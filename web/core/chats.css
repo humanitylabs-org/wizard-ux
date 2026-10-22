@@ -620,14 +620,16 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 @keyframes ncIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .ch-newchat { animation: none; } }
 
-/* Reply to a notification: a slim quote above the composer (× drops it) and the same quote above the sent words. */
-.ch-reply { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 0 0 10px; border-left: 2px solid var(--line-2); }
+/* Reply to a notification: a small bubble above the composer (× drops it) and the same quote card above the sent
+ * words. Every colour comes from the skin's own tokens (accent, ink, bg), so each skin draws it in its own look. */
+.ch-reply { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 6px 0 6px 12px; border-radius: 12px; border-left: 3px solid var(--violet-2, var(--line-2)); background: color-mix(in srgb, var(--violet) 12%, transparent); }
 .ch-reply-t, .ch-rq { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .ch-reply-t { flex: 1; }
 .ch-reply-t b, .ch-rq b { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ch-reply-t span, .ch-rq span { font-size: 12.5px; line-height: 1.35; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-.ch-compose button.ch-reply-x { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%; background: none; color: var(--ink-2); font-size: 22px; line-height: 1; box-shadow: none; }
-.ch-rq { margin: 0 0 6px; padding: 0 0 0 10px; border-left: 2px solid var(--line-2); }
+.ch-compose button.ch-reply-x { flex: 0 0 auto; width: 44px; height: 44px; margin: -6px 0; border-radius: 50%; background: none; border: 0; color: var(--ink-2); font-size: 22px; line-height: 1; box-shadow: none; }
+.ch-compose button.ch-reply-x:hover { color: var(--ink); }
+.ch-rq { margin: 0 0 8px; padding: 5px 10px; border-radius: 10px; border-left: 3px solid color-mix(in srgb, var(--ink) 55%, transparent); background: color-mix(in srgb, var(--bg) 24%, transparent); }
 /* Pull to refresh (core/chats.js bindPull) and the "Not up to date" bar. Tokens only, so every skin re-dresses it. */
 .ch-ptr { flex: none; height: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: var(--ink-3); pointer-events: none; }
 .ch-ptr.out { transition: height .18s ease; }

@@ -1,6 +1,6 @@
 // Miguel's skin behaviour (Dark, Light, Landscapes), ported from his test port into the skin package.
 // Uses only the skin API (web/skins/README.md); James's skins never load this file.
-//   1. Big Back button bottom-left in the dock while a thread is open (phone).
+//   1. (retired) Back is a small chevron in the thread header; the dock keeps no Back button.
 //   2. Defer / Done sit on the model-switch row instead of a row of their own.
 //   3. Swipe strip (phone): swipe left from the list's right edge reopens the last thread;
 //      swipe left inside a thread goes to the desk it opened (link / app), if there is one.
@@ -11,19 +11,9 @@ export function setupBehaviour(api) {
   const phone = api.env.shell !== 'desktop';
   const offs = [];
 
-  /* 1. Dock Back */
-  let back = null;
-  const dock = api.part('dock');
-  if (phone && dock) {
-    back = document.createElement('button');
-    back.type = 'button'; back.className = 'mz-dock-back'; back.hidden = true; back.setAttribute('aria-label', 'Back to chats');
-    const svg = document.createElementNS(SVGNS, 'svg'); svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true');
-    const p = document.createElementNS(SVGNS, 'path'); p.setAttribute('d', 'M15 5l-7 7 7 7'); svg.appendChild(p); back.appendChild(svg);
-    dock.appendChild(back);
-    api.listen(back, 'click', e => { e.stopPropagation(); try { navigator.vibrate?.(8); } catch (_) {} api.nav.back(); });
-    offs.push(() => { back.remove(); dock.classList.remove('mz-back-on'); });
-  }
-  const syncBack = () => { if (!back) return; const on = api.route().view === 'thread'; back.hidden = !on; dock.classList.toggle('mz-back-on', on); };
+  /* 1. Back lives in the thread header only (a small chevron, styled in skin.css); the dock stays the same pill
+   *    everywhere. Swipe right still goes back. */
+  const syncBack = () => {};
 
   /* 2. Defer / Done onto the switch row */
   const moveActs = () => {

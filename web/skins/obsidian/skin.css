@@ -267,12 +267,12 @@ html[data-skin^="obsidian"] .launcher .lapp[data-app="app-store"] .ic { backgrou
 
 /* Reply to a notification (Miguel's look): one quiet quote line, no box. A hairline rule on the left, the title in ink,
  * one or two lines in ink-2, and a bare × (44px target). The sent message shows the same quote above his words. */
-html[data-skin^="obsidian"] .ch-compose .ch-reply { padding: 2px 0 0 12px; margin: 0 2px; border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; }
+html[data-skin^="obsidian"] .ch-compose .ch-reply { padding: 2px 0 0 12px; margin: 0 2px; border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; border-radius: 0; }
 html[data-skin^="obsidian"] .ch-compose button.ch-reply-x { width: 44px; height: 44px; margin: -6px -4px -6px 0; background: none !important; border: 0 !important; box-shadow: none !important; color: var(--ink-2); font-size: 22px; font-weight: 300; }
 html[data-skin^="obsidian"] .ch-compose button.ch-reply-x:hover { color: var(--ink); }
 html[data-skin^="obsidian"] .ch-reply-t b, html[data-skin^="obsidian"] .ch-rq b { font-weight: 600; color: var(--ink); letter-spacing: 0; }
 html[data-skin^="obsidian"] .ch-reply-t span, html[data-skin^="obsidian"] .ch-rq span { color: var(--ink-2); }
-html[data-skin^="obsidian"] .msg.u .bub .ch-rq { margin: 0 0 8px; padding: 0 0 0 10px; border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; }
+html[data-skin^="obsidian"] .msg.u .bub .ch-rq { margin: 0 0 8px; padding: 0 0 0 10px; border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; border-radius: 0; }
 html[data-skin^="obsidian"] .ch-compose.has-reply { padding-top: 12px !important; }
 /* The skin's :is(.ch-compose button…) fill rule out-ranks a plain selector, so the × colour must win explicitly (Light drew it white on white). */
 html[data-skin^="obsidian"] .ch-compose button.ch-reply-x, html[data-skin^="obsidian"] .ch-compose button.ch-reply-x svg { color: color-mix(in srgb, var(--ink) 78%, transparent) !important; stroke: currentColor !important; }
@@ -495,3 +495,10 @@ html[data-skin^="obsidian"] .home .constellation .now-card:active { transform: s
 @keyframes nc-spin { to { transform: rotate(360deg); } }
 @keyframes nc-pulse { 0%, 100% { opacity: .55; transform: scale(.78); } 50% { opacity: 1; transform: scale(1); } }
 html[data-skin="obsidian-light"] .home .constellation .now-card[data-act="ready"] { --c: #14935a; }
+
+/* Miguel's skins (phone, 22 Oct): no Back in the dock. A thread's Back is a small chevron in the top-left of its header
+ * (swipe right still goes back), and the voice controls (cancel, pause, screenshot, attach) sit centred inside the pill. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head { padding-left: 4px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head .ch-back { width: 28px; height: 28px; border-radius: 9px; color: var(--ink-3); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head .ch-back svg { width: 16px; height: 16px; stroke-width: 2.2; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .voice .arc { bottom: calc(var(--pill-b) + var(--pill-h) / 2); }
