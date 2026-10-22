@@ -2859,7 +2859,7 @@
     const it = await OUTBOX.stage({ ...(snap.route || {}), kind: sid && sid !== '__new__' ? 'reply' : 'new',
       sessionId: sid && sid !== '__new__' ? sid : '',
       steerRunId: snap.meetingEventId ? '' : rt?.steerRunId ?? (CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '', ...(snap.seal?.reply ? { reply: snap.seal.reply } : {}),
-      meetingEventId:snap.meetingEventId,sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || '',
+      meetingEventId:snap.meetingEventId,sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || snap.route?.agent || '',
       files: [...takeFiles(), ...(snap.seal?.files || [])].filter(f => f?.id),
       instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: rt?.wid || sv?.id || '' });
     V.custodyCapture = null;
