@@ -457,7 +457,7 @@
     if (e.target.closest('[data-plus]')) { if (Date.now() - dockSwiped < 400) return; newDesk(); tourEv('desk-plus', {}); return; }
     const b = e.target.closest('[data-goto]'); if (!b) return;
     if (Date.now() - peekJustOpened < 600 || Date.now() - dockSwiped < 400) return;
-    goDesk(+b.dataset.goto); tourEv('desk', { home: idx === HOME });
+    closeOverview(); goDesk(+b.dataset.goto); tourEv('desk', { home: idx === HOME });
   });
   $('#dock').addEventListener('contextmenu', e => { if (e.target.closest('[data-goto]')) e.preventDefault(); });
   /* Swipe anywhere on the bottom bar to change desks: the orb has its own gestures, the
@@ -511,25 +511,57 @@
     }).join('');
     const cap = wins.length === 1 && winTitle(wins[0]) !== winApp(wins[0]).name ? winTitle(wins[0]) : '';
     const accessible = wins.length > 1 ? `${wins.length} windows: ${wins.map(w => winTitle(w)).join(', ')}` : name;
+    // Miguel's skins: each desk card carries the same count badge as its dock mark (Ready chats, unread notifications…).
+    const badge = (() => { if (!oursSkin()) return ''; const n = window.WizCore?.workspaceNav?.deskCount(d, W, winApp) || 0; return n ? `<b class="ov-badge" aria-label="${n} new">${window.WizCore.workspaceNav.fmt(n)}</b>` : ''; })();
     return `<div class="ov-card${here ? ' here' : ''}${d.home ? ' ov-home' : ''}${rv ? ' review' : ''}" data-ov="${d.id}" role="button" tabindex="0"${here ? ' aria-current="true"' : ''} style="--ov-c:${primary.color};--ov-c2:${c2}" aria-label="${esc(accessible)}${here ? ', current desk' : ''}${rv ? ', review' : ''}">
       <div class="ov-chrome"><span class="ov-state">${here ? '<span class="ov-here">Here</span>' : ''}${rv ? '<span class="ov-review">Review</span>' : ''}</span>${d.home ? '' : `<button class="ov-x" data-ovx="${d.id}" aria-label="Close ${esc(name)}">✕</button>`}</div>
-      <div class="ov-body ov-n${Math.min(wins.length, 4)}">${body}</div>
+      ${badge}<div class="ov-body ov-n${Math.min(wins.length, 4)}">${body}</div>
       <div class="ov-top"><b>${esc(wins.length > 1 ? `${wins.length} windows` : name)}</b>${cap ? `<small>${esc(cap)}</small>` : ''}</div></div>`;
   }
   function renderOverview() {
     const open = desks.filter(d => !d.home && d.wins.length).length;
-    ovEl.innerHTML = `<div class="ov-head"><b>Desks</b><span>${open} open</span><button class="ov-done" data-ovdone>Done</button></div>
+    const inner = `<div class="ov-head"><b>Desks</b><span>${open} open</span><button class="ov-done" data-ovdone>Done</button></div>
       <div class="ov-grid">${desks.map((_, i) => ovCard(i)).join('')}<button class="ov-card ov-add" data-ovadd aria-label="New desk: pick an app"><span aria-hidden="true">＋</span><b>New desk</b></button></div>
       <p class="ov-hint">Hold and drag to reorder · pinch two desks together to merge · spread one apart to split</p>`;
+    // Pill mode: the same content inside a panel that grows out of the bottom pill; the rest of the screen is a tap-to-close scrim.
+    const keep = ovEl.querySelector('.ov-scroll')?.scrollTop || 0;
+    // Pill mode is the dock itself with room to spare: the same desk icons and badges in a grid, an ✕ where the pill was.
+    const cell = i => {
+      const d = desks[i], here = i === idx, name = d.home ? 'Home' : deskName(i);
+      return `<div class="ov-card ov-cell${here ? ' here' : ''}${d.home ? ' ov-home' : ''}" data-ov="${d.id}" role="button" tabindex="0"${here ? ' aria-current="true"' : ''} aria-label="${esc(name)}${here ? ', current desk' : ''}"><span class="ov-ic">${deskSigil(i)}</span><span class="ov-nm">${esc(name)}</span>${d.home ? '' : `<button class="ov-x" data-ovx="${d.id}" aria-label="Close ${esc(name)}">✕</button>`}</div>`;
+    };
+    const pillInner = `<div class="ov-grid">${desks.map((_, i) => cell(i)).join('')}<button class="ov-card ov-cell ov-new" data-ovadd aria-label="New desk: pick an app"><span class="ov-ic"><span class="dsg"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="3.2" stroke-dasharray="3.1 2.6"/></svg></span></span><span class="ov-nm">New desk</span></button></div>`;
+    ovEl.innerHTML = ovEl.classList.contains('ov-pill') ? `<div class="ov-sheet"><div class="ov-scroll">${pillInner}</div><button class="ov-close" data-ovdone aria-label="Close desks"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>` : inner;
+    const sh = ovEl.querySelector('.ov-scroll'); if (sh) sh.scrollTop = keep;
   }
-  function openOverview() {
+  /* Miguel's skins: swiping up on the orb opens this same overview as an extension of the bottom pill (mode 'pill'):
+   * the pill grows upward into a panel holding every desk; the orb stays as its handle (tap or swipe down closes). */
+  function openOverview(mode) {
     if (!ovEl) { ovEl = document.createElement('div'); ovEl.id = 'overview'; ovEl.className = 'ov'; device.appendChild(ovEl); bindOverview(ovEl); }
     closeSheets(true); if (LINKS && LINKS.isOpen()) LINKS.close();
-    renderOverview(); void ovEl.offsetWidth; ovEl.classList.add('open'); device.classList.add('ov-open');
-    ovEl.querySelector('.ov-card.here')?.scrollIntoView({ block: 'center' });
+    const pill = mode === 'pill' && oursSkin();
+    if (!ovEl.classList.contains('open')) { ovEl.classList.toggle('ov-pill', pill); device.classList.toggle('ov-pill-open', pill); }
+    const wasOpen = ovEl.classList.contains('open');
+    renderOverview(); void ovEl.offsetWidth;
+    if (pill && !wasOpen) flyFromDock();
+    ovEl.classList.add('open'); device.classList.add('ov-open');
+    ovEl.querySelector('.ov-card.here')?.scrollIntoView({ block: pill ? 'nearest' : 'center' });
     armBack(); vib(14); window.__ovLog = (window.__ovLog || []).concat('open').slice(-30);
   }
-  function closeOverview() { if (!ovEl || !ovEl.classList.contains('open')) return false; ovEl.classList.remove('open'); device.classList.remove('ov-open'); return true; }
+  // Each desk icon rises out of its own spot in the pill (the orb for the desk in view) to its place in the grid.
+  function flyFromDock() {
+    ovEl.querySelectorAll('.ov-cell').forEach(c => {
+      const i = c.dataset.ov ? posOf(c.dataset.ov) : -1, ic = c.querySelector('.ov-ic'); if (!ic) return;
+      const src = i === idx ? $('#orbWrap') : i >= 0 ? document.querySelector(`#dock [data-goto="${i}"] .dsg`) : document.querySelector('#dock .dnew .dsg');
+      const to = ic.getBoundingClientRect(); let dx = 0, dy = 0;
+      if (src) { const f = src.getBoundingClientRect(); dx = f.left + f.width / 2 - (to.left + to.width / 2); dy = f.top + f.height / 2 - (to.top + to.height / 2); }
+      else dy = 60;
+      try { ic.animate([{ transform: `translate(${dx}px, ${dy}px)`, opacity: src ? 1 : 0 }, { transform: 'none', opacity: 1 }], { duration: 340, easing: 'cubic-bezier(.2,.9,.25,1)' }); } catch (_) {}
+    });
+  }
+  function closeOverview() { if (!ovEl || !ovEl.classList.contains('open')) return false; ovEl.classList.remove('open'); device.classList.remove('ov-open', 'ov-pill-open'); ovEl.classList.remove('editing'); return true; }
+  const pillOvOpen = () => !!(ovEl && ovEl.classList.contains('open') && ovEl.classList.contains('ov-pill'));
+  window.addEventListener('wizard:app-counts', () => { if (ovEl && ovEl.classList.contains('open') && !OV) renderOverview(); });
   const openPeek = () => openOverview(), closePeek = () => closeOverview();
   const posOf = did => desks.findIndex(d => d.id === did);
   function ovLog(s) { window.__ovLog = (window.__ovLog || []).concat(s).slice(-30); }
@@ -545,7 +577,8 @@
       const x = e.target.closest('[data-ovx]'); if (x) { closeDesk(posOf(x.dataset.ovx)); if (desks.length) renderOverview(); return; }
       if (e.target.closest('[data-ovadd]')) { closeOverview(); return newDesk(); }
       const c = e.target.closest('[data-ov]'); if (c) { const i = posOf(c.dataset.ov); closeOverview(); if (i >= 0) goDesk(i); return; }
-      if (e.target === el || e.target.classList.contains('ov-grid')) closeOverview();
+      if (el.classList.contains('editing') && !e.target.closest('[data-ov]') && e.target !== el) { el.classList.remove('editing'); return; }
+      if (e.target === el || e.target.classList.contains('ov-grid') || e.target.classList.contains('ov-scroll')) closeOverview();
     });
     const cardAt = (x, y) => { const t = document.elementFromPoint(x, y); return t && t.closest ? t.closest('.ov-card[data-ov]') : null; };
     const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
@@ -588,12 +621,17 @@
       }
       clearTimeout(OV.hold);
       if (OV.drag) { endDrag(true); ovTapBlock = Date.now() + 400; }
+      else if (el.classList.contains('ov-pill') && e.changedTouches?.[0]) {
+        // Pill mode: a clear swipe down (list at its top) folds it back into the pill.
+        const t = e.changedTouches[0], dy = t.clientY - OV.y, dx = t.clientX - OV.x, sc = el.querySelector('.ov-scroll');
+        if (dy > 70 && dy > Math.abs(dx) * 1.3 && (!sc || sc.scrollTop <= 0)) { ovTapBlock = Date.now() + 400; OV = null; closeOverview(); return; }
+      }
       OV = null;
     };
     el.addEventListener('touchend', end); el.addEventListener('touchcancel', end);
     function startDrag(c, x, y) {
       OV.drag = true; OV.card = c; const r = c.getBoundingClientRect(); OV.ox = x - r.left; OV.oy = y - r.top;
-      c.classList.add('drag'); el.classList.add('dragging'); vib(16); ovLog('drag');
+      c.classList.add('drag'); el.classList.add('dragging', 'editing'); vib(16); ovLog('drag');
       OV.ghost = c.cloneNode(true); OV.ghost.classList.add('ghost'); OV.ghost.style.width = r.width + 'px'; OV.ghost.style.height = r.height + 'px'; el.appendChild(OV.ghost);
       moveDrag(x, y);
     }
@@ -610,7 +648,8 @@
         if (before !== OV.card) { grid.insertBefore(OV.card, before); vib(6); }
       }
       // Near the top or bottom edge: scroll so far desks can be reached while dragging.
-      if (y < dr.top + 70) el.scrollTop -= 12; else if (y > dr.bottom - 70) el.scrollTop += 12;
+      const sc = el.querySelector('.ov-scroll'), sr = sc ? sc.getBoundingClientRect() : dr, so = sc || el;
+      if (y < sr.top + 50) so.scrollTop -= 12; else if (y > sr.bottom - 50) so.scrollTop += 12;
     }
     function endDrag(commit) {
       const c = OV.card; c.classList.remove('drag'); el.classList.remove('dragging'); OV.ghost?.remove();
@@ -2821,6 +2860,8 @@
     snap.custodyId = it.id; snap.audio = audio;
     if(V.meetingLoan){if(!it.durable){setVoice('paused');toast('!','Save failed · original retained here; meeting remains paused');return;}await returnMeeting({status:'captured',voiceTakeId:nid||it.id,deliveryKey:it.id});}
     snap.seal?.done(it);
+    // A tap take with a fixed destination is the outbox's from here: Reload no longer waits for upload + transcription.
+    V.handedOff = (!rt && aimAt == null && kind !== 'command' && !snap.general && !snap.meetingEventId && !V.meetingLoan && !sv?.review && sv?.mode !== 'capture' && await OUTBOX.handOff?.(it.id)) ? it.id : null;
     // Released a moment after this take is handled: by then its outbox item (if any) has replaced the hold.
     const hold = V.hold; V.hold = null;
     const unhold = () => { if (hold) setTimeout(() => LIVE.releaseSend?.(hold), 1500); };
@@ -2927,7 +2968,7 @@
   async function runUtterance(text, kind, typed) {
     // Help is a command only on explicit command/typed surfaces, never a tapped voice take.
     if (!window.WosCommands.isMessageTake(kind, typed) && window.WosTour?.isHelp(text) && (kind === 'command' || sendSnap().view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
-    clearTimeout(txHideT); V.kind = kind || 'auto';
+    clearTimeout(txHideT); V.handedOff = null; V.kind = kind || 'auto';
     const snap = sendSnap();
     txShow('', typed ? 'Typed' : 'Heard', kind === 'command' ? 'command' : '', kind === 'command' ? '⚡' : '✦');
     setVoice('think'); shock();
@@ -3267,7 +3308,7 @@
     e.preventDefault(); try { orbWrap.setPointerCapture(e.pointerId); } catch (_) {} closeMenu();
     G = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), mode: 'pending', dx: 0, dy: 0, aim: null };
     Orb.press(true);
-    G.corner = device.classList.contains('orb-corner');
+    G.corner = device.classList.contains('orb-corner'); G.ovWas = pillOvOpen();
     if (mayHoldCommand()) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); if(V.state==='idle'||(V.state==='paused'&&V.replyTo)){vib(18);G.start=startVoice('command');}else{G.refused=true;toast('⏸','Pause your reply before a command');} } }, 380);
   });
   // Slide-to-aim is retired (James, 11 Oct 2026): a held command already opens on the desk beside this one, so
@@ -3306,6 +3347,12 @@
       placeTrack(dx * 1.1, false);
       orbWrap.dataset.dir = Math.abs(G.dx) > 50 ? (G.dx < 0 ? (idx < desks.length - 1 ? `${clip(deskName(idx + 1), 16)} →` : atPickerEnd() ? '' : 'New desk →') : (idx > 0 ? `← ${clip(deskName(idx - 1), 16)}` : '')) : '';
     } else if (G.mode === 'v') {
+      if (oursSkin() && !sheet) {
+        // Our skins: up grows the pill into the desks panel (once, mid-swipe); down while it is open closes it.
+        if (G.dy < -40 && !pillOvOpen() && !G.ovWas) { G.ovOpened = true; openOverview('pill'); }
+        orbWrap.dataset.dir = '';
+        return;
+      }
       if (!sheet && G.dy < 0) {
         const p = Math.min(1, Math.abs(G.dy) / 240);
         launcher.classList.add('dragging');
@@ -3322,6 +3369,10 @@
     if (!G || (e?.pointerId != null && e.pointerId !== G.pointerId)) return; const g = G; G = null;
     clearTimeout(g.hold); Orb.press(false); orbWrap.classList.remove('dragging'); orbWrap.dataset.dir = ''; device.classList.remove('aiming'); generalTarget.classList.remove('selected');
     const vt = (performance.now() - g.t) || 1;
+    // Our skins, desks panel open: the orb is its handle. Any tap or swipe on it closes the panel (nothing else fires).
+    if (g.ovWas && pillOvOpen()) { if (!cancelled && g.mode !== 'hold') { closeOverview(); return; } }
+    if (g.ovOpened) { if (cancelled) closeOverview(); return; }
+    if (oursSkin() && g.mode === 'v' && !sheet) { if (g.dy < -70 || g.dy / vt < -.55) openOverview('pill'); else if (!cancelled && V.state === 'idle' && (g.dy > 18 || (g.dy > 8 && g.dy / vt > .3))) setZen(true); return; }
     if (g.mode === 'pending' && !cancelled) {
       if (sheet) return closeSheets();
       if(V.admitting){V.admitSend=true;return;}
@@ -3704,7 +3755,7 @@
     openAgentChats,
     live: LIVE, openPeek, closePeek, openOverview, closeOverview, mergeDesks, splitDesk, reorderDesks, closeDesk, openLinkDesk, pinWin, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
     zoomIn: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomIn(f); }, zoomOut: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomOut(f); },
-    HOME, get idx() { return idx; }, get desks() { return desks; }, get ovLog() { return window.__ovLog || []; }, get wins() { return W; }, get voice() { return V.state; }, get sheet() { return sheet; },
+    HOME, get idx() { return idx; }, get desks() { return desks; }, get ovLog() { return window.__ovLog || []; }, get wins() { return W; }, get voice() { return V.state; }, get voiceHandedOff() { return !!V.handedOff && OUTBOX.handedOff?.(V.handedOff); }, get sheet() { return sheet; },
     get back() { return { watchers: watchers.size, guardOn, exitArmed: Date.now() < exitUntil, log: window.__backLog || [] }; },
     openSearch,
     startVoice, finishVoice, cancelVoice, recoverDictation, recoverParkedReply, outbox: OUTBOX, openSettings, unsentAll, renderSettings,

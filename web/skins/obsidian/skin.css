@@ -513,3 +513,102 @@ html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub code { font-size: 
 html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub pre { font-size: 12px; }
 html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub .code pre code { font-size: 12.5px; }
 html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub table { font-size: 13.5px; }
+
+/* Desks overview (Miguel, 22 Oct). Pinch-out: smaller cards, three across, each with its desk's count badge.
+ * Swipe up on the orb: the pill itself grows taller and lays the same dock icons and badges out in a grid, with an ✕ in the orb's spot. */
+/* Miguel's skins (phone): Desks overview. Smaller desk cards (three across) with each desk's count badge, used by both
+ * the pinch overview and the swipe-up version, which grows out of the bottom pill as one panel (the pill's own icons stay
+ * as its bottom row, the orb is the handle: tap or swipe down closes). */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-card { min-height: 116px; padding: 8px 6px 8px; border-radius: 18px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-card:has(.ov-n3), html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-card:has(.ov-n4) { min-height: 132px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-body { padding-top: 14px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-n3, html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-n4 { padding-top: 16px; gap: 2px 4px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-symbol { width: 50px; height: 50px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-symbol .sgi.sgl { font-size: 25px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-n2 .ov-symbol { width: 32px; height: 32px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov :is(.ov-n3, .ov-n4) .ov-symbol { width: 24px; height: 24px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-n2 .sgi.sgl { font-size: 16px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov :is(.ov-n3, .ov-n4) .sgi.sgl { font-size: 12px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-win em { font-size: 9.5px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov :is(.ov-n3, .ov-n4) .ov-win em { height: 1.2em; -webkit-line-clamp: 1; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-top b { font-size: 12px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-top small { font-size: 10px; -webkit-line-clamp: 1; }
+/* The current desk is already outlined: drop the "Here" tag; ✕ moves to the top-left so the badge owns the top-right. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-here { display: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-chrome { top: 0; left: 0; right: auto; flex-direction: row-reverse; min-height: 30px; gap: 2px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-x { width: 30px; height: 30px; font-size: 12px; border-radius: 10px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-review { font-size: 9px; line-height: 16px; padding: 0 5px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-badge { position: absolute; top: 6px; right: 6px; z-index: 2; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 99px; font: 800 11px/20px system-ui, sans-serif; text-align: center; color: #160b05; background: var(--amber); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--bg) 90%, transparent); pointer-events: none; }
+html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .ov .ov-badge { background: #000; color: #fff; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-add { flex-direction: column; gap: 4px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-add span { font-size: 28px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-add b { font-size: 12px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-head b { font-size: 21px; }
+
+/* Swipe-up version: the pill extended. A light scrim over the desk; the panel shares the pill's side insets, radius,
+ * frosted material and bottom edge, so the pill visibly grows upward. The real dock rides on top as its bottom row. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill { padding: 0; overflow: hidden; background: rgba(0, 0, 0, .32); -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { position: absolute; left: var(--pill-x, 12px); right: var(--pill-x, 12px); bottom: var(--pill-b, 8px); max-height: calc(100% - var(--safe-t, 0px) - 64px); display: flex; flex-direction: column; padding-bottom: var(--pill-h, 66px); border-radius: calc(var(--pill-h, 66px) / 2); border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); background: color-mix(in srgb, var(--bg) 86%, transparent); -webkit-backdrop-filter: blur(26px) saturate(1.4); backdrop-filter: blur(26px) saturate(1.4); box-shadow: 0 -10px 40px rgba(0, 0, 0, .32), inset 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent); overflow: hidden; transform-origin: 50% 100%; transform: translateY(14px) scaleY(.4); opacity: 0; transition: transform 300ms var(--spring, cubic-bezier(.2, .9, .2, 1.05)), opacity 160ms; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill.open .ov-sheet { transform: none; opacity: 1; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 10px 6px; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-head { padding: 0 6px 12px 10px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-done { height: 34px; border-radius: 17px; padding: 0 14px; font-size: 13px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card { background: color-mix(in srgb, var(--ink) 5%, transparent); border-color: color-mix(in srgb, var(--ink) 9%, transparent); box-shadow: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card.here { border-color: var(--violet-2); box-shadow: 0 0 0 1px var(--violet-2); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card.ov-add { background: transparent; border: 1px dashed color-mix(in srgb, var(--ink) 18%, transparent); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-hint { margin: 12px 8px 4px; font-size: 11px; }
+/* The dock stays visible above the panel and drops its own pill shell, so it reads as the panel's bottom row. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.ov-pill-open .desk-label { opacity: 0; }
+/* Draw the New desk plus as two bars (the fullwidth ＋ glyph is missing from some fonts and shows as a box). */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov:not(.ov-pill) :is(.ov-add span, .ov-empty-symbol) { font-size: 0; width: 24px; height: 24px; background: linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat, linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat; }
+/* Near-opaque so the panel reads as one even surface over any page (a bright frame showed through at 86%). */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { background: color-mix(in srgb, var(--bg) 95%, transparent); }
+
+/* Swipe-up, round 2: the pill itself with room to spare. It grows upward from its own shape (clip-path), shows the
+ * dock's own desk icons and badges in a grid (each rises from its spot in the pill), and an ✕ takes the orb's place. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.ov-pill-open .dock { opacity: 0; pointer-events: none; transition: opacity 140ms; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { transform: none; opacity: 1; background: color-mix(in srgb, var(--bg) 78%, transparent); border-color: color-mix(in srgb, var(--ink) 7%, transparent); box-shadow: 0 10px 30px rgba(0, 0, 0, .22); clip-path: inset(calc(100% - var(--pill-h, 66px)) 0 0 0 round calc(var(--pill-h, 66px) / 2)); transition: clip-path 320ms cubic-bezier(.2, .9, .25, 1); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill.open .ov-sheet { clip-path: inset(0 0 0 0 round calc(var(--pill-h, 66px) / 2)); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill { background: rgba(0, 0, 0, .28); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-scroll { padding: 22px 12px 4px; -webkit-mask-image: none; mask-image: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-grid { grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 14px 4px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell { min-height: 0; height: auto; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; transform: none; display: flex; flex-direction: column; align-items: center; gap: 6px; font: inherit; color: var(--ink); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.here, html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card.here { border: 0; box-shadow: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic { position: relative; width: 52px; height: 52px; display: grid; place-items: center; border-radius: 50%; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.here .ov-ic { background: color-mix(in srgb, var(--ink) 9%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 16%, transparent), 0 0 18px color-mix(in srgb, var(--violet-2, #a58bff) 22%, transparent); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg { width: 32px; height: 32px; opacity: .9; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.here .ov-ic .dsg { opacity: 1; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg .sgi { width: 88%; height: 88%; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg .sgi.sgl { font-size: 23px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg .sgi:is(.sg-hat, .sg-hat-private) { -webkit-mask-size: auto 80%; mask-size: auto 80%; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-new .dsg { color: color-mix(in srgb, var(--ink) 82%, transparent); }
+html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .ov.ov-pill .ov-new .dsg { color: #1b1b1f; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-new .dsg svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-nm { max-width: 100%; font-size: 11px; font-weight: 550; line-height: 1.2; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.here .ov-nm { color: var(--ink); font-weight: 650; }
+/* Closing a desk: hold any icon (that also starts drag-to-reorder) and small ✕s appear, like an iPhone home screen. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell .ov-x { position: absolute; left: calc(50% - 32px); top: -6px; width: 22px; height: 22px; padding: 0; border-radius: 50%; font-size: 10px; color: var(--ink); background: color-mix(in srgb, var(--bg) 70%, var(--ink) 30%); display: none; place-items: center; z-index: 3; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill.editing .ov-cell .ov-x { display: grid; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill.editing .ov-cell:not(.ov-home):not(.ov-new) .ov-ic { animation: ovJiggle .32s ease-in-out infinite alternate; }
+@keyframes ovJiggle { from { transform: rotate(-2.5deg); } to { transform: rotate(2.5deg); } }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.drag { opacity: .25; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card.ghost { background: none; box-shadow: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.merging .ov-ic { box-shadow: 0 0 0 2px var(--violet-2); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.splitting .ov-ic { box-shadow: 0 0 0 2px #5cd6ff; }
+/* The ✕ sits exactly where the orb was, inside the pill-height bottom row. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-close { position: absolute; left: 50%; bottom: calc((var(--pill-h, 66px) - 52px) / 2); width: 52px; height: 52px; margin-left: -26px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; color: var(--ink); background: color-mix(in srgb, var(--ink) 9%, transparent); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-close svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-close:active { transform: scale(.92); }
+/* Four per row across the full width (the dock's own rhythm), even breathing room, and an even fill over any page. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px 4px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-scroll { padding: 24px 12px 14px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { background: color-mix(in srgb, var(--bg) 94%, transparent); }
+
+/* Same icon size as the pill dock (42px), with a ring for the desk in view. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic { width: 60px; height: 60px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg { width: 42px; height: 42px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg .sgi.sgl { font-size: 29px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-new .dsg svg { width: 38px; height: 38px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell .ov-x { left: calc(50% - 35px); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { max-height: calc(100% - var(--safe-t, 0px) - 24px); }
