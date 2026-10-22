@@ -69,7 +69,7 @@ def main():
         try:
             assert serial not in run([adb, 'devices'], capture_output=True, text=True).stdout
             run([SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'connect', '-k',
-                 'system-images;android-35;google_apis;arm64-v8a', '-d', 'pixel_7', '-p', out / 'device'], input='no\n', text=True, capture_output=True)
+                 'system-images;android-35;google_apis;arm64-v8a', '-d', 'pixel_7', '-p', out / 'device', '-f'], input='no\n', text=True, capture_output=True)
             with (out / 'emulator.log').open('w') as log:
                 em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'connect', '-port', '5686', '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect'], env=env, stdout=log, stderr=subprocess.STDOUT)
             deadline = time.monotonic() + 240

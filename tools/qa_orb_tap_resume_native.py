@@ -170,9 +170,24 @@ class Suite:
             self.crashes.append({'phase': self.phase, 'log': crash})
         self.h['shot'](self.phase)
 
+    def quiet_prompts(self):
+        # A third-party app's runtime prompt (e.g. YouTube's notification ask on the google_apis image)
+        # makes Android hide every overlay window, so the orb and its controls vanish under the dialog.
+        # Deny it through the real UI and pin the answer so it never comes back mid-check.
+        for _ in range(3):
+            if not self.h['tap_text'](r"^Don.t allow$"):
+                break
+            time.sleep(1)
+        for pkg in ('com.google.android.youtube',):
+            with contextlib.suppress(Exception):
+                self.sx(f'pm revoke {pkg} android.permission.POST_NOTIFICATIONS; '
+                        f'pm set-permission-flags {pkg} android.permission.POST_NOTIFICATIONS user-set user-fixed')
+
     def begin(self, phase):
         self.save()
         self.phase = phase
+        with contextlib.suppress(Exception):
+            self.quiet_prompts()
         self.sx('logcat -c')
 
     def tap(self, point):
@@ -215,10 +230,10 @@ class Suite:
         devices = self.sh(self.adb, 'devices')
         if self.serial in devices:
             raise RuntimeError('reserved emulator serial already in use; refusing to touch it')
-        (self.out / 'avd').mkdir()
+        (self.out / 'avd').mkdir(exist_ok=True)  # a worker retry may rerun this chain
         self.sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'orb-resume',
                 '-k', 'system-images;android-35;google_apis;arm64-v8a', '-d', 'pixel_7',
-                '-p', self.out / 'device', stdin='no\n')
+                '-p', self.out / 'device', '-f', stdin='no\n')
         with (self.out / 'emulator.log').open('w') as log:
             self.em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'orb-resume',
                 '-port', str(self.port), '-no-window', '-no-snapshot', '-no-audio',
