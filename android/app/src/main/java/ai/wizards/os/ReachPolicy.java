@@ -4,7 +4,7 @@ package ai.wizards.os;
  * The "can't reach your Wizard" screen (James, 12 Oct: Tailscale off on GrapheneOS left a pure black screen).
  * Pure rules, unit-tested: when the screen shows, what it says, and when the app tries again on its own.
  *
- * The shell lives at the configured private origin (normally reachable only on the tailnet), so
+ * For tailnet-configured boxes, a connection without Tailscale can hang, so
  * with Tailscale off the old name's connection hangs with nothing on screen. Instead: a normal open paints before
  * CONNECTING_MS and never sees this screen; past that mark an open that cannot work (no network, no VPN) says why
  * at once; anything else says "Connecting…" and, at GIVE_UP_MS, that the Wizard isn't answering. The load keeps
@@ -26,15 +26,18 @@ final class ReachPolicy {
 
     static final String TAILSCALE_PKG = "com.tailscale.ipn";
 
-    static Why why(boolean network, boolean vpn) {
+    static Why why(boolean network, boolean vpn) { return why(network, vpn, true); }
+
+    static Why why(boolean network, boolean vpn, boolean needsTailscale) {
         if (!network) return Why.NO_NETWORK;
-        if (!vpn) return Why.TAILSCALE_OFF;
+        if (needsTailscale && !vpn) return Why.TAILSCALE_OFF;
         return Why.NOT_ANSWERING;
     }
 
     /** At the connecting mark: an open that cannot succeed (no network, Tailscale off) says why right away. */
-    static boolean failNow(boolean network, boolean vpn) {
-        return why(network, vpn) != Why.NOT_ANSWERING;
+    static boolean failNow(boolean network, boolean vpn) { return failNow(network, vpn, true); }
+    static boolean failNow(boolean network, boolean vpn, boolean needsTailscale) {
+        return why(network, vpn, needsTailscale) != Why.NOT_ANSWERING;
     }
 
     /** A gateway or server failure on the page itself (Caddy 502 while the Wizard restarts, 503, 504). */
@@ -59,7 +62,7 @@ final class ReachPolicy {
         switch (w) {
             case NO_NETWORK: return "This phone has no connection. Wizard opens by itself when it's back.";
             case TAILSCALE_OFF: return "Wizard lives on your private network. Turn Tailscale on and Wizard opens by itself.";
-            default: return "Tailscale is on, but your Wizard isn't answering yet. Wizard keeps trying by itself.";
+            default: return "Your Wizard isn't answering yet. Check its address and connection. Wizard keeps trying by itself.";
         }
     }
 

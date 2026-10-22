@@ -98,7 +98,7 @@
   const ease=x=>1-Math.pow(1-x,3);
   function cur(k){const a=S.anim[k];if(!a)return S.shown[k]??0;const x=Math.max(0,Math.min(1,(performance.now()-a.t0)/a.dur));return a.from+(a.to-a.from)*ease(x);}
   function dial(sp,i){const k=sp.k,now=cur(k),off=sp.signin||sp.off,known=k in S.shown||!!S.anim[k];
-    return `<button class="rs-dial ${off?'rs-dial-off':''}" data-k="${esc(k)}" data-t="${sp.v??''}" style="--i:${i}" ${sp.attrs} ${sp.title?`title="${esc(sp.title)}"`:''} ${sp.v!=null?`role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${sp.v}"`:''} aria-label="${esc(sp.label)} ${sp.v!=null?sp.v+'% used':esc(sp.sub||'loading')}"><span class="rs-gauge" style="--a:${ang(now)};--o:${(100-now).toFixed(1)}">${gauge}<b>${known&&!off?Math.round(now):''}</b></span><span class="rs-dl">${esc(sp.label)}${sp.signin?`<small>${esc(sp.sub)}</small>`:''}</span></button>`;}
+    return `<button class="rs-dial ${off?'rs-dial-off':''}${sp.fuel?' rs-fuel':''}${sp.fuel&&sp.v!=null&&sp.v<25?' rs-empty':''}" data-k="${esc(k)}" data-t="${sp.v??''}"${sp.money?` data-money="${esc(sp.money)}"`:''} style="--i:${i}" ${sp.attrs} ${sp.title?`title="${esc(sp.title)}"`:''} ${sp.v!=null?`role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${sp.v}"`:''} aria-label="${esc(sp.label)} ${sp.fuel&&sp.money?esc(sp.money)+' credit left':sp.v!=null?sp.v+'% used':esc(sp.sub||'loading')}"><span class="rs-gauge" style="--a:${ang(now)};--o:${(100-now).toFixed(1)}">${gauge}${sp.fuel?'<i class="rs-e">E</i><i class="rs-f">F</i>':''}<b>${sp.fuel?(sp.money||''):known&&!off?Math.round(now):''}</b></span><span class="rs-dl">${esc(sp.label)}${sp.signin?`<small>${esc(sp.sub)}</small>`:''}</span></button>`;}
   function dialSpecs(){const j=S.server||{},kind=p=>String(p.provider||p.id||'').split(':')[0];
     const out=[['CPU',j.cpu],['Memory',j.memory],['Disk',j.disk]].map(([k,v])=>({k,label:k,v,attrs:'data-res-open="server"',row:'s',off:!S.server&&!!S.serverError}));
     if(S.ai){const providers=S.ai.providers||[],per={},seen={};for(const p of providers)per[kind(p)]=(per[kind(p)]||0)+1;
@@ -106,16 +106,21 @@
         const full=p.providerName||(p.name&&!p.email?p.name:'')||id.charAt(0).toUpperCase()+id.slice(1),label=(full==='ChatGPT'?'GPT':full)+(n?' '+n:'');
         const q=weekly(p),bad=p.status==='unavailable',v=bad||q?.remainingPercent==null?null:100-q.remainingPercent;
         return bad&&APP_OF[id]?{k:'ai:'+p.id,label,v:null,signin:true,sub:'Sign in',attrs:`data-res-signin="${esc(APP_OF[id])}"`,title:p.email||label,row:'a'}:{k:'ai:'+p.id,label,v,attrs:'data-res-open="ai"',title:p.email||label,row:'a'};});
-      try{localStorage.setItem(GKEY,JSON.stringify(ai.map(a=>({k:a.k,label:a.label}))));}catch{}
+      /* Credit accounts (Tinfoil): a fuel gauge, E to F. Full = the last top-up; the readout is dollars left, not a percent. */
+      for(const p of providers){const x=p.paid;if(p.status==='unavailable'||!x||x.type!=='credits'||number(x.balanceMinor)==null)continue;
+        const id=kind(p),bal=number(x.balanceMinor),cap=number(x.limitMinor),ex=number(x.exponent)??2,v=cap>0?Math.max(0,Math.min(100,Math.round(bal/cap*100))):(bal>0?100:0);
+        const full=p.providerName||(p.name&&!p.email?p.name:'')||id.charAt(0).toUpperCase()+id.slice(1),left=bal/10**ex;
+        ai.push({k:'fuel:'+p.id,label:full,v,fuel:true,money:"$"+(left>=10||Number.isInteger(left)?Math.floor(left):left.toFixed(2)),attrs:APP_OF[id]?`data-res-signin="${esc(APP_OF[id])}"`:'data-res-open="ai"',title:`${cash(bal,ex,x.currency||'USD')} credit left`,row:'a'});}
+      try{localStorage.setItem(GKEY,JSON.stringify(ai.map(a=>({k:a.k,label:a.label,fuel:!!a.fuel}))));}catch{}
       return out.concat(ai);}
     let last=[];try{last=JSON.parse(localStorage.getItem(GKEY)||'[]')||[];}catch{}
-    return out.concat(last.filter(a=>a&&a.k&&a.label).map(a=>({k:String(a.k),label:String(a.label),v:null,attrs:'data-res-open="ai"',row:'a',off:!!S.aiError})));}
+    return out.concat(last.filter(a=>a&&a.k&&a.label).map(a=>({k:String(a.k),label:String(a.label),fuel:!!a.fuel,v:null,attrs:'data-res-open="ai"',row:'a',off:!!S.aiError})));}
   const dialSig=specs=>specs.map(s=>`${s.k}|${s.label}|${s.signin?1:0}`).join(',');
   function dialHtml(){const specs=dialSpecs(),sv=specs.filter(s=>s.row==='s'),ai=specs.filter(s=>s.row==='a');
     const row=(h,cells,o)=>`<div class="rs-dials" role="group" aria-label="${h}">${cells.map((c,i)=>dial(c,i+o)).join('')}</div>`;
-    return `<section class="rs-widget rs-dialed wz-home-widget" data-sig="${esc(dialSig(specs))}" aria-label="Server and AI resources">${row('Server',sv,0)}${ai.length?row('AI week used',ai,sv.length):''}</section>`;}
+    return `<section class="rs-widget rs-dialed wz-home-widget" style="--n:${specs.length}" data-sig="${esc(dialSig(specs))}" aria-label="Server and AI resources">${row('Server',sv,0)}${ai.length?row('AI week used',ai,sv.length):''}</section>`;}
   function paintDials(host){const specs=dialSpecs(),box=host.querySelector('.rs-dialed');
-    if(box&&box.dataset.sig===dialSig(specs)){for(const sp of specs){const el=box.querySelector(`[data-k="${CSS.escape(sp.k)}"]`);if(!el)continue;el.dataset.t=sp.v??'';el.classList.toggle('rs-dial-off',!!(sp.signin||sp.off));if(sp.v!=null){el.setAttribute('role','meter');el.setAttribute('aria-valuenow',sp.v);}}}
+    if(box&&box.dataset.sig===dialSig(specs)){for(const sp of specs){const el=box.querySelector(`[data-k="${CSS.escape(sp.k)}"]`);if(!el)continue;el.dataset.t=sp.v??'';el.classList.toggle('rs-dial-off',!!(sp.signin||sp.off));if(sp.v!=null){el.setAttribute('role','meter');el.setAttribute('aria-valuenow',sp.v);}el.classList.toggle('rs-empty',!!(sp.fuel&&sp.v!=null&&sp.v<25));if(sp.money){el.dataset.money=sp.money;const bb=el.querySelector('.rs-gauge b');if(bb)bb.textContent=sp.money;}}}
     else host.innerHTML=dialHtml();
     requestAnimationFrame(()=>requestAnimationFrame(()=>settle(host)));}
   // Sweep only what is actually on screen: a hidden or not-yet-shown Home keeps its needles at zero for later.
@@ -129,7 +134,7 @@
       const g=el.querySelector('.rs-gauge'),b=el.querySelector('.rs-gauge b'),left=Math.max(0,run.t0+run.dur-performance.now()),delay=Math.max(0,run.t0-performance.now());
       g.style.setProperty('--d',Math.max(0,left-delay)+'ms');g.style.setProperty('--w',delay+'ms');
       g.style.setProperty('--a',ang(to));g.style.setProperty('--o',100-to);cancelAnimationFrame(el._rsRaf);
-      const tick=()=>{if(S.anim[k]!==run){return;}const x=Math.max(0,Math.min(1,(performance.now()-run.t0)/run.dur));if(b&&!el.classList.contains('rs-dial-off'))b.textContent=Math.round(run.from+(run.to-run.from)*ease(x));
+      const tick=()=>{if(S.anim[k]!==run){return;}const x=Math.max(0,Math.min(1,(performance.now()-run.t0)/run.dur));if(b&&!el.dataset.money&&!el.classList.contains('rs-dial-off'))b.textContent=Math.round(run.from+(run.to-run.from)*ease(x));
         if(x<1)el._rsRaf=requestAnimationFrame(tick);else{S.shown[k]=run.to;delete S.anim[k];}};
       el._rsRaf=requestAnimationFrame(tick);}
     if(wait){clearTimeout(S.dialWait);S.dialWait=setTimeout(()=>{for(const h of document.querySelectorAll('[data-home-resources]'))settle(h);},400);}}

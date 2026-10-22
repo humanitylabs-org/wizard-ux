@@ -84,6 +84,30 @@ public class BackupE2eTest {
     private int count(String scope,boolean unique) {
         try(BackupLedger db=new BackupLedger(c); android.database.Cursor cur=db.getReadableDatabase().rawQuery("SELECT COUNT("+(unique?"DISTINCT asset":"*")+") FROM uploaded WHERE scope=?",new String[]{scope})) { cur.moveToFirst(); return cur.getInt(0); }
     }
+    /** Prepare generated, unbacked media for the web → real bridge → real worker acceptance.
+     * Invoked separately by the Thales runner after the native regression, before CDP attaches.
+     * No credentials are returned to JavaScript or copied into the evidence. */
+    @Test public void prepareWebSettingsFixture() throws Exception {
+        assertTrue("Never run on an owner phone",Build.HARDWARE.equals("ranchu") || Build.HARDWARE.equals("goldfish"));
+        assertTrue("Only QA package",BuildConfig.DEBUG && BuildConfig.APPLICATION_ID.endsWith(".qa"));
+        c=InstrumentationRegistry.getInstrumentation().getTargetContext();
+        settings=new BackupSettings(c);
+        assertEquals("Disposable server only","http://localhost:2286",settings.server());
+        assertTrue("Run the native backup regression first",settings.connected());
+        settings.prefs.edit().putBoolean("enabled",false).putBoolean("wifi",true).putBoolean("charge",true)
+                .putStringSet("albums",new HashSet<>()).commit();
+        settings.change(); BackupScheduler.cancel(c);
+        insert("wizard-web-chosen.jpg","WizardWebChosen","image/jpeg",image(120));
+        insert("wizard-web-excluded.jpg","WizardWebExcluded","image/jpeg",image(121));
+        JSONObject fixture=new JSONObject();
+        for(java.util.Map.Entry<String,String> album:new PhotoLibrary(c).albums().entrySet()) {
+            if(album.getValue().equals("WizardWebChosen")) fixture.put("chosen",album.getKey());
+            if(album.getValue().equals("WizardWebExcluded")) fixture.put("excluded",album.getKey());
+        }
+        assertTrue(fixture.has("chosen") && fixture.has("excluded"));
+        writeText(new File(c.getFilesDir(),"photos-web-fixture.json"),fixture.toString());
+    }
+
     @Test public void generatedMediaThroughRealSchedulerAndDisposableImmich() throws Exception {
         assertTrue("Never run on an owner phone",Build.HARDWARE.equals("ranchu") || Build.HARDWARE.equals("goldfish"));
         assertTrue("Only QA package",BuildConfig.DEBUG && BuildConfig.APPLICATION_ID.endsWith(".qa"));

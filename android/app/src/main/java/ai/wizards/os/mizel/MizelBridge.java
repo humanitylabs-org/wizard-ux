@@ -63,7 +63,7 @@ public final class MizelBridge implements MizelHub.Listener {
     private void onMessage(WebView view, WebMessageCompat message, Uri sourceOrigin, boolean isMainFrame, JavaScriptReplyProxy reply) {
         // Belt and braces: the allow-list already guarantees this.
         String src = sourceOrigin == null ? null : sourceOrigin.getScheme() + "://" + sourceOrigin.getAuthority();
-        if (src == null || !MizelConfig.DEFAULT_ORIGIN.equals(src)) return;
+        if (src == null || !MizelConfig.origin(app).equals(src)) return;
         frames.remove(reply);
         frames.add(reply);
         while (frames.size() > MAX_FRAMES) { JavaScriptReplyProxy old = frames.iterator().next(); frames.remove(old); pcmFrames.remove(old); }

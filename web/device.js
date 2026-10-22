@@ -363,7 +363,8 @@
   function webBusy() {
     try { if (J(DEV()?.recActive?.())?.id) return true; } catch (_) { return true; }
     const w = W$(); if (!w) return true;
-    if (w.voice !== 'idle' || sheet || w.voiceBorrowing) return true; // incl. an orb take parked on a meeting loan
+    // Sending (think) a take the outbox already owns survives a reload: the new page finishes that send.
+    if ((w.voice !== 'idle' && !(w.voice === 'think' && w.voiceHandedOff)) || sheet || w.voiceBorrowing) return true; // incl. an orb take parked on a meeting loan
     return Object.keys(w.wins).some(k => (w.chatState(k).files || []).some(f => f.uploading));
   }
   function saveDrafts() {

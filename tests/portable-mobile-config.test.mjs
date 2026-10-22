@@ -22,12 +22,12 @@ test('tracked Android and iOS files contain no personal paths or hosts', () => {
   assert.deepEqual(violations, [], `Personal mobile configuration must be external:\n${violations.join('\n')}`);
 });
 
-test('Android derives home, trust origin and both app links from one build property', () => {
+test('Android derives home, trust origin and both app links from one optional build property', () => {
   const gradle = read('android/app/build.gradle');
   assert.match(gradle, /providers\.gradleProperty\('wizardOrigin'\)\s*\.orElse\(providers\.environmentVariable\('WIZARD_ORIGIN'\)\)/);
-  assert.match(gradle, /buildConfigField 'String', 'ORIGIN', javaString\(wizardOrigin\)/);
-  assert.match(gradle, /buildConfigField 'String', 'HOME_URL', javaString\(wizardOrigin \+ '\/wizard-os-home\/'\)/);
-  assert.match(gradle, /manifestPlaceholders = \[wizardDeepLinkHost: originUri\.host\]/);
+  assert.match(gradle, /buildConfigField 'String', 'ORIGIN', javaString\(defaultOrigin\)/);
+  assert.match(gradle, /buildConfigField 'String', 'HOME_URL', javaString\(defaultOrigin \? defaultOrigin \+ '\/wizard-os-home\/' : ''\)/);
+  assert.match(gradle, /manifestPlaceholders = \[wizardDeepLinkHost: deepLinkHost\]/);
   assert.match(gradle, /groovy\.json\.JsonOutput\.toJson\(value\)/, 'BuildConfig strings must be escaped');
   const manifest = read('android/app/src/main/AndroidManifest.xml');
   const links = [...manifest.matchAll(/<data android:scheme="https" android:host="([^"]+)" android:pathPrefix="([^"]+)"/g)];
@@ -35,26 +35,26 @@ test('Android derives home, trust origin and both app links from one build prope
     ['${wizardDeepLinkHost}', '/wizard-os-home/'],
     ['${wizardDeepLinkHost}', '/mizel-live/'],
   ]);
+  assert.match(manifest, /<data android:scheme="wizard" android:host="connect" \/>/, 'wizard://connect pairing link');
 });
 
-test('unconfigured debug has an invalid placeholder; release is gated before building', () => {
+test('unconfigured builds open Connect; a configured origin is validated', () => {
   const gradle = read('android/app/build.gradle');
-  assert.match(gradle, /: 'https:\/\/wizard\.invalid'/);
-  assert.match(gradle, /tasks\.register\('validateReleaseOrigin'\)/);
-  assert.match(gradle, /if \(!configuredOrigin \|\| originUri\.host\.endsWith\('\.invalid'\)\)/);
-  assert.match(gradle, /tasks\.matching \{ it\.name == 'preReleaseBuild' \}\.configureEach \{\s*dependsOn tasks\.named\('validateReleaseOrigin'\)/);
+  assert.match(gradle, /def defaultOrigin = configuredOrigin \? configuredOrigin\.replaceAll\('\/\+\$', ''\) : ''/);
+  assert.doesNotMatch(gradle, /wizard\.invalid'/, 'no placeholder home; Connect owns first launch');
+  assert.doesNotMatch(gradle, /validateReleaseOrigin/, 'generic release APKs are valid: they pair at runtime');
   for (const field of ['rawUserInfo', 'rawQuery', 'rawFragment', 'rawPath']) {
     assert.ok(gradle.includes(`originUri.${field}`), `origin must validate ${field}`);
   }
   assert.match(gradle, /originUri\.scheme != 'https'/);
   assert.match(gradle, /originUri\.port != -1/);
-  const originTest = read('android/app/src/test/java/ai/wizards/os/OriginTest.java');
-  assert.match(originTest, /URI\.create\(BuildConfig\.ORIGIN\)\.getHost\(\)/);
+  const settings = read('android/app/src/main/java/ai/wizards/os/ServerSettings.java');
+  assert.match(settings, /ServerOrigin\.parse\(BuildConfig\.ORIGIN\)/);
 });
 
 test('photo backup has no personal default and the switch can open server setup', () => {
   const gradle = read('android/app/build.gradle');
-  assert.match(gradle, /providers\.gradleProperty\('photosServer'\)\.getOrElse\(''\)/);
+  assert.match(gradle, /providers\.gradleProperty\('photosServer'\)\s*\.orElse\(providers\.environmentVariable\('WIZARD_PHOTOS_SERVER'\)\)\.getOrElse\(''\)/);
   assert.match(gradle, /buildConfigField 'String', 'PHOTOS_SERVER', javaString\(photosServer\)/);
   const settings = read('android/app/src/main/java/ai/wizards/os/photos/BackupSettings.java');
   assert.match(settings, /getBoolean\("enabled", false\)/);

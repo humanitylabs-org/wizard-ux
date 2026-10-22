@@ -3,7 +3,6 @@ import os
 from pathlib import Path
 import tempfile
 from urllib.parse import urlsplit
-from qa_paths import android_sdk, java_home
 
 
 def work_root():

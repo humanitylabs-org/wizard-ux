@@ -1329,8 +1329,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     public void onDictated(EverywhereOutbox.Item it, String words) {
         // Archimedes Anywhere's path: reject decoder loops, run its clean-up, skip a duplicate, insert at the cursor.
         if (DictationCleanup.isLikelyRepetitionLoop(words)) {
-            ClipboardManager cb = getSystemService(ClipboardManager.class);
-            cb.setPrimaryClip(ClipData.newPlainText("Wizard", words.trim()));
+            WizardKeyboardService.copyAsLatest(this, words.trim());
             toast("That came back garbled · copied instead of typed");
             Log.w(TAG, "dictation looked like a repetition loop chars=" + words.length());
             buzz(30);
@@ -1344,8 +1343,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         boolean typed = fresh && k != null && k.insertText(text);
         if (typed) { lastInserted = text; lastInsertAt = now; }
         else {
-            ClipboardManager cb = getSystemService(ClipboardManager.class);
-            cb.setPrimaryClip(ClipData.newPlainText("Wizard", text.trim()));
+            WizardKeyboardService.copyAsLatest(this, text.trim());
             toast(k == null ? "Copied · turn on Accessibility → Wizard OS to type it for you" : "Copied · paste it where you want it");
         }
         Log.i(TAG, "dictation " + (typed ? "typed" : "copied") + " chars=" + text.length());
