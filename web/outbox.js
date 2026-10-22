@@ -348,7 +348,12 @@
     }
     await keepAudio(it);
     await settlePending(it); // attachments sent while still uploading: their receipts, before the run is admitted
-    const fileIds = [...new Set((it.files || []).map(f => f.id).filter(Boolean))];
+    // An agent without file access still hears the voice note: its transcript is the message, and the recording
+    // stays in the owner's custody instead of riding along as a file the agent may not open.
+    const noFiles = !!it.agent && window.WosAgents?.get?.(it.agent)?.permissions?.files === 'none';
+    const fileIds = [...new Set((it.files || []).filter(f => !(noFiles && f.id === it.audioFile?.id)).map(f => f.id).filter(Boolean))];
+    // A run the service refused for files was never admitted: rebuild it without the recording.
+    if (noFiles && it.body && /agent_files_disabled/.test(it.error || '')) it.body = '';
     if (fileIds.length > 8) throw new HttpError(409, 'Too many attachments including the recording · originals kept');
     const aq = it.agent ? `?agent=${encodeURIComponent(it.agent)}` : '';
     const words = it.text || `Please use the attached ${fileIds.length === 1 ? 'file' : 'files'}.`;
