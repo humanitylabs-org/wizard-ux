@@ -6,7 +6,7 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const number = v => v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null;
   const pct = v => { const n=number(v); return n == null || n<0 || n>100 ? null : Math.round(n); };
-  const S={server:null,serverAt:0,serverError:'',devices:null,devicesAt:0,devicesError:'',health:null,healthAt:0,healthError:'',ai:null,aiAt:0,aiError:'',timer:null,busy:null,controller:null,panel:null,tab:'server',opener:'server',pressing:false};
+  const S={server:null,serverAt:0,serverError:'',devices:null,devicesAt:0,devicesError:'',health:null,healthAt:0,healthError:'',ai:null,aiAt:0,aiError:'',timer:null,busy:null,controller:null,panel:null,tab:'server',opener:'server',pressing:false,shown:{},anim:{},dialWait:null};
   function normalize(j) {return {cpu:pct(j?.cpuLoad),memory:pct(j?.percentUsedMemory),disk:pct(j?.percentUsed),memoryTotal:number(j?.memoryTotal),diskUsed:number(j?.diskUsed),diskSize:number(j?.diskSize)};}
   const desktopHome = () => !!window.__wux && (window.__wux.homeOpen || !window.__wux.ws[window.__wux.cur]?.wins.length);
   const active = () => !document.hidden && (!!S.panel || desktopHome() || (window.__wos?.idx===0 && !window.__wos?.sheet && !window.__wos?.desks?.[0]?.wins.length));
@@ -85,18 +85,55 @@
   const OURS=new Set(['obsidian','obsidian-light','landscapes']);
   const ours=()=>typeof document!=='undefined'&&OURS.has(document.documentElement.dataset.skin||'');
   const APP_OF={chatgpt:'wizard-chatgpt',claude:'wizard-claude',tinfoil:'wizard-tinfoil'};
-  function dial(label,v,attrs,title,sub){const R=12.5,C=2*Math.PI*R,on=v!=null;
-    return `<button class="rs-dial ${on?'':'rs-dial-off'}" ${attrs} ${title?`title="${esc(title)}"`:''} ${on?`role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${v}"`:''} aria-label="${esc(label)} ${on?v+'% used':esc(sub||'unavailable')}"><span class="rs-rw"><svg viewBox="0 0 30 30" aria-hidden="true"><circle class="rs-ring" cx="15" cy="15" r="${R}"/>${on&&v>0?`<circle class="rs-arc" cx="15" cy="15" r="${R}" stroke-dasharray="${(C*Math.max(0,Math.min(100,v))/100).toFixed(2)} ${C.toFixed(2)}"/>`:''}</svg><b>${on?v:''}</b></span><span class="rs-dl">${esc(label)}${on?'':`<small>${esc(sub||'—')}</small>`}</span></button>`;}
-  function dialHtml(){const j=S.server||{},providers=S.ai?.providers||[],kind=p=>String(p.provider||p.id||'').split(':')[0];
-    const server=[['CPU',j.cpu],['Memory',j.memory],['Disk',j.disk]].map(([k,v])=>dial(k,v,'data-res-open="server"'));
-    const per={};for(const p of providers)per[kind(p)]=(per[kind(p)]||0)+1;const seen={};
-    const ai=providers.filter(p=>p.status==='unavailable'||weekly(p)).map(p=>{const id=kind(p),n=per[id]>1?(seen[id]=(seen[id]||0)+1):0;
-      const full=p.providerName||(p.name&&!p.email?p.name:'')||id.charAt(0).toUpperCase()+id.slice(1),name=(full==='ChatGPT'?'GPT':full)+(n?' '+n:'');
-      const q=weekly(p),bad=p.status==='unavailable',v=bad||q?.remainingPercent==null?null:100-q.remainingPercent;
-      return bad&&APP_OF[id]?dial(name,null,`data-res-signin="${esc(APP_OF[id])}"`,p.email||name,'Sign in'):dial(name,v,'data-res-open="ai"',p.email||name);});
-    const row=(h,cells,empty)=>`<div class="rs-dials" role="group" aria-label="${h}">${cells.length?cells.join(''):`<span class="rs-dial-empty">${empty}</span>`}</div>`;
-    return `<section class="rs-widget rs-dialed wz-home-widget" aria-label="Server and AI resources">${row('Server',server,'')}${row('AI week used',ai,S.aiError?'AI usage unavailable':'Connecting…')}</section>`;}
-  function paint() {if(S.pressing)return;const hosts=document.querySelectorAll('[data-home-resources]'); for(const host of hosts) {const h=html();if(host.innerHTML!==h){const next=document.createElement('div');next.innerHTML=h;const oldZones=host.querySelectorAll('.rs-zone'),newZones=next.querySelectorAll('.rs-zone'),oldA=host.querySelector('.rs-health-alert'),newA=next.querySelector('.rs-health-alert');if(oldZones.length===2&&newZones.length===2&&!!oldA===!!newA){if(oldA){oldA.className=newA.className;oldA.innerHTML=newA.innerHTML;oldA.setAttribute('aria-label',newA.getAttribute('aria-label'));}oldZones.forEach((zone,i)=>{zone.className=newZones[i].className;zone.innerHTML=newZones[i].innerHTML;});}else host.innerHTML=h;}} if(S.panel) {const body=S.panel.querySelector('[data-res-body]'),scroll=body.scrollTop,hadRefreshFocus=body.contains(document.activeElement)&&document.activeElement.hasAttribute('data-usage-refresh');const h=S.tab==='server'?devicesHtml():S.tab==='health'?healthHtml():window.WosUsage?.html()||'<p>AI usage unavailable</p>';if(body.innerHTML!==h){body.innerHTML=h;body.scrollTop=scroll;if(hadRefreshFocus)body.querySelector('[data-usage-refresh]')?.focus({preventScroll:true});}}}
+  /* Speedometer dials (Miguel's skins, 22 Oct): a 240° car gauge per reading. Each dial remembers what it last showed
+     (S.shown) and every render starts from there, so Home re-renders never jump; settle() then moves the needle, arc
+     and number to the new reading. First reading of a session = needles sweep up from zero, staggered, like a car's
+     cluster on start. Before a reading lands the dial already sits at zero, so nothing pops in. */
+  const GKEY='wos.res.dials';
+  const gauge='<svg viewBox="0 0 60 50" aria-hidden="true"><path class="rs-track" d="M9.22 42A24 24 0 1 1 50.78 42"/><path class="rs-arc" pathLength="100" d="M9.22 42A24 24 0 1 1 50.78 42"/>'+
+    Array.from({length:11},(_,i)=>{const a=(-120+i*24)*Math.PI/180,r1=i%5?18.6:16.6,r2=20.4;return `<line class="rs-tick${i%5?'':' rs-major'}" x1="${(30+r1*Math.sin(a)).toFixed(2)}" y1="${(30-r1*Math.cos(a)).toFixed(2)}" x2="${(30+r2*Math.sin(a)).toFixed(2)}" y2="${(30-r2*Math.cos(a)).toFixed(2)}"/>`;}).join('')+
+    '<g class="rs-ndl"><path d="M29.1 30.6L30 11.5L30.9 30.6Z"/></g><circle class="rs-hub" cx="30" cy="30" r="2.2"/></svg>';
+  const ang=v=>`rotate(${(-120+2.4*Math.max(0,Math.min(100,v))).toFixed(1)}deg)`;
+  // In-flight sweeps live in S.anim so a Home re-render mid-sweep picks up where the needle is instead of snapping.
+  const ease=x=>1-Math.pow(1-x,3);
+  function cur(k){const a=S.anim[k];if(!a)return S.shown[k]??0;const x=Math.max(0,Math.min(1,(performance.now()-a.t0)/a.dur));return a.from+(a.to-a.from)*ease(x);}
+  function dial(sp,i){const k=sp.k,now=cur(k),off=sp.signin||sp.off,known=k in S.shown||!!S.anim[k];
+    return `<button class="rs-dial ${off?'rs-dial-off':''}" data-k="${esc(k)}" data-t="${sp.v??''}" style="--i:${i}" ${sp.attrs} ${sp.title?`title="${esc(sp.title)}"`:''} ${sp.v!=null?`role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${sp.v}"`:''} aria-label="${esc(sp.label)} ${sp.v!=null?sp.v+'% used':esc(sp.sub||'loading')}"><span class="rs-gauge" style="--a:${ang(now)};--o:${(100-now).toFixed(1)}">${gauge}<b>${known&&!off?Math.round(now):''}</b></span><span class="rs-dl">${esc(sp.label)}${sp.signin?`<small>${esc(sp.sub)}</small>`:''}</span></button>`;}
+  function dialSpecs(){const j=S.server||{},kind=p=>String(p.provider||p.id||'').split(':')[0];
+    const out=[['CPU',j.cpu],['Memory',j.memory],['Disk',j.disk]].map(([k,v])=>({k,label:k,v,attrs:'data-res-open="server"',row:'s',off:!S.server&&!!S.serverError}));
+    if(S.ai){const providers=S.ai.providers||[],per={},seen={};for(const p of providers)per[kind(p)]=(per[kind(p)]||0)+1;
+      const ai=providers.filter(p=>p.status==='unavailable'||weekly(p)).map(p=>{const id=kind(p),n=per[id]>1?(seen[id]=(seen[id]||0)+1):0;
+        const full=p.providerName||(p.name&&!p.email?p.name:'')||id.charAt(0).toUpperCase()+id.slice(1),label=(full==='ChatGPT'?'GPT':full)+(n?' '+n:'');
+        const q=weekly(p),bad=p.status==='unavailable',v=bad||q?.remainingPercent==null?null:100-q.remainingPercent;
+        return bad&&APP_OF[id]?{k:'ai:'+p.id,label,v:null,signin:true,sub:'Sign in',attrs:`data-res-signin="${esc(APP_OF[id])}"`,title:p.email||label,row:'a'}:{k:'ai:'+p.id,label,v,attrs:'data-res-open="ai"',title:p.email||label,row:'a'};});
+      try{localStorage.setItem(GKEY,JSON.stringify(ai.map(a=>({k:a.k,label:a.label}))));}catch{}
+      return out.concat(ai);}
+    let last=[];try{last=JSON.parse(localStorage.getItem(GKEY)||'[]')||[];}catch{}
+    return out.concat(last.filter(a=>a&&a.k&&a.label).map(a=>({k:String(a.k),label:String(a.label),v:null,attrs:'data-res-open="ai"',row:'a',off:!!S.aiError})));}
+  const dialSig=specs=>specs.map(s=>`${s.k}|${s.label}|${s.signin?1:0}`).join(',');
+  function dialHtml(){const specs=dialSpecs(),sv=specs.filter(s=>s.row==='s'),ai=specs.filter(s=>s.row==='a');
+    const row=(h,cells,o)=>`<div class="rs-dials" role="group" aria-label="${h}">${cells.map((c,i)=>dial(c,i+o)).join('')}</div>`;
+    return `<section class="rs-widget rs-dialed wz-home-widget" data-sig="${esc(dialSig(specs))}" aria-label="Server and AI resources">${row('Server',sv,0)}${ai.length?row('AI week used',ai,sv.length):''}</section>`;}
+  function paintDials(host){const specs=dialSpecs(),box=host.querySelector('.rs-dialed');
+    if(box&&box.dataset.sig===dialSig(specs)){for(const sp of specs){const el=box.querySelector(`[data-k="${CSS.escape(sp.k)}"]`);if(!el)continue;el.dataset.t=sp.v??'';el.classList.toggle('rs-dial-off',!!(sp.signin||sp.off));if(sp.v!=null){el.setAttribute('role','meter');el.setAttribute('aria-valuenow',sp.v);}}}
+    else host.innerHTML=dialHtml();
+    requestAnimationFrame(()=>requestAnimationFrame(()=>settle(host)));}
+  // Sweep only what is actually on screen: a hidden or not-yet-shown Home keeps its needles at zero for later.
+  const seen=el=>{if(document.hidden||!el.isConnected)return false;const r=el.getBoundingClientRect();return r.width>0&&r.bottom>0&&r.top<innerHeight&&r.right>0&&r.left<innerWidth&&getComputedStyle(el).visibility!=='hidden';};
+  function settle(root){let wait=false;for(const el of root.querySelectorAll('.rs-dial[data-k]')){const t=el.dataset.t;if(t===''||t==null)continue;
+      const k=el.dataset.k,to=Number(t),a=S.anim[k];
+      if(!seen(el)){if(!(k in S.shown)&&!a)wait=true;continue;}
+      let run=a&&a.to===to?a:null;
+      if(!run){if(!a&&(S.shown[k]??null)===to)continue;const from=cur(k),boot=!(k in S.shown)&&!a;
+        run=S.anim[k]={from,to,dur:boot?1400:700,t0:performance.now()+(boot?(Number(el.style.getPropertyValue('--i'))||0)*90:0)};}
+      const g=el.querySelector('.rs-gauge'),b=el.querySelector('.rs-gauge b'),left=Math.max(0,run.t0+run.dur-performance.now()),delay=Math.max(0,run.t0-performance.now());
+      g.style.setProperty('--d',Math.max(0,left-delay)+'ms');g.style.setProperty('--w',delay+'ms');
+      g.style.setProperty('--a',ang(to));g.style.setProperty('--o',100-to);cancelAnimationFrame(el._rsRaf);
+      const tick=()=>{if(S.anim[k]!==run){return;}const x=Math.max(0,Math.min(1,(performance.now()-run.t0)/run.dur));if(b&&!el.classList.contains('rs-dial-off'))b.textContent=Math.round(run.from+(run.to-run.from)*ease(x));
+        if(x<1)el._rsRaf=requestAnimationFrame(tick);else{S.shown[k]=run.to;delete S.anim[k];}};
+      el._rsRaf=requestAnimationFrame(tick);}
+    if(wait){clearTimeout(S.dialWait);S.dialWait=setTimeout(()=>{for(const h of document.querySelectorAll('[data-home-resources]'))settle(h);},400);}}
+  function paint() {if(S.pressing)return;const hosts=document.querySelectorAll('[data-home-resources]'); for(const host of hosts) {if(ours()){paintDials(host);continue;}const h=html();if(host.innerHTML!==h){const next=document.createElement('div');next.innerHTML=h;const oldZones=host.querySelectorAll('.rs-zone'),newZones=next.querySelectorAll('.rs-zone'),oldA=host.querySelector('.rs-health-alert'),newA=next.querySelector('.rs-health-alert');if(oldZones.length===2&&newZones.length===2&&!!oldA===!!newA){if(oldA){oldA.className=newA.className;oldA.innerHTML=newA.innerHTML;oldA.setAttribute('aria-label',newA.getAttribute('aria-label'));}oldZones.forEach((zone,i)=>{zone.className=newZones[i].className;zone.innerHTML=newZones[i].innerHTML;});}else host.innerHTML=h;}} if(S.panel) {const body=S.panel.querySelector('[data-res-body]'),scroll=body.scrollTop,hadRefreshFocus=body.contains(document.activeElement)&&document.activeElement.hasAttribute('data-usage-refresh');const h=S.tab==='server'?devicesHtml():S.tab==='health'?healthHtml():window.WosUsage?.html()||'<p>AI usage unavailable</p>';if(body.innerHTML!==h){body.innerHTML=h;body.scrollTop=scroll;if(hadRefreshFocus)body.querySelector('[data-usage-refresh]')?.focus({preventScroll:true});}}}
   async function read(path,signal) {const r=await fetch(path,{cache:'no-store',credentials:'same-origin',signal});if(!r.ok)throw new Error('Unavailable');return r.json();}
   async function update(force=false) {
     if(S.busy)return S.busy;if(!active())return;
