@@ -574,7 +574,7 @@ def main():
                'required': sorted(REQUIRED), 'completed': completed,
                'apk_sha256': digest, 'debug_build_receipt': str(args.debug_receipt.resolve()),
                'physical_device': False, 'published': False,
-               'tap_retries': self.tap_retries,
+               'tap_retries': list(getattr(suite, 'tap_retries', None) or []) if isinstance(getattr(suite, 'tap_retries', None), list) else [],
                'scope': 'Native emulator taps + real recorder/bridge/UI signals; synthetic loopback server/audio; no live Wizard traffic'}
     (out / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
     print(json.dumps(receipt), flush=True)
