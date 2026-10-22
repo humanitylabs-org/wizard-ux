@@ -15,6 +15,12 @@ final class Handoff {
         return "{\"action\":\"say\",\"text\":" + quote(t) + "}";
     }
 
+    /** Opens Settings, optionally on one feature (a short lowercase id such as "photos-backup"; anything else is dropped). */
+    static String settings(String focus) {
+        if (focus == null || !focus.matches("[a-z][a-z0-9-]{0,39}")) return "{\"action\":\"settings\"}";
+        return "{\"action\":\"settings\",\"focus\":" + quote(focus) + "}";
+    }
+
     /** JSON string literal; also escapes '<' and line/paragraph separators so it is inert inside JS source. */
     static String quote(String s) {
         StringBuilder b = new StringBuilder(s.length() + 8).append('"');
