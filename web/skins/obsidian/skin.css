@@ -495,3 +495,10 @@ html[data-skin^="obsidian"] .home .constellation .now-card:active { transform: s
 @keyframes nc-spin { to { transform: rotate(360deg); } }
 @keyframes nc-pulse { 0%, 100% { opacity: .55; transform: scale(.78); } 50% { opacity: 1; transform: scale(1); } }
 html[data-skin="obsidian-light"] .home .constellation .now-card[data-act="ready"] { --c: #14935a; }
+
+/* Miguel's skins (phone, 22 Oct): no Back in the dock. A thread's Back is a small chevron in the top-left of its header
+ * (swipe right still goes back), and the voice controls (cancel, pause, screenshot, attach) sit centred inside the pill. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head { padding-left: 4px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head .ch-back { width: 28px; height: 28px; border-radius: 9px; color: var(--ink-3); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head .ch-back svg { width: 16px; height: 16px; stroke-width: 2.2; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .voice .arc { bottom: calc(var(--pill-b) + var(--pill-h) / 2); }
