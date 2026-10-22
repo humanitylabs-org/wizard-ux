@@ -1,118 +1,132 @@
 package ai.wizards.os;
 
-import android.net.http.SslError;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
-import android.webkit.SslErrorHandler;
-import android.webkit.WebResourceError;
+import android.webkit.CookieManager;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.Map;
 
-/**
- * Where an overlay page (side-button orb, floating orb, screen mode) comes from: the Wizard's own web shell first
- * (<origin>/wizard-os-home/assist/<page>, so its look and behaviour follow web deploys), and the copy bundled in the
- * APK (file:///android_asset/wizard-os-home/assist/<page>, same layout as web/) when the Wizard can't be reached.
- *
- * Security: the Wizard copy is tried only over https at exactly the configured origin (scheme, host, port), and
- * while it is showing every request outside <origin>/wizard-os-home/ is refused, so the page and its native bridge
- * never see any other site. The page never navigates. The bundled copy runs exactly as before: network blocked,
- * nothing but the bundled folder served. Any failure before the page has finished (error, HTTP status >= 400, TLS,
- * a redirect, or no answer within TIMEOUT_MS) drops to the bundled copy.
- *
- * The native bridges stay addJavascriptInterface (several calls return values synchronously, which an origin-scoped
- * WebMessageListener can't do without changing the pages). They are scoped by what the WebView can hold: only the
- * Wizard copy at the exact origin or the bundled copy is ever loaded, nothing navigates, and every other request is
- * refused, so no other origin's script runs where the bridge is.
+/** Exact-origin static documents, or the APK copy offline. No WebView-owned network requests:
+ * Android's shouldInterceptRequest is NOT called for subsequent redirect URLs. Native fetches
+ * refuse redirects and attach a frame/worker-denying CSP to every document, including the bundle.
+ * The synchronous bridges remain private to these three trusted top-level pages, not arbitrary
+ * same-origin shell pages. A compromised selected Wizard can still supply privileged JavaScript.
  */
 public class OverlayPage extends WebViewClient {
     static final long TIMEOUT_MS = 1500;
-    private static final String TAG = "WizardOverlay";
-
-    /* ---------------------------------------------------------------- loading */
-
     private final String page;
     private final boolean remoteFirst;
-    private final String origin = OverlayPolicy.wizardOrigin();
     private final Handler main = new Handler(Looper.getMainLooper());
-    private final Runnable timeout = () -> fallBack("no answer in " + TIMEOUT_MS + " ms");
+    private final Runnable timeout = () -> fallBack("timeout");
     private WebView web;
     private String current;
+    private volatile String origin;
     private volatile boolean remote;
+    private volatile int generation;
     private boolean done;
 
-    /** @param page file name in assist/, optionally with a #fragment; @param remoteFirst try the Wizard copy first */
     public OverlayPage(String page, boolean remoteFirst) {
+        if (!OverlayPolicy.validPage(page)) throw new IllegalArgumentException("Unknown overlay page");
         this.page = page;
         this.remoteFirst = remoteFirst;
     }
-
-    /** Loads the page into {@code v}; {@link #ready} runs once, for whichever copy ends up showing. */
     public void load(WebView v) {
         web = v;
+        origin = ServerSettings.origin(v.getContext());
         String r = remoteFirst ? OverlayPolicy.remoteUrl(origin, page) : null;
         show(r != null, r != null ? r : OverlayPolicy.bundledUrl(page));
     }
-
-    /** The page has finished loading (the Wizard copy, or the bundled one). Main thread. */
     protected void ready(WebView v, String url) { }
-
     private void show(boolean fromWizard, String url) {
+        generation++;
         remote = fromWizard;
         current = url;
         done = false;
-        web.getSettings().setBlockNetworkLoads(!fromWizard);
-        web.getSettings().setAllowFileAccess(!fromWizard); // bundled copy: as before; the Wizard copy never needs file:
+        // Interception serves even assets. Never permit a default-network or content/file bypass.
+        web.getSettings().setBlockNetworkLoads(true);
+        web.getSettings().setAllowFileAccess(false);
+        web.getSettings().setAllowContentAccess(false);
         main.removeCallbacks(timeout);
         if (fromWizard) main.postDelayed(timeout, TIMEOUT_MS);
         web.loadUrl(url);
     }
-
     private void fallBack(String why) {
-        if (!remote || done || web == null) return;
-        Log.i(TAG, page + ": Wizard copy unavailable (" + why + "); showing the bundled copy");
+        if (!remote || web == null) return;
+        Log.i("WizardOverlay", page + ": " + why + "; showing bundled copy");
         web.stopLoading();
         show(false, OverlayPolicy.bundledUrl(page));
     }
-
-    /** Overlay pages never navigate. A Wizard that redirects the page (a login wall, a move) gets the bundled copy. */
-    @Override
-    public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
-        if (r.isForMainFrame()) fallBack("navigation to " + r.getUrl().getHost());
+    @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
+        if (r.isForMainFrame()) fallBack("navigation");
         return true;
     }
-
-    @Override
-    public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
+    private static WebResourceResponse blocked() {
+        return new WebResourceResponse("text/plain", "utf-8", 403, "Blocked", Map.of(), new ByteArrayInputStream(new byte[0]));
+    }
+    @Override public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
+        final int attempt = generation;
+        final boolean fromWizard = remote;
         String u = r.getUrl().toString();
-        if (remote ? OverlayPolicy.fromWizard(origin, u) : OverlayPolicy.bundled(u)) return null;
-        return new WebResourceResponse("text/plain", "utf-8", 403, "Blocked", null, new ByteArrayInputStream(new byte[0]));
+        if (!"GET".equals(r.getMethod()) || !(fromWizard ? OverlayPolicy.fromWizard(origin, u) : OverlayPolicy.bundled(u))) return blocked();
+        // A subframe may not load even an allowlisted document (defence beyond frame-src).
+        if (u.split("#", 2)[0].endsWith(".html") && (!r.isForMainFrame() || !OverlayPolicy.samePage(current, u))) return blocked();
+        try {
+            byte[] bytes = fromWizard ? fetch(u) : read(web.getContext().getAssets().open(r.getUrl().getPath().substring("/android_asset/".length())));
+            String path = r.getUrl().getPath();
+            String mime = path.endsWith(".html") ? "text/html" : path.endsWith(".js") ? "application/javascript" : path.endsWith(".css") ? "text/css" : "image/png";
+            return new WebResourceResponse(mime, "utf-8", 200, "OK",
+                    Map.of("Content-Security-Policy", OverlayPolicy.CSP, "X-Content-Type-Options", "nosniff", "Cache-Control", "no-store"), new ByteArrayInputStream(bytes));
+        } catch (Exception e) {
+            if (fromWizard) main.post(() -> { if (generation == attempt) fallBack("static resource unavailable"); });
+            return blocked();
+        }
     }
-
-    @Override
-    public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) { fallBack("error " + e.getErrorCode()); }
-
-    @Override
-    public void onReceivedHttpError(WebView v, WebResourceRequest r, WebResourceResponse resp) {
-        if (resp.getStatusCode() >= 400) fallBack("HTTP " + resp.getStatusCode() + " " + r.getUrl().getPath());
+    /** Native HTTPS transport: no redirect, cache, unbounded stream, or weakened certificate checks. */
+    protected byte[] fetch(String url) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        c.setInstanceFollowRedirects(false);
+        c.setConnectTimeout(1000);
+        c.setReadTimeout(1000);
+        c.setUseCaches(false);
+        String cookies = origin == null ? null : CookieManager.getInstance().getCookie(origin);
+        if (cookies != null) c.setRequestProperty("Cookie", cookies);
+        try {
+            if (c.getResponseCode() != 200) throw new java.io.IOException("HTTP " + c.getResponseCode());
+            return read(c.getInputStream());
+        } finally { c.disconnect(); }
     }
-
-    @Override
-    public void onReceivedSslError(WebView v, SslErrorHandler h, SslError e) {
-        h.cancel();
-        fallBack("TLS");
+    private static byte[] read(InputStream input) throws Exception {
+        try (InputStream in = input; ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buf = new byte[8192]; int n;
+            while ((n = in.read(buf)) != -1) {
+                if (out.size() + n > 4 * 1024 * 1024) throw new java.io.IOException("Overlay resource too large");
+                out.write(buf, 0, n);
+            }
+            return out.toByteArray();
+        }
     }
-
-    @Override
-    public final void onPageFinished(WebView v, String url) {
-        if (done || current == null || !OverlayPolicy.samePage(current, url)) return; // an abandoned attempt
-        done = true;
-        main.removeCallbacks(timeout);
-        Log.i(TAG, page + " from " + (remote ? "the Wizard" : "the bundled copy"));
-        ready(v, url);
+    @Override public final void onPageFinished(WebView v, String url) {
+        if (done || current == null || !OverlayPolicy.samePage(current, url)) return;
+        final int attempt = generation;
+        // onPageFinished does not mean that an external script ran (HTTP-200 login/error HTML,
+        // syntax errors, missing Orb). Keep the deadline armed until the actual page API exists.
+        String api = page.startsWith("surface") ? "W" : page.startsWith("everywhere") ? "E" : "S";
+        v.evaluateJavascript("!!(window." + api + ("S".equals(api) ? ")" : " && window.Orb)"), value -> {
+            if (generation != attempt || done) return;
+            if (!"true".equals(value)) { fallBack("page API missing"); return; }
+            done = true;
+            main.removeCallbacks(timeout);
+            Log.i("WizardOverlay", page + " from " + (remote ? "Wizard" : "bundle"));
+            ready(v, url);
+        });
     }
 }

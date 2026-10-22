@@ -64,7 +64,15 @@ public class OverlayPolicyTest {
         assertFalse(OverlayPolicy.samePage(null, "x"));
     }
 
-    @Test public void theWizardOriginIsTheBuildOrigin() {
-        assertEquals(BuildConfig.ORIGIN, OverlayPolicy.wizardOrigin());
+    @Test public void rejectBroaderShellFramesQueriesAndInvalidPorts() {
+        for (String path : new String[]{"index.html", "core/settings.js", "api", "api/voice", "assist/unknown.html", "assist/%73urface.html", "assist/surface.html?x=1"})
+            assertFalse(path, OverlayPolicy.fromWizard(O, O + "/wizard-os-home/" + path));
+        for (String port : new String[]{":0", ":8443", ":65536"})
+            assertNull(OverlayPolicy.remoteUrl(O + port, "surface.html"));
+        assertNull(OverlayPolicy.remoteUrl(O, "../index.html"));
+        assertFalse(OverlayPolicy.bundled(OverlayPolicy.ASSETS + "index.html"));
+        assertTrue(OverlayPolicy.CSP.contains("frame-src 'none'"));
+        assertTrue(OverlayPolicy.CSP.contains("worker-src 'none'"));
+        assertTrue(OverlayPolicy.CSP.contains("connect-src 'none'"));
     }
 }
