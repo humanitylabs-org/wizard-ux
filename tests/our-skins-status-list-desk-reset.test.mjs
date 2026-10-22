@@ -40,5 +40,7 @@ test('our skins drop the Layout picker and the Yesterday filter', () => {
 test('on our skins, leaving a desk returns its Chats window to the session list', () => {
   const src = read('../web/app.js');
   const go = src.slice(src.indexOf('  function goDesk(n, silent) {'), src.indexOf('  function announce(html) {'));
-  assert.match(go, /if \(moved && from && \['obsidian', 'obsidian-light', 'landscapes'\]\.includes\(document\.documentElement\.dataset\.skin \|\| ''\)\) for \(const id of from\.wins\) \{ const w = W\[id\]; if \(w\?\.app === 'chats' && w\.thread && !to\.wins\.includes\(id\)\) chatsBack\(w\); \}/);
+  assert.match(go, /if \(moved && from && \['obsidian', 'obsidian-light', 'landscapes'\]\.includes\(document\.documentElement\.dataset\.skin \|\| ''\)\) for \(const id of from\.wins\) \{ const w = W\[id\]; if \(w\?\.app === 'chats' && w\.thread && !to\.wins\.includes\(id\) && !openedFrom\(to, id\)\) chatsBack\(w\); \}/);
+  // A link opened from the chat (its own desk, or a bound review view) must not throw the chat back to the list.
+  assert.match(src, /const openedFrom = \(desk, chatId\) => !!desk && desk\.wins\.some\(x => W\[x\]\?\.from\?\.win === chatId \|\| W\[x\]\?\.bound === chatId\);/);
 });
