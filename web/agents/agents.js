@@ -240,7 +240,7 @@
       ${privacy === 'private' ? `<div class="ag-sec">Standard chats</div><div class="ag-card"><div class="ag-tog"><span class="tx"><b>Read standard chats</b><small>Read-only search, conversation history and memory. Nothing flows back.</small></span><button type="button" class="sw" role="switch" aria-checked="${p.read_standard_chats === true}" aria-label="Read standard chats" data-standard-chats ${editable && typeof p.read_standard_chats === 'boolean' ? '' : 'disabled'}></button></div>${typeof p.read_standard_chats !== 'boolean' ? '<p class="ag-note">Available after the Agent Service update.</p>' : ''}</div>` : ''}
       <div class="ag-sec">Other agents</div>
       <div class="ag-seg" role="radiogroup" aria-label="Other agents" style="--n:${o.other_agents.length}">${o.other_agents.map(x => `<button type="button" role="radio" aria-checked="${(p.other_agents || 'none') === x.id}" data-others="${esc(x.id)}" ${dis}>${esc(x.label)}</button>`).join('')}</div>
-      ${draft ? '' : `<p class="ag-note">${privacy === 'private' ? 'Sealed: no other agent can read this agent’s chats, memory or files, whatever its own setting says.' : 'Private agents are never readable, whatever this says.'}</p>`}`;
+      ${draft ? '' : `<p class="ag-note">${privacy === 'private' ? 'Sealed: no other agent can read this agent’s chats, memory or files, whatever its own setting says. The Agent Service keeps them apart; it is not encryption, so this box’s administrators (and, on an install beside your own Hermes, that Hermes) can still read them.' : 'Private agents are never readable, whatever this says.'}</p>`}`;
   }
 
   /* ---------------- detail ---------------- */

@@ -55,9 +55,6 @@ window.WosChatPower = function chatPower(A) {
     const b = el.querySelector('[data-chlatest]'); if (!b || !nb) return;
     b.hidden = bottomGap(nb) < 160;
   }
-  // Threads already placed in this page. The first placement after a page load is a restore (a reload, an
-  // update, the app coming back): the saved place wins even in a Working thread, as long as it is for the same reply.
-  const placedThisPage = new Set();
   /* Called by renderThread after the new DOM is in. Returns true when it placed the scroll itself. */
   function position(w, el, nb, o) {
     const c = ch(w.id), sid = w.thread;
@@ -80,11 +77,19 @@ window.WosChatPower = function chatPower(A) {
         }
         return true;
       }
-      c.posFor = sid;
-      const restore = !placedThisPage.has(sid); placedThisPage.add(sid);
-      const saved = RP.read(sid), reply = lastReply(nb);
+      c.posFor = sid; c.posLid = c.lid; c.readerMoved = false;
+      // A cached paint comes first and may predate a reply that landed while you were away (James, 22 Oct:
+      // tapping a fresh Ready reply opened at his old place in the previous one). Remember it, so the server read decides.
+      c.posCached = !(c.loadedFor === sid && c.loadedNav === c.readNav);
+      // The Chats list's own read state decides (James, 22 Oct): a thread opened while it has an unread reply (bold, in
+      // Ready) opens at that reply's first line; a thread you have already read returns you to your place.
+      const unread = c.unreadOpen === sid;
+      const saved = unread ? null : RP.read(sid), reply = lastReply(nb);
       let apply = null;
-      if (o.working && !(restore && saved && !saved.atBottom && c.lid && saved.messageId === c.lid)) { c.follow = true; toBottom(nb); }
+      // A Working thread follows the live reply, unless you had scrolled up in it: your place wins whenever it is
+      // for the same latest reply, on a reload and on every reopen alike (James, 22 Oct: leaving the slow
+      // Philosopher thread mid-run and coming back threw him to the bottom).
+      if (o.working && !(saved && !saved.atBottom && c.lid && saved.messageId === c.lid)) { c.follow = true; toBottom(nb); }
       else if (saved && c.lid && saved.messageId === c.lid) {
         // Back where you were: anchored to the latest reply, so layout changes don't shift it.
         apply = saved.atBottom ? toBottom : box => { const r = lastReply(box); box.scrollTop = r && isFinite(saved.anchorOffset) ? box.scrollTop + relTop(box, r) - saved.anchorOffset : saved.scrollTop; };
@@ -95,8 +100,15 @@ window.WosChatPower = function chatPower(A) {
         c.atStart = sid;
       } else { c.follow = true; toBottom(nb); }
       if (apply) { apply(nb); if (!saved || saved.messageId !== c.lid) c.follow = bottomGap(nb) < 80; settle(c, nb, apply); }
+      if (!c.posCached) c.unreadOpen = '';
       paintLatest(el, nb);
       return true;
+    }
+    // The server read after a cached paint: a newer latest reply means a fresh open (its first line), unless you already scrolled.
+    if (c.posCached && c.loadedFor === sid && c.loadedNav === c.readNav) {
+      c.posCached = false;
+      if (c.lid === c.posLid || c.readerMoved) c.unreadOpen = '';
+      if (c.lid !== c.posLid && !c.readerMoved) { endSettle(c); c.posFor = null; return position(w, el, nb, o); }
     }
     // Later renders: a place still settling is placed again; a thread that follows stays on the bottom; otherwise the reading place holds.
     if (settling(c)) { const s = c.settle; s.apply(nb); settle(c, nb, s.apply, s.until); }
@@ -130,7 +142,7 @@ window.WosChatPower = function chatPower(A) {
     const id = el.dataset.chats, w = H.win(id); if (!w || !w.thread || w.thread === '__new__') return;
     const c = ch(id);
     if (settling(c) && c.settle.nb === nb) { paintLatest(el, nb); return; } // our own placement, not the reader
-    c.follow = bottomGap(nb) < 80;
+    c.follow = bottomGap(nb) < 80; c.readerMoved = true;
     paintLatest(el, nb);
     clearTimeout(saveT);
     savePending = () => {
@@ -528,7 +540,7 @@ window.WosChatPower = function chatPower(A) {
       const inp = el?.querySelector('[data-fiq]'); if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
     });
   }
-  const opened = (wid, sid) => { const c = ch(wid); c.posFor = ''; c.follow = false; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
+  const opened = (wid, sid) => { const c = ch(wid), s = sid && sid !== '__new__' ? LIVE.session(sid) : null; c.unreadOpen = s && LIVE.isNew(s) ? sid : ''; c.posFor = ''; c.follow = false; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
   const holds = id => !!sheet && sheet.pane === id;
   return { position, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
     paint, closeSheet, click, bind, opened, holds, openFiles, openModels, retryThread, FOLDER_SVG, RP, newModel: c => c.newModel || null };

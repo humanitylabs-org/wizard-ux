@@ -3,3 +3,14 @@ html[data-skin="sepia"] { color-scheme: light; }
 html[data-skin="sepia"] .home-time { font-family: 'Sk Fraunces', Georgia, serif; font-weight: 300; letter-spacing: -.035em; text-shadow: 0 1px rgba(255, 252, 238, .55); }
 html[data-skin="sepia"] :is(.now-card, .side-card) { box-shadow: inset 0 1px 0 rgba(255, 252, 238, .5), 0 12px 36px rgba(83, 59, 31, .08); }
 html[data-skin="sepia"] .sk-dot { border-color: rgba(86, 65, 40, .28); }
+
+/* Chat reading size: the stock phone default is 17px (core/chats.css); this skin keeps its original 15px. */
+html[data-skin="sepia"][data-shell="phone"] .ch-msgs .msg .bub { font-size: 15px; line-height: 1.45; }
+html[data-skin="sepia"][data-shell="phone"] .ch-msgs .bub h1 { font-size: 19px; }
+html[data-skin="sepia"][data-shell="phone"] .ch-msgs .bub h2 { font-size: 17.5px; }
+html[data-skin="sepia"][data-shell="phone"] .ch-msgs .bub h3 { font-size: 16px; }
+html[data-skin="sepia"][data-shell="phone"] .ch-msgs .bub :is(h4, h5, h6) { font-size: 15px; }
+html[data-skin="sepia"][data-shell="phone"] .ch-msgs .bub code { font-size: 13px; }
+html[data-skin="sepia"][data-shell="phone"] .ch-msgs .bub pre { font-size: 12px; }
+html[data-skin="sepia"][data-shell="phone"] .ch-msgs .bub .code pre code { font-size: 12.5px; }
+html[data-skin="sepia"][data-shell="phone"] .ch-msgs .bub table { font-size: 13.5px; }

@@ -641,3 +641,17 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 .ch-sync b { font-weight: 600; color: var(--wz-text, var(--ink)); }
 .ch-sync.ok { color: var(--violet-2, var(--ink-2)); }
 @media (prefers-reduced-motion: reduce) { .ch-ptr.out, .ch-ptr svg { transition: none; } }
+
+/* Phone chat reading size. Mobile line-length research puts comfortable reading
+   at roughly 35–50 characters (about 7–9 words) per line. At 15px a ~400px
+   phone fits ~53 Roboto characters, so message text steps up to 17px (~45
+   chars, ~8 words). Thread contents only: the Chats list and chrome keep
+   their sizes, and the desktop shell is unchanged. */
+html[data-shell="phone"] .ch-msgs .msg .bub { font-size: 17px; line-height: 1.5; }
+html[data-shell="phone"] .ch-msgs .bub h1 { font-size: 21px; }
+html[data-shell="phone"] .ch-msgs .bub h2 { font-size: 19.5px; }
+html[data-shell="phone"] .ch-msgs .bub h3 { font-size: 18px; }
+html[data-shell="phone"] .ch-msgs .bub :is(h4, h5, h6) { font-size: 17px; }
+html[data-shell="phone"] .ch-msgs .bub code { font-size: 14.5px; }
+html[data-shell="phone"] .ch-msgs .bub .code pre code, html[data-shell="phone"] .ch-msgs .bub pre { font-size: 13.5px; }
+html[data-shell="phone"] .ch-msgs .bub table { font-size: 15px; }
