@@ -1,4 +1,4 @@
-/* Native-only helper. No bridge, network, persistent state or idle polling. */
+/* Native-only helper. Origin-scoped metrics port; no network, storage or idle polling. */
 (() => {
   if (window.__wosScrollCapture) return;
   let selected = null, active = null;
@@ -13,30 +13,38 @@
     const d = hit?.closest?.(DOCK + ',' + SHELL_DOCK);
     return !!d && controls(e).includes(d);
   };
-  function bounds(e) {
-    if (!e?.isConnected || document.hidden) return null;
+  function bounds(e, reject=()=>null, allowHidden=false) {
+    if (!e?.isConnected) return reject('detached');
+    // PixelCopy needs a live page. The scroll proxy does not: an OEM screenshot toolbar
+    // may pause the still-visible Activity, which marks the WebView page hidden.
+    if (document.hidden && !allowHidden) return reject('document-hidden');
     const r = e.getBoundingClientRect(), s = getComputedStyle(e);
     // PixelCopy uses window coordinates; scrollTop/client sizes are CSS layout units.
     // Translation is safe. Scaling, rotation, skew, perspective and browser zoom are not.
-    if (window.visualViewport && Math.abs(visualViewport.scale - 1) > .001) return null;
+    if (window.visualViewport && Math.abs(visualViewport.scale - 1) > .001) return reject('viewport-zoom');
     for (let node = e; node; node = node.parentElement) {
       const st = getComputedStyle(node);
       if ((st.zoom && Number(st.zoom) !== 1) || (st.scale && st.scale !== 'none') ||
-          (st.rotate && st.rotate !== 'none') || st.perspective !== 'none') return null;
+          (st.rotate && st.rotate !== 'none') || st.perspective !== 'none') return reject('ancestor-scale-rotate-perspective');
       if (st.transform !== 'none') {
         const m = new DOMMatrixReadOnly(st.transform);
         if (!m.is2D || Math.abs(m.a - 1) > .001 || Math.abs(m.d - 1) > .001 ||
-            Math.abs(m.b) > .001 || Math.abs(m.c) > .001) return null;
+            Math.abs(m.b) > .001 || Math.abs(m.c) > .001) return reject('ancestor-transform');
       }
     }
-    if (r.width < 80 || r.height < 80 || r.left < 0 || r.top < 0 ||
-        r.right > innerWidth + 1 || r.bottom > innerHeight + 1 ||
-        s.visibility !== 'visible' || s.display === 'none' ||
-        !['auto','scroll'].includes(s.overflowY) || e.scrollHeight <= e.clientHeight + 2) return null;
+    if (r.width < 80 || r.height < 80) return reject('too-small');
+    if (r.left < 0 || r.top < 0 || r.right > innerWidth + 1 || r.bottom > innerHeight + 1) return reject('outside-viewport');
+    if (s.visibility !== 'visible' || s.display === 'none') return reject('hidden');
+    if (!['auto','scroll'].includes(s.overflowY)) return reject('not-scroll-container');
+    if (e.scrollHeight <= e.clientHeight + 2) return reject('not-overflowing');
     // Exclude covered/background desks and overlays, not merely display:none nodes.
-    for (const x of [.1,.5,.9]) for (const y of [.1,.5,.9]) {
+    // A paused (hidden) page has no fresh hit-test frame; keep only the scroller that
+    // was already confirmed uncovered while the window was live.
+    if (document.hidden && allowHidden) {
+      if (e !== proxyNode) return reject('hidden-unconfirmed');
+    } else for (const x of [.1,.5,.9]) for (const y of [.1,.5,.9]) {
       const hit = document.elementFromPoint(r.left + r.width*x, r.top + r.height*y);
-      if (!hit || !(e.contains(hit) || docked(hit, e))) return null;
+      if (!hit || !(e.contains(hit) || docked(hit, e))) return reject('occluded');
     }
     return {x:r.left + e.clientLeft,y:r.top + e.clientTop,w:e.clientWidth,h:e.clientHeight,
       vw:innerWidth,dpr:devicePixelRatio,top:e.scrollTop,height:e.scrollHeight};
@@ -62,12 +70,83 @@
     }
     return b;
   }
+  let searchReason='no-chat-scrollers';
+  function candidate(allowHidden=false) {
+    const reasons=[],reject=reason=>{if(!reasons.includes(reason))reasons.push(reason);return null;};
+    const found=[...document.querySelectorAll('[data-chats] .ch-msgs,[data-chats] .ch-scroll')]
+      .map(e=>({e,b:bounds(e,reject,allowHidden)})).filter(x=>x.b).sort((a,b)=>b.b.w*b.b.h-a.b.w*a.b.h)[0] || null;
+    searchReason=found?'ok':reasons.join('|') || 'no-chat-scrollers';return found;
+  }
+  // Samsung Smart Capture sees a View, not overflow divs. Publish only changed,
+  // numeric geometry from the exact same candidate as AOSP; never touch input.
+  const documentKey='sc-'+Math.random().toString(36).slice(2)+'-';
+  let proxyNode=null, proxyIdentity='', proxyKey='', serial=0, last='', timer=0, frame=0, sentAt=0;
+  let resize=null;
+  const port=window.wizardScrollPort;
+  function proxyCandidate() {
+    const c=active?null:candidate(true);
+    const identity=c ? location.href+'\n'+(c.e.closest('[data-chats]')?.dataset.draftFor || '') : '';
+    if(c?.e!==proxyNode || identity!==proxyIdentity) {
+      proxyNode=c?.e || null;proxyIdentity=identity;proxyKey=c?documentKey+(++serial):'';
+      resize?.disconnect();
+      if(proxyNode && resize) {
+        resize.observe(proxyNode);
+        for(const child of proxyNode.children)resize.observe(child);
+      }
+    }
+    return c;
+  }
+  function pushProxy() {
+    timer=0;frame=0;sentAt=performance.now();
+    const c=proxyCandidate(), b=c?.b;
+    const value=JSON.stringify(b ? {v:1,key:proxyKey,height:b.height,top:b.top,extent:b.h,dpr:b.dpr,vw:b.vw,reason:'ok'} : {v:1,reason:active?'capture-active':searchReason});
+    if(value!==last) { last=value;try {port?.postMessage(value);}catch(_){} }
+  }
+  function refreshProxy() {
+    if(!port || timer || frame)return;
+    // Hidden pages get no animation frames; push from the timer instead.
+    timer=setTimeout(()=>{timer=0;if(document.hidden)pushProxy();else frame=requestAnimationFrame(pushProxy);},Math.max(0,100-(performance.now()-sentAt)));
+  }
+  function proxyScroll(key,method,y) {
+    const c=proxyCandidate();
+    if(!c || key!==proxyKey || !Number.isFinite(y) || !['by','to'].includes(method))return false;
+    // Absolute/relative commands are executed serially in JS (no lost deltas),
+    // even when the native metrics acknowledgement is still throttled.
+    const e=c.e,old=e.style.getPropertyValue('scroll-behavior'),priority=e.style.getPropertyPriority('scroll-behavior');
+    e.style.setProperty('scroll-behavior','auto','important');
+    e.scrollTop=method==='by'?e.scrollTop+y:y;
+    old?e.style.setProperty('scroll-behavior',old,priority):e.style.removeProperty('scroll-behavior');
+    refreshProxy();return true;
+  }
+  if(port) {
+    resize=new ResizeObserver(refreshProxy);
+    const changes=new MutationObserver(records=>{
+      if(records.some(r=>r.type==='childList') && proxyNode) {
+        resize.disconnect();resize.observe(proxyNode);
+        for(const child of proxyNode.children)resize.observe(child);
+      }
+      refreshProxy();
+    });
+    changes.observe(document.documentElement,{subtree:true,childList:true,characterData:true,attributes:true,
+      attributeFilter:['class','style','hidden','data-draft-for']});
+    document.addEventListener('scroll',refreshProxy,{capture:true,passive:true});
+    // Current WebViews expose Navigation API; MainActivity's visited-history
+    // callback refreshes older WebViews without patching history/Back semantics.
+    window.navigation?.addEventListener('currententrychange',refreshProxy);
+    window.visualViewport?.addEventListener('resize',refreshProxy,{passive:true});
+    window.visualViewport?.addEventListener('scroll',refreshProxy,{passive:true});
+    for(const event of ['resize','popstate','hashchange','pageshow'])addEventListener(event,refreshProxy,{passive:true});
+    for(const event of ['transitionend','animationend','visibilitychange','wos-scroll-capture-end'])document.addEventListener(event,refreshProxy,{passive:true});
+    addEventListener('pagehide',()=>{clearTimeout(timer);cancelAnimationFrame(frame);timer=frame=0;last='';try{port.postMessage('{"v":1}');}catch(_){};});
+    refreshProxy();
+  }
   window.__wosScrollCapture = {
+    refreshProxy, proxyScroll,
+    searchReason:()=>searchReason,
+    resumeProxy() { last='';refreshProxy(); },
     search() {
       if (active) return null;
-      const candidates = [...document.querySelectorAll('[data-chats] .ch-msgs,[data-chats] .ch-scroll')]
-        .map(e=>({e,b:bounds(e)})).filter(x=>x.b).sort((a,b)=>b.b.w*b.b.h-a.b.w*a.b.h);
-      selected = candidates[0]?.e || null; return candidates[0]?.b || null;
+      const c=candidate();selected=c?.e || null;return c?.b || null;
     },
     start(id) {
       if (active) end(active.id);
@@ -88,6 +167,7 @@
         if(records.some(r=>e.contains(r.target))) end(id); else valid(id);
       });
       a.observer.observe(document.body,{childList:true,characterData:true,subtree:true});
+      refreshProxy();
       a.timer=setTimeout(()=>end(id),30000);
       return b;
     },

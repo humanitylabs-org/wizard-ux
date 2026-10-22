@@ -67,7 +67,7 @@ public class MainActivity extends Activity {
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
     private String pendingHandoff; // JSON handed to window.__wosHandoff once the shell is ready
     private int handoffTries;
-    private WebView web;
+    private SelectionWebView web;
     private FrameLayout root;
     private PermissionRequest pendingMic;
     private ValueCallback<Uri[]> pendingFiles;
@@ -261,6 +261,7 @@ public class MainActivity extends Activity {
 
             @Override
             public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
+                if (view instanceof SelectionWebView) ((SelectionWebView)view).refreshScrollProxy();
                 // A commit (also a same-document hop). Never fires for a load that was abandoned or still hangs.
                 if (isWeb(url) && !mainFailed && sameHost(url, wantUrl) && reach != null && reach.isShowing() && !reach.isOffline()) landed();
             }
@@ -274,7 +275,7 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
-                if (view instanceof SelectionWebView) ((SelectionWebView)view).cancelScrollCapture();
+                if (view instanceof SelectionWebView) ((SelectionWebView)view).scrollPageStarted();
                 pageUrl = url;
                 screenCaptureId = null;
                 setKeepAwake(false);
@@ -282,6 +283,7 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
+                if (view instanceof SelectionWebView) ((SelectionWebView)view).installScrollProxy();
                 topSent = -1; cutoutSent = -1; reportTop(topPx); reportCutout(cutoutPx); // a reload starts fresh: push both again
             }
 
@@ -713,7 +715,11 @@ public class MainActivity extends Activity {
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
+        if(!hasFocus)ScrollCaptureDiagnostics.arm("window-focus-lost");
+        ScrollCaptureDiagnostics.record("Activity.onWindowFocusChanged",ScrollCaptureDiagnostics.fields("hasFocus",hasFocus));
+        if(web!=null) {web.recordProxyState();web.refreshScrollProxy();}
         super.onWindowFocusChanged(hasFocus);
+        if(hasFocus)ScrollCaptureDiagnostics.resumed(this);
         if (hasFocus && immersive) applyImmersive(true); // a dialog or the shade can bring the bars back
     }
 
@@ -721,6 +727,8 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (web == null) return;
+        ScrollCaptureDiagnostics.record("Activity.onResume",ScrollCaptureDiagnostics.fields());
+        ScrollCaptureDiagnostics.resumed(this);
         web.onResume();
         ai.wizards.os.share.ShareService.resumeIfPending(this); // shares left queued (force-stop, reboot) carry on
         ai.wizards.os.mizel.MeetingEventSync.kick(this); // meeting markers from the floating orb / side button still unsent
@@ -745,6 +753,16 @@ public class MainActivity extends Activity {
             sideSetupActive = false;
             if (SideButton.assistant(this)) Toast.makeText(this, "Side button is on. Hold it to talk.", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    @Override public void onTopResumedActivityChanged(boolean top) {
+        if(android.os.Build.VERSION.SDK_INT>=29)super.onTopResumedActivityChanged(top);
+        ScrollCaptureDiagnostics.record("Activity.onTopResumedActivityChanged",ScrollCaptureDiagnostics.fields("top",top));
+    }
+    @Override public void onConfigurationChanged(android.content.res.Configuration c) {
+        super.onConfigurationChanged(c);
+        ScrollCaptureDiagnostics.record("Activity.onConfigurationChanged",ScrollCaptureDiagnostics.fields(
+            "orientation",c.orientation,"widthDp",c.screenWidthDp,"heightDp",c.screenHeightDp,"densityDpi",c.densityDpi));
     }
 
     /* ---------------- Side button switch ----------------
@@ -777,6 +795,9 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        ScrollCaptureDiagnostics.arm("activity-pause");
+        ScrollCaptureDiagnostics.record("Activity.onPause",ScrollCaptureDiagnostics.fields());
+        if(web!=null)web.recordProxyState();
         if (this instanceof AppSessionActivity && web != null) web.evaluateJavascript("window.__wosSessionCheckpoint?.()", null);
         if (mizel != null) mizel.setPcmForeground(false);
         // Mid-recording the page must keep running in the background (the floating orb can send/pause/cancel it).

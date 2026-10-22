@@ -4,7 +4,7 @@ Usage: qa_scroll_capture.py DEBUG_APK OUT
 API35 SystemUI initiates discovery and capture. Fixture is explicitly synthetic,
 using the same overflow-hidden / nested .ch-msgs and .ch-scroll arrangement.
 """
-import base64, fcntl, hashlib, http.server, json, pathlib, re, sys, threading, time, traceback, xml.etree.ElementTree as ET
+import base64, fcntl, hashlib, http.server, json, os, pathlib, re, sys, threading, time, traceback, xml.etree.ElementTree as ET
 from qa_aa_lib import Emu, Page, BASE, ADB, wait
 P=pathlib.Path
 APK=P(sys.argv[1]); OUT=P(sys.argv[2]); OUT.mkdir(parents=True,exist_ok=True)
@@ -73,8 +73,13 @@ def capture(name,kind,top):
   check(name+' no missing pixel bands at tile joins',bool(steps) and max(steps)-min(steps)<=2,steps)
   (OUT/(name+'-pixels.json')).write_text(json.dumps(pixels,indent=2))
  dismiss()
-with (BASE/'worker.lock').open('a') as lock:
- fcntl.flock(lock,fcntl.LOCK_EX)
+_inherited=os.environ.get('WIZARD_HEAVY_LOCK_FD')
+_lock=os.fdopen(int(_inherited),'a',closefd=False) if _inherited else (BASE/'worker.lock').open('a')
+with _lock as lock:
+ if _inherited:
+  want,have=(BASE/'worker.lock').stat(),os.fstat(lock.fileno())
+  if (want.st_dev,want.st_ino)!=(have.st_dev,have.st_ino):raise RuntimeError('inherited lock identity mismatch')
+ fcntl.flock(lock,fcntl.LOCK_EX|(fcntl.LOCK_NB if _inherited else 0))
  try:
   em.boot();check('install exact APK', 'Success' in em.sh(ADB,'-s',em.S,'install',APK))
   em.sh(ADB,'-s',em.S,'reverse',f'tcp:{PORT}',f'tcp:{PORT}')
