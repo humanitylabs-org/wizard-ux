@@ -129,3 +129,10 @@ html[data-layout="two-orb"] #device:not(.orb-corner) > #toast { left: auto; righ
 
 /* A thread's "↓ Latest" sits in the middle, clear of the agent orb. */
 html[data-layout="two-orb"] #device .ch-latest { left: 50%; right: auto; transform: translateX(-50%); }
+
+/* ---------- an app wearing the agent orb (WizardApp.orb.claim): its icon in white on the orb, tinted to the app ---------- */
+html[data-layout="two-orb"] .to-glyph { display: none; position: relative; z-index: 3; width: 26px; height: 26px; color: #fff; pointer-events: none; filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
+html[data-layout="two-orb"] .to-glyph svg { width: 100%; height: 100%; display: block; }
+html[data-layout="two-orb"] .to-orb.app-claim .to-glyph { display: block; }
+
+html[data-layout="two-orb"] .to-orb.app-claim .to-name { display: none; }
