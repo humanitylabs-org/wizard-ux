@@ -591,3 +591,15 @@ html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-new .dsg svg { width: 38px; height: 38px; }
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell .ov-x { left: calc(50% - 35px); }
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { max-height: calc(100% - var(--safe-t, 0px) - 24px); }
+
+/* Credit fuel gauge (Tinfoil, 22 Oct): same gauge with E / F at the ends; needle = credit left of the last top-up,
+   readout = dollars left. Amber once under a quarter tank, like a low-fuel light. */
+html[data-skin="landscapes"] .rs-fuel .rs-gauge :is(.rs-e, .rs-f) { position: absolute; bottom: 12%; font-style: normal; font-size: calc(var(--g) * .15); font-weight: 700; line-height: 1; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin="landscapes"] .rs-fuel .rs-gauge .rs-e { left: 2%; }
+html[data-skin="landscapes"] .rs-fuel .rs-gauge .rs-f { right: 2%; }
+html[data-skin="landscapes"] .rs-fuel .rs-gauge b { font-size: calc(var(--g) * .18); }
+html[data-skin="landscapes"] .rs-dial { --g: clamp(36px, min(13.4vw, calc((100vw - 44px) / var(--n, 6) - 3px)), 56px); }
+html[data-skin="landscapes"] .rs-fuel .rs-gauge :is(.rs-e, .rs-f) { bottom: 0; font-size: calc(var(--g) * .14); }
+html[data-skin="landscapes"] .rs-fuel.rs-empty .rs-gauge .rs-arc { stroke: var(--amber, #ffc56b); }
+html[data-skin="landscapes"] .rs-fuel.rs-empty .rs-gauge :is(.rs-ndl path, .rs-hub) { fill: var(--amber, #ffc56b); }
+html[data-skin="landscapes"] .rs-fuel.rs-empty .rs-gauge b { color: var(--amber, #ffc56b); }
