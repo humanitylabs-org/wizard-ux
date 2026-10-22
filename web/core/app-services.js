@@ -175,7 +175,7 @@
       titlebar: Object.freeze({ set(list) { check(); return setTools(st, list); },
         shown() { check(); const b = barOf(st)?.querySelector(':scope > .wtools'); return !!b && b.getClientRects().length > 0 && b.offsetHeight > 0; } }),
       view: Object.freeze({ isVisible() { check(); return !document.hidden && st.isVisible?.() === true; } }),
-      nav: Object.freeze({ openContextDraft(data) {
+      nav: Object.freeze({ threadAgents: true, openContextDraft(data) {
         check();
         if (st.appId !== 'notifications' || st.isVisible?.() !== true || typeof st.openContextDraft !== 'function') throw fault('Context draft unavailable');
         if (!data || typeof data.id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(data.id) || typeof data.title !== 'string' || data.title.length > 1000 || typeof data.message !== 'string' || data.message.length > 32000) throw fault('Invalid notification context');
@@ -194,7 +194,12 @@
           reply = window.WosChat?.reply?.clean({ key, title: r?.title, message: r?.message });
           if (!reply) throw fault('Invalid reply context');
         }
-        return st.openThread?.(id, reply ? { reply } : {}) === true;
+        const agent = opts?.agent;
+        if (agent != null) {
+          const a = typeof agent === 'string' ? window.WosAgents?.get(agent) : null;
+          if (!a || a.status !== 'running' || !window.WosAgents.isOther(agent)) throw fault('Thread agent unavailable');
+        }
+        return st.openThread?.(id, { ...(reply ? { reply } : {}), ...(agent ? { agent } : {}) }) === true;
       } }),
       share: Object.freeze({ text(data) {
         check();
