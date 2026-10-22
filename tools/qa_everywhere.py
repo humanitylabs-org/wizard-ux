@@ -47,7 +47,16 @@ def sh(*a, stdin=None, binary=False):
 def sx(c): return sh(ADB, '-s', S, 'shell', c)
 def top(): return next((l.strip() for l in sx('dumpsys activity activities').splitlines() if 'topResumedActivity' in l), '')
 def shot(name): (OUT / (name + '.png')).write_bytes(sh(ADB, '-s', S, 'exec-out', 'screencap', '-p', binary=True))
-def ui(): sx('uiautomator dump /sdcard/ui.xml >/dev/null'); return sx('cat /sdcard/ui.xml')
+def ui():
+    # uiautomator dump fails while the screen is still animating ("could not get idle state"); retry.
+    last = None
+    for _ in range(6):
+        try:
+            sx('rm -f /sdcard/ui.xml; uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; true')
+            return sx('cat /sdcard/ui.xml')
+        except Exception as e:
+            last = e; time.sleep(2)
+    raise last
 def tap_text(pattern, xml=None):
     xml = xml or ui()
     for m in re.finditer(r'<node [^>]*?>', xml):
