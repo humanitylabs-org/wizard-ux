@@ -117,11 +117,11 @@ import {adoptAppearance} from './store-appearance.js';
   }
   function action(a, cls = '') {
     const state=status(a);
-    if (S.busy.has(a.id)) return `<span class="get have ${cls}" aria-live="polite">Installing…</span>`;
-    if(state==='conflict') return '<span class="get have">Resolve conflict</span>';
-    if(state==='unknown') return '<span class="get have" aria-label="Status unavailable">Status unavailable</span>';
-    if(['get','switch','update'].includes(state) && architectureReason(a,S.architecture)) return `<span class="get have ${cls}" title="${esc(architectureReason(a,S.architecture))}">${S.architecture ? 'Not compatible' : 'Compatibility unavailable'}</span>`;
-    if(state==='switch' || state==='update') return `<button class="get ${cls}" data-get="${esc(key(a))}">${state==='update'?'Update':'Switch release'}</button>`;
+    if (S.busy.has(a.id)) return `<span class="get wait ${cls}" aria-live="polite">Installing…</span>`;
+    if(state==='conflict') return `<span class="get warn ${cls}">Resolve conflict</span>`;
+    if(state==='unknown') return `<span class="get wait ${cls}" aria-label="Status unavailable">Status unavailable</span>`;
+    if(['get','switch','update'].includes(state) && architectureReason(a,S.architecture)) return `<span class="get wait ${cls}" title="${esc(architectureReason(a,S.architecture))}">${S.architecture ? 'Not compatible' : 'Compatibility unavailable'}</span>`;
+    if(state==='switch' || state==='update') return `<button class="get upd ${cls}" data-get="${esc(key(a))}">${state==='update'?'Update':'Switch release'}</button>`;
     if (isInstalled(a) && canOpen(a)) return `<button class="get open ${cls}" data-open="${esc(openId(a))}">Open</button>`;
     if (isInstalled(a)) return `<span class="get have ${cls}" aria-label="Installed">✓ Installed</span>`;
     return `<button class="get ${cls}" data-get="${esc(key(a))}">Get</button>`;
