@@ -937,7 +937,9 @@
     r.listeners.add(paint);
     return { snapshot: r, close() { r.listeners.delete(paint); if (!r.listeners.size) r.dispose(); } };
   };
-  L.pendingRun = sid => PEND.get(sid)?.runId || '';
+  L.pendingRun = sid => PEND.get(sid)?.runId || (window.WosOutbox?.forThread(sid) || [])
+    .filter(it => it.state === 'sent' && it.runId && Date.now() - (it.sentAt || it.createdAt) < PEND_MAX)
+    .sort((a, b) => b.createdAt - a.createdAt)[0]?.runId || '';
 
   function attachOutbox() {
     const OB = window.WosOutbox; if (!OB || L._outbox) return; L._outbox = true;
