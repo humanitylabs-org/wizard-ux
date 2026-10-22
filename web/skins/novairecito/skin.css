@@ -43,3 +43,13 @@ html[data-skin="novairecito"] .ch-pin-toggle[aria-pressed="true"] svg {
   fill-opacity: 1;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .55));
 }
+/* Chat reading size: the stock phone default is 17px (core/chats.css); this skin keeps its original 15px. */
+html[data-skin="novairecito"][data-shell="phone"] .ch-msgs .msg .bub { font-size: 15px; line-height: 1.45; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-msgs .bub h1 { font-size: 19px; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-msgs .bub h2 { font-size: 17.5px; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-msgs .bub h3 { font-size: 16px; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-msgs .bub :is(h4, h5, h6) { font-size: 15px; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-msgs .bub code { font-size: 13px; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-msgs .bub pre { font-size: 12px; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-msgs .bub .code pre code { font-size: 12.5px; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-msgs .bub table { font-size: 13.5px; }

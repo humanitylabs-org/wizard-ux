@@ -502,3 +502,14 @@ html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head { 
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head .ch-back { width: 28px; height: 28px; border-radius: 9px; color: var(--ink-3); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head .ch-back svg { width: 16px; height: 16px; stroke-width: 2.2; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .voice .arc { bottom: calc(var(--pill-b) + var(--pill-h) / 2); }
+
+/* Chat reading size: the stock phone default is 17px (core/chats.css); this skin keeps its original 15px. */
+html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .msg .bub { font-size: 15px; line-height: 1.45; }
+html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub h1 { font-size: 19px; }
+html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub h2 { font-size: 17.5px; }
+html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub h3 { font-size: 16px; }
+html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub :is(h4, h5, h6) { font-size: 15px; }
+html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub code { font-size: 13px; }
+html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub pre { font-size: 12px; }
+html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub .code pre code { font-size: 12.5px; }
+html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub table { font-size: 13.5px; }
