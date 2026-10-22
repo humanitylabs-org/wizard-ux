@@ -69,9 +69,21 @@ screen-mode actions. Features live in `web/` (or in their own Wizard app) and ca
 
 ## Thin enough to install broadly
 
-- Native Java under ~6,000 lines and no feature names in bridge methods.
-- Two weeks of web feature changes with no APK release needed.
-- Connect screen works for any Wizard; Alongside users can install the same APK.
+Assess functionality, separability and modularity, not lines of code. The previous ~6,000-line target
+was an arbitrary estimate, not an architectural requirement; it is withdrawn.
 
-The step summary of the Android CI job prints the Java line and bridge-method counts on every PR, so
-progress is visible without opening the code.
+- Every native module has a documented device benefit that web cannot supply reliably. Keep native
+  safety checks, lifecycle management and offline recovery even when they require substantial code.
+- Feature screens, wording, workflows and non-device business rules can change through web updates
+  without rebuilding the APK. Verify representative changes, rather than imposing a waiting period.
+- Device capabilities have narrow, documented, versioned interfaces. Web apps can be replaced independently;
+  capability discovery and graceful fallback keep older clients and newer web components compatible.
+- Modules can be tested and changed independently. A feature's implementation does not leak into unrelated
+  capabilities or require coordinated releases across the app.
+- Native permission, origin, signer and payment-consent boundaries remain enforced on the device; moving
+  policy to web must not weaken them or regress background/offline behaviour.
+- Connect screen works for any Wizard; Alongside users can install the same APK. Switching preserves
+  owner isolation and never carries another Wizard's pending work or credentials across.
+
+Java line and bridge-method counts in CI are diagnostic inventory only, never acceptance gates. A larger
+well-separated capability layer is preferable to a smaller tightly coupled app.
