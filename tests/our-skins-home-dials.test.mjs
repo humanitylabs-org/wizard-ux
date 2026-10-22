@@ -71,3 +71,15 @@ test('a credit account renders as a fuel gauge with dollars left', () => {
   assert.match(h, /rs-dial  rs-fuel rs-empty|rs-dial rs-fuel rs-empty/);
   assert.match(h, /data-money="\$4\.50"/); assert.match(h, /class="rs-e">E</); assert.match(h, /Tinfoil \$4\.50 credit left/);
 });
+
+test('every dial shows what is left as a fuel gauge, computer and AI on separate lines', () => {
+  const injected = src.replace("server:null,serverAt:0", "server:{cpu:30,memory:95,disk:93},serverAt:0").replace("ai:null,aiAt:0", "ai:{providers:[{id:'claude:x',provider:'claude',providerName:'Claude',status:'ok',limits:[{id:'w',label:'Weekly',remainingPercent:58}]}]},aiAt:0");
+  const ctx = { window: {}, document: { documentElement: { dataset: { skin: 'landscapes' } }, addEventListener() {}, querySelectorAll: () => [], hidden: false },
+    localStorage: { getItem: () => null, setItem() {} }, queueMicrotask() {}, setTimeout, clearTimeout, fetch: async () => ({ ok: false }), AbortController };
+  ctx.window = ctx; ctx.window.addEventListener = () => {};
+  vm.runInNewContext(injected, ctx);
+  const h = ctx.WosResources.home();
+  assert.match(h, /aria-label="CPU 70% left"/); assert.match(h, /rs-fuel rs-empty rs-crit"[^>]*data-k="Memory"/);
+  assert.match(h, /aria-label="Claude 58% left"/); assert.equal((h.match(/class="rs-e">E</g) || []).length, 4);
+  assert.equal((h.match(/class="rs-dials"/g) || []).length, 2);
+});
