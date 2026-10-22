@@ -32,10 +32,15 @@ test('shared chats offers whole-thread and exact-message reminders without submi
 })
 test('thread menu exposes Boomerang separately and leaves Defer unchanged',()=>{
  const js=read('web/core/chats.js')
- assert.match(js,/data-rsboom[^>]*>.*Boomerang/)
+ assert.match(js,/data-rsboom[^>]*>.*🪃.*Boomerang/)
  assert.match(js,/closest\('\[data-rsboom\]'\)[\s\S]{0,300}BOOM\.open\(\{ sessionId:sid,targetKind: 'thread'/)
  assert.doesNotMatch(js,/a === 'defer' && BOOM/)
  assert.match(js,/a === 'defer' \? LIVE\.defer\(sid\)/)
+})
+test('selected-pin markup exposes an integrated head and shaft instead of a floating dot',()=>{
+ const js=read('web/core/chats.js')
+ assert.match(js,/class="ch-pin-head"/)
+ assert.match(js,/class="ch-pin-shaft"/)
 })
 test('due reminder supports exact context, change, cancel and canonical deep-link restoration',()=>{
  const js=read('web/core/boomerang.js'),links=read('web/core/deeplink.js')
