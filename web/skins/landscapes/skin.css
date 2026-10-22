@@ -421,3 +421,39 @@ html[data-skin="landscapes"] .home .constellation .now-card :is(.k, .n) { text-s
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { background: color-mix(in srgb, #0c0b12 48%, transparent); border-color: rgba(255, 255, 255, .14); }
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5)); }
 html[data-skin="landscapes"] .home .constellation .now-card :is(.k, .n) { color: color-mix(in srgb, var(--c) 72%, #fff); }
+/* Symmetric dock (Miguel, 22 Oct): two fixed slots each side of the orb, mirrored, so the bar balances at every desk.
+ * The orb is the current desk and the biggest thing on the bar; the nearest neighbours sit a touch larger and brighter
+ * than the outer pair. Empty slots keep their space. New desk is a dashed empty-desk outline, never a plus. */
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym { flex: 1 1 0; display: grid; grid-template-columns: 1fr 1fr; justify-items: center; align-items: center; gap: 0; padding: 0 6px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) :is(#dotsL, #dotsR).sym > * { order: 0; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .dslot { width: 32px; height: 32px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot { width: 36px; height: 36px; flex: none; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot .dsg { width: 30px; height: 30px; transition: transform 200ms, opacity 200ms; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d2 .dsg { transform: scale(.84); opacity: .62; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d1 .dsg { opacity: .92; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym::before, html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym::after { display: none; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dnew .dsg svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dnew .dsg { color: color-mix(in srgb, var(--ink) 82%, transparent); opacity: .92; transform: none; }
+
+/* Swipe-up Apps sheet open: the orb turns into a plain X, since tapping it closes the sheet (the only time it changes). */
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner)[data-sheet="launcher"] .dock .orb-wrap :is(.orb, .orb-fallback, .orb-app, .orb-badge, .moons) { opacity: 0 !important; transition: opacity 160ms; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner)[data-sheet="launcher"] .dock .orb-wrap::before { content: ""; position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; z-index: 3;
+  background: color-mix(in srgb, var(--ink) 12%, transparent); border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
+  -webkit-mask: none; box-shadow: inset 0 0 0 0 transparent;
+  background-image: linear-gradient(45deg, transparent calc(50% - 1.3px), var(--ink) calc(50% - 1.3px), var(--ink) calc(50% + 1.3px), transparent calc(50% + 1.3px)), linear-gradient(-45deg, transparent calc(50% - 1.3px), var(--ink) calc(50% - 1.3px), var(--ink) calc(50% + 1.3px), transparent calc(50% + 1.3px));
+  background-size: 22px 22px; background-position: center; background-repeat: no-repeat; animation: wosOrbX 180ms ease-out; }
+@keyframes wosOrbX { from { transform: translate(-50%, -50%) rotate(-90deg) scale(.6); opacity: 0; } to { transform: translate(-50%, -50%) rotate(0) scale(1); opacity: 1; } }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner)[data-sheet="launcher"] .dock .desk-dots { opacity: .35; pointer-events: none; }
+
+/* Three a side (Miguel, 22 Oct): bigger icons, the orb biggest, little dead space. Near > middle > far, all mirrored. */
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { --orb: 66px; gap: 2px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym { grid-template-columns: repeat(3, 1fr); padding: 0 4px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot { width: 46px; height: 46px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .dslot { width: 36px; height: 36px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot .dsg { width: 42px; height: 42px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d1 .dsg { transform: none; opacity: .95; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d2 .dsg { transform: scale(.88); opacity: .78; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d3 .dsg { transform: scale(.76); opacity: .6; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dnew .dsg svg { width: 38px; height: 38px; }
+@media (max-width: 360px) { html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot { width: 38px; height: 38px; } html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot .dsg { width: 32px; height: 32px; } html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { --orb: 60px; } }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) :is(#dotsL, #dotsR).sym > .ddot { display: grid !important; place-items: center; order: 0 !important; }
