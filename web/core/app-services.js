@@ -182,11 +182,19 @@
         // A Reply: the composer stays empty; the item rides beside the draft and is framed as quoted, untrusted
         // reference DATA only in the message that is sent (WosChat.reply).
         return st.openContextDraft('notifications:' + data.id, { title: data.title, message: data.message });
-      }, openThread(id) {
+      }, openThread(id, opts) {
         check();
-        // This bounded workflow is admitted only for the installed Manager's current document.
-        if (!managerAuthorized(st) || st.isVisible?.() !== true || typeof id !== 'string' || !id || id.length > 512 || /[\s\x00-\x1f]/.test(id) || id === '__new__') throw fault('Thread navigation unavailable');
-        return st.openThread?.(id) === true;
+        // This bounded workflow is admitted only for an admitted installed app's current document (Manager, Wisdom).
+        if (!hostedThreadAuthorized(st) || st.isVisible?.() !== true || typeof id !== 'string' || !id || id.length > 512 || /[\s\x00-\x1f]/.test(id) || id === '__new__') throw fault('Thread navigation unavailable');
+        // Optional app item that rides beside the thread's draft: keyed to this app, quoted as data when sent.
+        let reply = null;
+        if (opts?.reply != null) {
+          const r = opts.reply, key = String(r?.key || '');
+          if (!key.startsWith(st.appId + ':')) throw fault('Reply context must be keyed to this app');
+          reply = window.WosChat?.reply?.clean({ key, title: r?.title, message: r?.message });
+          if (!reply) throw fault('Invalid reply context');
+        }
+        return st.openThread?.(id, reply ? { reply } : {}) === true;
       } }),
       share: Object.freeze({ text(data) {
         check();
@@ -383,6 +391,13 @@
     // Receipt is evidence of durable admission even if focus changed during POST.
     if (receipt?.accepted !== true || receipt.request_id !== message.request_id) throw fault('App receipt uncertain · original kept');
     return { accepted: true, request_id: message.request_id };
+  }
+  // Same list as chats.js HOSTED_APPS: apps whose conversations are the real Chats thread over their window.
+  const HOSTED_THREAD_APPS = new Set(['wizard-manager', 'wisdom']);
+  function hostedThreadAuthorized(st) {
+    if (!st || !HOSTED_THREAD_APPS.has(st.appId) || !valid(st, st.doc) || typeof st.openThread !== 'function') return false;
+    const app = apps().find(a => a.id === st.appId && a.kind === 'wizard' && a.url);
+    try { return !!app && new URL(app.url, location.href).href === st.url.href; } catch (_) { return false; }
   }
   function managerAuthorized(st) {
     if (!st || st.appId !== 'wizard-manager' || !valid(st, st.doc) || typeof st.openThread !== 'function') return false;
