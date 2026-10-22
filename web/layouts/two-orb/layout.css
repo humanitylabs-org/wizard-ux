@@ -1,33 +1,50 @@
 /* Two orbs layout. Every rule is scoped to html[data-layout="two-orb"]; colours come from the skin's tokens. */
 
-/* ---------- white orb: the system (dock centre) ---------- */
-html[data-layout="two-orb"] #device:not(.orb-corner) #orb { filter: saturate(0) brightness(1.55) contrast(.92); transform: scale(.66); }
-html[data-layout="two-orb"] #device:not(.orb-corner) .orb-halo { filter: saturate(0); opacity: .55; }
-html[data-layout="two-orb"] #device:not(.orb-corner) #orbWrap[data-mode="typing"] #orb,
-html[data-layout="two-orb"] #device:not(.orb-corner)[data-voice="listen"] #orb { filter: saturate(.15) brightness(1.5); }
+/* ---------- centre: your active screen (dock centre) ----------
+ * A circle in the skin's accent colour wearing a white silhouette of the screen you are on. It keeps every dock
+ * gesture (swipe for desks and apps, tap to type into a field, hold for a system command). An agent take on the
+ * right orb never touches it; it pulses only for its own jobs. */
+html[data-layout="two-orb"] #device:not(.orb-corner) #orb,
+html[data-layout="two-orb"] #device:not(.orb-corner) #orbFallback { opacity: 0 !important; }
+html[data-layout="two-orb"] #device:not(.orb-corner) :is(.orb-halo, .orb-ring, .orb-shock, #moons) { visibility: hidden; }
+html[data-layout="two-orb"] #device:not(.orb-corner) #orbWrap::before {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 42px; height: 42px; margin: -21px 0 0 -21px; border-radius: 50%; pointer-events: none; z-index: 1;
+  background: var(--wz-accent, var(--violet, #7c4dff));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--wz-accent, #7c4dff) 60%, white), 0 4px 16px color-mix(in srgb, var(--wz-accent, #7c4dff) 45%, transparent);
+}
+html[data-layout="two-orb"] #device:not(.orb-corner) #orbApp:not(:empty) { display: grid !important; place-items: center; position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 1 !important; mix-blend-mode: normal; }
+html[data-layout="two-orb"] #device:not(.orb-corner) #orbApp .dsg { width: 24px; height: 24px; opacity: 1; background: none !important; box-shadow: none !important; border: 0 !important; }
+html[data-layout="two-orb"] #device:not(.orb-corner) #orbApp :is(.dn, .dbg) { display: none; }
+html[data-layout="two-orb"] #device:not(.orb-corner) #orbApp :is(img, .sgi, svg) { max-width: 24px; max-height: 24px; filter: brightness(0) invert(1); }
+html[data-layout="two-orb"] #device:not(.orb-corner) #orbApp .sgi { width: 24px; height: 24px; background: #fff; }
+html[data-layout="two-orb"]:not([data-to-take]) #device:not(.orb-corner):is([data-voice="listen"], [data-voice="command"]) #orbWrap::before { animation: to-centre 1.2s ease-in-out infinite; }
+@keyframes to-centre { 50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--wz-accent, #7c4dff) 30%, transparent), 0 4px 16px rgba(0,0,0,.35); } }
 
 /* ---------- agent orb (bottom right, in the dock bar) ---------- */
 html[data-layout="two-orb"] .to-orb {
   --c: var(--wz-accent, #8f63ff);
   position: absolute; z-index: 151; right: 16px; bottom: calc(var(--safe-b) + var(--dock-h) + 16px);
   width: 54px; height: 54px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center;
-  background: radial-gradient(circle at 34% 30%, color-mix(in srgb, var(--c) 45%, white) 0%, var(--c) 50%, color-mix(in srgb, var(--c) 70%, black) 100%);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 60%, transparent), 0 6px 22px color-mix(in srgb, var(--c) 45%, transparent);
+  background: url("../../robert-thread-orb.png") center / 118% no-repeat; filter: hue-rotate(calc(var(--h, 265) * 1deg - 265deg));
+  box-shadow: 0 6px 22px color-mix(in srgb, var(--c) 45%, transparent);
   color: white; touch-action: none; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
   transition: transform 160ms ease, background 240ms ease, box-shadow 240ms ease;
 }
 html[data-layout="two-orb"] .to-orb[hidden] { display: none; }
 html[data-layout="two-orb"] .to-orb.press { transform: scale(.92); }
 html[data-layout="two-orb"] .to-orb.picking { transform: scale(1.08); }
+html[data-layout="two-orb"] .to-orb .to-face { display: none; }
 html[data-layout="two-orb"] .to-face { width: 30px; height: 30px; display: grid; place-items: center; pointer-events: none; }
 html[data-layout="two-orb"] :is(.to-face, .to-chip-sig) .sgt { width: 100%; height: 100%; border-radius: 0; background: none !important; box-shadow: none !important; border: 0 !important; --c: #fff; color: #fff; font-size: 18px; }
 html[data-layout="two-orb"] :is(.to-face, .to-chip-sig) .sgt::before,
 html[data-layout="two-orb"] :is(.to-face, .to-chip-sig) .sgt::after { display: none !important; }
 html[data-layout="two-orb"] .to-face svg { width: 22px; height: 22px; }
 html[data-layout="two-orb"] .to-ring { position: absolute; inset: -5px; border-radius: 50%; border: 2px solid var(--c); opacity: 0; pointer-events: none; }
+html[data-layout="two-orb"] .to-orb:is([data-state="rec"], [data-state="busy"]) { background-image: url("../../robert-listening-galaxy.png"); animation: to-spin 6s linear infinite; }
+@keyframes to-spin { to { background-position: center; transform: rotate(360deg); } }
 html[data-layout="two-orb"] .to-orb[data-state="rec"] .to-ring { opacity: 1; animation: to-pulse 1.3s ease-out infinite; }
 html[data-layout="two-orb"] .to-orb[data-state="paused"] .to-ring { opacity: .8; border-style: dashed; }
-html[data-layout="two-orb"] .to-orb[data-state="other"] { filter: saturate(.4) brightness(.8); }
+html[data-layout="two-orb"] .to-orb[data-state="other"] { opacity: .55; }
 @keyframes to-pulse { 0% { transform: scale(.92); opacity: .95; } 100% { transform: scale(1.35); opacity: 0; } }
 /* who it goes to, when that is not your main agent (or while recording) */
 html[data-layout="two-orb"] .to-name {
@@ -70,21 +87,28 @@ html[data-layout="two-orb"] :is(.to-face, .to-chip-sig) .sgt > * { --c: #fff; co
 html[data-layout="two-orb"] :is(.to-face, .to-chip-sig) .sgi { width: 82%; height: 82%; filter: brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
 
 /* ---------- an agent take runs on the agent orb, not the dock ----------
- * Centre: the white system button stays small and quiet (no listening animation, no timer).
- * Controls (cancel, pause, screenshot, attach) fan out around the agent orb; transcript and "To …" sit above them. */
-html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) #orbWrap { opacity: .35; pointer-events: none; }
+ * The dock centre is the desktop/system button: an agent take never changes it, fades it or hides the desk dots.
+ * The agent orb carries its own feedback (pulsing ring); its controls sit in a row to its left; the
+ * "Talking to …" pill, transcript and toasts pop up right over the agent orb. */
 html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) :is(.orb-halo, .orb-ring, .orb-shock, #moons, #timer, #holdHint, #dictationStatus) { visibility: hidden; }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .desk-dots { opacity: 1; pointer-events: auto; }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .scrub { opacity: 1; pointer-events: auto; }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .hint-row { opacity: 1; }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .ch-fab { opacity: 0; pointer-events: none; }
 html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice .arc {
   left: auto; right: 43px; bottom: calc(var(--safe-b) + var(--dock-h) + 43px); width: 46px; height: 46px; margin: 0 -23px -23px 0;
   background: rgba(22, 14, 40, .92); color: #fff;
 }
 html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice .arc svg { stroke: #fff; color: #fff; }
-html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-left   { transform: translate(-100px, 0) scale(1); }
-html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-mid    { transform: translate(-87px, -50px) scale(1); }
-html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-screen { transform: translate(-50px, -87px) scale(1); }
-html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-right  { transform: translate(0, -100px) scale(1); }
-html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice .transcript { left: 16px; right: 16px; bottom: calc(var(--safe-b) + var(--dock-h) + 222px); }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-left   { transform: translate(-64px, 0) scale(1); }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-mid    { transform: translate(-118px, 0) scale(1); }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-screen { transform: translate(-172px, 0) scale(1); }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-right  { transform: translate(-226px, 0) scale(1); }
 html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .transcript.brief.tip { display: none; }
-html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) > :is(#voiceDestination, #generalVoice) { left: auto; right: 12px; transform: none; bottom: calc(var(--safe-b) + var(--dock-h) + 186px); }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice .transcript { left: 16px; right: 16px; bottom: calc(var(--safe-b) + var(--dock-h) + 118px); }
 html[data-layout="two-orb"][data-to-take] #device.immersive:not(.orb-corner) .voice .arc { bottom: calc(var(--safe-b) + 43px); visibility: visible; }
 html[data-layout="two-orb"][data-to-take] .to-name { display: none; }
+/* Pop-ups sit right over the agent orb, right edge aligned with it. */
+html[data-layout="two-orb"] #device:not(.orb-corner) > :is(#voiceDestination, #generalVoice) { left: auto; right: 12px; transform: none; bottom: calc(var(--safe-b) + var(--dock-h) + 78px); max-width: calc(100% - 24px); }
+html[data-layout="two-orb"] #device.immersive:not(.orb-corner) > :is(#voiceDestination, #generalVoice) { bottom: calc(var(--safe-b) + 78px); visibility: visible; }
+html[data-layout="two-orb"] #device:not(.orb-corner) > #toast { left: auto; right: 12px; transform: none; bottom: calc(var(--safe-b) + var(--dock-h) + 78px); top: auto; max-width: calc(100% - 24px); }

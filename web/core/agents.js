@@ -116,14 +116,33 @@
     // A non-default agent: its threads, sends and models never go through the main agent's route.
     isOther(id) { return !!id && id !== A.defaultId(); },
     others() { return A.list.filter(a => !a.is_default); },
-    colour(a) {
+    hue(a) {
       let h = Number(a?.appearance?.hue);
       if (!Number.isFinite(h)) {
         // Stable identity for future agents without a chosen hue.
         h = a?.privacy === 'private' ? 160 : !a || a.is_default ? 265
           : Array.from(String(a.id || a.label || 'agent')).reduce((n, c) => (n * 31 + c.codePointAt(0)) % 360, 0);
       }
-      return `hsl(${Math.round(((h % 360) + 360) % 360)} 72% 62%)`;
+      return ((Math.round(h) % 360) + 360) % 360;
+    },
+    // Every agent on this Wizard gets a colour you can tell apart: the main agent keeps its hue, then each agent in
+    // order keeps its own unless it sits within 28° of one already taken, in which case it steps round the wheel.
+    distinctHues() {
+      const list = A.list || [];
+      if (A._hueFor === list) return A._hues;
+      const taken = [], out = new Map(), gap = (x, y) => { const d = Math.abs(x - y) % 360; return Math.min(d, 360 - d); };
+      const order = [...list].sort((x, y) => (y.is_default ? 1 : 0) - (x.is_default ? 1 : 0));
+      for (const ag of order) {
+        let h = A.hue(ag);
+        for (let i = 0; i < 24 && taken.some(t => gap(t, h) < 28); i++) h = (h + 47) % 360;
+        taken.push(h); out.set(ag.id, h);
+      }
+      A._hueFor = list; A._hues = out;
+      return out;
+    },
+    colour(a) {
+      const h = (a?.id && A.distinctHues().get(a.id)) ?? A.hue(a);
+      return `hsl(${h} 72% 62%)`;
     },
     glyph(a) {
       // Agents share the company hat; privacy changes its cutout, hue identifies the agent.
