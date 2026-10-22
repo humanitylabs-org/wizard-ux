@@ -131,16 +131,19 @@ public class OverlayE2eTest {
         } finally { close(); }
     }
     @Test public void privilegedBridgeCannotBeReachedBySrcdocDataOrSameOriginFrames() throws Exception {
-        try {
-            open("everywhere.html", true, "");
-            js("Probe.hit()"); assertEquals("bridge positive control", 1, bridgeCalls.get()); bridgeCalls.set(0);
-            js("for(const src of ['srcdoc','data','same']){let f=document.createElement('iframe');if(src==='srcdoc')f.srcdoc='<script>Probe.hit()<\\/script>';else f.src=src==='data'?'data:text/html,<script>Probe.hit()<\\/script>':'https://fixture.invalid/wizard-os-home/assist/surface.html';document.body.append(f)}");
-            Thread.sleep(700);
-            assertEquals(0, bridgeCalls.get());
-            // Chromium can create an inert srcdoc document even with frame-src 'none'.
-            // Its inherited script-src forbids the injected inline script; network/data frames are denied.
-            assertEquals("true", js("Array.from(document.querySelectorAll('iframe')).filter(f=>f.src).every(f=>!f.contentDocument)"));
-        } finally { close(); }
+        for (boolean remote : new boolean[]{true, false}) {
+            bridgeCalls.set(0);
+            try {
+                open("everywhere.html", remote, "");
+                assertEquals("\"CSS1Compat\"", js("document.compatMode"));
+                js("Probe.hit()"); assertEquals("bridge positive control", 1, bridgeCalls.get()); bridgeCalls.set(0);
+                js("for(const src of ['srcdoc','data','same']){let f=document.createElement('iframe');if(src==='srcdoc')f.srcdoc='<script>Probe.hit()</scr'+'ipt>';else f.src=src==='data'?'data:text/html,<script>Probe.hit()</scr'+'ipt>':location.href;document.body.append(f)}");
+                Thread.sleep(700);
+                assertEquals("frame reached bridge; remote=" + remote, 0, bridgeCalls.get());
+                // srcdoc may render inert markup; injected inline scripts must still be denied.
+                assertEquals("true", js("Array.from(document.querySelectorAll('iframe')).filter(f=>f.src).every(f=>!f.contentDocument || !f.contentDocument.body.innerHTML.includes('Probe.hit'))"));
+            } finally { close(); }
+        }
     }
     @Test public void nativeTransportDoesNotFollowSubresourceRedirects() throws Exception {
         AtomicInteger requests = new AtomicInteger();

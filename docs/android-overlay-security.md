@@ -24,6 +24,13 @@ Existing words, layout, and native capability bridges are unchanged.
   resources remain confined to the explicit trusted asset set. This is not
   origin-scoping the Java bridge. The allowlist is the explicit overlay file
   set, not the full authenticated shell directory.
+- **File-scheme CSP header gap (emulator-proven):** the first instrumentation
+  run recovered to the bundle, then an injected srcdoc called the probe bridge
+  once despite the response CSP header. API 34 WebView ignored the CSP header
+  on the intercepted file response. Native HTML responses now also prepend
+  the policy as CSP metadata before supplied markup, retaining a standards
+  doctype. Frame probes run on remote AND bundled copies, with a top-level
+  bridge positive control and standards-mode assertions.
 - **False readiness:** `onPageFinished` is not script execution success. The
   actual W/E/S API (and shared Orb where used) must exist before native ready
   callbacks run or the timeout is cancelled. Missing/failed scripts and HTTP

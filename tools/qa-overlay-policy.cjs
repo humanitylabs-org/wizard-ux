@@ -8,7 +8,7 @@ const csp = java.match(/static final String CSP = ([\s\S]*?);\n/)[1].match(/"[^"
 (async () => {
   const browser = await chromium.launch();
   try {
-    for (const name of ['surface', 'everywhere', 'screen']) {
+    for (const mode of ['header', 'meta']) for (const name of ['surface', 'everywhere', 'screen']) {
       const page = await browser.newPage({viewport: {width: 411, height: 914}});
       const errors = [];
       page.on('pageerror', e => errors.push(e.message));
@@ -16,9 +16,12 @@ const csp = java.match(/static final String CSP = ([\s\S]*?);\n/)[1].match(/"[^"
         const relative = new URL(route.request().url()).pathname.replace('/wizard-os-home/', '');
         const file = path.join(root, 'web', relative);
         assert(file.startsWith(path.join(root, 'web') + path.sep));
-        await route.fulfill({status: 200, body: fs.readFileSync(file), headers: {
+        const bytes = fs.readFileSync(file);
+        const body = mode === 'meta' && file.endsWith('.html')
+          ? Buffer.concat([Buffer.from('<!doctype html><meta http-equiv="Content-Security-Policy" content="' + csp + '">'), bytes]) : bytes;
+        await route.fulfill({status: 200, body, headers: {
           'content-type': file.endsWith('.js') ? 'application/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.html') ? 'text/html' : 'image/png',
-          'content-security-policy': csp,
+          ...(mode === 'header' ? {'content-security-policy': csp} : {}),
         }});
       });
       await page.goto('https://fixture.invalid/wizard-os-home/assist/' + name + '.html');
@@ -41,7 +44,8 @@ const csp = java.match(/static final String CSP = ([\s\S]*?);\n/)[1].match(/"[^"
       await page.waitForTimeout(300);
       assert(await page.evaluate(() => !window.__frameAttack && Array.from(document.querySelectorAll('iframe')).filter(f => f.src).every(f => !f.contentDocument)));
       assert.deepStrictEqual(errors, []);
-      console.log('PASS ' + name + ': real page API/state under native CSP; injected srcdoc script and network/data frames blocked');
+      assert.strictEqual(await page.evaluate(() => document.compatMode), 'CSS1Compat');
+      console.log('PASS ' + name + '/' + mode + ': real page API/state under native CSP; injected srcdoc script and network/data frames blocked');
       await page.close();
     }
   } finally { await browser.close(); }

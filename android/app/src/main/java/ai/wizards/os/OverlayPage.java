@@ -100,6 +100,17 @@ public class OverlayPage extends WebViewClient {
             byte[] bytes = fromWizard ? fetch(u) : read(web.getContext().getAssets().open(r.getUrl().getPath().substring("/android_asset/".length())));
             String path = r.getUrl().getPath();
             String mime = path.endsWith(".html") ? "text/html" : path.endsWith(".js") ? "application/javascript" : path.endsWith(".css") ? "text/css" : "image/png";
+            if (path.endsWith(".html")) {
+                // Android WebView ignores CSP response headers on file: interception responses.
+                // Install the same policy before ANY supplied markup, with an initial standards
+                // doctype so the extra metadata does not switch the existing pages to quirks mode.
+                String prefix = "<!doctype html><meta http-equiv=\"Content-Security-Policy\" content=\"" + OverlayPolicy.CSP + "\">";
+                byte[] head = prefix.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                byte[] secured = new byte[head.length + bytes.length];
+                System.arraycopy(head, 0, secured, 0, head.length);
+                System.arraycopy(bytes, 0, secured, head.length, bytes.length);
+                bytes = secured;
+            }
             return new WebResourceResponse(mime, "utf-8", 200, "OK",
                     Map.of("Content-Security-Policy", OverlayPolicy.CSP, "X-Content-Type-Options", "nosniff", "Cache-Control", "no-store"), new ByteArrayInputStream(bytes));
         } catch (Exception e) {
