@@ -81,7 +81,10 @@ window.WosChatPower = function chatPower(A) {
       // A cached paint comes first and may predate a reply that landed while you were away (James, 22 Oct:
       // tapping a fresh Ready reply opened at his old place in the previous one). Remember it, so the server read decides.
       c.posCached = !(c.loadedFor === sid && c.loadedNav === c.readNav);
-      const saved = RP.read(sid), reply = lastReply(nb);
+      // The Chats list's own read state decides (James, 22 Oct): a thread opened while it has an unread reply (bold, in
+      // Ready) opens at that reply's first line; a thread you have already read returns you to your place.
+      const unread = c.unreadOpen === sid;
+      const saved = unread ? null : RP.read(sid), reply = lastReply(nb);
       let apply = null;
       // A Working thread follows the live reply, unless you had scrolled up in it: your place wins whenever it is
       // for the same latest reply, on a reload and on every reopen alike (James, 22 Oct: leaving the slow
@@ -97,12 +100,14 @@ window.WosChatPower = function chatPower(A) {
         c.atStart = sid;
       } else { c.follow = true; toBottom(nb); }
       if (apply) { apply(nb); if (!saved || saved.messageId !== c.lid) c.follow = bottomGap(nb) < 80; settle(c, nb, apply); }
+      if (!c.posCached) c.unreadOpen = '';
       paintLatest(el, nb);
       return true;
     }
     // The server read after a cached paint: a newer latest reply means a fresh open (its first line), unless you already scrolled.
     if (c.posCached && c.loadedFor === sid && c.loadedNav === c.readNav) {
       c.posCached = false;
+      if (c.lid === c.posLid || c.readerMoved) c.unreadOpen = '';
       if (c.lid !== c.posLid && !c.readerMoved) { endSettle(c); c.posFor = null; return position(w, el, nb, o); }
     }
     // Later renders: a place still settling is placed again; a thread that follows stays on the bottom; otherwise the reading place holds.
@@ -535,7 +540,7 @@ window.WosChatPower = function chatPower(A) {
       const inp = el?.querySelector('[data-fiq]'); if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
     });
   }
-  const opened = (wid, sid) => { const c = ch(wid); c.posFor = ''; c.follow = false; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
+  const opened = (wid, sid) => { const c = ch(wid), s = sid && sid !== '__new__' ? LIVE.session(sid) : null; c.unreadOpen = s && LIVE.isNew(s) ? sid : ''; c.posFor = ''; c.follow = false; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
   const holds = id => !!sheet && sheet.pane === id;
   return { position, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
     paint, closeSheet, click, bind, opened, holds, openFiles, openModels, retryThread, FOLDER_SVG, RP, newModel: c => c.newModel || null };
