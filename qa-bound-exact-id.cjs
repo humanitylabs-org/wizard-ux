@@ -2,10 +2,9 @@
 // name match. James, 19 Oct 2026: a link to outline-streaming-demo bound the older "Outline" (voice-outline) app,
 // so Review showed the old UX while the link itself opened the new one.
 // Usage (Thales): QA_WEB_DIR=<tree> PW=<playwright module dir> node qa-bound-exact-id.cjs [origin]
-const { createRequire } = require('module');
-const pw = createRequire((process.env.PW || '/home/telos/node_modules') + '/')('playwright');
+const pw = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const ORIGIN = process.argv[2] || 'https://wizard.tailc0f369.ts.net', WEB = process.env.QA_WEB_DIR;
+const ORIGIN = process.argv[2] || require('./tools/qa-paths.cjs').origin(), WEB = process.env.QA_WEB_DIR;
 let pass = 0, fail = 0; const ok = (c, n, x = '') => { c ? pass++ : fail++; console.log(c ? 'PASS' : 'FAIL', n, c ? '' : JSON.stringify(x).slice(0, 300)); };
 (async () => {
   const b = await pw.chromium.launch({ headless: true }), ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });

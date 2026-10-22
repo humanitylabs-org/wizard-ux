@@ -1,18 +1,18 @@
 // Wizard Motion Kit demo QA: every primitive works standalone at the stable URL (phone viewport).
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 (async () => {
-  const b = await chromium.launch({ args: ['--host-resolver-rules=MAP wizard.tailc0f369.ts.net 127.0.0.1:18443'] });
+  const b = await chromium.launch({ args: [...(process.env.QA_RESOLVE ? ['--host-resolver-rules=' + process.env.QA_RESOLVE] : [])] });
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true });
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(String(e)));
   let pass = 0, fail = 0; const ok = (c, n, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 'FAIL'} ${n}${c ? '' : ' — ' + d}`); };
-  const BASE = 'https://wizard.tailc0f369.ts.net/wizard-os-home/motion/';
+  const BASE = (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/motion/');
   await p.goto(BASE, { waitUntil: 'load' });
   for (const f of ['wizard-motion.js', 'wizard-motion.css', 'README.md']) { const s = await p.evaluate(u => fetch(u).then(r => r.status), BASE + f); ok(s === 200, `stable URL serves ${f}`, s); } await p.waitForTimeout(3000);
   ok(await p.evaluate(() => WizardMotion.version === '1.0.0'), 'WizardMotion v1 loads');
   ok(await p.evaluate(() => __demo.words.count > 0), 'words drift');
   await p.tap('[data-a="notice"]'); await p.waitForTimeout(3600);
   ok(await p.evaluate(() => document.querySelector('#card').classList.contains('on')), 'notice → card rises');
-  await p.screenshot({ path: '/home/telos/apps/wizard-os-home/qa-live/motion-card.png' });
+  await p.screenshot({ path: require('node:path').join(require('./tools/qa-paths.cjs').repoRoot, 'qa-live/motion-card.png') });
   await p.tap('#print'); await p.waitForTimeout(900);
   ok(await p.evaluate(() => !document.querySelector('#card').classList.contains('on') && __demo.list().length === 1), 'tap signs; card sends into the orb; a moon appears');
   await p.tap('[data-a="notice"]'); await p.waitForTimeout(3600);
@@ -24,7 +24,7 @@ const { chromium } = require('/home/telos/node_modules/playwright');
   ok(await p.evaluate(() => [...document.querySelectorAll('.wm-moon')].every(m => m.classList.contains('done'))), 'moons turn green');
   await p.tap('[data-a="zoom"]'); await p.waitForTimeout(800);
   ok(await p.evaluate(() => document.querySelector('#zoom').classList.contains('on')), 'zoom list opens');
-  await p.screenshot({ path: '/home/telos/apps/wizard-os-home/qa-live/motion-zoom.png' });
+  await p.screenshot({ path: require('node:path').join(require('./tools/qa-paths.cjs').repoRoot, 'qa-live/motion-zoom.png') });
   ok(errs.length === 0, 'no page errors', errs.join(' | '));
   console.log(`${pass}/${pass + fail} passed`); await b.close(); process.exit(fail ? 1 : 0);
 })().catch(e => { console.log('Error', e.message); process.exit(2); });

@@ -29,16 +29,19 @@ Checks
 """
 import fcntl, hashlib, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid
 import urllib.request
+from qa_paths import origin_host, work_root
+from qa_paths import android_sdk, java_home
+QA_ORIGIN_HOST = origin_host()
 P = pathlib.Path
-BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
+BASE = P(str(work_root() / 'AndroidBuilds')); SDK = android_sdk()
 APK = P(sys.argv[1]); NEXT = P(sys.argv[2]); LATER = P(sys.argv[3]); WEB = P(sys.argv[4])
 PKG = 'ai.wizards.os.qa'
 job = P(sys.argv[5]) if len(sys.argv) > 5 else BASE / 'qa' / ('wos-silent-' + uuid.uuid4().hex[:8])
 job.mkdir(parents=True, exist_ok=True)
 OUT = job / 'shots'; OUT.mkdir(exist_ok=True)
-env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
+env = os.environ.copy(); env.update(JAVA_HOME=java_home(),
     ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
-env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
+env['PATH'] = env['JAVA_HOME'] + '/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5704; S = 'emulator-%d' % PORT; DEVTOOLS = 9355; FAKE = 18789
 ORIGIN = 'http://localhost:%d' % FAKE
 BT = sorted((SDK / 'build-tools').iterdir())[-1]
@@ -304,7 +307,7 @@ with _lockfile as lock:
         VC = vcode(); NEXT_VC = 9000 + VC; LATER_VC = 9100 + VC
         VN0 = re.sub(r'-qa$', '', (re.search(r'versionName=(\S+)', sx('dumpsys package %s' % PKG)) or [None, '0-qa'])[1])
         check('install the 0.7.0 QA build over adb (installer of record: %s)' % installer(), out == 'Success' and VC > 0, '%s versionCode=%d' % (out, VC))
-        resolv = sx('ping -c 1 -W 2 wizard.tailc0f369.ts.net 2>&1 | head -2')
+        resolv = sx(f'ping -c 1 -W 2 {QA_ORIGIN_HOST} 2>&1 | head -2')
         check('the real Wizard is unreachable from the emulator (DNS dead)', 'unknown host' in resolv.lower() or 'bad address' in resolv.lower() or not re.search(r'\d+\.\d+\.\d+\.\d+', resolv), resolv.strip())
         check('fixtures: qanext/qalater share the QA signer, the tampered one does not',
               SIGNERS['next'] == SIGNERS['later'] == SIGNER and SIGNERS['bad'] and SIGNERS['bad'] != SIGNER, SIGNERS)

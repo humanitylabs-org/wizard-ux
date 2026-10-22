@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+from qa_paths import work_root
 
 
 def digest(path):
@@ -22,7 +23,7 @@ def main():
     if sys.platform != 'darwin' or not os.environ.get('WIZARD_HEAVY_LOCK_FD'):
         raise SystemExit('Use the durable Thales worker with its inherited lease')
     for p in (release_job, qa_job, old_apk, output):
-        if not p.resolve().is_relative_to('/Volumes/ThalesMedia'):
+        if not p.resolve().is_relative_to(str(work_root() / '')):
             raise SystemExit('Work must remain on ThalesMedia')
     fd = int(os.environ['WIZARD_HEAVY_LOCK_FD'])
     output.mkdir(parents=True, exist_ok=False)

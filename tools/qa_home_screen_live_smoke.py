@@ -2,13 +2,14 @@
 """Thales API35 smoke for the PRODUCTION signed Wizard OS APK: pin one app from the real Apps menu,
 open it from the Android launcher shortcut, prove Back never exits, and prove the pinned app is its own task.
 Read-only on the live Wizard: opens Wisdom's home view only (no chapter, no page turns, no writes).
-Usage on Thales: QA_OUT=/Volumes/ThalesMedia/... python3 tools/qa_home_screen_live_smoke.py <AndroidBuilds/jobs/JOB/receipt.json>
+Usage on Thales: QA_OUT=$WIZARD_WORK_ROOT/... python3 tools/qa_home_screen_live_smoke.py <AndroidBuilds/jobs/JOB/receipt.json>
 Optional QA_DNS (default 100.100.100.100, Tailscale MagicDNS so the emulator resolves the tailnet origin).
 """
 import hashlib, json, os, pathlib, re, socket, sys, time
 import xml.etree.ElementTree as E
+from qa_paths import java_home
 P = pathlib.Path
-if sys.platform != 'darwin' or 'thales' not in socket.gethostname().lower():
+if sys.platform != 'darwin' or not os.environ.get('WIZARD_WORK_ROOT'):
     raise SystemExit('Thales-only emulator QA')
 sys.path.insert(0, str(P(__file__).resolve().parent))
 from qa_aa_lib import Emu, wait, BASE, ADB
@@ -19,7 +20,7 @@ receipt_path = P(sys.argv[1]).resolve()
 if not receipt_path.is_relative_to(BASE) or receipt_path.name != 'receipt.json':
     raise SystemExit('Require canonical remote build receipt under AndroidBuilds')
 build = json.loads(receipt_path.read_text())
-if build.get('status') != 'ok' or build.get('host') != 'thales':
+if build.get('status') != 'ok' or build.get('host') != os.environ.get('WIZARD_BUILD_HOST', socket.gethostname()):
     raise SystemExit('Build receipt is not successful Thales output')
 arts = [a for a in build['artifacts'] if a.get('aapt2', {}).get('package') == PKG]
 if len(arts) != 1:
@@ -75,7 +76,7 @@ def wisdom_content(xml):
 
 out = P(os.environ['QA_OUT']); out.mkdir(parents=True, exist_ok=True)
 emu = Emu(out, 5598, PKG, dns=os.environ.get('QA_DNS', '100.100.100.100'))
-emu.env['JAVA_HOME'] = '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'
+emu.env['JAVA_HOME'] = java_home()
 emu.env['PATH'] = emu.env['JAVA_HOME'] + '/bin:' + emu.env['PATH']
 def cap(name):
     try:

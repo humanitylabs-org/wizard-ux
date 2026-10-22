@@ -1,9 +1,9 @@
 // QA: desk strip (Home | Chats | new desks beside the current one), link → review desk, overview gestures.
 // Usage: node qa-desk-strip.cjs [origin=http://127.0.0.1:9396/wizard-os-home/]   (every write is intercepted)
-let pw; try { pw = require('/home/telos/node_modules/playwright'); } catch (e) { pw = require('playwright-core'); }
+const pw = require('./tools/qa-playwright.cjs');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9396/wizard-os-home/';
 const ORIGIN = new URL(URL_).origin;
-const SHOTS = process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch/desk-strip';
+const SHOTS = process.env.QA_SHOTS || require('./tools/qa-paths.cjs').workPath('desk-strip');
 require('fs').mkdirSync(SHOTS, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else { fail++; console.log('FAIL', n, x); } };

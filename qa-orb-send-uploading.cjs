@@ -5,7 +5,7 @@
 // toast, the recorder stops, the phone steps back to the list, and the run arrives with the real Wizard Files id once
 // the upload lands (never a placeholder id).
 // Usage: QA_WEB_DIR=<repo> node qa-orb-send-uploading.cjs [url]. Real Wizard reads; every write is intercepted.
-let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const URL_ = process.argv[2] || 'http://127.0.0.1:8923/wizard-os-home/';
 const W = process.env.QA_WEB_DIR || '';

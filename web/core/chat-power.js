@@ -55,50 +55,97 @@ window.WosChatPower = function chatPower(A) {
     const b = el.querySelector('[data-chlatest]'); if (!b || !nb) return;
     b.hidden = bottomGap(nb) < 160;
   }
+  // Threads already placed in this page. The first placement after a page load is a restore (a reload, an
+  // update, the app coming back): the saved place wins even in a Working thread, as long as it is for the same reply.
+  const placedThisPage = new Set();
   /* Called by renderThread after the new DOM is in. Returns true when it placed the scroll itself. */
   function position(w, el, nb, o) {
     const c = ch(w.id), sid = w.thread;
     if (o.keep || !nb) return false;
+    if (c.placeWait) { c.placeWait.disconnect(); c.placeWait = null; }
     if (sid === '__new__' || !o.turns) { toBottom(nb); return true; }
     c.lid = latestId(o.turns);
     if (c.posFor !== sid) {
+      // No layout yet (the shell boots after a reload with the thread already open; desktop renders before it
+      // reveals its pane): every scrollTop clamps to 0, and marking the thread placed kept it at the top for good
+      // (James, 20 Oct: "an update reloads me to the very top of the chat"). Place it once the list has a size.
+      if (!nb.clientHeight) {
+        if (typeof ResizeObserver === 'function') {
+          const ro = c.placeWait = new ResizeObserver(() => {
+            if (!nb.clientHeight) return;
+            ro.disconnect(); if (c.placeWait === ro) c.placeWait = null;
+            if (nb.isConnected && el.querySelector('.ch-msgs') === nb && w.thread === sid && c.posFor !== sid) position(w, el, nb, o);
+          });
+          ro.observe(nb);
+        }
+        return true;
+      }
       c.posFor = sid;
+      const restore = !placedThisPage.has(sid); placedThisPage.add(sid);
       const saved = RP.read(sid), reply = lastReply(nb);
-      if (o.working) { c.follow = true; toBottom(nb); }
+      let apply = null;
+      if (o.working && !(restore && saved && !saved.atBottom && c.lid && saved.messageId === c.lid)) { c.follow = true; toBottom(nb); }
       else if (saved && c.lid && saved.messageId === c.lid) {
         // Back where you were: anchored to the latest reply, so layout changes don't shift it.
-        if (saved.atBottom) toBottom(nb);
-        else nb.scrollTop = reply && isFinite(saved.anchorOffset) ? nb.scrollTop + relTop(nb, reply) - saved.anchorOffset : saved.scrollTop;
+        apply = saved.atBottom ? toBottom : box => { const r = lastReply(box); box.scrollTop = r && isFinite(saved.anchorOffset) ? box.scrollTop + relTop(box, r) - saved.anchorOffset : saved.scrollTop; };
         c.follow = !!saved.atBottom;
       } else if (reply) {
         // A fresh reply: open at its first line, not the end of it.
-        nb.scrollTop = Math.max(0, nb.scrollTop + relTop(nb, reply) - 8);
-        c.follow = bottomGap(nb) < 80;
+        apply = box => { const r = lastReply(box); if (r) box.scrollTop = Math.max(0, box.scrollTop + relTop(box, r) - 8); };
         c.atStart = sid;
       } else { c.follow = true; toBottom(nb); }
+      if (apply) { apply(nb); if (!saved || saved.messageId !== c.lid) c.follow = bottomGap(nb) < 80; settle(c, nb, apply); }
       paintLatest(el, nb);
       return true;
     }
-    // Later renders: a thread that follows stays on the bottom; otherwise the reading place holds.
-    if (c.follow || (o.working && o.atBottom)) toBottom(nb);
+    // Later renders: a place still settling is placed again; a thread that follows stays on the bottom; otherwise the reading place holds.
+    if (settling(c)) { const s = c.settle; s.apply(nb); settle(c, nb, s.apply, s.until); }
+    else if (c.follow || (o.working && o.atBottom)) toBottom(nb);
     else if (o.boxTop != null) nb.scrollTop = o.boxTop; // read before the old list was replaced (a detached box reads 0)
     paintLatest(el, nb);
     return true;
   }
-  let saveT = 0;
+  /* A place lands while the layout is still moving: after a reload the desktop pane slides in narrow and short
+   * (James, 20 Oct: the reload put him back at the wrong place), photos land, live repaints replace the list.
+   * Until the reader touches the list or SETTLE_MS pass, place it again on every size change, photo load and
+   * repaint, and hold the save so a mid-slide clamp never overwrites the good place. */
+  const SETTLE_MS = 3000;
+  function settle(c, nb, apply, until) {
+    endSettle(c);
+    const s = c.settle = { nb, apply, until: until || Date.now() + SETTLE_MS };
+    const stop = () => endSettle(c, s), again = () => { if (settling(c) && c.settle === s) apply(nb); else stop(); };
+    // Any touch in the thread (the list, ↓ Latest, the composer) hands the place back to the reader.
+    const evs = ['wheel', 'touchstart', 'pointerdown', 'keydown'], host = nb.closest('[data-chats]') || nb;
+    evs.forEach(e => host.addEventListener(e, stop, { passive: true }));
+    nb.addEventListener('load', again, true);
+    if (typeof ResizeObserver === 'function') { s.ro = new ResizeObserver(again); s.ro.observe(nb); }
+    s.off = () => { evs.forEach(e => host.removeEventListener(e, stop)); nb.removeEventListener('load', again, true); s.ro?.disconnect(); };
+    s.t = setTimeout(stop, Math.max(0, s.until - Date.now()));
+  }
+  function endSettle(c, s) { const cur = c.settle; if (!cur || (s && cur !== s)) return; c.settle = null; cur.off?.(); clearTimeout(cur.t); }
+  const settling = c => !!(c.settle && Date.now() < c.settle.until);
+  let saveT = 0, savePending = null;
   function onScroll(nb) {
     const el = nb.closest('[data-chats]'); if (!el) return;
     const id = el.dataset.chats, w = H.win(id); if (!w || !w.thread || w.thread === '__new__') return;
     const c = ch(id);
+    if (settling(c) && c.settle.nb === nb) { paintLatest(el, nb); return; } // our own placement, not the reader
     c.follow = bottomGap(nb) < 80;
     paintLatest(el, nb);
     clearTimeout(saveT);
-    saveT = setTimeout(() => {
-      if (!c.lid || c.posFor !== w.thread) return;
+    savePending = () => {
+      savePending = null;
+      if (!c.lid || c.posFor !== w.thread || !nb.isConnected) return;
       const reply = lastReply(nb);
       RP.save({ sessionId: w.thread, messageId: c.lid, anchorOffset: reply ? relTop(nb, reply) : 0, scrollTop: Math.max(0, Math.round(nb.scrollTop)), savedAt: Date.now(), atBottom: bottomGap(nb) < 80, following: !!c.follow });
-    }, 200);
+    };
+    saveT = setTimeout(savePending, 200);
   }
+  // A reload (Update ready · Reload) or the app going away inside the 200 ms debounce must still keep the place.
+  const flushPlace = () => { clearTimeout(saveT); savePending?.(); };
+  addEventListener('pagehide', flushPlace);
+  addEventListener('beforeunload', flushPlace);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) flushPlace(); });
   // Pick from what's already in Wizard Files (#23), next to the paperclip.
   const filesBtn = () => (F ? `<button type="button" class="ch-fromfiles" data-chfiles aria-label="Attach from Wizard Files" title="From Wizard Files">${FOLDER_SVG}</button>` : '');
   const latestBtn = () => '<button type="button" class="ch-latest" data-chlatest hidden aria-label="Jump to the latest message">↓ Latest</button>';
@@ -343,7 +390,7 @@ window.WosChatPower = function chatPower(A) {
     let it;
     try {
       it = await OUTBOX.enqueue({ captureId, custodyId, sealKey: sealed.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: transcript ? [sealed.text, transcript].filter(Boolean).join('\n\n') : '', typed: sealed.text, audio: blob,
-        instructions, files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })),
+        instructions, files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), ...(sealed.reply ? { reply: sealed.reply } : {}),
         wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && (nm?.agent || w?.agent) ? { agent: nm?.agent || w.agent } : {}) });
     } catch (e) { // not saved anywhere: the words and attachments go back, and so does James if he is still on the list
       if (hold) LIVE.releaseSend?.(hold);

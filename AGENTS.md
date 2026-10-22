@@ -2,7 +2,19 @@
 
 Wizard UX is the front end of Wizard OS everywhere: the phone web shell and Android app (`ai.wizards.os`), and the desktop shell. It is one codebase with two shells. Shared code lives in `web/core/`. Read the team rules below before you start.
 
+## Machine-specific configuration
+
+Machine-specific paths and hosts come from env vars: `WIZARD_WORK_ROOT`, `WIZARD_BUILD_HOST`, `WIZARD_ORIGIN`, `QA_PLAYWRIGHT`, `HERMES_HOME`, `ANDROID_HOME` / `ANDROID_SDK_ROOT`, and `JAVA_HOME`. Never commit personal paths or tailnet hostnames; `tests/portable-paths.test.mjs` enforces this through `npm test`. QA imports Playwright through `tools/qa-playwright.cjs` only. Keep historical receipts unchanged; temporary native-folder guard exemptions belong to `fix/portable-app-origin`.
+
 ## This repo
+
+### Portable mobile configuration
+
+Machine-specific paths and hosts come from environment/build settings: `WIZARD_ORIGIN` (Android's
+`wizardOrigin` Gradle property also works), and `photosServer` in private Gradle user properties.
+Never commit personal paths or tailnet hostnames. `npm test` runs the tracked-file mobile portability
+guard in `tests/portable-mobile-config.test.mjs`; Android and iOS configuration, sources, tests and docs
+are covered. See `android/README.md` and `ios/README.md` for local configuration.
 
 - **`main` is what James runs.** Until 19 Oct 2026 it was named `daily`. Older notes, `BRANCHES.md` rows and QA comments that say `daily` mean `main`.
 - **Checks:**
@@ -42,6 +54,10 @@ New cross-platform UX belongs in `web/core/`. Register it once, and both shells 
 - **Merging:** a PR that only touches your own skin (your `SKINS` entry and `web/skins/<yours>/`) is yours to self-merge once checks pass; it needs no `needs: james review`. A new hook in the skin API is a small core PR that Archimedes reviews. Bring James only "make this the default for everyone", with a preview he can use.
 - **What stays as it is:** James's five skins and the shared base. Scope fonts to your own skin, rather than to `body`, `.win` or controls.
 - **The guards:** `tests/owner-skins-guard.test.mjs` fingerprints James's skins and fails on any change to them and on any shell-wide font rule. `tests/fixtures/owner-skins.json` changes only with James's explicit approval, named in the commit message. `tests/skin-packages.test.mjs` keeps skin packages in their lane: James's skins load nothing extra, skin CSS stays scoped, skin scripts use only the skin API.
+
+### App icons (sigils)
+
+- Every app in the Wizard App Store gets a designed sigil in the same PR that publishes it: a `HOUSE` entry in `tools/sigils/build.py` and its id in `STORE_APPS` in `tests/sigils-every-app.test.mjs`. CI fails without them. Unknown third-party apps fall back to their own icon file or a disc with their initial cut out, both drawn as masks in the same box, so a fallback never shows up as a square slab. How to add one: `tools/sigils/README.md`.
 
 <!-- wizard-os-team-rules v2 (19 Oct 2026). Same text in every Wizard OS repo; the canonical copy is humanitylabs-org/wizard-os AGENTS.md. Change it there first, then copy the block to every repo in one round of PRs. -->
 ## Wizard OS team rules (identical in every repo)

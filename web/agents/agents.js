@@ -237,6 +237,7 @@
       <div class="ag-sec">Agent apps<small>tools &amp; connectors · ${aa.length}</small></div>
       <div class="ag-card" data-agent-apps>${aa.map(a => appRow(a, 'agent')).join('') || '<div class="ag-empty-line">No agent apps, tools or connectors.</div>'}
         ${appsEditable ? `<button type="button" class="ag-add" data-add="agent">${PLUS.replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"')}Add agent app</button><button type="button" class="ag-add" data-add="tool">${PLUS.replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"')}Add tool or connector</button>` : ''}</div>
+      ${privacy === 'private' ? `<div class="ag-sec">Standard chats</div><div class="ag-card"><div class="ag-tog"><span class="tx"><b>Read standard chats</b><small>Read-only search, conversation history and memory. Nothing flows back.</small></span><button type="button" class="sw" role="switch" aria-checked="${p.read_standard_chats === true}" aria-label="Read standard chats" data-standard-chats ${editable && typeof p.read_standard_chats === 'boolean' ? '' : 'disabled'}></button></div>${typeof p.read_standard_chats !== 'boolean' ? '<p class="ag-note">Available after the Agent Service update.</p>' : ''}</div>` : ''}
       <div class="ag-sec">Other agents</div>
       <div class="ag-seg" role="radiogroup" aria-label="Other agents" style="--n:${o.other_agents.length}">${o.other_agents.map(x => `<button type="button" role="radio" aria-checked="${(p.other_agents || 'none') === x.id}" data-others="${esc(x.id)}" ${dis}>${esc(x.label)}</button>`).join('')}</div>
       ${draft ? '' : `<p class="ag-note">${privacy === 'private' ? 'Sealed: no other agent can read this agent’s chats, memory or files, whatever its own setting says.' : 'Private agents are never readable, whatever this says.'}</p>`}`;
@@ -389,6 +390,7 @@
     if (d.toolyes) { const id = d.toolyes; closeSheet(); editPerms(p => { const s = new Set(p.outside_tools || []); s.add(id); p.outside_tools = [...s]; }, 'Turned on'); return; }
     if (d.files) { editPerms(p => { p.files = d.files; }, 'Files updated'); return; }
     if (d.others) { editPerms(p => { p.other_agents = d.others; }, 'Saved'); return; }
+    if ('standardChats' in d && !t.disabled) { editPerms(p => { p.read_standard_chats = !p.read_standard_chats; }, 'Standard chat access updated'); return; }
     if (d.add) { openSheet({ type: 'add', kind: d.add }); return; }
     if (d.addpick) {
       const kind = S.sheet?.kind; const field = kind === 'wizard' ? 'wizard_apps' : 'agent_apps';

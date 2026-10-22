@@ -9,15 +9,17 @@
 //
 // Usage: node tools/qa-origin.cjs 9371 &  then  node qa-chat-basics.cjs [url]
 //   url defaults to http://127.0.0.1:9371/wizard-os-home/ ; QA_WEB_DIR=<dir> serves web/ from <dir>
-//   (e.g. QA_WEB_DIR=/home/telos/apps/wizard-os-home for the `daily` baseline). QA_OUT=<dir> for screenshots.
-const { chromium } = require('/home/telos/node_modules/playwright');
+//   Use a worktree, never a live copy. QA_OUT=<private scratch dir> for screenshots.
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9371/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || '';
-const OUT = process.env.QA_OUT || '/home/telos/.hermes/cache/scratch/wizard-audit/shots/feature-chat-basics';
-const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP wizard.tailc0f369.ts.net 127.0.0.1:18443';
-const REAL_THREAD = process.env.QA_REAL_THREAD || 'wizard_1791466716358_dd032d92f93f'; // James sent a photo (data-URL part); Archimedes replied with helm_attachments images
+const OUT = process.env.QA_OUT || require('path').join(require('os').homedir(), '.hermes/cache/scratch/chats-parity', 'qa-chat-basics');
+const EXEC = process.env.QA_CHROME || undefined;
+const RESOLVE = process.env.QA_RESOLVE || '';
+// Keep historical inline-JPEG coverage as well as the deterministic media fixture below.
+const REAL_THREAD = process.env.QA_REAL_THREAD || 'wizard_1791466716358_dd032d92f93f';
+const uploads = require('./tools/qa-uploads.cjs').uploadsFixture();
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra === '' ? '' : typeof extra === 'string' ? extra : JSON.stringify(extra)); } };
@@ -96,6 +98,8 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
     const q = r.request(), u = new URL(q.url()), m = q.method();
     const wm = u.pathname.match(/\/wizard-os-home\/((?:core\/|desktop\/)?[a-z-]+\.(?:js|css)|index\.html|desktop\.html|)$/);
     if (WEB && wm && m === 'GET' && !/^(data|summaries)\.js$/.test(wm[1])) { const f = wm[1] || 'index.html', fp = path.join(WEB, 'web', f); if (fs.existsSync(fp)) return r.fulfill({ status: 200, contentType: f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/html' : 'application/javascript', body: fs.readFileSync(fp) }); }
+    if (await uploads.route(r)) { if (!['GET', 'HEAD'].includes(m)) writes.push({ m, p: u.pathname, body: q.postData() || '', headers: q.headers() }); return; }
+    if (!['GET', 'HEAD'].includes(m) && !u.pathname.startsWith('/wizard/')) return r.fulfill({ status: 403, body: 'QA refuses writes' });
     if (!u.pathname.startsWith('/wizard/')) return r.continue();
     const json = (status, body) => r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (m !== 'GET' && m !== 'HEAD') {
@@ -118,12 +122,12 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
     }
     // GET: fixtures merged into real reads.
     if (u.pathname === '/wizard/hermes/api/sessions' && (u.searchParams.get('offset') || '0') === '0') {
-      const res = await r.fetch(); const p = await res.json();
+      const res = await r.fetch({ timeout: 60000 }); const p = await res.json();
       p.data = Object.keys(FIX).map(fixSession).concat(p.data || []);
       return json(200, p);
     }
     if (u.pathname === '/wizard/thread-dispositions') {
-      const res = await r.fetch(); const p = await res.json().catch(() => ({ state: {} }));
+      const p = { state: {} };
       for (const [id, st] of Object.entries(fixState)) if (st.deferred) (p.state = p.state || {})[`direct:${id}`] = st.deferred;
       return json(200, p);
     }
@@ -184,10 +188,10 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
 
   await p.goto(URL_, { waitUntil: 'domcontentloaded' });
   await p.waitForFunction(() => window.__wos?.live?.ok && window.__wos.live.session('qa_media_thread'), null, { timeout: 90000 }).catch(() => {});
-  ok(await p.evaluate(() => !!window.__wos?.live?.session('qa_media_thread')), 'Wizard thread list loaded (real + fixture threads)');
+  ok(await p.evaluate(() => !!window.__wos?.live?.session('qa_media_thread') && __wos.live.sessions.some(s => !s.id.startsWith('qa_'))), 'Wizard thread list loaded (real + fixture threads)');
   await p.evaluate(() => __wos.goDesk(1)); await sleep(600);
 
-  /* ===== #2 + #3 on REAL data: James's photo in his own bubble, Archimedes's images from helm_attachments ===== */
+  /* ===== #2 + #3: real inline JPEG plus assistant attachments (no fixture replaces this read) ===== */
   {
     await openThread(REAL_THREAD);
     // Photos are lazy-loaded: bring James's photo into view, then require it to actually decode.
@@ -198,21 +202,21 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
       return { u: u.length, uLoaded: u.filter(i => i.naturalWidth > 0).length, uData: u.filter(i => i.src.startsWith('data:image/')).length,
         a: a.length, aAtt: a.filter(i => /\/wizard\/attachments\/[0-9a-f]{32}$/.test(i.src)).length, raw: /helm_attachments|"items"\s*:|"sha256"/.test(document.querySelector('.ch-msgs').textContent) };
     });
-    ok(r.u >= 1 && r.uLoaded >= 1 && r.uData >= 1, 'real thread: James’s own photo (inline image part) shows in his bubble', r);
+    ok(r.u >= 1 && r.uLoaded >= 1 && r.uData >= 1 && await p.locator('.msg.u .mimg img').first().evaluate(i => i.getBoundingClientRect().width > 0), 'media sample: James’s own photo (inline image part) shows in his bubble', r);
     await reveal('.msg.u .mimg'); await sleep(700);
     await p.screenshot({ path: `${OUT}/01-real-user-photo.png` });
     const nA = await p.locator('.msg.a .mimg').count();
     for (let k = 0; k < nA; k++) { await p.evaluate(k => { const el = document.querySelectorAll('.msg.a .mimg')[k]; el.setAttribute('data-qa-reveal', ''); }, k); await reveal('[data-qa-reveal]'); await p.evaluate(() => document.querySelector('[data-qa-reveal]').removeAttribute('data-qa-reveal')); await sleep(150); }
     await p.waitForFunction(() => [...document.querySelectorAll('.msg.a .mimg img')].filter(i => i.complete && i.naturalWidth > 0).length >= 2, null, { timeout: 30000 }).catch(() => {});
     const a2 = await p.evaluate(() => [...document.querySelectorAll('.msg.a .mimg img')].filter(i => i.naturalWidth > 0).length);
-    ok(r.a >= 2 && r.aAtt === r.a && a2 >= 2, 'real thread: Archimedes’s helm_attachments images render as photos', { ...r, loaded: a2 });
-    ok(!r.raw, 'real thread: no raw attachment JSON in any bubble');
+    ok(r.a >= 2 && r.aAtt === r.a && a2 >= 2, 'media sample: Archimedes’s helm_attachments images render as photos', { ...r, loaded: a2 });
+    ok(!r.raw, 'media sample: no raw attachment JSON in any bubble');
     await reveal('.msg.a .mimg'); await sleep(700);
     await p.screenshot({ path: `${OUT}/02-real-assistant-images.png` });
     await p.locator('.msg.a .mimg').first().tap();
     await p.waitForFunction(() => { const i = document.querySelector('.mviewer .mv-stage img'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 15000 }).catch(() => {});
     const vr = await p.evaluate(() => { const i = document.querySelector('.mviewer .mv-stage img'); const r = i?.getBoundingClientRect(); return { ...__wos.viewer, w: i?.naturalWidth || 0, shownW: Math.round(r?.width || 0) }; });
-    ok(vr.open && vr.kind === 'image' && vr.w > 0 && vr.shownW >= 380, 'real thread: tapping Archimedes’s image opens it full-screen in the viewer', vr);
+    ok(vr.open && vr.kind === 'image' && vr.w > 0 && vr.shownW >= 380, 'media sample: tapping Archimedes’s image opens it full-screen in the viewer', vr);
     await p.screenshot({ path: `${OUT}/02b-real-image-viewer.png` });
     await back();
     ok(!(await p.evaluate(() => __wos.viewer.open)) && (await thread()) === REAL_THREAD, 'Back closes it and stays in the thread');
@@ -284,7 +288,7 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
       return { types: it.types, html: await get('text/html'), text: await get('text/plain') };
     });
     ok(/<h1>Plan<\/h1>/.test(rich.html) && /<strong>bold<\/strong>/.test(rich.html) && /<em>italic<\/em>/.test(rich.html), 'response Copy puts formatted HTML on the clipboard (heading, bold, italic)', rich.html.slice(0, 120));
-    ok(/<table>/.test(rich.html) && /<td align="right">1<\/td>/.test(rich.html) && /<ul>/.test(rich.html) && /<blockquote>/.test(rich.html), 'formatted copy keeps tables, lists and quotes', rich.html.slice(0, 200));
+    ok(/<table>/.test(rich.html) && /<td align="right">1<\/td>/.test(rich.html) && /• Top item/.test(rich.html) && /1\. Deep numbered/.test(rich.html) && !/<[ou]l[ >]/.test(rich.html) && /<blockquote>/.test(rich.html), 'formatted copy keeps tables, quotes and literal list bullets/numbers', rich.html.slice(0, 200));
     ok(!/class=|style=|<button|data-codecopy|Copy<\/button>/.test(rich.html), 'formatted copy carries no dark-mode styles, classes or Copy/Share buttons', rich.html.match(/class=|style=|<button/)?.[0]);
     ok(/<pre><code>echo "hello" &amp;&amp; ls -la<\/code><\/pre>/.test(rich.html), 'formatted copy keeps code blocks as code', rich.html.match(/<pre>.*<\/pre>/s)?.[0]);
     ok(rich.text.startsWith('Plan') && /• Top item/.test(rich.text) && /1\. Deep numbered/.test(rich.text) && !/^#|\*\*|\| Alpha \|/m.test(rich.text), 'plain-text flavour is readable text with bullets, no Markdown symbols', rich.text.slice(0, 160));
@@ -523,17 +527,21 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
       ta.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
     }, PNG.toString('base64'));
     await p.waitForFunction(() => document.querySelectorAll('.ch-tray .ch-att:not(.up) img').length === 1, null, { timeout: 5000 }).catch(() => {});
-    const up = writes.slice(n0).filter(x => /\/files\/upload$/.test(x.p));
-    ok(up.length === 1 && /^pasted-.*\.png$/.test(up[0].headers['x-wizard-filename']) && up[0].headers['x-wizard-mime'] === 'image/png', 'pasted image uploads to Wizard Files with a real filename', up.map(x => x.headers['x-wizard-filename']));
+    const up = uploads.completed().filter(x => /^pasted-.*\.png$/.test(x.filename));
+    ok(up.length === 1 && up[0].mime === 'image/png' && up[0].offset === PNG.length, 'pasted image completes resumable Wizard Files upload with original bytes and filename', up.map(x => x.filename));
     ok(await p.locator('.ch-tray img').count() === 1, 'pasted photo shows in the tray');
     await p.fill('.ch-compose textarea', 'qa: what is in this photo?');
     await p.tap('.ch-compose [type=submit]'); await sleep(1500);
     const runs = writes.slice(n0).filter(x => /\/v1\/runs$/.test(x.p));
     const rb = runs[0] ? JSON.parse(runs[0].body) : {};
     ok(runs.length === 1 && rb.session_id === 'qa_paste_thread' && rb.input === 'qa: what is in this photo?' && rb.wizard_file_ids?.length === 1, 'text + photo go as ONE run (one turn)', runs.map(r => r.body));
+    // Successful sends deliberately return to the list; reopen to inspect the optimistic bubble.
+    await openThread('qa_paste_thread');
     const pend = await p.evaluate(() => { const m = [...document.querySelectorAll('.msg.u.pending')].pop(); return m && { img: m.querySelectorAll('.mimg img').length, loaded: [...m.querySelectorAll('.mimg img')].filter(i => i.naturalWidth > 0).length, text: m.querySelector('.bub').textContent }; });
-    ok(pend && pend.img === 1 && /what is in this photo/.test(pend.text), 'the sent photo shows in James’s bubble right away', pend);
+    ok(pend && pend.img === 1 && /what is in this photo/.test(pend.text), 'reopening after send shows the optimistic photo and text in the same bubble', pend);
     await p.screenshot({ path: `${OUT}/11-paste-sent.png` });
+    // A successful send returns to the list; reopen before checking the cleared composer.
+    await openThread('qa_paste_thread');
     ok((await p.inputValue('.ch-compose textarea')) === '' && await p.locator('.ch-tray').count() === 0, 'composer and tray clear after send');
     ok(await p.evaluate(() => !('direct:qa_paste_thread' in JSON.parse(localStorage.getItem('wos.chat.drafts.v1') || '{}'))), 'sent draft is cleared from storage');
   }

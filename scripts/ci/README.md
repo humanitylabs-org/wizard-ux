@@ -35,7 +35,8 @@ external worker SSD. Colima's existing containerd image store must advertise
 both platforms. Do not replace its VM, switch global contexts, install binfmt,
 prune other builders or touch live containers.
 
-Host environment supplies `WIZARD_CI_ROOT` (under `/Volumes/ThalesMedia/`),
+Host environment supplies `WIZARD_WORK_ROOT` (the configured worker volume),
+`WIZARD_CI_ROOT` (under `$WIZARD_WORK_ROOT/`),
 `WIZARD_CI_WORKER_LOCK` (the existing shared Android/VM worker lock), and
 `DOCKER_HOST` (the explicit existing Colima socket). Builds use `fcntl.flock`,
 wait up to one hour and release automatically on exit. The 100-minute job limit

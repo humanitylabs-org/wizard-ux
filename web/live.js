@@ -36,6 +36,7 @@
     } catch (e) { return ' '; }
   };
   const clean = s => String(s || '')
+    .replace(/\n*^\[WIZARD_REPLY_V1\]\n[\s\S]*?\n^\[\/WIZARD_REPLY_V1\][ \t]*$/m, ' ') // a Notifications Reply's framed item (quoted lines can't close it)
     .replace(/\[WIZARD_FILES_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_FILES_V1\]/g, (_, j) => chipLabel(j))
     .replace(/\[WIZARD_FILE_CHIPS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_FILE_CHIPS_V1\]/g, (_, j) => chipLabel(j))
     .replace(/\[WIZARD_IMAGE_INTENT_V1\][\s\S]*?\[\/WIZARD_IMAGE_INTENT_V1\]/g, ' ')
@@ -115,18 +116,19 @@
   const vis = v => (typeof v === 'string' ? v : '').replace(/\s+/gu, ' ').trim().slice(0, 80).toLocaleLowerCase();
   function fingerprint(v) { let h = 2166136261; for (const c of vis(v)) { h ^= c.codePointAt(0) ?? 0; h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
   const keyOf = s => `${s.runtime}:${s.id}`;
+  const seenKeyOf = s => s.agent && s.agent !== 'hermes' ? `agent/${s.agent}/${keyOf(s)}` : keyOf(s);
   function assistantAt(s) { const v = s.lastAssistantAt ?? (s.previewRole === 'assistant' ? s.previewAt : undefined); return isFinite(Date.parse(v ?? '')) ? v : undefined; }
   function recordFor(s, seenAt) {
     const a = assistantAt(s);
     return { ...(typeof s.messageCount === 'number' ? { messageCount: s.messageCount } : {}), ...(s.status && s.status !== 'submitting' ? { status: s.status } : {}),
-      updatedAt: s.updatedAt, previewFingerprint: fingerprint(s.preview), ...(a ? { assistantActivityAt: a } : {}), seenAt };
+      updatedAt: s.updatedAt, previewFingerprint: s.agent && otherAgent(s.agent) ? 'private' : fingerprint(s.preview), ...(a ? { assistantActivityAt: a } : {}), seenAt };
   }
   function hasNew(s, state) {
     if (!state) return false;
-    const r = state.threads[keyOf(s)]; if (!r) return true;
+    const r = state.threads[seenKeyOf(s)]; if (!r) return true;
     const cur = Date.parse(assistantAt(s) ?? ''), seenA = Date.parse(r.assistantActivityAt ?? '');
     const comparable = typeof s.messageCount === 'number' && typeof r.messageCount === 'number';
-    const previewChanged = !comparable && fingerprint(s.preview) !== r.previewFingerprint;
+    const previewChanged = !otherAgent(s.agent) && !comparable && fingerprint(s.preview) !== r.previewFingerprint;
     const countUp = comparable && s.messageCount > r.messageCount;
     const becameReady = !!s.status && s.status !== r.status && READY_OR_ATTENTION.has(s.status) && (!r.status || !READY_OR_ATTENTION.has(r.status));
     if (isFinite(cur)) return isFinite(seenA) ? cur > seenA : cur > r.seenAt;
@@ -175,6 +177,8 @@
    * rises to page 1. The between-walk poll used to re-read ~6 pages (~1 MB) every 15 s;
    * one page carries the same news. The full walk still catches edits that don't bump activity. */
   const LIST_SUPPORT = new Map(), DETAIL = new Map();
+  const LIST_DEADLINE = 30000;
+  const listSignal = () => typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(LIST_DEADLINE) } : {};
   async function fetchSessions(full, agent = '', onFirst = null) {
     const out = []; let snapshot = '', meta = null, resets = 0;
     const overrides = JSON.stringify(listOverrides(agent));
@@ -182,7 +186,8 @@
       const slim = LIST_SUPPORT.get(agent) !== false;
       const q = `${slim ? `view=list&window=archive-50&overrides=${encodeURIComponent(overrides)}&` : ''}limit=100&offset=${offset}&include_children=false${snapshot ? `&snapshot=${encodeURIComponent(snapshot)}` : ''}${agent ? `&agent=${encodeURIComponent(agent)}` : ''}`;
       let p;
-      try { p = await (await req(`/wizard/hermes/api/sessions?${q}`)).json(); }
+      // A read that hangs must not leave Chats looking current: give up after LIST_DEADLINE and say so (offline).
+      try { p = await (await req(`/wizard/hermes/api/sessions?${q}`, listSignal())).json(); }
       catch (e) {
         if (slim && offset === 0 && [400,404].includes(e.status)) { LIST_SUPPORT.set(agent,false); continue; }
         if (offset > 0 && e.status === 409 && resets++ < 1) { offset=0; snapshot=''; out.length=0; continue; }
@@ -204,6 +209,7 @@
     throw new Error('Session window limit reached');
   }
   const FULL_EVERY = 3 * 60 * 1000;
+  const STALE_AFTER = 60 * 1000; // the list polls every 15 s, so a minute without a fresh read is worth saying
   /* ---- agents (Agents MVP): each non-default agent's threads are read from its own list (agent=<id>), always
    * through the owner's own Agent Service. Every thread/run call for such a thread names its agent, so a private
    * agent's #59 seal still refuses id-only reads from anything else.
@@ -239,7 +245,10 @@
   const ARCH_KEY = 'wos.chats.archiveAfter.v1';
   // Chat-list layout: 'day' (Ready = today, then Yesterday, Past week; the default) or 'status' (Working / Ready / Archive).
   const LAYOUT_KEY = 'wos.chats.layout.v1';
-  const chatLayout = () => { try { return localStorage.getItem(LAYOUT_KEY) === 'status' ? 'status' : 'day'; } catch (e) { return 'day'; } };
+  // Miguel's skins (Dark, Light, Landscapes) always list by status: Working, Ready, Archive. No Yesterday or Past week.
+  const OUR_SKINS = new Set(['obsidian', 'obsidian-light', 'landscapes']);
+  const oursSkin = () => { try { return OUR_SKINS.has(document.documentElement.dataset.skin || ''); } catch (e) { return false; } };
+  const chatLayout = () => { if (oursSkin()) return 'status'; try { return localStorage.getItem(LAYOUT_KEY) === 'status' ? 'status' : 'day'; } catch (e) { return 'day'; } };
   const archiveAfterDays = () => { try { const v = localStorage.getItem(ARCH_KEY); if (v != null && isFinite(+v)) return +v; } catch (e) {} return 7; };
   // Agent Service owns box-wide preferences. localStorage is only an offline cache.
   const PREFS_URL = '/wizard/v1/ui-preferences';
@@ -404,7 +413,11 @@
       if (OB.quarantined?.(it.id) || ['failed', 'empty', 'held', 'unconfirmed'].includes(it.state) || (it.state === 'sent' && it.steered)) continue;
       const cur = latest.get(it.sessionId); if (!cur || it.createdAt > cur.createdAt) latest.set(it.sessionId, it);
     }
-    for (const [sid, p] of PEND) if (!latest.has(sid)) PEND.delete(sid); // deleted / taken back to edit
+    // Deleted / taken back to edit. A message Wizard already accepted keeps its hold when its outbox item goes:
+    // an open thread pane (desktop) retires the item as soon as the words land in the transcript, seconds before
+    // the list reports the run, and dropping the hold then flashed the thread back into Ready with Done
+    // (James, 20 Oct 2026). That hold still ends on Wizard's own truth (confirmed) or PEND_MAX.
+    for (const [sid, p] of PEND) if (!latest.has(sid) && !(p.state === 'sent' && !String(p.key).startsWith('tap:'))) PEND.delete(sid);
     for (const [sid, it] of latest) {
       const known = PEND.get(sid);
       if (RELEASED.has(it.id) || (it.state === 'sent' && !known && Date.now() - (it.sentAt || 0) > PEND_MAX)) { if (known?.key === it.id) PEND.delete(sid); continue; } // already settled
@@ -487,8 +500,9 @@
     onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
     emit() { for (const fn of this.listeners) { try { fn(this); } catch (e) { console.error(e); } } },
     isNew(s) { return hasNew(s, this.seenOf(s)); },
-    // A non-default agent's read state stays on this device (never PUT to the main agent's thread-seen store).
-    seenOf(s) { return s && s.agent && otherAgent(s.agent) ? AGENT_SEEN : this.seen; },
+    // Server-owned, agent-qualified receipts: activity metadata only, never transcript text.
+    seenOf(s) { return this.seen; },
+    seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
     workGroups(sessions, now) { return groupWork(sessions || this.unified(), now); },
     readyByPriority: byPriority,
     get archiveAfterDays() { return archiveAfterDays(); },
@@ -519,6 +533,8 @@
       this.loading = (async () => {
         try {
           const started = Date.now();
+          // Coming back to a list that is already old (phone woke, slow server): repaint now so Chats says it is updating.
+          this.loadingAt = started; if (this.at && started - this.at > STALE_AFTER) this.emit();
           const full = !this.fullAt || Date.now() - this.fullAt > FULL_EVERY;
           const side = Promise.all([fetchDispositions(), fetchSeen().catch(() => null)]);
           const apply = (got, deferred, remote) => {
@@ -544,6 +560,9 @@
             putSeen(merged).catch(() => {});
           }
           this.seen = merged; writeLocal(merged);
+          // Retry device-local reads after reconnect/reload; failed writes must not strand a private receipt.
+          if (Object.entries(merged.threads).some(([key,r])=>r.seenAt>(remote?.threads?.[key]?.seenAt || 0)))
+            putSeen(merged).then(r=>{this.seen=merge(this.seen,r);writeLocal(this.seen);this.emit();}).catch(()=>{});
           this.ok = true; this.error = ''; this.at = Date.now(); this.cached = false;
           };
           // Only a cold list paints early; a later full walk replaces a list that is already on screen in one go.
@@ -562,11 +581,11 @@
       return this.loading;
     },
     /* Each non-default agent's threads, from that agent (agent=<id>). One agent failing never hides another. */
-    async refreshAgents(deferred = this.deferred) {
+    async refreshAgents(deferred = this.deferred, only = '') {
       const A = AG(); if (!A) return;
       if (!A.ready) await A.load().catch(() => {});
-      const ids = A.others().map(a => a.id);
-      for (const k of Object.keys(this.agentSessions)) if (!ids.includes(k)) { delete this.agentSessions[k]; delete this.agentStatus[k]; }
+      const known = A.others().map(a => a.id), ids = known.filter(id => !only || id === only);
+      for (const k of Object.keys(this.agentSessions)) if (!known.includes(k)) { delete this.agentSessions[k]; delete this.agentStatus[k]; }
       await Promise.all(ids.map(async id => {
         try {
           const got = await fetchSessions(true, id);
@@ -586,6 +605,16 @@
           this.agentStatus[id] = { ok: false, error: e.status === 403 ? 'access' : 'offline', at: Date.now() };
         }
       }));
+      let migrated = false, state = merge(readLocal(),this.seen) || {initializedAt:Date.now(),threads:{}};
+      for (const s of Object.values(this.agentSessions).flat()) {
+        const old = AGENT_SEEN.threads[keyOf(s)];
+        if (old) { state.threads[seenKeyOf(s)] = {...later(state.threads[seenKeyOf(s)],old),previewFingerprint:'private'}; delete AGENT_SEEN.threads[keyOf(s)]; migrated=true; }
+      }
+      if (migrated) {
+        this.seen=state;writeLocal(state);
+        try { localStorage.setItem(AGENT_SEEN_KEY,JSON.stringify(AGENT_SEEN)); } catch {}
+        putSeen(state).then(r=>{this.seen=merge(this.seen,r);writeLocal(this.seen);this.emit();}).catch(()=>{});
+      }
     },
     // The threads of one agent; '' (or the default agent) = the unified list the owner's main Chats shows.
     sessionsFor(agent = '') { return otherAgent(agent) ? (this.agentSessions[agent] || []) : this.unified(); },
@@ -599,20 +628,18 @@
     },
     // A private agent's thread (by id): its rows carry the lock and its words never enter another agent's context.
     isPrivate(id) { const a = this.agentOf(id), A = AG(); return !!a && !!A && A.isPrivate(A.get(a)); },
-    statusFor(agent = '') { return otherAgent(agent) ? (this.agentStatus[agent] || { ok: false, error: '' }) : { ok: this.ok, error: this.error, cached: this.cached, cachedAt: this.cachedAt, loading: !!this.loading }; },
+    statusFor(agent = '') { return otherAgent(agent) ? (this.agentStatus[agent] || { ok: false, error: '' }) : { ok: this.ok, error: this.error, cached: this.cached, cachedAt: this.cachedAt, loading: !!this.loading, at: this.at || 0 }; },
     // The non-default agent a thread is pinned to, or '' for the main agent.
     agentOf(id) { if (!id || id === '__new__') return ''; const a = AGENT_OF.get(id); return a && otherAgent(a) ? a : ''; },
     pinAgent(id, agent) { if (id && agent && otherAgent(agent)) AGENT_OF.set(id, agent); },
     markSeen(ids) {
       const all = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
       const ts = Date.now();
-      const mine = all.filter(s => s.agent && otherAgent(s.agent));
-      if (mine.length) { for (const s of mine) AGENT_SEEN.threads[keyOf(s)] = recordFor(s, ts); try { localStorage.setItem(AGENT_SEEN_KEY, JSON.stringify(AGENT_SEEN)); } catch (e) {} this.emit(); }
-      const list = all.filter(s => !mine.includes(s));
+      const list = all;
       if (!list.length) return;
       let state = merge(readLocal(), this.seen) || { initializedAt: ts, threads: {} };
       const threads = { ...state.threads };
-      for (const s of list) threads[keyOf(s)] = recordFor(s, ts);
+      for (const s of list) threads[seenKeyOf(s)] = recordFor(s, ts);
       state = { ...state, threads };
       this.seen = state; writeLocal(state); this.emit();
       putSeen(state).then(r => { this.seen = merge(this.seen, r); writeLocal(this.seen); this.emit(); }).catch(() => {});
@@ -723,7 +750,7 @@
     },
     rememberSearch(s) { if(s?.id) { if(otherAgent(s.agent)) AGENT_OF.set(s.id,s.agent); DETAIL.set(s.id,s); while(DETAIL.size>300) DETAIL.delete(DETAIL.keys().next().value); } },
     async sessionInfo(id) {
-      const agent = this.agentOf(id);
+      let agent = this.agentOf(id);
       let p;
       try { p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}?view=detail${aq(id,'&')}`)).json(); }
       catch(e) { if (![400,404].includes(e.status)) throw e; p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`)).json(); }
@@ -743,6 +770,9 @@
         }
       }
       const s = normalize(raw); if (!s) return null;
+      // A direct link can arrive before the scoped lists. Learn the authoritative
+      // server target before the first history read or reply; never overwrite a known scope.
+      if (!agent && otherAgent(s.agent) && s.id === id) { agent = s.agent; AGENT_OF.set(id, agent); }
       if (s.agent && (s.agent || 'hermes') !== (agent || 'hermes')) throw new Error('Thread scope changed');
       if (agent) s.agent = agent;
       const list = agent ? (this.agentSessions[agent] = this.agentSessions[agent] || []) : this.sessions;
@@ -851,6 +881,44 @@
     const OB = window.WosOutbox; if (!OB || L._outbox) return; L._outbox = true;
     const sync = () => { if (syncPending(OB)) L.emit(); };
     OB.onChange(sync); OB.load().then(sync).catch(() => {});
+    // Separate-agent sessions are raw gateway rows, not the main agent's run
+    // queue. Follow the accepted receipt, rather than waiting 15 s for that list.
+    const watches = new Map();
+    const follow = it => {
+      if (!otherAgent(it.agent) || !it.runId || it.steered || !['new','reply'].includes(it.kind)) return;
+      const sid = it.sessionId, runId = it.runId;
+      if (watches.get(sid) === runId) return;
+      watches.set(sid, runId); L.pinAgent(sid, it.agent);
+      const tick = async () => {
+        if (watches.get(sid) !== runId) return;
+        try {
+          if (!document.hidden) {
+            const run = await (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}?agent=${encodeURIComponent(it.agent)}`)).json();
+            if (watches.get(sid) !== runId) return;
+            if ((run.run_id || run.id) === runId && run.session_id === sid && ['completed','failed','cancelled','interrupted','expired'].includes(run.status)) {
+              await L.refreshAgents(L.deferred, it.agent);
+              if (watches.get(sid) !== runId) return;
+              // Older services list raw profile sessions without run keys/status.
+              // The exact terminal receipt still settles this send, never a newer one.
+              const pending = PEND.get(sid);
+              if (!pending || (pending.runId === runId && pending.key === it.id)) {
+                if (pending) { RELEASED.add(pending.key); PEND.delete(sid); }
+                const s = L.session(sid);
+                if (s && (!s.runId || s.runId === runId || s.pend)) {
+                  unPend(s); Object.assign(s, { status: run.status, lastRunStatus: run.status, lastRunKey: it.id, runId: '' });
+                  if (run.updated_at) s.lastAssistantAt = iso(run.updated_at);
+                }
+              }
+              L.emit(); if (watches.get(sid) === runId) watches.delete(sid); return;
+            }
+          }
+        } catch (_) { /* uncertain reads keep following the same receipt, never resend */ }
+        setTimeout(tick, document.hidden ? 3000 : 500);
+      };
+      tick();
+    };
+    OB.onSent(follow);
+    OB.load().then(() => { for (const it of OB._items.values()) if (it.state === 'sent' && Date.now() - it.sentAt < PEND_MAX) follow(it); }).catch(() => {});
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attachOutbox); else setTimeout(attachOutbox, 0);
   // A new or changed agent: read its threads now (not at the next poll), then repaint.

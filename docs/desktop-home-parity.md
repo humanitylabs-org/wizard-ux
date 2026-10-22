@@ -15,7 +15,7 @@ James requested mobile components on desktop (including Resources), a Home short
 
 ## Thales evidence
 
-All browser runs executed on Thales, using installed Google Chrome, under `/Volumes/ThalesMedia/Projects/wizard-ux/desktop-home-parity-20261015`.
+All browser runs executed on Thales, using installed Google Chrome, under `$WIZARD_WORK_ROOT/Projects/wizard-ux/desktop-home-parity-20261015`.
 
 - Untouched live daily `f4e5a7e` primary repro: 0 passed, 3 failed (offset house, missing Resources, absent Alt+0).
 - `candidate-review-r1/results.json`: 56 passed, 0 failed (includes six review regressions). Real Resources reads; dialog tabs; desktop sizes; focus; Escape/browser Back; composer/window identity; Home keyboard/palette/help; Settings; local-outbox fixture; resource lifecycle churn; phone Resources; no page errors. Also validates shared icon navigation, focused-app updates and badges, Home-first numeric mapping, shifted window movement, next-slot creation, empty-desktop pruning, inert out-of-range digits and reload persistence. All non-GET/HEAD requests fenced.

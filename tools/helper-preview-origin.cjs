@@ -6,13 +6,13 @@
 const http = require('http'), fs = require('fs'), path = require('path');
 const PORT = +(process.argv[2] || process.env.QA_ORIGIN_PORT || 9371);
 const WEB = path.resolve(process.argv[3] || process.env.QA_ORIGIN_WEB || path.join(__dirname, '..', 'web'));
-const FALLBACK = '/home/telos/apps/wizard-os-home/web'; // data.js / summaries.js are untracked build outputs
+const FALLBACK = process.env.WIZARD_UX_FALLBACK_WEB || WEB; // optional untracked data.js / summaries.js build outputs
 const BACKEND = { host: '127.0.0.1', port: 8923 };
 const STATIC = { '127.0.0.1:9271': '/api/' }; // voice/router endpoints of the prototype server
 const TYPES = { '.js': 'application/javascript', '.css': 'text/css', '.html': 'text/html', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.md': 'text/markdown' };
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; media-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 let refused = 0;
-const helperModule = import('/home/telos/work/was-helper-status/server/helper-status.mjs');
+const helperModule = () => import(require('node:url').pathToFileURL(path.resolve(require('./qa-paths.cjs').required('QA_HELPER_STATUS_MODULE'))).href);
 const demos = new Map();
 const demoStarts = new Map();
 const DEMO = ['running','finishing','stalled'];
@@ -53,8 +53,8 @@ async function helperPreview(req,res,u) {
   if(u.pathname==='/wizard/hermes/api/sessions') {
     const r=await fetch('http://127.0.0.1:8923'+req.url);if(!r.ok)return json(r.status,{error:'upstream_unavailable'});
     const p=await r.json(),rows=p.data||p.sessions||[];
-    const {readHelperStatuses}=await helperModule;
-    const statuses=readHelperStatuses('/home/telos/.hermes/state.db',rows.map(r=>r.id),{activeSessionIds:new Set(rows.filter(r=>r.wizard_run_id&&['running','queued','submitting','stopping'].includes(r.status)).map(r=>r.id))});
+    const {readHelperStatuses}=await helperModule();
+    const statuses=readHelperStatuses(require('./qa-paths.cjs').hermesPath('state.db'),rows.map(r=>r.id),{activeSessionIds:new Set(rows.filter(r=>r.wizard_run_id&&['running','queued','submitting','stopping'].includes(r.status)).map(r=>r.id))});
     for(const row of rows){const h=statuses.get(row.id);if(h)row.wizard_helper_status={...h,resumeEligible:false,previewReadOnly:true};}
     if((u.searchParams.get('offset')||'0')==='0')rows.unshift(...demoRows(key));
     if(p.data)p.data=rows;else p.sessions=rows;

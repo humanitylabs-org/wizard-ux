@@ -31,7 +31,7 @@ import android.widget.Toast;
 import android.window.OnBackInvokedDispatcher;
 
 /**
- * Wizard OS: a native home for James's private Wizard OS shell (wizard.tailc0f369.ts.net/wizard-os-home/).
+ * Wizard OS: a native home for the owner's private shell (BuildConfig.HOME_URL).
  *
  * Rules this activity enforces:
  *  - Back never exits. Every Back is handed to the shell (window.__wosNativeBack), which closes the top

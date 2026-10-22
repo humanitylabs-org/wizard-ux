@@ -97,3 +97,45 @@ test('a refused write keeps the old state and tells the owner', async () => {
   assert.equal(U.state.mode, 'auto');
   assert.deepEqual(c.t.at(-1), ['!', 'only the box owner can install from the Store', 2600]);
 });
+
+test('an update cut short by a reboot says interrupted, retrying, and offers Update now again', async () => {
+  const { U } = await load(() => [200, { ...STATUS, installing: false, interrupted: true }]);
+  const h = U.html();
+  assert.match(h, /<b data-osu-title>Update interrupted · retrying<\/b><small>Wizard OS 0\.3\.15 → 0\.3\.16 · tries again tonight, or tap Update now/);
+  assert.match(h, /data-osu="apply"[^>]*>Update now</);
+  const ask = await load(() => [200, { ...STATUS, mode: 'ask', chosen: true, interrupted: true }]);
+  assert.match(ask.U.html(), /<b data-osu-title>Update interrupted<\/b><small>[^<]*tap Update now to try again/);
+  const old = await load(() => [200, { ...STATUS }]);              // an App Manager without the field: unchanged
+  assert.match(old.U.html(), /<b data-osu-title>Update available<\/b>/);
+});
+
+test('channel picker: hidden on an App Manager without channels, shown with Stable checked when it has them', async () => {
+  const old = await load(() => [200, STATUS]);
+  assert.doesNotMatch(old.U.html(), /Release channel/);
+  const { U } = await load(() => [200, { ...STATUS, channel: 'stable', stable: '0.3.16' }]);
+  const h = U.html();
+  assert.match(h, /data-osu="ch-stable" role="radio" aria-checked="true"/);
+  assert.match(h, /Stable \(recommended\)/);
+  assert.match(h, /Latest \(every release, for testers\)/);
+});
+
+test('on latest with Automatic it says Automatic installs stable only; choosing a channel POSTs only {channel}', async () => {
+  let state = { ...STATUS, channel: 'stable', stable: '0.3.16' };
+  const { U, calls } = await load((method, body) => {
+    if (method === 'GET') return [200, state];
+    state = { ...state, channel: body.channel, latest: '0.3.17' }; return [200, { channel: body.channel, ...state }];
+  });
+  const c = ctx();
+  assert.equal(U.act(btn('ch-latest'), c), true);
+  await tick(); await tick();
+  const post = calls.find(x => x.method === 'POST');
+  assert.deepEqual(post.body, { channel: 'latest' });
+  assert.equal(post.headers['X-Wizard-Store'], '1');
+  assert.equal(U.state.channel, 'latest');
+  assert.match(U.html(), /data-osu="ch-latest" role="radio" aria-checked="true"/);
+  assert.match(U.html(), /Automatic installs stable only/);
+  assert.match(c.t[0][1], /Channel: Latest/);
+  const n = calls.length;
+  U.act(btn('ch-latest'), ctx()); await tick();
+  assert.equal(calls.length, n);   // re-tapping the current channel sends nothing
+});

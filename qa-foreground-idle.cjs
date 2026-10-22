@@ -1,8 +1,8 @@
 // Foreground battery regression. Real Wizard reads, no writes. Run only on Thales.
 // QA_TREE serves candidate static assets; baseline uses the live shell unchanged.
 const fs=require('fs'),path=require('path');
-const {chromium}=require(process.env.QA_PLAYWRIGHT||'/home/telos/node_modules/playwright');
-const BASE=process.env.QA_URL||'https://wizard.tailc0f369.ts.net/wizard-os-home/?open=chats';
+const {chromium}=require('./tools/qa-playwright.cjs');
+const BASE=process.env.QA_URL||(require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/?open=chats');
 (async()=>{
  const browser=await chromium.launch({args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
  const ctx=await browser.newContext({viewport:{width:412,height:892},deviceScaleFactor:2.625,isMobile:true,hasTouch:true,permissions:['microphone'],ignoreHTTPSErrors:true,serviceWorkers:'block'});

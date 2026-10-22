@@ -1,12 +1,12 @@
 // QA: the link sheet, the in-app browser for links tapped in Wizard (core/links.js).
 // Usage: node qa-link-sheet.cjs [origin=http://127.0.0.1:9393/wizard-os-home/]
 // Fixture pages under /qa-page/ are served by this suite (same origin); every Wizard write is intercepted.
-let pw; try { pw = require('/home/telos/node_modules/playwright'); } catch (e) { pw = require('playwright-core'); }
+const pw = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const WEB = process.env.QA_WEB_DIR || '';
 const URL_ = process.argv[2] || 'http://127.0.0.1:9393/wizard-os-home/';
 const ORIGIN = new URL(URL_).origin;
-const SHOTS = process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch';
+const SHOTS = process.env.QA_SHOTS || require('./tools/qa-paths.cjs').workPath('');
 const EXE = process.env.QA_CHROME || undefined;
 let pass = 0, fail = 0;
 const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else { fail++; console.log('FAIL', n, x); } };
@@ -20,7 +20,7 @@ const FIX = {
   '/qa-page/gallery/': page('Gallery', '<h1>Mockups</h1><a id="img1" href="/qa-page/wide.png">original</a><br><a id="img2" href="wide2.png" target="_blank">second</a>'),
 };
 // A real 1280-px-wide mockup screenshot: wider than any phone.
-const PNG = fs.readFileSync(process.env.QA_PNG || '/home/telos/.hermes/data/apps/private-reports/herdr-to-wizard/herdr-homepage-demo.png');
+const PNG = fs.readFileSync(process.env.QA_PNG || require('./tools/qa-paths.cjs').hermesPath('data/apps/private-reports/herdr-to-wizard/herdr-homepage-demo.png'));
 
 (async () => {
   const RES = process.env.QA_RESOLVE; const b = await pw.chromium.launch({ ...(EXE ? { executablePath: EXE } : {}), ...(RES ? { args: ['--host-resolver-rules=' + RES] } : {}) });

@@ -38,7 +38,7 @@ Tested executable commit: `e32ee97cb98c1907cb8f160edfe7bced4401da87`. Exact web 
 
 `docs/responsive-remainder-verification.json` is the read-back Thales receipt. It verifies SHA-256 equality for **286** tracked source/test files against the pushed commit, with zero mismatches. Subsequent documentation-only commits retain this executable tree.
 
-Evidence root on `thales.local`: `/Volumes/ThalesMedia/QA/responsive-parity-remainder-20261015`.
+Evidence root on `thales.local`: `$WIZARD_WORK_ROOT/QA/responsive-parity-remainder-20261015`.
 
 | Gate | Passed | Failed | Receipt under evidence root |
 |---|---:|---:|---|
