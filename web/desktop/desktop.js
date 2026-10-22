@@ -662,6 +662,8 @@
     if (act === 'mono') return toggleMono();
     if (act === 'pop') { const a = appOf(w); let href = a.url; try { href = el.querySelector('iframe').contentWindow.location.href; } catch (err) {} return window.open(href, '_blank', 'noopener'); }
     if (w?.app === 'chats' || CHATS.isHosted(id)) {
+      // Topic emoji taps belong to shared Chats; do not let the desktop pane adapter open the row first.
+      if (e.target.closest('[data-chpick]')) { const cid = e.target.closest('[data-chats]')?.dataset.chats; if (cid && CHATS.click(e, cid)) { e.stopPropagation(); syncChatsPane(id); return; } }
       // Rows in the list pane open in this window's thread pane.
       const row = e.target.closest('[data-chopen]');
       if (row && e.target.closest('.pane-list') && CHATS.justPressed()) { e.stopPropagation(); return; } // a long-press/right-click just opened the actions sheet
