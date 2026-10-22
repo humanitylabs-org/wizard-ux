@@ -41,8 +41,10 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-boot-timeout: 600
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -memory 3072
           script: |
+            adb shell svc wifi disable
+            adb shell svc data disable
             bash tools/android_emulator_smoke.sh android/app/build/outputs/apk/debug/app-debug.apk smoke-out
             cd android && ./gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=ai.wizards.os.DeviceBridgeE2eTest
       - name: Summary

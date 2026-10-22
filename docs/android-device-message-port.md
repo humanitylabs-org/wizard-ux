@@ -62,8 +62,10 @@ not assume every newer APK supports a feature. No production web caller changes 
   and success/error response contracts.
 - `DeviceBridgeE2eTest` pairs the actual QA APK to a disposable localhost Wizard. In its real WebView it
   discovers capabilities, reads package list/status, rejects an unadvertised operation and unsupported
-  version, and verifies the legacy status response still has its old shape. No APK installation,
-  uninstall or owner-server interaction occurs.
+  version, verifies same-origin child frames and non-shell top-level pages receive no native response,
+  and verifies the legacy status response still has its old shape. No APK installation,
+  uninstall or owner-server interaction occurs. Emulator Wi-Fi/mobile data are disabled: the fixture
+  uses loopback only and must not depend on background Google-services downloads.
 - The emulator workflow runs that instrumentation class separately from launch/Connect smoke. The
   smoke alone is **not** feature proof. Instrumentation reports are uploaded on success and failure.
 
