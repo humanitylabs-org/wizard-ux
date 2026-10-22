@@ -1026,6 +1026,31 @@ window.WizCore.chats = function createChats(H) {
     if (W[wid] === w && w.thread === sid && c.readNav === nav) renderThreadNow(w);
     LIVE.refresh();
   }
+  /* Replace el's contents with html while `keep` (a field inside el) stays attached: every ancestor of keep takes the
+   * fresh attributes and children, and keep takes the fresh field's place. Returns false (caller falls back to
+   * innerHTML) when the fresh markup has no matching field. */
+  function rebuildAround(el, html, keep) {
+    const tpl = document.createElement('template'); tpl.innerHTML = html;
+    const fresh = tpl.content.querySelector('.ch-compose textarea'); if (!fresh || !el.contains(keep)) return false;
+    const oldPath = [], newPath = [];
+    for (let n = keep; n && n !== el; n = n.parentNode) oldPath.unshift(n);
+    for (let n = fresh; n && n !== tpl.content; n = n.parentNode) newPath.unshift(n);
+    if (oldPath.length !== newPath.length || oldPath.some((n, i) => n.nodeName !== newPath[i].nodeName)) return false;
+    keep.placeholder = fresh.placeholder;
+    let oldParent = el, newParent = tpl.content;
+    oldPath.forEach((o, i) => {
+      const f = newPath[i];
+      for (const c of [...oldParent.childNodes]) if (c !== o) c.remove();
+      const kids = [...newParent.childNodes], at = kids.indexOf(f);
+      o.before(...kids.slice(0, at)); o.after(...kids.slice(at + 1));
+      if (o !== keep) {
+        for (const a of [...o.attributes]) if (!f.hasAttribute(a.name)) o.removeAttribute(a.name);
+        for (const a of [...f.attributes]) if (o.getAttribute(a.name) !== a.value) o.setAttribute(a.name, a.value);
+      }
+      oldParent = o; newParent = f;
+    });
+    return true;
+  }
   function renderThreadNow(w) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && w.thread) renderThread(w, el); }
   /* Selecting text (James, 12 Oct): a working thread re-renders on every new step, which replaced the bubble under
    * a long-press (Android cancels the press) and wiped any selection a few seconds later. Background updates now
@@ -1201,14 +1226,20 @@ window.WizCore.chats = function createChats(H) {
     const keepImgs = keepLoadedImages(el);
     const keepSheet = keptSheet(el);
     const openContexts = el.dataset.draftFor === dkey ? new Set([...el.querySelectorAll('[data-run-original][open]')].map(e => e.dataset.runOriginal)) : new Set();
-    el.innerHTML = `<div data-part="thread" class="ch-thread${TAG ? ' agent' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
+    const threadHTML = `<div data-part="thread" class="ch-thread${TAG ? ' agent' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
       <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(winTitle(w))}</b>`}${privTag}</div>${chip}</div>
       <div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
       ${msw ? `<div class="ch-swrow">${msw}</div>` : ''}<form data-part="composer" class="ch-compose${hasContent(draft) ? ' has-text' : ''}${rpl ? ' has-reply' : ''}" data-chform>${replyBubble(rpl)}${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${mlabel}</div>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
+    // A focused composer must never leave the page during a live repaint: iPhone Safari closes the keyboard the
+    // moment a focused field is detached and will not reopen it from script, so the owner saw a caret and no
+    // keyboard in any working thread (Miguel, 22 Oct 2026). Rebuild everything around the field instead.
+    if (!(keepTa && hadFocus && rebuildAround(el, threadHTML, keepTa))) {
+      el.innerHTML = threadHTML;
+      if (keepTa) { const fresh = el.querySelector('.ch-compose textarea'); keepTa.placeholder = fresh.placeholder; fresh.replaceWith(keepTa); }
+    }
     restoreSheet(el, keepSheet);
     for (const detail of el.querySelectorAll('[data-run-original]')) detail.open = openContexts.has(detail.dataset.runOriginal);
-    if (keepTa) { const fresh = el.querySelector('.ch-compose textarea'); keepTa.placeholder = fresh.placeholder; fresh.replaceWith(keepTa); }
     keepImgs(el);
     el.dataset.draftFor = dkey; c.draft = draft; c.draftFor = dkey;
     const nb = el.querySelector('.ch-msgs');
