@@ -82,6 +82,25 @@ const origin = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/
           assert.ok(Math.abs(g.stageTop - g.barH) <= 1, `desktop ${skin}: windows are not pushed down ${JSON.stringify(g)}`);
           assert.match(g.short, /Agent Service/);
         }
+        if (phone) {
+          // Phone: the same one-line pill as other notices (James, 22 Oct): small buttons, screen moves ≤ ~40px.
+          const g = await page.evaluate(() => {
+            const b = document.querySelector('[data-wxnet]').getBoundingClientRect();
+            const btn = [...document.querySelectorAll('[data-wxnet] .wx-actions button')].map(x => x.getBoundingClientRect().height);
+            const t = document.querySelector('.tiles'), push = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--wx-banner-height'));
+            return { h: b.height, btn, push, tilesTop: t?.getBoundingClientRect().top, short: document.querySelector('[data-wxnet] .wx-s')?.textContent };
+          });
+          assert.ok(g.h <= 30, `phone ${skin}: one-line pill ${JSON.stringify(g)}`);
+          assert.ok(g.btn.length === 2 && g.btn.every(h => h <= 24), `phone ${skin}: small buttons ${JSON.stringify(g)}`);
+          assert.ok(g.push <= 42, `phone ${skin}: screen makes only a pill's worth of room ${JSON.stringify(g)}`);
+          assert.match(g.short, /Agent Service/);
+          // Tapping the line unfolds the full diagnosis over the screen without pushing it further.
+          await page.locator('[data-wxnet] .wx-s').click();
+          const o = await page.evaluate(() => ({ open: !!document.querySelector('[data-wxnet].open'), m: getComputedStyle(document.querySelector('[data-wxnet] .wx-m')).display, push: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--wx-banner-height')) }));
+          assert.ok(o.open && o.m === 'block' && o.push === g.push, `phone ${skin}: unfold overlays ${JSON.stringify(o)}`);
+          if (process.env.QA_OUT) { fs.mkdirSync(process.env.QA_OUT, { recursive: true }); await page.screenshot({ path: path.join(process.env.QA_OUT, `phone-${skin}-open.png`) }); }
+          await page.locator('[data-wxnet] .wx-s').click();
+        }
         if (process.env.QA_OUT) { fs.mkdirSync(process.env.QA_OUT, { recursive: true }); await page.screenshot({ path: path.join(process.env.QA_OUT, `${phone ? 'phone' : 'desktop'}-${skin}.png`) }); }
       }
       // Recover without changing navigator.onLine or dispatching online.
@@ -105,7 +124,7 @@ const origin = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/
       await page.locator('[data-wxtroubleshoot]').click();
       await page.waitForFunction(() => [...document.querySelectorAll('iframe')].some(f => f.src.endsWith('/troubleshoot/') && f.contentDocument?.title === 'Troubleshooter QA fixture'));
       assert.deepEqual(errors, []);
-      console.log(JSON.stringify({ shell, successfulReads, diagnosisReads, checks: ['stale-offline-at-boot','launchable-troubleshooter-app','offline-event-with-working-http','actual-outage','diagnosed-service-layer','retry-and-troubleshooter-controls','nebula-fit','signal-fit','recovery-without-online-event','server-outage-and-recovery','troubleshooter-navigation','no-page-errors'], overlay: !!process.env.QA_STATUS_FILE || !!process.env.QA_WEB_DIR }));
+      console.log(JSON.stringify({ shell, successfulReads, diagnosisReads, checks: ['stale-offline-at-boot','launchable-troubleshooter-app','offline-event-with-working-http','actual-outage','diagnosed-service-layer','retry-and-troubleshooter-controls','nebula-fit','signal-fit','phone-pill-geometry','phone-unfold-overlays','recovery-without-online-event','server-outage-and-recovery','troubleshooter-navigation','no-page-errors'], overlay: !!process.env.QA_STATUS_FILE || !!process.env.QA_WEB_DIR }));
       await ctx.close();
     }
   } finally { await browser.close(); }
