@@ -256,10 +256,16 @@ a.fchip { color: inherit; text-decoration: none; }
 /* Long-press / swipe actions sheet */
 .ch-sheet { position: absolute; inset: 0; z-index: 8; display: flex; align-items: flex-end; background: rgba(3, 1, 10, .5); animation: ch-fade 160ms both; }
 .ch-sheet-b { width: 100%; padding: 8px 8px calc(10px + var(--safe-b, 0px)); border-radius: 18px 18px 0 0; background: rgba(20, 13, 44, .98); border-top: 1px solid var(--line-2); }
+.ch-sheet-head { display: flex; align-items: center; min-width: 0; }
 .ch-sheet-t { padding: 8px 10px 10px; font-size: 13px; font-weight: 750; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ch-sheet-b button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px; border-radius: 12px; font-size: 15px; font-weight: 650; color: var(--ink); text-align: left; }
+.ch-sheet-head .ch-sheet-t { flex: 1 1 auto; min-width: 0; padding-right: 4px; }
+.ch-sheet-b .ch-sheet-close { flex: 0 0 44px; margin-left: auto; width: 44px; height: 44px; padding: 10px; display: grid; place-items: center; }
+.ch-sheet-b .ch-sheet-close:focus-visible { outline: 2px solid var(--violet-2); outline-offset: -2px; }
 .ch-sheet-b button:active { background: rgba(205, 190, 255, .1); }
 .ch-sheet-b button svg { width: 20px; height: 20px; fill: none; stroke: var(--ink-2); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.ch-boomerang-glyph { color: var(--violet-2); }
+.ch-boomerang-glyph svg { width: 22px; height: 22px; fill: currentColor; stroke: currentColor; stroke-width: .7; stroke-linejoin: miter; }
 .ch-sheet-n { margin: 4px 12px 8px; font-size: 13px; color: var(--ink-3); }
 /* Approval card */
 .appr { align-self: stretch; padding: 12px; border-radius: 16px; background: rgba(255, 190, 85, .08); border: 1px solid rgba(255, 190, 85, .35); display: flex; flex-direction: column; gap: 8px; }

@@ -40,10 +40,25 @@ test('shared chats offers whole-thread and exact-message reminders without submi
 })
 test('thread menu exposes Boomerang separately and leaves Defer unchanged',()=>{
  const js=read('web/core/chats.js')
- assert.match(js,/data-rsboom[^>]*>.*🪃.*Boomerang/)
+ assert.match(js,/data-rsboom[^>]*>.*ch-boomerang-glyph.*<svg[^>]+viewBox="0 0 24 24".*Boomerang/)
+ assert.doesNotMatch(js,/🪃/)
  assert.match(js,/closest\('\[data-rsboom\]'\)[\s\S]{0,300}BOOM\.open\(\{ sessionId:sid,targetKind: 'thread'/)
  assert.doesNotMatch(js,/a === 'defer' && BOOM/)
  assert.match(js,/a === 'defer' \? LIVE\.defer\(sid\)/)
+})
+test('thread action sheet has one accessible far-right close matching Back and Escape',()=>{
+ const js=read('web/core/chats.js'),css=read('web/core/chats.css')
+ assert.match(js,/ch-sheet-head[^>]*>[\s\S]*ch-sheet-t[^>]*>[\s\S]*data-rsclose[^>]*aria-label="Close"/)
+ assert.match(js,/closest\('\[data-rsclose\]'\)[\s\S]{0,100}closeRowSheet\(\)/)
+ assert.match(js,/const closeOverlay[\s\S]{0,250}closeRowSheet\(\)/)
+ assert.match(css,/\.ch-sheet-head\s*\{[^}]*display:\s*flex[^}]*align-items:\s*center/)
+ assert.match(css,/\.ch-sheet-close\s*\{[^}]*margin-left:\s*auto[^}]*width:\s*44px[^}]*height:\s*44px/)
+})
+test('Boomerang glyph is a pointed theme-aware SVG, not a font emoji',()=>{
+ const js=read('web/core/chats.js'),css=read('web/core/chats.css')
+ assert.match(js,/ch-boomerang-glyph[\s\S]{0,240}<path d="M4 4L12 6L20 3L16 11L21 17L13 15L8 21L7 13Z"/)
+ assert.match(css,/\.ch-boomerang-glyph\s*\{[^}]*color:\s*var\(--violet-2\)/)
+ assert.match(css,/\.ch-boomerang-glyph svg\s*\{[^}]*fill:\s*currentColor[^}]*stroke:\s*currentColor/)
 })
 test('selected-pin markup exposes an integrated head and shaft instead of a floating dot',()=>{
  const js=read('web/core/chats.js')

@@ -864,15 +864,15 @@ window.WizCore.chats = function createChats(H) {
     const s = LIVE.session(sid), el = track.querySelector(`[data-chats="${wid}"]`); if (!s || !el) return;
     closeRowSheet();
     const acts = threadActions(s, null), pinned = PIN.has(sid);
-    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Thread actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(s.title)}</div>
+    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-modal="true" aria-label="Thread actions"><div class="ch-sheet-b"><div class="ch-sheet-head"><div class="ch-sheet-t">${esc(s.title)}</div><button type="button" class="ch-sheet-close" data-rsclose aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
       <button type="button" data-rsopen>${'<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'}Open</button>
       <button type="button" data-rspin>${'<svg viewBox="0 0 24 24"><path d="m15 4 5 5-4 2-3 5-2-2-5 5-1-1 5-5-2-2 5-3 2-4Z"/></svg>'}${pinned ? 'Unpin' : 'Pin'}</button>
       <button type="button" data-rsrename>${RENAME_SVG}Rename</button>
       <button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>
-      ${BOOM ? `<button type="button" data-rsboom><span class="ch-sheet-emoji" aria-hidden="true">🪃</span>Boomerang</button>` : ''}
+      ${BOOM ? `<button type="button" data-rsboom><span class="ch-sheet-emoji ch-boomerang-glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4L12 6L20 3L16 11L21 17L13 15L8 21L7 13Z"/></svg></span>Boomerang</button>` : ''}
       ${acts.map(a => `<button type="button" data-rsact="${a}">${ACT[a].icon}${ACT[a].label}</button>`).join('')}
       ${acts.length ? '' : `<p class="ch-sheet-n">${WORKING_ST.has(s.status) || ['waiting_for_approval', 'unknown'].includes(s.status) ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
-    rowSheet = { wid, sid }; vib(10);
+    rowSheet = { wid, sid }; el.querySelector('[data-rsclose]')?.focus({ preventScroll: true }); vib(10);
   }
   const emojiCategoryHtml = category => `<section class="ch-emoji-category"><h3>${esc(category.label)}</h3><div class="ch-emoji-grid">${category.emoji.map(emoji => `<button type="button" data-chtopicemoji="${emoji}" aria-label="Use ${emoji}">${emoji}</button>`).join('')}</div></section>`;
   const emojiRenderState = new WeakMap();
@@ -1900,6 +1900,7 @@ window.WizCore.chats = function createChats(H) {
     const more = e.target.closest('[data-secmore]'); if (more) { const c = ch(id); c.more = { ...(c.more || {}), [more.dataset.secmore]: true }; renderChatList(w, elOf(id)); return true; }
     if (e.target.closest('[data-chattach]')) { pickFor = id; picker.accept = ''; picker.click(); return true; }
     const rm = e.target.closest('[data-attrm]'); if (rm) { const c = ch(id); UPLOAD_ABORT.get(rm.dataset.attrm)?.abort(); c.files = (c.files || []).filter(f => f.key !== rm.dataset.attrm); refreshCompose(id); saveDraft(id); return true; }
+    if (e.target.closest('[data-rsclose]') && rowSheet) { closeRowSheet(); return true; }
     const rsa = e.target.closest('[data-rsact]'); if (rsa && rowSheet) { const { wid: rw, sid } = rowSheet; closeRowSheet(); threadAct(rw, sid, rsa.dataset.rsact); return true; }
     if (e.target.closest('[data-rsboom]') && rowSheet?.sid && BOOM) { const { sid } = rowSheet, s = LIVE.session(sid); closeRowSheet(); BOOM.open({ sessionId:sid,targetKind: 'thread', context:s?.title || 'This thread', note:s?.attention?.ask || '' }); return true; }
     if (e.target.closest('[data-rspin]') && rowSheet?.sid) { const { sid } = rowSheet, pinned = PIN.toggle(sid); closeRowSheet(); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww && !ww.thread) renderChats(ww); } toast('⌖', pinned ? 'Pinned' : 'Unpinned', 1400); return true; }
