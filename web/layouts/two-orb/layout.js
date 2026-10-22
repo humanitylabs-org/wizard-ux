@@ -19,13 +19,51 @@ export default function setup(api) {
   const face = doc.createElement('span'); face.className = 'to-face';
   const ring = doc.createElement('span'); ring.className = 'to-ring';
   const name = doc.createElement('span'); name.className = 'to-name';
-  orb.append(ring, face, name);
+  // The orb itself is the Wizard Everywhere floating orb: a second instance of the shell's orb.js, with Everywhere's
+  // mask, size, take timer and processing ring (android/.../assist/everywhere.html), hue-shifted to the agent.
+  const glass = doc.createElement('span'); glass.className = 'to-glass'; glass.setAttribute('aria-hidden', 'true');
+  const cv = doc.createElement('canvas'); cv.width = 64; cv.height = 64;
+  const fb = doc.createElement('img'); fb.alt = ''; fb.hidden = true; fb.src = 'robert-thread-orb.png';
+  const proc = doc.createElement('span'); proc.className = 'to-proc';
+  const timer = doc.createElement('span'); timer.className = 'to-timer'; timer.textContent = '0:00';
+  glass.append(cv, fb, proc, timer);
+  orb.append(glass, ring, face, name);
 
   const arc = doc.createElement('div'); arc.className = 'to-arc'; arc.hidden = true;
   arc.setAttribute('role', 'listbox'); arc.setAttribute('aria-label', 'Choose an agent for this message');
   api.mount(arc); api.mount(orb);
+  const eng = api.orb.create(cv, fb, { R: .64 });
+  if (eng) eng.setRestingMotion?.(false); else glass.classList.add('flat');
+  const T = { mode: 'idle', ms: 0, t0: 0, paused: false };
+  const fmt = ms => { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  const live = m => m === 'listen' || m === 'paused';
+  const tick = () => { if (live(T.mode)) { timer.textContent = fmt(T.ms + (T.paused ? 0 : performance.now() - T.t0)); api.after(250, tick); } };
+  function glassState(m) {
+    if (m === T.mode) return;
+    const was = T.mode;
+    if (live(m) && !live(was)) { T.ms = 0; T.t0 = performance.now(); T.paused = false; timer.textContent = '0:00'; }
+    if (m === 'paused' && !T.paused) { T.ms += performance.now() - T.t0; T.paused = true; }
+    if (m === 'listen' && T.paused) { T.paused = false; T.t0 = performance.now(); }
+    T.mode = m; glass.dataset.mode = m;
+    eng?.setMode(m);
+    if (live(m) && !live(was)) tick();
+  }
 
   let shownFor = '', chips = [], G = null;
+  // The agent orb hears the microphone during its own take, like the floating orb does.
+  api.orb.onLevel(v => { if (doc.documentElement.dataset.toTake) eng?.setLevel(v); });
+  /* Lift the agent orb (and everything gathered round it) above a message bar so it never covers Send. */
+  function lift() {
+    const dock = doc.getElementById('dock'), dev = doc.getElementById('device'); if (!dock || !dev) return;
+    const base = dock.getBoundingClientRect().top - 16;
+    let top = Infinity;
+    for (const c of dev.querySelectorAll('.ch-compose')) {
+      const r = c.getBoundingClientRect();
+      if (r.height && r.width > 120 && r.bottom > base - 60 && c.offsetParent) top = Math.min(top, r.top);
+    }
+    const px = Number.isFinite(top) ? Math.max(0, Math.round(base - top + 10)) : 0;
+    const v = px + 'px'; if (doc.documentElement.style.getPropertyValue('--to-lift') !== v) doc.documentElement.style.setProperty('--to-lift', v);
+  }
 
   const sigil = (el, id) => {
     const html = api.agents.sigil(id) || '';
@@ -53,6 +91,9 @@ export default function setup(api) {
     name.textContent = take ? 'To ' + who.label : here.main ? '' : who.label;
     orb.setAttribute('aria-label', take ? label : `Talk to ${label}. Hold to pick another agent.`);
     shownFor = who.id;
+    const gm = take ? (v.state === 'paused' ? 'paused' : v.state === 'listen' ? 'listen' : 'think') : 'idle';
+    glassState(gm);
+    lift();
   }
 
   /* ---------- the agent arc ---------- */
@@ -103,7 +144,7 @@ export default function setup(api) {
     api.gesture.claim(e.pointerId);
     try { orb.setPointerCapture(e.pointerId); } catch (_) {}
     G = { id: e.pointerId, x: e.clientX, y: e.clientY, arc: false, sel: null };
-    orb.classList.add('press');
+    orb.classList.add('press'); eng?.press(true);
     const idle = api.voice.state().state === 'idle';
     if (idle) G.off = api.after(HOLD_MS, () => { if (G && !G.moved) G.arc = openArc(); });
   });
@@ -114,7 +155,7 @@ export default function setup(api) {
   });
   function end(e, cancelled) {
     if (!G || (e && e.pointerId !== G.id)) return;
-    const g = G; G = null; g.off?.(); orb.classList.remove('press');
+    const g = G; G = null; g.off?.(); orb.classList.remove('press'); eng?.press(false);
     if (g.arc) {
       const sel = g.sel; closeArc();
       // Let go on an agent: recording starts for that agent, for this message. Let go elsewhere: nothing.
@@ -144,7 +185,14 @@ export default function setup(api) {
   api.on('render', paint);
   // Agents and app bindings arrive after boot: repaint a few times, then on events only.
   [400, 1500, 4000].forEach(ms => api.after(ms, paint));
+  api.listen(window, 'resize', lift);
+  // A thread's message bar comes and goes with taps and the keyboard; keep the orb clear of it.
+  let liftQueued = false;
+  const mo = new MutationObserver(() => { if (!liftQueued) { liftQueued = true; api.frame(() => { liftQueued = false; lift(); }); } });
+  mo.observe(doc.getElementById('device') || doc.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'hidden', 'style'] });
   paint();
 
-  return () => { closeArc(); delete doc.documentElement.dataset.toTake; };
+  return () => {
+    closeArc(); mo.disconnect(); delete doc.documentElement.dataset.toTake; doc.documentElement.style.removeProperty('--to-lift');
+  };
 }
