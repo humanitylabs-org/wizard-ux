@@ -1274,11 +1274,14 @@ window.WizCore.chats = function createChats(H) {
     // Right-click (a mouse) opens the same sheet; a touch long-press already did.
     root.addEventListener('contextmenu', e => { const row = e.target.closest('.ch-list [data-chopen]'); if (!row) return; e.preventDefault(); if (!rowSheet && !lp) { lpUntil = Date.now() + 700; openRowSheet(idOf(row), row.dataset.chopen); } });
     // Dragging a local screenshot/file onto the composer uses the same upload path as the paperclip and paste.
-    // Only file drags are claimed: selected text and links keep the browser's normal drag/drop behaviour.
-    const hasDraggedFiles = dt => !!dt && ([...(dt.items || [])].some(it => it.kind === 'file') || [...(dt.types || [])].includes('Files') || (dt.files?.length || 0) > 0);
+    // macOS Screenshot exposes a fresh thumbnail as a file promise: dragover can show only text/uri-list,
+    // then the real File appears at drop. Claim that dragover so Chrome delivers drop instead of opening the image.
+    const dragTypes = dt => [...(dt?.types || [])];
+    const hasDraggedFiles = dt => !!dt && ([...(dt.items || [])].some(it => it.kind === 'file') || dragTypes(dt).includes('Files') || (dt.files?.length || 0) > 0);
+    const couldBecomeDraggedFiles = dt => hasDraggedFiles(dt) || dragTypes(dt).includes('text/uri-list');
     root.addEventListener('dragover', e => {
       const compose = e.target.closest?.('.ch-compose');
-      if (!compose || !hasDraggedFiles(e.dataTransfer)) return;
+      if (!compose || !couldBecomeDraggedFiles(e.dataTransfer)) return;
       e.preventDefault();
       if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
       compose.classList.add('is-file-drag');

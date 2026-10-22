@@ -63,6 +63,26 @@ const ok = (v, name, detail = {}) => { console.log(v ? 'PASS' : 'FAIL', name, JS
     ok(result.overPrevented && result.dropPrevented && result.hover && result.cleared, 'file drag is accepted with visible hover feedback', result);
     ok(after.tray === 1 && after.value === 'Keep this draft', 'dropped screenshot reaches the tray without changing the draft', after);
     ok(writes.filter(w => w.path === '/wizard/files/upload').length === 1 && writes.find(w => w.path === '/wizard/files/upload')?.filename === 'desktop-screenshot.png', 'existing upload path receives the dropped screenshot', writes);
+    // macOS's fresh Screenshot thumbnail is a file promise: dragover may expose only a URI,
+    // then the real File appears at drop. The composer must claim that dragover or Chrome opens the image.
+    const promised = await page.evaluate(({ selector, png }) => {
+      const target = document.querySelector(selector), compose = target.closest('.ch-compose');
+      const overTransfer = new DataTransfer();
+      overTransfer.setData('text/uri-list', 'file:///var/folders/qa/T/screencaptureui/promised-screenshot.png');
+      const over = new DragEvent('dragover', { dataTransfer: overTransfer, bubbles: true, cancelable: true });
+      target.dispatchEvent(over);
+      const hover = compose.classList.contains('is-file-drag');
+      const dropTransfer = new DataTransfer();
+      dropTransfer.items.add(new File([Uint8Array.from(atob(png), c => c.charCodeAt(0))], 'promised-screenshot.png', { type: 'image/png' }));
+      const drop = new DragEvent('drop', { dataTransfer: dropTransfer, bubbles: true, cancelable: true });
+      target.dispatchEvent(drop);
+      return { overPrevented: over.defaultPrevented, dropPrevented: drop.defaultPrevented, hover, cleared: !compose.classList.contains('is-file-drag') };
+    }, { selector, png });
+    await page.waitForTimeout(600);
+    const promisedAfter = await page.evaluate(selector => ({ value: document.querySelector(selector).value, tray: document.querySelectorAll('.pane-main .ch-tray > *').length }), selector);
+    ok(promised.overPrevented && promised.dropPrevented && promised.hover && promised.cleared, 'macOS screenshot file promise is accepted before the File is exposed', promised);
+    ok(promisedAfter.tray === 2 && promisedAfter.value === 'Keep this draft', 'promised screenshot reaches the tray without changing the draft', promisedAfter);
+    ok(writes.filter(w => w.path === '/wizard/files/upload').length === 2 && writes.some(w => w.path === '/wizard/files/upload' && w.filename === 'promised-screenshot.png'), 'existing upload path receives the promised screenshot', writes);
     const text = await page.evaluate(selector => {
       const target = document.querySelector(selector), dt = new DataTransfer(); dt.setData('text/plain', 'dragged words');
       const over = new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true });
