@@ -46,7 +46,7 @@ public class OverlayE2eTest {
             web = new WebView(activity); activity.setContentView(web);
             web.getSettings().setJavaScriptEnabled(true); web.getSettings().setDomStorageEnabled(true);
             web.addJavascriptInterface(new Probe(), "EverywhereNative"); web.addJavascriptInterface(new Probe(), "Probe");
-            OverlayPage client = new OverlayPage(page, remote) {
+            OverlayPage client = new OverlayPage(page, remote, failure.equals("timeout") ? OverlayPage.TIMEOUT_MS : 10000) {
                 @Override protected byte[] fetch(String u) throws Exception {
                     fetchCalls.incrementAndGet();
                     if (failLate) throw new IOException("late resource failure");
@@ -60,17 +60,9 @@ public class OverlayE2eTest {
                 }
                 @Override protected void ready(WebView v, String u) { loaded.set(u); ready.countDown(); }
             };
-            if (remote) {
-                // Warm this renderer using the actual bundled page. Cold emulator shader/renderer
-                // startup may legitimately exceed the production 1.5 s deadline and recover offline;
-                // do not relax that deadline merely to force the remote-success fixture green.
-                OverlayPage warm = new OverlayPage(page, false) {
-                    @Override protected void ready(WebView v, String u) {
-                        web.setWebViewClient(client); client.load(web);
-                    }
-                };
-                web.setWebViewClient(warm); warm.load(web);
-            } else { web.setWebViewClient(client); client.load(web); }
+            // Success/security fixtures allow slow emulator rendering independently of production's
+            // 1.5 s deadline. The timeout fixture above uses the unchanged production deadline.
+            web.setWebViewClient(client); client.load(web);
         });
         assertTrue("overlay ready: " + page + "/" + failure, ready.await(12, TimeUnit.SECONDS));
         return loaded.get();

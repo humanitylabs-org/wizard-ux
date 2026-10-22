@@ -25,6 +25,7 @@ public class OverlayPage extends WebViewClient {
     static final long TIMEOUT_MS = 1500;
     private final String page;
     private final boolean remoteFirst;
+    private final long deadlineMs;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final Runnable timeout = () -> fallBack("timeout");
     private WebView web;
@@ -41,10 +42,14 @@ public class OverlayPage extends WebViewClient {
         });
     };
 
-    public OverlayPage(String page, boolean remoteFirst) {
+    public OverlayPage(String page, boolean remoteFirst) { this(page, remoteFirst, TIMEOUT_MS); }
+    // Package-private timing injection separates slow emulator renderer tests from production's
+    // offline deadline. Every real host uses the public constructor; timeout fixtures use its value.
+    OverlayPage(String page, boolean remoteFirst, long deadlineMs) {
         if (!OverlayPolicy.validPage(page)) throw new IllegalArgumentException("Unknown overlay page");
         this.page = page;
         this.remoteFirst = remoteFirst;
+        this.deadlineMs = deadlineMs;
     }
     public void load(WebView v) {
         web = v;
@@ -73,7 +78,7 @@ public class OverlayPage extends WebViewClient {
         web.getSettings().setAllowFileAccess(false);
         web.getSettings().setAllowContentAccess(false);
         main.removeCallbacks(timeout);
-        if (fromWizard) main.postDelayed(timeout, TIMEOUT_MS);
+        if (fromWizard) main.postDelayed(timeout, deadlineMs);
         web.loadUrl(url);
     }
     private void fallBack(String why) {

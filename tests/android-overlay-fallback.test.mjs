@@ -40,3 +40,18 @@ test('overlay pages run under the shell CSP: no inline script, nothing off-origi
     assert.doesNotMatch(html, /(?:src|href)="(?:https?:)?\/\//, `${p}.html: overlay pages load only from the shell`);
   }
 });
+
+test('real native hosts retain the production deadline and bundled-only lock policy', () => {
+  const java = readFileSync(join(root, 'android/app/src/main/java/ai/wizards/os/OverlayPage.java'), 'utf8');
+  assert.match(java, /TIMEOUT_MS = 1500/);
+  assert.match(java, /public OverlayPage\(String page, boolean remoteFirst\) \{ this\(page, remoteFirst, TIMEOUT_MS\); \}/);
+  for (const [file, page, remote] of [
+    ['assist/AssistLockActivity.java', 'surface.html', false],
+    ['assist/WizardSession.java', 'surface.html#corner', true],
+    ['everywhere/EverywhereService.java', 'everywhere.html', true],
+    ['everywhere/ScreenMode.java', 'screen.html', true],
+  ]) {
+    const source = readFileSync(join(root, 'android/app/src/main/java/ai/wizards/os', file), 'utf8');
+    assert.ok(source.includes(`new OverlayPage("${page}", ${remote})`), `${file}: must use production constructor, not fixture timing`);
+  }
+});
