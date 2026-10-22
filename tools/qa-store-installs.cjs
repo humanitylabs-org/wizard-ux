@@ -1,6 +1,6 @@
 // Safe real-browser A/B: every write intercepted, service workers disabled.
 // Usage: NODE_PATH=<playwright-core parent> node tools/qa-store-installs.cjs [origin] [candidate store.js]
-const {chromium}=require('playwright-core');
+const {chromium}=require('./qa-playwright.cjs');
 const fs=require('node:fs');
 const assert=require('node:assert/strict');
 const {execFileSync}=require('node:child_process');

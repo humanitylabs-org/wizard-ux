@@ -2,7 +2,7 @@
 // QA_PLAYWRIGHT=/external/path/playwright QA_CHROME=/path/to/chrome node tools/qa-scroll-capture.cjs
 // QA_ROOT selects a source checkout (also permits baseline comparison); QA_OUT stores JSON evidence.
 const fs = require('fs'), path = require('path');
-const { chromium } = require(process.env.QA_PLAYWRIGHT || 'playwright');
+const { chromium } = require('./qa-playwright.cjs');
 const ROOT = path.resolve(process.env.QA_ROOT || path.join(__dirname, '..'));
 const OUT = path.resolve(process.env.QA_OUT || 'qa-scroll-capture-results');
 const helper = fs.readFileSync(path.join(ROOT, 'android/app/src/main/assets/scroll-capture.js'), 'utf8');

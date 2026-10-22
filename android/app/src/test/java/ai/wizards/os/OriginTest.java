@@ -7,10 +7,10 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 public class OriginTest {
-    static final String HOME = "wizard.tailc0f369.ts.net";
+    static final String HOME = java.net.URI.create(BuildConfig.ORIGIN).getHost();
 
     @Test
-    public void homeIsTheTailnetName() {
+    public void homeAndTrustHostFollowTheBuildOrigin() {
         assertEquals(HOME, Origin.HOST);
         assertEquals("https://" + HOME, BuildConfig.ORIGIN);
         assertEquals("https://" + HOME + "/wizard-os-home/", BuildConfig.HOME_URL);

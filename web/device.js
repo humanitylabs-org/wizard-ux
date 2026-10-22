@@ -36,6 +36,8 @@
     el.className = 'dv-wrap'; el.dataset.dv = kind;
     el.innerHTML = `<div class="dv-scrim" data-dvclose></div><section class="dv-sheet" role="dialog" aria-label="${esc(kind)}">${html}</section>`;
     ($('#device') || document.body).appendChild(el);
+    // The share sheet keeps the orb usable: dock + voice layer sit above its scrim so the note can be dictated.
+    $('#device')?.classList.toggle('dv-share-open', kind === 'share');
     requestAnimationFrame(() => el.classList.add('open'));
     sheet = { kind, el, onBack };
     return el;
@@ -43,6 +45,7 @@
   function closeSheet() {
     if (!sheet) return false;
     const el = sheet.el; sheet = null;
+    $('#device')?.classList.remove('dv-share-open');
     el.classList.remove('open'); setTimeout(() => el.remove(), 220);
     return true;
   }
@@ -278,7 +281,7 @@
    * that the session list hasn't caught up with yet is never swept away. */
   const seenAtOf = (L, id) => {
     const s = L.session?.(id); if (!s) return NaN;
-    const r = L.seen?.threads?.[`${s.runtime}:${s.id}`]; if (!r) return NaN;
+    const r = L.seenRecord?.(s) || L.seen?.threads?.[`${s.runtime}:${s.id}`]; if (!r) return NaN;
     return typeof r.seenAt === 'number' ? r.seenAt : Date.parse(r.seenAt ?? '');
   };
   function sweepReadNotes(why) {

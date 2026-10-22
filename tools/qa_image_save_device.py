@@ -17,14 +17,17 @@ Save image → a second file; long-press a search result → opens with the menu
 sheet and Wizard OS stays open.
 """
 import fcntl, hashlib, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid, urllib.error, urllib.request
+from qa_paths import origin_host, work_root
+from qa_paths import android_sdk, java_home
+QA_ORIGIN_HOST = origin_host()
 P = pathlib.Path
-BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
+BASE = P(str(work_root() / 'AndroidBuilds')); SDK = android_sdk()
 APK = P(sys.argv[1]); WEB = P(sys.argv[2]).resolve(); SEARCH = int(sys.argv[3]); PKG = 'ai.wizards.os.qa'
 job = P(sys.argv[4]) if len(sys.argv) > 4 else BASE / 'qa' / ('wos-imgsave-' + uuid.uuid4().hex[:6])
 job.mkdir(parents=True, exist_ok=True)
-env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
+env = os.environ.copy(); env.update(JAVA_HOME=java_home(),
     ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
-env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
+env['PATH'] = env['JAVA_HOME'] + '/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5714; S = 'emulator-%d' % PORT; DEVTOOLS = 9365; FAKE = 18799
 ORIGIN = 'http://localhost:%d' % FAKE
 NOW = int(time.time())
@@ -273,7 +276,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx('cmd connectivity airplane-mode disable')
         val = wait(lambda: 'VALIDATED' in sx('dumpsys connectivity | grep -E "NetworkAgentInfo.*(WIFI|CELLULAR)"'), 40, 2)
         print('network validated:', bool(val), flush=True)
-        resolv = sx('ping -c1 -W2 wizard.tailc0f369.ts.net 2>&1')
+        resolv = sx(f'ping -c1 -W2 {QA_ORIGIN_HOST} 2>&1')
         check('the real Wizard is unreachable from the emulator (DNS dead)', not re.search(r'\(\d+\.\d+\.\d+\.\d+\)', resolv), resolv.strip()[:120])
         inst = sh(ADB, '-s', S, 'install', '-r', APK).strip().splitlines()[-1]
         ver = re.search(r'versionName=(\S+)', sx('dumpsys package %s | grep versionName' % PKG) or '')

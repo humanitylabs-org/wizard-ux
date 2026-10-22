@@ -17,7 +17,7 @@ This restores a rendered reading place. The app continues to own its content, ro
 
 ## Verification
 
-Execute sustained browser QA only on Thales, under `/Volumes/ThalesMedia/AndroidBuilds/worker.lock`.
+Execute sustained browser QA only on Thales, under `$WIZARD_WORK_ROOT/AndroidBuilds/worker.lock`.
 
 `qa-app-reading-position.cjs` uses deterministic hosted readers plus an optional GET-only proxy of the actual I Ching app (`QA_REAL=1`). It exercises both shells, nonzero page offsets, actual update-banner buttons, inner panels, delayed text, partial content with a surviving early anchor, cancellation, route isolation, no-scroll route changes, parked geometry, document-hidden parking beyond the restore deadline, and timeout checkpoint preservation. `QA_SHA` and `QA_TREE` identify the exact tested source; `QA_OUT/result.json` records host, checks, scope, runtime errors and writes.
 

@@ -1,6 +1,6 @@
 // Synthetic compact list/window acceptance. Run on Thales; no real API traffic.
 const fs=require('fs'),path=require('path'),assert=require('assert');
-const {chromium}=require(process.env.QA_PLAYWRIGHT||'playwright');
+const {chromium}=require('./tools/qa-playwright.cjs');
 const TREE=process.env.QA_TREE||__dirname, OUT=process.env.QA_OUT||path.join(TREE,'qa-slim-out');fs.mkdirSync(OUT,{recursive:true});
 let pass=0;const ok=(v,n)=>{assert(v,n);pass++;console.log('PASS',n)};
 (async()=>{

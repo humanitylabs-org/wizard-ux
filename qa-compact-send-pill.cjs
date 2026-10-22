@@ -2,7 +2,7 @@
  * QA_WEB_DIR=<repo> QA_OUT=<evidence> PLAYWRIGHT_MODULE=<module> node qa-compact-send-pill.cjs [qa-origin]
  * qa-ab.sh supplies the two qa-origins; without one, serve the source under an intercepted localhost origin. */
 const fs = require('node:fs'), path = require('node:path');
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const root = process.env.QA_WEB_DIR || __dirname, out = process.env.QA_OUT || 'qa-live/compact-send-pill';
 const origin = process.argv[2] || 'http://localhost:9481/wizard-os-home/';
 const sid = 'compact-fixture', model = 'qa', provider = 'qa';

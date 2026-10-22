@@ -1,6 +1,6 @@
 # Wizard Mobile (legacy) — user-facing feature inventory @ ff86db8c
 
-Source: `git -C /home/telos/apps/wizard-mobile show ff86db8c:<path>`, read-only. A copy was extracted to `/home/telos/.hermes/cache/scratch/wizard-audit/src-ff86/`.
+Source: `git -C $HOME/apps/wizard-mobile show ff86db8c:<path>`, read-only. A copy was extracted to `$HERMES_HOME/cache/scratch/wizard-audit/src-ff86/`.
 Format: **ID. Name**: what the user sees or can do. *Evidence: file → symbol.*
 ⭐ = a feature James has explicitly said he cares about (keep screen on while recording; Archive/Done/Defer buttons; sent images showing in the thread).
 

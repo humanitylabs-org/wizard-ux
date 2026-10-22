@@ -1,5 +1,5 @@
 // Phone-ready live Home resource QA. Run on Thales; no user/agent writes. Includes fixture error cases explicitly marked.
-let pw;try{pw=require('playwright');}catch{pw=require('playwright-core');}
+const pw = require('./tools/qa-playwright.cjs');
 const URL_=process.argv[2],OUT=process.env.QA_OUT||process.cwd();let pass=0,fail=0,writes=0;const ok=(v,n,x='')=>{console.log(v?'PASS':'FAIL',n,x);v?pass++:fail++;};
 (async()=>{const b=await pw.chromium.launch({executablePath:process.env.QA_CHROME||undefined});
 const c=await b.newContext({viewport:{width:412,height:892},hasTouch:true,isMobile:true,serviceWorkers:'block',userAgent:'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/141.0.0.0 Mobile Safari/537.36',ignoreHTTPSErrors:true});await c.addInitScript(()=>localStorage.setItem('wos.coached','true'));const LOCAL=/^http:\/\/127\.0\.0\.1/.test(URL_||''),stubLoad=ctx=>LOCAL&&ctx.route('**/api/system/load',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({cpuLoad:12,percentUsedMemory:41,percentUsed:63,memoryTotal:16,diskUsed:244,diskSize:387})}));await c.route('**/*',r=>{if(!['GET','HEAD'].includes(r.request().method())){writes++;return r.fulfill({status:403,body:'{}'});}return r.continue();});await stubLoad(c);

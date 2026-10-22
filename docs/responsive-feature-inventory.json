@@ -145,6 +145,8 @@
     "core/chat-topic-emojis-data.js",
     "core/chat-topic-emojis.js",
     "core/chat-work.js",
+    "core/chats-view.css",
+    "core/chats-view.js",
     "core/chats.css",
     "core/chats.js",
     "core/commands.js",
@@ -161,6 +163,8 @@
     "core/my-skin.js",
     "core/notif-bell.js",
     "core/os-updates.js",
+    "core/own-views.css",
+    "core/own-views.js",
     "core/polish.css",
     "core/reach.js",
     "core/resources.css",
@@ -172,6 +176,7 @@
     "core/sel-menu.js",
     "core/settings.css",
     "core/settings.js",
+    "core/setup-launch.js",
     "core/shell.js",
     "core/sigils.css",
     "core/sigils.js",
@@ -355,6 +360,14 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/chats-fixture-view.js": {
+      "loadedBy": [],
+      "note": "Dev-only Chats slot module, dynamically loaded only with explicit fixture opt-in"
+    },
+    "core/chats-view.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Versioned in-document Chats provider admission and lifecycle"
+    },
     "core/chats.js": {
       "loadedBy": [
         "phone",
@@ -418,6 +431,10 @@
       ],
       "note": "Direct entrypoint import; Settings \u2192 Updates shows only where the App Manager answers store-install/_updates"
     },
+    "core/own-views.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Shared own-screen fallback and shell-only Settings confirmation; same App Manager owner listener as Updates"
+    },
     "core/music-voice.js": {
       "loadedBy": [
         "phone",
@@ -480,6 +497,10 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/setup-launch.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Shared first-run Setup admission; adapters supply only open/home callbacks."
     },
     "core/shell.js": {
       "loadedBy": [

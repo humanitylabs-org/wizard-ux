@@ -30,9 +30,9 @@ public class AppsPolicyTest {
 
     @Test
     public void bytesComeOnlyFromThePinnedPath() {
-        assertEquals("https://wizard.tailc0f369.ts.net/android-apps/apk/" + SHA + ".apk", AppsPolicy.apkUrl("https://wizard.tailc0f369.ts.net", SHA));
-        assertNull(AppsPolicy.apkUrl("https://wizard.tailc0f369.ts.net", "../../evil"));
-        assertNull(AppsPolicy.apkUrl("https://wizard.tailc0f369.ts.net", SHA.toUpperCase()));
+        assertEquals("https://wizard.example.ts.net/android-apps/apk/" + SHA + ".apk", AppsPolicy.apkUrl("https://wizard.example.ts.net", SHA));
+        assertNull(AppsPolicy.apkUrl("https://wizard.example.ts.net", "../../evil"));
+        assertNull(AppsPolicy.apkUrl("https://wizard.example.ts.net", SHA.toUpperCase()));
         assertNull(AppsPolicy.apkUrl(null, SHA));
     }
 

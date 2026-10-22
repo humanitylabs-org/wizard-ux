@@ -1,8 +1,8 @@
 // Thales-only browser acceptance: real read APIs, all external mutations refused.
 // PLAYWRIGHT_PATH, QA_OUT, QA_CHROME; node qa-icons-picker.cjs <read-only-origin>
-const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path'), os = require('os');
-if (!os.hostname().toLowerCase().includes('thales') || !process.env.QA_OUT || !process.env.QA_CHROME) throw Error('Run on Thales with QA_OUT on its external work volume and QA_CHROME configured');
+if (!process.env.WIZARD_WORK_ROOT || !process.env.QA_OUT || !process.env.QA_CHROME) throw Error('Run on Thales with QA_OUT on its external work volume and QA_CHROME configured');
 const BASE = process.argv[2], OUT = process.env.QA_OUT;
 fs.mkdirSync(OUT, { recursive: true });
 const checks = [], errors = [], writes = [], reads = []; let browser;

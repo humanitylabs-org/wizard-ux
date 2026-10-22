@@ -1,6 +1,6 @@
 // Proportionate A/B: reproduce the old false native Share success, then prove the current viewer does not claim it (a void bridge reports only that the sheet opened).
 const fs=require('fs'),http=require('http'),path=require('path'),assert=require('assert/strict'),os=require('os');
-const {chromium}=require(process.env.PW);
+const {chromium}=require('./tools/qa-playwright.cjs');
 const candidate=process.env.QA_WEB_DIR;
 const baseline=process.env.QA_BASELINE;
 const out=process.env.QA_OUT;

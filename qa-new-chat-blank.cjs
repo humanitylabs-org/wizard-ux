@@ -7,7 +7,7 @@
 //  5 Back from New chat returns to the list and the app stays open
 // Every non-GET request is refused by qa-origin; nothing reaches Wizard.
 // Usage: node tools/qa-origin.cjs 9381 <worktree>/web (background), then node qa-new-chat-blank.cjs [url]
-let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9381/wizard-os-home/';
 const OUT = process.env.QA_OUT || (process.env.TMPDIR || '/tmp') + '/qa-new-chat-blank';
@@ -16,7 +16,7 @@ let pass = 0, fail = 0;
 const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else { fail++; console.log('FAIL', n, JSON.stringify(x).slice(0, 400)); } };
 const STALE = 'QA stale unsent new chat about humanity branding';
 (async () => {
-  const br = await chromium.launch({ executablePath: process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome' });
+  const br = await chromium.launch({ executablePath: process.env.QA_CHROME || (process.env.QA_CHROME || undefined) });
   const ctx = await br.newContext({ viewport: { width: 412, height: 892 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
   const p = await ctx.newPage(); const errs = [];
   p.on('pageerror', e => { if (!/localStorage/.test(e.message)) errs.push(e.message); });

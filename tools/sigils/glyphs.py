@@ -328,6 +328,33 @@ def g_burst():
     rays = U(*[R(rrect(234, 84 + (i % 2) * 22, 44, 150 - (i % 2) * 22, 22), i * 360 / 8, 256, 256) for i in range(8)])
     return D(U(rays, circle(256, 256, 76)), circle(256, 256, 30))
 
+@glyph('shield', 'A shield with a keyhole cut out: private AI, sealed in an enclave.')
+def g_shield():
+    shield = P("M256 72 L404 124 V236 C404 330 344 404 256 440 C168 404 108 330 108 236 V124 Z")
+    return D(shield, circle(256, 228, 40), P("M240 244 L272 244 L288 336 L224 336 Z"))
+
+@glyph('cloud', 'A plain cloud: your Cloudflare accounts (a generic cloud, not Cloudflare\'s mark).')
+def g_cloud():
+    return P("M166 220A70 70 0 1 0 166 360H348A78 78 0 0 0 348 204A96 96 0 0 0 166 220Z")
+
+@glyph('scope', 'A rifle scope reticle with its centre dot: the daily scan that picks targets.')
+def g_scope():
+    ring = stroke(circle(256, 256, 132), 40)
+    ticks = U(rrect(242, 92, 28, 110, 14), rrect(242, 310, 28, 110, 14), rrect(92, 242, 110, 28, 14), rrect(310, 242, 110, 28, 14))
+    return U(ring, ticks, circle(256, 256, 30))
+
+@glyph('clip', 'A film frame with play cut out: a video to edit.')
+def g_clip():
+    frame = rrect(88, 132, 336, 248, 52)
+    return D(frame, poly((220, 196), (220, 316), (324, 256)))
+
+@glyph('wrench', 'A wrench with its jaw open: fix your Wizard.')
+def g_wrench():
+    head = circle(184, 184, 100)
+    handle = stroke("M210 210 L384 384", 66)
+    jaw = R(rrect(150, 60, 68, 150, 0), -45, 184, 184)
+    return D(U(head, handle), jaw, circle(184, 184, 34))
+
 @glyph('gauge', 'A dial with its needle cut out: how your box is doing.')
 def g_gauge():
     dial = P("M96 330 A160 160 0 0 1 416 330 L416 352 C416 370 402 384 384 384 H128 C110 384 96 370 96 352 Z")

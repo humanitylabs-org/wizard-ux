@@ -10,7 +10,7 @@ A fake meetings server on the Mac (reached from the emulator as 10.0.2.2) implem
 so no test audio reaches James's real Mizel. The debug build is pointed there by files/qa_origin.txt and given
 short timers by files/qa_mizel.json (both debug-only hooks).
 
-Pages that use window.wizardMizelPort are served on the real origin https://wizard.tailc0f369.ts.net by CDP
+Pages that use window.wizardMizelPort are served on the real origin https://wizard.example.ts.net by CDP
 Fetch interception (/mizel-qa/*, /mizel-live/*), as is a foreign origin https://example.org (iframe).
 
 Checks
@@ -28,21 +28,23 @@ Checks
 """
 import fcntl, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid, base64, struct
 import urllib.request, urllib.parse
+from qa_paths import origin as wizard_origin, work_root
+from qa_paths import android_sdk, java_home
 P = pathlib.Path
-BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
+BASE = P(str(work_root() / 'AndroidBuilds')); SDK = android_sdk()
 apk = P(sys.argv[1]); PKG = sys.argv[2]
 LONG = int(sys.argv[3]) if len(sys.argv) > 3 else 200
 job = P(sys.argv[4]) if len(sys.argv) > 4 else BASE / 'qa' / ('wos-mizel-' + uuid.uuid4().hex[:8])
 job.mkdir(parents=True, exist_ok=True)
 OUT = job / 'shots'; OUT.mkdir(exist_ok=True)
-env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
+env = os.environ.copy(); env.update(JAVA_HOME=java_home(),
     ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
-env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
+env['PATH'] = env['JAVA_HOME'] + '/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5698; S = f'emulator-{PORT}'; DEVTOOLS = 9351
 # The fake server binds before the worker lease; use an OS-assigned port so
 # queued suites and unrelated tunnels cannot collide or receive our audio.
 FAKE = 0
-ORIGIN = 'https://wizard.tailc0f369.ts.net'
+ORIGIN = wizard_origin()
 RES = []
 def check(group, n, ok, d: object = ''):
     RES.append({'group': group, 'name': n, 'ok': bool(ok), 'detail': d if isinstance(d, (str, int, float, bool, list, dict, type(None))) else str(d)})

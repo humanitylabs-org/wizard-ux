@@ -8,11 +8,11 @@ Run on Thales with isolated state:
 
 ```sh
 export PATH=/opt/homebrew/bin:$PATH
-export HERMES_HOME=/Volumes/ThalesMedia/wizard-qa/helper-status-release-20261012/isolated-hermes
-export TMPDIR=/Volumes/ThalesMedia/wizard-qa/helper-status-release-20261012/tmp
-export WAS_ROOT=/Volumes/ThalesMedia/wizard-qa/helper-status-release-20261012/delivered-recovery
-export QA_WEB_DIR=/Volumes/ThalesMedia/wizard-qa/helper-status-release-20261012/delivered-ux/web
-export QA_OUT=/Volumes/ThalesMedia/wizard-qa/helper-status-release-20261012/evidence/delivered-native-green
+export HERMES_HOME=$WIZARD_WORK_ROOT/wizard-qa/helper-status-release-20261012/isolated-hermes
+export TMPDIR=$WIZARD_WORK_ROOT/wizard-qa/helper-status-release-20261012/tmp
+export WAS_ROOT=$WIZARD_WORK_ROOT/wizard-qa/helper-status-release-20261012/delivered-recovery
+export QA_WEB_DIR=$WIZARD_WORK_ROOT/wizard-qa/helper-status-release-20261012/delivered-ux/web
+export QA_OUT=$WIZARD_WORK_ROOT/wizard-qa/helper-status-release-20261012/evidence/delivered-native-green
 node qa-helper-delivered-recovery.cjs
 ```
 
@@ -25,4 +25,4 @@ Both phone and desktop must:
 
 All browser writes are intercepted. The static origin also refuses non-GET/HEAD service requests. Only the intercepted Continue naming the exact fixture session is forwarded to the isolated test service; read receipts and other writes are blocked. No live backend or data is used.
 
-Before repair, the same script against backend `d43501a99f5f63421199a5be6f35001fc911d223` fails with `completed`, Working false, zero Continue buttons and HTTP 409. Thales evidence lives under `/Volumes/ThalesMedia/wizard-qa/helper-status-release-20261012/`: `delivered-native-red.log`, `delivered-native-green.log`, and `evidence/delivered-native-{red,green}/` (screenshots and green JSON receipt). Backend normal Vitest and native lock receipts are `delivered-full.log` (289 passing) and `delivered-lock.log` (9 passing).
+Before repair, the same script against backend `d43501a99f5f63421199a5be6f35001fc911d223` fails with `completed`, Working false, zero Continue buttons and HTTP 409. Thales evidence lives under `$WIZARD_WORK_ROOT/wizard-qa/helper-status-release-20261012/`: `delivered-native-red.log`, `delivered-native-green.log`, and `evidence/delivered-native-{red,green}/` (screenshots and green JSON receipt). Backend normal Vitest and native lock receipts are `delivered-full.log` (289 passing) and `delivered-lock.log` (9 passing).

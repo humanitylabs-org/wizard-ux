@@ -1,5 +1,5 @@
 // Phone-sized real shell; all transport is synthetic and intercepted (no live account).
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path'), assert = require('assert/strict');
 const root = __dirname, out = process.env.QA_OUT || path.join(root, 'qa-evidence'); fs.mkdirSync(out,{recursive:true});
 (async()=>{
