@@ -28,6 +28,7 @@ import java.util.concurrent.Executors;
 
 import ai.wizards.os.BuildConfig;
 import ai.wizards.os.device.AppState;
+import ai.wizards.os.device.DeviceMessageProtocol;
 
 /**
  * window.wizardAppsPort: the Android Apps bridge.
@@ -62,7 +63,10 @@ public final class AppsBridge implements AppsInstaller.Listener {
         try {
             java.util.Set<String> allow = new java.util.HashSet<>(Collections.singleton(AppState.primaryOrigin(a)));
             WebViewCompat.addWebMessageListener(web, NAME, allow, b::onMessage);
+            WebViewCompat.addWebMessageListener(web, DeviceMessageProtocol.NAME, allow, b::onDeviceMessage);
         } catch (RuntimeException e) {
+            WebViewCompat.removeWebMessageListener(web, NAME);
+            WebViewCompat.removeWebMessageListener(web, DeviceMessageProtocol.NAME);
             Log.w(AppsInstaller.TAG, "addWebMessageListener failed: no Android Apps bridge", e);
             return null;
         }
@@ -130,6 +134,43 @@ public final class AppsBridge implements AppsInstaller.Listener {
             final Object r = result; final String er = err;
             main.post(() -> answer(reply, id, r, er));
         });
+    }
+
+    /** Additive generic request/reply port. Legacy subscriptions remain on wizardAppsPort. */
+    private void onDeviceMessage(WebView view, WebMessageCompat message, Uri sourceOrigin, boolean isMainFrame, JavaScriptReplyProxy reply) {
+        String want = AppState.origin(activity);
+        if (sourceOrigin == null || !want.equals(originOf(sourceOrigin)) || !isMainFrame || !shellOnTop()) return;
+        final DeviceMessageProtocol.Request request;
+        try {
+            request = DeviceMessageProtocol.parse(new JSONObject(message == null || message.getData() == null ? "" : message.getData()));
+        } catch (JSONException e) {
+            // No valid correlation envelope: do not echo untrusted values or exception details.
+            deviceAnswer(reply, "", null, "invalid request");
+            return;
+        }
+        if ("device.capabilities".equals(request.method)) {
+            try { deviceAnswer(reply, request.id, DeviceMessageProtocol.capabilities(), null); }
+            catch (JSONException e) { deviceAnswer(reply, request.id, null, "Something went wrong"); }
+            return;
+        }
+        final String method = DeviceMessageProtocol.packageMethod(request.method);
+        if (method == null || !AppsPolicy.method(method)) {
+            deviceAnswer(reply, request.id, null, "unknown method");
+            return;
+        }
+        bg.execute(() -> {
+            Object result = null; String error = null;
+            try { result = call(method, request.params); }
+            catch (Refusal e) { error = e.getMessage(); }
+            catch (JSONException | RuntimeException e) { error = "Something went wrong"; }
+            final Object r = result; final String er = error;
+            main.post(() -> deviceAnswer(reply, request.id, r, er));
+        });
+    }
+
+    private void deviceAnswer(JavaScriptReplyProxy reply, String id, Object result, String error) {
+        try { post(reply, DeviceMessageProtocol.answer(id, result, error).toString()); }
+        catch (JSONException ignored) { }
     }
 
     static String originOf(Uri u) {

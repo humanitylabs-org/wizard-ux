@@ -26,7 +26,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Debug APK
         working-directory: android
-        run: ./gradlew --no-daemon --stacktrace :app:assembleDebug
+        run: ./gradlew --no-daemon --stacktrace :app:assembleDebug :app:assembleDebugAndroidTest
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -42,15 +42,20 @@ jobs:
           disable-animations: true
           emulator-boot-timeout: 600
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
-          script: bash tools/android_emulator_smoke.sh android/app/build/outputs/apk/debug/app-debug.apk smoke-out
+          script: |
+            bash tools/android_emulator_smoke.sh android/app/build/outputs/apk/debug/app-debug.apk smoke-out
+            cd android && ./gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=ai.wizards.os.DeviceBridgeE2eTest
       - name: Summary
         if: always()
         run: |
           echo "### Android emulator smoke" >> "$GITHUB_STEP_SUMMARY"
           cat smoke-out/result.txt >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "no result (emulator did not finish)" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: always()
         with:
           name: android-emulator-smoke
-          path: smoke-out
+          path: |
+            smoke-out
+            android/app/build/reports/androidTests
+            android/app/build/outputs/androidTest-results
           retention-days: 7
