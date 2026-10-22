@@ -403,3 +403,21 @@ html[data-skin="landscapes"] .rs-gauge .rs-track { stroke: rgba(255, 255, 255, .
 html[data-skin="landscapes"] .rs-gauge .rs-tick.rs-major { stroke: rgba(255, 255, 255, .85); }
 html[data-skin="landscapes"] .rs-gauge :is(.rs-ndl path, .rs-hub) { fill: #fff; }
 html[data-skin="landscapes"] .rs-gauge .rs-arc { stroke: #fff; }
+
+/* Blend into the background (Miguel's skins, 22 Oct): no dark chips behind Home controls. The Settings gear is a bare
+   icon, Ready / Working are round outlined buttons in their own colour, and the phone pill dock is a light frosted glass
+   that lets the background through while the icons stay clear. */
+html[data-skin="landscapes"] .home-tools .gear, html[data-skin="landscapes"] .gear { background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; color: var(--wz-text, var(--ink)); }
+html[data-skin="landscapes"] .gear svg { width: 24px; height: 24px; stroke-width: 1.7; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--bg) 70%, transparent)); }
+html[data-skin="landscapes"] .home .constellation { gap: 18px; }
+html[data-skin="landscapes"] .home .constellation .now-card.wz-home-widget { flex: 0 0 74px; width: 74px; height: 74px; padding: 0; border-radius: 50%; place-content: center; row-gap: 1px; background: color-mix(in srgb, var(--c) 9%, transparent); border: 1.5px solid color-mix(in srgb, var(--c) 60%, transparent); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-skin="landscapes"] .home .constellation .now-card .n { font-size: 24px; line-height: 1; }
+html[data-skin="landscapes"] .home .constellation .now-card .k { font-size: 10.5px; line-height: 1.1; }
+html[data-skin="landscapes"] .home .constellation .now-card:active { transform: scale(.94); background: color-mix(in srgb, var(--c) 18%, transparent); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { background: color-mix(in srgb, var(--bg) 46%, transparent); border-color: color-mix(in srgb, var(--ink) 10%, transparent); box-shadow: 0 6px 22px rgba(0, 0, 0, .14); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); }
+html[data-skin="landscapes"] .gear svg { color: #fff; filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .6)) drop-shadow(0 0 6px rgba(0, 0, 0, .3)); }
+html[data-skin="landscapes"] .home .constellation .now-card.wz-home-widget { background: color-mix(in srgb, #0c0b12 34%, transparent); border-color: color-mix(in srgb, var(--c) 80%, #fff); -webkit-backdrop-filter: blur(14px) saturate(1.2); backdrop-filter: blur(14px) saturate(1.2); }
+html[data-skin="landscapes"] .home .constellation .now-card :is(.k, .n) { text-shadow: 0 1px 2px rgba(0, 0, 0, .55); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { background: color-mix(in srgb, #0c0b12 48%, transparent); border-color: rgba(255, 255, 255, .14); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5)); }
+html[data-skin="landscapes"] .home .constellation .now-card :is(.k, .n) { color: color-mix(in srgb, var(--c) 72%, #fff); }

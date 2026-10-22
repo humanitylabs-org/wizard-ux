@@ -426,3 +426,17 @@ html[data-skin^="obsidian"] .rs-dial-off :is(.rs-arc, .rs-ndl) { opacity: 0; }
 html[data-skin^="obsidian"] .rs-dialed .rs-dl { max-width: none; font-size: 9.5px; color: var(--wz-text-secondary, var(--ink-2)); }
 html[data-skin^="obsidian"][data-shell="phone"] .home [data-home-resources] { order: -1; margin: 0 0 6px; }
 html[data-skin^="obsidian"][data-shell="phone"] .home .home-top { order: -2; }
+
+/* Blend into the background (Miguel's skins, 22 Oct): no dark chips behind Home controls. The Settings gear is a bare
+   icon, Ready / Working are round outlined buttons in their own colour, and the phone pill dock is a light frosted glass
+   that lets the background through while the icons stay clear. */
+html[data-skin^="obsidian"] .home-tools .gear, html[data-skin^="obsidian"] .gear { background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; color: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .gear svg { width: 24px; height: 24px; stroke-width: 1.7; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--bg) 70%, transparent)); }
+html[data-skin^="obsidian"] .home .constellation { gap: 18px; }
+html[data-skin^="obsidian"] .home .constellation .now-card.wz-home-widget { flex: 0 0 74px; width: 74px; height: 74px; padding: 0; border-radius: 50%; place-content: center; row-gap: 1px; background: color-mix(in srgb, var(--c) 9%, transparent); border: 1.5px solid color-mix(in srgb, var(--c) 60%, transparent); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-skin^="obsidian"] .home .constellation .now-card .n { font-size: 24px; line-height: 1; }
+html[data-skin^="obsidian"] .home .constellation .now-card .k { font-size: 10.5px; line-height: 1.1; }
+html[data-skin^="obsidian"] .home .constellation .now-card:active { transform: scale(.94); background: color-mix(in srgb, var(--c) 18%, transparent); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { background: color-mix(in srgb, var(--bg) 46%, transparent); border-color: color-mix(in srgb, var(--ink) 10%, transparent); box-shadow: 0 6px 22px rgba(0, 0, 0, .14); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); }
+html[data-skin="obsidian-light"] .home .constellation .now-card.wz-home-widget { background: color-mix(in srgb, var(--c) 7%, #fff 40%); }
+html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { background: color-mix(in srgb, #fff 58%, transparent); box-shadow: 0 4px 18px rgba(0, 0, 0, .07); }

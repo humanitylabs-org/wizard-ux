@@ -40,3 +40,11 @@ test('Miguel skins draw speedometer gauges that start at zero and sit at the top
     assert.match(css, /\[data-home-resources\] \.rs-dialed\.rs-widget\.wz-home-widget \{ background: none; border: 0;/, `${f}: no panel`);
   }
 });
+
+test('Miguel skins: bare gear, round Ready/Working, see-through dock', () => {
+  for (const [f, P] of [['obsidian', 'html[data-skin^="obsidian"]'], ['landscapes', 'html[data-skin="landscapes"]']]) {
+    const css = fs.readFileSync(new URL(`../web/skins/${f}/skin.css`, import.meta.url), 'utf8');
+    assert.ok(css.includes(`${P} .home-tools .gear, ${P} .gear { background: none; border: 0;`), `${f}: gear has no chip`);
+    assert.match(css, /\.now-card\.wz-home-widget \{[^}]*border-radius: 50%/, `${f}: round tiles`);
+  }
+});
