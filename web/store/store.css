@@ -70,6 +70,15 @@ h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
 .get.light { color: #fff; background: rgba(255, 255, 255, .22); backdrop-filter: blur(8px); }
 .get.big { height: 34px; min-width: 96px; font-size: 15px; color: #fff; background: var(--violet); margin-top: 10px; }
 .get.big.have { background: rgba(79, 240, 176, .14); color: var(--green); }
+/* One colour per meaning: violet = Get, green = on this box (solid Open, quiet Installed),
+   amber = needs attention (Update, conflict), grey = waiting or unknown. */
+.get:not(.open):not(.have):not(.upd):not(.warn):not(.wait):not(.light) { color: var(--wz-on-accent, var(--s-on-accent)); background: var(--wz-accent, var(--violet)); }
+.get.open, .get.big.open { color: var(--wz-base, var(--bg)); background: var(--green); }
+.get.have, .get.big.have { color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); }
+.get.upd, .get.big.upd { color: var(--wz-base, var(--bg)); background: var(--amber); }
+.get.warn, .get.big.warn { color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent); font-size: 12.5px; }
+.get.wait, .get.big.wait { color: var(--wz-text-secondary, var(--ink-2)); background: color-mix(in srgb, var(--wz-text-secondary, var(--ink-2)) 10%, transparent); font-size: 12.5px; }
+.row .get.warn, .row .get.wait { max-width: 110px; white-space: normal; text-align: center; height: auto; min-height: 30px; }
 
 /* list layer */
 .layer { padding: 4px 20px 24px; animation: rise .28s var(--ease); }
@@ -132,7 +141,7 @@ html.wz-hosted, html.wz-hosted body { background: transparent; }
 html.wz-hosted .top { background: var(--wz-chrome, transparent); }
 html.wz-hosted .toast { background: var(--wz-overlay, rgba(28, 19, 58, .94)); color: var(--ink); }
 html.wz-hosted .release-label select { background: var(--wz-surface-raised, #211831); }
-.get.open, .get.big { color: var(--s-on-accent); }
+.get.big:not(.open):not(.have):not(.upd):not(.warn):not(.wait) { color: var(--s-on-accent); }
 
 /* Connection Router: install sheet and "Models and connections" (store-router.js). */
 .mc-lede { margin: 0 0 14px; font-size: 14px; line-height: 1.45; color: var(--ink-2); }

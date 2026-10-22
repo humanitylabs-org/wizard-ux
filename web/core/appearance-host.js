@@ -106,7 +106,13 @@
     }
   });
   // A frame that navigated to a document that did not (re)announce itself loses the theme marker.
-  document.addEventListener('load', e => { const f = e.target; if (f && f.tagName === 'IFRAME' && frames.has(f)) { let doc = null; try { doc = f.contentDocument; } catch (er) {} if (doc !== frames.get(f).doc) forget(f); } }, true);
+  document.addEventListener('load', e => {
+    const f = e.target;
+    // Skin package CSS may arrive after data-skin changed. Its color-scheme must
+    // invalidate the cached context too, or light apps receive dark UA canvases.
+    if (f?.tagName === 'LINK' && f.rel === 'stylesheet') { queue(true); return; }
+    if (f && f.tagName === 'IFRAME' && frames.has(f)) { let doc = null; try { doc = f.contentDocument; } catch (er) {} if (doc !== frames.get(f).doc) forget(f); }
+  }, true);
 
   function mount() {
     const root = document.documentElement;

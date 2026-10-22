@@ -468,17 +468,33 @@
         catch (_) { el.removeAttribute('href'); }
       }
     }
-    const html = box.innerHTML;
+    // List numbers and bullets are literal text in both flavours (James, 21 Oct 2026: a copied quote lost
+    // its 1. 2. 3. when pasted, while Share kept them). Chat apps that flatten pasted HTML drop CSS list
+    // markers, so the HTML carries "1. " / "• " as text inside plain blocks, never <ol>/<ul>.
+    const marker = li => {
+      const list = li.parentElement, ordered = list?.tagName === 'OL';
+      const n = ordered ? (+list.getAttribute('start') || 1) + [...list.children].indexOf(li) : 0;
+      return ordered ? `${n}. ` : '• ';
+    };
+    // Loose list items wrap their text in <p>: the marker goes inside it so it stays on the same line.
+    const mark = (li, text) => { const f = li.firstChild, host = f?.nodeType === 1 && f.tagName === 'P' ? f : li; host.insertBefore(document.createTextNode(text), host.firstChild); };
+    const listDepth = (li, root) => { let d = 0, p = li.parentElement?.parentElement; while (p && p !== root) { if (p.tagName === 'UL' || p.tagName === 'OL') d++; p = p.parentElement; } return d; };
     // Readable plain text: bullets/numbers on list items, then the browser's own text layout.
     const plainBox = box.cloneNode(true);
     for (const li of plainBox.querySelectorAll('li')) {
-      const list = li.parentElement, ordered = list?.tagName === 'OL';
-      const n = ordered ? (+list.getAttribute('start') || 1) + [...list.children].indexOf(li) : 0;
-      const depth = (() => { let d = 0, p = list?.parentElement; while (p && p !== plainBox) { if (p.tagName === 'UL' || p.tagName === 'OL') d++; p = p.parentElement; } return d; })();
-      li.insertBefore(document.createTextNode('  '.repeat(depth) + (ordered ? `${n}. ` : '• ')), li.firstChild);
+      mark(li, '  '.repeat(listDepth(li, plainBox)) + marker(li));
       li.style.display = 'block';
     }
     for (const l of plainBox.querySelectorAll('ul, ol')) { l.style.listStyle = 'none'; l.style.padding = '0'; l.style.margin = '0'; }
+    // Nested items indent with non-breaking spaces, which survive flattening too (no style attributes).
+    const lis = [...box.querySelectorAll('li')], marks = lis.map(li => '\u00a0'.repeat(3 * listDepth(li, box)) + marker(li));
+    lis.forEach((li, k) => mark(li, marks[k]));
+    for (const l of [...box.querySelectorAll('ul, ol')].reverse()) {
+      const wrap = document.createElement('div');
+      for (const li of [...l.children]) { const row = document.createElement('div'); row.append(...li.childNodes); wrap.appendChild(row); }
+      l.replaceWith(wrap);
+    }
+    const html = box.innerHTML;
     plainBox.style.cssText = 'position:fixed;left:-99999px;top:0;width:600px;white-space:normal;opacity:0;pointer-events:none';
     document.body.appendChild(plainBox);
     let text = '';

@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Thales-only real cached-song streaming + exact shell/Music + signed preview API35 emulator QA."""
 import fcntl, hashlib, http.server, json, mimetypes, os, pathlib, plistlib, re, socket, sqlite3, subprocess, sys, threading, time, urllib.parse, urllib.request
+from qa_paths import work_root
+from qa_paths import android_sdk, java_home
 P=pathlib.Path
-if not str(P.cwd()).startswith('/Volumes/ThalesMedia/'):
+if not os.environ.get('WIZARD_WORK_ROOT') or not P.cwd().resolve().is_relative_to(work_root()):
     raise SystemExit('Thales media worker required')
 source_sha=sys.argv[5]
 apk,shell,music,out=map(P,sys.argv[1:5]); out.mkdir(parents=True,exist_ok=True)
-SDK=P('/opt/homebrew/share/android-commandlinetools'); PKG='ai.wizards.os.musicpreview'; PORT=5704; ADB=str(SDK/'platform-tools/adb'); SERIAL=f'emulator-{PORT}'; HTTP=18794; CDP=9354
-ENV=os.environ.copy();ENV.update(JAVA_HOME='/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home',ANDROID_HOME=str(SDK),ANDROID_SDK_ROOT=str(SDK),ANDROID_AVD_HOME=str(out/'avd'));ENV['PATH']='/opt/homebrew/bin:'+ENV['JAVA_HOME']+'/bin:'+ENV['PATH'];(out/'avd').mkdir(exist_ok=True)
+SDK=android_sdk(); PKG='ai.wizards.os.musicpreview'; PORT=5704; ADB=str(SDK/'platform-tools/adb'); SERIAL=f'emulator-{PORT}'; HTTP=18794; CDP=9354
+ENV=os.environ.copy();ENV.update(JAVA_HOME=java_home(),ANDROID_HOME=str(SDK),ANDROID_SDK_ROOT=str(SDK),ANDROID_AVD_HOME=str(out/'avd'));ENV['PATH']=ENV['JAVA_HOME']+'/bin:'+ENV['PATH'];(out/'avd').mkdir(exist_ok=True)
 def sh(*args,stdin=None,timeout=120):
     r=subprocess.run(list(map(str,args)),input=stdin,text=True,capture_output=True,env=ENV,timeout=timeout)
     if r.returncode: raise RuntimeError('command failed '+str(args)[:180]+'\n'+r.stderr[-2000:]+'\n'+r.stdout[-2000:])
@@ -21,7 +23,7 @@ state={'tracks':[], 'events':[], 'bytes':0,'gets':[], 'refills':0,'batches':{},'
 LOCK=threading.Lock(); em=None;server=None
 stale_release=threading.Event();stale_release.set()
 def worker_lease():
-    lock_path=P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock')
+    lock_path=P(str(work_root() / 'AndroidBuilds/worker.lock'))
     inherited=os.environ.get('WIZARD_HEAVY_LOCK_FD')
     if inherited is not None:
         fd=int(inherited); actual=os.fstat(fd); expected=lock_path.stat()
@@ -146,7 +148,7 @@ with worker_lease() as worker:
         sh('ffmpeg','-v','error','-y','-i',next(clips.glob('*.mp3')),'-f','adts',out/'qa_mic.aac');sh(ADB,'-s',SERIAL,'push',out/'qa_mic.aac','/data/local/tmp/qa_mic.aac');sx(f'run-as {PKG} cp /data/local/tmp/qa_mic.aac files/qa_mic.aac')
         sx(f'pm grant {PKG} android.permission.POST_NOTIFICATIONS');sx(f'pm grant {PKG} android.permission.RECORD_AUDIO');sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity');time.sleep(5)
         pid=sx('pidof '+PKG).strip();sh(ADB,'-s',SERIAL,'forward',f'tcp:{CDP}',f'localabstract:webview_devtools_remote_{pid}')
-        r=subprocess.run(['/opt/homebrew/bin/node',str(shell/'tools/qa-background-audio.cjs'),str(CDP),str(HTTP),str(out)],env=ENV,text=True,capture_output=True,timeout=450)
+        r=subprocess.run(['node',str(shell/'tools/qa-background-audio.cjs'),str(CDP),str(HTTP),str(out)],env=ENV,text=True,capture_output=True,timeout=450)
         (out/'qa.log').write_text(r.stdout+'\n'+r.stderr);print(r.stdout,flush=True);print(r.stderr,flush=True)
         log=sx('logcat -d -b crash');(out/'crash.log').write_text(log);(out/'service.log').write_text(sx('logcat -d -s WizardAudio:*'))
         (out/'http-state.json').write_text(json.dumps(state,indent=2))

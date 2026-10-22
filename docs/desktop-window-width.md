@@ -17,4 +17,4 @@ Historical preview: `/wizard-os-home/?shell=desktop&open=chats` on the retired c
 
 Verification limit: viewport resize/large desktop browser dimensions were tested, rather than the physical Mac green-button transition. James judges whether the 1200px width feels right on his desktop. Explicit app immersive fullscreen remains full-viewport.
 
-Evidence root: `/Volumes/ThalesMedia/wizard-os/desktop-window-width-20261013` on Thales. Small receipt copies: `/home/telos/.hermes/data/releases/desktop-window-width/evidence`. Preview home: `/home/telos/.local/share/wizard-stage/desktop-width`. Approve/ship then integrate the latest daily into the candidate and rerun decisive geometry/fullscreen before production activation.
+Evidence root: `$WIZARD_WORK_ROOT/wizard-os/desktop-window-width-20261013` on Thales. Small receipt copies: `$HERMES_HOME/data/releases/desktop-window-width/evidence`. Preview home: `$HOME/.local/share/wizard-stage/desktop-width`. Approve/ship then integrate the latest daily into the candidate and rerun decisive geometry/fullscreen before production activation.

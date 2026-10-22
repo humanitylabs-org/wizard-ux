@@ -3,14 +3,14 @@
 // no opaque frame fill, window material behind, their own accent and type unchanged, full screen keeps the material,
 // nested Back returns inside the app and root Back stays in Wizard. A non-adopting app (Calendar) keeps today's
 // opaque frame fill. A same-origin test host sends a light (Paper) and a dark (Nebula) context to every app.
-// Usage: node qa-appearance-live.cjs [shell url] — e.g. https://wizard.tailc0f369.ts.net/wizard-os-home/ (Thales) or a
+// Usage: node qa-appearance-live.cjs [shell url] — e.g. $WIZARD_ORIGIN/wizard-os-home/ (Thales) or a
 // same-origin local proxy. Env: QA_RESOLVE (host-resolver rules), QA_CHROME (executable), QA_SHOTS (screenshot dir),
 // QA_APPS (comma list of app ids). Every non-GET request is fulfilled 403 in ctx.route; zero /v1/runs writes asserted.
-let pw; try { pw = require('/home/telos/node_modules/playwright'); } catch (e) { pw = require('playwright-core'); }
+const pw = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const URL_ = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 const ORIGIN = new URL(URL_).origin;
-const SHOTS = process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch/appearance-live-chunk1';
+const SHOTS = process.env.QA_SHOTS || require('./tools/qa-paths.cjs').workPath('appearance-live-chunk1');
 fs.mkdirSync(SHOTS, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else { fail++; console.log('FAIL', n, typeof x === 'string' ? x : JSON.stringify(x)); } };

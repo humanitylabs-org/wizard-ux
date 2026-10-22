@@ -5,7 +5,7 @@ const http = require('node:http');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const os = require('node:os');
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const { chromium } = require('../tools/qa-playwright.cjs');
 const root = path.resolve(__dirname, '..');
 const evidence = process.env.CAPTURE_EVIDENCE || path.join(__dirname, 'evidence');
 fs.mkdirSync(evidence, { recursive: true });

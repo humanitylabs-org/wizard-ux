@@ -1,13 +1,8 @@
-// Port existing isolated browser suites to Thales without editing their assertions/fixtures.
-const Module = require('module'), resolve = Module._resolveFilename;
-Module._resolveFilename = function(request, parent, ...rest) {
-  if (request === '/home/telos/node_modules/playwright') request = 'playwright-core';
-  return resolve.call(this, request, parent, ...rest);
-};
+// Synthetic-regression preload only; all module resolution lives in qa-playwright.cjs.
 // Opt-in synthetic authority fills model fixtures absent from older suites. The voice-seal suite
 // otherwise requires a live backend; supply reads here and fence all unhandled requests locally.
 if (process.env.QA_SYNTHETIC_REGRESSION === '1') {
-  const { chromium } = require('playwright-core'), launch = chromium.launch.bind(chromium);
+  const { chromium } = require('./qa-playwright.cjs'), launch = chromium.launch.bind(chromium);
   chromium.launch = async (...args) => {
     const browser = await launch(...args), newContext = browser.newContext.bind(browser);
     browser.newContext = async (...options) => {

@@ -11,7 +11,7 @@ public class AppStateTest {
     public void onlyLoopbackFakesCanReplaceTheOrigin() {
         assertTrue(AppState.isQaOrigin("http://localhost:18788"));
         assertTrue(AppState.isQaOrigin("http://10.0.2.2:18788"));
-        assertFalse(AppState.isQaOrigin("https://wizard.tailc0f369.ts.net"));
+        assertFalse(AppState.isQaOrigin("https://wizard.example.ts.net"));
         assertFalse(AppState.isQaOrigin("http://evil.example:80"));
         assertFalse(AppState.isQaOrigin("http://localhost:18788/path"));
         assertFalse(AppState.isQaOrigin(null));

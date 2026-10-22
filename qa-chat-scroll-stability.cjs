@@ -1,8 +1,8 @@
 // Thales-only real CDP scroll regression. Candidate assets at the real origin, SW blocked,
 // EVERY non-GET/HEAD request fulfilled locally. Deterministic session/message fixtures, no sends.
-const { chromium } = require('playwright-core');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const ORIGIN = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const ORIGIN = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 const WEB = process.env.QA_WEB_DIR || __dirname;
 const OUT = process.env.QA_OUT || path.join(__dirname, 'qa-scroll');
 const EXEC = process.env.QA_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';

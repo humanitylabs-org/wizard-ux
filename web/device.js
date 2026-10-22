@@ -281,7 +281,7 @@
    * that the session list hasn't caught up with yet is never swept away. */
   const seenAtOf = (L, id) => {
     const s = L.session?.(id); if (!s) return NaN;
-    const r = L.seen?.threads?.[`${s.runtime}:${s.id}`]; if (!r) return NaN;
+    const r = L.seenRecord?.(s) || L.seen?.threads?.[`${s.runtime}:${s.id}`]; if (!r) return NaN;
     return typeof r.seenAt === 'number' ? r.seenAt : Date.parse(r.seenAt ?? '');
   };
   function sweepReadNotes(why) {

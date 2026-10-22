@@ -1,9 +1,9 @@
 // Remote-safe desktop width QA: real API reads; all writes intercepted; no agent sends.
 // Usage: PLAYWRIGHT_PATH=<package> QA_OUT=<dir> QA_EXPECTED_WEB_DIR=<repo> [QA_WEB_DIR=<override>] node <suite> <base-url>
 const fs = require('fs'), path = require('path'), os = require('os'), crypto = require('crypto');
-let pw; for (const m of [process.env.PLAYWRIGHT_PATH, 'playwright', 'playwright-core'].filter(Boolean)) { try { pw = require(m); break; } catch {} }
+const pw = require('./tools/qa-playwright.cjs');
 if (!pw) throw Error('Set PLAYWRIGHT_PATH to Playwright');
-const BASE = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const BASE = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 const OUT = process.env.QA_OUT || path.join(process.cwd(), 'width-evidence');
 fs.mkdirSync(OUT, { recursive: true });
 const cases = [], writes = [], errors = [];

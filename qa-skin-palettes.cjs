@@ -6,12 +6,12 @@
 //  4 tap Wizard → back on the Wizard palette last worn (Tide, picked before), not the first one
 //  5 tap Mizel again → Light (its last palette) comes back
 //  6 reload keeps Light and the Mizel card pressed; Appearance v1 context carries family=mizel
-//  7 every card and colour is a ≥44 px target; zero writes; no page errors
+//  7 every card and colour is a ≥48 px target; zero writes; no page errors
 // Usage: node qa-skin-palettes.cjs [origin=http://127.0.0.1:9391/wizard-os-home/]  QA_SHOTS=<dir>
-let pw; try { pw = require('playwright-core'); } catch (e) { pw = require('/home/telos/node_modules/playwright'); }
+const pw = require('./tools/qa-playwright.cjs');
 const fs = require('fs');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9391/wizard-os-home/';
-const SHOTS = process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch/skin-palettes'; fs.mkdirSync(SHOTS, { recursive: true });
+const SHOTS = process.env.QA_SHOTS || require('path').join(require('os').homedir(), '.hermes/cache/scratch/chats-parity', 'qa-skin-palettes'); fs.mkdirSync(SHOTS, { recursive: true });
 const PHONE_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36';
 let pass = 0, fail = 0;
 const ok = (c, n, x = '') => { c ? pass++ : fail++; console.log(c ? 'PASS' : 'FAIL', n, x); };
@@ -27,9 +27,10 @@ async function run(b, mode) {
     writes.push(q.method() + ' ' + new URL(q.url()).pathname); return r.fulfill({ status: 403, contentType: 'application/json', body: '{"error":"qa refuses writes"}' }); });
   await ctx.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); } catch (e) {} });
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(String(e)));
-  await p.goto(URL_, { waitUntil: 'load' }); await p.waitForTimeout(3500);
+  await p.goto(URL_, { waitUntil: 'domcontentloaded' }); await p.waitForTimeout(3500);
   const openLook = async () => { await p.evaluate(() => WizCore.deeplink.route(location.pathname + '?view=skin')); await p.waitForTimeout(1200); };
   const tap = async sel => {
+    await p.locator('.mz-intro').waitFor({ state: 'detached' });
     const r = await p.evaluate(s => { const e = [...document.querySelectorAll(s)].find(n => n.getClientRects().length); if (!e) return null; e.scrollIntoView({ block: 'center' });
       const b = e.getBoundingClientRect(); const x = b.x + b.width / 2, y = b.y + b.height / 2; const h = document.elementFromPoint(x, y); return { x, y, hit: !!h && (h === e || e.contains(h)) }; }, sel);
     if (!r) return null; if (phone) await p.touchscreen.tap(r.x, r.y); else await p.mouse.click(r.x, r.y); await p.waitForTimeout(900); return r;
@@ -43,9 +44,9 @@ async function run(b, mode) {
 
   await openLook();
   let L = await look();
-  ok(L && JSON.stringify(L.fams) === '["wizard","mizel"]' && L.famOn === 'wizard', `${mode}: Look shows Wizard and Mizel skins, Wizard worn`, JSON.stringify(L && { fams: L.fams, on: L.famOn }));
+  ok(L && L.fams[0] === 'wizard' && L.fams.includes('mizel') && L.famOn === 'wizard', `${mode}: Look shows Wizard first plus Mizel (other skins may follow), Wizard worn`, JSON.stringify(L && { fams: L.fams, on: L.famOn }));
   ok(L && JSON.stringify(L.pals) === JSON.stringify(WIZ) && L.palOn === 'nebula', `${mode}: Colours = the five Wizard palettes, Nebula on`, L && L.pals.join(','));
-  ok(L && L.sizes.every(v => v >= 44), `${mode}: every skin card and colour is a ≥44 px target`, L && L.sizes.join(','));
+  ok(L && L.sizes.every(v => v >= 48), `${mode}: every skin card and colour is a ≥48 px target`, L && L.sizes.join(','));
   await p.screenshot({ path: `${SHOTS}/${mode}-1-wizard.png` });
   await tap('[data-skinpick="tide"]');
   L = await look(); ok(L.skin === 'tide' && L.name === 'Wizard · Tide', `${mode}: tap Tide → worn, label "Wizard · Tide"`, JSON.stringify({ skin: L.skin, name: L.name }));

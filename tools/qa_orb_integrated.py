@@ -11,6 +11,7 @@ import re
 import threading
 import time
 import urllib.parse
+from qa_paths import origin_host
 
 
 class Fixture:
@@ -32,7 +33,7 @@ class Fixture:
             if delay: threading.Timer(delay, lambda: pg._send(payload)).start()
             else: pg._send(payload)
         # No request is continued to production, including reads, analytics or SW.
-        if u.hostname != 'wizard.tailc0f369.ts.net': return reply({},status=403)
+        if u.hostname != origin_host(): return reply({},status=403)
         if method=='GET':
             for prefix, root in [('/wizard-os-home/',self.root/'web'),('/mizel-live/',self.adoption/'web')]:
                 if p.startswith(prefix):

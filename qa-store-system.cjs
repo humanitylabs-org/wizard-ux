@@ -1,6 +1,6 @@
 // Focused real-index private peer QA. Every unsafe request is fenced before it can reach Telos.
 if (!process.argv[2] && !process.env.QA_ORIGIN) throw new Error('QA_ORIGIN or an explicit preview URL is required');
-const {chromium}=require(process.env.PW || '/Users/thales/workspace/wizard-mobile-link-candidate/node_modules/playwright');
+const {chromium}=require('./tools/qa-playwright.cjs');
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
 const BASE=process.argv[2] || new URL(process.env.QA_ORIGIN).origin+'/wizard-os-home/';
 const OUT=process.env.QA_OUT || 'evidence'; fs.mkdirSync(OUT,{recursive:true});

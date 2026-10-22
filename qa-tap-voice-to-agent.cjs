@@ -3,7 +3,7 @@
 // Transcription and all writes are intercepted fixtures; installed apps/session reads are real.
 // Music execution is acknowledged locally to avoid playing production audio.
 // Usage: QA_WEB_DIR=<repo> node qa-tap-voice-to-agent.cjs [url]. QA_SERVED=1 disables asset overlay.
-const {chromium} = require(process.env.QA_PLAYWRIGHT || 'playwright');
+const {chromium} = require('./tools/qa-playwright.cjs');
 const URL_ = process.argv[2] || 'http://127.0.0.1:8923/wizard-os-home/';
 const W = process.env.QA_WEB_DIR || '';
 let pass = 0, fail = 0;

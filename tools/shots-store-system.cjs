@@ -1,6 +1,6 @@
 // Screenshot pass for design review: phone + desktop, Store and System, entered the way James enters them.
 if (!process.env.QA_ORIGIN) throw new Error('QA_ORIGIN is required: select an isolated tailnet preview');
-const {chromium}=require(process.env.PW);const fs=require('fs');
+const {chromium}=require('./qa-playwright.cjs');const fs=require('fs');
 const B=new URL(process.env.QA_ORIGIN).origin+'/wizard-os-home/',OUT=process.env.QA_OUT||'shots';fs.mkdirSync(OUT,{recursive:true});
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 (async()=>{const b=await chromium.launch();const errs=[],unsafe=[];

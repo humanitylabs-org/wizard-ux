@@ -6,12 +6,12 @@
 //  5 Mic until there is something to send: typing or an attachment swaps it for Send; recording turns the mic into Send
 // Fixture threads merged into real Wizard reads; EVERY non-GET request is intercepted, nothing reaches Wizard.
 // Usage: node tools/qa-origin.cjs 9475 <worktree>/web &  then  QA_WEB_DIR=<worktree> node qa-chat-declutter.cjs [url]
-let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9475/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || '';
-const OUT = process.env.QA_OUT || '/home/telos/.hermes/cache/scratch/wizard-audit/shots/chat-declutter';
-const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
+const OUT = process.env.QA_OUT || require('./tools/qa-paths.cjs').workPath('wizard-audit/shots/chat-declutter');
+const EXEC = process.env.QA_CHROME || (process.env.QA_CHROME || undefined);
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra === '' ? '' : typeof extra === 'string' ? extra : JSON.stringify(extra).slice(0, 600)); } };

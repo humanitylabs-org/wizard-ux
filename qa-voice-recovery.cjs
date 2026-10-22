@@ -1,3 +1,4 @@
+// Run via QA_RECOVERY_ONLY=1 QA_OUT=<private dir> node qa-voice-custody-callers.cjs (not directly).
 // Focused recovery regressions, imported by the real-shell custody harness. All writes intercepted.
 const path=require('node:path');
 module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{

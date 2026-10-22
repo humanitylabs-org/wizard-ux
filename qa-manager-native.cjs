@@ -1,7 +1,7 @@
 // Run on Thales. Candidate assets over the live entry URL; isolated browser storage.
 // Real canonical IDs/history are read-only. Every mutation is intercepted (never sent).
 const fs=require('fs'), path=require('path'), assert=require('assert/strict');
-const {chromium}=require(process.env.PW);
+const {chromium}=require('./tools/qa-playwright.cjs');
 const ROOT=process.env.QA_WEB_DIR||__dirname, MANAGER=process.env.QA_MANAGER_DIR;
 const BASE=process.env.QA_URL, OUT=process.env.QA_OUT;
 const checks=[],receipts=[]; fs.mkdirSync(OUT,{recursive:true});

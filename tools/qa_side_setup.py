@@ -9,14 +9,16 @@ a real side-button hold reaches Wizard OS and the card then disappears; Android'
 on the switch; Back never leaves Wizard OS. Hermes/Wizard writes are failed by CDP. Always stops the emulator."""
 import fcntl, json, os, pathlib, re, socket, subprocess, sys, time, uuid
 import urllib.request
+from qa_paths import work_root
+from qa_paths import android_sdk, java_home
 P = pathlib.Path
-BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
+BASE = P(str(work_root() / 'AndroidBuilds')); SDK = android_sdk()
 apk = P(sys.argv[1]); PKG = sys.argv[2]; old = P(sys.argv[3]) if len(sys.argv) > 3 else None
 job = BASE / 'qa' / ('wos-side-' + uuid.uuid4().hex[:8]); job.mkdir(parents=True)
 OUT = job / 'shots'; OUT.mkdir()
-env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
+env = os.environ.copy(); env.update(JAVA_HOME=java_home(),
     ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
-env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir()
+env['PATH'] = env['JAVA_HOME'] + '/bin:' + env['PATH']; (job / 'avd').mkdir()
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5690; S = f'emulator-{PORT}'; DEVTOOLS = 9341
 res = []
 def check(n, ok, d=''):

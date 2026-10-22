@@ -68,7 +68,7 @@ public final class PhotosActivity extends Activity implements SharedPreferences.
                 // Not signed in yet: the switch itself starts Wizard Sign-in and turns backup on when it returns.
                 quiet=true; v.setChecked(false); quiet=false;
                 settings.prefs.edit().putBoolean("enable_after_signin",true).commit();
-                startSignIn(settings.server());
+                signIn(); // With no build-time server, ask for one before starting OAuth.
                 return;
             }
             settings.change(); settings.prefs.edit().putBoolean(key,on).commit();

@@ -1,8 +1,8 @@
 // Dock morph acceptance: real touch gestures + current-take screenshot custody. API writes are fixtures only.
-const { chromium } = require(process.env.PLAYWRIGHT_PATH || '/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const W = process.env.QA_WEB_DIR || __dirname;
-const URL_ = 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const URL_ = (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 let pass=0,fail=0;
 const ok=(v,n,d='')=>{v?pass++:fail++; console.log((v?'PASS ':'FAIL ')+n+' '+d);};
 // Reuse the existing isolated boot (all network intercepted, writes only recorded, never delivered).
