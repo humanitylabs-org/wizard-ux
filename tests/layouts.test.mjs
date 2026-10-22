@@ -116,7 +116,8 @@ test('layout files exist and every rule is scoped to its layout', () => {
   for (const f of ['web/layouts/two-orb/layout.css', 'web/layouts/two-orb/layout.js']) assert.ok(existsSync(new URL(f, root)), f);
   const css = read('web/layouts/two-orb/layout.css').replace(/\/\*[\s\S]*?\*\//g, '').replace(/@keyframes[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, '');
   for (const m of css.matchAll(/([^{}]+)\{[^{}]*\}/g)) {
-    for (const sel of m[1].split(',').map(x => x.trim()).filter(Boolean)) assert.match(sel, /^html\[data-layout="two-orb"\]/, sel);
+    const top = []; let d = 0, cur = ''; for (const ch of m[1]) { if (ch === '(') d++; if (ch === ')') d--; if (ch === ',' && !d) { top.push(cur); cur = ''; } else cur += ch; } top.push(cur);
+    for (const sel of top.map(x => x.trim()).filter(Boolean)) assert.match(sel, /^html\[data-layout="two-orb"\]/, sel);
   }
   const js = read('web/layouts/two-orb/layout.js');
   assert.doesNotMatch(js, /__wos|localStorage|fetch\(|\bimport\b/, 'layouts use the hook API only');
