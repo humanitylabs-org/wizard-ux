@@ -101,7 +101,7 @@ def worker_lock():
 class Suite:
     def __init__(self, out, apk):
         self.out, self.apk = out, apk
-        self.checks, self.pages, self.crashes = [], [], []
+        self.checks, self.pages, self.crashes, self.tap_retries = [], [], [], []
         self.em = self.server = None
         self.phase = 'setup'
         self.current_check = None
@@ -190,11 +190,28 @@ class Suite:
             return a if read() == a else None
         return self.wait(stable)
 
-    def orb(self):
-        self.tap(self.h['mid'](self.settled(self.h['bubble'])))
+    def retrying(self, read, expect, label):
+        # The emulator sometimes drops the first tap on a freshly shown overlay window (r9: Pause on a
+        # carried take and the orb over the keyboard, with no app log at all). Re-tap only while the
+        # expected first effect is absent, so a tap is never applied twice; retries are recorded.
+        for attempt in range(3):
+            self.tap(self.h['mid'](self.settled(read)))
+            if expect is None:
+                return
+            deadline = time.monotonic() + 2.5
+            while time.monotonic() < deadline:
+                if expect():
+                    if attempt:
+                        self.tap_retries.append({'phase': self.phase, 'target': label, 'retries': attempt})
+                    return
+                time.sleep(.2)
+        raise AssertionError(f'{label} tap had no effect in {self.phase} after 3 taps')
 
-    def control(self, name):
-        self.tap(self.h['mid'](self.settled(lambda: self.h['controls']().get(name))))
+    def orb(self, expect=None):
+        self.retrying(self.h['bubble'], expect, 'orb')
+
+    def control(self, name, expect=None):
+        self.retrying(lambda: self.h['controls']().get(name), expect, name)
 
     def page(self, match):
         pg = self.h['Page'](match=match, fetch=False)
@@ -287,12 +304,10 @@ class Suite:
         self.current_check = 'everywhere.1'
         self.begin('everywhere-resume')
         before = self.submissions()
-        self.orb()  # NO staged file: real recorder, no QA auto-finish timer.
-        self.wait(lambda: self.logs(r': listening$'))
-        self.control('pause')
-        self.wait(lambda: self.logs(r': paused$'))
+        self.orb(lambda: self.logs(r': listening$'))  # NO staged file: real recorder, no QA auto-finish timer.
+        self.control('pause', lambda: self.logs(r': paused$'))
         self.wait(lambda: self.floating.ev("S.mode==='paused'"))
-        self.orb()
+        self.orb(lambda: self.logs(r': resumed$'))
         resumed = self.h['wait_log'](r': resumed$', 5)
         # The native "resumed" log precedes the page's mode change and the chip windows by a few
         # frames; sampling them at that instant failed r8. Let them land, then require them to hold.
@@ -330,7 +345,7 @@ class Suite:
         self.sx('input keyevent KEYCODE_HOME')
         self.wait(self.h['bubble'])
         self.wait(lambda: self.logs('app voice listen'))
-        self.control('pause')
+        self.control('pause', lambda: self.logs(r'remote pause|: paused') or self.home.ev("__wos.voice==='paused'"))
         self.wait(lambda: self.home.ev("__wos.voice==='paused'"))
         self.wait(lambda: self.floating.ev("S.mode==='paused'"))
         active_before = self.wait(lambda: self.home.ev('(()=>{const a=JSON.parse(WizardOSDevice.recActive());return a?.paused && a})()'))
@@ -339,7 +354,7 @@ class Suite:
         self.save()
         self.sx('logcat -c')  # remove the Pause CHIP's remote pause before tapping orb
         before = self.submissions()
-        self.orb()
+        self.orb(lambda: self.logs(r'remote|resum|send'))
         remote = self.h['wait_log'](r': remote pause$', 5)
         self.wait(lambda: self.home.ev("__wos.voice==='listen'"))
         active_after = self.wait(lambda: self.home.ev('(()=>{const a=JSON.parse(WizardOSDevice.recActive());return a && !a.paused && a})()'))
@@ -386,10 +401,9 @@ class Suite:
         self.wait(lambda: self.floating.ev("S.mode==='type'"))
         self.stage()
         before, runs, transcribes = self.submissions(), len(self.state['runs']), self.state['transcribe']
-        self.orb()
+        self.orb(lambda: self.logs(r': listening'))
         self.wait(lambda: self.logs(r': listening \(voice typing\)'), 6)
-        self.control('pause')
-        self.wait(lambda: self.logs(r': paused$'), 2)
+        self.control('pause', lambda: self.logs(r': paused$'))
         self.wait(lambda: self.floating.ev("S.mode==='paused'"), 2)
         self.orb()
         # QA_FINISH_MS keeps polling while paused. A wrong resume resets its
@@ -560,6 +574,7 @@ def main():
                'required': sorted(REQUIRED), 'completed': completed,
                'apk_sha256': digest, 'debug_build_receipt': str(args.debug_receipt.resolve()),
                'physical_device': False, 'published': False,
+               'tap_retries': self.tap_retries,
                'scope': 'Native emulator taps + real recorder/bridge/UI signals; synthetic loopback server/audio; no live Wizard traffic'}
     (out / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
     print(json.dumps(receipt), flush=True)
