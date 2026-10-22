@@ -77,7 +77,10 @@ window.WosChatPower = function chatPower(A) {
         }
         return true;
       }
-      c.posFor = sid;
+      c.posFor = sid; c.posLid = c.lid; c.readerMoved = false;
+      // A cached paint comes first and may predate a reply that landed while you were away (James, 22 Oct:
+      // tapping a fresh Ready reply opened at his old place in the previous one). Remember it, so the server read decides.
+      c.posCached = !(c.loadedFor === sid && c.loadedNav === c.readNav);
       const saved = RP.read(sid), reply = lastReply(nb);
       let apply = null;
       // A Working thread follows the live reply, unless you had scrolled up in it: your place wins whenever it is
@@ -96,6 +99,11 @@ window.WosChatPower = function chatPower(A) {
       if (apply) { apply(nb); if (!saved || saved.messageId !== c.lid) c.follow = bottomGap(nb) < 80; settle(c, nb, apply); }
       paintLatest(el, nb);
       return true;
+    }
+    // The server read after a cached paint: a newer latest reply means a fresh open (its first line), unless you already scrolled.
+    if (c.posCached && c.loadedFor === sid && c.loadedNav === c.readNav) {
+      c.posCached = false;
+      if (c.lid !== c.posLid && !c.readerMoved) { endSettle(c); c.posFor = null; return position(w, el, nb, o); }
     }
     // Later renders: a place still settling is placed again; a thread that follows stays on the bottom; otherwise the reading place holds.
     if (settling(c)) { const s = c.settle; s.apply(nb); settle(c, nb, s.apply, s.until); }
@@ -129,7 +137,7 @@ window.WosChatPower = function chatPower(A) {
     const id = el.dataset.chats, w = H.win(id); if (!w || !w.thread || w.thread === '__new__') return;
     const c = ch(id);
     if (settling(c) && c.settle.nb === nb) { paintLatest(el, nb); return; } // our own placement, not the reader
-    c.follow = bottomGap(nb) < 80;
+    c.follow = bottomGap(nb) < 80; c.readerMoved = true;
     paintLatest(el, nb);
     clearTimeout(saveT);
     savePending = () => {
