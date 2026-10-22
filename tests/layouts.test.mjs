@@ -14,14 +14,14 @@ const root = new URL('../', import.meta.url);
 const read = p => readFileSync(new URL(p, root), 'utf8');
 const settle = () => new Promise(r => setTimeout(r, 15));
 
-function page({ layout = null } = {}) {
+function page({ layout = null, search = '' } = {}) {
   const links = [], mounted = [], toasts = [];
   const el = tag => ({ tag, nodeType: 1, dataset: {}, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, remove() { const i = links.indexOf(this); if (i >= 0) links.splice(i, 1); const j = mounted.indexOf(this); if (j >= 0) mounted.splice(j, 1); } });
   const device = { appendChild(n) { mounted.push(n); } };
   const ls = { _: {}, getItem(k) { return this._[k] ?? null; }, setItem(k, v) { this._[k] = String(v); }, removeItem(k) { delete this._[k]; } };
   if (layout) ls._['wos.layout'] = layout;
   const ctx = {
-    console: { warn() {}, log() {} }, URL, Date, Promise, Set, Map, Object, Array, JSON, Math, Error, String, Blob,
+    console: { warn() {}, log() {} }, URL, URLSearchParams, location: { search }, Date, Promise, Set, Map, Object, Array, JSON, Math, Error, String, Blob,
     setTimeout, clearTimeout,
     navigator: { userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 7)' }, matchMedia: () => ({ matches: true }),
     requestAnimationFrame: fn => setTimeout(fn, 0), cancelAnimationFrame: id => clearTimeout(id),
@@ -132,4 +132,14 @@ test('the shell wires layouts: orb tap hook, Settings row, agent kept on recover
   const models = read('web/core/chat-models.js');
   assert.match(models, /route\.agent \? \{ agent: route\.agent \}/);
   assert.match(models, /M\.currentRoute\('', saved, saved\.agent \|\| ''\)/);
+});
+
+test('a ?layout= link turns a layout on or off and remembers it', async () => {
+  const on = page({ search: '?layout=two-orb' });
+  assert.equal(on.ctx.document.documentElement.dataset.layout, 'two-orb');
+  assert.equal(on.ctx.localStorage._['wos.layout'], 'two-orb');
+  const off = page({ layout: 'two-orb', search: '?layout=classic' });
+  assert.equal(off.ctx.document.documentElement.dataset.layout, undefined);
+  assert.equal(off.ctx.localStorage._['wos.layout'], undefined);
+  const junk = page({ search: '?layout=../x' }); assert.equal(junk.ctx.localStorage._['wos.layout'], undefined);
 });

@@ -322,6 +322,11 @@
     // The stored skin's stylesheet now, in <head>, so it paints with the first frame (no flash).
     const id = window.WosSkin && window.WosSkin.current;
     if (id) { ensureCss(id); committedId = id; }
+    // ?layout=<id> in a link turns that layout on (and remembers it); ?layout=classic turns it off. Lets people share a try-it link.
+    try {
+      const q = new URLSearchParams(location.search).get('layout');
+      if (q === 'classic') localStorage.removeItem(LAYOUT_KEY); else if (layoutOf(q)) localStorage.setItem(LAYOUT_KEY, q);
+    } catch (_) {}
     try { const l = localStorage.getItem(LAYOUT_KEY); if (layoutOf(l)) { layoutId = l; paintLayout(l); } } catch (_) {}
     if (isDoc) for (const pid of ['pointerup', 'pointercancel']) document.addEventListener(pid, e => release(e.pointerId), true);
   }
