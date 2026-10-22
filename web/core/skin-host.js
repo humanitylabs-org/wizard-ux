@@ -17,7 +17,18 @@
 (function () {
   'use strict';
   const ERR_LIMIT = 3, ERR_WINDOW = 60000;
-  const EVENTS = ['route', 'render'];
+  const EVENTS = ['route', 'render', 'voice'];
+  /* Layouts (James, 22 Oct 2026): a third, opt-in layer for UX changes (gestures, orbs, controls) that any
+   * colour skin can wear. Classic is the shell as everyone has it and loads nothing. A layout lives in
+   * web/layouts/<id>/{layout.css,layout.js}; its css applies only under html[data-layout="<id>"]. */
+  const LAYOUTS = Object.freeze([
+    Object.freeze({ id: 'classic', name: 'Classic', desc: 'One orb: tap to talk, hold for a command' }),
+    Object.freeze({ id: 'two-orb', name: 'Two orbs', desc: 'Agent orb bottom right · white orb types and runs commands', css: true, js: true }),
+  ]);
+  const LAYOUT_KEY = 'wos.layout';
+  const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic') || null;
+  let layoutId = 'classic', layoutRec = null, layoutSeq = 0;
+  const taps = new Set();           // orb tap interceptors (layout first-wins); each returns true when handled
   const isDoc = typeof document !== 'undefined';
   let shell = null;                 // adapter from app.js: route/back/openList/openThread/goDesk/deskCount/root/dock/toast
   let active = null;                // { id, dir, teardown, offs:Set, frames:Set, on:{route:Set,render:Set}, errs:[], dead }
@@ -29,7 +40,7 @@
   let importer = url => import(url);
   let committedId = null, loadSeq = 0;
   let personal = null, personalSeq = 0, packageReady = Promise.resolve();
-  const record = (id, label = id) => ({ id, label, offs: new Set(), frames: new Set(), claims: new Set(), on: { route: new Set(), render: new Set() }, errs: [], dead: false, teardown: null });
+  const record = (id, label = id) => ({ id, label, offs: new Set(), frames: new Set(), claims: new Set(), mounts: new Set(), taps: new Set(), on: { route: new Set(), render: new Set(), voice: new Set() }, errs: [], dead: false, teardown: null });
 
   const skinOf = id => (typeof window !== 'undefined' && window.WosSkin && window.WosSkin.pkgOf) ? window.WosSkin.pkgOf(id) : null;
   const dirOf = (id, pkg) => (pkg && pkg.dir) || id;
@@ -79,7 +90,7 @@
     const need = () => { if (!shell) throw new Error('shell not ready'); return shell; };
     const api = {
       env: E,
-      route: () => { const r = shell ? shell.route() : { view: 'desk', thread: null, desk: 0 }; return Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0 }); },
+      route: () => routeOf(),
       on(type, fn) {
         if (!EVENTS.includes(type) || typeof fn !== 'function') throw new Error(`unknown skin event ${type}`);
         const g = guard(a, `on(${type})`, fn); a.on[type].add(g);
@@ -117,6 +128,39 @@
         claim: pointerId => { if (shell && shell.locked && shell.locked(pointerId)) return false; claims.add(pointerId); a.claims.add(pointerId); return true; },
       }),
       toast: msg => { try { need().toast(String(msg).slice(0, 140)); } catch (e) { fault(a, 'toast', e); } },
+      /* A timer that dies with the layer. */
+      after(ms, fn) {
+        const g = guard(a, 'after', fn); const h = { id: 0 };
+        h.id = setTimeout(() => { a.frames.delete(h); g(); }, Math.max(0, Math.min(10000, ms | 0)));
+        h.clear = () => clearTimeout(h.id); a.frames.add(h);
+        return () => { clearTimeout(h.id); a.frames.delete(h); };
+      },
+      /* Own controls: a node appended to the device, removed on teardown. */
+      mount(node) {
+        const host = isDoc && document.getElementById('device'); if (!host || !node || node.nodeType !== 1) return () => {};
+        host.appendChild(node); a.mounts.add(node);
+        return () => { node.remove(); a.mounts.delete(node); };
+      },
+      /* Agents: who can receive a message, and who the screen in front routes to. */
+      agents: Object.freeze({
+        list: () => shell?.agents ? shell.agents().map(x => Object.freeze({ ...x })) : [],
+        here: () => shell?.agentHere ? Object.freeze({ ...shell.agentHere() }) : null,
+        sigil: id => shell?.agentSigil ? shell.agentSigil(id) : null,
+        open: id => { if (typeof id === 'string' && id) need().openAgent?.(id); },
+      }),
+      /* Voice: the orb's own recorder. talk(agent) records a message for that agent (none = the screen's own);
+       * tap() is the orb's tap on a running take (send / resume); dictate() types into the focused field. */
+      voice: Object.freeze({
+        state: () => shell?.voiceState ? Object.freeze({ ...shell.voiceState() }) : { state: 'idle' },
+        talk: id => need().talk(typeof id === 'string' ? id : ''),
+        tap: () => need().voiceTap(),
+        dictate: () => !!need().dictate(),
+        cancel: () => need().voiceCancel?.(),
+      }),
+      orb: Object.freeze({
+        /* The dock orb's idle tap: fn() returns true to replace the shell's own talk. */
+        onTap(fn) { const g = guard(a, 'orb.onTap', fn); a.taps.add(g); taps.add(g); return () => { a.taps.delete(g); taps.delete(g); }; },
+      }),
       storage: Object.freeze({
         get(key) { try { const v = localStorage.getItem(`wos.skin.${a.id}.${key}`); return v == null ? null : JSON.parse(v); } catch (_) { return null; } },
         set(key, value) { try { localStorage.setItem(`wos.skin.${a.id}.${key}`, JSON.stringify(value)); } catch (_) {} },
@@ -137,8 +181,11 @@
     a.dead = true;
     if (typeof a.teardown === 'function') { try { a.teardown(reason); } catch (e) { try { console.warn(`[skin ${a.id}] teardown:`, e); } catch (_) {} } }
     for (const off of [...a.offs]) { try { off(); } catch (_) {} }
-    for (const h of [...a.frames]) { try { cancelAnimationFrame(h.id); } catch (_) {} }
-    a.offs.clear(); a.frames.clear(); a.on.route.clear(); a.on.render.clear();
+    for (const h of [...a.frames]) { try { h.clear ? h.clear() : cancelAnimationFrame(h.id); } catch (_) {} }
+    for (const n of [...a.mounts]) { try { n.remove(); } catch (_) {} }
+    for (const g of a.taps) taps.delete(g);
+    if (layoutRec === a) layoutRec = null;
+    a.offs.clear(); a.frames.clear(); a.mounts.clear(); a.taps.clear(); a.on.route.clear(); a.on.render.clear(); a.on.voice.clear();
     for (const id of a.claims) { if (!(active?.claims.has(id) || personal?.claims.has(id))) claims.delete(id); }
     a.claims.clear();
   }
@@ -163,14 +210,55 @@
     return active === a;
   }
 
+  const layers = () => [active, personal, layoutRec].filter(Boolean);
   function emit(type, payload) {
-    for (const a of [active, personal]) if (a) for (const fn of [...a.on[type]]) fn(payload);
+    for (const a of layers()) for (const fn of [...a.on[type]]) fn(payload);
+  }
+  function routeOf() {
+    const r = shell ? shell.route() : { view: 'desk', thread: null, desk: 0 };
+    return Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0, app: r.app || null, agent: r.agent || null });
   }
   function emitRoute() {
-    if ((!active && !personal) || !shell) return;
-    const r = shell.route(), k = `${r.view}|${r.thread || ''}|${r.desk}`;
+    if (!layers().length || !shell) return;
+    const r = routeOf(), k = `${r.view}|${r.thread || ''}|${r.desk}|${r.app || ''}|${r.agent || ''}`;
     if (k === lastRoute) return; lastRoute = k;
-    emit('route', Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0 }));
+    emit('route', r);
+  }
+
+  /* ---------- layout layer ---------- */
+  const layoutUrl = (id, file) => isDoc ? new URL(`layouts/${id}/${file}`, document.baseURI).href : `layouts/${id}/${file}`;
+  let layoutCss = null;
+  function paintLayout(id) {
+    if (!isDoc) return;
+    const L = layoutOf(id);
+    if (L) document.documentElement.dataset.layout = id; else delete document.documentElement.dataset.layout;
+    if (layoutCss && (!L || layoutCss.dataset.layoutPkg !== id)) { layoutCss.remove(); layoutCss = null; }
+    if (L && L.css && !layoutCss) {
+      const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = layoutUrl(id, 'layout.css'); l.dataset.layoutPkg = id;
+      l.setAttribute('blocking', 'render'); document.head.appendChild(l); layoutCss = l; requested.push(l.href);
+    }
+  }
+  async function loadLayout(id) {
+    const seq = ++layoutSeq;
+    dispose(layoutRec, 'switch');
+    const L = layoutOf(id); const key = 'layout:' + id;
+    if (!L || !L.js || !shell || disabled.has(key)) return false;
+    const href = layoutUrl(id, 'layout.js'); requested.push(href);
+    let mod;
+    try { mod = await importer(href); } catch (e) { try { console.warn(`[layout ${id}] import failed:`, e); } catch (_) {} return false; }
+    if (seq !== layoutSeq || layoutId !== id || typeof mod?.default !== 'function') return false;
+    const a = record(key, L.name + ' layout'); layoutRec = a;
+    try { a.teardown = mod.default(makeApi(a)); } catch (e) { fault(a, 'setup', e); if (a.dead) return false; }
+    lastRoute = ''; emitRoute();
+    return layoutRec === a;
+  }
+  function setLayout(id) {
+    const next = layoutOf(id) ? id : 'classic';
+    try { if (next === 'classic') localStorage.removeItem(LAYOUT_KEY); else localStorage.setItem(LAYOUT_KEY, next); } catch (_) {}
+    layoutId = next; paintLayout(next);
+    if (shell) loadLayout(next); else if (next === 'classic') { layoutSeq++; dispose(layoutRec, 'off'); }
+    try { shell?.relayout?.(); } catch (_) {}
+    return next;
   }
 
   /* My skin supplies hashed bytes, never a service URL. Check consent again after waiting for the
@@ -207,7 +295,15 @@
     /* core/skins.js: the owner picked a skin. Stylesheet plus (if any) its script. */
     commit(id) { ensureCss(id); committedId = id; if (shell) packageReady = load(id); },
     /* app.js: the shell is ready; hands over the narrow adapter skins are allowed to drive. */
-    attach(adapter) { shell = adapter; const id = committedId || (window.WosSkin && window.WosSkin.current); committedId = id; if (id) packageReady = load(id); window.WosMySkin?.startScript(); },
+    attach(adapter) { shell = adapter; const id = committedId || (window.WosSkin && window.WosSkin.current); committedId = id; if (id) packageReady = load(id); window.WosMySkin?.startScript(); if (layoutOf(layoutId)) loadLayout(layoutId); },
+    /* Layouts: Settings › Look. Classic loads nothing. */
+    layouts: LAYOUTS, setLayout,
+    get layout() { return layoutId; },
+    get layoutState() { return { id: layoutId, active: !!layoutRec, disabled: disabled.has('layout:' + layoutId), mounts: layoutRec?.mounts.size || 0 }; },
+    /* app.js: the dock orb was tapped while idle. True when a layout handled it. */
+    orbTap() { for (const fn of [...taps]) { if (fn() === true) return true; } return false; },
+    /* app.js: the orb's voice state changed. */
+    voice(state) { if (layers().length) emit('voice', Object.freeze({ ...(shell?.voiceState ? shell.voiceState() : { state }) })); },
     loadPersonal, scriptProblem,
     stopPersonal() { personalSeq++; dispose(personal, 'off'); },
     get personalState() { return { ready: !!shell, active: !!personal, disabled: disabled.has('my-skin'), listeners: personal?.offs.size || 0, handlers: personal ? personal.on.route.size + personal.on.render.size : 0 }; },
@@ -219,13 +315,14 @@
     claimed: pointerId => claims.has(pointerId),
     release,
     get state() { return { active: active ? active.id : null, listeners: active ? active.offs.size : 0, frames: active ? active.frames.size : 0, handlers: active ? active.on.route.size + active.on.render.size : 0, disabled: [...disabled], requested: [...requested], css: [...cssLinks.keys()] }; },
-    _test: { setImporter(fn) { importer = fn; }, env, load, unload },
+    _test: { setImporter(fn) { importer = fn; }, env, load, unload, loadLayout },
   };
   if (typeof window !== 'undefined') {
     window.WosSkinHost = host;
     // The stored skin's stylesheet now, in <head>, so it paints with the first frame (no flash).
     const id = window.WosSkin && window.WosSkin.current;
     if (id) { ensureCss(id); committedId = id; }
+    try { const l = localStorage.getItem(LAYOUT_KEY); if (layoutOf(l)) { layoutId = l; paintLayout(l); } } catch (_) {}
     if (isDoc) for (const pid of ['pointerup', 'pointercancel']) document.addEventListener(pid, e => release(e.pointerId), true);
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = host;

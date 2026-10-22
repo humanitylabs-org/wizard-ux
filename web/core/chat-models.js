@@ -223,14 +223,15 @@
     },
     keepVoiceRoute(id, route) {
       const all = JSON.parse(localStorage.getItem('wos.voice-model-routes.v1') || '{}');
-      all[id] = { model: route.model, provider: route.provider };
+      // A take for another agent keeps its agent, so a recovered recording never falls back to the main agent.
+      all[id] = { model: route.model, provider: route.provider, ...(route.agent ? { agent: route.agent } : {}) };
       localStorage.setItem('wos.voice-model-routes.v1', JSON.stringify(all));
     },
     voiceRoute(id) {
       try {
         const saved = JSON.parse(localStorage.getItem('wos.voice-model-routes.v1') || '{}')[id];
         // Complete an older model-only take without replacing its saved model with today's choice.
-        return saved?.model ? M.currentRoute('', saved) : null;
+        return saved?.model ? M.currentRoute('', saved, saved.agent || '') : null;
       } catch { throw new Error('Saved recording model route is unreadable'); }
     },
     forgetVoiceRoute(id) {

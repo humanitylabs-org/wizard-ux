@@ -192,7 +192,14 @@
       const head = fams.length > 1 ? `<div class="skp-fam">${esc(f.name)}</div>` : '';
       return `${head}<div class="skp" role="group" aria-label="${esc(f.name || 'Skin')} colours">${pals.map(k => skinCard(k, cur)).join('')}</div>`;
     }).join('');
-    return `<div class="st-group" data-stgroup="look"><h4>Look</h4><div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(lookName(S, cur))}</small></span></div><div class="skp-all${facesReady ? '' : ' skp-wait'}">${groups}</div></div>${suggestionHtml()}${mySkinRow(S.list.find(k => k.id === cur)?.name || '')}</div>`;
+    return `<div class="st-group" data-stgroup="look"><h4>Look</h4><div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(lookName(S, cur))}</small></span></div><div class="skp-all${facesReady ? '' : ' skp-wait'}">${groups}</div></div>${suggestionHtml()}${mySkinRow(S.list.find(k => k.id === cur)?.name || '')}${layoutRow()}</div>`;
+  }
+  /* Layout: how the shell behaves (orbs, gestures), worn over any skin. Classic = the shell as everyone has it. */
+  function layoutRow() {
+    const H = window.WosSkinHost; if (!H?.layouts) return '';
+    const cur = H.layout, L = H.layouts.find(l => l.id === cur) || H.layouts[0];
+    const btns = H.layouts.map(l => `<button type="button" class="ghost" data-layoutpick="${esc(l.id)}" aria-pressed="${l.id === cur}">${esc(l.name)}</button>`).join('');
+    return `<div class="st-row static layout-row" data-layout-row><span class="st-ic">⦿</span><span class="st-tx"><b>Layout</b><small data-layoutdesc>${esc(L.desc)}</small></span><span class="ms-acts layout-acts">${btns}</span></div>`;
   }
   register({ id: 'look', aliases: ['skin'], html() {
     const S = window.WosSkin; if (!S) return '';
@@ -200,6 +207,13 @@
   }, act(ctx, el, event) {
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
+    const lp = el.closest('[data-layoutpick]');
+    if (lp) {
+      const H = window.WosSkinHost, now = H.setLayout(lp.dataset.layoutpick), L = H.layouts.find(l => l.id === now);
+      ctx.root.querySelectorAll('[data-layoutpick]').forEach(n => n.setAttribute('aria-pressed', String(n.dataset.layoutpick === now)));
+      const d = ctx.root.querySelector('[data-layoutdesc]'); if (d && L) d.textContent = L.desc;
+      ctx.haptic?.(8); return true;
+    }
     const S = window.WosSkin;
     const b = el.closest('[data-skinpick]'); if (!b) return false;
     const now = S.set(b.dataset.skinpick);
