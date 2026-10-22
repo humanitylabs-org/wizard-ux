@@ -1170,9 +1170,9 @@ window.WizCore.chats = function createChats(H) {
   const assistantStamp = turns => JSON.stringify((turns || []).filter(t => t.a && t.a.final !== false).map(t => [t.a.at, t.a.text]));
   function closeStream(c) { c.stream?.handle?.close(); clearTimeout(c.stream?.retry); c.stream = null; }
   function syncStream(w, c, turns, agent) {
-    const sid = w.thread, s = LIVE.session(sid), rid = LIVE.pendingRun?.(sid) || s?.runId;
+    const sid = w.thread, s = LIVE.session(sid), pendingRun = LIVE.pendingRun?.(sid), rid = pendingRun || s?.runId;
     if (c.stream && (c.stream.sid !== sid || (rid && c.stream.rid !== rid) || agentRec(agent).privacy === 'private')) closeStream(c);
-    if (!c.stream && turns && rid && WORKING_ST.has(s?.status) && agentRec(agent).privacy !== 'private') {
+    if (!c.stream && turns && rid && (pendingRun || WORKING_ST.has(s?.status)) && agentRec(agent).privacy !== 'private') {
       const st = { sid, rid, baseline: assistantStamp(turns), text: '', terminal: false, landed: false };
       c.stream = st;
       st.handle = LIVE.openRunStream?.(sid, agent, rid, snapshot => {
