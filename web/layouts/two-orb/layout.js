@@ -42,6 +42,9 @@ export default function setup(api) {
     orb.hidden = false;
     orb.style.setProperty('--c', who.colour);
     sigil(face, who.id);
+    // The whole recording lives on this orb: the shell's controls and transcript gather around it (layout.css).
+    const rootEl = doc.documentElement;
+    if (take) rootEl.dataset.toTake = v.state; else delete rootEl.dataset.toTake;
     orb.dataset.state = take ? (v.state === 'paused' ? 'paused' : v.state === 'listen' ? 'rec' : 'busy') : busy ? 'other' : 'idle';
     orb.classList.toggle('private', !!who.private);
     const label = take ? (v.state === 'paused' ? 'Paused · tap to resume' : 'To ' + who.label + ' · tap to send')
@@ -142,5 +145,5 @@ export default function setup(api) {
   [400, 1500, 4000].forEach(ms => api.after(ms, paint));
   paint();
 
-  return () => { closeArc(); };
+  return () => { closeArc(); delete doc.documentElement.dataset.toTake; };
 }
