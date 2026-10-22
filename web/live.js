@@ -896,6 +896,7 @@
       };
       const close = () => { r.source?.close(); r.source = null; };
       const terminal = () => { if (!r.terminal) { r.terminal = true; close(); notify(); } };
+      let retries = 0;
       const event = e => {
         if (r.stopped || r.terminal) return;
         let d; try { d = JSON.parse(e.data); } catch (_) { return; }
@@ -905,12 +906,22 @@
         // reasoning.available is deliberately not answer text.
         if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) terminal();
       };
-      try {
-        r.source = new window.EventSource(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
-        r.source.onmessage = event;
-        for (const name of ['message.delta', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted']) r.source.addEventListener(name, event);
-        r.source.onerror = close; // no automatic reconnect/replayed deltas; polling owns completion
-      } catch (_) { close(); }
+      const connect = () => {
+        if (r.stopped || r.terminal) return;
+        try {
+          r.source = new window.EventSource(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
+          r.source.onmessage = event;
+          for (const name of ['message.delta', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted']) r.source.addEventListener(name, event);
+          r.source.onerror = () => {
+            close();
+            // A queued main run can close before its upstream event endpoint is ready.
+            // Retry only before ANY answer bytes: no duplicated/replayed text. This is
+            // another read of the same run, never another admission/send.
+            if (!r.stopped && !r.terminal && !r.text && retries++ < 3) r.reconnect = setTimeout(connect, 500);
+          };
+        } catch (_) { close(); }
+      };
+      connect();
       const poll = async () => {
         if (r.stopped || r.terminal) return;
         try {
@@ -920,7 +931,7 @@
         } catch (_) { /* connectivity recovery is the ordinary read poll, never another send */ }
         if (!r.stopped && !r.terminal) r.timer = setTimeout(poll, 500);
       };
-      r.dispose = () => { r.stopped = true; close(); clearTimeout(r.timer); if (r.frame != null) cancelAnimationFrame(r.frame); RUN_STREAMS.delete(key); };
+      r.dispose = () => { r.stopped = true; close(); clearTimeout(r.timer); clearTimeout(r.reconnect); if (r.frame != null) cancelAnimationFrame(r.frame); RUN_STREAMS.delete(key); };
       r.timer = setTimeout(poll, 500);
     }
     r.listeners.add(paint);
