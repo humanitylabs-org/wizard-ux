@@ -536,6 +536,7 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 .ch-bell svg { width: 18px; height: 18px; fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .ch-bell b { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: grid; place-items: center; font-size: 11px; font-weight: 800; line-height: 1; color: var(--on-accent, #160b32); background: var(--violet-2, #b99bff); }
 .ch-bell.needs b { background: var(--amber, #ffbe55); }
+.ch-bell[hidden] { display: none; }
 .ch-bell:active { background: rgba(205, 190, 255, .12); }
 
 /* Loading placeholders (list rows + thread bubbles): same geometry as real content, skin tokens only. */
