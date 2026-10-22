@@ -21,6 +21,8 @@ public class OverlayE2eTest {
     final android.app.Instrumentation ins = InstrumentationRegistry.getInstrumentation();
     final Context context = ins.getTargetContext();
     final AtomicInteger bridgeCalls = new AtomicInteger();
+    final AtomicInteger fetchCalls = new AtomicInteger();
+    volatile boolean failLate;
     Activity activity;
     WebView web;
     public final class Probe {
@@ -46,6 +48,8 @@ public class OverlayE2eTest {
             web.addJavascriptInterface(new Probe(), "EverywhereNative"); web.addJavascriptInterface(new Probe(), "Probe");
             OverlayPage client = new OverlayPage(page, remote) {
                 @Override protected byte[] fetch(String u) throws Exception {
+                    fetchCalls.incrementAndGet();
+                    if (failLate) throw new IOException("late resource failure");
                     if (failure.equals("offline")) throw new IOException("fixture network down");
                     if (failure.equals("timeout")) Thread.sleep(2200);
                     if (failure.equals("script") && u.endsWith("everywhere.js")) throw new IOException("fixture JS 404");
@@ -85,6 +89,36 @@ public class OverlayE2eTest {
             try { assertTrue(failure, open("everywhere.html", true, failure).startsWith(OverlayPolicy.ASSETS)); }
             finally { close(); }
         }
+    }
+    @Test public void lateScriptFailureStillRecoversAndLockedPolicyNeverFetches() throws Exception {
+        try {
+            open("everywhere.html", true, "");
+            failLate = true;
+            js("let s=document.createElement('script');s.src='../orb.js';document.body.append(s)");
+            boolean bundled = false;
+            for (int i = 0; i < 40; i++) {
+                if (js("location.href").contains("file:///android_asset/")) { bundled = true; break; }
+                Thread.sleep(100);
+            }
+            assertTrue("late resource failure must recover after ready", bundled);
+        } finally { close(); }
+        fetchCalls.set(0); failLate = false;
+        try {
+            assertTrue(open("surface.html", false, "offline").startsWith(OverlayPolicy.ASSETS));
+            assertEquals("bundled-only lock policy must not fetch", 0, fetchCalls.get());
+        } finally { close(); }
+    }
+    @Test public void runtimeSelectionInvalidatesAnAlreadyLoadedRemotePage() throws Exception {
+        try {
+            assertTrue(open("everywhere.html", true, "").startsWith("https://fixture.invalid/"));
+            context.getSharedPreferences("wizard_server", Context.MODE_PRIVATE).edit().putString("origin", "https://other.invalid").commit();
+            boolean bundled = false;
+            for (int i = 0; i < 40; i++) {
+                if (js("location.href").contains("file:///android_asset/")) { bundled = true; break; }
+                Thread.sleep(100);
+            }
+            assertTrue("old Wizard document survives selected-origin change", bundled);
+        } finally { close(); }
     }
     @Test public void privilegedBridgeCannotBeReachedBySrcdocDataOrSameOriginFrames() throws Exception {
         try {

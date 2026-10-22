@@ -33,6 +33,13 @@ public class OverlayPage extends WebViewClient {
     private volatile boolean remote;
     private volatile int generation;
     private boolean done;
+    private android.content.SharedPreferences serverPrefs;
+    private final android.content.SharedPreferences.OnSharedPreferenceChangeListener serverChanged = (prefs, key) -> {
+        if ("origin".equals(key)) main.post(() -> {
+            if (remote && web != null && !origin.equals(ServerSettings.origin(web.getContext())))
+                fallBack("selected Wizard changed");
+        });
+    };
 
     public OverlayPage(String page, boolean remoteFirst) {
         if (!OverlayPolicy.validPage(page)) throw new IllegalArgumentException("Unknown overlay page");
@@ -42,6 +49,16 @@ public class OverlayPage extends WebViewClient {
     public void load(WebView v) {
         web = v;
         origin = ServerSettings.origin(v.getContext());
+        serverPrefs = v.getContext().getSharedPreferences("wizard_server", android.content.Context.MODE_PRIVATE);
+        serverPrefs.registerOnSharedPreferenceChangeListener(serverChanged);
+        v.addOnAttachStateChangeListener(new android.view.View.OnAttachStateChangeListener() {
+            @Override public void onViewAttachedToWindow(android.view.View view) { }
+            @Override public void onViewDetachedFromWindow(android.view.View view) {
+                serverPrefs.unregisterOnSharedPreferenceChangeListener(serverChanged);
+                main.removeCallbacks(timeout);
+                generation++; // ignore asynchronous completions after this host is destroyed
+            }
+        });
         String r = remoteFirst ? OverlayPolicy.remoteUrl(origin, page) : null;
         show(r != null, r != null ? r : OverlayPolicy.bundledUrl(page));
     }
