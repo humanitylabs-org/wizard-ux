@@ -154,7 +154,7 @@ public class SelectionWebView extends WebView {
     }
     @Override public android.view.accessibility.AccessibilityNodeProvider getAccessibilityNodeProvider() {
         android.view.accessibility.AccessibilityNodeProvider p=super.getAccessibilityNodeProvider();
-        ScrollCaptureDiagnostics.record("getAccessibilityNodeProvider",ScrollCaptureDiagnostics.fields("present",p!=null));
+        ScrollCaptureDiagnostics.gated("getAccessibilityNodeProvider",ScrollCaptureDiagnostics.fields("present",p!=null));
         if(p==null)return null;
         if(diagnosticProvider==null || diagnosticProvider.delegate!=p)diagnosticProvider=new ScrollAccessibilityProvider(this,p);
         return diagnosticProvider;

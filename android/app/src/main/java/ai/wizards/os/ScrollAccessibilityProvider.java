@@ -11,6 +11,9 @@ final class ScrollAccessibilityProvider extends AccessibilityNodeProvider {
     private final SelectionWebView web;
     ScrollAccessibilityProvider(SelectionWebView web,AccessibilityNodeProvider delegate) { this.web=web;this.delegate=delegate; }
     static void node(String method, int id, AccessibilityNodeInfo n) {
+        // Accessibility services (Bitwarden, voice tools) walk thousands of nodes on the UI thread at open;
+        // recording each one with a stack trace froze the app into an ANR. Only record inside a capture window.
+        if(!ScrollCaptureDiagnostics.armed())return;
         ScrollCaptureDiagnostics.record(method,ScrollCaptureDiagnostics.fields("virtualId",id,"present",n!=null,
             "scrollable",n!=null && n.isScrollable(),"actions",n==null?0:n.getActions(),
             "childCount",n==null?0:n.getChildCount()));
@@ -31,7 +34,7 @@ final class ScrollAccessibilityProvider extends AccessibilityNodeProvider {
     }
     @Override public List<AccessibilityNodeInfo> findAccessibilityNodeInfosByText(String text,int id) {
         List<AccessibilityNodeInfo> nodes=delegate.findAccessibilityNodeInfosByText(text,id);
-        ScrollCaptureDiagnostics.record("virtual.findAccessibilityNodeInfosByText",ScrollCaptureDiagnostics.fields(
+        ScrollCaptureDiagnostics.gated("virtual.findAccessibilityNodeInfosByText",ScrollCaptureDiagnostics.fields(
             "virtualId",id,"count",nodes==null?0:nodes.size()));return nodes;
     }
     @Override public void addExtraDataToAccessibilityNodeInfo(int id,AccessibilityNodeInfo info,String key,Bundle args) {
