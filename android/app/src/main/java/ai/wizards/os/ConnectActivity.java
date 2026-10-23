@@ -63,10 +63,14 @@ public final class ConnectActivity extends Activity {
         body.setPadding(dp(20), dp(12), dp(20), dp(24));
         scroll.addView(body, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         root.setOnApplyWindowInsetsListener((v, in) -> {
-            android.graphics.Insets bars = in.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
-            int ime = in.getInsets(WindowInsets.Type.ime()).bottom;
-            scroll.setPadding(bars.left, bars.top, bars.right, Math.max(bars.bottom, ime));
-            return WindowInsets.CONSUMED;
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets bars = in.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                int ime = in.getInsets(WindowInsets.Type.ime()).bottom;
+                scroll.setPadding(bars.left, bars.top, bars.right, Math.max(bars.bottom, ime));
+                return WindowInsets.CONSUMED;
+            }
+            scroll.setPadding(in.getSystemWindowInsetLeft(), in.getSystemWindowInsetTop(), in.getSystemWindowInsetRight(), in.getSystemWindowInsetBottom());
+            return in.consumeSystemWindowInsets();
         });
 
         // Header: back (when there is a Wizard to go back to) + title, like a Settings sub-page.
