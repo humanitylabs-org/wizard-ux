@@ -30,7 +30,7 @@ import {adoptAppearance} from './store-appearance.js';
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set() };
+  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set(), access: new Map() };
   const key = a => `${a.id}|${a.repo || ''}`;
   const find = id => S.apps.find(a => key(a) === id) || S.apps.find(a => a.id === id);
   const selected = a => ({...a, ...preferredRelease(a,S.installed.get(key(a))), ...(a.releases || []).find(r => `${r.source}:${r.commit}` === S.selections.get(key(a))), releases:a.releases, conflict:a.conflict, alpha_badge:a.alpha_badge});
@@ -207,10 +207,16 @@ import {adoptAppearance} from './store-appearance.js';
   function showSheet(k) {
     const base = find(k); if (!base) return; const a = selected(base), id = routerId(a), c = S.router.get(id);
     const left = pending(c?.data);
+    // An app tagged `privacy: private` on a Wizard with no private agent: nobody can use it yet, so ask
+    // (James, 23 Oct 2026: "this is meant to be privacy first…").
+    const access = S.access.get(id), models = hasNeeds(c?.data);
+    const privacy = access?.needs_private_agent ? `<div class="pv-card" data-pv-app="${esc(id)}"><h3>Privacy first</h3>
+      <p class="mc-lede">${esc(a.name)} is meant to be private, and this Wizard has no private agent yet, so no agent can use it. Set up a private agent, or choose a non-private agent yourself.</p>
+      <div class="pv-acts"><button type="button" class="get big" data-pv-new>Set up private agent</button><button type="button" class="get" data-pv-choose>Choose an agent</button></div></div>` : '';
     $('sheet').innerHTML = `<div class="list-head"><button class="back" data-back aria-label="Back">‹</button><div><h2>${esc(a.name)} is installed</h2>
-      <p>${left ? `${left} feature${left === 1 ? '' : 's'} need${left === 1 ? 's' : ''} a model` : 'Every feature has a model'}</p></div></div>
-      <p class="mc-lede">Each feature was tested on one model. Connect that provider, or approve a swap to a model this Wizard already has.</p>
-      <div class="mc-list" data-mc-app="${esc(id)}">${c?.data ? routerRows(id, c.data, rctx()) : '<p class="empty">Checking connections…</p>'}</div>
+      <p>${models || !privacy ? (left ? `${left} feature${left === 1 ? '' : 's'} need${left === 1 ? 's' : ''} a model` : 'Every feature has a model') : 'Private app'}</p></div></div>
+      ${privacy}${models || !privacy ? `<p class="mc-lede">Each feature was tested on one model. Connect that provider, or approve a swap to a model this Wizard already has.</p>
+      <div class="mc-list" data-mc-app="${esc(id)}">${c?.data ? routerRows(id, c.data, rctx()) : '<p class="empty">Checking connections…</p>'}</div>` : ''}
       <div class="mc-done"><button type="button" class="get big" data-back>${left ? 'Decide later' : 'Done'}</button></div>`;
   }
   async function approve(btn) {
@@ -277,6 +283,10 @@ import {adoptAppearance} from './store-appearance.js';
   // Identifiers select a server-authorized release, never a browser-supplied install URL or ref.
   const INSTALL = DATA.replace(/store-data\/$/, 'store-install/');
 
+  // Which agents can use an installed app (#58), plus its optional privacy tag. Null when unknown.
+  async function appAccess(id) {
+    try { const r = await fetch('/wizard/v1/apps/' + encodeURIComponent(id) + '/agents', { credentials: 'same-origin', cache: 'no-store' }); return r.ok ? await r.json() : null; } catch (_) { return null; }
+  }
   async function install(a) {
     if (!a || architectureReason(a,S.architecture) || S.busy.has(a.id) || !['get','update','switch'].includes(status(a))) return;
     const operation = status(a)==='get'?'install':status(a);
@@ -302,9 +312,10 @@ import {adoptAppearance} from './store-appearance.js';
       const actual=S.installed.get(key(a));
       if(!actual || actual.conflict || actual.repo!==a.repo || actual.commit!==a.commit) throw new Error('Installation finished, but the selected release is not registered yet. Refresh to check.');
       // The Router reads the app's declaration once it is registered; any model needs open the install sheet.
-      const id = routerId(a), need = await routerNeeds(id); S.router.set(id, { ...need, at: Date.now() });
-      if (hasNeeds(need.data)) { if (top() !== 'sheet') push('sheet', key(a)); showSheet(key(a)); window.scrollTo(0, 0); }
-      else say('Find it in your apps.', true);
+      const id = routerId(a), [need, access] = await Promise.all([routerNeeds(id), appAccess(id)]); S.router.set(id, { ...need, at: Date.now() });
+      if (access) S.access.set(id, access);
+      if (hasNeeds(need.data) || access?.needs_private_agent) { if (top() !== 'sheet') push('sheet', key(a)); showSheet(key(a)); window.scrollTo(0, 0); }
+      else say(access?.privacy === 'private' ? 'Private: only your private agent can use it.' : 'Find it in your apps.', true);
     } catch (err) { say(err.message || 'Install failed.'); }
     finally { S.busy.delete(a.id); refresh(); }
   }
@@ -316,6 +327,10 @@ import {adoptAppearance} from './store-appearance.js';
       if(!['get','switch','update'].includes(state)) return;
       install(a); return; }
 
+    const pv = e.target.closest('[data-pv-new],[data-pv-choose]');
+    if (pv) { e.stopPropagation(); const id = pv.closest('[data-pv-app]')?.dataset.pvApp; if (!id) return;
+      if (framed) parent.postMessage({ type: 'wizard:app-route', id, ...(pv.matches('[data-pv-new]') ? { action: 'new-private-agent' } : {}) }, location.origin);
+      else toast('<b>Open Wizard to choose.</b>'); return; }
     const ap = e.target.closest('[data-mc-approve]'); if (ap) { e.stopPropagation(); approve(ap); return; }
     const cn = e.target.closest('[data-mc-connect]'); if (cn) { e.stopPropagation(); connect(cn); return; }
     const o = e.target.closest('[data-open]');

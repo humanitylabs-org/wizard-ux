@@ -169,3 +169,7 @@ html[data-color-scheme="light"] .mc-state.off { color: #b3261e; background: rgba
 .mc-wait { font-size: 13px; color: var(--ink-3); padding: 10px 0; }
 .mc-done { display: flex; justify-content: flex-end; margin-top: 18px; }
 .sheet-layer .list-head h2 { font-size: 22px; }
+/* Private app install prompt (James, 23 Oct 2026) */
+.pv-card { margin: 0 0 16px; padding: 14px 16px; border-radius: 16px; border: 1px solid color-mix(in srgb, var(--ink-2) 30%, transparent); background: color-mix(in srgb, var(--ink-2) 6%, transparent); }
+.pv-card h3 { margin: 0 0 6px; font-size: 16px; }
+.pv-acts { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
