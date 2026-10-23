@@ -132,6 +132,38 @@
 
 .st-title:focus, .st-page-head h3:focus { outline: none; }
 
+.ls-look fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.ls-look button { min-height: 48px; }
+.ls-look button:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
+.ls-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 16px; border: 1px solid var(--wz-border); border-radius: 16px; }
+.ls-tabs button { flex: 1; padding: 8px; border-radius: 12px; color: var(--wz-text-secondary); background: transparent; font: inherit; }
+.ls-tabs button[aria-pressed="true"] { background: var(--wz-accent-soft); color: var(--wz-text); }
+.ls-status { margin: 8px 0; color: var(--wz-text-secondary); font-size: 14px; overflow-wrap: anywhere; }
+.ls-status:empty { display: none; }
+.ls-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 12px; margin-top: 12px; }
+.ls-card { border: 1px solid var(--wz-border); border-radius: 18px; overflow: hidden; padding: 0; background: var(--wz-surface); color: var(--wz-text); text-align: left; min-width: 0; }
+.ls-card-body { display: grid; gap: 12px; padding: 14px; }
+.ls-card-body > b { font-size: 18px; overflow-wrap: anywhere; }
+.ls-preview { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--wz-surface-raised); }
+.ls-swatch { display: flex; align-items: center; justify-content: center; gap: 12px; background: var(--wz-accent-soft); }
+.ls-swatch i { width: 28px; height: 28px; border-radius: 50%; background: var(--wz-accent); }
+.ls-swatch i:nth-child(2) { background: var(--wz-text); }
+.ls-swatch i:nth-child(3) { background: var(--wz-text-muted); }
+.ls-author { display: flex; gap: 10px; align-items: center; font-size: 14px; overflow-wrap: anywhere; }
+.ls-author img, .ls-avatar { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 50%; background: var(--wz-accent-soft); }
+.ls-author small, .ls-stats { display: block; font-size: 12px; line-height: 1.5; color: var(--wz-text-secondary); }
+.ls-featured { color: var(--wz-accent); font-size: 12px; }
+.ls-detail { padding-bottom: 16px; overflow-wrap: anywhere; }
+.ls-detail > .ls-preview { border-radius: 16px; }
+.ls-detail > h3 { font-size: 24px; margin: 16px 0 12px; }
+.ls-detail > p { font-size: 15px; line-height: 1.5; }
+.ls-back { display: block; padding: 8px 12px; margin-bottom: 12px; color: var(--wz-text); background: var(--wz-surface); border-radius: 12px; }
+.ls-mine { padding: 12px 0; border-bottom: 1px solid var(--wz-border); }
+.ls-look > .st-actions { margin-bottom: 12px; }
+.ls-mine .st-row[aria-pressed="true"], .ls-look > .st-row[aria-pressed="true"] { border-color: var(--wz-accent); }
+/* An opaque, sandboxed demo is the only capture target, never the owner UI behind it. */
+.ls-demo { position: fixed; left: max(8px, calc((100vw - 340px) / 2)); top: max(8px, calc((100vh - 400px) / 2)); width: min(340px, calc(100vw - 16px)); height: min(400px, calc(100vh - 16px)); border: 0; z-index: 2147483647; background: var(--wz-base, var(--bg)); pointer-events: none; }
+
 /* Settings › Photos backup (core/photos-settings.js): one flat form, rows split by hairlines, no cards inside cards. */
 .st-group h4.ph-h { text-transform: none; letter-spacing: 0; font-size: 15px; font-weight: 650; color: var(--wz-text); }
 .ph { display: flex; flex-direction: column; }

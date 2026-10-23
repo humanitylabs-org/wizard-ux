@@ -987,6 +987,7 @@
   }
   function closeSettings() {
     if (setEl.hidden) return;
+    settingsView.dismiss();
     setEl.hidden = true;
     if (settingsFocus?.isConnected && settingsFocus.getClientRects().length) settingsFocus.focus({ preventScroll: true });
     else if (focused()) focusInside(focused().id);

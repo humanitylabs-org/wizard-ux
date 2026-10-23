@@ -203,10 +203,13 @@
     const btns = H.layouts.map(l => `<button type="button" class="ghost" data-layoutpick="${esc(l.id)}" aria-pressed="${l.id === cur}">${esc(l.name)}</button>`).join('');
     return `<div class="st-row static layout-row" data-layout-row><span class="st-ic">⦿</span><span class="st-tx"><b>Layout</b><small data-layoutdesc>${esc(L.desc)}</small></span><span class="ms-acts layout-acts">${btns}</span></div>`;
   }
-  register({ id: 'look', aliases: ['skin'], html() {
+  register({ id: 'look', aliases: ['skin'], html(ctx) {
     const S = window.WosSkin; if (!S) return '';
-    return lookHtml(S);
-  }, act(ctx, el, event) {
+    return window.WosSkinStore ? window.WosSkinStore.html(ctx, lookHtml(S)) : lookHtml(S);
+  }, enter: ctx => window.WosSkinStore?.enter(ctx), leave: ctx => window.WosSkinStore?.leave(ctx),
+  back: ctx => window.WosSkinStore?.back(ctx), input: (ctx, el) => window.WosSkinStore?.input(ctx, el),
+  deferRefresh: ctx => window.WosSkinStore?.deferRefresh(ctx), act(ctx, el, event) {
+    if (window.WosSkinStore?.act(ctx, el)) return true;
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
     const lp = el.closest('[data-layoutpick]');
@@ -293,7 +296,7 @@
   } });
   function mount(root, adapter) {
     root.classList.add('st-root'); root.dataset.settingsRoot = '';
-    const ctx = { ...adapter, root }, api = { render, focus, back, destroy, dispatch, context: ctx, get page() { return page; } };
+    const ctx = { ...adapter, root }, api = { render, focus, back, dismiss, destroy, dispatch, context: ctx, get page() { return page; } };
     let skinImportMessage = '', page = '', confirm = null;
     const desktop = adapter.shell === 'desktop';
     ctx.render = () => render(true);
@@ -340,6 +343,7 @@
       g?.scrollIntoView?.({ block: 'nearest' });
       (g?.querySelector('button:not(:disabled)') || root.querySelector(page ? '.st-page-head h3' : '.st-title'))?.focus({ preventScroll: true });
     }
+    function dismiss() { for (const f of features.values()) if (pageOf(f) === page) f.leave?.(ctx); confirm = null; }
     function back() {
       for (const f of features.values()) if (pageOf(f) === page && f.back?.(ctx)) return true;
       if (confirm) { if (!ctx.chatsBusy) { confirm = null; render(); root.querySelector('[data-chats-choice][aria-checked="true"]')?.focus(); } return true; }

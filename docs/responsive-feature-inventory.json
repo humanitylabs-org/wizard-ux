@@ -188,6 +188,7 @@
     "core/skin-frame.css",
     "core/skin-frame.js",
     "core/skin-host.js",
+    "core/skins-store.js",
     "core/skins.css",
     "core/skins.js",
     "core/status.js",
@@ -560,6 +561,10 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/skins-store.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Shared Settings Look: owner skin folders, verified Store, transient Try on and native publish"
     },
     "core/skins.js": {
       "loadedBy": [
