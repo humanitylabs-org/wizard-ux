@@ -8,8 +8,13 @@ test('Play removes installer permissions and every native installer component', 
   const manifest = read(root + 'play/AndroidManifest.xml');
   for (const permission of ['REQUEST_INSTALL_PACKAGES', 'UPDATE_PACKAGES_WITHOUT_USER_ACTION', 'ENFORCE_UPDATE_OWNERSHIP'])
     assert.match(manifest, new RegExp(permission + '" tools:node="remove"'));
-  for (const name of ['update.InstallReceiver', 'update.UpdateBoot', 'update.UpdateJob', 'update.ApkProvider', 'apps.AppsInstallReceiver', 'apps.AppsUpdateJob'])
-    assert.ok(manifest.includes(`android:name=".${name}" tools:node="remove"`), name);
+  const direct = read(root + 'sideload/AndroidManifest.xml');
+  const common = read(root + 'main/AndroidManifest.xml');
+  for (const name of ['update.InstallReceiver', 'update.UpdateBoot', 'update.UpdateJob', 'update.ApkProvider', 'apps.AppsInstallReceiver', 'apps.AppsUpdateJob']) {
+    assert.ok(direct.includes(`android:name=".${name}"`), name);
+    assert.ok(!common.includes(`android:name=".${name}"`), name);
+    assert.ok(!manifest.includes(`android:name=".${name}"`), name);
+  }
   const play = ['apps/AppsDistribution.java', 'update/UpdateChannel.java'].map(p => read(root + 'play/java/ai/wizards/os/' + p)).join('\n');
   assert.doesNotMatch(play, /PackageInstaller|latest\.json|UPDATE_SIGNER|ACTION_MANAGE_UNKNOWN_APP_SOURCES/);
   assert.match(play, /bridge\.openPlay\(pkg\)/);

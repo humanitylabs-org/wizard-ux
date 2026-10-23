@@ -4,12 +4,4 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" tools:node="remove" />
     <uses-permission android:name="android.permission.ENFORCE_UPDATE_OWNERSHIP" tools:node="remove" />
-    <application>
-        <receiver android:name=".update.InstallReceiver" tools:node="remove" />
-        <receiver android:name=".update.UpdateBoot" tools:node="remove" />
-        <service android:name=".update.UpdateJob" tools:node="remove" />
-        <provider android:name=".update.ApkProvider" tools:node="remove" />
-        <receiver android:name=".apps.AppsInstallReceiver" tools:node="remove" />
-        <service android:name=".apps.AppsUpdateJob" tools:node="remove" />
-    </application>
 </manifest>
