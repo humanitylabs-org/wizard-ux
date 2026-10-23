@@ -87,7 +87,8 @@ public class ConnectE2eTest {
             back(); foreground(); visible("Fixture home");
             device.findObject(By.text("Open overlay")).click(); visible("Fixture overlay");
             back(); visible("Fixture home"); foreground();
-            assertNull(device.findObject(By.text("Fixture overlay")));
+            // The overlay node can still be in the tree for a frame after Back; wait for it to go rather than racing it.
+            assertTrue("overlay closed by Back", device.wait(Until.gone(By.text("Fixture overlay")), 5000));
             assertEquals(fake.origin(), ServerSettings.origin(c));
             assertEquals(fake.origin(), ai.wizards.os.device.AppState.origin(c));
             assertEquals(fake.origin(), ai.wizards.os.mizel.MizelConfig.origin(c));
