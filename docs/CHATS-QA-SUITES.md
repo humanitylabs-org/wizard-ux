@@ -82,6 +82,7 @@ in screenshots/logs remain private; none are committed or attached to a PR.
 | qa-unified-chats | 47 / 0 |
 | qa-desktop | 55 / 0 |
 | qa-thread-back-race | 19 / 0 |
+| qa-mark-unread | 25 / 0 |
 | qa-skin-palettes | 28 / 0 |
 | qa-my-skin-script | 34 / 0 |
 | qa-own-views | 26 / 0 |

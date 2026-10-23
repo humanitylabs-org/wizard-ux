@@ -32,7 +32,11 @@ are covered. See `android/README.md` and `ios/README.md` for local configuration
 
 Every new or changed chat feature must add/update the canonical `wizard-agent-service/qa/agent-parity/features.json` entry and a main-versus-routed-thread behavioral test. Exercise a host-profile, container and restricted route as appropriate; shared renderer code alone is not parity proof. Keep browser and live evidence separate from fixture/unit passes. Never open existing private-agent sessions for QA; use disposable synthetic threads and block production mutations independently at browser and origin. Preserve the Back and Appearance contracts below.
 
-### Shared responsive feature contract
+### Reuse before build
+
+`docs/COMPONENTS.md` lists every shared capability by need: read it before building any UI, chat, auth, upload, settings, visual or per-agent-kind logic. Every PR body carries a `Reuse:` block (REUSE / EXTEND / NEW per capability, checked by CI). Extend a near-fit module instead of building beside it; NEW adds a module in `web/core/` plus a row in the same PR. `wizard-ui.css` is look only, never a chat. Every chat row serves every agent kind.
+
+# Shared responsive feature contract
 
 New cross-platform UX belongs in `web/core/`. Register it once, and both shells render it. A shell adapter may own layout, navigation and input (touch and the orb on the phone, keyboard and window manager on desktop). Each feature's markup, state and action dispatch exist once, in `web/core/`.
 

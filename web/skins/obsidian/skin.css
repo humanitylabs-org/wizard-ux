@@ -638,3 +638,136 @@ html[data-skin^="obsidian"] .rs-fuel.rs-empty .rs-gauge b { color: var(--amber, 
 html[data-skin^="obsidian"] .rs-fuel.rs-crit .rs-gauge .rs-arc { stroke: #e5484d; }
 html[data-skin^="obsidian"] .rs-fuel.rs-crit .rs-gauge :is(.rs-ndl path, .rs-hub) { fill: #e5484d; }
 html[data-skin^="obsidian"] .rs-fuel.rs-crit .rs-gauge b { color: #e5484d; }
+
+/* E / F once (first dial only) and muted: a legend, not a label on every gauge (Miguel, 23 Oct). */
+html[data-skin^="obsidian"] .rs-fuel .rs-gauge :is(.rs-e, .rs-f) { opacity: .5; font-weight: 600; }
+
+/* Devices sheet (Miguel's skins, 23 Oct): Agent devices with gauges, then Your devices / Client Wizards / Other as
+   online lights. Same quiet type as Home; no boxes inside boxes. */
+html[data-skin^="obsidian"] .rs-dv-wrap { display: flex; flex-direction: column; gap: 22px; padding: 4px 2px 18px; }
+html[data-skin^="obsidian"] .rs-dv-g h3 { margin: 0 0 8px; font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-dv-total { margin: -2px 0 10px; font-size: 13px; color: var(--wz-text, var(--ink)); font-variant-numeric: tabular-nums; }
+html[data-skin^="obsidian"] .rs-dv { padding: 10px 0 12px; border-top: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); }
+html[data-skin^="obsidian"] .rs-dv header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; min-width: 0; }
+html[data-skin^="obsidian"] .rs-dv header b { font-size: 14.5px; font-weight: 600; color: var(--wz-text, var(--ink)); white-space: nowrap; }
+html[data-skin^="obsidian"] .rs-dv header small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-dv .rs-dials { display: flex; justify-content: center; gap: 14px; }
+html[data-skin^="obsidian"] .rs-dv .rs-dial { --g: 58px; }
+html[data-skin^="obsidian"] .rs-dv-off { margin: 0; font-size: 12.5px; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] :is(.rs-dv, .rs-dv-net li) .rs-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 35%, transparent); align-self: center; }
+html[data-skin^="obsidian"] :is(.rs-dv.rs-st-online, .rs-dv-net li.rs-st-online) .rs-dot { background: var(--green, #4ade80); }
+html[data-skin^="obsidian"] .rs-dv.rs-st-stale .rs-dot { background: var(--amber, #f5b642); }
+html[data-skin^="obsidian"] .rs-dv-net { list-style: none; margin: 0; padding: 0; }
+html[data-skin^="obsidian"] .rs-dv-net li { display: flex; align-items: center; gap: 9px; padding: 9px 0; border-top: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); font-size: 14px; color: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .rs-dv-net li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-skin^="obsidian"] .rs-dv-net li small { font-size: 12px; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-dv-net li.rs-st-offline { opacity: .6; }
+html[data-skin^="obsidian"] .rs-dv-total { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+html[data-skin^="obsidian"] .rs-dv-total span { white-space: nowrap; }
+html[data-skin^="obsidian"] .rs-dv-role { margin: -4px 0 8px 15px; font-size: 12px; color: var(--wz-text-secondary, var(--ink-2)); }
+
+/* Capacity bars in the devices sheet (Miguel, 23 Oct): segment length = real capacity, fill = used. */
+html[data-skin^="obsidian"] .rs-caps { display: flex; flex-direction: column; gap: 14px; margin: 2px 0 14px; }
+html[data-skin^="obsidian"] .rs-cap-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 6px; font-size: 13px; }
+html[data-skin^="obsidian"] .rs-cap-h b { font-weight: 600; color: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .rs-cap-h span { color: var(--wz-text-secondary, var(--ink-2)); font-variant-numeric: tabular-nums; white-space: nowrap; }
+html[data-skin^="obsidian"] .rs-cap-bar { display: flex; gap: 3px; }
+html[data-skin^="obsidian"] .rs-cap-seg { position: relative; min-width: 26px; height: 30px; padding: 0; border: 0; border-radius: 7px; overflow: hidden; cursor: pointer; background: color-mix(in srgb, var(--ink) 13%, transparent); -webkit-tap-highlight-color: transparent; }
+html[data-skin^="obsidian"] .rs-cap-seg i { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--ink) 62%, transparent); transition: width .9s cubic-bezier(.33, 1, .68, 1); }
+html[data-skin^="obsidian"] .rs-cap-seg small { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 8px; font-size: 11px; font-weight: 600; color: var(--wz-text, var(--ink)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; mix-blend-mode: normal; text-shadow: 0 0 4px color-mix(in srgb, var(--bg) 85%, transparent); }
+html[data-skin^="obsidian"] .rs-cap-seg.rs-empty i { background: #d08a1e; }
+html[data-skin^="obsidian"] .rs-cap-seg.rs-crit i { background: #e5484d; }
+html[data-skin^="obsidian"] .rs-cap-seg:active { opacity: .8; }
+html[data-skin^="obsidian"] .rs-dv-ms { list-style: none; margin: 0; padding: 0; }
+html[data-skin^="obsidian"] .rs-dv-m { display: grid; grid-template-columns: auto 1fr; column-gap: 9px; row-gap: 2px; padding: 9px 6px; border-top: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); border-radius: 8px; transition: background .2s; }
+html[data-skin^="obsidian"] .rs-dv-m .rs-dot { grid-row: 1; margin-top: 5px; }
+html[data-skin^="obsidian"] .rs-dv-m span { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+html[data-skin^="obsidian"] .rs-dv-m span b { font-size: 14px; font-weight: 600; color: var(--wz-text, var(--ink)); white-space: nowrap; }
+html[data-skin^="obsidian"] .rs-dv-m span small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-dv-m em { grid-column: 2; font-style: normal; font-size: 12px; color: var(--wz-text-secondary, var(--ink-2)); font-variant-numeric: tabular-nums; }
+html[data-skin^="obsidian"] .rs-dv-m .rs-dot { width: 7px; height: 7px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 35%, transparent); }
+html[data-skin^="obsidian"] .rs-dv-m.rs-st-online .rs-dot { background: var(--green, #4ade80); }
+html[data-skin^="obsidian"] .rs-dv-m.rs-picked { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+html[data-skin^="obsidian"] .rs-cap-col { min-width: 30px; display: flex; flex-direction: column; gap: 4px; }
+html[data-skin^="obsidian"] .rs-cap-col .rs-cap-seg { width: 100%; height: 14px; border-radius: 5px; }
+html[data-skin^="obsidian"] .rs-cap-col small { font-size: 11px; font-weight: 500; color: var(--wz-text-secondary, var(--ink-2)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html[data-skin^="obsidian"] .rs-cap-bar { gap: 4px; }
+html[data-skin^="obsidian"] .device:has(.rs-sheet) .home-tools { visibility: hidden; }
+
+/* Home resources as bars (Miguel, 23 Oct): label | bar | value, one row each. AI first, then compute. Fill = what is left.
+   No panel; Landscapes gets a soft dark halo per row so it reads over bright photos. */
+html[data-skin^="obsidian"] [data-home-resources] .rs-barsw.rs-widget.wz-home-widget { display: flex; flex-direction: column; gap: 12px; width: min(100%, 340px); margin: 0 auto; padding: 0; background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-skin^="obsidian"] .rs-bg { display: flex; flex-direction: column; gap: 7px; }
+html[data-skin^="obsidian"] .rs-br { display: grid; grid-template-columns: 54px 1fr 58px; align-items: center; column-gap: 10px; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; -webkit-tap-highlight-color: transparent; }
+html[data-skin^="obsidian"] .rs-br:active { opacity: .7; }
+html[data-skin^="obsidian"] .rs-bl { font-size: 12px; font-weight: 500; color: var(--wz-text-secondary, var(--ink-2)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html[data-skin^="obsidian"] .rs-bv { font-size: 12px; font-weight: 600; text-align: right; color: var(--wz-text, var(--ink)); font-variant-numeric: tabular-nums; white-space: nowrap; }
+html[data-skin^="obsidian"] .rs-bt { display: flex; gap: 3px; height: 6px; }
+html[data-skin^="obsidian"] .rs-bs { position: relative; min-width: 8px; height: 100%; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--ink) 14%, transparent); }
+html[data-skin^="obsidian"] .rs-bf { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--wz-text, var(--ink)); transition: width 1.1s cubic-bezier(.33, 1, .68, 1); }
+html[data-skin^="obsidian"] .rs-bs.rs-empty .rs-bf, html[data-skin^="obsidian"] .rs-bv.rs-empty { background: #d08a1e; }
+html[data-skin^="obsidian"] .rs-bv.rs-empty { background: none; color: #d08a1e; }
+html[data-skin^="obsidian"] .rs-bs.rs-crit .rs-bf { background: #e5484d; }
+html[data-skin^="obsidian"] .rs-bv.rs-crit { color: #e5484d; }
+html[data-skin^="obsidian"] .rs-br-off .rs-bv { color: var(--wz-text-secondary, var(--ink-2)); text-decoration: underline; text-underline-offset: 2px; }
+html[data-skin^="obsidian"] .rs-br-off .rs-bs { background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink) 18%, transparent) 0 4px, transparent 4px 7px); }
+
+/* Home bars never clip at the corners (the widget base rounds and hides overflow). */
+html[data-skin^="obsidian"] [data-home-resources] .rs-barsw.rs-widget.wz-home-widget { overflow: visible; border-radius: 0; }
+
+/* Resources pop-up, quiet version (Miguel, 23 Oct): solid sheet so Home never ghosts through, bare back / refresh
+   icons, plain text tabs with no pill or divider, sentence-case section titles, no row dividers, a dot only when a
+   machine is offline. */
+html[data-skin^="obsidian"] .rs-sheet { background: var(--bg); border: 0; box-shadow: 0 18px 50px rgba(0, 0, 0, .28); -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-skin^="obsidian"] .device:has(.rs-sheet) [data-home-resources] { visibility: hidden; }
+html[data-skin^="obsidian"] .rs-detail-head { padding: 12px 10px 4px; gap: 6px; }
+html[data-skin^="obsidian"] .rs-detail-head button { width: 38px; height: 38px; background: none; border: 0; border-radius: 50%; font-size: 26px; color: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .rs-detail-head [data-res-refresh] { font-size: 19px; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-detail-head h2 { font-size: 17px; font-weight: 600; }
+html[data-skin^="obsidian"] .rs-tabs { gap: 18px; padding: 2px 20px 10px; border-bottom: 0; }
+html[data-skin^="obsidian"] .rs-tabs button { flex: none; padding: 6px 0; border: 0; border-radius: 0; background: none; font-size: 13.5px; font-weight: 500; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-tabs .selected { background: none; color: var(--wz-text, var(--ink)); font-weight: 650; box-shadow: inset 0 -2px 0 currentColor; }
+html[data-skin^="obsidian"] .rs-dv-wrap { padding: 6px 4px 18px; gap: 26px; }
+html[data-skin^="obsidian"] .rs-dv-g h3 { font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--wz-text, var(--ink)); margin-bottom: 10px; }
+html[data-skin^="obsidian"] :is(.rs-dv-m, .rs-dv-net li) { border-top: 0; padding: 7px 0; }
+html[data-skin^="obsidian"] :is(.rs-dv-m, .rs-dv-net li) .rs-dot { visibility: hidden; }
+html[data-skin^="obsidian"] :is(.rs-dv-m, .rs-dv-net li):is(.rs-st-offline, .rs-st-unreachable, .rs-st-stale) .rs-dot { visibility: visible; }
+html[data-skin^="obsidian"] .rs-dv-m { grid-template-columns: 0 1fr; column-gap: 0; }
+html[data-skin^="obsidian"] .rs-dv-net li { gap: 0; }
+html[data-skin^="obsidian"] .rs-dv-net li:is(.rs-st-offline) { gap: 8px; }
+html[data-skin^="obsidian"] .rs-dv-net li .rs-dot { width: 0; }
+html[data-skin^="obsidian"] .rs-dv-net li.rs-st-offline .rs-dot { width: 7px; }
+html[data-skin^="obsidian"] .rs-caps { gap: 16px; margin-bottom: 18px; }
+html[data-skin^="obsidian"] .rs-cap-h { font-size: 12.5px; }
+html[data-skin^="obsidian"] .rs-cap-h b { font-weight: 500; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-cap-h span { color: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .device:has(.rs-sheet) .home :is(.constellation, .home-attn) { visibility: hidden; }
+html[data-skin^="obsidian"] .rs-detail-head button:focus:not(:focus-visible) { outline: none; box-shadow: none; }
+html[data-skin^="obsidian"] .rs-detail-head button { outline-offset: 0; }
+html[data-skin^="obsidian"][data-shell="phone"] .rs-detail-head button:focus { outline: none; box-shadow: none; }
+
+/* Home: AI and Computers as two clearly separate blocks (Miguel, 23 Oct). Each block has a small heading; compute
+   bars are stacked by machine, each machine in its own colour with a legend. Warnings stay amber/red. */
+html[data-skin^="obsidian"] [data-home-resources] .rs-barsw.rs-widget.wz-home-widget { gap: 22px; }
+html[data-skin^="obsidian"] .rs-gh { display: flex; align-items: baseline; gap: 6px; margin: 0 0 2px; font-size: 11px; }
+html[data-skin^="obsidian"] .rs-gh b { font-weight: 700; letter-spacing: .04em; color: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .rs-gh span { color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-bg-hw { padding-top: 14px; border-top: 1px solid color-mix(in srgb, var(--ink) 16%, transparent); }
+html[data-skin^="obsidian"] .rs-lg { display: flex; gap: 14px; margin: 0 0 3px; font-size: 11px; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-lg span { display: inline-flex; align-items: center; gap: 5px; }
+html[data-skin^="obsidian"] .rs-lg i { width: 8px; height: 8px; border-radius: 2px; background: var(--dc); }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bt { height: 9px; gap: 2px; }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bs { border-radius: 2px; background: color-mix(in srgb, var(--dc) 22%, transparent); }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bs:first-child { border-radius: 4px 2px 2px 4px; }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bs:last-child { border-radius: 2px 4px 4px 2px; }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bs .rs-bf { background: var(--dc); }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bs.rs-empty .rs-bf { background: #d08a1e; }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bs.rs-crit .rs-bf { background: #e5484d; }
+html[data-skin="obsidian"] .rs-d0 { --dc: #f4f4f5; }
+html[data-skin="obsidian"] .rs-d1 { --dc: #7dd3fc; }
+html[data-skin="obsidian"] .rs-d2 { --dc: #c4b5fd; }
+html[data-skin="obsidian"] .rs-d3 { --dc: #86efac; }
+html[data-skin="obsidian-light"] .rs-d0 { --dc: #18181b; }
+html[data-skin="obsidian-light"] .rs-d1 { --dc: #0284c7; }
+html[data-skin="obsidian-light"] .rs-d2 { --dc: #7c3aed; }
+html[data-skin="obsidian-light"] .rs-d3 { --dc: #16a34a; }

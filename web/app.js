@@ -539,7 +539,7 @@
   function openOverview(mode) {
     if (!ovEl) { ovEl = document.createElement('div'); ovEl.id = 'overview'; ovEl.className = 'ov'; device.appendChild(ovEl); bindOverview(ovEl); }
     closeSheets(true); if (LINKS && LINKS.isOpen()) LINKS.close();
-    const pill = mode === 'pill' && oursSkin();
+    const pill = mode === 'pill' && (oursSkin() || orbUpVar() === 'pill');
     if (!ovEl.classList.contains('open')) { ovEl.classList.toggle('ov-pill', pill); device.classList.toggle('ov-pill-open', pill); }
     const wasOpen = ovEl.classList.contains('open');
     renderOverview(); void ovEl.offsetWidth;
@@ -1384,6 +1384,11 @@
    * Same order as the App Store: Apps = anything with a screen you use; Wizard apps = backend-only apps your agent uses
    * (tap = its settings sheet); Agents = agent chats + the Agents app; Connectors = sign-ins to another service. James's skins keep his layout. */
   const oursSkin = () => ['obsidian', 'obsidian-light', 'landscapes'].includes(document.documentElement.dataset.skin || '');
+  /* Swipe up on the orb opens Desks instead of Apps: Miguel's skins always; any other skin when its CSS (or the owner's
+   * My skin) sets `--wos-orb-swipe-up` on <html>: `desks` = the regular overview, `pill` = Miguel's pill panel (the skin
+   * or My skin then carries the .ov-pill styling, as Miguel's skin.css does). */
+  const orbUpVar = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-orb-swipe-up').trim(); } catch (_) { return ''; } };
+  const orbUpDesks = () => oursSkin() || ['desks', 'pill'].includes(orbUpVar());
   const CONNECTOR_IDS = new Set(['wizard-chatgpt', 'wizard-claude', 'wizard-tinfoil', 'wizard-cloudflare']);
   const isConnector = a => CONNECTOR_IDS.has(a.id) || /^(connect|sign in to)\b/i.test(a.desc || '');
   /* System apps: the defaults Wizard OS ships for its parking spots (wizard-os docs/SYSTEM_APPS.md): files,
@@ -2939,9 +2944,17 @@
       txPill('↻', 'Waiting to send · recording kept', 'agent', 'Couldn’t reach Wizard · retrying'); txHide(2600);
     } finally { if(kind==='command')restoreReply(); }
   }
-  // The tap that starts recording must not also press an arc button: the arc fans out
-  // from under the finger, so the same tap's click would land on it mid-animation.
-  $('#voice').addEventListener('click', e => { if (e.target.closest('.arc') && performance.now() - (V.onAt || 0) < 450) { e.stopPropagation(); e.preventDefault(); } }, true);
+  // The tap that starts recording must not also press an arc button: the arc fans out from under the finger, so the
+  // same tap's click lands on it (Attach is on top, so the file picker opened). A fixed time window failed on a busy
+  // phone, where that click arrives late (James, 23 Oct 2026). An arc button now takes a pointer click only when the
+  // press also started on it; keyboard and programmatic clicks (detail 0) are untouched.
+  let arcPress = null;
+  window.addEventListener('pointerdown', e => { arcPress = e.target?.closest?.('.arc') || null; }, true);
+  $('#voice').addEventListener('click', e => {
+    const arc = e.target.closest('.arc'); if (!arc) return;
+    const pressed = arcPress === arc; arcPress = null;
+    if (e.detail > 0 && !pressed) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
   $('#arcCancel').addEventListener('click', () => cancelVoice());
   $('#arcPause').addEventListener('click', () => {
     if(parking)return;
@@ -3320,7 +3333,7 @@
     e.preventDefault(); try { orbWrap.setPointerCapture(e.pointerId); } catch (_) {} closeMenu();
     G = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), mode: 'pending', dx: 0, dy: 0, aim: null };
     Orb.press(true);
-    G.corner = device.classList.contains('orb-corner'); G.ovWas = pillOvOpen();
+    G.corner = device.classList.contains('orb-corner'); G.ovWas = pillOvOpen(); G.upDesks = orbUpDesks();
     if (mayHoldCommand()) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); if(V.state==='idle'||(V.state==='paused'&&V.replyTo)){vib(18);G.start=startVoice('command');}else{G.refused=true;toast('⏸','Pause your reply before a command');} } }, 380);
   });
   // Slide-to-aim is retired (James, 11 Oct 2026): a held command already opens on the desk beside this one, so
@@ -3359,7 +3372,7 @@
       placeTrack(dx * 1.1, false);
       orbWrap.dataset.dir = Math.abs(G.dx) > 50 ? (G.dx < 0 ? (idx < desks.length - 1 ? `${clip(deskName(idx + 1), 16)} →` : atPickerEnd() ? '' : 'New desk →') : (idx > 0 ? `← ${clip(deskName(idx - 1), 16)}` : '')) : '';
     } else if (G.mode === 'v') {
-      if (oursSkin() && !sheet) {
+      if (G.upDesks && !sheet) {
         // Our skins: up grows the pill into the desks panel (once, mid-swipe); down while it is open closes it.
         if (G.dy < -40 && !pillOvOpen() && !G.ovWas) { G.ovOpened = true; openOverview('pill'); }
         orbWrap.dataset.dir = '';
@@ -3397,7 +3410,7 @@
     // Our skins, desks panel open: the orb is its handle. Any tap or swipe on it closes the panel (nothing else fires).
     if (g.ovWas && pillOvOpen()) { if (!cancelled && g.mode !== 'hold') { closeOverview(); return; } }
     if (g.ovOpened) { if (cancelled) closeOverview(); return; }
-    if (oursSkin() && g.mode === 'v' && !sheet) { if (g.dy < -70 || g.dy / vt < -.55) openOverview('pill'); else if (!cancelled && V.state === 'idle' && (g.dy > 18 || (g.dy > 8 && g.dy / vt > .3))) setZen(true); return; }
+    if (g.upDesks && g.mode === 'v' && !sheet) { if (g.dy < -70 || g.dy / vt < -.55) openOverview('pill'); else if (!cancelled && V.state === 'idle' && (g.dy > 18 || (g.dy > 8 && g.dy / vt > .3))) setZen(true); return; }
     if (g.mode === 'pending' && !cancelled) {
       if (sheet) return closeSheets();
       if(V.admitting){V.admitSend=true;return;}
@@ -3520,6 +3533,7 @@
     { const t = window.WosTour?.back(); if (t) { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } return t; } } // the first-run tour and the Help sheet sit above everything
     { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
     if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet sits above the windows
+    if (window.WosBoomerang?.back()) return 'boomerang'; // the Boomerang picker sits above the thread it was opened from
     // Explicit bypass capture follows the retain-on-Back contract; ordinary recordings keep navigating.
     if (V.snap?.general && ['listen', 'command'].includes(V.state)) { V.stopAsked = true; pauseCommandCapture(); return 'recording'; }
     if (document.querySelector('#txChips [data-handoff], #txChips [data-hold]')) { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(0); return 'draft'; }

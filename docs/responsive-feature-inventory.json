@@ -139,6 +139,7 @@
     "core/chat-errors.js",
     "core/chat-kit.js",
     "core/chat-models.js",
+    "core/chat-pins.js",
     "core/chat-power.css",
     "core/chat-power.js",
     "core/chat-search.js",
@@ -171,6 +172,9 @@
     "core/resources.css",
     "core/resources.js",
     "core/scenery.js",
+    "core/scheduled-reminders.css",
+    "core/scheduled-reminders.js",
+    "core/schedules.js",
     "core/screen-capture.js",
     "core/screen-text.js",
     "core/sel-menu.css",
@@ -319,6 +323,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/chat-pins.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Pinned chats, synced per owner through ui-preferences pinnedChats"
+    },
     "core/chat-models.js": {
       "loadedBy": [
         "phone",
@@ -424,6 +435,17 @@
         "desktop"
       ],
       "note": "Direct entrypoint import; Settings → Microphone shows only where WizardOSDevice.micPolicy exists"
+    },
+    "core/scheduled-reminders.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Boomerang picker and return banner on the shared scheduler (kind return)"
+    },
+    "core/schedules.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Shared Settings → Schedules; hidden when Agent Service schedules returns 404"
     },
     "core/os-updates.js": {
       "loadedBy": [

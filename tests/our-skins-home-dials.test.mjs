@@ -12,33 +12,9 @@ function render(skin) {
   return ctx.WosResources.home();
 }
 
-test('Miguel skins get the compact dial strip, James skins keep the meters', () => {
-  for (const s of ['obsidian', 'obsidian-light', 'landscapes']) {
-    const h = render(s);
-    assert.match(h, /rs-dialed/, s); assert.doesNotMatch(h, /rs-bar|rs-warning-note|rs-health-alert/, s);
-  }
-  for (const s of ['nebula', 'grove', 'tide', 'ember', 'signal']) {
-    const h = render(s);
-    assert.doesNotMatch(h, /rs-dialed/, s); assert.match(h, /rs-zone/, s);
-  }
-});
-
 test('home dial styles live only in our skin packages', () => {
   for (const f of ['obsidian', 'landscapes']) assert.match(fs.readFileSync(new URL(`../web/skins/${f}/skin.css`, import.meta.url), 'utf8'), /\.rs-dialed/);
   for (const f of ['../web/styles.css', '../web/core/resources.css', '../web/core/skins.css']) assert.doesNotMatch(fs.readFileSync(new URL(f, import.meta.url), 'utf8'), /\.rs-dialed/);
-});
-
-test('Miguel skins draw speedometer gauges that start at zero and sit at the top on phone', () => {
-  for (const s of ['obsidian', 'obsidian-light', 'landscapes']) {
-    const h = render(s);
-    assert.match(h, /class="rs-ndl"/, s); assert.match(h, /class="rs-tick rs-major"/, s);
-    assert.match(h, /--a:rotate\(-120\.0deg\)/, `${s}: needle starts at zero`);
-  }
-  for (const f of ['obsidian', 'landscapes']) {
-    const css = fs.readFileSync(new URL(`../web/skins/${f}/skin.css`, import.meta.url), 'utf8');
-    assert.match(css, /\[data-shell="phone"\] \.home \[data-home-resources\] \{ order: -1;/, f);
-    assert.match(css, /\[data-home-resources\] \.rs-dialed\.rs-widget\.wz-home-widget \{ background: none; border: 0;/, `${f}: no panel`);
-  }
 });
 
 test('Miguel skins: bare gear, round Ready/Working, see-through dock', () => {
@@ -60,26 +36,52 @@ test('Ready / Working show glyph + one dot per chat only on Miguel skins', () =>
   for (const s of ['nebula', 'grove', 'tide', 'ember', 'signal']) assert.equal(run(s)('ready', 3), '', s);
 });
 
-test('a credit account renders as a fuel gauge with dollars left', () => {
-  const injected = src.replace("ai:null,aiAt:0", "ai:{providers:[{id:'tinfoil',provider:'tinfoil',providerName:'Tinfoil',status:'ok',limits:[],paid:{type:'credits',enabled:true,currency:'USD',exponent:2,balanceMinor:450,limitMinor:2000}}]},aiAt:0");
-  assert.notEqual(injected, src, 'state literal found');
+test('devices sheet draws capacity bars sized by real capacity', () => {
+  const injected = src.replace("devices:null,devicesAt:0", "devices:{devices:[{id:'this',kind:'this',group:'agent',name:'Big',status:'online',cpus:8,cpu:10,memory:50,memoryTotalGB:32,disks:[{label:'System disk',sizeGB:1000,freeGB:500,pct:50}]},{id:'s',kind:'ssh',group:'agent',name:'Small',status:'online',cpus:4,cpu:95,memory:20,memoryTotalGB:8,disks:[{label:'System disk',sizeGB:250,freeGB:200,pct:20}]}],network:{available:true,peers:[]}},devicesAt:0");
+  assert.notEqual(injected, src, 'devices state literal found');
   const ctx = { window: {}, document: { documentElement: { dataset: { skin: 'obsidian' } }, addEventListener() {}, querySelectorAll: () => [], hidden: false },
     localStorage: { getItem: () => null, setItem() {} }, queueMicrotask() {}, setTimeout, clearTimeout, fetch: async () => ({ ok: false }), AbortController };
   ctx.window = ctx; ctx.window.addEventListener = () => {};
-  vm.runInNewContext(injected, ctx);
-  const h = ctx.WosResources.home();
-  assert.match(h, /rs-dial  rs-fuel rs-empty|rs-dial rs-fuel rs-empty/);
-  assert.match(h, /data-money="\$4\.50"/); assert.match(h, /class="rs-e">E</); assert.match(h, /Tinfoil \$4\.50 credit left/);
+  vm.runInNewContext(injected.replace('window.WosResources={', 'globalThis.__dv=groupedDevicesHtml;window.WosResources={'), ctx);
+  const h = ctx.__dv();
+  assert.match(h, /data-cap="mem"[\s\S]*style="flex:32 1 0"[\s\S]*style="flex:8 1 0"/);
+  assert.match(h, /22 GB free of 40 GB/); assert.match(h, /700 GB free of 1.3 TB/);
+  assert.match(h, /data-cap="cpu"[\s\S]*rs-cap-seg rs-empty rs-crit/);
 });
 
-test('every dial shows what is left as a fuel gauge, computer and AI on separate lines', () => {
-  const injected = src.replace("server:null,serverAt:0", "server:{cpu:30,memory:95,disk:93},serverAt:0").replace("ai:null,aiAt:0", "ai:{providers:[{id:'claude:x',provider:'claude',providerName:'Claude',status:'ok',limits:[{id:'w',label:'Weekly',remainingPercent:58}]}]},aiAt:0");
-  const ctx = { window: {}, document: { documentElement: { dataset: { skin: 'landscapes' } }, addEventListener() {}, querySelectorAll: () => [], hidden: false },
+function homeWith(skin, state) {
+  let s = src;
+  for (const [a, b] of state) { assert.ok(s.includes(a), a); s = s.replace(a, b); }
+  const ctx = { window: {}, document: { documentElement: { dataset: { skin } }, addEventListener() {}, querySelectorAll: () => [], hidden: false },
     localStorage: { getItem: () => null, setItem() {} }, queueMicrotask() {}, setTimeout, clearTimeout, fetch: async () => ({ ok: false }), AbortController };
   ctx.window = ctx; ctx.window.addEventListener = () => {};
-  vm.runInNewContext(injected, ctx);
-  const h = ctx.WosResources.home();
-  assert.match(h, /aria-label="CPU 70% left"/); assert.match(h, /rs-fuel rs-empty rs-crit"[^>]*data-k="Memory"/);
-  assert.match(h, /aria-label="Claude 58% left"/); assert.equal((h.match(/class="rs-e">E</g) || []).length, 4);
-  assert.equal((h.match(/class="rs-dials"/g) || []).length, 2);
+  vm.runInNewContext(s, ctx); return ctx.WosResources.home();
+}
+const STATE = [["server:null,serverAt:0", "server:{cpu:30,memory:50,disk:93,diskSize:200},serverAt:0"],
+  ["ai:null,aiAt:0", "ai:{providers:[{id:'claude:x',provider:'claude',providerName:'Claude',status:'ok',limits:[{id:'w',label:'Weekly',remainingPercent:58}]},{id:'tinfoil',provider:'tinfoil',providerName:'Tinfoil',status:'ok',limits:[],paid:{type:'credits',enabled:true,currency:'USD',exponent:2,balanceMinor:450,limitMinor:2000}}]},aiAt:0"],
+  ["devices:null,devicesAt:0", "devices:{devices:[{id:'this',kind:'this',group:'agent',name:'Box',status:'online',cpus:4,cpu:30,memory:50,memoryTotalGB:16,disks:[{sizeGB:200,freeGB:14,pct:93}]},{id:'s',kind:'ssh',group:'agent',name:'Laptop',status:'online',cpus:4,cpu:5,memory:40,memoryTotalGB:8,disks:[{sizeGB:475,freeGB:400,pct:15}]}],network:{available:true,peers:[]}},devicesAt:0"]];
+
+test('Miguel skins show Home resources as bars of what is left; James skins keep the meters', () => {
+  for (const s of ['obsidian', 'obsidian-light', 'landscapes']) {
+    const h = homeWith(s, STATE);
+    assert.match(h, /rs-barsw/, s); assert.doesNotMatch(h, /rs-dial|rs-bar"|rs-warning-note/, s);
+    assert.ok(h.indexOf('aria-label="AI week left"') < h.indexOf('aria-label="Computer left"'), `${s}: AI first`);
+  }
+  for (const s of ['nebula', 'grove', 'tide', 'ember', 'signal']) { const h = homeWith(s, STATE); assert.doesNotMatch(h, /rs-barsw/, s); assert.match(h, /rs-zone/, s); }
+});
+
+test('compute bars split by machine capacity; AI and credit show what is left', () => {
+  const h = homeWith('landscapes', STATE);
+  assert.match(h, /aria-label="Claude 58% left"/); assert.match(h, /aria-label="Tinfoil \$4\.50 left"/);
+  assert.match(h, /data-k="hw:mem"[\s\S]*?flex:16 1 0[\s\S]*?flex:8 1 0/);
+  assert.match(h, /data-k="hw:disk"[\s\S]*?rs-bs rs-crit rs-d0" style="flex:200 1 0"/);
+  assert.match(h, /aria-label="Memory 13 GB left"/);
+  assert.match(h, /data-w="7"/, 'disk fill = 7% left');
+});
+
+test('Home separates AI and Computers, colours compute segments by machine with a legend', () => {
+  const h = homeWith('obsidian', STATE);
+  assert.match(h, /rs-bg rs-bg-ai[\s\S]*<b>AI<\/b>[\s\S]*rs-bg rs-bg-hw[\s\S]*<b>Computers<\/b>/);
+  assert.match(h, /class="rs-lg"><span class="rs-d0"><i><\/i>Box<\/span><span class="rs-d1"><i><\/i>Laptop/);
+  assert.match(h, /data-k="hw:mem"[\s\S]*?rs-bs rs-d0[\s\S]*?rs-bs rs-d1/);
 });
