@@ -78,7 +78,7 @@ const threadOpen = (p, id) => p.evaluate(id => [...document.querySelectorAll('[d
         await p.locator('.ch-tacts [data-chact="boomerang"]:visible').click();
         await p.locator('.boom-sheet .boom-card').waitFor();
         const pick = await p.evaluate(() => { const c = document.querySelector('.boom-card'), r = c.getBoundingClientRect(); return { title: c.querySelector('#boom-title')?.textContent, presets: c.querySelectorAll('[data-boom-preset]').length, minutes: c.querySelector('input[type=time]')?.step, zone: c.querySelector('select[name=timezone]')?.value, w: r.width, right: r.right, vw: innerWidth }; });
-        ok(pick.title === 'Boomerang this thread' && pick.presets >= 6 && pick.minutes === '60' && /\//.test(pick.zone) && pick.right <= pick.vw, `${L}: compact picker: quick choices, exact minutes, visible zone, fits 390px`, pick);
+        ok(pick.title === 'Recall' && pick.presets >= 6 && pick.minutes === '60' && /\//.test(pick.zone) && pick.right <= pick.vw, `${L}: compact Recall picker: quick choices, exact minutes, visible zone, fits 390px`, pick);
         await p.screenshot({ path: path.join(OUT, `${skin}-phone-picker.png`) });
         // Back closes the picker, never the thread or the app.
         const did = await back(p, false);
@@ -92,11 +92,11 @@ const threadOpen = (p, id) => p.evaluate(id => [...document.querySelectorAll('[d
         await p.locator('.boom-banner').waitFor();
         const post = st.posts.at(-1);
         ok(post?.kind === 'return' && post.thread === T[0].id && post.target?.message === null && post.when?.once && !post.body, `${L}: saved as a scheduler return job on the thread`, post);
-        ok(/Boomerang set/.test(await p.locator('.boom-banner').innerText()), `${L}: banner says it is set`);
+        ok(/Recall/.test(await p.locator('.boom-banner').innerText()) && /Returns .+ at .+/.test(await p.locator('.boom-banner').innerText()), `${L}: Recall confirmation shows its actual return date and time`);
         // ---- Boomerang one message.
         await p.locator('.msg.a [data-mboom]:visible').first().click();
         await p.locator('.boom-card').waitFor();
-        ok(await p.locator('#boom-title').innerText() === 'Boomerang this message', `${L}: message picker`);
+        ok(await p.locator('#boom-title').innerText() === 'Recall', `${L}: message Recall picker`);
         await p.locator('.boom-card [data-boom-note-toggle]').click(); await p.locator('.boom-card textarea[name=note], .boom-card input[name=note]').fill('Check the price');
         await p.locator('.boom-card [type=submit]').click(); await sleep(400);
         const mpost = st.posts.at(-1);
@@ -105,7 +105,7 @@ const threadOpen = (p, id) => p.evaluate(id => [...document.querySelectorAll('[d
         st.fire(st.schedules.at(-1).id);
         await p.evaluate(() => window.WosBoomerang.refresh()); await sleep(400);
         const ban = await p.locator('.boom-banner').innerText();
-        ok(/Boomerang is back/.test(ban) && /Check the price/.test(ban), `${L}: returned banner with the note`, ban);
+        ok(/Recall returned/.test(ban) && /Check the price/.test(ban), `${L}: returned Recall banner with the note`, ban);
         await p.screenshot({ path: path.join(OUT, `${skin}-phone-banner.png`) });
         await p.locator('.boom-banner [data-boom-open]').click(); await sleep(300);
         ok(await p.locator('.msg.a.boom-flash').count() === 1, `${L}: Show message lands on the exact reply`);

@@ -1,4 +1,4 @@
-/* Boomerang: hand a thread, or one message in it, back to yourself at a set time. Shared by phone and desktop.
+/* Recall: hand a thread, or one message in it, back to yourself at a set time. Shared by phone and desktop.
  * Timing, storage and delivery are the one Wizard scheduler (/wizard/v1/schedules, kind "return"): it never runs
  * a prompt. When it fires, the thread comes back to the top of Ready with a banner, the phone's reply watcher posts
  * a notification for the watch id wzb_<schedule id>, and an open desktop shows a system notification.
@@ -26,7 +26,7 @@
   const validZone=z=>{try{new Intl.DateTimeFormat('en',{timeZone:z}).format();return Boolean(z)}catch{return false}};
   const zones=()=>[DEFAULT_ZONE,Intl.DateTimeFormat().resolvedOptions().timeZone,'UTC','America/New_York','Europe/London'].filter((z,i,a)=>validZone(z)&&a.indexOf(z)===i);
   const zoneOptions=selected=>zones().map(z=>`<option value="${esc(z)}"${z===selected?' selected':''}>${esc(z)}</option>`).join('');
-  const req=async(path,init={})=>{const r=await fetch(path,{cache:'no-store',credentials:'same-origin',...init});let p={};try{p=await r.json()}catch{}if(!r.ok)throw new Error(r.status===404?'This Wizard needs an update for Boomerang.':p.error?.message||p.error||`HTTP ${r.status}`);return p};
+  const req=async(path,init={})=>{const r=await fetch(path,{cache:'no-store',credentials:'same-origin',...init});let p={};try{p=await r.json()}catch{}if(!r.ok)throw new Error(r.status===404?'This Wizard needs an update for Recall.':p.error?.message||p.error||`HTTP ${r.status}`);return p};
   // A scheduler job of kind "return", in the picker's own shape.
   const fromJob=j=>({id:j.id,session_id:j.thread,due_at:j.when?.once||j.nextRun,timezone:validZone(j.timezone)?j.timezone:DEFAULT_ZONE,note:j.prompt||'',
     anchor_at:j.target?.message??null,target_kind:j.target?.message!=null?'message':'thread',context:j.target?.excerpt||String(j.name||'').replace(/^Boomerang · /,''),
@@ -35,7 +35,7 @@
   const markSeen=ids=>{try{localStorage.setItem(SEEN_STORE,JSON.stringify([...ids].slice(-200)))}catch{}};
   const DEV=()=>{const d=window.WizardOSDevice;return d&&typeof d.watchRun==='function'?d:null};
   const live=()=>window.WizLive||null;
-  const titleOf=r=>live()?.session?.(r.session_id)?.title||r.context||'Boomerang';
+  const titleOf=r=>live()?.session?.(r.session_id)?.title||r.context||'Recall';
   const openThread=sid=>{const href=location.pathname+'?session='+encodeURIComponent(sid);if(!window.WizCore?.deeplink?.route(href))location.href=href};
   /* The phone app's reply watcher polls /wizard/hermes/v1/runs/wzb_<id>; the scheduler answers "completed" once the
    * thread is back, and the watcher notifies with a tap that opens the thread. Re-armed while the app is used, so a
@@ -44,7 +44,7 @@
     const d=DEV();if(!d||typeof d.watchRun!=='function'||r.status!=='scheduled')return;
     const s=live()?.session?.(r.session_id);if(!force&&s&&['submitting','queued','running','stopping','waiting_for_approval'].includes(s.status))return;
     if(!force&&Date.now()-(watchedAt.get(r.id)||0)<30*60000)return;
-    try{d.watchRun(r.session_id,WATCH+r.id,('🪃 '+titleOf(r)).slice(0,60));watchedAt.set(r.id,Date.now())}catch{}
+    try{d.watchRun(r.session_id,WATCH+r.id,('🪄 '+titleOf(r)).slice(0,60));watchedAt.set(r.id,Date.now())}catch{}
   }
   // Something came back: bring an archived or deferred thread back to Ready, and tell the owner on this screen.
   function arrived(list){
@@ -57,7 +57,7 @@
       const text=r.note||r.context||'Back for you';
       try{window.dispatchEvent(new CustomEvent('wos:boomerang-back',{detail:{id:r.id,session:r.session_id,title:titleOf(r)}}))}catch{}
       if(!DEV()&&typeof Notification==='function'&&Notification.permission==='granted'){
-        try{const n=new Notification('🪃 '+titleOf(r),{body:text,tag:'wzb-'+r.id});n.onclick=()=>{try{window.focus()}catch{}openThread(r.session_id);n.close()}}catch{}
+        try{const n=new Notification('🪄 '+titleOf(r),{body:text,tag:'wzb-'+r.id});n.onclick=()=>{try{window.focus()}catch{}openThread(r.session_id);n.close()}}catch{}
       }
     }
     markSeen(before);
@@ -99,9 +99,10 @@
   function shiftCalendar(form,months){let y=+form.elements['cal-year'].value,m=+form.elements['cal-month'].value+months;if(m<1){m=12;y--}if(m>12){m=1;y++}form.elements['cal-year'].innerHTML=years(y);form.elements['cal-year'].value=String(y);form.elements['cal-month'].value=String(m);renderCalendar(form)}
   function close(){if(!sheet)return false;const old=sheet;sheet=null;old.remove();restoreFocus?.focus?.({preventScroll:true});restoreFocus=null;return true}
   function back(){return close()?'boomerang':false}
+  function returnLabel(r){const d=new Date(r.due_at),date=d.toLocaleDateString([],{dateStyle:'medium',timeZone:r.timezone}),time=d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit',timeZone:r.timezone});return `Returns ${date} at ${time}`}
   function open(opts,existing=null){
     close();restoreFocus=document.activeElement;const selectedZone=validZone(existing?.timezone)?existing.timezone:DEFAULT_ZONE,ep=existing?parts(Date.parse(existing.due_at),selectedZone):null,p=existing?{date:dateString(ep.y,ep.m,ep.d),time:`${pad(ep.h)}:${pad(ep.min)}`}:preset('tomorrow-am',selectedZone),hasNote=Boolean(existing?.note||opts.note);
-    sheet=document.createElement('div');sheet.className='boom-sheet';sheet.innerHTML=`<form class="boom-card" data-boom-form role="dialog" aria-modal="true" aria-labelledby="boom-title"><header><span aria-hidden="true">🪃</span><b id="boom-title">${existing?(existing.status==='due'?'Boomerang again':'Change Boomerang'):opts.targetKind==='message'?'Boomerang this message':'Boomerang this thread'}</b><button type="button" data-boom-close aria-label="Close">×</button></header><p class="boom-context">${esc(opts.context||'This thread')}</p><section class="boom-quick" aria-labelledby="boom-quick-title"><h3 id="boom-quick-title">Quick choices</h3><div class="boom-presets">${presetButtons(selectedZone)}</div></section><section class="boom-exact" aria-labelledby="boom-exact-title"><h3 id="boom-exact-title">Exact date &amp; time</h3><div class="boom-fields"><label>Date<span class="boom-date-control"><input required type="date" name="date" value="${p.date}"><button type="button" data-boom-calendar-toggle aria-expanded="false" aria-label="Open calendar">▣</button></span></label><label>Time<input required type="time" name="time" value="${p.time}" step="60"></label></div>${calendarHtml(p.date)}<label class="boom-zone">Timezone<select required name="timezone">${zoneOptions(selectedZone)}</select><small>Bangkok by default · saved as UTC</small></label></section><button type="button" class="boom-link" data-boom-note-toggle aria-expanded="${hasNote}">${hasNote?'Hide note':'＋ Add a note'}</button><label class="boom-note"${hasNote?'':' hidden'}>Note<input name="note" maxlength="500" value="${esc(existing?.note||opts.note||'')}" placeholder="What should Future You remember?"></label><p class="boom-error" role="alert"></p><footer>${existing?'<button type="button" class="danger" data-boom-cancel>Remove</button>':''}<button type="button" data-boom-close>Cancel</button><button type="submit" class="primary">${existing?'Save':'Set Boomerang'}</button></footer></form>`;
+    sheet=document.createElement('div');sheet.className='boom-sheet';sheet.innerHTML=`<form class="boom-card" data-boom-form role="dialog" aria-modal="true" aria-labelledby="boom-title"><header><span aria-hidden="true">🪄</span><b id="boom-title">Recall</b><button type="button" data-boom-close aria-label="Close Recall">×</button></header><p class="boom-context">${esc(opts.context||'This thread')}</p><p class="boom-prompt">When should this return?</p><section class="boom-quick" aria-labelledby="boom-quick-title"><h3 id="boom-quick-title">Quick choices</h3><div class="boom-presets">${presetButtons(selectedZone)}</div></section><section class="boom-exact" aria-labelledby="boom-exact-title"><h3 id="boom-exact-title">Exact date &amp; time</h3><div class="boom-fields"><label>Date<span class="boom-date-control"><input required type="date" name="date" value="${p.date}"><button type="button" data-boom-calendar-toggle aria-expanded="false" aria-label="Open Recall calendar">▣</button></span></label><label>Time<input required type="time" name="time" value="${p.time}" step="60"></label></div>${calendarHtml(p.date)}<label class="boom-zone">Timezone<select required name="timezone">${zoneOptions(selectedZone)}</select><small>Bangkok by default · saved as UTC</small></label></section><button type="button" class="boom-link" data-boom-note-toggle aria-expanded="${hasNote}">${hasNote?'Hide note':'＋ Add a note'}</button><label class="boom-note"${hasNote?'':' hidden'}>Note<input name="note" maxlength="500" value="${esc(existing?.note||opts.note||'')}" placeholder="What should Future You remember?"></label><p class="boom-error" role="alert"></p><footer>${existing?'<button type="button" class="danger" data-boom-cancel aria-label="Remove Recall">Remove</button>':''}<button type="button" data-boom-close>Cancel</button><button type="submit" class="primary">${existing?'Save Recall':'Set Recall'}</button></footer></form>`;
     document.body.append(sheet);const form=sheet.querySelector('form'),calendar=form.querySelector('[data-boom-calendar]'),toggle=form.querySelector('[data-boom-calendar-toggle]');renderCalendar(form);
     const refreshPresets=()=>{form.querySelector('.boom-presets').innerHTML=presetButtons(form.timezone.value)};
     sheet.addEventListener('click',e=>{
@@ -122,7 +123,7 @@
       if(existing)job=await req(`${API}/${encodeURIComponent(existing.id)}`,{method:'PATCH',headers:J,body:JSON.stringify({when:{once:due_at},timezone,prompt:note,enabled:true})});
       else{const message=opts.targetKind==='message'&&Number(opts.anchorAt)>0?Number(opts.anchorAt):null,ag=live()?.agentOf?.(opts.sessionId)||'';
         job=await req(API,{method:'POST',headers:J,body:JSON.stringify({name:('Boomerang · '+String(opts.title||opts.context||'Thread').replace(/\s+/g,' ').trim()).slice(0,150),kind:'return',when:{once:due_at},timezone,thread:opts.sessionId,prompt:note,...(/^[a-z][a-z0-9-]{0,30}$/.test(ag)&&ag!=='hermes'?{agent:ag}:{}),target:{message,excerpt:message?String(opts.context||'').slice(0,280):''}})})}
-      askNotify();const r=fromJob(job);reminders=reminders.filter(x=>x.id!==r.id).concat(r);if(existing){const k=seen();k.delete(r.id);markSeen(k)}arm(r,true);emit();close();void refresh();window.dispatchEvent(new CustomEvent('wos:boomerang-set',{detail:{at:r.due_at,zone:r.timezone}}))}catch(err){error.textContent=err.message||'Could not set the Boomerang';submit.disabled=false}};
+      askNotify();const r=fromJob(job);reminders=reminders.filter(x=>x.id!==r.id).concat(r);if(existing){const k=seen();k.delete(r.id);markSeen(k)}arm(r,true);emit();close();void refresh();window.dispatchEvent(new CustomEvent('wos:boomerang-set',{detail:{at:r.due_at,zone:r.timezone}}))}catch(err){error.textContent=err.message||'Could not set Recall';submit.disabled=false}};
     form.querySelector('[data-boom-close]').focus();
   }
   async function cancel(id){await req(`${API}/${encodeURIComponent(id)}`,{method:'DELETE'});reminders=reminders.filter(r=>r.id!==id);emit();close();void refresh()}
@@ -132,11 +133,10 @@
   // The returned message Boomerang this thread should scroll to on its next open (once per page life).
   const focusFor=sessionId=>dueFor(sessionId).find(r=>r.anchor_at!=null&&!focused.has(r.id))||null;
   const focusedOn=id=>{focused.add(id)};
-  const when=r=>{try{return new Date(r.due_at).toLocaleString([],{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZone:r.timezone})}catch{return ''}};
   const zoneName=z=>String(z||'').split('/').pop().replace(/_/g,' ');
   function banner(sessionId){const due=dueFor(sessionId),next=nextFor(sessionId);if(!due.length&&!next)return'';const r=due[0]||next,isDue=Boolean(due.length);
     const what=r.target_kind==='message'?`<q>${esc(String(r.context||'').slice(0,140))}</q>`:'';
-    return `<aside class="boom-banner${isDue?' due':''}" data-boom-id="${esc(r.id)}" role="status"><span class="boom-banner-ic" aria-hidden="true">🪃</span><span class="boom-banner-tx"><b>${isDue?'Boomerang is back':'Boomerang set'}</b>${r.note?`<small>${esc(r.note)}</small>`:''}${what}<time>${isDue?'Due ':'Returns '}${esc(when(r))} · ${esc(zoneName(r.timezone))}</time></span><span class="boom-banner-acts">${isDue&&r.anchor_at!=null?'<button type="button" data-boom-open>Show message</button>':''}${isDue?'<button type="button" data-boom-change>Again</button><button type="button" class="primary" data-boom-done>Done</button>':'<button type="button" data-boom-change>Change</button><button type="button" data-boom-cancel>Cancel</button>'}</span></aside>`}
+    return `<aside class="boom-banner${isDue?' due':''}" data-boom-id="${esc(r.id)}" role="status" aria-label="${isDue?'Recall returned':'Recall scheduled'}"><span class="boom-banner-ic" aria-hidden="true">🪄</span><span class="boom-banner-tx"><b>${isDue?'Recall returned':'Recall'}</b>${r.note?`<small>${esc(r.note)}</small>`:''}${what}<time>${esc(returnLabel(r))} · ${esc(zoneName(r.timezone))}</time></span><span class="boom-banner-acts">${isDue&&r.anchor_at!=null?'<button type="button" data-boom-open aria-label="Show recalled message">Show message</button>':''}${isDue?'<button type="button" data-boom-change aria-label="Schedule Recall again">Again</button><button type="button" class="primary" data-boom-done aria-label="Acknowledge Recall">Done</button>':'<button type="button" data-boom-change aria-label="Edit Recall">Edit</button><button type="button" data-boom-cancel aria-label="Cancel Recall">Cancel</button>'}</span></aside>`}
   async function handle(target,showMessage){const box=target.closest('[data-boom-id]'),id=box?.dataset.boomId,r=reminders.find(x=>x.id===id);if(!r)return false;
     if(target.closest('[data-boom-open]')){showMessage?.(r);return true}
     if(target.closest('[data-boom-change]')){open({sessionId:r.session_id,targetKind:r.target_kind,anchorAt:r.anchor_at,context:r.context,note:r.note,title:titleOf(r)},r);return true}

@@ -63,7 +63,7 @@ test('the phone reply watcher is armed with the wzb_ watch id', async () => {
   const job = { id: 'b', kind: 'return', thread: 'wizard_t', when: { once: '2099-01-01T00:00:00.000Z' }, timezone: 'UTC', prompt: '', target: { message: null, excerpt: '' } }
   const { B } = load([job], { WizardOSDevice: { watchRun: (...a) => watched.push(a) }, WizLive: { session: () => ({ title: 'Quote', status: 'completed' }) } })
   await B.refresh()
-  assert.deepEqual(watched, [['wizard_t', 'wzb_b', '🪃 Quote']])
+  assert.deepEqual(watched, [['wizard_t', 'wzb_b', '🪄 Quote']])
 })
 
 test('wall-clock time in the chosen zone becomes the right instant', () => {
@@ -80,10 +80,24 @@ test('Back closes the picker before anything under it, on phone and desktop', ()
   order(desktop, "if (window.WosBoomerang?.back()) return 'boomerang'", 'if (!pal.hidden)')
 })
 
-test('Boomerang sits beside Defer, which is unchanged, and on single messages', () => {
+test('Recall sits beside Defer, which is unchanged, and on single messages', () => {
   const js = read('web/core/chats.js')
   assert.match(js, /return \['defer', 'boomerang', 'done'\]/)
   assert.match(js, /a === 'defer' \? LIVE\.defer\(sid\)/)
   assert.match(js, /data-mboom=/)
   assert.match(js, /targetKind: 'message', anchorAt/)
+  assert.match(js, /boomerang: \{ label: 'Recall'[\s\S]*🪄/)
+  assert.match(js, /aria-label="Recall this message"/)
+})
+
+test('Recall branding is consistent across the dialog and scheduled or returned banners', () => {
+  const js = read('web/core/scheduled-reminders.js')
+  assert.match(js, /id="boom-title">Recall/)
+  assert.match(js, /When should this return\?/)
+  assert.match(js, /Close Recall/)
+  assert.match(js, /Edit Recall/)
+  assert.match(js, /Cancel Recall/)
+  assert.match(js, /Recall returned/)
+  assert.match(js, /Returns \$\{date\} at \$\{time\}/)
+  assert.doesNotMatch(js, />Boomerang|Boomerang is back|Boomerang set|Set Boomerang|Change Boomerang|🪃/)
 })
