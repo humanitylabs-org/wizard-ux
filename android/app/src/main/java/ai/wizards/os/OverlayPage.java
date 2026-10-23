@@ -107,11 +107,14 @@ public class OverlayPage extends WebViewClient {
             main.postDelayed(timeout, deadlineMs);
             final String owner = origin;
             final int attempt = generation;
-            prefetch = new OverlayPrefetch(OverlayPolicy.prefetch(page), deadlineMs, path -> {
-                if (attempt != generation || !remoteAllowed() || !owner.equals(ServerSettings.origin(web.getContext())))
-                    throw new java.io.IOException("overlay owner changed");
-                return fetch(OverlayPolicy.upstream(owner, OverlayPolicy.VIRTUAL + OverlayPolicy.SHELL + path));
-            });
+            // The corner has seven serial resources. Leave the already-fast orb/screen paths unchanged.
+            if (page.startsWith("surface")) {
+                prefetch = new OverlayPrefetch(OverlayPolicy.prefetch(page), deadlineMs, path -> {
+                    if (attempt != generation || !remoteAllowed() || !owner.equals(ServerSettings.origin(web.getContext())))
+                        throw new java.io.IOException("overlay owner changed");
+                    return fetch(OverlayPolicy.upstream(owner, OverlayPolicy.VIRTUAL + OverlayPolicy.SHELL + path));
+                });
+            }
         }
         web.loadUrl(url);
     }
@@ -161,7 +164,7 @@ public class OverlayPage extends WebViewClient {
             return new WebResourceResponse(mime, "utf-8", 200, "OK",
                     Map.of("Content-Security-Policy", OverlayPolicy.CSP, "X-Content-Type-Options", "nosniff", "Cache-Control", "no-store"), new ByteArrayInputStream(bytes));
         } catch (Exception e) {
-            if (fromWizard) main.post(() -> { if (generation == attempt) fallBack("static resource unavailable"); });
+            if (fromWizard) main.post(() -> { if (generation == attempt) fallBack(e instanceof java.util.concurrent.TimeoutException ? "timeout" : "static resource unavailable"); });
             return blocked();
         }
     }

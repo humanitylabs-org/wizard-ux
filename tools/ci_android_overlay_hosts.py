@@ -435,6 +435,9 @@ try:
     kg = sx('dumpsys window | grep -iE "mDreamingLockscreen|isKeyguardShowing|KeyguardShowing|mShowingLockscreen"')
     (OUT / 'L-keyguard-before.txt').write_text(kg)
     shot('L-keyguard-before')
+    # Start the locked interval only after keyguard is actually showing. A last orb image requested before
+    # set-pin/sleep is not a hidden-session request while locked (retain it in the full request log).
+    r0 = len(REQ)
     how, tl, line = trigger_assist(t0, r'surface\.html from (Wizard|bundle)')
 
     log('  lock trigger:', how)
