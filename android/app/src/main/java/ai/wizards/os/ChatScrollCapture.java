@@ -23,7 +23,7 @@ import java.util.function.Consumer;
 /** Android 12+ system screenshot integration. Pixels never leave the OS-owned session surface. */
 @TargetApi(31)
 final class ChatScrollCapture implements ScrollCaptureCallback {
-    private final WebView web;
+    private final SelectionWebView web;
     private final Activity activity;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final String script;
@@ -35,7 +35,7 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
     private final java.util.ArrayList<Runnable> restored = new java.util.ArrayList<>();
     private final Runnable deadline = () -> abort();
 
-    ChatScrollCapture(Activity activity, WebView web) {
+    ChatScrollCapture(Activity activity, SelectionWebView web) {
         this.activity = activity; this.web = web;
         String source;
         try (java.io.InputStream in = activity.getAssets().open("scroll-capture.js")) {
@@ -143,6 +143,7 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
         if (!eligible() || bounds == null || restoring) { ready.run(); return; }
         Pending p = new Pending(signal, ready);
         id = UUID.randomUUID().toString(); final String token = id;
+        web.scrollCaptureBegan();
         js(call("start", JSONObject.quote(token)), b -> {
             if (!p.live() || !token.equals(id)) return;
             Rect granted = session.getScrollBounds();
@@ -229,6 +230,7 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
     }
     private void finishRestore() {
         restoring = false;
+        web.scrollCaptureEnded();
         java.util.ArrayList<Runnable> callbacks = new java.util.ArrayList<>(restored);
         restored.clear();
         for (Runnable callback : callbacks) callback.run();

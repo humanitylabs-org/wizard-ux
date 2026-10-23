@@ -99,6 +99,21 @@ public class SelectionWebView extends WebView {
         if (proxyEligible()) evaluateJavascript("window.__wosScrollCapture?.refreshProxy()", null);
     }
     void scrollPageStarted() { scrollMetrics = null; cancelScrollCapture(); }
+    // An OS scroll capture (One UI's toolbar) may pause the Activity mid-session. A paused
+    // WebView stops producing frames, so postVisualStateCallback never fires and every tile
+    // comes back empty. Keep rendering while a session is live; apply the pause after it ends.
+    private boolean pauseWanted, capturing, webPaused;
+    @Override public void onPause() { pauseWanted = true; if (!capturing && !webPaused) { webPaused = true; super.onPause(); } }
+    @Override public void onResume() { pauseWanted = false; if (webPaused) { webPaused = false; super.onResume(); } installScrollProxy(); }
+    void scrollCaptureBegan() {
+        capturing = true;
+        if (webPaused) { webPaused = false; super.onResume(); }
+        ScrollCaptureDiagnostics.record("capture.render",ScrollCaptureDiagnostics.fields("pauseWanted",pauseWanted));
+    }
+    void scrollCaptureEnded() {
+        capturing = false;
+        if (pauseWanted && !webPaused) { webPaused = true; super.onPause(); }
+    }
     void cancelScrollCapture() {
         if (android.os.Build.VERSION.SDK_INT >= 31 && scrollCapture != null) scrollCapture.abort();
     }
@@ -208,8 +223,6 @@ public class SelectionWebView extends WebView {
     // An OEM screenshot toolbar may pause the Activity while probing/capturing
     // the still-visible window. Match AOSP eligibility, not Activity.resumed.
     // Pause/visibility alone is not cancellation: SystemUI may own an active capture.
-    @Override public void onPause() { super.onPause(); }
-    @Override public void onResume() { super.onResume(); installScrollProxy(); }
     @Override protected void onDetachedFromWindow() {
         cancelScrollCapture(); scrollMetrics = null; super.onDetachedFromWindow();
     }
