@@ -71,8 +71,9 @@
 .dots b:nth-child(2) { animation-delay: .15s; } .dots b:nth-child(3) { animation-delay: .3s; }
 .ch-compose { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; padding: 8px 10px 10px; border-top: 1px solid var(--line); }
 .ch-row2 { display: flex; align-items: flex-end; gap: 8px; }
-.ch-compose textarea { flex: 1; min-width: 0; min-height: 42px; max-height: 140px; resize: none; padding: 10px 14px; border-radius: 20px; border: 1px solid var(--line-2); outline: 0; background: rgba(205, 190, 255, .06); color: var(--ink); font: inherit; font-size: 15px; line-height: 1.35; }
+.ch-compose textarea { flex: 1; min-width: 0; min-height: 42px; max-height: 140px; resize: none; padding: 10px 14px; border-radius: 20px; border: 1px solid var(--line-2); outline: 0; background: rgba(205, 190, 255, .06); color: var(--ink); font: inherit; font-size: 15px; line-height: 1.35; transition: border-color 120ms, background 120ms, box-shadow 120ms; }
 .ch-compose textarea:focus { border-color: rgba(185, 155, 255, .6); }
+.ch-compose.is-file-drag textarea { border-color: var(--violet-2); background: color-mix(in srgb, var(--violet) 15%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--violet-2) 40%, transparent); }
 .ch-compose button { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(140deg, #7a4dff, #c04dff); }
 .ch-compose button svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .ch-compose button[type=submit]:disabled { opacity: .45; }
