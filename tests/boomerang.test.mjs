@@ -73,10 +73,9 @@ test('shared chats offers whole-thread and exact-message reminders without submi
  assert.match(js,/WosBoomerang/);assert.match(js,/targetKind: 'message'/);assert.match(js,/targetKind: 'thread'/)
  assert.match(js,/data-boom-remind/);assert.doesNotMatch(read('web/core/scheduled-reminders.js'),/\/v1\/runs|OUTBOX\.send/)
 })
-test('thread menu exposes Boomerang separately and leaves Defer unchanged',()=>{
+test('thread menu exposes Recall separately and leaves Defer unchanged',()=>{
  const js=read('web/core/chats.js')
- assert.match(js,/data-rsboom[^>]*>.*ch-boomerang-glyph.*<svg[^>]+viewBox="0 0 24 24".*Boomerang/)
- assert.doesNotMatch(js,/🪃/)
+ assert.match(js,/data-rsboom[^>]*aria-label="Recall this chat"[^>]*>.*ch-boomerang-glyph.*🪄.*Recall/)
  assert.match(js,/closest\('\[data-rsboom\]'\)[\s\S]{0,300}BOOM\.open\(\{ sessionId:sid,targetKind: 'thread'/)
  assert.doesNotMatch(js,/a === 'defer' && BOOM/)
  assert.match(js,/a === 'defer' \? LIVE\.defer\(sid\)/)
@@ -89,11 +88,15 @@ test('thread action sheet has one accessible far-right close matching Back and E
  assert.match(css,/\.ch-sheet-head\s*\{[^}]*display:\s*flex[^}]*align-items:\s*center/)
  assert.match(css,/\.ch-sheet-close\s*\{[^}]*margin-left:\s*auto[^}]*width:\s*44px[^}]*height:\s*44px/)
 })
-test('Boomerang glyph is a pointed theme-aware SVG, not a font emoji',()=>{
- const js=read('web/core/chats.js'),css=read('web/core/chats.css')
- assert.match(js,/ch-boomerang-glyph[\s\S]{0,240}<path d="M4 4L12 6L20 3L16 11L21 17L13 15L8 21L7 13Z"/)
- assert.match(css,/\.ch-boomerang-glyph\s*\{[^}]*color:\s*var\(--violet-2\)/)
- assert.match(css,/\.ch-sheet-b \.ch-boomerang-glyph svg\s*\{[^}]*fill:\s*currentColor[^}]*stroke:\s*currentColor/)
+test('Recall uses the same wand in the menu, dialog and returned banner',()=>{
+ const chats=read('web/core/chats.js'),reminders=read('web/core/scheduled-reminders.js')
+ assert.match(chats,/ch-boomerang-glyph[^>]*"[^>]*>🪄<\/span>Recall/)
+ assert.match(reminders,/id="boom-title">Recall/)
+ assert.match(reminders,/Recall returned[\s\S]*🪄/)
+ assert.match(reminders,/When should this return\?/)
+ assert.match(reminders,/Returns \$\{date\} at \$\{time\}/)
+ assert.doesNotMatch(chats,/>Boomerang<|Boomerang this message/)
+ assert.doesNotMatch(reminders,/>Boomerang|Boomerang is back|Set Boomerang|Change Boomerang/)
 })
 test('selected-pin markup exposes an integrated head and shaft instead of a floating dot',()=>{
  const js=read('web/core/chats.js')

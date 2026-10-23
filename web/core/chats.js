@@ -793,7 +793,7 @@ window.WizCore.chats = function createChats(H) {
     let h = '';
     // A provider sign-out has its own panel (Open Claude / Open ChatGPT) in place of Hermes' generic failed-turn notice.
     if (last && reconnect && tn.a?.failed) tn = { ...tn, a: null };
-    if (tn.u) h += `<div class="msg u${tn.u.reply ? ' has-rq' : ''}" data-turn-at="${tn.u.at}"><div class="bub">${replyCard(tn.u.reply)}${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta"><button type="button" data-boom-remind="${tn.u.at}" title="Remind me about this message">Remind</button>${timeTag(tn.u.at)}</div></div>`;
+    if (tn.u) h += `<div class="msg u${tn.u.reply ? ' has-rq' : ''}" data-turn-at="${tn.u.at}"><div class="bub">${replyCard(tn.u.reply)}${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta"><button type="button" data-boom-remind="${tn.u.at}" title="Recall this message" aria-label="Recall this message">🪄 Recall</button>${timeTag(tn.u.at)}</div></div>`;
     else if (tn.note) h += noteHtml(tn.note);
     else if (tn.later) h += runContextHtml(tn.later);
     const live = last && working;
@@ -869,7 +869,7 @@ window.WizCore.chats = function createChats(H) {
       <button type="button" data-rspin>${'<svg viewBox="0 0 24 24"><path d="m15 4 5 5-4 2-3 5-2-2-5 5-1-1 5-5-2-2 5-3 2-4Z"/></svg>'}${pinned ? 'Unpin' : 'Pin'}</button>
       <button type="button" data-rsrename>${RENAME_SVG}Rename</button>
       <button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>
-      ${BOOM ? `<button type="button" data-rsboom><span class="ch-sheet-emoji ch-boomerang-glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4L12 6L20 3L16 11L21 17L13 15L8 21L7 13Z"/></svg></span>Boomerang</button>` : ''}
+      ${BOOM ? `<button type="button" data-rsboom aria-label="Recall this chat"><span class="ch-sheet-emoji ch-boomerang-glyph" aria-hidden="true">🪄</span>Recall</button>` : ''}
       ${acts.map(a => `<button type="button" data-rsact="${a}">${ACT[a].icon}${ACT[a].label}</button>`).join('')}
       ${acts.length ? '' : `<p class="ch-sheet-n">${WORKING_ST.has(s.status) || ['waiting_for_approval', 'unknown'].includes(s.status) ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
     rowSheet = { wid, sid }; el.querySelector('[data-rsclose]')?.focus({ preventScroll: true }); vib(10);
