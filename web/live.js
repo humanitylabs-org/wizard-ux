@@ -310,10 +310,10 @@
   //   Priority = approvals, then needs you, then things to test, then everything else (newest first within each).
   // Status labels never move a thread between days (James, 11 Oct 2026: Ready, Yesterday and Past week stay
   // filtered by day in Newest and Priority); Priority only reorders within Ready.
-  // Deferred threads sit at the bottom of Ready marked Deferred (James, 10 Oct 2026: "defer could just go at the
-  // bottom of today … and just change the status to deferred"), whatever their day and in every order, until
-  // restored or done.
-  const isDeferred = s => !!s.deferred && !s.archived;
+  // Snoozed (deferred) threads leave the list (James, 23 Oct 2026: "It doesn't remove the thread from my list,
+  // which is the purpose of snoozing it"; supersedes 10 Oct "bottom of today"). They wait in the collapsed Snoozed
+  // section until their return time, Restore or Done. A message James sends after snoozing brings the thread back.
+  const isDeferred = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt));
   const readyRank = s => needsApproval(s) ? 0 : isDeferred(s) ? 9 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
   const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
   // Oldest (James, 23 Oct 2026: "oldest messages at the top … the newest one at the bottom"): Newest's pins kept
@@ -327,7 +327,7 @@
       const t = sectionTime(s);
       if (needsApproval(s)) g.ready.push(s);
       else if (inWorking(s)) g.working.push(s);
-      else if (isDeferred(s)) g.ready.push(s);
+      else if (isDeferred(s)) g.deferred.push(s);
       else if (isErr(s)) g.errors.push(s);
       else if (s.archived) g.archive.push(s);
       else if (isFinite(t) && t <= archB) g.archive.push(s);
@@ -561,8 +561,8 @@
           else { const fresh = new Set(sessions.map(s => s.id)); sessions = sessions.concat(this.sessions.filter(s => !fresh.has(s.id) && !s.optimistic)); }
           for (const s of sessions) {
             const d = deferred[keyOf(s)];
-            delete s.deferred; delete s.restoredAt;
-            if (d) { if (d.deferred) s.deferred = true; else s.restoredAt = d.updatedAt; }
+            delete s.deferred; delete s.deferredAt; delete s.restoredAt;
+            if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
             applyLocal(s);
           }
           // A settled action stays applied until a list read that started after it lands.
@@ -615,8 +615,8 @@
           const list = got.sessions.filter(s => !s.agent || s.agent === id).map(s => { s.agent = id; AGENT_OF.set(s.id, id); return s; });
           for (const s of list) {
             const d = deferred[keyOf(s)];
-            delete s.deferred; delete s.restoredAt;
-            if (d) { if (d.deferred) s.deferred = true; else s.restoredAt = d.updatedAt; }
+            delete s.deferred; delete s.deferredAt; delete s.restoredAt;
+            if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
             applyLocal(s);
           }
           addSynthetic(list, id);
@@ -847,13 +847,13 @@
     busy(id) { const o = OVER.get(id); return !!o && !o.settled; },
     async _act(id, patch, write) {
       const s = this.session(id); if (!s || this.busy(id)) return false;
-      const snap = { archived: s.archived, deferred: s.deferred, restoredAt: s.restoredAt };
+      const snap = { archived: s.archived, deferred: s.deferred, deferredAt: s.deferredAt, restoredAt: s.restoredAt };
       const entry = { patch }; OVER.set(id, entry); Object.assign(s, patch); this.emit();
       try { await write(s); entry.settled = Date.now(); this.emit(); setTimeout(() => this.refresh(), 50); return true; }
       catch (e) {
         if (OVER.get(id) === entry) OVER.delete(id);
         const c = this.session(id);
-        if (c) { Object.assign(c, snap); if (snap.deferred === undefined) delete c.deferred; if (snap.restoredAt === undefined) delete c.restoredAt; }
+        if (c) { Object.assign(c, snap); if (snap.deferred === undefined) delete c.deferred; if (snap.deferredAt === undefined) delete c.deferredAt; if (snap.restoredAt === undefined) delete c.restoredAt; }
         this.emit(); return false;
       }
     },
@@ -880,7 +880,7 @@
       this.deferred[keyOf(s)] = p.record;
       return p.record;
     },
-    defer(id) { return this._act(id, { deferred: true }, () => this._defer(id, true)); },
+    defer(id) { return this._act(id, { deferred: true, deferredAt: new Date().toISOString() }, () => this._defer(id, true)); },
     /* Rename: James's own title for a thread. It locks the name: the agent never renames it after this. */
     async rename(id, title) {
       const s = this.session(id), t = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 60);

@@ -101,7 +101,11 @@ test('Snooze confirms the actual Bangkok time, independent of device timezone', 
 test('Snoozed preserves the deferred API and search aliases; Someday creates no schedule', () => {
   const chats = read('web/core/chats.js'), picker = read('web/core/scheduled-reminders.js')
   assert.match(chats, /label: 'Snoozed', syn: \['snooze', 'defer', 'deferred', 'later', 'boomerang'/)
-  assert.match(chats, /Snoozed · bottom of Ready/)
+  assert.match(chats, /Snoozed · out of your list/)
+  assert.match(chats, /\['deferred', 'Snoozed'\], \['archive', 'Archive'\]/, 'Snoozed threads wait in their own section')
+  assert.match(picker, /void away\(opts\.sessionId\)/, 'a timed Snooze also takes the thread out of the list')
+  const live = read('web/live.js')
+  assert.match(live, /else if \(isDeferred\(s\)\) g\.deferred\.push\(s\);/, 'snoozed threads leave Ready')
   for (const label of ['Later today', 'Tomorrow 9:00', 'Next week', 'Pick a time', 'Someday', 'When should this come back?']) assert.ok(picker.includes(label), label)
   assert.doesNotMatch(picker, /🪃|🪄/)
   assert.match(picker, /name:\('Snooze · '/, 'new jobs use the current UI name')
