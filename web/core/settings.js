@@ -15,6 +15,7 @@
     { id: 'phone', title: 'Phone', icon: '◉', available: android },
     { id: 'recovery', title: 'Unsent & recovered', icon: '↺' },
     { id: 'usage', title: 'AI usage', icon: '◴' },
+    { id: 'schedules', title: 'Schedules', icon: '◷', available: () => !!window.WosSchedules?.available },
     { id: 'about', title: 'About & updates', icon: '◇' },
   ];
   const featurePages = { look: 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', 'photos-backup': 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
@@ -32,6 +33,7 @@
     return items;
   }
   function subtitle(id, ctx) {
+    if (id === 'schedules') return 'Prompts on a schedule';
     if (id === 'appearance') return window.WosSkin ? lookName(window.WosSkin, window.WosSkin.current) : 'Default skin';
     if (id === 'chats') return 'Chats: ' + chatsName(chatsHost()?.defaultId() || 'wizard-chats');
     if (id === 'voice') { const v = window.WizCore.voiceStatus?.state; return `${v ? v.ready ? 'Voice ready' : 'Voice unavailable' : 'Checking voice'} · Mic: ${window.WosMic?.summary?.() || 'default'}`; }
@@ -141,7 +143,7 @@
     if (!window.WosMySkin) return '';
     const st = window.WosMySkin.state, js = st.script;
     const script = js?.exists && !st.off ? `<div class="st-row static my-skin-row" data-myskin-script><span class="st-ic">⌘</span><span class="st-tx"><b>${js.approved ? 'My skin script on' : 'My skin script changed'}</b><small>Skins/My skin/skin.js · this device only</small></span><span class="ms-acts">${js.approved ? '<button type="button" class="ghost" data-myskin="off">Turn off</button>' : `<button type="button" data-myskin="on" data-myskin-hash="${esc(js.sha256 || '')}" ${js.valid ? '' : 'disabled'}>Turn on</button>`}</span></div>` : '';
-    return `<div class="st-row static my-skin-row"><span class="st-ic">✎</span><span class="st-tx"><b>My skin</b><small data-myskinsub>${esc(mySkinSub(base))}</small></span><span class="ms-acts"><button type="button" data-myskin="edit">Edit</button><button type="button" class="ghost" data-myskin="reset">Reset</button></span></div>${script}`;
+    return `<div class="st-row static my-skin-row"><span class="st-ic">✎</span><span class="st-tx"><b>My custom skin</b><small data-myskinsub>${esc(mySkinSub(base))}</small></span><span class="ms-acts"><button type="button" data-myskin="edit">Edit</button><button type="button" class="ghost" data-myskin="reset">Reset</button></span></div>${script}`;
   }
   async function mySkinAction(ctx, what, event) {
     const M = window.WosMySkin; if (!M) return;
@@ -149,14 +151,14 @@
     if (what === 'off') { M.turnOff(); return; }
     if (what === 'edit') {
       const url = `/files/files/${(M.state.info?.path || M.FILE).split('/').map(encodeURIComponent).join('/')}`;
-      const opened = window.WizCanOpen?.('files') && ctx.openLink ? ctx.openLink(url, 'My skin') : false;
+      const opened = window.WizCanOpen?.('files') && ctx.openLink ? ctx.openLink(url, 'My custom skin') : false;
       if (!opened) ctx.toast?.('✎', 'Ask your agent: "change my skin so …"', 2600);
       return;
     }
     if (what === 'reset') {
-      if (M.state.empty) { ctx.toast?.('✓', 'My skin is already empty', 1600); return; }
-      try { await M.reset(); ctx.toast?.('✓', 'My skin emptied · your skin as its author made it', 2200); }
-      catch (e) { ctx.toast?.('!', 'Could not reset My skin right now', 2400); }
+      if (M.state.empty) { ctx.toast?.('✓', 'My custom skin is already empty', 1600); return; }
+      try { await M.reset(); ctx.toast?.('✓', 'My custom skin emptied · your skin as its author made it', 2200); }
+      catch (e) { ctx.toast?.('!', 'Could not reset My custom skin right now', 2400); }
       for (const m of mounts) m.render();
     }
   }
@@ -192,7 +194,14 @@
       const head = fams.length > 1 ? `<div class="skp-fam">${esc(f.name)}</div>` : '';
       return `${head}<div class="skp" role="group" aria-label="${esc(f.name || 'Skin')} colours">${pals.map(k => skinCard(k, cur)).join('')}</div>`;
     }).join('');
-    return `<div class="st-group" data-stgroup="look"><h4>Look</h4><div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(lookName(S, cur))}</small></span></div><div class="skp-all${facesReady ? '' : ' skp-wait'}">${groups}</div></div>${suggestionHtml()}${mySkinRow(S.list.find(k => k.id === cur)?.name || '')}</div>`;
+    return `<div class="st-group" data-stgroup="look"><h4>Look</h4><div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(lookName(S, cur))}</small></span></div><div class="skp-all${facesReady ? '' : ' skp-wait'}">${groups}</div></div>${suggestionHtml()}${mySkinRow(S.list.find(k => k.id === cur)?.name || '')}${layoutRow()}</div>`;
+  }
+  /* Layout: how the shell behaves (orbs, gestures), worn over any skin. Classic = the shell as everyone has it. */
+  function layoutRow() {
+    const H = window.WosSkinHost; if (!H?.layouts) return '';
+    const cur = H.layout, L = H.layouts.find(l => l.id === cur) || H.layouts[0];
+    const btns = H.layouts.map(l => `<button type="button" class="ghost" data-layoutpick="${esc(l.id)}" aria-pressed="${l.id === cur}">${esc(l.name)}</button>`).join('');
+    return `<div class="st-row static layout-row" data-layout-row><span class="st-ic">⦿</span><span class="st-tx"><b>Layout</b><small data-layoutdesc>${esc(L.desc)}</small></span><span class="ms-acts layout-acts">${btns}</span></div>`;
   }
   register({ id: 'look', aliases: ['skin'], html() {
     const S = window.WosSkin; if (!S) return '';
@@ -200,6 +209,13 @@
   }, act(ctx, el, event) {
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
+    const lp = el.closest('[data-layoutpick]');
+    if (lp) {
+      const H = window.WosSkinHost, now = H.setLayout(lp.dataset.layoutpick), L = H.layouts.find(l => l.id === now);
+      ctx.root.querySelectorAll('[data-layoutpick]').forEach(n => n.setAttribute('aria-pressed', String(n.dataset.layoutpick === now)));
+      const d = ctx.root.querySelector('[data-layoutdesc]'); if (d && L) d.textContent = L.desc;
+      ctx.haptic?.(8); return true;
+    }
     const S = window.WosSkin;
     const b = el.closest('[data-skinpick]'); if (!b) return false;
     const now = S.set(b.dataset.skinpick);
@@ -233,11 +249,12 @@
     if (st === 'everywhere' && N?.setEverywhere) { let on = false; try { on = JSON.parse(N.everywhere()).enabled; } catch (_) {} N.setEverywhere(!on); setTimeout(ctx.render, 250); ctx.haptic?.(8); return true; }
     if (st === 'side' && N) { ctx.openSub('side'); return true; } return false;
   } });
-  register({ id: 'photos-backup', available: () => typeof window.wizardPhotosPort?.postMessage === 'function', html() {
-    return `<div class="st-group"><h4>Photos</h4>${row('photos-backup', '▧', 'Photos backup', 'Originals backed up to your photo server')}</div>`;
+  // Photos backup registers itself from core/photos-settings.js (web page over window.wizardPhotosPort v1).
+  register({ id: 'server', available: () => typeof native()?.changeServer === 'function', html() {
+    return `<div class="st-group"><h4>Connection</h4>${row('change-server', '◇', 'Change Wizard', 'Scan another box QR or enter its address')}</div>`;
   }, act(ctx, el) {
-    if (el.closest('[data-st]')?.dataset.st !== 'photos-backup') return false;
-    window.wizardPhotosPort.postMessage('open'); return true;
+    if (el.closest('[data-st]')?.dataset.st !== 'change-server') return false;
+    native().changeServer(); return true;
   } });
   register({ id: 'voice', html: () => window.WizCore.voiceStatus?.card() || '' });
   register({ id: 'microphone', aliases: ['mic'], available: () => !!window.WosMic?.available(), html: () => window.WosMic?.html() || '', act: (ctx, el) => window.WosMic?.act(el, ctx) });
@@ -279,17 +296,23 @@
     const ctx = { ...adapter, root }, api = { render, focus, back, destroy, dispatch, context: ctx, get page() { return page; } };
     let skinImportMessage = '', page = '', confirm = null;
     const desktop = adapter.shell === 'desktop';
-    ctx.render = render;
+    ctx.render = () => render(true);
     ctx.paintUsage = () => { const g = root.querySelector('[data-usage]'); if (g) g.outerHTML = window.WosUsage.html(); paintSubtitles(); };
     function paintSubtitles() {
       root.querySelectorAll?.('[data-st-subtitle]').forEach(el => { el.textContent = subtitle(el.dataset.stSubtitle, ctx); });
     }
-    function render() {
+    function render(force = false) {
+      // Background polls must not replace an active form under a keystroke.
+      // Explicit feature actions render via ctx.render; skin changes use tokens.
+      if (force !== true && [...features.values()].some(f => pageOf(f) === page && f.deferRefresh?.(ctx))) return;
       if (adapter.visible && !adapter.visible()) return;
       const top = root.scrollTop, paneTop = root.querySelector('.st-page')?.scrollTop || 0, active = root.contains(document.activeElement) ? document.activeElement : null;
       const attrs = active ? [...active.attributes].filter(a => a.name.startsWith('data-')) : [];
       const record = active?.closest('[data-ubid]')?.dataset.ubid;
-      const pages = PAGES.filter(p => !p.available || p.available(ctx)), selected = page || (desktop ? 'appearance' : '');
+      const selection = active && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
+      const pages = PAGES.filter(p => !p.available || p.available(ctx));
+      if (page && !pages.some(p => p.id === page)) page = '';
+      const selected = page || (desktop ? 'appearance' : '');
       const heading = PAGES.find(p => p.id === selected)?.title || '';
       const items = attention(ctx);
       const attentionHtml = items.length ? `<div class="st-attention" aria-label="Needs attention"><h4>Needs attention</h4>${items.map(i => `<button data-st-attention="${esc(i.feature)}">${esc(i.title)}<span>›</span></button>`).join('')}</div>` : '';
@@ -302,13 +325,15 @@
       root.scrollTop = top;
       const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = paneTop;
       const importStatus = root.querySelector('[data-skinimport-status]'); if (importStatus) importStatus.textContent = skinImportMessage;
-      if (attrs.length) { const scope = record ? root.querySelector(`[data-ubid="${CSS.escape(record)}"]`) : root; const sel = attrs.map(a => `[${a.name}="${CSS.escape(a.value)}"]`).join(''); scope?.querySelector(sel)?.focus({ preventScroll: true }); }
+      if (attrs.length) { const scope = record ? root.querySelector(`[data-ubid="${CSS.escape(record)}"]`) : root; const sel = attrs.map(a => `[${a.name}="${CSS.escape(a.value)}"]`).join(''); const target = scope?.querySelector(sel); target?.focus({ preventScroll: true }); if (target && selection) target.setSelectionRange(...selection); }
       const U = window.WosUsage;
       if (U && !U.loading && (!U.snap || Date.now() - U.at > 60000)) U.load().then(ctx.paintUsage);
     }
     function focus(id) {
+      for (const f of features.values()) if (pageOf(f) === page) f.leave?.(ctx);
       const f = features.get(id) || [...features.values()].find(f => f.aliases?.includes(id));
       page = f ? pageOf(f) : featurePages[id] || (id === 'updates' ? 'about' : PAGES.some(p => p.id === id) ? id : '');
+      for (const f of features.values()) if (pageOf(f) === page) f.enter?.(ctx);
       confirm = null; render(); root.scrollTop = 0;
       const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = 0;
       const g = id && root.querySelector(`[data-settings-feature="${CSS.escape(f?.id || id)}"]`);
@@ -316,6 +341,7 @@
       (g?.querySelector('button:not(:disabled)') || root.querySelector(page ? '.st-page-head h3' : '.st-title'))?.focus({ preventScroll: true });
     }
     function back() {
+      for (const f of features.values()) if (pageOf(f) === page && f.back?.(ctx)) return true;
       if (confirm) { if (!ctx.chatsBusy) { confirm = null; render(); root.querySelector('[data-chats-choice][aria-checked="true"]')?.focus(); } return true; }
       if (!page) return false;
       const previous = page; focus(); root.querySelector(`[data-st-page="${previous}"]`)?.focus({ preventScroll: true }); return true;
@@ -360,7 +386,9 @@
       return !!f?.act?.(ctx, el, event);
     }
     const click = e => dispatch(e.target, e);
+    const featureInput = e => { const id = e.target.closest('[data-settings-feature]')?.dataset.settingsFeature; features.get(id)?.input?.(ctx, e.target); };
     const change = async e => {
+      featureInput(e);
       const input = e.target.closest('[data-skinfile]'); if (!input) return;
       const file = input.files?.[0]; if (!file) return;
       try {
@@ -375,6 +403,8 @@
       } finally { input.value = ''; }
     };
     const key = e => {
+      const dialog = root.querySelector('[data-settings-feature] [aria-modal="true"]');
+      if (dialog) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); back(); } else trap(e, dialog); return; }
       if (confirm) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); back(); } else trap(e, root.querySelector('.st-confirm')); return; }
       const category = e.target.closest('[data-st-page]');
       if (category && ['ArrowUp', 'ArrowDown'].includes(e.key)) {
@@ -396,8 +426,8 @@
     const unsubscribe = ctx.live?.onChange?.(() => render());
     const appsChanged = () => render();
     window.addEventListener?.('wizard:apps', appsChanged);
-    function destroy() { if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wizard:apps', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
-    root.addEventListener('click', click); root.addEventListener('keydown', key); root.addEventListener('change', change); mounts.add(api); render(); return api;
+    function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wizard:apps', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
+    root.addEventListener('input', featureInput); root.addEventListener('click', click); root.addEventListener('keydown', key); root.addEventListener('change', change); mounts.add(api); render(); return api;
   }
   function route(view, open) {
     if (view === 'settings') { open(); return true; }
@@ -407,7 +437,7 @@
   // Shared focus containment. Existing shell Back guards own history; never add a second guard here.
   function trap(event, panel) {
     if (event.key !== 'Tab') return;
-    const controls = [...panel.querySelectorAll('button:not(:disabled), input, textarea, a[href], [tabindex="0"]')].filter(e => e.getClientRects().length);
+    const controls = [...panel.querySelectorAll('button:not(:disabled), input, textarea, select, a[href], [tabindex="0"]')].filter(e => e.getClientRects().length);
     if (!controls.length) return;
     const at = controls.indexOf(document.activeElement);
     if (at < 0 || (!event.shiftKey && at === controls.length - 1) || (event.shiftKey && at === 0)) { event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0].focus(); }

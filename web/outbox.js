@@ -205,11 +205,21 @@
          [408, 425, 429].includes(it.errorStatus) || it.errorStatus >= 500)) {
       it.state = 'waiting'; it.nextAt = 0;
     }
+    /* Reload during a voice send (James, 22 Oct 2026: "I have to wait like five, maybe even ten seconds before it lets me
+     * reload"). A tap take whose destination and model route were fixed at stage time is handed to the outbox
+     * (handOff): a reload no longer waits for upload + transcription, and the new page finishes the same send under
+     * the same id (Idempotency-Key). Commands and unsealed routes keep the old interrupted-and-kept behaviour. */
+    if (it.state === 'processing' && it.resumeOnReload && resumable(it)) {
+      if (!it.text && it.recoveryText) it.text = [String(it.typed || '').trim(), it.recoveryText].filter(Boolean).join('\n\n').slice(0, 64000);
+      Object.assign(it, { state: 'queued', deliveryRequested: true, nextAt: 0, resumedAfterReload: true }); delete it.resumeOnReload;
+    }
     if (it.state === 'processing' || it.state === 'preparing') { it.state = it.intent === 'command' ? 'held' : 'failed'; it.error = it.intent === 'command' ? 'Interrupted command · original recording kept; not queued to an agent' : 'Interrupted before sending · recording kept. Retry sends to its original destination.'; }
     it.durable = durable;
     const old = items.get(it.id);
     if (!old || (old.state !== 'sent' && (it.state === 'sent' || (it.updatedAt || it.createdAt) > (old.updatedAt || old.createdAt) || (it.steerDispatch === 'started' && (it.updatedAt || it.createdAt) === (old.updatedAt || old.createdAt))))) items.set(it.id, it);
   }
+  const resumable = it => !!it && ['new', 'reply'].includes(it.kind) && it.intent !== 'command' && !!it.model && !!it.provider &&
+    !!it.audio && !it.parkedDraft && !it.meetingEventId && !it.steerDispatch && !it.body && !it.steerBody && !it.localCompleted;
   function load() {
     if (ready) return ready;
     ready = (async () => {
@@ -338,7 +348,12 @@
     }
     await keepAudio(it);
     await settlePending(it); // attachments sent while still uploading: their receipts, before the run is admitted
-    const fileIds = [...new Set((it.files || []).map(f => f.id).filter(Boolean))];
+    // An agent without file access still hears the voice note: its transcript is the message, and the recording
+    // stays in the owner's custody instead of riding along as a file the agent may not open.
+    const noFiles = !!it.agent && window.WosAgents?.get?.(it.agent)?.permissions?.files === 'none';
+    const fileIds = [...new Set((it.files || []).filter(f => !(noFiles && f.id === it.audioFile?.id)).map(f => f.id).filter(Boolean))];
+    // A run the service refused for files was never admitted: rebuild it without the recording.
+    if (noFiles && it.body && /agent_files_disabled/.test(it.error || '')) it.body = '';
     if (fileIds.length > 8) throw new HttpError(409, 'Too many attachments including the recording · originals kept');
     const aq = it.agent ? `?agent=${encodeURIComponent(it.agent)}` : '';
     const words = it.text || `Please use the attached ${fileIds.length === 1 ? 'file' : 'files'}.`;
@@ -591,6 +606,15 @@
       }
       return it.captureWrite;
     },
+    // Hand a staged tap take to the outbox so a reload can finish it (see recover). True once that is on device storage.
+    async handOff(id) {
+      const it = items.get(id);
+      if (!it || it.state !== 'processing' || quarantine.has(id) || localCompletions.has(id) || !resumable(it)) return false;
+      if (it.resumeOnReload && it.durable) return true;
+      it.resumeOnReload = true; await put(it);
+      return !!it.durable && !it.storageError;
+    },
+    handedOff(id) { const it = items.get(id); return !!it && it.durable === true && !it.storageError && (it.state === 'processing' ? !!it.resumeOnReload : it.state !== 'capturing'); },
     async protect(id) { const it = items.get(id); if (it) await keepAudio(it); return it; },
     // Callers must await this instead of mutating a recovered item only in RAM.
     async transition(id, state, error = '') {
@@ -617,6 +641,8 @@
       const it = held || make({ ...o, agent, ...(snapshot || {}) });
       if (held) {
         if (localCompletions.has(held.id) || held.localCompleted || held.state === 'sent' || held.body || held.steerBody || quarantine.has(held.id)) return held;
+        // The delivery caller names the agent (an orb pick); a staged take that lost it must not fall back to the main agent.
+        if (agent && !it.agent) { it.agent = agent; if (snapshot) Object.assign(it, snapshot); }
         // Preserve the original route/destination/id. Routing is allowed to choose a local command;
         // message delivery always retains the send-time thread and selected provider.
         Object.assign(it, { text: String(o.text || '').trim(), typed: o.typed || it.typed, files: [...(it.files || []), ...(o.files || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i), instructions: o.instructions || it.instructions, wid: o.wid || it.wid, ...(replyOf(o) || it.reply ? { reply: replyOf(o) || it.reply } : {}),

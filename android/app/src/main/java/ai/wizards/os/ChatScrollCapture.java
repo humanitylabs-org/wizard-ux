@@ -56,7 +56,7 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
         if ((activity.getWindow().getAttributes().flags & android.view.WindowManager.LayoutParams.FLAG_SECURE) != 0)
             return "flag-secure";
         Uri u = Uri.parse(web.getUrl() == null ? "" : web.getUrl());
-        return Origin.isPrivate(u) || ai.wizards.os.device.AppState.isQaPage(activity, u) ? null : "untrusted-origin";
+        return Origin.isPrivate(activity, u) || ai.wizards.os.device.AppState.isQaPage(activity, u) ? null : "untrusted-origin";
     }
     private boolean eligible() { return ineligibleReason() == null; }
 

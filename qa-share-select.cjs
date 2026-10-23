@@ -122,8 +122,18 @@ const tap = (p, id) => p.evaluate(id => document.querySelector(`.selmenu [data-s
   await tap(p, 'search'); await sleep(300);
   const srch = await p.evaluate(() => window.__qaSearch);
   ok(srch.length === 1 && srch[0][0] === picked.trim(), '3 Search looks the words up in Wizard Search', srch);
+  // 3g a real finger tap on Search: the sheet opens and stays open (22 Oct: the tap's trailing click hit the new
+  // sheet's scrim and closed it at once, which looked like a page refresh)
+  await p.evaluate(() => { window.__wos.openSearch = window.__wos.__o; });
+  await p.route('**/wizard-search/**', r => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Search</title><p>results</p>' }));
+  await select(p, '.msg.a .bub p', 0, 22); await menu(p);
+  const sb = await p.evaluate(() => { const r = document.querySelector('.selmenu [data-sm="search"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });
+  await p.touchscreen.tap(sb[0], sb[1]); await sleep(1200);
+  const sheet = await p.evaluate(() => ({ open: document.querySelector('#device')?.classList.contains('link-open') ?? null, frame: [...document.querySelectorAll('iframe')].map(f => { try { return f.contentWindow.location.pathname; } catch (e) { return '?'; } }).filter(x => /wizard-search/.test(x)) }));
+  ok(sheet.open === true && sheet.frame.length >= 1, '3 a finger tap on Search opens Wizard Search and it stays open', sheet);
+  await p.evaluate(() => document.querySelector('[data-ls="close"]')?.click()); await sleep(600);
   // 4 Settings toggle
-  await p.evaluate(() => window.__wos.openSettings()); await sleep(600);
+  await p.evaluate(() => window.__wos.openSettings('selection')); await sleep(600);
   const grp = await p.evaluate(() => { const g = document.querySelector('#settingsBody [data-selmenu]'); return g ? [...g.querySelectorAll('[data-smset]')].map(b => b.dataset.smset + (b.querySelector('.sw.on') ? ':on' : ':off')).join(',') : null; });
   ok(grp === 'copy:on,share:on,quote:on,search:on,all:on', '4 Settings lists the menu items, all on by default', grp);
   await p.evaluate(() => document.querySelector('#settingsBody [data-smset="quote"]').click()); await sleep(200);
@@ -191,7 +201,9 @@ const tap = (p, id) => p.evaluate(id => document.querySelector(`.selmenu [data-s
   // 6 old app / browser
   const o = await open(ctx, false);
   await select(o.p, '.msg.a .bub p', 0, 22); await sleep(900);
-  ok(!(await o.p.evaluate(() => window.WosSelMenu.state.open)), '6 an older app or a browser keeps its own toolbar (no Wizard menu)');
+  // Since the shared browser selection actions (f207bb94) the menu is in-page everywhere; only the native toolbar
+  // suppression needs WizardOSNative.selection, so a browser shows Wizard's menu and nothing native is called.
+  ok(await o.p.evaluate(() => window.WosSelMenu.state.open), '6 a browser (no native selection bridge) still gets Wizard’s in-page menu');
   await o.p.close();
   ok(!writes.filter(w => /\/v1\/runs$/.test(w)).length, 'no runs were posted (fence)', writes);
   console.log(`\n${pass} pass, ${fail} fail`);

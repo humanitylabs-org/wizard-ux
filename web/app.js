@@ -372,6 +372,8 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) undoLastMove(); });
   addEventListener('pagehide', undoLastMove);
   function atPickerEnd() { const d = desks[idx]; return idx === desks.length - 1 && !d.home && !d.wins.length; }
+  // A link or view opened from a chat keeps that chat where it was: swiping back lands on the same thread.
+  const openedFrom = (desk, chatId) => !!desk && desk.wins.some(x => W[x]?.from?.win === chatId || W[x]?.bound === chatId);
   function goDesk(n, silent) {
     n = Math.max(0, Math.min(desks.length - 1, n));
     // An empty desk (one the ＋ made, left without picking an app) goes away as soon as you leave it.
@@ -385,7 +387,7 @@
     // A Home card's chip is a quick look: leaving the Chats desk puts it back to all chats. Chips James picks stay.
     // Miguel's skins (Dark, Light, Landscapes): Chats you leave go back to the session list, so coming back to Chats
     // always starts on the list and it is clear where you are.
-    if (moved && from && ['obsidian', 'obsidian-light', 'landscapes'].includes(document.documentElement.dataset.skin || '')) for (const id of from.wins) { const w = W[id]; if (w?.app === 'chats' && w.thread && !to.wins.includes(id)) chatsBack(w); }
+    if (moved && from && ['obsidian', 'obsidian-light', 'landscapes'].includes(document.documentElement.dataset.skin || '')) for (const id of from.wins) { const w = W[id]; if (w?.app === 'chats' && w.thread && !to.wins.includes(id) && !openedFrom(to, id)) chatsBack(w); }
     if (moved) for (const id in W) { const c = CHATS.CH[id]; if (W[id].app === 'chats' && c?.fromCard && !desks[n].wins.includes(id)) { c.fromCard = false; c.coach = false; CHATS.setFilter(W[id], ''); } }
     placeTrack(0, true); renderDots(); save(); scheduleParking(); syncImmersive(); syncReviewChip(); syncBound();
     window.WosScenery?.[idx === HOME ? 'poke' : 'update'](); // scenery hook: Home animates, any other desk freezes it
@@ -416,9 +418,25 @@
     const h = deskSigil(idx); if (h !== orbAppHtml) { orbAppHtml = h; el.innerHTML = h; }
   }
   function renderDots() {
+    window.WosBell?.paint();
     if (typeof paintOrbBadge === 'function') try { paintOrbBadge(); } catch (_) {}
     paintOrbApp();
     const mk = i => `<button class="ddot sig${desks[i].wins.length ? ' filled' : ''}${desks[i].home ? ' dhome' : ''}${isReviewDesk(i) ? ' review' : ''}" data-goto="${i}" aria-label="${esc(deskName(i))}">${deskSigil(i)}</button>`;
+    /* Miguel's skins: a symmetric dock. Exactly three fixed slots each side of the orb (which is the current desk):
+     * the three desks to the left, the three to the right; New desk (an empty-desk outline, not a plus, so it never
+     * reads as New chat) takes the first free slot on the right; unused slots stay as blanks so nothing shifts. */
+    if (['obsidian', 'obsidian-light', 'landscapes'].includes(document.documentElement.dataset.skin || '')) {
+      const NEWD = '<button class="ddot sig dplus dnew" data-plus aria-label="New desk: pick an app"><span class="dsg"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="3.2" stroke-dasharray="3.1 2.6"/></svg></span></button>';
+      const gap = '<span class="dslot" aria-hidden="true"></span>';
+      const near = (h, k) => h.replace('class="ddot', `class="ddot ${k}`);
+      const Ls = [idx - 3, idx - 2, idx - 1].map((i, n) => i >= 0 ? near(mk(i), 'd' + (3 - n)) : gap);
+      let plus = !atPickerEnd();
+      const Rs = [idx + 1, idx + 2, idx + 3].map((i, n) => i < desks.length ? near(mk(i), 'd' + (n + 1)) : plus ? (plus = false, near(NEWD, 'd' + (n + 1))) : gap);
+      $('#dotsL').className = 'desk-dots left sym'; $('#dotsR').className = 'desk-dots right sym';
+      $('#dotsL').innerHTML = Ls.join(''); $('#dotsR').innerHTML = Rs.join('');
+      return;
+    }
+    $('#dotsL').className = 'desk-dots left'; $('#dotsR').className = 'desk-dots right';
     const L = []; for (let i = Math.max(0, idx - 3); i < idx; i++) L.push(i);
     const R = []; for (let i = idx + 1; i <= Math.min(desks.length - 1, idx + 3); i++) R.push(i);
     const homeExtra = L.length && L[0] > 0;
@@ -439,7 +457,7 @@
     if (e.target.closest('[data-plus]')) { if (Date.now() - dockSwiped < 400) return; newDesk(); tourEv('desk-plus', {}); return; }
     const b = e.target.closest('[data-goto]'); if (!b) return;
     if (Date.now() - peekJustOpened < 600 || Date.now() - dockSwiped < 400) return;
-    goDesk(+b.dataset.goto); tourEv('desk', { home: idx === HOME });
+    closeOverview(); goDesk(+b.dataset.goto); tourEv('desk', { home: idx === HOME });
   });
   $('#dock').addEventListener('contextmenu', e => { if (e.target.closest('[data-goto]')) e.preventDefault(); });
   /* Swipe anywhere on the bottom bar to change desks: the orb has its own gestures, the
@@ -493,25 +511,57 @@
     }).join('');
     const cap = wins.length === 1 && winTitle(wins[0]) !== winApp(wins[0]).name ? winTitle(wins[0]) : '';
     const accessible = wins.length > 1 ? `${wins.length} windows: ${wins.map(w => winTitle(w)).join(', ')}` : name;
+    // Miguel's skins: each desk card carries the same count badge as its dock mark (Ready chats, unread notifications…).
+    const badge = (() => { if (!oursSkin()) return ''; const n = window.WizCore?.workspaceNav?.deskCount(d, W, winApp) || 0; return n ? `<b class="ov-badge" aria-label="${n} new">${window.WizCore.workspaceNav.fmt(n)}</b>` : ''; })();
     return `<div class="ov-card${here ? ' here' : ''}${d.home ? ' ov-home' : ''}${rv ? ' review' : ''}" data-ov="${d.id}" role="button" tabindex="0"${here ? ' aria-current="true"' : ''} style="--ov-c:${primary.color};--ov-c2:${c2}" aria-label="${esc(accessible)}${here ? ', current desk' : ''}${rv ? ', review' : ''}">
       <div class="ov-chrome"><span class="ov-state">${here ? '<span class="ov-here">Here</span>' : ''}${rv ? '<span class="ov-review">Review</span>' : ''}</span>${d.home ? '' : `<button class="ov-x" data-ovx="${d.id}" aria-label="Close ${esc(name)}">✕</button>`}</div>
-      <div class="ov-body ov-n${Math.min(wins.length, 4)}">${body}</div>
+      ${badge}<div class="ov-body ov-n${Math.min(wins.length, 4)}">${body}</div>
       <div class="ov-top"><b>${esc(wins.length > 1 ? `${wins.length} windows` : name)}</b>${cap ? `<small>${esc(cap)}</small>` : ''}</div></div>`;
   }
   function renderOverview() {
     const open = desks.filter(d => !d.home && d.wins.length).length;
-    ovEl.innerHTML = `<div class="ov-head"><b>Desks</b><span>${open} open</span><button class="ov-done" data-ovdone>Done</button></div>
+    const inner = `<div class="ov-head"><b>Desks</b><span>${open} open</span><button class="ov-done" data-ovdone>Done</button></div>
       <div class="ov-grid">${desks.map((_, i) => ovCard(i)).join('')}<button class="ov-card ov-add" data-ovadd aria-label="New desk: pick an app"><span aria-hidden="true">＋</span><b>New desk</b></button></div>
       <p class="ov-hint">Hold and drag to reorder · pinch two desks together to merge · spread one apart to split</p>`;
+    // Pill mode: the same content inside a panel that grows out of the bottom pill; the rest of the screen is a tap-to-close scrim.
+    const keep = ovEl.querySelector('.ov-scroll')?.scrollTop || 0;
+    // Pill mode is the dock itself with room to spare: the same desk icons and badges in a grid, an ✕ where the pill was.
+    const cell = i => {
+      const d = desks[i], here = i === idx, name = d.home ? 'Home' : deskName(i);
+      return `<div class="ov-card ov-cell${here ? ' here' : ''}${d.home ? ' ov-home' : ''}" data-ov="${d.id}" role="button" tabindex="0"${here ? ' aria-current="true"' : ''} aria-label="${esc(name)}${here ? ', current desk' : ''}"><span class="ov-ic">${deskSigil(i)}</span><span class="ov-nm">${esc(name)}</span>${d.home ? '' : `<button class="ov-x" data-ovx="${d.id}" aria-label="Close ${esc(name)}">✕</button>`}</div>`;
+    };
+    const pillInner = `<div class="ov-grid">${desks.map((_, i) => cell(i)).join('')}<button class="ov-card ov-cell ov-new" data-ovadd aria-label="New desk: pick an app"><span class="ov-ic"><span class="dsg"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="3.2" stroke-dasharray="3.1 2.6"/></svg></span></span><span class="ov-nm">New desk</span></button></div>`;
+    ovEl.innerHTML = ovEl.classList.contains('ov-pill') ? `<div class="ov-sheet"><div class="ov-scroll">${pillInner}</div><button class="ov-close" data-ovdone aria-label="Close desks"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>` : inner;
+    const sh = ovEl.querySelector('.ov-scroll'); if (sh) sh.scrollTop = keep;
   }
-  function openOverview() {
+  /* Miguel's skins: swiping up on the orb opens this same overview as an extension of the bottom pill (mode 'pill'):
+   * the pill grows upward into a panel holding every desk; the orb stays as its handle (tap or swipe down closes). */
+  function openOverview(mode) {
     if (!ovEl) { ovEl = document.createElement('div'); ovEl.id = 'overview'; ovEl.className = 'ov'; device.appendChild(ovEl); bindOverview(ovEl); }
     closeSheets(true); if (LINKS && LINKS.isOpen()) LINKS.close();
-    renderOverview(); void ovEl.offsetWidth; ovEl.classList.add('open'); device.classList.add('ov-open');
-    ovEl.querySelector('.ov-card.here')?.scrollIntoView({ block: 'center' });
+    const pill = mode === 'pill' && (oursSkin() || orbUpVar() === 'pill');
+    if (!ovEl.classList.contains('open')) { ovEl.classList.toggle('ov-pill', pill); device.classList.toggle('ov-pill-open', pill); }
+    const wasOpen = ovEl.classList.contains('open');
+    renderOverview(); void ovEl.offsetWidth;
+    if (pill && !wasOpen) flyFromDock();
+    ovEl.classList.add('open'); device.classList.add('ov-open');
+    ovEl.querySelector('.ov-card.here')?.scrollIntoView({ block: pill ? 'nearest' : 'center' });
     armBack(); vib(14); window.__ovLog = (window.__ovLog || []).concat('open').slice(-30);
   }
-  function closeOverview() { if (!ovEl || !ovEl.classList.contains('open')) return false; ovEl.classList.remove('open'); device.classList.remove('ov-open'); return true; }
+  // Each desk icon rises out of its own spot in the pill (the orb for the desk in view) to its place in the grid.
+  function flyFromDock() {
+    ovEl.querySelectorAll('.ov-cell').forEach(c => {
+      const i = c.dataset.ov ? posOf(c.dataset.ov) : -1, ic = c.querySelector('.ov-ic'); if (!ic) return;
+      const src = i === idx ? $('#orbWrap') : i >= 0 ? document.querySelector(`#dock [data-goto="${i}"] .dsg`) : document.querySelector('#dock .dnew .dsg');
+      const to = ic.getBoundingClientRect(); let dx = 0, dy = 0;
+      if (src) { const f = src.getBoundingClientRect(); dx = f.left + f.width / 2 - (to.left + to.width / 2); dy = f.top + f.height / 2 - (to.top + to.height / 2); }
+      else dy = 60;
+      try { ic.animate([{ transform: `translate(${dx}px, ${dy}px)`, opacity: src ? 1 : 0 }, { transform: 'none', opacity: 1 }], { duration: 340, easing: 'cubic-bezier(.2,.9,.25,1)' }); } catch (_) {}
+    });
+  }
+  function closeOverview() { if (!ovEl || !ovEl.classList.contains('open')) return false; ovEl.classList.remove('open'); device.classList.remove('ov-open', 'ov-pill-open'); ovEl.classList.remove('editing'); return true; }
+  const pillOvOpen = () => !!(ovEl && ovEl.classList.contains('open') && ovEl.classList.contains('ov-pill'));
+  window.addEventListener('wizard:app-counts', () => { if (ovEl && ovEl.classList.contains('open') && !OV) renderOverview(); });
   const openPeek = () => openOverview(), closePeek = () => closeOverview();
   const posOf = did => desks.findIndex(d => d.id === did);
   function ovLog(s) { window.__ovLog = (window.__ovLog || []).concat(s).slice(-30); }
@@ -527,7 +577,8 @@
       const x = e.target.closest('[data-ovx]'); if (x) { closeDesk(posOf(x.dataset.ovx)); if (desks.length) renderOverview(); return; }
       if (e.target.closest('[data-ovadd]')) { closeOverview(); return newDesk(); }
       const c = e.target.closest('[data-ov]'); if (c) { const i = posOf(c.dataset.ov); closeOverview(); if (i >= 0) goDesk(i); return; }
-      if (e.target === el || e.target.classList.contains('ov-grid')) closeOverview();
+      if (el.classList.contains('editing') && !e.target.closest('[data-ov]') && e.target !== el) { el.classList.remove('editing'); return; }
+      if (e.target === el || e.target.classList.contains('ov-grid') || e.target.classList.contains('ov-scroll')) closeOverview();
     });
     const cardAt = (x, y) => { const t = document.elementFromPoint(x, y); return t && t.closest ? t.closest('.ov-card[data-ov]') : null; };
     const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
@@ -570,12 +621,17 @@
       }
       clearTimeout(OV.hold);
       if (OV.drag) { endDrag(true); ovTapBlock = Date.now() + 400; }
+      else if (el.classList.contains('ov-pill') && e.changedTouches?.[0]) {
+        // Pill mode: a clear swipe down (list at its top) folds it back into the pill.
+        const t = e.changedTouches[0], dy = t.clientY - OV.y, dx = t.clientX - OV.x, sc = el.querySelector('.ov-scroll');
+        if (dy > 70 && dy > Math.abs(dx) * 1.3 && (!sc || sc.scrollTop <= 0)) { ovTapBlock = Date.now() + 400; OV = null; closeOverview(); return; }
+      }
       OV = null;
     };
     el.addEventListener('touchend', end); el.addEventListener('touchcancel', end);
     function startDrag(c, x, y) {
       OV.drag = true; OV.card = c; const r = c.getBoundingClientRect(); OV.ox = x - r.left; OV.oy = y - r.top;
-      c.classList.add('drag'); el.classList.add('dragging'); vib(16); ovLog('drag');
+      c.classList.add('drag'); el.classList.add('dragging', 'editing'); vib(16); ovLog('drag');
       OV.ghost = c.cloneNode(true); OV.ghost.classList.add('ghost'); OV.ghost.style.width = r.width + 'px'; OV.ghost.style.height = r.height + 'px'; el.appendChild(OV.ghost);
       moveDrag(x, y);
     }
@@ -592,7 +648,8 @@
         if (before !== OV.card) { grid.insertBefore(OV.card, before); vib(6); }
       }
       // Near the top or bottom edge: scroll so far desks can be reached while dragging.
-      if (y < dr.top + 70) el.scrollTop -= 12; else if (y > dr.bottom - 70) el.scrollTop += 12;
+      const sc = el.querySelector('.ov-scroll'), sr = sc ? sc.getBoundingClientRect() : dr, so = sc || el;
+      if (y < sr.top + 50) so.scrollTop -= 12; else if (y > sr.bottom - 50) so.scrollTop += 12;
     }
     function endDrag(commit) {
       const c = OV.card; c.classList.remove('drag'); el.classList.remove('dragging'); OV.ghost?.remove();
@@ -1026,12 +1083,16 @@
   // Hosted Wizard apps (App Store, System) ask the shell to open another installed app in its own window.
   const hostedOpenable = id => { const a = APP[id]; if (!a?.url || a.kind !== 'wizard') return null; try { if (new URL(a.url, location.origin).origin !== location.origin) return null; } catch (e) { return null; } return a; };
   window.WizCanOpen = id => !!hostedOpenable(id);
+  window.WizAppOpen = id => Object.values(W).some(w => w && w.appId === id);
   window.WizOpenApp = id => { const x = hostedOpenable(id); return x ? openApp(x) : false; };
-  // Only the App Store and System windows may ask; the sender is checked by its actual frame, not by anything it says.
-  addEventListener('message', e => {
+  // Only trusted system windows may ask; check the actual sender frame, never a claimed app id.
+  addEventListener('message', async e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-app' || typeof d.id !== 'string') return;
     const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
-    const w = host && W[host.dataset.win]; if (!w || !['app-store', 'system', 'agents'].includes(w.appId)) return;
+    const w = host && W[host.dataset.win]; if (!w || !['app-store', 'system', 'agents', 'setup'].includes(w.appId)) return;
+    // Setup may have just installed it: apps-changed is asynchronous. Wait for the registry, not a guessed delay.
+    if (!hostedOpenable(d.id)) await window.WizCore.refreshApps?.();
+    if (!host.isConnected || W[host.dataset.win] !== w) return;
     const a = hostedOpenable(d.id); if (a) openApp(a);
   });
   /* App → agent binding: an app's settings sheet (core/app-route.js). Its Agents button opens the Agents app
@@ -1269,6 +1330,14 @@
   window.__wosEverywhere = () => { if (sheet === 'settings') renderSettings(); return true; };
 
   /* ---------------- home desk ---------------- */
+  /* Miguel's skins (22 Oct): Ready / Working as a glyph plus one dot per chat, so the count reads at a glance without a
+   * number (check = ready, spinning arc = working, whose dots pulse in turn). More than 12 shows 12 dots and a small +. */
+  function homeDots(kind, n) {
+    if (!['obsidian', 'obsidian-light', 'landscapes'].includes(document.documentElement.dataset.skin || '')) return '';
+    const icon = kind === 'ready' ? '<path d="M5 12.5l4.5 4.5L19 7"/>' : '<path d="M12 3a9 9 0 1 0 9 9"/>';
+    const shown = Math.min(n, 12), dots = Array.from({ length: shown }, (_, i) => `<i style="--n:${i}"></i>`).join('');
+    return `<span class="nc-vis${n ? '' : ' nc-zero'}" aria-hidden="true"><svg class="nc-ic" viewBox="0 0 24 24">${icon}</svg>${dots}${n > shown ? '<em>+</em>' : ''}</span>`;
+  }
   function renderHome() {
     const L = live(), needs = L.needs.length;
     // Opinionated: Ready = everything not working (read or not); unread is not a useful count.
@@ -1286,8 +1355,8 @@
       <div class="home-gap home-gap-a"></div>
       <div class="home-attn">
       <div class="constellation">
-        <button class="now-card wz-home-widget" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="ready"><span class="pip"></span><span class="meta"><span class="k">Ready</span></span><span class="n">${ready}</span></button>
-        <button class="now-card wz-home-widget" style="--c:var(--violet-2)" data-act="working"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span></span><span class="n">${working}</span></button>
+        <button class="now-card wz-home-widget" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="ready" aria-label="Ready ${ready}"><span class="pip"></span><span class="meta"><span class="k">Ready</span></span><span class="n">${ready}</span>${homeDots('ready', ready)}</button>
+        <button class="now-card wz-home-widget" style="--c:var(--violet-2)" data-act="working" aria-label="Working ${working}"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span></span><span class="n">${working}</span>${homeDots('working', working)}</button>
       </div>
       ${unsentCard()}
       ${sideCard()}
@@ -1315,6 +1384,11 @@
    * Same order as the App Store: Apps = anything with a screen you use; Wizard apps = backend-only apps your agent uses
    * (tap = its settings sheet); Agents = agent chats + the Agents app; Connectors = sign-ins to another service. James's skins keep his layout. */
   const oursSkin = () => ['obsidian', 'obsidian-light', 'landscapes'].includes(document.documentElement.dataset.skin || '');
+  /* Swipe up on the orb opens Desks instead of Apps: Miguel's skins always; any other skin when its CSS (or the owner's
+   * My skin) sets `--wos-orb-swipe-up` on <html>: `desks` = the regular overview, `pill` = Miguel's pill panel (the skin
+   * or My skin then carries the .ov-pill styling, as Miguel's skin.css does). */
+  const orbUpVar = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-orb-swipe-up').trim(); } catch (_) { return ''; } };
+  const orbUpDesks = () => oursSkin() || ['desks', 'pill'].includes(orbUpVar());
   const CONNECTOR_IDS = new Set(['wizard-chatgpt', 'wizard-claude', 'wizard-tinfoil', 'wizard-cloudflare']);
   const isConnector = a => CONNECTOR_IDS.has(a.id) || /^(connect|sign in to)\b/i.test(a.desc || '');
   /* System apps: the defaults Wizard OS ships for its parking spots (wizard-os docs/SYSTEM_APPS.md): files,
@@ -1800,7 +1874,7 @@
     if (which === 'inbox') return openChatsList();
     closeSheets(true); closeMenu();
     if (which === 'settings' && stDesk) dropParkedSettings(); // Settings opened on this desk moves here
-    sheet = which; device.classList.add('sheet-open'); tourEv('sheet', { which });
+    sheet = which; device.classList.add('sheet-open'); device.dataset.sheet = which; tourEv('sheet', { which });
     window.WosResources?.back(); window.WosResources?.sync();
     if (which === 'launcher') { forAgOpen = false; renderLauncher(q || ''); launcher.classList.add('open'); const s = $('#search'); s.value = q || ''; }
     else if (which === 'settings') { settingsFocus = document.activeElement; renderSettings(); settingsEl.classList.add('open'); $('#settingsBody').scrollTop = 0; settingsView?.focus(); }
@@ -1811,7 +1885,7 @@
   }
   function closeSheets(quiet) {
     if (!sheet && quiet) return;
-    const was = sheet; sheet = null; if (was) tourEv('sheet-closed', { which: was }); device.classList.remove('sheet-open');
+    const was = sheet; sheet = null; if (was) tourEv('sheet-closed', { which: was }); device.classList.remove('sheet-open'); delete device.dataset.sheet;
     launcher.classList.remove('open'); inboxEl.classList.remove('open'); if (!stDesk) settingsEl.classList.remove('open');
     [launcher, inboxEl, settingsEl].forEach(el => { if (el === settingsEl && stDesk) return; el.style.transform = ''; el.style.opacity = ''; });
     if (was === 'settings') settingsEl.style.transition = '';
@@ -1840,7 +1914,6 @@
       const top = body.scrollTop; body.innerHTML = html; body.__lhtml = html;
       body.scrollTop = live ? top : body.scrollHeight;
     };
-    if (oursSkin() && !launcher.querySelector('.lclose')) launcher.insertAdjacentHTML('afterbegin', '<button type="button" class="lclose" data-lclose aria-label="Close apps"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>');
     if (!q && oursSkin()) { paint(kindGroups(['apps', 'wiz', 'agents', 'conns'])); if (!live) body.scrollTop = 0; return; } // same order as New desk, read from the top
     if (!q) {
       const recentIds = store.get('recent', ['wizard', 'wizard-signal', 'wisdom', 'shopping']).filter(id => APP[id] && APP[id].kind !== 'native' && !window.WizCore.isMaintenanceApp(APP[id])).slice(0, 4);
@@ -1884,7 +1957,6 @@
   }
   window.WizHomeScreenApps?.attach(launcher, id => APP[id]);
   launcher.addEventListener('click', e => {
-    if (e.target.closest('[data-lclose]')) return closeSheets();
     const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app]);
     const bi = e.target.closest('[data-appinfo]'); if (bi) { closeSheets(); return openAppInfo(bi); }
     const t = e.target.closest('[data-thread]'); if (t) { closeSheets(); return openWizardThread(t.dataset.thread); }
@@ -2200,7 +2272,7 @@
   };
   let NOMIC = false;
   function setVoice(s) {
-    V.state = s; device.dataset.voice = s; tourEv('voice', { state: s }); if (s === 'listen' || s === 'idle') V.resumeBlocked = false;
+    V.state = s; device.dataset.voice = s; tourEv('voice', { state: s }); queueMicrotask(() => window.WosSkinHost?.voice?.(s)); if (s === 'listen' || s === 'idle') V.resumeBlocked = false;
     $('#arcPause small').textContent=s==='paused'?'Resume':'Pause';$('#arcPause').setAttribute('aria-label',s==='paused'?'Resume recording':'Pause recording');
     CHATS.PW?.paintMic((s === 'listen' || s === 'paused') && !!V.replyTo, V.replyTo?.sid || '');
     reportVoice(s);
@@ -2320,11 +2392,11 @@
     if (V.an) {
       const a = new Uint8Array(V.an.fftSize); V.an.getByteTimeDomainData(a);
       let s = 0; for (let k = 0; k < a.length; k++) { const v = (a[k] - 128) / 128; s += v * v; }
-      Orb.setLevel(V.state === 'paused' ? 0 : Math.min(1, Math.sqrt(s / a.length) * 4.2));
+      orbLevel(V.state === 'paused' ? 0 : Math.min(1, Math.sqrt(s / a.length) * 4.2));
     } else if (V.native) {
       if (performance.now() - (V.lvlAt || 0) > 90) { V.lvlAt = performance.now(); try { V.lvl = DEV().recLevel() / 100; } catch (e) {} }
-      Orb.setLevel(V.state === 'paused' ? 0 : Math.min(1, (V.lvl || 0) * 1.6));
-    } else if (V.sim) Orb.setLevel(V.state === 'paused' ? 0 : .25 + .25 * Math.sin(performance.now() / 160) * Math.sin(performance.now() / 410));
+      orbLevel(V.state === 'paused' ? 0 : Math.min(1, (V.lvl || 0) * 1.6));
+    } else if (V.sim) orbLevel(V.state === 'paused' ? 0 : .25 + .25 * Math.sin(performance.now() / 160) * Math.sin(performance.now() / 410));
     tx.style.setProperty('--lvl', (V.an || V.sim || V.native) ? 0.4 : 0);
     if (V.state !== 'idle' && V.state !== 'think') V.raf = requestAnimationFrame(tick);
   }
@@ -2413,6 +2485,12 @@
     if (V.state !== 'idle') return;
     const initialSnap=kind==='dictation'?null:kind==='general'?generalVoiceSnap():sendSnap();
     if(initialSnap) initialSnap.route=CHATS.modelRoute(initialSnap.view?.id,initialSnap.view?.thread||'');
+    // An explicit agent pick (two-orb layout's agent orb): a new chat with that agent, its own route only.
+    if (initialSnap && kind === 'general' && opt.agent && window.WosAgents?.isOther(opt.agent)) {
+      let r = null; try { r = window.WosModels.snapshot('', null, opt.agent); } catch (e) { toast('!', esc(e.message), 2600); return 'busy'; }
+      if (!r?.agent) { toast('!', 'That agent has no model yet · open Agents', 2600); return 'busy'; }
+      initialSnap.route = r;
+    }
     const shared = window.WizAppCapture?.getState?.();
     let meetingLoan=null;
     if (shared?.active || shared?.recording || shared?.hold) {
@@ -2514,7 +2592,7 @@
     if (V.chunks.length) V.parts.push(new Blob(V.chunks, { type: V.mime || 'audio/webm' }));
     V.chunks = [];
     if (V.state !== 'paused') V.acc += performance.now() - V.t0;
-    stopStream(); V.rec = null; Orb.setLevel(0);
+    stopStream(); V.rec = null; orbLevel(0);
     setVoice('paused');
     $('#txRouteText').textContent = V.kind === 'dictation' ? 'Dictation interrupted · kept · tap orb to transcribe' : 'Mic interrupted · kept · tap the orb to send';
     toast('⏸', 'Mic interrupted · your recording is kept');
@@ -2649,7 +2727,7 @@
       if (!V.snap.conversation) {
         // A route missing its provider (catalogue still loading) was never sent; each Send tap re-resolves it,
         // so a model the owner picks afterwards takes effect instead of the stale half-route.
-        if (!(V.snap.route?.model&&V.snap.route?.provider)) V.snap.route = V.snap.general ? CHATS.modelRoute() : CHATS.modelRoute(pin?.wid, pin?.sid || '');
+        if (!(V.snap.route?.model&&V.snap.route?.provider)) V.snap.route = V.snap.general ? (V.snap.route?.agent ? window.WosModels.snapshot('', null, V.snap.route.agent) : CHATS.modelRoute()) : CHATS.modelRoute(pin?.wid, pin?.sid || '');
         if (!(V.snap.route?.model&&V.snap.route?.provider)) { V.snap.route = null; window.WosModels.load?.(); toast('!', 'Choose a model before sending', 2200); return; }
         if (V.native) saveVoiceRoute(V.native, V.snap.route);
       }
@@ -2732,7 +2810,7 @@
       if (long && !rec && V.parts.length && window.WosCancelled) keepWeb(V.parts.slice());
       try { rec && rec.state !== 'inactive' && (rec.onstop = null, rec.stop()); } catch (e) {}
     }
-    stopStream(); V.rec = null; V.sim = false; cancelAnimationFrame(V.raf); Orb.setLevel(0);
+    stopStream(); V.rec = null; V.sim = false; cancelAnimationFrame(V.raf); orbLevel(0);
     setVoice('idle'); txHide(quiet ? 0 : 0);
     const kept = long && (nativeKeeps || !!rec || !!V.parts.length);
     if (!quiet || kept) { toast('✕', kept ? (nativeKeeps ? 'Cancelled · kept in Settings → Cancelled recordings' : 'Cancelled · keeping recording…') : 'Discarded', kept ? 3200 : 2200); vib(12); }
@@ -2757,7 +2835,7 @@
     V.parts = []; V.chunks = [];
     const blob = blobs[0] || new Blob([], { type: V.mime || 'audio/webm' });
     const size = blobs.reduce((n, b) => n + b.size, 0);
-    stopStream(); V.rec = null; Orb.setLevel(0);
+    stopStream(); V.rec = null; orbLevel(0);
     if (V.cancelled) { recDone(nid); dropHold(); unseal(); return; }
     if (V.kind === 'dictation') { const id = V.custodyCapture; V.custodyCapture = null; if (id) await OUTBOX.transition(id, 'held', 'Dictation recording · original kept'); if(V.meetingLoan){const held=await OUTBOX.retainDictation(new Blob(blobs,{type:blob.type}),id);if(!held.durable){setVoice('paused');toast('!','Save failed · recording retained here');return;}await returnMeeting({status:'local',voiceTakeId:nid||held.id});} return transcribeDictation(blobs, nid, id).finally(restoreReply); }
     if (!nid && !V.meetingLoan && (V.acc < 450 || size < 1200)) { recDone(nid); dropHold(); unseal(); V.replyTo = null; replyTake(null); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); tourEv('nospeech'); restoreReply();return; }
@@ -2786,13 +2864,15 @@
     const it = await OUTBOX.stage({ ...(snap.route || {}), kind: sid && sid !== '__new__' ? 'reply' : 'new',
       sessionId: sid && sid !== '__new__' ? sid : '',
       steerRunId: snap.meetingEventId ? '' : rt?.steerRunId ?? (CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '', ...(snap.seal?.reply ? { reply: snap.seal.reply } : {}),
-      meetingEventId:snap.meetingEventId,sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || '',
+      meetingEventId:snap.meetingEventId,sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || snap.route?.agent || '',
       files: [...takeFiles(), ...(snap.seal?.files || [])].filter(f => f?.id),
       instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: rt?.wid || sv?.id || '' });
     V.custodyCapture = null;
     snap.custodyId = it.id; snap.audio = audio;
     if(V.meetingLoan){if(!it.durable){setVoice('paused');toast('!','Save failed · original retained here; meeting remains paused');return;}await returnMeeting({status:'captured',voiceTakeId:nid||it.id,deliveryKey:it.id});}
     snap.seal?.done(it);
+    // A tap take with a fixed destination is the outbox's from here: Reload no longer waits for upload + transcription.
+    V.handedOff = (!rt && aimAt == null && kind !== 'command' && !snap.general && !snap.meetingEventId && !V.meetingLoan && !sv?.review && sv?.mode !== 'capture' && await OUTBOX.handOff?.(it.id)) ? it.id : null;
     // Released a moment after this take is handled: by then its outbox item (if any) has replaced the hold.
     const hold = V.hold; V.hold = null;
     const unhold = () => { if (hold) setTimeout(() => LIVE.releaseSend?.(hold), 1500); };
@@ -2864,9 +2944,17 @@
       txPill('↻', 'Waiting to send · recording kept', 'agent', 'Couldn’t reach Wizard · retrying'); txHide(2600);
     } finally { if(kind==='command')restoreReply(); }
   }
-  // The tap that starts recording must not also press an arc button: the arc fans out
-  // from under the finger, so the same tap's click would land on it mid-animation.
-  $('#voice').addEventListener('click', e => { if (e.target.closest('.arc') && performance.now() - (V.onAt || 0) < 450) { e.stopPropagation(); e.preventDefault(); } }, true);
+  // The tap that starts recording must not also press an arc button: the arc fans out from under the finger, so the
+  // same tap's click lands on it (Attach is on top, so the file picker opened). A fixed time window failed on a busy
+  // phone, where that click arrives late (James, 23 Oct 2026). An arc button now takes a pointer click only when the
+  // press also started on it; keyboard and programmatic clicks (detail 0) are untouched.
+  let arcPress = null;
+  window.addEventListener('pointerdown', e => { arcPress = e.target?.closest?.('.arc') || null; }, true);
+  $('#voice').addEventListener('click', e => {
+    const arc = e.target.closest('.arc'); if (!arc) return;
+    const pressed = arcPress === arc; arcPress = null;
+    if (e.detail > 0 && !pressed) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
   $('#arcCancel').addEventListener('click', () => cancelVoice());
   $('#arcPause').addEventListener('click', () => {
     if(parking)return;
@@ -2899,7 +2987,7 @@
   async function runUtterance(text, kind, typed) {
     // Help is a command only on explicit command/typed surfaces, never a tapped voice take.
     if (!window.WosCommands.isMessageTake(kind, typed) && window.WosTour?.isHelp(text) && (kind === 'command' || sendSnap().view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
-    clearTimeout(txHideT); V.kind = kind || 'auto';
+    clearTimeout(txHideT); V.handedOff = null; V.kind = kind || 'auto';
     const snap = sendSnap();
     txShow('', typed ? 'Typed' : 'Heard', kind === 'command' ? 'command' : '', kind === 'command' ? '⚡' : '✦');
     setVoice('think'); shock();
@@ -3008,7 +3096,7 @@
   async function handleText(text, kind, typed, sttMs, target, snap) {
     const sttNote = sttMs ? ` · heard in ${sttMs} ms` : '';
     snap = snap || sendSnap();
-    if (snap.general) return toAgent(text, 'To ' + window.WizConfig.agent(), { snap, files: typed ? [] : takeFiles() });
+    if (snap.general) return toAgent(text, 'To ' + snapAgentName(snap), { snap, files: typed ? [] : takeFiles() });
     if (snap.conversation && kind !== 'command' && target == null) {
       const it = await OUTBOX.sendConversation({ conversation: snap.conversation, text, audio: snap.audio || null, files: typed ? [] : takeFiles(), source: 'orb' });
       setVoice('idle'); txHide();
@@ -3203,6 +3291,10 @@
     if (V.state === 'idle') startVoice('general');
     else if (V.snap?.general && ['listen', 'paused'].includes(V.state)) finishVoice();
   });
+  function snapAgentName(snap) {
+    const id = snap?.route?.agent, a = id && window.WosAgents?.get(id);
+    return a ? a.label : window.WizConfig.agent();
+  }
   function generalVoiceSnap() {
     // An explicit general take contains no private/app screen, composer or thread context.
     return { id: null, desk: idx, view: null, screen: '', conversation: null, others: [], general: true, route: CHATS.modelRoute() };
@@ -3214,7 +3306,7 @@
     voiceDestination.classList.toggle('app-voice', !!label);
     device.classList.toggle('app-voice-input', active && !!label);
     voiceDestination.textContent = label ? 'To: ' + label + ' · tap to send'
-      : V.snap?.general ? 'Talking to ' + window.WizConfig.agent() + ' · tap to send'
+      : V.snap?.general ? 'Talking to ' + snapAgentName(V.snap) + ' · tap to send'
       : V.kind === 'command' ? 'Command · release to run · slide up for ' + window.WizConfig.agent() : 'Listening · tap to send';
     if (active) $('#orbWrap').setAttribute('aria-label', voiceDestination.textContent);
     generalTarget.hidden = V.state !== 'command';
@@ -3232,6 +3324,8 @@
     // focus. Tap still dictates; startVoice retains the microphone loan checks.
     return !focused || !!(capture?.recording && capture?.meetingId);
   }
+  // The dock orb's level, also handed to a layout drawing its own orb (Two orbs' agent orb).
+  function orbLevel(v) { Orb.setLevel(v); window.WosSkinHost?.level?.(v); }
   function shock() { const s = $('.orb-shock'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go'); }
   orbWrap.addEventListener('contextmenu', e => e.preventDefault());
   orbWrap.addEventListener('pointerdown', e => {
@@ -3239,7 +3333,7 @@
     e.preventDefault(); try { orbWrap.setPointerCapture(e.pointerId); } catch (_) {} closeMenu();
     G = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), mode: 'pending', dx: 0, dy: 0, aim: null };
     Orb.press(true);
-    G.corner = device.classList.contains('orb-corner');
+    G.corner = device.classList.contains('orb-corner'); G.ovWas = pillOvOpen(); G.upDesks = orbUpDesks();
     if (mayHoldCommand()) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); if(V.state==='idle'||(V.state==='paused'&&V.replyTo)){vib(18);G.start=startVoice('command');}else{G.refused=true;toast('⏸','Pause your reply before a command');} } }, 380);
   });
   // Slide-to-aim is retired (James, 11 Oct 2026): a held command already opens on the desk beside this one, so
@@ -3278,6 +3372,12 @@
       placeTrack(dx * 1.1, false);
       orbWrap.dataset.dir = Math.abs(G.dx) > 50 ? (G.dx < 0 ? (idx < desks.length - 1 ? `${clip(deskName(idx + 1), 16)} →` : atPickerEnd() ? '' : 'New desk →') : (idx > 0 ? `← ${clip(deskName(idx - 1), 16)}` : '')) : '';
     } else if (G.mode === 'v') {
+      if (G.upDesks && !sheet) {
+        // Our skins: up grows the pill into the desks panel (once, mid-swipe); down while it is open closes it.
+        if (G.dy < -40 && !pillOvOpen() && !G.ovWas) { G.ovOpened = true; openOverview('pill'); }
+        orbWrap.dataset.dir = '';
+        return;
+      }
       if (!sheet && G.dy < 0) {
         const p = Math.min(1, Math.abs(G.dy) / 240);
         launcher.classList.add('dragging');
@@ -3290,25 +3390,35 @@
       orbWrap.dataset.dir = sheet ? (Math.abs(G.dy) > 40 ? 'Close' : '') : G.dy < -40 ? '↑ Apps' : G.dy > 12 && V.state === 'idle' ? '↓ Hide' : '';
     }
   });
+  // The orb's tap on a running take (the dock orb, or a layout's agent orb).
+  // James 20 Oct: a tap on a paused take resumes it and never sends. Send is the next tap, once it records again.
+  // Only a take that cannot resume (mic held by another recording, or the last resume found the mic busy) still sends.
+  function orbTapBusy() {
+    if (V.admitting) { V.admitSend = true; return; }
+    if (V.state === 'paused') {
+      // Dictation keeps its own contract: a tap on a paused dictation transcribes into the sealed field (nothing is sent).
+      if (V.kind === 'dictation' || V.resumeBlocked || (window.WizAppCapture?.getState?.().recording && !V.meetingLoan)) { shock(); return finishVoice(); }
+      return $('#arcPause').click();
+    }
+    if (V.state === 'listen') { shock(); return finishVoice(); }
+    // sending: a tap on the orb does nothing until the take is handed off
+  }
   function endGesture(e, cancelled) {
     if (!G || (e?.pointerId != null && e.pointerId !== G.pointerId)) return; const g = G; G = null;
     clearTimeout(g.hold); Orb.press(false); orbWrap.classList.remove('dragging'); orbWrap.dataset.dir = ''; device.classList.remove('aiming'); generalTarget.classList.remove('selected');
     const vt = (performance.now() - g.t) || 1;
+    // Our skins, desks panel open: the orb is its handle. Any tap or swipe on it closes the panel (nothing else fires).
+    if (g.ovWas && pillOvOpen()) { if (!cancelled && g.mode !== 'hold') { closeOverview(); return; } }
+    if (g.ovOpened) { if (cancelled) closeOverview(); return; }
+    if (g.upDesks && g.mode === 'v' && !sheet) { if (g.dy < -70 || g.dy / vt < -.55) openOverview('pill'); else if (!cancelled && V.state === 'idle' && (g.dy > 18 || (g.dy > 8 && g.dy / vt > .3))) setZen(true); return; }
     if (g.mode === 'pending' && !cancelled) {
       if (sheet) return closeSheets();
       if(V.admitting){V.admitSend=true;return;}
       if(V.state==='paused'&&V.replyTo&&FIELDS.refresh())return startVoice('dictation');
-      if (V.state === 'idle') return startOrbVoice();
-      // James 20 Oct: a tap on a paused take resumes it and never sends. Send is the next tap, once it records again.
-      // Only a take that cannot resume (mic held by another recording, or the last resume found the mic busy) still sends.
-      if (V.state === 'paused') {
-        // Dictation keeps its own contract: a tap on a paused dictation transcribes into the sealed field (nothing is sent).
-        if (V.kind === 'dictation' || V.resumeBlocked || (window.WizAppCapture?.getState?.().recording && !V.meetingLoan)) { shock(); return finishVoice(); }
-        return $('#arcPause').click();
-      }
-      if (V.state === 'listen') { shock(); return finishVoice(); }
-      return; // sending: a tap on the orb does nothing until the take is handed off
+      if (V.state === 'idle') return window.WosSkinHost?.orbTap?.() ? undefined : startOrbVoice();
+      return orbTapBusy();
     } else if (g.mode === 'hold') {
+
       if(g.refused)return; // a refused hold always consumes its release; never sends a reply
       if(g.start){g.start.then(()=>{if(V.kind!=='command')return;if(cancelled)pauseCommandCapture();else finishVoice();});return;}
       // Capture loss is not explicit Cancel. Keep the take paused with controls, never discard it.
@@ -3351,7 +3461,7 @@
   window.addEventListener('pointercancel', e => endGesture(e, true), true);
   window.addEventListener('blur', () => endGesture(null, true));
   document.addEventListener('visibilitychange', () => { if (document.hidden) endGesture(null, true); });
-  orbWrap.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (V.state === 'idle') startOrbVoice(); else finishVoice(); } });
+  orbWrap.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (V.state === 'idle') { if (!window.WosSkinHost?.orbTap?.()) startOrbVoice(); } else finishVoice(); } });
   orbWrap.tabIndex = 0;
 
   /* Distraction-free, forgiving start (James, 18 Oct 2026): the swipe down may begin a little above the orb. Passive
@@ -3423,6 +3533,7 @@
     { const t = window.WosTour?.back(); if (t) { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } return t; } } // the first-run tour and the Help sheet sit above everything
     { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
     if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet sits above the windows
+    if (window.WosBoomerang?.back()) return 'boomerang'; // the Boomerang picker sits above the thread it was opened from
     // Explicit bypass capture follows the retain-on-Back contract; ordinary recordings keep navigating.
     if (V.snap?.general && ['listen', 'command'].includes(V.state)) { V.stopAsked = true; pauseCommandCapture(); return 'recording'; }
     if (document.querySelector('#txChips [data-handoff], #txChips [data-hold]')) { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(0); return 'draft'; }
@@ -3604,7 +3715,7 @@
       return true;
     }
     if (h.action === 'usuals') { openUsuals(); return true; }
-    if (h.action === 'unsent' || h.action === 'settings') { onUnsentChange(); openSettings(h.action === 'unsent'); return true; }
+    if (h.action === 'unsent' || h.action === 'settings') { onUnsentChange(); openSettings(h.action === 'unsent' || (typeof h.focus === 'string' && window.WosSettings?.features.some(f => f.id === h.focus) ? h.focus : undefined)); return true; }
     if (h.action === 'side-button') { store.set('sideHidden', false); refreshHome(true); if (SIDE && (SIDE.step === 'mic' || SIDE.step === 'assistant')) sideButtonTap(false); else toast('◉', 'Side button is on. Hold it to talk.', 2600); return true; }
     const text = String(h.text || '').trim().slice(0, 2000);
     if (h.action !== 'say' || !text) return false;
@@ -3676,7 +3787,7 @@
     openAgentChats,
     live: LIVE, openPeek, closePeek, openOverview, closeOverview, mergeDesks, splitDesk, reorderDesks, closeDesk, openLinkDesk, pinWin, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
     zoomIn: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomIn(f); }, zoomOut: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomOut(f); },
-    HOME, get idx() { return idx; }, get desks() { return desks; }, get ovLog() { return window.__ovLog || []; }, get wins() { return W; }, get voice() { return V.state; }, get sheet() { return sheet; },
+    HOME, get idx() { return idx; }, get desks() { return desks; }, get ovLog() { return window.__ovLog || []; }, get wins() { return W; }, get voice() { return V.state; }, get voiceHandedOff() { return !!V.handedOff && OUTBOX.handedOff?.(V.handedOff); }, get sheet() { return sheet; },
     get back() { return { watchers: watchers.size, guardOn, exitArmed: Date.now() < exitUntil, log: window.__backLog || [] }; },
     openSearch,
     startVoice, finishVoice, cancelVoice, recoverDictation, recoverParkedReply, outbox: OUTBOX, openSettings, unsentAll, renderSettings,
@@ -3745,9 +3856,39 @@
   window.WizCore.deeplink?.consume();
   /* Skin packages (core/skin-host.js): the only shell surface a skin script can drive. Each call goes through
    * the shell's own functions, so the Back contract and desk rules hold for every skin. */
+  function agentInfo(a) {
+    const AG = window.WosAgents;
+    // The main agent goes by the owner's name for it (Archimedes), not its harness label.
+    const label = a.is_default ? (window.WizConfig?.agent() || a.label || a.id) : (a.label || a.id);
+    return { id: a.id, label, colour: AG ? AG.colour(a) : '#b99bff', private: a.privacy === 'private', main: !!a.is_default, status: a.status || '' };
+  }
+  /* Who the agent orb sends to, from what is in front: an agent's Chats, a thread that belongs to an agent,
+   * an app bound to an agent (Agents › app bindings), else the main agent. */
+  function agentHere() {
+    const AG = window.WosAgents, def = AG?.defaultId() || 'hermes';
+    const f = desks[idx]?.focus, w = f && W[f];
+    let id = '', why = 'main', app = '';
+    if (w && agentWin(w)) { id = w.agent; why = 'chats'; }
+    else if (w && (w.app === 'chats' || CHATS.isHosted(f)) && w.thread && AG?.isOther(LIVE?.agentOf?.(w.thread))) { id = LIVE.agentOf(w.thread); why = 'thread'; }
+    else if (w?.appId) {
+      const b = AG?.binding?.(w.appId);
+      if (b?.agent && AG.isOther(b.agent) && AG.get(b.agent)) { id = b.agent; why = 'app'; app = APP[w.appId]?.name || w.appId; }
+    }
+    const a = AG?.get(id || def) || { id: id || def, label: window.WizConfig?.agent() || 'Hermes', is_default: !id, appearance: {} };
+    return { ...agentInfo(a), why, app };
+  }
+  /* The agent orb's tap / pick. No pick = the screen's own destination (the classic tap). */
+  function talkTo(id) {
+    if (V.state !== 'idle') return orbTapBusy();
+    const AG = window.WosAgents, here = agentHere();
+    const target = id || here.id;
+    if (target === here.id && here.why !== 'app') return startVoice('auto');
+    if (!AG?.isOther(target)) return startVoice('general');
+    return startVoice('general', { agent: target });
+  }
   const skinChatsWin = () => { const f = desks[idx]?.focus; if (W[f]?.app === 'chats') return W[f]; const id = desks[idx]?.wins.find(x => W[x]?.app === 'chats'); return id ? W[id] : null; };
   window.WosSkinHost?.attach({
-    route() { const w = skinChatsWin(); return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: idx }; },
+    route() { const w = skinChatsWin(), f = W[desks[idx]?.focus]; let ag = ''; try { ag = agentHere().id; } catch (_) {} return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: idx, app: f ? (f.appId || f.app || null) : null, agent: ag || null }; },
     back: () => backStep(),
     openList: () => openChatsList(),
     openThread: id => openWizardThread(id),
@@ -3757,5 +3898,16 @@
     dock: () => $('#dock'),
     locked: pointerId => !!(DS && DS.id === pointerId && DS.h),
     toast: text => toast('◇', text, 2400),
+    // Layouts (two-orb): who the screen routes to, and the orb's recorder.
+    agents: () => (window.WosAgents?.list || []).map(agentInfo),
+    agentHere: () => agentHere(),
+    agentSigil: id => { const AG = window.WosAgents, a = AG?.get(id); return a ? AG.sigil(a, 'ag-sig') : ''; },
+    openAgent: id => openAgentChats(id),
+    voiceState: () => ({ state: V.state, kind: V.kind || '', agent: V.state === 'idle' ? '' : (V.snap?.route?.agent || V.snap?.view?.agent || (V.replyTo?.sid && LIVE?.agentOf?.(V.replyTo.sid)) || window.WosAgents?.defaultId() || '') }),
+    talk: id => talkTo(id),
+    voiceTap: () => (V.state === 'idle' ? talkTo('') : orbTapBusy()),
+    dictate: () => { if (V.state !== 'idle' || !FIELDS?.refresh()) return false; startVoice('dictation'); return true; },
+    voiceCancel: () => cancelVoice(),
+    relayout: () => { try { syncImmersive(); } catch (_) {} },
   });
 })();

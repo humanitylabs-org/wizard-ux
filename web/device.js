@@ -281,7 +281,7 @@
    * that the session list hasn't caught up with yet is never swept away. */
   const seenAtOf = (L, id) => {
     const s = L.session?.(id); if (!s) return NaN;
-    const r = L.seen?.threads?.[`${s.runtime}:${s.id}`]; if (!r) return NaN;
+    const r = L.seenRecord?.(s) || L.seen?.threads?.[`${s.runtime}:${s.id}`]; if (!r) return NaN;
     return typeof r.seenAt === 'number' ? r.seenAt : Date.parse(r.seenAt ?? '');
   };
   function sweepReadNotes(why) {
@@ -363,7 +363,8 @@
   function webBusy() {
     try { if (J(DEV()?.recActive?.())?.id) return true; } catch (_) { return true; }
     const w = W$(); if (!w) return true;
-    if (w.voice !== 'idle' || sheet || w.voiceBorrowing) return true; // incl. an orb take parked on a meeting loan
+    // Sending (think) a take the outbox already owns survives a reload: the new page finishes that send.
+    if ((w.voice !== 'idle' && !(w.voice === 'think' && w.voiceHandedOff)) || sheet || w.voiceBorrowing) return true; // incl. an orb take parked on a meeting loan
     return Object.keys(w.wins).some(k => (w.chatState(k).files || []).some(f => f.uploading));
   }
   function saveDrafts() {

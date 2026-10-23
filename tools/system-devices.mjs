@@ -19,6 +19,9 @@ const ID_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const HOST_RE = /^(?!-)[A-Za-z0-9._@:-]{1,253}$/;
 const clip = (s, n) => String(s ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, n);
 const GiB = 1024 ** 3;
+// agent = machines the Wizard reads and runs work on; human = the owner's own devices; client = Wizards run for clients.
+export const GROUPS = new Set(['agent', 'human', 'client', 'other']);
+export const peerGroup = (os, name, reg) => reg.groups[String(name).toLowerCase()] || (/^(ios|android|macos|ipados)$/i.test(os || '') ? 'human' : 'other');
 
 // ---------- registry ----------
 export function cleanRegistry(raw) {
@@ -32,10 +35,13 @@ export function cleanRegistry(raw) {
     const c = d.connect || {};
     if (c.type !== 'ssh' || !HOST_RE.test(String(c.host || ''))) continue;
     seen.add(id);
-    devices.push({id, name: clip(d.name, 40) || id, role: clip(d.role, 60) || null, connect: {type: 'ssh', host: String(c.host)}, tailnet: names(d.tailnet)});
+    devices.push({id, name: clip(d.name, 40) || id, role: clip(d.role, 60) || null, group: GROUPS.has(d.group) ? d.group : 'agent', connect: {type: 'ssh', host: String(c.host), ...(c.shell === 'powershell' ? {shell: 'powershell'} : {})}, tailnet: names(d.tailnet)});
     if (devices.length >= 24) break;
   }
-  return {version: 1, this: thisBox, devices, hide: names(j.hide)};
+  // Tailnet machines the Wizard does not read: which group the owner sees them under (human / client / other).
+  const groups = {};
+  for (const [k, v] of Object.entries(j.groups && typeof j.groups === 'object' ? j.groups : {}).slice(0, 100)) { const n = clip(k, 64).toLowerCase(); if (n && GROUPS.has(v)) groups[n] = v; }
+  return {version: 1, this: thisBox, devices, hide: names(j.hide), groups};
 }
 export function readRegistry(path = REGISTRY_PATH()) {
   try { return cleanRegistry(JSON.parse(readFileSync(path, 'utf8'))); }
@@ -74,18 +80,37 @@ fi
 df -kP 2>/dev/null | awk 'NR>1{m=$6; for(i=7;i<=NF;i++) m=m" "$i; print "disk="$1"|"$2"|"$3"|"$4"|"m}'
 `;
 
+// Windows (OpenSSH default shell is cmd): the same key=value shape from PowerShell, read from stdin.
+export const PROBE_WIN = String.raw`
+$ErrorActionPreference='SilentlyContinue'
+$cs=Get-CimInstance Win32_ComputerSystem; $os=Get-CimInstance Win32_OperatingSystem
+"os=Windows"
+"cpus=$($cs.NumberOfLogicalProcessors)"
+"memtotal=$([int64]$os.TotalVisibleMemorySize*1024)"
+"memused=$(([int64]$os.TotalVisibleMemorySize-[int64]$os.FreePhysicalMemory)*1024)"
+$l=(Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average
+if($l -ne $null){"cpuidle=$(100-$l)"}
+"uptime=$([int64]((Get-Date)-$os.LastBootUpTime).TotalSeconds)"
+Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" | ForEach-Object { "wdisk=$($_.DeviceID)|$($_.Size)|$($_.FreeSpace)" }
+`;
+
 const LINUX_SKIP = /^\/(boot|snap|run|dev|sys|proc|var\/lib\/(docker|containers|kubelet)|var\/snap)(\/|$)/;
 export function parseProbe(text) {
-  const kv = {}, rows = [];
+  const kv = {}, rows = [], wrows = [];
   for (const line of String(text).split('\n').slice(0, 400)) {
     const i = line.indexOf('='); if (i < 1) continue;
     const k = line.slice(0, i), v = line.slice(i + 1).trim();
-    if (k === 'disk') rows.push(v.split('|')); else kv[k] = v;
+    if (k === 'disk') rows.push(v.split('|')); else if (k === 'wdisk') wrows.push(v.split('|')); else kv[k] = v;
   }
   const num = v => { const n = Number(v); return Number.isFinite(n) ? n : null; };
-  const mac = kv.os === 'Darwin', linux = kv.os === 'Linux';
-  if (!mac && !linux) throw new Error('unsupported platform');
+  const mac = kv.os === 'Darwin', linux = kv.os === 'Linux', win = kv.os === 'Windows';
+  if (!mac && !linux && !win) throw new Error('unsupported platform');
   const disks = [], devs = new Set();
+  for (const [drive, sizeS, freeS] of win ? wrows : []) {
+    const size = num(sizeS), av = num(freeS);
+    if (!/^[A-Z]:$/.test(String(drive)) || !(size >= GiB) || !Number.isFinite(av)) continue;
+    disks.push({label: drive === 'C:' ? 'System disk' : clip(drive, 4), mount: clip(drive, 4), usedGB: Math.round((size - av) / GiB), sizeGB: Math.round(size / GiB), freeGB: Math.round(av / GiB), pct: Math.round((size - av) / size * 100)});
+  }
   for (const [fs, blocks, used, avail, ...rest] of rows) {
     const mount = rest.join('|'), size = num(blocks) * 1024, av = num(avail) * 1024, us = num(used) * 1024;
     if (!fs?.startsWith('/dev/') || !mount || !(size >= GiB) || !Number.isFinite(av)) continue;
@@ -112,7 +137,7 @@ export function parseProbe(text) {
   const memTotal = num(kv.memtotal), memUsed = num(kv.memused), idle = num(kv.cpuidle);
   const pct = v => v == null ? null : Math.max(0, Math.min(100, Math.round(v)));
   return {
-    platform: mac ? 'macos' : 'linux',
+    platform: mac ? 'macos' : win ? 'windows' : 'linux',
     cpus: num(kv.cpus),
     cpu: idle == null ? null : pct(100 - idle),
     memory: memTotal && memUsed != null ? pct(memUsed / memTotal * 100) : null,
@@ -136,9 +161,10 @@ function run(cmd, args, {input = '', timeoutMs = 9000, max = 65536} = {}) {
   });
 }
 export const probeLocal = () => run('sh', ['-s'], {input: PROBE}).then(parseProbe);
-export function probeSsh(host) {
+export function probeSsh(host, shell) {
   if (!HOST_RE.test(host)) return Promise.reject(new Error('invalid host'));
-  return run('ssh', ['-T', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=6', '-o', 'ServerAliveInterval=5', '--', host, 'sh -s'], {input: PROBE, timeoutMs: 12000}).then(parseProbe);
+  const remote = shell === 'powershell' ? 'powershell -NoProfile -NonInteractive -Command -' : 'sh -s';
+  return run('ssh', ['-T', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=6', '-o', 'ServerAliveInterval=5', '--', host, remote], {input: shell === 'powershell' ? PROBE_WIN : PROBE, timeoutMs: 20000}).then(t => parseProbe(String(t).replace(/\r/g, '')));
 }
 
 // ---------- tailnet ----------
@@ -176,7 +202,7 @@ export function createDevicesReader({registryPath, probeLocalImpl = probeLocal, 
     const [tn, local, ...remote] = await Promise.all([
       reading('_tailnet', async () => { const t = await tailnetImpl(); if (!t) throw new Error('no tailnet'); return t; }),
       reading('this', probeLocalImpl),
-      ...reg.devices.map(d => reading('ssh:' + d.connect.host, () => probeSshImpl(d.connect.host))),
+      ...reg.devices.map(d => reading('ssh:' + d.connect.host, () => probeSshImpl(d.connect.host, d.connect.shell))),
     ]);
     const net = tn.data;
     const matchKeys = (d, extra = []) => new Set([d.id, d.name, d.connect?.host, ...d.tailnet, ...extra].filter(Boolean).map(s => String(s).toLowerCase().split('.')[0]));
@@ -189,13 +215,13 @@ export function createDevicesReader({registryPath, probeLocalImpl = probeLocal, 
     };
     const thisKeys = new Set([...reg.this.tailnet, net?.self.name.toLowerCase(), net?.self.dns].filter(Boolean));
     thisKeys.forEach(k => used.add(k));
-    const devices = [shape({id: 'this', kind: 'this', name: reg.this.name || pretty(net?.self.name) || pretty(hostname().split('.')[0]), role: reg.this.role || 'Wizard runs here'}, local, null)];
+    const devices = [shape({id: 'this', kind: 'this', group: 'agent', name: reg.this.name || pretty(net?.self.name) || pretty(hostname().split('.')[0]), role: reg.this.role || 'Wizard runs here'}, local, null)];
     reg.devices.forEach((d, i) => {
       const peer = findPeer(matchKeys(d)); if (peer) used.add(peer.name.toLowerCase());
-      devices.push(shape({id: d.id, kind: 'ssh', name: d.name, role: d.role}, remote[i], peer));
+      devices.push(shape({id: d.id, kind: 'ssh', group: d.group, name: d.name, role: d.role}, remote[i], peer));
     });
     const hide = new Set(reg.hide);
-    const network = net ? {available: true, peers: net.peers.filter(p => !used.has(p.name.toLowerCase()) && !used.has(p.dns) && !hide.has(p.name.toLowerCase()) && !hide.has(p.dns)).map(({name, os, online, lastSeen}) => ({name, os, online, lastSeen: online ? null : lastSeen})).sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name))} : {available: false, peers: []};
+    const network = net ? {available: true, peers: net.peers.filter(p => !used.has(p.name.toLowerCase()) && !used.has(p.dns) && !hide.has(p.name.toLowerCase()) && !hide.has(p.dns)).map(({name, dns, os, online, lastSeen}) => ({name, os, online, lastSeen: online ? null : lastSeen, group: peerGroup(os, reg.groups[dns] ? dns : name, reg)})).sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name))} : {available: false, peers: []};
     return {at: new Date(now()).toISOString(), devices, network};
   };
 }

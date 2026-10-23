@@ -22,8 +22,15 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Native child of Wizard Settings. No media, keys or OAuth responses enter WebView JavaScript. */
+/**
+ * Fallback native Photos backup screen, plus the OAuth callback landing. Settings › Photos backup is a web page now
+ * (web/core/photos-settings.js over PhotosBridge); this screen opens only when the web shell predates it (it posts the
+ * one word "open"). Proposed for deletion in a later APK once the web page is proven on device.
+ * No media, keys or OAuth responses enter WebView JavaScript.
+ */
 public final class PhotosActivity extends Activity implements SharedPreferences.OnSharedPreferenceChangeListener {
+    /** Set by PhotosBridge when the web page started sign-in: the callback goes straight back to the web page. */
+    static final String FROM_WEB = "signin_from_web", ASK_ACCESS = "ask_access_after_signin";
     private BackupSettings settings;
     private LinearLayout body;
     private TextView status;
@@ -37,16 +44,27 @@ public final class PhotosActivity extends Activity implements SharedPreferences.
         // OAuth / API-key editing must not leak into recents or screen-capture services.
         if (!BuildConfig.DEBUG) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         if(Build.VERSION.SDK_INT>=33) getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,this::back);
-        show(); callback(getIntent());
+        // A sign-in started from the web page lands here only to finish it: don't flash the native screen first.
+        if(getIntent().getData()==null || !settings.prefs.getBoolean(FROM_WEB,false)) show();
+        callback(getIntent());
     }
     @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); callback(intent); }
     private void callback(Intent intent) {
         Uri uri=intent.getData(); if(uri==null) return;
         // Never use untrusted deep-link parameters to change the server or choose credentials.
         String url=uri.toString(); intent.setData(null);
+        final boolean web=settings.prefs.getBoolean(FROM_WEB,false);
+        if(web) settings.prefs.edit().remove(FROM_WEB).commit();
         task(()-> { new PhotoAuth(this).finish(url);
-                if(settings.enabled()) { BackupScheduler.cancel(this); BackupScheduler.schedule(this); BackupScheduler.enqueue(this); runOnUiThread(this::permissions); } },
-            "Sign-in failed or expired · try Wizard Sign-in again");
+                if(settings.enabled()) { BackupScheduler.cancel(this); BackupScheduler.schedule(this); BackupScheduler.enqueue(this);
+                    if(web) settings.prefs.edit().putBoolean(ASK_ACCESS,true).commit(); else runOnUiThread(this::permissions); } },
+            "Sign-in failed or expired · try Wizard Sign-in again", web);
+    }
+    /** Back to Settings › Photos backup in the web shell (success or failure: the page shows the status line). */
+    private void backToWeb() {
+        startActivity(new Intent(this,MainActivity.class).setAction(MainActivity.ACTION_SETTINGS).putExtra(MainActivity.EXTRA_SETTINGS_FOCUS,"photos-backup")
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP));
+        finish();
     }
     @Override protected void onResume() { super.onResume(); settings.prefs.registerOnSharedPreferenceChangeListener(this); clock.run(); }
     @Override protected void onPause() { handler.removeCallbacks(clock); settings.prefs.unregisterOnSharedPreferenceChangeListener(this); super.onPause(); }
@@ -164,10 +182,11 @@ public final class PhotosActivity extends Activity implements SharedPreferences.
                 }).show();
     }
     private interface Task { void run() throws Exception; }
-    private void task(Task action,String error) {
+    private void task(Task action,String error) { task(action,error,false); }
+    private void task(Task action,String error,boolean web) {
         if(busy) return; busy=true; settings.status("Connecting…");
         io.execute(()-> { boolean ok=true; try { action.run(); } catch(Exception e) { ok=false; settings.status(error); }
-            final boolean success=ok; runOnUiThread(()-> { busy=false; if(!isDestroyed() && success) show(); refreshStatus(); }); });
+            final boolean success=ok; runOnUiThread(()-> { busy=false; if(isDestroyed()) return; if(web) { backToWeb(); return; } if(success) show(); refreshStatus(); }); });
     }
     private void back() {
         if(albums) { show(); return; }

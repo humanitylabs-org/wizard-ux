@@ -116,18 +116,26 @@
   const vis = v => (typeof v === 'string' ? v : '').replace(/\s+/gu, ' ').trim().slice(0, 80).toLocaleLowerCase();
   function fingerprint(v) { let h = 2166136261; for (const c of vis(v)) { h ^= c.codePointAt(0) ?? 0; h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
   const keyOf = s => `${s.runtime}:${s.id}`;
-  function assistantAt(s) { const v = s.lastAssistantAt ?? (s.previewRole === 'assistant' ? s.previewAt : undefined); return isFinite(Date.parse(v ?? '')) ? v : undefined; }
+  const seenKeyOf = s => s.agent && s.agent !== 'hermes' ? `agent/${s.agent}/${keyOf(s)}` : keyOf(s);
+  // The newest assistant message the list knows. lastAssistantAt counts model replies only; reports that apps and
+  // scheduled jobs append (Topics roundup, daily moves, audits) arrive as the latest message (previewAt) without moving
+  // it, so those threads came in already read (James, 23 Oct 2026). Take whichever is newer.
+  function assistantAt(s) {
+    const c = [s.lastAssistantAt, s.previewRole === 'assistant' ? s.previewAt : undefined].filter(v => isFinite(Date.parse(v ?? '')));
+    return c.length > 1 && Date.parse(c[1]) > Date.parse(c[0]) ? c[1] : c[0];
+  }
   function recordFor(s, seenAt) {
     const a = assistantAt(s);
     return { ...(typeof s.messageCount === 'number' ? { messageCount: s.messageCount } : {}), ...(s.status && s.status !== 'submitting' ? { status: s.status } : {}),
-      updatedAt: s.updatedAt, previewFingerprint: fingerprint(s.preview), ...(a ? { assistantActivityAt: a } : {}), seenAt };
+      updatedAt: s.updatedAt, previewFingerprint: s.agent && otherAgent(s.agent) ? 'private' : fingerprint(s.preview), ...(a ? { assistantActivityAt: a } : {}), seenAt };
   }
   function hasNew(s, state) {
     if (!state) return false;
-    const r = state.threads[keyOf(s)]; if (!r) return true;
+    const r = state.threads[seenKeyOf(s)]; if (!r) return true;
+    if ((r.unreadAt ?? -1) > r.seenAt) return true;
     const cur = Date.parse(assistantAt(s) ?? ''), seenA = Date.parse(r.assistantActivityAt ?? '');
     const comparable = typeof s.messageCount === 'number' && typeof r.messageCount === 'number';
-    const previewChanged = !comparable && fingerprint(s.preview) !== r.previewFingerprint;
+    const previewChanged = !otherAgent(s.agent) && !comparable && fingerprint(s.preview) !== r.previewFingerprint;
     const countUp = comparable && s.messageCount > r.messageCount;
     const becameReady = !!s.status && s.status !== r.status && READY_OR_ATTENTION.has(s.status) && (!r.status || !READY_OR_ATTENTION.has(r.status));
     if (isFinite(cur)) return isFinite(seenA) ? cur > seenA : cur > r.seenAt;
@@ -143,9 +151,10 @@
     if (lu !== ru) pick = ru > lu ? r : l;
     else { const lc = l.messageCount ?? -1, rc = r.messageCount ?? -1; pick = lc !== rc ? (rc > lc ? r : l) : (r.seenAt > l.seenAt ? r : l); }
     const seenAt = Math.max(l.seenAt, r.seenAt);
+    const unreadAt = Math.max(l.unreadAt ?? -1, r.unreadAt ?? -1);
     const la = Date.parse(l.assistantActivityAt ?? ''), ra = Date.parse(r.assistantActivityAt ?? '');
     const aa = !isFinite(la) ? r.assistantActivityAt : !isFinite(ra) ? l.assistantActivityAt : ra > la ? r.assistantActivityAt : l.assistantActivityAt;
-    return { ...pick, ...(aa ? { assistantActivityAt: aa } : {}), seenAt };
+    return { ...pick, ...(aa ? { assistantActivityAt: aa } : {}), seenAt, ...(unreadAt >= 0 ? { unreadAt } : {}) };
   }
   function merge(a, b) {
     if (!a) return b; if (!b) return a;
@@ -258,6 +267,8 @@
     chatLayout: ['wos.chats.layout.v1', v => v === 'day' || v === 'status', String],
     readyOrder: ['wos.chats.readyOrder.v1', v => ['newest', 'oldest', 'priority', 'subject'].includes(v), String],
     subjectOrder: ['wos.chats.subjectOrder.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
+    // Pinned chats (core/chat-pins.js): the same pins on every device.
+    pinnedChats: ['wos.chats.pinned.v2', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
   };
   let prefsOff = false;
   const putPrefs = patch => {
@@ -304,6 +315,9 @@
   const isDeferred = s => !!s.deferred && !s.archived;
   const readyRank = s => needsApproval(s) ? 0 : isDeferred(s) ? 9 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
   const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
+  // Oldest (James, 23 Oct 2026: "oldest messages at the top … the newest one at the bottom"): Newest's pins kept
+  // (approvals first, deferred last), only time reversed in between. Yesterday and Past week stay newest first.
+  const byOldest = list => list.slice().sort((l, r) => Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(r, l));
   function groupWork(sessions, now = Date.now()) {
     const g = { errors: [], working: [], ready: [], yesterday: [], pastWeek: [], deferred: [], archive: [] };
     const readyB = workDayStart(now), yB = readyB - DAY, archDays = archiveAfterDays(), archB = archDays ? now - archDays * DAY : -Infinity;
@@ -499,10 +513,12 @@
     onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
     emit() { for (const fn of this.listeners) { try { fn(this); } catch (e) { console.error(e); } } },
     isNew(s) { return hasNew(s, this.seenOf(s)); },
-    // A non-default agent's read state stays on this device (never PUT to the main agent's thread-seen store).
-    seenOf(s) { return s && s.agent && otherAgent(s.agent) ? AGENT_SEEN : this.seen; },
+    // Server-owned, agent-qualified receipts: activity metadata only, never transcript text.
+    seenOf(s) { return this.seen; },
+    seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
     workGroups(sessions, now) { return groupWork(sessions || this.unified(), now); },
     readyByPriority: byPriority,
+    readyByOldest: byOldest,
     get archiveAfterDays() { return archiveAfterDays(); },
     get chatLayout() { return chatLayout(); },
     set chatLayout(v) { const x = v === 'status' ? 'status' : 'day'; try { localStorage.setItem(LAYOUT_KEY, x); } catch (e) {} putPrefs({ chatLayout: x }); },
@@ -517,12 +533,12 @@
         if (['waiting_for_approval', 'unknown'].includes(s.status)) { needs.push(s); continue; }
         if (WORKING.has(s.status)) { working.push(s); continue; }
         if (def) continue;
-        const at = Date.parse(s.lastAssistantAt || s.activityAt || s.updatedAt);
+        const at = Date.parse(assistantAt(s) || s.activityAt || s.updatedAt);
         if (isFinite(at) && at < now - WEEK) continue;
         if (!hasNew(s, this.seenOf(s))) continue;
         if (s.status === 'failed' || s.status === 'interrupted' || s.critical) needs.push(s); else ready.push(s);
       }
-      const t = s => Date.parse(s.lastAssistantAt || s.activityAt || s.updatedAt) || 0;
+      const t = s => Date.parse(assistantAt(s) || s.activityAt || s.updatedAt) || 0;
       for (const g of [needs, ready, working]) g.sort((a, b) => t(b) - t(a));
       return { needs, ready, working };
     },
@@ -558,6 +574,9 @@
             putSeen(merged).catch(() => {});
           }
           this.seen = merged; writeLocal(merged);
+          // Retry device-local reads after reconnect/reload; failed writes must not strand a private receipt.
+          if (Object.entries(merged.threads).some(([key,r])=>r.seenAt>(remote?.threads?.[key]?.seenAt || 0)))
+            putSeen(merged).then(r=>{this.seen=merge(this.seen,r);writeLocal(this.seen);this.emit();}).catch(()=>{});
           this.ok = true; this.error = ''; this.at = Date.now(); this.cached = false;
           };
           // Only a cold list paints early; a later full walk replaces a list that is already on screen in one go.
@@ -576,11 +595,11 @@
       return this.loading;
     },
     /* Each non-default agent's threads, from that agent (agent=<id>). One agent failing never hides another. */
-    async refreshAgents(deferred = this.deferred) {
+    async refreshAgents(deferred = this.deferred, only = '') {
       const A = AG(); if (!A) return;
       if (!A.ready) await A.load().catch(() => {});
-      const ids = A.others().map(a => a.id);
-      for (const k of Object.keys(this.agentSessions)) if (!ids.includes(k)) { delete this.agentSessions[k]; delete this.agentStatus[k]; }
+      const known = A.others().map(a => a.id), ids = known.filter(id => !only || id === only);
+      for (const k of Object.keys(this.agentSessions)) if (!known.includes(k)) { delete this.agentSessions[k]; delete this.agentStatus[k]; }
       await Promise.all(ids.map(async id => {
         try {
           const got = await fetchSessions(true, id);
@@ -600,6 +619,16 @@
           this.agentStatus[id] = { ok: false, error: e.status === 403 ? 'access' : 'offline', at: Date.now() };
         }
       }));
+      let migrated = false, state = merge(readLocal(),this.seen) || {initializedAt:Date.now(),threads:{}};
+      for (const s of Object.values(this.agentSessions).flat()) {
+        const old = AGENT_SEEN.threads[keyOf(s)];
+        if (old) { state.threads[seenKeyOf(s)] = {...later(state.threads[seenKeyOf(s)],old),previewFingerprint:'private'}; delete AGENT_SEEN.threads[keyOf(s)]; migrated=true; }
+      }
+      if (migrated) {
+        this.seen=state;writeLocal(state);
+        try { localStorage.setItem(AGENT_SEEN_KEY,JSON.stringify(AGENT_SEEN)); } catch {}
+        putSeen(state).then(r=>{this.seen=merge(this.seen,r);writeLocal(this.seen);this.emit();}).catch(()=>{});
+      }
     },
     // The threads of one agent; '' (or the default agent) = the unified list the owner's main Chats shows.
     sessionsFor(agent = '') { return otherAgent(agent) ? (this.agentSessions[agent] || []) : this.unified(); },
@@ -620,16 +649,47 @@
     markSeen(ids) {
       const all = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
       const ts = Date.now();
-      const mine = all.filter(s => s.agent && otherAgent(s.agent));
-      if (mine.length) { for (const s of mine) AGENT_SEEN.threads[keyOf(s)] = recordFor(s, ts); try { localStorage.setItem(AGENT_SEEN_KEY, JSON.stringify(AGENT_SEEN)); } catch (e) {} this.emit(); }
-      const list = all.filter(s => !mine.includes(s));
+      const list = all;
       if (!list.length) return;
       let state = merge(readLocal(), this.seen) || { initializedAt: ts, threads: {} };
       const threads = { ...state.threads };
-      for (const s of list) threads[keyOf(s)] = recordFor(s, ts);
+      for (const s of list) threads[seenKeyOf(s)] = recordFor(s, ts);
       state = { ...state, threads };
       this.seen = state; writeLocal(state); this.emit();
       putSeen(state).then(r => { this.seen = merge(this.seen, r); writeLocal(this.seen); this.emit(); }).catch(() => {});
+    },
+    async markUnread(ids) {
+      const list = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
+      if (!list.length) return false;
+      const before = merge(readLocal(), this.seen) || { initializedAt: Date.now(), threads: {} };
+      const unreadAt = Math.max(Date.now(), ...list.map(s => (before.threads[seenKeyOf(s)]?.seenAt ?? 0) + 1));
+      const threads = { ...before.threads };
+      for (const s of list) {
+        const key = seenKeyOf(s), prior = threads[key];
+        threads[key] = { ...recordFor(s, prior?.seenAt ?? 0), ...(prior?.assistantActivityAt ? { assistantActivityAt: prior.assistantActivityAt } : {}), unreadAt };
+      }
+      const pending = { ...before, threads };
+      this.seen = pending; writeLocal(pending); this.emit();
+      try {
+        const remote = await putSeen(pending);
+        if (!list.every(s => (remote?.threads?.[seenKeyOf(s)]?.unreadAt ?? -1) >= unreadAt)) throw new Error('Unread marker was not saved');
+        this.seen = merge(this.seen, remote); writeLocal(this.seen); this.emit();
+        // A second device may have read the thread while this write was in
+        // flight. Its newer seenAt wins; do not claim the row was marked.
+        return list.every(s => {
+          const record = this.seen?.threads?.[seenKeyOf(s)];
+          return (record?.unreadAt ?? -1) > (record?.seenAt ?? 0);
+        });
+      } catch (e) {
+        const current = this.seen || pending, rolledBack = { ...current, threads: { ...current.threads } };
+        for (const s of list) {
+          const key = seenKeyOf(s);
+          if (rolledBack.threads[key]?.unreadAt !== unreadAt) continue;
+          if (before.threads[key]) rolledBack.threads[key] = before.threads[key]; else delete rolledBack.threads[key];
+        }
+        this.seen = rolledBack; writeLocal(rolledBack); this.emit();
+        return false;
+      }
     },
     session(id) {
       const s = this.sessions.find(x => x.id === id); if (s) return s;
@@ -737,7 +797,7 @@
     },
     rememberSearch(s) { if(s?.id) { if(otherAgent(s.agent)) AGENT_OF.set(s.id,s.agent); DETAIL.set(s.id,s); while(DETAIL.size>300) DETAIL.delete(DETAIL.keys().next().value); } },
     async sessionInfo(id) {
-      const agent = this.agentOf(id);
+      let agent = this.agentOf(id);
       let p;
       try { p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}?view=detail${aq(id,'&')}`)).json(); }
       catch(e) { if (![400,404].includes(e.status)) throw e; p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`)).json(); }
@@ -757,6 +817,9 @@
         }
       }
       const s = normalize(raw); if (!s) return null;
+      // A direct link can arrive before the scoped lists. Learn the authoritative
+      // server target before the first history read or reply; never overwrite a known scope.
+      if (!agent && otherAgent(s.agent) && s.id === id) { agent = s.agent; AGENT_OF.set(id, agent); }
       if (s.agent && (s.agent || 'hermes') !== (agent || 'hermes')) throw new Error('Thread scope changed');
       if (agent) s.agent = agent;
       const list = agent ? (this.agentSessions[agent] = this.agentSessions[agent] || []) : this.sessions;
@@ -861,10 +924,112 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) L.refresh(); });
   setInterval(() => { if (!document.hidden) L.refresh(); }, 15000);
   // outbox.js loads after this file: follow it once every script has run.
+  /* Open-thread delta subscriptions. Read-only: a failed stream never replays a send.
+   * Hermes uses unnamed SSE data frames with data.event; other runtimes name events. */
+  const RUN_STREAMS = new Map();
+  L.openRunStream = function (sid, agent, runId, paint) {
+    const registry = window.WosAgents;
+    const rec = registry?.get(agent || registry.defaultId());
+    if ((agent && !rec) || rec?.privacy === 'private' || !window.EventSource || !runId) return null;
+    const key = JSON.stringify([agent, sid, runId]);
+    let r = RUN_STREAMS.get(key);
+    if (!r) {
+      r = { text: '', terminal: false, listeners: new Set(), frame: null, stopped: false };
+      RUN_STREAMS.set(key, r);
+      const url = `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${agent ? '?agent=' + encodeURIComponent(agent) : ''}`;
+      const notify = () => {
+        if (r.frame != null || r.stopped) return;
+        r.frame = requestAnimationFrame(() => { r.frame = null; for (const fn of r.listeners) fn(r); });
+      };
+      const close = () => { r.source?.close(); r.source = null; };
+      const terminal = () => { if (!r.terminal) { r.terminal = true; close(); notify(); } };
+      let retries = 0;
+      const event = e => {
+        if (r.stopped || r.terminal) return;
+        let d; try { d = JSON.parse(e.data); } catch (_) { return; }
+        if ((d.session_id && d.session_id !== sid) || (d.run_id && d.run_id !== runId)) return;
+        const type = d.event || e.type;
+        if (type === 'message.delta' && typeof d.delta === 'string') { r.text += d.delta; notify(); }
+        // reasoning.available is deliberately not answer text.
+        if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) terminal();
+      };
+      const connect = () => {
+        if (r.stopped || r.terminal) return;
+        try {
+          r.source = new window.EventSource(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
+          r.source.onmessage = event;
+          for (const name of ['message.delta', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted']) r.source.addEventListener(name, event);
+          r.source.onerror = () => {
+            close();
+            // Some queued main sends close before yielding any answer bytes.
+            // Retry only before ANY answer bytes: no duplicated/replayed text. This is
+            // another read of the same run, never another admission/send.
+            if (!r.stopped && !r.terminal && !r.text && retries++ < 3) r.reconnect = setTimeout(connect, 500);
+          };
+        } catch (_) { close(); }
+      };
+      connect();
+      const poll = async () => {
+        if (r.stopped || r.terminal) return;
+        try {
+          const d = await (await req(url)).json();
+          if (r.stopped) return;
+          if ((d.run_id || d.id) === runId && d.session_id === sid && ['completed', 'failed', 'cancelled', 'interrupted'].includes(d.status)) terminal();
+        } catch (_) { /* connectivity recovery is the ordinary read poll, never another send */ }
+        if (!r.stopped && !r.terminal) r.timer = setTimeout(poll, 500);
+      };
+      r.dispose = () => { r.stopped = true; close(); clearTimeout(r.timer); clearTimeout(r.reconnect); if (r.frame != null) cancelAnimationFrame(r.frame); RUN_STREAMS.delete(key); };
+      r.timer = setTimeout(poll, 500);
+    }
+    r.listeners.add(paint);
+    return { snapshot: r, close() { r.listeners.delete(paint); if (!r.listeners.size) r.dispose(); } };
+  };
+  L.pendingRun = sid => PEND.get(sid)?.runId || (window.WosOutbox?.forThread(sid) || [])
+    .filter(it => it.state === 'sent' && it.runId && Date.now() - (it.sentAt || it.createdAt) < PEND_MAX)
+    .sort((a, b) => b.createdAt - a.createdAt)[0]?.runId || '';
+
   function attachOutbox() {
     const OB = window.WosOutbox; if (!OB || L._outbox) return; L._outbox = true;
     const sync = () => { if (syncPending(OB)) L.emit(); };
     OB.onChange(sync); OB.load().then(sync).catch(() => {});
+    // Separate-agent sessions are raw gateway rows, not the main agent's run
+    // queue. Follow the accepted receipt, rather than waiting 15 s for that list.
+    const watches = new Map();
+    const follow = it => {
+      if (!otherAgent(it.agent) || !it.runId || it.steered || !['new','reply'].includes(it.kind)) return;
+      const sid = it.sessionId, runId = it.runId;
+      if (watches.get(sid) === runId) return;
+      watches.set(sid, runId); L.pinAgent(sid, it.agent);
+      const tick = async () => {
+        if (watches.get(sid) !== runId) return;
+        try {
+          if (!document.hidden) {
+            const run = await (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}?agent=${encodeURIComponent(it.agent)}`)).json();
+            if (watches.get(sid) !== runId) return;
+            if ((run.run_id || run.id) === runId && run.session_id === sid && ['completed','failed','cancelled','interrupted','expired'].includes(run.status)) {
+              await L.refreshAgents(L.deferred, it.agent);
+              if (watches.get(sid) !== runId) return;
+              // Older services list raw profile sessions without run keys/status.
+              // The exact terminal receipt still settles this send, never a newer one.
+              const pending = PEND.get(sid);
+              if (!pending || (pending.runId === runId && pending.key === it.id)) {
+                if (pending) { RELEASED.add(pending.key); PEND.delete(sid); }
+                const s = L.session(sid);
+                if (s && (!s.runId || s.runId === runId || s.pend)) {
+                  unPend(s); Object.assign(s, { status: run.status, lastRunStatus: run.status, lastRunKey: it.id, runId: '' });
+                  if (run.updated_at) s.lastAssistantAt = iso(run.updated_at);
+                }
+              }
+              L.emit(); if (watches.get(sid) === runId) watches.delete(sid); return;
+            }
+          }
+        } catch (_) { /* uncertain reads keep following the same receipt, never resend */ }
+        setTimeout(tick, document.hidden ? 3000 : 500);
+      };
+      tick();
+    };
+    OB.onSent(follow);
+    OB.load().then(() => { for (const it of OB._items.values()) if (it.state === 'sent' && Date.now() - it.sentAt < PEND_MAX) follow(it); }).catch(() => {});
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attachOutbox); else setTimeout(attachOutbox, 0);
   // A new or changed agent: read its threads now (not at the next poll), then repaint.

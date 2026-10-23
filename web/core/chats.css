@@ -377,6 +377,30 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-row .emo.sti .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(90, 220, 255, .22); border-top-color: var(--cyan); animation: sti-spin .9s linear infinite; }
 @keyframes sti-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .ch-row .emo.sti .spin { animation-duration: 3s; } }
+.ch-topic-mark { position: relative; flex: 0 0 auto; width: 44px; height: 38px; }
+.ch-topic-emoji { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; font-size: 21px; line-height: 1; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.ch-row .emo.sti.ch-topic-status, .ch-topic-status.draft-status { position: absolute; right: 0; bottom: -1px; width: 17px; height: 17px; min-width: 0; border-radius: 6px; border: 1px solid var(--bg); z-index: 1; }
+.ch-row .emo.sti.ch-topic-status svg { width: 11px; height: 11px; }
+.ch-row .emo.sti.ch-topic-status .spin { width: 10px; height: 10px; border-width: 1.5px; }
+.ch-row .emo.sti.ch-topic-status .dot { width: 4px; height: 4px; }
+.ch-topic-status.draft-status { display: grid; place-items: center; font-size: 11px; color: var(--amber); background: var(--bg); box-shadow: inset 0 0 0 1px var(--line-2); }
+.ch-emoji-sheet { max-height: min(76%, 620px); display: flex; flex-direction: column; padding-bottom: calc(10px + var(--safe-b, 0px)); overflow: hidden; }
+.ch-emoji-sheet > .ch-sheet-t { flex: 0 0 auto; padding-bottom: 8px; }
+.ch-emoji-search { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; min-height: 42px; margin: 0 10px 8px; padding: 0 8px 0 12px; border: 1px solid var(--line-2); border-radius: 12px; background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink-3); }
+.ch-emoji-search:focus-within { border-color: var(--violet-2); box-shadow: 0 0 0 2px color-mix(in srgb, var(--violet) 14%, transparent); }
+.ch-emoji-search input { min-width: 0; flex: 1; padding: 10px 0; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: 16px; }
+.ch-emoji-search input::placeholder { color: var(--ink-3); opacity: .9; }
+.ch-emoji-search input::-webkit-search-cancel-button { display: none; }
+.ch-emoji-search button { flex: 0 0 30px; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; color: var(--ink-2); background: color-mix(in srgb, var(--ink) 8%, transparent); font-size: 20px; line-height: 1; }
+.ch-emoji-search button[hidden] { display: none; }
+.ch-emoji-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; scrollbar-gutter: stable; }
+.ch-emoji-empty { margin: 18px 12px 24px; padding: 20px 14px; border: 1px dashed var(--line-2); border-radius: 12px; color: var(--ink-3); text-align: center; font-size: 13px; }
+.ch-emoji-category { padding: 0 0 8px; content-visibility: auto; contain-intrinsic-size: auto 480px; }
+.ch-emoji-category h3 { position: sticky; top: 0; z-index: 1; margin: 0; padding: 7px 11px 5px; color: var(--ink-3); background: var(--bg); font-size: 11px; line-height: 1.2; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.ch-emoji-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; padding: 4px 10px; }
+.ch-sheet-b .ch-emoji-grid button { display: grid; place-items: center; min-width: 0; padding: 8px 4px; border-radius: 11px; font-size: 23px; line-height: 1; background: color-mix(in srgb, var(--ink) 6%, transparent); border: 1px solid var(--line); }
+.ch-sheet-b .ch-emoji-grid button:active, .ch-sheet-b .ch-emoji-grid button:focus-visible { background: color-mix(in srgb, var(--violet) 20%, transparent); border-color: var(--violet-2); }
+.ch-sheet-emoji { width: 24px; text-align: center; font-size: 18px; }
 .ch-row .emo.sti .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); opacity: .55; }
 /* Read state is the only thing that sets weight: unread = bold white title + brighter preview + violet time; read = plain. */
 .ch-row .tp b, .ch-row.att-needs .tp b, .ch-row.att-check .tp b { color: var(--ink-2); font-weight: 500; }
@@ -512,6 +536,7 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 .ch-bell svg { width: 18px; height: 18px; fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .ch-bell b { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: grid; place-items: center; font-size: 11px; font-weight: 800; line-height: 1; color: var(--on-accent, #160b32); background: var(--violet-2, #b99bff); }
 .ch-bell.needs b { background: var(--amber, #ffbe55); }
+.ch-bell[hidden] { display: none; }
 .ch-bell:active { background: rgba(205, 190, 255, .12); }
 
 /* Loading placeholders (list rows + thread bubbles): same geometry as real content, skin tokens only. */
@@ -596,14 +621,16 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 @keyframes ncIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .ch-newchat { animation: none; } }
 
-/* Reply to a notification: a slim quote above the composer (× drops it) and the same quote above the sent words. */
-.ch-reply { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 0 0 10px; border-left: 2px solid var(--line-2); }
+/* Reply to a notification: a small bubble above the composer (× drops it) and the same quote card above the sent
+ * words. Every colour comes from the skin's own tokens (accent, ink, bg), so each skin draws it in its own look. */
+.ch-reply { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 6px 0 6px 12px; border-radius: 12px; border-left: 3px solid var(--violet-2, var(--line-2)); background: color-mix(in srgb, var(--violet) 12%, transparent); }
 .ch-reply-t, .ch-rq { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .ch-reply-t { flex: 1; }
 .ch-reply-t b, .ch-rq b { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ch-reply-t span, .ch-rq span { font-size: 12.5px; line-height: 1.35; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-.ch-compose button.ch-reply-x { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%; background: none; color: var(--ink-2); font-size: 22px; line-height: 1; box-shadow: none; }
-.ch-rq { margin: 0 0 6px; padding: 0 0 0 10px; border-left: 2px solid var(--line-2); }
+.ch-compose button.ch-reply-x { flex: 0 0 auto; width: 44px; height: 44px; margin: -6px 0; border-radius: 50%; background: none; border: 0; color: var(--ink-2); font-size: 22px; line-height: 1; box-shadow: none; }
+.ch-compose button.ch-reply-x:hover { color: var(--ink); }
+.ch-rq { margin: 0 0 8px; padding: 5px 10px; border-radius: 10px; border-left: 3px solid color-mix(in srgb, var(--ink) 55%, transparent); background: color-mix(in srgb, var(--bg) 24%, transparent); }
 /* Pull to refresh (core/chats.js bindPull) and the "Not up to date" bar. Tokens only, so every skin re-dresses it. */
 .ch-ptr { flex: none; height: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: var(--ink-3); pointer-events: none; }
 .ch-ptr.out { transition: height .18s ease; }
@@ -614,3 +641,36 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 .ch-sync b { font-weight: 600; color: var(--wz-text, var(--ink)); }
 .ch-sync.ok { color: var(--violet-2, var(--ink-2)); }
 @media (prefers-reduced-motion: reduce) { .ch-ptr.out, .ch-ptr svg { transition: none; } }
+
+/* Phone chat reading size. Mobile line-length research puts comfortable reading
+   at roughly 35–50 characters (about 7–9 words) per line. At 15px a ~400px
+   phone fits ~53 Roboto characters, so message text steps up to 17px (~45
+   chars, ~8 words). Thread contents only: the Chats list and chrome keep
+   their sizes, and the desktop shell is unchanged. */
+html[data-shell="phone"] .ch-msgs .msg .bub { font-size: 17px; line-height: 1.5; }
+html[data-shell="phone"] .ch-msgs .bub h1 { font-size: 21px; }
+html[data-shell="phone"] .ch-msgs .bub h2 { font-size: 19.5px; }
+html[data-shell="phone"] .ch-msgs .bub h3 { font-size: 18px; }
+html[data-shell="phone"] .ch-msgs .bub :is(h4, h5, h6) { font-size: 17px; }
+html[data-shell="phone"] .ch-msgs .bub code { font-size: 14.5px; }
+html[data-shell="phone"] .ch-msgs .bub .code pre code, html[data-shell="phone"] .ch-msgs .bub pre { font-size: 13.5px; }
+html[data-shell="phone"] .ch-msgs .bub table { font-size: 15px; }
+
+/* Pinned chats (synced per owner; design: Novaire, wizard-ux PR 250) and Boomerang markers. */
+.ch-row-wrap { position: relative; }
+.ch-row-wrap > .ch-row { padding-right: 42px; }
+.ch-pin-toggle { position: absolute; z-index: 1; right: 7px; top: 50%; width: 32px; height: 32px; margin-top: -16px; display: grid; place-items: center; border-radius: 10px; color: var(--ink-3); opacity: .38; transition: opacity .14s ease, color .14s ease, background .14s ease; }
+.ch-pin-toggle::after { content: ''; position: absolute; inset: -6px; }
+.ch-pin-toggle svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.ch-row-wrap:hover .ch-pin-toggle, .ch-row-wrap:focus-within .ch-pin-toggle, .ch-pin-toggle:focus-visible, .ch-row-wrap.pinned .ch-pin-toggle { opacity: 1; }
+.ch-pin-toggle:hover, .ch-pin-toggle:focus-visible { color: var(--ink); background: color-mix(in srgb, var(--violet) 11%, transparent); outline: none; }
+.ch-pin-toggle:focus-visible { box-shadow: 0 0 0 2px var(--violet-2); }
+.ch-pin-toggle[aria-pressed="true"] { color: var(--violet-2); }
+.ch-pin-toggle[aria-pressed="true"] svg { fill: currentColor; fill-opacity: .18; }
+@media (pointer: coarse) { .ch-pin-toggle { opacity: .72; } .ch-row-wrap.pinned .ch-pin-toggle { opacity: 1; } }
+.ch-sec[data-sec="pinned"] .ch-sec-h { color: var(--violet-2); }
+.ch-boom { position: absolute; right: 44px; bottom: 9px; font-style: normal; font-size: 12px; line-height: 1; opacity: .7; }
+.ch-boom.due { opacity: 1; filter: drop-shadow(0 0 4px var(--violet-2)); }
+.ch-boom-ic { display: inline-block; width: 18px; font-size: 14px; line-height: 18px; text-align: center; }
+.mmeta [data-mboom] { font-size: 13px; padding-inline: 6px; }
+.msg.boom-flash > .bub { box-shadow: 0 0 0 2px var(--violet-2); transition: box-shadow .3s ease; }

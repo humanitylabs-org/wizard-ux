@@ -102,7 +102,7 @@ const setupWin = p => p.evaluate(() => { const w = Object.values(__wos.wins).fin
     const w = await setupWin(p);
     ok(w && w.desk === w.idx && w.idx !== 0, 'phone first run: Setup is the desk in front (not Home)', w);
     await f.waitForFunction(() => document.querySelector('.greet'), null, { timeout: 8000 }).catch(() => {});
-    ok(await txt(f, '.greet') === 'Hi Robin. One thing to set up for now.', 'greeting uses the owner name from settings', await txt(f, '.greet'));
+    ok(await txt(f, '.greet') === 'Hi Robin. Make this Wizard yours.', 'greeting uses the owner name from settings', await txt(f, '.greet'));
     await sleep(1500);
     let log = await fakeLog();
     ok(count(log, 'POST', '/wizard/v1/setup/seen') === 1, 'seen POSTed exactly once (by the app)', count(log, 'POST', '/wizard/v1/setup/seen'));

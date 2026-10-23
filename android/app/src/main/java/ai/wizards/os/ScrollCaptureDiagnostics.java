@@ -103,7 +103,7 @@ final class ScrollCaptureDiagnostics {
         if(generation==delivered || session==null)return;
         String origin=ai.wizards.os.device.AppState.origin(c);
         android.net.Uri u=android.net.Uri.parse(origin);
-        if(!Origin.isPrivate(u) && !(BuildConfig.DEBUG && ai.wizards.os.device.AppState.isQaOrigin(origin))) return;
+        if(!Origin.isPrivate(c,u) && !(BuildConfig.DEBUG && ai.wizards.os.device.AppState.isQaOrigin(origin))) return;
         final long sent=generation;
         final String body=RING.json(session);
         final String cookie=android.webkit.CookieManager.getInstance().getCookie(origin);

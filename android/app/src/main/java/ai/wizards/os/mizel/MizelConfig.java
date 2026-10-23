@@ -16,7 +16,6 @@ import java.nio.charset.StandardCharsets;
  *                           "fakeMic": 0|1|2, "staticNotification": 0|1}   (1 = synthetic tone if AudioRecord cannot open, 2 = always synthetic)
  */
 public final class MizelConfig {
-    public static final String DEFAULT_ORIGIN = ai.wizards.os.BuildConfig.ORIGIN;
     /** After Stop, the service stays in front this long without upload progress, then hands over to a job. */
     static final long DRAIN_GRACE_MS = 90_000L;
     /** How often a finished meeting is asked whether it is ready (for pruning local audio). */
@@ -25,13 +24,14 @@ public final class MizelConfig {
     private MizelConfig() {}
 
     public static String origin(Context c) {
-        if (!ai.wizards.os.BuildConfig.DEBUG) return DEFAULT_ORIGIN;
+        String configured = ai.wizards.os.device.AppState.origin(c);
+        if (!ai.wizards.os.BuildConfig.DEBUG) return configured;
         File f = new File(c.getFilesDir(), "qa_origin.txt");
-        if (!f.isFile()) return DEFAULT_ORIGIN;
+        if (!f.isFile()) return configured;
         try {
             String o = new String(MizelStore.readAll(new FileInputStream(f)), StandardCharsets.UTF_8).trim();
-            return o.matches("http://10\\.0\\.2\\.2:\\d+") ? o : DEFAULT_ORIGIN;
-        } catch (Exception e) { return DEFAULT_ORIGIN; }
+            return o.matches("http://10\\.0\\.2\\.2:\\d+") ? o : configured;
+        } catch (Exception e) { return configured; }
     }
 
     private static long qa(Context c, String key, long dflt, long min) {

@@ -193,7 +193,11 @@
       if (!a || a.missing) return null;
       const s = sid && window.WizLive?.session(sid);
       const AG = window.WosAgents;
-      const want = choice?.model || choice?.value || M.selections.get(sid || '')?.model || s?.model || '';
+      // A choice counts only when it was made for THIS agent (its picker, its saved take). A main-agent route that
+      // rode along with an orb or voice pick is not a choice: Philosopher ran on the main default, Opus, because Opus
+      // happens to be in its allowed list (James, 23 Oct: "I asked you to send it to Fable"). The agent's default wins.
+      const picked = choice && choice.agent === a.id ? choice.model || choice.value || '' : '';
+      const want = picked || (sid && M.selections.get(sid)?.model) || s?.model || '';
       return AG.route(a, want);
     },
     currentRoute(sid, choice, agent) {
@@ -223,14 +227,15 @@
     },
     keepVoiceRoute(id, route) {
       const all = JSON.parse(localStorage.getItem('wos.voice-model-routes.v1') || '{}');
-      all[id] = { model: route.model, provider: route.provider };
+      // A take for another agent keeps its agent, so a recovered recording never falls back to the main agent.
+      all[id] = { model: route.model, provider: route.provider, ...(route.agent ? { agent: route.agent } : {}) };
       localStorage.setItem('wos.voice-model-routes.v1', JSON.stringify(all));
     },
     voiceRoute(id) {
       try {
         const saved = JSON.parse(localStorage.getItem('wos.voice-model-routes.v1') || '{}')[id];
         // Complete an older model-only take without replacing its saved model with today's choice.
-        return saved?.model ? M.currentRoute('', saved) : null;
+        return saved?.model ? M.currentRoute('', saved, saved.agent || '') : null;
       } catch { throw new Error('Saved recording model route is unreadable'); }
     },
     forgetVoiceRoute(id) {

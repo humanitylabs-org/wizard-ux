@@ -31,7 +31,7 @@ import android.widget.Toast;
 import android.window.OnBackInvokedDispatcher;
 
 /**
- * Wizard OS: a native home for the owner's private shell (BuildConfig.HOME_URL).
+ * Wizard OS: a native home for the owner's configured Wizard OS shell.
  *
  * Rules this activity enforces:
  *  - Back never exits. Every Back is handed to the shell (window.__wosNativeBack), which closes the top
@@ -51,6 +51,8 @@ public class MainActivity extends Activity {
     public static final String ACTION_SIDE_BUTTON = "ai.wizards.os.action.SIDE_BUTTON";
     /** Notifications and the Everywhere button open Wizard OS on Settings / the Unsent list / a thread. */
     public static final String ACTION_SETTINGS = "ai.wizards.os.action.SETTINGS";
+    /** With ACTION_SETTINGS: the Settings feature to open on (e.g. "photos-backup"). Older web ignores it. */
+    public static final String EXTRA_SETTINGS_FOCUS = "ai.wizards.os.extra.SETTINGS_FOCUS";
     public static final String ACTION_UNSENT = "ai.wizards.os.action.UNSENT";
     public static final String ACTION_THREAD = "ai.wizards.os.action.THREAD";
     /** The floating orb's Screen button (voice typing / screenshots not set up yet) opens the setup dialog. */
@@ -82,6 +84,7 @@ public class MainActivity extends Activity {
     private ai.wizards.os.mizel.MizelBridge mizel; // window.wizardMizelPort, private origin only
     private ai.wizards.os.audio.BackgroundAudioBridge audio;
     private ai.wizards.os.apps.AppsBridge apps; // window.wizardAppsPort: the shell only (Android Apps relay)
+    private ai.wizards.os.photos.PhotosBridge photos; // window.wizardPhotosPort: Settings › Photos backup (web page)
 
     private String screenCaptureId;
 
@@ -106,21 +109,12 @@ public class MainActivity extends Activity {
                 });
     }
 
-    /** Main-frame settings navigation only; no media or credential bridge. */
-    private void installPhotosPort(WebView target) {
-        if (!androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_MESSAGE_LISTENER)) return;
-        java.util.Set<String> origins = java.util.Collections.singleton(ai.wizards.os.device.AppState.primaryOrigin(this));
-        androidx.webkit.WebViewCompat.addWebMessageListener(target, "wizardPhotosPort", origins,
-                (view, message, sourceOrigin, isMainFrame, reply) -> {
-                    if (!isMainFrame || web != target || sourceOrigin == null || !origins.contains(sourceOrigin.toString())) return;
-                    if (message != null && "open".equals(message.getData()))
-                        startActivity(new Intent(this, ai.wizards.os.photos.PhotosActivity.class));
-                });
-    }
-
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        if (ai.wizards.os.device.AppState.origin(this).isEmpty()) {
+            startActivity(new Intent(this, ConnectActivity.class)); finish(); return;
+        }
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.rgb(5, 3, 12));
         // targetSdk 35 draws edge to edge. The page itself runs under the status bar so its background reaches the
@@ -150,7 +144,7 @@ public class MainActivity extends Activity {
         buildWebView();
         reach = new ReachScreen(this, root, this::retryReach, this::openTailscale);
         watchNetwork();
-        if (state != null) web.restoreState(state);
+        if (state != null && ai.wizards.os.device.AppState.origin(this).equals(state.getString("serverOrigin"))) web.restoreState(state);
         if (this instanceof AppSessionActivity && web.getUrl() != null && !((AppSessionActivity)this).acceptsUrl(web.getUrl())) web.clearHistory();
         if (web.getUrl() == null || (this instanceof AppSessionActivity && !((AppSessionActivity)this).acceptsUrl(web.getUrl()))) go(startUrl(getIntent()));
         installBack();
@@ -189,12 +183,13 @@ public class MainActivity extends Activity {
         }
         installScreenPort(web);
         if (!(this instanceof AppSessionActivity)) HomeScreenShortcuts.attach(this, web);
-        installPhotosPort(web);
+        if (photos != null) photos.detach();
+        photos = ai.wizards.os.photos.PhotosBridge.install(this, web); // status/settings only; no media or credentials
         ai.wizards.os.photos.BackupScheduler.schedule(this);
         device = new ai.wizards.os.device.DeviceBridge(this, web);
         web.addJavascriptInterface(device, "WizardOSDevice");
         if (mizel != null) mizel.detach();
-        mizel = ai.wizards.os.mizel.MizelBridge.install(web, BuildConfig.ORIGIN);
+        mizel = ai.wizards.os.mizel.MizelBridge.install(web, ai.wizards.os.device.AppState.origin(this));
         if (apps != null) apps.detach();
         apps = ai.wizards.os.apps.AppsBridge.install(this, web);
         if (audio != null) audio.detach();
@@ -212,7 +207,7 @@ public class MainActivity extends Activity {
                     // Same-box, shell, custom-scheme and gestureless hops are never forwarded.
                     if (req.hasGesture() && ("https".equals(u.getScheme()) || "http".equals(u.getScheme()))
                             && !HomeScreenShortcuts.origin(MainActivity.this).equals(u.getScheme() + "://" + u.getEncodedAuthority())
-                            && !Origin.isPrivate(u) && u.getPath() != null && !Origin.isShellPath(u.getPath())) {
+                            && !Origin.isPrivate(MainActivity.this, u) && u.getPath() != null && !Origin.isShellPath(u.getPath())) {
                         openOutside(u); return true;
                     }
                     // Never route a rejected task navigation through ACTION_VIEW: a same-box
@@ -220,7 +215,7 @@ public class MainActivity extends Activity {
                     Toast.makeText(MainActivity.this,"Use Android Home to switch apps",Toast.LENGTH_SHORT).show();
                     return true;
                 }
-                if (Origin.isPrivate(u) || ai.wizards.os.device.AppState.isQaPage(MainActivity.this, u)) { if (req.isForMainFrame()) navStarted(u.toString()); return false; }
+                if (Origin.isPrivate(MainActivity.this, u) || ai.wizards.os.device.AppState.isQaPage(MainActivity.this, u)) { if (req.isForMainFrame()) navStarted(u.toString()); return false; }
                 if (!req.isForMainFrame()) return false; // hosted app frames stay inside their window
                 openOutside(u);
                 return true;
@@ -290,7 +285,7 @@ public class MainActivity extends Activity {
                 root.removeView(web);
                 web.destroy();
                 buildWebView();
-                go(MainActivity.this instanceof AppSessionActivity ? startUrl(getIntent()) : BuildConfig.HOME_URL);
+                go(MainActivity.this instanceof AppSessionActivity ? startUrl(getIntent()) : ai.wizards.os.device.AppState.homeUrl(MainActivity.this));
                 return true;
             }
         });
@@ -351,7 +346,7 @@ public class MainActivity extends Activity {
 
     String startUrl(Intent intent) {
         Uri data = intent == null ? null : intent.getData();
-        String target = data != null && Origin.isInApp(data) ? inAppUrl(data.toString()) : null;
+        String target = data != null && Origin.isInApp(MainActivity.this, data) ? inAppUrl(data.toString()) : null;
         if (target != null) return target;
         return ai.wizards.os.device.AppState.homeUrl(this); // HOME_URL; QA builds may point at a fake Wizard
     }
@@ -369,7 +364,7 @@ public class MainActivity extends Activity {
         if (this instanceof AppSessionActivity) return; // document root owns resume; no workspace handoff/navigation
         setIntent(intent);
         Uri data = intent.getData();
-        if (data != null && Origin.isInApp(data)) {
+        if (data != null && Origin.isInApp(MainActivity.this, data)) {
             go(inAppUrl(data.toString()));
         }
         if (ACTION_ACCESSIBILITY.equals(intent.getAction())) { intent.setAction(Intent.ACTION_MAIN); main.post(() -> offerAccessibility(true)); return; }
@@ -384,7 +379,7 @@ public class MainActivity extends Activity {
         if (intent == null) return;
         String act = intent.getAction();
         String json = ACTION_SIDE_BUTTON.equals(act) ? "{\"action\":\"side-button\"}"
-                : ACTION_SETTINGS.equals(act) ? "{\"action\":\"settings\"}"
+                : ACTION_SETTINGS.equals(act) ? Handoff.settings(intent.getStringExtra(EXTRA_SETTINGS_FOCUS))
                 : ACTION_UNSENT.equals(act) ? "{\"action\":\"unsent\"}"
                 : ACTION_USUALS.equals(act) ? "{\"action\":\"usuals\"}"
                 : ACTION_THREAD.equals(act) && intent.getStringExtra(EXTRA_THREAD) != null
@@ -464,7 +459,7 @@ public class MainActivity extends Activity {
     private final Runnable reachMark = () -> {
         if (reach == null) return;
         boolean[] n = ReachScreen.net(this);
-        if (ReachPolicy.failNow(n[0], n[1])) showOffline(null);
+        if (ReachPolicy.failNow(n[0], n[1], ServerOrigin.needsTailscale(ai.wizards.os.device.AppState.origin(this)))) showOffline(null);
         else reach.connecting();
     };
 
@@ -535,6 +530,20 @@ public class MainActivity extends Activity {
         if (resumed) main.postDelayed(reachRetry, ReachPolicy.RETRY_MS);
     }
 
+    void changeServer() {
+        Intent target = new Intent(this, ConnectActivity.class);
+        if (web == null) { startActivity(target); return; }
+        // Pass Appearance roles, never server-controlled URLs or credentials. Native validates colours.
+        web.evaluateJavascript("JSON.stringify({base:getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),ink:getComputedStyle(document.documentElement).getPropertyValue('--ink').trim(),accent:getComputedStyle(document.documentElement).getPropertyValue('--violet-2').trim()})", raw -> {
+            try {
+                String json = new org.json.JSONArray("[" + raw + "]").getString(0);
+                org.json.JSONObject colours = new org.json.JSONObject(json);
+                for (String key : new String[]{"base", "ink", "accent"}) target.putExtra(key, colours.optString(key));
+            } catch (Exception ignored) { }
+            startActivity(target);
+        });
+    }
+
     void openTailscale() {
         android.content.Intent i = getPackageManager().getLaunchIntentForPackage(ReachPolicy.TAILSCALE_PKG);
         if (i == null) { Toast.makeText(this, "Tailscale isn't installed on this phone", Toast.LENGTH_SHORT).show(); return; }
@@ -571,7 +580,7 @@ public class MainActivity extends Activity {
     /* ---------------- Microphone for the orb ---------------- */
 
     private void handleWebPermission(PermissionRequest request) {
-        if (!Origin.isPrivate(request.getOrigin())) { request.deny(); return; }
+        if (!Origin.isPrivate(MainActivity.this, request.getOrigin())) { request.deny(); return; }
         boolean wantsMic = false;
         for (String r : request.getResources()) if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)) wantsMic = true;
         if (!wantsMic) { request.deny(); return; }
@@ -588,6 +597,7 @@ public class MainActivity extends Activity {
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
         super.onRequestPermissionsResult(code, perms, results);
         if (code == REQ_EVERYWHERE) { continueEverywhere(); return; }
+        if (code == ai.wizards.os.photos.PhotosBridge.REQ_PERMISSIONS) { if (photos != null) photos.onPermissions(); return; }
         if (code == REQ_SIDE_MIC) {
             boolean ok = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
             if (ok) continueSideButton();
@@ -629,13 +639,15 @@ public class MainActivity extends Activity {
     @Override
     protected void onSaveInstanceState(Bundle out) {
         super.onSaveInstanceState(out);
-        web.saveState(out);
+        if (web != null) web.saveState(out);
+        out.putString("serverOrigin", ai.wizards.os.device.AppState.origin(this));
     }
 
     @Override
     protected void onStart() {
         super.onStart();
         if (!(this instanceof AppSessionActivity)) current = new java.lang.ref.WeakReference<>(this);
+        if (device == null) return;
         device.onStart();
         ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.front());
         ai.wizards.os.everywhere.EverywhereOutbox.get(this).pump();
@@ -644,7 +656,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onStop() {
-        device.onStop();
+        if (device != null) device.onStop();
         ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.front());
         super.onStop();
     }
@@ -708,6 +720,7 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         ScrollCaptureDiagnostics.record("Activity.onResume",ScrollCaptureDiagnostics.fields());
+        if (web == null) return; // Connect owns the screen until an origin is set
         ScrollCaptureDiagnostics.resumed(this);
         web.onResume();
         ai.wizards.os.share.ShareService.resumeIfPending(this); // shares left queued (force-stop, reboot) carry on
@@ -729,6 +742,7 @@ public class MainActivity extends Activity {
         web.evaluateJavascript("(window.__wosUsuals && window.__wosUsuals())", null);
         device.onResume();
         if (apps != null) apps.onResume();
+        if (photos != null) photos.onResume();
         if (sideSetupActive) {
             sideSetupActive = false;
             if (SideButton.assistant(this)) Toast.makeText(this, "Side button is on. Hold it to talk.", Toast.LENGTH_SHORT).show();
@@ -781,7 +795,7 @@ public class MainActivity extends Activity {
         if (this instanceof AppSessionActivity && web != null) web.evaluateJavascript("window.__wosSessionCheckpoint?.()", null);
         if (mizel != null) mizel.setPcmForeground(false);
         // Mid-recording the page must keep running in the background (the floating orb can send/pause/cancel it).
-        if (!ai.wizards.os.everywhere.EverywhereService.appIsRecording()) web.onPause();
+        if (web != null && !ai.wizards.os.everywhere.EverywhereService.appIsRecording()) web.onPause();
         CookieManager.getInstance().flush();
         resumed = false;
         main.removeCallbacks(reachRetry);
@@ -915,6 +929,7 @@ public class MainActivity extends Activity {
         }
         if (mizel != null) { mizel.detach(); mizel = null; }
         if (apps != null) { apps.detach(); apps = null; }
+        if (photos != null) { photos.detach(); photos = null; }
         if (audio != null) { audio.detach(); audio = null; }
         if (web != null) { root.removeView(web); web.destroy(); }
         super.onDestroy();
@@ -927,7 +942,8 @@ public class MainActivity extends Activity {
     }
 
     /** Small, read-mostly bridge: the shell can ask for a haptic tick and learn it runs natively. */
-    final class Bridge {
+    private final class Bridge {
+        @JavascriptInterface public void changeServer() { runOnUiThread(MainActivity.this::changeServer); }
         @JavascriptInterface
         public String platform() { return "android:" + BuildConfig.VERSION_NAME; }
 
@@ -1075,7 +1091,7 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 final WebView target = web;
                 final String url = target == null ? "" : target.getUrl();
-                boolean trusted = Origin.isShell(Uri.parse(url == null ? "" : url));
+                boolean trusted = Origin.isShell(MainActivity.this, Uri.parse(url == null ? "" : url));
                 if (BuildConfig.DEBUG) {
                     Uri u = Uri.parse(url == null ? "" : url);
                     trusted = trusted || (ai.wizards.os.device.AppState.isQaPage(MainActivity.this, u)

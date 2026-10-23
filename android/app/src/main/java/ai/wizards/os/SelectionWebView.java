@@ -79,7 +79,7 @@ public class SelectionWebView extends WebView {
     }
 
     private boolean trustedScrollOrigin(android.net.Uri u) {
-        return Origin.isPrivate(u) || ai.wizards.os.device.AppState.isQaPage(activity, u);
+        return Origin.isPrivate(activity, u) || ai.wizards.os.device.AppState.isQaPage(activity, u);
     }
     private boolean proxyEligible() {
         return activity != null && isAttachedToWindow() && isShown() &&

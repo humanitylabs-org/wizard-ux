@@ -99,6 +99,16 @@ html[data-layout="phone"] .url { cursor: pointer; }
 
 /* Signal uses square edges and monospace labels, not colour alone. */
 html[data-skin="signal"] { --setup-r: 2px; }
+.recommended { margin-top: 32px; }
+.recommended h2 { font-size: 18px; margin: 0 0 8px; color: var(--wz-text, #eeeaf4); }
+.recommended .intro { margin-bottom: 16px; }
+.recommended .row .recommended-action { font-size: 12px; text-align: right; max-width: 110px; flex-shrink: 0; color: var(--ac); }
+.recommended .row:disabled { cursor: default; opacity: .65; }
+@media (max-width: 420px) {
+  .recommended .row { flex-wrap: wrap; }
+  .recommended .bd { min-width: 160px; }
+  .recommended-action { max-width: none; }
+}
 html[data-skin="signal"] :is(h1, h2, .eyebrow, .btn, .url, .menu) { font-family: var(--wz-mono, monospace); }
 html[data-skin="signal"] :is(.item, .btn, .url, .menu, .sheet, .qr) { border-radius: 2px; }
 
