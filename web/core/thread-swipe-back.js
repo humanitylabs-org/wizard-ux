@@ -1,17 +1,11 @@
 /* Thread swipe-back (Miguel's gesture, every skin since James, 23 Oct 2026): inside an open chat thread, swipe right
  * from anywhere (not the OS edge strip) to go back one step. The thread follows the finger a little and fades;
- * release past 120px (or a deliberate 80px+ flick) that stays level runs the shell's own Back step (linked thread ->
- * parent, thread -> list). James, 23 Oct 2026: "an absolute subtle swipe is going back; make it an intentional swipe",
- * so short nudges, diagonal scrolls and slow drifts snap back (thresholds in INTENT below).
+ * an intentional swipe (swipe-intent.js: long drag or deliberate level flick) runs the shell's own Back step (linked thread -> parent, thread -> list).
  * It never leaves or exits the app. Code blocks, tables, the composer, sliders, inputs and selected text keep their
  * own horizontal gestures. Runs as a WosSkinHost built-in, so it gets the skin hook API's guards and cleanup.
  * API: none (registers itself). */
-(function () {
-  'use strict';
-  const INTENT = { engage: 24, commit: 120, flick: 80, speed: 0.6, drift: 50, level: 2.5 };
-  const engages = (dx, dy) => dx > INTENT.engage && dx > dy * 2;
-  const commits = (dx, dy, ms) => dy < INTENT.drift && dx > dy * INTENT.level
-    && (dx > INTENT.commit || (dx > INTENT.flick && dx / (ms || 1) > INTENT.speed));
+import { engages, commits } from './swipe-intent.js';
+{
   function setup(api) {
     let sw = null;
     const thread = () => { const r = api.part('thread'); return r && r.querySelector('[data-part="thread"]'); };
@@ -55,4 +49,4 @@
     return () => { if (sw) reset(sw.th); sw = null; };
   }
   window.WosSkinHost?.builtin('thread-swipe-back', setup, { when: 'touch', label: 'Swipe back' });
-})();
+}
