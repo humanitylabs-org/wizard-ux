@@ -99,7 +99,7 @@ const settle = (p, ms = 3500) => p.waitForFunction(() => document.querySelector(
   await p.evaluate(() => __wos.onBack()); await p.waitForTimeout(700);
   t = await T(p); ok(t.step === 4 && t.idx === 0 && !(await p.evaluate(() => document.querySelector('#device').classList.contains('zen'))), 'beat 3: Back brings the bars back → end card on Home', JSON.stringify(t));
   ok(await p.evaluate(() => document.visibilityState === 'visible' && !!document.querySelector('#orbWrap')), 'Back in the tour: app still open');
-  ok(/say “help”/.test(t.copy), 'end card: "Need this again? Hold the orb and say “help”."', t.copy);
+  ok(/Everything you see is customizable/.test(t.copy) && /say “help”/.test(t.alt), 'end card: "Everything you see is customizable…" + "Need this again? Hold the orb and say “help”."', t.copy + ' | ' + t.alt);
   await p.screenshot({ path: `${SHOTS}/07-done.png` });
   await p.mouse.click(206, 300); await p.waitForTimeout(500);
   t = await T(p); ok(!t.active && await p.evaluate(() => localStorage.getItem('wos.tour.v1') === 'true'), 'end card: a tap finishes and remembers', JSON.stringify(t));
