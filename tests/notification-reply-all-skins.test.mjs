@@ -18,8 +18,8 @@ test('the Reply bridge and bubble are not gated on a skin', () => {
   for (const src of [bridge, open, refresh]) {
     assert.doesNotMatch(src, /dataset\.skin|OURS|obsidian|landscapes|\bours\(/);
   }
-  // The thread render puts the bubble in for every skin: only a New chat of the main agent decides it.
-  assert.match(chats, /const rpl = isNew && !TAG \? KIT\.drafts\.get\(dkey\)\.reply : null;/);
+  // Match the live shared renderer: existing app-hosted drafts also carry reply context.
+  assert.match(chats, /const rpl = !\(isNew && TAG\) \? KIT\.drafts\.get\(dkey\)\.reply : null;/);
   assert.match(chats, /\$\{replyBubble\(rpl\)\}/);
   assert.match(chats, /\$\{replyCard\(tn\.u\.reply\)\}/);
 });
