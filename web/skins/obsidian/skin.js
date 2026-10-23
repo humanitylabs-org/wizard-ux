@@ -3,6 +3,7 @@
 // Back goes through the shell's own Back step (api.nav.back): linked thread -> parent, thread -> list; never exits.
 import { playIntro, noteSkin, toHome } from './intro.js';
 
+import { engages, commits } from './swipe-intent.js';
 import { setupBehaviour } from './behaviour.js';
 
 export default function setup(api) {
@@ -34,7 +35,7 @@ export default function setup(api) {
       const t = e.touches[0], dx = t.clientX - sw.x, dy = Math.abs(t.clientY - sw.y);
       if (!sw.on) {
         if (dy > 36 && dy > dx) { sw = null; return; }
-        if (dx > 14 && dx > dy * 1.6) { sw.on = true; sw.th.style.transition = 'none'; }
+        if (engages(dx, dy)) { sw.on = true; sw.th.style.transition = 'none'; }
         else return;
       }
       sw.dx = dx;
@@ -44,8 +45,8 @@ export default function setup(api) {
     const end = e => {
       if (!sw) return; const s = sw; sw = null; s.on && reset(s.th); s.on = s.on && e.type !== 'touchcancel';
       const t1 = e.changedTouches && e.changedTouches[0]; if (!t1 || !s.on) return;
-      const dx = t1.clientX - s.x, dy = Math.abs(t1.clientY - s.y), v = dx / ((performance.now() - s.t) || 1);
-      if ((dx > 90 || (dx > 40 && v > .45)) && dy < 70) api.nav.back();
+      const dx = t1.clientX - s.x, dy = Math.abs(t1.clientY - s.y);
+      if (commits(dx, dy, performance.now() - s.t)) api.nav.back();
     };
     api.listen(root, 'touchend', end, { passive: true });
     api.listen(root, 'touchcancel', end, { passive: true });
