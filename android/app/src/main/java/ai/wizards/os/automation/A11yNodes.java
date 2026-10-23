@@ -25,7 +25,8 @@ final class A11yNodes {
         if (s != null && Build.VERSION.SDK_INT >= 34) { try { s.clearCache(); } catch (Throwable ignored) { } }
     }
 
-    static void refresh(AccessibilityNodeInfo n) { try { n.refresh(); } catch (Throwable ignored) { } }
+    /** False when the node's view is gone (the app rebuilt its screen): callers keep the node's last known state. */
+    static boolean refresh(AccessibilityNodeInfo n) { try { return n.refresh(); } catch (Throwable ignored) { return false; } }
 
     /** The target app's window root, or null when it is not on screen. */
     static AccessibilityNodeInfo root(WizardKeyboardService s, String pkg) {

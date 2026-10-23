@@ -16,6 +16,9 @@ import android.widget.TextView;
  */
 public class DummyFoodActivity extends Activity {
     private int kraPao, padThai;
+    private Button basket;
+
+    private String basketLabel() { return "View basket · " + (kraPao + padThai) + " items"; }
     private LinearLayout root;
 
     @Override protected void onCreate(Bundle b) {
@@ -44,7 +47,9 @@ public class DummyFoodActivity extends Activity {
         LinearLayout l = row();
         TextView t = new TextView(this); t.setText(name); t.setTextSize(18);
         l.addView(t, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        Button a = new Button(this); a.setText("Add"); a.setAllCaps(false); a.setOnClickListener(v -> { add.run(); v.post(this::menu); });
+        // Like a real menu: Add updates the basket bar in place; the list itself is not rebuilt.
+        Button a = new Button(this); a.setText("Add"); a.setAllCaps(false);
+        a.setOnClickListener(v -> { add.run(); v.post(() -> { if (basket != null) basket.setText(basketLabel()); }); });
         l.addView(a);
     }
 
@@ -65,11 +70,12 @@ public class DummyFoodActivity extends Activity {
         express.setOnClickListener(v -> v.post(() -> paid("PAID BY EXPRESS")));
         TextView e = new TextView(this); e.setText("Express"); e.setTextSize(18); express.addView(e);
         TextView p = new TextView(this); p.setText("  Pay now ฿90"); p.setTextSize(18); express.addView(p);
-        button("View basket · " + (kraPao + padThai) + " items", this::checkout);
+        basket = button(basketLabel(), this::checkout);
     }
 
     void checkout() {
         root.removeAllViews();
+        basket = null;
         text("Review order");
         if (kraPao > 0) text(kraPao + "× Kra pao   ฿65");
         if (padThai > 0) text(padThai + "× Pad thai   ฿70");
