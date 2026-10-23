@@ -10,6 +10,8 @@ import android.widget.TextView;
 /**
  * A dummy food-ordering app for AutomationE2eTest. It ships in the instrumentation APK (ai.wizards.os.qa.test, the
  * debug-only automation target), so its windows belong to another package, exactly like Grab's. No network, no data.
+ * Screens change after the click is reported (posted), as in a real app: rebuilding inside onClick detaches the
+ * button before Android sends TYPE_VIEW_CLICKED, so no recorder would ever see the tap.
  * Home → menu (Kra pao / Pad thai rows with "Add", an Express row that wraps "Pay now") → checkout (Total, Place order).
  */
 public class DummyFoodActivity extends Activity {
@@ -28,7 +30,7 @@ public class DummyFoodActivity extends Activity {
     private TextView text(String s) { TextView t = new TextView(this); t.setText(s); t.setTextSize(18); root.addView(t); return t; }
 
     private Button button(String s, Runnable r) {
-        Button x = new Button(this); x.setText(s); x.setAllCaps(false); x.setOnClickListener(v -> r.run()); root.addView(x); return x;
+        Button x = new Button(this); x.setText(s); x.setAllCaps(false); x.setOnClickListener(v -> v.post(r)); root.addView(x); return x;
     }
 
     private LinearLayout row() {
@@ -42,16 +44,13 @@ public class DummyFoodActivity extends Activity {
         LinearLayout l = row();
         TextView t = new TextView(this); t.setText(name); t.setTextSize(18);
         l.addView(t, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        Button a = new Button(this); a.setText("Add"); a.setAllCaps(false); a.setOnClickListener(v -> { add.run(); menu(); });
+        Button a = new Button(this); a.setText("Add"); a.setAllCaps(false); a.setOnClickListener(v -> { add.run(); v.post(this::menu); });
         l.addView(a);
     }
 
     void home() {
         root.removeAllViews();
         text("Dummy Food home");
-        // Diagnostic for AutomationE2eTest: does this process send accessibility events at all?
-        android.view.accessibility.AccessibilityManager am = getSystemService(android.view.accessibility.AccessibilityManager.class);
-        text("a11y " + (am != null && am.isEnabled() ? "on" : "off"));
         button("Krua Thai Kitchen", this::menu);
     }
 
@@ -63,7 +62,7 @@ public class DummyFoodActivity extends Activity {
         // A control whose own label is harmless but which wraps a payment button: the live-node guard must refuse it.
         LinearLayout express = row();
         express.setClickable(true);
-        express.setOnClickListener(v -> paid("PAID BY EXPRESS"));
+        express.setOnClickListener(v -> v.post(() -> paid("PAID BY EXPRESS")));
         TextView e = new TextView(this); e.setText("Express"); e.setTextSize(18); express.addView(e);
         TextView p = new TextView(this); p.setText("  Pay now ฿90"); p.setTextSize(18); express.addView(p);
         button("View basket · " + (kraPao + padThai) + " items", this::checkout);
