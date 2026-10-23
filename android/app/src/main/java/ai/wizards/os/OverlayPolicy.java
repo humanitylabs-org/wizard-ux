@@ -7,6 +7,11 @@ import java.util.Set;
 final class OverlayPolicy {
     static final String ASSETS = "file:///android_asset/wizard-os-home/";
     static final String SHELL = "/wizard-os-home/";
+    /** Document origin of every remote overlay page. Never the Wizard origin: a service worker registered there (the
+     *  shell's web/sw.js, or a hosted app's root-scope worker) would answer the overlay's requests inside WebView,
+     *  where shouldInterceptRequest never sees them, and hand its own code the privileged bridges. No page can ever be
+     *  served at this reserved .invalid name (RFC 6761) except through OverlayPage, whose CSP denies workers. */
+    static final String VIRTUAL = "https://wizard-overlay.invalid";
     // addJavascriptInterface is visible to ALL frames, including opaque-origin srcdoc/data frames.
     // Enforce this policy natively, not via headers supplied by a potentially older web deployment.
     static final String CSP = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
@@ -21,7 +26,7 @@ final class OverlayPolicy {
     private OverlayPolicy() {}
 
     static String remoteUrl(String origin, String page) {
-        return isHttpsOrigin(origin) && validPage(page) ? origin.replaceAll("/+$", "") + SHELL + "assist/" + page : null;
+        return isHttpsOrigin(origin) && validPage(page) ? VIRTUAL + SHELL + "assist/" + page : null;
     }
     static boolean validPage(String page) {
         if (page == null) return false;
@@ -39,10 +44,16 @@ final class OverlayPolicy {
                 && o.getRawQuery() == null && o.getRawFragment() == null && (o.getPort() == -1 || o.getPort() == 443)
                 && (p == null || p.isEmpty() || p.equals("/"));
     }
+    /** An allowlisted overlay resource on the virtual document origin, while a plain HTTPS Wizard is selected. */
     static boolean fromWizard(String origin, String url) {
         URI u = parse(url);
-        return isHttpsOrigin(origin) && u != null && ServerOrigin.matches(origin.replaceAll("/+$", ""), url)
+        return isHttpsOrigin(origin) && u != null && "https".equals(u.getScheme()) && "wizard-overlay.invalid".equals(u.getRawAuthority())
                 && u.getRawQuery() == null && allowedPath(u.getRawPath(), SHELL);
+    }
+    /** Where natively fetched bytes for an allowed virtual URL come from: the same path on the selected Wizard. */
+    static String upstream(String origin, String url) {
+        if (!fromWizard(origin, url)) return null;
+        return origin.replaceAll("/+$", "") + parse(url).getRawPath();
     }
     static boolean bundled(String url) {
         URI u = parse(url);

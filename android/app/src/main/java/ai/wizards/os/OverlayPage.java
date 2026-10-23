@@ -16,13 +16,15 @@ import java.net.URL;
 import java.util.Map;
 
 /** Exact-origin static documents, or the APK copy offline. No WebView-owned network requests:
- * Android's shouldInterceptRequest is NOT called for subsequent redirect URLs. Native fetches
+ * Android's shouldInterceptRequest is NOT called for subsequent redirect URLs, nor for requests a service
+ * worker answers; remote pages therefore live on {@link OverlayPolicy#VIRTUAL}, never the Wizard origin. Native fetches
  * refuse redirects and attach a frame/worker-denying CSP to every document, including the bundle.
  * The synchronous bridges remain private to these three trusted top-level pages, not arbitrary
  * same-origin shell pages. A compromised selected Wizard can still supply privileged JavaScript.
  */
 public class OverlayPage extends WebViewClient {
     static final long TIMEOUT_MS = 1500;
+    static final long FETCH_TOTAL_MS = 3000;
     private final String page;
     private final boolean remoteFirst;
     private final long deadlineMs;
@@ -57,7 +59,13 @@ public class OverlayPage extends WebViewClient {
         serverPrefs = v.getContext().getSharedPreferences("wizard_server", android.content.Context.MODE_PRIVATE);
         serverPrefs.registerOnSharedPreferenceChangeListener(serverChanged);
         v.addOnAttachStateChangeListener(new android.view.View.OnAttachStateChangeListener() {
-            @Override public void onViewAttachedToWindow(android.view.View view) { }
+            @Override public void onViewAttachedToWindow(android.view.View view) {
+                // EverywhereService removes the orb window while Wizard OS is in front (exactly when Connect can
+                // switch Wizards) and re-adds the SAME WebView without reloading it. Recheck what was missed.
+                serverPrefs.registerOnSharedPreferenceChangeListener(serverChanged);
+                if (remote && !origin.equals(ServerSettings.origin(view.getContext()))) { fallBack("selected Wizard changed while hidden"); return; }
+                if (remote && !done) { main.removeCallbacks(timeout); main.postDelayed(timeout, deadlineMs); } // a load interrupted by detach still gets its deadline
+            }
             @Override public void onViewDetachedFromWindow(android.view.View view) {
                 serverPrefs.unregisterOnSharedPreferenceChangeListener(serverChanged);
                 main.removeCallbacks(timeout);
@@ -103,7 +111,7 @@ public class OverlayPage extends WebViewClient {
         // A subframe may not load even an allowlisted document (defence beyond frame-src).
         if (u.split("#", 2)[0].endsWith(".html") && (!r.isForMainFrame() || !OverlayPolicy.samePage(current, u))) return blocked();
         try {
-            byte[] bytes = fromWizard ? fetch(u) : read(web.getContext().getAssets().open(r.getUrl().getPath().substring("/android_asset/".length())));
+            byte[] bytes = fromWizard ? fetch(OverlayPolicy.upstream(origin, u)) : read(web.getContext().getAssets().open(r.getUrl().getPath().substring("/android_asset/".length())));
             String path = r.getUrl().getPath();
             String mime = path.endsWith(".html") ? "text/html" : path.endsWith(".js") ? "application/javascript" : path.endsWith(".css") ? "text/css" : "image/png";
             if (path.endsWith(".html")) {
@@ -125,6 +133,7 @@ public class OverlayPage extends WebViewClient {
     }
     /** Native HTTPS transport: no redirect, cache, unbounded stream, or weakened certificate checks. */
     protected byte[] fetch(String url) throws Exception {
+        if (url == null) throw new java.io.IOException("not an overlay resource");
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setInstanceFollowRedirects(false);
         c.setConnectTimeout(1000);
@@ -134,13 +143,16 @@ public class OverlayPage extends WebViewClient {
         if (cookies != null) c.setRequestProperty("Cookie", cookies);
         try {
             if (c.getResponseCode() != 200) throw new java.io.IOException("HTTP " + c.getResponseCode());
-            return read(c.getInputStream());
+            // Per-read timeouts alone let a server dribble one byte a second for minutes and pin a WebView IO thread.
+            return read(c.getInputStream(), System.nanoTime() + FETCH_TOTAL_MS * 1_000_000L);
         } finally { c.disconnect(); }
     }
-    private static byte[] read(InputStream input) throws Exception {
+    private static byte[] read(InputStream input) throws Exception { return read(input, Long.MAX_VALUE); }
+    private static byte[] read(InputStream input, long deadlineNanos) throws Exception {
         try (InputStream in = input; ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             byte[] buf = new byte[8192]; int n;
             while ((n = in.read(buf)) != -1) {
+                if (System.nanoTime() > deadlineNanos) throw new java.io.IOException("Overlay resource too slow");
                 if (out.size() + n > 4 * 1024 * 1024) throw new java.io.IOException("Overlay resource too large");
                 out.write(buf, 0, n);
             }

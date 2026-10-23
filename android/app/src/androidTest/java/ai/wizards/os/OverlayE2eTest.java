@@ -72,7 +72,7 @@ public class OverlayE2eTest {
             for (String page : new String[]{"surface.html#corner", "everywhere.html", "screen.html"}) {
                 try {
                     String url = open(page, remote, "");
-                    assertTrue(url, url.startsWith(remote ? "https://fixture.invalid/" : OverlayPolicy.ASSETS));
+                    assertTrue(url, url.startsWith(remote ? OverlayPolicy.VIRTUAL + "/" : OverlayPolicy.ASSETS));
                     if (page.startsWith("surface")) {
                         assertEquals("true", js("W.setMode('corner');W.lockState(false);W.begin();document.body.classList.contains('corner')"));
                         assertEquals("\"unlocked\"", js("document.getElementById('lock').textContent"));
@@ -112,7 +112,7 @@ public class OverlayE2eTest {
     }
     @Test public void runtimeSelectionInvalidatesAnAlreadyLoadedRemotePage() throws Exception {
         try {
-            assertTrue(open("everywhere.html", true, "").startsWith("https://fixture.invalid/"));
+            assertTrue(open("everywhere.html", true, "").startsWith(OverlayPolicy.VIRTUAL + "/"));
             context.getSharedPreferences("wizard_server", Context.MODE_PRIVATE).edit().putString("origin", "https://other.invalid").commit();
             boolean bundled = false;
             for (int i = 0; i < 40; i++) {
@@ -126,7 +126,7 @@ public class OverlayE2eTest {
         // EverywhereService detaches the orb WebView while Wizard OS is in front (exactly when Connect can switch
         // Wizards) and re-adds the SAME WebView later without reloading it.
         try {
-            assertTrue(open("everywhere.html", true, "").startsWith("https://fixture.invalid/"));
+            assertTrue(open("everywhere.html", true, "").startsWith(OverlayPolicy.VIRTUAL + "/"));
             ui(() -> activity.setContentView(new android.view.View(activity)));
             context.getSharedPreferences("wizard_server", Context.MODE_PRIVATE).edit().putString("origin", "https://other.invalid").commit();
             Thread.sleep(300);

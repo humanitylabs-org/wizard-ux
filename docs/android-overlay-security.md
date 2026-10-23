@@ -45,6 +45,28 @@ Existing words, layout, and native capability bridges are unchanged.
   is replaced by the bundle when that selection changes. Detach cancels the
   load deadline and invalidates asynchronous completion callbacks.
 
+- **Wizard-origin service worker (independent review, emulator-proven):** a
+  service worker registered for the Wizard origin by any WebView of the app
+  (the shell registers `web/sw.js` at `/wizard-os-home/`; hosted apps can hold
+  wider-scope workers) controls documents of that origin in every WebView of
+  the profile. Requests it answers never reach `shouldInterceptRequest`, so an
+  overlay page loaded at `<origin>/wizard-os-home/assist/` could be replaced by
+  worker-supplied markup with no native allowlist, redirect check or CSP
+  prefix, and with the privileged bridges. `OverlayE2eTest` reproduced
+  `sw-served` content in a real OverlayPage. Remote overlay documents now live
+  on the reserved virtual origin `https://wizard-overlay.invalid`; OverlayPage
+  maps each allowlisted path to the selected Wizard and fetches it natively.
+  No worker can exist on that origin (CSP `worker-src 'none'`, nothing else
+  serves it), and requests on the real Wizard origin are refused.
+- **Reattach after origin switch (emulator-proven):** EverywhereService
+  removes the orb window while Wizard OS is in front, which is exactly when
+  Connect switches Wizards, and later re-adds the same WebView. The change
+  listener was unregistered on detach, so the previous Wizard's privileged
+  page survived. Attach now re-registers and rechecks the selected origin.
+- **Slow-drip fetch:** per-read timeouts let a server send one byte a second
+  and pin a WebView IO thread indefinitely. Each native fetch now has a
+  3-second total deadline.
+
 ## Trust and compatibility
 
 The selected Wizard is trusted to supply privileged top-level JavaScript;
