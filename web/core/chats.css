@@ -348,6 +348,9 @@ a.fchip { color: inherit; text-decoration: none; }
 .mv-stage { flex: 1; min-height: 0; position: relative; display: grid; place-items: center; overflow: hidden; }
 .mv-stage img { width: 100%; height: 100%; object-fit: contain; transform-origin: center; transition: transform 200ms var(--ease); user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
 .mv-stage video { max-width: 100%; max-height: 100%; background: #000; }
+/* Long screenshots fit the width and scroll (chat-kit.js fit/clampPan): top-anchored, scaled from the top edge. */
+.mviewer.long .mv-stage { place-items: start center; }
+.mviewer.long .mv-stage img { height: auto; transform-origin: top center; }
 .mviewer[data-kind="file"] .mv-stage, .mviewer[data-kind="audio"] .mv-stage { touch-action: pan-y; }
 .mv-file { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px; text-align: center; max-width: 340px; }
 .mv-file .mv-ic { font-size: 40px; }
