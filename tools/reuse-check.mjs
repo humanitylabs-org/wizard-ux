@@ -11,7 +11,9 @@ const VISUAL_LINE = /<canvas\b|getContext\(\s*['"](webgl2?|2d)|@keyframes\b/;
 /** files: [{ path, added: [lines] }]. Returns a list of problems (empty = pass). */
 export function checkReuse({ body = '', files = [], inventory = '' }) {
   const problems = [];
-  const text = String(body).replace(/\r/g, '').replace(/<!--[\s\S]*?-->/g, '');
+  // Drop HTML comments (the template's examples) without a regex: an unclosed comment drops the rest.
+  const text = String(body).replace(/\r/g, '').split('<!--')
+    .map((part, i) => { if (!i) return part; const end = part.indexOf('-->'); return end < 0 ? '' : part.slice(end + 3); }).join('');
   const ui = files.some(f => UI.test(f.path));
   const touchedInventory = files.some(f => f.path === 'docs/COMPONENTS.md');
   const head = text.match(/^[ \t]*\**Reuse:?\**:?[ \t]*(.*)$/im);

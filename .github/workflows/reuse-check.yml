@@ -2,6 +2,8 @@ name: Reuse check
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
+permissions:
+  contents: read
 jobs:
   reuse:
     runs-on: ubuntu-latest
