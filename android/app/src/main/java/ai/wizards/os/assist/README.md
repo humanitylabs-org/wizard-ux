@@ -12,7 +12,7 @@ Power long-press → `PhoneWindowManager` → the default **assistant** role hol
 
 ## Files (all additive; MainActivity untouched)
 - `java/ai/wizards/os/assist/*`: activity, session, services, `VoiceCapture` (one mic engine shared by both surfaces), `Transcriber` (private Wizard voice endpoint), `SilenceDetector` (+ unit test)
-- `assets/assist/`: surface page plus a copy of Wizard Motion Kit v1
+- `web/assist/` (served by the Wizard): surface page; the APK bundles it, with the shared orb and Wizard Motion Kit, in `assets/wizard-os-home/` as the offline copy (`OverlayPage`)
 - `res/xml/assist_voice.xml`, `assist_recognition.xml`; manifest block marked "Side-button assistant"; `Theme.WizardOS.AssistSurface`
 
 ## Verified

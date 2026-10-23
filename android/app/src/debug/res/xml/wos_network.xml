@@ -6,4 +6,14 @@
         <domain includeSubdomains="false">localhost</domain>
         <domain includeSubdomains="false">127.0.0.1</domain>
     </domain-config>
+    <!-- Debuggable builds only (Android ignores debug-overrides otherwise): also trust the disposable CA of the
+         CI overlay host-flow run (tools/ci_android_overlay_hosts.py), so its fake Wizard can be a real HTTPS:443
+         origin. The committed qa_fixture_ca.pem is a placeholder whose private key was discarded; CI replaces it
+         with a CA minted for that one run. Release builds never contain this file. -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/qa_fixture_ca" />
+        </trust-anchors>
+    </debug-overrides>
 </network-security-config>

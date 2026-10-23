@@ -1,5 +1,6 @@
 package ai.wizards.os.assist;
 
+import ai.wizards.os.OverlayPage;
 import ai.wizards.os.BuildConfig;
 import ai.wizards.os.R;
 
@@ -21,15 +22,11 @@ import android.view.WindowManager;
 import android.webkit.ConsoleMessage;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
-import android.webkit.WebViewClient;
 
 import org.json.JSONObject;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
 
 /**
@@ -46,7 +43,6 @@ import java.io.File;
  */
 public class AssistLockActivity extends Activity implements VoiceCapture.View {
     static final String TAG = "WizardOSAssist";
-    private static final String SURFACE = "file:///android_asset/assist/surface.html";
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private WebView web;
@@ -91,25 +87,12 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
         s.setDomStorageEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setAllowContentAccess(false);
-        s.setAllowFileAccess(true); // only file:///android_asset/assist/ is served; everything else is blocked below
-        s.setBlockNetworkLoads(true); // the surface is local; only native code talks to Wizard voice
         web.addJavascriptInterface(new Bridge(), "WizardNative");
-        web.setWebViewClient(new WebViewClient() {
+        // Bundled copy only, network blocked, as before: over the lock screen the surface must appear at once and
+        // work with no connection, so it never waits on the Wizard (OverlayPage remoteFirst=false).
+        OverlayPage surface = new OverlayPage("surface.html", false) {
             @Override
-            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                return true; // the surface never navigates
-            }
-
-            @Override
-            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                String url = request.getUrl().toString();
-                if (url.startsWith("file:///android_asset/assist/")) return null;
-                return new WebResourceResponse("text/plain", "utf-8", 403, "Blocked", null,
-                        new ByteArrayInputStream(new byte[0]));
-            }
-
-            @Override
-            public void onPageFinished(WebView view, String url) {
+            protected void ready(WebView view, String url) {
                 pageReady = true;
                 pushLockState();
                 if (pendingBegin) {
@@ -117,7 +100,8 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
                     begin();
                 }
             }
-        });
+        };
+        web.setWebViewClient(surface);
         web.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onConsoleMessage(ConsoleMessage m) {
@@ -128,7 +112,7 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
         setContentView(web);
         registerReceiver(userPresent, new IntentFilter(Intent.ACTION_USER_PRESENT));
         pendingBegin = true;
-        web.loadUrl(SURFACE);
+        surface.load(web);
         Log.i(TAG, "surface created locked=" + keyguard.isKeyguardLocked() + " action=" + action(getIntent()));
     }
 
