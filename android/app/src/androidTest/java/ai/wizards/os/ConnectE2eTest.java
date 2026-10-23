@@ -139,7 +139,7 @@ public class ConnectE2eTest {
                 } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
             });
             visible("What you told the Wizard"); foreground(); shot("assist-nested");
-            back(); foreground(); assertNull(device.findObject(By.text("What you told the Wizard")));
+            back(); foreground(); assertTrue("assistant closed by Back", device.wait(Until.gone(By.text("What you told the Wizard")), 5000));
             shot("assist-nested-back"); back(); foreground(); shot("assist-root-back");
             start(MainActivity.class); // stop the silent emulator take; no owner endpoint or real audio
         }
