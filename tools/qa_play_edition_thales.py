@@ -103,14 +103,19 @@ def main():
     assert tree.get('package') == 'ai.wizards.os'
     assert tree.get(ANDROID + 'versionCode') == '1000069'
     assert tree.get(ANDROID + 'versionName') == '0.10.5'
-    fgs_types = {'everywhere.EverywhereService': 'microphone|specialUse',
-                 'mizel.MeetingRecorderService': 'microphone', 'recording.RecorderService': 'microphone',
-                 'share.ShareService': 'dataSync'}
+    # Protobuf manifest dumps encode FGS enum/flag values as hexadecimal integers.
+    fgs_types = {'everywhere.EverywhereService': 0x40000080,
+                 'mizel.MeetingRecorderService': 0x80, 'recording.RecorderService': 0x80,
+                 'share.ShareService': 0x1}
     for cls, expected in fgs_types.items():
         nodes = [n for n in tree.iter('service') if n.get(ANDROID + 'name') == 'ai.wizards.os.' + cls]
-        assert len(nodes) == 1 and nodes[0].get(ANDROID + 'foregroundServiceType') == expected, cls
+        assert len(nodes) == 1 and int(nodes[0].get(ANDROID + 'foregroundServiceType'), 0) == expected, cls
     for cls in ('update.InstallReceiver', 'update.UpdateBoot', 'update.UpdateJob', 'update.ApkProvider', 'apps.AppsInstallReceiver', 'apps.AppsUpdateJob'):
         assert not any((n.get(ANDROID + 'name') or '').endswith('.' + cls) for n in tree.iter())
+    recovery = [n for n in tree.iter('receiver') if n.get(ANDROID + 'name') == 'ai.wizards.os.share.ShareRecoveryBoot']
+    assert len(recovery) == 1
+    assert {n.get(ANDROID + 'name') for n in recovery[0].iter('action')} == {
+        'android.intent.action.BOOT_COMPLETED', 'android.intent.action.MY_PACKAGE_REPLACED'}
     config_path = app / 'build/generated/source/buildConfig/play/release/ai/wizards/os/BuildConfig.java'
     config = config_path.read_text()
     (evidence / 'PlayBuildConfig.java').write_text(config)
@@ -126,6 +131,7 @@ def main():
         assert descriptor in direct_dex, cls
     for forbidden in (b'/reports/wizard-os/latest.json', b'Landroid/content/pm/PackageInstaller;', b'UPDATE_SIGNER'):
         assert forbidden not in play_dex, forbidden
+    assert b'Lai/wizards/os/share/ShareRecoveryBoot;' in play_dex
     assert b'market://details?id=' in play_dex and b'https://play.google.com/store/apps/details?id=' in play_dex
     direct_manifest = run([SDK / 'build-tools/35.0.0/aapt2', 'dump', 'xmltree', apk, '--file', 'AndroidManifest.xml'], evidence / 'sideload-manifest.txt', env=env)
     assert 'android.permission.REQUEST_INSTALL_PACKAGES' in direct_manifest

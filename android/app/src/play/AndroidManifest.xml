@@ -5,6 +5,13 @@
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" tools:node="remove" />
     <uses-permission android:name="android.permission.ENFORCE_UPDATE_OWNERSHIP" tools:node="remove" />
     <application>
+        <!-- Preserve pending-share boot recovery independently of the excluded self-updater. -->
+        <receiver android:name=".share.ShareRecoveryBoot" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
         <!-- Same FGS types as main: expose them to lint's flavor-manifest lookup too. -->
         <service android:name="ai.wizards.os.everywhere.EverywhereService" android:foregroundServiceType="microphone|specialUse" />
         <service android:name="ai.wizards.os.mizel.MeetingRecorderService" android:foregroundServiceType="microphone" />

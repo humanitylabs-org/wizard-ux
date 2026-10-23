@@ -36,6 +36,24 @@ test('flavor foreground service declarations exactly match shared service types'
       .includes(`android:name="ai.wizards.os.${name}" android:foregroundServiceType="${type}"`));
   }
 });
+test('Play preserves pending-share recovery without updater boot work', () => {
+  const manifest = read(root + 'play/AndroidManifest.xml');
+  assert.match(manifest, /\.share\.ShareRecoveryBoot/);
+  assert.match(manifest, /android\.intent\.action\.BOOT_COMPLETED/);
+  assert.match(manifest, /android\.intent\.action\.MY_PACKAGE_REPLACED/);
+  const receiver = read(root + 'play/java/ai/wizards/os/share/ShareRecoveryBoot.java');
+  assert.match(receiver, /ShareJob\.scheduleIfPending\(c\)/);
+  assert.doesNotMatch(receiver, /Updater\.|UpdateJob\./);
+});
+test('Android smoke and CI use explicit flavor tasks and the right artifact path', () => {
+  const smoke = read('.github/workflows/android-emulator.yml');
+  assert.match(smoke, /apk\/sideload\/debug\/app-sideload-debug\.apk/);
+  assert.match(smoke, /:app:connectedSideloadDebugAndroidTest/);
+  assert.doesNotMatch(smoke, /:app:(?:assemble|connected)Debug/);
+  const ci = read('.github/workflows/android.yml');
+  assert.match(ci, /:app:testPlayDebugUnitTest/);
+  assert.match(ci, /:app:testSideloadDebugUnitTest/);
+});
 const device = read('web/device.js');
 const settings = device.slice(device.indexOf('    settingsHtml() {'), device.indexOf('    readRecording,')).replace(/,\s*$/, '');
 for (const distribution of ['play', 'sideload']) test(`${distribution} settings only offer the distribution's update controls`, () => {
