@@ -243,6 +243,8 @@
       release: () => { orbHandler = null; return service?.orb ? Promise.resolve(service.orb.set(null)) : transportReady ? request('orb.set', { spec: null }).then(() => true, () => false) : Promise.resolve(false); },
       shown: () => { try { return !!service?.orb?.shown(); } catch (_) { return false; } },
     }),
+    /* Lower Wizard Music while this app plays something short (a voice note); duck(false) restores it. */
+    audio: Object.freeze({ duck: on => service?.audio ? Promise.resolve(service.audio.duck(!!on)).then(v => v === true, () => false) : transportReady ? request('audio.duck', { on: !!on }).then(v => v === true, () => false) : Promise.resolve(false) }),
     badge: Object.freeze({ set: n => service ? service.badge.set(n) : transportReady ? request('badge.set', { n }).then(() => true, () => false) : Promise.resolve(false) }),
     update: Object.freeze({ hold, onAvailable: fn => listen(updates, fn, updateAvailable || service?.update.available()) }),
     capture: Object.freeze({ start: async opts => { if (['auto', 'command'].includes(opts?.kind)) throw new Error('Capture kind is reserved for Wizard voice; use audio/meeting and task metadata'); if (service) return service.capture.start(opts); if (framed) throw new Error('Shared capture needs the verified synchronous host connection'); const resource=captureModule(); return opts?.resumeId && resource.resume ? resource.resume(standaloneId(),opts.resumeId,opts) : resource.start(standaloneId(), opts); },
