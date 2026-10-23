@@ -51,7 +51,7 @@ async function boot(b) {
     if (u.pathname === '/wizard/thread-seen') return json(r, { state: { initializedAt: NOW - 864e5, threads: {} } });
     if (u.pathname === '/wizard/thread-dispositions') return json(r, { state: {} });
     if (u.pathname === '/wizard/v1/apps') return json(r, { apps: [{ id: 'wizard-search', name: 'Search', desc: 'Image search and AI overview', url: '/wizard-search/', icon: '⌕', colors: ['#8f63ff', '#ff5ccf'], source: 'launcher.json' },
-      { id: 'calendar', name: 'Calendar', desc: 'Your calendar', url: '/wizard-calendar/', source: 'launcher.json' },
+      { id: 'calendar', name: 'Calendar', desc: 'Your calendar', url: '/wizard-calendar/', source: 'apps.json', voice_names: ['planner', 'day planner'] },
       { id: 'wizard-signal', name: 'Wizard Signal', desc: 'Signal feed', url: '/wizard-signal/', source: 'launcher.json' },
       { id: 'airlock', name: 'Airlock', desc: 'Redaction checklist', url: '/airlock/', view: { mode: 'original', url: '/airlock/' }, source: 'apps.json' }] });
     return json(r, {});
@@ -86,7 +86,7 @@ const home = async p => { await p.evaluate(() => { for (const id of Object.keys(
   R.cmd = { route: 'agent', summary: 'x' };
 
   // 1. James's case: held "Calendar." on home → Calendar opens, on-device, router never asked, nothing sent.
-  for (const t of ['Calendar.', 'calendar', 'My calendar', 'the calendar app', 'Open calendar']) {
+  for (const t of ['Calendar.', 'calendar', 'My calendar', 'the calendar app', 'Open calendar', 'Planner', 'day planner', 'DayPlanner']) {
     await home(p); writes.length = 0; routes.length = 0;
     await say(p, t, 'command'); await sleep(900);
     const f = await front(p);
