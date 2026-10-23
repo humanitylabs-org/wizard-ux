@@ -139,69 +139,80 @@ public class OverlayE2eTest {
             assertTrue("previous Wizard's privileged page survived detach + origin switch + reattach", bundled);
         } finally { close(); }
     }
-    /** A service worker registered by the shell (web/sw.js, scope /wizard-os-home/) or by a hosted app at scope /
-     *  must not answer requests from a privileged overlay WebView: SW-controlled fetches bypass WebViewClient
-     *  interception, so they would skip the native allowlist, redirect refusal and CSP prefix. */
-    @Test public void shellServiceWorkerCannotServeOverlayDocuments() throws Exception {
-        AtomicInteger intercepted = new AtomicInteger();
-        try (ServerSocket server = new ServerSocket(0, 16, InetAddress.getByName("127.0.0.1"))) {
+    /** Loads one intercepted page in a plain WebView on the Wizard origin (the shell's role) and waits for its title. */
+    private String shellPage(String url, String html, String sw) throws Exception {
+        activity = ins.startActivitySync(new Intent(context, OverlayTestActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        ui(() -> {
+            web = new WebView(activity); activity.setContentView(web);
+            web.getSettings().setJavaScriptEnabled(true);
+            web.setWebViewClient(new android.webkit.WebViewClient() {
+                @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView v, android.webkit.WebResourceRequest r) {
+                    String u = r.getUrl().toString();
+                    String body = u.endsWith("/sw.js") ? sw : u.equals(url) ? html : null;
+                    if (body == null) return null;
+                    return new android.webkit.WebResourceResponse(u.endsWith(".js") ? "application/javascript" : "text/html", "utf-8", 200, "OK",
+                            java.util.Map.of(), new ByteArrayInputStream(body.getBytes()));
+                }
+            });
+            web.loadUrl(url);
+        });
+        String title = "";
+        for (int i = 0; i < 100 && !title.contains("done"); i++) { Thread.sleep(100); title = js("document.title"); }
+        ui(() -> { web.destroy(); web = null; activity.finish(); activity = null; });
+        return title;
+    }
+    /** A service worker registered for the Wizard origin by ANY WebView of this app (the shell registers web/sw.js at
+     *  /wizard-os-home/; a hosted app can hold a root-scope worker) controls that origin's documents in every WebView
+     *  of the profile, including a privileged overlay. SW-handled requests never reach shouldInterceptRequest, so they
+     *  skip the native allowlist, redirect refusal and CSP prefix: the worker's code would get the overlay bridges. */
+    @Test public void wizardOriginServiceWorkerCannotServeOverlayDocuments() throws Exception {
+        String wizard = "https://fixture.invalid";
+        String sw = "self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));"
+                + "self.addEventListener('fetch',e=>{if(new URL(e.request.url).pathname.endsWith('/assist/everywhere.html'))e.respondWith(new Response("
+                + "'<title>sw-served</title><script>window.E={state(){}};window.Orb={};Probe.hit()</scr'+'ipt>',{headers:{'content-type':'text/html'}}));});";
+        androidx.webkit.ServiceWorkerControllerCompat swc = androidx.webkit.ServiceWorkerControllerCompat.getInstance();
+        swc.setServiceWorkerClient(new androidx.webkit.ServiceWorkerClientCompat() {
+            @Override public android.webkit.WebResourceResponse shouldInterceptRequest(android.webkit.WebResourceRequest r) {
+                if (!r.getUrl().getPath().endsWith("/sw.js")) return null;
+                return new android.webkit.WebResourceResponse("application/javascript", "utf-8", 200, "OK", java.util.Map.of(), new ByteArrayInputStream(sw.getBytes()));
+            }
+        });
+        String unregister = "<!doctype html><script>navigator.serviceWorker.getRegistrations().then(rs=>Promise.all(rs.map(r=>r.unregister()))).finally(()=>document.title='done')</script>";
+        try {
+            String reg = shellPage(wizard + "/wizard-os-home/reg.html", "<!doctype html><title>reg</title><script>navigator.serviceWorker.register('/wizard-os-home/sw.js',{scope:'/wizard-os-home/'})"
+                    + ".then(()=>navigator.serviceWorker.ready).then(()=>document.title='done registered',e=>document.title='done failed '+e)</script>", sw);
+            assertTrue("fixture service worker registered for the Wizard origin: " + reg, reg.contains("registered"));
+            bridgeCalls.set(0);
+            open("everywhere.html", true, "");
+            assertNotEquals("Wizard-origin service worker answered a privileged overlay document", "\"sw-served\"", js("document.title"));
+            assertEquals("service-worker code reached the overlay bridge", 0, bridgeCalls.get());
+            assertEquals("\"Wizard Everywhere\"", js("document.title"));
+            close();
+        } finally {
+            close();
+            shellPage(wizard + "/wizard-os-home/unreg.html", unregister, sw);
+            swc.setServiceWorkerClient(null);
+        }
+    }
+    /** A server dribbling bytes under the per-read timeout must not pin a WebView IO thread for minutes. */
+    @Test public void nativeTransportHasATotalDeadline() throws Exception {
+        try (ServerSocket server = new ServerSocket(0, 4, InetAddress.getByName("127.0.0.1"))) {
             Thread responder = new Thread(() -> {
-                while (!server.isClosed()) try (Socket socket = server.accept()) {
+                try (Socket socket = server.accept()) {
                     BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                    String first = in.readLine(); String line; while ((line = in.readLine()) != null && !line.isEmpty()) { }
-                    String path = first == null ? "" : first.split(" ")[1];
-                    String type = "text/html", body;
-                    if (path.equals("/wizard-os-home/sw.js")) {
-                        type = "application/javascript";
-                        body = "self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));"
-                            + "self.addEventListener('fetch',e=>{if(new URL(e.request.url).pathname.includes('/assist/'))e.respondWith(new Response('<title>sw-served</title><script>Probe.hit()</scr'+'ipt>',{headers:{'content-type':'text/html'}}));});";
-                    } else if (path.equals("/wizard-os-home/reg.html")) {
-                        body = "<script>navigator.serviceWorker.register('/wizard-os-home/sw.js',{scope:'/wizard-os-home/'}).then(()=>navigator.serviceWorker.ready).then(()=>document.title='registered',e=>document.title='failed '+e)</script>";
-                    } else body = "<title>network</title>";
-                    byte[] b = body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    String line; while ((line = in.readLine()) != null && !line.isEmpty()) { }
                     OutputStream out = socket.getOutputStream();
-                    out.write(("HTTP/1.1 200 OK\r\nContent-Type: " + type + "\r\nContent-Length: " + b.length + "\r\nConnection: close\r\n\r\n").getBytes());
-                    out.write(b); out.flush();
-                } catch (IOException ignored) { }
+                    out.write("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n".getBytes()); out.flush();
+                    for (int i = 0; i < 40; i++) { out.write(' '); out.flush(); Thread.sleep(400); }
+                } catch (Exception ignored) { }
             });
             responder.start();
-            String base = "http://localhost:" + server.getLocalPort() + "/wizard-os-home/";
-            activity = ins.startActivitySync(new Intent(context, OverlayTestActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            AtomicReference<WebView> shell = new AtomicReference<>();
-            ui(() -> {
-                WebView w = new WebView(activity); shell.set(w); activity.setContentView(w);
-                w.getSettings().setJavaScriptEnabled(true);
-                w.setWebViewClient(new android.webkit.WebViewClient());
-                w.loadUrl(base + "reg.html");
-            });
-            web = shell.get();
-            String title = "";
-            for (int i = 0; i < 80 && !title.contains("registered"); i++) { Thread.sleep(100); title = js("document.title"); }
-            assertTrue("fixture service worker registered: " + title, title.contains("registered"));
-            ui(() -> {
-                WebView overlay = new WebView(activity);
-                // (fix commit isolates the overlay WebView here, as every OverlayPage host does)
-                overlay.getSettings().setJavaScriptEnabled(true);
-                overlay.addJavascriptInterface(new Probe(), "Probe");
-                overlay.getSettings().setBlockNetworkLoads(true);
-                overlay.setWebViewClient(new android.webkit.WebViewClient() {
-                    @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView v, android.webkit.WebResourceRequest r) {
-                        intercepted.incrementAndGet();
-                        return new android.webkit.WebResourceResponse("text/html", "utf-8", 200, "OK", java.util.Map.of(),
-                                new ByteArrayInputStream("<title>native</title>".getBytes()));
-                    }
-                });
-                shell.get().destroy();
-                web = overlay; activity.setContentView(overlay);
-                overlay.loadUrl(base + "assist/everywhere.html");
-            });
-            title = "";
-            for (int i = 0; i < 50 && !(title.contains("native") || title.contains("sw-served")); i++) { Thread.sleep(100); title = js("document.title"); }
-            assertEquals("service worker answered a privileged overlay request", "\"native\"", title);
-            assertEquals(0, bridgeCalls.get());
-            assertTrue(intercepted.get() > 0);
-            server.close();
-        } finally { close(); }
+            long t0 = System.nanoTime();
+            try { new OverlayPage("everywhere.html", true).fetch("http://localhost:" + server.getLocalPort() + "/orb.js"); fail("dribbled response accepted"); }
+            catch (IOException expected) { }
+            long ms = (System.nanoTime() - t0) / 1_000_000;
+            assertTrue("fetch held the IO thread for " + ms + " ms", ms < 5000);
+        }
     }
     @Test public void privilegedBridgeCannotBeReachedBySrcdocDataOrSameOriginFrames() throws Exception {
         for (boolean remote : new boolean[]{true, false}) {
