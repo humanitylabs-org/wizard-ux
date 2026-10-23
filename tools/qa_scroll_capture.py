@@ -54,13 +54,18 @@ def capture(name,kind,top,overlap=False):
  check(name+' original scroll restored',pg.ev(f"document.querySelector('.{kind}').scrollTop")==before,pg.ev(f"document.querySelector('.{kind}').scrollTop"))
  # Android initially selects only the original viewport, even when a long image
  # was captured. Expand its actual accessibility-labelled crop handles first.
- for label in ['Top boundary','Bottom boundary']:
-  tree=ET.fromstring(xml)
-  handle=next(x for x in tree.iter('node') if x.get('content-desc','').startswith(label))
-  crop=next(x for x in tree.iter('node') if x.get('resource-id','').endswith('/crop_view'))
-  h=list(map(int,re.findall(r'\d+',handle.get('bounds'))));c=list(map(int,re.findall(r'\d+',crop.get('bounds'))))
-  x=(h[0]+h[2])//2;y=(h[1]+h[3])//2;target=c[1]+2 if label.startswith('Top') else c[3]-2
-  em.sx(f'input swipe {x} {y} {x} {target} 600');time.sleep(.5);xml=em.ui()
+ # The editor animates; a drag can land before the handle settles. Retry until both
+ # handles report the full image (or give up after three passes).
+ for _ in range(3):
+  if 'Top boundary 0 percent' in xml and 'Bottom boundary 100 percent' in xml: break
+  for label in ['Top boundary','Bottom boundary']:
+   if label+(' 0 percent' if label.startswith('Top') else ' 100 percent') in xml: continue
+   tree=ET.fromstring(xml)
+   handle=next(x for x in tree.iter('node') if x.get('content-desc','').startswith(label))
+   crop=next(x for x in tree.iter('node') if x.get('resource-id','').endswith('/crop_view'))
+   h=list(map(int,re.findall(r'\d+',handle.get('bounds'))));c=list(map(int,re.findall(r'\d+',crop.get('bounds'))))
+   x=(h[0]+h[2])//2;y=(h[1]+h[3])//2;target=c[1]+2 if label.startswith('Top') else c[3]-2
+   em.sx(f'input swipe {x} {y} {x} {target} 600');time.sleep(1.2);xml=em.ui()
  check(name+' entire captured image selected','Top boundary 0 percent' in xml and 'Bottom boundary 100 percent' in xml)
  shot(name+'-expanded');em.tap_text('^Save$',xml);time.sleep(2)
  files=em.sx('find /sdcard/Pictures/Screenshots -type f').strip().splitlines()
