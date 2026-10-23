@@ -115,6 +115,26 @@
       "shell": "phone",
       "classification": "native",
       "reason": "Android pinned-shortcut app-only task (AppSessionActivity); desktop windows already isolate apps."
+    },
+    "core/device-port.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "wizardDevicePort client; Android-only transport, absent elsewhere."
+    },
+    "food/rules.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Food recipe/route/voice rules for the Android automation capability; no desktop caller (no remote-buy)."
+    },
+    "food/store.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Food saved orders: this phone's Grab taps, stored on the device page."
+    },
+    "food/backend.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Food over device.automation v1 or the legacy native bridge; Android only."
     }
   },
   "sharedAssets": [
@@ -231,6 +251,10 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/device-port.js": {
+      "loadedBy": ["phone"],
+      "note": "Direct entrypoint import before usuals.js; generic wizardDevicePort v1 client (capability discovery, request/reply)"
     },
     "core/orb-handoff.js": {
       "loadedBy": [

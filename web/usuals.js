@@ -1,21 +1,50 @@
 /* Food (was Usuals, renamed 12 Oct): James's Grab orders, one tap or one spell ("order food", "order kra pao") away.
- * Native does the work (android/.../usuals/*). "Order something new" opens Grab to browse: whatever he ends up
- * ordering is saved as a usual, named after the food (rename after). A saved usual replays under a cover and stops on
- * Grab's checkout. Placing the order is always James's tap: in Grab, or on the cover.
- * This file is only the window: the list, Order something new, Order, rename/edit, and what the last run did. */
+ * "Order something new" opens Grab to browse: whatever he ends up ordering is saved as a usual, named after the food
+ * (rename after). A saved usual replays under a cover and stops on Grab's checkout. Placing the order is always
+ * James's tap: in Grab, or on the cover.
+ *
+ * This file is the window: the list, Order something new, Order, rename/edit, and what the last run did. The work goes
+ * through a backend (web/food/backend.js):
+ *  - Android 0.10.2+: the generic device.automation v1 capability. Recipes, names, voice words and the route rules
+ *    live in web (web/food/*); native records, replays and shows the cover, and alone guards the money button.
+ *  - older Android: the pre-v1 native Food (WizardOSNative.usuals*), unchanged.
+ * localStorage 'wos.food.backend' = 'native' pins the old path while v1 is proven on a phone. */
 (() => {
   'use strict';
   const N = () => window.WizardOSNative;
-  const has = () => !!(N() && typeof N().usuals === 'function');
+  const legacyHas = () => !!(N() && typeof N().usuals === 'function');
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const els = new Set();
   let editing = null; // { id } while the edit sheet is open
   let teachName = null; // the name field while it is open (Edit → Teach again keeps the old name)
-  let naming = null;    // { id } while a just-saved usual's name field is open
+  const log = m => { window.__foodLog = (window.__foodLog || []).concat(m).slice(-40); };
+
+  let B = window.WosFoodBackend.legacy(N);
+  let choosing = null;
+  function pinnedNative() { try { return localStorage.getItem('wos.food.backend') === 'native'; } catch (e) { return false; } }
+  /** v1 when this APK offers device.automation v1 (and nobody pinned the old path); else the old native Food. */
+  function choose() {
+    if (choosing) return choosing;
+    choosing = (async () => {
+      const P = window.WizDevicePort;
+      if (!pinnedNative() && P && P.available() && await P.has('device.automation', 1, 'record')) {
+        B = window.WosFoodBackend.automation({
+          port: P, rules: window.WosFoodRules, store: window.WosFoodStore.create(localStorage, window.WosFoodRules),
+          stripAddress: t => window.WizConfig ? window.WizConfig.stripAddress(t) : t, onChange: paint, log,
+        });
+        await B.init();
+      }
+      log('backend:' + B.kind);
+      paint();
+      return B;
+    })();
+    return choosing;
+  }
+  const has = () => legacyHas() || !!(window.WizDevicePort && window.WizDevicePort.available());
 
   function read() {
     if (!has()) return { list: [], blocker: 'native', state: {} };
-    try { return JSON.parse(N().usuals() || '{}'); } catch (e) { return { list: [], blocker: '', state: {} }; }
+    return B.snapshot() || { list: [], blocker: '', state: {} };
   }
   const ago = t => { if (!t) return ''; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
   const lastLine = u => {
@@ -48,7 +77,6 @@
       ? `<div class="us-live"><span>${esc(st.browsing ? 'New order' : st.name)} · ${esc(st.status)}</span><button data-us="stop">${st.mode === 'teaching' ? "Don't save" : 'Stop'}</button></div>` : '';
     // The newest usual still wearing its made-up name gets the name field on top; it says what's in it.
     const fresh = list.filter(u => u.needsName).sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0))[0];
-    if (naming && !list.some(u => u.id === naming.id && u.needsName)) naming = null;
     const nameUi = fresh && !(st.mode && st.mode !== 'idle' && st.mode !== 'failed') ? nameCard(fresh) : '';
     const cards = list.map(u => `<div class="us-card" data-id="${esc(u.id)}">
         <button class="us-go" data-us="run" data-id="${esc(u.id)}" ${b ? 'disabled' : ''} aria-label="Order ${esc(u.name)}"><span class="us-ic">🍜</span><span class="us-meta"><b>${esc(u.name)}</b><small>${esc(lastLine(u))}</small></span><span class="us-cta">Order</span></button>
@@ -60,9 +88,9 @@
         <p>Tap <b>Order something new</b> and order in Grab like normal. Whatever you order is saved here, named after the food. Next time, tap it or say <i>“order kra pao”</i>. Wizard fills the basket and stops at checkout for your <b>Place order</b>.</p></div>` : '';
     const teach = teachName != null
       ? `<form class="us-teach" data-us-form="teach"><input name="n" maxlength="40" placeholder="Name it, e.g. Kra pao" value="${esc(teachName)}" autocomplete="off" enterkeyhint="go"><button type="submit" ${b ? 'disabled' : ''}>Open Grab</button></form>` : '';
-    const log = st.log && st.log.length && st.mode === 'failed' ? `<details class="us-log"><summary>What the last run did</summary><pre>${esc(st.log.slice(-12).join('\n'))}</pre></details>` : '';
+    const runLog = st.log && st.log.length && st.mode === 'failed' ? `<details class="us-log"><summary>What the last run did</summary><pre>${esc(st.log.slice(-12).join('\n'))}</pre></details>` : '';
     return `<div class="desk-scroll us-wrap">${blockerCard(b)}${live}${nameUi}${empty}${newBtn}${teach}<div class="us-list">${cards}</div>${spells}
-      <p class="us-fine">Runs on this phone with Grab on screen. Your Grab login, card and address stay in Grab. Wizard never presses Place order for you: you tap it, in Grab or on the cover.</p>${log}</div>${editSheet(list)}`;
+      <p class="us-fine">Runs on this phone with Grab on screen. Your Grab login, card and address stay in Grab. Wizard never presses Place order for you: you tap it, in Grab or on the cover.</p>${runLog}</div>${editSheet(list)}`;
   }
 
   function editSheet(list) {
@@ -75,23 +103,27 @@
   }
 
   function paint() { els.forEach(el => { if (!el.isConnected) { els.delete(el); return; } const f = document.activeElement; const keep = f && el.contains(f) && f.name; el.innerHTML = html(); if (keep) { const n = el.querySelector(`[name="${keep}"]`); if (n) { n.focus(); n.setSelectionRange?.(n.value.length, n.value.length); } } }); }
+  function refresh() { paint(); choose().then(b => b.refresh()).then(paint, paint); }
 
   function toast(i, t) { window.__wos?.toast?.(i, t, 2600); }
   function why(b) {
-    return b === 'accessibility' ? 'Turn on Wizard OS accessibility first' : b === 'grab' ? "Grab isn't installed" : b === 'busy' ? 'Finish the order in progress first' : b === 'missing' ? 'That order is gone' : b;
+    return b === 'accessibility' ? 'Turn on Wizard OS accessibility first' : b === 'grab' ? "Grab isn't installed" : b === 'busy' ? 'Finish the order in progress first'
+      : b === 'missing' ? 'That order is gone' : b === 'commit-step' ? 'That order names a payment button; edit its steps' : b;
   }
+  /** Backend actions answer '' (started) or a blocker code, sync (old native) or async (v1). */
+  const said = p => Promise.resolve(p).then(r => { if (r) toast('🍜', why(r)); paint(); }, () => paint());
 
   function onClick(e) {
     const t = e.target.closest('[data-us]'); if (!t) return;
     const a = t.dataset.us, id = t.dataset.id;
     if (a === 'a11y') return N()?.voiceTypingSettings?.();
-    if (a === 'new') { const r = N().usualsTeach(''); if (r) toast('🍜', why(r)); paint(); return; }
-    if (a === 'stop') { N().usualsCancel?.(); setTimeout(paint, 300); return; }
-    if (a === 'keep') { N().usualsKeepName?.(id); paint(); return; }
-    if (a === 'run') { const r = N().usualsRun(id); if (r) toast('🍜', why(r)); return; }
+    if (a === 'new') { said(B.teach('')); return; }
+    if (a === 'stop') { Promise.resolve(B.cancel()).then(() => setTimeout(refresh, 300)); return; }
+    if (a === 'keep') { B.keepName(id); paint(); return; }
+    if (a === 'run') { said(B.run(id)); return; }
     if (a === 'edit') { editing = { id }; paint(); return; }
-    if (a === 'delete') { if (!confirm('Delete this saved order?')) return; N().usualsDelete(id); editing = null; paint(); return; }
-    if (a === 'reteach') { const u = (read().list || []).find(x => x.id === id); editing = null; const r = N().usualsTeach(u ? u.name : ''); if (r) toast('🍜', why(r)); else N().usualsDelete(id); paint(); return; }
+    if (a === 'delete') { if (!confirm('Delete this saved order?')) return; B.remove(id); editing = null; paint(); return; }
+    if (a === 'reteach') { const u = (read().list || []).find(x => x.id === id); editing = null; said(B.teach(u ? u.name : '', id)); }
   }
   function onSubmit(e) {
     const f = e.target.closest('[data-us-form]'); if (!f) return;
@@ -99,56 +131,59 @@
     if (f.dataset.usForm === 'teach') {
       const name = f.n.value.trim() || 'My usual';
       teachName = null; paint();
-      const r = N().usualsTeach(name); if (r) toast('🍜', why(r));
+      said(B.teach(name));
       return;
     }
     if (f.dataset.usForm === 'name') {
       const n = f.n.value.trim();
-      if (n) N().usualsSave(f.dataset.id, n, null); else N().usualsKeepName?.(f.dataset.id);
+      if (n) B.save(f.dataset.id, n, null); else B.keepName(f.dataset.id);
       document.activeElement?.blur?.(); paint(); toast('✓', 'Saved');
       return;
     }
     if (f.dataset.usForm === 'edit') {
-      const ok = N().usualsSave(f.dataset.id, f.n.value, f.s.value);
+      const ok = B.save(f.dataset.id, f.n.value, f.s.value);
       if (!ok) { toast('⚠', 'Those steps need at least one line'); return; }
       editing = null; paint(); toast('✓', 'Saved');
     }
   }
 
-  /* Spells (James, 12 Oct: "I need voice commands that are easy to cast"). Same words the native side knows
-   * (UsualsPolicy.isBrowse), so the in-app orb casts them even on an app build that predates the newer phrases. */
-  const NEW_SPELL = /^(?!(?:.* )?get (?:me |us )?something$)(?:(?:please |can you |could you |let'?s |i(?: want to| wanna| would like to|'d like to) )?(?:order|get)(?: me| us)? (?:some |a |my )?(?:food|foods|grab|grab ?food|lunch|dinner|breakfast|brunch|supper|a snack|snacks|takeout|takeaway|take out|take away|delivery|food delivery|something(?: new| different| else)?(?: to eat)?)(?: (?:from|on|with|through) grab)?|order (?:from|on) grab|(?:a )?(?:food|grab|grab food) order|grab (?:me )?(?:some )?food|grab me something(?: new)? to eat|new (?:food|grab) order)$/;
+  /* Spells (James, 12 Oct: "I need voice commands that are easy to cast"). The order spells live in the shared voice
+   * table (web/food/rules.js voiceTable), which v1 also hands to native for the floating orb and side button. */
   const OPEN_SPELL = /^(?:food|wizard food|wizard eats|eats|my food|grab food app|food app|my orders|my saved orders|saved orders|my usuals|usuals)$/;
+  const SPELLS_ONLY = window.WosFoodRules.voiceTable([]);
   function spell(text) {
     const s = window.WizConfig.stripAddress(text).toLowerCase().replace(/[’]/g, "'").replace(/[.!?,]+/g, ' ').replace(/\s+/g, ' ').trim()
       .replace(/ (please|now|for me)$/, '').trim();
-    if (NEW_SPELL.test(s)) return 'new';
+    if (window.WosFoodRules.matchTable(SPELLS_ONLY, s) === '+new') return 'new';
     if (OPEN_SPELL.test(s)) return 'open';
     return '';
   }
   window.WosUsuals = {
     available: has,
     mount(el) {
-      if (!el || el.__us) { if (el) paint(); return; }
+      if (!el || el.__us) { if (el) refresh(); return; }
       el.__us = true; els.add(el);
       el.addEventListener('click', onClick);
       el.addEventListener('submit', onSubmit);
-      paint();
+      refresh();
     },
-    refresh: paint,
+    refresh,
     /** Back: edit sheet → teach name field → (nothing; the shell closes the window). */
     back() {
       if (editing) { editing = null; paint(); return 'usuals-edit'; }
       if (teachName != null) { teachName = null; paint(); return 'usuals-teach'; }
       return null;
     },
-    available: has,
     /** Food spells the shell checks after match(): 'new' (open Grab for a new order), 'open' (open Food), or ''. */
     spell,
-    /** "order my usual kra pao": the usual's id when the words are an order for one. */
-    match(text) { if (!has() || typeof N().usualsMatch !== 'function') return ''; try { return N().usualsMatch(String(text || '')) || ''; } catch (e) { return ''; } },
-    run(id) { const r = N().usualsRun(id); if (r) toast('🍜', why(r)); return !r; },
+    /** "order my usual kra pao": the usual's id when the words are an order for one ('+new' for a new order on v1). */
+    match(text) { if (!has()) return ''; try { return B.match(text) || ''; } catch (e) { return ''; } },
+    run(id) { said(B.run(id)); return true; },
+    /** QA: which backend Food uses, 'automation-v1' or 'native-usuals'. */
+    backend: () => B.kind,
   };
-  window.__wosUsuals = paint; // native onResume: the list may have changed (taught, ran)
-  setInterval(() => { if (els.size && !document.hidden) { const st = read().state || {}; if (st.mode && st.mode !== 'idle') paint(); } }, 1500);
+  window.__wosUsuals = refresh; // native onResume: the list may have changed (taught, ran)
+  window.__wosAutomation = () => { if (B.kind === 'automation-v1') B.collect().then(paint); }; // outcomes may be waiting
+  if (has()) choose();
+  setInterval(() => { if (els.size && !document.hidden) { const st = read().state || {}; if (st.mode && st.mode !== 'idle') refresh(); } }, 1500);
 })();

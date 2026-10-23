@@ -60,6 +60,8 @@ public class MainActivity extends Activity {
     public static final String EXTRA_THREAD = "ai.wizards.os.extra.THREAD";
     /** Usuals (re-ordering Grab food) hands back to Wizard OS on its panel after teaching or cancelling. */
     public static final String ACTION_USUALS = "ai.wizards.os.action.USUALS";
+    /** device.automation hands back to Wizard OS after a recording; web decides what to show. */
+    public static final String ACTION_AUTOMATION = "ai.wizards.os.action.AUTOMATION";
     private static final int REQ_EVERYWHERE = 44;
     private static java.lang.ref.WeakReference<MainActivity> current = new java.lang.ref.WeakReference<>(null);
     private boolean everywhereSetup; // James is on Android's "Display over other apps" page
@@ -380,6 +382,7 @@ public class MainActivity extends Activity {
                 : ACTION_SETTINGS.equals(act) ? Handoff.settings(intent.getStringExtra(EXTRA_SETTINGS_FOCUS))
                 : ACTION_UNSENT.equals(act) ? "{\"action\":\"unsent\"}"
                 : ACTION_USUALS.equals(act) ? "{\"action\":\"usuals\"}"
+                : ACTION_AUTOMATION.equals(act) ? "{\"action\":\"automation\"}"
                 : ACTION_THREAD.equals(act) && intent.getStringExtra(EXTRA_THREAD) != null
                     ? "{\"action\":\"thread\",\"id\":" + Handoff.quote(intent.getStringExtra(EXTRA_THREAD)) + "}"
                 : Handoff.json(act, intent.getStringExtra(Intent.EXTRA_TEXT));
@@ -732,6 +735,7 @@ public class MainActivity extends Activity {
         web.evaluateJavascript("window.dispatchEvent(new Event('wos-native-resume'))", null);
         pushSideButton();
         web.evaluateJavascript("(window.__wosUsuals && window.__wosUsuals())", null);
+        web.evaluateJavascript("(window.__wosAutomation && window.__wosAutomation())", null); // outcomes may be waiting
         device.onResume();
         if (apps != null) apps.onResume();
         if (photos != null) photos.onResume();

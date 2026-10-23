@@ -75,6 +75,7 @@ public class WizardKeyboardService extends AccessibilityService {
         }
         Log.i(TAG, "keyboard service connected");
         ai.wizards.os.usuals.UsualsRunner.get(this).serviceConnected();
+        ai.wizards.os.automation.AutomationEngine.get(this).serviceConnected();
         main.post(poll);
     }
 
@@ -99,7 +100,8 @@ public class WizardKeyboardService extends AccessibilityService {
     @Override
     public void onAccessibilityEvent(AccessibilityEvent e) {
         if (e == null) return;
-        ai.wizards.os.usuals.UsualsRunner.get(this).onEvent(e); // records taps in Grab only while James teaches a usual
+        ai.wizards.os.usuals.UsualsRunner.get(this).onEvent(e); // legacy Food: records only while teaching a usual
+        ai.wizards.os.automation.AutomationEngine.get(this).onEvent(e); // device.automation: only while recording its target
         int t = e.getEventType();
         if (t == AccessibilityEvent.TYPE_VIEW_FOCUSED || t == AccessibilityEvent.TYPE_VIEW_CLICKED
                 || t == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) {
