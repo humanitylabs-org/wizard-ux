@@ -259,6 +259,8 @@
     chatLayout: ['wos.chats.layout.v1', v => v === 'day' || v === 'status', String],
     readyOrder: ['wos.chats.readyOrder.v1', v => ['newest', 'oldest', 'priority', 'subject'].includes(v), String],
     subjectOrder: ['wos.chats.subjectOrder.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
+    // Pinned chats (core/chat-pins.js): the same pins on every device.
+    pinnedChats: ['wos.chats.pinned.v2', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
   };
   let prefsOff = false;
   const putPrefs = patch => {
