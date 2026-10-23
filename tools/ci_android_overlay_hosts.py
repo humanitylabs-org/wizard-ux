@@ -454,15 +454,15 @@ try:
     # ---------------------------------------------------------------- A online: orb from the Wizard
     log('== A online: orb from the Wizard')
     cold = []
-    for attempt in range(1, 4):
+    for attempt in range(1, 6):
         t0, r0, line = orb_online(attempt)
         if 'from Wizard' in line: break
         # A cold emulator renderer can miss the 1.5 s deadline (docs/android-overlay-security.md); that is the
-        # fallback doing its job. Keep the evidence and retry, at most 3 loads in total.
+        # fallback doing its job. Keep the evidence and retry, at most 5 loads in total.
         cold.append(f'attempt {attempt}: {line.strip()[-70:]} | reason: {why(t0, "everywhere.html")} | requests: {assist_reqs(r0)}')
         log('  orb load fell back:', cold[-1])
     (OUT / 'A-orb-online-attempts.txt').write_text('\n'.join(cold + [f'final: {line.strip()}']) + '\n')
-    check('A orb online', 'remote load attempts until the Wizard copy was ready (<= 3)', 'from Wizard' in line, f'{len(cold) + 1} load(s); fell back first: {len(cold)}')
+    check('A orb online', 'remote load attempts until the Wizard copy was ready (<= 5)', 'from Wizard' in line, f'{len(cold) + 1} load(s); fell back first: {len(cold)}')
     check('A orb online', 'floating orb page came from the Wizard', 'from Wizard' in line, (line, why(t0, 'everywhere.html')))
     w = wait_window('WizardEverywhere', 10)
     check('A orb online', 'orb is a WindowManager overlay window (WizardEverywhere)', w, w)
@@ -477,7 +477,7 @@ try:
     log('== C online: side-button corner orb from the Wizard')
     t0 = now(); r0 = len(REQ)
     corner_tries = []
-    for attempt in range(1, 4):
+    for attempt in range(1, 6):
         how, tc, line = trigger_assist(t0)
         if not line or 'from Wizard' in line: break
         corner_tries.append(f'attempt {attempt}: {line.strip()[-60:]} | reason: {why(t0, "surface.html#corner")} | requests: {assist_reqs(r0)}')
@@ -485,6 +485,7 @@ try:
         # A re-shown session keeps its WebView: only a new app process gives the corner a new page load.
         close_corner(); evidence(f'C-side-online-fallback-{attempt}'); t0 = now(); fresh(); launch_then_home(t0); t0 = now(); r0 = len(REQ)
     (OUT / 'C-side-online-attempts.txt').write_text('\n'.join(corner_tries + [f'final: {line.strip()}']) + '\n')
+    check('C side button unlocked online', 'remote corner load attempts until the Wizard copy was ready (<= 5)', 'from Wizard' in line, f'{len(corner_tries) + 1} load(s); fell back first: {len(corner_tries)}')
     log('  assist trigger:', how)
     check('C side button unlocked online', 'assist gesture reached WizardSession (corner shown)', first(t0, r'corner shown')[0], (how, first(t0, r'corner shown|session:')[1]))
     check('C side button unlocked online', 'corner surface page came from the Wizard', 'from Wizard' in line, (line, why(t0, 'surface.html#corner')))
