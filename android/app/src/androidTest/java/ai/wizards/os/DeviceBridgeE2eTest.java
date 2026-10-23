@@ -60,6 +60,9 @@ public class DeviceBridgeE2eTest {
                     + "m=await rpc(wizardDevicePort,'device.packages.status');check(m.ok&&m.result.app==='ai.wizards.os.qa');"
                     + "m=await rpc(wizardDevicePort,'device.packages.scheduleUpdates');check(!m.ok&&m.error==='unknown method');"
                     + "let invalid=new Promise(resolve=>pending.set('',resolve));wizardDevicePort.postMessage(JSON.stringify({v:2,id:'bad',method:'device.packages.install',params:{}}));m=await invalid;check(!m.ok&&m.error==='invalid request');"
+                    // Binary payloads (WEB_MESSAGE_ARRAY_BUFFER) must be refused, not crash the app on the UI thread.
+                    + "let binary=true;try{invalid=new Promise(resolve=>pending.set('',resolve));wizardDevicePort.postMessage(new ArrayBuffer(4));}catch(e){binary=false;pending.delete('');}if(binary){m=await invalid;check(!m.ok&&m.error==='invalid request');}"
+                    + "try{wizardAppsPort.postMessage(new ArrayBuffer(4));}catch(e){}"
                     + "m=await rpc(wizardAppsPort,'status');check(m.ok&&!('v' in m)&&m.result.bridge===1);"
                     + "let child=new Promise((resolve,reject)=>{window.addEventListener('message',e=>{if(e.origin===location.origin&&e.data==='child-refused')resolve();if(e.data==='child-replied')reject(Error('iframe native access'));});});let frame=document.createElement('iframe');frame.src='/probe';document.body.append(frame);await child;"
                     + "document.getElementById('status').textContent='Device bridge verified';}"
