@@ -1481,6 +1481,30 @@ window.WizCore.chats = function createChats(H) {
     root.addEventListener('pointerup', lpEnd); root.addEventListener('pointercancel', lpEnd);
     // Right-click (a mouse) opens the same sheet; a touch long-press already did.
     root.addEventListener('contextmenu', e => { const row = e.target.closest('.ch-list [data-chopen]'); if (!row) return; e.preventDefault(); if (!rowSheet && !lp) { lpUntil = Date.now() + 700; openRowSheet(idOf(row), row.dataset.chopen); } });
+    // Dragging a local screenshot/file onto the composer uses the same upload path as the paperclip and paste.
+    // Only file drags are claimed: selected text and links keep the browser's normal drag/drop behaviour.
+    const hasDraggedFiles = dt => !!dt && ([...(dt.items || [])].some(it => it.kind === 'file') || [...(dt.types || [])].includes('Files') || (dt.files?.length || 0) > 0);
+    root.addEventListener('dragover', e => {
+      const compose = e.target.closest?.('.ch-compose');
+      if (!compose || !hasDraggedFiles(e.dataTransfer)) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+      compose.classList.add('is-file-drag');
+    });
+    root.addEventListener('dragleave', e => {
+      const compose = e.target.closest?.('.ch-compose');
+      if (!compose || (e.relatedTarget && compose.contains(e.relatedTarget))) return;
+      compose.classList.remove('is-file-drag');
+    });
+    root.addEventListener('drop', e => {
+      const compose = e.target.closest?.('.ch-compose');
+      if (!compose || !hasDraggedFiles(e.dataTransfer)) return;
+      e.preventDefault();
+      compose.classList.remove('is-file-drag');
+      const items = [...(e.dataTransfer?.items || [])].filter(it => it.kind === 'file').map(it => it.getAsFile()).filter(Boolean);
+      const files = items.length ? items : [...(e.dataTransfer?.files || [])];
+      if (files.length) addFiles(idOf(compose), files);
+    });
     /* Paste a photo or file into the composer: it uploads into the tray like the paperclip.
      * Text pastes insert from the paste event's own snapshot. Dictation apps (Wispr Flow, Superwhisper, MacWhisper)
      * paste with a synthetic Cmd+V and restore the old clipboard straight after; Chrome's default paste re-reads the
