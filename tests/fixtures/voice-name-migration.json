@@ -1,0 +1,1301 @@
+{
+  "legacyAliases": [
+    "troubleshooter",
+    "troubleshooting",
+    "troubleshoot",
+    "fix wizard",
+    "wizard",
+    "chats",
+    "chat",
+    "threads",
+    "google maps",
+    "map",
+    "cine queue",
+    "movies",
+    "i ching",
+    "notifications",
+    "side key",
+    "power button",
+    "side button assistant",
+    "inbox",
+    "terminal",
+    "music",
+    "reader",
+    "wisdom reader",
+    "wizard reader",
+    "collections",
+    "jobs",
+    "steve jobs",
+    "signal",
+    "shop",
+    "meetings",
+    "meeting recorder",
+    "usual",
+    "usuals",
+    "food app",
+    "my food",
+    "grab app",
+    "saved orders",
+    "eats",
+    "wizard eats",
+    "bites",
+    "wizard bites",
+    "wizard food",
+    "grab",
+    "my usuals",
+    "grab food",
+    "food",
+    "order food"
+  ],
+  "base": "69a2c795e18648dccb772f1d863f1684314e8d83",
+  "apps": [
+    {
+      "id": "airlock",
+      "name": "Airlock",
+      "url": "/airlock/",
+      "source": "apps.json"
+    },
+    {
+      "id": "cinequeue-next",
+      "name": "Movies (test)",
+      "url": "/cinequeue-next/",
+      "source": "apps.json"
+    },
+    {
+      "id": "meditate-next",
+      "name": "Meditate (test)",
+      "url": "/meditate-next/",
+      "source": "apps.json"
+    },
+    {
+      "id": "messenger",
+      "name": "Messenger",
+      "url": "/messenger/",
+      "source": "apps.json"
+    },
+    {
+      "id": "mizel",
+      "name": "Mizel.ai",
+      "url": "/mizel-live/#/",
+      "source": "apps.json"
+    },
+    {
+      "id": "notifications",
+      "name": "Notifications",
+      "url": "/notifications/",
+      "source": "apps.json"
+    },
+    {
+      "id": "outline-streaming-demo",
+      "name": "Outline",
+      "url": "/voice-outline-streaming/",
+      "source": "apps.json"
+    },
+    {
+      "id": "reference",
+      "name": "Reference",
+      "url": "/reference/",
+      "source": "apps.json"
+    },
+    {
+      "id": "stories",
+      "name": "Stories",
+      "url": "/stories/",
+      "source": "apps.json"
+    },
+    {
+      "id": "wisdom",
+      "name": "Wisdom",
+      "url": "/wisdom/",
+      "source": "apps.json"
+    },
+    {
+      "id": "wizard-chatgpt",
+      "name": "ChatGPT",
+      "url": "/wizard-chatgpt/",
+      "source": "apps.json"
+    },
+    {
+      "id": "wizard-claude",
+      "name": "Claude",
+      "url": "/wizard-claude/",
+      "source": "apps.json"
+    },
+    {
+      "id": "wizard-connection-router",
+      "name": "Connection Router",
+      "url": "/wizard-connection-router/",
+      "source": "apps.json"
+    },
+    {
+      "id": "wizard-connectors",
+      "name": "Connected accounts",
+      "url": "/wizard-connectors/",
+      "source": "apps.json"
+    },
+    {
+      "id": "wizard-files",
+      "name": "Wizard Files",
+      "url": "/wizard-files/",
+      "source": "apps.json"
+    },
+    {
+      "id": "wizard-shopping",
+      "name": "Shopping",
+      "url": "/alpha-wizard-shopping/",
+      "source": "apps.json"
+    },
+    {
+      "id": "wizard-supervisor",
+      "name": "Supervisor",
+      "url": "/supervisor-prototype/",
+      "source": "apps.json"
+    },
+    {
+      "id": "morning",
+      "name": "Morning",
+      "url": "/morning/",
+      "source": "launcher.json"
+    },
+    {
+      "id": "mindfeed",
+      "name": "MindFeed",
+      "url": "/mindfeed/",
+      "source": "launcher.json"
+    },
+    {
+      "id": "wizard-manager",
+      "name": "Manager",
+      "url": "/wizard-manager/",
+      "source": "launcher.json"
+    },
+    {
+      "id": "wizard-signal",
+      "name": "Wizard Signal",
+      "url": "/wizard-signal/",
+      "source": "launcher.json"
+    },
+    {
+      "id": "wizard-search",
+      "name": "Search",
+      "url": "/wizard-search/",
+      "source": "launcher.json"
+    },
+    {
+      "id": "meditation",
+      "name": "Meditate",
+      "url": "/meditation/",
+      "source": "launcher.json"
+    },
+    {
+      "id": "wizard-music",
+      "name": "Wizard Music",
+      "url": "/wizard-music/",
+      "source": "launcher.json"
+    },
+    {
+      "id": "shopping",
+      "name": "Wizard Shopping",
+      "url": "/wizard-shopping/",
+      "source": "launcher.json"
+    },
+    {
+      "id": "topics",
+      "name": "Topics",
+      "url": "/wizard-topics-preview/",
+      "source": "launcher.json"
+    },
+    {
+      "id": "projects",
+      "name": "Projects",
+      "url": "/wizard-projects/",
+      "source": "launcher.json"
+    },
+    {
+      "id": "calendar",
+      "name": "Calendar",
+      "url": "/wizard-calendar/",
+      "source": "launcher.json"
+    },
+    {
+      "id": "trackhunt",
+      "name": "TrackHunt",
+      "url": "/trackhunt/",
+      "source": "launcher.json"
+    },
+    {
+      "id": "video-editor",
+      "name": "Video Editor",
+      "url": "/video-editor/",
+      "source": "launcher.json"
+    },
+    {
+      "id": "cinequeue",
+      "name": "Movies",
+      "url": "/cinequeue/",
+      "source": "launcher.json"
+    },
+    {
+      "id": "social",
+      "name": "Wizard Social",
+      "url": "/wizard-social/",
+      "source": "launcher.json"
+    },
+    {
+      "id": "files-legacy",
+      "name": "Files Legacy",
+      "url": "/files/",
+      "source": "launcher.json"
+    },
+    {
+      "id": "iching",
+      "name": "I Ching",
+      "url": "/iching/",
+      "source": "launcher.json"
+    },
+    {
+      "id": "console",
+      "name": "Console",
+      "url": "/console/",
+      "source": "launcher.json"
+    },
+    {
+      "id": "android-apps",
+      "name": "Android Apps",
+      "url": "/android-apps/",
+      "source": "launcher.json"
+    },
+    {
+      "id": "oscar-graph",
+      "name": "Oscar Graph",
+      "url": "/wizard-os-home/oscar-graph/index.html",
+      "source": "launcher.json"
+    }
+  ],
+  "cases": {
+    "mobile": [
+      {
+        "name": "troubleshooter",
+        "bare": "troubleshooter",
+        "explicit": "troubleshooter"
+      },
+      {
+        "name": "troubleshooting",
+        "bare": "troubleshooter",
+        "explicit": "troubleshooter"
+      },
+      {
+        "name": "troubleshoot",
+        "bare": "troubleshooter",
+        "explicit": "troubleshooter"
+      },
+      {
+        "name": "fix wizard",
+        "bare": "troubleshooter",
+        "explicit": "troubleshooter"
+      },
+      {
+        "name": "wizard",
+        "bare": "wizard",
+        "explicit": "wizard"
+      },
+      {
+        "name": "chats",
+        "bare": "wizard",
+        "explicit": "wizard"
+      },
+      {
+        "name": "chat",
+        "bare": "wizard",
+        "explicit": "wizard"
+      },
+      {
+        "name": "threads",
+        "bare": "wizard",
+        "explicit": "wizard"
+      },
+      {
+        "name": "google maps",
+        "bare": "maps",
+        "explicit": "maps"
+      },
+      {
+        "name": "map",
+        "bare": "maps",
+        "explicit": "maps"
+      },
+      {
+        "name": "cine queue",
+        "bare": "cinequeue",
+        "explicit": "cinequeue"
+      },
+      {
+        "name": "movies",
+        "bare": "cinequeue",
+        "explicit": "cinequeue"
+      },
+      {
+        "name": "i ching",
+        "bare": "iching",
+        "explicit": "iching"
+      },
+      {
+        "name": "notifications",
+        "bare": "notifications",
+        "explicit": "notifications"
+      },
+      {
+        "name": "side key",
+        "bare": "side-button",
+        "explicit": "side-button"
+      },
+      {
+        "name": "power button",
+        "bare": "side-button",
+        "explicit": "side-button"
+      },
+      {
+        "name": "side button assistant",
+        "bare": "side-button",
+        "explicit": "side-button"
+      },
+      {
+        "name": "inbox",
+        "bare": null,
+        "explicit": null
+      },
+      {
+        "name": "terminal",
+        "bare": "console",
+        "explicit": "console"
+      },
+      {
+        "name": "music",
+        "bare": "wizard-music",
+        "explicit": "wizard-music"
+      },
+      {
+        "name": "reader",
+        "bare": "wisdom",
+        "explicit": "wisdom"
+      },
+      {
+        "name": "wisdom reader",
+        "bare": "wisdom",
+        "explicit": "wisdom"
+      },
+      {
+        "name": "wizard reader",
+        "bare": "wisdom",
+        "explicit": "wisdom"
+      },
+      {
+        "name": "collections",
+        "bare": "wisdom",
+        "explicit": "wisdom"
+      },
+      {
+        "name": "jobs",
+        "bare": "wisdom",
+        "explicit": "wisdom"
+      },
+      {
+        "name": "steve jobs",
+        "bare": "wisdom",
+        "explicit": "wisdom"
+      },
+      {
+        "name": "signal",
+        "bare": "wizard-signal",
+        "explicit": "wizard-signal"
+      },
+      {
+        "name": "shop",
+        "bare": "shopping",
+        "explicit": "shopping"
+      },
+      {
+        "name": "meetings",
+        "bare": "mizel",
+        "explicit": "mizel"
+      },
+      {
+        "name": "meeting recorder",
+        "bare": "mizel",
+        "explicit": "mizel"
+      },
+      {
+        "name": "usual",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "usuals",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "food app",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "my food",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "grab app",
+        "bare": "grab",
+        "explicit": "usuals"
+      },
+      {
+        "name": "saved orders",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "eats",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "wizard eats",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "bites",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "wizard bites",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "wizard food",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "grab",
+        "bare": "grab",
+        "explicit": "usuals"
+      },
+      {
+        "name": "my usuals",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "grab food",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "food",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "order food",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "App Store",
+        "bare": "app-store",
+        "explicit": "app-store"
+      },
+      {
+        "name": "Agents",
+        "bare": "agents",
+        "explicit": "agents"
+      },
+      {
+        "name": "System",
+        "bare": "system",
+        "explicit": "system"
+      },
+      {
+        "name": "Troubleshooter",
+        "bare": "troubleshooter",
+        "explicit": "troubleshooter"
+      },
+      {
+        "name": "Setup",
+        "bare": "setup",
+        "explicit": "setup"
+      },
+      {
+        "name": "Chats",
+        "bare": "wizard",
+        "explicit": "wizard"
+      },
+      {
+        "name": "Airlock",
+        "bare": "airlock",
+        "explicit": "airlock"
+      },
+      {
+        "name": "Movies (test)",
+        "bare": "cinequeue-next",
+        "explicit": "cinequeue-next"
+      },
+      {
+        "name": "Meditate (test)",
+        "bare": "meditate-next",
+        "explicit": "meditate-next"
+      },
+      {
+        "name": "Messenger",
+        "bare": "messenger",
+        "explicit": "messenger"
+      },
+      {
+        "name": "Mizel.ai",
+        "bare": "mizel",
+        "explicit": "mizel"
+      },
+      {
+        "name": "Notifications",
+        "bare": "notifications",
+        "explicit": "notifications"
+      },
+      {
+        "name": "Outline",
+        "bare": "outline-streaming-demo",
+        "explicit": "outline-streaming-demo"
+      },
+      {
+        "name": "Reference",
+        "bare": "reference",
+        "explicit": "reference"
+      },
+      {
+        "name": "Stories",
+        "bare": "stories",
+        "explicit": "stories"
+      },
+      {
+        "name": "Wisdom",
+        "bare": "wisdom",
+        "explicit": "wisdom"
+      },
+      {
+        "name": "ChatGPT",
+        "bare": "wizard-chatgpt",
+        "explicit": "wizard-chatgpt"
+      },
+      {
+        "name": "Claude",
+        "bare": "wizard-claude",
+        "explicit": "wizard-claude"
+      },
+      {
+        "name": "Connection Router",
+        "bare": "wizard-connection-router",
+        "explicit": "wizard-connection-router"
+      },
+      {
+        "name": "Connected accounts",
+        "bare": "wizard-connectors",
+        "explicit": "wizard-connectors"
+      },
+      {
+        "name": "Wizard Files",
+        "bare": "wizard-files",
+        "explicit": "wizard-files"
+      },
+      {
+        "name": "Shopping",
+        "bare": "wizard-shopping",
+        "explicit": "wizard-shopping"
+      },
+      {
+        "name": "Supervisor",
+        "bare": "wizard-supervisor",
+        "explicit": "wizard-supervisor"
+      },
+      {
+        "name": "Morning",
+        "bare": "morning",
+        "explicit": "morning"
+      },
+      {
+        "name": "MindFeed",
+        "bare": "mindfeed",
+        "explicit": "mindfeed"
+      },
+      {
+        "name": "Manager",
+        "bare": "wizard-manager",
+        "explicit": "wizard-manager"
+      },
+      {
+        "name": "Wizard Signal",
+        "bare": "wizard-signal",
+        "explicit": "wizard-signal"
+      },
+      {
+        "name": "Search",
+        "bare": "wizard-search",
+        "explicit": "wizard-search"
+      },
+      {
+        "name": "Meditate",
+        "bare": "meditation",
+        "explicit": "meditation"
+      },
+      {
+        "name": "Wizard Music",
+        "bare": "wizard-music",
+        "explicit": "wizard-music"
+      },
+      {
+        "name": "Wizard Shopping",
+        "bare": "wizard-shopping",
+        "explicit": "shopping"
+      },
+      {
+        "name": "Topics",
+        "bare": "topics",
+        "explicit": "topics"
+      },
+      {
+        "name": "Projects",
+        "bare": "projects",
+        "explicit": "projects"
+      },
+      {
+        "name": "Calendar",
+        "bare": "calendar",
+        "explicit": "calendar"
+      },
+      {
+        "name": "TrackHunt",
+        "bare": "trackhunt",
+        "explicit": "trackhunt"
+      },
+      {
+        "name": "Video Editor",
+        "bare": "video-editor",
+        "explicit": "video-editor"
+      },
+      {
+        "name": "Movies",
+        "bare": "cinequeue",
+        "explicit": "cinequeue"
+      },
+      {
+        "name": "Wizard Social",
+        "bare": "social",
+        "explicit": "social"
+      },
+      {
+        "name": "Files Legacy",
+        "bare": "files-legacy",
+        "explicit": "files-legacy"
+      },
+      {
+        "name": "I Ching",
+        "bare": "iching",
+        "explicit": "iching"
+      },
+      {
+        "name": "Console",
+        "bare": "console",
+        "explicit": "console"
+      },
+      {
+        "name": "Android Apps",
+        "bare": "android-apps",
+        "explicit": "android-apps"
+      },
+      {
+        "name": "Oscar Graph",
+        "bare": "oscar-graph",
+        "explicit": "oscar-graph"
+      },
+      {
+        "name": "Maps",
+        "bare": "maps",
+        "explicit": "maps"
+      },
+      {
+        "name": "Camera",
+        "bare": "camera",
+        "explicit": "camera"
+      },
+      {
+        "name": "Phone",
+        "bare": "phone",
+        "explicit": "phone"
+      },
+      {
+        "name": "Messages",
+        "bare": "messages",
+        "explicit": "messages"
+      },
+      {
+        "name": "Spotify",
+        "bare": "spotify",
+        "explicit": "spotify"
+      },
+      {
+        "name": "Telegram",
+        "bare": "telegram",
+        "explicit": "telegram"
+      },
+      {
+        "name": "LINE",
+        "bare": "line",
+        "explicit": "line"
+      },
+      {
+        "name": "Grab",
+        "bare": "grab",
+        "explicit": "usuals"
+      },
+      {
+        "name": "Chrome",
+        "bare": "chrome",
+        "explicit": "chrome"
+      },
+      {
+        "name": "Food",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "Side button",
+        "bare": "side-button",
+        "explicit": "side-button"
+      },
+      {
+        "name": "Settings",
+        "bare": "settings",
+        "explicit": "settings"
+      },
+      {
+        "name": "my music",
+        "bare": "wizard-music",
+        "explicit": "wizard-music"
+      },
+      {
+        "name": "the music",
+        "bare": "wizard-music",
+        "explicit": "wizard-music"
+      },
+      {
+        "name": "songs",
+        "bare": "wizard-music",
+        "explicit": "wizard-music"
+      },
+      {
+        "name": "music app",
+        "bare": "wizard-music",
+        "explicit": "wizard-music"
+      },
+      {
+        "name": "music player",
+        "bare": "wizard-music",
+        "explicit": "wizard-music"
+      },
+      {
+        "name": "wizard music",
+        "bare": "wizard-music",
+        "explicit": "wizard-music"
+      }
+    ],
+    "desktop": [
+      {
+        "name": "troubleshooter",
+        "bare": "troubleshooter",
+        "explicit": "troubleshooter"
+      },
+      {
+        "name": "troubleshooting",
+        "bare": "troubleshooter",
+        "explicit": "troubleshooter"
+      },
+      {
+        "name": "troubleshoot",
+        "bare": "troubleshooter",
+        "explicit": "troubleshooter"
+      },
+      {
+        "name": "fix wizard",
+        "bare": "troubleshooter",
+        "explicit": "troubleshooter"
+      },
+      {
+        "name": "wizard",
+        "bare": "wizard",
+        "explicit": "wizard"
+      },
+      {
+        "name": "chats",
+        "bare": "wizard",
+        "explicit": "wizard"
+      },
+      {
+        "name": "chat",
+        "bare": "wizard",
+        "explicit": "wizard"
+      },
+      {
+        "name": "threads",
+        "bare": "wizard",
+        "explicit": "wizard"
+      },
+      {
+        "name": "google maps",
+        "bare": null,
+        "explicit": null
+      },
+      {
+        "name": "map",
+        "bare": null,
+        "explicit": null
+      },
+      {
+        "name": "cine queue",
+        "bare": "cinequeue",
+        "explicit": "cinequeue"
+      },
+      {
+        "name": "movies",
+        "bare": "cinequeue",
+        "explicit": "cinequeue"
+      },
+      {
+        "name": "i ching",
+        "bare": "iching",
+        "explicit": "iching"
+      },
+      {
+        "name": "notifications",
+        "bare": "notifications",
+        "explicit": "v-inbox"
+      },
+      {
+        "name": "side key",
+        "bare": null,
+        "explicit": null
+      },
+      {
+        "name": "power button",
+        "bare": null,
+        "explicit": null
+      },
+      {
+        "name": "side button assistant",
+        "bare": null,
+        "explicit": null
+      },
+      {
+        "name": "inbox",
+        "bare": "v-inbox",
+        "explicit": "v-inbox"
+      },
+      {
+        "name": "terminal",
+        "bare": "console",
+        "explicit": "console"
+      },
+      {
+        "name": "music",
+        "bare": "wizard-music",
+        "explicit": "wizard-music"
+      },
+      {
+        "name": "reader",
+        "bare": "wisdom",
+        "explicit": "wisdom"
+      },
+      {
+        "name": "wisdom reader",
+        "bare": "wisdom",
+        "explicit": "wisdom"
+      },
+      {
+        "name": "wizard reader",
+        "bare": "wisdom",
+        "explicit": "wisdom"
+      },
+      {
+        "name": "collections",
+        "bare": "wisdom",
+        "explicit": "wisdom"
+      },
+      {
+        "name": "jobs",
+        "bare": "wisdom",
+        "explicit": "wisdom"
+      },
+      {
+        "name": "steve jobs",
+        "bare": "wisdom",
+        "explicit": "wisdom"
+      },
+      {
+        "name": "signal",
+        "bare": "wizard-signal",
+        "explicit": "wizard-signal"
+      },
+      {
+        "name": "shop",
+        "bare": "shopping",
+        "explicit": "shopping"
+      },
+      {
+        "name": "meetings",
+        "bare": "mizel",
+        "explicit": "mizel"
+      },
+      {
+        "name": "meeting recorder",
+        "bare": "mizel",
+        "explicit": "mizel"
+      },
+      {
+        "name": "usual",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "usuals",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "food app",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "my food",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "grab app",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "saved orders",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "eats",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "wizard eats",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "bites",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "wizard bites",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "wizard food",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "grab",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "my usuals",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "grab food",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "food",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "order food",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "App Store",
+        "bare": "app-store",
+        "explicit": "app-store"
+      },
+      {
+        "name": "Agents",
+        "bare": "agents",
+        "explicit": "agents"
+      },
+      {
+        "name": "System",
+        "bare": "system",
+        "explicit": "system"
+      },
+      {
+        "name": "Troubleshooter",
+        "bare": "troubleshooter",
+        "explicit": "troubleshooter"
+      },
+      {
+        "name": "Inbox",
+        "bare": "v-inbox",
+        "explicit": "v-inbox"
+      },
+      {
+        "name": "Setup",
+        "bare": "setup",
+        "explicit": "setup"
+      },
+      {
+        "name": "Chats",
+        "bare": "wizard",
+        "explicit": "wizard"
+      },
+      {
+        "name": "Airlock",
+        "bare": "airlock",
+        "explicit": "airlock"
+      },
+      {
+        "name": "Movies (test)",
+        "bare": "cinequeue-next",
+        "explicit": "cinequeue-next"
+      },
+      {
+        "name": "Meditate (test)",
+        "bare": "meditate-next",
+        "explicit": "meditate-next"
+      },
+      {
+        "name": "Messenger",
+        "bare": "messenger",
+        "explicit": "messenger"
+      },
+      {
+        "name": "Mizel.ai",
+        "bare": "mizel",
+        "explicit": "mizel"
+      },
+      {
+        "name": "Notifications",
+        "bare": "notifications",
+        "explicit": "v-inbox"
+      },
+      {
+        "name": "Outline",
+        "bare": "outline-streaming-demo",
+        "explicit": "outline-streaming-demo"
+      },
+      {
+        "name": "Reference",
+        "bare": "reference",
+        "explicit": "reference"
+      },
+      {
+        "name": "Stories",
+        "bare": "stories",
+        "explicit": "stories"
+      },
+      {
+        "name": "Wisdom",
+        "bare": "wisdom",
+        "explicit": "wisdom"
+      },
+      {
+        "name": "ChatGPT",
+        "bare": "wizard-chatgpt",
+        "explicit": "wizard-chatgpt"
+      },
+      {
+        "name": "Claude",
+        "bare": "wizard-claude",
+        "explicit": "wizard-claude"
+      },
+      {
+        "name": "Connection Router",
+        "bare": "wizard-connection-router",
+        "explicit": "wizard-connection-router"
+      },
+      {
+        "name": "Connected accounts",
+        "bare": "wizard-connectors",
+        "explicit": "wizard-connectors"
+      },
+      {
+        "name": "Wizard Files",
+        "bare": "wizard-files",
+        "explicit": "wizard-files"
+      },
+      {
+        "name": "Shopping",
+        "bare": "wizard-shopping",
+        "explicit": "wizard-shopping"
+      },
+      {
+        "name": "Supervisor",
+        "bare": "wizard-supervisor",
+        "explicit": "wizard-supervisor"
+      },
+      {
+        "name": "Morning",
+        "bare": "morning",
+        "explicit": "morning"
+      },
+      {
+        "name": "MindFeed",
+        "bare": "mindfeed",
+        "explicit": "mindfeed"
+      },
+      {
+        "name": "Manager",
+        "bare": "wizard-manager",
+        "explicit": "wizard-manager"
+      },
+      {
+        "name": "Wizard Signal",
+        "bare": "wizard-signal",
+        "explicit": "wizard-signal"
+      },
+      {
+        "name": "Search",
+        "bare": "wizard-search",
+        "explicit": "wizard-search"
+      },
+      {
+        "name": "Meditate",
+        "bare": "meditation",
+        "explicit": "meditation"
+      },
+      {
+        "name": "Wizard Music",
+        "bare": "wizard-music",
+        "explicit": "wizard-music"
+      },
+      {
+        "name": "Wizard Shopping",
+        "bare": "wizard-shopping",
+        "explicit": "shopping"
+      },
+      {
+        "name": "Topics",
+        "bare": "topics",
+        "explicit": "topics"
+      },
+      {
+        "name": "Projects",
+        "bare": "projects",
+        "explicit": "projects"
+      },
+      {
+        "name": "Calendar",
+        "bare": "calendar",
+        "explicit": "calendar"
+      },
+      {
+        "name": "TrackHunt",
+        "bare": "trackhunt",
+        "explicit": "trackhunt"
+      },
+      {
+        "name": "Video Editor",
+        "bare": "video-editor",
+        "explicit": "video-editor"
+      },
+      {
+        "name": "Movies",
+        "bare": "cinequeue",
+        "explicit": "cinequeue"
+      },
+      {
+        "name": "Wizard Social",
+        "bare": "social",
+        "explicit": "social"
+      },
+      {
+        "name": "Files Legacy",
+        "bare": "files-legacy",
+        "explicit": "files-legacy"
+      },
+      {
+        "name": "I Ching",
+        "bare": "iching",
+        "explicit": "iching"
+      },
+      {
+        "name": "Console",
+        "bare": "console",
+        "explicit": "console"
+      },
+      {
+        "name": "Android Apps",
+        "bare": "android-apps",
+        "explicit": "android-apps"
+      },
+      {
+        "name": "Oscar Graph",
+        "bare": "oscar-graph",
+        "explicit": "oscar-graph"
+      },
+      {
+        "name": "Food",
+        "bare": "usuals",
+        "explicit": "usuals"
+      },
+      {
+        "name": "my music",
+        "bare": "wizard-music",
+        "explicit": "wizard-music"
+      },
+      {
+        "name": "the music",
+        "bare": "wizard-music",
+        "explicit": "wizard-music"
+      },
+      {
+        "name": "songs",
+        "bare": "wizard-music",
+        "explicit": "wizard-music"
+      },
+      {
+        "name": "music app",
+        "bare": "wizard-music",
+        "explicit": "wizard-music"
+      },
+      {
+        "name": "music player",
+        "bare": "wizard-music",
+        "explicit": "wizard-music"
+      },
+      {
+        "name": "wizard music",
+        "bare": "wizard-music",
+        "explicit": "wizard-music"
+      }
+    ]
+  }
+}

@@ -55,7 +55,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Text-selection actions | `WosSelMenu` (`web/core/sel-menu.js`) | own context menu |
 | Screen context for the agent | `WizScreen` (`web/core/screen-text.js`) | own DOM scrape |
 | Dictation into a focused field | `WizCore` focused field (`web/core/focused-field.js`); voice `WizCore` (`web/core/voice.js`); mic choice `WosMic` (`web/core/mic.js`) | own recorder/transcriber |
-| Local commands and installed-app launch names | `WosCommands` (`web/core/commands.js`); `WizCore.apps` (`web/core/apps.js`: `findApp`, `appByName`) resolve display names and app-declared `voice_names` | a second command parser or shell-owned aliases for installable apps |
+| Local commands and app launch names | `WosCommands` (`web/core/commands.js`); `WizCore.apps` (`web/core/apps.js`: `findApp`, `appByName`) resolve display names and app-declared `voice_names`; built-in records own native/Food/recovery names; temporary pre-registration defaults apply only when metadata is absent, never to an explicit `[]` | a second command parser or permanent shell-owned aliases for installable apps |
 | Bound views beside a thread | `WosBoundView` (`web/core/bound-view.js`), renderers `WosViews` (`web/core/views.js`) | — |
 | Screen capture | `WosScreenCapture` (`web/core/screen-capture.js`), `WosCaptureTools` (`web/core/capture-tools.js`) | — |
 | Update banners | `WizWebUpdate`, `WizAppUpdates` (`web/core/web-update.js`), `WizAppVersions` (`web/core/app-versions.js`), `WosUpdates` (`web/core/os-updates.js`) | own reload timers |

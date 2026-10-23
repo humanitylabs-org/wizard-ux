@@ -7,6 +7,7 @@ const fs = require('fs'), path = require('path');
 const ORIGIN = require('./tools/qa-paths.cjs').origin(), URL_ = ORIGIN + '/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || '';
+const MIGRATION = process.env.QA_VOICE_MIGRATION === '1' ? require('./tests/fixtures/voice-name-migration.json') : null;
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -50,6 +51,7 @@ async function boot(b) {
     if (sm) { const t = THREADS.find(x => x.id === decodeURIComponent(sm[1])); return t ? json(r, { session: t }) : json(r, { error: 'not_found' }, 404); }
     if (u.pathname === '/wizard/thread-seen') return json(r, { state: { initializedAt: NOW - 864e5, threads: {} } });
     if (u.pathname === '/wizard/thread-dispositions') return json(r, { state: {} });
+    if (u.pathname === '/wizard/v1/apps' && MIGRATION) return json(r, { apps: MIGRATION.apps });
     if (u.pathname === '/wizard/v1/apps') return json(r, { apps: [{ id: 'wizard-search', name: 'Search', desc: 'Image search and AI overview', url: '/wizard-search/', icon: '⌕', colors: ['#8f63ff', '#ff5ccf'], source: 'launcher.json' },
       { id: 'calendar', name: 'Calendar', desc: 'Your calendar', url: '/wizard-calendar/', source: 'apps.json', voice_names: ['planner', 'day planner'] },
       { id: 'wizard-signal', name: 'Wizard Signal', desc: 'Signal feed', url: '/wizard-signal/', source: 'launcher.json' },
@@ -57,6 +59,10 @@ async function boot(b) {
     return json(r, {});
   });
   await ctx.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); } catch (e) {} });
+  if (MIGRATION) await ctx.addInitScript(() => {
+    window.__voiceNativeCalls = [];
+    window.WizardOSNative = { usuals: () => '[]', sideButton: () => '{"step":"ready"}', usualsRun: id => { window.__voiceNativeCalls.push(id); return ''; } };
+  });
   const p = await ctx.newPage(); p.errs = [];
   p.on('pageerror', e => p.errs.push(String(e)));
   await p.goto(ORIGIN + '/qa-start').catch(() => {}); // a page before ours, so a wrong Back would really leave
@@ -84,6 +90,35 @@ const home = async p => { await p.evaluate(() => { for (const id of Object.keys(
   const b = await chromium.launch(process.env.QA_CHROME ? { executablePath: process.env.QA_CHROME } : {});
   const { p, writes } = await boot(b);
   R.cmd = { route: 'agent', summary: 'x' };
+
+  if (MIGRATION) {
+    // Exhaustive source-derived baseline: every formerly working alias and current display name,
+    // on both shell registries. Synthetic app pages and native bridge, no production writes.
+    for (const shell of ['mobile', 'desktop']) for (const c of MIGRATION.cases[shell]) {
+      const got = await p.evaluate(({shell, name}) => {
+        const r = window.WizCore.apps(shell);
+        return { bare: r.appByName(name)?.id || null, explicit: r.findApp(name)?.id || null };
+      }, {shell, name:c.name});
+      if(c.bare) ok(got.bare === c.bare, `${shell} baseline bare "${c.name}"`, JSON.stringify(got));
+      if(c.explicit) ok(got.explicit === c.explicit, `${shell} baseline explicit "${c.name}"`, JSON.stringify(got));
+    }
+    for (const c of MIGRATION.cases.mobile.filter(c => ['usuals','troubleshooter','spotify','maps','cinequeue','iching','console','wisdom','wizard-signal','shopping','mizel','wizard-music'].includes(c.bare) && (MIGRATION.legacyAliases.includes(c.name) || ['music','my music','the music','songs','music app','music player','wizard music'].includes(c.name)))) {
+      await p.evaluate(() => {
+        for(const id of Object.keys(window.__wos.wins)) window.__wos.closeWin(id);
+        window.__wos.goDesk(window.__wos.HOME, true);
+        window.__voiceNativeCalls.length = 0;
+      });
+      writes.length = 0; routes.length = 0;
+      await say(p, c.name, 'command'); await sleep(250);
+      const f = await front(p);
+      const native = await p.evaluate(() => window.__voiceNativeCalls.slice());
+      const destination = c.name === 'order food' ? native.includes('+new') : f === c.bare;
+      ok(destination && routes.length === 0 && agentWrites(writes).length === 0,
+        `held migration "${c.name}" -> ${c.name === 'order food' ? 'native Food browse' : c.bare}`, JSON.stringify({f,native,routes,writes}));
+    }
+    ok(p.errs.length === 0, 'migration has no page errors', JSON.stringify(p.errs));
+    console.log(`\n${pass}/${pass + fail} passed`); await b.close(); process.exit(fail ? 1 : 0);
+  }
 
   // 1. James's case: held "Calendar." on home → Calendar opens, on-device, router never asked, nothing sent.
   for (const t of ['Calendar.', 'calendar', 'My calendar', 'the calendar app', 'Open calendar', 'Planner', 'day planner', 'DayPlanner']) {
