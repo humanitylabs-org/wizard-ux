@@ -84,7 +84,7 @@ class Fake(http.server.BaseHTTPRequestHandler):
         b = p.read_bytes()
         if f.startswith('assist/') and f.endswith('.html'):
             # A marker only the Wizard's copy carries, visible to uiautomator (not to people: opacity .02).
-            tag = f'<div aria-label="{MARKER}" style="position:fixed;left:0;top:0;width:6px;height:6px;opacity:.02;overflow:hidden">{MARKER}</div>'.encode()
+            tag = f'<p role="status" style="position:fixed;left:4px;top:4px;margin:0;font:11px sans-serif;color:#9a9;opacity:.7;pointer-events:none;z-index:99">{MARKER}</p>'.encode()
             b = b.replace(b'</body>', tag + b'</body>') if b'</body>' in b else b + tag
         ct = {'css': 'text/css', 'html': 'text/html; charset=utf-8', 'png': 'image/png', 'svg': 'image/svg+xml',
               'js': 'application/javascript', 'json': 'application/json', 'webmanifest': 'application/manifest+json'}.get(f.rsplit('.', 1)[-1], 'application/octet-stream')
@@ -160,11 +160,13 @@ def first(since, pat):
     return None, ''
 def shot(name): (OUT / f'{name}.png').write_bytes(adb('exec-out', 'screencap', '-p', binary=True))
 def ui(name):
-    x = ''
+    x, best = '', ''
     for args in ('--windows /sdcard/ui.xml', '/sdcard/ui.xml'):
         sx(f'rm -f /sdcard/ui.xml; uiautomator dump {args} >/dev/null 2>&1')
         x = sx('cat /sdcard/ui.xml')
-        if '<hierarchy' in x: break
+        if '<hierarchy' in x and PKG in x: best = x; break
+        if '<hierarchy' in x and not best: best = x
+    x = best
     (OUT / f'{name}.xml').write_text(x)
     return x
 def windows():
@@ -200,10 +202,19 @@ def write_pref(name, body):
 def a11y_on():
     sx(f'settings put secure enabled_accessibility_services {PKG}/ai.wizards.os.everywhere.WizardKeyboardService')
     sx('settings put secure accessibility_enabled 1')
+def bind_assistant(since):
+    """force-stop unbinds the VoiceInteractionService ("Force stopping current voice interactor") and Android
+    does not rebind it by itself; re-selecting the assistant role does, like picking it again in Settings."""
+    sx(f'cmd role remove-role-holder --user 0 android.app.role.ASSISTANT {PKG}'); time.sleep(1)
+    sx(f'cmd role add-role-holder --user 0 android.app.role.ASSISTANT {PKG}')
+    t, _ = wait_log(since, r'voice service ready', 15)
+    return t
 def fresh():
     """New app process: every host builds a new WebView (and so a new OverlayPage load)."""
+    t0 = now()
     sx(f'am force-stop {PKG}'); time.sleep(1.5)
     a11y_on()   # Android disables a force-stopped package's accessibility service
+    if not bind_assistant(t0): log('  WARNING: voice interaction service did not report ready after force-stop')
 def launch_then_home(since):
     sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity'); time.sleep(7)
     sx('input keyevent KEYCODE_HOME')
@@ -278,45 +289,6 @@ try:
     server_up()
     start = now()
     log('== device after setup:', sx('getprop sys.boot_completed').strip(), '| top:', top()[:120])
-
-    def orb_online(attempt):
-        t0 = now(); r0 = len(REQ); fresh()
-        tr, line = launch_then_home(t0)
-        return t0, r0, line
-    # ---------------------------------------------------------------- A online: orb from the Wizard
-    log('== A online: orb from the Wizard')
-    t0, r0, line = orb_online(1)
-    if 'from Wizard' not in line:
-        # A cold renderer can miss the 1.5 s deadline once (see docs/android-overlay-security.md); that is the
-        # fallback working. Record it, then require the warm second load to come from the Wizard.
-        log('  first (cold) orb load:', line.strip()[-80:], '| reason:', why(t0, 'everywhere.html'), '| requests:', assist_reqs(r0))
-        (OUT / 'A-orb-online-cold.txt').write_text(f'{line}\nreason: {why(t0, "everywhere.html")}\nrequests: {assist_reqs(r0)}\n')
-        t0, r0, line = orb_online(2)
-    check('A orb online', 'floating orb page came from the Wizard', 'from Wizard' in line, (line, why(t0, 'everywhere.html')))
-    w = wait_window('WizardEverywhere', 10)
-    check('A orb online', 'orb is a WindowManager overlay window (WizardEverywhere)', w, w)
-    got = assist_reqs(r0)
-    check('A orb online', 'fake Wizard served everywhere.html, everywhere.js and orb.js', all(any(p.endswith(f) for p in got) for f in ('assist/everywhere.html', 'assist/everywhere.js', '/orb.js')), got)
-    time.sleep(1.5); evidence('A-orb-online')
-    x = (OUT / 'A-orb-online.xml').read_text()
-    check('A orb online', 'orb visible in uiautomator dump (content-desc Wizard Everywhere)', 'Wizard Everywhere' in x, 'see A-orb-online.xml')
-
-    # ---------------------------------------------------------------- C online: side-button corner orb from the Wizard
-    log('== C online: side-button corner orb from the Wizard')
-    t0 = now(); r0 = len(REQ)
-    how, tc, line = trigger_assist(t0)
-    if line and 'from Wizard' not in line:
-        log('  first (cold) corner load:', line.strip()[-80:], '| reason:', why(t0, 'surface.html#corner'))
-        close_corner(); time.sleep(1); t0 = now(); r0 = len(REQ)
-        how, tc, line = trigger_assist(t0)
-    log('  assist trigger:', how)
-    check('C side button unlocked online', 'assist gesture reached WizardSession (corner shown)', first(t0, r'corner shown')[0], (how, first(t0, r'corner shown|session:')[1]))
-    check('C side button unlocked online', 'corner surface page came from the Wizard', 'from Wizard' in line, (line, why(t0, 'surface.html#corner')))
-    check('C side button unlocked online', 'fake Wizard served surface.html and surface.js', any(p.endswith('assist/surface.html') for p in assist_reqs(r0)) and any(p.endswith('assist/surface.js') for p in assist_reqs(r0)), assist_reqs(r0))
-    time.sleep(1.5); evidence('C-side-online'); x = (OUT / 'C-side-online.xml').read_text()
-    check('C side button unlocked online', 'surface UI in uiautomator dump (Pause / Cancel)', re.search(r'content-desc="(Pause|Cancel)"', x), 'see C-side-online.xml')
-    close_corner()
-    no_crash('online hosts', start)
 
     # ---------------------------------------------------------------- Wizard unreachable (nothing listening on :443)
     log('== Wizard unreachable (nothing listening on :443)')
@@ -400,6 +372,50 @@ try:
     no_crash('lock screen', start)
     sx(f'am force-stop {PKG}'); sx('input keyevent KEYCODE_WAKEUP')
     sx('locksettings clear --old 1234'); sx('wm dismiss-keyguard'); time.sleep(1)
+
+    server_up()
+    log('== online (renderer now warm): orb, side button')
+    def orb_online(attempt):
+        t0 = now(); r0 = len(REQ); fresh()
+        tr, line = launch_then_home(t0)
+        return t0, r0, line
+    # ---------------------------------------------------------------- A online: orb from the Wizard
+    log('== A online: orb from the Wizard')
+    cold = []
+    for attempt in range(1, 4):
+        t0, r0, line = orb_online(attempt)
+        if 'from Wizard' in line: break
+        # A cold emulator renderer can miss the 1.5 s deadline (docs/android-overlay-security.md); that is the
+        # fallback doing its job. Keep the evidence and retry, at most 3 loads in total.
+        cold.append(f'attempt {attempt}: {line.strip()[-70:]} | reason: {why(t0, "everywhere.html")} | requests: {assist_reqs(r0)}')
+        log('  orb load fell back:', cold[-1])
+    (OUT / 'A-orb-online-attempts.txt').write_text('\n'.join(cold + [f'final: {line.strip()}']) + '\n')
+    check('A orb online', 'remote load attempts until the Wizard copy was ready (<= 3)', 'from Wizard' in line, f'{len(cold) + 1} load(s); fell back first: {len(cold)}')
+    check('A orb online', 'floating orb page came from the Wizard', 'from Wizard' in line, (line, why(t0, 'everywhere.html')))
+    w = wait_window('WizardEverywhere', 10)
+    check('A orb online', 'orb is a WindowManager overlay window (WizardEverywhere)', w, w)
+    got = assist_reqs(r0)
+    check('A orb online', 'fake Wizard served everywhere.html, everywhere.js and orb.js', all(any(p.endswith(f) for p in got) for f in ('assist/everywhere.html', 'assist/everywhere.js', '/orb.js')), got)
+    time.sleep(1.5); evidence('A-orb-online')
+    x = (OUT / 'A-orb-online.xml').read_text()
+    check('A orb online', 'orb visible in uiautomator dump (content-desc Wizard Everywhere)', 'Wizard Everywhere' in x, 'see A-orb-online.xml')
+
+    # ---------------------------------------------------------------- C online: side-button corner orb from the Wizard
+    log('== C online: side-button corner orb from the Wizard')
+    t0 = now(); r0 = len(REQ)
+    for attempt in range(1, 4):
+        how, tc, line = trigger_assist(t0)
+        if not line or 'from Wizard' in line: break
+        log(f'  corner load {attempt} fell back:', line.strip()[-70:], '| reason:', why(t0, 'surface.html#corner'))
+        close_corner(); time.sleep(1); t0 = now(); r0 = len(REQ)
+    log('  assist trigger:', how)
+    check('C side button unlocked online', 'assist gesture reached WizardSession (corner shown)', first(t0, r'corner shown')[0], (how, first(t0, r'corner shown|session:')[1]))
+    check('C side button unlocked online', 'corner surface page came from the Wizard', 'from Wizard' in line, (line, why(t0, 'surface.html#corner')))
+    check('C side button unlocked online', 'fake Wizard served surface.html and surface.js', any(p.endswith('assist/surface.html') for p in assist_reqs(r0)) and any(p.endswith('assist/surface.js') for p in assist_reqs(r0)), assist_reqs(r0))
+    time.sleep(1.5); evidence('C-side-online'); x = (OUT / 'C-side-online.xml').read_text()
+    check('C side button unlocked online', 'surface UI in uiautomator dump (Pause / Cancel)', re.search(r'content-desc="(Pause|Cancel)"', x), 'see C-side-online.xml')
+    close_corner()
+    no_crash('online hosts', start)
 
     # ---------------------------------------------------------------- Screen mode last (accessibility capture is the heaviest emulator path)
     log('== Screen mode (accessibility): online, unreachable, airplane')
