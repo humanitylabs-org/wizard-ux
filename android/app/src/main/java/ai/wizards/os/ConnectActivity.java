@@ -47,10 +47,6 @@ public final class ConnectActivity extends Activity {
         if (look.square()) labelFace = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD);
         boolean switching = !ServerSettings.origin(this).isEmpty();
         getWindow().setStatusBarColor(Color.TRANSPARENT); getWindow().setNavigationBarColor(Color.TRANSPARENT);
-        if (android.os.Build.VERSION.SDK_INT >= 30 && getWindow().getInsetsController() != null) {
-            int lightBars = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
-            getWindow().getInsetsController().setSystemBarsAppearance(look.isLight() ? lightBars : 0, lightBars);
-        }
 
         FrameLayout root = new FrameLayout(this);
         // The shell's .device glow: the accent rising softly from the bottom into the skin's base.
@@ -63,10 +59,14 @@ public final class ConnectActivity extends Activity {
         body.setPadding(dp(20), dp(12), dp(20), dp(24));
         scroll.addView(body, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         root.setOnApplyWindowInsetsListener((v, in) -> {
-            android.graphics.Insets bars = in.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
-            int ime = in.getInsets(WindowInsets.Type.ime()).bottom;
-            scroll.setPadding(bars.left, bars.top, bars.right, Math.max(bars.bottom, ime));
-            return WindowInsets.CONSUMED;
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets bars = in.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                int ime = in.getInsets(WindowInsets.Type.ime()).bottom;
+                scroll.setPadding(bars.left, bars.top, bars.right, Math.max(bars.bottom, ime));
+                return WindowInsets.CONSUMED;
+            }
+            scroll.setPadding(in.getSystemWindowInsetLeft(), in.getSystemWindowInsetTop(), in.getSystemWindowInsetRight(), in.getSystemWindowInsetBottom());
+            return in.consumeSystemWindowInsets();
         });
 
         // Header: back (when there is a Wizard to go back to) + title, like a Settings sub-page.
@@ -131,6 +131,12 @@ public final class ConnectActivity extends Activity {
         body.addView(note, margins(dp(8), dp(4), 0));
 
         setContentView(root);
+        // After setContentView: the window's decor (and its insets controller) exists only from here.
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            android.view.WindowInsetsController bars = getWindow().getInsetsController();
+            int lightBars = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+            if (bars != null) bars.setSystemBarsAppearance(look.isLight() ? lightBars : 0, lightBars);
+        }
         if (state != null) address.setText(state.getString("address", "")); else prefill(getIntent());
         if (android.os.Build.VERSION.SDK_INT >= 33) getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::back);
     }
