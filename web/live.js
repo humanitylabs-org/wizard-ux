@@ -116,6 +116,8 @@
   const vis = v => (typeof v === 'string' ? v : '').replace(/\s+/gu, ' ').trim().slice(0, 80).toLocaleLowerCase();
   function fingerprint(v) { let h = 2166136261; for (const c of vis(v)) { h ^= c.codePointAt(0) ?? 0; h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
   const keyOf = s => `${s.runtime}:${s.id}`;
+  // Side state (seen, snoozed) for another agent's thread is keyed agent/<id>/<runtime>:<id> on the server; the
+  // dispositions route takes agent_id in the body and refuses any query string (so agent snoozes used to fail).
   const seenKeyOf = s => s.agent && s.agent !== 'hermes' ? `agent/${s.agent}/${keyOf(s)}` : keyOf(s);
   // The newest assistant message the list knows. lastAssistantAt counts model replies only; reports that apps and
   // scheduled jobs append (Topics roundup, daily moves, audits) arrive as the latest message (previewAt) without moving
@@ -495,7 +497,7 @@
     const out = {}, scoped = id => (L.agentOf(id) || '') === (otherAgent(agent) ? agent : '');
     for (const [id, at] of Object.entries(readRestored())) if (scoped(id) && Date.now()-Date.parse(at)<WEEK) out[id]={restoredAt:at};
     for (const [key,d] of Object.entries(L.deferred)) {
-      const id=key.replace(/^direct:/,''); if (!scoped(id)) continue;
+      const id=key.replace(/^agent\/[^/]+\//,'').replace(/^[a-z]+:/,''); if (!scoped(id)) continue;
       out[id]={...(d.deferred ? {deferred:true} : {restoredAt:d.updatedAt}),...out[id]};
     }
     for (const [id,o] of OVER) if (scoped(id)) {
@@ -529,7 +531,7 @@
       const now = Date.now(), needs = [], ready = [], working = [];
       for (const s of this.sessionsFor(agent)) {
         if (s.archived || s.hidden) continue;
-        const def = this.deferred[keyOf(s)]?.deferred;
+        const def = this.deferred[seenKeyOf(s)]?.deferred;
         if (['waiting_for_approval', 'unknown'].includes(s.status)) { needs.push(s); continue; }
         if (WORKING.has(s.status)) { working.push(s); continue; }
         if (def) continue;
@@ -559,7 +561,7 @@
           if (got.complete) this.fullAt = Date.now();
           else { const fresh = new Set(sessions.map(s => s.id)); sessions = sessions.concat(this.sessions.filter(s => !fresh.has(s.id) && !s.optimistic)); }
           for (const s of sessions) {
-            const d = deferred[keyOf(s)];
+            const d = deferred[seenKeyOf(s)];
             delete s.deferred; delete s.deferredAt; delete s.restoredAt;
             if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
             applyLocal(s);
@@ -606,7 +608,7 @@
           if (got.meta) this.windows[id] = got.meta;
           const list = got.sessions.filter(s => !s.agent || s.agent === id).map(s => { s.agent = id; AGENT_OF.set(s.id, id); return s; });
           for (const s of list) {
-            const d = deferred[keyOf(s)];
+            const d = deferred[seenKeyOf(s)];
             delete s.deferred; delete s.deferredAt; delete s.restoredAt;
             if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
             applyLocal(s);
@@ -864,9 +866,9 @@
     async _defer(id, deferred) {
       const s = this.session(id); if (!s) throw new Error('gone');
       const ag = this.agentOf(id);
-      const p = await (await req('/wizard/thread-dispositions' + aq(id), { method: 'PUT', headers: J, body: JSON.stringify({ sessionId: id, runtime: s.runtime || 'direct', deferred, ...(ag ? { agent: ag } : {}) }) })).json();
+      const p = await (await req('/wizard/thread-dispositions', { method: 'PUT', headers: J, body: JSON.stringify({ sessionId: id, runtime: s.runtime || 'direct', deferred, ...(ag && ag !== 'hermes' ? { agent_id: ag } : {}) }) })).json();
       if (p?.record?.deferred !== deferred || !isFinite(Date.parse(p.record.updatedAt))) throw new Error('Thread disposition was not saved.');
-      this.deferred[keyOf(s)] = p.record;
+      this.deferred[seenKeyOf(s)] = p.record;
       return p.record;
     },
     defer(id) { return this._act(id, { deferred: true, deferredAt: new Date().toISOString() }, () => this._defer(id, true)); },
