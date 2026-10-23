@@ -38,7 +38,8 @@
  * ticked, private agents unticked; the gateway serves an agent only its own apps.
  *   GET/PUT /wizard/v1/apps/<app_id>/agents   → { app_id, kind, agents: [{ id, label, privacy, enabled }] }; PUT { agents: [ids] }
  *   WosAgents.appKnown(appId)        → true when the Agent Service offers the app to agents (agent-options)
- *   WosAgents.appAgents(appId)       → Promise<{ kind, agents:[{ id, enabled }] } | null> (falls back to permissions)
+ *   WosAgents.appAgents(appId)       → Promise<{ kind, privacy, needs_private_agent, agents:[{ id, enabled }] } | null>
+ *                                      (falls back to permissions). privacy 'private' = the app's optional wizard.md tag.
  *   WosAgents.setAppAgents(appId, ids) → Promise<same> (reloads the agents so their pages stay in sync)
  */
 (() => {
@@ -196,7 +197,7 @@
     async appAgents(appId) {
       try {
         const r = await fetch(`/wizard/v1/apps/${encodeURIComponent(appId)}/agents`, { cache: 'no-store', credentials: 'same-origin' });
-        if (r.ok) { const j = await r.json(); if (Array.isArray(j?.agents)) return { kind: String(j.kind || ''), agents: j.agents.filter(x => x && typeof x.id === 'string').map(x => ({ id: x.id, enabled: x.enabled === true })) }; }
+        if (r.ok) { const j = await r.json(); if (Array.isArray(j?.agents)) return { kind: String(j.kind || ''), privacy: j.privacy === 'private' ? 'private' : 'standard', needs_private_agent: j.needs_private_agent === true, agents: j.agents.filter(x => x && typeof x.id === 'string').map(x => ({ id: x.id, enabled: x.enabled === true })) }; }
         if (r.status === 404 && (await r.clone().json().catch(() => null))?.check === 'app.id') return null;
       } catch (_) {}
       // Older Agent Service: the agents' own app lists say the same thing.

@@ -417,6 +417,8 @@
   addEventListener('message', e => {
     const d = e.data; if (e.origin !== ORIGIN || e.source !== parent || !d) return;
     if (d.type === 'wizard:bindings-changed') { AG.load(true).then(() => AG.loadBindings(true)); return; }
+    // A private app's install sheet: start the New agent flow with Private chosen (James, 23 Oct 2026).
+    if (d.type === 'wizard:agents-new') { if (S.view.name !== 'new' && AG.available) { startNew(); if (d.preset === 'private') applyPreset(S.draft, 'private'); render(); } return; }
     if (d.type !== 'wizard:agents-show' || typeof d.id !== 'string') return;
     if (S.view.name === 'detail' && S.view.id === d.id) return;
     if (AG.get(d.id)) { S.sheet = null; go({ name: 'detail', id: d.id }); }

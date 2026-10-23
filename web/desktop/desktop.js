@@ -282,12 +282,12 @@
   });
   /* App → agent binding: an app's settings sheet (core/app-route.js). Its Agents button opens the Agents app
    * at that agent; System and Agents frames may ask for an app's sheet. */
-  window.WosAppRoute?.init({ openAgents: id => { openApp(APP.agents); if (id) [400, 1100, 2200].forEach(t => setTimeout(() => { for (const f of document.querySelectorAll('iframe[title="Agents"]')) f.contentWindow?.postMessage({ type: 'wizard:agents-show', id }, location.origin); }, t)); } });
+  window.WosAppRoute?.init({ openAgents: (id, o = {}) => { openApp(APP.agents); const msg = o.newPreset ? { type: 'wizard:agents-new', preset: o.newPreset } : id ? { type: 'wizard:agents-show', id } : null; if (msg) [400, 1100, 2200].forEach(t => setTimeout(() => { for (const f of document.querySelectorAll('iframe[title="Agents"]')) f.contentWindow?.postMessage(msg, location.origin); }, t)); } });
   addEventListener('message', e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:app-route' || typeof d.id !== 'string') return;
     const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
-    const w = host && W[host.dataset.win]; if (!w || !['system', 'agents'].includes(w.appId)) return;
-    window.WosAppRoute?.open(d.id);
+    const w = host && W[host.dataset.win]; if (!w || !['system', 'agents', 'app-store'].includes(w.appId)) return;
+    window.WosAppRoute?.request(d);
   });
   // The Agents app (and System) open an agent's own Chats. Only those frames may ask; the agent must exist.
   addEventListener('message', e => {
@@ -454,7 +454,7 @@
     if (!f) return;
     // servicesAs: a second view of an installed app (Video Editor's Feedback) gets that app's Back/services.
     const w = W[el.dataset.win], a = w && APP[w.servicesAs || w.appId];
-    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: sid => CHATS.openHosted(w.id, f, sid), openContextDraft: (key, text) => { let cw = ws[cur].wins.map(id => W[id]).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }, isVisible: () => !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) });
+    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), openContextDraft: (key, text) => { let cw = ws[cur].wins.map(id => W[id]).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }, isVisible: () => !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) });
     f.addEventListener('load', () => {
       // A refused frame (CSP frame-ancestors / X-Frame-Options) lands on an unreadable error document.
       let bad = false;
@@ -1178,13 +1178,8 @@
       {
         const staged = await OUTBOX.stage({kind:aimSid && aimSid!=='__new__'?'reply':'new',sessionId:aimSid==='__new__'?'':aimSid||'',steerRunId:rp?.steerRunId || '',...vRoute,audio:r.blob,captureId:r.captureId,instructions:vContext,how:'voice, aimed at this thread',source:'orb'});
         stagedId=staged.id;
-        // The outbox owns this take from here, so Reload no longer waits for transcription (outbox.js recover).
+        // The outbox owns transcription and delivery from here, so Reload no longer waits for either one.
         vHandedOff = !commandTake && await OUTBOX.handOff?.(stagedId) ? stagedId : null;
-        if(staged.durable) {
-          try { transcript=String((await window.WizConfig.transcribe(r.blob,{prompt:window.WizConfig.voicePrompt(),signal:AbortSignal.timeout(45000)})).text||'').trim(); } catch(_) {}
-          // Talk-key/tap takes are messages, even when the transcript resembles a command.
-          // Only commandVoice's explicit commandTake path above invokes the shared grammar.
-        }
       }
     }
     const w = vTarget && W[vTarget];
@@ -1230,11 +1225,22 @@
   recovery.id = 'recordingRecovery'; recovery.className = 'recording-recovery';
   recovery.setAttribute('aria-label', 'Retained recordings'); recovery.hidden = true;
   document.body.appendChild(recovery);
+  function recordingMeta(it) {
+    const thread = it.kind === 'dictation' ? 'Dictation'
+      : it.kind === 'new' ? 'New chat'
+      : LIVE?.session?.(it.sessionId)?.title || (it.sessionId ? 'Existing chat' : 'Voice message');
+    const at = Number(it.createdAt) || 0;
+    const stamp = at ? new Date(at).toLocaleString() : '';
+    const bytes = Number(it.audio?.size) || 0;
+    const size = bytes ? `${Math.max(1, Math.ceil(bytes / 1024))} KB` : '';
+    return [thread, stamp, size].filter(Boolean).join(' · ');
+  }
   function paintRecordings() {
     const takes = window.WosOutbox?.recordings() || [];
     recovery.hidden = !takes.length;
     recovery.innerHTML = takes.map(it => `<article>
       <strong>${it.kind === 'dictation' ? 'Dictation' : 'Voice recording'} kept</strong>
+      <p class="recording-meta">${esc(recordingMeta(it))}</p>
       <p role="status">${esc(it.storageError ? (it.durable ? 'Device save failed · complete backup kept; retrying.' : 'Device save failed · not saved. Keep this tab open; download before reload.') : (it.durable ? 'Saved on this device · available after reload.' : 'Saving recording…'))}</p>
       <p>${esc(it.state === 'transcribing' ? 'Transcribing…' : it.error || ((it.recoveryText || it.text) ? 'Transcript ready · copy it below.' : 'Ready to retry transcription.'))}</p>
       ${it.recoveryText || it.text ? `<textarea readonly aria-label="Recovered transcript">${esc(it.recoveryText || it.text)}</textarea><button data-record-copy="${esc(it.id)}">Copy transcript</button>` : ''}
@@ -1252,10 +1258,20 @@
       if (it.kind === 'conversation') await O.retryConversation(id);
       else if (O.canRetry(it)) toast('↻', O.retryFeedback(O.retry(id)), 2400); else await O.transcribeRecording(id);
     } else if (b.dataset.recordDownload) {
-      const url = URL.createObjectURL(it.audio), a = document.createElement('a');
-      const ext = /mp4|m4a/.test(it.audioType) ? 'm4a' : /ogg/.test(it.audioType) ? 'ogg' : /wav/.test(it.audioType) ? 'wav' : 'webm';
-      a.href = url; a.download = `wizard-recording-${id}.${ext}`; a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      if (!(it.audio instanceof Blob) || !it.audio.size) { toast('!', 'Audio is unavailable · keep this tab open', 3200); return; }
+      let url = '';
+      try {
+        url = URL.createObjectURL(it.audio);
+        const a = document.createElement('a');
+        const ext = /mp4|m4a/.test(it.audioType) ? 'm4a' : /ogg/.test(it.audioType) ? 'ogg' : /wav/.test(it.audioType) ? 'wav' : 'webm';
+        a.href = url; a.download = `wizard-recording-${id}.${ext}`; a.rel = 'noopener'; a.hidden = true;
+        document.body.appendChild(a); a.click(); a.remove();
+        toast('↓', 'Audio download requested · check Downloads', 2600);
+      } catch (error) {
+        console.error('Retained recording download failed', error);
+        toast('!', 'Audio download failed · recording is still kept', 3200);
+      }
+      if (url) setTimeout(() => URL.revokeObjectURL(url), 60000);
     } else if (b.dataset.recordCopy) {
       try { await navigator.clipboard.writeText(it.recoveryText || it.text); toast('📋', 'Transcript copied · recording kept until you discard it', 2600); }
       catch (e) { toast('!', 'Select and copy the transcript above', 2600); }
