@@ -98,6 +98,8 @@ const threadOpen = (p, id) => p.evaluate(id => [...document.querySelectorAll('[d
     ok(post?.kind==='return'&&post.thread===T[0].id&&post.target.message===null&&post.timezone==='Asia/Bangkok'&&/T02:00:00.000Z$/.test(post.when.once),`${L}: timed Snooze uses unchanged shared scheduler at Bangkok 9:00`,post);
     const label=await p.evaluate(()=>window.WosBoomerang._returnLabel(window.WosBoomerang.nextFor('qa_boom_a')));
     ok((await p.locator('.boom-banner').innerText()).includes(label)&&await p.evaluate(l=>document.body.innerText.includes(l),label),`${L}: exact saved return confirmation`,label);
+    await p.waitForFunction(id=>window.WizLive.workGroups().deferred.some(s=>s.id===id),T[0].id,{timeout:4000}).catch(()=>{});
+    ok(st.dispositionWrites.at(-1)?.deferred===true&&await p.evaluate(id=>!window.WizLive.workGroups().ready.some(s=>s.id===id),T[0].id)&&await threadOpen(p,T[0].id),`${L}: timed Snooze takes the thread out of Ready and keeps it open`);
     await shot('timed');
     await p.locator('.boom-banner [data-boom-change]').click();await p.locator('[data-boom-exact]').click();
     await p.locator('.boom-card input[name=time]').fill('09:37');
@@ -129,15 +131,14 @@ const threadOpen = (p, id) => p.evaluate(id => [...document.querySelectorAll('[d
     const beforePosts=st.posts.length;
     await p.locator('[data-boom-someday]').click();await p.waitForFunction(()=>!window.WosBoomerang.isOpen());await sleep(250);
     ok(st.posts.length===beforePosts&&st.schedules.some(j=>j.id===legacy.id)&&st.dispositionWrites.at(-1)?.deferred===true,`${L}: Someday uses old deferred disposition, no timed job`);
-    ok(await p.evaluate(()=>document.body.innerText.includes('Snoozed · bottom of Ready')),`${L}: exact Someday confirmation`);
-    const row=p.locator(`[data-sec="ready"] [data-chopen="${T[0].id}"]`).first();await row.waitFor();
-    ok((await row.innerText()).includes('Snoozed'),`${L}: existing deferred row says Snoozed`);
+    ok(await p.evaluate(()=>document.body.innerText.includes('Snoozed · out of your list')),`${L}: exact Someday confirmation`);
     const ids=await p.locator('[data-sec="ready"] [data-chopen]').evaluateAll(els=>els.map(el=>el.dataset.chopen));
-    ok(ids.at(-1)===T[0].id,`${L}: Someday at bottom of Ready`,ids);
+    ok(!ids.includes(T[0].id),`${L}: Someday takes the thread out of Ready`,ids);
+    ok(await p.evaluate(id=>window.WizLive.workGroups().deferred.some(s=>s.id===id),T[0].id)&&await p.locator('[data-sec="deferred"]:visible').count()>0,`${L}: snoozed thread waits in the Snoozed section`);
     await shot('someday');
     for(const q of ['snooze','defer','later','boomerang']) {
       const search=p.locator('.ch-search input:visible, input[data-chsearch]:visible').first();
-      await search.fill(q);await p.locator('[data-chsug="status:deferred"]:visible').first().click();await sleep(200);ok((await p.locator(`[data-chopen="${T[0].id}"]:visible`).count())>0,`${L}: search synonym ${q}`);await p.locator('[data-chchipx="status"]:visible').first().click();
+      await search.fill(q);const sug=p.locator('[data-chsug="status:deferred"]:visible').first();if(!await sug.waitFor({timeout:4000}).then(()=>true,()=>false)){ok(false,`${L}: search synonym ${q} offers Snoozed`);continue}await sug.click();await sleep(200);ok((await p.locator(`[data-chopen="${T[0].id}"]:visible`).count())>0,`${L}: search synonym ${q}`);await p.locator('[data-chchipx="status"]:visible').first().click();
     }
     ok(st.runs===0&&errs.length===0,`${L}: no runs or page errors`,errs);
     await ctx.close();
