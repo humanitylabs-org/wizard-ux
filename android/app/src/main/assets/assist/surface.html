@@ -283,8 +283,9 @@ const W = window.W = {
   back(){
     // Back only steps out of the private list. Otherwise it is ignored: talking, sending and the card stay put,
     // and the X is the only cancel (James, 10 Oct 2026).
-    if(S.state==='list'){$('zl').classList.remove('on','deep');S.state=card.open?'card':'idle';
-      if(S.state==='idle')idleClose(6000);return 'handled'}
+    // Close the list whenever it is showing, even if a take started underneath it (state is then 'listen').
+    if(S.state==='list'||$('zl').classList.contains('on')){$('zl').classList.remove('on','deep');
+      if(S.state==='list'){S.state=card.open?'card':'idle';if(S.state==='idle')idleClose(6000)}return 'handled'}
     return '';
   },
 };
