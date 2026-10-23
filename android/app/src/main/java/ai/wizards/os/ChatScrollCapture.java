@@ -116,8 +116,10 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
         if (rejected == null && restoring) rejected = "restoring";
         if (rejected != null) { ScrollCaptureDiagnostics.empty(rejected); ready.accept(new Rect()); return; }
         Pending p = new Pending(signal, () -> ready.accept(new Rect())); p.search = true;
-        js(script + ";(()=>{try{const c=window.__wosScrollCapture;return c.search()||{rejected:c.searchReason()};}catch(_){return {rejected:'exception'};}})()", b -> {
+        js(script + ";(()=>{try{const c=window.__wosScrollCapture;const r=c.search(),d=c.searchDetail&&c.searchDetail();return r?Object.assign(r,{detail:d}):{rejected:c.searchReason(),detail:d};}catch(_){return {rejected:'exception'};}})()", b -> {
             if (!p.live()) return;
+            if (b != null && b.has("detail")) ScrollCaptureDiagnostics.record("search.detail",
+                ScrollCaptureDiagnostics.fields("detail",String.valueOf(b.opt("detail")).substring(0,Math.min(1800,String.valueOf(b.opt("detail")).length()))));
             if (b == null) { p.fail("js-invalid-result-or-exception"); return; }
             if (b.has("rejected")) { p.fail("js-" + b.optString("rejected")); return; }
             if (b.optDouble("vw") <= 0) { p.fail("invalid-viewport"); return; }
@@ -143,7 +145,12 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
         id = UUID.randomUUID().toString(); final String token = id;
         js(call("start", JSONObject.quote(token)), b -> {
             if (!p.live() || !token.equals(id)) return;
-            if (b == null || !rect(b).equals(session.getScrollBounds())) { p.fail(); return; }
+            Rect granted = session.getScrollBounds();
+            ScrollCaptureDiagnostics.record("start.result",ScrollCaptureDiagnostics.fields("ok",b!=null,
+                "granted",String.valueOf(granted),"ours",b==null?"":String.valueOf(rect(b))));
+            // The system may clip our rect to the visible area; capture exactly what it granted.
+            if (b == null || granted == null || granted.isEmpty() || !rect(b).contains(granted)) { p.fail("start-bounds"); return; }
+            bounds = new Rect(granted);
             initial = b.optDouble("top");
             main.postDelayed(deadline, 30000);
             p.finish(ready);

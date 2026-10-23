@@ -86,7 +86,10 @@ public class SelectionWebView extends WebView {
             (activity.getWindow().getAttributes().flags & android.view.WindowManager.LayoutParams.FLAG_SECURE) == 0 &&
             trustedScrollOrigin(android.net.Uri.parse(getUrl() == null ? "" : getUrl()));
     }
-    private ScrollProxyMetrics proxy() { return proxyEligible() ? scrollMetrics : null; }
+    // Retired: One UI drives the AOSP ScrollCaptureCallback and never queries View scrollability
+    // (0.9.39 device recording). Overriding WebView scroll metrics was pure risk.
+    static final boolean SCROLL_PROXY = false;
+    private ScrollProxyMetrics proxy() { return SCROLL_PROXY && proxyEligible() ? scrollMetrics : null; }
 
     void installScrollProxy() {
         if (!proxyEligible() || scrollScript.isEmpty()) return;
