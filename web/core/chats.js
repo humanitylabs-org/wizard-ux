@@ -516,6 +516,16 @@ window.WizCore.chats = function createChats(H) {
     const rows = top > 0 ? [...sc.querySelectorAll('[data-chopen]')].filter(r => r.getBoundingClientRect().bottom > edge).slice(0, 8) : [];
     return { top, rows: rows.map(r => ({ id: r.dataset.chopen, section: r.closest('[data-sec]')?.dataset.sec, y: r.getBoundingClientRect().top - edge })) };
   }
+  // After an in-place patch the scroller kept its offset: only a row above that grew or shrank may move the reader.
+  // Never re-assign an unchanged scrollTop (that stops a phone's momentum scroll mid-fling).
+  function anchorListPlace(sc, place) {
+    if (!sc || !place || !place.rows.length) return;
+    const edge = sc.getBoundingClientRect().top, rows = [...sc.querySelectorAll('[data-chopen]')];
+    for (const anchor of place.rows) {
+      const row = rows.find(r => r.dataset.chopen === anchor.id && r.closest('[data-sec]')?.dataset.sec === anchor.section);
+      if (row) { const d = row.getBoundingClientRect().top - edge - anchor.y; if (Math.abs(d) >= 1) sc.scrollTop += d; break; }
+    }
+  }
   function restoreListPlace(sc, place) {
     if (!sc || !place) return;
     sc.scrollTop = place.top;
@@ -631,10 +641,18 @@ window.WizCore.chats = function createChats(H) {
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
-    const keepSheet = keptSheet(el);
-    clearReading(w.id); el.innerHTML = html; c.listHTML = html; c.listRoot = el.firstElementChild;
-    restoreSheet(el, keepSheet);
-    restoreListPlace(el.querySelector('.ch-scroll'), place);
+    // A live tick (a timer, a relative time, one Working row) patches only what changed: rows, spinners, scroll
+    // and any open sheet stay put (James, 23 Oct 2026: whole-list rebuilds flickered on every update).
+    const root = el.firstElementChild;
+    if (c.listRoot === root && root?.classList.contains('ch-list') && window.WosMorph?.morph(root, html)) {
+      clearReading(w.id); c.listHTML = html;
+      anchorListPlace(el.querySelector('.ch-scroll'), place);
+    } else {
+      const keepSheet = keptSheet(el);
+      clearReading(w.id); el.innerHTML = html; c.listHTML = html; c.listRoot = el.firstElementChild;
+      restoreSheet(el, keepSheet);
+      restoreListPlace(el.querySelector('.ch-scroll'), place);
+    }
     PW?.paint(w.id, el);
     window.WosSkinHost?.rendered('list', el);
     if (had) { const inp = el.querySelector('[data-chsearch]'); inp.focus(); try { inp.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
@@ -842,7 +860,7 @@ window.WizCore.chats = function createChats(H) {
     let h = '';
     // A provider sign-out has its own panel (Open Claude / Open ChatGPT) in place of Hermes' generic failed-turn notice.
     if (last && reconnect && tn.a?.failed) tn = { ...tn, a: null };
-    if (tn.u) h += `<div class="msg u${tn.u.reply ? ' has-rq' : ''}"><div class="bub">${replyCard(tn.u.reply)}${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${timeTag(tn.u.at)}</div></div>`;
+    if (tn.u) h += `<div class="msg u${tn.u.reply ? ' has-rq' : ''}"${isFinite(tn.u.at) ? ` data-morph-key="u${tn.u.at}"` : ''}><div class="bub">${replyCard(tn.u.reply)}${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${timeTag(tn.u.at)}</div></div>`;
     else if (tn.note) h += noteHtml(tn.note);
     else if (tn.later) h += runContextHtml(tn.later);
     const live = last && working;
@@ -857,7 +875,7 @@ window.WizCore.chats = function createChats(H) {
     if (tn.a || tn.media.length) {
       const k = tn.a ? c.texts.push(tn.a.text) - 1 : -1;
       const bAt = tn.a?.at ?? tn.mediaAt;
-      h += `<div class="msg a"${isFinite(bAt) ? ` data-boom-at="${bAt}"` : ''}><div class="bub">${tn.a ? md(tn.a.text) : ''}${mediaBlock(c, tn.media)}</div>`
+      h += `<div class="msg a"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}><div class="bub">${tn.a ? md(tn.a.text) : ''}${mediaBlock(c, tn.media)}</div>`
         + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>${isFinite(bAt) ? `<button type="button" data-mboom="${k}" data-at="${bAt}" aria-label="Snooze" title="Snooze this message">◷ Snooze</button>` : ''}${last && !working ? '<button type="button" data-mregen aria-label="Regenerate response">↻ Regenerate</button>' : ''}` : ''}</div></div>`;
     }
     return h;
@@ -1357,24 +1375,33 @@ window.WizCore.chats = function createChats(H) {
     // A focused composer must never leave the page during a live repaint: iPhone Safari closes the keyboard the
     // moment a focused field is detached and will not reopen it from script, so the owner saw a caret and no
     // keyboard in any working thread (Miguel, 22 Oct 2026). Rebuild everything around the field instead.
-    if (!(keepTa && hadFocus && rebuildAround(el, threadHTML, keepTa))) {
-      el.innerHTML = threadHTML;
-      if (keepTa) { const fresh = el.querySelector('.ch-compose textarea'); keepTa.placeholder = fresh.placeholder; fresh.replaceWith(keepTa); }
+    // A live repaint of the same thread (new step, helper timer, streamed words) patches only what changed: messages,
+    // photos, the composer field (focus, caret, keyboard) and the reading place stay exactly as they are
+    // (James, 23 Oct 2026: whole-thread rebuilds flickered while a reply was working).
+    const troot = el.firstElementChild;
+    const morphed = !!keepTa && troot?.dataset.part === 'thread' && troot.contains(keepTa) && !!window.WosMorph?.morph(troot, threadHTML, {
+      keep: (n, f) => { if (n !== keepTa) return false; const ph = f.getAttribute('placeholder'); if (ph !== null && n.placeholder !== ph) n.placeholder = ph; return true; },
+    });
+    if (!morphed) {
+      if (!(keepTa && hadFocus && rebuildAround(el, threadHTML, keepTa))) {
+        el.innerHTML = threadHTML;
+        if (keepTa) { const fresh = el.querySelector('.ch-compose textarea'); keepTa.placeholder = fresh.placeholder; fresh.replaceWith(keepTa); }
+      }
+      restoreSheet(el, keepSheet);
     }
-    restoreSheet(el, keepSheet);
-    for (const detail of el.querySelectorAll('[data-run-original]')) detail.open = openContexts.has(detail.dataset.runOriginal);
-    keepImgs(el);
+    for (const detail of el.querySelectorAll('[data-run-original]')) if (detail.open !== openContexts.has(detail.dataset.runOriginal)) detail.open = openContexts.has(detail.dataset.runOriginal);
+    if (!morphed) keepImgs(el);
     el.dataset.draftFor = dkey; c.draft = draft; c.draftFor = dkey;
     const nb = el.querySelector('.ch-msgs');
     if (keep) nb.scrollTop = nb.scrollHeight - keep.h + keep.top;
     else if (PW && PW.position(w, el, nb, { keep, atBottom, box, boxTop, turns, working })) {} // reading position (#18)
-    else nb.scrollTop = atBottom ? nb.scrollHeight : (boxTop ?? nb.scrollHeight);
+    else if (!morphed || atBottom) { const to = atBottom ? nb.scrollHeight : (boxTop ?? nb.scrollHeight); if (Math.abs(nb.scrollTop - to) >= 1 || !morphed) nb.scrollTop = to; }
     // Photos load after layout: keep a thread that was at the bottom pinned to the bottom.
     if (!keep && atBottom) nb.querySelectorAll('img').forEach(im => { if (!im.complete) im.addEventListener('load', () => { if (nb.scrollHeight - nb.scrollTop - nb.clientHeight < 400) nb.scrollTop = nb.scrollHeight; }, { once: true }); });
     if (hadFocus) { const ta = el.querySelector('textarea'); ta.focus({ preventScroll: true }); ta.setSelectionRange(...(keepRange || [ta.value.length, ta.value.length])); }
     growTa(el.querySelector('textarea'));
     // Re-attaching a field resets its scroll to the top; put the owner's view back where it was.
-    if (keepTa) keepTa.scrollTop = keepScroll;
+    if (keepTa && !morphed) keepTa.scrollTop = keepScroll;
     // Desktop renders before revealing its thread pane. Measure once it is visible,
     // retaining a usable first layout even before the user types or a live repaint runs.
     const field = el.querySelector('textarea');
