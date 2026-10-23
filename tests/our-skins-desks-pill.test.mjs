@@ -22,6 +22,14 @@ test('app.js gates the pill desks panel and per-desk badges on Miguel\'s three s
   const js = read('app.js');
   assert.match(js, /const pill = mode === 'pill' && oursSkin\(\)/);
   assert.match(js, /if \(!oursSkin\(\)\) return ''; const n = window\.WizCore\?\.workspaceNav\?\.deskCount/);
-  assert.match(js, /if \(oursSkin\(\) && !sheet\) \{[\s\S]{0,200}openOverview\('pill'\)/);
-  assert.match(js, /oursSkin\(\) && g\.mode === 'v' && !sheet\) \{ if \(g\.dy < -70[^}]*openOverview\('pill'\)/);
+  assert.match(js, /if \(G\.upDesks && !sheet\) \{[\s\S]{0,200}openOverview\('pill'\)/);
+  assert.match(js, /g\.upDesks && g\.mode === 'v' && !sheet\) \{ if \(g\.dy < -70[^}]*openOverview\('pill'\)/);
+  assert.match(js, /G\.upDesks = orbUpDesks\(\)/);
+});
+
+test('any skin (or My skin) can send the orb swipe-up to Desks with --wos-orb-swipe-up: desks', () => {
+  const js = read('app.js');
+  assert.match(js, /const orbUpDesks = \(\) => oursSkin\(\) \|\| [\s\S]{0,120}getPropertyValue\('--wos-orb-swipe-up'\)\.trim\(\) === 'desks'/);
+  // The pill look stays Miguel's: another skin gets the regular Desks overview.
+  assert.match(js, /const pill = mode === 'pill' && oursSkin\(\)/);
 });
