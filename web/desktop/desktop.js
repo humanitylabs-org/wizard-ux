@@ -1223,11 +1223,22 @@
   recovery.id = 'recordingRecovery'; recovery.className = 'recording-recovery';
   recovery.setAttribute('aria-label', 'Retained recordings'); recovery.hidden = true;
   document.body.appendChild(recovery);
+  function recordingMeta(it) {
+    const thread = it.kind === 'dictation' ? 'Dictation'
+      : it.kind === 'new' ? 'New chat'
+      : LIVE?.session?.(it.sessionId)?.title || (it.sessionId ? 'Existing chat' : 'Voice message');
+    const at = Number(it.createdAt) || 0;
+    const stamp = at ? new Date(at).toLocaleString() : '';
+    const bytes = Number(it.audio?.size) || 0;
+    const size = bytes ? `${Math.max(1, Math.ceil(bytes / 1024))} KB` : '';
+    return [thread, stamp, size].filter(Boolean).join(' · ');
+  }
   function paintRecordings() {
     const takes = window.WosOutbox?.recordings() || [];
     recovery.hidden = !takes.length;
     recovery.innerHTML = takes.map(it => `<article>
       <strong>${it.kind === 'dictation' ? 'Dictation' : 'Voice recording'} kept</strong>
+      <p class="recording-meta">${esc(recordingMeta(it))}</p>
       <p role="status">${esc(it.storageError ? (it.durable ? 'Device save failed · complete backup kept; retrying.' : 'Device save failed · not saved. Keep this tab open; download before reload.') : (it.durable ? 'Saved on this device · available after reload.' : 'Saving recording…'))}</p>
       <p>${esc(it.state === 'transcribing' ? 'Transcribing…' : it.error || ((it.recoveryText || it.text) ? 'Transcript ready · copy it below.' : 'Ready to retry transcription.'))}</p>
       ${it.recoveryText || it.text ? `<textarea readonly aria-label="Recovered transcript">${esc(it.recoveryText || it.text)}</textarea><button data-record-copy="${esc(it.id)}">Copy transcript</button>` : ''}
@@ -1245,10 +1256,20 @@
       if (it.kind === 'conversation') await O.retryConversation(id);
       else if (O.canRetry(it)) toast('↻', O.retryFeedback(O.retry(id)), 2400); else await O.transcribeRecording(id);
     } else if (b.dataset.recordDownload) {
-      const url = URL.createObjectURL(it.audio), a = document.createElement('a');
-      const ext = /mp4|m4a/.test(it.audioType) ? 'm4a' : /ogg/.test(it.audioType) ? 'ogg' : /wav/.test(it.audioType) ? 'wav' : 'webm';
-      a.href = url; a.download = `wizard-recording-${id}.${ext}`; a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      if (!(it.audio instanceof Blob) || !it.audio.size) { toast('!', 'Audio is unavailable · keep this tab open', 3200); return; }
+      let url = '';
+      try {
+        url = URL.createObjectURL(it.audio);
+        const a = document.createElement('a');
+        const ext = /mp4|m4a/.test(it.audioType) ? 'm4a' : /ogg/.test(it.audioType) ? 'ogg' : /wav/.test(it.audioType) ? 'wav' : 'webm';
+        a.href = url; a.download = `wizard-recording-${id}.${ext}`; a.rel = 'noopener'; a.hidden = true;
+        document.body.appendChild(a); a.click(); a.remove();
+        toast('↓', 'Audio download requested · check Downloads', 2600);
+      } catch (error) {
+        console.error('Retained recording download failed', error);
+        toast('!', 'Audio download failed · recording is still kept', 3200);
+      }
+      if (url) setTimeout(() => URL.revokeObjectURL(url), 60000);
     } else if (b.dataset.recordCopy) {
       try { await navigator.clipboard.writeText(it.recoveryText || it.text); toast('📋', 'Transcript copied · recording kept until you discard it', 2600); }
       catch (e) { toast('!', 'Select and copy the transcript above', 2600); }
