@@ -27,7 +27,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Protect unsaved work from updates | `WizardApp.update.hold` | app service worker, forced reload | hold released only after save + readback |
 | Reading place in an app document | shell-owned `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic for registered apps | app-local scroll store | reopen lands at the saved place |
 | Motion, haptics, press feel | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own spring/haptic helpers | — |
-| App look: rows, sections, empty state | the template's `wizard-ui.css` + `--wz-*` | its composer styling as a chat; literal colours | — |
+| App look: rows, sections, empty state, single-line add field | the shell's live kit `web/kit/wizard-ui.css` + `--wz-*`: `WizardApp` swaps the app's vendored `wizard-ui.css` for it and layers the active skin (`core/skins.css`, skin package, My skin) after the app's styles, so skins restyle `.wz-*` | a forked kit; `.wz-field-row` as a chat composer; literal colours | two skins + My skin restyle the app's `.wz-*` rows live |
 
 ## Shell (`web/core/`, shared by both shells; every row serves every agent kind: main, host-profile, container, restricted; a per-kind variant is a fork, declare it EXTEND)
 
@@ -59,6 +59,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Update banners | `WizWebUpdate`, `WizAppUpdates` (`web/core/web-update.js`), `WizAppVersions` (`web/core/app-versions.js`), `WosUpdates` (`web/core/os-updates.js`) | own reload timers |
 | Provider login (Claude, ChatGPT) for agents and apps | the installed login apps (`wizard-claude`, `wizard-chatgpt`; skill `app-owned-codex-connections`) | setup-tokens or bespoke auth flows |
 | Native Android device capability called from the shell (packages today; later mic, automation, notifications) | `wizardDevicePort` v1 (`android/app/src/main/java/ai/wizards/os/device/DeviceMessageProtocol.java`; add an adapter and list it in `device.capabilities`; see `docs/android-device-message-port.md`) | feature-named `@JavascriptInterface` methods, a second envelope on `wizardAppsPort`, native feature screens or wording |
+| Android long-screenshot (scroll capture) and text selection in the WebView | `ScrollAccessibilityProvider`, `ChatScrollCapture` + `android/app/src/main/assets/scroll-capture.js`, `SelectionWebView` (`android/app/src/main/java/ai/wizards/os/`) | a second accessibility provider or capture path | capture of a long Chats thread on a real device |
 
 ## Visual (anything drawn or animated: attach a side-by-side screenshot under `Visual:`)
 
