@@ -31,6 +31,22 @@ const where = p => p.evaluate(() => {
     const before = await where(p); ok(before.thread, `${skin}: thread open (${sid.slice(0, 12)})`);
     // Vertical-ish drag must not go back.
     await swipe(p, 200, 230, 420); ok((await where(p)).thread, `${skin}: a short drag keeps the thread`);
+    // Subtle swipes keep the thread and snap fully back (James, 23 Oct 2026).
+    const indent = () => p.evaluate(() => { const th = [...document.querySelectorAll('[data-part="thread"]')].find(n => n.getBoundingClientRect().width > 0); return th ? th.style.transform + '|' + th.style.opacity : 'none'; });
+    await swipe(p, 150, 215, 420); ok((await where(p)).thread, `${skin}: a subtle 65px flick keeps the thread`);
+    await swipe(p, 150, 250, 420); ok((await where(p)).thread, `${skin}: a 100px drag keeps the thread`);
+    // Release in the same frame as the last move, like a real phone: move and release in one task.
+    await p.evaluate(async () => {
+      const th = [...document.querySelectorAll('[data-part="thread"]')].find(n => n.getBoundingClientRect().width > 0);
+      const at = x => { const t = new Touch({ identifier: 41, target: th, clientX: x, clientY: 420 }); return { touches: [t], targetTouches: [t], changedTouches: [t], bubbles: true, cancelable: true }; };
+      th.dispatchEvent(new TouchEvent('touchstart', at(150)));
+      for (let x = 166; x < 240; x += 16) { th.dispatchEvent(new TouchEvent('touchmove', at(x))); await new Promise(r => setTimeout(r, 40)); }
+      th.dispatchEvent(new TouchEvent('touchmove', at(250)));
+      const t = new Touch({ identifier: 41, target: th, clientX: 250, clientY: 420 });
+      th.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [t], bubbles: true }));
+    });
+    await p.waitForTimeout(500);
+    const left = await indent(); ok(left === '|', `${skin}: a short drag snaps fully back (${left})`);
     await p.evaluate(() => { window.__backLog = []; });
     await swipe(p, 120, 330, 400);
     const after = await where(p);
