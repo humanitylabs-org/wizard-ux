@@ -30,6 +30,11 @@ def capture(name,top,attempt=0):
  em.sx('rm -f /sdcard/Pictures/Screenshots/*')
  # The offline emulator cannot reach the update feed; its error banner floats over the first fixture row.
  pg.ev("for(const e of document.querySelectorAll('body *'))if(/update feed/i.test(e.textContent)&&getComputedStyle(e).position==='fixed')e.style.display='none'")
+ # The live shell can re-render the thread after open (0.10 Snooze/Done row), dropping the fixture's
+ # colour bands; re-apply them right before capture so the pixel checks read real markers.
+ assert pg.ev(DECORATE)['rows']==14,'fixture bands'
+ time.sleep(.5)
+ assert pg.ev("!!document.getElementById('qa-bands')&&getComputedStyle(document.querySelector('.wos-doc-thread .msg.a')).backgroundColor==='rgb(30, 60, 90)'"),'fixture bands applied'
  pg.ev(f'window.scrollTo(0,{top})');time.sleep(.8)
  g=geometry();before=g['top']
  check(name+' real header and composer visible',g['head']['top']>=0 and g['head']['bottom']<g['composer']['top'] and g['composer']['bottom']<=g['vh']+1,g)
