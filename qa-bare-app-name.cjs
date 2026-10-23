@@ -112,9 +112,12 @@ const home = async p => { await p.evaluate(() => { for (const id of Object.keys(
       await say(p, c.name, 'command'); await sleep(250);
       const f = await front(p);
       const native = await p.evaluate(() => window.__voiceNativeCalls.slice());
-      const destination = c.name === 'order food' ? native.includes('+new') : f === c.bare;
+      // Held phrases the Food app claims as a new-order spell (WosUsuals.spell === 'new') reach the native
+      // Food browse action before app-name resolution, unchanged from main; only tap/registry lookup opens usuals.
+      const nativeNew = await p.evaluate(n => window.WosUsuals && window.WosUsuals.spell(n) === 'new', c.name);
+      const destination = nativeNew ? native.includes('+new') : f === c.bare;
       ok(destination && routes.length === 0 && agentWrites(writes).length === 0,
-        `held migration "${c.name}" -> ${c.name === 'order food' ? 'native Food browse' : c.bare}`, JSON.stringify({f,native,routes,writes}));
+        `held migration "${c.name}" -> ${nativeNew ? 'native Food browse' : c.bare}`, JSON.stringify({f,native,routes,writes}));
     }
     ok(p.errs.length === 0, 'migration has no page errors', JSON.stringify(p.errs));
     console.log(`\n${pass}/${pass + fail} passed`); await b.close(); process.exit(fail ? 1 : 0);
