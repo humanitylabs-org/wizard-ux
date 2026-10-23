@@ -539,7 +539,7 @@
   function openOverview(mode) {
     if (!ovEl) { ovEl = document.createElement('div'); ovEl.id = 'overview'; ovEl.className = 'ov'; device.appendChild(ovEl); bindOverview(ovEl); }
     closeSheets(true); if (LINKS && LINKS.isOpen()) LINKS.close();
-    const pill = mode === 'pill' && oursSkin();
+    const pill = mode === 'pill' && (oursSkin() || orbUpVar() === 'pill');
     if (!ovEl.classList.contains('open')) { ovEl.classList.toggle('ov-pill', pill); device.classList.toggle('ov-pill-open', pill); }
     const wasOpen = ovEl.classList.contains('open');
     renderOverview(); void ovEl.offsetWidth;
@@ -1404,8 +1404,10 @@
    * (tap = its settings sheet); Agents = agent chats + the Agents app; Connectors = sign-ins to another service. James's skins keep his layout. */
   const oursSkin = () => ['obsidian', 'obsidian-light', 'landscapes'].includes(document.documentElement.dataset.skin || '');
   /* Swipe up on the orb opens Desks instead of Apps: Miguel's skins always; any other skin when its CSS (or the owner's
-   * My skin) sets `--wos-orb-swipe-up: desks` on <html>. Only the pill styling stays Miguel's (his dock is the pill). */
-  const orbUpDesks = () => oursSkin() || (() => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-orb-swipe-up').trim() === 'desks'; } catch (_) { return false; } })();
+   * My skin) sets `--wos-orb-swipe-up` on <html>: `desks` = the regular overview, `pill` = Miguel's pill panel (the skin
+   * or My skin then carries the .ov-pill styling, as Miguel's skin.css does). */
+  const orbUpVar = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-orb-swipe-up').trim(); } catch (_) { return ''; } };
+  const orbUpDesks = () => oursSkin() || ['desks', 'pill'].includes(orbUpVar());
   const CONNECTOR_IDS = new Set(['wizard-chatgpt', 'wizard-claude', 'wizard-tinfoil', 'wizard-cloudflare']);
   const isConnector = a => CONNECTOR_IDS.has(a.id) || /^(connect|sign in to)\b/i.test(a.desc || '');
   /* System apps: the defaults Wizard OS ships for its parking spots (wizard-os docs/SYSTEM_APPS.md): files,
