@@ -343,6 +343,13 @@ def g_scope():
     ticks = U(rrect(242, 92, 28, 110, 14), rrect(242, 310, 28, 110, 14), rrect(92, 242, 110, 28, 14), rrect(310, 242, 110, 28, 14))
     return U(ring, ticks, circle(256, 256, 30))
 
+@glyph('card', 'A payment card with its stripe and chip cut out: the benefits each card still owes you.')
+def g_card():
+    card = rrect(114, 164, 284, 184, 34)
+    stripe = rrect(60, 200, 392, 34, 0)
+    chip = rrect(148, 270, 62, 44, 11)
+    return D(card, stripe, chip)
+
 @glyph('clip', 'A film frame with play cut out: a video to edit.')
 def g_clip():
     frame = rrect(88, 132, 336, 248, 52)
