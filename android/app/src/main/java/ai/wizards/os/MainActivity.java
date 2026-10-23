@@ -546,15 +546,8 @@ public class MainActivity extends Activity {
     void changeServer() {
         Intent target = new Intent(this, ConnectActivity.class);
         if (web == null) { startActivity(target); return; }
-        // Pass Appearance roles, never server-controlled URLs or credentials. Native validates colours.
-        web.evaluateJavascript("JSON.stringify({base:getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),ink:getComputedStyle(document.documentElement).getPropertyValue('--ink').trim(),accent:getComputedStyle(document.documentElement).getPropertyValue('--violet-2').trim()})", raw -> {
-            try {
-                String json = new org.json.JSONArray("[" + raw + "]").getString(0);
-                org.json.JSONObject colours = new org.json.JSONObject(json);
-                for (String key : new String[]{"base", "ink", "accent"}) target.putExtra(key, colours.optString(key));
-            } catch (Exception ignored) { }
-            startActivity(target);
-        });
+        // Connect dresses in the worn skin: resolve the shell's colour roles first (colours only, validated natively).
+        web.evaluateJavascript(WizardLook.READ_JS, raw -> { WizardLook.save(this, raw); startActivity(target); });
     }
 
     void openTailscale() {
@@ -805,6 +798,7 @@ public class MainActivity extends Activity {
         ScrollCaptureDiagnostics.arm("activity-pause");
         ScrollCaptureDiagnostics.record("Activity.onPause",ScrollCaptureDiagnostics.fields());
         if(web!=null)web.recordProxyState();
+        if (web != null && !(this instanceof AppSessionActivity)) web.evaluateJavascript(WizardLook.READ_JS, raw -> WizardLook.save(this, raw)); // the reach/Connect screens wear the last skin
         if (this instanceof AppSessionActivity && web != null) web.evaluateJavascript("window.__wosSessionCheckpoint?.()", null);
         if (mizel != null) mizel.setPcmForeground(false);
         // Mid-recording the page must keep running in the background (the floating orb can send/pause/cancel it).
