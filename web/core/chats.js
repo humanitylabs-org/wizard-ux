@@ -1524,7 +1524,7 @@ window.WizCore.chats = function createChats(H) {
       const row = e.target.closest('.ch-list [data-chopen]'); if (!row || e.button > 0) return;
       LIVE.warm?.(row.dataset.chopen);
       const wid = idOf(row);
-      lp = { row, wid, sid: row.dataset.chopen, x: e.clientX, y: e.clientY, dx: 0, t: setTimeout(() => { if (!lp) return; lpUntil = Date.now() + 700; openRowSheet(lp.wid, lp.sid); lp = null; }, 480) };
+      lp = { row, wid, pid: e.pointerId, sid: row.dataset.chopen, x: e.clientX, y: e.clientY, dx: 0, t: setTimeout(() => { if (!lp || window.WosSkinHost?.claimed(lp.pid)) return; lpUntil = Date.now() + 700; openRowSheet(lp.wid, lp.sid); lp = null; }, 480) };
     });
     root.addEventListener('pointermove', e => {
       if (!lp) return;
