@@ -885,15 +885,30 @@
    * Done (end of a reply) and ↓ Latest (scrolled up) sit directly below it. It follows the composer's real height
    * (attachments, multi-line text, keyboard). On the thread list there is no composer: it stays in the corner. */
   let liftRO = null, liftMO = null, liftEl = null;
+  /* Orb in the composer (James, 23 Oct 2026: "the orb keeps overlapping UX features"): in a full-screen thread the
+   * orb sits in the composer row's last seat (.ch-orbslot), where the mic used to be, so nothing floats over the
+   * conversation. Typed words swap it for Send in that same seat, exactly like the old mic; a live take keeps it. */
   function paintCornerLift() {
     const c = device.querySelector('.win.full .ch-thread .ch-compose');
     if (c !== liftEl) { try { liftRO?.disconnect(); } catch (e) {} liftEl = c; if (c && liftRO) liftRO.observe(c); }
     const h = c && c.offsetParent ? Math.round(c.getBoundingClientRect().height) : 0;
     device.style.setProperty('--comp-h', h + 'px');
     device.classList.toggle('orb-lift', h > 0);
+    const slot = h > 0 ? c.querySelector('.ch-orbslot') : null;
+    device.classList.toggle('orb-typed', !!slot && c.classList.contains('has-text') && V.state === 'idle');
+    device.classList.toggle('orb-slotted', !!slot);
+    if (!slot) return;
+    const sr = slot.getBoundingClientRect();
+    if (!sr.width) return; // Send holds the seat: keep the last position for the swap back
+    const dr = device.getBoundingClientRect();
+    device.style.setProperty('--slot-b', Math.round(dr.bottom - sr.bottom) + 'px');
+    device.style.setProperty('--slot-r', Math.round(dr.right - sr.right) + 'px');
   }
+  window.addEventListener('wos:composer', () => { if (liftRO) paintCornerLift(); });
+  window.addEventListener('resize', () => { if (liftRO) paintCornerLift(); });
+  window.visualViewport?.addEventListener('resize', () => { if (liftRO) paintCornerLift(); });
   function trackCornerLift(on) {
-    if (!on) { try { liftRO?.disconnect(); liftMO?.disconnect(); } catch (e) {} liftRO = liftMO = liftEl = null; device.classList.remove('orb-lift'); device.style.removeProperty('--comp-h'); return; }
+    if (!on) { try { liftRO?.disconnect(); liftMO?.disconnect(); } catch (e) {} liftRO = liftMO = liftEl = null; device.classList.remove('orb-lift', 'orb-slotted', 'orb-typed'); device.style.removeProperty('--comp-h'); return; }
     if (!liftRO && window.ResizeObserver) { liftRO = new ResizeObserver(paintCornerLift); liftMO = new MutationObserver(paintCornerLift); liftMO.observe(track, { childList: true, subtree: true }); }
     paintCornerLift();
   }
@@ -2267,7 +2282,7 @@
   };
   let NOMIC = false;
   function setVoice(s) {
-    V.state = s; device.dataset.voice = s; tourEv('voice', { state: s }); queueMicrotask(() => window.WosSkinHost?.voice?.(s)); if (s === 'listen' || s === 'idle') V.resumeBlocked = false;
+    V.state = s; device.dataset.voice = s; if (liftRO) queueMicrotask(paintCornerLift); tourEv('voice', { state: s }); queueMicrotask(() => window.WosSkinHost?.voice?.(s)); if (s === 'listen' || s === 'idle') V.resumeBlocked = false;
     $('#arcPause small').textContent=s==='paused'?'Resume':'Pause';$('#arcPause').setAttribute('aria-label',s==='paused'?'Resume recording':'Pause recording');
     CHATS.PW?.paintMic((s === 'listen' || s === 'paused') && !!V.replyTo, V.replyTo?.sid || '');
     reportVoice(s);

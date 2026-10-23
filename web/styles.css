@@ -786,6 +786,20 @@ body {
 .device.orb-lift .win.full .ch-latest { right: 12px; bottom: calc(var(--comp-h, 63px) + 10px); }
 .device.orb-lift .imm-edge { right: 0; }
 .device.orb-lift .imm-edge i { left: 50%; }
+/* Orb in the composer (James, 23 Oct 2026): the orb takes the composer row's last seat (.ch-orbslot, where the mic
+ * was), measured by paintCornerLift into --slot-b / --slot-r, so it never covers the conversation. Typed words swap
+ * it for Send in the same seat (.orb-typed); the text box keeps its width and the model chip stays inside it.
+ * Same orb, same palette; only its seat moves. !important outranks skins' older corner offsets. */
+.ch-orbslot { display: none; flex: 0 0 auto; width: var(--corner-orb, 44px); height: var(--corner-orb, 44px); margin: -2px 0; }
+#device.orb-slotted:not(.orb-typed) .win.full .ch-thread .ch-compose .ch-orbslot { display: block; }
+#device.orb-slotted .win.full .ch-thread .ch-compose .ch-mic { display: none !important; }
+#device.orb-slotted:not(.orb-typed) .win.full .ch-thread .ch-compose .ch-send { display: none !important; }
+#device.orb-slotted.orb-typed .win.full .ch-thread .ch-compose .ch-send { display: grid !important; }
+#device.orb-slotted .win.full .ch-thread .ch-compose { padding-right: 10px !important; }
+#device.orb-slotted { --corner-b: calc(var(--slot-b, 12px) - var(--safe-b)) !important; --corner-r: var(--slot-r, 10px) !important; }
+#device.orb-slotted .dock { bottom: var(--slot-b, 12px) !important; right: var(--slot-r, 10px) !important; transition: opacity 140ms var(--ease), transform 140ms var(--ease); }
+#device.orb-slotted.orb-typed .dock { opacity: 0; transform: scale(.6); pointer-events: none; }
+#device.orb-slotted .win.full .ch-latest { bottom: calc(var(--comp-h, 63px) + 10px) !important; }
 /* the live transcript card sits above the voice fan (which tops out ~175px above the orb), never on it */
 .device.orb-lift .transcript { bottom: calc(var(--safe-b) + var(--corner-b) + var(--corner-orb) + 170px); }
 .device.orb-lift .voice .transcript.brief { bottom: calc(var(--safe-b) + var(--corner-b) + var(--corner-orb) + 170px); }
