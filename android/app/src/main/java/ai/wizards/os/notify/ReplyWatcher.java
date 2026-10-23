@@ -41,6 +41,9 @@ public final class ReplyWatcher {
     public static final String CH = "chat-replies";
     static final int JOB_ID = 7401, N_BASE = 7500;
     static final long MAX_AGE = 6 * 3600_000L;
+    /** Boomerang returns (wzb_<schedule id>) can be weeks out; the scheduler answers 404 once one is cancelled. */
+    static final long BOOMERANG_MAX_AGE = 400L * 86_400_000L;
+    static boolean boomerang(String run) { return run != null && run.startsWith("wzb_"); }
     private static final Object LOCK = new Object();
     private static Handler loop;
 
@@ -63,7 +66,8 @@ public final class ReplyWatcher {
             JSONArray a = list(app), out = new JSONArray();
             for (int i = 0; i < a.length(); i++) {
                 JSONObject o = a.optJSONObject(i);
-                if (o != null && !session.equals(o.optString("s"))) out.put(o); // the newest run per thread wins
+                // The newest run per thread wins; a Boomerang and a reply on the same thread are watched side by side.
+                if (o != null && !(session.equals(o.optString("s")) && boomerang(run) == boomerang(o.optString("r")))) out.put(o);
             }
             try {
                 out.put(new JSONObject().put("s", session).put("r", run).put("t", title == null ? "" : title)
@@ -168,7 +172,7 @@ public final class ReplyWatcher {
             JSONObject w = a.optJSONObject(i);
             if (w == null) continue;
             String s = w.optString("s"), r = w.optString("r");
-            if (System.currentTimeMillis() - w.optLong("at") > MAX_AGE) { drop(c, s, r); continue; }
+            if (System.currentTimeMillis() - w.optLong("at") > (boomerang(r) ? BOOMERANG_MAX_AGE : MAX_AGE)) { drop(c, s, r); continue; }
             JSONObject run;
             try {
                 run = Http.json("GET", origin + "/wizard/hermes/v1/runs/" + URLEncoder.encode(r, "UTF-8"), origin, null, null);

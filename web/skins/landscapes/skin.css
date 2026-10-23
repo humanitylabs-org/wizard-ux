@@ -733,3 +733,25 @@ html[data-skin="landscapes"] .device:has(.rs-sheet) .home :is(.constellation, .h
 html[data-skin="landscapes"] .rs-detail-head button:focus:not(:focus-visible) { outline: none; box-shadow: none; }
 html[data-skin="landscapes"] .rs-detail-head button { outline-offset: 0; }
 html[data-skin="landscapes"][data-shell="phone"] .rs-detail-head button:focus { outline: none; box-shadow: none; }
+
+/* Home: AI and Computers as two clearly separate blocks (Miguel, 23 Oct). Each block has a small heading; compute
+   bars are stacked by machine, each machine in its own colour with a legend. Warnings stay amber/red. */
+html[data-skin="landscapes"] [data-home-resources] .rs-barsw.rs-widget.wz-home-widget { gap: 22px; }
+html[data-skin="landscapes"] .rs-gh { display: flex; align-items: baseline; gap: 6px; margin: 0 0 2px; font-size: 11px; }
+html[data-skin="landscapes"] .rs-gh b { font-weight: 700; letter-spacing: .04em; color: var(--wz-text, var(--ink)); }
+html[data-skin="landscapes"] .rs-gh span { color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin="landscapes"] .rs-bg-hw { padding-top: 14px; border-top: 1px solid color-mix(in srgb, var(--ink) 16%, transparent); }
+html[data-skin="landscapes"] .rs-lg { display: flex; gap: 14px; margin: 0 0 3px; font-size: 11px; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin="landscapes"] .rs-lg span { display: inline-flex; align-items: center; gap: 5px; }
+html[data-skin="landscapes"] .rs-lg i { width: 8px; height: 8px; border-radius: 2px; background: var(--dc); }
+html[data-skin="landscapes"] .rs-bg-hw .rs-bt { height: 9px; gap: 2px; }
+html[data-skin="landscapes"] .rs-bg-hw .rs-bs { border-radius: 2px; background: color-mix(in srgb, var(--dc) 22%, transparent); }
+html[data-skin="landscapes"] .rs-bg-hw .rs-bs:first-child { border-radius: 4px 2px 2px 4px; }
+html[data-skin="landscapes"] .rs-bg-hw .rs-bs:last-child { border-radius: 2px 4px 4px 2px; }
+html[data-skin="landscapes"] .rs-bg-hw .rs-bs .rs-bf { background: var(--dc); }
+html[data-skin="landscapes"] .rs-bg-hw .rs-bs.rs-empty .rs-bf { background: #ffc56b; }
+html[data-skin="landscapes"] .rs-bg-hw .rs-bs.rs-crit .rs-bf { background: #ff8a8a; }
+html[data-skin="landscapes"] .rs-d0 { --dc: #ffffff; }
+html[data-skin="landscapes"] .rs-d1 { --dc: #8fd3ff; }
+html[data-skin="landscapes"] .rs-d2 { --dc: #d6b4ff; }
+html[data-skin="landscapes"] .rs-d3 { --dc: #9ff0c4; }

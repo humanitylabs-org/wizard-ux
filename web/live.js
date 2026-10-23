@@ -117,7 +117,13 @@
   function fingerprint(v) { let h = 2166136261; for (const c of vis(v)) { h ^= c.codePointAt(0) ?? 0; h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
   const keyOf = s => `${s.runtime}:${s.id}`;
   const seenKeyOf = s => s.agent && s.agent !== 'hermes' ? `agent/${s.agent}/${keyOf(s)}` : keyOf(s);
-  function assistantAt(s) { const v = s.lastAssistantAt ?? (s.previewRole === 'assistant' ? s.previewAt : undefined); return isFinite(Date.parse(v ?? '')) ? v : undefined; }
+  // The newest assistant message the list knows. lastAssistantAt counts model replies only; reports that apps and
+  // scheduled jobs append (Topics roundup, daily moves, audits) arrive as the latest message (previewAt) without moving
+  // it, so those threads came in already read (James, 23 Oct 2026). Take whichever is newer.
+  function assistantAt(s) {
+    const c = [s.lastAssistantAt, s.previewRole === 'assistant' ? s.previewAt : undefined].filter(v => isFinite(Date.parse(v ?? '')));
+    return c.length > 1 && Date.parse(c[1]) > Date.parse(c[0]) ? c[1] : c[0];
+  }
   function recordFor(s, seenAt) {
     const a = assistantAt(s);
     return { ...(typeof s.messageCount === 'number' ? { messageCount: s.messageCount } : {}), ...(s.status && s.status !== 'submitting' ? { status: s.status } : {}),
@@ -261,6 +267,8 @@
     chatLayout: ['wos.chats.layout.v1', v => v === 'day' || v === 'status', String],
     readyOrder: ['wos.chats.readyOrder.v1', v => ['newest', 'oldest', 'priority', 'subject'].includes(v), String],
     subjectOrder: ['wos.chats.subjectOrder.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
+    // Pinned chats (core/chat-pins.js): the same pins on every device.
+    pinnedChats: ['wos.chats.pinned.v2', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
   };
   let prefsOff = false;
   const putPrefs = patch => {
@@ -521,12 +529,12 @@
         if (['waiting_for_approval', 'unknown'].includes(s.status)) { needs.push(s); continue; }
         if (WORKING.has(s.status)) { working.push(s); continue; }
         if (def) continue;
-        const at = Date.parse(s.lastAssistantAt || s.activityAt || s.updatedAt);
+        const at = Date.parse(assistantAt(s) || s.activityAt || s.updatedAt);
         if (isFinite(at) && at < now - WEEK) continue;
         if (!hasNew(s, this.seenOf(s))) continue;
         if (s.status === 'failed' || s.status === 'interrupted' || s.critical) needs.push(s); else ready.push(s);
       }
-      const t = s => Date.parse(s.lastAssistantAt || s.activityAt || s.updatedAt) || 0;
+      const t = s => Date.parse(assistantAt(s) || s.activityAt || s.updatedAt) || 0;
       for (const g of [needs, ready, working]) g.sort((a, b) => t(b) - t(a));
       return { needs, ready, working };
     },

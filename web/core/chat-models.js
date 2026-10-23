@@ -193,7 +193,11 @@
       if (!a || a.missing) return null;
       const s = sid && window.WizLive?.session(sid);
       const AG = window.WosAgents;
-      const want = choice?.model || choice?.value || M.selections.get(sid || '')?.model || s?.model || '';
+      // A choice counts only when it was made for THIS agent (its picker, its saved take). A main-agent route that
+      // rode along with an orb or voice pick is not a choice: Philosopher ran on the main default, Opus, because Opus
+      // happens to be in its allowed list (James, 23 Oct: "I asked you to send it to Fable"). The agent's default wins.
+      const picked = choice && choice.agent === a.id ? choice.model || choice.value || '' : '';
+      const want = picked || (sid && M.selections.get(sid)?.model) || s?.model || '';
       return AG.route(a, want);
     },
     currentRoute(sid, choice, agent) {

@@ -465,7 +465,7 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
     let c = await center('.ch-list [data-chopen="qa_ready_thread"]');
     await longPress(c[0], c[1]); await sleep(300);
     const sheet = await p.evaluate(() => ({ open: !!document.querySelector('.ch-sheet'), acts: [...document.querySelectorAll('.ch-sheet [data-rsact]')].map(b => b.dataset.rsact), t: (window.__wos.wins && Object.values(__wos.wins).find(w => w.app === 'chats').thread) }));
-    ok(sheet.open && sheet.acts.join(',') === 'unread,restore,done' && sheet.t === null, 'long-press a deferred thread → Mark unread / Restore / Done (list stays put)', sheet);
+    ok(sheet.open && sheet.acts.join(',') === 'unread,restore,boomerang,done' && sheet.t === null, 'long-press a deferred thread → Mark unread / Restore / Done (list stays put)', sheet);
     await p.screenshot({ path: `${OUT}/10-list-longpress.png` });
     await back();
     ok(!(await p.evaluate(() => !!document.querySelector('.ch-sheet'))) && p.url().includes('/wizard-os-home/'), 'Back closes the actions sheet; the app stays open');
@@ -481,7 +481,7 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
     c = await center('.ch-list [data-chopen="qa_ready_thread"]');
     await longPress(c[0], c[1]); await sleep(150);
     const unreadSheet = await p.evaluate(() => ({ acts: [...document.querySelectorAll('.ch-sheet [data-rsact]')].map(b => b.dataset.rsact) }));
-    ok(unreadSheet.acts.join(',') === 'unread,defer,done', 'read Ready thread offers Mark unread', unreadSheet);
+    ok(unreadSheet.acts.join(',') === 'unread,defer,boomerang,done', 'read Ready thread offers Mark unread', unreadSheet);
     const nUnread = writes.length;
     await p.locator('.ch-sheet [data-rsact="unread"]').tap(); await sleep(150);
     const unreadState = await p.evaluate(id => {

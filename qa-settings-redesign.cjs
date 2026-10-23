@@ -110,7 +110,8 @@ const fixtureModule = fs.readFileSync(path.join(__dirname, 'web/core/chats-fixtu
    if (!phone) {
     await p.locator('[data-st-page="appearance"]').focus(); await p.keyboard.press('ArrowDown');
     ok(await p.locator('#settingsBody').getAttribute('data-settings-page') === 'chats' && await p.locator('[data-st-page="chats"]').evaluate(e => e === document.activeElement), 'desktop: category arrows swap pane and keep keyboard focus');
-    await p.keyboard.press('Escape'); ok(await p.locator('#dsettings').isHidden(), 'desktop: Esc closes Settings');
+    await p.keyboard.press('Escape'); ok(await p.locator('#settingsBody').getAttribute('data-settings-page') === '', 'desktop: Esc leaves category first');
+    await p.keyboard.press('Escape'); ok(await p.locator('#dsettings').isHidden(), 'desktop: next Esc closes Settings');
    } else {
     await tap('[data-st-page="chats"]'); await p.evaluate(() => { window.__settingsDocument = document; history.back(); }); await nap(500);
     ok(await p.locator('#settingsBody').getAttribute('data-settings-page') === '' && await p.locator('#settings.open').isVisible(), 'phone: browser Back page → root');

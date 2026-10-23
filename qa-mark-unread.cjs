@@ -53,7 +53,12 @@ const ok = (condition, name, extra = '') => {
   if (condition) { pass++; console.log('PASS', name); }
   else { fail++; console.log('FAIL', name, typeof extra === 'string' ? extra : JSON.stringify(extra)); }
 };
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const screenshot = async (page, shell) => {
+    if (!process.env.QA_OUT) return;
+    fs.mkdirSync(process.env.QA_OUT, { recursive: true });
+    await page.screenshot({ path: path.join(process.env.QA_OUT, `mark-unread-${process.env.QA_SKIN || 'nebula'}-${shell}.png`) });
+  };
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 (async () => {
   const browser = await chromium.launch(process.env.QA_CHROME ? { executablePath: process.env.QA_CHROME } : {});
@@ -109,15 +114,17 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     if (url.pathname === '/wizard/v1/apps') return json(route, { apps: [] });
     return json(route, {});
   };
-  const initPrefs = () => {
+  const initPrefs = skin => {
     try {
       localStorage.setItem('wos.coached', 'true');
       localStorage.setItem('wos.voiceTipSeen', 'true');
+      localStorage.setItem('wos.tour.done', 'true');
+      if (skin) localStorage.setItem('wos.skin', skin);
       localStorage.setItem('wos.chats.layout.v1', 'day');
     } catch {}
   };
   await context.route('**/*', serve);
-  await context.addInitScript(initPrefs);
+  await context.addInitScript(initPrefs, process.env.QA_SKIN || 'nebula');
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(String(error)));
@@ -161,6 +168,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   ok(await page.evaluate(() => document.activeElement?.closest('.ch-sheet') !== null), 'keyboard actions move focus into the dialog');
   let actions = await page.locator('.ch-sheet [data-rsact]').evaluateAll(buttons => buttons.map(button => button.dataset.rsact));
   ok(actions[0] === 'unread', 'keyboard context menu exposes Mark unread on a read Ready item', actions);
+  await screenshot(page, 'phone');
   await closeSheet();
   ok(await readyRow.evaluate(row => document.activeElement === row), 'closing the dialog returns focus to its Ready row');
 
@@ -217,7 +225,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
   const desktop = await browser.newContext({ viewport: { width: 1280, height: 900 }, ignoreHTTPSErrors: true });
   await desktop.route('**/*', serve);
-  await desktop.addInitScript(initPrefs);
+  await desktop.addInitScript(initPrefs, process.env.QA_SKIN || 'nebula');
   const desktopPage = await desktop.newPage();
   const desktopErrors = [];
   desktopPage.on('pageerror', error => desktopErrors.push(String(error)));
@@ -229,6 +237,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   await desktopPage.waitForSelector('.ch-sheet');
   const desktopActions = await desktopPage.locator('.ch-sheet [data-rsact]').evaluateAll(buttons => buttons.map(button => button.dataset.rsact));
   ok(desktopActions.includes('unread'), 'desktop keyboard context menu offers Mark unread on a read Ready item', desktopActions);
+  await screenshot(desktopPage, 'desktop');
   ok(desktopErrors.length === 0, 'desktop has no page errors', desktopErrors);
   await desktop.close();
 
