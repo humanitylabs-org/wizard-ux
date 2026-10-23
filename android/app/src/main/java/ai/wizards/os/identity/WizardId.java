@@ -129,7 +129,7 @@ public final class WizardId {
         e.setFilterTouchesWhenObscured(true);
         e.setInputType(InputType.TYPE_CLASS_TEXT | (secret ? InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS : InputType.TYPE_TEXT_FLAG_CAP_WORDS));
         e.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
-        if (Build.VERSION.SDK_INT >= 29) e.setImportantForContentCapture(View.IMPORTANT_FOR_CONTENT_CAPTURE_NO_EXCLUDE_DESCENDANTS);
+        if (Build.VERSION.SDK_INT >= 30) e.setImportantForContentCapture(View.IMPORTANT_FOR_CONTENT_CAPTURE_NO_EXCLUDE_DESCENDANTS);
         body.addView(e); return e;
     }
     private void onboarding() {

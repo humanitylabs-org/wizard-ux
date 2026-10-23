@@ -323,6 +323,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     }
 
     @SuppressWarnings("deprecation")
+    @android.annotation.SuppressLint("MissingSuperCall") // Back never exits: super would finish the activity
     @Override
     public void onBackPressed() {
         handleBack(); // API < 33; never calls super, so Back can never finish the activity
