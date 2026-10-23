@@ -21,6 +21,15 @@ import static org.junit.Assert.*;
 public class ConnectE2eTest {
     private final Context c = InstrumentationRegistry.getInstrumentation().getTargetContext();
     private final UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
+    // The surface uppercases its heading with CSS; accessibility reports the rendered (uppercase) text.
+    private static final java.util.regex.Pattern LIST_HEADING =
+            java.util.regex.Pattern.compile("(?i)what you told the wizard");
+    private void visibleSelector(androidx.test.uiautomator.BySelector sel, String label) {
+        if (device.wait(Until.findObject(sel), 15000) != null) return;
+        shot("fail-" + label.replaceAll("[^A-Za-z0-9]+", "-"));
+        try { device.dumpWindowHierarchy(new File(c.getExternalFilesDir(null), "fail-hierarchy.xml")); } catch (Exception ignored) {}
+        fail(label + " not visible");
+    }
     private void visible(String text) {
         if (device.wait(Until.findObject(By.text(text)), 15000) != null) return;
         // WebView can lag its accessibility tree after an Activity returns to the front; settle once and re-read.
@@ -152,11 +161,11 @@ public class ConnectE2eTest {
                         ready[0] = true;
                     } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
                 });
-                if (ready[0]) listShown = device.wait(Until.findObject(By.text("What you told the Wizard")), 3000) != null;
+                if (ready[0]) listShown = device.wait(Until.findObject(By.text(LIST_HEADING)), 3000) != null;
                 else Thread.sleep(500);
             }
-            visible("What you told the Wizard"); foreground(); shot("assist-nested");
-            back(); foreground(); assertTrue("assistant closed by Back", device.wait(Until.gone(By.text("What you told the Wizard")), 5000));
+            visibleSelector(By.text(LIST_HEADING), "assistant list"); foreground(); shot("assist-nested");
+            back(); foreground(); assertTrue("assistant closed by Back", device.wait(Until.gone(By.text(LIST_HEADING)), 5000));
             shot("assist-nested-back"); back(); foreground(); shot("assist-root-back");
             start(MainActivity.class); // stop the silent emulator take; no owner endpoint or real audio
         }
