@@ -217,6 +217,7 @@
     throw new Error('Session window limit reached');
   }
   const FULL_EVERY = 3 * 60 * 1000;
+  const AGENT_WAIT = 1200; // ms a snapshot reload waits for other agents' threads before its one repaint
   const STALE_AFTER = 60 * 1000; // the list polls every 15 s, so a minute without a fresh read is worth saying
   /* ---- agents (Agents MVP): each non-default agent's threads are read from its own list (agent=<id>), always
    * through the owner's own Agent Service. Every thread/run call for such a thread names its agent, so a private
@@ -580,15 +581,22 @@
           this.ok = true; this.error = ''; this.at = Date.now(); this.cached = false;
           };
           // Only a cold list paints early; a later full walk replaces a list that is already on screen in one go.
+          // A stored snapshot counts as on screen: painting page 1 over it, then the full walk, then other agents'
+          // threads made a reload flicker through four different lists (James, 23 Oct 2026). From a snapshot the
+          // list now changes once, straight to the fresh one.
           // A first run anywhere (no read state on device or server) waits for the whole list, which it marks read.
-          const early = (!this.ok || this.cached) && full ? async page => { const [d, r] = await side; if (!merge(readLocal(), merge(this.seen, r))) return; apply(page, d, r); this.emit(); } : null;
+          const fromSnap = this.cached;
+          const early = !this.ok && full ? async page => { const [d, r] = await side; if (!merge(readLocal(), merge(this.seen, r))) return; apply(page, d, r); this.emit(); } : null;
           const got = await fetchSessions(full, '', early);
           const [deferred, remote] = await side;
           apply(got, deferred, remote);
           if (Date.now() - this.snapAt > SNAP_EVERY) writeSnap(this);
           // Other agents' threads merge in after the main list is on screen; one slow agent never holds Chats.
+          // Replacing a snapshot, they get a short head start so main and agents land in the same repaint.
+          const agents = this.refreshAgents(deferred);
+          if (fromSnap) await Promise.race([agents, new Promise(r => setTimeout(r, AGENT_WAIT))]);
           this.emit();
-          await this.refreshAgents(deferred);
+          await agents;
         } catch (e) { this.error = e.status === 403 ? 'access' : 'offline'; }
         finally { this.loading = null; this.emit(); }
       })();
