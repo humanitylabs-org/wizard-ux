@@ -67,7 +67,7 @@ html.wos-doc-scroll :is(#dock,.general-voice,.pill) { position: fixed; }
 .ch-search input::placeholder { color: var(--ink-3); }
 /* Focus is the list mode, ahead of the temporary status chip. Shared phone/desktop. */
 .ch-search.has-focus { min-height: 50px; height: auto; padding: 2px 6px; gap: 6px; }
-.ch-focus { min-width: 44px; min-height: 44px; max-width: 44%; flex: 0 1 auto; display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 99px; background: var(--wz-surface, var(--surface)); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; }
+.ch-focus { min-width: 44px; min-height: 44px; max-width: 58%; flex: 0 1 auto; display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 99px; background: var(--wz-surface, var(--surface)); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; }
 .ch-focus > span:not(.ag-sig) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ch-focus > i { flex: none; color: var(--ink-3); font-style: normal; }
 .ch-focus .ag-sig { flex: 0 0 20px; width: 20px; height: 20px; }
