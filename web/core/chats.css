@@ -18,9 +18,14 @@ html.wos-doc-scroll .track > .desk:not(.wos-doc-path),
 html.wos-doc-scroll .tiles > .win:not(.wos-doc-path),
 html.wos-doc-scroll .desk.wos-doc-path > :not(.wos-doc-path),
 html.wos-doc-scroll .win.wos-doc-path > .wbar { display: none !important; }
+/* The fixed header's top edge. Immersive full screen hides the phone status bar, so the header sits under the
+ * camera cutout (--cut-t), not the status-bar inset (--safe-t) — otherwise the thread scrolled into a bare
+ * status-bar-high strip above the title (James, 23 Oct 2026). */
+html.wos-doc-scroll .device { --wos-doc-top: var(--safe-t, 0px); }
+html.wos-doc-scroll .device.immersive { --wos-doc-top: var(--cut-t, 0px); }
 html.wos-doc-scroll .wos-doc-thread .ch-thread {
   position: relative !important; inset: auto !important; height: auto !important; min-height: 100dvh;
-  padding-top: calc(var(--safe-t, 0px) + var(--wos-doc-head, 54px)) !important;
+  padding-top: calc(var(--wos-doc-top, 0px) + var(--wos-doc-head, 54px)) !important;
   padding-bottom: calc(var(--wos-doc-compose, 84px) + var(--wos-doc-switch, 0px) + var(--safe-b, 0px) + var(--wos-doc-bottom, 0px) + 16px) !important;
 }
 html.wos-doc-scroll .wos-doc-thread .ch-msgs {
@@ -28,8 +33,14 @@ html.wos-doc-scroll .wos-doc-thread .ch-msgs {
   mask-image: none !important; -webkit-mask-image: none !important; overflow-anchor: none;
 }
 html.wos-doc-scroll .wos-doc-thread .ch-head {
-  position: fixed !important; top: var(--safe-t, 0px) !important; left: 0; right: 0;
+  position: fixed !important; top: var(--wos-doc-top, 0px) !important; left: 0; right: 0;
   z-index: 50; background: var(--wz-base, var(--bg));
+}
+/* Paint the inset above the header too: the document scrolls under the whole screen, so the strip under the
+ * status bar / cutout must stay opaque or messages show above the title. */
+html.wos-doc-scroll .wos-doc-thread .ch-head::before {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: var(--wos-doc-top, 0px);
+  background: inherit; pointer-events: none;
 }
 html.wos-doc-scroll .wos-doc-thread .ch-compose {
   position: fixed !important; bottom: calc(var(--safe-b, 0px) + var(--wos-doc-bottom, 0px)) !important;
