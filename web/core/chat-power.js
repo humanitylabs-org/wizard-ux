@@ -84,12 +84,16 @@ window.WosChatPower = function chatPower(A) {
       // The Chats list's own read state decides (James, 22 Oct): a thread opened while it has an unread reply (bold, in
       // Ready) opens at that reply's first line; a thread you have already read returns you to your place.
       const unread = c.unreadOpen === sid;
-      const saved = unread ? null : RP.read(sid), reply = lastReply(nb);
+      // A place saved at the bottom of a Working thread was the live reply being followed, not a place you read to:
+      // coming back opens at the start of that reply like any other (James, 23 Oct: a Philosopher reply that finished
+      // while he was away opened at its end).
+      const kept = unread ? null : RP.read(sid), saved = kept && !(kept.atBottom && kept.working) ? kept : null, reply = lastReply(nb);
+      const last = o.turns[o.turns.length - 1], replied = !!(last && last.a);
       let apply = null;
-      // A Working thread follows the live reply, unless you had scrolled up in it: your place wins whenever it is
-      // for the same latest reply, on a reload and on every reopen alike (James, 22 Oct: leaving the slow
-      // Philosopher thread mid-run and coming back threw him to the bottom).
-      if (o.working && !(saved && !saved.atBottom && c.lid && saved.messageId === c.lid)) { c.follow = true; toBottom(nb); }
+      // One rule for every thread, Working or not (the list's Working status lags a finished reply by up to a poll):
+      // your place if you left one for this reply; otherwise the first line of the latest reply. Only a thread still
+      // waiting for its first words follows the bottom.
+      if (o.working && !replied && !(saved && !saved.atBottom && c.lid && saved.messageId === c.lid)) { c.follow = true; toBottom(nb); }
       else if (saved && c.lid && saved.messageId === c.lid) {
         // Back where you were: anchored to the latest reply, so layout changes don't shift it.
         apply = saved.atBottom ? toBottom : box => { const r = lastReply(box); box.scrollTop = r && isFinite(saved.anchorOffset) ? box.scrollTop + relTop(box, r) - saved.anchorOffset : saved.scrollTop; };
@@ -149,7 +153,7 @@ window.WosChatPower = function chatPower(A) {
       savePending = null;
       if (!c.lid || c.posFor !== w.thread || !nb.isConnected) return;
       const reply = lastReply(nb);
-      RP.save({ sessionId: w.thread, messageId: c.lid, anchorOffset: reply ? relTop(nb, reply) : 0, scrollTop: Math.max(0, Math.round(nb.scrollTop)), savedAt: Date.now(), atBottom: bottomGap(nb) < 80, following: !!c.follow });
+      RP.save({ sessionId: w.thread, messageId: c.lid, anchorOffset: reply ? relTop(nb, reply) : 0, scrollTop: Math.max(0, Math.round(nb.scrollTop)), savedAt: Date.now(), atBottom: bottomGap(nb) < 80, following: !!c.follow, working: !!LIVE.session(w.thread) && ['submitting', 'queued', 'running', 'stopping'].includes(LIVE.session(w.thread).status) });
     };
     saveT = setTimeout(savePending, 200);
   }
@@ -326,6 +330,38 @@ window.WosChatPower = function chatPower(A) {
       return true;
     } catch (e) { toast('!', 'Couldn’t queue the retry', 2400); return false; }
     finally { if (c) c.retrying = ''; rerenderAll(); }
+  }
+  // Regeneration is a new, idempotent turn, never a history rewrite. Hydrate the
+  // authorized display history so native screenshots and file chips survive too.
+  async function regenerateThread(wid, sid) {
+    const w = H.win(wid), c = w ? ch(wid) : null;
+    if (!w || w.thread !== sid || !OUTBOX || c.regenerating || OUTBOX.unsent?.().some(it => it.sessionId === sid && it.how === 'regenerate')) return false;
+    c.regenerating = true;
+    try {
+      const s = await LIVE.sessionInfo(sid);
+      if (!s || LIVE.busy(sid) || ['queued','running','stopping','waiting_for_approval','unknown'].includes(s.status)) return false;
+      const turns = window.WosChat.parseRows(await LIVE.messages(sid));
+      const u = [...turns].reverse().find(t => t.u)?.u;
+      if (!u) throw new Error('No owner request');
+      const files = [...u.files];
+      for (const [i, url] of (u.images || []).entries()) {
+        const m = /^\/wizard\/files\/([A-Za-z0-9._:-]+)\/content$/.exec(url);
+        if (m && files.some(f => f.id === m[1])) continue;
+        if (!/^data:image\//.test(url) && !/^\/wizard\/(files|attachments)\//.test(url)) throw new Error('Image unavailable');
+        const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
+        if (!response.ok) throw new Error('Image unavailable');
+        const blob = await response.blob();
+        if (!blob.size || blob.size > 32 * 1024 * 1024 || !/^image\//.test(blob.type)) throw new Error('Image unavailable');
+        files.push(await window.WizUploads.upload(new File([blob], `image-${i + 1}.${blob.type === 'image/png' ? 'png' : 'jpg'}`, { type: blob.type })));
+      }
+      if (!u.text && !files.length && !u.reply) throw new Error('No owner request');
+      const cur = threadModel(s);
+      await OUTBOX.enqueue({ kind:'reply', sessionId:sid, wid, text:u.text || '', files, ...(u.reply ? { reply:u.reply } : {}),
+        how:'regenerate', source:'chat', instructions:'The owner pressed Regenerate on the last response. Answer the same owner request again, using its attached files. Preserve this thread’s selected model.',
+        ...(cur.model ? { model:cur.model, provider:cur.provider } : {}) });
+      c.follow = true; toast('↻','Regenerating',1600); return true;
+    } catch (_) { toast('!', 'Couldn’t regenerate · original request kept',2600); return false; }
+    finally { c.regenerating = false; rerenderAll(); }
   }
   const RECONNECT_APPS = new Set(['wizard-claude', 'wizard-chatgpt']);
   function openReconnect(appId, installed) {
@@ -510,6 +546,7 @@ window.WosChatPower = function chatPower(A) {
     // Failed thread panel. Signed out: open the provider's connection app in this shell, or the Store on it.
     const rc = t.closest('[data-chreconnect]'); if (rc) { openReconnect(rc.dataset.chreconnect, rc.dataset.installed !== '0'); return true; }
     // Failed thread panel
+    if (t.closest('[data-mregen]') && w?.thread) { regenerateThread(id, w.thread); return true; }
     if (t.closest('[data-chretry]') && w?.thread) { retryThread(id, w.thread); return true; }
     if (t.closest('[data-chretrymodel]') && w?.thread) { openModels(id, 'retry'); if (sheet) sheet.mode = 'retry'; paint(id, A.elOf(id)); return true; }
     if (t.closest('[data-chdismiss]') && w?.thread) { dismissThread(w.thread); return true; }

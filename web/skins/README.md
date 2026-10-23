@@ -44,6 +44,9 @@ whichever skin is picked. It starts empty, and empty means the picked skin exact
   `Skins/My skin/skin.js` after three errors a minute. **Turn off** revokes approval. Never runs in previews.
 - **Safety:** A box without the route (404), an error or a non-CSS answer shows the base
   skin; a bad rule only drops that rule. `?myskin=off` skips CSS and JS for one load. The shell CSP allows `script-src blob:` for verified modules, not inline scripts or eval.
+- **Orb swipe-up → Desks:** `html[data-skin] { --wos-orb-swipe-up: desks; }` makes a swipe up on the orb open the
+  Desks overview (Miguel's gesture) instead of Apps, with no script or approval tap. `pill` instead opens Miguel's
+  pill panel (`.ov.ov-pill` markup); the stylesheet setting it carries the `.ov-pill` rules, as `obsidian/skin.css` does.
 - **Settings › Look:** a "My skin" row says what it sits on, with Edit (opens the file in Files) and Reset.
 - **Agents:** asked to "change my skin", an agent edits My skin only, never a skin in this folder
   (Agent Service run instructions and skill say so).
