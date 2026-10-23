@@ -1435,11 +1435,9 @@
   }, true);
   function openAppInfo(el) { window.WosAppRoute?.open(el.dataset.appinfo, { name: el.dataset.name || '' }); }
   function renderEmpty(i) {
-    const grp = (h, list) => list.length ? `<div class="lgroup"><h4>${h}</h4><div class="lgrid">${list.map(appTile).join('')}</div></div>` : '';
-    if (oursSkin()) { tileN = 0; return `<div class="desk-scroll new-desk kinds"><div class="nd-head"><b>New desk</b><span>Pick an app to open here</span></div>${kindGroups(['apps', 'wiz', 'agents', 'conns'])}</div>`; }
-    const wiz = APPS.filter(a => a.id !== 'agents' && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')), views = APPS.filter(a => a.kind === 'view');
-    tileN = 0;
-    return `<div class="desk-scroll new-desk"><div class="nd-head"><b>New desk</b><span>Pick an app to open here</span></div>${grp('Apps', wiz)}${grp('Views', views)}</div>`;
+    // Miguel's app kinds are every skin's New desk (James, 23 Oct 2026): Apps with system apps first and ringed, then
+    // Wizard apps, Agents and Connectors folded under "For agents".
+    tileN = 0; return `<div class="desk-scroll new-desk kinds"><div class="nd-head"><b>New desk</b><span>Pick an app to open here</span></div>${kindGroups(['apps', 'wiz', 'agents', 'conns'])}</div>`;
   }
   function renderApp(w) {
     const a = APP[w.appId] || {};
