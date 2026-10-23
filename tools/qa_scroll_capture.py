@@ -91,6 +91,8 @@ with lock:
   open_thread('qa_doc_0')
   check('long real thread makes WebView document scrollable',pg.ev('document.scrollingElement.scrollHeight>innerHeight*1.5'))
   capture('thread-top',0)
+  # dismiss() presses Back after Save; with the editor already closed that Back (correctly) leaves the thread.
+  open_thread('qa_doc_0')
   capture('thread-middle',480)
   open_thread('qa_doc_1');pg.ev('window.scrollTo(0,0)');time.sleep(.5)
   check('short real thread has no document scroll',pg.ev('document.scrollingElement.scrollHeight<=innerHeight+1'))
