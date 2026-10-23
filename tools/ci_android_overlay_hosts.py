@@ -53,10 +53,15 @@ def adb(*a, stdin=None, binary=False, timeout=30):
         state = subprocess.run(['adb', 'get-state'], capture_output=True, text=True, timeout=10).stdout.strip() if a[:1] != ('get-state',) else ''
         log(f'  slow adb ({time.time() - t:.0f}s), device state={state!r}')
         if state != 'device' and SLOW['n'] >= 3: host_diag('device-lost'); raise DeviceLost(f'emulator no longer answers adb (state={state!r})')
+    if not binary and 'not found' in (err if 'err' in dir() else '') and a[:1] != ('get-state',):
+        host_diag('device-not-found'); raise DeviceLost('adb: emulator-5554 not found (emulator process gone)')
     return out
 def sx(cmd, **k): return adb('shell', cmd, **k)
 
 # ------------------------------------------------------------------ fake Wizard (HTTPS, runner loopback :443)
+OVERLAY_FILES = {'assist/everywhere.html', 'assist/surface.html', 'assist/screen.html', 'assist/everywhere.js',
+                 'assist/surface.js', 'assist/screen.js', 'assist/orb-size.js', 'orb.js', 'motion/wizard-motion.js',
+                 'motion/wizard-motion.css', 'robert-thread-orb.png', 'robert-listening-galaxy.png'}
 REQ = []                     # (host_time, path)
 MODE = {'v': 'up'}           # up | slow
 class Fake(http.server.BaseHTTPRequestHandler):
@@ -66,7 +71,11 @@ class Fake(http.server.BaseHTTPRequestHandler):
         REQ.append((time.time(), self.path))
         path = self.path.split('?', 1)[0].split('#', 1)[0]
         m = re.match(r'^/wizard-os-home/(.*)$', path)
-        f = (m.group(1) or 'index.html') if m else None
+        f = m.group(1) if m else None
+        # Only the overlay allowlist (OverlayPolicy.FILES). The full shell is NOT served: rendering it in
+        # MainActivity under swiftshader took the CI emulator down, and these flows don't need it (the app
+        # shows its native reach screen instead).
+        if f not in OVERLAY_FILES: f = None
         p = (WEB / f).resolve() if f else None
         if not p or not str(p).startswith(str(WEB.resolve())) or not p.is_file():
             b = b'{"error":"fixture"}'
@@ -116,6 +125,14 @@ def now():
     except ValueError: return float(sx('date +%s').strip() or 0)
 STREAM = OUT / 'logcat-stream.txt'
 LOGCAT = {'p': None}
+def mem_trace():
+    while True:
+        try:
+            with open(OUT / 'host-mem.txt', 'a') as f:
+                f.write(time.strftime('%H:%M:%S ') + subprocess.run("free -m | sed -n 2p; pgrep -f qemu-system >/dev/null && echo qemu-up || echo qemu-DOWN", shell=True, capture_output=True, text=True).stdout.replace('\n', ' ') + '\n')
+        except Exception: pass
+        time.sleep(5)
+threading.Thread(target=mem_trace, daemon=True).start()
 def stream_logcat():
     """One continuous logcat on the host: cheap to poll, and it survives an emulator that dies mid-run."""
     if LOGCAT['p'] and LOGCAT['p'].poll() is None: return
@@ -222,7 +239,7 @@ def no_crash(flow, since):
     check(flow, 'no crash or ANR from Wizard OS', not bad, bad[:3])
 def host_diag(tag):
     with open(OUT / f'host-diag-{tag}.txt', 'w') as f:
-        for c in ('free -m', 'uptime', 'pgrep -a -f qemu-system || true', 'ls -la /tmp/android-runner 2>&1 || true', 'sudo dmesg 2>/dev/null | tail -60'):
+        for c in ('free -m', 'uptime', 'pgrep -a -f qemu-system || echo NO-QEMU-PROCESS', 'ls -la /tmp/android-runner /tmp/android-$USER 2>&1 || true', 'sudo dmesg 2>/dev/null | grep -iE "oom|killed process|qemu|segfault" | tail -20', 'sudo dmesg 2>/dev/null | tail -25'):
             f.write(f'$ {c}\n' + subprocess.run(c, shell=True, capture_output=True, text=True).stdout + '\n')
     log((OUT / f'host-diag-{tag}.txt').read_text()[-3000:])
 def why(since, page):
