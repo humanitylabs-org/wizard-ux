@@ -2267,7 +2267,7 @@
   };
   let NOMIC = false;
   function setVoice(s) {
-    V.state = s; device.dataset.voice = s; tourEv('voice', { state: s }); if (s === 'listen' || s === 'idle') V.resumeBlocked = false;
+    V.state = s; device.dataset.voice = s; tourEv('voice', { state: s }); queueMicrotask(() => window.WosSkinHost?.voice?.(s)); if (s === 'listen' || s === 'idle') V.resumeBlocked = false;
     $('#arcPause small').textContent=s==='paused'?'Resume':'Pause';$('#arcPause').setAttribute('aria-label',s==='paused'?'Resume recording':'Pause recording');
     CHATS.PW?.paintMic((s === 'listen' || s === 'paused') && !!V.replyTo, V.replyTo?.sid || '');
     reportVoice(s);
@@ -2387,11 +2387,11 @@
     if (V.an) {
       const a = new Uint8Array(V.an.fftSize); V.an.getByteTimeDomainData(a);
       let s = 0; for (let k = 0; k < a.length; k++) { const v = (a[k] - 128) / 128; s += v * v; }
-      Orb.setLevel(V.state === 'paused' ? 0 : Math.min(1, Math.sqrt(s / a.length) * 4.2));
+      orbLevel(V.state === 'paused' ? 0 : Math.min(1, Math.sqrt(s / a.length) * 4.2));
     } else if (V.native) {
       if (performance.now() - (V.lvlAt || 0) > 90) { V.lvlAt = performance.now(); try { V.lvl = DEV().recLevel() / 100; } catch (e) {} }
-      Orb.setLevel(V.state === 'paused' ? 0 : Math.min(1, (V.lvl || 0) * 1.6));
-    } else if (V.sim) Orb.setLevel(V.state === 'paused' ? 0 : .25 + .25 * Math.sin(performance.now() / 160) * Math.sin(performance.now() / 410));
+      orbLevel(V.state === 'paused' ? 0 : Math.min(1, (V.lvl || 0) * 1.6));
+    } else if (V.sim) orbLevel(V.state === 'paused' ? 0 : .25 + .25 * Math.sin(performance.now() / 160) * Math.sin(performance.now() / 410));
     tx.style.setProperty('--lvl', (V.an || V.sim || V.native) ? 0.4 : 0);
     if (V.state !== 'idle' && V.state !== 'think') V.raf = requestAnimationFrame(tick);
   }
@@ -2480,6 +2480,12 @@
     if (V.state !== 'idle') return;
     const initialSnap=kind==='dictation'?null:kind==='general'?generalVoiceSnap():sendSnap();
     if(initialSnap) initialSnap.route=CHATS.modelRoute(initialSnap.view?.id,initialSnap.view?.thread||'');
+    // An explicit agent pick (two-orb layout's agent orb): a new chat with that agent, its own route only.
+    if (initialSnap && kind === 'general' && opt.agent && window.WosAgents?.isOther(opt.agent)) {
+      let r = null; try { r = window.WosModels.snapshot('', null, opt.agent); } catch (e) { toast('!', esc(e.message), 2600); return 'busy'; }
+      if (!r?.agent) { toast('!', 'That agent has no model yet · open Agents', 2600); return 'busy'; }
+      initialSnap.route = r;
+    }
     const shared = window.WizAppCapture?.getState?.();
     let meetingLoan=null;
     if (shared?.active || shared?.recording || shared?.hold) {
@@ -2581,7 +2587,7 @@
     if (V.chunks.length) V.parts.push(new Blob(V.chunks, { type: V.mime || 'audio/webm' }));
     V.chunks = [];
     if (V.state !== 'paused') V.acc += performance.now() - V.t0;
-    stopStream(); V.rec = null; Orb.setLevel(0);
+    stopStream(); V.rec = null; orbLevel(0);
     setVoice('paused');
     $('#txRouteText').textContent = V.kind === 'dictation' ? 'Dictation interrupted · kept · tap orb to transcribe' : 'Mic interrupted · kept · tap the orb to send';
     toast('⏸', 'Mic interrupted · your recording is kept');
@@ -2716,7 +2722,7 @@
       if (!V.snap.conversation) {
         // A route missing its provider (catalogue still loading) was never sent; each Send tap re-resolves it,
         // so a model the owner picks afterwards takes effect instead of the stale half-route.
-        if (!(V.snap.route?.model&&V.snap.route?.provider)) V.snap.route = V.snap.general ? CHATS.modelRoute() : CHATS.modelRoute(pin?.wid, pin?.sid || '');
+        if (!(V.snap.route?.model&&V.snap.route?.provider)) V.snap.route = V.snap.general ? (V.snap.route?.agent ? window.WosModels.snapshot('', null, V.snap.route.agent) : CHATS.modelRoute()) : CHATS.modelRoute(pin?.wid, pin?.sid || '');
         if (!(V.snap.route?.model&&V.snap.route?.provider)) { V.snap.route = null; window.WosModels.load?.(); toast('!', 'Choose a model before sending', 2200); return; }
         if (V.native) saveVoiceRoute(V.native, V.snap.route);
       }
@@ -2799,7 +2805,7 @@
       if (long && !rec && V.parts.length && window.WosCancelled) keepWeb(V.parts.slice());
       try { rec && rec.state !== 'inactive' && (rec.onstop = null, rec.stop()); } catch (e) {}
     }
-    stopStream(); V.rec = null; V.sim = false; cancelAnimationFrame(V.raf); Orb.setLevel(0);
+    stopStream(); V.rec = null; V.sim = false; cancelAnimationFrame(V.raf); orbLevel(0);
     setVoice('idle'); txHide(quiet ? 0 : 0);
     const kept = long && (nativeKeeps || !!rec || !!V.parts.length);
     if (!quiet || kept) { toast('✕', kept ? (nativeKeeps ? 'Cancelled · kept in Settings → Cancelled recordings' : 'Cancelled · keeping recording…') : 'Discarded', kept ? 3200 : 2200); vib(12); }
@@ -2824,7 +2830,7 @@
     V.parts = []; V.chunks = [];
     const blob = blobs[0] || new Blob([], { type: V.mime || 'audio/webm' });
     const size = blobs.reduce((n, b) => n + b.size, 0);
-    stopStream(); V.rec = null; Orb.setLevel(0);
+    stopStream(); V.rec = null; orbLevel(0);
     if (V.cancelled) { recDone(nid); dropHold(); unseal(); return; }
     if (V.kind === 'dictation') { const id = V.custodyCapture; V.custodyCapture = null; if (id) await OUTBOX.transition(id, 'held', 'Dictation recording · original kept'); if(V.meetingLoan){const held=await OUTBOX.retainDictation(new Blob(blobs,{type:blob.type}),id);if(!held.durable){setVoice('paused');toast('!','Save failed · recording retained here');return;}await returnMeeting({status:'local',voiceTakeId:nid||held.id});} return transcribeDictation(blobs, nid, id).finally(restoreReply); }
     if (!nid && !V.meetingLoan && (V.acc < 450 || size < 1200)) { recDone(nid); dropHold(); unseal(); V.replyTo = null; replyTake(null); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); tourEv('nospeech'); restoreReply();return; }
@@ -2853,7 +2859,7 @@
     const it = await OUTBOX.stage({ ...(snap.route || {}), kind: sid && sid !== '__new__' ? 'reply' : 'new',
       sessionId: sid && sid !== '__new__' ? sid : '',
       steerRunId: snap.meetingEventId ? '' : rt?.steerRunId ?? (CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '', ...(snap.seal?.reply ? { reply: snap.seal.reply } : {}),
-      meetingEventId:snap.meetingEventId,sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || '',
+      meetingEventId:snap.meetingEventId,sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || snap.route?.agent || '',
       files: [...takeFiles(), ...(snap.seal?.files || [])].filter(f => f?.id),
       instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: rt?.wid || sv?.id || '' });
     V.custodyCapture = null;
@@ -3077,7 +3083,7 @@
   async function handleText(text, kind, typed, sttMs, target, snap) {
     const sttNote = sttMs ? ` · heard in ${sttMs} ms` : '';
     snap = snap || sendSnap();
-    if (snap.general) return toAgent(text, 'To ' + window.WizConfig.agent(), { snap, files: typed ? [] : takeFiles() });
+    if (snap.general) return toAgent(text, 'To ' + snapAgentName(snap), { snap, files: typed ? [] : takeFiles() });
     if (snap.conversation && kind !== 'command' && target == null) {
       const it = await OUTBOX.sendConversation({ conversation: snap.conversation, text, audio: snap.audio || null, files: typed ? [] : takeFiles(), source: 'orb' });
       setVoice('idle'); txHide();
@@ -3272,6 +3278,10 @@
     if (V.state === 'idle') startVoice('general');
     else if (V.snap?.general && ['listen', 'paused'].includes(V.state)) finishVoice();
   });
+  function snapAgentName(snap) {
+    const id = snap?.route?.agent, a = id && window.WosAgents?.get(id);
+    return a ? a.label : window.WizConfig.agent();
+  }
   function generalVoiceSnap() {
     // An explicit general take contains no private/app screen, composer or thread context.
     return { id: null, desk: idx, view: null, screen: '', conversation: null, others: [], general: true, route: CHATS.modelRoute() };
@@ -3283,7 +3293,7 @@
     voiceDestination.classList.toggle('app-voice', !!label);
     device.classList.toggle('app-voice-input', active && !!label);
     voiceDestination.textContent = label ? 'To: ' + label + ' · tap to send'
-      : V.snap?.general ? 'Talking to ' + window.WizConfig.agent() + ' · tap to send'
+      : V.snap?.general ? 'Talking to ' + snapAgentName(V.snap) + ' · tap to send'
       : V.kind === 'command' ? 'Command · release to run · slide up for ' + window.WizConfig.agent() : 'Listening · tap to send';
     if (active) $('#orbWrap').setAttribute('aria-label', voiceDestination.textContent);
     generalTarget.hidden = V.state !== 'command';
@@ -3301,6 +3311,8 @@
     // focus. Tap still dictates; startVoice retains the microphone loan checks.
     return !focused || !!(capture?.recording && capture?.meetingId);
   }
+  // The dock orb's level, also handed to a layout drawing its own orb (Two orbs' agent orb).
+  function orbLevel(v) { Orb.setLevel(v); window.WosSkinHost?.level?.(v); }
   function shock() { const s = $('.orb-shock'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go'); }
   orbWrap.addEventListener('contextmenu', e => e.preventDefault());
   orbWrap.addEventListener('pointerdown', e => {
@@ -3365,6 +3377,19 @@
       orbWrap.dataset.dir = sheet ? (Math.abs(G.dy) > 40 ? 'Close' : '') : G.dy < -40 ? '↑ Apps' : G.dy > 12 && V.state === 'idle' ? '↓ Hide' : '';
     }
   });
+  // The orb's tap on a running take (the dock orb, or a layout's agent orb).
+  // James 20 Oct: a tap on a paused take resumes it and never sends. Send is the next tap, once it records again.
+  // Only a take that cannot resume (mic held by another recording, or the last resume found the mic busy) still sends.
+  function orbTapBusy() {
+    if (V.admitting) { V.admitSend = true; return; }
+    if (V.state === 'paused') {
+      // Dictation keeps its own contract: a tap on a paused dictation transcribes into the sealed field (nothing is sent).
+      if (V.kind === 'dictation' || V.resumeBlocked || (window.WizAppCapture?.getState?.().recording && !V.meetingLoan)) { shock(); return finishVoice(); }
+      return $('#arcPause').click();
+    }
+    if (V.state === 'listen') { shock(); return finishVoice(); }
+    // sending: a tap on the orb does nothing until the take is handed off
+  }
   function endGesture(e, cancelled) {
     if (!G || (e?.pointerId != null && e.pointerId !== G.pointerId)) return; const g = G; G = null;
     clearTimeout(g.hold); Orb.press(false); orbWrap.classList.remove('dragging'); orbWrap.dataset.dir = ''; device.classList.remove('aiming'); generalTarget.classList.remove('selected');
@@ -3377,17 +3402,10 @@
       if (sheet) return closeSheets();
       if(V.admitting){V.admitSend=true;return;}
       if(V.state==='paused'&&V.replyTo&&FIELDS.refresh())return startVoice('dictation');
-      if (V.state === 'idle') return startOrbVoice();
-      // James 20 Oct: a tap on a paused take resumes it and never sends. Send is the next tap, once it records again.
-      // Only a take that cannot resume (mic held by another recording, or the last resume found the mic busy) still sends.
-      if (V.state === 'paused') {
-        // Dictation keeps its own contract: a tap on a paused dictation transcribes into the sealed field (nothing is sent).
-        if (V.kind === 'dictation' || V.resumeBlocked || (window.WizAppCapture?.getState?.().recording && !V.meetingLoan)) { shock(); return finishVoice(); }
-        return $('#arcPause').click();
-      }
-      if (V.state === 'listen') { shock(); return finishVoice(); }
-      return; // sending: a tap on the orb does nothing until the take is handed off
+      if (V.state === 'idle') return window.WosSkinHost?.orbTap?.() ? undefined : startOrbVoice();
+      return orbTapBusy();
     } else if (g.mode === 'hold') {
+
       if(g.refused)return; // a refused hold always consumes its release; never sends a reply
       if(g.start){g.start.then(()=>{if(V.kind!=='command')return;if(cancelled)pauseCommandCapture();else finishVoice();});return;}
       // Capture loss is not explicit Cancel. Keep the take paused with controls, never discard it.
@@ -3430,7 +3448,7 @@
   window.addEventListener('pointercancel', e => endGesture(e, true), true);
   window.addEventListener('blur', () => endGesture(null, true));
   document.addEventListener('visibilitychange', () => { if (document.hidden) endGesture(null, true); });
-  orbWrap.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (V.state === 'idle') startOrbVoice(); else finishVoice(); } });
+  orbWrap.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (V.state === 'idle') { if (!window.WosSkinHost?.orbTap?.()) startOrbVoice(); } else finishVoice(); } });
   orbWrap.tabIndex = 0;
 
   /* Distraction-free, forgiving start (James, 18 Oct 2026): the swipe down may begin a little above the orb. Passive
@@ -3824,9 +3842,39 @@
   window.WizCore.deeplink?.consume();
   /* Skin packages (core/skin-host.js): the only shell surface a skin script can drive. Each call goes through
    * the shell's own functions, so the Back contract and desk rules hold for every skin. */
+  function agentInfo(a) {
+    const AG = window.WosAgents;
+    // The main agent goes by the owner's name for it (Archimedes), not its harness label.
+    const label = a.is_default ? (window.WizConfig?.agent() || a.label || a.id) : (a.label || a.id);
+    return { id: a.id, label, colour: AG ? AG.colour(a) : '#b99bff', private: a.privacy === 'private', main: !!a.is_default, status: a.status || '' };
+  }
+  /* Who the agent orb sends to, from what is in front: an agent's Chats, a thread that belongs to an agent,
+   * an app bound to an agent (Agents › app bindings), else the main agent. */
+  function agentHere() {
+    const AG = window.WosAgents, def = AG?.defaultId() || 'hermes';
+    const f = desks[idx]?.focus, w = f && W[f];
+    let id = '', why = 'main', app = '';
+    if (w && agentWin(w)) { id = w.agent; why = 'chats'; }
+    else if (w && (w.app === 'chats' || CHATS.isHosted(f)) && w.thread && AG?.isOther(LIVE?.agentOf?.(w.thread))) { id = LIVE.agentOf(w.thread); why = 'thread'; }
+    else if (w?.appId) {
+      const b = AG?.binding?.(w.appId);
+      if (b?.agent && AG.isOther(b.agent) && AG.get(b.agent)) { id = b.agent; why = 'app'; app = APP[w.appId]?.name || w.appId; }
+    }
+    const a = AG?.get(id || def) || { id: id || def, label: window.WizConfig?.agent() || 'Hermes', is_default: !id, appearance: {} };
+    return { ...agentInfo(a), why, app };
+  }
+  /* The agent orb's tap / pick. No pick = the screen's own destination (the classic tap). */
+  function talkTo(id) {
+    if (V.state !== 'idle') return orbTapBusy();
+    const AG = window.WosAgents, here = agentHere();
+    const target = id || here.id;
+    if (target === here.id && here.why !== 'app') return startVoice('auto');
+    if (!AG?.isOther(target)) return startVoice('general');
+    return startVoice('general', { agent: target });
+  }
   const skinChatsWin = () => { const f = desks[idx]?.focus; if (W[f]?.app === 'chats') return W[f]; const id = desks[idx]?.wins.find(x => W[x]?.app === 'chats'); return id ? W[id] : null; };
   window.WosSkinHost?.attach({
-    route() { const w = skinChatsWin(); return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: idx }; },
+    route() { const w = skinChatsWin(), f = W[desks[idx]?.focus]; let ag = ''; try { ag = agentHere().id; } catch (_) {} return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: idx, app: f ? (f.appId || f.app || null) : null, agent: ag || null }; },
     back: () => backStep(),
     openList: () => openChatsList(),
     openThread: id => openWizardThread(id),
@@ -3836,5 +3884,16 @@
     dock: () => $('#dock'),
     locked: pointerId => !!(DS && DS.id === pointerId && DS.h),
     toast: text => toast('◇', text, 2400),
+    // Layouts (two-orb): who the screen routes to, and the orb's recorder.
+    agents: () => (window.WosAgents?.list || []).map(agentInfo),
+    agentHere: () => agentHere(),
+    agentSigil: id => { const AG = window.WosAgents, a = AG?.get(id); return a ? AG.sigil(a, 'ag-sig') : ''; },
+    openAgent: id => openAgentChats(id),
+    voiceState: () => ({ state: V.state, kind: V.kind || '', agent: V.state === 'idle' ? '' : (V.snap?.route?.agent || V.snap?.view?.agent || (V.replyTo?.sid && LIVE?.agentOf?.(V.replyTo.sid)) || window.WosAgents?.defaultId() || '') }),
+    talk: id => talkTo(id),
+    voiceTap: () => (V.state === 'idle' ? talkTo('') : orbTapBusy()),
+    dictate: () => { if (V.state !== 'idle' || !FIELDS?.refresh()) return false; startVoice('dictation'); return true; },
+    voiceCancel: () => cancelVoice(),
+    relayout: () => { try { syncImmersive(); } catch (_) {} },
   });
 })();
