@@ -18,6 +18,14 @@
     return !!it && !localCompletions.has(it.id) && !it.localCompleted && !quarantine.has(it.id) && ['new', 'reply'].includes(it.kind) &&
       (it.intent !== 'command' || it.deliveryRequested === true) && it.steerDispatch !== 'started' && states.includes(it.state);
   }
+  // An agent-bound message rides on one of that agent's own models: its allowed pick, otherwise its default.
+  // A main-agent route that rode along on a staged take (Opus on a Private note) is never sent or rejected as-is.
+  function fitAgentRoute(it) {
+    const AG = window.WosAgents, a = it?.agent && AG?.get?.(it.agent);
+    if (!a?.model || it.body || !AG.allows || !AG.route || (it.model && AG.allows(a, it.model))) return false;
+    const r = AG.route(a, ''); if (!r?.model) return false;
+    Object.assign(it, { model: r.model, provider: r.provider }); return true;
+  }
   function queueRetry(it, states) {
     if (!eligible(it, states)) return false;
     // Claim synchronously before the first persistence await: a double tap cannot
@@ -333,6 +341,7 @@
   }
   async function deliver(it) {
     if (it.kind === 'conversation') throw new HttpError(409, 'App voice input messages use explicit conversation delivery only');
+    if (fitAgentRoute(it)) await put(it);
     if (!it.model || !it.provider) throw new HttpError(409, 'No confirmed model route · choose a model before retrying');
     if (it.body) {
       const frozen = JSON.parse(it.body);
@@ -643,6 +652,7 @@
         if (localCompletions.has(held.id) || held.localCompleted || held.state === 'sent' || held.body || held.steerBody || quarantine.has(held.id)) return held;
         // The delivery caller names the agent (an orb pick); a staged take that lost it must not fall back to the main agent.
         if (agent && !it.agent) { it.agent = agent; if (snapshot) Object.assign(it, snapshot); }
+        fitAgentRoute(it);
         // Preserve the original route/destination/id. Routing is allowed to choose a local command;
         // message delivery always retains the send-time thread and selected provider.
         Object.assign(it, { text: String(o.text || '').trim(), typed: o.typed || it.typed, files: [...(it.files || []), ...(o.files || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i), instructions: o.instructions || it.instructions, wid: o.wid || it.wid, ...(replyOf(o) || it.reply ? { reply: replyOf(o) || it.reply } : {}),
