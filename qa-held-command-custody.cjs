@@ -72,8 +72,8 @@ module.exports=async({boot,ok,sleep,sid,model,provider})=>{
   await f.done('held silent');}
  {const f=await boot(true);f.state.text='';
   await f.p.evaluate(()=>__wux.commandVoice());await sleep(1100);await f.p.evaluate(()=>__wux.commandVoice());await sleep(2000);
-  const rows=await unsent(f);
-  ok(rows.length===0&&f.state.posts.length===0,'desktop held silent: no Unsent row, nothing sent',{rows});
+  const rows=await unsent(f),recs=await f.p.evaluate(()=>WosOutbox.recordings().length);
+  ok(rows.length===0&&recs===0&&f.state.posts.length===0,'desktop held silent: no Unsent/Recordings row, nothing sent',{rows,recs});
   await f.done('desktop held silent');}
 
  // 6. Upgrade: settled command rows left by earlier builds clear on load; unheard/interrupted and messages stay.
