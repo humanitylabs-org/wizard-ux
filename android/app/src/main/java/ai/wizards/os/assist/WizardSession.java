@@ -98,6 +98,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
         web.addJavascriptInterface(new Bridge(), "WizardNative");
         // The Wizard's surface page, or the bundled copy offline; only that one origin is reachable (OverlayPage).
         OverlayPage surface = new OverlayPage("surface.html#corner", true) {
+            @Override protected boolean remoteAllowed() { return !keyguard.isKeyguardLocked(); }
             @Override
             protected void ready(WebView view, String url) {
                 pageReady = true;

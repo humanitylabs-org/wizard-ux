@@ -25,6 +25,13 @@ import java.util.Map;
 public class OverlayPage extends WebViewClient {
     static final long TIMEOUT_MS = 1500;
     static final long FETCH_TOTAL_MS = 3000;
+    private static final java.util.concurrent.ScheduledThreadPoolExecutor FETCH_DEADLINES = deadlines();
+    private static java.util.concurrent.ScheduledThreadPoolExecutor deadlines() {
+        java.util.concurrent.ScheduledThreadPoolExecutor e = new java.util.concurrent.ScheduledThreadPoolExecutor(1,
+                r -> { Thread t = new Thread(r, "overlay-deadline"); t.setDaemon(true); return t; });
+        e.setRemoveOnCancelPolicy(true);
+        return e;
+    }
     private final String page;
     private final boolean remoteFirst;
     private final long deadlineMs;
@@ -78,6 +85,7 @@ public class OverlayPage extends WebViewClient {
         show(r != null, r != null ? r : OverlayPolicy.bundledUrl(page));
     }
     protected void ready(WebView v, String url) { }
+    protected boolean remoteAllowed() { return true; }
     private void clearPrefetch() {
         OverlayPrefetch old = prefetch;
         prefetch = null;
@@ -100,7 +108,7 @@ public class OverlayPage extends WebViewClient {
             final String owner = origin;
             final int attempt = generation;
             prefetch = new OverlayPrefetch(OverlayPolicy.prefetch(page), deadlineMs, path -> {
-                if (attempt != generation || !owner.equals(ServerSettings.origin(web.getContext())))
+                if (attempt != generation || !remoteAllowed() || !owner.equals(ServerSettings.origin(web.getContext())))
                     throw new java.io.IOException("overlay owner changed");
                 return fetch(OverlayPolicy.upstream(owner, OverlayPolicy.VIRTUAL + OverlayPolicy.SHELL + path));
             });
@@ -132,11 +140,11 @@ public class OverlayPage extends WebViewClient {
         try {
             byte[] bytes;
             if (fromWizard) {
-                if (!owner.equals(ServerSettings.origin(v.getContext()))) return blocked();
+                if (!remoteAllowed() || !owner.equals(ServerSettings.origin(v.getContext()))) return blocked();
                 String path = r.getUrl().getPath().substring(OverlayPolicy.SHELL.length());
                 bytes = batch == null ? null : batch.take(path);
                 if (bytes == null) bytes = fetch(OverlayPolicy.upstream(owner, u));
-                if (attempt != generation || !remote || !owner.equals(ServerSettings.origin(v.getContext()))) return blocked();
+                if (attempt != generation || !remote || !remoteAllowed() || !owner.equals(ServerSettings.origin(v.getContext()))) return blocked();
             } else bytes = read(web.getContext().getAssets().open(r.getUrl().getPath().substring("/android_asset/".length())));
             String path = r.getUrl().getPath();
             String mime = path.endsWith(".html") ? "text/html" : path.endsWith(".js") ? "application/javascript" : path.endsWith(".css") ? "text/css" : "image/png";
@@ -168,11 +176,13 @@ public class OverlayPage extends WebViewClient {
         c.setUseCaches(false);
         String cookies = origin == null ? null : CookieManager.getInstance().getCookie(url);
         if (cookies != null) c.setRequestProperty("Cookie", cookies);
+        java.util.concurrent.ScheduledFuture<?> expiry = FETCH_DEADLINES.schedule(c::disconnect,
+                Math.max(0, deadline - System.nanoTime()), java.util.concurrent.TimeUnit.NANOSECONDS);
         try {
             if (c.getResponseCode() != 200) throw new java.io.IOException("HTTP " + c.getResponseCode());
             // Per-read timeouts alone let a server dribble one byte a second for minutes and pin a WebView IO thread.
             return read(c.getInputStream(), deadline);
-        } finally { c.disconnect(); }
+        } finally { expiry.cancel(false); c.disconnect(); }
     }
     private static byte[] read(InputStream input) throws Exception { return read(input, Long.MAX_VALUE); }
     private static byte[] read(InputStream input, long deadlineNanos) throws Exception {
