@@ -76,6 +76,8 @@
     url: a.source === 'apps.json' && a.view?.mode === 'own' && a.view.url === `/wizard/views/${a.id}/` ? a.view.url : a.url || '', desc: a.desc || '',
     ...(a.desktop_only ? { desktopOnly: true } : {}), source: a.source || '', system: a.system === true,
     receives_voice_input: trusted === true && a.receives_voice_input === true,
+    voice_names: a.source === 'apps.json' && Array.isArray(a.voice_names)
+      ? a.voice_names.filter(n => typeof n === 'string' && n.trim() && [...n].length <= 40 && !/[\x00-\x1f\x7f]/.test(n)).slice(0, 8) : [],
     sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [] },
   });
   let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).map(toTile); } catch (e) { return []; } })();
@@ -140,7 +142,10 @@
       // Reserve the agent namespace even after deletion: a stale remote app must never impersonate it.
       const views = window.WizChatsHost?.tiles() || [];
       const merged = [...ALL.slice(0, chats), main ? agentTile(main) : ALL[chats], ...agents, ...views, ...REMOTE.filter(r => !r.id.startsWith('agent:') && !ALL.some(a => a.id === r.id) && !views.some(a => a.id === r.id)), ...ALL.slice(chats + 1)];
-      const list = appsFor(shell, merged);
+      const list = appsFor(shell, merged).map(a => {
+        const installed = REMOTE.find(r => r.id === a.id);
+        return installed ? { ...a, voice_names: installed.voice_names } : a;
+      });
       // Every app wears its sigil (core/sigils.js): sgc = its one colour, sgh = the glyph markup.
       if (window.WizSigil) for (const a of list) if (!a.sgh) { const s = window.WizSigil.of(a.sigil || a); a.sgc = s.color; a.sgh = window.WizSigil.html(a.sigil || a); }
       APPS.splice(0, APPS.length, ...list);
@@ -154,10 +159,15 @@
   function findApp(q, exact) {
       q = norm(q).replace(/^(the|my) /, '').replace(/ (app|application|view)$/, '');
       if (!q) return null;
-      const alias = { troubleshooter: 'troubleshooter', troubleshooting: 'troubleshooter', troubleshoot: 'troubleshooter', 'fix wizard': 'troubleshooter', wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', 'google maps': 'maps', map: 'maps', 'cine queue': 'cinequeue', movies: 'cinequeue', 'i ching': 'iching', notifications: 'v-inbox', 'side key': 'side-button', 'power button': 'side-button', 'side button assistant': 'side-button', inbox: 'v-inbox', terminal: 'console', music: 'spotify', reader: 'wisdom', 'wisdom reader': 'wisdom', 'wizard reader': 'wisdom', collections: 'wisdom', jobs: 'wisdom', 'steve jobs': 'wisdom', signal: 'wizard-signal', shop: 'shopping', meetings: 'mizel', 'meeting recorder': 'mizel', usual: 'usuals', usuals: 'usuals', 'food app': 'usuals', 'my food': 'usuals', 'grab app': 'usuals', 'saved orders': 'usuals', eats: 'usuals', 'wizard eats': 'usuals', bites: 'usuals', 'wizard bites': 'usuals', 'wizard food': 'usuals', grab: 'usuals', 'my usuals': 'usuals', 'grab food': 'usuals', food: 'usuals', 'order food': 'usuals' };
-      // "Open music" is Wizard Music when this Wizard has it; Spotify only by name or as the fallback.
-      if (/^(music|my music|the music|songs|music app|music player|wizard music)$/.test(q) && APP['wizard-music']) return APP['wizard-music'];
+      const alias = { wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', notifications: 'v-inbox', inbox: 'v-inbox', 'side key': 'side-button', 'power button': 'side-button', 'side button assistant': 'side-button' };
       if (alias[q] && APP[alias[q]]) return APP[alias[q]];
+      const bare = n => norm(n).replace(/^wizard /, '');
+      const matches = n => tight(norm(n)) === tight(q) || tight(bare(n)) === tight(bare(q));
+      // Display names win collisions; only installed metadata can add alternative launch names.
+      const named = APPS.find(a => matches(a.name));
+      if (named) return named;
+      const spoken = APPS.find(a => (a.voice_names || []).some(matches));
+      if (spoken) return spoken;
       if (exact) return null; // appByName: name or alias only, no fuzzy guess
       let best = null, bs = 0;
       for (const a of APPS) {
@@ -177,10 +187,7 @@
     // matches only (name, name without its "Wizard" prefix, or an alias), so ordinary words never open apps.
     function appByName(q) {
       q = norm(q).replace(/^(open |the |my )+/, '').replace(/ (app|application)$/, '');
-      if (!q || q.split(' ').length > 4) return null;
-      const bare = n => n.replace(/^wizard /, '');
-      const hit = APPS.find(a => a.kind !== 'view' && (norm(a.name) === q || tight(bare(norm(a.name))) === tight(bare(q))));
-      if (hit) return hit;
+      if (!q) return null;
       return findApp(q, true);
     }
     // Ranked fuzzy search over names and descriptions (launcher, palette).

@@ -50,7 +50,7 @@
   }
   function suggestionHtml() {
     const r = recommendation(); if (!r) return '';
-    const name = r.installed ? chatsName(r.id) : r.id === 'mizel-chats' ? 'Mizel Chats' : r.id;
+    const name = r.installed ? chatsName(r.id) : String(r.id).split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
     return `<aside class="st-suggestion" data-chats-suggestion><b>${esc(r.name)} goes with ${esc(name)}</b><div class="st-actions"><button data-chats-suggest="${esc(r.id)}">${r.installed ? 'Use it' : 'Get it'}</button><button class="ghost" data-chats-dismiss="${esc(r.family)}">Not now</button></div></aside>`;
   }
   function register(feature) {
