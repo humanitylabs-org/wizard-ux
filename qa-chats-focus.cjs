@@ -76,6 +76,7 @@ async function capture(p,name){await p.waitForTimeout(450);await p.screenshot({p
   await activate(p,'[data-chfocusopt="agent:philosopher"]:visible');
   ok(JSON.stringify(await ids(p))===JSON.stringify(['phil_one','phil_two']),mode+' Philosopher only');
   ok((await p.locator('[data-chfocus]:visible').innerText()).includes('Philosopher'),mode+' pill updates');
+  ok(await p.locator('[data-chfocus]:visible > span:not(.ag-sig)').evaluate(e=>e.scrollWidth<=e.clientWidth+1),mode+' Philosopher label fits without truncation');
   ok(JSON.stringify(await snap(p))===JSON.stringify(before),mode+' focus creates no window or desk');
   await capture(p,mode+'-dark-philosopher');
   await p.locator('[data-chsearch]:visible').fill('answer');await p.waitForTimeout(220);
@@ -130,7 +131,7 @@ async function capture(p,name){await p.waitForTimeout(450);await p.screenshot({p
   ok(JSON.stringify(await snap(p))===JSON.stringify(before),mode+' foreign thread links reuse main window');
   ok(await p.locator('[data-wiz-private]:visible').count()>0,mode+' foreign private thread keeps lock');
   await p.goto((desktop?new URL('desktop.html',origin).href:origin)+'?session=private_one',{waitUntil:'domcontentloaded'});
-  await p.waitForFunction(()=>{const a=window.__wos||window.__wux;return a&&Object.values(a.wins).some(w=>w.thread==='private_one');});
+  await p.waitForFunction(()=>{const a=window.__wos||window.__wux;return a&&Object.values(a.wins).some(w=>w.thread==='private_one');},null,{timeout:15000});
   ok(JSON.stringify(await snap(p))===JSON.stringify(before),mode+' private ?session deep link reuses main window');
   if(!desktop){
    await p.evaluate(()=>__wos.onBack());
