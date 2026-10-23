@@ -10,7 +10,7 @@ usage: qa_android_apps.py QA_APK WEB_DIR AA_STATIC_DIR OLD_APK NEW_APK [JOB_DIR]
 A wrong-signer copy of NEW_APK is made here with a throwaway key. The real Wizard is never contacted (emulator DNS is
 dead; the fake answers on localhost). Always stops the emulator.
 """
-import fcntl, hashlib, http.server, json, os, pathlib, re, subprocess, sys, threading, time, uuid
+import argparse, fcntl, hashlib, http.server, json, os, pathlib, re, subprocess, sys, threading, time, uuid
 from qa_paths import origin_host
 from qa_paths import java_home
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -18,13 +18,20 @@ from qa_aa_lib import ADB, BASE, BT, Emu, Page, wait  # noqa: E402
 
 QA_ORIGIN_HOST = origin_host()
 P = pathlib.Path
-QA_APK, WEB, AA, OLD, NEW = (P(x) for x in sys.argv[1:6])
-job = P(sys.argv[6]) if len(sys.argv) > 6 else BASE / 'qa' / ('wos-aa-' + uuid.uuid4().hex[:8])
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--port', choices=('legacy', 'device'), default='legacy')
+parser.add_argument('--owner-switch', action='store_true', help='Exercise real Connect A→B isolation after package work')
+parser.add_argument('qa_apk', type=P); parser.add_argument('web', type=P); parser.add_argument('aa', type=P)
+parser.add_argument('old', type=P); parser.add_argument('new', type=P)
+parser.add_argument('job', nargs='?', type=P)
+args = parser.parse_args()
+QA_APK, WEB, AA, OLD, NEW = args.qa_apk, args.web, args.aa, args.old, args.new
+job = args.job or BASE / 'qa' / ('wos-aa-' + uuid.uuid4().hex[:8])
 job.mkdir(parents=True, exist_ok=True)
 OUT = job / 'shots'; OUT.mkdir(exist_ok=True)
 PKG = 'ai.wizards.os.qa'; FIX = 'com.beemdevelopment.aegis'; FAKE = 18797; ORIGIN = 'http://localhost:%d' % FAKE
 DEVTOOLS = 9361; JOB_ID = 7621
-res, receipt = [], {'job': str(job), 'checks': []}
+res, receipt = [], {'job': str(job), 'checks': [], 'candidate_head': os.environ.get('WIZARD_QA_HEAD'), 'port': args.port}
 
 
 def check(n, ok, d=''):
@@ -186,8 +193,12 @@ def watch_installer(secs, until):
     return seen, v
 
 
-with (BASE / 'worker.lock').open('a') as lock:
-    fcntl.flock(lock, fcntl.LOCK_EX)
+from qa_device_packages import connect_origin, owner_switch, run_device, worker_lock
+
+if args.port == 'device':
+    sys.exit(run_device(globals()))
+
+with worker_lock(BASE / 'worker.lock'):
     try:
         em.boot()
         out = em.sh(ADB, '-s', em.S, 'install', '-r', QA_APK).strip().splitlines()[-1]
@@ -196,7 +207,10 @@ with (BASE / 'worker.lock').open('a') as lock:
         resolv = em.sx(f'ping -c 1 -W 2 {QA_ORIGIN_HOST} 2>&1 | head -2')
         check('the real Wizard is unreachable from the emulator', not re.search(r'\(\d+\.\d+\.\d+\.\d+\)', resolv), resolv.strip()[:120])
         em.sh(ADB, '-s', em.S, 'reverse', 'tcp:%d' % FAKE, 'tcp:%d' % FAKE)
-        em.runas('mkdir -p files && echo %s > files/qa_home.txt && echo %s > files/qa_origin.txt' % (ORIGIN, ORIGIN))
+        if args.owner_switch:
+            pg = connect_origin(globals(), ORIGIN)
+        else:
+            em.runas('mkdir -p files && echo %s > files/qa_home.txt && echo %s > files/qa_origin.txt' % (ORIGIN, ORIGIN))
         em.sx('pm grant %s android.permission.POST_NOTIFICATIONS' % PKG)
         man = em.sh(BT / 'aapt2', 'dump', 'xmltree', '--file', 'AndroidManifest.xml', QA_APK)
         check('manifest: no QUERY_ALL_PACKAGES; <queries> for launcher apps; ENFORCE_UPDATE_OWNERSHIP + REQUEST_DELETE_PACKAGES',
@@ -362,6 +376,8 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('?open=android-apps opens Android Apps', wait(frame_open, 15), pg.ev('location.href'))
         shot('15-deeplink-open')
 
+        if args.owner_switch:
+            pg = owner_switch(globals(), pg)
         crashed = em.sx('logcat -d -b crash')
         check('no crashes', 'FATAL EXCEPTION' not in crashed, crashed[:300])
         receipt['wizard_apps_log'] = em.sx('logcat -d -s WizardApps:*')[-6000:]
@@ -373,9 +389,12 @@ with (BASE / 'worker.lock').open('a') as lock:
         try:
             if pg: pg.close()
         except Exception: pass
+        (job / 'logcat.txt').write_text(em.sx('logcat -d'))
         em.kill()
         srv.shutdown()
         receipt.update(passed=sum(res), total=len(res), apk=str(QA_APK), apk_sha256=sha(QA_APK), gets=ST['gets'],
-                       real_wizard_requests=[l for l in ST['log'] if 'wizard001' in l])
+                       real_wizard_requests=[l for l in ST['log'] if 'wizard001' in l], mode='legacy',
+                       screenshots=sorted(str(p) for p in OUT.glob('*.png')))
         (job / 'receipt.json').write_text(json.dumps(receipt, indent=1, default=str))
 print('%d/%d passed · %s' % (sum(res), len(res), job))
+if args.owner_switch: sys.exit(0 if all(res) else 1)
