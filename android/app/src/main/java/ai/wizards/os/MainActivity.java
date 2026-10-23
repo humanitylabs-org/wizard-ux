@@ -427,6 +427,19 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void openInOwnBrowser(Uri u) {
+        Intent view = new Intent(Intent.ACTION_VIEW, u).addCategory(Intent.CATEGORY_BROWSABLE);
+        // This app may claim its own Wizard's links: send them to the default browser explicitly.
+        android.content.pm.ResolveInfo ri = getPackageManager().resolveActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")).addCategory(Intent.CATEGORY_BROWSABLE), android.content.pm.PackageManager.MATCH_DEFAULT_ONLY);
+        String pkg = ri == null || ri.activityInfo == null ? null : ri.activityInfo.packageName;
+        if (pkg != null && !"android".equals(pkg) && !getPackageName().equals(pkg)) view.setPackage(pkg);
+        try { startActivity(view); }
+        catch (ActivityNotFoundException e) {
+            try { startActivity(Intent.createChooser(new Intent(Intent.ACTION_VIEW, u), "Open in")); }
+            catch (ActivityNotFoundException e2) { Toast.makeText(this, "No browser can open that link", Toast.LENGTH_SHORT).show(); }
+        }
+    }
+
     private void openOutside(Uri u) {
         try {
             startActivity(new Intent(Intent.ACTION_VIEW, u).addCategory(Intent.CATEGORY_BROWSABLE));
@@ -943,6 +956,18 @@ public class MainActivity extends Activity {
 
     /** Small, read-mostly bridge: the shell can ask for a haptic tick and learn it runs natively. */
     private final class Bridge {
+        /** Long-press › Open in your browser, also for this Wizard's own pages: the phone's default browser, never this app. */
+        @JavascriptInterface public void openInBrowser(String url) {
+            final Uri u = Uri.parse(String.valueOf(url));
+            if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) return;
+            runOnUiThread(() -> openInOwnBrowser(u));
+        }
+        /** A file link (APK, PDF…) on this Wizard: Android's download manager, so it lands in Downloads with a notification. */
+        @JavascriptInterface public void download(String url) {
+            final Uri u = Uri.parse(String.valueOf(url));
+            if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) return;
+            runOnUiThread(() -> downloadOutside(u.toString(), web == null ? null : web.getSettings().getUserAgentString(), null, null));
+        }
         @JavascriptInterface public void changeServer() { runOnUiThread(MainActivity.this::changeServer); }
         @JavascriptInterface
         public String platform() { return "android:" + BuildConfig.VERSION_NAME; }

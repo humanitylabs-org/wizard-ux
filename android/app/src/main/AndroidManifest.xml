@@ -43,6 +43,12 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!-- Long-press › Open in your browser: find the default browser so this app's own links leave it. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
         <package android:name="com.android.vending" />
         <!-- Usuals: see and open Grab. -->
         <package android:name="com.grabtaxi.passenger" />
