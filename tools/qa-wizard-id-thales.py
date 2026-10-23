@@ -105,6 +105,10 @@ def acceptance(job, receipt):
         artifacts.mkdir(mode=0o700)
         files = ["signed-event.json", "receipt.json", "capture.webp", "onboarding-dark.png",
                  "approval-skin-dark.png", "settings-light.png", "approval-app-light.png"]
+        for name in ("pin-timeout.png", "pin-timeout.xml"):  # failure diagnostics, optional
+            subprocess.run([str(adb), "-s", serial, "pull", "/sdcard/Android/data/ai.wizards.os.qa/files/identity-qa/" + name,
+                            str(output / name)], env=env, capture_output=True)
+        (output / "logcat.txt").write_text(device("logcat", "-d", "-t", "4000", capture_output=True, text=True).stdout)
         for name in files:
             pulled = subprocess.run([str(adb), "-s", serial, "pull",
                 "/sdcard/Android/data/ai.wizards.os.qa/files/identity-qa/" + name, str(artifacts / name)],

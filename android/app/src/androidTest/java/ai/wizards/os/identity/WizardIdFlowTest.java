@@ -120,7 +120,12 @@ public class WizardIdFlowTest {
     }
     private void pin() throws Exception {
         device.waitForIdle(); UiObject2 choose=device.wait(Until.findObject(By.text(java.util.regex.Pattern.compile("(?i)(use )?(PIN|screen lock|device credential)"))),2000); if(choose!=null)choose.click();
-        waitFor(() -> device.hasObject(By.res("com.android.systemui","pinEntry")) || device.hasObject(By.res("com.android.settings","password_entry")) || device.hasObject(By.textContains("Enter your PIN")) || device.hasObject(By.textContains("Confirm your PIN")));
+        try {
+            waitFor(() -> device.hasObject(By.res("com.android.systemui","pinEntry")) || device.hasObject(By.res("com.android.systemui","lockPassword")) || device.hasObject(By.res("com.android.settings","password_entry")) || device.hasObject(By.textContains("Enter your PIN")) || device.hasObject(By.textContains("Confirm your PIN")) || device.hasObject(By.textContains("Enter your device PIN")));
+        } catch (AssertionError e) {
+            // Diagnostics only (no secrets on screen at a PIN prompt): what the screen showed instead.
+            screenshot("pin-timeout.png"); device.dumpWindowHierarchy(new File(output,"pin-timeout.xml")); throw e;
+        }
         device.executeShellCommand("input text 246810"); device.pressEnter(); device.waitForIdle();
     }
     private void alive(){scenario.onActivity(a->{assertFalse(a.isFinishing());assertFalse(a.isDestroyed());});}
