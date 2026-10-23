@@ -131,16 +131,30 @@ public class ConnectE2eTest {
             back(); visible("Fixture home"); foreground();
             // The lock surface used to rely only on legacy onBackPressed, ignored by target 36.
             InstrumentationRegistry.getInstrumentation().getUiAutomation().grantRuntimePermission(c.getPackageName(), "android.permission.RECORD_AUDIO");
-            start(ai.wizards.os.assist.AssistLockActivity.class); Thread.sleep(2000);
-            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-                try {
-                    android.app.Activity a = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
-                            .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).iterator().next();
-                    java.lang.reflect.Field field = ai.wizards.os.assist.AssistLockActivity.class.getDeclaredField("web");
-                    field.setAccessible(true);
-                    ((android.webkit.WebView) field.get(a)).evaluateJavascript("W.reset();W.lockState(false);W.showList()", null);
-                } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
-            });
+            start(ai.wizards.os.assist.AssistLockActivity.class);
+            // Drive the list only once the surface page has loaded (W exists); a fixed sleep raced the page load.
+            boolean listShown = false;
+            for (int attempt = 0; attempt < 20 && !listShown; attempt++) {
+                final boolean[] ready = new boolean[1];
+                InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                    try {
+                        java.util.Iterator<android.app.Activity> it = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                                .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).iterator();
+                        if (!it.hasNext()) return;
+                        android.app.Activity a = it.next();
+                        if (!(a instanceof ai.wizards.os.assist.AssistLockActivity)) return;
+                        java.lang.reflect.Field pr = ai.wizards.os.assist.AssistLockActivity.class.getDeclaredField("pageReady");
+                        pr.setAccessible(true);
+                        if (!pr.getBoolean(a)) return;
+                        java.lang.reflect.Field field = ai.wizards.os.assist.AssistLockActivity.class.getDeclaredField("web");
+                        field.setAccessible(true);
+                        ((android.webkit.WebView) field.get(a)).evaluateJavascript("W.reset();W.lockState(false);W.showList()", null);
+                        ready[0] = true;
+                    } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+                });
+                if (ready[0]) listShown = device.wait(Until.findObject(By.text("What you told the Wizard")), 3000) != null;
+                else Thread.sleep(500);
+            }
             visible("What you told the Wizard"); foreground(); shot("assist-nested");
             back(); foreground(); assertTrue("assistant closed by Back", device.wait(Until.gone(By.text("What you told the Wizard")), 5000));
             shot("assist-nested-back"); back(); foreground(); shot("assist-root-back");
