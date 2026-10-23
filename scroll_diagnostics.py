@@ -50,7 +50,7 @@ def store(body, root=None):
                  'action', 'arguments', 'source', 'toolType', 'flags', 'deviceId', 'zeroDeviceId', 'downCount',
                  'moveCount', 'upCount', 'startY', 'endY', 'hasFocus', 'top', 'orientation', 'widthDp', 'heightDp',
                  'densityDpi', 'height', 'extent', 'dpr', 'vw', 'left', 'right', 'bottom', 'cancelled',
-                 'detail', 'ok', 'granted', 'ours'}
+                 'detail', 'ok', 'granted', 'ours', 'pauseWanted'}
     if set(payload['session']) - session_keys:
         raise ValueError('session fields')
     for event in payload['events']:
@@ -63,6 +63,8 @@ def store(body, root=None):
             detail = data['detail']
             if event.get('method') != 'search.detail' or not _capture_detail(detail):
                 raise ValueError('capture detail')
+        if 'pauseWanted' in data and (event.get('method') != 'capture.render' or not isinstance(data['pauseWanted'], bool)):
+            raise ValueError('capture render')
         if 'ok' in data and not isinstance(data['ok'], bool):
             raise ValueError('capture result')
         for key in ('granted', 'ours'):

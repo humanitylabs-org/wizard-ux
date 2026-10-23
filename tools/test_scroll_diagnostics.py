@@ -51,6 +51,15 @@ class DiagnosticsTest(unittest.TestCase):
         payload['events'][0]['data']['detail'] = None
         diag.store(json.dumps(payload).encode(), self.root)
 
+    def test_capture_render_pause_flag(self):
+        ok = json.dumps({'schema': 1, 'session': {}, 'events': [
+            {'seq': 1, 'uptimeMs': 1, 'thread': 'main', 'method': 'capture.render', 'data': {'pauseWanted': True}}]}).encode()
+        self.assertTrue(diag.store(ok, self.root))
+        for bad in [{'method': 'capture.render', 'data': {'pauseWanted': 'yes'}},
+                    {'method': 'scrollBy', 'data': {'pauseWanted': True}}]:
+            body = json.dumps({'schema': 1, 'session': {}, 'events': [dict(seq=1, uptimeMs=1, thread='main', **bad)]}).encode()
+            with self.assertRaises(ValueError): diag.store(body, self.root)
+
     def test_capture_detail_rejects_text_urls_and_unbounded_fields(self):
         payload = json.loads(self.body)
         for detail in ({'text':'private'}, 'https://private.invalid',
