@@ -59,7 +59,7 @@ def main():
         assert receipt['old_sha256']==OLD_SHA,'previous published APK drift'
         release=build(release_job,'release-build');qa=build(qa_job,'qa-build')
         signed,meta=release['ai.wizards.os']
-        assert meta['aapt2']['version_name']=='0.9.40' and str(meta['aapt2']['version_code'])=='65'
+        assert meta['aapt2']['version_name']=='0.9.41' and str(meta['aapt2']['version_code'])=='66'
         assert meta['signer_sha256']==SIGNER
         debug,_=qa['ai.wizards.os.qa'];test,_=qa['ai.wizards.os.qa.test'];src=qa_job/'source'
         run('qa-path-config',[sys.executable,'-m','unittest','discover','-s',src/'tools','-p','test_qa_paths.py','-v'])
@@ -71,7 +71,7 @@ def main():
         run('native-stock-webview',[sys.executable,src/'tools/qa_scroll_proxy.py',debug,test,out/'proxy'])
         proxy=json.loads((out/'proxy/receipt.json').read_text());assert proxy['ok'];receipt['native_stock_webview']=proxy
         receipt.update(ok=True,artifact=str(signed),sha256=meta['sha256'],signer=meta['signer_sha256'])
-        print('PASS Samsung scroll capture Thales release gates '+json.dumps({'apk':str(signed),'sha256':meta['sha256'],'version':'0.9.40/65'}),flush=True)
+        print('PASS Samsung scroll capture Thales release gates '+json.dumps({'apk':str(signed),'sha256':meta['sha256'],'version':'0.9.41/66'}),flush=True)
     finally:
         (out/'receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
 

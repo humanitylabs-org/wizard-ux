@@ -80,12 +80,19 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
             signal.setOnCancelListener(null); success.run();
         }
         void fail() { fail("capture-invalidated"); }
+        boolean tile;
         void fail(String reason) {
             if (done) return;
             if (search) ScrollCaptureDiagnostics.empty(reason);
             done = true; main.removeCallbacks(timeout);
             if (pending == this) pending = null;
             signal.setOnCancelListener(null);
+            if (tile) {
+                // One bad strip (a PixelCopy hiccup, a sub-pixel scroll settle) used to end the whole
+                // session, so every later request came back empty and One UI reported "not supported".
+                ScrollCaptureDiagnostics.record("tile.fail",ScrollCaptureDiagnostics.fields("reason",reason));
+                failure.run(); return;
+            }
             restore(failure);
         }
     }
@@ -161,8 +168,9 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
                                                       Rect request, Consumer<Rect> complete) {
         ScrollCaptureDiagnostics.arm("capture-callback");
         ScrollCaptureDiagnostics.record("onScrollCaptureImageRequest",ScrollCaptureDiagnostics.fields("left",request.left,"top",request.top,"right",request.right,"bottom",request.bottom,"cancelled",signal.isCanceled()));
-        if (!eligible() || id == null || pending != null) { complete.accept(new Rect()); return; }
+        if (!eligible() || id == null || pending != null) { ScrollCaptureDiagnostics.record("tile.fail",ScrollCaptureDiagnostics.fields("reason",!eligible()?"ineligible":id==null?"no-session":"busy")); complete.accept(new Rect()); return; }
         Pending p = new Pending(signal, () -> complete.accept(new Rect()));
+        p.tile = true;
         final String token = id;
         final Rect area = new Rect(request);
         js(call("move", JSONObject.quote(token) + "," + (initial + area.top/scale)), b -> {
@@ -170,7 +178,7 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
             if (b == null) { p.fail(); return; }
             int delta = (int)Math.round((b.optDouble("top") - initial)*scale);
             Rect available = new Rect(0, delta, bounds.width(), delta + bounds.height());
-            if (!available.intersect(area)) { p.finish(() -> complete.accept(new Rect())); return; }
+            if (!available.intersect(area)) { ScrollCaptureDiagnostics.record("tile.result",ScrollCaptureDiagnostics.fields("reason","scroll-limit")); p.finish(() -> complete.accept(new Rect())); return; }
             // Synchronize WebView's compositor, then wait two draws before reading the window buffer.
             web.postVisualStateCallback(System.nanoTime(), new WebView.VisualStateCallback() {
                 @Override public void onComplete(long requestId) {
@@ -178,7 +186,7 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
                         if (!p.live() || !token.equals(id)) return;
                         js(call("check", JSONObject.quote(token)), now -> {
                             if (!p.live() || !token.equals(id)) return;
-                            if (now == null || now.optDouble("top") != b.optDouble("top")) { p.fail(); return; }
+                            if (now == null || Math.abs(now.optDouble("top") - b.optDouble("top")) > 1) { p.fail(); return; }
                             copy(session, p, available, delta, token, b.optDouble("top"), complete);
                         });
                     }));
@@ -203,12 +211,13 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
                 js(call("check", JSONObject.quote(token)), now -> {
                     try {
                         if (!p.live() || !token.equals(id)) return;
-                        if (!eligible() || now == null || now.optDouble("top") != top) { p.fail(); return; }
+                        if (!eligible() || now == null || Math.abs(now.optDouble("top") - top) > 1) { p.fail(); return; }
                         Canvas canvas = session.getSurface().lockHardwareCanvas();
                         try {
                             canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
                             canvas.drawBitmap(bitmap, 0, 0, null);
                         } finally { session.getSurface().unlockCanvasAndPost(canvas); }
+                        ScrollCaptureDiagnostics.record("tile.result",ScrollCaptureDiagnostics.fields("left",available.left,"top",available.top,"right",available.right,"bottom",available.bottom));
                         p.finish(() -> complete.accept(new Rect(available)));
                     } catch (RuntimeException e) { p.fail(); }
                     finally { bitmap.recycle(); }

@@ -13,7 +13,7 @@ final class ScrollAccessibilityProvider extends AccessibilityNodeProvider {
     static void node(String method, int id, AccessibilityNodeInfo n) {
         // Accessibility services (Bitwarden, voice tools) walk thousands of nodes on the UI thread at open;
         // recording each one with a stack trace froze the app into an ANR. Only record inside a capture window.
-        if(!ScrollCaptureDiagnostics.armed())return;
+        if(!ScrollCaptureDiagnostics.armed() || ScrollCaptureDiagnostics.capturing)return;
         ScrollCaptureDiagnostics.record(method,ScrollCaptureDiagnostics.fields("virtualId",id,"present",n!=null,
             "scrollable",n!=null && n.isScrollable(),"actions",n==null?0:n.getActions(),
             "childCount",n==null?0:n.getChildCount()));

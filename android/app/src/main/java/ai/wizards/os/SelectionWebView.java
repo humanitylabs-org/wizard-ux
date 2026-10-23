@@ -106,12 +106,12 @@ public class SelectionWebView extends WebView {
     @Override public void onPause() { pauseWanted = true; if (!capturing && !webPaused) { webPaused = true; super.onPause(); } }
     @Override public void onResume() { pauseWanted = false; if (webPaused) { webPaused = false; super.onResume(); } installScrollProxy(); }
     void scrollCaptureBegan() {
-        capturing = true;
+        capturing = true; ScrollCaptureDiagnostics.capturing = true;
         if (webPaused) { webPaused = false; super.onResume(); }
         ScrollCaptureDiagnostics.record("capture.render",ScrollCaptureDiagnostics.fields("pauseWanted",pauseWanted));
     }
     void scrollCaptureEnded() {
-        capturing = false;
+        capturing = false; ScrollCaptureDiagnostics.capturing = false;
         if (pauseWanted && !webPaused) { webPaused = true; super.onPause(); }
     }
     void cancelScrollCapture() {

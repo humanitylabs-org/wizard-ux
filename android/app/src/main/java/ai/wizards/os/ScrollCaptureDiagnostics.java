@@ -45,7 +45,13 @@ final class ScrollCaptureDiagnostics {
         armedUntil=SystemClock.uptimeMillis()+60000; generation++;
         record("arm",fields("reason",reason));
     }
-    static void gated(String method, JSONObject data) { if(armed()) record(method,data); }
+    // Accessibility services (password managers, voice tools) query the node tree hundreds of times
+    // a second; during a capture they flooded the 400-event ring and hid the session's end.
+    static volatile boolean capturing;
+    static void gated(String method, JSONObject data) {
+        if(capturing && method.contains("ccessibility")) return;
+        if(armed()) record(method,data);
+    }
     static void record(String method, JSONObject data) {
         Thread t=Thread.currentThread();
         StackTraceElement[] trace=t.getStackTrace();

@@ -51,6 +51,7 @@ def store(body, root=None):
                  'moveCount', 'upCount', 'startY', 'endY', 'hasFocus', 'top', 'orientation', 'widthDp', 'heightDp',
                  'densityDpi', 'height', 'extent', 'dpr', 'vw', 'left', 'right', 'bottom', 'cancelled',
                  'detail', 'ok', 'granted', 'ours', 'pauseWanted'}
+    # tile.result/tile.fail reuse left/top/right/bottom and reason.
     if set(payload['session']) - session_keys:
         raise ValueError('session fields')
     for event in payload['events']:
