@@ -771,3 +771,16 @@ html[data-skin="obsidian-light"] .rs-d0 { --dc: #18181b; }
 html[data-skin="obsidian-light"] .rs-d1 { --dc: #0284c7; }
 html[data-skin="obsidian-light"] .rs-d2 { --dc: #7c3aed; }
 html[data-skin="obsidian-light"] .rs-d3 { --dc: #16a34a; }
+
+/* Readability pass (Miguel, 23 Oct): bars show USED of available; group titles "AI resources" / "Compute resources". */
+html[data-skin^="obsidian"] .rs-gh { font-size: 12.5px; margin-bottom: 4px; }
+html[data-skin^="obsidian"] .rs-gh b { font-weight: 650; letter-spacing: 0; }
+html[data-skin^="obsidian"] .rs-gh span { font-size: 11.5px; }
+html[data-skin^="obsidian"] .rs-bg { gap: 9px; }
+html[data-skin^="obsidian"] .rs-br { grid-template-columns: 58px 1fr 78px; }
+html[data-skin^="obsidian"] .rs-bl { font-size: 13px; }
+html[data-skin^="obsidian"] .rs-bv { font-size: 12.5px; }
+html[data-skin^="obsidian"] .rs-bt { height: 8px; }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bt { height: 10px; }
+html[data-skin^="obsidian"] .rs-lg { font-size: 11.5px; margin-bottom: 5px; }
+html[data-skin^="obsidian"] .rs-br { grid-template-columns: 58px minmax(60px, 1fr) max-content; }
