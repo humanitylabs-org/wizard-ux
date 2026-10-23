@@ -15,7 +15,9 @@ test('cache cannot self-grant; network catalog projects strict voice declaration
  assert.equal(registry.APP.editor.receives_voice_input,true);assert.equal(registry.APP.string.receives_voice_input,false);assert.equal(registry.APP.plain.receives_voice_input,false);
 });
 test('Troubleshooter stays a normal launchable app offline in both shells with all open-app aliases',async()=>{
- const window={WizCore:{norm:s=>String(s).toLowerCase()},dispatchEvent(){},localStorage:{getItem:()=>null,setItem(){}}};
+ const names=['troubleshooter','troubleshooting','troubleshoot','fix wizard'];
+ const installed=JSON.stringify([{id:'troubleshooter',name:'Troubleshooter',url:'/troubleshoot/',source:'apps.json',voice_names:names}]);
+ const window={WizCore:{norm:s=>String(s).toLowerCase()},dispatchEvent(){},localStorage:{getItem:key=>key === 'wux.apps.v1' ? installed : null,setItem(){}}};
  const ctx={window,CustomEvent:class{},URL,location:new URL('https://wizard.example/'),fetch:async()=>{throw Error('catalog unavailable');},AbortSignal,setTimeout,clearTimeout,setInterval(){},addEventListener(){},document:{addEventListener(){},visibilityState:'visible'},localStorage:window.localStorage};
  vm.runInNewContext(source,ctx);await window.WizCore.appsLoaded();
  for(const shell of ['mobile','desktop']){

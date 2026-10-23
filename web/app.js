@@ -89,20 +89,13 @@
     }
     return true;
   }
-  function seedApps() {
-    for (const appId of ['topics', 'mizel']) if (APP[appId] && !Object.values(W).some(w => w.app === 'frame' && w.appId === appId)) { const id = newId(); W[id] = { id, app: 'frame', appId }; desks.push(blank({ wins: [id], focus: id })); }
-  }
   function freshLayout() {
     W = {}; desks = [blank({ id: 'home', home: true })];
     const c = { id: newId(), app: 'chats', thread: null }; W[c.id] = c; desks.push(blank({ wins: [c.id], focus: c.id }));
     if (APP['v-day']) { const r = { id: newId(), app: 'review', z: { level: 'day', day: YESTERDAY } }; W[r.id] = r; desks.push(blank({ wins: [r.id], focus: r.id })); }
-    seedApps();
   }
   const okStrip = () => W && typeof W === 'object' && Array.isArray(desks) && desks.length > 0 && desks[0] && desks[0].home && desks.every(d => d && d.id && Array.isArray(d.wins));
-  if (!okStrip()) { if (migrateFive()) store.set('stripSeeded', true); else { freshLayout(); store.set('stripSeeded', !!(APP.topics || APP.mizel)); } }
-  // Mizel.ai moved from the old Meetings view (/meetings/, /mizel-preview/) to the canonical Mizel Live view.
-  // A frame window remembers the page it was on, so a saved Mizel desk would keep the retired view: move it.
-  Object.values(W).forEach(w => { if (w && w.app === 'frame' && w.appId === 'mizel' && /^\/(meetings|mizel-preview|apps)(\/|$)|^\/$/.test(w.url || '')) delete w.url; });
+  if (!okStrip() && !migrateFive()) freshLayout();
   // Apps from the Agent Service can arrive after first paint (fresh install, cleared cache): a frame window
   // painted before its app was known has no page yet, so draw that desk again once the app list lands.
   const reframe = () => {
@@ -110,11 +103,7 @@
       if (!u) return false; const f = document.querySelector(`.win[data-win="${id}"] iframe`); if (f && f.getAttribute('src') === u) return false;
       winEl(id)?.remove(); return true; })) { try { renderDesk(i); } catch (e) {} } });
   };
-  const lateLayout = () => {
-    if (store.get('stripSeeded', false) || !(APP.topics || APP.mizel)) return;
-    seedApps(); store.set('stripSeeded', true); try { save(); syncDesks(); } catch (e) {}
-  };
-  window.addEventListener('wizard:apps', () => { lateLayout(); reframe(); });
+  window.addEventListener('wizard:apps', reframe);
   setTimeout(reframe, 0); setTimeout(reframe, 1500);
   desks.forEach(d => {
     d.wins = d.wins.filter(id => W[id]).slice(0, MAXW);
@@ -1947,7 +1936,7 @@
     };
     if (!q && oursSkin()) { paint(kindGroups(['apps', 'wiz', 'agents', 'conns'])); if (!live) body.scrollTop = 0; return; } // same order as New desk, read from the top
     if (!q) {
-      const recentIds = store.get('recent', ['wizard', 'wizard-signal', 'wisdom', 'shopping']).filter(id => APP[id] && APP[id].kind !== 'native' && !window.WizCore.isMaintenanceApp(APP[id])).slice(0, 4);
+      const recentIds = store.get('recent', ['wizard']).filter(id => APP[id] && APP[id].kind !== 'native' && !window.WizCore.isMaintenanceApp(APP[id])).slice(0, 4);
       paint(`<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
         ${APPS.some(a => a.kind === 'view') ? `<div class="lgroup"><h4>Views <span>zoomable</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'view').map(appTile).join('')}</div></div>` : ''}
         <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).length}</span></h4><div class="lgrid">${APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).map(appTile).join('')}<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button></div></div>`); // preserve current tiles/order; Get apps opens a normal app frame
