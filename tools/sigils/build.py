@@ -84,6 +84,7 @@ HOUSE = {
     'wizard-cloudflare':('cloud', 62,  None),
     'wizard-shopping':('bag',     55,  None),
     'sniper':        ('scope',    4,   0.12),
+    'card-benefits': ('card',     145, None),
     'defleur-video': ('clip',     268, None),
     'troubleshooter':('wrench',   186, 0.08),
     'wizard-ux':     ('wizard',   280, 0.09),
