@@ -83,3 +83,16 @@ test('every dial shows what is left as a fuel gauge, computer and AI on separate
   assert.match(h, /aria-label="Claude 58% left"/); assert.equal((h.match(/class="rs-e">E</g) || []).length, 1); assert.ok(h.indexOf('AI week left') < h.indexOf('aria-label="Server"'), 'AI row first');
   assert.equal((h.match(/class="rs-dials"/g) || []).length, 2);
 });
+
+test('devices sheet draws capacity bars sized by real capacity', () => {
+  const injected = src.replace("devices:null,devicesAt:0", "devices:{devices:[{id:'this',kind:'this',group:'agent',name:'Big',status:'online',cpus:8,cpu:10,memory:50,memoryTotalGB:32,disks:[{label:'System disk',sizeGB:1000,freeGB:500,pct:50}]},{id:'s',kind:'ssh',group:'agent',name:'Small',status:'online',cpus:4,cpu:95,memory:20,memoryTotalGB:8,disks:[{label:'System disk',sizeGB:250,freeGB:200,pct:20}]}],network:{available:true,peers:[]}},devicesAt:0");
+  assert.notEqual(injected, src, 'devices state literal found');
+  const ctx = { window: {}, document: { documentElement: { dataset: { skin: 'obsidian' } }, addEventListener() {}, querySelectorAll: () => [], hidden: false },
+    localStorage: { getItem: () => null, setItem() {} }, queueMicrotask() {}, setTimeout, clearTimeout, fetch: async () => ({ ok: false }), AbortController };
+  ctx.window = ctx; ctx.window.addEventListener = () => {};
+  vm.runInNewContext(injected.replace('window.WosResources={', 'globalThis.__dv=groupedDevicesHtml;window.WosResources={'), ctx);
+  const h = ctx.__dv();
+  assert.match(h, /data-cap="mem"[\s\S]*style="flex:32 1 0"[\s\S]*style="flex:8 1 0"/);
+  assert.match(h, /22 GB free of 40 GB/); assert.match(h, /700 GB free of 1.3 TB/);
+  assert.match(h, /data-cap="cpu"[\s\S]*rs-cap-seg rs-empty rs-crit/);
+});
