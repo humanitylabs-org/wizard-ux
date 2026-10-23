@@ -138,5 +138,16 @@
 .new-desk .nd-head b { font-size: 22px; font-weight: 700; }
 .new-desk .nd-head span { font-size: 13.5px; color: var(--ink-3); }
 .new-desk .lgroup { margin-bottom: 22px; }
+/* Search apps (James, 23 Oct 2026): pill at bottom centre, above the dock. The desk scroll leaves room for it. */
+.new-desk.kinds { padding-bottom: 92px; }
+.nd-search { position: absolute; left: 50%; bottom: calc(var(--dock-h) + var(--safe-b, 0px) + 8px); transform: translateX(-50%); width: min(78%, 340px); height: 46px; z-index: 3; display: flex; align-items: center; gap: 9px; padding: 0 16px; border-radius: 999px; background: color-mix(in srgb, var(--bg-2, #0f0c17) 82%, transparent); border: 1px solid var(--line-2); box-shadow: 0 8px 26px rgba(0, 0, 0, .32); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+.nd-search svg { width: 17px; height: 17px; flex: 0 0 auto; fill: none; stroke: var(--ink-3); stroke-width: 2.2; stroke-linecap: round; }
+.nd-search input { flex: 1; min-width: 0; height: 100%; background: none; border: 0; outline: none; color: var(--ink); font: inherit; font-size: 16px; user-select: text; -webkit-user-select: text; }
+.nd-search input::placeholder { color: var(--ink-3); }
+.nd-search input::-webkit-search-cancel-button { display: none; }
+.new-desk .lapp[hidden], .new-desk .lgroup[hidden], .new-desk .forag[hidden] { display: none; }
+.new-desk .forag.searching .fa-body { display: block !important; } /* beats a skin's folded rule while searching */
+.new-desk .forag.searching .fa-row { display: none !important; }
+.new-desk .nd-none { margin: 30px 4px; text-align: center; color: var(--ink-3); font-size: 14px; }
 .new-desk .lgroup h4 { margin: 0 4px 12px; font-size: 12px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
 

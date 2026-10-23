@@ -41,6 +41,8 @@
   let importer = url => import(url);
   let committedId = null, loadSeq = 0;
   let personal = null, personalSeq = 0, packageReady = Promise.resolve();
+  // Built-in gestures every skin wears (core files register them; same API, guards and cleanup as a skin script).
+  const builtinDefs = new Map(), builtins = new Map();
   const record = (id, label = id) => ({ id, label, offs: new Set(), frames: new Set(), claims: new Set(), mounts: new Set(), taps: new Set(), levels: new Set(), orbs: new Set(), on: { route: new Set(), render: new Set(), voice: new Set() }, errs: [], dead: false, teardown: null });
 
   const skinOf = id => (typeof window !== 'undefined' && window.WosSkin && window.WosSkin.pkgOf) ? window.WosSkin.pkgOf(id) : null;
@@ -190,6 +192,7 @@
     if (!a) return;
     if (active === a) active = null;
     if (personal === a) personal = null;
+    if (builtins.get(a.id) === a) builtins.delete(a.id);
     a.dead = true;
     if (typeof a.teardown === 'function') { try { a.teardown(reason); } catch (e) { try { console.warn(`[skin ${a.id}] teardown:`, e); } catch (_) {} } }
     for (const off of [...a.offs]) { try { off(); } catch (_) {} }
@@ -200,7 +203,7 @@
     for (const o of a.orbs) { try { o.sleep(true); } catch (_) {} } a.orbs.clear();
     if (layoutRec === a) layoutRec = null;
     a.offs.clear(); a.frames.clear(); a.mounts.clear(); a.taps.clear(); a.on.route.clear(); a.on.render.clear(); a.on.voice.clear();
-    for (const id of a.claims) { if (!(active?.claims.has(id) || personal?.claims.has(id))) claims.delete(id); }
+    for (const id of a.claims) { if (!layers().some(l => l !== a && l.claims.has(id))) claims.delete(id); }
     a.claims.clear();
   }
 
@@ -224,7 +227,7 @@
     return active === a;
   }
 
-  const layers = () => [active, personal, layoutRec].filter(Boolean);
+  const layers = () => [...builtins.values(), active, personal, layoutRec].filter(Boolean);
   function emit(type, payload) {
     for (const a of layers()) for (const fn of [...a.on[type]]) fn(payload);
   }
@@ -293,7 +296,15 @@
     lastRoute = ''; emitRoute();
     return personal === a;
   }
-  function release(id) { claims.delete(id); active?.claims.delete(id); personal?.claims.delete(id); }
+  function release(id) { claims.delete(id); for (const l of layers()) l.claims.delete(id); }
+  function startBuiltin(name) {
+    const d = builtinDefs.get(name); if (!d || !shell || builtins.has('core:' + name) || disabled.has('core:' + name)) return false;
+    if (d.when === 'touch' && !env().touch) return false;
+    const a = record('core:' + name, d.label); builtins.set(a.id, a);
+    try { a.teardown = d.setup(makeApi(a)); } catch (e) { fault(a, 'setup', e); }
+    lastRoute = ''; emitRoute();
+    return builtins.get(a.id) === a;
+  }
 
   // Same honest-code lint as packaged skins, plus no module dependencies: only this file is approved.
   // This is a guardrail, not a sandbox for hostile JavaScript (owner code runs in the shell origin).
@@ -309,7 +320,7 @@
     /* core/skins.js: the owner picked a skin. Stylesheet plus (if any) its script. */
     commit(id) { ensureCss(id); committedId = id; if (shell) packageReady = load(id); },
     /* app.js: the shell is ready; hands over the narrow adapter skins are allowed to drive. */
-    attach(adapter) { shell = adapter; const id = committedId || (window.WosSkin && window.WosSkin.current); committedId = id; if (id) packageReady = load(id); window.WosMySkin?.startScript(); if (layoutOf(layoutId)) loadLayout(layoutId); },
+    attach(adapter) { shell = adapter; for (const n of builtinDefs.keys()) startBuiltin(n); const id = committedId || (window.WosSkin && window.WosSkin.current); committedId = id; if (id) packageReady = load(id); window.WosMySkin?.startScript(); if (layoutOf(layoutId)) loadLayout(layoutId); },
     /* Layouts: Settings › Look. Classic loads nothing. */
     layouts: LAYOUTS, setLayout,
     get layout() { return layoutId; },
@@ -320,10 +331,13 @@
     /* app.js: the orb's voice state changed. */
     voice(state) { if (layers().length) emit('voice', Object.freeze({ ...(shell?.voiceState ? shell.voiceState() : { state }) })); },
     loadPersonal, scriptProblem,
+    /* core/*.js: a gesture every skin wears. `when: 'touch'` skips desktop pointers. */
+    builtin(name, setup, { when = 'touch', label = name } = {}) { if (typeof setup !== 'function' || builtinDefs.has(name)) return false; builtinDefs.set(name, { setup, when, label }); return startBuiltin(name) || !shell; },
+    get builtinState() { return [...builtins.keys()]; },
     stopPersonal() { personalSeq++; dispose(personal, 'off'); },
     get personalState() { return { ready: !!shell, active: !!personal, disabled: disabled.has('my-skin'), listeners: personal?.offs.size || 0, handlers: personal ? personal.on.route.size + personal.on.render.size : 0 }; },
     /* chats.js: a chats window repainted part ('thread' | 'list'). */
-    rendered(part, el) { if (!active && !personal) return; emit('render', Object.freeze({ part, el })); emitRoute(); },
+    rendered(part, el) { if (!active && !personal && !builtins.size) return; emit('render', Object.freeze({ part, el })); emitRoute(); },
     /* app.js: desk or focus changed. */
     changed() { emitRoute(); },
     /* app.js dock swipe: true when a skin gesture owns this pointer. Cleared on pointerup/cancel. */

@@ -78,7 +78,7 @@ const threadOpen = (p, id) => p.evaluate(id => [...document.querySelectorAll('[d
         await p.locator('.ch-tacts [data-chact="snooze"]:visible').click();
         await p.locator('.boom-sheet .boom-card').waitFor();
         const pick = await p.evaluate(() => { const c = document.querySelector('.boom-card'), r = c.getBoundingClientRect(); return { title: c.querySelector('#boom-title')?.textContent, presets: c.querySelectorAll('[data-boom-preset]').length, minutes: c.querySelector('input[type=time]')?.step, zone: c.querySelector('select[name=timezone]')?.value, w: r.width, right: r.right, vw: innerWidth }; });
-        ok(pick.title === 'Snooze' && pick.presets === 3 && pick.minutes === '60' && /\//.test(pick.zone) && pick.right <= pick.vw, `${L}: compact picker: quick choices, exact minutes, visible zone, fits 390px`, pick);
+        ok(pick.title === 'When should this come back?' && pick.presets === 3 && pick.minutes === '60' && /\//.test(pick.zone) && pick.right <= pick.vw, `${L}: compact picker: quick choices, exact minutes, visible zone, fits 390px`, pick);
         await p.screenshot({ path: path.join(OUT, `${skin}-phone-picker.png`) });
         // Back closes the picker, never the thread or the app.
         const did = await back(p, false);
@@ -88,8 +88,7 @@ const threadOpen = (p, id) => p.evaluate(id => [...document.querySelectorAll('[d
         await p.locator('.boom-card [data-boom-exact]').click();
         await p.locator('.boom-card [data-boom-calendar-toggle]').click();
         ok(await p.locator('.boom-card [data-boom-calendar]:not([hidden])').count() === 1, `${L}: calendar expands`);
-        await p.locator('.boom-card [data-boom-preset]').nth(1).click();
-        await p.locator('.boom-card [type=submit]').click();
+        await p.locator('.boom-card [type=submit]').click(); // Pick a time: the exact fields carry their own Snooze button
         await p.locator('.boom-banner').waitFor();
         const post = st.posts.at(-1);
         ok(post?.kind === 'return' && post.thread === T[0].id && post.target?.message === null && post.when?.once && !post.body, `${L}: saved as a scheduler return job on the thread`, post);
@@ -97,9 +96,9 @@ const threadOpen = (p, id) => p.evaluate(id => [...document.querySelectorAll('[d
         // ---- Boomerang one message.
         await p.locator('.msg.a [data-mboom]:visible').first().click();
         await p.locator('.boom-card').waitFor();
-        ok(await p.locator('#boom-title').innerText() === 'Snooze', `${L}: message picker`);
+        ok(await p.locator('#boom-title').innerText() === 'When should this come back?', `${L}: message picker`);
         await p.locator('.boom-card [data-boom-note-toggle]').click(); await p.locator('.boom-card textarea[name=note], .boom-card input[name=note]').fill('Check the price');
-        await p.locator('.boom-card [type=submit]').click(); await sleep(400);
+        await p.locator('.boom-card [data-boom-preset]').first().click(); await sleep(400);
         const mpost = st.posts.at(-1);
         ok(mpost?.kind === 'return' && Number(mpost.target?.message) > 0 && /4,200/.test(mpost.target?.excerpt || '') && mpost.prompt === 'Check the price', `${L}: message Boomerang carries its message and note`, mpost);
         // ---- It comes back.

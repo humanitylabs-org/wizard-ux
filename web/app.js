@@ -394,7 +394,8 @@
     window.WosSetupLaunch?.desk(idx === HOME); // a first-run tour held back for Setup starts on the first return Home
     if (moved && LINKS && LINKS.isOpen()) LINKS.close(); // a link is a peek over this desk: moving desks dismisses it
     if (moved) vib(8);
-    if (!silent) announce(`<b>${esc(deskName(idx))}</b>`);
+    // An empty New desk already titles itself and its search pill sits where the label would flash.
+    if (!silent && (desks[idx].home || desks[idx].wins.length)) announce(`<b>${esc(deskName(idx))}</b>`);
     markVisibleThreadsSeen();
     window.WosResources?.sync();
     window.WosSkinHost?.changed();
@@ -1317,7 +1318,7 @@
     if (sheet === 'settings') renderSettings();
     if (sheet === 'inbox') renderInbox();
     refreshHome(); renderMoons();
-    desks.forEach((d, i) => { if (!d.wins.length && !d.home) { const g = secOf(i)?.querySelector('.glance'); if (g) g.innerHTML = renderEmpty(i); } });
+    desks.forEach((d, i) => { if (!d.wins.length && !d.home) { const g = secOf(i)?.querySelector('.glance'); if (g && !g.querySelector('[data-ndq]')?.value && document.activeElement?.closest('.glance') !== g) g.innerHTML = renderEmpty(i); } });
     for (const id of Object.keys(W)) { const w = W[id]; if ((w.app === 'chats' || CHATS.isHosted(id)) && w.thread) { const el = track.querySelector(`[data-chats="${id}"]`); if (el) renderThread(w, el); } }
     for (const id of Object.keys(W)) { const w = W[id]; if (w.app === 'chats' && !w.thread) { const el = track.querySelector(`[data-chats="${id}"]`); if (el && el.querySelector('.ch-list')) CHATS.renderChatList(w, el); } }
     // Tell Android how many app messages are stuck, so it can say so in a notification while the app is closed.
@@ -1378,7 +1379,7 @@
   function newDesk() {
     const last = desks.length - 1;
     if (last > 0 && !desks[last].wins.length) return goDesk(last);
-    forAgOpen = false; desks.push(blank({})); syncDesks(); renderDots(); goDesk(desks.length - 1, true); announce('<b>New desk</b>');
+    foldOpen.agents = foldOpen.dev = false; desks.push(blank({})); syncDesks(); renderDots(); goDesk(desks.length - 1, true); // the empty desk titles itself; a label flash would cover its search pill
   }
   /* Miguel's skins (Dark, Light, Landscapes): the launcher and New desk sort apps by what they are, with no Recent row.
    * Same order as the App Store: Apps = anything with a screen you use; Wizard apps = backend-only apps your agent uses
@@ -1396,15 +1397,20 @@
    * and wear a ring that reads as "this fills a spot"; everything else follows alphabetically. */
   const SYSTEM_IDS = new Set(['wizard', 'setup', 'files', 'notifications', 'transcriber', 'browser', 'secret-drop', 'wizard-chatgpt', 'wizard-claude']);
   const isSystem = a => SYSTEM_IDS.has(a.id) || a.system === true;
+  const inDev = a => !isSystem(a) && (window.WizCore.isInDevelopment?.(a) || a.source === 'launcher.json' || /-next$/.test(a.id) || /\(test\)\s*$/i.test(a.name || ''));
   function appKinds() {
     const byName = (x, y) => (isSystem(y) - isSystem(x)) || x.name.localeCompare(y.name, undefined, { sensitivity: 'base' });
     const mine = APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && ['wizard', 'chats', 'usuals', 'view'].includes(a.kind));
     const conns = mine.filter(a => a.kind === 'wizard' && isConnector(a));
     // Agents: each agent's chats (main agent first, as registered) plus the Agents app that manages them.
     const agents = [...mine.filter(a => a.kind === 'chats'), ...(APP.agents ? [APP.agents] : [])].sort((x, y) => isSystem(y) - isSystem(x));
-    const apps = mine.filter(a => a.kind !== 'chats' && !conns.includes(a)).sort(byName);
+    const people = mine.filter(a => a.kind !== 'chats' && !conns.includes(a)).sort(byName);
+    // In development (James, 23 Oct 2026): screens linked from the owner's launcher list rather than installed by the
+    // App Manager, and test copies of an installed app. They fold under their own row, shown only when there are any;
+    // once a screen ships as an installed app it moves up to Apps by itself.
+    const apps = people.filter(a => !inDev(a)), dev = people.filter(inDev);
     const back = (window.WizCore.backendApps?.() || []).filter(a => !APP[a.id]);
-    return { apps, agents, wiz: back.filter(a => !isConnector(a)).sort(byName), conns: [...conns, ...back.filter(isConnector)].sort(byName) };
+    return { apps, dev, agents, wiz: back.filter(a => !isConnector(a)).sort(byName), conns: [...conns, ...back.filter(isConnector)].sort(byName) };
   }
   const sysMark = html => html.replace('class="lapp', 'class="lapp lapp-sys').replace('<span class="nm">', '<span class="nm" title="System app">');
   const backTile = a => `<button class="lapp lapp-back${isSystem(a) ? ' lapp-sys' : ''}" data-appinfo="${esc(a.id)}" data-name="${esc(a.name)}" style="--i:${tileN++}">${ico('span', 'ic', a)}<span class="nm">${esc(a.name)}</span></button>`;
@@ -1424,22 +1430,24 @@
     // folded by default (each open of the sheet or a New desk starts folded), tap the row to open it.
     const fa = order.filter(k => k !== 'apps' && G[k]);
     const n = (K.wiz.length + K.agents.length + K.conns.length);
-    const folded = fa.length ? `<div class="forag${forAgOpen ? ' open' : ''}"><button type="button" class="fa-row" data-fatoggle aria-expanded="${forAgOpen}"><span>For agents</span><small>${n}</small><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><div class="fa-body">${fa.map(k => G[k]).join('')}</div></div>` : '';
-    return (order.includes('apps') ? G.apps : '') + folded;
+    const fold = (key, label, count, body) => `<div class="forag fa-${key}${foldOpen[key] ? ' open' : ''}" data-fold="${key}"><button type="button" class="fa-row" data-fatoggle="${key}" aria-expanded="${!!foldOpen[key]}"><span>${label}</span><small>${count}</small><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><div class="fa-body">${body}</div></div>`;
+    const dev = order.includes('apps') && K.dev.length ? fold('dev', 'In development', K.dev.length, `<div class="lgroup kg-dev"><h4>In development</h4><div class="lgrid">${K.dev.map(kindTile).join('')}</div></div>`) : '';
+    const folded = fa.length ? fold('agents', 'For agents', n, fa.map(k => G[k]).join('')) : '';
+    return (order.includes('apps') ? G.apps : '') + dev + folded;
   }
-  let forAgOpen = false;
+  const foldOpen = { agents: false, dev: false };
   document.addEventListener('click', e => {
     const t = e.target.closest && e.target.closest('[data-fatoggle]'); if (!t) return;
-    e.stopPropagation(); forAgOpen = !forAgOpen;
-    document.querySelectorAll('.forag').forEach(el => { el.classList.toggle('open', forAgOpen); el.querySelector('[data-fatoggle]')?.setAttribute('aria-expanded', String(forAgOpen)); });
+    e.stopPropagation(); const key = t.dataset.fatoggle || 'agents'; foldOpen[key] = !foldOpen[key];
+    document.querySelectorAll(`.forag[data-fold="${key}"]`).forEach(el => { el.classList.toggle('open', foldOpen[key]); el.querySelector('[data-fatoggle]')?.setAttribute('aria-expanded', String(foldOpen[key])); });
   }, true);
   function openAppInfo(el) { window.WosAppRoute?.open(el.dataset.appinfo, { name: el.dataset.name || '' }); }
   function renderEmpty(i) {
-    const grp = (h, list) => list.length ? `<div class="lgroup"><h4>${h}</h4><div class="lgrid">${list.map(appTile).join('')}</div></div>` : '';
-    if (oursSkin()) { tileN = 0; return `<div class="desk-scroll new-desk kinds"><div class="nd-head"><b>New desk</b><span>Pick an app to open here</span></div>${kindGroups(['apps', 'wiz', 'agents', 'conns'])}</div>`; }
-    const wiz = APPS.filter(a => a.id !== 'agents' && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')), views = APPS.filter(a => a.kind === 'view');
-    tileN = 0;
-    return `<div class="desk-scroll new-desk"><div class="nd-head"><b>New desk</b><span>Pick an app to open here</span></div>${grp('Apps', wiz)}${grp('Views', views)}</div>`;
+    // Miguel's app kinds are every skin's New desk (James, 23 Oct 2026): Apps with system apps first and ringed, then
+    // Wizard apps, Agents and Connectors folded under "For agents".
+    // Search apps (James, 23 Oct 2026): a pill at bottom centre, above the dock; typing filters every group in place
+    // (For agents unfolds while a query is on), Enter opens the first match.
+    tileN = 0; return `<div class="desk-scroll new-desk kinds"><div class="nd-head"><b>New desk</b><span>Pick an app to open here</span></div>${kindGroups(['apps', 'wiz', 'agents', 'conns'])}<p class="nd-none" hidden>No app matches</p></div><form class="nd-search" role="search" data-ndsearch><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><input type="search" data-ndq placeholder="Search apps" aria-label="Search apps" autocomplete="off" enterkeyhint="go"></form>`;
   }
   function renderApp(w) {
     const a = APP[w.appId] || {};
@@ -1522,7 +1530,7 @@
       if(W[audioId]?.appId === 'wizard-music') audioFrames.add(f);
       // servicesAs: a second view of an installed app (Video Editor's Feedback) gets that app's Back/services.
       const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
-      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: sid => CHATS.openHosted(w.id, f, sid), openContextDraft: (key, text) => { closeSheets(true); const cw = placeApp(mainChats, { app: 'chats', thread: null }, {}); if (!cw) throw new Error('Chats unavailable'); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); return receipt; }, isVisible: () => desks[idx].wins.includes(w.id) && (!desks[idx].full || desks[idx].focus === w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) });
+      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), openContextDraft: (key, text) => { closeSheets(true); const cw = placeApp(mainChats, { app: 'chats', thread: null }, {}); if (!cw) throw new Error('Chats unavailable'); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); return receipt; }, isVisible: () => desks[idx].wins.includes(w.id) && (!desks[idx].full || desks[idx].focus === w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) });
       watchEarly(f);
       const wrap = f.closest('.frame-wrap');
       if (f.dataset.probe) { wrap.classList.add('coming'); f.removeAttribute('src'); probeFrame(f, f.dataset.probe); }
@@ -1703,6 +1711,29 @@
   track.addEventListener('pointerdown', e => {
     const we = e.target.closest('.win'); if (we) focusWin(we.dataset.win);
   }, true);
+  function ndFilter(input) {
+    const nd = input.closest('.glance')?.querySelector('.new-desk'); if (!nd) return null;
+    // Names first ("Wiza" finds the Wizard apps, not every app whose blurb says Wizard); descriptions only when no name fits.
+    const n = norm(input.value); let first = null;
+    const tiles = [...nd.querySelectorAll('.lapp')].map(t => { const a = APP[t.dataset.app || t.dataset.appinfo], nm = norm(t.querySelector('.nm')?.textContent);
+      return { t, nm, byName: nm.split(' ').some(w => w.startsWith(n)) || nm.startsWith(n), byDesc: norm(a?.desc).includes(n) || nm.includes(n) }; });
+    const named = tiles.some(x => x.byName);
+    for (const x of tiles) {
+      const hit = !n || (named ? x.byName : x.byDesc); x.t.hidden = !hit;
+      if (hit && n && (!first || (x.nm.startsWith(n) && !first.s))) first = { t: x.t, s: x.nm.startsWith(n) };
+    }
+    for (const g of nd.querySelectorAll('.lgroup')) g.hidden = !!n && !g.querySelector('.lapp:not([hidden])');
+    for (const fa of nd.querySelectorAll('.forag')) { fa.classList.toggle('searching', !!n); fa.hidden = !!n && !fa.querySelector('.lapp:not([hidden])'); }
+    nd.querySelector('.nd-none').hidden = !n || !!first;
+    nd.classList.toggle('nd-q', !!n);
+    return first?.t || null;
+  }
+  track.addEventListener('input', e => { if (e.target.matches?.('[data-ndq]')) ndFilter(e.target); });
+  track.addEventListener('submit', e => {
+    const f = e.target.closest?.('[data-ndsearch]'); if (!f) return;
+    e.preventDefault(); const inp = f.querySelector('[data-ndq]'); const t = ndFilter(inp); if (!t) return;
+    inp.blur(); t.click();
+  });
   track.addEventListener('click', e => {
     const say = e.target.closest('[data-say]'); if (say) return runUtterance(say.dataset.say, 'auto');
     const info = e.target.closest('.new-desk [data-appinfo]'); if (info) return openAppInfo(info);
@@ -1876,7 +1907,7 @@
     if (which === 'settings' && stDesk) dropParkedSettings(); // Settings opened on this desk moves here
     sheet = which; device.classList.add('sheet-open'); device.dataset.sheet = which; tourEv('sheet', { which });
     window.WosResources?.back(); window.WosResources?.sync();
-    if (which === 'launcher') { forAgOpen = false; renderLauncher(q || ''); launcher.classList.add('open'); const s = $('#search'); s.value = q || ''; }
+    if (which === 'launcher') { foldOpen.agents = foldOpen.dev = false; renderLauncher(q || ''); launcher.classList.add('open'); const s = $('#search'); s.value = q || ''; }
     else if (which === 'settings') { settingsFocus = document.activeElement; renderSettings(); settingsEl.classList.add('open'); $('#settingsBody').scrollTop = 0; settingsView?.focus(); }
     else { renderInbox(); inboxEl.classList.add('open'); }
     [launcher, inboxEl, settingsEl].forEach(el => { if (el === settingsEl && stDesk) return; el.style.transform = ''; el.style.opacity = ''; });
@@ -3669,7 +3700,7 @@
     setMode: m => Orb.setMode(m),
     goHome: () => { if (idx !== HOME) goDesk(HOME, true); },
     workingCard: () => track.querySelector('.home-desk [data-act="working"]'),
-    cmdExample: () => (findApp('calendar') ? 'Open Calendar' : 'Open Day in review'),
+    cmdExample: () => (findApp('calendar') ? 'Open Calendar' : 'Open Files'),
     noMic: () => NOMIC,
     closeSheets: () => closeSheets(),
     setZen: on => setZen(on),

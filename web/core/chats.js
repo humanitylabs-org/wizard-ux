@@ -48,9 +48,22 @@ window.WizCore.chats = function createChats(H) {
   // A hosted thread borrows the exact standard chat UI without replacing its app iframe.
   // Entries and thread fields are ephemeral: shell persistence must still restore the app.
   const hosted = new Map();
-  function openHosted(wid, frame, sid) {
+  // Apps admitted to open the standard thread over their window (app-services.js keeps the same list).
+  // Wisdom (James, 22 Oct 2026): Ask AI is the real Chats thread, never an app-built chat.
+  const HOSTED_APPS = new Set(['wizard-manager', 'wisdom']);
+  function openHosted(wid, frame, sid, opts = {}) {
     const w = W[wid];
-    if (!w || w.appId !== 'wizard-manager' || !frame?.isConnected || frame.closest('[data-win]')?.dataset.win !== wid) return false;
+    if (!w || !HOSTED_APPS.has(w.appId) || !frame?.isConnected || frame.closest('[data-win]')?.dataset.win !== wid) return false;
+    // A newly-created agent thread may not be in the next session-list refresh yet.
+    if (opts?.agent != null) {
+      const a = typeof opts.agent === 'string' ? window.WosAgents?.get(opts.agent) : null;
+      if (!a || a.status !== 'running' || !window.WosAgents.isOther(opts.agent) || typeof LIVE.pinAgent !== 'function') return false;
+      LIVE.pinAgent(sid, opts.agent);
+    }
+    // An app item (Wisdom passage) rides beside this thread's draft as its reply, framed only into the next message.
+    // It never replaces one already waiting there, and the composer stays the owner's own words.
+    const rp = opts?.reply ? KIT.reply.clean(opts.reply) : null;
+    if (rp && sid !== '__new__' && !KIT.drafts.get('direct:' + sid).reply) KIT.drafts.setReply('direct:' + sid, rp);
     if (hosted.has(wid)) closeHosted(wid);
     const layer = document.createElement('div'); layer.className = 'chats hosted-thread'; layer.dataset.chats = wid;
     layer.style.cssText = 'position:absolute;inset:0;z-index:5;background:var(--wz-base,var(--base,#15151d));display:flex;flex-direction:column;min-height:0';
@@ -469,13 +482,13 @@ window.WizCore.chats = function createChats(H) {
   function replyBubble(r) {
     if (!r) return '';
     const pv = KIT.reply.preview(r, 180);
-    return `<div class="ch-reply" data-chreply role="group" aria-label="Replying to a notification"><span class="ch-reply-t"><b>${esc(clip(r.title || pv || 'Notification', 120))}</b>${r.title && pv ? `<span>${esc(pv)}</span>` : ''}</span><button type="button" class="ch-reply-x" data-chreplyx aria-label="Remove notification from this reply" title="Remove">×</button></div>`;
+    return `<div class="ch-reply" data-chreply role="group" aria-label="Replying to a quoted item"><span class="ch-reply-t"><b>${esc(clip(r.title || pv || 'Notification', 120))}</b>${r.title && pv ? `<span>${esc(pv)}</span>` : ''}</span><button type="button" class="ch-reply-x" data-chreplyx aria-label="Remove quoted item from this reply" title="Remove">×</button></div>`;
   }
   // The same item, read back from a sent message: a quiet card above his own words.
   function replyCard(r) {
     if (!r) return '';
     const pv = KIT.reply.preview(r, 180);
-    return `<div class="ch-rq" role="note" aria-label="Reply to a notification"><b>${esc(clip(r.title || pv || 'Notification', 120))}</b>${r.title && pv ? `<span>${esc(pv)}</span>` : ''}</div>`;
+    return `<div class="ch-rq" role="note" aria-label="Reply to a quoted item"><b>${esc(clip(r.title || pv || 'Notification', 120))}</b>${r.title && pv ? `<span>${esc(pv)}</span>` : ''}</div>`;
   }
   function discardDraft(key) { KIT.drafts.clear(key); toast('✕', 'Draft discarded', 1400); }
 
@@ -483,6 +496,8 @@ window.WizCore.chats = function createChats(H) {
   const COMPACT_KEY = 'wos.chats.compact.v1';
   // Miguel's skins (Dark, Light, Landscapes) default to the compact list; an explicit choice in Filter always wins.
   const OUR_SKINS = ['obsidian', 'obsidian-light', 'landscapes'];
+  // Regenerate sits under the last reply only for a skin (or My skin) that asks: `html[data-skin] { --wos-reply-regenerate: on; }`.
+  const regenOn = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-reply-regenerate').trim() === 'on'; } catch (_) { return false; } };
   const ourSkin = () => OUR_SKINS.includes(document.documentElement.dataset.skin || '');
   const compactOn = () => { try { const v = localStorage.getItem(COMPACT_KEY); return v == null ? OUR_SKINS.includes(document.documentElement.dataset.skin || '') : v === '1'; } catch (e) { return false; } };
   function filterSheet(c) {
@@ -718,7 +733,7 @@ window.WizCore.chats = function createChats(H) {
   // Repaint only the reply bubble (the textarea, its words and focus stay put).
   function refreshReply(wid) {
     const w = W[wid], form = elOf(wid)?.querySelector('[data-chform]'); if (!w || !form) return;
-    const r = w.thread === '__new__' && !winAgent(w) ? KIT.drafts.get(draftKey(w)).reply : null;
+    const r = w.thread && (w.thread !== '__new__' || !winAgent(w)) ? KIT.drafts.get(draftKey(w)).reply : null;
     form.querySelector('[data-chreply]')?.remove(); form.classList.toggle('has-reply', !!r);
     if (r) form.insertAdjacentHTML('afterbegin', replyBubble(r));
   }
@@ -839,7 +854,7 @@ window.WizCore.chats = function createChats(H) {
       const k = tn.a ? c.texts.push(tn.a.text) - 1 : -1;
       const bAt = tn.a?.at ?? tn.mediaAt;
       h += `<div class="msg a"${isFinite(bAt) ? ` data-boom-at="${bAt}"` : ''}><div class="bub">${tn.a ? md(tn.a.text) : ''}${mediaBlock(c, tn.media)}</div>`
-        + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>${isFinite(bAt) ? `<button type="button" data-mboom="${k}" data-at="${bAt}" aria-label="Snooze" title="Snooze this message">◷ Snooze</button>` : ''}${last && !working ? '<button type="button" data-mregen aria-label="Regenerate response">↻ Regenerate</button>' : ''}` : ''}</div></div>`;
+        + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>${last && !working && regenOn() ? '<button type="button" data-mregen aria-label="Regenerate response">↻ Regenerate</button>' : ''}` : ''}</div></div>`;
     }
     return h;
   }
@@ -1304,7 +1319,7 @@ window.WizCore.chats = function createChats(H) {
     const keepRange = keepTa && [keepTa.selectionStart, keepTa.selectionEnd, keepTa.selectionDirection];
     const keepScroll = keepTa ? keepTa.scrollTop : 0;
     const canStop = working && !!s?.runId && s.status !== 'stopping';
-    const rpl = isNew && !TAG ? KIT.drafts.get(dkey).reply : null; // a Notifications Reply waiting in this New chat
+    const rpl = !(isNew && TAG) ? KIT.drafts.get(dkey).reply : null; // an app item (Notifications, Wisdom passage) waiting with this draft
     PW?.ensureModels();
     // The model lives in the message box, bottom-right (James 18 Oct 2026); the header keeps the whole width for the title.
     // Miguel's skins (Dark, Light, Landscapes): a slide switch row above the composer replaces the in-box label.
@@ -2021,7 +2036,6 @@ window.WizCore.chats = function createChats(H) {
     // The lift that ends a long-press can land on the sheet's backdrop (the row sat under it): keep the sheet open.
     if (rowSheet && e.target.closest('.ch-sheet') && !e.target.closest('.ch-sheet-b')) { if (!justPressed()) closeRowSheet(); return true; }
     if (e.target.closest('[data-boom-id]') && w.thread) { const el = elOf(id); void BOOM()?.handle(e.target, r => { if (!showBoomMessage(el, r.anchor_at)) toast('!', 'That message is no longer in this thread', 2200); }); return true; }
-    const mb = e.target.closest('[data-mboom]'); if (mb && w.thread && BOOM()) { const s = LIVE.session(w.thread), t = ch(id).texts?.[+mb.dataset.mboom] ?? ''; BOOM().open({ sessionId: w.thread, targetKind: 'message', anchorAt: +mb.dataset.at, context: String(t).replace(/\s+/g, ' ').trim().slice(0, 280), title: s?.title || 'Thread' }); return true; }
     const ca = e.target.closest('[data-chact]'); if (ca && w.thread) { threadAct(id, w.thread, ca.dataset.chact); return true; }
     if (e.target.closest('[data-chstop]')) { const s = LIVE.session(w.thread); if (s?.runId) { e.target.closest('[data-chstop]').disabled = true; toast('■', 'Stopping…', 1400); LIVE.stop(s.runId).catch(() => { toast('!', 'Couldn’t stop · try again', 2600); renderThreadNow(w); }); } return true; }
     const apb = e.target.closest('[data-approve]'); if (apb) { chooseApproval(id, apb.dataset.approve, apb.dataset.controlKey, apb.closest('.appr')?.querySelector('[data-clarify-answer]')?.value); return true; }

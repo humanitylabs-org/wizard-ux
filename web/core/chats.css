@@ -673,5 +673,4 @@ html[data-shell="phone"] .ch-msgs .bub table { font-size: 15px; }
 .ch-boom { position: absolute; right: 44px; bottom: 9px; font-style: normal; font-size: 12px; line-height: 1; opacity: .7; }
 .ch-boom.due { opacity: 1; filter: drop-shadow(0 0 4px var(--violet-2)); }
 .ch-boom-ic { display: inline-block; width: 18px; font-size: 14px; line-height: 18px; text-align: center; }
-.mmeta [data-mboom] { font-size: 13px; padding-inline: 6px; }
 .msg.boom-flash > .bub { box-shadow: 0 0 0 2px var(--violet-2); transition: box-shadow .3s ease; }
