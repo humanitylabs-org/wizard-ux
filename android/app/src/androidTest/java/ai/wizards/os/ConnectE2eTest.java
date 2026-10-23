@@ -23,6 +23,9 @@ public class ConnectE2eTest {
     private final UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
     private void visible(String text) {
         if (device.wait(Until.findObject(By.text(text)), 15000) != null) return;
+        // WebView can lag its accessibility tree after an Activity returns to the front; settle once and re-read.
+        device.waitForIdle(); device.waitForWindowUpdate(null, 2000);
+        if (device.wait(Until.findObject(By.text(text)), 8000) != null || device.wait(Until.findObject(By.desc(text)), 2000) != null) return;
         // Keep the failing screen and its UI tree as evidence before failing.
         shot("fail-" + text.replaceAll("[^A-Za-z0-9]+", "-"));
         try { device.dumpWindowHierarchy(new File(c.getExternalFilesDir(null), "fail-hierarchy.xml")); } catch (Exception ignored) {}
@@ -164,7 +167,7 @@ public class ConnectE2eTest {
                 String html = "<!doctype html><title>Wizard OS</title><!-- core/ QA fixture -->"
                     + "<meta name='viewport' content='width=device-width, initial-scale=1'>"
                     + "<style>body{margin:0;background:#05030c;color:#f3efff;font:22px sans-serif}header{padding:16px;padding-top:calc(16px + var(--nat-t,0px))}button{font-size:20px;margin:12px}input{box-sizing:border-box;position:fixed;bottom:0;left:0;width:100%;height:64px;font-size:22px}#overlay{position:fixed;inset:25%;background:#483068;padding:20px}</style>"
-                    + "<header><div id='place'>Fixture home</div></header><button onclick=\"document.getElementById('place').textContent='Fixture nested'\">Open nested</button>"
+                    + "<header><h1 id='place' role='heading' aria-live='polite' style='font-size:22px;font-weight:normal;margin:0'>Fixture home</h1></header><button onclick=\"document.getElementById('place').textContent='Fixture nested'\">Open nested</button>"
                     + "<button onclick=\"document.getElementById('overlay').hidden=false\">Open overlay</button><div id='overlay' hidden>Fixture overlay</div><input value='Fixture composer'>"
                     + "<script>window.__wosTop=n=>document.documentElement.style.setProperty('--nat-t',n+'px');window.__wosNativeBack=()=>{const o=document.getElementById('overlay');if(!o.hidden){o.hidden=true;return 'handled'}document.getElementById('place').textContent='Fixture home';return 'handled'};</script>";
                 byte[] bytes = (shell ? (wizard ? html : "<title>Sign in</title>") : "{}").getBytes(StandardCharsets.UTF_8);
