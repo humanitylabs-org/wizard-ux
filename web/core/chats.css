@@ -65,15 +65,31 @@ html.wos-doc-scroll :is(#dock,.general-voice,.pill) { position: fixed; }
 .ch-search svg { width: 15px; height: 15px; flex: 0 0 auto; fill: none; stroke: var(--ink-3); stroke-width: 2; stroke-linecap: round; }
 .ch-search input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: 15px; }
 .ch-search input::placeholder { color: var(--ink-3); }
-/* Focus is the list mode, ahead of the temporary status chip. Shared phone/desktop. */
-.ch-search.has-focus { min-height: 50px; height: auto; padding: 2px 6px; gap: 6px; }
-.ch-focus { min-width: 44px; min-height: 44px; max-width: 58%; flex: 0 1 auto; display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 99px; background: var(--wz-surface, var(--surface)); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; }
-.ch-focus > span:not(.ag-sig) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ch-focus > i { flex: none; color: var(--ink-3); font-style: normal; }
-.ch-focus .ag-sig { flex: 0 0 20px; width: 20px; height: 20px; }
-.ch-focus .ag-lock { flex: 0 0 14px; width: 14px; height: 14px; }
-.ch-search.has-focus input { min-width: 24px; align-self: stretch; height: auto; }
-.ch-focus:focus-visible { outline: 2px solid var(--violet-2); outline-offset: 2px; }
+/* Persistent list Focus: one horizontally scrollable row, shared by both shells.
+ * A flex footer reserves its own height, so no last row can sit underneath it. */
+.ch-focus-strip { position: relative; z-index: 5; flex: 0 0 auto; display: flex; align-items: center; gap: 8px; min-width: 0; height: 52px; padding: 4px 10px; overflow-x: auto; overflow-y: hidden; white-space: nowrap; touch-action: pan-x; overscroll-behavior-x: contain; scrollbar-width: none; background: var(--bg); border-top: 1px solid var(--line); }
+.ch-focus-strip::-webkit-scrollbar { display: none; }
+.ch-focus-tab { position: relative; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; max-width: calc(100% - 20px); min-height: 44px; padding: 0 14px; border: 1px solid var(--line-2); border-radius: 22px; background: color-mix(in srgb, var(--ink) 5%, var(--bg)); color: var(--ink-2); font: inherit; font-size: 14px; white-space: nowrap; }
+.ch-focus-tab.on { background: var(--wz-accent, var(--violet-2)); border-color: var(--wz-accent, var(--violet-2)); color: var(--wz-accent-ink, var(--bg)); font-weight: 700; }
+.ch-focus-tab:focus-visible { outline: 2px solid var(--violet-2); outline-offset: -3px; }
+.ch-focus-tab > span { overflow: hidden; text-overflow: ellipsis; }
+.ch-focus-tab .ag-sig { display: none; }
+.ch-focus-tab .ag-lock { width: 14px; height: 14px; flex: none; }
+.ch-focus-dot { position: absolute; top: 4px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--amber); }
+.ch-list:has(.ch-focus-strip) .ch-fab { bottom: 68px; }
+.ch-list:has(.ch-focus-strip) .ch-pill { bottom: 68px; }
+/* Fullscreen phone lists extend behind the corner orb; reserve its existing safe area.
+ * Framed phone windows and desktop panes already end above their shell dock. */
+html[data-shell="phone"] .device.orb-corner .win.full .ch-focus-strip { margin-bottom: calc(var(--safe-b, 0px) + var(--corner-b) + var(--corner-orb) + 8px); }
+html[data-shell="phone"] .device.orb-corner .win.full .ch-list:has(.ch-focus-strip) .ch-fab { bottom: calc(var(--safe-b, 0px) + var(--corner-b) + var(--corner-orb) + 76px); }
+html[data-shell="phone"] .device.orb-corner .win.full .ch-list:has(.ch-focus-strip) .ch-pill { bottom: calc(var(--safe-b, 0px) + var(--corner-b) + var(--corner-orb) + 76px); }
+/* A solo list on pill-dock skins also reaches the viewport bottom. Reuse the
+ * skin's measured dock inset; the footer replaces its legacy fade/spacer. */
+#device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-focus-strip { margin-bottom: calc(var(--pill-top, 0px) + 8px); }
+#device .win:has(.ch-focus-strip)::after, #device .win .ch-list:has(.ch-focus-strip) .ch-scroll::after { display: none; }
+#device .win .ch-list:has(.ch-focus-strip) .ch-scroll { padding-bottom: 84px; }
+#device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-list:has(.ch-focus-strip) .ch-fab { bottom: calc(var(--pill-top, 0px) + 76px); }
+.device.zen:not(.orb-corner) .ch-focus-strip { margin-bottom: calc(var(--safe-b, 0px) + 24px); }
 .ch-list .ch-fcard:has([data-chfocusopt]) { background: var(--bg); }
 html[data-shell="phone"] .ch-fsheet:has([data-chfocusopt]) { bottom: calc(var(--dock-h) + var(--safe-b, 0px) + 8px); }
 .ch-fcard [data-chfocusopt] { min-height: 44px; height: auto; max-width: 100%; }
