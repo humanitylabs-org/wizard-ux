@@ -72,7 +72,6 @@ public final class AutomationEngine implements AutomationCover.Listener {
     private long awaySince;
     private String commitLabel;
     private boolean atCommitScreen;
-    private int ignoredClicks;
     private final Runnable watch = this::watchScreen;
 
     // replay
@@ -288,9 +287,6 @@ public final class AutomationEngine implements AutomationCover.Listener {
         if (mode != Mode.RECORDING || e == null) return;
         CharSequence from = e.getPackageName();
         int t = e.getEventType();
-        if (BuildConfig.DEBUG && ignoredClicks < 12 && t != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
-            ignoredClicks++; note("qa: event " + AccessibilityEvent.eventTypeToString(t) + " from " + from); // QA: what reaches the recorder
-        }
         if (from == null || !pkg.contentEquals(from)) return;
         long at = e.getEventTime() > 0 ? e.getEventTime() : SystemClock.uptimeMillis();
         if (t == AccessibilityEvent.TYPE_VIEW_CLICKED) {

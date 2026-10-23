@@ -189,10 +189,15 @@ public class AutomationE2eTest {
         assertEquals("recording", rec.getString("kind"));
         assertTrue(rec.getBoolean("committed"));
         assertEquals("฿95", rec.getString("total"));
-        String events = rec.getJSONArray("events").toString() + " log=" + main(() -> engine.status(T)).optJSONArray("log");
+        String events = rec.getJSONArray("events").toString();
         assertTrue(events, events.contains("\"label\":\"Krua Thai Kitchen\""));
         assertTrue(events, events.contains("\"near\":\"Pad thai\""));
         assertTrue(events, events.contains("View basket"));
-        assertFalse(events, events.toLowerCase().contains("place order"));
+        // The owner's commit tap ends the recording; it is never a step (screen fingerprints may name the button).
+        JSONArray ev = rec.getJSONArray("events");
+        for (int i = 0; i < ev.length(); i++) {
+            JSONObject step = ev.getJSONObject(i).optJSONObject("step");
+            if (step != null) assertFalse(events, AutomationPolicy.isCommit(step.optString("label")));
+        }
     }
 }
