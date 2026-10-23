@@ -6,12 +6,18 @@ const { chromium } = require('./tools/qa-playwright.cjs');
 const URL_ = process.argv[2], ID = process.env.ID; if (!ID) throw Error('set ID');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let cut = 0; // drop this many turns from the end of the thread's history
+let forceRunning = false; // the Chats list still says Working (it lags a finished reply by up to a poll)
 (async () => {
   const b = await chromium.launch();
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, serviceWorkers: 'block', bypassCSP: true });
   const p = await ctx.newPage();
   await p.route('**/*', async r => {
     const q = r.request(); if (!['GET', 'HEAD'].includes(q.method())) return r.fulfill({ status: 200, body: '{}' });
+    if (forceRunning && q.url().includes('/wizard/hermes/api/sessions?')) {
+      const res = await r.fetch(); const j = await res.json();
+      for (const k of ['data', 'sessions', 'items']) for (const row of j[k] || []) if ([row.id, row.session_id].includes(ID)) { row.status = 'running'; if ('run_status' in row) row.run_status = 'running'; }
+      return r.fulfill({ response: res, body: JSON.stringify(j) });
+    }
     if (q.url().includes(`/sessions/${ID}/messages`)) {
       const res = await r.fetch(); const j = await res.json(); const k = Array.isArray(j.data) ? 'data' : 'messages';
       for (let n = 0; n < cut; n++) { const rows = j[k]; const lastU = rows.map(x => x.role).lastIndexOf('user'); if (lastU > 0) j[k] = rows.slice(0, lastU); }
@@ -52,6 +58,24 @@ let cut = 0; // drop this many turns from the end of the thread's history
   landed = await waitFor(`(${nb}).querySelectorAll('[data-morph-key]').length !== ${m1}`);
   await sleep(1500);
   check('reply-lands-while-reading', a, await p.evaluate(eye), landed);
+
+  // 3) The latest reply has landed and you are reading it, the top of your own message still peeking above; the list's
+  //    Working status catches up (running -> completed) and the work receipt between the two changes shape.
+  //    Measured by the words under the eye line, not by the key the fix itself uses.
+  const words = `(()=>{const n=${nb};const r=n.getBoundingClientRect();const y=r.top+r.height/3;const el=document.elementFromPoint(r.left+r.width/2,y);const m=el&&el.closest('.ch-msgs > *');if(!m)return null;return {snip:m.innerText.trim().slice(0,60),off:Math.round(m.getBoundingClientRect().top-r.top),st:Math.round(n.scrollTop)}})()`;
+  const wordsAgain = snip => p.evaluate(`(()=>{const n=${nb};const r=n.getBoundingClientRect();const m=[...n.children].find(e=>e.innerText.trim().slice(0,60)===${JSON.stringify(snip)});return m?{snip:${JSON.stringify(snip)},off:Math.round(m.getBoundingClientRect().top-r.top),st:Math.round(n.scrollTop)}:null})()`);
+  await p.keyboard.press('Escape'); await sleep(800);
+  cut = 0; forceRunning = true; await bump('running', 0);
+  await p.evaluate(id => __wos.openWizardThread(id), ID); await sleep(5000);
+  // Park so the latest reply sits on the eye line with the bottom 20 px of your last message still above it.
+  await p.evaluate(`(()=>{const n=${nb};n.dispatchEvent(new TouchEvent('touchstart',{bubbles:true}));const u=[...n.querySelectorAll('.msg.u:not(.pending)')].pop();const r=n.getBoundingClientRect();n.scrollTop+=u.getBoundingClientRect().bottom-r.top-20;n.dispatchEvent(new Event('scroll'));n.dispatchEvent(new TouchEvent('touchend',{bubbles:true}));})()`);
+  await sleep(800);
+  const w0 = await p.evaluate(words), live0 = await p.evaluate(`!!${nb}.querySelector('.live')`);
+  forceRunning = false; await p.evaluate(id => { const s = __wos.live.session(id); s.status = 'completed'; s.messageCount += 1; }, ID);
+  landed = await waitFor(`!(${nb}).querySelector('.live')`, 25000); await sleep(1500);
+  const w1 = w0 && await wordsAgain(w0.snip);
+  const ok3 = !!(landed && w0 && w1 && Math.abs(w0.off - w1.off) <= 4); results.push(ok3);
+  console.log('working-status-catches-up-while-reading', JSON.stringify({ ok: ok3, landed, liveBefore: live0, before: w0, after: w1 }));
 
   console.log(JSON.stringify({ ok: results.every(Boolean) }));
   await b.close();
