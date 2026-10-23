@@ -1133,7 +1133,10 @@
     if (vFiles?.files.some(f => f.error && !f.local)) { toast('!', 'Remove the failed upload before sending · take kept', 2600); return 'busy'; }
     if (commandTake) {
       dictationFinishing = true; const snap = vSnapshot;
-      try { const r=await VOICE.finish({transcribe:false}); if(!r?.blob)return 'none'; const take=await OUTBOX.retainDictation(r.blob,r.captureId); const it=await OUTBOX.transcribeDictation(take.id); if(!it?.text)return 'retained';
+      try { const r=await VOICE.finish({transcribe:false}); if(!r?.blob)return 'none'; const take=await OUTBOX.retainDictation(r.blob,r.captureId); const it=await OUTBOX.transcribeDictation(take.id);
+        // A silent command never happened: nothing to recover. A failed transcription keeps its recording.
+        if(!it?.text&&/^No speech detected/.test(it?.error||'')&&await OUTBOX.completeLocal(it.id)){toast('◌','No speech heard · nothing sent',1800);return 'none';}
+        if(!it?.text)return 'retained';
         // A command take is never a message: executed or unmatched, its custody finishes here.
         // Music settles on the player's done receipt; a failure keeps the recording.
         const cmd=LOCAL_COMMANDS.parse(it.text,snap,'command'); const music=/^(music|play_music)$/.test(cmd?.action||'');
