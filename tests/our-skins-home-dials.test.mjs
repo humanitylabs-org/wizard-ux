@@ -69,7 +69,7 @@ test('a credit account renders as a fuel gauge with dollars left', () => {
   vm.runInNewContext(injected, ctx);
   const h = ctx.WosResources.home();
   assert.match(h, /rs-dial  rs-fuel rs-empty|rs-dial rs-fuel rs-empty/);
-  assert.match(h, /data-money="\$4\.50"/); assert.match(h, /class="rs-e">E</); assert.match(h, /Tinfoil \$4\.50 credit left/);
+  assert.match(h, /data-money="\$4\.50"/); assert.match(h, /Tinfoil \$4\.50 credit left/);
 });
 
 test('every dial shows what is left as a fuel gauge, computer and AI on separate lines', () => {
@@ -80,6 +80,6 @@ test('every dial shows what is left as a fuel gauge, computer and AI on separate
   vm.runInNewContext(injected, ctx);
   const h = ctx.WosResources.home();
   assert.match(h, /aria-label="CPU 70% left"/); assert.match(h, /rs-fuel rs-empty rs-crit"[^>]*data-k="Memory"/);
-  assert.match(h, /aria-label="Claude 58% left"/); assert.equal((h.match(/class="rs-e">E</g) || []).length, 4);
+  assert.match(h, /aria-label="Claude 58% left"/); assert.equal((h.match(/class="rs-e">E</g) || []).length, 1); assert.ok(h.indexOf('AI week left') < h.indexOf('aria-label="Server"'), 'AI row first');
   assert.equal((h.match(/class="rs-dials"/g) || []).length, 2);
 });

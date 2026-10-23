@@ -617,3 +617,6 @@ html[data-skin="landscapes"] .rs-fuel.rs-empty .rs-gauge b { color: var(--amber,
 html[data-skin="landscapes"] .rs-fuel.rs-crit .rs-gauge .rs-arc { stroke: #ff8080; }
 html[data-skin="landscapes"] .rs-fuel.rs-crit .rs-gauge :is(.rs-ndl path, .rs-hub) { fill: #ff8080; }
 html[data-skin="landscapes"] .rs-fuel.rs-crit .rs-gauge b { color: #ff8080; }
+
+/* E / F once (first dial only) and muted: a legend, not a label on every gauge (Miguel, 23 Oct). */
+html[data-skin="landscapes"] .rs-fuel .rs-gauge :is(.rs-e, .rs-f) { opacity: .5; font-weight: 600; }
