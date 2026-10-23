@@ -1176,13 +1176,8 @@
       {
         const staged = await OUTBOX.stage({kind:aimSid && aimSid!=='__new__'?'reply':'new',sessionId:aimSid==='__new__'?'':aimSid||'',steerRunId:rp?.steerRunId || '',...vRoute,audio:r.blob,captureId:r.captureId,instructions:vContext,how:'voice, aimed at this thread',source:'orb'});
         stagedId=staged.id;
-        // The outbox owns this take from here, so Reload no longer waits for transcription (outbox.js recover).
+        // The outbox owns transcription and delivery from here, so Reload no longer waits for either one.
         vHandedOff = !commandTake && await OUTBOX.handOff?.(stagedId) ? stagedId : null;
-        if(staged.durable) {
-          try { transcript=String((await window.WizConfig.transcribe(r.blob,{prompt:window.WizConfig.voicePrompt(),signal:AbortSignal.timeout(45000)})).text||'').trim(); } catch(_) {}
-          // Talk-key/tap takes are messages, even when the transcript resembles a command.
-          // Only commandVoice's explicit commandTake path above invokes the shared grammar.
-        }
       }
     }
     const w = vTarget && W[vTarget];
@@ -1337,6 +1332,7 @@
   // Esc peels one layer: palette → keys → inbox → voice → thread → (nothing: stays put, never leaves).
   function escStep() {
     if (window.WosSelMenu?.back()) return 'selection';
+    if (window.WosBoomerang?.back()) return 'boomerang'; // the Boomerang picker sits above the thread it was opened from
     if (!pal.hidden) { closePalette(); return 'palette'; }
     if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet
     if (window.WizWebUpdate?.back()) return 'update-list'; // the update card's thread list folds first
@@ -1346,7 +1342,7 @@
     if (window.WosResources?.back()) return 'resources';
     if (closeUsage()) return 'usage';
     if (settingsReturn === 'files') { const nested = CHATS.closeOverlay(); if (nested) { returnToSettings(); return nested; } settingsReturn = ''; }
-    if (setEl && !setEl.hidden) { closeSettings(); return 'settings'; }
+    if (setEl && !setEl.hidden) { if (settingsView.back()) return 'settings-page'; closeSettings(); return 'settings'; }
     if (!ib.hidden) { closeInbox(); return 'inbox'; }
     const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
     if (window.WosSkinFrame?.back()) return 'skin-controls';

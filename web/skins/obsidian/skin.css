@@ -212,7 +212,10 @@ html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner)
 /* Fade: a soft scrim rises from the bottom edge behind the pill, so whatever sits above the bar melts into the
  * background (iOS tab-bar look) instead of ending in a hard line. Hidden whenever the bar itself is hidden. */
 html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats:has(.ch-list)::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--pill-top) + 64px); z-index: 4; pointer-events: none; background: linear-gradient(to top, var(--bg) var(--pill-b), color-mix(in srgb, var(--bg) 92%, transparent) calc(var(--pill-top) - 20px), color-mix(in srgb, var(--bg) 55%, transparent) calc(var(--pill-top) + 22px), transparent 100%); }
-html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-list .ch-scroll { padding-bottom: calc(var(--pill-top) + 14px); }
+/* The room under the last row is a real flex item, not scroll padding: iPhone Safari leaves a flex scroller's
+ * bottom padding out of the scroll range, so a just-full list would not scroll the last row clear of + and the pill. */
+html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-list .ch-scroll { padding-bottom: 0; }
+html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-list .ch-scroll::after { content: ""; display: block; order: 99; flex: 0 0 calc(var(--pill-top) + 66px); }
 /* Opinionated (phone): just the orb. No ring, spinning arcs, orbit dots, halo or handle line; the count badge and the
  * tap ripple stay. Gestures unchanged (the scrub strip still works, it just draws nothing at rest). */
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock :is(.orb-ring, .moons, .orb-halo) { display: none; }
@@ -745,3 +748,46 @@ html[data-skin^="obsidian"] .device:has(.rs-sheet) .home :is(.constellation, .ho
 html[data-skin^="obsidian"] .rs-detail-head button:focus:not(:focus-visible) { outline: none; box-shadow: none; }
 html[data-skin^="obsidian"] .rs-detail-head button { outline-offset: 0; }
 html[data-skin^="obsidian"][data-shell="phone"] .rs-detail-head button:focus { outline: none; box-shadow: none; }
+
+/* Home: AI and Computers as two clearly separate blocks (Miguel, 23 Oct). Each block has a small heading; compute
+   bars are stacked by machine, each machine in its own colour with a legend. Warnings stay amber/red. */
+html[data-skin^="obsidian"] [data-home-resources] .rs-barsw.rs-widget.wz-home-widget { gap: 22px; }
+html[data-skin^="obsidian"] .rs-gh { display: flex; align-items: baseline; gap: 6px; margin: 0 0 2px; font-size: 11px; }
+html[data-skin^="obsidian"] .rs-gh b { font-weight: 700; letter-spacing: .04em; color: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .rs-gh span { color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-bg-hw { padding-top: 14px; border-top: 1px solid color-mix(in srgb, var(--ink) 16%, transparent); }
+html[data-skin^="obsidian"] .rs-lg { display: flex; gap: 14px; margin: 0 0 3px; font-size: 11px; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-lg span { display: inline-flex; align-items: center; gap: 5px; }
+html[data-skin^="obsidian"] .rs-lg i { width: 8px; height: 8px; border-radius: 2px; background: var(--dc); }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bt { height: 9px; gap: 2px; }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bs { border-radius: 2px; background: color-mix(in srgb, var(--dc) 22%, transparent); }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bs:first-child { border-radius: 4px 2px 2px 4px; }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bs:last-child { border-radius: 2px 4px 4px 2px; }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bs .rs-bf { background: var(--dc); }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bs.rs-empty .rs-bf { background: #d08a1e; }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bs.rs-crit .rs-bf { background: #e5484d; }
+html[data-skin="obsidian"] .rs-d0 { --dc: #f4f4f5; }
+html[data-skin="obsidian"] .rs-d1 { --dc: #7dd3fc; }
+html[data-skin="obsidian"] .rs-d2 { --dc: #c4b5fd; }
+html[data-skin="obsidian"] .rs-d3 { --dc: #86efac; }
+html[data-skin="obsidian-light"] .rs-d0 { --dc: #18181b; }
+html[data-skin="obsidian-light"] .rs-d1 { --dc: #0284c7; }
+html[data-skin="obsidian-light"] .rs-d2 { --dc: #7c3aed; }
+html[data-skin="obsidian-light"] .rs-d3 { --dc: #16a34a; }
+
+/* Readability pass (Miguel, 23 Oct): bars show USED of available; group titles "AI resources" / "Compute resources". */
+html[data-skin^="obsidian"] .rs-gh { font-size: 12.5px; margin-bottom: 4px; }
+html[data-skin^="obsidian"] .rs-gh b { font-weight: 650; letter-spacing: 0; }
+html[data-skin^="obsidian"] .rs-gh span { font-size: 11.5px; }
+html[data-skin^="obsidian"] .rs-bg { gap: 9px; }
+html[data-skin^="obsidian"] .rs-br { grid-template-columns: 58px 1fr 78px; }
+html[data-skin^="obsidian"] .rs-bl { font-size: 13px; }
+html[data-skin^="obsidian"] .rs-bv { font-size: 12.5px; }
+html[data-skin^="obsidian"] .rs-bt { height: 8px; }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bt { height: 10px; }
+html[data-skin^="obsidian"] .rs-lg { font-size: 11.5px; margin-bottom: 5px; }
+html[data-skin^="obsidian"] .rs-br { grid-template-columns: 58px minmax(60px, 1fr) max-content; }
+
+/* Miguel's skins: no chat pins (row pin button and the Pin action in the row sheet). Rows get their full width back. */
+html[data-skin^="obsidian"] .ch-pin-toggle, html[data-skin^="obsidian"] .ch-sheet [data-rspin] { display: none; }
+html[data-skin^="obsidian"] .ch-row-wrap > .ch-row { padding-right: 8px; }

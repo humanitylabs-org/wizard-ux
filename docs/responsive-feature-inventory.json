@@ -139,6 +139,7 @@
     "core/chat-errors.js",
     "core/chat-kit.js",
     "core/chat-models.js",
+    "core/chat-pins.js",
     "core/chat-power.css",
     "core/chat-power.js",
     "core/chat-search.js",
@@ -171,6 +172,9 @@
     "core/resources.css",
     "core/resources.js",
     "core/scenery.js",
+    "core/scheduled-reminders.css",
+    "core/scheduled-reminders.js",
+    "core/schedules.js",
     "core/screen-capture.js",
     "core/screen-text.js",
     "core/sel-menu.css",
@@ -187,6 +191,7 @@
     "core/skins.css",
     "core/skins.js",
     "core/status.js",
+    "core/thread-swipe-back.js",
     "core/update-banner.css",
     "core/uploads.js",
     "core/usage.js",
@@ -319,6 +324,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/chat-pins.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Pinned chats, synced per owner through ui-preferences pinnedChats"
+    },
     "core/chat-models.js": {
       "loadedBy": [
         "phone",
@@ -425,6 +437,17 @@
       ],
       "note": "Direct entrypoint import; Settings → Microphone shows only where WizardOSDevice.micPolicy exists"
     },
+    "core/scheduled-reminders.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Boomerang picker and return banner on the shared scheduler (kind return)"
+    },
+    "core/schedules.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Shared Settings → Schedules; hidden when Agent Service schedules returns 404"
+    },
     "core/os-updates.js": {
       "loadedBy": [
         "phone",
@@ -491,6 +514,20 @@
         "desktop"
       ],
       "note": "Shared validated skin frame foundations, loaded before skin composition"
+    },
+    "core/swipe-intent.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Swipe-back intent thresholds, imported by core/thread-swipe-back.js"
+    },
+    "core/thread-swipe-back.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin host built-in: swipe right in a chat thread goes back one step on every skin (touch only)"
     },
     "core/skin-host.js": {
       "loadedBy": [

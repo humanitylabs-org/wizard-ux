@@ -84,12 +84,16 @@ window.WosChatPower = function chatPower(A) {
       // The Chats list's own read state decides (James, 22 Oct): a thread opened while it has an unread reply (bold, in
       // Ready) opens at that reply's first line; a thread you have already read returns you to your place.
       const unread = c.unreadOpen === sid;
-      const saved = unread ? null : RP.read(sid), reply = lastReply(nb);
+      // A place saved at the bottom of a Working thread was the live reply being followed, not a place you read to:
+      // coming back opens at the start of that reply like any other (James, 23 Oct: a Philosopher reply that finished
+      // while he was away opened at its end).
+      const kept = unread ? null : RP.read(sid), saved = kept && !(kept.atBottom && kept.working) ? kept : null, reply = lastReply(nb);
+      const last = o.turns[o.turns.length - 1], replied = !!(last && last.a);
       let apply = null;
-      // A Working thread follows the live reply, unless you had scrolled up in it: your place wins whenever it is
-      // for the same latest reply, on a reload and on every reopen alike (James, 22 Oct: leaving the slow
-      // Philosopher thread mid-run and coming back threw him to the bottom).
-      if (o.working && !(saved && !saved.atBottom && c.lid && saved.messageId === c.lid)) { c.follow = true; toBottom(nb); }
+      // One rule for every thread, Working or not (the list's Working status lags a finished reply by up to a poll):
+      // your place if you left one for this reply; otherwise the first line of the latest reply. Only a thread still
+      // waiting for its first words follows the bottom.
+      if (o.working && !replied && !(saved && !saved.atBottom && c.lid && saved.messageId === c.lid)) { c.follow = true; toBottom(nb); }
       else if (saved && c.lid && saved.messageId === c.lid) {
         // Back where you were: anchored to the latest reply, so layout changes don't shift it.
         apply = saved.atBottom ? toBottom : box => { const r = lastReply(box); box.scrollTop = r && isFinite(saved.anchorOffset) ? box.scrollTop + relTop(box, r) - saved.anchorOffset : saved.scrollTop; };
@@ -149,7 +153,7 @@ window.WosChatPower = function chatPower(A) {
       savePending = null;
       if (!c.lid || c.posFor !== w.thread || !nb.isConnected) return;
       const reply = lastReply(nb);
-      RP.save({ sessionId: w.thread, messageId: c.lid, anchorOffset: reply ? relTop(nb, reply) : 0, scrollTop: Math.max(0, Math.round(nb.scrollTop)), savedAt: Date.now(), atBottom: bottomGap(nb) < 80, following: !!c.follow });
+      RP.save({ sessionId: w.thread, messageId: c.lid, anchorOffset: reply ? relTop(nb, reply) : 0, scrollTop: Math.max(0, Math.round(nb.scrollTop)), savedAt: Date.now(), atBottom: bottomGap(nb) < 80, following: !!c.follow, working: !!LIVE.session(w.thread) && ['submitting', 'queued', 'running', 'stopping'].includes(LIVE.session(w.thread).status) });
     };
     saveT = setTimeout(savePending, 200);
   }

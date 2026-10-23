@@ -132,6 +132,7 @@
   function hasNew(s, state) {
     if (!state) return false;
     const r = state.threads[seenKeyOf(s)]; if (!r) return true;
+    if ((r.unreadAt ?? -1) > r.seenAt) return true;
     const cur = Date.parse(assistantAt(s) ?? ''), seenA = Date.parse(r.assistantActivityAt ?? '');
     const comparable = typeof s.messageCount === 'number' && typeof r.messageCount === 'number';
     const previewChanged = !otherAgent(s.agent) && !comparable && fingerprint(s.preview) !== r.previewFingerprint;
@@ -150,9 +151,10 @@
     if (lu !== ru) pick = ru > lu ? r : l;
     else { const lc = l.messageCount ?? -1, rc = r.messageCount ?? -1; pick = lc !== rc ? (rc > lc ? r : l) : (r.seenAt > l.seenAt ? r : l); }
     const seenAt = Math.max(l.seenAt, r.seenAt);
+    const unreadAt = Math.max(l.unreadAt ?? -1, r.unreadAt ?? -1);
     const la = Date.parse(l.assistantActivityAt ?? ''), ra = Date.parse(r.assistantActivityAt ?? '');
     const aa = !isFinite(la) ? r.assistantActivityAt : !isFinite(ra) ? l.assistantActivityAt : ra > la ? r.assistantActivityAt : l.assistantActivityAt;
-    return { ...pick, ...(aa ? { assistantActivityAt: aa } : {}), seenAt };
+    return { ...pick, ...(aa ? { assistantActivityAt: aa } : {}), seenAt, ...(unreadAt >= 0 ? { unreadAt } : {}) };
   }
   function merge(a, b) {
     if (!a) return b; if (!b) return a;
@@ -266,6 +268,8 @@
     chatLayout: ['wos.chats.layout.v1', v => v === 'day' || v === 'status', String],
     readyOrder: ['wos.chats.readyOrder.v1', v => ['newest', 'oldest', 'priority', 'subject'].includes(v), String],
     subjectOrder: ['wos.chats.subjectOrder.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
+    // Pinned chats (core/chat-pins.js): the same pins on every device.
+    pinnedChats: ['wos.chats.pinned.v2', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
   };
   let prefsOff = false;
   const putPrefs = patch => {
@@ -312,6 +316,9 @@
   const isDeferred = s => !!s.deferred && !s.archived;
   const readyRank = s => needsApproval(s) ? 0 : isDeferred(s) ? 9 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
   const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
+  // Oldest (James, 23 Oct 2026: "oldest messages at the top … the newest one at the bottom"): Newest's pins kept
+  // (approvals first, deferred last), only time reversed in between. Yesterday and Past week stay newest first.
+  const byOldest = list => list.slice().sort((l, r) => Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(r, l));
   function groupWork(sessions, now = Date.now()) {
     const g = { errors: [], working: [], ready: [], yesterday: [], pastWeek: [], deferred: [], archive: [] };
     const readyB = workDayStart(now), yB = readyB - DAY, archDays = archiveAfterDays(), archB = archDays ? now - archDays * DAY : -Infinity;
@@ -512,6 +519,7 @@
     seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
     workGroups(sessions, now) { return groupWork(sessions || this.unified(), now); },
     readyByPriority: byPriority,
+    readyByOldest: byOldest,
     get archiveAfterDays() { return archiveAfterDays(); },
     get chatLayout() { return chatLayout(); },
     set chatLayout(v) { const x = v === 'status' ? 'status' : 'day'; try { localStorage.setItem(LAYOUT_KEY, x); } catch (e) {} putPrefs({ chatLayout: x }); },
@@ -657,6 +665,39 @@
       state = { ...state, threads };
       this.seen = state; writeLocal(state); this.emit();
       putSeen(state).then(r => { this.seen = merge(this.seen, r); writeLocal(this.seen); this.emit(); }).catch(() => {});
+    },
+    async markUnread(ids) {
+      const list = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
+      if (!list.length) return false;
+      const before = merge(readLocal(), this.seen) || { initializedAt: Date.now(), threads: {} };
+      const unreadAt = Math.max(Date.now(), ...list.map(s => (before.threads[seenKeyOf(s)]?.seenAt ?? 0) + 1));
+      const threads = { ...before.threads };
+      for (const s of list) {
+        const key = seenKeyOf(s), prior = threads[key];
+        threads[key] = { ...recordFor(s, prior?.seenAt ?? 0), ...(prior?.assistantActivityAt ? { assistantActivityAt: prior.assistantActivityAt } : {}), unreadAt };
+      }
+      const pending = { ...before, threads };
+      this.seen = pending; writeLocal(pending); this.emit();
+      try {
+        const remote = await putSeen(pending);
+        if (!list.every(s => (remote?.threads?.[seenKeyOf(s)]?.unreadAt ?? -1) >= unreadAt)) throw new Error('Unread marker was not saved');
+        this.seen = merge(this.seen, remote); writeLocal(this.seen); this.emit();
+        // A second device may have read the thread while this write was in
+        // flight. Its newer seenAt wins; do not claim the row was marked.
+        return list.every(s => {
+          const record = this.seen?.threads?.[seenKeyOf(s)];
+          return (record?.unreadAt ?? -1) > (record?.seenAt ?? 0);
+        });
+      } catch (e) {
+        const current = this.seen || pending, rolledBack = { ...current, threads: { ...current.threads } };
+        for (const s of list) {
+          const key = seenKeyOf(s);
+          if (rolledBack.threads[key]?.unreadAt !== unreadAt) continue;
+          if (before.threads[key]) rolledBack.threads[key] = before.threads[key]; else delete rolledBack.threads[key];
+        }
+        this.seen = rolledBack; writeLocal(rolledBack); this.emit();
+        return false;
+      }
     },
     session(id) {
       const s = this.sessions.find(x => x.id === id); if (s) return s;
