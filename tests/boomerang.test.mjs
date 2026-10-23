@@ -63,7 +63,7 @@ test('the phone reply watcher is armed with the wzb_ watch id', async () => {
   const job = { id: 'b', kind: 'return', thread: 'wizard_t', when: { once: '2099-01-01T00:00:00.000Z' }, timezone: 'UTC', prompt: '', target: { message: null, excerpt: '' } }
   const { B } = load([job], { WizardOSDevice: { watchRun: (...a) => watched.push(a) }, WizLive: { session: () => ({ title: 'Quote', status: 'completed' }) } })
   await B.refresh()
-  assert.deepEqual(watched, [['wizard_t', 'wzb_b', '🪃 Quote']])
+  assert.deepEqual(watched, [['wizard_t', 'wzb_b', '◷ Snooze · Quote']])
 })
 
 test('wall-clock time in the chosen zone becomes the right instant', () => {
@@ -80,10 +80,32 @@ test('Back closes the picker before anything under it, on phone and desktop', ()
   order(desktop, "if (window.WosBoomerang?.back()) return 'boomerang'", 'if (!pal.hidden)')
 })
 
-test('Boomerang sits beside Defer, which is unchanged, and on single messages', () => {
+test('one Snooze action replaces Defer and Boomerang, including on single messages', () => {
   const js = read('web/core/chats.js')
-  assert.match(js, /return \['defer', 'boomerang', 'done'\]/)
-  assert.match(js, /a === 'defer' \? LIVE\.defer\(sid\)/)
+  assert.match(js, /return \['snooze', 'done'\]/)
+  assert.doesNotMatch(js, /label: '(Defer|Boomerang)'|🪃/)
+  assert.match(read('web/core/scheduled-reminders.js'), /live\(\)\.defer\(opts.sessionId\)/)
   assert.match(js, /data-mboom=/)
   assert.match(js, /targetKind: 'message', anchorAt/)
+})
+
+
+test('Snooze confirms the actual Bangkok time, independent of device timezone', () => {
+  const { B } = load()
+  assert.equal(B._returnLabel({ due_at: '2026-10-24T02:00:00.000Z', timezone: 'Asia/Bangkok' }), 'Back 24 Oct at 9:00')
+  assert.equal(B._returnLabel({ due_at: '2026-10-23T23:37:00.000Z', timezone: 'Asia/Bangkok' }), 'Back 24 Oct at 6:37')
+  assert.deepEqual({ ...B._preset('tomorrow-am', 'Asia/Bangkok', Date.parse('2026-10-23T20:00:00Z')) }, { date: '2026-10-25', time: '09:00' })
+  assert.deepEqual({ ...B._preset('today', 'Asia/Bangkok', Date.parse('2026-10-23T15:00:00Z')) }, { date: '2026-10-23', time: '23:59' })
+})
+
+test('Snoozed preserves the deferred API and search aliases; Someday creates no schedule', () => {
+  const chats = read('web/core/chats.js'), picker = read('web/core/scheduled-reminders.js')
+  assert.match(chats, /label: 'Snoozed', syn: \['snooze', 'defer', 'deferred', 'later', 'boomerang'/)
+  assert.match(chats, /Snoozed · bottom of Ready/)
+  for (const label of ['Later today', 'Tomorrow 9:00', 'Next week', 'Pick a time', 'Someday', 'When should this come back?']) assert.ok(picker.includes(label), label)
+  assert.doesNotMatch(picker, /🪃|🪄/)
+  assert.match(picker, /name:\('Snooze · '/, 'new jobs use the current UI name')
+  const { B } = load()
+  for (const name of ['Boomerang · Quote', 'Snooze · Quote']) assert.equal(B._fromJob({ id: 'a', kind: 'return', name, when: { once: '2099-01-01T00:00:00Z' } }).context, 'Quote')
+  assert.doesNotMatch(picker.slice(picker.indexOf('async function someday'), picker.indexOf('function open(opts')), /method:'POST'/)
 })
