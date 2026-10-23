@@ -48,9 +48,22 @@ window.WizCore.chats = function createChats(H) {
   // A hosted thread borrows the exact standard chat UI without replacing its app iframe.
   // Entries and thread fields are ephemeral: shell persistence must still restore the app.
   const hosted = new Map();
-  function openHosted(wid, frame, sid) {
+  // Apps admitted to open the standard thread over their window (app-services.js keeps the same list).
+  // Wisdom (James, 22 Oct 2026): Ask AI is the real Chats thread, never an app-built chat.
+  const HOSTED_APPS = new Set(['wizard-manager', 'wisdom']);
+  function openHosted(wid, frame, sid, opts = {}) {
     const w = W[wid];
-    if (!w || w.appId !== 'wizard-manager' || !frame?.isConnected || frame.closest('[data-win]')?.dataset.win !== wid) return false;
+    if (!w || !HOSTED_APPS.has(w.appId) || !frame?.isConnected || frame.closest('[data-win]')?.dataset.win !== wid) return false;
+    // A newly-created agent thread may not be in the next session-list refresh yet.
+    if (opts?.agent != null) {
+      const a = typeof opts.agent === 'string' ? window.WosAgents?.get(opts.agent) : null;
+      if (!a || a.status !== 'running' || !window.WosAgents.isOther(opts.agent) || typeof LIVE.pinAgent !== 'function') return false;
+      LIVE.pinAgent(sid, opts.agent);
+    }
+    // An app item (Wisdom passage) rides beside this thread's draft as its reply, framed only into the next message.
+    // It never replaces one already waiting there, and the composer stays the owner's own words.
+    const rp = opts?.reply ? KIT.reply.clean(opts.reply) : null;
+    if (rp && sid !== '__new__' && !KIT.drafts.get('direct:' + sid).reply) KIT.drafts.setReply('direct:' + sid, rp);
     if (hosted.has(wid)) closeHosted(wid);
     const layer = document.createElement('div'); layer.className = 'chats hosted-thread'; layer.dataset.chats = wid;
     layer.style.cssText = 'position:absolute;inset:0;z-index:5;background:var(--wz-base,var(--base,#15151d));display:flex;flex-direction:column;min-height:0';
@@ -469,13 +482,13 @@ window.WizCore.chats = function createChats(H) {
   function replyBubble(r) {
     if (!r) return '';
     const pv = KIT.reply.preview(r, 180);
-    return `<div class="ch-reply" data-chreply role="group" aria-label="Replying to a notification"><span class="ch-reply-t"><b>${esc(clip(r.title || pv || 'Notification', 120))}</b>${r.title && pv ? `<span>${esc(pv)}</span>` : ''}</span><button type="button" class="ch-reply-x" data-chreplyx aria-label="Remove notification from this reply" title="Remove">×</button></div>`;
+    return `<div class="ch-reply" data-chreply role="group" aria-label="Replying to a quoted item"><span class="ch-reply-t"><b>${esc(clip(r.title || pv || 'Notification', 120))}</b>${r.title && pv ? `<span>${esc(pv)}</span>` : ''}</span><button type="button" class="ch-reply-x" data-chreplyx aria-label="Remove quoted item from this reply" title="Remove">×</button></div>`;
   }
   // The same item, read back from a sent message: a quiet card above his own words.
   function replyCard(r) {
     if (!r) return '';
     const pv = KIT.reply.preview(r, 180);
-    return `<div class="ch-rq" role="note" aria-label="Reply to a notification"><b>${esc(clip(r.title || pv || 'Notification', 120))}</b>${r.title && pv ? `<span>${esc(pv)}</span>` : ''}</div>`;
+    return `<div class="ch-rq" role="note" aria-label="Reply to a quoted item"><b>${esc(clip(r.title || pv || 'Notification', 120))}</b>${r.title && pv ? `<span>${esc(pv)}</span>` : ''}</div>`;
   }
   function discardDraft(key) { KIT.drafts.clear(key); toast('✕', 'Draft discarded', 1400); }
 
@@ -720,7 +733,7 @@ window.WizCore.chats = function createChats(H) {
   // Repaint only the reply bubble (the textarea, its words and focus stay put).
   function refreshReply(wid) {
     const w = W[wid], form = elOf(wid)?.querySelector('[data-chform]'); if (!w || !form) return;
-    const r = w.thread === '__new__' && !winAgent(w) ? KIT.drafts.get(draftKey(w)).reply : null;
+    const r = w.thread && (w.thread !== '__new__' || !winAgent(w)) ? KIT.drafts.get(draftKey(w)).reply : null;
     form.querySelector('[data-chreply]')?.remove(); form.classList.toggle('has-reply', !!r);
     if (r) form.insertAdjacentHTML('afterbegin', replyBubble(r));
   }
@@ -1306,7 +1319,7 @@ window.WizCore.chats = function createChats(H) {
     const keepRange = keepTa && [keepTa.selectionStart, keepTa.selectionEnd, keepTa.selectionDirection];
     const keepScroll = keepTa ? keepTa.scrollTop : 0;
     const canStop = working && !!s?.runId && s.status !== 'stopping';
-    const rpl = isNew && !TAG ? KIT.drafts.get(dkey).reply : null; // a Notifications Reply waiting in this New chat
+    const rpl = !(isNew && TAG) ? KIT.drafts.get(dkey).reply : null; // an app item (Notifications, Wisdom passage) waiting with this draft
     PW?.ensureModels();
     // The model lives in the message box, bottom-right (James 18 Oct 2026); the header keeps the whole width for the title.
     // Miguel's skins (Dark, Light, Landscapes): a slide switch row above the composer replaces the in-box label.
