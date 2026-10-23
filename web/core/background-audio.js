@@ -58,5 +58,38 @@
     const sessionId = window.WizBackgroundAudio.lastState?.sessionId;
     return sessionId ? send('pause', {sessionId}) : send('state').then(state => send('pause', {sessionId:state.sessionId}));
   }
-  window.WizBackgroundAudio = {init:(fn, grant) => {registry=fn;admit=grant;}, frameOk, canAttach:win => !!port() && frameOk(win), closeApp, lastState:null};
+  // Ducking: an app playing a short sound (a Messenger voice note) asks the shell to lower Wizard Music, and
+  // releases it when done. Shell-owned: apps never reach the Music session. Several apps can duck at once;
+  // the volume comes back only when the last one lets go (or its frame goes away).
+  const DUCK = 0.25, duckers = new Set(); let restoreTo = null, duckChain = Promise.resolve(false);
+  function shellSend(method, params = {}) {
+    const pt = port(); if (!pt) return Promise.reject(new Error('Background audio unavailable'));
+    listen(pt);
+    return new Promise((resolve, reject) => {
+      const id = 'audio-' + (++seq);
+      const timer = setTimeout(() => { pending.delete(id); reject(new Error('Music timed out')); }, 20000);
+      pending.set(id, {timer, complete:m => m.ok ? resolve(m.result || {}) : reject(new Error(m.error || 'Music failed'))});
+      try { pt.postMessage(JSON.stringify({...params,id,v:1,appId:'wizard-music',method})); }
+      catch (error) { pending.delete(id); clearTimeout(timer); reject(error); }
+    });
+  }
+  function duck(owner, on) {
+    if (on) duckers.add(owner); else if (!duckers.delete(owner)) return Promise.resolve(false);
+    duckChain = duckChain.catch(() => false).then(async () => {
+      if (!port()) return false;
+      if (duckers.size && restoreTo == null) {
+        const state = await shellSend('state');
+        if (!state.playing || !state.sessionId) return false;
+        restoreTo = typeof state.volume === 'number' ? state.volume : 1;
+        await shellSend('volume', {sessionId: state.sessionId, value: Math.min(restoreTo, DUCK)}); return true;
+      }
+      if (!duckers.size && restoreTo != null) {
+        const value = restoreTo; restoreTo = null;
+        const state = await shellSend('state'); if (state.sessionId) await shellSend('volume', {sessionId: state.sessionId, value}); return true;
+      }
+      return restoreTo != null;
+    });
+    return duckChain.catch(() => false);
+  }
+  window.WizBackgroundAudio = {init:(fn, grant) => {registry=fn;admit=grant;}, frameOk, canAttach:win => !!port() && frameOk(win), closeApp, duck, lastState:null};
 })();
