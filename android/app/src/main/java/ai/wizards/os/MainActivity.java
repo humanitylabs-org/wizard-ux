@@ -83,6 +83,7 @@ public class MainActivity extends Activity {
     private ai.wizards.os.device.DeviceBridge device;
     private ai.wizards.os.mizel.MizelBridge mizel; // window.wizardMizelPort, private origin only
     private ai.wizards.os.audio.BackgroundAudioBridge audio;
+    private ai.wizards.os.vault.VaultBridge vault;
     private ai.wizards.os.apps.AppsBridge apps; // window.wizardAppsPort: the shell only (Android Apps relay)
     private ai.wizards.os.photos.PhotosBridge photos; // window.wizardPhotosPort: Settings › Photos backup (web page)
 
@@ -195,6 +196,8 @@ public class MainActivity extends Activity {
         apps = ai.wizards.os.apps.AppsBridge.install(this, web);
         if (audio != null) audio.detach();
         audio = ai.wizards.os.audio.BackgroundAudioBridge.install(this, web);
+        if (vault != null) vault.detach();
+        vault = ai.wizards.os.vault.VaultBridge.install(this, web); // fingerprint-sealed app secrets (Messenger passphrase)
 
         // A WebView cannot save files. Anything it is asked to download (an APK, a PDF, an export) goes to
         // Android's download manager, so the file lands in Downloads with a notification you can tap to open or install.
@@ -934,6 +937,7 @@ public class MainActivity extends Activity {
         if (apps != null) { apps.detach(); apps = null; }
         if (photos != null) { photos.detach(); photos = null; }
         if (audio != null) { audio.detach(); audio = null; }
+        if (vault != null) { vault.detach(); vault = null; }
         if (web != null) { root.removeView(web); web.destroy(); }
         super.onDestroy();
     }
