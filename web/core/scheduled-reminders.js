@@ -26,7 +26,7 @@
   const zoneOptions=selected=>zones().map(z=>`<option value="${esc(z)}"${z===selected?' selected':''}>${esc(z)}</option>`).join('');
   const req=async(path,init={})=>{const r=await fetch(path,{cache:'no-store',credentials:'same-origin',...init});let p={};try{p=await r.json()}catch{}if(!r.ok)throw new Error(r.status===404?'This Wizard needs an update for Snooze.':p.error?.message||p.error||`HTTP ${r.status}`);return p};
   // A scheduler job of kind "return", in the picker's own shape.
-  const fromJob=j=>({id:j.id,session_id:j.thread,due_at:j.when?.once||j.nextRun,timezone:validZone(j.timezone)?j.timezone:DEFAULT_ZONE,note:j.prompt||'',
+  const fromJob=j=>({id:j.id,session_id:j.thread,created_at:j.createdAt||null,due_at:j.when?.once||j.nextRun,timezone:validZone(j.timezone)?j.timezone:DEFAULT_ZONE,note:j.prompt||'',
     anchor_at:j.target?.message??null,target_kind:j.target?.message!=null?'message':'thread',context:j.target?.excerpt||String(j.name||'').replace(/^(?:Boomerang|Snooze) · /,''),
     status:j.lastRun?.outcome==='returned'&&Date.parse(j.lastRun.scheduledFor)===Date.parse(j.when?.once||'')?'due':'scheduled',returned_at:j.lastRun?.finishedAt||null});
   const seen=()=>{try{return new Set(JSON.parse(localStorage.getItem(SEEN_STORE)||'[]'))}catch{return new Set()}};
@@ -62,7 +62,11 @@
   }
   const askNotify=()=>{try{if(!DEV()&&typeof Notification==='function'&&Notification.permission==='default')void Notification.requestPermission()}catch{}};
   const emit=()=>{listeners.forEach(fn=>{try{fn(reminders)}catch{}});window.dispatchEvent(new Event('wos:boomerang'))};
-  async function refresh(){try{const p=await req(API);const list=(Array.isArray(p.schedules)?p.schedules:[]).filter(j=>j.kind==='return').map(fromJob);arrived(list);reminders=list;loaded=true;reminders.forEach(r=>arm(r));emit();return reminders}catch{return reminders}}
+  // A Snooze set before it took threads out of the list (or by an older client) still does, once: only while
+  // nothing happened in the thread since it was set (no message from James, no Restore).
+  const adopted=new Set();
+  function adopt(list){const L=live();if(!L?.ok||!L.defer)return;for(const r of list){const t=Date.parse(r.created_at);if(r.status!=='scheduled'||!isFinite(t)||adopted.has(r.id))continue;const s=L.session?.(r.session_id);if(!s||s.archived||s.deferred||L.busy?.(s.id))continue;adopted.add(r.id);if(Date.parse(s.lastUserAt)>t||Date.parse(s.restoredAt)>t)continue;void L.defer(s.id)}}
+  async function refresh(){try{const p=await req(API);const list=(Array.isArray(p.schedules)?p.schedules:[]).filter(j=>j.kind==='return').map(fromJob);arrived(list);reminders=list;loaded=true;adopt(list);reminders.forEach(r=>arm(r));emit();return reminders}catch{return reminders}}
   const forSession=id=>reminders.filter(r=>r.session_id===id);
   const dueFor=id=>forSession(id).filter(r=>r.status==='due');
   const nextFor=id=>forSession(id).filter(r=>r.status==='scheduled').sort((a,b)=>Date.parse(a.due_at)-Date.parse(b.due_at))[0]||null;
