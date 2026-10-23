@@ -1176,13 +1176,8 @@
       {
         const staged = await OUTBOX.stage({kind:aimSid && aimSid!=='__new__'?'reply':'new',sessionId:aimSid==='__new__'?'':aimSid||'',steerRunId:rp?.steerRunId || '',...vRoute,audio:r.blob,captureId:r.captureId,instructions:vContext,how:'voice, aimed at this thread',source:'orb'});
         stagedId=staged.id;
-        // The outbox owns this take from here, so Reload no longer waits for transcription (outbox.js recover).
+        // The outbox owns transcription and delivery from here, so Reload no longer waits for either one.
         vHandedOff = !commandTake && await OUTBOX.handOff?.(stagedId) ? stagedId : null;
-        if(staged.durable) {
-          try { transcript=String((await window.WizConfig.transcribe(r.blob,{prompt:window.WizConfig.voicePrompt(),signal:AbortSignal.timeout(45000)})).text||'').trim(); } catch(_) {}
-          // Talk-key/tap takes are messages, even when the transcript resembles a command.
-          // Only commandVoice's explicit commandTake path above invokes the shared grammar.
-        }
       }
     }
     const w = vTarget && W[vTarget];

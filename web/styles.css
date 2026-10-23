@@ -328,6 +328,18 @@ body {
 .lapp { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 4px 0; text-align: center; }
 .lapp .ic { position: relative; width: 56px; height: 56px; border-radius: 18px; display: grid; place-items: center; font-size: 25px; background: linear-gradient(145deg, var(--g1), var(--g2)); box-shadow: 0 8px 20px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .22); transition: transform 160ms var(--spring); }
 .lapp:active .ic { transform: scale(.9); }
+/* App kinds (Miguel's design, every skin's New desk since 23 Oct 2026): system apps wear one accent ring and tint, and
+ * Wizard apps, Agents and Connectors fold into one quiet "For agents" row under Apps. Skins may restyle both. */
+:is(.launcher, .new-desk) .lapp.lapp-sys .ic { border: 2.5px solid var(--violet-2, #8f63ff); background: linear-gradient(160deg, color-mix(in srgb, var(--violet-2, #8f63ff) 34%, transparent), color-mix(in srgb, var(--violet-2, #8f63ff) 14%, transparent)), var(--bg-2, #0f0c17); box-shadow: 0 4px 14px color-mix(in srgb, var(--violet-2, #8f63ff) 28%, transparent); outline: none; }
+:is(.launcher, .new-desk) .forag { margin: 14px 0 4px; }
+:is(.launcher, .new-desk) .forag + .forag { margin-top: 8px; }
+:is(.launcher, .new-desk) .forag .kg-dev h4 { display: none; }
+:is(.launcher, .new-desk) .fa-row { width: 100%; display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-radius: 16px; background: color-mix(in srgb, var(--ink) 6%, transparent); border: 1px solid var(--line-2); color: var(--ink-2); font: inherit; font-size: 13.5px; font-weight: 600; text-align: left; }
+:is(.launcher, .new-desk) .fa-row small { color: var(--ink-3); font-size: 12.5px; font-weight: 500; }
+:is(.launcher, .new-desk) .fa-row svg { margin-left: auto; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform 200ms; }
+:is(.launcher, .new-desk) .forag.open .fa-row svg { transform: rotate(180deg); }
+:is(.launcher, .new-desk) .forag:not(.open) .fa-body { display: none; }
+:is(.launcher, .new-desk) .forag .fa-body { padding-top: 6px; }
 .lapp .ic .badge { position: absolute; right: -4px; bottom: -4px; padding: 1px 5px; border-radius: 6px; font-size: 8.5px; font-weight: 900; letter-spacing: .05em; background: #0d0a18; border: 1px solid var(--line-2); color: var(--ink-2); }
 .lapp .nm { font-size: 11.5px; line-height: 1.2; color: var(--ink-2); max-width: 76px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .lrow { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 6px; border-radius: 14px; text-align: left; }

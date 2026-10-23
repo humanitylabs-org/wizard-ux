@@ -23,3 +23,9 @@ test('Regenerate hydrates owner words/files, keeps scoped thread/model, and coal
 test('Regenerate retains restored native image bytes beside the original file',async()=>{const h=harness({images:true});h.click();await finished(h);assert.equal(h.sent.length,1);assert.equal(h.sent[0].files.length,2);assert.equal(await h.uploads[0].text(),'hello')});
 test('Unavailable screenshot never degrades into a text-only regeneration',async()=>{const h=harness({images:true,fail:true});h.click();await finished(h);assert.equal(h.sent.length,0);assert.ok(h.notices.some(x=>String(x[1]).includes('original request kept')))});
 for(const status of ['running','queued','stopping','waiting_for_approval','unknown'])test(`Regenerate refuses ${status} rather than steering or duplicating it`,async()=>{const h=harness({status});h.click();await finished(h);assert.equal(h.sent.length,0)});
+test('Regenerate renders only for a skin that opts in with --wos-reply-regenerate: on',()=>{
+ const js=readFileSync(new URL('../web/core/chats.js',import.meta.url),'utf8');
+ assert.match(js,/getPropertyValue\('--wos-reply-regenerate'\)\.trim\(\) === 'on'/);
+ assert.match(js,/last && !working && regenOn\(\) \? '<button type="button" data-mregen/);
+ assert.equal((js.match(/data-mregen/g)||[]).length,1);
+});
