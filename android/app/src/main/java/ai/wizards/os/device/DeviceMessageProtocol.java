@@ -47,7 +47,10 @@ public final class DeviceMessageProtocol {
         org.json.JSONArray methods = new org.json.JSONArray();
         for (String name : PACKAGE_METHODS) methods.put(PREFIX + name);
         return new JSONObject().put("v", VERSION).put("capabilities", new JSONObject()
-                .put("device.packages", new JSONObject().put("v", VERSION).put("methods", methods)));
+                .put("device.packages", new JSONObject().put("v", VERSION).put("methods", methods))
+                .put("identity", new JSONObject().put("v", VERSION).put("methods", new org.json.JSONArray()
+                    .put("identity.info").put("identity.setup").put("identity.sign")))
+                .put("view.capture", new JSONObject().put("v", VERSION)));
     }
 
     public static JSONObject answer(String id, Object result, String error) throws JSONException {

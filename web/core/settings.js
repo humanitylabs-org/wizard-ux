@@ -131,6 +131,38 @@
     if (!el.closest('[data-ub-all]')) return false;
     retryAll(ctx); return true;
   } });
+  // Public kind-0 only. The signed event comes from native; no secret is handled by the page.
+  const identityRelays = ['wss://relay.aiwizards.com', 'wss://nos.lol', 'wss://relay.damus.io'];
+  function publishIdentityProfile(event) {
+    return Promise.any(identityRelays.map(url => new Promise((resolve, reject) => {
+      let socket; const timer = setTimeout(() => { socket?.close(); reject(new Error('relay timeout')); }, 8000);
+      const finish = (ok, message) => { clearTimeout(timer); socket?.close(); ok ? resolve(url) : reject(new Error(message || 'relay refused')); };
+      try {
+        socket = new WebSocket(url);
+        socket.onopen = () => socket.send(JSON.stringify(['EVENT', event]));
+        socket.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (_) { return; } if (m[0] === 'OK' && m[1] === event.id) finish(m[2] === true, m[3]); };
+        socket.onerror = () => finish(false, 'relay unavailable');
+        socket.onclose = () => { clearTimeout(timer); reject(new Error('relay closed')); };
+      } catch (e) { clearTimeout(timer); reject(e); }
+    })));
+  }
+  let identityInfo = null;
+  register({ id: 'wizard-id', page: 'phone', aliases: ['wizard-id'], available: () => !!window.wizardDevicePort,
+    html() { return row('wizard-id', '◇', 'Wizard ID', identityInfo?.npub ? `${identityInfo.name || 'Your ID'} · ${identityInfo.backed_up ? 'Backed up' : 'Not backed up'}` : 'Your signing key stays on this phone'); },
+    act(ctx, el) {
+      if (!el.closest('[data-st="wizard-id"]')) return false;
+      window.WizCore.bridge.call('identity.setup').then(async result => {
+        if (result.cancelled || result.denied) return;
+        identityInfo = await window.WizCore.bridge.call('identity.info');
+        ctx.changed?.();
+        if (result.profile_event) {
+          try { await publishIdentityProfile(result.profile_event); ctx.toast?.('✓', 'Wizard ID profile published', 2200); }
+          catch (_) { ctx.toast?.('!', 'ID saved on this phone · profile not published. Open Wizard ID to retry.', 4500); }
+        }
+      }).catch(() => ctx.toast?.('!', 'Wizard ID unavailable · update the Wizard Android app', 3000));
+      return true;
+    }
+  });
   /* My skin: CSS plus an optional, per-version owner-approved hook module, kept in Files. */
   const mySkinSub = base => {
     const M = window.WosMySkin, st = M && M.state;

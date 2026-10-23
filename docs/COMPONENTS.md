@@ -58,7 +58,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Screen capture | `WosScreenCapture` (`web/core/screen-capture.js`), `WosCaptureTools` (`web/core/capture-tools.js`) | — |
 | Update banners | `WizWebUpdate`, `WizAppUpdates` (`web/core/web-update.js`), `WizAppVersions` (`web/core/app-versions.js`), `WosUpdates` (`web/core/os-updates.js`) | own reload timers |
 | Provider login (Claude, ChatGPT) for agents and apps | the installed login apps (`wizard-claude`, `wizard-chatgpt`; skill `app-owned-codex-connections`) | setup-tokens or bespoke auth flows |
-| Native Android device capability called from the shell (packages today; later mic, automation, notifications) | `wizardDevicePort` v1 (`android/app/src/main/java/ai/wizards/os/device/DeviceMessageProtocol.java`; add an adapter and list it in `device.capabilities`; see `docs/android-device-message-port.md`) | feature-named `@JavascriptInterface` methods, a second envelope on `wizardAppsPort`, native feature screens or wording |
+| Native Android device capability called from the shell (packages, Wizard ID identity/signing, visible WebP capture; later mic, automation, notifications) | `wizardDevicePort` v1 (`android/app/src/main/java/ai/wizards/os/device/DeviceMessageProtocol.java`; add an adapter and list it in `device.capabilities`; see `docs/android-device-message-port.md`) | feature-named `@JavascriptInterface` methods, a second envelope on `wizardAppsPort`, native feature screens or wording except the explicitly native secret/approval flow in `docs/WIZARD_ID.md` |
 
 ## Visual (anything drawn or animated: attach a side-by-side screenshot under `Visual:`)
 

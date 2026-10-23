@@ -47,19 +47,20 @@ public final class AppsBridge implements AppsInstaller.Listener {
 
     private final Activity activity;
     private final WebView web;
+    private final ai.wizards.os.device.DeviceBridge device;
     private final LinkedHashSet<JavaScriptReplyProxy> frames = new LinkedHashSet<>();
     private final ExecutorService bg = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
 
-    private AppsBridge(Activity a, WebView w) { activity = a; web = w; }
+    private AppsBridge(Activity a, WebView w, ai.wizards.os.device.DeviceBridge d) { activity = a; web = w; device = d; }
 
     /** Installs the port on {@code web}; null if this WebView can't (old WebView: the view says "update"). */
-    public static AppsBridge install(Activity a, WebView web) {
+    public static AppsBridge install(Activity a, WebView web, ai.wizards.os.device.DeviceBridge device) {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             Log.w(AppsInstaller.TAG, "WebView lacks WEB_MESSAGE_LISTENER: no Android Apps bridge");
             return null;
         }
-        AppsBridge b = new AppsBridge(a, web);
+        AppsBridge b = new AppsBridge(a, web, device);
         try {
             java.util.Set<String> allow = new java.util.HashSet<>(Collections.singleton(AppState.primaryOrigin(a)));
             WebViewCompat.addWebMessageListener(web, NAME, allow, b::onMessage);
@@ -154,6 +155,9 @@ public final class AppsBridge implements AppsInstaller.Listener {
             catch (JSONException e) { deviceAnswer(reply, request.id, null, "Something went wrong"); }
             return;
         }
+        final String trustedOrigin = want;
+        if (device.dispatchIdentity(request.method, request.params, result -> deviceAnswer(reply, request.id, result, null),
+                () -> trustedOrigin.equals(AppState.origin(activity)) && shellOnTop())) return;
         final String method = DeviceMessageProtocol.packageMethod(request.method);
         if (method == null || !AppsPolicy.method(method)) {
             deviceAnswer(reply, request.id, null, "unknown method");
