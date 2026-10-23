@@ -99,10 +99,12 @@ function routeFor() {
   const rowInfo = async id => p.evaluate(({ sel }) => { const e = document.querySelector(sel); if (!e) return null; return { cls: e.className, pv: e.querySelector('.pv')?.textContent || '', quiet: e.dataset.quiet === '1', op: getComputedStyle(e).opacity }; }, { sel: await R(`[data-chopen="${id}"]`) });
 
   // Rows of one day section, opened just for the read and closed again so Ready-only reads stay Ready-only.
-  const secIds = async k => { const t = await R(`[data-sectoggle="${k}"]`), was = await p.$eval(t, e => e.getAttribute('aria-expanded'));
+  const W = async sel => `[data-chats="${await wid()}"] ${sel}`;
+  const secIds = async k => { const t = await W(`[data-sectoggle="${k}"]`), was = await p.$eval(t, e => e.getAttribute('aria-expanded'));
     if (was !== 'true') { await p.$eval(t, e => e.click()); await sleep(300); }
-    const got = await p.$$eval(await R(`[data-sec="${k}"] [data-chopen]`), els => els.map(e => e.dataset.chopen).filter(id => id.startsWith('qa_rs_')));
-    if (was !== 'true') { await p.$eval(await R(`[data-sectoggle="${k}"]`), e => e.click()); await sleep(300); }
+    await p.evaluate(sel => document.querySelector(sel)?.click(), await W(`[data-sec="${k}"] [data-secmore]`)); await sleep(150);
+    const got = await p.$$eval(await W(`[data-sec="${k}"] [data-chopen]`), els => els.map(e => e.dataset.chopen).filter(id => id.startsWith('qa_rs_')));
+    if (was !== 'true') { await p.$eval(await W(`[data-sectoggle="${k}"]`), e => e.click()); await sleep(300); }
     return got; };
   try {
     const ids = await readyIds();
@@ -122,7 +124,7 @@ function routeFor() {
     // James, 23 Oct 2026: "it's not sorting yesterday and this week. It should sort those by the same standard of priority."
     const pwP = await secIds('pastWeek');
     ok(JSON.stringify(pwP) === JSON.stringify(['qa_rs_old', 'qa_rs_old_fyi']), '1e Priority also orders Past week: needs you above a newer FYI', pwP);
-    ok((await p.$$(await R('[data-sec="pastWeek"] .ch-rdy-bar'))).length === 0, '1e the order bar stays on Ready only');
+    ok((await p.$$(await W('[data-sec="pastWeek"] .ch-rdy-bar'))).length === 0, '1e the order bar stays on Ready only');
     await p.evaluate(sel => document.querySelector(sel)?.scrollIntoView({ block: 'start' }), await R('.ch-sec-h')); await sleep(300);
     await p.screenshot({ path: path.join(OUT, '1b-ready-priority.png') });
     // Priority survives a reload; Newest returns to recency.
