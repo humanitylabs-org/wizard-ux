@@ -1,3 +1,27 @@
+/* Schedules uses the existing Settings cards and confirmation sheet in both shells. */
+.sc-group > .st-actions { margin: 0 0 16px; }
+.sc-row { padding: 14px; margin-bottom: 12px; border: 1px solid var(--wz-border); border-radius: 18px; background: var(--wz-surface); }
+.sc-head { display: flex; gap: 12px; align-items: center; }
+.sc-head button { flex: none; border: 1px solid var(--wz-border); border-radius: 16px; padding: 8px 14px; color: var(--wz-text-secondary); background: var(--wz-surface-raised); }
+.sc-head button[aria-checked="true"] { color: var(--wz-text); background: var(--wz-accent-soft); border-color: var(--wz-accent); }
+.sc-row b, .sc-import b { overflow-wrap: anywhere; }
+.sc-chat { color: var(--wz-text-secondary); font-size: 13px; margin-top: 4px; }
+.sc-chat button { color: var(--wz-accent); background: transparent; padding: 0; text-align: left; text-decoration: underline; overflow-wrap: anywhere; max-width: 100%; }
+.sc-last { color: var(--wz-text-muted); margin: 6px 0; font-size: 12px; }
+.sc-scrim { align-items: end; }
+.sc-sheet { width: min(520px, 100%); max-height: 100%; box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain; }
+.sc-sheet > .st-actions { position: sticky; bottom: -20px; margin: 12px -20px -20px; padding: 12px 20px 20px; background: linear-gradient(var(--wz-overlay), var(--wz-overlay)), var(--wz-base); }
+.sc-sheet label { display: grid; gap: 6px; font-size: 14px; color: var(--wz-text-secondary); margin: 12px 0; }
+.sc-sheet input, .sc-sheet textarea, .sc-sheet select { min-width: 0; width: 100%; box-sizing: border-box; border: 1px solid var(--wz-border); border-radius: 10px; padding: 12px; background: var(--wz-surface); color: var(--wz-text); font: inherit; min-height: 48px; }
+.sc-sheet option { background: var(--wz-base); color: var(--wz-text); }
+.sc-sheet :is(input, textarea, select):focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 1px; }
+.sc-sheet fieldset { padding: 0; margin: 0; border: 0; min-width: 0; }
+.sc-import { list-style: none; padding: 0; }
+.sc-import li { display: grid; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--wz-border); }
+.sc-import small { color: var(--wz-text-secondary); }
+.sc-error { color: var(--wz-text); border-left: 2px solid var(--wz-accent); padding-left: 10px; overflow-wrap: anywhere; }
+@media (min-width: 700px) { .sc-scrim { align-items: center; } }
+
 /* Shared approved phone Settings controls, responsive container authored by Claude Opus.
  * Feature selectors belong here, never in a shell-only stylesheet. */
 .st-title { margin: 2px 4px 10px; font-size: 22px; font-weight: 650; }
