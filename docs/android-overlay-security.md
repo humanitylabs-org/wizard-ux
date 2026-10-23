@@ -52,8 +52,9 @@ Existing words, layout, and native capability bridges are unchanged.
   the profile. Requests it answers never reach `shouldInterceptRequest`, so an
   overlay page loaded at `<origin>/wizard-os-home/assist/` could be replaced by
   worker-supplied markup with no native allowlist, redirect check or CSP
-  prefix, and with the privileged bridges. `OverlayE2eTest` reproduced
-  `sw-served` content in a real OverlayPage. Remote overlay documents now live
+  prefix, and with the privileged bridges. On the emulator a worker registered
+  by one WebView answered a second WebView whose client intercepted every
+  request (run 39880324919, `sw-served`). Remote overlay documents now live
   on the reserved virtual origin `https://wizard-overlay.invalid`; OverlayPage
   maps each allowlisted path to the selected Wizard and fetches it natively.
   No worker can exist on that origin (CSP `worker-src 'none'`, nothing else
