@@ -56,7 +56,9 @@ public class ConnectE2eTest {
         String detail = label + " bounds=" + bounds + " insets=" + bars[0] + " height=" + device.getDisplayHeight();
         try (FileWriter out = new FileWriter(new File(c.getExternalFilesDir(null), name + ".txt"))) { out.write(detail); }
         shot(name);
-        assertTrue(detail, bounds.top >= bars[0].top && bounds.bottom <= device.getDisplayHeight() - bars[0].bottom);
+        // WebView accessibility bounds come from CSS px and can round past the clip by up to one device dp.
+        int slack = (int) Math.ceil(c.getResources().getDisplayMetrics().density);
+        assertTrue(detail, bounds.top >= bars[0].top - slack && bounds.bottom <= device.getDisplayHeight() - bars[0].bottom + slack);
         assertTrue(detail, bounds.height() >= 30);
     }
     private void start(Class<?> activity) { c.startActivity(new Intent(c, activity).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
