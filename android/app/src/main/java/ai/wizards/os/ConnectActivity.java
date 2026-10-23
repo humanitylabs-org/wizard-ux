@@ -50,6 +50,16 @@ public final class ConnectActivity extends Activity {
             address.setText(ServerSettings.origin(this));
         }
         status = text("Only the selected Wizard receives native requests. A QR code does not grant sign-in.", 15); status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE); body.addView(status);
+        // API 36 cannot opt out of edge-to-edge. Keep native form and keyboard clear of bars.
+        scroll.setOnApplyWindowInsetsListener((v, insets) -> {
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets bars = insets.getInsets(android.view.WindowInsets.Type.systemBars()
+                        | android.view.WindowInsets.Type.displayCutout() | android.view.WindowInsets.Type.ime());
+                v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+                return android.view.WindowInsets.CONSUMED;
+            }
+            return insets;
+        });
         setContentView(scroll);
         if (state != null) address.setText(state.getString("address", "")); else prefill(getIntent());
         if (android.os.Build.VERSION.SDK_INT >= 33) getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::back);

@@ -126,6 +126,8 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
             }
         });
         setContentView(web);
+        if (Build.VERSION.SDK_INT >= 33) getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
         registerReceiver(userPresent, new IntentFilter(Intent.ACTION_USER_PRESENT));
         pendingBegin = true;
         web.loadUrl(SURFACE);
@@ -168,7 +170,9 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
 
     @SuppressWarnings("deprecation")
     @Override
-    public void onBackPressed() {
+    public void onBackPressed() { handleBack(); } // API < 33 only; never call super
+
+    private void handleBack() {
         // Back never ends a take or closes the surface (James, 10 Oct 2026): only the X cancels. The one thing Back
         // still does is close the private list if it is open (a step inside the surface, not an exit).
         if (!pageReady) { Log.i(TAG, "back ignored (page loading)"); return; }

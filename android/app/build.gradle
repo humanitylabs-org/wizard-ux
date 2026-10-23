@@ -35,15 +35,15 @@ def deepLinkHost = (project.findProperty('wizardDeepLinkHost') ?: (originUri ? o
 
 android {
     namespace 'ai.wizards.os'
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         applicationId 'ai.wizards.os'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         minSdk 28
-        targetSdk 35
-        versionCode 65
-        versionName '0.10.2'
+        targetSdk 36
+        versionCode 70
+        versionName '0.10.5'
         // Empty default leaves backup unconfigured; the native Photos screen can connect a server.
         buildConfigField 'String', 'PHOTOS_SERVER', javaString(photosServer)
         buildConfigField 'String', 'HOME_URL', javaString(defaultOrigin ? defaultOrigin + '/wizard-os-home/' : '')
@@ -62,8 +62,8 @@ android {
         play {
             dimension 'distribution'
             // Reserve >= 1,000,000 for Play; direct APK release codes stay below that.
-            // 69 is above the parallel 0.10.4/68 branch, not just main's 0.10.2/65.
-            versionCode 1000069
+            // API 36 candidate; direct release remains verification-only.
+            versionCode 1000070
             versionName '0.10.5'
             buildConfigField 'String', 'ORIGIN', '""'
             buildConfigField 'String', 'HOME_URL', '""'

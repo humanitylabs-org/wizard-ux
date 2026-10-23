@@ -101,8 +101,10 @@ def main():
     assert 'android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION' not in permissions
     assert 'android.permission.ENFORCE_UPDATE_OWNERSHIP' not in permissions
     assert tree.get('package') == 'ai.wizards.os'
-    assert tree.get(ANDROID + 'versionCode') == '1000069'
+    assert tree.get(ANDROID + 'versionCode') == '1000070'
     assert tree.get(ANDROID + 'versionName') == '0.10.5'
+    assert tree.find('uses-sdk').get(ANDROID + 'targetSdkVersion') == '36'
+    assert tree.find('application').get(ANDROID + 'enableOnBackInvokedCallback') == 'true'
     # Protobuf manifest dumps encode FGS enum/flag values as hexadecimal integers.
     fgs_types = {'everywhere.EverywhereService': 0x40000080,
                  'mizel.MeetingRecorderService': 0x80, 'recording.RecorderService': 0x80,
@@ -154,7 +156,7 @@ def main():
     for name in ('assembleSideloadRelease', 'testSideloadReleaseUnitTest', 'lintSideloadRelease', 'assembleSideloadDebug', 'assembleSideloadQanext', 'assembleSideloadQalater'):
         assert ':app:' + name in dry, name
     result = {'status': 'ok', 'source_revision': receipt['source_revision'], 'aab_path': str(aab),
-              'aab_sha256': hashlib.sha256(aab.read_bytes()).hexdigest(), 'version_code': 1000069, 'version_name': '0.10.5',
+              'aab_sha256': hashlib.sha256(aab.read_bytes()).hexdigest(), 'version_code': 1000070, 'version_name': '0.10.5', 'target_sdk': 36,
               'signer_sha256': fingerprints[0], 'application_id': 'ai.wizards.os', 'play_origin': '',
               'play_request_install_packages': False, 'play_installer_classes': False,
               'sideload_apk_path': str(apk), 'sideload_apk_sha256': hashlib.sha256(apk.read_bytes()).hexdigest(),
