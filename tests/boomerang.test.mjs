@@ -80,13 +80,12 @@ test('Back closes the picker before anything under it, on phone and desktop', ()
   order(desktop, "if (window.WosBoomerang?.back()) return 'boomerang'", 'if (!pal.hidden)')
 })
 
-test('one Snooze action replaces Defer and Boomerang, including on single messages', () => {
+test('one Snooze action replaces Defer and Boomerang, with no second Snooze under each reply', () => {
   const js = read('web/core/chats.js')
   assert.match(js, /return \['snooze', 'done'\]/)
   assert.doesNotMatch(js, /label: '(Defer|Boomerang)'|🪃/)
   assert.match(read('web/core/scheduled-reminders.js'), /live\(\)\.defer\(opts.sessionId\)/)
-  assert.match(js, /data-mboom=/)
-  assert.match(js, /targetKind: 'message', anchorAt/)
+  assert.doesNotMatch(js, /data-mboom/)
 })
 
 
@@ -101,7 +100,8 @@ test('Snooze confirms the actual Bangkok time, independent of device timezone', 
 test('Snoozed preserves the deferred API and search aliases; Someday creates no schedule', () => {
   const chats = read('web/core/chats.js'), picker = read('web/core/scheduled-reminders.js')
   assert.match(chats, /label: 'Snoozed', syn: \['snooze', 'defer', 'deferred', 'later', 'boomerang'/)
-  assert.match(chats, /Snoozed · bottom of Ready/)
+  assert.match(chats, /Snoozed · out of your list/)
+  assert.match(chats, /\['deferred', 'Snoozed'\], \['archive', 'Archive'\]/)
   for (const label of ['Later today', 'Tomorrow 9:00', 'Next week', 'Pick a time', 'Someday', 'When should this come back?']) assert.ok(picker.includes(label), label)
   assert.doesNotMatch(picker, /🪃|🪄/)
   assert.match(picker, /name:\('Snooze · '/, 'new jobs use the current UI name')
