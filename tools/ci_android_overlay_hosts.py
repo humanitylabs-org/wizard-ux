@@ -36,12 +36,24 @@ def check(flow, name, ok, detail=''):
     log(('PASS ' if ok else 'FAIL ') + f'[{flow}] {name}' + (f' — {str(detail)[:400]}' if detail not in ('', None) else ''))
     return bool(ok)
 
-def adb(*a, stdin=None, binary=False, timeout=60):
+class DeviceLost(Exception): pass
+SLOW = {'n': 0}
+def adb(*a, stdin=None, binary=False, timeout=30):
+    t = time.time()
     try:
         r = subprocess.run(['adb', *map(str, a)], capture_output=True, input=stdin, text=not binary, timeout=timeout)
-        return r.stdout
+        err = r.stderr if not binary else r.stderr.decode(errors='replace')
+        if r.returncode != 0 and err.strip(): log(f'  adb {" ".join(map(str, a))[:80]} rc={r.returncode}: {err.strip()[:200]}')
+        out = r.stdout
     except subprocess.TimeoutExpired:
-        return b'' if binary else ''
+        log(f'  adb {" ".join(map(str, a))[:80]} TIMED OUT after {timeout}s')
+        out = b'' if binary else ''
+    if time.time() - t > 15:
+        SLOW['n'] += 1
+        state = subprocess.run(['adb', 'get-state'], capture_output=True, text=True, timeout=10).stdout.strip() if a[:1] != ('get-state',) else ''
+        log(f'  slow adb ({time.time() - t:.0f}s), device state={state!r}')
+        if state != 'device' and SLOW['n'] >= 3: raise DeviceLost(f'emulator no longer answers adb (state={state!r})')
+    return out
 def sx(cmd, **k): return adb('shell', cmd, **k)
 
 # ------------------------------------------------------------------ fake Wizard (HTTPS, runner loopback :443)
@@ -234,8 +246,10 @@ try:
     a11y_on(); time.sleep(1)
     server_up()
     start = now()
+    log('== device after setup:', sx('getprop sys.boot_completed').strip(), '| top:', top()[:120])
 
     # ---------------------------------------------------------------- A online: orb from the Wizard
+    log('== A online: orb from the Wizard')
     t0 = now(); r0 = len(REQ); fresh()
     tr, line = launch_then_home(t0)
     check('A orb online', 'floating orb page came from the Wizard', 'from Wizard' in line, line)
@@ -249,6 +263,7 @@ try:
     check('A orb online', 'orb visible in uiautomator dump (content-desc Wizard Everywhere)', 'Wizard Everywhere' in x, 'see A-orb-online.xml')
 
     # ---------------------------------------------------------------- B online: Screen mode from the Wizard
+    log('== B online: Screen mode from the Wizard')
     t0 = now(); r0 = len(REQ)
     wait_log(t0 - 60, r'keyboard service connected', 15)
     b, picked, line = open_screen(t0)
@@ -262,6 +277,7 @@ try:
     close_screen()
 
     # ---------------------------------------------------------------- C online: side-button corner orb from the Wizard
+    log('== C online: side-button corner orb from the Wizard')
     t0 = now(); r0 = len(REQ)
     how, tc, line = trigger_assist(t0)
     log('  assist trigger:', how)
@@ -274,6 +290,7 @@ try:
     no_crash('online hosts', start)
 
     # ---------------------------------------------------------------- D/E/F: Wizard unreachable (nothing listening on :443)
+    log('== D/E/F: Wizard unreachable (nothing listening on :443)')
     server_down()
     t0 = now(); r0 = len(REQ)
     b, picked, line = open_screen(t0)
@@ -302,6 +319,7 @@ try:
     no_crash('unreachable hosts', start)
 
     # ---------------------------------------------------------------- G: Wizard answers, too slowly -> the 1.5 s deadline
+    log('== G: Wizard answers, too slowly -> the 1.5 s deadline')
     server_up('slow')
     t0 = now(); r0 = len(REQ); fresh()
     tr, line = launch_then_home(t0)
@@ -314,6 +332,7 @@ try:
     MODE['v'] = 'up'
 
     # ---------------------------------------------------------------- H: airplane mode (Wizard up, phone offline)
+    log('== H: airplane mode (Wizard up, phone offline)')
     sx('cmd connectivity airplane-mode enable'); time.sleep(4)
     ap = sx('settings get global airplane_mode_on').strip()
     reach = sx('ping -c 1 -W 2 10.0.2.2 >/dev/null 2>&1 && echo reachable || echo unreachable').strip()
@@ -341,6 +360,7 @@ try:
     no_crash('airplane hosts', start)
 
     # ---------------------------------------------------------------- L: lock screen (PIN keyguard), Wizard online
+    log('== L: lock screen (PIN keyguard), Wizard online')
     t0 = now(); r0 = len(REQ); fresh()
     sx('locksettings set-pin 1234'); time.sleep(1)
     sx('input keyevent KEYCODE_SLEEP'); time.sleep(2); sx('input keyevent KEYCODE_WAKEUP'); time.sleep(2)
@@ -366,6 +386,8 @@ try:
     sx('locksettings clear --old 1234'); sx('wm dismiss-keyguard')
 
     no_crash('whole run', start)
+except DeviceLost as e:
+    check('harness', 'emulator stayed reachable over adb', False, repr(e))
 except Exception as e:
     import traceback; traceback.print_exc()
     check('harness', 'host-flow script ran to completion', False, repr(e))
