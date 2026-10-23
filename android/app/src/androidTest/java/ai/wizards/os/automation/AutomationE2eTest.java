@@ -161,7 +161,14 @@ public class AutomationE2eTest {
         throw new AssertionError("no clickable “" + text + "” in " + T);
     }
 
-    private void userTaps(String text) { assertTrue(text, find(text).performAction(AccessibilityNodeInfo.ACTION_CLICK)); SystemClock.sleep(900); }
+    /** A real touch (input tap), like the owner's finger: accessibility-action clicks are not what a user does. */
+    private void touch(AccessibilityNodeInfo n) throws Exception {
+        android.graphics.Rect r = new android.graphics.Rect(); n.getBoundsInScreen(r);
+        shell("input tap " + r.centerX() + " " + r.centerY());
+        SystemClock.sleep(1200);
+    }
+
+    private void userTaps(String text) throws Exception { touch(find(text)); }
 
     @Test public void recordingKeepsTheRouteAndNeverTheCommitTap() throws Exception {
         assertEquals("", main(() -> engine.record(new JSONObject().put("package", T).put("ref", "+new").put("ambiguous", new JSONArray().put("add")))));
@@ -173,8 +180,7 @@ public class AutomationE2eTest {
         AccessibilityNodeInfo add = null;
         for (int i = 0; i < pad.getChildCount(); i++) if ("Add".contentEquals(String.valueOf(pad.getChild(i).getText()))) add = pad.getChild(i);
         assertNotNull(add);
-        assertTrue(add.performAction(AccessibilityNodeInfo.ACTION_CLICK));
-        SystemClock.sleep(900);
+        touch(add);
         userTaps("View basket");
         userTaps("Place order"); // the owner's own commit: ends the recording, never becomes a step
         assertEquals(AutomationEngine.Mode.IDLE, waitMode(10000, AutomationEngine.Mode.IDLE));
