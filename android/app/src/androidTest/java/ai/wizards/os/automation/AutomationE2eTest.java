@@ -189,7 +189,7 @@ public class AutomationE2eTest {
         assertEquals("recording", rec.getString("kind"));
         assertTrue(rec.getBoolean("committed"));
         assertEquals("฿95", rec.getString("total"));
-        String events = rec.getJSONArray("events").toString();
+        String events = rec.getJSONArray("events").toString() + " log=" + main(() -> engine.status(T)).optJSONArray("log");
         assertTrue(events, events.contains("\"label\":\"Krua Thai Kitchen\""));
         assertTrue(events, events.contains("\"near\":\"Pad thai\""));
         assertTrue(events, events.contains("View basket"));
