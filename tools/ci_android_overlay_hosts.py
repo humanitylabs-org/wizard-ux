@@ -321,6 +321,17 @@ def page_is(flow, name, want, corner=None):
     ok = (from_wizard(d) if want == 'Wizard' else from_bundle(d)) and all(x.get('api') == 'object' and x.get('csp') for x in d)
     return check(flow, f'live {name} document is the {"Wizard" if want == "Wizard" else "bundled"} copy, API running, CSP present (DevTools)', ok, d)
 
+def settle(max_s=25, below=1.5):
+    """Wait for the guest to go quiet (1-min load average) so a remote load measures the page, not boot noise."""
+    t = time.time(); la = '?'
+    while time.time() - t < max_s:
+        la = sx('cat /proc/loadavg').split()[:1]
+        try:
+            if la and float(la[0]) < below: break
+        except ValueError: pass
+        time.sleep(2)
+    log(f'  guest load before remote load: {la} after {time.time() - t:.0f}s')
+
 def ms(a, b): return None if a is None or b is None else round((b - a) * 1000)
 
 # ================================================================== run
@@ -448,7 +459,7 @@ try:
     server_up()
     log('== online (renderer now warm): orb, side button')
     def orb_online(attempt):
-        t0 = now(); r0 = len(REQ); fresh()
+        t0 = now(); r0 = len(REQ); fresh(); settle()
         tr, line = launch_then_home(t0)
         return t0, r0, line
     # ---------------------------------------------------------------- A online: orb from the Wizard
@@ -475,7 +486,7 @@ try:
 
     # ---------------------------------------------------------------- C online: side-button corner orb from the Wizard
     log('== C online: side-button corner orb from the Wizard')
-    t0 = now(); r0 = len(REQ)
+    settle(); t0 = now(); r0 = len(REQ)
     corner_tries = []
     for attempt in range(1, 6):
         how, tc, line = trigger_assist(t0)
@@ -483,7 +494,7 @@ try:
         corner_tries.append(f'attempt {attempt}: {line.strip()[-60:]} | reason: {why(t0, "surface.html#corner")} | requests: {assist_reqs(r0)}')
         log('  corner load fell back:', corner_tries[-1])
         # A re-shown session keeps its WebView: only a new app process gives the corner a new page load.
-        close_corner(); evidence(f'C-side-online-fallback-{attempt}'); t0 = now(); fresh(); launch_then_home(t0); t0 = now(); r0 = len(REQ)
+        close_corner(); evidence(f'C-side-online-fallback-{attempt}'); t0 = now(); fresh(); launch_then_home(t0); settle(); t0 = now(); r0 = len(REQ)
     (OUT / 'C-side-online-attempts.txt').write_text('\n'.join(corner_tries + [f'final: {line.strip()}']) + '\n')
     check('C side button unlocked online', 'remote corner load attempts until the Wizard copy was ready (<= 5)', 'from Wizard' in line, f'{len(corner_tries) + 1} load(s); fell back first: {len(corner_tries)}')
     log('  assist trigger:', how)
