@@ -1,7 +1,7 @@
 // Obsidian (Miguel's skin): swipe right inside a thread to go back.
 // Ported from wizard-ux #121 into the skin package, so it ships with Obsidian and touches no other skin.
 // Back goes through the shell's own Back step (api.nav.back): linked thread -> parent, thread -> list; never exits.
-import { playIntro, noteSkin } from './intro.js';
+import { playIntro, noteSkin, toHome } from './intro.js';
 
 import { setupBehaviour } from './behaviour.js';
 
@@ -13,6 +13,7 @@ export default function setup(api) {
   if (!api.storage.get('live')) {
     api.storage.set('live', true);
     intro = playIntro({ listen: api.listen });
+    toHome(api);
   } else noteSkin();
   let sw = null;
   const thread = () => { const r = api.part('thread'); return r && r.querySelector('[data-part="thread"]'); };
