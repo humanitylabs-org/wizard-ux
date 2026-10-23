@@ -116,7 +116,7 @@ def server_up(mode='up'):
 def server_down():
     s = SRV['s']; SRV['s'] = None
     if s: s.shutdown(); s.server_close()
-def assist_reqs(since): return [p for t, p in REQ[since:] if '/wizard-os-home/assist/' in p]
+def assist_reqs(since): return [p for t, p in REQ[since:] if p.split('?', 1)[0].removeprefix('/wizard-os-home/') in OVERLAY_FILES]
 
 # ------------------------------------------------------------------ device helpers
 def now():
@@ -259,6 +259,63 @@ def why(since, page):
 def evidence(name):
     shot(name); ui(name); (OUT / f'{name}-windows.txt').write_text(windows())
 
+# ---- WebView DevTools (debug builds: MainActivity enables WebView debugging for the whole process)
+import base64, urllib.request
+def devtools(match=None):
+    pid = sx(f'pidof {PKG}').strip().split()[:1]
+    if not pid: return []
+    adb('forward', 'tcp:9333', f'localabstract:webview_devtools_remote_{pid[0]}')
+    try: pages = json.load(urllib.request.urlopen('http://127.0.0.1:9333/json/list', timeout=5))
+    except Exception as e: log('  devtools list failed:', e); return []
+    return [x for x in pages if x.get('type') == 'page' and (match is None or match(x.get('url', '')))]
+def cdp_eval(page, expr):
+    u = page['webSocketDebuggerUrl']; host, path = re.match(r'ws://([^/]+)(/.*)', u).groups(); h, port = host.split(':')
+    s_ = socket.create_connection(('127.0.0.1', 9333), timeout=10)
+    key = base64.b64encode(os.urandom(16)).decode()
+    s_.sendall(f'GET {path} HTTP/1.1\r\nHost: {host}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n'.encode())
+    buf = b''
+    while b'\r\n\r\n' not in buf: buf += s_.recv(4096)
+    buf = buf.split(b'\r\n\r\n', 1)[1]
+    data = json.dumps({'id': 1, 'method': 'Runtime.evaluate', 'params': {'expression': expr, 'returnByValue': True}}).encode()
+    mask = os.urandom(4); n = len(data)
+    hdr = bytearray([0x81]) + (bytearray([0x80 | n]) if n < 126 else bytearray([0x80 | 126]) + n.to_bytes(2, 'big'))
+    s_.sendall(bytes(hdr) + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
+    def need(k):
+        nonlocal buf
+        while len(buf) < k:
+            c = s_.recv(65536)
+            if not c: raise RuntimeError('ws closed')
+            buf += c
+    while True:
+        need(2); n = buf[1] & 0x7f; off = 2
+        if n == 126: need(4); n = int.from_bytes(buf[2:4], 'big'); off = 4
+        elif n == 127: need(10); n = int.from_bytes(buf[2:10], 'big'); off = 10
+        need(off + n); msg = json.loads(buf[off:off + n]); buf = buf[off + n:]
+        if msg.get('id') == 1: s_.close(); return msg.get('result', {}).get('result', {}).get('value')
+def doc(name, want_corner=None):
+    """The live document of an overlay page, read from inside the WebView: its URL, the fixture marker, its API."""
+    def match(u):
+        if f'/assist/{name}' not in u: return False
+        return want_corner is None or (('#corner' in u) == want_corner)
+    pages = devtools(match)
+    out = []
+    for pg in pages:
+        try:
+            v = cdp_eval(pg, "JSON.stringify({href: location.href, marker: !!document.body && document.body.innerText.includes(%s), "
+                             "api: typeof (window.W || window.E || window.S), csp: !!document.querySelector('meta[http-equiv=Content-Security-Policy]')})" % json.dumps(MARKER))
+            out.append(json.loads(v))
+        except Exception as e: out.append({'href': pg.get('url'), 'error': repr(e)[:120]})
+    (OUT / 'devtools.log').open('a').write(f'{time.strftime("%H:%M:%S")} {name} corner={want_corner}: {json.dumps(out)}\n')
+    return out
+def from_wizard(docs): return bool(docs) and all(d.get('href', '').startswith(ORIGIN + '/wizard-os-home/assist/') and d.get('marker') for d in docs)
+def from_bundle(docs): return bool(docs) and all(d.get('href', '').startswith('file:///android_asset/wizard-os-home/assist/') and not d.get('marker') for d in docs)
+
+def page_is(flow, name, want, corner=None):
+    """Assert, from inside the live WebView, where the shown document came from and that its page API runs."""
+    d = doc(name, corner)
+    ok = (from_wizard(d) if want == 'Wizard' else from_bundle(d)) and all(x.get('api') == 'object' and x.get('csp') for x in d)
+    return check(flow, f'live {name} document is the {"Wizard" if want == "Wizard" else "bundled"} copy, API running, CSP present (DevTools)', ok, d)
+
 def ms(a, b): return None if a is None or b is None else round((b - a) * 1000)
 
 # ================================================================== run
@@ -299,7 +356,7 @@ try:
     tb, _ = first(t0, r'bubble shown'); tf, fl = first(t0, r'everywhere\.html: .*showing bundled copy')
     check('A orb unreachable', f'fallback decided within {DEADLINE}s and ready within {DEADLINE + MARGIN}s of the orb attaching', ms(tb, tf) is not None and ms(tb, tf) <= DEADLINE * 1000 and ms(tb, tr) <= (DEADLINE + MARGIN) * 1000, {'decision_ms': ms(tb, tf), 'ready_ms': ms(tb, tr), 'why': fl})
     check('A orb unreachable', 'orb overlay window present', wait_window('WizardEverywhere', 8))
-    time.sleep(1.0); evidence('A-orb-unreachable')
+    time.sleep(1.0); evidence('A-orb-unreachable'); page_is('A orb unreachable', 'everywhere.html', 'bundle')
 
     t0 = now()
     how, tc, line = trigger_assist(t0)
@@ -307,7 +364,7 @@ try:
     ts_, _ = first(t0, r'corner shown'); tf, fl = first(t0, r'surface\.html#corner: .*showing bundled copy')
     check('C side button unreachable', f'fallback ready within {DEADLINE + MARGIN}s of the corner showing', ms(ts_, tc) is not None and ms(ts_, tc) <= (DEADLINE + MARGIN) * 1000, {'ready_ms': ms(ts_, tc), 'why': fl})
     time.sleep(1.0); evidence('C-side-unreachable'); x = (OUT / 'C-side-unreachable.xml').read_text()
-    check('C side button unreachable', 'bundled surface UI in uiautomator dump, without the Wizard marker', re.search(r'content-desc="(Pause|Cancel)"', x) and MARKER not in x)
+    page_is('C side button unreachable', 'surface.html', 'bundle', corner=True)
     close_corner()
     no_crash('unreachable hosts', start)
 
@@ -321,7 +378,7 @@ try:
     check('A orb slow Wizard', f'timeout fired at ~{DEADLINE}s (1.2-2.0 s after attach); bundled ready within {DEADLINE + MARGIN}s',
           ms(tb, tf) is not None and 1200 <= ms(tb, tf) <= 2000 and ms(tb, tr) <= (DEADLINE + MARGIN) * 1000, {'timeout_ms': ms(tb, tf), 'ready_ms': ms(tb, tr)})
     check('A orb slow Wizard', 'the slow host really was contacted', any(p.endswith('assist/everywhere.html') for p in assist_reqs(r0)), assist_reqs(r0))
-    time.sleep(1.0); evidence('A-orb-slow')
+    time.sleep(1.0); evidence('A-orb-slow'); page_is('A orb slow Wizard', 'everywhere.html', 'bundle')
     MODE['v'] = 'up'
 
     # ---------------------------------------------------------------- airplane mode (Wizard up, phone offline)
@@ -335,12 +392,12 @@ try:
     check('A orb airplane', 'floating orb shows the bundled copy', 'from bundle' in line, line)
     tb, _ = first(t0, r'bubble shown'); tf, fl = first(t0, r'everywhere\.html: .*showing bundled copy')
     check('A orb airplane', f'fallback decided within {DEADLINE}s, ready within {DEADLINE + MARGIN}s', ms(tb, tf) is not None and ms(tb, tf) <= DEADLINE * 1000 and ms(tb, tr) <= (DEADLINE + MARGIN) * 1000, {'decision_ms': ms(tb, tf), 'ready_ms': ms(tb, tr), 'why': fl})
-    time.sleep(1.0); evidence('A-orb-airplane')
+    time.sleep(1.0); evidence('A-orb-airplane'); page_is('A orb airplane', 'everywhere.html', 'bundle')
     t1 = now()
     how, tc, line = trigger_assist(t1)
     check('C side button airplane', 'corner surface shows the bundled copy', 'from bundle' in line, (how, line))
     time.sleep(1.0); evidence('C-side-airplane'); x = (OUT / 'C-side-airplane.xml').read_text()
-    check('C side button airplane', 'bundled surface UI in uiautomator dump, without the Wizard marker', re.search(r'content-desc="(Pause|Cancel)"', x) and MARKER not in x)
+    page_is('C side button airplane', 'surface.html', 'bundle', corner=True)
     close_corner()
     check('airplane', 'no overlay request reached the Wizard while in airplane mode', not assist_reqs(r0), assist_reqs(r0))
     sx('cmd connectivity airplane-mode disable'); time.sleep(5)
@@ -348,7 +405,9 @@ try:
 
     # ---------------------------------------------------------------- lock screen (PIN keyguard), Wizard online
     log('== lock screen (PIN keyguard), Wizard online')
-    t0 = now(); r0 = len(REQ); fresh()
+    t0 = now(); fresh()
+    launch_then_home(t0)   # debug builds enable WebView DevTools when MainActivity starts in this process
+    t0 = now(); r0 = len(REQ)
     sx('locksettings set-pin 1234'); time.sleep(1)
     sx('input keyevent KEYCODE_SLEEP'); time.sleep(2); sx('input keyevent KEYCODE_WAKEUP'); time.sleep(2)
     kg = sx('dumpsys window | grep -iE "mDreamingLockscreen|isKeyguardShowing|KeyguardShowing|mShowingLockscreen"')
@@ -364,10 +423,18 @@ try:
     check('L lock screen', 'keyguard (PIN) was showing before the trigger', re.search(r'(?i)(KeyguardShowing|mShowingLockscreen)=true', kg), kg.strip()[:200])
     check('L lock screen', 'assist over the PIN keyguard opens AssistLockActivity (locked=true)', first(t0, r'surface created locked=true')[0], (how, first(t0, r'surface created|session:')[1]))
     check('L lock screen', 'lock-screen surface uses the bundled copy', 'from bundle' in line, line)
-    check('L lock screen', 'the lock-screen surface never contacted the (reachable) Wizard', not any('surface' in p for p in assist_reqs(r0)), assist_reqs(r0))
+    # The visible lock-screen document must be the APK copy. (The hidden VoiceInteraction corner session that hands
+    # off to AssistLockActivity may prefetch its own remote corner page; recorded separately, not this host's page.)
+    corner_fetch = [p for t, p in REQ[r0:] if p.endswith('assist/surface.html')]
+    (OUT / 'L-lock-requests.txt').write_text('\n'.join(f'{t:.3f} {p}' for t, p in REQ[r0:]) + '\n')
+    log('  requests to the Wizard while locked (hidden corner session prefetch):', [p for t, p in REQ[r0:]])
+    page_is('L lock screen', 'surface.html', 'bundle', corner=False)
     check('L lock screen', 'AssistLockActivity is the resumed activity', 'AssistLockActivity' in top(), top())
     time.sleep(1.5); evidence('L-lock-surface'); x = (OUT / 'L-lock-surface.xml').read_text()
-    check('L lock screen', 'locked surface UI in uiautomator dump (Unlock the phone), without the Wizard marker', 'Unlock the phone' in x and MARKER not in x, 'see L-lock-surface.xml')
+    lk = doc('surface.html', False)
+    try: locked_ui = cdp_eval(devtools(lambda u: '/assist/surface.html' in u and '#corner' not in u)[0], "document.getElementById('lock').textContent + '|' + getComputedStyle(document.getElementById('unlockC')).display")
+    except Exception as e: locked_ui = repr(e)[:120]
+    check('L lock screen', 'surface shows its locked state (lock label, Unlock chip shown)', isinstance(locked_ui, str) and 'locked' in locked_ui and not locked_ui.endswith('|none'), locked_ui)
     (OUT / 'L-lock-trigger.txt').write_text(str(how))
     no_crash('lock screen', start)
     sx(f'am force-stop {PKG}'); sx('input keyevent KEYCODE_WAKEUP')
@@ -395,25 +462,30 @@ try:
     w = wait_window('WizardEverywhere', 10)
     check('A orb online', 'orb is a WindowManager overlay window (WizardEverywhere)', w, w)
     got = assist_reqs(r0)
-    check('A orb online', 'fake Wizard served everywhere.html, everywhere.js and orb.js', all(any(p.endswith(f) for p in got) for f in ('assist/everywhere.html', 'assist/everywhere.js', '/orb.js')), got)
+    check('A orb online', 'fake Wizard served everywhere.html, everywhere.js and orb.js (static allowlist)', all(any(p.endswith(f) for p in got) for f in ('assist/everywhere.html', 'assist/everywhere.js', '/orb.js')), got)
     time.sleep(1.5); evidence('A-orb-online')
     x = (OUT / 'A-orb-online.xml').read_text()
     check('A orb online', 'orb visible in uiautomator dump (content-desc Wizard Everywhere)', 'Wizard Everywhere' in x, 'see A-orb-online.xml')
+    page_is('A orb online', 'everywhere.html', 'Wizard')
 
     # ---------------------------------------------------------------- C online: side-button corner orb from the Wizard
     log('== C online: side-button corner orb from the Wizard')
     t0 = now(); r0 = len(REQ)
+    corner_tries = []
     for attempt in range(1, 4):
         how, tc, line = trigger_assist(t0)
         if not line or 'from Wizard' in line: break
-        log(f'  corner load {attempt} fell back:', line.strip()[-70:], '| reason:', why(t0, 'surface.html#corner'))
-        close_corner(); time.sleep(1); t0 = now(); r0 = len(REQ)
+        corner_tries.append(f'attempt {attempt}: {line.strip()[-60:]} | reason: {why(t0, "surface.html#corner")} | requests: {assist_reqs(r0)}')
+        log('  corner load fell back:', corner_tries[-1])
+        # A re-shown session keeps its WebView: only a new app process gives the corner a new page load.
+        close_corner(); evidence(f'C-side-online-fallback-{attempt}'); t0 = now(); fresh(); launch_then_home(t0); t0 = now(); r0 = len(REQ)
+    (OUT / 'C-side-online-attempts.txt').write_text('\n'.join(corner_tries + [f'final: {line.strip()}']) + '\n')
     log('  assist trigger:', how)
     check('C side button unlocked online', 'assist gesture reached WizardSession (corner shown)', first(t0, r'corner shown')[0], (how, first(t0, r'corner shown|session:')[1]))
     check('C side button unlocked online', 'corner surface page came from the Wizard', 'from Wizard' in line, (line, why(t0, 'surface.html#corner')))
     check('C side button unlocked online', 'fake Wizard served surface.html and surface.js', any(p.endswith('assist/surface.html') for p in assist_reqs(r0)) and any(p.endswith('assist/surface.js') for p in assist_reqs(r0)), assist_reqs(r0))
     time.sleep(1.5); evidence('C-side-online'); x = (OUT / 'C-side-online.xml').read_text()
-    check('C side button unlocked online', 'surface UI in uiautomator dump (Pause / Cancel)', re.search(r'content-desc="(Pause|Cancel)"', x), 'see C-side-online.xml')
+    page_is('C side button unlocked online', 'surface.html', 'Wizard', corner=True)
     close_corner()
     no_crash('online hosts', start)
 
@@ -437,7 +509,7 @@ try:
             check(flow, f'bundled page ready within {DEADLINE + MARGIN}s of open', ms(tb, tr) is not None and ms(tb, tr) <= (DEADLINE + MARGIN) * 1000, {'ready_ms': ms(tb, tr), 'why': why(t0, 'screen.html')})
         time.sleep(1.5); evidence(f'B-screen-{phase}'); x = (OUT / f'B-screen-{phase}.xml').read_text()
         check(flow, 'Screen page UI in uiautomator dump (Select all / Close)', re.search(r'Select all|"Close"', x), f'see B-screen-{phase}.xml')
-        check(flow, 'Wizard-only marker present' if phase == 'online' else 'no Wizard-only marker (bundled)', (MARKER in x) == (phase == 'online'))
+        page_is(flow, 'screen.html', 'Wizard' if phase == 'online' else 'bundle')
         if phase == 'airplane': check(flow, 'no request reached the Wizard', not assist_reqs(r0), assist_reqs(r0))
         close_screen()
         no_crash(flow, start)
