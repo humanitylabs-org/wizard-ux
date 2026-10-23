@@ -116,7 +116,7 @@ public final class AppsBridge implements AppsInstaller.Listener {
         String want = AppState.origin(activity);
         if (sourceOrigin == null || !want.equals(originOf(sourceOrigin))) return;
         if (!isMainFrame || !shellOnTop()) { Log.w(AppsInstaller.TAG, "refused: not the shell (" + (isMainFrame ? "main" : "frame") + ")"); return; }
-        String data = message == null ? null : message.getData();
+        String data = text(message);
         JSONObject m;
         try { m = new JSONObject(data == null ? "" : data); } catch (JSONException e) { return; }
         final String id = m.optString("id", "");
@@ -142,7 +142,8 @@ public final class AppsBridge implements AppsInstaller.Listener {
         if (sourceOrigin == null || !want.equals(originOf(sourceOrigin)) || !isMainFrame || !shellOnTop()) return;
         final DeviceMessageProtocol.Request request;
         try {
-            request = DeviceMessageProtocol.parse(new JSONObject(message == null || message.getData() == null ? "" : message.getData()));
+            String data = text(message);
+            request = DeviceMessageProtocol.parse(new JSONObject(data == null ? "" : data));
         } catch (JSONException e) {
             // No valid correlation envelope: do not echo untrusted values or exception details.
             deviceAnswer(reply, "", null, "invalid request");
@@ -171,6 +172,12 @@ public final class AppsBridge implements AppsInstaller.Listener {
     private void deviceAnswer(JavaScriptReplyProxy reply, String id, Object result, String error) {
         try { post(reply, DeviceMessageProtocol.answer(id, result, error).toString()); }
         catch (JSONException ignored) { }
+    }
+
+    /** String payload, or null. WebMessageCompat.getData() THROWS for ArrayBuffer messages (WebView 116+ delivers
+     *  them to every listener), which would crash Wizard OS on the main thread. */
+    static String text(WebMessageCompat message) {
+        return message == null || message.getType() != WebMessageCompat.TYPE_STRING ? null : message.getData();
     }
 
     static String originOf(Uri u) {
