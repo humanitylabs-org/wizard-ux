@@ -59,7 +59,7 @@ public class WizardIdFlowTest {
             click("Copy");
             assertEquals(nsec,((android.content.ClipboardManager)context.getSystemService(Context.CLIPBOARD_SERVICE)).getPrimaryClip().getItemAt(0).getText().toString());
             // Native test memory only: never output or screenshot a secret.
-            device.findObject(By.clazz("android.widget.EditText")).setText(nsec); device.pressBack();
+            device.findObject(By.clazz("android.widget.EditText")).setText(nsec); hideKeyboard();
             click("Check backup"); visible("Update your profile"); click("Approve & sign"); pin();
             JSONObject enrolled=result("setup"); verify(enrolled.getJSONObject("profile_event"));
             JSONObject info=result(call("info","identity.info",null)); assertTrue(info.getBoolean("backed_up"));
@@ -86,7 +86,7 @@ public class WizardIdFlowTest {
             // Restore the backed-up key after simulating a fresh install.
             assertTrue(context.getSharedPreferences("wizard-id-v1",0).edit().clear().commit()); store.deleteEntry(KeyVault.ALIAS);
             call("restore","identity.setup",null); visible("Create your Wizard ID"); click("Use my existing key"); visible("I have a Wizard ID");
-            java.util.List<UiObject2> inputs=device.findObjects(By.clazz("android.widget.EditText")); inputs.get(0).setText("Restored Wizard"); inputs.get(1).setText(nsec); device.pressBack();
+            java.util.List<UiObject2> inputs=device.findObjects(By.clazz("android.widget.EditText")); inputs.get(0).setText("Restored Wizard"); inputs.get(1).setText(nsec); hideKeyboard();
             click("Import key"); pin(); visible("Save your key"); click("Not now"); visible("Update your profile"); click("Approve & sign"); pin();
             JSONObject restored=result("restore"); assertEquals(info.getString("npub"),restored.getString("npub")); assertFalse(restored.getBoolean("backed_up")); verify(restored.getJSONObject("profile_event"));
             // Trusted-origin iframe cannot reach native even though its object is injected by WebView.
@@ -128,6 +128,8 @@ public class WizardIdFlowTest {
         }
         device.executeShellCommand("input text 246810"); device.pressEnter(); device.waitForIdle();
     }
+    // Back on a native Wizard ID sheet cancels it (Back never exits, it closes one level), so only dismiss a keyboard that is really up.
+    private void hideKeyboard() throws Exception { if (device.executeShellCommand("dumpsys input_method").contains("mInputShown=true")) device.pressBack(); device.waitForIdle(); }
     private void alive(){scenario.onActivity(a->{assertFalse(a.isFinishing());assertFalse(a.isDestroyed());});}
     private void screenshot(String name){assertTrue(device.takeScreenshot(new File(output,name)));}
     private void write(String name,String value)throws Exception{Files.write(new File(output,name).toPath(),value.getBytes(StandardCharsets.UTF_8));}
