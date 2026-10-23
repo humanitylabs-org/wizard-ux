@@ -2,6 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Direct APK edition only: component definitions preserved from the former main manifest. -->
     <application>
+        <!-- Lint checks foreground service types against the flavor manifest. Repeat the shared
+             declarations unchanged; merged types are also checked by the bundle audit. -->
+        <service android:name="ai.wizards.os.everywhere.EverywhereService" android:foregroundServiceType="microphone|specialUse" />
+        <service android:name="ai.wizards.os.mizel.MeetingRecorderService" android:foregroundServiceType="microphone" />
+        <service android:name="ai.wizards.os.recording.RecorderService" android:foregroundServiceType="microphone" />
+        <service android:name="ai.wizards.os.share.ShareService" android:foregroundServiceType="dataSync" />
         <receiver android:name=".update.InstallReceiver" android:exported="false" />
         <receiver android:name=".update.UpdateBoot" android:exported="false">
             <intent-filter>

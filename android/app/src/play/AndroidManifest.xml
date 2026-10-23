@@ -4,4 +4,11 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" tools:node="remove" />
     <uses-permission android:name="android.permission.ENFORCE_UPDATE_OWNERSHIP" tools:node="remove" />
+    <application>
+        <!-- Same FGS types as main: expose them to lint's flavor-manifest lookup too. -->
+        <service android:name="ai.wizards.os.everywhere.EverywhereService" android:foregroundServiceType="microphone|specialUse" />
+        <service android:name="ai.wizards.os.mizel.MeetingRecorderService" android:foregroundServiceType="microphone" />
+        <service android:name="ai.wizards.os.recording.RecorderService" android:foregroundServiceType="microphone" />
+        <service android:name="ai.wizards.os.share.ShareService" android:foregroundServiceType="dataSync" />
+    </application>
 </manifest>

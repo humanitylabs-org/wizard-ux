@@ -27,6 +27,15 @@ test('Play is generic even on an owner-configured worker, and sideload is defaul
   assert.match(gradle, /sideload \{\s*dimension 'distribution'\s*isDefault = true/);
   assert.match(gradle, /alias\.setDependsOn\(\[target\]\)/);
 });
+test('flavor foreground service declarations exactly match shared service types', () => {
+  const common = read(root + 'main/AndroidManifest.xml');
+  for (const [name, type] of [['everywhere.EverywhereService', 'microphone|specialUse'],
+    ['mizel.MeetingRecorderService', 'microphone'], ['recording.RecorderService', 'microphone'], ['share.ShareService', 'dataSync']]) {
+    assert.ok(common.includes(`android:name=".${name}"`));
+    for (const flavor of ['play', 'sideload']) assert.ok(read(root + flavor + '/AndroidManifest.xml')
+      .includes(`android:name="ai.wizards.os.${name}" android:foregroundServiceType="${type}"`));
+  }
+});
 const device = read('web/device.js');
 const settings = device.slice(device.indexOf('    settingsHtml() {'), device.indexOf('    readRecording,')).replace(/,\s*$/, '');
 for (const distribution of ['play', 'sideload']) test(`${distribution} settings only offer the distribution's update controls`, () => {

@@ -103,6 +103,12 @@ def main():
     assert tree.get('package') == 'ai.wizards.os'
     assert tree.get(ANDROID + 'versionCode') == '1000069'
     assert tree.get(ANDROID + 'versionName') == '0.10.5'
+    fgs_types = {'everywhere.EverywhereService': 'microphone|specialUse',
+                 'mizel.MeetingRecorderService': 'microphone', 'recording.RecorderService': 'microphone',
+                 'share.ShareService': 'dataSync'}
+    for cls, expected in fgs_types.items():
+        nodes = [n for n in tree.iter('service') if n.get(ANDROID + 'name') == 'ai.wizards.os.' + cls]
+        assert len(nodes) == 1 and nodes[0].get(ANDROID + 'foregroundServiceType') == expected, cls
     for cls in ('update.InstallReceiver', 'update.UpdateBoot', 'update.UpdateJob', 'update.ApkProvider', 'apps.AppsInstallReceiver', 'apps.AppsUpdateJob'):
         assert not any((n.get(ANDROID + 'name') or '').endswith('.' + cls) for n in tree.iter())
     config_path = app / 'build/generated/source/buildConfig/play/release/ai/wizards/os/BuildConfig.java'
