@@ -371,9 +371,9 @@
     if (d.pick && S.view.name === 'new') {
       const dr = S.draft;
       if (d.pick === 'harness') dr.harness = d.v;
-      if (d.pick === 'provider' && dr.provider !== d.v) { dr.provider = d.v; const p = provider(d.v); dr.model = p?.models.length === 1 || p?.confidential ? p.models[0]?.id || '' : ''; /* Tinfoil: its default (first) model, still changeable */ dr.preset = dr.wantPrivate ? 'private' : ''; /* asked for a private agent: a public provider stays blocked, never silently Standard */ }
+      if (d.pick === 'provider' && dr.provider !== d.v) { dr.provider = d.v; const p = provider(d.v); dr.model = p?.models.length === 1 || p?.confidential ? p.models[0]?.id || '' : ''; /* Tinfoil: its default (first) model, still changeable */ if (dr.wantPrivate) applyPreset(dr, 'private'); else dr.preset = ''; /* asked for a private agent: a public provider stays blocked, never silently Standard */ }
       if (d.pick === 'model') dr.model = d.v;
-      if (d.pick === 'preset') applyPreset(dr, d.v);
+      if (d.pick === 'preset') { dr.wantPrivate = d.v === 'private'; applyPreset(dr, d.v); } /* an explicit preset choice replaces the Set up private agent intent */
       render(); return;
     }
     if ('next' in d) { if (stepOk(S.draft, S.view.step)) { S.view = { ...S.view, step: S.view.step + 1 }; render(); scrollTo(0, 0); } return; }
