@@ -436,20 +436,15 @@ try:
     (OUT / 'L-keyguard-before.txt').write_text(kg)
     shot('L-keyguard-before')
     how, tl, line = trigger_assist(t0, r'surface\.html from (Wizard|bundle)')
-    if not tl:
-        # Last resort, as the Thales scripts do: the ASSIST intent straight to the lock-screen surface.
-        how = 'am start -a android.intent.action.ASSIST (direct)'
-        sx(f'am start -a android.intent.action.ASSIST -n {PKG}/ai.wizards.os.assist.AssistLockActivity')
-        tl, line = wait_log(t0, r'surface\.html from (Wizard|bundle)', 15)
+
     log('  lock trigger:', how)
     check('L lock screen', 'keyguard (PIN) was showing before the trigger', re.search(r'(?i)(KeyguardShowing|mShowingLockscreen)=true', kg), kg.strip()[:200])
     check('L lock screen', 'assist over the PIN keyguard opens AssistLockActivity (locked=true)', first(t0, r'surface created locked=true')[0], (how, first(t0, r'surface created|session:')[1]))
     check('L lock screen', 'lock-screen surface uses the bundled copy', 'from bundle' in line, line)
-    # The visible lock-screen document must be the APK copy. (The hidden VoiceInteraction corner session that hands
-    # off to AssistLockActivity may prefetch its own remote corner page; recorded separately, not this host's page.)
-    corner_fetch = [p for t, p in REQ[r0:] if p.endswith('assist/surface.html')]
+    check('L lock screen', 'real VoiceInteraction session handed off while locked (no direct Activity bypass)',
+          first(t0, r'session: locked, opening the lock-screen surface')[0], how)
     (OUT / 'L-lock-requests.txt').write_text('\n'.join(f'{t:.3f} {p}' for t, p in REQ[r0:]) + '\n')
-    log('  requests to the Wizard while locked (hidden corner session prefetch):', [p for t, p in REQ[r0:]])
+
     page_is('L lock screen', 'surface.html', 'bundle', corner=False)
     check('L lock screen', 'AssistLockActivity is the resumed activity', 'AssistLockActivity' in top(), top())
     time.sleep(1.5); evidence('L-lock-surface'); x = (OUT / 'L-lock-surface.xml').read_text()
@@ -458,6 +453,7 @@ try:
     except Exception as e: locked_ui = repr(e)[:120]
     check('L lock screen', 'surface shows its locked state (lock label, Unlock chip shown)', isinstance(locked_ui, str) and 'locked' in locked_ui and not locked_ui.endswith('|none'), locked_ui)
     (OUT / 'L-lock-trigger.txt').write_text(str(how))
+    check('L lock screen', 'zero requests to the Wizard while locked, including the hidden session', not REQ[r0:], REQ[r0:])
     no_crash('lock screen', start)
     sx(f'am force-stop {PKG}'); sx('input keyevent KEYCODE_WAKEUP')
     sx('locksettings clear --old 1234'); sx('wm dismiss-keyguard'); time.sleep(1)
@@ -507,17 +503,12 @@ try:
     tshow, _ = first(t0, r'corner shown'); tdead, _ = first(t0, r'surface\.html#corner: timeout')
     cports = sorted({c for t, c, p in CONN if t >= (REQ[r0][0] if r0 < len(REQ) else 0) and p.split('?')[0].removeprefix('/wizard-os-home/') in OVERLAY_FILES})
     check('C side button unlocked online', 'Wizard copy of the corner page ready inside the 1.5 s production deadline', won,
-          f'{len(corner_tries) + (1 if won else 0)} load(s), {len(corner_tries)} fell back on timeout; last: new TCP/TLS connections={len(cports)} for {len(assist_reqs(r0))} overlay requests', gate=False)
-    if not won:
-        # What IS provable on this emulator: the real session asked the Wizard first, then the production deadline
-        # (not an error) handed over to the bundled copy, whose live document works.
-        check('C side button unlocked online', 'corner session asked the Wizard first (surface.html requested)', any(p.endswith('assist/surface.html') for p in assist_reqs(r0)), assist_reqs(r0))
-        check('C side button unlocked online', f'production deadline fired ~{DEADLINE}s after the corner showed, then the bundled copy', tdead and 1200 <= ms(tshow, tdead) <= 2200 and 'from bundle' in line, {'deadline_ms': ms(tshow, tdead), 'line': line.strip()[-60:]})
+          f'{len(corner_tries) + (1 if won else 0)} load(s), {len(corner_tries)} fell back; last: new TCP/TLS connections={len(cports)} for {len(assist_reqs(r0))} overlay requests; ready_ms={ms(tshow, tc)}')
     log('  assist trigger:', how)
     check('C side button unlocked online', 'assist gesture reached WizardSession (corner shown)', first(t0, r'corner shown')[0], (how, first(t0, r'corner shown|session:')[1]))
-    if won: check('C side button unlocked online', 'fake Wizard served surface.html and surface.js', any(p.endswith('assist/surface.html') for p in assist_reqs(r0)) and any(p.endswith('assist/surface.js') for p in assist_reqs(r0)), assist_reqs(r0))
+    check('C side button unlocked online', 'fake Wizard served surface.html and surface.js', any(p.endswith('assist/surface.html') for p in assist_reqs(r0)) and any(p.endswith('assist/surface.js') for p in assist_reqs(r0)), assist_reqs(r0))
     time.sleep(1.5); evidence('C-side-online'); x = (OUT / 'C-side-online.xml').read_text()
-    page_is('C side button unlocked online', 'surface.html', 'Wizard' if won else 'bundle', corner=True)
+    page_is('C side button unlocked online', 'surface.html', 'Wizard', corner=True)
     close_corner()
     no_crash('online hosts', start)
 
