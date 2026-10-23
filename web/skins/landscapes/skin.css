@@ -603,3 +603,17 @@ html[data-skin="landscapes"] .rs-fuel .rs-gauge :is(.rs-e, .rs-f) { bottom: 0; f
 html[data-skin="landscapes"] .rs-fuel.rs-empty .rs-gauge .rs-arc { stroke: var(--amber, #ffc56b); }
 html[data-skin="landscapes"] .rs-fuel.rs-empty .rs-gauge :is(.rs-ndl path, .rs-hub) { fill: var(--amber, #ffc56b); }
 html[data-skin="landscapes"] .rs-fuel.rs-empty .rs-gauge b { color: var(--amber, #ffc56b); }
+
+/* All dials as fuel gauges of what is left (Miguel, 23 Oct): E to F, amber under a quarter, red under a tenth.
+   Computer and AI on two separate centred lines. */
+html[data-skin="landscapes"] [data-home-resources] .rs-dialed.rs-widget.wz-home-widget { flex-direction: column; align-items: center; gap: 8px; }
+html[data-skin="landscapes"] [data-home-resources] .rs-dialed.rs-widget.wz-home-widget .rs-dials { justify-content: center; }
+html[data-skin="landscapes"] [data-home-resources] .rs-dialed.rs-widget.wz-home-widget .rs-dials + .rs-dials { margin: 0; padding: 0; border: 0; }
+html[data-skin="landscapes"] .rs-fuel .rs-gauge b:not(:empty):not([data-money] b)::after { content: "%"; font-size: .72em; font-weight: 600; margin-left: 1px; opacity: .8; }
+html[data-skin="landscapes"] .rs-fuel[data-money] .rs-gauge b::after { content: none; }
+html[data-skin="landscapes"] .rs-fuel.rs-empty .rs-gauge .rs-arc { stroke: var(--amber, #ffc56b); }
+html[data-skin="landscapes"] .rs-fuel.rs-empty .rs-gauge :is(.rs-ndl path, .rs-hub) { fill: var(--amber, #ffc56b); }
+html[data-skin="landscapes"] .rs-fuel.rs-empty .rs-gauge b { color: var(--amber, #ffc56b); }
+html[data-skin="landscapes"] .rs-fuel.rs-crit .rs-gauge .rs-arc { stroke: #ff8080; }
+html[data-skin="landscapes"] .rs-fuel.rs-crit .rs-gauge :is(.rs-ndl path, .rs-hub) { fill: #ff8080; }
+html[data-skin="landscapes"] .rs-fuel.rs-crit .rs-gauge b { color: #ff8080; }

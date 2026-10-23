@@ -495,6 +495,7 @@ window.WizCore.chats = function createChats(H) {
     }
   }
   function renderChatList(w, el) {
+    closeStream(ch(w.id));
     if (!el) return;
     if (H.renderView?.(w, el, () => renderChatList(w, el), 'list')) return;
     if (window.__wosScrollCapture?.hold(el, null)) { ch(w.id).heldList = true; return; }
@@ -812,7 +813,7 @@ window.WizCore.chats = function createChats(H) {
     if (tn.a || tn.media.length) {
       const k = tn.a ? c.texts.push(tn.a.text) - 1 : -1;
       h += `<div class="msg a"><div class="bub">${tn.a ? md(tn.a.text) : ''}${mediaBlock(c, tn.media)}</div>`
-        + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>` : ''}</div></div>`;
+        + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>${last && !working ? '<button type="button" data-mregen aria-label="Regenerate response">↻ Regenerate</button>' : ''}` : ''}</div></div>`;
     }
     return h;
   }
@@ -1153,6 +1154,50 @@ window.WizCore.chats = function createChats(H) {
       }
     };
   }
+  const assistantStamp = turns => { const a = (turns || []).findLast(t => t.a && t.a.final !== false)?.a; return a ? JSON.stringify([a.at, a.text]) : ''; };
+  // Hide protocol trailers even when their opening marker spans token chunks.
+  const streamAnswer = value => {
+    let s = String(value || '');
+    const markers = ['[WIZARD_STATUS_V1]', '[WIZARD_CLOSE_AND_FILE_V1]', '[WIZARD_FILES_V1]', '[WIZARD_FILE_CHIPS_V1]', '[WIZARD_IMAGE_INTENT_V1]', '<helm_attachments>'];
+    for (const marker of markers) {
+      const at = s.indexOf(marker); if (at >= 0) s = s.slice(0, at);
+      for (let n = 1; n < marker.length; n++) if (s.endsWith(marker.slice(0, n))) { s = s.slice(0, -n); break; }
+    }
+    return s.trimEnd();
+  };
+  function closeStream(c) { c.stream?.handle?.close(); clearTimeout(c.stream?.retry); c.stream = null; }
+  function syncStream(w, c, turns, agent) {
+    const sid = w.thread, s = LIVE.session(sid), pendingRun = LIVE.pendingRun?.(sid), rid = pendingRun || s?.runId;
+    if (c.stream && (c.stream.sid !== sid || (rid && c.stream.rid !== rid) || agentRec(agent).privacy === 'private')) closeStream(c);
+    if (!c.stream && turns && rid && (pendingRun || WORKING_ST.has(s?.status)) && agentRec(agent).privacy !== 'private') {
+      const st = { sid, rid, baseline: assistantStamp(turns), text: '', terminal: false, landed: false };
+      c.stream = st;
+      st.handle = LIVE.openRunStream?.(sid, agent, rid, snapshot => {
+        if (c.stream !== st || W[w.id] !== w || w.thread !== sid || !elOf(w.id)) { closeStream(c); return; }
+        st.text = snapshot.text; st.terminal = snapshot.terminal;
+        renderThreadLive(w);
+        if (st.terminal && !st.reconciling) {
+          st.reconciling = true;
+          const until = Date.now() + 60000;
+          const reconcile = async () => {
+            if (c.stream !== st || w.thread !== sid || st.landed || Date.now() > until) return;
+            await loadThread(w, true);
+            if (c.stream === st && !st.landed) st.retry = setTimeout(reconcile, 500);
+          };
+          reconcile();
+        }
+      });
+      if (!st.handle) c.stream = null;
+    }
+    const st = c.stream;
+    // Publish the authoritative transcript and retire the provisional in the SAME paint.
+    // Keep the last words visible while terminal receipts race transcript persistence.
+    if (st && !st.landed && turns && assistantStamp(turns) !== st.baseline) {
+      st.landed = true; st.handle?.close(); clearTimeout(st.retry);
+    }
+    const visible = st && !st.landed ? streamAnswer(st.text) : '';
+    return visible ? `<div class="msg a" data-streaming="${esc(st.rid)}"><div class="bub">${md(visible)}</div><div class="mmeta">${st.terminal ? 'Finishing…' : 'Replying…'}</div></div>` : '';
+  }
   function renderThread(w, el, keep) {
     if (H.renderView?.(w, el, () => renderThread(w, el, keep), 'thread')) return;
     if (window.__wosScrollCapture?.hold(el, draftKey(w))) { ch(w.id).held = true; return; }
@@ -1194,6 +1239,7 @@ window.WizCore.chats = function createChats(H) {
         + pend.map(p => pendingHtml(p, c)).join('')
         + (pend.some(p => ['queued', 'sending', 'waiting'].includes(p.state)) && !working ? `<details class="steps live"><summary><i class="dots"><b></b><b></b><b></b></i> ${pend.some(p => p.state === 'waiting') ? 'Waiting for Wizard · will retry' : 'Sending'}</summary></details>` : '');
     }
+    msgs += syncStream(w, c, turns, TAG);
     const acts = isNew ? [] : threadActions(s, turns);
     const box = el.querySelector('.ch-msgs');
     const atBottom = !box || box.scrollHeight - box.scrollTop - box.clientHeight < 80;
@@ -1989,7 +2035,7 @@ window.WizCore.chats = function createChats(H) {
     ta.setSelectionRange(a + text.length, a + text.length); ch(id).draft = ta.value; saveDraft(id); growTa(ta); syncSend(ta.form, ch(id));
     return true;
   }
-  const forget = id => { closeHosted(id); clearReading(id); delete CH[id]; };
+  const forget = id => { if (CH[id]) closeStream(CH[id]); closeHosted(id); clearReading(id); delete CH[id]; };
   function justPressed() { return Date.now() < lpUntil; }
   // A list must not re-render under an open actions sheet or a finger mid-press.
   const holdList = id => {
