@@ -578,7 +578,7 @@ window.WizCore.chats = function createChats(H) {
     const draftSec = drafts.length ? `<section class="ch-sec open" data-sec="drafts"><div class="ch-sec-h static"><span>Drafts</span><small>${drafts.length}</small></div><div class="ch-sec-b">${drafts.map(d => draftRow(d, d.key === 'new' && curThread === '__new__')).join('')}</div></section>` : '';
     // Messages still on the phone (the window went back to the list on send), new chats and replies: shown until
     // Wizard takes them. Local recovery is independent of list/search/server availability.
-    const outNew = OUTBOX ? OUTBOX.unsent().filter(it => (it.agent || '') === AGID && (it.kind === 'new' || it.kind === 'reply')) : [];
+    const outNew = OUTBOX ? OUTBOX.unsent().filter(it => OUTBOX.isMessage(it) && (it.agent || '') === AGID && (it.kind === 'new' || it.kind === 'reply')) : [];
     // A message still leaving the phone already shows as its thread's "Sending…" row in Working; the pill is only
     // for trouble (offline / not sent) or a thread that isn't in the list.
     const pill = sendPill(outNew.filter(it => ['failed', 'waiting', 'unconfirmed'].includes(it.state) || OUTBOX?.quarantined(it.id) || !LIVE.session(it.sessionId)), w);
