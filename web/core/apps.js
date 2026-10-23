@@ -148,6 +148,7 @@
     };
     rebuild(); listeners.add(rebuild);
     window.WosAgents?.onChange(rebuild);
+  const tight = s => s.replace(/ /g, '');
   function findApp(q, exact) {
       q = norm(q).replace(/^(the|my) /, '').replace(/ (app|application|view)$/, '');
       if (!q) return null;
@@ -159,7 +160,8 @@
       let best = null, bs = 0;
       for (const a of APPS) {
         const n = norm(a.name);
-        let s = n === q ? 100 : n.startsWith(q) ? 80 : n.includes(q) ? 60 : q.includes(n) && n.length > 3 ? 50 : 0;
+        // Spacing never decides a name: speech-to-text hears "Airlock" as "air lock" (James, 23 Oct 2026).
+        let s = n === q || tight(n) === tight(q) ? 100 : n.startsWith(q) ? 80 : n.includes(q) ? 60 : q.includes(n) && n.length > 3 ? 50 : 0;
         // One spoken word that shares a long stem with a name word ("meditation" → Meditate). Shorter names win ties.
         if (!s && !q.includes(' ')) for (const w of n.split(' ')) {
           let k = 0; while (k < w.length && k < q.length && w[k] === q[k]) k++;
@@ -175,7 +177,7 @@
       q = norm(q).replace(/^(open |the |my )+/, '').replace(/ (app|application)$/, '');
       if (!q || q.split(' ').length > 4) return null;
       const bare = n => n.replace(/^wizard /, '');
-      const hit = APPS.find(a => a.kind !== 'view' && (norm(a.name) === q || bare(norm(a.name)) === bare(q)));
+      const hit = APPS.find(a => a.kind !== 'view' && (norm(a.name) === q || tight(bare(norm(a.name))) === tight(bare(q))));
       if (hit) return hit;
       return findApp(q, true);
     }
