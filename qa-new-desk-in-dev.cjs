@@ -3,7 +3,7 @@
 const { chromium } = require('./tools/qa-playwright.cjs');
 const BASE = process.env.QA_BASE || 'http://127.0.0.1:9371', SHOTS = process.env.QA_SHOTS || '';
 const fails = [], ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails.push(m); };
-const isDev = a => a.source === 'launcher.json' || /-next$/.test(a.id) || /\(test\)\s*$/i.test(a.name || '');
+let OWN = []; const isDev = a => OWN.includes(a.id) || a.source === 'launcher.json' || /-next$/.test(a.id) || /\(test\)\s*$/i.test(a.name || '');
 (async () => {
   const browser = await chromium.launch();
   for (const [skin, strip] of [['nebula', false], ['grove', false], ['obsidian', false], ['nebula', true], ['obsidian', true]]) {
@@ -12,9 +12,9 @@ const isDev = a => a.source === 'launcher.json' || /-next$/.test(a.id) || /\(tes
     await ctx.addInitScript(s => { if (window !== top) return; try { localStorage.removeItem('wux.apps.v1'); localStorage.setItem('wos.skin', s); localStorage.setItem('wos.tour.done', '1'); localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.rvCoached', 'true'); localStorage.setItem('wos.obsidian.live', 'true'); } catch (_) {} }, skin);
     let devIds = [];
     await ctx.route(/\/wizard\/v1\/apps(\?.*)?$/, async route => {
-      const r = await route.fetch(); const j = await r.json();
+      const r = await route.fetch(); const j = await r.json(); if (!strip && !j.in_development) j.in_development = ['usuals', 'outline-streaming-demo', 'reference']; OWN = j.in_development || [];
       devIds = (j.apps || []).filter(a => isDev(a) && !a.system).map(a => a.id);
-      if (strip) j.apps = (j.apps || []).filter(a => !isDev(a));
+      if (strip) { j.apps = (j.apps || []).filter(a => !isDev(a)); delete j.in_development; }
       await route.fulfill({ response: r, json: j });
     });
     const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(String(e)));
@@ -31,6 +31,8 @@ const isDev = a => a.source === 'launcher.json' || /-next$/.test(a.id) || /\(tes
       ok(devIds.length > 0, `${tag}: box has ${devIds.length} in-development apps`);
       ok(s.dev && s.folded && s.order.join() === 'apps,dev,agents', `${tag}: folded In development row between Apps and For agents ${JSON.stringify(s.order)}`);
       ok(devIds.every(id => !s.appTiles.includes(id)), `${tag}: Apps holds no in-development app`);
+      ok(['outline-streaming-demo', 'reference'].every(id => s.devTiles.includes(id)) && !s.appTiles.some(id => /^v-(day|week|month)$/.test(id)) && !s.devTiles.some(id => /^v-/.test(id)), `${tag}: owner list (Outline, Reference) folded; review views gone`);
+      ok(await p.evaluate(() => window.WizCore.isInDevelopment({ id: 'usuals' }) && !window.WizCore.isInDevelopment({ id: 'wisdom' })), `${tag}: Food (phone-app only tile) is marked in development`);
       ok(String(s.devTiles.length) === s.count && devIds.every(id => s.devTiles.includes(id)), `${tag}: In development holds all ${s.count}: ${s.devTiles.join(', ')}`);
       if (SHOTS) await p.screenshot({ path: `${SHOTS}/dev-${skin}.png` });
       await p.evaluate(() => window.__nd.querySelector('[data-fatoggle="dev"]').click()); await p.waitForTimeout(300);
