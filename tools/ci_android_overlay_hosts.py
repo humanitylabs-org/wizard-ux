@@ -110,7 +110,9 @@ def server_up(mode='up'):
     if SRV['s']: return
     s = Server(('127.0.0.1', 443), Fake)
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); ctx.load_cert_chain(CERTS / 'leaf.pem', CERTS / 'leaf.key')
-    s.socket = ctx.wrap_socket(s.socket, server_side=True)
+    # Handshake lazily in each handler thread: wrapping the listener with the default handshake-on-accept would
+    # serialise every TLS handshake in the accept loop and add avoidable latency to each overlay resource.
+    s.socket = ctx.wrap_socket(s.socket, server_side=True, do_handshake_on_connect=False)
     threading.Thread(target=s.serve_forever, daemon=True).start()
     SRV['s'] = s
 def server_down():
@@ -307,7 +309,10 @@ def doc(name, want_corner=None):
         except Exception as e: out.append({'href': pg.get('url'), 'error': repr(e)[:120]})
     (OUT / 'devtools.log').open('a').write(f'{time.strftime("%H:%M:%S")} {name} corner={want_corner}: {json.dumps(out)}\n')
     return out
-def from_wizard(docs): return bool(docs) and all(d.get('href', '').startswith(ORIGIN + '/wizard-os-home/assist/') and d.get('marker') for d in docs)
+# #323 serves remote overlay documents on a virtual origin (OverlayPolicy.VIRTUAL) whose bytes come from the selected
+# Wizard by native fetch; the fixture marker proves the bytes are the Wizard's, not the APK's.
+VIRTUAL = 'https://wizard-overlay.invalid'
+def from_wizard(docs): return bool(docs) and all(d.get('href', '').startswith(VIRTUAL + '/wizard-os-home/assist/') and d.get('marker') for d in docs)
 def from_bundle(docs): return bool(docs) and all(d.get('href', '').startswith('file:///android_asset/wizard-os-home/assist/') and not d.get('marker') for d in docs)
 
 def page_is(flow, name, want, corner=None):

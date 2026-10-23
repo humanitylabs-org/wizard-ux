@@ -3,7 +3,7 @@ name: Android overlay host flows
 # the floating orb (WindowManager overlay), Screen mode (accessibility capture), the side-button corner orb
 # (VoiceInteractionSession) and the lock-screen surface (AssistLockActivity over a PIN keyguard), each online,
 # with the Wizard unreachable, with a too-slow Wizard and in airplane mode. The Wizard is a disposable fake at
-# https://10.0.2.2 (the runner's loopback, port 443) whose CA is minted per run and trusted only by this run's
+# https://10.0.2.2 (the runner's loopback, port 443; ECDSA P-256 like a Tailscale cert) whose CA is minted per run and trusted only by this run's
 # debug QA build (debug-overrides). No signing, owner origin or secret; nothing is published.
 on:
   pull_request:
@@ -29,11 +29,11 @@ jobs:
         run: |
           set -euo pipefail
           d="$RUNNER_TEMP/overlay-certs"; mkdir -p "$d"
-          openssl req -x509 -newkey rsa:2048 -nodes -keyout "$d/ca.key" -out "$d/ca.pem" -days 2 \
+          openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout "$d/ca.key" -out "$d/ca.pem" -days 2 \
             -subj "/CN=Wizard OS CI overlay fixture CA (run ${{ github.run_id }})" \
             -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign"
-          openssl req -newkey rsa:2048 -nodes -keyout "$d/leaf.key" -out "$d/leaf.csr" -subj "/CN=10.0.2.2"
-          printf 'subjectAltName=IP:10.0.2.2\nbasicConstraints=CA:FALSE\nkeyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n' > "$d/leaf.ext"
+          openssl req -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout "$d/leaf.key" -out "$d/leaf.csr" -subj "/CN=10.0.2.2"
+          printf 'subjectAltName=IP:10.0.2.2\nbasicConstraints=CA:FALSE\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth\n' > "$d/leaf.ext"
           openssl x509 -req -in "$d/leaf.csr" -CA "$d/ca.pem" -CAkey "$d/ca.key" -CAcreateserial -days 2 -out "$d/leaf.pem" -extfile "$d/leaf.ext"
           rm -f "$d/ca.key"
           # The debug QA build trusts this run's CA instead of the committed placeholder (debug-overrides only).
