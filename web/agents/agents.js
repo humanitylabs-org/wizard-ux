@@ -371,7 +371,7 @@
     if (d.pick && S.view.name === 'new') {
       const dr = S.draft;
       if (d.pick === 'harness') dr.harness = d.v;
-      if (d.pick === 'provider' && dr.provider !== d.v) { dr.provider = d.v; const p = provider(d.v); dr.model = p?.models.length === 1 || p?.confidential ? p.models[0]?.id || '' : ''; /* Tinfoil: its default (first) model, still changeable */ dr.preset = ''; }
+      if (d.pick === 'provider' && dr.provider !== d.v) { dr.provider = d.v; const p = provider(d.v); dr.model = p?.models.length === 1 || p?.confidential ? p.models[0]?.id || '' : ''; /* Tinfoil: its default (first) model, still changeable */ dr.preset = dr.wantPrivate ? 'private' : ''; /* asked for a private agent: a public provider stays blocked, never silently Standard */ }
       if (d.pick === 'model') dr.model = d.v;
       if (d.pick === 'preset') applyPreset(dr, d.v);
       render(); return;
@@ -418,7 +418,7 @@
     const d = e.data; if (e.origin !== ORIGIN || e.source !== parent || !d) return;
     if (d.type === 'wizard:bindings-changed') { AG.load(true).then(() => AG.loadBindings(true)); return; }
     // A private app's install sheet: start the New agent flow with Private chosen (James, 23 Oct 2026).
-    if (d.type === 'wizard:agents-new') { if (S.view.name !== 'new' && AG.available) { startNew(); if (d.preset === 'private') applyPreset(S.draft, 'private'); render(); } return; }
+    if (d.type === 'wizard:agents-new') { if (S.view.name !== 'new' && AG.available) { startNew(); if (d.preset === 'private') { S.draft.wantPrivate = true; applyPreset(S.draft, 'private'); } render(); } return; }
     if (d.type !== 'wizard:agents-show' || typeof d.id !== 'string') return;
     if (S.view.name === 'detail' && S.view.id === d.id) return;
     if (AG.get(d.id)) { S.sheet = null; go({ name: 'detail', id: d.id }); }
