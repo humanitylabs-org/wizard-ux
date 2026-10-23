@@ -1576,7 +1576,11 @@ window.WizCore.chats = function createChats(H) {
       const cached = LIVE.cachedMessages(sid);
       if (cached && cached.length) {
         try {
-          Object.assign(c, { turns: toTurns(cached), cachedFor: sid, err: '' }); // loadedFor stays for the server read
+          // These turns now belong to sid alone. loadedFor named the previous thread's read; keeping it let Back to
+          // that thread treat sid's cached body as its own fresh copy (James, 23 Oct 2026: Morning projects → linked
+          // thread → Back showed the linked thread under the Morning header until the 60 s re-read). The server read
+          // below still runs and sets loadedFor.
+          Object.assign(c, { turns: toTurns(cached), cachedFor: sid, loadedFor: '', err: '' });
           const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderLive(w, el);
         } catch (e) {}
       }

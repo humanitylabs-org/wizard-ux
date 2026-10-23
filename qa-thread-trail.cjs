@@ -31,6 +31,7 @@ const FIX = {
   qa_tt_c: { title: 'QA trail C', t: now - 42, rows: () => [row('user', 'Thread C ask', now - 400), row('assistant', 'Thread C answer.', now - 350)] },
 };
 const ARCH = new Set(), DEF = new Set();
+const HOLD = new Map(); // session id -> release(): its history read waits until the test lets it land
 function fixSession(id) {
   const f = FIX[id], rows = f.rows(), last = rows[rows.length - 1], lastU = rows[0];
   return { id, agent: 'hermes', runtime: 'hermes', source: 'wizard-mobile', title: f.title, status: 'completed', archived: ARCH.has(id), hidden: false, message_count: rows.length,
@@ -64,6 +65,7 @@ function routeFor() {
       return json(200, p);
     }
     const mm = u.pathname.match(/\/wizard\/hermes\/api\/sessions\/([^/]+)\/messages$/);
+    if (mm && FIX[mm[1]] && HOLD.has(mm[1])) await HOLD.get(mm[1]).wait;
     if (mm && FIX[mm[1]]) { rid = 1; const rows = FIX[mm[1]].rows().map(x => ({ ...x, session_id: mm[1] })); return json(200, { object: 'list', data: rows, pagination: { limit: 500, offset: 0, returned: rows.length } }); }
     const sm = u.pathname.match(/\/wizard\/hermes\/api\/sessions\/([^/]+)$/); if (sm && FIX[sm[1]]) return json(200, { session: fixSession(sm[1]) });
     return r.continue();
@@ -128,7 +130,27 @@ function routeFor() {
     ok(await thread() === null, '2 Back on the summary (opened from the list) returns to the list', await thread());
     ok(await alive(), '2 app still open after Back');
 
-    // 3. Chain: summary → A → B; Defer on B → A; Back on A → summary; Back → list.
+    // 2b. Back while the linked thread's read is still out (James, 23 Oct 2026: Morning projects → linked working
+    // thread → Back showed the linked thread's messages under the Morning header until the 60 s re-read). Thread B is
+    // already on this device from case 2, so it paints from its cached copy while its server read waits.
+    await openFromList('qa_tt_sum');
+    { let release; HOLD.set('qa_tt_b', { wait: new Promise(r => { release = r; }) });
+      await tapLink('Thread B');
+      await p.waitForFunction(() => { const w = Object.values(__wos.wins).find(x => x.app === 'chats'); return w?.thread === 'qa_tt_b' && /Thread B answer/.test(document.querySelector(`[data-chats="${w.id}"] .ch-msgs`)?.textContent || ''); }, null, { timeout: 8000 }).catch(() => {});
+      const body = async () => p.evaluate(() => { const w = Object.values(__wos.wins).find(x => x.app === 'chats'), el = document.querySelector(`[data-chats="${w.id}"]`); return { thread: w.thread, title: el?.querySelector('.ch-head .ti b')?.textContent || '', text: el?.querySelector('.ch-msgs')?.textContent || '' }; });
+      ok(/Thread B answer/.test((await body()).text), '2b linked thread paints its cached copy while its read is out', await body());
+      await back(); await sleep(1500);
+      let s2 = await body();
+      ok(s2.thread === 'qa_tt_sum' && s2.title === 'QA trail summary' && /Here are your threads/.test(s2.text) && !/Thread B answer/.test(s2.text), '2b Back during the linked read shows the summary’s own messages, not the linked thread’s', { ...s2, text: s2.text.slice(0, 160) });
+      release(); HOLD.delete('qa_tt_b'); await sleep(900);
+      s2 = await body();
+      ok(s2.thread === 'qa_tt_sum' && /Here are your threads/.test(s2.text) && !/Thread B answer/.test(s2.text), '2b the late linked read cannot paint over the summary', { ...s2, text: s2.text.slice(0, 160) });
+      await tapLink('Thread B'); await waitThread('qa_tt_b');
+      ok((await body()).thread === 'qa_tt_b', '2b the summary’s links still work after that Back');
+      await back(); await back();
+      ok(await thread() === null && await alive(), '2b nested Back then root Back: list, app still open', await thread()); }
+
+    // 3. Chain: summary → A → B; Done on B → A; Back on A → summary; Back → list.
     await openFromList('qa_tt_sum');
     ARCH.delete('qa_tt_a'); await p.evaluate(() => __wos.live.refresh?.()); await sleep(800);
     await openFromList('qa_tt_a'); // reopen from list is a fresh trail …
@@ -137,8 +159,9 @@ function routeFor() {
     await tapLink('Thread A'); await waitThread('qa_tt_a');
     await tapLink('Thread B'); await waitThread('qa_tt_b');
     ok(await thread() === 'qa_tt_b', '3 link inside a linked thread opens the next thread');
-    await tapAct('defer'); await waitThread('qa_tt_a');
-    ok(await thread() === 'qa_tt_a', '3 Defer steps back one thread (B → A)', await thread());
+    // Snooze now opens its time picker (#365), so the one-tap step back here is Done.
+    await tapAct('done'); await waitThread('qa_tt_a');
+    ok(await thread() === 'qa_tt_a', '3 Done steps back one thread (B → A)', await thread());
     await back();
     ok(await thread() === 'qa_tt_sum', '3 Back steps back again (A → summary)', await thread());
     await back();
