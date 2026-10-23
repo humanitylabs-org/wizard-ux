@@ -37,7 +37,7 @@ test('Boomerang reads and writes the one scheduler, never its own store or a run
 test('a scheduler job maps to the picker shape; only the current time reads as returned', async () => {
   const { B } = load()
   const job = { id: 'a', kind: 'return', thread: 'wizard_t', when: { once: '2026-10-23T05:00:00.000Z' }, timezone: 'Asia/Bangkok', prompt: 'Check quote', target: { message: 1792700000000, excerpt: 'The quote' }, name: 'Boomerang · Quote' }
-  assert.deepEqual({ ...B._fromJob(job) }, { id: 'a', session_id: 'wizard_t', due_at: '2026-10-23T05:00:00.000Z', timezone: 'Asia/Bangkok', note: 'Check quote', anchor_at: 1792700000000, target_kind: 'message', context: 'The quote', status: 'scheduled', returned_at: null })
+  assert.deepEqual({ ...B._fromJob(job) }, { id: 'a', session_id: 'wizard_t', created_at: null, due_at: '2026-10-23T05:00:00.000Z', timezone: 'Asia/Bangkok', note: 'Check quote', anchor_at: 1792700000000, target_kind: 'message', context: 'The quote', status: 'scheduled', returned_at: null })
   const back = B._fromJob({ ...job, lastRun: { outcome: 'returned', scheduledFor: '2026-10-23T05:00:00.000Z', finishedAt: '2026-10-23T05:00:01Z' } })
   assert.equal(back.status, 'due')
   // "Again" moved the time: the earlier return is history, not a fresh one.
@@ -56,6 +56,21 @@ test('returned Boomerangs come back to the thread list and are announced once pe
   assert.match(sandbox.localStorage.getItem('wos.boomerang.seen.v1'), /"a"/)
   await B.refresh()
   assert.deepEqual(restored, ['wizard_t'], 'seen once, never restored again')
+})
+
+test('an existing Snooze takes its thread out of the list once, unless James wrote or restored since', async () => {
+  const deferred = []
+  const set = '2026-10-23T14:40:00.000Z'
+  const sessions = {
+    quiet: { id: 'quiet', lastUserAt: '2026-10-23T08:00:00.000Z' },
+    wrote: { id: 'wrote', lastUserAt: '2026-10-23T15:00:00.000Z' },
+    restored: { id: 'restored', lastUserAt: '2026-10-23T08:00:00.000Z', restoredAt: '2026-10-23T15:00:00.000Z' },
+    already: { id: 'already', deferred: true },
+  }
+  const job = id => ({ id: 'j_' + id, kind: 'return', thread: id, createdAt: set, when: { once: '2099-01-01T00:00:00.000Z' }, timezone: 'UTC', prompt: '', target: { message: null, excerpt: '' } })
+  const { B } = load(['quiet', 'wrote', 'restored', 'already'].map(job).concat({ ...job('quiet'), id: 'legacy', createdAt: undefined }), { WizLive: { ok: true, session: id => sessions[id], busy: () => false, defer: async id => { deferred.push(id); return true } } })
+  await B.refresh(); await B.refresh()
+  assert.deepEqual(deferred, ['quiet'])
 })
 
 test('the phone reply watcher is armed with the wzb_ watch id', async () => {
