@@ -6,6 +6,9 @@
 #   permissions: { contents: read, pull-requests: write }
 #   jobs: { review: { uses: humanitylabs-org/wizard-ux/.github/workflows/pr-agent-review.yml@main } }
 #
+# Private repos have no hosted-runner minutes on the org's plan; they pass their own self-hosted runner:
+#   with: { runs-on: '["self-hosted","macOS","ARM64","wizard-os"]' }
+#
 # Safety: pull_request_target gives a write token even on fork PRs, so this job never checks out or
 # runs PR code. It checks out the reviewer from wizard-ux main and reads the PR through the API only.
 name: Agent review
@@ -13,13 +16,18 @@ on:
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_call:
+    inputs:
+      runs-on:
+        description: JSON runner label or list, for example '"ubuntu-latest"' or '["self-hosted","macOS"]'.
+        type: string
+        default: '"ubuntu-latest"'
 permissions:
   contents: read
   pull-requests: write
 jobs:
   review:
     if: github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runs-on || '"ubuntu-latest"') }}
     concurrency:
       group: agent-review-${{ github.repository }}-${{ github.event.pull_request.number }}
       cancel-in-progress: true
