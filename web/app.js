@@ -898,11 +898,15 @@
     device.classList.toggle('orb-typed', !!slot && c.classList.contains('has-text') && V.state === 'idle');
     device.classList.toggle('orb-slotted', !!slot);
     if (!slot) return;
-    const sr = slot.getBoundingClientRect();
-    if (!sr.width) return; // Send holds the seat: keep the last position for the swap back
-    const dr = device.getBoundingClientRect();
-    device.style.setProperty('--slot-b', Math.round(dr.bottom - sr.bottom) + 'px');
-    device.style.setProperty('--slot-r', Math.round(dr.right - sr.right) + 'px');
+    // Measure the row, not the slot: the slot is hidden while Send holds the seat and on the first paint.
+    // Skins differ in dock size and insets, so centre the orb itself on the row by its measured offset.
+    const dock = device.querySelector('.dock'), row = slot.parentElement.getBoundingClientRect();
+    if (!row.height || !dock) return;
+    // Centres, so a mid-transition scale (Send swap) cannot skew the measurement.
+    const cs = getComputedStyle(dock), orbEl = $('#orbWrap'), d = orbEl.getBoundingClientRect(), half = orbEl.offsetWidth / 2;
+    const b = parseFloat(cs.bottom) + ((d.top + d.bottom) / 2 - (row.top + row.bottom) / 2), r = parseFloat(cs.right) + ((d.left + d.right) / 2 - (row.right - half));
+    device.style.setProperty('--slot-b', Math.round(b) + 'px');
+    device.style.setProperty('--slot-r', Math.round(r) + 'px');
   }
   window.addEventListener('wos:composer', () => { if (liftRO) paintCornerLift(); });
   window.addEventListener('resize', () => { if (liftRO) paintCornerLift(); });

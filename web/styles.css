@@ -797,7 +797,7 @@ body {
 #device.orb-slotted.orb-typed .win.full .ch-thread .ch-compose .ch-send { display: grid !important; }
 #device.orb-slotted .win.full .ch-thread .ch-compose { padding-right: 10px !important; }
 #device.orb-slotted { --corner-b: calc(var(--slot-b, 12px) - var(--safe-b)) !important; --corner-r: var(--slot-r, 10px) !important; }
-#device.orb-slotted .dock { bottom: var(--slot-b, 12px) !important; right: var(--slot-r, 10px) !important; transition: opacity 140ms var(--ease), transform 140ms var(--ease); }
+#device.orb-slotted .dock { bottom: var(--slot-b, 12px) !important; right: var(--slot-r, 10px) !important; transition: opacity 140ms var(--ease), transform 140ms var(--ease) !important; animation: none; }
 #device.orb-slotted.orb-typed .dock { opacity: 0; transform: scale(.6); pointer-events: none; }
 #device.orb-slotted .win.full .ch-latest { bottom: calc(var(--comp-h, 63px) + 10px) !important; }
 /* the live transcript card sits above the voice fan (which tops out ~175px above the orb), never on it */

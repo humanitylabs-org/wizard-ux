@@ -100,7 +100,7 @@ const writes = [];
 
   // clear: the orb returns
   await p.evaluate(() => { const t = document.querySelector('.win.full .ch-compose textarea'); t.value = ''; t.dispatchEvent(new Event('input', { bubbles: true })); });
-  await p.waitForTimeout(400);
+  await p.waitForFunction(() => getComputedStyle(document.querySelector('#dock')).opacity === '1', null, { timeout: 4000 }).catch(() => {});
   g = await geo();
   ok(g.orbVis && !g.sendVis, 'cleared box: orb returns', JSON.stringify(g));
   await p.evaluate(() => document.activeElement?.blur()); await p.waitForTimeout(400);
