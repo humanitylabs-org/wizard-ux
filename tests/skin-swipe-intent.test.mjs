@@ -1,7 +1,7 @@
 // Swipe-back (every skin) fires only on an intentional swipe (James, 23 Oct 2026).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { engages, commits } from '../web/core/swipe-intent.js';
+import { engages, commits, intentional } from '../web/core/swipe-intent.js';
 
 test('subtle swipes never go back', () => {
   assert.equal(commits(45, 5, 80), false, 'the old 40 px flick');
@@ -17,4 +17,13 @@ test('intentional swipes go back', () => {
   assert.equal(commits(140, 10, 500), true, 'long slow drag');
   assert.equal(commits(90, 8, 120), true, 'deliberate fast flick');
   assert.equal(engages(30, 5), true);
+});
+
+test('one threshold both ways: leftward skin swipes use the same rule as swipe-back', () => {
+  assert.equal(intentional(-70, 4, 60), false, 'subtle left flick');
+  assert.equal(intentional(-100, 8, 600), false, 'short left drag');
+  assert.equal(intentional(-140, 10, 500), true, 'long left drag');
+  assert.equal(intentional(-95, 6, 120), true, 'deliberate left flick');
+  assert.equal(intentional(140, 10, 500), commits(140, 10, 500));
+  assert.ok(globalThis.WosSwipeIntent?.intentional, 'classic scripts (skin-host) reach it');
 });
