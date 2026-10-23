@@ -1340,6 +1340,7 @@ window.WizCore.chats = function createChats(H) {
     const atBottom = !box || box.scrollHeight - box.scrollTop - box.clientHeight < 80;
     // Read the place now: once innerHTML replaces the list, the old box is detached and reports scrollTop 0.
     const boxTop = box ? box.scrollTop : null;
+    const anchor = box && !atBottom ? PW?.anchorOf?.(box) : null; // the message under your eyes, held through the repaint
     const dkey = draftKey(w);
     const oldTa = el.querySelector('textarea');
     const draft = oldTa && el.dataset.draftFor === dkey ? oldTa.value : (c.draftFor === dkey ? c.draft || '' : loadDraft(w));
@@ -1394,7 +1395,7 @@ window.WizCore.chats = function createChats(H) {
     el.dataset.draftFor = dkey; c.draft = draft; c.draftFor = dkey;
     const nb = el.querySelector('.ch-msgs');
     if (keep) nb.scrollTop = nb.scrollHeight - keep.h + keep.top;
-    else if (PW && PW.position(w, el, nb, { keep, atBottom, box, boxTop, turns, working })) {} // reading position (#18)
+    else if (PW && PW.position(w, el, nb, { keep, atBottom, box, boxTop, anchor, turns, working })) {} // reading position (#18)
     else if (!morphed || atBottom) { const to = atBottom ? nb.scrollHeight : (boxTop ?? nb.scrollHeight); if (Math.abs(nb.scrollTop - to) >= 1 || !morphed) nb.scrollTop = to; }
     // Photos load after layout: keep a thread that was at the bottom pinned to the bottom.
     if (!keep && atBottom) nb.querySelectorAll('img').forEach(im => { if (!im.complete) im.addEventListener('load', () => { if (nb.scrollHeight - nb.scrollTop - nb.clientHeight < 400) nb.scrollTop = nb.scrollHeight; }, { once: true }); });
