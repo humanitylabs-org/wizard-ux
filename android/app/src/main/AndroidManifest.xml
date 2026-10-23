@@ -300,5 +300,11 @@
             android:name=".apps.AppsUpdateJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- Connect › Scan QR code: zxing's CaptureActivity is declared sensorLandscape in the library, so the camera
+             opened sideways (James 24 Oct 2026). Follow the phone's orientation instead. -->
+        <activity
+            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+            android:screenOrientation="fullSensor"
+            tools:replace="screenOrientation" />
     </application>
 </manifest>
