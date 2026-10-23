@@ -94,8 +94,8 @@ public class WizardIdFlowTest {
             Thread.sleep(1800); assertEquals("false",evaluate("window.childReply"));
             call("navigation","identity.sign",new JSONObject().put("event",event)); visible("Publish Midnight as your skin");
             scenario.onActivity(a -> web.loadUrl(fixture.origin()+"/wizard-os-home/?next=1"));
-            waitFor(() -> "true".equals(evaluate("document.readyState==='complete' && !!window.qaReplies")));
-            assertFalse(device.hasObject(By.text("Approve & sign"))); alive();
+            waitFor(() -> "true".equals(evaluate("location.search==='?next=1' && document.readyState==='complete' && !!window.qaReplies")));
+            waitFor(() -> !device.hasObject(By.text("Approve & sign"))); alive(); // navigation closed the pending approval
             scenario.onActivity(a -> web.loadDataWithBaseURL("https://evil.example/wizard-os-home/","<html>Wrong origin</html>","text/html","utf-8",null));
             waitFor(() -> "true".equals(evaluate("location.hostname==='evil.example'")));
             assertEquals("\"undefined\"",evaluate("typeof window.wizardDevicePort")); device.pressBack(); alive();
