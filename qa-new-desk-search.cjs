@@ -10,7 +10,8 @@ const fails = [], ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if 
     await ctx.addInitScript(s => { if (window !== top) return; try { localStorage.setItem('wos.skin', s); localStorage.setItem('wos.tour.done', '1'); localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.rvCoached', 'true'); localStorage.setItem('wos.obsidian.live', 'true'); } catch (_) {} }, skin);
     const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(String(e)));
     await p.goto(BASE + '/wizard-os-home/?myskin=off'); await p.waitForSelector('#orbWrap'); await p.waitForTimeout(2500);
-    await p.evaluate(() => { __wos.openOverview(); document.querySelector('[data-ovadd]')?.click(); }); await p.waitForTimeout(800);
+    await p.evaluate(() => __wos.openOverview()); await p.waitForTimeout(300); await p.evaluate(() => document.querySelector('[data-ovadd]')?.click());
+    await p.waitForFunction(() => [...document.querySelectorAll('.nd-search')].some(n => { const r = n.getBoundingClientRect(); return r.width && Math.abs(r.left + r.width / 2 - innerWidth / 2) < 3; }), null, { timeout: 5000 }).catch(() => {}); await p.waitForTimeout(400);
     const geo = await p.evaluate(() => {
       const f = [...document.querySelectorAll('.nd-search')].find(n => { const r = n.getBoundingClientRect(); return r.width && r.left >= 0 && r.left < innerWidth; });
       if (!f) return null; window.__ndf = f; const r = f.getBoundingClientRect(); const dock = document.querySelector('.dock')?.getBoundingClientRect();

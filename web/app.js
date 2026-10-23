@@ -1379,7 +1379,7 @@
   function newDesk() {
     const last = desks.length - 1;
     if (last > 0 && !desks[last].wins.length) return goDesk(last);
-    forAgOpen = false; desks.push(blank({})); syncDesks(); renderDots(); goDesk(desks.length - 1, true); announce('<b>New desk</b>');
+    foldOpen.agents = foldOpen.dev = false; desks.push(blank({})); syncDesks(); renderDots(); goDesk(desks.length - 1, true); // the empty desk titles itself; a label flash would cover its search pill
   }
   /* Miguel's skins (Dark, Light, Landscapes): the launcher and New desk sort apps by what they are, with no Recent row.
    * Same order as the App Store: Apps = anything with a screen you use; Wizard apps = backend-only apps your agent uses
@@ -1397,15 +1397,20 @@
    * and wear a ring that reads as "this fills a spot"; everything else follows alphabetically. */
   const SYSTEM_IDS = new Set(['wizard', 'setup', 'files', 'notifications', 'transcriber', 'browser', 'secret-drop', 'wizard-chatgpt', 'wizard-claude']);
   const isSystem = a => SYSTEM_IDS.has(a.id) || a.system === true;
+  const inDev = a => !isSystem(a) && (a.source === 'launcher.json' || /-next$/.test(a.id) || /\(test\)\s*$/i.test(a.name || ''));
   function appKinds() {
     const byName = (x, y) => (isSystem(y) - isSystem(x)) || x.name.localeCompare(y.name, undefined, { sensitivity: 'base' });
     const mine = APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && ['wizard', 'chats', 'usuals', 'view'].includes(a.kind));
     const conns = mine.filter(a => a.kind === 'wizard' && isConnector(a));
     // Agents: each agent's chats (main agent first, as registered) plus the Agents app that manages them.
     const agents = [...mine.filter(a => a.kind === 'chats'), ...(APP.agents ? [APP.agents] : [])].sort((x, y) => isSystem(y) - isSystem(x));
-    const apps = mine.filter(a => a.kind !== 'chats' && !conns.includes(a)).sort(byName);
+    const people = mine.filter(a => a.kind !== 'chats' && !conns.includes(a)).sort(byName);
+    // In development (James, 23 Oct 2026): screens linked from the owner's launcher list rather than installed by the
+    // App Manager, and test copies of an installed app. They fold under their own row, shown only when there are any;
+    // once a screen ships as an installed app it moves up to Apps by itself.
+    const apps = people.filter(a => !inDev(a)), dev = people.filter(inDev);
     const back = (window.WizCore.backendApps?.() || []).filter(a => !APP[a.id]);
-    return { apps, agents, wiz: back.filter(a => !isConnector(a)).sort(byName), conns: [...conns, ...back.filter(isConnector)].sort(byName) };
+    return { apps, dev, agents, wiz: back.filter(a => !isConnector(a)).sort(byName), conns: [...conns, ...back.filter(isConnector)].sort(byName) };
   }
   const sysMark = html => html.replace('class="lapp', 'class="lapp lapp-sys').replace('<span class="nm">', '<span class="nm" title="System app">');
   const backTile = a => `<button class="lapp lapp-back${isSystem(a) ? ' lapp-sys' : ''}" data-appinfo="${esc(a.id)}" data-name="${esc(a.name)}" style="--i:${tileN++}">${ico('span', 'ic', a)}<span class="nm">${esc(a.name)}</span></button>`;
@@ -1425,14 +1430,16 @@
     // folded by default (each open of the sheet or a New desk starts folded), tap the row to open it.
     const fa = order.filter(k => k !== 'apps' && G[k]);
     const n = (K.wiz.length + K.agents.length + K.conns.length);
-    const folded = fa.length ? `<div class="forag${forAgOpen ? ' open' : ''}"><button type="button" class="fa-row" data-fatoggle aria-expanded="${forAgOpen}"><span>For agents</span><small>${n}</small><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><div class="fa-body">${fa.map(k => G[k]).join('')}</div></div>` : '';
-    return (order.includes('apps') ? G.apps : '') + folded;
+    const fold = (key, label, count, body) => `<div class="forag fa-${key}${foldOpen[key] ? ' open' : ''}" data-fold="${key}"><button type="button" class="fa-row" data-fatoggle="${key}" aria-expanded="${!!foldOpen[key]}"><span>${label}</span><small>${count}</small><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><div class="fa-body">${body}</div></div>`;
+    const dev = order.includes('apps') && K.dev.length ? fold('dev', 'In development', K.dev.length, `<div class="lgroup kg-dev"><h4>In development</h4><div class="lgrid">${K.dev.map(kindTile).join('')}</div></div>`) : '';
+    const folded = fa.length ? fold('agents', 'For agents', n, fa.map(k => G[k]).join('')) : '';
+    return (order.includes('apps') ? G.apps : '') + dev + folded;
   }
-  let forAgOpen = false;
+  const foldOpen = { agents: false, dev: false };
   document.addEventListener('click', e => {
     const t = e.target.closest && e.target.closest('[data-fatoggle]'); if (!t) return;
-    e.stopPropagation(); forAgOpen = !forAgOpen;
-    document.querySelectorAll('.forag').forEach(el => { el.classList.toggle('open', forAgOpen); el.querySelector('[data-fatoggle]')?.setAttribute('aria-expanded', String(forAgOpen)); });
+    e.stopPropagation(); const key = t.dataset.fatoggle || 'agents'; foldOpen[key] = !foldOpen[key];
+    document.querySelectorAll(`.forag[data-fold="${key}"]`).forEach(el => { el.classList.toggle('open', foldOpen[key]); el.querySelector('[data-fatoggle]')?.setAttribute('aria-expanded', String(foldOpen[key])); });
   }, true);
   function openAppInfo(el) { window.WosAppRoute?.open(el.dataset.appinfo, { name: el.dataset.name || '' }); }
   function renderEmpty(i) {
@@ -1716,7 +1723,7 @@
       if (hit && n && (!first || (x.nm.startsWith(n) && !first.s))) first = { t: x.t, s: x.nm.startsWith(n) };
     }
     for (const g of nd.querySelectorAll('.lgroup')) g.hidden = !!n && !g.querySelector('.lapp:not([hidden])');
-    const fa = nd.querySelector('.forag'); if (fa) { fa.classList.toggle('searching', !!n); fa.hidden = !!n && !fa.querySelector('.lapp:not([hidden])'); }
+    for (const fa of nd.querySelectorAll('.forag')) { fa.classList.toggle('searching', !!n); fa.hidden = !!n && !fa.querySelector('.lapp:not([hidden])'); }
     nd.querySelector('.nd-none').hidden = !n || !!first;
     nd.classList.toggle('nd-q', !!n);
     return first?.t || null;
@@ -1900,7 +1907,7 @@
     if (which === 'settings' && stDesk) dropParkedSettings(); // Settings opened on this desk moves here
     sheet = which; device.classList.add('sheet-open'); device.dataset.sheet = which; tourEv('sheet', { which });
     window.WosResources?.back(); window.WosResources?.sync();
-    if (which === 'launcher') { forAgOpen = false; renderLauncher(q || ''); launcher.classList.add('open'); const s = $('#search'); s.value = q || ''; }
+    if (which === 'launcher') { foldOpen.agents = foldOpen.dev = false; renderLauncher(q || ''); launcher.classList.add('open'); const s = $('#search'); s.value = q || ''; }
     else if (which === 'settings') { settingsFocus = document.activeElement; renderSettings(); settingsEl.classList.add('open'); $('#settingsBody').scrollTop = 0; settingsView?.focus(); }
     else { renderInbox(); inboxEl.classList.add('open'); }
     [launcher, inboxEl, settingsEl].forEach(el => { if (el === settingsEl && stDesk) return; el.style.transform = ''; el.style.opacity = ''; });
