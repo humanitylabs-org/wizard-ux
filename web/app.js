@@ -394,7 +394,8 @@
     window.WosSetupLaunch?.desk(idx === HOME); // a first-run tour held back for Setup starts on the first return Home
     if (moved && LINKS && LINKS.isOpen()) LINKS.close(); // a link is a peek over this desk: moving desks dismisses it
     if (moved) vib(8);
-    if (!silent) announce(`<b>${esc(deskName(idx))}</b>`);
+    // An empty New desk already titles itself and its search pill sits where the label would flash.
+    if (!silent && (desks[idx].home || desks[idx].wins.length)) announce(`<b>${esc(deskName(idx))}</b>`);
     markVisibleThreadsSeen();
     window.WosResources?.sync();
     window.WosSkinHost?.changed();
@@ -1317,7 +1318,7 @@
     if (sheet === 'settings') renderSettings();
     if (sheet === 'inbox') renderInbox();
     refreshHome(); renderMoons();
-    desks.forEach((d, i) => { if (!d.wins.length && !d.home) { const g = secOf(i)?.querySelector('.glance'); if (g) g.innerHTML = renderEmpty(i); } });
+    desks.forEach((d, i) => { if (!d.wins.length && !d.home) { const g = secOf(i)?.querySelector('.glance'); if (g && !g.querySelector('[data-ndq]')?.value && document.activeElement?.closest('.glance') !== g) g.innerHTML = renderEmpty(i); } });
     for (const id of Object.keys(W)) { const w = W[id]; if ((w.app === 'chats' || CHATS.isHosted(id)) && w.thread) { const el = track.querySelector(`[data-chats="${id}"]`); if (el) renderThread(w, el); } }
     for (const id of Object.keys(W)) { const w = W[id]; if (w.app === 'chats' && !w.thread) { const el = track.querySelector(`[data-chats="${id}"]`); if (el && el.querySelector('.ch-list')) CHATS.renderChatList(w, el); } }
     // Tell Android how many app messages are stuck, so it can say so in a notification while the app is closed.
@@ -1437,7 +1438,9 @@
   function renderEmpty(i) {
     // Miguel's app kinds are every skin's New desk (James, 23 Oct 2026): Apps with system apps first and ringed, then
     // Wizard apps, Agents and Connectors folded under "For agents".
-    tileN = 0; return `<div class="desk-scroll new-desk kinds"><div class="nd-head"><b>New desk</b><span>Pick an app to open here</span></div>${kindGroups(['apps', 'wiz', 'agents', 'conns'])}</div>`;
+    // Search apps (James, 23 Oct 2026): a pill at bottom centre, above the dock; typing filters every group in place
+    // (For agents unfolds while a query is on), Enter opens the first match.
+    tileN = 0; return `<div class="desk-scroll new-desk kinds"><div class="nd-head"><b>New desk</b><span>Pick an app to open here</span></div>${kindGroups(['apps', 'wiz', 'agents', 'conns'])}<p class="nd-none" hidden>No app matches</p></div><form class="nd-search" role="search" data-ndsearch><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><input type="search" data-ndq placeholder="Search apps" aria-label="Search apps" autocomplete="off" enterkeyhint="go"></form>`;
   }
   function renderApp(w) {
     const a = APP[w.appId] || {};
@@ -1701,6 +1704,29 @@
   track.addEventListener('pointerdown', e => {
     const we = e.target.closest('.win'); if (we) focusWin(we.dataset.win);
   }, true);
+  function ndFilter(input) {
+    const nd = input.closest('.glance')?.querySelector('.new-desk'); if (!nd) return null;
+    // Names first ("Wiza" finds the Wizard apps, not every app whose blurb says Wizard); descriptions only when no name fits.
+    const n = norm(input.value); let first = null;
+    const tiles = [...nd.querySelectorAll('.lapp')].map(t => { const a = APP[t.dataset.app || t.dataset.appinfo], nm = norm(t.querySelector('.nm')?.textContent);
+      return { t, nm, byName: nm.split(' ').some(w => w.startsWith(n)) || nm.startsWith(n), byDesc: norm(a?.desc).includes(n) || nm.includes(n) }; });
+    const named = tiles.some(x => x.byName);
+    for (const x of tiles) {
+      const hit = !n || (named ? x.byName : x.byDesc); x.t.hidden = !hit;
+      if (hit && n && (!first || (x.nm.startsWith(n) && !first.s))) first = { t: x.t, s: x.nm.startsWith(n) };
+    }
+    for (const g of nd.querySelectorAll('.lgroup')) g.hidden = !!n && !g.querySelector('.lapp:not([hidden])');
+    const fa = nd.querySelector('.forag'); if (fa) { fa.classList.toggle('searching', !!n); fa.hidden = !!n && !fa.querySelector('.lapp:not([hidden])'); }
+    nd.querySelector('.nd-none').hidden = !n || !!first;
+    nd.classList.toggle('nd-q', !!n);
+    return first?.t || null;
+  }
+  track.addEventListener('input', e => { if (e.target.matches?.('[data-ndq]')) ndFilter(e.target); });
+  track.addEventListener('submit', e => {
+    const f = e.target.closest?.('[data-ndsearch]'); if (!f) return;
+    e.preventDefault(); const inp = f.querySelector('[data-ndq]'); const t = ndFilter(inp); if (!t) return;
+    inp.blur(); t.click();
+  });
   track.addEventListener('click', e => {
     const say = e.target.closest('[data-say]'); if (say) return runUtterance(say.dataset.say, 'auto');
     const info = e.target.closest('.new-desk [data-appinfo]'); if (info) return openAppInfo(info);
