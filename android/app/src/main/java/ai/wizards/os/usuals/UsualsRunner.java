@@ -107,6 +107,7 @@ public final class UsualsRunner {
     public String blocker(String pkg) {
         if (!WizardKeyboardService.enabled(app) || svc() == null) return "accessibility";
         if (!grabInstalled(app, pkg)) return "grab";
+        if (ai.wizards.os.automation.AutomationEngine.get(app).busy()) return "busy"; // never two drivers at once
         return "";
     }
 

@@ -12,6 +12,15 @@ public final class DeviceMessageProtocol {
         "status", "list", "icon", "launch", "openPlay", "appInfo", "uninstall", "install"
     };
 
+    private static final String AUTOMATION = "device.automation.";
+    /**
+     * Generic accessibility automation (see docs/android-device-message-port.md). Deliberately absent: any method
+     * that presses a commit (money) button. That happens only from the user's tap on the native cover.
+     */
+    private static final String[] AUTOMATION_METHODS = {
+        "status", "record", "replay", "screen", "cancel", "outcomes", "ack", "shortcuts", "legacyRecipes"
+    };
+
     private DeviceMessageProtocol() { }
 
     public static final class Request {
@@ -43,11 +52,21 @@ public final class DeviceMessageProtocol {
         return null;
     }
 
+    public static String automationMethod(String method) {
+        for (String name : AUTOMATION_METHODS) if ((AUTOMATION + name).equals(method)) return name;
+        return null;
+    }
+
     public static JSONObject capabilities() throws JSONException {
         org.json.JSONArray methods = new org.json.JSONArray();
         for (String name : PACKAGE_METHODS) methods.put(PREFIX + name);
+        org.json.JSONArray automation = new org.json.JSONArray();
+        for (String name : AUTOMATION_METHODS) automation.put(AUTOMATION + name);
         return new JSONObject().put("v", VERSION).put("capabilities", new JSONObject()
-                .put("device.packages", new JSONObject().put("v", VERSION).put("methods", methods)));
+                .put("device.packages", new JSONObject().put("v", VERSION).put("methods", methods))
+                .put("device.automation", new JSONObject().put("v", VERSION).put("methods", automation)
+                        // Informational: the caller can't change it, only learn that it holds.
+                        .put("commit", "user-tap-on-native-cover-only")));
     }
 
     public static JSONObject answer(String id, Object result, String error) throws JSONException {
