@@ -50,7 +50,29 @@ window.WosChatPower = function chatPower(A) {
   const lastReply = nb => { const a = nb.querySelectorAll('.msg.a'); return a.length ? a[a.length - 1] : null; };
   const relTop = (nb, el) => el.getBoundingClientRect().top - nb.getBoundingClientRect().top;
   const bottomGap = nb => nb.scrollHeight - nb.scrollTop - nb.clientHeight;
-  const toBottom = nb => { nb.scrollTop = nb.scrollHeight; };
+  /* The words under the reader's eyes: the first message showing at the top of the list, and where it sits.
+   * A live re-read can change what sits ABOVE the reader (a turn re-grouped, a note becoming your message, a reply
+   * landing in an earlier turn), so holding the raw scrollTop moved the page under James while he read (23 Oct 2026:
+   * "I'm scrolling down reading a message and it jumps to a previous place"). Hold the message instead. */
+  function anchorOf(nb) {
+    if (!nb || !nb.isConnected) return null;
+    const top = nb.getBoundingClientRect().top, seen = {};
+    for (const m of nb.querySelectorAll('[data-morph-key]')) {
+      const k = m.dataset.morphKey; seen[k] = (seen[k] || 0) + 1;
+      const r = m.getBoundingClientRect(); if (!r.height) continue;
+      if (r.bottom > top + 1) return { key: k, nth: seen[k] - 1, off: r.top - top };
+    }
+    return null;
+  }
+  function toAnchor(nb, a) {
+    if (!a || !nb) return false;
+    let n = -1, m = null; for (const e of nb.querySelectorAll('[data-morph-key]')) if (e.dataset.morphKey === a.key && ++n === a.nth) { m = e; break; }
+    if (!m) return false;
+    const d = relTop(nb, m) - a.off; if (Math.abs(d) >= 1) nb.scrollTop += d;
+    return true;
+  }
+  // Write scrollTop only when it moves: a same-value write still stops a phone's momentum scroll mid-fling.
+  const toBottom = nb => { if (bottomGap(nb) >= 1) nb.scrollTop = nb.scrollHeight; };
   function paintLatest(el, nb) {
     const b = el.querySelector('[data-chlatest]'); if (!b || !nb) return;
     b.hidden = bottomGap(nb) < 160;
@@ -117,7 +139,8 @@ window.WosChatPower = function chatPower(A) {
     // Later renders: a place still settling is placed again; a thread that follows stays on the bottom; otherwise the reading place holds.
     if (settling(c)) { const s = c.settle; s.apply(nb); settle(c, nb, s.apply, s.until); }
     else if (c.follow || (o.working && o.atBottom)) toBottom(nb);
-    else if (o.boxTop != null) nb.scrollTop = o.boxTop; // read before the old list was replaced (a detached box reads 0)
+    else if (toAnchor(nb, o.anchor)) {} // the message you were reading stays exactly where it was
+    else if (o.boxTop != null && Math.abs(nb.scrollTop - o.boxTop) >= 1) nb.scrollTop = o.boxTop; // read before the old list was replaced (a detached box reads 0)
     paintLatest(el, nb);
     return true;
   }
@@ -579,6 +602,6 @@ window.WosChatPower = function chatPower(A) {
   }
   const opened = (wid, sid) => { const c = ch(wid), s = sid && sid !== '__new__' ? LIVE.session(sid) : null; c.unreadOpen = s && LIVE.isNew(s) ? sid : ''; c.posFor = ''; c.follow = false; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
   const holds = id => !!sheet && sheet.pane === id;
-  return { position, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
+  return { position, anchorOf, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
     paint, closeSheet, click, bind, opened, holds, openFiles, openModels, retryThread, FOLDER_SVG, RP, newModel: c => c.newModel || null };
 };

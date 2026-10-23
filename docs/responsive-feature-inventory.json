@@ -154,6 +154,7 @@
     "core/config.js",
     "core/core.js",
     "core/deeplink.js",
+    "core/dom-morph.js",
     "core/features.js",
     "core/files.js",
     "core/focused-field.js",
@@ -403,6 +404,13 @@
       "note": "Direct entrypoint import"
     },
     "core/deeplink.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/dom-morph.js": {
       "loadedBy": [
         "phone",
         "desktop"
