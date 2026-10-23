@@ -249,7 +249,7 @@ window.WizCore.chats = function createChats(H) {
     const topic = topicOn() && TOPIC.get(`thread:${s.id}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '));
     const mark = !topic ? stock : `<span class="ch-topic-mark" data-chpick="thread:${esc(s.id)}" title="Choose topic emoji"><span class="ch-topic-emoji" aria-hidden="true">${topic}</span><span class="emo sti ${kind} ch-topic-status" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span></span>`;
     const pinned = PIN.has(s.id), boom = BOOM()?.dueFor(s.id).length ? ' due' : BOOM()?.nextFor(s.id) ? ' set' : '';
-    return `<div class="ch-row-wrap${pinned ? ' pinned' : ''}"><button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}${priv ? ' private' : ''}" data-chopen="${esc(s.id)}"${quiet ? ' data-quiet="1"' : ''}${priv ? ' data-wiz-private=""' : ''}>${mark}
+    return `<div class="ch-row-wrap${pinned ? ' pinned' : ''}"><button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}${priv ? ' private' : ''}" data-chopen="${esc(s.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open thread · hold or open the context menu for actions"${quiet ? ' data-quiet="1"' : ''}${priv ? ' data-wiz-private=""' : ''}>${mark}
       <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b><time>${esc(ago(LIVE.cardAt(s)))}</time></span>
       ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}</span>${boom ? `<i class="ch-boom${boom}" title="${boom === ' due' ? 'Boomerang is back' : 'Boomerang set'}" aria-label="${boom === ' due' ? 'Boomerang is back' : 'Boomerang set'}">🪃</i>` : ''}</button><button type="button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinned ? 'Unpin' : 'Pin'} chat: ${esc(s.title)}" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}">${PIN_SVG}</button></div>`;
   }
@@ -853,6 +853,7 @@ window.WizCore.chats = function createChats(H) {
     return ['defer', 'boomerang', 'done'];
   }
   const ACT = {
+    unread: { label: 'Mark unread', icon: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m5 7 7 5 7-5"/></svg>', hint: 'Mark unread' },
     done: { label: 'Done', icon: '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>', hint: 'Mark done' },
     defer: { label: 'Defer', icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l3 2"/></svg>', hint: 'Defer thread' },
     file: { label: 'Close & file', icon: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="4" rx="1.2"/><path d="M5.5 9v9a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"/></svg>', hint: 'Close and file thread' },
@@ -877,6 +878,13 @@ window.WizCore.chats = function createChats(H) {
     const s = LIVE.session(sid); if (!s || !ACT[a]) return;
     const w = W[wid];
     vib(8);
+    if (a === 'unread') {
+      closeRowSheet();
+      const ok = await LIVE.markUnread(sid);
+      toast(ok ? '●' : '!', ok ? 'Marked unread' : 'Couldn’t mark unread', ok ? 1600 : 3200);
+      for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
+      return;
+    }
     if (a === 'boomerang') { const B = BOOM(); if (B) B.open({ sessionId: sid, targetKind: 'thread', title: s.title, context: s.title }, B.nextFor(sid)); else toast('!', 'Boomerang is still loading', 1600); return; }
     if (a !== 'restore' && w && w.thread === sid) threadBack(w);
     const msg = { done: ['✓', 'Marked done'], defer: ['◷', 'Deferred · bottom of Ready'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
@@ -888,10 +896,15 @@ window.WizCore.chats = function createChats(H) {
   }
   /* Long-press (or swipe left on) a thread in the list: the same actions in a small sheet. */
   let rowSheet = null; // { wid, sid }
+  function rowActions(s) {
+    const acts = threadActions(s, null);
+    return LIVE.workGroups([s]).ready.length > 0 && !LIVE.isNew(s) ? ['unread', ...acts] : acts;
+  }
   function openRowSheet(wid, sid) {
     const s = LIVE.session(sid), el = track.querySelector(`[data-chats="${wid}"]`); if (!s || !el) return;
     closeRowSheet();
-    const acts = threadActions(s, null);
+    const trigger = el.querySelector(`[data-chopen="${sid}"]`);
+    const acts = rowActions(s);
     el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Thread actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(s.title)}</div>
       <button type="button" data-rsopen>${'<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'}Open</button>
       <button type="button" data-rsrename>${RENAME_SVG}Rename</button>
@@ -899,7 +912,9 @@ window.WizCore.chats = function createChats(H) {
       ${topicOn() ? `<button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>` : ''}
       ${acts.map(a => `<button type="button" data-rsact="${a}">${ACT[a].icon}${ACT[a].label}</button>`).join('')}
       ${acts.length ? '' : `<p class="ch-sheet-n">${WORKING_ST.has(s.status) || ['waiting_for_approval', 'unknown'].includes(s.status) ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
-    rowSheet = { wid, sid }; vib(10);
+    rowSheet = { wid, sid, trigger };
+    el.querySelector('.ch-sheet button')?.focus({ preventScroll: true });
+    vib(10);
   }
   const emojiCategoryHtml = category => `<section class="ch-emoji-category"><h3>${esc(category.label)}</h3><div class="ch-emoji-grid">${category.emoji.map(emoji => `<button type="button" data-chtopicemoji="${emoji}" aria-label="Use ${emoji}">${emoji}</button>`).join('')}</div></section>`;
   const emojiRenderState = new WeakMap();
@@ -987,7 +1002,10 @@ window.WizCore.chats = function createChats(H) {
   }
   function closeRowSheet() {
     if (!rowSheet) return false;
-    H.root().querySelectorAll('.ch-sheet').forEach(n => n.remove()); rowSheet = null; return true;
+    const trigger = rowSheet.trigger;
+    H.root().querySelectorAll('.ch-sheet').forEach(n => n.remove()); rowSheet = null;
+    if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+    return true;
   }
   /* Controls are bound to the displayed identity, never to whichever prompt arrives next. */
   function approvalHtml(c, s) {
@@ -2051,6 +2069,11 @@ window.WizCore.chats = function createChats(H) {
     });
     root.addEventListener('keydown', e => {
       if (e.target.matches('[data-chemosearch]')) { e.stopPropagation(); if (e.key === 'Escape' && e.target.value) { e.preventDefault(); e.target.value = ''; renderEmojiSearch(e.target.closest('.ch-emoji-sheet'), ''); } return; }
+      if (rowSheet && e.key === 'Escape') { e.preventDefault(); closeRowSheet(); return; }
+      if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+        const row = e.target.closest('.ch-list [data-chopen]');
+        if (row) { e.preventDefault(); openRowSheet(idOf(row), row.dataset.chopen); return; }
+      }
       // Opinionated: with a hardware keyboard, Enter sends and Shift+Enter is a new line (touch keyboards keep Enter = new line).
       if (e.target.matches('.ch-compose textarea') && e.key === 'Enter' && !e.isComposing && !e.shiftKey && (e.metaKey || e.ctrlKey || !matchMedia('(pointer: coarse)').matches)) { e.preventDefault(); e.target.form.requestSubmit(); }
     });

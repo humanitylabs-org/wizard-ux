@@ -465,7 +465,7 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
     let c = await center('.ch-list [data-chopen="qa_ready_thread"]');
     await longPress(c[0], c[1]); await sleep(300);
     const sheet = await p.evaluate(() => ({ open: !!document.querySelector('.ch-sheet'), acts: [...document.querySelectorAll('.ch-sheet [data-rsact]')].map(b => b.dataset.rsact), t: (window.__wos.wins && Object.values(__wos.wins).find(w => w.app === 'chats').thread) }));
-    ok(sheet.open && sheet.acts.join(',') === 'restore,done' && sheet.t === null, 'long-press a deferred thread → Restore / Done (list stays put)', sheet);
+    ok(sheet.open && sheet.acts.join(',') === 'unread,restore,boomerang,done' && sheet.t === null, 'long-press a deferred thread → Mark unread / Restore / Done (list stays put)', sheet);
     await p.screenshot({ path: `${OUT}/10-list-longpress.png` });
     await back();
     ok(!(await p.evaluate(() => !!document.querySelector('.ch-sheet'))) && p.url().includes('/wizard-os-home/'), 'Back closes the actions sheet; the app stays open');
@@ -476,6 +476,23 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
     await sleep(500);
     const w1 = writes.slice(n1).find(x => x.p === '/wizard/thread-dispositions');
     ok(w1 && JSON.parse(w1.body).deferred === false, 'Restore of a deferred thread saves deferred:false', w1?.body);
+
+    // A read Ready item can be returned to the unread queue without changing its disposition.
+    c = await center('.ch-list [data-chopen="qa_ready_thread"]');
+    await longPress(c[0], c[1]); await sleep(150);
+    const unreadSheet = await p.evaluate(() => ({ acts: [...document.querySelectorAll('.ch-sheet [data-rsact]')].map(b => b.dataset.rsact) }));
+    ok(unreadSheet.acts.join(',') === 'unread,defer,boomerang,done', 'read Ready thread offers Mark unread', unreadSheet);
+    const nUnread = writes.length;
+    await p.locator('.ch-sheet [data-rsact="unread"]').tap(); await sleep(150);
+    const unreadState = await p.evaluate(id => {
+      const row = document.querySelector(`.ch-list [data-chopen="${CSS.escape(id)}"]`);
+      return { unread: row?.classList.contains('unread'), ready: __wos.live.workGroups().ready.some(thread => thread.id === id) };
+    }, 'qa_ready_thread');
+    ok(unreadState.unread && unreadState.ready, 'Mark unread flags the row and keeps it in Ready', unreadState);
+    const unreadWrite = writes.slice(nUnread).find(x => x.p === '/wizard/thread-seen');
+    const unreadRecords = unreadWrite ? Object.values(JSON.parse(unreadWrite.body).threads || {}) : [];
+    ok(unreadRecords.some(r => r.unreadAt > r.seenAt), 'Mark unread persists a newer unreadAt marker', unreadWrite?.body);
+
     // Swipe left → Done.
     await reveal('.ch-list [data-chopen="qa_done_thread"]'); await sleep(200);
     c = await center('.ch-list [data-chopen="qa_done_thread"]');
