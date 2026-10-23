@@ -25,6 +25,16 @@ final class OverlayPolicy {
 
     private OverlayPolicy() {}
 
+    /** Fixed dependencies, not server-supplied preload URLs. */
+    static String[] prefetch(String page) {
+        String file = noFragment(page);
+        if (file.equals("surface.html")) return new String[]{"assist/surface.html", "assist/orb-size.js", "orb.js",
+                "motion/wizard-motion.css", "motion/wizard-motion.js", "assist/surface.js", "robert-thread-orb.png"};
+        if (file.equals("everywhere.html")) return new String[]{"assist/everywhere.html", "assist/orb-size.js", "orb.js",
+                "assist/everywhere.js", "robert-thread-orb.png"};
+        return new String[]{"assist/screen.html", "assist/screen.js"};
+    }
+
     static String remoteUrl(String origin, String page) {
         return isHttpsOrigin(origin) && validPage(page) ? VIRTUAL + SHELL + "assist/" + page : null;
     }

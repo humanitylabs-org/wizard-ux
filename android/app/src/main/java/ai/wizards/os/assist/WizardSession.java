@@ -78,6 +78,8 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
     public View onCreateContentView() {
         root = new FrameLayout(getContext());
         root.setBackgroundColor(Color.TRANSPARENT);
+        // Android creates content BEFORE onShow's handoff. Never create a hidden remote loader while locked.
+        if (keyguard.isKeyguardLocked()) return root;
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             navInset = Build.VERSION.SDK_INT >= 30
                     ? insets.getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars()).bottom
@@ -96,6 +98,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
         web.addJavascriptInterface(new Bridge(), "WizardNative");
         // The Wizard's surface page, or the bundled copy offline; only that one origin is reachable (OverlayPage).
         OverlayPage surface = new OverlayPage("surface.html#corner", true) {
+            @Override protected boolean remoteAllowed() { return !keyguard.isKeyguardLocked(); }
             @Override
             protected void ready(WebView view, String url) {
                 pageReady = true;
@@ -134,7 +137,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
     public void onShow(Bundle args, int showFlags) {
         super.onShow(args, showFlags);
         boolean handoff = args != null && args.getBoolean(ARG_HANDOFF, false);
-        if (keyguard.isKeyguardLocked() && !handoff) {
+        if (keyguard.isKeyguardLocked()) {
             // Locked: the full lock-screen surface owns this moment. The keyguard stays underneath.
             Log.i(TAG, "session: locked, opening the lock-screen surface");
             Intent i = new Intent(getContext(), AssistLockActivity.class)
@@ -144,6 +147,8 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
             hide();
             return;
         }
+        // A session initially created over keyguard may be reused after unlocking.
+        if (web == null) setContentView(onCreateContentView());
         capture.attach(this);
         ai.wizards.os.SideButton.markUsed(getContext()); // the side button really reached Wizard OS
         Log.i(TAG, "corner shown handoff=" + handoff + " listening=" + capture.listening());

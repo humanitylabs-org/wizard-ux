@@ -25,6 +25,13 @@ import java.util.Map;
 public class OverlayPage extends WebViewClient {
     static final long TIMEOUT_MS = 1500;
     static final long FETCH_TOTAL_MS = 3000;
+    private static final java.util.concurrent.ScheduledThreadPoolExecutor FETCH_DEADLINES = deadlines();
+    private static java.util.concurrent.ScheduledThreadPoolExecutor deadlines() {
+        java.util.concurrent.ScheduledThreadPoolExecutor e = new java.util.concurrent.ScheduledThreadPoolExecutor(1,
+                r -> { Thread t = new Thread(r, "overlay-deadline"); t.setDaemon(true); return t; });
+        e.setRemoveOnCancelPolicy(true);
+        return e;
+    }
     private final String page;
     private final boolean remoteFirst;
     private final long deadlineMs;
@@ -35,6 +42,7 @@ public class OverlayPage extends WebViewClient {
     private volatile String origin;
     private volatile boolean remote;
     private volatile int generation;
+    private volatile OverlayPrefetch prefetch;
     private boolean done;
     private android.content.SharedPreferences serverPrefs;
     private final android.content.SharedPreferences.OnSharedPreferenceChangeListener serverChanged = (prefs, key) -> {
@@ -70,14 +78,22 @@ public class OverlayPage extends WebViewClient {
                 serverPrefs.unregisterOnSharedPreferenceChangeListener(serverChanged);
                 main.removeCallbacks(timeout);
                 generation++; // ignore asynchronous completions after this host is destroyed
+                clearPrefetch();
             }
         });
         String r = remoteFirst ? OverlayPolicy.remoteUrl(origin, page) : null;
         show(r != null, r != null ? r : OverlayPolicy.bundledUrl(page));
     }
     protected void ready(WebView v, String url) { }
+    protected boolean remoteAllowed() { return true; }
+    private void clearPrefetch() {
+        OverlayPrefetch old = prefetch;
+        prefetch = null;
+        if (old != null) old.close();
+    }
     private void show(boolean fromWizard, String url) {
         generation++;
+        clearPrefetch();
         remote = fromWizard;
         current = url;
         done = false;
@@ -87,7 +103,19 @@ public class OverlayPage extends WebViewClient {
         web.getSettings().setAllowFileAccess(false);
         web.getSettings().setAllowContentAccess(false);
         main.removeCallbacks(timeout);
-        if (fromWizard) main.postDelayed(timeout, deadlineMs);
+        if (fromWizard) {
+            main.postDelayed(timeout, deadlineMs);
+            final String owner = origin;
+            final int attempt = generation;
+            // The corner has seven serial resources. Leave the already-fast orb/screen paths unchanged.
+            if (page.startsWith("surface")) {
+                prefetch = new OverlayPrefetch(OverlayPolicy.prefetch(page), deadlineMs, path -> {
+                    if (attempt != generation || !remoteAllowed() || !owner.equals(ServerSettings.origin(web.getContext())))
+                        throw new java.io.IOException("overlay owner changed");
+                    return fetch(OverlayPolicy.upstream(owner, OverlayPolicy.VIRTUAL + OverlayPolicy.SHELL + path));
+                });
+            }
+        }
         web.loadUrl(url);
     }
     private void fallBack(String why) {
@@ -106,12 +134,21 @@ public class OverlayPage extends WebViewClient {
     @Override public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
         final int attempt = generation;
         final boolean fromWizard = remote;
+        final String owner = origin;
+        final OverlayPrefetch batch = prefetch;
         String u = r.getUrl().toString();
         if (!"GET".equals(r.getMethod()) || !(fromWizard ? OverlayPolicy.fromWizard(origin, u) : OverlayPolicy.bundled(u))) return blocked();
         // A subframe may not load even an allowlisted document (defence beyond frame-src).
         if (u.split("#", 2)[0].endsWith(".html") && (!r.isForMainFrame() || !OverlayPolicy.samePage(current, u))) return blocked();
         try {
-            byte[] bytes = fromWizard ? fetch(OverlayPolicy.upstream(origin, u)) : read(web.getContext().getAssets().open(r.getUrl().getPath().substring("/android_asset/".length())));
+            byte[] bytes;
+            if (fromWizard) {
+                if (!remoteAllowed() || !owner.equals(ServerSettings.origin(v.getContext()))) return blocked();
+                String path = r.getUrl().getPath().substring(OverlayPolicy.SHELL.length());
+                bytes = batch == null ? null : batch.take(path);
+                if (bytes == null) bytes = fetch(OverlayPolicy.upstream(owner, u));
+                if (attempt != generation || !remote || !remoteAllowed() || !owner.equals(ServerSettings.origin(v.getContext()))) return blocked();
+            } else bytes = read(web.getContext().getAssets().open(r.getUrl().getPath().substring("/android_asset/".length())));
             String path = r.getUrl().getPath();
             String mime = path.endsWith(".html") ? "text/html" : path.endsWith(".js") ? "application/javascript" : path.endsWith(".css") ? "text/css" : "image/png";
             if (path.endsWith(".html")) {
@@ -127,13 +164,14 @@ public class OverlayPage extends WebViewClient {
             return new WebResourceResponse(mime, "utf-8", 200, "OK",
                     Map.of("Content-Security-Policy", OverlayPolicy.CSP, "X-Content-Type-Options", "nosniff", "Cache-Control", "no-store"), new ByteArrayInputStream(bytes));
         } catch (Exception e) {
-            if (fromWizard) main.post(() -> { if (generation == attempt) fallBack("static resource unavailable"); });
+            if (fromWizard) main.post(() -> { if (generation == attempt) fallBack(e instanceof java.util.concurrent.TimeoutException ? "timeout" : "static resource unavailable"); });
             return blocked();
         }
     }
     /** Native HTTPS transport: no redirect, cache, unbounded stream, or weakened certificate checks. */
     protected byte[] fetch(String url) throws Exception {
         if (url == null) throw new java.io.IOException("not an overlay resource");
+        final long deadline = System.nanoTime() + FETCH_TOTAL_MS * 1_000_000L;
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setInstanceFollowRedirects(false);
         c.setConnectTimeout(1000);
@@ -141,11 +179,13 @@ public class OverlayPage extends WebViewClient {
         c.setUseCaches(false);
         String cookies = origin == null ? null : CookieManager.getInstance().getCookie(url);
         if (cookies != null) c.setRequestProperty("Cookie", cookies);
+        java.util.concurrent.ScheduledFuture<?> expiry = FETCH_DEADLINES.schedule(c::disconnect,
+                Math.max(0, deadline - System.nanoTime()), java.util.concurrent.TimeUnit.NANOSECONDS);
         try {
             if (c.getResponseCode() != 200) throw new java.io.IOException("HTTP " + c.getResponseCode());
             // Per-read timeouts alone let a server dribble one byte a second for minutes and pin a WebView IO thread.
-            return read(c.getInputStream(), System.nanoTime() + FETCH_TOTAL_MS * 1_000_000L);
-        } finally { c.disconnect(); }
+            return read(c.getInputStream(), deadline);
+        } finally { expiry.cancel(false); c.disconnect(); }
     }
     private static byte[] read(InputStream input) throws Exception { return read(input, Long.MAX_VALUE); }
     private static byte[] read(InputStream input, long deadlineNanos) throws Exception {

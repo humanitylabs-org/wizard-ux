@@ -23,6 +23,7 @@ public class OverlayE2eTest {
     final AtomicInteger bridgeCalls = new AtomicInteger();
     final AtomicInteger fetchCalls = new AtomicInteger();
     volatile boolean failLate;
+    final CountDownLatch concurrentReads = new CountDownLatch(6);
     Activity activity;
     WebView web;
     public final class Probe {
@@ -49,6 +50,10 @@ public class OverlayE2eTest {
             OverlayPage client = new OverlayPage(page, remote, failure.equals("timeout") ? OverlayPage.TIMEOUT_MS : 10000) {
                 @Override protected byte[] fetch(String u) throws Exception {
                     fetchCalls.incrementAndGet();
+                    if (failure.equals("parallel")) {
+                        concurrentReads.countDown();
+                        if (!concurrentReads.await(2, TimeUnit.SECONDS)) throw new IOException("serialized static reads");
+                    }
                     if (failLate) throw new IOException("late resource failure");
                     if (failure.equals("offline")) throw new IOException("fixture network down");
                     if (failure.equals("timeout")) Thread.sleep(2200);
@@ -85,6 +90,13 @@ public class OverlayE2eTest {
                 } finally { close(); }
             }
         }
+    }
+    @Test public void surfaceDependenciesAreFetchedConcurrentlyBeforeRendererRequestsThem() throws Exception {
+        try {
+            assertTrue("serialized dependencies must not pass", open("surface.html#corner", true, "parallel").startsWith(OverlayPolicy.VIRTUAL + "/"));
+            assertEquals(0, concurrentReads.getCount());
+            assertEquals("\"object\"", js("typeof W"));
+        } finally { close(); }
     }
     @Test public void offlineTimeoutMissingScriptAndHttp200LoginFallBack() throws Exception {
         for (String failure : new String[]{"offline", "timeout", "script", "login"}) {

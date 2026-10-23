@@ -1,0 +1,72 @@
+name: Android overlay host flows
+# The real native hosts of the overlay pages on an API 34 emulator, driven over adb like a person would:
+# the floating orb (WindowManager overlay), Screen mode (accessibility capture), the side-button corner orb
+# (VoiceInteractionSession) and the lock-screen surface (AssistLockActivity over a PIN keyguard), each online,
+# with the Wizard unreachable, with a too-slow Wizard and in airplane mode. The Wizard is a disposable fake at
+# https://10.0.2.2 (the runner's loopback, port 443; ECDSA P-256 like a Tailscale cert) whose CA is minted per run and trusted only by this run's
+# debug QA build (debug-overrides). No signing, owner origin or secret; nothing is published.
+on:
+  pull_request:
+    paths: ['android/**', 'web/assist/**', 'web/orb.js', 'web/motion/**', 'tools/ci_android_overlay_hosts.py', '.github/workflows/android-overlay-hosts.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-overlay-hosts-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  hosts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Disposable CA and fake-Wizard certificate for this run only
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/overlay-certs"; mkdir -p "$d"
+          openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout "$d/ca.key" -out "$d/ca.pem" -days 2 \
+            -subj "/CN=Wizard OS CI overlay fixture CA (run ${{ github.run_id }})" \
+            -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign"
+          openssl req -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout "$d/leaf.key" -out "$d/leaf.csr" -subj "/CN=10.0.2.2"
+          printf 'subjectAltName=IP:10.0.2.2\nbasicConstraints=CA:FALSE\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth\n' > "$d/leaf.ext"
+          openssl x509 -req -in "$d/leaf.csr" -CA "$d/ca.pem" -CAkey "$d/ca.key" -CAcreateserial -days 2 -out "$d/leaf.pem" -extfile "$d/leaf.ext"
+          rm -f "$d/ca.key"
+          # The debug QA build trusts this run's CA instead of the committed placeholder (debug-overrides only).
+          cp "$d/ca.pem" android/app/src/debug/res/raw/qa_fixture_ca.pem
+          echo "CERTS=$d" >> "$GITHUB_ENV"
+          # The fake Wizard must be a real HTTPS:443 origin (OverlayPolicy accepts no other port).
+          sudo sysctl -w net.ipv4.ip_unprivileged_port_start=443
+      - name: Debug QA APK (no signing, no owner origin)
+        working-directory: android
+        run: ./gradlew --no-daemon --stacktrace :app:assembleDebug
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Real host flows (orb, screen mode, side button, lock screen; online/unreachable/slow/airplane)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          ram-size: 3072M
+          disable-animations: true
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          script: python3 tools/ci_android_overlay_hosts.py android/app/build/outputs/apk/debug/app-debug.apk overlay-hosts-out "$CERTS"
+      - name: Summary
+        if: always()
+        run: cat overlay-hosts-out/summary.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "no summary (emulator did not finish)" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: overlay-host-flows
+          path: overlay-hosts-out
+          retention-days: 7
