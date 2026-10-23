@@ -29,6 +29,13 @@ const CSS = `
 
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n; };
 
+// After a skin is picked, Settings (or anything stacked on it) closes under the transition, so the owner lands on Home.
+export function toHome(api) {
+  const open = () => [...document.querySelectorAll('[data-settings-root], #settings, .st-root')].some(n => !n.hidden && n.getClientRects().length);
+  for (let i = 0; i < 6 && open(); i++) if (!api.nav.back()) break;
+  if (api.env.shell !== 'desktop' && api.nav.deskCount() > 0) api.nav.goDesk(0);
+}
+
 export function playIntro({ id, listen } = {}) {
   if (typeof document === 'undefined' || !document.body) return { stop() {}, done: Promise.resolve() };
   const to = id || document.documentElement.dataset.skin || 'obsidian';
