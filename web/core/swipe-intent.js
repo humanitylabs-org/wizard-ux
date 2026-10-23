@@ -1,4 +1,5 @@
-// Swipe-back intent (web/core/thread-swipe-back.js, every skin): one threshold.
+// Swipe intent: the one threshold for every horizontal shell swipe in a chat (core swipe-back, and skin
+// gestures through api.gesture.intent). Same rule in both directions.
 // James, 23 Oct 2026: "an absolute subtle swipe is going back; make sure it's an intentional swipe."
 // A drag only starts tracking once it is clearly sideways, and Back fires only on a long drag
 // or a deliberate fast flick that stays level. Short nudges, diagonal scrolls and slow drifts snap back.
@@ -15,3 +16,7 @@ export const commits = (dx, dy, ms) => {
   const v = dx / (ms || 1);
   return dx > COMMIT_PX || (dx > FLICK_PX && v > FLICK_SPEED);
 };
+
+// Either direction: travel is the absolute sideways distance.
+export const intentional = (dx, dy, ms) => commits(Math.abs(dx), Math.abs(dy), ms);
+if (typeof globalThis !== 'undefined') globalThis.WosSwipeIntent = Object.freeze({ engages, commits, intentional });

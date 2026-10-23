@@ -129,6 +129,8 @@
       gesture: Object.freeze({
         // Claim a pointer before the shell's dock swipe locks direction. False once the shell owns it.
         claim: pointerId => { if (shell && shell.locked && shell.locked(pointerId)) return false; claims.add(pointerId); a.claims.add(pointerId); return true; },
+        // The shell's one swipe threshold (core/swipe-intent.js): true for an intentional sideways swipe either way.
+        intent: (dx, dy, ms) => { const w = typeof window !== 'undefined' && window.WosSwipeIntent; return !!(w && w.intentional(+dx || 0, +dy || 0, +ms || 0)); },
       }),
       toast: msg => { try { need().toast(String(msg).slice(0, 140)); } catch (e) { fault(a, 'toast', e); } },
       /* A file shipped in the layout's own folder (e.g. an orb page); null for skins. */

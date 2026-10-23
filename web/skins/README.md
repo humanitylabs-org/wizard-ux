@@ -106,6 +106,7 @@ export default function setup(api) {
 | `api.listen(target, type, fn, opts)` | tracked event listener |
 | `api.frame(fn)` | tracked `requestAnimationFrame`, for drags. Settle with CSS transitions |
 | `api.gesture.claim(pointerId)` | take a finger before the shell's desk swipe does; false if the shell already has it |
+| `api.gesture.intent(dx, dy, ms)` | the shell's one swipe threshold (`core/swipe-intent.js`, same as swipe-back): true for an intentional sideways swipe either way. Use it for every horizontal skin gesture instead of your own numbers |
 | `api.toast(text)` | a short shell toast |
 | `api.storage.get/set(key, value)` | JSON storage namespaced to your skin |
 
