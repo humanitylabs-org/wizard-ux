@@ -53,6 +53,15 @@ public class MicRouteTest {
         assertTrue(MicRoute.EXTERNAL_MESSAGE.contains("phone's own mic"));
     }
 
+    /** 23 Oct 2026: voice notes from VOICE_RECOGNITION sounded thin next to Telegram's; notes start on the normal mic. */
+    @Test
+    public void voiceNotesRecordOnThePhonesNormalMicPathFirst() throws java.io.IOException {
+        assertEquals(android.media.MediaRecorder.AudioSource.MIC, MicRoute.NOTE_SOURCES[0]);
+        assertEquals(android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION, MicRoute.NOTE_SOURCES[1]);
+        String engine = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("src/main/java/ai/wizards/os/audio/NoteRecorder.java")), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(engine.contains("MicRoute.NOTE_SOURCES"));
+    }
+
     /**
      * 18 Oct 2026: the orb recorders opened the mic themselves and a Bluetooth speaker's mic took voice notes. Every
      * recorder now starts through MicRoute, which reads the route back and refuses anything but the phone's mic.
