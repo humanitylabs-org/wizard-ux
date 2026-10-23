@@ -1397,7 +1397,7 @@
    * and wear a ring that reads as "this fills a spot"; everything else follows alphabetically. */
   const SYSTEM_IDS = new Set(['wizard', 'setup', 'files', 'notifications', 'transcriber', 'browser', 'secret-drop', 'wizard-chatgpt', 'wizard-claude']);
   const isSystem = a => SYSTEM_IDS.has(a.id) || a.system === true;
-  const inDev = a => !isSystem(a) && (a.source === 'launcher.json' || /-next$/.test(a.id) || /\(test\)\s*$/i.test(a.name || ''));
+  const inDev = a => !isSystem(a) && (window.WizCore.isInDevelopment?.(a) || a.source === 'launcher.json' || /-next$/.test(a.id) || /\(test\)\s*$/i.test(a.name || ''));
   function appKinds() {
     const byName = (x, y) => (isSystem(y) - isSystem(x)) || x.name.localeCompare(y.name, undefined, { sensitivity: 'base' });
     const mine = APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && ['wizard', 'chats', 'usuals', 'view'].includes(a.kind));
@@ -3700,7 +3700,7 @@
     setMode: m => Orb.setMode(m),
     goHome: () => { if (idx !== HOME) goDesk(HOME, true); },
     workingCard: () => track.querySelector('.home-desk [data-act="working"]'),
-    cmdExample: () => (findApp('calendar') ? 'Open Calendar' : 'Open Day in review'),
+    cmdExample: () => (findApp('calendar') ? 'Open Calendar' : 'Open Files'),
     noMic: () => NOMIC,
     closeSheets: () => closeSheets(),
     setZen: on => setZen(on),
