@@ -25,7 +25,7 @@ def open_thread(sid):
  pg.ev(f'__wos.goDesk(1);__wos.openWizardThread({json.dumps(sid)})')
  assert wait(lambda:pg.ev("(()=>{const w=Object.values(__wos.wins).find(w=>w.app==='chats'&&w.thread==="+json.dumps(sid)+");return !!w&&__wos.chats.ch(w.id).loadedFor===w.thread&&!!document.querySelector('.wos-doc-thread .msg.a');})()"),20),'real thread messages'
  time.sleep(.6);pg.ev(DECORATE);time.sleep(.8)
-def capture(name,top):
+def capture(name,top,attempt=0):
  em.sx('rm -f /sdcard/Pictures/Screenshots/*')
  # The offline emulator cannot reach the update feed; its error banner floats over the first fixture row.
  pg.ev("for(const e of document.querySelectorAll('body *'))if(/update feed/i.test(e.textContent)&&getComputedStyle(e).position==='fixed')e.style.display='none'")
@@ -34,6 +34,7 @@ def capture(name,top):
  check(name+' real header and composer visible',g['head']['top']>=0 and g['head']['bottom']<g['composer']['top'] and g['composer']['bottom']<=g['vh']+1,g)
  check(name+' real first/last fixture messages mounted',len(g['rows'])==14 and 'ROW 00' in g['rows'][0] and 'ROW 13' in g['rows'][-1],g['rows'])
  check(name+' custom capture absent',g['custom']=='undefined')
+ em.sx('logcat -c')
  em.sx('input keyevent KEYCODE_SYSRQ');time.sleep(.8);shot(name+'-chip')
  xml=em.ui();(OUT/(name+'-chip.xml')).write_text(xml)
  found=em.tap_text('^Capture more$',xml)
@@ -43,6 +44,14 @@ def capture(name,top):
  (OUT/(name+'-logcat.txt')).write_text(em.sx('logcat -d -v time'))
  try: (OUT/(name+'-page.json')).write_text(json.dumps(pg.ev("({href:location.href,nav:performance.getEntriesByType('navigation').map(n=>n.type),age:performance.now(),thread:!!document.querySelector('[data-chats] .ch-msgs'),scrollY})")))
  except Exception as e: (OUT/(name+'-page.json')).write_text(repr(e))
+ log=(OUT/(name+'-logcat.txt')).read_text()
+ if 'Save' not in xml and attempt==0 and 'NullPointerException' in log and 'CancellationSignal' in log and 'ScrollCapture' in log:
+  # AOSP ScrollCaptureConnection races its cancellation field between the binder and UI threads
+  # (platform bug, outside the app; widened by the slow emulator). SystemUI aborts that one session.
+  receipt.setdefault('platform_race_retries',[]).append(name)
+  print('NOTE '+name+' AOSP ScrollCaptureConnection cancellation race; retrying once',flush=True)
+  dismiss();open_thread('qa_doc_0')
+  return capture(name,top,1)
  check(name+' long screenshot editor visible','Save' in xml,em.top())
  restored=pg.ev('scrollY')
  check(name+' original document scroll restored',abs(restored-before)<=1,{'before':before,'after':restored})
