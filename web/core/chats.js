@@ -1528,6 +1528,7 @@ window.WizCore.chats = function createChats(H) {
     });
     root.addEventListener('pointermove', e => {
       if (!lp) return;
+      if (window.WosSkinHost?.claimed(e.pointerId)) { clearTimeout(lp.t); lp.row.style.transform = ''; lp = null; return; } // a skin gesture owns this finger
       const dx = e.clientX - lp.x, dy = e.clientY - lp.y;
       if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { clearTimeout(lp.t); lp.row.style.transform = ''; lp = null; return; }
       if (Math.abs(dx) > 10) clearTimeout(lp.t);
