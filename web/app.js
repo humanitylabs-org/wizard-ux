@@ -2958,9 +2958,17 @@
       txPill('↻', 'Waiting to send · recording kept', 'agent', 'Couldn’t reach Wizard · retrying'); txHide(2600);
     } finally { if(kind==='command')restoreReply(); }
   }
-  // The tap that starts recording must not also press an arc button: the arc fans out
-  // from under the finger, so the same tap's click would land on it mid-animation.
-  $('#voice').addEventListener('click', e => { if (e.target.closest('.arc') && performance.now() - (V.onAt || 0) < 450) { e.stopPropagation(); e.preventDefault(); } }, true);
+  // The tap that starts recording must not also press an arc button: the arc fans out from under the finger, so the
+  // same tap's click lands on it (Attach is on top, so the file picker opened). A fixed time window failed on a busy
+  // phone, where that click arrives late (James, 23 Oct 2026). An arc button now takes a pointer click only when the
+  // press also started on it; keyboard and programmatic clicks (detail 0) are untouched.
+  let arcPress = null;
+  window.addEventListener('pointerdown', e => { arcPress = e.target?.closest?.('.arc') || null; }, true);
+  $('#voice').addEventListener('click', e => {
+    const arc = e.target.closest('.arc'); if (!arc) return;
+    const pressed = arcPress === arc; arcPress = null;
+    if (e.detail > 0 && !pressed) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
   $('#arcCancel').addEventListener('click', () => cancelVoice());
   $('#arcPause').addEventListener('click', () => {
     if(parking)return;
