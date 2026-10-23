@@ -1,4 +1,47 @@
 /* Wizard UX core: Chats (list, thread, composer, attachments, voice notes, unsent bubbles). Shared by every shell. */
+/* Native app only: a real root-scrolling WebView for Android's built-in capture.
+ * No clones, capture callbacks, scroll proxies or alternate chat renderer. */
+html.wos-doc-scroll { height: auto !important; overflow-y: auto !important; overflow-x: clip !important; }
+html.wos-doc-scroll body { height: auto !important; min-height: 100dvh; overflow: visible !important; display: block; }
+html.wos-doc-scroll .wos-doc-path {
+  position: relative !important; inset: auto !important; display: block !important;
+  width: 100% !important; height: auto !important; min-height: 0 !important; max-height: none !important;
+  overflow: visible !important; transform: none !important; translate: none !important;
+  touch-action: pan-y !important;
+  contain: none !important; will-change: auto !important; filter: none !important;
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important; animation: none !important;
+  transition: none !important; scale: none !important; rotate: none !important; container-type: normal !important;
+}
+html.wos-doc-scroll .device > :not(.wos-doc-path) { position: fixed !important; }
+html.wos-doc-scroll .wos-doc-path:is(.desk,.tiles,.win,.wbody) { padding: 0 !important; margin: 0 !important; border: 0 !important; border-radius: 0 !important; }
+html.wos-doc-scroll .track > .desk:not(.wos-doc-path),
+html.wos-doc-scroll .tiles > .win:not(.wos-doc-path),
+html.wos-doc-scroll .desk.wos-doc-path > :not(.wos-doc-path),
+html.wos-doc-scroll .win.wos-doc-path > .wbar { display: none !important; }
+html.wos-doc-scroll .wos-doc-thread .ch-thread {
+  position: relative !important; inset: auto !important; height: auto !important; min-height: 100dvh;
+  padding-top: calc(var(--safe-t, 0px) + var(--wos-doc-head, 54px)) !important;
+  padding-bottom: calc(var(--wos-doc-compose, 84px) + var(--wos-doc-switch, 0px) + var(--safe-b, 0px) + var(--wos-doc-bottom, 0px) + 16px) !important;
+}
+html.wos-doc-scroll .wos-doc-thread .ch-msgs {
+  flex: none !important; height: auto !important; overflow: visible !important;
+  mask-image: none !important; -webkit-mask-image: none !important; overflow-anchor: none;
+}
+html.wos-doc-scroll .wos-doc-thread .ch-head {
+  position: fixed !important; top: var(--safe-t, 0px) !important; left: 0; right: 0;
+  z-index: 50; background: var(--wz-base, var(--bg));
+}
+html.wos-doc-scroll .wos-doc-thread .ch-compose {
+  position: fixed !important; bottom: calc(var(--safe-b, 0px) + var(--wos-doc-bottom, 0px)) !important;
+  left: 0; right: 0; z-index: 50; background: var(--wz-base, var(--bg));
+}
+html.wos-doc-scroll .wos-doc-thread .ch-swrow {
+  position: fixed !important; bottom: calc(var(--safe-b, 0px) + var(--wos-doc-bottom, 0px) + var(--wos-doc-compose, 84px)) !important;
+  left: 0; right: 0; z-index: 50; background: var(--wz-base, var(--bg));
+}
+html.wos-doc-scroll .wos-doc-thread .ch-latest { position: fixed; bottom: calc(var(--wos-doc-compose, 84px) + var(--wos-doc-switch, 0px) + var(--safe-b, 0px) + var(--wos-doc-bottom, 0px) + 12px); z-index: 51; }
+html.wos-doc-scroll :is(#dock,.general-voice,.pill) { position: fixed; }
+
 .ch-custody-notice { display:block; flex-basis:100%; padding:8px 12px; color:var(--muted, #c4b8d2); font-size:12px; line-height:1.4; }
 .ch-compose > .ch-custody-notice { margin-bottom:12px; }
 .voice > .ch-custody-notice { position:absolute; bottom:calc(var(--safe-b, 0px) + var(--dock-h, 64px) + 18px); left:16px; right:16px; background:var(--bg, #160f24); border:1px solid var(--line, #433453); border-radius:12px; }

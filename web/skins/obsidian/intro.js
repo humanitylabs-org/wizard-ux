@@ -103,10 +103,10 @@ export function playIntro({ id, listen } = {}) {
     [...parts.water.children].forEach((s, i) => run(s, [{ transform: 'translateX(-14px) scaleX(.4)', opacity: 0 }, { transform: 'translateX(0) scaleX(1)', opacity: .8, offset: .4 }, { transform: 'translateX(12px) scaleX(.7)', opacity: .35 }], { delay: 1500 + i * 50, duration: 900, easing: 'ease-out' }));
     // the drawn landscape dissolves into the real wallpaper
     last = run(scene, [{ opacity: 1, filter: 'blur(0)', transform: 'scale(1)' }, { opacity: 0, filter: 'blur(10px)', transform: 'scale(1.06)' }], { delay: 1980, duration: 520, easing: 'cubic-bezier(.5,0,.6,1)' });
-    dev.animate([{ filter: 'blur(10px) saturate(1.3)', scale: '1.04' }, { filter: 'blur(0) saturate(1)', scale: '1' }], { delay: 1980, duration: 600, easing: 'cubic-bezier(.2,.9,.25,1)', fill: 'backwards' });
+    if (!document.documentElement.classList.contains('wos-doc-scroll')) dev.animate([{ filter: 'blur(10px) saturate(1.3)', scale: '1.04' }, { filter: 'blur(0) saturate(1)', scale: '1' }], { delay: 1980, duration: 600, easing: 'cubic-bezier(.2,.9,.25,1)', fill: 'backwards' });
   } else {
     // Dark / Light: the new screen comes into focus out of a soft blur while the old one drips away.
-    dev.animate([{ filter: `blur(16px) brightness(${to === 'obsidian' ? 1.6 : .75})`, scale: '1.06' }, { filter: 'blur(0) brightness(1)', scale: '1' }], { delay: 120, duration: 1500, easing: 'cubic-bezier(.2,.8,.25,1)', fill: 'backwards' });
+    if (!document.documentElement.classList.contains('wos-doc-scroll')) dev.animate([{ filter: `blur(16px) brightness(${to === 'obsidian' ? 1.6 : .75})`, scale: '1.06' }, { filter: 'blur(0) brightness(1)', scale: '1' }], { delay: 120, duration: 1500, easing: 'cubic-bezier(.2,.8,.25,1)', fill: 'backwards' });
     last = run(scene, [{ opacity: 1 }, { opacity: 1 }], { duration: 2000 });
   }
   // 3. Signature, small and late.
