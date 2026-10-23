@@ -20,6 +20,7 @@ import static org.junit.Assert.*;
 public class ScrollProxyE2eTest {
     private final Instrumentation inst = InstrumentationRegistry.getInstrumentation();
     private SelectionWebView web;
+    private android.webkit.WebView stock;
     private MainActivity activity;
     private SelectionWebView find(View v) {
         if (v instanceof SelectionWebView) return (SelectionWebView)v;
@@ -34,67 +35,117 @@ public class ScrollProxyE2eTest {
         inst.runOnMainSync(()->{try {out.set(call.call());}catch(Throwable t){err.set(t);}});
         if(err.get()!=null)throw new AssertionError(err.get());return out.get();
     }
-    private String js(String expr) throws Exception {
+    private String js(String expr) throws Exception { return js(web,expr); }
+    private String js(android.webkit.WebView target, String expr) throws Exception {
         CountDownLatch done=new CountDownLatch(1);AtomicReference<String> result=new AtomicReference<>();
-        inst.runOnMainSync(()->web.evaluateJavascript(expr,s->{result.set(s);done.countDown();}));
+        inst.runOnMainSync(()->target.evaluateJavascript(expr,s->{result.set(s);done.countDown();}));
         assertTrue("JS callback",done.await(5,TimeUnit.SECONDS));return result.get();
     }
     private double top() throws Exception {return Double.parseDouble(js("document.querySelector('.ch-msgs').scrollTop"));}
     private void until(java.util.concurrent.Callable<Boolean> check) throws Exception {
         long deadline=android.os.SystemClock.uptimeMillis()+7000;
         while(android.os.SystemClock.uptimeMillis()<deadline){if(check.call())return;Thread.sleep(60);}
-        fail("Timed out waiting for proxy contract");
+        fail("Timed out waiting for native scroll/diagnostics contract");
     }
     private void pass(String name) {android.util.Log.i("WizardScrollProxyTest","PASS "+name);}
 
-    @Test public void realNativeScrollProxyAndSecurity() throws Exception {
+    private long tile(ChatScrollCapture capture,android.view.ScrollCaptureSession session,
+                      android.media.ImageReader reader,android.graphics.Rect request) throws Exception {
+        CountDownLatch done=new CountDownLatch(1);AtomicReference<android.graphics.Rect> result=new AtomicReference<>();
+        ui(()->{capture.onScrollCaptureImageRequest(session,new CancellationSignal(),request,r->{result.set(r);done.countDown();});return null;});
+        assertTrue("PixelCopy completion",done.await(5,TimeUnit.SECONDS));
+        assertNotNull(result.get());assertFalse("capture cannot return an empty tile",result.get().isEmpty());
+        android.media.Image image=null;
+        for(int i=0;i<40&&image==null;i++){image=reader.acquireLatestImage();if(image==null)Thread.sleep(25);}
+        assertNotNull("capture posted a real surface buffer",image);
+        try {
+            android.media.Image.Plane plane=image.getPlanes()[0];java.nio.ByteBuffer bytes=plane.getBuffer();
+            java.util.zip.CRC32 crc=new java.util.zip.CRC32();
+            byte[] row=new byte[image.getWidth()*plane.getPixelStride()];
+            for(int y=0;y<image.getHeight();y++){bytes.position(y*plane.getRowStride());bytes.get(row);crc.update(row);}
+            return crc.getValue();
+        } finally {image.close();}
+    }
+    @Test public void stockWebViewAndDiagnosticsSecurity() throws Exception {
         assertTrue("QA build only",BuildConfig.DEBUG);
         inst.getUiAutomation(); // connect Android's real accessibility service before Chromium starts
         activity=(MainActivity)inst.startActivitySync(new Intent(inst.getTargetContext(),MainActivity.class)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         web=ui(()->find(activity.getWindow().getDecorView()));assertNotNull(web);
         until(()->"true".equals(js("!!window.qaScrollProxyFixture&&!!window.__wosScrollCapture")));
-        until(()->ui(()->web.canScrollVertically(1)));
-        ui(()->{ScrollCaptureDiagnostics.arm("qa-probe");web.canScrollVertically(1);return null;});
-        assertFalse(ui(()->web.canScrollVertically(-1)));
-        double dpr=Double.parseDouble(js("devicePixelRatio"));
-        int height=(int)Math.round(Double.parseDouble(js("document.querySelector('.ch-msgs').scrollHeight"))*dpr);
-        int client=(int)Math.round(Double.parseDouble(js("document.querySelector('.ch-msgs').clientHeight"))*dpr);
-        assertEquals(height,(int)ui(()->web.computeVerticalScrollRange()));
-        assertEquals(client,(int)ui(()->web.computeVerticalScrollExtent()));
-        pass("native canScrollVertically down=true at top; physical metrics mirror inner div");
-        ui(()->{web.onPause();return null;});
-        assertTrue(ui(()->web.canScrollVertically(1)));
-        pass("still-visible paused WebView remains discoverable to screenshot toolbar");
-        ui(()->{web.scrollBy(0,350);web.scrollBy(0,175);return null;});
-        until(()->top()>100);
-        assertEquals(525/dpr,top(),1.1);
-        assertEquals(0,Double.parseDouble(js("document.scrollingElement.scrollTop")),0);
-        until(()->Math.abs(ui(()->web.computeVerticalScrollOffset())-525)<=3);
-        pass("native webView.scrollBy moves inner element only, serial deltas retained");
-        ui(()->{web.onResume();return null;});
-        double unchangedTop=top();ui(()->{web.scrollBy(0,0);web.scrollBy(20,0);return null;});
-        Thread.sleep(150);assertEquals(unchangedTop,top(),1);
-        pass("zero and horizontal-only scrollBy never reset inner offset");
-        android.view.accessibility.AccessibilityNodeInfo host=ui(()->web.createAccessibilityNodeInfo());
-        assertTrue(host.isScrollable());
-        assertTrue((host.getActions() & 4096)!=0);
-        until(()->ui(()->web.getAccessibilityNodeProvider()!=null));
+        assertFalse("scroll proxy is retired",SelectionWebView.SCROLL_PROXY);
+        // Compare against an actual unmodified Chromium WebView with identical HTML,
+        // dimensions and settings, rather than assuming root scrollability from inner DOM.
+        String html=new org.json.JSONTokener(js("document.documentElement.outerHTML")).nextValue().toString();
+        String origin=new org.json.JSONTokener(js("location.origin")).nextValue().toString();
         ui(()->{
-            ScrollAccessibilityProvider provider=(ScrollAccessibilityProvider)web.getAccessibilityNodeProvider();
-            android.view.accessibility.AccessibilityNodeInfo before=provider.delegate.createAccessibilityNodeInfo(-1);
-            android.view.accessibility.AccessibilityNodeInfo after=provider.createAccessibilityNodeInfo(-1);
-            assertNotNull(before);assertNotNull(after);
-            assertEquals(before.getChildCount(),after.getChildCount());
-            assertEquals(before.getClassName(),after.getClassName());
-            assertTrue(after.isScrollable());
-            assertEquals(before.isAccessibilityFocused(),after.isAccessibilityFocused());
-            return null;
+            stock=new android.webkit.WebView(activity);
+            stock.getSettings().setJavaScriptEnabled(true);
+            stock.getSettings().setUseWideViewPort(web.getSettings().getUseWideViewPort());
+            stock.getSettings().setLoadWithOverviewMode(web.getSettings().getLoadWithOverviewMode());
+            ((ViewGroup)web.getParent()).addView(stock,new ViewGroup.LayoutParams(web.getWidth(),web.getHeight()));
+            stock.loadDataWithBaseURL(origin,"<!doctype html>"+html,"text/html","UTF-8",null);return null;
         });
-        double a11yTop=top();
-        assertTrue(ui(()->web.performAccessibilityAction(4096,null)));
-        until(()->top()>a11yTop+100);
-        pass("host accessibility scroll action moves inner scroller; Chromium provider retained");
+        until(()->"true".equals(js(stock,"document.readyState==='complete'&&!!window.qaScrollProxyFixture")));
+        until(()->ui(()->stock.getHeight()==web.getHeight()&&stock.getWidth()==web.getWidth()));
+        ui(()->{ScrollCaptureDiagnostics.arm("qa-probe");return null;});
+        assertEquals(ui(()->stock.canScrollVertically(1)),ui(()->web.canScrollVertically(1)));
+        assertEquals(ui(()->stock.canScrollVertically(-1)),ui(()->web.canScrollVertically(-1)));
+        assertEquals(ui(()->stock.getContentHeight()).intValue(),ui(()->web.getContentHeight()).intValue());
+        assertTrue("native range is not the huge inner chat",ui(()->web.computeVerticalScrollRange())<
+            Double.parseDouble(js("document.querySelector('.ch-msgs').scrollHeight")));
+        pass("nested chat does not spoof stock View scrollability or range");
+        js("document.querySelector('.ch-msgs').scrollTop=300");
+        js(stock,"document.querySelector('.ch-msgs').scrollTop=300");
+        double unchangedTop=top();
+        ui(()->{web.scrollBy(0,350);stock.scrollBy(0,350);web.scrollBy(0,0);stock.scrollBy(0,0);
+            web.scrollBy(20,0);stock.scrollBy(20,0);return null;});
+        Thread.sleep(200);assertEquals(unchangedTop,top(),1);
+        assertEquals(ui(()->stock.getScrollY()).intValue(),ui(()->web.getScrollY()).intValue());
+        ui(()->{web.scrollTo(0,0);stock.scrollTo(0,0);return null;});
+        // A real root-scrolling document still exposes normal Chromium View scrolling.
+        String rootScroll="document.documentElement.style.cssText='overflow:auto;height:auto';document.body.style.cssText='margin:0;height:4000px;overflow:visible';true";
+        js(rootScroll);js(stock,rootScroll);
+        until(()->ui(()->web.canScrollVertically(1)&&stock.canScrollVertically(1)));
+        ui(()->{web.scrollBy(0,350);stock.scrollBy(0,350);return null;});
+        until(()->ui(()->web.getScrollY()>0&&stock.getScrollY()>0));
+        assertEquals(ui(()->stock.getScrollY()).intValue(),ui(()->web.getScrollY()).intValue());
+        assertEquals(ui(()->stock.canScrollVertically(-1)),ui(()->web.canScrollVertically(-1)));
+        ui(()->{web.scrollTo(0,700);stock.scrollTo(0,700);return null;});
+        Thread.sleep(200);assertEquals(ui(()->stock.getScrollY()).intValue(),ui(()->web.getScrollY()).intValue());
+        assertEquals(unchangedTop,top(),1);
+        pass("stock root scrollBy/scrollTo retained; nested chat never moved by native methods");
+        ui(()->{web.scrollTo(0,0);((ViewGroup)stock.getParent()).removeView(stock);stock.destroy();return null;});
+        js("document.documentElement.style.cssText='';document.body.style.cssText='';document.querySelector('.ch-msgs').scrollTop=0;true");
+        until(()->"true".equals(js("!!__wosScrollCapture.search()")));
+        assertEquals("false",js("__wosScrollCapture.proxyScroll('forged','to',900)"));
+        // Both JS visibility and native pause must survive the screenshot UI taking focus.
+        ChatScrollCapture capture=ui(()->{
+            java.lang.reflect.Field field=SelectionWebView.class.getDeclaredField("scrollCapture");
+            field.setAccessible(true);return (ChatScrollCapture)field.get(web);
+        });
+        CountDownLatch found=new CountDownLatch(1);AtomicReference<android.graphics.Rect> bounds=new AtomicReference<>();
+        ui(()->{capture.onScrollCaptureSearch(new CancellationSignal(),r->{bounds.set(r);found.countDown();});return null;});
+        assertTrue(found.await(5,TimeUnit.SECONDS));assertNotNull(bounds.get());assertFalse(bounds.get().isEmpty());
+        android.media.ImageReader reader=android.media.ImageReader.newInstance(bounds.get().width(),bounds.get().height(),android.graphics.PixelFormat.RGBA_8888,2,android.hardware.HardwareBuffer.USAGE_CPU_READ_OFTEN|android.hardware.HardwareBuffer.USAGE_GPU_COLOR_OUTPUT);
+        android.view.ScrollCaptureSession session=new android.view.ScrollCaptureSession(reader.getSurface(),bounds.get(),new android.graphics.Point(0,0));
+        CountDownLatch started=new CountDownLatch(1);
+        ui(()->{capture.onScrollCaptureStart(session,new CancellationSignal(),started::countDown);return null;});
+        assertTrue(started.await(5,TimeUnit.SECONDS));
+        assertEquals("true",js("!!document.querySelector('.ch-msgs').dataset.wosScrollCapture"));
+        android.graphics.Rect port=bounds.get();
+        tile(capture,session,reader,new android.graphics.Rect(0,0,port.width(),port.height()));
+        pass("unpaused PixelCopy control delivered a real surface buffer");
+        ui(()->{activity.onPause();return null;});
+        assertEquals("true",js("!!__wosScrollCapture.check(document.querySelector('.ch-msgs').dataset.wosScrollCapture)"));
+        long firstTile=tile(capture,session,reader,new android.graphics.Rect(0,0,port.width(),port.height()));
+        long nextTile=tile(capture,session,reader,new android.graphics.Rect(0,port.height(),port.width(),2*port.height()));
+        assertNotEquals("paused capture must deliver different real compositor pixels after scroll",firstTile,nextTile);
+        ui(()->{activity.onResume();return null;});
+        CountDownLatch ended=new CountDownLatch(1);
+        ui(()->{capture.onScrollCaptureEnd(ended::countDown);return null;});
+        assertTrue(ended.await(5,TimeUnit.SECONDS));reader.close();
+        pass("native Activity pause does not abort an OS-owned capture session");
         org.json.JSONArray events=new org.json.JSONObject(ScrollCaptureDiagnostics.snapshot()[0]).getJSONArray("events");
         boolean sawCan=false,sawBy=false;
         for(int i=0;i<events.length();i++) {
@@ -106,35 +157,28 @@ public class ScrollProxyE2eTest {
         // The Python harness verifies the actual HTTP body and persisted readback, not a log line.
         until(ScrollCaptureDiagnostics::hasDeliveredForQa);
         pass("recorder includes native probes and resume schedules private diagnostic upload");
-        ui(()->{web.scrollTo(0,Integer.MAX_VALUE);return null;});
-        until(()->!ui(()->web.canScrollVertically(1)));
-        assertTrue(ui(()->web.canScrollVertically(-1)));
-        assertEquals((int)ui(()->web.computeVerticalScrollRange()-web.computeVerticalScrollExtent()),
-            (int)ui(()->web.computeVerticalScrollOffset()));
-        pass("native canScrollVertically down=false at bottom; up=true");
-        // A same-origin child frame has the port but cannot replace main-frame metrics.
-        int before=ui(()->web.computeVerticalScrollOffset());
-        js("(()=>{const f=document.createElement('iframe');f.srcdoc=`<script>wizardScrollPort.postMessage(JSON.stringify({v:1,key:'forged',height:999999,top:0,extent:500,dpr:devicePixelRatio,vw:innerWidth}))</script>`;f.style.display='none';document.body.append(f);return true})()");
-        Thread.sleep(300);assertEquals(before,(int)ui(()->web.computeVerticalScrollOffset()));
-        pass("child-frame metrics rejected by origin-bound native port");
         ui(()->{activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);return null;});
-        assertFalse(ui(()->web.canScrollVertically(-1)));
         double secureTop=top();ui(()->{web.scrollBy(0,-300);return null;});Thread.sleep(200);
         assertEquals(secureTop,top(),1);
         ui(()->{
-            ChatScrollCapture capture=new ChatScrollCapture(activity,web);
-            for(int i=0;i<55;i++)capture.onScrollCaptureSearch(new CancellationSignal(),r->assertTrue(r.isEmpty()));
+            ChatScrollCapture secureCapture=new ChatScrollCapture(activity,web);
+            for(int i=0;i<55;i++)secureCapture.onScrollCaptureSearch(new CancellationSignal(),r->assertTrue(r.isEmpty()));
             assertTrue(ScrollCaptureDiagnostics.RING.size()<=400);
             assertTrue(ScrollCaptureDiagnostics.snapshot()[0].contains("flag-secure"));
             activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);return null;
         });
-        pass("FLAG_SECURE blocks proxy and AOSP discovery; diagnostics ring capped at 400");
+        pass("FLAG_SECURE blocks AOSP discovery; diagnostics ring capped at 400");
         js("document.querySelector('.ch-msgs').style.height='650px';document.querySelector('.ch-msgs').innerHTML='<p>Short</p>';true");
         until(()->!ui(()->web.canScrollVertically(1))&&!ui(()->web.canScrollVertically(-1)));
-        pass("non-overflowing inner scroller clears native proxy");
+        pass("non-overflowing inner scroller still uses stock WebView");
         CountDownLatch empty=new CountDownLatch(1);
         ui(()->{new ChatScrollCapture(activity,web).onScrollCaptureSearch(new CancellationSignal(),r->{assertTrue(r.isEmpty());empty.countDown();});return null;});
         assertTrue(empty.await(5,TimeUnit.SECONDS));
+        assertEquals("null",js("__wosScrollCapture.searchDetail()"));
+        org.json.JSONArray latest=new org.json.JSONObject(ScrollCaptureDiagnostics.snapshot()[0]).getJSONArray("events");
+        org.json.JSONObject detail=null;
+        for(int i=latest.length()-1;i>=0;i--)if("search.detail".equals(latest.getJSONObject(i).optString("method"))){detail=latest.getJSONObject(i).getJSONObject("data");break;}
+        assertNotNull("native search emitted detail",detail);assertTrue("non-overflow uploads JSON-null detail",detail.isNull("detail"));
         String[] reasons=ScrollCaptureDiagnostics.snapshot();
         assertTrue(reasons[0].contains("js-not-overflowing"));
         pass("empty AOSP callback reports precise JS non-overflow reason");
@@ -145,6 +189,6 @@ public class ScrollProxyE2eTest {
         until(()->ui(()->web.getUrl()!=null&&web.getUrl().contains("scroll-proxy-untrusted.invalid")));
         ui(()->{web.installScrollProxy();return null;});Thread.sleep(200);
         assertFalse("untrusted helper never injected","true".equals(js("!!window.__wosScrollCapture")));
-        pass("untrusted top-level origin cannot install scroll proxy");
+        pass("untrusted top-level origin cannot install capture helper");
     }
 }

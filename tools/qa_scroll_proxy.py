@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Thales-only API35 native View scroll proxy instrumentation (not a Samsung emulator).
+"""Thales-only API35 stock WebView/diagnostic instrumentation (not a Samsung emulator).
 usage: qa_scroll_proxy.py DEBUG_APK ANDROID_TEST_APK OUTPUT
 """
 import fcntl
@@ -19,6 +19,7 @@ PKG = 'ai.wizards.os.qa'
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import scroll_diagnostics
 UPLOADS=[]
+UPLOAD_BYTES=[]
 FIXTURE = b'''<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <style>html,body{margin:0;overflow:hidden;background:#171020;color:#fff} .ch-msgs{position:absolute;top:50px;left:8px;right:8px;height:calc(100dvh - 140px);overflow-y:auto}p{height:96px}</style>
 <div data-chats="proxy" data-draft-for="proxy-fixture"><div class="ch-msgs"></div></div>
@@ -40,6 +41,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             readback=(OUT/'diagnostics'/name).read_bytes()
             assert readback==body
             UPLOADS.append(json.loads(readback))
+            UPLOAD_BYTES.append(len(readback))
         except Exception:
             self.send_error(400);return
         data=b'{"ok":true}'
@@ -74,7 +76,7 @@ with lock:
         check('install exact QA APK', 'Success' in em.sh(ADB,'-s',em.S,'install',APK))
         check('install exact instrumentation APK', 'Success' in em.sh(ADB,'-s',em.S,'install',TEST_APK))
         em.sh(ADB,'-s',em.S,'reverse',f'tcp:{PORT}',f'tcp:{PORT}')
-        em.sx(f"run-as {PKG} sh -c 'mkdir -p files; echo http://localhost:{PORT} > files/qa_home.txt'")
+        em.sx(f"run-as {PKG} sh -c 'mkdir -p files; echo http://localhost:{PORT} > files/qa_home.txt; echo http://localhost:{PORT} > files/qa_origin.txt'")
         em.sx('logcat -c')
         result = em.sx(f'am instrument -w -r -e class ai.wizards.os.ScrollProxyE2eTest {PKG}.test/androidx.test.runner.AndroidJUnitRunner')
         (OUT/'instrumentation.log').write_text(result)
@@ -82,12 +84,14 @@ with lock:
         (OUT/'native-logcat.txt').write_text(log)
         print(result, flush=True)
         print(log, flush=True)
-        check('real native View proxy instrumentation', 'OK (1 test)' in result and 'FAILURES' not in result)
+        check('real stock WebView and diagnostic instrumentation', 'OK (1 test)' in result and 'FAILURES' not in result)
         methods={e['method'] for u in UPLOADS for e in u['events']}
         check('resume upload reached private-origin fake server and persisted exact bytes',bool(UPLOADS),len(UPLOADS))
         check('uploaded record includes native probes and Activity resume',
-              {'canScrollVertically','scrollBy','Activity.onResume'}<=methods,sorted(methods))
-        check('uploaded diagnostics are capped and content-free',bool(UPLOADS) and all(
+              {'canScrollVertically','scrollBy','Activity.onResume','search.detail','start.result'}<=methods,sorted(methods))
+        probes=[e for u in UPLOADS for e in u['events'] if e['method']=='canScrollVertically']
+        check('native View probes confirm proxy disabled',bool(probes) and all(e['data'].get('proxy') is False for e in probes))
+        check('uploaded diagnostics are capped and content-free',bool(UPLOADS) and max(UPLOAD_BYTES)<=240*1024 and all(
             len(u['events'])<=400 and 'Proxy fixture row' not in json.dumps(u) and 'proxy-fixture' not in json.dumps(u)
             for u in UPLOADS))
         # The native test intentionally visits a foreign page as its final negative case.
@@ -99,7 +103,7 @@ with lock:
         for i in range(3):
             em.sx('input keyevent KEYCODE_BACK');time.sleep(.3)
             top=em.top()
-            check(f'proxy-enabled native Back {i+1} stays in app', PKG in top, top)
+            check(f'stock WebView native Back {i+1} stays in app', PKG in top, top)
         crash=em.sx('logcat -d -b crash')
         (OUT/'crash-logcat.txt').write_text(crash)
         check('no native crashes', 'FATAL EXCEPTION' not in crash)

@@ -77,9 +77,9 @@
         return {el:k, rect:[r.left,r.top,r.width,r.height].map(Math.round), pos:s.position, z:s.zIndex, pe:s.pointerEvents,
           up:label(n.parentElement)+'<'+label(n.parentElement?.parentElement)}; }),
       floaters:[...floaters].map(label).slice(0,4)};
-    // Keep whole CSS pixels inside the clear rows.
-    const b0 = best[1] ? Math.ceil(best[0] === 0 ? g.y0 : g.y0 + 2 + best[0]*step - step/2) : 0;
-    const b1 = best[1] ? Math.floor(best[0] + best[1] >= rows.length ? g.y1 : g.y0 + 2 + (best[0]+best[1])*step - step/2) : 0;
+    // Stay inside the sampled clear rows, never halfway into an unsampled blocker.
+    const b0 = best[1] ? Math.ceil(best[0] === 0 ? g.y0 : g.y0 + 2 + best[0]*step) : 0;
+    const b1 = best[1] ? Math.floor(best[0] + best[1] >= rows.length ? g.y1 : g.y0 + 2 + (best[0]+best[1]-1)*step) : 0;
     detail.band = [b0, b1 - b0];
     searchDetail = detail;
     if (!best[1] || b1 - b0 < Math.max(120, (g.y1 - g.y0)*.35)) return reject('occluded');
@@ -116,13 +116,14 @@
     const a = active; if (!a || a.id !== id) return null;
     const g = geometry(a.e, () => null, true);
     if (!g || a.url !== location.href || a.owner?.dataset.draftFor !== a.thread ||
-        g.scrollHeight !== a.height || g.x !== a.x || g.w !== a.w || g.top0 !== a.top0) {
+        g.scrollHeight !== a.height || g.x !== a.x || g.w !== a.w || g.top0 !== a.top0 || g.y0 !== a.y0 || g.y1 !== a.y1) {
       end(id); return null;
     }
     return {x:a.x,y:a.y,w:a.w,h:a.h,vw:innerWidth,dpr:devicePixelRatio,top:a.e.scrollTop,height:a.height};
   }
   let searchReason='no-chat-scrollers';
   function candidate(allowHidden=false) {
+    searchDetail = null;
     const reasons=[],reject=reason=>{if(!reasons.includes(reason))reasons.push(reason);return null;};
     const found=[...document.querySelectorAll('[data-chats] .ch-msgs,[data-chats] .ch-scroll')]
       .map(e=>({e,b:bounds(e,reject,allowHidden)})).filter(x=>x.b).sort((a,b)=>b.b.w*b.b.h-a.b.w*a.b.h)[0] || null;
@@ -159,6 +160,7 @@
     timer=setTimeout(()=>{timer=0;if(document.hidden)pushProxy();else frame=requestAnimationFrame(pushProxy);},Math.max(0,100-(performance.now()-sentAt)));
   }
   function proxyScroll(key,method,y) {
+    if (!port) return false;
     const c=proxyCandidate();
     if(!c || key!==proxyKey || !Number.isFinite(y) || !['by','to'].includes(method))return false;
     // Absolute/relative commands are executed serially in JS (no lost deltas),
@@ -206,6 +208,8 @@
       const owner=e.closest('[data-chats]');
       const a={...b,id,e,owner,thread:owner?.dataset.draftFor,key:e.matches('.ch-msgs')?owner?.dataset.draftFor:null,url:location.href,
         top0:e.getBoundingClientRect().top + e.clientTop,
+        y0:Math.max(0,e.getBoundingClientRect().top + e.clientTop),
+        y1:Math.min(innerHeight,e.getBoundingClientRect().top + e.clientTop + e.clientHeight),
         styles:['scroll-behavior','overflow-anchor','scroll-snap-type','padding-top','padding-bottom'].map(k=>[k,e.style.getPropertyValue(k),e.style.getPropertyPriority(k)])};
       e.style.setProperty('scroll-behavior','auto','important');
       e.style.setProperty('overflow-anchor','none','important');

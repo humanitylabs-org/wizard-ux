@@ -34,6 +34,35 @@ class DiagnosticsTest(unittest.TestCase):
                 diag.store(body, self.root)
         self.assertEqual([], list(self.root.glob('*')))
 
+    def test_capture_diagnostics_fields_persist_exact_bytes(self):
+        payload = json.loads(self.body)
+        detail = {'scroller':'div.ch-msgs','port':[0,0,412,800],'vh':800,'vw':412,
+                  'vv':[0,800],'band':[66,648],'floaters':['button#qaFloatingButton'],
+                  'blockers':[{'el':'div#qaHeader','rect':[0,0,412,60],'pos':'fixed',
+                               'z':'999999','pe':'auto','up':'div.device<body'}]}
+        payload['events'] = [
+            {'method':'search.detail','data':{'detail':detail}},
+            {'method':'start.result','data':{'ok':True,'granted':'Rect(0, 66 - 412, 714)',
+                                           'ours':'Rect(0, 66 - 412, 714)'}}]
+        body = json.dumps(payload).encode()
+        name = diag.store(body, self.root)
+        self.assertEqual(body, (self.root/name).read_bytes())
+        # Discovery rejected before geometry still uploads a null detail.
+        payload['events'][0]['data']['detail'] = None
+        diag.store(json.dumps(payload).encode(), self.root)
+
+    def test_capture_detail_rejects_text_urls_and_unbounded_fields(self):
+        payload = json.loads(self.body)
+        for detail in ({'text':'private'}, 'https://private.invalid',
+                       {'scroller':'div','port':[0,0,412,800],'vh':800,'vw':412,'vv':None,
+                        'band':[0,800],'floaters':['button#private text'],'blockers':[]}):
+            payload['events'] = [{'method':'search.detail','data':{'detail':detail}}]
+            with self.assertRaises(ValueError): diag.store(json.dumps(payload).encode(), self.root)
+        for data in ({'ok':'private'}, {'granted':'https://private.invalid'}, {'ours':'chat text'}):
+            payload['events'] = [{'method':'start.result','data':data}]
+            with self.assertRaises(ValueError): diag.store(json.dumps(payload).encode(), self.root)
+        self.assertEqual([], list(self.root.glob('*')))
+
     def test_http_origin_size_append_and_no_read(self):
         httpd = server.ThreadingHTTPServer(('127.0.0.1', 0), server.Handler)
         thread = threading.Thread(target=httpd.serve_forever, daemon=True)

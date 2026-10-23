@@ -12,7 +12,7 @@ PKG='ai.wizards.os.qa'; PORT=19064; ORIGIN=f'http://localhost:{PORT}'
 HTML='''<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Scroll capture fixture</title>
 <style>html,body{margin:0;height:100%;overflow:hidden;background:#10202d;color:#fff;font:18px sans-serif}*{box-sizing:border-box}
 [data-chats]{height:100%;display:flex;flex-direction:column}.ch-head,.ch-compose{height:64px;flex:none;background:#802040;padding:15px}
-.ch-msgs,.ch-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}.row{height:120px;padding:16px;border-top:3px solid #fff;background:#183747}.row:nth-child(even){background:#28516a}.stripe{height:8px;background:#00ff80}</style>
+.ch-msgs,.ch-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}.row{height:120px;padding:16px;border-top:3px solid #fff;background:#183747}.row:nth-child(even){background:#28516a}.stripe{height:8px;background:#00ff80}body.overlap .ch-head,body.overlap .ch-compose{position:fixed;left:0;right:0;z-index:10}body.overlap .ch-head{top:0;height:60px}body.overlap .ch-compose{bottom:0;height:80px}</style>
 <div data-chats="synthetic" data-draft-for="direct:fixture-a"><div class="ch-head">HEADER — appears outside capture</div><div class="ch-msgs"></div><div class="ch-compose">COMPOSER — outside capture</div></div>
 <script>function seed(kind='ch-msgs',n=40){document.querySelector('.ch-msgs,.ch-scroll').className=kind;document.querySelector('.'+kind).innerHTML=Array.from({length:n},(_,i)=>`<div class="row" style="background:rgb(${30+i*4},60,90)"><b>ROW ${String(i).padStart(2,'0')}</b><p>Native composited text • band ${i}</p></div>`).join('');}seed();window.__wosNativeBack=()=>true;</script>'''
 class H(http.server.BaseHTTPRequestHandler):
@@ -30,10 +30,13 @@ def shot(name):em.shot(OUT,name)
 def dismiss():
  em.sx('input keyevent KEYCODE_BACK');time.sleep(.5)
  em.sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity');time.sleep(.5)
-def capture(name,kind,top):
+def capture(name,kind,top,overlap=False):
  assert pg is not None
  em.sx('rm -f /sdcard/Pictures/Screenshots/*')
- pg.ev(f"seed({json.dumps(kind)});document.querySelector('.{kind}').scrollTop={top}");time.sleep(.8)
+ pg.ev(f"document.body.classList.toggle('overlap',{str(overlap).lower()});seed({json.dumps(kind)},{14 if overlap else 40});document.querySelector('.{kind}').scrollTop={top}");time.sleep(.8)
+ if overlap:
+  geometry=pg.ev("(()=>{const b=__wosScrollCapture.search(),h=document.querySelector('.ch-head').getBoundingClientRect(),c=document.querySelector('.ch-compose').getBoundingClientRect();return {b,header:h.bottom,composer:c.top};})()")
+  check(name+' capture band excludes overlapping header/composer',bool(geometry['b']) and geometry['b']['y']>=geometry['header'] and geometry['b']['y']+geometry['b']['h']<=geometry['composer'],geometry)
  before=pg.ev(f"document.querySelector('.{kind}').scrollTop")
  em.sx('input keyevent KEYCODE_SYSRQ');time.sleep(.8)
  # SystemUI screenshot chip is transient; avoid a slow accessibility-tree dump before tapping.
@@ -71,6 +74,7 @@ def capture(name,kind,top):
   check(name+' actual pixels encode consecutive nonduplicated rows',len(ids)>=8 and all(b==a+1 for a,b in zip(ids,ids[1:])),ids)
   steps=[b['y']-a['y'] for a,b in zip(pixels['rows'][1:],pixels['rows'][2:])]
   check(name+' no missing pixel bands at tile joins',bool(steps) and max(steps)-min(steps)<=2,steps)
+  if overlap:check(name+' stitched pixels include first and last fixture messages',bool(ids) and ids[0]==0 and ids[-1]==13,ids)
   (OUT/(name+'-pixels.json')).write_text(json.dumps(pixels,indent=2))
  dismiss()
 _inherited=os.environ.get('WIZARD_HEAVY_LOCK_FD')
@@ -90,6 +94,8 @@ with _lock as lock:
   capture('thread-top','ch-msgs',0)
   capture('thread-middle','ch-msgs',1700)
   capture('list-bottom','ch-scroll',99999)
+  capture('overlapping-chrome','ch-msgs',0,overlap=True)
+  pg.ev("document.body.classList.remove('overlap')")
   pg.ev("seed('ch-msgs',2)");time.sleep(.5)
   em.sx('input keyevent KEYCODE_SYSRQ');time.sleep(.8);xml=em.ui()
   check('short content not offered', 'Capture more' not in xml,xml[-500:]);dismiss()

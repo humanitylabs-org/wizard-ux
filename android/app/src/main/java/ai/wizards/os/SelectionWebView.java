@@ -207,7 +207,8 @@ public class SelectionWebView extends WebView {
 
     // An OEM screenshot toolbar may pause the Activity while probing/capturing
     // the still-visible window. Match AOSP eligibility, not Activity.resumed.
-    @Override public void onPause() { cancelScrollCapture(); super.onPause(); }
+    // Pause/visibility alone is not cancellation: SystemUI may own an active capture.
+    @Override public void onPause() { super.onPause(); }
     @Override public void onResume() { super.onResume(); installScrollProxy(); }
     @Override protected void onDetachedFromWindow() {
         cancelScrollCapture(); scrollMetrics = null; super.onDetachedFromWindow();

@@ -119,7 +119,7 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
         js(script + ";(()=>{try{const c=window.__wosScrollCapture;const r=c.search(),d=c.searchDetail&&c.searchDetail();return r?Object.assign(r,{detail:d}):{rejected:c.searchReason(),detail:d};}catch(_){return {rejected:'exception'};}})()", b -> {
             if (!p.live()) return;
             if (b != null && b.has("detail")) ScrollCaptureDiagnostics.record("search.detail",
-                ScrollCaptureDiagnostics.fields("detail",String.valueOf(b.opt("detail")).substring(0,Math.min(1800,String.valueOf(b.opt("detail")).length()))));
+                ScrollCaptureDiagnostics.fields("detail",b.opt("detail")));
             if (b == null) { p.fail("js-invalid-result-or-exception"); return; }
             if (b.has("rejected")) { p.fail("js-" + b.optString("rejected")); return; }
             if (b.optDouble("vw") <= 0) { p.fail("invalid-viewport"); return; }
