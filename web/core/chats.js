@@ -54,6 +54,12 @@ window.WizCore.chats = function createChats(H) {
   function openHosted(wid, frame, sid, opts = {}) {
     const w = W[wid];
     if (!w || !HOSTED_APPS.has(w.appId) || !frame?.isConnected || frame.closest('[data-win]')?.dataset.win !== wid) return false;
+    // A newly-created agent thread may not be in the next session-list refresh yet.
+    if (opts?.agent != null) {
+      const a = typeof opts.agent === 'string' ? window.WosAgents?.get(opts.agent) : null;
+      if (!a || a.status !== 'running' || !window.WosAgents.isOther(opts.agent) || typeof LIVE.pinAgent !== 'function') return false;
+      LIVE.pinAgent(sid, opts.agent);
+    }
     // An app item (Wisdom passage) rides beside this thread's draft as its reply, framed only into the next message.
     // It never replaces one already waiting there, and the composer stays the owner's own words.
     const rp = opts?.reply ? KIT.reply.clean(opts.reply) : null;
