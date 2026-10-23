@@ -51,6 +51,9 @@
       } else op.insertBefore(document.importNode(f, true), cur); // inert template node -> live (only new nodes load media)
     }
     while (cur) { const nx = cur.nextSibling; cur.remove(); cur = nx; }
+    // A keyed node no fresh child claimed is gone, wherever it sits: the unkeyed look-ahead above steps over keyed
+    // nodes, so one can be left before cur (a stale row kept beside its replacement, out of order; 23 Oct 2026).
+    for (const c of byKey.values()) if (c.parentNode === op) c.remove();
   }
   function morph(oldRoot, html, opts = {}) {
     if (!oldRoot || !oldRoot.isConnected) return false;
