@@ -40,6 +40,8 @@
 .ar-note { margin: 10px 2px 0; font-size: 13px; line-height: 1.45; color: var(--ink-2, #c9c0e8); }
 .ar-note.bad { color: var(--red, #ff6b86); padding: 10px 12px; border-radius: 12px; background: rgba(255, 107, 134, .08); border: 1px solid rgba(255, 107, 134, .3); }
 .ar-note.ok { color: var(--green, #4ff0b0); }
+.ar-note.warn { color: var(--amber, #ffcf6b); padding: 10px 12px; border-radius: 12px; background: rgba(255, 207, 107, .08); border: 1px solid rgba(255, 207, 107, .3); }
+[data-access-new-private] { margin-top: 10px; }
 .ar-foot { margin: 12px 2px 0; font-size: 12px; color: var(--ink-3, #8d84ad); }
 .ar-acts { display: flex; gap: 8px; margin-top: 14px; }
 .ar-btn { flex: 1; min-height: 44px; border-radius: 14px; font-weight: 700; font-size: 15px; background: var(--violet-2, #b99bff); color: #0b0718; }

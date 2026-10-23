@@ -1117,12 +1117,12 @@
   });
   /* App → agent binding: an app's settings sheet (core/app-route.js). Its Agents button opens the Agents app
    * at that agent; System and Agents frames may ask for an app's sheet. */
-  window.WosAppRoute?.init({ openAgents: id => { openApp(APP.agents); if (id) [400, 1100, 2200].forEach(t => setTimeout(() => { for (const f of document.querySelectorAll('iframe[title="Agents"]')) f.contentWindow?.postMessage({ type: 'wizard:agents-show', id }, location.origin); }, t)); } });
+  window.WosAppRoute?.init({ openAgents: (id, o = {}) => { openApp(APP.agents); const msg = o.newPreset ? { type: 'wizard:agents-new', preset: o.newPreset } : id ? { type: 'wizard:agents-show', id } : null; if (msg) [400, 1100, 2200].forEach(t => setTimeout(() => { for (const f of document.querySelectorAll('iframe[title="Agents"]')) f.contentWindow?.postMessage(msg, location.origin); }, t)); } });
   addEventListener('message', e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:app-route' || typeof d.id !== 'string') return;
     const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
-    const w = host && W[host.dataset.win]; if (!w || !['system', 'agents'].includes(w.appId)) return;
-    window.WosAppRoute?.open(d.id);
+    const w = host && W[host.dataset.win]; if (!w || !['system', 'agents', 'app-store'].includes(w.appId)) return;
+    window.WosAppRoute?.request(d);
   });
   /* The Agents app (and System) open an agent's own Chats. Only those frames may ask; the agent must exist. */
   addEventListener('message', e => {
