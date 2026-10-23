@@ -18,6 +18,17 @@ module.exports=async({boot,ok,sleep,sid,model,provider})=>{
   ok(rows.length===0&&f.state.posts.length===0,'phone held: router command leaves no Unsent row and sends nothing',{rows,posts:f.state.posts.length});
   await f.done('held router command');}
 
+ // 1b. Held over an open thread (James, 23 Oct 2026 screenshot): while the take is transcribing, the thread shows no
+ // "Voice note · words come when it sends" bubble. A held take is a system command, never a message in any chat.
+ {const f=await boot();f.state.text='Open air lock.';f.state.cmd={route:'agent',summary:'x'};f.state.sttDelay=2500;
+  await f.p.evaluate(s=>__wos.openWizardThread(s),sid);await sleep(1500);
+  await f.p.evaluate(()=>document.activeElement?.blur());await f.p.evaluate(()=>__wos.startVoice('command'));await f.p.waitForFunction(()=>['listen','command'].includes(__wos.voice));await sleep(1100);await f.p.evaluate(()=>__wos.finishVoice());
+  await sleep(1200);
+  const mid=await f.p.evaluate(s=>({bubbles:document.querySelectorAll('.msg.pending').length,staged:[...WosOutbox._items.values()].filter(x=>x.intent==='command').length,inThread:WosOutbox.forThread(s).length}),sid);
+  ok(mid.staged>0&&mid.bubbles===0&&mid.inThread===0,'phone held over a thread: the take never shows as a voice note in that chat',mid);
+  await settle(f);f.state.sttDelay=0;
+  await f.done('held over thread');}
+
  // 2. Router says "agent" (not a command): choice card, nothing sent, no failed-voice row.
  {const f=await boot();f.state.text='what is the capital of peru';f.state.cmd={route:'agent',summary:'x'};
   await holdTake(f);await settle(f);await sleep(400);

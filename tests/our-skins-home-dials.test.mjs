@@ -65,23 +65,23 @@ test('Miguel skins show Home resources as bars of what is left; James skins keep
   for (const s of ['obsidian', 'obsidian-light', 'landscapes']) {
     const h = homeWith(s, STATE);
     assert.match(h, /rs-barsw/, s); assert.doesNotMatch(h, /rs-dial|rs-bar"|rs-warning-note/, s);
-    assert.ok(h.indexOf('aria-label="AI week left"') < h.indexOf('aria-label="Computer left"'), `${s}: AI first`);
+    assert.ok(h.indexOf('aria-label="AI resources used this week"') < h.indexOf('aria-label="Compute resources used"'), `${s}: AI first`);
   }
   for (const s of ['nebula', 'grove', 'tide', 'ember', 'signal']) { const h = homeWith(s, STATE); assert.doesNotMatch(h, /rs-barsw/, s); assert.match(h, /rs-zone/, s); }
 });
 
 test('compute bars split by machine capacity; AI and credit show what is left', () => {
   const h = homeWith('landscapes', STATE);
-  assert.match(h, /aria-label="Claude 58% left"/); assert.match(h, /aria-label="Tinfoil \$4\.50 left"/);
+  assert.match(h, /aria-label="Claude 42% used"/); assert.match(h, /aria-label="Tinfoil \$4\.50 left"/);
   assert.match(h, /data-k="hw:mem"[\s\S]*?flex:16 1 0[\s\S]*?flex:8 1 0/);
   assert.match(h, /data-k="hw:disk"[\s\S]*?rs-bs rs-crit rs-d0" style="flex:200 1 0"/);
-  assert.match(h, /aria-label="Memory 13 GB left"/);
-  assert.match(h, /data-w="7"/, 'disk fill = 7% left');
+  assert.match(h, /aria-label="Memory 11\/24 GB used"/);
+  assert.match(h, /data-w="93"/, 'disk fill = 93% used');
 });
 
 test('Home separates AI and Computers, colours compute segments by machine with a legend', () => {
   const h = homeWith('obsidian', STATE);
-  assert.match(h, /rs-bg rs-bg-ai[\s\S]*<b>AI<\/b>[\s\S]*rs-bg rs-bg-hw[\s\S]*<b>Computers<\/b>/);
+  assert.match(h, /rs-bg rs-bg-ai[\s\S]*<b>AI resources<\/b>[\s\S]*rs-bg rs-bg-hw[\s\S]*<b>Compute resources<\/b>/);
   assert.match(h, /class="rs-lg"><span class="rs-d0"><i><\/i>Box<\/span><span class="rs-d1"><i><\/i>Laptop/);
   assert.match(h, /data-k="hw:mem"[\s\S]*?rs-bs rs-d0[\s\S]*?rs-bs rs-d1/);
 });

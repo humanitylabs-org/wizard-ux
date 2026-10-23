@@ -167,7 +167,10 @@ html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner
 /* Fade: a soft scrim rises from the bottom edge behind the pill, so whatever sits above the bar melts into the
  * background (iOS tab-bar look) instead of ending in a hard line. Hidden whenever the bar itself is hidden. */
 html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats:has(.ch-list)::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--pill-top) + 64px); z-index: 4; pointer-events: none; background: linear-gradient(to top, var(--bg) var(--pill-b), color-mix(in srgb, var(--bg) 92%, transparent) calc(var(--pill-top) - 20px), color-mix(in srgb, var(--bg) 55%, transparent) calc(var(--pill-top) + 22px), transparent 100%); }
-html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-list .ch-scroll { padding-bottom: calc(var(--pill-top) + 14px); }
+/* The room under the last row is a real flex item, not scroll padding: iPhone Safari leaves a flex scroller's
+ * bottom padding out of the scroll range, so a just-full list would not scroll the last row clear of + and the pill. */
+html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-list .ch-scroll { padding-bottom: 0; }
+html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-list .ch-scroll::after { content: ""; display: block; order: 99; flex: 0 0 calc(var(--pill-top) + 66px); }
 html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats:has(.ch-list)::after { height: calc(var(--pill-top) + 44px); background: linear-gradient(to top, color-mix(in srgb, var(--bg) 72%, transparent) 0, color-mix(in srgb, var(--bg) 45%, transparent) var(--pill-top), transparent 100%); }
 /* Opinionated (phone): just the orb. No ring, spinning arcs, orbit dots, halo or handle line; the count badge and the
  * tap ripple stay. Gestures unchanged (the scrub strip still works, it just draws nothing at rest). */
@@ -755,3 +758,20 @@ html[data-skin="landscapes"] .rs-d0 { --dc: #ffffff; }
 html[data-skin="landscapes"] .rs-d1 { --dc: #8fd3ff; }
 html[data-skin="landscapes"] .rs-d2 { --dc: #d6b4ff; }
 html[data-skin="landscapes"] .rs-d3 { --dc: #9ff0c4; }
+
+/* Readability pass (Miguel, 23 Oct): bars show USED of available; group titles "AI resources" / "Compute resources". */
+html[data-skin="landscapes"] .rs-gh { font-size: 12.5px; margin-bottom: 4px; }
+html[data-skin="landscapes"] .rs-gh b { font-weight: 650; letter-spacing: 0; }
+html[data-skin="landscapes"] .rs-gh span { font-size: 11.5px; }
+html[data-skin="landscapes"] .rs-bg { gap: 9px; }
+html[data-skin="landscapes"] .rs-br { grid-template-columns: 58px 1fr 78px; }
+html[data-skin="landscapes"] .rs-bl { font-size: 13px; }
+html[data-skin="landscapes"] .rs-bv { font-size: 12.5px; }
+html[data-skin="landscapes"] .rs-bt { height: 8px; }
+html[data-skin="landscapes"] .rs-bg-hw .rs-bt { height: 10px; }
+html[data-skin="landscapes"] .rs-lg { font-size: 11.5px; margin-bottom: 5px; }
+html[data-skin="landscapes"] .rs-br { grid-template-columns: 58px minmax(60px, 1fr) max-content; }
+
+/* Miguel's skins: no chat pins (row pin button and the Pin action in the row sheet). Rows get their full width back. */
+html[data-skin="landscapes"] .ch-pin-toggle, html[data-skin="landscapes"] .ch-sheet [data-rspin] { display: none; }
+html[data-skin="landscapes"] .ch-row-wrap > .ch-row { padding-right: 8px; }

@@ -52,7 +52,8 @@ async function boot(b) {
     if (u.pathname === '/wizard/thread-dispositions') return json(r, { state: {} });
     if (u.pathname === '/wizard/v1/apps') return json(r, { apps: [{ id: 'wizard-search', name: 'Search', desc: 'Image search and AI overview', url: '/wizard-search/', icon: '⌕', colors: ['#8f63ff', '#ff5ccf'], source: 'launcher.json' },
       { id: 'calendar', name: 'Calendar', desc: 'Your calendar', url: '/wizard-calendar/', source: 'launcher.json' },
-      { id: 'wizard-signal', name: 'Wizard Signal', desc: 'Signal feed', url: '/wizard-signal/', source: 'launcher.json' }] });
+      { id: 'wizard-signal', name: 'Wizard Signal', desc: 'Signal feed', url: '/wizard-signal/', source: 'launcher.json' },
+      { id: 'airlock', name: 'Airlock', desc: 'Redaction checklist', url: '/airlock/', view: { mode: 'original', url: '/airlock/' }, source: 'apps.json' }] });
     return json(r, {});
   });
   await ctx.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); } catch (e) {} });
@@ -102,6 +103,12 @@ const home = async p => { await p.evaluate(() => { for (const id of Object.keys(
   await home(p); routes.length = 0;
   await say(p, 'Signal', 'command'); await sleep(900);
   f = await front(p); ok(f === 'wizard-signal' && routes.length === 0, 'held "Signal" opens Wizard Signal', JSON.stringify({ f, routes }));
+  // 3b. Speech-to-text splits one-word names ("Open air lock", James 23 Oct 2026): spacing never decides the app.
+  for (const t of ['Open air lock.', 'Air lock', 'open Airlock']) {
+    await home(p); routes.length = 0;
+    await say(p, t, 'command'); await sleep(900);
+    f = await front(p); ok(f === 'airlock' && routes.length === 0, `held "${t}" opens Airlock on-device`, JSON.stringify({ f, routes }));
+  }
   // 4. Held over an open thread: still opens Calendar, nothing posted into the thread.
   await home(p); await p.evaluate(() => window.__wos.openWizardThread('qa-0')); await sleep(1500);
   writes.length = 0;

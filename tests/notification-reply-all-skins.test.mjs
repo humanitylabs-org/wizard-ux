@@ -12,14 +12,15 @@ const block = (src, a, b) => { const s = src.indexOf(a), e = src.indexOf(b, s + 
 const rule = sel => { const m = css.match(new RegExp('(^|\\n)' + sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\{([^}]*)\\}')); assert.ok(m, sel); return m[2]; };
 
 test('the Reply bridge and bubble are not gated on a skin', () => {
-  const bridge = block(services, 'openContextDraft(data)', 'openThread(id)');
+  const bridge = block(services, 'openContextDraft(data)', 'openThread(id, opts)');
   const open = block(chats, '  function openContextDraft(', '  function discardDraft(');
   const refresh = block(chats, '  function refreshReply(', '  function refreshCompose(');
   for (const src of [bridge, open, refresh]) {
     assert.doesNotMatch(src, /dataset\.skin|OURS|obsidian|landscapes|\bours\(/);
   }
-  // The thread render puts the bubble in for every skin: only a New chat of the main agent decides it.
-  assert.match(chats, /const rpl = isNew && !TAG \? KIT\.drafts\.get\(dkey\)\.reply : null;/);
+  // The thread render puts the bubble in for every skin: any draft carrying an item shows it (New chats of a
+  // pinned agent excepted); app-hosted threads (Wisdom passages) use the same bubble.
+  assert.match(chats, /const rpl = !\(isNew && TAG\) \? KIT\.drafts\.get\(dkey\)\.reply : null;/);
   assert.match(chats, /\$\{replyBubble\(rpl\)\}/);
   assert.match(chats, /\$\{replyCard\(tn\.u\.reply\)\}/);
 });

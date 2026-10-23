@@ -44,12 +44,18 @@ function fixSession(id) {
 }
 const rowsFor = id => [{ id: 1, session_id: id, role: 'user', content: `${FIX[id].title} ask`, timestamp: FIX[id].t - 120 }, { id: 2, session_id: id, role: 'assistant', content: `Answer for ${FIX[id].title}.`, timestamp: FIX[id].t }];
 const writes = [];
+const PREFS = { archiveAfterDays: 7, compact: false, readyOrder: 'newest', subjectOrder: [], pinnedChats: [] };
 function routeFor() {
   return async r => {
     const q = r.request(), u = new URL(q.url()), m = q.method();
     const wm = u.pathname.match(/\/wizard-os-home\/((?:core\/|desktop\/)?[a-z-]+\.(?:js|css)|index\.html|desktop\.html|)$/);
     if (WEB && wm && m === 'GET' && !/^(data|summaries)\.js$/.test(wm[1])) { const f = wm[1] || 'index.html', fp = path.join(WEB, 'web', f); if (fs.existsSync(fp)) return r.fulfill({ status: 200, contentType: f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/html' : 'application/javascript', body: fs.readFileSync(fp) }); }
     const json = (status, body) => r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+    // Box preferences stay in the fixture: the live box's saved order must not reset the suite's choices on reload.
+    if (u.pathname === '/wizard/v1/ui-preferences') {
+      if (m === 'PUT') { try { Object.assign(PREFS, JSON.parse((q.postDataBuffer() || Buffer.alloc(0)).toString())); } catch (e) {} }
+      return json(200, PREFS);
+    }
     if (m !== 'GET' && m !== 'HEAD') {
       const body = (q.postDataBuffer() || Buffer.alloc(0)).toString();
       writes.push({ m, p: u.pathname, body });
@@ -122,6 +128,22 @@ function routeFor() {
     ok(paged === 0, '1 Priority puts a needs-you row from deep in the list on the first page', paged);
     await p.locator(await R('[data-rdyorder="newest"]')).tap(); await sleep(500);
     ok((await readyIds())[0] === 'qa_rs_fyi', '1 back to Newest: the newest thread is at the top again', await readyIds());
+    // Oldest (James, 23 Oct 2026): tapping Newest again lists today's Ready oldest first, newest at the bottom.
+    await p.locator(await R('[data-rdyorder="newest"]')).tap(); await sleep(500);
+    const old1 = await readyIds();
+    ok(JSON.stringify(await onNow()) === JSON.stringify(['Oldest*', 'Priority', 'By subject']), '1d tapping Newest again shows Oldest', await onNow());
+    ok(old1[0] === 'qa_rs_needs' && old1[old1.length - 1] === 'qa_rs_fyi' && !old1.includes('qa_rs_old'), '1d Oldest: oldest of today on top, newest at the bottom, older days stay out', old1);
+    const oldPaged = await p.evaluate(() => { const L = window.__wos.live; const now = Date.now();
+      const mk = (i, extra) => ({ id: 'po' + i, title: 'po' + i, status: 'completed', updatedAt: new Date(now - i * 1000).toISOString(), ...extra });
+      const list = Array.from({ length: 50 }, (_, i) => mk(i)).concat([mk(60, { status: 'waiting_for_approval' }), mk(1, { id: 'podef', deferred: true })]);
+      const g = L.workGroups(list, now), r = L.readyByOldest(g.ready).map(s => s.id); return { first: r[0], second: r[1], last: r[r.length - 1], def: g.deferred.map(s => s.id).join() }; });
+    ok(oldPaged.first === 'po60' && oldPaged.second === 'po49' && oldPaged.last === 'po0' && oldPaged.def === 'podef', '1d Oldest keeps approvals pinned on top; snoozed threads leave Ready', oldPaged);
+    const yOrder = await p.evaluate(w => ['yesterday', 'pastWeek'].every(k => { const want = window.__wos.live.workGroups()[k].map(s => s.id);
+      const got = [...document.querySelectorAll(`[data-chats="${w}"] [data-sec="${k}"] [data-chopen]`)].map(e => e.dataset.chopen);
+      return got.length === 0 || JSON.stringify(got) === JSON.stringify(want.slice(0, got.length)); }), await wid());
+    ok(yOrder, '1d Yesterday and Past week stay newest first', yOrder);
+    await p.locator(await R('[data-rdyorder="newest"]')).tap(); await sleep(500);
+    ok((await readyIds())[0] === 'qa_rs_fyi', '1d tapping again returns to Newest', await readyIds());
 
     const n = await rowInfo('qa_rs_needs');
     ok(n && /att-needs/.test(n.cls) && /^Needs you: Say "ship desks"/.test(n.pv.trim()), '2 needs-you row: "Needs you:" label then the exact ask', n);
@@ -206,7 +228,8 @@ function routeFor() {
     await p.waitForFunction(() => window.__wos?.live?.ok && window.__wos.live.session('qa_rs_needs'), null, { timeout: 90000 }).catch(() => {});
     await p.evaluate(() => __wos.goDesk(1)); await sleep(1000); await expandReady(); await sleep(150);
     const n4 = await names();
-    ok(JSON.stringify(n4) === JSON.stringify(n3), '3b the order survives a reload', { n3, n4 });
+    // Live threads can leave Ready between loads (a subject empties): compare the subjects both renders share.
+    ok(n4.length >= 3 && JSON.stringify(n4) === JSON.stringify(n3.filter(x => n4.includes(x))), '3b the order survives a reload', { n3, n4 });
     ok(!writes.some(x => /\/v1\/runs|\/api\/sessions/.test(x.p)), '3b reordering writes nothing to Archimedes', writes.map(x => x.p));
     // 3c. James, 12 Oct 2026: Android Back on By subject / Priority goes back to the default Newest list, the
     // Chats desk stays open, and Back on Newest goes on as before (here: to Home).
@@ -230,6 +253,7 @@ function routeFor() {
     ok((await p.$$(await R('.ch-subj'))).length === 0, '3 Newest turns grouping off');
     // The old two-way toggle's "By subject" carries over to the three-way choice.
     await p.evaluate(() => { localStorage.removeItem('wos.chats.readyOrder.v1'); localStorage.setItem('wos.chats.readyBySubject.v1', '1'); });
+    delete PREFS.readyOrder; // a box that never saved an order (as before box-wide preferences)
     await p.reload({ waitUntil: 'domcontentloaded' });
     await p.waitForFunction(() => window.__wos?.live?.ok && window.__wos.live.session('qa_rs_needs'), null, { timeout: 90000 }).catch(() => {});
     await p.evaluate(() => __wos.goDesk(1)); await sleep(1000);

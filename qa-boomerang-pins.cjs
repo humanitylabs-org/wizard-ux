@@ -64,7 +64,7 @@ const back = (p, desktop) => p.evaluate(desktop => { if (desktop) return window.
 const threadOpen = (p, id) => p.evaluate(id => [...document.querySelectorAll('[data-chats]')].some(el => el.querySelector('.ch-thread') && el.offsetParent !== null) && Object.values((window.__wos || window.__wux).wins || {}).some(w => w.thread === id), id);
 
 (async () => {
-  const b = await chromium.launch();
+  const b = await chromium.launch({ executablePath: process.env.QA_CHROME || undefined });
   for (const skin of ['sepia', 'novairecito']) {
     const st = fakeWizard();
     for (const desktop of [false, true]) {
@@ -73,39 +73,39 @@ const threadOpen = (p, id) => p.evaluate(id => [...document.querySelectorAll('[d
       ok(await p.evaluate(() => document.documentElement.dataset.skin) === skin, `${L}: skin applied`);
       if (!desktop) {
         // ---- Boomerang a whole thread from the thread actions, beside Defer.
-        await openThread(p, T[0].id, false); await p.locator('.ch-tacts [data-chact="boomerang"]:visible').waitFor();
-        ok(await p.locator('.ch-tacts [data-chact="defer"]:visible').count() === 1, `${L}: Defer still beside Boomerang`);
-        await p.locator('.ch-tacts [data-chact="boomerang"]:visible').click();
+        await openThread(p, T[0].id, false); await p.locator('.ch-tacts [data-chact="snooze"]:visible').waitFor();
+        ok(await p.locator('.ch-tacts [data-chact="defer"]:visible').count() === 0, `${L}: Snooze replaces Defer`);
+        await p.locator('.ch-tacts [data-chact="snooze"]:visible').click();
         await p.locator('.boom-sheet .boom-card').waitFor();
         const pick = await p.evaluate(() => { const c = document.querySelector('.boom-card'), r = c.getBoundingClientRect(); return { title: c.querySelector('#boom-title')?.textContent, presets: c.querySelectorAll('[data-boom-preset]').length, minutes: c.querySelector('input[type=time]')?.step, zone: c.querySelector('select[name=timezone]')?.value, w: r.width, right: r.right, vw: innerWidth }; });
-        ok(pick.title === 'Boomerang this thread' && pick.presets >= 6 && pick.minutes === '60' && /\//.test(pick.zone) && pick.right <= pick.vw, `${L}: compact picker: quick choices, exact minutes, visible zone, fits 390px`, pick);
+        ok(pick.title === 'When should this come back?' && pick.presets === 3 && pick.minutes === '60' && /\//.test(pick.zone) && pick.right <= pick.vw, `${L}: compact picker: quick choices, exact minutes, visible zone, fits 390px`, pick);
         await p.screenshot({ path: path.join(OUT, `${skin}-phone-picker.png`) });
         // Back closes the picker, never the thread or the app.
         const did = await back(p, false);
         ok(did === 'boomerang' && await p.locator('.boom-sheet').count() === 0, `${L}: Back closes the picker first`, did);
         ok(await threadOpen(p, T[0].id), `${L}: thread still open after Back`);
-        await p.locator('.ch-tacts [data-chact="boomerang"]:visible').click();
+        await p.locator('.ch-tacts [data-chact="snooze"]:visible').click();
+        await p.locator('.boom-card [data-boom-exact]').click();
         await p.locator('.boom-card [data-boom-calendar-toggle]').click();
         ok(await p.locator('.boom-card [data-boom-calendar]:not([hidden])').count() === 1, `${L}: calendar expands`);
-        await p.locator('.boom-card [data-boom-preset]').nth(1).click();
-        await p.locator('.boom-card [type=submit]').click();
+        await p.locator('.boom-card [type=submit]').click(); // Pick a time: the exact fields carry their own Snooze button
         await p.locator('.boom-banner').waitFor();
         const post = st.posts.at(-1);
         ok(post?.kind === 'return' && post.thread === T[0].id && post.target?.message === null && post.when?.once && !post.body, `${L}: saved as a scheduler return job on the thread`, post);
-        ok(/Boomerang set/.test(await p.locator('.boom-banner').innerText()), `${L}: banner says it is set`);
+        ok(/Snoozed/.test(await p.locator('.boom-banner').innerText()), `${L}: banner says it is set`);
         // ---- Boomerang one message.
         await p.locator('.msg.a [data-mboom]:visible').first().click();
         await p.locator('.boom-card').waitFor();
-        ok(await p.locator('#boom-title').innerText() === 'Boomerang this message', `${L}: message picker`);
+        ok(await p.locator('#boom-title').innerText() === 'When should this come back?', `${L}: message picker`);
         await p.locator('.boom-card [data-boom-note-toggle]').click(); await p.locator('.boom-card textarea[name=note], .boom-card input[name=note]').fill('Check the price');
-        await p.locator('.boom-card [type=submit]').click(); await sleep(400);
+        await p.locator('.boom-card [data-boom-preset]').first().click(); await sleep(400);
         const mpost = st.posts.at(-1);
         ok(mpost?.kind === 'return' && Number(mpost.target?.message) > 0 && /4,200/.test(mpost.target?.excerpt || '') && mpost.prompt === 'Check the price', `${L}: message Boomerang carries its message and note`, mpost);
         // ---- It comes back.
         st.fire(st.schedules.at(-1).id);
         await p.evaluate(() => window.WosBoomerang.refresh()); await sleep(400);
         const ban = await p.locator('.boom-banner').innerText();
-        ok(/Boomerang is back/.test(ban) && /Check the price/.test(ban), `${L}: returned banner with the note`, ban);
+        ok(/Back for you/.test(ban) && /Check the price/.test(ban), `${L}: returned banner with the note`, ban);
         await p.screenshot({ path: path.join(OUT, `${skin}-phone-banner.png`) });
         await p.locator('.boom-banner [data-boom-open]').click(); await sleep(300);
         ok(await p.locator('.msg.a.boom-flash').count() === 1, `${L}: Show message lands on the exact reply`);
@@ -133,8 +133,8 @@ const threadOpen = (p, id) => p.evaluate(id => [...document.querySelectorAll('[d
         ok(Number(hid) < 0.6 && Number(shown) === 1, `${L}: pin shows on hover`, { hid, shown });
         // Right-click menu offers Pin and Boomerang.
         await row.locator('[data-chopen]').click({ button: 'right' }); await p.locator('.ch-sheet [data-rspin]').waitFor();
-        ok(/Pin/.test(await p.locator('.ch-sheet [data-rspin]').innerText()) && await p.locator('.ch-sheet [data-rsact="boomerang"]').count() === 1, `${L}: right-click: Pin and Boomerang`);
-        await p.locator('.ch-sheet [data-rsact="boomerang"]').click(); await p.locator('.boom-card').waitFor();
+        ok(/Pin/.test(await p.locator('.ch-sheet [data-rspin]').innerText()) && await p.locator('.ch-sheet [data-rsact="snooze"]').count() === 1, `${L}: right-click: Pin and Boomerang`);
+        await p.locator('.ch-sheet [data-rsact="snooze"]').click(); await p.locator('.boom-card').waitFor();
         await p.screenshot({ path: path.join(OUT, `${skin}-desktop-picker.png`) });
         ok(await back(p, true) === 'boomerang' && await p.locator('.boom-sheet').count() === 0, `${L}: Esc closes the picker first`);
         // Unpin on desktop; the shared list follows.

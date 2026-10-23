@@ -154,6 +154,7 @@
     "core/config.js",
     "core/core.js",
     "core/deeplink.js",
+    "core/dom-morph.js",
     "core/features.js",
     "core/files.js",
     "core/focused-field.js",
@@ -191,6 +192,7 @@
     "core/skins.css",
     "core/skins.js",
     "core/status.js",
+    "core/thread-swipe-back.js",
     "core/update-banner.css",
     "core/uploads.js",
     "core/usage.js",
@@ -408,6 +410,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/dom-morph.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
     "core/files.js": {
       "loadedBy": [
         "phone",
@@ -513,6 +522,20 @@
         "desktop"
       ],
       "note": "Shared validated skin frame foundations, loaded before skin composition"
+    },
+    "core/swipe-intent.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Swipe-back intent thresholds, imported by core/thread-swipe-back.js"
+    },
+    "core/thread-swipe-back.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin host built-in: swipe right in a chat thread goes back one step on every skin (touch only)"
     },
     "core/skin-host.js": {
       "loadedBy": [
