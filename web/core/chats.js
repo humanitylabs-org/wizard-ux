@@ -571,7 +571,7 @@ window.WizCore.chats = function createChats(H) {
     const draftSec = drafts.length ? `<section class="ch-sec open" data-sec="drafts"><div class="ch-sec-h static"><span>Drafts</span><small>${drafts.length}</small></div><div class="ch-sec-b">${drafts.map(d => draftRow(d, d.key === 'new' && curThread === '__new__')).join('')}</div></section>` : '';
     // Messages still on the phone (the window went back to the list on send), new chats and replies: shown until
     // Wizard takes them. Local recovery is independent of list/search/server availability.
-    const outNew = OUTBOX ? OUTBOX.unsent().filter(it => (it.agent || '') === AGID && (it.kind === 'new' || it.kind === 'reply')) : [];
+    const outNew = OUTBOX ? OUTBOX.unsent().filter(it => OUTBOX.isMessage(it) && (it.agent || '') === AGID && (it.kind === 'new' || it.kind === 'reply')) : [];
     // A message still leaving the phone already shows as its thread's "Sending…" row in Working; the pill is only
     // for trouble (offline / not sent) or a thread that isn't in the list.
     const pill = sendPill(outNew.filter(it => ['failed', 'waiting', 'unconfirmed'].includes(it.state) || OUTBOX?.quarantined(it.id) || !LIVE.session(it.sessionId)), w);
@@ -1030,7 +1030,7 @@ window.WizCore.chats = function createChats(H) {
   function approvalHtml(c, s) {
     const ap = c.approval;
     if (!ap || !s || ap.runId !== s.runId) return '';
-    if (ap.resolved) return `<div class="appr done">${esc(ap.kind === 'unknown' ? 'Recovery acknowledged · execution interrupted' : ap.kind === 'clarify' ? 'Answer sent' : KIT.choiceReceipt(ap.resolved))}</div>`;
+    if (ap.resolved) return `<div class="appr done">${esc(ap.stale ? 'No longer waiting · already answered or expired' : ap.kind === 'unknown' ? 'Recovery acknowledged · execution interrupted' : ap.kind === 'clarify' ? 'Answer sent' : KIT.choiceReceipt(ap.resolved))}</div>`;
     const buttons = ap.kind === 'clarify' ? [...ap.choices, { value: '__answer', label: 'Send answer' }] : ap.choices;
     return `<div class="appr" role="group" aria-label="Run control"><b>${ap.kind === 'unknown' ? 'Needs recovery' : ap.kind === 'clarify' ? 'Answer needed' : 'Needs your approval'}</b><pre>${esc(ap.action)}</pre>
       ${ap.kind === 'clarify' ? `<input data-clarify-answer aria-label="Clarification answer" value="${esc(ap.answer || '')}" maxlength="16384">` : ''}
@@ -1057,10 +1057,18 @@ window.WizCore.chats = function createChats(H) {
       if (ap) {
         ap.key = JSON.stringify([s.runId, ap.kind, ap.requestId, ap.generation]);
         if (prev?.key === ap.key) Object.assign(ap, { pending: prev.pending, error: prev.error, answer: prev.answer });
+        // An answered control stays answered: a runtime snapshot that still lists it (lagging poll, stale queue
+        // payload) must never re-offer it, or every tap 409s and the same card comes straight back (James, 23 Oct).
+        const settled = c.settled?.get(ap.key);
+        if (settled) Object.assign(ap, { resolved: settled.resolved, stale: settled.stale, pending: '' });
       }
       c.approval = ap ? { ...ap, runId: s.runId, at: Date.now() } : null;
       return JSON.stringify(prev && { k: prev.key, a: prev.action, c: prev.choices, r: prev.resolved }) !== JSON.stringify(c.approval && { k: c.approval.key, a: c.approval.action, c: c.approval.choices, r: c.approval.resolved });
     } catch { return false; }
+  }
+  function settle(c, key, resolved, stale = false) {
+    const m = c.settled || (c.settled = new Map()); m.delete(key); m.set(key, { resolved, stale });
+    while (m.size > 50) m.delete(m.keys().next().value);
   }
   async function chooseApproval(wid, choice, key, answer) {
     const w = W[wid], c = ch(wid), ap = c.approval;
@@ -1074,13 +1082,17 @@ window.WizCore.chats = function createChats(H) {
       if (ap.kind === 'unknown') await LIVE.resolveUnknown(ap.runId, ap.requestId, ap.generation);
       else if (ap.kind === 'clarify') await LIVE.clarify(ap.runId, ap.answer, ap.requestId, ap.generation);
       else await LIVE.approve(ap.runId, choice, ap.requestId, ap.generation);
+      settle(c, key, ap.kind === 'approval' ? choice : 'closed');
       if (owns()) c.approval.resolved = ap.kind === 'approval' ? choice : 'closed';
     } catch (e) {
       if (owns()) {
         if ([404, 409, 410].includes(e.status)) {
+          // The runtime says this exact control is no longer pending: retire its key so a reload can't re-offer it.
+          settle(c, key, 'closed', true);
           c.approval = null;
           await loadApproval(w, LIVE.session(sid));
-          if (W[wid] === w && w.thread === sid && c.readNav === nav) toast('·', 'This control changed. Check the current prompt before responding.', 3000);
+          const next = c.approval;
+          if (W[wid] === w && w.thread === sid && c.readNav === nav && next && !next.resolved && next.key !== key) toast('·', 'This control changed. Check the current prompt before responding.', 3000);
         } else c.approval.error = 'Couldn’t send. Check the connection and try again.';
       }
     }

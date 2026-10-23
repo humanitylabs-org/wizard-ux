@@ -677,7 +677,10 @@
     retryAll(agent) { let n = 0; for (const it of items.values()) if ((agent === undefined || (it.agent || '') === agent) && queueRetry(it, ['failed', 'waiting'])) n++; return n; },
     retryFeedback(n) { return n ? `Queued ${n === true || n === 1 ? 'retry' : n + ' retries'} · originals kept until confirmed` : 'Nothing eligible to retry · originals kept'; },
     unsent() { return [...items.values()].filter(it => !['dictation', 'capture'].includes(it.kind) && it.state !== 'sent').sort((a, b) => a.createdAt - b.createdAt); },
-    forThread(sessionId, wid) { return [...items.values()].filter(it => !it.compact && !(['empty', 'held', 'sent'].includes(it.state) && it.threadHidden) && !['dictation', 'conversation'].includes(it.kind) && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
+    // A held-orb take is a system command, never a chat message (James, 23 Oct 2026): it shows in no thread and in
+    // no send pill until he explicitly picks "Send to …" (deliveryRequested). Its recording stays recoverable.
+    isMessage: it => !!it && (it.intent !== 'command' || it.deliveryRequested === true),
+    forThread(sessionId, wid) { return [...items.values()].filter(it => api.isMessage(it) && !it.compact && !(['empty', 'held', 'sent'].includes(it.state) && it.threadHidden) && !['dictation', 'conversation'].includes(it.kind) && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
     dismissEmpty(id) { return this.get(id)?.state === 'sent' ? Promise.resolve(false) : this.dismissBubble(id); },
     async dismissBubble(id) {
       // Hide only the local presentation; accepted work and original recovery custody stay untouched.
