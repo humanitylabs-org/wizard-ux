@@ -1,11 +1,17 @@
 /* Thread swipe-back (Miguel's gesture, every skin since James, 23 Oct 2026): inside an open chat thread, swipe right
  * from anywhere (not the OS edge strip) to go back one step. The thread follows the finger a little and fades;
- * release past ~90px (or a quick flick) runs the shell's own Back step (linked thread -> parent, thread -> list).
+ * release past 120px (or a deliberate 80px+ flick) that stays level runs the shell's own Back step (linked thread ->
+ * parent, thread -> list). James, 23 Oct 2026: "an absolute subtle swipe is going back; make it an intentional swipe",
+ * so short nudges, diagonal scrolls and slow drifts snap back (thresholds in INTENT below).
  * It never leaves or exits the app. Code blocks, tables, the composer, sliders, inputs and selected text keep their
  * own horizontal gestures. Runs as a WosSkinHost built-in, so it gets the skin hook API's guards and cleanup.
  * API: none (registers itself). */
 (function () {
   'use strict';
+  const INTENT = { engage: 24, commit: 120, flick: 80, speed: 0.6, drift: 50, level: 2.5 };
+  const engages = (dx, dy) => dx > INTENT.engage && dx > dy * 2;
+  const commits = (dx, dy, ms) => dy < INTENT.drift && dx > dy * INTENT.level
+    && (dx > INTENT.commit || (dx > INTENT.flick && dx / (ms || 1) > INTENT.speed));
   function setup(api) {
     let sw = null;
     const thread = () => { const r = api.part('thread'); return r && r.querySelector('[data-part="thread"]'); };
@@ -25,7 +31,7 @@
         const t = e.touches[0], dx = t.clientX - sw.x, dy = Math.abs(t.clientY - sw.y);
         if (!sw.on) {
           if (dy > 36 && dy > dx) { sw = null; return; }
-          if (dx > 14 && dx > dy * 1.6) { sw.on = true; sw.th.style.transition = 'none'; } else return;
+          if (engages(dx, dy)) { sw.on = true; sw.th.style.transition = 'none'; } else return;
         }
         sw.dx = dx;
         const s = sw;
@@ -34,8 +40,8 @@
       const end = e => {
         if (!sw) return; const s = sw; sw = null; s.on && reset(s.th); s.on = s.on && e.type !== 'touchcancel';
         const t1 = e.changedTouches && e.changedTouches[0]; if (!t1 || !s.on) return;
-        const dx = t1.clientX - s.x, dy = Math.abs(t1.clientY - s.y), v = dx / ((performance.now() - s.t) || 1);
-        if ((dx > 90 || (dx > 40 && v > .45)) && dy < 70) api.nav.back();
+        const dx = t1.clientX - s.x, dy = Math.abs(t1.clientY - s.y);
+        if (commits(dx, dy, performance.now() - s.t)) api.nav.back();
       };
       api.listen(root, 'touchend', end, { passive: true });
       api.listen(root, 'touchcancel', end, { passive: true });
