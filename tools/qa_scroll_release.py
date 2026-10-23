@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 from qa_paths import required_work_root
 
 SIGNER='3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd'
-OLD_SHA='3500b8c3b0a3dd2b2eed02082f22b5e3ee86dff8781449511e1e47a52ec4e9c2'
+OLD_SHA='56d745a58a31d9edfaf070b775511d0f1df325a5daa85a8a20ada57b3e11976a'  # published 0.9.40
 
 def digest(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
