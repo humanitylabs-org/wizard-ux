@@ -641,3 +641,27 @@ html[data-skin^="obsidian"] .rs-fuel.rs-crit .rs-gauge b { color: #e5484d; }
 
 /* E / F once (first dial only) and muted: a legend, not a label on every gauge (Miguel, 23 Oct). */
 html[data-skin^="obsidian"] .rs-fuel .rs-gauge :is(.rs-e, .rs-f) { opacity: .5; font-weight: 600; }
+
+/* Devices sheet (Miguel's skins, 23 Oct): Agent devices with gauges, then Your devices / Client Wizards / Other as
+   online lights. Same quiet type as Home; no boxes inside boxes. */
+html[data-skin^="obsidian"] .rs-dv-wrap { display: flex; flex-direction: column; gap: 22px; padding: 4px 2px 18px; }
+html[data-skin^="obsidian"] .rs-dv-g h3 { margin: 0 0 8px; font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-dv-total { margin: -2px 0 10px; font-size: 13px; color: var(--wz-text, var(--ink)); font-variant-numeric: tabular-nums; }
+html[data-skin^="obsidian"] .rs-dv { padding: 10px 0 12px; border-top: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); }
+html[data-skin^="obsidian"] .rs-dv header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; min-width: 0; }
+html[data-skin^="obsidian"] .rs-dv header b { font-size: 14.5px; font-weight: 600; color: var(--wz-text, var(--ink)); white-space: nowrap; }
+html[data-skin^="obsidian"] .rs-dv header small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-dv .rs-dials { display: flex; justify-content: center; gap: 14px; }
+html[data-skin^="obsidian"] .rs-dv .rs-dial { --g: 58px; }
+html[data-skin^="obsidian"] .rs-dv-off { margin: 0; font-size: 12.5px; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] :is(.rs-dv, .rs-dv-net li) .rs-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 35%, transparent); align-self: center; }
+html[data-skin^="obsidian"] :is(.rs-dv.rs-st-online, .rs-dv-net li.rs-st-online) .rs-dot { background: var(--green, #4ade80); }
+html[data-skin^="obsidian"] .rs-dv.rs-st-stale .rs-dot { background: var(--amber, #f5b642); }
+html[data-skin^="obsidian"] .rs-dv-net { list-style: none; margin: 0; padding: 0; }
+html[data-skin^="obsidian"] .rs-dv-net li { display: flex; align-items: center; gap: 9px; padding: 9px 0; border-top: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); font-size: 14px; color: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .rs-dv-net li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-skin^="obsidian"] .rs-dv-net li small { font-size: 12px; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-dv-net li.rs-st-offline { opacity: .6; }
+html[data-skin^="obsidian"] .rs-dv-total { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+html[data-skin^="obsidian"] .rs-dv-total span { white-space: nowrap; }
+html[data-skin^="obsidian"] .rs-dv-role { margin: -4px 0 8px 15px; font-size: 12px; color: var(--wz-text-secondary, var(--ink-2)); }
