@@ -245,6 +245,21 @@
     }),
     /* Lower Wizard Music while this app plays something short (a voice note); duck(false) restores it. */
     audio: Object.freeze({ duck: on => service?.audio ? Promise.resolve(service.audio.duck(!!on)).then(v => v === true, () => false) : transportReady ? request('audio.duck', { on: !!on }).then(v => v === true, () => false) : Promise.resolve(false) }),
+
+    /* Fingerprint vault (Wizard OS Android app): keep one small secret for this app on the phone, behind the
+     * fingerprint. has() -> {available, saved}; seal(secret, title) and open(title) show the fingerprint prompt;
+     * errors carry .code (cancelled, unavailable, not_saved, invalidated, busy, failed). */
+    vault: Object.freeze((() => {
+      const call = (op, args) => service?.vault ? service.vault[op.slice(6)](...(op === 'vault.seal' ? [args.secret, args.title] : [args?.title]))
+        : transportReady ? request(op, args, 130000).catch(e => { throw Object.assign(new Error(String(e.message).replace(/^vault:/, '')), { code: String(e.message).startsWith('vault:') ? String(e.message).slice(6) : 'unavailable' }); })
+        : Promise.reject(Object.assign(new Error('unavailable'), { code: 'unavailable' }));
+      return {
+        has: () => call('vault.has').catch(() => ({ available: false, saved: false })),
+        seal: (secret, title) => call('vault.seal', { secret, title }),
+        open: title => call('vault.open', { title }).then(r => r.secret),
+        forget: () => call('vault.forget').catch(() => ({ saved: false })),
+      };
+    })()),
     badge: Object.freeze({ set: n => service ? service.badge.set(n) : transportReady ? request('badge.set', { n }).then(() => true, () => false) : Promise.resolve(false) }),
     update: Object.freeze({ hold, onAvailable: fn => listen(updates, fn, updateAvailable || service?.update.available()) }),
     capture: Object.freeze({ start: async opts => { if (['auto', 'command'].includes(opts?.kind)) throw new Error('Capture kind is reserved for Wizard voice; use audio/meeting and task metadata'); if (service) return service.capture.start(opts); if (framed) throw new Error('Shared capture needs the verified synchronous host connection'); const resource=captureModule(); return opts?.resumeId && resource.resume ? resource.resume(standaloneId(),opts.resumeId,opts) : resource.start(standaloneId(), opts); },

@@ -4,7 +4,21 @@
   'use strict';
   if (window.WizAppServices) return;
   const VERSION = 1, ORIGIN = location.origin, frames = new Map();
-  const OPS = new Set(['ready', 'share.text', 'share.file', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set', 'orb.set', 'audio.duck']);
+  const OPS = new Set(['ready', 'share.text', 'share.file', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set', 'orb.set', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget']);
+
+  // Fingerprint vault (Android app only): one small secret per app, sealed on this phone by a Keystore key that
+  // only a fingerprint unlocks. The shell names the app (st.appId), so apps can never ask for each other's secret.
+  let vaultSeq = 0, vaultBound = null; const vaultWaits = new Map();
+  function vaultPort() { const p = window.wizardVaultPort; if (!p?.postMessage) return null; if (vaultBound !== p) { vaultBound = p; p.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (_) { return; } const w = vaultWaits.get(m?.id); if (!w) return; vaultWaits.delete(m.id); clearTimeout(w.timer); m.ok ? w.resolve(m.result || {}) : w.reject(Object.assign(new Error(m.error || 'failed'), { code: m.error || 'failed' })); }; } return p; }
+  function vaultCall(appId, method, extra = {}) {
+    const p = vaultPort(); if (!p) return Promise.resolve(method === 'has' ? { available: false, saved: false } : Promise.reject(Object.assign(new Error('unavailable'), { code: 'unavailable' })));
+    const id = 'vault-' + (++vaultSeq);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { vaultWaits.delete(id); reject(Object.assign(new Error('timeout'), { code: 'timeout' })); }, 120000);
+      vaultWaits.set(id, { resolve, reject, timer });
+      try { p.postMessage(JSON.stringify({ ...extra, id, v: 1, appId, method })); } catch (e) { clearTimeout(timer); vaultWaits.delete(id); reject(e); }
+    });
+  }
   let registry, available = null, serial = 0, rootArm = null;
   const uid = () => 'as-' + (++serial) + '-' + Math.random().toString(36).slice(2);
   const fault = message => new Error(message);
@@ -194,6 +208,13 @@
       // Lower Wizard Music while this app plays a short sound; duck(false) restores it. Resolves true when ducked.
       audio: Object.freeze({ duck(on) { check(); return window.WizBackgroundAudio?.duck ? window.WizBackgroundAudio.duck(st, !!on) : Promise.resolve(false); } }),
       orb: Object.freeze({ set(spec) { check(); return setOrb(st, spec); }, shown() { check(); return orbShown(st.frame); } }),
+
+      vault: Object.freeze({
+        has() { check(); return vaultCall(st.appId, 'has'); },
+        seal(secret, title) { check(); return vaultCall(st.appId, 'seal', { secret: String(secret ?? ''), title: String(title || '') }); },
+        open(title) { check(); return vaultCall(st.appId, 'open', { title: String(title || '') }); },
+        forget() { check(); return vaultCall(st.appId, 'forget'); },
+      }),
       titlebar: Object.freeze({ set(list) { check(); return setTools(st, list); },
         shown() { check(); const b = barOf(st)?.querySelector(':scope > .wtools'); return !!b && b.getClientRects().length > 0 && b.offsetHeight > 0; } }),
       view: Object.freeze({ isVisible() { check(); return !document.hidden && st.isVisible?.() === true; } }),
@@ -316,6 +337,8 @@
       if (d.op === 'update.hold') { const h = svc.update.hold(d.args?.reason), id = uid(); st.messageHolds ||= new Map(); st.messageHolds.set(id, h); value = id; }
       if (d.op === 'badge.set') value = svc.badge.set(d.args?.n);
       if (d.op === 'audio.duck') value = await svc.audio.duck(d.args?.on === true);
+
+      if (d.op.startsWith('vault.')) { try { value = await svc.vault[d.op.slice(6)](d.op === 'vault.seal' ? d.args?.secret : d.args?.title, d.args?.title); } catch (err) { reply(null, 'vault:' + (err.code || 'failed')); return; } }
       if (d.op === 'titlebar.set') value = svc.titlebar.set(d.args?.tools);
       if (d.op === 'orb.set') value = svc.orb.set(d.args?.spec);
       if (d.op === 'update.release') { st.messageHolds?.get(d.args?.id)?.release(); st.messageHolds?.delete(d.args?.id); value = true; }
