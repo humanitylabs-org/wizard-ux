@@ -175,7 +175,7 @@
     short(model, provider) {
       if (!model) return '';
       if (isTinfoil(provider)) { const n = privateName(model); return [n.name, n.version].filter(Boolean).join(' '); }
-      const f = claudeFamily(model, provider || (/^claude-/.test(model) ? 'anthropic' : ''));
+      const f = claudeFamily(model, /^claude-/i.test(model) ? 'anthropic' : provider);
       if (f) return cap(f);
       const o = M.find(model, provider);
       return (o ? o.name : friendly(model)).replace(/^Claude /, '').split(' · ')[0];
