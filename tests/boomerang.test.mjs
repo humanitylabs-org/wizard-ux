@@ -80,13 +80,12 @@ test('Back closes the picker before anything under it, on phone and desktop', ()
   order(desktop, "if (window.WosBoomerang?.back()) return 'boomerang'", 'if (!pal.hidden)')
 })
 
-test('one Snooze action replaces Defer and Boomerang, including on single messages', () => {
+test('one Snooze action replaces Defer and Boomerang, with no second Snooze under each reply', () => {
   const js = read('web/core/chats.js')
   assert.match(js, /return \['snooze', 'done'\]/)
   assert.doesNotMatch(js, /label: '(Defer|Boomerang)'|🪃/)
   assert.match(read('web/core/scheduled-reminders.js'), /live\(\)\.defer\(opts.sessionId\)/)
-  assert.match(js, /data-mboom=/)
-  assert.match(js, /targetKind: 'message', anchorAt/)
+  assert.doesNotMatch(js, /data-mboom/)
 })
 
 
