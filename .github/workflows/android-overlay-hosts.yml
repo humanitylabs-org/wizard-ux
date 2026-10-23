@@ -53,8 +53,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
-          # AOSP image: no Google app/GMS model downloads competing for the emulator's CPU during the 1.5 s deadline.
-          target: default
+          target: google_apis
           arch: x86_64
           profile: pixel_6
           ram-size: 3072M

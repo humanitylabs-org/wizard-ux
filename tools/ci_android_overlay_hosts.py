@@ -238,8 +238,11 @@ def open_screen(since):
     b = wait_window('WizardEverywhere', 10)
     if not b: return None, None, ''
     x, y = (b[0] + b[2]) // 2, (b[1] + b[3]) // 2
-    sx(f'input swipe {x} {y} {x} {y} 1000')
-    if not wait_window('WizOrbMenu', 5): return b, None, ''
+    for _ in range(3):   # a hold that lands while the orb page is still settling is ignored; hold again, as a person would
+        sx(f'input swipe {x} {y} {x} {y} 1000')
+        if wait_window('WizOrbMenu', 4): break
+        time.sleep(1.5)
+    else: return b, None, ''
     xml = ui('tmp-menu'); picked = tap_text(r'^Select text$', xml)
     t, l = wait_log(since, r'screen\.html from (Wizard|bundle)', 20)
     return b, picked, l
