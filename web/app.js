@@ -100,6 +100,7 @@
   }
   const okStrip = () => W && typeof W === 'object' && Array.isArray(desks) && desks.length > 0 && desks[0] && desks[0].home && desks.every(d => d && d.id && Array.isArray(d.wins));
   if (!okStrip()) { if (migrateFive()) store.set('stripSeeded', true); else { freshLayout(); store.set('stripSeeded', !!(APP.topics || APP.mizel)); } }
+  desks = window.WizCore.migrateChatsFocus(W, desks);
   // Mizel.ai moved from the old Meetings view (/meetings/, /mizel-preview/) to the canonical Mizel Live view.
   // A frame window remembers the page it was on, so a saved Mizel desk would keep the retired view: move it.
   Object.values(W).forEach(w => { if (w && w.app === 'frame' && w.appId === 'mizel' && /^\/(meetings|mizel-preview|apps)(\/|$)|^\/$/.test(w.url || '')) delete w.url; });
@@ -1131,15 +1132,15 @@
     const w = host && W[host.dataset.win]; if (!w || !['system', 'agents'].includes(w.appId)) return;
     openAgentChats(d.id, { backTo: w.id, thread: d.thread === '__new__' ? '__new__' : '' });
   });
-  /* An agent's own Chats: one window per agent, on its own desk. The default agent's chats are the main Chats. */
+  /* Agent shortcuts select Focus in the main Chats window; no per-agent window or desk. */
   async function openAgentChats(id, o = {}) {
     const AG = window.WosAgents; if (!AG || !/^[a-z0-9][a-z0-9-]{0,40}$/.test(String(id || ''))) return false;
     if (!AG.get(id)) await AG.load(true);
     if (!AG.get(id)) { toast('!', 'That agent isn’t on this Wizard', 2000); return false; }
-    if (!AG.isOther(id)) { openApp(APP.wizard); return true; }
     closeSheets(true);
-    const w = placeApp(x => x.app === 'chats' && x.agent === id, { app: 'chats', thread: null, agent: id }, {}, x => { if (o.backTo) x.backTo = o.backTo; });
-    if (w && o.backTo) { w.backTo = o.backTo; save(); }
+    const w = placeApp(mainChats, { app: 'chats', thread: null });
+    if (!w) return false;
+    CHATS.setFocus(w, { kind: 'agent', key: id });
     if (w && o.thread === '__new__') CHATS.openNewDraft(w.id, '');
     LIVE?.refreshAgents?.().then(() => LIVE.emit());
     return true;
@@ -1205,7 +1206,7 @@
     if (!here) return;
     const t = deskOf(here); if (t !== idx) goDesk(t, true);
     focusWin(here); const w = W[here], d = desks[t]; if (d.full && d.focus !== here) setFull(d.focus, false);
-    const c = CHATS.ch(here); c.subject = ''; c.q = ''; c.sheet = false; c.fromCard = false; c.coach = false; c.filterFrom = null;
+    const c = CHATS.ch(here); c.q = ''; c.sheet = false; c.fromCard = false; c.coach = false; c.filterFrom = null;
     if (!CHATS.setFilter(w, '')) CHATS.renderChats(w);
     requestAnimationFrame(() => { const sc = winEl(here)?.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; });
   }
@@ -1219,7 +1220,7 @@
     if (!here) return;
     const t = deskOf(here); if (t !== idx) goDesk(t, true);
     focusWin(here); const w = W[here], d = desks[t]; if (d.full && d.focus !== here) setFull(d.focus, false);
-    const c = CHATS.ch(here); c.subject = ''; c.q = ''; c.sheet = false; c.lastChip = 'status';
+    const c = CHATS.ch(here); c.q = ''; c.sheet = false; c.lastChip = 'status';
     // The chip is the same one James can add himself from the filter button; the first time, one coach line.
     c.coach = !store.get('chipCoached', false); store.set('chipCoached', true);
     c.fromCard = !!opts.card;
@@ -1626,12 +1627,11 @@
   /* Open a real thread: in a Chats window on this desk, else any Chats window, else a new one here. */
   function openWizardThread(id, opts = {}) {
     if (!id) return;
-    // A thread opens in the Chats of the agent it is pinned to (main Chats for the main agent's threads).
-    const ag = LIVE?.agentOf?.(id) || '';
-    const mine = x => W[x] && W[x].app === 'chats' && (W[x].agent || '') === ag && (ag || CHATS.views.providerFor(W[x]) === CHATS.views.defaultId());
+    // Any agent's thread opens in the main Chats window, without changing its list Focus.
+    const mine = x => mainChats(W[x]);
     let wid = desks[idx].wins.find(mine);
     if (!wid) { const d = desks.findIndex(dd => dd.wins.some(mine)); if (d >= 0) { wid = desks[d].wins.find(mine); goDesk(d, true); } }
-    if (!wid) { const w = openWin({ app: 'chats', thread: null, ...(ag ? { agent: ag } : {}) }, opts); if (!w) return; wid = w.id; }
+    if (!wid) { const w = openWin({ app: 'chats', thread: null }, opts); if (!w) return; wid = w.id; }
     focusWin(wid); openChat(wid, id);
   }
 
@@ -3918,7 +3918,7 @@
     const AG = window.WosAgents, def = AG?.defaultId() || 'hermes';
     const f = desks[idx]?.focus, w = f && W[f];
     let id = '', why = 'main', app = '';
-    if (w && agentWin(w)) { id = w.agent; why = 'chats'; }
+    if (w && w.app === 'chats' && (!w.thread || w.thread === '__new__') && CHATS.winAgent(w)) { id = CHATS.winAgent(w); why = 'chats'; }
     else if (w && (w.app === 'chats' || CHATS.isHosted(f)) && w.thread && AG?.isOther(LIVE?.agentOf?.(w.thread))) { id = LIVE.agentOf(w.thread); why = 'thread'; }
     else if (w?.appId) {
       const b = AG?.binding?.(w.appId);
