@@ -1481,7 +1481,7 @@ window.WizCore.chats = function createChats(H) {
     root.addEventListener('pointerup', lpEnd); root.addEventListener('pointercancel', lpEnd);
     // Right-click (a mouse) opens the same sheet; a touch long-press already did.
     root.addEventListener('contextmenu', e => { const row = e.target.closest('.ch-list [data-chopen]'); if (!row) return; e.preventDefault(); if (!rowSheet && !lp) { lpUntil = Date.now() + 700; openRowSheet(idOf(row), row.dataset.chopen); } });
-    // Dragging a local screenshot/file onto the composer uses the same upload path as the paperclip and paste.
+    // Dragging a local screenshot/file onto the composer reuses addFiles, the paperclip/paste upload path.
     // Only file drags are claimed: selected text and links keep the browser's normal drag/drop behaviour.
     const hasDraggedFiles = dt => !!dt && ([...(dt.items || [])].some(it => it.kind === 'file') || [...(dt.types || [])].includes('Files') || (dt.files?.length || 0) > 0);
     root.addEventListener('dragover', e => {
