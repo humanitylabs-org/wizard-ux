@@ -20,6 +20,7 @@ window.WosChatPower = function chatPower(A) {
   const LIVE = window.WizLive, OUTBOX = window.WosOutbox || null;
   const M = window.WosModels || null, WK = window.WosWork || null, E = window.WosErrors || null, F = window.WosFiles || null;
   const { ch, toast, H } = A;
+  const scrollBox = A.scrollBox || (nb => nb);
   const agent = () => window.WizConfig.agent();
   const FAILED = new Set(['failed', 'interrupted']);
   const FOLDER_SVG = '<svg viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.2h7a2 2 0 0 1 2 2v7.8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/></svg>';
@@ -48,9 +49,9 @@ window.WosChatPower = function chatPower(A) {
   };
   const latestId = turns => { for (let i = turns.length - 1; i >= 0; i--) if (turns[i].a) return `${i}:${turns[i].a.at ?? ''}`; return ''; };
   const lastReply = nb => { const a = nb.querySelectorAll('.msg.a'); return a.length ? a[a.length - 1] : null; };
-  const relTop = (nb, el) => el.getBoundingClientRect().top - nb.getBoundingClientRect().top;
-  const bottomGap = nb => nb.scrollHeight - nb.scrollTop - nb.clientHeight;
-  const toBottom = nb => { nb.scrollTop = nb.scrollHeight; };
+  const relTop = (nb, el) => el.getBoundingClientRect().top - (scrollBox(nb) === nb ? nb.getBoundingClientRect().top : nb.closest('.ch-thread').querySelector('.ch-head').getBoundingClientRect().bottom);
+  const bottomGap = nb => { const s = scrollBox(nb); return s.scrollHeight - s.scrollTop - s.clientHeight; };
+  const toBottom = nb => { const s = scrollBox(nb); s.scrollTop = s.scrollHeight; };
   function paintLatest(el, nb) {
     const b = el.querySelector('[data-chlatest]'); if (!b || !nb) return;
     b.hidden = bottomGap(nb) < 160;
@@ -69,10 +70,10 @@ window.WosChatPower = function chatPower(A) {
       // No layout yet (the shell boots after a reload with the thread already open; desktop renders before it
       // reveals its pane): every scrollTop clamps to 0, and marking the thread placed kept it at the top for good
       // (James, 20 Oct: "an update reloads me to the very top of the chat"). Place it once the list has a size.
-      if (!nb.clientHeight) {
+      if (!scrollBox(nb).clientHeight) {
         if (typeof ResizeObserver === 'function') {
           const ro = c.placeWait = new ResizeObserver(() => {
-            if (!nb.clientHeight) return;
+            if (!scrollBox(nb).clientHeight) return;
             ro.disconnect(); if (c.placeWait === ro) c.placeWait = null;
             if (nb.isConnected && el.querySelector('.ch-msgs') === nb && w.thread === sid && c.posFor !== sid) position(w, el, nb, o);
           });
@@ -87,11 +88,11 @@ window.WosChatPower = function chatPower(A) {
       if (o.working && !(restore && saved && !saved.atBottom && c.lid && saved.messageId === c.lid)) { c.follow = true; toBottom(nb); }
       else if (saved && c.lid && saved.messageId === c.lid) {
         // Back where you were: anchored to the latest reply, so layout changes don't shift it.
-        apply = saved.atBottom ? toBottom : box => { const r = lastReply(box); box.scrollTop = r && isFinite(saved.anchorOffset) ? box.scrollTop + relTop(box, r) - saved.anchorOffset : saved.scrollTop; };
+        apply = saved.atBottom ? toBottom : box => { const r = lastReply(box); scrollBox(box).scrollTop = r && isFinite(saved.anchorOffset) ? scrollBox(box).scrollTop + relTop(box, r) - saved.anchorOffset : saved.scrollTop; };
         c.follow = !!saved.atBottom;
       } else if (reply) {
         // A fresh reply: open at its first line, not the end of it.
-        apply = box => { const r = lastReply(box); if (r) box.scrollTop = Math.max(0, box.scrollTop + relTop(box, r) - 8); };
+        apply = box => { const r = lastReply(box); if (r) scrollBox(box).scrollTop = Math.max(0, scrollBox(box).scrollTop + relTop(box, r) - 8); };
         c.atStart = sid;
       } else { c.follow = true; toBottom(nb); }
       if (apply) { apply(nb); if (!saved || saved.messageId !== c.lid) c.follow = bottomGap(nb) < 80; settle(c, nb, apply); }
@@ -101,7 +102,7 @@ window.WosChatPower = function chatPower(A) {
     // Later renders: a place still settling is placed again; a thread that follows stays on the bottom; otherwise the reading place holds.
     if (settling(c)) { const s = c.settle; s.apply(nb); settle(c, nb, s.apply, s.until); }
     else if (c.follow || (o.working && o.atBottom)) toBottom(nb);
-    else if (o.boxTop != null) nb.scrollTop = o.boxTop; // read before the old list was replaced (a detached box reads 0)
+    else if (o.boxTop != null) scrollBox(nb).scrollTop = o.boxTop; // read before the old list was replaced (a detached box reads 0)
     paintLatest(el, nb);
     return true;
   }
@@ -137,7 +138,7 @@ window.WosChatPower = function chatPower(A) {
       savePending = null;
       if (!c.lid || c.posFor !== w.thread || !nb.isConnected) return;
       const reply = lastReply(nb);
-      RP.save({ sessionId: w.thread, messageId: c.lid, anchorOffset: reply ? relTop(nb, reply) : 0, scrollTop: Math.max(0, Math.round(nb.scrollTop)), savedAt: Date.now(), atBottom: bottomGap(nb) < 80, following: !!c.follow });
+      RP.save({ sessionId: w.thread, shown: scrollBox(nb) !== nb ? c.show : undefined, messageId: c.lid, anchorOffset: reply ? relTop(nb, reply) : 0, scrollTop: Math.max(0, Math.round(scrollBox(nb).scrollTop)), savedAt: Date.now(), atBottom: bottomGap(nb) < 80, following: !!c.follow });
     };
     saveT = setTimeout(savePending, 200);
   }
@@ -488,7 +489,7 @@ window.WosChatPower = function chatPower(A) {
     const w = H.win(id);
     if (t.closest('[data-chfiles]')) { openFiles(id); return true; }
     if (t.closest('[data-chmodel]')) { const ww = H.win(A.owner(id)); openModels(id, ww?.thread === '__new__' ? 'new' : 'thread', !!t.closest('.ch-mlabel')); return true; }
-    if (t.closest('[data-chlatest]')) { const nb = A.elOf(id)?.querySelector('.ch-msgs'); if (nb) { ch(id).follow = true; nb.scrollTo({ top: nb.scrollHeight, behavior: 'smooth' }); } return true; }
+    if (t.closest('[data-chlatest]')) { const nb = A.elOf(id)?.querySelector('.ch-msgs'); if (nb) { ch(id).follow = true; scrollBox(nb).scrollTo({ top: scrollBox(nb).scrollHeight, behavior: 'smooth' }); } return true; }
     if (t.closest('[data-chmic]')) {
       if (!w?.thread || !H.recordReply) return true;
       const r = H.recordReply(id, w.thread);

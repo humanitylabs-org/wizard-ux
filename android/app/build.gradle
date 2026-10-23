@@ -47,8 +47,8 @@ android {
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         minSdk 28
         targetSdk 35
-        versionCode 66
-        versionName '0.9.41'
+        versionCode 67
+        versionName '0.9.42'
         // Empty default leaves backup unconfigured; the native Photos screen can connect a server.
         buildConfigField 'String', 'PHOTOS_SERVER', javaString(photosServer)
         buildConfigField 'String', 'HOME_URL', javaString(wizardOrigin + '/wizard-os-home/')

@@ -89,7 +89,7 @@ export function playIntro({ id, listen } = {}) {
     anims.forEach(a => { try { if (a !== hold) a.finish(); } catch (_) {} });
     const out = (run(core, [{ transform: 'scale(1)', opacity: 1, filter: 'blur(0)' }, { transform: 'scale(2.7)', opacity: 0, filter: 'blur(10px)' }], { duration: 420, easing: 'cubic-bezier(.6,0,.9,.4)' }),
          run(root, [{ clipPath: 'circle(150% at 50% 50%)' }, { clipPath: 'circle(0% at 50% 50%)' }], { duration: 580, easing: 'cubic-bezier(.7,0,.84,0)' }));
-    { const dev = document.getElementById('device'); if (dev) dev.animate([{ scale: '1.05', filter: 'brightness(1.35)' }, { scale: '1', filter: 'brightness(1)' }], { delay: 380, duration: 560, easing: 'cubic-bezier(.2,.9,.25,1)' }); }
+    { const dev = document.getElementById('device'); if (dev && !document.documentElement.classList.contains('wos-doc-scroll')) dev.animate([{ scale: '1.05', filter: 'brightness(1.35)' }, { scale: '1', filter: 'brightness(1)' }], { delay: 380, duration: 560, easing: 'cubic-bezier(.2,.9,.25,1)' }); }
     out.finished.then(cleanup, cleanup);
   };
   hold.finished.then(exit, () => {});
