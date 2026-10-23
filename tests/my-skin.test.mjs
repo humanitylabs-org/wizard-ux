@@ -36,7 +36,7 @@ async function boot({ responses = [], cached = null, search = '' } = {}) {
     if (r.throw) throw new TypeError('offline');
     return { ok: r.status >= 200 && r.status < 300, status: r.status, headers: { get: () => r.type }, text: async () => r.body };
   };
-  const ctx = { document, fetch, location: { search }, URLSearchParams,
+  const ctx = { document, fetch, location: { search }, URLSearchParams, TextEncoder,
     localStorage: { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) } };
   ctx.window = ctx;
   vm.runInNewContext(SRC, ctx);
@@ -110,4 +110,18 @@ test('Settings › Look offers My skin with Edit and Reset', () => {
   assert.match(s, /data-myskin="edit"/);
   assert.match(s, /data-myskin="reset"/);
   assert.match(s, /On top of \$\{base\}/);
+});
+
+test('Try on suspends only the real CSS sheet and changes no cache, state or approvals', async () => {
+  const b = await boot({cached: 'html{--trial:owner}', responses: [{status: 200, type: 'text/css', body: 'html{--trial:owner}'}]});
+  b.store.set('wos.myskin.js.ok', 'untouched');
+  const saved = [...b.store], before = JSON.stringify(b.M.state);
+  const cancel = b.M.tryOn('html{--trial:store}');
+  assert.equal(b.style().media, 'not all');
+  assert.equal(b.document.head.lastElementChild.id, 'wosSkinTryOn');
+  assert.deepEqual([...b.store], saved); assert.equal(JSON.stringify(b.M.state), before);
+  cancel(); assert.equal(b.style().media, '');
+  assert.equal(b.document.head.children.some(c => c.id === 'wosSkinTryOn'), false);
+  assert.deepEqual([...b.store], saved); assert.equal(JSON.stringify(b.M.state), before);
+  assert.throws(() => b.M.tryOn('x'.repeat(65537)), /Invalid/);
 });

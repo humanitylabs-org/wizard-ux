@@ -1,0 +1,37 @@
+/* Grove: CSS-only palette on top of Nebula. Animated canvas scenery is not exported. */
+html[data-skin] {
+  --bg: #050b07 !important;
+  --ink: #eef5e9 !important;
+  --ink-2: #b5cbb9 !important;
+  --ink-3: #7f9a86 !important;
+  --line: rgba(207,232,200,.14) !important;
+  --line-2: rgba(207,232,200,.26) !important;
+  --glass: rgba(10,22,14,.55) !important;
+  --glass-2: rgba(16,32,22,.78) !important;
+  --violet: #7ddc8a !important;
+  --violet-2: #e6c66b !important;
+  --pink: #e8a07a !important;
+  --cyan: #8fd6c4 !important;
+  --amber: #f0b45a !important;
+  --green: #9be37a !important;
+  --red: #e8806a !important;
+  --sk-time-a: #f6f9ee !important;
+  --sk-time-b: #cfe3a6 !important;
+  --sk-dock: rgba(9,22,14,.94) !important;
+  --sk-dock-line: rgba(207,232,200,.10) !important;
+  --sk-ddot: rgba(207,232,200,.45) !important;
+  --sk-tour: rgba(9,22,14,.82) !important;
+  --sk-dim: rgba(4,12,7,.72) !important;
+  --sk-win: rgba(8,15,10,.84) !important;
+  --sk-space: 0 !important;
+  --sk-orb: hue-rotate(-160deg) saturate(0.85) brightness(1.08) !important;
+}
+html[data-skin] body, html[data-skin] .device { background: var(--bg); color: var(--ink); }
+html[data-skin] .skin-bg { visibility: hidden; }
+html[data-skin] .win { background: var(--sk-win); color: var(--ink); }
+html[data-skin] :is(.sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .ch-fcard, .wx-fcard, .ls-panel) { background: var(--glass-2); color: var(--ink); }
+
+html[data-skin] .home-time { font-family: 'Sk Fraunces', Georgia, serif; font-weight: 300; letter-spacing: -.03em; }
+
+html[data-skin] .now-card { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05), inset 0 -10px 20px rgba(0, 0, 0, .16); }
+

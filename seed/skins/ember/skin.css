@@ -1,0 +1,37 @@
+/* Ember: CSS-only palette on top of Nebula. Animated canvas scenery is not exported. */
+html[data-skin] {
+  --bg: #090504 !important;
+  --ink: #ffe9d6 !important;
+  --ink-2: #d4b49c !important;
+  --ink-3: #a0806a !important;
+  --line: rgba(255,176,122,.15) !important;
+  --line-2: rgba(255,176,122,.27) !important;
+  --glass: rgba(26,13,7,.58) !important;
+  --glass-2: rgba(36,19,11,.8) !important;
+  --violet: #ff8a3d !important;
+  --violet-2: #ffb470 !important;
+  --pink: #e2553a !important;
+  --cyan: #ffcf8a !important;
+  --amber: #ffc24d !important;
+  --green: #ffd27a !important;
+  --red: #ff6a4d !important;
+  --sk-time-a: #fff1e2 !important;
+  --sk-time-b: #ffb27a !important;
+  --sk-dock: rgba(20,10,6,.95) !important;
+  --sk-dock-line: rgba(255,176,122,.10) !important;
+  --sk-ddot: rgba(255,176,122,.45) !important;
+  --sk-tour: rgba(20,10,6,.84) !important;
+  --sk-dim: rgba(10,5,3,.74) !important;
+  --sk-win: rgba(16,9,5,.85) !important;
+  --sk-space: 0 !important;
+  --sk-orb: hue-rotate(115deg) saturate(1.15) brightness(1.05) !important;
+}
+html[data-skin] body, html[data-skin] .device { background: var(--bg); color: var(--ink); }
+html[data-skin] .skin-bg { visibility: hidden; }
+html[data-skin] .win { background: var(--sk-win); color: var(--ink); }
+html[data-skin] :is(.sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .ch-fcard, .wx-fcard, .ls-panel) { background: var(--glass-2); color: var(--ink); }
+
+html[data-skin] .home-time { font-family: 'Sk Cormorant', Georgia, serif; font-style: italic; font-weight: 300; letter-spacing: -.02em; }
+
+html[data-skin] .now-card { box-shadow: 0 0 30px -10px rgba(255, 138, 61, .35); }
+

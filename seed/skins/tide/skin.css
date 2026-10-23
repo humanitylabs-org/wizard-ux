@@ -1,0 +1,35 @@
+/* Tide: CSS-only palette on top of Nebula. Animated canvas scenery is not exported. */
+html[data-skin] {
+  --bg: #052a36 !important;
+  --ink: #e8f6f8 !important;
+  --ink-2: #a9cdd4 !important;
+  --ink-3: #6f98a2 !important;
+  --line: rgba(168,230,238,.15) !important;
+  --line-2: rgba(168,230,238,.27) !important;
+  --glass: rgba(4,38,50,.5) !important;
+  --glass-2: rgba(8,56,72,.7) !important;
+  --violet: #3fd2c0 !important;
+  --violet-2: #7fd8ff !important;
+  --pink: #ffd08a !important;
+  --cyan: #7fd8ff !important;
+  --amber: #ffc070 !important;
+  --green: #8fe3a8 !important;
+  --red: #ff8a8a !important;
+  --sk-time-a: #f2fbfc !important;
+  --sk-time-b: #9fe6e6 !important;
+  --sk-dock: rgba(3,26,34,.94) !important;
+  --sk-dock-line: rgba(168,230,238,.10) !important;
+  --sk-ddot: rgba(168,230,238,.45) !important;
+  --sk-tour: rgba(3,26,34,.82) !important;
+  --sk-dim: rgba(1,14,19,.72) !important;
+  --sk-win: rgba(4,26,34,.82) !important;
+  --sk-space: 0 !important;
+  --sk-orb: hue-rotate(-95deg) saturate(1) brightness(1.06) !important;
+}
+html[data-skin] body, html[data-skin] .device { background: var(--bg); color: var(--ink); }
+html[data-skin] .skin-bg { visibility: hidden; }
+html[data-skin] .win { background: var(--sk-win); color: var(--ink); }
+html[data-skin] :is(.sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .ch-fcard, .wx-fcard, .ls-panel) { background: var(--glass-2); color: var(--ink); }
+
+html[data-skin] .home-time { font-family: 'Sk Jost', ui-sans-serif, sans-serif; font-weight: 200; letter-spacing: -.03em; }
+

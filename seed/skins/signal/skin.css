@@ -1,0 +1,49 @@
+/* Signal: CSS-only palette on top of Nebula. Animated canvas scenery is not exported. */
+html[data-skin] {
+  --bg: #000000 !important;
+  --ink: #d8ffd8 !important;
+  --ink-2: #8fc79a !important;
+  --ink-3: #4f8a5a !important;
+  --line: rgba(57,255,140,.16) !important;
+  --line-2: rgba(57,255,140,.32) !important;
+  --glass: rgba(0,10,4,.62) !important;
+  --glass-2: rgba(0,20,8,.76) !important;
+  --violet: #39ff8c !important;
+  --violet-2: #ffbe55 !important;
+  --pink: #5ad1ff !important;
+  --cyan: #5ad1ff !important;
+  --amber: #ffbe55 !important;
+  --green: #39ff8c !important;
+  --red: #ff5f56 !important;
+  --sk-time-a: #e6ffe6 !important;
+  --sk-time-b: #39ff8c !important;
+  --sk-dock: rgba(0,0,0,.96) !important;
+  --sk-dock-line: rgba(57,255,140,.18) !important;
+  --sk-ddot: rgba(57,255,140,.5) !important;
+  --sk-tour: rgba(0,8,3,.88) !important;
+  --sk-dim: rgba(0,0,0,.76) !important;
+  --sk-win: rgba(0,10,4,.86) !important;
+  --sk-space: 0 !important;
+  --sk-orb: hue-rotate(-125deg) saturate(1.2) brightness(1.1) !important;
+}
+html[data-skin] body, html[data-skin] .device { background: var(--bg); color: var(--ink); }
+html[data-skin] .skin-bg { visibility: hidden; }
+html[data-skin] .win { background: var(--sk-win); color: var(--ink); }
+html[data-skin] :is(.sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .ch-fcard, .wx-fcard, .ls-panel) { background: var(--glass-2); color: var(--ink); }
+
+html[data-skin] .home-time { font-family: 'Sk Mono', ui-monospace, monospace; font-weight: 200; letter-spacing: -.07em; }
+
+html[data-skin] .now-card .k, html[data-skin] .home-date { font-family: 'Sk Mono', ui-monospace, monospace; font-weight: 500; }
+
+html[data-skin] .now-card { border-radius: 2px; }
+
+html[data-skin] .now-card::before, html[data-skin] .now-card::after { content: ""; position: absolute; width: 8px; height: 8px; border: 1.5px solid var(--green); pointer-events: none; }
+
+html[data-skin] .now-card { position: relative; }
+
+html[data-skin] .now-card::before { left: -1px; top: -1px; border-right: 0; border-bottom: 0; }
+
+html[data-skin] .now-card::after { right: -1px; bottom: -1px; border-left: 0; border-top: 0; }
+
+html[data-skin] .now-card .pip { border-radius: 1px; }
+

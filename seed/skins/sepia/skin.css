@@ -1,0 +1,50 @@
+/* Sepia: CSS-only palette on top of Nebula. Animated canvas scenery is not exported. */
+html[data-skin] {
+  --bg: #f3ead2 !important;
+  --ink: #332b22 !important;
+  --ink-2: #5f5243 !important;
+  --ink-3: #786651 !important;
+  --line: rgba(86,65,40,.16) !important;
+  --line-2: rgba(86,65,40,.30) !important;
+  --glass: rgba(236,222,190,.76) !important;
+  --glass-2: rgba(247,239,219,.92) !important;
+  --violet: #76533d !important;
+  --violet-2: #684733 !important;
+  --pink: #9a5c56 !important;
+  --cyan: #557878 !important;
+  --amber: #94691d !important;
+  --green: #57704d !important;
+  --red: #a34236 !important;
+  --sk-time-a: #3a3026 !important;
+  --sk-time-b: #735b43 !important;
+  --sk-dock: rgba(238,225,197,.96) !important;
+  --sk-dock-line: rgba(86,65,40,.16) !important;
+  --sk-ddot: rgba(86,65,40,.52) !important;
+  --sk-tour: rgba(247,239,219,.94) !important;
+  --sk-dim: rgba(75,55,32,.24) !important;
+  --sk-win: rgba(247,239,219,.94) !important;
+  --sk-space: 0 !important;
+  --sk-orb: hue-rotate(18deg) saturate(0.38) brightness(0.82) !important;
+}
+html[data-skin] body, html[data-skin] .device { background: var(--bg); color: var(--ink); }
+html[data-skin] .skin-bg { visibility: hidden; }
+html[data-skin] .win { background: var(--sk-win); color: var(--ink); }
+html[data-skin] :is(.sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .ch-fcard, .wx-fcard, .ls-panel) { background: var(--glass-2); color: var(--ink); }
+
+/* Sepia: Novaire's warm e-reader paper with soft dark ink. Visual only; geometry and behaviour stay stock. */
+html[data-skin] { color-scheme: light; }
+html[data-skin] .home-time { font-family: 'Sk Fraunces', Georgia, serif; font-weight: 300; letter-spacing: -.035em; text-shadow: 0 1px rgba(255, 252, 238, .55); }
+html[data-skin] :is(.now-card, .side-card) { box-shadow: inset 0 1px 0 rgba(255, 252, 238, .5), 0 12px 36px rgba(83, 59, 31, .08); }
+html[data-skin] .sk-dot { border-color: rgba(86, 65, 40, .28); }
+
+/* Chat reading size: the stock phone default is 17px (core/chats.css); this skin keeps its original 15px. */
+html[data-skin][data-shell="phone"] .ch-msgs .msg .bub { font-size: 15px; line-height: 1.45; }
+html[data-skin][data-shell="phone"] .ch-msgs .bub h1 { font-size: 19px; }
+html[data-skin][data-shell="phone"] .ch-msgs .bub h2 { font-size: 17.5px; }
+html[data-skin][data-shell="phone"] .ch-msgs .bub h3 { font-size: 16px; }
+html[data-skin][data-shell="phone"] .ch-msgs .bub :is(h4, h5, h6) { font-size: 15px; }
+html[data-skin][data-shell="phone"] .ch-msgs .bub code { font-size: 13px; }
+html[data-skin][data-shell="phone"] .ch-msgs .bub pre { font-size: 12px; }
+html[data-skin][data-shell="phone"] .ch-msgs .bub .code pre code { font-size: 12.5px; }
+html[data-skin][data-shell="phone"] .ch-msgs .bub table { font-size: 13.5px; }
+

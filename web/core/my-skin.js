@@ -70,7 +70,21 @@
     } catch (_) { if (seq === refreshSeq) { verified = null; turnOff(); } }
   }
   const emptyCss = css => !String(css || '').replace(/\/\*[\s\S]*?(?:\*\/|$)/g, '').trim();
-  let el = null;
+  let el = null, trial = null;
+  // A transient CSS-only layer. Never write the cache, script approval or state.
+  // Suppress only the real CSS sheet while trying a Store skin on the base.
+  function cancelTryOn() {
+    trial?.remove(); trial = null;
+    if (el) el.media = '';
+  }
+  function tryOn(css) {
+    if (!isDoc || typeof css !== 'string' || new TextEncoder().encode(css).byteLength > MAX) throw Error('Invalid trial stylesheet');
+    cancelTryOn(); trial = document.createElement('style'); trial.id = 'wosSkinTryOn'; trial.textContent = css;
+    if (el) el.media = 'not all';
+    (document.head || document.documentElement).appendChild(trial);
+    const own = trial;
+    return () => { if (trial === own) cancelTryOn(); };
+  }
 
   function styleEl() {
     if (!isDoc) return null;
@@ -78,6 +92,7 @@
     // Always last in <head>: after core/skins.css, the skin package sheet and skin-frame.css.
     const head = document.head || document.documentElement;
     if (el.parentNode !== head || head.lastElementChild !== el) head.appendChild(el);
+    if (trial) { el.media = 'not all'; head.appendChild(trial); }
     return el;
   }
   function apply(css) {
@@ -125,7 +140,7 @@
   const api = {
     FILE,
     get state() { return state; },
-    refresh, reset, turnOn, turnOff, startScript,
+    refresh, reset, turnOn, turnOff, startScript, tryOn, cancelTryOn,
     on(fn) { if (typeof fn === 'function') subs.add(fn); return () => subs.delete(fn); },
     _test: { apply, emptyCss },
   };
