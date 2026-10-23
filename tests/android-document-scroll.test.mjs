@@ -9,9 +9,14 @@ test('Android capture uses stock WebView discovery, scrolling and default hint',
  for(const p of ['android/app/src/main/assets/scroll-capture.js','android/app/src/main/java/ai/wizards/os/ChatScrollCapture.java'])assert.equal(existsSync(new URL('../'+p,import.meta.url)),false);
  assert.doesNotMatch(read('web/core/chats.js'),/__wosScrollCapture/);
 });
-test('document scrolling is opted in by the Android bridge or app UA only',()=>{
+test('document scrolling is opted in only by app 0.9.42 or newer (older APKs keep inner scrolling)',()=>{
  const js=read('web/core/chats.js');
- assert.match(js,/const androidDocument = \/WizardOS-Android\/\.test\(navigator.userAgent\) \|\| !!window.WizardOSNative/);
+ const m=/const androidDocument = (\(\(\) => \{[\s\S]*?\}\)\(\));/.exec(js);assert.ok(m);
+ const gate=ua=>new Function('navigator','return '+m[1])({userAgent:ua});
+ assert.equal(gate('Mozilla/5.0 Chrome/140'),false);
+ assert.equal(gate('X WizardOS-Android/0.9.41'),false);
+ assert.equal(gate('X WizardOS-Android/0.9.42'),true);
+ assert.equal(gate('X WizardOS-Android/0.10.1'),true);
  assert.match(js,/if \(!androidDocument\) return/);
  assert.match(js,/root.classList.toggle\('wos-doc-scroll', !!next\)/);
  assert.match(js,/const scrollBox = nb => nb && docOwner\?\.contains\(nb\) \? document.scrollingElement : nb/);

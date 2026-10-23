@@ -78,7 +78,15 @@ window.WizCore.chats = function createChats(H) {
   const ch = id => (CH[id] = CH[id] || { q: '', turns: null, loadedFor: '', pending: [], at: 0 });
   // Android's built-in WebView capture scrolls the DOCUMENT, never an overflow div.
   // Keep the real thread and delegated events in their existing shell DOM.
-  const androidDocument = /WizardOS-Android/.test(navigator.userAgent) || !!window.WizardOSNative;
+  // Document scrolling ships with app 0.9.42 (stock Android scroll capture); older APKs still carry the
+  // custom capture + scroll proxy and keep inner-div scrolling.
+  const androidDocument = (() => {
+    const m = /WizardOS-Android\/(\d+)\.(\d+)\.(\d+)/.exec(navigator.userAgent);
+    if (!m) return false;
+    const v = [+m[1], +m[2], +m[3]], min = [0, 9, 42];
+    for (let i = 0; i < 3; i++) if (v[i] !== min[i]) return v[i] > min[i];
+    return true;
+  })();
   let docOwner = null, docFrame = 0, docResize = null;
   const scrollBox = nb => nb && docOwner?.contains(nb) ? document.scrollingElement : nb;
   function sizeDocumentChrome() {

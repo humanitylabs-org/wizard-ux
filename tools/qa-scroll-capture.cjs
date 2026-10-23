@@ -16,7 +16,7 @@ function ok(mode,name,value,detail) { results.push({mode,name,pass:!!value,detai
  const browser=await chromium.launch({headless:true,executablePath:process.env.QA_CHROME || undefined});
  try { for(const [android,skin] of [[false,'obsidian'],[true,'obsidian'],[true,'landscapes']]) {
   const mode=(android?'android-':'browser-')+skin;
-  const ctx=await browser.newContext({viewport:android?{width:412,height:915}:{width:1280,height:900},deviceScaleFactor:2.625,isMobile:android,hasTouch:android,userAgent:android?'Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/140 Mobile Safari/537.36 WizardOS-Android':'Mozilla/5.0 Chrome/140 Safari/537.36',serviceWorkers:'block'});
+  const ctx=await browser.newContext({viewport:android?{width:412,height:915}:{width:1280,height:900},deviceScaleFactor:2.625,isMobile:android,hasTouch:android,userAgent:android?'Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/140 Mobile Safari/537.36 WizardOS-Android/0.9.42':'Mozilla/5.0 Chrome/140 Safari/537.36',serviceWorkers:'block'});
   await ctx.route('**/*',async r=>{
    const q=r.request(),u=new URL(q.url()),p=u.pathname;
    const json=x=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(x)});
