@@ -169,7 +169,7 @@
         <service android:name=".audio.BackgroundAudioService" android:foregroundServiceType="mediaPlayback" android:exported="true">
                 <intent-filter><action android:name="androidx.media3.session.MediaSessionService" /></intent-filter>
             </service>
-            <service android:name=".everywhere.EverywhereService"
+            <service android:name="ai.wizards.os.everywhere.EverywhereService"
             android:exported="false"
             android:foregroundServiceType="microphone|specialUse"
             android:stopWithTask="false">
@@ -196,7 +196,7 @@
              Captures the phone mic in 5 s WAV chunks while a meeting records; uploads them through a durable
              outbox; Pause releases the mic. Started only from the app (page bridge) while it is in front. -->
         <service
-            android:name=".mizel.MeetingRecorderService"
+            android:name="ai.wizards.os.mizel.MeetingRecorderService"
             android:exported="false"
             android:foregroundServiceType="microphone"
             android:stopWithTask="false" />
@@ -216,7 +216,7 @@
         <!-- ===== Native parity (0.7.0) ===== -->
         <!-- Orb recorder: keeps recording with the screen off or the app in the background (Stop/Send notification). -->
         <service
-            android:name=".recording.RecorderService"
+            android:name="ai.wizards.os.recording.RecorderService"
             android:exported="false"
             android:foregroundServiceType="microphone"
             android:stopWithTask="false" />
@@ -243,7 +243,7 @@
         <!-- Share to Wizard: shared files upload in the background (resumable /wizard/v1/shares), through app
              close, network loss and reboot. The service holds the read grant while it copies; the job resumes. -->
         <service
-            android:name=".share.ShareService"
+            android:name="ai.wizards.os.share.ShareService"
             android:exported="false"
             android:foregroundServiceType="dataSync"
             android:stopWithTask="false" />
