@@ -33,7 +33,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 
 | Need | Use | Never hand-roll |
 |---|---|---|
-| Chat list, thread, composer, thread card, read state | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); live data `WizLive` (`web/live.js`) | a second thread, composer or per-agent thread logic |
+| Chat list, thread, composer, desktop file drop, thread card, read state | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); live data `WizLive` (`web/live.js`) | a second thread, composer or per-agent thread logic |
 | Alternative Chats list | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Model picker, errors and retry, composer mic, work receipts, reading place | `WosChatPower` (`web/core/chat-power.js`) + `WosModels` (`web/core/chat-models.js`), `WosErrors` (`web/core/chat-errors.js`), `WosWork` (`web/core/chat-work.js`) | own model list, own error card, own reading-position store |
 | Markdown, drafts, rich copy, Bangkok time, media viewer | `WosChat` (`web/core/chat-kit.js`: `md`, `copyRich`, `viewer`) | a markdown library, own lightbox |
