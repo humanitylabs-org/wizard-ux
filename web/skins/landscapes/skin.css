@@ -278,7 +278,7 @@ html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsL:has(> .ddot[data-goto]:not(.dhome):nth-last-child(3))::before,
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsR:has(> .ddot[data-goto]:nth-child(3))::after { content: ""; flex: 0 0 auto; width: 3px; height: 3px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 40%, transparent); }
 
-/* App kinds on New desk (Apps · Wizard apps · Connectors): the panel stops above the pill dock and scrolls inside. */
+/* App kinds on New desk (Apps · Agent apps · Connectors): the panel stops above the pill dock and scrolls inside. */
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .new-desk.kinds { height: calc(100% - 20px); max-height: none; overflow-y: auto; } /* the desk already stops above the pill dock: fill all of it */
 
 /* App kinds: the Apps sheet uses the whole screen between the status bar and the pill dock, same as New desk. */
@@ -353,7 +353,7 @@ html[data-skin="landscapes"] .home-time { font-variant-numeric: normal; }
 /* System apps: one purple border (it replaces the tile's own colour border, never adds a second) and a purple tint. */
 html[data-skin="landscapes"] :is(.launcher, .new-desk) .lapp.lapp-sys .ic { border: 2.5px solid #8f63ff; background: linear-gradient(160deg, rgba(143, 99, 255, .34), rgba(143, 99, 255, .14)), #0f0c17; box-shadow: 0 4px 14px rgba(143, 99, 255, .28); outline: none; }
 
-/* "For agents" (Wizard apps, Agents, Connectors): one quiet folded row under Apps. */
+/* "For agents" (Agent apps, Agents, Connectors): one quiet folded row under Apps. */
 html[data-skin="landscapes"] :is(.launcher, .new-desk) .forag { margin: 14px 0 4px; }
 html[data-skin="landscapes"] :is(.launcher, .new-desk) .fa-row { width: 100%; display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-radius: 16px; background: color-mix(in srgb, var(--ink) 6%, transparent); border: 1px solid var(--line-2); color: var(--ink-2); font-size: 13.5px; font-weight: 600; }
 html[data-skin="landscapes"] :is(.launcher, .new-desk) .fa-row small { color: var(--ink-3); font-size: 12.5px; font-weight: 500; }
