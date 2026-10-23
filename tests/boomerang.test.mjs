@@ -98,6 +98,7 @@ test('Recall branding is consistent across the dialog and scheduled or returned 
   assert.match(js, /Edit Recall/)
   assert.match(js, /Cancel Recall/)
   assert.match(js, /Recall returned/)
-  assert.match(js, /Returns \$\{date\} at \$\{time\}/)
+  assert.match(js, /returned\?'Returned':'Returns'/)
+  assert.match(js, /returnLabel\(r,isDue\)/)
   assert.doesNotMatch(js, />Boomerang|Boomerang is back|Boomerang set|Set Boomerang|Change Boomerang|🪃/)
 })
