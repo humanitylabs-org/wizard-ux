@@ -169,7 +169,8 @@ window.WizCore.chats = function createChats(H) {
   // Focus belongs to the persisted owner window, never the transient desktop list pane / search state.
   function focusOf(w) { const o = (w && W[owner(w.id)]) || w; const f = o?.focus; return f && ['agent', 'subject'].includes(f.kind) && typeof f.key === 'string' && f.key ? f : null; }
   function focusAgents() { const A = window.WosAgents; return A ? [agentRec(A.defaultId()), ...A.others()] : [agentRec('')]; }
-  function focusMatches(w, s) { const f = focusOf(w); return !f || (f.kind === 'subject' ? subjectOf(s) === f.key : f.key === AGS()?.defaultId() ? !LIVE.agentOf(s.id) : LIVE.agentOf(s.id) === f.key); }
+  function matchesFocus(f, s) { return !f || (f.kind === 'subject' ? subjectOf(s) === f.key : f.key === AGS()?.defaultId() ? !LIVE.agentOf(s.id) : LIVE.agentOf(s.id) === f.key); }
+  function focusMatches(w, s) { return matchesFocus(focusOf(w), s); }
   function setFocus(w, f) {
     const o = W[owner(w.id)] || w; if (!o) return false;
     if (o.thread) chatsBack(o); // saves the old agent's draft before changing its route
@@ -529,22 +530,62 @@ window.WizCore.chats = function createChats(H) {
   const regenOn = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-reply-regenerate').trim() === 'on'; } catch (_) { return false; } };
   const ourSkin = () => OUR_SKINS.includes(document.documentElement.dataset.skin || '');
   const compactOn = () => { try { const v = localStorage.getItem(COMPACT_KEY); return v == null ? OUR_SKINS.includes(document.documentElement.dataset.skin || '') : v === '1'; } catch (e) { return false; } };
-  function filterSheet(c) {
+  function filterSheet(w, c) {
     const opt = (k, key, label, on) => `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-chfopt="${k}:${esc(key)}"><i class="ch-fdot ${k === 'status' ? key : 'subject'}"></i>${esc(label)}${on ? '<b>✓</b>' : ''}</button>`;
     return `<div class="ch-fsheet" data-chfsheet><div class="ch-fcard" role="dialog" aria-label="Filter chats"><div class="ch-fh"><b>Filter</b>${c.filter ? '<button type="button" data-chfclear>Clear</button>' : ''}</div>
       <h5>Status</h5><div class="ch-fopts">${statusEntries().map(([k, f]) => opt('status', k, f.label, c.filter === k)).join('')}</div>
+      ${focusSection(w)}
       ${ourSkin() ? '' : `<h5>Layout</h5><div class="ch-fopts">${[['day', 'By day'], ['status', 'By status']].map(([v, l]) => { const on = (byStatus() ? 'status' : 'day') === v; return `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-chlayout="${v}">${l}${on ? '<b>✓</b>' : ''}</button>`; }).join('')}</div>`}
       <h5>View</h5><div class="ch-fopts"><button type="button" class="ch-fopt${compactOn() ? ' on' : ''}" data-chcompact>Compact · titles only${compactOn() ? '<b>✓</b>' : ''}</button></div>
       </div></div>`;
   }
   function focusLabel(w) { const f = focusOf(w); return !f ? 'All' : f.kind === 'agent' ? agentRec(f.key).label : f.key; }
-  function focusSheet(w) {
-    const f = focusOf(w), all = LIVE.unified().filter(s => !s.hidden);
-    const opt = (kind, key, label, badge, count) => {
-      const on = kind === 'all' ? !f : f?.kind === kind && f.key === key;
-      return `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-chfocusopt="${kind}:${esc(key)}" aria-pressed="${on}">${badge}<span>${esc(label)}</span><small>${count}</small>${on ? '<b>✓</b>' : ''}</button>`;
+  // One option model and button renderer for the strip and Filter sheet. Rank populated
+  // options by unread count, latest activity, then thread count; All always leads.
+  function focusOptions() {
+    const all = LIVE.unified().filter(s => !s.hidden);
+    const stats = (kind, key, label, badge = '') => {
+      const rows = kind === 'all' ? all : all.filter(s => matchesFocus({ kind, key }, s));
+      return { kind, key, label, badge, count: rows.length, unread: rows.filter(s => LIVE.isNew(s)).length,
+        recent: rows.reduce((n, s) => Math.max(n, Date.parse(s.activityAt || s.updatedAt || '') || 0), 0) };
     };
-    return `<div class="ch-fsheet" data-chfsheet><div class="ch-fcard" role="dialog" aria-label="Focus chats"><div class="ch-fh"><b>Focus</b></div><div class="ch-fopts">${opt('all', '', 'All chats', '', all.length)}</div><h5>Agents <small>· unread</small></h5><div class="ch-fopts">${focusAgents().map(a => opt('agent', a.id, a.label, (AGS()?.sigil(a) || '') + (AGS()?.isPrivate(a) ? AGS().lock() : ''), (a.is_default ? all.filter(s => !LIVE.agentOf(s.id)) : LIVE.sessionsFor(a.id)).filter(s => !s.hidden && LIVE.isNew(s)).length)).join('')}</div><h5>Subjects</h5><div class="ch-fopts">${subjects().map(k => opt('subject', k, k, '', all.filter(s => subjectOf(s) === k).length)).join('')}</div></div></div>`;
+    const opts = focusAgents().map(a => stats('agent', a.id, a.label, (AGS()?.sigil(a) || '') + (AGS()?.isPrivate(a) ? AGS().lock() : '')))
+      .concat(subjects().map(k => stats('subject', k, k)));
+    opts.sort((a, b) => b.unread - a.unread || b.recent - a.recent || b.count - a.count || a.label.localeCompare(b.label));
+    return [stats('all', '', 'All'), ...opts];
+  }
+  function focusOption(w, o, strip = false) {
+    const f = focusOf(w), on = o.kind === 'all' ? !f : f?.kind === o.kind && f.key === o.key;
+    return `<button type="button" class="${strip ? 'ch-focus-tab' : 'ch-fopt'}${on ? ' on' : ''}" data-chfocusopt="${o.kind}:${esc(o.key)}" aria-pressed="${on}"${strip ? ` aria-label="${esc(o.label)}${o.unread ? ` · ${o.unread} unread` : ''}"` : ''}>${o.badge}<span>${esc(o.label)}</span>${strip ? o.unread ? '<i class="ch-focus-dot" aria-hidden="true"></i>' : '' : `<small>${o.kind === 'agent' ? o.unread : o.count}</small>${on ? '<b>✓</b>' : ''}`}</button>`;
+  }
+  function focusSection(w) {
+    const opts = focusOptions();
+    return `<h5>Focus</h5><div class="ch-fopts">${focusOption(w, opts[0])}</div><h5>Agents <small>· unread</small></h5><div class="ch-fopts">${opts.filter(o => o.kind === 'agent').map(o => focusOption(w, o)).join('')}</div><h5>Subjects</h5><div class="ch-fopts">${opts.filter(o => o.kind === 'subject').map(o => focusOption(w, o)).join('')}</div>`;
+  }
+  function focusStrip(w) {
+    const opts = focusOptions().filter(o => o.kind === 'all' || o.count);
+    return opts.length > 1 ? `<nav class="ch-focus-strip" aria-label="Chats focus">${opts.map(o => focusOption(w, o, true)).join('')}</nav>` : '';
+  }
+  function bindFocusStrip(el) {
+    const strip = el.querySelector('.ch-focus-strip'); if (!strip) return;
+    if (!strip._focusBound) {
+      strip._focusBound = true;
+      // Native horizontal scrolling owns this gesture, not an ancestor's desk swipe.
+      // Do not preventDefault: taps and the browser's pan-x scrolling stay native.
+      for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'touchstart', 'touchmove', 'touchend', 'touchcancel'])
+        strip.addEventListener(type, e => e.stopPropagation(), { passive: true });
+    }
+    const active = strip.querySelector('[aria-pressed="true"]');
+    // Scroll only the row (scrollIntoView would also move the containing desk/list).
+    if (active && strip._activeFocus !== active.dataset.chfocusopt) {
+      strip._activeFocus = active.dataset.chfocusopt;
+      requestAnimationFrame(() => {
+        if (!active.isConnected) return;
+        const a = active.getBoundingClientRect(), r = strip.getBoundingClientRect();
+        if (a.left < r.left + 10) strip.scrollLeft += a.left - r.left - 10;
+        else if (a.right > r.right - 10) strip.scrollLeft += a.right - r.right + 10;
+      });
+    }
   }
   // The phone replaces the list with the thread. Keep a bounded return bookmark before
   // that replacement, including nearby row anchors so Done or live updates above it
@@ -615,9 +656,8 @@ window.WizCore.chats = function createChats(H) {
     c.more = c.more || {};
     const chip = (k, label) => `<span class="ch-chip ${k}" data-chchip="${k}"><i class="ch-fdot ${k === 'status' ? c.filter : 'subject'}"></i>${esc(label)}<button type="button" data-chchipx="${k}" aria-label="Remove filter ${esc(label)}">✕</button></span>`;
     const chips = (F ? chip('status', F.label) : '');
-    const pillFocus = `<button type="button" class="ch-focus" data-chfocus aria-label="Focus: ${esc(focusLabel(w))}" aria-expanded="${c.sheet === 'focus'}">${focus?.kind === 'agent' ? (AGS()?.sigil(agentRec(focus.key)) || '') + (AGS()?.isPrivate(agentRec(focus.key)) ? AGS().lock() : '') : ''}<span>${esc(focusLabel(w))}</span><i aria-hidden="true">⌄</i></button>`;
     const ph = filtered ? 'Search within' : 'Search, or type to start a chat';
-    const head = `<div class="ch-top"><div class="ch-search has-focus${F ? ' has-chips' : ''}">${pillFocus}${chips}<input data-chsearch placeholder="${ph}" aria-label="Search chats and messages" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false">${c.q ? '<button type="button" class="ch-sclear" data-chsclear aria-label="Clear search">×</button>' : ''}<button type="button" class="ch-fbtn${F ? ' on' : ''}" data-chfbtn aria-label="Filter chats" aria-expanded="${c.sheet === 'status' ? 'true' : 'false'}"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button></div>${AGID ? '' : (window.WosBell?.html() || '')}</div>`
+    const head = `<div class="ch-top"><div class="ch-search${F ? ' has-chips' : ''}">${chips}<input data-chsearch placeholder="${ph}" aria-label="Search chats and messages" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false">${c.q ? '<button type="button" class="ch-sclear" data-chsclear aria-label="Clear search">×</button>' : ''}<button type="button" class="ch-fbtn${F ? ' on' : ''}" data-chfbtn aria-label="Filter chats" aria-expanded="${c.sheet === 'status' ? 'true' : 'false'}"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button></div>${AGID ? '' : (window.WosBell?.html() || '')}</div>`
       + (filtered && !LIVE.ok ? '' : filtered ? `<div class="ch-count">${hitCount()} ${hitCount() === 1 ? 'chat' : 'chats'}${coachLine()}</div>` : '');
     // Suggestions while typing (or focused on an empty field): filters that match the words, then a new chat.
     const sug = !c.sugOff && (c.q || c.focus) ? matchFilters(c.q, 3).filter(f => !(f.kind === 'status' && f.key === c.filter) && !(f.kind === focus?.kind && f.key === focus.key)) : [];
@@ -639,7 +679,7 @@ window.WizCore.chats = function createChats(H) {
     else if (!LST.ok && !LST.error) body = draftSec + skelRows(AGID ? `Connecting to ${agentName(AGID)}` : 'Connecting to Wizard');
     else if (!LST.ok) body = draftSec + `<div class="ch-empty">${esc(window.WizReach?.failure().message || 'Checking the connection to Wizard…')}</div>`;
     else if (AGID && !all.length && !n && !F) body = `<div class="ch-empty"><b>No chats with ${esc(agentName(AGID))} yet</b><br>Tap + to start one. ${agentRec(AGID).privacy === 'private' ? 'They stay with this agent: the main agent can’t search or read them.' : 'They stay in this agent’s chats.'}</div>`;
-    else if (filtered && !hit.length) body = `<div class="ch-empty">${n ? 'No chats match' : F ? F.empty : `No chats in ${esc(focusLabel(w))}`}<br><button type="button" class="ch-fclear" ${n || F ? 'data-chfclear' : 'data-chfocus'}>${n || F ? 'Clear filter' : 'Change focus'}</button></div>`;
+    else if (filtered && !hit.length) body = `<div class="ch-empty">${n ? 'No chats match' : F ? F.empty : `No chats in ${esc(focusLabel(w))}`}<br><button type="button" class="ch-fclear" ${n || F ? 'data-chfclear' : 'data-chfbtn'}>${n || F ? 'Clear filter' : 'Change focus'}</button></div>`;
     else if (!hit.length && !drafts.length) body = `<div class="ch-empty">${bs && (bs.busy || bs.scanned < Math.min(bs.want, bs.total || 0)) ? `No titles match “${esc(c.q)}” · searching messages…` : `No threads match “${esc(c.q)}”.`}</div>`;
     else body = (filtered ? '' : draftSec)
       + (pinnedRows.length ? `<section class="ch-sec ch-pinned open" data-sec="pinned"><div class="ch-sec-h static"><span>Pinned</span><small>${pinnedRows.length}</small></div><div class="ch-sec-b">${pinnedRows.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')}</div></section>` : '')
@@ -677,7 +717,7 @@ window.WizCore.chats = function createChats(H) {
       : LST.cached ? syncBar('', `${spin}<span>Updating…${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}</span>`)
       : LST.ok && age > STALE_LIST ? syncBar('stale', `${LST.loading ? spin : ''}<span><b>Not up to date</b> · ${esc(since)}${LST.loading ? ' · updating…' : ''}</span>`)
       : c.ptrState === 'done' ? syncBar('ok', '<span>Up to date</span>') : '';
-    const html = `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${AGID ? ` style="--agc:${AGS()?.colour(agentRec(AGID)) || ''}"` : ''}>${head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${c.sheet === 'focus' ? focusSheet(w) : c.sheet ? filterSheet(c) : ''}</div>`;
+    const html = `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${AGID ? ` style="--agc:${AGS()?.colour(agentRec(AGID)) || ''}"` : ''}>${head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${focusStrip(w)}${c.sheet ? filterSheet(w, c) : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
@@ -694,6 +734,7 @@ window.WizCore.chats = function createChats(H) {
       restoreListPlace(el.querySelector('.ch-scroll'), place);
     }
     PW?.paint(w.id, el);
+    bindFocusStrip(el);
     window.WosSkinHost?.rendered('list', el);
     if (had) { const inp = el.querySelector('[data-chsearch]'); inp.focus(); try { inp.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
   }
@@ -2086,7 +2127,6 @@ window.WizCore.chats = function createChats(H) {
     const dr = e.target.closest('[data-chdraft]'); if (dr) { openNewDraft(owner(id), dr.dataset.chdraft); return true; }
     if (e.target.closest('[data-chbsmore]')) { window.WizCore.chatSearch?.more(id); renderChatList(w, elOf(id)); return true; }
     const cx = e.target.closest('[data-chchipx]'); if (cx) { const c = ch(id); c.filter = ''; c.filterFrom = null; c.coach = false; rerenderList(w); return true; }
-    if (e.target.closest('[data-chfocus]')) { const c = ch(id); c.sheet = c.sheet === 'focus' ? false : 'focus'; c.focus = false; rerenderList(w); return true; }
     const fp = e.target.closest('[data-chfocusopt]'); if (fp) { const [kind, ...key] = fp.dataset.chfocusopt.split(':'); setFocus(w, { kind, key: key.join(':') }); return true; }
     if (e.target.closest('[data-chfbtn]')) { const c = ch(id); c.sheet = c.sheet === 'status' ? false : 'status'; c.focus = false; rerenderList(w); return true; }
     if (e.target.closest('[data-chfclear]')) { const c = ch(id); c.sheet = false; c.coach = false; clearAll(w); return true; }
