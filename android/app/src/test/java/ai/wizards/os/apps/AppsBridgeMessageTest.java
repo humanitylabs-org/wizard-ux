@@ -15,6 +15,6 @@ public class AppsBridgeMessageTest {
 
     @Test public void stringMessagesPassThrough() {
         assertEquals("{\"v\":1}", AppsBridge.text(new WebMessageCompat("{\"v\":1}")));
-        assertNull(AppsBridge.text(new WebMessageCompat(null)));
+        assertNull(AppsBridge.text(new WebMessageCompat((String) null)));
     }
 }
