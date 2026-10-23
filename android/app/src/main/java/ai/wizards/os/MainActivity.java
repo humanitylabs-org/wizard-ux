@@ -39,7 +39,7 @@ import android.window.OnBackInvokedDispatcher;
  *  - Only the private origin loads inside the app; any other link opens in the phone's browser.
  *  - The microphone is granted to the private origin only, after Android's own permission prompt.
  */
-public class MainActivity extends Activity {
+public class MainActivity extends androidx.fragment.app.FragmentActivity {
     static final String UA_TAG = " WizardOS-Android/" + BuildConfig.VERSION_NAME;
     private static final int REQ_MIC = 41;
     private static final int REQ_FILE = 42;
@@ -186,12 +186,13 @@ public class MainActivity extends Activity {
         if (photos != null) photos.detach();
         photos = ai.wizards.os.photos.PhotosBridge.install(this, web); // status/settings only; no media or credentials
         ai.wizards.os.photos.BackupScheduler.schedule(this);
+        if (device != null) device.onPageStarted();
         device = new ai.wizards.os.device.DeviceBridge(this, web);
         web.addJavascriptInterface(device, "WizardOSDevice");
         if (mizel != null) mizel.detach();
         mizel = ai.wizards.os.mizel.MizelBridge.install(web, ai.wizards.os.device.AppState.origin(this));
         if (apps != null) apps.detach();
-        apps = ai.wizards.os.apps.AppsBridge.install(this, web);
+        apps = ai.wizards.os.apps.AppsBridge.install(this, web, device);
         if (audio != null) audio.detach();
         audio = ai.wizards.os.audio.BackgroundAudioBridge.install(this, web);
 
@@ -267,6 +268,7 @@ public class MainActivity extends Activity {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 if (view instanceof SelectionWebView) ((SelectionWebView)view).cancelScrollCapture();
+                if (device != null) device.onPageStarted();
                 pageUrl = url;
                 screenCaptureId = null;
                 setKeepAwake(false);
@@ -321,6 +323,7 @@ public class MainActivity extends Activity {
     }
 
     @SuppressWarnings("deprecation")
+    @android.annotation.SuppressLint("MissingSuperCall") // Back never exits: super would finish the activity
     @Override
     public void onBackPressed() {
         handleBack(); // API < 33; never calls super, so Back can never finish the activity
