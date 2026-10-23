@@ -151,7 +151,7 @@
      capacity). Every fill shows what is LEFT; amber under a quarter, red under a tenth. Fills grow from zero on first
      paint and glide afterwards. Tap AI to open AI accounts, compute to open devices. */
   function homeRows(){const kind=p=>String(p.provider||p.id||'').split(':')[0],rows={ai:[],hw:[]};
-    for(const sp of dialSpecs().filter(x=>x.row==='a'))rows.ai.push({k:sp.k,label:sp.label,segs:[{cap:1,left:sp.v,title:sp.title||sp.label}],value:sp.signin?'Sign in':sp.money||(sp.v==null?'':sp.v+'%'),signin:sp.signin,attrs:sp.attrs,left:sp.v});
+    for(const sp of dialSpecs().filter(x=>x.row==='a'))rows.ai.push({k:sp.k,label:sp.label,segs:[{cap:1,left:sp.v,title:sp.title||sp.label}],value:sp.signin?'Sign in':sp.money?sp.money+' left':(sp.v==null?'':(100-sp.v)+'%'),signin:sp.signin,attrs:sp.attrs,left:sp.v});
     const list=devList().length?devList():[{id:'this',kind:'this',group:'agent',name:'This server',status:'online',disks:[]}];
     const M=list.filter(d=>(d.group||'agent')==='agent'&&(d.status==='online'||d.status==='stale'||d.kind==='this')).map(d=>{const r=devReading(d),main=diskOf(d)[0]||null,me=d.kind==='this'&&S.server;
       return {d,mem:{cap:r.ram,used:r.mem},disk:{cap:me&&number(S.server.diskSize)!=null?number(S.server.diskSize):number(main?.sizeGB),used:r.disk},cpu:{cap:r.cores,used:r.cpu}};});
@@ -159,15 +159,15 @@
     for(const [k,label] of [['mem','Memory'],['disk','Disk'],['cpu','CPU']]){
       let segs=M.filter(m=>number(m[k].cap)>0&&m[k].used!=null);
       // Before the devices list arrives, this box alone (percent only) so Home never waits on other machines.
-      if(!segs.length){const j=S.server||{},v=k==='mem'?j.memory:k==='disk'?j.disk:j.cpu;rows.hw.push({k:'hw:'+k,label,segs:[{cap:1,left:v==null?null:100-v,title:label}],value:v==null?'':(100-v)+'%',attrs:'data-res-open="server"',left:v==null?null:100-v});continue;}
+      if(!segs.length){const j=S.server||{},v=k==='mem'?j.memory:k==='disk'?j.disk:j.cpu;rows.hw.push({k:'hw:'+k,label,segs:[{cap:1,left:v==null?null:100-v,title:label}],value:v==null?'':v+'%',attrs:'data-res-open="server"',left:v==null?null:100-v});continue;}
       const tot=segs.reduce((a,m)=>a+m[k].cap,0),free=segs.reduce((a,m)=>a+m[k].cap*(100-m[k].used)/100,0);
-      rows.hw.push({k:'hw:'+k,label,segs:segs.map(m=>({dv:M.indexOf(m),cap:m[k].cap,left:100-m[k].used,title:`${m.d.name}: ${fmt(k,Math.round(m[k].cap*(100-m[k].used)/100))} free of ${fmt(k,m[k].cap)}`})),value:fmt(k,Math.round(free)),attrs:'data-res-open="server"',left:Math.round(free/tot*100)});}
+      rows.hw.push({k:'hw:'+k,label,segs:segs.map(m=>({dv:M.indexOf(m),cap:m[k].cap,left:100-m[k].used,title:`${m.d.name}: ${fmt(k,Math.round(m[k].cap*m[k].used/100))} used of ${fmt(k,m[k].cap)}`})),value:`${Math.round(tot-free)}/${fmt(k,Math.round(tot))}`,attrs:'data-res-open="server"',left:Math.round(free/tot*100)});}
     rows.machines=M.map(m=>m.d.name);
     return rows;}
   const lvl=v=>v==null?'':v<10?' rs-crit':v<25?' rs-empty':'';
   function homeBarsHtml(){const R=homeRows(),sig=[...R.ai,...R.hw].map(r=>r.k+':'+r.segs.length+(r.signin?'s':'')).join(',');
-    const row=r=>`<button class="rs-br${r.signin?' rs-br-off':''}" data-k="${esc(r.k)}" ${r.attrs} aria-label="${esc(r.label)} ${esc(r.signin?'sign in':r.value+' left')}"><span class="rs-bl">${esc(r.label)}</span><span class="rs-bt">${r.segs.map(g=>`<i class="rs-bs${lvl(g.left)}${g.dv!=null?' rs-d'+(g.dv%4):''}" style="flex:${g.cap} 1 0" title="${esc(g.title)}"><i class="rs-bf" data-w="${g.left??0}" style="width:0%"></i></i>`).join('')}</span><span class="rs-bv${lvl(r.left)}">${esc(r.value)}</span></button>`;
-    return `<section class="rs-widget rs-barsw wz-home-widget" data-sig="${esc(sig)}" aria-label="AI and computer resources">${R.ai.length?`<div class="rs-bg rs-bg-ai" role="group" aria-label="AI week left"><p class="rs-gh"><b>AI</b><span>left this week</span></p>${R.ai.map(row).join('')}</div>`:''}<div class="rs-bg rs-bg-hw" role="group" aria-label="Computer left"><p class="rs-gh"><b>Computers</b><span>free</span></p>${(R.machines||[]).length>1?`<p class="rs-lg">${R.machines.map((n,i)=>`<span class="rs-d${i%4}"><i></i>${esc(n.split(' ')[0])}</span>`).join('')}</p>`:''}${R.hw.map(row).join('')}</div></section>`;}
+    const row=r=>`<button class="rs-br${r.signin?' rs-br-off':''}" data-k="${esc(r.k)}" ${r.attrs} aria-label="${esc(r.label)} ${esc(r.signin?'sign in':/left$/.test(r.value)?r.value:r.value+' used')}"><span class="rs-bl">${esc(r.label)}</span><span class="rs-bt">${r.segs.map(g=>`<i class="rs-bs${lvl(g.left)}${g.dv!=null?' rs-d'+(g.dv%4):''}" style="flex:${g.cap} 1 0" title="${esc(g.title)}"><i class="rs-bf" data-w="${g.left==null?0:100-g.left}" style="width:0%"></i></i>`).join('')}</span><span class="rs-bv${lvl(r.left)}">${esc(r.value)}</span></button>`;
+    return `<section class="rs-widget rs-barsw wz-home-widget" data-sig="${esc(sig)}" aria-label="AI and computer resources">${R.ai.length?`<div class="rs-bg rs-bg-ai" role="group" aria-label="AI resources used this week"><p class="rs-gh"><b>AI resources</b><span>used this week</span></p>${R.ai.map(row).join('')}</div>`:''}<div class="rs-bg rs-bg-hw" role="group" aria-label="Compute resources used"><p class="rs-gh"><b>Compute resources</b><span>used</span></p>${(R.machines||[]).length>1?`<p class="rs-lg">${R.machines.map((n,i)=>`<span class="rs-d${i%4}"><i></i>${esc(n.split(' ')[0])}</span>`).join('')}</p>`:''}${R.hw.map(row).join('')}</div></section>`;}
   function paintBars(host){const R=homeRows(),box=host.querySelector('.rs-barsw'),next=homeBarsHtml();
     const tmp=document.createElement('div');tmp.innerHTML=next;const fresh=tmp.firstElementChild;
     if(!box||box.dataset.sig!==fresh.dataset.sig){host.innerHTML=next;}
