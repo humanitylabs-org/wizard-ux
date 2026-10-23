@@ -49,6 +49,9 @@ public class DummyFoodActivity extends Activity {
     void home() {
         root.removeAllViews();
         text("Dummy Food home");
+        // Diagnostic for AutomationE2eTest: does this process send accessibility events at all?
+        android.view.accessibility.AccessibilityManager am = getSystemService(android.view.accessibility.AccessibilityManager.class);
+        text("a11y " + (am != null && am.isEnabled() ? "on" : "off"));
         button("Krua Thai Kitchen", this::menu);
     }
 

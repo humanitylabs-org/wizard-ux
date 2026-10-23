@@ -173,6 +173,7 @@ public class AutomationE2eTest {
     @Test public void recordingKeepsTheRouteAndNeverTheCommitTap() throws Exception {
         assertEquals("", main(() -> engine.record(new JSONObject().put("package", T).put("ref", "+new").put("ambiguous", new JSONArray().put("add")))));
         SystemClock.sleep(2000);
+        String home = screen();
         userTaps("Krua Thai Kitchen");
         // "Add" is ambiguous: the recorder must remember the dish beside it. Two rows say Add; take Pad thai's.
         AccessibilityNodeInfo root = ui.getRootInActiveWindow();
@@ -189,7 +190,7 @@ public class AutomationE2eTest {
         assertEquals("recording", rec.getString("kind"));
         assertTrue(rec.getBoolean("committed"));
         assertEquals("฿95", rec.getString("total"));
-        String events = rec.getJSONArray("events").toString() + " log=" + main(() -> engine.status(T)).optJSONArray("log");
+        String events = rec.getJSONArray("events").toString() + " home=" + home + " log=" + main(() -> engine.status(T)).optJSONArray("log");
         assertTrue(events, events.contains("\"label\":\"Krua Thai Kitchen\""));
         assertTrue(events, events.contains("\"near\":\"Pad thai\""));
         assertTrue(events, events.contains("View basket"));
