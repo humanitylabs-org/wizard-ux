@@ -64,8 +64,10 @@
 
 /* spread-to-zoom list: a full-screen sheet that scales in; .deep reveals detail lines */
 .wm-zoom { position: absolute; inset: 0; overflow-y: auto; opacity: 0; pointer-events: none; transform: scale(.94);
-  background: radial-gradient(140% 90% at 50% 30%, #140c2e, #05030c); transition: opacity .7s, transform .9s var(--wm-spring); }
-.wm-zoom.on { opacity: 1; pointer-events: auto; transform: none; }
+  background: radial-gradient(140% 90% at 50% 30%, #140c2e, #05030c); visibility: hidden;
+  transition: opacity .7s, transform .9s var(--wm-spring), visibility 0s linear .7s; }
+/* visibility drops the closed list from TalkBack/accessibility once its fade ends, not just from sight. */
+.wm-zoom.on { opacity: 1; pointer-events: auto; transform: none; visibility: visible; transition-delay: 0s; }
 .wm-zoom .wm-zi { display: block; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid rgba(185, 168, 255, .12); padding: 13px 0; color: var(--wm-ink); }
 .wm-zoom .wm-zi .t { font-size: 18px; font-weight: 400; display: flex; align-items: center; gap: 10px; }
 .wm-zoom .wm-zi .t::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c, var(--wm-violet-2)); box-shadow: 0 0 8px var(--c, var(--wm-violet-2)); flex: none; }

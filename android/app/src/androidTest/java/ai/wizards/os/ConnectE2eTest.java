@@ -161,7 +161,8 @@ public class ConnectE2eTest {
                         ready[0] = true;
                     } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
                 });
-                if (ready[0]) listShown = device.wait(Until.findObject(By.text(LIST_HEADING)), 3000) != null;
+                // A take starting on open closes the list; only proceed once it stays open.
+                if (ready[0]) { Thread.sleep(1500); listShown = device.wait(Until.findObject(By.text(LIST_HEADING)), 3000) != null; }
                 else Thread.sleep(500);
             }
             visibleSelector(By.text(LIST_HEADING), "assistant list"); foreground(); shot("assist-nested");
