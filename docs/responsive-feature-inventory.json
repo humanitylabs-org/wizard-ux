@@ -192,6 +192,7 @@
     "core/skins.css",
     "core/skins.js",
     "core/status.js",
+    "core/thread-swipe-back.js",
     "core/update-banner.css",
     "core/uploads.js",
     "core/usage.js",
@@ -521,6 +522,13 @@
         "desktop"
       ],
       "note": "Shared validated skin frame foundations, loaded before skin composition"
+    },
+    "core/thread-swipe-back.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin host built-in: swipe right in a chat thread goes back one step on every skin (touch only)"
     },
     "core/skin-host.js": {
       "loadedBy": [
