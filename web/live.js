@@ -662,7 +662,12 @@
         const remote = await putSeen(pending);
         if (!list.every(s => (remote?.threads?.[seenKeyOf(s)]?.unreadAt ?? -1) >= unreadAt)) throw new Error('Unread marker was not saved');
         this.seen = merge(this.seen, remote); writeLocal(this.seen); this.emit();
-        return true;
+        // A second device may have read the thread while this write was in
+        // flight. Its newer seenAt wins; do not claim the row was marked.
+        return list.every(s => {
+          const record = this.seen?.threads?.[seenKeyOf(s)];
+          return (record?.unreadAt ?? -1) > (record?.seenAt ?? 0);
+        });
       } catch (e) {
         const current = this.seen || pending, rolledBack = { ...current, threads: { ...current.threads } };
         for (const s of list) {
