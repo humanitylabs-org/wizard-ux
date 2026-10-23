@@ -136,8 +136,8 @@ function routeFor() {
     const oldPaged = await p.evaluate(() => { const L = window.__wos.live; const now = Date.now();
       const mk = (i, extra) => ({ id: 'po' + i, title: 'po' + i, status: 'completed', updatedAt: new Date(now - i * 1000).toISOString(), ...extra });
       const list = Array.from({ length: 50 }, (_, i) => mk(i)).concat([mk(60, { status: 'waiting_for_approval' }), mk(1, { id: 'podef', deferred: true })]);
-      const r = L.readyByOldest(L.workGroups(list, now).ready).map(s => s.id); return { first: r[0], second: r[1], last: r[r.length - 1], beforeLast: r[r.length - 2] }; });
-    ok(oldPaged.first === 'po60' && oldPaged.second === 'po49' && oldPaged.beforeLast === 'po0' && oldPaged.last === 'podef', '1d Oldest keeps approvals pinned on top and deferred last', oldPaged);
+      const g = L.workGroups(list, now), r = L.readyByOldest(g.ready).map(s => s.id); return { first: r[0], second: r[1], last: r[r.length - 1], def: g.deferred.map(s => s.id).join() }; });
+    ok(oldPaged.first === 'po60' && oldPaged.second === 'po49' && oldPaged.last === 'po0' && oldPaged.def === 'podef', '1d Oldest keeps approvals pinned on top; snoozed threads leave Ready', oldPaged);
     const yOrder = await p.evaluate(w => ['yesterday', 'pastWeek'].every(k => { const want = window.__wos.live.workGroups()[k].map(s => s.id);
       const got = [...document.querySelectorAll(`[data-chats="${w}"] [data-sec="${k}"] [data-chopen]`)].map(e => e.dataset.chopen);
       return got.length === 0 || JSON.stringify(got) === JSON.stringify(want.slice(0, got.length)); }), await wid());
