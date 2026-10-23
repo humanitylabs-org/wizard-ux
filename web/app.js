@@ -2919,6 +2919,11 @@
       }
       const text = words.filter(Boolean).join(' ').trim();
       if (!text) {
+        // A silent held take is a quick command that never happened (James, 23 Oct 2026): nothing to recover,
+        // so it finishes custody instead of piling up in Unsent. A take carrying composer text or files keeps them.
+        if (kind === 'command' && await OUTBOX.completeLocal(snap.custodyId)) {
+          releaseNative(); unhold(); setVoice('idle'); txHide(); toast('◌', 'No speech heard · nothing sent'); tourEv('nospeech'); return;
+        }
         await OUTBOX.transition(snap.custodyId, 'empty', 'No speech detected · original recording and composer kept together');
         releaseNative(); unhold(); setVoice('idle'); txHide();
         toast('◌', 'No speech detected · recording and text kept in Unsent'); tourEv('nospeech'); return;

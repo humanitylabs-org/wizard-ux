@@ -36,13 +36,17 @@ export function setupBehaviour(api) {
       sw = null; if (e.touches.length !== 1) return;
       const t = e.touches[0], view = api.route().view;
       if (e.target.closest && e.target.closest('pre, table, input, textarea, [contenteditable="true"], .ms-track')) return;
-      if (view === 'list' && last && t.clientX > innerWidth - 28) sw = { x: t.clientX, y: t.clientY, view };
-      else if (view === 'thread' && t.clientX > api.env.edgeInset) sw = { x: t.clientX, y: t.clientY, view };
+      if (view === 'list' && last && t.clientX > innerWidth - 28) sw = { x: t.clientX, y: t.clientY, t: performance.now(), view };
+      else if (view === 'thread' && t.clientX > api.env.edgeInset) sw = { x: t.clientX, y: t.clientY, t: performance.now(), view };
+    }, { passive: true });
+    // The right-edge strip on the list owns its finger: the row under it does not also swipe to Done / actions.
+    api.listen(root, 'pointerdown', e => {
+      if (e.pointerType === 'touch' && api.route().view === 'list' && last && e.clientX > innerWidth - 28) api.gesture.claim(e.pointerId);
     }, { passive: true });
     const end = e => {
       const s = sw; sw = null; const t = e.changedTouches && e.changedTouches[0]; if (!s || !t || e.type === 'touchcancel') return;
       const dx = t.clientX - s.x, dy = Math.abs(t.clientY - s.y);
-      if (dx > -80 || dy > 60) return;                                  // a clear leftward swipe only
+      if (dx >= 0 || !api.gesture.intent(dx, dy, performance.now() - s.t)) return; // the shell's one swipe threshold, leftward
       if (s.view === 'list' && last) api.nav.openThread(last);
       else if (s.view === 'thread') { const d = api.route().desk; if (d + 1 < api.nav.deskCount()) api.nav.goDesk(d + 1); }
     };

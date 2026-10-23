@@ -37,6 +37,38 @@
     // Browser / PWA: a new tab.
     try { window.open(u.href, '_blank', 'noopener'); } catch (e) { location.href = u.href; }
   }
+  // Files (an APK, a PDF, an archive) are downloaded, never loaded into the sheet, where a WebView frame
+  // swallows them and nothing happens (James 23 Oct 2026: the 0.10.3 Download button did nothing).
+  const FILE = /\.(apk|aab|pdf|zip|7z|tar|t?gz|dmg|pkg|exe|msi|csv|xlsx?|docx?|pptx?|epub|mp3|m4a|aac|wav|flac|mp4|mov|mkv|webm)$/i;
+  const isFile = u => !!u && FILE.test(u.pathname);
+  const bridge = () => window.WizardOSNative || null;
+  // Opening in the phone's own browser needs the native bridge for this Wizard's own pages: a plain window.open
+  // on Android loads in the main frame (multiple windows are off) and would replace Wizard.
+  const canBrowse = u => !!u && (!inApp(u) || !NATIVE || typeof bridge()?.openInBrowser === 'function');
+  function browse(u) {
+    const b = bridge();
+    if (NATIVE && typeof b?.openInBrowser === 'function') { try { b.openInBrowser(u.href); return; } catch (_) {} }
+    if (NATIVE && inApp(u)) return;
+    external(u);
+  }
+  function download(u, doc) {
+    const b = bridge();
+    if (NATIVE && typeof b?.download === 'function') { try { b.download(u.href); return true; } catch (_) {} }
+    // Android builds before 0.10.4 have no download bridge, and a main-frame file request would arm the
+    // "can't reach your Wizard" screen. Copy the link so it can be pasted into the phone's browser.
+    if (NATIVE) {
+      const say = t => { const n = document.createElement('div'); n.textContent = t; n.setAttribute('role', 'status');
+        n.style.cssText = 'position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:2147483001;max-width:86vw;background:rgba(22,14,46,.98);color:#f1ecff;border:1px solid rgba(205,190,255,.18);border-radius:12px;padding:10px 14px;font:14px/1.35 system-ui,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.5)';
+        document.body.appendChild(n); setTimeout(() => n.remove(), 4200); };
+      try { navigator.clipboard.writeText(u.href).then(() => say('Link copied · paste it into Chrome to download'), () => say('Open this link in Chrome to download: ' + u.href)); }
+      catch (_) { say('Open this link in Chrome to download: ' + u.href); }
+      return true;
+    }
+    // Browsers: an <a download> click.
+    const d = doc || document, a = d.createElement('a');
+    a.href = u.href; a.download = decodeURIComponent(u.pathname.split('/').pop() || ''); a.rel = 'noopener';
+    d.body.appendChild(a); a.click(); a.remove(); return true;
+  }
   // Images never load as a raw page (Android shows them at full pixel size, wider than the screen, no zoom).
   // They open in the shared media viewer: fit to the screen width, pinch to zoom, Back closes only the viewer.
   const IMG = /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i;
@@ -65,7 +97,7 @@
         <span class="ls-title"><b></b><small></small></span>
         <button class="ls-full" data-ls="full" aria-label="Smaller" title="Smaller">⤡</button>
         <button class="ls-keep" data-ls="keep" title="Keep as a window on this desk">Keep</button>
-        ${NATIVE ? '' : '<button class="ls-out" data-ls="out" aria-label="Open in browser" title="Open in browser">↗</button>'}
+        ${!NATIVE || typeof bridge()?.openInBrowser === 'function' ? '<button class="ls-out" data-ls="out" aria-label="Open in browser" title="Open in browser">↗</button>' : ''}
         <button class="ls-x" data-ls="close" aria-label="Close">✕</button>
       </header>
       <div class="ls-body"><i class="ls-load"></i><iframe class="ls-frame" title="Link" allow="microphone; clipboard-read; clipboard-write; fullscreen" referrerpolicy="same-origin"></iframe></div></div>`;
@@ -103,6 +135,7 @@
       if (!allowURL(u)) return true; // consumed, never navigate a forbidden shell/task
       if (inApp(u) && isImage(u) && viewImage(u, doc)) return true;
       if (!inApp(u)) { external(u); return true; }
+      if (isFile(u)) return download(u, doc);
       if (cur() && cur().url === u.href) { show(); return true; }
       stack.push({ url: u.href, title: '' }); paint(); show(); load(u.href);
       return true;
@@ -137,11 +170,13 @@
     });
     function patch(win, doc) {
       if (doc.__wizLinks) return; doc.__wizLinks = true;
+      try { linkMenu(doc, 'body', doc.baseURI); } catch (_) {}
       doc.addEventListener('click', e => {
         if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
         const a = e.target.closest && e.target.closest('a[href]'); if (!a) return;
-        const u = abs(a.getAttribute('href'), doc.baseURI); if (!u || a.hasAttribute('download')) return;
+        const u = abs(a.getAttribute('href'), doc.baseURI); if (!u) return;
         if (!/^https?:$/.test(u.protocol)) return; // mailto:, tel:, intent:, the page's own handling
+        if (inApp(u) && (isFile(u) || a.hasAttribute('download'))) { e.preventDefault(); download(u, doc); return; }
         const t = (a.getAttribute('target') || '').toLowerCase();
         if (!inApp(u)) { e.preventDefault(); external(u); return; }
         if (!t || t === '_self') { const h = doc.location; if (u.pathname === h.pathname && u.search === h.search && u.hash) return; } // in-page anchor
@@ -177,7 +212,7 @@
       if (k === 'full') { const peek = !el.classList.contains('peek'); el.classList.toggle('peek', peek); b.textContent = peek ? '⤢' : '⤡'; b.setAttribute('aria-label', peek ? 'Full screen' : 'Smaller'); b.title = b.getAttribute('aria-label'); return; }
       if (k === 'close') close();
       else if (k === 'back') back();
-      else if (k === 'out' && c) external(abs(c.url));
+      else if (k === 'out' && c) { let url = c.url; try { url = frame.contentWindow.location.href; } catch (e) {} browse(abs(url)); }
       else if (k === 'keep' && c) {
         let url = c.url; try { url = frame.contentWindow.location.href; } catch (e) {}
         const u = abs(url), title = c.title || (u ? nice(u) : 'Page');
@@ -224,6 +259,7 @@
       if (d0 && d0.session && !d0.video && a.closest('[data-chats]')) { e.preventDefault(); return; }
       e.preventDefault(); e.stopPropagation();
       if (inApp(u) && isImage(u) && viewImage(u, a.ownerDocument)) return;
+      if (inApp(u) && isFile(u)) { download(u, a.ownerDocument); return; }
       // A link to this app itself (…/wizard-os-home/?session=…, ?view=…) opens in place, not in a sheet.
       const DL = window.WizCore && window.WizCore.deeplink;
       if (DL && DL.route(u.href, a)) return;
@@ -233,17 +269,23 @@
     }, true);
   }
 
-  /* Long-press (or right-click) an outside link in a chat: open it in your own browser, or copy it.
+  /* Long-press (or right-click) a link in a chat or in a page in the link sheet: open it in your own browser,
+   * download it (files), or copy it. This Wizard's own pages count too (James 23 Oct 2026).
    * (James 18 Oct 2026: links in chats mostly come from the agent, so asking the agent to open its own link added nothing.) */
-  function linkMenu(root, scope = '.bub, .note-line, .steps') {
+  function linkMenu(root, scope = '.bub, .note-line, .steps', base) {
     let menu = null, timer = 0, at = null, swallow = 0;
     const shut = () => { if (menu) { menu.remove(); menu = null; } };
     const show = (a, x, y) => {
-      const u = abs(a.getAttribute('href')); if (!u || !/^https?:$/.test(u.protocol) || inApp(u)) return false;
+      const u = abs(a.getAttribute('href'), base); if (!u || !/^https?:$/.test(u.protocol)) return false;
+      const DLm = window.WizCore && window.WizCore.deeplink;
+      if (inApp(u) && DLm && DLm.isOwn && DLm.isOwn(u) && !isFile(u)) return false; // Wizard's own threads/apps open in place
+      const items = (canBrowse(u) ? '<button type="button" role="menuitem" data-wl="mine">Open in your browser</button>' : '')
+        + (inApp(u) && isFile(u) ? '<button type="button" role="menuitem" data-wl="dl">Download</button>' : '')
+        + '<button type="button" role="menuitem" data-wl="copy">Copy link</button>';
       shut();
       const doc = a.ownerDocument;
       menu = doc.createElement('div'); menu.className = 'wiz-linkmenu'; menu.setAttribute('role', 'menu');
-      menu.innerHTML = `<div class="wl-host">${esc(u.hostname)}</div><button type="button" role="menuitem" data-wl="mine">Open in your browser</button><button type="button" role="menuitem" data-wl="copy">Copy link</button>`;
+      menu.innerHTML = `<div class="wl-host">${esc(inApp(u) ? decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || u.hostname) : u.hostname)}</div>${items}`;
       menu.style.cssText = 'position:fixed;z-index:2147483000;min-width:220px;max-width:min(300px,calc(100vw - 16px));background:rgba(22,14,46,.98);color:#f1ecff;border:1px solid rgba(205,190,255,.18);border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.55);padding:6px;font:15px/1.3 system-ui,sans-serif';
       for (const b of menu.querySelectorAll('button')) b.style.cssText = 'display:block;width:100%;text-align:left;border:0;background:none;padding:12px 10px;font:inherit;color:inherit;border-radius:8px;cursor:pointer';
       menu.querySelector('.wl-host').style.cssText = 'padding:6px 10px 4px;font-size:12px;color:#8a82a6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
@@ -254,7 +296,8 @@
       menu.style.top = Math.max(8, Math.min(y, vh - r.height - 8)) + 'px';
       menu.addEventListener('click', e => {
         const b = e.target.closest('[data-wl]'); if (!b) return; e.preventDefault(); e.stopPropagation();
-        if (b.dataset.wl === 'mine') { shut(); return external(u); }
+        if (b.dataset.wl === 'mine') { shut(); return browse(u); }
+        if (b.dataset.wl === 'dl') { shut(); return download(u, doc); }
         const done = ok => { b.textContent = ok ? 'Link copied' : 'Couldn’t copy'; setTimeout(shut, 700); };
         try { (doc.defaultView.navigator.clipboard?.writeText(u.href) || Promise.reject()).then(() => done(true), () => done(false)); } catch (_) { done(false); }
       });

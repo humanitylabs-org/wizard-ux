@@ -151,7 +151,7 @@
   // or onSent notification. Never consume a sealed message or unrelated draft.
   function localCompletable(it) {
     return !!it && !quarantine.has(it.id) && ['new', 'reply', 'dictation'].includes(it.kind) &&
-      ['processing', 'held'].includes(it.state) && !it.deliveryRequested && !it.body && !it.steerBody &&
+      (['processing', 'held'].includes(it.state) || (it.state === 'empty' && it.intent === 'command')) && !it.deliveryRequested && !it.body && !it.steerBody &&
       !it.steerDispatch && !it.runId && !it.parkedDraft && !String(it.typed || '').trim() &&
       !(it.files || []).some(f => f.id !== it.audioFile?.id);
   }
@@ -160,6 +160,9 @@
   // Unheard takes (STT failed) and interrupted captures keep their audio; fresh rows (<10 min) may still settle.
   const SETTLED_COMMAND = /^(Command accepted · completion unconfirmed|Delivery not confirmed · original recording kept; not queued for retry|Music didn’t confirm|Command completed · device cleanup failed)/;
   function settledCommand(it) { return it.intent === 'command' && SETTLED_COMMAND.test(String(it.error || '')) && !!String(it.recoveryText || it.text || '').trim() && now() - (it.updatedAt || it.createdAt || 0) > 10 * 60 * 1000; }
+  // Silent held takes from earlier builds sat in Unsent as "No speech detected". A long press with no words is a
+  // command that never happened: clear it, unless the owner's composer text or files rode along (localCompletable).
+  function silentCommand(it) { return !!it && it.intent === 'command' && it.state === 'empty' && !String(it.text || it.recoveryText || '').trim(); }
   async function completeLocal(id) {
     const it = items.get(id);
     if (!localCompletable(it) || localCompletions.has(id)) return false;
@@ -246,7 +249,7 @@
       // 'handled' labels also covered pending music/app work, so keep those.
       for (const it of [...items.values()]) {
         if (recovered && it.completion === 'local') await put(it); // move fallback receipts into the available primary store
-        else if (it.state === 'held' && (it.localCompleted || settledCommand(it))) await completeLocal(it.id);
+        else if ((it.state === 'held' && (it.localCompleted || settledCommand(it))) || silentCommand(it)) await completeLocal(it.id);
       }
       emit(); schedule();
     })().finally(() => { if (!recovered) ready = null; });
