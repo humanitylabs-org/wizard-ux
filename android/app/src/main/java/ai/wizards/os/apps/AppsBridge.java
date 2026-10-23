@@ -40,7 +40,7 @@ import ai.wizards.os.device.DeviceMessageProtocol;
  *
  * Protocol (JSON strings): page → {id, method, params}; native → {id, ok, result | error}; pushes → {type:'status'|'resume', ...}.
  */
-public final class AppsBridge implements AppsInstaller.Listener {
+public final class AppsBridge implements AppsDistribution.Listener {
     public static final String NAME = "wizardAppsPort";
     public static final int VERSION = 1;
     private static final int MAX_FRAMES = 4;
@@ -56,7 +56,7 @@ public final class AppsBridge implements AppsInstaller.Listener {
     /** Installs the port on {@code web}; null if this WebView can't (old WebView: the view says "update"). */
     public static AppsBridge install(Activity a, WebView web) {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
-            Log.w(AppsInstaller.TAG, "WebView lacks WEB_MESSAGE_LISTENER: no Android Apps bridge");
+            Log.w(AppsDistribution.TAG, "WebView lacks WEB_MESSAGE_LISTENER: no Android Apps bridge");
             return null;
         }
         AppsBridge b = new AppsBridge(a, web);
@@ -67,15 +67,15 @@ public final class AppsBridge implements AppsInstaller.Listener {
         } catch (RuntimeException e) {
             WebViewCompat.removeWebMessageListener(web, NAME);
             WebViewCompat.removeWebMessageListener(web, DeviceMessageProtocol.NAME);
-            Log.w(AppsInstaller.TAG, "addWebMessageListener failed: no Android Apps bridge", e);
+            Log.w(AppsDistribution.TAG, "addWebMessageListener failed: no Android Apps bridge", e);
             return null;
         }
-        AppsInstaller.listener = b;
+        AppsDistribution.attach(b);
         return b;
     }
 
     public void detach() {
-        if (AppsInstaller.listener == this) AppsInstaller.listener = null;
+        AppsDistribution.detach(this);
         frames.clear();
         bg.shutdown();
     }
@@ -84,7 +84,7 @@ public final class AppsBridge implements AppsInstaller.Listener {
     public void onResume() {
         if (frames.isEmpty()) return;
         push("{\"type\":\"resume\"}");
-        AppsInstaller.postInventorySoon(activity);
+        AppsDistribution.postInventorySoon(activity);
     }
 
     @Override
@@ -115,7 +115,7 @@ public final class AppsBridge implements AppsInstaller.Listener {
     private void onMessage(WebView view, WebMessageCompat message, Uri sourceOrigin, boolean isMainFrame, JavaScriptReplyProxy reply) {
         String want = AppState.origin(activity);
         if (sourceOrigin == null || !want.equals(originOf(sourceOrigin))) return;
-        if (!isMainFrame || !shellOnTop()) { Log.w(AppsInstaller.TAG, "refused: not the shell (" + (isMainFrame ? "main" : "frame") + ")"); return; }
+        if (!isMainFrame || !shellOnTop()) { Log.w(AppsDistribution.TAG, "refused: not the shell (" + (isMainFrame ? "main" : "frame") + ")"); return; }
         String data = text(message);
         JSONObject m;
         try { m = new JSONObject(data == null ? "" : data); } catch (JSONException e) { return; }
@@ -130,7 +130,7 @@ public final class AppsBridge implements AppsInstaller.Listener {
             Object result = null; String err = null;
             try { result = call(method, params); }
             catch (Refusal e) { err = e.getMessage(); }
-            catch (JSONException | RuntimeException e) { Log.w(AppsInstaller.TAG, method + ": " + e); err = "Something went wrong"; }
+            catch (JSONException | RuntimeException e) { Log.w(AppsDistribution.TAG, method + ": " + e); err = "Something went wrong"; }
             final Object r = result; final String er = err;
             main.post(() -> answer(reply, id, r, er));
         });
@@ -212,10 +212,10 @@ public final class AppsBridge implements AppsInstaller.Listener {
             case "status":
                 return new JSONObject().put("bridge", VERSION).put("app", activity.getPackageName())
                         .put("version", BuildConfig.VERSION_NAME).put("versionCode", BuildConfig.VERSION_CODE)
-                        .put("sdk", Build.VERSION.SDK_INT).put("canInstall", activity.getPackageManager().canRequestPackageInstalls())
-                        .put("installs", AppsInstaller.status());
+                        .put("sdk", Build.VERSION.SDK_INT).put("canInstall", AppsDistribution.canInstall(activity))
+                        .put("installs", AppsDistribution.status());
             case "list":
-                AppsUpdateJob.schedule(activity); // the add-on is in use: keep its apps updated from now on
+                AppsDistribution.schedule(activity); // only direct distribution schedules APK updates
                 return new JSONObject().put("apps", AppsCatalog.list(activity)).put("self", activity.getPackageName()).put("sdk", Build.VERSION.SDK_INT);
             case "icon": {
                 String s = installed(p);
@@ -229,10 +229,7 @@ public final class AppsBridge implements AppsInstaller.Listener {
                 return true;
             }
             case "openPlay": {
-                String s = pkg(p);
-                Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + s)).setPackage("com.android.vending");
-                try { start(i); }
-                catch (Refusal e) { start(new Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=" + s))); }
+                openPlay(pkg(p));
                 return true;
             }
             case "appInfo": {
@@ -246,23 +243,20 @@ public final class AppsBridge implements AppsInstaller.Listener {
                 start(new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + s)));
                 return true;
             }
-            case "install": {
-                if (!activity.getPackageManager().canRequestPackageInstalls()) {
-                    start(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + activity.getPackageName())));
-                    return new JSONObject().put("needsPermission", true);
-                }
-                AppsInstaller.Request r = new AppsInstaller.Request(p.optString("sha256", ""), p.optString("package", ""),
-                        p.optString("signer", ""), p.optLong("versionCode", 0), false);
-                String bad = AppsInstaller.start(activity, r);
-                if (bad != null) throw new Refusal(bad);
-                return new JSONObject().put("started", true);
-            }
+            case "install":
+                return AppsDistribution.install(this, activity, p);
             default:
                 throw new Refusal("unknown method");
         }
     }
 
-    private void start(Intent i) throws Refusal {
+    void openPlay(String pkg) throws Refusal {
+        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + pkg)).setPackage("com.android.vending");
+        try { start(i); }
+        catch (Refusal e) { start(new Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=" + pkg))); }
+    }
+
+    void start(Intent i) throws Refusal {
         final Refusal[] err = {null};
         final Object lock = new Object();
         final boolean[] done = {false};

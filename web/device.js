@@ -430,7 +430,7 @@
       const sub = u.state === 'ready' ? `${u.version} is ready · tap to restart` : u.state === 'available' ? `${u.version} is available · tap to update` : u.state === 'error' ? `${u.message || 'Update failed'} · tap to retry` : u.state === 'deferred' ? `${UPD_TEXT.deferred(u)[0]} · Install now` : u.state === 'current' ? 'Up to date' : u.state === 'offline' ? 'Couldn’t check · tap to try again' : 'Tap to check for updates';
       return `<div class="st-row static"><span class="st-ic">◉</span><span class="st-tx"><b>Recording</b><small>Keeps going with the screen off or in another app · Stop and Send in the notification</small></span></div>
         <div class="st-row static"><span class="st-ic">✉</span><span class="st-tx"><b>Reply notifications</b><small>${n.allowed ? `On · when ${window.WizConfig.agent()} answers a chat you sent from here · clear once you read the thread` : 'Off · allow notifications for Wizard OS in Android settings'}</small></span></div>
-        <button class="st-row" data-dvupd><span class="st-ic">↻</span><span class="st-tx"><b>Wizard OS ${esc(ver)}</b><small>${esc(sub)}</small></span><span class="st-go">›</span></button>`;
+        ${u.distribution === 'play' ? `<div class="st-row static" data-play-managed><span class="st-ic">↻</span><span class="st-tx"><b>Wizard OS ${esc(ver)}</b><small>Updates managed by Google Play</small></span></div>` : `<button class="st-row" data-dvupd><span class="st-ic">↻</span><span class="st-tx"><b>Wizard OS ${esc(ver)}</b><small>${esc(sub)}</small></span><span class="st-go">›</span></button>`}`;
     },
     readRecording,
     recoverRecorder: () => syncRecorder('control'),

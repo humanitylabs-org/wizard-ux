@@ -19,7 +19,7 @@ rc = subprocess.run([sys.executable, str(here / 'qa_photos_backup_thales.py'), *
 if rc:
     print(json.dumps({'chain': 'fail', 'step': 'photos-e2e', 'rc': rc})); sys.exit(rc)
 
-new_apk = rel / 'source/android/app/build/outputs/apk/release/app-release.apk'
+new_apk = rel / 'source/android/app/build/outputs/apk/sideload/release/app-sideload-release.apk'
 assert new_apk.is_file() and old_apk.is_file(), (new_apk, old_apk)
 upgrade = here / 'qa_upgrade.py'
 if not upgrade.is_file():

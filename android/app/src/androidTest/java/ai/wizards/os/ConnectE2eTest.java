@@ -21,8 +21,20 @@ import static org.junit.Assert.*;
 public class ConnectE2eTest {
     private final Context c = InstrumentationRegistry.getInstrumentation().getTargetContext();
     private final UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
+    // The surface uppercases its heading with CSS; accessibility reports the rendered (uppercase) text.
+    private static final java.util.regex.Pattern LIST_HEADING =
+            java.util.regex.Pattern.compile("(?i)what you told the wizard");
+    private void visibleSelector(androidx.test.uiautomator.BySelector sel, String label) {
+        if (device.wait(Until.findObject(sel), 15000) != null) return;
+        shot("fail-" + label.replaceAll("[^A-Za-z0-9]+", "-"));
+        try { device.dumpWindowHierarchy(new File(c.getExternalFilesDir(null), "fail-hierarchy.xml")); } catch (Exception ignored) {}
+        fail(label + " not visible");
+    }
     private void visible(String text) {
         if (device.wait(Until.findObject(By.text(text)), 15000) != null) return;
+        // WebView can lag its accessibility tree after an Activity returns to the front; settle once and re-read.
+        device.waitForIdle(); device.waitForWindowUpdate(null, 2000);
+        if (device.wait(Until.findObject(By.text(text)), 8000) != null || device.wait(Until.findObject(By.desc(text)), 2000) != null) return;
         // Keep the failing screen and its UI tree as evidence before failing.
         shot("fail-" + text.replaceAll("[^A-Za-z0-9]+", "-"));
         try { device.dumpWindowHierarchy(new File(c.getExternalFilesDir(null), "fail-hierarchy.xml")); } catch (Exception ignored) {}
@@ -33,6 +45,34 @@ public class ConnectE2eTest {
         return o == null ? "?" : o.getText();
     }
     private void foreground() { assertEquals(c.getPackageName(), device.getCurrentPackageName()); }
+    private void back() throws Exception {
+        if ("true".equals(InstrumentationRegistry.getArguments().getString("gesture_back"))) {
+            assertTrue(device.swipe(1, device.getDisplayHeight() / 2,
+                    device.getDisplayWidth() / 2, device.getDisplayHeight() / 2, 30));
+        } else device.pressBack();
+        device.waitForIdle(); Thread.sleep(350);
+    }
+    private void clearOfBars(String label, String name) throws Exception {
+        if (Build.VERSION.SDK_INT < 30) return;
+        final android.graphics.Insets[] bars = new android.graphics.Insets[1];
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            android.app.Activity a = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                    .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).iterator().next();
+            bars[0] = a.getWindow().getDecorView().getRootWindowInsets().getInsets(
+                    android.view.WindowInsets.Type.systemBars() | android.view.WindowInsets.Type.displayCutout()
+                            | android.view.WindowInsets.Type.ime());
+        });
+        androidx.test.uiautomator.UiObject2 control = device.wait(Until.findObject(By.text(label)), 10000);
+        assertNotNull(label, control);
+        android.graphics.Rect bounds = control.getVisibleBounds();
+        String detail = label + " bounds=" + bounds + " insets=" + bars[0] + " height=" + device.getDisplayHeight();
+        try (FileWriter out = new FileWriter(new File(c.getExternalFilesDir(null), name + ".txt"))) { out.write(detail); }
+        shot(name);
+        // WebView accessibility bounds come from CSS px and can round past the clip by up to one device dp.
+        int slack = (int) Math.ceil(c.getResources().getDisplayMetrics().density);
+        assertTrue(detail, bounds.top >= bars[0].top - slack && bounds.bottom <= device.getDisplayHeight() - bars[0].bottom + slack);
+        assertTrue(detail, bounds.height() >= 30);
+    }
     private void start(Class<?> activity) { c.startActivity(new Intent(c, activity).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
     private void shot(String name) { device.takeScreenshot(new File(c.getExternalFilesDir(null), name + ".png")); }
 
@@ -43,24 +83,37 @@ public class ConnectE2eTest {
         c.getSharedPreferences("wizard_server", Context.MODE_PRIVATE).edit().clear().commit();
         try (FakeWizard fake = new FakeWizard(); FakeWizard other = new FakeWizard()) {
             start(MainActivity.class);
-            visible("Connect to your Wizard"); shot("connect-fresh");
-            device.pressBack(); visible("Connect to your Wizard"); foreground();
+            visible("Connect to your Wizard"); clearOfBars("Connect to your Wizard", "connect-fresh");
+            back(); visible("Connect to your Wizard"); foreground();
             // The actual QR scanner is a nested native activity: cancelling returns to Connect, not the launcher.
             InstrumentationRegistry.getInstrumentation().getUiAutomation().grantRuntimePermission(c.getPackageName(), "android.permission.CAMERA");
             device.findObject(By.text("Scan QR code")).click();
-            Thread.sleep(1800); device.pressBack(); visible("Connect to your Wizard"); foreground();
+            Thread.sleep(1800); back(); visible("Connect to your Wizard"); foreground();
             device.findObject(By.desc("Wizard address")).setText(fake.origin());
             device.findObject(By.text("Connect")).click();
-            visible("Fixture home"); foreground(); shot("connect-shell");
+            visible("Fixture home"); foreground();
+            clearOfBars("Fixture home", "shell-top-insets");
+            clearOfBars("Fixture composer", "shell-composer-insets");
+            device.findObject(By.text("Fixture composer")).click(); Thread.sleep(1000);
+            clearOfBars("Fixture composer", "shell-composer-ime-insets");
+            back(); foreground(); visible("Fixture home");
+            device.findObject(By.text("Open overlay")).click(); visible("Fixture overlay");
+            back(); visible("Fixture home"); foreground();
+            // The overlay node can still be in the tree for a frame after Back; wait for it to go rather than racing it.
+            assertTrue("overlay closed by Back", device.wait(Until.gone(By.text("Fixture overlay")), 5000));
             assertEquals(fake.origin(), ServerSettings.origin(c));
             assertEquals(fake.origin(), ai.wizards.os.device.AppState.origin(c));
             assertEquals(fake.origin(), ai.wizards.os.mizel.MizelConfig.origin(c));
-            device.findObject(By.text("Open nested")).click(); visible("Fixture nested");
-            device.pressBack(); visible("Fixture home"); foreground(); shot("connect-nested-back");
-            device.pressBack(); visible("Fixture home"); foreground();
+            for (int repeat = 0; repeat < 3; repeat++) {
+                device.findObject(By.text("Open nested")).click(); visible("Fixture nested");
+                shot("nested-" + repeat); back(); visible("Fixture home"); foreground();
+                shot("nested-back-" + repeat);
+            }
+            back(); visible("Fixture home"); foreground();
+            back(); visible("Fixture home"); foreground(); shot("root-back-twice");
             // A new Activity/process-independent persisted read uses the same server.
             start(ConnectActivity.class); visible("Keep current Wizard");
-            device.pressBack(); visible("Fixture home"); foreground();
+            back(); visible("Fixture home"); foreground();
             start(ConnectActivity.class); visible("Keep current Wizard");
             device.findObject(By.desc("Wizard address")).setText("http://evil.example");
             device.findObject(By.text("Connect")).click();
@@ -84,7 +137,37 @@ public class ConnectE2eTest {
             c.startActivity(new Intent(c, ConnectActivity.class).setData(Uri.parse("wizard://connect?origin=https%3A%2F%2Fother.example")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP));
             visible("Check this Wizard address, then tap Connect.");
             assertEquals(other.origin(), ServerSettings.origin(c)); shot("connect-pairing-confirmation");
-            device.pressBack(); visible("Fixture home"); foreground();
+            back(); visible("Fixture home"); foreground();
+            // The lock surface used to rely only on legacy onBackPressed, ignored by target 36.
+            InstrumentationRegistry.getInstrumentation().getUiAutomation().grantRuntimePermission(c.getPackageName(), "android.permission.RECORD_AUDIO");
+            start(ai.wizards.os.assist.AssistLockActivity.class);
+            // Drive the list only once the surface page has loaded (W exists); a fixed sleep raced the page load.
+            boolean listShown = false;
+            for (int attempt = 0; attempt < 20 && !listShown; attempt++) {
+                final boolean[] ready = new boolean[1];
+                InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                    try {
+                        java.util.Iterator<android.app.Activity> it = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                                .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).iterator();
+                        if (!it.hasNext()) return;
+                        android.app.Activity a = it.next();
+                        if (!(a instanceof ai.wizards.os.assist.AssistLockActivity)) return;
+                        java.lang.reflect.Field pr = ai.wizards.os.assist.AssistLockActivity.class.getDeclaredField("pageReady");
+                        pr.setAccessible(true);
+                        if (!pr.getBoolean(a)) return;
+                        java.lang.reflect.Field field = ai.wizards.os.assist.AssistLockActivity.class.getDeclaredField("web");
+                        field.setAccessible(true);
+                        ((android.webkit.WebView) field.get(a)).evaluateJavascript("W.reset();W.lockState(false);W.showList()", null);
+                        ready[0] = true;
+                    } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+                });
+                if (ready[0]) listShown = device.wait(Until.findObject(By.text(LIST_HEADING)), 3000) != null;
+                else Thread.sleep(500);
+            }
+            visibleSelector(By.text(LIST_HEADING), "assistant list"); foreground(); shot("assist-nested");
+            back(); foreground(); assertTrue("assistant closed by Back", device.wait(Until.gone(By.text(LIST_HEADING)), 5000));
+            shot("assist-nested-back"); back(); foreground(); shot("assist-root-back");
+            start(MainActivity.class); // stop the silent emulator take; no owner endpoint or real audio
         }
     }
 
@@ -105,10 +188,11 @@ public class ConnectE2eTest {
                 for (int i = 0; i < length; i++) if (in.read() < 0) break;
                 boolean shell = request.startsWith("GET /wizard-os-home/");
                 String html = "<!doctype html><title>Wizard OS</title><!-- core/ QA fixture -->"
-                    + "<meta name='viewport' content='width=device-width, initial-scale=1'><body style='background:#05030c;color:#f3efff;font:22px sans-serif;padding-top:120px'>"
-                    + "<!-- The app draws edge to edge and the real shell pads itself from the reported top inset; the fixture keeps its text clear of the status bar so accessibility reports it visible. -->"
-                    + "<p id='place'>Fixture home</p><button onclick=\"document.getElementById('place').textContent='Fixture nested'\">Open nested</button>"
-                    + "<script>window.__wosNativeBack=()=>{document.getElementById('place').textContent='Fixture home';return 'handled'};</script>";
+                    + "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+                    + "<style>body{margin:0;background:#05030c;color:#f3efff;font:22px sans-serif}header{padding:16px;padding-top:calc(16px + var(--nat-t,0px))}button{font-size:20px;margin:12px}input{box-sizing:border-box;position:fixed;bottom:0;left:0;width:100%;height:64px;font-size:22px}#overlay{position:fixed;inset:25%;background:#483068;padding:20px}</style>"
+                    + "<header><h1 id='place' role='heading' aria-live='polite' style='font-size:22px;font-weight:normal;margin:0'>Fixture home</h1></header><button onclick=\"document.getElementById('place').textContent='Fixture nested'\">Open nested</button>"
+                    + "<button onclick=\"document.getElementById('overlay').hidden=false\">Open overlay</button><div id='overlay' hidden>Fixture overlay</div><input value='Fixture composer'>"
+                    + "<script>window.__wosTop=n=>document.documentElement.style.setProperty('--nat-t',n+'px');window.__wosNativeBack=()=>{const o=document.getElementById('overlay');if(!o.hidden){o.hidden=true;return 'handled'}document.getElementById('place').textContent='Fixture home';return 'handled'};</script>";
                 byte[] bytes = (shell ? (wizard ? html : "<title>Sign in</title>") : "{}").getBytes(StandardCharsets.UTF_8);
                 OutputStream out = client.getOutputStream();
                 out.write(("HTTP/1.1 200 OK\r\nContent-Type: " + (shell ? "text/html" : "application/json") + "\r\nContent-Length: " + bytes.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.UTF_8)); out.write(bytes); out.flush();

@@ -25,7 +25,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Unit tests, lint, debug APK
         working-directory: android
-        run: ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+        run: ./gradlew --no-daemon --stacktrace :app:testSideloadDebugUnitTest :app:lintSideloadDebug :app:assembleSideloadDebug :app:testPlayDebugUnitTest :app:lintPlayDebug :app:assemblePlayDebug
       - name: Native size report
         if: always()
         run: |

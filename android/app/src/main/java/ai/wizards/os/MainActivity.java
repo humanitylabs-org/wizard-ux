@@ -117,7 +117,7 @@ public class MainActivity extends Activity {
         }
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.rgb(5, 3, 12));
-        // targetSdk 35 draws edge to edge. The page itself runs under the status bar so its background reaches the
+        // targetSdk 36 enforces edge to edge. The page itself runs under the status bar so its background reaches the
         // top of the glass (James, 10 Oct: "like Telegram"); the shell keeps its content clear of the bar with the
         // inset it is told (--nat-t). Only the side cutouts, the navigation bar and the keyboard still pad the view.
         root.setOnApplyWindowInsetsListener((v, insets) -> {

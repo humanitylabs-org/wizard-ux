@@ -45,7 +45,7 @@ public final class AppsCatalog {
         try { ris = pm.queryIntentActivities(main, 0); } catch (RuntimeException e) { ris = java.util.Collections.emptyList(); }
         Set<String> pkgs = new HashSet<>();
         for (ResolveInfo ri : ris) if (ri.activityInfo != null) pkgs.add(ri.activityInfo.packageName);
-        pkgs.addAll(AppsInstaller.known(c));
+        pkgs.addAll(AppsDistribution.known(c));
         for (String p : pkgs) {
             if (p.equals(c.getPackageName())) continue;
             JSONObject row = row(c, p);

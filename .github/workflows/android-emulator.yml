@@ -26,7 +26,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Debug APK
         working-directory: android
-        run: ./gradlew --no-daemon --stacktrace :app:assembleDebug :app:assembleDebugAndroidTest
+        run: ./gradlew --no-daemon --stacktrace :app:assembleSideloadDebug :app:assembleSideloadDebugAndroidTest
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -46,8 +46,8 @@ jobs:
             adb shell svc wifi disable
             adb shell svc data disable
             sleep 60
-            bash tools/android_emulator_smoke.sh android/app/build/outputs/apk/debug/app-debug.apk smoke-out
-            cd android && ./gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=ai.wizards.os.DeviceBridgeE2eTest
+            bash tools/android_emulator_smoke.sh android/app/build/outputs/apk/sideload/debug/app-sideload-debug.apk smoke-out
+            cd android && ./gradlew --no-daemon :app:connectedSideloadDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=ai.wizards.os.DeviceBridgeE2eTest
       - name: Summary
         if: always()
         run: |

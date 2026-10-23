@@ -263,7 +263,8 @@ public class CaptureJournalTest {
         allow(allowed, "update/Updater.java", "f.delete()", "x.delete()", "f.delete()");
         allow(allowed, "apps/AppsInstaller.java", "f.delete()", "file(app,sha).delete()");
         allow(allowed, "MainActivity.java", "f.delete()", "d.delete()");
-        final Path root = base;
+        for (String sourceSet : new String[]{"main", "sideload", "play"}) {
+        final Path root = base.getParent().getParent().resolve(sourceSet).resolve("java");
         try (Stream<Path> paths = Files.walk(root)) {
             for (Path file : (Iterable<Path>) paths.filter(p -> p.toString().endsWith(".java"))::iterator) {
                 String name = root.relativize(file).toString().replace(File.separatorChar, '/').replaceFirst("^ai/wizards/os/", "");
@@ -276,6 +277,7 @@ public class CaptureJournalTest {
                     assertTrue(text.contains("custody.releaseFile(f, \"meeting\", reason);\n            return;"));
                 }
             }
+        }
         }
     }
 

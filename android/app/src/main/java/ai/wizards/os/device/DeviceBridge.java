@@ -28,7 +28,7 @@ import ai.wizards.os.recording.RecorderService;
 import ai.wizards.os.recording.CancelledTakes;
 import ai.wizards.os.recording.RecordingStore;
 import ai.wizards.os.share.ShareStore;
-import ai.wizards.os.update.Updater;
+import ai.wizards.os.update.UpdateChannel;
 
 /**
  * Second JS bridge, "WizardOSDevice": the native-parity features (background recorder, share target, reply
@@ -54,7 +54,7 @@ public final class DeviceBridge implements RecorderService.Listener {
         this.web = web;
         if (!(activity instanceof ai.wizards.os.AppSessionActivity)) {
             RecorderService.setListener(this);
-            Updater.attach(activity, this);
+            UpdateChannel.attach(activity, this);
         }
         new Thread(() -> ShareStore.get(activity).prune(), "wizard-share-prune").start();
     }
@@ -64,7 +64,7 @@ public final class DeviceBridge implements RecorderService.Listener {
     /** Share sheet and "recording saved" notification taps. */
     public void onIntent(Intent intent) {
         if (intent == null) return;
-        Updater.onIntent(activity, intent); // "Update ready · tap to install" notification
+        UpdateChannel.onIntent(activity, intent); // "Update ready · tap to install" notification
         String a = intent.getAction();
         String json = null;
         if (ACTION_SHARE.equals(a) && intent.getStringExtra(EXTRA_SHARE) != null) {
@@ -94,12 +94,12 @@ public final class DeviceBridge implements RecorderService.Listener {
     };
 
     public void onStart() { AppState.setFront(activity,true); ReplyWatcher.appFront(activity); }
-    public void onStop() { AppState.setFront(activity,false); if (!AppState.front()) ReplyWatcher.kick(activity); if (!(activity instanceof ai.wizards.os.AppSessionActivity)) Updater.onStop(activity); }
-    public void onResume() { if (!(activity instanceof ai.wizards.os.AppSessionActivity)) Updater.onResume(activity); WizardIdentity.refresh(activity); }
+    public void onStop() { AppState.setFront(activity,false); if (!AppState.front()) ReplyWatcher.kick(activity); if (!(activity instanceof ai.wizards.os.AppSessionActivity)) UpdateChannel.onStop(activity); }
+    public void onResume() { if (!(activity instanceof ai.wizards.os.AppSessionActivity)) UpdateChannel.onResume(activity); WizardIdentity.refresh(activity); }
     public void onDestroy() {
         // A take still running (app swiped away) carries on; its notification's Stop/Send take over from here.
         AppState.setFront(activity,false);
-        if (!(activity instanceof ai.wizards.os.AppSessionActivity)) { RecorderService.setListener(null); Updater.detach(activity); }
+        if (!(activity instanceof ai.wizards.os.AppSessionActivity)) { RecorderService.setListener(null); UpdateChannel.detach(activity); }
     }
 
     /* ------------------------------------------------------------------ events to the page */
@@ -299,13 +299,13 @@ public final class DeviceBridge implements RecorderService.Listener {
     /* --- update --- */
 
     @JavascriptInterface
-    public void updateCheck() { Updater.check(activity); }
+    public void updateCheck() { UpdateChannel.check(activity); }
 
     @JavascriptInterface
-    public void updateInstall() { Updater.install(activity); }
+    public void updateInstall() { UpdateChannel.install(activity); }
 
     @JavascriptInterface
-    public String updateState() { return Updater.state(); }
+    public String updateState() { return UpdateChannel.state(); }
 
     /* ------------------------------------------------------------------ helpers */
 
