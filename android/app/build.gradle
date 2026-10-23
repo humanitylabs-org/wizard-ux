@@ -49,8 +49,27 @@ android {
         buildConfigField 'String', 'HOME_URL', javaString(defaultOrigin ? defaultOrigin + '/wizard-os-home/' : '')
         buildConfigField 'String', 'ORIGIN', javaString(defaultOrigin)
         manifestPlaceholders = [wizardDeepLinkHost: deepLinkHost]
-        // The one certificate (SHA-256) an in-app update must be signed with: the Wizard OS release key.
-        buildConfigField 'String', 'UPDATE_SIGNER', '"3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd"'
+    }
+
+    flavorDimensions 'distribution'
+    productFlavors {
+        sideload {
+            dimension 'distribution'
+            isDefault = true
+            // Preserve direct APK identity, configuration, signer and update policy.
+            buildConfigField 'String', 'UPDATE_SIGNER', '"3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd"'
+        }
+        play {
+            dimension 'distribution'
+            // Reserve >= 1,000,000 for Play; direct APK release codes stay below that.
+            // 69 is above the parallel 0.10.4/68 branch, not just main's 0.10.2/65.
+            versionCode 1000069
+            versionName '0.10.5'
+            buildConfigField 'String', 'ORIGIN', '""'
+            buildConfigField 'String', 'HOME_URL', '""'
+            buildConfigField 'String', 'PHOTOS_SERVER', '""'
+            manifestPlaceholders = [wizardDeepLinkHost: 'unconfigured.invalid']
+        }
     }
 
     buildFeatures {
@@ -76,8 +95,7 @@ android {
             // QA build: installs beside the real app (own id) and allows WebView inspection over adb.
             applicationIdSuffix '.qa'
             versionNameSuffix '-qa'
-            // QA builds pin their own debug key at runtime (each Thales build job has its own; see Updater.pinnedSigner).
-            buildConfigField 'String', 'UPDATE_SIGNER', '""'
+            // The sideload QA signer override is variant-scoped below, never added to Play.
         }
         release {
             minifyEnabled false
@@ -118,11 +136,33 @@ android {
 }
 
 androidComponents {
+    beforeVariants(selector().all()) { v ->
+        if (v.productFlavors.any { it.first == 'distribution' && it.second == 'play' } &&
+                v.buildType in ['qanext', 'qalater']) v.enable = false
+    }
+    onVariants(selector().all()) { v ->
+        if (v.flavorName == 'sideload' && v.buildType != 'release') {
+            v.buildConfigFields.put('UPDATE_SIGNER',
+                    new com.android.build.api.variant.BuildConfigField('String', '""', 'Pin installed QA signer'))
+        }
+    }
     onVariants(selector().withBuildType('qanext')) { v ->
         v.outputs.each { it.versionCode.set(9000 + (it.versionCode.getOrElse(0) ?: 0)) }
     }
     onVariants(selector().withBuildType('qalater')) { v ->
         v.outputs.each { it.versionCode.set(9100 + (it.versionCode.getOrElse(0) ?: 0)) }
+    }
+}
+
+// Keep historical entry points sideload-only; AGP's unqualified assemble tasks would build both.
+// New automation should use explicit Sideload/Play task names and flavor-qualified output paths.
+afterEvaluate {
+    ['assembleDebug', 'assembleRelease', 'assembleQanext', 'assembleQalater',
+     'assembleDebugAndroidTest', 'testDebugUnitTest', 'testReleaseUnitTest',
+     'lintDebug', 'lintRelease', 'bundleRelease'].each { legacy ->
+        def target = legacy.replaceFirst(/^(assemble|test|lint|bundle)/, '$1Sideload')
+        def alias = tasks.findByName(legacy) ?: tasks.create(legacy)
+        alias.setDependsOn([target])
     }
 }
 

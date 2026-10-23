@@ -1,5 +1,17 @@
 # Wizard OS for Android
 
+## Distribution variants
+
+See [PLAY_EDITION.md](PLAY_EDITION.md) for policy boundaries and version-code allocation.
+The default `sideload` distribution keeps the direct APK updater and signing configuration.
+Use `:app:bundlePlayRelease` for the public generic Play bundle, never `assembleRelease`.
+Explicit QA: `:app:testSideloadReleaseUnitTest :app:lintSideloadRelease
+:app:assembleSideloadRelease :app:testPlayReleaseUnitTest :app:lintPlayRelease :app:bundlePlayRelease`.
+Historical unqualified task names are sideload-only compatibility aliases. APK output moves to
+`app/build/outputs/apk/sideload/<buildType>/app-sideload-<buildType>.apk`; Play's bundle is
+`app/build/outputs/bundle/playRelease/app-play-release.aab`. Both release editions retain `ai.wizards.os`
+and the same release key. `tools/qa_play_edition_thales.py --job <prepared-job>` builds and audits on Thales.
+
 This is a native WebView shell, not a Capacitor Android project. Run Gradle/builds on your Android build
 machine, not a small control-plane VPS. `npm test` runs the lightweight source/configuration guards.
 
@@ -24,17 +36,16 @@ Direct Gradle invocation on a build machine supports:
 ```sh
 export WIZARD_ORIGIN=https://wizard.example.ts.net
 cd android
-./gradlew :app:testDebugUnitTest :app:assembleDebug
+./gradlew :app:testSideloadDebugUnitTest :app:assembleSideloadDebug
 # Or use -PwizardOrigin=https://wizard.example.ts.net -PphotosServer=https://photos.example.ts.net
 ```
 
 Use an HTTPS origin with no path, query, credentials or explicit port. The existing native trust policy
 supports HTTPS port 443 only. A trailing slash is removed. One value drives `BuildConfig.ORIGIN`,
 `BuildConfig.HOME_URL` (`origin + /wizard-os-home/`) and both manifest app-link hosts. No personal
-hostname is compiled in by default. Android currently has **no runtime server-setup/pairing screen**:
-its connection UI retries the built-in address or opens Tailscale. With no address, debug/unit-test
-builds use the non-routable `https://wizard.invalid`; release's `preReleaseBuild` fails with a clear
-configuration error. Release unit tests also require configuration because they share that prerequisite.
+hostname is compiled in by default. With an empty origin, release and debug builds open the runtime
+Connect screen for QR pairing or an HTTPS address; see [CONNECT.md](CONNECT.md). The Play flavor
+always has empty origin/home/photos defaults, even on an owner-configured worker.
 
 An omitted `photosServer` is safe: backup starts disabled, and the native Photos settings can connect
 an HTTPS server before enabling it. Saved photo-server credentials/preferences remain unchanged on

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <!-- Defense against main and future library manifests. Play is the only installer/updater. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" tools:node="remove" />
+    <uses-permission android:name="android.permission.ENFORCE_UPDATE_OWNERSHIP" tools:node="remove" />
+    <application>
+        <receiver android:name=".update.InstallReceiver" tools:node="remove" />
+        <receiver android:name=".update.UpdateBoot" tools:node="remove" />
+        <service android:name=".update.UpdateJob" tools:node="remove" />
+        <provider android:name=".update.ApkProvider" tools:node="remove" />
+        <receiver android:name=".apps.AppsInstallReceiver" tools:node="remove" />
+        <service android:name=".apps.AppsUpdateJob" tools:node="remove" />
+    </application>
+</manifest>

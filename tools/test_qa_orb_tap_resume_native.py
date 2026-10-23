@@ -31,7 +31,7 @@ class ContractTests(unittest.TestCase):
 
     def receipt_fixture(self):
         # Tiny test bytes, not an APK or a claimed build result.
-        path = self.root / 'source/android/app/build/outputs/apk/debug/app-debug.apk'
+        path = self.root / 'source/android/app/build/outputs/apk/sideload/debug/app-sideload-debug.apk'
         path.parent.mkdir(parents=True)
         path.write_bytes(b'unit-test-only-not-an-apk')
         receipt = {'status': 'ok', 'job': str(self.root), 'artifacts': [

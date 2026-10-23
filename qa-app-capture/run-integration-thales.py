@@ -50,9 +50,9 @@ try:
  sdk=str(android_sdk());jdk=java_home()
  nativeEnv={'JAVA_HOME':jdk,'ANDROID_HOME':sdk,'ANDROID_SDK_ROOT':sdk,'PATH':jdk+'/bin:'+env.get('PATH','')}
  (root/'android/local.properties').write_text('sdk.dir='+sdk+'\n')
- build=run('native-build',['./gradlew','--no-daemon',':app:assembleDebug',':app:testDebugUnitTest'],nativeEnv,root/'android')
+ build=run('native-build',['./gradlew','--no-daemon',':app:assembleSideloadDebug',':app:testSideloadDebugUnitTest'],nativeEnv,root/'android')
  if not build:
-  apk=root/'android/app/build/outputs/apk/debug/app-debug.apk';receipt['apkSHA256']=hashlib.sha256(apk.read_bytes()).hexdigest();save()
+  apk=root/'android/app/build/outputs/apk/sideload/debug/app-sideload-debug.apk';receipt['apkSHA256']=hashlib.sha256(apk.read_bytes()).hexdigest();save()
   run('native',['python3','tools/qa_mizel.py',str(apk),'ai.wizards.os.qa','20',str(evidence/'native/job')],{'QA_SHARED_CAPTURE_ONLY':'1','QA_PCM_ONLY':'1','QA_EXTERNAL_LOCK':'1'})
 finally:server.shutdown();save()
 raise SystemExit(1 if any(c['exit'] for c in receipt['commands']) else 0)

@@ -7,7 +7,7 @@ import java.io.File;
 final class ServerSwitchGuard {
     private ServerSwitchGuard() {}
     static boolean hasLocalWork(Context c) {
-        if (ai.wizards.os.update.Updater.recording(c)
+        if (ai.wizards.os.update.UpdateChannel.recording(c)
                 || !ai.wizards.os.everywhere.EverywhereOutbox.get(c).unsent().isEmpty()
                 || ai.wizards.os.share.ShareQueue.get(c).pending()
                 || !ai.wizards.os.recording.RecordingStore.get(c).pending(null).isEmpty()) return true;
