@@ -47,6 +47,8 @@ whichever skin is picked. It starts empty, and empty means the picked skin exact
 - **Orb swipe-up → Desks:** `html[data-skin] { --wos-orb-swipe-up: desks; }` makes a swipe up on the orb open the
   Desks overview (Miguel's gesture) instead of Apps, with no script or approval tap. `pill` instead opens Miguel's
   pill panel (`.ov.ov-pill` markup); the stylesheet setting it carries the `.ov-pill` rules, as `obsidian/skin.css` does.
+- **Regenerate under replies:** `html[data-skin] { --wos-reply-regenerate: on; }` shows a Regenerate button under
+  the last finished reply. Stock skins leave it off; scope the selector to your own palettes so nobody else gets it.
 - **Settings › Look:** a "My skin" row says what it sits on, with Edit (opens the file in Files) and Reset.
 - **Agents:** asked to "change my skin", an agent edits My skin only, never a skin in this folder
   (Agent Service run instructions and skill say so).
