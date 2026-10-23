@@ -121,6 +121,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        ScrollCaptureCrashGuard.install();
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.rgb(5, 3, 12));
         // targetSdk 35 draws edge to edge. The page itself runs under the status bar so its background reaches the

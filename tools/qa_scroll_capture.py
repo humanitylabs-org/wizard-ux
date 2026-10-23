@@ -38,6 +38,9 @@ def capture(name,top):
  check(name+' OS offers Capture more',bool(found),xml[-500:])
  if not found: dismiss();return
  time.sleep(7);shot(name+'-editor');xml=em.ui();(OUT/(name+'-editor.xml')).write_text(xml)
+ (OUT/(name+'-logcat.txt')).write_text(em.sx('logcat -d -v time'))
+ try: (OUT/(name+'-page.json')).write_text(json.dumps(pg.ev("({href:location.href,nav:performance.getEntriesByType('navigation').map(n=>n.type),age:performance.now(),thread:!!document.querySelector('[data-chats] .ch-msgs'),scrollY})")))
+ except Exception as e: (OUT/(name+'-page.json')).write_text(repr(e))
  check(name+' long screenshot editor visible','Save' in xml,em.top())
  restored=pg.ev('scrollY')
  check(name+' original document scroll restored',abs(restored-before)<=1,{'before':before,'after':restored})
