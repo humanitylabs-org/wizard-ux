@@ -50,7 +50,8 @@ window.WosChatPower = function chatPower(A) {
   const lastReply = nb => { const a = nb.querySelectorAll('.msg.a'); return a.length ? a[a.length - 1] : null; };
   const relTop = (nb, el) => el.getBoundingClientRect().top - nb.getBoundingClientRect().top;
   const bottomGap = nb => nb.scrollHeight - nb.scrollTop - nb.clientHeight;
-  const toBottom = nb => { nb.scrollTop = nb.scrollHeight; };
+  // Write scrollTop only when it moves: a same-value write still stops a phone's momentum scroll mid-fling.
+  const toBottom = nb => { if (bottomGap(nb) >= 1) nb.scrollTop = nb.scrollHeight; };
   function paintLatest(el, nb) {
     const b = el.querySelector('[data-chlatest]'); if (!b || !nb) return;
     b.hidden = bottomGap(nb) < 160;
@@ -117,7 +118,7 @@ window.WosChatPower = function chatPower(A) {
     // Later renders: a place still settling is placed again; a thread that follows stays on the bottom; otherwise the reading place holds.
     if (settling(c)) { const s = c.settle; s.apply(nb); settle(c, nb, s.apply, s.until); }
     else if (c.follow || (o.working && o.atBottom)) toBottom(nb);
-    else if (o.boxTop != null) nb.scrollTop = o.boxTop; // read before the old list was replaced (a detached box reads 0)
+    else if (o.boxTop != null && Math.abs(nb.scrollTop - o.boxTop) >= 1) nb.scrollTop = o.boxTop; // read before the old list was replaced (a detached box reads 0)
     paintLatest(el, nb);
     return true;
   }
