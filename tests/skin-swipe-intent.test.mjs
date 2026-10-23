@@ -1,7 +1,7 @@
-// Swipe-back in Obsidian/Landscapes fires only on an intentional swipe (James, 23 Oct 2026).
+// Swipe-back (every skin) fires only on an intentional swipe (James, 23 Oct 2026).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { engages, commits } from '../web/skins/obsidian/swipe-intent.js';
+import { engages, commits } from '../web/core/swipe-intent.js';
 
 test('subtle swipes never go back', () => {
   assert.equal(commits(45, 5, 80), false, 'the old 40 px flick');

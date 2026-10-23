@@ -1,4 +1,4 @@
-// Swipe-back intent for Miguel's skins (Obsidian, Landscapes): one threshold for both.
+// Swipe-back intent (web/core/thread-swipe-back.js, every skin): one threshold.
 // James, 23 Oct 2026: "an absolute subtle swipe is going back; make sure it's an intentional swipe."
 // A drag only starts tracking once it is clearly sideways, and Back fires only on a long drag
 // or a deliberate fast flick that stays level. Short nudges, diagonal scrolls and slow drifts snap back.
