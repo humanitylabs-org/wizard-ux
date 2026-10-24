@@ -1136,26 +1136,30 @@ window.WizCore.chats = function createChats(H) {
     return h;
   }
   const turnAt = tn => [tn.u?.at, tn.a?.at, tn.mediaAt].find(v => isFinite(v));
-  /* Thread actions: Defer / Done on a settled thread with an answer (Close & file retired with Helm);
-   * Restore (and Done) on a deferred or archived one; nothing while the agent is working or waiting.
-   * They sit bottom-right under the final response, Done rightmost. */
+  /* Thread actions: Snooze / Done on a settled thread with an answer (Close & file retired with Helm).
+   * A durable follow-up adds an explicit Stop action; Done becomes "Done for now" and never cancels it. */
+  const followUpActive = s => s?.followUp?.active === true && Number(s.followUp.count) > 0;
   function threadActions(s, turns) {
     if (!s || LIVE.busy(s.id)) return [];
+    const watching = followUpActive(s);
     const inArchive = s.archived || LIVE.workGroups([s]).archive.length > 0;
-    if (inArchive) return ['restore', 'snooze'];
+    if (inArchive) return watching ? ['restore', 'snooze', 'stop_watch'] : ['restore', 'snooze'];
     if (isWorking(s) || ['waiting_for_approval', 'unknown'].includes(s.status)) return [];
-    if (s.deferred) return ['restore', 'snooze', 'done'];
+    if (s.deferred) return watching ? ['restore', 'snooze', 'stop_watch', 'done'] : ['restore', 'snooze', 'done'];
     // A run James stopped (or one that died) before any answer still needs a way out: Done files it.
-    if (turns && !turns.some(t => t.a || t.media.length)) return ['cancelled', 'failed', 'interrupted'].includes(s.status) ? ['done'] : [];
-    return ['snooze', 'done'];
+    if (turns && !turns.some(t => t.a || t.media.length)) return ['cancelled', 'failed', 'interrupted'].includes(s.status) ? (watching ? ['stop_watch', 'done'] : ['done']) : [];
+    return watching ? ['snooze', 'stop_watch', 'done'] : ['snooze', 'done'];
   }
   const ACT = {
     unread: { label: 'Mark unread', icon: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m5 7 7 5 7-5"/></svg>', hint: 'Mark unread' },
     done: { label: 'Done', icon: '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>', hint: 'Mark done' },
     file: { label: 'Close & file', icon: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="4" rx="1.2"/><path d="M5.5 9v9a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"/></svg>', hint: 'Close and file thread' },
     snooze: { label: 'Snooze', icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l3 2"/></svg>', hint: 'Snooze: bring this thread back later' },
+    stop_watch: { label: 'Stop watching', icon: '<svg viewBox="0 0 24 24"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z"/><path d="m4 4 16 16"/></svg>', hint: 'Stop watching this follow-up' },
     restore: { label: 'Restore', icon: '<svg viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v4h4"/></svg>', hint: 'Restore to Work' },
   };
+  const actionLabel = (s, a, compact = false) => a === 'done' && followUpActive(s) ? 'Done for now'
+    : a === 'stop_watch' && compact ? 'Stop' : ACT[a].label;
   const owner = id => (H.owner ? H.owner(id) : id);
   /* ---- Agents MVP: per-agent Chats. A window pinned to a non-default agent (w.agent) lists only that agent's
    * threads and starts new chats on it. Focus derives that same route; the thread keeps its
@@ -1181,9 +1185,16 @@ window.WizCore.chats = function createChats(H) {
       for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
       return;
     }
+    if (a === 'stop_watch') {
+      closeRowSheet();
+      const ok = await LIVE.stopWatching(sid);
+      toast(ok ? '◉' : '!', ok ? 'Stopped watching' : 'Couldn’t stop watching', ok ? 1600 : 3200);
+      for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
+      return;
+    }
     if (a === 'snooze') { const B = BOOM(); if (B) B.open({ sessionId: sid, targetKind: 'thread', title: s.title, context: s.title }, B.nextFor(sid)); else toast('!', 'Snooze is still loading', 1600); return; }
     if (a !== 'restore' && w && w.thread === sid) threadBack(w);
-    const msg = { done: ['✓', 'Marked done'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
+    const msg = { done: ['✓', followUpActive(s) ? 'Done for now · still watching' : 'Marked done'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
     toast(msg[0], msg[1], 1600);
     const ok = await (a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : LIVE.restore(sid));
     if (ok && a === 'file') toast('▤', 'Filed in Archive', 1800);
@@ -1207,7 +1218,7 @@ window.WizCore.chats = function createChats(H) {
       <button type="button" data-rspin>${PIN_SVG}${PIN.has(sid) ? 'Unpin' : 'Pin'}</button>
       ${spaces().map(space => `<button type="button" data-rsspace="${esc(space.id)}" data-add="${!space.threads.includes(sid)}">${PIN_SVG}${space.threads.includes(sid) ? 'Remove from' : 'Add to'} ${SPACE.one} · ${esc(space.name)}</button>`).join('')}
       ${topicOn() ? `<button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>` : ''}
-      ${acts.map(a => `<button type="button" data-rsact="${a}">${ACT[a].icon}${ACT[a].label}</button>`).join('')}
+      ${acts.map(a => `<button type="button" data-rsact="${a}">${ACT[a].icon}${actionLabel(s, a)}</button>`).join('')}
       ${acts.length ? '' : `<p class="ch-sheet-n">${isWorking(s) || ['waiting_for_approval', 'unknown'].includes(s.status) ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
     rowSheet = { wid, sid, trigger };
     el.querySelector('.ch-sheet button')?.focus({ preventScroll: true });
@@ -1631,7 +1642,7 @@ window.WizCore.chats = function createChats(H) {
     const mlabel = PW?.modelLabel && !msw ? PW.modelLabel(w, s) : '';
     const chip = PW && !PW.modelLabel ? PW.modelChip(w, s) : '';
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
-    const tacts = acts.length && turns && !pend.length ? `<div class="ch-tacts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${ACT[a].label}</span></button>`).join('')}</div>` : '';
+    const tacts = acts.length && turns && !pend.length ? `<div class="ch-tacts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${actionLabel(s, a, true)}</span></button>`).join('')}</div>` : '';
     clearReading(w.id);
     // Live repaints rebuild the thread. Keep each already-loaded photo node so it doesn't blank and reload (flicker).
     const keepImgs = keepLoadedImages(el);
