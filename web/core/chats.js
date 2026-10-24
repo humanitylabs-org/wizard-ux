@@ -927,7 +927,7 @@ window.WizCore.chats = function createChats(H) {
    * Every attachment goes through the resumable /wizard/v1/uploads API when the box offers it (core/uploads.js):
    * chunked, any size, resumes after a dropped network or a Wizard restart, progress on the chip. A box without
    * capabilities.resumable_uploads keeps the old one-shot POST /wizard/files/upload (its own 64 MB limit). */
-  const MAX_FILES = 8, OLD_ROUTE_MAX = 64 * 1024 * 1024;
+  const MAX_FILES = 10, OLD_ROUTE_MAX = 64 * 1024 * 1024;
   const PEND = window.WizUploads?.pending || null;
   // A placeholder for a file still uploading (sent before it finished) shows its local thumbnail until it lands.
   const pendRef = f => { const r = PEND ? PEND.ref(f) : (f && f.id && !f.uploading ? fileRef(f) : null); if (r && PEND?.isPending(r.id) && f.preview) PREVIEW[r.id] = f.preview; return r; };
@@ -2123,7 +2123,7 @@ window.WizCore.chats = function createChats(H) {
       return;
     }
     const now = peekComposer(wid, sid);
-    const back = { text: [String(text || '').trim(), now.text.trim()].filter(Boolean).join('\n'), files: [...files, ...now.all.filter(f => !files.some(x => x.id === f.id))].slice(0, 8) };
+    const back = { text: [String(text || '').trim(), now.text.trim()].filter(Boolean).join('\n'), files: [...files, ...now.all.filter(f => !files.some(x => x.id === f.id))].slice(0, MAX_FILES) };
     if (reply && !now.reply) KIT.drafts.setReply(composerKey(sid), reply);
     if (now.here) { setDraft(wid, back.text, back.files); renderChats(W[wid]); } else KIT.drafts.set(composerKey(sid), back.text, back.files);
   }
@@ -2179,7 +2179,7 @@ window.WizCore.chats = function createChats(H) {
     const sealed = opts.seal === true ? takeComposer(wid, sid) : opts.seal || null;
     const tray = here && !voice ? (c.files || []) : [];
     // Files still uploading go too, as placeholders the outbox fills in before delivery (never a "wait" gate).
-    const files = [...(opts.files || []), ...(sealed ? sealed.files : []), ...tray.map(pendRef)].filter(f => f && f.id && !f.uploading).filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, 8);
+    const files = [...(opts.files || []), ...(sealed ? sealed.files : []), ...tray.map(pendRef)].filter(f => f && f.id && !f.uploading).filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, MAX_FILES);
     // A recording not yet transcribed carries the typed words beside it (the outbox puts them before the
     // transcript); anything already in words is joined now.
     let typed = sealed ? sealed.text : '';
