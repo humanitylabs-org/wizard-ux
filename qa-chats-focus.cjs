@@ -17,7 +17,7 @@ const rows = [
  ['phil_two','Philosopher answer','Philosophy','philosopher','check'],
  ['private_one','Sealed thread','Wizard OS','private','check']
 ].map(([id,title,subject,agent,state],i) => ({id,title,source:'wizard-mobile',status:'completed',message_count:2,hidden:false,last_active:now-i,started_at:now-500,wizard_last_user_at:now-100,wizard_last_assistant_at:now-i,wizard_activity_at:now-i,wizard_attention:{state,subject,ask:'Fixture ask'},...(agent?{agent}:{}), latest_message:{role:'assistant',content:'Fixture reply',timestamp:now-i}}));
-const writes = [], errors = [], failedAgents = new Set();
+const writes = [], errors = [], failedAgents = new Set(), spaceDetails = new Map();
 let writeSeq = 0;
 let sharedSpaces = [];
 let soloAgent = false;
@@ -33,7 +33,7 @@ async function route(r) {
  if (u.pathname==='/wizard/hermes/api/sessions' && failedAgents.has(u.searchParams.get('agent'))) return json({error:'fixture agent unavailable'},503);
  if (u.pathname==='/wizard/hermes/api/sessions') return json({data:rows.filter(s=>(s.agent||'')===(u.searchParams.get('agent')||'')),has_more:false,archive_returned:0,archive_total:0});
  const sm=u.pathname.match(/\/sessions\/([^/]+)(\/messages)?$/);
- if (sm) { const s=rows.find(x=>x.id===sm[1]); return json(sm[2]?{data:[{id:1,role:'user',content:'Fixture question',timestamp:now-50},{id:2,role:'assistant',content:'Fixture answer',timestamp:now} ],has_more:false}:{session:s}); }
+ if (sm) { const s=rows.find(x=>x.id===sm[1]) || spaceDetails.get(sm[1]); return json(sm[2]?{data:[{id:1,role:'user',content:'Fixture question',timestamp:now-50},{id:2,role:'assistant',content:'Fixture answer',timestamp:now} ],has_more:false}:{session:s}); }
  if (u.pathname.endsWith('/api/model/options')) return json({options:[{value:'fixture-model',provider:'fixture',default:true}]});
  if (u.pathname==='/wizard/v1/apps') return json({apps:[]});
  return json({});
@@ -148,9 +148,57 @@ async function routingMatrix(b) {
   await ctx.close();sharedSpaces=[];
  }
 }
+async function spaceArchiveMatrix(b) {
+ const saved=rows.slice();
+ const members=Array.from({length:82},(_,i)=>{
+  const t=now-(i<20?0:20*86400);
+  return {...saved[0],id:'space_member_'+i,title:'Space member '+i,last_active:t,started_at:t,wizard_last_user_at:t,wizard_last_assistant_at:t,wizard_activity_at:t,latest_message:{role:'assistant',content:'Member reply',timestamp:t}};
+ });
+ rows.splice(0,rows.length,...members.slice(0,20),...Array.from({length:50},(_,i)=>{
+  const t=now-9*86400;return {...members[20],id:'global_archive_'+i,title:'Global archive '+i,last_active:t,wizard_last_user_at:t,wizard_last_assistant_at:t,wizard_activity_at:t,latest_message:{role:'assistant',content:'Global reply',timestamp:t}};
+ }));
+ for(const s of members.slice(20))spaceDetails.set(s.id,s);
+ spaceDetails.set('space_hidden',{...members[20],id:'space_hidden',hidden:true});
+ spaceDetails.set('space_sealed',{...members[20],id:'space_sealed',agent:'private'});
+ sharedSpaces=[{id:'old-members',name:'Old members',threads:[...members.map(s=>s.id),'space_hidden','space_sealed','space_deleted']}];
+ try {
+  for(const desktop of [false,true]) {
+   const {ctx,p}=await boot(b,desktop),mode=desktop?'desktop':'phone';
+   try {
+    const before=await p.evaluate(()=>WizLive.unified().length);
+    await choose(p,'space:old-members');
+    await p.waitForFunction(()=>!document.querySelector('.ch-count')?.textContent.includes('Loading Space'),null,{timeout:15000});
+    const count=await p.locator('.ch-count:visible').innerText();
+    ok(count.startsWith('82 chats'),mode+' Space counts all 82 visible members beyond global archive-50',count);
+    const archive=p.locator('[data-sec="archive"]:visible');
+    if(!await archive.count()){ok(false,mode+' Space Archive count is 62','Archive missing');await capture(p,mode+'-missing-archive');continue;}
+    ok(await archive.locator('.ch-sec-h small').innerText()==='62',mode+' Space Archive count is 62');
+    if(!await archive.evaluate(e=>e.classList.contains('open')))await archive.locator('[data-sectoggle]').click();
+    // Display pagination is separate from fetching: use the existing Show more control.
+    while(await archive.locator('[data-secmore]').count())await archive.locator('[data-secmore]').click();
+    ok(await archive.locator('[data-chopen]').count()===62,mode+' all 62 old member rows are reachable');
+    ok(await p.locator('[data-chopen="space_hidden"], [data-chopen="space_sealed"]').count()===0,mode+' hidden/private discovery excluded');
+    ok(await p.evaluate(()=>WizLive.unified().length)===before,mode+' supplemental rows do not expand All');
+    for(const skin of ['obsidian','nebula']){
+     await p.evaluate(s=>WosSkin.set(s),skin);await p.waitForTimeout(500);
+     await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');if(window.__wos)a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);});
+     await p.waitForFunction(()=>{const e=document.querySelector('.ch-count'),r=e?.getBoundingClientRect();return r&&e.contains(document.elementFromPoint(r.x+15,r.y+r.height/2));});
+     await p.locator('.ch-scroll:visible').evaluate(e=>{const a=e.querySelector('[data-sec="archive"]');e.scrollTop=a.offsetTop-e.offsetTop;});await capture(p,mode+'-'+skin+'-old-space');
+    }
+    await choose(p,'all:');
+    ok(await p.locator('[data-chopen="space_member_81"]').count()===0,mode+' All remains globally windowed');
+    await choose(p,'space:old-members');
+    await p.locator('[data-chopen="space_member_81"]').click();
+    await p.evaluate(()=>{if(window.__wos)__wos.onBack();else __wux.escStep();});
+    ok((await activeFocus(p)).includes('Old members'),mode+' Back from old member retains Space focus');
+   } finally {await ctx.close();}
+  }
+ } finally {rows.splice(0,rows.length,...saved);spaceDetails.clear();sharedSpaces=[];}
+}
 (async()=>{
  const b=await chromium.launch({executablePath:process.env.QA_CHROME||undefined,args:['--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required']});
  try {
+ if(process.env.QA_SPACE_MEMBERS_ONLY){await spaceArchiveMatrix(b);ok(errors.length===0,'no page errors',errors);console.log(`${pass} passed, ${fail} failed`);process.exitCode=fail?1:0;return;}
  // One-agent install: no strip and no Focus section until a second agent or a Space exists.
  for(const desktop of [false,true]){
   soloAgent=true;sharedSpaces=[];
@@ -342,6 +390,7 @@ async function routingMatrix(b) {
  }
  ok(writes.filter(w=>/\/v1\/runs$/.test(w.path)).length===0,'zero /v1/runs during navigation');
  await sectionMatrix(b);
+ await spaceArchiveMatrix(b);
  await routingMatrix(b);
  ok(errors.length===0,'no page errors',errors);
  }finally{await b.close();}
