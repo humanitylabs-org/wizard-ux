@@ -104,7 +104,9 @@ def acceptance(job, receipt):
         artifacts = output / "evidence"
         artifacts.mkdir(mode=0o700)
         files = ["signed-event.json", "receipt.json", "capture.webp", "onboarding-dark.png",
-                 "approval-skin-dark.png", "settings-light.png", "approval-app-light.png"]
+                 "approval-skin-dark.png", "settings-light.png", "approval-app-light.png", "apps-receipt.json",
+                 "approval-devices-light.png", "approval-devices-dark.png", "approval-revoke-dark.png",
+                 "approval-encrypt-dark.png", "approval-decrypt-dark.png", "approval-seal-dark.png"]
         for name in ("pin-timeout.png", "pin-timeout.xml"):  # failure diagnostics, optional
             subprocess.run([str(adb), "-s", serial, "pull", "/sdcard/Android/data/ai.wizards.os.qa/files/identity-qa/" + name,
                             str(output / name)], env=env, capture_output=True)
@@ -116,6 +118,14 @@ def acceptance(job, receipt):
             if instrumentation_ok and pulled.returncode != 0:
                 raise RuntimeError("Missing public acceptance evidence: " + name)
         assert instrumentation_ok, "Signer instrumentation did not pass; inspect instrumentation.txt"
+        apps_receipt = json.loads((artifacts / "apps-receipt.json").read_text())
+        assert apps_receipt["status"] == "ok" and apps_receipt["nip44_roundtrip"] and apps_receipt["device_list_signed"] and apps_receipt["tamper_denied"]
+        import xml.etree.ElementTree as ET
+        unit_suites = [ET.parse(p).getroot() for p in (source / "android/app/build/test-results/testDebugUnitTest").glob("TEST-*.xml")]
+        unit_counts = {k: sum(int(s.get(k, "0")) for s in unit_suites) for k in ("tests", "failures", "errors", "skipped")}
+        nip44 = next(s for s in unit_suites if s.get("name") == "ai.wizards.os.identity.Nip44Test")
+        assert unit_counts["tests"] > 0 and unit_counts["failures"] == unit_counts["errors"] == unit_counts["skipped"] == 0
+        assert int(nip44.get("tests", "0")) == 8 and int(nip44.get("failures", "0")) == 0 and int(nip44.get("errors", "0")) == 0
         # Independent JS implementation in an isolated evidence directory, not app sources.
         verifier_dir = output / "verifier"
         run(["npm", "install", "--prefix", verifier_dir, "--no-save", "--ignore-scripts", "@noble/curves@2.0.1"], capture_output=True, text=True)
@@ -131,6 +141,8 @@ def acceptance(job, receipt):
         result = {"status": "ok", "host": receipt["host"], "source_revision": receipt["source_revision"],
                   "source_manifest_sha256": receipt["source_manifest_sha256"], "apk": str(app_path),
                   "apk_sha256": app["sha256"], "instrumented_tests": 3, "serial": serial,
+                  "unit_tests": unit_counts, "nip44_vector_cases": 128, "nip44_unit_tests": int(nip44.get("tests", "0")),
+                  "installed_apps": apps_receipt,
                   "independent_verification": verified, "screenshots": [str(artifacts / n) for n in files if n.endswith(".png")],
                   "published": False, "physical_phone": False}
         (output / "receipt.json").write_text(json.dumps(result, indent=2) + "\n")

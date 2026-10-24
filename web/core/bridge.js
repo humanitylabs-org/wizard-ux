@@ -58,14 +58,14 @@
   }
   function call(method, params = {}) {
     const mac = window.webkit?.messageHandlers?.wizardNative, droid = window.WizardNative;
-    const deviceMethod = method.startsWith('device.') || ['identity.info', 'identity.setup', 'identity.sign', 'view.capture'].includes(method);
+    const deviceMethod = method.startsWith('device.') || ['identity.info', 'identity.setup', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt', 'view.capture'].includes(method);
     const port = deviceMethod && window.wizardDevicePort;
     if (!mac && !droid && !port) return Promise.reject(new Error('no native shell'));
     const id = 'wux-' + (++seq);
     return new Promise((resolve, reject) => {
       waiting.set(id, { resolve, reject });
       // Native has a three-minute expiry. A biometric/PIN or backup flow is not a 15-second RPC.
-      const timeout = ['identity.setup', 'identity.sign'].includes(method) ? 185000 : 15000;
+      const timeout = ['identity.setup', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt'].includes(method) ? 185000 : 15000;
       const timer = setTimeout(() => { if (waiting.delete(id)) reject(new Error('native timeout')); }, timeout);
       waiting.set(id, { resolve: x => { clearTimeout(timer); resolve(x); }, reject: e => { clearTimeout(timer); reject(e); } });
       try {

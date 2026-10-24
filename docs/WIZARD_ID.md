@@ -54,8 +54,8 @@ alone never sets `backed_up`. No provider/declined save offers native copy/paste
 pubkey comparison. The exact WIZARD_ID loss warning appears before either path. Declining backup
 keeps `backed_up:false`. No ncryptsec decryption or key export through the bridge.
 
-The one approval sheet derives its sentence from kinds 0/1/3/30117/30617, name then d tags; all other
-kinds show “Unfamiliar request” and raw event JSON. All kinds require Approve & sign and biometric/PIN.
+The one approval sheet derives its sentence from known event kinds and validated tags (expanded
+below); all other kinds show “Unfamiliar request” and raw event JSON. Signing always needs Approve & sign and biometric/PIN.
 Back cancels sheets or steps back inside native import/error screens; it never exits the app.
 Native sheets take only Appearance colour roles from the current shell, with a dark fallback and
 contrast checks. The emulator fixture tests dark and light tokens.
@@ -63,6 +63,63 @@ contrast checks. The emulator fixture tests dark and light tokens.
 Settings publishes only an owner-approved **public kind-0** event, with relay OK acknowledgement
 before a published toast. Relays: `wss://relay.aiwizards.com`, `wss://nos.lol`,
 `wss://relay.damus.io`. No skin/app publication or Blossom uploader is introduced by this port.
+
+## Installed apps and private sealing (DECISIONS #94)
+
+REUSE: the versioned `wizardDevicePort`, native `WizardId` sheet, `KeyVault` per-use CryptoObject,
+`WizCore.bridge.call` and the `WizardApp` request/reply transport.
+EXTEND: `web/core/app-services.js` verifies the attached current app document and installed `apps.json`
+catalog entry; `web/core/app-client.js` exposes `WizardApp.identity`. No app-owned key or approval UI.
+EXTEND: native `NostrEvent` sentences and the existing `DeviceBridge` adapter/capabilities.
+NEW: native-only `Nip44` crypto primitive (not a web capability implementation); shared facade is in
+`web/core`. Bouncy Castle's lightweight RFC8439 engine supplies ChaCha20 without registering a JCA provider.
+
+```js
+const owner = await WizardApp.identity.info();
+const signed = await WizardApp.identity.sign({ kind: 30078, tags, content: '' });
+const sealed = await WizardApp.identity.nip44_encrypt({ pubkey: recipientHex, plaintext: JSON.stringify(innerEvent) });
+const opened = await WizardApp.identity.nip44_decrypt({ pubkey: senderHex, ciphertext: sealed.ciphertext });
+```
+
+The corresponding native methods are `identity.nip44_encrypt {pubkey,plaintext}` → `{ciphertext}` and
+`identity.nip44_decrypt {pubkey,ciphertext}` → `{plaintext}`. Each opens the **same native approval
+sheet** and requires a fresh biometric/PIN and one Keystore unwrap. The owner secret, ECDH point,
+conversation key and message-key buffers are wiped after one operation, never cached or returned.
+ACINQ constant-time point multiplication supplies raw shared X (its hashed `ecdh()` is not NIP-44).
+HKDF-SHA256 extract uses salt `nip44-v2`; expand uses the random 32-byte nonce; ChaCha20 starts at
+counter zero; HMAC-SHA256 authenticates nonce + ciphertext before decryption. Constant-time MAC
+comparison, strict UTF-8, payload/version checks, padding and resource limits fail closed as
+`{denied:true}`. Mobile limit: 1..65535 UTF-8 bytes; no extended-length messages in this port.
+
+Only installed `kind:wizard`, `source:apps.json` entries, their attached iframe and current same-origin
+app path qualify. Owner links, arbitrary frames and foreign origins do not. Request/reply authority
+is bound to the exact document across await, including same-path reloads and detach/uninstall. The
+shell sends only needed fields plus a catalog-owned display name (`Profiles asks:`); app-supplied
+requester text is ignored. Native sanitizes that display label; it never derives the action from it.
+Desktop shells and standalone clients return `{unavailable:true}`, without a fake signature or a
+Mac bridge call. Phone routing, Wizard Link and cached Messenger grants are out of scope. Same-origin
+hosted apps remain trusted by the shell's existing architecture; this is not a hostile-script sandbox.
+
+There are **two identities, never three**: the phone's owner Wizard ID, and the box's Wizard device/inbox
+key. This bridge only uses the owner key. The phone signs the addressable kind-30078 `d=wizard-devices`
+list and its revocations; the box keeps its own key for unattended receiving. This change does not
+create/store that box key or implement profile resolution. Sheets now say:
+
+- kind 30078, `d=wizard-devices`: **Let this Wizard receive for you**, listing short device npubs;
+- that list with a `revoked` tag: **Remove a Wizard from your Wizard ID**;
+- kind 13: **Send a sealed friend request**;
+- kind 1078, `t=wizard-profile` and a valid `p` key: **Add <short npub> as a friend**;
+- encrypt: validated inner-event sentence + **sealed to <short npub>**, otherwise
+  **Encrypt a private message to <short npub>**;
+- decrypt: **Open a sealed message from <short npub>**. A supplied pubkey is not proof of a sender;
+  callers must verify the decrypted Nostr event.
+
+Unrecognized events retain **Unfamiliar request** and raw JSON. No remembered allow grants. Back
+cancels each sheet and never exits; native navigation/destruction/expiry invalidates the request.
+Official public NIP-44 vectors and provenance live in `android/app/src/test/resources/` (all 128 cases,
+8 JUnit methods). Emulator acceptance now drives the real installed Profiles iframe's `WizardApp`
+requests through the shell, signs a device list, opens fresh PIN prompts for encrypt/decrypt/tamper,
+asserts a roundtrip and tamper denial, cancels with Back and captures device-list sheets on two skins.
 
 ## Verification
 

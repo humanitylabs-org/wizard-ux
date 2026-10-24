@@ -18,6 +18,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 
 | Need | Use | Never hand-roll | Test the shared path by |
 |---|---|---|---|
+| Owner signatures and private sealing on the phone | `WizardApp.identity.{info,sign,nip44_encrypt,nip44_decrypt}` (`web/core/app-client.js`), forwarded by `WizAppServices` for installed same-origin apps to `WizCore.bridge.call` / `wizardDevicePort` | app-owned keys, custom signer ports, approval descriptions, remembered grants, desktop fake success | `tests/wizard-id-bridge.test.mjs`; Thales `Nip44Test` + `WizardIdFlowTest` |
 | Talk to an agent about app content: thread, composer, Stop, retry, outbox, model picker, dictation, attachments | `WizardApp.nav.openThread(sessionId, {reply})`, the real Chats thread over the app (wizard-builder `references/chat.md`) | composer, transcript, streaming client or retry loop in the app; `wizard-ui.css` is look only | the shell shows the `[data-chats]` thread for that session; the app frame has no textarea; a forced 503 leaves exactly one outbox item and one delivered message |
 | Back inside the app | `WizardApp.back.register / push / useHistory` | root history guards, CloseWatcher | nested view + Back keeps the app open |
 | Skin, tokens, light/dark | `WizardApp.theme.get / onChange`, `--wz-*` roles | theme storage, own dark mode, literal colours | two skins + a live skin change keep app state |

@@ -49,7 +49,7 @@ public final class DeviceMessageProtocol {
         return new JSONObject().put("v", VERSION).put("capabilities", new JSONObject()
                 .put("device.packages", new JSONObject().put("v", VERSION).put("methods", methods))
                 .put("identity", new JSONObject().put("v", VERSION).put("methods", new org.json.JSONArray()
-                    .put("identity.info").put("identity.setup").put("identity.sign")))
+                    .put("identity.info").put("identity.setup").put("identity.sign").put("identity.nip44_encrypt").put("identity.nip44_decrypt")))
                 .put("view.capture", new JSONObject().put("v", VERSION)));
     }
 

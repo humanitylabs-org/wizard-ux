@@ -65,7 +65,7 @@ public final class DeviceBridge implements RecorderService.Listener {
     /** Called by the existing origin-scoped wizardDevicePort dispatcher, never a second JS interface. */
     public boolean dispatchIdentity(String method, JSONObject params, java.util.function.Consumer<JSONObject> reply,
             java.util.function.BooleanSupplier trusted) {
-        if (!java.util.Arrays.asList("identity.info", "identity.setup", "identity.sign", "view.capture").contains(method)) return false;
+        if (!java.util.Arrays.asList("identity.info", "identity.setup", "identity.sign", "identity.nip44_encrypt", "identity.nip44_decrypt", "view.capture").contains(method)) return false;
         long document = identityDocument;
         java.util.function.Consumer<JSONObject> answer = result -> {
             if (document == identityDocument && trusted.getAsBoolean()) reply.accept(result);
@@ -78,7 +78,8 @@ public final class DeviceBridge implements RecorderService.Listener {
             if (document != identityDocument || !trusted.getAsBoolean()) return;
             try { wizardId.colors(new JSONObject((String)new org.json.JSONTokener(encoded).nextValue())); } catch (Exception ignored) { }
             if ("identity.setup".equals(method)) wizardId.setup(answer);
-            else { JSONObject event = params.optJSONObject("event"); if (event == null) answer.accept(denied()); else wizardId.sign(event,answer); }
+            else if ("identity.nip44_encrypt".equals(method) || "identity.nip44_decrypt".equals(method)) wizardId.nip44(params, "identity.nip44_encrypt".equals(method), params.optString("requester"), answer);
+            else { JSONObject event = params.optJSONObject("event"); if (event == null) answer.accept(denied()); else wizardId.sign(event, params.optString("requester"), answer); }
         });
         return true;
     }

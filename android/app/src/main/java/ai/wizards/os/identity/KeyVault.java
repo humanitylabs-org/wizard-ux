@@ -72,6 +72,11 @@ public final class KeyVault {
             return NostrEvent.hex(sig);
         } finally { Arrays.fill(secret, (byte)0); Arrays.fill(auxiliary, (byte)0); }
     }
+    public String nip44(Cipher cipher, String pubkey, String data, boolean encrypt) throws Exception {
+        byte[] secret = unlock(cipher);
+        try { return encrypt ? Nip44.encrypt(secret, pubkey, data) : Nip44.decrypt(secret, pubkey, data); }
+        finally { Arrays.fill(secret, (byte)0); }
+    }
     public void backup(Cipher cipher, Consumer<String> consume) throws Exception {
         byte[] secret = unlock(cipher);
         try { consume.accept(Nip19.encode("nsec", secret)); } finally { Arrays.fill(secret, (byte)0); }
