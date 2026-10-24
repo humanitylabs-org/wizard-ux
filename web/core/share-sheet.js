@@ -49,7 +49,11 @@
     write(localStorage, RECV, receivers); return true;
   }
   const kindOf = p => (p.text ? 'text' : 'url');
-  const live = kind => Object.entries(receivers).filter(([id, r]) => r?.accepts?.includes(kind) && installed(id));
+  // Reviewed receivers offered before the app has ever been opened on this device (fresh install, new phone,
+  // cleared storage). Until the catalog carries a manifest share declaration, this list is the only default; the
+  // app's own WizardApp.share.receive registration replaces it (and adds its people) the first time it runs.
+  const DEFAULTS = Object.freeze({ messenger: Object.freeze({ accepts: Object.freeze(['text', 'url']), targets: Object.freeze([]) }) });
+  const live = kind => Object.entries({ ...DEFAULTS, ...receivers }).filter(([id, r]) => r?.accepts?.includes(kind) && installed(id));
   const rank = key => { const i = recent.indexOf(key); return i < 0 ? 1e6 : i; };
   function people(kind) {
     const rows = [];

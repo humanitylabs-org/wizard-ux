@@ -13,8 +13,9 @@ function load({ apps = { messenger: { kind: 'wizard', name: 'Messenger' } }, ope
   return { S: Object.assign({}, window.WosShareSheet, ops), G: window.WosShareSheet, events, claim: window.WizAppServices.claimShare };
 }
 
-test('no receiver: Share goes straight out with the native receipt, no sheet', async () => {
-  const { S } = load();
+test('Messenger is offered before it was ever opened; with no receiver installed Share goes straight out', async () => {
+  assert.equal(load().S.wants('text'), true);
+  const { S } = load({ apps: { calendar: { kind: 'wizard', name: 'Calendar' } } });
   assert.equal(S.wants('text'), false);
   assert.equal(await S.show({ text: 'hi' }, async () => 'shared'), 'shared');
   assert.equal(S.isOpen(), false);
@@ -29,8 +30,8 @@ test('registry: only declared kinds, only installed Wizard apps, targets cleaned
   assert.equal(S.wants('text'), true);
   assert.equal(S.wants('url'), false);
   S.register('ghost', { accepts: ['text'] }); // not installed: never offered
-  S.register('messenger', { accepts: [] }); // unregister
-  assert.equal(S.wants('text'), false);
+  S.register('messenger', { accepts: [] }); // unregister falls back to the reviewed default
+  assert.equal(S.wants('text'), true);
   assert.ok(S.setTargets('ghost', Array.from({ length: 40 }, (_, i) => ({ id: 'p' + i, name: 'P' + i }))));
   assert.equal(S._state().receivers.ghost.targets.length, 24);
 });

@@ -2,8 +2,7 @@
 // node share-sheet-e2e.cjs <outDir> [base=http://127.0.0.1:9561/wizard-os-home/]
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
-// Usage: node qa-share-sheet.cjs <outDir> <base, e.g. http://127.0.0.1:<preview port>/wizard-os-home/>
-const OUT = process.argv[2], BASE = process.argv[3];
+const OUT = process.argv[2], BASE = process.argv[3]; // base: http://127.0.0.1:<preview port>/wizard-os-home/
 const FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><title>Messenger fixture</title>
 <script src="/wizard-os-home/core/app-client.js"></script></head><body style="background:#111;color:#eee;font:16px system-ui">
 <h1>Messenger fixture</h1><p id="to">no share yet</p><textarea id="draft" rows="4" cols="40"></textarea>
@@ -39,10 +38,12 @@ const step = (name, ok, extra = '') => { results.push({ name, ok }); console.log
   await p.waitForFunction(() => window.__wos?.live?.ok && window.WosShareSheet && window.WizOpenApp, null, { timeout: 90000 });
   await p.waitForTimeout(2500);
 
-  // 0. No receiver yet: Share goes straight out (old behaviour, no sheet).
-  let r = await p.evaluate(() => window.WosChat.shareText('before any receiver'));
-  step('no receiver → straight to the system tray', r === 'shared' && !(await p.$('.wos-share')) && (await p.evaluate(() => window.__native.length)) === 1, r);
-
+  // 0. Messenger never opened on this device: the sheet still offers it (no people yet), never the tray first.
+  p.evaluate(() => { window.__res = window.WosChat.shareText('before any receiver'); });
+  await p.waitForSelector('.wos-share.on', { timeout: 5000 }); await p.waitForTimeout(350);
+  const first = await p.evaluate(() => ({ people: document.querySelectorAll('.wos-share .shs-person').length, apps: [...document.querySelectorAll('.wos-share .shs-app')].map(a => a.dataset.shsApp).join() }));
+  step('Messenger never opened → sheet offers it, nothing to the tray', first.apps === 'messenger' && first.people === 0 && (await p.evaluate(() => window.__native.length)) === 0, JSON.stringify(first));
+  await p.click('[data-shs-other]'); await p.waitForTimeout(400);
   // 1. Open Messenger once: it registers as a receiver with its people.
   await p.evaluate(() => window.WizOpenApp('messenger'));
   await p.waitForFunction(() => window.WosShareSheet._state().receivers.messenger?.targets?.length === 3, null, { timeout: 20000 });
