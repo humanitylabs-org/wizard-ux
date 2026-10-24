@@ -579,7 +579,7 @@
   /* ---------------- top bar ---------------- */
   addEventListener('wizard:app-counts', () => paintBar());
   function paintBar() {
-    window.WosBell?.paint();
+    window.WosBell?.paint?.();
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
     C.workspaceNav.setCount(APP.wizard?.id || 'wizard', LIVE?.ok ? (LIVE.workGroups().ready || []).length : 0);
     $('#logo').setAttribute('aria-current', homeOpen ? 'page' : 'false');
