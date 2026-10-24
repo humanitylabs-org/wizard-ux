@@ -1,6 +1,6 @@
 # Wizard OS components: reuse before build
 
-**One implementation per capability.** Before you build any UI, chat, auth, upload, settings, visual or per-agent-kind logic, find the need below and reuse its entry point. If a row nearly fits, **extend that module** (as PR #338 added `Orb.create` to `web/orb.js`) instead of building beside it. NEW is only for a need no row covers: it lands in `web/core/` with a row here in the same PR, never inside an app.
+**One implementation per capability.** Before UI, chat, auth, upload, settings, visual or per-agent-kind work, reuse the entry point below. Extend a near-fit module; don't build beside it. NEW is only for an uncovered need: land it in `web/core/` with a row here, never inside an app.
 
 Every PR body carries a `Reuse:` block (see `.github/pull_request_template.md`); CI checks it (`tools/reuse-check.mjs`) and checks that every shell global is listed here (`tests/components-inventory.test.mjs`).
 
