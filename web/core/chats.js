@@ -837,7 +837,7 @@ window.WizCore.chats = function createChats(H) {
     const fids = F?.ids ? F.ids(AGID) : null;
     const space = focus?.kind === 'space' ? spaces().find(s => s.id === focus.key) : null;
     const members = space && LST.ok ? LIVE.spaceSessions?.(space.threads) : null;
-    const all = (LST.ok ? (members ? members.rows : LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).filter(s => !s.hidden) : []).filter(s => (!F || (fids ? fids.has(s.id) : F.test(s))) && focusMatches(w, s));
+    const all = (LST.ok ? (members ? members.rows : n && LIVE.searchRows ? LIVE.searchRows(AGID) : LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).filter(s => !s.hidden) : []).filter(s => (!F || (fids ? fids.has(s.id) : F.test(s))) && focusMatches(w, s));
     const filtered = !!(F || focus);
     const titleHit = n ? all.filter(s => norm(s.title).includes(n) || norm(s.preview).includes(n)) : all;
     // Message bodies: searched lazily in the background (core/chat-search.js); hits stream in with a snippet.
