@@ -1170,7 +1170,22 @@
     return startRead(id, true);
   };
   const bgRead = id => { const e = INFLIGHT.get(id); return e ? e.p : startRead(id, false); };
-  L.cachedMessages = id => (keepable(id) && TC.get(id)?.rows) || null;
+  // What the transcript contains, as the list reports it: message count and the newest user/assistant times.
+  // Status and tool activity are left out, so they never invalidate a copy whose messages are unchanged.
+  const ckOf = s => s ? [s.messageCount, s.lastAssistantAt, s.lastUserAt].join('|') : '';
+  L.contentKey = ckOf;
+  // The list can vouch for a copy only after a live list read since the page last came to the front: a stored
+  // snapshot or a list from before the phone slept describes the same old transcript the copy has.
+  let shownAt = Date.now();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) shownAt = Date.now(); });
+  L.listTrusted = () => !L.cached && (L.at || 0) >= shownAt;
+  // A stored copy paints only when it matches what the live list says the thread holds. Painting an older copy
+  // showed the previous reply for 1-2 s before the fresh read replaced it (James, 24 Oct 2026); a skeleton is
+  // honest, an outdated reply is not.
+  L.cachedMessages = id => {
+    const c = keepable(id) && TC.get(id), s = L.session(id); if (!c || !s || !L.listTrusted()) return null;
+    return String(c.rev || '').split('|').slice(0, 3).join('|') === ckOf(s) ? c.rows : null;
+  };
   const saving = () => !!navigator.connection?.saveData;
   L.warm = id => {
     const s = L.session(id); if (!s || s.archived || s.optimistic || saving() || INFLIGHT.has(id) || !keepable(id)) return;
