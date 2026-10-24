@@ -100,6 +100,10 @@ test('Home hears about a new release without a reload: the status is re-read eve
   assert.match(b.pop().innerHTML, /Update available/);
 });
 const tick0 = () => new Promise(r => setTimeout(r, 0));
-test('the stock module reads no personal release file and has no release-layer states', () => {
-  assert.doesNotMatch(src, /my-release|\bmine\b|Propose|behind > 0|data-mine/);
+test('a box without my-release.json keeps the stock card and words (release states are data-gated)', async () => {
+  const b = await boot({ status: ST() });
+  assert.equal(b.U.release, false);
+  assert.equal(b.U.title(), 'About & updates');
+  assert.match(b.U.cardHtml(), /Update available/);
+  assert.doesNotMatch(b.U.html(), /Your changes|Propose|data-osu-release/);
 });
