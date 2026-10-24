@@ -616,7 +616,7 @@ window.WizCore.chats = function createChats(H) {
       const list = k === 'ready' && !n ? readyOrdered(list0) : k === 'archive' && !n && !filtered && Object.keys(LIVE.windows || {}).length ? list0.slice(0,50) : list0;
       // Errors also holds failed background work and voice notes that didn't send (chat-power.js #12).
       const extra = PW && k === 'errors' && !n ? PW.errorsExtra() : { n: 0, html: '' };
-      if (!list.length && !extra.n && (k === 'errors' || k === 'deferred' || n || filtered)) return '';
+      if (!list.length && !extra.n && (k === 'errors' || k === 'deferred' || k === 'yesterday' || k === 'pastWeek' || n || filtered)) return '';
       // While searching, every section with a hit opens so nothing is buried.
       const open = n || filtered ? true : secOpen[k];
       const newN = k === 'ready' && !byStatus() ? list.filter(s => LIVE.isNew(s) && !waitsOn(s)).length : 0;
@@ -1316,6 +1316,8 @@ window.WizCore.chats = function createChats(H) {
     const pend = pendingFor(w);
     const carry = isNew && c.carry && TAG ? `<div class="ch-carry" role="note"><b>${AGS()?.lock?.() || ''}Continues “${esc(clip(c.carry.title, 60))}” privately</b><span>Your first message takes the last ${c.carry.n === 1 ? 'message' : `${c.carry.n} messages`} with it as quoted context. That thread stays as it is.</span><button type="button" data-chcarryx>Don’t include</button></div>` : '';
     if (isNew && !pend.length) msgs = newChatHtml(TAG) + `<div class="ch-empty nc-classic"><b>${TAG && AGS()?.isPrivate(agentRec(TAG)) ? `New private chat` : 'New chat'}</b><br>${esc(H.newChatHint || 'Type below.')}</div>${carry}`;
+    // A thread answered 404 in this open is gone: that verdict wins over cached turns and queued sends.
+    else if (!isNew && c.goneFor === w.thread && c.goneNav === c.readNav) msgs = threadErrHtml(c);
     else if (!turns && !isNew && !pend.length) msgs = c.err && (c.failN > 1 || c.err !== 'Couldn’t load this thread') ? threadErrHtml(c) : skelThread();
     else {
       const all = turns || [];
@@ -1728,7 +1730,9 @@ window.WizCore.chats = function createChats(H) {
         // A 404 is a verdict, not a blip: the thread is gone (deleted, or a window restored from an earlier install
         // on the same address). Say so once and stop; retrying a missing thread forever reads as a broken Wizard.
         const gone = e.status === 404;
-        if (gone) { c.goneFor = sid; c.goneNav = nav; }
+        // A gone thread drops any cached or earlier-loaded transcript, so the "no longer here" message renders
+        // instead of a stale, still-editable copy of a deleted thread.
+        if (gone) { Object.assign(c, { goneFor: sid, goneNav: nav, turns: null, loadedFor: '', cachedFor: '' }); LIVE.forgetMessages?.(sid); }
         c.err = e.status === 403 ? 'Wizard sign-in needed' : gone ? 'This thread is no longer here. It may have been deleted, or it came from an earlier install. Go back to Chats to start a new one.' : pendingFor(w).length ? '' : 'Couldn’t load this thread'; c.at = Date.now();
         if (e.status !== 403 && !gone) { if (!e.status) window.WizReach?.failure(); retryRead(w, sid, nav, c.failN); }
         renderThreadLive(w);
