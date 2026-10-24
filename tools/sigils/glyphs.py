@@ -380,6 +380,16 @@ def g_gauge():
 def g_letter():
     return D(circle(256, 256, 156), circle(256, 256, 120))
 
+@glyph('profile', 'A disc with a wizard cut out, hat over a bust running off the edge: who you are, as friends see you.')
+def g_profile():
+    disc = circle(256, 256, 176)
+    # Three big shapes so it still reads at 24 px: the hat, one bust (head and shoulders joined), and a wide band
+    # of disc between them. The shoulders run past the disc, so it is a person, never a pawn on a base.
+    hat_ = U(hat_at(256, 200, 106), rrect(170, 184, 172, 30, 15))   # tip stays inside the disc
+    bust = U(circle(256, 284, 46), P("M118 480 C124 372 188 326 256 326 C324 326 388 372 394 480 Z"))
+    bust = D(bust, rrect(140, 150, 232, 92, 0))      # flat-topped head: the hat sits on it across a clear gap
+    return D(disc, U(hat_, bust))
+
 # ---------- normalise + emit ----------
 def fmt(p):
     pen = SVGPathPen(None, ntos=lambda v: str(int(round(v))))

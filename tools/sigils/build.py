@@ -86,6 +86,7 @@ HOUSE = {
     'sniper':        ('scope',    4,   0.12),
     'card-benefits': ('card',     145, None),
     'money':         ('dollar',   152, 0.13),
+    'profiles':      ('profile',  296, None),
     'defleur-video': ('clip',     268, None),
     'troubleshooter':('wrench',   186, 0.08),
     'wizard-ux':     ('wizard',   280, 0.09),

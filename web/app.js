@@ -997,7 +997,7 @@
   function boundTip(wid) {
     const n = store.get('boundTips', 0); if (n >= 3) return;
     store.set('boundTips', n + 1);
-    const b = boundOf(wid); if (b) toast('▸', `<b>${esc(clip(winTitle(b), 28))}</b> is open beside this thread · swipe the bottom bar to look`, 2600);
+    const b = boundOf(wid); if (b) toast('▸', `<b>${esc(clip(winTitle(b), 28))}</b> is open beside this thread · ${myRelease() ? 'tap or swipe the right edge' : 'swipe the bottom bar'} to look`, 2600);
   }
   /* The peek (James, 12 Oct 2026: no tab, the bottom bar swipe is enough): on the thread the bound desk leans
    * 36 px in from the right; on the bound view its thread leans 12 px in from the left. */
