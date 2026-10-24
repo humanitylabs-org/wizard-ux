@@ -1,5 +1,6 @@
 package ai.wizards.os.everywhere;
 
+import ai.wizards.os.OverlayPage;
 import android.annotation.SuppressLint;
 import android.app.PendingIntent;
 import android.content.ClipData;
@@ -23,7 +24,6 @@ import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
-import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -34,7 +34,6 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -123,19 +122,17 @@ final class ScreenMode {
         page.setOverScrollMode(View.OVER_SCROLL_NEVER);
         WebSettings s = page.getSettings();
         s.setJavaScriptEnabled(true);
-        s.setAllowFileAccess(true); // only file:///android_asset/assist/ is served; everything else is blocked
-        s.setBlockNetworkLoads(true);
         page.addJavascriptInterface(new Bridge(), "ScreenNative");
-        page.setWebViewClient(new WebViewClient() {
+        // The Wizard's screen page, or the bundled copy offline; only that one origin is reachable (OverlayPage).
+        OverlayPage screenPage = new OverlayPage("screen.html", true) {
             @Override
-            public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
-                if (r.getUrl().toString().startsWith("file:///android_asset/assist/")) return null;
-                return new WebResourceResponse("text/plain", "utf-8", 403, "Blocked", null, new ByteArrayInputStream(new byte[0]));
+            protected void ready(WebView v, String url) {
+                pageReady = true;
+                sent = false; // a recovered bundled document needs the native screen snapshot again
+                sendOpen();
             }
-
-            @Override
-            public void onPageFinished(WebView v, String url) { pageReady = true; sendOpen(); }
-        });
+        };
+        page.setWebViewClient(screenPage);
         root.addView(page, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams(screenW, screenH,
@@ -164,7 +161,7 @@ final class ScreenMode {
             return;
         }
         root.post(() -> { measure(); laidOut = true; sendOpen(); });
-        page.loadUrl("file:///android_asset/assist/screen.html");
+        screenPage.load(page);
         Log.i(TAG, "screen mode open (" + mode + ") blocks=" + blocks.size() + " shot=" + (jpeg == null ? 0 : jpeg.length));
     }
 
