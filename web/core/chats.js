@@ -1151,6 +1151,7 @@ window.WizCore.chats = function createChats(H) {
   function threadActions(s, turns) {
     if (!s || LIVE.busy(s.id)) return [];
     const watching = followUpActive(s);
+    if (WORKING_ST.has(s.status) || ['waiting_for_approval', 'unknown'].includes(s.status)) return watching ? ['stop_watch'] : [];
     const inArchive = s.archived || LIVE.workGroups([s]).archive.length > 0;
     if (inArchive) return watching ? ['restore', 'snooze', 'stop_watch'] : ['restore', 'snooze'];
     if (isWorking(s) || ['waiting_for_approval', 'unknown'].includes(s.status)) return [];
