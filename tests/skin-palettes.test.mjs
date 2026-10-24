@@ -21,12 +21,12 @@ test('the saved choice stays the palette id; the last palette per skin is rememb
   assert.match(s, /return ids\.includes\(v\) \? v : ids\[0\]/, 'a stale or foreign saved palette falls back to the skin\'s first');
 });
 
-test('Settings › Look shows every colour as a preview card, grouped under its skin', () => {
+test('Settings › Look shows every look as a preview card in one flat grid, without family headings or a Chats pairing', () => {
   const s = read('web/core/settings.js');
-  assert.match(s, /<div class="skp-fam">\$\{esc\(f\.name\)\}<\/div>/);
-  assert.match(s, /f\.palettes\.map\(id => S\.list\.find\(k => k\.id === id\)\)/);
-  assert.match(s, /aria-label="\$\{esc\(f\.name \|\| 'Skin'\)\} colours"/);
-  assert.match(s, /pals\.map\(k => skinCard\(k, cur\)\)/);
+  assert.doesNotMatch(s, /skp-fam|famOf|recommends/);
+  assert.match(s, /<div class="skp" role="group" aria-label="Skins">\$\{S\.list\.map\(k => skinCard\(k, cur\)\)\.join\(''\)\}\$\{myTile\(\)\}<\/div>/);
+  assert.doesNotMatch(read('web/core/skins.js'), /recommends/);
+  assert.doesNotMatch(read('web/core/skins.css'), /\.skp-fam/);
 });
 
 test('Appearance v1 adds the skin family without changing the palette field', () => {
