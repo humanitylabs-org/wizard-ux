@@ -224,6 +224,106 @@ print(round((t["page from bundle"] - t["orb shown"]).total_seconds(), 2) if len(
   adb shell input keyevent KEYCODE_HOME; sleep 2
   [ "$(orbwin)" = "0" ] && pass "orb: stays hidden after hold" || bad "orb: stays hidden after hold"
   adb exec-out screencap -p > "$OUT/orb-hidden.png" 2>/dev/null
+
+  # ---- Settings → Phone → Wizard Everywhere is the orb's one switch (the real web/core/settings.js + device-orb.js).
+  resumed() { adb shell dumpsys activity activities | grep -m1 "ResumedActivity" | tr -d '\r'; }
+  # Tap a page element the fixture reported (CSS px centre + devicePixelRatio) at its real screen position.
+  web_tap() { # <ui-dump-name> <ev> [filter-key=value]
+    dump "$1"; python3 - "$OUT/ui-$1.xml" "$FX" "$2" "${3:-}" <<'PY' > "$OUT/tap-$1.txt"
+import json, re, sys
+xml, fx, want, flt = open(sys.argv[1]).read(), sys.argv[2], sys.argv[3], sys.argv[4]
+wv = re.search(r'class="android\.webkit\.WebView"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)
+for line in reversed(open(fx).read().splitlines()):
+    try: e = json.loads(line)
+    except ValueError: continue
+    if e.get('ev') != want or 'x' not in e: continue
+    if flt and str(e.get(flt.split('=')[0])) != flt.split('=', 1)[1]: continue
+    x0, y0 = (int(wv.group(1)), int(wv.group(2))) if wv else (0, 0)
+    print(int(x0 + e['x'] * e['dpr']), int(y0 + e['y'] * e['dpr'])); break
+PY
+    read -r TX TY < "$OUT/tap-$1.txt"; echo "tap $2: $TX,$TY" >> "$OUT/result.txt"
+    [ -n "${TX:-}" ] && adb shell input tap "$TX" "$TY"
+  }
+  echo everywhere > "$FIXTURE_OUT/mode"
+  adb shell am force-stop "$PKG"; adb logcat -c
+  adb shell am start -W -n "$ACT" >/dev/null 2>&1
+  wait_ev everywhere 40; ev everywhere > "$OUT/everywhere.json"
+  [ "$(ev everywhere ready)" = "true" ] && [ "$(ev everywhere switches)" = "1" ] && [ "$(ev everywhere orbRows)" = "0" ] && [ "$(ev everywhere dead)" = "0" ] \
+    && pass "everywhere: Settings shows one Wizard Everywhere switch (no duplicate orb row, no full-app-only rows)" || bad "everywhere: one switch in Settings ($(cat "$OUT/everywhere.json"))"
+  [ "$(ev everywhere on)" = "false" ] && pass "everywhere: off after the orb was held away" || bad "everywhere: off after the orb was held away"
+  sleep 1; web_tap everywhere everywhere
+  for _ in $(seq 1 15); do [ "$(ev everywhere-switch on)" = "true" ] && break; sleep 1; done
+  [ "$(ev everywhere-switch on)" = "true" ] && [ "$(ev everywhere-switch checked)" = "true" ] \
+    && pass "everywhere: a tap on the switch turns the floating orb on" || bad "everywhere: a tap on the switch turns the floating orb on"
+  sleep 1; [ "$(orbwin)" = "0" ] && pass "everywhere: orb hidden while Wizard is in front" || bad "everywhere: orb hidden while Wizard is in front"
+  adb shell input keyevent KEYCODE_HOME; sleep 1; other_app; sleep 3
+  [ "$(orbwin)" -ge 1 ] && pass "everywhere: turning it on in Settings shows the orb over another app" || bad "everywhere: turning it on in Settings shows the orb over another app"
+  adb exec-out screencap -p > "$OUT/everywhere-orb-over-app.png" 2>/dev/null
+
+  # ---- Home-screen apps (window.wizardHomeScreenPort, the real web/core/home-screen-apps.js sheet).
+  echo pin > "$FIXTURE_OUT/mode"
+  adb shell am force-stop "$PKG"; adb logcat -c
+  adb shell am start -W -n "$ACT" >/dev/null 2>&1
+  wait_ev untapped 40
+  [ "$(ev untapped status)" = "error" ] && pass "pin: a pin request without a tap is refused" || bad "pin: a pin request without a tap is refused ($(ev untapped status))"
+  for _ in $(seq 1 20); do [ "$(ev sheet text)" = "Add to home screen" ] && break; sleep 1; done
+  [ "$(ev sheet text)" = "Add to home screen" ] && pass "pin: the shell offers Add to home screen (status ready over the port)" || bad "pin: offered ($(ev sheet text))"
+  sleep 1; web_tap pinsheet sheet "text=Add to home screen"
+  # The launcher asks the owner; accept as he would.
+  ok=""
+  for _ in $(seq 1 15); do
+    dump launcher
+    b=$(python3 - "$OUT/ui-launcher.xml" <<'PY'
+import re, sys
+hits = []
+for m in re.finditer(r'<node [^>]*>', open(sys.argv[1]).read()):
+    n = m.group(0)
+    if 'package="ai.wizards.shell' in n: continue
+    t = re.search(r'text="([^"]*)"', n).group(1).lower()
+    if t in ('add to home screen', 'add automatically', 'add'):
+        x1, y1, x2, y2 = map(int, re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n).groups())
+        hits.append(('clickable="true"' not in n and 'Button' not in n, (x1 + x2) // 2, (y1 + y2) // 2))
+if hits: _, x, y = sorted(hits)[0]; print(x, y)  # the dialog's button, not its title
+PY
+)
+    if [ -n "$b" ]; then ok=1; adb shell input tap $b; break; fi; sleep 1
+  done
+  [ -n "$ok" ] && pass "pin: Android's add-to-home-screen dialog is offered" || bad "pin: Android's add-to-home-screen dialog is offered"
+  for _ in $(seq 1 15); do [ "$(ev sheet text)" = "Added to home screen" ] && break; sleep 1; done
+  [ "$(ev sheet text)" = "Added to home screen" ] && pass "pin: the sheet confirms once the launcher added it" || bad "pin: the sheet confirms ($(ev sheet text))"
+  adb shell dumpsys shortcut > "$OUT/pin-shortcuts.txt" 2>/dev/null
+  grep -q "homeapp-" "$OUT/pin-shortcuts.txt" && pass "pin: pinned shortcut created" || bad "pin: pinned shortcut created"
+  adb shell run-as "$PKG" cat shared_prefs/home-screen-pins.xml 2>/dev/null | grep -q ':confirmed" value="true"' \
+    && pass "pin: launcher confirmation received (PinConfirmed)" || bad "pin: launcher confirmation received"
+
+  # Launch it from the home screen: its own task opens just that app on the selected Wizard.
+  adb shell input keyevent KEYCODE_HOME; sleep 2
+  launched=""
+  for _ in 1 2 3; do dump home; tap_text home "QA App" && { launched=icon; break; }; sleep 2; done
+  if [ -z "$launched" ]; then
+    # Not on the visible home page: start the shortcut's exact intent (same component and task URI).
+    U=$(python3 -c "import hashlib;print('wizard-homeapp://$PKG/homeapp-'+hashlib.sha256(b'https://10.0.2.2:8443\nqa-app').hexdigest()+'?app=qa-app')")
+    adb shell am start -W -a android.intent.action.VIEW -d "'$U'" -n "$PKG/ai.wizards.shell.home.AppSessionActivity" >/dev/null 2>&1 && launched=intent
+  fi
+  echo "pinned app launched by: $launched" >> "$OUT/result.txt"
+  wait_ev session 30
+  [ "$(ev session app)" = "qa-app" ] && pass "pin: launching it opens that app's session on the selected Wizard" || bad "pin: launching it opens that app ($(ev session))"
+  [ "$(ev session devicePort)" = "false" ] && [ "$(ev session homePort)" = "false" ] && pass "pin: the pinned app gets no device or pin port" || bad "pin: the pinned app gets no device or pin port"
+  resumed | tee -a "$OUT/result.txt" | grep -q "AppSessionActivity" && pass "pin: runs in its own app task" || bad "pin: runs in its own app task"
+  sleep 2; [ "$(orbwin)" -ge 1 ] && pass "pin: the floating orb stays over a pinned app" || bad "pin: the floating orb stays over a pinned app"
+  adb exec-out screencap -p > "$OUT/pin-app.png" 2>/dev/null
+  adb shell input keyevent KEYCODE_BACK; sleep 2
+  resumed | grep -q "AppSessionActivity" && adb shell pidof "$PKG" >/dev/null && pass "pin: Back stays inside the pinned app" || bad "pin: Back stays inside the pinned app"
+  n1=$(grep -c '"ev": "session"' "$FX")
+  adb shell input keyevent KEYCODE_HOME; sleep 1
+  adb shell am start -W -a android.intent.action.VIEW -d "'$(python3 -c "import hashlib;print('wizard-homeapp://$PKG/homeapp-'+hashlib.sha256(b'https://10.0.2.2:8443\nqa-app').hexdigest()+'?app=qa-app')")'" -n "$PKG/ai.wizards.shell.home.AppSessionActivity" >/dev/null 2>&1; sleep 3
+  n2=$(grep -c '"ev": "session"' "$FX")
+  tasks=$(adb shell dumpsys activity activities | grep -c "A=.*ai.wizards.shell.test.homeapp")
+  echo "session loads: $n1 -> $n2; homeapp tasks: $tasks" >> "$OUT/result.txt"
+  resumed | grep -q "AppSessionActivity" && [ "$n2" = "$n1" ] && pass "pin: opening it again resumes the same task (no reload)" || bad "pin: opening it again resumes the same task"
+  bogus="wizard-homeapp://$PKG/homeapp-0000?app=qa-app"
+  adb shell am start -W -a android.intent.action.VIEW -d "'$bogus'" -n "$PKG/ai.wizards.shell.home.AppSessionActivity" >/dev/null 2>&1; sleep 3
+  dump bogus; has bogus "App unavailable" && pass "pin: an edited shortcut opens nothing of the Wizard" || bad "pin: an edited shortcut opens nothing of the Wizard"
   cp "$FX" "$OUT/fixture.log" 2>/dev/null
 fi
 
