@@ -1177,8 +1177,10 @@ window.WizCore.chats = function createChats(H) {
    * conversation title and model picker without repeating the agent banner. ---- */
   const AGS = () => window.WosAgents || null;
   function winAgent(w) { const o = (w && W[owner(w.id)]) || w; const f = focusOf(o), id = f?.kind === 'agent' ? f.key : o?.agent || ''; const A = AGS(); return id && (!A || A.isOther(id)) ? id : ''; }
-  // The thread row this window shows: an agent window resolves inside its own agent, never a same-id main row.
-  const rowOf = (wid, sid) => { const w = W[owner(wid)]; return LIVE.sessionFor ? LIVE.sessionFor(sid, winAgent(w)) : LIVE.session(sid); };
+  // The thread row this window shows. A window focused on an agent lists that agent's rows, so a same-id thread
+  // opened from it is that agent's row; anything else (All, the main agent, a main thread opened from a link while
+  // an agent is focused) keeps the shared lookup. Watcher actions then scope to this row's own owner.
+  const rowOf = (wid, sid) => { const a = winAgent(W[owner(wid)]); return (a && LIVE.sessionFor ? LIVE.sessionFor(sid, a) : null) || LIVE.session(sid); };
   function agentRec(id) {
     const A = AGS();
     if (!id) { const d = A?.get(A.defaultId()); return d || { id: 'hermes', label: window.WizConfig.agent(), privacy: 'standard', appearance: { glyph: 'wizard' }, model: {}, is_default: true }; }
@@ -1200,7 +1202,7 @@ window.WizCore.chats = function createChats(H) {
     }
     if (a === 'stop_watch') {
       closeRowSheet();
-      const ok = await LIVE.stopWatching(sid, winAgent(w));
+      const ok = await LIVE.stopWatching(sid, LIVE.ownerOf ? LIVE.ownerOf(s) : undefined);
       toast(ok ? '◉' : '!', ok ? 'Stopped watching' : 'Couldn’t stop watching', ok ? 1600 : 3200);
       for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
       return;

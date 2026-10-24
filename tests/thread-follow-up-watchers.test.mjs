@@ -10,7 +10,7 @@ test('active follow-ups keep Snooze, make Done temporary, and expose explicit St
   assert.match(chats, /Done for now/);
   assert.match(chats, /Stop watching/);
   assert.match(chats, /\['snooze', 'stop_watch', 'done'\]/);
-  assert.match(chats, /LIVE\.stopWatching\(sid, winAgent\(w\)\)/);
+  assert.match(chats, /LIVE\.stopWatching\(sid, LIVE\.ownerOf \? LIVE\.ownerOf\(s\) : undefined\)/);
   assert.match(chats, /if \(watching && \(WORKING_ST\.has\(s\.status\)[^\n]*return \['stop_watch'\];/);
 });
 
