@@ -23,10 +23,11 @@ const FIX = {
   qa_ds_stopped: { title: 'QA stopped no answer', st: 'cancelled', t: now - 30, rows: () => [row('user', 'Accidental voice note text', now - 60)] },
   qa_ds_failed: { title: 'QA failed no answer', st: 'failed', t: now - 40, rows: () => [row('user', 'Another prompt', now - 70)] },
   qa_ds_answered: { title: 'QA answered', st: 'completed', t: now - 50, rows: () => [row('user', 'Question', now - 300), row('assistant', 'Answer', now - 250)] },
+  qa_archived_running: { title: 'QA archived stale run', st: 'running', run: '', t: now - 55, rows: () => [row('user', 'Completed elsewhere', now - 280), row('assistant', 'Done.', now - 260)] },
 };
 function fixSession(id) {
   const f = FIX[id], rows = f.rows(), last = rows[rows.length - 1], lastU = rows[0];
-  return { id, source: 'wizard-mobile', title: f.title, status: f.st, wizard_last_run_status: f.st, archived: false, hidden: false, message_count: rows.length,
+  return { id, source: 'wizard-mobile', title: f.title, status: f.st, wizard_last_run_status: f.st, archived: id === 'qa_archived_running', hidden: false, message_count: rows.length,
     started_at: f.t - 600, last_active: f.t, wizard_last_user_at: lastU.timestamp, wizard_last_assistant_at: f.t, wizard_activity_at: f.t, wizard_run_id: '',
     latest_message: { role: last.role, content: String(last.content).slice(0, 200), timestamp: last.timestamp },
     last_user_message: { role: 'user', content: lastU.content, timestamp: lastU.timestamp } };
@@ -65,6 +66,11 @@ const overlap = (a, b) => !!a && !!b && a.x < b.r && b.x < a.r && a.y < b.b && b
   await p.goto(URL_, { waitUntil: 'domcontentloaded' });
   await p.waitForFunction(() => window.__wos?.live?.ok && window.__wos.live.session('qa_ds_stopped'), null, { timeout: 90000 }).catch(() => {});
   ok(await p.evaluate(() => !!window.__wos?.live?.session('qa_ds_stopped')), 'thread list loaded with the fixture threads');
+  const grouped = await p.evaluate(() => {
+    const g = __wos.live.workGroups();
+    return { working: g.working.map(s => s.id), archive: g.archive.map(s => s.id) };
+  });
+  ok(!grouped.working.includes('qa_archived_running') && grouped.archive.includes('qa_archived_running'), 'an archived thread with stale running status is in Archive, not Working', grouped);
   const acts = async id => {
     await p.evaluate(i => __wos.openWizardThread(i), id);
     await p.waitForFunction(() => document.querySelector('.win .ch-msgs .msg.u, .win .ch-msgs .msg'), null, { timeout: 20000 }).catch(() => {});
@@ -85,7 +91,7 @@ const overlap = (a, b) => !!a && !!b && a.x < b.r && b.x < a.r && a.y < b.b && b
     a = await acts('qa_ds_failed');
     ok(a.join() === 'done', 'failed thread with no answer shows Done only', a);
     a = await acts('qa_ds_answered');
-    ok(a.join() === 'defer,done', 'answered thread keeps Defer and Done', a);
+    ok(a.join() === 'snooze,done', 'answered thread keeps Snooze and Done', a);
   } catch (e) { ok(false, 'run completed', String(e)); }
   ok(errs.length === 0, 'no page errors', errs);
   ok(writes.every(w => w.p === '/wizard/thread-seen' || /\/sessions\/qa_ds_/.test(w.p)), 'only fixture writes (all intercepted)', writes);

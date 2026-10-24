@@ -383,11 +383,11 @@
     for (const s of sessions) {
       if (s.hidden) continue;
       const t = sectionTime(s);
-      if (needsApproval(s)) g.ready.push(s);
+      if (s.archived) g.archive.push(s);
+      else if (needsApproval(s)) g.ready.push(s);
       else if (inWorking(s)) g.working.push(s);
       else if (isDeferred(s)) g.deferred.push(s);
       else if (isErr(s)) g.errors.push(s);
-      else if (s.archived) g.archive.push(s);
       else if (isFinite(t) && t <= archB) g.archive.push(s);
       else if (chatLayout() === 'status') g.ready.push(s); // By status: everything not yet archived is Ready
       else if (!isFinite(t) || t < yB) g.pastWeek.push(s);
