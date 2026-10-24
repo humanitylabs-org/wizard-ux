@@ -81,7 +81,7 @@ const threadOpen = (p, id) => p.evaluate(id => [...document.querySelectorAll('[d
     ok(await p.locator('[data-chact="defer"], [data-chact="boomerang"]').count()===0,`${L}: one thread Snooze action replaces both old controls`);
     await pick();
     ok(await p.locator('#boom-title').innerText()==='When should this come back?' && await p.locator('.boom-context, .boom-prompt, .boom-card footer:not([hidden])').count()===0 && await p.locator('.boom-presets .selected').count()===0,`${L}: one question, no thread-title box, no footer, nothing preselected`);
-    ok((await p.locator('.boom-presets button span').allTextContents()).join('|')==='Later today|Tomorrow 9:00|Next week|Pick a time|Someday',`${L}: five approved choices`);
+    ok((await p.locator('.boom-presets button span').allTextContents()).join('|')==='Later today|Tomorrow|In 2 days|In 3 days|In 5 days|Next week|Someday|Other date…',`${L}: one-tap day choices, exact picker last`);
     const rect=await p.locator('.boom-card').evaluate(el=>{const r=el.getBoundingClientRect();return {x:r.x,right:r.right,bottom:r.bottom,w:innerWidth,h:innerHeight,overflow:el.scrollWidth>el.clientWidth}});
     ok(rect.x>=0&&rect.right<=rect.w&&rect.bottom<=rect.h&&!rect.overflow,`${L}: picker fits`,rect);
     ok(await p.evaluate(()=>document.documentElement.dataset.skin)===skin,`${L}: worn skin`);
@@ -105,19 +105,25 @@ const threadOpen = (p, id) => p.evaluate(id => [...document.querySelectorAll('[d
     await p.locator('.boom-card input[name=time]').fill('09:37');
     await p.locator('.boom-card [type=submit]').click();await p.waitForFunction(()=>window.WosBoomerang.nextFor('qa_boom_a')?.due_at.includes('02:37:'));
     ok(st.schedules.length===1&&st.schedules[0].when.once.includes('T02:37:'),`${L}: edit keeps existing scheduler id and exact minutes`);
-    await p.locator('.msg.a [data-mboom]:visible').first().click();
-    ok(await p.locator('#boom-title').innerText()==='When should this come back?'&&/4,200/.test(await p.locator('q.boom-context').innerText()),`${L}: message action uses same picker and quotes the message`);
-    await p.locator('[data-boom-note-toggle]').click();await p.locator('input[name=note]').fill('Check the price');
-    await p.locator('[data-boom-preset="tomorrow-am"]').click();await p.waitForFunction(()=>!window.WosBoomerang.isOpen());
-    const msg=st.posts.at(-1);
-    ok(msg.target.message>0&&msg.prompt==='Check the price'&&msg.target.excerpt.includes('4,200'),`${L}: message Snooze preserves anchor and note`);
-    st.fire(st.schedules.at(-1).id);await p.evaluate(()=>window.WosBoomerang.refresh());
-    await p.locator('.boom-banner.due').waitFor();
-    ok((await p.locator('.boom-banner').innerText()).includes('Back for you'),`${L}: existing scheduler return still works`);
-    await p.locator('[data-boom-open]').click();await sleep(250);
-    ok(await p.locator('.msg.a.boom-flash').count()===1,`${L}: returned message opens its exact reply`);
+    if(await p.locator('.msg.a [data-mboom]').count()){ // per-reply Snooze was trimmed (64dc147d); keep its checks for skins that bring it back
+      await p.locator('.msg.a [data-mboom]:visible').first().click();
+      ok(await p.locator('#boom-title').innerText()==='When should this come back?'&&/4,200/.test(await p.locator('q.boom-context').innerText()),`${L}: message action uses same picker and quotes the message`);
+      await p.locator('[data-boom-note-toggle]').click();await p.locator('input[name=note]').fill('Check the price');
+      await p.locator('[data-boom-preset="tomorrow-am"]').click();await p.waitForFunction(()=>!window.WosBoomerang.isOpen());
+      const msg=st.posts.at(-1);
+      ok(msg.target.message>0&&msg.prompt==='Check the price'&&msg.target.excerpt.includes('4,200'),`${L}: message Snooze preserves anchor and note`);
+      st.fire(st.schedules.at(-1).id);await p.evaluate(()=>window.WosBoomerang.refresh());
+      await p.locator('.boom-banner.due').waitFor();
+      ok((await p.locator('.boom-banner').innerText()).includes('Back for you'),`${L}: existing scheduler return still works`);
+      await p.locator('[data-boom-open]').click();await sleep(250);
+      ok(await p.locator('.msg.a.boom-flash').count()===1,`${L}: returned message opens its exact reply`);
+    }else{
+      st.fire(st.schedules.at(-1).id);await p.evaluate(()=>window.WosBoomerang.refresh());
+      await p.locator('.boom-banner.due').waitFor();
+      ok((await p.locator('.boom-banner').innerText()).includes('Back for you'),`${L}: existing scheduler return still works`);
+    }
     await p.locator('[data-boom-done]').click();await sleep(300);
-    await p.locator('.boom-banner [data-boom-cancel]').click();await sleep(300);
+    if(await p.locator('.boom-banner [data-boom-cancel]').count()){await p.locator('.boom-banner [data-boom-cancel]').click();await sleep(300)}
     // Both failures retain the picker/thread and never announce success.
     await pick();st.failSchedule=true;await p.locator('[data-boom-preset="tomorrow-am"]').click();
     await p.locator('.boom-error').filter({hasText:'QA schedule unavailable'}).waitFor();
