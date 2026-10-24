@@ -1,6 +1,6 @@
 # Wizard OS components: reuse before build
 
-**One implementation per capability.** Before you build any UI, chat, auth, upload, settings, visual or per-agent-kind logic, find the need below and reuse its entry point. If a row nearly fits, **extend that module** (as PR #338 added `Orb.create` to `web/orb.js`) instead of building beside it. NEW is only for a need no row covers: it lands in `web/core/` with a row here in the same PR, never inside an app.
+**One implementation per capability.** Find the need below and reuse its entry point. Near-fit: **extend that module**. NEW: only if no row fits; land it in `web/core/` with a row here, never inside an app.
 
 Every PR body carries a `Reuse:` block (see `.github/pull_request_template.md`); CI checks it (`tools/reuse-check.mjs`) and checks that every shell global is listed here (`tests/components-inventory.test.mjs`).
 
@@ -57,7 +57,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Brand hat | `WizBrand` (`web/core/brand.js`) | redrawn logos |
 | Links: in-app sheet, image links, long-press Open in your browser / Download / Copy link | `WizLinks` (`web/core/links.js`; Android: `WizardOSNative.openInBrowser` / `download`) | `window.open`, own iframe sheet, own link menu |
 | Text-selection actions | `WosSelMenu` (`web/core/sel-menu.js`) | own context menu |
-| Share sheet, receivers, pending handoffs | `WosShareSheet` (`web/core/share-sheet.js`), entered only via `WosChat.sharePayload` | a second share picker, sending for an app |
+| Share sheet, receivers, pending handoffs | `WosShareSheet` (`web/core/share-sheet.js`), via `WosChat.sharePayload / shareFile`; hold bypass: `WosChat.bindSharePress` | a second share picker, sending for an app |
 | Screen context for the agent | `WizScreen` (`web/core/screen-text.js`) | own DOM scrape |
 | Dictation into a focused field | `WizCore` focused field (`web/core/focused-field.js`); voice `WizCore` (`web/core/voice.js`); mic choice `WosMic` (`web/core/mic.js`) | own recorder/transcriber |
 | Local commands | `WosCommands` (`web/core/commands.js`) | a second command parser |

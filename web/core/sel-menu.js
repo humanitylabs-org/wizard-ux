@@ -71,6 +71,7 @@
     const end = (e, up) => {
       if (!drag || e.pointerId !== drag.id) return;
       const was = drag; drag = null;
+      if (e.wosShareHeld) return; // the shared Share gesture already ran this action
       if (was.on) { dragged = true; el.classList.remove('drag'); return; } // the drop is not a tap
       const b = up && document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.selmenu [data-sm]');
       if (b) { swallowClick(); run(b.dataset.sm); }
