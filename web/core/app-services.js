@@ -4,7 +4,7 @@
   'use strict';
   if (window.WizAppServices) return;
   const VERSION = 1, ORIGIN = location.origin, frames = new Map();
-  const OPS = new Set(['ready', 'share.text', 'share.file', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set']);
+  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.receive', 'share.targets', 'share.pending', 'share.ack', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set']);
   let registry, available = null, serial = 0, rootArm = null;
   const uid = () => 'as-' + (++serial) + '-' + Math.random().toString(36).slice(2);
   const fault = message => new Error(message);
@@ -208,7 +208,13 @@
         }
         return window.WosChat?.sharePayload(data) || Promise.resolve('unsupported');
       },
-        file(file, opts) { check(); if (!file || !['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(file))) return Promise.resolve('unsupported'); return window.WosChat?.shareFile(file, opts) || Promise.resolve('unsupported'); } }),
+        file(file, opts) { check(); if (!file || !['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(file))) return Promise.resolve('unsupported'); return window.WosChat?.shareFile(file, opts) || Promise.resolve('unsupported'); },
+        // Receiving (docs/SHARE-SHEET.md): this verified frame registers its own app id only; items stay pending
+        // until the app acks that it placed one in its own composer.
+        receive(opts) { check(); return !!window.WosShareSheet?.register(st.appId, { accepts: opts?.accepts, targets: opts?.targets }); },
+        targets(list) { check(); return !!window.WosShareSheet?.setTargets(st.appId, list); },
+        pending() { check(); return window.WosShareSheet?.pending(st.appId) || []; },
+        ack(id) { check(); return typeof id === 'string' && !!window.WosShareSheet?.ack(st.appId, id); } }),
       theme: Object.freeze({ get() { check(); return window.WizAppearance?.get(frameOf(st)) || null; } }),
       update: Object.freeze({ hold, available() { check(); return available; } }),
       capture: Object.freeze({ start,
@@ -229,6 +235,12 @@
   }
   const frameOf = st => st.frame;
   addEventListener('wizard-app-capture-state', changed);
+  // A share was handed to an app that is already open: tell its verified frame to pull.
+  addEventListener('wizard:share-pending', e => {
+    for (const st of frames.values()) if (st.appId === e.detail?.appId && valid(st, st.doc)) {
+      try { st.frame.contentWindow.postMessage({ type: 'wizard:app:share', version: VERSION }, ORIGIN); } catch (_) {}
+    }
+  });
   function back(frame) {
     const st = frames.get(frame); if (!st || !registered(st) || !frame.isConnected) return 'notReady';
     if (st.url.origin !== ORIGIN) {
@@ -289,6 +301,10 @@
       if (d.op === 'ready') value = svc.ready();
       if (d.op === 'share.text') value = await svc.share.text(d.args);
       if (d.op === 'share.file') value = await svc.share.file(d.args?.file, d.args?.options);
+      if (d.op === 'share.receive') value = svc.share.receive(d.args);
+      if (d.op === 'share.targets') value = svc.share.targets(d.args?.targets);
+      if (d.op === 'share.pending') value = svc.share.pending();
+      if (d.op === 'share.ack') value = svc.share.ack(d.args?.id);
       if (d.op === 'capture.pending') value = await svc.capture.pending();
       if (d.op === 'capture.ack') value = await svc.capture.ack(d.args?.id);
       if (d.op === 'update.hold') { const h = svc.update.hold(d.args?.reason), id = uid(); st.messageHolds ||= new Map(); st.messageHolds.set(id, h); value = id; }
