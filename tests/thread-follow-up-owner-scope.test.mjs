@@ -78,12 +78,16 @@ test('a zero-count stop is a failure and keeps the watcher visible', async () =>
 
 test('Chats windows resolve their own row before acting and pass their agent scope to Stop', () => {
   const winAgent = slice(chats, '  function winAgent(w) {', '  function agentRec(id) {');
-  const ctx = { LIVE: harness().LIVE, W: { mainWin: { id: 'mainWin', app: 'chats' }, routedWin: { id: 'routedWin', app: 'chats', agent: ROUTED } },
-    owner: id => id, AGS: () => ({ isOther: a => !!a && a !== 'hermes' }) };
+  const W = { mainWin: { id: 'mainWin', app: 'chats' }, routedWin: { id: 'routedWin', app: 'chats', agent: ROUTED },
+    focusedWin: { id: 'focusedWin', app: 'chats', focus: { kind: 'agent', key: ROUTED } } };
+  // focusOf mirrors chats.js: a window focused on an agent routes to it like a pinned agent window.
+  const ctx = { LIVE: harness().LIVE, W, owner: id => id, AGS: () => ({ isOther: a => !!a && a !== 'hermes' }),
+    focusOf: w => (w?.focus && ['agent', 'space'].includes(w.focus.kind) ? w.focus : null) };
   vm.createContext(ctx);
   vm.runInContext(`${winAgent}\nthis.api = { winAgent, rowOf };`, ctx);
   assert.equal(ctx.api.rowOf('mainWin', 'X'), ctx.LIVE.sessions[0]);
   assert.equal(ctx.api.rowOf('routedWin', 'X'), ctx.LIVE.agentSessions[ROUTED][0]);
+  assert.equal(ctx.api.rowOf('focusedWin', 'X'), ctx.LIVE.agentSessions[ROUTED][0], 'an agent-focused window resolves the routed row');
   // Every watcher-visible surface reads the window's row, and Stop carries that window's scope.
   assert.match(chats, /async function threadAct\(wid, sid, a\) \{\n    wid = owner\(wid\);\n    const s = rowOf\(wid, sid\);/);
   assert.match(chats, /LIVE\.stopWatching\(sid, winAgent\(w\)\)/);
