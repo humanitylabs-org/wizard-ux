@@ -1,0 +1,226 @@
+/* One app's owner-needs checklist. Store and both shells use these rows and actions.
+ * The Router remains authoritative: no keys, inferred approvals or private-data bypasses here. */
+(() => {
+  'use strict';
+  const script = new URL(document.currentScript.src);
+  const base = new URL('../', script);
+  const url = path => new URL(path, base).href;
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  let R, installer, current = null, overlay = null, links = null, alternative = null;
+  let hooks = {}, serial = 0, pending = false;
+  const moduleURL = path => { const u = new URL(path, base); if (script.searchParams.has('v')) u.searchParams.set('v', script.searchParams.get('v')); return u.href; };
+  const ready = Promise.all([import(moduleURL('store/store-router.js')), import(moduleURL('store/store-install.js'))]).then(([r, i]) => { R = r; installer = i; });
+  // Keep a failed dynamic import handled, too: older/offline boxes must still open apps.
+  ready.catch(() => {});
+  const entries = data => [...(data?.models || []), ...(data?.services || [])];
+  const gaps = data => entries(data).filter(n => n.status !== 'ready');
+  const canContinue = data => !gaps(data).some(n => n.required !== false);
+  const needsSetup = data => data?.ready_to_open === false || gaps(data).length > 0;
+
+  function html(app, data, ctx = {}) {
+    return `<div class="was-checklist" data-mc-app="${esc(app)}">${R.routerRows(app, data, { ...ctx, esc: ctx.esc || esc, checklist: true })}</div>`;
+  }
+  // Providers from the Router are installed; Store listings need an explicit installed read.
+  function choices(need, data, ctx = {}) {
+    const all = new Map((ctx.storeApps || []).filter(a => ctx.isInstalled?.(a)).map(a => [a.id, a]));
+    for (const p of data.providers || []) all.set(p.id, { ...all.get(p.id), ...p });
+    return [...all.values()].filter(p => {
+      if (need.private_data && p.private !== true) return false;
+      if (need.slot) return (p.provides || []).includes(need.slot);
+      return (p.models || []).some(m => (need.swap === 'never' ? m.id === need.tested_on : m.tier === need.tier || m.id === need.tested_on));
+    });
+  }
+  function dismissAlternative() {
+    if (!alternative) return false;
+    const { el, button } = alternative; alternative = null; el.remove(); button?.focus(); return true;
+  }
+  function others(btn, context) {
+    dismissAlternative();
+    const { data, app } = context, key = btn.dataset.mcAnother;
+    const need = entries(data).find(n => (n.slot || n.feature) === key); if (!need) return;
+    const candidates = choices(need, data, context);
+    const box = document.createElement('div'); box.className = 'was-alternatives'; box.dataset.wasAlternatives = '';
+    box.setAttribute('role', 'group'); box.setAttribute('aria-label', 'Other providers');
+    box.innerHTML = `<p class="mc-line">${need.private_data ? 'Private providers only. ' : ''}Choose a connection${need.slot ? '' : ' and approve a named model'}.</p>` + candidates.map(p => {
+      if (need.slot) return `<button type="button" class="mc-btn" data-mc-connect="${esc(p.id)}" data-mc-installed="1">Connect ${esc(p.name || p.id)}</button>`;
+      return (p.models || []).filter(m => need.swap === 'never' ? m.id === need.tested_on : m.tier === need.tier || m.id === need.tested_on).map(m => `<button type="button" class="mc-btn" data-mc-approve="${esc(need.feature)}" data-mc-provider="${esc(p.id)}" data-mc-model="${esc(m.id)}">Approve ${esc(m.label || m.id)} · ${esc(p.name || p.id)}</button>`).join('');
+    }).join('') + `${!candidates.length ? '<p class="mc-line">No other installed provider for this need.</p>' : ''}<button type="button" class="mc-btn alt" data-was-store="${esc(need.slot || 'ai-connection')}">Find providers in Store</button><button type="button" class="mc-btn alt" data-was-back>Back to checklist</button>`;
+    btn.closest('.mc-row').appendChild(box); alternative = { el: box, button: btn, app };
+    box.querySelector('button')?.focus();
+  }
+  async function action(btn, context) {
+    const { app, data } = context;
+    if (btn.matches('[data-was-back]')) { dismissAlternative(); return true; }
+    if (btn.matches('[data-mc-another]')) { others(btn, context); return true; }
+    if (btn.matches('[data-was-store]')) { context.openStore(btn.dataset.wasStore); return true; }
+    if (btn.matches('[data-mc-approve]')) {
+      await R.routerApprove({ app, feature: btn.dataset.mcApprove, provider: btn.dataset.mcProvider, model: btn.dataset.mcModel });
+      dismissAlternative(); await context.recheck(); return true;
+    }
+    if (!btn.matches('[data-mc-connect]')) return false;
+    const id = btn.dataset.mcConnect;
+    const row = btn.closest('.mc-row');
+    const need = entries(data).find(n => (n.slot && n.slot === row?.dataset.mcSlot) || (n.feature && n.feature === row?.dataset.mcFeature));
+    if (!id) { if (need?.fix_url) await context.openProvider('', need.fix_url); else context.openStore(need?.slot || 'ai-connection'); return true; }
+    if (btn.dataset.mcInstalled !== '1') {
+      const provider = (context.storeApps || []).find(a => a.id === id);
+      if (!provider) { context.openStore(id); return true; }
+      btn.textContent = 'Setting up…';
+      if (!await context.installProvider(provider)) return true;
+    }
+    const provider = (data.providers || []).find(p => p.id === id);
+    const fix = id === (need?.recommend || need?.provider || need?.route?.provider) ? need?.fix_url : null;
+    await context.openProvider(id, fix || provider?.fix_url);
+    return true;
+  }
+  async function catalog() {
+    const apps = []; let offset = 0;
+    for (let i = 0; i < 100; i++) {
+      const r = await fetch(url(`store-data/wizard/v1/index/search?limit=100&offset=${offset}`), { credentials: 'same-origin', cache: 'no-store' });
+      if (!r.ok) throw Error('The App Index is unavailable.');
+      const j = await r.json(); apps.push(...(j.apps || []));
+      if (j.next_offset == null) return apps;
+      if (!Number.isSafeInteger(j.next_offset) || j.next_offset <= offset) break;
+      offset = j.next_offset;
+    }
+    throw Error('The App Index did not finish loading.');
+  }
+  async function installed() {
+    const r = await fetch(url('store-data/wizard/v1/installed-apps'), { credentials: 'same-origin', cache: 'no-store' });
+    if (!r.ok) throw Error('Installed apps could not be checked.');
+    const j = await r.json();
+    if (j.complete !== true || !Array.isArray(j.wam) || !Array.isArray(j.shell)) throw Error('Installed apps are still being checked. Try again before installing a provider.');
+    return [...j.wam, ...j.shell];
+  }
+  function close() {
+    if (!overlay && !current && !pending) return false;
+    pending = false; serial++; dismissAlternative(); const focus = current?.focus; current = null;
+    links?.close(); links = null; overlay?.remove(); overlay = null; if (focus?.isConnected) focus.focus(); return true;
+  }
+  function paint() {
+    if (!overlay || !current) return;
+    dismissAlternative();
+    const c = current;
+    overlay.querySelector('.was-card').innerHTML = `<header class="was-head"><button class="mc-btn alt" type="button" data-was-close>Back</button><h2 tabindex="-1">Set up ${esc(c.name)}</h2></header>
+      <p class="mc-lede">${canContinue(c.data) ? 'Your required connections are ready. These extras are optional.' : 'Connect these parts before opening the app.'}</p>
+      ${html(c.app, c.data, { storeApps: c.apps, isInstalled: a => c.installed.some(p => p.id === a.id) })}
+      <button type="button" class="mc-btn alt" data-was-agents>Agents and privacy settings</button>
+      <p class="mc-line was-note" role="status">${esc(c.note || '')}</p><footer class="mc-acts"><button type="button" class="mc-btn alt" data-was-recheck>Check again</button>${canContinue(c.data) ? `<button type="button" class="mc-btn" data-was-continue>${gaps(c.data).length ? 'Continue anyway' : 'Open ' + esc(c.name)}</button>` : ''}</footer>`;
+  }
+  async function recheck() {
+    const c = current; if (!c) return;
+    const check = c.check = (c.check || 0) + 1;
+    const r = await R.routerNeeds(c.app);
+    if (current !== c || check !== c.check) return;
+    // Compatibility fallback applies on every check, not only the initial open.
+    if (!r.data) { const resume = c.resume; close(); resume(); return; }
+    c.data = r.data; paint();
+  }
+  function child(href) {
+    let u; try { u = new URL(href, location.href); } catch (_) { throw Error('No connection page is available.'); }
+    if (u.origin !== location.origin || !/^https?:$/.test(u.protocol)) throw Error('The connection page must be on this Wizard.');
+    if (!links) links = window.WizLinks.mount({ parent: overlay, onChange: open => {
+      if (!open && current) {
+        // A connect page is one nested visit. Do not reuse a closing sheet's
+        // delayed history stack if another connection is opened immediately.
+        const ended = links; links = null; ended?.el.remove(); recheck();
+      }
+    } });
+    links.open(u.href);
+  }
+  async function openProvider(id, fix) {
+    const c = current;
+    await window.WizCore?.refreshApps?.();
+    if (current !== c || !overlay) return;
+    // Router fix links may be shell deep links: resolve them to the installed app's page,
+    // never embed another shell inside the checklist.
+    let target = fix;
+    const u = fix && new URL(fix, location.href);
+    if (!target || u.searchParams.has('open')) target = hooks.getApp?.(u?.searchParams.get('open') || id)?.url;
+    if (!target) throw Error('Open this provider from Apps, then return here and check again.');
+    child(target);
+  }
+  function context(c) {
+    return { app: c.app, data: c.data, storeApps: c.apps, isInstalled: a => c.installed.some(p => p.id === a.id), recheck,
+      openStore: slot => child(url('store/index.html?q=' + encodeURIComponent(slot))),
+      openProvider: (id, fix) => current === c ? openProvider(id, fix) : undefined,
+      installProvider: async provider => {
+        if (provider.conflict) throw Error('This provider has a source conflict. Choose its release in the Store.');
+        // Never interpret an unavailable/incomplete registry as a missing provider.
+        const before = await installed();
+        if (current !== c) return false;
+        const existing = before.find(p => p.id === provider.id);
+        if (existing?.conflict) throw Error('This provider has a source conflict. Choose its release in the Store.');
+        if (existing) { c.installed = before; return true; }
+        await installer.installRelease(provider, { base });
+        const snapshot = await installed();
+        if (!snapshot.some(p => p.id === provider.id && !p.conflict && p.repo === provider.repo && p.commit === provider.commit)) throw Error('The installed release is not registered yet. Check again before retrying.');
+        if (current !== c) return false;
+        c.installed = snapshot; await window.WizCore?.refreshApps?.(); return current === c;
+      } };
+  }
+  // Synchronous admission preserves the shells' boolean openApp contract. Only the captured
+  // continuation can create a window; cancelling or a newer launch invalidates an in-flight read.
+  function gate(app, resume) {
+    const ticket = ++serial;
+    if (current || overlay || pending) { close(); serial = ticket; }
+    pending = true;
+    (async () => {
+      let result;
+      try { await ready; result = await R.routerNeeds(app.id); } catch (_) { result = {}; }
+      if (ticket !== serial) return;
+      pending = false;
+      if (!result.data || !needsSetup(result.data)) { resume(); return; }
+      current = { app: app.id, name: app.name || app.id, resume, data: result.data, apps: [], installed: [], note: '', focus: document.activeElement };
+      const c = current;
+      overlay = document.createElement('section'); overlay.className = 'was-overlay'; overlay.setAttribute('aria-label', 'App setup');
+      overlay.innerHTML = `<div class="was-card" role="dialog" aria-modal="true" aria-label="Set up ${esc(c.name)}"></div>`; document.body.appendChild(overlay); paint();
+      overlay.addEventListener('keydown', e => {
+        if (e.key !== 'Tab' || links?.isOpen()) return;
+        const buttons = [...overlay.querySelectorAll('.was-card button:not(:disabled)')];
+        const first = buttons[0], last = buttons.at(-1);
+        if (e.shiftKey && (document.activeElement === first || document.activeElement.tagName === 'H2')) { e.preventDefault(); last?.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+      });
+      overlay.querySelector('h2')?.focus();
+      overlay.addEventListener('click', async e => {
+        const btn = e.target.closest('button'); if (!btn || !btn.closest('.was-card') || current !== c) return;
+        if (btn.matches('[data-was-close]')) { close(); return; }
+        if (c.busy) return;
+        if (btn.matches('[data-was-continue]')) { if (canContinue(c.data)) { close(); c.resume(); } return; }
+        if (btn.matches('[data-was-agents]')) { window.WosAppRoute?.open(c.app, { name: c.name }); return; }
+        c.busy = true; btn.disabled = true; c.note = '';
+        try { if (btn.matches('[data-was-recheck]')) await recheck(); else await action(btn, context(c)); }
+        catch (e) { if (current === c) { c.note = e.message; paint(); } }
+        finally { c.busy = false; if (btn.isConnected) btn.disabled = false; }
+      });
+      Promise.allSettled([catalog(), installed()]).then(([apps, inst]) => {
+        if (current !== c) return;
+        c.apps = apps.status === 'fulfilled' ? apps.value : [];
+        c.installed = inst.status === 'fulfilled' ? inst.value : [];
+        if (!links?.isOpen()) paint();
+      });
+    })();
+    return true;
+  }
+  function back() {
+    if (links?.isOpen()) return links.back();
+    if (alternative) return dismissAlternative();
+    return close();
+  }
+  // The nested Store uses its existing hosted-app messages. Trust only our exact
+  // Store frame (never a provider frame or a claimed app id) and installed app URLs.
+  addEventListener('message', async e => {
+    const frame = links?.el.querySelector('iframe');
+    if (!current || e.origin !== location.origin || e.source !== frame?.contentWindow) return;
+    let page; try { page = new URL(links.state().url); } catch (_) { return; }
+    if (page.origin !== location.origin || !page.pathname.startsWith(new URL('store/', base).pathname)) return;
+    const d = e.data; if (!d || typeof d.id !== 'string' || !/^[a-z0-9-]{1,80}$/.test(d.id)) return;
+    if (d.type === 'wizard:open-app') { try { await openProvider(d.id); } catch (err) { if (current) { current.note = err.message; paint(); } } }
+    else if (d.type === 'wizard:app-route') window.WosAppRoute?.request(d);
+  });
+  const onReturn = () => { if (!document.hidden && current && !links?.isOpen()) ready.then(recheck).catch(() => {}); };
+  document.addEventListener('visibilitychange', onReturn); addEventListener('focus', onReturn);
+  window.WosAppSetup = { ready, html, action, choices, gaps, canContinue, needsSetup, gate, back, close, recheck,
+    init(o) { hooks = { ...hooks, ...o }; }, isOpen: () => !!current };
+})();

@@ -32,7 +32,7 @@ function needs(st) {
   let pass = 0, fail = 0; const ok = (c, m) => { if (c) { pass++; console.log('PASS', m); } else { fail++; console.log('FAIL', m); } };
   try {
     for (const [w, h, mobile] of [[390, 844, true], [1280, 900, false]]) for (const scenario of ['swap', 'match', 'none']) {
-      const st = { scenario, installed: false, approved: false, approvals: [], installs: 0, writes: [] };
+      const st = { scenario, installed: false, approved: false, approvals: [], installs: 0, providerInstalls: 0, writes: [] };
       const ctx = await browser.newContext({ viewport: { width: w, height: h }, ...(mobile ? { isMobile: true, hasTouch: true } : {}), serviceWorkers: 'block' });
       const errors = []; const json = (r, status, body) => r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
       await ctx.route('**/*', async r => {
@@ -43,13 +43,16 @@ function needs(st) {
           const sub = p.slice('/wizard-os-home/store-data/'.length);
           if (sub === 'wizard/v1/index/search') return json(r, 200, catalog);
           if (sub === 'api/apps/installed') return json(r, 200, { installed: [] });
-          if (sub === 'wizard/v1/installed-apps') return json(r, 200, { complete: true, architecture: 'amd64', wam: st.installed ? [{ id: 'wisdom', repo: catalog.apps[0].repo, commit: C, source: 'standard', status: 'running' }] : [], shell: [] });
+          if (sub === 'wizard/v1/installed-apps') return json(r, 200, { complete: true, architecture: 'amd64', wam: [...(st.installed ? [{ id: 'wisdom', repo: catalog.apps[0].repo, commit: C, source: 'standard', status: 'running' }] : []), ...(st.providerInstalls ? [{ id: 'wizard-claude', repo: catalog.apps[1].repo, commit: C, source: 'standard', status: 'running' }] : [])], shell: [] });
           if (sub === 'router/v1/needs/wisdom' && m === 'GET') return st.installed ? json(r, 200, needs(st)) : json(r, 403, { code: 'blocked', message: 'Calling app is not installed.' });
           if (sub === 'router/v1/approve' && m === 'POST') {
             const b = JSON.parse(r.request().postData()); st.approvals.push({ b, h: r.request().headers() }); st.approved = true;
             return json(r, 200, { type: 'approved', route: { provider: b.provider, model: b.model } });
           }
           st.writes.push(m + ' ' + p); return json(r, 404, {});
+        }
+        if (p === '/wizard-os-home/store-install/wizard-claude' && m === 'POST') {
+          st.providerInstalls++; return json(r, 200, { state: 'installed', selection: JSON.parse(r.request().postData()) });
         }
         if (p === '/wizard-os-home/store-install/wisdom') {
           if (m === 'POST') { st.installs++; st.installed = true; const b = JSON.parse(r.request().postData()); return json(r, 200, { state: 'installed', selection: b }); }
@@ -75,12 +78,12 @@ function needs(st) {
       if (scenario !== 'swap') {
         const [a1, c1] = ['ask-ai', 'chapter-authoring'].map(f => sheet.rows.find(r => r.f === f));
         if (scenario === 'match') {
-          ok(/Every feature has a model/.test(sheet.sub) && a1?.state === 'Ready' && c1?.state === 'Ready', `${tag} matching: every feature Ready (${sheet.sub})`);
-          ok(/Using claude-sonnet-4\.5 via Claude/.test(a1?.text) && /Using claude-opus-4\.1 via Claude/.test(c1?.text) && a1.btns.length + c1.btns.length === 0, `${tag} matching: tested models in use, no swap or connect offered`);
+          ok(/Every connection is ready/.test(sheet.sub) && a1?.state === 'Ready' && c1?.state === 'Ready', `${tag} matching: every feature Ready (${sheet.sub})`);
+          ok(/Using claude-sonnet-4\.5 via Claude/.test(a1?.text) && /Using claude-opus-4\.1 via Claude/.test(c1?.text) && a1.btns.every(b => b === 'Use another') && c1.btns.length === 0, `${tag} matching: tested models in use, no swap or connect offered`);
           ok(await pg.locator('#sheet .mc-done button').innerText() === 'Done', `${tag} matching: single Done action`);
         } else {
-          ok(/2 features need a model/.test(sheet.sub) && a1?.state === 'Needs a provider' && a1.btns.length === 1 && a1.btns[0] === 'Connect Claude', `${tag} no provider: ask feature offers Connect Claude only`);
-          ok(c1?.state === 'Off until connected' && c1.btns.length === 1 && c1.btns[0] === 'Connect Claude' && !sheet.rows.some(r => r.btns.some(b => /swap/i.test(b))), `${tag} no provider: strict feature off, no swap anywhere`);
+          ok(/2 connections need setup/.test(sheet.sub) && a1?.state === 'Needs a provider' && a1.btns.length === 2 && a1.btns[0] === 'Set up Claude', `${tag} no provider: ask feature offers Set up Claude and Use another`);
+          ok(c1?.state === 'Off until connected' && c1.btns.length === 2 && c1.btns[0] === 'Set up Claude' && !sheet.rows.some(r => r.btns.some(b => /swap/i.test(b))), `${tag} no provider: strict feature off, no swap anywhere`);
         }
         await shot('sheet');
         await pg.locator('#sheet [data-back]').first().click();
@@ -91,11 +94,11 @@ function needs(st) {
         ok(errors.length === 0, `${tag} no page errors: ${errors.join(' | ')}`);
         await ctx.close(); continue;
       }
-      ok(/Wisdom is installed/.test(sheet.title) && /2 features need a model/.test(sheet.sub), `${tag} sheet title and count: ${sheet.sub}`);
+      ok(/Wisdom is installed/.test(sheet.title) && /2 connections need setup/.test(sheet.sub), `${tag} sheet title and count: ${sheet.sub}`);
       const ask = sheet.rows.find(r => r.f === 'ask-ai'), ch = sheet.rows.find(r => r.f === 'chapter-authoring');
-      ok(ask && /claude-sonnet-4\.5/.test(ask.text) && ask.btns.includes('Connect Claude') && ask.btns.includes('Approve swap to gpt-5.1-mini'), `${tag} ask-ai: tested model, Connect Claude, named swap`);
+      ok(ask && /claude-sonnet-4\.5/.test(ask.text) && !ask.btns.includes('Connect Claude') && ask.btns.includes('Approve swap to gpt-5.1-mini') && ask.btns.includes('Use another'), `${tag} ask-ai: tested model, named approval primary and Use another`);
       ok(ask && /Results may differ/.test(ask.text), `${tag} ask-ai warns results may differ`);
-      ok(ch && ch.state === 'Off until connected' && ch.btns.length === 1 && ch.btns[0] === 'Connect Claude' && /tested model only/.test(ch.text), `${tag} strict feature: off, connect only, no swap`);
+      ok(ch && ch.state === 'Off until connected' && ch.btns.length === 2 && ch.btns[0] === 'Set up Claude' && /tested model only/.test(ch.text), `${tag} strict feature: off, connect only, no swap`);
       // Buttons are thumb-sized and nothing overflows the window.
       const geo = await pg.evaluate(() => ({ minH: Math.min(...[...document.querySelectorAll('#sheet .mc-btn')].map(b => b.getBoundingClientRect().height)), over: document.documentElement.scrollWidth - innerWidth }));
       ok(geo.minH >= 40 && geo.over <= 0, `${tag} buttons ≥40px (${geo.minH}) and no horizontal overflow (${geo.over})`);
@@ -107,7 +110,7 @@ function needs(st) {
       ok(st.approvals.length === 1 && ap.b.app === 'wisdom' && ap.b.provider === 'wizard-chatgpt' && ap.b.model === 'gpt-5.1-mini' && ap.h['x-wizard-store'] === '1', `${tag} approve sends one exact owner choice`);
       const after = await pg.evaluate(() => ({ state: document.querySelector('#sheet .mc-row[data-mc-feature="ask-ai"] .mc-state').textContent, text: document.querySelector('#sheet .mc-row[data-mc-feature="ask-ai"]').innerText, sub: document.querySelector('#sheet .list-head p').textContent }));
       ok(after.state === 'Ready · approved swap' && /Using gpt-5\.1-mini/.test(after.text), `${tag} approved row shows the swap in use`);
-      ok(/1 feature needs a model/.test(after.sub), `${tag} sheet count updates: ${after.sub}`);
+      ok(/1 connection needs setup/.test(after.sub), `${tag} sheet count updates: ${after.sub}`);
       await shot('approved');
       // Back closes the sheet; the app's detail now carries Models and connections.
       await pg.locator('#sheet [data-back]').first().click();
@@ -115,10 +118,10 @@ function needs(st) {
       const det = await pg.evaluate(() => ({ layers: window.__store.state().layers, h: document.querySelector('#detail .mc h3')?.textContent, rows: document.querySelectorAll('#detail .mc .mc-row').length }));
       ok(det.layers.at(-1) === 'detail' && det.h === 'Models and connections' && det.rows === 2, `${tag} Back returns to detail with Models and connections`);
       await pg.locator('#detail .mc').scrollIntoViewIfNeeded(); await shot('detail');
-      // Connect for an uninstalled provider opens its Store page.
+      // Setup reuses the Store's qualified install transaction, not a second installer.
       await pg.locator('#detail .mc-row[data-mc-feature="chapter-authoring"] [data-mc-connect]').click();
-      await pg.waitForFunction(() => document.querySelector('#detail h1, #detail h2')?.textContent.includes('Claude'), null, { timeout: 5000 }).catch(() => {});
-      ok(await pg.evaluate(() => /Claude/.test(document.querySelector('#detail').innerText.slice(0, 200))), `${tag} Connect Claude opens its Store page`);
+      await pg.waitForFunction(() => /Open this provider from Apps/.test(document.querySelector('#toast').textContent));
+      ok(st.providerInstalls === 1, `${tag} Set up Claude installs recommended provider once via Store`);
       ok(st.writes.length === 0, `${tag} no other writes: ${st.writes.join(', ')}`);
       ok(errors.length === 0, `${tag} no page errors: ${errors.join(' | ')}`);
       await ctx.close();
