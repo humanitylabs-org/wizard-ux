@@ -8,7 +8,8 @@
  *
  * Custody: the native copy is released (ack) only after the web outbox holds the audio durably (app.js recDone).
  * Takes cut short by an app kill, stopped from the notification, or cancelled after 20 s (native keeps those) are moved into the outbox
- * as held recordings (Settings → Recordings) and only then released. Nothing is ever sent without a tap.
+ * as held recordings (Settings → Recordings) and only then released. Nothing is ever sent without a tap: a take the
+ * floating orb stopped with its second tap (`send`) goes out as a new chat, like the full app's notification Send.
  */
 (() => {
   'use strict';
@@ -72,6 +73,7 @@
         const owned = OUTBOX.nativeItem?.(t.id);
         if (owned?.durable) { await call(CAP + '.ack', { id: t.id }).catch(() => {}); continue; }
         const blob = await readTake(t.id, t.bytes);
+        if (t.send && await sendTake(t, blob)) continue; // the floating orb's take: the owner tapped to send it
         const cid = 'native-' + t.id;
         const item = await OUTBOX.capture(blob, cid);
         const reason = t.state === 'interrupted' ? 'Interrupted recording · original kept' : t.state === 'cancelled' ? 'Cancelled recording · original kept' : 'Stopped recording · original kept';
@@ -81,6 +83,22 @@
       }
     } catch (e) { console.warn('device recording sweep (' + why + '):', e); }
     finally { sweeping = false; }
+  }
+
+  /* A take the floating orb stopped with "send": a new chat through the durable outbox (which transcribes and
+   * delivers it), exactly like the full app's notification Send. False (kept as held) when no model route exists. */
+  async function sendTake(t, blob) {
+    const OUTBOX = window.WosOutbox;
+    let route = null;
+    try { route = window.WosModels?.snapshot?.('', null, '') || null; } catch (_) { route = null; }
+    if (!route?.model || typeof OUTBOX?.enqueue !== 'function') return false;
+    const owner = window.WizConfig?.owner?.();
+    const it = await OUTBOX.enqueue({ nativeId: t.id, ...route, kind: 'new', sessionId: '', text: '', audio: blob, source: 'orb', how: 'floating-orb',
+      instructions: (owner ? owner + ' recorded' : 'The owner recorded') + ' this with the floating Wizard orb on their Android phone. The original recording is attached as a voice note.' });
+    if (!it?.durable) return true; // the outbox keeps it in memory and retries; native keeps its copy until durable
+    await call(CAP + '.ack', { id: t.id });
+    toast('✦', 'Orb recording sent', 2400);
+    return true;
   }
 
   /* The recorder surface app.js already uses for the full app's bridge (synchronous answers come from the cache). */
@@ -150,6 +168,7 @@
 
   window.WosDeviceRecording = {
     get ready() { return ready; },
+    collect: why => sweep(why || 'collect'),
     device: () => (ready ? device : null),
     _state: () => ({ ready, status, pending: pendingList.length, inflight: [...inflight] }),
   };

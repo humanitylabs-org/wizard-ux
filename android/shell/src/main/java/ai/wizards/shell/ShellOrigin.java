@@ -6,17 +6,24 @@ import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 /** Pure, fail-closed rules for the one Wizard address the shell trusts. Unit-tested off-device. */
-final class ShellOrigin {
+public final class ShellOrigin {
     static final String HOME_PATH = "/wizard-os-home/";
+    /** Where ShellActivity keeps the selected Wizard (SharedPreferences name and key). */
+    public static final String PREFS = "shell", KEY = "origin";
 
     private ShellOrigin() {}
+
+    /** The selected Wizard's origin, or null: the one place services read it. */
+    public static String selected(android.content.Context c) {
+        return parse(c.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE).getString(KEY, null));
+    }
 
     /**
      * Accepts what an owner pastes or a Setup QR carries: {@code https://host[:port]}, optionally ending in
      * {@code /} or {@code /wizard-os-home/}, a bare {@code host[:port]}, or {@code wizard://connect?origin=<encoded>}.
      * Returns the normalised origin ({@code https://host[:port]}, port 443 dropped) or null.
      */
-    static String parse(String text) {
+    public static String parse(String text) {
         if (text == null) return null;
         String t = text.trim();
         if (t.isEmpty() || t.length() > 2048) return null;

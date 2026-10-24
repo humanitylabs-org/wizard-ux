@@ -95,10 +95,13 @@ public final class TakeStore {
     }
 
     /** Ends a take: records state and duration. A take with no speech is released at once. */
-    public synchronized JSONObject finish(String id, String state, long ms, long now) {
+    public synchronized JSONObject finish(String id, String state, long ms, long now) { return finish(id, state, ms, now, false); }
+
+    /** {@code send}: the owner asked to send it (the floating orb's second tap); the Wizard's page sends it. */
+    public synchronized JSONObject finish(String id, String state, long ms, long now, boolean send) {
         JSONObject o = read(id);
         if (o == null) return null;
-        try { o.put("state", state).put("ms", Math.max(0, ms)).put("stoppedAt", now); } catch (JSONException ignored) { }
+        try { o.put("state", state).put("ms", Math.max(0, ms)).put("stoppedAt", now); if (send) o.put("send", true); } catch (JSONException ignored) { }
         write(id, o);
         File a = audio(id);
         if (a.length() < NOTHING_BYTES) { release(id); return describe(id, o, true); }
