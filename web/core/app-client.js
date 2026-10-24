@@ -298,6 +298,12 @@
   }
   const sharedResult = promise => promise.then(value => ['shared', 'copied', 'cancelled', 'unsupported'].includes(value) ? value : 'unsupported', () => 'unsupported');
   window.WizardApp = Object.freeze({ version: VERSION, get hosted() { return !!service || transportReady; }, ready,
+    identity: Object.freeze({
+      info: () => framed ? request('identity.info') : Promise.resolve({ unavailable: true }),
+      sign: event => framed ? request('identity.sign', { event }, 190000) : Promise.resolve({ unavailable: true }),
+      nip44_encrypt: args => framed ? request('identity.nip44_encrypt', args, 190000) : Promise.resolve({ unavailable: true }),
+      nip44_decrypt: args => framed ? request('identity.nip44_decrypt', args, 190000) : Promise.resolve({ unavailable: true }),
+    }),
     voiceInput, conversation: voiceInput, // backwards-compatible name, identical receiver/authority
     back: Object.freeze({ register, push, useHistory }),
     view: Object.freeze({ isVisible: () => !document.hidden && (!framed || service?.view?.isVisible() === true) }),
