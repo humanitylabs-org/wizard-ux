@@ -39,6 +39,7 @@
     }
   }
   function attach(frame, { appId, path, openThread, openContextDraft, isVisible, readingStorage } = {}) {
+    if (window.WizBrowserBoundary?.enabled) return window.WizBrowserBoundary.attach(frame);
     frames.get(frame)?.detach();
     if (!frame || frame.tagName !== 'IFRAME' || !appId || !path) return () => {};
     let url; try { url = new URL(path, ORIGIN); } catch (_) { return () => {}; }

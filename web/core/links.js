@@ -100,7 +100,7 @@
         ${!NATIVE || typeof bridge()?.openInBrowser === 'function' ? '<button class="ls-out" data-ls="out" aria-label="Open in browser" title="Open in browser">↗</button>' : ''}
         <button class="ls-x" data-ls="close" aria-label="Close">✕</button>
       </header>
-      <div class="ls-body"><i class="ls-load"></i><iframe class="ls-frame" title="Link" allow="microphone; clipboard-read; clipboard-write; fullscreen" referrerpolicy="same-origin"></iframe></div></div>`;
+      <div class="ls-body"><i class="ls-load"></i><iframe class="ls-frame"${window.WizBrowserBoundary?.enabled ? ' ' + window.WizBrowserBoundary.frameAttributes() : ''} title="Link" allow="microphone; clipboard-read; clipboard-write; fullscreen" referrerpolicy="same-origin"></iframe></div></div>`;
     (parent || document.body).appendChild(el);
     const frame = el.querySelector('iframe'), bar = el.querySelector('.ls-bar'), panel = el.querySelector('.ls-panel');
     let stack = [], open = false, popping = false, hideT = 0;
