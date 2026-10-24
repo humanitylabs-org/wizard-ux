@@ -1398,43 +1398,29 @@
    * or My skin then carries the .ov-pill styling, as Miguel's skin.css does). */
   const orbUpVar = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-orb-swipe-up').trim(); } catch (_) { return ''; } };
   const orbUpDesks = () => oursSkin() || ['desks', 'pill'].includes(orbUpVar());
-  const CONNECTOR_IDS = new Set(['wizard-chatgpt', 'wizard-claude', 'wizard-tinfoil', 'wizard-cloudflare']);
-  const isConnector = a => CONNECTOR_IDS.has(a.id) || /^(connect|sign in to)\b/i.test(a.desc || '');
-  /* System apps: the defaults Wizard OS ships for its parking spots (wizard-os docs/SYSTEM_APPS.md): files,
-   * notifications, transcription, browser, secrets, Setup, the main agent and the AI connections. They lead their group
-   * and wear a ring that reads as "this fills a spot"; everything else follows alphabetically. */
-  const SYSTEM_IDS = new Set(['wizard', 'setup', 'files', 'notifications', 'transcriber', 'browser', 'secret-drop', 'wizard-chatgpt', 'wizard-claude']);
-  const isSystem = a => SYSTEM_IDS.has(a.id) || a.system === true;
-  const inDev = a => !isSystem(a) && (window.WizCore.isInDevelopment?.(a) || a.source === 'launcher.json' || /-next$/.test(a.id) || /\(test\)\s*$/i.test(a.name || ''));
-  function appKinds() {
-    const byName = (x, y) => (isSystem(y) - isSystem(x)) || x.name.localeCompare(y.name, undefined, { sensitivity: 'base' });
-    const mine = APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && ['wizard', 'chats', 'usuals', 'view'].includes(a.kind));
-    const conns = mine.filter(a => a.kind === 'wizard' && isConnector(a));
-    // Agents: each agent's chats (main agent first, as registered) plus the Agents app that manages them.
-    const agents = [...mine.filter(a => a.kind === 'chats'), ...(APP.agents ? [APP.agents] : [])].sort((x, y) => isSystem(y) - isSystem(x));
-    const people = mine.filter(a => a.kind !== 'chats' && !conns.includes(a)).sort(byName);
-    // In development (James, 23 Oct 2026): screens linked from the owner's launcher list rather than installed by the
-    // App Manager, and test copies of an installed app. They fold under their own row, shown only when there are any;
-    // once a screen ships as an installed app it moves up to Apps by itself.
-    const apps = people.filter(a => !inDev(a)), dev = people.filter(inDev);
-    const back = (window.WizCore.backendApps?.() || []).filter(a => !APP[a.id]);
-    return { apps, dev, agents, wiz: back.filter(a => !isConnector(a)).sort(byName), conns: [...conns, ...back.filter(isConnector)].sort(byName) };
-  }
+  /* App kinds (core/app-kinds.js, shared with the desktop selector): Apps, Agent apps, Agents, Connectors, system apps
+   * first and ringed; every group ends with a "+ Get ..." tile for its App Store section, and Agents also has
+   * "+ Build agents" (the Agents app, where agents are made and managed). */
+  const AK = window.WosAppKinds;
+  const { isSystem } = AK;
+  const appKinds = () => AK.kinds(APPS, APP);
   const sysMark = html => html.replace('class="lapp', 'class="lapp lapp-sys').replace('<span class="nm">', '<span class="nm" title="System app">');
   const backTile = a => `<button class="lapp lapp-back${isSystem(a) ? ' lapp-sys' : ''}" data-appinfo="${esc(a.id)}" data-name="${esc(a.name)}" style="--i:${tileN++}">${ico('span', 'ic', a)}<span class="nm">${esc(a.name)}</span></button>`;
   const kindTile = a => a.url || a.kind !== 'wizard' ? (isSystem(a) ? sysMark(appTile(a)) : appTile(a)) : backTile(a);
-  const getApps = '<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button>';
+  const plusTile = (attrs, label) => `<button class="lapp lapp-get" ${attrs}><span class="ic">+</span><span class="nm">${esc(label)}</span></button>`;
+  const getTile = k => plusTile(`data-storekind="${AK.GET[k][0]}"`, AK.GET[k][1]);
   // System apps lead their group in the same grid; their purple tile (skin.css .lapp-sys) marks them, no label or box.
-  function sysSplit(list, tile) { return [...list.filter(isSystem), ...list.filter(a => !isSystem(a))].map(tile).join(''); }
+  function sysSplit(list, tile) { return AK.sysFirst(list).map(tile).join(''); }
   function kindGroups(order) {
     const K = appKinds();
+    const grp = (k, body) => `<div class="lgroup kg-${k}"><h4>${AK.LABELS[k]}</h4><div class="lgrid">${body}${getTile(k)}</div></div>`;
     const G = {
-      apps: `<div class="lgroup kg-apps"><h4>Apps</h4><div class="lgrid">${sysSplit(K.apps, kindTile)}${getApps}</div></div>`,
-      wiz: K.wiz.length ? `<div class="lgroup kg-wiz"><h4>Wizard apps</h4><div class="lgrid">${sysSplit(K.wiz, backTile)}</div></div>` : '',
-      agents: K.agents.length ? `<div class="lgroup kg-agents"><h4>Agents</h4><div class="lgrid">${sysSplit(K.agents, kindTile)}</div></div>` : '',
-      conns: K.conns.length ? `<div class="lgroup kg-conns"><h4>Connectors</h4><div class="lgrid">${sysSplit(K.conns, kindTile)}</div></div>` : '',
+      apps: grp('apps', sysSplit(K.apps, kindTile)),
+      wiz: grp('wiz', sysSplit(K.wiz, backTile)),
+      agents: grp('agents', sysSplit(K.agents, kindTile) + (K.builder ? plusTile('data-app="agents"', 'Build agents') : '')),
+      conns: grp('conns', sysSplit(K.conns, kindTile)),
     };
-    // Apps are for people; Wizard apps, Agents and Connectors are mostly for agents: one "For agents" section,
+    // Apps are for people; Agent apps, Agents and Connectors are mostly for agents: one "For agents" section,
     // folded by default (each open of the sheet or a New desk starts folded), tap the row to open it.
     const fa = order.filter(k => k !== 'apps' && G[k]);
     const n = (K.wiz.length + K.agents.length + K.conns.length);
@@ -1442,6 +1428,13 @@
     const dev = order.includes('apps') && K.dev.length ? fold('dev', 'In development', K.dev.length, `<div class="lgroup kg-dev"><h4>In development</h4><div class="lgrid">${K.dev.map(kindTile).join('')}</div></div>`) : '';
     const folded = fa.length ? fold('agents', 'For agents', n, fa.map(k => G[k]).join('')) : '';
     return (order.includes('apps') ? G.apps : '') + dev + folded;
+  }
+  // "+ Get ..." tiles open the App Store on that section (store.js reads ?kind=).
+  function openStoreKind(kind) {
+    closeSheets(); // not quiet: the Apps sheet must close even when it was opened without a tracked sheet
+    const url = AK.storeUrl(kind), id = Object.keys(W).find(k => W[k].appId === 'app-store' && deskOf(k) >= 0);
+    if (id) { const f = winEl(id)?.querySelector('iframe'); W[id].url = url; if (f) f.src = url; const t = deskOf(id); if (t !== idx) goDesk(t, true); focusWin(id); save(); return; }
+    openWin({ app: 'frame', appId: 'app-store', url });
   }
   const foldOpen = { agents: false, dev: false };
   document.addEventListener('click', e => {
@@ -1743,6 +1736,7 @@
   });
   track.addEventListener('click', e => {
     const say = e.target.closest('[data-say]'); if (say) return runUtterance(say.dataset.say, 'auto');
+    const sk = e.target.closest('.new-desk [data-storekind]'); if (sk) return openStoreKind(sk.dataset.storekind);
     const info = e.target.closest('.new-desk [data-appinfo]'); if (info) return openAppInfo(info);
     const pick = e.target.closest('.new-desk [data-app]');
     if (pick) { const a = APP[pick.dataset.app]; if (a) { const r = store.get('recent', []).filter(x => x !== a.id); r.unshift(a.id); store.set('recent', r.slice(0, 8)); openApp(a); } return; }
@@ -1997,6 +1991,7 @@
   // Miguel's skins open apps from the New desk grid (swipe up shows Desks, not the Apps sheet): same long-press there.
   window.WizHomeScreenApps?.attach(track, id => APP[id], { rows: '.new-desk [data-app]', live: row => !!row.closest('.new-desk') && row.getClientRects().length > 0 });
   launcher.addEventListener('click', e => {
+    const sk = e.target.closest('[data-storekind]'); if (sk) return openStoreKind(sk.dataset.storekind);
     const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app]);
     const bi = e.target.closest('[data-appinfo]'); if (bi) { closeSheets(); return openAppInfo(bi); }
     const t = e.target.closest('[data-thread]'); if (t) { closeSheets(); return openWizardThread(t.dataset.thread); }
