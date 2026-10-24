@@ -163,17 +163,23 @@
     titleRecord(id) {
       return A.get(id || A.defaultId()) || { id: id || 'hermes', label: id || 'Hermes', is_default: !id, appearance: {} };
     },
-    titleContent(id, iconClass, titleClass) {
+    titleContent(id, iconClass, titleClass, label = '') {
       const a = A.titleRecord(id);
-      return A.sigil(a, iconClass) + `<span class="${titleClass}" style="color:var(--ink)">${esc(A.title(a))}</span>`;
+      return A.sigil(a, iconClass) + `<span class="${titleClass}" style="color:var(--ink)">${esc(label || A.title(a))}</span>`;
     },
     titlebar(id = '', iconClass = 'ic', titleClass = 't') {
       return `<span class="agent-titlebar" data-agent-titlebar="${esc(id)}" data-icon-class="${iconClass}" data-title-class="${titleClass}">${A.titleContent(id, iconClass, titleClass)}</span>`;
     },
+    setTitlebarLabel(el, label = '') {
+      if (!el) return;
+      el.dataset.titleLabel = label;
+      const html = A.titleContent(el.dataset.agentTitlebar, el.dataset.iconClass, el.dataset.titleClass, label);
+      if (el.innerHTML !== html) el.innerHTML = html;
+    },
     refreshTitlebars() {
       // Registry updates only repaint the small identity wrapper, preserving drafts and scroll position.
       document.querySelectorAll('[data-agent-titlebar]').forEach(el => {
-        const html = A.titleContent(el.dataset.agentTitlebar, el.dataset.iconClass, el.dataset.titleClass);
+        const html = A.titleContent(el.dataset.agentTitlebar, el.dataset.iconClass, el.dataset.titleClass, el.dataset.titleLabel);
         if (el.innerHTML !== html) el.innerHTML = html;
       });
     },
