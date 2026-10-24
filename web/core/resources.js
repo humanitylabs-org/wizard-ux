@@ -167,16 +167,16 @@
   /* Bar groups, in order. Each takes the rows from homeRows(); a third group (say, storage or money) is one more entry
      here with its own rows key. Home (on skins that draw bars) and Settings › Resources both draw from this list (WosResources.bars). */
   const GROUPS=[
-    {id:'ai',cls:'rs-bg-ai',title:'AI resources',sub:'used this week',label:'AI resources used this week',optional:true},
-    {id:'hw',cls:'rs-bg-hw',title:'Compute resources',sub:'used',label:'Compute resources used',legend:true},
+    {id:'ai',cls:'rs-bg-ai',title:'AI resources',sub:'left this week',label:'AI resources left this week',optional:true},
+    {id:'hw',cls:'rs-bg-hw',title:'Compute resources',sub:'left',label:'Compute resources left',legend:true},
   ];
   function homeBarsHtml(){const R=homeRows(),sig=GROUPS.flatMap(g=>R[g.id]||[]).map(r=>r.k+':'+r.segs.length+(r.signin?'s':'')).join(',');
-    const row=r=>`<button class="rs-br${r.signin?' rs-br-off':''}" data-k="${esc(r.k)}" ${r.attrs} aria-label="${esc(r.label)} ${esc(r.signin?'sign in':/left$/.test(r.value)?r.value:r.value+' used')}"><span class="rs-bl">${esc(r.label)}</span><span class="rs-bt">${r.segs.map(g=>`<i class="rs-bs${lvl(g.left)}${g.dv!=null?' rs-d'+(g.dv%4):''}" style="flex:${g.cap} 1 0" title="${esc(g.title)}"><i class="rs-bf" data-w="${g.left==null?0:100-g.left}" style="width:0%"></i></i>`).join('')}</span><span class="rs-bv${lvl(r.left)}">${esc(r.value)}</span></button>`;
+    const row=r=>`<button class="rs-br${r.signin?' rs-br-off':''}" data-k="${esc(r.k)}" ${r.attrs} aria-label="${esc(r.label)} ${esc(r.signin?'sign in':/left$/.test(r.value)?r.value:r.value+' left')}"><span class="rs-bl">${esc(r.label)}</span><span class="rs-bt">${r.segs.map(g=>`<i class="rs-bs${lvl(g.left)}${g.dv!=null?' rs-d'+(g.dv%4):''}" style="flex:${g.cap} 1 0" title="${esc(g.title)}"><i class="rs-bf" data-w="${g.left==null?0:g.left}" style="width:0%"></i></i>`).join('')}</span><span class="rs-bv${lvl(r.left)}">${esc(r.value)}</span></button>`;
     const legend=()=>(R.machines||[]).length>1?`<p class="rs-lg">${R.machines.map((n,i)=>`<span class="rs-d${i%4}"><i></i>${esc(n.split(' ')[0])}</span>`).join('')}</p>`:'';
     const group=g=>{const rows=R[g.id]||[];if(g.optional&&!rows.length)return '';return `<div class="rs-bg ${g.cls}" role="group" aria-label="${esc(g.label)}" data-rs-group="${esc(g.id)}"><p class="rs-gh"><b>${esc(g.title)}</b><span>${esc(g.sub)}</span></p>${g.legend?legend():''}${rows.map(row).join('')}</div>`;};
     return `<section class="rs-widget rs-barsw wz-home-widget" data-sig="${esc(sig)}" aria-label="AI and computer resources">${GROUPS.map(group).join('')}</section>`;}
   // The least left across every bar ({label, left} or null): Settings shows it as a quiet value only when it is low.
-  function lowest(){const R=homeRows();let low=null;for(const r of GROUPS.flatMap(g=>R[g.id]||[]))if(r.left!=null&&!r.signin&&(!low||r.left<low.left))low={label:r.label,left:r.left,value:/left$/.test(r.value)?r.value:r.value?r.value+' used':''};return low;}
+  function lowest(){const R=homeRows();let low=null;for(const r of GROUPS.flatMap(g=>R[g.id]||[]))if(r.left!=null&&!r.signin&&(!low||r.left<low.left))low={label:r.label,left:r.left,value:/left$/.test(r.value)?r.value:r.value?r.value+' left':''};return low;}
   function paintBars(host,settled){const box=host.querySelector('.rs-barsw'),next=homeBarsHtml();
     const tmp=document.createElement('div');tmp.innerHTML=next;const fresh=tmp.firstElementChild;
     if(!box||box.dataset.sig!==fresh.dataset.sig){host.innerHTML=next;}
