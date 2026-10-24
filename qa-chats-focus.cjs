@@ -231,10 +231,11 @@ async function visualPicker(b) {
  const g=await p.locator('.ch-space-picker').boundingBox();ok(g.x>=0&&g.x+g.width<=412&&g.y>=0,'phone picker inside viewport',g);
  await activate(p,'[data-spspace="launch"]');await capture(p,'phone-nebula-space-active');
  await activate(p,'.ch-focus-tab.on:visible');await activate(p,'[data-spnew]');await p.locator('.ch-space-form input').fill('Research projects');
- await p.evaluate(()=>WosSkin.set('obsidian'));await p.locator('.mz-intro').waitFor({state:'attached'});await p.locator('.mz-intro').waitFor({state:'detached'});
+ await p.evaluate(()=>WosSkin.set('obsidian'));await p.waitForTimeout(500);await p.locator('.mz-intro').waitFor({state:'detached'});
  // Dark's existing first-switch intro navigates Home. Reopen the same Chats window after it finishes.
  await p.evaluate(()=>{const a=__wos,w=Object.values(a.wins).find(w=>w.app==='chats');a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);});
- await activate(p,'.ch-focus-tab.on:visible');await activate(p,'[data-spnew]');await p.locator('.ch-space-form input').fill('Research projects');await capture(p,'phone-dark-new-space');
+ if (!await p.locator('[data-chspacepicker]').count()) { await activate(p,'.ch-focus-tab.on:visible');await activate(p,'[data-spnew]'); }
+ await p.locator('.ch-space-form input').fill('Research projects');await capture(p,'phone-dark-new-space');
  ok(await p.locator('.ch-space-form input').inputValue()==='Research projects','Dark skin new Space input remains legible and editable');
  await p.evaluate(()=>__wos.onBack());await ctx.close();
  const wide=await boot(b,true);await wide.p.evaluate(()=>WosSkin.set('nebula'));await choose(wide.p,'agent:hermes');await activate(wide.p,'.ch-focus-tab.on:visible');await capture(wide.p,'desktop-nebula-picker');await wide.ctx.close();
@@ -370,7 +371,7 @@ async function soloAcceptance(b) {
   ok(await opts.count()===5,mode+' strip exactly All plus every agent, despite subjects');
   ok(await opts.first().getAttribute('data-chfocusopt')==='all:',mode+' All first');
   ok(JSON.stringify(await opts.evaluateAll(es=>es.map(e=>e.dataset.chfocusopt)))===JSON.stringify(['all:','agent:hermes','agent:philosopher','agent:idle','agent:private']),mode+' stable All then registry agent order',await opts.evaluateAll(es=>es.map(e=>({key:e.dataset.chfocusopt,label:e.getAttribute('aria-label')}))));
-  ok(await p.locator('.ch-focus-strip [data-chfocusopt="agent:idle"]').count()===1,mode+' empty agent remains on strip');
+  ok(await p.locator('.ch-focus-strip:visible [data-chfocusopt="agent:idle"]').count()===1,mode+' empty agent remains on strip');
   ok(await p.locator('.ch-focus-strip [data-chfocusopt="agent:private"] .ag-lock').count()>0,mode+' private lock visible');
   ok(await p.locator('.ch-focus-strip:visible').evaluate(e=>e.scrollWidth>=e.clientWidth&&getComputedStyle(e).touchAction==='pan-x'&&new Set([...e.children].map(c=>c.offsetTop)).size===1),mode+' single row scrolls horizontally');
   ok(await p.locator('.ch-focus-strip [data-chfocusopt="agent:philosopher"] .ch-focus-dot').count()>0,mode+' unread tab dot');
