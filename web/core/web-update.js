@@ -64,6 +64,7 @@
     printNow = p;
     if (!pending) { pending = true; log('web:changed'); }
     await loadChanges(); window.WizAppServices?.update.announce({ version: p, changes }); render();
+    try { window.WosUpdates?.popup?.(); } catch (_) {}
   }
   /* Which threads made the update: ux-changes.json lists every web/ change newest first with the thread that
    * committed it. Take the ones since the version this page loaded; one row per thread. */
@@ -157,6 +158,8 @@
    * short list; Back/Esc closes the list. Nothing known (no change list): "Wizard OS was updated". */
   function render() {
     if (!pending || !H) return;
+    // The Home update pop-up (core/os-updates.js) carries this reload while it shows, and after its ×: one, not two.
+    if (window.WosUpdates?.ownsReload?.()) { document.getElementById('dvWeb')?.remove(); listOpen = false; return; }
     let el = document.getElementById('dvWeb');
     if (!el) {
       el = document.createElement('div'); el.id = 'dvWeb'; el.className = 'dv-update web'; el.setAttribute('role', 'status');
@@ -207,6 +210,7 @@
     init, check, back, reload, busy, render, plan,
     get armed() { return !!armed; },
     get pending() { return pending; },
+    get version() { return printNow; },
     _state: () => ({ pending, print0: !!print0, changes, listOpen }),
   });
   // Older name used by hosted-app QA and the app services layer.
