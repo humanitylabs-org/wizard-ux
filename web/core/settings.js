@@ -336,7 +336,7 @@
       for (const f of features.values()) if (pageOf(f) === page) f.enter?.(ctx);
       confirm = null; render(); root.scrollTop = 0;
       const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = 0;
-      const g = id && root.querySelector(`[data-settings-feature="${CSS.escape(f?.id || id)}"]`);
+      const g = id ? root.querySelector(`[data-settings-feature="${CSS.escape(f?.id || id)}"]`) : null;
       g?.scrollIntoView?.({ block: 'nearest' });
       (g?.querySelector('button:not(:disabled)') || root.querySelector(page ? '.st-page-head h3' : '.st-title'))?.focus({ preventScroll: true });
     }
