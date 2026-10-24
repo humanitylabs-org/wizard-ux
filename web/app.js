@@ -894,15 +894,34 @@
    * Done (end of a reply) and ↓ Latest (scrolled up) sit directly below it. It follows the composer's real height
    * (attachments, multi-line text, keyboard). On the thread list there is no composer: it stays in the corner. */
   let liftRO = null, liftMO = null, liftEl = null;
+  /* Orb in the composer (James, 23 Oct 2026: "the orb keeps overlapping UX features"): in a full-screen thread the
+   * orb sits in the composer row's last seat (.ch-orbslot), where the mic used to be, so nothing floats over the
+   * conversation. Typed words swap it for Send in that same seat, exactly like the old mic; a live take keeps it. */
   function paintCornerLift() {
     const c = device.querySelector('.win.full .ch-thread .ch-compose');
     if (c !== liftEl) { try { liftRO?.disconnect(); } catch (e) {} liftEl = c; if (c && liftRO) liftRO.observe(c); }
     const h = c && c.offsetParent ? Math.round(c.getBoundingClientRect().height) : 0;
     device.style.setProperty('--comp-h', h + 'px');
     device.classList.toggle('orb-lift', h > 0);
+    const slot = h > 0 ? c.querySelector('.ch-orbslot') : null;
+    device.classList.toggle('orb-typed', !!slot && c.classList.contains('has-text') && V.state === 'idle');
+    device.classList.toggle('orb-slotted', !!slot);
+    if (!slot) return;
+    // Measure the row, not the slot: the slot is hidden while Send holds the seat and on the first paint.
+    // Skins differ in dock size and insets, so centre the orb itself on the row by its measured offset.
+    const dock = device.querySelector('.dock'), row = slot.parentElement.getBoundingClientRect();
+    if (!row.height || !dock) return;
+    // Centres, so a mid-transition scale (Send swap) cannot skew the measurement.
+    const cs = getComputedStyle(dock), orbEl = $('#orbWrap'), d = orbEl.getBoundingClientRect(), half = orbEl.offsetWidth / 2;
+    const b = parseFloat(cs.bottom) + ((d.top + d.bottom) / 2 - (row.top + row.bottom) / 2), r = parseFloat(cs.right) + ((d.left + d.right) / 2 - (row.right - half));
+    device.style.setProperty('--slot-b', Math.round(b) + 'px');
+    device.style.setProperty('--slot-r', Math.round(r) + 'px');
   }
+  window.addEventListener('wos:composer', () => { if (liftRO) paintCornerLift(); });
+  window.addEventListener('resize', () => { if (liftRO) paintCornerLift(); });
+  window.visualViewport?.addEventListener('resize', () => { if (liftRO) paintCornerLift(); });
   function trackCornerLift(on) {
-    if (!on) { try { liftRO?.disconnect(); liftMO?.disconnect(); } catch (e) {} liftRO = liftMO = liftEl = null; device.classList.remove('orb-lift'); device.style.removeProperty('--comp-h'); return; }
+    if (!on) { try { liftRO?.disconnect(); liftMO?.disconnect(); } catch (e) {} liftRO = liftMO = liftEl = null; device.classList.remove('orb-lift', 'orb-slotted', 'orb-typed'); device.style.removeProperty('--comp-h'); return; }
     if (!liftRO && window.ResizeObserver) { liftRO = new ResizeObserver(paintCornerLift); liftMO = new MutationObserver(paintCornerLift); liftMO.observe(track, { childList: true, subtree: true }); }
     paintCornerLift();
   }
@@ -2312,7 +2331,7 @@
   };
   let NOMIC = false;
   function setVoice(s) {
-    V.state = s; device.dataset.voice = s; tourEv('voice', { state: s }); queueMicrotask(() => window.WosSkinHost?.voice?.(s)); if (s === 'listen' || s === 'idle') V.resumeBlocked = false;
+    V.state = s; device.dataset.voice = s; if (liftRO) queueMicrotask(paintCornerLift); tourEv('voice', { state: s }); queueMicrotask(() => window.WosSkinHost?.voice?.(s)); if (s === 'listen' || s === 'idle') V.resumeBlocked = false;
     $('#arcPause small').textContent=s==='paused'?'Resume':'Pause';$('#arcPause').setAttribute('aria-label',s==='paused'?'Resume recording':'Pause recording');
     CHATS.PW?.paintMic((s === 'listen' || s === 'paused') && !!V.replyTo, V.replyTo?.sid || '');
     reportVoice(s);
@@ -3585,6 +3604,7 @@
     { const t = window.WosTour?.back(); if (t) { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } return t; } } // the first-run tour and the Help sheet sit above everything
     { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above everything, incl. the selection menu that opened it
     { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
+    { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above whatever it was opened from
     if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet sits above the windows
     if (window.WosBoomerang?.back()) return 'boomerang'; // the Boomerang picker sits above the thread it was opened from
     // Explicit bypass capture follows the retain-on-Back contract; ordinary recordings keep navigating.
@@ -3962,5 +3982,15 @@
     dictate: () => { if (V.state !== 'idle' || !FIELDS?.refresh()) return false; startVoice('dictation'); return true; },
     voiceCancel: () => cancelVoice(),
     relayout: () => { try { syncImmersive(); } catch (_) {} },
+    appOrb: () => { const f = frontAppFrame(); return f ? window.WizAppServices?.orb?.of(f) || null : null; },
+    appOrbTap: () => { const f = frontAppFrame(); return !!f && !!window.WizAppServices?.orb?.tap(f); },
   });
+  // The app window in front (no sheet over it): the only app that may wear the agent orb.
+  function frontAppFrame() {
+    const f = desks[idx]?.focus, w = f && W[f];
+    if (!w?.appId || sheet || menuFor || CHATS.isHosted(f)) return null;
+    return track.querySelector(`.win[data-win="${f}"] iframe.appframe`);
+  }
+  // An app's claim shows whenever the active layout draws an agent orb (it wears it while that app is in front).
+  window.WizAppServices?.orb?.presenter(() => document.documentElement.dataset.layout === 'two-orb');
 })();
