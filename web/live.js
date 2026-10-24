@@ -959,14 +959,23 @@
     // Stop exactly the watcher on the row the owner pressed: `agent` is the window's agent scope ('' = main).
     async stopWatching(id, agent) {
       const s = agent === undefined ? this.session(id) : this.sessionFor(id, agent);
-      if (!s || this.busy(id) || !s.followUp?.active) return false;
+      if (!s) return false;
       const owner = this.ownerOf(s);
-      try {
-        const result = await (await req('/wizard/follow-ups/stop', { method: 'POST', headers: J,
-          body: JSON.stringify({ session_id: id, ...(owner ? { agent_id: owner } : {}) }) })).json();
-        if (result?.ok !== true || !Number.isSafeInteger(result.stopped) || result.stopped < 1) throw new Error('follow-up stop not confirmed');
-        s.followUp = null; this.emit(); setTimeout(() => this.refresh(), 50); return true;
-      } catch (e) { return false; }
+      // One Stop per row at a time: a second tap shares the first request's answer instead of racing it to a
+      // zero-count reply and reporting a failure for a stop that worked.
+      const key = `${owner}\u0000${id}`, stopping = (this._stopping ||= new Map());
+      if (stopping.has(key)) return stopping.get(key);
+      if (this.busy(id) || !s.followUp?.active) return false;
+      const pending = (async () => {
+        try {
+          const result = await (await req('/wizard/follow-ups/stop', { method: 'POST', headers: J,
+            body: JSON.stringify({ session_id: id, ...(owner ? { agent_id: owner } : {}) }) })).json();
+          if (result?.ok !== true || !Number.isSafeInteger(result.stopped) || result.stopped < 1) throw new Error('follow-up stop not confirmed');
+          s.followUp = null; this.emit(); setTimeout(() => this.refresh(), 50); return true;
+        } catch (e) { return false; } finally { stopping.delete(key); }
+      })();
+      stopping.set(key, pending);
+      return pending;
     },
     async _defer(id, deferred) {
       const s = this.session(id); if (!s) throw new Error('gone');

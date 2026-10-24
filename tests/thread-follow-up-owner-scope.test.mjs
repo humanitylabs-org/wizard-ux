@@ -76,6 +76,33 @@ test('a zero-count stop is a failure and keeps the watcher visible', async () =>
   assert.equal(h.routed.followUp.active, true);
 });
 
+test('a second Stop tap while the first is in flight shares its answer instead of reporting a false failure', async () => {
+  const h = harness();
+  let release, replies = 0;
+  const gate = new Promise(resolve => { release = resolve; });
+  // The service answers stopped: 1 once, then stopped: 0 for anything after: the race a double tap used to lose.
+  h.req = async (url, init) => { h.calls.push({ url, body: JSON.parse(init.body) }); await gate;
+    return { json: async () => ({ ok: true, stopped: replies++ === 0 ? 1 : 0 }) }; };
+  const first = h.LIVE.stopWatching('X', ROUTED), second = h.LIVE.stopWatching('X', ROUTED);
+  release();
+  assert.deepEqual(await Promise.all([first, second]), [true, true]);
+  assert.equal(h.calls.length, 1, 'one request per row while it is in flight');
+  assert.equal(h.routed.followUp, null);
+  assert.equal(await h.LIVE.stopWatching('X', ROUTED), false, 'a later tap on an already stopped row is a no-op, not a request');
+  assert.equal(h.calls.length, 1);
+});
+
+test('an in-flight Stop on one owner never blocks the same thread id on the other owner', async () => {
+  const h = harness();
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  h.req = async (url, init) => { h.calls.push({ url, body: JSON.parse(init.body) }); await gate; return { json: async () => ({ ok: true, stopped: 1 }) }; };
+  const routed = h.LIVE.stopWatching('X', ROUTED), main = h.LIVE.stopWatching('X', '');
+  release();
+  assert.deepEqual(await Promise.all([routed, main]), [true, true]);
+  assert.deepEqual(h.calls.map(c => ({ ...c.body })), [{ session_id: 'X', agent_id: ROUTED }, { session_id: 'X' }]);
+});
+
 test('Chats windows resolve their own row before acting and Stop scopes to that row\'s owner', () => {
   const winAgent = slice(chats, '  function winAgent(w) {', '  function agentRec(id) {');
   const W = { mainWin: { id: 'mainWin', app: 'chats' }, routedWin: { id: 'routedWin', app: 'chats', agent: ROUTED },
