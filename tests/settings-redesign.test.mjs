@@ -28,8 +28,8 @@ test('root is only an index: seven Android categories and no feature bodies; des
   assert.equal((h.root.innerHTML.match(/class="st-category"/g) || []).length, 7);
   assert.doesNotMatch(h.root.innerHTML, /data-settings-feature=/);
   assert.doesNotMatch(h.root.innerHTML, /st-attention/);
-  assert.match(h.root.innerHTML, /<small data-st-subtitle="appearance">Nebula<\/small>/, 'Look reads as the skin name alone');
-  assert.match(h.root.innerHTML, /Nothing waiting/);
+  assert.match(h.root.innerHTML, /<span class="st-tx"><b>Look<\/b><\/span><span class="st-val" data-st-subtitle="appearance">Nebula<\/span>/, 'Look shows the skin name as a quiet value');
+  assert.doesNotMatch(h.root.innerHTML, /Nothing waiting|<small|st-ic/, 'no subtitles, no icon tiles on the index');
   const d = harness({ shell: 'desktop' }); assert.match(d.root.innerHTML, /st-desktop/); assert.match(d.root.innerHTML, /data-settings-feature="look"/);
 });
 test('registry page, fallback and every historical alias route to their owning page', () => {
@@ -48,10 +48,12 @@ test('attention is conditional, counts real stores and routes each item; recover
   h.view.context.outbox = { canRetry: () => false, unsent: () => [{ id: 'same', createdAt: 1, state: 'failed' }] };
   h.s.WosCancelled = { html: () => '', list: () => [{ id: 'same' }, { id: 'other' }] };
   h.s.WosUpdates = { state: { update_available: true } };
+  h.s.WizWebUpdate = { pending: true };
   h.s.WizCore.voiceStatus = { card: () => '', state: { ready: false } }; h.view.context.live.error = 'access';
   h.view.render();
-  for (const text of ['1 message not sent', '2 recordings to recover', 'Update ready', 'Voice unavailable', 'Sign-in needed', '2 waiting']) assert.ok(h.root.innerHTML.includes(text), text);
-  for (const [feature, page] of [['unsent', 'recovery'], ['cancelled', 'recovery'], ['updates', 'release'], ['voice', 'voice'], ['wizard', 'about']]) { h.act('data-st-attention', feature); assert.equal(h.view.page, page); }
+  for (const text of ['1 message not sent', '2 recordings to recover', 'Voice unavailable', 'Sign-in needed', 'data-st-subtitle="recovery">2<']) assert.ok(h.root.innerHTML.includes(text), text);
+  assert.doesNotMatch(h.root.innerHTML, /Update ready|<h4>Needs attention/, 'updates are said once, by the update card');
+  for (const [feature, page] of [['unsent', 'recovery'], ['cancelled', 'recovery'], ['voice', 'voice'], ['wizard', 'about']]) { h.act('data-st-attention', feature); assert.equal(h.view.page, page); }
 });
 test('page Back returns to root, then leaves closing to the shell; confirm Back only dismisses', () => {
   const h = harness(); h.view.focus('chats-default'); h.act('data-chats-choice', 'mizel-chats');
@@ -92,22 +94,51 @@ test('no skin suggests a Chats app: Look and Chats show no pairing on any skin',
   assert.equal(h.posts.length, 0);
 });
 
-test('index opens on My release as one hero card, then the categories; Look is design only; About comes last', () => {
+test('index: the update card leads when there is something to do, nothing otherwise; My release is a plain row', () => {
   const h = harness();
-  assert.doesNotMatch(h.root.innerHTML, /st-hero/, 'no release card until the updates module knows something');
-  h.s.WosUpdates = { state: { mode: 'ask' }, hero: () => ({ title: "Miguel's release", lines: ['Built on Latest b79c1e9', '4 changes of your own'], state: 'Up to date', tone: 'ok', mine: true }) };
+  assert.doesNotMatch(h.root.innerHTML, /osu-card|data-st-page="release"/, 'no release row until the updates module knows something');
+  let cardHtml = '';
+  h.s.WosUpdates = { state: { mode: 'ask' }, mine: { name: 'x' }, title: () => 'My release', cardHtml: () => cardHtml };
   h.view.render();
-  const html = h.root.innerHTML;
-  assert.match(html, /<nav aria-label="Settings categories"><button class="st-hero" data-st-page="release"[^>]*><span class="st-tx"><b>Miguel&#39;s release<\/b><small>Built on Latest b79c1e9<\/small><small>4 changes of your own<\/small><\/span><span class="st-hero-state ok">Up to date<\/span>/);
-  assert.doesNotMatch(html, /data-st-page="release"[^>]*class="st-category"|class="st-category" data-st-page="release"/, 'the hero replaces the plain row');
+  let html = h.root.innerHTML;
+  assert.doesNotMatch(html, /osu-card|st-card-wrap/, 'nothing to do: no card at all');
+  assert.match(html, /<nav aria-label="Settings categories"><button class="st-category" data-st-page="release" aria-current="false"><span class="st-tx"><b>My release<\/b><\/span>/);
   const order = [...html.matchAll(/data-st-page="([a-z]+)"/g)].map(m => m[1]);
   assert.equal(order[0], 'release'); assert.equal(order.at(-1), 'about');
-  assert.match(html, /<b>Look<\/b>/); assert.doesNotMatch(html, /Updates &amp; about|Updates & about|>Appearance</);
+  assert.doesNotMatch(html, /st-hero|Check for updates|Update ready/);
+  cardHtml = '<div class="osu-card" data-osu-card="behind"><button data-osu="apply">Update</button></div>';
+  h.view.render(); html = h.root.innerHTML;
+  assert.match(html, /<h3 class="st-title" tabindex="-1">Settings<\/h3><section class="st-card-wrap" data-settings-feature="updates"><div class="osu-card" data-osu-card="behind">/);
   h.act('data-st-page', 'release'); assert.equal(h.view.page, 'release');
-  assert.match(h.root.innerHTML, /<h3 tabindex="-1">My release &amp; updates<\/h3>|<h3 tabindex="-1">My release & updates<\/h3>/);
+  assert.match(h.root.innerHTML, /<h3 tabindex="-1">My release<\/h3>/);
   for (const alias of ['updates', 'my-release']) { h.view.focus(alias); assert.equal(h.view.page, 'release', alias); }
   h.view.focus('look'); assert.equal(h.view.page, 'appearance');
-  assert.match(h.root.innerHTML, /<p class="st-intro">Design only: colours, fonts, backgrounds\. Separate from My release\.<\/p>/);
+  assert.doesNotMatch(h.root.innerHTML, /st-intro/);
   const d = harness({ shell: 'desktop' }); d.s.WosUpdates = h.s.WosUpdates; d.view.render(); d.view.focus();
   assert.match(d.root.innerHTML, /<h3 tabindex="-1">My release/, 'desktop opens on My release when there is one');
+  assert.doesNotMatch(d.root.innerHTML, /st-card-wrap/, 'desktop: the release page beside the list carries the card, the list does not repeat it');
+  const stock = harness(); stock.s.WosUpdates = { state: { mode: 'auto' }, title: () => 'Updates', cardHtml: () => '' }; stock.view.render();
+  assert.match(stock.root.innerHTML, /<b>Updates<\/b>/);
+});
+test('About has no separate Check for updates; rows carry no icon tiles anywhere in Settings', () => {
+  const h = harness(); h.s.WizWebUpdate = { check() {}, pending: false };
+  h.view.focus('wizard');
+  assert.doesNotMatch(h.root.innerHTML, /Check for updates|web-update|st-ic/);
+  assert.match(h.root.innerHTML, /Gestures &amp; help|Gestures & help/);
+  for (const f of ['settings', 'mic', 'voice-status', 'sel-menu', 'workspace-sync']) {
+    const code = fs.readFileSync(new URL(`../web/core/${f}.js`, import.meta.url), 'utf8');
+    assert.doesNotMatch(code, /class="st-ic"/, f);
+  }
+  assert.doesNotMatch(fs.readFileSync(new URL('../web/device.js', import.meta.url), 'utf8'), /class="st-ic"/);
+});
+test('settings.css: rows are hairline lines, not boxes', () => {
+  const css = fs.readFileSync(new URL('../web/core/settings.css', import.meta.url), 'utf8');
+  const rule = sel => (css.match(new RegExp(`(?:^|\\n)${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{([^}]*)\\}`)) || [])[1] || '';
+  for (const sel of ['.st-row', '.st-category', '.ub-row', '.cx-row', '.sc-row']) {
+    const r = rule(sel);
+    assert.ok(r, sel);
+    assert.match(r, /border-bottom: 1px solid var\(--wz-border\)/, sel);
+    assert.doesNotMatch(r, /background: var\(--wz-surface\)|border-radius: 1[2-9]px/, sel);
+  }
+  assert.doesNotMatch(css, /\.st-ic \{|\.st-hero \{/);
 });
