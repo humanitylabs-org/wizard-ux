@@ -3576,6 +3576,7 @@
     return result || 'notReady';
   }
   function backStep(skipHosted) {
+    if (window.WizShareWizard?.back()) return 'share-wizard';
     if (window.WizHomeScreenApps?.back()) return 'pin-sheet';
     { const t = window.WosTour?.back(); if (t) { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } return t; } } // the first-run tour and the Help sheet sit above everything
     { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above everything, incl. the selection menu that opened it
