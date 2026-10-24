@@ -78,10 +78,16 @@ service lacks `spaces` or returns 403, stop and report the deployment/authorizat
 helper sends only the `spaces` key, preserving pins and all other preferences. Run one collection edit
 at a time: this whole-array read/merge/write contract does not provide same-array compare-and-swap.
 
-Restricted/routed agents: this helper is an owner-authorized preferences client, not a grant. A container
-without the installed skill or access to this route cannot perform historical back-fill. Report that gap;
-never use host credentials, cross-agent history, a new network bridge or direct file writes as a workaround.
-Status-based filing still works server-side for these agents.
+Routed agents: use the always-on wizard MCP gateway built-ins (with the MCP prefix shown by your tools):
+`spaces_list`, `spaces_create(name)`, `spaces_search_threads(query, offset, limit)`,
+`spaces_add(space_id, thread_ids)`, `spaces_remove(space_id, thread_ids)`, `spaces_delete(space_id)`.
+Identity comes from your own gateway token, not arguments. Only your own Spaces and canonical threads
+are accessible, including archived thread metadata. Page search while `has_more`; search returns IDs,
+titles and subjects, never message content. For a fill request, reuse the exact requested Space ID.
+Never seek host credentials, owner preferences access or another agent’s history. Status filing works
+server-side for every agent. Main may keep this CLI: its default scope is `hermes`, including list/search.
+The owner shell can still read Space names and membership IDs in box-wide preferences; Spaces do not
+change that storage/privacy boundary.
 
 Installation: Wizard UX ships this directory under `skills/wizard-spaces`. Copy the whole directory,
 including `scripts/`, to the active agent's native skills directory (`$HERMES_HOME/skills`, normally
