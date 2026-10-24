@@ -34,7 +34,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 
 | Need | Use | Never hand-roll |
 |---|---|---|
-| Chat list, thread, composer, desktop file drop, thread card, read state, reply action row (Copy · Share; Regenerate only when the skin sets `--wos-reply-regenerate: on`) | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); live data `WizLive` (`web/live.js`) | a second thread, composer or per-agent thread logic; extra per-reply buttons on every skin |
+| Chat list, thread, composer, desktop file drop, thread card, read state, reply action row (Copy · Share; Regenerate only when the skin sets `--wos-reply-regenerate: on`); historical sections appear only when populated | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); live data `WizLive` (`web/live.js`) | a second thread, composer or per-agent thread logic; extra per-reply buttons on every skin |
 | Alternative Chats list | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
 | Model picker, errors and retry, composer mic, work receipts, reading place | `WosChatPower` (`web/core/chat-power.js`) + `WosModels` (`web/core/chat-models.js`), `WosErrors` (`web/core/chat-errors.js`), `WosWork` (`web/core/chat-work.js`) | own model list, own error card, own reading-position store |
@@ -71,6 +71,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Skins, backgrounds, scenery, skin feature switches (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`), `WosSkinHost` (`web/core/skin-host.js`; `WosSkinHost.builtin` gestures every skin wears, e.g. thread swipe-back in `web/core/thread-swipe-back.js`; skin scripts use the same threshold via `api.gesture.intent` with `web/core/swipe-intent.js`), `WosMySkin` (`web/core/my-skin.js`), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own gradients, canvases or colour constants |
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) | own keyframe sets |
 | Tour and help sheet | `WosTour` (`web/core/tour.js`) | — |
+| First launch and explicit Setup/tour; VM auto-onboarding and quiet existing-Hermes alongside launch | `WosSetupLaunch` (`web/core/setup-launch.js`); built-in checklist `web/setup/setup.js` distinguishes ready-to-open from phone-connected | shell-specific first-run checks, a second tour launcher |
 
 ## Shell plumbing (owned by one module; never duplicate, rarely called directly)
 
