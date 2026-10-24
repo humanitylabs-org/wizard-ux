@@ -138,8 +138,8 @@
     if (what === 'off') { M.turnOff(); return; }
     if (what === 'edit') {
       const app = ['wizard-files', 'files'].find(id => window.WizCanOpen?.(id));
-      const url = `/${app}/files/${(M.state.info?.path || M.FILE).split('/').map(encodeURIComponent).join('/')}`;
-      const opened = app && ctx.openLink ? ctx.openLink(url, M.active?.name || 'Skin') : false;
+      // Open the registered app, not a guessed folder URL or an app id absent on this box.
+      const opened = app && window.WizOpenApp?.(app);
       if (!opened) ctx.toast?.('✎', esc(`Ask your Wizard: “change my ${M.active?.name || 'own'} skin so…”`), 4000);
     }
   }

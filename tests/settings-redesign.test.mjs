@@ -191,6 +191,15 @@ test('own tiles use base preview; own panel shows colours, edit hint and a neste
   assert.equal(h.view.back(),true); assert.equal(h.view.page,'appearance');
   assert.doesNotMatch(h.root.innerHTML,/role="alertdialog"/);
 });
+test('own skin Edit opens only registered Files IDs or shows the Wizard hint', () => {
+  const h = harness(); const opened=[];
+  h.s.WosMySkin = {recipes:[],active:{name:'Quiet'},state:{script:{}}};
+  h.s.WizCanOpen = id => id === 'wizard-files'; h.s.WizOpenApp = id => {opened.push(id); return true;};
+  h.act('data-myskin','edit'); assert.deepEqual(opened,['wizard-files']);
+  h.s.WizCanOpen = id => id === 'files'; h.act('data-myskin','edit'); assert.deepEqual(opened,['wizard-files','files']);
+  h.s.WizCanOpen = () => false; h.act('data-myskin','edit');
+  assert.equal(opened.length,2); assert.match(h.notices.at(-1)[1],/change my Quiet skin so/);
+});
 test('arrows reach every tile without silently wearing or opening it', () => {
   assert.match(source,/\[data-ownskin\], \[data-newskin\]/);
   assert.match(source,/buttons\[n\]\.focus\(\);/);
