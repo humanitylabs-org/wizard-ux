@@ -3947,7 +3947,7 @@
     locked: pointerId => !!(DS && DS.id === pointerId && DS.h),
     toast: text => toast('◇', text, 2400),
     // Layouts (two-orb): who the screen routes to, and the orb's recorder.
-    agents: () => (window.WosAgents?.list || []).map(agentInfo),
+    agents: () => (window.WosAgents?.visible?.() || window.WosAgents?.list || []).map(agentInfo),
     agentHere: () => agentHere(),
     agentSigil: id => { const AG = window.WosAgents, a = AG?.get(id); return a ? AG.sigil(a, 'ag-sig') : ''; },
     openAgent: id => openAgentChats(id),
