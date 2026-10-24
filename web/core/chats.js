@@ -1442,7 +1442,10 @@ window.WizCore.chats = function createChats(H) {
     const turns = c.loadedFor === w.thread || c.cachedFor === w.thread ? c.turns || [] : null;
     c.media = []; c.texts = [];
     let msgs;
-    const pend = pendingFor(w);
+    // A message the transcript on screen already shows is never drawn again below it as pending: reopening a thread
+    // painted the cached transcript (your message, then the reply) and the outbox copy still "Sending…" under both
+    // until the server read retired it (James, 23 Oct 2026).
+    const pend = pendingFor(w).filter(p => !(turns && echoed(turns, p)));
     const carry = isNew && c.carry && TAG ? `<div class="ch-carry" role="note"><b>${AGS()?.lock?.() || ''}Continues “${esc(clip(c.carry.title, 60))}” privately</b><span>Your first message takes the last ${c.carry.n === 1 ? 'message' : `${c.carry.n} messages`} with it as quoted context. That thread stays as it is.</span><button type="button" data-chcarryx>Don’t include</button></div>` : '';
     if (isNew && !pend.length) msgs = newChatHtml(TAG) + `<div class="ch-empty nc-classic"><b>${TAG && AGS()?.isPrivate(agentRec(TAG)) ? `New private chat` : 'New chat'}</b><br>${esc(H.newChatHint || 'Type below.')}</div>${carry}`;
     // A thread answered 404 in this open is gone: that verdict wins over cached turns and queued sends.
@@ -1741,6 +1744,24 @@ window.WizCore.chats = function createChats(H) {
     const c = ch(w.id); if (!c.newAt) c.newAt = Date.now(); // a restored window: everything older is not this chat's
     return OUTBOX.forThread('', w.id).filter(it => (it.createdAt || 0) >= c.newAt);
   }
+  /* Has the transcript already got this outbox message? A sent one matches a recent user turn (or steer) by file or
+   * by its opening words. One whose send was attempted but whose receipt was lost (attempts > 0) matches
+   * the same file IDs, or the exact same words in a user turn made after it was written. A queued one that never left
+   * the phone never matches: sending the same words twice on purpose keeps both (Codex P2 on #418). */
+  function echoed(turns, p) {
+    const recent = turns.slice(-6), us = recent.filter(t => t.u).map(t => t.u).concat(recent.flatMap(t => t.steers || []));
+    const files = (p.files || []).filter(f => f && f.id);
+    const sameFiles = u => files.length && files.every(f => (u.files || []).some(x => x.id === f.id));
+    if (p.state === 'sent') return us.some(u => (files.length && files.some(f => (u.files || []).some(x => x.id === f.id))) || (!!p.text && (u.text || '').includes(p.text.slice(0, 40))));
+    if (!['queued', 'sending', 'waiting', 'unconfirmed'].includes(p.state) || !(p.attempts > 0) || p.steerRunId) return false;
+    const t = String(p.text || '').trim(), after = u => isFinite(u.at) && u.at >= (p.createdAt || 0) - 10e3; // made after this message was written (10 s for clock skew)
+    return us.some(u => after(u) && (files.length ? sameFiles(u) && (!t || String(u.text || '').trim().includes(t)) : !!t && String(u.text || '').trim() === t));
+  }
+  function retireLanded(sid, turns) {
+    let gone = false;
+    if (OUTBOX && turns.length) for (const p of OUTBOX.forThread(sid)) if (p.state === 'sent' && echoed(turns, p)) { OUTBOX.landed(p.id); gone = true; }
+    return gone;
+  }
   function pendingState(p) {
     if (OUTBOX?.quarantined(p.id)) return '<span class="pst wait">Waiting for device storage verification · not sending</span>';
     const recover = H.recoverUnsent ? `<button type="button" class="pbtn" data-obrecover="${esc(p.id)}">Recover</button>` : '';
@@ -1814,6 +1835,8 @@ window.WizCore.chats = function createChats(H) {
     }
     if (fresh && !force) {
       c.loadedNav = nav; // still current for this open: the reading place can trust it
+      // Reopening inside the cache window skips the read, so retire sends this transcript already shows here too.
+      if (c.loadedFor === sid && retireLanded(sid, c.turns || [])) { const el = elOf(w.id); if (el) renderLive(w, el); }
       // Reopening a cached quiet transcript still refreshes rename/retry metadata,
       // once per navigation, without throwing away its 60-second history cache.
       if (s?.listVersion === 1 && c.detailNav !== nav && c.detailLoadingNav !== nav) {
@@ -1839,16 +1862,8 @@ window.WizCore.chats = function createChats(H) {
       let changed = c.loadedFor !== w.thread || sig !== c.sig;
       Object.assign(c, { turns, cachedFor: '', loadedFor: w.thread, loadedNav: nav, at: Date.now(), err: '', sig, readRevision: revision, detailNav: nav, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
       // A sent message has landed once a recent user turn in the thread matches it.
-      const sent = OUTBOX ? OUTBOX.forThread(w.thread).filter(p => p.state === 'sent') : [];
-      if (sent.length) {
-        const us = turns.filter(t => t.u).slice(-4).map(t => t.u).concat(turns.slice(-4).flatMap(t => t.steers || []));
-        const landed = p => us.some(u => ((p.files || []).length && p.files.some(f => (u.files || []).some(x => x.id === f.id)))
-          || (!!p.text && (u.text || '').includes(p.text.slice(0, 40))));
-        let gone = false;
-        for (const p of sent) if (landed(p)) { OUTBOX.landed(p.id); gone = true; }
-        // Transcript absence is not a rejection receipt. Never replay accepted steering.
-        if (gone) changed = true;
-      }
+      // Transcript absence is not a rejection receipt. Never replay accepted steering.
+      if (retireLanded(w.thread, turns)) changed = true;
       if (await loadApproval(w, LIVE.session(sid))) changed = true;
       if (!current()) return;
       const s2 = LIVE.session(w.thread), hk2 = s2 ? [s2.status, !!s2.archived, !!s2.deferred, s2.runId].join('|') : '';
