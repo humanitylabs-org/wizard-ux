@@ -1648,6 +1648,7 @@ window.WizCore.chats = function createChats(H) {
   async function loadThread(w, force) {
     const c = ch(w.id), sid = w.thread, nav = c.readNav;
     if (!sid || sid === '__new__' || (c.loading && c.loading.sid === sid && c.loading.nav === nav)) return;
+    if (c.goneFor === sid && c.goneNav === nav) return; // answered 404 in this open: gone, not worth polling
     const s = LIVE.session(sid);
     // Cache finished history while its session revision is unchanged. Its existing session poll remains live;
     // any new message/activity/status immediately invalidates this cache, with a 60 s safety re-read.
@@ -1724,8 +1725,12 @@ window.WizCore.chats = function createChats(H) {
         // "Couldn’t load this thread" after one dropped read). Retry on our own with a short backoff, name the
         // broken link in plain words, and give a Retry now tap. Sign-in (403) still needs the owner.
         c.failN = (c.failFor === sid ? c.failN || 0 : 0) + 1; c.failFor = sid; c.errStatus = e.status || 0;
-        c.err = e.status === 403 ? 'Wizard sign-in needed' : pendingFor(w).length ? '' : 'Couldn’t load this thread'; c.at = Date.now();
-        if (e.status !== 403) { if (!e.status) window.WizReach?.failure(); retryRead(w, sid, nav, c.failN); }
+        // A 404 is a verdict, not a blip: the thread is gone (deleted, or a window restored from an earlier install
+        // on the same address). Say so once and stop; retrying a missing thread forever reads as a broken Wizard.
+        const gone = e.status === 404;
+        if (gone) { c.goneFor = sid; c.goneNav = nav; }
+        c.err = e.status === 403 ? 'Wizard sign-in needed' : gone ? 'This thread is no longer here. It may have been deleted, or it came from an earlier install. Go back to Chats to start a new one.' : pendingFor(w).length ? '' : 'Couldn’t load this thread'; c.at = Date.now();
+        if (e.status !== 403 && !gone) { if (!e.status) window.WizReach?.failure(); retryRead(w, sid, nav, c.failN); }
         renderThreadLive(w);
       }
     }
