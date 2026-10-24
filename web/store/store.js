@@ -207,8 +207,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     if (!c?.data) return '';
     if (!hasNeeds(c.data)) return '';
     return `<section class="d-sec mc" data-mc-app="${esc(routerId(a))}"><h3>Models and connections</h3>
-      <p class="d-note">What each feature was tested on and what runs it here. Models change only when you approve.</p>
-      <div class="mc-list">${Setup.html(routerId(a), c.data, rctx())}</div></section>`;
+      <div class="mc-list">${Setup.html(routerId(a), c.data, rctx())}</div>${Setup.controls(routerId(a), c.data, { ...rctx(), name: a.name, store: true })}</section>`;
   }
   function showSheet(k) {
     const base = find(k); if (!base) return; const a = selected(base), id = routerId(a), c = S.router.get(id);
@@ -221,9 +220,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       <div class="pv-acts"><button type="button" class="get big" data-pv-new>Set up private agent</button><button type="button" class="get" data-pv-choose>Choose an agent</button></div></div>` : '';
     $('sheet').innerHTML = `<div class="list-head"><button class="back" data-back aria-label="Back">‹</button><div><h2>${esc(a.name)} is installed</h2>
       <p>${models || !privacy ? (left ? `${left} connection${left === 1 ? '' : 's'} need${left === 1 ? 's' : ''} setup` : 'Every connection is ready') : 'Private app'}</p></div></div>
-      ${privacy}${models || !privacy ? `<p class="mc-lede">Connect the parts this app needs. You approve any model changes; private data stays with private providers.</p>
-      <div class="mc-list" data-mc-app="${esc(id)}">${c?.data ? Setup.html(id, c.data, rctx()) : '<p class="empty">Checking connections…</p>'}</div>` : ''}
-      <div class="mc-done"><button type="button" class="get big" data-back>${left ? 'Decide later' : 'Done'}</button></div>`;
+      ${privacy}${models || !privacy ? `<div class="mc-list" data-mc-app="${esc(id)}">${c?.data ? Setup.html(id, c.data, rctx()) + Setup.controls(id, c.data, { ...rctx(), name: a.name, store: true }) : '<p class="empty">Checking connections…</p>'}</div>` : ''}`;
   }
   async function setupAction(btn) {
     const app = btn.closest('[data-mc-app]')?.dataset.mcApp;
@@ -236,7 +233,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
         installProvider: a => install(selected(a), { setup: true }),
         openProvider: id => { if (framed) parent.postMessage({ type: 'wizard:open-app', id }, location.origin); else toast('<b>Open this provider from Apps, then return here.</b>'); }
       });
-    } catch (err) { toast(`<b>Setup needs attention</b><span>${esc(err.message)}</span>`); }
+    } catch (err) { toast('<b>Couldn’t finish setup. Try again.</b>'); }
     finally { S.mcBusy.delete(app); if (btn.isConnected) btn.disabled = false; }
   }
   // Coming back from a provider's connection app: re-read what the Router sees.
