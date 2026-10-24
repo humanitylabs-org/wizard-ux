@@ -43,7 +43,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Markdown, drafts, rich copy, Bangkok time, media viewer | `WosChat` (`web/core/chat-kit.js`: `md`, `copyRich`, `viewer`) | a markdown library, own lightbox |
 | Owner-created Spaces / Focus | `WizCore` Chats (`web/core/chats.js`), `WizLive.putPrefs` (`spaces` in box-wide ui-preferences); `winAgent` / `modelRoute` drive every new-chat adapter; `WosAgents.colour` / `distinctHues` drive tab identity and `--ch-agent-hue` list tint | automatic subject tabs, separate collection store, per-shell Focus routing or section implementations |
 | Pinned threads (synced across devices) | `WosChatPins` (`web/core/chat-pins.js`) | device-local pin lists |
-| Snooze a thread/message until a time or Someday (existing deferred disposition) | `WosBoomerang` (`web/core/scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`web/core/schedules.js`) | own timers or reminder stores |
+| Snooze a thread/message until a time or Someday (existing deferred disposition); one-tap presets Later today · Tomorrow · In 2/3/5 days · Next week · Someday, exact picker last as "Other date…" | `WosBoomerang` (`web/core/scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`web/core/schedules.js`) | own timers or reminder stores |
 | Thread topic emoji | `WosTopicEmoji` (`web/core/chat-topic-emojis.js`, data `WosTopicEmojiData`) | — |
 | Durable send that survives outages without duplicates | `WosOutbox`, `WosCarry` (`web/outbox.js`) | fetch + retry loop |
 | Cancelled-recording keep | `WosCancelled` (`web/core/cancelled.js`) | — |

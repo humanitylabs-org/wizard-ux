@@ -10,7 +10,7 @@
   const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
   const WEEKDAYS=['Su','Mo','Tu','We','Th','Fr','Sa'];
   const PRESETS=[
-    ['today','Later today'],['tomorrow-am','Tomorrow 9:00'],['1w','Next week']
+    ['today','Later today'],['tomorrow-am','Tomorrow'],['2d','In 2 days'],['3d','In 3 days'],['5d','In 5 days'],['1w','Next week']
   ];
   let reminders=[], loaded=false, sheet=null, listeners=new Set(), poll=0, restoreFocus=null;
   const focused=new Set(), watchedAt=new Map();
@@ -86,10 +86,10 @@
     if(kind==='tomorrow-am')return{date:addWallDays(today,1),time:'09:00'};
     if(kind==='tomorrow-pm')return{date:addWallDays(today,1),time:'14:00'};
     if(kind==='1m')return{date:addWallMonths(today,1),time:'09:00'};
-    const n={ '2d':2,'4d':4,'1w':7,'2w':14 }[kind]||1;return{date:addWallDays(today,n),time:'09:00'};
+    const n={ '2d':2,'3d':3,'4d':4,'5d':5,'1w':7,'2w':14 }[kind]||1;return{date:addWallDays(today,n),time:'09:00'};
   }
   function formatPreset(v,z){const utc=wallToUtc(v.date,v.time,z);return new Intl.DateTimeFormat('en',{timeZone:z,weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(utc))}
-  function presetButtons(z,selected=''){return PRESETS.map(([id,label])=>{const v=preset(id,z);return `<button type="button" data-boom-preset="${id}" class="${selected===`${v.date}T${v.time}`?'selected':''}"${Date.parse(wallToUtc(v.date,v.time,z))<=Date.now()?' disabled':''}><span>${label}</span><small>${esc(formatPreset(v,z))}</small></button>`}).join('')+'<button type="button" data-boom-exact><span>Pick a time</span><small>Choose date &amp; time</small></button><button type="button" data-boom-someday><span>Someday</span><small>No time · bottom of Ready</small></button>'}
+  function presetButtons(z,selected=''){return PRESETS.map(([id,label])=>{const v=preset(id,z);return `<button type="button" data-boom-preset="${id}" class="${selected===`${v.date}T${v.time}`?'selected':''}"${Date.parse(wallToUtc(v.date,v.time,z))<=Date.now()?' disabled':''}><span>${label}</span><small>${esc(formatPreset(v,z))}</small></button>`}).join('')+'<button type="button" data-boom-someday><span>Someday</span><small>No time · bottom of Ready</small></button><button type="button" data-boom-exact><span>Other date…</span><small>Pick an exact date &amp; time</small></button>'}
   function years(selected){const now=new Date().getUTCFullYear(),from=Math.min(now-2,selected),to=Math.max(now+10,selected);let html='';for(let y=from;y<=to;y++)html+=`<option value="${y}"${y===selected?' selected':''}>${y}</option>`;return html}
   function calendarHtml(selected){const {y,m,d}=parseDate(selected);return `<section class="boom-calendar" data-boom-calendar hidden aria-label="Choose date"><div class="boom-cal-head"><button type="button" data-cal-prev aria-label="Previous month">‹</button><select name="cal-month" aria-label="Month">${MONTHS.map((x,i)=>`<option value="${i+1}"${i+1===m?' selected':''}>${x}</option>`).join('')}</select><select name="cal-year" aria-label="Year">${years(y)}</select><button type="button" data-cal-next aria-label="Next month">›</button></div><div class="boom-weekdays" aria-hidden="true">${WEEKDAYS.map(x=>`<span>${x}</span>`).join('')}</div><div class="boom-grid" role="grid" aria-label="${MONTHS[m-1]} ${y}" data-cal-grid data-year="${y}" data-month="${m}"></div></section>`}
   function renderCalendar(form,focusDate=''){
