@@ -130,7 +130,7 @@
   function mySkinRow(skin) {
     const M = window.WosMySkin, st = M?.state, js = st?.script;
     const script = js?.exists && !st.off ? `<div class="st-row static my-skin-row" data-myskin-script><span class="st-tx"><b>${js.approved ? 'Skin script on' : 'Skin script changed'}</b><small>Skins/My skin/skin.js · this device only</small></span><span class="ms-acts">${js.approved ? '<button type="button" class="ghost" data-myskin="off">Turn off</button>' : `<button type="button" data-myskin="on" data-myskin-hash="${esc(js.sha256 || '')}" ${js.valid ? '' : 'disabled'}>Turn on</button>`}</span></div>` : '';
-    return `<div class="ms-panel" data-ownskin-panel><button class="st-row" data-myskin="edit"><span class="st-tx"><b>Edit with your Wizard</b><small>Ask your Wizard ‘change my ${esc(skin.name)} skin so…’</small></span><span class="st-go">›</span></button><p class="st-hint">Saved on this device. Own skins share the CSS and approved script in Skins/My skin until separate skin folders are supported.</p>${script}<button class="st-row" data-ownskin-remove="${esc(skin.id)}"><span class="st-tx"><b>Remove skin</b></span><span class="st-go">›</span></button></div>`;
+    return `<div class="ms-panel" data-ownskin-panel><button class="st-row" data-myskin="edit"><span class="st-tx"><b>Edit with your Wizard</b><small>Ask your Wizard ‘change my ${esc(skin.name)} skin so…’</small></span><span class="st-go">›</span></button><p class="st-hint">Saved on this device.</p>${script}<button class="st-row" data-ownskin-remove="${esc(skin.id)}"><span class="st-tx"><b>Remove skin</b></span><span class="st-go">›</span></button></div>`;
   }
   function mySkinAction(ctx, what, event) {
     const M = window.WosMySkin; if (!M) return;
