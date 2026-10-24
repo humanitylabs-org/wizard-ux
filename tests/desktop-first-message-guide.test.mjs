@@ -71,11 +71,14 @@ test('Skip this step shows the end card; Skip tour ends it, remembers and says w
   const u = boot(); u.D.start('first-run'); u.click('[data-dskip]');
   assert.equal(u.D.active, false); assert.equal(u.T.done(), true); assert.ok(u.calls.some(c => /Keys and help/.test(c)));
 });
-test('Esc / Back dismisses the desktop guide first (Codex #482), before any other step', () => {
+test('Esc / Back dismisses the desktop guide (Codex #482): after sheets above it, before any navigation', () => {
   const js = read('web/desktop/desktop.js');
   const body = js.slice(js.indexOf('  function escStep() {'), js.indexOf('\n  }\n', js.indexOf('  function escStep() {')));
-  const first = body.split('\n')[1] || '';
-  assert.match(first, /window\.WosTour\?\.desk\?\.active\) \{ window\.WosTour\.desk\.finish\('skip'\); return 'tour'; \}/);
+  const at = body.indexOf("if (window.WosTour?.desk?.active) { window.WosTour.desk.finish('skip'); return 'tour'; }");
+  assert.ok(at > 0, 'escStep dismisses the guide');
+  // after every sheet that sits above it (Settings, Keys, palette, inbox), before any window/thread navigation
+  for (const above of ['closePalette()', 'toggleKeys(false)', 'closeSettings()', 'closeInbox()']) assert.ok(body.indexOf(above) < at, above + ' closes first');
+  for (const below of ['if (homeOpen)', 'CHATS.threadBack(f)', 'closeWin(']) assert.ok(body.indexOf(below) > at, below + ' comes after');
 });
 test('desktop boot passes a busy check: recording, an open sheet or typed text holds the guide back', () => {
   const js = read('web/desktop/desktop.js');

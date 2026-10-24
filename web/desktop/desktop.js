@@ -1470,7 +1470,6 @@
   }
   // Esc peels one layer: palette → keys → inbox → voice → thread → (nothing: stays put, never leaves).
   function escStep() {
-    if (window.WosTour?.desk?.active) { window.WosTour.desk.finish('skip'); return 'tour'; } // the first-message guide: Esc/Back = Skip tour
     { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above everything, incl. the selection menu
     if (window.WosSelMenu?.back()) return 'selection';
     if (window.WosBoomerang?.back()) return 'boomerang'; // the Boomerang picker sits above the thread it was opened from
@@ -1487,6 +1486,8 @@
     if (!ib.hidden) { closeInbox(); return 'inbox'; }
     const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
     if (window.WosSkinFrame?.back()) return 'skin-controls';
+    // The first-message guide: once nothing sits above it, Esc/Back dismisses it (= Skip tour) before any navigation.
+    if (window.WosTour?.desk?.active) { window.WosTour.desk.finish('skip'); return 'tour'; }
     // Leave fullscreen before navigating the app underneath; preserve its thread and draft.
     if (homeOpen) return '';
     if (focused() && CHATS.isHosted(focused().id)) return CHATS.threadBack(focused());
