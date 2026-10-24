@@ -60,7 +60,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Brand hat | `WizBrand` (`web/core/brand.js`) | redrawn logos |
 | Links: in-app sheet, image links | `WizLinks` (`web/core/links.js`) | `window.open`, own iframe sheet |
 | Text-selection actions | `WosSelMenu` (`web/core/sel-menu.js`) | own context menu |
-| Share sheet (people → Wizard apps → Other apps…), receiver registry and pending handoffs | `WosShareSheet` (`web/core/share-sheet.js`, `web/core/share-sheet.css`), entered only through `WosChat.sharePayload` | a second share picker, sending on an app's behalf |
+| Share sheet, receivers, pending handoffs | `WosShareSheet` (`web/core/share-sheet.js`), via `WosChat.sharePayload / shareFile`; hold bypass: `WosChat.bindSharePress` | a second share picker, sending for an app |
 | Screen context for the agent | `WizScreen` (`web/core/screen-text.js`) | own DOM scrape |
 | Dictation into a focused field | `WizCore` focused field (`web/core/focused-field.js`); voice `WizCore` (`web/core/voice.js`); mic choice `WosMic` (`web/core/mic.js`) | own recorder/transcriber |
 | Local commands | `WosCommands` (`web/core/commands.js`) | a second command parser |
