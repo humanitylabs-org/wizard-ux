@@ -167,9 +167,8 @@ async function spaceArchiveMatrix(b) {
    try {
     const before=await p.evaluate(()=>WizLive.unified().length);
     await choose(p,'space:old-members');
-    await p.waitForFunction(()=>!document.querySelector('.ch-count')?.textContent.includes('Loading Space'),null,{timeout:15000});
-    const count=await p.locator('.ch-count:visible').innerText();
-    ok(count.startsWith('82 chats'),mode+' Space counts all 82 visible members beyond global archive-50',count);
+    await p.waitForFunction(()=>document.querySelector('.ch-scroll [data-sec="archive"] .ch-sec-h small')?.textContent==='62',null,{timeout:15000}).catch(()=>{});
+    ok(await p.locator('.ch-count:visible').count()===0,mode+' Focus switch adds no count line under search');
     const archive=p.locator('[data-sec="archive"]:visible');
     if(!await archive.count()){ok(false,mode+' Space Archive count is 62','Archive missing');await capture(p,mode+'-missing-archive');continue;}
     ok(await archive.locator('.ch-sec-h small').innerText()==='62',mode+' Space Archive count is 62');
@@ -182,7 +181,7 @@ async function spaceArchiveMatrix(b) {
     for(const skin of ['obsidian','nebula']){
      await p.evaluate(s=>WosSkin.set(s),skin);await p.waitForTimeout(500);
      await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');if(window.__wos)a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);});
-     await p.waitForFunction(()=>{const e=document.querySelector('.ch-count'),r=e?.getBoundingClientRect();return r&&e.contains(document.elementFromPoint(r.x+15,r.y+r.height/2));});
+     await p.waitForFunction(()=>{const e=document.querySelector('.ch-scroll [data-sec]'),r=e?.getBoundingClientRect();return r&&e.contains(document.elementFromPoint(r.x+15,r.y+r.height/2));});
      await p.locator('.ch-scroll:visible').evaluate(e=>{const a=e.querySelector('[data-sec="archive"]');e.scrollTop=a.offsetTop-e.offsetTop;});await capture(p,mode+'-'+skin+'-old-space');
     }
     await choose(p,'all:');
