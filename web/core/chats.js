@@ -419,6 +419,8 @@ window.WizCore.chats = function createChats(H) {
     // Nothing left to retry (e.g. a recording this device can no longer read): offer the Unsent screen, where it can
     // be deleted, rather than a pill with no way to clear it.
     if (one && !OUTBOX.canRetry(one) && ['failed', 'waiting'].includes(one.state)) btns = H.recoverUnsent && (one.audio || one.audioFile || one.body) ? `<button type="button" class="pbtn" data-obrecover="${esc(one.id)}">Recover</button>` : '';
+    // Several such items: "Retry all" would queue none of them, so route to Unsent as well.
+    else if (!one && H.recoverUnsent && items.every(it => ['failed', 'waiting'].includes(it.state) && !OUTBOX.canRetry(it))) btns = `<button type="button" class="pbtn" data-obrecover="${esc(items[0].id)}">Recover</button>`;
     const spin = failed.length || items.some(it => ['unconfirmed', 'held', 'empty'].includes(it.state) || OUTBOX?.quarantined(it.id)) ? '' : '<i class="dots"><b></b><b></b><b></b></i>';
     return `<div class="ch-pill${cls}" data-sendpill="${items.length}" role="status"><span class="pl"${open}>${spin}<span>${label}</span></span>${btns}</div>`;
   }
