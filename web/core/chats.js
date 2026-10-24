@@ -727,7 +727,8 @@ window.WizCore.chats = function createChats(H) {
       // A Space counts persisted members before/after hydration; unread/recent use available member rows.
       const members = kind === 'space' && LIVE.spaceSessions ? LIVE.spaceSessions(spaces().find(s => s.id === key)?.threads || [], { peek: true }).rows.filter(s => !s.hidden) : null;
       const rows = members || (kind === 'all' ? all : all.filter(s => matchesFocus({ kind, key }, s)));
-      return { kind, key, label, badge, count: kind === 'space' ? (spaces().find(s => s.id === key)?.threads.length || 0) : rows.length, unread: rows.filter(s => LIVE.isNew(s)).length,
+      // Counts exclude Archive (James, 25 Oct 2026). Unloaded Space members sit beyond the archive window, so they are archived too.
+      return { kind, key, label, badge, count: rows.length - LIVE.workGroups(rows).archive.length, unread: rows.filter(s => LIVE.isNew(s)).length,
         recent: rows.reduce((n, s) => Math.max(n, Date.parse(s.activityAt || s.updatedAt || '') || 0), 0) };
     };
     const opts = focusAgents().map(a => stats('agent', a.id, a.label, (AGS()?.sigil(a) || '') + (AGS()?.isPrivate(a) ? AGS().lock() : '')))
@@ -924,7 +925,8 @@ window.WizCore.chats = function createChats(H) {
     const chips = (F ? chip('status', F.label) : '');
     const ph = filtered ? 'Search within' : 'Search chats and messages';
     const head = `<div class="ch-top"><div class="ch-search${F ? ' has-chips' : ''}">${chips}<input data-chsearch placeholder="${ph}" aria-label="Search chats and messages" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false">${c.q ? '<button type="button" class="ch-sclear" data-chsclear aria-label="Clear search">×</button>' : ''}<button type="button" class="ch-fbtn${F ? ' on' : ''}" data-chfbtn aria-label="Filter chats" aria-expanded="${c.sheet === 'status' ? 'true' : 'false'}"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button></div>${AGID ? '' : (window.WosBell?.html() || '')}</div>`
-      + (filtered && !LIVE.ok ? '' : filtered ? `<div class="ch-count">${hitCount()} ${hitCount() === 1 ? 'chat' : 'chats'}${members?.pending ? ' · Loading Space…' : members?.failed ? ' · Some chats unavailable' : ''}${coachLine()}</div>` : '');
+      // Switching Focus (agent/Space) never pushes the list down with a count line (James, 25 Oct 2026); only a status filter says how many matched.
+      + (F && LIVE.ok ? `<div class="ch-count">${hitCount()} ${hitCount() === 1 ? 'chat' : 'chats'}${coachLine()}</div>` : '');
     // Suggestions while typing (or focused on an empty field): filters that match the words, then a new chat.
     const sug = !c.sugOff && (c.q || c.focus) ? matchFilters(c.q, 3).filter(f => !(f.kind === 'status' && f.key === c.filter) && !(f.kind === focus?.kind && f.key === focus.key)) : [];
     // Filter suggestions only. New chat lives in one place, the bottom-right button (James, 24 Oct 2026: no second New chat in search).

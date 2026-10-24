@@ -501,7 +501,9 @@
    * outside unified()/the disk snapshot, so All and agent Focus keep their windows.
    * Successful reads refresh on the existing full-walk cadence; failures retry no
    * more than once a minute. Repaints/polls never fan out duplicate requests. */
-  const SPACE_ROWS = new Map(), SPACE_QUEUE = [];
+  // Hydrated members are archived rows: any new activity brings them back through the
+  // ordinary list (loaded rows win), so they refresh rarely (~60 x 2.6 KB reads per half hour).
+  const SPACE_ROWS = new Map(), SPACE_QUEUE = [], SPACE_EVERY = 30 * 60 * 1000;
   let spaceReads = 0;
   function drainSpaceReads() {
     while (!document.hidden && spaceReads < 4 && SPACE_QUEUE.length) {
@@ -698,7 +700,7 @@
         if (typeof id !== 'string' || !/^[A-Za-z0-9._:-]{1,256}$/.test(id)) continue;
         if (loaded.has(id)) { const s = loaded.get(id); if (!s.hidden) rows.push(s); continue; }
         let entry = SPACE_ROWS.get(id);
-        if (!peek && !document.hidden && (!entry || (!entry.pending && Date.now() - entry.at >= (entry.failed ? STALE_AFTER : FULL_EVERY)))) {
+        if (!peek && !document.hidden && (!entry || (!entry.pending && Date.now() - entry.at >= (entry.failed ? STALE_AFTER : SPACE_EVERY)))) {
           if (!entry) { entry = { row: null, at: 0 }; SPACE_ROWS.set(id, entry); }
           entry.pending = true; SPACE_QUEUE.push([id, entry]);
         }
