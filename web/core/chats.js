@@ -726,10 +726,10 @@ window.WizCore.chats = function createChats(H) {
   function focusOptions() {
     const all = LIVE.unified().filter(s => !s.hidden);
     const stats = (kind, key, label, badge = '') => {
-      // A Space counts its explicit members, including ones hydrated beyond the global archive window.
+      // A Space counts persisted members before/after hydration; unread/recent use available member rows.
       const members = kind === 'space' && LIVE.spaceSessions ? LIVE.spaceSessions(spaces().find(s => s.id === key)?.threads || [], { peek: true }).rows.filter(s => !s.hidden) : null;
       const rows = members || (kind === 'all' ? all : all.filter(s => matchesFocus({ kind, key }, s)));
-      return { kind, key, label, badge, count: rows.length, unread: rows.filter(s => LIVE.isNew(s)).length,
+      return { kind, key, label, badge, count: kind === 'space' ? (spaces().find(s => s.id === key)?.threads.length || 0) : rows.length, unread: rows.filter(s => LIVE.isNew(s)).length,
         recent: rows.reduce((n, s) => Math.max(n, Date.parse(s.activityAt || s.updatedAt || '') || 0), 0) };
     };
     const opts = focusAgents().map(a => stats('agent', a.id, a.label, (AGS()?.sigil(a) || '') + (AGS()?.isPrivate(a) ? AGS().lock() : '')))

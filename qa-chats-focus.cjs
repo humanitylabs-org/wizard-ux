@@ -221,14 +221,14 @@ async function visualPicker(b) {
 }
 
 async function pickerAcceptance(browser, mode) {
- sharedSpaces = [{id:'main-only',name:'Main plans',threads:['main_wos'],createdAt:new Date().toISOString()}, {id:'phil-only',name:'Reading',agent:'philosopher',threads:['phil_one'],createdAt:new Date().toISOString()}];
+ sharedSpaces = [{id:'main-only',name:'Main plans',threads:['main_wos','not-loaded-yet'],createdAt:new Date().toISOString()}, {id:'phil-only',name:'Reading',agent:'philosopher',threads:['phil_one'],createdAt:new Date().toISOString()}];
  const at=writes.length;const {ctx,p}=await boot(browser,mode==='desktop');await choose(p,'agent:hermes');
  ok(!await p.locator('.ch-focus-strip [data-chfocusopt^="space:"]').count(),mode+' strip has no Space pills');
  ok(!await p.locator('[data-chfocusopt="agent:archimedes-new"]').count(),mode+' hidden agent excluded from strip');
  await activate(p,'.ch-focus-strip:visible [data-chfocusopt="agent:hermes"]');
  ok(await p.locator('[data-chspacepicker]').count()===1,mode+' tapping active agent opens picker');
  ok(await p.locator('[data-spspace="main-only"]').count()===1&&!await p.locator('[data-spspace="phil-only"]').count(),mode+' picker only owner agent Spaces');
- ok((await p.locator('[data-spspace="main-only"]').innerText()).includes('1'),mode+' picker has member count');
+ ok((await p.locator('[data-spspace="main-only"]').innerText()).includes('2'),mode+' picker counts persisted members outside loaded list window');
  await activate(p,'[data-spspace="main-only"]');
  ok((await p.locator('.ch-focus-tab.on:visible').innerText()).includes('Main plans'),mode+' Space replaces agent label');
  ok((await p.locator('.ch-focus-tab.on:visible').getAttribute('data-chfocusopt'))==='agent:hermes',mode+' Space retains agent tab identity');
