@@ -88,7 +88,7 @@ async function run(browser, mode, my) {
     // Onboarding says it: the tour's end card and the Help sheet both carry the one-change invitation (phone shell owns the tour).
     if (phone) {
       const tour = await p.evaluate(async () => {
-        WosTour.start(); await new Promise(r => setTimeout(r, 400)); WosTour._go(4); await new Promise(r => setTimeout(r, 500));
+        WosTour.start(); await new Promise(r => setTimeout(r, 400)); WosTour._go(WosTour.DONE || 4); await new Promise(r => setTimeout(r, 500));
         const end = { copy: document.querySelector('.tr-copy b')?.textContent || '', alt: document.querySelector('.tr-copy .tr-alt')?.textContent || '' };
         WosTour.finish?.(); await new Promise(r => setTimeout(r, 300));
         WosTour.openHelp(); await new Promise(r => setTimeout(r, 500));
