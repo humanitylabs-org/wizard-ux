@@ -79,7 +79,9 @@
       }
       if (tour) setTimeout(() => {
         if (window.WosTour?.active || window.WosTour?.done?.()) return;
-        if (!deeplinked()) H.tour?.('first-run'); else H.markTour?.();
+        if (deeplinked()) return H.markTour?.();
+        if (acted || H.busy?.()) { log('tour:busy'); return; } // e.g. no /setup answer in time and the owner already tapped
+        H.tour?.('first-run');
       }, Math.max(0, TOUR_DELAY - (Date.now() - t0)));
     }, 0);
   }
