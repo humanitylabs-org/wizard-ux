@@ -28,7 +28,7 @@ fs.mkdirSync(out, { recursive:true });
         });
         const page = await context.newPage(); page.on('pageerror',e=>errors.push(String(e)));
         try {
-          await page.goto(origin+'/wizard-os-home/'+(shell==='desktop'?'desktop.html':'')+'?open=look&shell='+shell, {waitUntil:'domcontentloaded'});
+          await page.goto(origin+'/wizard-os-home/'+(shell==='desktop'?'desktop.html':'')+'?view=look&shell='+shell, {waitUntil:'domcontentloaded'});
           await page.waitForFunction(() => !!(window.__wos || window.__wux), null, {timeout:20000});
           await page.locator('[data-stgroup="look"]').waitFor({state:'visible',timeout:20000});
           if (expected) {
@@ -50,15 +50,15 @@ fs.mkdirSync(out, { recursive:true });
             await page.screenshot({path:path.join(out,id+'-tweaks.png'),fullPage:true});
             // Exercise the real shared model facade on the list without opening a private thread or sending.
             const shellPath=shell==='desktop'?'desktop.html':'';
-            await page.goto(origin+'/wizard-os-home/'+shellPath+'?open=chats&shell='+shell,{waitUntil:'domcontentloaded'});
+            await page.goto(origin+'/wizard-os-home/'+shellPath+'?view=chats&shell='+shell,{waitUntil:'domcontentloaded'});
             await page.locator('[data-part="model-pills"] button').first().waitFor({state:'visible',timeout:20000});
             await page.locator('[data-part="model-pills"]').screenshot({path:path.join(out,id+'-model-pills.png')});
             await page.locator('[data-part="model-pills"] button').first().click();
             await page.waitForFunction(()=>document.querySelector('[data-part="model-pills"] [aria-pressed="true"]'));
-            await page.goto(origin+'/wizard-os-home/'+shellPath+'?open=home&shell='+shell,{waitUntil:'domcontentloaded'});
+            await page.goto(origin+'/wizard-os-home/'+shellPath+'?view=home&shell='+shell,{waitUntil:'domcontentloaded'});
             await page.locator('[data-home-resources] .rs-barsw').waitFor({state:'visible',timeout:20000});
             await page.locator('[data-home-resources]').screenshot({path:path.join(out,id+'-resources.png')});
-            await page.goto(origin+'/wizard-os-home/'+shellPath+'?open=look&shell='+shell,{waitUntil:'domcontentloaded'});
+            await page.goto(origin+'/wizard-os-home/'+shellPath+'?view=look&shell='+shell,{waitUntil:'domcontentloaded'});
             await page.waitForFunction(()=>window.WosExperience && !window.WosExperience.state.busy);
             await page.locator('[data-experience="back"]').click();
             await page.waitForFunction(()=>!window.WosExperience.state.busy && window.WosExperience.state.base===null && window.WosExperience.state.active.length===0);
