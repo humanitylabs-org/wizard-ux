@@ -1392,6 +1392,7 @@
   // Esc peels one layer: palette → keys → inbox → voice → thread → (nothing: stays put, never leaves).
   function escStep() {
     if (window.WosSelMenu?.back()) return 'selection';
+    { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above whatever it was opened from
     if (window.WosBoomerang?.back()) return 'boomerang'; // the Boomerang picker sits above the thread it was opened from
     if (!pal.hidden) { closePalette(); return 'palette'; }
     if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet

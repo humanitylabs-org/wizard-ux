@@ -183,6 +183,8 @@
     "core/settings.css",
     "core/settings.js",
     "core/setup-launch.js",
+    "core/share-sheet.css",
+    "core/share-sheet.js",
     "core/shell.js",
     "core/sigils.css",
     "core/sigils.js",
@@ -379,7 +381,10 @@
       "note": "Dev-only Chats slot module, dynamically loaded only with explicit fixture opt-in"
     },
     "core/chats-view.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Versioned in-document Chats provider admission and lifecycle"
     },
     "core/chats.js": {
@@ -453,7 +458,10 @@
       "note": "Boomerang picker and return banner on the shared scheduler (kind return)"
     },
     "core/schedules.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Shared Settings → Schedules; hidden when Agent Service schedules returns 404"
     },
     "core/os-updates.js": {
@@ -461,10 +469,13 @@
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import; Settings \u2192 Updates shows only where the App Manager answers store-install/_updates"
+      "note": "Direct entrypoint import; Settings → Updates shows only where the App Manager answers store-install/_updates"
     },
     "core/own-views.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Shared own-screen fallback and shell-only Settings confirmation; same App Manager owner listener as Updates"
     },
     "core/photos-settings.js": {
@@ -516,6 +527,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/share-sheet.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
     "core/skin-frame.js": {
       "loadedBy": [
         "phone",
@@ -552,7 +570,10 @@
       "note": "Direct entrypoint import"
     },
     "core/setup-launch.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Shared first-run Setup admission; adapters supply only open/home callbacks."
     },
     "core/shell.js": {
