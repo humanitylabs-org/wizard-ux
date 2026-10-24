@@ -126,6 +126,8 @@
     "core/app-route.css",
     "core/app-route.js",
     "core/app-services.js",
+    "core/app-setup.css",
+    "core/app-setup.js",
     "core/app-versions.js",
     "core/appearance-host.css",
     "core/appearance-host.js",
@@ -274,6 +276,10 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/app-setup.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Shared per-app needs checklist and app-open admission"
     },
     "core/app-versions.js": {
       "loadedBy": [
