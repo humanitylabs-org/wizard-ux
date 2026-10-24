@@ -35,9 +35,15 @@
     })();
     return loading;
   }
+  const mineOn = () => typeof document !== 'undefined' && document.documentElement?.dataset?.mine != null;
   function card() {
     if (!st || Date.now() - at > 60e3) load();
     const s = st;
+    // Miguel's release: one plain row, the provider on the right.
+    if (mineOn()) {
+      const v = !s ? 'Checking…' : s.ready ? s.name + (s.attested ? ' · attested' : '') : s.off ? 'Not set up' : 'Not ready';
+      return `<div class="st-group st-plain vx-card" data-voicecard="${!s ? 'loading' : s.ready ? 'ready' : 'down'}"><div class="st-row static"><span class="st-tx"><b>Transcription</b></span><span class="st-val">${esc(v)}</span></div></div>`;
+    }
     const head = '<h4>Voice transcription</h4>';
     if (!s) return `<div class="st-group vx-card" data-voicecard="loading">${head}<div class="st-row static"><span class="st-tx"><b>Checking…</b><small>Reading this Wizard’s speech-to-text setup</small></span></div></div>`;
     const state = s.ready ? 'ready' : 'down';

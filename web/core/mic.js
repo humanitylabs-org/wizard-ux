@@ -38,8 +38,19 @@
     try { return JSON.parse(d.setMicPolicy(JSON.stringify(body))); } catch (_) { return null; }
   }
 
+  const mineOn = () => typeof document !== 'undefined' && document.documentElement?.dataset?.mine != null;
   function html() {
     const s = read(); if (!s) return '';
+    if (mineOn()) {
+      // Miguel's release: short choices, a check on the one in use; what each means is in its name.
+      const { policy, inputs } = s, mode = policy.mode, chk = on => `<span class="st-check" aria-hidden="true">${on ? '✓' : ''}</span>`;
+      const r = (key, title, on, i = '') => `<button class="st-row" data-mic="${key}"${i !== '' ? ` data-mici="${i}"` : ''} role="radio" aria-checked="${on}"><span class="st-tx"><b>${esc(title)}</b></span>${chk(on)}</button>`;
+      let rows = r('phone', 'Phone mic', mode === 'phone') + r('any', 'Any connected mic', mode === 'any');
+      const seen = [];
+      for (const [i, d] of (mode === 'prefer' ? policy.prefer : []).entries()) { seen.push(d); rows += r('forget', label(d) + (inputs.some(x => same(d, x)) ? '' : ' · not connected'), true, i); }
+      for (const d of inputs.filter(i => i.type !== 'builtin_mic')) { if (seen.some(x => same(x, d))) continue; rows += r('prefer', label(d), false, inputs.indexOf(d)); }
+      return `<div class="st-group st-plain" data-mic-group><p class="st-lbl">Microphone</p>${rows}</div>`;
+    }
     const { policy, inputs } = s, mode = policy.mode;
     const others = inputs.filter(i => i.type !== 'builtin_mic');
     const remembered = mode === 'prefer' ? policy.prefer : [];

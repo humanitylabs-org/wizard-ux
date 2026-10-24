@@ -190,6 +190,8 @@
   }
   function html() {
     const l = all();
+    // Miguel's release: the recordings only, no heading or help; nothing when none are waiting.
+    if (document.documentElement?.dataset?.mine != null) return `<div class="st-group st-plain" data-cancelled>${l.map(row).join('')}${l.length > 1 ? `<button class="st-wide ghost" data-cx-all="delete">${Date.now() - confirmAll < 4000 ? 'Tap again to delete all ' + l.length : 'Delete all'}</button>` : ''}</div>`;
     return `<div class="st-group" data-cancelled><h4>Recovered &amp; cancelled recordings <span>${l.length || ''}</span></h4>
       ${l.length ? l.map(row).join('') : '<div class="st-empty">No recordings waiting.</div>'}
       ${l.length > 1 ? `<button class="st-wide ghost" data-cx-all="delete">${Date.now() - confirmAll < 4000 ? 'Tap again to delete all ' + l.length : 'Delete all'}</button>` : ''}
