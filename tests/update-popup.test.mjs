@@ -13,7 +13,7 @@ function el(tag) {
   return { tag, className: '', dataset: {}, style: {}, attrs: {}, innerHTML: '', listeners: {}, removed: false,
     setAttribute(k, v) { this.attrs[k] = v; }, addEventListener(t, f) { this.listeners[t] = f; }, remove() { this.removed = true; body.kids = body.kids.filter(k => k !== this); } };
 }
-async function boot({ status, home = true, storage = new Map(), web, desktop = false } = {}) {
+async function boot({ status, home = true, storage = new Map(), web, desktop = false, overlay = null, timers = [], now = null } = {}) {
   body.kids = [];
   const posts = [];
   const fetch = async (url, opts = {}) => {
@@ -24,10 +24,11 @@ async function boot({ status, home = true, storage = new Map(), web, desktop = f
   if (desktop) window.__wux = { homeOpen: home, ws: [{ wins: home ? [] : [1] }], cur: 0, toast() {} };
   else window.__wos = { idx: home ? 0 : 1, sheet: null, desks: [{ wins: [] }], toast() {} };
   const document = { body, hidden: false, currentScript: { src: 'https://box/wizard-os-home/core/os-updates.js' },
-    createElement: el, querySelector: sel => sel === '#dock, .dock' ? { getBoundingClientRect: () => ({ top: 790, height: 84 }) } : null, addEventListener() {} };
-  new Function('window', 'document', 'fetch', 'location', 'setInterval', 'clearInterval', src)(window, document, fetch, { href: 'https://box/wizard-os-home/', reload() {} }, () => 0, () => {});
+    createElement: el, querySelector: sel => sel === '#dock, .dock' ? { getBoundingClientRect: () => ({ top: 790, height: 84 }) } : overlay && sel.includes(overlay) ? {} : null, addEventListener() {} };
+  const D = now ? { now: () => now.t } : Date;
+  new Function('window', 'document', 'fetch', 'location', 'setInterval', 'clearInterval', 'Date', src)(window, document, fetch, { href: 'https://box/wizard-os-home/', reload() {} }, (f, ms) => { timers.push({ f, ms }); return 0; }, () => {}, D);
   await tick(); await tick(); await tick();
-  return { U: window.WosUpdates, window, storage, posts, pop: () => body.kids.find(k => k.className === 'osu-pop' && !k.removed) };
+  return { U: window.WosUpdates, window, storage, posts, setStatus: v => { status = v; }, pop: () => body.kids.find(k => k.className === 'osu-pop' && !k.removed) };
 }
 const tapGo = pop => pop.listeners.click({ target: { closest: s => s === '[data-osu]' ? { dataset: { osu: 'apply' } } : null } });
 const tapX = pop => pop.listeners.click({ target: { closest: s => s === '[data-osu-dismiss]' ? {} : null } });
@@ -82,6 +83,23 @@ test('only one notice: the old web banner steps aside while the pop-up carries t
   const css = readFileSync(new URL('../web/core/update-banner.css', import.meta.url), 'utf8');
   assert.match(css, /\.osu-pop \{[^}]*--wz-text/, 'styled with --wz-* tokens');
 });
+test('desktop: the pop-up never sits above an open overlay (palette, keys, Inbox, Usage, Settings)', async () => {
+  for (const o of ['#palette', '#keys', '#inbox', '.usage-ov', '.dsettings']) {
+    const b = await boot({ status: ST(), desktop: true, overlay: o }); b.U.popup();
+    assert.equal(b.pop(), undefined, o);
+  }
+});
+test('Home hears about a new release without a reload: the status is re-read every 10 minutes', async () => {
+  const now = { t: 1e6 }, timers = [];
+  const b = await boot({ status: ST({ update_available: false, latest: '0.3.32' }), timers, now }); b.U.popup();
+  assert.equal(b.pop(), undefined);
+  b.setStatus(ST());
+  const tick = timers.find(t => t.ms === 60e3); assert.ok(tick, 'a one-minute tick');
+  now.t += 5 * 60e3; tick.f(); await tick0(); b.U.popup(); assert.equal(b.pop(), undefined, 'not before 10 minutes');
+  now.t += 5 * 60e3; tick.f(); await tick0(); await tick0(); b.U.popup();
+  assert.match(b.pop().innerHTML, /Update available/);
+});
+const tick0 = () => new Promise(r => setTimeout(r, 0));
 test('the stock module reads no personal release file and has no release-layer states', () => {
   assert.doesNotMatch(src, /my-release|\bmine\b|Propose|behind > 0|data-mine/);
 });
