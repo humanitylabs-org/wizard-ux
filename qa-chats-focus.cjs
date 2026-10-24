@@ -7,7 +7,7 @@ const OUT = process.env.QA_OUT || require('./tools/qa-paths.cjs').workPath('chat
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (v, n, detail = '') => { console.log(v ? 'PASS' : 'FAIL', n, v ? '' : JSON.stringify(detail)); v ? pass++ : fail++; };
-const agents = [{ id:'hermes', label:'Main', is_default:true }, { id:'philosopher', label:'Philosopher' }, { id:'idle', label:'Idle' }, { id:'private', label:'Private', privacy:'private' }].map(a => ({ harness:'hermes', privacy:'standard', status:'running', model:{provider:'fixture',model:'fixture-model',allowed_models:['fixture-model']}, appearance:{hue:220}, ...a }));
+const agents = [{ id:'hermes', label:'Archimedes', is_default:true }, { id:'philosopher', label:'Philosopher' }, { id:'idle', label:'Idle' }, { id:'private', label:'Private agent', privacy:'private' }].map(a => ({ harness:'hermes', privacy:'standard', status:'running', model:{provider:'fixture',model:'fixture-model',allowed_models:['fixture-model']}, appearance:{hue:({hermes:265,philosopher:42,idle:330,private:160})[a.id]}, ...a }));
 const now = Date.now()/1000;
 const rows = [
  ['main_phil','Main philosophy','Philosophy','', 'check'],
@@ -18,12 +18,13 @@ const rows = [
  ['private_one','Sealed thread','Wizard OS','private','check']
 ].map(([id,title,subject,agent,state],i) => ({id,title,source:'wizard-mobile',status:'completed',message_count:2,hidden:false,last_active:now-i,started_at:now-500,wizard_last_user_at:now-100,wizard_last_assistant_at:now-i,wizard_activity_at:now-i,wizard_attention:{state,subject,ask:'Fixture ask'},...(agent?{agent}:{}), latest_message:{role:'assistant',content:'Fixture reply',timestamp:now-i}}));
 const writes = [], errors = [], failedAgents = new Set();
+let writeSeq = 0;
 let sharedSpaces = [];
 const sampleSpaces = () => [{id:'wizard-launch',name:'Wizard OS launch',threads:['main_wos','phil_one','deleted_thread'],createdAt:'2026-10-24T00:00:00.000Z'},{id:'reading',name:'Reading',threads:['main_phil','phil_two'],createdAt:'2026-10-24T00:00:00.000Z'}];
 async function route(r) {
  const q=r.request(), u=new URL(q.url()), m=q.method();
  const json=(body,status=200)=>r.fulfill({status,json:body});
- if (!['GET','HEAD'].includes(m)) { writes.push({path:u.pathname,body:q.postData()}); if(u.pathname==='/wizard/v1/ui-preferences'){const patch=JSON.parse(q.postData());if(patch.spaces)sharedSpaces=patch.spaces;return json({spaces:sharedSpaces});} return json(u.pathname==='/wizard/thread-seen'?{state:JSON.parse(q.postData()||'{}').state}:{ok:true}); }
+ if (!['GET','HEAD'].includes(m)) { writes.push({path:u.pathname,query:u.search,body:q.postData()}); if(u.pathname.endsWith('/api/sessions'))return json({ok:true}); if(u.pathname.endsWith('/v1/runs'))return json({run_id:'fixture-run-'+(++writeSeq),status:'running'}); if(u.pathname==='/wizard/files/upload')return json({file:{id:'fixture-audio-'+(++writeSeq),filename:'voice.webm',mime:'audio/webm'}}); if(u.pathname.endsWith('/api/transcribe'))return json({text:'Fixture voice question'}); if(u.pathname==='/wizard/v1/ui-preferences'){const patch=JSON.parse(q.postData());if(patch.spaces)sharedSpaces=patch.spaces;return json({spaces:sharedSpaces});} return json(u.pathname==='/wizard/thread-seen'?{state:JSON.parse(q.postData()||'{}').state}:{ok:true}); }
  if (!u.pathname.startsWith('/wizard/')) return r.continue();
  if (u.pathname==='/wizard/v1/agents') return json({agents});
  if (u.pathname==='/wizard/v1/ui-preferences') return json({archiveAfterDays:7,compact:false,readyOrder:'newest',pinnedChats:[],spaces:sharedSpaces});
@@ -32,6 +33,7 @@ async function route(r) {
  if (u.pathname==='/wizard/hermes/api/sessions') return json({data:rows.filter(s=>(s.agent||'')===(u.searchParams.get('agent')||'')),has_more:false,archive_returned:0,archive_total:0});
  const sm=u.pathname.match(/\/sessions\/([^/]+)(\/messages)?$/);
  if (sm) { const s=rows.find(x=>x.id===sm[1]); return json(sm[2]?{data:[{id:1,role:'user',content:'Fixture question',timestamp:now-50},{id:2,role:'assistant',content:'Fixture answer',timestamp:now} ],has_more:false}:{session:s}); }
+ if (u.pathname.endsWith('/api/model/options')) return json({options:[{value:'fixture-model',provider:'fixture',default:true}]});
  if (u.pathname==='/wizard/v1/apps') return json({apps:[]});
  return json({});
 }
@@ -39,6 +41,7 @@ async function boot(b,desktop=false,legacy='') {
  const ctx=await b.newContext({viewport:desktop?{width:1440,height:1000}:{width:412,height:892},hasTouch:!desktop,isMobile:!desktop,deviceScaleFactor:1,serviceWorkers:'block'});
  await ctx.route('**/*',route);
  await ctx.addInitScript(({desktop,legacy})=>{
+  const md=navigator.mediaDevices; if(md)md.getUserMedia=async()=>{const ac=new AudioContext(),o=ac.createOscillator(),dst=ac.createMediaStreamDestination();o.connect(dst);o.start();return dst.stream;};
   localStorage.setItem('wos.coached','true');localStorage.setItem('wos.voiceTipSeen','true');localStorage.setItem('wos.shell',desktop?'desktop':'phone');
   if (!sessionStorage.getItem('focusBoot')) {
    sessionStorage.setItem('focusBoot','1');localStorage.setItem('wos.skin','obsidian');
@@ -61,10 +64,93 @@ async function activate(p,s){const l=p.locator(s);await l[await p.evaluate(()=>n
 async function choose(p,v){await activate(p,`.ch-focus-strip:visible [data-chfocusopt="${v}"]`);}
 const activeFocus = p => p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText();
 async function capture(p,name){await p.waitForTimeout(450);await p.screenshot({path:path.join(OUT,name+'.png'),animations:'disabled'});}
+async function sectionMatrix(b) {
+ const saved=rows.slice();
+ const sections=['ready','yesterday','pastWeek','archive','errors','working'];
+ for(const [i,k] of sections.entries()) {
+  const t=now-([0,86400,3*86400,10*86400,0,0][i]);
+  rows.push({...rows[4],id:'section_'+k,title:'Section '+k,status:k==='errors'?'failed':k==='working'?'running':'completed',archived:k==='archive',last_active:t,started_at:t-50,wizard_last_user_at:t,wizard_last_assistant_at:t,wizard_activity_at:t,latest_message:{role:'assistant',content:'Section fixture',timestamp:t}});
+ }
+ sharedSpaces=[{id:'sections',name:'Sections',threads:rows.filter(r=>r.agent==='philosopher').map(r=>r.id)}];
+ for(const desktop of [false,true]) {
+  const {ctx,p}=await boot(b,desktop),mode=desktop?'desktop':'phone';
+  await p.evaluate(()=>{const a=window.__wos||window.__wux;document.documentElement.dataset.skin='nebula';a.live.chatLayout='day';});
+  for(const focus of ['agent:philosopher','space:sections']) {
+   await choose(p,focus);
+   for(const k of sections) {
+    const h=p.locator(`.ch-list:visible [data-sectoggle="${k}"]`);
+    if(!await h.count()){ok(false,mode+' '+focus+' '+k+' header exists');continue;}
+    if(await h.getAttribute('aria-expanded')==='false')await h.click();
+    await h.click();ok(await h.getAttribute('aria-expanded')==='false',mode+' '+focus+' '+k+' collapses');
+    await p.evaluate(()=>{const a=window.__wos||window.__wux;a.live.emit();});
+    ok(await h.getAttribute('aria-expanded')==='false',mode+' '+focus+' '+k+' survives refresh');
+    await h.click();ok(await h.getAttribute('aria-expanded')==='true',mode+' '+focus+' '+k+' expands');
+   }
+  }
+  await ctx.close();
+ }
+ rows.splice(0,rows.length,...saved);sharedSpaces=[];
+}
+// Exercise the real durable outbox and intercepted create/run HTTP transports, not an enqueue stub.
+async function routingMatrix(b) {
+ for(const desktop of [false,true]) {
+  const {ctx,p}=await boot(b,desktop),mode=desktop?'desktop':'phone';
+  const reset=async(agent='philosopher')=>{
+   await p.evaluate(agent=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');if(w.thread){if(window.__wos)a.onBack();else a.escStep();}a.chats.setFocus(w,agent.startsWith('space:')?{kind:'space',key:agent.slice(6)}:{kind:'agent',key:agent});a.focusWin(w.id);document.activeElement?.blur();},agent);
+   await p.waitForTimeout(650);
+   if(!desktop)await p.waitForFunction(()=>__wos.voice==='idle',null,{timeout:6000});
+  };
+  const send=async()=>{await p.locator('.ch-compose textarea:visible').fill('Fixture Focus route');await p.locator('.ch-compose textarea:visible').press('Control+Enter');};
+  const check=async(name,act,agent='philosopher')=>{
+   await reset(agent);const at=writes.length;
+   try {await act();} catch(e) {ok(false,mode+' ROUTING '+name+' → '+agent,{error:e.message});return;}
+   const end=Date.now()+16000;while(Date.now()<end&&!writes.slice(at).some(w=>w.path.endsWith('/v1/runs')))await p.waitForTimeout(100);
+   const actual=writes.slice(at).filter(w=>w.path.endsWith('/api/sessions')||w.path.endsWith('/v1/runs'));
+   const target=agent==='hermes'||agent.startsWith('space:')?'':agent;
+   ok(actual.length===2&&actual.every(w=>(new URLSearchParams(w.query).get('agent')||'')===target&&(JSON.parse(w.body).agent||'')===target),mode+' ROUTING '+name+' → '+agent,actual);return actual;
+  };
+  for(const agent of ['philosopher','hermes','private']) {
+   await check('list +',async()=>{await activate(p,'[data-chfab]:visible');await send();},agent);
+   await check('__new__ composer',async()=>{await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');a.chats.openChat(w.id,'__new__');});await send();},agent);
+  }
+  await check('empty-state Start a new chat',async()=>{await p.locator('.ch-list:visible [data-chemptynew]').click();await send();},'idle');
+  if(desktop) {
+   await check('Start a new chat',async()=>{await p.locator('[data-panenew]:visible').click();await send();});
+   await check('Alt+Enter',async()=>{await p.keyboard.press('Alt+Enter');await send();});
+   await check('orb tap',async()=>{await p.locator('#micBtn').click();await p.waitForTimeout(900);await p.locator('#micBtn').click();});
+   await check('Alt+Shift+V',async()=>{await p.keyboard.press('Alt+Shift+V');await p.waitForTimeout(900);await p.keyboard.press('Alt+Shift+V');});
+   await check('new voice button',async()=>{await p.locator('#generalVoice').click();await p.waitForTimeout(900);await p.locator('#generalVoice').click();});
+  } else {
+   await check('orb tap',async()=>{await p.locator('#orbWrap').tap();await p.waitForTimeout(900);await p.locator('#orbWrap').tap();});
+   await check('phone new voice',async()=>{await p.evaluate(()=>__wos.startVoice('general'));await p.waitForTimeout(900);await p.evaluate(()=>__wos.finishVoice());});
+   // Holding is intentionally a local-command surface, NOT a message/new-chat transport.
+   await reset();const at=writes.length;
+   const box=await p.locator('#orbWrap').boundingBox();const cdp=await ctx.newCDPSession(p);
+   await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:box.x+box.width/2,y:box.y+box.height/2}]});await p.waitForTimeout(1100);
+   await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await p.waitForTimeout(1800);await cdp.detach();
+   ok(!writes.slice(at).some(w=>w.path.endsWith('/api/sessions')||w.path.endsWith('/v1/runs')),'phone ROUTING orb hold → local command, no chat');
+  }
+  // Space retains the main-agent route and durable membership for typed and fresh voice starts.
+  sharedSpaces=[{id:'route-space',name:'Route space',threads:[]}];
+  await p.evaluate(()=>window.dispatchEvent(new Event('focus')));
+  await p.locator('[data-chfocusopt="space:route-space"]:visible').waitFor();
+  for(const voice of [false,true]) {
+   const req=await check(voice?'Space new voice':'Space list +',async()=>{
+    if(!voice){await activate(p,'[data-chfab]:visible');await send();}
+    else if(desktop){await p.locator('#generalVoice').click();await p.waitForTimeout(900);await p.locator('#generalVoice').click();}
+    else{await p.evaluate(()=>__wos.startVoice('general'));await p.waitForTimeout(900);await p.evaluate(()=>__wos.finishVoice());}
+   },'space:route-space');
+   const sid=JSON.parse(req?.find(r=>r.path.endsWith('/v1/runs'))?.body||'{}').session_id;
+   ok(!!sid&&sharedSpaces[0]?.threads.includes(sid),mode+' Space '+(voice?'voice':'typed')+' joins durable thread id',sharedSpaces);
+  }
+  if(desktop)await check('Alt+N fresh window',async()=>{await p.keyboard.press('Alt+N');await send();});
+  await ctx.close();sharedSpaces=[];
+ }
+}
 (async()=>{
- const b=await chromium.launch({executablePath:process.env.QA_CHROME||undefined});
+ const b=await chromium.launch({executablePath:process.env.QA_CHROME||undefined,args:['--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required']});
  try {
- for(const desktop of [false,true]){
+ for(const desktop of process.env.QA_ROUTING_ONLY?[]:[false,true]){
   sharedSpaces=[];
   const {ctx,p}=await boot(b,desktop), mode=desktop?'desktop':'phone', before=await snap(p);
   const present=await p.locator('.ch-focus-strip:visible').count();ok(present===1,mode+' Focus strip exists');
@@ -99,7 +185,10 @@ async function capture(p,name){await p.waitForTimeout(450);await p.screenshot({p
    ok(await p.locator('.ch-focus-strip').evaluate(e=>e.scrollLeft)>=scrolled-1,mode+' live morph preserves manual tab scroll');rows[0].title=oldTitle;
   }
   await p.locator('.ch-focus-strip:visible').evaluate(e=>e.scrollLeft=0);
-  await capture(p,desktop?'desktop-dark':'phone-dark-agents');
+  await capture(p,desktop?'desktop-dark':'phone-dark-all');
+  ok(await p.locator('.ch-list:visible').evaluate(e=>!e.style.getPropertyValue('--ch-agent-hue')),mode+' All has no agent tint');
+  const pill=await opts.first().evaluate(e=>({hit:e.getBoundingClientRect().height,visual:parseFloat(getComputedStyle(e,'::before').height)}));
+  ok(pill.hit>=44&&pill.visual<=34&&pill.visual>=30,mode+' slim 32px pill and 44px target',pill);
   const existingRows=rows.slice();
   rows.push(...Array.from({length:24},(_,i)=>({...rows[0],id:'subject_fixture_'+i,title:'Subject fixture '+i,wizard_attention:{...rows[0].wizard_attention,subject:'Automatic topic '+i}})));
   await p.evaluate(async()=>{const a=window.__wos||window.__wux;await a.live.refresh();a.live.emit();});await p.waitForTimeout(100);
@@ -111,6 +200,17 @@ async function capture(p,name){await p.waitForTimeout(450);await p.screenshot({p
   await choose(p,'agent:philosopher');
   ok(JSON.stringify(await ids(p))===JSON.stringify(['phil_one','phil_two']),mode+' Philosopher only');
   ok((await activeFocus(p)).includes('Philosopher'),mode+' active tab updates');
+  ok(await p.locator('.ch-list:visible').evaluate(e=>e.style.getPropertyValue('--ch-agent-hue')===String(WosAgents.distinctHues().get('philosopher'))&&getComputedStyle(e).backgroundImage.includes('gradient')),mode+' focused list reuses agent hue tint');
+  ok(await opts.evaluateAll(es=>es.filter(e=>e.dataset.chfocusopt.startsWith('agent:')).every(e=>e.style.getPropertyValue('--ch-agent-colour')===WosAgents.colour(WosAgents.get(e.dataset.chfocusopt.slice(6))))),mode+' tabs reuse registry colours');
+  const activePaint=await p.locator('.ch-focus-strip:visible .on').evaluate(e=>({bg:getComputedStyle(e,'::before').backgroundColor,neutral:getComputedStyle(e.parentElement).backgroundColor}));
+  ok(activePaint.bg!=='rgba(0, 0, 0, 0)'&&activePaint.bg!==activePaint.neutral,mode+' active pill filled',activePaint);
+  const ready=p.locator('.ch-list:visible [data-sectoggle=ready]');
+  await ready.click();ok(await ready.getAttribute('aria-expanded')==='false',mode+' agent Ready collapses');
+  await choose(p,'all:');ok(await ready.getAttribute('aria-expanded')==='false',mode+' All shares collapsed section state');
+  await choose(p,'space:wizard-launch');ok(await ready.getAttribute('aria-expanded')==='false',mode+' Space shares collapsed section state');
+  ok(await p.locator('.ch-list:visible').evaluate(e=>!e.style.getPropertyValue('--ch-agent-hue')),mode+' Space clears tint');
+  await ready.click();ok(await ready.getAttribute('aria-expanded')==='true',mode+' Space Ready expands');
+  await choose(p,'agent:philosopher');
   ok(await p.locator('.ch-focus-strip:visible .on').evaluate(e=>{const a=e.getBoundingClientRect(),r=e.parentElement.getBoundingClientRect();return a.left>=r.left&&a.right<=r.right;}),mode+' active tab auto-scrolls fully into view');
   ok(JSON.stringify(await snap(p))===JSON.stringify(before),mode+' focus creates no window or desk');
   await capture(p,desktop?'desktop-philosopher':'phone-dark-philosopher');
@@ -222,6 +322,8 @@ async function capture(p,name){await p.waitForTimeout(450);await p.screenshot({p
   }
  }
  ok(writes.filter(w=>/\/v1\/runs$/.test(w.path)).length===0,'zero /v1/runs during navigation');
+ await sectionMatrix(b);
+ await routingMatrix(b);
  ok(errors.length===0,'no page errors',errors);
  }finally{await b.close();}
  console.log(`${pass} passed, ${fail} failed; intercepted writes ${writes.length}`);process.exitCode=fail?1:0;

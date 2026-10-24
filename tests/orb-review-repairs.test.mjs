@@ -30,9 +30,14 @@ test('real native receipt admits only its exact recovered borrower while meeting
 });
 const route={model:'private-model',provider:'private-provider'};
 function producer(thread) {
- const c={W:{w:{app:'chats',thread}},agentWin:()=>true,agentApp:()=>({agent:'private-agent',name:'Private',private:true}),winTitle:()=> 'PRIVATE TITLE'};
+ const c={W:{w:{app:'chats',thread,agent:'private-agent'}},CHATS:{winAgent:()=> 'private-agent'},agentWin:()=>true,agentApp:()=>({agent:'private-agent',name:'Private',private:true}),winTitle:()=> 'PRIVATE TITLE'};
  vm.runInNewContext(section(phone,'  function viewOf(','  // Rides as'),c);return c.viewOf('w');
 }
+test('focused agent list snapshot keeps routing metadata and shared list command grammar',()=>{
+ const c={W:{w:{app:'chats',focus:{kind:'agent',key:'philosopher'}}},CHATS:{winAgent:w=>w.focus?.key||''},agentWin:()=>false,agentApp:w=>({agent:w.agent,name:'Philosopher',private:false})};
+ vm.runInNewContext(section(phone,'  function viewOf(','  // Rides as'),c);
+ const v=c.viewOf('w');assert.equal(v.agent,'philosopher');assert.equal(v.kind,'thread list');assert.equal(v.thread,'');
+});
 for(const thread of ['thread-a',''])test('actual producer view survives journal reload: '+(thread||'private list'),()=>{
  const store=storage(),h=handoff(store),view=producer(thread);
  assert.equal(view.kind,thread?'chat thread':'agent chats');

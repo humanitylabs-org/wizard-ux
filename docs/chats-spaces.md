@@ -5,9 +5,19 @@ Reuse:
 - Box-wide persistence: REUSE WizLive.putPrefs and /wizard/v1/ui-preferences, with local offline cache like chat-pins.js.
 - Voice: REUSE WosCommands focus grammar and matchFilters.
 - Thread metadata: REUSE attention.subject and By subject sorting; subjects are not Focus options.
-Visual: existing Focus strip, unchanged tokens and layout; phone Dark and Nebula screenshots in acceptance receipt.
+Visual: 32px agent-colour pills inside 44px transparent hit targets; registry-derived colours and a subtle `--ch-agent-hue` list gradient over the skin surface. All / Spaces clear the tint. Dark and Nebula screenshots in acceptance receipt.
 
 Default Focus is All, then every configured agent in registry order (including empty agents).
+Section collapse uses the same `wos.chats.sections.v1` state in All, agent and Space Focus; only
+nonempty text search temporarily opens matching sections. Ready, Yesterday, Past week, Archive,
+Errors and Working all use that one renderer/toggle.
+
+New chats inherit `winAgent(w)` / `modelRoute(wid, '__new__')` through the shared composer/outbox:
+list +, empty-agent Start a new chat, desktop empty pane, Alt+Enter, fresh-window Alt+N/palette,
+phone orb tap/general voice and desktop mic/new-voice buttons (Alt+V or Alt+Shift+V).
+Existing-thread replies keep the recorded thread route. Explicit new-voice takes never borrow
+its composer or screen context. A held phone orb remains a local-command surface; an unmatched
+command creates no thread and is never silently sent to an agent.
 Only owner-requested Spaces follow the agents. A Space is a named collection of thread IDs, not a
 folder that moves threads or changes their privacy/agent. Unknown/deleted IDs are ignored.
 Saved subject focuses migrate to All. Deleting a Space restores All on the next preferences sync.
