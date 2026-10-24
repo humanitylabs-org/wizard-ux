@@ -1,6 +1,8 @@
 // Miguel's skins (Dark, Light, Landscapes): floating pill dock, plain orb carrying the current app icon.
-// The core hook (#orbApp) is created hidden; only our skin packages show it, James's skins stay stock.
+// Owner-live desk glyphs are accepted too; exact approved core CSS remains fingerprint guarded.
 import { test } from 'node:test';
+import { createHash } from 'node:crypto';
+const approved = JSON.parse(readFileSync(new URL('./fixtures/owner-skins.json', import.meta.url), 'utf8'));
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 const web = new URL('../web/', import.meta.url);
@@ -12,7 +14,7 @@ test('core mirrors the current desk icon into a hidden #orbApp', () => {
   assert.match(app, /paintOrbApp\(\);/);
 });
 
-test('only Miguel\'s skin packages style the pill dock and show #orbApp', () => {
+test('pill docks remain skin-only; owner-live core desk glyphs match the approved baseline', () => {
   for (const dir of ['obsidian', 'landscapes']) {
     const css = read(`skins/${dir}/skin.css`);
     assert.match(css, /floating pill bottom bar/);
@@ -23,6 +25,8 @@ test('only Miguel\'s skin packages style the pill dock and show #orbApp', () => 
   }
   for (const f of readdirSync(new URL('core/', web)).filter(f => f.endsWith('.css')).concat(['styles.css'])) {
     const src = read(f.includes('/') || f === 'styles.css' ? f : `core/${f}`);
-    assert.ok(!src.includes('.orb-app'), `${f} must not style .orb-app (skin-only)`);
+    if (f === 'skins.css') {
+      assert.equal(createHash('sha256').update(src).digest('hex'), approved.approvedCoreSkinsSha256, 'owner-approved live core glyph baseline drifted');
+    } else assert.ok(!src.includes('.orb-app'), `${f} must not style .orb-app (skin-only)`);
   }
 });

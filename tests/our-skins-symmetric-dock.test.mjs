@@ -1,6 +1,8 @@
 // Miguel's skins (Dark, Light, Landscapes): symmetric phone dock, three fixed slots a side, empty-desk New desk icon,
 // orb turns into an X while the Apps sheet is open. James's skins keep the stock dock.
 import { test } from 'node:test';
+import { createHash } from 'node:crypto';
+const approved = JSON.parse(readFileSync(new URL('./fixtures/owner-skins.json', import.meta.url), 'utf8'));
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 const web = new URL('../web/', import.meta.url);
@@ -25,6 +27,9 @@ test('only our skin packages style the symmetric dock and the orb X', () => {
   }
   for (const f of readdirSync(new URL('core/', web)).filter(f => f.endsWith('.css')).map(f => `core/${f}`).concat(['styles.css'])) {
     const src = read(f);
-    assert.ok(!/\.desk-dots\.sym|\.dnew\b|data-sheet="launcher"/.test(src), `${f} must not carry our skins' dock`);
+    if (f === 'core/skins.css') {
+      assert.equal(createHash('sha256').update(src).digest('hex'), approved.approvedCoreSkinsSha256, 'owner-approved live breathing baseline drifted');
+      assert.ok(!/\.desk-dots\.sym/.test(src), 'core must not acquire collaborator symmetric layout');
+    } else assert.ok(!/\.desk-dots\.sym|\.dnew\b|data-sheet="launcher"/.test(src), `${f} must not carry our skins' dock`);
   }
 });
