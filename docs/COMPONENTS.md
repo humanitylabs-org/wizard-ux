@@ -1,6 +1,6 @@
 # Wizard OS components: reuse before build
 
-**One implementation per capability.** Find the need below and reuse its entry point. Extend near-fit modules instead of building beside them. NEW lands in `web/core/` with a row here, never inside an app.
+**One implementation per capability.** Reuse or extend the entry below. NEW belongs in `web/core/` with a row here, never in an app.
 
 Every PR body carries a `Reuse:` block (see `.github/pull_request_template.md`); CI checks it (`tools/reuse-check.mjs`) and checks that every shell global is listed here (`tests/components-inventory.test.mjs`).
 
