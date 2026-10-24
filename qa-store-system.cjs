@@ -37,7 +37,7 @@ async function checkStore(p,mobile){
  const data=await p.evaluate(async()=>{const pre='/wizard-os-home/store-data/';return Promise.all(['wizard/v1/index/search?q=transcri','wizard/v1/index/tags','api/apps/installed','wizard/v1/wizard-apps'].map(async s=>{const r=await fetch(pre+s);return {status:r.status,body:await r.json()};}));});
  ok(data.every(d=>d.status===200)&&data[0].body.apps.some(a=>a.id==='transcriber')&&data[1].body.tags.length>0,label+': real index/search/tags and installed sources');
  ok(data[2].body.installed.some(a=>a.info.id==='transcriber')&&!/"(?:config|userConfig|form_fields|JWT_SECRET|mcp|health)"/.test(JSON.stringify(data.slice(2))),label+': real installed mark data without secret fields');
- for(const file of ['app.js','styles.css','core/apps.js','core/deeplink.js','desktop/desktop.js','store/store.js','store/store.css','system/system.js','system/system.css']) {
+ for(const file of ['app.js','styles.css','core/apps.js','core/deeplink.js','desktop/desktop.js','store/store.js','store/store-install-result.js','store/store.css','system/system.js','system/system.css']) {
  const served=await p.evaluate(file=>fetch('/wizard-os-home/'+file).then(r=>r.text()),file);const local=fs.readFileSync(path.join(__dirname,'web',file),'utf8');
  ok(crypto.createHash('sha256').update(served).digest('hex')===crypto.createHash('sha256').update(local).digest('hex'),label+': peer serves exact '+file); }
  const rect=await p.locator('iframe[title="App Store"]').boundingBox();
@@ -65,6 +65,13 @@ async function checkStore(p,mobile){
  await back(p,label+' Store parent');
  if(mobile) ok(await p.evaluate(()=>window.__wos.idx===0)&&p.url().includes('/wizard-os-home/'),label+': real browser Back Store → Wizard Home');
  else ok(await p.locator('iframe[title="App Store"]').count()===0&&p.url().includes('/wizard-os-home/desktop.html'),label+': real browser Back Store → desktop parent');
+ await p.goto(BASE+(mobile?'?shell=phone&open=app-store':'desktop.html?view=store'),{waitUntil:'load'});
+ await f.locator('.kind:not([disabled])').first().waitFor({timeout:20000});
+ // Exercise the real install-success renderer without issuing an install.
+ await f.locator('#toast').evaluate(async t=>{const {renderInstallResult,successMessage}=await import('./store-install-result.js');t.innerHTML=renderInstallResult({name:'Test app',message:successMessage(null),ok:true});t.hidden=false;t.classList.add('on');});
+ await f.locator('#toast [data-my-apps]').click();
+ if(mobile){await p.locator('#launcher.open').waitFor();ok(await p.locator('#launcherBody [data-app]').count()>0&&await p.evaluate(()=>document.activeElement?.tagName!=='IFRAME'),label+': install success My apps link navigates to the phone app sheet and releases Store focus');await p.keyboard.press('Escape');await p.locator('#launcher.open').waitFor({state:'detached'}).catch(()=>p.locator('#launcher').waitFor({state:'hidden'}));}
+ else{await p.locator('#palette:not([hidden])').waitFor();ok(await p.locator('#palette [data-i]').count()>0&&await p.evaluate(()=>document.activeElement?.tagName!=='IFRAME'),label+': install success My apps link navigates to the desktop app picker and releases Store focus');await p.keyboard.press('Escape');await p.locator('#palette').waitFor({state:'hidden'});}
 }
 (async()=>{const b=await chromium.launch();try{
  for(const mobile of [true,false]){const c=await context(b,mobile),p=await c.newPage();const errors=[];p.on('pageerror',e=>errors.push(String(e)));try{
