@@ -1141,7 +1141,11 @@
   $('#keys .keys-head small').textContent = IS_MAC ? 'Every Wizard key is ⌥ (Option) plus one key, so nothing clashes with macOS, the browser or Omarchy.' : 'Every Wizard key is Alt plus one key, so nothing clashes with the browser or Omarchy (Super).';
   $('#keysBody').innerHTML = KEYS.map(([h, rows]) => `<section class="kgrp"><h4>${h}</h4>` + rows.map(([k, d]) => `<div class="krow"><span>${esc(d)}</span><span class="kk">${k.split(/\s{2,}/).map(x => `<kbd>${esc(x)}</kbd>`).join('<i>or</i>')}</span></div>`).join('') + '</section>').join('');
   function toggleKeys(on) { keysEl.hidden = on == null ? !keysEl.hidden : !on; if (!keysEl.hidden) window.WosResources?.back(); }
-  keysEl.addEventListener('click', e => { if (e.target === keysEl || e.target.closest('[data-close]')) toggleKeys(false); });
+  keysEl.addEventListener('click', e => {
+    if (e.target.closest('[data-keystour]')) { toggleKeys(false); settingsReturn = ''; window.WosTour?.desk?.start('help'); return; }
+    if (e.target === keysEl || e.target.closest('[data-close]')) toggleKeys(false);
+  });
+  if (window.WosTour?.desk) { const b = document.createElement('button'); b.type = 'button'; b.className = 'keys-tour'; b.dataset.keystour = ''; b.textContent = 'Show me again'; $('#keys .keys-head .x')?.before(b); }
 
   /* ---------------- voice: Right ⌘ talk, Right ⌥ dictate (taps), mic button ----------------
    * Tap to start, tap again to send (never hold). Lands in the focused thread when one is open,
@@ -1466,6 +1470,7 @@
   }
   // Esc peels one layer: palette → keys → inbox → voice → thread → (nothing: stays put, never leaves).
   function escStep() {
+    if (window.WosTour?.desk?.active) { window.WosTour.desk.finish('skip'); return 'tour'; } // the first-message guide: Esc/Back = Skip tour
     { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above everything, incl. the selection menu
     if (window.WosSelMenu?.back()) return 'selection';
     if (window.WosBoomerang?.back()) return 'boomerang'; // the Boomerang picker sits above the thread it was opened from
@@ -1685,9 +1690,17 @@
    * Back/Esc then walks thread → list → stays; the page is never left. */
   window.WosFeatures.install({review:openReview,maps:openMaps,command:localCommand,context:commandSnapshot,openFeature:(id,opts)=>{closeSettings();newWin({app:'feature',featureId:id,featureOptions:opts,title:window.WosFeatures.entries.find(f=>f.id===id)?.title});}});
   window.WosMusic.install({app:()=>APP['wizard-music'],findWin:()=>findWin(w=>w.app==='frame'&&w.appId==='wizard-music')?.id,openMusic:()=>{openApp(APP['wizard-music']);return findWin(w=>w.appId==='wizard-music')?.id;},frameOf:id=>winEl(id)?.querySelector('iframe'),toast});
+  // First-message guide (core/tour.js WosTour.desk): once per browser on an alongside install's first launch, or from
+  // ?view=tour and the Keys sheet's "Show me again". VM launches keep Setup only (alongsideOnly).
+  const DESK_TOUR = window.WosTour?.desk || null;
+  DESK_TOUR?.attach({ mod: MOD, toast, newChat: () => newChat(),
+    composer: () => { const f = focused(); return f?.app === 'chats' ? winEl(f.id)?.querySelector('.pane-main .ch-compose .ch-field') || null : null; },
+    pane: () => { const f = focused(); return f?.app === 'chats' ? winEl(f.id)?.querySelector('.pane-main') || null : null; } });
   C.deeplink.handle({
     thread: sid => openThread(sid),
     view(v, section) {
+      if (v === 'tour' && window.WosTour?.desk) { closeSettings(); toggleKeys(false); return window.WosTour.desk.start('link'); }
+      if (v === 'help') { closeSettings(); return toggleKeys(true); }
       if (v === 'home') return goHome();
       if (v === 'inbox') return openInbox();
       if (v === 'apps') return openPicker();
@@ -1715,7 +1728,9 @@
   C.deeplink.consume();
   window.WosScenery?.attach({ device: document.body, homeInView: () => (homeOpen || !ws[cur].wins.length) && setEl.hidden && pal.hidden && keysEl.hidden && ib.hidden && usageEl.hidden && !window.WosResources?.state?.panel });
   new MutationObserver(() => window.WosScenery?.update()).observe(stage, { attributes: true, subtree: true, attributeFilter: ['class', 'hidden'] });
-  window.WosSetupLaunch?.boot({ open: id => { const a = APP[id]; if (a) openApp(a); } }); // Setup opens itself on first run
+  window.WosSetupLaunch?.boot({ open: id => { const a = APP[id]; if (a) openApp(a); }, alongsideOnly: true,
+    firstRunTour: !!DESK_TOUR && !window.WosTour.done(), tour: why => DESK_TOUR?.start(why), markTour: () => window.WosTour?.mark(),
+    busy: () => VOICE.state !== 'idle' || !setEl.hidden || !pal.hidden || [...document.querySelectorAll('.ch-compose textarea')].some(t => t.value.trim()) }); // Setup opens itself on first run
   C.status?.attach({ openInbox, inboxOpen: () => !ib.hidden, current: () => { const f = focused(); return f?.app === 'chats' && f.thread !== '__new__' ? f.thread || '' : ''; } });
   const f0 = focused(); if (f0) setTimeout(() => focusInside(f0.id), 50);
 
