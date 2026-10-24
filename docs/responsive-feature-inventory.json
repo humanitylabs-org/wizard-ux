@@ -46,6 +46,11 @@
       "classification": "native",
       "reason": "WizardAndroidRelay required; Android-only transport."
     },
+    "core/device-port.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "wizardDevicePort v1 client for the Wizard Shell's optional Android capabilities; absent port means no-op."
+    },
     "core/device-recording.js": {
       "shell": "phone",
       "classification": "native",
@@ -407,6 +412,12 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/device-port.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "wizardDevicePort v1 request/reply client shared by core/device-*.js."
     },
     "core/device-recording.js": {
       "loadedBy": [

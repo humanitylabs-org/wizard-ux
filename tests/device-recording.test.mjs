@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
 
+const portSrc = readFileSync(new URL('../web/core/device-port.js', import.meta.url), 'utf8');
 const src = readFileSync(new URL('../web/core/device-recording.js', import.meta.url), 'utf8');
 const tick = () => new Promise(r => setTimeout(r, 0));
 const settle = async (n = 20) => { for (let i = 0; i < n; i++) await tick(); };
@@ -44,6 +45,7 @@ function harness({ port = true, caps = ['status', 'level', 'start', 'pause', 'st
   };
   const ctx = { window, document: { readyState: 'complete', hidden: false, addEventListener() {} }, crypto: webcrypto, Blob, atob, setTimeout, clearTimeout, setInterval: () => 1, clearInterval() {}, queueMicrotask, console };
   vm.createContext(ctx);
+  vm.runInContext(portSrc, ctx);
   vm.runInContext(src, ctx);
   return { window, sent, takes, audio, outbox, toasts, seed: t => { takes.set(t.id, t); audio.set(t.id, t.data); }, get live() { return live; } };
 }
@@ -113,5 +115,6 @@ test('app.js reaches the shell recorder only through DEV() and keeps the full ap
   const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
   assert.match(app, /const DEV = \(\) => \{ const d = window\.WizardOSDevice; return d && typeof d\.recStart === 'function' \? d : window\.WosDeviceRecording\?\.device\(\) \|\| null; \};/);
   const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
+  assert.ok(html.indexOf('core/device-port.js') < html.indexOf('core/device-recording.js'));
   assert.ok(html.indexOf('core/device-recording.js') < html.indexOf('"app.js"'));
 });

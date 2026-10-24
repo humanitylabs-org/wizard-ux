@@ -14,30 +14,12 @@
   'use strict';
   if (window.WosDeviceRecording) return;
   const CAP = 'device.recording';
-  const port = () => window.wizardDevicePort;
-  const pending = new Map();
-  let seq = 0, ready = false, status = { id: null, state: 'idle', ms: 0, level: 0, kind: '', last: { id: '', state: '' } };
+  const call = (method, params, timeout) => window.WosDevicePort.call(method, params, timeout);
+  let ready = false, status = { id: null, state: 'idle', ms: 0, level: 0, kind: '', last: { id: '', state: '' } };
   let pendingList = [], polling = 0, lastSeenEnd = '';
   const inflight = new Set(); // takes app.js is finishing: the recovery sweep leaves them alone
   const fetched = new Map();  // id → {meta, blob} read for app.js, until the outbox has it (recDone)
   let starting = '';
-
-  function call(method, params = {}, timeout = 150000) {
-    const p = port(); if (!p) return Promise.reject(new Error('no device port'));
-    const id = 'rec-' + (++seq) + '-' + Date.now().toString(36);
-    return new Promise((resolve, reject) => {
-      const t = setTimeout(() => { pending.delete(id); reject(new Error('Device did not answer')); }, timeout);
-      pending.set(id, { resolve, reject, t });
-      try { p.postMessage(JSON.stringify({ v: 1, id, method, params })); }
-      catch (e) { clearTimeout(t); pending.delete(id); reject(e); }
-    });
-  }
-  function onReply(ev) {
-    let m; try { m = JSON.parse(typeof ev === 'string' ? ev : ev?.data); } catch (_) { return; }
-    const w = m && pending.get(m.id); if (!w || m.v !== 1) return;
-    pending.delete(m.id); clearTimeout(w.t);
-    if (m.ok) w.resolve(m.result); else w.reject(new Error(String(m.error || 'Device error')));
-  }
 
   const W$ = () => window.__wos;
   const toast = (i, t, ms) => W$()?.toast?.(i, t, ms);
@@ -153,13 +135,9 @@
   };
 
   async function discover() {
-    const p = port(); if (!p || window.WizardOSDevice) return;
-    if (typeof p.addEventListener === 'function') p.addEventListener('message', onReply); else p.onmessage = onReply;
-    try {
-      const caps = await call('device.capabilities', {}, 8000);
-      const c = caps?.capabilities?.[CAP];
-      if (!c || c.v !== 1 || !['start', 'stop', 'read', 'ack', 'pending', 'status'].every(m => c.methods?.includes(CAP + '.' + m))) return;
-    } catch (_) { return; }
+    if (!window.WosDevicePort?.present || window.WizardOSDevice) return;
+    const c = await window.WosDevicePort.capability(CAP, 1);
+    if (!c || !['start', 'stop', 'read', 'ack', 'pending', 'status'].every(m => c.methods?.includes(CAP + '.' + m))) return;
     ready = true;
     await refresh();
     // Reopened while a take kept going (page reloaded, app restored): the orb picks it back up.
