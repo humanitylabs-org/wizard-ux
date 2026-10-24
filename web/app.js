@@ -1134,8 +1134,11 @@
     return true;
   }
   window.WizOpenAgentChats = openAgentChats;
+  window.WosAppSetup?.init({ getApp: id => APP[id] });
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
+    if (a.kind === 'wizard' && a.url && !opts.setupChecked && window.WosAppSetup)
+      return window.WosAppSetup.gate(a, () => openApp(a, extra, { ...opts, setupChecked: true }));
     if (a.id === 'side-button') { closeSheets(true); if (idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
     if (a.kind === 'view') {
       if (a.view === 'inbox') { openSheet('inbox'); return true; }
@@ -3585,6 +3588,7 @@
     { const t = window.WosTour?.back(); if (t) { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } return t; } } // the first-run tour and the Help sheet sit above everything
     { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
     if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet sits above the windows
+    if (window.WosAppSetup?.back()) return 'app-setup';
     if (window.WosBoomerang?.back()) return 'boomerang'; // the Boomerang picker sits above the thread it was opened from
     // Explicit bypass capture follows the retain-on-Back contract; ordinary recordings keep navigating.
     if (V.snap?.general && ['listen', 'command'].includes(V.state)) { V.stopAsked = true; pauseCommandCapture(); return 'recording'; }

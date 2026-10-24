@@ -1,0 +1,28 @@
+/* Checklist layout only. Palette follows the Wizard Appearance roles. */
+.was-overlay{--wz-base:var(--bg);--wz-text:var(--ink);--wz-text-secondary:var(--ink-2);--wz-border:var(--line-2);--wz-accent:var(--violet-2);--wz-surface:var(--sk-win);position:fixed;inset:0;z-index:9000;overflow:auto;background:var(--wz-base);color:var(--wz-text);padding:calc(20px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom));font:inherit}
+.was-card{max-width:580px;margin:0 auto;outline:none}
+.was-head{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.was-head h2{font-size:1.35rem;line-height:1.3;margin:0;outline:none}
+.was-checklist .mc-row{padding:18px 0;border-bottom:1px solid var(--wz-border);overflow-wrap:anywhere}
+.was-checklist .mc-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.was-checklist .mc-state{color:var(--wz-text-secondary);font-size:.8rem;white-space:nowrap}
+.was-checklist .mc-state.ready{color:var(--wz-accent)}
+.was-checklist .mc-line,.was-checklist .mc-warn,.was-overlay .mc-line,.was-overlay .mc-lede{color:var(--wz-text-secondary);font-size:.9rem;line-height:1.5;margin:8px 0}
+.was-checklist .mc-acts,.was-overlay .mc-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.was-checklist .mc-btn,.was-overlay .mc-btn{font:inherit;font-size:.88rem;line-height:1.3;min-height:44px;max-width:100%;border:1px solid var(--wz-border);border-radius:var(--wz-radius,12px);padding:10px 14px;background:var(--wz-accent);color:var(--wz-base);cursor:pointer;white-space:normal}
+.was-checklist .mc-btn.alt,.was-overlay .mc-btn.alt{background:var(--wz-surface);color:var(--wz-text)}
+.was-checklist .mc-btn:disabled,.was-overlay .mc-btn:disabled{opacity:.55;cursor:wait}
+.was-checklist .mc-btn:focus-visible,.was-overlay .mc-btn:focus-visible{outline:2px solid var(--wz-accent);outline-offset:3px}
+.was-alternatives{display:flex;flex-direction:column;align-items:stretch;gap:8px;margin-top:12px;padding:12px;border:1px solid var(--wz-border);border-radius:var(--wz-radius,12px)}
+.was-note:empty{display:none}
+.was-overlay footer{margin-top:24px}
+.was-overlay [data-was-agents]{margin-top:18px}
+.was-overlay .linksheet{position:fixed;inset:0;z-index:1}
+.was-overlay .ls-panel{background:var(--wz-base);color:var(--wz-text);border-color:var(--wz-border)}
+.was-overlay .ls-bar{border-color:var(--wz-border)}
+.was-overlay .ls-bar button{color:var(--wz-text);min-height:44px;min-width:44px}
+.was-overlay .ls-title small{color:var(--wz-text-secondary)}
+.was-overlay .ls-grip{background:var(--wz-border)}
+.was-overlay .ls-frame{background:var(--wz-base)}
+.was-overlay .ls-scrim{background:color-mix(in srgb,var(--wz-base) 70%,transparent)}
+.was-overlay .linksheet .ls-keep,.was-overlay .linksheet .ls-full{display:none}

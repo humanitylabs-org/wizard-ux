@@ -51,6 +51,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Settings entry in both shells | `WosSettings.register` (`web/core/settings.js`); mounted `focus(id)` routes aliases, with false/empty ids opening the root safely; actions/views `WosFeatures` (`web/core/features.js`) | per-feature settings page, shell-only branch |
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`web/core/agents.js`) | hard-coded agent names or colours |
 | App routing to an agent, incl. the private-app note and Set up private agent (also from the Store install sheet) | `WosAppRoute` (`web/core/app-route.js`) | — |
+| Per-app Connection Router checklist, install follow-through, required-needs open gate | `WosAppSetup` (`web/core/app-setup.js`, `web/core/app-setup.css`); REUSE `routerNeeds`/`routerApprove` and EXTEND `serviceRow` in `web/store/store-router.js`, Store transaction `installRelease` (`web/store/store-install.js`), `WosAppRoute` for private agents, `WizLinks` for connect pages | app-local setup gates or install clients |
 | App glyph tiles | `WizSigil` (`web/core/sigils.js`, `web/core/sigils.css`) | PNG/emoji icons |
 | Brand hat | `WizBrand` (`web/core/brand.js`) | redrawn logos |
 | Links: in-app sheet, image links, long-press Open in your browser / Download / Copy link | `WizLinks` (`web/core/links.js`; Android: `WizardOSNative.openInBrowser` / `download`) | `window.open`, own iframe sheet, own link menu |
