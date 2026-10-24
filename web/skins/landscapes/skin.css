@@ -64,7 +64,7 @@ html[data-skin="landscapes"] .new-desk .lapp .nm { color: var(--ink); font-size:
 html[data-skin="landscapes"] .new-desk .lapp .ic.sgt { background-color: #0f0c17; border-color: color-mix(in oklab, var(--c) 55%, rgba(255, 255, 255, .14)); }
 
 /* App kinds on New desk (Apps · Wizard apps · Connectors): the panel stops above the pill dock and scrolls inside. */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .new-desk.kinds { height: calc(100% - 20px); max-height: none; overflow-y: auto; padding-bottom: 6px; } /* the desk already stops above the pill dock: fill all of it */
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .new-desk.kinds { height: calc(100% - 20px); max-height: none; overflow-y: auto; padding-bottom: 78px; } /* the desk already stops above the pill dock: fill all of it */
 
 html[data-skin="landscapes"] :is(.home .constellation .now-card, .rs-dialed) {
   background: linear-gradient(180deg, rgba(22, 20, 30, .74), rgba(12, 11, 18, .82)); border-color: rgba(255, 255, 255, .12);
