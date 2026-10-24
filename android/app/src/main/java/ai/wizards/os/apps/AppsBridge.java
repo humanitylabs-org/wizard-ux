@@ -48,6 +48,12 @@ public final class AppsBridge implements AppsInstaller.Listener {
     private final Activity activity;
     private final WebView web;
     private final LinkedHashSet<JavaScriptReplyProxy> frames = new LinkedHashSet<>();
+    // Fingerprint vault is a separate adapter, never Wizard ID key custody.
+    private ai.wizards.os.vault.VaultBridge vault;
+    private long vaultDocument;
+    private boolean vaultDetached;
+    public void onVaultPageStarted() { vaultDocument++; if (vault != null) vault.cancel(); }
+
     private final ExecutorService bg = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
 
@@ -76,6 +82,8 @@ public final class AppsBridge implements AppsInstaller.Listener {
 
     public void detach() {
         if (AppsInstaller.listener == this) AppsInstaller.listener = null;
+        vaultDetached = true;
+        onVaultPageStarted();
         frames.clear();
         bg.shutdown();
     }
@@ -147,6 +155,14 @@ public final class AppsBridge implements AppsInstaller.Listener {
         } catch (JSONException e) {
             // No valid correlation envelope: do not echo untrusted values or exception details.
             deviceAnswer(reply, "", null, "invalid request");
+            return;
+        }
+        // Vault dispatch retains the existing main-frame/origin/path boundary above, plus document revocation.
+        if (ai.wizards.os.vault.VaultPolicy.method(request.method) != null) {
+            if (vault == null) vault = new ai.wizards.os.vault.VaultBridge(activity);
+            final long document = vaultDocument; final String origin = want;
+            vault.dispatch(request.method, request.params, (result, error) -> deviceAnswer(reply, request.id, result, error),
+                    () -> !vaultDetached && document == vaultDocument && origin.equals(AppState.origin(activity)) && shellOnTop());
             return;
         }
         if ("device.capabilities".equals(request.method)) {

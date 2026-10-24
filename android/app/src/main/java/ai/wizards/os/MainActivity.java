@@ -271,6 +271,7 @@ public class MainActivity extends Activity {
                 pageUrl = url;
                 screenCaptureId = null;
                 setKeepAwake(false);
+                if (apps != null) apps.onVaultPageStarted();
             }
 
             @Override
