@@ -25,7 +25,7 @@ public class DeviceBridgeE2eTest {
         c.getSharedPreferences("wizard_server", Context.MODE_PRIVATE).edit().clear().commit();
         try (Fixture fixture = new Fixture()) {
             c.startActivity(new Intent(c, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
-            assertNotNull(device.wait(Until.findObject(By.desc("Wizard address")), 15000));
+            assertNotNull("Connect screen's address field never appeared", waitPastSystemDialogs(device, By.desc("Wizard address"), 30000));
             device.findObject(By.desc("Wizard address")).setText(fixture.origin());
             device.findObject(By.text("Connect")).click();
             assertNotNull("Real WebView generic request/reply or legacy compatibility failed", device.wait(Until.findObject(By.text("Device bridge verified")), 30000));
@@ -33,6 +33,18 @@ public class DeviceBridgeE2eTest {
             device.findObject(By.text("Check wrong path")).click();
             assertNotNull("Top-level non-shell path reached native", device.wait(Until.findObject(By.text("Wrong path refused")), 15000));
         }
+    }
+
+    /** CI emulators raise "Pixel Launcher isn't responding" over the app; tap Wait and keep looking. */
+    private static androidx.test.uiautomator.UiObject2 waitPastSystemDialogs(UiDevice device, androidx.test.uiautomator.BySelector target, long ms) {
+        long end = System.currentTimeMillis() + ms;
+        while (System.currentTimeMillis() < end) {
+            androidx.test.uiautomator.UiObject2 hit = device.wait(Until.findObject(target), 1500);
+            if (hit != null) return hit;
+            androidx.test.uiautomator.UiObject2 wait = device.findObject(By.res("android:id/aerr_wait"));
+            if (wait != null) wait.click();
+        }
+        return null;
     }
 
     private static final class Fixture implements AutoCloseable {
