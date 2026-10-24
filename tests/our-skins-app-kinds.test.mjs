@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
 const css = f => readFileSync(new URL(`../web/skins/${f}/skin.css`, import.meta.url), 'utf8');
 const mine = readFileSync(new URL('../web/mine/mine.css', import.meta.url), 'utf8');
+const kinds = readFileSync(new URL('../web/core/app-kinds.js', import.meta.url), 'utf8');
 
 test('app kinds are gated on the release layer, not a skin', () => {
   assert.match(app, /const myRelease = \(\) => document\.documentElement\.dataset\.mine != null;/);
@@ -16,8 +17,10 @@ test('app kinds are gated on the release layer, not a skin', () => {
   assert.match(app, /<h4>Recent<\/h4>/);
 });
 test('system apps lead each group', () => {
-  assert.match(app, /'setup'/);
-  assert.match(app, /const byName = \(x, y\) => \(isSystem\(y\) - isSystem\(x\)\) \|\| x\.name\.localeCompare/);
+  assert.match(kinds, /'setup'/);
+  assert.match(kinds, /const byName = \(x, y\) => \(isSystem\(y\) - isSystem\(x\)\) \|\| x\.name\.localeCompare/);
+  // Both shells read the one list (phone launcher, New desk, desktop selector).
+  assert.match(app, /window\.WosAppKinds/); assert.match(readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8'), /window\.WosAppKinds/);
 });
 test('kind styles: the release layer carries the layout, Miguel\'s packages only their purple system ring', () => {
   for (const f of ['obsidian', 'landscapes']) { assert.match(css(f), /\.lapp\.lapp-sys \.ic \{ border: 2\.5px solid #8f63ff/); assert.doesNotMatch(css(f), /\.lclose|sysbox|forag/); }
@@ -27,4 +30,11 @@ test('kind styles: the release layer carries the layout, Miguel\'s packages only
   const base = readFileSync(new URL('../web/styles.css', import.meta.url), 'utf8');
   assert.match(base, /:is\(\.launcher, \.new-desk\) \.lapp\.lapp-sys \.ic \{ border: 2\.5px solid var\(--violet-2/);
   assert.match(base, /:is\(\.launcher, \.new-desk\) \.forag:not\(\.open\) \.fa-body \{ display: none/);
+});
+
+test('every kind ends in a "+ Get" tile for its App Store section; Agents also has Build agents', () => {
+  assert.match(kinds, /apps: \['apps', 'Get apps'\], wiz: \['agent-apps', 'Get agent apps'\], agents: \['agents', 'Get agents'\], conns: \['connections', 'Get connectors'\]/);
+  assert.match(kinds, /wiz: 'Agent apps'/);
+  assert.match(app, /'Build agents'/);
+  assert.match(readFileSync(new URL('../web/store/store.js', import.meta.url), 'utf8'), /get\('kind'\)/);
 });

@@ -121,6 +121,7 @@
     "/wizard-os-home/apple-touch-icon.png",
     "core/agents.js",
     "core/app-capture.js",
+    "core/app-kinds.js",
     "core/app-reading-position.js",
     "core/app-route.css",
     "core/app-route.js",
@@ -229,12 +230,6 @@
       ],
       "note": "Direct entrypoint import"
     },
-    "core/background-audio.js": {
-      "loadedBy": [
-        "phone"
-      ],
-      "note": "Android-only background playback transport; no separate common Music renderer."
-    },
     "core/app-capture.js": {
       "loadedBy": [
         "phone",
@@ -242,15 +237,16 @@
       ],
       "note": "Direct entrypoint import"
     },
-    "core/orb-handoff.js": {
-      "loadedBy": [
-        "phone"
-      ],
-      "note": "Phone orb meeting-loan coordinator; desktop admission not yet claimed."
-    },
     "core/app-client.js": {
       "loadedBy": [],
       "note": "Support/client/export module; not directly mounted by either shell"
+    },
+    "core/app-kinds.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
     },
     "core/app-reading-position.js": {
       "loadedBy": [
@@ -294,6 +290,19 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/background-audio.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Android-only background playback transport; no separate common Music renderer."
+    },
+    "core/bound-view.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
     "core/brand.js": {
       "loadedBy": [
         "phone",
@@ -315,6 +324,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/capture-tools.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
     "core/chat-errors.js": {
       "loadedBy": [
         "phone",
@@ -329,19 +345,19 @@
       ],
       "note": "Direct entrypoint import"
     },
-    "core/chat-pins.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Pinned chats, synced per owner through ui-preferences pinnedChats"
-    },
     "core/chat-models.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/chat-pins.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Pinned chats, synced per owner through ui-preferences pinnedChats"
     },
     "core/chat-power.js": {
       "loadedBy": [
@@ -383,10 +399,20 @@
       "note": "Dev-only Chats slot module, dynamically loaded only with explicit fixture opt-in"
     },
     "core/chats-view.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Versioned in-document Chats provider admission and lifecycle"
     },
     "core/chats.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/commands.js": {
       "loadedBy": [
         "phone",
         "desktop"
@@ -421,6 +447,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/features.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
     "core/files.js": {
       "loadedBy": [
         "phone",
@@ -435,6 +468,18 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/home-screen-apps.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Long-press Add to home screen sheet; Android ShortcutManager bridge"
+    },
+    "core/home-screen-policy.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Android pinned app-only task policy (home-screen shortcut sessions)"
+    },
     "core/links.js": {
       "loadedBy": [
         "phone",
@@ -447,18 +492,34 @@
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import; Settings → Microphone shows only where WizardOSDevice.micPolicy exists"
+      "note": "Direct entrypoint import; Settings \u2192 Microphone shows only where WizardOSDevice.micPolicy exists"
     },
-    "core/scheduled-reminders.js": {
+    "core/music-voice.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
-      "note": "Boomerang picker and return banner on the shared scheduler (kind return)"
+      "note": "Direct entrypoint import"
     },
-    "core/schedules.js": {
-      "loadedBy": ["phone", "desktop"],
-      "note": "Shared Settings → Schedules; hidden when Agent Service schedules returns 404"
+    "core/my-skin.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "My skin: the owner's own CSS (Skins/My skin.css in Files, served by the Agent Service at /wizard/v1/my-skin) applied last, on top of the picked skin"
+    },
+    "core/notif-bell.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/orb-handoff.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Phone orb meeting-loan coordinator; desktop admission not yet claimed."
     },
     "core/os-updates.js": {
       "loadedBy": [
@@ -468,7 +529,10 @@
       "note": "Direct entrypoint import; Settings \u2192 Updates shows only where the App Manager answers store-install/_updates"
     },
     "core/own-views.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Shared own-screen fallback and shell-only Settings confirmation; same App Manager owner listener as Updates"
     },
     "core/photos-settings.js": {
@@ -476,9 +540,9 @@
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import after settings.js; Settings › Photos backup shows only where the Android app's window.wizardPhotosPort exists"
+      "note": "Direct entrypoint import after settings.js; Settings \u203a Photos backup shows only where the Android app's window.wizardPhotosPort exists"
     },
-    "core/music-voice.js": {
+    "core/reach.js": {
       "loadedBy": [
         "phone",
         "desktop"
@@ -498,6 +562,20 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/scheduled-reminders.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Boomerang picker and return banner on the shared scheduler (kind return)"
+    },
+    "core/schedules.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared Settings \u2192 Schedules; hidden when Agent Service schedules returns 404"
     },
     "core/screen-capture.js": {
       "loadedBy": [
@@ -520,34 +598,6 @@
       ],
       "note": "Direct entrypoint import"
     },
-    "core/skin-frame.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Shared validated skin frame foundations, loaded before skin composition"
-    },
-    "core/swipe-intent.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Swipe-back intent thresholds, imported by core/thread-swipe-back.js"
-    },
-    "core/thread-swipe-back.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Skin host built-in: swipe right in a chat thread goes back one step on every skin (touch only)"
-    },
-    "core/skin-host.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Skin packages: loads only the active skin's own folder (web/skins/<dir>/) and gives its script a small API; desktop gets stylesheets"
-    },
     "core/settings.js": {
       "loadedBy": [
         "phone",
@@ -556,7 +606,10 @@
       "note": "Direct entrypoint import"
     },
     "core/setup-launch.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Shared first-run Setup admission; adapters supply only open/home callbacks."
     },
     "core/shell.js": {
@@ -573,6 +626,26 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/single-app-session.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Pinned home-screen app task: one app full screen with its own Back history"
+    },
+    "core/skin-frame.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared validated skin frame foundations, loaded before skin composition"
+    },
+    "core/skin-host.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin packages: loads only the active skin's own folder (web/skins/<dir>/) and gives its script a small API; desktop gets stylesheets"
+    },
     "core/skins.js": {
       "loadedBy": [
         "phone",
@@ -587,12 +660,19 @@
       ],
       "note": "Direct entrypoint import"
     },
-    "core/reach.js": {
+    "core/swipe-intent.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import"
+      "note": "Swipe-back intent thresholds, imported by core/thread-swipe-back.js"
+    },
+    "core/thread-swipe-back.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin host built-in: swipe right in a chat thread goes back one step on every skin (touch only)"
     },
     "core/tour.js": {
       "loadedBy": [
@@ -615,6 +695,13 @@
       "note": "Direct entrypoint import"
     },
     "core/video-desks.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/views.js": {
       "loadedBy": [
         "phone",
         "desktop"
@@ -654,73 +741,6 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
-    },
-    "core/bound-view.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Direct entrypoint import"
-    },
-    "core/capture-tools.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Direct entrypoint import"
-    },
-    "core/commands.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Direct entrypoint import"
-    },
-    "core/features.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Direct entrypoint import"
-    },
-    "core/views.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Direct entrypoint import"
-    },
-    "core/notif-bell.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Direct entrypoint import"
-    },
-    "core/home-screen-policy.js": {
-      "loadedBy": [
-        "phone"
-      ],
-      "note": "Android pinned app-only task policy (home-screen shortcut sessions)"
-    },
-    "core/home-screen-apps.js": {
-      "loadedBy": [
-        "phone"
-      ],
-      "note": "Long-press Add to home screen sheet; Android ShortcutManager bridge"
-    },
-    "core/single-app-session.js": {
-      "loadedBy": [
-        "phone"
-      ],
-      "note": "Pinned home-screen app task: one app full screen with its own Back history"
-    },
-    "core/my-skin.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "My skin: the owner's own CSS (Skins/My skin.css in Files, served by the Agent Service at /wizard/v1/my-skin) applied last, on top of the picked skin"
     }
   }
 }

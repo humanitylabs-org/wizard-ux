@@ -661,7 +661,30 @@
   }
 
   /* ---------------- home (root / empty workspace) ---------------- */
+  /* My release: the desktop Home is the phone Home at desktop size (Miguel, 24 Oct 2026): resource dials on top, Ready
+   * and Working as the same dot counters, Settings as a bare gear. No clock, thread lists, app chips or key hints. */
+  function mineHomeDots(kind, n) {
+    const icon = kind === 'ready' ? '<path d="M5 12.5l4.5 4.5L19 7"/>' : '<path d="M12 3a9 9 0 1 0 9 9"/>';
+    const shown = Math.min(n, 12), dots = Array.from({ length: shown }, (_, k) => `<i style="--n:${k}"></i>`).join('');
+    return `<span class="nc-vis${n ? '' : ' nc-zero'}" aria-hidden="true"><svg class="nc-ic" viewBox="0 0 24 24">${icon}</svg>${dots}${n > shown ? '<em>+</em>' : ''}</span>`;
+  }
+  function mineHomeHtml() {
+    const G = LIVE?.ok ? LIVE.workGroups() : {}, ready = (G.ready || []).length, working = (G.working || []).length;
+    const pending = OUTBOX?.unsent() || [];
+    return `<div class="home-in mine-home">
+      <nav class="home-tools" aria-label="Settings"><button class="mh-gear" data-home-settings aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>${pending.length ? `<span class="gear-n">${pending.length}</span>` : ''}</button></nav>
+      <div class="mh-res">${window.WosResources?.home() || ''}</div>
+      <div class="mh-gap"></div>
+      ${LIVE?.ok ? '' : '<div class="home-line">Connecting to Wizard…</div>'}
+      <div class="constellation">
+        <button class="now-card wz-home-widget" style="--c:var(--green)" data-home-act="ready" aria-label="Ready ${ready}"><span class="meta"><span class="k">Ready</span></span><span class="n">${ready}</span>${mineHomeDots('ready', ready)}</button>
+        <button class="now-card wz-home-widget" style="--c:var(--violet-2)" data-home-act="working" aria-label="Working ${working}"><span class="meta"><span class="k">Working</span></span><span class="n">${working}</span>${mineHomeDots('working', working)}</button>
+      </div>
+      ${pending.length ? `<button class="home-unsent" data-home-unsent>${pending.length} ${pending.some(u => u.state === 'failed') ? 'not sent' : 'waiting to send'} · View unsent messages</button>` : ''}
+    </div>`;
+  }
   function homeHtml(i) {
+    if (document.documentElement.dataset.mine != null) return mineHomeHtml();
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
     const pending = OUTBOX?.unsent() || [];
     const working = LIVE?.ok ? LIVE.workGroups().working || [] : [];
@@ -682,6 +705,8 @@
   stage.addEventListener('click', e => {
     if (e.target.closest('[data-home-settings]')) return openSettings();
     if (e.target.closest('[data-home-unsent]')) return openInbox();
+    const ha = e.target.closest('.home [data-home-act]')?.dataset.homeAct;
+    if (ha) { openApp(APP.wizard); const w = ws[cur].wins.map(id => W[id]).find(x => x?.app === 'chats' && !x.agent); if (w) { if (ha === 'working') CHATS.setFilter(w, 'working'); else CHATS.clearFilter?.(w); } return; }
     const hr = e.target.closest('.home [data-thread]'); if (hr) return openThread(hr.dataset.thread);
     const ap = e.target.closest('.home [data-app]'); if (ap) return openApp(APP[ap.dataset.app]);
   });
@@ -831,22 +856,45 @@
     const list = norm(q) ? searchApps(q) : APPS.slice().sort((a, b) => pickRank(a) - pickRank(b) || SYS_APPS.indexOf(a.id) - SYS_APPS.indexOf(b.id));
     return list.filter(a => a.kind !== 'native' && a.id !== 'agents' && !C.isMaintenanceApp(a)).map(a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, run: o => openApp(a, o) }));
   }
-  /* My release (html[data-mine]): the selector sorts apps by what they are, like the phone launcher and the App Store:
-   * Apps (a screen you use), Agents (agent chats), Connectors (sign-ins to another service). Search stays one flat list. */
+  /* My release (html[data-mine]): the selector is the phone launcher at desktop size (core/app-kinds.js): Apps with
+   * system apps first and ringed, "+ Get apps", then one folded "For agents" row holding Agent apps, Agents (with
+   * "+ Build agents") and Connectors, each ending in its own "+ Get ..." tile. Search stays one flat list. */
   const mine = () => document.documentElement.dataset.mine != null;
-  const CONNECTOR_IDS = new Set(['wizard-chatgpt', 'wizard-claude', 'wizard-tinfoil', 'wizard-cloudflare']);
-  const isConnector = a => CONNECTOR_IDS.has(a.id) || /^(connect|sign in to)\b/i.test(a.desc || '');
-  function pickGroups(items) {
-    const g = { Apps: [], Agents: [], Connectors: [] };
-    for (const it of items) (it.app.kind === 'chats' ? g.Agents : isConnector(it.app) ? g.Connectors : g.Apps).push(it);
-    return Object.entries(g).filter(([, v]) => v.length);
+  let palFold = false;
+  function openStoreKind(kind) {
+    const url = window.WosAppKinds.storeUrl(kind);
+    const ex = findWin(w => w.app === 'frame' && w.appId === 'app-store');
+    if (ex) { ex.url = url; const f = winEl(ex.id)?.querySelector('iframe'); if (f) f.src = url; focusWin(ex.id); save(); return; }
+    newWin({ app: 'frame', appId: 'app-store', url });
+  }
+  function pickKinds() {
+    const AK = window.WosAppKinds, K = AK.kinds(APPS, APP), out = [];
+    const app = a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, sys: AK.isSystem(a), run: o => a.url || a.kind !== 'wizard' ? openApp(a, o) : window.WosAppRoute?.open(a.id, { name: a.name }) });
+    const get = k => ({ kind: 'app', get: true, name: AK.GET[k][1], run: () => openStoreKind(AK.GET[k][0]) });
+    const group = (k, list, extra = []) => out.push({ head: AK.LABELS[k], items: [...AK.sysFirst(list).map(app), ...extra, get(k)] });
+    group('apps', K.apps);
+    const n = K.wiz.length + K.agents.length + K.conns.length;
+    out.push({ fold: true, n });
+    if (palFold) {
+      group('wiz', K.wiz);
+      group('agents', K.agents, K.builder ? [{ kind: 'app', get: true, name: 'Build agents', run: o => openApp(K.builder, o) }] : []);
+      group('conns', K.conns);
+    }
+    return out;
   }
   function pickRender() {
     palItems = pickBuild(palIn.value); palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
-    if (mine() && !norm(palIn.value)) {
-      const groups = pickGroups(palItems); palItems = groups.flatMap(([, v]) => v); let k = 0;
-      const tileHtml = it => { const i = k++; return `<button type="button" class="pal-app${i === palSel ? ' sel' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-selected="${i === palSel}" title="${esc(it.sub ? `${it.name} · ${it.sub}` : it.name)}">${ico('span', 'ic', it.app)}<span class="nm">${esc(it.name)}</span></button>`; };
-      palList.innerHTML = groups.map(([name, v]) => `<div class="pal-grp pal-kind" role="presentation">${esc(name)}</div>` + v.map(tileHtml).join('')).join('');
+    if (mine() && !norm(palIn.value) && window.WosAppKinds) {
+      const blocks = pickKinds(); palItems = []; const html = [];
+      const tile = it => { const i = palItems.push(it) - 1;
+        const ic = it.get ? '<span class="ic pal-plus">+</span>' : ico('span', 'ic', it.app);
+        return `<button type="button" class="pal-app${it.sys ? ' pal-sys' : ''}${it.get ? ' pal-get' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-selected="false" title="${esc(it.sub ? `${it.name} · ${it.sub}` : it.name)}">${ic}<span class="nm">${esc(it.name)}</span></button>`; };
+      for (const b of blocks) {
+        if (b.fold) { const i = palItems.push({ kind: 'fold', name: 'For agents', run: () => { palFold = !palFold; pickRender(); palIn.focus(); } }) - 1;
+          html.push(`<button type="button" class="pal-fold${palFold ? ' open' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-expanded="${palFold}"><span>For agents</span><small>${b.n}</small><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>`); continue; }
+        html.push(`<div class="pal-grp pal-kind" role="presentation">${esc(b.head)}</div>` + b.items.map(tile).join(''));
+      }
+      palList.innerHTML = html.join(''); palSel = Math.min(palSel, palItems.length - 1);
       return palMark(palSel);
     }
     palList.innerHTML = palItems.map((it, i) => `<button type="button" class="pal-app${i === palSel ? ' sel' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-selected="${i === palSel}" title="${esc(it.sub ? `${it.name} · ${it.sub}` : it.name)}">${ico('span', 'ic', it.app)}<span class="nm">${esc(it.name)}</span></button>`).join('')
@@ -863,7 +911,7 @@
   // Grid arrows are spatial: ←/→ step one tile, ↑/↓ one row; ↓ from a row above a short last row lands on its last tile.
   function pickMove(key) {
     const n = palItems.length; if (!n) return;
-    if (palList.querySelector('.pal-kind')) {   // grouped: rows differ in length, so move by position on screen
+    if (palList.querySelector('.pal-kind, .pal-fold')) {   // grouped: rows differ in length, so move by position on screen
       const tiles = [...palList.querySelectorAll('[data-i]')], cur = tiles[palSel];
       if (key === 'ArrowRight') return palMark(Math.min(n - 1, palSel + 1));
       if (key === 'ArrowLeft') return palMark(Math.max(0, palSel - 1));
@@ -917,6 +965,7 @@
   }
   function palRun(i, o = {}) {
     const it = palItems[i]; if (!it) return;
+    if (it.kind === 'fold') return it.run();
     // An app takes focus where it opens; anything else returns focus first, then runs (it may open its own layer).
     if (it.kind === 'app') { closePalette({ restore: false }); it.run(o); restFocus(); return; }
     closePalette(); it.run(o);
