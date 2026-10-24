@@ -177,6 +177,8 @@
     "core/setup-launch.js",
     "core/share-sheet.css",
     "core/share-sheet.js",
+    "core/share-wizard.css",
+    "core/share-wizard.js",
     "core/shell.js",
     "core/sigils.css",
     "core/sigils.js",
@@ -740,6 +742,13 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/share-wizard.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Extracted native/app internal share sheet"
     }
   }
 }
