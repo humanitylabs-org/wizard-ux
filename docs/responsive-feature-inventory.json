@@ -111,6 +111,7 @@
     "/wizard-os-home/apple-touch-icon.png",
     "core/agents.js",
     "core/app-capture.js",
+    "core/app-kinds.js",
     "core/app-reading-position.js",
     "core/app-route.css",
     "core/app-route.js",
@@ -173,6 +174,8 @@
     "core/settings.css",
     "core/settings.js",
     "core/setup-launch.js",
+    "core/share-sheet.css",
+    "core/share-sheet.js",
     "core/shell.js",
     "core/sigils.css",
     "core/sigils.js",
@@ -517,6 +520,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/share-sheet.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
     "core/skin-frame.js": {
       "loadedBy": [
         "phone",
@@ -715,6 +725,13 @@
         "desktop"
       ],
       "note": "My skin: the owner's own CSS (Skins/My skin.css in Files, served by the Agent Service at /wizard/v1/my-skin) applied last, on top of the picked skin"
+    },
+    "core/app-kinds.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
     }
   }
 }
