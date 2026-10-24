@@ -193,6 +193,8 @@ function seedMain() {
   const t = now();
   addSession('hermes', 'wizard_fixture_main_1', 'Wizard OS · Agents MVP plan', [{ role: 'user', content: 'Plan the agents MVP', timestamp: t - 7200 }, { role: 'assistant', content: 'Here is the plan: Agents app, per-agent chats, Private agent on Tinfoil.', timestamp: t - 7100 }]);
   addSession('hermes', 'wizard_fixture_main_2', 'Groceries for the week', [{ role: 'user', content: 'What should I buy?', timestamp: t - 3600 }, { role: 'assistant', content: 'Eggs, rice, greens and coffee.', timestamp: t - 3500 }]);
+  const archived = addSession('hermes', 'wizard_fixture_archived_main', 'Archived main fixture', [{ role: 'user', content: 'Finished main work', timestamp: t - 3400 }, { role: 'assistant', content: 'Done.', timestamp: t - 3300 }]);
+  archived.status = 'running'; archived.archived = true;
 }
 function seedPrivate() {
   const [, j] = createAgent({ label: 'Private', harness: 'hermes', model: { provider: 'tinfoil', model: 'glm-5-3' }, permissions: { preset: 'private' }, appearance: { glyph: 'lock', hue: 160 } });
@@ -201,6 +203,8 @@ function seedPrivate() {
   a.model.allowed_models = ['glm-5-3', 'deepseek-v4-1-flash'];
   const t = now();
   addSession(a.id, 'wizard_fixture_private_1', 'Recording recap · Team call', [{ role: 'user', content: 'Recap of today’s recording', timestamp: t - 1800 }, { role: 'assistant', content: 'Recap kept in the Private agent. Nothing left this agent.', timestamp: t - 1750 }]);
+  const archived = addSession(a.id, 'wizard_fixture_archived_private', 'Archived routed fixture', [{ role: 'user', content: 'Finished routed work', timestamp: t - 1700 }, { role: 'assistant', content: 'Done.', timestamp: t - 1650 }]);
+  archived.status = 'running'; archived.archived = true;
   // A Mizel-style app delivery (assistant-only recap), newer than every main thread: tops the unified Chats.
   addSession(a.id, 'wizard_app_mizel_fixture1', 'Mizel recap · Fixture standup', [{ role: 'assistant', content: 'Fixture recap: three decisions, two follow-ups.', timestamp: t - 60 }]);
 }

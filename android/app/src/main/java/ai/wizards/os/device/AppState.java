@@ -17,6 +17,12 @@ public final class AppState {
 
     /** Wizard OS is on screen (MainActivity started). Reply notifications only fire while it is not. */
     public static synchronized boolean front() { return !visible.isEmpty(); }
+    /** The Wizard OS shell itself is on screen. A home-screen app (AppSessionActivity) is a standalone app window with no
+     *  orb of its own, so the floating Archimedes orb stays over it (James, 24 Oct). */
+    public static synchronized boolean shellFront() {
+        for (Object o : visible) if (!(o instanceof ai.wizards.os.AppSessionActivity)) return true;
+        return false;
+    }
     public static synchronized void setFront(Object owner, boolean on) { if (on) visible.add(owner); else visible.remove(owner); }
 
     /**

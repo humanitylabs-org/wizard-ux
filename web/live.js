@@ -327,11 +327,11 @@
     for (const s of sessions) {
       if (s.hidden) continue;
       const t = sectionTime(s);
-      if (needsApproval(s)) g.ready.push(s);
+      if (s.archived) g.archive.push(s);
+      else if (needsApproval(s)) g.ready.push(s);
       else if (inWorking(s)) g.working.push(s);
       else if (isDeferred(s)) g.deferred.push(s);
       else if (isErr(s)) g.errors.push(s);
-      else if (s.archived) g.archive.push(s);
       else if (isFinite(t) && t <= archB) g.archive.push(s);
       else if (chatLayout() === 'status') g.ready.push(s); // By status: everything not yet archived is Ready
       else if (!isFinite(t) || t < yB) g.pastWeek.push(s);
@@ -1104,6 +1104,12 @@
   };
   const bgRead = id => { const e = INFLIGHT.get(id); return e ? e.p : startRead(id, false); };
   L.cachedMessages = id => (keepable(id) && TC.get(id)?.rows) || null;
+  // A thread the server answered 404 for is gone: drop its memory and IndexedDB copy so a reopen can't repaint it.
+  L.forgetMessages = async id => {
+    if (!id) return; TC.delete(id);
+    const db = await tcOpen(); if (!db) return;
+    try { db.transaction('t', 'readwrite').objectStore('t').delete(id); } catch (e) {}
+  };
   const saving = () => !!navigator.connection?.saveData;
   L.warm = id => {
     const s = L.session(id); if (!s || s.archived || s.optimistic || saving() || INFLIGHT.has(id) || !keepable(id)) return;
