@@ -817,7 +817,7 @@ window.WizCore.chats = function createChats(H) {
     if (spacePicker === p) closeSpacePicker();
     const w = W[p.wid]; if (!w) return;
     setFocus(w, { kind: 'space', key: space.id });
-    const it = await sendChat(w.id, `Fill my new Space “${name}” (id ${space.id}): find my existing threads that belong in it and add them with the wizard-spaces skill, then tell me how many you added and list a few. Search only your own agent’s threads (${p.agent}); do not change other Spaces.`, 'creating a Space in Chats', null, { sid: '__new__', away: true, seal: false, captureId: 'space-fill:' + space.id });
+    const it = await sendChat(w.id, `Fill my new Space “${name}” (id ${space.id}): find my existing threads that belong in it and add them with your Spaces tool, then tell me how many you added and list a few. Search only your own agent’s threads (${p.agent}); do not change other Spaces.`, 'creating a Space in Chats', null, { sid: '__new__', away: true, seal: false, captureId: 'space-fill:' + space.id });
     if (!it) toast('!', 'Space created; fill message wasn’t saved. Ask the agent to fill it from a new chat.', 5000);
   }
 
