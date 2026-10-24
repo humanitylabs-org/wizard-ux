@@ -4,7 +4,7 @@
   'use strict';
   if (window.WizAppServices) return;
   const VERSION = 1, ORIGIN = location.origin, frames = new Map();
-  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.receive', 'share.targets', 'share.pending', 'share.ack', 'voice.transcribe', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set', 'orb.set', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget']);
+  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.wizard', 'share.receive', 'share.targets', 'share.pending', 'share.ack', 'voice.transcribe', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set', 'orb.set', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget']);
 
   // Fingerprint vault (Android app only): one small secret per app, sealed on this phone by a Keystore key that
   // only a fingerprint unlocks. The shell names the app (st.appId), so apps can never ask for each other's secret.
@@ -265,6 +265,14 @@
         }
         return window.WosChat?.sharePayload(data) || Promise.resolve('unsupported');
       },
+        async wizard(data) {
+          check();
+          if (!window.WizShareWizard) return 'unsupported';
+          window.WizShareWizard.valid(data);
+          const h = hold('Share to Wizard');
+          try { return await window.WizShareWizard.wizard(data, () => valid(st, doc)); }
+          finally { h.release(); }
+        },
         file(file, opts) { check(); if (!file || !['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(file))) return Promise.resolve('unsupported'); return window.WosChat?.shareFile(file, opts) || Promise.resolve('unsupported'); },
         // Receiving (docs/SHARE-SHEET.md): this verified frame registers its own app id only; items stay pending
         // until the app acks that it placed one in its own composer.
@@ -358,6 +366,7 @@
       const svc = connect(e.source, st.client); let value;
       if (d.op === 'ready') value = svc.ready();
       if (d.op === 'share.text') value = await svc.share.text(d.args);
+      if (d.op === 'share.wizard') value = await svc.share.wizard(d.args);
       if (d.op === 'share.file') value = await svc.share.file(d.args?.file, d.args?.options);
       if (d.op === 'voice.transcribe') value = await svc.voice.transcribe(d.args?.file, { language: d.args?.language });
       if (d.op === 'share.receive') value = svc.share.receive(d.args);
