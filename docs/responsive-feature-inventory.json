@@ -66,16 +66,6 @@
       "classification": "native",
       "reason": "Android Food bridge UI."
     },
-    "core/tour.js": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone gestures tutorial; desktop keyboard help is a layout/input-specific guide."
-    },
-    "core/tour.css": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone gesture spotlights; desktop keyboard sheet remains shell-local."
-    },
     "core/voice.js": {
       "shell": "desktop",
       "classification": "adapter",
@@ -193,6 +183,8 @@
     "core/skins.js",
     "core/status.js",
     "core/thread-swipe-back.js",
+    "core/tour.css",
+    "core/tour.js",
     "core/update-banner.css",
     "core/uploads.js",
     "core/usage.js",
@@ -379,7 +371,10 @@
       "note": "Dev-only Chats slot module, dynamically loaded only with explicit fixture opt-in"
     },
     "core/chats-view.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Versioned in-document Chats provider admission and lifecycle"
     },
     "core/chats.js": {
@@ -453,7 +448,10 @@
       "note": "Boomerang picker and return banner on the shared scheduler (kind return)"
     },
     "core/schedules.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Shared Settings → Schedules; hidden when Agent Service schedules returns 404"
     },
     "core/os-updates.js": {
@@ -461,10 +459,13 @@
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import; Settings \u2192 Updates shows only where the App Manager answers store-install/_updates"
+      "note": "Direct entrypoint import; Settings → Updates shows only where the App Manager answers store-install/_updates"
     },
     "core/own-views.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Shared own-screen fallback and shell-only Settings confirmation; same App Manager owner listener as Updates"
     },
     "core/photos-settings.js": {
@@ -552,7 +553,10 @@
       "note": "Direct entrypoint import"
     },
     "core/setup-launch.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Shared first-run Setup admission; adapters supply only open/home callbacks."
     },
     "core/shell.js": {
@@ -592,9 +596,10 @@
     },
     "core/tour.js": {
       "loadedBy": [
-        "phone"
+        "phone",
+        "desktop"
       ],
-      "note": "Direct entrypoint import"
+      "note": "Phone gesture tour (Talk, Hide) and the desktop first-message guide (WosTour.desk) share one module and one done flag."
     },
     "core/uploads.js": {
       "loadedBy": [
