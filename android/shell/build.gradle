@@ -59,5 +59,9 @@ android {
 }
 
 dependencies {
+    // addWebMessageListener: the one exact-origin message port for optional device capabilities (no JS bridge).
+    implementation 'androidx.webkit:webkit:1.12.1'
     testImplementation 'junit:junit:4.13.2'
+    // org.json is an Android stub on the JVM; the real one lets the protocol and custody tests run off-device.
+    testImplementation 'org.json:json:20240303'
 }
