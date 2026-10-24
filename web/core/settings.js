@@ -34,7 +34,7 @@
   }
   function subtitle(id, ctx) {
     if (id === 'schedules') return 'Prompts on a schedule';
-    if (id === 'appearance') return window.WosSkin ? lookName(window.WosSkin, window.WosSkin.current) : 'Default skin';
+    if (id === 'appearance') return window.WosSkin ? (mySkinWorn() ? 'My skin · on ' : '') + lookName(window.WosSkin, window.WosSkin.current) : 'Default skin';
     if (id === 'chats') return 'Chats: ' + chatsName(chatsHost()?.defaultId() || 'wizard-chats');
     if (id === 'voice') { const v = window.WizCore.voiceStatus?.state; return `${v ? v.ready ? 'Voice ready' : 'Voice unavailable' : 'Checking voice'} · Mic: ${window.WosMic?.summary?.() || 'default'}`; }
     if (id === 'phone') { try { return JSON.parse(native()?.everywhere?.() || '{}').enabled ? 'Everywhere on' : 'Everywhere off'; } catch (_) { return 'Android controls'; } }
@@ -132,18 +132,24 @@
     retryAll(ctx); return true;
   } });
   /* My skin: CSS plus an optional, per-version owner-approved hook module, kept in Files. */
+  // Launch model (23 Oct 2026): Nebula is the one default skin; the owner's first appearance request makes "My skin",
+  // their own layer on top of the skin they wear, and from then on Look shows it as theirs on every device.
+  const mySkinWorn = () => { const st = window.WosMySkin?.state; return !!st && !st.off && !st.empty && !st.info?.unavailable; };
+  const MY_SKIN_INVITE = 'Everything you see is customizable. Ask your Wizard for one change and it becomes My skin.';
   const mySkinSub = base => {
     const M = window.WosMySkin, st = M && M.state;
     if (!M) return '';
     if (st.off) return `Off for this visit · on top of ${base}`;
     if (st.info && st.info.unavailable) return `Not on this box yet · ${base} as made`;
-    return st.empty ? `Empty · ${base} exactly as made` : `On top of ${base}`;
+    return st.empty ? MY_SKIN_INVITE : `Wearing it · your changes on top of ${base}`;
   };
   function mySkinRow(base) {
     if (!window.WosMySkin) return '';
-    const st = window.WosMySkin.state, js = st.script;
+    const st = window.WosMySkin.state, js = st.script, worn = mySkinWorn();
     const script = js?.exists && !st.off ? `<div class="st-row static my-skin-row" data-myskin-script><span class="st-ic">⌘</span><span class="st-tx"><b>${js.approved ? 'My skin script on' : 'My skin script changed'}</b><small>Skins/My skin/skin.js · this device only</small></span><span class="ms-acts">${js.approved ? '<button type="button" class="ghost" data-myskin="off">Turn off</button>' : `<button type="button" data-myskin="on" data-myskin-hash="${esc(js.sha256 || '')}" ${js.valid ? '' : 'disabled'}>Turn on</button>`}</span></div>` : '';
-    return `<div class="st-row static my-skin-row"><span class="st-ic">✎</span><span class="st-tx"><b>My custom skin</b><small data-myskinsub>${esc(mySkinSub(base))}</small></span><span class="ms-acts"><button type="button" data-myskin="edit">Edit</button><button type="button" class="ghost" data-myskin="reset">Reset</button></span></div>${script}`;
+    // Reset only when there is something to reset (an empty form never shows Clear).
+    const reset = st.empty ? '' : '<button type="button" class="ghost" data-myskin="reset">Reset</button>';
+    return `<div class="st-row static my-skin-row${worn ? ' worn' : ''}" data-myskin-row data-worn="${worn}"><span class="st-ic">${worn ? '✓' : '✎'}</span><span class="st-tx"><b>My skin</b><small data-myskinsub>${esc(mySkinSub(base))}</small></span><span class="ms-acts"><button type="button" data-myskin="edit">Edit</button>${reset}</span></div>${script}`;
   }
   async function mySkinAction(ctx, what, event) {
     const M = window.WosMySkin; if (!M) return;
@@ -151,14 +157,14 @@
     if (what === 'off') { M.turnOff(); return; }
     if (what === 'edit') {
       const url = `/files/files/${(M.state.info?.path || M.FILE).split('/').map(encodeURIComponent).join('/')}`;
-      const opened = window.WizCanOpen?.('files') && ctx.openLink ? ctx.openLink(url, 'My custom skin') : false;
+      const opened = window.WizCanOpen?.('files') && ctx.openLink ? ctx.openLink(url, 'My skin') : false;
       if (!opened) ctx.toast?.('✎', 'Ask your agent: "change my skin so …"', 2600);
       return;
     }
     if (what === 'reset') {
-      if (M.state.empty) { ctx.toast?.('✓', 'My custom skin is already empty', 1600); return; }
-      try { await M.reset(); ctx.toast?.('✓', 'My custom skin emptied · your skin as its author made it', 2200); }
-      catch (e) { ctx.toast?.('!', 'Could not reset My custom skin right now', 2400); }
+      if (M.state.empty) { ctx.toast?.('✓', 'My skin is already empty', 1600); return; }
+      try { await M.reset(); ctx.toast?.('✓', 'My skin emptied · back to the skin as its author made it', 2200); }
+      catch (e) { ctx.toast?.('!', 'Could not reset My skin right now', 2400); }
       for (const m of mounts) m.render();
     }
   }
@@ -194,7 +200,7 @@
       const head = fams.length > 1 ? `<div class="skp-fam">${esc(f.name)}</div>` : '';
       return `${head}<div class="skp" role="group" aria-label="${esc(f.name || 'Skin')} colours">${pals.map(k => skinCard(k, cur)).join('')}</div>`;
     }).join('');
-    return `<div class="st-group" data-stgroup="look"><h4>Look</h4><div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(lookName(S, cur))}</small></span></div><div class="skp-all${facesReady ? '' : ' skp-wait'}">${groups}</div></div>${suggestionHtml()}${mySkinRow(S.list.find(k => k.id === cur)?.name || '')}${layoutRow()}</div>`;
+    return `<div class="st-group" data-stgroup="look"><h4>Look</h4>${mySkinRow(lookName(S, cur))}<div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(lookName(S, cur))}</small></span></div><div class="skp-all${facesReady ? '' : ' skp-wait'}">${groups}</div></div>${suggestionHtml()}${layoutRow()}</div>`;
   }
   /* Layout: how the shell behaves (orbs, gestures), worn over any skin. Classic = the shell as everyone has it. */
   function layoutRow() {
@@ -220,9 +226,8 @@
     const b = el.closest('[data-skinpick]'); if (!b) return false;
     const now = S.set(b.dataset.skinpick);
     ctx.root.querySelectorAll('[data-skinpick]').forEach(n => n.setAttribute('aria-pressed', String(n.dataset.skinpick === now)));
-    const nm = S.list.find(k => k.id === now)?.name || '';
     ctx.root.querySelector('[data-skinname]').textContent = lookName(S, now);
-    const sub = ctx.root.querySelector('[data-myskinsub]'); if (sub) sub.textContent = mySkinSub(nm);
+    const sub = ctx.root.querySelector('[data-myskinsub]'); if (sub) sub.textContent = mySkinSub(lookName(S, now));
     for (const m of mounts) m.render();
     ctx.haptic?.(8); return true;
   } });

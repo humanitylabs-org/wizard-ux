@@ -106,8 +106,25 @@ test('CSS stays non-executable, loads last in both shells, and scripts use the s
 
 test('Settings › Look offers My skin with Edit and Reset', () => {
   const s = read('web/core/settings.js');
-  assert.match(s, /<b>My custom skin<\/b>/);
+  assert.match(s, /<b>My skin<\/b>/);
   assert.match(s, /data-myskin="edit"/);
   assert.match(s, /data-myskin="reset"/);
-  assert.match(s, /On top of \$\{base\}/);
+  assert.match(s, /your changes on top of \$\{base\}/);
+});
+
+test('Launch: Nebula is the default skin, My skin leads Look and invites the first change', () => {
+  const k = read('web/core/skins.js');
+  // A fresh profile (no wos.skin) wears SKINS[0], which must be Nebula.
+  assert.match(k, /const SKINS = \[\s*\{ id: 'nebula'/);
+  assert.match(k, /const idxOf = id => Math\.max\(0, SKINS\.findIndex/);
+  const s = read('web/core/settings.js');
+  // My skin renders before the built-in picker, so the owner lands on their own skin.
+  assert.match(s, /<h4>Look<\/h4>\$\{mySkinRow\(/);
+  assert.match(s, /Everything you see is customizable/);
+  // Reset only when there is something to reset.
+  assert.match(s, /const reset = st\.empty \? '' :/);
+  // No skin marketplace or community shelf for launch (comes later with Nostr IDs).
+  assert.doesNotMatch(s, /browse skins|get skins|skin store|community skins/i);
+  assert.match(read('web/core/tour.js'), /Everything you see is customizable\. Try asking your Wizard for one change\./);
+  assert.match(read('web/setup/setup.js'), /Everything you see is customizable\. Try asking your Wizard for one change\./);
 });
