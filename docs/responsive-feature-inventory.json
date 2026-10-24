@@ -202,6 +202,7 @@
     "core/voice-status.js",
     "core/web-update.js",
     "core/workspace-navigation.js",
+    "core/workspace-sync.js",
     "data.js",
     "favicon.ico",
     "icon-192.png",
@@ -641,6 +642,13 @@
       "note": "Direct entrypoint import"
     },
     "core/workspace-navigation.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/workspace-sync.js": {
       "loadedBy": [
         "phone",
         "desktop"

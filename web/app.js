@@ -130,7 +130,7 @@
   // load, which used to shift the saved position onto the next desk to the right).
   let idx = (() => { const id = store.get('idxDesk', ''), at = id ? desks.findIndex(d => d.id === id) : -1; return at >= 0 ? at : store.get('idx4', HOME); })();
   if (!(idx >= 0 && idx < desks.length)) idx = HOME;
-  const save = () => { store.set('wins4', W); store.set('strip', desks); store.set('idx4', idx); store.set('idxDesk', desks[idx]?.id || ''); };
+  const save = () => { store.set('wins4', W); store.set('strip', desks); store.set('idx4', idx); store.set('idxDesk', desks[idx]?.id || ''); window.WosWorkspaceSync?.current?.changed(); };
 
   /* Live Wizard state: inbox, unread, working come from the real Wizard backend. */
   // Thread emojis are Wizard's own (same-origin storage), read fresh each render.
@@ -3695,6 +3695,23 @@
 
   /* ---------------- boot ---------------- */
   buildDesks(); setVoice('idle'); armBack();
+  /* Workspace sync (core/workspace-sync.js): the same desks on every device. Home stays this phone's own; a desk
+   * with more windows than the phone tiles keeps the rest in d.more so they are never dropped from the shared copy. */
+  window.WosWorkspaceSync?.create({
+    shell: 'phone',
+    title: w => winApp(w)?.name || w.title || w.appId,
+    read: () => ({ desks: desks.filter(d => !d.home).map(d => ({ id: d.id, wins: [...d.wins.map(id => W[id]).filter(Boolean), ...(d.more || [])] })) }),
+    apply(state, o = {}) {
+      if (!state) { const i = posOf(o.focus); if (i > 0) { closeSheets(true); goDesk(i); } return; }
+      const here = desks[idx]?.id, at = idx;
+      const r = window.WosWorkspaceSync.reconcile(desks.slice(1), W, state, { fresh: id => blank({ id }), max: MAXW });
+      r.removed.forEach(id => { closeAppPlayback(W[id]); CHATS.closeHosted(id); delete W[id]; delete CH[id]; });
+      desks = [desks[0], ...r.desks].map(d => { if (!d.wins.length) d.full = false; return d; });
+      syncDesks(); desks.forEach((_, i) => renderDesk(i));
+      idx = posOf(here); if (idx < 0) idx = Math.max(0, Math.min(at, desks.length - 1));
+      placeTrack(0, false); renderDots(); save();
+    },
+  });
   // Decorative motion lives only on a visible, recently touched Home with nothing over it (core/scenery.js).
   window.WosScenery?.attach({ device, homeInView: () => idx === HOME && !desks[idx]?.full, deskIdx: () => idx });
   if (LIVE) LIVE.refresh();
