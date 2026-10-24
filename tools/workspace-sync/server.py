@@ -15,6 +15,7 @@ import json, os, re, threading, time, http.server, urllib.parse
 PATH = os.path.expanduser(os.environ.get('WORKSPACE_SYNC_FILE', '~/.wizard-os/workspace-sync.json'))
 PORT = int(os.environ.get('WORKSPACE_SYNC_PORT', '8824'))
 PREFIX = '/wizard-os-home/workspace-sync/api'
+AS = '/wizard/v1/workspaces'  # the Agent Service contract (wizard-agent-service docs/workspaces.md)
 MAX_BODY = 512 * 1024
 MAX_DESKS, MAX_WINS, MAX_CLOSED = 40, 12, 12
 APPS = {'chats', 'frame', 'review', 'maps', 'feature'}
@@ -120,7 +121,7 @@ class H(http.server.BaseHTTPRequestHandler):
         path, q = self.route()
         if path == PREFIX + '/health':
             return self.send(200, {'ok': True, 'rev': DB['rev']})
-        if path != PREFIX + '/state':
+        if path not in (PREFIX + '/state', AS):
             return self.send(404, {'error': 'not_found'})
         try:
             since = int(q.get('since', ['-1'])[0]); wait = max(0.0, min(25.0, float(q.get('wait', ['0'])[0])))
@@ -134,7 +135,7 @@ class H(http.server.BaseHTTPRequestHandler):
 
     def do_PUT(self):
         path, _ = self.route()
-        if path != PREFIX + '/state':
+        if path not in (PREFIX + '/state', AS):
             return self.send(404, {'error': 'not_found'})
         n = int(self.headers.get('Content-Length') or 0)
         if n <= 0 or n > MAX_BODY:
@@ -163,7 +164,7 @@ class H(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):  # forget one recently closed desk: {desk: <id>}
         path, _ = self.route()
-        if path != PREFIX + '/closed/forget':
+        if path not in (PREFIX + '/closed/forget', AS + '/closed/forget'):
             return self.send(404, {'error': 'not_found'})
         n = int(self.headers.get('Content-Length') or 0)
         try:

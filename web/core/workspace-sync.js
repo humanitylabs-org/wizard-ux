@@ -1,7 +1,7 @@
 /* Workspace sync (Miguel's release): the same workspaces on every Wizard client.
  *
  * Each shell keeps its desks in localStorage. This module mirrors the part that should follow the owner between
- * devices to his box (/wizard-os-home/workspace-sync/api, reachable only on his tailnet): which desks exist, their
+ * devices to the box (Agent Service /wizard/v1/workspaces, owner access only): which desks exist, their
  * order, the apps on each, and the page or thread an app has open when it first arrives on a device. Window
  * layout, focus, full screen and the current desk stay per device, and an app already open on a device keeps its
  * own page (another device never yanks it). Closing a desk closes it everywhere; the box keeps it under Recently
@@ -17,7 +17,7 @@
  * and adds only those of its own the box lacks (by their apps), so each device's starter Chats desk never piles up. */
 (() => {
   'use strict';
-  const API = '/wizard-os-home/workspace-sync/api';
+  const API = '/wizard/v1/workspaces'; // Agent Service (docs/workspaces.md in wizard-agent-service)
   const KEY = 'wos.wsync.v1', OFF = 'wos.wsync.off';
   const APPS = new Set(['chats', 'frame', 'review', 'maps', 'feature']);
   const FIELDS = ['appId', 'url', 'thread', 'agent', 'chatsProvider', 'title', 'dest', 'mode', 'query', 'featureId', 'z', 'featureOptions'];
@@ -134,7 +134,7 @@
           const local = now();
           if (!pending && lastLocal && same(local, lastLocal)) break;
           const want = pending || merge(lastLocal || st.base, local, st.base);
-          const { status, j } = await req('PUT', '/state', { baseRev: st.rev, device: name, state: want });
+          const { status, j } = await req('PUT', '', { baseRev: st.rev, device: name, state: want });
           if (!j || !Array.isArray(j.state?.desks)) throw new Error('state ' + status);
           st = { rev: j.rev, base: j.state }; persist(); take(j);
           if (status === 200) { pending = null; const cur = now(); if (same(cur, local)) put(j.state); else { pending = merge(local, cur, j.state); put(pending); again = true; } break; }
@@ -171,7 +171,7 @@
         if (off()) { await sleep(5000); continue; }
         try {
           const wait = document.hidden || !st.base || ok !== true ? 0 : 25; // answer at once until in sync, then long-poll
-          const { status, j } = await req('GET', `/state?since=${st.base ? st.rev : -1}&wait=${wait}`);
+          const { status, j } = await req('GET', `?since=${st.base ? st.rev : -1}&wait=${wait}`);
           if (status !== 200 || !j || !Array.isArray(j.state?.desks)) throw new Error('state ' + status);
           if (!busy && (j.rev !== st.rev || !st.base)) arrive(j); else take(j);
           if (ok !== true) { ok = true; } emit(); fails = 0;
