@@ -116,6 +116,8 @@
   const vis = v => (typeof v === 'string' ? v : '').replace(/\s+/gu, ' ').trim().slice(0, 80).toLocaleLowerCase();
   function fingerprint(v) { let h = 2166136261; for (const c of vis(v)) { h ^= c.codePointAt(0) ?? 0; h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
   const keyOf = s => `${s.runtime}:${s.id}`;
+  // Side state (seen, snoozed) for another agent's thread is keyed agent/<id>/<runtime>:<id> on the server; the
+  // dispositions route takes agent_id in the body and refuses any query string (so agent snoozes used to fail).
   const seenKeyOf = s => s.agent && s.agent !== 'hermes' ? `agent/${s.agent}/${keyOf(s)}` : keyOf(s);
   // The newest assistant message the list knows. lastAssistantAt counts model replies only; reports that apps and
   // scheduled jobs append (Topics roundup, daily moves, audits) arrive as the latest message (previewAt) without moving
@@ -185,6 +187,7 @@
    * rises to page 1. The between-walk poll used to re-read ~6 pages (~1 MB) every 15 s;
    * one page carries the same news. The full walk still catches edits that don't bump activity. */
   const LIST_SUPPORT = new Map(), DETAIL = new Map();
+  const SEARCH_CLIENT=globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : Math.random().toString(36).slice(2);
   const LIST_DEADLINE = 30000;
   const listSignal = () => typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(LIST_DEADLINE) } : {};
   async function fetchSessions(full, agent = '', onFirst = null) {
@@ -209,14 +212,67 @@
       out.push(...rows.map(normalize).filter(Boolean));
       offset += rows.length;
       const more = typeof p.has_more === 'boolean' ? p.has_more : typeof p.pagination?.has_more === 'boolean' ? p.pagination.has_more : rows.length >= 100;
-      if (!more) return { sessions:out, complete:true, meta };
+      if (!more) { setTimeout(()=>{void fetchTitleIndex(agent)},0); return { sessions:out, complete:true, meta }; }
       if (!rows.length) throw new Error('Incomplete session window');
       if (!full) return { sessions:out, complete:false, meta };
       if (onFirst && offset === rows.length) await onFirst({ sessions:out.slice(), complete:false, meta });
     }
     throw new Error('Session window limit reached');
   }
+  // A compact, scope-separated title/preview index. Never persist private-agent rows.
+  const TITLE_PREFIX='wos.chats.titles.v1:', TITLE_INDEX=new Map(), TITLE_LOADING=new Map();
+  let titleAccount='', titleEpoch=0;
+  function clearTitleIndex() {
+    TITLE_INDEX.clear(); TITLE_LOADING.clear(); titleAccount=''; titleEpoch++;
+    try { for(const k of Object.keys(localStorage)) if(k.startsWith(TITLE_PREFIX)) localStorage.removeItem(k); } catch {}
+    window.WizCore?.chatSearch?.reset?.();
+  }
+  window.addEventListener('wizard-account-change',clearTitleIndex);
+  function indexRow(raw,scope) {
+    if(!raw?.id || (raw.agent || 'hermes')!==(scope || 'hermes')) return null;
+    return normalize({...raw,listVersion:1,agent:scope||'',agent_id:scope||'hermes',updatedAt:raw.cardTime||raw.updatedAt,activityAt:raw.cardTime||raw.activityAt,previewAt:raw.cardTime||raw.previewAt});
+  }
+  async function fetchTitleIndex(scope='') {
+    if(TITLE_LOADING.has(scope)) return TITLE_LOADING.get(scope);
+    const task=(async()=>{
+      let cursor='', snapshot='', offset=0, build='', rows=[], epoch=titleEpoch;
+      const overrides=JSON.stringify(listOverrides(scope));
+      for(let pages=0; pages<30; pages++) {
+        const p=new URLSearchParams({view:'list',window:'archive-50',fields:'slim',limit:'500',offset:String(offset),include_children:'false',overrides});
+        if(scope) p.set('agent',scope); if(cursor) p.set('cursor',cursor); else if(snapshot) p.set('snapshot',snapshot);
+        const value=await (await req(`/wizard/hermes/api/sessions?${p}`,listSignal())).json();
+        if(epoch!==titleEpoch) return;
+        if(value.fields!=='slim' || !value.build) return; // an older service: retain existing search
+        if(!scope && value.account_scope) {
+          let previous=titleAccount;
+          try { previous ||= localStorage.getItem(TITLE_PREFIX+'account')||''; } catch {}
+          if(previous && previous!==value.account_scope) { clearTitleIndex(); epoch=titleEpoch; }
+          titleAccount=value.account_scope;
+          try { localStorage.setItem(TITLE_PREFIX+'account',titleAccount); } catch {}
+        }
+        const key=TITLE_PREFIX+(titleAccount||SCOPE)+':'+(scope||'hermes');
+        if(!build) {
+          build=value.build; snapshot=value.snapshot;
+          if(TITLE_INDEX.get(scope)?.build===build) return;
+          // Validate the account and the current server build before using any persisted rows.
+          if(!scope && titleAccount) try {
+            const cached=JSON.parse(localStorage.getItem(key)||'null');
+            if(cached?.build===build && Array.isArray(cached.rows) && cached.rows.length<=10000) { TITLE_INDEX.set(scope,cached); store.emit(); return; }
+          } catch {}
+        }
+        rows.push(...(value.data||[]).map(raw=>indexRow(raw,scope)).filter(Boolean));
+        if(rows.length>10000) throw new Error('Title index limit reached');
+        if(value.has_more && !cursor) { offset+=value.data.length; continue; }
+        if(value.archive_cursor) { cursor=value.archive_cursor; offset=0; continue; }
+        const entry={build,rows}; TITLE_INDEX.set(scope,entry);
+        if(!scope && titleAccount) try { const data=JSON.stringify(entry); if(data.length<2000000) localStorage.setItem(key,data); } catch {}
+        store.emit(); return;
+      }
+    })().catch(e=>{if(e.status===403) clearTitleIndex();}).finally(()=>{ if(TITLE_LOADING.get(scope)===task) TITLE_LOADING.delete(scope); });
+    TITLE_LOADING.set(scope,task); return task;
+  }
   const FULL_EVERY = 3 * 60 * 1000;
+  const AGENT_WAIT = 1200; // ms a snapshot reload waits for other agents' threads before its one repaint
   const STALE_AFTER = 60 * 1000; // the list polls every 15 s, so a minute without a fresh read is worth saying
   /* ---- agents (Agents MVP): each non-default agent's threads are read from its own list (agent=<id>), always
    * through the owner's own Agent Service. Every thread/run call for such a thread names its agent, so a private
@@ -269,6 +325,7 @@
     subjectOrder: ['wos.chats.subjectOrder.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
     // Pinned chats (core/chat-pins.js): the same pins on every device.
     pinnedChats: ['wos.chats.pinned.v2', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
+    spaces: ['wos.chats.spaces.v1', v => Array.isArray(v), JSON.stringify],
   };
   let prefsOff = false;
   const putPrefs = patch => {
@@ -309,10 +366,10 @@
   //   Priority = approvals, then needs you, then things to test, then everything else (newest first within each).
   // Status labels never move a thread between days (James, 11 Oct 2026: Ready, Yesterday and Past week stay
   // filtered by day in Newest and Priority); Priority only reorders within Ready.
-  // Deferred threads sit at the bottom of Ready marked Deferred (James, 10 Oct 2026: "defer could just go at the
-  // bottom of today … and just change the status to deferred"), whatever their day and in every order, until
-  // restored or done.
-  const isDeferred = s => !!s.deferred && !s.archived;
+  // Snoozed (deferred) threads leave the list (James, 23 Oct 2026: "It doesn't remove the thread from my list,
+  // which is the purpose of snoozing it"; supersedes 10 Oct "bottom of today"). They wait in the collapsed Snoozed
+  // section until their return time, Restore or Done. A message James sends after snoozing brings the thread back.
+  const isDeferred = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt));
   const readyRank = s => needsApproval(s) ? 0 : isDeferred(s) ? 9 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
   const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
   // Oldest (James, 23 Oct 2026: "oldest messages at the top … the newest one at the bottom"): Newest's pins kept
@@ -324,11 +381,11 @@
     for (const s of sessions) {
       if (s.hidden) continue;
       const t = sectionTime(s);
-      if (needsApproval(s)) g.ready.push(s);
+      if (s.archived) g.archive.push(s);
+      else if (needsApproval(s)) g.ready.push(s);
       else if (inWorking(s)) g.working.push(s);
-      else if (isDeferred(s)) g.ready.push(s);
+      else if (isDeferred(s)) g.deferred.push(s);
       else if (isErr(s)) g.errors.push(s);
-      else if (s.archived) g.archive.push(s);
       else if (isFinite(t) && t <= archB) g.archive.push(s);
       else if (chatLayout() === 'status') g.ready.push(s); // By status: everything not yet archived is Ready
       else if (!isFinite(t) || t < yB) g.pastWeek.push(s);
@@ -490,12 +547,48 @@
     } catch (e) { try { localStorage.removeItem(SNAP_KEY); } catch (_) {} }
   }
 
+  /* A Space is an explicit membership list, not an archive window. Read only its
+   * missing members, four at a time across all windows. Keep these rows in memory,
+   * outside unified()/the disk snapshot, so All and agent Focus keep their windows.
+   * Successful reads refresh on the existing full-walk cadence; failures retry no
+   * more than once a minute. Repaints/polls never fan out duplicate requests. */
+  // Hydrated members are archived rows: any new activity brings them back through the
+  // ordinary list (loaded rows win), so they refresh rarely (~60 x 2.6 KB reads per half hour).
+  const SPACE_ROWS = new Map(), SPACE_QUEUE = [], SPACE_EVERY = 30 * 60 * 1000;
+  let spaceReads = 0;
+  function drainSpaceReads() {
+    while (!document.hidden && spaceReads < 4 && SPACE_QUEUE.length) {
+      const [id, entry] = SPACE_QUEUE.shift(); spaceReads++;
+      (async () => {
+        const agent = L.agentOf(id);
+        try {
+          const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}?view=detail${agent ? `&agent=${encodeURIComponent(agent)}` : ''}`, listSignal())).json();
+          const s = normalize(p.session || p);
+          if (!s || s.id !== id || L.agentOf(id) !== agent || (agent && s.agent && s.agent !== agent)) throw new Error('Thread scope changed');
+          if (otherAgent(s.agent)) {
+            const A = AG(), a = A?.get(s.agent);
+            // An id in preferences is not permission to discover a private agent.
+            if (!a || (!agent && A.isPrivate(a))) throw new Error('Thread scope changed');
+            AGENT_OF.set(id, s.agent);
+          }
+          if (agent) s.agent = agent;
+          entry.row = s.hidden ? null : s;
+          entry.failed = false;
+        } catch (_) { entry.row = null; entry.failed = true; }
+        finally {
+          entry.at = Date.now(); entry.pending = false; spaceReads--;
+          drainSpaceReads(); L.emit();
+        }
+      })();
+    }
+  }
+
   /* ---- store ---- */
   function listOverrides(agent = '') {
     const out = {}, scoped = id => (L.agentOf(id) || '') === (otherAgent(agent) ? agent : '');
     for (const [id, at] of Object.entries(readRestored())) if (scoped(id) && Date.now()-Date.parse(at)<WEEK) out[id]={restoredAt:at};
     for (const [key,d] of Object.entries(L.deferred)) {
-      const id=key.replace(/^direct:/,''); if (!scoped(id)) continue;
+      const id=key.replace(/^agent\/[^/]+\//,'').replace(/^[a-z]+:/,''); if (!scoped(id)) continue;
       out[id]={...(d.deferred ? {deferred:true} : {restoredAt:d.updatedAt}),...out[id]};
     }
     for (const [id,o] of OVER) if (scoped(id)) {
@@ -512,7 +605,18 @@
     agentSessions: {}, agentStatus: {}, // non-default agents: id -> sessions / { ok, error, at }
     onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
     emit() { for (const fn of this.listeners) { try { fn(this); } catch (e) { console.error(e); } } },
-    isNew(s) { return hasNew(s, this.seenOf(s)); },
+    // Archived threads are read (James, 24 Oct 2026): Archive (Done, or aged past archiveAfterDays) never shows unread.
+    isNew(s) { return !this.inArchive(s) && hasNew(s, this.seenOf(s)); },
+    // Same rule as groupWork's Archive section, without the per-row day maths.
+    inArchive(s) {
+      if (!s || s.hidden || needsApproval(s) || inWorking(s) || isDeferred(s) || isErr(s)) return false;
+      if (s.archived) return true;
+      const d = archiveAfterDays(), t = sectionTime(s);
+      return !!d && isFinite(t) && t <= Date.now() - d * DAY;
+    },
+    // Visible unread: threads the Chats list actually shows unread (not hidden, archived or snoozed). Focus badges
+    // (agents, Spaces) count only these, so a dot never points at nothing.
+    visibleUnread(rows) { const g = groupWork(rows || []), out = []; for (const [k, list] of Object.entries(g)) if (k !== 'archive' && k !== 'deferred') for (const s of list) if (hasNew(s, this.seenOf(s))) out.push(s); return out; },
     // Server-owned, agent-qualified receipts: activity metadata only, never transcript text.
     seenOf(s) { return this.seen; },
     seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
@@ -529,7 +633,7 @@
       const now = Date.now(), needs = [], ready = [], working = [];
       for (const s of this.sessionsFor(agent)) {
         if (s.archived || s.hidden) continue;
-        const def = this.deferred[keyOf(s)]?.deferred;
+        const def = this.deferred[seenKeyOf(s)]?.deferred;
         if (['waiting_for_approval', 'unknown'].includes(s.status)) { needs.push(s); continue; }
         if (WORKING.has(s.status)) { working.push(s); continue; }
         if (def) continue;
@@ -559,9 +663,9 @@
           if (got.complete) this.fullAt = Date.now();
           else { const fresh = new Set(sessions.map(s => s.id)); sessions = sessions.concat(this.sessions.filter(s => !fresh.has(s.id) && !s.optimistic)); }
           for (const s of sessions) {
-            const d = deferred[keyOf(s)];
-            delete s.deferred; delete s.restoredAt;
-            if (d) { if (d.deferred) s.deferred = true; else s.restoredAt = d.updatedAt; }
+            const d = deferred[seenKeyOf(s)];
+            delete s.deferred; delete s.deferredAt; delete s.restoredAt;
+            if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
             applyLocal(s);
           }
           // A settled action stays applied until a list read that started after it lands.
@@ -580,15 +684,22 @@
           this.ok = true; this.error = ''; this.at = Date.now(); this.cached = false;
           };
           // Only a cold list paints early; a later full walk replaces a list that is already on screen in one go.
+          // A stored snapshot counts as on screen: painting page 1 over it, then the full walk, then other agents'
+          // threads made a reload flicker through four different lists (James, 23 Oct 2026). From a snapshot the
+          // list now changes once, straight to the fresh one.
           // A first run anywhere (no read state on device or server) waits for the whole list, which it marks read.
-          const early = (!this.ok || this.cached) && full ? async page => { const [d, r] = await side; if (!merge(readLocal(), merge(this.seen, r))) return; apply(page, d, r); this.emit(); } : null;
+          const fromSnap = this.cached;
+          const early = !this.ok && full ? async page => { const [d, r] = await side; if (!merge(readLocal(), merge(this.seen, r))) return; apply(page, d, r); this.emit(); } : null;
           const got = await fetchSessions(full, '', early);
           const [deferred, remote] = await side;
           apply(got, deferred, remote);
           if (Date.now() - this.snapAt > SNAP_EVERY) writeSnap(this);
           // Other agents' threads merge in after the main list is on screen; one slow agent never holds Chats.
+          // Replacing a snapshot, they get a short head start so main and agents land in the same repaint.
+          const agents = this.refreshAgents(deferred);
+          if (fromSnap) await Promise.race([agents, new Promise(r => setTimeout(r, AGENT_WAIT))]);
           this.emit();
-          await this.refreshAgents(deferred);
+          await agents;
         } catch (e) { this.error = e.status === 403 ? 'access' : 'offline'; }
         finally { this.loading = null; this.emit(); }
       })();
@@ -606,9 +717,9 @@
           if (got.meta) this.windows[id] = got.meta;
           const list = got.sessions.filter(s => !s.agent || s.agent === id).map(s => { s.agent = id; AGENT_OF.set(s.id, id); return s; });
           for (const s of list) {
-            const d = deferred[keyOf(s)];
-            delete s.deferred; delete s.restoredAt;
-            if (d) { if (d.deferred) s.deferred = true; else s.restoredAt = d.updatedAt; }
+            const d = deferred[seenKeyOf(s)];
+            delete s.deferred; delete s.deferredAt; delete s.restoredAt;
+            if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
             applyLocal(s);
           }
           addSynthetic(list, id);
@@ -639,6 +750,30 @@
       const seen = new Set(this.sessions.map(s => s.id)), out = this.sessions.slice();
       for (const [, list] of extra) for (const s of list) if (!seen.has(s.id)) { seen.add(s.id); out.push(s); }
       return out;
+    },
+    // peek: badges/strip read loaded + already-hydrated rows only; never start reads.
+    spaceSessions(ids, { peek = false } = {}) {
+      const loaded = new Map(this.unified().map(s => [s.id, s])), rows = [];
+      let pending = false, failed = false;
+      for (const id of new Set(ids)) {
+        if (typeof id !== 'string' || !/^[A-Za-z0-9._:-]{1,256}$/.test(id)) continue;
+        if (loaded.has(id)) { const s = loaded.get(id); if (!s.hidden) rows.push(s); continue; }
+        let entry = SPACE_ROWS.get(id);
+        if (!peek && !document.hidden && (!entry || (!entry.pending && Date.now() - entry.at >= (entry.failed ? STALE_AFTER : SPACE_EVERY)))) {
+          if (!entry) { entry = { row: null, at: 0 }; SPACE_ROWS.set(id, entry); }
+          entry.pending = true; SPACE_QUEUE.push([id, entry]);
+        }
+        pending ||= !!entry?.pending; failed ||= !!entry?.failed;
+        const s = entry?.row;
+        // Removed agents and scope changes cannot resurrect a cached row.
+        if (!s || s.hidden || (otherAgent(s.agent) && (!AG()?.get(s.agent) || this.agentOf(id) !== s.agent))) continue;
+        const d = this.deferred[seenKeyOf(s)];
+        delete s.deferred; delete s.deferredAt; delete s.restoredAt;
+        if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
+        applyLocal(s); rows.push(s);
+      }
+      if (!peek) drainSpaceReads();
+      return { rows, pending, failed };
     },
     // A private agent's thread (by id): its rows carry the lock and its words never enter another agent's context.
     isPrivate(id) { const a = this.agentOf(id), A = AG(); return !!a && !!A && A.isPrivate(A.get(a)); },
@@ -694,7 +829,7 @@
     session(id) {
       const s = this.sessions.find(x => x.id === id); if (s) return s;
       for (const list of Object.values(this.agentSessions)) { const a = list.find(x => x.id === id); if (a) return a; }
-      return DETAIL.get(id) || null;
+      return DETAIL.get(id) || SPACE_ROWS.get(id)?.row || null;
     },
     chatUrl(id) { return id ? `/wizard/?session=${encodeURIComponent(id)}` : '/wizard/?view=work'; },
     /* A real Archimedes request: same admission path the Wizard app uses.
@@ -760,40 +895,55 @@
       return rows;
     },
     async searchSessions(q, agent = '', signal, onBatch) {
-      const scopes = otherAgent(agent) ? [agent] : ['', ...(AG()?.others() || []).map(a=>a.id)];
-      const settled = await Promise.allSettled(scopes.map(async scope => {
-        const found=[]; let snapshot='', resets=0;
+      const scopes=otherAgent(agent)?[agent]:['',...(AG()?.others()||[]).filter(a=>a.privacy!=='private').map(a=>a.id)];
+      const settled=await Promise.allSettled(scopes.map(async scope=>{
+        const found=[]; let snapshot='', resets=0, legacy=false;
         for(let offset=0; offset<100000;) {
           const params=new URLSearchParams({view:'list',q,limit:'100',offset:String(offset),include_children:'false'});
+          if(!legacy) params.set('mode','body');
           if(scope) params.set('agent',scope); if(snapshot) params.set('snapshot',snapshot);
           let p;
-          try { p=await (await req(`/wizard/hermes/api/sessions?${params}`,{signal})).json(); }
+          try { p=await (await req(`/wizard/hermes/api/sessions?${params}`,{signal,headers:{'X-Wizard-Search-Scope':`${SEARCH_CLIENT}:${scope||'hermes'}`}})).json(); }
           catch(e) {
-            if([400,404].includes(e.status)) return null;
+            if([400,404,501].includes(e.status)) { if(!legacy) {legacy=true;continue;} return null; }
             if(e.status===409 && offset && resets++<1) {offset=0;snapshot='';found.length=0;continue;}
             throw e;
           }
           if(p.list_version!==1 || !Number.isInteger(p.search_total)) return null;
-          snapshot=p.snapshot || snapshot;
-          const rows=p.data||p.sessions||p.items||[];
-          for(const raw of rows) {
-            const s=normalize(raw); if(!s || (s.agent||'hermes')!==(scope||'hermes')) continue;
+          const body=p.mode==='body'||p.mode==='titles';
+          const available=this.searchRows(scope).filter(s=>(s.agent||'hermes')===(scope||'hermes'));
+          snapshot=p.snapshot||snapshot;
+          for(const raw of p.data||[]) {
+            if((raw.agent||'hermes')!==(scope||'hermes')) continue;
+            const s=body ? {...(available.find(s=>s.id===raw.id)||indexRow({id:raw.id,agent:raw.agent,title:'Chat'},scope)),searchSnippet:raw.snippet} : normalize(raw);
+            if(!s) continue;
             if(signal?.aborted) throw new DOMException('Aborted','AbortError');
             if(scope) AGENT_OF.set(s.id,scope);
             found.push(s);
           }
-          if(!p.has_more) { if(!signal?.aborted) onBatch?.(found); return found; }
-          if(!rows.length) throw new Error('Incomplete search');
-          offset+=rows.length;
+          found.partial=!!p.partial;
+          if(!signal?.aborted) onBatch?.(found);
+          if(body || !p.has_more) return found;
+          if(!p.data?.length) throw new Error('Incomplete search'); offset+=p.data.length;
         }
         throw new Error('Search limit reached');
       }));
       if(signal?.aborted) throw new DOMException('Aborted','AbortError');
-      const good=settled.filter(x=>x.status==='fulfilled' && Array.isArray(x.value));
+      const good=settled.filter(x=>x.status==='fulfilled'&&Array.isArray(x.value));
       const failed=settled.filter(x=>x.status==='rejected');
-      if(!good.length) { if(failed.length) throw failed[0].reason; return null; }
-      const found=good.flatMap(x=>x.value); found.partial=good.length!==scopes.length;
+      const fallbackScopes=scopes.filter((_,i)=>settled[i].status==='fulfilled'&&settled[i].value===null);
+      if(!good.length && !fallbackScopes.length && failed.length) throw failed[0].reason;
+      const found=good.flatMap(x=>x.value); found.partial=failed.length>0; found.capped=good.some(x=>x.value.partial); found.fallbackScopes=fallbackScopes; // capped: the server showed only its newest message matches
       return found;
+    },
+    searchRows(agent='') {
+      const scopes=otherAgent(agent)?[agent]:['',...(AG()?.others()||[]).filter(a=>a.privacy!=='private').map(a=>a.id)];
+      const rows=new Map();
+      for(const scope of scopes) {
+        for(const s of TITLE_INDEX.get(scope)?.rows||[]) rows.set(`${scope}:${s.id}`,s);
+        for(const s of (scope?this.agentSessions[scope]||[]:this.sessions)) rows.set(`${scope}:${s.id}`,s);
+      }
+      return [...rows.values()];
     },
     rememberSearch(s) { if(s?.id) { if(otherAgent(s.agent)) AGENT_OF.set(s.id,s.agent); DETAIL.set(s.id,s); while(DETAIL.size>300) DETAIL.delete(DETAIL.keys().next().value); } },
     async sessionInfo(id) {
@@ -836,18 +986,20 @@
     busy(id) { const o = OVER.get(id); return !!o && !o.settled; },
     async _act(id, patch, write) {
       const s = this.session(id); if (!s || this.busy(id)) return false;
-      const snap = { archived: s.archived, deferred: s.deferred, restoredAt: s.restoredAt };
+      const snap = { archived: s.archived, deferred: s.deferred, deferredAt: s.deferredAt, restoredAt: s.restoredAt };
       const entry = { patch }; OVER.set(id, entry); Object.assign(s, patch); this.emit();
       try { await write(s); entry.settled = Date.now(); this.emit(); setTimeout(() => this.refresh(), 50); return true; }
       catch (e) {
         if (OVER.get(id) === entry) OVER.delete(id);
         const c = this.session(id);
-        if (c) { Object.assign(c, snap); if (snap.deferred === undefined) delete c.deferred; if (snap.restoredAt === undefined) delete c.restoredAt; }
+        if (c) { Object.assign(c, snap); if (snap.deferred === undefined) delete c.deferred; if (snap.deferredAt === undefined) delete c.deferredAt; if (snap.restoredAt === undefined) delete c.restoredAt; }
         this.emit(); return false;
       }
     },
     // Done: archive the thread (PATCH archived). Close & file: the Helm filing route, idempotent by command id.
     archive(id, { file = false } = {}) {
+      // Done marks the thread read too, so it stays read on every client and if it is ever restored.
+      if (this.session(id) && hasNew(this.session(id), this.seenOf(this.session(id)))) this.markSeen(id);
       return this._act(id, { archived: true, deferred: false }, async s => {
         const all = readRestored(); if (all[id]) { delete all[id]; writeRestored(all); }
         if (!file) { await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: true }) }); return; }
@@ -864,12 +1016,12 @@
     async _defer(id, deferred) {
       const s = this.session(id); if (!s) throw new Error('gone');
       const ag = this.agentOf(id);
-      const p = await (await req('/wizard/thread-dispositions' + aq(id), { method: 'PUT', headers: J, body: JSON.stringify({ sessionId: id, runtime: s.runtime || 'direct', deferred, ...(ag ? { agent: ag } : {}) }) })).json();
+      const p = await (await req('/wizard/thread-dispositions', { method: 'PUT', headers: J, body: JSON.stringify({ sessionId: id, runtime: s.runtime || 'direct', deferred, ...(ag && ag !== 'hermes' ? { agent_id: ag } : {}) }) })).json();
       if (p?.record?.deferred !== deferred || !isFinite(Date.parse(p.record.updatedAt))) throw new Error('Thread disposition was not saved.');
-      this.deferred[keyOf(s)] = p.record;
+      this.deferred[seenKeyOf(s)] = p.record;
       return p.record;
     },
-    defer(id) { return this._act(id, { deferred: true }, () => this._defer(id, true)); },
+    defer(id) { return this._act(id, { deferred: true, deferredAt: new Date().toISOString() }, () => this._defer(id, true)); },
     /* Rename: James's own title for a thread. It locks the name: the agent never renames it after this. */
     async rename(id, title) {
       const s = this.session(id), t = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 60);
@@ -1093,7 +1245,28 @@
     return startRead(id, true);
   };
   const bgRead = id => { const e = INFLIGHT.get(id); return e ? e.p : startRead(id, false); };
-  L.cachedMessages = id => (keepable(id) && TC.get(id)?.rows) || null;
+  // What the transcript contains, as the list reports it: message count and the newest user/assistant times.
+  // Status and tool activity are left out, so they never invalidate a copy whose messages are unchanged.
+  const ckOf = s => s ? [s.messageCount, s.lastAssistantAt, s.lastUserAt].join('|') : '';
+  L.contentKey = ckOf;
+  // The list can vouch for a copy only after a live list read since the page last came to the front: a stored
+  // snapshot or a list from before the phone slept describes the same old transcript the copy has.
+  let shownAt = Date.now();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) shownAt = Date.now(); });
+  L.listTrusted = () => !L.cached && (L.at || 0) >= shownAt;
+  // A stored copy paints only when it matches what the live list says the thread holds. Painting an older copy
+  // showed the previous reply for 1-2 s before the fresh read replaced it (James, 24 Oct 2026); a skeleton is
+  // honest, an outdated reply is not.
+  L.cachedMessages = id => {
+    const c = keepable(id) && TC.get(id), s = L.session(id); if (!c || !s || !L.listTrusted()) return null;
+    return String(c.rev || '').split('|').slice(0, 3).join('|') === ckOf(s) ? c.rows : null;
+  };
+  // A thread the server answered 404 for is gone: drop its memory and IndexedDB copy so a reopen can't repaint it.
+  L.forgetMessages = async id => {
+    if (!id) return; TC.delete(id);
+    const db = await tcOpen(); if (!db) return;
+    try { db.transaction('t', 'readwrite').objectStore('t').delete(id); } catch (e) {}
+  };
   const saving = () => !!navigator.connection?.saveData;
   L.warm = id => {
     const s = L.session(id); if (!s || s.archived || s.optimistic || saving() || INFLIGHT.has(id) || !keepable(id)) return;

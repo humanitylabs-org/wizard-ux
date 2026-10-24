@@ -14,6 +14,7 @@
  *   Right ⌥ tap   dictate (tap again: insert at the cursor, else copy)
  *   ⌥I            inbox                       ⇧⌥←→       swap window
  *   ⌘W / ⌥W       close app                   ⌥F         full screen
+ *   ⌥R            refresh the focused window (keeps it open, in place)
  *   ⌥/            all keys                    ⌥[ ⌥]      previous / next workspace
  *   Esc           close the top layer (never leaves the app)
  */
@@ -42,6 +43,8 @@
     // First run: Chats on 1, so Wizard opens on the thing you use most.
     const id = uid(); W[id] = { id, app: 'chats', thread: null }; ws[0].wins.push(id); ws[0].focus = id;
   }
+  const oldActive = ws[cur];
+  ws = C.migrateChatsFocus(W, ws); cur = Math.max(0, ws.indexOf(oldActive));
   const placed = new Set(), deskIds = new Set();
   ws = ws.map(d => {
     d = d && typeof d === 'object' ? d : freshDesk();
@@ -280,12 +283,12 @@
   });
   /* App → agent binding: an app's settings sheet (core/app-route.js). Its Agents button opens the Agents app
    * at that agent; System and Agents frames may ask for an app's sheet. */
-  window.WosAppRoute?.init({ openAgents: id => { openApp(APP.agents); if (id) [400, 1100, 2200].forEach(t => setTimeout(() => { for (const f of document.querySelectorAll('iframe[title="Agents"]')) f.contentWindow?.postMessage({ type: 'wizard:agents-show', id }, location.origin); }, t)); } });
+  window.WosAppRoute?.init({ openAgents: (id, o = {}) => { openApp(APP.agents); const msg = o.newPreset ? { type: 'wizard:agents-new', preset: o.newPreset } : id ? { type: 'wizard:agents-show', id } : null; if (msg) [400, 1100, 2200].forEach(t => setTimeout(() => { for (const f of document.querySelectorAll('iframe[title="Agents"]')) f.contentWindow?.postMessage(msg, location.origin); }, t)); } });
   addEventListener('message', e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:app-route' || typeof d.id !== 'string') return;
     const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
-    const w = host && W[host.dataset.win]; if (!w || !['system', 'agents'].includes(w.appId)) return;
-    window.WosAppRoute?.open(d.id);
+    const w = host && W[host.dataset.win]; if (!w || !['system', 'agents', 'app-store'].includes(w.appId)) return;
+    window.WosAppRoute?.request(d);
   });
   // The Agents app (and System) open an agent's own Chats. Only those frames may ask; the agent must exist.
   addEventListener('message', e => {
@@ -298,9 +301,9 @@
     const AG = window.WosAgents; if (!AG || !/^[a-z0-9][a-z0-9-]{0,40}$/.test(String(id || ''))) return false;
     if (!AG.get(id)) await AG.load(true);
     if (!AG.get(id)) { toast('!', 'That agent isn’t on this Wizard', 2000); return false; }
-    if (!AG.isOther(id)) return openApp(APP.wizard);
-    let w = findWin(x => x.app === 'chats' && x.agent === id);
-    if (w) focusWin(w.id); else w = newWin({ app: 'chats', thread: null, agent: id });
+    let w = findWin(mainChats);
+    if (w) focusWin(w.id); else w = newWin({ app: 'chats', thread: null });
+    CHATS.setFocus(w, { kind: 'agent', key: id });
     if (o.thread === '__new__') { CHATS.openNewDraft(w.id, ''); syncChatsPane(w.id); }
     LIVE?.refreshAgents?.().then(() => LIVE.emit());
     return true;
@@ -333,10 +336,10 @@
   }
   function openThread(sid, opts = {}) {
     if (!sid) return;
-    // A thread opens in the Chats of the agent it is pinned to (main Chats for the main agent's threads).
-    const ag = LIVE?.agentOf?.(sid) || '', mine = x => x.app === 'chats' && (x.agent || '') === ag && (ag || CHATS.views.providerFor(x) === CHATS.views.defaultId());
+    // Any agent's thread opens in the main Chats window, without changing its list Focus.
+    const mine = mainChats;
     let w = !opts.fresh && (ws[cur].wins.map(id => W[id]).find(mine) || findWin(mine));
-    if (!w) w = newWin({ app: 'chats', thread: null, ...(ag ? { agent: ag } : {}) }, opts);
+    if (!w) w = newWin({ app: 'chats', thread: null }, opts);
     focusWin(w.id); CHATS.openChat(w.id, sid);
     setTimeout(() => focusInside(w.id), 30);
   }
@@ -344,7 +347,7 @@
     // ⌘Enter in an agent's Chats starts a chat with that agent; anywhere else, with the main agent.
     const f0 = focused();
     let w = !opts.fresh && (f0?.app === 'chats' ? f0 : ws[cur].wins.map(id => W[id]).find(mainChats));
-    if (!w) w = newWin({ app: 'chats', thread: null }, opts);
+    if (!w) w = newWin({ app: 'chats', thread: null, ...(f0?.app === 'chats' && f0.focus ? { focus: { ...f0.focus } } : {}) }, opts);
     focusWin(w.id); CHATS.openNewDraft(w.id, '');
     syncChatsPane(w.id); setTimeout(() => focusInside(w.id), 30);
     return w;
@@ -372,6 +375,7 @@
     const a = appOf(w);
     return `<div class="wbar" data-drag>${w.app === 'chats' ? window.WosAgents.titlebar(w.agent || '', 'ic', 't') : `${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>`}
       ${window.WosBoundView.badge(w)}${w.app === 'frame' ? window.WosOwnViews?.marker(a) || '' : ''}${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
+      ${reloadable(w) ? `<button data-wact="reload" title="Refresh (${MOD}R)" aria-label="Refresh window">↻</button>` : ''}
       <button data-wact="mono" title="Full screen (${MOD}F)" aria-label="Full screen">⤢</button>
       <button data-wact="close" title="Close app (${MOD}W)" aria-label="Close window">✕</button></div>
       <div class="wbody">${bodyHtml(w)}</div>`;
@@ -574,12 +578,41 @@
     ws.splice(cur, 1); cur = ws.indexOf(previous); lastWs = cur; save(); render();
     if (focused()) focusInside(focused().id); CHATS.markVisibleThreadsSeen(); return true;
   }
+  /* Refresh what is in front, in place: app frames reload at the page they are on, Chats refetches its list and open
+   * thread, built-in views remount, and Home refetches its data. Nothing closes or moves. */
+  const reloadable = w => !!w;
+  function refreshData() { window.WizCore.refreshApps?.(); return Promise.resolve(LIVE?.refresh?.()).catch(() => {}); }
+  function reloadWin(id) {
+    const w = W[id], el = winEl(id); if (!reloadable(w) || !el) return false;
+    if (w.app === 'chats' || CHATS.isHosted(id)) {
+      refreshData().then(() => {
+        if (!W[id]) return;
+        if (W[id].thread && W[id].thread !== '__new__') CHATS.loadThread(W[id], true);
+        const lp = winEl(id)?.querySelector(`[data-chats="${id}::list"]`); if (lp) CHATS.renderChatList(listWin(id), lp);
+        syncChatsPane(id);
+      });
+      if (w.app === 'chats') { toast('↻', `Refreshed ${winTitle(w)}`, 900); return true; }
+    }
+    const f = el.querySelector('.wbody iframe');
+    if (f) {
+      // Same-origin apps reload where they are; a cross-origin page can only restart at its start page.
+      try { f.contentWindow.location.reload(); } catch (e) { f.src = f.src; toast('↻', `Restarted ${winTitle(w)}`, 1100); return true; }
+    } else { save(); const host = el.parentNode, next = el.nextSibling, fresh = mountWin(w, host); host.insertBefore(fresh, next); el.remove(); render(); }
+    toast('↻', `Refreshed ${winTitle(w)}`, 900);
+    return true;
+  }
+  function refreshHome() {
+    refreshData().then(() => render());
+    window.WosUsage?.load?.(true)?.then?.(() => { if (!usageEl.hidden) paintUsage(); });
+    render(); toast('↻', 'Refreshed Home', 900); return true;
+  }
+  function reloadCurrent() { if (homeOpen || !ws[cur].wins.length) return refreshHome(); const f = focused(); return f ? reloadWin(f.id) : refreshHome(); }
   function closeCurrent() { const f = focused(); if (f) { closeWin(f.id); return 'app'; } return closeDesktop() ? 'desktop' : 'root'; }
 
   /* ---------------- top bar ---------------- */
   addEventListener('wizard:app-counts', () => paintBar());
   function paintBar() {
-    window.WosBell?.paint();
+    window.WosBell?.paint?.();
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
     C.workspaceNav.setCount(APP.wizard?.id || 'wizard', LIVE?.ok ? (LIVE.workGroups().ready || []).length : 0);
     $('#logo').setAttribute('aria-current', homeOpen ? 'page' : 'false');
@@ -627,7 +660,29 @@
   }
 
   /* ---------------- home (root / empty workspace) ---------------- */
+  /* Miguel's skins: the desktop Home is the phone Home at desktop size (Miguel, 24 Oct 2026): resource dials on top, Ready
+   * and Working as the same dot counters. Settings stays in the top bar (one gear). No clock, thread lists, app chips or key hints. */
+  function mineHomeDots(kind, n) {
+    const icon = kind === 'ready' ? '<path d="M5 12.5l4.5 4.5L19 7"/>' : '<path d="M12 3a9 9 0 1 0 9 9"/>';
+    const shown = Math.min(n, 12), dots = Array.from({ length: shown }, (_, k) => `<i style="--n:${k}"></i>`).join('');
+    return `<span class="nc-vis${n ? '' : ' nc-zero'}" aria-hidden="true"><svg class="nc-ic" viewBox="0 0 24 24">${icon}</svg>${dots}${n > shown ? '<em>+</em>' : ''}</span>`;
+  }
+  function mineHomeHtml() {
+    const G = LIVE?.ok ? LIVE.workGroups() : {}, ready = (G.ready || []).length, working = (G.working || []).length;
+    const pending = OUTBOX?.unsent() || [];
+    return `<div class="home-in mine-home">
+      <div class="mh-res">${window.WosResources?.home() || ''}</div>
+      <div class="mh-gap"></div>
+      ${LIVE?.ok ? '' : '<div class="home-line">Connecting to Wizard…</div>'}
+      <div class="constellation">
+        <button class="now-card wz-home-widget" style="--c:var(--green)" data-home-act="ready" aria-label="Ready ${ready}"><span class="meta"><span class="k">Ready</span></span><span class="n">${ready}</span>${mineHomeDots('ready', ready)}</button>
+        <button class="now-card wz-home-widget" style="--c:var(--violet-2)" data-home-act="working" aria-label="Working ${working}"><span class="meta"><span class="k">Working</span></span><span class="n">${working}</span>${mineHomeDots('working', working)}</button>
+      </div>
+      ${pending.length ? `<button class="home-unsent" data-home-unsent>${pending.length} ${pending.some(u => u.state === 'failed') ? 'not sent' : 'waiting to send'} · View unsent messages</button>` : ''}
+    </div>`;
+  }
   function homeHtml(i) {
+    if (mine()) return mineHomeHtml();
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
     const pending = OUTBOX?.unsent() || [];
     const working = LIVE?.ok ? LIVE.workGroups().working || [] : [];
@@ -648,6 +703,8 @@
   stage.addEventListener('click', e => {
     if (e.target.closest('[data-home-settings]')) return openSettings();
     if (e.target.closest('[data-home-unsent]')) return openInbox();
+    const ha = e.target.closest('.home [data-home-act]')?.dataset.homeAct;
+    if (ha) { openApp(APP.wizard); const w = ws[cur].wins.map(id => W[id]).find(x => x?.app === 'chats' && !x.agent); if (w) { if (ha === 'working') CHATS.setFilter(w, 'working'); else CHATS.clearFilter?.(w); } return; }
     const hr = e.target.closest('.home [data-thread]'); if (hr) return openThread(hr.dataset.thread);
     const ap = e.target.closest('.home [data-app]'); if (ap) return openApp(APP[ap.dataset.app]);
   });
@@ -659,6 +716,7 @@
     const id = el.dataset.win, w = W[id];
     const act = e.target.closest('[data-wact]')?.dataset.wact;
     if (act === 'close') return closeWin(id);
+    if (act === 'reload') return reloadWin(id);
     if (act === 'mono') return toggleMono();
     if (act === 'pop') { const a = appOf(w); let href = a.url; try { href = el.querySelector('iframe').contentWindow.location.href; } catch (err) {} return window.open(href, '_blank', 'noopener'); }
     if (w?.app === 'chats' || CHATS.isHosted(id)) {
@@ -745,6 +803,7 @@
       ...(window.WosUsage ? [{ kind: 'cmd', name: 'AI usage', icon: '◔', run: () => openUsage() }] : []),
       { kind: 'cmd', name: 'Close app / empty desktop', icon: '✕', keys: `${MOD}W`, run: () => closeCurrent() },
       { kind: 'cmd', name: 'Full screen', icon: '⤢', keys: `${MOD}F`, run: () => toggleMono() },
+      { kind: 'cmd', name: 'Refresh window', icon: '↻', keys: `${MOD}R`, run: () => reloadCurrent() },
       { kind: 'cmd', name: 'Keyboard shortcuts', icon: '⌨', keys: `${MOD}/`, run: () => toggleKeys(true) },
       { kind: 'cmd', name: 'Settings', icon: '⚙', keys: `${MOD},`, run: () => openSettings() },
       { kind: 'cmd', name: 'Use the phone layout here', icon: '📱', run: () => { location.href = './?shell=phone'; } },
@@ -759,7 +818,7 @@
     let threads;
     if (n) threads = sessions.map(s => { const t = norm(s.title), p = norm(s.preview); const sc = t.startsWith(n) ? 3 : t.includes(n) ? 2 : p.includes(n) ? 1 : 0; return [sc, s]; }).filter(x => x[0]).sort((a, b) => b[0] - a[0] || Date.parse(LIVE.cardAt(b[1])) - Date.parse(LIVE.cardAt(a[1]))).slice(0, 8).map(x => x[1]);
     else { const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] }; threads = [...L.needs, ...L.ready, ...L.working].slice(0, 6); }
-    const th = threads.map(s => ({ kind: 'thread', name: s.title, sub: ago(LIVE.cardAt(s)) + (LIVE.isNew(s) ? ' · unread' : WORKING_ST.has(s.status) ? ' · working' : ''), icon: emoOf(s.id), run: o => openThread(s.id, o) }));
+    const th = threads.map(s => ({ kind: 'thread', name: s.title, sub: ago(LIVE.cardAt(s)) + (LIVE.isNew(s) ? ' · unread' : !s.archived && WORKING_ST.has(s.status) ? ' · working' : ''), icon: emoOf(s.id), run: o => openThread(s.id, o) }));
     const cmds = commands().filter(c => !n || norm(c.name).includes(n));
     // Quick search: web + AI overview, or images, in the right-half link pane (no new thread).
     let searchGrp = null;
@@ -795,8 +854,47 @@
     const list = norm(q) ? searchApps(q) : APPS.slice().sort((a, b) => pickRank(a) - pickRank(b) || SYS_APPS.indexOf(a.id) - SYS_APPS.indexOf(b.id));
     return list.filter(a => a.kind !== 'native' && a.id !== 'agents' && !C.isMaintenanceApp(a)).map(a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, run: o => openApp(a, o) }));
   }
+  /* Miguel's skins (Dark, Light, Landscapes): the selector is the phone launcher at desktop size (core/app-kinds.js): Apps with
+   * system apps first and ringed, "+ Get apps", then one folded "For agents" row holding Agent apps, Agents (with
+   * "+ Build agents") and Connectors, each ending in its own "+ Get ..." tile. Search stays one flat list. */
+  const mine = () => ['obsidian', 'obsidian-light', 'landscapes'].includes(document.documentElement.dataset.skin || ''); // Miguel's skins
+  let palFold = false;
+  function openStoreKind(kind) {
+    const url = window.WosAppKinds.storeUrl(kind);
+    const ex = findWin(w => w.app === 'frame' && w.appId === 'app-store');
+    if (ex) { ex.url = url; const f = winEl(ex.id)?.querySelector('iframe'); if (f) f.src = url; focusWin(ex.id); save(); return; }
+    newWin({ app: 'frame', appId: 'app-store', url });
+  }
+  function pickKinds() {
+    const AK = window.WosAppKinds, K = AK.kinds(APPS, APP), out = [];
+    const app = a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, sys: AK.isSystem(a), run: o => a.url || a.kind !== 'wizard' ? openApp(a, o) : window.WosAppRoute?.open(a.id, { name: a.name }) });
+    const get = k => ({ kind: 'app', get: true, name: AK.GET[k][1], run: () => openStoreKind(AK.GET[k][0]) });
+    const group = (k, list, extra = []) => out.push({ head: AK.LABELS[k], items: [...AK.sysFirst(list).map(app), ...extra, get(k)] });
+    group('apps', K.apps);
+    const n = K.wiz.length + K.agents.length + K.conns.length;
+    out.push({ fold: true, n });
+    if (palFold) {
+      group('wiz', K.wiz);
+      group('agents', K.agents, K.builder ? [{ kind: 'app', get: true, name: 'Build agents', run: o => openApp(K.builder, o) }] : []);
+      group('conns', K.conns);
+    }
+    return out;
+  }
   function pickRender() {
     palItems = pickBuild(palIn.value); palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
+    if (mine() && !norm(palIn.value) && window.WosAppKinds) {
+      const blocks = pickKinds(); palItems = []; const html = [];
+      const tile = it => { const i = palItems.push(it) - 1;
+        const ic = it.get ? '<span class="ic pal-plus">+</span>' : ico('span', 'ic', it.app);
+        return `<button type="button" class="pal-app${it.sys ? ' pal-sys' : ''}${it.get ? ' pal-get' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-selected="false" title="${esc(it.sub ? `${it.name} · ${it.sub}` : it.name)}">${ic}<span class="nm">${esc(it.name)}</span></button>`; };
+      for (const b of blocks) {
+        if (b.fold) { const i = palItems.push({ kind: 'fold', name: 'For agents', run: () => { palFold = !palFold; pickRender(); palIn.focus(); } }) - 1;
+          html.push(`<button type="button" class="pal-fold${palFold ? ' open' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-expanded="${palFold}"><span>For agents</span><small>${b.n}</small><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>`); continue; }
+        html.push(`<div class="pal-grp pal-kind" role="presentation">${esc(b.head)}</div>` + b.items.map(tile).join(''));
+      }
+      palList.innerHTML = html.join(''); palSel = Math.min(palSel, palItems.length - 1);
+      return palMark(palSel);
+    }
     palList.innerHTML = palItems.map((it, i) => `<button type="button" class="pal-app${i === palSel ? ' sel' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-selected="${i === palSel}" title="${esc(it.sub ? `${it.name} · ${it.sub}` : it.name)}">${ico('span', 'ic', it.app)}<span class="nm">${esc(it.name)}</span></button>`).join('')
       || `<div class="pal-empty">No app called “${esc(clip(palIn.value.trim(), 40))}”.<br><kbd>↵</kbd> searches threads and commands too</div>`;
     palMark(palSel);
@@ -811,6 +909,17 @@
   // Grid arrows are spatial: ←/→ step one tile, ↑/↓ one row; ↓ from a row above a short last row lands on its last tile.
   function pickMove(key) {
     const n = palItems.length; if (!n) return;
+    if (palList.querySelector('.pal-kind, .pal-fold')) {   // grouped: rows differ in length, so move by position on screen
+      const tiles = [...palList.querySelectorAll('[data-i]')], cur = tiles[palSel];
+      if (key === 'ArrowRight') return palMark(Math.min(n - 1, palSel + 1));
+      if (key === 'ArrowLeft') return palMark(Math.max(0, palSel - 1));
+      const down = key === 'ArrowDown', rows = tiles.filter(t => down ? t.offsetTop > cur.offsetTop : t.offsetTop < cur.offsetTop);
+      if (!rows.length) return;
+      const y = down ? Math.min(...rows.map(t => t.offsetTop)) : Math.max(...rows.map(t => t.offsetTop));
+      const row = rows.filter(t => t.offsetTop === y);
+      const best = row.reduce((a, b) => Math.abs(b.offsetLeft - cur.offsetLeft) < Math.abs(a.offsetLeft - cur.offsetLeft) ? b : a);
+      return palMark(+best.dataset.i);
+    }
     const tiles = palList.querySelectorAll('[data-i]'), top = tiles[0].offsetTop;
     let cols = 0; while (cols < tiles.length && tiles[cols].offsetTop === top) cols++;
     const i = palSel, row = Math.floor(i / cols), last = Math.floor((n - 1) / cols);
@@ -854,6 +963,7 @@
   }
   function palRun(i, o = {}) {
     const it = palItems[i]; if (!it) return;
+    if (it.kind === 'fold') return it.run();
     // An app takes focus where it opens; anything else returns focus first, then runs (it may open its own layer).
     if (it.kind === 'app') { closePalette({ restore: false }); it.run(o); restFocus(); return; }
     closePalette(); it.run(o);
@@ -1023,7 +1133,7 @@
     ['Open and find', [[`${MOD}Space`, 'Search everything'], [`${MOD}O`, 'Open an app'], [`${MOD}1`, 'Home'], [`${MOD}I`, 'Inbox'], [`${MOD},`, 'Settings'], [`${MOD}/`, 'This list']]],
     ['Chat', [[`${MOD}N`, 'New chat'], [`${MOD}V`, 'New voice chat (again to send)'], ['Enter', 'Send (⇧Enter for a new line)'], [`${MOD}↑  ${MOD}↓`, 'Previous / next chat'], ['Esc', 'Back'], ['/', 'Search chats']]],
     ['Desktops', [[`${MOD}T`, 'New desktop'], [`${MOD}2 … 9`, 'Go to desktop'], [`${MOD}[  ${MOD}]`, 'Previous / next desktop'], [`${MOD}\``, 'Last desktop'], [`${MOD}⇧2 … 9`, 'Send window to desktop']]],
-    ['Windows', [[`${MOD}← ↑ → ↓`, 'Focus window (or H J K L)'], [`${MOD}⇧← →`, 'Swap window'], [`${MOD}F`, 'Full screen'], [`${MOD}W`, 'Close app']]],
+    ['Windows', [[`${MOD}← ↑ → ↓`, 'Focus window (or H J K L)'], [`${MOD}⇧← →`, 'Swap window'], [`${MOD}F`, 'Full screen'], [`${MOD}R`, 'Refresh window'], [`${MOD}W`, 'Close app']]],
     ['Wizard for Mac (any app)', [['Caps Lock', 'Search and launch'], ['Caps Lock + letter', 'Jump to an app'], ['Right ⌘', 'Talk to Wizard'], ['Right ⌥', 'Dictate into any app']]],
   ];
   const keysEl = $('#keys');
@@ -1031,7 +1141,11 @@
   $('#keys .keys-head small').textContent = IS_MAC ? 'Every Wizard key is ⌥ (Option) plus one key, so nothing clashes with macOS, the browser or Omarchy.' : 'Every Wizard key is Alt plus one key, so nothing clashes with the browser or Omarchy (Super).';
   $('#keysBody').innerHTML = KEYS.map(([h, rows]) => `<section class="kgrp"><h4>${h}</h4>` + rows.map(([k, d]) => `<div class="krow"><span>${esc(d)}</span><span class="kk">${k.split(/\s{2,}/).map(x => `<kbd>${esc(x)}</kbd>`).join('<i>or</i>')}</span></div>`).join('') + '</section>').join('');
   function toggleKeys(on) { keysEl.hidden = on == null ? !keysEl.hidden : !on; if (!keysEl.hidden) window.WosResources?.back(); }
-  keysEl.addEventListener('click', e => { if (e.target === keysEl || e.target.closest('[data-close]')) toggleKeys(false); });
+  keysEl.addEventListener('click', e => {
+    if (e.target.closest('[data-keystour]')) { toggleKeys(false); settingsReturn = ''; window.WosTour?.desk?.start('help'); return; }
+    if (e.target === keysEl || e.target.closest('[data-close]')) toggleKeys(false);
+  });
+  if (window.WosTour?.desk) { const b = document.createElement('button'); b.type = 'button'; b.className = 'keys-tour'; b.dataset.keystour = ''; b.textContent = 'Show me again'; $('#keys .keys-head .x')?.before(b); }
 
   /* ---------------- voice: Right ⌘ talk, Right ⌥ dictate (taps), mic button ----------------
    * Tap to start, tap again to send (never hold). Lands in the focused thread when one is open,
@@ -1108,15 +1222,16 @@
       const f = focused(); vSnapshot = commandSnapshot();
       vFeedback = !forceNew && f?.from?.sid ? {thread:f.from.sid,title:f.from.title,url:f.url,context:viewContext(f.id,'feedback on the bound page')} : null;
       vFiles?.close(); vFiles = window.WosCaptureTools.take(CHATS.uploadFile, paintVoiceFiles); paintVoiceFiles();
-      vTarget = !forceNew && (f?.app === 'chats' || CHATS.isHosted(f?.id)) && (f.thread || f.agent) ? f.id : null;
+      vTarget = (f?.app === 'chats' || (!forceNew && CHATS.isHosted(f?.id))) ? f.id : null;
+      if (forceNew && vTarget) vSnapshot.thread = '__new__';
       const capability = window.WizAppServices?.voiceInput, app = APP[f?.appId];
       vConversation = !forceNew && !CHATS.isHosted(f?.id) ? (capability ? capability.pin(winEl(f?.id)?.querySelector('iframe'), app?.id)
         : app?.receives_voice_input === true ? { appId: app.id, token: 'unavailable', label: app.name } : null) : null;
-      vReply = vTarget && f.thread ? { wid: f.id, sid: f.thread, steerRunId: CHATS.WORKING_ST.has(LIVE.session(f.thread)?.status) ? LIVE.session(f.thread)?.runId || '' : '' } : null;
+      vReply = !forceNew && vTarget && f.thread && f.thread !== '__new__' ? { wid: f.id, sid: f.thread, steerRunId: CHATS.isWorking(LIVE.session(f.thread)) ? LIVE.session(f.thread)?.runId || '' : '' } : null;
       vContext = forceNew ? 'Explicit general-agent voice request. No foreground app or private thread context shared.' : viewContext(vTarget, 'voice, aimed at this thread');
       dictationFinishing = true; // model options may not have loaded while an app is foreground
       try {
-        const resolveRoute = () => vFeedback ? window.WosModels.snapshot(vFeedback.thread) : CHATS.modelRoute(vTarget, vTarget ? vSnapshot.thread || '__new__' : '');
+        const resolveRoute = () => vFeedback ? window.WosModels.snapshot(vFeedback.thread) : CHATS.modelRoute(forceNew && f?.app === 'chats' ? f.id : vTarget, forceNew || vTarget ? (forceNew ? '__new__' : vSnapshot.thread || '__new__') : '');
         vRoute = vConversation ? null : resolveRoute();
         if (!vConversation && !vRoute) { await loadVoiceModels(); vRoute = resolveRoute(); }
         if (!vConversation && !vRoute?.model) throw Error('Model route unavailable · recording has not started');
@@ -1131,7 +1246,10 @@
     if (vFiles?.files.some(f => f.error && !f.local)) { toast('!', 'Remove the failed upload before sending · take kept', 2600); return 'busy'; }
     if (commandTake) {
       dictationFinishing = true; const snap = vSnapshot;
-      try { const r=await VOICE.finish({transcribe:false}); if(!r?.blob)return 'none'; const take=await OUTBOX.retainDictation(r.blob,r.captureId); const it=await OUTBOX.transcribeDictation(take.id); if(!it?.text)return 'retained';
+      try { const r=await VOICE.finish({transcribe:false}); if(!r?.blob)return 'none'; const take=await OUTBOX.retainDictation(r.blob,r.captureId); const it=await OUTBOX.transcribeDictation(take.id);
+        // A silent command never happened: nothing to recover. A failed transcription keeps its recording.
+        if(!it?.text&&/^No speech detected/.test(it?.error||'')&&await OUTBOX.completeLocal(it.id)){toast('◌','No speech heard · nothing sent',1800);return 'none';}
+        if(!it?.text)return 'retained';
         // A command take is never a message: executed or unmatched, its custody finishes here.
         // Music settles on the player's done receipt; a failure keeps the recording.
         const cmd=LOCAL_COMMANDS.parse(it.text,snap,'command'); const music=/^(music|play_music)$/.test(cmd?.action||'');
@@ -1156,7 +1274,7 @@
     // The thread in front at the send key, before any await; an agent's Chats list takes it as a new chat with that agent.
     const aimSid = vFeedback?.thread || rp?.sid || (vTarget && vSnapshot?.view?.kind === 'chat thread' ? vSnapshot.thread : '') || (vTarget ? '__new__' : '');
     // Text, photos and voice go as ONE message (legacy H4): that thread's composer, taken at the send key.
-    const sealAt = vFeedback ? null : rp ? rp : aimSid ? { wid: vTarget, sid: aimSid } : null;
+    const sealAt = vFeedback || vNewChat ? null : rp ? rp : aimSid ? { wid: vTarget, sid: aimSid } : null;
     let modelRoute;
     try { modelRoute = vRoute; if (!modelRoute) throw Error('Recording-start model unavailable · take kept'); }
     catch (e) { vReply = rp; toast('!', String(e.message || e), 2400); return 'busy'; }
@@ -1204,7 +1322,7 @@
     catch(e) { toast('!',String(e.message||e),2600);return 'busy'; }
     finally { dictationFinishing = false; }
     vFiles?.close(); vFiles = window.WosCaptureTools.take(CHATS.uploadFile,paintVoiceFiles); paintVoiceFiles();
-    vMode = 'talk'; vNewChat = false; vTarget = wid; vReply = { wid, sid, steerRunId: CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : '' }; vContext = viewContext(wid, 'voice, aimed at this thread');
+    vMode = 'talk'; vNewChat = false; vTarget = wid; vReply = { wid, sid, steerRunId: CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : '' }; vContext = viewContext(wid, 'voice, aimed at this thread');
     $('#voiceTime').textContent = '0:00';
     try { await VOICE.start(); } catch (e) { vReply = null; toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
     return 'recording';
@@ -1352,6 +1470,8 @@
   }
   // Esc peels one layer: palette → keys → inbox → voice → thread → (nothing: stays put, never leaves).
   function escStep() {
+    if (window.WizShareWizard?.back()) return 'share-wizard';
+    { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above everything, incl. the selection menu
     if (window.WosSelMenu?.back()) return 'selection';
     if (window.WosBoomerang?.back()) return 'boomerang'; // the Boomerang picker sits above the thread it was opened from
     if (!pal.hidden) { closePalette(); return 'palette'; }
@@ -1367,6 +1487,8 @@
     if (!ib.hidden) { closeInbox(); return 'inbox'; }
     const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
     if (window.WosSkinFrame?.back()) return 'skin-controls';
+    // The first-message guide: once nothing sits above it, Esc/Back dismisses it (= Skip tour) before any navigation.
+    if (window.WosTour?.desk?.active) { window.WosTour.desk.finish('skip'); return 'tour'; }
     // Leave fullscreen before navigating the app underneath; preserve its thread and draft.
     if (homeOpen) return '';
     if (focused() && CHATS.isHosted(focused().id)) return CHATS.threadBack(focused());
@@ -1401,7 +1523,8 @@
     if (alt && !shift && (code === 'ArrowUp' || code === 'ArrowDown') && focused()?.app === 'chats') return hit(() => stepThread(focused().id, code === 'ArrowDown' ? 1 : -1));
     // ⌥N new chat; ⌥V new voice chat (⌥V again sends).
     if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); closeInbox(); toggleKeys(false); closeSettings(); closeUsage(); newChat({ fresh: true }); });
-    if (alt && !shift && code === 'KeyV') return hit(() => { if (e.repeat) return; closePalette(); closeInbox(); toggleKeys(false); closeSettings(); closeUsage(); talkNew(`${MOD}V`); });
+    if (alt && !shift && code === 'Enter') return hit(() => { if (!e.repeat) newChat(); });
+    if (alt && code === 'KeyV') return hit(() => { if (e.repeat) return; closePalette(); closeInbox(); toggleKeys(false); closeSettings(); closeUsage(); talkNew(`${MOD}V`); });
     // ⌥Space search everything, ⌥O open an app: from anywhere, even while typing.
     if (alt && !shift && code === 'Space') return hit(() => palToggle('all'));
     if (alt && !shift && code === 'KeyO') return hit(() => { if (!e.repeat) palToggle('apps'); });
@@ -1454,6 +1577,7 @@
     if (code === 'KeyI') return hit(() => toggleInbox());
     if (code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
     if (code === 'KeyF') return hit(() => { if (!e.repeat) toggleMono(); });
+    if (code === 'KeyR' && !shift) return hit(() => { if (!e.repeat) reloadCurrent(); });
     if (code === 'Slash') return hit(() => toggleKeys());
     if (code === 'Comma') return hit(() => (setEl.hidden ? openSettings() : closeSettings()));
     if (code === 'BracketLeft') return hit(() => { lastWs = cur; goWs((cur - 1 + ws.length) % ws.length); });
@@ -1568,9 +1692,17 @@
    * Back/Esc then walks thread → list → stays; the page is never left. */
   window.WosFeatures.install({review:openReview,maps:openMaps,command:localCommand,context:commandSnapshot,openFeature:(id,opts)=>{closeSettings();newWin({app:'feature',featureId:id,featureOptions:opts,title:window.WosFeatures.entries.find(f=>f.id===id)?.title});}});
   window.WosMusic.install({app:()=>APP['wizard-music'],findWin:()=>findWin(w=>w.app==='frame'&&w.appId==='wizard-music')?.id,openMusic:()=>{openApp(APP['wizard-music']);return findWin(w=>w.appId==='wizard-music')?.id;},frameOf:id=>winEl(id)?.querySelector('iframe'),toast});
+  // First-message guide (core/tour.js WosTour.desk): once per browser on an alongside install's first launch, or from
+  // ?view=tour and the Keys sheet's "Show me again". VM launches keep Setup only (alongsideOnly).
+  const DESK_TOUR = window.WosTour?.desk || null;
+  DESK_TOUR?.attach({ mod: MOD, toast, newChat: () => newChat(),
+    composer: () => { const f = focused(); return f?.app === 'chats' ? winEl(f.id)?.querySelector('.pane-main .ch-compose .ch-field') || null : null; },
+    pane: () => { const f = focused(); return f?.app === 'chats' ? winEl(f.id)?.querySelector('.pane-main') || null : null; } });
   C.deeplink.handle({
     thread: sid => openThread(sid),
     view(v, section) {
+      if (v === 'tour' && window.WosTour?.desk) { closeSettings(); toggleKeys(false); return window.WosTour.desk.start('link'); }
+      if (v === 'help') { closeSettings(); return toggleKeys(true); }
       if (v === 'home') return goHome();
       if (v === 'inbox') return openInbox();
       if (v === 'apps') return openPicker();
@@ -1598,7 +1730,9 @@
   C.deeplink.consume();
   window.WosScenery?.attach({ device: document.body, homeInView: () => (homeOpen || !ws[cur].wins.length) && setEl.hidden && pal.hidden && keysEl.hidden && ib.hidden && usageEl.hidden && !window.WosResources?.state?.panel });
   new MutationObserver(() => window.WosScenery?.update()).observe(stage, { attributes: true, subtree: true, attributeFilter: ['class', 'hidden'] });
-  window.WosSetupLaunch?.boot({ open: id => { const a = APP[id]; if (a) openApp(a); } }); // Setup opens itself on first run
+  window.WosSetupLaunch?.boot({ open: id => { const a = APP[id]; if (a) openApp(a); }, alongsideOnly: true,
+    firstRunTour: !!DESK_TOUR && !window.WosTour.done(), tour: why => DESK_TOUR?.start(why), markTour: () => window.WosTour?.mark(),
+    busy: () => VOICE.state !== 'idle' || !setEl.hidden || !pal.hidden || [...document.querySelectorAll('.ch-compose textarea')].some(t => t.value.trim()) }); // Setup opens itself on first run
   C.status?.attach({ openInbox, inboxOpen: () => !ib.hidden, current: () => { const f = focused(); return f?.app === 'chats' && f.thread !== '__new__' ? f.thread || '' : ''; } });
   const f0 = focused(); if (f0) setTimeout(() => focusInside(f0.id), 50);
 
@@ -1608,7 +1742,7 @@
     shell: 'desktop', log: (...a) => { window.__wuxLog = (window.__wuxLog || []).concat(a.join(' ')).slice(-80); },
     mount: () => document.querySelector('#bar .bar-r') || document.body, prepend: true,
     openThread: sid => openThread(sid),
-    busy: () => ((dictationFinishing || VOICE.state !== 'idle') && !(vHandedOff && !['listen', 'paused'].includes(VOICE.state) && OUTBOX.handedOff?.(vHandedOff))) || Object.values(W).some(win => (CHATS.ch(win.id)?.files || []).some(f => f.uploading)),
+    busy: () => window.WizShareWizard?.busy || ((dictationFinishing || VOICE.state !== 'idle') && !(vHandedOff && !['listen', 'paused'].includes(VOICE.state) && OUTBOX.handedOff?.(vHandedOff))) || Object.values(W).some(win => (CHATS.ch(win.id)?.files || []).some(f => f.uploading)),
     beforeReload: () => { for (const el of document.querySelectorAll('[data-compose]')) el.dispatchEvent(new Event('input', { bubbles: true })); },
     toast,
   });
@@ -1633,6 +1767,9 @@
     openList: () => { const w = skinChatsWin(); if (w) { CHATS.openChat(w.id, null); syncChatsPane(w.id); } },
     openThread: id => openThread(id),
     goDesk: i => goWs(i),
+    newThread: () => { const w = skinChatsWin(); if (w) CHATS.openChat(w.id, '__new__'); },
+    models: () => { const w = skinChatsWin(); return w ? CHATS.tweakModels(w.id) : []; },
+    model: (choice, alive) => { const w = skinChatsWin(); return w ? CHATS.tweakModel(w.id, choice, alive) : null; },
     deskCount: () => ws.length,
     root() { const w = skinChatsWin(); return w ? document.querySelector(`[data-chats="${w.id}"]`) : null; },
     dock: () => null,

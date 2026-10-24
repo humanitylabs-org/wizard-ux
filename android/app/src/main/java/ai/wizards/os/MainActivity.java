@@ -69,7 +69,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
     private String pendingHandoff; // JSON handed to window.__wosHandoff once the shell is ready
     private int handoffTries;
-    private WebView web;
+    private SelectionWebView web;
     private FrameLayout root;
     private PermissionRequest pendingMic;
     private ValueCallback<Uri[]> pendingFiles;
@@ -254,6 +254,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
             @Override
             public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
+                if (view instanceof SelectionWebView) ((SelectionWebView)view).refreshScrollProxy();
                 // A commit (also a same-document hop). Never fires for a load that was abandoned or still hangs.
                 if (isWeb(url) && !mainFailed && sameHost(url, wantUrl) && reach != null && reach.isShowing() && !reach.isOffline()) landed();
             }
@@ -267,7 +268,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
-                if (view instanceof SelectionWebView) ((SelectionWebView)view).cancelScrollCapture();
+                if (view instanceof SelectionWebView) ((SelectionWebView)view).scrollPageStarted();
                 if (device != null) device.onPageStarted();
                 pageUrl = url;
                 screenCaptureId = null;
@@ -276,6 +277,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
+                if (view instanceof SelectionWebView) ((SelectionWebView)view).installScrollProxy();
                 topSent = -1; cutoutSent = -1; reportTop(topPx); reportCutout(cutoutPx); // a reload starts fresh: push both again
             }
 
@@ -428,6 +430,19 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         }
     }
 
+    private void openInOwnBrowser(Uri u) {
+        Intent view = new Intent(Intent.ACTION_VIEW, u).addCategory(Intent.CATEGORY_BROWSABLE);
+        // This app may claim its own Wizard's links: send them to the default browser explicitly.
+        android.content.pm.ResolveInfo ri = getPackageManager().resolveActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")).addCategory(Intent.CATEGORY_BROWSABLE), android.content.pm.PackageManager.MATCH_DEFAULT_ONLY);
+        String pkg = ri == null || ri.activityInfo == null ? null : ri.activityInfo.packageName;
+        if (pkg != null && !"android".equals(pkg) && !getPackageName().equals(pkg)) view.setPackage(pkg);
+        try { startActivity(view); }
+        catch (ActivityNotFoundException e) {
+            try { startActivity(Intent.createChooser(new Intent(Intent.ACTION_VIEW, u), "Open in")); }
+            catch (ActivityNotFoundException e2) { Toast.makeText(this, "No browser can open that link", Toast.LENGTH_SHORT).show(); }
+        }
+    }
+
     private void openOutside(Uri u) {
         try {
             startActivity(new Intent(Intent.ACTION_VIEW, u).addCategory(Intent.CATEGORY_BROWSABLE));
@@ -534,15 +549,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     void changeServer() {
         Intent target = new Intent(this, ConnectActivity.class);
         if (web == null) { startActivity(target); return; }
-        // Pass Appearance roles, never server-controlled URLs or credentials. Native validates colours.
-        web.evaluateJavascript("JSON.stringify({base:getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),ink:getComputedStyle(document.documentElement).getPropertyValue('--ink').trim(),accent:getComputedStyle(document.documentElement).getPropertyValue('--violet-2').trim()})", raw -> {
-            try {
-                String json = new org.json.JSONArray("[" + raw + "]").getString(0);
-                org.json.JSONObject colours = new org.json.JSONObject(json);
-                for (String key : new String[]{"base", "ink", "accent"}) target.putExtra(key, colours.optString(key));
-            } catch (Exception ignored) { }
-            startActivity(target);
-        });
+        // Connect dresses in the worn skin: resolve the shell's colour roles first (colours only, validated natively).
+        web.evaluateJavascript(WizardLook.READ_JS, raw -> { WizardLook.save(this, raw); startActivity(target); });
     }
 
     void openTailscale() {
@@ -650,7 +658,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (!(this instanceof AppSessionActivity)) current = new java.lang.ref.WeakReference<>(this);
         if (device == null) return;
         device.onStart();
-        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.front());
+        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.shellFront());
         ai.wizards.os.everywhere.EverywhereOutbox.get(this).pump();
         ai.wizards.os.mizel.MeetingRecorderService.recover(this); // a meeting cut off by a process death is closed and uploaded
     }
@@ -658,7 +666,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     @Override
     protected void onStop() {
         if (device != null) device.onStop();
-        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.front());
+        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.shellFront());
         super.onStop();
     }
 
@@ -709,14 +717,20 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
+        if(!hasFocus)ScrollCaptureDiagnostics.arm("window-focus-lost");
+        ScrollCaptureDiagnostics.record("Activity.onWindowFocusChanged",ScrollCaptureDiagnostics.fields("hasFocus",hasFocus));
+        if(web!=null) {web.recordProxyState();web.refreshScrollProxy();}
         super.onWindowFocusChanged(hasFocus);
+        if(hasFocus)ScrollCaptureDiagnostics.resumed(this);
         if (hasFocus && immersive) applyImmersive(true); // a dialog or the shade can bring the bars back
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        if (web == null) return;
+        ScrollCaptureDiagnostics.record("Activity.onResume",ScrollCaptureDiagnostics.fields());
+        if (web == null) return; // Connect owns the screen until an origin is set
+        ScrollCaptureDiagnostics.resumed(this);
         web.onResume();
         ai.wizards.os.share.ShareService.resumeIfPending(this); // shares left queued (force-stop, reboot) carry on
         ai.wizards.os.mizel.MeetingEventSync.kick(this); // meeting markers from the floating orb / side button still unsent
@@ -742,6 +756,16 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             sideSetupActive = false;
             if (SideButton.assistant(this)) Toast.makeText(this, "Side button is on. Hold it to talk.", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    @Override public void onTopResumedActivityChanged(boolean top) {
+        if(android.os.Build.VERSION.SDK_INT>=29)super.onTopResumedActivityChanged(top);
+        ScrollCaptureDiagnostics.record("Activity.onTopResumedActivityChanged",ScrollCaptureDiagnostics.fields("top",top));
+    }
+    @Override public void onConfigurationChanged(android.content.res.Configuration c) {
+        super.onConfigurationChanged(c);
+        ScrollCaptureDiagnostics.record("Activity.onConfigurationChanged",ScrollCaptureDiagnostics.fields(
+            "orientation",c.orientation,"widthDp",c.screenWidthDp,"heightDp",c.screenHeightDp,"densityDpi",c.densityDpi));
     }
 
     /* ---------------- Side button switch ----------------
@@ -774,6 +798,10 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
     @Override
     protected void onPause() {
+        ScrollCaptureDiagnostics.arm("activity-pause");
+        ScrollCaptureDiagnostics.record("Activity.onPause",ScrollCaptureDiagnostics.fields());
+        if(web!=null)web.recordProxyState();
+        if (web != null && !(this instanceof AppSessionActivity)) web.evaluateJavascript(WizardLook.READ_JS, raw -> WizardLook.save(this, raw)); // the reach/Connect screens wear the last skin
         if (this instanceof AppSessionActivity && web != null) web.evaluateJavascript("window.__wosSessionCheckpoint?.()", null);
         if (mizel != null) mizel.setPcmForeground(false);
         // Mid-recording the page must keep running in the background (the floating orb can send/pause/cancel it).
@@ -925,6 +953,18 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
     /** Small, read-mostly bridge: the shell can ask for a haptic tick and learn it runs natively. */
     private final class Bridge {
+        /** Long-press › Open in your browser, also for this Wizard's own pages: the phone's default browser, never this app. */
+        @JavascriptInterface public void openInBrowser(String url) {
+            final Uri u = Uri.parse(String.valueOf(url));
+            if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) return;
+            runOnUiThread(() -> openInOwnBrowser(u));
+        }
+        /** A file link (APK, PDF…) on this Wizard: Android's download manager, so it lands in Downloads with a notification. */
+        @JavascriptInterface public void download(String url) {
+            final Uri u = Uri.parse(String.valueOf(url));
+            if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) return;
+            runOnUiThread(() -> downloadOutside(u.toString(), web == null ? null : web.getSettings().getUserAgentString(), null, null));
+        }
         @JavascriptInterface public void changeServer() { runOnUiThread(MainActivity.this::changeServer); }
         @JavascriptInterface
         public String platform() { return "android:" + BuildConfig.VERSION_NAME; }

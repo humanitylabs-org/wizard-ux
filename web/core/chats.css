@@ -1,4 +1,58 @@
 /* Wizard UX core: Chats (list, thread, composer, attachments, voice notes, unsent bubbles). Shared by every shell. */
+/* Native app only: a real root-scrolling WebView for Android's built-in capture.
+ * No clones, capture callbacks, scroll proxies or alternate chat renderer. */
+html.wos-doc-scroll { height: auto !important; overflow-y: auto !important; overflow-x: clip !important; }
+html.wos-doc-scroll body { height: auto !important; min-height: 100dvh; overflow: visible !important; display: block; }
+html.wos-doc-scroll .wos-doc-path {
+  position: relative !important; inset: auto !important; display: block !important;
+  width: 100% !important; height: auto !important; min-height: 0 !important; max-height: none !important;
+  overflow: visible !important; transform: none !important; translate: none !important;
+  touch-action: pan-y !important;
+  contain: none !important; will-change: auto !important; filter: none !important;
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important; animation: none !important;
+  transition: none !important; scale: none !important; rotate: none !important; container-type: normal !important;
+}
+html.wos-doc-scroll .device > :not(.wos-doc-path) { position: fixed !important; }
+html.wos-doc-scroll .wos-doc-path:is(.desk,.tiles,.win,.wbody) { padding: 0 !important; margin: 0 !important; border: 0 !important; border-radius: 0 !important; }
+html.wos-doc-scroll .track > .desk:not(.wos-doc-path),
+html.wos-doc-scroll .tiles > .win:not(.wos-doc-path),
+html.wos-doc-scroll .desk.wos-doc-path > :not(.wos-doc-path),
+html.wos-doc-scroll .win.wos-doc-path > .wbar { display: none !important; }
+/* The fixed header's top edge. Immersive full screen hides the phone status bar, so the header sits under the
+ * camera cutout (--cut-t), not the status-bar inset (--safe-t) — otherwise the thread scrolled into a bare
+ * status-bar-high strip above the title (James, 23 Oct 2026). */
+html.wos-doc-scroll .device { --wos-doc-top: var(--safe-t, 0px); }
+html.wos-doc-scroll .device.immersive { --wos-doc-top: var(--cut-t, 0px); }
+html.wos-doc-scroll .wos-doc-thread .ch-thread {
+  position: relative !important; inset: auto !important; height: auto !important; min-height: 100dvh;
+  padding-top: calc(var(--wos-doc-top, 0px) + var(--wos-doc-head, 54px)) !important;
+  padding-bottom: calc(var(--wos-doc-compose, 84px) + var(--wos-doc-switch, 0px) + var(--safe-b, 0px) + var(--wos-doc-bottom, 0px) + 16px) !important;
+}
+html.wos-doc-scroll .wos-doc-thread .ch-msgs {
+  flex: none !important; height: auto !important; overflow: visible !important;
+  mask-image: none !important; -webkit-mask-image: none !important;
+}
+html.wos-doc-scroll .wos-doc-thread .ch-head {
+  position: fixed !important; top: var(--wos-doc-top, 0px) !important; left: 0; right: 0;
+  z-index: 50; background: var(--wz-base, var(--bg));
+}
+/* Paint the inset above the header too: the document scrolls under the whole screen, so the strip under the
+ * status bar / cutout must stay opaque or messages show above the title. */
+html.wos-doc-scroll .wos-doc-thread .ch-head::before {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: var(--wos-doc-top, 0px);
+  background: inherit; pointer-events: none;
+}
+html.wos-doc-scroll .wos-doc-thread .ch-compose {
+  position: fixed !important; bottom: calc(var(--safe-b, 0px) + var(--wos-doc-bottom, 0px)) !important;
+  left: 0; right: 0; z-index: 50; background: var(--wz-base, var(--bg));
+}
+html.wos-doc-scroll .wos-doc-thread .ch-swrow {
+  position: fixed !important; bottom: calc(var(--safe-b, 0px) + var(--wos-doc-bottom, 0px) + var(--wos-doc-compose, 84px)) !important;
+  left: 0; right: 0; z-index: 50; background: var(--wz-base, var(--bg));
+}
+html.wos-doc-scroll .wos-doc-thread .ch-latest { position: fixed; bottom: calc(var(--wos-doc-compose, 84px) + var(--wos-doc-switch, 0px) + var(--safe-b, 0px) + var(--wos-doc-bottom, 0px) + 12px); z-index: 51; }
+html.wos-doc-scroll :is(#dock,.general-voice,.pill) { position: fixed; }
+
 .ch-custody-notice { display:block; flex-basis:100%; padding:8px 12px; color:var(--muted, #c4b8d2); font-size:12px; line-height:1.4; }
 .ch-compose > .ch-custody-notice { margin-bottom:12px; }
 .voice > .ch-custody-notice { position:absolute; bottom:calc(var(--safe-b, 0px) + var(--dock-h, 64px) + 18px); left:16px; right:16px; background:var(--bg, #160f24); border:1px solid var(--line, #433453); border-radius:12px; }
@@ -11,6 +65,52 @@
 .ch-search svg { width: 15px; height: 15px; flex: 0 0 auto; fill: none; stroke: var(--ink-3); stroke-width: 2; stroke-linecap: round; }
 .ch-search input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: 15px; }
 .ch-search input::placeholder { color: var(--ink-3); }
+/* Persistent list Focus: one horizontally scrollable row, shared by both shells.
+ * A flex footer reserves its own height, so no last row can sit underneath it. */
+.ch-focus-strip { position: relative; z-index: 5; flex: 0 0 auto; display: flex; align-items: center; gap: 8px; min-width: 0; height: 52px; padding: 4px 10px; overflow-x: auto; overflow-y: hidden; white-space: nowrap; touch-action: pan-x; overscroll-behavior-x: contain; scrollbar-width: none; background: var(--bg); border-top: 1px solid var(--line); }
+.ch-focus-strip::-webkit-scrollbar { display: none; }
+.ch-focus-tab { --ch-tab-colour: var(--ch-agent-colour, var(--wz-accent, var(--violet-2))); position: relative; isolation: isolate; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 44px; max-width: calc(100% - 20px); height: 44px; padding: 0 11px; border: 0; border-radius: 22px; background: transparent; color: var(--wz-ink, var(--ink)); font: inherit; font-size: 13px; white-space: nowrap; }
+/* The pill is 32px tall; the transparent button remains a 44px touch target. */
+.ch-focus-tab::before { content: ''; position: absolute; z-index: -1; inset: 6px 0; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--ch-tab-colour) 28%, transparent); background: color-mix(in srgb, var(--ch-tab-colour) 8%, var(--wz-base, var(--bg))); }
+.ch-focus-tab.on { color: var(--wz-base, var(--bg)); font-weight: 650; }
+.ch-focus-tab.on::before { background: var(--ch-tab-colour); border-color: transparent; }
+/* Agent headspace (James, 24 Oct 2026): no background wash; the agent's colour carries the highlights instead. */
+.ch-focus-tab[style*="--ch-agent-colour"]:not(.on) { color: color-mix(in oklab, var(--ch-tab-colour) 80%, var(--wz-ink, var(--ink))); font-weight: 600; }
+.ch-focus-tab[style*="--ch-agent-colour"]:not(.on)::before { border-color: color-mix(in srgb, var(--ch-tab-colour) 60%, transparent); background: color-mix(in srgb, var(--ch-tab-colour) 18%, var(--wz-base, var(--bg))); }
+.ch-focus-tab.on::before { box-shadow: 0 0 0 2px color-mix(in srgb, var(--ch-tab-colour) 35%, transparent), 0 4px 14px color-mix(in srgb, var(--ch-tab-colour) 45%, transparent); }
+.ch-list[style*="--agc"] .ch-focus-strip { border-top: 2px solid var(--agc); }
+.ch-list[style*="--agc"] .ch-search { border-color: color-mix(in srgb, var(--agc) 55%, transparent); }
+.ch-list[style*="--agc"] .ch-rdy-bar button.on { background: color-mix(in srgb, var(--agc) 30%, transparent); border-color: var(--agc); color: var(--wz-ink, var(--ink)); }
+.ch-list[style*="--agc"] .ch-sec-h b:not(.wait) { background: var(--agc); color: var(--wz-base, var(--bg)); }
+.ch-list[style*="--agc"] .ch-row.unread .tp time { color: var(--agc); }
+.ch-list[style*="--agc"] .ch-fab { background: linear-gradient(145deg, color-mix(in oklab, var(--agc) 85%, #fff), color-mix(in oklab, var(--agc) 80%, #000)); color: #111; box-shadow: 0 10px 26px color-mix(in srgb, var(--agc) 50%, transparent), inset 0 1px 0 rgba(255,255,255,.25); }
+.ch-focus-tab[data-chfocusopt^="space:"]::before { border-color: var(--wz-line, var(--line-2)); }
+.ch-focus-tab:focus-visible { outline: 2px solid var(--violet-2); outline-offset: -3px; }
+.ch-focus-tab > span { overflow: hidden; text-overflow: ellipsis; }
+.ch-focus-tab .ag-sig { display: none; }
+.ch-focus-tab .ag-lock { width: 14px; height: 14px; flex: none; }
+.ch-focus-dot { position: absolute; top: 4px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--amber); }
+.ch-list:has(.ch-focus-strip) .ch-fab { bottom: 68px; }
+.ch-list:has(.ch-focus-strip) .ch-pill { bottom: 68px; }
+/* Fullscreen phone lists extend behind the corner orb; reserve its existing safe area.
+ * Framed phone windows and desktop panes already end above their shell dock. */
+html[data-shell="phone"] .device.orb-corner .win.full .ch-focus-strip { margin-bottom: calc(var(--safe-b, 0px) + var(--corner-b) + var(--corner-orb) + 8px); }
+html[data-shell="phone"] .device.orb-corner .win.full .ch-list:has(.ch-focus-strip) .ch-fab { bottom: calc(var(--safe-b, 0px) + var(--corner-b) + var(--corner-orb) + 76px); }
+html[data-shell="phone"] .device.orb-corner .win.full .ch-list:has(.ch-focus-strip) .ch-pill { bottom: calc(var(--safe-b, 0px) + var(--corner-b) + var(--corner-orb) + 76px); }
+/* A solo list on pill-dock skins also reaches the viewport bottom. Reuse the
+ * skin's measured dock inset; the footer replaces its legacy fade/spacer. */
+#device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-focus-strip { margin-bottom: calc(var(--pill-top, 0px) + 8px); }
+#device .win:has(.ch-focus-strip)::after, #device .win .ch-list:has(.ch-focus-strip) .ch-scroll::after { display: none; }
+#device .win .ch-list:has(.ch-focus-strip) .ch-scroll { padding-bottom: 84px; }
+#device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-list:has(.ch-focus-strip) .ch-fab { bottom: calc(var(--pill-top, 0px) + 76px); }
+.device.zen:not(.orb-corner) .ch-focus-strip { margin-bottom: calc(var(--safe-b, 0px) + 24px); }
+.ch-list .ch-fcard:has([data-chfocusopt]) { background: var(--bg); }
+html[data-shell="phone"] .ch-fsheet:has([data-chfocusopt]) { bottom: calc(var(--dock-h) + var(--safe-b, 0px) + 8px); }
+.ch-fcard [data-chfocusopt] { min-height: 44px; height: auto; max-width: 100%; }
+.ch-fcard [data-chfocusopt] > span { min-width: 0; overflow-wrap: anywhere; }
+.ch-fcard [data-chfocusopt] small { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.ch-fcard [data-chfocusopt] .ag-sig { width: 22px; height: 22px; flex: none; }
+.ch-fcard [data-chfocusopt] .ag-lock { width: 16px; height: 16px; flex: none; }
 .ch-new { flex: 0 0 auto; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: linear-gradient(140deg, #7a4dff, #c04dff); box-shadow: 0 6px 18px rgba(140, 80, 255, .35); }
 .ch-new svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; }
 .ch-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none; padding: 2px 6px 12px; }
@@ -71,8 +171,9 @@
 .dots b:nth-child(2) { animation-delay: .15s; } .dots b:nth-child(3) { animation-delay: .3s; }
 .ch-compose { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; padding: 8px 10px 10px; border-top: 1px solid var(--line); }
 .ch-row2 { display: flex; align-items: flex-end; gap: 8px; }
-.ch-compose textarea { flex: 1; min-width: 0; min-height: 42px; max-height: 140px; resize: none; padding: 10px 14px; border-radius: 20px; border: 1px solid var(--line-2); outline: 0; background: rgba(205, 190, 255, .06); color: var(--ink); font: inherit; font-size: 15px; line-height: 1.35; }
+.ch-compose textarea { flex: 1; min-width: 0; min-height: 42px; max-height: 140px; resize: none; padding: 10px 14px; border-radius: 20px; border: 1px solid var(--line-2); outline: 0; background: rgba(205, 190, 255, .06); color: var(--ink); font: inherit; font-size: 15px; line-height: 1.35; transition: border-color 120ms, background 120ms, box-shadow 120ms; }
 .ch-compose textarea:focus { border-color: rgba(185, 155, 255, .6); }
+.ch-compose.is-file-drag textarea { border-color: var(--violet-2); background: color-mix(in srgb, var(--violet) 15%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--violet-2) 40%, transparent); }
 .ch-compose button { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(140deg, #7a4dff, #c04dff); }
 .ch-compose button svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .ch-compose button[type=submit]:disabled { opacity: .45; }

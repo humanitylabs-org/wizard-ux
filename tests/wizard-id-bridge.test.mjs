@@ -40,6 +40,16 @@ test('missing bridge refuses without pretending to create an ID', async () => {
   const f = fixture({ wizardDevicePort: undefined }); await assert.rejects(f.call('identity.setup'), /no native shell/);
 });
 
+test('page navigation retains scroll reset and native signer cancellation', () => {
+  const activity = readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/MainActivity.java', import.meta.url), 'utf8');
+  const pageStarted = activity.split('public void onPageStarted(')[1]?.split('@Override')[0];
+  assert.ok(pageStarted, 'MainActivity must keep its navigation lifecycle hook');
+  assert.match(pageStarted, /\(\(SelectionWebView\)view\)\.scrollPageStarted\(\)/);
+  assert.match(pageStarted, /if \(device != null\) device\.onPageStarted\(\)/);
+  const selection = readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/SelectionWebView.java', import.meta.url), 'utf8');
+  assert.match(selection, /void scrollPageStarted\(\)\s*\{\s*scrollMetrics = null;\s*cancelScrollCapture\(\);\s*\}/);
+});
+
 const servicesSource = readFileSync(new URL('../web/core/app-services.js', import.meta.url), 'utf8');
 function appFixture({ native = true, source = 'apps.json', kind = 'wizard' } = {}) {
   const location = new URL('https://wizard.example/wizard-os-home/'), calls = [], replies = [], listeners = {};

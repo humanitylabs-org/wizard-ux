@@ -41,6 +41,11 @@ test('shell adapters cannot retain a second Settings renderer, picker, or hardco
     assert.doesNotMatch(s, /data-skinpick|<div class="st-group"/);
   }
   assert.doesNotMatch(read('web/core/polish.css'), /html\[data-shell="desktop"\] \.st-/);
+  const settings = read('web/core/settings.js');
+  assert.doesNotMatch(settings, /data-layoutpick|data-layout-row/);
+  assert.match(settings, /data-skinfamily=/);
+  assert.match(settings, /<h4>Colours<\/h4>/);
+  assert.match(settings, /data-myskin-tile/);
   assert.match(read('web/core/deeplink.js'), /WosSettings\?\.features\.some/);
 });
 
@@ -137,4 +142,16 @@ test('unsent Edit consumes only after the shared draft store verifies text and a
   assert.equal(sandbox.WosSettings.moveDraft(opts), true); assert.deepEqual(removed, ['fixture']);
   sandbox.WosChat.drafts.get = () => ({ text: '', files: [] });
   assert.equal(sandbox.WosSettings.moveDraft(opts), false); assert.deepEqual(removed, ['fixture']); assert.equal(notices.length, 1);
+});
+
+// Look's new controls stay in the shared Settings stack; Back never navigates out of Wizard.
+test('nested Look / skin tweaks Back returns to Settings before shell root Back, in both mounts', () => {
+  const { sandbox, roots } = harness();
+  sandbox.WosSkin = { current:'obsidian', list:[], families:[{ id:'mizel', name:'Mizel', tweaks:'miguel', palettes:['obsidian'] }], familyOf:()=>'mizel' };
+  sandbox.WosExperience = { state:{owner:'miguel',busy:false,error:'',tweaks:[{id:'miguel/hidden-pin',name:'Hide pin buttons',description:'No pin button on chats',on:true}],active:['miguel/hidden-pin']} };
+  for (const { root, view } of roots) {
+    view.focus('look'); assert.equal(view.page,'appearance'); assert.match(root.innerHTML,/Mizel also changes how things work/); assert.match(root.innerHTML,/1 of 1 changes on/);
+    assert.doesNotMatch(root.innerHTML,/Back to my setup|Try Miguel|Your tweaks|stop following/);
+    assert.equal(view.back(), true); assert.equal(view.page,''); assert.equal(view.back(), false); assert.match(root.innerHTML,/Settings categories/);
+  }
 });

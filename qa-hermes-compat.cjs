@@ -54,6 +54,19 @@ const root = __dirname, out = process.env.QA_OUT || path.join(root, 'qa-evidence
   const answer=writes.find(x=>x.path.endsWith('/clarify'));check(JSON.stringify(answer.body)===JSON.stringify({request_id:'question-a',execution_generation:11,answer:'A custom colour'}),'clarification goes to clarify, not a new inference turn');
   session.status='waiting_for_approval';run={status:session.status,approval:{request_id:'old-prompt',command:'legacy action',choices:['once','deny']}};await refresh();await page.locator('[data-approve="deny"]').waitFor();await page.locator('[data-approve="deny"]').click();
   const legacy=writes.filter(x=>x.path.endsWith('/approval')).at(-1);check(!('execution_generation' in legacy.body)&&legacy.body.request_id==='old-prompt','legacy approval format unchanged');
+  // An answered control never comes back, even while the runtime snapshot still lists it (James, 23 Oct: Deny looped).
+  const stuck=()=>{session.status='waiting_for_approval';run={status:session.status,approval:{request_id:'stuck-prompt',command:'stuck action',choices:['once','session','always','deny']}}};
+  stuck();await refresh();await page.locator('[data-approve="deny"]').waitFor();await page.locator('[data-approve="deny"]').click();await page.waitForTimeout(150);
+  stuck();await refresh();await page.waitForTimeout(100);
+  check(await page.locator('[data-approve="deny"]').count()===0&&(await page.locator('.appr.done').innerText()).includes('Denied'),'stale snapshot after Deny keeps the Denied receipt, no buttons');
+  const toasts=()=>page.evaluate(()=>{const t=document.getElementById('toast');return t&&/This control changed/.test(t.textContent)&&+getComputedStyle(t).opacity>0?1:0});
+  session.status='waiting_for_approval';run={status:session.status,approval:{request_id:'gone-prompt',command:'gone action',choices:['once','deny']}};conflict=true;await refresh();await page.locator('[data-approve="deny"]').waitFor();await page.waitForTimeout(3200);
+  await page.locator('[data-approve="deny"]').click();await page.waitForTimeout(200);await refresh();await page.waitForTimeout(100);
+  check(await page.locator('[data-approve="deny"]').count()===0&&(await page.locator('.appr.done').innerText()).includes('No longer waiting'),'409 on the displayed control retires it instead of re-offering it');
+  check(await toasts()===0,'retired control raises no "control changed" toast');
+  check(writes.filter(x=>x.path.endsWith('/approval')&&x.body.request_id==='gone-prompt').length===1,'retired control is answered once, no loop');
+  run.approval={request_id:'new-prompt',command:'new action',choices:['once','deny']};await refresh();await page.locator('[data-approve="deny"]').waitFor();
+  check(true,'a genuinely new prompt still appears after a retired one');conflict=false;
   // 409 stop never paints stopping and never invokes resolution.
   session.status='unknown';run={status:'unknown',admission_id:'adm_fixture',execution_generation:12};conflict=true;await refresh();await page.evaluate(()=>__wos.live.stop('wizardq_0123456789abcdef0123456789abcdef').catch(()=>{}));await page.waitForTimeout(100);
   check(await page.evaluate(()=>__wos.live.session('qa_compat').status)==='unknown','stop 409 preserves unknown state');

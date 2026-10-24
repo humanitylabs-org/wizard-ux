@@ -18,11 +18,14 @@
     return !!it && !localCompletions.has(it.id) && !it.localCompleted && !quarantine.has(it.id) && ['new', 'reply'].includes(it.kind) &&
       (it.intent !== 'command' || it.deliveryRequested === true) && it.steerDispatch !== 'started' && states.includes(it.state);
   }
+  // A recording this device can no longer read, with no copy on Wizard, has nothing left to send: Delete only.
+  const lostAudio = it => !!it?.audioUnreadable && !it.audioFile?.id;
   function queueRetry(it, states) {
-    if (!eligible(it, states)) return false;
+    if (!eligible(it, states) || lostAudio(it)) return false;
     // Claim synchronously before the first persistence await: a double tap cannot
     // reset an in-flight attempt back to waiting and cause a second dispatch.
-    Object.assign(it, { state: 'queued', threadHidden: false, nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) });
+    // useServerCopy: the owner asked for this attempt, so unreadable device audio may use Wizard's saved copy.
+    Object.assign(it, { state: 'queued', threadHidden: false, nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1), useServerCopy: true });
     put(it).then(pump); return true;
   }
   function wake() {
@@ -151,15 +154,20 @@
   // or onSent notification. Never consume a sealed message or unrelated draft.
   function localCompletable(it) {
     return !!it && !quarantine.has(it.id) && ['new', 'reply', 'dictation'].includes(it.kind) &&
-      ['processing', 'held'].includes(it.state) && !it.deliveryRequested && !it.body && !it.steerBody &&
+      (['processing', 'held'].includes(it.state) || (it.state === 'empty' && it.intent === 'command')) && !it.deliveryRequested && !it.body && !it.steerBody &&
       !it.steerDispatch && !it.runId && !it.parkedDraft && !String(it.typed || '').trim() &&
       !(it.files || []).some(f => f.id !== it.audioFile?.id);
   }
+  const transcriptionTimedOut = (it, error = null) => !!it?.audio && !!it.audioFile?.id && !it.text &&
+    ((error?.status ?? it.errorStatus) === 408 || /(?:Request|Transcription) timed out|HTTP 408\b/.test(String(error?.message ?? it.error ?? '')));
   // A held-orb take is a command, never a message. Earlier builds parked routed commands here as
   // "Delivery not confirmed" or "completion unconfirmed" although nothing was ever due for delivery.
   // Unheard takes (STT failed) and interrupted captures keep their audio; fresh rows (<10 min) may still settle.
   const SETTLED_COMMAND = /^(Command accepted · completion unconfirmed|Delivery not confirmed · original recording kept; not queued for retry|Music didn’t confirm|Command completed · device cleanup failed)/;
   function settledCommand(it) { return it.intent === 'command' && SETTLED_COMMAND.test(String(it.error || '')) && !!String(it.recoveryText || it.text || '').trim() && now() - (it.updatedAt || it.createdAt || 0) > 10 * 60 * 1000; }
+  // Silent held takes from earlier builds sat in Unsent as "No speech detected". A long press with no words is a
+  // command that never happened: clear it, unless the owner's composer text or files rode along (localCompletable).
+  function silentCommand(it) { return !!it && it.intent === 'command' && it.state === 'empty' && !String(it.text || it.recoveryText || '').trim(); }
   async function completeLocal(id) {
     const it = items.get(id);
     if (!localCompletable(it) || localCompletions.has(id)) return false;
@@ -198,9 +206,14 @@
     if (it.state === 'capturing') { it.state = 'held'; it.error = 'Interrupted recording · original bytes kept'; }
     if (it.steerDispatch === 'started' && it.state !== 'sent') { it.state = 'unconfirmed'; it.error = unconfirmed; }
     if (it.state === 'sending') it.state = 'waiting';
+    // A timed-out transcription is not an admitted message. Replaying the same recovered audio forever makes its
+    // thread look permanently Working; keep the recording and require an explicit retry instead.
+    if ((it.attempts || 0) > 0 && ['waiting', 'failed'].includes(it.state) && transcriptionTimedOut(it)) {
+      it.state = 'failed'; it.nextAt = 0; it.error = 'Transcription timed out · original recording kept. Retry when ready.';
+    }
     // Older builds exhausted durable retries. Revive only identifiable transport
     // failures with delivery authority; an ambiguous steer remains unconfirmed.
-    if (it.state === 'failed' && eligible(it, ['failed']) &&
+    if (it.state === 'failed' && !transcriptionTimedOut(it) && !it.audioUnreadable && eligible(it, ['failed']) &&
         (/Couldn[’']t reach Wizard|Wizard was unavailable|Request timed out|HTTP (408|425|429)\b/.test(it.error || '') ||
          [408, 425, 429].includes(it.errorStatus) || it.errorStatus >= 500)) {
       it.state = 'waiting'; it.nextAt = 0;
@@ -246,7 +259,7 @@
       // 'handled' labels also covered pending music/app work, so keep those.
       for (const it of [...items.values()]) {
         if (recovered && it.completion === 'local') await put(it); // move fallback receipts into the available primary store
-        else if (it.state === 'held' && (it.localCompleted || settledCommand(it))) await completeLocal(it.id);
+        else if ((it.state === 'held' && (it.localCompleted || settledCommand(it))) || silentCommand(it)) await completeLocal(it.id);
       }
       emit(); schedule();
     })().finally(() => { if (!recovered) ready = null; });
@@ -262,6 +275,7 @@
   }
   const transient = e => !e.status || [408, 425, 429].includes(e.status) || e.status >= 500;
   function reason(e) {
+    if (e.localAudio) return e.message;
     if (!e.status) return 'Couldn’t reach Wizard';
     if (e.status === 403) return 'Wizard sign-in needed';
     if (e.status === 413) return 'Too large for Wizard';
@@ -274,14 +288,47 @@
       new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new HttpError(0, 'Request timed out · original kept')); }, ms); })]); }
     finally { clearTimeout(timer); }
   }
-  async function transcribe(it) {
-    try { return (await bounded(signal => window.WizConfig.transcribe(it.audio, { prompt: window.WizConfig.voicePrompt(), signal }), TRANSCRIBE_TIMEOUT_MS)).text; }
+  /* A recording restored from device storage can lose its bytes: the browser still lists the Blob, but reading it
+   * fails (Robert's Mac Safari, 24 Oct 2026: every retry failed locally, Wizard saw no request, and the banner said
+   * "Wizard reachable · retrying" for good). That is a fact about this device, not a network blip, so it must never
+   * enter the transport retry loop. Read the bytes into memory first. When they are gone the take stops as an explicit
+   * failure; an owner's Retry may then use the copy Wizard already saved for this same take (its upload receipt) and
+   * repair the device copy with it. Automatic retries never resend an old take from the server copy by themselves. */
+  const LOCAL_READ_MS = 15000;
+  class LocalAudioError extends Error { constructor(msg) { super(msg); this.localAudio = true; this.status = 0; } }
+  async function readAudio(it, serverCopy = !!it.useServerCopy) {
+    const type = it.audioType || it.audio?.type || 'audio/webm';
+    let timer, slow = false;
+    try {
+      const buf = await Promise.race([Promise.resolve().then(() => it.audio.arrayBuffer()),
+        new Promise((_, reject) => { timer = setTimeout(() => { slow = true; reject(new Error('read timed out')); }, LOCAL_READ_MS); })]);
+      if (buf.byteLength || !it.audio.size) { if (it.audioUnreadable) { delete it.audioUnreadable; await put(it); } return new Blob([buf], { type }); }
+    } catch (_) { /* unreadable on this device: fall through */ }
+    finally { clearTimeout(timer); }
+    // A slow read (large take, busy storage) is not proof the bytes are gone: keep it in the normal retry loop.
+    if (slow) throw new HttpError(0, 'Reading the recording took too long · original kept');
+    const ref = it.audioFile;
+    if (!ref?.id) throw new LocalAudioError('This recording can’t be read on this device and never reached Wizard · nothing to retry');
+    if (!serverCopy) throw new LocalAudioError('This recording can’t be read on this device · Wizard has a saved copy. Retry to send it.');
+    let r;
+    try { r = await fetch(`/wizard/files/${encodeURIComponent(ref.id)}/content`, { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(45000) }); }
+    catch (_) { throw new HttpError(0, 'Couldn’t reach Wizard'); }
+    if (!r.ok) throw new HttpError(r.status, r.status === 404 ? 'Wizard no longer has a copy of this recording' : '');
+    const buf = await r.arrayBuffer();
+    if (!buf.byteLength || (Number(ref.bytes) > 0 && buf.byteLength !== Number(ref.bytes))) throw new LocalAudioError('Wizard’s copy of this recording doesn’t match');
+    it.audio = new Blob([buf], { type }); delete it.audioUnreadable; await put(it); // the device copy is readable again
+    return it.audio;
+  }
+  async function transcribe(it, serverCopy) {
+    const audio = await readAudio(it, serverCopy);
+    try { return (await bounded(signal => window.WizConfig.transcribe(audio, { prompt: window.WizConfig.voicePrompt(), signal }), TRANSCRIBE_TIMEOUT_MS)).text; }
     catch (e) { throw new HttpError(e.status || 0, e.message); }
   }
   async function uploadAudio(it) {
     const ext = /wav/.test(it.audioType) ? 'wav' : /mp4|m4a/.test(it.audioType) ? 'm4a' : /ogg/.test(it.audioType) ? 'ogg' : /aac/.test(it.audioType) ? 'aac' : 'webm';
     const name = `wizard-voice-${new Date(it.createdAt).toISOString().replace(/[:.]/g, '-')}.${ext}`;
-    const r = await call('/wizard/files/upload', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Wizard-Filename': name, 'X-Wizard-Mime': it.audioType || 'audio/webm' }, body: it.audio });
+    const body = await (await readAudio(it)).arrayBuffer(); // finite in-memory bytes, never a device-backed Blob stream
+    const r = await call('/wizard/files/upload', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Wizard-Filename': name, 'X-Wizard-Mime': it.audioType || 'audio/webm' }, body });
     const f = (await r.json()).file || {};
     if (!f.id) throw new HttpError(502, 'Wizard Files returned no id');
     return { id: String(f.id), name: String(f.filename || name), mime: String(f.mime || it.audioType || ''), bytes: Number(f.bytes) || it.audio.size };
@@ -436,18 +483,27 @@
   }
   async function done(it, res) {
     if (it.audio && !it.audioFile?.id) throw new HttpError(502, 'No recording upload receipt · original kept');
+    delete it.useServerCopy;
     Object.assign(it, { state: 'sent', sentAt: now(), runId: res.runId, userMessageId: res.userMessageId || null, steered: !!res.steered, steerQueued: !!res.steerQueued, error: '' });
     delete it.audio; delete it.pendingBlobs;
     await put(it);
     for (const fn of sentHooks) try { fn(it, res); } catch (e) { console.error(e); }
   }
   async function attempt(it) {
-    it.state = 'sending'; await put(it);
+    // A new attempt drops the previous attempt's timeout evidence: recovery must never read a stale 408 as this
+    // attempt's timeout after a reload mid-retry. Other rejections (agent_files_disabled) stay readable to deliver().
+    if (transcriptionTimedOut(it)) it.error = '';
+    it.state = 'sending'; it.errorStatus = 0; await put(it);
     try { await deliver(it); }
     catch (e) {
+      delete it.useServerCopy; // one explicit Retry authorizes one attempt
       it.attempts = (it.attempts || 0) + 1; it.error = reason(e); it.errorStatus = e.status || 0; it.lastAttemptAt = now();
-      // Never silently abandon a transient failure, even with durable custody.
-      if (transient(e)) { it.state = 'waiting'; it.nextAt = now() + BACKOFF[Math.min(it.attempts - 1, BACKOFF.length - 1)]; }
+      // A finite STT deadline keeps the recording but releases the thread; automatic replay of the same body can
+      // otherwise spend almost all its time in Sending. Other transport failures still retry from durable custody.
+      if (transcriptionTimedOut(it, e)) { it.state = 'failed'; it.nextAt = 0; it.error = 'Transcription timed out · original recording kept. Retry when ready.'; }
+      // The device lost this recording's bytes: no network retry can fix that, so stop and say so plainly.
+      else if (e.localAudio) { it.state = 'failed'; it.nextAt = 0; it.audioUnreadable = true; }
+      else if (transient(e)) { it.state = 'waiting'; it.nextAt = now() + BACKOFF[Math.min(it.attempts - 1, BACKOFF.length - 1)]; }
       else { it.state = 'failed'; it.nextAt = 0; }
       await put(it);
     }
@@ -551,7 +607,7 @@
       const it = items.get(id);
       if (!it?.audio || quarantine.has(id) || !['held', 'empty', 'failed', 'unconfirmed'].includes(it.state)) return Promise.resolve(null);
       const work = (async () => {
-        try { it.recoveryText = String(await transcribe(it) || '').trim(); it.recoveryError = it.recoveryText ? '' : 'No speech detected · original kept'; }
+        try { it.recoveryText = String(await transcribe(it, true) || '').trim(); it.recoveryError = it.recoveryText ? '' : 'No speech detected · original kept'; }
         catch (e) { it.recoveryError = String(e.message || e); }
         await put(it); return it;
       })().finally(() => { transcriptWork.delete(id); emit(); });
@@ -662,12 +718,15 @@
       } catch (e) { it.state = 'failed'; it.error = String(e.message || e); }
       await put(it); pump(); return it;
     },
-    canRetry(it) { return eligible(typeof it === 'string' ? items.get(it) : it, ['failed', 'waiting', 'empty']); },
+    canRetry(it) { const x = typeof it === 'string' ? items.get(it) : it; return eligible(x, ['failed', 'waiting', 'empty']) && !lostAudio(x); },
     retry(id) { return queueRetry(items.get(id), ['failed', 'waiting', 'empty']); },
     retryAll(agent) { let n = 0; for (const it of items.values()) if ((agent === undefined || (it.agent || '') === agent) && queueRetry(it, ['failed', 'waiting'])) n++; return n; },
     retryFeedback(n) { return n ? `Queued ${n === true || n === 1 ? 'retry' : n + ' retries'} · originals kept until confirmed` : 'Nothing eligible to retry · originals kept'; },
     unsent() { return [...items.values()].filter(it => !['dictation', 'capture'].includes(it.kind) && it.state !== 'sent').sort((a, b) => a.createdAt - b.createdAt); },
-    forThread(sessionId, wid) { return [...items.values()].filter(it => !it.compact && !(['empty', 'held', 'sent'].includes(it.state) && it.threadHidden) && !['dictation', 'conversation'].includes(it.kind) && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
+    // A held-orb take is a system command, never a chat message (James, 23 Oct 2026): it shows in no thread and in
+    // no send pill until he explicitly picks "Send to …" (deliveryRequested). Its recording stays recoverable.
+    isMessage: it => !!it && (it.intent !== 'command' || it.deliveryRequested === true),
+    forThread(sessionId, wid) { return [...items.values()].filter(it => api.isMessage(it) && !it.compact && !(['empty', 'held', 'sent'].includes(it.state) && it.threadHidden) && !['dictation', 'conversation'].includes(it.kind) && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
     dismissEmpty(id) { return this.get(id)?.state === 'sent' ? Promise.resolve(false) : this.dismissBubble(id); },
     async dismissBubble(id) {
       // Hide only the local presentation; accepted work and original recovery custody stay untouched.

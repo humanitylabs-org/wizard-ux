@@ -19,7 +19,7 @@ export function projection(a) {
     source:text(a.source || 'standard',64),source_name:text(a.source_name || 'Standard',60),channel:a.channel==='alpha'?'alpha':'standard',
     commit:/^[a-f0-9]{40}$/.test(a.commit || a.install?.commit || '')?(a.commit || a.install.commit):'',
     private:a.private===true,type:text(a.type,24),category:text(a.category,32),publisher:text(a.publisher,80),
-    tags:words(a.tags),uses:words(a.uses),provides:words(a.provides),architectures:words(a.architectures),
+    tags:words(a.tags),uses:words(a.uses),needs:words(a.needs),provides:words(a.provides),architectures:words(a.architectures),
     release_notes:text(a.release_notes,2000),url:text(a.url,250),logo:text(a.logo,250),installs:Number.isSafeInteger(a.installs)?a.installs:0};
 }
 export function mergeRows(rows,installed={}) {

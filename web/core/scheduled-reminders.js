@@ -10,7 +10,7 @@
   const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
   const WEEKDAYS=['Su','Mo','Tu','We','Th','Fr','Sa'];
   const PRESETS=[
-    ['today','Later today'],['tomorrow-am','Tomorrow 9:00'],['1w','Next week']
+    ['today','Later today'],['tomorrow-am','Tomorrow'],['2d','In 2 days'],['3d','In 3 days'],['5d','In 5 days'],['1w','Next week']
   ];
   let reminders=[], loaded=false, sheet=null, listeners=new Set(), poll=0, restoreFocus=null;
   const focused=new Set(), watchedAt=new Map();
@@ -26,7 +26,7 @@
   const zoneOptions=selected=>zones().map(z=>`<option value="${esc(z)}"${z===selected?' selected':''}>${esc(z)}</option>`).join('');
   const req=async(path,init={})=>{const r=await fetch(path,{cache:'no-store',credentials:'same-origin',...init});let p={};try{p=await r.json()}catch{}if(!r.ok)throw new Error(r.status===404?'This Wizard needs an update for Snooze.':p.error?.message||p.error||`HTTP ${r.status}`);return p};
   // A scheduler job of kind "return", in the picker's own shape.
-  const fromJob=j=>({id:j.id,session_id:j.thread,due_at:j.when?.once||j.nextRun,timezone:validZone(j.timezone)?j.timezone:DEFAULT_ZONE,note:j.prompt||'',
+  const fromJob=j=>({id:j.id,session_id:j.thread,created_at:j.createdAt||null,due_at:j.when?.once||j.nextRun,timezone:validZone(j.timezone)?j.timezone:DEFAULT_ZONE,note:j.prompt||'',
     anchor_at:j.target?.message??null,target_kind:j.target?.message!=null?'message':'thread',context:j.target?.excerpt||String(j.name||'').replace(/^(?:Boomerang|Snooze) · /,''),
     status:j.lastRun?.outcome==='returned'&&Date.parse(j.lastRun.scheduledFor)===Date.parse(j.when?.once||'')?'due':'scheduled',returned_at:j.lastRun?.finishedAt||null});
   const seen=()=>{try{return new Set(JSON.parse(localStorage.getItem(SEEN_STORE)||'[]'))}catch{return new Set()}};
@@ -62,7 +62,11 @@
   }
   const askNotify=()=>{try{if(!DEV()&&typeof Notification==='function'&&Notification.permission==='default')void Notification.requestPermission()}catch{}};
   const emit=()=>{listeners.forEach(fn=>{try{fn(reminders)}catch{}});window.dispatchEvent(new Event('wos:boomerang'))};
-  async function refresh(){try{const p=await req(API);const list=(Array.isArray(p.schedules)?p.schedules:[]).filter(j=>j.kind==='return').map(fromJob);arrived(list);reminders=list;loaded=true;reminders.forEach(r=>arm(r));emit();return reminders}catch{return reminders}}
+  // A Snooze set before it took threads out of the list (or by an older client) still does, once: only while
+  // nothing happened in the thread since it was set (no message from James, no Restore).
+  const adopted=new Set();
+  function adopt(list){const L=live();if(!L?.ok||!L.defer)return;for(const r of list){const t=Date.parse(r.created_at);if(r.status!=='scheduled'||!isFinite(t)||adopted.has(r.id))continue;const s=L.session?.(r.session_id);if(!s||s.archived||s.deferred||L.busy?.(s.id))continue;adopted.add(r.id);if(Date.parse(s.lastUserAt)>t||Date.parse(s.restoredAt)>t)continue;void L.defer(s.id)}}
+  async function refresh(){try{const p=await req(API);const list=(Array.isArray(p.schedules)?p.schedules:[]).filter(j=>j.kind==='return').map(fromJob);arrived(list);reminders=list;loaded=true;adopt(list);reminders.forEach(r=>arm(r));emit();return reminders}catch{return reminders}}
   const forSession=id=>reminders.filter(r=>r.session_id===id);
   const dueFor=id=>forSession(id).filter(r=>r.status==='due');
   const nextFor=id=>forSession(id).filter(r=>r.status==='scheduled').sort((a,b)=>Date.parse(a.due_at)-Date.parse(b.due_at))[0]||null;
@@ -82,10 +86,10 @@
     if(kind==='tomorrow-am')return{date:addWallDays(today,1),time:'09:00'};
     if(kind==='tomorrow-pm')return{date:addWallDays(today,1),time:'14:00'};
     if(kind==='1m')return{date:addWallMonths(today,1),time:'09:00'};
-    const n={ '2d':2,'4d':4,'1w':7,'2w':14 }[kind]||1;return{date:addWallDays(today,n),time:'09:00'};
+    const n={ '2d':2,'3d':3,'4d':4,'5d':5,'1w':7,'2w':14 }[kind]||1;return{date:addWallDays(today,n),time:'09:00'};
   }
   function formatPreset(v,z){const utc=wallToUtc(v.date,v.time,z);return new Intl.DateTimeFormat('en',{timeZone:z,weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(utc))}
-  function presetButtons(z,selected=''){return PRESETS.map(([id,label])=>{const v=preset(id,z);return `<button type="button" data-boom-preset="${id}" class="${selected===`${v.date}T${v.time}`?'selected':''}"${Date.parse(wallToUtc(v.date,v.time,z))<=Date.now()?' disabled':''}><span>${label}</span><small>${esc(formatPreset(v,z))}</small></button>`}).join('')+'<button type="button" data-boom-exact><span>Pick a time</span><small>Choose date &amp; time</small></button><button type="button" data-boom-someday><span>Someday</span><small>No time · bottom of Ready</small></button>'}
+  function presetButtons(z,selected=''){return PRESETS.map(([id,label])=>{const v=preset(id,z);return `<button type="button" data-boom-preset="${id}" class="${selected===`${v.date}T${v.time}`?'selected':''}"${Date.parse(wallToUtc(v.date,v.time,z))<=Date.now()?' disabled':''}><span>${label}</span><small>${esc(formatPreset(v,z))}</small></button>`}).join('')+'<button type="button" data-boom-someday><span>Someday</span><small>No time · bottom of Ready</small></button><button type="button" data-boom-exact><span>Other date…</span><small>Pick an exact date &amp; time</small></button>'}
   function years(selected){const now=new Date().getUTCFullYear(),from=Math.min(now-2,selected),to=Math.max(now+10,selected);let html='';for(let y=from;y<=to;y++)html+=`<option value="${y}"${y===selected?' selected':''}>${y}</option>`;return html}
   function calendarHtml(selected){const {y,m,d}=parseDate(selected);return `<section class="boom-calendar" data-boom-calendar hidden aria-label="Choose date"><div class="boom-cal-head"><button type="button" data-cal-prev aria-label="Previous month">‹</button><select name="cal-month" aria-label="Month">${MONTHS.map((x,i)=>`<option value="${i+1}"${i+1===m?' selected':''}>${x}</option>`).join('')}</select><select name="cal-year" aria-label="Year">${years(y)}</select><button type="button" data-cal-next aria-label="Next month">›</button></div><div class="boom-weekdays" aria-hidden="true">${WEEKDAYS.map(x=>`<span>${x}</span>`).join('')}</div><div class="boom-grid" role="grid" aria-label="${MONTHS[m-1]} ${y}" data-cal-grid data-year="${y}" data-month="${m}"></div></section>`}
   function renderCalendar(form,focusDate=''){
@@ -106,6 +110,8 @@
     if(!await live().defer(opts.sessionId))throw new Error('Could not snooze · thread kept where it was.');
     close();window.dispatchEvent(new CustomEvent('wos:snooze-someday',{detail:{session:opts.sessionId}}));
   }
+  // A timed Snooze also takes the thread out of the list (James, 23 Oct 2026): the existing Defer disposition, restored when it comes back.
+  async function away(id){const s=live()?.session?.(id);if(!s||s.archived)return;if(!s.deferred&&!await live().defer?.(id)){window.dispatchEvent(new CustomEvent('wos:boomerang-error'));return}window.dispatchEvent(new CustomEvent('wos:snooze-someday',{detail:{session:id,quiet:true}}))}
   function open(opts,existing=null){
     close();restoreFocus=document.activeElement;const selectedZone=validZone(existing?.timezone)?existing.timezone:DEFAULT_ZONE,ep=existing?parts(Date.parse(existing.due_at),selectedZone):null,p=existing?{date:dateString(ep.y,ep.m,ep.d),time:`${pad(ep.h)}:${pad(ep.min)}`}:preset('tomorrow-am',selectedZone),hasNote=Boolean(existing?.note||opts.note);
     sheet=document.createElement('div');sheet.className='boom-sheet';sheet.innerHTML=`<form class="boom-card" data-boom-form role="dialog" aria-modal="true" aria-labelledby="boom-title"><header><span aria-hidden="true">◷</span><b id="boom-title">When should this come back?</b><button type="button" data-boom-close aria-label="Close">×</button></header>${opts.targetKind==='message'&&opts.context?`<q class="boom-context">${esc(opts.context)}</q>`:''}<section class="boom-quick" aria-label="Snooze until"><div class="boom-presets">${presetButtons(selectedZone,existing?`${p.date}T${p.time}`:'')}</div></section><section class="boom-exact" aria-labelledby="boom-exact-title" hidden><h3 id="boom-exact-title">Exact date &amp; time</h3><div class="boom-fields"><label>Date<span class="boom-date-control"><input required type="date" name="date" value="${p.date}"><button type="button" data-boom-calendar-toggle aria-expanded="false" aria-label="Open calendar">▣</button></span></label><label>Time<input required type="time" name="time" value="${p.time}" step="60"></label></div>${calendarHtml(p.date)}<label class="boom-zone">Timezone<select required name="timezone">${zoneOptions(selectedZone)}</select><small>Bangkok by default · saved as UTC</small></label></section><button type="button" class="boom-link" data-boom-note-toggle aria-expanded="${hasNote}">${hasNote?'Hide note':'＋ Add a note'}</button><label class="boom-note"${hasNote?'':' hidden'}>Note<input name="note" maxlength="500" value="${esc(existing?.note||opts.note||'')}" placeholder="What should Future You remember?"></label><p class="boom-error" role="alert"></p><footer${existing?'':' hidden'}>${existing?'<button type="button" class="danger" data-boom-cancel>Remove snooze</button>':''}<button type="submit" class="primary">${existing?'Save':'Snooze'}</button></footer></form>`;
@@ -132,10 +138,10 @@
       if(existing)job=await req(`${API}/${encodeURIComponent(existing.id)}`,{method:'PATCH',headers:J,body:JSON.stringify({when:{once:due_at},timezone,prompt:note,enabled:true})});
       else{const message=opts.targetKind==='message'&&Number(opts.anchorAt)>0?Number(opts.anchorAt):null,ag=live()?.agentOf?.(opts.sessionId)||'';
         job=await req(API,{method:'POST',headers:J,body:JSON.stringify({name:('Snooze · '+String(opts.title||opts.context||'Thread').replace(/\s+/g,' ').trim()).slice(0,150),kind:'return',when:{once:due_at},timezone,thread:opts.sessionId,prompt:note,...(/^[a-z][a-z0-9-]{0,30}$/.test(ag)&&ag!=='hermes'?{agent:ag}:{}),target:{message,excerpt:message?String(opts.context||'').slice(0,280):''}})})}
-      askNotify();const r=fromJob(job);reminders=reminders.filter(x=>x.id!==r.id).concat(r);if(existing){const k=seen();k.delete(r.id);markSeen(k)}arm(r,true);emit();close();void refresh();window.dispatchEvent(new CustomEvent('wos:boomerang-set',{detail:{at:r.due_at,zone:r.timezone,label:returnLabel(r)}}))}catch(err){error.textContent=err.message||'Could not snooze';submit.disabled=false}finally{saving=false}};
+      askNotify();const r=fromJob(job);reminders=reminders.filter(x=>x.id!==r.id).concat(r);if(existing){const k=seen();k.delete(r.id);markSeen(k)}arm(r,true);emit();close();void refresh();window.dispatchEvent(new CustomEvent('wos:boomerang-set',{detail:{session:opts.sessionId,at:r.due_at,zone:r.timezone,label:returnLabel(r)}}));void away(opts.sessionId)}catch(err){error.textContent=err.message||'Could not snooze';submit.disabled=false}finally{saving=false}};
     form.querySelector('[data-boom-close]').focus();
   }
-  async function cancel(id){await req(`${API}/${encodeURIComponent(id)}`,{method:'DELETE'});reminders=reminders.filter(r=>r.id!==id);emit();close();void refresh()}
+  async function cancel(id){const sid=reminders.find(r=>r.id===id)?.session_id;await req(`${API}/${encodeURIComponent(id)}`,{method:'DELETE'});reminders=reminders.filter(r=>r.id!==id);emit();close();void refresh();const s=sid&&live()?.session?.(sid);if(s?.deferred&&!s.archived&&!nextFor(sid))void live().restore?.(sid)} // no snooze left: back in the list
   // Done with a returned Boomerang: the schedule is removed (it fired once; nothing else refers to it).
   const acknowledge=id=>cancel(id);
   
@@ -153,5 +159,5 @@
     try{if(target.closest('[data-boom-done]')){await acknowledge(id);return true}if(target.closest('[data-boom-cancel]')){await cancel(id);return true}}catch{window.dispatchEvent(new CustomEvent('wos:boomerang-error'))}
     return false}
   function start(){if(poll)return;void refresh();poll=setInterval(refresh,15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refresh()});addEventListener('focus',()=>void refresh())}
-  window.WosBoomerang={start,refresh,open,close,back,banner,handle,dueFor,nextFor,forSession,focusFor,focusedOn,_returnLabel:returnLabel,_preset:preset,isOpen:()=>Boolean(sheet),_wallToUtc:wallToUtc,_addWallDays:addWallDays,_addWallMonths:addWallMonths,_daysInMonth:daysInMonth,_fromJob:fromJob,onChange(fn){listeners.add(fn);return()=>listeners.delete(fn)}};start();
+  window.WosBoomerang={someday,start,refresh,open,close,back,banner,handle,dueFor,nextFor,forSession,focusFor,focusedOn,_returnLabel:returnLabel,_preset:preset,isOpen:()=>Boolean(sheet),_wallToUtc:wallToUtc,_addWallDays:addWallDays,_addWallMonths:addWallMonths,_daysInMonth:daysInMonth,_fromJob:fromJob,onChange(fn){listeners.add(fn);return()=>listeners.delete(fn)}};start();
 })();

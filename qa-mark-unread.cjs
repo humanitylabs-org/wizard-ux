@@ -45,6 +45,9 @@ let seenState = {
   initializedAt: NOW - 3600_000,
   threads: Object.fromEntries(THREADS.map(thread => [`direct:${thread.id}`, seenRecord(thread)])),
 };
+// Read state and run state are independent. Even if a working thread has unread activity,
+// Working stays visually quiet until the run moves to Ready.
+seenState.threads[`direct:${IDS.working}`].unreadAt = NOW + 1;
 let writeMode = 'ok';
 const writes = [];
 const CT = { '.css': 'text/css', '.html': 'text/html', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.js': 'application/javascript' };
@@ -159,6 +162,17 @@ const ok = (condition, name, extra = '') => {
   await page.evaluate(() => window.__wos.goDesk(1));
   await page.waitForSelector(selector(SID), { timeout: 15000 });
   ok(!await unread(), 'fixture starts read');
+  const workingVisual = await page.locator(selector(IDS.working)).evaluate((row, id) => {
+    const session = window.__wos.live.session(id);
+    return {
+      inWorking: window.__wos.live.workGroups().working.some(thread => thread.id === id),
+      unreadState: window.__wos.live.isNew(session),
+      unreadClass: row.classList.contains('unread'),
+      titleWeight: Number(getComputedStyle(row.querySelector('.tp b')).fontWeight),
+    };
+  }, IDS.working);
+  ok(workingVisual.inWorking && workingVisual.unreadState && !workingVisual.unreadClass && workingVisual.titleWeight <= 600,
+    'Working stays unbolded even when its read state is unread', workingVisual);
 
   const readyRow = page.locator(selector(SID));
   ok(await readyRow.getAttribute('aria-haspopup') === 'dialog' && await readyRow.getAttribute('aria-keyshortcuts') === 'Shift+F10', 'row announces its keyboard-accessible actions menu');
@@ -240,6 +254,24 @@ const ok = (condition, name, extra = '') => {
   await screenshot(desktopPage, 'desktop');
   ok(desktopErrors.length === 0, 'desktop has no page errors', desktopErrors);
   await desktop.close();
+
+  const formerlyWorking = THREADS.find(thread => thread.id === IDS.working);
+  formerlyWorking.status = 'completed';
+  const workingRecord = seenState.threads[`direct:${IDS.working}`];
+  workingRecord.unreadAt = workingRecord.seenAt + 1;
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForFunction(id => document.querySelector(`.ch-list [data-chopen="${id}"]`), IDS.working, { timeout: 15000 });
+  const readyVisual = await page.locator(selector(IDS.working)).evaluate((row, id) => {
+    const session = window.__wos.live.session(id);
+    return {
+      inReady: window.__wos.live.workGroups().ready.some(thread => thread.id === id),
+      unreadState: window.__wos.live.isNew(session),
+      unreadClass: row.classList.contains('unread'),
+      titleWeight: Number(getComputedStyle(row.querySelector('.tp b')).fontWeight),
+    };
+  }, IDS.working);
+  ok(readyVisual.inReady && readyVisual.unreadState && readyVisual.unreadClass && readyVisual.titleWeight >= 700,
+    'The same unread thread becomes bold when it moves to Ready', readyVisual);
 
   await browser.close();
   console.log(`\n${pass} passed, ${fail} failed`);

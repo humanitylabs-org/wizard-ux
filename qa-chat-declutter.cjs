@@ -201,7 +201,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     await openThread('qa_pw_other');
     const n1 = writes.length;
     await p.locator(await S('.ch-tacts [data-chact="defer"]')).tap(); await sleep(200);
-    ok((await thread()) === null && (await section('qa_pw_other')) === 'ready' && await p.evaluate(() => !!__wos.live.session('qa_pw_other')?.deferred), '2 Defer: back to the list, thread deferred at the bottom of Ready');
+    ok((await thread()) === null && (await section('qa_pw_other')) !== 'ready' && await p.evaluate(() => !!__wos.live.session('qa_pw_other')?.deferred), '2 Defer: back to the list, thread snoozed out of Ready');
     await sleep(500);
     ok(writes.slice(n1).some(x => x.p === '/wizard/thread-dispositions'), '2 Defer: saved through /wizard/thread-dispositions (intercepted)');
     // a deferred/archived thread offers Restore (+ Done) in the same place

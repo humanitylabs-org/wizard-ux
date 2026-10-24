@@ -24,7 +24,7 @@ Root, top to bottom:
 | Appearance | Wizard · Nebula | Skin family + colours (`look`), My skin, Borderless apps (`skin-frame`, phone only). "Import skin JSON" moves under a collapsed "Advanced" disclosure. |
 | Chats & app screens | Chats: Wizard Chats | **New** default-Chats chooser, **new** skin suggestion, Own app screens (`own-views`). |
 | Voice & typing | Voice ready · Mic: default | Voice transcription status (`voice`), Microphone (`microphone`), Text selection menu (`selection`). |
-| Phone (Android only) | Everywhere on | Wizard Everywhere, Voice typing & screenshots, side button (`assistant`), Photos backup (`photos-backup`). |
+| Phone (Android only) | Everywhere on | Wizard Everywhere, Voice typing & screenshots, side button (`assistant`). |
 | Unsent & recovered | Nothing waiting / 2 waiting | Unsent & retained (`unsent`) + Recovered & cancelled recordings (`cancelled`). |
 | AI usage | Claude 6% · ChatGPT 12% | `usage` unchanged. |
 | About & updates | Connected · up to date | Connection status, Check for updates, OS updates (`updates`), Gestures & help. |
@@ -63,3 +63,7 @@ Wizard skin tokens only (`--wz-*`); transparent when hosted; check two skins (Ne
 4. Default Chats chooser lists providers, confirms, POSTs the slot default, and re-renders; built-in-only state shows the Store hint.
 5. Mizel skin shows the Mizel Chats suggestion; Not now hides it for that skin; never auto-switches.
 6. Back: page → root → closed; app never exits. Deep-link aliases land on the right page.
+
+## What belongs in Settings
+
+Settings configures Wizard itself: look, chats, voice, phone integration, recovery, usage, updates. Anything that is an app or optional (Photos backup, Android Apps, Music, Calendar…) lives in its own app and launcher tile, never as a Settings row or page (James, 24 Oct 2026). A Wizard OS native capability such as photo backup reaches its app through a narrow shell relay (`photos-relay.js`, `android-relay.js`), not through Settings.

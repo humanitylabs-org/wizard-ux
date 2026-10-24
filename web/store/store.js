@@ -5,6 +5,7 @@
 import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp, architectureReason} from './store-status.js';
 import {routerNeeds, routerApprove, routerRows, hasNeeds, pending, nice} from './store-router.js';
 import {adoptAppearance} from './store-appearance.js';
+import {renderInstallResult, successMessage} from './store-install-result.js';
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
@@ -15,7 +16,7 @@ import {adoptAppearance} from './store-appearance.js';
     { id: 'apps', type: 'view', one: 'App', many: 'Apps', blurb: 'Things you open and use' },
     { id: 'agent-apps', type: 'service', one: 'Agent app', many: 'Agent apps', blurb: 'New skills for your agent' },
     { id: 'agents', type: 'agent', one: 'Agent', many: 'Agents', blurb: 'The minds that run Wizard' },
-    { id: 'connections', type: 'external', one: 'Connection', many: 'Connections', blurb: 'Accounts your agents can use' },
+    { id: 'connections', type: 'external', one: 'Connector', many: 'Connectors', blurb: 'Accounts your agents can use' },
   ];
   const KIND_OF = Object.fromEntries(KINDS.map(k => [k.type, k]));
   const kindOf = a => KIND_OF[a.type] || KINDS[1];
@@ -30,7 +31,7 @@ import {adoptAppearance} from './store-appearance.js';
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set() };
+  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set(), access: new Map() };
   const key = a => `${a.id}|${a.repo || ''}`;
   const find = id => S.apps.find(a => key(a) === id) || S.apps.find(a => a.id === id);
   const selected = a => ({...a, ...preferredRelease(a,S.installed.get(key(a))), ...(a.releases || []).find(r => `${r.source}:${r.commit}` === S.selections.get(key(a))), releases:a.releases, conflict:a.conflict, alpha_badge:a.alpha_badge});
@@ -51,7 +52,7 @@ import {adoptAppearance} from './store-appearance.js';
       url: txt(a.url, 250), repo: txt(a.repo, 201), source: ID.test(a.source || '') ? a.source : 'standard', source_name: txt(a.source_name,60), channel: a.channel === 'alpha' ? 'alpha' : 'standard', commit: /^[a-f0-9]{40}$/.test(a.commit || '') ? a.commit : '', release_notes: txt(a.release_notes,2000),
       releases: Array.isArray(a.releases) ? a.releases.slice(0,16).map(r => clean({...r,releases:null})).filter(Boolean) : [],
       alpha_badge: ['Alpha','Alpha available'].includes(a.alpha_badge) ? a.alpha_badge : '', conflict: a.conflict === true, installed_source: txt(a.installed_source,64), installed_commit: txt(a.installed_commit,40), installed_app_id: txt(a.installed_app_id,64), update_available: a.update_available === true,
-      private: a.private === true, tags: words(a.tags), provides: words(a.provides), uses: ids(a.uses), architectures: words(a.architectures),
+      private: a.private === true, tags: words(a.tags), provides: words(a.provides), uses: ids(a.uses), needs: words(a.needs), architectures: words(a.architectures),
       installs: Number.isSafeInteger(a.installs) && a.installs > 0 ? a.installs : 0, checked_at: Number.isFinite(a.checked_at) ? a.checked_at : 0 };
   }
   const get = p => fetch(DATA + p, { credentials: 'same-origin', cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
@@ -95,6 +96,9 @@ import {adoptAppearance} from './store-appearance.js';
     if(top()==='detail') showDetail(S.stack.at(-1).arg);
     else if(top()==='list') openKind(S.stack.at(-1).arg,true);
     else if(top()==='search') search(S.q);
+    // ?kind=apps|agent-apps|agents|connections: the launcher's "+ Get ..." tiles open that section.
+    const reqKind = new URLSearchParams(location.search).get('kind');
+    if (reqKind && !S.stack.length && KINDS.some(k => k.id === reqKind)) openKind(reqKind);
     const requested = new URLSearchParams(location.search).get('app');
     if (requested && !S.stack.length && S.apps.some(a => a.id === requested)) {
       const a=find(requested), source=new URLSearchParams(location.search).get('source'), r=a.releases.find(r=>r.source===source);
@@ -176,6 +180,7 @@ import {adoptAppearance} from './store-appearance.js';
       <div class="d-stats"><div><b>${esc(k.one)}</b><small>Kind</small></div><div><b>${a.installs > 0 ? a.installs : 'New'}</b><small>Installs</small></div><div><b>${esc((a.version || '—').split(/[-+]/)[0])}</b><small>Version</small></div><div><b>${(a.tags || [])[0] ? esc(cap(a.tags[0])) : '—'}</b><small>Topic</small></div></div>
       <section class="d-sec d-lead"><p class="d-sum">${esc(a.summary)}</p><p class="d-how">${esc(how)}</p></section>
       ${architectureReason(a,S.architecture) ? `<section class="d-sec"><p class="d-note" role="status">${esc(architectureReason(a,S.architecture))}</p></section>` : ''}
+      ${(a.needs || []).includes('home-network') ? `<section class="d-sec d-home"><h3>Needs a home network</h3><p class="d-note" role="status">${esc(a.name)} only works when your Wizard runs on a home internet connection. On a cloud server (VPS), it needs a computer at home to route through. Its setup screen explains how.</p></section>` : ''}
       ${needs}${powers}${gives}
       ${modelsSection(a)}
       ${a.release_notes ? `<section class="d-sec"><h3>Release notes</h3><p>${esc(a.release_notes)}</p></section>` : ''}
@@ -207,10 +212,16 @@ import {adoptAppearance} from './store-appearance.js';
   function showSheet(k) {
     const base = find(k); if (!base) return; const a = selected(base), id = routerId(a), c = S.router.get(id);
     const left = pending(c?.data);
+    // An app tagged `privacy: private` on a Wizard with no private agent: nobody can use it yet, so ask
+    // (James, 23 Oct 2026: "this is meant to be privacy first…").
+    const access = S.access.get(id), models = hasNeeds(c?.data);
+    const privacy = access?.needs_private_agent ? `<div class="pv-card" data-pv-app="${esc(id)}"><h3>Privacy first</h3>
+      <p class="mc-lede">${esc(a.name)} is meant to be private, and this Wizard has no private agent yet, so no agent can use it. Set up a private agent, or choose a non-private agent yourself.</p>
+      <div class="pv-acts"><button type="button" class="get big" data-pv-new>Set up private agent</button><button type="button" class="get" data-pv-choose>Choose an agent</button></div></div>` : '';
     $('sheet').innerHTML = `<div class="list-head"><button class="back" data-back aria-label="Back">‹</button><div><h2>${esc(a.name)} is installed</h2>
-      <p>${left ? `${left} feature${left === 1 ? '' : 's'} need${left === 1 ? 's' : ''} a model` : 'Every feature has a model'}</p></div></div>
-      <p class="mc-lede">Each feature was tested on one model. Connect that provider, or approve a swap to a model this Wizard already has.</p>
-      <div class="mc-list" data-mc-app="${esc(id)}">${c?.data ? routerRows(id, c.data, rctx()) : '<p class="empty">Checking connections…</p>'}</div>
+      <p>${models || !privacy ? (left ? `${left} feature${left === 1 ? '' : 's'} need${left === 1 ? 's' : ''} a model` : 'Every feature has a model') : 'Private app'}</p></div></div>
+      ${privacy}${models || !privacy ? `<p class="mc-lede">Each feature was tested on one model. Connect that provider, or approve a swap to a model this Wizard already has.</p>
+      <div class="mc-list" data-mc-app="${esc(id)}">${c?.data ? routerRows(id, c.data, rctx()) : '<p class="empty">Checking connections…</p>'}</div>` : ''}
       <div class="mc-done"><button type="button" class="get big" data-back>${left ? 'Decide later' : 'Done'}</button></div>`;
   }
   async function approve(btn) {
@@ -277,12 +288,16 @@ import {adoptAppearance} from './store-appearance.js';
   // Identifiers select a server-authorized release, never a browser-supplied install URL or ref.
   const INSTALL = DATA.replace(/store-data\/$/, 'store-install/');
 
+  // Which agents can use an installed app (#58), plus its optional privacy tag. Null when unknown.
+  async function appAccess(id) {
+    try { const r = await fetch('/wizard/v1/apps/' + encodeURIComponent(id) + '/agents', { credentials: 'same-origin', cache: 'no-store' }); return r.ok ? await r.json() : null; } catch (_) { return null; }
+  }
   async function install(a) {
     if (!a || architectureReason(a,S.architecture) || S.busy.has(a.id) || !['get','update','switch'].includes(status(a))) return;
     const operation = status(a)==='get'?'install':status(a);
     const selection = {source:a.source,repo:a.repo,commit:a.commit,operation};
     S.busy.add(a.id); refresh();
-    const say = (m, ok) => toast(`<b>${esc(a.name)}${ok ? ' is ready' : ' wasn’t installed'}</b><span>${esc(m)}</span>`);
+    const say = (m, ok=false) => toast(renderInstallResult({ name: a.name, message: m, ok }));
     try {
       const r = await fetch(INSTALL + encodeURIComponent(a.id), { method: 'POST', credentials: 'same-origin', cache: 'no-store',
         headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: JSON.stringify(selection) });
@@ -302,12 +317,19 @@ import {adoptAppearance} from './store-appearance.js';
       const actual=S.installed.get(key(a));
       if(!actual || actual.conflict || actual.repo!==a.repo || actual.commit!==a.commit) throw new Error('Installation finished, but the selected release is not registered yet. Refresh to check.');
       // The Router reads the app's declaration once it is registered; any model needs open the install sheet.
-      const id = routerId(a), need = await routerNeeds(id); S.router.set(id, { ...need, at: Date.now() });
-      if (hasNeeds(need.data)) { if (top() !== 'sheet') push('sheet', key(a)); showSheet(key(a)); window.scrollTo(0, 0); }
-      else say('Find it in your apps.', true);
+      const id = routerId(a), [need, access] = await Promise.all([routerNeeds(id), appAccess(id)]); S.router.set(id, { ...need, at: Date.now() });
+      if (access) S.access.set(id, access);
+      if (hasNeeds(need.data) || access?.needs_private_agent) { if (top() !== 'sheet') push('sheet', key(a)); showSheet(key(a)); window.scrollTo(0, 0); }
+      else say(successMessage(access), true);
     } catch (err) { say(err.message || 'Install failed.'); }
     finally { S.busy.delete(a.id); refresh(); }
   }
+
+  document.addEventListener('click', e => {
+    const mine = e.target.closest('[data-my-apps]');
+    if (!mine || !framed || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault(); e.stopImmediatePropagation(); window.top.location.assign(mine.href);
+  }, true);
 
   document.addEventListener('click', e => {
     if (e.target.closest('[data-back]')) { pop(); return; }
@@ -316,6 +338,10 @@ import {adoptAppearance} from './store-appearance.js';
       if(!['get','switch','update'].includes(state)) return;
       install(a); return; }
 
+    const pv = e.target.closest('[data-pv-new],[data-pv-choose]');
+    if (pv) { e.stopPropagation(); const id = pv.closest('[data-pv-app]')?.dataset.pvApp; if (!id) return;
+      if (framed) parent.postMessage({ type: 'wizard:app-route', id, ...(pv.matches('[data-pv-new]') ? { action: 'new-private-agent' } : {}) }, location.origin);
+      else toast('<b>Open Wizard to choose.</b>'); return; }
     const ap = e.target.closest('[data-mc-approve]'); if (ap) { e.stopPropagation(); approve(ap); return; }
     const cn = e.target.closest('[data-mc-connect]'); if (cn) { e.stopPropagation(); connect(cn); return; }
     const o = e.target.closest('[data-open]');

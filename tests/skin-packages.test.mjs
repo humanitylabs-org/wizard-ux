@@ -264,3 +264,6 @@ test('the shell wires the host: head order, adapter, dock claim, render hooks', 
   for (const p of ['thread', 'list', 'composer']) assert.match(chats, new RegExp(`data-part="${p}"`));
   assert.match(read('web/index.html'), /id="dock" data-part="dock"/);
 });
+
+// Tweaks share the package lint surface; behaviour belongs in web/tweaks, not new skin scripts.
+import './fixtures/tweak-lint.mjs';

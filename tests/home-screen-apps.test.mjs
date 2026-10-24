@@ -174,3 +174,28 @@ test('pinned app keeps Android status bar and navigation buttons; content starts
   const java=fs.readFileSync(root+'android/app/src/main/java/ai/wizards/os/AppSessionActivity.java','utf8');
   assert.doesNotMatch(java,/applyImmersive\(true\)/); assert.match(java,/super\.applyImmersive\(false\)/);
 });
+
+// Every surface that lists apps to open offers the same long-press. Miguel's skins replaced swipe-up Apps with
+// Desks → New desk on 22 Oct 2026 and the long-press silently vanished for their users; this pins both pickers.
+test('Apps sheet and New desk grid both carry the Add to home screen long-press', () => {
+  const app = read('app.js');
+  assert.match(app, /WizHomeScreenApps\?\.attach\(launcher,/);
+  assert.match(app, /WizHomeScreenApps\?\.attach\(track,[^\n]*rows: '\.new-desk \[data-app\]'/);
+  assert.match(read('core/home-screen-apps.js'), /function attach\(menu, appFor, opts = \{\}\)/);
+});
+
+// Desks overview: hold a one-app desk and let go in place → the same sheet; a drag still reorders (James, 24 Oct).
+test('Desks overview hold-and-release offers Add to home screen; drag keeps reordering', () => {
+  const app = read('app.js');
+  assert.match(app, /OV\.drag && !OV\.reordered[\s\S]{0,900}WizHomeScreenApps\?\.offer\(a\)/);
+  assert.match(app, /insertBefore\(OV\.card, before\); OV\.reordered = true;/);
+  assert.match(read('core/home-screen-apps.js'), /Object\.freeze\(\{ attach, offer,/);
+});
+
+// A home-screen app window is not "Wizard OS in front": the floating orb stays over it (James, 24 Oct).
+test('Pinned home-screen apps keep the floating orb', async () => {
+  const { readFileSync } = await import('node:fs');
+  const j = f => readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/' + f, import.meta.url), 'utf8');
+  assert.match(j('device/AppState.java'), /static synchronized boolean shellFront\(\)[\s\S]{0,160}instanceof ai\.wizards\.os\.AppSessionActivity/);
+  assert.equal((j('MainActivity.java').match(/setAppInFront\(this, ai\.wizards\.os\.device\.AppState\.shellFront\(\)\)/g) || []).length, 2);
+});
