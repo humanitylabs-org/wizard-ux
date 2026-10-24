@@ -16,7 +16,9 @@ public final class BackupScheduler {
         // The watcher only notices new media; the backup run it enqueues carries the network/charging rules.
         // Keeping network off the watcher means a photo taken offline still wakes the app once seen.
         Constraints.Builder b=new Constraints.Builder();
-        if(!watch) b.setRequiredNetworkType(s.wifi()?NetworkType.UNMETERED:NetworkType.CONNECTED).setRequiresCharging(s.initialCharging());
+        // CONNECTED, not UNMETERED: with the tailnet VPN on, Android judges the VPN (often metered), so an UNMETERED job
+        // never starts even on Wi-Fi. guard() enforces Wi-Fi-only per item, looking through the VPN to its Wi-Fi underlay.
+        if(!watch) b.setRequiredNetworkType(NetworkType.CONNECTED).setRequiresCharging(s.initialCharging());
         if(watch) b.addContentUriTrigger(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,true)
                 .addContentUriTrigger(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,true)
                 .setTriggerContentUpdateDelay(15,TimeUnit.SECONDS).setTriggerContentMaxDelay(60,TimeUnit.SECONDS);
