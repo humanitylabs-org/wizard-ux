@@ -202,9 +202,10 @@ public class OrbService extends Service {
             work.execute(() -> {
                 try {
                     String id = RecorderService.start(this, null, "orb", "floating-orb", origin);
+                    Log.i(TAG, "orb take " + id + " recording");
                     main.post(() -> { take = id; meter.run(); });
                 } catch (Exception e) {
-                    Log.w(TAG, "orb take: " + e.getMessage());
+                    Log.w(TAG, "orb take refused: " + e.getMessage());
                     main.post(() -> setState("idle"));
                 }
             });
@@ -252,6 +253,7 @@ public class OrbService extends Service {
             if (lp == null) return true;
             switch (e.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
+                    Log.i(TAG, "touch down " + Math.round(e.getRawX()) + "," + Math.round(e.getRawY()));
                     g.down(e.getRawX(), e.getRawY(), e.getEventTime());
                     rawX0 = e.getRawX(); rawY0 = e.getRawY(); x0 = lp.x; y0 = lp.y;
                     main.postDelayed(holdCheck, OrbGesture.HOLD_MS);
@@ -267,6 +269,7 @@ public class OrbService extends Service {
                 case MotionEvent.ACTION_UP: {
                     main.removeCallbacks(holdCheck);
                     OrbGesture.Kind k = g.up(e.getRawX(), e.getRawY(), e.getEventTime());
+                    Log.i(TAG, "touch " + k);
                     if (k == OrbGesture.Kind.TAP) tap();
                     else if (k == OrbGesture.Kind.HOLD) hide("hold");
                     else if (k == OrbGesture.Kind.DRAG) {

@@ -164,7 +164,9 @@ PY
 
   # Tap talks (a device.recording take marked send); tap again sends.
   read -r OX OY <<< "$(orb_xy)"; echo "orb centre: $OX,$OY" >> "$OUT/result.txt"
+  adb shell dumpsys input > "$OUT/orb-input.txt" 2>/dev/null
   adb shell input tap "$OX" "$OY"; sleep 4
+  adb exec-out screencap -p > "$OUT/orb-after-tap.png" 2>/dev/null
   OT=$(adb shell run-as "$PKG" ls files/takes 2>/dev/null | tr -d '\r' | grep -m1 '\.aac$' | sed 's/\.aac$//')
   [ -n "$OT" ] && adb shell dumpsys activity services "$PKG" | grep -q "RecorderService" && pass "orb: tap starts a recording over another app" || bad "orb: tap starts a recording over another app"
   sleep 3; adb shell input tap "$OX" "$OY"; sleep 3
@@ -180,6 +182,7 @@ PY
   # Offline: the Wizard's orb files fail (503) or answer too slowly (> 1.5 s) → the bundled copy, never blank.
   for how in down slow; do
     echo "$how" > "$FIXTURE_OUT/orb"
+    orblog > "$OUT/orb-before-$how.log"; adb logcat -d > "$OUT/logcat-before-$how.txt"
     adb shell am force-stop "$PKG"; adb logcat -c
     adb shell am start -W -n "$ACT" >/dev/null 2>&1; sleep 4
     adb shell input keyevent KEYCODE_HOME; sleep 1; adb shell am start -W -a android.settings.SETTINGS >/dev/null 2>&1
