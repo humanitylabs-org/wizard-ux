@@ -16,7 +16,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     { id: 'apps', type: 'view', one: 'App', many: 'Apps', blurb: 'Things you open and use' },
     { id: 'agent-apps', type: 'service', one: 'Agent app', many: 'Agent apps', blurb: 'New skills for your agent' },
     { id: 'agents', type: 'agent', one: 'Agent', many: 'Agents', blurb: 'The minds that run Wizard' },
-    { id: 'connections', type: 'external', one: 'Connection', many: 'Connections', blurb: 'Accounts your agents can use' },
+    { id: 'connections', type: 'external', one: 'Connector', many: 'Connectors', blurb: 'Accounts your agents can use' },
   ];
   const KIND_OF = Object.fromEntries(KINDS.map(k => [k.type, k]));
   const kindOf = a => KIND_OF[a.type] || KINDS[1];
@@ -52,7 +52,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       url: txt(a.url, 250), repo: txt(a.repo, 201), source: ID.test(a.source || '') ? a.source : 'standard', source_name: txt(a.source_name,60), channel: a.channel === 'alpha' ? 'alpha' : 'standard', commit: /^[a-f0-9]{40}$/.test(a.commit || '') ? a.commit : '', release_notes: txt(a.release_notes,2000),
       releases: Array.isArray(a.releases) ? a.releases.slice(0,16).map(r => clean({...r,releases:null})).filter(Boolean) : [],
       alpha_badge: ['Alpha','Alpha available'].includes(a.alpha_badge) ? a.alpha_badge : '', conflict: a.conflict === true, installed_source: txt(a.installed_source,64), installed_commit: txt(a.installed_commit,40), installed_app_id: txt(a.installed_app_id,64), update_available: a.update_available === true,
-      private: a.private === true, tags: words(a.tags), provides: words(a.provides), uses: ids(a.uses), architectures: words(a.architectures),
+      private: a.private === true, tags: words(a.tags), provides: words(a.provides), uses: ids(a.uses), needs: words(a.needs), architectures: words(a.architectures),
       installs: Number.isSafeInteger(a.installs) && a.installs > 0 ? a.installs : 0, checked_at: Number.isFinite(a.checked_at) ? a.checked_at : 0 };
   }
   const get = p => fetch(DATA + p, { credentials: 'same-origin', cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
@@ -96,6 +96,9 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     if(top()==='detail') showDetail(S.stack.at(-1).arg);
     else if(top()==='list') openKind(S.stack.at(-1).arg,true);
     else if(top()==='search') search(S.q);
+    // ?kind=apps|agent-apps|agents|connections: the launcher's "+ Get ..." tiles open that section.
+    const reqKind = new URLSearchParams(location.search).get('kind');
+    if (reqKind && !S.stack.length && KINDS.some(k => k.id === reqKind)) openKind(reqKind);
     const requested = new URLSearchParams(location.search).get('app');
     if (requested && !S.stack.length && S.apps.some(a => a.id === requested)) {
       const a=find(requested), source=new URLSearchParams(location.search).get('source'), r=a.releases.find(r=>r.source===source);
@@ -177,6 +180,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       <div class="d-stats"><div><b>${esc(k.one)}</b><small>Kind</small></div><div><b>${a.installs > 0 ? a.installs : 'New'}</b><small>Installs</small></div><div><b>${esc((a.version || '—').split(/[-+]/)[0])}</b><small>Version</small></div><div><b>${(a.tags || [])[0] ? esc(cap(a.tags[0])) : '—'}</b><small>Topic</small></div></div>
       <section class="d-sec d-lead"><p class="d-sum">${esc(a.summary)}</p><p class="d-how">${esc(how)}</p></section>
       ${architectureReason(a,S.architecture) ? `<section class="d-sec"><p class="d-note" role="status">${esc(architectureReason(a,S.architecture))}</p></section>` : ''}
+      ${(a.needs || []).includes('home-network') ? `<section class="d-sec d-home"><h3>Needs a home network</h3><p class="d-note" role="status">${esc(a.name)} only works when your Wizard runs on a home internet connection. On a cloud server (VPS), it needs a computer at home to route through. Its setup screen explains how.</p></section>` : ''}
       ${needs}${powers}${gives}
       ${modelsSection(a)}
       ${a.release_notes ? `<section class="d-sec"><h3>Release notes</h3><p>${esc(a.release_notes)}</p></section>` : ''}

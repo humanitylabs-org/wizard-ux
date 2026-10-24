@@ -29,7 +29,8 @@ test('cancelled command mode cannot consume the next thread or general take', as
   f.ctx.window.WosCaptureTools.take=()=>({files:[],ready:()=>true,close(){}});
   await f.ctx.talk('start');f.ctx.commandTake=true;await f.ctx.talk('cancel');
   assert.equal(f.ctx.commandTake,false);await f.ctx.talk('start',forceNew);await f.ctx.talk('send');
-  assert.equal(f.calls[0][0],forceNew?'new':'reply');
+  assert.equal(f.calls[0][0],forceNew?'chat':'reply');
+  if(forceNew)assert.equal(f.calls[0].at(-1).sid,'__new__');
  }
 });
 test('desktop pre-STT stage keeps the recording-start working run and busy lock',async()=>{

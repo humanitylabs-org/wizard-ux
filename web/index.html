@@ -26,6 +26,7 @@
   <link rel="stylesheet" href="core/scheduled-reminders.css">
   <link rel="stylesheet" href="core/chats-view.css">
   <link rel="stylesheet" href="core/sel-menu.css">
+  <link rel="stylesheet" href="core/share-sheet.css">
   <link rel="stylesheet" href="core/chat-power.css">
   <link rel="stylesheet" href="core/polish.css">
   <link rel="stylesheet" href="styles.css">
@@ -47,6 +48,7 @@
   <script type="module" src="core/thread-swipe-back.js"></script>
   <link rel="stylesheet" href="core/skin-frame.css">
   <script src="core/my-skin.js"></script>
+  <script defer src="core/experience.js"></script>
 </head>
 <body>
   <div id="device" class="device">
@@ -84,7 +86,7 @@
     </div>
 
     <!-- Dock -->
-    <div id="dock" data-part="dock" class="dock">
+    <div data-slot="dock-end" id="dock" data-part="dock" class="dock">
       <div id="dotsL" class="desk-dots left"></div>
       <div id="orbWrap" class="orb-wrap">
         <div class="orb-halo"></div>
@@ -138,6 +140,7 @@
   <script src="core/workspace-navigation.js"></script>
   <script src="core/chats-view.js"></script>
   <script src="core/apps.js"></script>
+  <script src="core/app-kinds.js"></script>
   <script src="core/appearance-host.js"></script>
   <script src="core/app-capture.js"></script>
   <script src="core/app-reading-position.js"></script>
@@ -150,6 +153,7 @@
   <script src="live.js"></script>
   <script src="outbox.js"></script>
   <script src="core/orb-handoff.js"></script>
+  <script src="core/share-sheet.js"></script>
   <script src="core/chat-kit.js"></script>
   <script src="core/chat-pins.js"></script>
   <script src="core/chat-topic-emojis-data.js"></script>
@@ -171,7 +175,7 @@
   <script src="core/video-desks.js"></script>
   <script src="core/voice-status.js"></script>
   <script src="core/settings.js"></script>
-  <script src="core/photos-settings.js"></script>
+  <script src="core/photos-relay.js"></script>
   <script src="core/cancelled.js"></script>
   <script src="core/mic.js"></script>
   <script src="core/os-updates.js"></script>

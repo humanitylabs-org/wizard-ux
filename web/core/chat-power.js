@@ -169,6 +169,9 @@ window.WosChatPower = function chatPower(A) {
     const el = nb.closest('[data-chats]'); if (!el) return;
     const id = el.dataset.chats, w = H.win(id); if (!w || !w.thread || w.thread === '__new__') return;
     const c = ch(id);
+    // Document-scrolled phones: a thread off screen (another app or desk in front) is not being read. Its box can
+    // scroll or measure zero while parked; saving that overwrote your place and flipped it to 'following the bottom'.
+    if (A.docAside?.(nb)) return;
     if (settling(c) && c.settle.nb === nb) { paintLatest(el, nb); return; } // our own placement, not the reader
     c.follow = bottomGap(nb) < 80; c.readerMoved = true;
     paintLatest(el, nb);
@@ -203,7 +206,7 @@ window.WosChatPower = function chatPower(A) {
     return M?.currentRoute(s?.id || '') || { model: '', provider: '' };
   }
   // Agents MVP: the agent a window or thread belongs to (null = the main agent).
-  const agentOfWin = (w, s) => { const AG = window.WosAgents; const id = (s && LIVE.agentOf?.(s.id)) || (w && w.agent) || ''; return AG && id && AG.isOther(id) ? AG.get(id) || { id, label: id, missing: true } : null; };
+  const agentOfWin = (w, s) => { const AG = window.WosAgents; const id = s ? (LIVE.agentOf?.(s.id) || (typeof s.agent === 'string' ? s.agent : s.agent?.id) || '') : A.winAgent(w); return AG && id && AG.isOther(id) ? AG.get(id) || { id, label: id, missing: true } : null; };
   function newModel(c, w) {
     if (c.newModel) return c.newModel;
     const ag = agentOfWin(w || H.win(Object.keys(A.CH).find(k => A.CH[k] === c) || ''), null);
@@ -282,7 +285,7 @@ window.WosChatPower = function chatPower(A) {
     M.load().then(() => { for (const id of Object.keys(A.CH)) { const w = H.win(id); if (w?.thread) (A.renderThreadLive || A.renderThreadNow)(w); } }); // background: waits for a selection
   }
   async function pickModel(o, direct) {
-    const sh = direct || sheet; if (!sh || (!direct && sh.type !== 'model')) return;
+    const sh = direct || sheet; if (!sh || (!direct && sh.type !== 'model') || (direct?.alive && !direct.alive())) return;
     const c = ch(sh.wid), w = H.win(sh.wid); if (!direct) closeSheet();
     if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', o.private ? `New private chat on ${o.name}` : `New chat on ${o.name}`, 1400); if (w) A.renderThreadNow(w); return; }
     const s = LIVE.session(sh.sid); if (!s) return;
@@ -295,6 +298,7 @@ window.WosChatPower = function chatPower(A) {
       let route;
       try { route = await M.setThreadModel(sh.sid, o); }
       catch (e) { toast('!', 'Couldn’t change the model · try again', 2600); return; }
+      if (direct?.alive && !direct.alive()) return;
       Object.assign(s, route);
     }
     if (sh.mode === 'retry') return retryThread(sh.wid, sh.sid, o);
@@ -463,7 +467,7 @@ window.WosChatPower = function chatPower(A) {
     try {
       it = await OUTBOX.enqueue({ captureId, custodyId, sealKey: sealed.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: transcript ? [sealed.text, transcript].filter(Boolean).join('\n\n') : '', typed: sealed.text, audio: blob,
         instructions, files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), ...(sealed.reply ? { reply: sealed.reply } : {}),
-        wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && (nm?.agent || w?.agent) ? { agent: nm?.agent || w.agent } : {}) });
+        wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && (nm?.agent || A.winAgent(w)) ? { agent: nm?.agent || A.winAgent(w) } : {}) });
     } catch (e) { // not saved anywhere: the words and attachments go back, and so does James if he is still on the list
       if (hold) LIVE.releaseSend?.(hold);
       if (isNew && nm) c.newModel = nm;
@@ -519,7 +523,7 @@ window.WosChatPower = function chatPower(A) {
     const cur = mode === 'new' ? newModel(ch(wid), w) : threadModel(s);
     const agent = agentOfWin(w, s);
     // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
-    const priv = !agent && !w.agent && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
+    const priv = !agent && !A.winAgent(w) && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
     openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false, agent, priv, pop: !!pop && mode !== 'retry' });
     if (!M.ready) M.load().then(() => { if (sheet?.type === 'model') paint(sheet.pane, A.elOf(sheet.pane)); });
   }
@@ -603,6 +607,26 @@ window.WosChatPower = function chatPower(A) {
   }
   const opened = (wid, sid) => { const c = ch(wid), s = sid && sid !== '__new__' ? LIVE.session(sid) : null; c.unreadOpen = s && LIVE.isNew(s) ? sid : ''; c.posFor = ''; c.follow = false; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
   const holds = id => !!sheet && sheet.pane === id;
-  return { position, anchorOf, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
+  async function tweakModels(wid) {
+    const w = H.win(wid); if (!w) return [];
+    await M.load(); const s = w.thread && w.thread !== '__new__' ? LIVE.session(w.thread) : null;
+    const agent = agentOfWin(w, s), cur = s ? threadModel(s) : newModel(ch(wid), w);
+    if (agent) return agent.missing ? [] : window.WosAgents.modelOptions(agent);
+    return M.visible(cur?.model || '', cur?.provider || '').concat(!w.agent ? M.privateOptions() : []);
+  }
+  async function tweakModel(wid, choice, alive = () => true) {
+    const w = H.win(wid); if (!w) return null;
+    const sid = w.thread && w.thread !== '__new__' ? w.thread : '';
+    if (!choice) return M.snapshot(sid, sid ? null : newModel(ch(wid), w), sid ? '' : A.winAgent(w));
+    const target = w.thread, session = sid ? LIVE.session(sid) : null;
+    const sameTarget = () => alive() && H.win(wid) === w && w.thread === target && (!sid || LIVE.session(sid) === session);
+    const options = await tweakModels(wid);
+    if (!sameTarget()) return null;
+    const m = options.find(x => x.value === choice.id && x.provider === choice.provider && (x.agent || '') === (choice.agent || ''));
+    if (!m) throw new Error('That model is unavailable');
+    await pickModel(m, { wid, sid, alive: sameTarget, mode: sid ? 'thread' : 'new' });
+    return sameTarget() ? tweakModel(wid) : null;
+  }
+  return { tweakModels, tweakModel, position, anchorOf, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
     paint, closeSheet, click, bind, opened, holds, openFiles, openModels, retryThread, FOLDER_SVG, RP, newModel: c => c.newModel || null };
 };
