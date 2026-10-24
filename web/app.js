@@ -2543,7 +2543,7 @@
     }
     if (V.state !== 'idle') return;
     const initialSnap=kind==='dictation'?null:kind==='general'?generalVoiceSnap():sendSnap();
-    if(initialSnap) initialSnap.route=CHATS.modelRoute(initialSnap.view?.id,initialSnap.view?.thread||'');
+    if(initialSnap && !initialSnap.route) initialSnap.route=CHATS.modelRoute(initialSnap.view?.id,initialSnap.view?.thread||'__new__');
     // An explicit agent pick (two-orb layout's agent orb): a new chat with that agent, its own route only.
     if (initialSnap && kind === 'general' && opt.agent && window.WosAgents?.isOther(opt.agent)) {
       let r = null; try { r = window.WosModels.snapshot('', null, opt.agent); } catch (e) { toast('!', esc(e.message), 2600); return 'busy'; }
@@ -3068,9 +3068,10 @@
    * and the shared WizardApp.voiceInput receiver; app-authored meta tags grant nothing. */
   function viewOf(id) {
     const w = W[id]; if (!w) return null;
-    if (agentWin(w)) { // an agent's Chats: what is said here goes to that agent, and private titles never leave it
-      const a = agentApp(w);
-      return { id, mode: 'auto', kind: w.thread ? 'chat thread' : 'agent chats', thread: w.thread || '', agent: a.agent, agentLabel: a.name, private: a.private,
+    if (agentWin(w) || (w.app === 'chats' && (!w.thread || w.thread === '__new__') && CHATS.winAgent(w))) {
+      // A Focus list/draft has the same destination as the former per-agent window. Existing threads keep theirs.
+      const a = agentApp({ ...w, agent: CHATS.winAgent(w) || w.agent });
+      return { id, mode: 'auto', kind: w.thread ? 'chat thread' : w.agent ? 'agent chats' : 'thread list', thread: w.thread || '', agent: a.agent, agentLabel: a.name, private: a.private,
         name: a.private ? `${a.name} chats (private agent)` : w.thread ? `${a.name} thread “${winTitle(w)}”` : `${a.name} chats` };
     }
     // Unified Chats: a private agent's thread open in the main Chats is named like its own Chats, never by title.
@@ -3321,6 +3322,10 @@
     setTimeout(() => { setVoice('idle'); }, 1200);
     txHide(isPill() ? 1400 : 2600);
     const ctx = viewContext(desks[idx].focus, opts.how || 'voice', opts.snap);
+    // Chats new-voice uses the shared draft path, including Space membership, but no composer or screen context.
+    if (opts.snap?.newChatWid && W[opts.snap.newChatWid]?.app === 'chats') {
+      return sendChat(opts.snap.newChatWid, text, 'new voice chat', opts.audio || opts.snap.audio || null, { custodyId: opts.snap.custodyId, sid: '__new__', route: opts.snap.route, seal: false, files: opts.files || [], instructions: 'Explicit new voice chat. No foreground app or private thread context shared.' });
+    }
     // Saved before it is sent: a dropped connection can delay this, never lose it.
     const item = await OUTBOX.enqueue({ sealKey: opts.snap?.seal?.key, custodyId: opts.snap?.custodyId, kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || opts.snap?.audio || null, source: opts.source || 'orb', files: opts.files || [], ...(opts.reply ? { reply: opts.reply } : {}) });
     renderMoons(); refreshHome(); renderDots();
@@ -3361,7 +3366,9 @@
   }
   function generalVoiceSnap() {
     // An explicit general take contains no private/app screen, composer or thread context.
-    return { id: null, desk: idx, view: null, screen: '', conversation: null, others: [], general: true, route: CHATS.modelRoute() };
+    const w = W[desks[idx].focus];
+    const route = w?.app === 'chats' ? CHATS.modelRoute(w.id, '__new__') : CHATS.modelRoute();
+    return { id: null, desk: idx, view: null, screen: '', conversation: null, others: [], general: true, route, newChatWid: w?.app === 'chats' ? w.id : null };
   }
   function paintVoiceDestination() {
     const label = V.snap?.conversation?.label;

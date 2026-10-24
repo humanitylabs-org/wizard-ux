@@ -69,8 +69,13 @@ html.wos-doc-scroll :is(#dock,.general-voice,.pill) { position: fixed; }
  * A flex footer reserves its own height, so no last row can sit underneath it. */
 .ch-focus-strip { position: relative; z-index: 5; flex: 0 0 auto; display: flex; align-items: center; gap: 8px; min-width: 0; height: 52px; padding: 4px 10px; overflow-x: auto; overflow-y: hidden; white-space: nowrap; touch-action: pan-x; overscroll-behavior-x: contain; scrollbar-width: none; background: var(--bg); border-top: 1px solid var(--line); }
 .ch-focus-strip::-webkit-scrollbar { display: none; }
-.ch-focus-tab { position: relative; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; max-width: calc(100% - 20px); min-height: 44px; padding: 0 14px; border: 1px solid var(--line-2); border-radius: 22px; background: color-mix(in srgb, var(--ink) 5%, var(--bg)); color: var(--ink-2); font: inherit; font-size: 14px; white-space: nowrap; }
-.ch-focus-tab.on { background: var(--wz-accent, var(--violet-2)); border-color: var(--wz-accent, var(--violet-2)); color: var(--wz-accent-ink, var(--bg)); font-weight: 700; }
+.ch-focus-tab { --ch-tab-colour: var(--ch-agent-colour, var(--wz-accent, var(--violet-2))); position: relative; isolation: isolate; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 44px; max-width: calc(100% - 20px); height: 44px; padding: 0 11px; border: 0; border-radius: 22px; background: transparent; color: var(--wz-ink, var(--ink)); font: inherit; font-size: 13px; white-space: nowrap; }
+/* The pill is 32px tall; the transparent button remains a 44px touch target. */
+.ch-focus-tab::before { content: ''; position: absolute; z-index: -1; inset: 6px 0; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--ch-tab-colour) 28%, transparent); background: color-mix(in srgb, var(--ch-tab-colour) 8%, var(--wz-base, var(--bg))); }
+.ch-focus-tab.on { color: var(--wz-base, var(--bg)); font-weight: 650; }
+.ch-focus-tab.on::before { background: var(--ch-tab-colour); border-color: transparent; }
+.ch-list[style*="--ch-agent-hue"] { background-image: linear-gradient(145deg, hsl(var(--ch-agent-hue) 72% 62% / .09), hsl(var(--ch-agent-hue) 72% 62% / .025) 65%, transparent); }
+.ch-focus-tab[data-chfocusopt^="space:"]::before { border-color: var(--wz-line, var(--line-2)); }
 .ch-focus-tab:focus-visible { outline: 2px solid var(--violet-2); outline-offset: -3px; }
 .ch-focus-tab > span { overflow: hidden; text-overflow: ellipsis; }
 .ch-focus-tab .ag-sig { display: none; }
