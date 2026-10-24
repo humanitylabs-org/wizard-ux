@@ -24,15 +24,25 @@
     const fid = S.familyOf?.(S.current), fam = (S.families || []).find(f => f.id === fid);
     return fam?.tweaks && /^[a-z0-9][a-z0-9-]*$/.test(fam.tweaks) ? fam.tweaks : null;
   }
-  const offFor = who => (who && state.off[who]) || [];
+  // Absence means the published defaults; an explicit [] is the owner's deliberate choice.
+  const offFor = who => who && Object.hasOwn(state.off, who) ? state.off[who] : (who === owner ? set?.off || [] : []);
+  // Move the legacy Layout choice into the Wizard tweak once, even if another skin is worn now.
+  try {
+    if (localStorage.getItem('wos.layout') === 'two-orb' && !localStorage.getItem('wos.two-orbs.migrated.v1')) {
+      if (!Object.hasOwn(state.off, 'wizard')) { state.off.wizard = []; Store.write(state); }
+      localStorage.setItem('wos.two-orbs.migrated.v1', 'true');
+    }
+  } catch (_) {}
   async function apply() {
     const seq = ++generation; busy = true; error = ''; changed();
     try {
       const who = wornOwner();
+      // A legacy layout can boot before this deferred module; the worn family now owns it.
+      if (window.WosSkinHost.layout === 'two-orb' && !window.WosSkinHost.tweakState.includes('wizard/two-orbs')) window.WosSkinHost.setLayout('classic');
       catalog ||= await read('tweaks/catalog.json'); slots ||= await read('core/slots.json');
       const next = who ? await read(`tweaks/${who}/profile.json`) : null;
       if (seq !== generation) return;
-      if (next && (next.id !== who || !Array.isArray(next.tweaks) || next.tweaks.some(id => !ID.test(id) || !catalog.tweaks.includes(id)))) throw new Error('This skin’s tweaks could not be read');
+      if (next && (next.id !== who || !Array.isArray(next.tweaks) || next.tweaks.some(id => !ID.test(id) || !catalog.tweaks.includes(id)) || (next.off !== undefined && (!Array.isArray(next.off) || next.off.some(id => !next.tweaks.includes(id)))))) throw new Error('This skin’s tweaks could not be read');
       owner = who; set = next;
       const all = next ? next.tweaks : [];
       manifests = new Map(await Promise.all(all.map(async id => [id, await read(`tweaks/${id}/manifest.json`)])));

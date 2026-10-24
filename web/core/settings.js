@@ -193,7 +193,7 @@
     const fam = (S.families || []).find(f => f.id === S.familyOf?.(S.current)), who = esc(fam?.name || 'This skin');
     const on = s.tweaks.filter(t => t.on).length, disabled = s.busy ? ' disabled' : '';
     const rows = s.tweaks.map(t => `<button type="button" class="st-row tw-row" data-tweak-toggle="${esc(t.id)}" role="switch" aria-checked="${t.on}"${disabled}><span class="st-tx"><b>${esc(t.name)}</b>${t.description ? `<small>${esc(t.description)}</small>` : ''}</span><span class="sw ${t.on ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`).join('');
-    return `<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row"><span class="st-ic">◇</span><span class="st-tx"><b>${who} also changes how things work</b><small>${on} of ${s.tweaks.length} changes on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</details>`;
+    return `<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row"><span class="st-tx"><b>${who} also changes how things work</b><small>${on} of ${s.tweaks.length} changes on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</details>`;
   }
   let tweaksOpen = false;
   window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
@@ -449,10 +449,10 @@
         buttons[(at + delta + buttons.length) % buttons.length].focus(); return;
       }
       const b = e.target.closest('[data-skinpick], [data-skinfamily], [data-myskin-tile]'); if (!b || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
-      const attr = b.hasAttribute('data-skinfamily') ? 'data-skinfamily' : 'data-skinpick';
+      const attr = b.hasAttribute('data-skinpick') ? 'data-skinpick' : 'data-skinfamily';
       // The skin grid's arrows/Home/End also reach its last tile, My skin. Landing on it only moves focus (it opens
       // its controls on Enter/Space or a tap), so arrowing past never toggles the panel.
-      const sel = attr === 'data-skinpick' ? '[data-skinpick], [data-myskin-tile]' : `[${attr}]`;
+      const sel = attr === 'data-skinfamily' ? '[data-skinfamily], [data-myskin-tile]' : '[data-skinpick]';
       e.preventDefault(); const buttons = [...root.querySelectorAll(sel)], at = buttons.indexOf(b);
       const n = e.key === 'Home' ? 0 : e.key === 'End' ? buttons.length - 1 : (at + (e.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
       if (buttons[n].hasAttribute('data-myskin-tile')) { buttons[n].focus(); return; }

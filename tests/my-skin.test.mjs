@@ -119,8 +119,8 @@ test('Launch: Nebula is the default skin, My skin leads Look and invites the fir
   assert.match(k, /const idxOf = id => Math\.max\(0, SKINS\.findIndex/);
   const s = read('web/core/settings.js');
   // My skin is the grid's last tile; while it is empty the invite sits right under the grid.
-  assert.match(s, /\$\{S\.list\.map\(k => skinCard\(k, cur\)\)\.join\(''\)\}\$\{myTile\(\)\}<\/div>/);
-  assert.match(s, /const invite = M && !myOpen && !mySkinWorn\(\) \?/);
+  assert.match(s, /\$\{tiles\}\$\{myTile\(\)\}<\/div>/);
+  assert.match(s, /const invite = M && !myOpen && M\.state\.empty \?/);
   assert.match(s, /Everything you see is customizable/);
   // Reset only when there is something to reset.
   assert.match(s, /const reset = st\.empty \? '' :/);

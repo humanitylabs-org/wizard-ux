@@ -1,9 +1,11 @@
 {
   "teamAuthors": [
-    "miguel"
+    "miguel",
+    "wizard"
   ],
   "profiles": [
-    "miguel"
+    "miguel",
+    "wizard"
   ],
   "tweaks": [
     "miguel/switch-row-actions",
@@ -12,6 +14,7 @@
     "miguel/model-pills",
     "miguel/hidden-pin",
     "miguel/snooze-someday",
-    "miguel/home-bars"
+    "miguel/home-bars",
+    "wizard/two-orbs"
   ]
 }

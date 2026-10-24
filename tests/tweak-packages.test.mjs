@@ -68,6 +68,37 @@ test('a core repaint removes the origin marker: teardown never resurrects stale 
   await f.clear(); assert.equal(f.thread.querySelector('[data-part="thread-actions"]'),replacement); assert.equal(f.thread.children.filter(n=>n.dataset.part==='thread-actions').length,1);
 });
 
+function wizardExperience(storage = new Map()) {
+  let skin = 'nebula', active = [], layout = storage.get('wos.layout') || 'classic';
+  const window = { WosSkin: { get current() { return skin; }, familyOf: id => id === 'nebula' ? 'wizard' : 'novairecito', families: [{id:'wizard',tweaks:'wizard'}, {id:'novairecito'}] },
+    WosSkinHost: { personalState:{ready:false}, get tweakState() { return active; }, get layout() { return layout; }, setLayout: id => { layout = id; }, loadTweaks: async ids => { active = ids; } }, addEventListener() {}, dispatchEvent() {} };
+  vm.runInNewContext(read('web/core/experience.js'), {window, document:{baseURI:'https://wizard.test/wizard-os-home/',addEventListener(){}}, Event, URL, AbortSignal,
+    localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)}, fetch:async url=>({ok:true,json:async()=>JSON.parse(read('web/'+url.pathname.split('/wizard-os-home/')[1]))})});
+  return { E:window.WosExperience, storage, skin:id=>{skin=id;}, active:()=>Array.from(active) };
+}
+test('profile default-off applies until the owner stores a deliberate choice, including an empty off list', async () => {
+  let f = wizardExperience(); await f.E.refresh(); assert.deepEqual(f.active(), []); assert.equal(f.E.state.tweaks[0].on, false);
+  await f.E.toggle('wizard/two-orbs'); assert.deepEqual(f.active(), ['wizard/two-orbs']);
+  assert.deepEqual(JSON.parse(f.storage.get('wos.skin-tweaks.v1')).off.wizard, []);
+  f = wizardExperience(f.storage); await f.E.refresh(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
+  f.skin('novairecito'); await f.E.chooseSkin(); assert.deepEqual(f.active(), []);
+  f.skin('nebula'); await f.E.chooseSkin(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
+  await f.E.toggle('wizard/two-orbs'); await f.E.refresh(); assert.deepEqual(f.active(), []);
+});
+test('legacy two-orb migration opts in exactly once, preserving a later owner off choice', async () => {
+  let f = wizardExperience(new Map([['wos.layout','two-orb']])); await f.E.refresh(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
+  await f.E.toggle('wizard/two-orbs');
+  f = wizardExperience(f.storage); await f.E.refresh(); assert.deepEqual(f.active(), []);
+  const saved = new Map([['wos.layout','two-orb'], ['wos.skin-tweaks.v1',JSON.stringify({version:1,off:{wizard:['wizard/two-orbs']}})]]);
+  f = wizardExperience(saved); await f.E.refresh(); assert.deepEqual(f.active(), []);
+});
+test('layout handles become inert on disposal and their cleanup is idempotent', async () => {
+  const f = fixture(); let api;
+  f.host._test.setImporter(async () => ({default:a=>{api=a;return()=>{};}}));
+  await f.mount('wizard/two-orbs'); await f.clear();
+  api.layout.use('two-orb')(); assert.equal(f.host.layout,'classic');
+});
+
 test('slot lookup prefers a visible instance over hidden Chats copies (desktop)', async () => {
   const { readFile } = await import('node:fs/promises');
   const src = await readFile(new URL('../web/core/skin-host.js', import.meta.url), 'utf8');

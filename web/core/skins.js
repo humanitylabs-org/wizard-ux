@@ -22,7 +22,7 @@
   // below is one of its palettes (colour sets). The saved choice stays the palette id, so nothing migrates.
   // A skin entry not listed here is a skin of its own with one palette (so a new collaborator skin needs no edit here).
   const FAMILIES = [
-    { id: 'wizard', name: 'Wizard', who: 'The original Wizard look, in five moods.', palettes: ['nebula', 'grove', 'tide', 'ember', 'signal'] },
+    { id: 'wizard', name: 'Wizard', tweaks: 'wizard', who: 'The original Wizard look, in five moods.', palettes: ['nebula', 'grove', 'tide', 'ember', 'signal'] },
     { id: 'mizel', name: 'Mizel', tweaks: 'miguel', recommends: { chats: 'mizel-chats' }, who: 'Miguel’s skin: black and white, or a new landscape every minute.', palettes: ['obsidian', 'obsidian-light', 'landscapes'] },
     { id: 'novairecito', name: 'Novairecito', who: 'Novaire’s skin: a noir violet command deck, or warm paper for long reads.', palettes: ['novairecito', 'sepia'] },
   ];

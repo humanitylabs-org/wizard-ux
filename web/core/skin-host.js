@@ -345,6 +345,14 @@
     }, toast: base.toast, storage: base.storage };
     if (caps.has('layout')) {
       Object.assign(api, { listen: base.listen, frame: base.frame, gesture: base.gesture });
+      // Borrow a built-in layout through the same host; disposal invalidates the handle.
+      api.layout = Object.freeze({ use(id) {
+        if (a.dead || !layoutOf(id)) return () => {};
+        setLayout(id);
+        let released = false;
+        const release = () => { if (!released) { released = true; if (layoutId === id) setLayout('classic'); } };
+        a.offs.add(release); return release;
+      } });
       api.part = name => /^[a-z-]+$/.test(name) ? shell?.root()?.querySelector(`[data-part="${name}"]`) || null : null;
       const slot = name => {
         if (!slotContract?.slots[name]) return null;

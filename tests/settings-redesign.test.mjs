@@ -90,14 +90,15 @@ test('no skin suggests a Chats app: Look and Chats show no pairing on any skin',
   assert.doesNotMatch(source, /recommendation\(|suggestionHtml|data-chats-dismiss/);
   assert.equal(h.posts.length, 0);
 });
-test('Look: every skin in one flat grid, named by its own name, no per-person family headings', () => {
+test('Look: family tiles lead, only the worn family colours render, and Layout is gone', () => {
   const h = harness(); h.s.WosSkin.current = 'obsidian-light'; h.view.focus('look');
   const html = h.root.innerHTML;
-  assert.doesNotMatch(html, /skp-fam|Mizel · |Wizard · /);
-  assert.equal((html.match(/<div class="skp" role="group"/g) || []).length, 1, 'one grid');
-  assert.match(html, /<div class="skp" role="group" aria-label="Skins"><button type="button" class="skp-card" data-skinpick="nebula"[^]*data-skinpick="obsidian-light"/);
-  assert.match(html, /<small data-skinname>Light<\/small>/);
-  assert.match(html, /<h4>Look<\/h4><div class="st-row static sk-row/, 'the grid leads Look');
+  assert.match(html, /data-skinfamily="wizard"[^]*data-skinfamily="mizel" aria-pressed="true"/);
+  assert.match(html, /<h4>Colours<\/h4>[^]*aria-label="Mizel colours"[^]*data-skinpick="obsidian-light"/);
+  assert.doesNotMatch(html, /data-skinpick="nebula"|data-layout-row|data-layoutpick|<b>Layout<\/b>/);
+  h.s.WosSkin.current = 'nebula'; h.view.render();
+  assert.match(h.root.innerHTML, /aria-label="Wizard colours"[^]*data-skinpick="nebula"/);
+  assert.doesNotMatch(h.root.innerHTML, /data-skinpick="obsidian-light"/);
 });
 test('index: one update card on top when there is something to do, nothing otherwise; desktop does not repeat it beside About', () => {
   const h = harness();
@@ -143,7 +144,7 @@ test('My skin is the dashed last tile of the one skin grid; tapping it opens Edi
   h.view.focus('look');
   let html = h.root.innerHTML;
   assert.equal((html.match(/<div class="skp" role="group"/g) || []).length, 1, 'still one grid');
-  assert.match(html, /data-skinpick="obsidian-light"[^]*?<\/button><button type="button" class="skp-card skp-my" data-myskin-tile aria-expanded="false" aria-label="My skin">[^]*?<\/button><\/div>/, 'My skin is the last tile');
+  assert.match(html, /data-skinfamily="mizel"[^]*?<\/button><button type="button" class="skp-card skp-my" data-myskin-tile aria-expanded="false" aria-label="My skin">[^]*?<\/button><\/div>/, 'My skin is the last tile');
   assert.doesNotMatch(html, /data-myskin-panel|data-myskin="edit"/, 'controls closed');
   assert.match(html, /class="st-hint ms-invite" data-myskinsub>Everything you see is customizable/, 'the launch invite stays visible while empty');
   h.view.dispatch({ closest: sel => sel === '[data-myskin-tile]' ? {} : sel === '[data-settings-feature]' ? { dataset: { settingsFeature: 'look' } } : null });
@@ -159,7 +160,7 @@ test('My skin is the dashed last tile of the one skin grid; tapping it opens Edi
 });
 test('the skin grid keyboard arrows reach the My skin tile (focus only), and its styles live in settings.css', () => {
   const src = fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8');
-  assert.match(src, /const sel = attr === 'data-skinpick' \? '\[data-skinpick\], \[data-myskin-tile\]'/);
+  assert.match(src, /const sel = attr === 'data-skinfamily' \? '\[data-skinfamily\], \[data-myskin-tile\]'/);
   assert.match(src, /if \(buttons\[n\]\.hasAttribute\('data-myskin-tile'\)\) \{ buttons\[n\]\.focus\(\); return; \}/);
   assert.match(fs.readFileSync(new URL('../web/core/settings.css', import.meta.url), 'utf8'), /\.st-root \.skp-my \.skp-mini-my \{/);
   assert.doesNotMatch(fs.readFileSync(new URL('../web/core/skins.css', import.meta.url), 'utf8'), /skp-my|ms-panel|ms-invite/);

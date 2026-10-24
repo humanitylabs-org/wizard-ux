@@ -23,9 +23,10 @@ test('the saved choice stays the palette id; the last palette per skin is rememb
 
 test('Settings › Look shows every look as a preview card in one flat grid, without family headings or a Chats pairing', () => {
   const s = read('web/core/settings.js');
-  assert.doesNotMatch(s, /skp-fam|famOf|recommends/);
-  assert.match(s, /<div class="skp" role="group" aria-label="Skins">\$\{S\.list\.map\(k => skinCard\(k, cur\)\)\.join\(''\)\}\$\{myTile\(\)\}<\/div>/);
-  assert.doesNotMatch(read('web/core/skins.js'), /recommends/);
+  assert.match(s, /data-skinfamily=/);
+  assert.doesNotMatch(s, /suggestionHtml|data-chats-suggest/);
+  assert.match(s, /aria-label="Skins">\$\{tiles\}\$\{myTile\(\)\}<\/div>/);
+  assert.match(s, /<h4>Colours<\/h4>/);
   assert.doesNotMatch(read('web/core/skins.css'), /\.skp-fam/);
 });
 

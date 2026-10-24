@@ -15,7 +15,7 @@ fs.mkdirSync(out, { recursive:true });
       for (const shell of ['phone','desktop']) for (const skin of ['nebula','obsidian']) {
         const id = `${name}-${shell}-${skin}`, errors = [], blocked = [];
         const context = await browser.newContext({ viewport: shell === 'phone' ? {width:390,height:844} : {width:1440,height:1000}, isMobile:shell==='phone',hasTouch:shell==='phone',timezoneId:'Asia/Bangkok',serviceWorkers:'block' });
-        await context.addInitScript(({ skin }) => { try { if (!sessionStorage.getItem('qa.seeded')) { localStorage.setItem('wos.skin',skin); sessionStorage.setItem('qa.seeded','1'); } } catch (_) {} /* seed once: later picks must survive navigation */ /* sandboxed app frames have no storage */ }, {skin});
+        await context.addInitScript(({ skin }) => { try { if (!sessionStorage.getItem('qa.seeded')) { localStorage.setItem('wos.skin',skin); localStorage.setItem('wos.tour.v1','true'); sessionStorage.setItem('qa.seeded','1'); } } catch (_) {} /* seed once: later picks must survive navigation */ /* sandboxed app frames have no storage */ }, {skin});
         await context.route('**/*', async route => {
           const q=route.request(), url=new URL(q.url());
           if (!['GET','HEAD'].includes(q.method())) { blocked.push({method:q.method(),path:url.pathname}); return route.fulfill({status:403,contentType:'application/json',body:'{"error":"QA blocks all writes"}'}); }
@@ -34,6 +34,7 @@ fs.mkdirSync(out, { recursive:true });
           if (expected) {
             // Picking Miguel's skin brings his tweaks; one disclosure under the picker lists them.
             await page.waitForFunction(()=>window.WosExperience && !window.WosExperience.state.busy);
+            await page.locator('[data-skinfamily="mizel"]').click();
             await page.locator('[data-skinpick="obsidian"]').click();
             await page.waitForFunction(()=>!window.WosExperience.state.busy && window.WosExperience.state.active.length===7, null,{timeout:25000});
             assert.equal(await page.locator('[data-experience]').count(),0);
@@ -49,9 +50,11 @@ fs.mkdirSync(out, { recursive:true });
             await page.screenshot({path:path.join(out,id+'-tweaks.png'),fullPage:true});
             // Leave his skin for the run's own skin unless it is his: tweaks follow the skin.
             if (skin!=='obsidian') {
+              await page.locator('[data-skinfamily="wizard"]').click();
               await page.locator(`[data-skinpick="${skin}"]`).click();
               await page.waitForFunction(()=>!window.WosExperience.state.busy && window.WosExperience.state.active.length===0);
-              assert.equal(await page.locator('[data-tweakset]').count(),0);
+              assert.equal(await page.locator('[data-tweak-toggle="wizard/two-orbs"]').getAttribute('aria-checked'),'false');
+              await page.locator('[data-skinfamily="mizel"]').click();
               await page.locator('[data-skinpick="obsidian"]').click();
               await page.waitForFunction(()=>!window.WosExperience.state.busy && window.WosExperience.state.active.length===7);
             }
@@ -67,8 +70,14 @@ fs.mkdirSync(out, { recursive:true });
             await page.locator('[data-home-resources]').screenshot({path:path.join(out,id+'-resources.png')});
             await page.goto(origin+'/wizard-os-home/'+shellPath+'?view=skin&shell='+shell,{waitUntil:'domcontentloaded'});
             await page.waitForFunction(()=>window.WosExperience && !window.WosExperience.state.busy);
+            await page.locator('[data-skinfamily="wizard"]').click();
             await page.locator('[data-skinpick="nebula"]').click();
             await page.waitForFunction(()=>!window.WosExperience.state.busy && window.WosExperience.state.active.length===0);
+            if (!await page.locator('[data-tweakset]').evaluate(n=>n.open)) await page.locator('[data-tweakset] > summary').click();
+            await page.locator('[data-tweak-toggle="wizard/two-orbs"]').click();
+            await page.waitForFunction(()=>!window.WosExperience.state.busy && window.WosSkinHost.layoutState.active && window.WosSkinHost.layout==='two-orb');
+            await page.locator('[data-tweak-toggle="wizard/two-orbs"]').click();
+            await page.waitForFunction(()=>!window.WosExperience.state.busy && window.WosSkinHost.layout==='classic');
             await page.screenshot({path:path.join(out,id+'-own.png'),fullPage:true});
           } else { assert.equal(await page.locator('[data-tweakset]').count(),0); await page.screenshot({path:path.join(out,id+'-look.png'),fullPage:true}); }
           // Real in-app nested Back. Keep Settings itself mounted; do not count a stable URL as proof.
