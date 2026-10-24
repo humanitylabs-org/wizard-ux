@@ -201,3 +201,42 @@
 /* About & updates without a card: one quiet line naming what is installed; the choices sit under plain labels. */
 .osu-sec { margin-top: 26px; }
 .osu-lbl { display: block; margin: 0 4px 8px; font-size: 13px; font-weight: 650; letter-spacing: .02em; color: var(--wz-text-muted); }
+
+/* My release (wizard-os#186; only on a box that serves my-release.json or a release status): its name and base, Your
+ * changes as hairline rows with a status chip each, and Propose on the owner's own (Mine) changes. */
+.st-root[data-settings-root] button.osu-more { align-self: flex-start; min-height: 36px; min-width: 0; margin: 2px 0 0 -6px; padding: 4px 6px; border: 0; border-radius: 8px; background: transparent; color: var(--wz-text-secondary); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+.osu-new { margin: 4px 0 0; padding: 0 0 0 18px; font-size: 14px; line-height: 1.45; color: var(--wz-text-secondary); }
+.rl-head { display: flex; flex-direction: column; gap: 4px; padding: 4px 4px 16px; border-bottom: 1px solid var(--wz-border); }
+.rl-name { font-size: 22px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.rl-head small { font-size: 15px; color: var(--wz-text-secondary); }
+.st-root[data-settings-root] .rl-toggle { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; margin: 0; padding: 12px 4px; border-radius: 0; border: 0; border-bottom: 1px solid var(--wz-border); box-shadow: none; background: transparent; color: var(--wz-text); text-align: left; touch-action: manipulation; -webkit-tap-highlight-color: transparent; -webkit-appearance: none; appearance: none; }
+.st-root .rl-toggle:focus:not(:focus-visible), .st-root .rl-propose:focus:not(:focus-visible) { outline: none; }
+.st-root .rl-toggle:focus-visible { outline: 2px solid color-mix(in srgb, var(--wz-accent) 70%, transparent); outline-offset: 2px; }
+.st-root .rl-propose:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .st-root .rl-toggle:hover { background: color-mix(in srgb, var(--wz-text) 5%, transparent); } .st-root .rl-propose:hover { background: var(--wz-surface-raised); } }
+.rl-toggle .st-go { transition: transform 180ms; }
+.rl-toggle[aria-expanded="true"] .st-go { transform: rotate(90deg); }
+.rl-tl { flex: 1; min-width: 0; font-size: 17px; font-weight: 550; }
+.rl-changes { list-style: none; margin: 0; padding: 0; }
+.rl-changes li { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 12px 4px; border-bottom: 1px solid color-mix(in srgb, var(--wz-border) 60%, transparent); }
+.rl-ct { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.rl-ct b { font-size: 15px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.rl-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rl-meta small { font-size: 12.5px; color: var(--wz-text-muted); font-variant-numeric: tabular-nums; }
+.rl-chip { flex: none; display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11.5px; font-weight: 650; line-height: 1.3; white-space: nowrap; color: var(--wz-text); --c: var(--wz-accent); background: color-mix(in srgb, var(--c) 18%, transparent); }
+/* Fixed hues so the lanes read apart on every skin, light or dark; text stays the skin's own ink. */
+.rl-chip.rl-mine { --c: var(--wz-accent); }
+.rl-chip.rl-feature { --c: #3b82f6; }
+.rl-chip.rl-fix { --c: #22a861; }
+.rl-chip.rl-merged { --c: var(--wz-text-muted); }
+.st-root[data-settings-root] button.rl-propose { flex: none; align-self: center; min-height: 40px; min-width: 0; padding: 8px 14px; border: 1px solid var(--wz-border); border-radius: 99px; background: transparent; color: var(--wz-text); font-size: 13.5px; font-weight: 650; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.st-root[data-settings-root] button.rl-propose:active { background: var(--wz-surface-raised); }
+.rl-legend { margin: 0; padding: 0 4px; }
+.st-root[data-settings-root] .rl-legend summary { min-height: 44px; display: flex; align-items: center; gap: 6px; list-style: none; font-size: 13px; color: var(--wz-text-muted); cursor: pointer; background: transparent; -webkit-tap-highlight-color: transparent; }
+.rl-legend summary::-webkit-details-marker { display: none; }
+.rl-legend summary::after { content: '›'; font-size: 16px; transition: transform 180ms; }
+.rl-legend[open] summary::after { transform: rotate(90deg); }
+.rl-legend summary:focus:not(:focus-visible) { outline: none; }
+.rl-legend summary:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; border-radius: 8px; }
+.rl-legend p { margin: 0 0 8px; font-size: 13px; line-height: 1.5; color: var(--wz-text-secondary); }
+.rl-legend b { font-weight: 650; color: var(--wz-text); }

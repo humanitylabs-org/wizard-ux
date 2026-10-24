@@ -9,7 +9,11 @@
   const android = () => !!native() || /Android/i.test(navigator.userAgent);
   // Rows are plain lines split by hairlines: no boxes, no icon tiles; a second line only when it says something.
   const row = (id, title, sub) => `<button class="st-row" data-st="${esc(id)}"><span class="st-tx"><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="st-go">›</span></button>`;
+  // My release (wizard-os#186) leads when the box has one (WosUpdates.release: my-release.json or the App Manager's
+  // `release`); About folds into its foot. A box without a release keeps About & updates last, as before.
+  const release = () => !!window.WosUpdates?.release;
   const PAGES = [
+    { id: 'release', title: 'My release', available: release },
     { id: 'appearance', title: 'Appearance' },
     { id: 'chats', title: 'Chats & app screens' },
     { id: 'voice', title: 'Voice & typing' },
@@ -17,10 +21,11 @@
     { id: 'recovery', title: 'Unsent & recovered' },
     { id: 'usage', title: 'AI usage' },
     { id: 'schedules', title: 'Schedules', available: () => !!window.WosSchedules?.available },
-    { id: 'about', title: 'About & updates' },
+    { id: 'about', title: 'About & updates', available: () => !release() },
   ];
   const featurePages = { look: 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', 'photos-backup': 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
-  const pageOf = f => f?.page != null ? PAGES.some(p => p.id === f.page) ? f.page : 'about' : featurePages[f?.id] || 'about';
+  const basePage = f => f?.page != null ? PAGES.some(p => p.id === f.page) ? f.page : 'about' : featurePages[f?.id] || 'about';
+  const pageOf = f => { const p = basePage(f); return p === 'about' && release() ? 'release' : p; };
   const chatsHost = () => window.WizChatsHost;
   const chatsName = id => id === 'wizard-chats' ? 'Wizard Chats' : chatsHost()?.installed().find(a => a.id === id)?.name || id;
   const recovered = () => window.WosCancelled?.list?.() || [];
@@ -305,16 +310,16 @@
       const selection = active && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
       const pages = PAGES.filter(p => !p.available || p.available(ctx));
       if (page && !pages.some(p => p.id === page)) page = '';
-      const selected = page || (desktop ? 'appearance' : '');
+      const selected = page || (desktop ? (release() ? 'release' : 'appearance') : '');
       const heading = PAGES.find(p => p.id === selected)?.title || '';
       const items = attention(ctx);
       const attentionHtml = items.length ? `<div class="st-attention" aria-label="Needs attention">${items.map(i => `<button data-st-attention="${esc(i.feature)}">${esc(i.title)}<span aria-hidden="true">›</span></button>`).join('')}</div>` : '';
-      // Desktop shows About & updates beside the list with the card on it, so the list does not repeat it.
-      const card = desktop && selected === 'about' ? '' : cardHtml();
+      // Desktop shows About & updates (or My release) beside the list with the card on it, so the list does not repeat it.
+      const card = desktop && (selected === 'about' || selected === 'release') ? '' : cardHtml();
       const nav = pages.map(p => `<button class="st-category" data-st-page="${p.id}" aria-current="${p.id === selected ? 'page' : 'false'}"><span class="st-tx"><b>${p.title}</b></span><span class="st-val" data-st-subtitle="${p.id}">${esc(subtitle(p.id, ctx))}</span><span class="st-go" aria-hidden="true">›</span></button>`).join('');
       const fs = [...features.values()].filter(f => pageOf(f) === selected && (!f.available || f.available(ctx)));
       // About & updates leads with the update card and its choices; the connection rows follow.
-      if (selected === 'about') fs.sort((x, y) => (y.id === 'updates') - (x.id === 'updates'));
+      if (selected === 'about' || selected === 'release') fs.sort((x, y) => (y.id === 'updates') - (x.id === 'updates'));
       const content = fs.map(f => `<section data-settings-feature="${esc(f.id)}">${f.html(ctx)}</section>`).join('');
       const footer = `<footer class="st-shortcuts">${window.WosFiles ? '<button data-st-shortcut="files" data-st="files">Files</button>' : ''}${(window.WosFeatures?.entries || []).filter(f => !f.available || f.available()).map(f => `<button data-st-shortcut="${esc(f.id)}">${esc(f.title || f.id)}</button>`).join('')}</footer>`;
       root.dataset.settingsPage = page;
@@ -329,13 +334,14 @@
     function focus(id) {
       for (const f of features.values()) if (pageOf(f) === page) f.leave?.(ctx);
       const f = features.get(id) || [...features.values()].find(f => f.aliases?.includes(id));
-      page = f ? pageOf(f) : featurePages[id] || (id === 'updates' ? 'about' : PAGES.some(p => p.id === id) ? id : '');
+      page = f ? pageOf(f) : featurePages[id] || (['updates', 'release', 'my-release', 'about'].includes(id) ? (release() ? 'release' : 'about') : PAGES.some(p => p.id === id) ? id : '');
       for (const f of features.values()) if (pageOf(f) === page) f.enter?.(ctx);
       confirm = null; render(); root.scrollTop = 0;
       const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = 0;
       const g = id && root.querySelector(`[data-settings-feature="${CSS.escape(f?.id || id)}"]`);
       g?.scrollIntoView?.({ block: 'nearest' });
-      (g?.querySelector('button:not(:disabled)') || root.querySelector(page ? '.st-page-head h3' : '.st-title'))?.focus({ preventScroll: true });
+      // My release opens on its update card; focus its heading, not the card's button (no stray focus ring).
+      ((page !== 'release' && g?.querySelector('button:not(:disabled)')) || root.querySelector(page ? '.st-page-head h3' : '.st-title'))?.focus({ preventScroll: true });
     }
     function back() {
       for (const f of features.values()) if (pageOf(f) === page && f.back?.(ctx)) return true;

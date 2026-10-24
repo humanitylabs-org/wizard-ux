@@ -73,7 +73,8 @@
     l.dataset.skinPkg = dir; l.setAttribute('blocking', 'render');
     // The old cascade slot of these rules: right after core/skins.css (later packages stack after earlier ones).
     const prev = [...cssLinks.values()].pop();
-    const anchor = prev || document.querySelector('link[href*="core/skins.css"]');
+    // An owner's release layer (core/owner-layer.js, wizard-os#186) sits right after core/skins.css; skin looks stack after it.
+    const anchor = prev || document.querySelector('link[data-owner-layer]') || document.querySelector('link[href*="core/skins.css"]');
     if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(l, anchor.nextSibling); else document.head.appendChild(l);
     cssLinks.set(dir, l); requested.push(l.href); return l;
   }
