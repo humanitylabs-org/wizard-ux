@@ -200,7 +200,9 @@ async function routingMatrix(b) {
   await choose(p,'agent:philosopher');
   ok(JSON.stringify(await ids(p))===JSON.stringify(['phil_one','phil_two']),mode+' Philosopher only');
   ok((await activeFocus(p)).includes('Philosopher'),mode+' active tab updates');
-  ok(await p.locator('.ch-list:visible').evaluate(e=>e.style.getPropertyValue('--ch-agent-hue')===String(WosAgents.distinctHues().get('philosopher'))&&getComputedStyle(e).backgroundImage.includes('gradient')),mode+' focused list reuses agent hue tint');
+  ok(await p.locator('.ch-list:visible').evaluate(e=>e.style.getPropertyValue('--ch-agent-hue')===String(WosAgents.distinctHues().get('philosopher'))&&getComputedStyle(e).backgroundImage==='none'),mode+' focused list keeps the skin background (no wash)');
+  {const hl=await p.locator('.ch-list:visible').evaluate(e=>{const fab=e.querySelector('.ch-fab'),strip=e.querySelector('.ch-focus-strip');return {fab:fab?getComputedStyle(fab).backgroundImage:'',strip:strip?getComputedStyle(strip).borderTopWidth:''};});
+  ok(hl.strip==='2px'&&(!hl.fab||!/155, 107, 255/.test(hl.fab)),mode+' agent colour carries the highlights (+ button, strip edge)',hl);}
   ok(await opts.evaluateAll(es=>es.filter(e=>e.dataset.chfocusopt.startsWith('agent:')).every(e=>e.style.getPropertyValue('--ch-agent-colour')===WosAgents.colour(WosAgents.get(e.dataset.chfocusopt.slice(6))))),mode+' tabs reuse registry colours');
   const activePaint=await p.locator('.ch-focus-strip:visible .on').evaluate(e=>({bg:getComputedStyle(e,'::before').backgroundColor,neutral:getComputedStyle(e.parentElement).backgroundColor}));
   ok(activePaint.bg!=='rgba(0, 0, 0, 0)'&&activePaint.bg!==activePaint.neutral,mode+' active pill filled',activePaint);
