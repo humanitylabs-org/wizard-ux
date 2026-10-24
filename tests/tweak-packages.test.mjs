@@ -74,7 +74,7 @@ function wizardExperience(storage = new Map()) {
     WosSkinHost: { personalState:{ready:false}, get tweakState() { return active; }, get layout() { return layout; }, setLayout: id => { layout = id; }, loadTweaks: async ids => { active = ids; } }, addEventListener() {}, dispatchEvent() {} };
   vm.runInNewContext(read('web/core/experience.js'), {window, document:{baseURI:'https://wizard.test/wizard-os-home/',addEventListener(){}}, Event, URL, AbortSignal,
     localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)}, fetch:async url=>({ok:true,json:async()=>JSON.parse(read('web/'+url.pathname.split('/wizard-os-home/')[1]))})});
-  return { E:window.WosExperience, storage, skin:id=>{skin=id;}, active:()=>Array.from(active) };
+  return { window, E:window.WosExperience, storage, skin:id=>{skin=id;}, active:()=>Array.from(active) };
 }
 test('profile default-off applies until the owner stores a deliberate choice, including an empty off list', async () => {
   let f = wizardExperience(); await f.E.refresh(); assert.deepEqual(f.active(), []); assert.equal(f.E.state.tweaks[0].on, false);
@@ -108,6 +108,22 @@ test('App borders migrates stored framed exactly once, leaves everyone else bord
     if (foundation === 'framed') { await f.E.toggle('wizard/app-borders'); f = wizardExperience(storage); await f.E.refresh(); assert.deepEqual(f.active(), []); }
   }
 });
+test('own recipes expose all installed tweaks, use published defaults and isolate builtin choices', async () => {
+  const f = wizardExperience();
+  f.window.WosSkin.familyOf = id => id === 'obsidian-light' ? 'mizel' : 'wizard';
+  f.window.WosSkin.families.push({id:'mizel',name:'Mizel',tweaks:'miguel'});
+  const defaults = await f.E.defaults('nebula');
+  assert.equal(defaults['wizard/app-borders'], false); assert.equal(defaults['wizard/two-orbs'], false);
+  assert.equal(defaults['miguel/model-pills'], false);
+  const mizel = await f.E.defaults('obsidian-light'); assert.equal(mizel['miguel/model-pills'],true);
+  const skin = {id:'quiet',tweaks:{...defaults,'miguel/model-pills':true}};
+  f.window.WosMySkin = {active:skin,update(v){ Object.assign(skin.tweaks,v.tweaks); }};
+  await f.E.refresh(); assert.equal(f.E.state.tweaks.length, JSON.parse(read('web/tweaks/catalog.json')).tweaks.length);
+  assert.deepEqual(f.active(),['miguel/model-pills']);
+  await f.E.toggle('wizard/app-borders'); assert.ok(f.active().includes('wizard/app-borders'));
+  f.window.WosMySkin.active=null; await f.E.refresh(); assert.deepEqual(f.active(),[]);
+});
+
 test('disposed foundation capability cannot change windows', async () => {
   const f = fixture(); let api;
   f.host._test.setImporter(async () => ({default:a=>{api=a;return()=>{};}}));

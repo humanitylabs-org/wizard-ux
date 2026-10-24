@@ -35,20 +35,21 @@
   }
   async function startScript() {
     const v = verified, host = window.WosSkinHost;
-    if (off || !v || approval() !== v.sha256 || !host?.personalState.ready || started === v.sha256) return;
+    if (off || !own() || !v || approval() !== v.sha256 || !host?.personalState.ready || started === v.sha256) return;
     started = v.sha256;
-    await host.loadPersonal(v.bytes, () => !off && verified === v && approval() === v.sha256);
+    await host.loadPersonal(v.bytes, () => !off && !!own() && verified === v && approval() === v.sha256);
     emit();
   }
   function turnOn(event) {
     // No agent/API approval, synthetic clicks or stale buttons. The trusted event must hit this exact version.
     const b = event?.target?.closest?.('button[data-myskin="on"]');
-    if (off || !verified || verified.sha256 !== state.script.sha256 || typeof MouseEvent === 'undefined' || !(event instanceof MouseEvent) || !event.isTrusted || event.type !== 'click' || !b?.isConnected || b.disabled || b.dataset.myskinHash !== state.script.sha256 || !state.script.sha256) return false;
+    if (off || !own() || !verified || verified.sha256 !== state.script.sha256 || typeof MouseEvent === 'undefined' || !(event instanceof MouseEvent) || !event.isTrusted || event.type !== 'click' || !b?.isConnected || b.disabled || b.dataset.myskinHash !== state.script.sha256 || !state.script.sha256) return false;
     try { localStorage.setItem(OK, state.script.sha256); } catch (_) { return false; }
     state.script.approved = true; startScript(); emit(); return true;
   }
   async function refreshScript(seq) {
     const info = state.info?.script;
+    if (info?.exists) { migrate('skin.js'); apply(state.css); }
     if (!info?.exists || verified?.sha256 !== info.sha256) { verified = null; stopScript(); }
     state.script = { exists: !!info?.exists, sha256: info?.sha256 || null, bytes: info?.bytes || 0, approved: false };
     if (!info?.exists || approval() !== info.sha256) { turnOff(); }
@@ -69,6 +70,65 @@
       else await startScript();
     } catch (_) { if (seq === refreshSeq) { verified = null; turnOff(); } }
   }
+  // Named recipes are device-local until the service supports Skins/<name>/ folders.
+  const RECIPES = 'wos.own-skins.v1';
+  const clone = value => JSON.parse(JSON.stringify(value));
+  let recipes = { version: 1, skins: [], active: null, migrated: false };
+  try {
+    const saved = JSON.parse(localStorage.getItem(RECIPES));
+    if (saved?.version === 1 && Array.isArray(saved.skins)) {
+      recipes = { version: 1, skins: saved.skins.filter(s => s && /^[a-z0-9-]+$/.test(s.id) && typeof s.name === 'string' && s.name.trim() && s.name.length <= 60 && typeof s.base === 'string' && s.tweaks && typeof s.tweaks === 'object' && !Array.isArray(s.tweaks)), active: saved.active, migrated: !!saved.migrated };
+      if (!recipes.skins.some(s => s.id === recipes.active)) recipes.active = null;
+    }
+  } catch (_) {}
+  const own = () => recipes.skins.find(s => s.id === recipes.active) || null;
+  function persist(next) { localStorage.setItem(RECIPES, JSON.stringify(next)); recipes = next; }
+  function migrate(css) {
+    if (recipes.migrated || emptyCss(css)) return;
+    const skin = { id: 'my-skin', name: 'My skin', base: window.WosSkin?.current || 'nebula', tweaks: {}, legacy: true };
+    try { persist({ version: 1, skins: [skin], active: skin.id, migrated: true }); } catch (_) {}
+  }
+  function recipeChanged() {
+    apply(state.css);
+    if (!own()) stopScript(); else void startScript();
+    emit();
+    if (typeof Event !== 'undefined') window.dispatchEvent?.(new Event('wos:own-skin'));
+  }
+  function wear(id) {
+    const skin = recipes.skins.find(s => s.id === id); if (!skin) throw new Error('Skin not found');
+    persist({ ...recipes, active: id }); window.WosSkin?.set(skin.base); recipeChanged(); return clone(skin);
+  }
+  function leave() { if (!own()) return; persist({ ...recipes, active: null }); recipeChanged(); }
+  function create({ name, base, tweaks }) {
+    name = String(name || '').trim();
+    if (!name || name.length > 60) throw new Error('Give your skin a name (up to 60 characters)');
+    if (!window.WosSkin?.list.some(s => s.id === base)) throw new Error('Choose an installed colour');
+    if (recipes.skins.some(s => s.name.toLocaleLowerCase() === name.toLocaleLowerCase())) throw new Error('You already have a skin with that name');
+    const map = Object.fromEntries(Object.entries(tweaks || {}).filter(([id,v]) => /^[a-z0-9-]+\/[a-z0-9-]+$/.test(id) && typeof v === 'boolean'));
+    const skin = { id: 'skin-' + crypto.randomUUID(), name, base, tweaks: map };
+    persist({ ...recipes, skins: [...recipes.skins, skin], active: skin.id, migrated: true });
+    window.WosSkin.set(base); recipeChanged(); return clone(skin);
+  }
+  function update(values) {
+    const skin = own(); if (!skin) return;
+    const base = values.base || skin.base;
+    if (!window.WosSkin?.list.some(s => s.id === base)) throw new Error('Choose an installed colour');
+    const next = { ...skin, base, tweaks: { ...skin.tweaks, ...(values.tweaks || {}) } };
+    persist({ ...recipes, skins: recipes.skins.map(s => s.id === skin.id ? next : s) });
+    if (window.WosSkin.current !== base) window.WosSkin.set(base); recipeChanged();
+  }
+  function remove(id) {
+    const index = recipes.skins.findIndex(s => s.id === id); if (index < 0) return null;
+    const snapshot = { skin: clone(recipes.skins[index]), index, worn: recipes.active === id };
+    persist({ ...recipes, skins: recipes.skins.filter(s => s.id !== id), active: snapshot.worn ? null : recipes.active, migrated: true });
+    if (snapshot.worn) window.WosSkin?.set(snapshot.skin.base); recipeChanged(); return snapshot;
+  }
+  function restore(snapshot) {
+    if (!snapshot || recipes.skins.some(s => s.id === snapshot.skin.id)) return;
+    const skins = [...recipes.skins]; skins.splice(snapshot.index, 0, snapshot.skin);
+    persist({ ...recipes, skins, active: snapshot.worn ? snapshot.skin.id : recipes.active });
+    if (snapshot.worn) window.WosSkin?.set(snapshot.skin.base); recipeChanged();
+  }
   const emptyCss = css => !String(css || '').replace(/\/\*[\s\S]*?(?:\*\/|$)/g, '').trim();
   let el = null;
 
@@ -82,11 +142,11 @@
   }
   function apply(css) {
     css = typeof css === 'string' && css.length <= MAX ? css : '';
-    state.css = css; state.empty = emptyCss(css);
+    state.css = css; state.empty = emptyCss(css); migrate(css);
     if (!isDoc) return;
-    if (off || state.empty) { if (el) { el.textContent = ''; el.remove(); } }
+    if (off || !own() || state.empty) { if (el) { el.textContent = ''; el.remove(); } }
     else { const s = styleEl(); if (s.textContent !== css) s.textContent = css; }
-    if (document.documentElement) document.documentElement.toggleAttribute('data-my-skin', !off && !state.empty);
+    if (document.documentElement) document.documentElement.toggleAttribute('data-my-skin', !off && !!own() && !state.empty);
   }
   const emit = () => { for (const fn of [...subs]) { try { fn(state); } catch (_) {} } };
   const cache = css => { try { if (css && !emptyCss(css)) localStorage.setItem(CACHE, css); else localStorage.removeItem(CACHE); } catch (_) {} };
@@ -124,6 +184,9 @@
   if (!off) { try { const c = localStorage.getItem(CACHE); if (c) apply(c); } catch (_) {} }
   const api = {
     FILE,
+    get recipes() { return clone(recipes.skins); },
+    get active() { return own() ? clone(own()) : null; },
+    create, wear, leave, update, remove, restore,
     get state() { return state; },
     // The owner overlay stays above the skin and the tweaks it brings; changing skin never clears it.
     // Per-skin tweak offs live in experience.js until Agent Service offers an owner profile route.
@@ -134,6 +197,8 @@
   };
   if (typeof window !== 'undefined') {
     window.WosMySkin = api;
+    if (own() && window.WosSkin?.list.some(s => s.id === own().base)) window.WosSkin.set(own().base);
+    window.addEventListener?.('wos:skin', () => { if (own() && own().base !== window.WosSkin.current) leave(); });
     if (isDoc && !off) {
       window.addEventListener?.('storage', e => { if (e.key === OK) { stopScript(); refresh(); } });
       refresh();
