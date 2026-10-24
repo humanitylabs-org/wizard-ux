@@ -617,7 +617,7 @@ window.WizCore.chats = function createChats(H) {
       const list = k === 'ready' && !n ? readyOrdered(list0) : k === 'archive' && !n && !filtered && Object.keys(LIVE.windows || {}).length ? list0.slice(0,50) : list0;
       // Errors also holds failed background work and voice notes that didn't send (chat-power.js #12).
       const extra = PW && k === 'errors' && !n ? PW.errorsExtra() : { n: 0, html: '' };
-      if (!list.length && !extra.n && (k === 'errors' || k === 'deferred' || n || filtered)) return '';
+      if (!list.length && !extra.n && (k === 'errors' || k === 'deferred' || k === 'yesterday' || k === 'pastWeek' || n || filtered)) return '';
       // While searching, every section with a hit opens so nothing is buried.
       const open = n || filtered ? true : secOpen[k];
       const newN = k === 'ready' && !byStatus() ? list.filter(s => LIVE.isNew(s) && !waitsOn(s)).length : 0;
