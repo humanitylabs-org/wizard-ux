@@ -7,5 +7,6 @@
   "capabilities": [
     "layout",
     "nav"
-  ]
+  ],
+  "description": "Swipe left to reopen the last chat"
 }

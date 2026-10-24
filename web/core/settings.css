@@ -158,3 +158,9 @@
 .ph-album { display: flex; align-items: center; gap: 12px; padding: 8px 4px; background: transparent; color: var(--wz-text); text-align: left; font-size: 15px; }
 .ph-check { flex: 0 0 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--wz-text-muted); }
 .ph-album[aria-checked="true"] .ph-check { background: var(--wz-accent); border-color: var(--wz-accent); box-shadow: inset 0 0 0 3px var(--wz-base); }
+
+/* Tweaks that come with the picked skin: one disclosure under the picker. */
+.tw-set > summary { list-style: none; cursor: pointer; }
+.tw-set > summary::-webkit-details-marker { display: none; }
+.tw-set[open] > summary .st-go { transform: rotate(90deg); }
+.tw-set .tw-row { padding-left: 18px; }

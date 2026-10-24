@@ -140,12 +140,13 @@ test('unsent Edit consumes only after the shared draft store verifies text and a
 });
 
 // Look's new controls stay in the shared Settings stack; Back never navigates out of Wizard.
-test('nested Look / Your tweaks Back returns to Settings before shell root Back, in both mounts', () => {
+test('nested Look / skin tweaks Back returns to Settings before shell root Back, in both mounts', () => {
   const { sandbox, roots } = harness();
-  sandbox.WosSkin = { current:'grove', list:[], families:[], familyOf:()=>'' };
-  sandbox.WosExperience = { LABEL:'Experience', state:{base:'miguel',busy:false,error:'',tweaks:[{id:'miguel/hidden-pin',name:'Hide pin buttons',on:true}],active:['miguel/hidden-pin']} };
+  sandbox.WosSkin = { current:'obsidian', list:[], families:[{ id:'mizel', name:'Mizel', tweaks:'miguel', palettes:['obsidian'] }], familyOf:()=>'mizel' };
+  sandbox.WosExperience = { state:{owner:'miguel',busy:false,error:'',tweaks:[{id:'miguel/hidden-pin',name:'Hide pin buttons',description:'No pin button on chats',on:true}],active:['miguel/hidden-pin']} };
   for (const { root, view } of roots) {
-    view.focus('look'); assert.equal(view.page,'appearance'); assert.match(root.innerHTML,/Your tweaks/); assert.match(root.innerHTML,/Back to my setup/);
+    view.focus('look'); assert.equal(view.page,'appearance'); assert.match(root.innerHTML,/Mizel also changes how things work/); assert.match(root.innerHTML,/1 of 1 changes on/);
+    assert.doesNotMatch(root.innerHTML,/Back to my setup|Try Miguel|Your tweaks|stop following/);
     assert.equal(view.back(), true); assert.equal(view.page,''); assert.equal(view.back(), false); assert.match(root.innerHTML,/Settings categories/);
   }
 });

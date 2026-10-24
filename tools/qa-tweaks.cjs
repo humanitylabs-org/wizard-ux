@@ -32,10 +32,12 @@ fs.mkdirSync(out, { recursive:true });
           await page.waitForFunction(() => !!(window.__wos || window.__wux), null, {timeout:20000});
           await page.locator('[data-stgroup="look"]').waitFor({state:'visible',timeout:20000});
           if (expected) {
+            // Picking Miguel's skin brings his tweaks; one disclosure under the picker lists them.
             await page.waitForFunction(()=>window.WosExperience && !window.WosExperience.state.busy);
-            await page.locator('[data-experience="try"]').click();
+            await page.locator('[data-skinpick="obsidian"]').click();
             await page.waitForFunction(()=>!window.WosExperience.state.busy && window.WosExperience.state.active.length===7, null,{timeout:25000});
-            assert.equal(await page.evaluate(()=>window.WosSkin.current),'obsidian');
+            assert.equal(await page.locator('[data-experience]').count(),0);
+            await page.locator('[data-tweakset] > summary').click();
             assert.equal(await page.locator('[data-tweak-toggle]').count(),7);
             const ids=await page.locator('[data-tweak-toggle]').evaluateAll(nodes=>nodes.map(n=>n.dataset.tweakToggle));
             for (const tweak of ids) {
@@ -44,10 +46,15 @@ fs.mkdirSync(out, { recursive:true });
               await page.locator(`[data-tweak-toggle="${tweak}"]`).click();
               await page.waitForFunction(id=>!window.WosExperience.state.busy && window.WosExperience.state.active.includes(id),tweak);
             }
-            // Independently choose another look while keeping the same behaviours.
-            await page.locator(`[data-skinpick="${skin}"]`).click();
-            assert.equal(await page.evaluate(()=>window.WosSkin.current),skin);
             await page.screenshot({path:path.join(out,id+'-tweaks.png'),fullPage:true});
+            // Leave his skin for the run's own skin unless it is his: tweaks follow the skin.
+            if (skin!=='obsidian') {
+              await page.locator(`[data-skinpick="${skin}"]`).click();
+              await page.waitForFunction(()=>!window.WosExperience.state.busy && window.WosExperience.state.active.length===0);
+              assert.equal(await page.locator('[data-tweakset]').count(),0);
+              await page.locator('[data-skinpick="obsidian"]').click();
+              await page.waitForFunction(()=>!window.WosExperience.state.busy && window.WosExperience.state.active.length===7);
+            }
             // Exercise the real shared model facade on the list without opening a private thread or sending.
             const shellPath=shell==='desktop'?'desktop.html':'';
             await page.goto(origin+'/wizard-os-home/'+shellPath+'?view=chats&shell='+shell,{waitUntil:'domcontentloaded'});
@@ -60,11 +67,10 @@ fs.mkdirSync(out, { recursive:true });
             await page.locator('[data-home-resources]').screenshot({path:path.join(out,id+'-resources.png')});
             await page.goto(origin+'/wizard-os-home/'+shellPath+'?view=skin&shell='+shell,{waitUntil:'domcontentloaded'});
             await page.waitForFunction(()=>window.WosExperience && !window.WosExperience.state.busy);
-            await page.locator('[data-experience="back"]').click();
-            await page.waitForFunction(()=>!window.WosExperience.state.busy && window.WosExperience.state.base===null && window.WosExperience.state.active.length===0);
-            assert.equal(await page.evaluate(()=>window.WosSkin.current),skin);
+            await page.locator('[data-skinpick="nebula"]').click();
+            await page.waitForFunction(()=>!window.WosExperience.state.busy && window.WosExperience.state.active.length===0);
             await page.screenshot({path:path.join(out,id+'-own.png'),fullPage:true});
-          } else { assert.equal(await page.locator('[data-experience="try"]').count(),0); await page.screenshot({path:path.join(out,id+'-look.png'),fullPage:true}); }
+          } else { assert.equal(await page.locator('[data-tweakset]').count(),0); await page.screenshot({path:path.join(out,id+'-look.png'),fullPage:true}); }
           // Real in-app nested Back. Keep Settings itself mounted; do not count a stable URL as proof.
           // Desktop shows the Settings index beside the page (no Back button); Back-never-exits is the phone contract.
           if (shell==='phone') { await page.locator('[data-st-back]:visible').click();

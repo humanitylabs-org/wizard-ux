@@ -7,5 +7,6 @@
   "capabilities": [
     "layout",
     "models"
-  ]
+  ],
+  "description": "Pick the model from pills above your chats"
 }

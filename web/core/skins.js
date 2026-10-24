@@ -23,7 +23,7 @@
   // A skin entry not listed here is a skin of its own with one palette (so a new collaborator skin needs no edit here).
   const FAMILIES = [
     { id: 'wizard', name: 'Wizard', who: 'The original Wizard look, in five moods.', palettes: ['nebula', 'grove', 'tide', 'ember', 'signal'] },
-    { id: 'mizel', name: 'Mizel', recommends: { chats: 'mizel-chats' }, who: 'Miguel’s skin: black and white, or a new landscape every minute.', palettes: ['obsidian', 'obsidian-light', 'landscapes'] },
+    { id: 'mizel', name: 'Mizel', tweaks: 'miguel', recommends: { chats: 'mizel-chats' }, who: 'Miguel’s skin: black and white, or a new landscape every minute.', palettes: ['obsidian', 'obsidian-light', 'landscapes'] },
     { id: 'novairecito', name: 'Novairecito', who: 'Novaire’s skin: a noir violet command deck, or warm paper for long reads.', palettes: ['novairecito', 'sepia'] },
   ];
   const LAST = 'wos.skin.last.';
@@ -88,7 +88,7 @@
       if (!out.includes(f)) out.push(f);
       s.family = f.id;
     }
-    return out.map(f => Object.freeze({ id: f.id, name: f.name, who: f.who, ...(f.recommends ? { recommends: Object.freeze({ ...f.recommends }) } : {}), palettes: Object.freeze(SKINS.filter(s => s.family === f.id).map(s => s.id)) }));
+    return out.map(f => Object.freeze({ id: f.id, name: f.name, who: f.who, ...(f.recommends ? { recommends: Object.freeze({ ...f.recommends }) } : {}), ...(f.tweaks ? { tweaks: f.tweaks } : {}), palettes: Object.freeze(SKINS.filter(s => s.family === f.id).map(s => s.id)) }));
   })();
   const N = SKINS.length;
   const idxOf = id => Math.max(0, SKINS.findIndex(s => s.id === id));
@@ -381,7 +381,7 @@
     // Skin packages (core/skin-host.js): a collaborator skin's own folder web/skins/<dir>/ (skin.css, skin.js).
     pkgOf(id) { const s = SKINS.find(x => x.id === id); return s && s.pkg ? Object.freeze({ ...s.pkg }) : null; },
     preview(p) { paint(p); },
-    set(id) { const i = idxOf(id); if (composition) { composition.extends = SKINS[i].id; saveComposition(); } paint(i); try { localStorage.setItem(KEY, SKINS[i].id); localStorage.setItem(LAST + SKINS[i].family, SKINS[i].id); } catch (e) {} window.WosSkinHost?.commit(SKINS[i].id); return SKINS[i].id; },
+    set(id) { const i = idxOf(id); if (composition) { composition.extends = SKINS[i].id; saveComposition(); } paint(i); try { localStorage.setItem(KEY, SKINS[i].id); localStorage.setItem(LAST + SKINS[i].family, SKINS[i].id); } catch (e) {} window.WosSkinHost?.commit(SKINS[i].id); try { dispatchEvent(new CustomEvent('wos:skin', { detail: SKINS[i].id })); } catch (e) {} return SKINS[i].id; },
     get frame() { return F ? F.frame(frameOf(SKINS[Math.round(pos)])) : { foundation: 'framed' }; },
     get frameAdjustable() { return PHONE; },
     get composition() { return { version: 1, extends: this.current, frame: this.frame }; },

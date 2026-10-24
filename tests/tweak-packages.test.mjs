@@ -35,17 +35,19 @@ test('multiple ordered packages clean listeners, CSS, mounts and action intercep
   assert.equal(f.host.tweakState.length, catalog.tweaks.length); assert.equal(f.host.action('snooze', {sessionId:'s1'}), true);
   await f.clear(); assert.equal(f.doc.head.children.length, 0); assert.equal(f.thread.handlers.get('touchend').size, 0); assert.equal(f.host.action('snooze', {sessionId:'s1'}), false);
 });
-test('Try follows updated ordered ids, disabled overrides survive, fork stops following, one tap restores own setup', async () => {
+test('a skin brings its tweaks; offs are remembered per skin; another skin drops them; new published tweaks arrive', async () => {
   const storage = new Map(); let skin = 'grove', published = { id: 'miguel', version: 1, skin: 'obsidian', tweaks: ['miguel/hidden-pin'], flags: {} }, active;
-  const window = { WosSkin: { get current() { return skin; }, set(v) { skin = v; } }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active || []; }, loadTweaks: async ids => { active = ids; } }, addEventListener() {}, dispatchEvent() {} };
+  const fams = [{ id: 'wizard', palettes: ['grove'] }, { id: 'mizel', tweaks: 'miguel', palettes: ['obsidian', 'landscapes'] }];
+  const window = { WosSkin: { get current() { return skin; }, families: fams, familyOf: id => fams.find(f => f.palettes.includes(id)).id }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active || []; }, loadTweaks: async ids => { active = ids; } }, addEventListener() {}, dispatchEvent() {} };
   const ctx = { window, document: { baseURI:'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal, localStorage: { getItem:k=>storage.get(k), setItem:(k,v)=>storage.set(k,v) }, fetch: async url => ({ ok:true, json: async () => url.pathname.endsWith('profile.json') ? published : JSON.parse(read('web/'+url.pathname.split('/wizard-os-home/')[1])) }) };
   vm.runInNewContext(read('web/core/experience.js'), ctx); const E = window.WosExperience;
-  await E.tryProfile(); assert.equal(skin, 'obsidian'); assert.equal(E.state.base, 'miguel');
-  await E.toggle('miguel/hidden-pin'); assert.equal(active.length, 0);
+  await E.refresh(); assert.equal(E.state.owner, null); assert.equal(active.length, 0);
+  skin = 'obsidian'; await E.chooseSkin(); assert.equal(E.state.owner, 'miguel'); assert.deepEqual(Array.from(active), ['miguel/hidden-pin']);
+  await E.toggle('miguel/hidden-pin'); assert.equal(active.length, 0); assert.equal(E.state.tweaks[0].on, false);
   published = { ...published, version:2, tweaks: ['miguel/home-bars','miguel/hidden-pin'] }; await E.refresh();
-  assert.deepEqual(Array.from(active), ['miguel/home-bars']); assert.equal(E.state.overrides['miguel/hidden-pin'], false);
-  await E.backToMine(); assert.equal(skin, 'grove'); assert.equal(active.length, 0);
-  await E.tryProfile(); await E.fork(); assert.equal(E.state.base, null); assert.equal(E.state.mine.tweaks.length, 2);
+  assert.deepEqual(Array.from(active), ['miguel/home-bars']);
+  skin = 'grove'; await E.chooseSkin(); assert.equal(E.state.owner, null); assert.equal(active.length, 0); assert.equal(E.state.tweaks.length, 0);
+  skin = 'landscapes'; await E.chooseSkin(); assert.deepEqual(Array.from(active), ['miguel/home-bars']);
 });
 
 test('event access is capability-gated, render payloads have no DOM, stale model and nav APIs are inert', async () => {

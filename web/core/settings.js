@@ -192,12 +192,17 @@
     .filter(([, v]) => v).map(([n, v]) => `--p-${n}:${esc(v)}`).join(';'); };
   const mini = k => `<span class="skp-mini" data-skp="${esc(k.id)}" style="${pvars(k)}" aria-hidden="true"><i class="skp-a"></i><i class="skp-a skp-a2"></i><i class="skp-u"></i><i class="skp-dock"><i class="skp-orb"></i></i></span>`;
   const skinCard = (k, cur) => `<button type="button" class="skp-card" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}">${mini(k)}<span class="skp-nm" style="${esc(faceCss(k.face))}">${esc(k.name)}</span></button>`;
-  function tweakRows() {
+  /* A skin brings its author's tweaks. One disclosure under the picker lists them with on/off; skins without
+   * tweaks show nothing. No separate setup, following or copy: changing skin is the only way in or out. */
+  function tweakRows(S) {
     const E = window.WosExperience; if (!E) return '';
-    const s = E.state, disabled = s.busy ? ' disabled' : '';
-    const action = (id, title) => `<button type="button" class="st-row" data-experience="${id}"${disabled}><span class="st-ic">◇</span><span class="st-tx"><b>${title}</b></span></button>`;
-    return `<h4>${esc(E.LABEL)}</h4><div class="st-row static"><span class="st-tx"><b>${s.base ? 'Following Miguel' : 'Your setup'}</b><small>Saved on this device · My skin stays on top</small></span></div>${s.base ? action('back', 'Back to my setup') + action('fork', 'Make a copy · stop following') : action('try', 'Try Miguel’s')}<h4>Your tweaks</h4>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${s.tweaks.length ? s.tweaks.map(t => `<button type="button" class="st-row" data-tweak-toggle="${esc(t.id)}" role="switch" aria-checked="${t.on}"${disabled}><span class="st-ic">◇</span><span class="st-tx"><b>${esc(t.name)}</b><small>${s.active.includes(t.id) ? 'On' : t.on ? 'Unavailable' : 'Off'}</small></span><span aria-hidden="true">${t.on ? 'On' : 'Off'}</span></button>`).join('') : '<div class="st-row static"><span class="st-tx"><small>No tweaks in your setup. Try Miguel’s to choose what to keep.</small></span></div>'}`;
+    const s = E.state; if (!s.owner || (!s.tweaks.length && !s.error)) return '';
+    const fam = (S.families || []).find(f => f.id === S.familyOf?.(S.current)), who = esc(fam?.name || 'This skin');
+    const on = s.tweaks.filter(t => t.on).length, disabled = s.busy ? ' disabled' : '';
+    const rows = s.tweaks.map(t => `<button type="button" class="st-row tw-row" data-tweak-toggle="${esc(t.id)}" role="switch" aria-checked="${t.on}"${disabled}><span class="st-tx"><b>${esc(t.name)}</b>${t.description ? `<small>${esc(t.description)}</small>` : ''}</span><span class="sw ${t.on ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`).join('');
+    return `<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row"><span class="st-ic">◇</span><span class="st-tx"><b>${who} also changes how things work</b><small>${on} of ${s.tweaks.length} changes on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</details>`;
   }
+  let tweaksOpen = false;
   window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
   function lookHtml(S) {
     const cur = S.current, fams = S.families?.length ? S.families : [{ id: '', name: '', palettes: S.list.map(k => k.id) }];
@@ -207,7 +212,7 @@
       const head = fams.length > 1 ? `<div class="skp-fam">${esc(f.name)}</div>` : '';
       return `${head}<div class="skp" role="group" aria-label="${esc(f.name || 'Skin')} colours">${pals.map(k => skinCard(k, cur)).join('')}</div>`;
     }).join('');
-    return `<div class="st-group" data-stgroup="look"><h4>Look</h4>${mySkinRow(lookName(S, cur))}<div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(lookName(S, cur))}</small></span></div><div class="skp-all${facesReady ? '' : ' skp-wait'}">${groups}</div></div>${suggestionHtml()}${layoutRow()}${tweakRows()}</div>`;
+    return `<div class="st-group" data-stgroup="look"><h4>Look</h4>${mySkinRow(lookName(S, cur))}<div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(lookName(S, cur))}</small></span></div><div class="skp-all${facesReady ? '' : ' skp-wait'}">${groups}</div></div>${tweakRows(S)}${suggestionHtml()}${layoutRow()}</div>`;
   }
   /* Layout: how the shell behaves (orbs, gestures), worn over any skin. Classic = the shell as everyone has it. */
   function layoutRow() {
@@ -220,12 +225,10 @@
     const S = window.WosSkin; if (!S) return '';
     return lookHtml(S);
   }, act(ctx, el, event) {
-    const experience = el.closest('[data-experience]'), tweak = el.closest('[data-tweak-toggle]');
-    if (experience || tweak) {
-      const E = window.WosExperience;
-      const result = tweak ? E.toggle(tweak.dataset.tweakToggle) : experience.dataset.experience === 'try' ? E.tryProfile() : experience.dataset.experience === 'back' ? E.backToMine() : E.fork();
-      void result.catch(e => ctx.toast?.('!', e.message, 2400)); return true;
-    }
+    const tweak = el.closest('[data-tweak-toggle]');
+    if (tweak) { tweaksOpen = true; void window.WosExperience.toggle(tweak.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; }
+    const set = el.closest('[data-tweakset] > summary');
+    if (set) { event?.preventDefault?.(); tweaksOpen = !set.parentElement.open; set.parentElement.open = tweaksOpen; return true; }
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
     const lp = el.closest('[data-layoutpick]');
@@ -237,7 +240,7 @@
     }
     const S = window.WosSkin;
     const b = el.closest('[data-skinpick]'); if (!b) return false;
-    const now = S.set(b.dataset.skinpick); window.WosExperience?.chooseSkin?.(now);
+    const now = S.set(b.dataset.skinpick); void window.WosExperience?.chooseSkin?.();
     ctx.root.querySelectorAll('[data-skinpick]').forEach(n => n.setAttribute('aria-pressed', String(n.dataset.skinpick === now)));
     ctx.root.querySelector('[data-skinname]').textContent = lookName(S, now);
     const sub = ctx.root.querySelector('[data-myskinsub]'); if (sub) sub.textContent = mySkinSub(lookName(S, now));
