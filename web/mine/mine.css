@@ -647,3 +647,7 @@ html[data-mine] .rs-br { grid-template-columns: 58px minmax(60px, 1fr) max-conte
 /* Miguel's skins: no chat pins (row pin button and the Pin action in the row sheet). Rows get their full width back. */
 html[data-mine] .ch-pin-toggle, html[data-mine] .ch-sheet [data-rspin] { display: none; }
 html[data-mine] .ch-row-wrap > .ch-row { padding-right: 8px; }
+/* Settings (Miguel, 24 Oct): he never uses Day / Week / Month in review, Maps or Local command, so their shortcuts
+ * leave his Settings. Stock boxes keep them; the features themselves stay reachable by deep link. */
+html[data-mine] .st-root :is([data-st-shortcut], [data-feature-open]):is([data-st-shortcut="day"], [data-st-shortcut="week"], [data-st-shortcut="month"], [data-st-shortcut="maps"], [data-st-shortcut="command"], [data-feature-open="day"], [data-feature-open="week"], [data-feature-open="month"], [data-feature-open="maps"], [data-feature-open="command"]) { display: none; }
+html[data-mine] .st-root [data-settings-feature="features"]:not(:has([data-feature-open]:not([data-feature-open="day"], [data-feature-open="week"], [data-feature-open="month"], [data-feature-open="maps"], [data-feature-open="command"]))) { display: none; }

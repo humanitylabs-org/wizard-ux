@@ -89,3 +89,19 @@ for (const skin of JAMES) {
     assert.doesNotMatch(home({ skin }), /rs-barsw/, 'without the flag: stock meters');
   });
 }
+
+test('Settings shortcuts for Day/Week/Month in review, Maps and Local command are hidden only with the release flag', () => {
+  const css = read('web/mine/mine.css'), core = read('web/core/settings.css') + read('web/core/features.js') + read('web/core/settings.js');
+  const hide = rules(css).filter(sel => /data-st-shortcut="day"/.test(sel));
+  assert.equal(hide.length, 1, 'one rule hides them');
+  assert.ok(hide[0].split(',').every(s => s.trim().startsWith('html[data-mine]')) || hide[0].startsWith('html[data-mine]'), 'scoped to the mine flag');
+  for (const id of ['day', 'week', 'month', 'maps', 'command']) {
+    assert.match(hide[0], new RegExp(`data-st-shortcut="${id}"`), id);
+    assert.match(hide[0], new RegExp(`data-feature-open="${id}"`), id);
+  }
+  assert.match(css, /html\[data-mine\] \.st-root \[data-st-shortcut\][^{]*\{ display: none; \}|html\[data-mine\] \.st-root :is\(\[data-st-shortcut\], \[data-feature-open\]\)[^{]*\{ display: none; \}/);
+  // Stock boxes keep them: core registers all five and hides none of them.
+  for (const id of ['maps', 'command']) assert.match(core, new RegExp(`id: '${id}'`));
+  assert.match(core, /for \(const level of \['day', 'week', 'month'\]\)/);
+  assert.doesNotMatch(read('web/core/settings.css'), /data-st-shortcut="(day|maps|command)"/);
+});
