@@ -116,6 +116,17 @@ test('Talk still advances only on a real sent message; Hide on hide + bring back
   t.T.event('zen', { on: false }); t.runTimers(); assert.equal(t.T.step, 3);
 });
 
+test('a hold during Talk never advances it, even when it ran as a command (Codex P2 on #456)', () => {
+  for (const ev of [['command', { ok: true, text: 'Open Calendar' }], ['command', { ok: false }], ['nomatch', { text: 'x' }]]) {
+    const t = boot();
+    t.T.start('qa'); t.calls.length = 0;
+    t.T.event(...ev); t.runTimers();
+    assert.equal(t.T.step, 1, `${ev[0]} ${JSON.stringify(ev[1])} keeps Talk`);
+    assert.doesNotMatch(t.view().copy, /ran as a command/);
+    assert.ok(t.calls.includes('home') && t.calls.includes('dismissVoice'), 'what the hold opened is put back behind Home');
+  }
+});
+
 test('skipping Hide while the bars are hidden brings them back first', () => {
   const t = boot();
   t.T.start('qa'); t.tap('[data-tnext]');

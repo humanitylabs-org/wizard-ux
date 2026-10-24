@@ -107,13 +107,15 @@
     if (type === 'voice') { el.classList.toggle('tr-live', d.state !== 'idle'); return; }
     if (type === 'nomic') { if (!typed) { typed = true; log('typed'); later(() => { if (!active()) return; H.prepare(); el.classList.remove('tr-live'); go(step); }, 700); } return; }
     if (step === 1) {
-      if (type === 'sent' || (type === 'command' && d.ok)) {
+      // Only a real message moves Talk on. A hold is steered back to a tap, whether or not it ran as a command
+      // (the tour no longer teaches commands; anything a command opened is put back behind Home).
+      if (type === 'sent') {
         busy = true; misses = 0; spot('open');
-        setCopy(type === 'sent' ? 'Sent. Your Wizard is working on it.' : 'That ran as a command. Nice.', sub(1));
+        setCopy('Sent. Your Wizard is working on it.', sub(1));
         return later(() => go(2), 2200);
       }
       if (type === 'nospeech') { misses++; busy = false; return nudge('Didn’t hear anything. Tap, speak, then tap again.', 3200); }
-      if (type === 'nomatch') { busy = false; H.dismissVoice(); return nudge('That was a hold. For this one, just tap.'); }
+      if (type === 'nomatch' || type === 'command') { busy = false; H.dismissVoice(); H.goHome(); return nudge('That was a hold. For this one, just tap.'); }
     }
     if (step === 2) {
       if (type === 'zen' && d.on) { inbox = true; spot('closed'); setCopy('Nothing in the way. Swipe up from the bottom edge to bring it back.', sub(2)); return; }

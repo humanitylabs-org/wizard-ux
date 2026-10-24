@@ -62,6 +62,12 @@ const settle = (p, ms = 3500) => p.waitForFunction(() => document.querySelector(
   ok(t.step === 1 && /Didn.t hear anything/.test(t.copy), 'beat 1: no speech → "Didn\'t hear anything" and stays on beat 1', JSON.stringify(t));
   await p.waitForTimeout(3400);
 
+  // Beat 1, a hold that runs a real shell command (Open Calendar / Open Files): Talk does not move on, and what the
+  // command opened goes back behind Home (Codex P2 on #456: the tour no longer has a command path).
+  await p.evaluate(() => __wos.runUtterance(__wos.findApp?.('calendar') ? 'Open Calendar' : 'Open Files', 'command')); await p.waitForTimeout(1200);
+  t = await T(p); ok(t.step === 1 && t.idx === 0 && !/ran as a command/.test(t.copy) && (await p.evaluate(() => (window.__tourLog || []).some(x => /^ev:command$/.test(x)))), 'beat 1: a hold that ran a command (tour saw ev:command) keeps Talk, back on Home', JSON.stringify(t));
+  await p.waitForTimeout(2400);
+
   // Beat 1, a real take with the real (fake-device) microphone → sent → beat 2.
   S.heard = 'Hello Wizard'; const w0 = S.writes.length;
   await tap(p); await p.waitForTimeout(1600); await p.screenshot({ path: `${SHOTS}/02-beat1-listening.png` }); await tap(p);
