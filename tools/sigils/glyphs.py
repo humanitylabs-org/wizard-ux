@@ -350,6 +350,13 @@ def g_card():
     chip = rrect(148, 270, 62, 44, 11)
     return D(card, stripe, chip)
 
+@glyph('dollar', 'A dollar sign cut through a coin: what you spent, what you own.')
+def g_dollar():
+    coin = circle(256, 256, 170)
+    s_curve = stroke("M318 196 C306 168 282 158 256 158 C222 158 196 176 196 206 C196 238 226 248 256 256 C288 264 318 274 318 306 C318 336 290 354 256 354 C226 354 200 342 192 314", 36)
+    bar = U(rrect(238, 118, 36, 46, 12), rrect(238, 348, 36, 46, 12))
+    return D(coin, U(s_curve, bar))
+
 @glyph('clip', 'A film frame with play cut out: a video to edit.')
 def g_clip():
     frame = rrect(88, 132, 336, 248, 52)
