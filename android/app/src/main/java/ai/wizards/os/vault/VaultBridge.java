@@ -155,8 +155,7 @@ public final class VaultBridge {
                     catch (Exception e) { finish.accept(null, "failed"); }
                 }
                 @Override public void onAuthenticationError(int code, CharSequence message) {
-                    finish.accept(null, code == BiometricPrompt.BIOMETRIC_ERROR_USER_CANCELED || code == BiometricPrompt.BIOMETRIC_ERROR_CANCELED
-                            || code == BiometricPrompt.BIOMETRIC_ERROR_NEGATIVE_BUTTON ? "cancelled" : "failed");
+                    finish.accept(null, code == BiometricPrompt.BIOMETRIC_ERROR_USER_CANCELED || code == BiometricPrompt.BIOMETRIC_ERROR_CANCELED ? "cancelled" : "failed");
                 }
             });
         } catch (RuntimeException e) { finish.accept(null, "failed"); }
