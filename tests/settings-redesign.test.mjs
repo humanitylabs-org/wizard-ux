@@ -137,3 +137,25 @@ test('settings.css: rows are hairline lines, not boxes', () => {
   }
   assert.doesNotMatch(css, /\.st-ic \{|\.st-hero \{|\.st-suggestion \{/);
 });
+test('Resources: the page shows the Home resource bars from the shared renderer; the index row stays quiet unless something is low', () => {
+  const h = harness();
+  const hosts = [];
+  let low = { label: 'Disk', left: 60, value: '40/100 GB used' };
+  h.s.WosResources = { bars: host => hosts.push(host), lowest: () => low };
+  h.view.render();
+  assert.match(h.root.innerHTML, /<b>Resources<\/b><\/span><span class="st-val" data-st-subtitle="usage"><\/span>/, 'renamed, no value while nothing is low');
+  low = { label: 'Disk', left: 12, value: '88/100 GB used' }; h.view.render();
+  assert.match(h.root.innerHTML, /data-st-subtitle="usage">Disk 88\/100 GB used</, 'under a quarter left: the lowest one');
+  const section = { querySelector: sel => sel === '[data-st-resources]' ? { host: true } : null };
+  h.root.querySelector = sel => sel === '[data-settings-feature="usage"]' ? section : null;
+  h.view.focus('resources');
+  assert.equal(h.view.page, 'usage');
+  assert.match(h.root.innerHTML, /<h3 tabindex="-1">Resources<\/h3><\/header><section data-settings-feature="usage"><div class="st-group st-res" data-st-resources><\/div>/);
+  assert.ok(hosts.some(x => x.host), 'WosResources.bars draws into the page host');
+});
+test('Resources falls back to AI usage where the shared bars are not there', () => {
+  const h = harness();
+  h.s.WosUsage = { html: () => '<p>usage</p>', loading: true, snap: {}, at: Date.now(), load: async () => {} };
+  h.view.focus('usage');
+  assert.match(h.root.innerHTML, /<h3 tabindex="-1">AI usage<\/h3>[^]*<p>usage<\/p>/);
+});
