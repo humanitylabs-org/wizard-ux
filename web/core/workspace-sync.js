@@ -18,7 +18,8 @@
 (() => {
   'use strict';
   const API = '/wizard/v1/workspaces'; // Agent Service (docs/workspaces.md in wizard-agent-service)
-  const KEY = 'wos.wsync.v1', OFF = 'wos.wsync.off';
+  // Phone and desktop keep separate desk stores on the same origin, so each keeps its own sync checkpoint.
+  const KEY = shell => `wos.wsync.v2.${shell}`, OFF = 'wos.wsync.off';
   const APPS = new Set(['chats', 'frame', 'review', 'maps', 'feature']);
   const FIELDS = ['appId', 'url', 'thread', 'agent', 'chatsProvider', 'title', 'dest', 'mode', 'query', 'featureId', 'z', 'featureOptions'];
   const ls = {
@@ -103,19 +104,24 @@
 
   function create({ shell, read, apply, title }) {
     const name = label(shell);
-    let st = ls.get(KEY, null) || { rev: -1, base: null };   // base = the box's desks as of rev
-    let lastLocal = null;                                     // this device's desks as of base
+    const key = KEY(shell);
+    // base = the box's desks as of rev; last = this device's desks as of base. Both are saved, so edits made offline
+    // survive a reload and are merged and pushed when the box answers again.
+    let st = ls.get(key, null) || { rev: -1, base: null, last: null };
+    let lastLocal = st.last || null;
     let closed = [], info = { device: '', at: '' }, ok = null, timer = 0, busy = false, again = false, applying = false, alive = true;
     const off = () => ls.get(OFF, false) === true;
-    const persist = () => ls.set(KEY, st);
+    const persist = () => { st.last = lastLocal; ls.set(key, st); };
     const emit = () => { try { window.dispatchEvent(new Event('wos:workspace-sync')); window.WosSettings?.refresh(); } catch (e) {} };
     const take = j => { closed = Array.isArray(j.closed) ? j.closed : []; info = { device: j.device || '', at: j.at || '' }; };
     const now = () => norm(read());
+    // What this device shows is not on the box yet: keep the box's copy as the baseline (saved), so a reload still pushes it.
+    const unsent = () => { lastLocal = st.base; persist(); };
     function put(state, opts = {}) {
       applying = true;
       try { apply(state, opts); } catch (e) { console.error('workspace sync', e); }
       finally { applying = false; }
-      lastLocal = now();
+      lastLocal = now(); persist();
     }
     async function req(method, path, body) {
       const r = await fetch(API + path, { method, cache: 'no-store', credentials: 'same-origin', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
@@ -137,10 +143,10 @@
           const { status, j } = await req('PUT', '', { baseRev: st.rev, device: name, state: want });
           if (!j || !Array.isArray(j.state?.desks)) throw new Error('state ' + status);
           st = { rev: j.rev, base: j.state }; persist(); take(j);
-          if (status === 200) { pending = null; const cur = now(); if (same(cur, local)) put(j.state); else { pending = merge(local, cur, j.state); put(pending); again = true; } break; }
+          if (status === 200) { pending = null; const cur = now(); if (same(cur, local)) put(j.state); else { pending = merge(local, cur, j.state); put(pending); unsent(); again = true; } break; }
           if (status !== 409) throw new Error('state ' + status);
           // Another device saved first: lay this device's edits over theirs, show that, save it.
-          pending = merge(lastLocal || want, now(), j.state); put(pending);
+          pending = merge(lastLocal || want, now(), j.state); put(pending); unsent();
         }
         ok = true;
       } catch (e) { if (e.absent) ok = null; else { ok = false; setTimeout(schedule, 5000); } }
@@ -157,13 +163,13 @@
         st = { rev: j.rev, base: j.state }; persist();
         const joined = { desks: [...j.state.desks, ...extra] };
         put(joined, { join: true });
-        if (extra.length) { pending = joined; schedule(); }
+        if (extra.length) { pending = joined; unsent(); schedule(); }
         return;
       }
       const dirty = !!lastLocal && !same(local, lastLocal);
       st = { rev: j.rev, base: j.state }; persist();
       if (!dirty) { put(j.state); return; }
-      pending = merge(lastLocal, local, j.state); put(pending); schedule();
+      pending = merge(lastLocal, local, j.state); put(pending); unsent(); schedule();
     }
     async function loop() {
       let fails = 0;
@@ -191,9 +197,10 @@
       finally { applying = false; }
       closed = closed.filter(x => x !== c); schedule(); emit(); return true;
     }
-    function setOff(v) { ls.set(OFF, !!v); if (!v) { st = { rev: -1, base: null }; lastLocal = null; persist(); } emit(); }
+    function setOff(v) { ls.set(OFF, !!v); if (!v) { st = { rev: -1, base: null, last: null }; lastLocal = null; persist(); } emit(); }
     addEventListener('pagehide', () => { if (timer) { clearTimeout(timer); push(); } });
     setTimeout(loop, 300);
+    if (st.base && lastLocal && !same(now(), lastLocal)) setTimeout(schedule, 0); // offline edits from before a reload
     const api = {
       changed, reopen, setOff, title, stop() { alive = false; },
       get on() { return !off(); }, get ok() { return ok; }, get closed() { return closed; }, get info() { return info; }, get name() { return name; }, get rev() { return st.rev; },
