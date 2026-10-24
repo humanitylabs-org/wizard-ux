@@ -722,7 +722,9 @@ window.WizCore.chats = function createChats(H) {
   function focusOptions() {
     const all = LIVE.unified().filter(s => !s.hidden);
     const stats = (kind, key, label, badge = '') => {
-      const rows = kind === 'all' ? all : all.filter(s => matchesFocus({ kind, key }, s));
+      // A Space counts its explicit members, including ones hydrated beyond the global archive window.
+      const members = kind === 'space' && LIVE.spaceSessions ? LIVE.spaceSessions(spaces().find(s => s.id === key)?.threads || [], { peek: true }).rows.filter(s => !s.hidden) : null;
+      const rows = members || (kind === 'all' ? all : all.filter(s => matchesFocus({ kind, key }, s)));
       return { kind, key, label, badge, count: rows.length, unread: rows.filter(s => LIVE.isNew(s)).length,
         recent: rows.reduce((n, s) => Math.max(n, Date.parse(s.activityAt || s.updatedAt || '') || 0), 0) };
     };
@@ -809,7 +811,9 @@ window.WizCore.chats = function createChats(H) {
     if (!AGID) morningPoll();
     const F = c.filter && STATUS[c.filter] ? STATUS[c.filter] : null, focus = focusOf(w);
     const fids = F?.ids ? F.ids(AGID) : null;
-    const all = (LST.ok ? (LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).filter(s => !s.hidden) : []).filter(s => (!F || (fids ? fids.has(s.id) : F.test(s))) && focusMatches(w, s));
+    const space = focus?.kind === 'space' ? spaces().find(s => s.id === focus.key) : null;
+    const members = space && LST.ok ? LIVE.spaceSessions?.(space.threads) : null;
+    const all = (LST.ok ? (members ? members.rows : LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).filter(s => !s.hidden) : []).filter(s => (!F || (fids ? fids.has(s.id) : F.test(s))) && focusMatches(w, s));
     const filtered = !!(F || focus);
     const titleHit = n ? all.filter(s => norm(s.title).includes(n) || norm(s.preview).includes(n)) : all;
     // Message bodies: searched lazily in the background (core/chat-search.js); hits stream in with a snippet.
@@ -837,7 +841,7 @@ window.WizCore.chats = function createChats(H) {
     const chips = (F ? chip('status', F.label) : '');
     const ph = filtered ? 'Search within' : 'Search chats and messages';
     const head = `<div class="ch-top"><label class="ch-search${filtered ? ' has-chips' : ''}"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>${chips}<input data-chsearch placeholder="${ph}" aria-label="Search chats and messages" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false">${c.q ? '<button type="button" class="ch-sclear" data-chsclear aria-label="Clear search">×</button>' : ''}<button type="button" class="ch-fbtn${filtered ? ' on' : ''}" data-chfbtn aria-label="Filter chats" aria-expanded="${c.sheet ? 'true' : 'false'}"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button></label>${AGID ? '' : (window.WosBell?.html?.() || '')}</div>`
-      + (filtered && !LIVE.ok ? '' : filtered ? `<div class="ch-count">${hitCount()} ${hitCount() === 1 ? 'chat' : 'chats'}${coachLine()}</div>` : '');
+      + (filtered && !LIVE.ok ? '' : filtered ? `<div class="ch-count">${hitCount()} ${hitCount() === 1 ? 'chat' : 'chats'}${members?.pending ? ' · Loading Space…' : members?.failed ? ' · Some chats unavailable' : ''}${coachLine()}</div>` : '');
     // Suggestions while typing (or focused on an empty field): filters that match the words, then a new chat.
     const sug = !c.sugOff && (c.q || c.focus) ? matchFilters(c.q, 3).filter(f => !(f.kind === 'status' && f.key === c.filter) && !(f.kind === focus?.kind && f.key === focus.key)) : [];
     // Filter suggestions only. New chat lives in one place, the bottom-right button (James, 24 Oct 2026: no second New chat in search).
@@ -880,7 +884,8 @@ window.WizCore.chats = function createChats(H) {
       return `<section class="ch-sec${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length + extra.n}</small>${waitN ? `<b class="wait">${waitN} need you</b>` : ''}${newN ? `<b>${newN} new</b>` : ''}<i aria-hidden="true"></i></button>
         ${open ? `<div class="ch-sec-b">${k === 'archive' && !n && !filtered ? archSel() : ''}${archiveNote}${k === 'ready' && !n && !filtered && !AGID ? morningCard() : ''}${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : k === 'ready' && !n ? readyBody(shown, s => chatRow(s, null)) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
     }).join('');
-    if (bs && LST.ok) body += BS.footer(bs);
+    // Progress sits above the results (James, 25 Oct 2026: it was hidden below a long Archive); the final line stays under them.
+    if (bs && LST.ok) body = BS.scanning(bs) || bs.busy ? BS.footer(bs) + body : body + BS.footer(bs);
     const place = listPlace(el) || c.listPlace;
     // Results stream in while typing: keep the search box focused with the caret where it was.
     const inp0 = el.querySelector('[data-chsearch]'), had = inp0 && document.activeElement === inp0, sel = had ? [inp0.selectionStart, inp0.selectionEnd] : null;
@@ -906,6 +911,8 @@ window.WizCore.chats = function createChats(H) {
     const root = el.firstElementChild;
     if (c.listRoot === root && root?.classList.contains('ch-list') && window.WosMorph?.morph(root, html)) {
       clearReading(w.id); c.listHTML = html;
+      // The morph keeps a typed field's live value; a cleared search (×, Back, a chip) must empty the box too.
+      const box = root.querySelector('[data-chsearch]'); if (box && !c.q && box.value) box.value = '';
       anchorListPlace(el.querySelector('.ch-scroll'), place);
     } else {
       const keepSheet = keptSheet(el);
@@ -2017,7 +2024,7 @@ window.WizCore.chats = function createChats(H) {
    * Done and Defer step back to that thread instead of the list (James clicks through a summary thread's links,
    * reviews each one, taps Done, and lands back on the summary). Opening a thread any other way starts a fresh trail. */
   function openChat(wid, sid, opts = {}) {
-    window.WizCore.chatSearch?.cancel(wid);
+    window.WizCore.chatSearch?.park(wid); // Back returns to these results, not a fresh search
     const w = W[wid]; if (!w) return;
     if (!w.thread) { const place = listPlace(elOf(wid)); if (place) ch(wid).listPlace = place; }
     if (w.thread) saveDraft(wid);
