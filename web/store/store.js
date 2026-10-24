@@ -5,6 +5,7 @@
 import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp, architectureReason} from './store-status.js';
 import {routerNeeds, routerApprove, routerRows, hasNeeds, pending, nice} from './store-router.js';
 import {adoptAppearance} from './store-appearance.js';
+import {renderInstallResult, successMessage} from './store-install-result.js';
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
@@ -292,7 +293,7 @@ import {adoptAppearance} from './store-appearance.js';
     const operation = status(a)==='get'?'install':status(a);
     const selection = {source:a.source,repo:a.repo,commit:a.commit,operation};
     S.busy.add(a.id); refresh();
-    const say = (m, ok) => toast(`<b>${esc(a.name)}${ok ? ' is ready' : ' wasn’t installed'}</b><span>${esc(m)}</span>`);
+    const say = (m, ok=false) => toast(renderInstallResult({ name: a.name, message: m, ok }));
     try {
       const r = await fetch(INSTALL + encodeURIComponent(a.id), { method: 'POST', credentials: 'same-origin', cache: 'no-store',
         headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: JSON.stringify(selection) });
@@ -315,10 +316,16 @@ import {adoptAppearance} from './store-appearance.js';
       const id = routerId(a), [need, access] = await Promise.all([routerNeeds(id), appAccess(id)]); S.router.set(id, { ...need, at: Date.now() });
       if (access) S.access.set(id, access);
       if (hasNeeds(need.data) || access?.needs_private_agent) { if (top() !== 'sheet') push('sheet', key(a)); showSheet(key(a)); window.scrollTo(0, 0); }
-      else say(access?.privacy === 'private' ? 'Private: only your private agent can use it.' : 'Find it in your apps.', true);
+      else say(successMessage(access), true);
     } catch (err) { say(err.message || 'Install failed.'); }
     finally { S.busy.delete(a.id); refresh(); }
   }
+
+  document.addEventListener('click', e => {
+    const mine = e.target.closest('[data-my-apps]');
+    if (!mine || !framed || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault(); e.stopImmediatePropagation(); window.top.location.assign(mine.href);
+  }, true);
 
   document.addEventListener('click', e => {
     if (e.target.closest('[data-back]')) { pop(); return; }
