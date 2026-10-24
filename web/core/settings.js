@@ -15,7 +15,8 @@
     { id: 'voice', title: 'Voice & typing' },
     { id: 'phone', title: 'Phone', available: android },
     { id: 'recovery', title: 'Unsent & recovered' },
-    { id: 'usage', title: 'AI usage' },
+    // Resources: the Home resource bars (AI + Compute) from the shared renderer, when it is there; else AI usage.
+    { id: 'usage', get title() { return window.WosResources?.bars ? 'Resources' : 'AI usage'; } },
     { id: 'schedules', title: 'Schedules', available: () => !!window.WosSchedules?.available },
     { id: 'about', title: 'About & updates' },
   ];
@@ -38,6 +39,8 @@
     if (id === 'appearance') return window.WosSkin ? (mySkinWorn() ? 'My skin · ' : '') + lookName(window.WosSkin, window.WosSkin.current) : '';
     if (id === 'phone') { try { return JSON.parse(native()?.everywhere?.() || '{}').enabled ? 'Everywhere on' : ''; } catch (_) { return ''; } }
     if (id === 'recovery') { const n = new Set([...unsentAll(ctx), ...recovered()].map(x => x.id)).size; return n ? String(n) : ''; }
+    // Resources: quiet unless something is running low (under a quarter left), then the lowest one.
+    if (id === 'usage') { const low = window.WosResources?.lowest?.(); return low && low.left < 25 ? `${low.label} ${low.value || (100 - low.left) + '% used'}` : ''; }
     return '';
   }
   // The update card (os-updates.js) sits above the list, same look in every state; nothing to do = nothing shown.
@@ -273,7 +276,11 @@
     // No separate "Check for updates": the shell checks every minute and the update card offers Reload.
     return `<div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-tx"><b>${esc(status)}</b><small>${esc(native()?.platform?.() || 'Web')} · ${esc(location.host)}</small></span></div>${window.WosDevice?.settingsHtml?.() || ''}${row('help', 'Gestures & help', ctx.helpSub)}</div>`;
   }, act(ctx, el) { const st = el.closest('[data-st]')?.dataset.st; if (!['files', 'help'].includes(st)) return false; ctx.openSub(st); return true; } });
-  register({ id: 'usage', aliases: ['usage'], html: () => window.WosUsage?.html() || '', act(ctx, el) { if (!el.closest('[data-usage-refresh]')) return false; window.WosUsage?.load(true).then(ctx.paintUsage); ctx.paintUsage(); return true; } });
+  // Settings › Resources shows the Home bars themselves (core/resources.js draws them into this host and keeps them
+  // live); tapping a bar opens the same detail sheet as on Home (devices, health, AI accounts with reset times).
+  register({ id: 'usage', aliases: ['usage', 'resources'], html: () => window.WosResources?.bars ? '<div class="st-group st-res" data-st-resources></div>' : window.WosUsage?.html() || '',
+    painted(ctx, section) { const host = section?.querySelector?.('[data-st-resources]'); if (host) window.WosResources.bars(host); },
+    act(ctx, el) { if (!el.closest('[data-usage-refresh]')) return false; window.WosUsage?.load(true).then(ctx.paintUsage); ctx.paintUsage(); return true; } });
   // A shell chooses the composer; common code owns preservation before consuming an unsent record.
   function moveDraft({ chats, wid, item, outbox, toast }) {
     if (item.audio || item.audioFile || item.hasAudio || item.body || item.state === 'unconfirmed' || item.state === 'sending' || outbox.quarantined?.(item.id)) {
@@ -335,6 +342,7 @@
       const footer = `<footer class="st-shortcuts">${window.WosFiles ? '<button data-st-shortcut="files" data-st="files">Files</button>' : ''}${(window.WosFeatures?.entries || []).filter(f => !f.available || f.available()).map(f => `<button data-st-shortcut="${esc(f.id)}">${esc(f.title || f.id)}</button>`).join('')}</footer>`;
       root.dataset.settingsPage = page;
       root.innerHTML = `<div class="st-inner ${desktop ? 'st-desktop' : 'st-phone'} ${page ? 'st-in-page' : ''}"><div class="st-index"><h3 class="st-title" tabindex="-1">Settings</h3>${card}${attentionHtml}<nav aria-label="Settings categories">${nav}</nav>${footer}</div><div class="st-page" ${selected ? '' : 'hidden'}><header class="st-page-head"><button data-st-back aria-label="Back to Settings">‹</button><h3 tabindex="-1">${heading}</h3></header>${content}</div></div>${confirm ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="st-confirm-title"><h3 id="st-confirm-title">Use ${esc(chatsName(confirm.id))} for all your chats?</h3><p>You can switch back here any time.</p><div class="st-actions"><button data-chats-cancel ${ctx.chatsBusy ? 'disabled' : ''}>Cancel</button><button data-chats-confirm ${ctx.chatsBusy ? 'disabled' : ''}>${ctx.chatsBusy ? 'Switching…' : 'Use ' + esc(chatsName(confirm.id))}</button></div></section></div>` : ''}`;
+      for (const f of fs) if (f.painted) { try { f.painted(ctx, root.querySelector(`[data-settings-feature="${CSS.escape(f.id)}"]`)); } catch (e) { console.error(e); } }
       root.scrollTop = top;
       const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = paneTop;
       const importStatus = root.querySelector('[data-skinimport-status]'); if (importStatus) importStatus.textContent = skinImportMessage;
