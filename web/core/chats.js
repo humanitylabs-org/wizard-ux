@@ -129,7 +129,7 @@ window.WizCore.chats = function createChats(H) {
   const SECTIONS_STATUS = [['errors', 'Errors'], ['working', 'Working'], ['ready', 'Ready'], ['deferred', 'Snoozed'], ['archive', 'Archive']];
   const byStatus = () => LIVE.chatLayout === 'status';
   const SEC_OPEN_KEY = 'wos.chats.sections.v1';
-  /* One persistent Focus (All / agent / subject), one temporary status chip and search text combine (AND).
+  /* One persistent Focus (All / agent / owner-created Space), one temporary status chip and search text combine (AND).
    * Filter suggestions and the shared held/typed command grammar set these same values.
    * Back clears search/status, never the window's Focus mode. */
   const STATUS = {
@@ -153,7 +153,7 @@ window.WizCore.chats = function createChats(H) {
     const q = norm(text); if (!q) return [];
     const out = [], seen = new Set(), push = f => { const k = f.kind + ':' + f.key; if (!seen.has(k)) { seen.add(k); out.push(f); } };
     const st = statusEntries().map(([key, f]) => ({ kind: 'status', key, label: f.label, names: [norm(f.label), ...f.syn.map(norm)] }));
-    const sj = subjects().map(k => ({ kind: 'subject', key: k, label: k, names: [norm(k)] }));
+    const sj = spaces().map(s => ({ kind: 'space', key: s.id, label: s.name, names: [norm(s.name)] }));
     const ag = focusAgents().map(a => ({ kind: 'agent', key: a.id, label: a.label, names: [norm(a.id), norm(a.label)] }));
     for (const f of st.concat(ag, sj)) if (f.names.includes(q)) push(f);
     if (q.length >= 2) for (const f of st.concat(ag, sj)) if (f.names.some(n => n.startsWith(q) || n.split(' ').some(w => w.length > 2 && w.startsWith(q)))) push(f);
@@ -167,20 +167,47 @@ window.WizCore.chats = function createChats(H) {
     rerenderList(w); return true;
   }
   // Focus belongs to the persisted owner window, never the transient desktop list pane / search state.
-  function focusOf(w) { const o = (w && W[owner(w.id)]) || w; const f = o?.focus; return f && ['agent', 'subject'].includes(f.kind) && typeof f.key === 'string' && f.key ? f : null; }
+  // One UI vocabulary entry: rename this if the product term changes.
+  const SPACE = { one: 'Space', many: 'Spaces' }, SPACES_KEY = 'wos.chats.spaces.v1';
+  let spacesRaw = null, spacesCache = [], spaceThreads = new Map();
+  function spaces() {
+    let raw = null; try { raw = localStorage.getItem(SPACES_KEY); } catch (_) {}
+    if (raw !== spacesRaw) {
+      spacesRaw = raw;
+      try { const v = JSON.parse(raw || '[]'); spacesCache = Array.isArray(v) ? v.filter(s => s && typeof s.id === 'string' && typeof s.name === 'string' && Array.isArray(s.threads)) : []; } catch (_) { spacesCache = []; }
+      spaceThreads = new Map(spacesCache.map(s => [s.id, new Set(s.threads)]));
+    }
+    return spacesCache;
+  }
+  function spaceContains(key, sid) { spaces(); return spaceThreads.get(key)?.has(sid) || false; }
+  function spaceMember(key, sid, add) {
+    const list = spaces().map(s => ({ ...s, threads: s.threads.slice() })), space = list.find(s => s.id === key); if (!space) return false;
+    const ids = new Set(space.threads); if (add) ids.add(sid); else ids.delete(sid);
+    if (ids.size > 500) { toast('!', `${SPACE.one} is full`, 2400); return false; }
+    space.threads = [...ids];
+    try { localStorage.setItem(SPACES_KEY, JSON.stringify(list)); } catch (_) {}
+    LIVE.putPrefs({ spaces: list });
+    window.dispatchEvent(new Event('wos:prefs')); return true;
+  }
+  window.addEventListener('storage', e => { if (e.key === SPACES_KEY) window.dispatchEvent(new Event('wos:prefs')); });
+  function focusOf(w) {
+    const o = (w && W[owner(w.id)]) || w, f = o?.focus;
+    // Old automatic subject focuses migrate to All, as do deleted Spaces.
+    if (f?.kind === 'subject' || (f?.kind === 'space' && !spaces().some(s => s.id === f.key))) { o.focus = null; save(); return null; }
+    return f && ['agent', 'space'].includes(f.kind) && typeof f.key === 'string' && f.key ? f : null;
+  }
   function focusAgents() { const A = window.WosAgents; return A ? [agentRec(A.defaultId()), ...A.others()] : [agentRec('')]; }
-  function matchesFocus(f, s) { return !f || (f.kind === 'subject' ? subjectOf(s) === f.key : f.key === AGS()?.defaultId() ? !LIVE.agentOf(s.id) : LIVE.agentOf(s.id) === f.key); }
+  function matchesFocus(f, s) { return !f || (f.kind === 'space' ? spaceContains(f.key, s.id) : f.key === AGS()?.defaultId() ? !LIVE.agentOf(s.id) : LIVE.agentOf(s.id) === f.key); }
   function focusMatches(w, s) { return matchesFocus(focusOf(w), s); }
   function setFocus(w, f) {
     const o = W[owner(w.id)] || w; if (!o) return false;
     if (o.thread) chatsBack(o); // saves the old agent's draft before changing its route
-    o.focus = f && ['agent', 'subject'].includes(f.kind) && f.key ? { kind: f.kind, key: String(f.key) } : null;
+    o.focus = f && ['agent', 'space'].includes(f.kind) && f.key ? { kind: f.kind, key: String(f.key) } : null;
     const ids = new Set([o.id, o.id + '::list', w.id]);
     for (const id of ids) { const c = ch(id); c.sheet = false; c.focus = false; c.newModel = null; c.listHTML = ''; c.readNav = (c.readNav || 0) + 1; window.WizCore.chatSearch?.cancel(id); const ww = W[id]; if (ww) rerenderList(ww); }
     save(); H.layout(o.id); return true;
   }
-  function setSubject(w, k) { return setFocus(w, k ? { kind: 'subject', key: k } : null); }
-  function addFilter(w, f) { if (!f) return false; if (f.kind === 'subject' || f.kind === 'agent') return setFocus(w, f); const c = ch(w.id); if (w.thread) chatsBack(w); c.filter = f.key; c.filterFrom = null; rerenderList(w); return true; }
+  function addFilter(w, f) { if (!f) return false; if (f.kind === 'space' || f.kind === 'agent') return setFocus(w, f); const c = ch(w.id); if (w.thread) chatsBack(w); c.filter = f.key; c.filterFrom = null; rerenderList(w); return true; }
   function rerenderList(w) { const el = elOf(w.id); if (el && !w.thread) { ch(w.id).listPlace = null; renderChatList(w, el); const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; } }
   /* Back on a filtered list: search text first, then the most recent chip. */
   function clearFilter(w) {
@@ -539,9 +566,8 @@ window.WizCore.chats = function createChats(H) {
       <h5>View</h5><div class="ch-fopts"><button type="button" class="ch-fopt${compactOn() ? ' on' : ''}" data-chcompact>Compact · titles only${compactOn() ? '<b>✓</b>' : ''}</button></div>
       </div></div>`;
   }
-  function focusLabel(w) { const f = focusOf(w); return !f ? 'All' : f.kind === 'agent' ? agentRec(f.key).label : f.key; }
-  // One option model and button renderer for the strip and Filter sheet. Rank populated
-  // options by unread count, latest activity, then thread count; All always leads.
+  function focusLabel(w) { const f = focusOf(w); return !f ? 'All' : f.kind === 'agent' ? agentRec(f.key).label : spaces().find(s => s.id === f.key)?.name || 'All'; }
+  // One stable option order for strip and Filter: All, agents, then owner-created Spaces.
   function focusOptions() {
     const all = LIVE.unified().filter(s => !s.hidden);
     const stats = (kind, key, label, badge = '') => {
@@ -550,8 +576,7 @@ window.WizCore.chats = function createChats(H) {
         recent: rows.reduce((n, s) => Math.max(n, Date.parse(s.activityAt || s.updatedAt || '') || 0), 0) };
     };
     const opts = focusAgents().map(a => stats('agent', a.id, a.label, (AGS()?.sigil(a) || '') + (AGS()?.isPrivate(a) ? AGS().lock() : '')))
-      .concat(subjects().map(k => stats('subject', k, k)));
-    opts.sort((a, b) => b.unread - a.unread || b.recent - a.recent || b.count - a.count || a.label.localeCompare(b.label));
+      .concat(spaces().map(s => stats('space', s.id, s.name)));
     return [stats('all', '', 'All'), ...opts];
   }
   function focusOption(w, o, strip = false) {
@@ -560,10 +585,10 @@ window.WizCore.chats = function createChats(H) {
   }
   function focusSection(w) {
     const opts = focusOptions();
-    return `<h5>Focus</h5><div class="ch-fopts">${focusOption(w, opts[0])}</div><h5>Agents <small>· unread</small></h5><div class="ch-fopts">${opts.filter(o => o.kind === 'agent').map(o => focusOption(w, o)).join('')}</div><h5>Subjects</h5><div class="ch-fopts">${opts.filter(o => o.kind === 'subject').map(o => focusOption(w, o)).join('')}</div>`;
+    return `<h5>Focus</h5><div class="ch-fopts">${focusOption(w, opts[0])}</div><h5>Agents <small>· unread</small></h5><div class="ch-fopts">${opts.filter(o => o.kind === 'agent').map(o => focusOption(w, o)).join('')}</div>${spaces().length ? `<h5>${SPACE.many}</h5><div class="ch-fopts">${opts.filter(o => o.kind === 'space').map(o => focusOption(w, o)).join('')}</div>` : ''}`;
   }
   function focusStrip(w) {
-    const opts = focusOptions().filter(o => o.kind === 'all' || o.count);
+    const opts = focusOptions();
     return opts.length > 1 ? `<nav class="ch-focus-strip" aria-label="Chats focus">${opts.map(o => focusOption(w, o, true)).join('')}</nav>` : '';
   }
   function bindFocusStrip(el) {
@@ -1025,6 +1050,7 @@ window.WizCore.chats = function createChats(H) {
       <button type="button" data-rsopen>${'<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'}Open</button>
       <button type="button" data-rsrename>${RENAME_SVG}Rename</button>
       <button type="button" data-rspin>${PIN_SVG}${PIN.has(sid) ? 'Unpin' : 'Pin'}</button>
+      ${spaces().map(space => `<button type="button" data-rsspace="${esc(space.id)}" data-add="${!space.threads.includes(sid)}">${PIN_SVG}${space.threads.includes(sid) ? 'Remove from' : 'Add to'} ${SPACE.one} · ${esc(space.name)}</button>`).join('')}
       ${topicOn() ? `<button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>` : ''}
       ${acts.map(a => `<button type="button" data-rsact="${a}">${ACT[a].icon}${ACT[a].label}</button>`).join('')}
       ${acts.length ? '' : `<p class="ch-sheet-n">${WORKING_ST.has(s.status) || ['waiting_for_approval', 'unknown'].includes(s.status) ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
@@ -1976,6 +2002,7 @@ window.WizCore.chats = function createChats(H) {
     if (carryText) { if (later) typed = joinWords(typed, carryText); else if (text || files.length) text = `${text}\n\n${carryText}`.trim(); }
     if (!text && !files.length && !audio) { sealed?.putBack(); return; }
     const isNew = sid === '__new__';
+    const spaceKey = isNew && focusOf(w)?.kind === 'space' ? focusOf(w).key : '';
     // A Notifications Reply: the item rides with the message (framed at delivery), never in his words.
     const rdkey = isNew ? (winAgent(w) ? 'agentnew:' + winAgent(w) : 'new') : 'direct:' + sid;
     const reply = voice ? (sealed?.reply || null) : here ? KIT.drafts.get(rdkey).reply : null;
@@ -2021,6 +2048,9 @@ window.WizCore.chats = function createChats(H) {
       toast('!', 'Couldn’t save that message · your words are back in the thread', 3200);
       return null;
     }
+    // The durable outbox allocates the final thread id before dispatch; retain that
+    // membership even if delivery retries or this window navigates away.
+    if (spaceKey && it?.sessionId) spaceMember(spaceKey, it.sessionId, true);
     sealed?.done(it);
     if (!left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
     return it;
@@ -2152,6 +2182,8 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chemoclear]') && rowSheet?.emoji) { const sheet = e.target.closest('.ch-emoji-sheet'), input = sheet?.querySelector('[data-chemosearch]'); if (input) { input.value = ''; renderEmojiSearch(sheet, ''); input.focus(); } return true; }
     const emoji = e.target.closest('[data-chtopicemoji]'); if (emoji && rowSheet?.emoji) { const { key } = rowSheet; if (TOPIC.set(key, emoji.dataset.chtopicemoji)) { closeRowSheet(); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww && !ww.thread) renderChats(ww); } toast(emoji.dataset.chtopicemoji, 'Topic emoji saved', 1400); } return true; }
     if (e.target.closest('[data-rsemo]') && rowSheet?.sid) { const { wid: rw, sid } = rowSheet, s = LIVE.session(sid); openEmojiSheet(rw, `thread:${sid}`, s?.title || 'Choose emoji'); return true; }
+    const rsSpace = e.target.closest('[data-rsspace]');
+    if (rsSpace && rowSheet?.sid) { const { sid } = rowSheet; closeRowSheet(); spaceMember(rsSpace.dataset.rsspace, sid, rsSpace.dataset.add === 'true'); return true; }
     if (e.target.closest('[data-rspin]') && rowSheet?.sid) { const { sid } = rowSheet, on = PIN.toggle(sid); closeRowSheet(); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
     if (e.target.closest('[data-rsrename]') && rowSheet) { const { wid: rw, sid } = rowSheet; openRenameSheet(rw, sid); return true; }
     if (e.target.closest('[data-rncancel]') && rowSheet) { closeRowSheet(); return true; }
@@ -2287,7 +2319,7 @@ window.WizCore.chats = function createChats(H) {
     if (sig === outSig) return; outSig = sig;
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
-  return { openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setSubject, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST,
     KIT, threadAct, openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };
