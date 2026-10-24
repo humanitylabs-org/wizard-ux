@@ -793,7 +793,8 @@
             if(scope) AGENT_OF.set(s.id,scope);
             found.push(s);
           }
-          if(!p.has_more) { if(!signal?.aborted) onBatch?.(found); return found; }
+          if(!signal?.aborted) onBatch?.(found); // each page shows as it lands
+          if(!p.has_more) return found;
           if(!rows.length) throw new Error('Incomplete search');
           offset+=rows.length;
         }
