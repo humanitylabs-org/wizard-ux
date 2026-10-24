@@ -23,6 +23,23 @@ def atomic(path, value):
     temp.replace(path)
 
 
+def require_running_image(entry, containers, verified_load):
+    """Classic IDs match directly; containerd IDs are resolved only by WAM's archive verifier.
+
+    On Docker 29 the local immutable ID is the OCI manifest rather than its config.
+    Reuse the canonical checksum+manifest+config binding, never accept a mutable tag
+    or a container's self-reported label as proof. The extra load is idempotent.
+    """
+    running = {x['Image'] for x in containers if x['State']['Running']}
+    if not running:
+        raise ValueError('running_image_mismatch')
+    if running & {i['image_id'] for i in entry['images'].values()}:
+        return
+    loaded = verified_load()
+    if not loaded or loaded['image_id'] not in running:
+        raise ValueError('running_image_mismatch')
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
         return None
@@ -53,9 +70,7 @@ def main():
         raise ValueError('installed_pin_mismatch')
     ids = run(['docker', 'ps', '-q', '--filter', f'label=com.docker.compose.project={a.app}_{cli.STORE}']).split()
     containers = json.loads(run(['docker', 'inspect', *ids])) if ids else []
-    images = {i['image_id'] for i in entry['images'].values()}
-    if not any(x['Image'] in images and x['State']['Running'] for x in containers):
-        raise ValueError('running_image_mismatch')
+    require_running_image(entry, containers, lambda: test_catalog.preload(entry, cli.private.token()))
     port = app['app'].get('port') or app['info'].get('port')
     fragment = test_catalog.gateway_fragment(entry, int(port))
     target = Path(policy['fragment_dir']) / (a.app + '.caddy')
