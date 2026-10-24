@@ -1728,7 +1728,9 @@ window.WizCore.chats = function createChats(H) {
         // A 404 is a verdict, not a blip: the thread is gone (deleted, or a window restored from an earlier install
         // on the same address). Say so once and stop; retrying a missing thread forever reads as a broken Wizard.
         const gone = e.status === 404;
-        if (gone) { c.goneFor = sid; c.goneNav = nav; }
+        // A gone thread drops any cached or earlier-loaded transcript, so the "no longer here" message renders
+        // instead of a stale, still-editable copy of a deleted thread.
+        if (gone) Object.assign(c, { goneFor: sid, goneNav: nav, turns: null, loadedFor: '', cachedFor: '' });
         c.err = e.status === 403 ? 'Wizard sign-in needed' : gone ? 'This thread is no longer here. It may have been deleted, or it came from an earlier install. Go back to Chats to start a new one.' : pendingFor(w).length ? '' : 'Couldn’t load this thread'; c.at = Date.now();
         if (e.status !== 403 && !gone) { if (!e.status) window.WizReach?.failure(); retryRead(w, sid, nav, c.failN); }
         renderThreadLive(w);
