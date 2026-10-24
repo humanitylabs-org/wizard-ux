@@ -622,6 +622,13 @@
         return;
       }
       clearTimeout(OV.hold);
+      if (OV.drag && !OV.reordered && e.changedTouches?.[0] && Math.hypot(e.changedTouches[0].clientX - OV.dx, e.changedTouches[0].clientY - OV.dy) < 12) {
+        // Held and let go in place: nothing moved, so offer Add to home screen for a one-app desk (drag still reorders).
+        const d = desks[posOf(OV.card.dataset.ov)], w = d && d.wins.length === 1 ? W[d.wins[0]] : null, a = w?.app === 'frame' ? APP[w.appId] : null;
+        endDrag(false); ovTapBlock = Date.now() + 400; OV = null;
+        if (a) window.WizHomeScreenApps?.offer(a);
+        return;
+      }
       if (OV.drag) { endDrag(true); ovTapBlock = Date.now() + 400; }
       else if (el.classList.contains('ov-pill') && e.changedTouches?.[0]) {
         // Pill mode: a clear swipe down (list at its top) folds it back into the pill.
@@ -632,7 +639,7 @@
     };
     el.addEventListener('touchend', end); el.addEventListener('touchcancel', end);
     function startDrag(c, x, y) {
-      OV.drag = true; OV.card = c; const r = c.getBoundingClientRect(); OV.ox = x - r.left; OV.oy = y - r.top;
+      OV.drag = true; OV.card = c; OV.dx = x; OV.dy = y; OV.reordered = false; const r = c.getBoundingClientRect(); OV.ox = x - r.left; OV.oy = y - r.top;
       c.classList.add('drag'); el.classList.add('dragging', 'editing'); vib(16); ovLog('drag');
       OV.ghost = c.cloneNode(true); OV.ghost.classList.add('ghost'); OV.ghost.style.width = r.width + 'px'; OV.ghost.style.height = r.height + 'px'; el.appendChild(OV.ghost);
       moveDrag(x, y);
@@ -647,7 +654,7 @@
         // Home stays first, but its drop zone means "first app", before Chats or any other tab.
         // Rejecting Home as a target made the left edge feel like a pinned Chats slot.
         const before = over.classList.contains('ov-home') || a < b ? over.nextSibling : over;
-        if (before !== OV.card) { grid.insertBefore(OV.card, before); vib(6); }
+        if (before !== OV.card) { grid.insertBefore(OV.card, before); OV.reordered = true; vib(6); }
       }
       // Near the top or bottom edge: scroll so far desks can be reached while dragging.
       const sc = el.querySelector('.ov-scroll'), sr = sc ? sc.getBoundingClientRect() : dr, so = sc || el;
