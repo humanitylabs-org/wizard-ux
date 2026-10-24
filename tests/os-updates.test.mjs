@@ -139,3 +139,27 @@ test('on latest with Automatic it says Automatic installs stable only; choosing 
   U.act(btn('ch-latest'), ctx()); await tick();
   assert.equal(calls.length, n);   // re-tapping the current channel sends nothing
 });
+
+test('my release: the summary names it and its base, and Your changes lists each change', async () => {
+  const MINE = { name: "Miguel's release", base: { ref: 'b79c1e9', label: 'Latest b79c1e9' }, changes: [{ sha: 'abc1234', title: 'Updates shows my release', status: 'Mine', date: '2026-10-24' }] };
+  const { U, calls } = await load((m, b) => [200, STATUS]);
+  assert.equal(calls[0].url, 'https://box.ts.net/wizard-os-home/store-install/_updates');
+  assert.equal(calls[1].url, 'https://box.ts.net/wizard-os-home/my-release.json');
+  assert.doesNotMatch(U.html(), /Your changes/);                       // no my-release.json: nothing new
+  const r2 = await (async () => {
+    const calls = [], registered = [];
+    const fetch = async (url) => { calls.push(url); return { ok: true, status: 200, json: async () => url.endsWith('my-release.json') ? MINE : STATUS }; };
+    const window = { WosSettings: { register: f => registered.push(f), refresh() {} } };
+    const document = { currentScript: { src: 'https://box.ts.net/wizard-os-home/core/os-updates.js' } };
+    new Function('window', 'document', 'fetch', 'location', src)(window, document, fetch, { href: 'https://box.ts.net/wizard-os-home/' });
+    for (let i = 0; i < 4; i++) await tick();
+    return window.WosUpdates;
+  })();
+  let h = r2.html();
+  assert.match(h, /<b data-osu-title>Miguel&#39;s release<\/b><small>Built on Latest b79c1e9 · 1 change of your own/);
+  assert.match(h, /data-osu="mine"[^>]*aria-expanded="false"/);
+  assert.doesNotMatch(h, /Updates shows my release/);
+  assert.equal(r2.act(btn('mine'), ctx()), true);
+  h = r2.html();
+  assert.match(h, /data-osu-change="abc1234"[\s\S]*Updates shows my release[\s\S]*Mine · 2026-10-24/);
+});

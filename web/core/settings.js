@@ -9,6 +9,7 @@
   const android = () => !!native() || /Android/i.test(navigator.userAgent);
   const row = (id, icon, title, sub) => `<button class="st-row" data-st="${esc(id)}"><span class="st-ic">${icon}</span><span class="st-tx"><b>${esc(title)}</b><small>${esc(sub)}</small></span><span class="st-go">›</span></button>`;
   const PAGES = [
+    { id: 'about', title: 'Updates & about', icon: '◇' },
     { id: 'appearance', title: 'Appearance', icon: '◐' },
     { id: 'chats', title: 'Chats & app screens', icon: '☷' },
     { id: 'voice', title: 'Voice & typing', icon: '🎙' },
@@ -16,7 +17,6 @@
     { id: 'recovery', title: 'Unsent & recovered', icon: '↺' },
     { id: 'usage', title: 'AI usage', icon: '◴' },
     { id: 'schedules', title: 'Schedules', icon: '◷', available: () => !!window.WosSchedules?.available },
-    { id: 'about', title: 'About & updates', icon: '◇' },
   ];
   const featurePages = { look: 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', 'photos-backup': 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
   const pageOf = f => f?.page != null ? PAGES.some(p => p.id === f.page) ? f.page : 'about' : featurePages[f?.id] || 'about';

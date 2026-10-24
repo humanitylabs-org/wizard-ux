@@ -27,6 +27,10 @@
   const API = new URL('../store-install/_updates', document.currentScript?.src || location.href).href;
   const FRESH = 60e3;
   let st = null, at = 0, inflight = null, busy = '', off = false;
+  // My release (wizard-os#186): an owner's own changes on top of a channel. The box writes my-release.json next to
+  // the shell when it builds one; a box without it shows nothing new.
+  const MINE = new URL('../my-release.json', document.currentScript?.src || location.href).href;
+  let mine = null, mineOpen = false;
 
   const valid = d => d && typeof d === 'object' && ['auto', 'ask'].includes(d.mode) && 'update_available' in d;
   function changed() { try { window.WosSettings?.refresh(); } catch (_) {} }
@@ -54,6 +58,7 @@
 
   function summary(s) {
     if (s.installing) return ['Updating…', 'Takes 10–20 minutes · Wizard reconnects by itself'];
+    if (mine) return [`${mine.name || 'My release'}`, `Built on ${mine.base.label || mine.base.ref} · ${mine.changes.length} ${mine.changes.length === 1 ? 'change' : 'changes'} of your own`];
     if (s.unpinned) return ['Updated by hand', 'This Wizard isn’t on a release, so updates leave it alone'];
     const have = s.installed ? `Wizard OS ${s.installed}` : 'Wizard OS';
     // The last update was cut short (the box restarted mid-update): the App Manager has cleared it so it can rerun.
@@ -74,7 +79,8 @@
     const channel = ch ? `<div role="radiogroup" aria-label="Release channel" style="margin-top:8px">${copt('stable', 'Stable (recommended)', 'Tested releases only')}${copt('latest', 'Latest (every release, for testers)', auto ? 'Automatic installs stable only · Update now takes the newest' : 'Update now takes the newest release')}</div>` : '';
     const now = st.update_available && !st.installing && !st.unpinned
       ? `<button class="st-wide" data-osu="apply" ${busy ? 'disabled' : ''}>${busy === 'apply' ? 'Starting…' : 'Update now'}</button>` : '';
-    return `<div class="st-group" data-osu-group><h4>Updates</h4><div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b data-osu-title>${esc(title)}</b><small>${esc(sub)}</small></span></div>${now ? `<div style="margin:0 0 8px">${now}</div>` : ''}<div role="radiogroup" aria-label="Updates">${opt('auto', 'Automatic', 'New releases install overnight, never during a chat', auto)}${opt('ask', 'Ask me', 'Shows Update here · nothing installs by itself', !auto)}</div>${channel}</div>`;
+    const list = mine ? `<button class="st-row" data-osu="mine" aria-expanded="${mineOpen}"><span class="st-ic">✎</span><span class="st-tx"><b>Your changes</b><small>Running only on this Wizard, kept on every update</small></span><span class="st-go">${mineOpen ? '⌄' : '›'}</span></button>${mineOpen ? mine.changes.map(c => `<div class="st-row static" data-osu-change="${esc(c.sha)}"><span class="st-ic">•</span><span class="st-tx"><b>${esc(c.title)}</b><small>${esc(c.status || 'Mine')}${c.date ? ` · ${esc(c.date)}` : ''}</small></span></div>`).join('') || '<div class="st-row static"><span class="st-tx"><small>None yet · everything you have is in main</small></span></div>' : ''}` : '';
+    return `<div class="st-group" data-osu-group><h4>Updates</h4><div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b data-osu-title>${esc(title)}</b><small>${esc(sub)}</small></span></div>${list}${now ? `<div style="margin:0 0 8px">${now}</div>` : ''}<div role="radiogroup" aria-label="Updates">${opt('auto', 'Automatic', 'New releases install overnight, never during a chat', auto)}${opt('ask', 'Ask me', 'Shows Update here · nothing installs by itself', !auto)}</div>${channel}</div>`;
   }
   function pick(chan, ctx) {
     if (!['stable', 'latest'].includes(chan) || chan === st.channel) return true;
@@ -90,6 +96,7 @@
   function act(el, ctx) {
     const b = el.closest('[data-osu]'); if (!b || busy || !st) return !!b;
     const what = b.dataset.osu;
+    if (what === 'mine') { mineOpen = !mineOpen; changed(); return true; }
     if (what.startsWith('ch-')) return pick(what.slice(3), ctx);
     if ((what === 'auto' || what === 'ask') && what === st.mode && st.chosen) return true;
     busy = what; ctx?.render?.(); ctx?.haptic?.(8);
@@ -110,4 +117,6 @@
   window.WosUpdates = { html, act, load, get state() { return st; } };
   window.WosSettings?.register({ id: 'updates', aliases: ['updates'], available: () => !!st, html: () => html(), act: (ctx, el) => act(el, ctx) });
   load();
+  fetch(MINE, { credentials: 'same-origin', cache: 'no-store' }).then(r => r.ok ? r.json() : null)
+    .then(d => { if (d && Array.isArray(d.changes) && d.base) { mine = d; changed(); } }).catch(() => {});
 })();
