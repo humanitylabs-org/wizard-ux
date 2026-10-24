@@ -1,4 +1,14 @@
 /* Extracted Share to Wizard sheet. Both shells wear the same role tokens. */
+/* Appearance v1 bridge: --wz-* roles alias the live skin tokens (same as core/share-sheet.css), so the sheet is
+ * opaque and readable on every skin and in the phone shell, where no ancestor defines the roles. */
+.wz-share {
+  --wz-text: var(--ink, #f3efff); --wz-text-secondary: var(--ink-2, #b9b0d8); --wz-text-muted: var(--ink-3, #7d74a3);
+  --wz-border: var(--line-2, rgba(205, 190, 255, .24)); --wz-accent: var(--violet-2, #b99bff); --wz-on-accent: var(--bg, #05030c);
+  --wz-surface: color-mix(in srgb, var(--bg, #05030c) 92%, var(--ink, #f3efff) 8%);
+  --wz-surface-raised: color-mix(in srgb, var(--ink, #f3efff) 10%, transparent);
+  --wz-accent-soft: color-mix(in srgb, var(--violet-2, #b99bff) 18%, transparent);
+  --wz-canvas: var(--bg, #05030c);
+}
 .wz-share.dv-wrap { position:absolute; inset:0; z-index:80; pointer-events:auto; color:var(--wz-text); font:inherit; }
 body > .wz-share.dv-wrap { position:fixed; }
 .wz-share .dv-scrim { position:absolute; inset:0; background:var(--wz-scrim, #0009); opacity:1; }
