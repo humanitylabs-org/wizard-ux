@@ -298,13 +298,15 @@
   class LocalAudioError extends Error { constructor(msg) { super(msg); this.localAudio = true; this.status = 0; } }
   async function readAudio(it, serverCopy = !!it.useServerCopy) {
     const type = it.audioType || it.audio?.type || 'audio/webm';
-    let timer;
+    let timer, slow = false;
     try {
       const buf = await Promise.race([Promise.resolve().then(() => it.audio.arrayBuffer()),
-        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('read timed out')), LOCAL_READ_MS); })]);
+        new Promise((_, reject) => { timer = setTimeout(() => { slow = true; reject(new Error('read timed out')); }, LOCAL_READ_MS); })]);
       if (buf.byteLength || !it.audio.size) { if (it.audioUnreadable) { delete it.audioUnreadable; await put(it); } return new Blob([buf], { type }); }
     } catch (_) { /* unreadable on this device: fall through */ }
     finally { clearTimeout(timer); }
+    // A slow read (large take, busy storage) is not proof the bytes are gone: keep it in the normal retry loop.
+    if (slow) throw new HttpError(0, 'Reading the recording took too long · original kept');
     const ref = it.audioFile;
     if (!ref?.id) throw new LocalAudioError('This recording can’t be read on this device and never reached Wizard · nothing to retry');
     if (!serverCopy) throw new LocalAudioError('This recording can’t be read on this device · Wizard has a saved copy. Retry to send it.');

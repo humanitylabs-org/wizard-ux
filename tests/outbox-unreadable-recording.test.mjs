@@ -133,3 +133,10 @@ test('a readable recording still retries automatically when Wizard is briefly un
   assert.equal(f.calls[0].path, '/wizard/files/upload');
   assert.equal(f.calls[0].body, 'aaaa');
 });
+
+test('a slow local read stays retryable instead of being marked unreadable', () => {
+  // Codex P2 on #439: a 15 s read timeout is not proof the bytes are gone.
+  assert.match(source, /slow = true; reject\(new Error\('read timed out'\)\)/);
+  assert.match(source, /if \(slow\) throw new HttpError\(0, 'Reading the recording took too long · original kept'\);/);
+  assert.ok(source.indexOf('if (slow) throw') < source.indexOf("never reached Wizard · nothing to retry"), 'checked before the permanent unreadable state');
+});
