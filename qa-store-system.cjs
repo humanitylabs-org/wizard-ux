@@ -68,7 +68,9 @@ async function checkStore(p,mobile){
  await p.goto(BASE+(mobile?'?shell=phone&open=app-store':'desktop.html?view=store'),{waitUntil:'load'});
  await f.locator('.kind:not([disabled])').first().waitFor({timeout:20000});
  // Exercise the real install-success renderer without issuing an install.
- await f.locator('#toast').evaluate(async t=>{const {renderInstallResult,successMessage}=await import('./store-install-result.js');t.innerHTML=renderInstallResult({name:'Test app',message:successMessage(null),ok:true});t.hidden=false;t.classList.add('on');});
+ await f.locator('#toast').evaluate(async t=>{const {renderInstallResult,successMessage}=await import('./store-install-result.js');t.innerHTML=renderInstallResult({name:'Private test app',message:successMessage({privacy:'private'}),ok:true});t.hidden=false;t.classList.add('on');});
+ ok((await f.locator('#toast').innerText()).includes('Private: only your private agent can use it. Find it in My apps.'),label+': private install success keeps its caveat and My apps link');
+ await f.locator('#toast').evaluate(async t=>{const {renderInstallResult,successMessage}=await import('./store-install-result.js');t.innerHTML=renderInstallResult({name:'Test app',message:successMessage(null),ok:true});});
  await f.locator('#toast [data-my-apps]').click();
  if(mobile){await p.locator('#launcher.open').waitFor();ok(await p.locator('#launcherBody [data-app]').count()>0&&await p.evaluate(()=>document.activeElement?.tagName!=='IFRAME'),label+': install success My apps link navigates to the phone app sheet and releases Store focus');await p.keyboard.press('Escape');await p.locator('#launcher.open').waitFor({state:'detached'}).catch(()=>p.locator('#launcher').waitFor({state:'hidden'}));}
  else{await p.locator('#palette:not([hidden])').waitFor();ok(await p.locator('#palette [data-i]').count()>0&&await p.evaluate(()=>document.activeElement?.tagName!=='IFRAME'),label+': install success My apps link navigates to the desktop app picker and releases Store focus');await p.keyboard.press('Escape');await p.locator('#palette').waitFor({state:'hidden'});}
