@@ -452,7 +452,9 @@
     for (const fn of sentHooks) try { fn(it, res); } catch (e) { console.error(e); }
   }
   async function attempt(it) {
-    it.state = 'sending'; await put(it);
+    // A new attempt starts without the previous attempt's failure: recovery must never read a stale 408 as this
+    // attempt's timeout after a reload mid-retry.
+    it.state = 'sending'; it.error = ''; it.errorStatus = 0; await put(it);
     try { await deliver(it); }
     catch (e) {
       it.attempts = (it.attempts || 0) + 1; it.error = reason(e); it.errorStatus = e.status || 0; it.lastAttemptAt = now();

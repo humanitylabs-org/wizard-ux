@@ -95,6 +95,27 @@ test('a transcript the old page already heard is reused, not transcribed again',
   assert.equal(stt, 0);
 });
 
+test('an explicit retry after a timeout drops the stale 408, so a reload mid-retry finishes the send', async t => {
+  const f = await fixture(t);
+  const page1 = client(f.origin, new Map(), () => new Promise(() => {})); // the retried transcription is still running
+  const it = await stageTake(page1.api);
+  await page1.api.handOff(it.id);
+  const row = page1.rows.get(it.id);
+  Object.assign(row, { state: 'failed', deliveryRequested: true, attempts: 1, errorStatus: 408, error: 'Transcription timed out · original recording kept. Retry when ready.',
+    audioFile: { id: 'drop_voice', name: 'voice.aac', mime: 'audio/aac', bytes: 4 } });
+  page1.rows.set(it.id, row); await page1.api.load();
+  page1.api.get(it.id) && Object.assign(page1.api.get(it.id), structuredClone(row));
+  assert.equal(page1.api.retry(it.id), true);
+  const sending = await until(() => page1.rows.get(it.id)?.state === 'sending' && page1.rows.get(it.id));
+  assert.equal(sending.errorStatus, 0); assert.equal(sending.error, '');
+  page1.close(); // reload while the retry is transcribing
+
+  const page2 = client(f.origin, page1.rows); t.after(page2.close);
+  await page2.api.load();
+  const sent = await until(() => page2.api.get(it.id)?.state === 'sent' && page2.api.get(it.id));
+  assert.equal(sent.text, 'six minutes of philosophy');
+});
+
 test('a recovered timed-out transcription releases Working and keeps its original recording', async t => {
   const f = await fixture(t);
   const page1 = client(f.origin); t.after(page1.close);
