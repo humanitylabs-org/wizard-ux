@@ -44,7 +44,11 @@ test('the switch row is gated on the skin in chat-power and chats', () => {
   assert.match(cp, /modelSwitch: \(w, s\) => M\?\.ours\?\.\(\) \? modelSwitch\(w, s\) : ''/);
   assert.match(cj, /const mlabel = PW\?\.modelLabel && !msw/);
   for (const d of ['obsidian', 'landscapes']) assert.match(read(`web/skins/${d}/skin.css`), /\.ms-track/);
-  assert.doesNotMatch(read('web/core/chats.css') + read('web/core/chat-power.css'), /\.ms-track|ch-swrow/);
+  const css = read('web/core/chats.css') + read('web/core/chat-power.css');
+  // Layout-only native document rules may anchor an existing skin-owned switch.
+  // They must not create a switch or style one outside the Android document mode.
+  assert.doesNotMatch(css.replace(/html\.wos-doc-scroll[^{}]*\{[^{}]*\}/g, ''), /\.ms-track|ch-swrow/);
+  assert.doesNotMatch(css, /\.ms-track/);
 });
 
 test("Miguel's skins default the chat list to compact; an explicit Filter choice still wins", () => {

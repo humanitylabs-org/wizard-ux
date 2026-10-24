@@ -28,13 +28,13 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Protect unsaved work from updates | `WizardApp.update.hold` | app service worker, forced reload | hold released only after save + readback |
 | Reading place in an app document | shell-owned `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic for registered apps | app-local scroll store | reopen lands at the saved place |
 | Motion, haptics, press feel | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own spring/haptic helpers | — |
-| App look: rows, sections, empty state | the template's `wizard-ui.css` + `--wz-*` | its composer styling as a chat; literal colours | — |
+| App look: rows, sections, empty state, single-line add field | the shell's live kit `web/kit/wizard-ui.css` + `--wz-*`: `WizardApp` swaps the app's vendored `wizard-ui.css` for it and layers the active skin (`core/skins.css`, skin package, My skin) after the app's styles, so skins restyle `.wz-*` | a forked kit; `.wz-field-row` as a chat composer; literal colours | two skins + My skin restyle the app's `.wz-*` rows live |
 
 ## Shell (`web/core/`, shared by both shells; every row serves every agent kind: main, host-profile, container, restricted; a per-kind variant is a fork, declare it EXTEND)
 
 | Need | Use | Never hand-roll |
 |---|---|---|
-| Chat list, thread, composer, desktop file drop, thread card, read state, reply action row (Copy · Share; Regenerate only when the skin sets `--wos-reply-regenerate: on`) | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); live data `WizLive` (`web/live.js`) | a second thread, composer or per-agent thread logic; extra per-reply buttons on every skin |
+| Chat list, thread, composer, desktop file drop, thread card, read state, reply action row (Copy · Share; Regenerate only when the skin sets `--wos-reply-regenerate: on`); historical sections appear only when populated | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); live data `WizLive` (`web/live.js`) | a second thread, composer or per-agent thread logic; extra per-reply buttons on every skin |
 | Alternative Chats list | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
 | Model picker, errors and retry, composer mic, work receipts, reading place | `WosChatPower` (`web/core/chat-power.js`) + `WosModels` (`web/core/chat-models.js`), `WosErrors` (`web/core/chat-errors.js`), `WosWork` (`web/core/chat-work.js`) | own model list, own error card, own reading-position store |
@@ -61,6 +61,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Update banners | `WizWebUpdate`, `WizAppUpdates` (`web/core/web-update.js`), `WizAppVersions` (`web/core/app-versions.js`), `WosUpdates` (`web/core/os-updates.js`) | own reload timers |
 | Provider login (Claude, ChatGPT) for agents and apps | the installed login apps (`wizard-claude`, `wizard-chatgpt`; skill `app-owned-codex-connections`) | setup-tokens or bespoke auth flows |
 | Native Android device capability called from the shell (packages today; later mic, automation, notifications) | `wizardDevicePort` v1 (`android/app/src/main/java/ai/wizards/os/device/DeviceMessageProtocol.java`; add an adapter and list it in `device.capabilities`; see `docs/android-device-message-port.md`) | feature-named `@JavascriptInterface` methods, a second envelope on `wizardAppsPort`, native feature screens or wording |
+| Android long-screenshot (scroll capture) and text selection in the WebView | `ScrollAccessibilityProvider`, `ChatScrollCapture` + `android/app/src/main/assets/scroll-capture.js`, `SelectionWebView` (`android/app/src/main/java/ai/wizards/os/`) | a second accessibility provider or capture path | capture of a long Chats thread on a real device |
 
 ## Visual (anything drawn or animated: attach a side-by-side screenshot under `Visual:`)
 
@@ -70,6 +71,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Skins, backgrounds, scenery, skin feature switches (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`), `WosSkinHost` (`web/core/skin-host.js`; `WosSkinHost.builtin` gestures every skin wears, e.g. thread swipe-back in `web/core/thread-swipe-back.js`; skin scripts use the same threshold via `api.gesture.intent` with `web/core/swipe-intent.js`), `WosMySkin` (`web/core/my-skin.js`), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own gradients, canvases or colour constants |
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) | own keyframe sets |
 | Tour and help sheet | `WosTour` (`web/core/tour.js`) | — |
+| First launch and explicit Setup/tour; VM auto-onboarding and quiet existing-Hermes alongside launch | `WosSetupLaunch` (`web/core/setup-launch.js`); built-in checklist `web/setup/setup.js` distinguishes ready-to-open from phone-connected | shell-specific first-run checks, a second tour launcher |
 
 ## Shell plumbing (owned by one module; never duplicate, rarely called directly)
 
