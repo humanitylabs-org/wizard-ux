@@ -1920,7 +1920,7 @@
     settingsEl.style.transform = `translate3d(${off}px,0,0)`;
     if (at === idx && !dx && !sheet) { // home again: Settings is the open sheet once more
       dropParkedSettings(); if (anim) settingsEl.style.transition = 'transform 520ms var(--ease)';
-      sheet = 'settings'; device.classList.add('sheet-open');
+      sheet = 'settings'; device.classList.add('sheet-open'); tourEv('sheet', { which: 'settings' }); // same handoff as openSheet
       window.WosResources?.sync(); window.WosScenery?.update();
     }
   }
