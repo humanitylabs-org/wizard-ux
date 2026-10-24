@@ -10,7 +10,10 @@ async function launch(data, { tour = true, deep = false, desktop = false, done =
   const actions = [], listeners = {};
   const window = { AbortController, WosTour: { active: false, done: () => done, desk: { active: false } } };
   vm.runInNewContext(source, { window, AbortController, setTimeout, clearTimeout, Date,
-    fetch: async () => { await new Promise(r => setTimeout(r, slow)); return { ok: true, json: async () => data }; },
+    fetch: (u, o = {}) => new Promise((resolve, reject) => {
+      const t = setTimeout(() => resolve({ ok: true, json: async () => data }), slow);
+      o.signal?.addEventListener?.('abort', () => { clearTimeout(t); reject(new Error('aborted')); }); // honour the 2.5 s budget
+    }),
     addEventListener(t, f) { (listeners[t] ||= []).push(f); }, location: { origin: 'https://example.test' } });
   window.WosSetupLaunch.boot({ firstRunTour: tour, deeplinked: () => deep, ...(desktop ? { alongsideOnly: true } : {}), busy: () => busy,
     open: id => actions.push(id), tour: why => actions.push('tour:' + why), markTour: () => actions.push('marked') });
