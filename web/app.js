@@ -421,7 +421,7 @@
     const h = deskSigil(idx); if (h !== orbAppHtml) { orbAppHtml = h; el.innerHTML = h; }
   }
   function renderDots() {
-    window.WosBell?.paint();
+    window.WosBell?.paint?.();
     if (typeof paintOrbBadge === 'function') try { paintOrbBadge(); } catch (_) {}
     paintOrbApp();
     const mk = i => `<button class="ddot sig${desks[i].wins.length ? ' filled' : ''}${desks[i].home ? ' dhome' : ''}${isReviewDesk(i) ? ' review' : ''}" data-goto="${i}" aria-label="${esc(deskName(i))}">${deskSigil(i)}</button>`;
