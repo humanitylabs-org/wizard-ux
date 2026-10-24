@@ -28,10 +28,15 @@ const server=http.createServer((req,res)=>{
 });
 let browser,lastPage,lastFrame;
 async function check(name,fn){await fn();checks.push(name);console.log('PASS',name);}
-async function shot(page,name){const p=path.join(OUT,'pp-ux-'+name+'.png');await page.screenshot({path:p});screens.push(p);console.log('SHOT',p);}
+async function shot(page,name){
+ // Let finite shell transitions finish; do not capture a blurred Settings/window switch.
+ for(const frame of page.frames())await frame.waitForFunction(()=>document.getAnimations().every(a=>a.playState!=='running'||a.effect?.getTiming().iterations===Infinity));
+ await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+ const p=path.join(OUT,'pp-ux-'+name+'.png');await page.screenshot({path:p});screens.push(p);console.log('SHOT',p);
+}
 async function selectSkin(p,f,mobile,skin){
  // Real Settings → Skin control, not token injection.
- if(mobile)await p.evaluate(()=>__wos.openSheet('settings'));else await p.locator('#settingsBtn').click();
+ if(mobile)await p.evaluate(()=>__wos.openSheet('settings'));else await p.evaluate(()=>WizCore.deeplink.route(location.pathname+'?view=settings'));
  await p.locator('[data-st-page="appearance"]').filter({visible:true}).click();
  await p.locator(`[data-skinpick="${skin}"]`).last().click();
  if(mobile)await p.evaluate(()=>__wos.closeSheets(true));else {await p.keyboard.press('Escape');await p.keyboard.press('Escape');}
@@ -84,6 +89,7 @@ async function selectSkin(p,f,mobile,skin){
  await check(mode+' Store nested Back remains in shell',async()=>{if(mobile)await p.evaluate(()=>__wosNativeBack());else await store.locator('[data-back]').first().click();assert.equal(await store.locator('#q').inputValue(),'');assert.ok(p.url().includes('/wizard-os-home/'));assert.equal(await f.evaluate(()=>__agents.state().draft.label),'Empty');});
  // Required launch matrix, isolated fixtures: no app + existing legacy, installed, installed/unavailable.
  await p.evaluate(()=>WizOpenApp('agents'));
+ if(!mobile)await p.locator('[data-win]').filter({has:p.locator('iframe[title="Agents"]')}).locator('[data-wact="mono"]').click();
  for(const state of ['legacy','tinfoil','unavailable']){
   scenario=state;
   for(const skin of ['nebula','signal']){
