@@ -37,7 +37,7 @@
   /* Miguel's skins (Dark, Light, Landscapes) carry his model UX: the private Tinfoil slot, its setup row and the bottom
    * switch. James's skins keep the stock three-model menu, so none of this shows there (team rule: taste lives in your skin). */
   const OURS = new Set(['obsidian', 'obsidian-light', 'landscapes']);
-  const ours = () => typeof document !== 'undefined' && OURS.has(document.documentElement.dataset.skin || '');
+  const ours = () => typeof document !== 'undefined' && (document.documentElement.dataset.tweaks || '').split(' ').includes('miguel/model-pills');
   const primaryFamilies = () => ours() ? PRIMARY : PRIMARY.filter(p => p.family !== 'tinfoil');
   const shown = list => ours() ? list : list.filter(o => !isTinfoil(o.provider));
   /* Unified Chats: once a private agent offers models in the main picker, a confidential (Tinfoil) choice means the

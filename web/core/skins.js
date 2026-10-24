@@ -23,7 +23,7 @@
   // A skin entry not listed here is a skin of its own with one palette (so a new collaborator skin needs no edit here).
   const FAMILIES = [
     { id: 'wizard', name: 'Wizard', who: 'The original Wizard look, in five moods.', palettes: ['nebula', 'grove', 'tide', 'ember', 'signal'] },
-    { id: 'mizel', name: 'Mizel', recommends: { chats: 'mizel-chats' }, who: 'Miguel’s skin: black and white, or a new landscape every minute.', palettes: ['obsidian', 'obsidian-light', 'landscapes'] },
+    { id: 'mizel', name: 'Mizel', tweaks: 'miguel', recommends: { chats: 'mizel-chats' }, who: 'Miguel’s skin: black and white, or a new landscape every minute.', palettes: ['obsidian', 'obsidian-light', 'landscapes'] },
     { id: 'novairecito', name: 'Novairecito', who: 'Novaire’s skin: a noir violet command deck, or warm paper for long reads.', palettes: ['novairecito', 'sepia'] },
   ];
   const LAST = 'wos.skin.last.';
@@ -56,16 +56,16 @@
       t: T({ bg: '#f3ead2', ink: '#332b22', 'ink-2': '#5f5243', 'ink-3': '#786651', line: 'rgba(86,65,40,.16)', 'line-2': 'rgba(86,65,40,.30)', glass: 'rgba(236,222,190,.76)', 'glass-2': 'rgba(247,239,219,.92)',
         violet: '#76533d', 'violet-2': '#684733', pink: '#9a5c56', cyan: '#557878', amber: '#94691d', green: '#57704d', red: '#a34236',
         'sk-time-a': '#3a3026', 'sk-time-b': '#735b43', 'sk-dock': 'rgba(238,225,197,.96)', 'sk-dock-line': 'rgba(86,65,40,.16)', 'sk-ddot': 'rgba(86,65,40,.52)', 'sk-tour': 'rgba(247,239,219,.94)', 'sk-dim': 'rgba(75,55,32,.24)', 'sk-win': 'rgba(247,239,219,.94)' }) },
-    { id: 'obsidian', pkg: { css: true, js: true, when: 'always', dir: 'obsidian' }, name: 'Dark', who: 'Miguel’s dark skin. Black, white and nothing else.', orb: [0, 0, 1.15],
+    { id: 'obsidian', pkg: { css: true, dir: 'obsidian' }, name: 'Dark', who: 'Miguel’s dark skin. Black, white and nothing else.', orb: [0, 0, 1.15],
       t: T({ bg: '#000000', ink: '#f7f7f7', 'ink-2': '#c4c4c4', 'ink-3': '#8a8a8a', line: 'rgba(255,255,255,.12)', 'line-2': 'rgba(255,255,255,.26)', glass: 'rgba(20,20,20,.62)', 'glass-2': 'rgba(24,24,24,.86)',
         violet: '#ffffff', 'violet-2': '#e8e8e8', pink: '#bdbdbd', cyan: '#d6d6d6', amber: '#e6b15c', green: '#9fd8a8', red: '#ff6b6b',
         'sk-time-a': '#ffffff', 'sk-time-b': '#9a9a9a', 'sk-dock': 'rgba(0,0,0,.96)', 'sk-dock-line': 'rgba(255,255,255,.12)', 'sk-ddot': 'rgba(255,255,255,.5)', 'sk-tour': 'rgba(10,10,10,.9)', 'sk-dim': 'rgba(0,0,0,.78)', 'sk-win': 'rgba(10,10,10,.9)' }) },
-    { id: 'obsidian-light', pkg: { css: true, js: true, when: 'always', dir: 'obsidian' }, name: 'Light', who: 'Miguel’s light skin. Ink on white paper.', orb: [0, 0, .55],
+    { id: 'obsidian-light', pkg: { css: true, dir: 'obsidian' }, name: 'Light', who: 'Miguel’s light skin. Ink on white paper.', orb: [0, 0, .55],
       t: T({ bg: '#ffffff', ink: '#000000', 'ink-2': '#2e2e2e', 'ink-3': '#6b6b6b', line: 'rgba(0,0,0,.14)', 'line-2': 'rgba(0,0,0,.32)', glass: 'rgba(244,244,244,.78)', 'glass-2': 'rgba(240,240,240,.94)',
         violet: '#000000', 'violet-2': '#1a1a1a', pink: '#555555', cyan: '#3a3a3a', amber: '#9a6400', green: '#0f7a3e', red: '#c62828',
         'sk-time-a': '#000000', 'sk-time-b': '#5a5a5a', 'sk-dock': 'rgba(255,255,255,.96)', 'sk-dock-line': 'rgba(0,0,0,.12)', 'sk-ddot': 'rgba(0,0,0,.5)', 'sk-tour': 'rgba(250,250,250,.94)', 'sk-dim': 'rgba(255,255,255,.72)', 'sk-win': 'rgba(255,255,255,.94)' }) },
     // Opinionated: Landscapes rotates the classic macOS landscape wallpapers (Mavericks → Golden Gate) behind frosted glass.
-    { id: 'landscapes', pkg: { css: true, js: true, when: 'always', dir: 'landscapes' }, name: 'Landscapes', who: 'Miguel’s photo skin. A new view of the world every minute.', orb: [0, 1, 1.05],
+    { id: 'landscapes', pkg: { css: true, dir: 'landscapes' }, name: 'Landscapes', who: 'Miguel’s photo skin. A new view of the world every minute.', orb: [0, 1, 1.05],
       t: T({ bg: '#0B0A10', ink: '#ffffff', 'ink-2': 'rgba(255,255,255,.80)', 'ink-3': 'rgba(255,255,255,.58)', line: 'rgba(255,255,255,.16)', 'line-2': 'rgba(255,255,255,.28)', glass: 'rgba(16,14,22,.52)', 'glass-2': 'rgba(20,18,26,.74)',
         violet: '#7A5CFF', 'violet-2': '#A08CFF', pink: '#ff7ac8', cyan: '#6fd8ff', amber: '#ffbe55', green: '#62e6a8', red: '#ff6b86',
         'sk-time-a': '#ffffff', 'sk-time-b': '#ffffff', 'sk-dock': 'rgba(11,10,16,.62)', 'sk-dock-line': 'rgba(255,255,255,.10)', 'sk-ddot': 'rgba(255,255,255,.6)', 'sk-tour': 'rgba(11,10,16,.80)', 'sk-dim': 'rgba(11,10,16,.70)', 'sk-win': 'rgba(16,14,22,.72)' }) },
@@ -88,7 +88,7 @@
       if (!out.includes(f)) out.push(f);
       s.family = f.id;
     }
-    return out.map(f => Object.freeze({ id: f.id, name: f.name, who: f.who, ...(f.recommends ? { recommends: Object.freeze({ ...f.recommends }) } : {}), palettes: Object.freeze(SKINS.filter(s => s.family === f.id).map(s => s.id)) }));
+    return out.map(f => Object.freeze({ id: f.id, name: f.name, who: f.who, ...(f.recommends ? { recommends: Object.freeze({ ...f.recommends }) } : {}), ...(f.tweaks ? { tweaks: f.tweaks } : {}), palettes: Object.freeze(SKINS.filter(s => s.family === f.id).map(s => s.id)) }));
   })();
   const N = SKINS.length;
   const idxOf = id => Math.max(0, SKINS.findIndex(s => s.id === id));
@@ -381,7 +381,7 @@
     // Skin packages (core/skin-host.js): a collaborator skin's own folder web/skins/<dir>/ (skin.css, skin.js).
     pkgOf(id) { const s = SKINS.find(x => x.id === id); return s && s.pkg ? Object.freeze({ ...s.pkg }) : null; },
     preview(p) { paint(p); },
-    set(id) { const i = idxOf(id); if (composition) { composition.extends = SKINS[i].id; saveComposition(); } paint(i); try { localStorage.setItem(KEY, SKINS[i].id); localStorage.setItem(LAST + SKINS[i].family, SKINS[i].id); } catch (e) {} window.WosSkinHost?.commit(SKINS[i].id); return SKINS[i].id; },
+    set(id) { const i = idxOf(id); if (composition) { composition.extends = SKINS[i].id; saveComposition(); } paint(i); try { localStorage.setItem(KEY, SKINS[i].id); localStorage.setItem(LAST + SKINS[i].family, SKINS[i].id); } catch (e) {} window.WosSkinHost?.commit(SKINS[i].id); try { dispatchEvent(new CustomEvent('wos:skin', { detail: SKINS[i].id })); } catch (e) {} return SKINS[i].id; },
     get frame() { return F ? F.frame(frameOf(SKINS[Math.round(pos)])) : { foundation: 'framed' }; },
     get frameAdjustable() { return PHONE; },
     get composition() { return { version: 1, extends: this.current, frame: this.frame }; },

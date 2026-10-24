@@ -1,0 +1,17 @@
+{
+  "teamAuthors": [
+    "miguel"
+  ],
+  "profiles": [
+    "miguel"
+  ],
+  "tweaks": [
+    "miguel/switch-row-actions",
+    "miguel/swipe-strip",
+    "miguel/send-and-go",
+    "miguel/model-pills",
+    "miguel/hidden-pin",
+    "miguel/snooze-someday",
+    "miguel/home-bars"
+  ]
+}

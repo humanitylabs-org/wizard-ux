@@ -109,7 +109,7 @@
      column grid so Server and AI line up. No warning notes, alert marks, health line or freshness text; the detail sheet
      keeps all of that. An AI account that can't be read is a dial that opens its connection app to sign back in. */
   const OURS=new Set(['obsidian','obsidian-light','landscapes']);
-  const ours=()=>typeof document!=='undefined'&&OURS.has(document.documentElement.dataset.skin||'');
+  const ours=()=>typeof document!=='undefined'&&(document.documentElement.dataset.tweaks||'').split(' ').includes('miguel/home-bars');
   const APP_OF={chatgpt:'wizard-chatgpt',claude:'wizard-claude',tinfoil:'wizard-tinfoil'};
   /* Speedometer dials (Miguel's skins, 22 Oct): a 240° car gauge per reading. Each dial remembers what it last showed
      (S.shown) and every render starts from there, so Home re-renders never jump; settle() then moves the needle, arc
@@ -218,5 +218,5 @@
   document.addEventListener('keydown',e=>{if(!S.panel)return;if(e.key==='Escape'){e.preventDefault();if(window.__wux)close();else window.__wos?.onBack();}else if(e.key==='Tab'){const list=[...S.panel.querySelectorAll('button:not(:disabled)')],first=list[0],last=list.at(-1);if(e.shiftKey&&(document.activeElement===first||!S.panel.contains(document.activeElement))){e.preventDefault();last?.focus();}else if(!e.shiftKey&&(document.activeElement===last||!S.panel.contains(document.activeElement))){e.preventDefault();first?.focus();}}});
   window.addEventListener('blur',()=>{S.pressing=false;});
   document.addEventListener('visibilitychange',sync);
-  window.WosResources={healthProblems,home(){queueMicrotask(sync);return `<div data-home-resources>${html()}</div>`;},sync,back:close,normalize,weekly,update,extraOf,extraFor,get state(){return {server:S.server,serverAt:S.serverAt,serverError:S.serverError,devices:S.devices,devicesError:S.devicesError,health:S.health,healthAt:S.healthAt,healthError:S.healthError,ai:S.ai,aiAt:S.aiAt,aiError:S.aiError,timer:!!S.timer,busy:!!S.busy,panel:!!S.panel};}};
+  window.WosResources={healthProblems,home(){queueMicrotask(sync);return `<div data-slot="home-top" data-home-resources>${html()}</div>`;},sync,back:close,normalize,weekly,update,extraOf,extraFor,get state(){return {server:S.server,serverAt:S.serverAt,serverError:S.serverError,devices:S.devices,devicesError:S.devicesError,health:S.health,healthAt:S.healthAt,healthError:S.healthError,ai:S.ai,aiAt:S.aiAt,aiError:S.aiError,timer:!!S.timer,busy:!!S.busy,panel:!!S.panel};}};
 })();
