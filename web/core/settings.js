@@ -183,11 +183,19 @@
     .filter(([, v]) => v).map(([n, v]) => `--p-${n}:${esc(v)}`).join(';'); };
   const mini = k => `<span class="skp-mini" data-skp="${esc(k.id)}" style="${pvars(k)}" aria-hidden="true"><i class="skp-a"></i><i class="skp-a skp-a2"></i><i class="skp-u"></i><i class="skp-dock"><i class="skp-orb"></i></i></span>`;
   const skinCard = (k, cur) => `<button type="button" class="skp-card" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}">${mini(k)}<span class="skp-nm" style="${esc(faceCss(k.face))}">${esc(k.name)}</span></button>`;
+  // My skin is the last tile of the same grid, same size, drawn dashed (ringed while worn). Tapping it opens its
+  // controls (Edit, Reset when non-empty, the script switch) right under the grid; while it is empty and closed, the
+  // launch invite stays on screen under the grid.
+  let myOpen = false;
+  const myTile = () => window.WosMySkin ? `<button type="button" class="skp-card skp-my${mySkinWorn() ? ' worn' : ''}" data-myskin-tile aria-expanded="${myOpen}" aria-label="My skin"><span class="skp-mini skp-mini-my" aria-hidden="true"><i class="skp-plus"></i></span><span class="skp-nm">My skin</span></button>` : '';
   function lookHtml(S) {
-    const cur = S.current;
+    const cur = S.current, base = lookName(S, cur);
     loadFaces();
-    const grid = `<div class="skp" role="group" aria-label="Skins">${S.list.map(k => skinCard(k, cur)).join('')}</div>`;
-    return `<div class="st-group" data-stgroup="look"><h4>Look</h4>${mySkinRow(lookName(S, cur))}<div class="st-row static sk-row"><div class="sk-head"><span class="st-tx"><b>Skin</b><small data-skinname>${esc(lookName(S, cur))}</small></span></div><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}</div></div>${layoutRow()}</div>`;
+    const grid = `<div class="skp" role="group" aria-label="Skins">${S.list.map(k => skinCard(k, cur)).join('')}${myTile()}</div>`;
+    const M = window.WosMySkin;
+    const panel = M && myOpen ? `<div class="ms-panel" data-myskin-panel>${mySkinRow(base)}</div>` : '';
+    const invite = M && !myOpen && !mySkinWorn() ? `<p class="st-hint ms-invite" data-myskinsub>${esc(mySkinSub(base))}</p>` : '';
+    return `<div class="st-group" data-stgroup="look"><h4>Look</h4><div class="st-row static sk-row"><div class="sk-head"><span class="st-tx"><b>Skin</b><small data-skinname>${esc(base)}</small></span></div><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}</div></div>${panel}${invite}${layoutRow()}</div>`;
   }
   /* Layout: how the shell behaves (orbs, gestures), worn over any skin. Classic = the shell as everyone has it. */
   function layoutRow() {
@@ -202,6 +210,14 @@
   }, act(ctx, el, event) {
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
+    if (el.closest('[data-myskin-tile]')) {
+      myOpen = !myOpen; ctx.render?.(); ctx.haptic?.(8);
+      if (myOpen) ctx.root.querySelector?.('[data-myskin-panel]')?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+      // A tap leaves no focus ring on the re-rendered tile; Enter/Space (detail 0) keeps it for keyboard users.
+      const t = ctx.root.querySelector?.('[data-myskin-tile]');
+      if (event?.detail > 0 && t && t === document.activeElement) t.blur?.();
+      return true;
+    }
     const lp = el.closest('[data-layoutpick]');
     if (lp) {
       const H = window.WosSkinHost, now = H.setLayout(lp.dataset.layoutpick), L = H.layouts.find(l => l.id === now);
@@ -409,10 +425,14 @@
         e.preventDefault(); const buttons = [...root.querySelectorAll('[data-chats-choice]')], at = buttons.indexOf(radio), delta = ['ArrowUp', 'ArrowLeft'].includes(e.key) ? -1 : 1;
         buttons[(at + delta + buttons.length) % buttons.length].focus(); return;
       }
-      const b = e.target.closest('[data-skinpick], [data-skinfamily]'); if (!b || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+      const b = e.target.closest('[data-skinpick], [data-skinfamily], [data-myskin-tile]'); if (!b || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
       const attr = b.hasAttribute('data-skinfamily') ? 'data-skinfamily' : 'data-skinpick';
-      e.preventDefault(); const buttons = [...root.querySelectorAll(`[${attr}]`)], at = buttons.indexOf(b);
+      // The skin grid's arrows/Home/End also reach its last tile, My skin. Landing on it only moves focus (it opens
+      // its controls on Enter/Space or a tap), so arrowing past never toggles the panel.
+      const sel = attr === 'data-skinpick' ? '[data-skinpick], [data-myskin-tile]' : `[${attr}]`;
+      e.preventDefault(); const buttons = [...root.querySelectorAll(sel)], at = buttons.indexOf(b);
       const n = e.key === 'Home' ? 0 : e.key === 'End' ? buttons.length - 1 : (at + (e.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
+      if (buttons[n].hasAttribute('data-myskin-tile')) { buttons[n].focus(); return; }
       const id = buttons[n].getAttribute(attr); buttons[n].focus(); buttons[n].click();
       root.querySelector(`[${attr}="${id}"]`)?.focus();
     };

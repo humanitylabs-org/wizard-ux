@@ -97,7 +97,7 @@ test('Look: every skin in one flat grid, named by its own name, no per-person fa
   assert.equal((html.match(/<div class="skp" role="group"/g) || []).length, 1, 'one grid');
   assert.match(html, /<div class="skp" role="group" aria-label="Skins"><button type="button" class="skp-card" data-skinpick="nebula"[^]*data-skinpick="obsidian-light"/);
   assert.match(html, /<small data-skinname>Light<\/small>/);
-  assert.match(html, /<h4>Look<\/h4><div class="st-row static my-skin-row|<h4>Look<\/h4><div class="st-row static sk-row/, 'My skin (when present) still leads Look');
+  assert.match(html, /<h4>Look<\/h4><div class="st-row static sk-row/, 'the grid leads Look');
 });
 test('index: one update card on top when there is something to do, nothing otherwise; desktop does not repeat it beside About', () => {
   const h = harness();
@@ -136,4 +136,31 @@ test('settings.css: rows are hairline lines, not boxes', () => {
     assert.doesNotMatch(r, /background: var\(--wz-surface\)|border-radius: 1[2-9]px/, sel);
   }
   assert.doesNotMatch(css, /\.st-ic \{|\.st-hero \{|\.st-suggestion \{/);
+});
+test('My skin is the dashed last tile of the one skin grid; tapping it opens Edit (and Reset only when non-empty) under the grid', () => {
+  const h = harness();
+  h.s.WosMySkin = { state: { empty: true, off: false, info: {}, script: { exists: false } }, on() {} };
+  h.view.focus('look');
+  let html = h.root.innerHTML;
+  assert.equal((html.match(/<div class="skp" role="group"/g) || []).length, 1, 'still one grid');
+  assert.match(html, /data-skinpick="obsidian-light"[^]*?<\/button><button type="button" class="skp-card skp-my" data-myskin-tile aria-expanded="false" aria-label="My skin">[^]*?<\/button><\/div>/, 'My skin is the last tile');
+  assert.doesNotMatch(html, /data-myskin-panel|data-myskin="edit"/, 'controls closed');
+  assert.match(html, /class="st-hint ms-invite" data-myskinsub>Everything you see is customizable/, 'the launch invite stays visible while empty');
+  h.view.dispatch({ closest: sel => sel === '[data-myskin-tile]' ? {} : sel === '[data-settings-feature]' ? { dataset: { settingsFeature: 'look' } } : null });
+  html = h.root.innerHTML;
+  assert.match(html, /aria-expanded="true"/);
+  assert.match(html, /<div class="ms-panel" data-myskin-panel><div class="st-row static my-skin-row"[^]*data-myskin="edit">Edit<\/button><\/span>/);
+  assert.doesNotMatch(html, /data-myskin="reset"/, 'Reset only when non-empty');
+  h.s.WosMySkin.state.empty = false; h.view.render();
+  html = h.root.innerHTML;
+  assert.match(html, /skp-card skp-my worn/, 'worn: the tile is ringed');
+  assert.match(html, /data-myskin="reset">Reset/);
+  assert.doesNotMatch(html, /ms-invite/, 'no invite once worn');
+});
+test('the skin grid keyboard arrows reach the My skin tile (focus only), and its styles live in settings.css', () => {
+  const src = fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8');
+  assert.match(src, /const sel = attr === 'data-skinpick' \? '\[data-skinpick\], \[data-myskin-tile\]'/);
+  assert.match(src, /if \(buttons\[n\]\.hasAttribute\('data-myskin-tile'\)\) \{ buttons\[n\]\.focus\(\); return; \}/);
+  assert.match(fs.readFileSync(new URL('../web/core/settings.css', import.meta.url), 'utf8'), /\.st-root \.skp-my \.skp-mini-my \{/);
+  assert.doesNotMatch(fs.readFileSync(new URL('../web/core/skins.css', import.meta.url), 'utf8'), /skp-my|ms-panel|ms-invite/);
 });
