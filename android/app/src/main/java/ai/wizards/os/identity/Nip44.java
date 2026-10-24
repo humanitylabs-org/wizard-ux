@@ -31,7 +31,7 @@ public final class Nip44 {
     }
     static byte[] conversationKey(byte[] secret, String pubkey) throws Exception {
         require(secret.length == 32 && Secp256k1.get().secKeyVerify(secret));
-        // libsecp's ecdh() hashes the point. NIP-44 requires raw X: use its constant-time tweak-mul.
+        // libsecp's ecdh() hashes the point. NIP-44 requires raw X: use its point tweak-mul.
         byte[] point = Secp256k1.get().pubKeyTweakMul(publicKey(pubkey), secret);
         byte[] x = Arrays.copyOfRange(point, 1, 33);
         try { return hmac("nip44-v2".getBytes(StandardCharsets.US_ASCII), x); }

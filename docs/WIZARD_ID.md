@@ -85,7 +85,7 @@ The corresponding native methods are `identity.nip44_encrypt {pubkey,plaintext}`
 `identity.nip44_decrypt {pubkey,ciphertext}` → `{plaintext}`. Each opens the **same native approval
 sheet** and requires a fresh biometric/PIN and one Keystore unwrap. The owner secret, ECDH point,
 conversation key and message-key buffers are wiped after one operation, never cached or returned.
-ACINQ constant-time point multiplication supplies raw shared X (its hashed `ecdh()` is not NIP-44).
+ACINQ point multiplication supplies raw shared X (its hashed `ecdh()` is not NIP-44).
 HKDF-SHA256 extract uses salt `nip44-v2`; expand uses the random 32-byte nonce; ChaCha20 starts at
 counter zero; HMAC-SHA256 authenticates nonce + ciphertext before decryption. Constant-time MAC
 comparison, strict UTF-8, payload/version checks, padding and resource limits fail closed as
