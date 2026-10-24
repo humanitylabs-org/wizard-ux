@@ -58,7 +58,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Local commands | `WosCommands` (`web/core/commands.js`) | a second command parser |
 | Bound views beside a thread | `WosBoundView` (`web/core/bound-view.js`), renderers `WosViews` (`web/core/views.js`) | — |
 | Screen capture | `WosScreenCapture` (`web/core/screen-capture.js`), `WosCaptureTools` (`web/core/capture-tools.js`) | — |
-| Update banners | `WizWebUpdate`, `WizAppUpdates` (`web/core/web-update.js`), `WizAppVersions` (`web/core/app-versions.js`), `WosUpdates` (`web/core/os-updates.js`) | own reload timers |
+| Update banners, the Settings update card and the Home update pop-up (one notice: the pop-up carries the web reload while it shows or after its ×) | `WizWebUpdate`, `WizAppUpdates` (`web/core/web-update.js`), `WizAppVersions` (`web/core/app-versions.js`), `WosUpdates` (`web/core/os-updates.js`: `card` / `cardHtml` / `popup` / `ownsReload`) | own reload timers, a second update card or banner |
 | Provider login (Claude, ChatGPT) for agents and apps | the installed login apps (`wizard-claude`, `wizard-chatgpt`; skill `app-owned-codex-connections`) | setup-tokens or bespoke auth flows |
 
 ## Visual (anything drawn or animated: attach a side-by-side screenshot under `Visual:`)
