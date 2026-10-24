@@ -63,6 +63,9 @@ const ok = (condition, name, detail = '') => {
   const thread = 'chat-recent';
   const watch = scheduler.create({ name: 'Knowledge MVP', kind: 'watch', when: { every: 10 }, prompt: 'Check the dependency.', thread, agent: 'main' });
   const privateThread = 'private-follow-up';
+  // Main owns a thread with the identical id, so every same-id control is exercised from both owners' windows.
+  await fetch(`${fixtureOrigin}/api/sessions`, { method: 'POST', headers: { Authorization: 'Bearer local-fixture-only', 'Content-Type': 'application/json' }, body: JSON.stringify({ id: privateThread, title: 'Main same-id follow-up', source: 'wizard-mobile' }) });
+  await fetch(`${fixtureOrigin}/v1/runs`, { method: 'POST', headers: { Authorization: 'Bearer local-fixture-only', 'Content-Type': 'application/json', 'Idempotency-Key': 'main-same-id-history-seed' }, body: JSON.stringify({ session_id: privateThread, input: 'Plain reply for main same-id watcher QA.' }) });
   await fetch(`${privateFixtureOrigin}/api/sessions`, { method: 'POST', headers: { Authorization: 'Bearer local-fixture-only', 'Content-Type': 'application/json' }, body: JSON.stringify({ id: privateThread, title: 'Private follow-up', source: 'wizard-mobile' }) });
   await fetch(`${privateFixtureOrigin}/v1/runs`, { method: 'POST', headers: { Authorization: 'Bearer local-fixture-only', 'Content-Type': 'application/json', 'Idempotency-Key': 'private-history-seed' }, body: JSON.stringify({ session_id: privateThread, input: 'Plain reply for routed watcher QA.' }) });
   await sleep(250);
@@ -192,27 +195,50 @@ const ok = (condition, name, detail = '') => {
     await page.waitForFunction(({ id, agent }) => window.__wos.live.agentSessions[agent]?.some(item => item.id === id && item.followUp?.active), { id: privateThread, agent: privateAgent }, { timeout: 15000 });
     await page.evaluate(id => window.__wos.openWizardThread(id), privateThread);
     await sleep(250);
-    await page.evaluate(id => {
-      const el = [...document.querySelectorAll('[data-chats]')].find(node => /Private follow-up/.test(node.innerText));
-      if (!el) throw new Error('private Chats window did not open');
-      window.__wos.openChat(el.dataset.chats, id);
-    }, privateThread);
-    const routedControlShown = await until(() => page.evaluate(() => !!document.querySelector('.ch-tacts [data-chact="stop_watch"]')), 8000).catch(() => false);
+    // Find the routed window by its agent, not by header text: the shell header still reads titles by id alone.
+    const routedWin = await page.evaluate(({ id, agent }) => {
+      const W = window.__wos.wins, wid = Object.keys(W).find(key => W[key]?.app === 'chats' && W[key].agent === agent);
+      if (!wid) throw new Error('routed Chats window did not open ' + JSON.stringify(Object.entries(W).map(([k, w]) => ({ k, app: w.app, agent: w.agent || '' }))));
+      window.__wos.openChat(wid, id); return wid;
+    }, { id: privateThread, agent: privateAgent });
+    const routedScope = `[data-chats="${routedWin}"] .ch-tacts [data-chact="stop_watch"]`;
+    const routedControlShown = await until(() => page.evaluate(sel => !!document.querySelector(sel), routedScope), 8000).catch(() => false);
     const routedDebug = routedControlShown ? null : await page.evaluate(async ({ id, agent }) => {
       const read = async url => { const response = await fetch(url); return { status: response.status, body: await response.text() }; };
       return { agent: window.__wos.live.agentOf(id), session: window.__wos.live.session(id), detail: await read(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}?agent=${encodeURIComponent(agent)}`), messages: await read(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}/messages?agent=${encodeURIComponent(agent)}`), chats: [...document.querySelectorAll('[data-chats]')].map(el => ({ id: el.dataset.chats, text: el.innerText.slice(0, 300) })) };
     }, { id: privateThread, agent: privateAgent });
     ok(routedControlShown, 'routed thread exposes Stop watching', routedDebug);
-    const routedActions = await page.evaluate(() => [...document.querySelectorAll('.ch-tacts [data-chact]')].map(button => button.dataset.chact));
-    if (routedControlShown) await page.locator('.ch-tacts [data-chact="stop_watch"]').tap();
+    const routedActions = await page.evaluate(wid => [...document.querySelectorAll(`[data-chats="${wid}"] .ch-tacts [data-chact]`)].map(button => button.dataset.chact), routedWin);
+    if (routedControlShown) await page.locator(routedScope).tap();
     else await page.evaluate(({ id, agent }) => window.__wos.live.stopWatching(id, agent), { id: privateThread, agent: privateAgent });
     await until(() => scheduler.get(routedWatch.id).enabled === false);
     ok(scheduler.get(mainGuard.id).enabled === true, 'routed Stop watching cannot cancel a same-ID main watcher');
+    // The reverse: main's own Stop on the identical id must not reach the routed owner (the id-only pin map says routed).
+    const routedGuard = scheduler.create({ name: 'Routed same-ID guard', kind: 'watch', when: { every: 10 }, prompt: 'Routed only.', thread: privateThread, agent: privateAgent });
+    await page.evaluate(() => window.__wos.live.refresh());
+    await page.waitForFunction(({ id, agent }) => window.__wos.live.sessions.some(item => item.id === id && item.followUp?.active)
+      && window.__wos.live.agentSessions[agent]?.some(item => item.id === id && item.followUp?.active), { id: privateThread, agent: privateAgent }, { timeout: 15000 });
+    const stopBodies = [];
+    const recordStop = route => { stopBodies.push(JSON.parse(route.request().postData() || '{}')); return route.continue(); };
+    await page.route('**/wizard/follow-ups/stop', recordStop);
+    const mainWin = await page.evaluate(id => {
+      const W = window.__wos.wins, wid = Object.keys(W).find(key => W[key]?.app === 'chats' && !W[key].agent);
+      if (!wid) throw new Error('main Chats window not found');
+      const desk = window.__wos.desks.findIndex(d => d.wins.includes(wid)); if (desk >= 0) window.__wos.goDesk(desk, true);
+      window.__wos.focusWin(wid); window.__wos.openChat(wid, id); return wid;
+    }, privateThread);
+    const mainScope = `[data-chats="${mainWin}"] .ch-tacts [data-chact="stop_watch"]`;
+    const mainControlShown = await until(() => page.evaluate(sel => !!document.querySelector(sel), mainScope), 8000).catch(() => false);
+    ok(mainControlShown, 'main same-id thread exposes its own Stop watching');
+    if (mainControlShown) await page.locator(mainScope).tap();
+    await until(() => scheduler.get(mainGuard.id).enabled === false).catch(() => undefined);
+    ok(scheduler.get(mainGuard.id).enabled === false && scheduler.get(routedGuard.id).enabled === true, 'main Stop watching cancels only the main watcher on a same-ID pair', { main: scheduler.get(mainGuard.id).enabled, routed: scheduler.get(routedGuard.id).enabled, stopBodies });
+    ok(stopBodies.length === 1 && stopBodies[0].session_id === privateThread && !('agent_id' in stopBodies[0]), 'main Stop request carries no routed agent scope', stopBodies);
+    await page.unroute('**/wizard/follow-ups/stop', recordStop);
+    await page.evaluate(wid => document.querySelector(`[data-chats="${wid}"] [data-chback]`)?.click(), mainWin);
+    scheduler.stopFollowUps(privateThread, { agent: privateAgent });
     scheduler.stopFollowUps(privateThread, { agent: 'main' });
-    await page.evaluate(() => {
-      const el = [...document.querySelectorAll('[data-chats]')].find(node => /Private follow-up/.test(node.innerText));
-      if (el) window.__wos.closeWin(el.dataset.chats);
-    });
+    await page.evaluate(wid => window.__wos.closeWin(wid), routedWin);
 
     // A required owner decision is itself terminal: restore the same thread and expose the real approval card.
     const approvalWatch = scheduler.create({ name: 'Owner decision', kind: 'watch', when: { every: 10 }, prompt: 'Ask only if approval is required.', thread, agent: 'main' });
