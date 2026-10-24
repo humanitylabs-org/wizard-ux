@@ -4,10 +4,10 @@ name: Android shell
 # background recording against a disposable HTTPS fixture Wizard (screen off, backgrounded, a take surviving force-stop).
 on:
   pull_request:
-    paths: ['android/shell/**', 'android/settings.gradle', '.github/workflows/android-shell.yml', 'tools/android_shell_smoke.sh', 'tools/android_shell_fixture.py']
+    paths: ['android/shell/**', 'android/settings.gradle', '.github/workflows/android-shell.yml', 'tools/android_shell_smoke.sh', 'tools/android_shell_fixture.py', 'tests/fixtures/qa_mic.aac']
   push:
     branches: [main]
-    paths: ['android/shell/**', 'android/settings.gradle', '.github/workflows/android-shell.yml', 'tools/android_shell_smoke.sh', 'tools/android_shell_fixture.py']
+    paths: ['android/shell/**', 'android/settings.gradle', '.github/workflows/android-shell.yml', 'tools/android_shell_smoke.sh', 'tools/android_shell_fixture.py', 'tests/fixtures/qa_mic.aac']
 permissions:
   contents: read
 concurrency:
@@ -30,8 +30,6 @@ jobs:
           cp "$RUNNER_TEMP/fx-certs/ca.pem" android/shell/src/debug/res/raw/qa_fixture_ca.pem
           mkdir -p "$RUNNER_TEMP/fx-out"
           nohup python3 tools/android_shell_fixture.py serve "$RUNNER_TEMP/fx-certs" "$RUNNER_TEMP/fx-out" > "$RUNNER_TEMP/fx-out/server.txt" 2>&1 &
-          # 20 s of tone as the emulator's stand-in microphone (debug builds stream files/qa_mic.aac).
-          ffmpeg -v error -f lavfi -i sine=frequency=440:duration=20 -c:a aac -b:a 64k -f adts "$RUNNER_TEMP/qa_mic.aac"
           sleep 1; curl -sk https://127.0.0.1:8443/wizard-os-home/mode
       - name: Unit tests, lint, builds
         working-directory: android
@@ -59,7 +57,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -memory 3072
           script: |
             sleep 45
-            FIXTURE_OUT="$RUNNER_TEMP/fx-out" QA_MIC="$RUNNER_TEMP/qa_mic.aac" bash tools/android_shell_smoke.sh android/shell/build/outputs/apk/debug/shell-debug.apk shell-out
+            FIXTURE_OUT="$RUNNER_TEMP/fx-out" QA_MIC=tests/fixtures/qa_mic.aac bash tools/android_shell_smoke.sh android/shell/build/outputs/apk/debug/shell-debug.apk shell-out
       - name: Summary
         if: always()
         run: cat shell-out/result.txt >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
