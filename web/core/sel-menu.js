@@ -193,8 +193,10 @@
   }
 
   /* ---- Settings ---- */
+  const mineOn = () => typeof document !== 'undefined' && document.documentElement?.dataset?.mine != null;
   function html() {
     const on = enabled(), n = N();
+    if (mineOn()) return `<div class="st-group st-plain" data-selmenu><p class="st-lbl">Selection menu</p>${ITEMS.map(it => `<button class="st-row" data-smset="${it.id}" role="switch" aria-checked="${on.includes(it.id)}"><span class="st-tx"><b>${esc(it.label)}</b></span><span class="sw ${on.includes(it.id) ? 'on' : ''}"><i></i></span></button>`).join('')}</div>`;
     const sub = own() ? 'Select words in a chat · choose what the menu offers' : n ? 'Update the Wizard OS app (0.9.7) to use it' : 'Works in the Wizard OS Android app';
     return `<div class="st-group" data-selmenu><h4>Text selection menu</h4><p class="st-note">${esc(sub)}</p>
       ${ITEMS.map(it => `<button class="st-row" data-smset="${it.id}"><span class="st-tx"><b>${esc(it.label)}</b><small>${esc(it.note)}</small></span><span class="sw ${on.includes(it.id) ? 'on' : ''}"><i></i></span></button>`).join('')}</div>`;

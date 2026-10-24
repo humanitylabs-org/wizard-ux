@@ -218,6 +218,11 @@
   function html() {
     const s = window.WosWorkspaceSync.current; if (!shown()) return '';
     const status = !s.on ? 'Off on this device' : s.ok === false ? 'Offline · your changes sync when you are back' : s.info.at ? `In sync · last change ${ago(s.info.at)}${s.info.device ? ' on ' + s.info.device : ''}` : 'In sync';
+    if (document.documentElement?.dataset?.mine != null) {
+      // Miguel's release: one switch; Recently closed as plain rows under a small label.
+      const closed = s.on ? s.closed.slice(0, 6).map(c => `<button class="st-row" data-wsync="reopen" data-wsync-desk="${esc(c.desk.id)}" aria-label="Reopen ${esc(deskName(c.desk))}"><span class="st-tx"><b>${esc(deskName(c.desk))}</b></span><span class="st-val">${esc(ago(c.closedAt))}</span><span class="st-go" aria-hidden="true">↺</span></button>`).join('') : '';
+      return `<div class="st-group st-plain" data-wsync-group><button class="st-row" data-wsync="toggle" role="switch" aria-checked="${s.on}"><span class="st-tx"><b>Workspace sync</b></span>${s.on && s.ok === false ? '<span class="st-val">Offline</span>' : ''}<span class="sw ${s.on ? 'on' : ''}"><i></i></span></button></div>${closed ? `<div class="st-group st-plain" data-wsync-closed><p class="st-lbl">Recently closed</p>${closed}</div>` : ''}`;
+    }
     const rows = s.on ? s.closed.slice(0, 6).map(c => `<button class="st-row" data-wsync="reopen" data-wsync-desk="${esc(c.desk.id)}" aria-label="Reopen ${esc(deskName(c.desk))}"><span class="st-tx"><b>${esc(deskName(c.desk))}</b><small>Closed ${esc(ago(c.closedAt))}${c.device ? ' on ' + esc(c.device) : ''} · tap to reopen</small></span><span class="st-go">↺</span></button>`).join('') : '';
     return `<div class="st-group" data-wsync-group><h4>Workspace sync</h4><button class="st-row" data-wsync="toggle" role="switch" aria-checked="${s.on}"><span class="st-tx"><b>Same workspaces on every device</b><small>${esc(status)}</small></span><span class="st-go">${s.on ? 'On' : 'Off'}</span></button></div>${rows ? `<div class="st-group" data-wsync-closed><h4>Recently closed</h4>${rows}</div>` : ''}`;
   }

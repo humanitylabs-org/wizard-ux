@@ -93,6 +93,7 @@
   }
   window.WosSettings.register({ id:'own-views', aliases:['own-views'], available: () => !!selected || apps().some(own), html: () => {
     const a = app(selected), list = [...new Map(apps().filter(own).map(a => [a.id, a])).values()];
+    if (document.documentElement?.dataset?.mine != null && !(a && own(a))) return `<div class="st-group st-plain">${list.map(a => `<button class="st-row" data-own-original="${esc(a.id)}"><span class="st-tx"><b>${esc(a.name)}</b></span><span class="st-val">Your version</span><span class="st-go" aria-hidden="true">›</span></button>`).join('')}${note ? `<p class="st-note" role="status">${esc(note)}</p>` : ''}</div>`;
     return `<div class="st-group"><h4>Your app screens</h4>${a && own(a) ? `<p class="st-note">Use the original screen for ${esc(a.name)}? Your version’s files are kept.</p><button class="st-wide" data-own-confirm="${esc(a.id)}" ${busy ? 'disabled' : ''}>${busy ? 'Switching…' : 'Use original'}</button><button class="st-wide" data-own-cancel ${busy ? 'disabled' : ''}>Keep your version</button>` : list.map(a => `<button class="st-row" data-own-original="${esc(a.id)}"><span class="st-tx"><b>${esc(a.name)}</b><small>Your version · use original</small></span></button>`).join('')}${note ? `<p class="st-note" role="status">${esc(note)}</p>` : ''}</div>`;
   } });
   document.addEventListener('click', e => {

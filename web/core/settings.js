@@ -7,23 +7,31 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const native = () => window.WizardOSNative;
   const android = () => !!native() || /Android/i.test(navigator.userAgent);
+  // Miguel's release (html[data-mine], web/mine/mine-flag.js): his quieter Settings. Stock boxes never take these paths.
+  const mine = () => typeof document !== 'undefined' && document.documentElement?.dataset?.mine != null;
+  const releaseOn = () => !!(window.WosUpdates?.mine || window.WosUpdates?.state);
+  // My release folds About into its own page (connection, build, Gestures & help, Change Wizard at the bottom).
+  const foldAbout = () => mine() && releaseOn();
+  const waiting = ctx => new Set([...unsentAll(ctx), ...recovered()].map(x => x.id)).size;
   // Rows are plain lines split by hairlines (Miguel, 24 Oct: no boxes, no icon tiles); a second line only when it says something.
   const row = (id, title, sub) => `<button class="st-row" data-st="${esc(id)}"><span class="st-tx"><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="st-go">›</span></button>`;
   // My release first (wizard-os#186): what you are on and your own changes. Look is design only, never code.
   const PAGES = [
     { id: 'release', title: () => window.WosUpdates?.title?.() || 'Updates', available: () => !!(window.WosUpdates?.mine || window.WosUpdates?.state) },
-    { id: 'appearance', title: 'Look' },
+    { id: 'appearance', title: () => mine() ? 'Skins' : 'Look' },
     { id: 'chats', title: 'Chats & app screens' },
     { id: 'voice', title: 'Voice & typing' },
     { id: 'phone', title: 'Phone', available: android },
-    { id: 'recovery', title: 'Unsent & recovered' },
-    { id: 'usage', title: 'AI usage' },
+    // Mine: nothing waiting = no row; the page has nothing else on it.
+    { id: 'recovery', title: 'Unsent & recovered', available: ctx => !mine() || waiting(ctx) > 0 },
+    { id: 'usage', title: () => mine() ? 'Resources' : 'AI usage' },
     { id: 'schedules', title: 'Schedules', available: () => !!window.WosSchedules?.available },
-    { id: 'about', title: 'About' },
+    { id: 'about', title: 'About', available: () => !foldAbout() },
   ];
   const titleOf = p => (typeof p?.title === 'function' ? p.title() : p?.title || '');
   const featurePages = { look: 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', 'photos-backup': 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
-  const pageOf = f => f?.page != null ? PAGES.some(p => p.id === f.page) ? f.page : 'about' : featurePages[f?.id] || 'about';
+  const basePage = f => f?.page != null ? PAGES.some(p => p.id === f.page) ? f.page : 'about' : featurePages[f?.id] || 'about';
+  const pageOf = f => { const p = basePage(f); return p === 'about' && foldAbout() ? 'release' : p; };
   const chatsHost = () => window.WizChatsHost;
   const chatsName = id => id === 'wizard-chats' ? 'Wizard Chats' : chatsHost()?.installed().find(a => a.id === id)?.name || id;
   const recovered = () => window.WosCancelled?.list?.() || [];
@@ -40,7 +48,9 @@
   function subtitle(id, ctx) {
     if (id === 'appearance') return window.WosSkin ? lookName(window.WosSkin, window.WosSkin.current) : '';
     if (id === 'phone') { try { return JSON.parse(native()?.everywhere?.() || '{}').enabled ? 'Everywhere on' : ''; } catch (_) { return ''; } }
-    if (id === 'recovery') { const ids = new Set([...unsentAll(ctx), ...recovered()].map(x => x.id)); return ids.size ? String(ids.size) : ''; }
+    if (id === 'recovery') { const n = waiting(ctx); return n ? String(n) : ''; }
+    // Resources: quiet unless something is running low (under a quarter left), then the lowest one.
+    if (id === 'usage' && mine()) { const low = window.WosResources?.lowest?.(); return low && low.left < 25 ? `${low.label} ${low.value || (100 - low.left) + '% used'}` : ''; }
     return '';
   }
   // The update card (os-updates.js) sits above the list, same look in every state; nothing to do = nothing shown.
@@ -119,6 +129,8 @@
   }
   register({ id: 'unsent', aliases: ['unsent'], html(ctx) {
     const all = unsentAll(ctx);
+    // Mine: the rows only (each says what it is); nothing at all when nothing is waiting.
+    if (mine()) return all.length ? `<div class="st-group st-plain">${all.map(it => unsentRow(it, ctx)).join('')}${all.length > 1 ? '<button class="st-wide" data-ub-all="retry">Retry all</button>' : ''}</div>` : '';
     return `<div class="st-group"><h4>Unsent & retained <span>${all.length || ''}</span></h4>${all.length ? all.map(it => unsentRow(it, ctx)).join('') + (all.length > 1 ? '<button class="st-wide" data-ub-all="retry">Retry all</button>' : '') : '<div class="st-empty">No messages awaiting delivery on this device.</div>'}<details class="st-info"><summary aria-label="About retained messages">?</summary><p class="st-note">Held recordings are not queued. Retry all sends eligible failed/waiting messages only; held commands and unconfirmed delivery stay kept.</p></details></div>`;
   }, act(ctx, el) {
     const b = el.closest('[data-ub]');
@@ -138,7 +150,7 @@
     if (!window.WosMySkin) return '';
     const st = window.WosMySkin.state, js = st.script;
     const script = js?.exists && !st.off ? `<div class="st-row static my-skin-row" data-myskin-script><span class="st-tx"><b>${js.approved ? 'My skin script on' : 'My skin script changed'}</b><small>Skins/My skin/skin.js · this device only</small></span><span class="ms-acts">${js.approved ? '<button type="button" class="ghost" data-myskin="off">Turn off</button>' : `<button type="button" data-myskin="on" data-myskin-hash="${esc(js.sha256 || '')}" ${js.valid ? '' : 'disabled'}>Turn on</button>`}</span></div>` : '';
-    return `<div class="st-row static my-skin-row"><span class="st-tx"><b>My custom skin</b><small data-myskinsub>${esc(mySkinSub(base))}</small></span><span class="ms-acts"><button type="button" data-myskin="edit">Edit</button><button type="button" class="ghost" data-myskin="reset">Reset</button></span></div>${script}`;
+    return `<div class="st-row static my-skin-row"><span class="st-tx"><b>${mine() ? 'My skin' : 'My custom skin'}</b><small data-myskinsub>${esc(mySkinSub(base))}</small></span><span class="ms-acts"><button type="button" data-myskin="edit">Edit</button><button type="button" class="ghost" data-myskin="reset">Reset</button></span></div>${script}`;
   }
   async function mySkinAction(ctx, what, event) {
     const M = window.WosMySkin; if (!M) return;
@@ -180,9 +192,17 @@
     .filter(([, v]) => v).map(([n, v]) => `--p-${n}:${esc(v)}`).join(';'); };
   const mini = k => `<span class="skp-mini" data-skp="${esc(k.id)}" style="${pvars(k)}" aria-hidden="true"><i class="skp-a"></i><i class="skp-a skp-a2"></i><i class="skp-u"></i><i class="skp-dock"><i class="skp-orb"></i></i></span>`;
   const skinCard = (k, cur) => `<button type="button" class="skp-card" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}">${mini(k)}<span class="skp-nm" style="${esc(faceCss(k.face))}">${esc(k.name)}</span></button>`;
+  // Mine: "My skin" is one more tile at the end of the grid, same size, drawn dashed; it opens its controls below.
+  let myOpen = false;
+  const myTile = () => window.WosMySkin ? `<button type="button" class="skp-card skp-my" data-myskin-tile aria-expanded="${myOpen}" aria-label="My skin"><span class="skp-mini skp-mini-my" aria-hidden="true"><i class="skp-plus"></i></span><span class="skp-nm">My skin</span></button>` : '';
   function lookHtml(S) {
     const cur = S.current;
     loadFaces();
+    if (mine()) {
+      const grid = `<div class="skp" role="group" aria-label="Skins">${S.list.map(k => skinCard(k, cur)).join('')}${myTile()}</div>`;
+      const panel = myOpen && window.WosMySkin ? `<div class="ms-panel" data-myskin-panel>${mySkinRow(lookName(S, cur))}</div>` : '';
+      return `<div class="st-group st-plain" data-stgroup="look"><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}</div>${panel}${layoutRow()}</div>`;
+    }
     const grid = `<div class="skp" role="group" aria-label="Skins">${S.list.map(k => skinCard(k, cur)).join('')}</div>`;
     return `<div class="st-group" data-stgroup="look"><div class="sk-row"><h4 class="sk-head">Skin <small data-skinname>${esc(lookName(S, cur))}</small></h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}</div></div>${mySkinRow(lookName(S, cur))}${layoutRow()}</div>`;
   }
@@ -191,7 +211,8 @@
     const H = window.WosSkinHost; if (!H?.layouts) return '';
     const cur = H.layout, L = H.layouts.find(l => l.id === cur) || H.layouts[0];
     const btns = H.layouts.map(l => `<button type="button" class="ghost" data-layoutpick="${esc(l.id)}" aria-pressed="${l.id === cur}">${esc(l.name)}</button>`).join('');
-    return `<div class="st-row static layout-row" data-layout-row><span class="st-tx"><b>Layout</b><small data-layoutdesc>${esc(L.desc)}</small></span><span class="ms-acts layout-acts">${btns}</span></div>`;
+    const desc = mine() ? '' : `<small data-layoutdesc>${esc(L.desc)}</small>`;
+    return `<div class="st-row static layout-row" data-layout-row><span class="st-tx"><b>Layout</b>${desc}</span><span class="ms-acts layout-acts">${btns}</span></div>`;
   }
   register({ id: 'look', aliases: ['skin'], html() {
     const S = window.WosSkin; if (!S) return '';
@@ -199,6 +220,13 @@
   }, act(ctx, el, event) {
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
+    if (el.closest('[data-myskin-tile]')) {
+      myOpen = !myOpen; ctx.render?.(); ctx.haptic?.(8);
+      const t = ctx.root.querySelector?.('[data-myskin-tile]');
+      if (myOpen) ctx.root.querySelector?.('[data-myskin-panel]')?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+      if (event?.detail > 0 && t && t === document.activeElement) t.blur?.();
+      return true;
+    }
     const lp = el.closest('[data-layoutpick]');
     if (lp) {
       const H = window.WosSkinHost, now = H.setLayout(lp.dataset.layoutpick), L = H.layouts.find(l => l.id === now);
@@ -211,7 +239,7 @@
     const now = S.set(b.dataset.skinpick);
     ctx.root.querySelectorAll('[data-skinpick]').forEach(n => n.setAttribute('aria-pressed', String(n.dataset.skinpick === now)));
     const nm = S.list.find(k => k.id === now)?.name || '';
-    ctx.root.querySelector('[data-skinname]').textContent = lookName(S, now);
+    const label = ctx.root.querySelector('[data-skinname]'); if (label) label.textContent = lookName(S, now);
     const sub = ctx.root.querySelector('[data-myskinsub]'); if (sub) sub.textContent = mySkinSub(nm);
     for (const m of mounts) m.render();
     ctx.haptic?.(8); return true;
@@ -220,6 +248,7 @@
   register({ id: 'skin-frame', available: () => !!window.WosSkin?.frameAdjustable, html() {
     const S = window.WosSkin; if (!S?.frame) return '';
     const on = S.frame.foundation === 'borderless';
+    if (mine()) return `<div class="st-group st-plain sf-section"><button class="st-row" data-skinborderless role="switch" aria-checked="${on}"><span class="st-tx"><b>Borderless windows</b></span><span class="sw ${on ? 'on' : ''}"><i></i></span></button><button class="st-row" data-skinimport><span class="st-tx"><b>Import skin JSON</b></span><span class="st-go" aria-hidden="true">›</span></button><input type="file" data-skinfile accept="application/json,.json" hidden><p class="st-note" data-skinimport-status role="status"></p></div>`;
     return `<div class="st-group sf-section"><h4>Windows</h4><button class="st-row" data-skinborderless role="switch" aria-checked="${on}"><span class="st-tx"><b>Borderless apps</b><small>${on ? 'On · apps fill the screen with a floating X' : 'Off · apps open in framed windows'}</small></span><span class="sw ${on ? 'on' : ''}"><i></i></span></button><details class="st-advanced"><summary>Advanced</summary><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><p data-skinimport-status role="status"></p></details></div>`;
   }, act(ctx, el) {
     if (el.closest('[data-skinimport]')) { ctx.root.querySelector('[data-skinfile]').click(); return true; }
@@ -241,6 +270,7 @@
   } });
   // Photos backup registers itself from core/photos-settings.js (web page over window.wizardPhotosPort v1).
   register({ id: 'server', available: () => typeof native()?.changeServer === 'function', html() {
+    if (foldAbout()) return `<div class="st-group st-plain st-about">${row('change-server', 'Change Wizard', '')}</div>`;
     return `<div class="st-group"><h4>Connection</h4>${row('change-server', 'Change Wizard', 'Scan another box QR or enter its address')}</div>`;
   }, act(ctx, el) {
     if (el.closest('[data-st]')?.dataset.st !== 'change-server') return false;
@@ -252,10 +282,19 @@
   register({ id: 'selection', html: () => window.WosSelMenu?.html() || '', act: (ctx, el) => window.WosSelMenu?.act(el) });
   register({ id: 'wizard', html(ctx) {
     const status = ctx.live?.ok ? 'Connected' : ctx.live?.error === 'access' ? 'Sign-in needed' : 'Connecting…';
+    if (foldAbout()) {
+      // Quiet rows at the foot of My release: where you are connected, which build, Gestures & help.
+      const b = window.WosUpdates?.build?.loaded || window.WosUpdates?.state?.installed || '';
+      const line = (k, v, attr = '') => `<div class="st-row static"${attr}><span class="st-tx"><b>${esc(k)}</b></span><span class="st-val">${esc(v)}</span></div>`;
+      return `<div class="st-group st-plain st-about" data-about-folded>${line(status, location.host, ' data-about="server"')}${b ? line('Version', b, ' data-about="version"') : ''}${window.WosDevice?.settingsHtml?.() || ''}${row('help', 'Gestures & help', '')}</div>`;
+    }
     // No separate "Check for updates": the shell checks every minute and the update card offers Reload.
     return `<div class="st-group"><div class="st-row static"><span class="st-tx"><b>${esc(status)}</b><small>${esc(native()?.platform?.() || 'Web')} · ${esc(location.host)}</small></span></div>${window.WosDevice?.settingsHtml?.() || ''}${row('help', 'Gestures & help', '')}</div>`;
   }, act(ctx, el) { const st = el.closest('[data-st]')?.dataset.st; if (!['files', 'help'].includes(st)) return false; ctx.openSub(st); return true; } });
-  register({ id: 'usage', aliases: ['usage'], html: () => window.WosUsage?.html() || '', act(ctx, el) { if (!el.closest('[data-usage-refresh]')) return false; window.WosUsage?.load(true).then(ctx.paintUsage); ctx.paintUsage(); return true; } });
+  // Mine: Settings › Resources shows the Home bars themselves (core/resources.js draws them into this host and keeps
+  // them live); tapping a bar opens the same detail sheet as on Home (devices, health, AI accounts with reset times).
+  register({ id: 'usage', aliases: ['usage', 'resources'], html: () => mine() && window.WosResources?.bars ? '<div class="st-group st-plain st-res" data-st-resources></div>' : window.WosUsage?.html() || '',
+    painted(ctx, section) { const host = section?.querySelector?.('[data-st-resources]'); if (host) window.WosResources.bars(host); }, act(ctx, el) { if (!el.closest('[data-usage-refresh]')) return false; window.WosUsage?.load(true).then(ctx.paintUsage); ctx.paintUsage(); return true; } });
   // A shell chooses the composer; common code owns preservation before consuming an unsent record.
   function moveDraft({ chats, wid, item, outbox, toast }) {
     if (item.audio || item.audioFile || item.hasAudio || item.body || item.state === 'unconfirmed' || item.state === 'sending' || outbox.quarantined?.(item.id)) {
@@ -280,6 +319,11 @@
   register({ id: 'chats-default', page: 'chats', aliases: ['chats-default'], html(ctx) {
     const host = chatsHost(), apps = host?.installed() || [{ id: 'wizard-chats' }], current = host?.defaultId() || 'wizard-chats';
     apps.sort((a, b) => (b.id === 'wizard-chats') - (a.id === 'wizard-chats'));
+    if (mine()) {
+      // One Chats app: one row naming it; tapping it finds another in the Store. Several: one row each, a check on the one in use.
+      if (apps.length === 1) return `<div class="st-group st-plain"><button class="st-row" data-chats-store><span class="st-tx"><b>Chats app</b></span><span class="st-val">${esc(chatsName(apps[0].id))}</span><span class="st-go" aria-hidden="true">›</span></button></div>`;
+      return `<div class="st-group st-plain"><div class="st-chats-options" role="radiogroup" aria-label="Chats app">${apps.map(a => `<button class="st-row" role="radio" aria-checked="${a.id === current}" data-chats-choice="${esc(a.id)}" ${ctx.chatsBusy ? 'disabled' : ''}><span class="st-tx"><b>${esc(chatsName(a.id))}</b></span><span class="st-check" aria-hidden="true">${a.id === current ? '✓' : ''}</span></button>`).join('')}</div></div>`;
+    }
     return `<div class="st-group"><h4>Default Chats</h4><div class="st-chats-options" role="radiogroup" aria-label="Default Chats">${apps.map(a => `<button class="st-row" role="radio" aria-checked="${a.id === current}" data-chats-choice="${esc(a.id)}" ${ctx.chatsBusy ? 'disabled' : ''}><span aria-hidden="true">${a.id === current ? '◉' : '○'}</span><span class="st-tx"><b>${esc(a.id === 'wizard-chats' ? 'Wizard Chats (built in)' : a.name)}</b></span></button>`).join('')}</div>${apps.length === 1 ? '<div class="st-store-hint">Install another Chats from the <button data-chats-store>Store</button> to switch</div>' : ''}</div>`;
   } });
   function mount(root, adapter) {
@@ -311,10 +355,13 @@
       const card = selected === 'release' ? '' : cardHtml();
       const nav = pages.map(p => { const v = subtitle(p.id, ctx); return `<button class="st-category" data-st-page="${p.id}" aria-current="${p.id === selected ? 'page' : 'false'}"><span class="st-tx"><b>${esc(titleOf(p))}</b></span><span class="st-val" data-st-subtitle="${p.id}">${esc(v)}</span><span class="st-go" aria-hidden="true">›</span></button>`; }).join('');
       const fs = [...features.values()].filter(f => pageOf(f) === selected && (!f.available || f.available(ctx)));
+      // Folded About rows sit at the bottom of My release, after the release's own controls.
+      if (selected === 'release') fs.sort((a, b) => (basePage(a) === 'about') - (basePage(b) === 'about'));
       const content = fs.map(f => `<section data-settings-feature="${esc(f.id)}">${f.html(ctx)}</section>`).join('');
-      const footer = `<footer class="st-shortcuts">${window.WosFiles ? '<button data-st-shortcut="files" data-st="files">Files</button>' : ''}${(window.WosFeatures?.entries || []).filter(f => !f.available || f.available()).map(f => `<button data-st-shortcut="${esc(f.id)}">${esc(f.title || f.id)}</button>`).join('')}</footer>`;
+      const footer = `<footer class="st-shortcuts">${window.WosFiles && !mine() ? '<button data-st-shortcut="files" data-st="files">Files</button>' : ''}${(window.WosFeatures?.entries || []).filter(f => !f.available || f.available()).map(f => `<button data-st-shortcut="${esc(f.id)}">${esc(f.title || f.id)}</button>`).join('')}</footer>`;
       root.dataset.settingsPage = page;
       root.innerHTML = `<div class="st-inner ${desktop ? 'st-desktop' : 'st-phone'} ${page ? 'st-in-page' : ''}"><div class="st-index"><h3 class="st-title" tabindex="-1">Settings</h3>${card}${attentionHtml}<nav aria-label="Settings categories">${nav}</nav>${footer}</div><div class="st-page" ${selected ? '' : 'hidden'}><header class="st-page-head"><button data-st-back aria-label="Back to Settings">‹</button><h3 tabindex="-1">${heading}</h3></header>${content}</div></div>${confirm ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="st-confirm-title"><h3 id="st-confirm-title">Use ${esc(chatsName(confirm.id))} for all your chats?</h3><p>You can switch back here any time.</p><div class="st-actions"><button data-chats-cancel ${ctx.chatsBusy ? 'disabled' : ''}>Cancel</button><button data-chats-confirm ${ctx.chatsBusy ? 'disabled' : ''}>${ctx.chatsBusy ? 'Switching…' : 'Use ' + esc(chatsName(confirm.id))}</button></div></section></div>` : ''}`;
+      for (const f of fs) if (f.painted) { try { f.painted(ctx, root.querySelector(`[data-settings-feature="${CSS.escape(f.id)}"]`)); } catch (e) { console.error(e); } }
       root.scrollTop = top;
       const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = paneTop;
       const importStatus = root.querySelector('[data-skinimport-status]'); if (importStatus) importStatus.textContent = skinImportMessage;
@@ -325,14 +372,15 @@
     function focus(id) {
       for (const f of features.values()) if (pageOf(f) === page) f.leave?.(ctx);
       const f = features.get(id) || [...features.values()].find(f => f.aliases?.includes(id));
-      page = f ? pageOf(f) : featurePages[id] || (['updates', 'my-release'].includes(id) ? 'release' : PAGES.some(p => p.id === id) ? id : '');
+      page = f ? pageOf(f) : featurePages[id] || (['updates', 'my-release'].includes(id) || (id === 'about' && foldAbout()) ? 'release' : PAGES.some(p => p.id === id) ? id : '');
       for (const f of features.values()) if (pageOf(f) === page) f.enter?.(ctx);
       confirm = null; render(); root.scrollTop = 0;
       const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = 0;
       const g = id && root.querySelector(`[data-settings-feature="${CSS.escape(f?.id || id)}"]`);
       g?.scrollIntoView?.({ block: 'nearest' });
       // The release page opens on its update card; focus its heading, not the card's button (no stray focus ring).
-      ((page !== 'release' && g?.querySelector('button:not(:disabled)')) || root.querySelector(page ? '.st-page-head h3' : '.st-title'))?.focus({ preventScroll: true });
+      // Mine: always the page heading (a ring on the first bar or skin tile reads as a box around it).
+      ((page !== 'release' && !mine() && g?.querySelector('button:not(:disabled)')) || root.querySelector(page ? '.st-page-head h3' : '.st-title'))?.focus({ preventScroll: true });
     }
     function back() {
       for (const f of features.values()) if (pageOf(f) === page && f.back?.(ctx)) return true;
@@ -433,5 +481,5 @@
     if (at < 0 || (!event.shiftKey && at === controls.length - 1) || (event.shiftKey && at === 0)) { event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0].focus(); }
   }
   window.WosMySkin?.on(() => { for (const m of mounts) m.render(); });
-  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
+  window.WosSettings = { mine, refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
 })();

@@ -656,3 +656,42 @@ html[data-mine] .ch-ptr { display: none; }
 /* My release: ↻ refresh sits just left of ✕ in the phone title bar, styled like it (borderless frames hide other bar buttons). */
 html[data-mine][data-shell="phone"] .wbar > [data-wact="reload"] { display: grid; flex: 0 0 auto; width: 34px; height: 34px; place-items: center; border-radius: 10px; color: var(--ink-2); }
 html[data-mine][data-shell="phone"] .wbar > [data-wact="reload"]:hover { color: var(--ink); background: var(--glass-2); }
+
+/* Settings, final pass (Miguel, 24 Oct): every page is plain rows on the page. No boxes, no section headings beyond a small
+ * label where a list needs one, no help paragraphs or ? toggles. Short label left, value or switch right. */
+html[data-mine] .st-root .st-plain { margin: 0 0 22px; }
+html[data-mine] .st-root .st-plain > .st-row:first-child, html[data-mine] .st-root .st-plain .st-chats-options > .st-row:first-child { border-top: 0; }
+html[data-mine] .st-root .st-lbl { margin: 0 4px 2px; font-size: 13px; font-weight: 600; color: var(--wz-text-muted); }
+html[data-mine] .st-root .st-check { flex: none; width: 22px; text-align: center; font-size: 17px; font-weight: 700; color: var(--wz-accent); }
+html[data-mine] .st-root .st-row .st-val { max-width: 55%; }
+html[data-mine] .st-root .st-plain .st-row { min-height: 56px; }
+html[data-mine] .st-root .st-plain .st-tx b { font-size: 16.5px; }
+html[data-mine] .st-root .st-plain .vx-dot { display: none; }
+html[data-mine] .st-root .st-plain .ub-row:last-of-type, html[data-mine] .st-root .st-plain .cx-row:last-of-type { border-bottom: 0; }
+html[data-mine] .st-root .st-plain .cx-text { background: transparent; padding: 6px 0 0; border-radius: 0; }
+html[data-mine] .st-root .st-plain .st-advanced summary { min-height: 48px; padding: 0 4px; font-size: 15px; color: var(--wz-text-secondary); list-style: none; }
+html[data-mine] .st-root .st-plain .st-advanced summary::-webkit-details-marker { display: none; }
+html[data-mine] .st-root .st-plain .sf-import { min-height: 40px; margin: 0 4px 8px; padding: 6px 14px; border: 1px solid var(--wz-border); border-radius: 99px; background: transparent; color: var(--wz-text); }
+/* Skins: one grid; My skin is the last tile, same size, dashed; its controls open under the grid. */
+html[data-mine] .st-root [data-stgroup="look"] .skp-all { padding-bottom: 14px; border-bottom: 1px solid var(--wz-border); }
+html[data-mine] .st-root .skp-my .skp-mini-my { background: transparent; box-shadow: none; border: 0; outline: 1.5px dashed color-mix(in srgb, var(--ink) 40%, transparent); outline-offset: -1.5px; }
+html[data-mine] .st-root .skp-my[aria-expanded="true"] .skp-mini-my { outline-color: var(--ink); }
+html[data-mine] .st-root .skp-my .skp-plus { left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; background: linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat, linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat; color: color-mix(in srgb, var(--ink) 55%, transparent); }
+html[data-mine] .st-root .ms-panel { border-bottom: 1px solid var(--wz-border); }
+html[data-mine] .st-root .ms-panel .my-skin-row { border-bottom: 0; flex-wrap: wrap; }
+html[data-mine] .st-root .ms-panel .my-skin-row + .my-skin-row { border-top: 1px solid var(--wz-border); }
+html[data-mine] .st-root .layout-row { flex-wrap: wrap; }
+/* Resources page: the Home bars, left-aligned, full width of the page. */
+html[data-mine] .st-root .st-res .rs-barsw.rs-widget.wz-home-widget { display: flex; flex-direction: column; gap: 22px; width: 100%; max-width: 480px; margin: 4px 0 0; padding: 0 4px; background: none; border: 0; box-shadow: none; overflow: visible; border-radius: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-mine] .st-root .st-res .rs-br { min-height: 32px; }
+html[data-mine] .st-root[data-settings-root] .st-res button.rs-br { min-height: 32px; min-width: 0; }
+/* About, folded into My release: quiet rows at the very bottom. */
+html[data-mine] .st-root .st-about { margin-top: 28px; }
+html[data-mine] .st-root .st-about .st-row { min-height: 50px; }
+html[data-mine] .st-root .st-about .st-tx b { font-size: 15.5px; font-weight: 500; }
+html[data-mine] .st-root .st-about .st-tx small { display: none; }
+html[data-mine] .st-root .st-plain.sf-section { padding: 0; }
+html[data-mine] .st-root [data-settings-feature="skin-frame"] .st-plain { margin-top: -22px; }
+html[data-mine] .st-root .st-plain [data-skinimport-status]:empty { display: none; }
+/* The chosen Layout reads on every skin (Obsidian's light accent took white text). */
+html[data-mine] .st-root .layout-row .layout-acts button[aria-pressed="true"] { color: var(--wz-base); }
