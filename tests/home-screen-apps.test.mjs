@@ -69,11 +69,11 @@ test('unavailable session consumes repeated root Back; selection closes first',a
 
 function pinFixture(status='ready',withPort=true) {
   class Element {
-    constructor(){this.events=new Map();this.children=[];this.classList={contains:()=>true};this.dataset={};this.isConnected=true;this.style={};}
+    constructor(){this.events=new Map();this.children=[];this.classList={contains:()=>true,add(){}};this.dataset={};this.isConnected=true;this.style={};}
     addEventListener(t,fn){const list=this.events.get(t)||[];list.push(fn);this.events.set(t,list);}
     emit(t,event={}){for(const fn of this.events.get(t)||[])fn(event);return event;}
     append(...els){this.children.push(...els);} appendChild(el){this.append(el);} remove(){this.isConnected=false;}
-    setAttribute(){} querySelector(sel){if(sel==='.sgi')return null;return this.children.find(e=>e.tag===sel)||this.children.map(e=>e.querySelector(sel)).find(Boolean);}
+    setAttribute(){} querySelector(sel){if(sel==='.sgi')return null;return this.children.find(e=>e.isConnected && e.tag===sel)||this.children.map(e=>e.querySelector(sel)).find(Boolean);}
   }
   const document=new Element(), body=new Element(), menu=new Element(), row=new Element(); row.dataset.app='wisdom'; row.closest=()=>row; document.body=body;
   document.createElement=tag=>{const e=new Element();e.tag=tag;if(tag==='canvas'){e.getContext=()=>({fillRect(){},fillText(){}});e.toDataURL=()=> 'data:image/png;base64,fixture';}return e;};
@@ -90,8 +90,8 @@ function pinFixture(status='ready',withPort=true) {
 test('without native bridge long-press offers browser install without sending native requests',()=>{
   const f=pinFixture('ready',false);f.menu.emit('pointerdown',f.event());f.tick(450);
   assert.equal(f.window.WizHomeScreenApps.state.open,true);
-  assert.equal(f.body.children[0].querySelector('button').textContent,'Add to home screen');
-  assert.equal(f.body.children[0].querySelector('input').value,'https://box.example/wizard-os-home/install/wisdom/');
+  assert.equal(f.body.children[0].querySelector('button').textContent,'Copy link');
+  assert.equal(f.body.children[0].querySelector('textarea').value,'https://box.example/wisdom/');
   assert.equal(f.messages.length,0);
   assert.equal(f.window.WizHomeScreenApps.back(),true);
   assert.equal(f.window.WizHomeScreenApps.state.open,false);
@@ -213,3 +213,14 @@ test('Pinned home-screen apps keep the floating orb', async () => {
   assert.match(j('device/AppState.java'), /static synchronized boolean shellFront\(\)[\s\S]{0,160}instanceof ai\.wizards\.os\.AppSessionActivity/);
   assert.equal((j('MainActivity.java').match(/setAppInFront\(this, ai\.wizards\.os\.device\.AppState\.shellFront\(\)\)/g) || []).length, 2);
 });
+
+ test('browser offer rejects unsafe destinations and preserves exact registered route',()=>{
+  const f=pinFixture('ready',false);
+  for(const url of ['/', '/wizard-os-home/', '/wizard-os-home/install/wisdom/', 'https://evil.example/wisdom/', 'javascript:alert(1)', '/wisdom/%252e%252e/']) {
+    assert.equal(f.window.WizHomeScreenApps.offer({id:'wisdom',name:'Wisdom',kind:'wizard',url}),false,url);
+  }
+  for(const url of ['/actual-view/?tab=read#chapter','https://box.example/another-view/']) {
+    assert.equal(f.window.WizHomeScreenApps.offer({id:'wisdom',name:'Wisdom',kind:'wizard',url}),true);
+    assert.equal(f.body.children.at(-1).querySelector('textarea').value,new URL(url,'https://box.example').href);
+  }
+ });

@@ -1,22 +1,19 @@
 # Add individual apps to a browser home screen
 
-Hold an app in mobile Apps or New desk, or hold and release a one-app desk without dragging. The native Android bridge still owns **Add to home screen** when present. Android web still opens the app's install guide. On iPhone/iPad web (including an installed PWA), the sheet immediately shows only two steps:
+Hold an app in Apps or New desk, or hold and release a one-app desk without dragging. The native Android `wizardHomeScreenPort` branch is unchanged. Every web/PWA client immediately gets the same two-step guide:
 
-1. **Open this link in Safari** — one **Copy link** button and a visible, wrapped, selectable URL. Open Safari manually and paste it into its address bar.
-2. **Save to Home Screen** — Share → Add to Home Screen → Add.
+1. **Open this link in Safari / Chrome / your browser** — one **Copy link** button and a wrapped, selectable address. Copy, manually open the browser, and paste into its address bar. iPhone/iPad (including desktop-UA touch iPad) uses Safari; Android uses Chrome; other clients use generic browser wording.
+2. **Save to Home Screen** — iOS: Share → Add to Home Screen → Add. Android: Chrome ⋮ menu → Add to Home screen / Install app. Other browsers: their install/home-screen menu, if available.
 
-There are no iOS open/add links, new-tab escape promises, or custom Safari schemes. Clipboard success is reported only after the API resolves; denial selects the URL and explicitly asks for manual copying. Ordinary taps, native pinning, and desk reordering are unchanged.
+The displayed and copied link is exactly the validated registered `app.url` resolved against the current origin (Wisdom is `/wisdom/`, not a guessed `/apps/wisdom/` or an install intermediary). The existing same-origin, frontend-path and ID checks remain required. Denied clipboard access selects that same URL for manual copying. No new-tab escape or silent-install promise is made.
 
-- **Android Chrome:** use the guide's Add to home screen button if Chrome offers an install prompt, or Chrome's ⋮ menu → Add to Home screen / Install app.
-- **iPhone Safari:** Share → Add to Home Screen → Add.
-- **Already inside Wizard's installed PWA / an in-app browser:** opening a new tab is best effort, not a way to force Safari/Chrome. Copy the install link and paste it into the regular browser if needed. Clipboard denial leaves a selectable link.
-- Opening the installed icon shows only the selected app using the existing isolated app-session. It does not open or rewrite your desks. Multi-app desks do not become installable web apps.
+**Direct-link limitation:** the target app owns its manifest, icon, scope and installation behavior. This guide does not create a distinct PWA identity or guarantee standalone/isolated-session behavior when that app lacks suitable metadata. A browser may offer only a shortcut, reuse a shared identity, or offer no install option. Native shortcuts retain their existing separate session contract.
 
 Installation still needs browser/OS confirmation, HTTPS (or localhost for development), and access to the Wizard. A web page cannot silently pin icons or reliably query whether an iOS icon already exists. Authentication may need repeating in the installed app on platforms with separate storage.
 
-## Delivery contract
+## Compatibility install endpoints (not used by the new guide)
 
-`/wizard-os-home/install/<registered-id>/` is the canonical, server-rendered install document. Its stable, same-origin `manifest.webmanifest` has an app-specific `id`, `name`, icon, `scope` and `start_url`. No blob/data manifest, query-supplied display names, arbitrary navigation destination, or install-state localStorage flag is used. Names are bounded/escaped; IDs and frontend routes are validated against a fresh, authenticated `/wizard/v1/apps` response. Removed apps fail closed. Registry unavailability is a retryable 503, not a stale install offer. Registry redirects are not followed and identity headers are forwarded, never invented.
+`/wizard-os-home/install/<registered-id>/` remains a server-rendered compatibility install document. Its stable, same-origin `manifest.webmanifest` has an app-specific `id`, `name`, icon, `scope` and `start_url`. No blob/data manifest, query-supplied display names, arbitrary navigation destination, or install-state localStorage flag is used. Names are bounded/escaped; IDs and frontend routes are validated against a fresh, authenticated `/wizard/v1/apps` response. Removed apps fail closed. Registry unavailability is a retryable 503, not a stale install offer. Registry redirects are not followed and identity headers are forwarded, never invented.
 
 Each app has its own path scope. The manifest starts at `?launch=1`; Safari reopening the saved canonical URL is recognized through standalone mode. The install guide does **not** auto-launch in an ordinary browser. An explicit `?install=1` handoff can show the guide inside an existing installed PWA; it removes that marker before Safari saves the page. The installed document contains one full-height frame hosting the existing `?app-session=<id>` entry; that session still owns the app frame, Back, appearance and reading state. The outer frame preserves the app's manifest identity and scope instead of navigating into the shared Wizard workspace URL.
 
@@ -28,12 +25,14 @@ A static-only development server cannot serve these per-app manifests. Use the p
 
 ## Verification
 
-- `QA_OUT=<private-receipts> QA_ORIGIN=<staged-or-live-origin> node qa-ios-install-sheet.cjs`: trusted touch hold/tap on the actual shell, iPhone browser/PWA and desktop-UA iPad, real browser clipboard write/readback, deterministic denial, tap/hold selection, geometry and Back. `QA_RESOLVE='MAP hostname address'` supports private host resolver overrides. No installation or production-data mutation is performed; launcher state is in an isolated browser context.
+- `QA_OUT=<private-receipts> QA_ORIGIN=<staged-or-live-origin> node qa-ios-install-sheet.cjs`: trusted touch hold/tap on the actual shell, iPhone/Android browser/PWA, desktop-UA iPad and generic browser, real browser clipboard write/readback, deterministic denial, tap/hold selection, geometry and Back. `QA_RESOLVE='MAP hostname address'` supports private host resolver overrides. No installation or production-data mutation is performed; launcher state is in an isolated browser context.
 - Interaction investigation: the old Copy handler did receive trusted touch in Chromium; the `freshPress` guard did **not** reproduce a dropped copy tap there. The old field did inherit `-webkit-user-select:none` from the shell, however. The selectable control now explicitly restores text selection/callout, and its click is exempt from the action guard after selection-related pointer cancellation. Buttons still require a fresh press. This is not evidence about the owner's Safari event stream.
-- The outer install document/manifest is unchanged: copied URLs contain no query. In ordinary Safari, the canonical path stays a guide; standalone launch stays isolated. Existing tests cover stripping `?install=1` before saving. No speculative Safari URL workaround was introduced.
+- The compatibility install documents/manifests remain unchanged. The new shell guide never links to them. Registry URL query/hash components, if present, are preserved.
 - `npm test`: includes the Python HTTP contract (`tests/app_install_test.py`) and existing native pin/desk/gesture/session tests.
 - `QA_OUT=<private-receipts> QA_ORIGIN=<isolated-container> node qa-pwa-app-install.cjs`: real Chromium with Android/iPhone user agents, standalone simulation, manifest parsing/installability diagnostics, native and prompt handler fixtures, clipboard denial, trusted touch hold, ordinary tap/Back, isolated session/reload and mobile geometry. Run against `tools/qa-install-fixture.py` as the container's upstream so no production data is read or changed.
 - For the original source negative control, serve its `web/` with `QA_WEB_ROOT=<baseline-web> QA_FIXTURE_PORT=<port> python3 tools/qa-install-fixture.py`, then run the browser suite with `QA_BASELINE=1` against that loopback origin. It verifies that browser hold was inert and the per-app manifest route was absent.
 - `qa-home-screen-apps.cjs` remains the separate Thales/actual-frontend suite; its browser fallback assertion is updated. That suite is not replaced by synthetic app content.
 
 These checks are **not physical iPhone/Android installation, OS home-icon deduplication, Recents, process-death, or actual Safari engine proof**. Test those on the owner's phone after deployment; do not claim them from emulation. App-specific sites can still require a network connection. This feature does not add offline app storage or change native shortcut identity.
+
+For read-only post-deploy verification run the same `qa-ios-install-sheet.cjs` against the live HTTPS origin, without `QA_WEB_ROOT`. It reads Wisdom from the actual loaded registry and records registered/direct URLs. Set `QA_WEB_ROOT=<candidate>/web` only for pre-deploy candidate-overlay QA; receipts explicitly label it. All non-read network requests are blocked in the isolated context. Docker asset stamping versions changed JS/CSS; the network-only worker needs no cache migration.

@@ -15,8 +15,8 @@ const check = (name, pass, detail) => { checks.push({name,pass:!!pass,detail}); 
   const browser = await chromium.launch({headless:true,args:process.env.QA_RESOLVE ? ['--host-resolver-rules='+process.env.QA_RESOLVE] : []});
   let failure;
   try {
-    for (const kind of ['iphone-browser','iphone-pwa','ipad-pwa']) {
-      const ctx = await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,userAgent:kind.startsWith('ipad') ? 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15' : 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'});
+    for (const kind of ['iphone-browser','iphone-pwa','ipad-pwa','android-browser','android-pwa','generic-browser']) {
+      const ctx = await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,userAgent:kind.startsWith('android') ? 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36' : kind.startsWith('generic') ? 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0 Safari/537.36' : kind.startsWith('ipad') ? 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15' : 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'});
       // Live verification must never write workspace or owner data.
       await ctx.route('**/*', route => ['GET','HEAD','OPTIONS'].includes(route.request().method()) ? route.continue() : route.fulfill({status:405,body:'Read-only QA'}));
       await ctx.addInitScript(kind => {
@@ -26,10 +26,19 @@ const check = (name, pass, detail) => { checks.push({name,pass:!!pass,detail}); 
         window.touchReceipt=[];
         for (const type of ['pointerdown','click']) document.addEventListener(type,e=>{if(e.target.closest?.('.home-pin-sheet')) touchReceipt.push({type,trusted:e.isTrusted});},true);
       }, kind);
+      // Optional local candidate assets against real registry; receipt labels this, never deploys.
+      if (process.env.QA_WEB_ROOT) await ctx.route('**/core/home-screen-apps.*', route => {
+        const file = path.basename(new URL(route.request().url()).pathname);
+        return route.fulfill({path:path.join(process.env.QA_WEB_ROOT,'core',file)});
+      });
       const page = await ctx.newPage();
       await page.goto(origin+'/wizard-os-home/?shell=phone');
       await page.waitForFunction(()=>!!window.__wos?.openSheet);
       await page.evaluate(async()=>{await WizCore.appsLoaded();__wos.openSheet('launcher');});
+      const registered = await page.evaluate(()=>WizCore.apps().APP.wisdom);
+      assert.ok(registered && registered.url, 'Wisdom must exist in actual registry');
+      const directURL = new URL(registered.url, origin).href;
+      check(kind+' registered URL safe',new URL(directURL).origin===origin && !new URL(directURL).pathname.startsWith('/wizard-os-home'),{registeredURL:registered.url,directURL});
       const tile=page.locator('#launcher [data-app="wisdom"]').first();
       await tile.scrollIntoViewIfNeeded(); await page.waitForTimeout(650);
       const r=await tile.boundingBox(),cdp=await ctx.newCDPSession(page);
@@ -41,7 +50,10 @@ const check = (name, pass, detail) => { checks.push({name,pass:!!pass,detail}); 
       check(kind+' only Copy link; no open/add links',await sheet.locator('button').count()===1 && await sheet.locator('button').innerText()==='Copy link' && await sheet.locator('a').count()===0);
       check(kind+' opening release inert',ctx.pages().length===1 && await sheet.locator('[role=status]').innerText()==='');
       const link=sheet.locator('textarea');
-      check(kind+' canonical full URL',await link.inputValue()===origin+'/wizard-os-home/install/wisdom/');
+      check(kind+' canonical full URL',await link.inputValue()===directURL);
+      const label = kind.startsWith('iphone') || kind.startsWith('ipad') ? 'Safari' : kind.startsWith('android') ? 'Chrome' : 'your browser';
+      check(kind+' platform label',await sheet.locator('strong').first().innerText()==='Open this link in '+label);
+      check(kind+' platform save instruction', (await sheet.locator('ol > li').nth(1).innerText()).includes(label==='Safari' ? 'Share → Add to Home Screen' : 'Install app'));
       // Actual browser clipboard write/read, permission granted; activation is a trusted touchscreen tap.
       await ctx.grantPermissions(['clipboard-read','clipboard-write']);
       await sheet.locator('button').tap();
@@ -71,12 +83,22 @@ const check = (name, pass, detail) => { checks.push({name,pass:!!pass,detail}); 
       await page.screenshot({path:path.join(out,kind+'.png')});
       await page.evaluate(()=>__wosNativeBack());
       check(kind+' Back preserves launcher',await sheet.count()===0 && await page.locator('#launcher').evaluate(e=>e.classList.contains('open')));
+      // Native bridge fixture regression: trusted action, real rendering; not an OS pin.
+      await page.evaluate(()=>{
+        window.nativeMessages=[];
+        window.wizardHomeScreenPort={postMessage(raw){const m=JSON.parse(raw);nativeMessages.push(m);this.onmessage({data:JSON.stringify({requestId:m.requestId,status:m.op==='status'?'ready':'pending'})});}};
+        WizHomeScreenApps.offer(WizCore.apps().APP.wisdom);
+      });
+      await page.waitForFunction(()=>document.querySelector('.home-pin-sheet button')?.disabled===false);
+      await page.locator('.home-pin-sheet button').tap();
+      check(kind+' native bridge fixture unchanged',await page.evaluate(()=>nativeMessages.some(m=>m.op==='pin'&&m.appId==='wisdom'&&m.icon.startsWith('data:image/png')&&!('url' in m))&&WizHomeScreenApps.state.pending));
+      check(kind+' native has no browser guide',await page.locator('.home-pin-sheet textarea, .home-pin-sheet ol').count()===0);
       await ctx.close();
     }
   } catch(e) { failure=String(e.stack||e); }
   finally {
     await browser.close();
-    fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({origin,checks,failure,limits:['Chromium touch emulation, not iOS Safari engine/physical phone or OS install proof']},null,2));
+    fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({origin,candidateOverlay:process.env.QA_WEB_ROOT||null,checks,failure,limits:['Chromium touch emulation, not iOS Safari engine/physical phone or OS install proof']},null,2));
     console.log(JSON.stringify({checks:checks.length,failure,out})); if(failure)process.exitCode=1;
   }
 })();
