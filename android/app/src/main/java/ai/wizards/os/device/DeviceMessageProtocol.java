@@ -14,6 +14,13 @@ public final class DeviceMessageProtocol {
 
     private DeviceMessageProtocol() { }
 
+    /** Independent capability group; keep the base adapter discovery composable with Wizard ID. */
+    public static JSONObject capabilities() throws JSONException {
+        JSONObject result = baseCapabilities();
+        result.getJSONObject("capabilities").put("vault", ai.wizards.os.vault.VaultPolicy.capability());
+        return result;
+    }
+
     public static final class Request {
         public final String id;
         public final String method;
@@ -43,7 +50,7 @@ public final class DeviceMessageProtocol {
         return null;
     }
 
-    public static JSONObject capabilities() throws JSONException {
+    private static JSONObject baseCapabilities() throws JSONException {
         org.json.JSONArray methods = new org.json.JSONArray();
         for (String name : PACKAGE_METHODS) methods.put(PREFIX + name);
         return new JSONObject().put("v", VERSION).put("capabilities", new JSONObject()
