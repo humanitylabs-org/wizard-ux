@@ -272,6 +272,7 @@
     subjectOrder: ['wos.chats.subjectOrder.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
     // Pinned chats (core/chat-pins.js): the same pins on every device.
     pinnedChats: ['wos.chats.pinned.v2', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
+    spaces: ['wos.chats.spaces.v1', v => Array.isArray(v), JSON.stringify],
   };
   let prefsOff = false;
   const putPrefs = patch => {
@@ -1104,6 +1105,12 @@
   };
   const bgRead = id => { const e = INFLIGHT.get(id); return e ? e.p : startRead(id, false); };
   L.cachedMessages = id => (keepable(id) && TC.get(id)?.rows) || null;
+  // A thread the server answered 404 for is gone: drop its memory and IndexedDB copy so a reopen can't repaint it.
+  L.forgetMessages = async id => {
+    if (!id) return; TC.delete(id);
+    const db = await tcOpen(); if (!db) return;
+    try { db.transaction('t', 'readwrite').objectStore('t').delete(id); } catch (e) {}
+  };
   const saving = () => !!navigator.connection?.saveData;
   L.warm = id => {
     const s = L.session(id); if (!s || s.archived || s.optimistic || saving() || INFLIGHT.has(id) || !keepable(id)) return;

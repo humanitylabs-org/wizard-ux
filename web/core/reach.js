@@ -41,7 +41,7 @@
       }
       if (body.overall && body.overall !== 'ok') return result('wizard', body.summary || 'Wizard reports a problem. Open Troubleshooter to check it.', 'Wizard needs attention · retrying');
     } catch (_) { return result('diagnosis', 'Wizard’s gateway is reachable, but its health report isn’t available. Open Troubleshooter to check it. Messages are kept while we retry.', 'Health report unavailable · retrying'); }
-    return result('send', 'Wizard is reachable but didn’t take the message. Retrying.', 'Wizard reachable · retrying');
+    return result('send', 'Wizard is online, but this message hasn’t gone through yet. It’s kept on this device while we retry.', 'Not sent yet · retrying');
   }
   function diagnose() {
     if (work) return work;
