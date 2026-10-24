@@ -35,12 +35,24 @@
   const cached = () => { try { return JSON.parse(localStorage.getItem(CACHE) || 'null'); } catch (_) { return null; } };
   const remember = v => { try { if (v) localStorage.setItem(CACHE, JSON.stringify(v)); else localStorage.removeItem(CACHE); } catch (_) {} };
 
+  // Right after core/skins.css. This script runs first in <head>, before the parser has made that link, so a cached
+  // layer waits for it (and lands at the end of <head> if it never comes) instead of sitting above every core sheet.
+  const place = () => {
+    const anchor = document.querySelector('link[href*="core/skins.css"]');
+    if (!link || !anchor?.parentNode) return false;
+    if (anchor.nextSibling !== link) anchor.parentNode.insertBefore(link, anchor.nextSibling);
+    return true;
+  };
   function addCss() {
     if (link) return;
     link = document.createElement('link');
     link.rel = 'stylesheet'; link.href = CSS; link.dataset.ownerLayer = '';
-    const anchor = document.querySelector('link[href*="core/skins.css"]');
-    if (anchor?.parentNode) anchor.parentNode.insertBefore(link, anchor.nextSibling); else document.head.appendChild(link);
+    if (place()) return;
+    if (typeof MutationObserver === 'function') {
+      const mo = new MutationObserver(() => { if (place()) mo.disconnect(); });
+      mo.observe(document.documentElement, { childList: true, subtree: true });
+      document.addEventListener('DOMContentLoaded', () => { mo.disconnect(); if (link && !place() && !link.parentNode) document.head.appendChild(link); }, { once: true });
+    } else document.addEventListener('DOMContentLoaded', () => { if (link && !place()) document.head.appendChild(link); }, { once: true });
   }
   function startJs() {
     if (jsStarted) return;
