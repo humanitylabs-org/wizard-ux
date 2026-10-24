@@ -223,8 +223,7 @@ window.WosChatPower = function chatPower(A) {
     const priv = !!ag && AG?.isPrivate(ag);
     const full = cur?.model ? (ag ? AG.modelName(ag, cur.model) : M.name(cur.model, cur.provider)) : 'default';
     const label = cur?.model ? (ag ? full : M.short(cur.model, cur.provider)) : M.ready ? 'Default model' : 'Model';
-    const secure = !ag && !!cur?.provider && !!M.ours?.() && !!M.isPrivateRoute?.(cur.provider);
-    return `<button type="button" class="ch-model${ag ? ' agent' : ''}${priv || secure ? ' private' : ''}" data-chmodel aria-label="Model: ${esc(full)}${priv ? ', private' : ''}. Change model" title="${esc(cur?.model || '')}">${priv || secure ? (AG?.lock?.() || '') : ''}${esc(label)}<i aria-hidden="true">▾</i></button>`;
+    return `<button type="button" class="ch-model${ag ? ' agent' : ''}${priv ? ' private' : ''}" data-chmodel aria-label="Model: ${esc(full)}${priv ? ', private' : ''}. Change model" title="${esc(cur?.model || '')}">${priv ? (AG?.lock?.() || '') : ''}${esc(label)}<i aria-hidden="true">▾</i></button>`;
   }
   /* The model label inside the message box, bottom-right (James 18 Oct: just the name, small, white; no bubble).
    * Tapping it opens the compact model menu over the right side, just above it. */
@@ -232,19 +231,20 @@ window.WosChatPower = function chatPower(A) {
     const chip = modelChip(w, s); if (!chip) return '';
     return chip.replace('class="ch-model', 'class="ch-mlabel ch-model').replace(/<i aria-hidden="true">▾<\/i>/, '');
   }
-  /* Miguel's skins only (Dark, Light, Landscapes; M.ours()): a four-position slide switch (Opus · Astra · Sol · the
-   * private Tinfoil model) above the composer, drag or tap; ⋯ opens every model. James's skins keep the model label. */
+  /* Miguel's skins only: Opus · Astra · Sol · a private agent model.
+   * The fourth choice carries agent identity, just like the Private group. */
   const SW_NAMES = ['Opus', 'Astra', 'Sol', '']; // slot 4: the private model's own name (privateName), in the privacy colour
   function switchOpts(w, s) {
     const cur = w.thread === '__new__' ? newModel(ch(w.id), w) : s ? threadModel(s) : null;
     const vis = M && M.ready ? M.visible(cur?.model || '', cur?.provider || '') : [];
     // Match by family in the model id (newest first), so e.g. gpt-6.1-sol still fills the Sol slot.
-    const RX = [/opus/i, /astra/i, /-sol(-|$)/i], all = M && M.ready ? M.options.filter(o => !/-900k$/i.test(o.value)) : [];
+    const RX = [/opus/i, /astra/i, /-sol(-|$)/i], all = M && M.ready ? M.mainOptions().filter(o => !/-900k$/i.test(o.value)) : [];
     const newest = l => l.slice().sort((x, y) => y.value.localeCompare(x.value, 'en', { numeric: true }))[0] || null;
-    const standard = o => M.family(o.value, o.provider) !== 'tinfoil';
+    const standard = o => !o.agent;
     const opts = RX.map(rx => vis.find(o => standard(o) && rx.test(o.value)) || newest(all.filter(o => standard(o) && rx.test(o.value))));
-    opts.push(M?.tinfoilReady?.() ? vis.find(o => M.family(o.value, o.provider) === 'tinfoil') || null : null);
-    const at = cur?.model ? opts.findIndex(o => o && o.value === cur.model && (!cur.provider || o.provider === cur.provider)) : -1;
+    const priv = M?.privateOptions?.() || [];
+    opts.push(priv.find(o => o.agent === cur?.agent && o.value === cur?.model) || priv[0] || null);
+    const at = cur?.model ? opts.findIndex(o => o && o.value === cur.model && (!cur.provider || o.provider === cur.provider) && (o.agent || '') === (cur.agent || '')) : -1;
     return { opts, at };
   }
   // Versions come from the actual selectable id, never a display-name guess or a pinned catalogue.

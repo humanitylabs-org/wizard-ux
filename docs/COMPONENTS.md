@@ -1,6 +1,6 @@
 # Wizard OS components: reuse before build
 
-**One implementation per capability.** Before you build any UI, chat, auth, upload, settings, visual or per-agent-kind logic, find the need below and reuse its entry point. If a row nearly fits, **extend that module** (as PR #338 added `Orb.create` to `web/orb.js`) instead of building beside it. NEW is only for a need no row covers: it lands in `web/core/` with a row here in the same PR, never inside an app.
+**One implementation per capability.** Find the need below before building UI, chat, auth, upload, settings, visuals or agent-kind logic. **Extend a near-fit module**, never build beside it. NEW lands in `web/core/` with a row here, never in an app.
 
 Every PR body carries a `Reuse:` block (see `.github/pull_request_template.md`); CI checks it (`tools/reuse-check.mjs`) and checks that every shell global is listed here (`tests/components-inventory.test.mjs`).
 
@@ -39,7 +39,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Chat list, persistent bottom Focus strip and Filter-sheet options (All / agent / Space; 32px agent-colour pills, 44px hit areas, shared persisted section collapse), status/search, thread, composer (text or staged attachments are sendable), desktop file drop, thread card, read state, reply action row (Copy · Share; Regenerate only when the skin sets `--wos-reply-regenerate: on`); historical sections appear only when populated | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); `setFocus(w, {kind, key})` / `setFocus(w, null)` persist `w.focus` via shell save; `WizCore.migrateChatsFocus` folds legacy `w.agent` windows on restore; live data `WizLive` (`web/live.js`) | a second thread, composer, Focus/command parser or per-agent thread logic; extra per-reply buttons on every skin |
 | Alternative Chats list | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
-| Model picker, errors and retry, composer mic, work receipts, reading place | `WosChatPower` (`web/core/chat-power.js`) + `WosModels` (`web/core/chat-models.js`), `WosErrors` (`web/core/chat-errors.js`), `WosWork` (`web/core/chat-work.js`) | own model list, own error card, own reading-position store |
+| Model picker/private agent groups, errors/retry, composer mic, receipts, reading place | `WosChatPower` (`web/core/chat-power.js`) + `WosModels` (`web/core/chat-models.js`), `WosErrors` (`web/core/chat-errors.js`), `WosWork` (`web/core/chat-work.js`) | own model list, own error card, own reading-position store |
 | Markdown, drafts, rich copy, Bangkok time, media viewer | `WosChat` (`web/core/chat-kit.js`: `md`, `copyRich`, `viewer`) | a markdown library, own lightbox |
 | Owner-created Spaces / Focus | `WizCore` Chats (`web/core/chats.js`), `WizLive.putPrefs` (`spaces` in box-wide ui-preferences); `winAgent` / `modelRoute` drive every new-chat adapter; `WosAgents.colour` / `distinctHues` drive tab identity and `--ch-agent-hue` list tint | automatic subject tabs, separate collection store, per-shell Focus routing or section implementations |
 | Pinned threads (synced across devices) | `WosChatPins` (`web/core/chat-pins.js`) | device-local pin lists |
@@ -50,7 +50,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Uploads of any size | `WizUploads` (`web/core/uploads.js`) | file input + single fetch |
 | Files browse, preview, attach | `WosFiles` (`web/core/files.js`) | own picker |
 | Settings entry in both shells | `WosSettings.register` (`web/core/settings.js`); mounted `focus(id)` routes aliases, with false/empty ids opening the root safely; actions/views `WosFeatures` (`web/core/features.js`) | per-feature settings page, shell-only branch |
-| Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`web/core/agents.js`) | hard-coded agent names or colours |
+| Agent identity, appAgents, installed/legacy private providers and model policy | `WosAgents` (`web/core/agents.js`) | hard-coded provider catalogues, names or colours |
 | App routing to an agent, incl. the private-app note and Set up private agent (also from the Store install sheet) | `WosAppRoute` (`web/core/app-route.js`) | — |
 | App glyph tiles | `WizSigil` (`web/core/sigils.js`, `web/core/sigils.css`) | PNG/emoji icons |
 | App groups | `WosAppKinds` (`web/core/app-kinds.js`) | forks |
