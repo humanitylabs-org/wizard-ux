@@ -187,7 +187,7 @@ async function spaceArchiveMatrix(b) {
     for(const skin of ['obsidian','nebula']){
      await p.evaluate(s=>WosSkin.set(s),skin);await p.waitForTimeout(500);
      await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');if(window.__wos)a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);});
-     await p.waitForFunction(()=>{const e=document.querySelector('.ch-scroll [data-sec]'),r=e?.getBoundingClientRect();return r&&e.contains(document.elementFromPoint(r.x+15,r.y+r.height/2));});
+     await p.waitForFunction(()=>{const e=document.querySelector('.ch-scroll [data-sec]'),r=e?.getBoundingClientRect();return r&&r.height>0&&e.contains(document.elementFromPoint(r.x+15,Math.max(0,r.y)+15));});
      await p.locator('.ch-scroll:visible').evaluate(e=>{const a=e.querySelector('[data-sec="archive"]');e.scrollTop=a.offsetTop-e.offsetTop;});await capture(p,mode+'-'+skin+'-old-space');
     }
     await choose(p,'all:');
@@ -297,7 +297,7 @@ async function soloAcceptance(b) {
    ok(JSON.stringify(await strip.locator('[data-chfocusopt]').evaluateAll(es=>es.map(e=>e.dataset.chfocusopt)))===JSON.stringify(['all:','space:solo','space:reading'])&&await strip.locator('[data-chspacenew]').count()===1,mode+' '+skin+' All / Space / +, no agent chip');
    await activate(r.p,'.ch-focus-strip:visible [data-chfocusopt="space:solo"]');
    ok(!await r.p.locator('[data-chspacepicker]').count()&&JSON.stringify(await ids(r.p))===JSON.stringify(['main_wos']),mode+' '+skin+' Space tap directly filters without picker');
-   ok(await r.p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');return a.chats.listTitle(w)==='Solo space';}),mode+' '+skin+' header focus title is Space name');
+   ok(await r.p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');return document.querySelector(`[data-win="${w.id}"] [data-agent-titlebar]`)?.textContent.trim()==='Solo space';}),mode+' '+skin+' header focus title is Space name');
    await capture(r.p,mode+'-'+skin+'-flat-spaces');
    await activate(r.p,'[data-chspacenew]:visible');
    ok(await r.p.locator('.ch-space-form input').count()===1,mode+' '+skin+' + opens existing naming form');
