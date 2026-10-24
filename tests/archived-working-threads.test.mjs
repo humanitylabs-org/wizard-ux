@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
 const chatsSource = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const desktopSource = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
 const kinds = ['main', 'host-profile', 'container', 'restricted'];
 
 function workGroups(sessions) {
@@ -43,6 +44,7 @@ test('Done keeps archived stale-running threads out of Working for main and ever
 
   assert.deepEqual(groups.working.map(row => row.id), ['active']);
   assert.deepEqual(groups.archive.map(row => row.runtimeKind).sort(), [...kinds].sort());
+  assert.match(desktopSource, /LIVE\.isNew\(s\) \? ' · unread' : !s\.archived && WORKING_ST\.has\(s\.status\) \? ' · working'/);
 });
 
 test('archived stale-running threads remain recoverable without steering stale runs', () => {
