@@ -15,32 +15,46 @@ function stamped() {
   execFileSync('sh', [STAMP, d]); return d;
 }
 
-test('every local script and stylesheet in both shells carries its own file hash', () => {
+const RE = /^[0-9a-f]{12}$/;
+const tokenOf = h => h.match(/<meta name="wos-release" content="([0-9a-f]+)">/)?.[1];
+
+test('every local script and stylesheet in both shells carries the release token', () => {
   const d = stamped();
   for (const page of ['index.html', 'desktop.html']) {
-    const h = readFileSync(join(d, page), 'utf8');
-    const refs = [...h.matchAll(/(?:src|href)="([A-Za-z0-9._/-]+\.(?:js|css))(\?v=([0-9a-f]{10}))?"/g)];
+    const h = readFileSync(join(d, page), 'utf8'), v = tokenOf(h);
+    assert.match(v || '', RE, `${page} has its release meta`);
+    const refs = [...h.matchAll(/(?:src|href)="((?:\/wizard-os-home\/)?[A-Za-z0-9._][A-Za-z0-9._/-]*\.(?:js|css))(?:\?v=([0-9a-f]+))?"/g)];
     assert.ok(refs.length > 40, `${page} has its links`);
-    for (const [, ref, , v] of refs) {
-      if (/(^|\/)(data|summaries)\.js$/.test(ref)) { assert.equal(v, undefined, `${ref} stays unstamped`); continue; }
-      assert.ok(v, `${page}: ${ref} is stamped`);
-      const sha = execFileSync('sha1sum', [join(d, ref)]).toString().slice(0, 10);
-      assert.equal(v, sha, `${ref} stamp matches its bytes`);
+    for (const [, ref, got] of refs) {
+      if (/(^|\/)(data|summaries)\.js$/.test(ref)) { assert.equal(got, undefined, `${ref} stays unstamped`); continue; }
+      assert.equal(got, v, `${page}: ${ref} carries the release token`);
     }
-    assert.match(h, /src="core\/notif-bell\.js\?v=[0-9a-f]{10}"/);
   }
 });
 
-test('a changed file gets a new stamp; an unchanged one keeps it', () => {
+test('module imports carry the token too, so a changed dependency gets a new URL (Codex, #428)', () => {
+  const d = stamped(), v = tokenOf(readFileSync(join(d, 'index.html'), 'utf8'));
+  const swipe = readFileSync(join(d, 'core/thread-swipe-back.js'), 'utf8');
+  assert.ok(swipe.includes(`from './swipe-intent.js?v=${v}'`), 'thread-swipe-back imports a stamped swipe-intent');
+  const store = readFileSync(join(d, 'store/store.js'), 'utf8');
+  assert.ok(store.includes(`from './store-status.js?v=${v}'`));
+  const obs = readFileSync(join(d, 'skins/obsidian/skin.js'), 'utf8');
+  assert.ok(obs.includes(`from './intro.js?v=${v}'`));
+  const land = readFileSync(join(d, 'skins/landscapes/skin.js'), 'utf8');
+  assert.ok(land.includes(`from '../obsidian/intro.js?v=${v}'`));
+});
+
+test('any change anywhere in web/ moves the token; rerunning the stamp is a no-op', () => {
   const a = stamped();
   const b = mkdtempSync(join(tmpdir(), 'stamp-')); cpSync(WEB, b, { recursive: true });
-  writeFileSync(join(b, 'core/notif-bell.js'), readFileSync(join(b, 'core/notif-bell.js'), 'utf8') + '\n// next release\n');
-  execFileSync('sh', [STAMP, b]); execFileSync('sh', [STAMP, b]); // a second run leaves stamped links alone
-  const va = readFileSync(join(a, 'index.html'), 'utf8'), vb = readFileSync(join(b, 'index.html'), 'utf8');
-  const v = (h, f) => { const k = `"${f}?v=`, at = h.indexOf(k); assert.ok(at >= 0, f); return h.slice(at + k.length, h.indexOf('"', at + k.length)); };
-  assert.notEqual(v(va, 'core/notif-bell.js'), v(vb, 'core/notif-bell.js'));
-  assert.equal(v(va, 'core/chats.js'), v(vb, 'core/chats.js'));
-  assert.doesNotMatch(vb, /\?v=[0-9a-f]+\?v=/, 'no double stamps');
+  writeFileSync(join(b, 'core/swipe-intent.js'), readFileSync(join(b, 'core/swipe-intent.js'), 'utf8') + '\n// next release\n');
+  execFileSync('sh', [STAMP, b]);
+  const once = readFileSync(join(b, 'index.html'), 'utf8'), onceImp = readFileSync(join(b, 'core/thread-swipe-back.js'), 'utf8');
+  execFileSync('sh', [STAMP, b]);
+  assert.notEqual(tokenOf(readFileSync(join(a, 'index.html'), 'utf8')), tokenOf(once), 'a dependency-only change still moves the token');
+  assert.equal(readFileSync(join(b, 'core/thread-swipe-back.js'), 'utf8'), onceImp, 'imports are not stamped twice');
+  assert.doesNotMatch(readFileSync(join(b, 'index.html'), 'utf8'), /\?v=[0-9a-f]+\?v=/, 'links are not stamped twice');
+  assert.equal((readFileSync(join(b, 'index.html'), 'utf8').match(/name="wos-release"/g) || []).length, 1);
 });
 
 test('the image build runs the stamp over the shipped web tree', () => {
@@ -52,7 +66,12 @@ test('the image build runs the stamp over the shipped web tree', () => {
 test('skin packages still find core/skins.css once its link carries ?v=', () => {
   assert.match(readFileSync(new URL('../web/core/skin-host.js', import.meta.url), 'utf8'), /link\[href\*="core\/skins\.css"\]/);
 });
-
+test('skin and layout files loaded on demand carry the page release token', () => {
+  const src = readFileSync(new URL('../web/core/skin-host.js', import.meta.url), 'utf8');
+  assert.match(src, /meta\[name="wos-release"\]/);
+  assert.match(src, /const url = \(dir, file\) => isDoc \? stamp\(/);
+  assert.match(src, /const layoutUrl = \(id, file\) => isDoc \? stamp\(/);
+});
 // Backstop: a boot error reloads once (fresh files) before the "couldn't start" card; never loops.
 function boot({ shell = false, seen = null } = {}) {
   const L = {}, store = new Map(seen ? [['wos.bootReloadAt', String(seen)]] : []);

@@ -1,27 +1,27 @@
 #!/bin/sh
-# Stamps every local script and stylesheet link in the shell's HTML pages with a hash of that file's bytes:
-#   <script src="core/notif-bell.js">  ->  <script src="core/notif-bell.js?v=3f9c2a1b7d">
-# Each release then asks for its own copy of every file, so a phone can never start a new shell against an old
-# cached module (Robert's iPhone, 24 Oct 2026: a cached notif-bell.js without WosBell.paint stopped Wizard at boot).
-# Run at image build time on the copied web/ tree (see Dockerfile); git keeps the plain links. POSIX sh + busybox.
-#   usage: stamp-assets.sh <web-root>
+# Gives every shell file a release-specific URL, so a phone can never start one release's shell against another
+# release's cached modules (Robert's iPhone, 24 Oct 2026: a cached notif-bell.js without WosBell.paint stopped
+# Wizard at boot). One release-wide token (hash of every file under web/) is added as ?v=<token> to:
+#   - every local <script src> / <link href> .js/.css in each HTML page,
+#   - every relative static or literal dynamic ES module import in each .js file (import ... from './x.js'),
+#   - a <meta name="wos-release"> in each page, which core/skin-host.js appends to skin/layout files it loads.
+# A release-wide token (not per-file hashes) also covers a module whose own bytes are unchanged but whose
+# dependency changed. Run at image build time on the copied web/ tree (see Dockerfile); git keeps plain links.
+# POSIX sh + busybox.   usage: stamp-assets.sh <web-root>
 set -eu
 root="${1:?usage: stamp-assets.sh <web-root>}"
 cd "$root"
+# Owner-generated data (data.js, summaries.js) changes at runtime: never part of the token, never stamped.
+v=$(find . -type f ! -name data.js ! -name summaries.js | LC_ALL=C sort | xargs sha1sum | sha1sum | cut -c1-12)
 find . -name '*.html' -type f | while IFS= read -r page; do
-  dir=$(dirname "$page")
-  # Local .js/.css links only: relative paths or the shell's own /wizard-os-home/ prefix, not yet stamped.
-  grep -oE '(src|href)="[A-Za-z0-9._/-]+\.(js|css)"' "$page" | sed -E 's/^(src|href)="//; s/"$//' | sort -u | while IFS= read -r ref; do
-    case "$ref" in
-      //*|*://*) continue ;;
-      /wizard-os-home/*) file="./${ref#/wizard-os-home/}" ;;
-      /*) continue ;;
-      *) file="$dir/$ref" ;;
-    esac
-    # Owner-generated data (data.js, summaries.js) changes at runtime: leave it unstamped.
-    case "$ref" in data.js|summaries.js|*/data.js|*/summaries.js) continue ;; esac
-    [ -f "$file" ] || continue
-    v=$(sha1sum "$file" | cut -c1-10)
-    sed -i "s|=\"$ref\"|=\"$ref?v=$v\"|g" "$page"
-  done
+  grep -q 'name="wos-release"' "$page" || sed -i "s|<meta charset=\"utf-8\">|<meta charset=\"utf-8\"><meta name=\"wos-release\" content=\"$v\">|" "$page"
+  # Relative links or the shell's own /wizard-os-home/ prefix only; other absolute paths and data files stay plain.
+  sed -i -E \
+    -e "s#((src|href)=\"(/wizard-os-home/)?[A-Za-z0-9._][A-Za-z0-9._/-]*\.(js|css))\"#\1?v=$v\"#g" \
+    -e "s#((src|href)=\"([A-Za-z0-9._/-]*/)?(data|summaries)\.js)\?v=$v\"#\1\"#g" \
+    "$page"
+done
+find . -name '*.js' -type f ! -name data.js ! -name summaries.js | while IFS= read -r f; do
+  grep -qE "(from|import)[[:space:]]*\(?[[:space:]]*['\"]\.\.?/" "$f" || continue
+  sed -i -E "s#((from|import)[[:space:]]*\(?[[:space:]]*(['\"])\.\.?/[A-Za-z0-9._/-]+\.js)(['\"])#\1?v=$v\4#g" "$f"
 done
