@@ -210,7 +210,7 @@ async function visualPicker(b) {
  const g=await p.locator('.ch-space-picker').boundingBox();ok(g.x>=0&&g.x+g.width<=412&&g.y>=0,'phone picker inside viewport',g);
  await activate(p,'[data-spspace="launch"]');await capture(p,'phone-nebula-space-active');
  await activate(p,'.ch-focus-tab.on:visible');await activate(p,'[data-spnew]');await p.locator('.ch-space-form input').fill('Research projects');
- await p.evaluate(()=>WosSkin.set('obsidian'));await p.locator('.mz-intro').waitFor({state:'attached'});await p.locator('.mz-intro').waitFor({state:'detached'});
+ await p.evaluate(()=>WosSkin.set('obsidian'));await p.waitForFunction(()=>WosSkinHost.state.active==='obsidian');await p.locator('.mz-intro').waitFor({state:'detached'});
  // Dark's existing first-switch intro navigates Home. Reopen the same Chats window after it finishes.
  await p.evaluate(()=>{const a=__wos,w=Object.values(a.wins).find(w=>w.app==='chats');a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);});
  if(!await p.locator('[data-chspacepicker]').count())await activate(p,'.ch-focus-tab.on:visible');if(!await p.locator('.ch-space-form input').count())await activate(p,'[data-spnew]');await p.locator('.ch-space-form input').fill('Research projects');await capture(p,'phone-dark-new-space');
