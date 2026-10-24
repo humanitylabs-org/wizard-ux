@@ -47,7 +47,11 @@
 
   const skinOf = id => (typeof window !== 'undefined' && window.WosSkin && window.WosSkin.pkgOf) ? window.WosSkin.pkgOf(id) : null;
   const dirOf = (id, pkg) => (pkg && pkg.dir) || id;
-  const url = (dir, file) => isDoc ? new URL(`skins/${dir}/${file}`, document.baseURI).href : `skins/${dir}/${file}`;
+  // The image build stamps each page with its release (tools/stamp-assets.sh); skin and layout files loaded here
+  // carry it too, so a phone never mixes one release's shell with another's cached skin code.
+  const releaseToken = () => { try { const v = isDoc && document.querySelector('meta[name="wos-release"]')?.content; return v && /^[0-9a-f]{6,40}$/.test(v) ? v : ''; } catch (_) { return ''; } };
+  const stamp = h => { const v = releaseToken(); return v ? h + (h.includes('?') ? '&' : '?') + 'v=' + v : h; };
+  const url = (dir, file) => isDoc ? stamp(new URL(`skins/${dir}/${file}`, document.baseURI).href) : `skins/${dir}/${file}`;
 
   function env() {
     const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
@@ -70,7 +74,7 @@
     // The old cascade slot of these rules: right after core/skins.css (later packages stack after earlier ones).
     const prev = [...cssLinks.values()].pop();
     // My release layer (web/mine/mine.css, wizard-os#186) sits right after core/skins.css; skin looks stack after it.
-    const anchor = prev || document.querySelector('link[href$="mine/mine.css"]') || document.querySelector('link[href$="core/skins.css"]');
+    const anchor = prev || document.querySelector('link[href*="mine/mine.css"]') || document.querySelector('link[href*="core/skins.css"]');
     if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(l, anchor.nextSibling); else document.head.appendChild(l);
     cssLinks.set(dir, l); requested.push(l.href); return l;
   }
@@ -246,7 +250,7 @@
   }
 
   /* ---------- layout layer ---------- */
-  const layoutUrl = (id, file) => isDoc ? new URL(`layouts/${id}/${file}`, document.baseURI).href : `layouts/${id}/${file}`;
+  const layoutUrl = (id, file) => isDoc ? stamp(new URL(`layouts/${id}/${file}`, document.baseURI).href) : `layouts/${id}/${file}`;
   let layoutCss = null;
   function paintLayout(id) {
     if (!isDoc) return;

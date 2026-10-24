@@ -17,7 +17,7 @@ test('the release flag loads first on both shells, and the layer right after cor
     assert.ok(at('src="mine/mine.js"') > at('src="core/skin-host.js"'), `${f}: behaviour after the skin host`);
   }
   // Skin packages are inserted after mine.css, so a skin can still recolour the layer's parts.
-  assert.match(read('web/core/skin-host.js'), /prev \|\| document\.querySelector\('link\[href\$="mine\/mine\.css"\]'\) \|\| document\.querySelector\('link\[href\$="core\/skins\.css"\]'\)/);
+  assert.match(read('web/core/skin-host.js'), /prev \|\| document\.querySelector\('link\[href\*="mine\/mine\.css"\]'\) \|\| document\.querySelector\('link\[href\*="core\/skins\.css"\]'\)/);
 });
 
 test('the flag sets html[data-mine] unless ?mine=off', () => {

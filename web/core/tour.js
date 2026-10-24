@@ -5,7 +5,7 @@
  *   1 Talk     tap the orb, say hello, tap again: a real message to the Wizard (a real first thread)
  *   2 Command  hold the orb, say "Open Calendar", let go: the app opens on the desk next door
  *   3 Hide     swipe the orb down: the bars hide (distraction-free); swipe up from the bottom brings them back
- *   4 Done     "Need this again? Hold the orb, say help."
+ *   4 Done     "Everything you see is customizable. Try asking your Wizard for one change." (+ "say help" line)
  *
  * No mic (denied, or none here): the shell's own "tap a line" chips appear and count. Two empty takes in a row:
  * a "Type instead" path appears (beat 1: a text box that sends for real; beat 2: the command as a button).
@@ -32,7 +32,7 @@
     { title: 'Talk', copy: () => typed ? 'Type “hello” and send it to your Wizard.' : 'Tap the orb and say hello. Tap again to send.' },
     { title: 'Command', copy: () => typed ? `Tap the orb’s command: “${cmd()}”.` : `Hold the orb and say “${cmd()}”. Let go when you’re done.` },
     { title: 'Hide', copy: () => 'Swipe the orb down to hide everything but your screen.' },
-    { title: 'Done', copy: () => 'Need this again? Hold the orb and say “help”.' },
+    { title: 'Done', copy: () => 'Everything you see is customizable. Try asking your Wizard for one change.' },
   ];
 
   function build() {
@@ -72,6 +72,7 @@
     if (n === 1 && typed) return `<form class="tr-type"><input type="text" placeholder="hello" enterkeyhint="send" aria-label="Message to your Wizard" autocomplete="off"><button type="submit">Send</button></form>`;
     if (n === 2 && typed) return `<button type="button" class="tr-cmd" data-tsay="${esc(cmd())}" data-tkind="command">${esc(cmd())}</button>`;
     if ((n === 1 || n === 2) && misses >= 2) return `<button type="button" class="tr-link" data-ttype>Type instead</button>`;
+    if (n === 4) return '<span class="tr-note">Need this again? Hold the orb and say “help”.</span>';
     return '';
   }
   function go(n) {
@@ -173,6 +174,7 @@
     { k: 'filter', a: 'In Chats', b: 'Tap the filter button in search, or hold the orb and say “filter by unread” or “search budget”.' },
     { k: 'dots', a: 'Dots under the orb', b: 'Tap to jump to a desk. Long-press to see them all.' },
     { k: 'back', a: 'Back', b: 'Always one step back. It never closes Wizard.' },
+    { k: 'skin', a: 'Make it yours', b: 'Everything you see is customizable. Ask your Wizard for one change, and it becomes My skin.', say: ['Make my chat text a little bigger'] },
   ];
   function openHelp() {
     if (!H || helpEl) return;

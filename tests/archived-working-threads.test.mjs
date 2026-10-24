@@ -4,6 +4,9 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
+const chatsSource = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const desktopSource = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+const kinds = ['main', 'host-profile', 'container', 'restricted'];
 
 function workGroups(sessions) {
   const firstStart = source.indexOf('  const DAY = 864e5;');
@@ -27,7 +30,6 @@ function workGroups(sessions) {
 }
 
 test('Done keeps archived stale-running threads out of Working for main and every routed runtime kind', () => {
-  const kinds = ['main', 'host-profile', 'container', 'restricted'];
   const archived = kinds.map((kind, index) => ({
     id: `archived-${kind}`,
     title: `Finished ${kind} task`,
@@ -42,4 +44,35 @@ test('Done keeps archived stale-running threads out of Working for main and ever
 
   assert.deepEqual(groups.working.map(row => row.id), ['active']);
   assert.deepEqual(groups.archive.map(row => row.runtimeKind).sort(), [...kinds].sort());
+  assert.match(desktopSource, /LIVE\.isNew\(s\) \? ' · unread' : !s\.archived && WORKING_ST\.has\(s\.status\) \? ' · working'/);
+});
+
+test('archived stale-running threads remain recoverable without steering stale runs', () => {
+  const workingStart = chatsSource.indexOf("  const WORKING_ST = new Set(['submitting', 'queued', 'running', 'stopping']);");
+  const workingEnd = chatsSource.indexOf('\n  // Same sections', workingStart);
+  const actionsStart = chatsSource.indexOf('  function threadActions(s, turns) {');
+  const actionsEnd = chatsSource.indexOf('\n  const ACT =', actionsStart);
+  const stateStart = chatsSource.indexOf('  function threadState(s, agent) {');
+  const stateEnd = chatsSource.indexOf('\n  function renderThread(', stateStart);
+  assert.ok(workingStart > 0 && workingEnd > workingStart && actionsStart > 0 && actionsEnd > actionsStart && stateStart > 0 && stateEnd > stateStart, 'thread state helpers found');
+
+  const context = {
+    LIVE: { busy: id => id === 'busy', workGroups: rows => ({ archive: rows.filter(row => row.aged) }) },
+    window: { WosWork: { helperLabel: () => '' } },
+    agentName: () => 'Wizard',
+    ago: () => 'just now',
+  };
+  vm.createContext(context);
+  vm.runInContext(`${chatsSource.slice(workingStart, workingEnd)}\n${chatsSource.slice(actionsStart, actionsEnd)}\n${chatsSource.slice(stateStart, stateEnd)}\nthis.actions = threadActions; this.state = threadState; this.working = isWorking;`, context);
+
+  for (const runtimeKind of kinds) {
+    const archived = { id: `archived-${runtimeKind}`, archived: true, status: 'running', runId: `stale-${runtimeKind}`, runtimeKind };
+    assert.deepEqual(Array.from(context.actions(archived, null)), ['restore', 'snooze']);
+    assert.deepEqual(JSON.parse(JSON.stringify(context.state(archived, runtimeKind))), { working: false, sub: 'Archived' });
+    assert.equal(context.working(archived), false, `${runtimeKind} must not steer its stale run`);
+  }
+  assert.deepEqual(Array.from(context.actions({ id: 'active', status: 'running' }, null)), []);
+  assert.equal(context.working({ id: 'active', status: 'running' }), true);
+  assert.deepEqual(Array.from(context.actions({ id: 'busy', archived: true, status: 'running' }, null)), [], 'optimistic archive writes stay disabled');
+  assert.deepEqual(Array.from(context.actions({ id: 'aged', aged: true, status: 'running' }, null)), ['restore', 'snooze']);
 });

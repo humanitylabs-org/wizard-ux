@@ -81,12 +81,12 @@ test('mine: Skins is one grid ending in a dashed My skin tile that opens Edit / 
   h.act('data-myskin-tile', '', 'look');
   html = h.root.innerHTML;
   assert.match(html, /aria-expanded="true"/);
-  assert.match(html, /data-myskin-panel>.*data-myskin="edit".*data-myskin="reset"/s);
+  assert.match(html, /data-myskin-panel>.*data-myskin="edit"/s);   // Reset appears only once My skin has changes (main, launch model)
   assert.ok(html.indexOf('data-myskin-panel') > html.indexOf('skp-mini-my'), 'controls sit under the grid');
   const css = read('web/mine/mine.css');
   assert.match(css, /html\[data-mine\] \.st-root \.skp-my \.skp-mini-my \{[^}]*outline: 1\.5px dashed/);
   const stock = harness({ mine: false }); stock.view.focus('look');
-  assert.doesNotMatch(stock.root.innerHTML, /skp-my/); assert.match(stock.root.innerHTML, /My custom skin/);
+  assert.doesNotMatch(stock.root.innerHTML, /skp-my/); assert.match(stock.root.innerHTML, /<b>My skin<\/b>/);
 });
 test('mine: Unsent & recovered leaves the index when nothing is waiting, returns with a count', () => {
   assert.ok(!pages(harness().root.innerHTML).includes('recovery'));
