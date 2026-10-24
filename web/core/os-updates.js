@@ -33,6 +33,12 @@
  *   WosUpdates.act(el, ctx)  → handles a [data-osu] tap; true if handled
  *   WosUpdates.load(force)   → refresh the App Manager status (cached 60 s)
  *   WosUpdates.poll()        → re-read my-release.json (and the status) now; the timer and visibility call it
+ *   WosUpdates.popup()       → show / hide the Home pop-up now (shells call it when Home comes into view)
+ *
+ * Home pop-up (wizard-os#186): when the card says Update, Reload or Couldn’t update, Home shows the same words and the
+ * same button in a small card clear of the dock, with a ×. × hides it for that exact state (keyed by the build, the
+ * Latest sha or the failure) until something new arrives. It replaces the old "Wizard OS was updated · Reload"
+ * banner (core/web-update.js asks ownsReload() and stays away while the pop-up has the reload), so only one shows.
  */
 (() => {
   'use strict';
@@ -51,7 +57,7 @@
 
   const valid = d => d && typeof d === 'object' && ['auto', 'ask'].includes(d.mode) && 'update_available' in d;
   const rel = () => (st?.release && typeof st.release === 'object' ? st.release : null);
-  function changed() { try { window.WosSettings?.refresh(); } catch (_) {} }
+  function changed() { try { window.WosSettings?.refresh(); } catch (_) {} try { popup(); } catch (_) {} }
   function take(d) { st = d; if (rel()?.behind > 0) sawBehind = true; }
   function load(force) {
     if (off && !force) return Promise.resolve(st);
@@ -244,7 +250,65 @@
       .finally(() => { busy = ''; changed(); if (what === 'apply') setTimeout(() => load(true), 1500); });
     return true;
   }
-  window.WosUpdates = { html, act, load, poll, card, cardHtml, title, kind, label, get state() { return st; }, get mine() { return mine; }, get build() { return { loaded: build0, now: buildNow }; } };
+  /* ---- Home pop-up ---- */
+  const POP_STATES = ['behind', 'reload', 'failed'], DISMISS = 'wos.osu.dismissed';
+  const store = { get() { try { return window.localStorage.getItem(DISMISS) || ''; } catch (_) { return ''; } }, set(v) { try { window.localStorage.setItem(DISMISS, v); } catch (_) {} } };
+  // One key per state worth telling: a new build, new commits on Latest, or a new failure each count as new.
+  function popKey(c) {
+    if (!c || !POP_STATES.includes(c.state)) return '';
+    const R = rel(), W = window.WizWebUpdate;
+    if (c.state === 'reload') return 'reload:' + (buildNow && buildNow !== build0 ? buildNow : W?.version || 'web');
+    if (c.state === 'failed') return 'failed:' + (R ? `${R.base || ''}:${typeof R.failed === 'object' ? R.failed?.code || R.failed?.at || '' : R.failed}` : st?.latest || '');
+    const last = Array.isArray(R?.new) && R.new.length ? R.new[R.new.length - 1]?.sha || R.new[0]?.sha : '';
+    return 'behind:' + (R ? `${last || ''}:${R.behind}` : st?.latest || '');
+  }
+  // Home in view, nothing over it: phone desk 0 with no windows and no sheet; desktop Home or an empty desk, no Settings.
+  function homeInView() {
+    if (typeof document === 'undefined' || document.hidden || document.querySelector?.('.mz-intro, .rs-sheet, .wos-burst, .tour.on')) return false;
+    const P = window.__wos, D = window.__wux;
+    if (D) return !!(D.homeOpen || !D.ws?.[D.cur]?.wins?.length) && !document.querySelector?.('.dsettings:not([hidden])');
+    if (P) return P.idx === 0 && !P.sheet && !P.desks?.[0]?.wins?.length;
+    return false;
+  }
+  function ownsReload() { const c = card(); if (c?.state !== 'reload') return false; const k = popKey(c); return k === store.get() || popShown === k; }
+  let popEl = null, popShown = '', popTimer = 0;
+  const popCtx = () => { const H = window.__wos || window.__wux; return { toast: (...a) => H?.toast?.(...a), haptic: n => { try { navigator.vibrate?.(n); } catch (_) {} }, render: () => popup(), root: popEl }; };
+  // Phone: sit just above the dock (measured, so any skin's pill or orb stays clear); desktop: under the top bar, right.
+  function place() {
+    if (!popEl || window.__wux) return;
+    const dock = document.querySelector('#dock, .dock'), r = dock?.getBoundingClientRect?.();
+    const vh = window.innerHeight || 0, top = r && r.height ? Math.min(r.top, vh) : vh - 140;
+    popEl.style.bottom = Math.max(16, vh - top + 12) + 'px';
+  }
+  function popup() {
+    if (typeof document === 'undefined' || !document.body) return;
+    const c = card(), k = popKey(c), show = !!k && k !== store.get() && homeInView();
+    const was = popShown; popShown = show ? k : '';
+    if (!show) { if (popEl) { popEl.remove(); popEl = null; } }
+    else {
+      if (!popEl) {
+        popEl = document.createElement('div'); popEl.className = 'osu-pop'; popEl.setAttribute('role', 'status'); popEl.setAttribute('aria-live', 'polite');
+        popEl.dataset.shell = window.__wux ? 'desktop' : 'phone';
+        popEl.addEventListener('click', e => {
+          const x = e.target.closest('[data-osu-dismiss]');
+          if (x) { store.set(popEl?.dataset.key || ''); popup(); return; }
+          if (e.target.closest('[data-osu]')) act(e.target, popCtx(), e);
+          popup();
+        });
+        document.body.appendChild(popEl);
+      }
+      const armed = c.state === 'reload' && window.WizWebUpdate?.armed;
+      const html = `<div class="osu-pop-tx"><b>${esc(c.title)}</b><span>${esc(c.line)}</span></div><button type="button" class="osu-pop-go" data-osu="${c.action}" ${c.disabled ? 'disabled' : ''}>${esc(armed ? 'Waiting…' : c.label)}</button><button type="button" class="osu-pop-x" data-osu-dismiss aria-label="Dismiss">×</button>`;
+      if (popEl.dataset.key !== k || popEl.dataset.html !== html) { popEl.innerHTML = html; popEl.dataset.key = k; popEl.dataset.html = html; popEl.dataset.state = c.state; }
+      place();
+    }
+    // The old "Wizard OS was updated" banner steps aside while the pop-up has the reload (and after its ×).
+    if (was !== popShown) { try { window.WizWebUpdate?.render?.(); } catch (_) {} }
+    // Home comes and goes without telling this module; while there is something to say, look again every second.
+    clearInterval(popTimer); popTimer = 0;
+    if (k && k !== store.get() && typeof setInterval === 'function') { popTimer = setInterval(popup, 1000); popTimer?.unref?.(); }
+  }
+  window.WosUpdates = { html, act, load, poll, card, cardHtml, title, kind, label, popup, popKey, ownsReload, homeInView, get state() { return st; }, get mine() { return mine; }, get build() { return { loaded: build0, now: buildNow }; } };
   window.WosSettings?.register({ id: 'updates', page: 'release', aliases: ['updates', 'release', 'my-release'], available: () => !!(st || mine), html: () => html(), act: (ctx, el, event) => act(el, ctx, event) });
   load();
   readMine();
