@@ -46,6 +46,11 @@
       "classification": "native",
       "reason": "WizardAndroidRelay required; Android-only transport."
     },
+    "core/device-orb.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android-only device.orb switch for the Wizard Shell's floating orb; absent capability means no Settings row."
+    },
     "core/device-port.js": {
       "shell": "phone",
       "classification": "native",
@@ -412,6 +417,12 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/device-orb.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Wizard Shell (android/shell) floating orb switch over wizardDevicePort; a no-op elsewhere."
     },
     "core/device-port.js": {
       "loadedBy": [

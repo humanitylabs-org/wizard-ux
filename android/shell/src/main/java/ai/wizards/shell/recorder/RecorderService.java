@@ -140,14 +140,17 @@ public class RecorderService extends Service {
     }
 
     /** Ends the live take with {@code state} (stopped or cancelled) and describes what is kept. */
-    public static JSONObject end(Context c, String id, String state) {
+    public static JSONObject end(Context c, String id, String state) { return end(c, id, state, false); }
+
+    /** {@code send}: stopped by the floating orb's tap, so the Wizard sends it (status last.state "sent"). */
+    public static JSONObject end(Context c, String id, String state, boolean send) {
         if (id == null || !id.equals(activeId)) return null;
         final JSONObject[] out = new JSONObject[1];
-        onMain(() -> { RecorderService s = live; if (s != null && id.equals(activeId)) out[0] = s.finish(state); });
+        onMain(() -> { RecorderService s = live; if (s != null && id.equals(activeId)) out[0] = s.finish(state, send); });
         if (out[0] == null && id.equals(activeId)) {
             // No service (it died between calls): close the books on disk anyway; the bytes stay.
             synchronized (LOCK) { activeId = null; activeOrigin = null; activeRef = ""; }
-            out[0] = store(c).finish(id, state, elapsedMs(), System.currentTimeMillis());
+            out[0] = store(c).finish(id, state, elapsedMs(), System.currentTimeMillis(), send);
         }
         return out[0];
     }
@@ -286,7 +289,9 @@ public class RecorderService extends Service {
     }
 
     /** Stops the recorder and the service; the file stays in custody until the page acknowledges it. Main thread. */
-    private JSONObject finish(String state) {
+    private JSONObject finish(String state) { return finish(state, false); }
+
+    private JSONObject finish(String state, boolean send) {
         String id = activeId;
         long ms = elapsedMs();
         if (canned != null) {
@@ -306,10 +311,10 @@ public class RecorderService extends Service {
         JSONObject out = null;
         synchronized (LOCK) {
             activeId = null; paused = false; level = 0;
-            if (id != null) { lastId = id; lastState = state; lastOrigin = activeOrigin == null ? "" : activeOrigin; }
+            if (id != null) { lastId = id; lastState = send ? "sent" : state; lastOrigin = activeOrigin == null ? "" : activeOrigin; }
             activeOrigin = null; activeRef = "";
         }
-        if (id != null) out = store(this).finish(id, state, ms, System.currentTimeMillis());
+        if (id != null) out = store(this).finish(id, state, ms, System.currentTimeMillis(), send);
         Log.i(TAG, "take " + id + " " + state);
         release();
         return out;

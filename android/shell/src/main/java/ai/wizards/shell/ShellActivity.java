@@ -49,12 +49,12 @@ import java.util.List;
  * can't-reach screen, microphone and camera permission for that exact Wizard, file picking, handing
  * other sites and downloads to the phone's browser, hardware Back, and system-bar insets.
  * No JavaScript bridge: the Wizard's pages see an ordinary browser, so every feature updates from the Wizard.
- * Optional device capabilities (background recording) are offered over one versioned message port,
+ * Optional device capabilities (background recording, the floating orb) are offered over one versioned message port,
  * window.wizardDevicePort v1 ({@link ShellPort}), which the Wizard discovers and may ignore.
  */
 public class ShellActivity extends Activity {
     static final String ACTION_CHANGE = "ai.wizards.shell.CHANGE_WIZARD";
-    private static final String PREFS = "shell", KEY_ORIGIN = "origin";
+    private static final String PREFS = ShellOrigin.PREFS, KEY_ORIGIN = ShellOrigin.KEY;
     private static final String UA_TAG = " WizardOS-Android/" + BuildConfig.VERSION_NAME + " WizardShell/" + BuildConfig.VERSION_NAME;
     private static final int REQ_FILE = 1, REQ_MEDIA = 2, REQ_CAPABILITY = 3;
     private static final int BG = Color.rgb(5, 3, 12), INK = Color.rgb(233, 228, 255), VIOLET = Color.rgb(155, 123, 255);
@@ -134,6 +134,44 @@ public class ShellActivity extends Activity {
         web.loadUrl(ShellOrigin.home(origin));
     }
 
+    /* ---------------- Floating orb (device.orb): a clear ask before Android's overlay screen ---------------- */
+
+    private boolean overlayAsked;
+
+    private void askOverlay() {
+        if (isFinishing() || ai.wizards.shell.orb.OrbService.permitted(this)) return;
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Show the Wizard orb over other apps?")
+                .setMessage("The orb floats over your other apps so you can talk to your Wizard from anywhere. "
+                        + "Tap it to talk, drag it to move it, hold it to hide it.\n\n"
+                        + "Android asks for \u201cDisplay over other apps\u201d next. Turn it on for Wizard, then come back.")
+                .setPositiveButton("Continue", (d, w) -> {
+                    overlayAsked = true;
+                    try {
+                        startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:" + getPackageName())));
+                    } catch (ActivityNotFoundException e) { overlayAsked = false; }
+                })
+                .setNegativeButton("Not now", null)
+                .show();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (overlayAsked) {
+            overlayAsked = false;
+            if (ai.wizards.shell.orb.OrbService.permitted(this)) ai.wizards.shell.orb.OrbService.setWanted(this, true);
+        }
+        ai.wizards.shell.orb.OrbService.appFront(this, true); // the orb hides while the Wizard app is in front
+    }
+
+    @Override
+    protected void onStop() {
+        ai.wizards.shell.orb.OrbService.appFront(this, false);
+        super.onStop();
+    }
+
     @Override
     protected void onDestroy() {
         java.util.concurrent.CountDownLatch l = capabilityAsk;
@@ -164,7 +202,8 @@ public class ShellActivity extends Activity {
         s.setUserAgentString(s.getUserAgentString() + UA_TAG);
         // Before the first load: the port is injected only for this exact origin (a new Wizard gets a new WebView).
         port = ShellPort.install(web, origin, () -> origin, new ai.wizards.shell.device.DevicePort.Registry()
-                .add(new ai.wizards.shell.recorder.RecordingCapability(this, () -> origin, this::ensurePermissions)));
+                .add(new ai.wizards.shell.recorder.RecordingCapability(this, () -> origin, this::ensurePermissions))
+                .add(new ai.wizards.shell.orb.OrbCapability(this, () -> runOnUiThread(this::askOverlay))));
         root.addView(web, 0, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         web.setDownloadListener((url, ua, disposition, mime, length) -> outside(Uri.parse(url)));

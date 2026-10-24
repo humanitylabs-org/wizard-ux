@@ -8,10 +8,16 @@ The page at /wizard-os-home/ talks to window.wizardDevicePort v1 directly and po
 line per event in OUT/fixture.log. OUT/mode (re-read on every request) picks what the page does:
   record   discover capabilities, start a device.recording take (or report the live one), post status
   recover  list pending takes, read each completely, acknowledge it; probe an unknown take and method
+  orb      turn the floating orb on (device.orb.enable)
   idle     discover only
+The orb's own files (web/assist/everywhere.*, orb.js, its images) are served from this repo's web/. OUT/orb picks how:
+  up (default) · down (HTTP 503) · slow (answer after 4 s, past the 1.5 s deadline)
 /elsewhere/ is a same-origin page outside the shell path: native must not answer it.
 """
 import http.server, json, os, pathlib, ssl, subprocess, sys, time
+
+WEB = pathlib.Path(__file__).resolve().parent.parent / 'web'
+ORB_FILES = {'assist/everywhere.html', 'assist/everywhere.js', 'assist/orb-size.js', 'orb.js', 'robert-thread-orb.png', 'robert-listening-galaxy.png'}
 
 PAGE = r"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>fixture</title><body style="background:#111;color:#eee;font:16px sans-serif;padding:80px 20px">
@@ -32,6 +38,7 @@ if(P)P.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(_){return}const w=pend
     else{const r=await call('device.recording.start',{kind:'voice',ref:'fixture'},60000).then(r=>r,e=>({error:e.message}));log({ev:'started',...r});}
     setInterval(async()=>{try{log({ev:'status',st:await call('device.recording.status')});}catch(e){}},3000);
   }
+  if(mode==='orb'){log({ev:'orb',r:await call('device.orb.enable').then(r=>r,e=>({error:e.message}))});}
   if(mode==='recover'){
     const p=await call('device.recording.pending');log({ev:'pending',p});
     for(const t of p){let off=0,size=0;while(off>=0){const c=await call('device.recording.read',{id:t.id,offset:off});size+=atob(c.b64).length;off=c.next;}
@@ -75,6 +82,13 @@ def serve(d, out):
                 m = (out / 'mode').read_text().strip() if (out / 'mode').exists() else 'idle'
                 return self.send(200, m, 'text/plain')
             if p in ('/', '/wizard-os-home', '/wizard-os-home/', '/wizard-os-home/index.html', '/elsewhere/'): return self.send(200, PAGE)
+            f = p[len('/wizard-os-home/'):] if p.startswith('/wizard-os-home/') else None
+            if f in ORB_FILES:
+                how = (out / 'orb').read_text().strip() if (out / 'orb').exists() else 'up'
+                if how == 'down': return self.send(503, 'down', 'text/plain')
+                if how == 'slow': time.sleep(4)
+                ctype = 'text/html; charset=utf-8' if f.endswith('.html') else 'application/javascript' if f.endswith('.js') else 'image/png'
+                return self.send(200, (WEB / f).read_bytes(), ctype)
             self.send(404, 'not found', 'text/plain')
         def do_POST(self):
             n = int(self.headers.get('Content-Length') or 0); body = self.rfile.read(n).decode(errors='replace')
