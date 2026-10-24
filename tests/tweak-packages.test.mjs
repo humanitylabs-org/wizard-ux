@@ -79,7 +79,7 @@ function wizardExperience(storage = new Map()) {
 test('profile default-off applies until the owner stores a deliberate choice, including an empty off list', async () => {
   let f = wizardExperience(); await f.E.refresh(); assert.deepEqual(f.active(), []); assert.equal(f.E.state.tweaks[0].on, false);
   await f.E.toggle('wizard/two-orbs'); assert.deepEqual(f.active(), ['wizard/two-orbs']);
-  assert.deepEqual(JSON.parse(f.storage.get('wos.skin-tweaks.v1')).off.wizard, []);
+  assert.deepEqual(JSON.parse(f.storage.get('wos.skin-tweaks.v1')).off.wizard, ['wizard/app-borders']);
   f = wizardExperience(f.storage); await f.E.refresh(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
   f.skin('novairecito'); await f.E.chooseSkin(); assert.deepEqual(f.active(), []);
   f.skin('nebula'); await f.E.chooseSkin(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
@@ -97,6 +97,22 @@ test('layout handles become inert on disposal and their cleanup is idempotent', 
   f.host._test.setImporter(async () => ({default:a=>{api=a;return()=>{};}}));
   await f.mount('wizard/two-orbs'); await f.clear();
   api.layout.use('two-orb')(); assert.equal(f.host.layout,'classic');
+});
+
+
+test('App borders migrates stored framed exactly once, leaves everyone else borderless and respects later off', async () => {
+  for (const foundation of ['framed', 'borderless', null]) {
+    const storage = new Map(foundation ? [['wos.skin.composition.v1', JSON.stringify({version:1,extends:'nebula',frame:{foundation}})]] : []);
+    let f = wizardExperience(storage); await f.E.refresh();
+    assert.equal(f.active().includes('wizard/app-borders'), foundation === 'framed');
+    if (foundation === 'framed') { await f.E.toggle('wizard/app-borders'); f = wizardExperience(storage); await f.E.refresh(); assert.deepEqual(f.active(), []); }
+  }
+});
+test('disposed foundation capability cannot change windows', async () => {
+  const f = fixture(); let api;
+  f.host._test.setImporter(async () => ({default:a=>{api=a;return()=>{};}}));
+  await f.mount('wizard/app-borders'); await f.clear(); api.layout.foundation('framed')();
+  assert.equal(f.ctx.window.WosSkin.frame.foundation, 'borderless');
 });
 
 test('slot lookup prefers a visible instance over hidden Chats copies (desktop)', async () => {

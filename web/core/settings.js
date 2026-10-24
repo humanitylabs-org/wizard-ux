@@ -252,16 +252,11 @@
     for (const m of mounts) m.render();
     ctx.haptic?.(8); return true;
   } });
-  // Phone only: desktop always keeps framed windows. One switch, on by default; skin JSON import stays for designers.
-  register({ id: 'skin-frame', available: () => !!window.WosSkin?.frameAdjustable, html() {
-    const S = window.WosSkin; if (!S?.frame) return '';
-    const on = S.frame.foundation === 'borderless';
-    return `<div class="st-group sf-section"><h4>Windows</h4><button class="st-row" data-skinborderless role="switch" aria-checked="${on}"><span class="st-tx"><b>Borderless apps</b><small>${on ? 'On · apps fill the screen with a floating X' : 'Off · apps open in framed windows'}</small></span><span class="sw ${on ? 'on' : ''}"><i></i></span></button><details class="st-advanced"><summary>Advanced</summary><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><p data-skinimport-status role="status"></p></details></div>`;
+  register({ id: 'skin-frame', available: () => !!window.WosSkin, html() {
+    return '<div class="st-group sf-section"><details class="st-advanced"><summary>Advanced</summary><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><p data-skinimport-status role="status"></p></details></div>';
   }, act(ctx, el) {
-    if (el.closest('[data-skinimport]')) { ctx.root.querySelector('[data-skinfile]').click(); return true; }
-    if (!el.closest('[data-skinborderless]')) return false;
-    const S = window.WosSkin; S.setFoundation(S.frame.foundation === 'borderless' ? 'framed' : 'borderless');
-    ctx.haptic?.(8); ctx.render(); return true;
+    if (!el.closest('[data-skinimport]')) return false;
+    ctx.root.querySelector('[data-skinfile]').click(); return true;
   } });
   register({ id: 'assistant', available: android, html(ctx) {
     const N = native(), evNative = typeof N?.setEverywhere === 'function'; let ev = null;
