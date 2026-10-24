@@ -213,6 +213,8 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 /* ---------- app selector (⌘O, every new desktop): the palette's search box over square app tiles, as on the phone ----------
  * 640px card → six 96px+ columns; 56px squircle sigils (the phone's launcher is 58px), name below, two lines at most. */
 .palette[data-mode="apps"] .pal-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 4px; align-content: start; padding: 12px; }
+.palette[data-mode="apps"] .pal-kind { grid-column: 1 / -1; margin: 10px 8px 2px; }
+.palette[data-mode="apps"] .pal-kind:first-child { margin-top: 2px; }
 .pal-app { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 4px 10px; border-radius: 14px; text-align: center; }
 .pal-app .ic { flex: 0 0 auto; width: 56px; height: 56px; border-radius: 18px; display: grid; place-items: center; font-size: 24px; transition: transform 160ms var(--ease), box-shadow 160ms; }
 .pal-app .ic:not(.sgt) { color: #fff; background: linear-gradient(140deg, var(--g1, #3a2a6a), var(--g2, #241a44)); } /* no sigil library: the old gradient chip */

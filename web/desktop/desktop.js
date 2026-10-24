@@ -831,8 +831,24 @@
     const list = norm(q) ? searchApps(q) : APPS.slice().sort((a, b) => pickRank(a) - pickRank(b) || SYS_APPS.indexOf(a.id) - SYS_APPS.indexOf(b.id));
     return list.filter(a => a.kind !== 'native' && a.id !== 'agents' && !C.isMaintenanceApp(a)).map(a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, run: o => openApp(a, o) }));
   }
+  /* My release (html[data-mine]): the selector sorts apps by what they are, like the phone launcher and the App Store:
+   * Apps (a screen you use), Agents (agent chats), Connectors (sign-ins to another service). Search stays one flat list. */
+  const mine = () => document.documentElement.dataset.mine != null;
+  const CONNECTOR_IDS = new Set(['wizard-chatgpt', 'wizard-claude', 'wizard-tinfoil', 'wizard-cloudflare']);
+  const isConnector = a => CONNECTOR_IDS.has(a.id) || /^(connect|sign in to)\b/i.test(a.desc || '');
+  function pickGroups(items) {
+    const g = { Apps: [], Agents: [], Connectors: [] };
+    for (const it of items) (it.app.kind === 'chats' ? g.Agents : isConnector(it.app) ? g.Connectors : g.Apps).push(it);
+    return Object.entries(g).filter(([, v]) => v.length);
+  }
   function pickRender() {
     palItems = pickBuild(palIn.value); palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
+    if (mine() && !norm(palIn.value)) {
+      const groups = pickGroups(palItems); palItems = groups.flatMap(([, v]) => v); let k = 0;
+      const tileHtml = it => { const i = k++; return `<button type="button" class="pal-app${i === palSel ? ' sel' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-selected="${i === palSel}" title="${esc(it.sub ? `${it.name} · ${it.sub}` : it.name)}">${ico('span', 'ic', it.app)}<span class="nm">${esc(it.name)}</span></button>`; };
+      palList.innerHTML = groups.map(([name, v]) => `<div class="pal-grp pal-kind" role="presentation">${esc(name)}</div>` + v.map(tileHtml).join('')).join('');
+      return palMark(palSel);
+    }
     palList.innerHTML = palItems.map((it, i) => `<button type="button" class="pal-app${i === palSel ? ' sel' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-selected="${i === palSel}" title="${esc(it.sub ? `${it.name} · ${it.sub}` : it.name)}">${ico('span', 'ic', it.app)}<span class="nm">${esc(it.name)}</span></button>`).join('')
       || `<div class="pal-empty">No app called “${esc(clip(palIn.value.trim(), 40))}”.<br><kbd>↵</kbd> searches threads and commands too</div>`;
     palMark(palSel);
@@ -847,6 +863,17 @@
   // Grid arrows are spatial: ←/→ step one tile, ↑/↓ one row; ↓ from a row above a short last row lands on its last tile.
   function pickMove(key) {
     const n = palItems.length; if (!n) return;
+    if (palList.querySelector('.pal-kind')) {   // grouped: rows differ in length, so move by position on screen
+      const tiles = [...palList.querySelectorAll('[data-i]')], cur = tiles[palSel];
+      if (key === 'ArrowRight') return palMark(Math.min(n - 1, palSel + 1));
+      if (key === 'ArrowLeft') return palMark(Math.max(0, palSel - 1));
+      const down = key === 'ArrowDown', rows = tiles.filter(t => down ? t.offsetTop > cur.offsetTop : t.offsetTop < cur.offsetTop);
+      if (!rows.length) return;
+      const y = down ? Math.min(...rows.map(t => t.offsetTop)) : Math.max(...rows.map(t => t.offsetTop));
+      const row = rows.filter(t => t.offsetTop === y);
+      const best = row.reduce((a, b) => Math.abs(b.offsetLeft - cur.offsetLeft) < Math.abs(a.offsetLeft - cur.offsetLeft) ? b : a);
+      return palMark(+best.dataset.i);
+    }
     const tiles = palList.querySelectorAll('[data-i]'), top = tiles[0].offsetTop;
     let cols = 0; while (cols < tiles.length && tiles[cols].offsetTop === top) cols++;
     const i = palSel, row = Math.floor(i / cols), last = Math.floor((n - 1) / cols);
