@@ -48,7 +48,7 @@ test('real shared Chats send enqueues all 10 attachments once without consuming 
  const src=read('web/core/chats.js'),start=src.indexOf('  async function sendChat('),end=src.indexOf('  const picker =',start);
  const files=Array.from({length:10},(_,n)=>({id:'f'+n,name:'voice-'+n+'.ogg',mime:'audio/ogg',bytes:10}));
  const draft={draft:'Keep my words',files:[{id:'existing',name:'mine'}]},enqueued=[];
- const sandbox={MAX_FILES:Number(src.match(/const MAX_FILES = (\d+)/)[1]),W:{w1:{id:'w1',app:'chats',thread:'__new__'}},ch:()=>draft,
+ const sandbox={window:{},MAX_FILES:Number(src.match(/const MAX_FILES = (\d+)/)[1]),W:{w1:{id:'w1',app:'chats',thread:'__new__'}},ch:()=>draft,
   joinWords:(a,b)=>[a,b].filter(Boolean).join('\n\n'),focusOf:()=>null,PW:null,winAgent:()=>'',AGS:()=>null,
   KIT:{drafts:{get:()=>({}),clear(){throw Error('Do not consume my draft');}}},LIVE:{},OUTBOX:{async enqueue(it){enqueued.push(it);return {durable:true,id:'receipt'};}},
   viewContext:()=>'',isWorking:()=>false,pendRef:f=>f,renderChats(){},applyLayout(){},deskOf:()=>0};

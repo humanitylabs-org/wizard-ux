@@ -8,7 +8,7 @@ test('skin picker renders preview cards for every skin, names in each skin\'s ow
   const s = read('web/core/settings.js');
   assert.match(s, /class="skp-all\$\{facesReady \? '' : ' skp-wait'\}"/);
   assert.doesNotMatch(s, /class="sk-dot"/, 'no dot swatches left');
-  assert.doesNotMatch(s, /data-skinfamily=/, 'no separate skin row: every colour is one tap');
+  assert.match(s, /data-skinfamily=/, 'family tiles precede the picked family colours');
   const k = read('web/core/skins.js');
   assert.match(k, /face: FACES\[s\.id\] \|\| null, t: \{ \.\.\.s\.t \}/);
   for (const id of ['nebula', 'grove', 'tide', 'ember', 'signal']) assert.match(k, new RegExp(`\\n    ${id}: \\{ family:`));

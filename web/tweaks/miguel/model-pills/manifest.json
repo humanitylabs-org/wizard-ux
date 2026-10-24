@@ -1,0 +1,12 @@
+{
+  "id": "miguel/model-pills",
+  "name": "Pill model switcher",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout",
+    "models"
+  ],
+  "description": "Pick the model from pills above your chats"
+}

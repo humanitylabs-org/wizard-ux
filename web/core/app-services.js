@@ -4,7 +4,7 @@
   'use strict';
   if (window.WizAppServices) return;
   const VERSION = 1, ORIGIN = location.origin, frames = new Map();
-  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.wizard', 'share.receive', 'share.targets', 'share.pending', 'share.ack', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set']);
+  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'share.receive', 'share.targets', 'share.pending', 'share.ack', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set']);
   let registry, available = null, serial = 0, rootArm = null;
   // Share receiving (docs/SHARE-SHEET.md): the share sheet hands its per-app ops here once, at shell load, before
   // any app frame exists; they are never on a global, so a frame reaches only its own app id's items.
@@ -12,6 +12,16 @@
   const claimShare = ops => { if (shareOps || !ops) return false; shareOps = ops; return true; };
   const uid = () => 'as-' + (++serial) + '-' + Math.random().toString(36).slice(2);
   const fault = message => new Error(message);
+  // Apps use the box's one configured transcriber; no microphone or provider credentials cross the frame.
+  async function transcribeFile(file, opts = {}) {
+    if (!file || !['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(file)) || !file.size || file.size > 25 * 1024 * 1024) throw fault('Use an audio file up to 25 MB');
+    if (opts.language != null && (typeof opts.language !== 'string' || !/^[a-zA-Z-]{0,35}$/.test(opts.language))) throw fault('Invalid transcription language');
+    const config = window.WizConfig;
+    await config?.ready;
+    if (!config?.transcribe || !config.endpoint('transcribe')) return { unavailable: true };
+    try { const result = await config.transcribe(file, { language: opts.language || '', prompt: config.voicePrompt?.() || '' }); return { text: String(result.text || '').trim() }; }
+    catch (e) { if (e.code === 'no_voice') return { unavailable: true }; throw e; }
+  }
   function apps() { if (!registry) registry = [window.WizCore.apps('mobile'), window.WizCore.apps('desktop')]; return registry.flatMap(r => r.APPS); }
   function registered(st) {
     const a = apps().find(a => a.id === st.appId && a.kind !== 'native' && a.url);
@@ -227,6 +237,7 @@
         targets(list) { check(); return !!shareOps?.setTargets(st.appId, list); },
         pending() { check(); return shareOps?.pending(st.appId, { owner: st, alive: () => frames.get(st.frame) === st && st.frame.isConnected && valid(st, st.doc) }) || []; },
         ack(id) { check(); return typeof id === 'string' && !!shareOps?.ack(st.appId, id); } }),
+      voice: Object.freeze({ async transcribe(file, opts) { check(); const result = await transcribeFile(file, opts); check(); return result; } }),
       theme: Object.freeze({ get() { check(); return window.WizAppearance?.get(frameOf(st)) || null; } }),
       update: Object.freeze({ hold, available() { check(); return available; } }),
       capture: Object.freeze({ start,
@@ -314,6 +325,7 @@
       if (d.op === 'share.text') value = await svc.share.text(d.args);
       if (d.op === 'share.wizard') value = await svc.share.wizard(d.args);
       if (d.op === 'share.file') value = await svc.share.file(d.args?.file, d.args?.options);
+      if (d.op === 'voice.transcribe') value = await svc.voice.transcribe(d.args?.file, { language: d.args?.language });
       if (d.op === 'share.receive') value = svc.share.receive(d.args);
       if (d.op === 'share.targets') value = svc.share.targets(d.args?.targets);
       if (d.op === 'share.pending') value = svc.share.pending();
