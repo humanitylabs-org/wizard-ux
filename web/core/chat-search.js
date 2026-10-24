@@ -15,7 +15,7 @@
 (() => {
   'use strict';
   const C = window.WizCore = window.WizCore || {};
-  const BATCH = 30, LIMIT = 200, CONC = 4, CACHE_N = 150, MAX_SCAN = 300;
+  const BATCH = 30, LIMIT = 200, CONC = 4, CACHE_N = 150, MAX_SCAN = 300, STALE = 5 * 60 * 1000;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const cache = new Map(); // id → { sig, texts: [string] }
   const runs = {};         // wid → { q, want, scanned, hits, ctrl, done, busy, onUpdate, stats }
@@ -82,7 +82,7 @@
           publish(rows);
         } catch(e) { if(e.name==='AbortError') throw e; r.errors++; r.serverError=true; }
       }
-      while (!r.ctrl.signal.aborted && r.scanned < Math.min(r.want, list.length)) {
+      while (!r.ctrl.signal.aborted && !r.paused && r.scanned < Math.min(r.want, list.length)) {
         const slice = list.slice(r.scanned, Math.min(r.want, list.length, r.scanned + CONC));
         await Promise.all(slice.map(async s => {
           try { const m = match(await textsOf(s, r.ctrl.signal), ws); if (m && !r.ctrl.signal.aborted && runs[wid] === r) r.hits.set(s.id, m); }
@@ -94,29 +94,53 @@
     } catch (e) { if (e.name === 'AbortError') stats.aborted++; }
     finally { r.busy = false; }
     r.total = list.length;
+    if (!r.paused && r.scanned >= Math.min(r.want, list.length)) r.doneAt = Date.now();
     if (!r.ctrl.signal.aborted) r.onUpdate?.();
   }
   function cancel(wid) { const r = runs[wid]; if (r) { r.ctrl.abort(); delete runs[wid]; } }
+  const scanning = r => !!r && (r.busy || (!r.paused && r.scanned < Math.min(r.want, r.total || 0)));
+  /* Instant answers before any read: rows the previous (shorter) query already found that still match, and
+   * every message body this phone has cached. The server/background rounds then only add to them. */
+  function seed(r, prev) {
+    const ws = words(r.q);
+    if (prev && prev.agent === r.agent && r.q.includes(prev.q)) for (const [id, s] of prev.rows) {
+      const m = match([s.title, s.preview, s.searchSnippet].filter(Boolean), ws); if (m) { r.rows.set(id, s); r.hits.set(id, m); }
+    }
+    for (const s of candidates(r.agent)) {
+      const hit = cache.get(`${s.agent || 'hermes'}:${s.id}`);
+      if (hit && hit.sig === sigOf(s) && !r.hits.has(s.id)) { const m = match(hit.texts, ws); if (m) r.hits.set(s.id, m); }
+    }
+  }
   C.chatSearch = {
     query(wid, q, onUpdate, agent = '') {
       const ws = words(q);
       if (!ws.length || ws.join(' ').length < 2) { cancel(wid); return null; }
       let r = runs[wid];
-      if (!r || r.q !== ws.join(' ') || r.agent !== agent) {
-        cancel(wid);
+      const fresh = r && r.q === ws.join(' ') && r.agent === agent && !(r.doneAt && Date.now() - r.doneAt > STALE);
+      if (!fresh) {
+        const prev = r; cancel(wid);
         r = runs[wid] = { q: ws.join(' '), agent, rows:new Map(), want: BATCH, scanned: 0, total: candidates(agent).length, hits: new Map(), ctrl: new AbortController(), busy: false, errors: 0, onUpdate };
+        seed(r, prev);
         // Wait for the typing to settle before reading anything.
         setTimeout(() => { if (runs[wid] === r) pump(wid, r); }, 250);
-      } else r.onUpdate = onUpdate;
+      } else {
+        r.onUpdate = onUpdate;
+        // Back from a thread opened out of these results: the same answers, at once; finish a paused round.
+        if (r.paused) { r.paused = false; if (!r.busy) pump(wid, r); }
+      }
       return r;
     },
+    /* Opening a thread from the results keeps them for Back (James, 25 Oct 2026: Back re-ran the whole search).
+     * The server answer may finish in the background; the per-thread message reads pause so the thread loads first. */
+    park(wid) { const r = runs[wid]; if (r) r.paused = true; },
+    scanning,
     more(wid) { const r = runs[wid]; if (!r) return; r.want = Math.min(MAX_SCAN, r.want + BATCH); pump(wid, r); },
     cancel,
     /* One line under the results: progress, the cap, and the button for older threads. */
     footer(r) {
       if (!r) return '';
       const total = Math.min(r.total || candidates().length, MAX_SCAN), upto = Math.min(r.want, total);
-      if (r.busy || r.scanned < upto) return `<div class="ch-bodysearch busy" data-chbs="busy"><span class="wx-spin" aria-hidden="true"></span>Searching messages · ${r.scanned} of ${upto} recent threads</div>`;
+      if (scanning(r) || (!r.paused && r.scanned < upto)) return `<div class="ch-bodysearch busy" data-chbs="busy"><span class="wx-spin" aria-hidden="true"></span>Searching messages · ${r.scanned} of ${upto} recent threads</div>`;
       const n = r.hits.size, more = upto < total;
       if (r.serverError) return '<div class="ch-bodysearch">Couldn’t search older threads · check your connection and try again</div>';
       if (r.partial) return `<div class="ch-bodysearch" data-chbs="done">Searched available agents · ${n} with matches · some agents could not be searched</div>`;
