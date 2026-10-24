@@ -97,7 +97,7 @@
       if (B.bootstrap) {
         const type = (blob.type || 'audio/webm').split(';')[0];
         const ext = type.includes('mp4') ? 'm4a' : type.includes('ogg') ? 'ogg' : type.includes('wav') ? 'wav' : 'webm';
-        // WebKit can keep an IndexedDB-restored Blob's request stream open without sending its bytes. Materialize
+        // A browser can keep an IndexedDB-restored Blob's request stream open without sending its bytes. Materialize
         // the recording first so a recovered voice send either uploads a finite body or fails locally and keeps it.
         let body = blob;
         if (typeof blob?.arrayBuffer === 'function') {
