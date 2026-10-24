@@ -188,6 +188,9 @@
     },
     providerId(id) { return ({ tinfoil: 'wizard-tinfoil', local: 'wizard-local-model' })[id] || id; },
     provider(id) { return (A.options?.providers || []).find(p => A.providerId(p.id) === A.providerId(id)) || null; },
+    // Compatibility for an existing sealed legacy agent, not an installed-provider catalogue or creation option.
+    // Any installed row (including unavailable) is authoritative; never bypass it using the legacy policy.
+    legacyPrivate(a) { return A.isPrivate(a) && A.providerId(a.model?.provider) === 'wizard-tinfoil' && !!A.options && !A.provider(a.model.provider); },
     privacyPromise(p) {
       const kind = p?.kind || p?.private_inference?.kind;
       if (kind === 'attested-relay') return `Encrypted on this box; ${A.cleanProvider(p.label || p.id)} can’t read it`;
@@ -242,7 +245,7 @@
       const allowed = Array.isArray(a.model.allowed_models) && a.model.allowed_models.length ? a.model.allowed_models : [a.model.model].filter(Boolean);
       const p = A.provider(a.model.provider);
       // Sealed choices are the intersection of the agent policy and its installed provider's advertised models.
-      const offered = A.isPrivate(a) ? allowed.filter(id => p?.available !== false && p?.models?.some(m => (typeof m === 'string' ? m : m.id) === id)) : allowed;
+      const offered = A.isPrivate(a) && !A.legacyPrivate(a) ? allowed.filter(id => p?.available !== false && p?.models?.some(m => (typeof m === 'string' ? m : m.id) === id)) : allowed;
       return offered.map(m => ({ value: m, provider: a.model.provider, agent: a.id, name: A.modelName(a, m), description: A.providerLabel(a.model.provider) + (a.model.fallback === false ? ' · no fallback' : ''), isGlobalDefault: m === a.model.model }));
     },
     allows(a, model) { return A.modelOptions(a).some(o => o.value === model); },

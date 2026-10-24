@@ -181,7 +181,7 @@
       const p = provider(d.provider);
       body = `<p class="ag-lede">Where ${esc(d.label || 'this agent')}’s thinking runs. Private providers keep inference inside your private boundary.</p>
         ${o.providers.map(x => choice('provider', x.id, d.provider === x.id, x.label, x.confidential ? AG.privacyPromise(x) + (x.available ? '' : ' · Unavailable') : x.description || 'Public model provider', x.confidential ? `<span class="ag-badge priv" style="--ag:var(--c-accent)">${LOCK}Confidential</span>` : '')).join('')}
-        ${!o.providers.some(x => x.confidential) ? '<p class="ag-note"><a class="ag-link" href="../store/index.html?q=private" data-store>Install a private provider</a></p>' : ''}
+        ${!o.providers.some(x => x.confidential) && !AG.list.some(a => AG.legacyPrivate(a)) ? '<p class="ag-note"><a class="ag-link" href="../store/index.html?q=private" data-store>Install a private provider</a></p>' : ''}
         ${p ? `<div class="ag-sec">Model</div><div class="ag-models" role="radiogroup" aria-label="Model">${p.models.map(m => `<button type="button" class="ag-chip" role="radio" aria-checked="${d.model === m.id}" data-pick="model" data-v="${esc(m.id)}">${esc(m.label)}</button>`).join('') || '<span class="ag-empty-line">This provider has no models yet.</span>'}</div>
           <p class="ag-note">${p.confidential ? 'No fallback: if this model is down, the agent waits. It never switches to a public provider.' : 'Your Wizard may fall back to another model if this one is down.'}</p>` : ''}`;
     } else {
@@ -267,6 +267,7 @@
         <div class="ag-kv"><span>Allowed in chats</span><b>${esc(allowed.map(m => AG.modelName(a, m)).join(', ') || '—')}</b></div>
         <div class="ag-kv"><span>Fallback</span><b>${a.model.fallback ? 'On' : 'Off'}</b></div>
         ${editable && (p?.models?.length || 0) > 1 ? '<button type="button" class="ag-add" data-model>Change model</button>' : ''}
+        ${p?.available === false ? '<p class="ag-note bad" data-provider-unavailable>Provider unavailable. This agent waits; it never falls back to a public provider.</p>' : ''}
         ${a.privacy === 'private' ? `<p class="ag-note" data-privacy-promise>${esc(AG.privacyPromise(p))}</p><p class="ag-note">No fallback. Its chats can only use the models above.</p>` : ''}</div>
       <div class="ag-sec">Permissions<small>Preset: ${esc(preset(a.permissions.preset).label)}</small></div>
       ${editable ? '' : '<p class="ag-note">The main agent runs your Wizard’s own setup. Its other permissions are managed there; pick its apps here.</p>'}

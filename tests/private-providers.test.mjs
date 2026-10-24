@@ -74,6 +74,26 @@ test('stale or unavailable private provider models are not selectable',async()=>
   const {A,M}=await setup({agents:[agent('stale','wizard-local-model','removed-model'),agent('offline','another-relay','old-model')]});
   assert.equal(A.modelOptions(A.get('stale')).length,0);assert.equal(M.privateOptions().length,0);
 });
+for (const id of ['tinfoil', 'wizard-tinfoil']) test(`legacy Private on ${id} keeps its policy models without a provider app or Store nag`, async()=>{
+  const {A,M,ctx,root,click}=await setup({ui:true,rows:[],query:'?agent=private',agents:[agent('private',id,'legacy-model',{status:'running'})]});
+  assert.equal(A.provider(id),null); // no fabricated installed-provider row
+  assert.deepEqual(Array.from(A.modelOptions(A.get('private')),o=>o.value),['legacy-model']);
+  assert.equal((await M.resolveRoute({agent:'private',model:'legacy-model'})).provider,id);
+  assert.match(root.innerHTML,/Running/);assert.doesNotMatch(root.innerHTML,/Unavailable|Install a private provider/);
+  ctx.__agents.back();click({new:''});ctx.__agents.state().draft.label='Another';click({next:''});
+  assert.doesNotMatch(root.innerHTML,/Install a private provider/);
+  assert.equal(M.privateOptions().length,1);
+});
+test('missing arbitrary private provider never inherits legacy compatibility',async()=>{
+  const {A}=await setup({rows:[],agents:[agent('missing','removed-provider','old-model')]});
+  assert.equal(A.modelOptions(A.get('missing')).length,0);
+});
+test('installed unavailable Tinfoil overrides legacy policy, even with advertised models',async()=>{
+  const {A,M,root}=await setup({ui:true,rows:[{...providers[0],available:false}],query:'?agent=private',agents:[agent('private','tinfoil','relay-model')]});
+  assert.equal(A.modelOptions(A.get('private')).length,0);assert.equal(M.privateOptions().length,0);
+  assert.match(root.innerHTML,/data-provider-unavailable/);
+  await assert.rejects(M.resolveRoute({agent:'private',model:'relay-model'}),/can’t use/);
+});
 test('nested Agents Back closes sheet, detail then stays at root without navigating',async()=>{
   const {ctx,click}=await setup({ui:true,query:'?agent=private',agents:[agent('private','wizard-local-model','owned-model')]});
   click({rename:''});assert.equal(ctx.__agents.state().sheet,'rename');ctx.__agents.back();
