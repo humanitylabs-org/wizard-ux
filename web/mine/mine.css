@@ -651,3 +651,8 @@ html[data-mine] .ch-row-wrap > .ch-row { padding-right: 8px; }
  * leave his Settings. Stock boxes keep them; the features themselves stay reachable by deep link. */
 html[data-mine] .st-root :is([data-st-shortcut], [data-feature-open]):is([data-st-shortcut="day"], [data-st-shortcut="week"], [data-st-shortcut="month"], [data-st-shortcut="maps"], [data-st-shortcut="command"], [data-feature-open="day"], [data-feature-open="week"], [data-feature-open="month"], [data-feature-open="maps"], [data-feature-open="command"]) { display: none; }
 html[data-mine] .st-root [data-settings-feature="features"]:not(:has([data-feature-open]:not([data-feature-open="day"], [data-feature-open="week"], [data-feature-open="month"], [data-feature-open="maps"], [data-feature-open="command"]))) { display: none; }
+/* My release: Chats has no pull-to-refresh (refresh is the ↻ in the title bar). */
+html[data-mine] .ch-ptr { display: none; }
+/* My release: ↻ refresh sits just left of ✕ in the phone title bar, styled like it (borderless frames hide other bar buttons). */
+html[data-mine][data-shell="phone"] .wbar > [data-wact="reload"] { display: grid; flex: 0 0 auto; width: 34px; height: 34px; place-items: center; border-radius: 10px; color: var(--ink-2); }
+html[data-mine][data-shell="phone"] .wbar > [data-wact="reload"]:hover { color: var(--ink); background: var(--glass-2); }

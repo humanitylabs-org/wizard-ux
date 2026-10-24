@@ -1459,6 +1459,7 @@ window.WizCore.chats = function createChats(H) {
   function bindPull(root) {
     root.addEventListener('touchstart', e => {
       ptr = null;
+      if (document.documentElement.dataset.mine != null) return; // My release: refresh is the ↻ in the title bar, no pull gesture
       if (e.touches.length !== 1) return;
       const sc = e.target.closest?.('.ch-list > .ch-scroll'); if (!sc || sc.scrollTop > 0) return;
       if (e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
