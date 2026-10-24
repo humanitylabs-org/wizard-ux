@@ -14,6 +14,7 @@
  *   Right ⌥ tap   dictate (tap again: insert at the cursor, else copy)
  *   ⌥I            inbox                       ⇧⌥←→       swap window
  *   ⌘W / ⌥W       close app                   ⌥F         full screen
+ *   ⌥R            refresh the focused window (keeps it open, in place)
  *   ⌥/            all keys                    ⌥[ ⌥]      previous / next workspace
  *   Esc           close the top layer (never leaves the app)
  */
@@ -372,6 +373,7 @@
     const a = appOf(w);
     return `<div class="wbar" data-drag>${w.app === 'chats' ? window.WosAgents.titlebar(w.agent || '', 'ic', 't') : `${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>`}
       ${window.WosBoundView.badge(w)}${w.app === 'frame' ? window.WosOwnViews?.marker(a) || '' : ''}${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
+      <button data-wact="reload" title="Refresh (${MOD}R)" aria-label="Refresh window">↻</button>
       <button data-wact="mono" title="Full screen (${MOD}F)" aria-label="Full screen">⤢</button>
       <button data-wact="close" title="Close app (${MOD}W)" aria-label="Close window">✕</button></div>
       <div class="wbody">${bodyHtml(w)}</div>`;
@@ -574,6 +576,24 @@
     ws.splice(cur, 1); cur = ws.indexOf(previous); lastWs = cur; save(); render();
     if (focused()) focusInside(focused().id); CHATS.markVisibleThreadsSeen(); return true;
   }
+  /* Refresh one window in place: an app frame reloads at the page it is on, Chats refetches its list and thread,
+   * built-in views remount. The window keeps its desk, position and size, so nobody has to close and reopen it. */
+  function reloadWin(id) {
+    const w = W[id], el = winEl(id); if (!w || !el) return false;
+    if (w.app === 'chats' || CHATS.isHosted(id)) {
+      window.WizCore.refreshApps?.(); LIVE?.refresh?.();
+      if (w.thread && w.thread !== '__new__') CHATS.loadThread(w, true);
+    }
+    if (w.app === 'chats') { CHATS.renderChatList(listWin(id), el.querySelector(`[data-chats="${id}::list"]`)); syncChatsPane(id); }
+    else {
+      const f = el.querySelector('.wbody iframe');
+      if (f) { try { f.contentWindow.location.reload(); } catch (e) { f.src = f.src; } }
+      else { save(); const host = el.parentNode, next = el.nextSibling, fresh = mountWin(w, host); host.insertBefore(fresh, next); el.remove(); render(); }
+    }
+    toast('↻', `Refreshed ${winTitle(w)}`, 900);
+    return true;
+  }
+  function reloadCurrent() { const f = focused(); return f && !homeOpen ? reloadWin(f.id) : false; }
   function closeCurrent() { const f = focused(); if (f) { closeWin(f.id); return 'app'; } return closeDesktop() ? 'desktop' : 'root'; }
 
   /* ---------------- top bar ---------------- */
@@ -659,6 +679,7 @@
     const id = el.dataset.win, w = W[id];
     const act = e.target.closest('[data-wact]')?.dataset.wact;
     if (act === 'close') return closeWin(id);
+    if (act === 'reload') return reloadWin(id);
     if (act === 'mono') return toggleMono();
     if (act === 'pop') { const a = appOf(w); let href = a.url; try { href = el.querySelector('iframe').contentWindow.location.href; } catch (err) {} return window.open(href, '_blank', 'noopener'); }
     if (w?.app === 'chats' || CHATS.isHosted(id)) {
@@ -745,6 +766,7 @@
       ...(window.WosUsage ? [{ kind: 'cmd', name: 'AI usage', icon: '◔', run: () => openUsage() }] : []),
       { kind: 'cmd', name: 'Close app / empty desktop', icon: '✕', keys: `${MOD}W`, run: () => closeCurrent() },
       { kind: 'cmd', name: 'Full screen', icon: '⤢', keys: `${MOD}F`, run: () => toggleMono() },
+      { kind: 'cmd', name: 'Refresh window', icon: '↻', keys: `${MOD}R`, run: () => reloadCurrent() },
       { kind: 'cmd', name: 'Keyboard shortcuts', icon: '⌨', keys: `${MOD}/`, run: () => toggleKeys(true) },
       { kind: 'cmd', name: 'Settings', icon: '⚙', keys: `${MOD},`, run: () => openSettings() },
       { kind: 'cmd', name: 'Use the phone layout here', icon: '📱', run: () => { location.href = './?shell=phone'; } },
@@ -1023,7 +1045,7 @@
     ['Open and find', [[`${MOD}Space`, 'Search everything'], [`${MOD}O`, 'Open an app'], [`${MOD}1`, 'Home'], [`${MOD}I`, 'Inbox'], [`${MOD},`, 'Settings'], [`${MOD}/`, 'This list']]],
     ['Chat', [[`${MOD}N`, 'New chat'], [`${MOD}V`, 'New voice chat (again to send)'], ['Enter', 'Send (⇧Enter for a new line)'], [`${MOD}↑  ${MOD}↓`, 'Previous / next chat'], ['Esc', 'Back'], ['/', 'Search chats']]],
     ['Desktops', [[`${MOD}T`, 'New desktop'], [`${MOD}2 … 9`, 'Go to desktop'], [`${MOD}[  ${MOD}]`, 'Previous / next desktop'], [`${MOD}\``, 'Last desktop'], [`${MOD}⇧2 … 9`, 'Send window to desktop']]],
-    ['Windows', [[`${MOD}← ↑ → ↓`, 'Focus window (or H J K L)'], [`${MOD}⇧← →`, 'Swap window'], [`${MOD}F`, 'Full screen'], [`${MOD}W`, 'Close app']]],
+    ['Windows', [[`${MOD}← ↑ → ↓`, 'Focus window (or H J K L)'], [`${MOD}⇧← →`, 'Swap window'], [`${MOD}F`, 'Full screen'], [`${MOD}R`, 'Refresh window'], [`${MOD}W`, 'Close app']]],
     ['Wizard for Mac (any app)', [['Caps Lock', 'Search and launch'], ['Caps Lock + letter', 'Jump to an app'], ['Right ⌘', 'Talk to Wizard'], ['Right ⌥', 'Dictate into any app']]],
   ];
   const keysEl = $('#keys');
@@ -1457,6 +1479,7 @@
     if (code === 'KeyI') return hit(() => toggleInbox());
     if (code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
     if (code === 'KeyF') return hit(() => { if (!e.repeat) toggleMono(); });
+    if (code === 'KeyR' && !shift) return hit(() => { if (!e.repeat) reloadCurrent(); });
     if (code === 'Slash') return hit(() => toggleKeys());
     if (code === 'Comma') return hit(() => (setEl.hidden ? openSettings() : closeSettings()));
     if (code === 'BracketLeft') return hit(() => { lastWs = cur; goWs((cur - 1 + ws.length) % ws.length); });
