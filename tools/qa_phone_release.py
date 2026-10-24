@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepared combined phone release + pinned 0.10.8 upgrade. Thales worker only; never publishes.
+"""Prepared combined phone release + pinned 0.10.11 upgrade. Thales worker only; never publishes.
 usage: qa_phone_release.py RELEASE_JOB OLD_APK OUTPUT REVISION
 Android unit/lint evidence is supplied separately by CI on this exact revision.
 """
@@ -13,7 +13,7 @@ import sys
 from qa_paths import required_work_root, android_sdk, java_home
 
 SIGNER = '3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd'
-OLD_SHA = 'cc4e2e99d0d90aad111aaecb710aac43c1e6e08f2c9c49cfb93404e6cbaae6fe'
+OLD_SHA = '643a68d497166ed5c4164b65f9bc1c1d06cb65c42d156ab78df7baa65ca5d76b'
 
 
 def digest(path):
@@ -28,6 +28,8 @@ def validate(config, revision):
         raise ValueError('prepared tree is dirty')
     if config.get('expected_signer') != SIGNER:
         raise ValueError('established phone signer required')
+    if Path(config.get('signing_env', '')).resolve() != Path.home() / '.hermes/secure/wizard-os/signing.env':
+        raise ValueError('Wizard OS WOS_* signing configuration required')
     if config['tasks'] != [':app:assembleRelease']:
         raise ValueError('expected one release build; Android unit tests belong to CI')
 
@@ -48,11 +50,11 @@ def main():
     config = json.loads((args.release_job / 'job.json').read_text())
     validate(config, args.revision)
     if digest(args.old_apk) != OLD_SHA:
-        raise SystemExit('0.10.8/72 previous APK drift')
+        raise SystemExit('0.10.11/75 previous APK drift')
     fd = int(os.environ['WIZARD_HEAVY_LOCK_FD'])
     args.output.mkdir(parents=True, exist_ok=False)
     receipt = {'source_revision': args.revision, 'old_sha256': OLD_SHA, 'ok': False, 'steps': []}
-    env = dict(os.environ, WOS_NEW='0.10.9', JAVA_HOME=java_home(), ANDROID_HOME=str(android_sdk()), ANDROID_SDK_ROOT=str(android_sdk()))
+    env = dict(os.environ, WOS_NEW='0.10.12', JAVA_HOME=java_home(), ANDROID_HOME=str(android_sdk()), ANDROID_SDK_ROOT=str(android_sdk()))
     env['PATH'] = env['JAVA_HOME'] + '/bin:' + env['PATH']
 
     def run(name, argv):
@@ -72,12 +74,12 @@ def main():
         artifact = built['artifacts'][0]
         metadata = artifact['aapt2']
         assert metadata['package'] == 'ai.wizards.os'
-        assert metadata['version_name'] == '0.10.9' and str(metadata['version_code']) == '73'
+        assert metadata['version_name'] == '0.10.12' and str(metadata['version_code']) == '76'
         assert artifact['signer_sha256'] == SIGNER
         apk = args.release_job / 'source' / artifact['path']
         assert digest(apk) == artifact['sha256']
         receipt['build'] = built
-        run('signed-upgrade-0.10.8-to-0.10.9', [sys.executable, args.release_job / 'source/tools/qa_upgrade.py', args.old_apk, apk])
+        run('signed-upgrade-0.10.11-to-0.10.12', [sys.executable, args.release_job / 'source/tools/qa_upgrade.py', args.old_apk, apk])
         receipt.update(ok=True, artifact=str(apk), sha256=artifact['sha256'])
     finally:
         (args.output / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
