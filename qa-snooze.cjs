@@ -92,19 +92,23 @@ const threadOpen = (p, id) => p.evaluate(id => [...document.querySelectorAll('[d
     await shot('picker');
     ok(await back(p,desktop)==='boomerang'&&await p.locator('.boom-sheet').count()===0&&await threadOpen(p,T[0].id),`${L}: nested Back closes only picker, app/thread stay`);
     await pick();
-    await p.locator('[data-boom-preset="tomorrow-am"]').click();await p.locator('.boom-banner').waitFor();
+    await p.locator('[data-boom-preset="tomorrow-am"]').click();await p.waitForFunction(id=>!Object.values((window.__wos||window.__wux).wins||{}).some(w=>w.thread===id),T[0].id,{timeout:4000}).catch(()=>{});
+    ok(!await threadOpen(p,T[0].id),`${L}: timed Snooze goes back like Done, no extra tap`);
     ok(await p.locator('.boom-sheet').count()===0,`${L}: one tap on a choice snoozes and closes`);
     const post=st.posts.at(-1);
     ok(post?.kind==='return'&&post.thread===T[0].id&&post.target.message===null&&post.timezone==='Asia/Bangkok'&&/T02:00:00.000Z$/.test(post.when.once),`${L}: timed Snooze uses unchanged shared scheduler at Bangkok 9:00`,post);
     const label=await p.evaluate(()=>window.WosBoomerang._returnLabel(window.WosBoomerang.nextFor('qa_boom_a')));
-    ok((await p.locator('.boom-banner').innerText()).includes(label)&&await p.evaluate(l=>document.body.innerText.includes(l),label),`${L}: exact saved return confirmation`,label);
+    ok(await p.evaluate(l=>document.body.innerText.includes(l),label),`${L}: exact saved return confirmation toast`,label);
     await p.waitForFunction(id=>window.WizLive.workGroups().deferred.some(s=>s.id===id),T[0].id,{timeout:4000}).catch(()=>{});
-    ok(st.dispositionWrites.at(-1)?.deferred===true&&await p.evaluate(id=>!window.WizLive.workGroups().ready.some(s=>s.id===id),T[0].id)&&await threadOpen(p,T[0].id),`${L}: timed Snooze takes the thread out of Ready and keeps it open`);
+    ok(st.dispositionWrites.at(-1)?.deferred===true&&await p.evaluate(id=>!window.WizLive.workGroups().ready.some(s=>s.id===id),T[0].id),`${L}: timed Snooze takes the thread out of Ready`);
     await shot('timed');
+    await open();await p.locator('.boom-banner').waitFor();
+    ok((await p.locator('.boom-banner').innerText()).includes(label),`${L}: reopened thread shows Back-at banner`,label);
     await p.locator('.boom-banner [data-boom-change]').click();await p.locator('[data-boom-exact]').click();
     await p.locator('.boom-card input[name=time]').fill('09:37');
     await p.locator('.boom-card [type=submit]').click();await p.waitForFunction(()=>window.WosBoomerang.nextFor('qa_boom_a')?.due_at.includes('02:37:'));
     ok(st.schedules.length===1&&st.schedules[0].when.once.includes('T02:37:'),`${L}: edit keeps existing scheduler id and exact minutes`);
+    await open();
     if(await p.locator('.msg.a [data-mboom]').count()){ // per-reply Snooze was trimmed (64dc147d); keep its checks for skins that bring it back
       await p.locator('.msg.a [data-mboom]:visible').first().click();
       ok(await p.locator('#boom-title').innerText()==='When should this come back?'&&/4,200/.test(await p.locator('q.boom-context').innerText()),`${L}: message action uses same picker and quotes the message`);

@@ -485,9 +485,14 @@ window.WizCore.chats = function createChats(H) {
   }
   // A pin changed here, on another tab, or on another device (pulled through the shared preferences).
   window.addEventListener('wos:chat-pins', () => { for (const id of Object.keys(CH)) { const w = W[id]; if (w && !w.thread && !holdList(id)) renderChats(w); } });
-  window.addEventListener('wos:boomerang-set', e => toast('◷', e.detail.label, 3200));
+  // A successful thread Snooze leaves the thread like Done does: back to wherever James came from, no extra tap
+  // (James, 24 Oct 2026; supersedes keeping it open on the Back-at banner). The toast carries the return time.
+  window.addEventListener('wos:boomerang-set', e => {
+    toast('◷', e.detail.label, 3200);
+    if (e.detail.session) for (const id of Object.keys(CH)) { const w = W[id]; if (w?.thread === e.detail.session) threadBack(w); }
+  });
   window.addEventListener('wos:snooze-someday', e => {
-    if (!e.detail.quiet) for (const id of Object.keys(CH)) { const w = W[id]; if (w?.thread === e.detail.session) threadBack(w); } // a timed Snooze keeps its thread open on the Back-at banner
+    if (!e.detail.quiet) for (const id of Object.keys(CH)) { const w = W[id]; if (w?.thread === e.detail.session) threadBack(w); } // a timed Snooze already left the thread on wos:boomerang-set
     if (!e.detail.quiet) toast('◷', 'Snoozed · out of your list', 2400); H.changed?.();
   });
   // A scheduled Snooze was set, changed or came back: list markers, the thread banner and the Ready place follow.
