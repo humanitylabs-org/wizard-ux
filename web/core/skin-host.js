@@ -349,7 +349,11 @@
       const slot = name => {
         if (!slotContract?.slots[name]) return null;
         const selector = `[data-slot="${name}"]`;
-        return shell?.root()?.querySelector(selector) || document.querySelector(selector);
+        // Prefer the focused chats window, then any visible instance: desktop keeps hidden Chats copies around.
+        const seen = el => !!el && el.isConnected !== false && (typeof el.getClientRects !== 'function' || el.getClientRects().length > 0);
+        const own = shell?.root()?.querySelector(selector);
+        if (seen(own)) return own;
+        return [...document.querySelectorAll(selector)].find(seen) || own || document.querySelector(selector);
       };
       const borrowed = new Map();
       slot.mount = (name, node, order = 0) => {

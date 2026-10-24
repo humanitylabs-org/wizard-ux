@@ -65,3 +65,10 @@ test('a core repaint removes the origin marker: teardown never resurrects stale 
   const replacement=f.doc.createElement('div'); replacement.setAttribute('data-part','thread-actions'); f.thread.append(replacement);
   await f.clear(); assert.equal(f.thread.querySelector('[data-part="thread-actions"]'),replacement); assert.equal(f.thread.children.filter(n=>n.dataset.part==='thread-actions').length,1);
 });
+
+test('slot lookup prefers a visible instance over hidden Chats copies (desktop)', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const src = await readFile(new URL('../web/core/skin-host.js', import.meta.url), 'utf8');
+  assert.match(src, /getClientRects\(\)\.length > 0\)/);
+  assert.match(src, /querySelectorAll\(selector\)\]\.find\(seen\)/);
+});
