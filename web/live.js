@@ -328,15 +328,16 @@
     spaces: ['wos.chats.spaces.v1', v => Array.isArray(v), JSON.stringify],
   };
   let prefsOff = false;
-  const putPrefs = patch => {
-    if (prefsOff) return prefsWrites;
+  const putPrefs = (patch, { requireShared = false } = {}) => {
+    if (prefsOff) return Promise.resolve(!requireShared);
     prefsPending++; prefsRevision++;
     prefsWrites = prefsWrites.then(async () => {
       try {
         const r = await req(PREFS_URL, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
-        if (r.status === 404) { prefsOff = true; return; } // this Agent Service has no shared preferences yet: keep the choice on this device, quietly
+        if (r.status === 404) { prefsOff = true; return !requireShared; } // this Agent Service has no shared preferences yet: keep the choice on this device, quietly
         if (!r.ok) throw new Error('Preferences unavailable');
-      } catch (e) { window.dispatchEvent(new Event('wos:prefs-error')); }
+        return true;
+      } catch (e) { window.dispatchEvent(new Event('wos:prefs-error')); return false; }
       finally { prefsPending--; }
     });
     return prefsWrites;
