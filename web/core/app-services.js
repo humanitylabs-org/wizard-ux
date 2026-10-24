@@ -20,6 +20,10 @@
     });
   }
   let registry, available = null, serial = 0, rootArm = null;
+  // Share receiving (docs/SHARE-SHEET.md): the share sheet hands its per-app ops here once, at shell load, before
+  // any app frame exists; they are never on a global, so a frame reaches only its own app id's items.
+  let shareOps = null;
+  const claimShare = ops => { if (shareOps || !ops) return false; shareOps = ops; return true; };
   const uid = () => 'as-' + (++serial) + '-' + Math.random().toString(36).slice(2);
   const fault = message => new Error(message);
   // Apps use the box's one configured transcriber; no microphone or provider credentials cross the frame.
@@ -264,10 +268,10 @@
         file(file, opts) { check(); if (!file || !['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(file))) return Promise.resolve('unsupported'); return window.WosChat?.shareFile(file, opts) || Promise.resolve('unsupported'); },
         // Receiving (docs/SHARE-SHEET.md): this verified frame registers its own app id only; items stay pending
         // until the app acks that it placed one in its own composer.
-        receive(opts) { check(); return !!window.WosShareSheet?.register(st.appId, { accepts: opts?.accepts, targets: opts?.targets }); },
-        targets(list) { check(); return !!window.WosShareSheet?.setTargets(st.appId, list); },
-        pending() { check(); return window.WosShareSheet?.pending(st.appId) || []; },
-        ack(id) { check(); return typeof id === 'string' && !!window.WosShareSheet?.ack(st.appId, id); } }),
+        receive(opts) { check(); return !!shareOps?.register(st.appId, { accepts: opts?.accepts, targets: opts?.targets }); },
+        targets(list) { check(); return !!shareOps?.setTargets(st.appId, list); },
+        pending() { check(); return shareOps?.pending(st.appId) || []; },
+        ack(id) { check(); return typeof id === 'string' && !!shareOps?.ack(st.appId, id); } }),
       voice: Object.freeze({ async transcribe(file, opts) { check(); const result = await transcribeFile(file, opts); check(); return result; } }),
       theme: Object.freeze({ get() { check(); return window.WizAppearance?.get(frameOf(st)) || null; } }),
       update: Object.freeze({ hold, available() { check(); return available; } }),
@@ -569,7 +573,7 @@
     if (!openProvider || sweepTimer) return;
     sweepTimer = setTimeout(() => { sweepTimer = 0; try { appsClosed(openProvider()); } catch (_) {} }, 0);
   }
-  window.WizAppServices = Object.freeze({ version: VERSION, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
+  window.WizAppServices = Object.freeze({ version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
     orb: Object.freeze({ of: orbOf, tap: orbTap, presenter(fn) { orbShown = typeof fn === 'function' ? fn : () => false; } }),
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),

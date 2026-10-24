@@ -5,7 +5,7 @@
 (() => {
   'use strict';
   if (window.WosShareSheet) return;
-  const RECV = 'wos.share.receivers.v1', RECENT = 'wos.share.recent.v1', PEND = 'wos.share.pending.v1';
+  const RECV = 'wos.share.receivers.v1', RECENT = 'wos.share.recent.v1';
   const KINDS = new Set(['text', 'url']), TTL = 30 * 60 * 1000, MAX_PEOPLE = 8;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const read = (store, key, dflt) => { try { const v = JSON.parse(store.getItem(key) || 'null'); return v ?? dflt; } catch (_) { return dflt; } };
@@ -14,7 +14,8 @@
   const okId = v => typeof v === 'string' && v.length > 0 && v.length <= 160 && !/[\x00-\x1f\x7f]/.test(v);
   let receivers = read(localStorage, RECV, {}); if (!receivers || typeof receivers !== 'object') receivers = {};
   let recent = read(localStorage, RECENT, []); if (!Array.isArray(recent)) recent = [];
-  let pendingItems = read(sessionStorage, PEND, []); if (!Array.isArray(pendingItems)) pendingItems = [];
+  // Pending items live in this closure only (never storage, never a global): app-services reads them per verified app id.
+  let pendingItems = [];
   let open = null; // { el, resolve, native }
 
   function appMeta(appId) {
@@ -59,15 +60,15 @@
   const wants = kind => live(kind).length > 0;
   function remember(...keys) { recent = [...keys, ...recent.filter(k => !keys.includes(k))].slice(0, 40); write(localStorage, RECENT, recent); }
 
-  function prune() { const now = Date.now(); pendingItems = pendingItems.filter(x => now - x.at < TTL); write(sessionStorage, PEND, pendingItems); }
+  function prune() { const now = Date.now(); pendingItems = pendingItems.filter(x => now - x.at < TTL); }
   function pending(appId) { prune(); return pendingItems.filter(x => x.appId === appId).map(x => ({ id: x.id, ...x.payload, target: x.target })); }
-  function ack(appId, id) { const n = pendingItems.length; pendingItems = pendingItems.filter(x => !(x.appId === appId && x.id === id)); write(sessionStorage, PEND, pendingItems); return pendingItems.length < n; }
+  function ack(appId, id) { const n = pendingItems.length; pendingItems = pendingItems.filter(x => !(x.appId === appId && x.id === id)); return pendingItems.length < n; }
   function deliver(appId, payload, target) {
     if (!window.WizOpenApp) return false;
     prune();
     const id = 'sh-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
     pendingItems.push({ id, appId, payload, target: target || null, at: Date.now() });
-    write(sessionStorage, PEND, pendingItems);
+   
     if (window.WizOpenApp(appId) === false) { ack(appId, id); return false; }
     // An app already open pulls now; a fresh frame pulls when it registers.
     window.dispatchEvent(new CustomEvent('wizard:share-pending', { detail: { appId } }));
@@ -81,10 +82,10 @@
     const icon = window.WizSigil ? window.WizSigil.box('span', 'shs-ic', a) : `<span class="shs-ic">${esc(initials(a.name))}</span>`;
     return { name: a.name || appId, icon };
   }
+  function dismiss(o) { o.el.classList.remove('on'); o.el.style.pointerEvents = 'none'; setTimeout(() => o.el.remove(), 160); }
   function close(outcome) {
     if (!open) return false;
-    const o = open; open = null;
-    o.el.classList.remove('on'); setTimeout(() => o.el.remove(), 160);
+    const o = open; open = null; dismiss(o);
     o.resolve(outcome); return true;
   }
   function render(payload, kind) {
@@ -108,13 +109,13 @@
     if (open) close('cancelled');
     return new Promise(resolve => {
       const el = render(payload, kind);
-      open = { el, resolve, native };
+      const me = open = { el, resolve, native };
       // Tap handling on pointerup/click with a short arm so the tap that opened the sheet cannot also pick a row.
       const armedAt = Date.now();
       el.addEventListener('click', e => {
-        if (Date.now() - armedAt < 250) return;
+        if (open !== me || Date.now() - armedAt < 250) return; // a fading sheet never acts on a newer one
         if (!e.target.closest('.shs-b')) return close('cancelled');
-        if (e.target.closest('[data-shs-other]')) { const o = open; open = null; el.classList.remove('on'); setTimeout(() => el.remove(), 160); Promise.resolve().then(() => o.native()).then(o.resolve, () => o.resolve('unsupported')); return; }
+        if (e.target.closest('[data-shs-other]')) { open = null; dismiss(me); Promise.resolve().then(() => me.native()).then(me.resolve, () => me.resolve('unsupported')); return; }
         const b = e.target.closest('[data-shs-app]'); if (!b) return;
         const appId = b.dataset.shsApp, target = b.dataset.shsTarget || null;
         remember(...(target ? [appId + '|' + target] : []), appId);
@@ -127,6 +128,8 @@
   }
   // Back / Escape: the sheet sits above everything it was opened from.
   const back = () => (close('cancelled') ? 'share-sheet' : null);
-  window.WosShareSheet = Object.freeze({ show, wants: kind => wants(kind), register, setTargets, pending, ack, back, isOpen: () => !!open,
+  const claimed = !!window.WizAppServices?.claimShare?.(Object.freeze({ register, setTargets, pending, ack }));
+  if (!claimed) console.warn('WosShareSheet: app services already claimed; apps cannot receive shares');
+  window.WosShareSheet = Object.freeze({ show, wants: kind => wants(kind), back, isOpen: () => !!open,
     _state: () => ({ receivers, recent, pending: pendingItems.map(x => ({ id: x.id, appId: x.appId, target: x.target })) }) });
 })();
