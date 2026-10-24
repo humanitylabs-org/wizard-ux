@@ -720,6 +720,11 @@ window.WizCore.chats = function createChats(H) {
       </div></div>`;
   }
   function focusLabel(w) { const f = focusOf(w); return !f ? 'All' : f.kind === 'agent' ? agentRec(f.key).label : spaces().find(s => s.id === f.key)?.name || 'All'; }
+  function listTitle(w) { return focusAgents().length === 1 && focusOf(w)?.kind === 'space' ? focusLabel(w) : ''; }
+  function syncListTitle(w) {
+    const o = W[owner(w.id)] || w;
+    AGS()?.setTitlebarLabel(track.querySelector(`[data-win="${o.id}"] [data-agent-titlebar]`), !o.thread ? listTitle(o) : '');
+  }
   // One stable option order for strip and Filter; the strip shows the level with a choice.
   function focusOptions() {
     const all = LIVE.unified().filter(s => !s.hidden);
@@ -910,6 +915,7 @@ window.WizCore.chats = function createChats(H) {
     requestAnimationFrame(step);
   }
   function renderChatList(w, el) {
+    syncListTitle(w);
     closeStream(ch(w.id));
     if (!el) return;
     if (H.renderView?.(w, el, () => renderChatList(w, el), 'list')) return;
@@ -2050,6 +2056,7 @@ window.WizCore.chats = function createChats(H) {
     return `<div class="ch-empty ch-readerr" role="status"><b>Couldn’t load this thread</b><br>${esc(why)} Retrying automatically.<br><button type="button" class="pbtn" data-chretry>Retry now</button>${r && !['checking', 'send'].includes(r.layer) ? ' ' + troubleshoot : ''}</div>`;
   }
   function renderChats(w) {
+    syncListTitle(w);
     const el = track.querySelector(`[data-chats="${w.id}"]`); if (!el) return;
 
     if (w.thread) { renderThread(w, el); loadThread(w); } else renderChatList(w, el);
@@ -2651,7 +2658,7 @@ window.WizCore.chats = function createChats(H) {
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
   const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
-  return { tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle: w => focusAgents().length === 1 && focusOf(w)?.kind === 'space' ? focusLabel(w) : '', modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST,
     KIT, threadAct, openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };
