@@ -4,7 +4,7 @@
   'use strict';
   if (window.WizAppServices) return;
   const VERSION = 1, ORIGIN = location.origin, frames = new Map();
-  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'share.receive', 'share.targets', 'share.pending', 'share.ack', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set']);
+  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'share.receive', 'share.targets', 'share.pending', 'share.ack', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set', 'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt']);
   let registry, available = null, serial = 0, rootArm = null;
   // Share receiving (docs/SHARE-SHEET.md): the share sheet hands its per-app ops here once, at shell load, before
   // any app frame exists; they are never on a global, so a frame reaches only its own app id's items.
@@ -135,6 +135,29 @@
     return true;
   }
   function setTools(st, list) { st.tools = cleanTools(st, list); return paintTools(st); }
+  // Owner-key access is narrower than ordinary app services: installed apps.json entries only,
+  // never owner links, arbitrary same-origin frames or off-origin apps. Label comes from the catalog.
+  async function identity(st, doc, method, args) {
+    const authorize = () => {
+      const app = apps().find(a => a.id === st.appId && a.kind === 'wizard' && a.source === 'apps.json');
+      if (!app || !valid(st, doc) || st.url.origin !== ORIGIN) throw fault('Wizard ID needs an installed same-origin app');
+      return app;
+    };
+    const app = authorize(), bridge = window.WizCore?.bridge;
+    if (!window.wizardDevicePort || !bridge?.call) return { unavailable: true }; // Desktop-to-phone routing is not v1.
+    const params = { requester: String(app.name || app.id).replace(/[\p{Cc}\p{Cf}]/gu, '').trim().slice(0, 80) };
+    if (method === 'sign') params.event = args?.event;
+    if (method === 'nip44_encrypt' || method === 'nip44_decrypt') {
+      params.pubkey = args?.pubkey;
+      const key = method === 'nip44_encrypt' ? 'plaintext' : 'ciphertext'; params[key] = args?.[key];
+    }
+    // Copy now: an app cannot mutate its event after the sheet is opened.
+    const payload = JSON.stringify(params);
+    if (payload.length > 140000) throw fault('Wizard ID request too large');
+    const result = await bridge.call('identity.' + method, JSON.parse(payload));
+    authorize(); // No signature/plaintext to a reloaded, navigated, detached or uninstalled document.
+    return result;
+  }
   function connect(source, client) {
     const st = from(source); if (!valid(st)) return null;
     const doc = source.document;
@@ -185,6 +208,12 @@
     source.addEventListener('pagehide', () => { if (st.doc === doc) reset(st); }, { once: true });
     return Object.freeze({ version: VERSION, appId: st.appId,
       ready() { check(); return { version: VERSION, hosted: true, appId: st.appId }; },
+      identity: Object.freeze({
+        info: () => identity(st, doc, 'info'),
+        sign: event => identity(st, doc, 'sign', { event }),
+        nip44_encrypt: args => identity(st, doc, 'nip44_encrypt', args),
+        nip44_decrypt: args => identity(st, doc, 'nip44_decrypt', args),
+      }),
       badge: Object.freeze({ set(n) { check(); setBadge(st.appId, n); st.badged = true; return true; } }),
       titlebar: Object.freeze({ set(list) { check(); return setTools(st, list); },
         shown() { check(); const b = barOf(st)?.querySelector(':scope > .wtools'); return !!b && b.getClientRects().length > 0 && b.offsetHeight > 0; } }),
@@ -318,7 +347,8 @@
     const st = from(e.source); if (!st || e.origin !== ORIGIN || !valid(st, st.doc)) return;
     st.requests ||= new Set(); if (st.requests.size >= 32 || st.requests.has(d.id)) return; st.requests.add(d.id);
     // Bounded message transport handles serializable operations only. Session functions never cross it.
-    const reply = (value, error) => { if (valid(st, st.doc)) e.source.postMessage({ type: 'wizard:app:reply', version: VERSION, id: d.id, value, error }, ORIGIN); };
+    const requestDoc = e.source.document;
+    const reply = (value, error) => { if (valid(st, requestDoc)) e.source.postMessage({ type: 'wizard:app:reply', version: VERSION, id: d.id, value, error }, ORIGIN); };
     try {
       const svc = connect(e.source, st.client); let value;
       if (d.op === 'ready') value = svc.ready();
@@ -335,6 +365,10 @@
       if (d.op === 'update.hold') { const h = svc.update.hold(d.args?.reason), id = uid(); st.messageHolds ||= new Map(); st.messageHolds.set(id, h); value = id; }
       if (d.op === 'badge.set') value = svc.badge.set(d.args?.n);
       if (d.op === 'titlebar.set') value = svc.titlebar.set(d.args?.tools);
+      if (d.op === 'identity.info') value = await svc.identity.info();
+      if (d.op === 'identity.sign') value = await svc.identity.sign(d.args?.event);
+      if (d.op === 'identity.nip44_encrypt') value = await svc.identity.nip44_encrypt(d.args);
+      if (d.op === 'identity.nip44_decrypt') value = await svc.identity.nip44_decrypt(d.args);
       if (d.op === 'update.release') { st.messageHolds?.get(d.args?.id)?.release(); st.messageHolds?.delete(d.args?.id); value = true; }
       reply(value);
     } catch (err) { reply(null, String(err.message || err).slice(0, 200)); }

@@ -1,6 +1,6 @@
 # Wizard OS components: reuse before build
 
-**One implementation per capability.** Find the need below and reuse its entry point. Extend near-fit modules instead of building beside them. NEW lands in `web/core/` with a row here, never inside an app.
+**One implementation per capability.** Reuse entry points below; extend near-fit modules. NEW lands in `web/core/` with a row here, never in an app.
 
 Every PR body carries a `Reuse:` block (see `.github/pull_request_template.md`); CI checks it (`tools/reuse-check.mjs`) and checks that every shell global is listed here (`tests/components-inventory.test.mjs`).
 
@@ -18,7 +18,8 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 
 | Need | Use | Never hand-roll | Test the shared path by |
 |---|---|---|---|
-| Talk to an agent: composer, Stop/retry/outbox, models, dictation, attachments | `WizardApp.nav.openThread(sessionId, {reply})`, the real Chats thread over the app (wizard-builder `references/chat.md`) | composer, transcript, streaming client or retry loop in the app; `wizard-ui.css` is look only | the shell shows the `[data-chats]` thread for that session; the app frame has no textarea; a forced 503 leaves exactly one outbox item and one delivered message |
+| Phone signing / NIP-44 (EXTEND) | `WizardApp.identity.{info,sign,nip44_encrypt,nip44_decrypt}` → `WizAppServices` (installed same-origin apps) → `WizCore.bridge.call` | app keys/ports, own approval text, cached grants, desktop fake success | `tests/wizard-id-bridge.test.mjs`; Thales `Nip44Test` / `WizardIdFlowTest` |
+| Talk to an agent: composer, Stop/retry/outbox, models, dictation, attachments | `WizardApp.nav.openThread(sessionId, {reply})`, Chats over the app (`references/chat.md`, wizard-builder) | app composer/transcript/streaming/retries; `wizard-ui.css` is look only | shell `[data-chats]` opens the session; no app textarea; forced 503 leaves one outbox item and one delivered message |
 | Back inside the app | `WizardApp.back.register / push / useHistory` | root history guards, CloseWatcher | nested view + Back keeps the app open |
 | Skin, tokens, light/dark | `WizardApp.theme.get / onChange`, `--wz-*` roles | theme storage, own dark mode, literal colours | two skins + a live skin change keep app state |
 | Native Android screens in the worn skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`: shell `--wz-*` roles saved natively, Nebula fallback) | literal colours in native screens |
@@ -67,8 +68,8 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Screen capture | `WosScreenCapture` (`web/core/screen-capture.js`), `WosCaptureTools` (`web/core/capture-tools.js`) | — |
 | Update banners, Settings card, Home pop-up | `WizWebUpdate`, `WizAppUpdates` (`web/core/web-update.js`), `WizAppVersions` (`web/core/app-versions.js`), `WosUpdates` (`web/core/os-updates.js`: `card`/`popup`) | own reload timers, a second card |
 | Provider login (Claude, ChatGPT) for agents and apps | the installed login apps (`wizard-claude`, `wizard-chatgpt`; skill `app-owned-codex-connections`) | setup-tokens or bespoke auth flows |
-| Native mic recording on the phone (voice notes, orb takes, live dictation) | `NoteRecorder` (`android/app/src/main/java/ai/wizards/os/audio/NoteRecorder.java`) over `MicRoute` (`audio/MicRoute.java`: `MicRoute.start` with `MicRoute.NOTE_SOURCES` for notes people listen to, `MicRoute.SOURCES` for speech-to-text) | `new MediaRecorder`, `AudioRecord` or `setAudioSource` outside `audio/` | `MicRouteTest`, `NoteRecorderTest` (source order, bitrate, every recorder goes through `MicRoute`) |
-| Native Android device capability called from the shell (packages today; later mic, automation, notifications) | `wizardDevicePort` v1 (`android/app/src/main/java/ai/wizards/os/device/DeviceMessageProtocol.java`; add an adapter and list it in `device.capabilities`; see `docs/android-device-message-port.md`) | feature-named `@JavascriptInterface` methods, a second envelope on `wizardAppsPort`, native feature screens or wording |
+| Phone notes, orb takes, dictation | `NoteRecorder` (`android/app/src/main/java/ai/wizards/os/audio/NoteRecorder.java`) over `MicRoute.start` (`audio/MicRoute.java`): `MicRoute.NOTE_SOURCES` for listening, `MicRoute.SOURCES` for STT | `MediaRecorder`, `AudioRecord`, `setAudioSource` outside `audio/` | `MicRouteTest`, `NoteRecorderTest`: source order, bitrate, routing |
+| Native device ops: packages, identity, WebP capture (EXTEND) | `wizardDevicePort` v1 (`android/app/src/main/java/ai/wizards/os/device/DeviceMessageProtocol.java`); adapters in `device.capabilities`; `docs/android-device-message-port.md` | feature `@JavascriptInterface`, second `wizardAppsPort` envelope, native UI except NEW secret/approval flow (`docs/WIZARD_ID.md`) |
 | Add an app to the phone home screen (long-press on the Apps sheet and New desk grid; hold-and-release a one-app desk in Desks) | `WizHomeScreenApps.attach(menu, appFor, {rows, live})`, `WizHomeScreenApps.offer(app)` (`web/core/home-screen-apps.js`) + native `HomeScreenShortcuts`/`AppSessionActivity`; a pinned app keeps the floating orb (`AppState.shellFront`) | a second long-press menu or pin sheet per surface |
 | Android long-screenshot (scroll capture) and text selection in the WebView | `ScrollAccessibilityProvider`, `ChatScrollCapture` + `android/app/src/main/assets/scroll-capture.js`, `SelectionWebView` (`android/app/src/main/java/ai/wizards/os/`) | a second accessibility provider or capture path | capture of a long Chats thread on a real device |
 

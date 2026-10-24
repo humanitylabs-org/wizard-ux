@@ -49,14 +49,34 @@
     if (w) { waiting.delete(m.id); m.error ? w.reject(new Error(m.error)) : w.resolve(m.result); return; }
     if (typeof prevReply === 'function') prevReply(msg);
   };
+  let deviceListening = null;
+  function deviceReply(ev) {
+    let m; try { m = JSON.parse(ev.data); } catch (_) { return; }
+    if (m.v !== 1 || typeof m.id !== 'string') return;
+    const w = waiting.get(m.id); if (!w) return;
+    waiting.delete(m.id); m.ok ? w.resolve(m.result) : w.reject(new Error(m.error || 'native error'));
+  }
   function call(method, params = {}) {
     const mac = window.webkit?.messageHandlers?.wizardNative, droid = window.WizardNative;
-    if (!mac && !droid) return Promise.reject(new Error('no native shell'));
+    const deviceMethod = method.startsWith('device.') || ['identity.info', 'identity.setup', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt', 'view.capture'].includes(method);
+    const port = deviceMethod && window.wizardDevicePort;
+    if (!mac && !droid && !port) return Promise.reject(new Error('no native shell'));
     const id = 'wux-' + (++seq);
     return new Promise((resolve, reject) => {
       waiting.set(id, { resolve, reject });
-      setTimeout(() => { if (waiting.delete(id)) reject(new Error('native timeout')); }, 15000);
-      if (mac) mac.postMessage({ id, method, params }); else droid.postMessage(JSON.stringify({ id, method, params }));
+      // Native has a three-minute expiry. A biometric/PIN or backup flow is not a 15-second RPC.
+      const timeout = ['identity.setup', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt'].includes(method) ? 185000 : 15000;
+      const timer = setTimeout(() => { if (waiting.delete(id)) reject(new Error('native timeout')); }, timeout);
+      waiting.set(id, { resolve: x => { clearTimeout(timer); resolve(x); }, reject: e => { clearTimeout(timer); reject(e); } });
+      try {
+        if (port) {
+          if (deviceListening !== port) {
+            if (typeof port.addEventListener === 'function') port.addEventListener('message', deviceReply); else port.onmessage = deviceReply;
+            deviceListening = port;
+          }
+          port.postMessage(JSON.stringify({ v: 1, id, method, params }));
+        } else if (mac) mac.postMessage({ id, method, params }); else droid.postMessage(JSON.stringify({ id, method, params }));
+      } catch (e) { waiting.delete(id); clearTimeout(timer); reject(e); }
     });
   }
   const native = () => (window.webkit?.messageHandlers?.wizardNative ? 'mac' : window.WizardNative || window.WizardOSNative ? 'android' : '');
