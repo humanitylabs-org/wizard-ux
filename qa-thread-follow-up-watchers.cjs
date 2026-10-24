@@ -9,7 +9,7 @@ const path = require('node:path');
 const SERVICE = process.env.QA_AGENT_SERVICE;
 if (!SERVICE) throw new Error('QA_AGENT_SERVICE is required');
 const WEB = path.resolve(__dirname, 'web');
-const OUT = process.env.QA_OUT || path.join(require('node:os').homedir(), '.hermes/cache/screenshots/thread-follow-up-watchers');
+const OUT = process.env.QA_OUT || path.join(tmpdir(), 'thread-follow-up-watchers-shots');
 mkdirSync(OUT, { recursive: true });
 const root = mkdtempSync(path.join(tmpdir(), 'thread-follow-up-browser-'));
 const ownerProof = 'fixture-owner-proof-with-at-least-32-characters';
