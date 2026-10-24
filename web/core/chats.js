@@ -1848,15 +1848,17 @@ window.WizCore.chats = function createChats(H) {
     return OUTBOX.forThread('', w.id).filter(it => (it.createdAt || 0) >= c.newAt);
   }
   /* Has the transcript already got this outbox message? A sent one matches a recent user turn (or steer) by file or
-   * by its opening words. One still marked sending/waiting (its receipt was lost and the retry has not answered yet)
-   * matches only the exact same words in a user turn made after it was written. */
+   * by its opening words. One whose send was attempted but whose receipt was lost (attempts > 0) matches
+   * the same file IDs, or the exact same words in a user turn made after it was written. A queued one that never left
+   * the phone never matches: sending the same words twice on purpose keeps both (Codex P2 on #418). */
   function echoed(turns, p) {
     const recent = turns.slice(-6), us = recent.filter(t => t.u).map(t => t.u).concat(recent.flatMap(t => t.steers || []));
-    if (p.state === 'sent') return us.some(u => ((p.files || []).length && p.files.some(f => (u.files || []).some(x => x.id === f.id)))
-      || (!!p.text && (u.text || '').includes(p.text.slice(0, 40))));
-    if (!['queued', 'sending', 'waiting'].includes(p.state) || p.steerRunId) return false;
-    const t = String(p.text || '').trim();
-    return !!t && us.some(u => String(u.text || '').trim() === t && isFinite(u.at) && u.at >= (p.createdAt || 0) - 30e3);
+    const files = (p.files || []).filter(f => f && f.id);
+    const sameFiles = u => files.length && files.every(f => (u.files || []).some(x => x.id === f.id));
+    if (p.state === 'sent') return us.some(u => (files.length && files.some(f => (u.files || []).some(x => x.id === f.id))) || (!!p.text && (u.text || '').includes(p.text.slice(0, 40))));
+    if (!['queued', 'sending', 'waiting', 'unconfirmed'].includes(p.state) || !(p.attempts > 0) || p.steerRunId) return false;
+    const t = String(p.text || '').trim(), after = u => isFinite(u.at) && u.at >= (p.createdAt || 0) - 10e3; // made after this message was written (10 s for clock skew)
+    return us.some(u => after(u) && (files.length ? sameFiles(u) && (!t || String(u.text || '').trim().includes(t)) : !!t && String(u.text || '').trim() === t));
   }
   function retireLanded(sid, turns) {
     let gone = false;
