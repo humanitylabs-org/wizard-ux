@@ -1,5 +1,6 @@
 package ai.wizards.os;
 
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -80,8 +81,12 @@ public class OverlayPolicyTest {
     @Test public void rejectBroaderShellFramesQueriesAndInvalidPorts() {
         for (String path : new String[]{"index.html", "core/settings.js", "api", "api/voice", "assist/unknown.html", "assist/%73urface.html", "assist/surface.html?x=1"})
             assertFalse(path, OverlayPolicy.fromWizard(O, V + "/wizard-os-home/" + path));
-        for (String port : new String[]{":0", ":8443", ":65536"})
+        for (String port : new String[]{":0", ":65536"})
             assertNull(OverlayPolicy.remoteUrl(O + port, "surface.html"));
+        // A Wizard on its own HTTPS port (Connect accepts these since #219) keeps its exact origin, port included.
+        assertNotNull(OverlayPolicy.remoteUrl(O + ":8444", "surface.html"));
+        assertEquals(O + ":8444/wizard-os-home/assist/surface.html",
+                OverlayPolicy.upstream(O + ":8444", OverlayPolicy.remoteUrl(O + ":8444", "surface.html")));
         assertNull(OverlayPolicy.remoteUrl(O, "../index.html"));
         assertFalse(OverlayPolicy.bundled(OverlayPolicy.ASSETS + "index.html"));
         assertTrue(OverlayPolicy.CSP.contains("frame-src 'none'"));

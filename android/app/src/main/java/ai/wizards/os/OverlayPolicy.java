@@ -51,7 +51,7 @@ final class OverlayPolicy {
         URI o = parse(origin);
         String p = o == null ? null : o.getRawPath();
         return o != null && "https".equals(o.getScheme()) && o.getHost() != null && o.getRawUserInfo() == null
-                && o.getRawQuery() == null && o.getRawFragment() == null && (o.getPort() == -1 || o.getPort() == 443)
+                && o.getRawQuery() == null && o.getRawFragment() == null && (o.getPort() == -1 || (o.getPort() > 0 && o.getPort() <= 65535))
                 && (p == null || p.isEmpty() || p.equals("/"));
     }
     /** An allowlisted overlay resource on the virtual document origin, while a plain HTTPS Wizard is selected. */
