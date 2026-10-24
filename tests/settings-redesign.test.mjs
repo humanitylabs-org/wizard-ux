@@ -43,6 +43,17 @@ test('registry page, fallback and every historical alias route to their owning p
   assert.equal(h.s.WosSettings.pageOf({ id: 'look', page: 'typo' }), 'about', 'invalid explicit pages never silently use a legacy mapping');
   h.view.focus('unmapped'); assert.match(h.root.innerHTML, /Future/);
 });
+test('falsy root focus from real shell settings buttons never treats a boolean as an Element', () => {
+  for (const shell of ['phone', 'desktop']) {
+    const h = harness({ shell });
+    for (const id of [undefined, null, '', false, 0]) {
+      h.view.focus('look');
+      assert.equal(h.view.page, 'appearance');
+      assert.doesNotThrow(() => h.view.focus(id));
+      assert.equal(h.view.page, '');
+    }
+  }
+});
 test('attention is conditional, counts real stores and routes each item; recovery subtitle deduplicates custody', () => {
   const h = harness();
   h.view.context.outbox = { canRetry: () => false, unsent: () => [{ id: 'same', createdAt: 1, state: 'failed' }] };

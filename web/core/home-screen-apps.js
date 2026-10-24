@@ -72,17 +72,23 @@
       });
     };
   }
-  function attach(menu, appFor) {
+  const pinnable = a => !!a && a.kind === 'wizard' && !!a.url && window.WizHomeScreenPolicy.validId(a.id) && !window.WizHomeScreenPolicy.isShell(a.url) && window.WizHomeScreenPolicy.within(a.url,a.url);
+  // Desks overview: hold a one-app desk and let go without dragging → the same sheet (drag still reorders).
+  function offer(a) { if (!port() || !pinnable(a)) return false; try { navigator.vibrate?.(12); } catch (_) {} show(a); return true; }
+  // rows: which tiles inside `menu` can be held; live(row): the surface is still showing when the hold fires.
+  // Default is the Apps sheet (#launcher, live while .open). The New desk grid passes its own (it has no .open).
+  function attach(menu, appFor, opts = {}) {
+    const rows = opts.rows || '[data-app]', live = opts.live || (() => menu.classList.contains('open'));
     let hold = null, timer = null, blockedUntil = 0;
     function cancel() { clearTimeout(timer); timer = null; hold = null; }
     const block = () => { blockedUntil = performance.now() + 700; };
     menu.addEventListener('pointerdown', e => {
       if (hold) { cancel(); block(); return; }
       if (!port()) return; // inert until the installed Android app provides the pin bridge (older APKs, browsers, desktop)
-      const row = e.target.closest('[data-app]'), a = row && appFor(row.dataset.app);
-      if (!e.isTrusted || !e.isPrimary || e.button !== 0 || !a || a.kind !== 'wizard' || !a.url || !window.WizHomeScreenPolicy.validId(a.id) || window.WizHomeScreenPolicy.isShell(a.url) || !window.WizHomeScreenPolicy.within(a.url,a.url)) return;
+      const row = e.target.closest(rows), a = row && appFor(row.dataset.app);
+      if (!e.isTrusted || !e.isPrimary || e.button !== 0 || !pinnable(a)) return;
       hold = { id:e.pointerId, x:e.clientX, y:e.clientY, a };
-      timer = setTimeout(() => { if (!hold || !row.isConnected || !menu.classList.contains('open')) { cancel(); return; } block(); try { navigator.vibrate?.(12); } catch (_) {} show(a); },450);
+      timer = setTimeout(() => { if (!hold || !row.isConnected || !live(row)) { cancel(); return; } block(); try { navigator.vibrate?.(12); } catch (_) {} show(a); },450);
     }, true);
     document.addEventListener('pointerdown', e => { if (hold && e.pointerId !== hold.id) { cancel(); block(); } },true);
     menu.addEventListener('pointermove', e => { if (hold && e.pointerId === hold.id && Math.hypot(e.clientX-hold.x,e.clientY-hold.y) > 8) { cancel(); block(); } },true);
@@ -101,5 +107,5 @@
     if (r.status === 'pinned') { paint('confirmed'); setTimeout(() => { if (active === a) close(); },1200); }
     else close(); // OS cancellation is silent; dispatch isn't success.
   });
-  window.WizHomeScreenApps = Object.freeze({ attach, back() { if (!overlay) return false; if (!pending) close(); return true; }, get state() { return { open:!!overlay, appId:active?.id || '', pending }; } });
+  window.WizHomeScreenApps = Object.freeze({ attach, offer, back() { if (!overlay) return false; if (!pending) close(); return true; }, get state() { return { open:!!overlay, appId:active?.id || '', pending }; } });
 })();

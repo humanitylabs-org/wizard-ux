@@ -272,6 +272,7 @@
     subjectOrder: ['wos.chats.subjectOrder.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
     // Pinned chats (core/chat-pins.js): the same pins on every device.
     pinnedChats: ['wos.chats.pinned.v2', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
+    spaces: ['wos.chats.spaces.v1', v => Array.isArray(v), JSON.stringify],
   };
   let prefsOff = false;
   const putPrefs = patch => {
@@ -493,6 +494,42 @@
     } catch (e) { try { localStorage.removeItem(SNAP_KEY); } catch (_) {} }
   }
 
+  /* A Space is an explicit membership list, not an archive window. Read only its
+   * missing members, four at a time across all windows. Keep these rows in memory,
+   * outside unified()/the disk snapshot, so All and agent Focus keep their windows.
+   * Successful reads refresh on the existing full-walk cadence; failures retry no
+   * more than once a minute. Repaints/polls never fan out duplicate requests. */
+  // Hydrated members are archived rows: any new activity brings them back through the
+  // ordinary list (loaded rows win), so they refresh rarely (~60 x 2.6 KB reads per half hour).
+  const SPACE_ROWS = new Map(), SPACE_QUEUE = [], SPACE_EVERY = 30 * 60 * 1000;
+  let spaceReads = 0;
+  function drainSpaceReads() {
+    while (!document.hidden && spaceReads < 4 && SPACE_QUEUE.length) {
+      const [id, entry] = SPACE_QUEUE.shift(); spaceReads++;
+      (async () => {
+        const agent = L.agentOf(id);
+        try {
+          const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}?view=detail${agent ? `&agent=${encodeURIComponent(agent)}` : ''}`, listSignal())).json();
+          const s = normalize(p.session || p);
+          if (!s || s.id !== id || L.agentOf(id) !== agent || (agent && s.agent && s.agent !== agent)) throw new Error('Thread scope changed');
+          if (otherAgent(s.agent)) {
+            const A = AG(), a = A?.get(s.agent);
+            // An id in preferences is not permission to discover a private agent.
+            if (!a || (!agent && A.isPrivate(a))) throw new Error('Thread scope changed');
+            AGENT_OF.set(id, s.agent);
+          }
+          if (agent) s.agent = agent;
+          entry.row = s.hidden ? null : s;
+          entry.failed = false;
+        } catch (_) { entry.row = null; entry.failed = true; }
+        finally {
+          entry.at = Date.now(); entry.pending = false; spaceReads--;
+          drainSpaceReads(); L.emit();
+        }
+      })();
+    }
+  }
+
   /* ---- store ---- */
   function listOverrides(agent = '') {
     const out = {}, scoped = id => (L.agentOf(id) || '') === (otherAgent(agent) ? agent : '');
@@ -650,6 +687,30 @@
       for (const [, list] of extra) for (const s of list) if (!seen.has(s.id)) { seen.add(s.id); out.push(s); }
       return out;
     },
+    // peek: badges/strip read loaded + already-hydrated rows only; never start reads.
+    spaceSessions(ids, { peek = false } = {}) {
+      const loaded = new Map(this.unified().map(s => [s.id, s])), rows = [];
+      let pending = false, failed = false;
+      for (const id of new Set(ids)) {
+        if (typeof id !== 'string' || !/^[A-Za-z0-9._:-]{1,256}$/.test(id)) continue;
+        if (loaded.has(id)) { const s = loaded.get(id); if (!s.hidden) rows.push(s); continue; }
+        let entry = SPACE_ROWS.get(id);
+        if (!peek && !document.hidden && (!entry || (!entry.pending && Date.now() - entry.at >= (entry.failed ? STALE_AFTER : SPACE_EVERY)))) {
+          if (!entry) { entry = { row: null, at: 0 }; SPACE_ROWS.set(id, entry); }
+          entry.pending = true; SPACE_QUEUE.push([id, entry]);
+        }
+        pending ||= !!entry?.pending; failed ||= !!entry?.failed;
+        const s = entry?.row;
+        // Removed agents and scope changes cannot resurrect a cached row.
+        if (!s || s.hidden || (otherAgent(s.agent) && (!AG()?.get(s.agent) || this.agentOf(id) !== s.agent))) continue;
+        const d = this.deferred[seenKeyOf(s)];
+        delete s.deferred; delete s.deferredAt; delete s.restoredAt;
+        if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
+        applyLocal(s); rows.push(s);
+      }
+      if (!peek) drainSpaceReads();
+      return { rows, pending, failed };
+    },
     // A private agent's thread (by id): its rows carry the lock and its words never enter another agent's context.
     isPrivate(id) { const a = this.agentOf(id), A = AG(); return !!a && !!A && A.isPrivate(A.get(a)); },
     statusFor(agent = '') { return otherAgent(agent) ? (this.agentStatus[agent] || { ok: false, error: '' }) : { ok: this.ok, error: this.error, cached: this.cached, cachedAt: this.cachedAt, loading: !!this.loading, at: this.at || 0 }; },
@@ -704,7 +765,7 @@
     session(id) {
       const s = this.sessions.find(x => x.id === id); if (s) return s;
       for (const list of Object.values(this.agentSessions)) { const a = list.find(x => x.id === id); if (a) return a; }
-      return DETAIL.get(id) || null;
+      return DETAIL.get(id) || SPACE_ROWS.get(id)?.row || null;
     },
     chatUrl(id) { return id ? `/wizard/?session=${encodeURIComponent(id)}` : '/wizard/?view=work'; },
     /* A real Archimedes request: same admission path the Wizard app uses.
@@ -792,7 +853,8 @@
             if(scope) AGENT_OF.set(s.id,scope);
             found.push(s);
           }
-          if(!p.has_more) { if(!signal?.aborted) onBatch?.(found); return found; }
+          if(!signal?.aborted) onBatch?.(found); // each page shows as it lands
+          if(!p.has_more) return found;
           if(!rows.length) throw new Error('Incomplete search');
           offset+=rows.length;
         }

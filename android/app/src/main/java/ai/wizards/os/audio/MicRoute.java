@@ -37,6 +37,12 @@ public final class MicRoute {
             "Android moved the microphone to a Bluetooth or external device. Wizard records only from the phone's own mic. Try again, or choose another mic in Settings → Microphone.";
     /** Sources tried in order: the speech-tuned one, then the plain mic, which Android less often hands to Bluetooth. */
     public static final int[] SOURCES = {MediaRecorder.AudioSource.VOICE_RECOGNITION, MediaRecorder.AudioSource.MIC};
+    /**
+     * Sources for voice notes people listen to (23 Oct 2026): the phone's normal mic path first, as Telegram records
+     * (AudioSource.DEFAULT/MIC), so the note keeps the phone's tuned gain and low end. VOICE_RECOGNITION is the
+     * flat, unboosted speech-recognition path: notes from it played back about 8 dB quieter and thin ("tinny").
+     */
+    public static final int[] NOTE_SOURCES = {MediaRecorder.AudioSource.MIC, MediaRecorder.AudioSource.VOICE_RECOGNITION};
 
     private MicRoute() {}
 
@@ -135,9 +141,14 @@ public final class MicRoute {
      * throws. Tries each of {@link #SOURCES}; a take Android confirms on a disallowed input is stopped and released.
      */
     public static MediaRecorder start(Context c, Maker maker, Setup setup) throws IOException {
+        return start(c, maker, setup, SOURCES);
+    }
+
+    /** {@link #start(Context, Maker, Setup)} trying {@code sources} in order. */
+    public static MediaRecorder start(Context c, Maker maker, Setup setup, int[] sources) throws IOException {
         Choice ch = choose(c);
         IOException last = new IOException("The microphone did not start");
-        for (int src : SOURCES) {
+        for (int src : sources) {
             MediaRecorder r = maker.make();
             boolean started = false;
             try {

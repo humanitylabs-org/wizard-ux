@@ -85,10 +85,10 @@ export function playIntro({ id, listen } = {}) {
   if (land) {
     // the wallpaper sharpens band by band, sky first, then the mountains, then the water
     bands.forEach((b, i) => run(b, [{ opacity: 1 }, { opacity: 0 }], { delay: 520 + i * 190, duration: 640, easing: 'cubic-bezier(.4,0,.2,1)' }));
-    dev.animate([{ scale: '1.035' }, { scale: '1' }], { delay: 60, duration: 1900, easing: 'cubic-bezier(.2,.8,.25,1)', fill: 'backwards' });
+    if (!document.documentElement.classList.contains('wos-doc-scroll')) dev.animate([{ scale: '1.035' }, { scale: '1' }], { delay: 60, duration: 1900, easing: 'cubic-bezier(.2,.8,.25,1)', fill: 'backwards' });
     last = anims[anims.length - 1];
   } else {
-    dev.animate([{ filter: `blur(14px) brightness(${to === 'obsidian' ? 1.35 : .85})`, scale: '1.035' }, { filter: 'blur(0) brightness(1)', scale: '1' }], { delay: 140, duration: 1450, easing: 'cubic-bezier(.2,.8,.25,1)', fill: 'backwards' });
+    if (!document.documentElement.classList.contains('wos-doc-scroll')) dev.animate([{ filter: `blur(14px) brightness(${to === 'obsidian' ? 1.35 : .85})`, scale: '1.035' }, { filter: 'blur(0) brightness(1)', scale: '1' }], { delay: 140, duration: 1450, easing: 'cubic-bezier(.2,.8,.25,1)', fill: 'backwards' });
     last = run(sig, [{ opacity: 0 }, { opacity: 0 }], { duration: 1700 });
   }
   // 3. Signature, small and late.

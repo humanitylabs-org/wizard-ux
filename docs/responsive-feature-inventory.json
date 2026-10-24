@@ -66,16 +66,6 @@
       "classification": "native",
       "reason": "Android Food bridge UI."
     },
-    "core/tour.js": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone gestures tutorial; desktop keyboard help is a layout/input-specific guide."
-    },
-    "core/tour.css": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone gesture spotlights; desktop keyboard sheet remains shell-local."
-    },
     "core/voice.js": {
       "shell": "desktop",
       "classification": "adapter",
@@ -121,6 +111,7 @@
     "/wizard-os-home/apple-touch-icon.png",
     "core/agents.js",
     "core/app-capture.js",
+    "core/app-kinds.js",
     "core/app-reading-position.js",
     "core/app-route.css",
     "core/app-route.js",
@@ -168,7 +159,7 @@
     "core/os-updates.js",
     "core/own-views.css",
     "core/own-views.js",
-    "core/photos-settings.js",
+    "core/photos-relay.js",
     "core/polish.css",
     "core/reach.js",
     "core/resources.css",
@@ -184,6 +175,8 @@
     "core/settings.css",
     "core/settings.js",
     "core/setup-launch.js",
+    "core/share-sheet.css",
+    "core/share-sheet.js",
     "core/shell.js",
     "core/sigils.css",
     "core/sigils.js",
@@ -194,6 +187,8 @@
     "core/skins.js",
     "core/status.js",
     "core/thread-swipe-back.js",
+    "core/tour.css",
+    "core/tour.js",
     "core/update-banner.css",
     "core/uploads.js",
     "core/usage.js",
@@ -461,14 +456,14 @@
         "phone",
         "desktop"
       ],
-      "note": "Shared Settings \u2192 Schedules; hidden when Agent Service schedules returns 404"
+      "note": "Shared Settings → Schedules; hidden when Agent Service schedules returns 404"
     },
     "core/os-updates.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import; Settings \u2192 Updates shows only where the App Manager answers store-install/_updates"
+      "note": "Direct entrypoint import; Settings → Updates shows only where the App Manager answers store-install/_updates"
     },
     "core/own-views.js": {
       "loadedBy": [
@@ -477,12 +472,12 @@
       ],
       "note": "Shared own-screen fallback and shell-only Settings confirmation; same App Manager owner listener as Updates"
     },
-    "core/photos-settings.js": {
+    "core/photos-relay.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import after settings.js; Settings \u203a Photos backup shows only where the Android app's window.wizardPhotosPort exists"
+      "note": "Shell relay for the optional Photos app frame (/photos/) to the Android app's window.wizardPhotosPort; draws no UI. Without the port it answers no-bridge"
     },
     "core/music-voice.js": {
       "loadedBy": [
@@ -520,6 +515,13 @@
       "note": "Direct entrypoint import"
     },
     "core/sel-menu.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/share-sheet.js": {
       "loadedBy": [
         "phone",
         "desktop"
@@ -605,9 +607,10 @@
     },
     "core/tour.js": {
       "loadedBy": [
-        "phone"
+        "phone",
+        "desktop"
       ],
-      "note": "Direct entrypoint import"
+      "note": "Phone gesture tour (Talk, Hide) and the desktop first-message guide (WosTour.desk) share one module and one done flag."
     },
     "core/uploads.js": {
       "loadedBy": [
@@ -730,6 +733,13 @@
         "desktop"
       ],
       "note": "Owner experience storage boundary; published profiles, overrides and multi-tweak package lifecycle via skin-host"
+    },
+    "core/app-kinds.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
     }
   }
 }
