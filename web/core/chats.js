@@ -726,7 +726,7 @@ window.WizCore.chats = function createChats(H) {
       const members = kind === 'space' && LIVE.spaceSessions ? LIVE.spaceSessions(spaces().find(s => s.id === key)?.threads || [], { peek: true }).rows.filter(s => !s.hidden) : null;
       const rows = members || (kind === 'all' ? all : all.filter(s => matchesFocus({ kind, key }, s)));
       // Counts exclude Archive (James, 25 Oct 2026). Unloaded Space members sit beyond the archive window, so they are archived too.
-      return { kind, key, label, badge, count: rows.length - LIVE.workGroups(rows).archive.length, unread: rows.filter(s => LIVE.isNew(s)).length,
+      return { kind, key, label, badge, count: rows.length - LIVE.workGroups(rows).archive.length, unread: LIVE.visibleUnread ? LIVE.visibleUnread(rows).length : rows.filter(s => LIVE.isNew(s)).length,
         recent: rows.reduce((n, s) => Math.max(n, Date.parse(s.activityAt || s.updatedAt || '') || 0), 0) };
     };
     const opts = focusAgents().map(a => stats('agent', a.id, a.label, (AGS()?.sigil(a) || '') + (AGS()?.isPrivate(a) ? AGS().lock() : '')))
@@ -837,7 +837,7 @@ window.WizCore.chats = function createChats(H) {
     const fids = F?.ids ? F.ids(AGID) : null;
     const space = focus?.kind === 'space' ? spaces().find(s => s.id === focus.key) : null;
     const members = space && LST.ok ? LIVE.spaceSessions?.(space.threads) : null;
-    const all = (LST.ok ? (members ? members.rows : LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).filter(s => !s.hidden) : []).filter(s => (!F || (fids ? fids.has(s.id) : F.test(s))) && focusMatches(w, s));
+    const all = (LST.ok ? (members ? members.rows : n && LIVE.searchRows ? LIVE.searchRows(AGID) : LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).filter(s => !s.hidden) : []).filter(s => (!F || (fids ? fids.has(s.id) : F.test(s))) && focusMatches(w, s));
     const filtered = !!(F || focus);
     const titleHit = n ? all.filter(s => norm(s.title).includes(n) || norm(s.preview).includes(n)) : all;
     // Message bodies: searched lazily in the background (core/chat-search.js); hits stream in with a snippet.
@@ -1600,7 +1600,7 @@ window.WizCore.chats = function createChats(H) {
     const privTag = TAG && AGS()?.isPrivate(agentRec(TAG)) ? `<span class="ch-privtag" data-wiz-private="" title="Private agent: ${esc(agentName(TAG))}">${AGS().lock()}<span>Private</span></span>` : '';
     const state = threadState(s, TAG), working = state.working;
     const sub = isNew ? `Starts a new thread with ${agentName(TAG)}` : state.sub;
-    const turns = c.loadedFor === w.thread || c.cachedFor === w.thread ? c.turns || [] : null;
+    const turns = (c.loadedFor === w.thread || c.cachedFor === w.thread) && turnsCurrent(c, s) ? c.turns || [] : null;
     c.media = []; c.texts = [];
     let msgs;
     // A message the transcript on screen already shows is never drawn again below it as pending: reopening a thread
@@ -1966,6 +1966,13 @@ window.WizCore.chats = function createChats(H) {
 
     if (w.thread) { renderThread(w, el); loadThread(w); } else renderChatList(w, el);
   }
+  // Turns kept from an earlier open may only paint a new open when the live list says the thread still holds the
+  // same messages; otherwise the previous reply showed until the read landed (James, 24 Oct 2026). Within one open
+  // (this open's own read or cached paint) the turns on screen stay put while the next read runs, so polls never blank it.
+  function turnsCurrent(c, s) {
+    if (c.loadedNav === c.readNav || c.cachedNav === c.readNav || !s || !LIVE.contentKey) return true;
+    return !!LIVE.listTrusted?.() && c.readCk === LIVE.contentKey(s);
+  }
   async function loadThread(w, force) {
     const c = ch(w.id), sid = w.thread, nav = c.readNav;
     if (!sid || sid === '__new__' || (c.loading && c.loading.sid === sid && c.loading.nav === nav)) return;
@@ -1980,12 +1987,13 @@ window.WizCore.chats = function createChats(H) {
     const quiet = s && (!s.status || ['completed', 'cancelled', 'failed', 'interrupted'].includes(s.status))
       && Number.isSafeInteger(s.messageCount) && !LIVE.busy(w.thread) && !c.err && !pendingFor(w).length;
     const age = isWorking(s) ? 3500 : quiet ? 60000 : 15000;
-    const fresh = c.loadedFor === w.thread && Date.now() - c.at < age && (!quiet || c.readRevision === revision);
+    const fresh = c.loadedFor === w.thread && Date.now() - c.at < age && (!quiet || c.readRevision === revision) && turnsCurrent(c, s);
     // Status changes (Stopping…, Deferred, Archived) re-render the header even between message reads.
     const hk = s ? [s.status, !!s.archived, !!s.deferred, s.runId].join('|') : '';
     // Speed: a thread not yet read this page paints its last on-device copy at once (no skeleton);
     // the read below still runs and replaces it.
-    if (c.loadedFor !== sid && c.cachedFor !== sid && LIVE.cachedMessages) {
+    // A stored copy also replaces turns from an earlier open that the list says are out of date (preload often has the newer one).
+    if (!((c.loadedFor === sid || c.cachedFor === sid) && turnsCurrent(c, s)) && LIVE.cachedMessages) {
       const cached = LIVE.cachedMessages(sid);
       if (cached && cached.length) {
         try {
@@ -1993,7 +2001,7 @@ window.WizCore.chats = function createChats(H) {
           // that thread treat sid's cached body as its own fresh copy (James, 23 Oct 2026: Morning projects → linked
           // thread → Back showed the linked thread under the Morning header until the 60 s re-read). The server read
           // below still runs and sets loadedFor.
-          Object.assign(c, { turns: toTurns(cached), cachedFor: sid, loadedFor: '', err: '' });
+          Object.assign(c, { turns: toTurns(cached), cachedFor: sid, cachedNav: nav, loadedFor: '', err: '' });
           const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderLive(w, el);
         } catch (e) {}
       }
@@ -2017,7 +2025,7 @@ window.WizCore.chats = function createChats(H) {
     }
     // Every read owns a captured thread AND navigation generation. A -> B -> A is a new read;
     // an old completion must neither publish into it nor release its loading lock.
-    const read = { sid, nav }; c.loading = read;
+    const read = { sid, nav }, readCk = LIVE.contentKey ? LIVE.contentKey(s) : ''; c.loading = read;
     const current = () => W[w.id] === w && w.thread === sid && c.readNav === nav && c.loading === read;
     try {
       const rows = await LIVE.messages(sid);
@@ -2025,7 +2033,7 @@ window.WizCore.chats = function createChats(H) {
       const turns = toTurns(rows);
       const sig = JSON.stringify(turns.slice(-3));
       let changed = c.loadedFor !== w.thread || sig !== c.sig;
-      Object.assign(c, { turns, cachedFor: '', loadedFor: w.thread, loadedNav: nav, at: Date.now(), err: '', sig, readRevision: revision, detailNav: nav, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
+      Object.assign(c, { turns, cachedFor: '', loadedFor: w.thread, loadedNav: nav, readCk, at: Date.now(), err: '', sig, readRevision: revision, detailNav: nav, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
       // A sent message has landed once a recent user turn in the thread matches it.
       // Transcript absence is not a rejection receipt. Never replay accepted steering.
       if (retireLanded(w.thread, turns)) changed = true;
