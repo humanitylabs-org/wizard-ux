@@ -15,7 +15,7 @@ fs.mkdirSync(out, { recursive:true });
       for (const shell of ['phone','desktop']) for (const skin of ['nebula','obsidian']) {
         const id = `${name}-${shell}-${skin}`, errors = [], blocked = [];
         const context = await browser.newContext({ viewport: shell === 'phone' ? {width:390,height:844} : {width:1440,height:1000}, isMobile:shell==='phone',hasTouch:shell==='phone',timezoneId:'Asia/Bangkok',serviceWorkers:'block' });
-        await context.addInitScript(({ skin }) => { try { localStorage.setItem('wos.skin',skin); } catch (_) {} /* sandboxed app frames have no storage */ }, {skin});
+        await context.addInitScript(({ skin }) => { try { if (!sessionStorage.getItem('qa.seeded')) { localStorage.setItem('wos.skin',skin); sessionStorage.setItem('qa.seeded','1'); } } catch (_) {} /* seed once: later picks must survive navigation */ /* sandboxed app frames have no storage */ }, {skin});
         await context.route('**/*', async route => {
           const q=route.request(), url=new URL(q.url());
           if (!['GET','HEAD'].includes(q.method())) { blocked.push({method:q.method(),path:url.pathname}); return route.fulfill({status:403,contentType:'application/json',body:'{"error":"QA blocks all writes"}'}); }
