@@ -7,214 +7,12 @@ html[data-skin="landscapes"] :is(.now-card, .side-card, .win, .launcher, .inbox,
 html[data-skin="landscapes"] .now-card { background: rgba(16, 14, 22, .42); border-color: rgba(255, 255, 255, .14); box-shadow: none; }
 html[data-skin="landscapes"] .dock { border-top-color: transparent; }
 
-/* New chat greeting (moved from core/chats.css). */
-:is(html[data-skin="landscapes"]) .ch-empty.nc-classic { display: none; }
-:is(html[data-skin="landscapes"]) .ch-newchat { margin: auto; padding: 28px 16px 36px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; max-width: 440px; animation: ncIn .32s ease-out both; }
-
 /* Desktop (moved from desktop/desktop.css). */
 html[data-skin="landscapes"] .keys-card { background: #0d1210; }
-/* Model switch (Miguel's skins): four slots above the composer, Opus · Astra · Sol · the private Tinfoil model.
- * The private slot shows its model id (Kimi K3) in private-browsing purple with a small lock, never a provider name. */
-html[data-skin="landscapes"] .ch-swrow { flex: 0 0 auto; display: flex; align-items: center; padding: 4px 10px 0; }
-html[data-skin="landscapes"] .ms { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; --ms-i: 1; --secure: hsl(282 88% 74%); --secure-on: #1d0630; }
-html[data-skin="landscapes"] .ms-track { position: relative; flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); height: 38px; border-radius: 19px; background: color-mix(in srgb, var(--ink) 7%, transparent); touch-action: none; user-select: none; -webkit-user-select: none; }
-html[data-skin="landscapes"] .ms-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 4); border-radius: 16px; background: var(--ink); transform: translateX(calc(var(--ms-i) * 100%)); transition: transform 220ms cubic-bezier(.2, .9, .25, 1); pointer-events: none; }
-html[data-skin="landscapes"] .ms-track.dragging .ms-thumb { transition: none; }
-html[data-skin="landscapes"] .ms-track.off .ms-thumb { opacity: 0; }
-html[data-skin="landscapes"] .ms-o { position: relative; z-index: 1; min-width: 0; padding: 0 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; white-space: nowrap; font-size: 13px; font-weight: 700; line-height: 1.1; color: var(--ink-2); transition: color 200ms; }
-html[data-skin="landscapes"] .ms-o.on { color: var(--bg); }
-html[data-skin="landscapes"] .ms-o:disabled { opacity: .35; }
-html[data-skin="landscapes"] .ms-version { font-size: 10px; font-weight: 500; line-height: 1.1; opacity: .65; }
-html[data-skin="landscapes"] .ms-version:empty { display: none; }
-html[data-skin="landscapes"] .ms-o.secure { color: var(--secure); }
-html[data-skin="landscapes"] .ms-o.secure .ms-version { display: inline-flex; align-items: center; gap: 2px; opacity: .9; }
-html[data-skin="landscapes"] .ms-o.secure .ag-lock { width: 9px; height: 9px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-html[data-skin="landscapes"] .ms-o.secure.on { color: var(--secure-on); }
-html[data-skin="landscapes"] .ms.secure-on .ms-thumb { background: var(--secure); box-shadow: 0 0 14px color-mix(in srgb, var(--secure) 45%, transparent); }
-html[data-skin="landscapes"] .ms-more { flex: 0 0 auto; height: 38px; min-width: 36px; padding: 0 8px; border: 0; background: none; border-radius: 12px; color: var(--ink-2); font-weight: 800; display: flex; align-items: center; gap: 6px; }
-html[data-skin="landscapes"] .ms-more small { font-size: 11.5px; font-weight: 650; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-html[data-skin="landscapes"] .ch-swrow + .ch-compose { border-top: 0; }
-html[data-skin="landscapes"] .ch-model.private, html[data-skin="landscapes"] .mrow.secure .mn b { color: var(--secure, hsl(282 88% 74%)); }
-html[data-skin="landscapes"] .mrow.secure .mn b { display: inline-flex; align-items: center; gap: 6px; }
-html[data-skin="landscapes"] .mrow.secure .ag-lock { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-html[data-skin="landscapes"][data-shell="desktop"] .ch-swrow .ms { flex: 0 1 340px; }
 
-/* Miguel's layout (ported from his test port, 20 Oct 2026): phone list order, edge-to-edge apps, quiet composer,
- * lower dock, desktop list order and slim header. Scoped to this skin; James's skins keep the stock layout. */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-scroll { display: flex; flex-direction: column-reverse; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec { display: flex; flex-direction: column-reverse; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec-b { display: flex; flex-direction: column-reverse; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec + .ch-sec { border-top: 0; border-bottom: 1px solid var(--line); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-scroll { padding-bottom: 8px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-scroll { padding-bottom: 8px; }
-html[data-skin="landscapes"] .ch-sec[data-sec="archive"].open { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-thread { display: flex; flex-direction: column; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-compose:not(.has-text) .ch-mic:not(.on) { display: none; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"] { position: sticky; top: 0; z-index: 2; background: color-mix(in srgb, var(--ink) 6%, var(--bg)); border-radius: 12px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"]:not(.open) .ch-sec-h { min-height: 34px; padding-top: 6px; padding-bottom: 6px; opacity: .8; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-scroll { flex-direction: column; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec { order: 1; flex-direction: column; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec:not([data-sec="ready"]) .ch-sec-b { flex-direction: column; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"] { order: 0; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="ready"] { order: 2; margin-top: auto; flex-direction: column-reverse; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec + .ch-sec { border-bottom: 0; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="ready"] { border-top: 1px solid var(--line); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-head { padding-left: 14px; }
-html[data-skin="landscapes"] #device.orb-lift { --corner-b: 9px; }
-html[data-skin="landscapes"] #device.orb-corner .win.full .ch-compose:not(.has-text) { padding-right: calc(var(--corner-orb) + var(--corner-r) + 8px); }
-html[data-skin="landscapes"] #device.orb-corner .win.full .ch-compose.has-text { padding-right: 10px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-head { padding: 4px 10px 4px 14px; border-bottom: 0; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-head .ti, html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-head .ti .ti-b { min-height: 26px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-head .ti b { font-size: 14.5px; font-weight: 650; color: var(--ink-2); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .win.full .wbar { height: 28px; border-bottom: 0; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-tacts button { border: 0; background: color-mix(in srgb, var(--ink) 7%, transparent); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-latest { bottom: auto; top: auto; right: 50%; transform: translateX(50%); bottom: 140px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-fab { right: calc(var(--corner-r) + var(--corner-orb) + 10px); bottom: calc(var(--safe-b) + var(--corner-b)); width: 44px; height: 44px; border-radius: 22px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-compose textarea { border-color: transparent; background: color-mix(in srgb, var(--ink) 7%, transparent); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-compose .ch-attach { background: none; border: 0; color: var(--ink-2); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-compose .ch-attach svg { stroke: var(--ink-2); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-thread > .ch-head { background: var(--bg); position: relative; z-index: 2; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-compose { border-top: 0; padding-bottom: calc(10px + var(--safe-b, 0px)); }
-html[data-skin="landscapes"] #device.orb-corner { --corner-r: 16px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="ready"] { flex-direction: column; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-scroll { padding-bottom: calc(var(--safe-b, 0px) + var(--corner-b)); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-rdy-bar { min-height: var(--corner-orb); align-items: center; padding-right: calc(var(--corner-r) + 2 * var(--corner-orb) + 18px); margin: 0; }
-html[data-skin="landscapes"] .ch-compose button.ch-attach { background: none !important; border: 0 !important; box-shadow: none !important; }
-html[data-skin="landscapes"] .ch-compose button.ch-attach svg { stroke: var(--ink-2) !important; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-rdy-bar { padding-right: 120px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-fab { width: 44px; height: 44px; border-radius: 22px; }
-html[data-skin="landscapes"][data-shell="desktop"] .ch-list .ch-scroll { display: flex; flex-direction: column; }
-html[data-skin="landscapes"][data-shell="desktop"] .ch-list .ch-sec[data-sec="archive"] { order: -2; }
-html[data-skin="landscapes"][data-shell="desktop"] .ch-list .ch-sec[data-sec="working"] { order: -1; }
-html[data-skin="landscapes"][data-shell="desktop"] .ch-list .ch-sec[data-sec="ready"] { order: 0; }
-html[data-skin="landscapes"][data-shell="desktop"] .ch-list .ch-sec[data-sec="archive"].open { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; }
-html[data-skin="landscapes"][data-shell="desktop"] .ch-compose button.ch-mic:not(.on) { border: 0 !important; background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--ink) 70%, transparent), color-mix(in srgb, var(--violet) 55%, var(--bg)) 55%, var(--bg) 100%) !important; box-shadow: 0 0 0 1px var(--line-2), 0 0 14px color-mix(in srgb, var(--violet) 35%, transparent) !important; }
-html[data-skin="landscapes"][data-shell="desktop"] .ch-compose button.ch-mic:not(.on) svg { opacity: 0; }
-html[data-skin="landscapes"][data-shell="desktop"] .ch-head { padding: 3px 10px 3px 4px; min-height: 0; }
-html[data-skin="landscapes"][data-shell="desktop"] .ch-head .ti b { font-size: 14px; }
-html[data-skin="landscapes"][data-shell="desktop"] .ch-head .ch-back { width: 30px; height: 30px; }
 html[data-skin="landscapes"] { --ch-priv: hsl(282 88% 74%); }
-html[data-skin="landscapes"] { --safe-b-low: calc(var(--safe-b) * .45); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .dock { height: calc(var(--dock-h) + var(--safe-b-low)); padding-bottom: calc(6px + var(--safe-b-low)); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.orb-corner .dock { bottom: calc(var(--safe-b-low) + var(--corner-b)); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-compose { padding-bottom: calc(8px + var(--safe-b-low)) !important; }
-html[data-skin="landscapes"] .dock .orb-wrap { z-index: 3; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .scrub { bottom: max(0px, calc(var(--safe-b-low) - 10px)); height: 12px; z-index: 1; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.immersive .tiles.has-full { bottom: 0; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-compose { padding-bottom: calc(4px + var(--safe-b-low)) !important; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) #device.orb-corner { --corner-b: 4px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.orb-corner .dock { bottom: calc(var(--safe-b-low) + var(--corner-b)); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .imm-edge { height: calc(12px + var(--safe-b-low)); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .imm-edge i { bottom: 3px; }
-html[data-skin="landscapes"][data-shell="phone"] .tiles:not(.has-full) { left: 0; right: 0; top: calc(var(--sb) + var(--safe-t)); bottom: calc(var(--dock-h) + var(--safe-b-low, var(--safe-b)) - 4px); --gap: 2px; gap: 2px; }
-html[data-skin="landscapes"][data-shell="phone"] .tiles:not(.has-full) .win { border-radius: 0; border-left: 0; border-right: 0; box-shadow: none; }
-html[data-skin="landscapes"][data-shell="phone"] .tiles:not(.has-full) .win.solo { border-top: 0; border-bottom: 0; border-radius: 0 0 22px 22px; }
-html[data-skin="landscapes"][data-shell="phone"] .tiles:not(.has-full) .win.focus { box-shadow: inset 0 0 0 1px rgba(185, 155, 255, .5); }
-html[data-skin="landscapes"][data-shell="phone"] .win .wb[data-wact="full"] { display: none; }
-html[data-skin="landscapes"][data-shell="phone"] .tiles:not(.has-full) .win.solo.app-chats > .wbar { display: none; }
-html[data-skin="landscapes"][data-shell="phone"] .tiles:not(.has-full) .win.solo { border-radius: 0; }
-html[data-skin="landscapes"][data-shell="phone"] .tiles:not(.has-full) .ch-compose { padding-bottom: 4px !important; padding-top: 6px; gap: 6px; }
-html[data-skin="landscapes"] .ch-rdy-bar button { white-space: nowrap; flex: 0 0 auto; }
 
-/* Miguel's behaviour pieces (behaviour.js): big dock Back, Defer/Done on the switch row, top-centre toasts. */
-html[data-skin="landscapes"] .mz-dock-back { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; z-index: 4; color: var(--ink); background: color-mix(in srgb, var(--ink) 9%, transparent); border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); transition: transform 160ms ease, background 160ms; }
-html[data-skin="landscapes"] .mz-dock-back svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-html[data-skin="landscapes"] .mz-dock-back:active { transform: translateY(-50%) scale(.92); }
-html[data-skin="landscapes"] .mz-dock-back[hidden] { display: none; }
-html[data-skin="landscapes"] .dock.mz-back-on #dotsL { visibility: hidden; }
-html[data-skin="landscapes"] .ch-swrow { gap: 6px; }
-html[data-skin="landscapes"] .ch-swrow .ch-tacts { margin: 0; gap: 4px; flex: 0 0 auto; display: flex; }
-html[data-skin="landscapes"] .ch-swrow .ch-tacts button { height: 36px; width: 40px; padding: 0; justify-content: center; border-radius: 18px; border: 0; background: color-mix(in srgb, var(--ink) 7%, transparent); }
-html[data-skin="landscapes"] .ch-swrow .ch-tacts button span { display: none; }
-html[data-skin="landscapes"][data-shell="desktop"] .ch-swrow .ch-tacts button { width: auto; padding: 0 12px; }
-html[data-skin="landscapes"][data-shell="desktop"] .ch-swrow .ch-tacts button span { display: inline; }
-html[data-skin="landscapes"][data-shell="desktop"] .ch-swrow { justify-content: space-between; }
-html[data-skin="landscapes"] .toast { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 12px); }
-/* Opinionated (phone, test port): floating pill bottom bar, like iOS tab bars (LINE, Slack, WhatsApp, Telegram).
- * Same orb, desk icons, Back, scrubber and gestures; only the shape moves: an inset frosted capsule lifted off the
- * screen edge so desk swipes start well above the iPhone home-indicator swipe zone. Corner orb (full screen) unchanged. */
-html[data-skin="landscapes"] { --pill-h: 66px; --pill-x: 12px; --pill-b: calc(var(--safe-b-low) + 8px); --pill-top: calc(var(--pill-b) + var(--pill-h)); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { left: var(--pill-x); right: var(--pill-x); bottom: var(--pill-b); height: var(--pill-h); padding: 0; gap: 18px; align-items: center; border-radius: calc(var(--pill-h) / 2); border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); background: color-mix(in srgb, var(--bg) 62%, transparent); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: 0 8px 28px rgba(0, 0, 0, .28), inset 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-wrap, html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots { margin-top: 0; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub { bottom: 2px; height: 10px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub i { width: 30px; height: 3px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock :is(.dock-back, .mz-dock-back) { left: 7px; width: 46px; height: 46px; transform: translateY(-50%); border-color: transparent; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock :is(.dock-back, .mz-dock-back):active { transform: translateY(-50%) scale(.92); }
-html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) { bottom: calc(var(--pill-top) + 6px); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.immersive) .tiles.has-full { bottom: calc(var(--pill-top) + 6px); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) #device:not(.orb-corner) > :is(#voiceDestination, #generalVoice) { bottom: calc(var(--pill-top) - 9px); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub .sc-label { bottom: calc(var(--pill-h) + 4px); }
-/* Opinionated (phone): the "Wizard OS was updated · Reload" banner sits just above the bottom bar, in thumb reach,
- * instead of under the status bar. Its thread list opens upward. Full-screen chats: above the corner orb. */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device .dv-update { top: auto; left: var(--pill-x, 10px); right: var(--pill-x, 10px); bottom: calc(var(--pill-top, calc(var(--dock-h) + var(--safe-b-low))) + 8px); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.orb-corner .dv-update { bottom: calc(var(--safe-b-low) + var(--corner-b) + var(--corner-orb) + 10px); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device .dv-update.web { flex-direction: column-reverse; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device .dv-update .dv-wl { margin: 0 0 8px; border-top: 0; border-bottom: 1px solid var(--line); }
-/* Opinionated (phone, test port) round 2: content runs under the pill and fades out into the background (iOS style)
- * instead of stopping in a hard edge above it; quieter pill; chat Back drawn as a hamburger (back to the list). */
-html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full):has(> .win.solo.app-chats) { bottom: 0; }
-html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats { border-radius: 0; }
-html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-thread { padding-bottom: calc(var(--pill-top) + 4px); }
-html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-msgs { -webkit-mask-image: linear-gradient(to top, transparent 0, #000 28px); mask-image: linear-gradient(to top, transparent 0, #000 28px); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { border-color: color-mix(in srgb, var(--ink) 7%, transparent); background: color-mix(in srgb, var(--bg) 78%, transparent); box-shadow: 0 10px 30px rgba(0, 0, 0, .22); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub:not(.on) i { opacity: 0; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-ring { opacity: .45; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .dock :is(.dock-back, .mz-dock-back) { background: transparent; border: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .dock :is(.dock-back, .mz-dock-back) svg { display: none; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .dock :is(.dock-back, .mz-dock-back)::before { content: ""; width: 20px; height: 2px; border-radius: 2px; background: currentColor; box-shadow: 0 -6.5px 0 currentColor, 0 6.5px 0 currentColor; }
-html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-fab { bottom: calc(var(--pill-top) + 12px); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .moons { opacity: .55; }
-/* Fade: a soft scrim rises from the bottom edge behind the pill, so whatever sits above the bar melts into the
- * background (iOS tab-bar look) instead of ending in a hard line. Hidden whenever the bar itself is hidden. */
-html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats:has(.ch-list)::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--pill-top) + 64px); z-index: 4; pointer-events: none; background: linear-gradient(to top, var(--bg) var(--pill-b), color-mix(in srgb, var(--bg) 92%, transparent) calc(var(--pill-top) - 20px), color-mix(in srgb, var(--bg) 55%, transparent) calc(var(--pill-top) + 22px), transparent 100%); }
-/* The room under the last row is a real flex item, not scroll padding: iPhone Safari leaves a flex scroller's
- * bottom padding out of the scroll range, so a just-full list would not scroll the last row clear of + and the pill. */
-html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-list .ch-scroll { padding-bottom: 0; }
-html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-list .ch-scroll::after { content: ""; display: block; order: 99; flex: 0 0 calc(var(--pill-top) + 66px); }
 html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats:has(.ch-list)::after { height: calc(var(--pill-top) + 44px); background: linear-gradient(to top, color-mix(in srgb, var(--bg) 72%, transparent) 0, color-mix(in srgb, var(--bg) 45%, transparent) var(--pill-top), transparent 100%); }
-/* Opinionated (phone): just the orb. No ring, spinning arcs, orbit dots, halo or handle line; the count badge and the
- * tap ripple stay. Gestures unchanged (the scrub strip still works, it just draws nothing at rest). */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .dock :is(.orb-ring, .moons, .orb-halo) { display: none; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .dock .scrub:not(.on) i { opacity: 0; }
-/* Opinionated (phone): bigger everything inside the pill. The orb grows to nearly the pill's height and carries the
- * current app's icon inside its glass, so it reads as the orb sitting on top of whatever is in view. */
-html[data-skin="landscapes"] { --pill-h: 72px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { --orb: 62px; gap: 20px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots { width: auto; min-width: 0; flex: 1 1 0; gap: 16px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.left { padding-left: 14px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.right { padding-right: 14px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot { width: 34px; height: 34px; display: grid; place-items: center; border: 0; background: none; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg { width: 32px; height: 32px; opacity: .9; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg .sgi.sgl { font-size: 23px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dplus .dsg svg { width: 30px; height: 30px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-badge { top: -2px; right: -4px; min-width: 20px; height: 20px; font-size: 12px; z-index: 3; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock :is(.dock-back, .mz-dock-back) { left: 6px; width: 58px; height: 58px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock :is(.dock-back, .mz-dock-back)::before { width: 26px; height: 2.6px; box-shadow: 0 -8.5px 0 currentColor, 0 8.5px 0 currentColor; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app:not(:empty) { display: grid; place-items: center; position: absolute; inset: 0; z-index: 2; pointer-events: none; mix-blend-mode: screen; opacity: .8; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .dsg { width: 30px; height: 30px; opacity: 1; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .dsg .sgi.sgl { font-size: 22px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app :is(.dn, .dbg) { display: none; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner):is([data-voice="listen"], [data-voice="paused"]) .dock .orb-app { opacity: 0; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots { justify-content: space-evenly; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg .sgi { width: 88%; height: 88%; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg .sgi:is(.sg-hat, .sg-hat-private) { -webkit-mask-size: auto 80%; mask-size: auto 80%; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app:not(:empty) { mix-blend-mode: normal; opacity: .92; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .dsg { width: 36px; height: 36px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .sgi { width: 100%; height: 100%; background: var(--ink); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--bg) 80%, transparent)) drop-shadow(0 1px 2px rgba(0, 0, 0, .5)); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .sgi:is(.sg-hat, .sg-hat-private) { -webkit-mask-size: auto 82%; mask-size: auto 82%; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb { -webkit-mask-image: radial-gradient(circle closest-side, #000 72%, transparent 100%); mask-image: radial-gradient(circle closest-side, #000 72%, transparent 100%); }
-
-/* Miguel's skins (phone): app title bars as slim as the chat thread header, so apps keep the screen.
- * Same 14.5px title as a chat thread, a 36px bar, and no extra gap under the status bar. */
-html[data-skin="landscapes"][data-shell="phone"][data-skin-frame="borderless"] .win { padding-top: calc(var(--sb) + var(--safe-t)); --sf-head: calc(36px + var(--sb) + var(--safe-t)); }
-html[data-skin="landscapes"][data-shell="phone"][data-skin-frame="borderless"] .win > .wbar { height: 36px; min-height: 36px; flex-basis: 36px; padding-right: calc(40px + var(--sf-padding, 16px)); }
-html[data-skin="landscapes"][data-shell="phone"][data-skin-frame="borderless"] .wbar > :is(.wt, .t) { font-size: 14.5px; font-weight: 650; letter-spacing: -.01em; }
-html[data-skin="landscapes"][data-shell="phone"][data-skin-frame="borderless"] .wbar > [data-wact="close"] { width: 36px; min-width: 36px; height: 36px; right: calc(var(--sf-padding, 16px) - 8px); }
-html[data-skin="landscapes"][data-shell="phone"][data-skin-frame="borderless"] .wbar > [data-wact="close"] svg { width: 16px; height: 16px; }
-html[data-skin="landscapes"][data-shell="phone"][data-skin-frame="borderless"] .wbar .wtool { height: 28px; min-width: 28px; }
-html[data-skin="landscapes"][data-shell="phone"][data-skin-frame="borderless"] .wbar .wtool-pick { height: 28px; font-size: 12.5px; }
-html[data-skin="landscapes"][data-shell="phone"][data-skin-frame="borderless"] .shield { top: 36px; }
-
 
 /* App selector, Miguel's look: names in full ink at a readable size, section titles one step brighter, Get apps
  * drawn as a tile like its neighbours (hairline edge) instead of an unbordered box. */
@@ -265,137 +63,17 @@ html[data-skin="landscapes"] .new-desk .lgroup h4 { color: var(--ink-2); }
 html[data-skin="landscapes"] .new-desk .lapp .nm { color: var(--ink); font-size: 12px; font-weight: 600; letter-spacing: -.01em; text-shadow: 0 1px 2px rgba(0, 0, 0, .45); }
 html[data-skin="landscapes"] .new-desk .lapp .ic.sgt { background-color: #0f0c17; border-color: color-mix(in oklab, var(--c) 55%, rgba(255, 255, 255, .14)); }
 
-/* Dock fit (Miguel, 21 Oct): with many desks open, each side holds at most Home + two neighbours on the left and two
- * neighbours + New on the right, so nothing squeezes under the orb or past the pill's ends. A dot marks hidden desks. */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { gap: 12px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots { gap: 8px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.left { padding-left: 8px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.right { padding-right: 8px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot { width: 32px; height: 32px; flex: 0 0 32px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg { width: 30px; height: 30px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsL > .ddot[data-goto]:not(.dhome):nth-last-child(n+3) { display: none; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsR > .ddot[data-goto]:nth-child(n+3) { display: none; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsL > .dhome { order: -1; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsR > .dplus { order: 1; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) :is(#dotsL:has(> .ddot[data-goto]:not(.dhome):nth-last-child(3)), #dotsR:has(> .ddot[data-goto]:nth-child(3))) > .dmore { display: none; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsL:has(> .ddot[data-goto]:not(.dhome):nth-last-child(3))::before,
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsR:has(> .ddot[data-goto]:nth-child(3))::after { content: ""; flex: 0 0 auto; width: 3px; height: 3px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 40%, transparent); }
-
 /* App kinds on New desk (Apps · Wizard apps · Connectors): the panel stops above the pill dock and scrolls inside. */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .new-desk.kinds { height: calc(100% - 20px); max-height: none; overflow-y: auto; } /* the desk already stops above the pill dock: fill all of it */
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .new-desk.kinds { height: calc(100% - 20px); max-height: none; overflow-y: auto; padding-bottom: 6px; } /* the desk already stops above the pill dock: fill all of it */
 
-/* App kinds: the Apps sheet uses the whole screen between the status bar and the pill dock, same as New desk. */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .launcher { top: calc(30px + var(--safe-t)); bottom: calc(var(--pill-top, 90px) + 8px); }
-
-/* System apps (fill a Wizard OS parking spot): first in their group, with a second ring around the icon. */
-
-/* Opinionated (Miguel's skins): Home resources as the most compact readout: two rows (Server, then AI accounts) of
-   small ring + label cells on one shared 3-column grid, no headings, warnings or freshness text; one settings gear.
-   resources.js renders .rs-dialed only for these skins. */
-html[data-skin="landscapes"] [data-home-resources] { margin-top: 0; }
-html[data-skin="landscapes"] .rs-dialed { padding: 10px 14px; }
-html[data-skin="landscapes"] .rs-dials { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 6px; }
-html[data-skin="landscapes"] .rs-dials + .rs-dials { margin-top: 8px; }
-html[data-skin="landscapes"] .rs-dial { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; font-variant-numeric: tabular-nums; -webkit-tap-highlight-color: transparent; }
-html[data-skin="landscapes"] .rs-rw { position: relative; flex: none; width: 30px; height: 30px; }
-html[data-skin="landscapes"] .rs-rw svg { width: 30px; height: 30px; transform: rotate(-90deg); display: block; }
-html[data-skin="landscapes"] .rs-dial circle { fill: none; stroke-width: 2.4; }
-html[data-skin="landscapes"] .rs-ring { stroke: var(--line-2, var(--line)); }
-html[data-skin="landscapes"] .rs-arc { stroke: var(--ink-2); stroke-linecap: round; transition: stroke-dasharray .5s ease; }
-html[data-skin="landscapes"] .rs-rw b { position: absolute; inset: 0; display: grid; place-items: center; font-size: 10.5px; font-weight: 550; letter-spacing: -.02em; color: var(--wz-text, var(--ink)); }
-html[data-skin="landscapes"] .rs-dial-off .rs-ring { stroke-dasharray: 2 3; }
-html[data-skin="landscapes"] .rs-dl { min-width: 0; display: flex; flex-direction: column; font-size: 11.5px; line-height: 1.2; color: var(--wz-text-secondary, var(--ink-2)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-html[data-skin="landscapes"] .rs-dl small { font-size: 10px; color: var(--wz-text, var(--ink)); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--line-2, var(--line)); }
-html[data-skin="landscapes"] .rs-dial:active { opacity: .7; }
-html[data-skin="landscapes"] .rs-dial:focus-visible { outline: 2px solid var(--violet-2); outline-offset: 2px; border-radius: 8px; }
-html[data-skin="landscapes"] .rs-dial-empty { grid-column: 1 / -1; min-height: 30px; display: flex; align-items: center; font-size: 11.5px; color: var(--wz-text-muted, var(--ink-3)); }
-html[data-skin="landscapes"] .home-tools .home-system { display: none; }
-
-/* Opinionated (Miguel's skins): Ready / Working as two squarish tiles: the count large at the top, the label with its
-   dot underneath. Same surface, radius and edges as the resources card below so Home reads as one set. Landscapes gets
-   a frosted dark panel so both stay legible over bright photos. */
-html[data-skin="landscapes"] .home .constellation { gap: 10px; margin-bottom: 10px; }
-html[data-skin="landscapes"] .home .constellation .now-card {
-  flex: 1 1 0; min-height: 0; height: 84px; padding: 12px 14px; border-radius: var(--wz-home-widget-radius, 20px);
-  display: grid; grid-template: "n n" 1fr "p k" auto / auto 1fr; align-items: center; column-gap: 7px; row-gap: 0; text-align: left;
-  background: var(--wz-home-widget-surface); border: 1px solid var(--wz-home-widget-border); box-shadow: none; }
-html[data-skin="landscapes"] .home .constellation .now-card .n { grid-area: n; align-self: start; }
-html[data-skin="landscapes"] .home .constellation .now-card .pip { grid-area: p; width: 6px; height: 6px; flex: none; margin: 0; }
-html[data-skin="landscapes"] .home .constellation .now-card .meta { grid-area: k; display: block; }
-html[data-skin="landscapes"] .home .constellation .now-card .k { font-size: 12.5px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--wz-text-secondary, var(--ink-2)); }
-html[data-skin="landscapes"] .home .constellation .now-card .n { padding: 0; font-size: 30px; line-height: 1; font-weight: 420; letter-spacing: -.03em; color: var(--wz-text, var(--ink)); }
-html[data-skin="landscapes"] .home .constellation .now-card:active { transform: scale(.97); }
 html[data-skin="landscapes"] :is(.home .constellation .now-card, .rs-dialed) {
   background: linear-gradient(180deg, rgba(22, 20, 30, .74), rgba(12, 11, 18, .82)); border-color: rgba(255, 255, 255, .12);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); -webkit-backdrop-filter: blur(22px) saturate(1.2); backdrop-filter: blur(22px) saturate(1.2); }
-/* Dark / Light: clean, modern surfaces (no grain): a flat raised card with a crisp hairline. */
 
-/* Opinionated (Miguel's skins, 21 Oct): everything on Home centred and shrink-wrapped so the background shows as much
-   as possible. Date and clock centred; Ready / Working as two small centred tiles; resources as ONE centred row of tiny
-   ring dials (Server | AI) with the label under each ring. No panel is wider or taller than its content. */
-html[data-skin="landscapes"] .home .home-top { text-align: center; padding-left: 0; padding-right: 0; }
-html[data-skin="landscapes"] .home .home-attn { align-items: center; }
-html[data-skin="landscapes"] .home .constellation { justify-content: center; gap: 8px; margin-bottom: 8px; }
-html[data-skin="landscapes"] .home .constellation .now-card {
-  flex: 0 0 82px; width: 82px; min-width: 0; height: auto; padding: 8px 12px 7px; border-radius: 16px;
-  grid-template: "n n" auto "p k" auto / auto auto; justify-content: center; justify-items: center; row-gap: 3px; column-gap: 5px; }
-html[data-skin="landscapes"] .home .constellation .now-card .n { align-self: center; font-size: 22px; }
-html[data-skin="landscapes"] .home .constellation .now-card .k { font-size: 11px; }
-html[data-skin="landscapes"] .home .constellation .now-card .pip { width: 5px; height: 5px; }
-html[data-skin="landscapes"] [data-home-resources] { display: flex; justify-content: center; }
-html[data-skin="landscapes"] .rs-dialed { display: flex; flex-wrap: nowrap; justify-content: center; align-items: flex-start; width: fit-content; max-width: 100%; padding: 8px 8px 7px; border-radius: 16px; }
-html[data-skin="landscapes"] .rs-dials { display: flex; gap: 0; }
-html[data-skin="landscapes"] .rs-dials + .rs-dials { margin: 0 0 0 6px; padding: 0 0 0 6px; border-left: 1px solid var(--line); }
-html[data-skin="landscapes"] .rs-dial { flex-direction: column; gap: 3px; width: 42px; text-align: center; }
-html[data-skin="landscapes"] .rs-rw, html[data-skin="landscapes"] .rs-rw svg { width: 28px; height: 28px; }
-html[data-skin="landscapes"] .rs-rw b { font-size: 10px; }
-html[data-skin="landscapes"] .rs-dl { align-items: center; max-width: 42px; font-size: 9.5px; line-height: 1.15; }
-html[data-skin="landscapes"] .rs-dl small { font-size: 9px; }
-html[data-skin="landscapes"] .rs-arc { stroke: var(--wz-text, var(--ink)); }
-html[data-skin="landscapes"] .home-time { font-variant-numeric: normal; }
 /* System apps: one purple border (it replaces the tile's own colour border, never adds a second) and a purple tint. */
 html[data-skin="landscapes"] :is(.launcher, .new-desk) .lapp.lapp-sys .ic { border: 2.5px solid #8f63ff; background: linear-gradient(160deg, rgba(143, 99, 255, .34), rgba(143, 99, 255, .14)), #0f0c17; box-shadow: 0 4px 14px rgba(143, 99, 255, .28); outline: none; }
 
-/* "For agents" (Wizard apps, Agents, Connectors): one quiet folded row under Apps. */
-html[data-skin="landscapes"] :is(.launcher, .new-desk) .forag { margin: 14px 0 4px; }
-html[data-skin="landscapes"] :is(.launcher, .new-desk) .fa-row { width: 100%; display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-radius: 16px; background: color-mix(in srgb, var(--ink) 6%, transparent); border: 1px solid var(--line-2); color: var(--ink-2); font-size: 13.5px; font-weight: 600; }
-html[data-skin="landscapes"] :is(.launcher, .new-desk) .fa-row small { color: var(--ink-3); font-size: 12.5px; font-weight: 500; }
-html[data-skin="landscapes"] :is(.launcher, .new-desk) .fa-row svg { margin-left: auto; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform 200ms; }
-html[data-skin="landscapes"] :is(.launcher, .new-desk) .forag.open .fa-row svg { transform: rotate(180deg); }
-html[data-skin="landscapes"] :is(.launcher, .new-desk) .forag:not(.open) .fa-body { display: none; }
-html[data-skin="landscapes"] :is(.launcher, .new-desk) .forag .fa-body { padding-top: 6px; }
-
-/* Home without date and clock (Miguel, 21 Oct): the device already shows the time. */
-html[data-skin="landscapes"] :is(.home-date, .home-time) { display: none; }
-
-/* Home Ready/Working: colour the word and number instead of a dot (Miguel, 21 Oct). */
-html[data-skin="landscapes"] .home .constellation .now-card .pip { display: none; }
-html[data-skin="landscapes"] .home .constellation .now-card :is(.k, .n) { color: var(--c); }
-html[data-skin="landscapes"] .home .constellation .now-card { grid-template: "n" auto "k" auto / auto; column-gap: 0; }
-
-/* Speedometer dials (Miguel's skins, 22 Oct): each reading is a small 240° car gauge (ticks, arc, needle, digital
-   readout). Needles start at zero and sweep up on first load, staggered, like a car cluster on start; later readings
-   glide. No panel: the dials sit straight on the background. On phone they live at the top (rarely touched), leaving
-   the thumb zone to Ready / Working. resources.js sets --a (needle angle) and --o (arc offset) per dial. */
-html[data-skin="landscapes"] [data-home-resources] .rs-dialed.rs-widget.wz-home-widget { background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; padding: 0; border-radius: 0; gap: 0; }
-html[data-skin="landscapes"] .rs-dials + .rs-dials { margin: 0 0 0 4px; padding: 0 0 0 4px; border-left: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); }
-html[data-skin="landscapes"] .rs-dial { --g: clamp(44px, 13.4vw, 56px); width: calc(var(--g) + 2px); gap: 1px; }
-html[data-skin="landscapes"] .rs-gauge { position: relative; display: block; width: var(--g); height: calc(var(--g) * .8333); }
-html[data-skin="landscapes"] .rs-gauge svg { display: block; width: 100%; height: 100%; overflow: visible; }
-html[data-skin="landscapes"] .rs-gauge path { fill: none; stroke-linecap: butt; }
-html[data-skin="landscapes"] .rs-gauge .rs-track { stroke: color-mix(in srgb, var(--ink) 20%, transparent); stroke-width: 2.6; }
-html[data-skin="landscapes"] .rs-gauge .rs-arc { stroke: var(--wz-text, var(--ink)); stroke-width: 2.6; stroke-dasharray: 100 200; stroke-dashoffset: var(--o, 100); transition: stroke-dashoffset var(--d, 0ms) cubic-bezier(.33, 1, .68, 1) var(--w, 0ms); }
 html[data-skin="landscapes"] .rs-gauge .rs-tick { stroke: rgba(255, 255, 255, .55); stroke-width: .9; stroke-linecap: round; }
-html[data-skin="landscapes"] .rs-gauge .rs-tick.rs-major { stroke: color-mix(in srgb, var(--ink) 62%, transparent); stroke-width: 1.2; }
-html[data-skin="landscapes"] .rs-gauge .rs-ndl path { fill: var(--wz-text, var(--ink)); stroke: none; }
-html[data-skin="landscapes"] .rs-gauge .rs-ndl { transform-box: view-box; transform-origin: 30px 30px; transform: var(--a, rotate(-120deg)); transition: transform var(--d, 0ms) cubic-bezier(.3, 1.18, .5, 1) var(--w, 0ms); }
-html[data-skin="landscapes"] .rs-gauge .rs-hub { fill: var(--wz-text, var(--ink)); }
-html[data-skin="landscapes"] .rs-gauge b { position: absolute; left: 0; right: 0; bottom: 0; display: block; text-align: center; font-size: calc(var(--g) * .2); line-height: 1; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--wz-text, var(--ink)); }
-html[data-skin="landscapes"] .rs-dial-off .rs-track { stroke-dasharray: 2 3; }
-html[data-skin="landscapes"] .rs-dial-off :is(.rs-arc, .rs-ndl) { opacity: 0; }
-html[data-skin="landscapes"] .rs-dialed .rs-dl { max-width: none; font-size: 9.5px; color: var(--wz-text-secondary, var(--ink-2)); }
-html[data-skin="landscapes"][data-shell="phone"] .home [data-home-resources] { order: -1; margin: 0 0 6px; }
-html[data-skin="landscapes"][data-shell="phone"] .home .home-top { order: -2; }
 html[data-skin="landscapes"] [data-home-resources] .rs-dialed.rs-widget { filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .55)) drop-shadow(0 0 8px rgba(0, 0, 0, .28)); }
 html[data-skin="landscapes"] .rs-dialed :is(.rs-dl, .rs-gauge b) { color: #fff; }
 html[data-skin="landscapes"] .rs-gauge .rs-track { stroke: rgba(255, 255, 255, .26); }
@@ -403,217 +81,20 @@ html[data-skin="landscapes"] .rs-gauge .rs-tick.rs-major { stroke: rgba(255, 255
 html[data-skin="landscapes"] .rs-gauge :is(.rs-ndl path, .rs-hub) { fill: #fff; }
 html[data-skin="landscapes"] .rs-gauge .rs-arc { stroke: #fff; }
 
-/* Blend into the background (Miguel's skins, 22 Oct): no dark chips behind Home controls. The Settings gear is a bare
-   icon, Ready / Working are round outlined buttons in their own colour, and the phone pill dock is a light frosted glass
-   that lets the background through while the icons stay clear. */
-html[data-skin="landscapes"] .home-tools .gear, html[data-skin="landscapes"] .gear { background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; color: var(--wz-text, var(--ink)); }
-html[data-skin="landscapes"] .gear svg { width: 24px; height: 24px; stroke-width: 1.7; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--bg) 70%, transparent)); }
-html[data-skin="landscapes"] .home .constellation { gap: 18px; }
-html[data-skin="landscapes"] .home .constellation .now-card.wz-home-widget { flex: 0 0 74px; width: 74px; height: 74px; padding: 0; border-radius: 50%; place-content: center; row-gap: 1px; background: color-mix(in srgb, var(--c) 9%, transparent); border: 1.5px solid color-mix(in srgb, var(--c) 60%, transparent); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
-html[data-skin="landscapes"] .home .constellation .now-card .n { font-size: 24px; line-height: 1; }
-html[data-skin="landscapes"] .home .constellation .now-card .k { font-size: 10.5px; line-height: 1.1; }
-html[data-skin="landscapes"] .home .constellation .now-card:active { transform: scale(.94); background: color-mix(in srgb, var(--c) 18%, transparent); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { background: color-mix(in srgb, var(--bg) 46%, transparent); border-color: color-mix(in srgb, var(--ink) 10%, transparent); box-shadow: 0 6px 22px rgba(0, 0, 0, .14); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); }
 html[data-skin="landscapes"] .gear svg { color: #fff; filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .6)) drop-shadow(0 0 6px rgba(0, 0, 0, .3)); }
-html[data-skin="landscapes"] .home .constellation .now-card.wz-home-widget { background: color-mix(in srgb, #0c0b12 34%, transparent); border-color: color-mix(in srgb, var(--c) 80%, #fff); -webkit-backdrop-filter: blur(14px) saturate(1.2); backdrop-filter: blur(14px) saturate(1.2); }
 html[data-skin="landscapes"] .home .constellation .now-card :is(.k, .n) { text-shadow: 0 1px 2px rgba(0, 0, 0, .55); }
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { background: color-mix(in srgb, #0c0b12 48%, transparent); border-color: rgba(255, 255, 255, .14); }
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5)); }
 html[data-skin="landscapes"] .home .constellation .now-card :is(.k, .n) { color: color-mix(in srgb, var(--c) 72%, #fff); }
-/* Symmetric dock (Miguel, 22 Oct): two fixed slots each side of the orb, mirrored, so the bar balances at every desk.
- * The orb is the current desk and the biggest thing on the bar; the nearest neighbours sit a touch larger and brighter
- * than the outer pair. Empty slots keep their space. New desk is a dashed empty-desk outline, never a plus. */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym { flex: 1 1 0; display: grid; grid-template-columns: 1fr 1fr; justify-items: center; align-items: center; gap: 0; padding: 0 6px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) :is(#dotsL, #dotsR).sym > * { order: 0; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .dslot { width: 32px; height: 32px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot { width: 36px; height: 36px; flex: none; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot .dsg { width: 30px; height: 30px; transition: transform 200ms, opacity 200ms; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d2 .dsg { transform: scale(.84); opacity: .62; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d1 .dsg { opacity: .92; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym::before, html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym::after { display: none; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dnew .dsg svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dnew .dsg { color: color-mix(in srgb, var(--ink) 82%, transparent); opacity: .92; transform: none; }
 
-/* Swipe-up Apps sheet open: the orb turns into a plain X, since tapping it closes the sheet (the only time it changes). */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner)[data-sheet="launcher"] .dock .orb-wrap :is(.orb, .orb-fallback, .orb-app, .orb-badge, .moons) { opacity: 0 !important; transition: opacity 160ms; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner)[data-sheet="launcher"] .dock .orb-wrap::before { content: ""; position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; z-index: 3;
-  background: color-mix(in srgb, var(--ink) 12%, transparent); border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
-  -webkit-mask: none; box-shadow: inset 0 0 0 0 transparent;
-  background-image: linear-gradient(45deg, transparent calc(50% - 1.3px), var(--ink) calc(50% - 1.3px), var(--ink) calc(50% + 1.3px), transparent calc(50% + 1.3px)), linear-gradient(-45deg, transparent calc(50% - 1.3px), var(--ink) calc(50% - 1.3px), var(--ink) calc(50% + 1.3px), transparent calc(50% + 1.3px));
-  background-size: 22px 22px; background-position: center; background-repeat: no-repeat; animation: wosOrbX 180ms ease-out; }
-@keyframes wosOrbX { from { transform: translate(-50%, -50%) rotate(-90deg) scale(.6); opacity: 0; } to { transform: translate(-50%, -50%) rotate(0) scale(1); opacity: 1; } }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner)[data-sheet="launcher"] .dock .desk-dots { opacity: .35; pointer-events: none; }
-
-/* Three a side (Miguel, 22 Oct): bigger icons, the orb biggest, little dead space. Near > middle > far, all mirrored. */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { --orb: 66px; gap: 2px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym { grid-template-columns: repeat(3, 1fr); padding: 0 4px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot { width: 46px; height: 46px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .dslot { width: 36px; height: 36px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot .dsg { width: 42px; height: 42px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d1 .dsg { transform: none; opacity: .95; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d2 .dsg { transform: scale(.88); opacity: .78; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d3 .dsg { transform: scale(.76); opacity: .6; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dnew .dsg svg { width: 38px; height: 38px; }
-@media (max-width: 360px) { html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot { width: 38px; height: 38px; } html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot .dsg { width: 32px; height: 32px; } html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { --orb: 60px; } }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) :is(#dotsL, #dotsR).sym > .ddot { display: grid !important; place-items: center; order: 0 !important; }
-
-/* Instant icons: the app selector shows every icon at once (no staggered fade-in that read as icons loading late),
- * and the brand marks above are inlined (web/brand/apps/*.svg, same bytes) so they never wait on a request. */
-html[data-skin="landscapes"] .launcher.open .lgrid .lapp { animation: none; }
-
-/* Ready / Working as glyph + dots (Miguel's skins, 22 Oct): no tile, no number; two quiet rows sitting on the
-   background, one dot per chat. app.js homeDots() renders .nc-vis only for these skins. */
-html[data-skin="landscapes"] .home .constellation { flex-direction: row; justify-content: center; align-items: center; flex-wrap: wrap; gap: 0 18px; max-width: 100%; margin-bottom: 12px; }
-html[data-skin="landscapes"] .home .constellation .now-card.wz-home-widget { flex: none; width: auto; height: auto; min-height: 0; padding: 8px 6px; display: flex; border-radius: 12px; background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
-html[data-skin="landscapes"] .home .constellation .now-card :is(.pip, .meta, .n) { display: none; }
-html[data-skin="landscapes"] .nc-vis { display: flex; align-items: center; gap: 7px; color: var(--c); }
-html[data-skin="landscapes"] .nc-vis .nc-ic { width: 19px; height: 19px; margin-right: 3px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-html[data-skin="landscapes"] .nc-vis i { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
-html[data-skin="landscapes"] .nc-vis em { font-style: normal; font-size: 14px; font-weight: 700; line-height: 1; }
-html[data-skin="landscapes"] .nc-vis.nc-zero { opacity: .45; }
-html[data-skin="landscapes"] [data-act="working"] .nc-vis:not(.nc-zero) .nc-ic { animation: nc-spin 1.6s linear infinite; }
-html[data-skin="landscapes"] [data-act="working"] .nc-vis i { animation: nc-pulse 1.5s ease-in-out infinite; animation-delay: calc(var(--n) * 160ms); }
-html[data-skin="landscapes"] .home .constellation .now-card:active { transform: scale(.96); background: color-mix(in srgb, var(--c) 12%, transparent); }
-@keyframes nc-spin { to { transform: rotate(360deg); } }
-@keyframes nc-pulse { 0%, 100% { opacity: .55; transform: scale(.78); } 50% { opacity: 1; transform: scale(1); } }
 html[data-skin="landscapes"] .nc-vis { color: color-mix(in srgb, var(--c) 70%, #fff); filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .6)) drop-shadow(0 0 6px rgba(0, 0, 0, .3)); }
 
-/* Miguel's skins (phone, 22 Oct): no Back in the dock. A thread's Back is a small chevron in the top-left of its header
- * (swipe right still goes back), and the voice controls (cancel, pause, screenshot, attach) sit centred inside the pill. */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-thread > .ch-head { padding-left: 4px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-thread > .ch-head .ch-back { width: 28px; height: 28px; border-radius: 9px; color: var(--ink-3); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-thread > .ch-head .ch-back svg { width: 16px; height: 16px; stroke-width: 2.2; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .voice .arc { bottom: calc(var(--pill-b) + var(--pill-h) / 2); }
-
-/* Chat reading size: the stock phone default is 17px (core/chats.css); this skin keeps its original 15px. */
-html[data-skin="landscapes"][data-shell="phone"] .ch-msgs .msg .bub { font-size: 15px; line-height: 1.45; }
-html[data-skin="landscapes"][data-shell="phone"] .ch-msgs .bub h1 { font-size: 19px; }
-html[data-skin="landscapes"][data-shell="phone"] .ch-msgs .bub h2 { font-size: 17.5px; }
-html[data-skin="landscapes"][data-shell="phone"] .ch-msgs .bub h3 { font-size: 16px; }
-html[data-skin="landscapes"][data-shell="phone"] .ch-msgs .bub :is(h4, h5, h6) { font-size: 15px; }
-html[data-skin="landscapes"][data-shell="phone"] .ch-msgs .bub code { font-size: 13px; }
-html[data-skin="landscapes"][data-shell="phone"] .ch-msgs .bub pre { font-size: 12px; }
-html[data-skin="landscapes"][data-shell="phone"] .ch-msgs .bub .code pre code { font-size: 12.5px; }
-html[data-skin="landscapes"][data-shell="phone"] .ch-msgs .bub table { font-size: 13.5px; }
-
-/* Desks overview (Miguel, 22 Oct). Pinch-out: smaller cards, three across, each with its desk's count badge.
- * Swipe up on the orb: the pill itself grows taller and lays the same dock icons and badges out in a grid, with an ✕ in the orb's spot. */
-/* Miguel's skins (phone): Desks overview. Smaller desk cards (three across) with each desk's count badge, used by both
- * the pinch overview and the swipe-up version, which grows out of the bottom pill as one panel (the pill's own icons stay
- * as its bottom row, the orb is the handle: tap or swipe down closes). */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-card { min-height: 116px; padding: 8px 6px 8px; border-radius: 18px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-card:has(.ov-n3), html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-card:has(.ov-n4) { min-height: 132px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-body { padding-top: 14px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-n3, html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-n4 { padding-top: 16px; gap: 2px 4px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-symbol { width: 50px; height: 50px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-symbol .sgi.sgl { font-size: 25px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-n2 .ov-symbol { width: 32px; height: 32px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov :is(.ov-n3, .ov-n4) .ov-symbol { width: 24px; height: 24px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-n2 .sgi.sgl { font-size: 16px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov :is(.ov-n3, .ov-n4) .sgi.sgl { font-size: 12px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-win em { font-size: 9.5px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov :is(.ov-n3, .ov-n4) .ov-win em { height: 1.2em; -webkit-line-clamp: 1; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-top b { font-size: 12px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-top small { font-size: 10px; -webkit-line-clamp: 1; }
-/* The current desk is already outlined: drop the "Here" tag; ✕ moves to the top-left so the badge owns the top-right. */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-here { display: none; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-chrome { top: 0; left: 0; right: auto; flex-direction: row-reverse; min-height: 30px; gap: 2px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-x { width: 30px; height: 30px; font-size: 12px; border-radius: 10px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-review { font-size: 9px; line-height: 16px; padding: 0 5px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-badge { position: absolute; top: 6px; right: 6px; z-index: 2; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 99px; font: 800 11px/20px system-ui, sans-serif; text-align: center; color: #160b05; background: var(--amber); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--bg) 90%, transparent); pointer-events: none; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-add { flex-direction: column; gap: 4px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-add span { font-size: 28px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-add b { font-size: 12px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov .ov-head b { font-size: 21px; }
-
-/* Swipe-up version: the pill extended. A light scrim over the desk; the panel shares the pill's side insets, radius,
- * frosted material and bottom edge, so the pill visibly grows upward. The real dock rides on top as its bottom row. */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill { padding: 0; overflow: hidden; background: rgba(0, 0, 0, .32); -webkit-backdrop-filter: none; backdrop-filter: none; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { position: absolute; left: var(--pill-x, 12px); right: var(--pill-x, 12px); bottom: var(--pill-b, 8px); max-height: calc(100% - var(--safe-t, 0px) - 64px); display: flex; flex-direction: column; padding-bottom: var(--pill-h, 66px); border-radius: calc(var(--pill-h, 66px) / 2); border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); background: color-mix(in srgb, var(--bg) 86%, transparent); -webkit-backdrop-filter: blur(26px) saturate(1.4); backdrop-filter: blur(26px) saturate(1.4); box-shadow: 0 -10px 40px rgba(0, 0, 0, .32), inset 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent); overflow: hidden; transform-origin: 50% 100%; transform: translateY(14px) scaleY(.4); opacity: 0; transition: transform 300ms var(--spring, cubic-bezier(.2, .9, .2, 1.05)), opacity 160ms; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill.open .ov-sheet { transform: none; opacity: 1; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 10px 6px; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-head { padding: 0 6px 12px 10px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-done { height: 34px; border-radius: 17px; padding: 0 14px; font-size: 13px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card { background: color-mix(in srgb, var(--ink) 5%, transparent); border-color: color-mix(in srgb, var(--ink) 9%, transparent); box-shadow: none; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card.here { border-color: var(--violet-2); box-shadow: 0 0 0 1px var(--violet-2); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card.ov-add { background: transparent; border: 1px dashed color-mix(in srgb, var(--ink) 18%, transparent); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-hint { margin: 12px 8px 4px; font-size: 11px; }
-/* The dock stays visible above the panel and drops its own pill shell, so it reads as the panel's bottom row. */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.ov-pill-open .desk-label { opacity: 0; }
-/* Draw the New desk plus as two bars (the fullwidth ＋ glyph is missing from some fonts and shows as a box). */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov:not(.ov-pill) :is(.ov-add span, .ov-empty-symbol) { font-size: 0; width: 24px; height: 24px; background: linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat, linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat; }
-/* Near-opaque so the panel reads as one even surface over any page (a bright frame showed through at 86%). */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { background: color-mix(in srgb, var(--bg) 95%, transparent); }
-
-/* Swipe-up, round 2: the pill itself with room to spare. It grows upward from its own shape (clip-path), shows the
- * dock's own desk icons and badges in a grid (each rises from its spot in the pill), and an ✕ takes the orb's place. */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.ov-pill-open .dock { opacity: 0; pointer-events: none; transition: opacity 140ms; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { transform: none; opacity: 1; background: color-mix(in srgb, var(--bg) 78%, transparent); border-color: color-mix(in srgb, var(--ink) 7%, transparent); box-shadow: 0 10px 30px rgba(0, 0, 0, .22); clip-path: inset(calc(100% - var(--pill-h, 66px)) 0 0 0 round calc(var(--pill-h, 66px) / 2)); transition: clip-path 320ms cubic-bezier(.2, .9, .25, 1); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill.open .ov-sheet { clip-path: inset(0 0 0 0 round calc(var(--pill-h, 66px) / 2)); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { background: color-mix(in srgb, var(--bg) 88%, transparent); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill { background: rgba(0, 0, 0, .28); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-scroll { padding: 22px 12px 4px; -webkit-mask-image: none; mask-image: none; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-grid { grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 14px 4px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell { min-height: 0; height: auto; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; transform: none; display: flex; flex-direction: column; align-items: center; gap: 6px; font: inherit; color: var(--ink); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.here, html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card.here { border: 0; box-shadow: none; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic { position: relative; width: 52px; height: 52px; display: grid; place-items: center; border-radius: 50%; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.here .ov-ic { background: color-mix(in srgb, var(--ink) 9%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 16%, transparent), 0 0 18px color-mix(in srgb, var(--violet-2, #a58bff) 22%, transparent); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg { width: 32px; height: 32px; opacity: .9; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.here .ov-ic .dsg { opacity: 1; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg .sgi { width: 88%; height: 88%; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg .sgi.sgl { font-size: 23px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg .sgi:is(.sg-hat, .sg-hat-private) { -webkit-mask-size: auto 80%; mask-size: auto 80%; }
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5)); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-new .dsg { color: color-mix(in srgb, var(--ink) 82%, transparent); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-new .dsg svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-nm { max-width: 100%; font-size: 11px; font-weight: 550; line-height: 1.2; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.here .ov-nm { color: var(--ink); font-weight: 650; }
-/* Closing a desk: hold any icon (that also starts drag-to-reorder) and small ✕s appear, like an iPhone home screen. */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell .ov-x { position: absolute; left: calc(50% - 32px); top: -6px; width: 22px; height: 22px; padding: 0; border-radius: 50%; font-size: 10px; color: var(--ink); background: color-mix(in srgb, var(--bg) 70%, var(--ink) 30%); display: none; place-items: center; z-index: 3; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill.editing .ov-cell .ov-x { display: grid; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill.editing .ov-cell:not(.ov-home):not(.ov-new) .ov-ic { animation: ovJiggle .32s ease-in-out infinite alternate; }
-@keyframes ovJiggle { from { transform: rotate(-2.5deg); } to { transform: rotate(2.5deg); } }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.drag { opacity: .25; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card.ghost { background: none; box-shadow: none; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.merging .ov-ic { box-shadow: 0 0 0 2px var(--violet-2); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.splitting .ov-ic { box-shadow: 0 0 0 2px #5cd6ff; }
-/* The ✕ sits exactly where the orb was, inside the pill-height bottom row. */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-close { position: absolute; left: 50%; bottom: calc((var(--pill-h, 66px) - 52px) / 2); width: 52px; height: 52px; margin-left: -26px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; color: var(--ink); background: color-mix(in srgb, var(--ink) 9%, transparent); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-close svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-close:active { transform: scale(.92); }
-/* Four per row across the full width (the dock's own rhythm), even breathing room, and an even fill over any page. */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px 4px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-scroll { padding: 24px 12px 14px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { background: color-mix(in srgb, var(--bg) 94%, transparent); }
 
-/* Same icon size as the pill dock (42px), with a ring for the desk in view. */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic { width: 60px; height: 60px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg { width: 42px; height: 42px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg .sgi.sgl { font-size: 29px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-new .dsg svg { width: 38px; height: 38px; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell .ov-x { left: calc(50% - 35px); }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { max-height: calc(100% - var(--safe-t, 0px) - 24px); }
-
-/* Credit fuel gauge (Tinfoil, 22 Oct): same gauge with E / F at the ends; needle = credit left of the last top-up,
-   readout = dollars left. Amber once under a quarter tank, like a low-fuel light. */
-html[data-skin="landscapes"] .rs-fuel .rs-gauge :is(.rs-e, .rs-f) { position: absolute; bottom: 12%; font-style: normal; font-size: calc(var(--g) * .15); font-weight: 700; line-height: 1; color: var(--wz-text-secondary, var(--ink-2)); }
-html[data-skin="landscapes"] .rs-fuel .rs-gauge .rs-e { left: 2%; }
-html[data-skin="landscapes"] .rs-fuel .rs-gauge .rs-f { right: 2%; }
-html[data-skin="landscapes"] .rs-fuel .rs-gauge b { font-size: calc(var(--g) * .18); }
-html[data-skin="landscapes"] .rs-dial { --g: clamp(36px, min(13.4vw, calc((100vw - 44px) / var(--n, 6) - 3px)), 56px); }
-html[data-skin="landscapes"] .rs-fuel .rs-gauge :is(.rs-e, .rs-f) { bottom: 0; font-size: calc(var(--g) * .14); }
 html[data-skin="landscapes"] .rs-fuel.rs-empty .rs-gauge .rs-arc { stroke: var(--amber, #ffc56b); }
 html[data-skin="landscapes"] .rs-fuel.rs-empty .rs-gauge :is(.rs-ndl path, .rs-hub) { fill: var(--amber, #ffc56b); }
 html[data-skin="landscapes"] .rs-fuel.rs-empty .rs-gauge b { color: var(--amber, #ffc56b); }
 
-/* All dials as fuel gauges of what is left (Miguel, 23 Oct): E to F, amber under a quarter, red under a tenth.
-   Computer and AI on two separate centred lines. */
-html[data-skin="landscapes"] [data-home-resources] .rs-dialed.rs-widget.wz-home-widget { flex-direction: column; align-items: center; gap: 8px; }
-html[data-skin="landscapes"] [data-home-resources] .rs-dialed.rs-widget.wz-home-widget .rs-dials { justify-content: center; }
-html[data-skin="landscapes"] [data-home-resources] .rs-dialed.rs-widget.wz-home-widget .rs-dials + .rs-dials { margin: 0; padding: 0; border: 0; }
-html[data-skin="landscapes"] .rs-fuel .rs-gauge b:not(:empty):not([data-money] b)::after { content: "%"; font-size: .72em; font-weight: 600; margin-left: 1px; opacity: .8; }
-html[data-skin="landscapes"] .rs-fuel[data-money] .rs-gauge b::after { content: none; }
 html[data-skin="landscapes"] .rs-fuel.rs-empty .rs-gauge .rs-arc { stroke: var(--amber, #ffc56b); }
 html[data-skin="landscapes"] .rs-fuel.rs-empty .rs-gauge :is(.rs-ndl path, .rs-hub) { fill: var(--amber, #ffc56b); }
 html[data-skin="landscapes"] .rs-fuel.rs-empty .rs-gauge b { color: var(--amber, #ffc56b); }
@@ -621,157 +102,28 @@ html[data-skin="landscapes"] .rs-fuel.rs-crit .rs-gauge .rs-arc { stroke: #ff808
 html[data-skin="landscapes"] .rs-fuel.rs-crit .rs-gauge :is(.rs-ndl path, .rs-hub) { fill: #ff8080; }
 html[data-skin="landscapes"] .rs-fuel.rs-crit .rs-gauge b { color: #ff8080; }
 
-/* E / F once (first dial only) and muted: a legend, not a label on every gauge (Miguel, 23 Oct). */
-html[data-skin="landscapes"] .rs-fuel .rs-gauge :is(.rs-e, .rs-f) { opacity: .5; font-weight: 600; }
-
-/* Devices sheet (Miguel's skins, 23 Oct): Agent devices with gauges, then Your devices / Client Wizards / Other as
-   online lights. Same quiet type as Home; no boxes inside boxes. */
-html[data-skin="landscapes"] .rs-dv-wrap { display: flex; flex-direction: column; gap: 22px; padding: 4px 2px 18px; }
-html[data-skin="landscapes"] .rs-dv-g h3 { margin: 0 0 8px; font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--wz-text-secondary, var(--ink-2)); }
-html[data-skin="landscapes"] .rs-dv-total { margin: -2px 0 10px; font-size: 13px; color: var(--wz-text, var(--ink)); font-variant-numeric: tabular-nums; }
-html[data-skin="landscapes"] .rs-dv { padding: 10px 0 12px; border-top: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); }
-html[data-skin="landscapes"] .rs-dv header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; min-width: 0; }
-html[data-skin="landscapes"] .rs-dv header b { font-size: 14.5px; font-weight: 600; color: var(--wz-text, var(--ink)); white-space: nowrap; }
-html[data-skin="landscapes"] .rs-dv header small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--wz-text-secondary, var(--ink-2)); }
-html[data-skin="landscapes"] .rs-dv .rs-dials { display: flex; justify-content: center; gap: 14px; }
-html[data-skin="landscapes"] .rs-dv .rs-dial { --g: 58px; }
-html[data-skin="landscapes"] .rs-dv-off { margin: 0; font-size: 12.5px; color: var(--wz-text-secondary, var(--ink-2)); }
-html[data-skin="landscapes"] :is(.rs-dv, .rs-dv-net li) .rs-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 35%, transparent); align-self: center; }
-html[data-skin="landscapes"] :is(.rs-dv.rs-st-online, .rs-dv-net li.rs-st-online) .rs-dot { background: var(--green, #4ade80); }
-html[data-skin="landscapes"] .rs-dv.rs-st-stale .rs-dot { background: var(--amber, #f5b642); }
-html[data-skin="landscapes"] .rs-dv-net { list-style: none; margin: 0; padding: 0; }
-html[data-skin="landscapes"] .rs-dv-net li { display: flex; align-items: center; gap: 9px; padding: 9px 0; border-top: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); font-size: 14px; color: var(--wz-text, var(--ink)); }
-html[data-skin="landscapes"] .rs-dv-net li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-html[data-skin="landscapes"] .rs-dv-net li small { font-size: 12px; color: var(--wz-text-secondary, var(--ink-2)); }
-html[data-skin="landscapes"] .rs-dv-net li.rs-st-offline { opacity: .6; }
-html[data-skin="landscapes"] .rs-dv-total { display: flex; flex-wrap: wrap; gap: 2px 12px; }
-html[data-skin="landscapes"] .rs-dv-total span { white-space: nowrap; }
-html[data-skin="landscapes"] .rs-dv-role { margin: -4px 0 8px 15px; font-size: 12px; color: var(--wz-text-secondary, var(--ink-2)); }
-
-/* Capacity bars in the devices sheet (Miguel, 23 Oct): segment length = real capacity, fill = used. */
-html[data-skin="landscapes"] .rs-caps { display: flex; flex-direction: column; gap: 14px; margin: 2px 0 14px; }
-html[data-skin="landscapes"] .rs-cap-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 6px; font-size: 13px; }
-html[data-skin="landscapes"] .rs-cap-h b { font-weight: 600; color: var(--wz-text, var(--ink)); }
-html[data-skin="landscapes"] .rs-cap-h span { color: var(--wz-text-secondary, var(--ink-2)); font-variant-numeric: tabular-nums; white-space: nowrap; }
-html[data-skin="landscapes"] .rs-cap-bar { display: flex; gap: 3px; }
-html[data-skin="landscapes"] .rs-cap-seg { position: relative; min-width: 26px; height: 30px; padding: 0; border: 0; border-radius: 7px; overflow: hidden; cursor: pointer; background: color-mix(in srgb, var(--ink) 13%, transparent); -webkit-tap-highlight-color: transparent; }
-html[data-skin="landscapes"] .rs-cap-seg i { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--ink) 62%, transparent); transition: width .9s cubic-bezier(.33, 1, .68, 1); }
-html[data-skin="landscapes"] .rs-cap-seg small { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 8px; font-size: 11px; font-weight: 600; color: var(--wz-text, var(--ink)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; mix-blend-mode: normal; text-shadow: 0 0 4px color-mix(in srgb, var(--bg) 85%, transparent); }
 html[data-skin="landscapes"] .rs-cap-seg.rs-empty i { background: #ffc56b; }
 html[data-skin="landscapes"] .rs-cap-seg.rs-crit i { background: #ff8080; }
-html[data-skin="landscapes"] .rs-cap-seg:active { opacity: .8; }
-html[data-skin="landscapes"] .rs-dv-ms { list-style: none; margin: 0; padding: 0; }
-html[data-skin="landscapes"] .rs-dv-m { display: grid; grid-template-columns: auto 1fr; column-gap: 9px; row-gap: 2px; padding: 9px 6px; border-top: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); border-radius: 8px; transition: background .2s; }
-html[data-skin="landscapes"] .rs-dv-m .rs-dot { grid-row: 1; margin-top: 5px; }
-html[data-skin="landscapes"] .rs-dv-m span { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-html[data-skin="landscapes"] .rs-dv-m span b { font-size: 14px; font-weight: 600; color: var(--wz-text, var(--ink)); white-space: nowrap; }
-html[data-skin="landscapes"] .rs-dv-m span small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--wz-text-secondary, var(--ink-2)); }
-html[data-skin="landscapes"] .rs-dv-m em { grid-column: 2; font-style: normal; font-size: 12px; color: var(--wz-text-secondary, var(--ink-2)); font-variant-numeric: tabular-nums; }
-html[data-skin="landscapes"] .rs-dv-m .rs-dot { width: 7px; height: 7px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 35%, transparent); }
-html[data-skin="landscapes"] .rs-dv-m.rs-st-online .rs-dot { background: var(--green, #4ade80); }
-html[data-skin="landscapes"] .rs-dv-m.rs-picked { background: color-mix(in srgb, var(--ink) 8%, transparent); }
 html[data-skin="landscapes"] .rs-cap-seg { background: rgba(255, 255, 255, .16); }
 html[data-skin="landscapes"] .rs-cap-seg i { background: rgba(255, 255, 255, .7); }
 html[data-skin="landscapes"] .rs-cap-seg small { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .6); }
-html[data-skin="landscapes"] .rs-cap-col { min-width: 30px; display: flex; flex-direction: column; gap: 4px; }
-html[data-skin="landscapes"] .rs-cap-col .rs-cap-seg { width: 100%; height: 14px; border-radius: 5px; }
-html[data-skin="landscapes"] .rs-cap-col small { font-size: 11px; font-weight: 500; color: var(--wz-text-secondary, var(--ink-2)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-html[data-skin="landscapes"] .rs-cap-bar { gap: 4px; }
-html[data-skin="landscapes"] .device:has(.rs-sheet) .home-tools { visibility: hidden; }
 
-/* Home resources as bars (Miguel, 23 Oct): label | bar | value, one row each. AI first, then compute. Fill = what is left.
-   No panel; Landscapes gets a soft dark halo per row so it reads over bright photos. */
-html[data-skin="landscapes"] [data-home-resources] .rs-barsw.rs-widget.wz-home-widget { display: flex; flex-direction: column; gap: 12px; width: min(100%, 340px); margin: 0 auto; padding: 0; background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
-html[data-skin="landscapes"] .rs-bg { display: flex; flex-direction: column; gap: 7px; }
-html[data-skin="landscapes"] .rs-br { display: grid; grid-template-columns: 54px 1fr 58px; align-items: center; column-gap: 10px; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; -webkit-tap-highlight-color: transparent; }
-html[data-skin="landscapes"] .rs-br:active { opacity: .7; }
-html[data-skin="landscapes"] .rs-bl { font-size: 12px; font-weight: 500; color: var(--wz-text-secondary, var(--ink-2)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-html[data-skin="landscapes"] .rs-bv { font-size: 12px; font-weight: 600; text-align: right; color: var(--wz-text, var(--ink)); font-variant-numeric: tabular-nums; white-space: nowrap; }
-html[data-skin="landscapes"] .rs-bt { display: flex; gap: 3px; height: 6px; }
-html[data-skin="landscapes"] .rs-bs { position: relative; min-width: 8px; height: 100%; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--ink) 14%, transparent); }
-html[data-skin="landscapes"] .rs-bf { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--wz-text, var(--ink)); transition: width 1.1s cubic-bezier(.33, 1, .68, 1); }
 html[data-skin="landscapes"] .rs-bs.rs-empty .rs-bf, html[data-skin="landscapes"] .rs-bv.rs-empty { background: #ffc56b; }
 html[data-skin="landscapes"] .rs-bv.rs-empty { background: none; color: #ffc56b; }
 html[data-skin="landscapes"] .rs-bs.rs-crit .rs-bf { background: #ff8a8a; }
 html[data-skin="landscapes"] .rs-bv.rs-crit { color: #ff8a8a; }
-html[data-skin="landscapes"] .rs-br-off .rs-bv { color: var(--wz-text-secondary, var(--ink-2)); text-decoration: underline; text-underline-offset: 2px; }
-html[data-skin="landscapes"] .rs-br-off .rs-bs { background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink) 18%, transparent) 0 4px, transparent 4px 7px); }
 html[data-skin="landscapes"] .rs-barsw { filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .55)) drop-shadow(0 0 7px rgba(0, 0, 0, .3)); }
 html[data-skin="landscapes"] :is(.rs-bl, .rs-bv) { color: #fff; }
 html[data-skin="landscapes"] .rs-bs { background: rgba(255, 255, 255, .28); }
 html[data-skin="landscapes"] .rs-bf { background: #fff; }
 
-/* Home bars never clip at the corners (the widget base rounds and hides overflow). */
-html[data-skin="landscapes"] [data-home-resources] .rs-barsw.rs-widget.wz-home-widget { overflow: visible; border-radius: 0; }
-
-/* Resources pop-up, quiet version (Miguel, 23 Oct): solid sheet so Home never ghosts through, bare back / refresh
-   icons, plain text tabs with no pill or divider, sentence-case section titles, no row dividers, a dot only when a
-   machine is offline. */
 html[data-skin="landscapes"] .rs-sheet { background: #0c0b12; border: 0; box-shadow: 0 18px 50px rgba(0, 0, 0, .28); -webkit-backdrop-filter: none; backdrop-filter: none; }
-html[data-skin="landscapes"] .device:has(.rs-sheet) [data-home-resources] { visibility: hidden; }
-html[data-skin="landscapes"] .rs-detail-head { padding: 12px 10px 4px; gap: 6px; }
-html[data-skin="landscapes"] .rs-detail-head button { width: 38px; height: 38px; background: none; border: 0; border-radius: 50%; font-size: 26px; color: var(--wz-text, var(--ink)); }
-html[data-skin="landscapes"] .rs-detail-head [data-res-refresh] { font-size: 19px; color: var(--wz-text-secondary, var(--ink-2)); }
-html[data-skin="landscapes"] .rs-detail-head h2 { font-size: 17px; font-weight: 600; }
-html[data-skin="landscapes"] .rs-tabs { gap: 18px; padding: 2px 20px 10px; border-bottom: 0; }
-html[data-skin="landscapes"] .rs-tabs button { flex: none; padding: 6px 0; border: 0; border-radius: 0; background: none; font-size: 13.5px; font-weight: 500; color: var(--wz-text-secondary, var(--ink-2)); }
-html[data-skin="landscapes"] .rs-tabs .selected { background: none; color: var(--wz-text, var(--ink)); font-weight: 650; box-shadow: inset 0 -2px 0 currentColor; }
-html[data-skin="landscapes"] .rs-dv-wrap { padding: 6px 4px 18px; gap: 26px; }
-html[data-skin="landscapes"] .rs-dv-g h3 { font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--wz-text, var(--ink)); margin-bottom: 10px; }
-html[data-skin="landscapes"] :is(.rs-dv-m, .rs-dv-net li) { border-top: 0; padding: 7px 0; }
-html[data-skin="landscapes"] :is(.rs-dv-m, .rs-dv-net li) .rs-dot { visibility: hidden; }
-html[data-skin="landscapes"] :is(.rs-dv-m, .rs-dv-net li):is(.rs-st-offline, .rs-st-unreachable, .rs-st-stale) .rs-dot { visibility: visible; }
-html[data-skin="landscapes"] .rs-dv-m { grid-template-columns: 0 1fr; column-gap: 0; }
-html[data-skin="landscapes"] .rs-dv-net li { gap: 0; }
-html[data-skin="landscapes"] .rs-dv-net li:is(.rs-st-offline) { gap: 8px; }
-html[data-skin="landscapes"] .rs-dv-net li .rs-dot { width: 0; }
-html[data-skin="landscapes"] .rs-dv-net li.rs-st-offline .rs-dot { width: 7px; }
-html[data-skin="landscapes"] .rs-caps { gap: 16px; margin-bottom: 18px; }
-html[data-skin="landscapes"] .rs-cap-h { font-size: 12.5px; }
-html[data-skin="landscapes"] .rs-cap-h b { font-weight: 500; color: var(--wz-text-secondary, var(--ink-2)); }
-html[data-skin="landscapes"] .rs-cap-h span { color: var(--wz-text, var(--ink)); }
 html[data-skin="landscapes"] .rs-cap-seg { background: rgba(255, 255, 255, .14); }
 html[data-skin="landscapes"] .rs-cap-seg i { background: rgba(255, 255, 255, .85); }
-html[data-skin="landscapes"] .device:has(.rs-sheet) .home :is(.constellation, .home-attn) { visibility: hidden; }
-html[data-skin="landscapes"] .rs-detail-head button:focus:not(:focus-visible) { outline: none; box-shadow: none; }
-html[data-skin="landscapes"] .rs-detail-head button { outline-offset: 0; }
-html[data-skin="landscapes"][data-shell="phone"] .rs-detail-head button:focus { outline: none; box-shadow: none; }
 
-/* Home: AI and Computers as two clearly separate blocks (Miguel, 23 Oct). Each block has a small heading; compute
-   bars are stacked by machine, each machine in its own colour with a legend. Warnings stay amber/red. */
-html[data-skin="landscapes"] [data-home-resources] .rs-barsw.rs-widget.wz-home-widget { gap: 22px; }
-html[data-skin="landscapes"] .rs-gh { display: flex; align-items: baseline; gap: 6px; margin: 0 0 2px; font-size: 11px; }
-html[data-skin="landscapes"] .rs-gh b { font-weight: 700; letter-spacing: .04em; color: var(--wz-text, var(--ink)); }
-html[data-skin="landscapes"] .rs-gh span { color: var(--wz-text-secondary, var(--ink-2)); }
-html[data-skin="landscapes"] .rs-bg-hw { padding-top: 14px; border-top: 1px solid color-mix(in srgb, var(--ink) 16%, transparent); }
-html[data-skin="landscapes"] .rs-lg { display: flex; gap: 14px; margin: 0 0 3px; font-size: 11px; color: var(--wz-text-secondary, var(--ink-2)); }
-html[data-skin="landscapes"] .rs-lg span { display: inline-flex; align-items: center; gap: 5px; }
-html[data-skin="landscapes"] .rs-lg i { width: 8px; height: 8px; border-radius: 2px; background: var(--dc); }
-html[data-skin="landscapes"] .rs-bg-hw .rs-bt { height: 9px; gap: 2px; }
-html[data-skin="landscapes"] .rs-bg-hw .rs-bs { border-radius: 2px; background: color-mix(in srgb, var(--dc) 22%, transparent); }
-html[data-skin="landscapes"] .rs-bg-hw .rs-bs:first-child { border-radius: 4px 2px 2px 4px; }
-html[data-skin="landscapes"] .rs-bg-hw .rs-bs:last-child { border-radius: 2px 4px 4px 2px; }
-html[data-skin="landscapes"] .rs-bg-hw .rs-bs .rs-bf { background: var(--dc); }
 html[data-skin="landscapes"] .rs-bg-hw .rs-bs.rs-empty .rs-bf { background: #ffc56b; }
 html[data-skin="landscapes"] .rs-bg-hw .rs-bs.rs-crit .rs-bf { background: #ff8a8a; }
 html[data-skin="landscapes"] .rs-d0 { --dc: #ffffff; }
 html[data-skin="landscapes"] .rs-d1 { --dc: #8fd3ff; }
 html[data-skin="landscapes"] .rs-d2 { --dc: #d6b4ff; }
 html[data-skin="landscapes"] .rs-d3 { --dc: #9ff0c4; }
-
-/* Readability pass (Miguel, 23 Oct): bars show USED of available; group titles "AI resources" / "Compute resources". */
-html[data-skin="landscapes"] .rs-gh { font-size: 12.5px; margin-bottom: 4px; }
-html[data-skin="landscapes"] .rs-gh b { font-weight: 650; letter-spacing: 0; }
-html[data-skin="landscapes"] .rs-gh span { font-size: 11.5px; }
-html[data-skin="landscapes"] .rs-bg { gap: 9px; }
-html[data-skin="landscapes"] .rs-br { grid-template-columns: 58px 1fr 78px; }
-html[data-skin="landscapes"] .rs-bl { font-size: 13px; }
-html[data-skin="landscapes"] .rs-bv { font-size: 12.5px; }
-html[data-skin="landscapes"] .rs-bt { height: 8px; }
-html[data-skin="landscapes"] .rs-bg-hw .rs-bt { height: 10px; }
-html[data-skin="landscapes"] .rs-lg { font-size: 11.5px; margin-bottom: 5px; }
-html[data-skin="landscapes"] .rs-br { grid-template-columns: 58px minmax(60px, 1fr) max-content; }
-
-/* Miguel's skins: no chat pins (row pin button and the Pin action in the row sheet). Rows get their full width back. */
-html[data-skin="landscapes"] .ch-pin-toggle, html[data-skin="landscapes"] .ch-sheet [data-rspin] { display: none; }
-html[data-skin="landscapes"] .ch-row-wrap > .ch-row { padding-right: 8px; }

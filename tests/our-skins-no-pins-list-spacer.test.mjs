@@ -1,9 +1,9 @@
-// Miguel's skins (Dark, Light, Landscapes): no chat pins, and the phone list's bottom room is a real spacer.
+// My release (html[data-mine], every skin): no chat pins, and the phone list's bottom room is a real spacer.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8')
-for (const [file, pre] of [['web/skins/obsidian/skin.css', 'html[data-skin^="obsidian"]'], ['web/skins/landscapes/skin.css', 'html[data-skin="landscapes"]']]) {
+for (const [file, pre] of [['web/mine/mine.css', 'html[data-mine]']]) {
   const css = read(file)
   test(`${file}: pin button and Pin action hidden`, () => {
     assert.ok(css.includes(`${pre} .ch-pin-toggle, ${pre} .ch-sheet [data-rspin] { display: none; }`))

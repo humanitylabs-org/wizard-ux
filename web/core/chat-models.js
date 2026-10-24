@@ -34,12 +34,11 @@
   // The models closest to the thumb in the compact model menu (James 18 Oct 2026). Everything else is one tap away.
   const PRIMARY = [{ family: 'claude:opus', name: 'Opus' }, { family: 'gpt:astra', name: 'Astra' }, { family: 'gpt:sol', name: 'Sol' }, { family: 'tinfoil', name: '' }];
   const isTinfoil = provider => provider === 'wizard-tinfoil' || provider === 'custom:wizard-tinfoil';
-  /* Miguel's skins (Dark, Light, Landscapes) carry his model UX: the private Tinfoil slot, its setup row and the bottom
-   * switch. James's skins keep the stock three-model menu, so none of this shows there (team rule: taste lives in your skin). */
-  const OURS = new Set(['obsidian', 'obsidian-light', 'landscapes']);
-  const ours = () => typeof document !== 'undefined' && OURS.has(document.documentElement.dataset.skin || '');
-  const primaryFamilies = () => ours() ? PRIMARY : PRIMARY.filter(p => p.family !== 'tinfoil');
-  const shown = list => ours() ? list : list.filter(o => !isTinfoil(o.provider));
+  /* My release (html[data-mine], wizard-os#186) carries Miguel's model UX on every skin: the private Tinfoil slot, its
+   * setup row and the bottom switch. Without the release layer the stock three-model menu shows. */
+  const mine = () => typeof document !== 'undefined' && document.documentElement.dataset.mine != null;
+  const primaryFamilies = () => mine() ? PRIMARY : PRIMARY.filter(p => p.family !== 'tinfoil');
+  const shown = list => mine() ? list : list.filter(o => !isTinfoil(o.provider));
   /* Unified Chats: once a private agent offers models in the main picker, a confidential (Tinfoil) choice means the
    * private agent. The main agent's own Tinfoil route is hidden there so a locked GLM never lands in the shared
    * history; a thread already on it still shows its current model. */
@@ -166,7 +165,7 @@
         .finally(() => { M.loading = null; });
       return M.loading;
     },
-    normalize, visibleChoices, PRIMARY, family, privateName, isPrivateRoute: isTinfoil, ours,
+    normalize, visibleChoices, PRIMARY, family, privateName, isPrivateRoute: isTinfoil, mine,
     tinfoilReady() { return M.tinfoil?.provider === 'tinfoil' && M.tinfoil?.credentialStored === true; },
     defaultOption() { return M.options.find(o => o.isGlobalDefault) || null; },
     find(model, provider) { if (!model) return null; return M.options.find(o => o.value === model && (!provider || o.provider === provider)) || null; },
@@ -324,7 +323,7 @@
         + privList.map((o, k) => { const i = main.length + k; return `<button type="button" class="mrow priv${isCur(o) ? ' on' : ''}" data-mpick="${i}" data-mprivate="${esc(o.agent)}" aria-pressed="${isCur(o)}"><span class="mn"><b>${lock}${esc(o.name)}</b><small>${esc([o.description, o.isGlobalDefault ? 'Default' : ''].filter(Boolean).join(' · '))}</small></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`; }).join('')
         + `<p class="msheet-gn">${esc(privNote)}</p></div>` : '';
       return { list, html: `<div class="ch-sheet ch-msheet" role="dialog" aria-label="${esc(head)}"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(title ? `${head} · ${title}` : head)}</div>
-        <div class="msheet-list">${rows}${!own && !privList.length && ours() && !M.options.some(o => isTinfoil(o.provider)) ? '<a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>' : ''}${!own && M.ready && !all && M.options.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${M.options.length}</button>` : ''}${privRows}</div>
+        <div class="msheet-list">${rows}${!own && !privList.length && mine() && !M.options.some(o => isTinfoil(o.provider)) ? '<a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>' : ''}${!own && M.ready && !all && M.options.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${M.options.length}</button>` : ''}${privRows}</div>
         <p class="ch-sheet-n">${esc(note)}</p></div></div>` };
     },
     /* The compact model menu opened from the label in the message box: a small card over the right side.
@@ -348,7 +347,7 @@
       const setupRow = `<button type="button" class="mrow" disabled aria-disabled="true" title="Set up Tinfoil in its connection app"><span class="mn"><b>Tinfoil</b></span></button><a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>`;
       // A same-Hermes route, never a Private agent or a new history. No model id is guessed.
       const mainRows = primary.map(o => !own && isTinfoil(o.provider) && !M.tinfoilReady() ? setupRow : row(o)).join('')
-        + (!own && !privList.length && ours() && !primary.some(o => isTinfoil(o.provider)) ? setupRow : '');
+        + (!own && !privList.length && mine() && !primary.some(o => isTinfoil(o.provider)) ? setupRow : '');
       const privRows = privList.map(o => row(o, ' priv')).join('');
       const moreRows = rest.map(o => row(o)).join('');
       const moreBtn = !own && M.ready && !all && vis.some(o => !primary.includes(o)) ? `<button type="button" class="mrow more" data-mall>More models</button>` : '';

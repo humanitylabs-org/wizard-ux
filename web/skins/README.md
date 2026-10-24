@@ -23,6 +23,18 @@ Declare the package on your skin's entry in `web/core/skins.js`:
 
 James's skins (Nebula, Grove, Tide, Ember, Signal) have no package and load nothing from here.
 
+## My release layer (web/mine/, wizard-os#186)
+
+A skin is only look: colours, fonts, spacing, surfaces, backgrounds, icons/sigils, brand marks and its skin-switch
+intro. How things work or are arranged (Miguel's model switch, pill dock, Home bars, list order, gestures) lives in the
+owner's own release, in `web/mine/`, and applies on whichever skin is picked:
+
+- `mine-flag.js` (first in `<head>`, phone and desktop) sets `html[data-mine]`; `?mine=off` skips it for one load.
+  Core checks it with `document.documentElement.dataset.mine != null` (e.g. `WosModels.mine()`), never a skin id.
+- `mine.css` loads right after `core/skins.css`; every rule starts with `html[data-mine]`, uses palette tokens, and a
+  skin package (inserted after it) can still recolour its parts.
+- `mine.js` runs `behaviour.js` as a `WosSkinHost.builtin`, so it gets this hook API on every skin and survives switches.
+
 ## My skin (every owner's own layer)
 
 Every box also has one personal skin, **My skin**: plain CSS the owner (or their agent) writes, layered on top of

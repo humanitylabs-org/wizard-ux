@@ -219,7 +219,7 @@ window.WosChatPower = function chatPower(A) {
     const priv = !!ag && AG?.isPrivate(ag);
     const full = cur?.model ? (ag ? AG.modelName(ag, cur.model) : M.name(cur.model, cur.provider)) : 'default';
     const label = cur?.model ? (ag ? full : M.short(cur.model, cur.provider)) : M.ready ? 'Default model' : 'Model';
-    const secure = !ag && !!cur?.provider && !!M.ours?.() && !!M.isPrivateRoute?.(cur.provider);
+    const secure = !ag && !!cur?.provider && !!M.mine?.() && !!M.isPrivateRoute?.(cur.provider);
     return `<button type="button" class="ch-model${ag ? ' agent' : ''}${priv || secure ? ' private' : ''}" data-chmodel aria-label="Model: ${esc(full)}${priv ? ', private' : ''}. Change model" title="${esc(cur?.model || '')}">${priv || secure ? (AG?.lock?.() || '') : ''}${esc(label)}<i aria-hidden="true">▾</i></button>`;
   }
   /* The model label inside the message box, bottom-right (James 18 Oct: just the name, small, white; no bubble).
@@ -228,8 +228,8 @@ window.WosChatPower = function chatPower(A) {
     const chip = modelChip(w, s); if (!chip) return '';
     return chip.replace('class="ch-model', 'class="ch-mlabel ch-model').replace(/<i aria-hidden="true">▾<\/i>/, '');
   }
-  /* Miguel's skins only (Dark, Light, Landscapes; M.ours()): a four-position slide switch (Opus · Astra · Sol · the
-   * private Tinfoil model) above the composer, drag or tap; ⋯ opens every model. James's skins keep the model label. */
+  /* My release only (html[data-mine], M.mine(); every skin): a four-position slide switch (Opus · Astra · Sol · the
+   * private Tinfoil model) above the composer, drag or tap; ⋯ opens every model. Without the release layer the stock model label shows. */
   const SW_NAMES = ['Opus', 'Astra', 'Sol', '']; // slot 4: the private model's own name (privateName), in the privacy colour
   function switchOpts(w, s) {
     const cur = w.thread === '__new__' ? newModel(ch(w.id), w) : s ? threadModel(s) : null;
@@ -602,6 +602,6 @@ window.WosChatPower = function chatPower(A) {
   }
   const opened = (wid, sid) => { const c = ch(wid), s = sid && sid !== '__new__' ? LIVE.session(sid) : null; c.unreadOpen = s && LIVE.isNew(s) ? sid : ''; c.posFor = ''; c.follow = false; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
   const holds = id => !!sheet && sheet.pane === id;
-  return { position, anchorOf, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
+  return { position, anchorOf, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.mine?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
     paint, closeSheet, click, bind, opened, holds, openFiles, openModels, retryThread, FOLDER_SVG, RP, newModel: c => c.newModel || null };
 };

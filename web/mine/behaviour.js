@@ -1,5 +1,5 @@
-// Miguel's skin behaviour (Dark, Light, Landscapes), ported from his test port into the skin package.
-// Uses only the skin API (web/skins/README.md); James's skins never load this file.
+// Miguel's behaviour (My release layer, wizard-os#186): runs on every skin through web/mine/mine.js, a WosSkinHost
+// built-in. Uses only the skin hook API (web/skins/README.md).
 //   1. (retired) Back is a small chevron in the thread header; the dock keeps no Back button.
 //   2. Defer / Done sit on the model-switch row instead of a row of their own.
 //   3. Swipe strip (phone): swipe left from the list's right edge reopens the last thread;
@@ -11,7 +11,7 @@ export function setupBehaviour(api) {
   const phone = api.env.shell !== 'desktop';
   const offs = [];
 
-  /* 1. Back lives in the thread header only (a small chevron, styled in skin.css); the dock stays the same pill
+  /* 1. Back lives in the thread header only (a small chevron, styled in web/mine/mine.css); the dock stays the same pill
    *    everywhere. Swipe right still goes back. */
   const syncBack = () => {};
 

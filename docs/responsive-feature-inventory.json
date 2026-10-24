@@ -207,6 +207,9 @@
     "icon-192.png",
     "live.js",
     "manifest.webmanifest",
+    "mine/mine-flag.js",
+    "mine/mine.css",
+    "mine/mine.js",
     "outbox.js",
     "pwa-install.js",
     "summaries.js"

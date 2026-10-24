@@ -4,9 +4,9 @@ import fs from 'node:fs';
 
 const read = f => fs.readFileSync(new URL(f, import.meta.url), 'utf8');
 
-test('our skins hide the Home date and clock', () => {
-  assert.match(read('../web/skins/obsidian/skin.css'), /html\[data-skin\^="obsidian"\] :is\(\.home-date, \.home-time\) \{ display: none; \}/);
-  assert.match(read('../web/skins/landscapes/skin.css'), /html\[data-skin="landscapes"\] :is\(\.home-date, \.home-time\) \{ display: none; \}/);
+test('the release layer hides the Home date and clock (every skin)', () => {
+  assert.match(read('../web/mine/mine.css'), /html\[data-mine\] :is\(\.home-date, \.home-time\) \{ display: none; \}/);
+  for (const d of ['obsidian', 'landscapes']) assert.doesNotMatch(read(`../web/skins/${d}/skin.css`), /\.home-(date|time)[^{]*\{[^}]*display:\s*none/, d);
 });
 
 test('James skins and core CSS keep the Home date and clock', () => {

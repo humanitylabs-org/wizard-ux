@@ -1,5 +1,5 @@
-// Miguel's skins (Dark, Light, Landscapes): floating pill dock, plain orb carrying the current app icon.
-// The core hook (#orbApp) is created hidden; only our skin packages show it, James's skins stay stock.
+// My release (html[data-mine], every skin): floating pill dock, plain orb carrying the current app icon.
+// The core hook (#orbApp) is created hidden; only the release layer shows it, the stock shell stays as it is.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -12,14 +12,16 @@ test('core mirrors the current desk icon into a hidden #orbApp', () => {
   assert.match(app, /paintOrbApp\(\);/);
 });
 
-test('only Miguel\'s skin packages style the pill dock and show #orbApp', () => {
+test('only the release layer styles the pill dock and shows #orbApp (skins may only recolour it)', () => {
+  const css = read('mine/mine.css');
+  assert.match(css, /floating pill bottom bar/);
+  assert.match(css, /\.orb-app:not\(:empty\) \{ display: grid/);
+  for (const line of css.split('\n').filter(l => l.includes('.orb-app') || l.includes('--pill-'))) {
+    assert.match(line, /^html\[data-mine\]|^\s|^\/\*| \*|^@media/, line.slice(0, 90));
+  }
   for (const dir of ['obsidian', 'landscapes']) {
-    const css = read(`skins/${dir}/skin.css`);
-    assert.match(css, /floating pill bottom bar/);
-    assert.match(css, /\.orb-app:not\(:empty\) \{ display: grid/);
-    for (const line of css.split('\n').filter(l => l.includes('.orb-app') || l.includes('--pill-'))) {
-      assert.match(line, /^html\[data-skin(\^="obsidian"|="obsidian-light"|="landscapes")\]|^\s|^\/\*| \*/, line.slice(0, 90));
-    }
+    const sk = read(`skins/${dir}/skin.css`);
+    assert.doesNotMatch(sk, /\.orb-app:not\(:empty\) \{ display: grid|--pill-h:/, dir);
   }
   for (const f of readdirSync(new URL('core/', web)).filter(f => f.endsWith('.css')).concat(['styles.css'])) {
     const src = read(f.includes('/') || f === 'styles.css' ? f : `core/${f}`);
