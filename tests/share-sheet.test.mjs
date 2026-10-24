@@ -55,3 +55,18 @@ test('deliver keeps the item in memory for that app only, acked once', () => {
   S.register('messenger', { accepts: ['text'], targets: [{ id: 'p1', name: 'Miguel' }] });
   assert.equal(S.pending('messenger').length, 0);
 });
+
+test('a pending share goes to one frame: the first live puller claims it until it closes', () => {
+  const { S } = load();
+  S.register('messenger', { accepts: ['text'] });
+  assert.equal(S.deliver('messenger', { text: 'hi' }, 'p1'), true);
+  let aOpen = true; const a = { owner: 'A', alive: () => aOpen }, b = { owner: 'B', alive: () => true };
+  assert.equal(S.pending('messenger', a).length, 1);
+  assert.equal(S.pending('messenger', b).length, 0, 'second window never gets the same item');
+  assert.equal(S.pending('messenger', a).length, 1, 'the claimant can pull again (e.g. after unlock)');
+  aOpen = false;
+  const got = S.pending('messenger', b);
+  assert.equal(got.length, 1, 'a closed claimant releases it');
+  assert.equal(S.ack('messenger', got[0].id), true);
+  assert.equal(S.pending('messenger', b).length, 0);
+});

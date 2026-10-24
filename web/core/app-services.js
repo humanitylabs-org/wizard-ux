@@ -270,7 +270,7 @@
         // until the app acks that it placed one in its own composer.
         receive(opts) { check(); return !!shareOps?.register(st.appId, { accepts: opts?.accepts, targets: opts?.targets }); },
         targets(list) { check(); return !!shareOps?.setTargets(st.appId, list); },
-        pending() { check(); return shareOps?.pending(st.appId) || []; },
+        pending() { check(); return shareOps?.pending(st.appId, { owner: st, alive: () => frames.get(st.frame) === st && st.frame.isConnected && valid(st, st.doc) }) || []; },
         ack(id) { check(); return typeof id === 'string' && !!shareOps?.ack(st.appId, id); } }),
       voice: Object.freeze({ async transcribe(file, opts) { check(); const result = await transcribeFile(file, opts); check(); return result; } }),
       theme: Object.freeze({ get() { check(); return window.WizAppearance?.get(frameOf(st)) || null; } }),

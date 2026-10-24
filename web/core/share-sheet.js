@@ -65,7 +65,13 @@
   function remember(...keys) { recent = [...keys, ...recent.filter(k => !keys.includes(k))].slice(0, 40); write(localStorage, RECENT, recent); }
 
   function prune() { const now = Date.now(); pendingItems = pendingItems.filter(x => now - x.at < TTL); }
-  function pending(appId) { prune(); return pendingItems.filter(x => x.appId === appId).map(x => ({ id: x.id, ...x.payload, target: x.target })); }
+  // One frame per item: the first live frame of that app to pull claims it, and only a closed claimant releases it,
+  // so two open windows of one app never both place the same share.
+  function pending(appId, claimant) {
+    prune();
+    const mine = x => x.appId === appId && (!x.claim || x.claim.owner === claimant?.owner || !x.claim.alive());
+    return pendingItems.filter(mine).map(x => { if (claimant) x.claim = claimant; return { id: x.id, ...x.payload, target: x.target }; });
+  }
   function ack(appId, id) { const n = pendingItems.length; pendingItems = pendingItems.filter(x => !(x.appId === appId && x.id === id)); return pendingItems.length < n; }
   function deliver(appId, payload, target) {
     if (!window.WizOpenApp) return false;
@@ -132,7 +138,7 @@
   }
   // Back / Escape: the sheet sits above everything it was opened from.
   const back = () => (close('cancelled') ? 'share-sheet' : null);
-  const claimed = !!window.WizAppServices?.claimShare?.(Object.freeze({ register, setTargets, pending, ack }));
+  const claimed = !!window.WizAppServices?.claimShare?.(Object.freeze({ register, setTargets, pending, ack, deliver }));
   if (!claimed) console.warn('WosShareSheet: app services already claimed; apps cannot receive shares');
   window.WosShareSheet = Object.freeze({ show, wants: kind => wants(kind), back, isOpen: () => !!open,
     _state: () => ({ receivers, recent, pending: pendingItems.map(x => ({ id: x.id, appId: x.appId, target: x.target })) }) });
