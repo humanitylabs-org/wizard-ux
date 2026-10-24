@@ -45,7 +45,11 @@ test('the switch row is gated on the release layer in chat-power and chats, styl
   assert.match(cj, /const mlabel = PW\?\.modelLabel && !msw/);
   assert.match(read('web/mine/mine.css'), /html\[data-mine\] \.ms-track \{/);
   for (const d of ['obsidian', 'landscapes']) assert.doesNotMatch(read(`web/skins/${d}/skin.css`), /\.ms-track/);
-  assert.doesNotMatch(read('web/core/chats.css') + read('web/core/chat-power.css'), /\.ms-track|ch-swrow/);
+  const css = read('web/core/chats.css') + read('web/core/chat-power.css');
+  // Layout-only native document rules may anchor an existing switch row.
+  // They must not create a switch or style one outside the Android document mode.
+  assert.doesNotMatch(css.replace(/html\.wos-doc-scroll[^{}]*\{[^{}]*\}/g, ''), /\.ms-track|ch-swrow/);
+  assert.doesNotMatch(css, /\.ms-track/);
 });
 
 test("my release defaults the chat list to compact; an explicit Filter choice still wins", () => {

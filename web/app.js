@@ -2016,6 +2016,8 @@
     closeSheets(); setTimeout(() => openApp(a), 120);
   }
   window.WizHomeScreenApps?.attach(launcher, id => APP[id]);
+  // Miguel's skins open apps from the New desk grid (swipe up shows Desks, not the Apps sheet): same long-press there.
+  window.WizHomeScreenApps?.attach(track, id => APP[id], { rows: '.new-desk [data-app]', live: row => !!row.closest('.new-desk') && row.getClientRects().length > 0 });
   launcher.addEventListener('click', e => {
     const sk = e.target.closest('[data-storekind]'); if (sk) return openStoreKind(sk.dataset.storekind);
     const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app]);
