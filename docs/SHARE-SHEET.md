@@ -27,7 +27,8 @@ WizardApp.share.targets(list);                      // refresh the direct target
 WizardApp.share.check();                            // pull again (e.g. after unlock); also runs on registration and on each delivery
 ```
 
-- `receive` returns `true` only when the item is visibly placed (composer filled). Anything else leaves it pending; the shell drops undelivered items after 30 minutes.
+- `receive` returns (or resolves) `true` only when the item is visibly placed (composer filled) or the owner dismissed the app's own picker. Anything else leaves it pending; the shell drops undelivered items after 30 minutes or on a shell reload.
+- Isolation: pending items live only in the share sheet's closure. It hands its per-app ops to `WizAppServices` once at shell load (`claimShare`, before any app frame exists), so a frame reads, acks and registers only under its own verified app id; nothing about receivers or pending content is on a global or in storage except the published target names.
 - Registration is runtime and device-local (`localStorage wos.share.receivers.v1`): an app appears in the sheet after it has been opened once on that device. Only names and ids the app chose to publish are cached, never message content.
 - Same-origin hosted apps only (the verified synchronous `WizAppServices` connection); the sheet never sends on the app's behalf, so each app keeps its own auth, CSRF and send path.
 - Ranking: people and apps used from the sheet rise to the front (`wos.share.recent.v1`), then each app's own order.
