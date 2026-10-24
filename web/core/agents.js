@@ -11,8 +11,8 @@
  * Threads and runs take agent=<id>; a thread carries agent:{id,label,privacy,appearance} from server metadata.
  *
  * The default agent (is_default, normally id "hermes") is the Wizard's main agent: its chats are the ordinary
- * Chats window, unchanged. Every other agent's chats live in a Chats window pinned to that agent (w.agent) and
- * never mix with the main list.
+ * Chats window's All focus. A persisted per-window Focus selects All, an agent or a subject.
+ * Agent focus reuses the scoped list/composer route; legacy w.agent windows migrate into the main window.
  *
  *   WosAgents.load(force)        → Promise<agents[]> (404/absent API → [] and available=false)
  *   WosAgents.list / ready / available / error
