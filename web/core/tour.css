@@ -21,7 +21,9 @@
 .tr-copy small { font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--violet-2); opacity: .85; }
 .tr-copy b { font-size: 21px; line-height: 1.3; font-weight: 600; color: var(--ink); letter-spacing: -.005em; text-wrap: balance; }
 .tr-copy.in { animation: trIn 380ms var(--ease) both; }
-@keyframes trIn { from { opacity: 0; transform: translateY(8px); filter: blur(3px); } }
+/* Movement only, never opacity: WebKit can hold an entrance at frame 0 for ~2 s while the shell boots, and with
+   opacity in the keyframes the instruction stayed invisible that whole time. A held rise still shows the text. */
+@keyframes trIn { from { transform: translateY(8px); } }
 .tour[data-step="3"] .tr-copy { top: 28%; }
 .tr-stage { position: absolute; inset: 0; }
 /* End card + Help: gesture glyphs */
