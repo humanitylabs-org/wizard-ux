@@ -166,7 +166,7 @@ async function visualPicker(b) {
  await p.evaluate(()=>WosSkin.set('obsidian'));await p.locator('.mz-intro').waitFor({state:'attached'});await p.locator('.mz-intro').waitFor({state:'detached'});
  // Dark's existing first-switch intro navigates Home. Reopen the same Chats window after it finishes.
  await p.evaluate(()=>{const a=__wos,w=Object.values(a.wins).find(w=>w.app==='chats');a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);});
- await activate(p,'.ch-focus-tab.on:visible');await activate(p,'[data-spnew]');await p.locator('.ch-space-form input').fill('Research projects');await capture(p,'phone-dark-new-space');
+ if(!await p.locator('[data-chspacepicker]').count())await activate(p,'.ch-focus-tab.on:visible');if(!await p.locator('.ch-space-form input').count())await activate(p,'[data-spnew]');await p.locator('.ch-space-form input').fill('Research projects');await capture(p,'phone-dark-new-space');
  ok(await p.locator('.ch-space-form input').inputValue()==='Research projects','Dark skin new Space input remains legible and editable');
  await p.evaluate(()=>__wos.onBack());await ctx.close();
  const wide=await boot(b,true);await wide.p.evaluate(()=>WosSkin.set('nebula'));await choose(wide.p,'agent:hermes');await activate(wide.p,'.ch-focus-tab.on:visible');await capture(wide.p,'desktop-nebula-picker');await wide.ctx.close();
