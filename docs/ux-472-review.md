@@ -24,7 +24,7 @@ The last assertion is broader than the visual behavior it is trying to protect. 
 
 ## Real Thales execution and screenshots
 
-Evidence root: `/Volumes/ThalesMedia/QA/mac-launch-472-review`.
+Evidence root: `$THALES_MEDIA/QA/mac-launch-472-review` (exact retained location in PR body).
 
 - `protected-assertions.log`: candidate three protected files, exit 1, seven failures.
 - `main-protected-assertions.log`: exact frozen-main three protected files, exit 0.
