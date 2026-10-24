@@ -169,6 +169,9 @@ window.WosChatPower = function chatPower(A) {
     const el = nb.closest('[data-chats]'); if (!el) return;
     const id = el.dataset.chats, w = H.win(id); if (!w || !w.thread || w.thread === '__new__') return;
     const c = ch(id);
+    // Document-scrolled phones: a thread off screen (another app or desk in front) is not being read. Its box can
+    // scroll or measure zero while parked; saving that overwrote your place and flipped it to 'following the bottom'.
+    if (A.docAside?.(nb)) return;
     if (settling(c) && c.settle.nb === nb) { paintLatest(el, nb); return; } // our own placement, not the reader
     c.follow = bottomGap(nb) < 80; c.readerMoved = true;
     paintLatest(el, nb);
@@ -203,7 +206,7 @@ window.WosChatPower = function chatPower(A) {
     return M?.currentRoute(s?.id || '') || { model: '', provider: '' };
   }
   // Agents MVP: the agent a window or thread belongs to (null = the main agent).
-  const agentOfWin = (w, s) => { const AG = window.WosAgents; const id = (s && LIVE.agentOf?.(s.id)) || (w && w.agent) || ''; return AG && id && AG.isOther(id) ? AG.get(id) || { id, label: id, missing: true } : null; };
+  const agentOfWin = (w, s) => { const AG = window.WosAgents; const id = s ? (LIVE.agentOf?.(s.id) || (typeof s.agent === 'string' ? s.agent : s.agent?.id) || '') : A.winAgent(w); return AG && id && AG.isOther(id) ? AG.get(id) || { id, label: id, missing: true } : null; };
   function newModel(c, w) {
     if (c.newModel) return c.newModel;
     const ag = agentOfWin(w || H.win(Object.keys(A.CH).find(k => A.CH[k] === c) || ''), null);
@@ -463,7 +466,7 @@ window.WosChatPower = function chatPower(A) {
     try {
       it = await OUTBOX.enqueue({ captureId, custodyId, sealKey: sealed.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: transcript ? [sealed.text, transcript].filter(Boolean).join('\n\n') : '', typed: sealed.text, audio: blob,
         instructions, files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), ...(sealed.reply ? { reply: sealed.reply } : {}),
-        wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && (nm?.agent || w?.agent) ? { agent: nm?.agent || w.agent } : {}) });
+        wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && (nm?.agent || A.winAgent(w)) ? { agent: nm?.agent || A.winAgent(w) } : {}) });
     } catch (e) { // not saved anywhere: the words and attachments go back, and so does James if he is still on the list
       if (hold) LIVE.releaseSend?.(hold);
       if (isNew && nm) c.newModel = nm;
@@ -519,7 +522,7 @@ window.WosChatPower = function chatPower(A) {
     const cur = mode === 'new' ? newModel(ch(wid), w) : threadModel(s);
     const agent = agentOfWin(w, s);
     // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
-    const priv = !agent && !w.agent && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
+    const priv = !agent && !A.winAgent(w) && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
     openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false, agent, priv, pop: !!pop && mode !== 'retry' });
     if (!M.ready) M.load().then(() => { if (sheet?.type === 'model') paint(sheet.pane, A.elOf(sheet.pane)); });
   }

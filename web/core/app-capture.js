@@ -716,9 +716,15 @@
         recoveryLive.add(row.id);await put(row);all=await rows();
       }
     }
+    // Positive proof that no native recorder runs: the device reports no take and the meeting bridge (if any) is not recording.
+    let nativeQuiet = false;
+    try { nativeQuiet = JSON.parse(W.WizardOSDevice?.recActive?.() || 'null') === null && !unknownMeetingActive &&
+      !(meeting?.status && (await meeting.status())?.recording); } catch (_) { nativeQuiet = false; }
     for (const row of all) {
       if (!['starting', 'recording', 'recoverable'].includes(row.status)) continue;
-      if (row.native && !row.nativeId) { await put({ ...row, status: 'recoverable', partial: true, recoveryError: 'native_owner_uncertain' }); continue; }
+      // An ID-less native reservation with no live native recorder cannot hold the mic (e.g. after an app kill):
+      // keep it as pending partial custody instead of a permanent microphone lock.
+      if (row.native && !row.nativeId) { await put({ ...row, status: nativeQuiet ? 'pending' : 'recoverable', partial: true, recoveryError: 'native_owner_uncertain' }); continue; }
       if (active?.row.id === row.id) continue;
       try {
       if (row.native && row.nativeId) {

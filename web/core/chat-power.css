@@ -36,8 +36,8 @@
 .ch-err-t b svg { width: 15px; height: 15px; fill: none; stroke: var(--ink-2); stroke-width: 2; }
 .ch-err-t small { font-size: 12.5px; color: #ff9c82; }
 
-/* #13 composer mic: one round button on the right. Mic while the field is empty (staged files ride with the voice
- * reply); Send once there are words (.has-text); the mic itself turns into Send while its voice take records (.on). Without a mic
+/* #13 composer mic: one round button on the right. Mic only while the full draft is empty; typed words or staged
+ * attachments show Send (.has-text). The mic itself turns into Send while its voice take records (.on). Without a mic
  * (no voice on this device) Send always shows. */
 .ch-compose:not(.has-text) .ch-mic ~ .ch-send, .ch-compose .ch-mic.on ~ .ch-send { display: none; }
 .ch-compose.has-text .ch-mic:not(.on) { display: none; }

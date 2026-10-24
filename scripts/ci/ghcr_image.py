@@ -80,6 +80,22 @@ def clean_env(config):
             **{key: os.environ[key] for key in passthrough if key in os.environ}}
 
 
+def _lock_holders(lock_path):
+    """Name the processes holding the shared lock, so a timeout is actionable."""
+    try:
+        listing = subprocess.run(["lsof", "-Fpc", "--", str(lock_path)], capture_output=True,
+                                 text=True, timeout=20).stdout
+    except (OSError, subprocess.SubprocessError):
+        return "unknown (lsof unavailable)"
+    holders, pid = [], None
+    for line in listing.splitlines():
+        if line.startswith("p"):
+            pid = line[1:]
+        elif line.startswith("c") and pid and pid != str(os.getpid()):
+            holders.append(f"{line[1:]}[{pid}]")
+    return ", ".join(holders[:8]) or "none visible"
+
+
 def _volume_of(path):
     """The mounted volume holding path, unless that is the system disk ("/").
 
@@ -115,7 +131,7 @@ def publish(args):
                 break
             except BlockingIOError:
                 if time.monotonic() >= deadline:
-                    raise TimeoutError("shared worker lock busy for one hour")
+                    raise TimeoutError("shared worker lock busy for one hour; open by (holder plus waiters): " + _lock_holders(lock_path))
                 time.sleep(10)
         with tempfile.TemporaryDirectory(prefix="publish-", dir=root) as config:
             # Explicit plugin path: no owner HOME or global Docker config is inherited.
