@@ -90,8 +90,9 @@ public class ShellActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 33) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::back);
         }
-        addChangeShortcut();
         origin = ShellOrigin.parse(prefs().getString(KEY_ORIGIN, null));
+        if (session()) { begin(saved); return; }
+        addChangeShortcut();
         if (!handle(getIntent())) {
             if (origin == null) showConnect(null, null);
             else open(saved);
@@ -101,8 +102,33 @@ public class ShellActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        if (session()) return; // a pinned app's task resumes as it was (AppSessionActivity)
         setIntent(intent);
         handle(intent);
+    }
+
+    /* ---------------- Hooks for a pinned home-screen app (home/AppSessionActivity) ---------------- */
+
+    /** True in a pinned app's own task: one app on the selected Wizard, no connect flow, no device ports. */
+    protected boolean session() { return false; }
+
+    /** A pinned app's first step (only called when {@link #session()}). */
+    protected void begin(Bundle saved) { }
+
+    /** Where this window opens and returns to. */
+    protected String startUrl() { return ShellOrigin.home(origin); }
+
+    /** A main-frame URL this window may show itself; anything else goes to the phone or is refused. */
+    protected boolean ownPage(String url) { return ShellOrigin.same(origin, url); }
+
+    protected String origin() { return origin; }
+
+    /** A plain native note in place of the Wizard (a pinned app this phone can't open). */
+    protected void showNote(String title, String body) {
+        LinearLayout col = column();
+        col.addView(text(title, 22, true), lp(0));
+        col.addView(dim(text(body, 15, false), 0.75f), lp(10));
+        showCover(col);
     }
 
     /** wizard://connect links and the launcher's Change Wizard shortcut open the connect screen. */
@@ -127,11 +153,12 @@ public class ShellActivity extends Activity {
 
     /* ---------------- The Wizard ---------------- */
 
-    private void open(Bundle saved) {
+    protected void open(Bundle saved) {
         hideCover();
         if (web == null) buildWebView();
-        if (saved != null && web.restoreState(saved) != null) return;
-        web.loadUrl(ShellOrigin.home(origin));
+        if (saved != null && web.restoreState(saved) != null && (web.getUrl() == null || ownPage(web.getUrl()))) return;
+        web.clearHistory();
+        web.loadUrl(startUrl());
     }
 
     /* ---------------- Floating orb (device.orb): a clear ask before Android's overlay screen ---------------- */
@@ -163,12 +190,21 @@ public class ShellActivity extends Activity {
             overlayAsked = false;
             if (ai.wizards.shell.orb.OrbService.permitted(this)) ai.wizards.shell.orb.OrbService.setWanted(this, true);
         }
-        ai.wizards.shell.orb.OrbService.appFront(this, true); // the orb hides while the Wizard app is in front
+        // The orb hides while the Wizard app is in front, and stays over a pinned app (its own task).
+        if (session()) ai.wizards.shell.orb.OrbService.refresh(this);
+        else ai.wizards.shell.orb.OrbService.appFront(this, true);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // The Wizard's pages re-check what changed while away (e.g. a home-screen pin the launcher just confirmed).
+        if (web != null && !session()) web.evaluateJavascript("window.dispatchEvent(new Event('wos-native-resume'))", null);
     }
 
     @Override
     protected void onStop() {
-        ai.wizards.shell.orb.OrbService.appFront(this, false);
+        if (!session()) ai.wizards.shell.orb.OrbService.appFront(this, false);
         super.onStop();
     }
 
@@ -200,10 +236,14 @@ public class ShellActivity extends Activity {
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         s.setSupportMultipleWindows(false);
         s.setUserAgentString(s.getUserAgentString() + UA_TAG);
-        // Before the first load: the port is injected only for this exact origin (a new Wizard gets a new WebView).
-        port = ShellPort.install(web, origin, () -> origin, new ai.wizards.shell.device.DevicePort.Registry()
-                .add(new ai.wizards.shell.recorder.RecordingCapability(this, () -> origin, this::ensurePermissions))
-                .add(new ai.wizards.shell.orb.OrbCapability(this, () -> runOnUiThread(this::askOverlay))));
+        // Before the first load: the ports are injected only for this exact origin (a new Wizard gets a new WebView).
+        // A pinned app's task gets none: it is one app, not the Wizard shell.
+        if (!session()) {
+            port = ShellPort.install(web, origin, () -> origin, new ai.wizards.shell.device.DevicePort.Registry()
+                    .add(new ai.wizards.shell.recorder.RecordingCapability(this, () -> origin, this::ensurePermissions))
+                    .add(new ai.wizards.shell.orb.OrbCapability(this, () -> runOnUiThread(this::askOverlay))));
+            ai.wizards.shell.home.HomeScreenPort.install(this, web, origin);
+        }
         root.addView(web, 0, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         web.setDownloadListener((url, ua, disposition, mime, length) -> outside(Uri.parse(url)));
@@ -212,10 +252,28 @@ public class ShellActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 if (!request.isForMainFrame()) return false;
                 Uri u = request.getUrl();
-                if (ShellOrigin.same(origin, u.toString())) return false;
+                if (ownPage(u.toString())) return false;
+                if (session()) {
+                    // A pinned app: a tapped public link opens in the phone's browser; the Wizard's other pages,
+                    // custom schemes and untapped hops are refused, so this task never becomes the whole Wizard.
+                    boolean link = "https".equals(u.getScheme()) || "http".equals(u.getScheme());
+                    if (request.hasGesture() && link && !ShellOrigin.same(origin, u.toString())) outside(u);
+                    else android.widget.Toast.makeText(ShellActivity.this, "Use Android Home to switch apps", android.widget.Toast.LENGTH_SHORT).show();
+                    return true;
+                }
                 if ("wizard".equals(u.getScheme())) { handle(new Intent(Intent.ACTION_VIEW, u)); return true; }
                 outside(u); // other sites, mail, phone numbers: the phone's own apps
                 return true;
+            }
+
+            @Override
+            public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                // A load that skipped shouldOverrideUrlLoading (a redirect, a restored page) still can't leave the app.
+                if (session() && request.isForMainFrame() && !ownPage(request.getUrl().toString())) {
+                    return new android.webkit.WebResourceResponse("text/html", "UTF-8", new java.io.ByteArrayInputStream(
+                            "<!doctype html><h2>App unavailable</h2><p>Use Android Home to return to Wizard.</p>".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+                }
+                return null;
             }
 
             @Override
@@ -369,6 +427,7 @@ public class ShellActivity extends Activity {
         web.evaluateJavascript("(window.__wosNativeBack ? window.__wosNativeBack() : 'nojs')", r -> {
             String step = r == null ? "" : r.replace("\"", "");
             if (!step.isEmpty() && !step.equals("nojs") && !step.equals("null")) return;
+            if (session()) return; // a pinned app consumes Back: it never steps out of its own page
             if (web.canGoBack()) web.goBack();
             else moveTaskToBack(true);
         });
@@ -434,9 +493,11 @@ public class ShellActivity extends Activity {
             });
             col.addView(ts, lp(10));
         }
-        TextView change = pill("Change Wizard", false);
-        change.setOnClickListener(v -> showConnect(origin, null));
-        col.addView(change, lp(10));
+        if (!session()) {
+            TextView change = pill("Change Wizard", false);
+            change.setOnClickListener(v -> showConnect(origin, null));
+            col.addView(change, lp(10));
+        }
         col.addView(dim(text(origin + "\n" + why, 12, false), 0.4f), lp(18));
         showCover(col);
     }
@@ -444,7 +505,7 @@ public class ShellActivity extends Activity {
     private void retry() {
         if (web == null) { open(null); return; }
         hideCover();
-        web.loadUrl(ShellOrigin.home(origin));
+        web.loadUrl(startUrl());
     }
 
     private void showCover(View content) {

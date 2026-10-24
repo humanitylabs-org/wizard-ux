@@ -615,6 +615,7 @@
   // Downloads with a notification, and the app's own toast says so. The WebView can't save a blob it holds itself,
   // so Save points it at the file's real URL instead (item.download names the file, e.g. Wizard Search's ?dl=title).
   const appDownloads = () => {
+    if (!window.WizardOSNative && /WizardShell\//.test(navigator.userAgent || '')) return true; // Wizard Shell: DownloadListener → the phone
     const m = /WizardOS-Android\/(\d+)\.(\d+)\.(\d+)/.exec(navigator.userAgent || '');
     return !!m && (+m[1] * 1e6 + +m[2] * 1e3 + +m[3]) >= 8004; // DownloadListener → DownloadManager since 0.8.4
   };

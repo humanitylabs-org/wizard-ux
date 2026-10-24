@@ -25,6 +25,9 @@
   'use strict';
   const ORIGIN = location.origin;
   const NATIVE = !!window.WizardOSNative || /WizardOS-Android\//.test(navigator.userAgent || '');
+  // Wizard Shell (android/shell) also says WizardOS-Android/ but has no WizardOSNative: it hands every main-frame
+  // download to the phone through its DownloadListener, so a plain <a download> works there (no clipboard detour).
+  const SHELL = !window.WizardOSNative && /WizardShell\//.test(navigator.userAgent || '');
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   function abs(href, base) {
@@ -56,7 +59,7 @@
     if (NATIVE && typeof b?.download === 'function') { try { b.download(u.href); return true; } catch (_) {} }
     // Android builds before 0.10.4 have no download bridge, and a main-frame file request would arm the
     // "can't reach your Wizard" screen. Copy the link so it can be pasted into the phone's browser.
-    if (NATIVE) {
+    if (NATIVE && !SHELL) {
       const say = t => { const n = document.createElement('div'); n.textContent = t; n.setAttribute('role', 'status');
         n.style.cssText = 'position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:2147483001;max-width:86vw;background:rgba(22,14,46,.98);color:#f1ecff;border:1px solid rgba(205,190,255,.18);border-radius:12px;padding:10px 14px;font:14px/1.35 system-ui,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.5)';
         document.body.appendChild(n); setTimeout(() => n.remove(), 4200); };

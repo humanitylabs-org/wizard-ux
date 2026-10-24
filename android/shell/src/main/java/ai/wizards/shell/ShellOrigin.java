@@ -56,12 +56,12 @@ public final class ShellOrigin {
         return "https://" + host + (p == -1 || p == 443 ? "" : ":" + p);
     }
 
-    static String home(String origin) {
+    public static String home(String origin) {
         return origin + HOME_PATH;
     }
 
     /** Same scheme, host and port as the saved origin (an implicit 443 equals an explicit one). */
-    static boolean same(String origin, String url) {
+    public static boolean same(String origin, String url) {
         if (origin == null || url == null) return false;
         try {
             URI a = new URI(origin), b = new URI(url);
