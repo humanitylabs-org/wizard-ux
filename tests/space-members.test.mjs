@@ -43,7 +43,8 @@ test('Space includes 82 members / 62 archived beyond the global archive-50 witho
   assert.equal(h.L.session(ids[81]).id,ids[81], 'actions can resolve supplemental rows');
   for (let i=0;i<10;i++) h.L.spaceSessions(ids);
   assert.equal(h.calls.length,62, 'repaints and ordinary polls do not reread members');
-  h.advance(180001); await ready(h.L,ids); assert.equal(h.calls.length,124);
+  h.advance(180001); await ready(h.L,ids); assert.equal(h.calls.length,62,"archived members are not reread on the 3-minute walk");
+  h.advance(30*60*1000); await ready(h.L,ids); assert.equal(h.calls.length,124);
 });
 
 test('main, host-profile, container and restricted members use authoritative routes', async () => {
@@ -99,7 +100,7 @@ test('loaded hidden rows outrank cache, membership edits apply immediately, fail
   assert.equal((await ready(h.L,['old'])).rows.length,1);
   assert.equal(h.L.spaceSessions([]).rows.length,0);
   h.L.sessions=[row('old','',{hidden:true})]; assert.equal(h.L.spaceSessions(['old']).rows.length,0);
-  h.L.sessions=[]; h.advance(180001); h.replies.delete('old');
+  h.L.sessions=[]; h.advance(30*60*1000+1); h.replies.delete('old');
   assert.equal((await ready(h.L,['old'])).rows.length,0);
 });
 
