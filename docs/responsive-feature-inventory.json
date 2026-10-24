@@ -183,6 +183,8 @@
     "core/settings.css",
     "core/settings.js",
     "core/setup-launch.js",
+    "core/share-wizard.css",
+    "core/share-wizard.js",
     "core/shell.js",
     "core/sigils.css",
     "core/sigils.js",
@@ -261,6 +263,10 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/share-wizard.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Extracted native/imported and installed-app internal Share to Wizard sheet"
     },
     "core/app-services.js": {
       "loadedBy": [

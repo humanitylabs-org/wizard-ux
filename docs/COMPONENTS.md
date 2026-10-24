@@ -46,6 +46,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Thread topic emoji | `WosTopicEmoji` (`web/core/chat-topic-emojis.js`, data `WosTopicEmojiData`) | — |
 | Durable send that survives outages without duplicates | `WosOutbox`, `WosCarry` (`web/outbox.js`) | fetch + retry loop |
 | Cancelled-recording keep | `WosCancelled` (`web/core/cancelled.js`) | — |
+| Internal Share to Wizard | `web/core/share-wizard.js`, `web/core/share-wizard.css` (`WizShareWizard`) | Native incoming shares and `WizardApp.share.wizard({files,text,title})` use one sheet in phone/desktop; shared Chats upload + durable send, no OS tray. |
 | Uploads of any size | `WizUploads` (`web/core/uploads.js`) | file input + single fetch |
 | Files browse, preview, attach | `WosFiles` (`web/core/files.js`) | own picker |
 | Settings entry in both shells | `WosSettings.register` (`web/core/settings.js`); mounted `focus(id)` routes aliases, with false/empty ids opening the root safely; actions/views `WosFeatures` (`web/core/features.js`) | per-feature settings page, shell-only branch |

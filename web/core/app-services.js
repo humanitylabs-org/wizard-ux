@@ -4,7 +4,7 @@
   'use strict';
   if (window.WizAppServices) return;
   const VERSION = 1, ORIGIN = location.origin, frames = new Map();
-  const OPS = new Set(['ready', 'share.text', 'share.file', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set']);
+  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.wizard', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set']);
   let registry, available = null, serial = 0, rootArm = null;
   const uid = () => 'as-' + (++serial) + '-' + Math.random().toString(36).slice(2);
   const fault = message => new Error(message);
@@ -208,6 +208,14 @@
         }
         return window.WosChat?.sharePayload(data) || Promise.resolve('unsupported');
       },
+        async wizard(data) {
+          check();
+          if (!window.WizShareWizard) return 'unsupported';
+          window.WizShareWizard.valid(data);
+          const h = hold('Share to Wizard');
+          try { return await window.WizShareWizard.wizard(data, () => valid(st, doc)); }
+          finally { h.release(); }
+        },
         file(file, opts) { check(); if (!file || !['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(file))) return Promise.resolve('unsupported'); return window.WosChat?.shareFile(file, opts) || Promise.resolve('unsupported'); } }),
       theme: Object.freeze({ get() { check(); return window.WizAppearance?.get(frameOf(st)) || null; } }),
       update: Object.freeze({ hold, available() { check(); return available; } }),
@@ -288,6 +296,7 @@
       const svc = connect(e.source, st.client); let value;
       if (d.op === 'ready') value = svc.ready();
       if (d.op === 'share.text') value = await svc.share.text(d.args);
+      if (d.op === 'share.wizard') value = await svc.share.wizard(d.args);
       if (d.op === 'share.file') value = await svc.share.file(d.args?.file, d.args?.options);
       if (d.op === 'capture.pending') value = await svc.capture.pending();
       if (d.op === 'capture.ack') value = await svc.capture.ack(d.args?.id);
