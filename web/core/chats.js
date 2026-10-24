@@ -295,7 +295,7 @@ window.WizCore.chats = function createChats(H) {
     const q = norm(text); if (!q) return [];
     const out = [], seen = new Set(), push = f => { const k = f.kind + ':' + f.key; if (!seen.has(k)) { seen.add(k); out.push(f); } };
     const st = statusEntries().map(([key, f]) => ({ kind: 'status', key, label: f.label, names: [norm(f.label), ...f.syn.map(norm)] }));
-    const sj = spaces().map(s => ({ kind: 'space', key: s.id, label: s.name, names: [norm(s.name)] }));
+    const sj = visibleSpaces().map(s => ({ kind: 'space', key: s.id, label: s.name, names: [norm(s.name)] }));
     const ag = focusAgents().map(a => ({ kind: 'agent', key: a.id, label: a.label, names: [norm(a.id), norm(a.label)] }));
     for (const f of st.concat(ag, sj)) if (f.names.includes(q)) push(f);
     if (q.length >= 2) for (const f of st.concat(ag, sj)) if (f.names.some(n => n.startsWith(q) || n.split(' ').some(w => w.length > 2 && w.startsWith(q)))) push(f);
@@ -321,6 +321,9 @@ window.WizCore.chats = function createChats(H) {
     }
     return spacesCache;
   }
+  const spaceAgent = s => s?.agent || AGS()?.defaultId() || 'hermes';
+  const visibleSpaces = () => spaces().filter(s => focusAgents().some(a => a.id === spaceAgent(s)));
+  const focusedAgent = f => f?.kind === 'agent' ? f.key : f?.kind === 'space' ? spaceAgent(spaces().find(s => s.id === f.key)) : '';
   function spaceContains(key, sid) { spaces(); return spaceThreads.get(key)?.has(sid) || false; }
   function spaceMember(key, sid, add) {
     const list = spaces().map(s => ({ ...s, threads: s.threads.slice() })), space = list.find(s => s.id === key); if (!space) return false;
@@ -335,14 +338,15 @@ window.WizCore.chats = function createChats(H) {
   function focusOf(w) {
     const o = (w && W[owner(w.id)]) || w, f = o?.focus;
     // Old automatic subject focuses migrate to All, as do deleted Spaces.
-    if (f?.kind === 'subject' || (f?.kind === 'space' && !spaces().some(s => s.id === f.key))) { o.focus = null; save(); return null; }
+    if (f?.kind === 'subject' || (f?.kind === 'space' && !visibleSpaces().some(s => s.id === f.key)) || (f?.kind === 'agent' && !focusAgents().some(a => a.id === f.key))) { o.focus = null; save(); return null; }
     return f && ['agent', 'space'].includes(f.kind) && typeof f.key === 'string' && f.key ? f : null;
   }
-  function focusAgents() { const A = window.WosAgents; return A ? [agentRec(A.defaultId()), ...A.others()] : [agentRec('')]; }
-  function matchesFocus(f, s) { return !f || (f.kind === 'space' ? spaceContains(f.key, s.id) : f.key === AGS()?.defaultId() ? !LIVE.agentOf(s.id) : LIVE.agentOf(s.id) === f.key); }
+  function focusAgents() { const A = window.WosAgents; return A ? [agentRec(A.defaultId()), ...A.others()].filter(a => !a.hidden) : [agentRec('')]; }
+  function matchesFocus(f, s) { return !f || (f.kind === 'space' ? spaceContains(f.key, s.id) && (LIVE.agentOf(s.id) || AGS()?.defaultId() || 'hermes') === focusedAgent(f) : f.key === AGS()?.defaultId() ? !LIVE.agentOf(s.id) : LIVE.agentOf(s.id) === f.key); }
   function focusMatches(w, s) { return matchesFocus(focusOf(w), s); }
   function setFocus(w, f) {
     const o = W[owner(w.id)] || w; if (!o) return false;
+    closeSpacePicker();
     if (o.thread) chatsBack(o); // saves the old agent's draft before changing its route
     o.focus = f && ['agent', 'space'].includes(f.kind) && f.key ? { kind: f.kind, key: String(f.key) } : null;
     const ids = new Set([o.id, o.id + '::list', w.id]);
@@ -730,29 +734,110 @@ window.WizCore.chats = function createChats(H) {
         recent: rows.reduce((n, s) => Math.max(n, Date.parse(s.activityAt || s.updatedAt || '') || 0), 0) };
     };
     const opts = focusAgents().map(a => stats('agent', a.id, a.label, (AGS()?.sigil(a) || '') + (AGS()?.isPrivate(a) ? AGS().lock() : '')))
-      .concat(spaces().map(s => stats('space', s.id, s.name)));
+      .concat(visibleSpaces().map(s => stats('space', s.id, s.name)));
     return [stats('all', '', 'All'), ...opts];
   }
   function focusOption(w, o, strip = false) {
-    const f = focusOf(w), on = o.kind === 'all' ? !f : f?.kind === o.kind && f.key === o.key;
-    return `<button type="button" class="${strip ? 'ch-focus-tab' : 'ch-fopt'}${on ? ' on' : ''}" data-chfocusopt="${o.kind}:${esc(o.key)}" aria-pressed="${on}"${strip && o.kind === 'agent' ? ` style="--ch-agent-colour:${AGS()?.colour(agentRec(o.key)) || ''}"` : ''}${strip ? ` aria-label="${esc(o.label)}${o.unread ? ` · ${o.unread} unread` : ''}"` : ''}>${o.badge}<span>${esc(o.label)}</span>${strip ? o.unread ? '<i class="ch-focus-dot" aria-hidden="true"></i>' : '' : `<small>${o.kind === 'agent' ? o.unread : o.count}</small>${on ? '<b>✓</b>' : ''}`}</button>`;
+    const f = focusOf(w), on = o.kind === 'all' ? !f : strip && o.kind === 'agent' ? focusedAgent(f) === o.key : f?.kind === o.kind && f.key === o.key;
+    const label = strip && on && f?.kind === 'space' ? spaces().find(s => s.id === f.key)?.name || o.label : o.label;
+    const caret = strip && on && o.kind === 'agent' ? '<i class="ch-focus-caret" aria-hidden="true">⌄</i>' : '';
+    return `<button type="button" class="${strip ? 'ch-focus-tab' : 'ch-fopt'}${on ? ' on' : ''}" data-chfocusopt="${o.kind}:${esc(o.key)}" aria-pressed="${on}"${strip && o.kind === 'agent' ? ' aria-haspopup="dialog" aria-expanded="false"' : ''}${strip && o.kind === 'agent' ? ` style="--ch-agent-colour:${AGS()?.colour(agentRec(o.key)) || ''}"` : ''}${strip ? ` aria-label="${esc(label !== o.label ? o.label + ' · ' + label : o.label)}${o.unread ? ` · ${o.unread} unread` : ''}"` : ''}>${o.badge}<span>${esc(label)}</span>${caret}${strip ? o.unread ? '<i class="ch-focus-dot" aria-hidden="true"></i>' : '' : `<small>${o.kind === 'agent' ? o.unread : o.count}</small>${on ? '<b>✓</b>' : ''}`}</button>`;
   }
   function focusSection(w) {
     if (!focusUseful()) return '';
     const opts = focusOptions();
-    return `<h5>Focus</h5><div class="ch-fopts">${focusOption(w, opts[0])}</div><h5>Agents <small>· unread</small></h5><div class="ch-fopts">${opts.filter(o => o.kind === 'agent').map(o => focusOption(w, o)).join('')}</div>${spaces().length ? `<h5>${SPACE.many}</h5><div class="ch-fopts">${opts.filter(o => o.kind === 'space').map(o => focusOption(w, o)).join('')}</div>` : ''}`;
+    return `<h5>Focus</h5><div class="ch-fopts">${focusOption(w, opts[0])}</div>${opts.filter(o => o.kind === 'agent').map(a => `<div class="ch-focus-group"><div class="ch-fopts">${focusOption(w, a)}</div><div class="ch-fopts ch-space-nested">${opts.filter(o => o.kind === 'space' && spaceAgent(spaces().find(s => s.id === o.key)) === a.key).map(o => focusOption(w, o)).join('')}</div></div>`).join('')}`;
   }
   /* Focus only appears once there is something to switch between (James, 24 Oct 2026): a second agent, or an
    * owner-made Space. A one-agent install sees no strip and no Focus section. */
-  function focusUseful() { return focusAgents().length > 1 || spaces().length > 0; }
+  function focusUseful() { return focusAgents().length > 1 || visibleSpaces().length > 0; }
   function focusStrip(w) {
     const opts = focusOptions();
-    return focusUseful() ? `<nav class="ch-focus-strip" aria-label="Chats focus">${opts.map(o => focusOption(w, o, true)).join('')}</nav>` : '';
+    return focusUseful() ? `<nav class="ch-focus-strip" aria-label="Chats focus">${opts.filter(o => o.kind !== 'space').map(o => focusOption(w, o, true)).join('')}</nav>` : '';
   }
+  // One local picker, rendered through the same Focus options as the filter sheet.
+  let spacePicker = null, focusHoldUntil = 0;
+  function closeSpacePicker() {
+    if (!spacePicker) return false;
+    const old = spacePicker; spacePicker = null;
+    document.querySelector('[data-chspacepicker]')?.remove();
+    old.tab?.setAttribute('aria-expanded', 'false');
+    if (old.tab?.isConnected) old.tab.focus({ preventScroll: true });
+    return true;
+  }
+  function openSpacePicker(w, agent, tab) {
+    if (!focusAgents().some(a => a.id === agent)) return;
+    closeSpacePicker();
+    spacePicker = { wid: owner(w.id), agent, tab, naming: false, busy: false, error: '', name: '' };
+    renderSpacePicker();
+  }
+  function renderSpacePicker() {
+    const p = spacePicker; if (!p) return;
+    document.querySelector('[data-chspacepicker]')?.remove();
+    const w = W[p.wid], a = agentRec(p.agent), opts = focusOptions(), f = focusOf(w);
+    if (!w || !focusAgents().some(a => a.id === p.agent)) { closeSpacePicker(); return; }
+    const rows = opts.filter(o => o.kind === 'space' && spaceAgent(spaces().find(s => s.id === o.key)) === p.agent).sort((a, b) => b.recent - a.recent);
+    const allOn = f?.kind === 'agent' && f.key === p.agent;
+    const wrap = document.createElement('div'); wrap.dataset.chspacepicker = '';
+    wrap.className = 'ch-space-shade';
+    wrap.innerHTML = `<div class="ch-space-picker" role="dialog" aria-modal="true" aria-label="${esc(a.label)} Spaces" style="--ch-agent-colour:${AGS()?.colour(a) || ''}"><div class="ch-space-grab" aria-hidden="true"></div><header><i></i><b>${esc(a.label)}</b><button type="button" data-spclose aria-label="Close Spaces">×</button></header><div class="ch-space-rows"><button type="button" class="ch-fopt${allOn ? ' on' : ''}" data-spall aria-pressed="${allOn}"><span>All ${esc(a.label)} chats</span>${allOn ? '<b>✓</b>' : ''}</button>${rows.map(o => `<button type="button" class="ch-fopt${f?.kind === 'space' && f.key === o.key ? ' on' : ''}" data-spspace="${esc(o.key)}" aria-pressed="${f?.kind === 'space' && f.key === o.key}"><span>${esc(o.label)}</span><small>${o.count}</small>${o.unread ? '<i class="ch-focus-dot" aria-label="Unread"></i>' : ''}${f?.key === o.key ? '<b>✓</b>' : ''}</button>`).join('')}</div>${p.naming ? `<form class="ch-space-form"><label for="chSpaceName">New space</label><div><input id="chSpaceName" name="name" maxlength="60" placeholder="Space name" value="${esc(p.name)}" autocomplete="off" ${p.busy ? 'disabled' : ''}><button type="submit" ${p.busy || !p.name.trim() ? 'disabled' : ''}>${p.busy ? 'Creating…' : 'Create'}</button></div>${p.error ? `<p role="alert">${esc(p.error)}</p>` : ''}</form>` : '<button type="button" class="ch-space-new" data-spnew>+ New space</button>'}</div>`;
+    document.body.appendChild(wrap);
+    const card = wrap.firstElementChild, strip = p.tab?.closest('.ch-focus-strip') || elOf(p.wid)?.querySelector('.ch-focus-strip'), r = strip?.getBoundingClientRect(), tr = p.tab?.getBoundingClientRect();
+    if (r) { card.style.bottom = `${Math.max(8, innerHeight - r.top + 8)}px`; if (innerWidth > 640) card.style.left = `${Math.max(8, Math.min(tr?.left || r.left, innerWidth - 296))}px`; }
+    p.tab?.setAttribute('aria-expanded', 'true');
+    wrap.addEventListener('click', e => {
+      if (e.target === wrap && Date.now() < focusHoldUntil) { e.preventDefault(); return; }
+      if (e.target === wrap || e.target.closest('[data-spclose]')) { closeSpacePicker(); return; }
+      if (p.busy) return;
+      if (e.target.closest('[data-spnew]')) { p.naming = true; renderSpacePicker(); return; }
+      const s = e.target.closest('[data-spspace]');
+      if (s || e.target.closest('[data-spall]')) { closeSpacePicker(); setFocus(w, s ? { kind: 'space', key: s.dataset.spspace } : { kind: 'agent', key: p.agent }); }
+    });
+    wrap.addEventListener('input', e => { if (e.target.name === 'name') { p.name = e.target.value; wrap.querySelector('[type="submit"]').disabled = !p.name.trim(); } });
+    wrap.querySelector('form')?.addEventListener('submit', e => { e.preventDefault(); createPickerSpace(p); });
+    wrap.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (p.naming && !p.busy) { p.naming = false; renderSpacePicker(); } else closeSpacePicker(); return; }
+      if (e.target.tagName === 'INPUT' && e.key !== 'Tab') return;
+      const items = [...wrap.querySelectorAll('button:not(:disabled),input:not(:disabled)')], i = items.indexOf(document.activeElement);
+      if (['Tab', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) { e.preventDefault(); const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : (i + (e.key === 'ArrowUp' || e.shiftKey ? -1 : 1) + items.length) % items.length; items[next]?.focus(); }
+    });
+    requestAnimationFrame(() => { if (spacePicker === p) (wrap.querySelector('input:not(:disabled)') || wrap.querySelector('[aria-pressed="true"]') || wrap.querySelector('button'))?.focus({ preventScroll: true }); });
+  }
+  async function createPickerSpace(p) {
+    if (p !== spacePicker || p.busy) return;
+    const name = p.name.trim();
+    if (!name || name.length > 60 || /[\u0000-\u001f\u007f]/u.test(name)) return;
+    if (spaces().some(s => spaceAgent(s) === p.agent && norm(s.name) === norm(name))) { p.error = 'Already a Space'; renderSpacePicker(); return; }
+    if (spaces().length >= 50) { p.error = 'Maximum 50 Spaces'; renderSpacePicker(); return; }
+    p.busy = true; p.error = ''; renderSpacePicker();
+    const space = { id: crypto.randomUUID(), name, agent: p.agent, threads: [], createdAt: new Date().toISOString() };
+    const list = [...spaces(), space];
+    const saved = await LIVE.putPrefs({ spaces: list }, { requireShared: true });
+    if (!saved) { p.busy = false; p.error = 'Couldn’t create space. Try again.'; if (spacePicker === p) renderSpacePicker(); return; }
+    localStorage.setItem(SPACES_KEY, JSON.stringify(list)); window.dispatchEvent(new Event('wos:prefs'));
+    if (spacePicker === p) closeSpacePicker();
+    const w = W[p.wid]; if (!w) return;
+    setFocus(w, { kind: 'space', key: space.id });
+    const it = await sendChat(w.id, `Fill my new Space “${name}” (id ${space.id}): find my existing threads that belong in it and add them with the wizard-spaces skill, then tell me how many you added and list a few. Search only your own agent’s threads (${p.agent}); do not change other Spaces.`, 'creating a Space in Chats', null, { sid: '__new__', away: true, seal: false, captureId: 'space-fill:' + space.id });
+    if (!it) toast('!', 'Space created; fill message wasn’t saved. Ask the agent to fill it from a new chat.', 5000);
+  }
+
   function bindFocusStrip(el) {
     const strip = el.querySelector('.ch-focus-strip'); if (!strip) return;
     if (!strip._focusBound) {
       strip._focusBound = true;
+      let held = null, timer = 0;
+      const cancel = () => { clearTimeout(timer); timer = 0; held = null; };
+      const open = tab => { const w = W[idOf(tab)]; if (w) openSpacePicker(w, tab.dataset.chfocusopt.slice(6), tab); };
+      strip.addEventListener('pointerdown', e => {
+        const tab = e.target.closest('[data-chfocusopt^="agent:"]'); if (!tab || e.button > 0) return;
+        cancel(); held = { tab, x: e.clientX, y: e.clientY };
+        timer = setTimeout(() => { if (!held) return; const t = held.tab; cancel(); focusHoldUntil = Date.now() + 750; open(t); }, 450);
+      });
+      strip.addEventListener('pointermove', e => { if (held && Math.hypot(e.clientX - held.x, e.clientY - held.y) > 8) cancel(); }, { passive: true });
+      for (const type of ['pointerup', 'pointercancel', 'pointerleave']) strip.addEventListener(type, cancel, { passive: true });
+      strip.addEventListener('contextmenu', e => { const t = e.target.closest('[data-chfocusopt^="agent:"]'); if (t) { e.preventDefault(); cancel(); focusHoldUntil = Date.now() + 300; open(t); } });
+      strip.addEventListener('keydown', e => { const t = e.target.closest('[data-chfocusopt^="agent:"]'); if (t && (e.key === 'ArrowUp' || e.key === 'ContextMenu' || e.key === 'F10' && e.shiftKey)) { e.preventDefault(); e.stopPropagation(); open(t); } });
       // Native horizontal scrolling owns this gesture, not an ancestor's desk swipe.
       // Do not preventDefault: taps and the browser's pan-x scrolling stay native.
       for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'touchstart', 'touchmove', 'touchend', 'touchcancel'])
@@ -864,6 +949,7 @@ window.WizCore.chats = function createChats(H) {
     if (false) {}
     else if (!LST.ok && !LST.error) body = draftSec + skelRows(AGID ? `Connecting to ${agentName(AGID)}` : 'Connecting to Wizard');
     else if (!LST.ok) body = draftSec + `<div class="ch-empty">${esc(window.WizReach?.failure().message || 'Checking the connection to Wizard…')}</div>`;
+    else if (focus?.kind === 'space' && !hit.length && !n && !F) body = `<div class="ch-empty">${esc(agentRec(focusedAgent(focus)).label)} is filling this Space…</div>`;
     else if (AGID && !all.length && !n && !F) body = `<div class="ch-empty"><b>No chats with ${esc(agentName(AGID))} yet</b><br><button type="button" class="ch-fclear" data-chnew data-chemptynew>Start a new chat</button><br> ${agentRec(AGID).privacy === 'private' ? 'They stay with this agent: the main agent can’t search or read them.' : 'They stay in this agent’s chats.'}</div>`;
     else if (filtered && !hit.length) body = `<div class="ch-empty">${n ? 'No chats match' : F ? F.empty : `No chats in ${esc(focusLabel(w))}`}<br><button type="button" class="ch-fclear" ${n || F ? 'data-chfclear' : 'data-chfbtn'}>${n || F ? 'Clear filter' : 'Change focus'}</button></div>`;
     else if (!hit.length && !drafts.length) body = `<div class="ch-empty">${bs && (bs.busy || bs.scanned < Math.min(bs.want, bs.total || 0)) ? `No titles match “${esc(c.q)}” · searching messages…` : `No threads match “${esc(c.q)}”.`}</div>`;
@@ -904,7 +990,7 @@ window.WizCore.chats = function createChats(H) {
       : LST.cached ? syncBar('', `${spin}<span>Updating…${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}</span>`)
       : LST.ok && age > STALE_LIST ? syncBar('stale', `${LST.loading ? spin : ''}<span><b>Not up to date</b> · ${esc(since)}${LST.loading ? ' · updating…' : ''}</span>`)
       : c.ptrState === 'done' ? syncBar('ok', '<span>Up to date</span>') : '';
-    const html = `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${focus?.kind === 'agent' ? ` style="--agc:${AGS()?.colour(agentRec(focus.key)) || ''};--ch-agent-hue:${AGS()?.distinctHues().get(focus.key) ?? AGS()?.hue(agentRec(focus.key))}"` : ''}>${head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${focusStrip(w)}${c.sheet ? filterSheet(w, c) : ''}</div>`;
+    const html = `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${focusedAgent(focus) ? ` style="--agc:${AGS()?.colour(agentRec(focusedAgent(focus))) || ''};--ch-agent-hue:${AGS()?.distinctHues().get(focusedAgent(focus)) ?? AGS()?.hue(agentRec(focusedAgent(focus)))}"` : ''}>${head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${focusStrip(w)}${c.sheet ? filterSheet(w, c) : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
@@ -1170,7 +1256,7 @@ window.WizCore.chats = function createChats(H) {
    * threads and starts new chats on it. Focus derives that same route; the thread keeps its
    * conversation title and model picker without repeating the agent banner. ---- */
   const AGS = () => window.WosAgents || null;
-  function winAgent(w) { const o = (w && W[owner(w.id)]) || w; const f = focusOf(o), id = f?.kind === 'agent' ? f.key : o?.agent || ''; const A = AGS(); return id && (!A || A.isOther(id)) ? id : ''; }
+  function winAgent(w) { const o = (w && W[owner(w.id)]) || w; const f = focusOf(o), id = focusedAgent(f) || o?.agent || ''; const A = AGS(); return id && !A?.get(id)?.hidden && (!A || A.isOther(id)) ? id : ''; }
   function agentRec(id) {
     const A = AGS();
     if (!id) { const d = A?.get(A.defaultId()); return d || { id: 'hermes', label: window.WizConfig.agent(), privacy: 'standard', appearance: { glyph: 'wizard' }, model: {}, is_default: true }; }
@@ -1214,7 +1300,7 @@ window.WizCore.chats = function createChats(H) {
       <button type="button" data-rsopen>${'<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'}Open</button>
       <button type="button" data-rsrename>${RENAME_SVG}Rename</button>
       <button type="button" data-rspin>${PIN_SVG}${PIN.has(sid) ? 'Unpin' : 'Pin'}</button>
-      ${spaces().map(space => `<button type="button" data-rsspace="${esc(space.id)}" data-add="${!space.threads.includes(sid)}">${PIN_SVG}${space.threads.includes(sid) ? 'Remove from' : 'Add to'} ${SPACE.one} · ${esc(space.name)}</button>`).join('')}
+      ${visibleSpaces().filter(space => spaceAgent(space) === (LIVE.agentOf(sid) || AGS()?.defaultId() || 'hermes')).map(space => `<button type="button" data-rsspace="${esc(space.id)}" data-add="${!space.threads.includes(sid)}">${PIN_SVG}${space.threads.includes(sid) ? 'Remove from' : 'Add to'} ${SPACE.one} · ${esc(space.name)}</button>`).join('')}
       ${topicOn() ? `<button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>` : ''}
       ${acts.map(a => `<button type="button" data-rsact="${a}">${ACT[a].icon}${ACT[a].label}</button>`).join('')}
       ${acts.length ? '' : `<p class="ch-sheet-n">${isWorking(s) || ['waiting_for_approval', 'unknown'].includes(s.status) ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
@@ -2355,7 +2441,13 @@ window.WizCore.chats = function createChats(H) {
     const dr = e.target.closest('[data-chdraft]'); if (dr) { openNewDraft(owner(id), dr.dataset.chdraft); return true; }
     if (e.target.closest('[data-chbsmore]')) { window.WizCore.chatSearch?.more(id); renderChatList(w, elOf(id)); return true; }
     const cx = e.target.closest('[data-chchipx]'); if (cx) { const c = ch(id); c.filter = ''; c.filterFrom = null; c.coach = false; rerenderList(w); return true; }
-    const fp = e.target.closest('[data-chfocusopt]'); if (fp) { const [kind, ...key] = fp.dataset.chfocusopt.split(':'); setFocus(w, { kind, key: key.join(':') }); return true; }
+    const fp = e.target.closest('[data-chfocusopt]'); if (fp) {
+      if (Date.now() < focusHoldUntil) return true;
+      const [kind, ...parts] = fp.dataset.chfocusopt.split(':'), key = parts.join(':');
+      if (fp.classList.contains('ch-focus-tab') && kind === 'agent' && focusedAgent(focusOf(w)) === key) openSpacePicker(w, key, fp);
+      else setFocus(w, { kind, key });
+      return true;
+    }
     if (e.target.closest('[data-chfbtn]')) { const c = ch(id); c.sheet = c.sheet === 'status' ? false : 'status'; c.focus = false; rerenderList(w); return true; }
     if (e.target.closest('[data-chfclear]')) { const c = ch(id); c.sheet = false; c.coach = false; clearAll(w); return true; }
     const lay = e.target.closest('[data-chlayout]'); if (lay) { LIVE.chatLayout = lay.dataset.chlayout; for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
@@ -2494,7 +2586,7 @@ window.WizCore.chats = function createChats(H) {
   };
   // Back / Esc: the media viewer, then the actions sheet. Returns what it closed, or ''.
   function closeFilterSheet() { for (const id of Object.keys(CH)) { const c = CH[id]; if (c.sheet) { c.sheet = false; const w = H.win(id); if (w) rerenderList(w); return true; } } return false; }
-  const closeOverlay = () => (closeFilterSheet() ? 'filter-sheet' : null) || (window.WizCore.status?.back() || (KIT.viewer.close() ? 'viewer' : closeRowSheet() ? 'thread-actions' : PW?.closeSheet() ? 'chat-sheet' : ''));
+  const closeOverlay = () => (closeSpacePicker() ? 'space-picker' : null) || (closeFilterSheet() ? 'filter-sheet' : null) || (window.WizCore.status?.back() || (KIT.viewer.close() ? 'viewer' : closeRowSheet() ? 'thread-actions' : PW?.closeSheet() ? 'chat-sheet' : ''));
   // Put words (and already-uploaded files) back into a composer, e.g. editing an unsent message.
   function setDraft(wid, text, files) {
     const w = W[wid], c = ch(wid); if (!w) return;

@@ -116,7 +116,8 @@
     defaultId() { return (A.list.find(a => a.is_default) || {}).id || 'hermes'; },
     // A non-default agent: its threads, sends and models never go through the main agent's route.
     isOther(id) { return !!id && id !== A.defaultId(); },
-    others() { return A.list.filter(a => !a.is_default); },
+    visible() { return A.list.filter(a => !a.hidden); },
+    others() { return A.visible().filter(a => !a.is_default); },
     hue(a) {
       let h = Number(a?.appearance?.hue);
       if (!Number.isFinite(h)) {
@@ -257,7 +258,7 @@
       model: { provider: String(model.provider || ''), model: String(model.model || ''), allowed_models: Array.isArray(model.allowed_models) ? model.allowed_models.map(String) : [], fallback: model.fallback !== false },
       permissions: a.permissions && typeof a.permissions === 'object' ? a.permissions : {},
       status: ['running', 'stopped', 'starting', 'error'].includes(a.status) ? a.status : 'stopped',
-      status_detail: String(a.status_detail || ''), is_default: a.is_default === true,
+      status_detail: String(a.status_detail || ''), is_default: a.is_default === true, hidden: a.hidden === true,
       bound_apps: (Array.isArray(a.bound_apps) ? a.bound_apps : []).map(x => typeof x === 'string' ? { id: x } : x).filter(x => x && typeof x.id === 'string' && x.id)
         .map(x => ({ id: x.id, label: String(x.label || x.name || x.id).slice(0, 60), purpose: String(x.purpose || '').slice(0, 160) })),
     };
