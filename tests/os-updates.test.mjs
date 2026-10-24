@@ -32,11 +32,10 @@ test('reads the App Manager through the Store listener and registers one Setting
   assert.equal(registered.length, 1);
   assert.equal(registered[0].id, 'updates');
   assert.equal(registered[0].available(), true);
-  assert.equal(registered[0].page, 'release');                         // Settings › My release & updates
+  assert.equal(registered[0].page, 'release');
+  assert.equal(U.title(), 'Updates');                                   // a stock box: no My release
   const h = U.html();
-  assert.doesNotMatch(h, /<h4>Updates<\/h4>/);
-  assert.match(h, /<b class="rl-name" data-osu-title>Update available<\/b><small class="rl-base">Wizard OS 0\.3\.15 → 0\.3\.16<\/small>/);
-  assert.match(h, /data-osu="apply"[^>]*>Update now</);
+  assert.match(h, /<div class="osu-card" data-osu-card="behind" role="status"><div class="osu-tx"><b data-osu-title>Update available<\/b><span>Wizard OS 0\.3\.15 → 0\.3\.16<\/span><\/div><button type="button" class="osu-go" data-osu="apply" >Update<\/button><\/div>/);
   assert.match(h, /data-osu="auto" role="radio" aria-checked="true"/);   // Automatic is the default
   assert.match(h, /data-osu="ask" role="radio" aria-checked="false"/);
 });
@@ -45,7 +44,8 @@ test('up to date shows installed version and no Update button; Ask me is shown w
   const { U } = await load(() => [200, { ...STATUS, mode: 'ask', chosen: true, latest: '0.3.15', update_available: false }]);
   const h = U.html();
   assert.match(h, /Wizard OS 0\.3\.15<\/b><small class="rl-base">Up to date/);
-  assert.doesNotMatch(h, /data-osu="apply"/);
+  assert.doesNotMatch(h, /data-osu="apply"|osu-card/);
+  assert.equal(U.card(), null);
   assert.match(h, /data-osu="ask" role="radio" aria-checked="true"/);
 });
 
@@ -85,8 +85,8 @@ test('choosing a mode and Update now POST the exact bodies with the Store header
   const apply = calls.filter(x => x.method === 'POST').at(-1);
   assert.deepEqual(apply.body, { action: 'apply' });
   assert.equal(U.state.installing, true);
-  assert.match(U.html(), /Updating…/);
-  assert.doesNotMatch(U.html(), /data-osu="apply"/);
+  assert.match(U.html(), /data-osu-card="building"[\s\S]*Updating…/);
+  assert.match(U.html(), /data-osu="apply" disabled>/);                // same card, button disabled
   assert.ok(!calls.some(x => x.body && 'force' in x.body));
 });
 
@@ -99,13 +99,10 @@ test('a refused write keeps the old state and tells the owner', async () => {
   assert.deepEqual(c.t.at(-1), ['!', 'only the box owner can install from the Store', 2600]);
 });
 
-test('an update cut short by a reboot says interrupted, retrying, and offers Update now again', async () => {
+test('an update cut short by a reboot says so on the same card and offers Try again', async () => {
   const { U } = await load(() => [200, { ...STATUS, installing: false, interrupted: true }]);
-  const h = U.html();
-  assert.match(h, /<b class="rl-name" data-osu-title>Update interrupted · retrying<\/b><small class="rl-base">Wizard OS 0\.3\.15 → 0\.3\.16 · tries again tonight, or tap Update now/);
-  assert.match(h, /data-osu="apply"[^>]*>Update now</);
-  const ask = await load(() => [200, { ...STATUS, mode: 'ask', chosen: true, interrupted: true }]);
-  assert.match(ask.U.html(), /<b class="rl-name" data-osu-title>Update interrupted<\/b><small class="rl-base">[^<]*tap Update now to try again/);
+  assert.deepEqual(U.card(), { state: 'failed', title: 'Update interrupted', line: 'Wizard OS 0.3.15 → 0.3.16', action: 'apply', label: 'Try again', disabled: false });
+  assert.match(U.html(), /data-osu="apply" >Try again</);
   const old = await load(() => [200, { ...STATUS }]);              // an App Manager without the field: unchanged
   assert.match(old.U.html(), /data-osu-title>Update available<\/b>/);
 });
@@ -141,32 +138,25 @@ test('on latest with Automatic it says Automatic installs stable only; choosing 
   assert.equal(calls.length, n);   // re-tapping the current channel sends nothing
 });
 
-test('my release: the summary names it and its base, and Your changes lists each change', async () => {
+test('my release: the page names it and its base, and Your changes lists each change', async () => {
   const MINE = { name: "Miguel's release", base: { ref: 'b79c1e9', label: 'Latest b79c1e9' }, changes: [{ sha: 'abc1234', title: 'Updates shows my release', status: 'Mine', date: '2026-10-24' }] };
   const { U, calls } = await load((m, b) => [200, STATUS]);
   assert.equal(calls[0].url, 'https://box.ts.net/wizard-os-home/store-install/_updates');
   assert.equal(calls[1].url, 'https://box.ts.net/wizard-os-home/my-release.json');
+  assert.equal(calls[1].cache, 'no-store');
   assert.doesNotMatch(U.html(), /Your changes/);                       // no my-release.json: nothing new
-  const r2 = await (async () => {
-    const calls = [], registered = [];
-    const fetch = async (url) => { calls.push(url); return { ok: true, status: 200, json: async () => url.endsWith('my-release.json') ? MINE : STATUS }; };
-    const window = { WosSettings: { register: f => registered.push(f), refresh() {} } };
-    const document = { currentScript: { src: 'https://box.ts.net/wizard-os-home/core/os-updates.js' } };
-    new Function('window', 'document', 'fetch', 'location', src)(window, document, fetch, { href: 'https://box.ts.net/wizard-os-home/' });
-    for (let i = 0; i < 4; i++) await tick();
-    return window.WosUpdates;
-  })();
+  const { U: r2 } = await mineBox(MINE, { ...STATUS, update_available: false });
+  assert.equal(r2.title(), 'My release');
   let h = r2.html();
-  assert.match(h, /<b class="rl-name" data-osu-title>Miguel&#39;s release<\/b><small class="rl-base">Built on Latest b79c1e9<\/small><small>1 change of your own<\/small><span class="rl-state ready">Update available<\/span>/);   // stock update states stay
-  assert.deepEqual(r2.hero(), { title: "Miguel's release", lines: ['Built on Latest b79c1e9', '1 change of your own'], state: 'Update available', tone: 'ready', mine: true });
-  assert.match(h, /data-osu="mine"[^>]*aria-expanded="false"/);
+  assert.match(h, /<div class="rl-head"><b class="rl-name" data-osu-title>Miguel&#39;s release<\/b><small class="rl-base">Built on Latest b79c1e9<\/small><\/div>/);
+  assert.doesNotMatch(h, /osu-card|Up to date|hourly|rl-state/);      // nothing to do: just the release
+  assert.match(h, /data-osu="mine" aria-expanded="false"><span class="rl-tl">Your changes<\/span><span class="st-val">1<\/span>/);
   assert.doesNotMatch(h, /Updates shows my release/);
   assert.equal(r2.act(btn('mine'), ctx()), true);
   h = r2.html();
-  assert.match(h, /data-osu="mine"[^>]*aria-expanded="true"/);
+  assert.match(h, /data-osu="mine" aria-expanded="true"/);
   assert.match(h, /data-osu-change="abc1234"><span class="rl-ct"><b>Updates shows my release<\/b><span class="rl-meta"><span class="rl-chip rl-mine">Mine<\/span><small>24 Oct<\/small><\/span><\/span><button type="button" class="rl-propose" data-osu="propose" data-sha="abc1234"/);
-  assert.match(h, /<details class="rl-legend"><summary>What the labels mean<\/summary><p><b>Mine<\/b> only on your Wizard · <b>Feature<\/b> review, then Latest, then Stable · <b>Fix<\/b> fast lane to Stable\./);   // the lanes fold into one line
-  assert.doesNotMatch(h, /<dl class="rl-legend"/);
+  assert.match(h, /<details class="rl-legend"><summary>What the labels mean<\/summary><p><b>Mine<\/b> only on your Wizard · <b>Feature<\/b> review, then Latest, then Stable · <b>Fix<\/b> fast lane to Stable\./);
   assert.equal(r2.act(btn('mine'), ctx()), true);
   assert.doesNotMatch(r2.html(), /data-osu-change/);
 });
@@ -182,9 +172,10 @@ test('my release: each change gets a status chip from my-release.json (default M
   for (let i = 0; i < 4; i++) await tick();
   const U = window.WosUpdates;
   assert.equal(registered[0].available(), true, 'a box with my-release.json still shows My release when the App Manager is silent');
-  assert.equal(U.hero().title, 'My release');
-  assert.match(U.hero().lines[0], /Built on b79c1e9/);
-  assert.match(U.html(), /<small>1 mine · 1 feature · 1 fix · 1 merged<\/small>/);
+  assert.equal(U.title(), 'My release');
+  assert.match(U.html(), /<small class="rl-base">Built on b79c1e9<\/small>/);
+  assert.match(U.html(), /<span class="st-val">4<\/span>/);
+  assert.equal(U.card(), null);
   assert.doesNotMatch(U.html(), /data-osu="(auto|ask|apply)"/);   // no App Manager: no install choices to offer
   assert.equal(U.act(btn('mine'), ctx()), true);
   const h = U.html();
@@ -212,27 +203,120 @@ const RELEASE = { name: "Miguel's release", base: { ref: 'b79c1e9', label: 'Late
   { sha: 'ddd4444', title: 'Workspace sync', status: 'Proposed feature' },
   { sha: 'eee5555', title: 'Old thing', status: 'Merged' }] };
 
-test('my release: no "Up to date" pill; a quiet "Rebuilt hourly · last …" line from built_at instead', async () => {
+test('my release: nothing to do shows no card and no "Up to date" or hourly text; Automatic hides Latest changes', async () => {
   const built = new Date(Date.now() - 20 * 60e3).toISOString();
-  const upToDate = { ...STATUS, mode: 'ask', chosen: true, latest: '0.3.15', update_available: false };
-  const { U } = await mineBox({ ...RELEASE, built_at: built }, upToDate);
-  const h = U.hero();
-  assert.equal(h.state, '', 'his own release is always current: no pill');
-  assert.deepEqual(h.lines, ['Built on Latest b79c1e9', '5 changes of your own', 'Rebuilt hourly · last 20 min ago']);
-  assert.doesNotMatch(U.html(), /Up to date|rl-state/);
-  const none = await mineBox(RELEASE, upToDate);                       // built_at missing: the line is left out
-  assert.deepEqual(none.U.hero().lines, ['Built on Latest b79c1e9', '5 changes of your own']);
-  assert.equal(none.U.hero().state, '');
-  const bad = await mineBox({ ...RELEASE, built_at: 'not a date' }, upToDate);
-  assert.equal(bad.U.hero().lines.length, 2);
-  for (const [s, state, tone] of [[{ ...STATUS }, 'Update available', 'ready'], [{ ...STATUS, installing: true }, 'Updating…', 'busy'], [{ ...STATUS, interrupted: true, mode: 'ask' }, 'Update interrupted', 'ready']]) {
-    const r = await mineBox({ ...RELEASE, built_at: built }, s);
-    assert.equal(r.U.hero().state, state); assert.equal(r.U.hero().tone, tone);
+  const rel = { name: "Miguel's release", base: 'b79c1e9', build: 'aaaa111', behind: 0, new: [], building: false, failed: null };
+  for (const status of [{ ...STATUS, update_available: false, release: rel }, { ...STATUS, mode: 'auto', release: { ...rel, behind: 3 } }]) {
+    const { U } = await mineBox({ ...RELEASE, built_at: built, build: 'aaaa111' }, status);
+    assert.equal(U.card(), null, 'Automatic applies Latest by itself: nothing to ask');
+    assert.equal(U.cardHtml(), '');
+    assert.doesNotMatch(U.html(), /Up to date|hourly|Rebuilt|rl-state|Channel|ch-stable/);
   }
-  assert.equal(U.ago(new Date(Date.now() - 3 * 3600e3).toISOString()), '3 h ago');
-  assert.equal(U.ago(new Date().toISOString()), 'just now');
-  const stock = await load(() => [200, upToDate]);                     // stock boxes keep "Up to date"
+  const auto = await mineBox(RELEASE, { ...STATUS, update_available: false, release: rel });
+  assert.match(auto.U.html(), /New changes from Latest are applied under yours by themselves\./);
+  const ask = await mineBox(RELEASE, { ...STATUS, mode: 'ask', chosen: true, update_available: false, release: rel });
+  assert.match(ask.U.html(), /You choose when\. Your own changes always apply right away\./);
+  assert.equal((ask.U.html().match(/class="st-hint"/g) || []).length, 1, 'one short line under the choice, nothing else');
+  const stock = await load(() => [200, { ...STATUS, update_available: false }]);   // stock boxes keep "Up to date"
   assert.match(stock.U.html(), /Wizard OS 0\.3\.15<\/b><small class="rl-base">Up to date/);
+});
+
+const REL = { name: "Miguel's release", base: 'b79c1e9', build: 'aaaa111', behind: 0, new: [], building: false, failed: null, checked_at: '2026-10-24T10:00:00Z' };
+const ASK = { ...STATUS, mode: 'ask', chosen: true, channel: 'latest', update_available: false, release: REL };
+
+test('card · Ask me and Latest is ahead: "N new changes on Latest" · Update, with the new titles in plain words', async () => {
+  const st = { ...ASK, update_available: true, release: { ...REL, behind: 3, new: [{ sha: '1', title: 'feat(chats): faster sends (#4)' }, { sha: '2', title: 'fix: dock gap' }, { sha: '3', title: 'Docs: x' }] } };
+  const { U } = await mineBox({ ...RELEASE, build: 'aaaa111' }, st);
+  const c = U.card();
+  assert.equal(c.state, 'behind'); assert.equal(c.title, '3 new changes on Latest'); assert.equal(c.line, 'Get them under your release');
+  assert.equal(c.label, 'Update'); assert.equal(c.action, 'apply');
+  assert.deepEqual(c.more, ['Faster sends', 'Dock gap', 'X']);
+  let h = U.html();
+  assert.match(h, /^<div class="st-group rl" data-osu-group><div class="osu-card" data-osu-card="behind"/, 'the card leads the My release page');
+  assert.match(h, /<b data-osu-title>3 new changes on Latest<\/b><span>Get them under your release<\/span><button type="button" class="osu-more" data-osu="new" aria-expanded="false">What’s new<\/button><\/div><button type="button" class="osu-go" data-osu="apply" >Update<\/button>/);
+  assert.doesNotMatch(h, /ch-stable|ch-latest/, 'a release box always builds on Latest: no channel control');
+  U.act(btn('new'), ctx());
+  assert.match(U.cardHtml(), /<ul class="osu-new"><li>Faster sends<\/li><li>Dock gap<\/li><li>X<\/li><\/ul>/);
+  const one = await mineBox(RELEASE, { ...st, release: { ...REL, behind: 1 } });
+  assert.equal(one.U.card().title, '1 new change on Latest');
+});
+
+test('card · Update POSTs apply, then shows "Updating…" with the button disabled; a building box says so too', async () => {
+  const posts = [];
+  const fetch = async (url, o = {}) => {
+    if (url.endsWith('my-release.json')) return { ok: true, status: 200, json: async () => ({ ...RELEASE, build: 'aaaa111' }) };
+    if (o.method === 'POST') { posts.push(JSON.parse(o.body)); return { ok: true, status: 200, json: async () => ({ started: true }) }; }
+    return { ok: true, status: 200, json: async () => ({ ...ASK, update_available: true, release: { ...REL, behind: 2 } }) };
+  };
+  const window = { WosSettings: { register() {}, refresh() {} } };
+  new Function('window', 'document', 'fetch', 'location', src)(window, { currentScript: { src: 'https://box.ts.net/wizard-os-home/core/os-updates.js' } }, fetch, { href: '' });
+  for (let i = 0; i < 4; i++) await tick();
+  const U = window.WosUpdates, c = ctx();
+  U.act(btn('apply'), c); await tick(); await tick();
+  assert.deepEqual(posts, [{ action: 'apply' }]);
+  assert.deepEqual(U.card(), { state: 'building', title: 'Updating…', line: 'Your changes are being reapplied', action: 'apply', label: 'Update', disabled: true });
+  assert.match(U.cardHtml(), /data-osu-card="building"[\s\S]*<button type="button" class="osu-go" data-osu="apply" disabled>Update<\/button>/);
+  U.act(btn('apply'), c); await tick();
+  assert.equal(posts.length, 1, 'a disabled Update sends nothing');
+  const b = await mineBox(RELEASE, { ...ASK, release: { ...REL, building: true, behind: 2 } });
+  assert.equal(b.U.card().state, 'building');
+});
+
+test('card · failed: "Couldn’t update", a short reason, Try again POSTs apply', async () => {
+  const { U } = await mineBox(RELEASE, { ...ASK, release: { ...REL, behind: 2, failed: { code: 'CONFLICT', sha: 'aaa1111' } } });
+  assert.deepEqual(U.card(), { state: 'failed', title: 'Couldn’t update', line: 'Your change clashes with Latest', action: 'apply', label: 'Try again', disabled: false });
+  assert.match(U.cardHtml(), /data-osu-card="failed"[\s\S]*data-osu="apply" >Try again</);
+  const s = await mineBox(RELEASE, { ...ASK, mode: 'auto', release: { ...REL, failed: 'CONFLICT' } });
+  assert.equal(s.U.card().line, 'Your change clashes with Latest', 'failed shows on Automatic too');
+  const other = await mineBox(RELEASE, { ...ASK, release: { ...REL, failed: { code: 'BUILD', message: 'Build failed' } } });
+  assert.equal(other.U.card().line, 'Build failed');
+});
+
+// A box whose my-release.json names a new build after the page loaded.
+async function buildBox(builds, statuses) {
+  let m = 0, s = 0;
+  const fetch = async (url) => url.endsWith('my-release.json')
+    ? { ok: true, status: 200, json: async () => ({ ...RELEASE, build: builds[Math.min(m++, builds.length - 1)] }) }
+    : { ok: true, status: 200, json: async () => statuses[Math.min(s++, statuses.length - 1)] };
+  const listeners = {}, reloads = [];
+  const window = { WosSettings: { register() {}, refresh() {} }, addEventListener: (k, f) => { listeners[k] = f; } };
+  const document = { currentScript: { src: 'https://box.ts.net/wizard-os-home/core/os-updates.js' }, hidden: false, addEventListener: (k, f) => { listeners['doc:' + k] = f; } };
+  new Function('window', 'document', 'fetch', 'location', src)(window, document, fetch, { href: '', reload: () => reloads.push(1) });
+  for (let i = 0; i < 4; i++) await tick();
+  return { U: window.WosUpdates, window, listeners, reloads };
+}
+
+test('card · reload: a new build in my-release.json (on visibility) turns the card into "New build ready" · Reload', async () => {
+  const { U, listeners, reloads } = await buildBox(['aaaa111', 'aaaa111', 'bbbb222'], [ASK]);
+  assert.equal(U.card(), null);
+  assert.equal(U.build.loaded, 'aaaa111');
+  await U.poll();
+  assert.equal(U.card(), null, 'same build: still nothing');
+  listeners['doc:visibilitychange'](); for (let i = 0; i < 4; i++) await tick();
+  assert.deepEqual(U.card(), { state: 'reload', title: 'New build ready', line: 'Reload to see it', action: 'reload', label: 'Reload' });
+  assert.match(U.cardHtml(), /<div class="osu-card" data-osu-card="reload" role="status"><div class="osu-tx"><b data-osu-title>New build ready<\/b><span>Reload to see it<\/span><\/div><button type="button" class="osu-go" data-osu="reload" >Reload<\/button><\/div>/);
+  assert.equal(U.act(btn('reload'), ctx()), true);
+  assert.equal(reloads.length, 1, 'Reload reloads the page');
+  assert.match(U.html(), /Your changes/, 'the page keeps the changes it was built with until the reload');
+});
+
+test('card · reload after an update: Latest went from ahead to caught up → "Update installed"; Reload uses the guarded shell reload', async () => {
+  const before = { ...ASK, update_available: true, release: { ...REL, behind: 2 } }, after = { ...ASK, release: { ...REL, build: 'bbbb222', behind: 0 } };
+  const { U, window } = await buildBox(['aaaa111', 'bbbb222'], [before, after]);
+  assert.equal(U.card().state, 'behind');
+  await U.poll();
+  assert.equal(U.card().title, 'Update installed');
+  assert.equal(U.card().label, 'Reload');
+  const taps = []; window.WizWebUpdate = { pending: false, reload: why => taps.push(why) };
+  U.act(btn('reload'), ctx());
+  assert.deepEqual(taps, ['tap']);
+});
+
+test('card · an older box without build or release: no Reload detection, nothing polled, stock behaviour', async () => {
+  const { U } = await buildBox([undefined, 'bbbb222'], [{ ...STATUS, update_available: false }]);
+  assert.equal(U.build.loaded, '');
+  await U.poll();
+  assert.equal(U.card(), null, 'no build at load: a later build is not a reload');
 });
 
 test('my release: each change reads in plain words: own label, else the title without prefix or issue ref', async () => {
