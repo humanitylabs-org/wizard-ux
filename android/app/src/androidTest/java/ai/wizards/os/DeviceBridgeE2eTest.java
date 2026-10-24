@@ -28,10 +28,10 @@ public class DeviceBridgeE2eTest {
             assertNotNull("Connect screen's address field never appeared", waitPastSystemDialogs(device, By.desc("Wizard address"), 30000));
             device.findObject(By.desc("Wizard address")).setText(fixture.origin());
             device.findObject(By.text("Connect")).click();
-            assertNotNull("Real WebView generic request/reply or legacy compatibility failed", device.wait(Until.findObject(By.text("Device bridge verified")), 30000));
+            assertNotNull("Real WebView generic request/reply or legacy compatibility failed", waitPastSystemDialogs(device, By.text("Device bridge verified"), 45000));
             assertEquals(c.getPackageName(), device.getCurrentPackageName());
             device.findObject(By.text("Check wrong path")).click();
-            assertNotNull("Top-level non-shell path reached native", device.wait(Until.findObject(By.text("Wrong path refused")), 15000));
+            assertNotNull("Top-level non-shell path reached native", waitPastSystemDialogs(device, By.text("Wrong path refused"), 20000));
         }
     }
 
