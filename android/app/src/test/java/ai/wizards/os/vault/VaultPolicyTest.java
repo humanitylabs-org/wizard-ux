@@ -38,7 +38,7 @@ public class VaultPolicyTest {
     }
     @Test public void bridgeIsMainFrameShellOnlyAndBiometricBound() throws Exception {
         String src = new String(Files.readAllBytes(Paths.get("src/main/java/ai/wizards/os/vault/VaultBridge.java")), "UTF-8");
-        String dispatcher = Files.readString(Paths.get("src/main/java/ai/wizards/os/apps/AppsBridge.java"));
+        String dispatcher = new String(Files.readAllBytes(Paths.get("src/main/java/ai/wizards/os/apps/AppsBridge.java")), "UTF-8");
         assertTrue(dispatcher.contains("!isMainFrame || !shellOnTop()"));
         assertTrue(dispatcher.contains("document == vaultDocument"));
         assertTrue(dispatcher.contains("origin.equals(AppState.origin(activity))"));
