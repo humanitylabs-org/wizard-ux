@@ -138,17 +138,6 @@ html[data-shell="desktop"] .st-root .skp { grid-template-columns: repeat(auto-fi
   background: var(--ink); color: var(--bg); font-size: 11px; font-weight: 900; line-height: 1; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
 .st-root .skp-card:focus-visible { outline: none; }
 .st-root .skp-card:focus-visible .skp-mini { box-shadow: 0 0 0 2.5px var(--bg), 0 0 0 4px color-mix(in srgb, var(--ink) 55%, transparent); }
-/* My skin: the last tile of the grid, same size, dashed; ringed in ink while worn. Its controls open under the grid. */
-.st-root .skp-my .skp-mini-my { background: transparent; box-shadow: none; border: 0; outline: 1.5px dashed color-mix(in srgb, var(--ink) 40%, transparent); outline-offset: -1.5px; }
-.st-root .skp-my[aria-expanded="true"] .skp-mini-my, .st-root .skp-my.worn .skp-mini-my { outline-color: var(--ink); }
-.st-root .skp-my.worn .skp-mini-my { outline-style: solid; }
-.st-root .skp-my .skp-plus { left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; background: linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat, linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat; color: color-mix(in srgb, var(--ink) 55%, transparent); }
-.st-root .skp-my:focus-visible .skp-mini-my { outline: 2px solid color-mix(in srgb, var(--ink) 70%, transparent); }
-.st-root .ms-panel { border-bottom: 1px solid var(--wz-border); }
-.st-root .ms-panel .my-skin-row { margin: 0; border-bottom: 0; flex-wrap: wrap; }
-.st-root .ms-panel .my-skin-row.worn { box-shadow: none; }
-.st-root .ms-panel .my-skin-row + .my-skin-row { border-top: 1px solid var(--wz-border); }
-.st-root .ms-invite { margin: 8px 4px 16px; }
 /* Living-background colours per look (the canvas scenes, reduced to a few CSS layers). */
 .st-root .skp-mini[data-skp="nebula"] { background: radial-gradient(70% 50% at 25% 30%, rgba(143,99,255,.55), transparent 70%), radial-gradient(60% 45% at 80% 60%, rgba(255,92,207,.32), transparent 70%), radial-gradient(50% 40% at 60% 15%, rgba(63,224,255,.22), transparent 70%), #05030c; }
 .st-root .skp-mini[data-skp="grove"] { background: radial-gradient(60% 45% at 72% 20%, rgba(255,226,140,.24), transparent 70%), radial-gradient(70% 40% at 20% 75%, rgba(79,138,82,.28), transparent 70%), linear-gradient(160deg, #13281d, #08130c 55%, #040906); }

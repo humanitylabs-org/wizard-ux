@@ -425,10 +425,14 @@
         e.preventDefault(); const buttons = [...root.querySelectorAll('[data-chats-choice]')], at = buttons.indexOf(radio), delta = ['ArrowUp', 'ArrowLeft'].includes(e.key) ? -1 : 1;
         buttons[(at + delta + buttons.length) % buttons.length].focus(); return;
       }
-      const b = e.target.closest('[data-skinpick], [data-skinfamily]'); if (!b || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+      const b = e.target.closest('[data-skinpick], [data-skinfamily], [data-myskin-tile]'); if (!b || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
       const attr = b.hasAttribute('data-skinfamily') ? 'data-skinfamily' : 'data-skinpick';
-      e.preventDefault(); const buttons = [...root.querySelectorAll(`[${attr}]`)], at = buttons.indexOf(b);
+      // The skin grid's arrows/Home/End also reach its last tile, My skin. Landing on it only moves focus (it opens
+      // its controls on Enter/Space or a tap), so arrowing past never toggles the panel.
+      const sel = attr === 'data-skinpick' ? '[data-skinpick], [data-myskin-tile]' : `[${attr}]`;
+      e.preventDefault(); const buttons = [...root.querySelectorAll(sel)], at = buttons.indexOf(b);
       const n = e.key === 'Home' ? 0 : e.key === 'End' ? buttons.length - 1 : (at + (e.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
+      if (buttons[n].hasAttribute('data-myskin-tile')) { buttons[n].focus(); return; }
       const id = buttons[n].getAttribute(attr); buttons[n].focus(); buttons[n].click();
       root.querySelector(`[${attr}="${id}"]`)?.focus();
     };
