@@ -19,7 +19,7 @@ function session(i) { return { id: 'qa_return_' + i, source: 'wizard-mobile', ti
   await ctx.route('**/*', async r => {
    const q=r.request(), u=new URL(q.url()), m=q.method();
    const json=body=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
-   if(m!=='GET' && m!=='HEAD') { writes.push({method:m,path:u.pathname}); const sid=u.pathname.match(/\/sessions\/(qa_return_\d+)$/)?.[1]; if (sid && m==='PATCH' && JSON.parse(q.postData() || '{}').archived) archived.add(sid); return json({ok:true,state:{initializedAt:Date.now(),threads:{}}}); }
+   if(m!=='GET' && m!=='HEAD') { writes.push({method:m,path:u.pathname,qa:/QA reply/.test(q.postData()||'')}); const sid=u.pathname.match(/\/sessions\/(qa_return_\d+)$/)?.[1]; if (sid && m==='PATCH' && JSON.parse(q.postData() || '{}').archived) archived.add(sid); return json({ok:true,state:{initializedAt:Date.now(),threads:{}}}); }
    if(process.env.QA_LIVE!=='1' && u.pathname.startsWith('/wizard-os-home/')) {
     const f=u.pathname.slice('/wizard-os-home/'.length)||'index.html', fp=path.join(WEB,'web',f);
     if(!f.includes('..') && fs.existsSync(fp) && fs.statSync(fp).isFile()) return r.fulfill({status:200,contentType:f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':undefined,body:fs.readFileSync(fp)});
@@ -47,14 +47,34 @@ function session(i) { return { id: 'qa_return_' + i, source: 'wizard-mobile', ti
   const beforeDone=await position(), id=await openVisible();await p.locator('[data-chact="done"]').first().tap();await p.waitForSelector('.ch-list');await sleep(800);
   const afterDone=await place();ok(Math.abs(beforeDone.top-afterDone.top)<2 && beforeDone.id===afterDone.id,'Done returns to saved list location',{id,before:beforeDone,after:afterDone});
   ok(await p.locator(`.ch-scroll [data-chopen="${id}"]`).count()===0,'Done removes the archived row from Ready',id);
+  // A typed reply steps the phone back to the list (send and go): same place as Back, and it holds while the send settles.
+  { const before=await position(); await openVisible(); await p.locator('.ch-compose textarea').fill('QA reply');
+   await p.locator('.ch-compose .ch-send').tap(); await p.waitForSelector('.ch-list'); const seen=[];
+   for (const t of [150, 900, 2500]) { await sleep(t - (seen.at(-1)?.t || 0)); seen.push({ t, ...(await place()) }); }
+   ok(seen.every(a => a.id===before.id && Math.abs(a.y-before.y)<2), 'typed reply returns to saved list location', { before, seen }); }
+  // The phone can paint the list before its window has layout (hidden, parked, mid-transition): the scroller ignores
+  // scrollTop and sits at 0. The bookmark must land once the window shows, for a reply and for Done alike.
+  for (const how of ['reply', 'done']) {
+   const before=await position(); await openVisible();
+   if (how==='reply') await p.locator('.ch-compose textarea').fill('QA reply hidden');
+   await p.evaluate(() => { const w=document.querySelector('[data-chats]').closest('.win') || document.querySelector('[data-chats]'); w.style.display='none'; window.__qaHidden=w; });
+   if (how==='reply') await p.evaluate(() => document.querySelector('.ch-compose .ch-send').click()); else await p.evaluate(() => document.querySelector('[data-chact="done"]').click());
+   await sleep(250); await p.evaluate(() => { window.__qaHidden.style.display=''; }); await sleep(700);
+   const after=await place(); ok(after.id===before.id && Math.abs(after.y-before.y)<2, how+' with the list not laid out yet still returns to saved list location', { before, after });
+   await p.evaluate(()=>__wos.live.refresh()); await sleep(600); const polled=await place(); ok(polled.id===before.id && Math.abs(polled.y-before.y)<2, how+' hidden-return place survives refresh', { before, polled });
+  }
+  // James scrolling the list himself wins over a held bookmark.
+  { await position(); await openVisible(); await p.evaluate(() => { const w=document.querySelector('[data-chats]').closest('.win') || document.querySelector('[data-chats]'); w.style.display='none'; window.__qaHidden=w; });
+   await p.keyboard.press('Escape'); await sleep(100); await p.evaluate(() => { window.__qaHidden.style.display=''; const sc=document.querySelector('.ch-scroll'); sc.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -50 })); sc.scrollTop = 200; }); await sleep(600);
+   ok(Math.abs((await place()).top-200)<2, 'own scroll during a held return is never overridden', await place()); }
   // Archive the top visible anchor; its surviving neighbor keeps the same screen coordinate.
-  await position();const old=await place();const neighbor=await p.evaluate(id=>{const sc=document.querySelector('.ch-scroll'),a=sc.querySelector(`[data-chopen="${id}"]`).nextElementSibling;return {id:a.dataset.chopen,y:a.getBoundingClientRect().top-sc.getBoundingClientRect().top};},old.id);
+  await position();const old=await place();const neighbor=await p.evaluate(id=>{const sc=document.querySelector('.ch-scroll'),rs=[...sc.querySelectorAll('[data-chopen]')],a=rs[rs.findIndex(r=>r.dataset.chopen===id)+1];return {id:a.dataset.chopen,y:a.getBoundingClientRect().top-sc.getBoundingClientRect().top};},old.id);
   await p.evaluate(id=>__wos.openWizardThread(id),old.id);await p.waitForSelector('.ch-msgs .msg.a');await p.locator('[data-chact="done"]').first().tap();await p.waitForSelector('.ch-list');await sleep(800);
   const next=await p.evaluate(id=>{const sc=document.querySelector('.ch-scroll'),a=sc.querySelector(`[data-chopen="${id}"]`);return {id,y:a.getBoundingClientRect().top-sc.getBoundingClientRect().top,top:sc.scrollTop};},neighbor.id);
   ok(Math.abs(neighbor.y-next.y)<2,'archiving the anchor keeps the surviving neighbor in place',{neighbor,next});
   // Expanded Archive must not steal the bookmark when the anchor moves sections.
   await p.evaluate(() => document.querySelector('[data-sectoggle="archive"]').click()); await sleep(350);
-  await position(); const expanded = await place(); const survivor = await p.evaluate(id => { const sc=document.querySelector('.ch-scroll'),a=sc.querySelector(`[data-chopen="${id}"]`).nextElementSibling; return {id:a.dataset.chopen,y:a.getBoundingClientRect().top-sc.getBoundingClientRect().top}; }, expanded.id);
+  await position(); const expanded = await place(); const survivor = await p.evaluate(id => { const sc=document.querySelector('.ch-scroll'),rs=[...sc.querySelectorAll('[data-chopen]')],a=rs[rs.findIndex(r=>r.dataset.chopen===id)+1]; return {id:a.dataset.chopen,y:a.getBoundingClientRect().top-sc.getBoundingClientRect().top}; }, expanded.id);
   await p.evaluate(id=>__wos.openWizardThread(id),expanded.id); await p.waitForSelector('.ch-msgs .msg.a'); await p.locator('[data-chact="done"]').first().tap(); await p.waitForSelector('.ch-list'); await sleep(800);
   const archiveResult=await p.evaluate(id=>{const sc=document.querySelector('.ch-scroll'),a=sc.querySelector(`[data-chopen="${id}"]`);return {y:a.getBoundingClientRect().top-sc.getBoundingClientRect().top,top:sc.scrollTop};},survivor.id);
   ok(Math.abs(survivor.y-archiveResult.y)<2,'expanded Archive keeps the surviving Ready neighbor in place',{survivor,archiveResult});
@@ -64,7 +84,7 @@ function session(i) { return { id: 'qa_return_' + i, source: 'wizard-mobile', ti
   const changed=await place();ok(saved.id===changed.id && Math.abs(saved.y-changed.y)<2,'updates above viewport preserve the visible row on return',{saved,changed});
   await p.fill('[data-chsearch]','QA return position 30');await sleep(450);ok((await place()).top===0 && await p.locator('.ch-scroll [data-chopen="qa_return_30"]').count()===1,'single-result search remains usable');
   await p.screenshot({path:path.join(OUT,'list-return.png')});
-  ok(errors.length===0,'zero page errors',errors);ok(!writes.some(x=>/\/v1\/runs$/.test(x.path)),'zero agent sends',writes);
+  ok(errors.length===0,'zero page errors',errors);ok(writes.filter(x=>/\/v1\/runs$/.test(x.path)).every(x=>x.qa),'only fixture replies reach the (fulfilled) runs route',writes.filter(x=>/runs/.test(x.path)));
   ok(await p.evaluate(()=>!navigator.serviceWorker.controller),'service worker cannot bypass write fence');
   fs.writeFileSync(path.join(OUT,'receipt.json'),JSON.stringify({pass,fail,checks,errors,writes,origin:URL_,live:process.env.QA_LIVE==='1'},null,2));
   console.log(`${pass} pass, ${fail} fail`);

@@ -353,7 +353,7 @@ window.WizCore.chats = function createChats(H) {
     save(); H.layout(o.id); return true;
   }
   function addFilter(w, f) { if (!f) return false; if (f.kind === 'space' || f.kind === 'agent') return setFocus(w, f); const c = ch(w.id); if (w.thread) chatsBack(w); c.filter = f.key; c.filterFrom = null; rerenderList(w); return true; }
-  function rerenderList(w) { const el = elOf(w.id); if (el && !w.thread) { ch(w.id).listPlace = null; renderChatList(w, el); const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; } }
+  function rerenderList(w) { const el = elOf(w.id); if (el && !w.thread) { ch(w.id).listPlace = null; ch(w.id).listPending = null; renderChatList(w, el); const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; } }
   /* Back on a filtered list: search text first, then the most recent chip. */
   function clearFilter(w) {
     if (!w || w.thread) return false;
@@ -872,16 +872,37 @@ window.WizCore.chats = function createChats(H) {
       if (row) { const d = row.getBoundingClientRect().top - edge - anchor.y; if (Math.abs(d) >= 1) sc.scrollTop += d; break; }
     }
   }
+  /* Put the return bookmark back; true once it landed. A scroller with no layout yet (its window hidden, parked or
+   * mid-transition on the phone) ignores scrollTop and sits at 0, and rows not painted yet clamp it short. Every
+   * later paint then read that 0 as the place, so a reply or Done sent James to the top of Chats although Back kept
+   * his spot (James, 24 Oct 2026). */
   function restoreListPlace(sc, place) {
-    if (!sc || !place) return;
+    if (!sc || !place) return true;
+    if (place.top < 1) { sc.scrollTop = 0; return true; }
+    if (!sc.isConnected || !sc.getClientRects().length || !sc.clientHeight) return false;
     sc.scrollTop = place.top;
     const rows = [...sc.querySelectorAll('[data-chopen]')];
     for (const anchor of place.rows) {
       // Done can leave the same ID visible in expanded Archive. Follow a surviving
       // neighbor in the original section, never the archived row to its new home.
       const row = rows.find(r => r.dataset.chopen === anchor.id && r.closest('[data-sec]')?.dataset.sec === anchor.section);
-      if (row) { sc.scrollTop += row.getBoundingClientRect().top - sc.getBoundingClientRect().top - anchor.y; break; }
+      if (row) { sc.scrollTop += row.getBoundingClientRect().top - sc.getBoundingClientRect().top - anchor.y; return true; }
     }
+    return Math.abs(sc.scrollTop - place.top) < 2;
+  }
+  // Keep putting an unlanded bookmark back each frame (≤3 s) until it lands, the thread changes, James touches the
+  // list, or anything else scrolls it.
+  function holdListPlace(w, el, place) {
+    const c = ch(w.id), until = Date.now() + 3000; c.listPending = place;
+    let mine = el.querySelector('.ch-scroll')?.scrollTop ?? 0;
+    const step = () => {
+      if (c.listPending !== place) return;
+      const sc = el.querySelector('.ch-scroll');
+      if (w.thread || !sc || Date.now() > until || Math.abs(sc.scrollTop - mine) >= 1) { c.listPending = null; return; }
+      if (restoreListPlace(sc, place)) { c.listPending = null; return; }
+      mine = sc.scrollTop; requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   }
   function renderChatList(w, el) {
     closeStream(ch(w.id));
@@ -973,7 +994,8 @@ window.WizCore.chats = function createChats(H) {
     }).join('');
     // Progress sits above the results (James, 25 Oct 2026: it was hidden below a long Archive); the final line stays under them.
     if (bs && LST.ok) body = BS.scanning(bs) || bs.busy ? BS.footer(bs) + body : body + BS.footer(bs);
-    const place = listPlace(el) || c.listPlace;
+    // An unlanded return bookmark outranks the scroller's own reading: that reading is the 0 it fell to.
+    const place = c.listPending || listPlace(el) || c.listPlace;
     // Results stream in while typing: keep the search box focused with the caret where it was.
     const inp0 = el.querySelector('[data-chsearch]'), had = inp0 && document.activeElement === inp0, sel = had ? [inp0.selectionStart, inp0.selectionEnd] : null;
     // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
@@ -1000,12 +1022,14 @@ window.WizCore.chats = function createChats(H) {
       clearReading(w.id); c.listHTML = html;
       // The morph keeps a typed field's live value; a cleared search (×, Back, a chip) must empty the box too.
       const box = root.querySelector('[data-chsearch]'); if (box && !c.q && box.value) box.value = '';
-      anchorListPlace(el.querySelector('.ch-scroll'), place);
+      if (c.listPending) { if (restoreListPlace(el.querySelector('.ch-scroll'), place)) c.listPending = null; }
+      else anchorListPlace(el.querySelector('.ch-scroll'), place);
     } else {
       const keepSheet = keptSheet(el);
       clearReading(w.id); el.innerHTML = html; c.listHTML = html; c.listRoot = el.firstElementChild;
       restoreSheet(el, keepSheet);
-      restoreListPlace(el.querySelector('.ch-scroll'), place);
+      if (restoreListPlace(el.querySelector('.ch-scroll'), place)) c.listPending = null;
+      else if (c.listPending !== place) holdListPlace(w, el, place);
     }
     PW?.paint(w.id, el);
     bindFocusStrip(el);
@@ -1825,7 +1849,11 @@ window.WizCore.chats = function createChats(H) {
     });
   }
   function bindPull(root) {
+    // James's own touch or wheel on the list owns its scroll from here: drop any return bookmark still being held.
+    const own = e => { const sc = e.target.closest?.('.ch-list > .ch-scroll'); const id = sc && idOf(sc); if (id) ch(id).listPending = null; };
+    root.addEventListener('wheel', own, { capture: true, passive: true });
     root.addEventListener('touchstart', e => {
+      own(e);
       ptr = null;
       if (e.touches.length !== 1) return;
       const sc = e.target.closest?.('.ch-list > .ch-scroll'); if (!sc || sc.scrollTop > 0) return;
@@ -2105,7 +2133,7 @@ window.WizCore.chats = function createChats(H) {
   function openChat(wid, sid, opts = {}) {
     window.WizCore.chatSearch?.park(wid); // Back returns to these results, not a fresh search
     const w = W[wid]; if (!w) return;
-    if (!w.thread) { const place = listPlace(elOf(wid)); if (place) ch(wid).listPlace = place; }
+    if (!w.thread) { const c0 = ch(wid), place = c0.listPending || listPlace(elOf(wid)); c0.listPending = null; if (place) c0.listPlace = place; }
     if (w.thread) saveDraft(wid);
     closeRowSheet();
     const c = ch(wid); c.approval = null; c.cachedFor = ''; // a cached paint belongs to one open only
