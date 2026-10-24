@@ -1020,6 +1020,36 @@
     if (vsec) vsec.classList.add('bound-view-host');
     device.classList.toggle('bound-peeking', on);
     device.classList.toggle('bound-view-peeking', left);
+    if (myRelease()) boundGrab(on ? 1 : left ? -1 : 0);
+  }
+  /* My release: the peeking edge is a real handle. The view leaning in on the right (or the thread on the left of a
+   * bound view) gets a strip you can tap or swipe to move across, and the next dot in the dock glows a few times so
+   * it's clear there is something beside you. The strip sits inside the screen, clear of the iPhone's bottom
+   * home-indicator area and its left-edge back gesture region is left alone (the left strip only answers taps). */
+  let grabEl = null, grabSide = 0;
+  function boundGrab(side) {
+    if (!grabEl) {
+      grabEl = document.createElement('button');
+      grabEl.type = 'button'; grabEl.className = 'bound-grab'; grabEl.hidden = true;
+      let g = null;
+      grabEl.addEventListener('pointerdown', e => { g = { x: e.clientX, y: e.clientY, id: e.pointerId, moved: false }; try { grabEl.setPointerCapture(e.pointerId); } catch (_) {} });
+      grabEl.addEventListener('pointermove', e => { if (g && e.pointerId === g.id && Math.abs(e.clientX - g.x) > 10) g.moved = true; });
+      const end = e => {
+        if (!g || e.pointerId !== g.id) return; const s0 = g; g = null;
+        if (e.type === 'pointercancel') return;
+        const dx = e.clientX - s0.x;
+        // Tap, or a swipe toward the middle of the screen, moves to the view beside you.
+        if (!s0.moved || (grabSide > 0 ? dx < -30 : dx > 30)) { dockSwiped = Date.now(); swipeDesk(grabSide); }
+      };
+      grabEl.addEventListener('pointerup', end); grabEl.addEventListener('pointercancel', end);
+      device.appendChild(grabEl);
+    }
+    const was = grabSide; grabSide = side;
+    grabEl.hidden = !side;
+    grabEl.classList.toggle('right', side > 0); grabEl.classList.toggle('left', side < 0);
+    grabEl.setAttribute('aria-label', side > 0 ? 'Show the view beside this thread' : 'Back to the thread');
+    if (side && side !== was) { device.classList.remove('bound-glow'); void device.offsetWidth; device.classList.add('bound-glow'); clearTimeout(boundGrab.t); boundGrab.t = setTimeout(() => device.classList.remove('bound-glow'), 5200); }
+    if (!side) device.classList.remove('bound-glow');
   }
   // "Open app": a normal copy on a desk of its own, beside the bound one; the bound view stays with the thread.
   function detachBound(id) {

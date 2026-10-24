@@ -695,3 +695,20 @@ html[data-mine] .st-root [data-settings-feature="skin-frame"] .st-plain { margin
 html[data-mine] .st-root .st-plain [data-skinimport-status]:empty { display: none; }
 /* The chosen Layout reads on every skin (Obsidian's light accent took white text). */
 html[data-mine] .st-root .layout-row .layout-acts button[aria-pressed="true"] { color: var(--wz-base); }
+
+/* Bound view peek (My release): the leaning edge is a handle you can tap or swipe, and the next dot glows a few times. */
+html[data-mine] .bound-grab { position: absolute; z-index: 40; top: calc(var(--safe-t, 0px) + 64px); bottom: calc(var(--dock-h, 72px) + var(--safe-b, 0px) + 12px);
+  width: 40px; padding: 0; border: 0; background: transparent; touch-action: pan-y; -webkit-tap-highlight-color: transparent; cursor: pointer; }
+html[data-mine] .bound-grab.right { right: 0; }
+html[data-mine] .bound-grab.left { left: 0; width: 26px; }
+html[data-mine] .bound-grab[hidden] { display: none; }
+html[data-mine] .bound-grab::after { content: ""; position: absolute; top: 50%; width: 5px; height: 56px; margin-top: -28px; border-radius: 3px;
+  background: color-mix(in srgb, var(--violet-2, #8f63ff) 70%, #fff); opacity: .55; box-shadow: 0 0 14px color-mix(in srgb, var(--violet-2, #8f63ff) 70%, transparent); }
+html[data-mine] .bound-grab.right::after { right: 8px; }
+html[data-mine] .bound-grab.left::after { left: 6px; }
+html[data-mine] .device.bound-glow .bound-grab::after { animation: boundGlow 1.6s ease-in-out 3; }
+html[data-mine] .device.bound-glow.bound-peeking #dotsR .ddot.d1 .dsg,
+html[data-mine] .device.bound-glow.bound-view-peeking #dotsL .ddot.d1 .dsg { animation: boundDot 1.6s ease-in-out 3; }
+@keyframes boundGlow { 50% { opacity: 1; transform: scaleY(1.25); box-shadow: 0 0 22px var(--violet-2, #8f63ff); } }
+@keyframes boundDot { 50% { filter: drop-shadow(0 0 8px var(--violet-2, #8f63ff)) brightness(1.5); transform: scale(1.18); } }
+@media (prefers-reduced-motion: reduce) { html[data-mine] .device.bound-glow .bound-grab::after, html[data-mine] .device.bound-glow .ddot .dsg { animation: none; } }
