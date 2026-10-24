@@ -16,3 +16,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "WizardOS"
 include(":app")
+// Wizard Shell: the thin client (shell only; features live on the Wizard). See shell/README.md.
+include(":shell")
