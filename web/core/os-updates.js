@@ -16,8 +16,11 @@
  *   POST {"action":"apply"}    start the update now
  * A box whose App Manager has no such route (older, or no Serve mount) shows nothing.
  *
- * My release (wizard-os#186): ../my-release.json {name, base:{ref,label}, changes:[{sha,title,status,date}]} names the
- * owner's own changes layered on the channel; status is Mine (default), Proposed feature, Proposed fix or Merged.
+ * My release (wizard-os#186): ../my-release.json {name, base:{ref,label}, built_at?, changes:[{sha,title,label?,status,date}]}
+ * names the owner's own changes layered on the channel; status is Mine (default), Proposed feature, Proposed fix or
+ * Merged. A release is rebuilt by the box every hour, so it never says "Up to date"; it says when it was last rebuilt.
+ * Each Mine change offers Propose: Settings closes and a fresh chat opens with the change attached as a reply
+ * (the shell's openContextDraft hook, the same path as a Notifications Reply); the composer stays empty.
  *
  *   WosUpdates.hero()       → {title, lines, state, tone} for the Settings index card (null while unknown)
  *   WosUpdates.html()       → the My release & updates page ('' while unknown or unavailable)
@@ -64,6 +67,21 @@
   const KINDS = { mine: 'Mine', feature: 'Proposed feature', fix: 'Proposed fix', merged: 'Merged' };
   const kind = v => { v = String(v || '').toLowerCase(); return v.includes('fix') ? 'fix' : v.includes('feature') ? 'feature' : v.includes('merged') ? 'merged' : 'mine'; };
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  // A change in plain words: its own label, else the commit title without a conventional prefix ("fix:", "Docs:",
+  // "feat(chats):") or a trailing issue reference ("(wizard-os#186)").
+  const PREFIX = /^(?:feat|feature|fix|docs?|chore|refactor|tests?|style|perf|build|ci|revert)(?:\([^)]*\))?!?:\s*/i;
+  function label(c) {
+    const own = String(c?.label || '').trim(); if (own) return own;
+    const t = String(c?.title || '').trim().replace(/\s*\((?:[\w.-]+)?#\d+\)$/, '').replace(PREFIX, '').trim();
+    return t ? t[0].toUpperCase() + t.slice(1) : String(c?.sha || '');
+  }
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const day = v => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || '')); return m && +m[2] >= 1 && +m[2] <= 12 ? `${+m[3]} ${MONTHS[m[2] - 1]}` : String(v || ''); };
+  function ago(iso, now = Date.now()) {
+    const t = Date.parse(iso || ''); if (!Number.isFinite(t)) return '';
+    const m = Math.max(0, Math.round((now - t) / 60e3));
+    return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`;
+  }
   function summary(s) {
     if (s.installing) return ['Updating…', 'Takes 10–20 minutes · Wizard reconnects by itself'];
     if (s.unpinned && !mine) return ['Updated by hand', 'This Wizard isn’t on a release, so updates leave it alone'];
@@ -82,8 +100,13 @@
     const [title, sub] = st ? summary(st) : ['', ''];
     const tone = st?.installing ? 'busy' : st?.update_available ? 'ready' : st && st.checked && !st.unpinned ? 'ok' : '';
     if (!mine) return { title: title || 'Wizard OS', lines: sub ? [sub] : [], state: '', tone };
-    const state = !st ? '' : title.startsWith('Wizard OS') ? (sub === 'Up to date' ? 'Up to date' : sub) : title;
-    return { title: mine.name || 'My release', lines: [`Built on ${mine.base.label || mine.base.ref}`, plural(mine.changes.length, 'change of your own', 'changes of your own')], state, tone, mine: true };
+    // My release is rebuilt hourly onto the newest base, so it is always current: no "Up to date" pill, only the
+    // states that ask for something (an update to install, one running, one cut short).
+    const loud = !!st && (st.installing || st.update_available);
+    const built = ago(mine.built_at);
+    const lines = [`Built on ${mine.base.label || mine.base.ref}`, plural(mine.changes.length, 'change of your own', 'changes of your own')];
+    if (built) lines.push(`Rebuilt hourly · last ${built}`);
+    return { title: mine.name || 'My release', lines, state: loud ? title : '', tone: loud ? tone : '', mine: true };
   }
   const seg = (label, items) => `<div class="st-seg" role="radiogroup" aria-label="${esc(label)}">${items.map(([key, name, on]) => `<button type="button" data-osu="${key}" role="radio" aria-checked="${on}" ${busy ? 'disabled' : ''}>${esc(name)}</button>`).join('')}</div>`;
   function changesHtml() {
@@ -93,9 +116,13 @@
     const tally = Object.keys(KINDS).filter(k => counts[k]).map(k => `${counts[k]} ${KINDS[k].replace('Proposed ', '').toLowerCase()}`).join(' · ');
     const toggle = `<button type="button" class="rl-toggle" data-osu="mine" aria-expanded="${mineOpen}"><span class="st-tx"><b>Your changes</b><small>${esc(tally || 'Kept on every update')}</small></span><span class="st-go" aria-hidden="true">›</span></button>`;
     if (!mineOpen) return toggle;
-    const rows = mine.changes.map(c => { const k = kind(c.status); return `<li data-osu-change="${esc(c.sha)}"><span class="rl-ct"><b>${esc(c.title)}</b>${c.date ? `<small>${esc(c.date)}</small>` : ''}</span><span class="rl-chip rl-${k}">${KINDS[k]}</span></li>`; }).join('');
-    const legend = `<dl class="rl-legend"><div><dt><span class="rl-chip rl-mine">Mine</span></dt><dd>Only on your Wizard</dd></div><div><dt><span class="rl-chip rl-feature">Proposed feature</span></dt><dd>Review, then Latest, then Stable</dd></div><div><dt><span class="rl-chip rl-fix">Proposed fix</span></dt><dd>Fast lane to Stable</dd></div></dl>`;
-    return `${toggle}${n ? `<ul class="rl-changes">${rows}</ul>` : '<p class="st-hint">None yet · everything you have is in main</p>'}${legend}<p class="st-hint">All of them are reapplied on every update.</p>`;
+    const rows = mine.changes.map(c => {
+      const k = kind(c.status), name = label(c);
+      const go = k === 'mine' ? `<button type="button" class="rl-propose" data-osu="propose" data-sha="${esc(c.sha)}" aria-label="Propose ${esc(name)} to main">Propose</button>` : '';
+      return `<li data-osu-change="${esc(c.sha)}"><span class="rl-ct"><b>${esc(name)}</b><span class="rl-meta"><span class="rl-chip rl-${k}">${KINDS[k]}</span>${c.date ? `<small>${esc(day(c.date))}</small>` : ''}</span></span>${go}</li>`;
+    }).join('');
+    const legend = `<details class="rl-legend"><summary>What the labels mean</summary><p><b>Mine</b> only on your Wizard · <b>Feature</b> review, then Latest, then Stable · <b>Fix</b> fast lane to Stable. All are reapplied on every update.</p></details>`;
+    return `${toggle}${n ? `<ul class="rl-changes">${rows}</ul>` : '<p class="st-hint">None yet · everything you have is in main</p>'}${legend}`;
   }
   function html() {
     if (!st && !mine) { if (!off) load(); return ''; }
@@ -120,10 +147,30 @@
       .finally(() => { busy = ''; changed(); });
     return true;
   }
-  function act(el, ctx) {
+  // Propose: close Settings and open a fresh chat with this change attached as a reply bubble (the composer stays
+  // empty for the owner's own words). Uses the shell's hook: window.__wos (phone) or window.__wux (desktop).
+  function propose(sha, ctx) {
+    const c = mine?.changes.find(x => x.sha === sha);
+    if (!c || kind(c.status) !== 'mine') return true;
+    const open = window.__wux?.openContextDraft || window.__wos?.openContextDraft;
+    if (typeof open !== 'function') { ctx?.toast?.('!', 'Couldn’t open a chat for this change here', 2600); return true; }
+    ctx?.haptic?.(8);
+    try {
+      open('release-change:' + sha, { title: `Propose to main: ${label(c)}`, message: `Change ${sha} from my release.\nSay feature or fix, and I'll open the PR.` });
+    } catch (e) { ctx?.toast?.('!', e?.message || 'Couldn’t open a chat for this change', 2600); }
+    return true;
+  }
+  function act(el, ctx, event) {
     const b = el.closest('[data-osu]'); if (!b) return false;
     const what = b.dataset.osu;
-    if (what === 'mine') { mineOpen = !mineOpen; changed(); return true; }
+    if (what === 'mine') {
+      mineOpen = !mineOpen; changed();
+      // Settings re-renders and puts focus back on the toggle in code, which browsers paint as a keyboard ring.
+      // A tap or click (detail > 0) leaves no ring; Enter/Space (detail 0) keeps it for keyboard users.
+      if (event?.detail > 0) { const t = ctx?.root?.querySelector?.('[data-osu="mine"]'); if (t && t === document.activeElement) t.blur(); }
+      return true;
+    }
+    if (what === 'propose') return propose(b.dataset.sha, ctx);
     if (busy || !st) return true;
     if (what.startsWith('ch-')) return pick(what.slice(3), ctx);
     if ((what === 'auto' || what === 'ask') && what === st.mode && st.chosen) return true;
@@ -142,8 +189,8 @@
       .finally(() => { busy = ''; changed(); if (what === 'apply') setTimeout(() => load(true), 1500); });
     return true;
   }
-  window.WosUpdates = { html, act, load, hero, kind, get state() { return st; }, get mine() { return mine; } };
-  window.WosSettings?.register({ id: 'updates', page: 'release', aliases: ['updates', 'release', 'my-release'], available: () => !!(st || mine), html: () => html(), act: (ctx, el) => act(el, ctx) });
+  window.WosUpdates = { html, act, load, hero, kind, label, ago, get state() { return st; }, get mine() { return mine; } };
+  window.WosSettings?.register({ id: 'updates', page: 'release', aliases: ['updates', 'release', 'my-release'], available: () => !!(st || mine), html: () => html(), act: (ctx, el, event) => act(el, ctx, event) });
   load();
   fetch(MINE, { credentials: 'same-origin', cache: 'no-store' }).then(r => r.ok ? r.json() : null)
     .then(d => { if (d && Array.isArray(d.changes) && d.base) { mine = d; changed(); } }).catch(() => {});

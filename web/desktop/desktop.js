@@ -448,11 +448,14 @@
     else watchFrame(el.querySelector('iframe'), el);
     return el;
   }
+  // An item opens a fresh New chat with it attached as a reply bubble (composer empty): Notifications Reply and
+  // Settings › My release › Propose both come here; Settings closes first so the chat is in view.
+  function openContextDraft(key, item) { closeSettings(); let cw = ws[cur].wins.map(id => W[id]).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, item); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }
   function watchFrame(f, el) {
     if (!f) return;
     // servicesAs: a second view of an installed app (Video Editor's Feedback) gets that app's Back/services.
     const w = W[el.dataset.win], a = w && APP[w.servicesAs || w.appId];
-    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), openContextDraft: (key, text) => { let cw = ws[cur].wins.map(id => W[id]).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }, isVisible: () => !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) });
+    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), openContextDraft, isVisible: () => !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) });
     f.addEventListener('load', () => {
       // A refused frame (CSP frame-ancestors / X-Frame-Options) lands on an unreadable error document.
       let bad = false;
@@ -1640,7 +1643,7 @@
     goWs, newDesktop, closeDesktop, closeCurrent, newWin, closeWin, focusWin, moveWin, openApp, openThread, newChat, openPalette, closePalette, openPicker, openInbox, talk, ask, escStep, viewContext,
     openFiles, openUsage, recordReply, openSearch, openReview, openMaps, localCommand, commandVoice, dictate, toast,
     pauseVoice: () => VOICE.state === 'paused' ? VOICE.resume() : VOICE.pause(),
-    openSettings, closeSettings, stepThread, setListW, get listW() { return listW(); },
+    openSettings, closeSettings, openContextDraft, stepThread, setListW, get listW() { return listW(); },
     get voice() { return VOICE.state; }, get log() { return window.__wuxLog || []; },
   };
   /* Skin packages (core/skin-host.js) on desktop: the same narrow adapter the phone shell hands over, so a skin

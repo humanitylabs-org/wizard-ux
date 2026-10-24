@@ -157,16 +157,16 @@ test('my release: the summary names it and its base, and Your changes lists each
     return window.WosUpdates;
   })();
   let h = r2.html();
-  assert.match(h, /<b class="rl-name" data-osu-title>Miguel&#39;s release<\/b><small class="rl-base">Built on Latest b79c1e9<\/small><small>1 change of your own<\/small><span class="rl-state ready">Update available<\/span>/);
+  assert.match(h, /<b class="rl-name" data-osu-title>Miguel&#39;s release<\/b><small class="rl-base">Built on Latest b79c1e9<\/small><small>1 change of your own<\/small><span class="rl-state ready">Update available<\/span>/);   // stock update states stay
   assert.deepEqual(r2.hero(), { title: "Miguel's release", lines: ['Built on Latest b79c1e9', '1 change of your own'], state: 'Update available', tone: 'ready', mine: true });
   assert.match(h, /data-osu="mine"[^>]*aria-expanded="false"/);
   assert.doesNotMatch(h, /Updates shows my release/);
   assert.equal(r2.act(btn('mine'), ctx()), true);
   h = r2.html();
   assert.match(h, /data-osu="mine"[^>]*aria-expanded="true"/);
-  assert.match(h, /data-osu-change="abc1234"><span class="rl-ct"><b>Updates shows my release<\/b><small>2026-10-24<\/small><\/span><span class="rl-chip rl-mine">Mine<\/span>/);
-  assert.match(h, /Proposed feature<\/span><\/dt><dd>Review, then Latest, then Stable/);   // the three lanes, one line each
-  assert.match(h, /Proposed fix<\/span><\/dt><dd>Fast lane to Stable/);
+  assert.match(h, /data-osu-change="abc1234"><span class="rl-ct"><b>Updates shows my release<\/b><span class="rl-meta"><span class="rl-chip rl-mine">Mine<\/span><small>24 Oct<\/small><\/span><\/span><button type="button" class="rl-propose" data-osu="propose" data-sha="abc1234"/);
+  assert.match(h, /<details class="rl-legend"><summary>What the labels mean<\/summary><p><b>Mine<\/b> only on your Wizard · <b>Feature<\/b> review, then Latest, then Stable · <b>Fix<\/b> fast lane to Stable\./);   // the lanes fold into one line
+  assert.doesNotMatch(h, /<dl class="rl-legend"/);
   assert.equal(r2.act(btn('mine'), ctx()), true);
   assert.doesNotMatch(r2.html(), /data-osu-change/);
 });
@@ -192,4 +192,105 @@ test('my release: each change gets a status chip from my-release.json (default M
     assert.match(h, new RegExp(`data-osu-change="${sha}">[\\s\\S]*?<span class="rl-chip rl-${cls}">${label}</span>`), sha);
   assert.equal(U.kind('proposed FIX'), 'fix');
   assert.equal(U.kind(undefined), 'mine');
+});
+
+// Shared harness for My release: my-release.json plus an App Manager reply, optional shell hooks.
+async function mineBox(MINE, status = STATUS, extra = {}) {
+  const fetch = async (url) => url.endsWith('my-release.json') ? { ok: true, status: 200, json: async () => MINE }
+    : status ? { ok: true, status: 200, json: async () => status } : { ok: false, status: 404, json: async () => ({}) };
+  const registered = [], window = { WosSettings: { register: f => registered.push(f), refresh() {} }, ...extra };
+  const document = { currentScript: { src: 'https://box.ts.net/wizard-os-home/core/os-updates.js' } };
+  new Function('window', 'document', 'fetch', 'location', src)(window, document, fetch, { href: 'https://box.ts.net/wizard-os-home/' });
+  for (let i = 0; i < 4; i++) await tick();
+  return { U: window.WosUpdates, window, registered };
+}
+const pbtn = sha => ({ closest: sel => (sel === '[data-osu]' ? { dataset: { osu: 'propose', sha } } : null) });
+const RELEASE = { name: "Miguel's release", base: { ref: 'b79c1e9', label: 'Latest b79c1e9' }, changes: [
+  { sha: 'aaa1111', title: 'Docs: skins are look, the My release layer (web/mine) is behaviour and layout (wizard-os#186)', status: 'Mine', date: '2026-10-23' },
+  { sha: 'bbb2222', title: 'feat(chats): send-and-go opens a fresh New chat', label: 'Sends open a fresh chat', status: 'Mine' },
+  { sha: 'ccc3333', title: 'fix: Store toast on 502 (#99)', status: 'Proposed fix' },
+  { sha: 'ddd4444', title: 'Workspace sync', status: 'Proposed feature' },
+  { sha: 'eee5555', title: 'Old thing', status: 'Merged' }] };
+
+test('my release: no "Up to date" pill; a quiet "Rebuilt hourly · last …" line from built_at instead', async () => {
+  const built = new Date(Date.now() - 20 * 60e3).toISOString();
+  const upToDate = { ...STATUS, mode: 'ask', chosen: true, latest: '0.3.15', update_available: false };
+  const { U } = await mineBox({ ...RELEASE, built_at: built }, upToDate);
+  const h = U.hero();
+  assert.equal(h.state, '', 'his own release is always current: no pill');
+  assert.deepEqual(h.lines, ['Built on Latest b79c1e9', '5 changes of your own', 'Rebuilt hourly · last 20 min ago']);
+  assert.doesNotMatch(U.html(), /Up to date|rl-state/);
+  const none = await mineBox(RELEASE, upToDate);                       // built_at missing: the line is left out
+  assert.deepEqual(none.U.hero().lines, ['Built on Latest b79c1e9', '5 changes of your own']);
+  assert.equal(none.U.hero().state, '');
+  const bad = await mineBox({ ...RELEASE, built_at: 'not a date' }, upToDate);
+  assert.equal(bad.U.hero().lines.length, 2);
+  for (const [s, state, tone] of [[{ ...STATUS }, 'Update available', 'ready'], [{ ...STATUS, installing: true }, 'Updating…', 'busy'], [{ ...STATUS, interrupted: true, mode: 'ask' }, 'Update interrupted', 'ready']]) {
+    const r = await mineBox({ ...RELEASE, built_at: built }, s);
+    assert.equal(r.U.hero().state, state); assert.equal(r.U.hero().tone, tone);
+  }
+  assert.equal(U.ago(new Date(Date.now() - 3 * 3600e3).toISOString()), '3 h ago');
+  assert.equal(U.ago(new Date().toISOString()), 'just now');
+  const stock = await load(() => [200, upToDate]);                     // stock boxes keep "Up to date"
+  assert.match(stock.U.html(), /Wizard OS 0\.3\.15<\/b><small class="rl-base">Up to date/);
+});
+
+test('my release: each change reads in plain words: own label, else the title without prefix or issue ref', async () => {
+  const { U } = await mineBox(RELEASE);
+  for (const [c, want] of [
+    [{ title: 'Docs: skins are look, the My release layer (web/mine) is behaviour and layout (wizard-os#186)' }, 'Skins are look, the My release layer (web/mine) is behaviour and layout'],
+    [{ title: 'fix: dock overlaps the last row' }, 'Dock overlaps the last row'],
+    [{ title: 'feat(chats): Enter sends (#12)' }, 'Enter sends'],
+    [{ title: 'Workspace sync: the same desks on every device (wizard-os#186)' }, 'Workspace sync: the same desks on every device'],
+    [{ title: 'fix(x)!: breaking thing' }, 'Breaking thing'],
+    [{ title: 'feat: x', label: 'Own words' }, 'Own words'],
+    [{ title: '', sha: 'abc' }, 'abc']]) assert.equal(U.label(c), want, c.title);
+  U.act(btn('mine'), ctx());
+  const h = U.html();
+  assert.match(h, /<b>Skins are look, the My release layer \(web\/mine\) is behaviour and layout<\/b>/);
+  assert.match(h, /<b>Sends open a fresh chat<\/b>/);
+  assert.match(h, /<small>23 Oct<\/small>/);
+  assert.doesNotMatch(h, /wizard-os#186|Docs:|feat\(chats\)/);
+});
+
+test('my release: Propose only on Mine rows', async () => {
+  const { U } = await mineBox(RELEASE);
+  U.act(btn('mine'), ctx());
+  const h = U.html(), rows = [...h.matchAll(/<li data-osu-change="([^"]+)">([\s\S]*?)<\/li>/g)];
+  assert.equal(rows.length, 5);
+  for (const [, sha, body] of rows) assert.equal(/data-osu="propose"/.test(body), ['aaa1111', 'bbb2222'].includes(sha), sha);
+  assert.match(h, /data-osu="propose" data-sha="bbb2222" aria-label="Propose Sends open a fresh chat to main">Propose<\/button>/);
+});
+
+test('my release: Propose opens a fresh chat through the shell hook with the change as a reply; no hook = toast', async () => {
+  const calls = [];
+  const hook = (key, item) => { calls.push([key, item]); return { kind: 'unsent-draft', id: 'new:x', sent: false }; };
+  const phone = await mineBox(RELEASE, STATUS, { __wos: { openContextDraft: hook } });
+  const c = ctx();
+  assert.equal(phone.U.act(pbtn('aaa1111'), c), true);
+  assert.deepEqual(calls, [['release-change:aaa1111', { title: 'Propose to main: Skins are look, the My release layer (web/mine) is behaviour and layout', message: "Change aaa1111 from my release.\nSay feature or fix, and I'll open the PR." }]]);
+  assert.equal(c.t.length, 0);
+  assert.match(calls[0][0], /^[a-z][a-z0-9-]{0,40}:[A-Za-z0-9_-]{1,128}$/, 'the key is one chat-kit accepts for a reply');
+  const desk = []; const d = await mineBox(RELEASE, STATUS, { __wux: { openContextDraft: (k, i) => desk.push([k, i.title]) } });
+  d.U.act(pbtn('bbb2222'), ctx());
+  assert.deepEqual(desk, [['release-change:bbb2222', 'Propose to main: Sends open a fresh chat']]);
+  phone.U.act(pbtn('ccc3333'), ctx()); phone.U.act(pbtn('nope'), ctx());   // a proposed change, an unknown sha: nothing
+  assert.equal(calls.length, 1);
+  const bare = await mineBox(RELEASE, STATUS);
+  const t = ctx(); assert.equal(bare.U.act(pbtn('aaa1111'), t), true);
+  assert.equal(t.t[0][0], '!'); assert.match(t.t[0][1], /Couldn’t open a chat/);
+  const thrown = await mineBox(RELEASE, null, { __wos: { openContextDraft: () => { throw new Error('Chats unavailable'); } } });
+  const e = ctx(); thrown.U.act(pbtn('aaa1111'), e);                     // works before the App Manager answers too
+  assert.deepEqual(e.t[0].slice(0, 2), ['!', 'Chats unavailable']);
+});
+
+test('shells expose openContextDraft on the same path as the Notifications Reply wiring', () => {
+  const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+  const desk = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+  assert.match(app, /function openContextDraft\(key, item\) \{ closeSheets\(true\); const cw = placeApp\(mainChats, \{ app: 'chats', thread: null \}, \{\}\);[^\n]*CHATS\.openContextDraft\(cw\.id, key, item\); CHATS\.renderChats\(cw\)/);
+  assert.match(app, /openThread: \(sid, opts\) => CHATS\.openHosted\(w\.id, f, sid, opts\), openContextDraft, isVisible/);
+  assert.match(app, /openSettings, openContextDraft, unsentAll/);
+  assert.match(desk, /function openContextDraft\(key, item\) \{ closeSettings\(\); let cw = ws\[cur\]\.wins\.map\(id => W\[id\]\)\.find\(mainChats\);[^\n]*CHATS\.openContextDraft\(cw\.id, key, item\); CHATS\.renderChats\(cw\); syncChatsPane\(cw\.id\)/);
+  assert.match(desk, /openThread: \(sid, opts\) => CHATS\.openHosted\(w\.id, f, sid, opts\), openContextDraft, isVisible/);
+  assert.match(desk, /openSettings, closeSettings, openContextDraft,/);
 });
