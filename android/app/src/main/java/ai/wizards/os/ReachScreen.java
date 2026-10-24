@@ -117,8 +117,9 @@ final class ReachScreen {
         retry.setAlpha(1f);
         tailscale.setVisibility(ReachPolicy.offerTailscale(why, tailscaleInstalled) ? View.VISIBLE : View.GONE);
         status.setVisibility(View.GONE);
-        String host = android.net.Uri.parse(ServerSettings.origin(a)).getHost();
-        server.setText(host == null || host.isEmpty() ? "Edit address" : host + "  ·  Edit address");
+        // The address actually being tried (QA override included), with any port: a wrong port is a real cause.
+        String where = android.net.Uri.parse(ai.wizards.os.device.AppState.origin(a)).getAuthority();
+        server.setText(where == null || where.isEmpty() ? "Edit address" : where + "  ·  Edit address");
         server.setContentDescription("Edit Wizard address");
         server.setVisibility(View.VISIBLE);
         String d = ReachPolicy.detail(raw);
