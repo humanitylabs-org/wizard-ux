@@ -202,7 +202,8 @@
     if (L.status === 'missing') { $('list').innerHTML = h + '<div class="state"><p>This Wizard doesn’t have Setup yet.</p><p class="muted">Update Wizard, then come back.</p></div>'; return; }
     const item = (L.data?.items || []).find(i => i && i.id === 'phone') || { id: 'phone', title: 'Use Wizard on your phone', state: '' };
     const st = L.status === 'loading' ? 'loading' : L.status === 'neterr' ? 'neterr' : item.state;
-    const line = { loading: 'Checking…', neterr: 'Can’t check right now.', todo: 'From anywhere, not just at home.', in_progress: 'Not finished. Pick up where you left off.', done: 'Your phone is connected.' }[st] || 'From anywhere, not just at home.';
+    const line = st === 'done' && item.phone_ready === true ? 'Ready to open on your phone.'
+      : { loading: 'Checking…', neterr: 'Can’t check right now.', todo: 'From anywhere, not just at home.', in_progress: 'Not finished. Pick up where you left off.', done: 'Your phone is connected.' }[st] || 'From anywhere, not just at home.';
     const end = st === 'done' ? `<svg class="okmark" viewBox="0 0 24 24" aria-label="Done"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>` : st === 'in_progress' ? `<span class="dot" aria-label="In progress"></span>${CHEV}` : CHEV;
     h += `<div class="rows"><button class="row" data-act="open-phone" data-state="${esc(st)}"><span class="ic" aria-hidden="true">📱</span><span class="bd"><b>${esc(str(item.title) || 'Use Wizard on your phone')}</b><small>${line}</small></span><span class="end">${end}</span></button></div>`;
     if (L.status === 'neterr') h += '<button class="link" data-act="retry-list">Try again</button>';
