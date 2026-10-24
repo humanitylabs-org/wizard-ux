@@ -163,6 +163,8 @@
       !it.steerDispatch && !it.runId && !it.parkedDraft && !String(it.typed || '').trim() &&
       !(it.files || []).some(f => f.id !== it.audioFile?.id);
   }
+  const transcriptionTimedOut = (it, error = null) => !!it?.audio && !!it.audioFile?.id && !it.text &&
+    ((error?.status ?? it.errorStatus) === 408 || /(?:Request|Transcription) timed out|HTTP 408\b/.test(String(error?.message ?? it.error ?? '')));
   // A held-orb take is a command, never a message. Earlier builds parked routed commands here as
   // "Delivery not confirmed" or "completion unconfirmed" although nothing was ever due for delivery.
   // Unheard takes (STT failed) and interrupted captures keep their audio; fresh rows (<10 min) may still settle.
@@ -209,9 +211,14 @@
     if (it.state === 'capturing') { it.state = 'held'; it.error = 'Interrupted recording · original bytes kept'; }
     if (it.steerDispatch === 'started' && it.state !== 'sent') { it.state = 'unconfirmed'; it.error = unconfirmed; }
     if (it.state === 'sending') it.state = 'waiting';
+    // A timed-out transcription is not an admitted message. Replaying the same recovered audio forever makes its
+    // thread look permanently Working; keep the recording and require an explicit retry instead.
+    if ((it.attempts || 0) > 0 && ['waiting', 'failed'].includes(it.state) && transcriptionTimedOut(it)) {
+      it.state = 'failed'; it.nextAt = 0; it.error = 'Transcription timed out · original recording kept. Retry when ready.';
+    }
     // Older builds exhausted durable retries. Revive only identifiable transport
     // failures with delivery authority; an ambiguous steer remains unconfirmed.
-    if (it.state === 'failed' && eligible(it, ['failed']) &&
+    if (it.state === 'failed' && !transcriptionTimedOut(it) && eligible(it, ['failed']) &&
         (/Couldn[’']t reach Wizard|Wizard was unavailable|Request timed out|HTTP (408|425|429)\b/.test(it.error || '') ||
          [408, 425, 429].includes(it.errorStatus) || it.errorStatus >= 500)) {
       it.state = 'waiting'; it.nextAt = 0;
@@ -458,8 +465,10 @@
     try { await deliver(it); }
     catch (e) {
       it.attempts = (it.attempts || 0) + 1; it.error = reason(e); it.errorStatus = e.status || 0; it.lastAttemptAt = now();
-      // Never silently abandon a transient failure, even with durable custody.
-      if (transient(e)) { it.state = 'waiting'; it.nextAt = now() + BACKOFF[Math.min(it.attempts - 1, BACKOFF.length - 1)]; }
+      // A finite STT deadline keeps the recording but releases the thread; automatic replay of the same body can
+      // otherwise spend almost all its time in Sending. Other transport failures still retry from durable custody.
+      if (transcriptionTimedOut(it, e)) { it.state = 'failed'; it.nextAt = 0; it.error = 'Transcription timed out · original recording kept. Retry when ready.'; }
+      else if (transient(e)) { it.state = 'waiting'; it.nextAt = now() + BACKOFF[Math.min(it.attempts - 1, BACKOFF.length - 1)]; }
       else { it.state = 'failed'; it.nextAt = 0; }
       await put(it);
     }
