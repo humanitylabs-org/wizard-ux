@@ -136,6 +136,66 @@ PY
   [ -z "$(adb shell run-as "$PKG" ls files/takes 2>/dev/null | tr -d '\r')" ] && pass "rec: native copy released only after ack" || bad "rec: native copy released only after ack"
   [ "$(ev unknownTake r)" = "unknown take" ] && [ "$(ev unknownMethod r)" = "unknown method" ] && pass "rec: unknown take and method refused" || bad "rec: unknown take and method refused"
   wait_ev elsewhere 20; [ "$(ev elsewhere r)" = "noreply" ] && pass "rec: same-origin page outside the shell gets no answer" || bad "rec: same-origin page outside the shell gets no answer ($(ev elsewhere r))"
+  # ---- Optional floating orb (device.orb). The app allows "Display over other apps" via appops, as the owner would.
+  orblog() { adb logcat -d -s ShellOrb:I 2>/dev/null; }
+  orbwin() { adb shell dumpsys window windows 2>/dev/null | grep -c "WizardShellOrb" | tr -d '\r'; }
+  wait_log() { for _ in $(seq 1 "$2"); do orblog | grep -q "$1" && return 0; sleep 1; done; return 1; }
+  orb_xy() { # centre of the orb from its last "shown at"/"moved to" log line (64 dp square)
+    local d; d=$(adb shell wm density | grep -o '[0-9]*' | tail -1)
+    orblog | grep -oE "(shown at|moved to) -?[0-9]+,-?[0-9]+" | tail -1 | grep -oE -- "-?[0-9]+,-?[0-9]+" \
+      | awk -F, -v d="$d" '{s=int(64*d/160+0.5); print $1+int(s/2), $2+int(s/2)}'
+  }
+  adb shell appops set "$PKG" SYSTEM_ALERT_WINDOW allow
+  echo up > "$FIXTURE_OUT/orb"; echo orb > "$FIXTURE_OUT/mode"
+  adb logcat -c
+  adb shell am start -W -n "$ACT" >/dev/null 2>&1
+  wait_ev orb 40; [ "$(ev orb r.on)" = "true" ] && pass "orb: the Wizard turns the orb on (device.orb.enable)" || bad "orb: the Wizard turns the orb on ($(ev orb r))"
+  sleep 2; [ "$(orbwin)" = "0" ] && pass "orb: hidden while the Wizard app is in front" || bad "orb: hidden while the Wizard app is in front"
+  adb shell input keyevent KEYCODE_HOME; sleep 1
+  adb shell am start -W -a android.settings.SETTINGS >/dev/null 2>&1
+  wait_log "page from Wizard" 20 && pass "orb: page from the Wizard (virtual origin, native fetch)" || bad "orb: page from the Wizard"
+  sleep 1; adb shell dumpsys window windows > "$OUT/orb-windows.txt"
+  [ "$(orbwin)" -ge 1 ] && adb shell dumpsys activity activities | grep -q "ResumedActivity.*com.android.settings" \
+    && pass "orb: floats over another app (Settings in front)" || bad "orb: floats over another app"
+  adb exec-out screencap -p > "$OUT/orb-over-settings.png" 2>/dev/null
+  grep -q '"get": "/wizard-os-home/assist/everywhere.html"' "$FX" && grep -q '"get": "/wizard-os-home/orb.js"' "$FX" \
+    && pass "orb: page files fetched from the selected Wizard" || bad "orb: page files fetched from the selected Wizard"
+
+  # Tap talks (a device.recording take marked send); tap again sends.
+  read -r OX OY <<< "$(orb_xy)"; echo "orb centre: $OX,$OY" >> "$OUT/result.txt"
+  adb shell input tap "$OX" "$OY"; sleep 4
+  OT=$(adb shell run-as "$PKG" ls files/takes 2>/dev/null | tr -d '\r' | grep -m1 '\.aac$' | sed 's/\.aac$//')
+  [ -n "$OT" ] && adb shell dumpsys activity services "$PKG" | grep -q "RecorderService" && pass "orb: tap starts a recording over another app" || bad "orb: tap starts a recording over another app"
+  sleep 3; adb shell input tap "$OX" "$OY"; sleep 3
+  adb shell run-as "$PKG" cat "files/takes/$OT.json" > "$OUT/orb-take.json" 2>/dev/null
+  grep -q '"send":true' "$OUT/orb-take.json" && grep -q '"state":"stopped"' "$OUT/orb-take.json" \
+    && pass "orb: second tap stops it for the Wizard to send" || bad "orb: second tap stops it for the Wizard to send"
+
+  # Drag moves it and it rests on an edge.
+  read -r OX OY <<< "$(orb_xy)"
+  adb shell input swipe "$OX" "$OY" 300 900 600; sleep 2
+  orblog | grep -q "orb moved to" && pass "orb: drag moves it" || bad "orb: drag moves it"
+
+  # Offline: the Wizard's orb files fail (503) or answer too slowly (> 1.5 s) → the bundled copy, never blank.
+  for how in down slow; do
+    echo "$how" > "$FIXTURE_OUT/orb"
+    adb shell am force-stop "$PKG"; adb logcat -c
+    adb shell am start -W -n "$ACT" >/dev/null 2>&1; sleep 4
+    adb shell input keyevent KEYCODE_HOME; sleep 1; adb shell am start -W -a android.settings.SETTINGS >/dev/null 2>&1
+    want=$([ "$how" = down ] && echo "static resource unavailable" || echo "timeout")
+    wait_log "page from bundle" 25 && orblog | grep -q "$want; showing the bundled copy" && [ "$(orbwin)" -ge 1 ] \
+      && pass "orb: falls back to the bundled page when the Wizard is $how" || bad "orb: falls back to the bundled page when the Wizard is $how"
+    orblog > "$OUT/orb-$how.log"
+  done
+  echo up > "$FIXTURE_OUT/orb"
+
+  # Hold hides it, and it stays off.
+  read -r OX OY <<< "$(orb_xy)"
+  adb shell input swipe "$OX" "$OY" "$OX" "$OY" 1500; sleep 2
+  orblog | grep -q "orb off: hold" && [ "$(orbwin)" = "0" ] && pass "orb: hold hides it" || bad "orb: hold hides it"
+  adb shell input keyevent KEYCODE_HOME; sleep 2
+  [ "$(orbwin)" = "0" ] && pass "orb: stays hidden after hold" || bad "orb: stays hidden after hold"
+  adb exec-out screencap -p > "$OUT/orb-hidden.png" 2>/dev/null
   cp "$FX" "$OUT/fixture.log" 2>/dev/null
 fi
 
