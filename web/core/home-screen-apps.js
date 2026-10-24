@@ -58,6 +58,25 @@
       freshPress = false;
       if (e.target === overlay && !pending) close();
     }, true);
+    if (!port()) {
+      const url = new URL('/wizard-os-home/install/' + encodeURIComponent(a.id) + '/', location.origin).href;
+      button.textContent = 'Add to home screen'; button.disabled = false;
+      const help = document.createElement('p');
+      help.textContent = 'Open this app’s install page in Safari or Chrome, then add it to your home screen. If it stays in Wizard, copy the link and paste it into your browser.';
+      const address = document.createElement('input'); address.readOnly = true; address.value = url; address.setAttribute('aria-label', 'Install link');
+      const copy = document.createElement('button'); copy.type = 'button'; copy.textContent = 'Copy install link';
+      copy.onclick = async () => {
+        try { await navigator.clipboard.writeText(url); help.textContent = 'Link copied. Paste it into Safari or Chrome.'; }
+        catch (_) { address.focus(); address.select(); help.textContent = 'Copy the selected link and paste it into Safari or Chrome.'; }
+      };
+      button.onclick = e => {
+        if (!e.isTrusted) return;
+        // A new browsing context is best effort, not a promise to escape an installed iOS PWA.
+        const link = document.createElement('a'); link.href = url + '?install=1'; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.click();
+      };
+      sheet.append(help, copy, address);
+      return;
+    }
     try { png = await iconPNG(a, header); } catch (_) { if (active === a) paint('error'); return; }
     if (active !== a) return;
     const response = await request('status', a);
@@ -74,7 +93,7 @@
   }
   const pinnable = a => !!a && a.kind === 'wizard' && !!a.url && window.WizHomeScreenPolicy.validId(a.id) && !window.WizHomeScreenPolicy.isShell(a.url) && window.WizHomeScreenPolicy.within(a.url,a.url);
   // Desks overview: hold a one-app desk and let go without dragging → the same sheet (drag still reorders).
-  function offer(a) { if (!port() || !pinnable(a)) return false; try { navigator.vibrate?.(12); } catch (_) {} show(a); return true; }
+  function offer(a) { if (!pinnable(a)) return false; try { navigator.vibrate?.(12); } catch (_) {} show(a); return true; }
   // rows: which tiles inside `menu` can be held; live(row): the surface is still showing when the hold fires.
   // Default is the Apps sheet (#launcher, live while .open). The New desk grid passes its own (it has no .open).
   function attach(menu, appFor, opts = {}) {
@@ -84,7 +103,6 @@
     const block = () => { blockedUntil = performance.now() + 700; };
     menu.addEventListener('pointerdown', e => {
       if (hold) { cancel(); block(); return; }
-      if (!port()) return; // inert until the installed Android app provides the pin bridge (older APKs, browsers, desktop)
       const row = e.target.closest(rows), a = row && appFor(row.dataset.app);
       if (!e.isTrusted || !e.isPrimary || e.button !== 0 || !pinnable(a)) return;
       hold = { id:e.pointerId, x:e.clientX, y:e.clientY, a };

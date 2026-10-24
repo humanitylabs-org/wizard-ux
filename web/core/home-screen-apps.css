@@ -12,3 +12,5 @@ html[data-app-session] .linksheet { position:fixed; padding-top:var(--nat-t,0px)
 .home-pin-sheet header .sgt { width:32px; height:32px; border-radius:9px; }
 .home-pin-sheet button { width:100%; min-height:48px; border:0; border-radius:10px; text-align:left; padding:12px; background:rgba(255,255,255,.06); color:inherit; font:inherit; font-size:15px; }
 .home-pin-sheet button:disabled { opacity:.65; }
+.home-pin-sheet p { margin:12px 8px; line-height:1.5; font-size:14px; }
+.home-pin-sheet input { box-sizing:border-box; width:100%; min-height:44px; margin-top:10px; padding:8px; color:inherit; background:transparent; border:1px solid var(--line-2,#77688e); border-radius:8px; font-size:16px; }

@@ -80,17 +80,21 @@ function pinFixture(status='ready',withPort=true) {
   const timers=new Map();let serial=0,now=0,actualStatus=status;const messages=[];
   const window={WizHomeScreenPolicy:policy().p,WizSigil:{box:()=>'',of:()=>({color:'#FEC25D',letter:'W'})}};
   if(withPort)window.wizardHomeScreenPort={postMessage(raw){const d=JSON.parse(raw);messages.push(d);this.onmessage({data:JSON.stringify({requestId:d.requestId,status:d.op==='pin'?'pending':actualStatus})});}};
-  const ctx=vm.createContext({window,document,performance:{now:()=>now},navigator:{userActivation:{isActive:true},vibrate(){}},setTimeout:(fn,ms)=>{const id=++serial;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id),addEventListener:(t,fn)=>window[t]=fn});
+  const ctx=vm.createContext({window,document,URL,location:{origin:'https://box.example'},performance:{now:()=>now},navigator:{userActivation:{isActive:true},vibrate(){}},setTimeout:(fn,ms)=>{const id=++serial;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id),addEventListener:(t,fn)=>window[t]=fn});
   vm.runInContext(read('core/home-screen-apps.js'),ctx);
   window.WizHomeScreenApps.attach(menu,()=>({id:'wisdom',name:'Wisdom',kind:'wizard',url:'/wisdom/'}));
   const event=(extra={})=>({target:row,isTrusted:true,isPrimary:true,button:0,pointerId:1,clientX:50,clientY:50,detail:1,preventDefault(){this.prevented=true;},stopPropagation(){},stopImmediatePropagation(){this.stopped=true;},...extra});
   const tick=ms=>{now+=ms;for(const [id,t] of [...timers])if(t.ms===ms){timers.delete(id);t.fn();}};
   return {window,document,body,menu,event,tick,messages,ctx,setStatus:s=>actualStatus=s};
 }
-test('without the native pin bridge (older APK, browser, desktop) long-press stays inert and ordinary tap survives',()=>{
-  const f=pinFixture('ready',false);const down=f.menu.emit('pointerdown',f.event());f.tick(450);
-  assert.equal(f.window.WizHomeScreenApps.state.open,false);assert.equal(f.body.children.length,0);
-  f.document.emit('pointerup',f.event());assert.equal(f.menu.emit('click',f.event()).stopped,undefined);
+test('without native bridge long-press offers browser install without sending native requests',()=>{
+  const f=pinFixture('ready',false);f.menu.emit('pointerdown',f.event());f.tick(450);
+  assert.equal(f.window.WizHomeScreenApps.state.open,true);
+  assert.equal(f.body.children[0].querySelector('button').textContent,'Add to home screen');
+  assert.equal(f.body.children[0].querySelector('input').value,'https://box.example/wizard-os-home/install/wisdom/');
+  assert.equal(f.messages.length,0);
+  assert.equal(f.window.WizHomeScreenApps.back(),true);
+  assert.equal(f.window.WizHomeScreenApps.state.open,false);
 });
 test('long-press cancels on move, scroll, pointercancel and second pointer; ordinary tap survives',()=>{
   for (const action of ['move','scroll','cancel','second']) {
