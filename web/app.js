@@ -420,7 +420,7 @@
     const h = deskSigil(idx); if (h !== orbAppHtml) { orbAppHtml = h; el.innerHTML = h; }
   }
   function renderDots() {
-    window.WosBell?.paint();
+    window.WosBell?.paint?.();
     if (typeof paintOrbBadge === 'function') try { paintOrbBadge(); } catch (_) {}
     paintOrbApp();
     const mk = i => `<button class="ddot sig${desks[i].wins.length ? ' filled' : ''}${desks[i].home ? ' dhome' : ''}${isReviewDesk(i) ? ' review' : ''}" data-goto="${i}" aria-label="${esc(deskName(i))}">${deskSigil(i)}</button>`;
@@ -622,6 +622,13 @@
         return;
       }
       clearTimeout(OV.hold);
+      if (OV.drag && !OV.reordered && e.changedTouches?.[0] && Math.hypot(e.changedTouches[0].clientX - OV.dx, e.changedTouches[0].clientY - OV.dy) < 12) {
+        // Held and let go in place: nothing moved, so offer Add to home screen for a one-app desk (drag still reorders).
+        const d = desks[posOf(OV.card.dataset.ov)], w = d && d.wins.length === 1 ? W[d.wins[0]] : null, a = w?.app === 'frame' ? APP[w.appId] : null;
+        endDrag(false); ovTapBlock = Date.now() + 400; OV = null;
+        if (a) window.WizHomeScreenApps?.offer(a);
+        return;
+      }
       if (OV.drag) { endDrag(true); ovTapBlock = Date.now() + 400; }
       else if (el.classList.contains('ov-pill') && e.changedTouches?.[0]) {
         // Pill mode: a clear swipe down (list at its top) folds it back into the pill.
@@ -632,7 +639,7 @@
     };
     el.addEventListener('touchend', end); el.addEventListener('touchcancel', end);
     function startDrag(c, x, y) {
-      OV.drag = true; OV.card = c; const r = c.getBoundingClientRect(); OV.ox = x - r.left; OV.oy = y - r.top;
+      OV.drag = true; OV.card = c; OV.dx = x; OV.dy = y; OV.reordered = false; const r = c.getBoundingClientRect(); OV.ox = x - r.left; OV.oy = y - r.top;
       c.classList.add('drag'); el.classList.add('dragging', 'editing'); vib(16); ovLog('drag');
       OV.ghost = c.cloneNode(true); OV.ghost.classList.add('ghost'); OV.ghost.style.width = r.width + 'px'; OV.ghost.style.height = r.height + 'px'; el.appendChild(OV.ghost);
       moveDrag(x, y);
@@ -647,7 +654,7 @@
         // Home stays first, but its drop zone means "first app", before Chats or any other tab.
         // Rejecting Home as a target made the left edge feel like a pinned Chats slot.
         const before = over.classList.contains('ov-home') || a < b ? over.nextSibling : over;
-        if (before !== OV.card) { grid.insertBefore(OV.card, before); vib(6); }
+        if (before !== OV.card) { grid.insertBefore(OV.card, before); OV.reordered = true; vib(6); }
       }
       // Near the top or bottom edge: scroll so far desks can be reached while dragging.
       const sc = el.querySelector('.ov-scroll'), sr = sc ? sc.getBoundingClientRect() : dr, so = sc || el;
@@ -1894,7 +1901,7 @@
     settingsEl.style.transform = `translate3d(${off}px,0,0)`;
     if (at === idx && !dx && !sheet) { // home again: Settings is the open sheet once more
       dropParkedSettings(); if (anim) settingsEl.style.transition = 'transform 520ms var(--ease)';
-      sheet = 'settings'; device.classList.add('sheet-open');
+      sheet = 'settings'; device.classList.add('sheet-open'); tourEv('sheet', { which: 'settings' }); // same handoff as openSheet
       window.WosResources?.sync(); window.WosScenery?.update();
     }
   }
@@ -1987,6 +1994,8 @@
     closeSheets(); setTimeout(() => openApp(a), 120);
   }
   window.WizHomeScreenApps?.attach(launcher, id => APP[id]);
+  // Miguel's skins open apps from the New desk grid (swipe up shows Desks, not the Apps sheet): same long-press there.
+  window.WizHomeScreenApps?.attach(track, id => APP[id], { rows: '.new-desk [data-app]', live: row => !!row.closest('.new-desk') && row.getClientRects().length > 0 });
   launcher.addEventListener('click', e => {
     const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app]);
     const bi = e.target.closest('[data-appinfo]'); if (bi) { closeSheets(); return openAppInfo(bi); }
@@ -2502,7 +2511,7 @@
     // One recorder pathway (James, 18 Oct 2026: "the orb works … shouldn't the microphone button be triggering the same
     // pathway"): startVoice owns admission, so a Mizel meeting lends its microphone to the composer mic exactly as it
     // does to the orb, and the reply pin is set before the take opens (it survives the asynchronous loan).
-    startVoice('auto', { replyTo: { wid, sid, steerRunId: CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : '' } });
+    startVoice('auto', { replyTo: { wid, sid, steerRunId: CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : '' } });
     // No pill (James, 10 Oct 2026: "a giant pillbox pops up and covers my orb … I know I'm replying. The orb
     // animates."): the lit mic, the orb and its timer already say a reply is recording.
     return 'recording';
@@ -2894,7 +2903,7 @@
     }
     const it = await OUTBOX.stage({ ...(snap.route || {}), kind: sid && sid !== '__new__' ? 'reply' : 'new',
       sessionId: sid && sid !== '__new__' ? sid : '',
-      steerRunId: snap.meetingEventId ? '' : rt?.steerRunId ?? (CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '', ...(snap.seal?.reply ? { reply: snap.seal.reply } : {}),
+      steerRunId: snap.meetingEventId ? '' : rt?.steerRunId ?? (CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '', ...(snap.seal?.reply ? { reply: snap.seal.reply } : {}),
       meetingEventId:snap.meetingEventId,sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || snap.route?.agent || '',
       files: [...takeFiles(), ...(snap.seal?.files || [])].filter(f => f?.id),
       instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: rt?.wid || sv?.id || '' });
@@ -2930,6 +2939,11 @@
       }
       const text = words.filter(Boolean).join(' ').trim();
       if (!text) {
+        // A silent held take is a quick command that never happened (James, 23 Oct 2026): nothing to recover,
+        // so it finishes custody instead of piling up in Unsent. A take carrying composer text or files keeps them.
+        if (kind === 'command' && await OUTBOX.completeLocal(snap.custodyId)) {
+          releaseNative(); unhold(); setVoice('idle'); txHide(); toast('◌', 'No speech heard · nothing sent'); tourEv('nospeech'); return;
+        }
         await OUTBOX.transition(snap.custodyId, 'empty', 'No speech detected · original recording and composer kept together');
         releaseNative(); unhold(); setVoice('idle'); txHide();
         toast('◌', 'No speech detected · recording and text kept in Unsent'); tourEv('nospeech'); return;

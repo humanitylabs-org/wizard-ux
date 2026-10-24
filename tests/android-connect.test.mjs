@@ -31,3 +31,8 @@ test('Change Wizard uses shared settings and only invokes native navigation', ()
   assert.equal(view.dispatch(element), true);
   assert.equal(calls, 1);
 });
+
+test('QR scanner follows the phone orientation (zxing CaptureActivity is landscape by default)', () => {
+  const m = fs.readFileSync(new URL('../android/app/src/main/AndroidManifest.xml', import.meta.url), 'utf8');
+  assert.match(m, /com\.journeyapps\.barcodescanner\.CaptureActivity"\s+android:screenOrientation="fullSensor"\s+tools:replace="screenOrientation"/);
+});

@@ -11,13 +11,13 @@ const FALLBACK = process.env.QA_FALLBACK_WEB || require('node:path').join(requir
 let pass = 0, fail = 0;
 const ok = (c, n, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 'FAIL'} ${n}${d !== '' ? ' ' + JSON.stringify(d) : ''}`); };
 const now = Date.now() / 1000, sleep = ms => new Promise(r => setTimeout(r, ms));
-const S = ['t_once', 't_many', 't_tap', 't_leave', 't_403'].map((id, i) => ({ id, title: 'QA ' + id, source: 'wizard-mobile', message_count: 2, last_active: now - 600 - i * 60, started_at: now - 3600, archived: false, hidden: false, status: null, preview: 'answer ' + id }));
+const S = ['t_once', 't_many', 't_tap', 't_leave', 't_403', 't_404'].map((id, i) => ({ id, title: 'QA ' + id, source: 'wizard-mobile', message_count: 2, last_active: now - 600 - i * 60, started_at: now - 3600, archived: false, hidden: false, status: null, preview: 'answer ' + id }));
 const rows = id => [
   { id: 1, role: 'user', content: 'question ' + id, timestamp: now - 900 },
   { id: 2, role: 'assistant', content: 'Answer for ' + id + '.', timestamp: now - 880 },
 ];
 // failuresLeft[id] = how many message reads fail before one succeeds (Infinity = keep failing until changed)
-const failuresLeft = { t_once: 1, t_many: 3, t_tap: Infinity, t_leave: Infinity, t_403: Infinity };
+const failuresLeft = { t_once: 1, t_many: 3, t_tap: Infinity, t_leave: Infinity, t_403: Infinity, t_404: Infinity };
 const reads = {};
 
 (async () => {
@@ -35,6 +35,7 @@ const reads = {};
       if (failuresLeft[id] > 0) {
         failuresLeft[id]--;
         if (id === 't_403') return json(403, { error: { message: 'sign in' } });
+        if (id === 't_404') return json(404, { error: { message: 'not found' } });
         if (id === 't_many') return json(502, { error: { message: 'bad gateway' } });
         return r.abort('connectionreset'); // a dropped read, like a phone network blip
       }
@@ -110,6 +111,15 @@ const reads = {};
   const s403 = await until(s => !!s.err, 5000);
   ok(/sign-in/.test(s403.s.err), '403 still says Wizard sign-in needed', s403.s.err);
   ok(!/connection/.test(s403.s.err) && !s403.s.retry, 'another thread’s read error never shows on this one', s403.s);
+
+  await back();
+
+  // 6. 404: the thread is gone. Say so plainly and never loop.
+  await open('t_404');
+  const s404 = await until(s => !!s.err, 5000);
+  ok(/no longer here/.test(s404.s.err) && !s404.s.retry && !/Retrying/.test(s404.s.err), 'a missing thread says it is gone, with no retry loop', s404.s);
+  await sleep(2000); const n404 = reads.t_404.length; await sleep(8000); // settle the open's own reads, then watch for a loop
+  ok(reads.t_404.length === n404, 'a missing thread stops being read (no retry loop)', { before: n404, after: reads.t_404.length, gaps: reads.t_404.map(t => t - reads.t_404[0]) });
 
   ok(errs.length === 0, 'no page errors', errs);
   console.log(`\n${pass} passed, ${fail} failed`);
