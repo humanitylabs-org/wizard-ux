@@ -195,6 +195,7 @@
 
 /* Named recipes and New skin extend the shared settings sheet, cards and switch rows. */
 .st-root .skp-families .skp-nm { overflow-wrap: anywhere; }
+.st-root[data-settings-nested="true"] .st-page-head button { display: grid; }
 .st-root .skin-create { width: 100%; max-width: none; max-height: none; overflow: visible; }
 .st-root .skin-create > .st-actions { bottom: 0; margin: 12px 0 0; padding: 12px 0; z-index: 1; }
 .st-root .st-skin-toast { position: sticky; bottom: 12px; display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--wz-border); border-radius: 12px; background: linear-gradient(var(--wz-overlay), var(--wz-overlay)), var(--wz-base); color: var(--wz-text); z-index: 2; }

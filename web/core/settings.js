@@ -224,7 +224,7 @@
   register({ id: 'look', aliases: ['skin'], html(ctx) {
     const S = window.WosSkin; if (!S) return '';
     return lookHtml(S, ctx);
-  }, deferRefresh: ctx => !!ctx.skinDraft,
+  }, deferRefresh: ctx => !!(ctx.skinDraft || ctx.skinRemove),
   leave(ctx) { ctx.skinDraft = null; ctx.skinRemove = null; },
   back(ctx) {
     if (ctx.skinRemove) { ctx.skinRemove = null; ctx.render(); return true; }
@@ -377,6 +377,7 @@
       const content = fs.map(f => `<section data-settings-feature="${esc(f.id)}">${f.html(ctx)}</section>`).join('');
       const footer = `<footer class="st-shortcuts">${window.WosFiles ? '<button data-st-shortcut="files" data-st="files">Files</button>' : ''}${(window.WosFeatures?.entries || []).filter(f => !f.available || f.available()).map(f => `<button data-st-shortcut="${esc(f.id)}">${esc(f.title || f.id)}</button>`).join('')}</footer>`;
       root.dataset.settingsPage = page;
+      root.dataset.settingsNested = ctx.skinDraft ? 'true' : 'false';
       root.innerHTML = `<div class="st-inner ${desktop ? 'st-desktop' : 'st-phone'} ${page ? 'st-in-page' : ''}"><div class="st-index"><h3 class="st-title" tabindex="-1">Settings</h3>${card}${attentionHtml}<nav aria-label="Settings categories">${nav}</nav>${footer}</div><div class="st-page" ${selected ? '' : 'hidden'}><header class="st-page-head"><button data-st-back aria-label="${ctx.skinDraft ? 'Back to Look' : 'Back to Settings'}">‹</button><h3 tabindex="-1">${ctx.skinDraft ? 'New skin' : heading}</h3></header>${content}</div></div>${confirm ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="st-confirm-title"><h3 id="st-confirm-title">Use ${esc(chatsName(confirm.id))} for all your chats?</h3><p>You can switch back here any time.</p><div class="st-actions"><button data-chats-cancel ${ctx.chatsBusy ? 'disabled' : ''}>Cancel</button><button data-chats-confirm ${ctx.chatsBusy ? 'disabled' : ''}>${ctx.chatsBusy ? 'Switching…' : 'Use ' + esc(chatsName(confirm.id))}</button></div></section></div>` : ''}`;
       for (const f of fs) if (f.painted) { try { f.painted(ctx, root.querySelector(`[data-settings-feature="${CSS.escape(f.id)}"]`)); } catch (e) { console.error(e); } }
       root.scrollTop = top;
