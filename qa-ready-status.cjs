@@ -32,6 +32,8 @@ const FIX = {
   qa_rs_check: { title: 'QA rs Check build', t: now - 40, att: { state: 'check', ask: 'Try the new orb timing from the side button', subject: 'Wizard OS' } },
   qa_rs_needs: { title: 'QA rs Needs decision', t: now - 50, att: { state: 'needs_you', ask: 'Say "ship desks" if the preview feels right', subject: 'Wizard OS' } },
   qa_rs_old: { title: 'QA rs Old needs', t: now - 3 * 86400, att: { state: 'needs_you', ask: 'Approve the UPS and Cat6 purchase', subject: 'Home' } },
+  // Newer than qa_rs_old on the same day: Priority must still put the needs-you row first in Past week.
+  qa_rs_old_fyi: { title: 'QA rs Old FYI', t: now - 3 * 86400 + 600, att: { state: 'fyi', ask: 'Summarised the router notes', subject: 'Research' } },
   qa_rs_plain: { title: 'QA rs Plain reply', t: now - 25, att: null },
 };
 const ARCH = new Set();
@@ -98,6 +100,14 @@ function routeFor() {
   const readyIds = async () => { await expandReady(); await sleep(150); return p.$$eval(await R('[data-chopen]'), els => els.map(e => e.dataset.chopen).filter(id => id.startsWith('qa_rs_'))); };
   const rowInfo = async id => p.evaluate(({ sel }) => { const e = document.querySelector(sel); if (!e) return null; return { cls: e.className, pv: e.querySelector('.pv')?.textContent || '', quiet: e.dataset.quiet === '1', op: getComputedStyle(e).opacity }; }, { sel: await R(`[data-chopen="${id}"]`) });
 
+  // Rows of one day section, opened just for the read and closed again so Ready-only reads stay Ready-only.
+  const W = async sel => `[data-chats="${await wid()}"] ${sel}`;
+  const secIds = async k => { const t = await W(`[data-sectoggle="${k}"]`), was = await p.$eval(t, e => e.getAttribute('aria-expanded'));
+    if (was !== 'true') { await p.$eval(t, e => e.click()); await sleep(300); }
+    await p.evaluate(sel => document.querySelector(sel)?.click(), await W(`[data-sec="${k}"] [data-secmore]`)); await sleep(150);
+    const got = await p.$$eval(await W(`[data-sec="${k}"] [data-chopen]`), els => els.map(e => e.dataset.chopen).filter(id => id.startsWith('qa_rs_')));
+    if (was !== 'true') { await p.$eval(await W(`[data-sectoggle="${k}"]`), e => e.click()); await sleep(300); }
+    return got; };
   try {
     const workingVisual = await p.evaluate(sel => {
       const row = document.querySelector(sel), session = window.__wos.live.session('qa_rs_working');
@@ -125,6 +135,10 @@ function routeFor() {
     ok(JSON.stringify(pids) === JSON.stringify(['qa_rs_needs', 'qa_rs_check', 'qa_rs_fyi', 'qa_rs_plain', 'qa_rs_done']), '1 Priority: needs you, then test this, then the rest (even when newer)', pids);
     ok(JSON.stringify(await onNow()) === JSON.stringify(['Newest', 'Priority*', 'By subject']), '1 Priority is highlighted', await onNow());
     ok((await p.$$(await R('.ch-subj'))).length === 0, '1 Priority adds no subsection headers');
+    // James, 23 Oct 2026: "it's not sorting yesterday and this week. It should sort those by the same standard of priority."
+    const pwP = await secIds('pastWeek');
+    ok(JSON.stringify(pwP) === JSON.stringify(['qa_rs_old', 'qa_rs_old_fyi']), '1e Priority also orders Past week: needs you above a newer FYI', pwP);
+    ok((await p.$$(await W('[data-sec="pastWeek"] .ch-rdy-bar'))).length === 0, '1e the order bar stays on Ready only');
     await p.evaluate(sel => document.querySelector(sel)?.scrollIntoView({ block: 'start' }), await R('.ch-sec-h')); await sleep(300);
     await p.screenshot({ path: path.join(OUT, '1b-ready-priority.png') });
     // Priority survives a reload; Newest returns to recency.
@@ -142,6 +156,8 @@ function routeFor() {
     ok(paged === 0, '1 Priority puts a needs-you row from deep in the list on the first page', paged);
     await p.locator(await R('[data-rdyorder="newest"]')).tap(); await sleep(500);
     ok((await readyIds())[0] === 'qa_rs_fyi', '1 back to Newest: the newest thread is at the top again', await readyIds());
+    const pwN = await secIds('pastWeek');
+    ok(JSON.stringify(pwN) === JSON.stringify(['qa_rs_old_fyi', 'qa_rs_old']), '1e Newest: Past week by recency, labels ignored', pwN);
     // Oldest (James, 23 Oct 2026): tapping Newest again lists today's Ready oldest first, newest at the bottom.
     await p.locator(await R('[data-rdyorder="newest"]')).tap(); await sleep(500);
     const old1 = await readyIds();
@@ -152,10 +168,8 @@ function routeFor() {
       const list = Array.from({ length: 50 }, (_, i) => mk(i)).concat([mk(60, { status: 'waiting_for_approval' }), mk(1, { id: 'podef', deferred: true })]);
       const g = L.workGroups(list, now), r = L.readyByOldest(g.ready).map(s => s.id); return { first: r[0], second: r[1], last: r[r.length - 1], def: g.deferred.map(s => s.id).join() }; });
     ok(oldPaged.first === 'po60' && oldPaged.second === 'po49' && oldPaged.last === 'po0' && oldPaged.def === 'podef', '1d Oldest keeps approvals pinned on top; snoozed threads leave Ready', oldPaged);
-    const yOrder = await p.evaluate(w => ['yesterday', 'pastWeek'].every(k => { const want = window.__wos.live.workGroups()[k].map(s => s.id);
-      const got = [...document.querySelectorAll(`[data-chats="${w}"] [data-sec="${k}"] [data-chopen]`)].map(e => e.dataset.chopen);
-      return got.length === 0 || JSON.stringify(got) === JSON.stringify(want.slice(0, got.length)); }), await wid());
-    ok(yOrder, '1d Yesterday and Past week stay newest first', yOrder);
+    const pwO = await secIds('pastWeek');
+    ok(JSON.stringify(pwO) === JSON.stringify(['qa_rs_old', 'qa_rs_old_fyi']), '1e Oldest: Past week oldest first too', pwO);
     await p.locator(await R('[data-rdyorder="newest"]')).tap(); await sleep(500);
     ok((await readyIds())[0] === 'qa_rs_fyi', '1d tapping again returns to Newest', await readyIds());
 
