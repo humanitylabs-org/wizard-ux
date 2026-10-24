@@ -44,7 +44,7 @@ public class DeviceMessageProtocolTest {
         assertEquals(1, packages.getInt("v"));
         JSONObject identity = caps.getJSONObject("capabilities").getJSONObject("identity");
         assertEquals(1, identity.getInt("v"));
-        assertEquals("[\"identity.info\",\"identity.setup\",\"identity.sign\"]", identity.getJSONArray("methods").toString());
+        assertEquals("[\"identity.info\",\"identity.setup\",\"identity.sign\",\"identity.nip44_encrypt\",\"identity.nip44_decrypt\"]", identity.getJSONArray("methods").toString());
         assertEquals(1, caps.getJSONObject("capabilities").getJSONObject("view.capture").getInt("v"));
         JSONArray methods = packages.getJSONArray("methods");
         assertEquals(8, methods.length());

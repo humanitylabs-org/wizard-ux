@@ -55,6 +55,7 @@ public final class WizardId {
     private byte[] imported;
     private int generation;
     private boolean setupRequest;
+    private String requester = "";
     private int base = Color.rgb(15,16,20), ink = Color.rgb(244,240,232), accent = Color.rgb(182,159,255), warning = Color.rgb(255,193,92);
     public WizardId(FragmentActivity activity) { this.activity = activity; vault = new KeyVault(activity); }
     private static JSONObject value(String key, Object value) {
@@ -78,13 +79,43 @@ public final class WizardId {
         if (completion != null) { reply.accept(value("denied", true)); return false; }
         generation++; completion = reply; main.postDelayed(expire, 180000); return true;
     }
-    public void setup(Consumer<JSONObject> reply) { if (begin(reply)) { setupRequest = true; if (vault.enrolled()) settings(); else onboarding(); } }
-    public void sign(JSONObject input, Consumer<JSONObject> reply) {
+    public void setup(Consumer<JSONObject> reply) { if (begin(reply)) { requester = ""; setupRequest = true; if (vault.enrolled()) settings(); else onboarding(); } }
+    public void sign(JSONObject input, String app, Consumer<JSONObject> reply) {
         if (!begin(reply)) return;
+        requester = cleanRequester(app);
         setupRequest = false;
         try {
             if (!vault.enrolled()) throw new IllegalStateException("No Wizard ID");
             approval(NostrEvent.normalize(input, vault.publicKey(), System.currentTimeMillis()/1000), this::finish);
+        } catch (Exception e) { finish(value("denied", true)); }
+    }
+    private static String cleanRequester(String app) {
+        String safe = app == null ? "" : app.replaceAll("[\\p{Cc}\\p{Cf}]", "").trim();
+        return safe.substring(0, Math.min(80, safe.length()));
+    }
+    private void requesterLabel(LinearLayout body) { if (!requester.isEmpty()) text(body, requester + " asks:", 16); }
+    public void nip44(JSONObject params, boolean encrypt, String app, Consumer<JSONObject> reply) {
+        if (!begin(reply)) return;
+        setupRequest = false; requester = cleanRequester(app);
+        try {
+            if (!vault.enrolled()) throw new IllegalStateException("No Wizard ID");
+            String pubkey = params.getString("pubkey"), data = params.getString(encrypt ? "plaintext" : "ciphertext");
+            Nip44.publicKey(pubkey);
+            if (encrypt) Nip44.validatePlaintext(data); else Nip44.validatePayload(data);
+            String sentence = encrypt ? NostrEvent.encryptionSentence(data, pubkey, vault.publicKey()) : "Open a sealed message from " + NostrEvent.shortNpub(pubkey);
+            LinearLayout b = sheet("Wizard ID", false, this::cancel); requesterLabel(b);
+            text(b, sentence, 22); text(b, vault.name() + " · " + info().optString("npub"), 14);
+            if (encrypt) {
+                TextView details = text(b, data, 12); details.setVisibility(View.GONE);
+                button(b, "Advanced · message details", () -> details.setVisibility(details.getVisibility() == View.GONE ? View.VISIBLE : View.GONE));
+            }
+            button(b, encrypt ? "Approve & encrypt" : "Approve & open", () -> {
+                try { authenticate(vault.newSigningCipher(), sentence.substring(0, Math.min(200, sentence.length())), cipher -> {
+                    try { finish(value(encrypt ? "ciphertext" : "plaintext", vault.nip44(cipher, pubkey, data, encrypt))); }
+                    catch (Exception e) { finish(value("denied", true)); }
+                }); } catch (Exception e) { finish(value("denied", true)); }
+            });
+            button(b, "Cancel", this::cancel);
         } catch (Exception e) { finish(value("denied", true)); }
     }
     public void cancel() { if (completion != null) finish(value(setupRequest ? "cancelled" : "denied", true)); }
@@ -237,7 +268,9 @@ public final class WizardId {
     }
     private void approval(JSONObject event, Consumer<JSONObject> signed) throws Exception {
         LinearLayout b = sheet("Wizard ID",false,this::cancel); String sentence = NostrEvent.sentence(event);
+        requesterLabel(b);
         text(b,sentence,22); text(b,vault.name()+" · "+info().optString("npub"),14);
+        String devices = NostrEvent.deviceBody(event); if (!devices.isEmpty()) text(b, devices, 16);
         TextView details = text(b,event.toString(2),12);
         if (!sentence.equals("Unfamiliar request")) {
             details.setVisibility(View.GONE); button(b,"Advanced · event details",() -> details.setVisibility(details.getVisibility()==View.GONE?View.VISIBLE:View.GONE));

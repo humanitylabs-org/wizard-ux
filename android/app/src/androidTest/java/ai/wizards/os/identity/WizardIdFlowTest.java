@@ -83,6 +83,7 @@ public class WizardIdFlowTest {
             call("settings","identity.setup",null); visible("Backed up"); screenshot("settings-light.png"); device.pressBack(); result("settings"); alive();
             JSONObject app=new JSONObject().put("kind",30617).put("tags",new JSONArray("[[\"d\",\"editor\"]]")).put("content","");
             call("app","identity.sign",new JSONObject().put("event",app)); visible("Publish editor as your app"); screenshot("approval-app-light.png"); device.pressBack(); assertTrue(result("app").getBoolean("denied")); alive();
+            installedAppIdentity(info);
             // Restore the backed-up key after simulating a fresh install.
             assertTrue(context.getSharedPreferences("wizard-id-v1",0).edit().clear().commit()); store.deleteEntry(KeyVault.ALIAS);
             call("restore","identity.setup",null); visible("Create your Wizard ID"); click("Use my existing key"); visible("I have a Wizard ID");
@@ -102,6 +103,53 @@ public class WizardIdFlowTest {
             write("receipt.json",new JSONObject().put("status","ok").put("package",BuildConfig.APPLICATION_ID).put("synthetic_pin",true).put("backed_up",true)
                 .put("npub",info.getString("npub")).put("signed_event_id",signed.getString("id")).put("skin_count",2).put("physical_phone",false).toString(2));
         } finally { if(scenario!=null)scenario.close(); Files.deleteIfExists(new File(context.getFilesDir(),"qa_home.txt").toPath()); }
+    }
+    private void installedAppIdentity(JSONObject info) throws Exception {
+        waitFor(() -> "true".equals(evaluate("!!document.getElementById('profiles')?.contentWindow.WizardApp")));
+        assertEquals(info.getString("pubkey"), result(appCall("app-info", "info", null)).getString("pubkey"));
+        String publicKey = info.getString("pubkey"), shortKey = NostrEvent.shortNpub(publicKey);
+        JSONObject devices = new JSONObject().put("kind", 30078).put("content", "").put("tags", new JSONArray()
+            .put(new JSONArray().put("d").put("wizard-devices"))
+            .put(new JSONArray().put("p").put(publicKey).put("wss://relay.example").put("inbox")));
+        // The app cannot rename itself with requester fields; every visible label is catalog-owned.
+        for (String skin : new String[]{"light", "dark"}) {
+            if ("dark".equals(skin)) evaluate("document.documentElement.style.cssText='--wz-base:#101018;--wz-text:#f8f4ec;--wz-accent:#b89cff;--wz-warning:#ffd080'");
+            appCall("devices-" + skin, "sign", devices); visible("Let this Wizard receive for you"); visible("Profiles asks:"); visible("Wizard: " + shortKey);
+            screenshot("approval-devices-" + skin + ".png");
+            if ("light".equals(skin)) { device.pressBack(); assertTrue(result("devices-" + skin).getBoolean("denied")); alive(); }
+            else { click("Approve & sign"); pin(); verify(result("devices-" + skin)); }
+        }
+        devices.getJSONArray("tags").put(new JSONArray().put("revoked").put(publicKey).put("123"));
+        appCall("device-revoke", "sign", devices); visible("Remove a Wizard from your Wizard ID"); screenshot("approval-revoke-dark.png");
+        device.pressBack(); assertTrue(result("device-revoke").getBoolean("denied")); alive();
+        JSONObject rumor = new JSONObject().put("kind", 1078).put("content", "synthetic friend profile").put("tags", new JSONArray()
+            .put(new JSONArray().put("t").put("wizard-profile")).put(new JSONArray().put("p").put(publicKey)));
+        JSONObject encrypt = new JSONObject().put("pubkey", publicKey).put("plaintext", rumor.toString()).put("requester", "Fake bank").put("description", "Harmless login");
+        appCall("encrypt-deny", "nip44_encrypt", encrypt); visible("Add " + shortKey + " as a friend · sealed to " + shortKey); visible("Profiles asks:");
+        assertFalse(device.hasObject(By.textContains("Fake bank"))); assertFalse(device.hasObject(By.textContains("Harmless login")));
+        screenshot("approval-encrypt-dark.png"); device.pressBack(); assertTrue(result("encrypt-deny").getBoolean("denied")); alive();
+        appCall("encrypt", "nip44_encrypt", encrypt); visible("Profiles asks:"); click("Approve & encrypt"); pin();
+        JSONObject encrypted = result("encrypt"); assertEquals(1, encrypted.length()); String ciphertext = encrypted.getString("ciphertext");
+        assertFalse(ciphertext.contains("synthetic friend"));
+        JSONObject decrypt = new JSONObject().put("pubkey", publicKey).put("ciphertext", ciphertext);
+        appCall("decrypt-deny", "nip44_decrypt", decrypt); visible("Open a sealed message from " + shortKey); visible("Profiles asks:");
+        screenshot("approval-decrypt-dark.png"); device.pressBack(); assertTrue(result("decrypt-deny").getBoolean("denied")); alive();
+        appCall("decrypt", "nip44_decrypt", decrypt); visible("Open a sealed message from " + shortKey); click("Approve & open"); pin();
+        JSONObject opened = result("decrypt"); assertEquals(1, opened.length()); assertEquals(rumor.toString(), opened.getString("plaintext"));
+        // Tampering is denied after a separate fresh PIN, never producing unauthenticated plaintext.
+        byte[] corrupt = android.util.Base64.decode(ciphertext, android.util.Base64.NO_WRAP); corrupt[corrupt.length - 1] ^= 1;
+        decrypt.put("ciphertext", android.util.Base64.encodeToString(corrupt, android.util.Base64.NO_WRAP));
+        appCall("decrypt-corrupt", "nip44_decrypt", decrypt); visible("Open a sealed message from " + shortKey); click("Approve & open"); pin();
+        assertTrue(result("decrypt-corrupt").getBoolean("denied")); alive();
+        JSONObject seal = new JSONObject().put("kind", 13).put("tags", new JSONArray()).put("content", ciphertext);
+        appCall("seal", "sign", seal); visible("Send a sealed friend request"); visible("Profiles asks:"); screenshot("approval-seal-dark.png");
+        device.pressBack(); assertTrue(result("seal").getBoolean("denied")); alive();
+        write("apps-receipt.json", new JSONObject().put("status", "ok").put("app", "profiles").put("device_list_signed", true)
+            .put("nip44_roundtrip", true).put("tamper_denied", true).put("back_stays_in_app", true).put("fresh_pin_operations", 4).toString(2));
+    }
+    private String appCall(String id, String method, JSONObject args) throws Exception {
+        evaluate("document.getElementById('profiles').contentWindow.WizardApp.identity[" + JSONObject.quote(method) + "](" + (args == null ? "" : args.toString()) + ")"
+            + ".then(r=>qaReplies[" + JSONObject.quote(id) + "]=r).catch(e=>qaReplies[" + JSONObject.quote(id) + "]={error:e.message})"); return id;
     }
     private String call(String id,String method,JSONObject params) throws Exception {
         evaluate("WizCore.bridge.call("+JSONObject.quote(method)+","+(params==null?"{}":params.toString())+").then(r=>qaReplies["+JSONObject.quote(id)+"]=r).catch(e=>qaReplies["+JSONObject.quote(id)+"]={error:e.message})"); return id;
@@ -138,19 +186,24 @@ public class WizardIdFlowTest {
     private void waitFor(Check check)throws Exception{long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(30);while(System.nanoTime()<end){if(check.get())return;Thread.sleep(200);}fail("Timed out waiting for Wizard ID QA");}
     private static class Fixture implements AutoCloseable {
         final ServerSocket socket=new ServerSocket(0,10,InetAddress.getByName("127.0.0.1")); volatile boolean running=true;
-        final byte[] bridge;
+        final java.util.Map<String, byte[]> scripts = new java.util.HashMap<>();
         Fixture() throws Exception {
-            try(InputStream in=InstrumentationRegistry.getInstrumentation().getContext().getAssets().open("bridge.js")){bridge=readBytes(in);}
+            for (String name : new String[]{"bridge.js", "app-services.js", "app-client.js"}) {
+                try(InputStream in=InstrumentationRegistry.getInstrumentation().getContext().getAssets().open(name)){ scripts.put("/" + name, readBytes(in)); }
+            }
             new Thread(()->{while(running)try{respond(socket.accept());}catch(IOException ignored){}},"IdentityFixture").start();
         }
         private static byte[] readBytes(InputStream in)throws IOException{ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1)out.write(b,0,n);return out.toByteArray();}
         String origin(){return "http://localhost:"+socket.getLocalPort();}
         private void respond(Socket s)throws IOException {
             try(Socket client=s){client.setSoTimeout(3000);BufferedReader in=new BufferedReader(new InputStreamReader(client.getInputStream(),StandardCharsets.UTF_8));String request=in.readLine();if(request==null)return;String line;while((line=in.readLine())!=null&&!line.isEmpty()){}
-                boolean script=request.startsWith("GET /bridge.js ");
-                String html="<!doctype html><html style='--wz-base:#0f1014;--wz-text:#f4f0e8;--wz-accent:#b69fff;--wz-warning:#ffc15c'><title>Wizard OS</title><!-- core/ isolated fixture --><meta name='viewport' content='width=device-width,initial-scale=1'><body style='background:#0f1014;color:white;padding:100px 24px'><h1>Wizard ID isolated QA</h1><script>window.qaReplies={};</script><script src='/bridge.js'></script></body></html>";
+                String path = request.split(" ")[1]; boolean script = scripts.containsKey(path);
+                String html="<!doctype html><html style='--wz-base:#0f1014;--wz-text:#f4f0e8;--wz-accent:#b69fff;--wz-warning:#ffc15c'><title>Wizard OS</title><!-- core/ isolated fixture --><meta name='viewport' content='width=device-width,initial-scale=1'><body style='background:#0f1014;color:white;padding:100px 24px'><h1>Wizard ID isolated QA</h1><script>window.qaReplies={};</script><script src='/bridge.js'></script>"
+                    + "<script>WizCore.apps=()=>({APPS:[{id:'profiles',name:'Profiles',kind:'wizard',source:'apps.json',url:'/profiles/'}]});</script><script src='/app-services.js'></script>"
+                    + "<iframe id='profiles' src='/profiles/'></iframe><script>WizAppServices.attach(document.getElementById('profiles'),{appId:'profiles',path:'/profiles/'});</script></body></html>";
+                if(path.equals("/profiles/")) html="<!doctype html><title>Profiles</title><script src='/app-client.js'></script><script>WizardApp.ready({name:'Profiles'});</script>";
                 if(request.startsWith("GET /child "))html="<script>wizardDevicePort.onmessage=()=>parent.postMessage('native-reply',location.origin);wizardDevicePort.postMessage(JSON.stringify({v:1,id:'child',method:'identity.info',params:{}}));</script>";
-                byte[] bytes=script?bridge:html.getBytes(StandardCharsets.UTF_8);OutputStream out=client.getOutputStream();out.write(("HTTP/1.1 200 OK\r\nContent-Type: "+(script?"application/javascript":"text/html")+"\r\nContent-Length: "+bytes.length+"\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.UTF_8));out.write(bytes);out.flush();}
+                byte[] bytes=script?scripts.get(path):html.getBytes(StandardCharsets.UTF_8);OutputStream out=client.getOutputStream();out.write(("HTTP/1.1 200 OK\r\nContent-Type: "+(script?"application/javascript":"text/html")+"\r\nContent-Length: "+bytes.length+"\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.UTF_8));out.write(bytes);out.flush();}
         }
         @Override public void close()throws IOException{running=false;socket.close();}
     }

@@ -73,10 +73,56 @@ public final class NostrEvent {
             case 0: return "Update your profile";
             case 1: return "Post publicly";
             case 3: return "Change who you follow";
+            case 13: return "Send a sealed friend request";
+            case 30078:
+                if ("wizard-devices".equals(tag(e, "d"))) return hasTag(e, "revoked") ? "Remove a Wizard from your Wizard ID" : "Let this Wizard receive for you";
+                return "Unfamiliar request";
+            case 1078:
+                if (hasTagValue(e, "t", "wizard-profile") && tag(e, "p").matches("[0-9a-f]{64}")) return "Add " + shortNpub(tag(e, "p")) + " as a friend";
+                return "Unfamiliar request";
             case 30117: return "Publish " + name(e) + " as your skin";
             case 30617: return "Publish " + name(e) + " as your app";
             default: return "Unfamiliar request";
         }
+    }
+    public static String tag(JSONObject e, String key) throws JSONException {
+        JSONArray tags = e.getJSONArray("tags");
+        for (int i = 0; i < tags.length(); i++) { JSONArray t = tags.getJSONArray(i); if (key.equals(t.optString(0))) return t.optString(1); }
+        return "";
+    }
+    private static boolean hasTag(JSONObject e, String key) throws JSONException {
+        JSONArray tags = e.getJSONArray("tags");
+        for (int i = 0; i < tags.length(); i++) if (key.equals(tags.getJSONArray(i).optString(0))) return true;
+        return false;
+    }
+    private static boolean hasTagValue(JSONObject e, String key, String value) throws JSONException {
+        JSONArray tags = e.getJSONArray("tags");
+        for (int i = 0; i < tags.length(); i++) { JSONArray t = tags.getJSONArray(i); if (key.equals(t.optString(0)) && value.equals(t.optString(1))) return true; }
+        return false;
+    }
+    public static String shortNpub(String hex) {
+        if (!hex.matches("[0-9a-f]{64}")) throw new IllegalArgumentException("Invalid public key");
+        String npub = Nip19.encode("npub", bytes(hex)); return npub.substring(0, 12) + "…" + npub.substring(npub.length() - 6);
+    }
+    public static String deviceBody(JSONObject e) throws JSONException {
+        if (e.getInt("kind") != 30078 || !"wizard-devices".equals(tag(e, "d"))) return "";
+        StringBuilder body = new StringBuilder(); JSONArray tags = e.getJSONArray("tags");
+        for (int i = 0; i < tags.length(); i++) {
+            JSONArray t = tags.getJSONArray(i); String key = t.optString(0), pub = t.optString(1);
+            if (("p".equals(key) || "revoked".equals(key)) && pub.matches("[0-9a-f]{64}")) {
+                if (body.length() > 0) body.append('\n'); body.append("revoked".equals(key) ? "Remove: " : "Wizard: ").append(shortNpub(pub));
+            }
+        }
+        return body.toString();
+    }
+    /** Validate the inner event before describing it, discarding requester-supplied descriptions. */
+    public static String encryptionSentence(String plaintext, String recipient, String owner) {
+        String who = shortNpub(recipient);
+        try {
+            JSONObject inner = new JSONObject(plaintext);
+            JSONObject event = normalize(inner, owner, System.currentTimeMillis() / 1000);
+            return sentence(event) + " · sealed to " + who;
+        } catch (Exception ignored) { return "Encrypt a private message to " + who; }
     }
     private static String name(JSONObject e) throws JSONException {
         JSONArray tags = e.getJSONArray("tags");
