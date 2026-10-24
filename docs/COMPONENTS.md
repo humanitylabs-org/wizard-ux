@@ -24,7 +24,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Native Android screens in the worn skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`: shell `--wz-*` roles saved natively, Nebula fallback) | literal colours in native screens |
 | Native "can't reach your Wizard" screen and the Connect / edit-address screen | `ReachScreen` (`android/app/src/main/java/ai/wizards/os/ReachScreen.java`, rules in `ReachPolicy`; Try again is the only primary, the address is a quiet Edit address line), `ConnectActivity` (`android/app/src/main/java/ai/wizards/os/ConnectActivity.java`, address in `ServerSettings`) | a second offline overlay, a WebView error page, another address editor |
 | Share text or a file out (Wizard's share sheet first: people → Wizard apps → Other apps…) | `WizardApp.share.text / file` | `navigator.share`, an own share picker | cancelled is not reported as shared |
-| Receive shares from other Wizard apps and the chats (people as direct targets) | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound share route, URL-fragment payloads | the item stays pending until `receive` returns true, then is acked once |
+| Receive shares (people as direct targets) | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound share route, URL-fragment payloads | pending until `receive` is true, acked once |
 | Mic, camera, screen capture | `WizardApp.capture.start / pending / ack` | `getUserMedia`, `MediaRecorder` | pending capture survives Back and is acked once |
 | Title-bar tools | `WizardApp.titlebar.set(tools)` | an app header repeating the title | tools appear in the shell title bar |
 | Protect unsaved work from updates | `WizardApp.update.hold` | app service worker, forced reload | hold released only after save + readback |
@@ -56,7 +56,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Brand hat | `WizBrand` (`web/core/brand.js`) | redrawn logos |
 | Links: in-app sheet, image links, long-press Open in your browser / Download / Copy link | `WizLinks` (`web/core/links.js`; Android: `WizardOSNative.openInBrowser` / `download`) | `window.open`, own iframe sheet, own link menu |
 | Text-selection actions | `WosSelMenu` (`web/core/sel-menu.js`) | own context menu |
-| Share sheet (people → Wizard apps → Other apps…), receiver registry and pending handoffs | `WosShareSheet` (`web/core/share-sheet.js`, `web/core/share-sheet.css`), entered only through `WosChat.sharePayload` | a second share picker, sending on an app's behalf |
+| Share sheet, receivers, pending handoffs | `WosShareSheet` (`web/core/share-sheet.js`), entered only via `WosChat.sharePayload` | a second share picker, sending for an app |
 | Screen context for the agent | `WizScreen` (`web/core/screen-text.js`) | own DOM scrape |
 | Dictation into a focused field | `WizCore` focused field (`web/core/focused-field.js`); voice `WizCore` (`web/core/voice.js`); mic choice `WosMic` (`web/core/mic.js`) | own recorder/transcriber |
 | Local commands | `WosCommands` (`web/core/commands.js`) | a second command parser |
