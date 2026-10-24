@@ -37,7 +37,7 @@ test('a changed file gets a new stamp; an unchanged one keeps it', () => {
   writeFileSync(join(b, 'core/notif-bell.js'), readFileSync(join(b, 'core/notif-bell.js'), 'utf8') + '\n// next release\n');
   execFileSync('sh', [STAMP, b]); execFileSync('sh', [STAMP, b]); // a second run leaves stamped links alone
   const va = readFileSync(join(a, 'index.html'), 'utf8'), vb = readFileSync(join(b, 'index.html'), 'utf8');
-  const v = (h, f) => h.match(new RegExp(`"${f.replace(/[./]/g, '\\$&')}\\?v=([0-9a-f]+)"`))[1];
+  const v = (h, f) => { const k = `"${f}?v=`, at = h.indexOf(k); assert.ok(at >= 0, f); return h.slice(at + k.length, h.indexOf('"', at + k.length)); };
   assert.notEqual(v(va, 'core/notif-bell.js'), v(vb, 'core/notif-bell.js'));
   assert.equal(v(va, 'core/chats.js'), v(vb, 'core/chats.js'));
   assert.doesNotMatch(vb, /\?v=[0-9a-f]+\?v=/, 'no double stamps');
