@@ -728,7 +728,7 @@ window.WizCore.chats = function createChats(H) {
       const members = kind === 'space' && LIVE.spaceSessions ? LIVE.spaceSessions(spaces().find(s => s.id === key)?.threads || [], { peek: true }).rows.filter(s => !s.hidden) : null;
       const rows = members || (kind === 'all' ? all : all.filter(s => matchesFocus({ kind, key }, s)));
       // Counts exclude Archive (James, 25 Oct 2026). Unloaded Space members sit beyond the archive window, so they are archived too.
-      return { kind, key, label, badge, count: rows.length - LIVE.workGroups(rows).archive.length, unread: rows.filter(s => LIVE.isNew(s)).length,
+      return { kind, key, label, badge, count: rows.length - LIVE.workGroups(rows).archive.length, unread: LIVE.visibleUnread ? LIVE.visibleUnread(rows).length : rows.filter(s => LIVE.isNew(s)).length,
         recent: rows.reduce((n, s) => Math.max(n, Date.parse(s.activityAt || s.updatedAt || '') || 0), 0) };
     };
     const opts = focusAgents().map(a => stats('agent', a.id, a.label, (AGS()?.sigil(a) || '') + (AGS()?.isPrivate(a) ? AGS().lock() : '')))

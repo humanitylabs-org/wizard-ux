@@ -554,7 +554,18 @@
     agentSessions: {}, agentStatus: {}, // non-default agents: id -> sessions / { ok, error, at }
     onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
     emit() { for (const fn of this.listeners) { try { fn(this); } catch (e) { console.error(e); } } },
-    isNew(s) { return hasNew(s, this.seenOf(s)); },
+    // Archived threads are read (James, 24 Oct 2026): Archive (Done, or aged past archiveAfterDays) never shows unread.
+    isNew(s) { return !this.inArchive(s) && hasNew(s, this.seenOf(s)); },
+    // Same rule as groupWork's Archive section, without the per-row day maths.
+    inArchive(s) {
+      if (!s || s.hidden || needsApproval(s) || inWorking(s) || isDeferred(s) || isErr(s)) return false;
+      if (s.archived) return true;
+      const d = archiveAfterDays(), t = sectionTime(s);
+      return !!d && isFinite(t) && t <= Date.now() - d * DAY;
+    },
+    // Visible unread: threads the Chats list actually shows unread (not hidden, archived or snoozed). Focus badges
+    // (agents, Spaces) count only these, so a dot never points at nothing.
+    visibleUnread(rows) { const g = groupWork(rows || []), out = []; for (const [k, list] of Object.entries(g)) if (k !== 'archive' && k !== 'deferred') for (const s of list) if (hasNew(s, this.seenOf(s))) out.push(s); return out; },
     // Server-owned, agent-qualified receipts: activity metadata only, never transcript text.
     seenOf(s) { return this.seen; },
     seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
@@ -925,6 +936,8 @@
     },
     // Done: archive the thread (PATCH archived). Close & file: the Helm filing route, idempotent by command id.
     archive(id, { file = false } = {}) {
+      // Done marks the thread read too, so it stays read on every client and if it is ever restored.
+      if (this.session(id) && hasNew(this.session(id), this.seenOf(this.session(id)))) this.markSeen(id);
       return this._act(id, { archived: true, deferred: false }, async s => {
         const all = readRestored(); if (all[id]) { delete all[id]; writeRestored(all); }
         if (!file) { await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: true }) }); return; }
