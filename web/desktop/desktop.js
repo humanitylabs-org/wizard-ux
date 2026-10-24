@@ -579,22 +579,35 @@
     ws.splice(cur, 1); cur = ws.indexOf(previous); lastWs = cur; save(); render();
     if (focused()) focusInside(focused().id); CHATS.markVisibleThreadsSeen(); return true;
   }
-  /* Refresh one window in place: an app frame reloads at the page it is on, built-in views remount. The window keeps
-   * its desk, position and size, so nobody has to close and reopen it. Chats windows keep their own live refresh
-   * (4s poll, pull to refresh), so they get no button and ⌥R leaves them alone. */
-  const reloadable = w => !!w && w.app !== 'chats';
+  /* Refresh what is in front, in place: app frames reload at the page they are on, Chats refetches its list and open
+   * thread, built-in views remount, and Home refetches its data. Nothing closes or moves. */
+  const reloadable = w => !!w;
+  function refreshData() { window.WizCore.refreshApps?.(); return Promise.resolve(LIVE?.refresh?.()).catch(() => {}); }
   function reloadWin(id) {
     const w = W[id], el = winEl(id); if (!reloadable(w) || !el) return false;
+    if (w.app === 'chats' || CHATS.isHosted(id)) {
+      refreshData().then(() => {
+        if (!W[id]) return;
+        if (W[id].thread && W[id].thread !== '__new__') CHATS.loadThread(W[id], true);
+        const lp = winEl(id)?.querySelector(`[data-chats="${id}::list"]`); if (lp) CHATS.renderChatList(listWin(id), lp);
+        syncChatsPane(id);
+      });
+      if (w.app === 'chats') { toast('↻', `Refreshed ${winTitle(w)}`, 900); return true; }
+    }
     const f = el.querySelector('.wbody iframe');
     if (f) {
-      // Same-origin apps reload where they are. A cross-origin page can't be reloaded from here, so it restarts at
-      // the app's start page (what close + reopen did) and the toast says so.
+      // Same-origin apps reload where they are; a cross-origin page can only restart at its start page.
       try { f.contentWindow.location.reload(); } catch (e) { f.src = f.src; toast('↻', `Restarted ${winTitle(w)}`, 1100); return true; }
     } else { save(); const host = el.parentNode, next = el.nextSibling, fresh = mountWin(w, host); host.insertBefore(fresh, next); el.remove(); render(); }
     toast('↻', `Refreshed ${winTitle(w)}`, 900);
     return true;
   }
-  function reloadCurrent() { const f = focused(); return f && !homeOpen ? reloadWin(f.id) : false; }
+  function refreshHome() {
+    refreshData().then(() => render());
+    window.WosUsage?.load?.(true)?.then?.(() => { if (!usageEl.hidden) paintUsage(); });
+    render(); toast('↻', 'Refreshed Home', 900); return true;
+  }
+  function reloadCurrent() { if (homeOpen || !ws[cur].wins.length) return refreshHome(); const f = focused(); return f ? reloadWin(f.id) : refreshHome(); }
   function closeCurrent() { const f = focused(); if (f) { closeWin(f.id); return 'app'; } return closeDesktop() ? 'desktop' : 'root'; }
 
   /* ---------------- top bar ---------------- */

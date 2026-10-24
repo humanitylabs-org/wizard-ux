@@ -14,8 +14,8 @@ test('⌥R refreshes the focused window in place (no close/reopen)', () => {
   const body = js.slice(js.indexOf('function reloadWin('), js.indexOf('function reloadCurrent('));
   assert.ok(!/closeWin\(/.test(body), 'refresh must not close the window');
   assert.match(body, /contentWindow\.location\.reload\(\)/, 'app frames reload at their current page');
-  assert.ok(!/CHATS\./.test(body), 'Chats keeps its own live refresh; window refresh never touches chat state');
-  assert.match(js, /const reloadable = w => !!w && w\.app !== 'chats';/);
+  assert.match(body, /CHATS\.loadThread\(W\[id\], true\)/, 'Chats refetches its open thread');
+  assert.match(js, /function refreshHome\(\)/, 'Home refreshes too');
   assert.match(body, /Restarted \$\{winTitle\(w\)\}/, 'cross-origin frames say they restarted, not refreshed');
 });
 
