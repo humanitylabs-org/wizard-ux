@@ -1,8 +1,8 @@
 # Wizard OS components: reuse before build
 
-**One implementation per capability.** Find the need below and reuse its entry point. Extend near-fit modules instead of building beside them. NEW lands in `web/core/` with a row here, never inside an app.
+**One implementation per capability.** Reuse these entry points; extend near-fit modules. NEW goes in `web/core/` with a row, never an app.
 
-Every PR body carries a `Reuse:` block (see `.github/pull_request_template.md`); CI checks it (`tools/reuse-check.mjs`) and checks that every shell global is listed here (`tests/components-inventory.test.mjs`).
+Every PR needs a `Reuse:` block (`.github/pull_request_template.md`); CI checks it (`tools/reuse-check.mjs`) and this inventory (`tests/components-inventory.test.mjs`).
 
 ```
 Reuse:
@@ -22,7 +22,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Back inside the app | `WizardApp.back.register / push / useHistory` | root history guards, CloseWatcher | nested view + Back keeps the app open |
 | Skin, tokens, light/dark | `WizardApp.theme.get / onChange`, `--wz-*` roles | theme storage, own dark mode, literal colours | two skins + a live skin change keep app state |
 | Native Android screens in the worn skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`: shell `--wz-*` roles saved natively, Nebula fallback) | literal colours in native screens |
-| Native "can't reach your Wizard" screen and the Connect / edit-address screen | `ReachScreen` (`android/app/src/main/java/ai/wizards/os/ReachScreen.java`, rules in `ReachPolicy`; Try again is the only primary, the address is a quiet Edit address line), `ConnectActivity` (`android/app/src/main/java/ai/wizards/os/ConnectActivity.java`, address in `ServerSettings`) | a second offline overlay, a WebView error page, another address editor |
+| Native offline / Connect / edit-address screens | `ReachScreen` (`android/app/src/main/java/ai/wizards/os/ReachScreen.java`, `ReachPolicy`: Try again is primary; quiet Edit address), `ConnectActivity` (`android/app/src/main/java/ai/wizards/os/ConnectActivity.java`, `ServerSettings`) | duplicate offline overlays, WebView error pages or address editors |
 | Share text or a file out (Wizard's share sheet first: people → Wizard apps → Other apps…) | `WizardApp.share.text / file` | `navigator.share`, an own share picker | cancelled is not reported as shared |
 | Receive shares (people as direct targets) | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound share route, URL-fragment payloads | pending until `receive` is true, acked once |
 | Mic, camera, screen capture | `WizardApp.capture.start / pending / ack` | `getUserMedia`, `MediaRecorder` | pending capture survives Back and is acked once |
@@ -37,7 +37,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 
 | Need | Use | Never hand-roll |
 |---|---|---|
-| Chat list, persistent bottom Focus strip and Filter-sheet options (All / agent / Space; 32px agent-colour pills, 44px hit areas, shared persisted section collapse), status/search, thread, composer (text or staged attachments are sendable), desktop file drop, thread card, read state, reply action row (Copy · Share; Regenerate only when the skin sets `--wos-reply-regenerate: on`); historical sections appear only when populated | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); `setFocus(w, {kind, key})` / `setFocus(w, null)` persist `w.focus` via shell save; `WizCore.migrateChatsFocus` folds legacy `w.agent` windows on restore; live data `WizLive` (`web/live.js`) | a second thread, composer, Focus/command parser or per-agent thread logic; extra per-reply buttons on every skin |
+| Chat list, Focus strip and Filter sheet (All / agent / Space; 32px coloured pills, 44px hit areas, persisted collapse), search, thread, composer, attachments/drop, read state and Copy · Share actions; Regenerate only with `--wos-reply-regenerate: on`; historical sections only when populated | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); `setFocus(w, {kind, key})` / `setFocus(w, null)` persist `w.focus`; `WizCore.migrateChatsFocus` migrates legacy `w.agent`; data `WizLive` (`web/live.js`) | second thread/composer, Focus parser, per-agent logic or extra per-reply buttons on every skin |
 | Alternative Chats list | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
 | Model picker, errors and retry, composer mic, work receipts, reading place | `WosChatPower` (`web/core/chat-power.js`) + `WosModels` (`web/core/chat-models.js`), `WosErrors` (`web/core/chat-errors.js`), `WosWork` (`web/core/chat-work.js`) | own model list, own error card, own reading-position store |
