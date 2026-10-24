@@ -19,6 +19,13 @@ class ImageContract(unittest.TestCase):
                     branch='main', retry_seconds=0)
         return argparse.Namespace(**(data | kwargs))
 
+    def test_lock_timeout_names_other_lock_openers(self):
+        listing = f'p{os.getpid()}\ncPython\np80520\ncPython\np83965\ncqemu-system-x86\n'
+        with patch.object(ci.subprocess, 'run', return_value=Mock(stdout=listing)):
+            self.assertEqual(ci._lock_holders('/lock'), 'Python[80520], qemu-system-x86[83965]')
+        with patch.object(ci.subprocess, 'run', side_effect=FileNotFoundError):
+            self.assertEqual(ci._lock_holders('/lock'), 'unknown (lsof unavailable)')
+
     def test_clean_environment_removes_all_credentials(self):
         with patch.dict(os.environ, {'GHCR_TOKEN': 'secret', 'DOCKER_AUTH_CONFIG': 'secret', 'GITHUB_TOKEN': 'secret', 'HOME': '/owner'}, clear=False):
             env = ci.clean_env('/isolated')

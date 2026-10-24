@@ -10,6 +10,9 @@
   function chatsVoice(t, snap, kind) {
     const v = snap?.view; if (!v || v.kind !== 'thread list') return null;
     const s = norm(window.WizConfig.stripAddress(t)).replace(/ please$/, '').trim();
+    if (/^(clear focus|all chats|show all chats)$/.test(s)) return { action: 'chats_focus', f: null };
+    const focus = s.match(/^focus (.+)$/);
+    if (focus) { const f = CHATS.matchFilters(focus[1], 20).find(f => f.kind !== 'status'); return f ? { action: 'chats_focus', f } : { action: 'chats_search', q: focus[1] }; }
     if (/^(clear|remove|reset|turn off|drop) (the |all )?(filters?|chips?)$|^(show )?(all|every) (chats|threads)$|^show everything$|^no filters?$/.test(s)) return { action: 'chats_filter', clear: true };
     let m = s.match(/^(?:filter|filtered) (?:by |to |for |on )?(.+)$/) || s.match(/^only (?:show )?(.+)$/) || s.match(/^show (?:me )?(?:only |just )?(?:the |my )?(.+?)(?: only| chats| threads)?$/);
     if (m) {
@@ -112,9 +115,9 @@
    if (/direction|navigat|route/.test(a)) { H.maps('dir', c.destination || c.query || text); return true; }
    if (/maps_search|map/.test(a)) { H.maps('search', c.query || text); return true; }
    if (a === 'quick_search') return H.search(c.query, c.tab);
-   if (a === 'chats_filter' || a === 'chats_search') {
+   if (a === 'chats_focus' || a === 'chats_filter' || a === 'chats_search') {
      const w = H.focused(); if (w?.app !== 'chats') return false;
-     if (c.clear) H.chats.clearAll(w); else if (c.f) H.chats.addFilter(w, c.f); else H.chats.setQuery(w, c.q); return true;
+     if (a === 'chats_focus') H.chats.setFocus(w, c.f); else if (c.clear) H.chats.clearAll(w); else if (c.f) H.chats.addFilter(w, c.f); else H.chats.setQuery(w, c.q); return true;
    }
    if (a === 'open_view' || a === 'view' || a === 'show') {
      const v = c.view;
@@ -131,7 +134,7 @@
  // purchases, searches and app voice handoffs may only acknowledge acceptance.
  function completedLocally(c, ok) {
    return !!ok && !c?.then_agent && ['open_app','open','launch','app','open_view','view','show',
-     'chats_filter','chats_search','desk','clear_desk','close_window','fullscreen','move_window'].includes(c?.action);
+     'chats_focus','chats_filter','chats_search','desk','clear_desk','close_window','fullscreen','move_window'].includes(c?.action);
  }
  window.WosCommands = { create, execute, completedLocally, isMessageTake };
 })();
