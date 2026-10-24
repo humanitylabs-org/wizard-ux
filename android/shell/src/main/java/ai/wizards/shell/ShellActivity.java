@@ -49,12 +49,14 @@ import java.util.List;
  * can't-reach screen, microphone and camera permission for that exact Wizard, file picking, handing
  * other sites and downloads to the phone's browser, hardware Back, and system-bar insets.
  * No JavaScript bridge: the Wizard's pages see an ordinary browser, so every feature updates from the Wizard.
+ * Optional device capabilities (background recording) are offered over one versioned message port,
+ * window.wizardDevicePort v1 ({@link ShellPort}), which the Wizard discovers and may ignore.
  */
 public class ShellActivity extends Activity {
     static final String ACTION_CHANGE = "ai.wizards.shell.CHANGE_WIZARD";
     private static final String PREFS = "shell", KEY_ORIGIN = "origin";
     private static final String UA_TAG = " WizardOS-Android/" + BuildConfig.VERSION_NAME + " WizardShell/" + BuildConfig.VERSION_NAME;
-    private static final int REQ_FILE = 1, REQ_MEDIA = 2;
+    private static final int REQ_FILE = 1, REQ_MEDIA = 2, REQ_CAPABILITY = 3;
     private static final int BG = Color.rgb(5, 3, 12), INK = Color.rgb(233, 228, 255), VIOLET = Color.rgb(155, 123, 255);
 
     private FrameLayout root;
@@ -64,6 +66,8 @@ public class ShellActivity extends Activity {
     private ValueCallback<Uri[]> pendingFiles;
     private PermissionRequest pendingMedia;
     private boolean mainFrameFailed;
+    private ShellPort port;
+    private volatile java.util.concurrent.CountDownLatch capabilityAsk;
 
     @Override
     protected void onCreate(Bundle saved) {
@@ -131,6 +135,14 @@ public class ShellActivity extends Activity {
     }
 
     @Override
+    protected void onDestroy() {
+        java.util.concurrent.CountDownLatch l = capabilityAsk;
+        if (l != null) l.countDown();
+        if (port != null) port.close();
+        super.onDestroy(); // a take still recording carries on in its foreground service
+    }
+
+    @Override
     protected void onSaveInstanceState(Bundle out) {
         super.onSaveInstanceState(out);
         if (web != null) web.saveState(out);
@@ -150,6 +162,9 @@ public class ShellActivity extends Activity {
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         s.setSupportMultipleWindows(false);
         s.setUserAgentString(s.getUserAgentString() + UA_TAG);
+        // Before the first load: the port is injected only for this exact origin (a new Wizard gets a new WebView).
+        port = ShellPort.install(web, origin, () -> origin, new ai.wizards.shell.device.DevicePort.Registry()
+                .add(new ai.wizards.shell.recorder.RecordingCapability(this, () -> origin, this::ensurePermissions)));
         root.addView(web, 0, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         web.setDownloadListener((url, ua, disposition, mime, length) -> outside(Uri.parse(url)));
@@ -184,9 +199,7 @@ public class ShellActivity extends Activity {
             @Override
             public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
                 // A renderer crash never takes the app down: rebuild and go home.
-                root.removeView(web);
-                web.destroy();
-                web = null;
+                dropWebView();
                 open(null);
                 return true;
             }
@@ -212,6 +225,34 @@ public class ShellActivity extends Activity {
                 }
             }
         });
+    }
+
+    private void dropWebView() {
+        if (port != null) port.close();
+        port = null;
+        root.removeView(web);
+        web.destroy();
+        web = null;
+    }
+
+    /**
+     * A capability (on a background thread) needs a runtime permission: ask once and wait for the answer.
+     * True when every permission is granted.
+     */
+    private boolean ensurePermissions(String... wanted) {
+        List<String> ask = new ArrayList<>();
+        for (String p : wanted) if (checkSelfPermission(p) != PackageManager.PERMISSION_GRANTED) ask.add(p);
+        if (ask.isEmpty()) return true;
+        java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
+        synchronized (this) {
+            if (capabilityAsk != null) return false; // one question at a time
+            capabilityAsk = done;
+        }
+        runOnUiThread(() -> requestPermissions(ask.toArray(new String[0]), REQ_CAPABILITY));
+        try { done.await(120, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
+        synchronized (this) { if (capabilityAsk == done) capabilityAsk = null; }
+        for (String p : wanted) if (checkSelfPermission(p) != PackageManager.PERMISSION_GRANTED) return false;
+        return true;
     }
 
     private void outside(Uri u) {
@@ -246,6 +287,11 @@ public class ShellActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int code, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(code, permissions, results);
+        if (code == REQ_CAPABILITY) {
+            java.util.concurrent.CountDownLatch l = capabilityAsk;
+            if (l != null) l.countDown();
+            return;
+        }
         if (code != REQ_MEDIA || pendingMedia == null) return;
         PermissionRequest r = pendingMedia;
         pendingMedia = null;
@@ -318,9 +364,7 @@ public class ShellActivity extends Activity {
             origin = clean;
             if (changed && web != null) {
                 // A different Wizard starts clean: no history or page state carries over.
-                root.removeView(web);
-                web.destroy();
-                web = null;
+                dropWebView();
             }
             open(null);
         };

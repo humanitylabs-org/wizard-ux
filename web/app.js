@@ -2177,9 +2177,10 @@
   // survives an app kill on disk. Browsers/PWAs and older shells keep the in-page MediaRecorder.
   // When James leaves the app mid-take, the floating orb (Everywhere) shows and drives this same take
   // through __wosVoiceCmd below; it never starts a second recorder.
-  const DEV = () => { const d = window.WizardOSDevice; return d && typeof d.recStart === 'function' ? d : null; };
+  // Wizard Shell (android/shell): the same recorder surface over wizardDevicePort, only when it offers device.recording.
+  const DEV = () => { const d = window.WizardOSDevice; return d && typeof d.recStart === 'function' ? d : window.WosDeviceRecording?.device() || null; };
   function nativeBlob(id, expected) {
-    return window.WosDevice.readRecording(id, expected);
+    return DEV()?.fetched?.(id)?.blob || window.WosDevice.readRecording(id, expected);
   }
   /* Stop (or claim an already-stopped) native take and hand its audio to the normal pipeline. */
   function nativeTakeAppOwned(id) {
@@ -2202,6 +2203,8 @@
   }
   window.__wosVoiceRecovery = () => { try { return Object.values(JSON.parse(localStorage.getItem(VOICE_RECOVERY_KEY) || '{}')); } catch (_) { return []; } };
   function nativeFinish(id, stopped) {
+    // The shell recorder stops and reads asynchronously: fetch both first, then finish exactly as below.
+    const shell = DEV(); if (shell?.fetch && !shell.fetched(id)) { shell.fetch(id).then(() => nativeFinish(id, stopped), () => { V.native = null; setVoice('idle'); txHide(); toast('!', 'Could not read recording · original kept on this phone'); }); return; }
     if (nativeTakeAppOwned(id)) { setVoice('paused'); toast('🎙', 'This recording belongs to another app'); return; }
     // Notification/Everywhere Send enters here directly, bypassing finishVoice. Seal the model before claiming
     // audio or awaiting STT. A recreated page restores the last route saved for this native take.

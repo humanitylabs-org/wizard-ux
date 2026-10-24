@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only. HTTPS only, as in release. Android honours debug-overrides only in debuggable builds:
+     they also trust the disposable CA of the CI emulator fixture Wizard (tools/android_shell_fixture.py), so its
+     fake Wizard can be a real HTTPS origin. The committed qa_fixture_ca.pem is a placeholder whose private key was
+     discarded; CI replaces it with a CA minted for that one run. Release builds never contain this file. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/qa_fixture_ca" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>
