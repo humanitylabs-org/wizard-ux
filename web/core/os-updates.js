@@ -150,7 +150,8 @@
   function homeInView() {
     if (typeof document === 'undefined' || document.hidden || document.querySelector?.('.mz-intro, .rs-sheet, .wos-burst, .tour.on')) return false;
     const P = window.__wos, D = window.__wux;
-    if (D) return !!(D.homeOpen || !D.ws?.[D.cur]?.wins?.length) && !document.querySelector?.('.dsettings:not([hidden])');
+    // Desktop: any overlay (Settings, the palette, Inbox, the keys sheet, Usage) hides it; it never sits above a modal.
+    if (D) return !!(D.homeOpen || !D.ws?.[D.cur]?.wins?.length) && !document.querySelector?.('.dsettings:not([hidden]), #palette:not([hidden]), #keys:not([hidden]), #inbox:not([hidden]), .usage-ov:not([hidden])');
     if (P) return P.idx === 0 && !P.sheet && !P.desks?.[0]?.wins?.length;
     return false;
   }
@@ -195,7 +196,11 @@
   window.WosUpdates = { html, act, load, card, cardHtml, popup, popKey, ownsReload, homeInView, get state() { return st; } };
   window.WosSettings?.register({ id: 'updates', aliases: ['updates'], available: () => !!st, html: () => html(), act: (ctx, el) => act(el, ctx) });
   load();
-  // While an update runs, look again every minute so the card moves on by itself.
-  const timer = typeof setInterval === 'function' ? setInterval(() => { if (st?.installing && !document.hidden) load(true); }, FRESH) : 0;
+  // Look again by itself so Home hears about a new release without a reload: every minute while an update runs,
+  // otherwise every 10 minutes (the App Manager caches stable ~10 min), and whenever the page comes back into view.
+  const IDLE = 10 * FRESH;
+  const tick = () => { if (!st || document.hidden) return; if (st.installing || Date.now() - at >= IDLE) load(true); };
+  const timer = typeof setInterval === 'function' ? setInterval(tick, FRESH) : 0;
   timer?.unref?.();
+  document.addEventListener?.('visibilitychange', () => { if (!document.hidden && st && Date.now() - at >= FRESH) load(true); });
 })();
