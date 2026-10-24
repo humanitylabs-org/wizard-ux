@@ -17,11 +17,12 @@ const RELEASE = (o = {}) => ({ name: "James's release", base: { ref: 'abc1234', 
   { sha: 'ddd4444', title: 'Quieter toasts', label: 'Quieter notices', status: 'Merged', date: '2026-10-23' },
 ], ...o });
 
-function boot({ status = ST(), release = null, wos = {} } = {}) {
+function boot({ status = ST(), release = null, wos = {}, failStatus = 0 } = {}) {
   const calls = [];
-  let rel = release;
+  let rel = release, fails = failStatus;
   const fetch = async (url, opts = {}) => {
     calls.push(url);
+    if (fails && String(url).endsWith('/_updates')) { fails--; throw new Error('offline'); }
     if (opts.method === 'POST') return { ok: true, json: async () => ({ started: true }) };
     if (String(url).endsWith('/my-release.json')) return rel ? { ok: true, json: async () => rel } : { ok: false, status: 404, json: async () => ({}) };
     return { ok: true, json: async () => status };
@@ -93,6 +94,15 @@ test('release card states: Update (behind), Updating, Couldn’t update, Reload 
   assert.equal(b.U.popKey(b.U.card()), 'reload:b2');
 });
 
+test('a release box retries the App Manager status after a failed first read', async () => {
+  const b = boot({ release: RELEASE(), failStatus: 1 }); await settle();
+  assert.equal(b.U.state, null, 'first status read failed');
+  assert.equal(b.U.release, true);
+  await b.U.poll(); await settle();
+  assert.equal(b.U.state?.mode, 'ask', 'the poll asked again and got it');
+  assert.match(b.U.html(), /data-osu="ask"/, 'Automatic / Ask me are back');
+});
+
 test('a stock box asks for my-release.json once, then never polls it again', async () => {
   const b = boot(); await settle();
   const n = b.calls.filter(u => u.endsWith('/my-release.json')).length;
@@ -117,7 +127,9 @@ async function bootLayer({ file = null, search = '', cache = null } = {}) {
   const root = { dataset: {} };
   const head = { appendChild: l => links.push(l) };
   const document = { documentElement: root, head, currentScript: { src: 'https://box/wizard-os-home/core/owner-layer.js' },
-    createElement: () => ({ dataset: {}, remove() { links.splice(links.indexOf(this), 1); } }), querySelector: () => null, addEventListener() {} };
+    createElement: () => ({ dataset: {}, parentNode: null, remove() { links.splice(links.indexOf(this), 1); this.parentNode = null; } }),
+    querySelector: sel => sel.includes('core/skins.css') ? anchor : null, addEventListener() {} };
+  const anchor = { nextSibling: null, parentNode: { insertBefore: (l, ref) => { links.push(l); l.parentNode = anchor.parentNode; anchor.nextSibling = l; } } };
   const window = { WosSkinHost: { builtin: (n, f, o) => builtins.push([n, o]) } };
   const fetch = async url => { fetched.push(url); return file ? { ok: true, json: async () => file } : { ok: false, status: 404, json: async () => ({}) }; };
   const localStorage = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v), removeItem: k => store.delete(k) };
@@ -144,6 +156,12 @@ test('(c) a release with a layer: data-mine set, layer.css linked, layer.js run 
   assert.equal(b.links.length, 1); assert.equal(b.links[0].href, 'https://box/wizard-os-home/my-release/layer.css');
   assert.deepEqual(b.imports, ['https://box/wizard-os-home/my-release/layer.js']);
   assert.equal(b.builtins[0][0], 'owner-layer'); assert.equal(b.builtins[0][1].when, 'always');
+});
+
+test('(c) a cached layer waits for core/skins.css instead of landing above every core sheet', () => {
+  assert.match(layerSrc, /new MutationObserver\(\(\) => \{ if \(place\(\)\) mo\.disconnect\(\); \}\)/);
+  assert.match(layerSrc, /const anchor = document\.querySelector\('link\[href\*="core\/skins\.css"\]'\);/);
+  assert.doesNotMatch(layerSrc.slice(layerSrc.indexOf('function addCss'), layerSrc.indexOf('function startJs')), /if \(anchor\?\.parentNode\)[^\n]*else document\.head\.appendChild/);
 });
 
 test('(c) ?mine=off skips the layer for one load; a layer that went away is removed', async () => {

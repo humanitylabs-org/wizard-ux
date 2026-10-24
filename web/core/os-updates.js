@@ -111,7 +111,8 @@
   }
   function poll() {
     const work = [readRelease()];
-    if (st && (rel() || st.installing)) work.push(load(true));
+    // A release box keeps asking the App Manager even when its first answer failed, so the page gets its controls back.
+    if ((st && (rel() || st.installing)) || (mine && !st)) work.push(load(true));
     return Promise.all(work).then(() => card());
   }
 
@@ -349,7 +350,7 @@
   timer?.unref?.();
   document.addEventListener?.('visibilitychange', () => { if (!document.hidden && st && Date.now() - at >= FRESH) load(true); });
   // A release box also re-reads its build file (tiny) so a new build offers Reload; a stock box polls nothing new.
-  const relTick = () => { if (!document.hidden && (build0 || rel())) poll(); };
+  const relTick = () => { if (!document.hidden && (mine || rel())) poll(); };
   const relTimer = typeof setInterval === 'function' ? setInterval(relTick, POLL) : 0;
   relTimer?.unref?.();
   document.addEventListener?.('visibilitychange', relTick);
