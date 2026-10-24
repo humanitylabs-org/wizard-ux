@@ -270,7 +270,7 @@
 .rl-chip.rl-feature { --c: #3b82f6; }
 .rl-chip.rl-fix { --c: #22a861; }
 .rl-chip.rl-merged { --c: var(--wz-text-muted); }
-.st-root[data-settings-root] button.rl-propose { flex: none; align-self: center; min-height: 40px; min-width: 0; padding: 8px 14px; border: 1px solid var(--wz-border); border-radius: 99px; background: transparent; color: var(--wz-text); font-size: 13.5px; font-weight: 650; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.st-root[data-settings-root] button.rl-propose { flex: none; align-self: center; min-height: 40px; min-width: 0; padding: 8px 14px; border: 1px solid color-mix(in srgb, var(--wz-text) 38%, transparent); border-radius: 99px; background: transparent; color: var(--wz-text); font-size: 13.5px; font-weight: 650; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 .st-root[data-settings-root] button.rl-propose:active { background: var(--wz-surface-raised); }
 .rl-legend { margin: 0; padding: 0 4px; }
 .st-root[data-settings-root] .rl-legend summary { min-height: 44px; display: flex; align-items: center; gap: 6px; list-style: none; font-size: 13px; color: var(--wz-text-muted); cursor: pointer; background: transparent; -webkit-tap-highlight-color: transparent; }
