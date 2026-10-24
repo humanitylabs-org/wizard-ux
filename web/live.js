@@ -58,6 +58,12 @@
     const ask = String(v.ask || '').replace(/\s+/g, ' ').trim().slice(0, 140); if (!ask) return null;
     return { state: v.state, ask, subject: String(v.subject || '').replace(/\s+/g, ' ').trim().slice(0, 40) };
   }
+  function followUpOf(v) {
+    if (!v || typeof v !== 'object' || v.active !== true || !Number.isSafeInteger(v.count) || v.count < 1) return null;
+    const names = Array.isArray(v.names) ? v.names.map(name => String(name).replace(/\s+/g, ' ').trim().slice(0, 160)).filter(Boolean).slice(0, 3) : [];
+    const nextRun = optIso(v.nextRun);
+    return { active: true, count: v.count, names, ...(nextRun ? { nextRun } : {}) };
+  }
   function normalize(item) {
     if (item.listVersion === 1) return { safeError:'', reconnect:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, runtime: 'direct', request: '', renames: [], detailNeeded: true };
     const id = item.id || item.session_id; if (!id) return null;
@@ -99,6 +105,8 @@
       helperStatus: item.wizard_helper_status && typeof item.wizard_helper_status === 'object' ? item.wizard_helper_status : null,
       // What the finished thread asks of James (the agent's hidden status line): needs_you / check / done / fyi.
       attention: attentionOf(item.wizard_attention),
+      // A durable quiet one-shot checker bound to this thread. The prompt never reaches the list.
+      followUp: followUpOf(item.wizard_follow_up),
       // Thread titles (Agent Service thread-titles.mjs): every rename with its time, so the thread shows
       // "Renamed from …" right after the reply that renamed it. The list shows only the current title.
       renames: Array.isArray(item.wizard_title_renames) ? item.wizard_title_renames.filter(r => r && typeof r.from === 'string' && isFinite(r.at)).slice(-6).map(r => ({ from: r.from.slice(0, 120), to: String(r.to || '').slice(0, 120), at: Number(r.at), by: r.by === 'you' ? 'you' : 'agent' })) : [],
@@ -932,6 +940,16 @@
         }
         if (!r.ok || r.status === 202) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
       });
+    },
+    async stopWatching(id) {
+      const s = this.session(id); if (!s || this.busy(id) || !s.followUp?.active) return false;
+      const agent = this.agentOf(id);
+      try {
+        const result = await (await req('/wizard/follow-ups/stop', { method: 'POST', headers: J,
+          body: JSON.stringify({ session_id: id, ...(agent ? { agent_id: agent } : {}) }) })).json();
+        if (result?.ok !== true || !Number.isSafeInteger(result.stopped) || result.stopped < 1) throw new Error('follow-up stop not confirmed');
+        s.followUp = null; this.emit(); setTimeout(() => this.refresh(), 50); return true;
+      } catch (e) { return false; }
     },
     async _defer(id, deferred) {
       const s = this.session(id); if (!s) throw new Error('gone');
