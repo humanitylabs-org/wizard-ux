@@ -86,7 +86,10 @@
   function migrate(css) {
     if (recipes.migrated || emptyCss(css)) return;
     const skin = { id: 'my-skin', name: 'My skin', base: window.WosSkin?.current || 'nebula', tweaks: {}, legacy: true };
-    try { persist({ version: 1, skins: [skin], active: skin.id, migrated: true }); } catch (_) {}
+    try {
+      persist({ version: 1, skins: [skin], active: skin.id, migrated: true });
+      if (typeof Event !== 'undefined') window.dispatchEvent?.(new Event('wos:own-skin'));
+    } catch (_) {}
   }
   function recipeChanged() {
     apply(state.css);

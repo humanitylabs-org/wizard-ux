@@ -38,10 +38,10 @@ async function boot({ responses = [], cached = null, search = '', saved = null, 
     if (r.throw) throw new TypeError('offline');
     return { ok: r.status >= 200 && r.status < 300, status: r.status, headers: { get: () => r.type }, text: async () => r.body };
   };
-  const events = {};
+  const events = {}, dispatched = [];
   const ctx = { document, fetch, crypto: webcrypto, Event,
     addEventListener: (name,fn) => { (events[name] ||= []).push(fn); },
-    dispatchEvent: e => { for (const fn of events[e.type] || []) fn(e); },
+    dispatchEvent: e => { dispatched.push(e.type); for (const fn of events[e.type] || []) fn(e); },
     WosSkin: { current: 'nebula', list: [{id:'nebula'},{id:'obsidian-light'}], set(id) { this.current=id; ctx.dispatchEvent(new Event('wos:skin')); } },
     location: { search }, URLSearchParams,
     localStorage: { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => { if (quota && k === 'wos.own-skins.v1') throw new Error('Storage full'); store.set(k, String(v)); }, removeItem: k => store.delete(k) } };
@@ -49,7 +49,7 @@ async function boot({ responses = [], cached = null, search = '', saved = null, 
   vm.runInNewContext(SRC, ctx);
   await new Promise(r => setTimeout(r, 5));
   const style = () => document.head.children.find(c => c.id === 'wosMySkin') || null;
-  return { ctx, document, store, calls, style, M: ctx.WosMySkin };
+  return { ctx, document, store, calls, dispatched, style, M: ctx.WosMySkin };
 }
 
 test('empty My skin adds nothing: the picked skin renders exactly as its author made it', async () => {
@@ -147,6 +147,12 @@ test('legacy overlay migrates once; removing never resurrects it or deletes shar
   assert.equal(again.M.recipes.length,0); assert.equal(again.style(),null);
   assert.equal(again.store.get('wos.myskin.v1'),'.dock{opacity:.5}');
   assert.ok(again.calls.every(c=>c.method==='GET'));
+});
+test('a late nonempty service overlay announces the migrated own recipe to the tweak loader', async () => {
+  const b = await boot({responses:[{status:200,type:'text/css',body:'.dock{opacity:.5}'}]});
+  assert.equal(b.M.active.name,'My skin');
+  assert.equal(b.dispatched.filter(e=>e==='wos:own-skin').length,1);
+  await b.M.refresh(); assert.equal(b.dispatched.filter(e=>e==='wos:own-skin').length,1);
 });
 test('overlay only applies while own skin is worn, including builtin changes outside Settings', async () => {
   const b = await boot({cached:'.dock{opacity:.5}',responses:[{throw:true}]});
