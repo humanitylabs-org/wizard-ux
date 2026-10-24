@@ -169,6 +169,9 @@ window.WosChatPower = function chatPower(A) {
     const el = nb.closest('[data-chats]'); if (!el) return;
     const id = el.dataset.chats, w = H.win(id); if (!w || !w.thread || w.thread === '__new__') return;
     const c = ch(id);
+    // Document-scrolled phones: a thread off screen (another app or desk in front) is not being read. Its box can
+    // scroll or measure zero while parked; saving that overwrote your place and flipped it to 'following the bottom'.
+    if (A.docAside?.(nb)) return;
     if (settling(c) && c.settle.nb === nb) { paintLatest(el, nb); return; } // our own placement, not the reader
     c.follow = bottomGap(nb) < 80; c.readerMoved = true;
     paintLatest(el, nb);

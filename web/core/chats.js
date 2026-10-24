@@ -111,7 +111,7 @@ window.WizCore.chats = function createChats(H) {
   // Document scrolling needs an APK that dropped the custom scroll capture and scroll proxy; such APKs
   // say so in their user agent. Older APKs (any version line) keep inner-div scrolling.
   const androidDocument = /\bWizardOS-DocScroll\b/.test(navigator.userAgent);
-  let docOwner = null, docFrame = 0, docResize = null, docObserved = [], docUserAt = 0, docTouching = false;
+  let docOwner = null, docFrame = 0, docResize = null, docObserved = [], docUserAt = 0, docTouching = false, docOwnedAt = 0;
   // Where you were reading in each thread window when it gave up the document scroll (another app or desk came to the
   // front). The document is shared, so coming back starts at its top unless we put you back (James, 24 Oct 2026:
   // "I opened Messenger, tapped Back, and now I'm at the very top of this thread").
@@ -127,9 +127,16 @@ window.WizCore.chats = function createChats(H) {
     }
     return null;
   }
+  // A thread window that does not hold the document has no reading place of its own: its list is a plain box, possibly
+  // parked (not laid out) on a desk two swipes away. Scrolls and sizes read there are not the reader (James, 24 Oct:
+  // thread, Home, Claude usage, back to the thread, and it sat at the bottom).
+  const docAside = nb => androidDocument && !!nb && !(docOwner && docOwner.contains(nb) && docShown(docOwner));
   function docRestore(owner, away) {
     const sc = document.scrollingElement, w = H.win(owner.dataset.chats), c = w && ch(w.id);
-    if (c?.follow) { sc.scrollTop = sc.scrollHeight; return; }
+    // Follow the bottom only if you were at the bottom when the thread gave up the document; whatever set
+    // c.follow while it was away was measured on the aside box, not on you.
+    if (c) c.follow = !!away.bottom;
+    if (away.bottom) { sc.scrollTop = sc.scrollHeight; return; }
     const nb = owner.querySelector('.ch-msgs'), head = owner.querySelector('.ch-head');
     let m = null, n = -1;
     if (away.anchor && nb) for (const e of nb.querySelectorAll('[data-morph-key]')) if (e.dataset.morphKey === away.anchor.key && ++n === away.anchor.nth) { m = e; break; }
@@ -162,11 +169,13 @@ window.WizCore.chats = function createChats(H) {
       const prev = docOwner, pw = prev && H.win(prev.dataset.chats);
       if (pw?.thread && pw.thread !== '__new__') {
         const last = docLast.get(prev.dataset.chats);
-        docAway.set(prev.dataset.chats, { sid: pw.thread, anchor: docShown(prev) ? docAnchor(prev) : last?.anchor || null, top: docShown(prev) ? document.scrollingElement.scrollTop : last?.top ?? null });
+        const sc = document.scrollingElement, shown = docShown(prev);
+        docAway.set(prev.dataset.chats, { sid: pw.thread, anchor: shown ? docAnchor(prev) : last?.anchor || null, top: shown ? sc.scrollTop : last?.top ?? null,
+          bottom: shown ? sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80 : !!last?.bottom });
       }
       document.querySelectorAll('.wos-doc-path,.wos-doc-thread').forEach(n => n.classList.remove('wos-doc-path', 'wos-doc-thread'));
       docResize?.disconnect(); docResize = null; docObserved = [];
-      docOwner = next;
+      docOwner = next; docOwnedAt = Date.now();
       root.classList.toggle('wos-doc-scroll', !!next);
       if (!next) { window.scrollTo(0, 0); return; }
       next.classList.add('wos-doc-thread');
@@ -194,7 +203,9 @@ window.WizCore.chats = function createChats(H) {
         const sc = document.scrollingElement, bottom = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80;
         sizeDocumentChrome();
         // A finger on the list, or a scroll in the last moment, is the reader leaving the bottom: never pull them back.
-        if (changed && bottom && !docTouching && Date.now() - docUserAt > 600) sc.scrollTop = sc.scrollHeight;
+        // Nor in the first second after the thread takes the document back: the page is still growing into place
+        // (a parked desk lays out, the dock hides) and 'near the bottom' then is a passing state, not the reader.
+        if (changed && bottom && !docTouching && Date.now() - docUserAt > 600 && Date.now() - docOwnedAt > 1000) sc.scrollTop = sc.scrollHeight;
       });
       nodes.forEach(n => docResize.observe(n));
     }
@@ -217,7 +228,7 @@ window.WizCore.chats = function createChats(H) {
       // The thread just left the screen (another app or desk in front): the page shrinking under it scrolls the document
       // to 0. That is not the reader scrolling: don't save it as their place and don't load earlier messages for it.
       if (!docShown(docOwner)) return;
-      docLast.set(docOwner.dataset.chats, { top: document.scrollingElement.scrollTop, anchor: null });
+      { const sc = document.scrollingElement; docLast.set(docOwner.dataset.chats, { top: sc.scrollTop, anchor: null, bottom: sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80 }); }
       const nb = docOwner.querySelector('.ch-msgs'); if (!nb) return;
       nb.dispatchEvent(new Event('scroll')); // existing save / following / scroll-idle guards
       const w = H.win(docOwner.dataset.chats), c = w && ch(w.id);
@@ -2469,7 +2480,7 @@ window.WizCore.chats = function createChats(H) {
     const el = elOf(wid); if (el) delete el.dataset.draftFor;
   }
   // Models, Errors actions, composer mic, work receipts, reading position, Files (core/chat-power.js).
-  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, scrollBox, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent, winAgent }) : null;
+  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, scrollBox, docAside, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent, winAgent }) : null;
   restoreSealed();
   // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.
   let outSig = '';
