@@ -58,13 +58,56 @@
       if (service) { try { rootWatcher?.destroy(); } catch (_) {} rootWatcher = null; }
       parent.postMessage({ type: 'wizard:appearance:ready', version: VERSION, app: String(meta.name || '').slice(0, 96) }, ORIGIN);
     }
-    if (service) return Promise.resolve(service.ready());
+    if (service) { const r = service.ready(); registerShare(); return Promise.resolve(r); }
     if (!framed) return Promise.resolve({ version: VERSION, hosted: false });
     return request('ready', null, 1500).then(result => {
       transportReady = result?.version === VERSION && result.hosted === true;
+      if (transportReady) registerShare();
       return transportReady ? result : { version: VERSION, hosted: false };
     }, () => { transportReady = false; return { version: VERSION, hosted: false }; });
   }
+  /* Receiving shares from Wizard's share sheet (docs/SHARE-SHEET.md). Hosted apps only: the shell keeps each item
+   * pending until receive() returns true (the item is visibly placed, e.g. in the app's composer), then it is acked. */
+  let shareRecv = null, sharePull = null;
+  function shareOp(op, args) {
+    if (service) return Promise.resolve().then(() => op === 'receive' ? service.share.receive(args) : op === 'targets' ? service.share.targets(args.targets) : op === 'pending' ? service.share.pending() : service.share.ack(args.id));
+    if (transportReady) return request('share.' + op, args);
+    return Promise.reject(new Error('Receiving shares needs the Wizard host'));
+  }
+  function pullShares() {
+    if (!shareRecv) return Promise.resolve(0);
+    if (sharePull) { sharePull.again = true; return sharePull.done; }
+    const run = sharePull = { again: false };
+    run.done = (async () => {
+      let n = 0;
+      try {
+        do {
+          run.again = false;
+          const items = await shareOp('pending').catch(() => []);
+          for (const it of Array.isArray(items) ? items : []) {
+            if (!shareRecv) break;
+            let ok = false;
+            try { ok = (await shareRecv.receive(Object.freeze({ ...it }))) === true; } catch (e) { console.warn('WizardApp share receive', e); }
+            if (ok) { await shareOp('ack', { id: it.id }).catch(() => {}); n++; }
+          }
+        } while (run.again && shareRecv);
+      } finally { sharePull = null; }
+      return n;
+    })();
+    return run.done;
+  }
+  function registerShare() {
+    if (!shareRecv || (!service && !transportReady)) return Promise.resolve(false);
+    return shareOp('receive', { accepts: shareRecv.accepts, targets: shareRecv.targets }).then(ok => { if (ok) pullShares(); return ok === true; }, () => false);
+  }
+  function receiveShares({ accepts, targets, receive } = {}) {
+    if (typeof receive !== 'function') throw new TypeError('Share receiver needs receive(item)');
+    shareRecv = { accepts: Array.isArray(accepts) ? accepts.slice(0, 8) : [], targets: Array.isArray(targets) ? targets.slice(0, 24) : undefined, receive };
+    registerShare();
+    const mine = shareRecv;
+    return () => { if (shareRecv !== mine) return; shareRecv = null; shareOp('receive', { accepts: [] }).catch(() => {}); };
+  }
+  function shareTargets(list) { if (shareRecv && Array.isArray(list)) shareRecv.targets = list.slice(0, 24); return shareRecv && Array.isArray(list) ? shareOp('targets', { targets: list.slice(0, 24) }).then(v => v === true, () => false) : Promise.resolve(false); }
   function register({ canGoBack, back: fn }) {
     if (typeof canGoBack !== 'function' || typeof fn !== 'function') throw new TypeError('Back needs synchronous canGoBack/back callbacks');
     const h = { canGoBack, back: fn }; handlers.push(h);
@@ -154,6 +197,7 @@
     if (d.type === 'wizard:appearance' && applyTheme(d.appearance)) parent.postMessage({ type: 'wizard:appearance:ack', version: VERSION, revision: currentTheme.revision }, ORIGIN);
     if (d.type === 'wizard:app:tool' && d.version === VERSION && toolHandler && typeof d.id === 'string') { try { toolHandler({ id: d.id, value: typeof d.value === 'string' ? d.value : undefined }); } catch (err) { console.warn('WizardApp tool', err); } }
     if (d.type === 'wizard:app:update' && d.version === VERSION) { updateAvailable = d.available; notify(updates, updateAvailable); }
+    if (d.type === 'wizard:app:share' && d.version === VERSION) pullShares();
   });
   function hold(reason) {
     if (service) return service.update.hold(reason);
@@ -259,7 +303,8 @@
     view: Object.freeze({ isVisible: () => !document.hidden && (!framed || service?.view?.isVisible() === true) }),
     nav: Object.freeze({ get threadAgents() { return service?.nav?.threadAgents === true; }, openThread: (id, opts) => service?.nav?.openThread(id, opts) === true, openContextDraft: data => { if (!service?.nav?.openContextDraft) throw new Error('Context drafts need the verified Wizard host'); return service.nav.openContextDraft(data); } }),
     theme: Object.freeze({ get: () => currentTheme || window.WizardTheme?.current || null, onChange: fn => listen(themes, fn, currentTheme || window.WizardTheme?.current) }),
-    share: Object.freeze({ text: data => service ? service.share.text(data) : transportReady ? sharedResult(request('share.text', data)) : fallbackText(data), file: (file, opts) => service ? service.share.file(file, opts) : transportReady ? sharedResult(request('share.file', { file, options: opts })) : fallbackFile(file, opts) }),
+    share: Object.freeze({ text: data => service ? service.share.text(data) : transportReady ? sharedResult(request('share.text', data)) : fallbackText(data), file: (file, opts) => service ? service.share.file(file, opts) : transportReady ? sharedResult(request('share.file', { file, options: opts })) : fallbackFile(file, opts),
+      receive: receiveShares, targets: shareTargets, check: () => pullShares() }),
     titlebar: Object.freeze({ set: (tools, onTool) => { toolHandler = typeof onTool === 'function' ? onTool : null; return service ? Promise.resolve(service.titlebar.set(tools)) : transportReady ? request('titlebar.set', { tools }).then(v => v === true, () => false) : Promise.resolve(false); },
       shown: () => { try { return !!service?.titlebar.shown(); } catch (_) { return false; } } }),
     badge: Object.freeze({ set: n => service ? service.badge.set(n) : transportReady ? request('badge.set', { n }).then(() => true, () => false) : Promise.resolve(false) }),
