@@ -627,7 +627,7 @@
   }
 
   /* ---------------- home (root / empty workspace) ---------------- */
-  /* My release: the desktop Home is the phone Home at desktop size (Miguel, 24 Oct 2026): resource dials on top, Ready
+  /* Miguel's skins: the desktop Home is the phone Home at desktop size (Miguel, 24 Oct 2026): resource dials on top, Ready
    * and Working as the same dot counters. Settings stays in the top bar (one gear). No clock, thread lists, app chips or key hints. */
   function mineHomeDots(kind, n) {
     const icon = kind === 'ready' ? '<path d="M5 12.5l4.5 4.5L19 7"/>' : '<path d="M12 3a9 9 0 1 0 9 9"/>';
@@ -649,7 +649,7 @@
     </div>`;
   }
   function homeHtml(i) {
-    if (document.documentElement.dataset.mine != null) return mineHomeHtml();
+    if (mine()) return mineHomeHtml();
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
     const pending = OUTBOX?.unsent() || [];
     const working = LIVE?.ok ? LIVE.workGroups().working || [] : [];
@@ -819,10 +819,10 @@
     const list = norm(q) ? searchApps(q) : APPS.slice().sort((a, b) => pickRank(a) - pickRank(b) || SYS_APPS.indexOf(a.id) - SYS_APPS.indexOf(b.id));
     return list.filter(a => a.kind !== 'native' && a.id !== 'agents' && !C.isMaintenanceApp(a)).map(a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, run: o => openApp(a, o) }));
   }
-  /* My release (html[data-mine]): the selector is the phone launcher at desktop size (core/app-kinds.js): Apps with
+  /* Miguel's skins (Dark, Light, Landscapes): the selector is the phone launcher at desktop size (core/app-kinds.js): Apps with
    * system apps first and ringed, "+ Get apps", then one folded "For agents" row holding Agent apps, Agents (with
    * "+ Build agents") and Connectors, each ending in its own "+ Get ..." tile. Search stays one flat list. */
-  const mine = () => document.documentElement.dataset.mine != null;
+  const mine = () => ['obsidian', 'obsidian-light', 'landscapes'].includes(document.documentElement.dataset.skin || ''); // Miguel's skins
   let palFold = false;
   function openStoreKind(kind) {
     const url = window.WosAppKinds.storeUrl(kind);
