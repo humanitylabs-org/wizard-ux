@@ -54,12 +54,39 @@
     overlay.addEventListener('pointercancel', () => { freshPress = false; });
     // Opening gesture's release/click can never activate the newly mounted action.
     overlay.addEventListener('click', e => {
+      // Selection can cancel its pointer stream. Guard actions, not native text selection.
+      if (e.target.dataset?.installLink !== undefined) return;
       if (!freshPress && e.detail !== 0) { e.preventDefault(); e.stopImmediatePropagation(); return; }
       freshPress = false;
       if (e.target === overlay && !pending) close();
     }, true);
     if (!port()) {
       const url = new URL('/wizard-os-home/install/' + encodeURIComponent(a.id) + '/', location.origin).href;
+      const ios = /iPad|iPhone|iPod/.test(navigator.userAgent || '') || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (ios) {
+        sheet.classList.add('home-pin-ios');
+        button.remove();
+        const steps = document.createElement('ol');
+        const first = document.createElement('li');
+        const heading = document.createElement('strong'); heading.textContent = 'Open this link in Safari';
+        const hint = document.createElement('p'); hint.textContent = 'Copy the link, open Safari, and paste it into the address bar.';
+        const copy = document.createElement('button'); copy.type = 'button'; copy.textContent = 'Copy link';
+        const address = document.createElement('textarea'); address.readOnly = true; address.rows = 4; address.value = url;
+        address.setAttribute('aria-label', 'Install link'); address.setAttribute('data-install-link', ''); address.spellcheck = false;
+        const status = document.createElement('p'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+        const select = () => { address.focus(); address.select(); address.setSelectionRange(0, url.length); };
+        address.onclick = select;
+        copy.onclick = async () => {
+          try { await navigator.clipboard.writeText(url); status.textContent = 'Copied. Paste into Safari’s address bar.'; }
+          catch (_) { select(); status.textContent = 'Couldn’t copy automatically. Copy the selected link, then paste it into Safari.'; }
+        };
+        first.append(heading, hint, copy, address, status);
+        const second = document.createElement('li');
+        const save = document.createElement('strong'); save.textContent = 'Save to Home Screen';
+        const instruction = document.createElement('p'); instruction.textContent = 'In Safari, tap Share → Add to Home Screen → Add.';
+        second.append(save, instruction); steps.append(first, second); sheet.append(steps);
+        return;
+      }
       button.textContent = 'Add to home screen'; button.disabled = false;
       const help = document.createElement('p');
       help.textContent = 'Open this app’s install page in Safari or Chrome, then add it to your home screen. If it stays in Wizard, copy the link and paste it into your browser.';

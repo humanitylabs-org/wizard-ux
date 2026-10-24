@@ -121,6 +121,16 @@ test('already pinned/unsupported state disables action and canceled OS sheet has
   const f=pinFixture();f.menu.emit('pointerdown',f.event());f.tick(450);await Promise.resolve();await Promise.resolve();await Promise.resolve();f.body.children[0].querySelector('button').onclick(f.event());await Promise.resolve();await f.window['wos-native-resume']();assert.equal(f.window.WizHomeScreenApps.state.open,false);
 });
 
+test('selection control bypasses canceled-pointer action guard, but actions still fail closed',async()=>{
+  const f=pinFixture(); f.menu.emit('pointerdown',f.event()); f.tick(450);
+  const overlay=f.body.children[0];
+  overlay.emit('pointercancel',f.event());
+  const selected=overlay.emit('click',f.event({target:{dataset:{installLink:''}}}));
+  assert.equal(selected.stopped,undefined);
+  const action=overlay.emit('click',f.event({target:{dataset:{}}}));
+  assert.equal(action.stopped,true);
+});
+
 test('action requires active intentional gesture; canceled action press and port failure fail closed',async()=>{
   const f=pinFixture();f.menu.emit('pointerdown',f.event());f.tick(450);
   await Promise.resolve();await Promise.resolve();await Promise.resolve();

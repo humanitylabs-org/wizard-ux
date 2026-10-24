@@ -1,6 +1,11 @@
 # Add individual apps to a browser home screen
 
-Hold an app in mobile Apps or New desk, or hold and release a one-app desk without dragging. **Add to home screen** keeps using the native Android bridge when it exists. Otherwise it opens that app's install guide; ordinary taps and desk reordering are unchanged.
+Hold an app in mobile Apps or New desk, or hold and release a one-app desk without dragging. The native Android bridge still owns **Add to home screen** when present. Android web still opens the app's install guide. On iPhone/iPad web (including an installed PWA), the sheet immediately shows only two steps:
+
+1. **Open this link in Safari** — one **Copy link** button and a visible, wrapped, selectable URL. Open Safari manually and paste it into its address bar.
+2. **Save to Home Screen** — Share → Add to Home Screen → Add.
+
+There are no iOS open/add links, new-tab escape promises, or custom Safari schemes. Clipboard success is reported only after the API resolves; denial selects the URL and explicitly asks for manual copying. Ordinary taps, native pinning, and desk reordering are unchanged.
 
 - **Android Chrome:** use the guide's Add to home screen button if Chrome offers an install prompt, or Chrome's ⋮ menu → Add to Home screen / Install app.
 - **iPhone Safari:** Share → Add to Home Screen → Add.
@@ -23,6 +28,9 @@ A static-only development server cannot serve these per-app manifests. Use the p
 
 ## Verification
 
+- `QA_OUT=<private-receipts> QA_ORIGIN=<staged-or-live-origin> node qa-ios-install-sheet.cjs`: trusted touch hold/tap on the actual shell, iPhone browser/PWA and desktop-UA iPad, real browser clipboard write/readback, deterministic denial, tap/hold selection, geometry and Back. `QA_RESOLVE='MAP hostname address'` supports private host resolver overrides. No installation or production-data mutation is performed; launcher state is in an isolated browser context.
+- Interaction investigation: the old Copy handler did receive trusted touch in Chromium; the `freshPress` guard did **not** reproduce a dropped copy tap there. The old field did inherit `-webkit-user-select:none` from the shell, however. The selectable control now explicitly restores text selection/callout, and its click is exempt from the action guard after selection-related pointer cancellation. Buttons still require a fresh press. This is not evidence about the owner's Safari event stream.
+- The outer install document/manifest is unchanged: copied URLs contain no query. In ordinary Safari, the canonical path stays a guide; standalone launch stays isolated. Existing tests cover stripping `?install=1` before saving. No speculative Safari URL workaround was introduced.
 - `npm test`: includes the Python HTTP contract (`tests/app_install_test.py`) and existing native pin/desk/gesture/session tests.
 - `QA_OUT=<private-receipts> QA_ORIGIN=<isolated-container> node qa-pwa-app-install.cjs`: real Chromium with Android/iPhone user agents, standalone simulation, manifest parsing/installability diagnostics, native and prompt handler fixtures, clipboard denial, trusted touch hold, ordinary tap/Back, isolated session/reload and mobile geometry. Run against `tools/qa-install-fixture.py` as the container's upstream so no production data is read or changed.
 - For the original source negative control, serve its `web/` with `QA_WEB_ROOT=<baseline-web> QA_FIXTURE_PORT=<port> python3 tools/qa-install-fixture.py`, then run the browser suite with `QA_BASELINE=1` against that loopback origin. It verifies that browser hold was inert and the per-app manifest route was absent.
