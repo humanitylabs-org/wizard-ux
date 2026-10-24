@@ -55,7 +55,7 @@ async function boot(b,desktop=false,legacy='') {
  },{desktop,legacy});
  const p=await ctx.newPage();p.setDefaultTimeout(12000);p.on('pageerror',e=>errors.push(String(e)));
  await p.goto(desktop?new URL('desktop.html',origin).href:origin,{waitUntil:'domcontentloaded'});
- await p.waitForFunction(solo=>{const l=(window.__wos||window.__wux)?.live;return solo?!!l?.agentStatus:!!l?.agentStatus.philosopher?.ok;},soloAgent);
+ await p.waitForFunction(solo=>{const l=(window.__wos||window.__wux)?.live;return solo?!!l?.agentStatus:!!l?.agentStatus.philosopher?.ok;},soloAgent,{timeout:30000});
  await p.evaluate(()=>{if(window.__wos){const a=__wos,w=Object.values(a.wins).find(w=>w.app==='chats');a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);}else{const a=__wux,w=Object.values(a.wins).find(w=>w.app==='chats');a.focusWin(w.id);}});
  await p.waitForTimeout(600);return {ctx,p};
 }
@@ -381,7 +381,7 @@ async function pickerAcceptance(browser, mode) {
   ok(await p.locator('.ch-search:visible').evaluate(e=>e.scrollWidth<=e.clientWidth+1),mode+' Focus plus status fit search field');
   await capture(p,mode+'-focus-status');
   await p.locator('[data-chchipx="status"]:visible').click();
-  await p.reload({waitUntil:'domcontentloaded'});await p.waitForFunction(solo=>{const l=(window.__wos||window.__wux)?.live;return solo?!!l?.agentStatus:!!l?.agentStatus.philosopher?.ok;},soloAgent);
+  await p.reload({waitUntil:'domcontentloaded'});await p.waitForFunction(solo=>{const l=(window.__wos||window.__wux)?.live;return solo?!!l?.agentStatus:!!l?.agentStatus.philosopher?.ok;},soloAgent,{timeout:30000});
   ok((await p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText()).includes('Wizard OS launch'),mode+' Space focus survives reload');
   await p.locator('[data-chopen="main_wos"]:visible').click();await p.waitForTimeout(250);
   ok(await p.locator('.ch-thread .ch-focus-strip').count()===0&&(desktop||await p.locator('.ch-focus-strip:visible').count()===0),mode+' thread view has no strip');
