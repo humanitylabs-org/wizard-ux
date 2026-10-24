@@ -57,7 +57,9 @@
 
   const valid = d => d && typeof d === 'object' && ['auto', 'ask'].includes(d.mode) && 'update_available' in d;
   const rel = () => (st?.release && typeof st.release === 'object' ? st.release : null);
-  function changed() { try { window.WosSettings?.refresh(); } catch (_) {} try { popup(); } catch (_) {} }
+  // Quiet updates belong only to this personal release, never stock boxes or Ask me.
+  const quietAuto = () => document.documentElement?.dataset?.mine != null && !!(mine || rel()) && st?.mode === 'auto';
+  function changed() { try { window.WosSettings?.refresh(); } catch (_) {} try { popup(); } catch (_) {} try { window.WizWebUpdate?.render?.(); } catch (_) {} }
   function take(d) { st = d; if (rel()?.behind > 0) sawBehind = true; }
   function load(force) {
     if (off && !force) return Promise.resolve(st);
@@ -121,6 +123,11 @@
   // The one card. Same shape for every state; null when there is nothing to do.
   function card() {
     const R = rel(), have = st?.installed ? `Wizard OS ${st.installed}` : 'Wizard OS';
+    // Failures stay actionable even if a newer build is pending; routine auto states stay silent.
+    if (quietAuto()) {
+      if (R?.failed) return { state: 'failed', title: 'Couldn’t update', line: failReason(R.failed), action: 'apply', label: busy === 'apply' ? 'Starting…' : 'Try again', disabled: !!busy };
+      return null;
+    }
     // A new build of my own release (or of the web shell) is on the box: reload to see it.
     const webPending = !!window.WizWebUpdate?.pending;
     if ((build0 && buildNow && buildNow !== build0) || webPending) {
@@ -180,7 +187,7 @@
     const ch = !release && ['stable', 'latest'].includes(st?.channel) ? st.channel : '';
     const channel = ch ? `<div class="rl-sec"><span class="rl-lbl">Channel</span>${seg('Release channel', [['ch-stable', 'Stable', ch === 'stable'], ['ch-latest', 'Latest', ch === 'latest']])}<p class="st-hint">${ch === 'stable' ? 'Tested. Fixes arrive the same day.' : `Every approved change, within hours.${auto ? ' Automatic installs Stable only.' : ''}`}</p></div>` : '';
     const hint = release
-      ? (auto ? 'New changes from Latest are applied under yours by themselves.' : 'You choose when. Your own changes always apply right away.')
+      ? (auto ? (quietAuto() ? 'Latest is applied quietly under your changes. Only failures need your attention; reload when you’re ready.' : 'New changes from Latest are applied under yours by themselves.') : 'You choose when. Your own changes always apply right away.')
       : (auto ? 'Overnight, never during a chat.' : 'Nothing installs until you tap Update.');
     const install = st ? `<div class="rl-sec"><span class="rl-lbl">Updates</span>${seg('Updates', [['auto', 'Automatic', auto], ['ask', 'Ask me', !auto]])}<p class="st-hint">${hint}</p></div>` : '';
     return `<div class="st-group rl" data-osu-group>${cardHtml()}${head}${changesHtml()}${install}${channel}</div>`;
@@ -270,7 +277,7 @@
     if (P) return P.idx === 0 && !P.sheet && !P.desks?.[0]?.wins?.length;
     return false;
   }
-  function ownsReload() { const c = card(); if (c?.state !== 'reload') return false; const k = popKey(c); return k === store.get() || popShown === k; }
+  function ownsReload() { if (quietAuto()) return true; const c = card(); if (c?.state !== 'reload') return false; const k = popKey(c); return k === store.get() || popShown === k; }
   let popEl = null, popShown = '', popTimer = 0;
   const popCtx = () => { const H = window.__wos || window.__wux; return { toast: (...a) => H?.toast?.(...a), haptic: n => { try { navigator.vibrate?.(n); } catch (_) {} }, render: () => popup(), root: popEl }; };
   // Phone: sit just above the dock (measured, so any skin's pill or orb stays clear); desktop: under the top bar, right.
