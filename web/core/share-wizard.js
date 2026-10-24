@@ -22,7 +22,7 @@
     a.urls.forEach(u => URL.revokeObjectURL(u)); a.resolve(result); a.focus?.focus?.();
   }
   function back() { if (!active) return false; if (!active.busy) finish('cancelled'); return true; }
-  function open({items = [], text = '', title = '', skipped = 0} = {}, authorize = () => true) {
+  function open({items = [], text = '', title = '', skipped = 0, stay = false} = {}, authorize = () => true) {
     const w = host(), chats = w?.chats;
     if (!w || !chats?.uploadFile || !chats?.sendChat || !(w.openWizardThread || w.openThread)) return Promise.resolve('unsupported');
     if (active) return Promise.resolve('unsupported'); // never replace a sheet holding someone's unsent note
@@ -59,11 +59,22 @@
           }
           if (!authorize()) return finish('unsupported');
           status.textContent = 'Sending…';
-          const target = b.dataset.shareto; (w.openWizardThread || w.openThread)(target);
-          const wid = Object.keys(w.wins).find(k => w.wins[k].app === 'chats' && w.wins[k].thread === target);
+          const target = b.dataset.shareto;
+          // From an installed app (stay): send in the background and leave the owner where they were. Any existing
+          // main Chats window can carry the send (sendChat with away + sid never navigates it); with none open, one is
+          // opened for the send, then closed and the previous desk/window put back.
+          const before = new Set(Object.keys(w.wins || {})), deskWas = w.idx, focusWas = w.cur ?? w.desks?.[w.idx]?.focus;
+          let wid = stay ? Object.keys(w.wins).find(k => w.wins[k].app === 'chats' && !w.wins[k].agent) : '';
+          const opened = !wid;
+          if (!wid) { (w.openWizardThread || w.openThread)(target); wid = Object.keys(w.wins).find(k => w.wins[k].app === 'chats' && w.wins[k].thread === target); }
           if (!wid) throw new Error('No chat window');
           // Keep the destination's draft/tray untouched. One message carries all files and the edited note.
           const receipt = await chats.sendChat(wid, note, 'shared to Wizard', null, {sid: target, files: a.uploaded, seal: false, away: true});
+          if (stay && opened) {
+            if (!before.has(wid)) w.closeWin?.(wid, true);
+            if (deskWas != null && w.idx !== deskWas) w.goDesk?.(deskWas, true);
+            if (focusWas != null && w.wins?.[focusWas]) w.focusWin?.(focusWas);
+          }
           if (!receipt) throw new Error('Could not save the message');
           finish('sent'); w.toast?.('✦', 'Sent to Wizard', 1800);
         } catch (err) {
@@ -75,7 +86,7 @@
   }
   function wizard(data, authorize) {
     const p = valid(data);
-    return open({text:p.text, title:p.title, items:p.files.map((f,n) => ({name:f.name || `attachment-${n+1}`, mime:f.type, bytes:f.size, blob:f}))}, authorize);
+    return open({stay:true, text:p.text, title:p.title, items:p.files.map((f,n) => ({name:f.name || `attachment-${n+1}`, mime:f.type, bytes:f.size, blob:f}))}, authorize);
   }
   document.addEventListener('keydown', e => {
     if (!active) return;
