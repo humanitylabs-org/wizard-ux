@@ -159,6 +159,8 @@
     "core/os-updates.js",
     "core/own-views.css",
     "core/own-views.js",
+    "core/pages.css",
+    "core/pages.js",
     "core/photos-relay.js",
     "core/polish.css",
     "core/reach.js",
@@ -474,6 +476,7 @@
       ],
       "note": "Shared own-screen fallback and shell-only Settings confirmation; same App Manager owner listener as Updates"
     },
+    "core/pages.js": {"loadedBy":["phone","desktop"],"note":"Shared Pages list, opaque viewer, versioned editor and bridge"},
     "core/photos-relay.js": {
       "loadedBy": [
         "phone",

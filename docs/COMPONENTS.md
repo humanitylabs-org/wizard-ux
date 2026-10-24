@@ -1,8 +1,8 @@
 # Wizard OS components: reuse before build
 
-**One implementation per capability.** Find the need below and reuse its entry point. Extend near-fit modules instead of building beside them. NEW lands in `web/core/` with a row here, never inside an app.
+**One implementation per capability.** Reuse the entry point below; extend near-fit modules. NEW belongs in `web/core/` with a row here.
 
-Every PR body carries a `Reuse:` block (see `.github/pull_request_template.md`); CI checks it (`tools/reuse-check.mjs`) and checks that every shell global is listed here (`tests/components-inventory.test.mjs`).
+PRs carry a `Reuse:` block (`.github/pull_request_template.md`), checked by `tools/reuse-check.mjs`. `tests/components-inventory.test.mjs` checks shell globals.
 
 ```
 Reuse:
@@ -37,6 +37,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 
 | Need | Use | Never hand-roll |
 |---|---|---|
+| Pages: list, sandbox, editor, history, bridge | `WosPages` (`web/core/pages.js`, `web/core/pages.css`) | hosted-app privileges on pages |
 | Chats: list, Focus strip/Filter (All / agent / Space; 32px colour pills, 44px targets, persisted collapse), search, thread, composer (text/attachments), drop, cards/read state, Copy · Share (Regenerate: `--wos-reply-regenerate: on`); history only when populated | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); `setFocus(w, {kind, key})` / `setFocus(w, null)` persist `w.focus` via shell save; `WizCore.migrateChatsFocus` folds legacy `w.agent` windows on restore; live data `WizLive` (`web/live.js`) | a second thread, composer, Focus/command parser or per-agent thread logic; extra per-reply buttons on every skin |
 | Alternative Chats list | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
@@ -57,7 +58,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | App glyph tiles | `WizSigil` (`web/core/sigils.js`, `web/core/sigils.css`) | PNG/emoji icons |
 | App groups | `WosAppKinds` (`web/core/app-kinds.js`) | forks |
 | Brand hat | `WizBrand` (`web/core/brand.js`) | redrawn logos |
-| Links: in-app sheet, image links, long-press Open in your browser / Download / Copy link | `WizLinks` (`web/core/links.js`; Android: `WizardOSNative.openInBrowser` / `download`) | `window.open`, own iframe sheet, own link menu |
+| Links: in-app sheet, image links, long-press Open in your browser / Download / Copy link | `WizLinks` (`web/core/links.js`; Pages: `WosPages`; Android: `WizardOSNative.openInBrowser` / `download`) | `window.open`, own iframe sheet, own link menu |
 | Text-selection actions | `WosSelMenu` (`web/core/sel-menu.js`) | own context menu |
 | Share sheet, receivers, pending handoffs | `WosShareSheet` (`web/core/share-sheet.js`), entered only via `WosChat.sharePayload` | a second share picker, sending for an app |
 | Screen context for the agent | `WizScreen` (`web/core/screen-text.js`) | own DOM scrape |

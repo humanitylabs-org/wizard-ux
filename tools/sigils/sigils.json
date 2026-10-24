@@ -1,4 +1,8 @@
 {
+ "pages": {
+  "d": "M124 70H295V163H388V442H124ZM182 243C177 243 173 247 173 252V263C173 268 177 272 182 272H330C335 272 339 268 339 263V252C339 247 335 243 330 243Z",
+  "desc": "A folded page with a reading line cut through it: what your agent makes."
+ },
  "wizard": {
   "d": "M117 437 230 156C243 123 245 102 228 80C225 77 230 73 234 75C271 93 287 123 300 156L395 437H289V370C289 352 274 337 256 337C238 337 223 352 223 370V437Z",
   "desc": "The mother mark: the hat, with its door joined to the ground line."

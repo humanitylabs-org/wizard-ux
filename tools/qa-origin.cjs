@@ -1,5 +1,5 @@
 // Local QA origin for when the Thales tunnel (127.0.0.1:18443) is down.
-// Serves <web dir> at /wizard-os-home/ and proxies READS of /wizard/* to the Wizard Agent
+// Serves <web dir> at /wizard-os-home/ and proxies READS of /wizard/* and /pages/* to the Wizard Agent
 // Service (127.0.0.1:8923), the same backend the live origin fronts. Any non-GET/HEAD to
 // /wizard/* is refused here (403) as a second fence: suites must intercept writes themselves.
 // Usage: node tools/qa-origin.cjs [port=9371] [webDir=<repo>/web]
@@ -25,9 +25,9 @@ http.createServer((req, res) => {
     p.on('error', () => { res.writeHead(502); res.end(); }); return p.end();
   }
   if (u.pathname === '/__qa/refused') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ refused })); }
-  if (u.pathname.startsWith('/wizard/')) {
+  if (u.pathname.startsWith('/wizard/') || u.pathname.startsWith('/pages/')) {
     if (req.method !== 'GET' && req.method !== 'HEAD') { refused++; res.writeHead(403, { 'content-type': 'application/json' }); return res.end('{"error":"qa-origin refuses writes"}'); }
-    const headers = { ...req.headers }; delete headers.host; delete headers.origin; delete headers.referer;
+    const headers = { ...req.headers }; delete headers.host; if (headers.origin !== 'null') delete headers.origin; delete headers.referer;
     const p = http.request({ ...BACKEND, method: req.method, path: req.url, headers }, r => { res.writeHead(r.statusCode, r.headers); r.pipe(res); });
     p.on('error', e => { res.writeHead(502); res.end(String(e)); });
     return p.end();

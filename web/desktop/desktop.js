@@ -212,6 +212,7 @@
     return W[id];
   }
   function closeWin(id, internal = false) {
+    if (W[id]?.app === 'pages' && !window.WosPages.canClose(winEl(id)?.querySelector('.pg-host'))) return;
     const t = wsOf(id); if (t < 0) return;
     if (!internal) boundManager?.dismiss(W[id]);
     if (W[id]?.app === 'chats') threadShown(id,null);
@@ -312,6 +313,7 @@
   function openApp(a, opts = {}) {
     if (!a) return false;
     if (a.kind === 'view' && ['day','week','month'].includes(a.view)) { openReview(a.view); return true; }
+    if (a.id === 'pages') { const ex = !opts.fresh && findWin(w => w.app === 'pages'); if (ex) focusWin(ex.id); else newWin({app:'pages',appId:'pages'}, opts); return true; }
     if (a.id === 'maps') { openMaps('search',''); return true; }
     if (a.kind === 'view' && a.view === 'inbox') { openInbox(); return true; }
     if (a.kind === 'chats') {
@@ -383,6 +385,7 @@
   function bodyHtml(w) {
     if (w.app === 'review') return window.WosViews.renderReviewShell(w.id);
     if (w.app === 'maps') return window.WosViews.renderMaps(w);
+    if (w.app === 'pages') return '<div class="pg-host"></div>';
     if (w.app === 'feature') return '<div class="shared-feature"></div>';
     if (w.app === 'chats') return `<div class="dchats" data-thread="${esc(w.thread || '')}" style="--list-w:${listW()}px"><div class="pane-list"><div class="chats" data-chats="${w.id}::list"></div></div>
       <div class="pane-split" data-split role="separator" aria-orientation="vertical" aria-label="Resize the thread list" tabindex="0" title="Drag to resize · double-click to reset"></div>
@@ -447,6 +450,7 @@
       if (w.thread) CHATS.renderChats(w);
       syncChatsPane(w.id);
     } else if (w.app === 'review') mountReview(w,el);
+    else if (w.app === 'pages') window.WosPages.mount(el.querySelector('.pg-host'),{slug:w.pageSlug || '',close:() => closeWin(w.id)});
     else if (w.app === 'maps') window.WosViews.bindMaps(el,w,save);
     else if (w.app === 'feature') window.WosFeatures.mount(w.featureId,el.querySelector('.shared-feature'),w.featureOptions);
     else watchFrame(el.querySelector('iframe'), el);
@@ -1492,6 +1496,7 @@
     // Leave fullscreen before navigating the app underneath; preserve its thread and draft.
     if (homeOpen) return '';
     if (focused() && CHATS.isHosted(focused().id)) return CHATS.threadBack(focused());
+    if (focused()?.app === 'pages') { const w = focused(); if (window.WosPages.back(winEl(w.id)?.querySelector('.pg-host'))) return 'pages'; closeWin(w.id); return 'pages-close'; }
     if (ws[cur].mono) { toggleMono(); return 'mono'; }
     // Back navigates while recording; only the explicit Cancel control may discard audio.
     const f = focused();
@@ -1681,6 +1686,8 @@
   // Back, theme), not in the plain link pane (James, 19 Oct 2026: Outline said "not connected to Wizard").
   if (LINKS) LINKS.route = href => {
     let u; try { u = new URL(href, location.href); } catch (e) { return false; }
+    const pageSlug = window.WosPages.match(href);
+    if (pageSlug) { newWin({app:'pages',appId:'pages',pageSlug}); return true; }
     const a = u.origin === location.origin && appAt(u.href); if (!a) return false;
     const rel = u.pathname + u.search + u.hash, same = new URL(a.url, location.href);
     if (same.pathname + same.search === u.pathname + u.search) { openApp(a, { fresh: false }); return true; }

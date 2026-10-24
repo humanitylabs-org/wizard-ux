@@ -4,6 +4,7 @@
   'use strict';
   const { norm } = window.WizCore;
   const ALL = [
+    {id:'pages', kind:'wizard', name:'Pages', system:true, icon:'P', desc:'Reports, documents and dashboards your agent makes', sigil:{id:'pages',name:'Pages'}},
     { id: 'app-store', kind: 'wizard', name: 'App Store', icon: '+', g: ['#8f63ff', '#ff5ccf'], url: '/wizard-os-home/store/index.html', desc: 'Get apps · Browse the Wizard App Index' },
     // Agents: a system app of its own, reached from Home and System; never in Apps or the Store.
     // Its sigil is the house `agents` mark (two layered hats), never a single hat that could pass for one agent.
@@ -41,6 +42,7 @@
       if (a.kind === 'view' && a.view !== 'inbox' && !hasHistory) return false;
       // Phone: no Inbox tile; notifications are the Chats list ("open inbox" still opens Chats).
       if (shell !== 'desktop' && a.view === 'inbox') return false;
+      if (a.id === 'pages' && !window.WosPages?.available) return false;
       if (a.id === 'side-button' && !nativeSide) return false;
       if (a.id === 'usuals' && !(window.WizardOSNative && typeof window.WizardOSNative.usuals === 'function')) return false;
       if (shell === 'desktop') return a.kind !== 'native' && !(a.kind === 'view' && a.view !== 'inbox');
@@ -112,7 +114,7 @@
   const firstLoad = loadRemote();
   window.WizCore.refreshApps = loadRemote;
   // ?open=<id> before the box's app list arrived (first run, no cache): wait for it once, then retry.
-  window.WizCore.appsLoaded = () => Promise.all([firstLoad, window.WosAgents?.load()]);
+  window.WizCore.appsLoaded = () => Promise.all([firstLoad, window.WosAgents?.load(), window.WosPages?.ready]);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadRemote(); });
   // A Store Get (or another same-origin Wizard window) says the box's apps changed: read the list again now, so
   // the new app can be opened (Store "Open") without reloading the shell. Refetching is all it can trigger.
@@ -149,6 +151,7 @@
       window.dispatchEvent(new CustomEvent('wizard:apps', { detail: { shell, count: APPS.length } }));
     };
     rebuild(); listeners.add(rebuild);
+    window.WosPages?.onChange(rebuild);
     window.WosAgents?.onChange(rebuild);
   const tight = s => s.replace(/ /g, '');
   function findApp(q, exact) {

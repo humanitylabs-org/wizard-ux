@@ -223,6 +223,7 @@
   function winBody(w) {
     switch (w.app) {
       case 'chats': return `<div class="chats" data-chats="${w.id}"></div>`;
+      case 'pages': return '<div class="pg-host"></div>';
       case 'feature': return '<div class="shared-feature"></div>';
       case 'review': return renderReviewShell(w.id);
       case 'frame': return renderFrame(w);
@@ -245,6 +246,7 @@
   }
   function mountWin(w, el) {
     if (w.app === 'feature') window.WosFeatures.mount(w.featureId, el.querySelector('.shared-feature'),w.featureOptions);
+    if (w.app === 'pages') window.WosPages.mount(el.querySelector('.pg-host'), {slug:w.pageSlug || '', close:() => closeWin(w.id)});
     if (w.app === 'maps') window.WosViews.bindMaps(el, w, save);
     if (w.app === 'review') mountReview(w.id, null);
     if (w.app === 'chats') renderChats(w);
@@ -757,6 +759,7 @@
     window.WizBackgroundAudio?.closeApp(w?.appId)?.catch(() => toast('♫', 'Music could not stop. Pause it from the media controls.'));
   }
   function closeWin(id, quiet, preservePlayback = false) {
+    if (W[id]?.app === 'pages' && !window.WosPages.canClose(winEl(id)?.querySelector('.pg-host'))) return;
     const i = deskOf(id); if (i < 0) return;
     const w = W[id], d = desks[i], name = winTitle(w);
     if (!preservePlayback) closeAppPlayback(w);
@@ -961,6 +964,10 @@
     if (u.origin !== location.origin) return false;
     const srcId = (fromEl && fromEl.closest ? fromEl.closest('.win')?.dataset.win : '') || desks[idx].focus;
     const src = W[srcId], rel = u.pathname + u.search + u.hash;
+    const pageSlug = window.WosPages.match(href);
+    if (pageSlug) return !!openWin({app:'pages', appId:'pages', pageSlug, from:fromOf(srcId)});
+    // Without the Pages API preserve the ordinary link sheet, not a privileged frame.
+    if (/^\/pages\//.test(u.pathname)) return false;
     if (src && src.from && src.app === 'frame') { const f = winEl(srcId)?.querySelector('iframe'); if (f) { try { f.contentWindow.location.href = u.href; } catch (e) { f.src = u.href; } return true; } }
     const open = Object.values(W).find(w => w.from && w.url === rel); if (open) { goDesk(deskOf(open.id)); return true; }
     const from = fromOf(srcId);
@@ -1136,6 +1143,7 @@
   window.WizOpenAgentChats = openAgentChats;
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
+    if (a.id === 'pages') { closeSheets(true); placeApp(w => w.app === 'pages' && !w.from, {app:'pages', appId:'pages'}, opts); return true; }
     if (a.id === 'side-button') { closeSheets(true); if (idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
     if (a.kind === 'view') {
       if (a.view === 'inbox') { openSheet('inbox'); return true; }
@@ -3602,6 +3610,7 @@
     const d = desks[idx], f = W[d.focus];
     if (f && CHATS.isHosted(f.id)) return CHATS.threadBack(f);
     if (f) {
+      if (f.app === 'pages') { if (window.WosPages.back(winEl(f.id)?.querySelector('.pg-host'))) return 'pages'; closeWin(f.id); return 'pages-close'; }
       if (f.app === 'chats' && f.thread) return CHATS.threadBack(f);
       if (f.app === 'chats' && (CHATS.hasFilter(f) || CHATS.ch(f.id).q)) {
         const c = CHATS.ch(f.id), back = c.filterFrom, did = CHATS.clearFilter(f);

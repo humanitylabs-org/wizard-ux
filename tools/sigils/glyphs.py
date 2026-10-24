@@ -69,6 +69,10 @@ def glyph(name, desc, scale=1.0, dy=0):
         G[name] = dict(fn=fn, desc=desc, scale=scale, dy=dy); return fn
     return deco
 
+@glyph('pages', 'A folded page with a reading line cut through it: what your agent makes.')
+def g_pages():
+    return D(P('M146 88H300L384 172V424H146Z'), P('M300 88V172H384Z'), rrect(190, 244, 150, 26, 8))
+
 @glyph('wizard', 'The mother mark: the hat, with its door joined to the ground line.')
 def g_wizard():
     return D(hat(), P("M226 412 V346 A30 30 0 0 1 286 346 V412 Z"))
