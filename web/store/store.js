@@ -16,7 +16,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     { id: 'apps', type: 'view', one: 'App', many: 'Apps', blurb: 'Things you open and use' },
     { id: 'agent-apps', type: 'service', one: 'Agent app', many: 'Agent apps', blurb: 'New skills for your agent' },
     { id: 'agents', type: 'agent', one: 'Agent', many: 'Agents', blurb: 'The minds that run Wizard' },
-    { id: 'connections', type: 'external', one: 'Connection', many: 'Connections', blurb: 'Accounts your agents can use' },
+    { id: 'connections', type: 'external', one: 'Connector', many: 'Connectors', blurb: 'Accounts your agents can use' },
   ];
   const KIND_OF = Object.fromEntries(KINDS.map(k => [k.type, k]));
   const kindOf = a => KIND_OF[a.type] || KINDS[1];
@@ -96,6 +96,9 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     if(top()==='detail') showDetail(S.stack.at(-1).arg);
     else if(top()==='list') openKind(S.stack.at(-1).arg,true);
     else if(top()==='search') search(S.q);
+    // ?kind=apps|agent-apps|agents|connections: the launcher's "+ Get ..." tiles open that section.
+    const reqKind = new URLSearchParams(location.search).get('kind');
+    if (reqKind && !S.stack.length && KINDS.some(k => k.id === reqKind)) openKind(reqKind);
     const requested = new URLSearchParams(location.search).get('app');
     if (requested && !S.stack.length && S.apps.some(a => a.id === requested)) {
       const a=find(requested), source=new URLSearchParams(location.search).get('source'), r=a.releases.find(r=>r.source===source);
