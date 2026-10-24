@@ -95,6 +95,28 @@ test('a transcript the old page already heard is reused, not transcribed again',
   assert.equal(stt, 0);
 });
 
+test('a recovered timed-out transcription releases Working and keeps its original recording', async t => {
+  const f = await fixture(t);
+  const page1 = client(f.origin); t.after(page1.close);
+  const it = await stageTake(page1.api);
+  await page1.api.handOff(it.id);
+  const row = page1.rows.get(it.id);
+  Object.assign(row, {
+    state: 'sending', deliveryRequested: true, attempts: 2, errorStatus: 408, error: 'HTTP 408',
+    lastAttemptAt: Date.now() - 1000, audioFile: { id: 'drop_voice', name: 'voice.aac', mime: 'audio/aac', bytes: 4 },
+  });
+  page1.rows.set(it.id, row); page1.close();
+
+  const page2 = client(f.origin, page1.rows, async () => { throw new Error('must not auto retry'); }); t.after(page2.close);
+  await page2.api.load();
+  const recovered = page2.api.get(it.id);
+  assert.equal(recovered.state, 'failed');
+  assert.match(recovered.error, /Transcription timed out/);
+  assert.equal(recovered.audio.size, 4);
+  await new Promise(r => setTimeout(r, 50));
+  assert.equal(f.calls.filter(c => c.path === '/wizard/hermes/v1/runs').length, 0);
+});
+
 test('held commands and takes never handed off keep the old interrupted-and-kept behaviour', async t => {
   const f = await fixture(t);
   const page1 = client(f.origin);
