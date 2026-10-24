@@ -263,9 +263,9 @@ window.WizCore.chats = function createChats(H) {
     const topic = topicOn() && TOPIC.get(`thread:${s.id}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '));
     const mark = !topic ? stock : `<span class="ch-topic-mark" data-chpick="thread:${esc(s.id)}" title="Choose topic emoji"><span class="ch-topic-emoji" aria-hidden="true">${topic}</span><span class="emo sti ${kind} ch-topic-status" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span></span>`;
     const pinned = PIN.has(s.id), boom = BOOM()?.dueFor(s.id).length ? ' due' : BOOM()?.nextFor(s.id) ? ' set' : '';
-    return `<div class="ch-row-wrap${pinned ? ' pinned' : ''}" data-morph-key="row:${esc(s.id)}"><button class="ch-row${unread ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}${priv ? ' private' : ''}" data-chopen="${esc(s.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open thread · hold or open the context menu for actions"${quiet ? ' data-quiet="1"' : ''}${priv ? ' data-wiz-private=""' : ''}>${mark}
+    return `<div class="ch-row-wrap${pinned ? ' pinned' : ''}" data-morph-key="row:${esc(s.id)}"><button data-part="thread-row" class="ch-row${unread ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}${priv ? ' private' : ''}" data-chopen="${esc(s.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open thread · hold or open the context menu for actions"${quiet ? ' data-quiet="1"' : ''}${priv ? ' data-wiz-private=""' : ''}>${mark}
       <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b><time>${esc(ago(LIVE.cardAt(s)))}</time></span>
-      ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}</span>${boom ? `<i class="ch-boom${boom}" title="${boom === ' due' ? 'Back for you' : 'Snoozed'}" aria-label="${boom === ' due' ? 'Back for you' : 'Snoozed'}">◷</i>` : ''}</button><button type="button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinned ? 'Unpin' : 'Pin'} chat: ${esc(s.title)}" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}">${PIN_SVG}</button></div>`;
+      ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}</span>${boom ? `<i class="ch-boom${boom}" title="${boom === ' due' ? 'Back for you' : 'Snoozed'}" aria-label="${boom === ' due' ? 'Back for you' : 'Snoozed'}">◷</i>` : ''}</button><button type="button" data-part="pin-button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinned ? 'Unpin' : 'Pin'} chat: ${esc(s.title)}" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}">${PIN_SVG}</button></div>`;
   }
   /* Ready has three orders (James, 10 Oct 2026): Newest (pure recency, labels don't move rows), Priority
    * (needs you, then test this, then the rest) and By subject (the roundup, kept live). */
@@ -640,7 +640,7 @@ window.WizCore.chats = function createChats(H) {
       : LST.cached ? syncBar('', `${spin}<span>Updating…${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}</span>`)
       : LST.ok && age > STALE_LIST ? syncBar('stale', `${LST.loading ? spin : ''}<span><b>Not up to date</b> · ${esc(since)}${LST.loading ? ' · updating…' : ''}</span>`)
       : c.ptrState === 'done' ? syncBar('ok', '<span>Up to date</span>') : '';
-    const html = `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${AGID ? ` style="--agc:${AGS()?.colour(agentRec(AGID)) || ''}"` : ''}>${head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${c.sheet ? filterSheet(c) : ''}</div>`;
+    const html = `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${AGID ? ` style="--agc:${AGS()?.colour(agentRec(AGID)) || ''}"` : ''}><div data-slot="list-top"></div>${head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${c.sheet ? filterSheet(c) : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
@@ -923,6 +923,7 @@ window.WizCore.chats = function createChats(H) {
       for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
       return;
     }
+    if (a === 'snooze' && window.WosSkinHost?.action('snooze', { sessionId: sid })) return;
     if (a === 'snooze') { const B = BOOM(); if (B) B.open({ sessionId: sid, targetKind: 'thread', title: s.title, context: s.title }, B.nextFor(sid)); else toast('!', 'Snooze is still loading', 1600); return; }
     if (a !== 'restore' && w && w.thread === sid) threadBack(w);
     const msg = { done: ['✓', 'Marked done'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
@@ -946,7 +947,7 @@ window.WizCore.chats = function createChats(H) {
     el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Thread actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(s.title)}</div>
       <button type="button" data-rsopen>${'<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'}Open</button>
       <button type="button" data-rsrename>${RENAME_SVG}Rename</button>
-      <button type="button" data-rspin>${PIN_SVG}${PIN.has(sid) ? 'Unpin' : 'Pin'}</button>
+      <button type="button" data-part="pin-button" data-rspin>${PIN_SVG}${PIN.has(sid) ? 'Unpin' : 'Pin'}</button>
       ${topicOn() ? `<button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>` : ''}
       ${acts.map(a => `<button type="button" data-rsact="${a}">${ACT[a].icon}${ACT[a].label}</button>`).join('')}
       ${acts.length ? '' : `<p class="ch-sheet-n">${isWorking(s) || ['waiting_for_approval', 'unknown'].includes(s.status) ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
@@ -1364,16 +1365,16 @@ window.WizCore.chats = function createChats(H) {
     const mlabel = PW?.modelLabel && !msw ? PW.modelLabel(w, s) : '';
     const chip = PW && !PW.modelLabel ? PW.modelChip(w, s) : '';
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
-    const tacts = acts.length && turns && !pend.length ? `<div class="ch-tacts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${ACT[a].label}</span></button>`).join('')}</div>` : '';
+    const tacts = acts.length && turns && !pend.length ? `<div class="ch-tacts" data-part="thread-actions">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${ACT[a].label}</span></button>`).join('')}</div>` : '';
     clearReading(w.id);
     // Live repaints rebuild the thread. Keep each already-loaded photo node so it doesn't blank and reload (flicker).
     const keepImgs = keepLoadedImages(el);
     const keepSheet = keptSheet(el);
     const openContexts = el.dataset.draftFor === dkey ? new Set([...el.querySelectorAll('[data-run-original][open]')].map(e => e.dataset.runOriginal)) : new Set();
     const threadHTML = `<div data-part="thread" class="ch-thread${TAG ? ' agent' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
-      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(winTitle(w))}</b>`}${privTag}</div>${chip}</div>
+      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(winTitle(w))}</b>`}${privTag}</div>${chip}<span data-slot="thread-header-actions"></span></div>
       ${s && BOOM() ? BOOM().banner(s.id) : ''}<div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
-      ${msw ? `<div class="ch-swrow">${msw}</div>` : ''}<form data-part="composer" class="ch-compose${hasContent(draft) ? ' has-text' : ''}${rpl ? ' has-reply' : ''}" data-chform>${replyBubble(rpl)}${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${mlabel}</div>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
+      ${msw ? `<div class="ch-swrow">${msw}<span data-slot="thread-switch-row-end"></span></div>` : '<div data-slot="thread-switch-row-end"></div>'}<form data-slot="composer-end" data-part="composer" class="ch-compose${hasContent(draft) ? ' has-text' : ''}${rpl ? ' has-reply' : ''}" data-chform>${replyBubble(rpl)}${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${mlabel}</div>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
     // A focused composer must never leave the page during a live repaint: iPhone Safari closes the keyboard the
     // moment a focused field is detached and will not reopen it from script, so the owner saw a caret and no
@@ -1951,6 +1952,7 @@ window.WizCore.chats = function createChats(H) {
     }
     sealed?.done(it);
     if (!left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
+    window.WosSkinHost?.emit('sent', { thread: sid, wid, isNew });
     return it;
   }
   const picker = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true });
@@ -2200,7 +2202,7 @@ window.WizCore.chats = function createChats(H) {
     const el = elOf(wid); if (el) delete el.dataset.draftFor;
   }
   // Models, Errors actions, composer mic, work receipts, reading position, Files (core/chat-power.js).
-  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent }) : null;
+  const PW = window.WosChatPower ? window.WosChatPower({ winAgent, CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent }) : null;
   restoreSealed();
   // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.
   let outSig = '';
@@ -2214,7 +2216,8 @@ window.WizCore.chats = function createChats(H) {
     if (sig === outSig) return; outSig = sig;
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
-  return { openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setSubject, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
+  return { tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setSubject, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
     KIT, threadAct, openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };

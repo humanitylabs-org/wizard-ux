@@ -789,5 +789,3 @@ html[data-skin^="obsidian"] .rs-lg { font-size: 11.5px; margin-bottom: 5px; }
 html[data-skin^="obsidian"] .rs-br { grid-template-columns: 58px minmax(60px, 1fr) max-content; }
 
 /* Miguel's skins: no chat pins (row pin button and the Pin action in the row sheet). Rows get their full width back. */
-html[data-skin^="obsidian"] .ch-pin-toggle, html[data-skin^="obsidian"] .ch-sheet [data-rspin] { display: none; }
-html[data-skin^="obsidian"] .ch-row-wrap > .ch-row { padding-right: 8px; }

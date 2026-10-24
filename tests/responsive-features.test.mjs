@@ -138,3 +138,14 @@ test('unsent Edit consumes only after the shared draft store verifies text and a
   sandbox.WosChat.drafts.get = () => ({ text: '', files: [] });
   assert.equal(sandbox.WosSettings.moveDraft(opts), false); assert.deepEqual(removed, ['fixture']); assert.equal(notices.length, 1);
 });
+
+// Look's new controls stay in the shared Settings stack; Back never navigates out of Wizard.
+test('nested Look / Your tweaks Back returns to Settings before shell root Back, in both mounts', () => {
+  const { sandbox, roots } = harness();
+  sandbox.WosSkin = { current:'grove', list:[], families:[], familyOf:()=>'' };
+  sandbox.WosExperience = { LABEL:'Experience', state:{base:'miguel',busy:false,error:'',tweaks:[{id:'miguel/hidden-pin',name:'Hide pin buttons',on:true}],active:['miguel/hidden-pin']} };
+  for (const { root, view } of roots) {
+    view.focus('look'); assert.equal(view.page,'appearance'); assert.match(root.innerHTML,/Your tweaks/); assert.match(root.innerHTML,/Back to my setup/);
+    assert.equal(view.back(), true); assert.equal(view.page,''); assert.equal(view.back(), false); assert.match(root.innerHTML,/Settings categories/);
+  }
+});

@@ -75,3 +75,12 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 ## Shell plumbing (owned by one module; never duplicate, rarely called directly)
 
 `WizardApp` (`web/core/app-client.js`), `WizAppCapture` (`web/core/app-capture.js`, behind `WizardApp.capture`), `WosSkinFrame` (`web/core/skin-frame.js`), `WosDevice` (`web/device.js`), `WizAppServices` (`web/core/app-services.js`), `WizCore` (`web/core/core.js`, `web/core/bridge.js`), `WizConfig` (`web/core/config.js`), `WizReach` (`web/core/reach.js`), `WizAndroidRelay` (`web/core/android-relay.js`), `WizBackgroundAudio` (`web/core/background-audio.js`), `WizHomeScreenApps` (`web/core/home-screen-apps.js`), `WizHomeScreenPolicy` (`web/core/home-screen-policy.js`), `WosOwnViews` (`web/core/own-views.js`), `WosOrbHandoff` (`web/core/orb-handoff.js`), `WosSetupLaunch` (`web/core/setup-launch.js`), `WosBell` (`web/core/notif-bell.js`), `WosResources` (`web/core/resources.js`), `WosUsage` (`web/core/usage.js`), `WosPhotos` (`web/core/photos-settings.js`), `WosMusic` (`web/core/music-voice.js`), `WizVideoDesks` (`web/core/video-desks.js`), `WosUsuals` (`web/usuals.js`), phone shell openers `WizAppOpen`, `WizCanOpen`, `WizOpenApp`, `WizOpenAgentChats` (`web/app.js`).
+
+## Tweaks / owner experiences (v1)
+
+| Need | Shared component | Contract |
+| --- | --- | --- |
+| Named extension mounts, ordered capability-gated tweak lifecycle | `WosSkinHost` (`web/core/skin-host.js`, `slots.json`) | Extends skin/layout record guards and disposal; data-slot/data-part only; incompatible package turns off with a toast |
+| Try / follow / fork a published setup, per-id overrides, return to own setup | `WosExperience` (`web/core/experience.js`) | Single device-storage boundary pending an owner Files profile route; provisional label in `LABEL`; My skin remains on top |
+| Tweak model controls | `WosChatPower.tweakModels/tweakModel`, `WosModels` | Existing catalogue, agent restrictions and model action; shell adapters only identify the current Chats window |
+| Your tweaks list | `WosSettings` Look feature | Shared row components, existing nested Back stack in both shells |

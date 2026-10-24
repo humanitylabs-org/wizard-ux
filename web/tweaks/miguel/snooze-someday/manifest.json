@@ -1,0 +1,10 @@
+{
+  "id": "miguel/snooze-someday",
+  "name": "One-tap Snooze \u00b7 Someday",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "nav"
+  ]
+}

@@ -125,6 +125,9 @@
   const api = {
     FILE,
     get state() { return state; },
+    // The owner overlay stays above a followed experience; it is never cleared by Try / Back.
+    // Device persistence lives in experience.js until Agent Service offers an owner profile route.
+    get experience() { return window.WosExperience || null; },
     refresh, reset, turnOn, turnOff, startScript,
     on(fn) { if (typeof fn === 'function') subs.add(fn); return () => subs.delete(fn); },
     _test: { apply, emptyCss },

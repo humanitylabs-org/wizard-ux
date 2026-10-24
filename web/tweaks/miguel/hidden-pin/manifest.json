@@ -1,0 +1,10 @@
+{
+  "id": "miguel/hidden-pin",
+  "name": "Hide pin buttons",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ]
+}
