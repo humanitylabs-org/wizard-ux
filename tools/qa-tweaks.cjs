@@ -13,6 +13,7 @@ fs.mkdirSync(out, { recursive:true });
   try {
     for (const [name, origin, expected] of [['baseline',baseline,false],['candidate',candidate,true]]) {
       for (const shell of ['phone','desktop']) for (const skin of ['nebula','obsidian']) {
+        if (process.env.QA_ONLY && !process.env.QA_ONLY.split(',').includes(name+'-'+shell+'-'+skin)) continue;
         const id = `${name}-${shell}-${skin}`, errors = [], blocked = [];
         const context = await browser.newContext({ viewport: shell === 'phone' ? {width:390,height:844} : {width:1440,height:1000}, isMobile:shell==='phone',hasTouch:shell==='phone',timezoneId:'Asia/Bangkok',serviceWorkers:'block' });
         await context.addInitScript(({ skin }) => { try { if (!sessionStorage.getItem('qa.seeded')) { localStorage.setItem('wos.skin',skin); localStorage.setItem('wos.tour.v1','true'); sessionStorage.setItem('qa.seeded','1'); } } catch (_) {} /* seed once: later picks must survive navigation */ /* sandboxed app frames have no storage */ }, {skin});
@@ -67,7 +68,8 @@ fs.mkdirSync(out, { recursive:true });
             await page.waitForFunction(()=>document.querySelector('[data-part="model-pills"] [aria-pressed="true"]'));
             await page.goto(origin+'/wizard-os-home/'+shellPath+'?view=home&shell='+shell,{waitUntil:'domcontentloaded'});
             await page.locator('[data-home-resources] .rs-barsw').waitFor({state:'visible',timeout:20000});
-            await page.locator('[data-home-resources]').screenshot({path:path.join(out,id+'-resources.png')});
+            // Home repaints the live bars host while polling; re-resolve and retry instead of holding a stale node.
+            for (let n=0;;n++) { try { await page.locator('[data-home-resources]').screenshot({path:path.join(out,id+'-resources.png'),timeout:5000}); break; } catch(e) { if (n>=3 || !/not attached/i.test(String(e))) throw e; await page.waitForTimeout(300); } }
             await page.goto(origin+'/wizard-os-home/'+shellPath+'?view=skin&shell='+shell,{waitUntil:'domcontentloaded'});
             await page.waitForFunction(()=>window.WosExperience && !window.WosExperience.state.busy);
             await page.locator('[data-skinfamily="wizard"]').click();
