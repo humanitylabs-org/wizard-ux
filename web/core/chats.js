@@ -2349,7 +2349,7 @@ window.WizCore.chats = function createChats(H) {
     if (spaceKey && it?.sessionId) spaceMember(spaceKey, it.sessionId, true);
     sealed?.done(it);
     if (!left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
-    window.WosSkinHost?.emit('sent', { thread: sid, wid, isNew });
+    window.WosSkinHost?.emit?.('sent', { thread: sid, wid, isNew });
     return it;
   }
   const picker = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true });
