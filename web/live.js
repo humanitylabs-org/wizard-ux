@@ -271,6 +271,7 @@
     subjectOrder: ['wos.chats.subjectOrder.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
     // Pinned chats (core/chat-pins.js): the same pins on every device.
     pinnedChats: ['wos.chats.pinned.v2', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
+    spaces: ['wos.chats.spaces.v1', v => Array.isArray(v), JSON.stringify],
   };
   let prefsOff = false;
   const putPrefs = patch => {

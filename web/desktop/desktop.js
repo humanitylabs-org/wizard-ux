@@ -43,6 +43,8 @@
     // First run: Chats on 1, so Wizard opens on the thing you use most.
     const id = uid(); W[id] = { id, app: 'chats', thread: null }; ws[0].wins.push(id); ws[0].focus = id;
   }
+  const oldActive = ws[cur];
+  ws = C.migrateChatsFocus(W, ws); cur = Math.max(0, ws.indexOf(oldActive));
   const placed = new Set(), deskIds = new Set();
   ws = ws.map(d => {
     d = d && typeof d === 'object' ? d : freshDesk();
@@ -299,9 +301,9 @@
     const AG = window.WosAgents; if (!AG || !/^[a-z0-9][a-z0-9-]{0,40}$/.test(String(id || ''))) return false;
     if (!AG.get(id)) await AG.load(true);
     if (!AG.get(id)) { toast('!', 'That agent isn’t on this Wizard', 2000); return false; }
-    if (!AG.isOther(id)) return openApp(APP.wizard);
-    let w = findWin(x => x.app === 'chats' && x.agent === id);
-    if (w) focusWin(w.id); else w = newWin({ app: 'chats', thread: null, agent: id });
+    let w = findWin(mainChats);
+    if (w) focusWin(w.id); else w = newWin({ app: 'chats', thread: null });
+    CHATS.setFocus(w, { kind: 'agent', key: id });
     if (o.thread === '__new__') { CHATS.openNewDraft(w.id, ''); syncChatsPane(w.id); }
     LIVE?.refreshAgents?.().then(() => LIVE.emit());
     return true;
@@ -334,10 +336,10 @@
   }
   function openThread(sid, opts = {}) {
     if (!sid) return;
-    // A thread opens in the Chats of the agent it is pinned to (main Chats for the main agent's threads).
-    const ag = LIVE?.agentOf?.(sid) || '', mine = x => x.app === 'chats' && (x.agent || '') === ag && (ag || CHATS.views.providerFor(x) === CHATS.views.defaultId());
+    // Any agent's thread opens in the main Chats window, without changing its list Focus.
+    const mine = mainChats;
     let w = !opts.fresh && (ws[cur].wins.map(id => W[id]).find(mine) || findWin(mine));
-    if (!w) w = newWin({ app: 'chats', thread: null, ...(ag ? { agent: ag } : {}) }, opts);
+    if (!w) w = newWin({ app: 'chats', thread: null }, opts);
     focusWin(w.id); CHATS.openChat(w.id, sid);
     setTimeout(() => focusInside(w.id), 30);
   }
@@ -345,7 +347,7 @@
     // ⌘Enter in an agent's Chats starts a chat with that agent; anywhere else, with the main agent.
     const f0 = focused();
     let w = !opts.fresh && (f0?.app === 'chats' ? f0 : ws[cur].wins.map(id => W[id]).find(mainChats));
-    if (!w) w = newWin({ app: 'chats', thread: null }, opts);
+    if (!w) w = newWin({ app: 'chats', thread: null, ...(f0?.app === 'chats' && f0.focus ? { focus: { ...f0.focus } } : {}) }, opts);
     focusWin(w.id); CHATS.openNewDraft(w.id, '');
     syncChatsPane(w.id); setTimeout(() => focusInside(w.id), 30);
     return w;
@@ -1219,15 +1221,16 @@
       const f = focused(); vSnapshot = commandSnapshot();
       vFeedback = !forceNew && f?.from?.sid ? {thread:f.from.sid,title:f.from.title,url:f.url,context:viewContext(f.id,'feedback on the bound page')} : null;
       vFiles?.close(); vFiles = window.WosCaptureTools.take(CHATS.uploadFile, paintVoiceFiles); paintVoiceFiles();
-      vTarget = !forceNew && (f?.app === 'chats' || CHATS.isHosted(f?.id)) && (f.thread || f.agent) ? f.id : null;
+      vTarget = (f?.app === 'chats' || (!forceNew && CHATS.isHosted(f?.id))) ? f.id : null;
+      if (forceNew && vTarget) vSnapshot.thread = '__new__';
       const capability = window.WizAppServices?.voiceInput, app = APP[f?.appId];
       vConversation = !forceNew && !CHATS.isHosted(f?.id) ? (capability ? capability.pin(winEl(f?.id)?.querySelector('iframe'), app?.id)
         : app?.receives_voice_input === true ? { appId: app.id, token: 'unavailable', label: app.name } : null) : null;
-      vReply = vTarget && f.thread ? { wid: f.id, sid: f.thread, steerRunId: CHATS.isWorking(LIVE.session(f.thread)) ? LIVE.session(f.thread)?.runId || '' : '' } : null;
+      vReply = !forceNew && vTarget && f.thread && f.thread !== '__new__' ? { wid: f.id, sid: f.thread, steerRunId: CHATS.isWorking(LIVE.session(f.thread)) ? LIVE.session(f.thread)?.runId || '' : '' } : null;
       vContext = forceNew ? 'Explicit general-agent voice request. No foreground app or private thread context shared.' : viewContext(vTarget, 'voice, aimed at this thread');
       dictationFinishing = true; // model options may not have loaded while an app is foreground
       try {
-        const resolveRoute = () => vFeedback ? window.WosModels.snapshot(vFeedback.thread) : CHATS.modelRoute(vTarget, vTarget ? vSnapshot.thread || '__new__' : '');
+        const resolveRoute = () => vFeedback ? window.WosModels.snapshot(vFeedback.thread) : CHATS.modelRoute(forceNew && f?.app === 'chats' ? f.id : vTarget, forceNew || vTarget ? (forceNew ? '__new__' : vSnapshot.thread || '__new__') : '');
         vRoute = vConversation ? null : resolveRoute();
         if (!vConversation && !vRoute) { await loadVoiceModels(); vRoute = resolveRoute(); }
         if (!vConversation && !vRoute?.model) throw Error('Model route unavailable · recording has not started');
@@ -1270,7 +1273,7 @@
     // The thread in front at the send key, before any await; an agent's Chats list takes it as a new chat with that agent.
     const aimSid = vFeedback?.thread || rp?.sid || (vTarget && vSnapshot?.view?.kind === 'chat thread' ? vSnapshot.thread : '') || (vTarget ? '__new__' : '');
     // Text, photos and voice go as ONE message (legacy H4): that thread's composer, taken at the send key.
-    const sealAt = vFeedback ? null : rp ? rp : aimSid ? { wid: vTarget, sid: aimSid } : null;
+    const sealAt = vFeedback || vNewChat ? null : rp ? rp : aimSid ? { wid: vTarget, sid: aimSid } : null;
     let modelRoute;
     try { modelRoute = vRoute; if (!modelRoute) throw Error('Recording-start model unavailable · take kept'); }
     catch (e) { vReply = rp; toast('!', String(e.message || e), 2400); return 'busy'; }
@@ -1515,7 +1518,8 @@
     if (alt && !shift && (code === 'ArrowUp' || code === 'ArrowDown') && focused()?.app === 'chats') return hit(() => stepThread(focused().id, code === 'ArrowDown' ? 1 : -1));
     // ⌥N new chat; ⌥V new voice chat (⌥V again sends).
     if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); closeInbox(); toggleKeys(false); closeSettings(); closeUsage(); newChat({ fresh: true }); });
-    if (alt && !shift && code === 'KeyV') return hit(() => { if (e.repeat) return; closePalette(); closeInbox(); toggleKeys(false); closeSettings(); closeUsage(); talkNew(`${MOD}V`); });
+    if (alt && !shift && code === 'Enter') return hit(() => { if (!e.repeat) newChat(); });
+    if (alt && code === 'KeyV') return hit(() => { if (e.repeat) return; closePalette(); closeInbox(); toggleKeys(false); closeSettings(); closeUsage(); talkNew(`${MOD}V`); });
     // ⌥Space search everything, ⌥O open an app: from anywhere, even while typing.
     if (alt && !shift && code === 'Space') return hit(() => palToggle('all'));
     if (alt && !shift && code === 'KeyO') return hit(() => { if (!e.repeat) palToggle('apps'); });

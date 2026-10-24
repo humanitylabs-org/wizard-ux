@@ -381,7 +381,7 @@
       for (const f of features.values()) if (pageOf(f) === page) f.enter?.(ctx);
       confirm = null; render(); root.scrollTop = 0;
       const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = 0;
-      const g = id && root.querySelector(`[data-settings-feature="${CSS.escape(f?.id || id)}"]`);
+      const g = id ? root.querySelector(`[data-settings-feature="${CSS.escape(f?.id || id)}"]`) : null;
       g?.scrollIntoView?.({ block: 'nearest' });
       // The release page opens on its update card; focus its heading, not the card's button (no stray focus ring).
       // Mine: always the page heading (a ring on the first bar or skin tile reads as a box around it).
