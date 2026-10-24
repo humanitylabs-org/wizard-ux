@@ -118,8 +118,9 @@ test('Launch: Nebula is the default skin, My skin leads Look and invites the fir
   assert.match(k, /const SKINS = \[\s*\{ id: 'nebula'/);
   assert.match(k, /const idxOf = id => Math\.max\(0, SKINS\.findIndex/);
   const s = read('web/core/settings.js');
-  // My skin renders before the built-in picker, so the owner lands on their own skin.
-  assert.match(s, /<h4>Look<\/h4>\$\{mySkinRow\(/);
+  // My skin is the grid's last tile; while it is empty the invite sits right under the grid.
+  assert.match(s, /\$\{tiles\}\$\{myTile\(\)\}<\/div>/);
+  assert.match(s, /const invite = M && !myOpen && M\.state\.empty \?/);
   assert.match(s, /Everything you see is customizable/);
   // Reset only when there is something to reset.
   assert.match(s, /const reset = st\.empty \? '' :/);

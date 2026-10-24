@@ -55,7 +55,11 @@ New cross-platform UX belongs in `web/core/`. Register it once, and both shells 
 - **Claiming parity:** an import test alone never proves universal parity. Whether a feature is reachable, whether its actions work, and native-specific limits all need runtime evidence. A screenshot-only or mocked-API-only pass does not count.
 - **Concurrent work:** when integrating, preserve voice-custody work that is in flight on other branches.
 
-### Skins: your look and your UX live in your own skin (James, 18–19 Oct 2026)
+### Tweaks / experiences (James, 24 Oct 2026; wizard-os #186)
+
+Skins are look only. New behaviour is a tweak package or an approved core flag; never a skin script. Extend `core/skin-host.js`, mount only at `slots.json` names, declare capabilities, ship a CI contract, and preserve My skin on top. One-tap Snooze stays a tweak. Profiles use `core/experience.js` until Agent Service exposes a dedicated owner Files route. No WAM rebases or owner release builds.
+
+### Historical skins contract (superseded for new behaviour)
 
 - **James's skins:** Nebula (the default), Grove, Tide, Ember and Signal, together with the base shell look in `web/core/base.css` (palette and body font). They define the default shell.
 - **Your own look and behaviour:** taste goes into a skin of your own, never into the default shell and never as a Settings toggle. A skin is a `SKINS` entry in `web/core/skins.js` (tokens, orb, background) plus its own folder `web/skins/<dir>/` with `skin.css` and an optional `skin.js` (gestures, small layout tweaks) that only load for people who pick that skin. The skin API, lint rules and a worked example are in `web/skins/README.md`. Obsidian and Landscapes are working examples.

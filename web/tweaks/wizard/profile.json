@@ -1,0 +1,6 @@
+{
+  "id": "wizard",
+  "version": 1,
+  "tweaks": ["wizard/two-orbs"],
+  "off": ["wizard/two-orbs"]
+}
