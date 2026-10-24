@@ -21,7 +21,8 @@ const server=http.createServer(async(req,res)=>{
    async uploadFile(f){return fetch('/api/uploads',{method:'POST',headers:{'Content-Type':f.type,'X-Name':f.name},body:f}).then(r=>r.json());},
    async sendChat(wid,text,how,audio,opts){return fetch('/api/chat',{method:'POST',body:JSON.stringify({wid,text,files:opts.files,opts})}).then(r=>r.json());}
   }};
-  host.openWizardThread=host.openThread=sid=>wins.w1={app:'chats',thread:sid};
+  wins.m={app:'messenger'};const nav=window.__nav=[];Object.assign(host,{idx:0,desks:[{focus:'m'}],goDesk:n=>nav.push('desk:'+n),focusWin:id=>{nav.push('focus:'+id);host.desks[0].focus=id;},closeWin:id=>{nav.push('close:'+id);delete wins[id];}});
+  host.openWizardThread=host.openThread=sid=>{nav.push('open:'+sid);wins.w1={app:'chats',thread:sid};host.desks[0].focus='w1';};
   window[shell==='phone'?'__wos':'__wux']=host;
  },shell);
  // One call from the installed app, not from the top page. No native DEV() exists on either fixture.
@@ -34,9 +35,18 @@ const server=http.createServer(async(req,res)=>{
  await page.locator('.dv-text').fill('My note\n\nMiguel (19:24): The words and transcript');
  await page.getByRole('button',{name:'Send to a new chat',exact:true}).dblclick();await page.locator('.wz-share').waitFor({state:'hidden'});
  assert.equal(await app.evaluate(()=>window.result),'sent');const sent=posts.slice(start).filter(p=>p.kind==='send');assert.equal(sent.length,1);assert.equal(sent[0].files.length,10);assert.match(sent[0].text,/My note/);assert.equal(sent[0].opts.seal,false);assert.equal(sent[0].opts.away,true);
+ // App forwards leave the owner where they were: the temporary Chats window closes and Messenger keeps focus.
+ assert.deepEqual(await page.evaluate(()=>[Object.keys(__nav.length&&(window.__wos||window.__wux).wins),(window.__wos||window.__wux).desks[0].focus,__nav]),[['m'],'m',['open:__new__','close:w1','focus:m']]);
+ // With a main Chats window already open, the send rides on it and nothing navigates at all.
+ await page.evaluate(()=>{const h=window.__wos||window.__wux;h.wins.c={app:'chats',thread:'s3'};__nav.length=0;});
+ await app.evaluate(()=>{window.result=WizardApp.share.wizard({files:[],text:'Second forward'});});await page.locator('.wz-share').waitFor();
+ await page.getByRole('button',{name:'Recent chat 1',exact:true}).click();await page.locator('.wz-share').waitFor({state:'hidden'});
+ assert.equal(await app.evaluate(()=>window.result),'sent');assert.deepEqual(await page.evaluate(()=>__nav),[],'no navigation');
+ { const last=posts.filter(p=>p.kind==='send').at(-1); assert.equal(last.wid,'c'); assert.equal(last.opts.sid,'s1'); }
+ await page.evaluate(()=>{delete (window.__wos||window.__wux).wins.c;});
  await app.evaluate(()=>{window.result=WizardApp.share.wizard({files:[],text:'Cancel me'});});await page.locator('.wz-share').waitFor();
  await page.evaluate(()=>WizShareWizard.back());assert.equal(await app.evaluate(()=>window.result),'cancelled');
- assert.equal(posts.slice(start).filter(p=>p.kind==='send').length,1);
+ assert.equal(posts.slice(start).filter(p=>p.kind==='send').length,2);
  await page.close();}
  fs.writeFileSync(ev+'/receipt.json',JSON.stringify({shells:['phone','desktop'],posts},null,2));console.log('pass: 2 shells; real installed-frame share.wizard → shared sheet; 10 uploads → 1 message; no DEV; two skins; Cancel/Back');
  }finally{await browser.close();server.close();}
