@@ -99,7 +99,8 @@
   let lastHtml = '';
   function render() {
     const parts = [];
-    const waiting = window.WosOutbox?.unsent().some(it => it.state === 'waiting');
+    // Only a message the outbox will actually retry may hold the retrying banner up; anything else is a stated failure.
+    const O = window.WosOutbox, waiting = O?.unsent().some(it => it.state === 'waiting' && (!O.canRetry || O.canRetry(it)));
     if (!(net === 'offline' || net === 'reconnecting' || waiting)) netOpen = false;
     if (net === 'offline' || net === 'reconnecting' || waiting) {
       const diagnosis = window.WizReach?.failure();
