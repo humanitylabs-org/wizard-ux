@@ -27,6 +27,15 @@ const overlap = (a, b) => a && b && a.l < b.r && b.l < a.r && a.t < b.b && b.t <
   ok(fab && win && fab.r <= win.r - 8 && fab.r >= win.r - 30 && fab.b <= win.b - 8 && fab.b >= win.b - 30, 'phone: sits bottom-right of the Chats window', { fab, win });
   ok(!overlap(fab, orb), 'phone: clear of the orb', { fab, orb });
   await p.screenshot({ path: OUT + '/phone-list.png' });
+  // One New chat only: focusing or typing in search never adds a second one (James, 24 Oct 2026).
+  const extraNew = () => p.evaluate(() => [...document.querySelectorAll('.ch-list [data-chnew], .ch-sug [data-chnew], .ch-sug .ch-sugrow')].filter(e => !e.matches('[data-chfab]') && /New chat/.test(e.textContent)).length);
+  await p.tap('[data-chsearch]'); await p.waitForTimeout(500);
+  ok(await extraNew() === 0, 'phone: focusing search shows no second New chat');
+  await p.screenshot({ path: OUT + '/phone-search-focus.png' });
+  await p.type('[data-chsearch]', 'unr', { delay: 40 }); await p.waitForTimeout(500);
+  const sugs = await p.evaluate(() => [...document.querySelectorAll('.ch-sug .ch-sugrow')].map(b => b.lastElementChild.textContent.trim()));
+  ok(sugs[0] === 'Filter: Unread' && await extraNew() === 0, 'phone: typing keeps filter suggestions, no New chat row', sugs);
+  await p.fill('[data-chsearch]', ''); await p.evaluate(() => document.activeElement?.blur()); await p.waitForTimeout(500);
   await p.tap('[data-chfab]'); await p.waitForTimeout(700);
   ok(!!(await box(p, '.ch-compose textarea')), 'phone: tap opens the New chat composer');
   await p.fill('.ch-compose textarea', 'hello from the new button');
