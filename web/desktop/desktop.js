@@ -373,7 +373,7 @@
     const a = appOf(w);
     return `<div class="wbar" data-drag>${w.app === 'chats' ? window.WosAgents.titlebar(w.agent || '', 'ic', 't') : `${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>`}
       ${window.WosBoundView.badge(w)}${w.app === 'frame' ? window.WosOwnViews?.marker(a) || '' : ''}${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
-      <button data-wact="reload" title="Refresh (${MOD}R)" aria-label="Refresh window">↻</button>
+      ${reloadable(w) ? `<button data-wact="reload" title="Refresh (${MOD}R)" aria-label="Refresh window">↻</button>` : ''}
       <button data-wact="mono" title="Full screen (${MOD}F)" aria-label="Full screen">⤢</button>
       <button data-wact="close" title="Close app (${MOD}W)" aria-label="Close window">✕</button></div>
       <div class="wbody">${bodyHtml(w)}</div>`;
@@ -576,20 +576,18 @@
     ws.splice(cur, 1); cur = ws.indexOf(previous); lastWs = cur; save(); render();
     if (focused()) focusInside(focused().id); CHATS.markVisibleThreadsSeen(); return true;
   }
-  /* Refresh one window in place: an app frame reloads at the page it is on, Chats refetches its list and thread,
-   * built-in views remount. The window keeps its desk, position and size, so nobody has to close and reopen it. */
+  /* Refresh one window in place: an app frame reloads at the page it is on, built-in views remount. The window keeps
+   * its desk, position and size, so nobody has to close and reopen it. Chats windows keep their own live refresh
+   * (4s poll, pull to refresh), so they get no button and ⌥R leaves them alone. */
+  const reloadable = w => !!w && w.app !== 'chats';
   function reloadWin(id) {
-    const w = W[id], el = winEl(id); if (!w || !el) return false;
-    if (w.app === 'chats' || CHATS.isHosted(id)) {
-      window.WizCore.refreshApps?.(); LIVE?.refresh?.();
-      if (w.thread && w.thread !== '__new__') CHATS.loadThread(w, true);
-    }
-    if (w.app === 'chats') { CHATS.renderChatList(listWin(id), el.querySelector(`[data-chats="${id}::list"]`)); syncChatsPane(id); }
-    else {
-      const f = el.querySelector('.wbody iframe');
-      if (f) { try { f.contentWindow.location.reload(); } catch (e) { f.src = f.src; } }
-      else { save(); const host = el.parentNode, next = el.nextSibling, fresh = mountWin(w, host); host.insertBefore(fresh, next); el.remove(); render(); }
-    }
+    const w = W[id], el = winEl(id); if (!reloadable(w) || !el) return false;
+    const f = el.querySelector('.wbody iframe');
+    if (f) {
+      // Same-origin apps reload where they are. A cross-origin page can't be reloaded from here, so it restarts at
+      // the app's start page (what close + reopen did) and the toast says so.
+      try { f.contentWindow.location.reload(); } catch (e) { f.src = f.src; toast('↻', `Restarted ${winTitle(w)}`, 1100); return true; }
+    } else { save(); const host = el.parentNode, next = el.nextSibling, fresh = mountWin(w, host); host.insertBefore(fresh, next); el.remove(); render(); }
     toast('↻', `Refreshed ${winTitle(w)}`, 900);
     return true;
   }
