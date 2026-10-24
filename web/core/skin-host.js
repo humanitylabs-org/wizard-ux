@@ -17,7 +17,7 @@
 (function () {
   'use strict';
   const ERR_LIMIT = 3, ERR_WINDOW = 60000;
-  const EVENTS = ['route', 'render', 'voice'];
+  const EVENTS = ['route', 'render', 'voice', 'sent'];
   /* Layouts (James, 22 Oct 2026): a third, opt-in layer for UX changes (gestures, orbs, controls) that any
    * colour skin can wear. Classic is the shell as everyone has it and loads nothing. A layout lives in
    * web/layouts/<id>/{layout.css,layout.js}; its css applies only under html[data-layout="<id>"]. */
@@ -43,10 +43,13 @@
   let personal = null, personalSeq = 0, packageReady = Promise.resolve();
   // Built-in gestures every skin wears (core files register them; same API, guards and cleanup as a skin script).
   const builtinDefs = new Map(), builtins = new Map();
-  const record = (id, label = id) => ({ id, label, offs: new Set(), frames: new Set(), claims: new Set(), mounts: new Set(), taps: new Set(), levels: new Set(), orbs: new Set(), on: { route: new Set(), render: new Set(), voice: new Set() }, errs: [], dead: false, teardown: null });
+  const record = (id, label = id) => ({ id, label, offs: new Set(), frames: new Set(), claims: new Set(), mounts: new Set(), taps: new Set(), levels: new Set(), orbs: new Set(), on: { route: new Set(), render: new Set(), voice: new Set(), sent: new Set() }, errs: [], dead: false, teardown: null });
 
   const skinOf = id => (typeof window !== 'undefined' && window.WosSkin && window.WosSkin.pkgOf) ? window.WosSkin.pkgOf(id) : null;
   const dirOf = (id, pkg) => (pkg && pkg.dir) || id;
+  // The image build stamps each page with its release (tools/stamp-assets.sh); tweak files loaded here carry it too.
+  const releaseToken = () => { try { const v = isDoc && document.querySelector('meta[name="wos-release"]')?.content; return v && /^[0-9a-f]{6,40}$/.test(v) ? v : ''; } catch (_) { return ''; } };
+  const stamp = h => { const v = releaseToken(); return v ? h + (h.includes('?') ? '&' : '?') + 'v=' + v : h; };
   const url = (dir, file) => isDoc ? new URL(`skins/${dir}/${file}`, document.baseURI).href : `skins/${dir}/${file}`;
 
   function env() {
@@ -80,7 +83,7 @@
     try { console.warn(`[skin ${a.id}] ${where}:`, e); } catch (_) {}
     const now = Date.now(); a.errs = a.errs.filter(t => now - t < ERR_WINDOW); a.errs.push(now);
     if (a.errs.length >= ERR_LIMIT) {
-      disabled.add(a.id); dispose(a, 'error');
+      const wasTweak = tweaks.has(a.id); disabled.add(a.id); dispose(a, 'error'); if (wasTweak) { paintTweaks(); window.dispatchEvent?.(new Event('wos:experience')); }
       try { shell && shell.toast(`${a.label || nameOf(a.id)} gestures turned off after an error`); } catch (_) {}
     }
   }
@@ -200,6 +203,7 @@
     if (active === a) active = null;
     if (personal === a) personal = null;
     if (builtins.get(a.id) === a) builtins.delete(a.id);
+    if (tweaks.get(a.id) === a) tweaks.delete(a.id);
     a.dead = true;
     if (typeof a.teardown === 'function') { try { a.teardown(reason); } catch (e) { try { console.warn(`[skin ${a.id}] teardown:`, e); } catch (_) {} } }
     for (const off of [...a.offs]) { try { off(); } catch (_) {} }
@@ -209,7 +213,7 @@
     for (const g of a.levels) levels.delete(g); a.levels.clear();
     for (const o of a.orbs) { try { o.sleep(true); } catch (_) {} } a.orbs.clear();
     if (layoutRec === a) layoutRec = null;
-    a.offs.clear(); a.frames.clear(); a.mounts.clear(); a.taps.clear(); a.on.route.clear(); a.on.render.clear(); a.on.voice.clear();
+    a.offs.clear(); a.frames.clear(); a.mounts.clear(); a.taps.clear(); a.on.route.clear(); a.on.render.clear(); a.on.voice.clear(); a.on.sent.clear();
     for (const id of a.claims) { if (!layers().some(l => l !== a && l.claims.has(id))) claims.delete(id); }
     a.claims.clear();
   }
@@ -234,15 +238,15 @@
     return active === a;
   }
 
-  const layers = () => [...builtins.values(), active, personal, layoutRec].filter(Boolean);
+  const layers = () => [...builtins.values(), active, personal, layoutRec, ...tweaks.values()].filter(Boolean);
   function emit(type, payload) {
-    for (const a of layers()) for (const fn of [...a.on[type]]) fn(payload);
+    for (const a of layers()) for (const fn of [...(a.on[type] || [])]) fn(payload);
   }
   function routeOf() {
     const r = shell ? shell.route() : { view: 'desk', thread: null, desk: 0 };
     return Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0, app: r.app || null, agent: r.agent || null });
   }
-  if (isDoc) window.addEventListener('wizard:app-orb', () => { if (layers().length) emit('render', Object.freeze({ part: 'app-orb', el: null })); });
+  if (isDoc && typeof window.addEventListener === 'function') window.addEventListener('wizard:app-orb', () => { if (layers().length) emit('render', Object.freeze({ part: 'app-orb', el: null })); });
   function emitRoute() {
     if (!layers().length || !shell) return;
     const r = routeOf(), k = `${r.view}|${r.thread || ''}|${r.desk}|${r.app || ''}|${r.agent || ''}`;
@@ -322,13 +326,128 @@
     return banned.test(src) ? 'Use the skin hook API; imports are not allowed' : null;
   }
 
+  /* Tweaks extend the existing package host: same guards, listeners, frames and disposal. */
+  const tweaks = new Map(), interceptors = new Map();
+  let tweakSeq = 0, slotContract = null;
+  const safeTweakId = id => /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/.test(id);
+  const tweakUrl = (id, file) => stamp(new URL(`tweaks/${id}/${file}`, document.baseURI).href);
+  const bounded = async promise => {
+    let timer;
+    try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Package timed out')), 8000); })]); }
+    finally { clearTimeout(timer); }
+  };
+  function paintTweaks() {
+    if (isDoc) document.documentElement.dataset.tweaks = [...tweaks].filter(([, a]) => !a.dead).map(([id]) => id).join(' ');
+    window.WosResources?.sync();
+  }
+  function tweakApi(a, manifest, trusted) {
+    const base = makeApi(a), caps = new Set(manifest.capabilities.filter(c => trusted || c === 'layout' || c === 'nav'));
+    const api = { env: base.env, route: base.route, on(type, fn) {
+      if (type === 'render' && !caps.has('layout')) throw new Error('render requires layout');
+      if (type === 'sent' && (!caps.has('nav') || !trusted)) throw new Error('sent requires trusted navigation');
+      if (type === 'voice' && !caps.has('layout')) throw new Error('voice requires layout');
+      return base.on(type, payload => fn(type === 'render' ? Object.freeze({ part: payload.part }) : payload));
+    }, toast: base.toast, storage: base.storage };
+    if (caps.has('layout')) {
+      Object.assign(api, { listen: base.listen, frame: base.frame, gesture: base.gesture });
+      // Borrow a built-in layout through the same host; disposal invalidates the handle.
+      api.layout = Object.freeze({ use(id) {
+        if (a.dead || !layoutOf(id)) return () => {};
+        setLayout(id);
+        let released = false;
+        const release = () => { if (!released) { released = true; if (layoutId === id) setLayout('classic'); } };
+        a.offs.add(release); return release;
+      } });
+      api.part = name => /^[a-z-]+$/.test(name) ? shell?.root()?.querySelector(`[data-part="${name}"]`) || null : null;
+      const slot = name => {
+        if (!slotContract?.slots[name]) return null;
+        const selector = `[data-slot="${name}"]`;
+        // Prefer the focused chats window, then any visible instance: desktop keeps hidden Chats copies around.
+        const seen = el => !!el && el.isConnected !== false && (typeof el.getClientRects !== 'function' || el.getClientRects().length > 0);
+        const own = shell?.root()?.querySelector(selector);
+        if (seen(own)) return own;
+        return [...document.querySelectorAll(selector)].find(seen) || own || document.querySelector(selector);
+      };
+      const borrowed = new Map();
+      slot.mount = (name, node, order = 0) => {
+        if (a.dead || !node || node.nodeType !== 1) return false;
+        const target = slot(name); if (!target) return false;
+        if (!borrowed.has(node)) {
+          const parent = node.parentNode, marker = parent ? document.createComment('tweak mount origin') : null;
+          if (parent) parent.insertBefore(marker, node);
+          borrowed.set(node, marker);
+          // Restore borrowed core nodes; owned nodes are removed. Run before common mount cleanup.
+          a.offs.add(() => { if (marker?.parentNode?.isConnected) { marker.parentNode.insertBefore(node, marker); marker.remove(); a.mounts.delete(node); } });
+        }
+        node.dataset.tweakOrder = String(Number(order) || 0);
+        const after = [...target.children].find(n => n !== node && +(n.dataset.tweakOrder || 0) > +node.dataset.tweakOrder);
+        if (node.parentNode !== target || (after && node.nextSibling !== after)) target.insertBefore(node, after || null);
+        a.mounts.add(node); return true;
+      };
+      api.slot = Object.freeze(slot);
+    }
+    if (caps.has('nav')) api.nav = Object.freeze({ ...Object.fromEntries(Object.entries(base.nav).map(([key, fn]) => [key, (...args) => !a.dead && fn(...args)])),
+      newThread: () => !a.dead && shell?.newThread?.(),
+      intercept(action, fn) {
+        if (!trusted || a.dead) throw new Error('Trusted navigation required');
+        if (action !== 'snooze' || typeof fn !== 'function') throw new Error('Unknown action');
+        const handler = context => Promise.resolve().then(() => !a.dead && fn(Object.freeze({ ...context }))).catch(e => base.toast(e.message));
+        interceptors.set(a.id, { action, handler }); a.offs.add(() => interceptors.delete(a.id));
+      },
+      snoozeSomeday: sessionId => { if (!trusted || a.dead) throw new Error('Trusted navigation required'); return window.WosBoomerang.someday({ sessionId }); },
+    });
+    if (caps.has('models')) {
+      api.models = Object.freeze({ list: async () => {
+        const options = await shell?.models?.() || [];
+        return a.dead ? [] : options.map(m => Object.freeze({ id: m.value, provider: m.provider, agent: m.agent || '', label: m.name, disabled: !!m.disabled }));
+      } });
+      api.thread = Object.freeze({ model: choice => a.dead ? null : shell?.model?.(choice, () => !a.dead) });
+    }
+    if (caps.has('data.read')) api.data = Object.freeze({ read: Object.freeze({ resources: Object.freeze({
+      snapshot: () => structuredClone(window.WosResources?.state || {}), refresh: () => window.WosResources?.sync(),
+    }) }) });
+    return Object.freeze(api);
+  }
+  async function loadTweaks(entries, contract, { teamAuthors = [], trustedAuthors = [] } = {}) {
+    const seq = ++tweakSeq; slotContract = contract;
+    for (const a of [...tweaks.values()]) dispose(a, 'replace');
+    tweaks.clear(); paintTweaks();
+    if (!shell) return false;
+    for (const id of entries) {
+      if (seq !== tweakSeq) return false;
+      if (!safeTweakId(id)) continue;
+      try {
+        const response = await bounded(fetch(tweakUrl(id, 'manifest.json'), { cache: 'no-store' }));
+        if (!response.ok) throw new Error('Manifest unavailable');
+        const m = await response.json();
+        if (m.id !== id || m.author !== id.split('/')[0] || typeof m.version !== 'string' || !Array.isArray(m.capabilities) || m.capabilities.some(c => !['layout','nav','models','data.read'].includes(c))) throw new Error('Invalid manifest');
+        if (m.apiVersion !== contract.apiVersion) throw new Error('Incompatible API version');
+        const mod = await bounded(importer(tweakUrl(id, 'tweak.js')));
+        if (seq !== tweakSeq) return false;
+        if (typeof mod.default !== 'function') throw new Error('Missing setup');
+        const a = record(id, m.name || id); tweaks.set(id, a);
+        // CSS is optional; missing CSS is harmless. All package assets are same-origin build artifacts.
+        const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = tweakUrl(id, 'tweak.css'); document.head.append(link); a.offs.add(() => link.remove());
+        paintTweaks();
+        try {
+          a.teardown = mod.default(tweakApi(a, m, teamAuthors.includes(m.author) || trustedAuthors.includes(m.author)));
+          if (a.teardown && typeof a.teardown !== 'function') throw new Error('Setup must return teardown');
+        } catch (e) { dispose(a, 'error'); throw e; }
+      } catch (e) { shell?.toast?.(`${id} turned off · ${e.message}`); }
+    }
+    paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true;
+  }
+
   const host = {
+    loadTweaks, emit,
+    get tweakState() { return [...tweaks.keys()]; },
+    action(name, context) { for (const { action, handler } of interceptors.values()) if (action === name) { void handler(context); return true; } return false; },
     /* core/skins.js: picker landed near a skin (preview or commit). Stylesheet only. */
     preview(id) { ensureCss(id); },
     /* core/skins.js: the owner picked a skin. Stylesheet plus (if any) its script. */
     commit(id) { ensureCss(id); committedId = id; if (shell) packageReady = load(id); },
     /* app.js: the shell is ready; hands over the narrow adapter skins are allowed to drive. */
-    attach(adapter) { shell = adapter; for (const n of builtinDefs.keys()) startBuiltin(n); const id = committedId || (window.WosSkin && window.WosSkin.current); committedId = id; if (id) packageReady = load(id); window.WosMySkin?.startScript(); if (layoutOf(layoutId)) loadLayout(layoutId); },
+    attach(adapter) { shell = adapter; for (const n of builtinDefs.keys()) startBuiltin(n); const id = committedId || (window.WosSkin && window.WosSkin.current); committedId = id; if (id) packageReady = load(id); window.WosMySkin?.startScript(); if (layoutOf(layoutId)) loadLayout(layoutId); window.dispatchEvent?.(new Event('wos:skin-host-ready')); },
     /* Layouts: Settings › Look. Classic loads nothing. */
     layouts: LAYOUTS, setLayout,
     get layout() { return layoutId; },
@@ -345,7 +464,7 @@
     stopPersonal() { personalSeq++; dispose(personal, 'off'); },
     get personalState() { return { ready: !!shell, active: !!personal, disabled: disabled.has('my-skin'), listeners: personal?.offs.size || 0, handlers: personal ? personal.on.route.size + personal.on.render.size : 0 }; },
     /* chats.js: a chats window repainted part ('thread' | 'list'). */
-    rendered(part, el) { if (!active && !personal && !builtins.size) return; emit('render', Object.freeze({ part, el })); emitRoute(); },
+    rendered(part, el) { if (!layers().length) return; emit('render', Object.freeze({ part, el })); emitRoute(); },
     /* app.js: desk or focus changed. */
     changed() { emitRoute(); },
     /* app.js dock swipe: true when a skin gesture owns this pointer. Cleared on pointerup/cancel. */

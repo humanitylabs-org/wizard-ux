@@ -39,6 +39,7 @@
   <script type="module" src="core/thread-swipe-back.js"></script>
   <link rel="stylesheet" href="core/skin-frame.css">
   <script src="core/my-skin.js"></script>
+  <script defer src="core/experience.js"></script>
 </head>
 <body>
   <header id="bar" class="bar">
@@ -53,7 +54,7 @@
         <div class="voice-tray"><span class="voice-hint"><kbd id="voiceKey">Right ⌘</kbd><small id="voiceAct">send</small></span><div class="voice-extras"><button id="voicePause" type="button">Pause</button><button id="voiceSend" type="button">Finish</button><button id="voiceAttach" type="button">Attach</button><button id="voiceScreenshot" type="button">Screenshot</button></div><div id="voiceFiles"></div></div><input id="voiceFileInput" type="file" multiple hidden>
       </div>
     </div>
-    <div class="bar-r">
+    <div class="bar-r" data-slot="dock-end">
       <button id="searchBtn" class="mic" title="Search apps, chats and commands (⌥Space)" aria-label="Search and launch"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></button>
       <button id="micBtn" class="mic" title="Talk about what's on screen (Right ⌘)" aria-label="Talk to Wizard"><svg viewBox="0 0 24 24"><path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a7 7 0 0 0 14 0M12 18v4"/></svg></button>
       <button id="commandBtn" class="mic" title="Speak a command like “open calendar”; stays on this box" aria-label="Speak a local command"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg></button><button id="dictateBtn" class="mic" title="Dictate text into the field you're typing in" aria-label="Dictate into the focused field"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4ZM13.5 6.5l4 4"/></svg></button>

@@ -1,8 +1,8 @@
-/* Wizard OS · Settings → Updates: Automatic / Ask me, installed vs latest, Update now.
+/* Wizard OS · Settings → About & updates: one update card, Automatic / Ask me, release channel; the Home pop-up.
  *
  * The box updates the one documented way: the App Manager reruns the installer (`os.sh | bash -s start`) onto the
  * release `releases/stable` names. Automatic (the default) does that overnight, skipping while a chat run is
- * active; Ask me only shows "Update available · Update now" here.
+ * active; Ask me waits for a tap on Update.
  *
  * Same path as the Store's Get: `../store-install/_updates` is the App Manager's owner-only listener behind
  * Tailscale Serve (owner login, the shell's own Origin, JSON + X-Wizard-Store). No token reaches the browser.
@@ -16,9 +16,23 @@
  *   POST {"action":"apply"}    start the update now
  * A box whose App Manager has no such route (older, or no Serve mount) shows nothing.
  *
- *   WosUpdates.html()       → the Settings group ('' while unknown or unavailable)
+ * One card, same look in every state; only the words change. Nothing to do = no card:
+ *   behind    "Update available" · "Wizard OS 0.3.32 → 0.3.33" · Update
+ *   building  "Updating…" · "Takes 10–20 minutes · Wizard reconnects by itself" · Update (disabled)
+ *   failed    "Update interrupted" · "Wizard OS 0.3.32 → 0.3.33" · Try again
+ *   reload    the web shell changed under this page (core/web-update.js) → "Wizard OS was updated" · Reload
+ *
+ *   WosUpdates.card()       → {state, title, line, action, label, disabled} or null
+ *   WosUpdates.cardHtml()   → the card's markup ('' when there is nothing to do); Settings puts it on top
+ *   WosUpdates.html()       → the About & updates group ('' while unknown or unavailable)
  *   WosUpdates.act(el, ctx) → handles a [data-osu] tap; true if handled
  *   WosUpdates.load(force)  → refresh the status (cached 60 s here; the App Manager caches stable ~10 min)
+ *   WosUpdates.popup()      → show / hide the Home pop-up now
+ *
+ * Home pop-up: when the card says Update, Try again or Reload, Home shows the same words and the same button in a
+ * small card clear of the dock, with a ×. × hides it for that exact state (keyed by the release or the web build)
+ * until something new arrives. It replaces the old "Wizard OS was updated · Reload" banner (core/web-update.js asks
+ * ownsReload() and stays away while the pop-up has the reload, or after its ×), so only one notice shows.
  */
 (() => {
   'use strict';
@@ -29,7 +43,7 @@
   let st = null, at = 0, inflight = null, busy = '', off = false;
 
   const valid = d => d && typeof d === 'object' && ['auto', 'ask'].includes(d.mode) && 'update_available' in d;
-  function changed() { try { window.WosSettings?.refresh(); } catch (_) {} }
+  function changed() { try { window.WosSettings?.refresh(); } catch (_) {} try { popup(); } catch (_) {} }
   function load(force) {
     if (off && !force) return Promise.resolve(st);
     if (!force && st && Date.now() - at < FRESH) return Promise.resolve(st);
@@ -52,46 +66,62 @@
     return d;
   }
 
-  function summary(s) {
-    if (s.installing) return ['Updating…', 'Takes 10–20 minutes · Wizard reconnects by itself'];
-    if (s.unpinned) return ['Updated by hand', 'This Wizard isn’t on a release, so updates leave it alone'];
-    const have = s.installed ? `Wizard OS ${s.installed}` : 'Wizard OS';
-    // The last update was cut short (the box restarted mid-update): the App Manager has cleared it so it can rerun.
-    if (s.interrupted && s.update_available) return s.mode === 'auto'
-      ? ['Update interrupted · retrying', `${have} → ${s.latest} · tries again tonight, or tap Update now`]
-      : ['Update interrupted', `${have} → ${s.latest} · tap Update now to try again`];
-    if (s.update_available) return ['Update available', `${have} → ${s.latest}`];
-    if (!s.checked) return [have, 'Couldn’t check for updates · trying again later'];
-    return [have, 'Up to date'];
+  // The one card. Same shape for every state; null when there is nothing to do.
+  function card() {
+    if (window.WizWebUpdate?.pending) return { state: 'reload', title: 'Wizard OS was updated', line: 'Reload to see it', action: 'reload', label: 'Reload' };
+    if (!st) return null;
+    const have = st.installed ? `Wizard OS ${st.installed}` : 'Wizard OS';
+    if (st.installing) return { state: 'building', title: 'Updating…', line: 'Takes 10–20 minutes · Wizard reconnects by itself', action: 'apply', label: 'Update', disabled: true };
+    if (st.unpinned || !st.update_available) return null;
+    const go = busy === 'apply' ? 'Starting…' : st.interrupted ? 'Try again' : 'Update';
+    return { state: st.interrupted ? 'failed' : 'behind', title: st.interrupted ? 'Update interrupted' : 'Update available', line: `${have} → ${st.latest}`, action: 'apply', label: go, disabled: !!busy };
+  }
+  function cardHtml() {
+    const c = card(); if (!c) return '';
+    return `<div class="osu-card" data-osu-card="${c.state}" role="status"><div class="osu-tx"><b data-osu-title>${esc(c.title)}</b><span>${esc(c.line)}</span></div><button type="button" class="osu-go" data-osu="${c.action}" ${c.disabled ? 'disabled' : ''}>${esc(c.label)}</button></div>`;
+  }
+  const seg = (name, items) => `<div class="st-seg" role="radiogroup" aria-label="${esc(name)}">${items.map(([key, text, on]) => `<button type="button" data-osu="${key}" role="radio" aria-checked="${on}" ${busy ? 'disabled' : ''}>${esc(text)}</button>`).join('')}</div>`;
+  // With no card, one quiet line says what is installed.
+  function quietHead() {
+    if (!st || card()) return '';
+    const have = st.installed ? `Wizard OS ${st.installed}` : 'Wizard OS';
+    const sub = st.unpinned ? 'Updated by hand · not on a release' : !st.checked ? 'Couldn’t check for updates' : 'Up to date';
+    return `<div class="st-row static osu-head"><span class="st-tx"><b data-osu-title>${esc(have)}</b></span><span class="st-val">${esc(sub)}</span></div>`;
   }
   function html() {
     if (!st) { if (!off) load(); return ''; }
     if (Date.now() - at > FRESH) load();
-    const [title, sub] = summary(st), auto = st.mode === 'auto';
-    const opt = (key, title, sub, on) => `<button class="st-row" data-osu="${key}" role="radio" aria-checked="${on}" ${busy ? 'disabled' : ''}><span class="st-ic">${key === 'auto' ? '↻' : '?'}</span><span class="st-tx"><b>${esc(title)}</b><small>${esc(sub)}</small></span><span class="st-go">${on ? '●' : '○'}</span></button>`;
+    const auto = st.mode === 'auto';
     const ch = ['stable', 'latest'].includes(st.channel) ? st.channel : '';
-    const copt = (key, title, sub) => `<button class="st-row" data-osu="ch-${key}" role="radio" aria-checked="${ch === key}" ${busy ? 'disabled' : ''}><span class="st-ic">${key === 'stable' ? '◆' : '◇'}</span><span class="st-tx"><b>${esc(title)}</b><small>${esc(sub)}</small></span><span class="st-go">${ch === key ? '●' : '○'}</span></button>`;
-    const channel = ch ? `<div role="radiogroup" aria-label="Release channel" style="margin-top:8px">${copt('stable', 'Stable (recommended)', 'Tested releases only')}${copt('latest', 'Latest (every release, for testers)', auto ? 'Automatic installs stable only · Update now takes the newest' : 'Update now takes the newest release')}</div>` : '';
-    const now = st.update_available && !st.installing && !st.unpinned
-      ? `<button class="st-wide" data-osu="apply" ${busy ? 'disabled' : ''}>${busy === 'apply' ? 'Starting…' : 'Update now'}</button>` : '';
-    return `<div class="st-group" data-osu-group><h4>Updates</h4><div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b data-osu-title>${esc(title)}</b><small>${esc(sub)}</small></span></div>${now ? `<div style="margin:0 0 8px">${now}</div>` : ''}<div role="radiogroup" aria-label="Updates">${opt('auto', 'Automatic', 'New releases install overnight, never during a chat', auto)}${opt('ask', 'Ask me', 'Shows Update here · nothing installs by itself', !auto)}</div>${channel}</div>`;
+    const channel = ch ? `<div class="osu-sec"><span class="osu-lbl">Channel</span>${seg('Release channel', [['ch-stable', 'Stable', ch === 'stable'], ['ch-latest', 'Latest', ch === 'latest']])}<p class="st-hint">${ch === 'stable' ? 'Tested releases only.' : `Every release, for testers.${auto ? ' Automatic installs Stable only.' : ''}`}</p></div>` : '';
+    const install = `<div class="osu-sec"><span class="osu-lbl">Updates</span>${seg('Updates', [['auto', 'Automatic', auto], ['ask', 'Ask me', !auto]])}<p class="st-hint">${auto ? 'Overnight, never during a chat.' : 'Nothing installs until you tap Update.'}</p></div>`;
+    return `<div class="st-group" data-osu-group>${cardHtml()}${quietHead()}${install}${channel}</div>`;
   }
   function pick(chan, ctx) {
     if (!['stable', 'latest'].includes(chan) || chan === st.channel) return true;
     busy = 'ch'; ctx?.render?.(); ctx?.haptic?.(8);
     post({ channel: chan }).then(d => {
       st = valid(d) ? d : { ...st, channel: chan };
-      ctx?.toast?.('✓', chan === 'latest' ? 'Channel: Latest · Automatic still installs stable only' : 'Channel: Stable', 2200);
+      ctx?.toast?.('✓', chan === 'latest' ? (st.mode === 'auto' ? 'Channel: Latest · Automatic still installs stable only' : 'Channel: Latest') : 'Channel: Stable', 2200);
       at = Date.now();
     }).catch(e => ctx?.toast?.('!', e.message || 'Couldn’t reach the App Manager', 2600))
       .finally(() => { busy = ''; changed(); });
     return true;
   }
+  // Reload through the shell's guarded reload (waits for a recording, saves first) when it is there.
+  function reload() {
+    const W = window.WizWebUpdate;
+    if (typeof W?.reload === 'function') { W.reload('tap'); return; }
+    location.reload();
+  }
   function act(el, ctx) {
-    const b = el.closest('[data-osu]'); if (!b || busy || !st) return !!b;
+    const b = el.closest('[data-osu]'); if (!b) return false;
     const what = b.dataset.osu;
+    if (what === 'reload') { ctx?.haptic?.(8); reload(); return true; }
+    if (busy || !st) return true;
     if (what.startsWith('ch-')) return pick(what.slice(3), ctx);
     if ((what === 'auto' || what === 'ask') && what === st.mode && st.chosen) return true;
+    if (what === 'apply' && card()?.disabled) return true;
     busy = what; ctx?.render?.(); ctx?.haptic?.(8);
     const body = what === 'apply' ? { action: 'apply' } : { mode: what };
     post(body).then(d => {
@@ -107,7 +137,70 @@
       .finally(() => { busy = ''; changed(); if (what === 'apply') setTimeout(() => load(true), 1500); });
     return true;
   }
-  window.WosUpdates = { html, act, load, get state() { return st; } };
+  /* ---- Home pop-up ---- */
+  const POP_STATES = ['behind', 'reload', 'failed'], DISMISS = 'wos.osu.dismissed';
+  const store = { get() { try { return window.localStorage.getItem(DISMISS) || ''; } catch (_) { return ''; } }, set(v) { try { window.localStorage.setItem(DISMISS, v); } catch (_) {} } };
+  // One key per state worth telling: a new release or a new web build each count as new.
+  function popKey(c) {
+    if (!c || !POP_STATES.includes(c.state)) return '';
+    if (c.state === 'reload') return 'reload:' + (window.WizWebUpdate?.version || 'web');
+    return c.state + ':' + (st?.latest || '');
+  }
+  // Home in view, nothing over it: phone desk 0 with no windows and no sheet; desktop Home or an empty desk, no Settings.
+  function homeInView() {
+    if (typeof document === 'undefined' || document.hidden || document.querySelector?.('.mz-intro, .rs-sheet, .wos-burst, .tour.on')) return false;
+    const P = window.__wos, D = window.__wux;
+    // Desktop: any overlay (Settings, the palette, Inbox, the keys sheet, Usage) hides it; it never sits above a modal.
+    if (D) return !!(D.homeOpen || !D.ws?.[D.cur]?.wins?.length) && !document.querySelector?.('.dsettings:not([hidden]), #palette:not([hidden]), #keys:not([hidden]), #inbox:not([hidden]), .usage-ov:not([hidden])');
+    if (P) return P.idx === 0 && !P.sheet && !P.desks?.[0]?.wins?.length;
+    return false;
+  }
+  function ownsReload() { const c = card(); if (c?.state !== 'reload') return false; const k = popKey(c); return k === store.get() || popShown === k; }
+  let popEl = null, popShown = '', popTimer = 0;
+  const popCtx = () => { const H = window.__wos || window.__wux; return { toast: (...a) => H?.toast?.(...a), haptic: n => { try { navigator.vibrate?.(n); } catch (_) {} }, render: () => popup(), root: popEl }; };
+  // Phone: sit just above the dock (measured, so any skin's pill or orb stays clear); desktop: bottom right (CSS).
+  function place() {
+    if (!popEl || window.__wux) return;
+    const dock = document.querySelector('#dock, .dock'), r = dock?.getBoundingClientRect?.();
+    const vh = window.innerHeight || 0, top = r && r.height ? Math.min(r.top, vh) : vh - 140;
+    popEl.style.bottom = Math.max(16, vh - top + 12) + 'px';
+  }
+  function popup() {
+    if (typeof document === 'undefined' || !document.body) return;
+    const c = card(), k = popKey(c), show = !!k && k !== store.get() && homeInView();
+    const was = popShown; popShown = show ? k : '';
+    if (!show) { if (popEl) { popEl.remove(); popEl = null; } }
+    else {
+      if (!popEl) {
+        popEl = document.createElement('div'); popEl.className = 'osu-pop'; popEl.setAttribute('role', 'status'); popEl.setAttribute('aria-live', 'polite');
+        popEl.dataset.shell = window.__wux ? 'desktop' : 'phone';
+        popEl.addEventListener('click', e => {
+          const x = e.target.closest('[data-osu-dismiss]');
+          if (x) { store.set(popEl?.dataset.key || ''); popup(); return; }
+          if (e.target.closest('[data-osu]')) act(e.target, popCtx(), e);
+          popup();
+        });
+        document.body.appendChild(popEl);
+      }
+      const armed = c.state === 'reload' && window.WizWebUpdate?.armed;
+      const html = `<div class="osu-pop-tx"><b>${esc(c.title)}</b><span>${esc(c.line)}</span></div><button type="button" class="osu-pop-go" data-osu="${c.action}" ${c.disabled ? 'disabled' : ''}>${esc(armed ? 'Waiting…' : c.label)}</button><button type="button" class="osu-pop-x" data-osu-dismiss aria-label="Dismiss">×</button>`;
+      if (popEl.dataset.key !== k || popEl.dataset.html !== html) { popEl.innerHTML = html; popEl.dataset.key = k; popEl.dataset.html = html; popEl.dataset.state = c.state; }
+      place();
+    }
+    // The old "Wizard OS was updated" banner steps aside while the pop-up has the reload (and after its ×).
+    if (was !== popShown) { try { window.WizWebUpdate?.render?.(); } catch (_) {} }
+    // Home comes and goes without telling this module; while there is something to say, look again every second.
+    clearInterval(popTimer); popTimer = 0;
+    if (k && k !== store.get() && typeof setInterval === 'function') { popTimer = setInterval(popup, 1000); popTimer?.unref?.(); }
+  }
+  window.WosUpdates = { html, act, load, card, cardHtml, popup, popKey, ownsReload, homeInView, get state() { return st; } };
   window.WosSettings?.register({ id: 'updates', aliases: ['updates'], available: () => !!st, html: () => html(), act: (ctx, el) => act(el, ctx) });
   load();
+  // Look again by itself so Home hears about a new release without a reload: every minute while an update runs,
+  // otherwise every 10 minutes (the App Manager caches stable ~10 min), and whenever the page comes back into view.
+  const IDLE = 10 * FRESH;
+  const tick = () => { if (!st || document.hidden) return; if (st.installing || Date.now() - at >= IDLE) load(true); };
+  const timer = typeof setInterval === 'function' ? setInterval(tick, FRESH) : 0;
+  timer?.unref?.();
+  document.addEventListener?.('visibilitychange', () => { if (!document.hidden && st && Date.now() - at >= FRESH) load(true); });
 })();

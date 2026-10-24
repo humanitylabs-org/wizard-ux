@@ -156,6 +156,7 @@
     "core/core.js",
     "core/deeplink.js",
     "core/dom-morph.js",
+    "core/experience.js",
     "core/features.js",
     "core/files.js",
     "core/focused-field.js",
@@ -734,6 +735,13 @@
         "desktop"
       ],
       "note": "My skin: the owner's own CSS (Skins/My skin.css in Files, served by the Agent Service at /wizard/v1/my-skin) applied last, on top of the picked skin"
+    },
+    "core/experience.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Owner experience storage boundary; published profiles, overrides and multi-tweak package lifecycle via skin-host"
     },
     "core/app-kinds.js": {
       "loadedBy": [
