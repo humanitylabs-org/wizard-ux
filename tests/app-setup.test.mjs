@@ -9,7 +9,7 @@ const provider = { id: 'wizard-tinfoil', name: 'Wizard Tinfoil', provides: ['liv
 const service = { slot: 'live-transcription', required: true, purpose: 'Words appear as you speak', recommend: provider.id, private_data: true, status: 'missing' };
 async function harness(result) {
   const listeners = {}, sandbox = { URL, console, setTimeout, Map, Set, Promise, location: { href: 'https://fixture.test/wizard-os-home/' },
-    document: { currentScript: { src: 'https://fixture.test/wizard-os-home/core/app-setup.js' }, addEventListener: (e, f) => listeners[e] = f }, addEventListener: (e, f) => listeners[e] = f,
+    document: { currentScript: { src: 'https://fixture.test/wizard-os-home/core/app-setup.js' }, addEventListener: (e, f) => listeners[e] = f, querySelectorAll: () => [] }, addEventListener: (e, f) => listeners[e] = f,
     load: async url => url.includes('store-router') ? { ...router, routerNeeds: async () => typeof result === 'function' ? result() : result } : { installRelease } };
   sandbox.window = sandbox;
   vm.runInNewContext(read('web/core/app-setup.js').replace(/\bimport\(/g, 'load('), sandbox);
@@ -25,17 +25,18 @@ test('missing required service has recommended setup, purpose and no Continue ad
   const data = { ready_to_open: false, models: [], services: [service] }, setup = await harness({ data });
   assert.equal(setup.needsSetup(data), true); assert.equal(setup.canContinue(data), false);
   const html = setup.html('recorder', data, { storeApps: [provider] });
-  assert.match(html, /Set up Tinfoil/); assert.match(html, /Words appear as you speak/); assert.match(html, /Required/); assert.match(html, /Use another/);
+  assert.match(html, /Set up Tinfoil/); assert.match(html, /Words appear as you speak/); assert.match(html, /<details class="mc-row"/); assert.match(html, /Use another/);
   assert.match(html, /data-mc-installed="0"/);
   assert.match(setup.html('recorder', data, { storeApps: [provider], isInstalled: () => true }), /data-mc-installed="1">Connect/);
+  assert.match(setup.controls('recorder', data, { storeApps: [provider] }), /Set up with Tinfoil/);
 });
 test('private_data blocked is explicit and other-provider choices exclude public and unknown privacy', async () => {
   const data = { models: [], services: [{ ...service, status: 'blocked', error: { message: 'The selected provider is not private.' } }], providers: [provider, { ...provider, id: 'public', private: false }, { ...provider, id: 'unknown', private: undefined }] };
   const setup = await harness({ data }); assert.equal(setup.canContinue(data), false);
-  assert.match(setup.html('recorder', data), /Blocked/); assert.match(setup.html('recorder', data), /not private/);
+  assert.match(setup.html('recorder', data), /aria-label="Not ready"/); assert.match(setup.html('recorder', data), /private provider is required/);
   assert.deepEqual(Array.from(setup.choices(service, data), p => p.id), [provider.id]);
 });
-test('only optional gaps permit Continue anyway; omitted required is conservatively required', async () => {
+test('only optional gaps permit Open app without nagging; omitted required is conservatively required', async () => {
   const setup = await harness({});
   assert.equal(setup.canContinue({ services: [{ ...service, required: false }] }), true);
   assert.equal(setup.needsSetup({ ready_to_open: true, services: [{ ...service, required: false }] }), true);
@@ -80,4 +81,45 @@ test('both launchers put admission before window creation; Back peels setup befo
     const back = src.indexOf("return 'app-setup'"); assert.ok(back > 0);
   }
   const store = read('web/store/store.js'); assert.match(store, /Setup\.html\(routerId\(a\)/); assert.match(store, /Setup\.html\(id/); assert.match(store, /await installRelease\(/);
+});
+
+test('captured Recorder needs share one recommendation even before a signed-out provider lists its models', async () => {
+  const setup = await harness({});
+  const data = JSON.parse(read('tests/fixtures/recorder-needs-before.json'));
+  const registry = [{ ...provider, name: 'Tinfoil', provides: ['live-transcription', 'ai-connection'] }];
+  const ctx = { name: 'Recorder', storeApps: registry };
+  const rows = setup.html(data.app, data, ctx), controls = setup.controls(data.app, data, ctx);
+  assert.equal((rows.match(/<details /g) || []).length, 3);
+  assert.deepEqual([...rows.matchAll(/class="mc-name">([^<]+)/g)].map(m => m[1]), ['Live transcription', 'Live summary', 'Recap']);
+  assert.doesNotMatch(rows, /Tested on|Your choice|Needs a provider|<[^>]+>Required</);
+  assert.equal((controls.match(/data-mc-connect=/g) || []).length, 1);
+  assert.match(controls, /Set up with Tinfoil/);
+  assert.match(controls, /data-mc-installed="1"/);
+  assert.equal(router.connectTarget(data.models[0], data, registry).id, provider.id);
+  assert.equal(router.connectTarget(data.models[0], data, [{ ...registry[0], private: false }]), null);
+  data.providers = [];
+  assert.match(setup.controls(data.app, data, ctx), /data-mc-installed="0"/);
+});
+test('captured ready and optional-only Recorder needs offer only Open Recorder', async () => {
+  const setup = await harness({});
+  for (const data of [JSON.parse(read('tests/fixtures/recorder-needs-ready.json')), { models: [], services: [{ ...service, required: false }] }]) {
+    const controls = setup.controls('wizard-recorder', data, { name: 'Recorder' });
+    assert.match(controls, /Open Recorder/);
+    assert.equal((controls.match(/<button /g) || []).length, 1);
+    assert.doesNotMatch(controls, /Use another|Set up with|Continue anyway/);
+  }
+});
+test('different recommendations use the first displayed required need and registry display names', async () => {
+  const setup = await harness({});
+  const data = { models: [], services: [service, { ...service, slot: 'recap', recommend: 'wizard-other' }] };
+  const controls = setup.controls('recorder', data, { storeApps: [{ ...provider, name: 'Tinfoil Secure' }] });
+  assert.match(controls, /Set up with Tinfoil Secure/);
+  assert.doesNotMatch(controls, /Set up with Other/);
+});
+test('compact disclosures escape need copy and never use purpose as the row name', async () => {
+  const setup = await harness({});
+  const rows = setup.html('recorder', { models: [], services: [{ ...service, purpose: '<img onerror=alert(1)>' }] });
+  assert.match(rows, /class="mc-name">Live transcription/);
+  assert.match(rows, /&lt;img onerror=alert\(1\)&gt;/);
+  assert.doesNotMatch(rows, /<img/);
 });

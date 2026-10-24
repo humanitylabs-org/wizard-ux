@@ -145,31 +145,8 @@ html.wz-hosted .toast { background: var(--wz-overlay, rgba(28, 19, 58, .94)); co
 html.wz-hosted .release-label select { background: var(--wz-surface-raised, #211831); }
 .get.big:not(.open):not(.have):not(.upd):not(.warn):not(.wait) { color: var(--s-on-accent); }
 
-/* Connection Router: install sheet and "Models and connections" (store-router.js). */
-.mc-lede { margin: 0 0 14px; font-size: 14px; line-height: 1.45; color: var(--ink-2); }
-.mc-list { display: grid; gap: 10px; }
-.mc-row { padding: 14px; border-radius: 14px; background: var(--glass); border: 1px solid var(--line); min-width: 0; }
-.mc-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.mc-head b { font-size: 15px; font-weight: 700; }
-.mc-state { flex: none; font-size: 12px; font-weight: 750; padding: 3px 9px; border-radius: 99px; }
-.mc-state.ready { color: var(--green); background: rgba(79, 240, 176, .12); }
-.mc-state.needs { color: var(--amber); background: rgba(255, 190, 85, .14); }
-.mc-state.off { color: #ff8a9a; background: rgba(255, 92, 120, .14); }
-.mc-line { margin: 6px 0 0; font-size: 13.5px; line-height: 1.4; color: var(--ink-2); overflow-wrap: anywhere; }
-.mc-line b { color: var(--ink); font-weight: 650; }
-.mc-warn { margin: 6px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--amber); overflow-wrap: anywhere; }
-.mc-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.mc-btn { min-height: 40px; padding: 0 16px; border-radius: 99px; font-size: 14px; font-weight: 700; color: var(--s-on-accent); background: var(--violet);
-  max-width: 100%; white-space: normal; text-align: center; line-height: 1.2; }
-.mc-btn.alt { color: var(--violet-2); background: transparent; border: 1px solid var(--line-2, var(--line)); }
-html[data-color-scheme="light"] .mc-btn.alt { color: var(--ink); }
-/* Appearance v1 carries no status colours; the dark-tuned amber/green/red wash out on light skins. */
-html[data-color-scheme="light"] .mc-warn, html[data-color-scheme="light"] .mc-state.needs { color: #8a5a00; }
-html[data-color-scheme="light"] .mc-state.ready { color: #0f6e38; background: rgba(15, 122, 62, .12); }
-html[data-color-scheme="light"] .mc-state.off { color: #b3261e; background: rgba(198, 40, 40, .1); }
-.mc-btn:active { transform: scale(.97); }
-.mc-wait { font-size: 13px; color: var(--ink-3); padding: 10px 0; }
-.mc-done { display: flex; justify-content: flex-end; margin-top: 18px; }
+/* Shared compact Router rows and actions live in core/app-setup.css. */
+.mc-list { display: grid; gap: 0; }
 .sheet-layer .list-head h2 { font-size: 22px; }
 /* Private app install prompt (James, 23 Oct 2026) */
 .pv-card { margin: 0 0 16px; padding: 14px 16px; border-radius: 16px; border: 1px solid color-mix(in srgb, var(--ink-2) 30%, transparent); background: color-mix(in srgb, var(--ink-2) 6%, transparent); }

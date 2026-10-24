@@ -20,6 +20,12 @@
   function html(app, data, ctx = {}) {
     return `<div class="was-checklist" data-mc-app="${esc(app)}">${R.routerRows(app, data, { ...ctx, esc: ctx.esc || esc, checklist: true })}</div>`;
   }
+  function controls(app, data, ctx = {}) {
+    const { need, target } = R.setupTarget(data, ctx);
+    if (canContinue(data)) return `<footer class="was-actions"><button type="button" class="mc-btn was-primary" ${ctx.store ? `data-open="${esc(app)}"` : 'data-was-continue'}>Open ${esc(ctx.name || app)}</button></footer>`;
+    const key = need?.slot || need?.feature || '';
+    return `<footer class="was-actions">${target ? `<button type="button" class="mc-btn was-primary" data-mc-connect="${esc(target.id)}" data-mc-need="${esc(key)}" data-mc-installed="${target.installed ? 1 : 0}">Set up with ${esc(target.name)}</button>` : `<button type="button" class="mc-btn was-primary" data-mc-another="${esc(key)}">Choose a provider</button>`}${target ? `<button type="button" class="was-link" data-mc-another="${esc(key)}">Use another provider</button>` : ''}</footer>`;
+  }
   // Providers from the Router are installed; Store listings need an explicit installed read.
   function choices(need, data, ctx = {}) {
     const all = new Map((ctx.storeApps || []).filter(a => ctx.isInstalled?.(a)).map(a => [a.id, a]));
@@ -40,12 +46,12 @@
     const need = entries(data).find(n => (n.slot || n.feature) === key); if (!need) return;
     const candidates = choices(need, data, context);
     const box = document.createElement('div'); box.className = 'was-alternatives'; box.dataset.wasAlternatives = '';
-    box.setAttribute('role', 'group'); box.setAttribute('aria-label', 'Other providers');
-    box.innerHTML = `<p class="mc-line">${need.private_data ? 'Private providers only. ' : ''}Choose a connection${need.slot ? '' : ' and approve a named model'}.</p>` + candidates.map(p => {
-      if (need.slot) return `<button type="button" class="mc-btn" data-mc-connect="${esc(p.id)}" data-mc-installed="1">Connect ${esc(p.name || p.id)}</button>`;
-      return (p.models || []).filter(m => need.swap === 'never' ? m.id === need.tested_on : m.tier === need.tier || m.id === need.tested_on).map(m => `<button type="button" class="mc-btn" data-mc-approve="${esc(need.feature)}" data-mc-provider="${esc(p.id)}" data-mc-model="${esc(m.id)}">Approve ${esc(m.label || m.id)} · ${esc(p.name || p.id)}</button>`).join('');
-    }).join('') + `${!candidates.length ? '<p class="mc-line">No other installed provider for this need.</p>' : ''}<button type="button" class="mc-btn alt" data-was-store="${esc(need.slot || 'ai-connection')}">Find providers in Store</button><button type="button" class="mc-btn alt" data-was-back>Back to checklist</button>`;
-    btn.closest('.mc-row').appendChild(box); alternative = { el: box, button: btn, app };
+    box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-label', 'Other providers');
+    box.innerHTML = `<h3>Use another provider</h3><p class="mc-line">${need.private_data ? 'Private providers only.' : 'Choose a connection.'}</p>` + candidates.map(p => {
+      if (need.slot) return `<button type="button" class="mc-btn alt" data-mc-connect="${esc(p.id)}" data-mc-installed="1">Connect ${esc(R.providerName(data, p.id, context.storeApps))}</button>`;
+      return (p.models || []).filter(m => need.swap === 'never' ? m.id === need.tested_on : m.tier === need.tier || m.id === need.tested_on).map(m => `<button type="button" class="mc-btn alt" data-mc-approve="${esc(need.feature)}" data-mc-provider="${esc(p.id)}" data-mc-model="${esc(m.id)}">Approve ${esc(m.label || m.id)} · ${esc(R.providerName(data, p.id, context.storeApps))}</button>`).join('');
+    }).join('') + `${!candidates.length ? '<p class="mc-line">No other installed provider.</p>' : ''}<button type="button" class="mc-btn alt" data-was-store="${esc(need.slot || 'ai-connection')}">Find providers in Store</button><button type="button" class="mc-btn alt" data-was-back>Back to checklist</button>`;
+    (btn.closest('.mc-row') || btn.closest('[data-mc-app]') || btn.closest('.was-card')).appendChild(box); alternative = { el: box, button: btn, app };
     box.querySelector('button')?.focus();
   }
   async function action(btn, context) {
@@ -60,7 +66,7 @@
     if (!btn.matches('[data-mc-connect]')) return false;
     const id = btn.dataset.mcConnect;
     const row = btn.closest('.mc-row');
-    const need = entries(data).find(n => (n.slot && n.slot === row?.dataset.mcSlot) || (n.feature && n.feature === row?.dataset.mcFeature));
+    const need = entries(data).find(n => (n.slot || n.feature) === btn.dataset.mcNeed || (n.slot && n.slot === row?.dataset.mcSlot) || (n.feature && n.feature === row?.dataset.mcFeature));
     if (!id) { if (need?.fix_url) await context.openProvider('', need.fix_url); else context.openStore(need?.slot || 'ai-connection'); return true; }
     if (btn.dataset.mcInstalled !== '1') {
       const provider = (context.storeApps || []).find(a => a.id === id);
@@ -101,11 +107,9 @@
     if (!overlay || !current) return;
     dismissAlternative();
     const c = current;
-    overlay.querySelector('.was-card').innerHTML = `<header class="was-head"><button class="mc-btn alt" type="button" data-was-close>Back</button><h2 tabindex="-1">Set up ${esc(c.name)}</h2></header>
-      <p class="mc-lede">${canContinue(c.data) ? 'Your required connections are ready. These extras are optional.' : 'Connect these parts before opening the app.'}</p>
-      ${html(c.app, c.data, { storeApps: c.apps, isInstalled: a => c.installed.some(p => p.id === a.id) })}
-      <button type="button" class="mc-btn alt" data-was-agents>Agents and privacy settings</button>
-      <p class="mc-line was-note" role="status">${esc(c.note || '')}</p><footer class="mc-acts"><button type="button" class="mc-btn alt" data-was-recheck>Check again</button>${canContinue(c.data) ? `<button type="button" class="mc-btn" data-was-continue>${gaps(c.data).length ? 'Continue anyway' : 'Open ' + esc(c.name)}</button>` : ''}</footer>`;
+    const ctx = { name: c.name, storeApps: c.apps, isInstalled: a => c.installed.some(p => p.id === a.id) };
+    overlay.querySelector('.was-card').innerHTML = `<header class="was-head"><span class="was-app-icon" aria-hidden="true">${window.WizSigil?.html(c.record.sigil || c.record) || esc(c.name.charAt(0))}</span><h2 tabindex="-1">Set up ${esc(c.name)}</h2><p>${esc(c.name)} needs a few services to work.</p></header>
+      ${html(c.app, c.data, ctx)}<p class="mc-line was-note" role="status">${esc(c.note || '')}</p>${controls(c.app, c.data, ctx)}`;
   }
   async function recheck() {
     const c = current; if (!c) return;
@@ -159,8 +163,17 @@
         c.installed = snapshot; await window.WizCore?.refreshApps?.(); return current === c;
       } };
   }
-  // Synchronous admission preserves the shells' boolean openApp contract. Only the captured
-  // continuation can create a window; cancelling or a newer launch invalidates an in-flight read.
+  function trapFocus(e, scope) {
+    if (e.key !== 'Tab') return;
+    const buttons = [...scope.querySelectorAll('button:not(:disabled), summary')].filter(el => el.getClientRects().length);
+    const first = buttons[0], last = buttons.at(-1);
+    if (e.shiftKey && (document.activeElement === first || document.activeElement.tagName === 'H2')) { e.preventDefault(); last?.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+  }
+  // The Store reuses the same provider sheet without constructing a launch gate.
+  document.addEventListener('keydown', e => { if (alternative && !overlay) trapFocus(e, alternative.el); });
+  // Admission preserves the shells' boolean openApp contract. Only the captured continuation
+  // can create a window; cancelling or a newer launch invalidates an in-flight read.
   function gate(app, resume) {
     const ticket = ++serial;
     if (current || overlay || pending) { close(); serial = ticket; }
@@ -171,16 +184,12 @@
       if (ticket !== serial) return;
       pending = false;
       if (!result.data || !needsSetup(result.data)) { resume(); return; }
-      current = { app: app.id, name: app.name || app.id, resume, data: result.data, apps: [], installed: [], note: '', focus: document.activeElement };
+      current = { app: app.id, record: app, name: app.name || app.id, resume, data: result.data, apps: [], installed: [], note: '', focus: document.activeElement };
       const c = current;
       overlay = document.createElement('section'); overlay.className = 'was-overlay'; overlay.setAttribute('aria-label', 'App setup');
       overlay.innerHTML = `<div class="was-card" role="dialog" aria-modal="true" aria-label="Set up ${esc(c.name)}"></div>`; document.body.appendChild(overlay); paint();
       overlay.addEventListener('keydown', e => {
-        if (e.key !== 'Tab' || links?.isOpen()) return;
-        const buttons = [...overlay.querySelectorAll('.was-card button:not(:disabled)')];
-        const first = buttons[0], last = buttons.at(-1);
-        if (e.shiftKey && (document.activeElement === first || document.activeElement.tagName === 'H2')) { e.preventDefault(); last?.focus(); }
-        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+        if (!links?.isOpen()) trapFocus(e, alternative?.el || overlay.querySelector('.was-card'));
       });
       overlay.querySelector('h2')?.focus();
       overlay.addEventListener('click', async e => {
@@ -191,7 +200,7 @@
         if (btn.matches('[data-was-agents]')) { window.WosAppRoute?.open(c.app, { name: c.name }); return; }
         c.busy = true; btn.disabled = true; c.note = '';
         try { if (btn.matches('[data-was-recheck]')) await recheck(); else await action(btn, context(c)); }
-        catch (e) { if (current === c) { c.note = e.message; paint(); } }
+        catch (e) { if (current === c) { c.note = 'Couldn’t finish setup. Try again.'; paint(); } }
         finally { c.busy = false; if (btn.isConnected) btn.disabled = false; }
       });
       Promise.allSettled([catalog(), installed()]).then(([apps, inst]) => {
@@ -206,6 +215,8 @@
   function back() {
     if (links?.isOpen()) return links.back();
     if (alternative) return dismissAlternative();
+    const expanded = [...document.querySelectorAll('.was-checklist details[open]')].at(-1);
+    if (expanded) { expanded.open = false; expanded.querySelector('summary')?.focus(); return true; }
     return close();
   }
   // The nested Store uses its existing hosted-app messages. Trust only our exact
@@ -216,11 +227,11 @@
     let page; try { page = new URL(links.state().url); } catch (_) { return; }
     if (page.origin !== location.origin || !page.pathname.startsWith(new URL('store/', base).pathname)) return;
     const d = e.data; if (!d || typeof d.id !== 'string' || !/^[a-z0-9-]{1,80}$/.test(d.id)) return;
-    if (d.type === 'wizard:open-app') { try { await openProvider(d.id); } catch (err) { if (current) { current.note = err.message; paint(); } } }
+    if (d.type === 'wizard:open-app') { try { await openProvider(d.id); } catch (err) { if (current) { current.note = 'Couldn’t open the provider. Try again.'; paint(); } } }
     else if (d.type === 'wizard:app-route') window.WosAppRoute?.request(d);
   });
   const onReturn = () => { if (!document.hidden && current && !links?.isOpen()) ready.then(recheck).catch(() => {}); };
   document.addEventListener('visibilitychange', onReturn); addEventListener('focus', onReturn);
-  window.WosAppSetup = { ready, html, action, choices, gaps, canContinue, needsSetup, gate, back, close, recheck,
+  window.WosAppSetup = { ready, html, controls, action, choices, gaps, canContinue, needsSetup, gate, back, close, recheck,
     init(o) { hooks = { ...hooks, ...o }; }, isOpen: () => !!current };
 })();

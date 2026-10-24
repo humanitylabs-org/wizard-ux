@@ -72,20 +72,25 @@ function needs(st) {
       await pg.locator('#detail [data-get]').first().click();
       await pg.locator('#sheet:not([hidden]) .mc-row').first().waitFor({ timeout: 10000 });
       ok(st.installs === 1, `${tag} one install POST`);
+      ok(await pg.locator('#sheet .mc-detail:visible').count() === 0, `${tag} compact rows start collapsed`);
+      await pg.locator('#sheet .mc-row summary').first().click();
+      await pg.locator('#sheet .mc-row summary').nth(1).click();
       const sheet = await pg.evaluate(() => ({ layers: window.__store.state().layers, title: document.querySelector('#sheet h2').textContent, sub: document.querySelector('#sheet .list-head p').textContent,
-        rows: [...document.querySelectorAll('#sheet .mc-row')].map(r => ({ f: r.dataset.mcFeature, state: r.querySelector('.mc-state').textContent, text: r.innerText, btns: [...r.querySelectorAll('button')].map(b => b.textContent) })) }));
+        rows: [...document.querySelectorAll('#sheet .mc-row')].map(r => ({ f: r.dataset.mcFeature, state: r.querySelector('.mc-state').getAttribute('aria-label'), text: r.innerText, btns: [...r.querySelectorAll('button')].map(b => b.textContent) })) }));
       ok(sheet.layers.at(-1) === 'sheet', `${tag} install opens the sheet layer`);
       if (scenario !== 'swap') {
         const [a1, c1] = ['ask-ai', 'chapter-authoring'].map(f => sheet.rows.find(r => r.f === f));
         if (scenario === 'match') {
           ok(/Every connection is ready/.test(sheet.sub) && a1?.state === 'Ready' && c1?.state === 'Ready', `${tag} matching: every feature Ready (${sheet.sub})`);
-          ok(/Using claude-sonnet-4\.5 via Claude/.test(a1?.text) && /Using claude-opus-4\.1 via Claude/.test(c1?.text) && a1.btns.every(b => b === 'Use another') && c1.btns.length === 0, `${tag} matching: tested models in use, no swap or connect offered`);
-          ok(await pg.locator('#sheet .mc-done button').innerText() === 'Done', `${tag} matching: single Done action`);
+          ok(/Using Sonnet · Claude/.test(a1?.text) && /Using Opus · Claude/.test(c1?.text) && a1.btns.every(b => b === 'Use another for this') && c1.btns.length === 0, `${tag} matching: tested models in use, no swap or connect offered`);
+          ok(await pg.locator('#sheet .was-primary').innerText() === 'Open Wisdom', `${tag} matching: single Open Wisdom action`);
         } else {
-          ok(/2 connections need setup/.test(sheet.sub) && a1?.state === 'Needs a provider' && a1.btns.length === 2 && a1.btns[0] === 'Set up Claude', `${tag} no provider: ask feature offers Set up Claude and Use another`);
-          ok(c1?.state === 'Off until connected' && c1.btns.length === 2 && c1.btns[0] === 'Set up Claude' && !sheet.rows.some(r => r.btns.some(b => /swap/i.test(b))), `${tag} no provider: strict feature off, no swap anywhere`);
+          ok(/2 connections need setup/.test(sheet.sub) && a1?.state === 'Not ready' && a1.btns.length === 2 && a1.btns[0] === 'Set up Claude', `${tag} no provider: ask feature offers Set up Claude and Use another`);
+          ok(c1?.state === 'Not ready' && c1.btns.length === 2 && c1.btns[0] === 'Set up Claude' && !sheet.rows.some(r => r.btns.some(b => /swap/i.test(b))), `${tag} no provider: strict feature off, no swap anywhere`);
         }
         await shot('sheet');
+        await pg.locator('#sheet .mc-row[open] summary').first().click();
+        await pg.locator('#sheet .mc-row[open] summary').first().click();
         await pg.locator('#sheet [data-back]').first().click();
         await pg.locator('#detail .mc .mc-row').first().waitFor({ timeout: 5000 });
         ok(await pg.evaluate(() => window.__store.state().layers.at(-1)) === 'detail', `${tag} Back returns to detail`);
@@ -96,11 +101,11 @@ function needs(st) {
       }
       ok(/Wisdom is installed/.test(sheet.title) && /2 connections need setup/.test(sheet.sub), `${tag} sheet title and count: ${sheet.sub}`);
       const ask = sheet.rows.find(r => r.f === 'ask-ai'), ch = sheet.rows.find(r => r.f === 'chapter-authoring');
-      ok(ask && /claude-sonnet-4\.5/.test(ask.text) && !ask.btns.includes('Connect Claude') && ask.btns.includes('Approve swap to gpt-5.1-mini') && ask.btns.includes('Use another'), `${tag} ask-ai: tested model, named approval primary and Use another`);
+      ok(ask && /Model: claude-sonnet-4\.5/.test(ask.text) && !ask.btns.includes('Connect Claude') && ask.btns.includes('Approve swap to gpt-5.1-mini') && ask.btns.includes('Use another for this'), `${tag} ask-ai: tested model, named approval primary and Use another`);
       ok(ask && /Results may differ/.test(ask.text), `${tag} ask-ai warns results may differ`);
-      ok(ch && ch.state === 'Off until connected' && ch.btns.length === 2 && ch.btns[0] === 'Set up Claude' && /tested model only/.test(ch.text), `${tag} strict feature: off, connect only, no swap`);
+      ok(ch && ch.state === 'Not ready' && ch.btns.length === 2 && ch.btns[0] === 'Set up Claude' && /tested model only/.test(ch.text), `${tag} strict feature: off, connect only, no swap`);
       // Buttons are thumb-sized and nothing overflows the window.
-      const geo = await pg.evaluate(() => ({ minH: Math.min(...[...document.querySelectorAll('#sheet .mc-btn')].map(b => b.getBoundingClientRect().height)), over: document.documentElement.scrollWidth - innerWidth }));
+      const geo = await pg.evaluate(() => ({ minH: Math.min(...[...document.querySelectorAll('#sheet .mc-btn:where(:not(details:not([open]) *))')].map(b => b.getBoundingClientRect().height)), over: document.documentElement.scrollWidth - innerWidth }));
       ok(geo.minH >= 40 && geo.over <= 0, `${tag} buttons ≥40px (${geo.minH}) and no horizontal overflow (${geo.over})`);
       await shot('sheet');
       // Approve the swap: one POST with the Store header, and the row reads Ready · approved swap.
@@ -108,17 +113,20 @@ function needs(st) {
       await pg.locator('#sheet .mc-row[data-mc-feature="ask-ai"] .mc-state.ready').waitFor({ timeout: 5000 });
       const ap = st.approvals[0];
       ok(st.approvals.length === 1 && ap.b.app === 'wisdom' && ap.b.provider === 'wizard-chatgpt' && ap.b.model === 'gpt-5.1-mini' && ap.h['x-wizard-store'] === '1', `${tag} approve sends one exact owner choice`);
-      const after = await pg.evaluate(() => ({ state: document.querySelector('#sheet .mc-row[data-mc-feature="ask-ai"] .mc-state').textContent, text: document.querySelector('#sheet .mc-row[data-mc-feature="ask-ai"]').innerText, sub: document.querySelector('#sheet .list-head p').textContent }));
-      ok(after.state === 'Ready · approved swap' && /Using gpt-5\.1-mini/.test(after.text), `${tag} approved row shows the swap in use`);
+      await pg.locator('#sheet [data-mc-feature="ask-ai"] summary').click();
+      const after = await pg.evaluate(() => ({ state: document.querySelector('#sheet .mc-row[data-mc-feature="ask-ai"] .mc-state').getAttribute('aria-label'), text: document.querySelector('#sheet .mc-row[data-mc-feature="ask-ai"]').innerText, sub: document.querySelector('#sheet .list-head p').textContent }));
+      ok(after.state === 'Ready' && /Using GPT-5\.1 mini · ChatGPT/.test(after.text) && /Approved replacement model/.test(after.text), `${tag} approved row shows the swap in use`);
       ok(/1 connection needs setup/.test(after.sub), `${tag} sheet count updates: ${after.sub}`);
       await shot('approved');
       // Back closes the sheet; the app's detail now carries Models and connections.
+      await pg.locator('#sheet .mc-row[open] summary').first().click();
       await pg.locator('#sheet [data-back]').first().click();
       await pg.locator('#detail .mc .mc-row').first().waitFor({ timeout: 5000 });
       const det = await pg.evaluate(() => ({ layers: window.__store.state().layers, h: document.querySelector('#detail .mc h3')?.textContent, rows: document.querySelectorAll('#detail .mc .mc-row').length }));
       ok(det.layers.at(-1) === 'detail' && det.h === 'Models and connections' && det.rows === 2, `${tag} Back returns to detail with Models and connections`);
       await pg.locator('#detail .mc').scrollIntoViewIfNeeded(); await shot('detail');
       // Setup reuses the Store's qualified install transaction, not a second installer.
+      await pg.locator('#detail .mc-row[data-mc-feature="chapter-authoring"] summary').click();
       await pg.locator('#detail .mc-row[data-mc-feature="chapter-authoring"] [data-mc-connect]').click();
       await pg.waitForFunction(() => /Open this provider from Apps/.test(document.querySelector('#toast').textContent));
       ok(st.providerInstalls === 1, `${tag} Set up Claude installs recommended provider once via Store`);
