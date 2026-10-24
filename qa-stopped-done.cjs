@@ -78,9 +78,13 @@ const overlap = (a, b) => !!a && !!b && a.x < b.r && b.x < a.r && a.y < b.b && b
     return p.evaluate(() => [...document.querySelectorAll('.win [data-chact]')].map(e => e.dataset.chact));
   };
   try {
+    let a = await acts('qa_archived_running');
+    const archivedThread = await p.evaluate(() => ({ state: document.querySelector('.win.focus .ch-thread .ti, .win .ch-thread .ti')?.getAttribute('title') || '', actions: [...document.querySelectorAll('.win.focus [data-chact], .win [data-chact]')].map(e => e.dataset.chact) }));
+    ok(a.includes('restore') && a.includes('snooze'), 'archived stale-running thread offers Restore and Snooze', a);
+    ok(archivedThread.state === 'Archived', 'archived stale-running thread header says Archived', archivedThread);
     const st = await p.evaluate(() => __wos.live.session('qa_ds_stopped').status);
     ok(st === 'cancelled', 'fixture thread reads as cancelled', st);
-    let a = await acts('qa_ds_stopped');
+    a = await acts('qa_ds_stopped');
     ok(a.join() === 'done', 'stopped thread with no answer shows Done only', a);
     await p.screenshot({ path: path.join(OUT, '1-stopped-done.png') });
     const before = writes.length;

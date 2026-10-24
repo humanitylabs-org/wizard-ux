@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
+const chatsSource = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
 
 function workGroups(sessions) {
   const firstStart = source.indexOf('  const DAY = 864e5;');
@@ -42,4 +43,28 @@ test('Done keeps archived stale-running threads out of Working for main and ever
 
   assert.deepEqual(groups.working.map(row => row.id), ['active']);
   assert.deepEqual(groups.archive.map(row => row.runtimeKind).sort(), [...kinds].sort());
+});
+
+test('archived stale-running threads remain restorable and say Archived', () => {
+  const actionsStart = chatsSource.indexOf('  function threadActions(s, turns) {');
+  const actionsEnd = chatsSource.indexOf('\n  const ACT =', actionsStart);
+  const stateStart = chatsSource.indexOf('  function threadState(s, agent) {');
+  const stateEnd = chatsSource.indexOf('\n  function renderThread(', stateStart);
+  assert.ok(actionsStart > 0 && actionsEnd > actionsStart && stateStart > 0 && stateEnd > stateStart, 'thread state helpers found');
+
+  const context = {
+    WORKING_ST: new Set(['running', 'stopping']),
+    LIVE: { busy: () => true, workGroups: rows => ({ archive: rows.filter(row => row.aged) }) },
+    window: { WosWork: { helperLabel: () => '' } },
+    agentName: () => 'Wizard',
+    ago: () => 'just now',
+  };
+  vm.createContext(context);
+  vm.runInContext(`${chatsSource.slice(actionsStart, actionsEnd)}\n${chatsSource.slice(stateStart, stateEnd)}\nthis.actions = threadActions; this.state = threadState;`, context);
+
+  const archived = { id: 'archived', archived: true, status: 'running' };
+  assert.deepEqual(Array.from(context.actions(archived, null)), ['restore', 'snooze']);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.state(archived, ''))), { working: false, sub: 'Archived' });
+  assert.deepEqual(Array.from(context.actions({ id: 'active', status: 'running' }, null)), []);
+  assert.deepEqual(Array.from(context.actions({ id: 'aged', aged: true, status: 'running' }, null)), ['restore', 'snooze']);
 });
