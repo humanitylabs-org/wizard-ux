@@ -20,13 +20,14 @@ const rows = [
 const writes = [], errors = [], failedAgents = new Set();
 let writeSeq = 0;
 let sharedSpaces = [];
+let soloAgent = false;
 const sampleSpaces = () => [{id:'wizard-launch',name:'Wizard OS launch',threads:['main_wos','phil_one','deleted_thread'],createdAt:'2026-10-24T00:00:00.000Z'},{id:'reading',name:'Reading',threads:['main_phil','phil_two'],createdAt:'2026-10-24T00:00:00.000Z'}];
 async function route(r) {
  const q=r.request(), u=new URL(q.url()), m=q.method();
  const json=(body,status=200)=>r.fulfill({status,json:body});
  if (!['GET','HEAD'].includes(m)) { writes.push({path:u.pathname,query:u.search,body:q.postData()}); if(u.pathname.endsWith('/api/sessions'))return json({ok:true}); if(u.pathname.endsWith('/v1/runs'))return json({run_id:'fixture-run-'+(++writeSeq),status:'running'}); if(u.pathname==='/wizard/files/upload')return json({file:{id:'fixture-audio-'+(++writeSeq),filename:'voice.webm',mime:'audio/webm'}}); if(u.pathname.endsWith('/api/transcribe'))return json({text:'Fixture voice question'}); if(u.pathname==='/wizard/v1/ui-preferences'){const patch=JSON.parse(q.postData());if(patch.spaces)sharedSpaces=patch.spaces;return json({spaces:sharedSpaces});} return json(u.pathname==='/wizard/thread-seen'?{state:JSON.parse(q.postData()||'{}').state}:{ok:true}); }
  if (!u.pathname.startsWith('/wizard/')) return r.continue();
- if (u.pathname==='/wizard/v1/agents') return json({agents});
+ if (u.pathname==='/wizard/v1/agents') return json({agents:soloAgent?agents.filter(a=>a.is_default):agents});
  if (u.pathname==='/wizard/v1/ui-preferences') return json({archiveAfterDays:7,compact:false,readyOrder:'newest',pinnedChats:[],spaces:sharedSpaces});
  if (u.pathname==='/wizard/thread-seen') return json({state:{initializedAt:1,threads:{}}});
  if (u.pathname==='/wizard/hermes/api/sessions' && failedAgents.has(u.searchParams.get('agent'))) return json({error:'fixture agent unavailable'},503);
@@ -54,7 +55,7 @@ async function boot(b,desktop=false,legacy='') {
  },{desktop,legacy});
  const p=await ctx.newPage();p.setDefaultTimeout(4000);p.on('pageerror',e=>errors.push(String(e)));
  await p.goto(desktop?new URL('desktop.html',origin).href:origin,{waitUntil:'domcontentloaded'});
- await p.waitForFunction(()=>!!(window.__wos||window.__wux)?.live?.agentStatus.philosopher?.ok);
+ await p.waitForFunction(solo=>{const l=(window.__wos||window.__wux)?.live;return solo?!!l?.agentStatus:!!l?.agentStatus.philosopher?.ok;},soloAgent);
  await p.evaluate(()=>{if(window.__wos){const a=__wos,w=Object.values(a.wins).find(w=>w.app==='chats');a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);}else{const a=__wux,w=Object.values(a.wins).find(w=>w.app==='chats');a.focusWin(w.id);}});
  await p.waitForTimeout(600);return {ctx,p};
 }
@@ -150,6 +151,22 @@ async function routingMatrix(b) {
 (async()=>{
  const b=await chromium.launch({executablePath:process.env.QA_CHROME||undefined,args:['--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required']});
  try {
+ // One-agent install: no strip and no Focus section until a second agent or a Space exists.
+ for(const desktop of [false,true]){
+  soloAgent=true;sharedSpaces=[];
+  const {ctx,p}=await boot(b,desktop), mode=(desktop?'desktop':'phone')+' one-agent';
+  await p.waitForTimeout(1200);
+  ok(await p.locator('.ch-focus-strip').count()===0,mode+' shows no Focus strip');
+  const fb=p.locator('.ch-list:visible [data-chfbtn]').first();
+  if(await fb.count()){await fb.click();await p.waitForTimeout(300);ok(!(await p.locator('[data-chfsheet]').innerText().catch(()=>'')).includes('Focus'),mode+' Filter sheet has no Focus section');}
+  else ok(false,mode+' filter button found');
+  await ctx.close();
+  sharedSpaces=[{id:'solo',name:'Solo space',threads:[]}];
+  const r2=await boot(b,desktop);await r2.p.waitForTimeout(1200);
+  ok(await r2.p.locator('.ch-focus-strip:visible').count()===1,mode+' a Space brings the strip back');
+  await r2.ctx.close();
+  soloAgent=false;sharedSpaces=[];
+ }
  for(const desktop of process.env.QA_ROUTING_ONLY?[]:[false,true]){
   sharedSpaces=[];
   const {ctx,p}=await boot(b,desktop), mode=desktop?'desktop':'phone', before=await snap(p);
@@ -242,7 +259,7 @@ async function routingMatrix(b) {
   ok(await p.locator('.ch-search:visible').evaluate(e=>e.scrollWidth<=e.clientWidth+1),mode+' Focus plus status fit search field');
   await capture(p,mode+'-focus-status');
   await p.locator('[data-chchipx="status"]:visible').click();
-  await p.reload({waitUntil:'domcontentloaded'});await p.waitForFunction(()=>!!(window.__wos||window.__wux)?.live?.agentStatus.philosopher?.ok);
+  await p.reload({waitUntil:'domcontentloaded'});await p.waitForFunction(solo=>{const l=(window.__wos||window.__wux)?.live;return solo?!!l?.agentStatus:!!l?.agentStatus.philosopher?.ok;},soloAgent);
   ok((await p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText()).includes('Wizard OS launch'),mode+' Space focus survives reload');
   await p.locator('[data-chopen="phil_one"]:visible').click();await p.waitForTimeout(250);
   ok(await p.locator('.ch-thread .ch-focus-strip').count()===0&&(desktop||await p.locator('.ch-focus-strip:visible').count()===0),mode+' thread view has no strip');
