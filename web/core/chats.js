@@ -102,6 +102,7 @@ window.WizCore.chats = function createChats(H) {
   const topicOn = () => !!TOPIC && TOPIC_SKINS.includes(document.documentElement.dataset.skin || '');
   const toTurns = KIT.parseRows, md = KIT.md;
   const WORKING_ST = new Set(['submitting', 'queued', 'running', 'stopping']);
+  const isWorking = s => !!s && !s.archived && WORKING_ST.has(s.status);
   // Same sections, order and day boundaries as Wizard's Work view.
   // Deferred threads live at the bottom of Ready with a Deferred status (live.js groupWork), not in a section.
   const STALE_LIST = 60000; // the list re-reads every 15 s; older than a minute means a read is failing or hung
@@ -203,7 +204,7 @@ window.WizCore.chats = function createChats(H) {
   // The agent's status line for a finished thread (live.js attention): what it asks of James.
   const ATT = { needs_you: { cls: 'needs', label: 'Needs you' }, check: { cls: 'check', label: 'Your call' }, done: { cls: 'done', label: 'Done' }, fyi: { cls: 'fyi', label: '' } };
   const deferredOf = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt));
-  const attOf = s => (s.attention && !WORKING_ST.has(s.status) && s.status !== 'waiting_for_approval' && s.status !== 'failed' && s.status !== 'interrupted') ? s.attention : null;
+  const attOf = s => (s.attention && !isWorking(s) && s.status !== 'waiting_for_approval' && s.status !== 'failed' && s.status !== 'interrupted') ? s.attention : null;
   const svg = b => `<svg viewBox="0 0 24 24" aria-hidden="true">${b}</svg>`;
   const STI = {
     needs: svg('<path d="M18 11V6a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>'),
@@ -242,7 +243,7 @@ window.WizCore.chats = function createChats(H) {
   let rowListAgent = '';
   const privRow = s => !rowListAgent && !!LIVE.isPrivate?.(s.id);
   function chatRow(s, snip) {
-    const working = WORKING_ST.has(s.status), unread = !working && LIVE.isNew(s), needs = ['waiting_for_approval', 'unknown'].includes(s.status) || s.status === 'failed' || s.status === 'interrupted';
+    const working = isWorking(s), unread = !working && LIVE.isNew(s), needs = ['waiting_for_approval', 'unknown'].includes(s.status) || s.status === 'failed' || s.status === 'interrupted';
     // Deferred (bottom of Ready): the status reads Deferred in place of Needs you / Your call, then its one line.
     const def = deferredOf(s) && !working && !needs;
     const at = def ? null : attOf(s), A = at && ATT[at.state], quiet = !!at && (at.state === 'done' || at.state === 'fyi');
@@ -881,11 +882,10 @@ window.WizCore.chats = function createChats(H) {
    * Restore (and Done) on a deferred or archived one; nothing while the agent is working or waiting.
    * They sit bottom-right under the final response, Done rightmost. */
   function threadActions(s, turns) {
-    if (!s) return [];
+    if (!s || LIVE.busy(s.id)) return [];
     const inArchive = s.archived || LIVE.workGroups([s]).archive.length > 0;
     if (inArchive) return ['restore', 'snooze'];
-    if (LIVE.busy(s.id)) return [];
-    if (WORKING_ST.has(s.status) || ['waiting_for_approval', 'unknown'].includes(s.status)) return [];
+    if (isWorking(s) || ['waiting_for_approval', 'unknown'].includes(s.status)) return [];
     if (s.deferred) return ['restore', 'snooze', 'done'];
     // A run James stopped (or one that died) before any answer still needs a way out: Done files it.
     if (turns && !turns.some(t => t.a || t.media.length)) return ['cancelled', 'failed', 'interrupted'].includes(s.status) ? ['done'] : [];
@@ -949,7 +949,7 @@ window.WizCore.chats = function createChats(H) {
       <button type="button" data-rspin>${PIN_SVG}${PIN.has(sid) ? 'Unpin' : 'Pin'}</button>
       ${topicOn() ? `<button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>` : ''}
       ${acts.map(a => `<button type="button" data-rsact="${a}">${ACT[a].icon}${ACT[a].label}</button>`).join('')}
-      ${acts.length ? '' : `<p class="ch-sheet-n">${WORKING_ST.has(s.status) || ['waiting_for_approval', 'unknown'].includes(s.status) ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
+      ${acts.length ? '' : `<p class="ch-sheet-n">${isWorking(s) || ['waiting_for_approval', 'unknown'].includes(s.status) ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
     rowSheet = { wid, sid, trigger };
     el.querySelector('.ch-sheet button')?.focus({ preventScroll: true });
     vib(10);
@@ -1260,8 +1260,8 @@ window.WizCore.chats = function createChats(H) {
   function closeStream(c) { c.stream?.handle?.close(); clearTimeout(c.stream?.retry); c.stream = null; }
   function syncStream(w, c, turns, agent) {
     const sid = w.thread, s = LIVE.session(sid), pendingRun = LIVE.pendingRun?.(sid), rid = pendingRun || s?.runId;
-    if (c.stream && (c.stream.sid !== sid || (rid && c.stream.rid !== rid) || agentRec(agent).privacy === 'private')) closeStream(c);
-    if (!c.stream && turns && rid && (pendingRun || WORKING_ST.has(s?.status)) && agentRec(agent).privacy !== 'private') {
+    if (c.stream && (c.stream.sid !== sid || (rid && c.stream.rid !== rid) || s?.archived || agentRec(agent).privacy === 'private')) closeStream(c);
+    if (!c.stream && turns && rid && !s?.archived && (pendingRun || isWorking(s)) && agentRec(agent).privacy !== 'private') {
       const st = { sid, rid, baseline: assistantStamp(turns), text: '', terminal: false, landed: false };
       c.stream = st;
       st.handle = LIVE.openRunStream?.(sid, agent, rid, snapshot => {
@@ -1291,7 +1291,7 @@ window.WizCore.chats = function createChats(H) {
     return visible ? `<div class="msg a" data-streaming="${esc(st.rid)}"><div class="bub">${md(visible)}</div><div class="mmeta">${st.terminal ? 'Finishing…' : 'Replying…'}</div></div>` : '';
   }
   function threadState(s, agent) {
-    const working = !!s && !s.archived && WORKING_ST.has(s.status);
+    const working = isWorking(s);
     const sub = !s ? '' : s.archived ? 'Archived' : s.status === 'unknown' ? 'Needs recovery · needs your acknowledgement' : s.status === 'stopping' ? 'Stopping…' : working ? (window.WosWork?.helperLabel(s.helperStatus) || (s.waitingOn === 'helper' ? `A helper is finishing this for ${agentName(agent)}` : `${agentName(agent)} is working`)) : s.status === 'waiting_for_approval' ? 'Waiting for your response' : s.deferred ? 'Snoozed' : `Updated ${ago(s.lastAssistantAt || s.updatedAt)}`;
     return { working, sub };
   }
@@ -1652,7 +1652,7 @@ window.WizCore.chats = function createChats(H) {
     // The Agent Service omits status for settled historical sessions. A local in-flight override is live.
     const quiet = s && (!s.status || ['completed', 'cancelled', 'failed', 'interrupted'].includes(s.status))
       && Number.isSafeInteger(s.messageCount) && !LIVE.busy(w.thread) && !c.err && !pendingFor(w).length;
-    const age = s && WORKING_ST.has(s.status) ? 3500 : quiet ? 60000 : 15000;
+    const age = isWorking(s) ? 3500 : quiet ? 60000 : 15000;
     const fresh = c.loadedFor === w.thread && Date.now() - c.at < age && (!quiet || c.readRevision === revision);
     // Status changes (Stopping…, Deferred, Archived) re-render the header even between message reads.
     const hk = s ? [s.status, !!s.archived, !!s.deferred, s.runId].join('|') : '';
@@ -1908,7 +1908,7 @@ window.WizCore.chats = function createChats(H) {
     const rdkey = isNew ? (winAgent(w) ? 'agentnew:' + winAgent(w) : 'new') : 'direct:' + sid;
     const reply = voice ? (sealed?.reply || null) : here ? KIT.drafts.get(rdkey).reply : null;
     const s = isNew ? null : LIVE.session(sid);
-    const steerRunId = s && WORKING_ST.has(s.status) && s.runId ? s.runId : '';
+    const steerRunId = isWorking(s) && s.runId ? s.runId : '';
     const nm = opts.route || (isNew && PW ? PW.newModel(c) : null); // a model picked for this new chat (#11)
     // A new chat goes to the agent its model belongs to: the window's agent, or a Private pick in the main Chats.
     const AGID = isNew ? (opts.route?.agent || winAgent(w) || (nm?.agent && AGS()?.isOther(nm.agent) ? nm.agent : '')) : '';
@@ -2200,7 +2200,7 @@ window.WizCore.chats = function createChats(H) {
     const el = elOf(wid); if (el) delete el.dataset.draftFor;
   }
   // Models, Errors actions, composer mic, work receipts, reading position, Files (core/chat-power.js).
-  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent }) : null;
+  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent }) : null;
   restoreSealed();
   // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.
   let outSig = '';
@@ -2215,6 +2215,6 @@ window.WizCore.chats = function createChats(H) {
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
   return { openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setSubject, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
-    refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST,
+    refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
     KIT, threadAct, openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };

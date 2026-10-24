@@ -17,7 +17,7 @@ function harness({shared=null,admitting=false,admitReply=null}={}) {
     shock(){},finishVoice(){calls.sent++;},
     DEV:()=>({recActive:()=>'null'}),
     startVoice:(kind,opt)=>{calls.starts.push([kind,JSON.parse(JSON.stringify(opt||{}))]);return Promise.resolve();},
-    CHATS:{WORKING_ST:new Set(['running'])},
+    CHATS:{WORKING_ST:new Set(['running']),isWorking:s=>!!s&&!s.archived&&s.status==='running'},
     LIVE:{session:()=>({status:'running',runId:'run-9'})}};
   vm.createContext(c);vm.runInContext(reply+';this.recordReply=recordReply;',c);
   return c;
