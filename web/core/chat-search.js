@@ -80,7 +80,7 @@
           };
           const rows = await window.WizLive.searchSessions(r.q, r.agent, r.ctrl.signal, publish);
           if (r.ctrl.signal.aborted || runs[wid] !== r) return;
-          r.serverDone = true; r.server = rows !== null && !rows?.fallbackScopes?.length; r.partial = !!rows?.partial;
+          r.serverDone = true; r.server = rows !== null && !rows?.fallbackScopes?.length; r.partial = !!rows?.partial; r.capped = !!rows?.capped;
           r.fallbackScopes=rows===null ? null : rows?.fallbackScopes||[];
           publish(rows);
         } catch(e) { if(e.name==='AbortError') throw e; r.errors++; r.serverError=true; r.serverDone=true; r.fallbackScopes=[]; }
@@ -152,7 +152,7 @@
       if (r.serverError) return '<div class="ch-bodysearch">Couldn’t search older threads · check your connection and try again</div>';
       if (r.partial) return `<div class="ch-bodysearch" data-chbs="done">Searched available agents · ${n} with matches · some agents could not be searched</div>`;
       if (r.titlesOnly) return '<div class="ch-bodysearch">Type 3 letters to search messages</div>';
-      if (r.server) return `<div class="ch-bodysearch" data-chbs="done">Searched titles and messages · ${n} with matches</div>`;
+      if (r.server) return `<div class="ch-bodysearch" data-chbs="done">Searched titles and messages · ${n} with matches${r.capped ? ' · newest message matches shown' : ''}</div>`;
       return `<div class="ch-bodysearch" data-chbs="done">Searched messages in the ${r.scanned} most recent threads${n ? ` · ${n} with matches` : ''}${more ? ` <button type="button" data-chbsmore>Search older threads</button>` : ''}</div>`;
     },
     get stats() { return { ...stats, cached: cache.size, runs: Object.fromEntries(Object.entries(runs).map(([k, r]) => [k, { q: r.q, scanned: r.scanned, want: r.want, hits: [...r.hits.keys()], busy: r.busy }])) }; },
