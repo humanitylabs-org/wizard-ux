@@ -24,8 +24,14 @@ PY
 )
   [ -n "$b" ] && adb shell input tap $b
 }
+# A fresh emulator's launcher can show "Pixel Launcher isn't responding" over everything (not this app): press Wait.
+system_anr() {
+  grep -q "isn.t responding" "$OUT/ui-$1.xml" 2>/dev/null && grep -q 'package="android"' "$OUT/ui-$1.xml" || return 1
+  echo "NOTE system dialog over the screen ($1): $(grep -o 'text="[^"]*isn.t responding"' "$OUT/ui-$1.xml"); pressing Wait" >> "$OUT/result.txt"
+  tap_text "$1" "Wait"; sleep 2; return 0
+}
 wait_for() { # <name> <text> <seconds>
-  for _ in $(seq 1 "$3"); do dump "$1"; has "$1" "$2" && return 0; sleep 1; done; return 1
+  for _ in $(seq 1 "$3"); do dump "$1"; has "$1" "$2" && return 0; system_anr "$1"; sleep 1; done; return 1
 }
 
 adb install -r "$APK" >/dev/null && pass "installs" || bad "installs"
@@ -320,7 +326,7 @@ PY
   n2=$(grep -c '"ev": "session"' "$FX")
   tasks=$(adb shell dumpsys activity activities | grep -c "A=.*ai.wizards.shell.test.homeapp")
   echo "session loads: $n1 -> $n2; homeapp tasks: $tasks" >> "$OUT/result.txt"
-  resumed | grep -q "AppSessionActivity" && [ "$n2" = "$n1" ] && pass "pin: opening it again resumes the same task (no reload)" || bad "pin: opening it again resumes the same task"
+  resumed | grep -q "AppSessionActivity" && [ "$n1" -ge 1 ] && [ "$n2" = "$n1" ] && pass "pin: opening it again resumes the same task (no reload)" || bad "pin: opening it again resumes the same task"
   bogus="wizard-homeapp://$PKG/homeapp-0000?app=qa-app"
   adb shell am start -W -a android.intent.action.VIEW -d "'$bogus'" -n "$PKG/ai.wizards.shell.home.AppSessionActivity" >/dev/null 2>&1; sleep 3
   dump bogus; has bogus "App unavailable" && pass "pin: an edited shortcut opens nothing of the Wizard" || bad "pin: an edited shortcut opens nothing of the Wizard"
