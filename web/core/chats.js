@@ -722,7 +722,9 @@ window.WizCore.chats = function createChats(H) {
   function focusOptions() {
     const all = LIVE.unified().filter(s => !s.hidden);
     const stats = (kind, key, label, badge = '') => {
-      const rows = kind === 'all' ? all : all.filter(s => matchesFocus({ kind, key }, s));
+      // A Space counts its explicit members, including ones hydrated beyond the global archive window.
+      const members = kind === 'space' && LIVE.spaceSessions ? LIVE.spaceSessions(spaces().find(s => s.id === key)?.threads || [], { peek: true }).rows.filter(s => !s.hidden) : null;
+      const rows = members || (kind === 'all' ? all : all.filter(s => matchesFocus({ kind, key }, s)));
       return { kind, key, label, badge, count: rows.length, unread: rows.filter(s => LIVE.isNew(s)).length,
         recent: rows.reduce((n, s) => Math.max(n, Date.parse(s.activityAt || s.updatedAt || '') || 0), 0) };
     };

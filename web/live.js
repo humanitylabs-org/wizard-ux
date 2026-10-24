@@ -685,14 +685,15 @@
       for (const [, list] of extra) for (const s of list) if (!seen.has(s.id)) { seen.add(s.id); out.push(s); }
       return out;
     },
-    spaceSessions(ids) {
+    // peek: badges/strip read loaded + already-hydrated rows only; never start reads.
+    spaceSessions(ids, { peek = false } = {}) {
       const loaded = new Map(this.unified().map(s => [s.id, s])), rows = [];
       let pending = false, failed = false;
       for (const id of new Set(ids)) {
         if (typeof id !== 'string' || !/^[A-Za-z0-9._:-]{1,256}$/.test(id)) continue;
         if (loaded.has(id)) { const s = loaded.get(id); if (!s.hidden) rows.push(s); continue; }
         let entry = SPACE_ROWS.get(id);
-        if (!document.hidden && (!entry || (!entry.pending && Date.now() - entry.at >= (entry.failed ? STALE_AFTER : FULL_EVERY)))) {
+        if (!peek && !document.hidden && (!entry || (!entry.pending && Date.now() - entry.at >= (entry.failed ? STALE_AFTER : FULL_EVERY)))) {
           if (!entry) { entry = { row: null, at: 0 }; SPACE_ROWS.set(id, entry); }
           entry.pending = true; SPACE_QUEUE.push([id, entry]);
         }
@@ -705,7 +706,7 @@
         if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
         applyLocal(s); rows.push(s);
       }
-      drainSpaceReads();
+      if (!peek) drainSpaceReads();
       return { rows, pending, failed };
     },
     // A private agent's thread (by id): its rows carry the lock and its words never enter another agent's context.

@@ -102,3 +102,14 @@ test('loaded hidden rows outrank cache, membership edits apply immediately, fail
   h.L.sessions=[]; h.advance(180001); h.replies.delete('old');
   assert.equal((await ready(h.L,['old'])).rows.length,0);
 });
+
+test('peek (Focus badges) counts hydrated members without starting reads', async () => {
+  const h=harness(), ids=Array.from({length:6},(_,i)=>`peek_${i}`);
+  h.L.sessions=ids.slice(0,2).map(id=>row(id,'',{listVersion:1,updatedAt:new Date().toISOString()}));
+  for(const id of ids.slice(2))h.replies.set(id,row(id));
+  assert.equal(h.L.spaceSessions(ids,{peek:true}).rows.length,2); await settle();
+  assert.equal(h.calls.length,0,'peek never fans out');
+  await ready(h.L,ids);
+  assert.equal(h.L.spaceSessions(ids,{peek:true}).rows.length,6,'badge sees hydrated members');
+  assert.equal(h.calls.length,4);
+});
