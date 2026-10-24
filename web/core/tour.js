@@ -99,6 +99,9 @@
     if (!active()) return;
     log('ev:' + type + (d.which ? ':' + d.which : ''));
     if (type === 'voice') { el.classList.toggle('tr-live', d.state !== 'idle'); return; }
+    // Settings opened mid-tour (a deeplink, a notification, a voice command): the owner went somewhere on purpose.
+    // Step aside; the tour's tap guard would otherwise swallow every tap in Settings under its scrim.
+    if (type === 'sheet' && d.which === 'settings') return finish('handoff');
     if (type === 'nomic') { if (!typed) { typed = true; log('typed'); later(() => { if (!active()) return; H.prepare(); el.classList.remove('tr-live'); go(step); }, 700); } return; }
     if (step === 1) {
       if (type === 'sent' || (type === 'command' && d.ok)) {
