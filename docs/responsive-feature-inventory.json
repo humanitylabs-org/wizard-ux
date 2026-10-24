@@ -167,6 +167,7 @@
     "core/os-updates.js",
     "core/own-views.css",
     "core/own-views.js",
+    "core/owner-layer.js",
     "core/photos-settings.js",
     "core/polish.css",
     "core/reach.js",
@@ -462,6 +463,13 @@
         "desktop"
       ],
       "note": "Direct entrypoint import; Settings \u2192 Updates shows only where the App Manager answers store-install/_updates"
+    },
+    "core/owner-layer.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Owner release layer (wizard-os#186): loads ../my-release/layer.css and layer.js only when the box's my-release.json declares a layer; sets html[data-mine]; ?mine=off skips it"
     },
     "core/own-views.js": {
       "loadedBy": ["phone", "desktop"],

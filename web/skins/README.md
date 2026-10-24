@@ -23,6 +23,20 @@ Declare the package on your skin's entry in `web/core/skins.js`:
 
 James's skins (Nebula, Grove, Tide, Ember, Signal) have no package and load nothing from here.
 
+## An owner's release layer (wizard-os#186)
+
+A skin is look only: colours, fonts, spacing, surfaces, backgrounds, icons. How things work or are arranged for one
+owner belongs in that owner's release, which the box may ship as a layer beside `my-release.json`:
+
+- `my-release.json` with `"layer": {"css": true, "js": true}` turns it on; without `layer` (or without the file, as on
+  a stock box) nothing loads and `html[data-mine]` is never set. `web/core/owner-layer.js` (first in `<head>`, both
+  shells) reads it and caches the answer for the first frame.
+- `my-release/layer.css` loads right after `core/skins.css`, so skin packages stack after it and My skin stays on
+  top. Every rule starts with `html[data-mine]` and uses palette tokens.
+- `my-release/layer.js` exports a default `setup(api)` and runs as a `WosSkinHost.builtin` on every skin, with the
+  hook API below, so it survives skin switches.
+- `?mine=off` skips the layer for one load, to compare with stock or to recover from a layer that breaks something.
+
 ## My skin (every owner's own layer)
 
 Every box also has one personal skin, **My skin**: plain CSS the owner (or their agent) writes, layered on top of
