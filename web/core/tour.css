@@ -86,3 +86,18 @@
 .tr-nx:empty { display: none; }
 .tr-nx { display: flex; justify-content: center; pointer-events: auto; }
 .tr-next { font-size: 13.5px; color: var(--ink-2); text-decoration-color: rgba(205, 190, 255, .35); }
+
+/* Desktop first-message guide (WosTour.desk): a small card above the New chat composer. No scrim, no tap guard. */
+.dtr { position: fixed; z-index: 35; display: flex; flex-direction: column; gap: 6px; padding: 14px 16px 12px; border-radius: 14px; box-sizing: border-box;
+  background: color-mix(in oklab, var(--bg, #0b0816) 92%, var(--ink, #fff) 8%); color: var(--ink, #f4f0ff); border: 1px solid var(--line-2, rgba(205, 190, 255, .2));
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .4); animation: trIn 320ms var(--ease, ease) both; }
+.dtr small { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--violet-2, #b99bff); }
+.dtr b { font-size: 15.5px; line-height: 1.35; font-weight: 600; }
+.dtr .dtr-sub { font-size: 12.5px; line-height: 1.5; color: var(--ink-2, #cfc6e6); }
+.dtr .dtr-acts { display: flex; gap: 8px; justify-content: flex-end; align-items: center; margin-top: 2px; }
+.dtr .dtr-link { border: 0; background: none; color: var(--ink-2, #cfc6e6); font: inherit; font-size: 12.5px; padding: 6px 8px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(205, 190, 255, .35); }
+.dtr .dtr-go { border: 0; border-radius: 99px; padding: 7px 16px; font: inherit; font-size: 13px; font-weight: 650; color: #fff; background: var(--violet, #8f63ff); cursor: pointer; }
+.dtr-ring { position: fixed; z-index: 34; pointer-events: none; border-radius: 18px; border: 2px solid var(--violet-2, #b99bff); box-shadow: 0 0 0 5px rgba(143, 99, 255, .16); animation: trIn 320ms var(--ease, ease) both; }
+@media (prefers-reduced-motion: reduce) { .dtr { animation: none; } }
+/* The header tools sit under the top-right Skip tour pill and take no taps while the tour runs: hide them then. */
+.device.touring .home-tools { visibility: hidden; }
