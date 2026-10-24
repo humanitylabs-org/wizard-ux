@@ -187,7 +187,7 @@ async function spaceArchiveMatrix(b) {
     for(const skin of ['obsidian','nebula']){
      await p.evaluate(s=>WosSkin.set(s),skin);await p.waitForTimeout(500);
      await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');if(window.__wos)a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);});
-     await p.waitForFunction(()=>{const e=document.querySelector('.ch-scroll [data-sec]'),r=e?.getBoundingClientRect();return r&&r.height>0&&e.contains(document.elementFromPoint(r.x+15,Math.max(0,r.y)+15));});
+     await p.waitForFunction(()=>{const e=document.querySelector('.ch-scroll'),r=e?.getBoundingClientRect();return r&&r.height>0&&e.contains(document.elementFromPoint(r.x+15,r.y+15));});
      await p.locator('.ch-scroll:visible').evaluate(e=>{const a=e.querySelector('[data-sec="archive"]');e.scrollTop=a.offsetTop-e.offsetTop;});await capture(p,mode+'-'+skin+'-old-space');
     }
     await choose(p,'all:');
