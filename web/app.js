@@ -199,6 +199,7 @@
   }
   function winTitle(w) {
     if (!w) return '';
+    if (w.app === 'chats' && !w.thread) { const title = CHATS.listTitle?.(w); if (title) return title; }
     if (agentWin(w) && !w.thread) return `${agentApp(w).name} · Chats`;
     if (w.app === 'chats') return w.thread === '__new__' ? 'New chat' : w.thread ? (LIVE?.session(w.thread)?.title || OUTBOX?.forThread(w.thread)[0]?.title || 'Thread') : 'Chats';
     if (w.app === 'review') return { month: 'Month in review', week: 'Week in review', day: 'Day in review', group: 'Day in review', thread: 'Thread' }[w.z?.level] || 'Review';
@@ -3952,7 +3953,7 @@
     locked: pointerId => !!(DS && DS.id === pointerId && DS.h),
     toast: text => toast('◇', text, 2400),
     // Layouts (two-orb): who the screen routes to, and the orb's recorder.
-    agents: () => (window.WosAgents?.list || []).map(agentInfo),
+    agents: () => (window.WosAgents?.visible?.() || window.WosAgents?.list || []).map(agentInfo),
     agentHere: () => agentHere(),
     agentSigil: id => { const AG = window.WosAgents, a = AG?.get(id); return a ? AG.sigil(a, 'ag-sig') : ''; },
     openAgent: id => openAgentChats(id),
