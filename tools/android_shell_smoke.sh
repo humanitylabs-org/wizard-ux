@@ -138,7 +138,12 @@ PY
   wait_ev elsewhere 20; [ "$(ev elsewhere r)" = "noreply" ] && pass "rec: same-origin page outside the shell gets no answer" || bad "rec: same-origin page outside the shell gets no answer ($(ev elsewhere r))"
   # ---- Optional floating orb (device.orb). The app allows "Display over other apps" via appops, as the owner would.
   orblog() { adb logcat -d -s ShellOrb:I 2>/dev/null; }
-  orbwin() { adb shell dumpsys window windows 2>/dev/null | grep -c "WizardShellOrb" | tr -d '\r'; }
+  # Windows that are really on screen. (Settings hides every non-system overlay, so another app is used below.)
+  orbwin() { adb shell dumpsys window windows 2>/dev/null | awk '/Window #[0-9]+ Window\{.*WizardShellOrb/{o=1} o&&/isVisible=/{print; o=0}' | grep -c "isVisible=true" | tr -d '\r'; }
+  other_app() { # a normal app in front (the Dialer; the launcher if there is none)
+    adb shell am start -W -a android.intent.action.DIAL >/dev/null 2>&1 || adb shell input keyevent KEYCODE_HOME
+    sleep 2; adb shell dumpsys activity activities | grep -m1 "ResumedActivity" | tee -a "$OUT/result.txt" >/dev/null
+  }
   wait_log() { for _ in $(seq 1 "$2"); do orblog | grep -q "$1" && return 0; sleep 1; done; return 1; }
   orb_xy() { # centre of the orb from its last "shown at"/"moved to" log line (64 dp square)
     local d; d=$(adb shell wm density | grep -o '[0-9]*' | tail -1)
@@ -153,12 +158,12 @@ PY
   wait_ev orb 40; [ "$(ev orb r.on)" = "true" ] && pass "orb: the Wizard turns the orb on (device.orb.enable)" || bad "orb: the Wizard turns the orb on ($(ev orb r))"
   sleep 2; [ "$(orbwin)" = "0" ] && pass "orb: hidden while the Wizard app is in front" || bad "orb: hidden while the Wizard app is in front"
   adb shell input keyevent KEYCODE_HOME; sleep 1
-  adb shell am start -W -a android.settings.SETTINGS >/dev/null 2>&1
+  other_app
   wait_log "page from Wizard" 20 && pass "orb: page from the Wizard (virtual origin, native fetch)" || bad "orb: page from the Wizard"
   sleep 1; adb shell dumpsys window windows > "$OUT/orb-windows.txt"
-  [ "$(orbwin)" -ge 1 ] && adb shell dumpsys activity activities | grep -q "ResumedActivity.*com.android.settings" \
-    && pass "orb: floats over another app (Settings in front)" || bad "orb: floats over another app"
-  adb exec-out screencap -p > "$OUT/orb-over-settings.png" 2>/dev/null
+  [ "$(orbwin)" -ge 1 ] && ! adb shell dumpsys activity activities | grep -m1 "ResumedActivity" | grep -q "$PKG" \
+    && pass "orb: visible over another app" || bad "orb: visible over another app"
+  adb exec-out screencap -p > "$OUT/orb-over-app.png" 2>/dev/null
   grep -q '"get": "/wizard-os-home/assist/everywhere.html"' "$FX" && grep -q '"get": "/wizard-os-home/orb.js"' "$FX" \
     && pass "orb: page files fetched from the selected Wizard" || bad "orb: page files fetched from the selected Wizard"
 
@@ -185,7 +190,7 @@ PY
     orblog > "$OUT/orb-before-$how.log"; adb logcat -d > "$OUT/logcat-before-$how.txt"
     adb shell am force-stop "$PKG"; adb logcat -c
     adb shell am start -W -n "$ACT" >/dev/null 2>&1; sleep 4
-    adb shell input keyevent KEYCODE_HOME; sleep 1; adb shell am start -W -a android.settings.SETTINGS >/dev/null 2>&1
+    adb shell input keyevent KEYCODE_HOME; sleep 1; other_app
     want=$([ "$how" = down ] && echo "static resource unavailable" || echo "timeout")
     wait_log "page from bundle" 25 && orblog | grep -q "$want; showing the bundled copy" && [ "$(orbwin)" -ge 1 ] \
       && pass "orb: falls back to the bundled page when the Wizard is $how" || bad "orb: falls back to the bundled page when the Wizard is $how"
