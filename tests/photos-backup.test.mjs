@@ -16,7 +16,7 @@ function shell({ port = null, frames = [] } = {}) {
   const ctx = { console, Map, Set, JSON, String, Array, Object, Error,
     location: { origin: 'https://box.example' },
     setTimeout: () => 1, clearTimeout: () => {},
-    document: { querySelectorAll: sel => sel === 'iframe.appframe' ? iframes : [] },
+    document: { querySelectorAll: sel => sel === 'iframe.appframe, iframe[data-own-app]' ? iframes : [] },
     addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); } };
   ctx.window = ctx;
   if (port) ctx.wizardPhotosPort = port;
@@ -85,6 +85,14 @@ test('relay: older apps get the one legacy word; native resume reaches the app',
   assert.equal(w.got.at(-1).m.ok, true);
   s.fire('wos-native-resume', {});
   assert.deepEqual(w.got.at(-1).m, { type: 'wizard-os:photos-push', push: { type: 'resume' } });
+});
+
+test('relay accepts desktop window frames as well as phone app frames', () => {
+  assert.match(relaySrc, /SHELL_FRAMES = 'iframe\.appframe, iframe\[data-own-app\]'/);
+  assert.match(read('web/desktop/desktop.js'), /<iframe data-own-app=/);
+  const s = shell({ frames: ['/photos/'] }); const w = s.iframes[0].contentWindow;
+  call(s, w, 'status');
+  assert.deepEqual(w.got.at(-1).m, { type: 'wizard-os:photos', id: 'a1', ok: false, error: 'no-bridge' }, 'desktop gets the honest no-bridge answer');
 });
 
 test('relay method list matches the native allowlist (plus legacy open)', () => {

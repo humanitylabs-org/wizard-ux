@@ -6,7 +6,7 @@
  * Older apps (before v1) understand only the word 'open', which opens their native backup screen.
  *
  * This relay accepts {type:'wizard-os:photos', id, method, params} only from a frame that is (1) one of the shell's own
- * app iframes, (2) same origin, (3) at /photos/, and only for the allowlisted methods. Answers go back to that frame as
+ * app iframes (phone .appframe or desktop [data-own-app]), (2) same origin, (3) at /photos/, and only for the allowlisted methods. Answers go back to that frame as
  * {type:'wizard-os:photos', id, ok, result|error}; native pushes go to every Photos frame as
  * {type:'wizard-os:photos-push', push}. Without the port (a browser, the desktop shell) every call answers
  * {ok:false, error:'no-bridge'} so the app can say where backup works. Keys and sign-in state never cross this relay:
@@ -22,14 +22,16 @@
   const log = m => { window.__photosRelayLog = (window.__photosRelayLog || []).concat(m).slice(-40); };
   const port = () => window.wizardPhotosPort && typeof window.wizardPhotosPort.postMessage === 'function' ? window.wizardPhotosPort : null;
 
+  // Phone shell app frames carry .appframe; desktop windows carry [data-own-app].
+  const SHELL_FRAMES = 'iframe.appframe, iframe[data-own-app]';
   function frameOk(win, origin) {
     if (!win || win === window || origin !== location.origin) return false;
-    const f = [...document.querySelectorAll('iframe.appframe')].find(x => x.contentWindow === win);
+    const f = [...document.querySelectorAll(SHELL_FRAMES)].find(x => x.contentWindow === win);
     if (!f) return false;
     try { return PATH.test(win.location.pathname); } catch (e) { return false; }
   }
   function frames() {
-    return [...document.querySelectorAll('iframe.appframe')].map(f => f.contentWindow).filter(w => { try { return w && PATH.test(w.location.pathname); } catch (e) { return false; } });
+    return [...document.querySelectorAll(SHELL_FRAMES)].map(f => f.contentWindow).filter(w => { try { return w && PATH.test(w.location.pathname); } catch (e) { return false; } });
   }
   const send = (win, msg) => { try { win.postMessage(msg, location.origin); } catch (e) {} };
   const reply = (win, id, ok, x) => send(win, ok ? { type: T, id, ok: true, result: x } : { type: T, id, ok: false, error: x });
