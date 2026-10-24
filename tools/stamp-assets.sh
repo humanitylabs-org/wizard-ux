@@ -14,14 +14,16 @@ cd "$root"
 # Owner-generated data (data.js, summaries.js) changes at runtime: never part of the token, never stamped.
 v=$(find . -type f ! -name data.js ! -name summaries.js | LC_ALL=C sort | xargs sha1sum | sha1sum | cut -c1-12)
 find . -name '*.html' -type f | while IFS= read -r page; do
-  grep -q 'name="wos-release"' "$page" || sed -i "s|<meta charset=\"utf-8\">|<meta charset=\"utf-8\"><meta name=\"wos-release\" content=\"$v\">|" "$page"
+  grep -q 'name="wos-release"' "$page" || sed -i.bak "s|<meta charset=\"utf-8\">|<meta charset=\"utf-8\"><meta name=\"wos-release\" content=\"$v\">|" "$page"
   # Relative links or the shell's own /wizard-os-home/ prefix only; other absolute paths and data files stay plain.
-  sed -i -E \
+  sed -i.bak -E \
     -e "s#((src|href)=\"(/wizard-os-home/)?[A-Za-z0-9._][A-Za-z0-9._/-]*\.(js|css))\"#\1?v=$v\"#g" \
     -e "s#((src|href)=\"([A-Za-z0-9._/-]*/)?(data|summaries)\.js)\?v=$v\"#\1\"#g" \
     "$page"
+  rm -f "$page.bak"
 done
 find . -name '*.js' -type f ! -name data.js ! -name summaries.js | while IFS= read -r f; do
   grep -qE "(from|import)[[:space:]]*\(?[[:space:]]*['\"]\.\.?/" "$f" || continue
-  sed -i -E "s#((from|import)[[:space:]]*\(?[[:space:]]*(['\"])\.\.?/[A-Za-z0-9._/-]+\.js)(['\"])#\1?v=$v\4#g" "$f"
+  sed -i.bak -E "s#((from|import)[[:space:]]*\(?[[:space:]]*(['\"])\.\.?/[A-Za-z0-9._/-]+\.js)(['\"])#\1?v=$v\4#g" "$f"
+  rm -f "$f.bak"
 done
