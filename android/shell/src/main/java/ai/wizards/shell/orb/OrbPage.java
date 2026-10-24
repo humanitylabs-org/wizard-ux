@@ -30,7 +30,8 @@ import ai.wizards.shell.ShellOrigin;
  * The orb's page from the selected Wizard, or the APK copy offline. Ported from android/app's OverlayPage (#323):
  * no WebView-owned network requests (Android doesn't intercept redirect hops or service-worker answers), so the
  * remote page lives on {@link OrbPolicy#VIRTUAL}; native fetches refuse redirects, bound time and size, and put the
- * CSP before any remote markup. A page whose API (window.E and window.Orb) isn't up within 1.5 s is replaced by the
+ * CSP before any remote markup. The page's fixed dependencies are fetched concurrently (OrbPrefetch, memory only,
+ * per load). A page whose API (window.E and window.Orb) isn't up within 1.5 s is replaced by the
  * bundled copy. Detach/reattach (the orb hides while the Wizard app is in front) rechecks the selected Wizard.
  * The page gets no JavaScript bridge: native only calls E.state / E.level.
  */
@@ -53,6 +54,7 @@ public class OrbPage extends WebViewClient {
     private volatile String origin;
     private volatile boolean remote;
     private volatile int generation;
+    private volatile OrbPrefetch prefetch;
     private boolean done;
     private SharedPreferences prefs;
     private final SharedPreferences.OnSharedPreferenceChangeListener changed = (p, key) -> {
@@ -78,6 +80,7 @@ public class OrbPage extends WebViewClient {
                 prefs.unregisterOnSharedPreferenceChangeListener(changed);
                 main.removeCallbacks(timeout);
                 generation++; // ignore asynchronous completions after this host is hidden
+                clearPrefetch();
             }
         });
         String r = OrbPolicy.remoteUrl(origin);
@@ -91,10 +94,18 @@ public class OrbPage extends WebViewClient {
         if (prefs != null) prefs.unregisterOnSharedPreferenceChangeListener(changed);
         main.removeCallbacks(timeout);
         generation++;
+        clearPrefetch();
+    }
+
+    private void clearPrefetch() {
+        OrbPrefetch old = prefetch;
+        prefetch = null;
+        if (old != null) old.close();
     }
 
     private void show(boolean fromWizard, String url) {
         generation++;
+        clearPrefetch();
         remote = fromWizard;
         current = url;
         done = false;
@@ -104,7 +115,17 @@ public class OrbPage extends WebViewClient {
         web.getSettings().setAllowFileAccess(false);
         web.getSettings().setAllowContentAccess(false);
         main.removeCallbacks(timeout);
-        if (fromWizard) main.postDelayed(timeout, TIMEOUT_MS);
+        if (fromWizard) {
+            main.postDelayed(timeout, TIMEOUT_MS);
+            final String owner = origin;
+            final int attempt = generation;
+            final Context c = web.getContext();
+            // The page's fixed dependencies at once instead of a serial waterfall; same policy and transport.
+            prefetch = new OrbPrefetch(OrbPrefetch.PATHS, TIMEOUT_MS, path -> {
+                if (attempt != generation || !String.valueOf(owner).equals(ShellOrigin.selected(c))) throw new IOException("orb owner changed");
+                return fetch(OrbPolicy.upstream(owner, OrbPolicy.VIRTUAL + OrbPolicy.SHELL + path));
+            });
+        }
         web.loadUrl(url);
     }
 
@@ -128,6 +149,7 @@ public class OrbPage extends WebViewClient {
         final int attempt = generation;
         final boolean fromWizard = remote;
         final String owner = origin;
+        final OrbPrefetch batch = prefetch;
         String u = r.getUrl().toString();
         if (!"GET".equals(r.getMethod()) || !(fromWizard ? OrbPolicy.fromWizard(owner, u) : OrbPolicy.bundled(u))) return blocked();
         // A subframe may not load even an allowlisted document (defence beyond frame-src).
@@ -136,7 +158,9 @@ public class OrbPage extends WebViewClient {
             byte[] bytes;
             if (fromWizard) {
                 if (!String.valueOf(owner).equals(ShellOrigin.selected(v.getContext()))) return blocked();
-                bytes = fetch(OrbPolicy.upstream(owner, u));
+                String path = r.getUrl().getPath().substring(OrbPolicy.SHELL.length());
+                bytes = batch == null ? null : batch.take(path);
+                if (bytes == null) bytes = fetch(OrbPolicy.upstream(owner, u));
                 if (attempt != generation || !remote || !String.valueOf(owner).equals(ShellOrigin.selected(v.getContext()))) return blocked();
             } else {
                 bytes = read(v.getContext().getAssets().open(r.getUrl().getPath().substring("/android_asset/".length())), Long.MAX_VALUE);

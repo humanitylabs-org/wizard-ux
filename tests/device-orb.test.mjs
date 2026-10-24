@@ -37,6 +37,7 @@ test('the orb host keeps #323\'s hardening: virtual origin, 1.5 s fallback, no r
   assert.match(page, /setBlockNetworkLoads\(true\)/);
   assert.match(page, /onViewAttachedToWindow[\s\S]*?selected Wizard changed while hidden/);
   assert.match(page, /window\.E && window\.Orb/);
+  assert.match(page, /new OrbPrefetch\(OrbPrefetch\.PATHS, TIMEOUT_MS/);
   assert.match(read('android/shell/src/main/java/ai/wizards/shell/orb/OrbPolicy.java'), /VIRTUAL = "https:\/\/wizard-overlay\.invalid"/);
   for (const f of walk('android/shell/src/main/java')) assert.doesNotMatch(readFileSync(join(root, f), 'utf8'), /addJavascriptInterface|@JavascriptInterface/, f);
 });
