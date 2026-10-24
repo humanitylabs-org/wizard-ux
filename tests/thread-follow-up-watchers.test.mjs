@@ -10,8 +10,8 @@ test('active follow-ups keep Snooze, make Done temporary, and expose explicit St
   assert.match(chats, /Done for now/);
   assert.match(chats, /Stop watching/);
   assert.match(chats, /\['snooze', 'stop_watch', 'done'\]/);
-  assert.match(chats, /LIVE\.stopWatching\(sid\)/);
-  assert.match(chats, /WORKING_ST\.has\(s\.status\).*return watching \? \['stop_watch'\] : \[\]/);
+  assert.match(chats, /LIVE\.stopWatching\(sid, winAgent\(w\)\)/);
+  assert.match(chats, /if \(watching && \(WORKING_ST\.has\(s\.status\)[^\n]*return \['stop_watch'\];/);
 });
 
 test('archived watcher checks stay out of Working while their silent run is active', () => {
@@ -20,7 +20,7 @@ test('archived watcher checks stay out of Working while their silent run is acti
 });
 
 test('Done and Snooze remain presentation actions; only Stop watching hits the cancellation route', () => {
-  assert.match(live, /stopWatching\(id\)/);
+  assert.match(live, /stopWatching\(id, agent\)/);
   assert.match(live, /\/wizard\/follow-ups\/stop/);
   const archive = live.slice(live.indexOf('archive(id,'), live.indexOf('async stopWatching'));
   const defer = live.slice(live.indexOf('async _defer'), live.indexOf('/* Rename:'));

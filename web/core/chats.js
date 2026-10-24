@@ -1151,7 +1151,8 @@ window.WizCore.chats = function createChats(H) {
   function threadActions(s, turns) {
     if (!s || LIVE.busy(s.id)) return [];
     const watching = followUpActive(s);
-    if (WORKING_ST.has(s.status) || ['waiting_for_approval', 'unknown'].includes(s.status)) return watching ? ['stop_watch'] : [];
+    // A watcher check really running (quiet, so its thread may stay archived): Stop watching is the only action.
+    if (watching && (WORKING_ST.has(s.status) || ['waiting_for_approval', 'unknown'].includes(s.status))) return ['stop_watch'];
     const inArchive = s.archived || LIVE.workGroups([s]).archive.length > 0;
     if (inArchive) return watching ? ['restore', 'snooze', 'stop_watch'] : ['restore', 'snooze'];
     if (isWorking(s) || ['waiting_for_approval', 'unknown'].includes(s.status)) return [];
@@ -1176,6 +1177,8 @@ window.WizCore.chats = function createChats(H) {
    * conversation title and model picker without repeating the agent banner. ---- */
   const AGS = () => window.WosAgents || null;
   function winAgent(w) { const o = (w && W[owner(w.id)]) || w; const f = focusOf(o), id = f?.kind === 'agent' ? f.key : o?.agent || ''; const A = AGS(); return id && (!A || A.isOther(id)) ? id : ''; }
+  // The thread row this window shows: an agent window resolves inside its own agent, never a same-id main row.
+  const rowOf = (wid, sid) => { const w = W[owner(wid)]; return LIVE.sessionFor ? LIVE.sessionFor(sid, winAgent(w)) : LIVE.session(sid); };
   function agentRec(id) {
     const A = AGS();
     if (!id) { const d = A?.get(A.defaultId()); return d || { id: 'hermes', label: window.WizConfig.agent(), privacy: 'standard', appearance: { glyph: 'wizard' }, model: {}, is_default: true }; }
@@ -1185,7 +1188,7 @@ window.WizCore.chats = function createChats(H) {
   const agentName = id => id ? agentRec(id).label : window.WizConfig.agent();
   async function threadAct(wid, sid, a) {
     wid = owner(wid);
-    const s = LIVE.session(sid); if (!s || !ACT[a]) return;
+    const s = rowOf(wid, sid); if (!s || !ACT[a]) return;
     const w = W[wid];
     vib(8);
     if (a === 'unread') {
@@ -1197,7 +1200,7 @@ window.WizCore.chats = function createChats(H) {
     }
     if (a === 'stop_watch') {
       closeRowSheet();
-      const ok = await LIVE.stopWatching(sid);
+      const ok = await LIVE.stopWatching(sid, winAgent(w));
       toast(ok ? '◉' : '!', ok ? 'Stopped watching' : 'Couldn’t stop watching', ok ? 1600 : 3200);
       for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
       return;
@@ -1219,7 +1222,7 @@ window.WizCore.chats = function createChats(H) {
     return LIVE.workGroups([s]).ready.length > 0 && !LIVE.isNew(s) ? ['unread', ...acts] : acts;
   }
   function openRowSheet(wid, sid) {
-    const s = LIVE.session(sid), el = track.querySelector(`[data-chats="${wid}"]`); if (!s || !el) return;
+    const s = rowOf(wid, sid), el = track.querySelector(`[data-chats="${wid}"]`); if (!s || !el) return;
     closeRowSheet();
     const trigger = el.querySelector(`[data-chopen="${sid}"]`);
     const acts = rowActions(s);
@@ -1579,7 +1582,7 @@ window.WizCore.chats = function createChats(H) {
   function renderThread(w, el, keep) {
     if (H.renderView?.(w, el, () => renderThread(w, el, keep), 'thread')) return;
     ch(w.id).held = false; // explicit actions/navigation may repaint immediately
-    const c = ch(w.id), isNew = w.thread === '__new__', s = isNew ? null : LIVE.session(w.thread);
+    const c = ch(w.id), isNew = w.thread === '__new__', s = isNew ? null : rowOf(w.id, w.thread);
     // The thread's own agent (pinned at creation); a new chat belongs to the window's agent.
     const TAG = isNew ? (winAgent(w) || (AGS()?.isOther(c.newModel?.agent) ? c.newModel.agent : '')) : (LIVE.agentOf ? LIVE.agentOf(w.thread) : '');
     // Unified Chats: a private agent's thread opened from the owner's main list says so in its header.
@@ -1827,7 +1830,7 @@ window.WizCore.chats = function createChats(H) {
     const lpEnd = () => {
       if (!lp) return; const q = lp; lp = null; clearTimeout(q.t); q.row.style.transform = '';
       // A Done / FYI row needs nothing from James: a swipe files it straight away (Archive keeps it, restorable).
-      if (q.dx < -60 && q.row.dataset.quiet === '1' && threadActions(LIVE.session(q.sid), null).includes('done')) { lpUntil = Date.now() + 700; threadAct(q.wid, q.sid, 'done'); }
+      if (q.dx < -60 && q.row.dataset.quiet === '1' && threadActions(rowOf(q.wid, q.sid), null).includes('done')) { lpUntil = Date.now() + 700; threadAct(q.wid, q.sid, 'done'); }
       else if (q.dx < -60) { lpUntil = Date.now() + 700; openRowSheet(q.wid, q.sid); }
     };
     root.addEventListener('pointerup', lpEnd); root.addEventListener('pointercancel', lpEnd);
