@@ -46,6 +46,11 @@
       "classification": "native",
       "reason": "WizardAndroidRelay required; Android-only transport."
     },
+    "core/device-recording.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android-only device.recording transport for the phone orb (Wizard Shell); desktop records in the browser."
+    },
     "core/background-audio.js": {
       "shell": "phone",
       "classification": "native",
@@ -402,6 +407,12 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/device-recording.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Wizard Shell (android/shell) background recording adapter over wizardDevicePort; a no-op elsewhere."
     },
     "core/deeplink.js": {
       "loadedBy": [
