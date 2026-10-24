@@ -222,7 +222,8 @@ window.WosChatPower = function chatPower(A) {
     const ag = agentOfWin(w, s) || (w.thread === '__new__' && cur?.agent && AG?.isOther(cur.agent) ? AG.get(cur.agent) || null : null);
     const priv = !!ag && AG?.isPrivate(ag);
     const full = cur?.model ? (ag ? AG.modelName(ag, cur.model) : M.name(cur.model, cur.provider)) : 'default';
-    const label = cur?.model ? (ag ? full : M.short(cur.model, cur.provider)) : M.ready ? 'Default model' : 'Model';
+    // Agents get the same short family name as the main chat (Fable, Opus, GLM 5.3), never a raw id like claude-fable-5-1.
+    const label = cur?.model ? (M.short(cur.model, cur.provider || ag?.model?.provider) || full) : M.ready ? 'Default model' : 'Model';
     const secure = !ag && !!cur?.provider && !!M.ours?.() && !!M.isPrivateRoute?.(cur.provider);
     return `<button type="button" class="ch-model${ag ? ' agent' : ''}${priv || secure ? ' private' : ''}" data-chmodel aria-label="Model: ${esc(full)}${priv ? ', private' : ''}. Change model" title="${esc(cur?.model || '')}">${priv || secure ? (AG?.lock?.() || '') : ''}${esc(label)}<i aria-hidden="true">▾</i></button>`;
   }
@@ -524,7 +525,10 @@ window.WosChatPower = function chatPower(A) {
     // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
     const priv = !agent && !A.winAgent(w) && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
     openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false, agent, priv, pop: !!pop && mode !== 'retry' });
-    if (!M.ready) M.load().then(() => { if (sheet?.type === 'model') paint(sheet.pane, A.elOf(sheet.pane)); });
+    // Revalidate on every open (stale-while-revalidate): a model that appears or disappears server-side (an account
+    // gains Astra, a provider logs out) shows in the open sheet without reloading Wizard. Repaint only on change.
+    const key = () => M.options.map(o => `${o.provider}/${o.value}`).join('|'), before = M.ready ? key() : null;
+    M.load(M.ready).then(() => { if (sheet?.type === 'model' && key() !== before) paint(sheet.pane, A.elOf(sheet.pane)); });
   }
   function openFiles(pane) {
     if (!F) return;

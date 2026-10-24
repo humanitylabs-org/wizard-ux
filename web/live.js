@@ -626,8 +626,11 @@
           window.WosModels?.reconcile(list);
           this.agentSessions[id] = list; this.agentStatus[id] = { ok: true, error: '', at: Date.now() };
         } catch (e) {
+          // Same contract as the main list: a failed refresh keeps the threads already shown and marks them
+          // Not up to date (with the real last-read time); only an agent never read yet shows the connection card.
+          const prev = this.agentStatus[id], error = e.status === 403 ? 'access' : 'offline';
           this.agentSessions[id] = this.agentSessions[id] || [];
-          this.agentStatus[id] = { ok: false, error: e.status === 403 ? 'access' : 'offline', at: Date.now() };
+          this.agentStatus[id] = prev?.ok && error !== 'access' ? { ok: true, error, at: prev.at } : { ok: false, error, at: Date.now() };
         }
       }));
       let migrated = false, state = merge(readLocal(),this.seen) || {initializedAt:Date.now(),threads:{}};

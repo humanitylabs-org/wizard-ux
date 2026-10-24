@@ -4,7 +4,21 @@
   'use strict';
   if (window.WizAppServices) return;
   const VERSION = 1, ORIGIN = location.origin, frames = new Map();
-  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.receive', 'share.targets', 'share.pending', 'share.ack', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set']);
+  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.receive', 'share.targets', 'share.pending', 'share.ack', 'voice.transcribe', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set', 'orb.set', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget']);
+
+  // Fingerprint vault (Android app only): one small secret per app, sealed on this phone by a Keystore key that
+  // only a fingerprint unlocks. The shell names the app (st.appId), so apps can never ask for each other's secret.
+  let vaultSeq = 0, vaultBound = null; const vaultWaits = new Map();
+  function vaultPort() { const p = window.wizardVaultPort; if (!p?.postMessage) return null; if (vaultBound !== p) { vaultBound = p; p.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (_) { return; } const w = vaultWaits.get(m?.id); if (!w) return; vaultWaits.delete(m.id); clearTimeout(w.timer); m.ok ? w.resolve(m.result || {}) : w.reject(Object.assign(new Error(m.error || 'failed'), { code: m.error || 'failed' })); }; } return p; }
+  function vaultCall(appId, method, extra = {}) {
+    const p = vaultPort(); if (!p) return Promise.resolve(method === 'has' ? { available: false, saved: false } : Promise.reject(Object.assign(new Error('unavailable'), { code: 'unavailable' })));
+    const id = 'vault-' + (++vaultSeq);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { vaultWaits.delete(id); reject(Object.assign(new Error('timeout'), { code: 'timeout' })); }, 120000);
+      vaultWaits.set(id, { resolve, reject, timer });
+      try { p.postMessage(JSON.stringify({ ...extra, id, v: 1, appId, method })); } catch (e) { clearTimeout(timer); vaultWaits.delete(id); reject(e); }
+    });
+  }
   let registry, available = null, serial = 0, rootArm = null;
   // Share receiving (docs/SHARE-SHEET.md): the share sheet hands its per-app ops here once, at shell load, before
   // any app frame exists; they are never on a global, so a frame reaches only its own app id's items.
@@ -12,6 +26,16 @@
   const claimShare = ops => { if (shareOps || !ops) return false; shareOps = ops; return true; };
   const uid = () => 'as-' + (++serial) + '-' + Math.random().toString(36).slice(2);
   const fault = message => new Error(message);
+  // Apps use the box's one configured transcriber; no microphone or provider credentials cross the frame.
+  async function transcribeFile(file, opts = {}) {
+    if (!file || !['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(file)) || !file.size || file.size > 25 * 1024 * 1024) throw fault('Use an audio file up to 25 MB');
+    if (opts.language != null && (typeof opts.language !== 'string' || !/^[a-zA-Z-]{0,35}$/.test(opts.language))) throw fault('Invalid transcription language');
+    const config = window.WizConfig;
+    await config?.ready;
+    if (!config?.transcribe || !config.endpoint('transcribe')) return { unavailable: true };
+    try { const result = await config.transcribe(file, { language: opts.language || '', prompt: config.voicePrompt?.() || '' }); return { text: String(result.text || '').trim() }; }
+    catch (e) { if (e.code === 'no_voice') return { unavailable: true }; throw e; }
+  }
   function apps() { if (!registry) registry = [window.WizCore.apps('mobile'), window.WizCore.apps('desktop')]; return registry.flatMap(r => r.APPS); }
   function registered(st) {
     const a = apps().find(a => a.id === st.appId && a.kind !== 'native' && a.url);
@@ -34,7 +58,7 @@
   }
   function from(source) { return [...frames.values()].find(st => st.frame.contentWindow === source); }
   const changed = () => window.dispatchEvent(new CustomEvent('wizard:app-holds'));
-  function reset(st) { if (st.tools) setTools(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
+  function reset(st) { window.WizBackgroundAudio?.duck?.(st, false); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
   function reconcile() {
     for (const st of frames.values()) {
       if (st.tools && st.frame.isConnected && !barOf(st)?.querySelector(':scope > .wtools')) paintTools(st);
@@ -124,6 +148,25 @@
     bar.classList.add('has-tools');
     return true;
   }
+  /* App orb claims: one fixed icon set, a short label, the app's own registry colour. The shell decides when it shows. */
+  const ORB_ICONS = new Set(['plus', 'mic', 'record', 'stop', 'send', 'search', 'edit']);
+  let orbShown = () => false;
+  function setOrb(st, spec) {
+    const icon = spec && ORB_ICONS.has(spec.icon) ? spec.icon : null;
+    const next = icon ? { icon, label: String(spec.label || '').replace(/[\x00-\x1f]/g, '').slice(0, 40) } : null;
+    if (JSON.stringify(next) === JSON.stringify(st.orb || null)) return orbShown(st.frame);
+    st.orb = next; window.dispatchEvent(new CustomEvent('wizard:app-orb', { detail: { appId: st.appId } }));
+    return orbShown(st.frame);
+  }
+  function orbOf(frame) {
+    const st = frames.get(frame); if (!st?.orb || !valid(st, st.doc)) return null;
+    const a = apps().find(x => x.id === st.appId);
+    return Object.freeze({ appId: st.appId, name: a?.name || st.appId, icon: st.orb.icon, label: st.orb.label || a?.name || st.appId, colors: Array.isArray(a?.colors) ? a.colors.slice(0, 2) : (a?.g || []) });
+  }
+  function orbTap(frame) {
+    const st = frames.get(frame); if (!st?.orb || !valid(st, st.doc)) return false;
+    try { st.frame.contentWindow.postMessage({ type: 'wizard:app:orb', version: VERSION }, ORIGIN); return true; } catch (_) { return false; }
+  }
   function setTools(st, list) { st.tools = cleanTools(st, list); return paintTools(st); }
   function connect(source, client) {
     const st = from(source); if (!valid(st)) return null;
@@ -176,6 +219,16 @@
     return Object.freeze({ version: VERSION, appId: st.appId,
       ready() { check(); return { version: VERSION, hosted: true, appId: st.appId }; },
       badge: Object.freeze({ set(n) { check(); setBadge(st.appId, n); st.badged = true; return true; } }),
+      // Lower Wizard Music while this app plays a short sound; duck(false) restores it. Resolves true when ducked.
+      audio: Object.freeze({ duck(on) { check(); return window.WizBackgroundAudio?.duck ? window.WizBackgroundAudio.duck(st, !!on) : Promise.resolve(false); } }),
+      orb: Object.freeze({ set(spec) { check(); return setOrb(st, spec); }, shown() { check(); return orbShown(st.frame); } }),
+
+      vault: Object.freeze({
+        has() { check(); return vaultCall(st.appId, 'has'); },
+        seal(secret, title) { check(); return vaultCall(st.appId, 'seal', { secret: String(secret ?? ''), title: String(title || '') }); },
+        open(title) { check(); return vaultCall(st.appId, 'open', { title: String(title || '') }); },
+        forget() { check(); return vaultCall(st.appId, 'forget'); },
+      }),
       titlebar: Object.freeze({ set(list) { check(); return setTools(st, list); },
         shown() { check(); const b = barOf(st)?.querySelector(':scope > .wtools'); return !!b && b.getClientRects().length > 0 && b.offsetHeight > 0; } }),
       view: Object.freeze({ isVisible() { check(); return !document.hidden && st.isVisible?.() === true; } }),
@@ -219,6 +272,7 @@
         targets(list) { check(); return !!shareOps?.setTargets(st.appId, list); },
         pending() { check(); return shareOps?.pending(st.appId, { owner: st, alive: () => frames.get(st.frame) === st && st.frame.isConnected && valid(st, st.doc) }) || []; },
         ack(id) { check(); return typeof id === 'string' && !!shareOps?.ack(st.appId, id); } }),
+      voice: Object.freeze({ async transcribe(file, opts) { check(); const result = await transcribeFile(file, opts); check(); return result; } }),
       theme: Object.freeze({ get() { check(); return window.WizAppearance?.get(frameOf(st)) || null; } }),
       update: Object.freeze({ hold, available() { check(); return available; } }),
       capture: Object.freeze({ start,
@@ -305,6 +359,7 @@
       if (d.op === 'ready') value = svc.ready();
       if (d.op === 'share.text') value = await svc.share.text(d.args);
       if (d.op === 'share.file') value = await svc.share.file(d.args?.file, d.args?.options);
+      if (d.op === 'voice.transcribe') value = await svc.voice.transcribe(d.args?.file, { language: d.args?.language });
       if (d.op === 'share.receive') value = svc.share.receive(d.args);
       if (d.op === 'share.targets') value = svc.share.targets(d.args?.targets);
       if (d.op === 'share.pending') value = svc.share.pending();
@@ -313,7 +368,11 @@
       if (d.op === 'capture.ack') value = await svc.capture.ack(d.args?.id);
       if (d.op === 'update.hold') { const h = svc.update.hold(d.args?.reason), id = uid(); st.messageHolds ||= new Map(); st.messageHolds.set(id, h); value = id; }
       if (d.op === 'badge.set') value = svc.badge.set(d.args?.n);
+      if (d.op === 'audio.duck') value = await svc.audio.duck(d.args?.on === true);
+
+      if (d.op.startsWith('vault.')) { try { value = await svc.vault[d.op.slice(6)](d.op === 'vault.seal' ? d.args?.secret : d.args?.title, d.args?.title); } catch (err) { reply(null, 'vault:' + (err.code || 'failed')); return; } }
       if (d.op === 'titlebar.set') value = svc.titlebar.set(d.args?.tools);
+      if (d.op === 'orb.set') value = svc.orb.set(d.args?.spec);
       if (d.op === 'update.release') { st.messageHolds?.get(d.args?.id)?.release(); st.messageHolds?.delete(d.args?.id); value = true; }
       reply(value);
     } catch (err) { reply(null, String(err.message || err).slice(0, 200)); }
@@ -515,6 +574,7 @@
     sweepTimer = setTimeout(() => { sweepTimer = 0; try { appsClosed(openProvider()); } catch (_) {} }, 0);
   }
   window.WizAppServices = Object.freeze({ version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
+    orb: Object.freeze({ of: orbOf, tap: orbTap, presenter(fn) { orbShown = typeof fn === 'function' ? fn : () => false; } }),
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     update: Object.freeze({ busy, announce, available: () => available, reloadPlan, prepareReload, frames: updateFrames }),
