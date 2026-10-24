@@ -97,10 +97,21 @@ let passed=0;const ok=(v,s)=>{assert.ok(v,s);console.log('PASS '+s);passed++;};
   let newDelivery;
   for(let i=0;i<100;i++){const rs=await p.request.get(origin+'/__qa/records').then(r=>r.json());newDelivery=rs.find(x=>/\/api\/sessions\/[^/]+\/chat\/stream$/.test(x.path)&&JSON.stringify(x.body).includes('/pages/'+docSlug+'/'));if(newDelivery)break;await p.waitForTimeout(200);}
   ok(newDelivery&&newDelivery.body.session_id!=='wizard_1_pagesqa','['+shell+'] new-thread feedback delivered to newly created session');
+  // A real shared-chat renderer produces the link; only its transcript is fixture data.
+  await ctx.route('**/wizard/hermes/api/sessions/wizard_1_pagesqa/messages*',r=>r.fulfill({json:{data:[{id:1,role:'assistant',content:'[Review page](/pages/'+slug+'/)',timestamp:Date.now()/1000}],has_more:false}}));
+  await p.goto(entry);await p.waitForFunction(()=>window.__wux || window.__wos);
+  await p.evaluate(()=>window.__wux ? __wux.openThread('wizard_1_pagesqa') : __wos.openWizardThread('wizard_1_pagesqa'));
+  await p.locator('a[href="/pages/'+slug+'/"]').first().click();
+  await p.locator('.pg-frame[src="/pages/'+slug+'/"]').waitFor();
+  ok(await p.evaluate(()=>!(window.__wux || window.__wos).links.isOpen()),'['+shell+'] chat page link opens Pages viewer, not generic sheet');
   // Availability fallback on the very same Agent Service; no launcher tile or JS exceptions.
   await ctx.route('**/wizard/v1/pages',r=>r.fulfill({status:404,contentType:'application/json',body:'{"error":"not_found"}'}));
   await p.goto(entry);await p.waitForFunction(()=>window.WizCore?.appsLoaded&&window.WosPages);await p.evaluate(()=>WizCore.appsLoaded());
   ok(await p.evaluate(()=>!WosPages.available&&!WizCore.apps(document.documentElement.dataset.shell).APPS.some(a=>a.id==='pages')&&!WosPages.match('/pages/anything/')),'['+shell+'] absent API hides tile and leaves link sheet fallback');
+  await p.evaluate(()=>window.__wux ? __wux.openThread('wizard_1_pagesqa') : __wos.openWizardThread('wizard_1_pagesqa'));
+  await p.locator('a[href="/pages/'+slug+'/"]').first().click();
+  await p.waitForFunction(()=>(window.__wux || window.__wos).links.isOpen());
+  ok(await p.evaluate(()=>(window.__wux || window.__wos).links.isOpen()),'['+shell+'] absent API chat link uses normal link sheet');
   ok(errors.length===0,'['+shell+'] no page errors: '+JSON.stringify(errors));
   await ctx.close();
  }
