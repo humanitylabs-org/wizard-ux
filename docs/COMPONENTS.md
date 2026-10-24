@@ -50,6 +50,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Agent identity, glyph, hue | `WosAgents` (`web/core/agents.js`) | hard-coded agent names or colours |
 | App routing to an agent | `WosAppRoute` (`web/core/app-route.js`) | — |
 | App glyph tiles | `WizSigil` (`web/core/sigils.js`, `web/core/sigils.css`) | PNG/emoji icons |
+| App kinds (Apps / Agent apps / Agents / Connectors, system ring, "+ Get" store sections) for the phone launcher, New desk and desktop selector | `WosAppKinds` (`web/core/app-kinds.js`) | per-shell connector or system lists |
 | Brand hat | `WizBrand` (`web/core/brand.js`) | redrawn logos |
 | Links: in-app sheet, image links | `WizLinks` (`web/core/links.js`) | `window.open`, own iframe sheet |
 | Text-selection actions | `WosSelMenu` (`web/core/sel-menu.js`) | own context menu |
