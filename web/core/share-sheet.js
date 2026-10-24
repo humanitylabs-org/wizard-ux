@@ -86,7 +86,7 @@
     prune();
     const id = 'sh-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
     pendingItems.push({ id, appId, payload, target: target || null, at: Date.now() });
-   
+
     if (window.WizOpenApp(appId) === false) { ack(appId, id); return false; }
     // An app already open pulls now; a fresh frame pulls when it registers.
     window.dispatchEvent(new CustomEvent('wizard:share-pending', { detail: { appId } }));
