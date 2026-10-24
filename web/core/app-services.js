@@ -8,6 +8,17 @@
   let registry, available = null, serial = 0, rootArm = null;
   const uid = () => 'as-' + (++serial) + '-' + Math.random().toString(36).slice(2);
   const fault = message => new Error(message);
+  // Vault is an independent op group. Native uses the one device envelope, never an app-supplied appId.
+  for (const op of ['vault.has', 'vault.seal', 'vault.open', 'vault.forget']) OPS.add(op);
+  async function vaultCall(appId, method, extra = {}) {
+    if (!window.wizardDevicePort?.postMessage || !window.WizCore?.bridge?.call) {
+      if (method === 'has') return { available: false, saved: false };
+      throw Object.assign(new Error('unavailable'), { code: 'unavailable' });
+    }
+    try { return await window.WizCore.bridge.call('vault.' + method, { ...extra, appId }); }
+    catch (e) { throw Object.assign(new Error(e.message || 'failed'), { code: e.message === 'unknown method' ? 'unavailable' : e.message || 'failed' }); }
+  }
+
   function apps() { if (!registry) registry = [window.WizCore.apps('mobile'), window.WizCore.apps('desktop')]; return registry.flatMap(r => r.APPS); }
   function registered(st) {
     const a = apps().find(a => a.id === st.appId && a.kind !== 'native' && a.url);
@@ -168,6 +179,8 @@
           resume() { check(); if (!session.resume) return Promise.reject(fault('Capture resume unavailable')); return session.resume(); } });
       } catch (e) { release(); throw e; }
     };
+    // Recheck the exact requesting document after the biometric prompt as well as before it.
+    const vault = async (method, extra) => { check(); const result = await vaultCall(st.appId, method, extra); check(); return result; };
     source.addEventListener('pagehide', () => { if (st.doc === doc) reset(st); }, { once: true });
     return Object.freeze({ version: VERSION, appId: st.appId,
       ready() { check(); return { version: VERSION, hosted: true, appId: st.appId }; },
@@ -224,6 +237,12 @@
         current() {check();return window.WizAppCapture?.current?.(st.appId) || null;},
         pending() { check(); if (!window.WizAppCapture) return Promise.reject(fault('Shared capture unavailable')); return window.WizAppCapture.pending(st.appId); },
         ack(id) { check(); if (!window.WizAppCapture) return Promise.reject(fault('Shared capture unavailable')); return window.WizAppCapture.ack(st.appId, id); } }),
+      vault: Object.freeze({
+        has: () => vault('has'),
+        seal: (secret, title) => vault('seal', { secret, title }),
+        open: title => vault('open', { title }),
+        forget: () => vault('forget'),
+      }),
       alive() { check(); return true; },
     });
   }
@@ -293,6 +312,7 @@
       if (d.op === 'capture.ack') value = await svc.capture.ack(d.args?.id);
       if (d.op === 'update.hold') { const h = svc.update.hold(d.args?.reason), id = uid(); st.messageHolds ||= new Map(); st.messageHolds.set(id, h); value = id; }
       if (d.op === 'badge.set') value = svc.badge.set(d.args?.n);
+      if (d.op.startsWith('vault.')) { try { value = await svc.vault[d.op.slice(6)](d.op === 'vault.seal' ? d.args?.secret : d.args?.title, d.args?.title); } catch (err) { reply(null, 'vault:' + (err.code || 'failed')); return; } }
       if (d.op === 'titlebar.set') value = svc.titlebar.set(d.args?.tools);
       if (d.op === 'update.release') { st.messageHolds?.get(d.args?.id)?.release(); st.messageHolds?.delete(d.args?.id); value = true; }
       reply(value);

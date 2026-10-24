@@ -25,6 +25,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Share text or a file out | `WizardApp.share.text / file` | `navigator.share` | cancelled is not reported as shared |
 | Mic, camera, screen capture | `WizardApp.capture.start / pending / ack` | `getUserMedia`, `MediaRecorder` | pending capture survives Back and is acked once |
 | Title-bar tools | `WizardApp.titlebar.set(tools)` | an app header repeating the title | tools appear in the shell title bar |
+| Keep one small app secret behind the phone's strong biometric | `WizardApp.vault.has / seal / open / forget` (`web/core/app-client.js`, `app-services.js`; `wizardDevicePort` vault adapter in `vault/VaultBridge.java`) | app-owned native ports, server-side sealed copies, Wizard ID key aliases | cancel/reload never releases plaintext; frame cannot select another app's key |
 | Protect unsaved work from updates | `WizardApp.update.hold` | app service worker, forced reload | hold released only after save + readback |
 | Reading place in an app document | shell-owned `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic for registered apps | app-local scroll store | reopen lands at the saved place |
 | Motion, haptics, press feel | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own spring/haptic helpers | — |
