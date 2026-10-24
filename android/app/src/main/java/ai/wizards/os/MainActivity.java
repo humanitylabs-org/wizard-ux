@@ -656,7 +656,7 @@ public class MainActivity extends Activity {
         if (!(this instanceof AppSessionActivity)) current = new java.lang.ref.WeakReference<>(this);
         if (device == null) return;
         device.onStart();
-        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.front());
+        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.shellFront());
         ai.wizards.os.everywhere.EverywhereOutbox.get(this).pump();
         ai.wizards.os.mizel.MeetingRecorderService.recover(this); // a meeting cut off by a process death is closed and uploaded
     }
@@ -664,7 +664,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onStop() {
         if (device != null) device.onStop();
-        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.front());
+        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.shellFront());
         super.onStop();
     }
 
