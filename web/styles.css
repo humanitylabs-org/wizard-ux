@@ -266,6 +266,10 @@ body {
   -webkit-backdrop-filter: blur(20px) saturate(1.4); backdrop-filter: blur(20px) saturate(1.4);
   box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
 }
+/* A long take never grows the card off screen: the header (with ×) and chips stay visible, the words scroll. */
+.transcript:not(.brief) { display: flex; flex-direction: column; max-height: min(44dvh, calc(100dvh - var(--safe-t) - var(--safe-b) - 300px)); }
+.transcript:not(.brief) #txText { flex: 0 1 auto; min-height: 25px; overflow-y: auto; overscroll-behavior: contain; }
+.transcript:not(.brief) .tx-route, .transcript:not(.brief) .tx-chips { flex: none; }
 .voice.tx .transcript { opacity: 1; transform: none; pointer-events: none; }
 .voice.tx .transcript:has(.tx-chips:not(:empty)) { pointer-events: auto; }
 .voice.cmd .transcript { bottom: calc(var(--safe-b) + 172px); }
