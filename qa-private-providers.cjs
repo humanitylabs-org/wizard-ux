@@ -2,6 +2,7 @@
 // node qa-private-providers.cjs [output-directory]
 const {chromium}=require('./tools/qa-playwright.cjs'), http=require('node:http'), fs=require('node:fs'), path=require('node:path'), assert=require('node:assert/strict');
 const OUT=path.resolve(process.argv[2]||'qa-private-providers-out');fs.mkdirSync(OUT,{recursive:true});
+const WEB=path.resolve(process.env.QA_WEB_DIR||path.join(__dirname,'web'));
 const providers=[{id:'wizard-tinfoil',label:'Tinfoil',kind:'attested-relay',confidential:true,available:true,models:[{id:'relay-model',label:'Relay model'}]}, {id:'wizard-local-model',label:'Local model',kind:'local',confidential:true,available:true,models:[{id:'owned-model',label:'Owned model'}]}, {id:'another-relay',label:'Another relay',kind:'attested-relay',confidential:true,available:false,models:[]}];
 const agent=(id,label,provider,model,privacy='private')=>({id,label,privacy,harness:'hermes',status:'running',is_default:id==='hermes',model:{provider,model,allowed_models:[model],fallback:privacy!=='private'},permissions:{preset:privacy,outside_tools:[],files:'own',wizard_apps:[],agent_apps:[],other_agents:'none'}});
 const agents=[agent('hermes','Atlas','anthropic','claude-opus-5-5','standard'),agent('sealed','Relay agent','tinfoil','relay-model'),agent('owned','Owned agent','wizard-local-model','owned-model')];
@@ -21,7 +22,7 @@ const server=http.createServer((req,res)=>{
  if(p.startsWith('/wizard/'))return json(res,{apps:[],bindings:[],data:[],has_more:false,state:{},presets:[]});
  let rel=p.replace(/^\/wizard-os-home\//,'')||'index.html';if(rel.endsWith('/'))rel+='index.html';
  if(rel.includes('..')||rel==='sw.js'){res.writeHead(404);return res.end();}
- const file=path.join(__dirname,'web',rel);if(!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);return res.end();}
+ const file=path.join(WEB,rel);if(!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);return res.end();}
  const type={'.js':'application/javascript','.css':'text/css','.html':'text/html','.png':'image/png','.svg':'image/svg+xml','.json':'application/json','.webmanifest':'application/manifest+json','.woff2':'font/woff2'}[path.extname(file)]||'application/octet-stream';
  res.writeHead(200,{'content-type':type,'content-security-policy':CSP,'cache-control':'no-store'});res.end(fs.readFileSync(file));
 });
@@ -31,8 +32,9 @@ async function shot(page,name){const p=path.join(OUT,'pp-ux-'+name+'.png');await
 async function selectSkin(p,f,mobile,skin){
  // Real Settings → Skin control, not token injection.
  if(mobile)await p.evaluate(()=>__wos.openSheet('settings'));else await p.locator('#settingsBtn').click();
+ await p.locator('[data-st-page="appearance"]').filter({visible:true}).click();
  await p.locator(`[data-skinpick="${skin}"]`).last().click();
- if(mobile)await p.evaluate(()=>__wos.closeSheets(true));else await p.keyboard.press('Escape');
+ if(mobile)await p.evaluate(()=>__wos.closeSheets(true));else {await p.keyboard.press('Escape');await p.keyboard.press('Escape');}
  await f.waitForFunction(s=>document.documentElement.dataset.skin===s,skin);
 }
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}/wizard-os-home/`;
@@ -100,7 +102,8 @@ async function selectSkin(p,f,mobile,skin){
    await check(`${mode} ${skin} ${state} provider discovery does not nag`,async()=>{
     assert.equal(await f.locator('[data-store]').count(),0);
     assert.equal(await f.locator('[data-pick="provider"]').count(),state==='legacy'?0:1);
-    if(state==='unavailable')assert.match(await f.locator('#app').innerText(),/Unavailable/);
+    if(state!=='legacy')await f.locator('[data-pick="provider"]').click();
+    if(state==='unavailable'){assert.match(await f.locator('#app').innerText(),/Unavailable/);assert.equal(await f.locator('[data-next]').isDisabled(),true);}
    });
    await shot(p,`${mode}-${skin}-${state}-providers`);
    if(mobile)await p.evaluate(()=>__wosNativeBack());else await f.locator('[data-back]').first().click();
@@ -109,13 +112,13 @@ async function selectSkin(p,f,mobile,skin){
   }
  }
  await check(mode+' root browser Back never exits the shell',async()=>{
-  await p.goBack();assert.ok(p.url().includes('/wizard-os-home/'));assert.ok(await p.locator('body').count());
+  await p.evaluate(()=>history.back());await p.waitForTimeout(400);assert.ok(p.url().includes('/wizard-os-home/'));assert.ok(await p.locator('body').count());
  });
  scenario='installed';await ctx.close();
  }
  const standalone=await browser.newPage({viewport:{width:412,height:892}});await standalone.goto(base+'agents/index.html');await standalone.waitForSelector('[data-open="owned"]');
  await check('standalone Agents has dark fallback',async()=>{assert.equal(await standalone.evaluate(()=>getComputedStyle(document.documentElement).colorScheme),'dark');assert.notEqual(await standalone.evaluate(()=>getComputedStyle(document.body).backgroundColor),'rgba(0, 0, 0, 0)');});await shot(standalone,'standalone-dark');await standalone.close();
- console.log('RESULT',JSON.stringify({checks:checks.length,errors,writes,screens},null,2));assert.equal(errors.length,0);
+ console.log('RESULT',JSON.stringify({checks:checks.length,errors,writes,screens},null,2));assert.equal(errors.length,0);assert.equal(writes.length,0);
  fs.writeFileSync(path.join(OUT,'results.json'),JSON.stringify({checks,errors,writes,screens},null,2));
  fs.rmSync(path.join(OUT,'failure.json'),{force:true});
 })().catch(async e=>{console.error(e);process.exitCode=1;console.log('FRAME STATE',await lastFrame?.evaluate(()=>({state:window.__agents?.state(),text:document.body.innerText})).catch(()=>null));await lastPage?.screenshot({path:path.join(OUT,'failure.png')}).catch(()=>{});fs.writeFileSync(path.join(OUT,'failure.json'),JSON.stringify({error:String(e),checks,errors},null,2));}).finally(async()=>{if(browser)await browser.close();server.close();});

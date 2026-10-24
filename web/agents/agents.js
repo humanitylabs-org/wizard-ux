@@ -163,7 +163,7 @@
   }
   function stepOk(d, step) {
     if (step === 0) return !!d.label.trim() && !!d.harness;
-    if (step === 1) return !!d.provider && !!d.model;
+    if (step === 1) return !!d.provider && !!d.model && provider(d.provider)?.available === true;
     if (step === 2) return !!d.preset && !privateBlocked(d);
     return false;
   }
@@ -266,7 +266,7 @@
         <div class="ag-kv"><span>Model</span><b>${esc(AG.modelName(a, a.model.model) || '—')}</b></div>
         <div class="ag-kv"><span>Allowed in chats</span><b>${esc(allowed.map(m => AG.modelName(a, m)).join(', ') || '—')}</b></div>
         <div class="ag-kv"><span>Fallback</span><b>${a.model.fallback ? 'On' : 'Off'}</b></div>
-        ${editable && (p?.models?.length || 0) > 1 ? '<button type="button" class="ag-add" data-model>Change model</button>' : ''}
+        ${editable && p?.available !== false && (p?.models?.length || 0) > 1 ? '<button type="button" class="ag-add" data-model>Change model</button>' : ''}
         ${p?.available === false ? '<p class="ag-note bad" data-provider-unavailable>Provider unavailable. This agent waits; it never falls back to a public provider.</p>' : ''}
         ${a.privacy === 'private' ? `<p class="ag-note" data-privacy-promise>${esc(AG.privacyPromise(p))}</p><p class="ag-note">No fallback. Its chats can only use the models above.</p>` : ''}</div>
       <div class="ag-sec">Permissions<small>Preset: ${esc(preset(a.permissions.preset).label)}</small></div>

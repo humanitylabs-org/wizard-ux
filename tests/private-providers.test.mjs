@@ -94,6 +94,12 @@ test('installed unavailable Tinfoil overrides legacy policy, even with advertise
   assert.match(root.innerHTML,/data-provider-unavailable/);
   await assert.rejects(M.resolveRoute({agent:'private',model:'relay-model'}),/can’t use/);
 });
+test('unavailable provider stays visible but cannot advance new-agent creation',async()=>{
+  const {ctx,root,click}=await setup({ui:true,rows:[{...providers[0],available:false}]});
+  ctx.__agents.state().draft.label='New';click({next:''});click({pick:'provider',v:'wizard-tinfoil'});
+  assert.match(root.innerHTML,/Unavailable/);assert.match(root.innerHTML,/data-next disabled/);
+  click({next:''});assert.equal(ctx.__agents.state().view.step,1);
+});
 test('nested Agents Back closes sheet, detail then stays at root without navigating',async()=>{
   const {ctx,click}=await setup({ui:true,query:'?agent=private',agents:[agent('private','wizard-local-model','owned-model')]});
   click({rename:''});assert.equal(ctx.__agents.state().sheet,'rename');ctx.__agents.back();
