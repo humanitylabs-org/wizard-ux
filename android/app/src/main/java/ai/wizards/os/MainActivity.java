@@ -112,6 +112,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        ScrollCaptureCrashGuard.install();
         if (ai.wizards.os.device.AppState.origin(this).isEmpty()) {
             startActivity(new Intent(this, ConnectActivity.class)); finish(); return;
         }
@@ -172,7 +173,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(false);
         s.setSupportMultipleWindows(false);
-        s.setUserAgentString(s.getUserAgentString() + UA_TAG);
+        s.setUserAgentString(s.getUserAgentString() + UA_TAG + " WizardOS-DocScroll");
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         web.addJavascriptInterface(new Bridge(), "WizardOSNative");
@@ -254,7 +255,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
             @Override
             public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
-                if (view instanceof SelectionWebView) ((SelectionWebView)view).refreshScrollProxy();
                 // A commit (also a same-document hop). Never fires for a load that was abandoned or still hangs.
                 if (isWeb(url) && !mainFailed && sameHost(url, wantUrl) && reach != null && reach.isShowing() && !reach.isOffline()) landed();
             }
@@ -268,7 +268,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
-                if (view instanceof SelectionWebView) ((SelectionWebView)view).scrollPageStarted();
                 if (device != null) device.onPageStarted();
                 pageUrl = url;
                 screenCaptureId = null;
@@ -278,7 +277,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                if (view instanceof SelectionWebView) ((SelectionWebView)view).installScrollProxy();
                 topSent = -1; cutoutSent = -1; reportTop(topPx); reportCutout(cutoutPx); // a reload starts fresh: push both again
             }
 
@@ -720,7 +718,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     public void onWindowFocusChanged(boolean hasFocus) {
         if(!hasFocus)ScrollCaptureDiagnostics.arm("window-focus-lost");
         ScrollCaptureDiagnostics.record("Activity.onWindowFocusChanged",ScrollCaptureDiagnostics.fields("hasFocus",hasFocus));
-        if(web!=null) {web.recordProxyState();web.refreshScrollProxy();}
         super.onWindowFocusChanged(hasFocus);
         if(hasFocus)ScrollCaptureDiagnostics.resumed(this);
         if (hasFocus && immersive) applyImmersive(true); // a dialog or the shade can bring the bars back
@@ -801,7 +798,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     protected void onPause() {
         ScrollCaptureDiagnostics.arm("activity-pause");
         ScrollCaptureDiagnostics.record("Activity.onPause",ScrollCaptureDiagnostics.fields());
-        if(web!=null)web.recordProxyState();
         if (web != null && !(this instanceof AppSessionActivity)) web.evaluateJavascript(WizardLook.READ_JS, raw -> WizardLook.save(this, raw)); // the reach/Connect screens wear the last skin
         if (this instanceof AppSessionActivity && web != null) web.evaluateJavascript("window.__wosSessionCheckpoint?.()", null);
         if (mizel != null) mizel.setPcmForeground(false);
