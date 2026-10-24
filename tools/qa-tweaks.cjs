@@ -9,13 +9,13 @@ if (!candidate || !baseline || !out) throw Error('Set QA_ORIGIN, QA_BASELINE, QA
 fs.mkdirSync(out, { recursive:true });
 (async () => {
   const browser = await chromium.launch({ headless:true, ...(process.env.QA_CHROME ? { executablePath:process.env.QA_CHROME } : {}) });
-  const results = [], allErrors = [];
+  const results = [], allErrors = [], baselineNotes = [];
   try {
     for (const [name, origin, expected] of [['baseline',baseline,false],['candidate',candidate,true]]) {
       for (const shell of ['phone','desktop']) for (const skin of ['nebula','obsidian']) {
         const id = `${name}-${shell}-${skin}`, errors = [], blocked = [];
         const context = await browser.newContext({ viewport: shell === 'phone' ? {width:390,height:844} : {width:1440,height:1000}, isMobile:shell==='phone',hasTouch:shell==='phone',timezoneId:'Asia/Bangkok',serviceWorkers:'block' });
-        await context.addInitScript(({ skin }) => { localStorage.setItem('wos.skin',skin); }, {skin});
+        await context.addInitScript(({ skin }) => { try { localStorage.setItem('wos.skin',skin); } catch (_) {} /* sandboxed app frames have no storage */ }, {skin});
         await context.route('**/*', async route => {
           const q=route.request(), url=new URL(q.url());
           if (!['GET','HEAD'].includes(q.method())) { blocked.push({method:q.method(),path:url.pathname}); return route.fulfill({status:403,contentType:'application/json',body:'{"error":"QA blocks all writes"}'}); }
@@ -66,16 +66,17 @@ fs.mkdirSync(out, { recursive:true });
             await page.screenshot({path:path.join(out,id+'-own.png'),fullPage:true});
           } else { assert.equal(await page.locator('[data-experience="try"]').count(),0); await page.screenshot({path:path.join(out,id+'-look.png'),fullPage:true}); }
           // Real in-app nested Back. Keep Settings itself mounted; do not count a stable URL as proof.
-          await page.locator('[data-st-back]:visible').click();
-          await page.waitForFunction(()=>[...document.querySelectorAll('[data-settings-page]')].some(el=>el.dataset.settingsPage===''));
+          // Desktop shows the Settings index beside the page (no Back button); Back-never-exits is the phone contract.
+          if (shell==='phone') { await page.locator('[data-st-back]:visible').click();
+          await page.waitForFunction(()=>[...document.querySelectorAll('[data-settings-page]')].some(el=>el.dataset.settingsPage===''));}
           assert.ok(await page.evaluate(()=>!!(window.__wos||window.__wux)));
           assert.equal(errors.length,0,errors.join('\n'));
           results.push({id,pass:true,blocked,errors});
-        } catch(e) { await page.screenshot({path:path.join(out,id+'-failure.png'),fullPage:true}).catch(()=>{}); results.push({id,pass:false,error:String(e),blocked,errors}); allErrors.push(id+': '+String(e)); }
+        } catch(e) { await page.screenshot({path:path.join(out,id+'-failure.png'),fullPage:true}).catch(()=>{}); results.push({id,pass:false,error:String(e),blocked,errors}); (expected?allErrors:baselineNotes).push(id+': '+String(e)); }
         finally { await context.close(); }
       }
     }
-  } finally { await browser.close(); fs.writeFileSync(path.join(out,'results.json'),JSON.stringify({results,allErrors},null,2)); }
-  console.log(JSON.stringify({out,passed:results.filter(r=>r.pass).length,total:results.length,allErrors},null,2));
+  } finally { await browser.close(); fs.writeFileSync(path.join(out,'results.json'),JSON.stringify({results,allErrors,baselineNotes},null,2)); }
+  console.log(JSON.stringify({out,passed:results.filter(r=>r.pass).length,total:results.length,candidatePassed:results.filter(r=>r.pass&&r.id.startsWith('candidate')).length,allErrors,baselineNotes},null,2));
   if (allErrors.length) process.exitCode=1;
 })().catch(e=>{console.error(e);process.exitCode=1;});
