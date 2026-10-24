@@ -165,6 +165,11 @@
         dictate: () => !!need().dictate(),
         cancel: () => need().voiceCancel?.(),
       }),
+      /* The app in front may claim the agent orb as its main button (WizardApp.orb.claim). */
+      app: Object.freeze({
+        orb: () => shell?.appOrb ? shell.appOrb() : null,
+        tap: () => !!shell?.appOrbTap?.(),
+      }),
       orb: Object.freeze({
         /* The dock orb's idle tap: fn() returns true to replace the shell's own talk. */
         onTap(fn) { const g = guard(a, 'orb.onTap', fn); a.taps.add(g); taps.add(g); return () => { a.taps.delete(g); taps.delete(g); }; },
@@ -237,6 +242,7 @@
     const r = shell ? shell.route() : { view: 'desk', thread: null, desk: 0 };
     return Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0, app: r.app || null, agent: r.agent || null });
   }
+  if (isDoc) window.addEventListener('wizard:app-orb', () => { if (layers().length) emit('render', Object.freeze({ part: 'app-orb', el: null })); });
   function emitRoute() {
     if (!layers().length || !shell) return;
     const r = routeOf(), k = `${r.view}|${r.thread || ''}|${r.desk}|${r.app || ''}|${r.agent || ''}`;

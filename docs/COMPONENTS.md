@@ -24,6 +24,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Native Android screens in the worn skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`: shell `--wz-*` roles saved natively, Nebula fallback) | literal colours in native screens |
 | Share text or a file out | `WizardApp.share.text / file` | `navigator.share` | cancelled is not reported as shared |
 | Mic, camera, screen capture | `WizardApp.capture.start / pending / ack` | `getUserMedia`, `MediaRecorder` | pending capture survives Back and is acked once |
+| App's main button on the agent orb (two-orb layout) | `WizardApp.orb.claim({icon, label}, onTap)`, `WizardApp.orb.release()` | a floating action button drawn over the orb | the orb wears the app's icon and colour; tap runs the app action; leaving the view returns the agent orb |
 | Title-bar tools | `WizardApp.titlebar.set(tools)` | an app header repeating the title | tools appear in the shell title bar |
 | Protect unsaved work from updates | `WizardApp.update.hold` | app service worker, forced reload | hold released only after save + readback |
 | Reading place in an app document | shell-owned `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic for registered apps | app-local scroll store | reopen lands at the saved place |
