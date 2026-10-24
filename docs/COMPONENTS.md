@@ -74,7 +74,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 
 | Need | Use | Never hand-roll |
 |---|---|---|
-| The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`); Android mirror `android/app/src/main/assets/assist/everywhere.html` | PNG + CSS spin, Lottie, SVG |
+| The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`); Android `android/app/src/main/assets/assist/everywhere.html`, Screen mode `assist/screen.html` | PNG + CSS spin, Lottie, SVG |
 | Skins, backgrounds, scenery, skin feature switches (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`), `WosSkinHost` (`web/core/skin-host.js`; `WosSkinHost.builtin` gestures every skin wears, e.g. thread swipe-back in `web/core/thread-swipe-back.js`; skin scripts use the same threshold via `api.gesture.intent` with `web/core/swipe-intent.js`), `WosMySkin` (`web/core/my-skin.js`), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own gradients, canvases or colour constants |
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) | own keyframe sets |
 | Tour and help sheet (Talk → Hide → end card; per-step `skipStep()` plus Skip tour) | `WosTour` (`web/core/tour.js`) | — |
