@@ -6,14 +6,16 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../web/core/setup-launch.js', import.meta.url), 'utf8');
-async function launch(data, { tour = true, deep = false, desktop = false, done = false } = {}) {
-  const actions = [];
+async function launch(data, { tour = true, deep = false, desktop = false, done = false, busy = false, tapAt = -1, slow = 0 } = {}) {
+  const actions = [], listeners = {};
   const window = { AbortController, WosTour: { active: false, done: () => done, desk: { active: false } } };
   vm.runInNewContext(source, { window, AbortController, setTimeout, clearTimeout, Date,
-    fetch: async () => ({ ok: true, json: async () => data }), addEventListener() {}, location: { origin: 'https://example.test' } });
-  window.WosSetupLaunch.boot({ firstRunTour: tour, deeplinked: () => deep, ...(desktop ? { alongsideOnly: true } : {}),
+    fetch: async () => { await new Promise(r => setTimeout(r, slow)); return { ok: true, json: async () => data }; },
+    addEventListener(t, f) { (listeners[t] ||= []).push(f); }, location: { origin: 'https://example.test' } });
+  window.WosSetupLaunch.boot({ firstRunTour: tour, deeplinked: () => deep, ...(desktop ? { alongsideOnly: true } : {}), busy: () => busy,
     open: id => actions.push(id), tour: why => actions.push('tour:' + why), markTour: () => actions.push('marked') });
-  await new Promise(resolve => setTimeout(resolve, 800));
+  if (tapAt >= 0) setTimeout(() => (listeners.pointerdown || []).forEach(f => f({})), tapAt);
+  await new Promise(resolve => setTimeout(resolve, 800 + slow));
   return { actions, pending: window.WosSetupLaunch.tourPending, log: window.WosSetupLaunch.log };
 }
 test('alongside first launch starts the orientation once on phone and desktop; Setup never auto-opens', async () => {
@@ -44,4 +46,10 @@ test('unknown modes preserve VM onboarding; deep links are never replaced', asyn
   assert.deepEqual((await launch({ first_run: true, launch_mode: 'unknown' })).actions, ['setup']);
   assert.deepEqual((await launch({ first_run: true, launch_mode: 'alongside' }, { deep: true })).actions, ['marked']);
   assert.deepEqual((await launch({ first_run: true, launch_mode: 'alongside' }, { deep: true, desktop: true })).actions, []);
+});
+test('alongside: never interrupts the owner (Codex #482): a tap before a slow /setup answer, or a take in progress, skips it this launch', async () => {
+  for (const desktop of [false, true]) {
+    assert.deepEqual((await launch({ first_run: true, launch_mode: 'alongside' }, { desktop, slow: 900, tapAt: 300 })).actions, [], 'tapped first');
+    assert.deepEqual((await launch({ first_run: true, launch_mode: 'alongside' }, { desktop, busy: true })).actions, [], 'busy (recording, sheet, typed text)');
+  }
 });

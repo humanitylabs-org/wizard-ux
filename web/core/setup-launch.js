@@ -35,8 +35,14 @@
     } catch (e) { return null; } finally { clearTimeout(t); }
   }
 
+  // The owner already did something (a tap, a key) before the orientation's turn came: never yank them out of it
+  // (Codex, #482: a slow /setup answer let the delayed start cancel an orb take). It simply waits for a later launch.
+  let acted = false;
+  const act = () => { acted = true; };
   function boot(h) {
     if (booted || !h) return; booted = true; H = h;
+    acted = false;
+    try { addEventListener('pointerdown', act, true); addEventListener('keydown', act, true); } catch (e) {}
     const t0 = Date.now();
     let tour = !!h.firstRunTour;
     // Deep links are consumed synchronously at the end of shell boot; decide after that.
@@ -56,7 +62,9 @@
         log('alongside:tour');
         setTimeout(() => {
           if (window.WosTour?.active || window.WosTour?.desk?.active || window.WosTour?.done?.()) return;
-          if (!deeplinked()) H.tour?.('first-run'); else H.markTour?.();
+          if (deeplinked()) return H.markTour?.();
+          if (acted || H.busy?.()) { log('alongside:busy'); return; } // not marked done: the next plain launch offers it
+          H.tour?.('first-run');
         }, Math.max(0, TOUR_DELAY - (Date.now() - t0)));
         return;
       }
