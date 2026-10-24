@@ -632,16 +632,9 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 .ch-compose button.ch-reply-x { flex: 0 0 auto; width: 44px; height: 44px; margin: -6px 0; border-radius: 50%; background: none; border: 0; color: var(--ink-2); font-size: 22px; line-height: 1; box-shadow: none; }
 .ch-compose button.ch-reply-x:hover { color: var(--ink); }
 .ch-rq { margin: 0 0 8px; padding: 5px 10px; border-radius: 10px; border-left: 3px solid color-mix(in srgb, var(--ink) 55%, transparent); background: color-mix(in srgb, var(--bg) 24%, transparent); }
-/* Pull to refresh (core/chats.js bindPull) and the "Not up to date" bar. Tokens only, so every skin re-dresses it. */
-.ch-ptr { flex: none; height: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: var(--ink-3); pointer-events: none; }
-.ch-ptr.out { transition: height .18s ease; }
-.ch-ptr svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s ease; }
-.ch-ptr.go { color: var(--violet-2, var(--ink-2)); }
-.ch-ptr.go svg { transform: rotate(180deg); }
+/* The "Not up to date" bar. Tokens only, so every skin re-dresses it. */
 .ch-sync.stale { color: var(--ink-2); }
 .ch-sync b { font-weight: 600; color: var(--wz-text, var(--ink)); }
-.ch-sync.ok { color: var(--violet-2, var(--ink-2)); }
-@media (prefers-reduced-motion: reduce) { .ch-ptr.out, .ch-ptr svg { transition: none; } }
 
 /* Phone chat reading size. Mobile line-length research puts comfortable reading
    at roughly 35–50 characters (about 7–9 words) per line. At 15px a ~400px
