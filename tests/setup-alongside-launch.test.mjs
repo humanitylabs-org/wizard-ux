@@ -53,3 +53,9 @@ test('alongside: never interrupts the owner (Codex #482): a tap before a slow /s
     assert.deepEqual((await launch({ first_run: true, launch_mode: 'alongside' }, { desktop, busy: true })).actions, [], 'busy (recording, sheet, typed text)');
   }
 });
+test('no /setup answer in time: the generic tour start also never interrupts an owner who already tapped', async () => {
+  const fetchNever = { first_run: true, launch_mode: 'alongside' };
+  // slow > 2.5 s budget: firstRun() aborts -> null -> generic path
+  assert.deepEqual((await launch(fetchNever, { slow: 3000, tapAt: 500 })).actions, []);
+  assert.deepEqual((await launch(fetchNever, { slow: 3000 })).actions, ['tour:first-run'], 'untouched: still starts');
+});
