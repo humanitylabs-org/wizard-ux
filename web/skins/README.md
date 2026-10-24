@@ -1,3 +1,19 @@
+# Look packages and behaviour tweaks
+
+The 24 October decision supersedes the historical behaviour-in-skins instructions below. New skins are look only (tokens, CSS, backgrounds, icons). Behaviour belongs in `web/tweaks/<owner>/<tweak>/`, never in a new skin script or core patch. Existing non-Miguel skin scripts and My skin consent remain compatibility surfaces; do not add new behaviour there.
+
+A tweak ships `manifest.json` (`id`, `version`, `author`, `apiVersion`, `capabilities`), `tweak.js` default `setup(api)` returning teardown, optional `tweak.css`, and `contract.mjs`. Core CI discovers each shipped contract. `slots.json` owns the versioned mounts. Remove/rename a v1 slot only with an API bump; additions are compatible. Select only literal `[data-slot]` / `[data-part]`, never shell classes. `api.slot(name)` reads a mount; `api.slot.mount(name,node,order)` inserts in numeric order and restores borrowed core elements on teardown. Missing mounts are safe no-ops until the next render.
+
+Declared capabilities: `layout` exposes slot/part/listen/frame/gesture; `nav` exposes shell navigation and the existing Snooze action; `models` exposes `models.list()` and `thread.model([choice])`; `data.read` exposes the shared resources snapshot/refresh (resources.js and usage.js keep polling ownership). Common env/route/on/toast/storage are scoped to each package. The host gates namespaces, catches setup errors and bounds package reads/imports. An incompatible API disables that package with a toast and continues. Disabling removes CSS/listeners/frames/mounts/interceptors.
+
+Trust is defence in depth, **not a JavaScript sandbox**: same-origin code can still reach the DOM. Week one admits only repository-shipped, build-pinned packages from `tweaks/catalog.json`; its team-author list is core-owned, never taken from a manifest. Non-team authors receive layout/nav only unless explicitly passed in the host's trusted author list. There is no remote installation or trust UI yet. Publisher signatures and digest-pinned external package installation are not implemented; do not treat a manifest author as proof of identity.
+
+`WosExperience` is the single persistence boundary. No Agent Service owner-profile route exists beside `/wizard/v1/my-skin`, so week one uses `wos.experience.v1` device storage. A future Files route can replace Store. The provisional human label lives in one constant. `Try Miguel’s` follows `tweaks/miguel/profile.json`, keeps overrides keyed by tweak id, and re-reads it on reopen/tab return. `Back to my setup` restores skin/list/overrides in one tap; `Make a copy` forks and stops following. My skin is independent and stays on top. Selecting Miguel's skin alone no longer enables behaviour; try his experience for the complete setup.
+
+Miguel's seven tweaks: switch-row actions, swipe strip, desktop send-and-go (after successful outbox acceptance), model pills, hidden pins, one-tap Snooze (always Someday, never a core setting), Home resource bars. His existing appearance CSS and palettes stay intact.
+
+## Historical v1 skin API (compatibility only)
+
 # Skin packages
 
 A skin can change how Wizard looks **and** how it behaves, without changing the default shell.
