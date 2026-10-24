@@ -174,3 +174,12 @@ test('pinned app keeps Android status bar and navigation buttons; content starts
   const java=fs.readFileSync(root+'android/app/src/main/java/ai/wizards/os/AppSessionActivity.java','utf8');
   assert.doesNotMatch(java,/applyImmersive\(true\)/); assert.match(java,/super\.applyImmersive\(false\)/);
 });
+
+// Every surface that lists apps to open offers the same long-press. Miguel's skins replaced swipe-up Apps with
+// Desks → New desk on 22 Oct 2026 and the long-press silently vanished for their users; this pins both pickers.
+test('Apps sheet and New desk grid both carry the Add to home screen long-press', () => {
+  const app = read('app.js');
+  assert.match(app, /WizHomeScreenApps\?\.attach\(launcher,/);
+  assert.match(app, /WizHomeScreenApps\?\.attach\(track,[^\n]*rows: '\.new-desk \[data-app\]'/);
+  assert.match(read('core/home-screen-apps.js'), /function attach\(menu, appFor, opts = \{\}\)/);
+});
