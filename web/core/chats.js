@@ -89,6 +89,136 @@ window.WizCore.chats = function createChats(H) {
   const isHosted = wid => hosted.has(wid);
   const CH = {}; // per window: { q, turns, loadedFor, loading, pending, err, at, show, files }
   const ch = id => (CH[id] = CH[id] || { q: '', turns: null, loadedFor: '', pending: [], at: 0 });
+  // Android's built-in WebView capture scrolls the DOCUMENT, never an overflow div.
+  // Keep the real thread and delegated events in their existing shell DOM.
+  // Document scrolling needs an APK that dropped the custom scroll capture and scroll proxy; such APKs
+  // say so in their user agent. Older APKs (any version line) keep inner-div scrolling.
+  const androidDocument = /\bWizardOS-DocScroll\b/.test(navigator.userAgent);
+  let docOwner = null, docFrame = 0, docResize = null, docObserved = [], docUserAt = 0, docTouching = false;
+  // Where you were reading in each thread window when it gave up the document scroll (another app or desk came to the
+  // front). The document is shared, so coming back starts at its top unless we put you back (James, 24 Oct 2026:
+  // "I opened Messenger, tapped Back, and now I'm at the very top of this thread").
+  const docAway = new Map(), docLast = new Map();
+  // The message at the reader's eye line (just under the fixed header) and its offset: survives repaints while away.
+  function docAnchor(owner) {
+    const nb = owner.querySelector('.ch-msgs'), head = owner.querySelector('.ch-head'); if (!nb || !head) return null;
+    const top = head.getBoundingClientRect().bottom, seen = {};
+    for (const m of nb.querySelectorAll('[data-morph-key]')) {
+      const k = m.dataset.morphKey; seen[k] = (seen[k] || 0) + 1;
+      const r = m.getBoundingClientRect(); if (!r.height) continue;
+      if (r.bottom > top + 1) return { key: k, nth: seen[k] - 1, off: r.top - top };
+    }
+    return null;
+  }
+  function docRestore(owner, away) {
+    const sc = document.scrollingElement, w = H.win(owner.dataset.chats), c = w && ch(w.id);
+    if (c?.follow) { sc.scrollTop = sc.scrollHeight; return; }
+    const nb = owner.querySelector('.ch-msgs'), head = owner.querySelector('.ch-head');
+    let m = null, n = -1;
+    if (away.anchor && nb) for (const e of nb.querySelectorAll('[data-morph-key]')) if (e.dataset.morphKey === away.anchor.key && ++n === away.anchor.nth) { m = e; break; }
+    if (m && head) { const d = m.getBoundingClientRect().top - head.getBoundingClientRect().bottom - away.anchor.off; if (Math.abs(d) >= 1) sc.scrollTop += d; }
+    else if (away.top != null) sc.scrollTop = away.top;
+  }
+  const docShown = el => !!(el && el.isConnected && el.getClientRects().length && el.querySelector('.ch-thread'));
+  const scrollBox = nb => nb && docOwner?.contains(nb) ? document.scrollingElement : nb;
+  function sizeDocumentChrome() {
+    if (!docOwner) return;
+    const root = document.documentElement, vv = window.visualViewport;
+    const keyboard = Math.max(0, innerHeight - (vv ? vv.height + vv.offsetTop : innerHeight));
+    const header = docOwner.querySelector('.ch-head'), composer = docOwner.querySelector('.ch-compose'), sw = docOwner.querySelector('.ch-swrow');
+    root.style.setProperty('--wos-doc-head', (header?.getBoundingClientRect().height || 0) + 'px');
+    root.style.setProperty('--wos-doc-compose', (composer?.getBoundingClientRect().height || 0) + 'px');
+    root.style.setProperty('--wos-doc-switch', (sw?.getBoundingClientRect().height || 0) + 'px');
+    root.style.setProperty('--wos-doc-keyboard', keyboard + 'px');
+    const dock = document.getElementById('dock'), ds = dock && getComputedStyle(dock);
+    const dockInset = dock && ds.display !== 'none' && ds.visibility !== 'hidden' && Number(ds.opacity) > 0
+      ? Math.max(0, innerHeight - dock.getBoundingClientRect().top) : 0;
+    // Preserve the shell's orb / navigation pill; it must not cover the composer.
+    root.style.setProperty('--wos-doc-bottom', Math.max(keyboard, dockInset) + 'px');
+  }
+  function syncDocumentThread() {
+    if (!androidDocument) return;
+    const next = H.visible().map(id => elOf(id)).find(el => el?.querySelector('.ch-thread') && el.getClientRects().length) || null;
+    const root = document.documentElement;
+    let back = null;
+    if (next !== docOwner) {
+      const prev = docOwner, pw = prev && H.win(prev.dataset.chats);
+      if (pw?.thread && pw.thread !== '__new__') {
+        const last = docLast.get(prev.dataset.chats);
+        docAway.set(prev.dataset.chats, { sid: pw.thread, anchor: docShown(prev) ? docAnchor(prev) : last?.anchor || null, top: docShown(prev) ? document.scrollingElement.scrollTop : last?.top ?? null });
+      }
+      document.querySelectorAll('.wos-doc-path,.wos-doc-thread').forEach(n => n.classList.remove('wos-doc-path', 'wos-doc-thread'));
+      docResize?.disconnect(); docResize = null; docObserved = [];
+      docOwner = next;
+      root.classList.toggle('wos-doc-scroll', !!next);
+      if (!next) { window.scrollTo(0, 0); return; }
+      next.classList.add('wos-doc-thread');
+      for (let n = next; n && n !== root; n = n.parentElement) n.classList.add('wos-doc-path');
+      const away = docAway.get(next.dataset.chats), nw = H.win(next.dataset.chats);
+      docAway.delete(next.dataset.chats);
+      if (away && nw?.thread === away.sid) back = away;
+    }
+    if (!next) return;
+    // A skin's Web Animations filter/scale on the device also creates a fixed
+    // containing block even at its identity keyframe. End those shell animations.
+    for (let n = next; n && n !== root; n = n.parentElement) n.getAnimations?.().forEach(a => a.cancel());
+    sizeDocumentChrome();
+    if (back) docRestore(next, back);
+    // Re-renders replace the composer. Observe its new node, not a detached one, and only re-observe when the nodes
+    // changed: this runs on every DOM change, and a fresh observer reports every node at once, which pulled the page
+    // back to the bottom each frame while the orb's recording UI updated (James, 24 Oct: couldn't scroll up while recording).
+    const nodes = [...next.querySelectorAll('.ch-head,.ch-compose,.ch-swrow'), document.getElementById('dock')].filter(Boolean);
+    if (typeof ResizeObserver === 'function' && (!docResize || nodes.length !== docObserved.length || nodes.some((n, i) => n !== docObserved[i]))) {
+      docResize?.disconnect(); docObserved = nodes;
+      const sizes = new WeakMap();
+      docResize = new ResizeObserver(entries => {
+        let changed = false;
+        for (const e of entries) { const h = Math.round(e.contentRect.height), was = sizes.get(e.target); sizes.set(e.target, h); if (was !== undefined && was !== h) changed = true; }
+        const sc = document.scrollingElement, bottom = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80;
+        sizeDocumentChrome();
+        // A finger on the list, or a scroll in the last moment, is the reader leaving the bottom: never pull them back.
+        if (changed && bottom && !docTouching && Date.now() - docUserAt > 600) sc.scrollTop = sc.scrollHeight;
+      });
+      nodes.forEach(n => docResize.observe(n));
+    }
+  }
+  if (androidDocument) {
+    const queueDocumentThread = () => { if (!docFrame) docFrame = requestAnimationFrame(() => { docFrame = 0; syncDocumentThread(); }); };
+    // Desk changes / Back / closing a hosted thread must relinquish document scrolling too.
+    new MutationObserver(queueDocumentThread).observe(document.body, { childList: true, subtree: true });
+    const device = document.getElementById('device');
+    if (device) new MutationObserver(queueDocumentThread).observe(device, { attributes: true, attributeFilter: ['class'] });
+    const deskTrack = H.root().querySelector('.track') || (H.root().matches?.('.track') ? H.root() : null);
+    if (deskTrack) new MutationObserver(queueDocumentThread).observe(deskTrack, { attributes: true, attributeFilter: ['style'] });
+    const userScroll = () => { docUserAt = Date.now(); };
+    document.addEventListener('touchstart', () => { docTouching = true; userScroll(); }, { passive: true, capture: true });
+    document.addEventListener('touchmove', userScroll, { passive: true, capture: true });
+    ['touchend', 'touchcancel'].forEach(t => document.addEventListener(t, () => { docTouching = false; userScroll(); }, { passive: true, capture: true }));
+    document.addEventListener('wheel', userScroll, { passive: true, capture: true });
+    window.addEventListener('scroll', e => {
+      if (e.target !== document || !docOwner) return;
+      // The thread just left the screen (another app or desk in front): the page shrinking under it scrolls the document
+      // to 0. That is not the reader scrolling: don't save it as their place and don't load earlier messages for it.
+      if (!docShown(docOwner)) return;
+      docLast.set(docOwner.dataset.chats, { top: document.scrollingElement.scrollTop, anchor: null });
+      const nb = docOwner.querySelector('.ch-msgs'); if (!nb) return;
+      nb.dispatchEvent(new Event('scroll')); // existing save / following / scroll-idle guards
+      const w = H.win(docOwner.dataset.chats), c = w && ch(w.id);
+      if (w && document.scrollingElement.scrollTop <= 1 && c.show < (c.turns?.length || 0) && !c.docEarlier) {
+        c.docEarlier = true;
+        const sc = scrollBox(nb); c.show = (c.show || PAGE) + PAGE;
+        renderThread(w, docOwner, { h: sc.scrollHeight, top: sc.scrollTop });
+        setTimeout(() => { c.docEarlier = false; }, 350);
+      }
+    }, { passive: true });
+    const resizeDocument = () => {
+      if (!docOwner) return;
+      const sc = document.scrollingElement, w = H.win(docOwner.dataset.chats), follow = w && ch(w.id).follow;
+      sizeDocumentChrome(); if (follow) requestAnimationFrame(() => { sc.scrollTop = sc.scrollHeight; });
+    };
+    window.visualViewport?.addEventListener('resize', resizeDocument);
+    window.addEventListener('resize', resizeDocument);
+  }
   // Parsing, Markdown, Bangkok time, drafts, copy/share and the media viewer live in chat-kit.js.
   const KIT = window.WosChat;
   // Pins (core/chat-pins.js, synced per owner) and Boomerang (core/scheduled-reminders.js, loads after this file).
@@ -548,7 +678,6 @@ window.WizCore.chats = function createChats(H) {
     closeStream(ch(w.id));
     if (!el) return;
     if (H.renderView?.(w, el, () => renderChatList(w, el), 'list')) return;
-    if (window.__wosScrollCapture?.hold(el, null)) { ch(w.id).heldList = true; return; }
     ch(w.id).heldList = false;
     H.threadShown?.(w.id, null); // the list is showing: nothing is bound to this window
     const c = ch(w.id), n = norm(c.q);
@@ -1302,7 +1431,6 @@ window.WizCore.chats = function createChats(H) {
   }
   function renderThread(w, el, keep) {
     if (H.renderView?.(w, el, () => renderThread(w, el, keep), 'thread')) return;
-    if (window.__wosScrollCapture?.hold(el, draftKey(w))) { ch(w.id).held = true; return; }
     ch(w.id).held = false; // explicit actions/navigation may repaint immediately
     const c = ch(w.id), isNew = w.thread === '__new__', s = isNew ? null : LIVE.session(w.thread);
     // The thread's own agent (pinned at creation); a new chat belongs to the window's agent.
@@ -1322,7 +1450,10 @@ window.WizCore.chats = function createChats(H) {
     else if (!turns && !isNew && !pend.length) msgs = c.err && (c.failN > 1 || c.err !== 'Couldn’t load this thread') ? threadErrHtml(c) : skelThread();
     else {
       const all = turns || [];
-      if (c.showFor !== w.thread) { c.show = PAGE; c.showFor = w.thread; }
+      if (c.showFor !== w.thread) {
+        const shown = androidDocument ? PW?.RP.read(w.thread)?.shown : 0;
+        c.show = Number.isInteger(shown) ? Math.max(PAGE, Math.min(all.length, shown)) : PAGE; c.showFor = w.thread;
+      }
       const from = Math.max(0, all.length - c.show), shown = all.slice(from);
       let day = '';
       // Renames show where they happened ("Renamed from …"), so the old name still finds its place in the thread.
@@ -1346,9 +1477,10 @@ window.WizCore.chats = function createChats(H) {
     msgs += syncStream(w, c, turns, TAG);
     const acts = isNew ? [] : threadActions(s, turns);
     const box = el.querySelector('.ch-msgs');
-    const atBottom = !box || box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+    const sc = scrollBox(box);
+    const atBottom = !sc || sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80;
     // Read the place now: once innerHTML replaces the list, the old box is detached and reports scrollTop 0.
-    const boxTop = box ? box.scrollTop : null;
+    const boxTop = sc ? sc.scrollTop : null;
     const anchor = box && !atBottom ? PW?.anchorOf?.(box) : null; // the message under your eyes, held through the repaint
     const dkey = draftKey(w);
     const oldTa = el.querySelector('textarea');
@@ -1402,12 +1534,13 @@ window.WizCore.chats = function createChats(H) {
     for (const detail of el.querySelectorAll('[data-run-original]')) if (detail.open !== openContexts.has(detail.dataset.runOriginal)) detail.open = openContexts.has(detail.dataset.runOriginal);
     if (!morphed) keepImgs(el);
     el.dataset.draftFor = dkey; c.draft = draft; c.draftFor = dkey;
-    const nb = el.querySelector('.ch-msgs');
-    if (keep) nb.scrollTop = nb.scrollHeight - keep.h + keep.top;
+    syncDocumentThread();
+    const nb = el.querySelector('.ch-msgs'), ns = scrollBox(nb);
+    if (keep) ns.scrollTop = ns.scrollHeight - keep.h + keep.top;
     else if (PW && PW.position(w, el, nb, { keep, atBottom, box, boxTop, anchor, turns, working })) {} // reading position (#18)
-    else if (!morphed || atBottom) { const to = atBottom ? nb.scrollHeight : (boxTop ?? nb.scrollHeight); if (Math.abs(nb.scrollTop - to) >= 1 || !morphed) nb.scrollTop = to; }
+    else if (!morphed || atBottom) { const to = atBottom ? ns.scrollHeight : (boxTop ?? ns.scrollHeight); if (Math.abs(ns.scrollTop - to) >= 1 || !morphed) ns.scrollTop = to; }
     // Photos load after layout: keep a thread that was at the bottom pinned to the bottom.
-    if (!keep && atBottom) nb.querySelectorAll('img').forEach(im => { if (!im.complete) im.addEventListener('load', () => { if (nb.scrollHeight - nb.scrollTop - nb.clientHeight < 400) nb.scrollTop = nb.scrollHeight; }, { once: true }); });
+    if (!keep && atBottom) nb.querySelectorAll('img').forEach(im => { if (!im.complete) im.addEventListener('load', () => { const s = scrollBox(nb); if (s.scrollHeight - s.scrollTop - s.clientHeight < 400) s.scrollTop = s.scrollHeight; }, { once: true }); });
     if (hadFocus) { const ta = el.querySelector('textarea'); ta.focus({ preventScroll: true }); ta.setSelectionRange(...(keepRange || [ta.value.length, ta.value.length])); }
     growTa(el.querySelector('textarea'));
     // Re-attaching a field resets its scroll to the top; put the owner's view back where it was.
@@ -2104,7 +2237,7 @@ window.WizCore.chats = function createChats(H) {
     const ca = e.target.closest('[data-chact]'); if (ca && w.thread) { threadAct(id, w.thread, ca.dataset.chact); return true; }
     if (e.target.closest('[data-chstop]')) { const s = LIVE.session(w.thread); if (s?.runId) { e.target.closest('[data-chstop]').disabled = true; toast('■', 'Stopping…', 1400); LIVE.stop(s.runId).catch(() => { toast('!', 'Couldn’t stop · try again', 2600); renderThreadNow(w); }); } return true; }
     const apb = e.target.closest('[data-approve]'); if (apb) { chooseApproval(id, apb.dataset.approve, apb.dataset.controlKey, apb.closest('.appr')?.querySelector('[data-clarify-answer]')?.value); return true; }
-    if (e.target.closest('[data-chearlier]')) { const c = ch(id), el = elOf(id), box = el.querySelector('.ch-msgs'); c.show = (c.show || PAGE) + PAGE; renderThread(w, el, { h: box.scrollHeight, top: box.scrollTop }); return true; }
+    if (e.target.closest('[data-chearlier]')) { const c = ch(id), el = elOf(id), box = scrollBox(el.querySelector('.ch-msgs')); c.show = (c.show || PAGE) + PAGE; renderThread(w, el, { h: box.scrollHeight, top: box.scrollTop }); return true; }
     const mi = e.target.closest('[data-mi]'); if (mi) { e.preventDefault(); openMedia(id, +mi.dataset.mi); return true; }
     const ml = e.target.closest('a[data-mlink]'); if (ml) { e.preventDefault(); const u = ml.dataset.mlink; KIT.viewer.open([{ url: u, name: ml.textContent.trim() || 'File', kind: 'file', mime: '' }]); return true; }
     const sl = e.target.closest('a[data-session]'); if (sl) { e.preventDefault(); openChat(owner(id), sl.dataset.session, { via: 'link' }); return true; }
@@ -2214,7 +2347,7 @@ window.WizCore.chats = function createChats(H) {
     const el = elOf(wid); if (el) delete el.dataset.draftFor;
   }
   // Models, Errors actions, composer mic, work receipts, reading position, Files (core/chat-power.js).
-  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent }) : null;
+  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, scrollBox, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent }) : null;
   restoreSealed();
   // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.
   let outSig = '';
