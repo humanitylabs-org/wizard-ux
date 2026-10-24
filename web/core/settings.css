@@ -26,7 +26,7 @@
  * Feature selectors belong here, never in a shell-only stylesheet. */
 .st-title { margin: 2px 4px 10px; font-size: 22px; font-weight: 650; }
 .st-group { margin: 0 0 16px; }
-.st-group h4 { display: flex; gap: 8px; align-items: baseline; margin: 0 4px 8px; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--wz-text-muted); }
+.st-group h4 { display: flex; gap: 8px; align-items: baseline; margin: 0 4px 10px; font-size: 16px; font-weight: 650; letter-spacing: 0; text-transform: none; color: var(--wz-text); }
 .st-group h4 span { color: var(--wz-warning); }
 .st-row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px; margin-bottom: 8px; border-radius: 18px; background: var(--wz-surface); border: 1px solid var(--wz-border); text-align: left; color: var(--wz-text); }
 .st-row[disabled] { opacity: .5; }
@@ -158,3 +158,60 @@
 .ph-album { display: flex; align-items: center; gap: 12px; padding: 8px 4px; background: transparent; color: var(--wz-text); text-align: left; font-size: 15px; }
 .ph-check { flex: 0 0 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--wz-text-muted); }
 .ph-album[aria-checked="true"] .ph-check { background: var(--wz-accent); border-color: var(--wz-accent); box-shadow: inset 0 0 0 3px var(--wz-base); }
+
+/* My release & updates (wizard-os#186). Flat on the page: one hero, a list split by hairlines, two segmented
+ * choices. Nothing boxed inside a box; type large enough to read at arm's length; every target ≥ 48px. */
+.st-hero { display: flex; align-items: center; gap: 12px; width: 100%; margin: 0 0 14px; padding: 18px 16px; border-radius: 22px; border: 1px solid var(--wz-border); background: var(--wz-accent-soft); color: var(--wz-text); text-align: left; }
+.st-hero .st-tx b { font-size: 19px; font-weight: 700; line-height: 1.25; }
+.st-hero .st-tx small { font-size: 14px; color: var(--wz-text-secondary); margin-top: 3px; }
+.st-hero-state, .rl-state { flex: none; padding: 6px 12px; border-radius: 99px; font-size: 13px; font-weight: 650; line-height: 1.2; color: var(--wz-text); background: var(--wz-surface-raised); white-space: nowrap; }
+.st-hero-state.ready, .rl-state.ready { background: color-mix(in srgb, var(--wz-warning) 26%, transparent); }
+.st-hero-state.ok, .rl-state.ok { background: color-mix(in srgb, var(--green, #4ff0b0) 22%, transparent); }
+.st-hero[aria-current="page"] { border-color: var(--wz-accent); }
+/* The state pill sits under the text so the release name never squeezes into a narrow column. */
+.st-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 8px; }
+.st-hero .st-tx { grid-column: 1; }
+.st-hero .st-go { grid-column: 2; grid-row: 1 / span 2; }
+.st-hero .st-hero-state { grid-column: 1; justify-self: start; margin-top: 10px; }
+.st-intro, .st-hint { margin: 0 4px 16px; font-size: 14px; line-height: 1.45; color: var(--wz-text-secondary); }
+.st-hint { margin-top: 10px; }
+.rl h4 { margin-top: 26px; }
+.rl-hero { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 4px 4px 18px; border-bottom: 1px solid var(--wz-border); }
+.rl-name { font-size: 22px; font-weight: 700; line-height: 1.2; }
+.rl-hero small { font-size: 15px; color: var(--wz-text-secondary); }
+.rl-hero .rl-state { align-self: flex-start; margin-top: 10px; }
+.st-primary { margin-top: 14px; min-height: 52px; padding: 12px 28px; border-radius: 99px; border: 0; background: var(--wz-accent); color: var(--wz-base); font-size: 16px; font-weight: 700; }
+.rl-toggle { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 12px 8px 12px 4px; border-radius: 0; border: 0; border-bottom: 1px solid var(--wz-border); background: transparent; color: var(--wz-text); text-align: left; touch-action: manipulation; }
+.rl-toggle .st-tx b { font-size: 17px; font-weight: 650; display: flex; align-items: center; gap: 8px; }
+.rl-toggle .st-tx small { font-size: 14px; color: var(--wz-text-secondary); }
+.rl-n { min-width: 24px; padding: 1px 8px; border-radius: 99px; background: var(--wz-surface-raised); font-size: 13px; font-weight: 650; text-align: center; }
+.rl-changes { list-style: none; margin: 0; padding: 0; }
+.rl-changes li { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 4px; border-bottom: 1px solid var(--wz-border); }
+.rl-ct { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.rl-ct b { font-size: 15px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.rl-ct small { margin-top: 2px; font-size: 13px; color: var(--wz-text-muted); }
+.rl-chip { flex: none; display: inline-block; padding: 4px 10px; border-radius: 99px; font-size: 12.5px; font-weight: 650; line-height: 1.25; white-space: nowrap; color: var(--wz-text); --c: var(--wz-accent); background: color-mix(in srgb, var(--c) 20%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 50%, transparent); }
+.rl-chip.rl-mine { --c: var(--wz-accent); }
+/* Fixed hues so the three lanes read apart on every skin, light or dark; text stays the skin's own ink. */
+.rl-chip.rl-feature { --c: #3b82f6; }
+.rl-chip.rl-fix { --c: #22a861; }
+.rl-chip.rl-merged { --c: var(--wz-text-muted); }
+.rl-legend { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 12px; align-items: center; margin: 18px 4px 0; }
+.rl-legend div { display: contents; }
+.rl-legend dt, .rl-legend dd { margin: 0; }
+.rl-legend dd { font-size: 14px; color: var(--wz-text-secondary); }
+.st-seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px; border-radius: 18px; background: var(--wz-surface); border: 1px solid var(--wz-border); }
+.st-seg button { min-height: 48px; padding: 8px 12px; border: 0; border-radius: 14px; background: transparent; color: var(--wz-text-secondary); font-size: 16px; font-weight: 600; touch-action: manipulation; }
+.st-seg button[aria-checked="true"] { background: var(--wz-accent); color: var(--wz-base); font-weight: 700; }
+.st-seg button:disabled { opacity: .6; }
+/* Look: the skin picker sits flat on the page under a plain heading. */
+.st-root .sk-row { padding: 0; margin: 0 0 8px; }
+.st-root .sk-row .sk-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding: 0; margin: 0 4px 6px; }
+.st-root .sk-row .sk-head small { font-size: 14px; font-weight: 500; color: var(--wz-text-secondary); }
+@media (hover: hover) and (pointer: fine) { .st-root .rl-toggle:hover, .st-root .st-hero:hover { background: color-mix(in srgb, var(--wz-text) 6%, transparent); } .st-root .st-hero:hover { background: color-mix(in srgb, var(--wz-accent) 22%, transparent); } }
+.rl-toggle .st-go { transition: transform 180ms; }
+.rl-toggle[aria-expanded="true"] .st-go { transform: rotate(90deg); }
+/* Phone: the dock floats over the sheet's foot, so the last line must scroll clear of it. */
+.st-phone { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
+.st-desktop .st-seg { max-width: 360px; }
+.st-desktop .st-page { padding-bottom: 32px; }

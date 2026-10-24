@@ -8,15 +8,17 @@
   const native = () => window.WizardOSNative;
   const android = () => !!native() || /Android/i.test(navigator.userAgent);
   const row = (id, icon, title, sub) => `<button class="st-row" data-st="${esc(id)}"><span class="st-ic">${icon}</span><span class="st-tx"><b>${esc(title)}</b><small>${esc(sub)}</small></span><span class="st-go">›</span></button>`;
+  // My release first (wizard-os#186): what you are on and your own changes. Look is design only, never code.
   const PAGES = [
-    { id: 'about', title: 'Updates & about', icon: '◇' },
-    { id: 'appearance', title: 'Appearance', icon: '◐' },
+    { id: 'release', title: 'My release & updates', icon: '◇', available: () => !!(window.WosUpdates?.hero?.() || window.WosUpdates?.state) },
+    { id: 'appearance', title: 'Look', icon: '◐', intro: 'Design only: colours, fonts, backgrounds. Separate from My release.' },
     { id: 'chats', title: 'Chats & app screens', icon: '☷' },
     { id: 'voice', title: 'Voice & typing', icon: '🎙' },
     { id: 'phone', title: 'Phone', icon: '◉', available: android },
     { id: 'recovery', title: 'Unsent & recovered', icon: '↺' },
     { id: 'usage', title: 'AI usage', icon: '◴' },
     { id: 'schedules', title: 'Schedules', icon: '◷', available: () => !!window.WosSchedules?.available },
+    { id: 'about', title: 'About', icon: 'i' },
   ];
   const featurePages = { look: 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', 'photos-backup': 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
   const pageOf = f => f?.page != null ? PAGES.some(p => p.id === f.page) ? f.page : 'about' : featurePages[f?.id] || 'about';
@@ -27,7 +29,7 @@
     const items = [], n = unsentAll(ctx).length, r = recovered().length;
     if (n) items.push({ title: `${n} ${n === 1 ? 'message' : 'messages'} not sent`, feature: 'unsent' });
     if (r) items.push({ title: `${r} ${r === 1 ? 'recording' : 'recordings'} to recover`, feature: 'cancelled' });
-    if (window.WosUpdates?.state?.update_available || window.WizWebUpdate?.pending) items.push({ title: 'Update ready', feature: 'updates' });
+    if ((window.WosUpdates?.state?.update_available && !window.WosUpdates?.hero) || window.WizWebUpdate?.pending) items.push({ title: 'Update ready', feature: window.WizWebUpdate?.pending && !window.WosUpdates?.state?.update_available ? 'wizard' : 'updates' });
     if (window.WizCore.voiceStatus?.state?.ready === false) items.push({ title: 'Voice unavailable', feature: 'voice' });
     if (ctx.live?.error === 'access') items.push({ title: 'Sign-in needed', feature: 'wizard' });
     return items;
@@ -40,7 +42,13 @@
     if (id === 'phone') { try { return JSON.parse(native()?.everywhere?.() || '{}').enabled ? 'Everywhere on' : 'Everywhere off'; } catch (_) { return 'Android controls'; } }
     if (id === 'recovery') { const ids = new Set([...unsentAll(ctx), ...recovered()].map(x => x.id)); return ids.size ? `${ids.size} waiting` : 'Nothing waiting'; }
     if (id === 'usage') return window.WosUsage?.snap?.providers?.map(p => p.limits?.length ? `${p.name} ${p.limits[0].usedPercent}%` : `${p.name}: unavailable`).join(' · ') || (window.WosUsage?.error ? 'Usage unavailable' : 'Checking usage');
-    return `${ctx.live?.ok ? 'Connected' : ctx.live?.error === 'access' ? 'Sign-in needed' : 'Connecting…'} · ${window.WosUpdates?.state?.update_available ? 'update ready' : window.WosUpdates?.state ? 'up to date' : 'check for updates'}`;
+    if (id === 'release') { const h = window.WosUpdates?.hero?.(); return h ? [h.lines[0], h.state].filter(Boolean).join(' · ') : ''; }
+    return `${ctx.live?.ok ? 'Connected' : ctx.live?.error === 'access' ? 'Sign-in needed' : 'Connecting…'} · ${location.host}`;
+  }
+  // The index opens on one card: the release you are on, its base and your changes, and whether an update waits.
+  function heroHtml(selected) {
+    const h = window.WosUpdates?.hero?.(); if (!h) return '';
+    return `<button class="st-hero" data-st-page="release" aria-current="${selected === 'release' ? 'page' : 'false'}"><span class="st-tx"><b>${esc(h.title)}</b>${h.lines.map(l => `<small>${esc(l)}</small>`).join('')}</span>${h.state ? `<span class="st-hero-state ${esc(h.tone)}">${esc(h.state)}</span>` : ''}<span class="st-go" aria-hidden="true">›</span></button>`;
   }
   function recommendation() {
     const S = window.WosSkin, f = S && famOf(S, S.current), id = f?.recommends?.chats;
@@ -194,7 +202,7 @@
       const head = fams.length > 1 ? `<div class="skp-fam">${esc(f.name)}</div>` : '';
       return `${head}<div class="skp" role="group" aria-label="${esc(f.name || 'Skin')} colours">${pals.map(k => skinCard(k, cur)).join('')}</div>`;
     }).join('');
-    return `<div class="st-group" data-stgroup="look"><h4>Look</h4><div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(lookName(S, cur))}</small></span></div><div class="skp-all${facesReady ? '' : ' skp-wait'}">${groups}</div></div>${suggestionHtml()}${mySkinRow(S.list.find(k => k.id === cur)?.name || '')}${layoutRow()}</div>`;
+    return `<div class="st-group" data-stgroup="look"><div class="sk-row"><h4 class="sk-head">Skin <small data-skinname>${esc(lookName(S, cur))}</small></h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${groups}</div></div>${suggestionHtml()}${mySkinRow(S.list.find(k => k.id === cur)?.name || '')}${layoutRow()}</div>`;
   }
   /* Layout: how the shell behaves (orbs, gestures), worn over any skin. Classic = the shell as everyone has it. */
   function layoutRow() {
@@ -312,16 +320,16 @@
       const selection = active && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
       const pages = PAGES.filter(p => !p.available || p.available(ctx));
       if (page && !pages.some(p => p.id === page)) page = '';
-      const selected = page || (desktop ? 'appearance' : '');
-      const heading = PAGES.find(p => p.id === selected)?.title || '';
+      const selected = page || (desktop ? pages[0]?.id || 'appearance' : '');
+      const pageDef = PAGES.find(p => p.id === selected), heading = pageDef?.title || '';
       const items = attention(ctx);
       const attentionHtml = items.length ? `<div class="st-attention" aria-label="Needs attention"><h4>Needs attention</h4>${items.map(i => `<button data-st-attention="${esc(i.feature)}">${esc(i.title)}<span>›</span></button>`).join('')}</div>` : '';
-      const nav = pages.map(p => `<button class="st-category" data-st-page="${p.id}" aria-current="${p.id === selected ? 'page' : 'false'}"><span class="st-ic" aria-hidden="true">${p.icon}</span><span class="st-tx"><b>${p.title}</b><small data-st-subtitle="${p.id}">${esc(subtitle(p.id, ctx))}</small></span><span class="st-go" aria-hidden="true">›</span></button>`).join('');
+      const hero = heroHtml(selected), nav = hero + pages.filter(p => !hero || p.id !== 'release').map(p => `<button class="st-category" data-st-page="${p.id}" aria-current="${p.id === selected ? 'page' : 'false'}"><span class="st-ic" aria-hidden="true">${p.icon}</span><span class="st-tx"><b>${p.title}</b><small data-st-subtitle="${p.id}">${esc(subtitle(p.id, ctx))}</small></span><span class="st-go" aria-hidden="true">›</span></button>`).join('');
       const fs = [...features.values()].filter(f => pageOf(f) === selected && (!f.available || f.available(ctx)));
       const content = fs.map(f => `<section data-settings-feature="${esc(f.id)}">${f.html(ctx)}</section>`).join('');
       const footer = `<footer class="st-shortcuts">${window.WosFiles ? '<button data-st-shortcut="files" data-st="files">Files</button>' : ''}${(window.WosFeatures?.entries || []).filter(f => !f.available || f.available()).map(f => `<button data-st-shortcut="${esc(f.id)}">${esc(f.title || f.id)}</button>`).join('')}</footer>`;
       root.dataset.settingsPage = page;
-      root.innerHTML = `<div class="st-inner ${desktop ? 'st-desktop' : 'st-phone'} ${page ? 'st-in-page' : ''}"><div class="st-index"><h3 class="st-title" tabindex="-1">Settings</h3>${attentionHtml}<nav aria-label="Settings categories">${nav}</nav>${footer}</div><div class="st-page" ${selected ? '' : 'hidden'}><header class="st-page-head"><button data-st-back aria-label="Back to Settings">‹</button><h3 tabindex="-1">${heading}</h3></header>${content}</div></div>${confirm ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="st-confirm-title"><h3 id="st-confirm-title">Use ${esc(chatsName(confirm.id))} for all your chats?</h3><p>You can switch back here any time.</p><div class="st-actions"><button data-chats-cancel ${ctx.chatsBusy ? 'disabled' : ''}>Cancel</button><button data-chats-confirm ${ctx.chatsBusy ? 'disabled' : ''}>${ctx.chatsBusy ? 'Switching…' : 'Use ' + esc(chatsName(confirm.id))}</button></div></section></div>` : ''}`;
+      root.innerHTML = `<div class="st-inner ${desktop ? 'st-desktop' : 'st-phone'} ${page ? 'st-in-page' : ''}"><div class="st-index"><h3 class="st-title" tabindex="-1">Settings</h3>${attentionHtml}<nav aria-label="Settings categories">${nav}</nav>${footer}</div><div class="st-page" ${selected ? '' : 'hidden'}><header class="st-page-head"><button data-st-back aria-label="Back to Settings">‹</button><h3 tabindex="-1">${heading}</h3></header>${pageDef?.intro ? `<p class="st-intro">${esc(pageDef.intro)}</p>` : ''}${content}</div></div>${confirm ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="st-confirm-title"><h3 id="st-confirm-title">Use ${esc(chatsName(confirm.id))} for all your chats?</h3><p>You can switch back here any time.</p><div class="st-actions"><button data-chats-cancel ${ctx.chatsBusy ? 'disabled' : ''}>Cancel</button><button data-chats-confirm ${ctx.chatsBusy ? 'disabled' : ''}>${ctx.chatsBusy ? 'Switching…' : 'Use ' + esc(chatsName(confirm.id))}</button></div></section></div>` : ''}`;
       root.scrollTop = top;
       const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = paneTop;
       const importStatus = root.querySelector('[data-skinimport-status]'); if (importStatus) importStatus.textContent = skinImportMessage;
@@ -332,7 +340,7 @@
     function focus(id) {
       for (const f of features.values()) if (pageOf(f) === page) f.leave?.(ctx);
       const f = features.get(id) || [...features.values()].find(f => f.aliases?.includes(id));
-      page = f ? pageOf(f) : featurePages[id] || (id === 'updates' ? 'about' : PAGES.some(p => p.id === id) ? id : '');
+      page = f ? pageOf(f) : featurePages[id] || (['updates', 'my-release'].includes(id) ? 'release' : PAGES.some(p => p.id === id) ? id : '');
       for (const f of features.values()) if (pageOf(f) === page) f.enter?.(ctx);
       confirm = null; render(); root.scrollTop = 0;
       const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = 0;

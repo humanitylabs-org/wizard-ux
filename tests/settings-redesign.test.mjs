@@ -51,7 +51,7 @@ test('attention is conditional, counts real stores and routes each item; recover
   h.s.WizCore.voiceStatus = { card: () => '', state: { ready: false } }; h.view.context.live.error = 'access';
   h.view.render();
   for (const text of ['1 message not sent', '2 recordings to recover', 'Update ready', 'Voice unavailable', 'Sign-in needed', '2 waiting']) assert.ok(h.root.innerHTML.includes(text), text);
-  for (const [feature, page] of [['unsent', 'recovery'], ['cancelled', 'recovery'], ['updates', 'about'], ['voice', 'voice'], ['wizard', 'about']]) { h.act('data-st-attention', feature); assert.equal(h.view.page, page); }
+  for (const [feature, page] of [['unsent', 'recovery'], ['cancelled', 'recovery'], ['updates', 'release'], ['voice', 'voice'], ['wizard', 'about']]) { h.act('data-st-attention', feature); assert.equal(h.view.page, page); }
 });
 test('page Back returns to root, then leaves closing to the shell; confirm Back only dismisses', () => {
   const h = harness(); h.view.focus('chats-default'); h.act('data-chats-choice', 'mizel-chats');
@@ -88,4 +88,24 @@ test('recommendation appears on both pages, never switches automatically, and No
   assert.equal(h.posts.length, 0); h.act('data-chats-dismiss', 'mizel');
   for (const feature of ['look', 'chats-default']) { h.view.focus(feature); assert.doesNotMatch(h.root.innerHTML, /data-chats-suggestion/); }
   assert.equal(h.storage.get('wos.settings.chats.dismiss.mizel'), 'mizel-chats'); assert.equal(h.posts.length, 0);
+});
+
+test('index opens on My release as one hero card, then the categories; Look is design only; About comes last', () => {
+  const h = harness();
+  assert.doesNotMatch(h.root.innerHTML, /st-hero/, 'no release card until the updates module knows something');
+  h.s.WosUpdates = { state: { mode: 'ask' }, hero: () => ({ title: "Miguel's release", lines: ['Built on Latest b79c1e9', '4 changes of your own'], state: 'Up to date', tone: 'ok', mine: true }) };
+  h.view.render();
+  const html = h.root.innerHTML;
+  assert.match(html, /<nav aria-label="Settings categories"><button class="st-hero" data-st-page="release"[^>]*><span class="st-tx"><b>Miguel&#39;s release<\/b><small>Built on Latest b79c1e9<\/small><small>4 changes of your own<\/small><\/span><span class="st-hero-state ok">Up to date<\/span>/);
+  assert.doesNotMatch(html, /data-st-page="release"[^>]*class="st-category"|class="st-category" data-st-page="release"/, 'the hero replaces the plain row');
+  const order = [...html.matchAll(/data-st-page="([a-z]+)"/g)].map(m => m[1]);
+  assert.equal(order[0], 'release'); assert.equal(order.at(-1), 'about');
+  assert.match(html, /<b>Look<\/b>/); assert.doesNotMatch(html, /Updates &amp; about|Updates & about|>Appearance</);
+  h.act('data-st-page', 'release'); assert.equal(h.view.page, 'release');
+  assert.match(h.root.innerHTML, /<h3 tabindex="-1">My release &amp; updates<\/h3>|<h3 tabindex="-1">My release & updates<\/h3>/);
+  for (const alias of ['updates', 'my-release']) { h.view.focus(alias); assert.equal(h.view.page, 'release', alias); }
+  h.view.focus('look'); assert.equal(h.view.page, 'appearance');
+  assert.match(h.root.innerHTML, /<p class="st-intro">Design only: colours, fonts, backgrounds\. Separate from My release\.<\/p>/);
+  const d = harness({ shell: 'desktop' }); d.s.WosUpdates = h.s.WosUpdates; d.view.render(); d.view.focus();
+  assert.match(d.root.innerHTML, /<h3 tabindex="-1">My release/, 'desktop opens on My release when there is one');
 });

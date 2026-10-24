@@ -32,9 +32,10 @@ test('reads the App Manager through the Store listener and registers one Setting
   assert.equal(registered.length, 1);
   assert.equal(registered[0].id, 'updates');
   assert.equal(registered[0].available(), true);
+  assert.equal(registered[0].page, 'release');                         // Settings › My release & updates
   const h = U.html();
-  assert.match(h, /<h4>Updates<\/h4>/);
-  assert.match(h, /<b data-osu-title>Update available<\/b><small>Wizard OS 0\.3\.15 → 0\.3\.16<\/small>/);
+  assert.doesNotMatch(h, /<h4>Updates<\/h4>/);
+  assert.match(h, /<b class="rl-name" data-osu-title>Update available<\/b><small class="rl-base">Wizard OS 0\.3\.15 → 0\.3\.16<\/small>/);
   assert.match(h, /data-osu="apply"[^>]*>Update now</);
   assert.match(h, /data-osu="auto" role="radio" aria-checked="true"/);   // Automatic is the default
   assert.match(h, /data-osu="ask" role="radio" aria-checked="false"/);
@@ -43,7 +44,7 @@ test('reads the App Manager through the Store listener and registers one Setting
 test('up to date shows installed version and no Update button; Ask me is shown when chosen', async () => {
   const { U } = await load(() => [200, { ...STATUS, mode: 'ask', chosen: true, latest: '0.3.15', update_available: false }]);
   const h = U.html();
-  assert.match(h, /Wizard OS 0\.3\.15<\/b><small>Up to date/);
+  assert.match(h, /Wizard OS 0\.3\.15<\/b><small class="rl-base">Up to date/);
   assert.doesNotMatch(h, /data-osu="apply"/);
   assert.match(h, /data-osu="ask" role="radio" aria-checked="true"/);
 });
@@ -101,12 +102,12 @@ test('a refused write keeps the old state and tells the owner', async () => {
 test('an update cut short by a reboot says interrupted, retrying, and offers Update now again', async () => {
   const { U } = await load(() => [200, { ...STATUS, installing: false, interrupted: true }]);
   const h = U.html();
-  assert.match(h, /<b data-osu-title>Update interrupted · retrying<\/b><small>Wizard OS 0\.3\.15 → 0\.3\.16 · tries again tonight, or tap Update now/);
+  assert.match(h, /<b class="rl-name" data-osu-title>Update interrupted · retrying<\/b><small class="rl-base">Wizard OS 0\.3\.15 → 0\.3\.16 · tries again tonight, or tap Update now/);
   assert.match(h, /data-osu="apply"[^>]*>Update now</);
   const ask = await load(() => [200, { ...STATUS, mode: 'ask', chosen: true, interrupted: true }]);
-  assert.match(ask.U.html(), /<b data-osu-title>Update interrupted<\/b><small>[^<]*tap Update now to try again/);
+  assert.match(ask.U.html(), /<b class="rl-name" data-osu-title>Update interrupted<\/b><small class="rl-base">[^<]*tap Update now to try again/);
   const old = await load(() => [200, { ...STATUS }]);              // an App Manager without the field: unchanged
-  assert.match(old.U.html(), /<b data-osu-title>Update available<\/b>/);
+  assert.match(old.U.html(), /data-osu-title>Update available<\/b>/);
 });
 
 test('channel picker: hidden on an App Manager without channels, shown with Stable checked when it has them', async () => {
@@ -115,8 +116,8 @@ test('channel picker: hidden on an App Manager without channels, shown with Stab
   const { U } = await load(() => [200, { ...STATUS, channel: 'stable', stable: '0.3.16' }]);
   const h = U.html();
   assert.match(h, /data-osu="ch-stable" role="radio" aria-checked="true"/);
-  assert.match(h, /Stable \(recommended\)/);
-  assert.match(h, /Latest \(every release, for testers\)/);
+  assert.match(h, /data-osu="ch-latest" role="radio" aria-checked="false"[^>]*>Latest</);
+  assert.match(h, /Tested\. Fixes arrive the same day\./);           // one line on what the chosen channel means
 });
 
 test('on latest with Automatic it says Automatic installs stable only; choosing a channel POSTs only {channel}', async () => {
@@ -133,7 +134,7 @@ test('on latest with Automatic it says Automatic installs stable only; choosing 
   assert.equal(post.headers['X-Wizard-Store'], '1');
   assert.equal(U.state.channel, 'latest');
   assert.match(U.html(), /data-osu="ch-latest" role="radio" aria-checked="true"/);
-  assert.match(U.html(), /Automatic installs stable only/);
+  assert.match(U.html(), /Every approved change, within hours\. Automatic installs Stable only\./);
   assert.match(c.t[0][1], /Channel: Latest/);
   const n = calls.length;
   U.act(btn('ch-latest'), ctx()); await tick();
@@ -156,10 +157,39 @@ test('my release: the summary names it and its base, and Your changes lists each
     return window.WosUpdates;
   })();
   let h = r2.html();
-  assert.match(h, /<b data-osu-title>Miguel&#39;s release<\/b><small>Built on Latest b79c1e9 · 1 change of your own/);
+  assert.match(h, /<b class="rl-name" data-osu-title>Miguel&#39;s release<\/b><small class="rl-base">Built on Latest b79c1e9<\/small><small>1 change of your own<\/small><span class="rl-state ready">Update available<\/span>/);
+  assert.deepEqual(r2.hero(), { title: "Miguel's release", lines: ['Built on Latest b79c1e9', '1 change of your own'], state: 'Update available', tone: 'ready', mine: true });
   assert.match(h, /data-osu="mine"[^>]*aria-expanded="false"/);
   assert.doesNotMatch(h, /Updates shows my release/);
   assert.equal(r2.act(btn('mine'), ctx()), true);
   h = r2.html();
-  assert.match(h, /data-osu-change="abc1234"[\s\S]*Updates shows my release[\s\S]*Mine · 2026-10-24/);
+  assert.match(h, /data-osu="mine"[^>]*aria-expanded="true"/);
+  assert.match(h, /data-osu-change="abc1234"><span class="rl-ct"><b>Updates shows my release<\/b><small>2026-10-24<\/small><\/span><span class="rl-chip rl-mine">Mine<\/span>/);
+  assert.match(h, /Proposed feature<\/span><\/dt><dd>Review, then Latest, then Stable/);   // the three lanes, one line each
+  assert.match(h, /Proposed fix<\/span><\/dt><dd>Fast lane to Stable/);
+  assert.equal(r2.act(btn('mine'), ctx()), true);
+  assert.doesNotMatch(r2.html(), /data-osu-change/);
+});
+
+test('my release: each change gets a status chip from my-release.json (default Mine), and the toggle works even while busy or before the App Manager answers', async () => {
+  const MINE = { name: 'My release', base: { ref: 'b79c1e9' }, changes: [
+    { sha: 'a', title: 'A', status: 'Proposed feature' }, { sha: 'b', title: 'B', status: 'Proposed fix' },
+    { sha: 'c', title: 'C' }, { sha: 'd', title: 'D', status: 'Merged' }] };
+  const fetch = async (url) => url.endsWith('my-release.json') ? { ok: true, status: 200, json: async () => MINE } : { ok: false, status: 404, json: async () => ({}) };
+  const registered = [], window = { WosSettings: { register: f => registered.push(f), refresh() {} } };
+  const document = { currentScript: { src: 'https://box.ts.net/wizard-os-home/core/os-updates.js' } };
+  new Function('window', 'document', 'fetch', 'location', src)(window, document, fetch, { href: 'https://box.ts.net/wizard-os-home/' });
+  for (let i = 0; i < 4; i++) await tick();
+  const U = window.WosUpdates;
+  assert.equal(registered[0].available(), true, 'a box with my-release.json still shows My release when the App Manager is silent');
+  assert.equal(U.hero().title, 'My release');
+  assert.match(U.hero().lines[0], /Built on b79c1e9/);
+  assert.match(U.html(), /<small>1 mine · 1 feature · 1 fix · 1 merged<\/small>/);
+  assert.doesNotMatch(U.html(), /data-osu="(auto|ask|apply)"/);   // no App Manager: no install choices to offer
+  assert.equal(U.act(btn('mine'), ctx()), true);
+  const h = U.html();
+  for (const [sha, cls, label] of [['a', 'feature', 'Proposed feature'], ['b', 'fix', 'Proposed fix'], ['c', 'mine', 'Mine'], ['d', 'merged', 'Merged']])
+    assert.match(h, new RegExp(`data-osu-change="${sha}">[\\s\\S]*?<span class="rl-chip rl-${cls}">${label}</span>`), sha);
+  assert.equal(U.kind('proposed FIX'), 'fix');
+  assert.equal(U.kind(undefined), 'mine');
 });
