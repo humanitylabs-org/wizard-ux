@@ -922,7 +922,7 @@
       const failed=settled.filter(x=>x.status==='rejected');
       const fallbackScopes=scopes.filter((_,i)=>settled[i].status==='fulfilled'&&settled[i].value===null);
       if(!good.length && !fallbackScopes.length && failed.length) throw failed[0].reason;
-      const found=good.flatMap(x=>x.value); found.partial=failed.length>0; found.capped=good.some(x=>x.value.partial); // capped: the server showed only its newest message matches found.fallbackScopes=fallbackScopes;
+      const found=good.flatMap(x=>x.value); found.partial=failed.length>0; found.capped=good.some(x=>x.value.partial); found.fallbackScopes=fallbackScopes; // capped: the server showed only its newest message matches
       return found;
     },
     searchRows(agent='') {
