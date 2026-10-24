@@ -717,12 +717,16 @@ window.WizCore.chats = function createChats(H) {
     return `<button type="button" class="${strip ? 'ch-focus-tab' : 'ch-fopt'}${on ? ' on' : ''}" data-chfocusopt="${o.kind}:${esc(o.key)}" aria-pressed="${on}"${strip && o.kind === 'agent' ? ` style="--ch-agent-colour:${AGS()?.colour(agentRec(o.key)) || ''}"` : ''}${strip ? ` aria-label="${esc(o.label)}${o.unread ? ` · ${o.unread} unread` : ''}"` : ''}>${o.badge}<span>${esc(o.label)}</span>${strip ? o.unread ? '<i class="ch-focus-dot" aria-hidden="true"></i>' : '' : `<small>${o.kind === 'agent' ? o.unread : o.count}</small>${on ? '<b>✓</b>' : ''}`}</button>`;
   }
   function focusSection(w) {
+    if (!focusUseful()) return '';
     const opts = focusOptions();
     return `<h5>Focus</h5><div class="ch-fopts">${focusOption(w, opts[0])}</div><h5>Agents <small>· unread</small></h5><div class="ch-fopts">${opts.filter(o => o.kind === 'agent').map(o => focusOption(w, o)).join('')}</div>${spaces().length ? `<h5>${SPACE.many}</h5><div class="ch-fopts">${opts.filter(o => o.kind === 'space').map(o => focusOption(w, o)).join('')}</div>` : ''}`;
   }
+  /* Focus only appears once there is something to switch between (James, 24 Oct 2026): a second agent, or an
+   * owner-made Space. A one-agent install sees no strip and no Focus section. */
+  function focusUseful() { return focusAgents().length > 1 || spaces().length > 0; }
   function focusStrip(w) {
     const opts = focusOptions();
-    return opts.length > 1 ? `<nav class="ch-focus-strip" aria-label="Chats focus">${opts.map(o => focusOption(w, o, true)).join('')}</nav>` : '';
+    return focusUseful() ? `<nav class="ch-focus-strip" aria-label="Chats focus">${opts.map(o => focusOption(w, o, true)).join('')}</nav>` : '';
   }
   function bindFocusStrip(el) {
     const strip = el.querySelector('.ch-focus-strip'); if (!strip) return;
