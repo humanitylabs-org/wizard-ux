@@ -892,12 +892,14 @@ window.WizCore.chats = function createChats(H) {
   }
   // Keep putting an unlanded bookmark back each frame (≤3 s) until it lands, the thread changes, James touches the
   // list, or anything else scrolls it.
+  // The window body can be remounted meanwhile, so each frame looks up the live scroller.
   function holdListPlace(w, el, place) {
     const c = ch(w.id), until = Date.now() + 3000; c.listPending = place;
-    let mine = el.querySelector('.ch-scroll')?.scrollTop ?? 0;
+    let box = el.querySelector('.ch-scroll'), mine = box?.scrollTop ?? 0;
     const step = () => {
       if (c.listPending !== place) return;
-      const sc = el.querySelector('.ch-scroll');
+      const sc = (elOf(w.id) || el).querySelector('.ch-scroll');
+      if (sc !== box) { box = sc; mine = sc?.scrollTop ?? 0; }
       if (w.thread || !sc || Date.now() > until || Math.abs(sc.scrollTop - mine) >= 1) { c.listPending = null; return; }
       if (restoreListPlace(sc, place)) { c.listPending = null; return; }
       mine = sc.scrollTop; requestAnimationFrame(step);
