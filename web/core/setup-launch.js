@@ -3,7 +3,8 @@
  *   phone   (app.js)     WosSetupLaunch.boot({...}) in place of the first-run tour timer, and .desk(home) in goDesk
  *   desktop (desktop.js) WosSetupLaunch.boot({...}) right after C.deeplink.consume()
  *
- * First run (design: Claude Fable, 14 Oct 2026, round 2 decision 1):
+ * Existing-Hermes installs (`launch_mode: alongside`) keep Setup and its tour explicit, never automatic.
+ * VM first run (design: Claude Fable, 14 Oct 2026, round 2 decision 1):
  *   - GET /wizard/v1/setup. When first_run is true the shell opens Setup; the app (not the shell) POSTs
  *     /wizard/v1/setup/seen when it renders, so a failed open simply tries again next launch.
  *   - Phone layout: the 30-second gesture tour waits (tourPending, this session only) and starts the first time the
@@ -28,7 +29,7 @@
       const r = await fetch(API, { credentials: 'same-origin', cache: 'no-store', signal: ctl?.signal });
       if (!r.ok) return null;
       const j = await r.json();
-      return j && typeof j === 'object' ? j.first_run === true : null;
+      return j && typeof j === 'object' ? j : null;
     } catch (e) { return null; } finally { clearTimeout(t); }
   }
 
@@ -42,7 +43,11 @@
         if (tour) setTimeout(() => H.markTour?.(), Math.max(0, TOUR_DELAY - (Date.now() - t0)));
         return;
       }
-      const fr = await firstRun();
+      const setup = await firstRun();
+      // An existing-Hermes owner came here to chat. Setup and its tour remain explicit apps/actions;
+      // never mark Setup seen or the tour done merely because this launch stays quiet.
+      if (setup?.launch_mode === 'alongside') { log('alongside:quiet'); return; }
+      const fr = setup ? setup.first_run === true : null;
       log('first_run:' + fr);
       if (fr === true && !deeplinked() && !(window.WosTour && window.WosTour.active)) {
         if (tour) pending = true;

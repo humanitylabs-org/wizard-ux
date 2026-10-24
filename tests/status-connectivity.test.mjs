@@ -65,3 +65,10 @@ test('send failure diagnoses even when live reads are healthy, then clears after
   O.waiting = false; O.listeners.forEach(fn => fn());
   assert.equal(h.ctx.document.getElementById('wxBanners').hidden, true);
 });
+test('a waiting item the outbox can no longer retry never holds the retrying banner up', () => {
+  const h = setup(); h.success(); const O = h.ctx.WosOutbox;
+  O.canRetry = () => false; O.waiting = true; O.listeners.forEach(fn => fn());
+  assert.equal(h.ctx.document.getElementById('wxBanners').hidden, true);
+  O.canRetry = () => true; O.listeners.forEach(fn => fn());
+  assert.match(h.ctx.document.getElementById('wxBanners').innerHTML, /data-wxnet="reconnecting"/);
+});
