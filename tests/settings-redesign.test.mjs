@@ -157,3 +157,10 @@ test('My skin is the dashed last tile of the one skin grid; tapping it opens Edi
   assert.match(html, /data-myskin="reset">Reset/);
   assert.doesNotMatch(html, /ms-invite/, 'no invite once worn');
 });
+test('the skin grid keyboard arrows reach the My skin tile (focus only), and its styles live in settings.css', () => {
+  const src = fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8');
+  assert.match(src, /const sel = attr === 'data-skinpick' \? '\[data-skinpick\], \[data-myskin-tile\]'/);
+  assert.match(src, /if \(buttons\[n\]\.hasAttribute\('data-myskin-tile'\)\) \{ buttons\[n\]\.focus\(\); return; \}/);
+  assert.match(fs.readFileSync(new URL('../web/core/settings.css', import.meta.url), 'utf8'), /\.st-root \.skp-my \.skp-mini-my \{/);
+  assert.doesNotMatch(fs.readFileSync(new URL('../web/core/skins.css', import.meta.url), 'utf8'), /skp-my|ms-panel|ms-invite/);
+});
