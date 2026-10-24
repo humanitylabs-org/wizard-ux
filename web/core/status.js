@@ -27,6 +27,12 @@
   function shellUp() { return !!(window.__wos || window.__wux); }
   addEventListener('load', () => setTimeout(() => {
     if (shellUp() || document.documentElement.dataset.leaving) return;
+    // A boot error is most often a phone mixing cached files from two releases: reload once to fetch one matching
+    // set before showing the card (Robert's iPhone, 24 Oct 2026). Once per minute per tab, so a real bug can't loop.
+    if (bootErrors.length) try {
+      const k = 'wos.bootReloadAt', t = +sessionStorage.getItem(k) || 0;
+      if (Date.now() - t > 60e3) { sessionStorage.setItem(k, String(Date.now())); log('fatal:auto-reload'); location.reload(); return; }
+    } catch (e) {}
     fatal(bootErrors.length ? `${agent()} couldn’t start on this device: ${bootErrors[0].replace(/^Uncaught\s+/, '').slice(0, 160)}` : `${agent()} couldn’t start on this device.`);
   }, 2500));
 
