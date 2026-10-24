@@ -65,6 +65,28 @@ async function activate(p,s){const l=p.locator(s);await l[await p.evaluate(()=>n
 async function choose(p,v){await activate(p,`.ch-focus-strip:visible [data-chfocusopt="${v}"]`);}
 const activeFocus = p => p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText();
 async function capture(p,name){await p.waitForTimeout(450);await p.screenshot({path:path.join(OUT,name+'.png'),animations:'disabled'});}
+// Archived threads are read, and agent/Space dots count only unread threads the list shows (James, 24 Oct 2026).
+async function archivedUnreadMatrix(b) {
+ const saved=rows.slice(), t=now-10*86400;
+ const mk=(id,extra)=>({...saved[4],id,title:id,agent:'idle',last_active:now,started_at:now-50,wizard_last_user_at:now-60,wizard_last_assistant_at:now,wizard_activity_at:now,latest_message:{role:'assistant',content:'Fixture',timestamp:now},...extra});
+ rows.push(mk('idle_archived',{archived:true}),mk('idle_aged',{last_active:t,started_at:t-50,wizard_last_user_at:t,wizard_last_assistant_at:t,wizard_activity_at:t,latest_message:{role:'assistant',content:'Old',timestamp:t}}));
+ for(const desktop of [false,true]) {
+  const {ctx,p}=await boot(b,desktop),mode=desktop?'desktop':'phone';
+  const dot='.ch-focus-strip:visible [data-chfocusopt="agent:idle"] .ch-focus-dot';
+  const st=await p.evaluate(()=>{const L=(window.__wos||window.__wux).live,s=id=>L.unified().find(x=>x.id===id);return {arch:L.isNew(s('idle_archived')),aged:L.isNew(s('idle_aged')),vis:L.visibleUnread?L.visibleUnread(L.unified().filter(x=>x.agent==='idle')).length:-1};});
+  ok(st.arch===false&&st.aged===false&&st.vis===0,mode+' archived and aged-out threads read as read',st);
+  ok(await p.locator(dot).count()===0,mode+' no agent dot when only archived threads are unread');
+  rows.push(mk('idle_live',{}));await p.evaluate(async()=>{const L=(window.__wos||window.__wux).live;L.fullAt=0;await L.refresh();L.emit();});await p.waitForTimeout(300);
+  ok(await p.locator(dot).count()===1,mode+' agent dot returns for a visible unread thread');
+  const before=writes.length;await p.evaluate(async()=>{await (window.__wos||window.__wux).live.archive('idle_live');});await p.waitForTimeout(300);
+  const seen=writes.slice(before).find(w=>w.path==='/wizard/thread-seen'&&/agent\/idle\/[^"]*idle_live/.test(w.body||''));
+  ok(!!seen,mode+' Done marks the thread read on the server');
+  ok(await p.locator(dot).count()===0,mode+' agent dot clears once the thread is archived');
+  rows.splice(rows.findIndex(r=>r.id==='idle_live'),1);
+  await ctx.close();
+ }
+ rows.splice(0,rows.length,...saved);
+}
 async function sectionMatrix(b) {
  const saved=rows.slice();
  const sections=['ready','yesterday','pastWeek','archive','errors','working'];
@@ -389,6 +411,7 @@ async function spaceArchiveMatrix(b) {
  }
  ok(writes.filter(w=>/\/v1\/runs$/.test(w.path)).length===0,'zero /v1/runs during navigation');
  await sectionMatrix(b);
+ await archivedUnreadMatrix(b);
  await spaceArchiveMatrix(b);
  await routingMatrix(b);
  ok(errors.length===0,'no page errors',errors);
