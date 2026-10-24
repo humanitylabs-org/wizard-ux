@@ -405,9 +405,13 @@ public final class EverywhereOutbox {
             main.post(() -> { for (Listener l : snapshot()) l.onWords(it, heard); });
             changed();
         }
-        // "Order my usual kra pao" from an orb or the side button: run that usual on the phone, send nothing.
+        // A voice shortcut from an orb or the side button ("order kra pao"): run it on the phone, send nothing. Once
+        // web has registered its shortcut table (device.automation.shortcuts), web's words decide; until then the
+        // legacy native Food phrases do (old web on a new APK keeps working).
         if (!it.dictation() && app != null) {
-            String usual = ai.wizards.os.usuals.UsualsVoice.match(app, it.text);
+            ai.wizards.os.automation.AutomationEngine auto = ai.wizards.os.automation.AutomationEngine.get(app);
+            final org.json.JSONObject shortcut = auto.shortcutsRegistered() ? auto.shortcut(it.text) : null;
+            String usual = auto.shortcutsRegistered() ? (shortcut == null ? null : "shortcut") : ai.wizards.os.usuals.UsualsVoice.match(app, it.text);
             if (usual != null) {
                 synchronized (this) {
                     it.state = "sent"; it.sentAt = System.currentTimeMillis(); it.error = "";
@@ -421,7 +425,17 @@ public final class EverywhereOutbox {
                 Log.i(TAG, "usual " + usual + " from " + it.source + " " + it.id);
                 meetingNote(it, "event", "local", "text", it.text);
                 final Context a = app;
-                main.post(() -> { changed(); for (Listener l : snapshot()) l.onSent(it); ai.wizards.os.usuals.UsualsVoice.start(a, usual); });
+                main.post(() -> {
+                    changed(); for (Listener l : snapshot()) l.onSent(it);
+                    if (shortcut != null) {
+                        String why = ai.wizards.os.automation.AutomationEngine.get(a).startShortcut(shortcut);
+                        if (!why.isEmpty()) {
+                            Log.i(TAG, "shortcut refused: " + why);
+                            String say = ai.wizards.os.automation.AutomationPolicy.word(shortcut.optJSONObject("refusals"), why, "");
+                            if (!say.isEmpty()) android.widget.Toast.makeText(a, say, android.widget.Toast.LENGTH_LONG).show();
+                        }
+                    } else ai.wizards.os.usuals.UsualsVoice.start(a, usual);
+                });
                 return;
             }
         }

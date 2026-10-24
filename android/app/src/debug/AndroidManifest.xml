@@ -1,4 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug (QA) builds only: the overlay test host (OverlayE2eTest) and the instrumentation APK's dummy food app,
+     the one extra target device.automation allows in debug (AutomationPolicy.QA_TARGET, driven by AutomationE2eTest). -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <queries>
+        <package android:name="ai.wizards.os.qa.test" />
+    </queries>
     <application>
         <activity android:name=".OverlayTestActivity" android:exported="false" />
     </application>

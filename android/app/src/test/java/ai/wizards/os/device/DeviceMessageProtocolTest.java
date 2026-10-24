@@ -53,6 +53,22 @@ public class DeviceMessageProtocolTest {
         }
     }
 
+    @Test public void automationIsDiscoverableButHasNoCommitMethod() throws Exception {
+        JSONObject a = DeviceMessageProtocol.capabilities().getJSONObject("capabilities").getJSONObject("device.automation");
+        assertEquals(1, a.getInt("v"));
+        assertEquals("user-tap-on-native-cover-only", a.getString("commit"));
+        JSONArray methods = a.getJSONArray("methods");
+        for (int i = 0; i < methods.length(); i++) {
+            String name = methods.getString(i);
+            assertEquals(name.substring("device.automation.".length()), DeviceMessageProtocol.automationMethod(name));
+            assertNull(name, DeviceMessageProtocol.packageMethod(name));
+        }
+        for (String name : new String[]{"device.automation.confirm", "device.automation.commit", "device.automation.placeOrder",
+                "device.automation.tap", "device.automation.press", "device.automation", "automation.replay", "device.automation.replay.x"}) {
+            assertNull(name, DeviceMessageProtocol.automationMethod(name));
+        }
+    }
+
     @Test public void responsesAreVersionedAndPreserveLegacyPayloads() throws Exception {
         JSONObject payload = new JSONObject().put("apps", new JSONArray());
         JSONObject ok = DeviceMessageProtocol.answer("r1", payload, null);

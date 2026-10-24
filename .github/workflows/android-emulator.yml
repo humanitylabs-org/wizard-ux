@@ -47,7 +47,7 @@ jobs:
             adb shell svc data disable
             sleep 60
             bash tools/android_emulator_smoke.sh android/app/build/outputs/apk/debug/app-debug.apk smoke-out
-            cd android && ./gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=ai.wizards.os.DeviceBridgeE2eTest
+            cd android && ./gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=ai.wizards.os.DeviceBridgeE2eTest,ai.wizards.os.automation.AutomationE2eTest
       - name: Summary
         if: always()
         run: |

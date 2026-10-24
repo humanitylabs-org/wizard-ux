@@ -53,7 +53,7 @@ screen-mode actions. Features live in `web/` (or in their own Wizard app) and ca
 | `assist/` | 1,741 | **Split**: keep the assist/recognition service hosts; the surface page and its logic become web |
 | `mizel/` | 2,702 | **Split**: keep the meeting mic service and PCM frames; move meeting protocol, journal rules, sync and upload policy to web/Mizel app |
 | `apps/` | 957 | **Split**: keep the package installer capability; catalogue and policy come from the Wizard |
-| `usuals/` (Food) | 1,844 | **Move to web** via a generic accessibility-automation capability, or retire |
+| `usuals/` (Food) | 1,844 | **Move to web** via a generic accessibility-automation capability, or retire. In progress: `automation/` (device.automation v1) + `web/food/`; `usuals/` stays as the old-web fallback until proven on a device |
 | bundled assets (`assets/assist/*`) | 1,686 | **Load from the Wizard**: `orb.js` and `wizard-motion.*` are byte-identical copies of `web/` today |
 
 ## Order
