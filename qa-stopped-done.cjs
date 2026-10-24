@@ -23,19 +23,20 @@ const FIX = {
   qa_ds_stopped: { title: 'QA stopped no answer', st: 'cancelled', t: now - 30, rows: () => [row('user', 'Accidental voice note text', now - 60)] },
   qa_ds_failed: { title: 'QA failed no answer', st: 'failed', t: now - 40, rows: () => [row('user', 'Another prompt', now - 70)] },
   qa_ds_answered: { title: 'QA answered', st: 'completed', t: now - 50, rows: () => [row('user', 'Question', now - 300), row('assistant', 'Answer', now - 250)] },
-  qa_archived_running: { title: 'QA archived stale run', st: 'running', run: '', t: now - 55, rows: () => [row('user', 'Completed elsewhere', now - 280), row('assistant', 'Done.', now - 260)] },
+  qa_archived_running: { title: 'QA archived stale run', st: 'running', run: 'qa-archived-run', t: now - 55, rows: () => [row('user', 'Completed elsewhere', now - 280), row('assistant', 'Done.', now - 260)] },
 };
 function fixSession(id) {
   const f = FIX[id], rows = f.rows(), last = rows[rows.length - 1], lastU = rows[0];
   return { id, source: 'wizard-mobile', title: f.title, status: f.st, wizard_last_run_status: f.st, archived: id === 'qa_archived_running', hidden: false, message_count: rows.length,
-    started_at: f.t - 600, last_active: f.t, wizard_last_user_at: lastU.timestamp, wizard_last_assistant_at: f.t, wizard_activity_at: f.t, wizard_run_id: '',
+    started_at: f.t - 600, last_active: f.t, wizard_last_user_at: lastU.timestamp, wizard_last_assistant_at: f.t, wizard_activity_at: f.t, wizard_run_id: f.run || '',
     latest_message: { role: last.role, content: String(last.content).slice(0, 200), timestamp: last.timestamp },
     last_user_message: { role: 'user', content: lastU.content, timestamp: lastU.timestamp } };
 }
-const writes = [];
+const writes = [], reads = [];
 const route = async r => {
   const q = r.request(), u = new URL(q.url()), m = q.method();
   const json = (status, body) => r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+  if (m === 'GET' && u.pathname.includes('/qa-archived-run')) { reads.push(u.pathname); if (u.pathname.endsWith('/events')) return r.fulfill({ status: 200, contentType: 'text/event-stream', body: '' }); }
   if (m !== 'GET' && m !== 'HEAD') {
     const body = (q.postDataBuffer() || Buffer.alloc(0)).toString();
     writes.push({ m, p: u.pathname });
@@ -78,9 +79,22 @@ const overlap = (a, b) => !!a && !!b && a.x < b.r && b.x < a.r && a.y < b.b && b
     return p.evaluate(() => [...document.querySelectorAll('.win [data-chact]')].map(e => e.dataset.chact));
   };
   try {
+    let a = await acts('qa_archived_running');
+    const archivedThread = await p.evaluate(() => ({ state: document.querySelector('.win.focus .ch-thread .ti, .win .ch-thread .ti')?.getAttribute('title') || '', actions: [...document.querySelectorAll('.win.focus [data-chact], .win [data-chact]')].map(e => e.dataset.chact) }));
+    ok(a.includes('restore') && a.includes('snooze'), 'archived stale-running thread offers Restore and Snooze', a);
+    ok(archivedThread.state === 'Archived', 'archived stale-running thread header says Archived', archivedThread);
+    ok(!reads.some(path => path.endsWith('/events')) && reads.filter(path => path.endsWith('/qa-archived-run')).length <= 1, 'archived stale run opens no stream or polling loop', reads);
+    const followup = 'QA archived follow-up starts a fresh turn';
+    await p.locator('.win.focus .ch-compose textarea, .win .ch-compose textarea').fill(followup);
+    await p.locator('.win.focus .ch-send, .win .ch-send').tap(); await sleep(1200);
+    const routed = await p.evaluate(text => {
+      const item = [...(window.WosOutbox?._items?.values?.() || [])].find(x => x.text === text);
+      return item ? { steerRunId: item.steerRunId || '', sessionId: item.sessionId, state: item.state } : null;
+    }, followup);
+    ok(routed?.sessionId === 'qa_archived_running' && routed.steerRunId === '', 'archived follow-up starts a new turn instead of steering the stale run', routed);
     const st = await p.evaluate(() => __wos.live.session('qa_ds_stopped').status);
     ok(st === 'cancelled', 'fixture thread reads as cancelled', st);
-    let a = await acts('qa_ds_stopped');
+    a = await acts('qa_ds_stopped');
     ok(a.join() === 'done', 'stopped thread with no answer shows Done only', a);
     await p.screenshot({ path: path.join(OUT, '1-stopped-done.png') });
     const before = writes.length;
@@ -94,7 +108,7 @@ const overlap = (a, b) => !!a && !!b && a.x < b.r && b.x < a.r && a.y < b.b && b
     ok(a.join() === 'snooze,done', 'answered thread keeps Snooze and Done', a);
   } catch (e) { ok(false, 'run completed', String(e)); }
   ok(errs.length === 0, 'no page errors', errs);
-  ok(writes.every(w => w.p === '/wizard/thread-seen' || /\/sessions\/qa_ds_/.test(w.p)), 'only fixture writes (all intercepted)', writes);
+  ok(writes.every(w => w.p === '/wizard/thread-seen' || w.p === '/wizard/hermes/v1/runs' || /\/sessions\/qa_ds_/.test(w.p)), 'only fixture writes (all intercepted)', writes);
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`); console.log('shots', OUT);
   process.exit(fail ? 1 : 0);
