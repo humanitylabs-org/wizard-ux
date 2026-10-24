@@ -181,7 +181,7 @@ async function pickerAcceptance(browser, mode) {
  await activate(p,'.ch-focus-strip:visible [data-chfocusopt="agent:hermes"]');
  ok(await p.locator('[data-chspacepicker]').count()===1,mode+' tapping active agent opens picker');
  ok(await p.locator('[data-spspace="main-only"]').count()===1&&!await p.locator('[data-spspace="phil-only"]').count(),mode+' picker only owner agent Spaces');
- ok((await p.locator('[data-spspace="main-only"]').innerText()).includes('2'),mode+' picker counts persisted members outside loaded list window');
+ ok((await p.locator('[data-spspace="main-only"] small').innerText())==='0',mode+' picker excludes archived persisted members outside loaded list window');
  await activate(p,'[data-spspace="main-only"]');
  ok((await p.locator('.ch-focus-tab.on:visible').innerText()).includes('Main plans'),mode+' Space replaces agent label');
  ok((await p.locator('.ch-focus-tab.on:visible').getAttribute('data-chfocusopt'))==='agent:hermes',mode+' Space retains agent tab identity');
@@ -218,9 +218,56 @@ async function pickerAcceptance(browser, mode) {
  await ctx.close();
 }
 
+async function soloAcceptance(b) {
+ soloAgent=true;
+ try { for(const desktop of [false,true]) {
+  const mode=(desktop?'desktop':'phone')+' solo';sharedSpaces=[];
+  const {ctx,p}=await boot(b,desktop);
+  try {
+   await p.waitForTimeout(1200);await p.evaluate(()=>WosSkin.set('nebula'));await p.waitForTimeout(500);
+   ok(await p.locator('.ch-focus-strip').count()===0,mode+' zero Spaces hides strip');
+   const row=p.locator('[data-chopen="main_wos"]:visible');
+   await row.scrollIntoViewIfNeeded();
+   if(desktop)await row.click({button:'right'});
+   else {const r=await row.boundingBox(),cdp=await ctx.newCDPSession(p);await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:r.x+r.width/2,y:r.y+r.height/2}]});await p.waitForTimeout(600);await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();}
+   ok(await p.locator('[data-rsspacepicker]').count()===1,mode+' long-press offers Add to a Space with zero Spaces');
+   await activate(p,'[data-rsspacepicker]');
+   ok(await p.locator('[data-spnew]').count()===1,mode+' empty Add picker offers New Space');
+   await activate(p,'[data-spnew]');await p.locator('.ch-space-form input').fill('First space');
+   const prior=await snap(p);
+   await p.evaluate(()=>{if(window.__wos)__wos.onBack();else __wux.escStep();});
+   ok(!await p.locator('[data-chspacepicker]').count()&&JSON.stringify(await snap(p))===JSON.stringify(prior),mode+' Back closes nested New Space without leaving Chats');
+   await row.click({button:'right'});await activate(p,'[data-rsspacepicker]');await activate(p,'[data-spnew]');
+   const at=writes.length;await p.locator('.ch-space-form input').fill('First space');await p.locator('.ch-space-form').evaluate(f=>f.requestSubmit());await p.waitForTimeout(400);
+   ok(sharedSpaces.length===1&&sharedSpaces[0].threads.includes('main_wos'),mode+' first Space contains the held thread');
+   ok(!writes.slice(at).some(w=>w.path.endsWith('/v1/runs')),mode+' row-created Space starts no fill run');
+  } finally {await ctx.close();}
+  sharedSpaces=[{id:'solo',name:'Solo space',threads:['main_wos']},{id:'reading',name:'Reading',threads:['main_phil']}];
+  const r=await boot(b,desktop);
+  try { for(const skin of ['nebula','obsidian-light']) {
+   await r.p.evaluate(s=>WosSkin.set(s),skin);await r.p.waitForTimeout(400);await r.p.locator('.mz-intro').waitFor({state:'detached'});
+   await r.p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');if(window.__wos)a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);});
+   const strip=r.p.locator('.ch-focus-strip:visible');
+   ok(JSON.stringify(await strip.locator('[data-chfocusopt]').evaluateAll(es=>es.map(e=>e.dataset.chfocusopt)))===JSON.stringify(['all:','space:solo','space:reading'])&&await strip.locator('[data-chspacenew]').count()===1,mode+' '+skin+' All / Space / +, no agent chip');
+   await activate(r.p,'.ch-focus-strip:visible [data-chfocusopt="space:solo"]');
+   ok(!await r.p.locator('[data-chspacepicker]').count()&&JSON.stringify(await ids(r.p))===JSON.stringify(['main_wos']),mode+' '+skin+' Space tap directly filters without picker');
+   ok(await r.p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');return a.chats.listTitle(w)==='Solo space';}),mode+' '+skin+' header focus title is Space name');
+   await capture(r.p,mode+'-'+skin+'-flat-spaces');
+   await activate(r.p,'[data-chspacenew]:visible');
+   ok(await r.p.locator('.ch-space-form input').count()===1,mode+' '+skin+' + opens existing naming form');
+   await r.p.locator('.ch-space-form input').fill('Unsent name');
+   await capture(r.p,mode+'-'+skin+'-new-space');
+   const prior=await snap(r.p);await r.p.evaluate(()=>{if(window.__wos)__wos.onBack();else __wux.escStep();});
+   ok(!await r.p.locator('[data-chspacepicker]').count()&&JSON.stringify(await snap(r.p))===JSON.stringify(prior),mode+' '+skin+' Back from + form preserves app');
+  }} finally {await r.ctx.close();}
+ }} finally {soloAgent=false;sharedSpaces=[];}
+}
+
 (async()=>{
  const b=await chromium.launch({executablePath:process.env.QA_CHROME||undefined,args:['--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required']});
  try {
+ await soloAcceptance(b);
+ if(process.env.QA_SOLO_ONLY){console.log(`${pass} passed, ${fail} failed`);process.exitCode=fail?1:0;return;}
  await visualPicker(b);
  await pickerAcceptance(b,'phone');await pickerAcceptance(b,'desktop');
  if(process.env.QA_PICKER_ONLY){console.log(`${pass} passed, ${fail} failed`);process.exitCode=fail?1:0;return;}
@@ -390,7 +437,7 @@ async function pickerAcceptance(browser, mode) {
   await p.locator('[data-rsspace="reading"]').click();await p.waitForTimeout(80);
   ok(JSON.stringify(await ids(p))===JSON.stringify([])&&!sharedSpaces.find(s=>s.id==='reading').threads.includes('main_phil'),mode+' remove membership PUT and visible filter');
   await choose(p,'all:');await p.locator('[data-chopen="main_phil"]:visible').dispatchEvent('contextmenu');
-  await p.locator('[data-rsspace="reading"]').click();await p.waitForTimeout(80);
+  await activate(p,'[data-rsspacepicker]');await activate(p,'[data-spspace="reading"]');await p.waitForTimeout(80);
   ok(sharedSpaces.find(s=>s.id==='reading').threads.includes('main_phil'),mode+' context menu Add to Space syncs');
   await choose(p,'space:reading');
   const prefsBefore=writes.filter(w=>w.path==='/wizard/v1/ui-preferences').length;

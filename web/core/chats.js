@@ -720,7 +720,7 @@ window.WizCore.chats = function createChats(H) {
       </div></div>`;
   }
   function focusLabel(w) { const f = focusOf(w); return !f ? 'All' : f.kind === 'agent' ? agentRec(f.key).label : spaces().find(s => s.id === f.key)?.name || 'All'; }
-  // One stable option order for strip and Filter: All, agents, then owner-created Spaces.
+  // One stable option order for strip and Filter; the strip shows the level with a choice.
   function focusOptions() {
     const all = LIVE.unified().filter(s => !s.hidden);
     const stats = (kind, key, label, badge = '') => {
@@ -737,7 +737,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function focusOption(w, o, strip = false) {
     const f = focusOf(w), on = o.kind === 'all' ? !f : strip && o.kind === 'agent' ? focusedAgent(f) === o.key : f?.kind === o.kind && f.key === o.key;
-    const label = strip && on && f?.kind === 'space' ? spaces().find(s => s.id === f.key)?.name || o.label : o.label;
+    const label = strip && on && o.kind === 'agent' && f?.kind === 'space' ? spaces().find(s => s.id === f.key)?.name || o.label : o.label;
     const caret = strip && on && o.kind === 'agent' ? '<i class="ch-focus-caret" aria-hidden="true">⌄</i>' : '';
     return `<button type="button" class="${strip ? 'ch-focus-tab' : 'ch-fopt'}${on ? ' on' : ''}" data-chfocusopt="${o.kind}:${esc(o.key)}" aria-pressed="${on}"${strip && o.kind === 'agent' ? ' aria-haspopup="dialog" aria-expanded="false"' : ''}${strip && o.kind === 'agent' ? ` style="--ch-agent-colour:${AGS()?.colour(agentRec(o.key)) || ''}"` : ''}${strip ? ` aria-label="${esc(label !== o.label ? o.label + ' · ' + label : o.label)}${o.unread ? ` · ${o.unread} unread` : ''}"` : ''}>${o.badge}<span>${esc(label)}</span>${caret}${strip ? o.unread ? '<i class="ch-focus-dot" aria-hidden="true"></i>' : '' : `<small>${o.kind === 'agent' ? o.unread : o.count}</small>${on ? '<b>✓</b>' : ''}`}</button>`;
   }
@@ -750,8 +750,8 @@ window.WizCore.chats = function createChats(H) {
    * owner-made Space. A one-agent install sees no strip and no Focus section. */
   function focusUseful() { return focusAgents().length > 1 || visibleSpaces().length > 0; }
   function focusStrip(w) {
-    const opts = focusOptions();
-    return focusUseful() ? `<nav class="ch-focus-strip" aria-label="Chats focus">${opts.filter(o => o.kind !== 'space').map(o => focusOption(w, o, true)).join('')}</nav>` : '';
+    const opts = focusOptions(), solo = focusAgents().length === 1;
+    return focusUseful() ? `<nav class="ch-focus-strip" aria-label="Chats focus">${opts.filter(o => o.kind === 'all' || o.kind === (solo ? 'space' : 'agent')).map(o => focusOption(w, o, true)).join('')}${solo ? '<button type="button" class="ch-focus-tab" data-chspacenew aria-label="New Space" aria-haspopup="dialog" aria-expanded="false"><span aria-hidden="true">＋</span></button>' : ''}</nav>` : '';
   }
   // One local picker, rendered through the same Focus options as the filter sheet.
   let spacePicker = null, focusHoldUntil = 0;
@@ -763,10 +763,10 @@ window.WizCore.chats = function createChats(H) {
     if (old.tab?.isConnected) old.tab.focus({ preventScroll: true });
     return true;
   }
-  function openSpacePicker(w, agent, tab) {
+  function openSpacePicker(w, agent, tab, { naming = false, sid = '' } = {}) {
     if (!focusAgents().some(a => a.id === agent)) return;
     closeSpacePicker();
-    spacePicker = { wid: owner(w.id), agent, tab, naming: false, busy: false, error: '', name: '' };
+    spacePicker = { wid: owner(w.id), agent, tab, naming, sid, busy: false, error: '', name: '' };
     renderSpacePicker();
   }
   function renderSpacePicker() {
@@ -778,7 +778,7 @@ window.WizCore.chats = function createChats(H) {
     const allOn = f?.kind === 'agent' && f.key === p.agent;
     const wrap = document.createElement('div'); wrap.dataset.chspacepicker = '';
     wrap.className = 'ch-space-shade';
-    wrap.innerHTML = `<div class="ch-space-picker" role="dialog" aria-modal="true" aria-label="${esc(a.label)} Spaces" style="--ch-agent-colour:${AGS()?.colour(a) || ''}"><div class="ch-space-grab" aria-hidden="true"></div><header><i></i><b>${esc(a.label)}</b><button type="button" data-spclose aria-label="Close Spaces">×</button></header><div class="ch-space-rows"><button type="button" class="ch-fopt${allOn ? ' on' : ''}" data-spall aria-pressed="${allOn}"><span>All ${esc(a.label)} chats</span>${allOn ? '<b>✓</b>' : ''}</button>${rows.map(o => `<button type="button" class="ch-fopt${f?.kind === 'space' && f.key === o.key ? ' on' : ''}" data-spspace="${esc(o.key)}" aria-pressed="${f?.kind === 'space' && f.key === o.key}"><span>${esc(o.label)}</span><small>${o.count}</small>${o.unread ? '<i class="ch-focus-dot" aria-label="Unread"></i>' : ''}${f?.key === o.key ? '<b>✓</b>' : ''}</button>`).join('')}</div>${p.naming ? `<form class="ch-space-form"><label for="chSpaceName">New space</label><div><input id="chSpaceName" name="name" maxlength="60" placeholder="Space name" value="${esc(p.name)}" autocomplete="off" ${p.busy ? 'disabled' : ''}><button type="submit" ${p.busy || !p.name.trim() ? 'disabled' : ''}>${p.busy ? 'Creating…' : 'Create'}</button></div>${p.error ? `<p role="alert">${esc(p.error)}</p>` : ''}</form>` : '<button type="button" class="ch-space-new" data-spnew>+ New space</button>'}</div>`;
+    wrap.innerHTML = `<div class="ch-space-picker" role="dialog" aria-modal="true" aria-label="${p.sid ? 'Add to a Space' : esc(a.label) + ' Spaces'}" style="--ch-agent-colour:${AGS()?.colour(a) || ''}"><div class="ch-space-grab" aria-hidden="true"></div><header><i></i><b>${p.sid ? 'Add to a Space' : esc(a.label)}</b><button type="button" data-spclose aria-label="Close Spaces">×</button></header><div class="ch-space-rows">${p.sid ? '' : `<button type="button" class="ch-fopt${allOn ? ' on' : ''}" data-spall aria-pressed="${allOn}"><span>All ${esc(a.label)} chats</span>${allOn ? '<b>✓</b>' : ''}</button>`}${rows.map(o => `<button type="button" class="ch-fopt${f?.kind === 'space' && f.key === o.key ? ' on' : ''}" data-spspace="${esc(o.key)}" aria-pressed="${f?.kind === 'space' && f.key === o.key}"><span>${esc(o.label)}</span><small>${o.count}</small>${o.unread ? '<i class="ch-focus-dot" aria-label="Unread"></i>' : ''}${f?.key === o.key ? '<b>✓</b>' : ''}</button>`).join('')}</div>${p.naming ? `<form class="ch-space-form"><label for="chSpaceName">New space</label><div><input id="chSpaceName" name="name" maxlength="60" placeholder="Space name" value="${esc(p.name)}" autocomplete="off" ${p.busy ? 'disabled' : ''}><button type="submit" ${p.busy || !p.name.trim() ? 'disabled' : ''}>${p.busy ? 'Creating…' : 'Create'}</button></div>${p.error ? `<p role="alert">${esc(p.error)}</p>` : ''}</form>` : '<button type="button" class="ch-space-new" data-spnew>+ New space</button>'}</div>`;
     document.body.appendChild(wrap);
     const card = wrap.firstElementChild, strip = p.tab?.closest('.ch-focus-strip') || elOf(p.wid)?.querySelector('.ch-focus-strip'), r = strip?.getBoundingClientRect(), tr = p.tab?.getBoundingClientRect();
     if (r) { card.style.bottom = `${Math.max(8, innerHeight - r.top + 8)}px`; if (innerWidth > 640) card.style.left = `${Math.max(8, Math.min(tr?.left || r.left, innerWidth - 296))}px`; }
@@ -789,6 +789,7 @@ window.WizCore.chats = function createChats(H) {
       if (p.busy) return;
       if (e.target.closest('[data-spnew]')) { p.naming = true; renderSpacePicker(); return; }
       const s = e.target.closest('[data-spspace]');
+      if (s && p.sid) { spaceMember(s.dataset.spspace, p.sid, !spaceContains(s.dataset.spspace, p.sid)); closeSpacePicker(); return; }
       if (s || e.target.closest('[data-spall]')) { closeSpacePicker(); setFocus(w, s ? { kind: 'space', key: s.dataset.spspace } : { kind: 'agent', key: p.agent }); }
     });
     wrap.addEventListener('input', e => { if (e.target.name === 'name') { p.name = e.target.value; wrap.querySelector('[type="submit"]').disabled = !p.name.trim(); } });
@@ -808,12 +809,13 @@ window.WizCore.chats = function createChats(H) {
     if (spaces().some(s => spaceAgent(s) === p.agent && norm(s.name) === norm(name))) { p.error = 'Already a Space'; renderSpacePicker(); return; }
     if (spaces().length >= 50) { p.error = 'Maximum 50 Spaces'; renderSpacePicker(); return; }
     p.busy = true; p.error = ''; renderSpacePicker();
-    const space = { id: crypto.randomUUID(), name, agent: p.agent, threads: [], createdAt: new Date().toISOString() };
+    const space = { id: crypto.randomUUID(), name, agent: p.agent, threads: p.sid ? [p.sid] : [], createdAt: new Date().toISOString() };
     const list = [...spaces(), space];
     const saved = await LIVE.putPrefs({ spaces: list }, { requireShared: true });
     if (!saved) { p.busy = false; p.error = 'Couldn’t create space. Try again.'; if (spacePicker === p) renderSpacePicker(); return; }
     localStorage.setItem(SPACES_KEY, JSON.stringify(list)); window.dispatchEvent(new Event('wos:prefs'));
     if (spacePicker === p) closeSpacePicker();
+    if (p.sid) return; // Row discovery creates a collection with this thread, never an agent run.
     const w = W[p.wid]; if (!w) return;
     setFocus(w, { kind: 'space', key: space.id });
     const it = await sendChat(w.id, `Fill my new Space “${name}” (id ${space.id}): find my existing threads that belong in it and add them with the wizard-spaces skill, then tell me how many you added and list a few. Search only your own agent’s threads (${p.agent}); do not change other Spaces.`, 'creating a Space in Chats', null, { sid: '__new__', away: true, seal: false, captureId: 'space-fill:' + space.id });
@@ -1305,7 +1307,8 @@ window.WizCore.chats = function createChats(H) {
       <button type="button" data-rsopen>${'<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'}Open</button>
       <button type="button" data-rsrename>${RENAME_SVG}Rename</button>
       <button type="button" data-rspin>${PIN_SVG}${PIN.has(sid) ? 'Unpin' : 'Pin'}</button>
-      ${visibleSpaces().filter(space => spaceAgent(space) === (LIVE.agentOf(sid) || AGS()?.defaultId() || 'hermes')).map(space => `<button type="button" data-rsspace="${esc(space.id)}" data-add="${!space.threads.includes(sid)}">${PIN_SVG}${space.threads.includes(sid) ? 'Remove from' : 'Add to'} ${SPACE.one} · ${esc(space.name)}</button>`).join('')}
+      <button type="button" data-rsspacepicker>${PIN_SVG}Add to a Space…</button>
+      ${visibleSpaces().filter(space => spaceAgent(space) === (LIVE.agentOf(sid) || AGS()?.defaultId() || 'hermes') && space.threads.includes(sid)).map(space => `<button type="button" data-rsspace="${esc(space.id)}" data-add="${!space.threads.includes(sid)}">${PIN_SVG}${space.threads.includes(sid) ? 'Remove from' : 'Add to'} ${SPACE.one} · ${esc(space.name)}</button>`).join('')}
       ${topicOn() ? `<button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>` : ''}
       ${acts.map(a => `<button type="button" data-rsact="${a}">${ACT[a].icon}${ACT[a].label}</button>`).join('')}
       ${acts.length ? '' : `<p class="ch-sheet-n">${WORKING_ST.has(s.status) || ['waiting_for_approval', 'unknown'].includes(s.status) ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
@@ -2432,6 +2435,8 @@ window.WizCore.chats = function createChats(H) {
     const dr = e.target.closest('[data-chdraft]'); if (dr) { openNewDraft(owner(id), dr.dataset.chdraft); return true; }
     if (e.target.closest('[data-chbsmore]')) { window.WizCore.chatSearch?.more(id); renderChatList(w, elOf(id)); return true; }
     const cx = e.target.closest('[data-chchipx]'); if (cx) { const c = ch(id); c.filter = ''; c.filterFrom = null; c.coach = false; rerenderList(w); return true; }
+    const newSpace = e.target.closest('[data-chspacenew]');
+    if (newSpace) { openSpacePicker(w, focusAgents()[0].id, newSpace, { naming: true }); return true; }
     const fp = e.target.closest('[data-chfocusopt]'); if (fp) {
       if (Date.now() < focusHoldUntil) return true;
       const [kind, ...parts] = fp.dataset.chfocusopt.split(':'), key = parts.join(':');
@@ -2463,6 +2468,10 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chemoclear]') && rowSheet?.emoji) { const sheet = e.target.closest('.ch-emoji-sheet'), input = sheet?.querySelector('[data-chemosearch]'); if (input) { input.value = ''; renderEmojiSearch(sheet, ''); input.focus(); } return true; }
     const emoji = e.target.closest('[data-chtopicemoji]'); if (emoji && rowSheet?.emoji) { const { key } = rowSheet; if (TOPIC.set(key, emoji.dataset.chtopicemoji)) { closeRowSheet(); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww && !ww.thread) renderChats(ww); } toast(emoji.dataset.chtopicemoji, 'Topic emoji saved', 1400); } return true; }
     if (e.target.closest('[data-rsemo]') && rowSheet?.sid) { const { wid: rw, sid } = rowSheet, s = LIVE.session(sid); openEmojiSheet(rw, `thread:${sid}`, s?.title || 'Choose emoji'); return true; }
+    if (e.target.closest('[data-rsspacepicker]') && rowSheet?.sid) {
+      const { sid, trigger } = rowSheet; closeRowSheet();
+      openSpacePicker(w, LIVE.agentOf(sid) || AGS()?.defaultId() || 'hermes', trigger, { sid }); return true;
+    }
     const rsSpace = e.target.closest('[data-rsspace]');
     if (rsSpace && rowSheet?.sid) { const { sid } = rowSheet; closeRowSheet(); spaceMember(rsSpace.dataset.rsspace, sid, rsSpace.dataset.add === 'true'); return true; }
     if (e.target.closest('[data-rspin]') && rowSheet?.sid) { const { sid } = rowSheet, on = PIN.toggle(sid); closeRowSheet(); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
@@ -2600,7 +2609,7 @@ window.WizCore.chats = function createChats(H) {
     if (sig === outSig) return; outSig = sig;
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
-  return { openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle: w => focusAgents().length === 1 && focusOf(w)?.kind === 'space' ? focusLabel(w) : '', modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST,
     KIT, threadAct, openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };
