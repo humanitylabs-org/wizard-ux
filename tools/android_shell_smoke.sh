@@ -52,7 +52,15 @@ adb shell am force-stop "$PKG"; adb shell am start -W -n "$ACT" >/dev/null 2>&1
 wait_for cold "Can.t reach your Wizard" 40 && pass "remembers the Wizard across restarts" || bad "remembers the Wizard across restarts"
 
 # Back on the can't-reach screen retries instead of crashing or closing into a blank state.
+adb logcat -c
 adb shell input keyevent KEYCODE_BACK; sleep 3
+if ! adb shell pidof "$PKG" >/dev/null && adb logcat -d | grep -q "Killing .*$PKG.*in dying proc"; then
+  # A fresh emulator's Play services can die and take every app using its font provider with it. That is the
+  # system, not Back: say so, relaunch once and repeat the check (still strict).
+  echo "NOTE system killed $PKG (dependency in a dying process) during the Back check; repeating once" | tee -a "$OUT/result.txt"
+  adb shell am start -W -n "$ACT" >/dev/null 2>&1; wait_for cold2 "Can.t reach your Wizard" 40
+  adb shell input keyevent KEYCODE_BACK; sleep 3
+fi
 adb shell pidof "$PKG" >/dev/null && pass "alive after Back" || bad "alive after Back"
 
 # ---- Optional background recording (device.recording over wizardDevicePort), against the disposable HTTPS fixture
