@@ -293,7 +293,11 @@ public final class WizardId {
             }
             @Override public void onAuthenticationError(int code, CharSequence message) { if (current == generation) cancel(); }
         });
-        BiometricPrompt.PromptInfo.Builder b = new BiometricPrompt.PromptInfo.Builder().setTitle(title);
+        // System credential screens drop the PIN field under a long title: short title, the full sentence as the description.
+        String head = title.split(" · ", 2)[0];
+        if (head.length() > 48) head = head.substring(0, 47) + "…";
+        BiometricPrompt.PromptInfo.Builder b = new BiometricPrompt.PromptInfo.Builder().setTitle(head);
+        if (!head.equals(title)) b.setDescription(title);
         if (Build.VERSION.SDK_INT >= 30) b.setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG | androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL);
         else b.setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG).setNegativeButtonText("Cancel");
         prompt.authenticate(b.build(),new BiometricPrompt.CryptoObject(cipher));
