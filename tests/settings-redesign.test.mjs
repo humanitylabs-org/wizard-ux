@@ -166,6 +166,19 @@ test('New skin is last; nested Back returns to Look on both shells, never leaves
     assert.equal(h.view.context.skinDraft, null, 'leave invalidates pending form defaults');
   }
 });
+test('desktop implicit Appearance uses its feature lifecycle for New skin Back, refresh and leave', async () => {
+  const h = harness({shell:'desktop'});
+  h.s.WosMySkin = {recipes:[],state:{script:{}}};
+  h.s.WosExperience = {installed:async()=>[],defaults:async()=>({}),state:{tweaks:[]}};
+  h.view.render(); assert.equal(h.view.page, '');
+  h.act('data-newskin'); await tick();
+  assert.equal(h.root.dataset.settingsNested,'true');
+  const html = h.root.innerHTML; h.view.render(); assert.equal(h.root.innerHTML,html);
+  assert.equal(h.view.back(),true); assert.equal(h.view.context.skinDraft,null);
+  assert.equal(h.root.dataset.settingsNested,'false');
+  h.act('data-newskin'); h.view.focus('chats'); await tick();
+  assert.equal(h.view.context.skinDraft,null);
+});
 test('own tiles use base preview; own panel shows colours, edit hint and a nested remove confirmation', () => {
   const h = harness();
   const own = {id:'mine',name:'Quiet',base:'nebula',tweaks:{}};
