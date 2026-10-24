@@ -1423,7 +1423,7 @@
   }
   // "+ Get ..." tiles open the App Store on that section (store.js reads ?kind=).
   function openStoreKind(kind) {
-    closeSheets(true);
+    closeSheets(); // not quiet: the Apps sheet must close even when it was opened without a tracked sheet
     const url = AK.storeUrl(kind), id = Object.keys(W).find(k => W[k].appId === 'app-store' && deskOf(k) >= 0);
     if (id) { const f = winEl(id)?.querySelector('iframe'); W[id].url = url; if (f) f.src = url; const t = deskOf(id); if (t !== idx) goDesk(t, true); focusWin(id); save(); return; }
     openWin({ app: 'frame', appId: 'app-store', url });
