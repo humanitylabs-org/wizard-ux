@@ -724,7 +724,9 @@ window.WizCore.chats = function createChats(H) {
   function focusOptions() {
     const all = LIVE.unified().filter(s => !s.hidden);
     const stats = (kind, key, label, badge = '') => {
-      const rows = kind === 'all' ? all : all.filter(s => matchesFocus({ kind, key }, s));
+      // A Space counts its explicit members, including ones hydrated beyond the global archive window.
+      const members = kind === 'space' && LIVE.spaceSessions ? LIVE.spaceSessions(spaces().find(s => s.id === key)?.threads || [], { peek: true }).rows.filter(s => !s.hidden) : null;
+      const rows = members || (kind === 'all' ? all : all.filter(s => matchesFocus({ kind, key }, s)));
       return { kind, key, label, badge, count: rows.length, unread: rows.filter(s => LIVE.isNew(s)).length,
         recent: rows.reduce((n, s) => Math.max(n, Date.parse(s.activityAt || s.updatedAt || '') || 0), 0) };
     };
@@ -892,7 +894,9 @@ window.WizCore.chats = function createChats(H) {
     if (!AGID) morningPoll();
     const F = c.filter && STATUS[c.filter] ? STATUS[c.filter] : null, focus = focusOf(w);
     const fids = F?.ids ? F.ids(AGID) : null;
-    const all = (LST.ok ? (LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).filter(s => !s.hidden) : []).filter(s => (!F || (fids ? fids.has(s.id) : F.test(s))) && focusMatches(w, s));
+    const space = focus?.kind === 'space' ? spaces().find(s => s.id === focus.key) : null;
+    const members = space && LST.ok ? LIVE.spaceSessions?.(space.threads) : null;
+    const all = (LST.ok ? (members ? members.rows : LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).filter(s => !s.hidden) : []).filter(s => (!F || (fids ? fids.has(s.id) : F.test(s))) && focusMatches(w, s));
     const filtered = !!(F || focus);
     const titleHit = n ? all.filter(s => norm(s.title).includes(n) || norm(s.preview).includes(n)) : all;
     // Message bodies: searched lazily in the background (core/chat-search.js); hits stream in with a snippet.
@@ -920,7 +924,7 @@ window.WizCore.chats = function createChats(H) {
     const chips = (F ? chip('status', F.label) : '');
     const ph = filtered ? 'Search within' : 'Search chats and messages';
     const head = `<div class="ch-top"><div class="ch-search${F ? ' has-chips' : ''}">${chips}<input data-chsearch placeholder="${ph}" aria-label="Search chats and messages" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false">${c.q ? '<button type="button" class="ch-sclear" data-chsclear aria-label="Clear search">×</button>' : ''}<button type="button" class="ch-fbtn${F ? ' on' : ''}" data-chfbtn aria-label="Filter chats" aria-expanded="${c.sheet === 'status' ? 'true' : 'false'}"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button></div>${AGID ? '' : (window.WosBell?.html() || '')}</div>`
-      + (filtered && !LIVE.ok ? '' : filtered ? `<div class="ch-count">${hitCount()} ${hitCount() === 1 ? 'chat' : 'chats'}${coachLine()}</div>` : '');
+      + (filtered && !LIVE.ok ? '' : filtered ? `<div class="ch-count">${hitCount()} ${hitCount() === 1 ? 'chat' : 'chats'}${members?.pending ? ' · Loading Space…' : members?.failed ? ' · Some chats unavailable' : ''}${coachLine()}</div>` : '');
     // Suggestions while typing (or focused on an empty field): filters that match the words, then a new chat.
     const sug = !c.sugOff && (c.q || c.focus) ? matchFilters(c.q, 3).filter(f => !(f.kind === 'status' && f.key === c.filter) && !(f.kind === focus?.kind && f.key === focus.key)) : [];
     // Filter suggestions only. New chat lives in one place, the bottom-right button (James, 24 Oct 2026: no second New chat in search).

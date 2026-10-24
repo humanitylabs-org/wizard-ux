@@ -1,6 +1,6 @@
 # Wizard OS components: reuse before build
 
-**One implementation per capability.** Before you build any UI, chat, auth, upload, settings, visual or per-agent-kind logic, find the need below and reuse its entry point. If a row nearly fits, **extend that module** (as PR #338 added `Orb.create` to `web/orb.js`) instead of building beside it. NEW is only for a need no row covers: it lands in `web/core/` with a row here in the same PR, never inside an app.
+**One implementation per capability.** Find the need below and reuse its entry point. Extend near-fit modules instead of building beside them. NEW lands in `web/core/` with a row here, never inside an app.
 
 Every PR body carries a `Reuse:` block (see `.github/pull_request_template.md`); CI checks it (`tools/reuse-check.mjs`) and checks that every shell global is listed here (`tests/components-inventory.test.mjs`).
 
@@ -43,7 +43,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
 | Model picker, errors and retry, composer mic, work receipts, reading place | `WosChatPower` (`web/core/chat-power.js`) + `WosModels` (`web/core/chat-models.js`), `WosErrors` (`web/core/chat-errors.js`), `WosWork` (`web/core/chat-work.js`) | own model list, own error card, own reading-position store |
 | Markdown, drafts, rich copy, Bangkok time, media viewer | `WosChat` (`web/core/chat-kit.js`: `md`, `copyRich`, `viewer`) | a markdown library, own lightbox |
-| Owner-created Spaces / Focus | `WizCore` Chats (`web/core/chats.js`), `WizLive.putPrefs` (`spaces` in box-wide ui-preferences); `winAgent` / `modelRoute` drive every new-chat adapter; `WosAgents.colour` / `distinctHues` drive tab identity and `--ch-agent-hue` list tint | automatic subject tabs, separate collection store, per-shell Focus routing or section implementations |
+| Owner-created Spaces / Focus | `WizCore` Chats (`web/core/chats.js`), `WizLive.putPrefs` (`spaces` in box-wide ui-preferences); `WizLive.spaceSessions(ids)` hydrates missing focused members outside global list windows (memory-only, four concurrent reads); `winAgent` / `modelRoute` drive every new-chat adapter; `WosAgents.colour` / `distinctHues` drive tab identity and `--ch-agent-hue` list tint | automatic subject tabs, separate collection store, per-shell Focus routing or section implementations |
 | Pinned threads (synced across devices) | `WosChatPins` (`web/core/chat-pins.js`) | device-local pin lists |
 | Snooze a thread/message until a time or Someday (existing deferred disposition); one-tap presets Later today · Tomorrow · In 2/3/5 days · Next week · Someday, exact picker last as "Other date…"; a successful thread Snooze goes back like Done (threadBack) | `WosBoomerang` (`web/core/scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`web/core/schedules.js`) | own timers or reminder stores |
 | Thread topic emoji | `WosTopicEmoji` (`web/core/chat-topic-emojis.js`, data `WosTopicEmojiData`) | — |
