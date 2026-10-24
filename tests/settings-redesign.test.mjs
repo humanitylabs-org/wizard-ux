@@ -12,7 +12,7 @@ function harness({ android = false, shell = 'phone', installed = true, failure =
   s.WizCore = { refreshApps: async () => { if (!stale) current = slot; } };
   s.WizBrand = { html: 'W' };
   s.WizChatsHost = { defaultId: () => current, installed: () => [{ id: 'wizard-chats', name: 'Chats' }, ...(installed ? [{ id: 'mizel-chats', name: 'Mizel Chats' }] : [])] };
-  s.WosSkin = { current: 'nebula', list: [{ id: 'nebula', name: 'Nebula' }, { id: 'obsidian-light', name: 'Light' }], families: [{ id: 'wizard', name: 'Wizard', palettes: ['nebula'] }, { id: 'mizel', name: 'Mizel', palettes: ['obsidian-light'], recommends: { chats: 'mizel-chats' } }], familyOf: id => id === 'nebula' ? 'wizard' : 'mizel' };
+  s.WosSkin = { current: 'nebula', list: [{ id: 'nebula', name: 'Nebula' }, { id: 'obsidian-light', name: 'Light' }], families: [{ id: 'wizard', name: 'Wizard', palettes: ['nebula'] }, { id: 'mizel', name: 'Mizel', palettes: ['obsidian-light'] }], familyOf: id => id === 'nebula' ? 'wizard' : 'mizel' };
   s.fetch = async (url, opts = {}) => {
     if (opts.method === 'POST') { posts.push({ url, ...opts }); if (failure) return { ok: false, json: async () => ({ error: 'Owner connection needed' }) }; slot = JSON.parse(opts.body).default; return { ok: true }; }
     reads.push(url); return { ok: true, json: async () => ({ default: slot }) };
@@ -28,7 +28,7 @@ test('root is only an index: seven Android categories and no feature bodies; des
   assert.equal((h.root.innerHTML.match(/class="st-category"/g) || []).length, 7);
   assert.doesNotMatch(h.root.innerHTML, /data-settings-feature=/);
   assert.doesNotMatch(h.root.innerHTML, /st-attention/);
-  assert.match(h.root.innerHTML, /Wizard · Nebula/);
+  assert.match(h.root.innerHTML, /<small data-st-subtitle="appearance">Nebula<\/small>/, 'Look reads as the skin name alone');
   assert.match(h.root.innerHTML, /Nothing waiting/);
   const d = harness({ shell: 'desktop' }); assert.match(d.root.innerHTML, /st-desktop/); assert.match(d.root.innerHTML, /data-settings-feature="look"/);
 });
@@ -76,18 +76,20 @@ test('unconfirmed registry does not claim success or rerender Chats', async () =
   const h = harness({ stale: true }); h.view.focus('chats-default'); h.act('data-chats-choice', 'mizel-chats'); h.act('data-chats-confirm'); await tick();
   assert.equal(h.changed.length, 0); assert.match(h.notices[0][1], /app list has not confirmed/);
 });
-test('built-in only has selected built-in and a Store hint; uninstalled suggestion opens exact Store app', () => {
+test('built-in only has selected built-in and a Store hint; Store opens the Store', () => {
   const h = harness({ installed: false }); h.view.focus('chats-default');
   assert.match(h.root.innerHTML, /aria-checked="true" data-chats-choice="wizard-chats"/); assert.match(h.root.innerHTML, /Install another Chats from the/);
-  h.s.WosSkin.current = 'obsidian-light'; h.view.render(); assert.match(h.root.innerHTML, /Mizel goes with Mizel Chats/); assert.match(h.root.innerHTML, />Get it<\/button>/);
-  h.act('data-chats-suggest', 'mizel-chats'); assert.deepEqual(h.stores, ['mizel-chats']); assert.equal(h.posts.length, 0);
+  h.act('data-chats-store'); assert.deepEqual(h.stores, [undefined]); assert.equal(h.posts.length, 0);
 });
-test('recommendation appears on both pages, never switches automatically, and Not now persists per skin family', () => {
-  const h = harness(); h.s.WosSkin.current = 'obsidian-light';
-  for (const feature of ['look', 'chats-default']) { h.view.focus(feature); assert.match(h.root.innerHTML, /Mizel goes with Mizel Chats/); assert.match(h.root.innerHTML, />Use it<\/button>/); }
-  assert.equal(h.posts.length, 0); h.act('data-chats-dismiss', 'mizel');
-  for (const feature of ['look', 'chats-default']) { h.view.focus(feature); assert.doesNotMatch(h.root.innerHTML, /data-chats-suggestion/); }
-  assert.equal(h.storage.get('wos.settings.chats.dismiss.mizel'), 'mizel-chats'); assert.equal(h.posts.length, 0);
+test('no skin suggests a Chats app: Look and Chats show no pairing on any skin', () => {
+  const h = harness();
+  for (const skin of ['nebula', 'obsidian-light']) {
+    h.s.WosSkin.current = skin;
+    for (const feature of ['look', 'chats-default']) { h.view.focus(feature); assert.doesNotMatch(h.root.innerHTML, /data-chats-suggestion|goes with/); }
+  }
+  h.view.focus('look');
+  assert.doesNotMatch(h.root.innerHTML, /skp-fam/); assert.match(h.root.innerHTML, /data-skinpick="nebula"[\s\S]*data-skinpick="obsidian-light"/);
+  assert.equal(h.posts.length, 0);
 });
 
 test('index opens on My release as one hero card, then the categories; Look is design only; About comes last', () => {

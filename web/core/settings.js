@@ -50,17 +50,6 @@
     const h = window.WosUpdates?.hero?.(); if (!h) return '';
     return `<button class="st-hero" data-st-page="release" aria-current="${selected === 'release' ? 'page' : 'false'}"><span class="st-tx"><b>${esc(h.title)}</b>${h.lines.map(l => `<small>${esc(l)}</small>`).join('')}</span>${h.state ? `<span class="st-hero-state ${esc(h.tone)}">${esc(h.state)}</span>` : ''}<span class="st-go" aria-hidden="true">›</span></button>`;
   }
-  function recommendation() {
-    const S = window.WosSkin, f = S && famOf(S, S.current), id = f?.recommends?.chats;
-    if (!id || id === chatsHost()?.defaultId()) return null;
-    try { if (localStorage.getItem('wos.settings.chats.dismiss.' + f.id) === id) return null; } catch (_) {}
-    return { family: f.id, name: f.name, id, installed: !!chatsHost()?.installed().some(a => a.id === id) };
-  }
-  function suggestionHtml() {
-    const r = recommendation(); if (!r) return '';
-    const name = r.installed ? chatsName(r.id) : r.id === 'mizel-chats' ? 'Mizel Chats' : r.id;
-    return `<aside class="st-suggestion" data-chats-suggestion><b>${esc(r.name)} goes with ${esc(name)}</b><div class="st-actions"><button data-chats-suggest="${esc(r.id)}">${r.installed ? 'Use it' : 'Get it'}</button><button class="ghost" data-chats-dismiss="${esc(r.family)}">Not now</button></div></aside>`;
-  }
   function register(feature) {
     if (!feature.id || features.has(feature.id) || typeof feature.html !== 'function') throw new Error('Settings feature requires a unique id and html');
     features.set(feature.id, feature);
@@ -170,11 +159,10 @@
       for (const m of mounts) m.render();
     }
   }
-  // Settings › Look (wizard-os spec/SKINS_AND_VIEWS.md §1): one card per skin, then that skin's palettes (Colours).
-  // Picking a skin puts on the palette last worn in it; picking a colour applies at once, in place.
-  const famOf = (S, id) => S.families?.find(f => f.id === S.familyOf?.(id)) || null;
-  const lookName = (S, id) => { const f = famOf(S, id), p = S.list.find(k => k.id === id)?.name || ''; return f ? `${f.name} · ${p}` : p; };
-  // Skin picker: a grid of small preview cards, one per colour, grouped under its skin. Each card is a miniature of
+  // Settings › Look: skins are design only, so every look is one card in one flat grid, named by its own name
+  // (no per-person groups, no app pairing). Picking a card applies it at once, in place.
+  const lookName = (S, id) => S.list.find(k => k.id === id)?.name || '';
+  // Skin picker: a grid of small preview cards, one per look, in the skins' own order. Each card is a miniature of
   // that look (its background, a reply and a sent bubble, the dock with its orb) drawn in CSS from its own tokens, with
   // the name set in its own face. Names stay hidden until those faces load (at most 2.5s), so they never flash.
   let facesP = null, facesReady = false;
@@ -195,14 +183,10 @@
   const mini = k => `<span class="skp-mini" data-skp="${esc(k.id)}" style="${pvars(k)}" aria-hidden="true"><i class="skp-a"></i><i class="skp-a skp-a2"></i><i class="skp-u"></i><i class="skp-dock"><i class="skp-orb"></i></i></span>`;
   const skinCard = (k, cur) => `<button type="button" class="skp-card" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}">${mini(k)}<span class="skp-nm" style="${esc(faceCss(k.face))}">${esc(k.name)}</span></button>`;
   function lookHtml(S) {
-    const cur = S.current, fams = S.families?.length ? S.families : [{ id: '', name: '', palettes: S.list.map(k => k.id) }];
+    const cur = S.current;
     loadFaces();
-    const groups = fams.map(f => {
-      const pals = f.palettes.map(id => S.list.find(k => k.id === id)).filter(Boolean); if (!pals.length) return '';
-      const head = fams.length > 1 ? `<div class="skp-fam">${esc(f.name)}</div>` : '';
-      return `${head}<div class="skp" role="group" aria-label="${esc(f.name || 'Skin')} colours">${pals.map(k => skinCard(k, cur)).join('')}</div>`;
-    }).join('');
-    return `<div class="st-group" data-stgroup="look"><div class="sk-row"><h4 class="sk-head">Skin <small data-skinname>${esc(lookName(S, cur))}</small></h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${groups}</div></div>${suggestionHtml()}${mySkinRow(S.list.find(k => k.id === cur)?.name || '')}${layoutRow()}</div>`;
+    const grid = `<div class="skp" role="group" aria-label="Skins">${S.list.map(k => skinCard(k, cur)).join('')}</div>`;
+    return `<div class="st-group" data-stgroup="look"><div class="sk-row"><h4 class="sk-head">Skin <small data-skinname>${esc(lookName(S, cur))}</small></h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}</div></div>${mySkinRow(lookName(S, cur))}${layoutRow()}</div>`;
   }
   /* Layout: how the shell behaves (orbs, gestures), worn over any skin. Classic = the shell as everyone has it. */
   function layoutRow() {
@@ -297,7 +281,7 @@
   register({ id: 'chats-default', page: 'chats', aliases: ['chats-default'], html(ctx) {
     const host = chatsHost(), apps = host?.installed() || [{ id: 'wizard-chats' }], current = host?.defaultId() || 'wizard-chats';
     apps.sort((a, b) => (b.id === 'wizard-chats') - (a.id === 'wizard-chats'));
-    return `<div class="st-group"><h4>Default Chats</h4><div class="st-chats-options" role="radiogroup" aria-label="Default Chats">${apps.map(a => `<button class="st-row" role="radio" aria-checked="${a.id === current}" data-chats-choice="${esc(a.id)}" ${ctx.chatsBusy ? 'disabled' : ''}><span aria-hidden="true">${a.id === current ? '◉' : '○'}</span><span class="st-tx"><b>${esc(a.id === 'wizard-chats' ? 'Wizard Chats (built in)' : a.name)}</b></span></button>`).join('')}</div>${apps.length === 1 ? '<div class="st-store-hint">Install another Chats from the <button data-chats-store>Store</button> to switch</div>' : ''}${suggestionHtml()}</div>`;
+    return `<div class="st-group"><h4>Default Chats</h4><div class="st-chats-options" role="radiogroup" aria-label="Default Chats">${apps.map(a => `<button class="st-row" role="radio" aria-checked="${a.id === current}" data-chats-choice="${esc(a.id)}" ${ctx.chatsBusy ? 'disabled' : ''}><span aria-hidden="true">${a.id === current ? '◉' : '○'}</span><span class="st-tx"><b>${esc(a.id === 'wizard-chats' ? 'Wizard Chats (built in)' : a.name)}</b></span></button>`).join('')}</div>${apps.length === 1 ? '<div class="st-store-hint">Install another Chats from the <button data-chats-store>Store</button> to switch</div>' : ''}</div>`;
   } });
   function mount(root, adapter) {
     root.classList.add('st-root'); root.dataset.settingsRoot = '';
@@ -386,10 +370,6 @@
       if (shortcut) { const id = shortcut.dataset.stShortcut; if (id === 'files') ctx.openSub('files'); else window.WosFeatures?.open(id); return true; }
       const choose = el.closest('[data-chats-choice]'); if (choose) { askChats(choose.dataset.chatsChoice); return true; }
       if (el.closest('[data-chats-store]')) { openStore(); return true; }
-      const suggest = el.closest('[data-chats-suggest]');
-      if (suggest) { const r = recommendation(); if (r?.installed) askChats(r.id); else if (r) openStore(r.id); return true; }
-      const dismiss = el.closest('[data-chats-dismiss]');
-      if (dismiss) { const r = recommendation(); if (r) { try { localStorage.setItem('wos.settings.chats.dismiss.' + r.family, r.id); } catch (_) {} for (const m of mounts) m.render(); } return true; }
       const id = el.closest('[data-settings-feature]')?.dataset.settingsFeature, f = features.get(id);
       return !!f?.act?.(ctx, el, event);
     }
