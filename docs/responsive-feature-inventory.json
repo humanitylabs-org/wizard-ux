@@ -168,7 +168,7 @@
     "core/os-updates.js",
     "core/own-views.css",
     "core/own-views.js",
-    "core/photos-settings.js",
+    "core/photos-relay.js",
     "core/polish.css",
     "core/reach.js",
     "core/resources.css",
@@ -481,12 +481,12 @@
       ],
       "note": "Shared own-screen fallback and shell-only Settings confirmation; same App Manager owner listener as Updates"
     },
-    "core/photos-settings.js": {
+    "core/photos-relay.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import after settings.js; Settings \u203a Photos backup shows only where the Android app's window.wizardPhotosPort exists"
+      "note": "Shell relay for the optional Photos app frame (/photos/) to the Android app's window.wizardPhotosPort; draws no UI. Without the port it answers no-bridge"
     },
     "core/music-voice.js": {
       "loadedBy": [
