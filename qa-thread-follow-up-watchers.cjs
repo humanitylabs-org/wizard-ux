@@ -241,6 +241,36 @@ const ok = (condition, name, detail = '') => {
     const approval = await page.evaluate(() => ({ title: document.querySelector('.appr b')?.textContent, action: document.querySelector('.appr pre')?.textContent, choices: [...document.querySelectorAll('.appr [data-approve]')].map(item => item.dataset.approve) }));
     ok(approval.title === 'Needs your approval' && /restore snapshot/.test(approval.action) && approval.choices.join() === 'allow_once,deny', 'owner-decision watcher shows the current approval choices', approval);
     await page.screenshot({ path: path.join(OUT, '03-owner-decision-mobile.png'), fullPage: true });
+
+    // While a watcher occurrence is really running, Stop watching remains the only available action.
+    const runningThread = 'chat-long';
+    const runningWatch = scheduler.create({ name: 'Running watcher', kind: 'watch', when: { every: 10 }, prompt: 'Hold this watcher until explicitly stopped.', thread: runningThread, agent: 'main' });
+    const runsBeforeHold = fixture.fixture.runs.size;
+    scheduler.runNow(runningWatch.id); await scheduler.tick(false);
+    await until(() => fixture.fixture.runs.size > runsBeforeHold && [...fixture.fixture.runs.values()].at(-1)?.scenario === 'hold');
+    await until(async () => { await scheduler.refreshRuns(); return scheduler.project(scheduler.get(runningWatch.id)).lastRun?.outcome === 'running'; });
+    await page.evaluate(() => window.__wos.live.refresh());
+    await page.waitForFunction(id => {
+      const session = window.__wos.live.session(id);
+      return session?.status === 'running' && session.followUp?.active;
+    }, runningThread, { timeout: 15000 });
+    await page.evaluate(id => window.__wos.openWizardThread(id), runningThread);
+    await page.waitForFunction(() => document.querySelector('.ch-tacts [data-chact="stop_watch"]'));
+    const runningActions = await page.evaluate(() => [...document.querySelectorAll('.ch-tacts [data-chact]')].map(button => ({ action: button.dataset.chact, text: button.textContent.trim() })));
+    ok(runningActions.map(item => item.action).join() === 'stop_watch' && runningActions[0]?.text === 'Stop', 'running watcher exposes only the compact Stop control', runningActions);
+    await page.screenshot({ path: path.join(OUT, '04-running-watcher-mobile.png'), fullPage: true });
+    await page.locator('[data-chback]').tap();
+    await page.waitForFunction(() => !document.querySelector('.ch-thread'));
+    const runningRow = page.locator(`.ch-list [data-chopen="${runningThread}"]`).first();
+    await runningRow.scrollIntoViewIfNeeded();
+    await longPress(runningRow);
+    await page.waitForFunction(() => document.querySelector('.ch-sheet [data-rsact="stop_watch"]'));
+    const runningSheet = await page.evaluate(() => [...document.querySelectorAll('.ch-sheet [data-rsact]')].map(button => ({ action: button.dataset.rsact, text: button.textContent.trim() })));
+    ok(runningSheet.map(item => item.action).join() === 'stop_watch' && runningSheet[0]?.text === 'Stop watching', 'running watcher row sheet exposes only Stop watching', runningSheet);
+    await page.locator('.ch-sheet [data-rsact="stop_watch"]').tap();
+    await until(() => scheduler.get(runningWatch.id).enabled === false);
+    ok([...fixture.fixture.runs.values()].at(-1)?.status === 'running', 'Stop watching prevents future polls without pretending to abort the active check');
+
     ok(errors.length === 0, 'browser produced no page errors', errors);
     await ctx.close();
   } finally {

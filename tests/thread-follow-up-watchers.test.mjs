@@ -11,6 +11,12 @@ test('active follow-ups keep Snooze, make Done temporary, and expose explicit St
   assert.match(chats, /Stop watching/);
   assert.match(chats, /\['snooze', 'stop_watch', 'done'\]/);
   assert.match(chats, /LIVE\.stopWatching\(sid\)/);
+  assert.match(chats, /WORKING_ST\.has\(s\.status\).*return watching \? \['stop_watch'\] : \[\]/);
+});
+
+test('archived watcher checks stay out of Working while their silent run is active', () => {
+  const grouping = live.slice(live.indexOf('function groupWork'), live.indexOf('async function fetchDispositions'));
+  assert.ok(grouping.indexOf('if (s.archived)') < grouping.indexOf('else if (inWorking(s))'));
 });
 
 test('Done and Snooze remain presentation actions; only Stop watching hits the cancellation route', () => {
