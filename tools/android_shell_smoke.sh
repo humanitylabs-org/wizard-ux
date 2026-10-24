@@ -147,7 +147,8 @@ PY
   }
   adb shell appops set "$PKG" SYSTEM_ALERT_WINDOW allow
   echo up > "$FIXTURE_OUT/orb"; echo orb > "$FIXTURE_OUT/mode"
-  adb logcat -c
+  # Cold start: the recovery page above navigated to /elsewhere/, and singleTask would just resume it.
+  adb shell am force-stop "$PKG"; adb logcat -c
   adb shell am start -W -n "$ACT" >/dev/null 2>&1
   wait_ev orb 40; [ "$(ev orb r.on)" = "true" ] && pass "orb: the Wizard turns the orb on (device.orb.enable)" || bad "orb: the Wizard turns the orb on ($(ev orb r))"
   sleep 2; [ "$(orbwin)" = "0" ] && pass "orb: hidden while the Wizard app is in front" || bad "orb: hidden while the Wizard app is in front"
@@ -190,7 +191,7 @@ PY
   echo up > "$FIXTURE_OUT/orb"
 
   # Hold hides it, and it stays off.
-  read -r OX OY <<< "$(orb_xy)"
+  read -r OX OY <<< "$(orb_xy)"; echo "orb centre before hold: $OX,$OY" >> "$OUT/result.txt"
   adb shell input swipe "$OX" "$OY" "$OX" "$OY" 1500; sleep 2
   orblog | grep -q "orb off: hold" && [ "$(orbwin)" = "0" ] && pass "orb: hold hides it" || bad "orb: hold hides it"
   adb shell input keyevent KEYCODE_HOME; sleep 2
