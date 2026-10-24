@@ -19,3 +19,9 @@ test('Settings styles the bars in the skin\'s own tokens (stock skins included),
   for (const sel of ['.st-res .rs-bf', '.st-res .rs-bs.rs-crit .rs-bf', '.st-res .rs-br-off .rs-bs']) assert.ok(css.includes(sel + ' {'), sel);
   assert.doesNotMatch(css.slice(css.indexOf('Settings › Resources')), /html\[data-skin/, 'no per-skin rules');
 });
+test('a Settings host keeps the readings polling (not only Home), and the detail sheet returns focus to the bar that opened it', () => {
+  assert.match(src, /function schedule\(\)\{clearTimeout\(S\.timer\);S\.timer=null;if\(viewing\(\)\)/);
+  assert.match(src, /function sync\(\)\{if\(!viewing\(\)\)/);
+  assert.match(src, /if\(b\.hasAttribute\('data-res-open'\)\)\{open\(b\.dataset\.resOpen\);S\.openerEl=b;\}/);
+  assert.match(src, /const from=S\.openerEl;S\.openerEl=null;if\(from\?\.isConnected&&from\.getClientRects\(\)\.length\)\{from\.focus/);
+});
