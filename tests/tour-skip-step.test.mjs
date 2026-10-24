@@ -127,6 +127,18 @@ test('a hold during Talk never advances it, even when it ran as a command (Codex
   }
 });
 
+test('a hold during Hide is a wrong gesture too: what it opened closes, Hide stays (Codex P2 on #456)', () => {
+  for (const ev of [['command', { ok: true, text: 'Settings' }], ['nomatch', { text: 'x' }]]) {
+    const t = boot();
+    t.T.start('qa'); t.tap('[data-tnext]'); t.calls.length = 0;
+    t.T.event(...ev);
+    assert.equal(t.T.step, 2);
+    assert.match(t.view().copy, /That was a hold\. Swipe the orb down instead\./);
+    assert.ok(['dismissVoice', 'closeSheets', 'home'].every(c => t.calls.includes(c)), JSON.stringify(t.calls));
+    t.runTimers(); assert.equal(t.T.step, 2); assert.match(t.view().copy, /Swipe the orb down to hide/);
+  }
+});
+
 test('skipping Hide while the bars are hidden brings them back first', () => {
   const t = boot();
   t.T.start('qa'); t.tap('[data-tnext]');

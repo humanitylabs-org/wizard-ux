@@ -81,6 +81,10 @@ const settle = (p, ms = 3500) => p.waitForFunction(() => document.querySelector(
   ok(t.dots === 2 && t.next === 'Skip this step' && t.skip === 'Skip tour', 'two progress dots, "Skip this step" and "Skip tour" shown', JSON.stringify(t));
   await p.screenshot({ path: `${SHOTS}/04-beat2-hide.png` });
 
+  // Beat 2, a hold that opens Settings by command: closed again, Hide stays (Codex P2 on #456).
+  await p.evaluate(() => __wos.runUtterance('Settings', 'command')); await p.waitForTimeout(900);
+  t = await T(p); ok(t.step === 2 && !(await p.evaluate(() => __wos.sheet)) && t.idx === 0 && /That was a hold/.test(t.copy), 'beat 2: a hold that opened Settings → sheet closed, still on Hide', JSON.stringify(t));
+  await p.waitForTimeout(2400);
   // Beat 2 Hide: swipe up is steered; swipe down hides the bars (distraction-free); Back brings them back.
   await swipe(p, -120); t = await T(p);
   ok(t.step === 2 && /Down, not up/.test(t.copy) && !(await p.evaluate(() => __wos.sheet)), 'beat 2: swipe up → "Down, not up."', t.copy);

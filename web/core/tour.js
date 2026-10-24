@@ -107,21 +107,24 @@
     if (type === 'voice') { el.classList.toggle('tr-live', d.state !== 'idle'); return; }
     if (type === 'nomic') { if (!typed) { typed = true; log('typed'); later(() => { if (!active()) return; H.prepare(); el.classList.remove('tr-live'); go(step); }, 700); } return; }
     if (step === 1) {
-      // Only a real message moves Talk on. A hold is steered back to a tap, whether or not it ran as a command
-      // (the tour no longer teaches commands; anything a command opened is put back behind Home).
+      // Only a real message moves Talk on. A hold is a wrong gesture (below), whether or not it ran as a command.
       if (type === 'sent') {
         busy = true; misses = 0; spot('open');
         setCopy('Sent. Your Wizard is working on it.', sub(1));
         return later(() => go(2), 2200);
       }
       if (type === 'nospeech') { misses++; busy = false; return nudge('Didn’t hear anything. Tap, speak, then tap again.', 3200); }
-      if (type === 'nomatch' || type === 'command') { busy = false; H.dismissVoice(); H.goHome(); return nudge('That was a hold. For this one, just tap.'); }
     }
     if (step === 2) {
       if (type === 'zen' && d.on) { inbox = true; spot('closed'); setCopy('Nothing in the way. Swipe up from the bottom edge to bring it back.', sub(2)); return; }
       if (type === 'zen' && !d.on && inbox) { inbox = false; return later(() => go(DONE), 250); }
     }
     // Wrong gesture: undo what the shell did and steer back to the beat.
+    // A hold (the tour no longer teaches commands): drop the take, close whatever a command opened, back to Home.
+    if ((type === 'command' || type === 'nomatch') && step < DONE) {
+      busy = false; H.dismissVoice(); H.closeSheets(); H.goHome();
+      return nudge(step === 1 ? 'That was a hold. For this one, just tap.' : 'That was a hold. Swipe the orb down instead.');
+    }
     if (type === 'sheet' && d.which === 'launcher') { H.closeSheets(); return nudge(step === 2 ? 'Down, not up.' : 'That’s every app. We’ll come back to it.'); }
     if (type === 'desk' && step < DONE && !busy && !d.home) { H.goHome(); return nudge('That moves between desks. Try the beat above.'); }
   }
