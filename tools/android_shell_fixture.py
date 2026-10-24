@@ -9,7 +9,10 @@ line per event in OUT/fixture.log. OUT/mode (re-read on every request) picks wha
   record   discover capabilities, start a device.recording take (or report the live one), post status
   recover  list pending takes, read each completely, acknowledge it; probe an unknown take and method
   orb      turn the floating orb on (device.orb.enable)
+  everywhere  the real Settings (web/core/settings.js + device-orb.js): Phone → Wizard Everywhere, for a native tap
+  pin      a refused untapped pin, then the real Add to home screen sheet (web/core/home-screen-apps.js) for app qa-app
   idle     discover only
+?app-session=<id> on the shell path is a pinned app's own task: it logs {ev:'session'} whatever the mode.
 The orb's own files (web/assist/everywhere.*, orb.js, its images) are served from this repo's web/. OUT/orb picks how:
   up (default) · down (HTTP 503) · slow (answer after 4 s, past the 1.5 s deadline)
 /elsewhere/ is a same-origin page outside the shell path: native must not answer it.
@@ -17,6 +20,9 @@ The orb's own files (web/assist/everywhere.*, orb.js, its images) are served fro
 import http.server, json, os, pathlib, ssl, subprocess, sys, time
 
 WEB = pathlib.Path(__file__).resolve().parent.parent / 'web'
+# The real web modules the everywhere/pin modes run (served as-is from this repo's web/).
+CORE_FILES = {'core/device-port.js', 'core/device-orb.js', 'core/settings.js', 'core/settings.css',
+              'core/home-screen-policy.js', 'core/home-screen-apps.js', 'core/home-screen-apps.css'}
 ORB_FILES = {'assist/everywhere.html', 'assist/everywhere.js', 'assist/orb-size.js', 'orb.js', 'robert-thread-orb.png', 'robert-listening-galaxy.png'}
 
 PAGE = r"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
@@ -26,7 +32,39 @@ const P=window.wizardDevicePort, log=o=>fetch('/log',{method:'POST',body:JSON.st
 let n=0;const pend=new Map();
 function call(method,params={},ms=20000){return new Promise((res,rej)=>{const id='q'+(++n);const t=setTimeout(()=>{pend.delete(id);rej(new Error('noreply'))},ms);pend.set(id,{res,rej,t});P.postMessage(JSON.stringify({v:1,id,method,params}));});}
 if(P)P.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(_){return}const w=pend.get(m.id);if(!w)return;pend.delete(m.id);clearTimeout(w.t);m.ok?w.res(m.result):w.rej(new Error(m.error));};
+const Q=new URLSearchParams(location.search);
+function load(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+// Where an element is, in CSS px of the WebView, for a real native tap (the smoke adds the WebView's screen offset).
+function rect(el){if(!el)return{};const r=el.getBoundingClientRect();return{x:r.left+r.width/2,y:r.top+r.height/2,dpr:devicePixelRatio};}
+function css(href){const l=document.createElement('link');l.rel='stylesheet';l.href=href;document.head.appendChild(l);}
+async function everywhere(){
+  window.WizCore={};window.WizBrand={html:'W'};
+  css('core/settings.css');
+  const box=document.createElement('div');box.id='st';document.body.replaceChildren(box);
+  await load('core/device-port.js');await load('core/settings.js');await load('core/device-orb.js');
+  for(let i=0;i<100&&!window.WosDeviceOrb?.ready;i++)await new Promise(r=>setTimeout(r,100));
+  const view=WosSettings.mount(box,{shell:'phone',helpSub:'',haptic(){}});view.focus('assistant');
+  await new Promise(r=>setTimeout(r,500));
+  log({ev:'everywhere',...rect(box.querySelector('[data-st="everywhere"]')),ready:!!WosDeviceOrb.ready,switches:box.querySelectorAll('[data-st="everywhere"]').length,orbRows:box.querySelectorAll('[data-st="shell-orb"]').length,dead:box.querySelectorAll('[data-st="side"],[data-st="typing"]').length,on:WosDeviceOrb.state.on});
+  let was=WosDeviceOrb.state.on;setInterval(()=>{const on=WosDeviceOrb.state.on;if(on!==was){was=on;log({ev:'everywhere-switch',on,checked:box.querySelector('[data-st="everywhere"]')?.getAttribute('aria-checked')});}},300);
+}
+async function pin(){
+  const H=window.wizardHomeScreenPort;if(!H){log({ev:'nohomeport'});return;}
+  // Negative control: a pin no one tapped for is refused.
+  const raw=await new Promise(res=>{const t=setTimeout(()=>res('noreply'),4000);H.onmessage=e=>{clearTimeout(t);try{res(JSON.parse(e.data).status)}catch(_){res('bad')}};
+    H.postMessage(JSON.stringify({op:'pin',requestId:'99',appId:'qa-app',name:'QA App',icon:'data:image/png;base64,AAAA'}));});
+  log({ev:'untapped',status:raw});
+  const app={id:'qa-app',name:'QA App',kind:'wizard',url:'/qa-app/'};
+  window.WizCore={apps:()=>({APP:{'qa-app':app}})};
+  window.WizSigil={of:()=>({color:'#9b7bff',letter:'Q'}),box:()=>'<span class="sgi"></span>'};
+  css('core/home-screen-apps.css');
+  document.body.style.padding='0';document.getElementById('s').textContent='';
+  await load('core/home-screen-policy.js');await load('core/home-screen-apps.js');
+  log({ev:'offer',shown:WizHomeScreenApps.offer(app)});
+  let last='';setInterval(()=>{const b=document.querySelector('.home-pin-sheet button');const t=b?b.textContent:'(closed)';if(t!==last){last=t;log({ev:'sheet',text:t,state:WizHomeScreenApps.state,...rect(b)});}},200);
+}
 (async()=>{
+  if(Q.has('app-session')){log({ev:'session',app:Q.get('app-session'),devicePort:!!window.wizardDevicePort,homePort:!!window.wizardHomeScreenPort});document.getElementById('s').textContent='QA pinned app '+Q.get('app-session');return;}
   if(!P){log({ev:'noport'});return;}
   if(location.pathname.startsWith('/elsewhere/')){const r=await call('device.capabilities',{},2500).then(()=>'answered',e=>e.message);log({ev:'elsewhere',r});return;}
   const caps=await call('device.capabilities');log({ev:'caps',caps});
@@ -38,6 +76,8 @@ if(P)P.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(_){return}const w=pend
     else{const r=await call('device.recording.start',{kind:'voice',ref:'fixture'},60000).then(r=>r,e=>({error:e.message}));log({ev:'started',...r});}
     setInterval(async()=>{try{log({ev:'status',st:await call('device.recording.status')});}catch(e){}},3000);
   }
+  if(mode==='everywhere'){await everywhere();return;}
+  if(mode==='pin'){await pin();return;}
   if(mode==='orb'){log({ev:'orb',r:await call('device.orb.enable').then(r=>r,e=>({error:e.message}))});}
   if(mode==='recover'){
     const p=await call('device.recording.pending');log({ev:'pending',p});
@@ -76,13 +116,15 @@ def serve(d, out):
             self.send_response(code); self.send_header('Content-Type', ctype); self.send_header('Content-Length', str(len(b)))
             self.send_header('Cache-Control', 'no-store'); self.end_headers(); self.wfile.write(b)
         def do_GET(self):
-            p = self.path.split('?', 1)[0]
-            logf.write(json.dumps({'t': time.time(), 'get': p}) + '\n')
+            p, _, q = self.path.partition('?')
+            logf.write(json.dumps({'t': time.time(), 'get': p, 'q': q}) + '\n')
             if p == '/wizard-os-home/mode':
                 m = (out / 'mode').read_text().strip() if (out / 'mode').exists() else 'idle'
                 return self.send(200, m, 'text/plain')
             if p in ('/', '/wizard-os-home', '/wizard-os-home/', '/wizard-os-home/index.html', '/elsewhere/'): return self.send(200, PAGE)
             f = p[len('/wizard-os-home/'):] if p.startswith('/wizard-os-home/') else None
+            if f in CORE_FILES:
+                return self.send(200, (WEB / f).read_bytes(), 'text/css' if f.endswith('.css') else 'application/javascript')
             if f in ORB_FILES:
                 how = (out / 'orb').read_text().strip() if (out / 'orb').exists() else 'up'
                 if how == 'down': return self.send(503, 'down', 'text/plain')

@@ -7,12 +7,16 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const native = () => window.WizardOSNative;
   const android = () => !!native() || /Android/i.test(navigator.userAgent);
+  // Wizard Shell (android/shell) has no WizardOSNative: its floating orb is device.orb (core/device-orb.js), and the
+  // full app's other controls (side button, voice typing) are hidden there instead of shown as dead switches.
+  const shell = () => !native() && /WizardShell\//.test(navigator.userAgent || '');
+  const shellOrb = () => shell() && window.WosDeviceOrb?.ready ? window.WosDeviceOrb : null;
   const row = (id, icon, title, sub) => `<button class="st-row" data-st="${esc(id)}"><span class="st-ic">${icon}</span><span class="st-tx"><b>${esc(title)}</b><small>${esc(sub)}</small></span><span class="st-go">›</span></button>`;
   const PAGES = [
     { id: 'appearance', title: 'Appearance', icon: '◐' },
     { id: 'chats', title: 'Chats & app screens', icon: '☷' },
     { id: 'voice', title: 'Voice & typing', icon: '🎙' },
-    { id: 'phone', title: 'Phone', icon: '◉', available: android },
+    { id: 'phone', title: 'Phone', icon: '◉', available: () => shell() ? !!shellOrb() || !!window.wizardPhotosPort : android() },
     { id: 'recovery', title: 'Unsent & recovered', icon: '↺' },
     { id: 'usage', title: 'AI usage', icon: '◴' },
     { id: 'schedules', title: 'Schedules', icon: '◷', available: () => !!window.WosSchedules?.available },
@@ -37,7 +41,7 @@
     if (id === 'appearance') return window.WosSkin ? (mySkinWorn() ? 'My skin · on ' : '') + lookName(window.WosSkin, window.WosSkin.current) : 'Default skin';
     if (id === 'chats') return 'Chats: ' + chatsName(chatsHost()?.defaultId() || 'wizard-chats');
     if (id === 'voice') { const v = window.WizCore.voiceStatus?.state; return `${v ? v.ready ? 'Voice ready' : 'Voice unavailable' : 'Checking voice'} · Mic: ${window.WosMic?.summary?.() || 'default'}`; }
-    if (id === 'phone') { try { return JSON.parse(native()?.everywhere?.() || '{}').enabled ? 'Everywhere on' : 'Everywhere off'; } catch (_) { return 'Android controls'; } }
+    if (id === 'phone') { if (shell()) return shellOrb() ? (shellOrb().state.on ? 'Everywhere on' : 'Everywhere off') : 'Android controls'; try { return JSON.parse(native()?.everywhere?.() || '{}').enabled ? 'Everywhere on' : 'Everywhere off'; } catch (_) { return 'Android controls'; } }
     if (id === 'recovery') { const ids = new Set([...unsentAll(ctx), ...recovered()].map(x => x.id)); return ids.size ? `${ids.size} waiting` : 'Nothing waiting'; }
     if (id === 'usage') return window.WosUsage?.snap?.providers?.map(p => p.limits?.length ? `${p.name} ${p.limits[0].usedPercent}%` : `${p.name}: unavailable`).join(' · ') || (window.WosUsage?.error ? 'Usage unavailable' : 'Checking usage');
     return `${ctx.live?.ok ? 'Connected' : ctx.live?.error === 'access' ? 'Sign-in needed' : 'Connecting…'} · ${window.WosUpdates?.state?.update_available ? 'update ready' : window.WosUpdates?.state ? 'up to date' : 'check for updates'}`;
@@ -242,7 +246,15 @@
     const S = window.WosSkin; S.setFoundation(S.frame.foundation === 'borderless' ? 'framed' : 'borderless');
     ctx.haptic?.(8); ctx.render(); return true;
   } });
-  register({ id: 'assistant', available: android, html(ctx) {
+  // Wizard Shell: Everywhere is the shell's floating orb (device.orb). One switch; nothing the shell can't do.
+  function shellAssistant() {
+    const O = shellOrb(); if (!O) return '';
+    const s = O.state, on = !!s.on;
+    const sub = on ? (s.permitted ? 'On · floats over other apps, hides while Wizard is open · hold it to hide' : 'Needs “Display over other apps”') : s.permitted ? 'A floating Wizard button over your other apps. Tap to talk, drag to move.' : 'A floating Wizard button over your other apps. Android asks to let Wizard display over other apps.';
+    return `<div class="st-group"><h4>Assistant</h4><button class="st-row" data-st="everywhere" role="switch" aria-checked="${on}"><span class="st-ic">${window.WizBrand.html}</span><span class="st-tx"><b>Wizard Everywhere</b><small>${esc(sub)}</small></span><span class="sw ${on ? 'on' : ''}"><i></i></span></button></div>`;
+  }
+  register({ id: 'assistant', aliases: ['everywhere', 'orb', 'floating-orb'], available: android, html(ctx) {
+    if (shell()) return shellAssistant();
     const N = native(), evNative = typeof N?.setEverywhere === 'function'; let ev = null;
     try { ev = evNative ? JSON.parse(N.everywhere()) : null; } catch (_) {}
     const evOn = !!ev?.enabled;
@@ -250,6 +262,7 @@
     return `<div class="st-group"><h4>Assistant</h4><button class="st-row" data-st="everywhere" role="switch" aria-checked="${evOn}" ${evNative ? '' : 'disabled'}><span class="st-ic">${window.WizBrand.html}</span><span class="st-tx"><b>Wizard Everywhere</b><small>${esc(evSub)}</small></span><span class="sw ${evOn ? 'on' : ''}"><i></i></span></button>${evNative && evOn && typeof N.voiceTypingSettings === 'function' ? row('typing', '⌨', 'Voice typing & screenshots', ev.keyboard ? 'On · with a keyboard open the orb types what you say' : 'Off · tap to set up: the orb types into any app and attaches screenshots') : ''}<button class="st-row" data-st="side" ${N ? '' : 'disabled'}><span class="st-ic">◉</span><span class="st-tx"><b>Side button</b><small>${esc(!N ? 'Works in the Wizard OS Android app' : ctx.sideReady?.() ? 'On · hold the side button to talk' : 'Hold the side button to talk, even when locked')}</small></span><span class="st-go">›</span></button></div>`;
   }, act(ctx, el) {
     const st = el.closest('[data-st]')?.dataset.st, N = native();
+    if (shell()) { const O = shellOrb(); if (st !== 'everywhere' || !O) return false; O.toggle().then(() => ctx.render()); ctx.haptic?.(8); return true; }
     if (st === 'typing' && N?.voiceTypingSettings) { N.voiceTypingSettings(); return true; }
     if (st === 'everywhere' && N?.setEverywhere) { let on = false; try { on = JSON.parse(N.everywhere()).enabled; } catch (_) {} N.setEverywhere(!on); setTimeout(ctx.render, 250); ctx.haptic?.(8); return true; }
     if (st === 'side' && N) { ctx.openSub('side'); return true; } return false;
@@ -267,7 +280,7 @@
   register({ id: 'selection', html: () => window.WosSelMenu?.html() || '', act: (ctx, el) => window.WosSelMenu?.act(el) });
   register({ id: 'wizard', html(ctx) {
     const status = ctx.live?.ok ? 'Connected' : ctx.live?.error === 'access' ? 'Sign-in needed' : 'Connecting…';
-    return `<div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${esc(status)}</b><small>${esc(native()?.platform?.() || 'Web')} · ${esc(location.host)}</small></span></div>${window.WosDevice?.settingsHtml?.() || ''}${window.WizWebUpdate ? row('web-update', '↻', 'Check for updates', 'Updates both layouts · reload only when you choose') : ''}${row('help', '?', 'Gestures & help', ctx.helpSub)}</div>`;
+    return `<div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${esc(status)}</b><small>${esc(native()?.platform?.() || (shell() ? 'Wizard Shell' : 'Web'))} · ${esc(location.host)}</small></span></div>${window.WosDevice?.settingsHtml?.() || ''}${window.WizWebUpdate ? row('web-update', '↻', 'Check for updates', 'Updates both layouts · reload only when you choose') : ''}${row('help', '?', 'Gestures & help', ctx.helpSub)}</div>`;
   }, act(ctx, el) { const st = el.closest('[data-st]')?.dataset.st; if (st === 'web-update') { window.WizWebUpdate?.check(); ctx.toast?.('↻', 'Checking for updates', 1400); return true; } if (!['files', 'help'].includes(st)) return false; ctx.openSub(st); return true; } });
   register({ id: 'usage', aliases: ['usage'], html: () => window.WosUsage?.html() || '', act(ctx, el) { if (!el.closest('[data-usage-refresh]')) return false; window.WosUsage?.load(true).then(ctx.paintUsage); ctx.paintUsage(); return true; } });
   // A shell chooses the composer; common code owns preservation before consuming an unsent record.

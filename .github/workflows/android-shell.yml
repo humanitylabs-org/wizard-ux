@@ -2,13 +2,14 @@ name: Android shell
 # Wizard Shell (android/shell): the thin client. Unit tests, lint, debug + unsigned release builds, then an
 # emulator run of tools/android_shell_smoke.sh (Connect, bad address, Setup link, can't-reach, restart, Back, no crash), plus
 # background recording against a disposable HTTPS fixture Wizard (screen off, backgrounded, a take surviving force-stop)
-# and the floating orb (visible over another app, page from the Wizard, bundled fallback when it is down or slow, tap, drag, hold).
+# the floating orb (visible over another app, page from the Wizard, bundled fallback when it is down or slow, tap, drag, hold),
+# Settings' Wizard Everywhere switch driving it, and home-screen apps (pin offered and created, launch, own task, Back, orb over it).
 on:
   pull_request:
-    paths: ['android/shell/**', 'android/settings.gradle', '.github/workflows/android-shell.yml', 'tools/android_shell_smoke.sh', 'tools/android_shell_fixture.py', 'tests/fixtures/qa_mic.aac', 'web/assist/**', 'web/orb.js']
+    paths: ['android/shell/**', 'android/settings.gradle', '.github/workflows/android-shell.yml', 'tools/android_shell_smoke.sh', 'tools/android_shell_fixture.py', 'tests/fixtures/qa_mic.aac', 'web/assist/**', 'web/orb.js', 'web/core/settings.js', 'web/core/device-orb.js', 'web/core/device-port.js', 'web/core/home-screen-apps.js', 'web/core/home-screen-policy.js']
   push:
     branches: [main]
-    paths: ['android/shell/**', 'android/settings.gradle', '.github/workflows/android-shell.yml', 'tools/android_shell_smoke.sh', 'tools/android_shell_fixture.py', 'tests/fixtures/qa_mic.aac', 'web/assist/**', 'web/orb.js']
+    paths: ['android/shell/**', 'android/settings.gradle', '.github/workflows/android-shell.yml', 'tools/android_shell_smoke.sh', 'tools/android_shell_fixture.py', 'tests/fixtures/qa_mic.aac', 'web/assist/**', 'web/orb.js', 'web/core/settings.js', 'web/core/device-orb.js', 'web/core/device-port.js', 'web/core/home-screen-apps.js', 'web/core/home-screen-policy.js']
 permissions:
   contents: read
 concurrency:

@@ -14,8 +14,8 @@ Native, and nothing else:
 
 There is **no JavaScript bridge**. The Wizard sees an ordinary Android browser (user agent adds
 `WizardOS-Android/<v> WizardShell/<v>`), so chats, apps, Food, Photos, the orb's look and every other feature
-come from the Wizard and update without a new APK. Device abilities beyond the list above (the floating orb,
-side-button assist, photo backup, share-in) stay in the full app (`android/app`) until each has a small, optional
+come from the Wizard and update without a new APK. Device abilities beyond the list above (side-button assist,
+photo backup, share-in) stay in the full app (`android/app`) until each has a small, optional
 capability here that the Wizard can discover.
 
 ## Optional device capabilities: `window.wizardDevicePort` v1
@@ -50,6 +50,29 @@ belongs to the Wizard that started it; another Wizard (after Change Wizard) can'
 The web half is `web/core/device-recording.js`: the orb uses it when the capability is present, moves recovered takes
 into its durable outbox as held recordings (never sent without a tap), then acknowledges them.
 
+### `device.orb` v1: Wizard Everywhere
+
+The floating orb over other apps (`orb/`). The web's one switch is Settings → Phone → **Wizard Everywhere**
+(`web/core/settings.js` drives `web/core/device-orb.js` when the shell offers `device.orb`); there is no second orb row.
+Full-app-only controls (side button, voice typing) are hidden in the shell, not shown disabled.
+
+## Home-screen apps: `window.wizardHomeScreenPort`
+
+Hold an app on the Apps sheet or the New desk grid, or hold a one-app desk in Desks, and the Wizard's own sheet
+(`web/core/home-screen-apps.js`, unchanged) offers **Add to home screen**. The shell answers the same contract as the
+full app: `{op:'status'|'pin', requestId, appId, name?, icon?}` → `{requestId, status: ready|pinned|pending|unsupported|error}`.
+
+- `home/HomeScreenPort.java`: exact origin, main frame, top page the selected Wizard's own `/wizard-os-home/` (never a
+  pinned app). A pin needs a fresh native tap plus the page's live activation on its own sheet; then
+  `ShortcutManager.requestPinShortcut`. Success is reported only after the launcher's confirmation callback.
+- `home/AppSessionActivity.java`: each (Wizard, app) is its own Android document task opening
+  `<Wizard>/wizard-os-home/?app-session=<id>`. Status and navigation bars stay; Back stays in the app; tapped public
+  links go to the phone's browser; every other page is refused. No connect flow and no device ports there. The floating
+  orb stays over a pinned app. A shortcut from another Wizard (after Change Wizard) opens only "App unavailable".
+- `home/HomeScreenPolicy.java`: the pure rules (JVM-tested).
+
+Older web that never uses the port sees no change.
+
 Package `ai.wizards.shell` (debug: `ai.wizards.shell.test`), so it installs beside the full app.
 
 ```sh
@@ -60,5 +83,7 @@ CI: `.github/workflows/android-shell.yml` (unit tests, lint, builds, emulator sm
 The smoke also drives `device.recording` against a disposable HTTPS fixture Wizard (`tools/android_shell_fixture.py`,
 a CA minted per run and trusted only through the debug build's `debug-overrides`): recording continues with the screen
 off and with another app in front, and a take survives `am force-stop` and is recovered, read and acknowledged.
+It also turns Wizard Everywhere on in the real Settings and checks the orb over another app, and pins an app
+through the real sheet (accepting Android's dialog), then launches it into its own task (Back, re-open, orb over it).
 Debug builds stream `files/qa_mic.aac` instead of the microphone (the emulator has none). The emulator can't prove
 real microphone audio quality, Bluetooth routing or OEM battery killers: those need a real phone.

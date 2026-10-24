@@ -41,6 +41,16 @@
                 <data android:scheme="wizard" android:host="connect" />
             </intent-filter>
         </activity>
+        <!-- Optional home-screen apps (window.wizardHomeScreenPort): each pinned (Wizard, app) is its own document task. -->
+        <activity
+            android:name=".home.AppSessionActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
+            android:documentLaunchMode="intoExisting"
+            android:exported="true"
+            android:launchMode="standard"
+            android:taskAffinity="${applicationId}.homeapp"
+            android:windowSoftInputMode="adjustResize" />
+        <receiver android:name=".home.HomeScreenPort$PinConfirmed" android:exported="false" />
         <service
             android:name=".recorder.RecorderService"
             android:exported="false"
