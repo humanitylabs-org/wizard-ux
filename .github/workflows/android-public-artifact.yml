@@ -1,7 +1,7 @@
 name: Public Android signed artifact audit
 on:
   push:
-    branches: [qa/public-android-artifact-20261025]
+    branches: [qa/two-prompt-0350]
     paths: [.github/workflows/android-public-artifact.yml, tools/qa_signed_shell.py]
 permissions:
   contents: read
@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
-          ref: 6c5d1649b1284235410b8a6f402ac29340c014f8
+          ref: 03b07142e1245f9b4c4f6f77545f92652e97db6f
           path: candidate
           persist-credentials: false
       - name: Disposable HTTPS fixture tooling
@@ -93,7 +93,7 @@ jobs:
       - name: Evidence scope
         if: always()
         run: |
-          printf '%s\n' 'Exact public signed APK, candidate 0bf63e70ea050c8703d100595a425a13bd4bf3ab. Real device modules/outbox on disposable trusted HTTPS fixture. Native Connect baseline is prior run 40162076238, not repeated here. No debug rebuild, TLS exception, real provider or physical-phone claim. See compat/checks.json for actual gates.' >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' 'Exact public signed APK, candidate 03b07142e1245f9b4c4f6f77545f92652e97db6f. Real device modules/outbox on disposable trusted HTTPS fixture. Native Connect baseline is prior run 40162076238, not repeated here. No debug rebuild, TLS exception, real provider or physical-phone claim. See compat/checks.json for actual gates.' >> "$GITHUB_STEP_SUMMARY"
           cat audit/results/result.txt >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
