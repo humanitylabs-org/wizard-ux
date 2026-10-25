@@ -8,6 +8,9 @@
   // Ordinary workspace/standalone clients are unchanged: the policy is session-only.
   try { if (parent !== window && parent.WizHomeScreenPolicy?.mode) parent.WizHomeScreenPolicy.installPresentationStorage(window); } catch (_) {}
   if (window.WizardApp) return;
+  // Home-screen identity (manifest, apple-touch-icon, title) for an app opened directly at its own path:
+  // the shared, registry-backed core/app-identity.js. Top-level documents only; it is a no-op in the shell.
+  try { if (parent === window && !window.WizardAppIdentity) { const s = document.createElement('script'); s.src = '/wizard-os-home/core/app-identity.js'; (document.head || document.documentElement).appendChild(s); } } catch (_) {}
   const ORIGIN = location.origin, VERSION = 1, overlays = [], handlers = [], themes = new Set(), updates = new Set();
   let service = null, transportReady = false, currentTheme = null, updateAvailable = null, rootWatcher = null, guarded = false, exitUntil = 0, requestId = 0;
   const requests = new Map();

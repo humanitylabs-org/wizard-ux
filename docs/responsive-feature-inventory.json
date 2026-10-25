@@ -755,6 +755,10 @@
         "desktop"
       ],
       "note": "Extracted native/app internal share sheet"
+    },
+    "core/app-identity.js": {
+      "loadedBy": [],
+      "note": "Support/client/export module; not directly mounted by either shell"
     }
   }
 }
