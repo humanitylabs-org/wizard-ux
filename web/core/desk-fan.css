@@ -1,0 +1,20 @@
+/* Desk fan: hold the orb, desks fan out in an arc (core/desk-fan.js). */
+.wdf { position: fixed; inset: 0; z-index: 400; pointer-events: none; }
+.wdf-veil { position: absolute; inset: 0; background: radial-gradient(90% 45% at 50% 100%, color-mix(in oklab, var(--wz-bg, var(--bg, #07060f)) 78%, transparent), transparent); opacity: 0; transition: opacity 160ms; }
+.wdf.on .wdf-veil { opacity: 1; }
+.wdf-item { position: absolute; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 18px; display: grid; place-items: center;
+  background: color-mix(in oklab, var(--wz-surface, var(--card, #171427)) 92%, transparent); border: 1px solid var(--wz-line, var(--line-2, rgba(205, 190, 255, .18)));
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .35); opacity: 0; transform: translateY(26px) scale(.4);
+  transition: transform 240ms var(--spring, cubic-bezier(.3, 1.4, .5, 1)) var(--d, 0ms), opacity 160ms var(--d, 0ms), background 120ms, border-color 120ms; }
+.wdf.on .wdf-item { opacity: 1; transform: none; }
+.wdf.off .wdf-item { opacity: 0; transform: scale(.6); transition-delay: 0ms; }
+.wdf-item .dsg { width: 26px; height: 26px; opacity: .9; }
+.wdf-item.cur { border-color: color-mix(in oklab, var(--wz-accent, #a78bfa) 70%, transparent); }
+.wdf-item.cur::after { content: ""; position: absolute; bottom: 5px; left: 50%; width: 10px; height: 2px; margin-left: -5px; border-radius: 2px; background: var(--wz-accent, #a78bfa); }
+.wdf.on .wdf-item.sel { transform: scale(1.38); background: color-mix(in oklab, var(--wz-accent, #a78bfa) 30%, var(--wz-surface, #171427)); border-color: var(--wz-accent, #a78bfa); transition-delay: 0ms; z-index: 2; }
+.wdf-item.sel .dsg { opacity: 1; }
+.wdf-label { position: absolute; left: 50%; transform: translateX(-50%); padding: 5px 12px; border-radius: 12px; white-space: nowrap; max-width: 86vw; overflow: hidden; text-overflow: ellipsis;
+  background: var(--wz-surface, #171427); border: 1px solid var(--wz-line, rgba(205, 190, 255, .18)); color: var(--wz-ink, var(--ink, #ece8ff)); font: 650 13px/1.2 var(--wz-font, system-ui); opacity: 0; transition: opacity 160ms; }
+.wdf.on .wdf-label { opacity: 1; }
+/* Quick-command window on a tap take: the destination label says which way the take will go. */
+#device > #voiceDestination.quick { border-color: color-mix(in oklab, var(--wz-accent, #a78bfa) 80%, transparent); color: var(--wz-accent, #c4b5fd); }
