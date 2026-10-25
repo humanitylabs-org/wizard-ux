@@ -99,6 +99,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="wizard" android:host="connect" />
+                <data android:scheme="wizard" android:host="install" />
             </intent-filter>
         </activity>
 
