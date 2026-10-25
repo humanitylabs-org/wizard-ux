@@ -179,7 +179,8 @@ public class WizardIdFlowTest {
     }
     private void visible(String text) { assertTrue("Missing native UI: "+text,device.wait(Until.hasObject(By.text(text)),15000)); }
     private void click(String text) {
-        for(int i=0;i<10;i++){UiObject2 v=device.findObject(By.text(text));if(v!=null&&!v.getVisibleBounds().isEmpty()){v.click();return;}UiObject2 s=device.findObject(By.scrollable(true));if(s!=null)s.scroll(Direction.DOWN,.65f);device.waitForIdle();}fail("Cannot reach "+text);
+        for(int i=0;i<10;i++){UiObject2 v=device.findObject(By.text(text));if(v!=null&&!v.getVisibleBounds().isEmpty()){v.click();return;}java.util.List<UiObject2> ss=device.findObjects(By.scrollable(true));for(int k=ss.size()-1;k>=0;k--)ss.get(k).scroll(Direction.DOWN,.65f);device.waitForIdle();}
+        try{device.dumpWindowHierarchy(new File(output,"click-timeout.xml"));}catch(Exception ignored){}fail("Cannot reach "+text);
     }
     private void pin() throws Exception {
         device.waitForIdle(); UiObject2 choose=device.wait(Until.findObject(By.text(java.util.regex.Pattern.compile("(?i)(use )?(PIN|screen lock|device credential)"))),2000); if(choose!=null)choose.click();
