@@ -61,7 +61,17 @@ jobs:
           PY
           bash -n audit/smoke.sh
       - name: Enable runner KVM
+        env:
+          QA_WEB: candidate/web
         run: |
+          python3 - <<'PY'
+          import importlib.util, re, subprocess
+          spec=importlib.util.spec_from_file_location('fixture','tools/qa_signed_shell.py')
+          module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+          for html in [module.PAGE,module.PROBE]:
+              for script in re.findall(r'<script>(.*?)</script>',html,re.S):
+                  subprocess.run(['node','--check'],input=script,text=True,check=True)
+          PY
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
