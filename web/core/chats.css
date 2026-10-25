@@ -480,10 +480,11 @@ body > .mviewer { position: fixed; z-index: 200; }
 :is(.ch-row, .ch-head) .emo.sti.working { background: rgba(90, 220, 255, .08); }
 :is(.ch-row, .ch-head) .emo.sti .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(90, 220, 255, .22); border-top-color: var(--cyan); animation: sti-spin .9s linear infinite; }
 @keyframes sti-spin { to { transform: rotate(360deg); } }
-/* The open thread's header wears its row's status icon, a size down, beside the title. */
-.ch-head .emo.ch-head-sti { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; margin-left: -2px; }
-.ch-head .emo.ch-head-sti svg { width: 17px; height: 17px; }
-.ch-head .emo.ch-head-sti .spin { width: 15px; height: 15px; }
+/* The open thread's header wears its row's status icon beside the title, at about the title's text height
+ * (James, 25 Oct 2026: 30 px read "much larger" than the 16 px title; 24 px box, 14 px glyph). */
+.ch-head .emo.ch-head-sti { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; margin-left: -2px; }
+.ch-head .emo.ch-head-sti svg { width: 14px; height: 14px; stroke-width: 2.2; }
+.ch-head .emo.ch-head-sti .spin { width: 12px; height: 12px; border-width: 1.5px; }
 /* A Working spinner is status, not decoration: Reduce Motion slows it, never stops it. !important out-ranks the global
  * reduced-motion kill switch in styles.css (`*` + !important), which froze it (Robert, 24 Oct 2026). */
 @media (prefers-reduced-motion: reduce) { .ch-head .emo.sti .spin, .ch-row .emo.sti .spin { animation-duration: 3s !important; animation-iteration-count: infinite !important; } }
