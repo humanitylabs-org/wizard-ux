@@ -55,7 +55,8 @@ const preview={id:'shared-tool',name:'Shared Journal',summary:'A private journal
   await shot('link-sheet');assert.match(await f.locator('#sheet').innerText(),/Not in the catalog.*Shared with you by Jane/);
   await f.locator('#sheet [data-back]').click();assert.equal(await f.locator('#detail h2').innerText(),'Beta Reader');
   await f.locator('#detail [data-back]').click();await f.locator('#results [data-back]').click();
-  assert.equal(await f.evaluate(()=>window.__wizardCloseOverlay()),true);assert.equal(await f.locator('#discover').isVisible(),true);
+  // Root hands Back to the shell (phone → Home, desktop closes); the Store stays mounted.
+  assert.equal(await f.evaluate(()=>window.__wizardCloseOverlay()),false);assert.equal(await f.locator('#discover').isVisible(),true);
   await f.evaluate(url=>window.__store.openInstallLink(url),url);await f.locator('[data-link-install]').waitFor();await f.locator('#sheet [data-back]').click();assert.equal(await f.locator('#discover').isVisible(),true);
   await f.evaluate(()=>window.__store.openInstallLink('wizard://unknown?repo=example/shared-tool'));await f.locator('.link-error').waitFor();assert.match(await f.locator('.link-error').innerText(),/This install link isn't valid:/);await shot('bad-link');await f.locator('#sheet [data-back]').click();
   // Failure/receipt paths must leave the review in place; no optimistic installed state.

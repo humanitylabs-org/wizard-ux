@@ -108,7 +108,8 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     }
   }
   const isInstalled = a => !!S.installed.get(key(a)) && !S.installed.get(key(a)).conflict;
-  const status = a => S.selections.get(key(a))==='unavailable' ? 'unknown' : releaseState(a,S.installed.get(key(a)),S.selections.has(key(a)),S.complete);
+  // A share link pins an exact release: treat it as an explicit selection so a different installed commit offers Switch.
+  const status = a => S.selections.get(key(a))==='unavailable' ? 'unknown' : releaseState(a,S.installed.get(key(a)),S.selections.has(key(a)) || !!a.install_link,S.complete);
   // The shell knows which apps have a view it can open; only those get "Open".
   const openId = a => S.installed.get(key(a))?.id || '';
   const canOpen = a => { try { return framed && typeof parent.WizCanOpen === 'function' && parent.WizCanOpen(openId(a)); } catch (_) { return false; } };
@@ -251,7 +252,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     $('sheet').innerHTML=`<div class="list-head"><button class="back" data-back aria-label="Back">‹</button><div><h2>${a?esc(a.name):'Install shared app'}</h2><p>Review before installing</p></div></div>
       ${l.loading?'<p class="mc-lede" role="status">Checking the GitHub app…</p>':''}
       ${l.error?`<div class="link-error" role="alert">${a?'Installation not confirmed:':"This install link isn't valid:"} ${esc(l.error)}</div>`:''}
-      ${a?`<section class="d-sec"><p class="sheet-source">${chip(a,false)}</p><p class="d-note">${a.catalog_source?'Also available in the catalog.':'Not in the catalog.'} ${esc(s.detail || 'Shared by a link.')}</p><p class="d-sum">${esc(a.summary)}</p><dl class="info"><div><dt>Repository</dt><dd>${esc(a.repo)}</dd></div><div><dt>Commit</dt><dd>${esc(a.commit)}</dd></div><div><dt>Kind</dt><dd>${esc(kindOf(a).one)}</dd></div></dl><p class="d-note">Only install apps from people you trust. The App Manager checks this exact release before installing.</p></section><div class="mc-done">${S.busy.has(a.id)?'<span class="get wait" role="status">Installing…</span>':status(a)==='get'?'<button type="button" class="get big" data-link-install>Install</button>':action(a)}</div>`:''}`;
+      ${a?`<section class="d-sec"><p class="sheet-source">${chip(a,false)}</p><p class="d-note">${a.catalog_source?'Also available in the catalog.':'Not in the catalog.'} ${esc(s.detail || 'Shared by a link.')}</p><p class="d-sum">${esc(a.summary)}</p><dl class="info"><div><dt>Repository</dt><dd>${esc(a.repo)}</dd></div><div><dt>Commit</dt><dd>${esc(a.commit)}</dd></div><div><dt>Kind</dt><dd>${esc(kindOf(a).one)}</dd></div></dl><p class="d-note">Only install apps from people you trust. The App Manager checks this exact release before installing.</p></section><div class="mc-done">${S.busy.has(a.id)?'<span class="get wait" role="status">Installing…</span>':['get','update','switch'].includes(status(a))?`<button type="button" class="get big" data-link-install>${status(a)==='get'?'Install':status(a)==='update'?'Update':'Switch to this release'}</button>`:action(a)}</div>`:''}`;
   }
   async function shareApp(base) {
     if(!base) return;
@@ -297,7 +298,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   }
   function push(t, arg) { scrolls.push(window.scrollY); S.stack.push({ t, arg }); render(); }
   function pop() {
-    if (!S.stack.length) return true; // Store root consumes Back; the shell must not exit it.
+    if (!S.stack.length) return false; // Root: the shell takes the step (phone → Home, desktop closes); Back never exits Wizard.
     const was = S.stack.pop(); render();
     if (was.t === 'search') { $('q').value = ''; S.q = ''; }
     const under = S.stack[S.stack.length - 1];
@@ -333,7 +334,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   }
   async function install(a) {
     if (!a || architectureReason(a,S.architecture) || S.busy.has(a.id) || !['get','update','switch'].includes(status(a))) return;
-    const operation = a.install_link ? 'install' : status(a)==='get'?'install':status(a);
+    const operation = status(a)==='get'?'install':status(a);
     const selection = {source:a.source,repo:a.repo,commit:a.commit,operation};
     if(a.install_link && S.link) S.link.error='';
     S.busy.add(a.id); refresh();
