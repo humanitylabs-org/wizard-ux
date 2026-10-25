@@ -191,7 +191,9 @@
   async function draftDefaults(ctx, family) {
     const draft = ctx.skinDraft; if (!draft) return;
     const seq = draft.seq = (draft.seq || 0) + 1;
-    draft.family = family.id; draft.base = family.palettes[0]; draft.loading = true; draft.error = ''; ctx.render?.();
+    draft.family = family.id; draft.base = family.palettes[0]; draft.error = '';
+    // The list is warmed when Look opens, so Loading only shows on a cold first read.
+    draft.loading = !window.WosExperience.installedReady; ctx.render?.();
     try {
       const [items, map] = await Promise.all([window.WosExperience.installed(), window.WosExperience.defaults(draft.base)]);
       if (ctx.skinDraft !== draft || draft.seq !== seq) return;
@@ -204,6 +206,7 @@
     return `<div class="st-group sc-sheet skin-create" data-newskin-sheet><h4>New skin</h4><label>Name<input data-skin-name maxlength="60" autocomplete="off" value="${esc(draft.name)}" placeholder="Give your skin a name"></label><label>Base skin<select data-skin-base>${S.families.map(f => `<option value="${esc(f.id)}"${f.id === draft.family ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label><h4>Colour</h4><div class="skp" role="group" aria-label="New skin colours">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, draft.base)).join('')}</div><h4>Tweaks</h4><p class="st-hint">All installed tweaks · starts with the base skin’s defaults.</p>${draft.loading ? '<p role="status">Loading tweaks…</p>' : tweakSwitches((draft.items || []).map(t => ({ ...t, on: draft.tweaks[t.id] })), 'data-draft-tweak')}${draft.validation ? `<p role="alert">${esc(draft.validation)}</p>` : ''}${draft.error ? `<p role="alert">${esc(draft.error)}</p><button data-skinretry>Try again</button>` : ''}<div class="st-actions"><button data-skin-create${draft.loading || draft.error ? ' disabled' : ''}>Create skin</button></div></div>`;
   }
   function lookHtml(S, ctx) {
+    window.WosExperience?.installed?.().catch(() => {}); // warm the tweak list for New skin
     if (ctx.skinDraft) return newSkinHtml(S, ctx.skinDraft);
     const cur = S.current, base = lookName(S, cur), own = window.WosMySkin?.active;
     loadFaces();

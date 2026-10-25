@@ -13,9 +13,16 @@
   const copy = value => JSON.parse(JSON.stringify(value));
   let state = Store.read() || { version: 1, off: {} };
   let catalog = null, slots = null, set = null, owner = null, manifests = new Map(), generation = 0, error = '', busy = false;
-  const read = async url => {
-    const r = await fetch(new URL(url, document.baseURI), { cache: 'no-store', signal: AbortSignal.timeout(8000) });
+  // Tweak files are static per release: read each once per page (a failure is forgotten so the next call retries).
+  const files = new Map();
+  const fetchOnce = async url => {
+    const r = await fetch(new URL(url, document.baseURI), { cache: 'no-cache', signal: AbortSignal.timeout(6000) });
     if (!r.ok) throw new Error(`Could not read ${url} (${r.status})`); return r.json();
+  };
+  const read = url => {
+    if (/profile\.json$/.test(url)) return fetchOnce(url); // a published profile can change; manifests cannot
+    if (!files.has(url)) files.set(url, fetchOnce(url).catch(() => fetchOnce(url)).catch(e => { files.delete(url); throw e; }));
+    return files.get(url).then(v => JSON.parse(JSON.stringify(v)));
   };
   const changed = () => window.dispatchEvent(new Event('wos:experience'));
   // The tweak set the worn skin carries: its family's `tweaks` owner id, or none.
@@ -45,9 +52,13 @@
     }
   } catch (_) {}
   const recipe = () => window.WosMySkin?.active;
-  async function installed() {
-    catalog ||= await read('tweaks/catalog.json');
-    return Promise.all(catalog.tweaks.map(async id => ({ id, ...await read(`tweaks/${id}/manifest.json`) })));
+  let installedP = null;
+  function installed() {
+    installedP ||= (async () => {
+      catalog ||= await read('tweaks/catalog.json');
+      return Promise.all(catalog.tweaks.map(async id => ({ id, ...await read(`tweaks/${id}/manifest.json`) })));
+    })().then(v => { installedP.settled = true; return v; }, e => { installedP = null; throw e; });
+    return installedP.then(list => list.map(m => ({ ...m })));
   }
   async function defaults(palette) {
     const fid = window.WosSkin.familyOf(palette), fam = window.WosSkin.families.find(f => f.id === fid);
@@ -78,6 +89,7 @@
         tweaks: [...manifests].map(([id, m]) => ({ id, name: m.name, description: m.description || '', on: recipe() ? (Object.hasOwn(recipe().tweaks, id) ? recipe().tweaks[id] : !!set?.tweaks.includes(id) && !offFor(owner).includes(id)) : !offFor(owner).includes(id) })) });
     },
     installed, defaults,
+    get installedReady() { return !!installedP?.settled; },
     refresh: apply,
     // Settings calls this after a skin pick; other skin changes arrive as `wos:skin`.
     chooseSkin() { if (wornOwner() !== owner || (!set && owner)) return apply(); return Promise.resolve(); },
