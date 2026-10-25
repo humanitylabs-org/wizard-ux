@@ -129,8 +129,8 @@
   const mySkinWorn = () => !!window.WosMySkin?.active;
   function mySkinRow(skin) {
     const M = window.WosMySkin, st = M?.state, js = st?.script;
-    const script = js?.exists && !st.off ? `<div class="st-row static my-skin-row" data-myskin-script><span class="st-tx"><b>${js.approved ? 'Skin script on' : 'Skin script changed'}</b><small>Skins/My skin/skin.js · this device only</small></span><span class="ms-acts">${js.approved ? '<button type="button" class="ghost" data-myskin="off">Turn off</button>' : `<button type="button" data-myskin="on" data-myskin-hash="${esc(js.sha256 || '')}" ${js.valid ? '' : 'disabled'}>Turn on</button>`}</span></div>` : '';
-    return `<div class="ms-panel" data-ownskin-panel><button class="st-row" data-myskin="edit"><span class="st-tx"><b>Edit with your Wizard</b><small>Ask your Wizard ‘change my ${esc(skin.name)} skin so…’</small></span><span class="st-go">›</span></button><p class="st-hint">Saved on this device.</p>${script}<button class="st-row" data-ownskin-remove="${esc(skin.id)}"><span class="st-tx"><b>Remove skin</b></span><span class="st-go">›</span></button></div>`;
+    const script = js?.exists && !st.off ? `<div class="st-row static my-skin-row" data-myskin-script><span class="st-tx"><b>${js.approved ? 'Skin script on' : 'Skin script changed'}</b><small>${esc(M.active ? 'Skins/' + M.active.id + '/skin.js' : 'skin.js')} · approval on this device</small></span><span class="ms-acts">${js.approved ? '<button type="button" class="ghost" data-myskin="off">Turn off</button>' : `<button type="button" data-myskin="on" data-myskin-hash="${esc(js.sha256 || '')}" ${js.valid ? '' : 'disabled'}>Turn on</button>`}</span></div>` : '';
+    return `<div class="ms-panel" data-ownskin-panel><button class="st-row" data-myskin="edit"><span class="st-tx"><b>Edit with your Wizard</b><small>Ask your Wizard ‘change my ${esc(skin.name)} skin so…’</small></span><span class="st-go">›</span></button><p class="st-hint">${M.storage === 'box' ? 'Saved on your Wizard.' : M.storage === 'local' ? 'Saved on this device until your Wizard is updated.' : 'Offline · showing a cached skin.'}</p>${script}<button class="st-row" data-ownskin-remove="${esc(skin.id)}"><span class="st-tx"><b>Remove skin</b></span><span class="st-go">›</span></button></div>`;
   }
   function mySkinAction(ctx, what, event) {
     const M = window.WosMySkin; if (!M) return;
@@ -181,6 +181,9 @@
   let tweaksOpen = false;
   window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
   const newTile = () => window.WosMySkin ? '<button type="button" class="skp-card skp-my" data-newskin aria-label="New skin"><span class="skp-mini skp-mini-my" aria-hidden="true"><i class="skp-plus"></i></span><span class="skp-nm">+ New skin</span></button>' : '';
+  function skinAction(action, done, failed) {
+    try { const result = action(); if (result?.then) result.then(done, failed); else done(result); } catch (e) { failed(e); }
+  }
   function ownTiles(S) {
     const M = window.WosMySkin;
     return (M?.recipes || []).map(skin => {
@@ -203,7 +206,7 @@
   }
   function newSkinHtml(S, draft) {
     const family = S.families.find(f => f.id === draft.family);
-    return `<div class="st-group sc-sheet skin-create" data-newskin-sheet><h4>New skin</h4><label>Name<input data-skin-name maxlength="60" autocomplete="off" value="${esc(draft.name)}" placeholder="Give your skin a name"></label><label>Base skin<select data-skin-base>${S.families.map(f => `<option value="${esc(f.id)}"${f.id === draft.family ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label><h4>Colour</h4><div class="skp" role="group" aria-label="New skin colours">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, draft.base)).join('')}</div><h4>Tweaks</h4><p class="st-hint">All installed tweaks · starts with the base skin’s defaults.</p>${draft.loading ? '<p role="status">Loading tweaks…</p>' : tweakSwitches((draft.items || []).map(t => ({ ...t, on: draft.tweaks[t.id] })), 'data-draft-tweak')}${draft.validation ? `<p role="alert">${esc(draft.validation)}</p>` : ''}${draft.error ? `<p role="alert">${esc(draft.error)}</p><button data-skinretry>Try again</button>` : ''}<div class="st-actions"><button data-skin-create${draft.loading || draft.error ? ' disabled' : ''}>Create skin</button></div></div>`;
+    return `<div class="st-group sc-sheet skin-create" data-newskin-sheet><h4>New skin</h4><label>Name<input data-skin-name maxlength="60" autocomplete="off" value="${esc(draft.name)}" placeholder="Give your skin a name"></label><label>Base skin<select data-skin-base>${S.families.map(f => `<option value="${esc(f.id)}"${f.id === draft.family ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label><h4>Colour</h4><div class="skp" role="group" aria-label="New skin colours">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, draft.base)).join('')}</div><h4>Tweaks</h4><p class="st-hint">All installed tweaks · starts with the base skin’s defaults.</p>${draft.loading ? '<p role="status">Loading tweaks…</p>' : tweakSwitches((draft.items || []).map(t => ({ ...t, on: draft.tweaks[t.id] })), 'data-draft-tweak')}${draft.validation ? `<p role="alert">${esc(draft.validation)}</p>` : ''}${draft.error ? `<p role="alert">${esc(draft.error)}</p><button data-skinretry>Try again</button>` : ''}<div class="st-actions"><button data-skin-create${draft.loading || draft.error || draft.saving ? ' disabled' : ''}>Create skin</button></div></div>`;
   }
   function lookHtml(S, ctx) {
     window.WosExperience?.installed?.().catch(() => {}); // warm the tweak list for New skin
@@ -220,7 +223,7 @@
     }).join('');
     const grid = `<div class="skp skp-families" role="group" aria-label="Skins">${tiles}${ownTiles(S)}${newTile()}</div>`;
     const colours = `<div class="skp-colours"><h4>Colours</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colours">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>`;
-    const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>The base colour and shared CSS files are kept.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
+    const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
     const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
     return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
   }
@@ -243,11 +246,11 @@
     const M = window.WosMySkin, S = window.WosSkin;
     if (el.closest('[data-skin-remove-cancel]')) { ctx.skinRemove = null; ctx.render(); return true; }
     if (el.closest('[data-skin-remove-confirm]')) {
-      try { ctx.skinUndo = M.remove(ctx.skinRemove.id); ctx.skinRemove = null; ctx.render(); ctx.root.querySelector('[data-skin-undo]')?.focus(); }
-      catch (_) { ctx.toast?.('!', 'Could not save removal on this device', 3000); } return true;
+      if (ctx.skinSaving) return true; ctx.skinSaving = true;
+      skinAction(() => M.remove(ctx.skinRemove.id), snapshot => { ctx.skinSaving = false; ctx.skinUndo = snapshot; ctx.skinRemove = null; ctx.render(); ctx.root.querySelector('[data-skin-undo]')?.focus(); }, e => { ctx.skinSaving = false; ctx.toast?.('!', e.message || 'Could not remove skin', 3000); }); return true;
     }
     if (ctx.skinRemove) return true;
-    if (el.closest('[data-skin-undo]')) { try { M.restore(ctx.skinUndo); ctx.skinUndo = null; ctx.render(); } catch (_) { ctx.toast?.('!', 'Could not restore skin', 3000); } return true; }
+    if (el.closest('[data-skin-undo]')) { if (ctx.skinSaving) return true; ctx.skinSaving = true; skinAction(() => M.restore(ctx.skinUndo), () => { ctx.skinSaving = false; ctx.skinUndo = null; ctx.render(); }, e => { ctx.skinSaving = false; ctx.toast?.('!', e.message || 'Could not restore skin', 3000); }); return true; }
     if (el.closest('[data-skin-undo-dismiss]')) { ctx.skinUndo = null; ctx.render(); return true; }
     if (el.closest('[data-newskin]')) {
       ctx.skinDraft = { name: '', items: [], tweaks: {} };
@@ -260,15 +263,15 @@
       if (colour) { draft.base = colour.dataset.skinpick; ctx.render(); return true; }
       if (el.closest('[data-skinretry]')) { void draftDefaults(ctx, S.families.find(f => f.id === draft.family)); return true; }
       if (el.closest('[data-skin-create]') && !draft.loading && !draft.error) {
-        try { M.create(draft); ctx.skinDraft = null; ctx.render(); ctx.root.querySelector('[data-ownskin][aria-pressed="true"]')?.focus(); }
-        catch (e) { draft.validation = e.message; ctx.render(); } return true;
+        if (draft.saving) return true; draft.saving = true; ctx.render();
+        skinAction(() => M.create(draft), () => { draft.saving = false; ctx.skinDraft = null; ctx.render(); ctx.root.querySelector('[data-ownskin][aria-pressed="true"]')?.focus(); }, e => { draft.saving = false; draft.validation = e.message; ctx.render(); }); return true;
       }
       return false;
     }
     const remove = el.closest('[data-ownskin-remove]');
     if (remove) { ctx.skinRemove = M.recipes.find(s => s.id === remove.dataset.ownskinRemove); ctx.render(); ctx.root.querySelector('[data-skin-remove-cancel]')?.focus(); return true; }
     const own = el.closest('[data-ownskin]');
-    if (own) { try { M.wear(own.dataset.ownskin); ctx.render(); } catch (e) { ctx.toast?.('!', e.message, 3000); } return true; }
+    if (own) { skinAction(() => M.wear(own.dataset.ownskin), () => ctx.render(), e => ctx.toast?.('!', e.message, 3000)); return true; }
     const tweak = el.closest('[data-tweak-toggle]');
     if (tweak) { tweaksOpen = true; void window.WosExperience.toggle(tweak.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; }
     const set = el.closest('[data-tweakset] > summary');
@@ -276,11 +279,12 @@
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
     const family = el.closest('[data-skinfamily]');
-    if (family) { M?.leave?.(); S.setFamily(family.dataset.skinfamily); void window.WosExperience?.chooseSkin?.(); ctx.render?.(); ctx.haptic?.(8); return true; }
+    if (family) { skinAction(() => M?.leave?.(), () => { S.setFamily(family.dataset.skinfamily); void window.WosExperience?.chooseSkin?.(); ctx.render?.(); ctx.haptic?.(8); }, e => ctx.toast?.('!', e.message, 3000)); return true; }
     const b = el.closest('[data-skinpick]'); if (!b) return false;
-    if (M?.active) M.update({ base: b.dataset.skinpick }); else S.set(b.dataset.skinpick);
-    void window.WosExperience?.chooseSkin?.();
-    for (const m of mounts) m.render(); ctx.haptic?.(8); return true;
+    skinAction(() => M?.active ? M.update({ base: b.dataset.skinpick }) : S.set(b.dataset.skinpick), () => {
+      void window.WosExperience?.chooseSkin?.();
+      for (const m of mounts) m.render(); ctx.haptic?.(8);
+    }, e => ctx.toast?.('!', e.message, 3000)); return true;
   } });
   register({ id: 'skin-frame', available: () => !!window.WosSkin, html() {
     return '<div class="st-group sf-section"><details class="st-advanced"><summary>Advanced</summary><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><p data-skinimport-status role="status"></p></details></div>';

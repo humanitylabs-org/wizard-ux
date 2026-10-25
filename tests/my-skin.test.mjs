@@ -33,6 +33,7 @@ async function boot({ responses = [], cached = null, search = '', saved = null, 
   const queue = [...responses];
   const fetch = async (url, init = {}) => {
     calls.push({ url, method: init.method || 'GET' });
+    if (String(url).startsWith('/wizard/v1/skins')) return { ok: false, status: 404 };
     if (String(url).includes('format=json')) return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => ({ path: 'Skins/My skin.css', empty: false }) };
     const r = queue.length ? queue.shift() : { status: 200, type: 'text/css', body: '' };
     if (r.throw) throw new TypeError('offline');
@@ -57,7 +58,7 @@ test('empty My skin adds nothing: the picked skin renders exactly as its author 
   assert.equal(b.style(), null);
   assert.equal(b.M.state.empty, true);
   assert.equal(b.document.documentElement.attrs.has('data-my-skin'), false);
-  assert.equal(b.calls[0].url, '/wizard/v1/my-skin');
+  assert.ok(b.calls.some(c => c.url === '/wizard/v1/my-skin'));
 });
 
 test('a My skin rule is applied last in <head>, after the base skin and its package stylesheet', async () => {

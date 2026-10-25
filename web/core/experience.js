@@ -52,18 +52,27 @@
     }
   } catch (_) {}
   const recipe = () => window.WosMySkin?.active;
+  const profileReads = new Map();
+  function profile(who) {
+    if (!profileReads.has(who)) {
+      const pending = read(`tweaks/${who}/profile.json`).catch(e => { profileReads.delete(who); throw e; });
+      profileReads.set(who, pending);
+    }
+    return profileReads.get(who);
+  }
   let installedP = null;
   function installed() {
     installedP ||= (async () => {
       catalog ||= await read('tweaks/catalog.json');
+      for (const who of catalog.profiles || []) void profile(who).catch(() => {});
       return Promise.all(catalog.tweaks.map(async id => ({ id, ...await read(`tweaks/${id}/manifest.json`) })));
     })().then(v => { installedP.settled = true; return v; }, e => { installedP = null; throw e; });
     return installedP.then(list => list.map(m => ({ ...m })));
   }
   async function defaults(palette) {
     const fid = window.WosSkin.familyOf(palette), fam = window.WosSkin.families.find(f => f.id === fid);
-    const profile = fam?.tweaks ? await read(`tweaks/${fam.tweaks}/profile.json`) : null;
-    return Object.fromEntries((await installed()).map(m => [m.id, !!profile?.tweaks.includes(m.id) && !(profile.off || []).includes(m.id)]));
+    const published = fam?.tweaks ? await profile(fam.tweaks) : null;
+    return Object.fromEntries((await installed()).map(m => [m.id, !!published?.tweaks.includes(m.id) && !(published.off || []).includes(m.id)]));
   }
   async function apply() {
     const seq = ++generation; busy = true; error = ''; changed();
@@ -76,6 +85,7 @@
       if (seq !== generation) return;
       if (next && (next.id !== who || !Array.isArray(next.tweaks) || next.tweaks.some(id => !ID.test(id) || !catalog.tweaks.includes(id)) || (next.off !== undefined && (!Array.isArray(next.off) || next.off.some(id => !next.tweaks.includes(id)))))) throw new Error('This skin’s tweaks could not be read');
       owner = who; set = next;
+      if (who) profileReads.set(who, Promise.resolve(next));
       const own = recipe();
       const all = own ? catalog.tweaks : next ? next.tweaks : [];
       manifests = new Map(await Promise.all(all.map(async id => [id, await read(`tweaks/${id}/manifest.json`)])));
@@ -96,7 +106,7 @@
     async toggle(id) {
       if (recipe()) {
         const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
-        window.WosMySkin.update({ tweaks: { [id]: !item.on } }); return apply();
+        await window.WosMySkin.update({ tweaks: { [id]: !item.on } }); return apply();
       }
       if (!owner || !set?.tweaks.includes(id)) return;
       const off = new Set(offFor(owner)); off.has(id) ? off.delete(id) : off.add(id);
