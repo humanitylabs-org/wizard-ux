@@ -48,7 +48,7 @@
   const placed = new Set(), deskIds = new Set();
   ws = ws.map(d => {
     d = d && typeof d === 'object' ? d : freshDesk();
-    if (typeof d.id !== 'string' || !/^dw[a-z0-9]+$/.test(d.id) || deskIds.has(d.id)) d.id = freshDesk().id;
+    if (typeof d.id !== 'string' || !/^d[a-z0-9]+$/.test(d.id) || deskIds.has(d.id)) d.id = freshDesk().id;
     deskIds.add(d.id);
     d.wins = (Array.isArray(d.wins) ? d.wins : []).filter(id => W[id] && !placed.has(id) && placed.add(id));
     if (!d.wins.includes(d.focus)) d.focus = d.wins[0] || null;
@@ -64,7 +64,7 @@
   Object.keys(W).forEach(id => { if (!ws.some(d => d.wins.includes(id))) delete W[id]; });
   if (!(cur >= 0 && cur < ws.length)) cur = 0;
   function uid() { return 'w' + Math.random().toString(36).slice(2, 9); }
-  const save = () => { store.set('wins', W); store.set('ws', ws); store.set('cur', cur); };
+  const save = () => { store.set('wins', W); store.set('ws', ws); store.set('cur', cur); window.WosWorkspaceSync?.current?.changed(); };
   const wsOf = id => ws.findIndex(d => d.wins.includes(id));
   let homeOpen = store.get('homeOpen', false) === true;
   const focused = () => homeOpen ? null : W[ws[cur].focus] || null;
@@ -1677,6 +1677,22 @@
 
   /* ---------------- deep links + boot ---------------- */
   render();
+  /* Workspace sync (core/workspace-sync.js): the same desktops on every device; layout and full screen stay here. */
+  window.WosWorkspaceSync?.create({
+    shell: 'desktop',
+    title: w => appOf(w)?.name || w.title || w.appId,
+    read: () => ({ desks: ws.map(d => ({ id: d.id, wins: d.wins.map(id => W[id]).filter(Boolean) })) }),
+    apply(state, o = {}) {
+      if (!state) { const i = ws.findIndex(d => d.id === o.focus); if (i >= 0) { closeSettings(); goWs(i); } return; }
+      const here = ws[cur]?.id, at = cur;
+      const r = window.WosWorkspaceSync.reconcile(ws, W, state, { fresh: id => ({ ...freshDesk(), id }) });
+      r.removed.forEach(id => { boundManager?.dismiss(W[id]); if (W[id]?.app === 'chats') CHATS.saveDraft(id); delete W[id]; CHATS.forget(id); });
+      ws = r.desks.length ? r.desks : [freshDesk()];
+      ws.forEach(d => { d.mono = !!d.mono && d.wins.length > 0; });
+      cur = ws.findIndex(d => d.id === here); if (cur < 0) cur = Math.max(0, Math.min(at, ws.length - 1));
+      save(); render();
+    },
+  });
   // In-app browser (core/links.js): links tapped in Wizard open in a right-half pane.
   const LINKS = window.WizLinks ? window.WizLinks.mount({
     parent: document.body, mode: 'pane',
