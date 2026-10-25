@@ -149,6 +149,17 @@ def main():
         check('force-stop recovery into real durable outbox',not any(t['id']==st['id'] for t in r['pending']) and any(t['id']=='native-'+st['id'] and t['durable'] and t['bytes']>0 and t['state']=='held' for t in r['rows']))
         adb('shell','appops','set',PKG,'SYSTEM_ALERT_WINDOW','allow');r=send('orb');check('Everywhere capability enabled',r['on'] and r['permitted'])
         adb('shell','am','start','-W','-a','android.intent.action.DIAL');time.sleep(5)
+        # Preserve cold fallback attempts; never widen the signed APK's 1.5s deadline.
+        (OUT/'logcat-before-orb.txt').write_text(adb('logcat','-d'))
+        attempt=0;orb_log=''
+        for attempt in range(1,4):
+            orb_log=adb('logcat','-d','-s','ShellOrb:I');(OUT/f'orb-attempt-{attempt}.log').write_text(orb_log)
+            if 'page from Wizard' in orb_log:break
+            if attempt==3:break
+            before=len(events);adb('shell','am','force-stop',PKG);adb('logcat','-c');adb('shell','am','start','-W','-n',ACT)
+            until(lambda:any(e.get('boot') for e in events[before:]))
+            adb('shell','am','start','-W','-a','android.intent.action.DIAL');time.sleep(5)
+        (OUT/'orb-attempts.json').write_text(json.dumps({'attempts':attempt,'maxAttempts':3,'remoteReady':'page from Wizard' in orb_log}))
         windows=adb('shell','dumpsys','window','windows');(OUT/'orb-windows.txt').write_text(windows)
         check('native orb visible over Dialer',orb_visible(windows))
         orb_log=adb('logcat','-d','-s','ShellOrb:I');(OUT/'orb-logcat.txt').write_text(orb_log)
