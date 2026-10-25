@@ -144,6 +144,7 @@ public final class WizardId {
         if (dialog != null) { dialog.dismiss(); dialog = null; }
         if (done != null) done.accept(result);
     }
+    private LinearLayout footer;
     private LinearLayout sheet(String title, boolean secret, Runnable back) { return sheet(title, secret, back, false); }
     /** Settings chrome stays outside the scroller, including with a keyboard or large text. */
     private LinearLayout sheet(String title, boolean secret, Runnable back, boolean previous) {
@@ -169,7 +170,10 @@ public final class WizardId {
         LinearLayout body = new LinearLayout(activity); body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(dp(24),0,dp(24),dp(32)); body.setFocusableInTouchMode(true);
         ScrollView scroll = new ScrollView(activity); scroll.setFillViewport(true); scroll.setClipToPadding(false);
-        scroll.addView(body); root.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1)); d.setContentView(root);
+        scroll.addView(body); root.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1));
+        // The screen's one confirmation stays pinned below the scroller, always visible above the keyboard.
+        footer = new LinearLayout(activity); footer.setOrientation(LinearLayout.VERTICAL); footer.setPadding(dp(24),0,dp(24),dp(20));
+        root.addView(footer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT)); d.setContentView(root);
         if (secret) d.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         d.setCanceledOnTouchOutside(false);
         d.setOnCancelListener(ignored -> cancel());
@@ -229,7 +233,7 @@ public final class WizardId {
         int onAccent = ColorUtils.calculateContrast(Color.BLACK,accent) >= ColorUtils.calculateContrast(Color.WHITE,accent) ? Color.BLACK : Color.WHITE;
         TextView b = label(label,16,onAccent,true); b.setGravity(Gravity.CENTER); b.setMinHeight(dp(52)); b.setPadding(dp(16),dp(12),dp(16),dp(12));
         b.setBackground(new RippleDrawable(ColorStateList.valueOf(ColorUtils.setAlphaComponent(onAccent,32)),round(accent,0,99),round(Color.WHITE,0,99)));
-        actionable(b,action); LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT); p.topMargin = dp(20); p.bottomMargin = dp(8); body.addView(b,p);
+        actionable(b,action); LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT); p.topMargin = dp(12); (footer != null ? footer : body).addView(b,p);
     }
     private EditText input(LinearLayout body, String hint, boolean secret) {
         TextView fieldLabel = label(hint,13,muted,true); fieldLabel.setPadding(0,dp(16),0,dp(8)); body.addView(fieldLabel);
