@@ -1,12 +1,18 @@
 name: App shared-components reuse gate
 on:
   workflow_call:
+    inputs:
+      runner:
+        description: 'JSON runner name or label array; private apps select their self-hosted reuse worker'
+        type: string
+        required: false
+        default: '"ubuntu-latest"'
 permissions:
   contents: read
 jobs:
   reuse:
     name: Shared-components reuse
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner) }}
     timeout-minutes: 5
     steps:
       - name: Read app PR history (never execute app code)

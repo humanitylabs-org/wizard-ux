@@ -14,6 +14,37 @@ jobs:
     uses: humanitylabs-org/wizard-ux/.github/workflows/reuse-check-app.yml@main
 ```
 
+## Private repositories: self-hosted reuse worker
+
+Public app callers keep the snippet above unchanged: the reusable workflow's
+`runner` input defaults to the JSON string `"ubuntu-latest"`. Private app callers
+must pass the repo-level self-hosted reuse-worker labels instead:
+
+```yaml
+jobs:
+  reuse:
+    uses: humanitylabs-org/wizard-ux/.github/workflows/reuse-check-app.yml@main
+    with:
+      runner: '["self-hosted","linux","forum","reuse-check"]'
+```
+
+Before opening the first private app PR, the installation operator registers its
+repo-level runner with `forum-ci-runner-add <repo>` on their control host (see the
+installed `wizard-builder` skill for the operator setup). The helper obtains a
+short-lived registration token locally; no personal token goes to the runner or
+into source. Keep public repositories on GitHub-hosted runners. The input accepts
+JSON, not a comma-separated string. Do not move unrelated existing workflows or
+build jobs to this lightweight worker. Any inline job in the **reuse caller**
+uses the same self-hosted label array.
+
+Self-hosted runners are for trusted private app repositories only. They run as an
+unprivileged account without Docker, KVM, libvirt or sudo access, with an aggregate
+resource limit separate from other workloads. The gate still executes only the
+canonical checker, never PR code; do not add app installs or scripts here. Do not
+route public/fork app PRs to this worker. Revisit trust and registration if a
+repository becomes public; labels and a shared Unix account are not a sandbox
+against malicious workflows.
+
 Every app PR, including CI-only work, needs a `Reuse:` block naming entry points
 from [COMPONENTS.md](COMPONENTS.md). Template:
 
