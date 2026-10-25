@@ -72,6 +72,15 @@
     composerModule().then(m => { if (!dead && m) off = m.bind(root, opts); });
     return () => { dead = true; if (off) { off(); off = null; } };
   }
+  // Esc in an app opened on its own (not inside Wizard, which routes Esc to Back itself): close the topmost
+  // overlay from anywhere; leave a nested view only when the key is not typed into a field.
+  if (!framed) addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || e.repeat) return;
+    const t = e.target, typing = !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ''));
+    if (!overlays.length && typing) return;
+    let did = false; try { did = back(); } catch (_) {}
+    if (did) e.preventDefault();
+  });
   function ready(meta = {}) {
     if (framed) {
       try { service = parent.WizAppServices?.connect(window, conversationClient) || null; } catch (_) { service = null; }
