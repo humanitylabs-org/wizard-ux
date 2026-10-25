@@ -2,7 +2,7 @@ name: Public Android signed artifact audit
 on:
   push:
     branches: [qa/public-android-artifact-20261025]
-    paths: [.github/workflows/android-public-artifact.yml]
+    paths: [.github/workflows/android-public-artifact.yml, tools/qa_signed_shell.py]
 permissions:
   contents: read
 jobs:

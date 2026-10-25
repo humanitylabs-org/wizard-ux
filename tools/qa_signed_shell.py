@@ -57,7 +57,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         n=int(self.headers.get('Content-Length','0'))
         if self.path!='/log' or n>100000:return self.send_error(400)
-        ev=json.loads(self.rfile.read(n));events.append(ev)
+        ev=json.loads(self.rfile.read(n))
+        if ev.get('boot'):command.clear()  # Never replay a pre-reload start/stop on the new page.
+        events.append(ev)
         with open(OUT/'events.jsonl','a') as f:f.write(json.dumps(ev)+'\n')
         self.send('{}','application/json')
 def adb(*args):return subprocess.check_output(['adb',*args],text=True,stderr=subprocess.STDOUT)
@@ -88,6 +90,15 @@ def tap(text):
         if n.attrib.get('text')==text:
             a=list(map(int,re.findall(r'\d+',n.attrib['bounds'])));adb('shell','input','tap',str((a[0]+a[2])//2),str((a[1]+a[3])//2));return True
     return False
+
+def orb_point(control=0):
+    text=adb('shell','dumpsys','input');(OUT/'orb-input.txt').write_text(text)
+    line=next(l for l in text.splitlines() if "WizardShellOrb', id=" in l)
+    x1,y1,x2,y2=map(int,re.search(r'touchableRegion=\[(\d+),(\d+)\]\[(\d+),(\d+)\]',line).groups())
+    return str(int(x1+control*(x2-x1-(y2-y1))/4 if control else x2-(y2-y1)/2)),str((y1+y2)//2)
+
+def orb_visible(windows):
+    return any('WizardShellOrb' in b.split('\n')[0] and 'isVisible=true' in b for b in windows.split('Window #'))
 
 def connect(origin):
     before=len(events)
@@ -130,8 +141,17 @@ def main():
         adb('shell','appops','set',PKG,'SYSTEM_ALERT_WINDOW','allow');r=send('orb');check('Everywhere capability enabled',r['on'] and r['permitted'])
         adb('shell','am','start','-W','-a','android.intent.action.DIAL');time.sleep(5)
         windows=adb('shell','dumpsys','window','windows');(OUT/'orb-windows.txt').write_text(windows)
-        check('native orb window exists', 'WizardShellOrb' in windows)
-        (OUT/'orb-logcat.txt').write_text(adb('logcat','-d','-s','ShellOrb:I'))
+        check('native orb visible over Dialer',orb_visible(windows))
+        orb_log=adb('logcat','-d','-s','ShellOrb:I');(OUT/'orb-logcat.txt').write_text(orb_log)
+        check('native orb loaded candidate remote page', 'page from Wizard' in orb_log)
+        x,y=orb_point();adb('shell','input','tap',x,y);time.sleep(2);orb_take=send('status')
+        check('native orb tap starts recording',bool(orb_take['id']) and orb_take['state']=='recording')
+        x,y=orb_point(3);adb('shell','input','tap',x,y);time.sleep(1);check('remote orb Pause button',send('status')['state']=='paused')
+        adb('shell','input','tap',x,y);time.sleep(1);check('remote orb Resume button',send('status')['state']=='recording')
+        x,y=orb_point();adb('shell','input','swipe',x,y,x,y,'1500');time.sleep(1);hold=send('status')
+        check('native hold pauses same take without hiding',hold['id']==orb_take['id'] and hold['state']=='paused' and orb_visible(adb('shell','dumpsys','window','windows')))
+        subprocess.run(['adb','exec-out','screencap','-p'],stdout=open(OUT/'orb-paused.png','wb'))
+        x,y=orb_point(1);adb('shell','input','tap',x,y);time.sleep(1);check('remote orb Cancel stops without sending',send('status')['id'] is None)
         adb('shell','am','start','-W','-n',ACT);send('orb')
         st=send('start');time.sleep(4);retained=send('retain',id=st['id'])
         check('origin-bound take retained before switching',retained['bytes']>0)
