@@ -33,3 +33,16 @@ test('the dismiss tap is handled before the open tap and posts to Morning withou
   assert.doesNotMatch(hide, /api\/step/)
   assert.match(src, /hidden: !!d\.hidden/, 'status carries the hidden flag')
 })
+
+// James, 25 Oct 2026: "when I hit it, it should automatically return me to the previous screen ... on any build when
+// I'm dismissing something, archiving something". Apps get one shared call for that; the Chats card remembers its source.
+test('apps can return to the previous screen after a finishing action, through the shell Back', () => {
+  const client = readFileSync(new URL('../web/core/app-client.js', import.meta.url), 'utf8')
+  const svc = readFileSync(new URL('../web/core/app-services.js', import.meta.url), 'utf8')
+  const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8')
+  assert.match(client, /back: \(\) => \{ try \{ return service\?\.nav\?\.back\?\.\(\) === true/)
+  assert.match(svc, /back\(\) \{ check\(\); if \(st\.isVisible\?\.\(\) !== true/, 'hidden apps cannot navigate the owner')
+  assert.match(svc, /isVisible, back, readingStorage \}/)
+  assert.match(app, /back: \(\) => \{ if \(desks\[idx\]\.focus !== w\.id\) return false; const did = backStep\(w\.id\)/)
+  assert.match(src, /H\.openApp\?\.\('morning', e\.target\)/, 'the Morning card opens Morning with Chats as where it came from')
+})

@@ -12,6 +12,7 @@
  *   editUnsent(item) → put an unsent message back into a composer
  *   newChatHint      → the line under "New chat" (the phone mentions the orb, the desktop its keys)
  *   openLink(url, title) → (optional) open a private-origin link in a window of this shell; return true if it did
+ *   openApp(id, srcEl) → (optional) open an installed app, remembering the source window so Back returns to it
  *   owner(id)        → (optional) the window a pane belongs to (the desktop's list pane id::list → id)
  *   overlay(open)         → (optional) the media viewer opened/closed (the phone arms its Back guard)
  *   vib(ms)               → (optional) haptic tick
@@ -2573,7 +2574,7 @@ window.WizCore.chats = function createChats(H) {
     const rb = e.target.closest('[data-obretry]'); if (rb) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retry(rb.dataset.obretry)), 2400); return true; }
     if (e.target.closest('[data-chunsent]')) { H.openUnsent?.(); return true; }
     if (e.target.closest('[data-chmorninghide]')) { morningHide(); return true; }
-    if (e.target.closest('[data-chmorning]')) { MORNING.at = 0; if (!(window.WizOpenApp?.('morning'))) H.openLink?.('/morning/', 'Morning'); return true; }
+    if (e.target.closest('[data-chmorning]')) { MORNING.at = 0; if (!(H.openApp?.('morning', e.target) || window.WizOpenApp?.('morning'))) H.openLink?.('/morning/', 'Morning'); return true; }
     if (e.target.closest('[data-obretryall]')) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retryAll(winAgent(w))), 2400); return true; }
     const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) H.editUnsent(it); return true; }
     if (PW && PW.click(e, id)) return true;
