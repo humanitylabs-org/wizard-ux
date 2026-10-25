@@ -338,10 +338,12 @@ window.WizCore.chats = function createChats(H) {
   function focusOf(w) {
     const o = (w && W[owner(w.id)]) || w, f = o?.focus;
     // Old automatic subject focuses migrate to All, as do deleted Spaces.
-    if (f?.kind === 'subject' || (f?.kind === 'space' && !visibleSpaces().some(s => s.id === f.key)) || (f?.kind === 'agent' && !focusAgents().some(a => a.id === f.key))) { o.focus = null; save(); return null; }
+    // Hidden agents leave discovery only: an existing route to one (or its Space) stays valid.
+    if (f?.kind === 'subject' || (f?.kind === 'space' && !spaces().some(s => s.id === f.key && routeAgents().some(a => a.id === spaceAgent(s)))) || (f?.kind === 'agent' && !routeAgents().some(a => a.id === f.key))) { o.focus = null; save(); return null; }
     return f && ['agent', 'space'].includes(f.kind) && typeof f.key === 'string' && f.key ? f : null;
   }
-  function focusAgents() { const A = window.WosAgents; return A ? [agentRec(A.defaultId()), ...A.others()].filter(a => !a.hidden) : [agentRec('')]; }
+  function routeAgents() { const A = window.WosAgents; return A ? [agentRec(A.defaultId()), ...A.others()] : [agentRec('')]; }
+  function focusAgents() { return routeAgents().filter(a => !a.hidden); }
   function matchesFocus(f, s) { return !f || (f.kind === 'space' ? spaceContains(f.key, s.id) && (LIVE.agentOf(s.id) || AGS()?.defaultId() || 'hermes') === focusedAgent(f) : f.key === AGS()?.defaultId() ? !LIVE.agentOf(s.id) : LIVE.agentOf(s.id) === f.key); }
   function focusMatches(w, s) { return matchesFocus(focusOf(w), s); }
   function setFocus(w, f) {
@@ -732,7 +734,7 @@ window.WizCore.chats = function createChats(H) {
     const all = LIVE.unified().filter(s => !s.hidden);
     const stats = (kind, key, label, badge = '') => {
       // A Space counts its explicit members, including ones hydrated beyond the global archive window.
-      const members = kind === 'space' && LIVE.spaceSessions ? LIVE.spaceSessions(spaces().find(s => s.id === key)?.threads || [], { peek: true }).rows.filter(s => !s.hidden) : null;
+      const members = kind === 'space' && LIVE.spaceSessions ? LIVE.spaceSessions(spaces().find(s => s.id === key)?.threads || [], { peek: true, agent: spaceAgent(spaces().find(s => s.id === key)) }).rows.filter(s => !s.hidden) : null;
       const rows = members || (kind === 'all' ? all : all.filter(s => matchesFocus({ kind, key }, s)));
       // Counts exclude Archive (James, 25 Oct 2026). Unloaded Space members sit beyond the archive window, so they are archived too.
       return { kind, key, label, badge, count: rows.length - LIVE.workGroups(rows).archive.length, unread: LIVE.visibleUnread ? LIVE.visibleUnread(rows).length : rows.filter(s => LIVE.isNew(s)).length,
@@ -930,7 +932,7 @@ window.WizCore.chats = function createChats(H) {
     const F = c.filter && STATUS[c.filter] ? STATUS[c.filter] : null, focus = focusOf(w);
     const fids = F?.ids ? F.ids(AGID) : null;
     const space = focus?.kind === 'space' ? spaces().find(s => s.id === focus.key) : null;
-    const members = space && LST.ok ? LIVE.spaceSessions?.(space.threads) : null;
+    const members = space && LST.ok ? LIVE.spaceSessions?.(space.threads, { agent: spaceAgent(space) }) : null;
     const all = (LST.ok ? (members ? members.rows : n && LIVE.searchRows ? LIVE.searchRows(AGID) : LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).filter(s => !s.hidden) : []).filter(s => (!F || (fids ? fids.has(s.id) : F.test(s))) && focusMatches(w, s));
     const filtered = !!(F || focus);
     const titleHit = n ? all.filter(s => norm(s.title).includes(n) || norm(s.preview).includes(n)) : all;

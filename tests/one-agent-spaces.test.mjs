@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
 const cut = (a,b) => src.slice(src.indexOf(a),src.indexOf(b,src.indexOf(a)));
 function fixture(agentIds, collections, focus = null) {
-  const env = { focusAgents: () => agentIds.map(id=>({id})), visibleSpaces:()=>collections, spaces:()=>collections,
+  const env = { spaceAgent: s => s?.agent || 'hermes', focusAgents: () => agentIds.map(id=>({id})), visibleSpaces:()=>collections, spaces:()=>collections,
     focusOf:()=>focus, focusedAgent:f=>f?.kind==='agent'?f.key:f?.kind==='space'?'hermes':'',
     esc:s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),
     AGS:()=>({colour:()=>'',sigil:()=>'',isPrivate:()=>false}),agentRec:id=>({id}),
