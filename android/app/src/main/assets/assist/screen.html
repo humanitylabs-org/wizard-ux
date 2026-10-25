@@ -43,9 +43,15 @@
   #pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; height: 38px; padding: 0 16px; font-size: 14px; }
   #pill b { font-weight: 700; color: var(--acc); }
   /* bottom sheet */
-  .sheet { position: fixed; left: 8px; right: 8px; bottom: calc(var(--bot) + 8px); background: var(--card); border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 10px 34px rgba(0, 0, 0, .6); padding: 12px 12px 10px; transform: translateY(140%); transition: transform .2s cubic-bezier(.2, .8, .2, 1); z-index: 7; }
-  .sheet.show { transform: none; }
-  #sel { max-height: 30vh; overflow: auto; white-space: pre-wrap; word-break: break-word; font-size: 15px; color: var(--ink); user-select: text; -webkit-user-select: text; padding: 2px 2px 10px; }
+  /* Hidden sheets sit fully past the screen edge (behind the nav bar is not hidden) and take no touches. A flick on a
+     sheet docks every sheet at the top or the bottom, so it never has to cover the line being read. */
+  .sheet { position: fixed; left: 8px; right: 8px; bottom: calc(var(--bot) + 8px); background: var(--card); border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 10px 34px rgba(0, 0, 0, .6); padding: 6px 12px 10px; transform: translateY(calc(100% + var(--bot) + 40px)); visibility: hidden; pointer-events: none; transition: transform .2s cubic-bezier(.2, .8, .2, 1), visibility 0s linear .2s; z-index: 7; touch-action: none; }
+  .sheet.show { transform: none; visibility: visible; pointer-events: auto; transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
+  body.dtop .sheet { bottom: auto; top: calc(var(--top) + 98px); transform: translateY(calc(-100% - var(--top) - 140px)); }
+  body.dtop .sheet.show { transform: none; }
+  .sheet.drag { transition: none; }
+  .grip { display: block; width: 40px; height: 4px; margin: 0 auto 8px; border-radius: 2px; background: rgba(205, 190, 255, .35); }
+  #sel { max-height: 30vh; overflow: auto; touch-action: pan-y; white-space: pre-wrap; word-break: break-word; font-size: 15px; color: var(--ink); user-select: text; -webkit-user-select: text; padding: 2px 2px 10px; }
   #sel .lab { display: block; font: 600 11.5px system-ui, sans-serif; letter-spacing: .04em; text-transform: uppercase; color: var(--acc); margin-bottom: 4px; user-select: none; }
   #sel .err { color: #ff9db3; }
   #sel .pl { display: block; padding: 7px 8px; margin: 2px -4px; border-radius: 10px; border: 1px solid transparent; }
@@ -55,10 +61,10 @@
   .acts button i { font-style: normal; font-size: 17px; line-height: 1; color: var(--acc); }
   .acts button:active { background: rgba(185, 155, 255, .18); }
   .acts button[disabled] { opacity: .45; }
-  #tbar { padding: 8px; }
+  #tbar { padding: 6px 8px 8px; }
   #langs { max-height: 60vh; display: flex; flex-direction: column; }
   #langs h4 { margin: 2px 4px 8px; font: 600 12px system-ui, sans-serif; letter-spacing: .04em; text-transform: uppercase; color: var(--acc); }
-  #langs .ll { overflow: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  #langs .ll { overflow: auto; touch-action: pan-y; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   #langs button { height: 42px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, .04); color: var(--ink); font: 600 14px system-ui, sans-serif; }
   #langs button.on { background: #3a2870; border-color: var(--acc); }
   /* search strip above the native search sheet */
@@ -87,6 +93,7 @@
 </div>
 <div id="sub"><div id="hint"></div><button class="chip" id="pill" hidden></button></div>
 <div class="sheet" id="sheet">
+  <i class="grip"></i>
   <div id="sel"></div>
   <div class="acts">
     <button id="aCopy"><i>⧉</i>Copy</button>
@@ -96,13 +103,14 @@
   </div>
 </div>
 <div class="sheet" id="tbar">
+  <i class="grip"></i>
   <div class="acts">
     <button id="tCopy"><i>⧉</i>Copy translation</button>
     <button id="tSel"><i>⌶</i>Select text</button>
     <button id="tAsk"><i>✦</i>Ask Wizard</button>
   </div>
 </div>
-<div class="sheet" id="langs"><h4>Translate into</h4><div class="ll"></div></div>
+<div class="sheet" id="langs"><i class="grip"></i><h4>Translate into</h4><div class="ll"></div></div>
 <div id="sstrip"><b id="sq"></b><button class="chip" id="sBig">Bigger</button><button class="chip x" id="sClose" aria-label="Close search">×</button></div>
 <div id="toast"></div>
 <script>
@@ -118,6 +126,8 @@
     pic: null, picSel: new Set(), panel: 'sel', trans: null, searching: false, big: false, seq: 0, pending: {},
   };
   if (!LANGS.includes(st.to)) st.to = 'English';
+  st.dock = (() => { try { return localStorage.getItem('wizScreenDock') === 'top' ? 'top' : 'bottom'; } catch (e) { return 'bottom'; } })();
+  document.body.classList.toggle('dtop', st.dock === 'top');
   let toastT = 0, px = null, wantPaint = false;
   function toast(t) { const e = $('#toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('show'), 1600); }
   function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -605,6 +615,55 @@
     picture(false);
   });
 
+
+  /* ================= flick the sheets to the top or the bottom ================= */
+  /** Dock every sheet at 'top' or 'bottom'; the shown one glides from where the finger left it. */
+  function setDock(d, el) {
+    const from = el ? el.getBoundingClientRect().top : 0;
+    st.dock = d; document.body.classList.toggle('dtop', d === 'top');
+    try { localStorage.setItem('wizScreenDock', d); } catch (e) { }
+    if (!el) return;
+    el.style.transform = '';
+    const to = el.getBoundingClientRect().top;
+    el.style.transform = 'translateY(' + (from - to) + 'px)';
+    void el.offsetHeight;
+    el.classList.remove('drag');
+    el.style.transform = '';
+  }
+  let sd = null, ate = 0;
+  for (const el of document.querySelectorAll('.sheet')) {
+    el.addEventListener('pointerdown', e => {
+      const sc = e.target.closest('#sel, #langs .ll');
+      if (sc && sc.scrollHeight > sc.clientHeight + 1) return; // that part scrolls; the grip and buttons still flick
+      sd = { el, pid: e.pointerId, x: e.clientX, y: e.clientY, moved: false, pts: [[e.timeStamp, e.clientY]] };
+    });
+    el.addEventListener('pointermove', e => {
+      if (!sd || sd.el !== el || e.pointerId !== sd.pid) return;
+      const dx = e.clientX - sd.x, dy = e.clientY - sd.y;
+      if (!sd.moved) {
+        if (Math.abs(dy) < 12 || Math.abs(dy) < Math.abs(dx) * 1.2) return;
+        sd.moved = true; el.classList.add('drag');
+        try { el.setPointerCapture(e.pointerId); } catch (x) { }
+      }
+      sd.pts.push([e.timeStamp, e.clientY]); if (sd.pts.length > 8) sd.pts.shift();
+      el.style.transform = 'translateY(' + dy + 'px)';
+    });
+    const up = e => {
+      if (!sd || sd.el !== el) return;
+      const d = sd; sd = null;
+      if (!d.moved) return;
+      ate = Date.now(); // the lift after a flick is not a button tap
+      const now = e.timeStamp, back = d.pts.filter(p => now - p[0] <= 120), p0 = back[0] || d.pts[0];
+      const v = (e.clientY - p0[1]) / Math.max(16, now - p0[0]); // px per ms, + is down
+      const r = el.getBoundingClientRect(), mid = r.top + r.height / 2;
+      const want = v < -0.35 ? 'top' : v > 0.35 ? 'bottom' : mid < innerHeight / 2 ? 'top' : 'bottom';
+      setDock(want, el);
+      N.log('screen sheet docked ' + want);
+    };
+    el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  }
+  document.addEventListener('click', e => { if (Date.now() - ate < 400) { e.stopPropagation(); e.preventDefault(); } }, true);
+
   /* ================= native callbacks ================= */
   window.S = {
     open,
@@ -613,7 +672,8 @@
       const o = st.o || {}, d = o.dpr || 1, sx = x => Math.round(x * d + (o.ox || 0)), sy = y => Math.round(y * d + (o.oy || 0));
       const ctr = el => { const r = el.getBoundingClientRect(); return r.width ? [sx(r.left + r.width / 2), sy(r.top + r.height / 2)] : null; };
       const r = range();
-      return { mode: st.mode, shot: !!o.shot, panel: st.panel, searching: st.searching, langsOpen: st.langsOpen,
+      const box = el => { const r = el.getBoundingClientRect(), v = getComputedStyle(el).visibility !== 'hidden'; return { top: sy(r.top), bottom: sy(r.bottom), visible: v && r.bottom > 0 && r.top < innerHeight }; };
+      return { dock: st.dock, sheets: { sheet: box($('#sheet')), tbar: box($('#tbar')), langs: box($('#langs')) }, vh: sy(innerHeight), mode: st.mode, shot: !!o.shot, panel: st.panel, searching: st.searching, langsOpen: st.langsOpen,
         words: st.words.map(w => ({ t: w.t, b: w.b, x: sx(w.x + w.w / 2), y: sy(w.y + w.h / 2), l: sx(w.x), r: sx(w.x + w.w) })),
         exact: st.blocks.filter(b => b.ex).length, blocks: st.blocks.length, boxes: document.querySelectorAll('.b').length,
         sel: r, selText: r ? selText() : '', hl: document.querySelectorAll('.hl').length,
