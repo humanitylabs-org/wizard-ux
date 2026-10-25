@@ -352,7 +352,11 @@
     if (caps.has('layout')) {
       Object.assign(api, { listen: base.listen, frame: base.frame, gesture: base.gesture });
       // Borrow a built-in layout through the same host; disposal invalidates the handle.
-      api.layout = Object.freeze({ use(id) {
+      api.layout = Object.freeze({ foundation(id) {
+        if (a.dead) return () => {};
+        const release = window.WosSkin?.useFoundation(id) || (() => {});
+        a.offs.add(release); return release;
+      }, use(id) {
         if (a.dead || !layoutOf(id)) return () => {};
         setLayout(id);
         let released = false;

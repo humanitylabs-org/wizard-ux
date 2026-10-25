@@ -36,7 +36,7 @@
   }
   // A quiet value on the right of a row, only where it tells you something at a glance; '' otherwise.
   function subtitle(id, ctx) {
-    if (id === 'appearance') return window.WosSkin ? (mySkinWorn() ? 'My skin · ' : '') + lookName(window.WosSkin, window.WosSkin.current) : '';
+    if (id === 'appearance') return window.WosSkin ? (mySkinWorn() ? window.WosMySkin.active.name + ' · ' : '') + lookName(window.WosSkin, window.WosSkin.current) : '';
     if (id === 'phone') { try { return JSON.parse(native()?.everywhere?.() || '{}').enabled ? 'Everywhere on' : ''; } catch (_) { return ''; } }
     if (id === 'recovery') { const n = new Set([...unsentAll(ctx), ...recovered()].map(x => x.id)).size; return n ? String(n) : ''; }
     // Resources: quiet unless something is running low (under a quarter left), then the lowest one.
@@ -158,41 +158,21 @@
       return true;
     }
   });
-  /* My skin: CSS plus an optional, per-version owner-approved hook module, kept in Files. */
-  // Launch model (23 Oct 2026): Nebula is the one default skin; the owner's first appearance request makes "My skin",
-  // their own layer on top of the skin they wear, and from then on Look shows it as theirs on every device.
-  const mySkinWorn = () => { const st = window.WosMySkin?.state; return !!st && !st.off && !st.empty && !st.info?.unavailable; };
-  const MY_SKIN_INVITE = 'Everything you see is customizable. Ask your Wizard for one change and it becomes My skin.';
-  const mySkinSub = base => {
-    const M = window.WosMySkin, st = M && M.state;
-    if (!M) return '';
-    if (st.off) return `Off for this visit · on top of ${base}`;
-    if (st.info && st.info.unavailable) return `Not on this box yet · ${base} as made`;
-    return st.empty ? MY_SKIN_INVITE : `Wearing it · your changes on top of ${base}`;
-  };
-  function mySkinRow(base) {
-    if (!window.WosMySkin) return '';
-    const st = window.WosMySkin.state, js = st.script, worn = mySkinWorn();
-    const script = js?.exists && !st.off ? `<div class="st-row static my-skin-row" data-myskin-script><span class="st-tx"><b>${js.approved ? 'My skin script on' : 'My skin script changed'}</b><small>Skins/My skin/skin.js · this device only</small></span><span class="ms-acts">${js.approved ? '<button type="button" class="ghost" data-myskin="off">Turn off</button>' : `<button type="button" data-myskin="on" data-myskin-hash="${esc(js.sha256 || '')}" ${js.valid ? '' : 'disabled'}>Turn on</button>`}</span></div>` : '';
-    // Reset only when there is something to reset (an empty form never shows Clear).
-    const reset = st.empty ? '' : '<button type="button" class="ghost" data-myskin="reset">Reset</button>';
-    return `<div class="st-row static my-skin-row${worn ? ' worn' : ''}" data-myskin-row data-worn="${worn}"><span class="st-tx"><b>My skin</b><small data-myskinsub>${esc(mySkinSub(base))}</small></span><span class="ms-acts"><button type="button" data-myskin="edit">Edit</button>${reset}</span></div>${script}`;
+  const mySkinWorn = () => !!window.WosMySkin?.active;
+  function mySkinRow(skin) {
+    const M = window.WosMySkin, st = M?.state, js = st?.script;
+    const script = js?.exists && !st.off ? `<div class="st-row static my-skin-row" data-myskin-script><span class="st-tx"><b>${js.approved ? 'Skin script on' : 'Skin script changed'}</b><small>${esc(M.active ? 'Skins/' + M.active.id + '/skin.js' : 'skin.js')} · approval on this device</small></span><span class="ms-acts">${js.approved ? '<button type="button" class="ghost" data-myskin="off">Turn off</button>' : `<button type="button" data-myskin="on" data-myskin-hash="${esc(js.sha256 || '')}" ${js.valid ? '' : 'disabled'}>Turn on</button>`}</span></div>` : '';
+    return `<div class="ms-panel" data-ownskin-panel><button class="st-row" data-myskin="edit"><span class="st-tx"><b>Edit with your Wizard</b><small>Ask your Wizard ‘change my ${esc(skin.name)} skin so…’</small></span><span class="st-go">›</span></button><p class="st-hint">${M.storage === 'box' ? 'Saved on your Wizard.' : M.storage === 'local' ? 'Saved on this device until your Wizard is updated.' : 'Offline · showing a cached skin.'}</p>${script}<button class="st-row" data-ownskin-remove="${esc(skin.id)}"><span class="st-tx"><b>Remove skin</b></span><span class="st-go">›</span></button></div>`;
   }
-  async function mySkinAction(ctx, what, event) {
+  function mySkinAction(ctx, what, event) {
     const M = window.WosMySkin; if (!M) return;
     if (what === 'on') { M.turnOn(event); return; }
     if (what === 'off') { M.turnOff(); return; }
     if (what === 'edit') {
-      const url = `/files/files/${(M.state.info?.path || M.FILE).split('/').map(encodeURIComponent).join('/')}`;
-      const opened = window.WizCanOpen?.('files') && ctx.openLink ? ctx.openLink(url, 'My skin') : false;
-      if (!opened) ctx.toast?.('✎', 'Ask your agent: "change my skin so …"', 2600);
-      return;
-    }
-    if (what === 'reset') {
-      if (M.state.empty) { ctx.toast?.('✓', 'My skin is already empty', 1600); return; }
-      try { await M.reset(); ctx.toast?.('✓', 'My skin emptied · back to the skin as its author made it', 2200); }
-      catch (e) { ctx.toast?.('!', 'Could not reset My skin right now', 2400); }
-      for (const m of mounts) m.render();
+      const app = ['wizard-files', 'files'].find(id => window.WizCanOpen?.(id));
+      // Open the registered app, not a guessed folder URL or an app id absent on this box.
+      const opened = app && window.WizOpenApp?.(app);
+      if (!opened) ctx.toast?.('✎', esc(`Ask your Wizard: “change my ${M.active?.name || 'own'} skin so…”`), 4000);
     }
   }
   // Settings › Look: one tile per family, then only that family's colours. My skin stays an overlay.
@@ -219,23 +199,51 @@
   const skinCard = (k, cur) => `<button type="button" class="skp-card" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}">${mini(k)}<span class="skp-nm" style="${esc(faceCss(k.face))}">${esc(k.name)}</span></button>`;
   /* A skin brings its author's tweaks. One disclosure under the picker lists them with on/off; skins without
    * tweaks show nothing. No separate setup, following or copy: changing skin is the only way in or out. */
+  const tweakSwitches = (items, attr, busy = false) => items.map(t => `<button type="button" class="st-row tw-row" ${attr}="${esc(t.id)}" role="switch" aria-checked="${!!t.on}"${busy ? ' disabled' : ''}><span class="st-tx"><b>${esc(t.name)}</b>${t.description ? `<small>${esc(t.description)}</small>` : ''}</span><span class="sw ${t.on ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`).join('');
   function tweakRows(S) {
     const E = window.WosExperience; if (!E) return '';
-    const s = E.state; if (!s.owner || (!s.tweaks.length && !s.error)) return '';
+    const s = E.state, own = window.WosMySkin?.active;
+    if ((!s.owner && !own) || (!s.tweaks.length && !s.error)) return '';
     const fam = (S.families || []).find(f => f.id === S.familyOf?.(S.current)), who = esc(fam?.name || 'This skin');
-    const on = s.tweaks.filter(t => t.on).length, disabled = s.busy ? ' disabled' : '';
-    const rows = s.tweaks.map(t => `<button type="button" class="st-row tw-row" data-tweak-toggle="${esc(t.id)}" role="switch" aria-checked="${t.on}"${disabled}><span class="st-tx"><b>${esc(t.name)}</b>${t.description ? `<small>${esc(t.description)}</small>` : ''}</span><span class="sw ${t.on ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`).join('');
+    const rows = tweakSwitches(s.tweaks, 'data-tweak-toggle', s.busy);
+    if (own) return `<div class="tw-set"><h4>Tweaks</h4>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</div>`;
+    const on = s.tweaks.filter(t => t.on).length;
     return `<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row"><span class="st-tx"><b>${who} also changes how things work</b><small>${on} of ${s.tweaks.length} changes on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</details>`;
   }
   let tweaksOpen = false;
   window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
-  // My skin is the last tile of the same grid, same size, drawn dashed (ringed while worn). Tapping it opens its
-  // controls (Edit, Reset when non-empty, the script switch) right under the grid; while it is empty and closed, the
-  // launch invite stays on screen under the grid.
-  let myOpen = false;
-  const myTile = () => window.WosMySkin ? `<button type="button" class="skp-card skp-my${mySkinWorn() ? ' worn' : ''}" data-myskin-tile aria-expanded="${myOpen}" aria-label="My skin"><span class="skp-mini skp-mini-my" aria-hidden="true"><i class="skp-plus"></i></span><span class="skp-nm">My skin</span></button>` : '';
-  function lookHtml(S) {
-    const cur = S.current, base = lookName(S, cur);
+  const newTile = () => window.WosMySkin ? '<button type="button" class="skp-card skp-my" data-newskin aria-label="New skin"><span class="skp-mini skp-mini-my" aria-hidden="true"><i class="skp-plus"></i></span><span class="skp-nm">+ New skin</span></button>' : '';
+  function skinAction(action, done, failed) {
+    try { const result = action(); if (result?.then) result.then(done, failed); else done(result); } catch (e) { failed(e); }
+  }
+  function ownTiles(S) {
+    const M = window.WosMySkin;
+    return (M?.recipes || []).map(skin => {
+      const palette = S.list.find(k => k.id === skin.base);
+      return `<button type="button" class="skp-card" data-ownskin="${esc(skin.id)}" aria-pressed="${M.active?.id === skin.id}" aria-label="${esc(skin.name)}">${palette ? mini(palette) : ''}<span class="skp-nm">${esc(skin.name)}</span></button>`;
+    }).join('');
+  }
+  async function draftDefaults(ctx, family) {
+    const draft = ctx.skinDraft; if (!draft) return;
+    const seq = draft.seq = (draft.seq || 0) + 1;
+    draft.family = family.id; draft.base = family.palettes[0]; draft.error = '';
+    // The list is warmed when Look opens, so Loading only shows on a cold first read.
+    draft.loading = !window.WosExperience.installedReady; ctx.render?.();
+    try {
+      const [items, map] = await Promise.all([window.WosExperience.installed(), window.WosExperience.defaults(draft.base)]);
+      if (ctx.skinDraft !== draft || draft.seq !== seq) return;
+      draft.items = items; draft.tweaks = map;
+    } catch (e) { if (ctx.skinDraft === draft && draft.seq === seq) draft.error = 'Could not load installed tweaks. Try again.'; }
+    finally { if (ctx.skinDraft === draft && draft.seq === seq) { draft.loading = false; ctx.render?.(); } }
+  }
+  function newSkinHtml(S, draft) {
+    const family = S.families.find(f => f.id === draft.family);
+    return `<div class="st-group sc-sheet skin-create" data-newskin-sheet><h4>New skin</h4><label>Name<input data-skin-name maxlength="60" autocomplete="off" value="${esc(draft.name)}" placeholder="Give your skin a name"></label><label>Base skin<select data-skin-base>${S.families.map(f => `<option value="${esc(f.id)}"${f.id === draft.family ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label><h4>Colour</h4><div class="skp" role="group" aria-label="New skin colours">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, draft.base)).join('')}</div><h4>Tweaks</h4><p class="st-hint">All installed tweaks · starts with the base skin’s defaults.</p>${draft.loading ? '<p role="status">Loading tweaks…</p>' : tweakSwitches((draft.items || []).map(t => ({ ...t, on: draft.tweaks[t.id] })), 'data-draft-tweak')}${draft.validation ? `<p role="alert">${esc(draft.validation)}</p>` : ''}${draft.error ? `<p role="alert">${esc(draft.error)}</p><button data-skinretry>Try again</button>` : ''}<div class="st-actions"><button data-skin-create${draft.loading || draft.error || draft.saving ? ' disabled' : ''}>Create skin</button></div></div>`;
+  }
+  function lookHtml(S, ctx) {
+    window.WosExperience?.installed?.().catch(() => {}); // warm the tweak list for New skin
+    if (ctx.skinDraft) return newSkinHtml(S, ctx.skinDraft);
+    const cur = S.current, base = lookName(S, cur), own = window.WosMySkin?.active;
     loadFaces();
     const fams = S.families || [{ id: cur, name: base, palettes: S.list.map(k => k.id) }];
     const worn = S.familyOf?.(cur) || fams[0]?.id;
@@ -243,57 +251,78 @@
     const ordered = [...fams].sort((a, b) => ['wizard', 'mizel', 'novairecito'].indexOf(a.id) - ['wizard', 'mizel', 'novairecito'].indexOf(b.id));
     const tiles = ordered.map(f => {
       const k = S.list.find(k => k.id === (S.lastIn?.(f.id) || f.palettes[0]));
-      return `<button type="button" class="skp-card" data-skinfamily="${esc(f.id)}" aria-pressed="${f.id === worn}" aria-label="${esc(f.name)}">${k ? mini(k) : ''}<span class="skp-nm">${esc(f.name)}</span></button>`;
+      return `<button type="button" class="skp-card" data-skinfamily="${esc(f.id)}" aria-pressed="${!own && f.id === worn}" aria-label="${esc(f.name)}">${k ? mini(k) : ''}<span class="skp-nm">${esc(f.name)}</span></button>`;
     }).join('');
-    const grid = `<div class="skp skp-families" role="group" aria-label="Skins">${tiles}${myTile()}</div>`;
-    const M = window.WosMySkin;
-    const panel = M && myOpen ? `<div class="ms-panel" data-myskin-panel>${mySkinRow(base)}</div>` : '';
-    const invite = M && !myOpen && M.state.empty ? `<p class="st-hint ms-invite" data-myskinsub>${esc(mySkinSub(base))}</p>` : '';
-    const colours = myOpen ? '' : `<div class="skp-colours"><h4>Colours</h4><div class="skp" role="group" aria-label="${esc(family?.name || 'Skin')} colours">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>`;
-    return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${panel}${invite}${colours}</div>${myOpen ? '' : tweakRows(S)}</div>`;
+    const grid = `<div class="skp skp-families" role="group" aria-label="Skins">${tiles}${ownTiles(S)}${newTile()}</div>`;
+    const colours = `<div class="skp-colours"><h4>Colours</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colours">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>`;
+    const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
+    const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
+    return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
   }
-  register({ id: 'look', aliases: ['skin'], html() {
+  register({ id: 'look', aliases: ['skin'], html(ctx) {
     const S = window.WosSkin; if (!S) return '';
-    return lookHtml(S);
+    return lookHtml(S, ctx);
+  }, deferRefresh: ctx => !!(ctx.skinDraft || ctx.skinRemove),
+  leave(ctx) { ctx.skinDraft = null; ctx.skinRemove = null; },
+  back(ctx) {
+    if (ctx.skinRemove) { ctx.skinRemove = null; ctx.render(); return true; }
+    if (!ctx.skinDraft) return false;
+    ctx.skinDraft = null; ctx.render(); ctx.root.querySelector('[data-newskin]')?.focus(); return true;
+  }, input(ctx, el) {
+    if (!ctx.skinDraft) return;
+    if (el.matches('[data-skin-name]')) ctx.skinDraft.name = el.value;
+    if (el.matches('[data-skin-base]') && ctx.skinDraft.family !== el.value) {
+      const family = window.WosSkin.families.find(f => f.id === el.value); if (family) void draftDefaults(ctx, family);
+    }
   }, act(ctx, el, event) {
+    const M = window.WosMySkin, S = window.WosSkin;
+    if (el.closest('[data-skin-remove-cancel]')) { ctx.skinRemove = null; ctx.render(); return true; }
+    if (el.closest('[data-skin-remove-confirm]')) {
+      if (ctx.skinSaving) return true; ctx.skinSaving = true;
+      skinAction(() => M.remove(ctx.skinRemove.id), snapshot => { ctx.skinSaving = false; ctx.skinUndo = snapshot; ctx.skinRemove = null; ctx.render(); ctx.root.querySelector('[data-skin-undo]')?.focus(); }, e => { ctx.skinSaving = false; ctx.toast?.('!', e.message || 'Could not remove skin', 3000); }); return true;
+    }
+    if (ctx.skinRemove) return true;
+    if (el.closest('[data-skin-undo]')) { if (ctx.skinSaving) return true; ctx.skinSaving = true; skinAction(() => M.restore(ctx.skinUndo), () => { ctx.skinSaving = false; ctx.skinUndo = null; ctx.render(); }, e => { ctx.skinSaving = false; ctx.toast?.('!', e.message || 'Could not restore skin', 3000); }); return true; }
+    if (el.closest('[data-skin-undo-dismiss]')) { ctx.skinUndo = null; ctx.render(); return true; }
+    if (el.closest('[data-newskin]')) {
+      ctx.skinDraft = { name: '', items: [], tweaks: {} };
+      void draftDefaults(ctx, S.families.find(f => f.id === S.familyOf(S.current)) || S.families[0]);
+      ctx.root.querySelector('[data-skin-name]')?.focus(); return true;
+    }
+    if (ctx.skinDraft) {
+      const draft = ctx.skinDraft, tweak = el.closest('[data-draft-tweak]'), colour = el.closest('[data-skinpick]');
+      if (tweak) { const id = tweak.dataset.draftTweak; draft.tweaks[id] = !draft.tweaks[id]; ctx.render(); return true; }
+      if (colour) { draft.base = colour.dataset.skinpick; ctx.render(); return true; }
+      if (el.closest('[data-skinretry]')) { void draftDefaults(ctx, S.families.find(f => f.id === draft.family)); return true; }
+      if (el.closest('[data-skin-create]') && !draft.loading && !draft.error) {
+        if (draft.saving) return true; draft.saving = true; ctx.render();
+        skinAction(() => M.create(draft), () => { draft.saving = false; ctx.skinDraft = null; ctx.render(); ctx.root.querySelector('[data-ownskin][aria-pressed="true"]')?.focus(); }, e => { draft.saving = false; draft.validation = e.message; ctx.render(); }); return true;
+      }
+      return false;
+    }
+    const remove = el.closest('[data-ownskin-remove]');
+    if (remove) { ctx.skinRemove = M.recipes.find(s => s.id === remove.dataset.ownskinRemove); ctx.render(); ctx.root.querySelector('[data-skin-remove-cancel]')?.focus(); return true; }
+    const own = el.closest('[data-ownskin]');
+    if (own) { skinAction(() => M.wear(own.dataset.ownskin), () => ctx.render(), e => ctx.toast?.('!', e.message, 3000)); return true; }
     const tweak = el.closest('[data-tweak-toggle]');
     if (tweak) { tweaksOpen = true; void window.WosExperience.toggle(tweak.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; }
     const set = el.closest('[data-tweakset] > summary');
     if (set) { event?.preventDefault?.(); tweaksOpen = !set.parentElement.open; set.parentElement.open = tweaksOpen; return true; }
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
-    if (el.closest('[data-myskin-tile]')) {
-      myOpen = !myOpen; ctx.render?.(); ctx.haptic?.(8);
-      if (myOpen) ctx.root.querySelector?.('[data-myskin-panel]')?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
-      // A tap leaves no focus ring on the re-rendered tile; Enter/Space (detail 0) keeps it for keyboard users.
-      const t = ctx.root.querySelector?.('[data-myskin-tile]');
-      if (event?.detail > 0 && t && t === document.activeElement) t.blur?.();
-      return true;
-    }
-    const S = window.WosSkin;
     const family = el.closest('[data-skinfamily]');
-    if (family) {
-      myOpen = false; S.setFamily(family.dataset.skinfamily); void window.WosExperience?.chooseSkin?.();
-      ctx.render?.(); ctx.haptic?.(8); return true;
-    }
+    if (family) { skinAction(() => M?.leave?.(), () => { S.setFamily(family.dataset.skinfamily); void window.WosExperience?.chooseSkin?.(); ctx.render?.(); ctx.haptic?.(8); }, e => ctx.toast?.('!', e.message, 3000)); return true; }
     const b = el.closest('[data-skinpick]'); if (!b) return false;
-    myOpen = false; const now = S.set(b.dataset.skinpick); void window.WosExperience?.chooseSkin?.();
-    ctx.root.querySelectorAll('[data-skinpick]').forEach(n => n.setAttribute('aria-pressed', String(n.dataset.skinpick === now)));
-    const label = ctx.root.querySelector('[data-skinname]'); if (label) label.textContent = lookName(S, now);
-    const sub = ctx.root.querySelector('[data-myskinsub]'); if (sub) sub.textContent = mySkinSub(lookName(S, now));
-    for (const m of mounts) m.render();
-    ctx.haptic?.(8); return true;
+    skinAction(() => M?.active ? M.update({ base: b.dataset.skinpick }) : S.set(b.dataset.skinpick), () => {
+      void window.WosExperience?.chooseSkin?.();
+      for (const m of mounts) m.render(); ctx.haptic?.(8);
+    }, e => ctx.toast?.('!', e.message, 3000)); return true;
   } });
-  // Phone only: desktop always keeps framed windows. One switch, on by default; skin JSON import stays for designers.
-  register({ id: 'skin-frame', available: () => !!window.WosSkin?.frameAdjustable, html() {
-    const S = window.WosSkin; if (!S?.frame) return '';
-    const on = S.frame.foundation === 'borderless';
-    return `<div class="st-group sf-section"><h4>Windows</h4><button class="st-row" data-skinborderless role="switch" aria-checked="${on}"><span class="st-tx"><b>Borderless apps</b><small>${on ? 'On · apps fill the screen with a floating X' : 'Off · apps open in framed windows'}</small></span><span class="sw ${on ? 'on' : ''}"><i></i></span></button><details class="st-advanced"><summary>Advanced</summary><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><p data-skinimport-status role="status"></p></details></div>`;
+  register({ id: 'skin-frame', available: () => !!window.WosSkin, html() {
+    return '<div class="st-group sf-section"><details class="st-advanced"><summary>Advanced</summary><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><p data-skinimport-status role="status"></p></details></div>';
   }, act(ctx, el) {
-    if (el.closest('[data-skinimport]')) { ctx.root.querySelector('[data-skinfile]').click(); return true; }
-    if (!el.closest('[data-skinborderless]')) return false;
-    const S = window.WosSkin; S.setFoundation(S.frame.foundation === 'borderless' ? 'framed' : 'borderless');
-    ctx.haptic?.(8); ctx.render(); return true;
+    if (!el.closest('[data-skinimport]')) return false;
+    ctx.root.querySelector('[data-skinfile]').click(); return true;
   } });
   register({ id: 'assistant', available: android, html(ctx) {
     const N = native(), evNative = typeof N?.setEverywhere === 'function'; let ev = null;
@@ -358,6 +387,7 @@
     const ctx = { ...adapter, root }, api = { render, focus, back, destroy, dispatch, context: ctx, get page() { return page; } };
     let skinImportMessage = '', page = '', confirm = null;
     const desktop = adapter.shell === 'desktop';
+    const effectivePage = () => page || (desktop ? 'appearance' : '');
     ctx.render = () => render(true);
     ctx.paintUsage = () => { const g = root.querySelector('[data-usage]'); if (g) g.outerHTML = window.WosUsage.html(); paintSubtitles(); };
     function paintSubtitles() {
@@ -366,7 +396,7 @@
     function render(force = false) {
       // Background polls must not replace an active form under a keystroke.
       // Explicit feature actions render via ctx.render; skin changes use tokens.
-      if (force !== true && [...features.values()].some(f => pageOf(f) === page && f.deferRefresh?.(ctx))) return;
+      if (force !== true && [...features.values()].some(f => pageOf(f) === effectivePage() && f.deferRefresh?.(ctx))) return;
       if (adapter.visible && !adapter.visible()) return;
       const top = root.scrollTop, paneTop = root.querySelector('.st-page')?.scrollTop || 0, active = root.contains(document.activeElement) ? document.activeElement : null;
       const attrs = active ? [...active.attributes].filter(a => a.name.startsWith('data-')) : [];
@@ -374,18 +404,19 @@
       const selection = active && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
       const pages = PAGES.filter(p => !p.available || p.available(ctx));
       if (page && !pages.some(p => p.id === page)) page = '';
-      const selected = page || (desktop ? 'appearance' : '');
+      const selected = effectivePage();
       const heading = PAGES.find(p => p.id === selected)?.title || '';
       const items = attention(ctx);
       const attentionHtml = items.length ? `<div class="st-attention" aria-label="Needs attention">${items.map(i => `<button data-st-attention="${esc(i.feature)}">${esc(i.title)}<span aria-hidden="true">›</span></button>`).join('')}</div>` : '';
       // Desktop shows About & updates beside the list with the card on it, so the list does not repeat it.
       const card = desktop && selected === 'about' ? '' : cardHtml();
       const nav = pages.map(p => `<button class="st-category" data-st-page="${p.id}" aria-current="${p.id === selected ? 'page' : 'false'}"><span class="st-tx"><b>${p.title}</b></span><span class="st-val" data-st-subtitle="${p.id}">${esc(subtitle(p.id, ctx))}</span><span class="st-go" aria-hidden="true">›</span></button>`).join('');
-      const fs = [...features.values()].filter(f => pageOf(f) === selected && (!f.available || f.available(ctx)));
+      const fs = [...features.values()].filter(f => pageOf(f) === selected && (!ctx.skinDraft || f.id === 'look') && (!f.available || f.available(ctx)));
       // About & updates leads with the update card and its choices; the connection rows follow.
       if (selected === 'about') fs.sort((x, y) => (y.id === 'updates') - (x.id === 'updates'));
       const content = fs.map(f => `<section data-settings-feature="${esc(f.id)}">${f.html(ctx)}</section>`).join('');
       root.dataset.settingsPage = page;
+      root.dataset.settingsNested = ctx.skinDraft ? 'true' : 'false';
       root.innerHTML = `<div class="st-inner ${desktop ? 'st-desktop' : 'st-phone'} ${page ? 'st-in-page' : ''}"><div class="st-index"><h3 class="st-title" tabindex="-1">Settings</h3>${card}${attentionHtml}<nav aria-label="Settings categories">${nav}</nav></div><div class="st-page" ${selected ? '' : 'hidden'}><header class="st-page-head"><button data-st-back aria-label="Back to Settings">‹</button><h3 tabindex="-1">${heading}</h3></header>${content}</div></div>${confirm ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="st-confirm-title"><h3 id="st-confirm-title">Use ${esc(chatsName(confirm.id))} for all your chats?</h3><p>You can switch back here any time.</p><div class="st-actions"><button data-chats-cancel ${ctx.chatsBusy ? 'disabled' : ''}>Cancel</button><button data-chats-confirm ${ctx.chatsBusy ? 'disabled' : ''}>${ctx.chatsBusy ? 'Switching…' : 'Use ' + esc(chatsName(confirm.id))}</button></div></section></div>` : ''}`;
       for (const f of fs) if (f.painted) { try { f.painted(ctx, root.querySelector(`[data-settings-feature="${CSS.escape(f.id)}"]`)); } catch (e) { console.error(e); } }
       root.scrollTop = top;
@@ -396,10 +427,10 @@
       if (U && !U.loading && (!U.snap || Date.now() - U.at > 60000)) U.load().then(ctx.paintUsage);
     }
     function focus(id) {
-      for (const f of features.values()) if (pageOf(f) === page) f.leave?.(ctx);
+      for (const f of features.values()) if (pageOf(f) === effectivePage()) f.leave?.(ctx);
       const f = features.get(id) || [...features.values()].find(f => f.aliases?.includes(id));
       page = f ? pageOf(f) : featurePages[id] || (id === 'updates' ? 'about' : PAGES.some(p => p.id === id) ? id : '');
-      for (const f of features.values()) if (pageOf(f) === page) f.enter?.(ctx);
+      for (const f of features.values()) if (pageOf(f) === effectivePage()) f.enter?.(ctx);
       confirm = null; render(); root.scrollTop = 0;
       const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = 0;
       const g = id ? root.querySelector(`[data-settings-feature="${CSS.escape(f?.id || id)}"]`) : null;
@@ -407,7 +438,7 @@
       (g?.querySelector('button:not(:disabled)') || root.querySelector(page ? '.st-page-head h3' : '.st-title'))?.focus({ preventScroll: true });
     }
     function back() {
-      for (const f of features.values()) if (pageOf(f) === page && f.back?.(ctx)) return true;
+      for (const f of features.values()) if (pageOf(f) === effectivePage() && f.back?.(ctx)) return true;
       if (confirm) { if (!ctx.chatsBusy) { confirm = null; render(); root.querySelector('[data-chats-choice][aria-checked="true"]')?.focus(); } return true; }
       if (!page) return false;
       const previous = page; focus(); root.querySelector(`[data-st-page="${previous}"]`)?.focus({ preventScroll: true }); return true;
@@ -476,16 +507,12 @@
         e.preventDefault(); const buttons = [...root.querySelectorAll('[data-chats-choice]')], at = buttons.indexOf(radio), delta = ['ArrowUp', 'ArrowLeft'].includes(e.key) ? -1 : 1;
         buttons[(at + delta + buttons.length) % buttons.length].focus(); return;
       }
-      const b = e.target.closest('[data-skinpick], [data-skinfamily], [data-myskin-tile]'); if (!b || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
-      const attr = b.hasAttribute('data-skinpick') ? 'data-skinpick' : 'data-skinfamily';
-      // The skin grid's arrows/Home/End also reach its last tile, My skin. Landing on it only moves focus (it opens
-      // its controls on Enter/Space or a tap), so arrowing past never toggles the panel.
-      const sel = attr === 'data-skinfamily' ? '[data-skinfamily], [data-myskin-tile]' : '[data-skinpick]';
-      e.preventDefault(); const buttons = [...root.querySelectorAll(sel)], at = buttons.indexOf(b);
+      const b = e.target.closest('[data-skinpick], [data-skinfamily], [data-ownskin], [data-newskin]');
+      if (!b || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+      const grid = b.closest('[role="group"]'); if (!grid) return;
+      e.preventDefault(); const buttons = [...grid.querySelectorAll('button')], at = buttons.indexOf(b);
       const n = e.key === 'Home' ? 0 : e.key === 'End' ? buttons.length - 1 : (at + (e.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
-      if (buttons[n].hasAttribute('data-myskin-tile')) { buttons[n].focus(); return; }
-      const id = buttons[n].getAttribute(attr); buttons[n].focus(); buttons[n].click();
-      root.querySelector(`[${attr}="${id}"]`)?.focus();
+      buttons[n].focus();
     };
     const unsubscribe = ctx.live?.onChange?.(() => render());
     const appsChanged = () => render();
