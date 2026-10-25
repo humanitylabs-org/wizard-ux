@@ -109,6 +109,7 @@ test('Chats windows resolve their own row before acting and Stop scopes to that 
     focusedWin: { id: 'focusedWin', app: 'chats', focus: { kind: 'agent', key: ROUTED } } };
   // focusOf mirrors chats.js: a window focused on an agent lists that agent's rows.
   const ctx = { LIVE: harness().LIVE, W, owner: id => id, AGS: () => ({ isOther: a => !!a && a !== 'hermes' }),
+    focusedAgent: f => f?.kind === 'agent' ? f.key : '',
     focusOf: w => (w?.focus && ['agent', 'space'].includes(w.focus.kind) ? w.focus : null) };
   const mainOnly = { id: 'M', status: 'completed' }; ctx.LIVE.sessions.push(mainOnly);
   vm.createContext(ctx);
