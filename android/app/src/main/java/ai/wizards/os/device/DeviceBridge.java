@@ -74,9 +74,10 @@ public final class DeviceBridge implements RecorderService.Listener {
         if ("identity.info".equals(method)) { answer.accept(wizardId.info()); return true; }
         if ("view.capture".equals(method)) { answer.accept(captureView(params)); return true; }
         // Appearance-only values: never used for the sentence, event, signer or key.
-        web.evaluateJavascript("(()=>{const s=getComputedStyle(document.documentElement),o={};for(const [k,t] of Object.entries({base:'--wz-base',ink:'--wz-text',accent:'--wz-accent',warning:'--wz-warning'})){let v=s.getPropertyValue(t).trim(),m=v.match(/^rgba?\\((\\d+)[, ]+(\\d+)[, ]+(\\d+)/);o[k]=m?'#'+m.slice(1,4).map(x=>(+x).toString(16).padStart(2,'0')).join(''):v;}return JSON.stringify(o)})()", encoded -> {
+        web.evaluateJavascript(ai.wizards.os.WizardLook.READ_JS, encoded -> {
             if (document != identityDocument || !trusted.getAsBoolean()) return;
-            try { wizardId.colors(new JSONObject((String)new org.json.JSONTokener(encoded).nextValue())); } catch (Exception ignored) { }
+            ai.wizards.os.WizardLook.save(activity, encoded);
+            wizardId.colors(ai.wizards.os.WizardLook.identityColors(activity));
             if ("identity.setup".equals(method)) wizardId.setup(answer);
             else if ("identity.nip44_encrypt".equals(method) || "identity.nip44_decrypt".equals(method)) wizardId.nip44(params, "identity.nip44_encrypt".equals(method), params.optString("requester"), answer);
             else { JSONObject event = params.optJSONObject("event"); if (event == null) answer.accept(denied()); else wizardId.sign(event, params.optString("requester"), answer); }
