@@ -9,7 +9,7 @@
   const BACKOFF = [2000, 5000, 15000, 30000, 60000, 120000], AUTO_TRIES = BACKOFF.length;
   // Agent Service allows 180 seconds of STT; leave time for upload/response transit.
   const TRANSCRIBE_TIMEOUT_MS = 195000;
-  const J = { 'Content-Type': 'application/json' }, listeners = new Set(), sentHooks = new Set();
+  const J = { 'Content-Type': 'application/json' }, listeners = new Set(), sentHooks = new Set(), newHooks = new Set();
   const items = new Map(), writes = new Map(), encodings = new WeakMap();
   const conversationWork = new Map(), transcriptWork = new Map(), removeErrors = new Map();
   // One authority check for explicit retry and automatic delivery. Terminal/ambiguous
@@ -674,6 +674,8 @@
       // promote a command. Recovery and reconnect never create this authorization.
       it.deliveryRequested = true;
       await put(it); // own the entire submission even if route discovery fails
+      // A new thread is announced once it is saved (Chats files it into the Space in front).
+      if (it.kind === 'new' && it.sessionId) for (const fn of newHooks) try { fn(it, o); } catch (e) { console.error(e); }
       try {
         if (routeError) throw routeError;
         if (!M) throw new Error('Model selector unavailable · reload Wizard before sending');
@@ -746,6 +748,8 @@
     removeError(id) { return removeErrors.get(id) || ''; },
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     onSent(fn) { sentHooks.add(fn); return () => sentHooks.delete(fn); },
+    // fn(item, request) after a new-thread message is saved; request.space === false: file it nowhere.
+    onNew(fn) { newHooks.add(fn); return () => newHooks.delete(fn); },
     notice, paintNotice, pump, load, bounded, TRANSCRIBE_TIMEOUT_MS, _items: items, AUTO_TRIES, BACKOFF,
   };
   addEventListener('beforeunload', e => { if ([...items.values()].some(it => it.state !== 'sent' && !it.durable)) { e.preventDefault(); e.returnValue = ''; } });
