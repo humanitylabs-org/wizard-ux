@@ -757,12 +757,16 @@
       return out;
     },
     // peek: badges/strip read loaded + already-hydrated rows only; never start reads.
-    spaceSessions(ids, { peek = false } = {}) {
+    // agent: the Space's owner. A routed agent's Space member beyond its list window has no
+    // AGENT_OF yet; the owner-made Space scopes its read (the proxy still enforces that agent).
+    spaceSessions(ids, { peek = false, agent = '' } = {}) {
       const loaded = new Map(this.unified().map(s => [s.id, s])), rows = [];
+      const scope = otherAgent(agent) && AG()?.get(agent) ? agent : '';
       let pending = false, failed = false;
       for (const id of new Set(ids)) {
         if (typeof id !== 'string' || !/^[A-Za-z0-9._:-]{1,256}$/.test(id)) continue;
         if (loaded.has(id)) { const s = loaded.get(id); if (!s.hidden) rows.push(s); continue; }
+        if (scope && !AGENT_OF.has(id)) AGENT_OF.set(id, scope);
         let entry = SPACE_ROWS.get(id);
         if (!peek && !document.hidden && (!entry || (!entry.pending && Date.now() - entry.at >= (entry.failed ? STALE_AFTER : SPACE_EVERY)))) {
           if (!entry) { entry = { row: null, at: 0 }; SPACE_ROWS.set(id, entry); }
