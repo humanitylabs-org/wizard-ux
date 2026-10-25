@@ -35,7 +35,7 @@
     null,
     { title: 'Talk', copy: () => typed ? 'Type “hello” and send it to your Wizard.' : 'Tap the orb and say hello. Tap again to send.' },
     { title: 'Hide', copy: () => 'Swipe the orb down to hide everything but your screen.' },
-    { title: 'Done', copy: () => 'Need this again? Hold the orb and say “help”.' },
+    { title: 'Done', copy: () => 'Everything you see is customizable. Try asking your Wizard for one change.' },
   ];
   const DONE = BEATS.length - 1; // the end card; every beat before it can be skipped on its own
 
@@ -196,6 +196,7 @@
     { k: 'filter', a: 'In Chats', b: 'Tap the filter button in search, or hold the orb and say “filter by unread” or “search budget”.' },
     { k: 'dots', a: 'Dots under the orb', b: 'Tap to jump to a desk. Long-press to see them all.' },
     { k: 'back', a: 'Back', b: 'Always one step back. It never closes Wizard.' },
+    { k: 'skin', a: 'Make it yours', b: 'Everything you see is customizable. Ask your Wizard for one change, and it becomes My skin.', say: ['Make my chat text a little bigger'] },
   ];
   function openHelp() {
     if (!H || helpEl) return;
