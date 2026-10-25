@@ -484,7 +484,7 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-head .emo.ch-head-sti .spin { width: 15px; height: 15px; }
 /* A Working spinner is status, not decoration: Reduce Motion slows it, never stops it. !important out-ranks the global
  * reduced-motion kill switch in styles.css (`*` + !important), which froze it (Robert, 24 Oct 2026). */
-@media (prefers-reduced-motion: reduce) { :is(.ch-row, .ch-head) .emo.sti .spin { animation-duration: 3s !important; animation-iteration-count: infinite !important; } }
+@media (prefers-reduced-motion: reduce) { .ch-head .emo.sti .spin, .ch-row .emo.sti .spin { animation-duration: 3s !important; animation-iteration-count: infinite !important; } }
 .ch-topic-mark { position: relative; flex: 0 0 auto; width: 44px; height: 38px; }
 .ch-topic-emoji { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; font-size: 21px; line-height: 1; background: color-mix(in srgb, var(--ink) 7%, transparent); }
 :is(.ch-row, .ch-head) .emo.sti.ch-topic-status, .ch-topic-status.draft-status { position: absolute; right: 0; bottom: -1px; width: 17px; height: 17px; min-width: 0; border-radius: 6px; border: 1px solid var(--bg); z-index: 1; }
