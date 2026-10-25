@@ -40,6 +40,18 @@ test('deleted/context lines and old code are not scanned; line numbers survive m
   assert.deepEqual(check([file('new MediaRecorder(s)', 'README.md')]), []);
 });
 
+test('adjacent added lines are scanned together without joining across unchanged code', () => {
+  const adjacent = { path: 'src/app.js', added: [{line: 7, text:'const recorder = new'}, {line:8, text:'MediaRecorder(stream);'}] };
+  assert.match(check([adjacent]).join(), /src\/app.js:7: duplicate voice/);
+  const separate = { path:'src/app.js', added: [{line:7,text:'const harmless = new'}, {line:19,text:'MediaRecorder;'}] };
+  assert.deepEqual(check([separate]), []);
+});
+
+test('shared orb host is allowed but cannot conceal a custom renderer', () => {
+  assert.deepEqual(check([file('<canvas id="orb"></canvas>\nOrb.create(canvas);')]), []);
+  assert.match(check([file('<canvas id="orb"></canvas>\nOrb.create(canvas);\nfunction drawOrb() {}')]).join(), /duplicate orb/);
+});
+
 test('NEW requires an exact newly added inventory row and only waives its named capability', () => {
   const source = file('new MediaRecorder(s)');
   const row = file('| Staged capture adapter | `SharedCapture` | app recorder |', 'docs/COMPONENTS.md');

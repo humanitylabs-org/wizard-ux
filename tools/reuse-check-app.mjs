@@ -58,9 +58,24 @@ export function checkAppReuse({ body = '', files = [], inventory = '' }) {
     }
   }
   for (const file of files.filter(f => SOURCE.test(f.path))) {
+    // Join adjacent added lines only: formatting across new lines cannot evade
+    // capture checks, and unchanged/context code never becomes a new finding.
+    const chunks = [];
     for (const added of file.added) {
+      const last = chunks.at(-1);
+      if (last && last.end + 1 === added.line) { last.text += '\n' + added.text; last.end = added.line; }
+      else chunks.push({ line: added.line, end: added.line, text: added.text });
+    }
+    const sharedOrb = file.added.some(l => /\bOrb\s*\.\s*create\s*\(/.test(l.text));
+    for (const chunk of chunks) {
       for (const rule of rules) {
-        if (rule.pattern.test(added.text) && !newRows.has(rule.id)) problems.push(`${file.path}:${added.line}: duplicate ${rule.id} implementation. COMPONENTS row "${rule.row}": use ${rule.api}. Only an explicit NEW: <new row title> plus that added docs/COMPONENTS.md row can waive this finding.`);
+        // A canvas is a valid Orb.create host, not an orb implementation itself.
+        const candidate = rule.id === 'orb' && sharedOrb
+          ? chunk.text.replace(/<(?:canvas|svg|img)\b[^>]*\borb\b[^>]*>/gi, m => m.replace(/[^\n]/g, ' ')) : chunk.text;
+        const match = rule.pattern.exec(candidate);
+        if (!match || newRows.has(rule.id)) continue;
+        const line = chunk.line + chunk.text.slice(0, match.index).split('\n').length - 1;
+        problems.push(`${file.path}:${line}: duplicate ${rule.id} implementation. COMPONENTS row "${rule.row}": use ${rule.api}. Only an explicit NEW: <new row title> plus that added docs/COMPONENTS.md row can waive this finding.`);
       }
     }
   }
