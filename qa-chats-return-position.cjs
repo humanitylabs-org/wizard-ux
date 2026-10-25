@@ -9,7 +9,7 @@ fs.mkdirSync(OUT, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0; const checks = [], writes = [], errors = [];
 function ok(v, name, evidence) { checks.push({ name, pass: !!v, evidence }); console.log(v ? 'PASS' : 'FAIL', name, JSON.stringify(evidence)); v ? pass++ : fail++; }
-const now = Date.now()/1000, archived = new Set();
+const now = Date.now()/1000, archived = new Set(); let slowList = 0;
 function session(i) { return { id: 'qa_return_' + i, source: 'wizard-mobile', title: 'QA return position ' + String(i).padStart(2,'0'), status: 'completed', archived: false, hidden: false, message_count: 2, started_at: now-600, last_active: now-i, wizard_last_user_at: now-300, wizard_last_assistant_at: now-i, wizard_activity_at: now-i, wizard_attention: { state: 'done', ask: 'Scroll return fixture completed', subject: 'Research' }, latest_message: { role:'assistant', content:'Fixture answer.', timestamp:now-i }, last_user_message: { role:'user', content:'Fixture question.', timestamp:now-300 } }; }
 (async () => {
  let b;
@@ -24,6 +24,7 @@ function session(i) { return { id: 'qa_return_' + i, source: 'wizard-mobile', ti
     const f=u.pathname.slice('/wizard-os-home/'.length)||'index.html', fp=path.join(WEB,'web',f);
     if(!f.includes('..') && fs.existsSync(fp) && fs.statSync(fp).isFile()) return r.fulfill({status:200,contentType:f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':undefined,body:fs.readFileSync(fp)});
    }
+   if(u.pathname==='/wizard/hermes/api/sessions' && slowList) await sleep(slowList);
    if(u.pathname==='/wizard/hermes/api/sessions') { const all=Array.from({length:36},(_,i)=>{const s=session(i);s.archived=archived.has(s.id);return s;}); return json({object:'list',data:all,pagination:{returned:all.length,offset:0,limit:100,has_more:false},has_more:false}); }
    const mm=u.pathname.match(/\/api\/sessions\/(qa_return_\d+)\/messages$/);
    if(mm) return json({object:'list',data:[{id:1,session_id:mm[1],role:'user',content:'Fixture question',timestamp:now-300},{id:2,session_id:mm[1],role:'assistant',content:'Fixture answer. [Linked thread](/wizard/?session=qa_return_25)',timestamp:now-200}],pagination:{returned:2,offset:0,limit:500}});
@@ -31,7 +32,7 @@ function session(i) { return { id: 'qa_return_' + i, source: 'wizard-mobile', ti
    if(/\/wizard\/(thread-seen|thread-dispositions)$/.test(u.pathname)) return json({state:{initializedAt:Date.now(),threads:{}}});
    return r.continue();
   });
-  await ctx.addInitScript(()=>{localStorage.clear();localStorage.setItem('wos.coached','true');localStorage.setItem('wos.voiceTipSeen','true');});
+  await ctx.addInitScript(()=>{if(!sessionStorage.getItem('qaInit')){sessionStorage.setItem('qaInit','1');localStorage.clear();localStorage.setItem('wos.coached','true');localStorage.setItem('wos.voiceTipSeen','true');}});
   const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));
   await p.goto(URL_+'?open=chats');await p.waitForSelector('[data-chopen="qa_return_20"]');await sleep(1500);
   if (process.env.QA_FULL === '1') { await p.locator('.win [data-wact="full"]').first().tap(); await sleep(1700); }
@@ -67,6 +68,17 @@ function session(i) { return { id: 'qa_return_' + i, source: 'wizard-mobile', ti
   { await position(); await openVisible(); await p.evaluate(() => { const w=document.querySelector('[data-chats]').closest('.win') || document.querySelector('[data-chats]'); w.style.display='none'; window.__qaHidden=w; });
    await p.keyboard.press('Escape'); await sleep(100); await p.evaluate(() => { window.__qaHidden.style.display=''; const sc=document.querySelector('.ch-scroll'); sc.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -50 })); sc.scrollTop = 200; }); await sleep(600);
    ok(Math.abs((await place()).top-200)<2, 'own scroll during a held return is never overridden', await place()); }
+  // Reload (the update banner's Reload, an app restart): the list comes back where James left it, on the same row,
+  // after a plain reload, after a reload while a thread is open (then Back), and when the list read is slow.
+  for (const how of ['list', 'thread', 'slow']) {
+   const before = await position(); await sleep(400);
+   if (how === 'thread') await openVisible();
+   slowList = how === 'slow' ? 2500 : 0;
+   await p.reload({ waitUntil: 'domcontentloaded' });
+   if (how === 'thread') { await p.waitForSelector('.ch-msgs .msg.a'); await sleep(500); await p.locator('[data-chback]').tap(); }
+   await p.waitForSelector(`[data-chopen="${before.id}"]`, { timeout: 15000 }); await sleep(1200); slowList = 0;
+   const after = await place(); ok(after.id === before.id && Math.abs(after.y - before.y) < 2, 'reload ('+how+') keeps the list place', { before, after });
+  }
   // Archive the top visible anchor; its surviving neighbor keeps the same screen coordinate.
   await position();const old=await place();const neighbor=await p.evaluate(id=>{const sc=document.querySelector('.ch-scroll'),rs=[...sc.querySelectorAll('[data-chopen]')],a=rs[rs.findIndex(r=>r.dataset.chopen===id)+1];return {id:a.dataset.chopen,y:a.getBoundingClientRect().top-sc.getBoundingClientRect().top};},old.id);
   await p.evaluate(id=>__wos.openWizardThread(id),old.id);await p.waitForSelector('.ch-msgs .msg.a');await p.locator('[data-chact="done"]').first().tap();await p.waitForSelector('.ch-list');await sleep(800);
