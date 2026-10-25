@@ -2321,6 +2321,7 @@
   function tick() {
     const el = V.acc + (V.state === 'listen' || V.state === 'command' ? performance.now() - V.t0 : 0);
     $('#timer').textContent = fmtT(el);
+    paintQuickWindow(el);
     if (V.an) {
       const a = new Uint8Array(V.an.fftSize); V.an.getByteTimeDomainData(a);
       let s = 0; for (let k = 0; k < a.length; k++) { const v = (a[k] - 128) / 128; s += v * v; }
@@ -2638,6 +2639,16 @@
       toast('!', kept ? 'Dictation retained in Settings → Cancelled recordings · transcribe & copy' : nid ? 'Dictation kept on device · reopen recording recovery to retry' : 'Storage unavailable · kept only while this page stays open · retry saving in Settings', 6000);
     } finally { clearTimeout(timer); if (V.dictationOp === op) V.dictationOp = null; }
   }
+  /* Quick command (James, 25 Oct 2026): a tap take shorter than QUICK_MS is a command; longer goes to the agent.
+   * Only a plain tap take qualifies: replies pinned to a thread composer, app voice input, general takes, review
+   * feedback, captures and takes carrying files or composer text stay messages. A quick take with no command match
+   * still goes where a tap take always went (so a short "ship it" in a thread still reaches that thread). */
+  const QUICK_MS = 3000;
+  function quickTake(kind, snap, replyTo, target, ms) {
+    if (kind !== 'auto' || replyTo || target != null || !snap || snap.general || snap.conversation || snap.meetingEventId || V.meetingLoan) return false;
+    if (snap.seal || V.seal || V.files?.length || snap.view?.review || snap.view?.mode === 'capture') return false;
+    return (ms || 0) < QUICK_MS;
+  }
   function finishVoice() {
     if(parking)return; // sealing the original is not a new Send gesture
     if(V.admitting){V.admitSend=true;return;}
@@ -2665,7 +2676,7 @@
       }
     } catch (e) { toast('!', String(e.message || e), 2200); return; }
     if (sealAt && !V.seal) { const t = CHATS.takeComposer(sealAt.wid, sealAt.sid); V.seal = t.text || t.files.length || t.reply ? t : null; }
-    leaveOnSend(V.snap);
+    if (!quickTake(V.kind, V.snap, V.replyTo, V.target, V.acc + (V.state !== 'paused' ? performance.now() - V.t0 : 0))) leaveOnSend(V.snap);
     if (V.native) {
       if (V.state !== 'paused') V.acc += performance.now() - V.t0;
       setVoice('think'); txPill(V.kind === 'command' ? '⚡' : '✦', 'Sending…', V.kind === 'command' ? 'command' : 'agent', 'Transcribing · Wizard Voice Core');
@@ -2775,7 +2786,7 @@
     // straight into the durable outbox (which transcribes it and keeps the recording as a voice note).
     const snap = V.snap || window.WosOrbHandoff?.takeSnap(nid) || sendSnap(); V.snap = null;
     snap.seal = V.seal || null; V.seal = null; // the composer read at the send tap (finishVoice)
-    const kind = V.kind, aimAt = V.target;
+    const kind = quickTake(V.kind, snap, V.replyTo, V.target, V.acc) ? 'quick' : V.kind, aimAt = V.target;
     // One immutable owner before STT/router awaits, including native handoffs. The native
     // copy is released only after the web copy is durable or a server receipt exists.
     const rt = V.replyTo;
@@ -2804,7 +2815,7 @@
     if(V.meetingLoan){if(!it.durable){setVoice('paused');toast('!','Save failed · original retained here; meeting remains paused');return;}await returnMeeting({status:'captured',voiceTakeId:nid||it.id,deliveryKey:it.id});}
     snap.seal?.done(it);
     // A tap take with a fixed destination is the outbox's from here: Reload no longer waits for upload + transcription.
-    V.handedOff = (!rt && aimAt == null && kind !== 'command' && !snap.general && !snap.meetingEventId && !V.meetingLoan && !sv?.review && sv?.mode !== 'capture' && await OUTBOX.handOff?.(it.id)) ? it.id : null;
+    V.handedOff = (!rt && aimAt == null && kind !== 'command' && kind !== 'quick' && !snap.general && !snap.meetingEventId && !V.meetingLoan && !sv?.review && sv?.mode !== 'capture' && await OUTBOX.handOff?.(it.id)) ? it.id : null;
     // Released a moment after this take is handled: by then its outbox item (if any) has replaced the hold.
     const hold = V.hold; V.hold = null;
     const unhold = () => { if (hold) setTimeout(() => LIVE.releaseSend?.(hold), 1500); };
@@ -2833,7 +2844,7 @@
       if (!text) {
         // A silent held take is a quick command that never happened (James, 23 Oct 2026): nothing to recover,
         // so it finishes custody instead of piling up in Unsent. A take carrying composer text or files keeps them.
-        if (kind === 'command' && await OUTBOX.completeLocal(snap.custodyId)) {
+        if ((kind === 'command' || kind === 'quick') && await OUTBOX.completeLocal(snap.custodyId)) {
           releaseNative(); unhold(); setVoice('idle'); txHide(); toast('◌', 'No speech heard · nothing sent'); tourEv('nospeech'); return;
         }
         await OUTBOX.transition(snap.custodyId, 'empty', 'No speech detected · original recording and composer kept together');
@@ -2844,7 +2855,7 @@
       const outcome = await handleText(text, kind, false, j.ms, aimAt, snap);
       // A held take is a command, never a message: once routed, there is nothing left to deliver.
       // Executed, unmatched or declined commands finish custody instead of posing as failed sends.
-      const settled = kind === 'command' && (outcome === false || outcome == null || outcome?.outcome === 'unhandled' || (outcome?.outcome === 'local-pending' && !outcome.done));
+      const settled = (kind === 'command' || snap.quickRan) && (outcome === false || outcome == null || outcome?.outcome === 'unhandled' || (outcome?.outcome === 'local-pending' && !outcome.done));
       if (settled && OUTBOX.get(snap.custodyId)?.state === 'processing') await OUTBOX.completeLocal(snap.custodyId);
       if (OUTBOX.get(snap.custodyId)?.state === 'processing') {
         const completed = outcome?.outcome === 'local' && await OUTBOX.completeLocal(snap.custodyId);
@@ -3038,6 +3049,22 @@
       setVoice('idle'); txHide();
       toast(it.state === 'sent' ? '✦' : '!', it.state === 'sent' ? 'Sent to ' + snap.conversation.label : it.error, 5000);
       return it;
+    }
+    // Quick take (under QUICK_MS): try it as a command first (on-device grammar, then the router off-thread).
+    // No match: it continues below as an ordinary tap take, so nothing short is ever lost.
+    if (kind === 'quick') {
+      const qo = target == null ? { snap } : { desk: target, snap };
+      const loc = localParse(text, snap, 'command');
+      if (loc) { snap.quickRan = true; showRouted('command', `Quick command · on-device${sttNote}`); return finishCmd(loc, text, qo); }
+      if (window.WosTour?.isHelp(text) && snap.view?.kind !== 'chat thread') { snap.quickRan = true; setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
+      const routeUrl = snap.view?.kind !== 'chat thread' && window.WizConfig.endpoint('route');
+      if (routeUrl) try {
+        setVoice('think'); if (isPill()) tx.dataset.detail = 'Quick command? · routing'; else $('#txRouteText').textContent = 'Quick command? · routing';
+        const r = await fetch(routeUrl, { method: 'POST', signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, force: '', view: null, apps: APPS.filter(a => a.kind !== 'view').map(a => a.name) }) });
+        const j = await r.json(); const c = r.ok && j.cmd || {};
+        if (c.route === 'command' && !c.then_agent) { snap.quickRan = true; showRouted('command', `Quick command · ${j.ms} ms${sttNote}`); return finishCmd(c, text, qo); }
+      } catch (_) {}
+      kind = 'auto';
     }
     // A bare "help" is not special in a tapped voice message.
     if (!window.WosCommands.isMessageTake(kind, typed) && window.WosTour?.isHelp(text) && (kind === 'command' || snap.view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
@@ -3253,6 +3280,18 @@
   }
   paintVoiceDestination();
   window.addEventListener('wizard:config', paintVoiceDestination);
+  // The 3-second rule, visible while talking: "Quick command" until QUICK_MS, then the agent's name.
+  let quickShown = null;
+  function paintQuickWindow(ms) {
+    const on = V.state === 'listen' && quickTake(V.kind, V.snap || {}, V.replyTo, V.target, 0);
+    const q = on ? (ms < QUICK_MS ? 'cmd' : 'agent') : null;
+    const was = quickShown; quickShown = q;
+    voiceDestination.classList.toggle('quick', q === 'cmd');
+    if (!q) { if (was) paintVoiceDestination(); return; }
+    const agent = window.WizConfig.agent();
+    const want = q === 'cmd' ? '⚡ Quick command · keep talking for ' + agent : 'To ' + (V.snap?.view?.kind === 'chat thread' ? 'this thread' : agent) + ' · tap to send';
+    if (voiceDestination.textContent !== want) voiceDestination.textContent = want;
+  }
   let G = null;
   function mayHoldCommand() {
     if (sheet) return false;
@@ -3271,13 +3310,24 @@
     G = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), mode: 'pending', dx: 0, dy: 0, aim: null };
     Orb.press(true);
     G.corner = device.classList.contains('orb-corner'); G.ovWas = pillOvOpen(); G.upDesks = orbUpDesks();
-    if (mayHoldCommand()) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); if(V.state==='idle'||(V.state==='paused'&&V.replyTo)){vib(18);G.start=startVoice('command');}else{G.refused=true;toast('⏸','Pause your reply before a command');} } }, 380);
+    // Hold = desk fan (James, 25 Oct 2026): commands moved to short taps (under QUICK_MS), so a held orb fans out
+    // every open desk in an arc; slide onto one and release to jump there. Works in any voice state, like swipes.
+    if (!sheet && desks.length > 1) G.hold = setTimeout(() => { if (G && G.mode === 'pending') openDeskFan(G); }, 380);
   });
+  function openDeskFan(g) {
+    g.mode = 'fan'; vib(18);
+    const r = orbWrap.getBoundingClientRect(), from = idx, w = track.getBoundingClientRect().width || innerWidth;
+    window.WosDeskFan.open({ x: r.left + r.width / 2, y: r.top + r.height / 2, current: idx,
+      items: desks.map((_, i) => ({ html: deskSigil(i), label: deskName(i) + (i === from ? ' · here' : '') })),
+      // The hovered desk slides in behind the fan, so James sees where he will land before releasing.
+      onHover: i => placeTrack(i == null ? 0 : (from - i) * w, true) });
+  }
   // Slide-to-aim is retired (James, 11 Oct 2026): a held command already opens on the desk beside this one, so
   // sliding while holding does nothing (no desk label, no aim). A hold that starts travelling at once is a swipe.
   const aimFor = () => null;
   orbWrap.addEventListener('pointermove', e => {
     if (!G || e.pointerId !== G.pointerId) return; G.dx = e.clientX - G.x; G.dy = e.clientY - G.y;
+    if (G.mode === 'fan') { window.WosDeskFan.move(e.clientX, e.clientY); return; }
     // A hold that starts travelling right after it fired was really a swipe (slow frame ate the moves).
     if (G.mode === 'hold' && G.holdAt && performance.now() - G.holdAt < 600 && (Math.hypot(G.dx, G.dy) > 34 || (G.dy > 16 && G.dy > Math.abs(G.dx) * 1.4)) && !(G.dy < -20 && Math.abs(G.dx) < 100)) {
       cancelVoice(true); G.mode = 'pending';
@@ -3354,6 +3404,10 @@
       if(V.state==='paused'&&V.replyTo&&FIELDS.refresh())return startVoice('dictation');
       if (V.state === 'idle') return window.WosSkinHost?.orbTap?.() ? undefined : startOrbVoice();
       return orbTapBusy();
+    } else if (g.mode === 'fan') {
+      const to = window.WosDeskFan.release();
+      if (cancelled || to == null || to === idx) { placeTrack(0, true); return; }
+      goDesk(to);
     } else if (g.mode === 'hold') {
 
       if(g.refused)return; // a refused hold always consumes its release; never sends a reply
@@ -3742,7 +3796,7 @@
     get links() { return LINKS; },
     get voiceBorrowing() { return parking || !!parkedReply || !!V.admitting; },
     openAgentChats,
-    live: LIVE, openPeek, closePeek, openOverview, closeOverview, mergeDesks, splitDesk, reorderDesks, closeDesk, openLinkDesk, pinWin, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
+    live: LIVE, openPeek, closePeek, openOverview, closeOverview, mergeDesks, splitDesk, reorderDesks, closeDesk, openLinkDesk, pinWin, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText, quickTake, QUICK_MS,
     HOME, get idx() { return idx; }, get desks() { return desks; }, get ovLog() { return window.__ovLog || []; }, get wins() { return W; }, get voice() { return V.state; }, get voiceHandedOff() { return !!V.handedOff && OUTBOX.handedOff?.(V.handedOff); }, get sheet() { return sheet; },
     get back() { return { watchers: watchers.size, guardOn, exitArmed: Date.now() < exitUntil, log: window.__backLog || [] }; },
     openSearch,
