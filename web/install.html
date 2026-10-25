@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>{{APP_NAME}}</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="{{APP_NAME}}">
+<meta name="theme-color" content="#110d1b">
+<link rel="canonical" href="{{APP_BASE}}">
+<link rel="manifest" href="{{APP_BASE}}manifest.webmanifest">
+<link rel="apple-touch-icon" href="{{APP_ICON}}">
+<link rel="icon" href="{{APP_ICON}}">
+<link rel="stylesheet" href="/wizard-os-home/install.css">
+<script defer src="/wizard-os-home/install.js"></script>
+</head>
+<body data-app-id="{{APP_ID}}">
+<main id="install">
+<img class="app-icon" src="{{APP_ICON}}" alt="" width="80" height="80">
+<h1>{{APP_NAME}}</h1>
+<p>Add this app to your home screen. It opens on its own, without your Wizard desks.</p>
+<button id="prompt" hidden>Add to home screen</button>
+<p id="instructions" role="status">In your browser menu, choose Add to Home screen or Install app.</p>
+<a id="browser" href="{{APP_BASE}}?install=1" target="_blank" rel="noopener noreferrer">Open install page</a>
+<button id="copy">Copy install link</button>
+<input id="address" aria-label="Install link" readonly>
+<a id="launch" href="{{APP_BASE}}?launch=1">Open app now</a>
+</main>
+</body>
+</html>

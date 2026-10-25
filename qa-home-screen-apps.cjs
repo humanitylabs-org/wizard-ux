@@ -133,7 +133,7 @@ try{
  await hold();check('trusted mobile hold opens one action sheet',await main.locator('.home-pin-sheet').count()===1);
  if(await main.locator('.home-pin-sheet').count()){
   check('opening lift does not activate pin',await main.evaluate(()=>!WizHomeScreenApps.state.pending));
-  check('unsupported browser launcher explanation is honest',await main.locator('.home-pin-sheet button').textContent()==="Can't add on this device");
+  check('browser launcher offers honest install handoff',await main.locator('.home-pin-sheet button').first().textContent()==='Copy link'&&await main.locator('.home-pin-sheet textarea').count()===1);
   await main.evaluate(()=>__wosNativeBack());check('pin sheet Back leaves Apps menu',await main.locator('.home-pin-sheet').count()===0&&await main.locator('#launcher').evaluate(e=>e.classList.contains('open')));
  }
  await point();await main.waitForTimeout(750);await tile.tap();await main.waitForTimeout(800);check('ordinary app tap still uses a desk, never pin',await main.evaluate(()=>!!__wos.wins&&!__wos.singleApp)&&await main.locator('.home-pin-sheet').count()===0,null,'regression');

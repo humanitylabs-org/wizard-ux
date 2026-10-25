@@ -93,6 +93,16 @@ test('legacy two-orb migration opts in exactly once, preserving a later owner of
   const saved = new Map([['wos.layout','two-orb'], ['wos.skin-tweaks.v1',JSON.stringify({version:1,off:{wizard:['wizard/two-orbs']}})]]);
   f = wizardExperience(saved); await f.E.refresh(); assert.deepEqual(f.active(), []);
 });
+test('overview mode is capability gated, revoked on teardown, and stale handles cannot reactivate it', async () => {
+  const f=fixture(); let api;
+  f.host._test.setImporter(async()=>({default:a=>{api=a;return()=>{};}}));
+  await f.mount('miguel/hidden-pin'); assert.equal(api.overview,undefined);
+  await f.mount('miguel/arrange-download');
+  assert.throws(()=>api.overview.use({hold:'exit',appHold:false}),/Invalid overview mode/);
+  const release=api.overview.use({hold:'arrange',appAction:'home-screen',appHold:false});
+  assert.equal(f.overview.hold,'arrange'); await f.clear(); assert.equal(f.overview,null);
+  release(); release(); api.overview.use({hold:'arrange',appAction:'home-screen',appHold:false}); assert.equal(f.overview,null);
+});
 test('layout handles become inert on disposal and their cleanup is idempotent', async () => {
   const f = fixture(); let api;
   f.host._test.setImporter(async () => ({default:a=>{api=a;return()=>{};}}));

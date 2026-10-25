@@ -9,7 +9,8 @@
     "miguel/model-pills",
     "miguel/hidden-pin",
     "miguel/snooze-someday",
-    "miguel/home-bars"
+    "miguel/home-bars",
+    "miguel/arrange-download"
   ],
   "flags": {}
 }
