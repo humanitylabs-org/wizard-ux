@@ -81,6 +81,7 @@
     title: w => winTitle(w),
     viewContext: (id, how) => viewContext(id, how),
     visible: () => homeOpen ? [] : ws[cur].wins,
+    front: () => homeOpen ? null : ws[cur].focus,
     editUnsent: it => editUnsent(it),
     recoverUnsent: id => { openSettings('unsent'); window.WosSettings.focusUnsent(id); },
     openUnsent: () => openSettings('unsent'),

@@ -162,14 +162,24 @@ async function routingMatrix(b) {
   sharedSpaces=[{id:'route-space',name:'Route space',agent:spaceAgent,threads:[]}];
   await p.evaluate(()=>window.dispatchEvent(new Event('focus')));
   await p.waitForTimeout(250);
-  for(const voice of [false,true]) {
-   const req=await check(voice?'Space new voice':'Space list +',async()=>{
-    if(!voice){await activate(p,'[data-chfab]:visible');await send();}
+  // Every way of starting a new thread while the Space is open joins it (James, 25 Oct 2026), including a plain
+  // orb tap on the list, which goes through the shell's toAgent path rather than the Chats composer.
+  for(const how of ['typed','voice','orb'].filter(h=>h!=='orb'||spaceAgent==='hermes')) {
+   const req=await check({typed:'Space list +',voice:'Space new voice',orb:'Space orb tap'}[how],async()=>{
+    if(how==='typed'){await activate(p,'[data-chfab]:visible');await send();}
+    else if(how==='orb'&&desktop){await p.locator('#micBtn').click();await p.waitForTimeout(900);await p.locator('#micBtn').click();}
+    else if(how==='orb'){await p.locator('#orbWrap').tap();await p.waitForTimeout(900);await p.locator('#orbWrap').tap();}
     else if(desktop){await p.locator('#generalVoice').click();await p.waitForTimeout(900);await p.locator('#generalVoice').click();}
     else{await p.evaluate(()=>__wos.startVoice('general'));await p.waitForTimeout(900);await p.evaluate(()=>__wos.finishVoice());}
    },'space:route-space');
    const sid=JSON.parse(req?.find(r=>r.path.endsWith('/v1/runs'))?.body||'{}').session_id;
-   ok(!!sid&&sharedSpaces[0]?.threads.includes(sid),mode+' Space '+(voice?'voice':'typed')+' joins durable thread id',sharedSpaces);
+   ok(!!sid&&sharedSpaces[0]?.threads.includes(sid),mode+' Space '+how+' joins durable thread id',sharedSpaces);
+  }
+  // Out of the Space (All in front), a new thread stays out of it.
+  if(spaceAgent==='hermes'){
+   const before=sharedSpaces[0].threads.length;
+   const req=await check('All orb tap',async()=>{if(desktop){await p.locator('#micBtn').click();await p.waitForTimeout(900);await p.locator('#micBtn').click();}else{await p.locator('#orbWrap').tap();await p.waitForTimeout(900);await p.locator('#orbWrap').tap();}},'hermes');
+   ok(!!req&&sharedSpaces[0].threads.length===before,mode+' new thread outside the Space stays out',sharedSpaces);
   }
   }
   if(desktop)await check('Alt+N fresh window',async()=>{await p.keyboard.press('Alt+N');await send();});

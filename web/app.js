@@ -157,6 +157,7 @@
     title: w => winTitle(w),
     viewContext: (id, how) => viewContext(id, how),
     visible: () => desks[idx].wins,
+    front: () => desks[idx].focus,
     editUnsent: it => editUnsent(it),
     recoverUnsent: id => { openSettings('unsent'); window.WosSettings.focusUnsent(id); },
     openUnsent: () => openSettings(true),

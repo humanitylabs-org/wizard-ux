@@ -8,6 +8,7 @@
  *   layout(id)       → that window's content changed shape (re-tile, re-measure)
  *   toast(icon, text, ms), title(w), viewContext(id, how)
  *   visible()        → ids of windows on screen (their open threads count as read)
+ *   front()          → (optional) id of the window in front; a new thread started while it shows a Space joins it
  *   editUnsent(item) → put an unsent message back into a composer
  *   newChatHint      → the line under "New chat" (the phone mentions the orb, the desktop its keys)
  *   openLink(url, title) → (optional) open a private-origin link in a window of this shell; return true if it did
@@ -334,6 +335,21 @@ window.WizCore.chats = function createChats(H) {
     LIVE.putPrefs({ spaces: list });
     window.dispatchEvent(new Event('wos:prefs')); return true;
   }
+  /* A Space open in front is where James is working: every new thread started there (composer, orb, voice,
+   * launcher) joins it (James, 25 Oct 2026). A Chats composer files its own (Space fixed at send, below) and opts
+   * out here; every other new thread is announced by the outbox once saved, and the Chats window in front decides:
+   * on its list or a new chat, focused on a Space of the agent the thread goes to. space: false opts out. */
+  function spaceInFront(agent) {
+    const id = H.front?.(), w = id && W[owner(id)];
+    if (!w || w.app !== 'chats' || (w.thread && w.thread !== '__new__')) return '';
+    const f = focusOf(w), sp = f?.kind === 'space' && spaces().find(s => s.id === f.key);
+    return sp && spaceAgent(sp) === (agent || AGS()?.defaultId() || 'hermes') ? sp.id : '';
+  }
+  OUTBOX?.onNew?.((it, o) => {
+    if (o?.space === false) return;
+    const key = spaceInFront(it.agent || '');
+    if (key) spaceMember(key, it.sessionId, true);
+  });
   window.addEventListener('storage', e => { if (e.key === SPACES_KEY) window.dispatchEvent(new Event('wos:prefs')); });
   function focusOf(w) {
     const o = (w && W[owner(w.id)]) || w, f = o?.focus;
@@ -2431,7 +2447,7 @@ window.WizCore.chats = function createChats(H) {
     let it;
     try {
       it = await OUTBOX.enqueue({ captureId: opts.captureId, custodyId: opts.custodyId, sealKey: sealed?.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio, typed: later ? typed : '',
-        instructions, files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), ...(reply ? { reply } : {}), wid: here ? wid : '', how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(AGID ? { agent: AGID } : {}) });
+        instructions, files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), ...(reply ? { reply } : {}), wid: here ? wid : '', how, source: 'chat', space: false, ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(AGID ? { agent: AGID } : {}) });
     } catch (e) {
       // Not saved anywhere: the words (and files) go back into that thread's composer, and James back into the
       // thread if the window is still on the list he was sent to.
