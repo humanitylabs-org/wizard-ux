@@ -65,7 +65,9 @@ public class WizardIdFlowTest {
             UiObject2 secretView=device.wait(Until.findObject(By.textStartsWith("nsec1")),15000);
             assertNotNull(secretView); String nsec=secretView.getText();
             click("Copy");
-            assertEquals(nsec,((android.content.ClipboardManager)context.getSystemService(Context.CLIPBOARD_SERVICE)).getPrimaryClip().getItemAt(0).getText().toString());
+            android.content.ClipboardManager clipboard=(android.content.ClipboardManager)context.getSystemService(Context.CLIPBOARD_SERVICE); android.content.ClipData copied=null;
+            for(int i=0;i<30&&copied==null;i++){device.waitForIdle();copied=clipboard.getPrimaryClip();if(copied==null)android.os.SystemClock.sleep(100);}
+            assertNotNull("Copy did not reach the clipboard",copied); assertEquals(nsec,copied.getItemAt(0).getText().toString());
             // Native test memory only: never output or screenshot a secret.
             device.findObject(By.clazz("android.widget.EditText")).setText(nsec); hideKeyboard();
             click("Check backup"); visible("Update your profile"); click("Approve & sign"); pin();
