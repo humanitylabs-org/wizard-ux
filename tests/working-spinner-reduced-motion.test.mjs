@@ -18,7 +18,7 @@ test('the global reduced-motion kill switch still exists (this test guards the e
   assert.match(styles, /\*, \*::before, \*::after \{ animation-duration: \.01ms !important; animation-iteration-count: 1 !important;/)
 })
 
-for (const [selector, dur] of [['.ch-row .emo.sti .spin', '3s'], ['.ch-spin', '2.4s']]) {
+for (const [selector, dur] of [['.ch-row .emo.sti .spin', '3s'], ['.ch-head .emo.sti .spin, .ch-row .emo.sti .spin', '3s'], ['.ch-spin', '2.4s']]) {
   test(`${selector}: reduced motion slows the spinner instead of freezing it`, () => {
     const rule = ruleFor(chats, selector)
     assert.ok(rule, `no reduced-motion rule for ${selector}`)
