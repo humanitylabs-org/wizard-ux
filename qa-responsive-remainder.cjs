@@ -12,9 +12,8 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
    WosFeatures.register({id:'parity-action',title:'Future registered action',run(){__sharedRan.push('registered-action');}});
    (window.__wux||window.__wos).openSettings();
   });
-  ok(await p.locator('[data-feature-open="parity-future"]').count()===1,`${label}: new common view discoverable from Settings`);
-  await p.locator('[data-feature-open="parity-action"]').click();
-  await p.locator('[data-feature-open="parity-future"]').click();
+  ok(await p.locator('.st-shortcuts,[data-feature-open],[data-st-shortcut]').count()===0,`${label}: Settings lists no launcher shortcuts (James, 25 Oct 2026)`);
+  await p.evaluate(()=>{WosFeatures.open('parity-action');WosFeatures.open('parity-future');});
   await p.locator('#future-action').click();
   ok(await p.evaluate(()=>__sharedRan.join(',')==='registered-action,action'),`${label}: registered action and view execute through shared registry`);
   ok(await p.evaluate(()=>WizCore.deeplink.parse('?view=parity-future').view==='parity-future'),`${label}: future view automatically deep-links`);
