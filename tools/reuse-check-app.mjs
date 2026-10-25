@@ -34,13 +34,25 @@ function withoutComments(body) { return String(body).replace(/<!--[\s\S]*?(?:-->
 function rows(inventory) { return inventory.split('\n').filter(l => /^\|[^|]+\|/.test(l)).map(l => ({ name: l.split('|')[1].trim(), text: l })); }
 
 export function checkAppReuse({ body = '', files = [], inventory = '' }) {
-  const text = withoutComments(body);
+  const text = withoutComments(body).replace(/```[\s\S]*?(?:```|$)/g, '');
   const problems = [];
-  const declarations = [...text.matchAll(/^\s*(?:[-*]\s+)?(?:[^\n:]+:\s*)?(REUSE|EXTEND|NEW):?\s+([^\n]+)$/gm)];
-  if (!/^\s*\**Reuse:?\**:?\s*$/im.test(text) || !declarations.length) {
+  const head = text.match(/^\s*\**Reuse:?\**:?[ \t]*$/im);
+  const lines = [];
+  if (head) {
+    for (const line of text.slice(head.index + head[0].length).split('\n')) {
+      if (/^\s*[-*]\s+/.test(line)) lines.push(line);
+      else if (line.trim() || lines.length) break;
+    }
+  }
+  const declarations = lines.map(line => line.match(/^\s*[-*]\s+[^\n:]+:\s*(REUSE|EXTEND|NEW):?\s+([^\n]+)$/)).filter(Boolean);
+  if (!declarations.length || declarations.length !== lines.length) {
     problems.push('PR body needs a Reuse: block with REUSE / EXTEND / NEW lines, including CI-only PRs.');
   }
   const inventoryRows = rows(inventory);
+  const known = new Set(inventoryRows.flatMap(row => [...(row.text.split('|')[2] || '').matchAll(/`([^`]+)`/g)]
+    .filter(m => !m[1].includes('/') || m[1].includes(' / '))
+    .map(m => m[1].match(/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*/)?.[0])
+    .filter(id => id && /[A-Z]/.test(id))));
   const addedRows = files.filter(f => f.path === 'docs/COMPONENTS.md').flatMap(f => rows(f.added.map(l => l.text).join('\n')));
   const newRows = new Set();
   for (const [declaration, kind, value] of declarations) {
@@ -54,7 +66,7 @@ export function checkAppReuse({ body = '', files = [], inventory = '' }) {
       }
     } else {
       const api = value.replace(/^`/, '').split(/[\s`(]/)[0];
-      if (!api || !inventoryRows.some(r => r.text.includes(api))) problems.push(`${kind} ${api || '(missing)'} is not an entry point in wizard-ux main's docs/COMPONENTS.md.`);
+      if (!api || !known.has(api)) problems.push(`${kind} ${api || '(missing)'} is not an entry point in wizard-ux main's docs/COMPONENTS.md.`);
     }
   }
   for (const file of files.filter(f => SOURCE.test(f.path))) {

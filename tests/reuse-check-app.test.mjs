@@ -13,6 +13,10 @@ test('all app PRs declare reuse against canonical inventory, even CI', () => {
   assert.deepEqual(check([], 'Reuse:\n- capture: EXTEND WizardApp.capture.start'), []);
 });
 
+test('declarations must name actual Use-column identifiers within the Reuse list', () => {
+  for (const b of ['Reuse:\n- x: REUSE chat', 'Reuse:\n- x: REUSE app', 'Reuse:\n- x: REUSE |', 'Reuse:\n- x: REUSE MediaRecorder', 'Reuse:\n- x: REUSE WizardApp.notReal', 'Reuse:\n\n## Later\n- x: REUSE WizardApp.capture.start', 'Reuse:\n```\n- x: REUSE WizardApp.capture.start\n```']) assert.ok(check([], b).length, b);
+});
+
 for (const [id, snippets, api] of [
   ['voice', ['navigator.mediaDevices.getUserMedia({audio:true})', 'new MediaRecorder(stream)', 'new window.MediaRecorder(stream)', 'ctx.createMediaStreamSource(stream)', 'micContext = new AudioContext()'], 'WizardApp.capture'],
   ['chat', ['const chatComposer = el()', '<textarea id="chat-input"></textarea>', 'function renderChat() {}', 'fetch("/v1/chat/completions", opts)', 'new EventSource("/api/chat/stream")', 'stream: true'], 'WizardApp.nav.openThread'],
