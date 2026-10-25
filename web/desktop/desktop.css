@@ -164,29 +164,8 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 .app-chip:hover { background: rgba(205, 190, 255, .1); color: var(--ink); }
 .app-chip > i { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 11px; color: #fff; background: linear-gradient(140deg, var(--g1), var(--g2)); }
 
-/* ---------- inbox drawer ---------- */
-.inbox { position: fixed; top: calc(var(--bar-h) + 6px); right: 6px; bottom: 6px; width: 380px; z-index: 25; display: flex; flex-direction: column;
-  border-radius: 14px; background: rgba(12, 8, 26, .96); border: 1px solid var(--line-2); box-shadow: 0 20px 60px rgba(0, 0, 0, .5); animation: slidein 160ms var(--ease); }
-.inbox[hidden] { display: none; }
-@keyframes slidein { from { transform: translateX(16px); opacity: 0; } }
-.ib-head { display: flex; align-items: baseline; gap: 8px; padding: 12px 12px 8px 16px; border-bottom: 1px solid var(--line); }
-.ib-head b { font-size: 15px; }
-.ib-head small { flex: 1; color: var(--ink-3); }
 .x { width: 26px; height: 26px; border-radius: 8px; color: var(--ink-3); }
 .x:hover { background: rgba(205, 190, 255, .1); color: var(--ink); }
-.ib-body { flex: 1; overflow-y: auto; padding: 6px 8px 12px; }
-.ib-sec h4 { margin: 12px 8px 4px; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
-.ib-sec[data-k="needs"] h4 { color: var(--amber); }
-.ib-row { display: flex; align-items: flex-start; gap: 9px; width: 100%; padding: 8px; border-radius: 10px; text-align: left; position: relative; }
-.ib-row:hover, .ib-row.sel { background: rgba(205, 190, 255, .07); }
-.ib-row .emo { width: 22px; text-align: center; padding-top: 1px; }
-.ib-row .bd { flex: 1; min-width: 0; }
-.ib-row .bd b { display: block; font-size: 13.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ib-row .bd span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 12.5px; color: var(--ink-3); }
-.ib-row time { font-size: 11.5px; color: var(--ink-3); }
-.ib-row .rd { position: absolute; right: 8px; bottom: 8px; display: none; padding: 2px 8px; border-radius: 99px; font-size: 11.5px; color: var(--ink-2); background: rgba(205, 190, 255, .12); }
-.ib-row:hover .rd { display: block; }
-.ib-none { padding: 4px 8px; font-size: 12.5px; color: var(--ink-3); }
 
 /* ---------- palette ---------- */
 .palette { position: fixed; inset: 0; z-index: 40; display: grid; justify-items: center; align-items: start; padding-top: 12vh; background: rgba(3, 2, 8, .45); backdrop-filter: blur(2px); }
@@ -245,7 +224,7 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 .toast.on { opacity: 1; transform: translate(-50%, 0); }
 
 
-.win .desk-scroll{height:100%;overflow:auto;padding:12px}.win .review{padding:10px}.win .review .pinch-hint{display:none}
+.win .desk-scroll{height:100%;overflow:auto;padding:12px}
 
 @media(max-width:700px){#bar{display:flex;gap:8px;overflow-x:auto}.bar-l,.bar-r{flex:0 0 auto}.bar-r{margin-left:auto}.bar-c #clock{display:none}}
 

@@ -20,14 +20,14 @@
   const API = '/wizard/v1/workspaces'; // Agent Service (docs/workspaces.md in wizard-agent-service)
   // Phone and desktop keep separate desk stores on the same origin, so each keeps its own sync checkpoint.
   const KEY = shell => `wos.wsync.v2.${shell}`, OFF = 'wos.wsync.off';
-  const APPS = new Set(['chats', 'frame', 'review', 'maps', 'feature']);
-  const FIELDS = ['appId', 'url', 'thread', 'agent', 'chatsProvider', 'title', 'dest', 'mode', 'query', 'featureId', 'z', 'featureOptions'];
+  const APPS = new Set(['chats', 'frame', 'feature']);
+  const FIELDS = ['appId', 'url', 'thread', 'agent', 'chatsProvider', 'title', 'query', 'featureId', 'featureOptions'];
   const ls = {
     get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
   };
   // Bound views and review peeks belong to the chat that opened them; device-only apps stay on their device.
-  const syncable = w => !!w && APPS.has(w.app) && !w.bound && !w.from && !w.servicesAs;
+  const syncable = w => !!w && APPS.has(w.app) && !window.WosFeatures?.retired(w) && !w.bound && !w.from && !w.servicesAs;
   function pick(w) {
     const o = { id: w.id, app: w.app };
     for (const k of FIELDS) { const v = w[k]; if (v != null && v !== '' && !(k === 'thread' && v === '__new__')) o[k] = v; }
@@ -67,6 +67,7 @@
    * page an app is on); new ones come from `state`; device-only windows stay on their desk; a desk with more
    * windows than the device shows keeps the rest in `d.more` so nothing is dropped from the shared copy. */
   function reconcile(localDesks, W, state, { fresh, max = Infinity }) {
+    state = norm(state); // Old box checkpoints must not resurrect retired shell views.
     const placed = new Set(localDesks.flatMap(d => d.wins)), out = [], added = [];
     const remoteIds = new Set(state.desks.map(d => d.id));
     for (const r of state.desks) {
@@ -127,6 +128,10 @@
       const r = await fetch(API + path, { method, cache: 'no-store', credentials: 'same-origin', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
       const j = await r.json().catch(() => null);
       if (r.status === 404 && !(j && 'rev' in j)) { const e = new Error('absent'); e.absent = true; throw e; }
+      if (j?.state) {
+        j.state = norm(j.state); // Ignore retired windows from older clients, without changing their other desks.
+        if (Array.isArray(j.closed)) j.closed = j.closed.map(c => ({ ...c, desk: norm({ desks: [c.desk] }).desks[0] })).filter(c => c.desk);
+      }
       return { status: r.status, j };
     }
     let pending = null; // desks to save that already merge this device's edits onto the box's newest copy
@@ -212,7 +217,7 @@
   /* Settings › Workspace sync: on/off for this device, last change, Recently closed with Reopen. */
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const ago = iso => { const t = Date.parse(iso || ''); if (!isFinite(t)) return ''; const m = Math.round((Date.now() - t) / 6e4); return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
-  const appName = w => { if (w.app === 'chats') return 'Chats'; if (w.app === 'review') return 'Review'; if (w.app === 'maps') return 'Maps'; try { return window.WosWorkspaceSync.current?.title?.(w) || w.title || w.appId || 'App'; } catch (e) { return w.title || w.appId || 'App'; } };
+  const appName = w => { if (w.app === 'chats') return 'Chats'; try { return window.WosWorkspaceSync.current?.title?.(w) || w.title || w.appId || 'App'; } catch (e) { return w.title || w.appId || 'App'; } };
   const deskName = d => [...new Set(d.wins.map(appName))].join(', ');
   const shown = () => { const s = window.WosWorkspaceSync.current; return !!s && (s.ok !== null || !s.on); };
   function html() {
