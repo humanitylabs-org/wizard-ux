@@ -42,3 +42,49 @@ const E = window.E = {
   level(v) { Orb.setLevel(S.paused ? 0 : +v || 0); },
 };
 N.log('everywhere page ready webgl=' + (window.Orb && Orb.webgl));
+
+/* Optional thin-shell device.recording controls. Full Android / old hosts retain their own controls.
+   The host exposes no start/send/read authority: just v1 pause/resume/cancel for the displayed take. */
+(() => {
+  'use strict';
+  const port = window.wizardOrbPort;
+  const cancel = document.getElementById('shellCancel');
+  const pause = document.getElementById('shellPause');
+  let state = {id: null, state: 'idle'}, pending = '', sequence = 0, timeout;
+  const render = () => {
+    cancel.disabled = pause.disabled = pending || !state.id;
+    pause.textContent = state.state === 'paused' ? 'Resume' : 'Pause';
+    pause.setAttribute('aria-label', pause.textContent + ' recording');
+  };
+  if (!port || typeof port.postMessage !== 'function' || !cancel || !pause) return;
+  window.WosShellOrb = {
+    v: 1,
+    status(value) {
+      state = value;
+      if (state.state === 'recording' || state.state === 'paused') {
+        E.state({mode: state.state === 'paused' ? 'paused' : 'listen', carry: true, ms: state.ms});
+      }
+      render();
+    }
+  };
+  document.body.classList.add('shell-orb');
+  port.onmessage = event => {
+    let answer;
+    try { answer = JSON.parse(event.data); } catch (_) { return; }
+    if (answer.v !== 1 || answer.id !== pending) return;
+    clearTimeout(timeout); pending = '';
+    if (answer.result) state = answer.result;
+    render();
+  };
+  function command(method, on) {
+    if (pending || !state.id) return;
+    pending = 'orb-' + (++sequence); render();
+    timeout = setTimeout(() => { pending = ''; render(); }, 3000);
+    const params = {id: state.id};
+    if (method === 'pause') params.on = on;
+    port.postMessage(JSON.stringify({v: 1, id: pending, method: 'device.recording.' + method, params}));
+  }
+  cancel.addEventListener('click', () => command('cancel'));
+  pause.addEventListener('click', () => command('pause', state.state !== 'paused'));
+  render();
+})();

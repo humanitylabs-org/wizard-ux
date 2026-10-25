@@ -56,6 +56,21 @@ The floating orb over other apps (`orb/`). The web's one switch is Settings → 
 (`web/core/settings.js` drives `web/core/device-orb.js` when the shell offers `device.orb`); there is no second orb row.
 Full-app-only controls (side button, voice typing) are hidden in the shell, not shown disabled.
 
+While recording, the unchanged 64dp orb expands its window to show the web page's **Cancel** and **Pause/Resume**
+buttons beside it (48dp targets). Tap the orb to start/send; drag still moves it. Hold pauses the take and keeps the
+orb and controls visible; idle hold does nothing. Explicit notification Hide / disabling Everywhere stops an orb-owned
+take unsent before removing its controls, including a start already in flight. Long Cancels keep the existing native
+custody/recovery rule (20 seconds), never the `send` marker.
+
+The isolated overlay's `wizardOrbPort` uses the existing device-port v1 envelope. Only `device.recording.pause`
+`{id,on}` and `device.recording.cancel` `{id}` are allowed: no start, send, read, ack or arbitrary device operations.
+The source must be the virtual origin's main frame, its top page must be the orb document, and the loaded and selected
+Wizard must still match. Every operation rechecks the displayed take's id and owner. ArrayBuffer messages are ignored.
+The bundle now loads at the same isolated virtual origin, using native allowlisted asset reads, not a wildcard/file
+message-port rule. Redirect/TLS/CSP/network restrictions and the 1.5-second fallback deadline remain unchanged.
+Old/mixed web pages without a functional controls API fall back to the APK copy; no usable port means no new mic take.
+Words and controls remain in `web/assist/everywhere.html` / `everywhere.js`; their bundled copies must match.
+
 ## Home-screen apps: `window.wizardHomeScreenPort`
 
 Hold an app on the Apps sheet or the New desk grid, or hold a one-app desk in Desks, and the Wizard's own sheet
@@ -80,6 +95,9 @@ cd android && ./gradlew :shell:testDebugUnitTest :shell:lintDebug :shell:assembl
 ```
 
 CI: `.github/workflows/android-shell.yml` (unit tests, lint, builds, emulator smoke `tools/android_shell_smoke.sh`).
+`tools/qa-shell-orb-controls.cjs` exercises the web controls and packaged copy in Chromium with a **stub port**, including
+old-web/mixed-web/no-port negative controls and CSP checks. It does not certify Android WindowManager or mic lifecycle.
+The emulator smoke additionally checks Pause/Resume and hold through audio-file growth, plus offline Cancel/no send.
 The smoke also drives `device.recording` against a disposable HTTPS fixture Wizard (`tools/android_shell_fixture.py`,
 a CA minted per run and trusted only through the debug build's `debug-overrides`): recording continues with the screen
 off and with another app in front, and a take survives `am force-stop` and is recovered, read and acknowledged.

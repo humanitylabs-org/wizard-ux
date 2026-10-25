@@ -45,6 +45,14 @@
   body.kb #timer::before{background:var(--cyan)}
   body.live #timer{opacity:1}
   @keyframes blink{50%{opacity:.35}}
+  /* Thin shell: web controls; native only hosts the touchable window and recorder. */
+  body.shell-orb #orbBox{inset:auto;right:0;top:0;width:64px;height:64px}
+  #shellControls{display:none;position:absolute;bottom:8px;left:4px;right:72px;gap:8px}
+  body.shell-orb.live #shellControls{display:flex}
+  #shellControls button{flex:1;min-height:48px;border:1px solid #7d74a3;border-radius:24px;
+    background:#211b35;color:var(--ink);font:600 14px system-ui;touch-action:manipulation}
+  #shellControls button:disabled{opacity:.5}
+  #shellControls button:focus-visible{outline:2px solid var(--cyan);outline-offset:-4px}
 </style>
 </head>
 <body>
@@ -56,8 +64,13 @@
   <span id="badge"></span>
   <div id="timer">0:00</div>
 </div>
+<div id="shellControls" aria-label="Recording controls">
+  <button id="shellCancel" type="button">Cancel</button>
+  <button id="shellPause" type="button">Pause</button>
+</div>
 <script src="orb-size.js" data-r=".64"></script>
 <script src="../orb.js"></script>
 <script src="everywhere.js"></script>
+
 </body>
 </html>

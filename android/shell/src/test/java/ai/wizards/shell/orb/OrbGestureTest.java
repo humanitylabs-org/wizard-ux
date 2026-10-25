@@ -17,11 +17,11 @@ public class OrbGestureTest {
         OrbGesture g = new OrbGesture(10);
         g.down(100, 100, 0);
         assertTrue(g.move(130, 100));
-        assertFalse("a drag never hides", g.held(5000));
+        assertFalse("a drag never becomes a hold", g.held(5000));
         assertEquals(OrbGesture.Kind.DRAG, g.up(200, 300, 100));
     }
 
-    @Test public void aLongStillPressHides() {
+    @Test public void aLongStillPressIsAHoldNotATap() {
         OrbGesture g = new OrbGesture(10);
         g.down(0, 0, 1000);
         assertFalse(g.held(1000 + OrbGesture.HOLD_MS - 1));
@@ -36,5 +36,11 @@ public class OrbGestureTest {
         assertArrayEquals(new int[]{1080 - 168 - 8, 500}, OrbGesture.rest(800, 500, 168, 1080, 2400, 8));
         assertArrayEquals(new int[]{8, 8}, OrbGesture.rest(-500, -500, 168, 1080, 2400, 8));
         assertArrayEquals(new int[]{1080 - 168 - 8, 2400 - 168 - 8}, OrbGesture.rest(5000, 9000, 168, 1080, 2400, 8));
+    }
+
+    @Test public void theExpandedRecordingWindowKeepsBothControlsOnScreen() {
+        assertArrayEquals(new int[]{8, 8}, OrbGesture.rest(-500, -500, 240, 64, 360, 800, 8));
+        assertArrayEquals(new int[]{112, 728}, OrbGesture.rest(5000, 9000, 240, 64, 360, 800, 8));
+        assertArrayEquals(new int[]{8, 100}, OrbGesture.rest(0, 100, 240, 64, 360, 800, 8));
     }
 }

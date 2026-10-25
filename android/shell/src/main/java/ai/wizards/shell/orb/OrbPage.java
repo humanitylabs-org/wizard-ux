@@ -33,7 +33,7 @@ import ai.wizards.shell.ShellOrigin;
  * CSP before any remote markup. The page's fixed dependencies are fetched concurrently (OrbPrefetch, memory only,
  * per load). A page whose API (window.E and window.Orb) isn't up within 1.5 s is replaced by the
  * bundled copy. Detach/reattach (the orb hides while the Wizard app is in front) rechecks the selected Wizard.
- * The page gets no JavaScript bridge: native only calls E.state / E.level.
+ * No JavaScript interface: OrbService installs a separate exact-origin, main-frame, take-bound recording-control port.
  */
 public class OrbPage extends WebViewClient {
     static final String TAG = "ShellOrb";
@@ -163,7 +163,10 @@ public class OrbPage extends WebViewClient {
                 if (bytes == null) bytes = fetch(OrbPolicy.upstream(owner, u));
                 if (attempt != generation || !remote || !String.valueOf(owner).equals(ShellOrigin.selected(v.getContext()))) return blocked();
             } else {
-                bytes = read(v.getContext().getAssets().open(r.getUrl().getPath().substring("/android_asset/".length())), Long.MAX_VALUE);
+                String asset = u.startsWith(OrbPolicy.VIRTUAL + OrbPolicy.SHELL)
+                        ? "wizard-os-home/" + r.getUrl().getPath().substring(OrbPolicy.SHELL.length())
+                        : r.getUrl().getPath().substring("/android_asset/".length());
+                bytes = read(v.getContext().getAssets().open(asset), Long.MAX_VALUE);
             }
             String path = r.getUrl().getPath();
             String mime = path.endsWith(".html") ? "text/html" : path.endsWith(".js") ? "application/javascript" : path.endsWith(".css") ? "text/css" : "image/png";
@@ -217,7 +220,7 @@ public class OrbPage extends WebViewClient {
         if (done || current == null || !OrbPolicy.samePage(current, url)) return;
         final int attempt = generation;
         // onPageFinished doesn't mean the scripts ran (a 200 login page, a missing orb.js): wait for the real API.
-        v.evaluateJavascript("!!(window.E && window.Orb)", value -> {
+        v.evaluateJavascript("!!(window.E && window.Orb && window.WosShellOrb && WosShellOrb.v === 1)", value -> {
             if (generation != attempt || done) return;
             if (!"true".equals(value)) { fallBack("page API missing"); return; }
             done = true;

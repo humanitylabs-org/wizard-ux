@@ -139,6 +139,11 @@ public class RecorderService extends Service {
         onMain(() -> { RecorderService s = live; if (s != null) s.setPaused(on); });
     }
 
+    /** Overlay controls bind the action to the displayed take and owner, even if another take starts meanwhile. */
+    public static void pause(String id, String origin, boolean on) {
+        onMain(() -> { RecorderService s = live; if (s != null && owns(id, origin)) s.setPaused(on); });
+    }
+
     /** Ends the live take with {@code state} (stopped or cancelled) and describes what is kept. */
     public static JSONObject end(Context c, String id, String state) { return end(c, id, state, false); }
 

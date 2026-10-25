@@ -2,7 +2,7 @@ package ai.wizards.shell.orb;
 
 /**
  * Pure touch rules for the floating orb (JVM-tested): a short press without movement is a tap, movement past the
- * slop is a drag, a still press held past {@link #HOLD_MS} hides the orb. Plus where a dropped orb comes to rest.
+ * slop is a drag, a still press held past {@link #HOLD_MS} is a hold (the host pauses). Plus its resting position.
  */
 public final class OrbGesture {
     public static final long HOLD_MS = 700;
@@ -23,7 +23,7 @@ public final class OrbGesture {
         return dragging;
     }
 
-    /** Still pressed without moving for the hold time: hide. Checked by the host's timer. */
+    /** Still pressed without moving for the hold time. Checked by the host's timer. */
     public boolean held(long now) { return down && !dragging && now - t0 >= HOLD_MS; }
 
     public Kind up(float x, float y, long now) {
@@ -38,9 +38,14 @@ public final class OrbGesture {
 
     /** Snap to the nearer side edge and keep the whole orb on screen. Returns {x, y} of its top-left corner. */
     public static int[] rest(int x, int y, int size, int screenW, int screenH, int margin) {
-        int left = margin, right = Math.max(margin, screenW - size - margin);
-        int nx = x + size / 2 < screenW / 2 ? left : right;
-        int ny = Math.max(margin, Math.min(y, Math.max(margin, screenH - size - margin)));
+        return rest(x, y, size, size, screenW, screenH, margin);
+    }
+
+    /** A recording window includes the web controls: clamp the whole rectangle, not just the orb. */
+    public static int[] rest(int x, int y, int width, int height, int screenW, int screenH, int margin) {
+        int left = margin, right = Math.max(margin, screenW - width - margin);
+        int nx = x + width / 2 < screenW / 2 ? left : right;
+        int ny = Math.max(margin, Math.min(y, Math.max(margin, screenH - height - margin)));
         return new int[]{nx, ny};
     }
 }

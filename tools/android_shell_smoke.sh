@@ -151,10 +151,15 @@ PY
     sleep 2; adb shell dumpsys activity activities | grep -m1 "ResumedActivity" | tee -a "$OUT/result.txt" >/dev/null
   }
   wait_log() { for _ in $(seq 1 "$2"); do orblog | grep -qE "$1" && return 0; sleep 1; done; return 1; }
-  orb_xy() { # centre of the orb's real input frame (the window manager's, not the layout params)
+  orb_xy() { # 64dp orb stays at the right of the real input frame; recording controls extend to its left
     adb shell dumpsys input 2>/dev/null | grep -m1 "WizardShellOrb', id=" | grep -oE "touchableRegion=\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]" \
-      | grep -oE "[0-9]+" | paste -sd' ' | awk '{print int(($1+$3)/2), int(($2+$4)/2)}'
+      | grep -oE "[0-9]+" | paste -sd' ' | awk '{print int($3-($4-$2)/2), int(($2+$4)/2)}'
   }
+  control_xy() { # Cancel=1 or Pause/Resume=3: centres of the two web buttons, never the orb's send target
+    adb shell dumpsys input 2>/dev/null | grep -m1 "WizardShellOrb', id=" | grep -oE "touchableRegion=\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]" \
+      | grep -oE "[0-9]+" | paste -sd' ' | awk -v n="$1" '{print int($1+n*($3-$1-($4-$2))/4), int(($2+$4)/2)}'
+  }
+  take_bytes() { adb shell run-as "$PKG" stat -c %s "files/takes/$1.aac" 2>/dev/null | tr -d '\r'; }
   # Seconds from "orb shown" to "page from bundle" in the current log: the fallback must be prompt, never blank.
   fallback_s() { orblog | python3 -c '
 import re, sys, datetime
@@ -195,9 +200,21 @@ print(round((t["page from bundle"] - t["orb shown"]).total_seconds(), 2) if len(
   adb shell dumpsys input > "$OUT/orb-input.txt" 2>/dev/null
   adb shell input tap "$OX" "$OY"; sleep 4
   adb exec-out screencap -p > "$OUT/orb-after-tap.png" 2>/dev/null
-  OT=$(adb shell run-as "$PKG" ls files/takes 2>/dev/null | tr -d '\r' | grep -m1 '\.aac$' | sed 's/\.aac$//')
+  OT=$(orblog | grep 'orb take .* recording' | tail -1 | awk '{print $(NF-1)}')
   [ -n "$OT" ] && adb shell dumpsys activity services "$PKG" | grep -q "RecorderService" && pass "orb: tap starts a recording over another app" || bad "orb: tap starts a recording over another app"
-  sleep 3; adb shell input tap "$OX" "$OY"; sleep 3
+  read -r PX PY <<< "$(control_xy 3)"; adb shell input tap "$PX" "$PY"; sleep 1
+  B1=$(take_bytes "$OT"); sleep 2; B2=$(take_bytes "$OT")
+  [ -n "$B1" ] && [ "$B1" = "$B2" ] && [ "$(orbwin)" -ge 1 ] \
+    && pass "orb: web Pause freezes audio while controls remain visible" || bad "orb: web Pause freezes audio"
+  adb exec-out screencap -p > "$OUT/orb-paused.png" 2>/dev/null
+  adb shell input tap "$PX" "$PY"; sleep 2; B3=$(take_bytes "$OT")
+  [ "${B3:-0}" -gt "${B2:-0}" ] && pass "orb: web Resume continues the same take" || bad "orb: web Resume continues the same take"
+  read -r OX OY <<< "$(orb_xy)"; adb shell input swipe "$OX" "$OY" "$OX" "$OY" 1500; sleep 1
+  B1=$(take_bytes "$OT"); sleep 2; B2=$(take_bytes "$OT")
+  [ -n "$B1" ] && [ "$B1" = "$B2" ] && [ "$(orbwin)" -ge 1 ] \
+    && pass "orb: hold pauses, never hides a live take" || bad "orb: hold pauses without hiding"
+  adb shell input tap "$PX" "$PY"; sleep 1
+  read -r OX OY <<< "$(orb_xy)"; adb shell input tap "$OX" "$OY"; sleep 3
   adb shell run-as "$PKG" cat "files/takes/$OT.json" > "$OUT/orb-take.json" 2>/dev/null
   grep -q '"send":true' "$OUT/orb-take.json" && grep -q '"state":"stopped"' "$OUT/orb-take.json" \
     && pass "orb: second tap stops it for the Wizard to send" || bad "orb: second tap stops it for the Wizard to send"
@@ -223,13 +240,23 @@ print(round((t["page from bundle"] - t["orb shown"]).total_seconds(), 2) if len(
   done
   echo up > "$FIXTURE_OUT/orb"
 
-  # Hold hides it, and it stays off.
+  # The offline APK page must offer usable controls too. Cancel stops a take, never sends it.
+  read -r OX OY <<< "$(orb_xy)"; adb shell input tap "$OX" "$OY"; sleep 3
+  CT=$(orblog | grep 'orb take .* recording' | tail -1 | awk '{print $(NF-1)}')
+  CB=$(take_bytes "$CT")
+  read -r CX CY <<< "$(control_xy 1)"; adb shell input tap "$CX" "$CY"; sleep 2
+  adb shell run-as "$PKG" cat "files/takes/$CT.json" > "$OUT/orb-cancelled.json" 2>/dev/null || true
+  [ -n "$CT" ] && [ "${CB:-0}" -gt 0 ] && ! adb shell dumpsys activity services "$PKG" | grep -q 'ServiceRecord{.*RecorderService' \
+    && ! grep -q '"send":true' "$OUT/orb-cancelled.json" \
+    && { [ ! -s "$OUT/orb-cancelled.json" ] || grep -q '"state":"cancelled"' "$OUT/orb-cancelled.json"; } \
+    && pass "orb: bundled Cancel stops without sending" || bad "orb: bundled Cancel stops without sending"
+  # Idle hold no longer disables the owner's Everywhere setting.
   read -r OX OY <<< "$(orb_xy)"; echo "orb centre before hold: $OX,$OY" >> "$OUT/result.txt"
   adb shell input swipe "$OX" "$OY" "$OX" "$OY" 1500; sleep 2
-  orblog | grep -q "orb off: hold" && [ "$(orbwin)" = "0" ] && pass "orb: hold hides it" || bad "orb: hold hides it"
+  ! orblog | grep -q "orb off: hold" && [ "$(orbwin)" -ge 1 ] && pass "orb: idle hold keeps it visible" || bad "orb: idle hold keeps it visible"
   adb shell input keyevent KEYCODE_HOME; sleep 2
-  [ "$(orbwin)" = "0" ] && pass "orb: stays hidden after hold" || bad "orb: stays hidden after hold"
-  adb exec-out screencap -p > "$OUT/orb-hidden.png" 2>/dev/null
+  [ "$(orbwin)" -ge 1 ] && pass "orb: stays enabled after hold" || bad "orb: stays enabled after hold"
+  adb exec-out screencap -p > "$OUT/orb-after-hold.png" 2>/dev/null
 
   # ---- Settings → Phone → Wizard Everywhere is the orb's one switch (the real web/core/settings.js + device-orb.js).
   resumed() { adb shell dumpsys activity activities | grep -m1 "ResumedActivity" | tr -d '\r'; }

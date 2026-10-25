@@ -12,7 +12,7 @@ public class OrbPolicyTest {
     @Test public void pageUrls() {
         assertEquals(V + "/wizard-os-home/assist/everywhere.html", OrbPolicy.remoteUrl(O));
         assertEquals(V + "/wizard-os-home/assist/everywhere.html", OrbPolicy.remoteUrl(P));
-        assertEquals("file:///android_asset/wizard-os-home/assist/everywhere.html", OrbPolicy.bundledUrl());
+        assertEquals(V + "/wizard-os-home/assist/everywhere.html", OrbPolicy.bundledUrl());
     }
 
     @Test public void noWizardCopyWithoutAPlainHttpsOrigin() {
@@ -51,6 +51,9 @@ public class OrbPolicyTest {
     }
 
     @Test public void theBundledCopyReachesOnlyTheBundledOrbFiles() {
+        assertTrue(OrbPolicy.bundled(OrbPolicy.bundledUrl()));
+        assertTrue(OrbPolicy.bundled(V + "/wizard-os-home/assist/everywhere.js"));
+        assertFalse(OrbPolicy.bundled(V + "/wizard-os-home/core/settings.js"));
         assertTrue(OrbPolicy.bundled("file:///android_asset/wizard-os-home/assist/everywhere.html"));
         assertTrue(OrbPolicy.bundled("file:///android_asset/wizard-os-home/robert-thread-orb.png"));
         assertFalse(OrbPolicy.bundled("file:///android_asset/wizard-os-home/../x.js"));

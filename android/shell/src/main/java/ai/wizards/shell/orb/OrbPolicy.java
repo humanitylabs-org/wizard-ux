@@ -29,7 +29,8 @@ public final class OrbPolicy {
         return isHttpsOrigin(origin) ? VIRTUAL + SHELL + "assist/" + PAGE : null;
     }
 
-    public static String bundledUrl() { return ASSETS + "assist/" + PAGE; }
+    // The bundle uses the same isolated origin too: a narrow message port never needs a wildcard/file rule.
+    public static String bundledUrl() { return VIRTUAL + SHELL + "assist/" + PAGE; }
 
     public static boolean isHttpsOrigin(String origin) {
         URI o = parse(origin);
@@ -54,6 +55,7 @@ public final class OrbPolicy {
     }
 
     public static boolean bundled(String url) {
+        if (fromWizard("https://bundle.invalid", url)) return true;
         URI u = parse(url);
         return u != null && url.startsWith(ASSETS) && u.getRawQuery() == null
                 && allowedPath(u.getRawPath(), "/android_asset/wizard-os-home/");

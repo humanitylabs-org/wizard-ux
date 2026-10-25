@@ -27,19 +27,25 @@ import android.view.WindowManager;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 
+import androidx.webkit.WebMessageCompat;
+import androidx.webkit.WebViewCompat;
+import androidx.webkit.WebViewFeature;
+
 import org.json.JSONObject;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.Collections;
 
 import ai.wizards.shell.ShellOrigin;
+import ai.wizards.shell.device.DevicePort;
 import ai.wizards.shell.recorder.RecorderService;
 
 /**
  * The floating orb (device.orb): a small overlay over other apps while the Wizard app is not in front.
  * Tap talks to the Wizard (a device.recording take marked "send"; tap again to send), drag moves it, a long hold
- * hides it. Its look is the Wizard's own orb page (OrbPage: remote with a bundled 1.5 s fallback); the page has no
- * bridge, native only calls window.E.state / E.level. A special-use foreground service with a Hide action keeps it.
+ * pauses the current take without hiding it. Its web page owns Cancel / Pause / Resume (remote with a bundled
+ * 1.5 s fallback); an exact-origin main-frame message port exposes only those take-bound device operations.
  */
 public class OrbService extends Service {
     static final String TAG = OrbPage.TAG;
@@ -57,6 +63,8 @@ public class OrbService extends Service {
     private OrbPage page;
     private WindowManager.LayoutParams lp;
     private boolean attached, pageReady;
+    private boolean closing, busy, controlTouch, controlsReady, pauseOnStart;
+    private String pageOwner;
     private String take; // the take this orb is recording, if any
     private int size, margin;
     private String lastState = "";
@@ -120,6 +128,10 @@ public class OrbService extends Service {
     /** Attach while the Wizard app is not in front, detach while it is. */
     private void place() {
         if (live != this) return;
+        if (web != null && !String.valueOf(pageOwner).equals(ShellOrigin.selected(this))) {
+            stopOwnedTake();
+            detach(); page.close(); web.destroy(); web = null; pageReady = false; controlsReady = false;
+        }
         if (appFront) { detach(); return; }
         attach();
     }
@@ -140,6 +152,8 @@ public class OrbService extends Service {
             };
             web.setWebViewClient(page);
             web.setOnTouchListener(new Touch());
+            pageOwner = ShellOrigin.selected(this);
+            installControls();
             page.load(web);
         }
         Point sc = screen();
@@ -156,19 +170,22 @@ public class OrbService extends Service {
             Log.i(TAG, "orb shown at " + lp.x + "," + lp.y);
             lastState = "";
             push();
+            main.removeCallbacks(meter);
+            meter.run();
         } catch (RuntimeException e) {
             Log.w(TAG, "overlay refused: " + e.getMessage());
         }
     }
 
     private void detach() {
+        main.removeCallbacks(meter);
         if (!attached || web == null) return;
         try { wm.removeViewImmediate(web); } catch (RuntimeException ignored) { }
         attached = false;
         Log.i(TAG, "orb hidden (Wizard app in front)");
     }
 
-    /** Hold or the notification's Hide: the orb goes away and stays off until turned on again in the Wizard. */
+    /** Explicit notification Hide: stop our own take unsent before removing its controls. */
     private void hide(String why) {
         Log.i(TAG, "orb off: " + why);
         prefs(this).edit().putBoolean("on", false).apply();
@@ -176,19 +193,25 @@ public class OrbService extends Service {
     }
 
     private void shutdown() {
+        closing = true;
+        stopOwnedTake();
         detach();
         if (page != null) page.close();
         if (web != null) { web.destroy(); web = null; }
         page = null; pageReady = false;
-        main.removeCallbacksAndMessages(null);
+        main.removeCallbacks(meter); // retain the completion of an in-flight start so it can stop its mic
         stopForeground(STOP_FOREGROUND_REMOVE);
         stopSelf();
     }
 
     @Override public void onDestroy() {
+        closing = true;
+        stopOwnedTake();
+        main.removeCallbacks(meter); // retain the completion of an in-flight start so it can stop its mic
         if (live == this) live = null;
+        if (page != null) page.close();
         if (web != null) { detach(); web.destroy(); web = null; }
-        work.shutdownNow();
+        work.shutdown(); // a start already in flight must finish and be closed, never leave a hidden live mic
         super.onDestroy();
     }
 
@@ -197,44 +220,65 @@ public class OrbService extends Service {
     /* ------------------------------------------------------------------ talking to the Wizard */
 
     private void tap() {
+        if (busy || closing || !pageReady || !controlsReady) return;
         final String origin = ShellOrigin.selected(this);
-        if (origin == null) return;
+        if (origin == null || !origin.equals(pageOwner)) return;
         String active = RecorderService.active();
         if (active == null) {
+            pauseOnStart = false;
+            busy = true;
             setState("listen");
             work.execute(() -> {
                 try {
                     String id = RecorderService.start(this, null, "orb", "floating-orb", origin);
                     Log.i(TAG, "orb take " + id + " recording");
-                    main.post(() -> { take = id; meter.run(); });
+                    main.post(() -> {
+                        busy = false;
+                        if (closing || !origin.equals(ShellOrigin.selected(this))) {
+                            RecorderService.end(this, id, "stopped");
+                            return;
+                        }
+                        take = id;
+                        if (pauseOnStart) RecorderService.pause(id, origin, true);
+                        main.removeCallbacks(meter); meter.run();
+                    });
                 } catch (Exception e) {
                     Log.w(TAG, "orb take refused: " + e.getMessage());
-                    main.post(() -> setState("idle"));
+                    main.post(() -> { busy = false; setState("idle"); });
                 }
             });
         } else if (RecorderService.owns(active, origin)) {
+            busy = true;
             // Stop and mark it to send: the Wizard's page sends it (now if it's alive, else when the app next opens).
             setState("think");
             work.execute(() -> {
                 JSONObject t = RecorderService.end(this, active, "stopped", true);
                 Log.i(TAG, "orb take " + active + " " + (t == null ? "gone" : t.optBoolean("released") ? "empty" : "sent to the Wizard"));
-                main.post(() -> { take = null; setState(t != null && !t.optBoolean("released") ? "done" : "idle"); main.postDelayed(() -> setState("idle"), 1200); });
+                main.post(() -> { busy = false; take = null; setState(t != null && !t.optBoolean("released") ? "done" : "idle"); main.postDelayed(() -> setState("idle"), 1200); });
             });
         }
     }
 
     private final Runnable meter = new Runnable() {
         @Override public void run() {
+            if (closing || !attached) return;
             String origin = ShellOrigin.selected(OrbService.this);
+            if (origin == null) { shutdown(); return; }
+            if (!origin.equals(pageOwner)) { place(); return; }
+            if (take != null && !RecorderService.owns(take, origin)) stopOwnedTake();
             JSONObject st = RecorderService.status(origin);
-            boolean recording = take != null && take.equals(st.optString("id"));
-            if (!recording) { if (take != null) { take = null; setState("idle"); } return; }
+            boolean recording = "recording".equals(st.optString("state")) || "paused".equals(st.optString("state"));
+            if (recording) setState("paused".equals(st.optString("state")) ? "paused" : "listen");
+            else if (!busy && (lastState.equals("listen") || lastState.equals("paused"))) { take = null; setState("idle"); }
+            resize(recording);
+            if (pageReady && attached) web.evaluateJavascript("window.WosShellOrb&&WosShellOrb.status(" + st + ")", null);
             if (pageReady && attached) web.evaluateJavascript("window.E&&E.level(" + (st.optInt("level") / 100.0) + ")", null);
-            main.postDelayed(this, 150);
+            main.postDelayed(this, recording || busy ? 150 : 1000);
         }
     };
 
     private void setState(String mode) {
+        if (mode.equals(lastState)) return;
         lastState = mode;
         push();
     }
@@ -245,15 +289,73 @@ public class OrbService extends Service {
         web.evaluateJavascript("window.E&&E.state({mode:'" + mode + "'})", null);
     }
 
+    private void hold() {
+        if (closing) return;
+        if (busy) pauseOnStart = true;
+        String origin = ShellOrigin.selected(this), id = RecorderService.active();
+        if (RecorderService.owns(id, origin)) RecorderService.pause(id, origin, true);
+        // Idle hold is deliberately a no-op. Hiding is an explicit notification/settings action.
+        main.removeCallbacks(meter); meter.run();
+    }
+
+    private void stopOwnedTake() {
+        String id = take;
+        if (id != null && id.equals(RecorderService.active())) RecorderService.end(this, id, "stopped");
+        take = null;
+    }
+
+    private void installControls() {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) return;
+        WebViewCompat.addWebMessageListener(web, "wizardOrbPort", Collections.singleton(OrbPolicy.VIRTUAL),
+                (view, message, source, isMainFrame, reply) -> {
+                    String owner = ShellOrigin.selected(this);
+                    if (!pageReady || closing || !OrbRecordingControl.allowed(view.getUrl(), source == null ? null : source.toString(),
+                            isMainFrame, pageOwner, owner) || message.getType() != WebMessageCompat.TYPE_STRING) return;
+                    try {
+                        String id = RecorderService.active();
+                        JSONObject request = new JSONObject(message.getData());
+                        String method = OrbRecordingControl.method(request, id);
+                        if (busy || method == null || !RecorderService.owns(id, owner)) return;
+                        if (method.equals("device.recording.cancel")) {
+                            RecorderService.end(this, id, "cancelled"); take = null; setState("idle");
+                        } else RecorderService.pause(id, owner, request.getJSONObject("params").getBoolean("on"));
+                        main.removeCallbacks(meter); meter.run();
+                        reply.postMessage(DevicePort.answer(request.getString("id"), RecorderService.status(owner), null).toString());
+                    } catch (org.json.JSONException | RuntimeException e) { Log.w(TAG, "orb control refused: " + e.getMessage()); }
+                });
+        controlsReady = true;
+    }
+
+    /** Grow only during a take. The web's 48dp buttons sit beside the unchanged 64dp orb. */
+    private void resize(boolean recording) {
+        if (!attached || lp == null) return;
+        Point sc = screen();
+        int width = recording ? Math.min(dp(240), sc.x - margin * 2) : size;
+        int height = size;
+        if (lp.width == width && lp.height == height) return;
+        lp.x += lp.width - width;
+        lp.width = width; lp.height = height;
+        clamp();
+        try { wm.updateViewLayout(web, lp); } catch (RuntimeException ignored) { }
+    }
+
+    private void clamp() {
+        Point sc = screen();
+        lp.x = Math.max(margin, Math.min(lp.x, sc.x - lp.width - margin));
+        lp.y = Math.max(margin, Math.min(lp.y, sc.y - lp.height - margin));
+    }
+
     /* ------------------------------------------------------------------ touch */
 
     private final class Touch implements android.view.View.OnTouchListener {
         final OrbGesture g = new OrbGesture(ViewConfiguration.get(OrbService.this).getScaledTouchSlop());
         float rawX0, rawY0; int x0, y0;
-        final Runnable holdCheck = () -> { if (g.held(android.os.SystemClock.uptimeMillis())) { g.cancel(); hide("hold"); } };
+        final Runnable holdCheck = () -> { if (g.held(android.os.SystemClock.uptimeMillis())) { g.cancel(); hold(); } };
 
         @Override public boolean onTouch(android.view.View v, MotionEvent e) {
             if (lp == null) return true;
+            if (e.getActionMasked() == MotionEvent.ACTION_DOWN) controlTouch = e.getY() >= size || e.getX() < lp.width - size;
+            if (controlTouch) return false; // don't swallow web button gestures or turn them into orb tap/send
             switch (e.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
                     Log.i(TAG, "touch down " + Math.round(e.getRawX()) + "," + Math.round(e.getRawY()));
@@ -274,13 +376,13 @@ public class OrbService extends Service {
                     OrbGesture.Kind k = g.up(e.getRawX(), e.getRawY(), e.getEventTime());
                     Log.i(TAG, "touch " + k);
                     if (k == OrbGesture.Kind.TAP) tap();
-                    else if (k == OrbGesture.Kind.HOLD) hide("hold");
+                    else if (k == OrbGesture.Kind.HOLD) hold();
                     else if (k == OrbGesture.Kind.DRAG) {
                         Point sc = screen();
-                        int[] at = OrbGesture.rest(lp.x, lp.y, size, sc.x, sc.y, margin);
+                        int[] at = OrbGesture.rest(lp.x, lp.y, lp.width, lp.height, sc.x, sc.y, margin);
                         lp.x = at[0]; lp.y = at[1];
                         try { wm.updateViewLayout(web, lp); } catch (RuntimeException ignored) { }
-                        prefs(OrbService.this).edit().putInt("x", lp.x).putInt("y", lp.y).apply();
+                        prefs(OrbService.this).edit().putInt("x", lp.x + lp.width - size).putInt("y", lp.y).apply();
                         Log.i(TAG, "orb moved to " + lp.x + "," + lp.y);
                     }
                     return true;
@@ -319,7 +421,7 @@ public class OrbService extends Service {
         Notification n = new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
                 .setContentTitle("Wizard orb is on")
-                .setContentText("Tap the orb to talk · hold it to hide")
+                .setContentText("Tap to talk or send · hold to pause")
                 .setContentIntent(tap)
                 .setOngoing(true)
                 .addAction(new Notification.Action.Builder(null, "Hide", hide).build())
