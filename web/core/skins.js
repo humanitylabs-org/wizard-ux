@@ -96,11 +96,10 @@
   const FRAME_KEY = 'wos.skin.composition.v1', F = window.WosSkinFrame;
   let composition = null;
   try { const saved = JSON.parse(localStorage.getItem(FRAME_KEY)); if (saved && F) composition = F.composition(saved, SKINS); } catch (_) { /* corrupt/old data: safe skin default */ }
-  // Borderless is the phone default; desktop always keeps its framed windows (James, 17 Oct 2026: "borderless mode on
-  // mobile, keep the borders on desktop; a toggle in settings, on by default"). A saved phone choice wins.
-  const PHONE = (document.documentElement.dataset.shell || 'phone') === 'phone';
-  const shellFrame = PHONE ? { foundation: 'borderless' } : null;
-  const frameOf = skin => PHONE ? (composition?.frame || skin.frame || shellFrame) : {};
+  // Borderless on both shells. The App borders tweak borrows a transient framed foundation.
+  let borrowedFoundation = null;
+  const shellFrame = { foundation: 'borderless' };
+  const frameOf = skin => ({ ...(composition?.frame || skin.frame || shellFrame), foundation: borrowedFoundation || 'borderless' });
   function applyFrame(skin) { F?.apply(frameOf(skin)); }
   function saveComposition() { try { localStorage.setItem(FRAME_KEY, JSON.stringify(composition)); } catch (_) {} }
 
@@ -383,7 +382,12 @@
     preview(p) { paint(p); },
     set(id) { const i = idxOf(id); if (composition) { composition.extends = SKINS[i].id; saveComposition(); } paint(i); try { localStorage.setItem(KEY, SKINS[i].id); localStorage.setItem(LAST + SKINS[i].family, SKINS[i].id); } catch (e) {} window.WosSkinHost?.commit(SKINS[i].id); try { dispatchEvent(new CustomEvent('wos:skin', { detail: SKINS[i].id })); } catch (e) {} return SKINS[i].id; },
     get frame() { return F ? F.frame(frameOf(SKINS[Math.round(pos)])) : { foundation: 'framed' }; },
-    get frameAdjustable() { return PHONE; },
+    get frameAdjustable() { return true; },
+    useFoundation(foundation) {
+      if (!['framed', 'borderless'].includes(foundation)) throw new Error('Unknown foundation');
+      const token = {}; borrowedFoundation = foundation; this._foundationToken = token; applyFrame(SKINS[Math.round(pos)]);
+      return () => { if (this._foundationToken === token) { borrowedFoundation = null; this._foundationToken = null; applyFrame(SKINS[Math.round(pos)]); } };
+    },
     get composition() { return { version: 1, extends: this.current, frame: this.frame }; },
     compose(value) {
       const next = F.composition(value, SKINS); // validate all fields before any mutation
