@@ -193,6 +193,13 @@
 .st-root .ms-panel .my-skin-row + .my-skin-row { border-top: 1px solid var(--wz-border); }
 .st-root .ms-invite { margin: 8px 4px 16px; }
 
+/* Named recipes and New skin extend the shared settings sheet, cards and switch rows. */
+.st-root .skp-families .skp-nm { overflow-wrap: anywhere; }
+.st-root[data-settings-nested="true"] .st-page-head button { display: grid; }
+.st-root .skin-create { width: 100%; max-width: none; max-height: none; overflow: visible; }
+.st-root .skin-create > .st-actions { bottom: 0; margin: 12px 0 0; padding: 12px 0; z-index: 1; }
+.st-root .st-skin-toast { position: sticky; bottom: 12px; display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--wz-border); border-radius: 12px; background: linear-gradient(var(--wz-overlay), var(--wz-overlay)), var(--wz-base); color: var(--wz-text); z-index: 2; }
+.st-root .st-skin-toast button { min-height: 44px; padding: 8px 12px; background: var(--wz-surface); color: var(--wz-text); border: 1px solid var(--wz-border); border-radius: 8px; }
 /* Family first, then its colours: four compact family tiles, never the full palette catalogue. */
 .st-root .skp.skp-families { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 24px; }
 .st-root .skp-families .skp-mini { aspect-ratio: 1; border-radius: 12px; }
