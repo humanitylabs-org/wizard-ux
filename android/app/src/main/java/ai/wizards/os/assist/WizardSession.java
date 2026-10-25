@@ -1,5 +1,6 @@
 package ai.wizards.os.assist;
 
+import ai.wizards.os.OverlayPage;
 import android.annotation.SuppressLint;
 import android.app.KeyguardManager;
 import android.content.Context;
@@ -20,16 +21,12 @@ import android.view.WindowManager;
 import android.webkit.ConsoleMessage;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
 import org.json.JSONObject;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
 
 /**
@@ -57,6 +54,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
     private WebView web;
     private boolean pageReady;
     private Runnable pending;
+    private boolean capturePaused;
     private boolean wide;
     private int navInset;
     private String heard = "";
@@ -80,6 +78,8 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
     public View onCreateContentView() {
         root = new FrameLayout(getContext());
         root.setBackgroundColor(Color.TRANSPARENT);
+        // Android creates content BEFORE onShow's handoff. Never create a hidden remote loader while locked.
+        if (keyguard.isKeyguardLocked()) return root;
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             navInset = Build.VERSION.SDK_INT >= 30
                     ? insets.getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars()).bottom
@@ -95,30 +95,26 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
         s.setDomStorageEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setAllowContentAccess(false);
-        s.setAllowFileAccess(true); // only file:///android_asset/assist/ is served; everything else is blocked
-        s.setBlockNetworkLoads(true);
         web.addJavascriptInterface(new Bridge(), "WizardNative");
-        web.setWebViewClient(new WebViewClient() {
+        // The Wizard's surface page, or the bundled copy offline; only that one origin is reachable (OverlayPage).
+        OverlayPage surface = new OverlayPage("surface.html#corner", true) {
+            @Override protected boolean remoteAllowed() { return !keyguard.isKeyguardLocked(); }
             @Override
-            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) { return true; }
-
-            @Override
-            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                if (request.getUrl().toString().startsWith("file:///android_asset/assist/")) return null;
-                return new WebResourceResponse("text/plain", "utf-8", 403, "Blocked", null,
-                        new ByteArrayInputStream(new byte[0]));
-            }
-
-            @Override
-            public void onPageFinished(WebView view, String url) {
+            protected void ready(WebView view, String url) {
                 pageReady = true;
                 js("W.setMode('corner')");
                 js("W.lockState(false)");
                 Runnable p = pending;
                 pending = null;
                 if (p != null) p.run();
+                else if (capture.listening()) {
+                    // Recovery can replace an already-ready remote document mid-recording.
+                    js("W.begin();W.onPaused(" + capturePaused + ")");
+                    if (capture.shotCount() > 0) js("W.onShot(" + capture.shotCount() + ")");
+                } else if (capture.sending()) js("W.onSending('recovery')");
             }
-        });
+        };
+        web.setWebViewClient(surface);
         web.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onConsoleMessage(ConsoleMessage m) {
@@ -133,7 +129,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
             Log.i(TAG, "orb frame " + at[0] + "," + at[1] + "," + (r - l) + "," + (b - t));
         });
         layoutOrb();
-        web.loadUrl("file:///android_asset/assist/surface.html#corner");
+        surface.load(web);
         return root;
     }
 
@@ -141,7 +137,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
     public void onShow(Bundle args, int showFlags) {
         super.onShow(args, showFlags);
         boolean handoff = args != null && args.getBoolean(ARG_HANDOFF, false);
-        if (keyguard.isKeyguardLocked() && !handoff) {
+        if (keyguard.isKeyguardLocked()) {
             // Locked: the full lock-screen surface owns this moment. The keyguard stays underneath.
             Log.i(TAG, "session: locked, opening the lock-screen surface");
             Intent i = new Intent(getContext(), AssistLockActivity.class)
@@ -151,6 +147,8 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
             hide();
             return;
         }
+        // A session initially created over keyguard may be reused after unlocking.
+        if (web == null) setContentView(onCreateContentView());
         capture.attach(this);
         ai.wizards.os.SideButton.markUsed(getContext()); // the side button really reached Wizard OS
         Log.i(TAG, "corner shown handoff=" + handoff + " listening=" + capture.listening());
@@ -285,7 +283,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
         }
     }
 
-    @Override public void onBegin() { main.removeCallbacks(closeAfterSend); syncAwake(); js("W.begin()"); }
+    @Override public void onBegin() { capturePaused = false; main.removeCallbacks(closeAfterSend); syncAwake(); js("W.begin()"); }
 
     @Override public void onLevel(float level) { js("W.level(" + level + ")"); }
 
@@ -320,7 +318,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
 
     @Override public void onQueued(String why) { js("W.onQueued(" + JSONObject.quote(why) + ")"); }
 
-    @Override public void onPaused(boolean p) { syncAwake(); js("W.onPaused(" + p + ")"); }
+    @Override public void onPaused(boolean p) { capturePaused = p; syncAwake(); js("W.onPaused(" + p + ")"); }
 
     private String delivered;
 

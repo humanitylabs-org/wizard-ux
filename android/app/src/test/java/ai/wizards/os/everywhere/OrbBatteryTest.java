@@ -18,7 +18,7 @@ public class OrbBatteryTest {
     }
 
     @Test public void sharedOrbThrottlesAndCapsResolution() throws Exception {
-        File f = new File(System.getProperty("user.dir"), "src/main/assets/assist/orb.js");
+        File f = new File(System.getProperty("user.dir"), "src/main/assets/wizard-os-home/orb.js");
         if (!f.isFile()) return;
         String s = new String(Files.readAllBytes(f.toPath()), "UTF-8");
         assertTrue("resting frame rate", s.contains("const IDLE_FPS = 12;"));

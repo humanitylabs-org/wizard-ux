@@ -1,5 +1,5 @@
 // Browser hit-test for the side-button corner orb: Screen/Cancel/Pause must be the top element under their own centre while talking (0.8.4 bug: the invisible heard-bubble covered them).
-// usage: node tools/qa_side_chip_hit.cjs $PWD/android/app/src/main/assets/assist/surface.html
+// usage: node tools/qa_side_chip_hit.cjs $PWD/web/assist/surface.html
 
 const { chromium } = require('./qa-playwright.cjs');
 (async () => {

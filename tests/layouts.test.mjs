@@ -148,12 +148,13 @@ test('a ?layout= link turns a layout on or off and remembers it', async () => {
 // James, 22 Oct 2026: "Can we please just use the floating orb?" The agent orb reuses the polished Wizard Everywhere
 // orb (the shared orb.js and Everywhere's mask, size and resting motion), not a stand-in drawn from scratch.
 test('the agent orb is the Wizard Everywhere floating orb', () => {
-  const ev = read('android/app/src/main/assets/assist/everywhere.html');
-  assert.equal(read('web/orb.js'), read('android/app/src/main/assets/assist/orb.js'), 'one orb engine, shared');
+  // #323: overlay pages live in web/assist/ (bundled under assets/wizard-os-home/); CSP moved inline scripts to files.
+  const ev = read('web/assist/everywhere.html') + read('web/assist/everywhere.js');
+  assert.equal(read('web/orb.js'), read('android/app/src/main/assets/wizard-os-home/orb.js'), 'one orb engine, shared');
   assert.match(read('web/orb.js'), /main\.create = create;/);
   const js = read('web/layouts/two-orb/layout.js'), css = read('web/layouts/two-orb/layout.css');
   assert.match(js, /api\.orb\.create\(cv, fb, \{ R: \.64 \}\)/);
-  assert.ok(ev.includes('window.ORB_R = .64'), 'Everywhere draws the sphere at .64');
+  assert.ok(ev.includes('<script src="orb-size.js" data-r=".64"></script>'), 'Everywhere draws the sphere at .64');
   assert.match(js, /setRestingMotion\?\.\(false\)/); assert.ok(ev.includes('Orb.setRestingMotion(false)'));
   const mask = 'radial-gradient(circle closest-side,#000 72%,transparent 100%)';
   assert.ok(ev.includes(mask) && css.includes(mask), 'Everywhere mask');

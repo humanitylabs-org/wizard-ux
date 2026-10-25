@@ -2,7 +2,7 @@
 // text, real touch drags. usage: node tools/qa-screen-page.cjs [screen.html] [outdir]
 const { chromium } = require('./qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const PAGE = path.resolve(process.argv[2] || path.join(__dirname, '../android/app/src/main/assets/assist/screen.html'));
+const PAGE = path.resolve(process.argv[2] || path.join(__dirname, '../web/assist/screen.html'));
 const OUT = process.argv[3] || '/tmp/qa-screen-page';
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;
