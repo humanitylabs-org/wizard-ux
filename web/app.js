@@ -3764,13 +3764,18 @@
   window.WizCore.deeplink?.handle({
     // ?session= takes exactly the path the Android app's ACTION_THREAD intent takes.
     thread: id => window.__wosHandoff({ action: 'thread', id }),
-    view(v, section) {
+    view(v, section, installQuery) {
       if (window.WosTour?.active && v !== 'tour') window.WosTour.finish('deeplink');
       if (v === 'tour') return window.WosTour?.start('link');
       if (v === 'help') { closeSheets(true); return window.WosTour?.openHelp(); }
       closeSheets(true);
       if (v === 'home') { window.WosResources?.back(); return goDesk(0, true); }
       if (v === 'apps') return openSheet('launcher');
+      if (v === 'install') {
+        openApp(APP['app-store']);
+        const w=Object.values(W).find(w=>w.appId==='app-store');
+        return window.WizCore.deeplink.installInFrame(w && document.querySelector(`[data-win="${w.id}"] iframe`),installQuery);
+      }
       if (v === 'store') return openApp(APP['app-store']);
       if (v === 'agents') return openApp(APP.agents);
       if (window.WosFeatures.open(v)) return;

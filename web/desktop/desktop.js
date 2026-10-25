@@ -1660,11 +1660,16 @@
     pane: () => { const f = focused(); return f?.app === 'chats' ? winEl(f.id)?.querySelector('.pane-main') || null : null; } });
   C.deeplink.handle({
     thread: sid => openThread(sid),
-    view(v, section) {
+    view(v, section, installQuery) {
       if (v === 'tour' && window.WosTour?.desk) { closeSettings(); toggleKeys(false); return window.WosTour.desk.start('link'); }
       if (v === 'help') { closeSettings(); return toggleKeys(true); }
       if (v === 'home') return goHome();
       if (v === 'apps') return openPicker();
+      if (v === 'install') {
+        openApp(APP['app-store']);
+        const w=findWin(w=>w.appId==='app-store');
+        return C.deeplink.installInFrame(w && winEl(w.id)?.querySelector('iframe'),installQuery);
+      }
       if (v === 'store') return openApp(APP['app-store']);
       if (v === 'agents') return openApp(APP.agents);
       if (window.WosFeatures.open(v)) return;
