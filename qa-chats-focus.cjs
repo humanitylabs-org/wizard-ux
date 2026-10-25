@@ -260,8 +260,19 @@ async function pickerAcceptance(browser, mode) {
  ok([...creates,...runs].every(x=>new URLSearchParams(x.query).get('agent')==='philosopher'&&JSON.parse(x.body||'{}').agent==='philosopher'),mode+' fill uses normal outbox and agent query+body on both writes',{creates,runs});
  const run=JSON.parse(runs[0]?.body||'{}');
  ok(JSON.stringify(run.input).includes('Fill my new Space')&&JSON.stringify(run.input).includes(newSpace?.id||'NEVER'),mode+' fill command contains existing Space id');
+ ok(JSON.stringify(run.input).includes('with your Spaces tool')&&!JSON.stringify(run.input).includes('wizard-spaces'),mode+' routed fill instructs scoped Spaces tool, never main-only CLI');
  ok(sharedSpaces.find(s=>s.id===newSpace?.id)?.threads.length===1,mode+' fill thread joins its Space');
  ok(sharedSpaces.find(s=>s.id==='main-only')?.threads.includes('main_wos'),mode+' New Space preserves existing collections');
+ await choose(p,'agent:hermes');await activate(p,'.ch-focus-tab.on:visible');await activate(p,'[data-spnew]');
+ const mainAt=writes.length;await p.locator('.ch-space-form input').fill('Main QA');await p.locator('.ch-space-form').evaluate(f=>f.requestSubmit());
+ await p.waitForFunction(()=>[...document.querySelectorAll('.ch-focus-tab.on')].some(e=>e.textContent.includes('Main QA')));
+ await p.waitForTimeout(900);
+ const mainWrites=writes.slice(mainAt),mainRuns=mainWrites.filter(x=>x.method==='POST'&&x.path==='/wizard/hermes/v1/runs'),mainCreates=mainWrites.filter(x=>x.method==='POST'&&x.path==='/wizard/hermes/api/sessions');
+ ok(mainRuns.length===1&&mainCreates.length===1,mode+' main Space fill sends exactly one thread/run');
+ ok([...mainCreates,...mainRuns].every(x=>(new URLSearchParams(x.query).get('agent')||'hermes')==='hermes'&&(!JSON.parse(x.body||'{}').agent||JSON.parse(x.body||'{}').agent==='hermes')),mode+' main fill retains canonical main route (no routed-agent override)',{mainCreates,mainRuns});
+ const mainInput=JSON.stringify(JSON.parse(mainRuns[0]?.body||'{}').input||'');
+ const mainSpace=sharedSpaces.find(s=>s.name==='Main QA');
+ ok(mainInput.includes('with your Spaces tool')&&!mainInput.includes('wizard-spaces')&&mainInput.includes(mainSpace?.id||'NEVER'),mode+' main fill instructs same scoped Spaces tool and exact Space id');
  await ctx.close();
 }
 
