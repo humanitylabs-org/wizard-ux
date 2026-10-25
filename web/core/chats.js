@@ -295,7 +295,7 @@ window.WizCore.chats = function createChats(H) {
     const q = norm(text); if (!q) return [];
     const out = [], seen = new Set(), push = f => { const k = f.kind + ':' + f.key; if (!seen.has(k)) { seen.add(k); out.push(f); } };
     const st = statusEntries().map(([key, f]) => ({ kind: 'status', key, label: f.label, names: [norm(f.label), ...f.syn.map(norm)] }));
-    const sj = spaces().map(s => ({ kind: 'space', key: s.id, label: s.name, names: [norm(s.name)] }));
+    const sj = visibleSpaces().map(s => ({ kind: 'space', key: s.id, label: s.name, names: [norm(s.name)] }));
     const ag = focusAgents().map(a => ({ kind: 'agent', key: a.id, label: a.label, names: [norm(a.id), norm(a.label)] }));
     for (const f of st.concat(ag, sj)) if (f.names.includes(q)) push(f);
     if (q.length >= 2) for (const f of st.concat(ag, sj)) if (f.names.some(n => n.startsWith(q) || n.split(' ').some(w => w.length > 2 && w.startsWith(q)))) push(f);
@@ -321,6 +321,9 @@ window.WizCore.chats = function createChats(H) {
     }
     return spacesCache;
   }
+  const spaceAgent = s => s?.agent || AGS()?.defaultId() || 'hermes';
+  const visibleSpaces = () => spaces().filter(s => focusAgents().some(a => a.id === spaceAgent(s)));
+  const focusedAgent = f => f?.kind === 'agent' ? f.key : f?.kind === 'space' ? spaceAgent(spaces().find(s => s.id === f.key)) : '';
   function spaceContains(key, sid) { spaces(); return spaceThreads.get(key)?.has(sid) || false; }
   function spaceMember(key, sid, add) {
     const list = spaces().map(s => ({ ...s, threads: s.threads.slice() })), space = list.find(s => s.id === key); if (!space) return false;
@@ -335,14 +338,18 @@ window.WizCore.chats = function createChats(H) {
   function focusOf(w) {
     const o = (w && W[owner(w.id)]) || w, f = o?.focus;
     // Old automatic subject focuses migrate to All, as do deleted Spaces.
-    if (f?.kind === 'subject' || (f?.kind === 'space' && !spaces().some(s => s.id === f.key))) { o.focus = null; save(); return null; }
+    // Hidden agents leave discovery only: an existing route to one (or its Space) stays valid.
+    const censusReady = AGS()?.ready && AGS()?.available && !AGS()?.error;
+    if (f?.kind === 'subject' || (censusReady && ((f?.kind === 'space' && !spaces().some(s => s.id === f.key && routeAgents().some(a => a.id === spaceAgent(s)))) || (f?.kind === 'agent' && !routeAgents().some(a => a.id === f.key))))) { o.focus = null; save(); return null; }
     return f && ['agent', 'space'].includes(f.kind) && typeof f.key === 'string' && f.key ? f : null;
   }
-  function focusAgents() { const A = window.WosAgents; return A ? [agentRec(A.defaultId()), ...A.others()] : [agentRec('')]; }
-  function matchesFocus(f, s) { return !f || (f.kind === 'space' ? spaceContains(f.key, s.id) : f.key === AGS()?.defaultId() ? !LIVE.agentOf(s.id) : LIVE.agentOf(s.id) === f.key); }
+  function routeAgents() { const A = window.WosAgents; return A?.list?.length ? A.list : [agentRec('')]; }
+  function focusAgents() { return routeAgents().filter(a => !a.hidden); }
+  function matchesFocus(f, s) { return !f || (f.kind === 'space' ? spaceContains(f.key, s.id) && (LIVE.agentOf(s.id) || AGS()?.defaultId() || 'hermes') === focusedAgent(f) : f.key === AGS()?.defaultId() ? !LIVE.agentOf(s.id) : LIVE.agentOf(s.id) === f.key); }
   function focusMatches(w, s) { return matchesFocus(focusOf(w), s); }
   function setFocus(w, f) {
     const o = W[owner(w.id)] || w; if (!o) return false;
+    closeSpacePicker();
     if (o.thread) chatsBack(o); // saves the old agent's draft before changing its route
     o.focus = f && ['agent', 'space'].includes(f.kind) && f.key ? { kind: f.kind, key: String(f.key) } : null;
     const ids = new Set([o.id, o.id + '::list', w.id]);
@@ -350,7 +357,7 @@ window.WizCore.chats = function createChats(H) {
     save(); H.layout(o.id); return true;
   }
   function addFilter(w, f) { if (!f) return false; if (f.kind === 'space' || f.kind === 'agent') return setFocus(w, f); const c = ch(w.id); if (w.thread) chatsBack(w); c.filter = f.key; c.filterFrom = null; rerenderList(w); return true; }
-  function rerenderList(w) { const el = elOf(w.id); if (el && !w.thread) { ch(w.id).listPlace = null; renderChatList(w, el); const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; } }
+  function rerenderList(w) { const el = elOf(w.id); if (el && !w.thread) { ch(w.id).listPlace = null; ch(w.id).listPending = null; renderChatList(w, el); const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; } }
   /* Back on a filtered list: search text first, then the most recent chip. */
   function clearFilter(w) {
     if (!w || w.thread) return false;
@@ -718,41 +725,130 @@ window.WizCore.chats = function createChats(H) {
       </div></div>`;
   }
   function focusLabel(w) { const f = focusOf(w); return !f ? 'All' : f.kind === 'agent' ? agentRec(f.key).label : spaces().find(s => s.id === f.key)?.name || 'All'; }
-  // One stable option order for strip and Filter: All, agents, then owner-created Spaces.
+  function listTitle(w) { return focusAgents().length === 1 && focusOf(w)?.kind === 'space' ? focusLabel(w) : ''; }
+  function syncListTitle(w) {
+    const o = W[owner(w.id)] || w;
+    AGS()?.setTitlebarLabel(track.querySelector(`[data-win="${o.id}"] [data-agent-titlebar]`), !o.thread ? listTitle(o) : '');
+  }
+  // One stable option order for strip and Filter; the strip shows the level with a choice.
   function focusOptions() {
     const all = LIVE.unified().filter(s => !s.hidden);
     const stats = (kind, key, label, badge = '') => {
       // A Space counts its explicit members, including ones hydrated beyond the global archive window.
-      const members = kind === 'space' && LIVE.spaceSessions ? LIVE.spaceSessions(spaces().find(s => s.id === key)?.threads || [], { peek: true }).rows.filter(s => !s.hidden) : null;
+      const members = kind === 'space' && LIVE.spaceSessions ? LIVE.spaceSessions(spaces().find(s => s.id === key)?.threads || [], { peek: true, agent: spaceAgent(spaces().find(s => s.id === key)) }).rows.filter(s => !s.hidden) : null;
       const rows = members || (kind === 'all' ? all : all.filter(s => matchesFocus({ kind, key }, s)));
       // Counts exclude Archive (James, 25 Oct 2026). Unloaded Space members sit beyond the archive window, so they are archived too.
-      return { kind, key, label, badge, count: rows.length - LIVE.workGroups(rows).archive.length, unread: rows.filter(s => LIVE.isNew(s)).length,
+      return { kind, key, label, badge, count: rows.length - LIVE.workGroups(rows).archive.length, unread: LIVE.visibleUnread ? LIVE.visibleUnread(rows).length : rows.filter(s => LIVE.isNew(s)).length,
         recent: rows.reduce((n, s) => Math.max(n, Date.parse(s.activityAt || s.updatedAt || '') || 0), 0) };
     };
     const opts = focusAgents().map(a => stats('agent', a.id, a.label, (AGS()?.sigil(a) || '') + (AGS()?.isPrivate(a) ? AGS().lock() : '')))
-      .concat(spaces().map(s => stats('space', s.id, s.name)));
+      .concat(visibleSpaces().map(s => stats('space', s.id, s.name)));
     return [stats('all', '', 'All'), ...opts];
   }
   function focusOption(w, o, strip = false) {
-    const f = focusOf(w), on = o.kind === 'all' ? !f : f?.kind === o.kind && f.key === o.key;
-    return `<button type="button" class="${strip ? 'ch-focus-tab' : 'ch-fopt'}${on ? ' on' : ''}" data-chfocusopt="${o.kind}:${esc(o.key)}" aria-pressed="${on}"${strip && o.kind === 'agent' ? ` style="--ch-agent-colour:${AGS()?.colour(agentRec(o.key)) || ''}"` : ''}${strip ? ` aria-label="${esc(o.label)}${o.unread ? ` · ${o.unread} unread` : ''}"` : ''}>${o.badge}<span>${esc(o.label)}</span>${strip ? o.unread ? '<i class="ch-focus-dot" aria-hidden="true"></i>' : '' : `<small>${o.kind === 'agent' ? o.unread : o.count}</small>${on ? '<b>✓</b>' : ''}`}</button>`;
+    const f = focusOf(w), on = o.kind === 'all' ? !f : strip && o.kind === 'agent' ? focusedAgent(f) === o.key : f?.kind === o.kind && f.key === o.key;
+    const label = strip && on && o.kind === 'agent' && f?.kind === 'space' ? spaces().find(s => s.id === f.key)?.name || o.label : o.label;
+    const caret = strip && on && o.kind === 'agent' ? '<i class="ch-focus-caret" aria-hidden="true">⌄</i>' : '';
+    return `<button type="button" class="${strip ? 'ch-focus-tab' : 'ch-fopt'}${on ? ' on' : ''}" data-chfocusopt="${o.kind}:${esc(o.key)}" aria-pressed="${on}"${strip && o.kind === 'agent' ? ' aria-haspopup="dialog" aria-expanded="false"' : ''}${strip && o.kind === 'agent' ? ` style="--ch-agent-colour:${AGS()?.colour(agentRec(o.key)) || ''}"` : ''}${strip ? ` aria-label="${esc(label !== o.label ? o.label + ' · ' + label : o.label)}${o.unread ? ` · ${o.unread} unread` : ''}"` : ''}>${o.badge}<span>${esc(label)}</span>${caret}${strip ? o.unread ? '<i class="ch-focus-dot" aria-hidden="true"></i>' : '' : `<small>${o.kind === 'agent' ? o.unread : o.count}</small>${on ? '<b>✓</b>' : ''}`}</button>`;
   }
   function focusSection(w) {
     if (!focusUseful()) return '';
     const opts = focusOptions();
-    return `<h5>Focus</h5><div class="ch-fopts">${focusOption(w, opts[0])}</div><h5>Agents <small>· unread</small></h5><div class="ch-fopts">${opts.filter(o => o.kind === 'agent').map(o => focusOption(w, o)).join('')}</div>${spaces().length ? `<h5>${SPACE.many}</h5><div class="ch-fopts">${opts.filter(o => o.kind === 'space').map(o => focusOption(w, o)).join('')}</div>` : ''}`;
+    return `<h5>Focus</h5><div class="ch-fopts">${focusOption(w, opts[0])}</div>${opts.filter(o => o.kind === 'agent').map(a => `<div class="ch-focus-group"><div class="ch-fopts">${focusOption(w, a)}</div><div class="ch-fopts ch-space-nested">${opts.filter(o => o.kind === 'space' && spaceAgent(spaces().find(s => s.id === o.key)) === a.key).map(o => focusOption(w, o)).join('')}</div></div>`).join('')}`;
   }
   /* Focus only appears once there is something to switch between (James, 24 Oct 2026): a second agent, or an
    * owner-made Space. A one-agent install sees no strip and no Focus section. */
-  function focusUseful() { return focusAgents().length > 1 || spaces().length > 0; }
+  function focusUseful() { return focusAgents().length > 1 || visibleSpaces().length > 0; }
   function focusStrip(w) {
-    const opts = focusOptions();
-    return focusUseful() ? `<nav class="ch-focus-strip" aria-label="Chats focus">${opts.map(o => focusOption(w, o, true)).join('')}</nav>` : '';
+    const opts = focusOptions(), solo = focusAgents().length === 1;
+    return focusUseful() ? `<nav class="ch-focus-strip" aria-label="Chats focus">${opts.filter(o => o.kind === 'all' || o.kind === (solo ? 'space' : 'agent')).map(o => focusOption(w, o, true)).join('')}${solo ? '<button type="button" class="ch-focus-tab" data-chspacenew aria-label="New Space" aria-haspopup="dialog" aria-expanded="false"><span aria-hidden="true">＋</span></button>' : ''}</nav>` : '';
   }
+  // One local picker, rendered through the same Focus options as the filter sheet.
+  let spacePicker = null, focusHoldUntil = 0;
+  function closeSpacePicker() {
+    if (!spacePicker) return false;
+    const old = spacePicker; spacePicker = null;
+    document.querySelector('[data-chspacepicker]')?.remove();
+    old.tab?.setAttribute('aria-expanded', 'false');
+    if (old.tab?.isConnected) old.tab.focus({ preventScroll: true });
+    return true;
+  }
+  function openSpacePicker(w, agent, tab, { naming = false, sid = '' } = {}) {
+    if (!focusAgents().some(a => a.id === agent)) return;
+    closeSpacePicker();
+    spacePicker = { wid: owner(w.id), agent, tab, naming, sid, busy: false, error: '', name: '' };
+    renderSpacePicker();
+  }
+  function renderSpacePicker() {
+    const p = spacePicker; if (!p) return;
+    document.querySelector('[data-chspacepicker]')?.remove();
+    const w = W[p.wid], a = agentRec(p.agent), opts = focusOptions(), f = focusOf(w);
+    if (!w || !focusAgents().some(a => a.id === p.agent)) { closeSpacePicker(); return; }
+    const rows = opts.filter(o => o.kind === 'space' && spaceAgent(spaces().find(s => s.id === o.key)) === p.agent).sort((a, b) => b.recent - a.recent);
+    const allOn = f?.kind === 'agent' && f.key === p.agent;
+    const wrap = document.createElement('div'); wrap.dataset.chspacepicker = '';
+    wrap.className = 'ch-space-shade';
+    wrap.innerHTML = `<div class="ch-space-picker" role="dialog" aria-modal="true" aria-label="${p.sid ? 'Add to a Space' : esc(a.label) + ' Spaces'}" style="--ch-agent-colour:${AGS()?.colour(a) || ''}"><div class="ch-space-grab" aria-hidden="true"></div><header><i></i><b>${p.sid ? 'Add to a Space' : esc(a.label)}</b><button type="button" data-spclose aria-label="Close Spaces">×</button></header><div class="ch-space-rows">${p.sid ? '' : `<button type="button" class="ch-fopt${allOn ? ' on' : ''}" data-spall aria-pressed="${allOn}"><span>All ${esc(a.label)} chats</span>${allOn ? '<b>✓</b>' : ''}</button>`}${rows.map(o => `<button type="button" class="ch-fopt${f?.kind === 'space' && f.key === o.key ? ' on' : ''}" data-spspace="${esc(o.key)}" aria-pressed="${f?.kind === 'space' && f.key === o.key}"><span>${esc(o.label)}</span><small>${o.count}</small>${o.unread ? '<i class="ch-focus-dot" aria-label="Unread"></i>' : ''}${f?.key === o.key ? '<b>✓</b>' : ''}</button>`).join('')}</div>${p.naming ? `<form class="ch-space-form"><label for="chSpaceName">New space</label><div><input id="chSpaceName" name="name" maxlength="60" placeholder="Space name" value="${esc(p.name)}" autocomplete="off" ${p.busy ? 'disabled' : ''}><button type="submit" ${p.busy || !p.name.trim() ? 'disabled' : ''}>${p.busy ? 'Creating…' : 'Create'}</button></div>${p.error ? `<p role="alert">${esc(p.error)}</p>` : ''}</form>` : '<button type="button" class="ch-space-new" data-spnew>+ New space</button>'}</div>`;
+    document.body.appendChild(wrap);
+    const card = wrap.firstElementChild, strip = p.tab?.closest('.ch-focus-strip') || elOf(p.wid)?.querySelector('.ch-focus-strip'), r = strip?.getBoundingClientRect(), tr = p.tab?.getBoundingClientRect();
+    if (r?.height && r.top > 0 && r.top < innerHeight) { card.style.bottom = `${Math.max(8, innerHeight - r.top + 8)}px`; if (innerWidth > 640) card.style.left = `${Math.max(8, Math.min(tr?.left || r.left, innerWidth - 296))}px`; }
+    if (!card.style.bottom) card.style.bottom = 'max(16px, env(safe-area-inset-bottom))';
+    p.tab?.setAttribute('aria-expanded', 'true');
+    wrap.addEventListener('click', e => {
+      if (e.target === wrap && Date.now() < focusHoldUntil) { e.preventDefault(); return; }
+      if (e.target === wrap || e.target.closest('[data-spclose]')) { closeSpacePicker(); return; }
+      if (p.busy) return;
+      if (e.target.closest('[data-spnew]')) { p.naming = true; renderSpacePicker(); return; }
+      const s = e.target.closest('[data-spspace]');
+      if (s && p.sid) { spaceMember(s.dataset.spspace, p.sid, !spaceContains(s.dataset.spspace, p.sid)); closeSpacePicker(); return; }
+      if (s || e.target.closest('[data-spall]')) { closeSpacePicker(); setFocus(w, s ? { kind: 'space', key: s.dataset.spspace } : { kind: 'agent', key: p.agent }); }
+    });
+    wrap.addEventListener('input', e => { if (e.target.name === 'name') { p.name = e.target.value; wrap.querySelector('[type="submit"]').disabled = !p.name.trim(); } });
+    wrap.querySelector('form')?.addEventListener('submit', e => { e.preventDefault(); createPickerSpace(p); });
+    wrap.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (p.naming && !p.busy) { p.naming = false; renderSpacePicker(); } else closeSpacePicker(); return; }
+      if (e.target.tagName === 'INPUT' && e.key !== 'Tab') return;
+      const items = [...wrap.querySelectorAll('button:not(:disabled),input:not(:disabled)')], i = items.indexOf(document.activeElement);
+      if (['Tab', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) { e.preventDefault(); const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : (i + (e.key === 'ArrowUp' || e.shiftKey ? -1 : 1) + items.length) % items.length; items[next]?.focus(); }
+    });
+    requestAnimationFrame(() => { if (spacePicker === p) (wrap.querySelector('input:not(:disabled)') || wrap.querySelector('[aria-pressed="true"]') || wrap.querySelector('button'))?.focus({ preventScroll: true }); });
+  }
+  async function createPickerSpace(p) {
+    if (p !== spacePicker || p.busy) return;
+    const name = p.name.trim();
+    if (!name || name.length > 60 || /[\u0000-\u001f\u007f]/u.test(name)) return;
+    if (spaces().some(s => spaceAgent(s) === p.agent && norm(s.name) === norm(name))) { p.error = 'Already a Space'; renderSpacePicker(); return; }
+    if (spaces().length >= 50) { p.error = 'Maximum 50 Spaces'; renderSpacePicker(); return; }
+    p.busy = true; p.error = ''; renderSpacePicker();
+    const space = { id: crypto.randomUUID(), name, agent: p.agent, threads: p.sid ? [p.sid] : [], createdAt: new Date().toISOString() };
+    const list = [...spaces(), space];
+    const saved = await LIVE.putPrefs({ spaces: list }, { requireShared: true });
+    if (!saved) { p.busy = false; p.error = 'Couldn’t create space. Try again.'; if (spacePicker === p) renderSpacePicker(); return; }
+    localStorage.setItem(SPACES_KEY, JSON.stringify(list)); window.dispatchEvent(new Event('wos:prefs'));
+    if (spacePicker === p) closeSpacePicker();
+    if (p.sid) return; // Row discovery creates a collection with this thread, never an agent run.
+    const w = W[p.wid]; if (!w) return;
+    setFocus(w, { kind: 'space', key: space.id });
+    const it = await sendChat(w.id, `Fill my new Space “${name}” (id ${space.id}): find my existing threads that belong in it and add them with your Spaces tool, then tell me how many you added and list a few. Search only your own agent’s threads (${p.agent}); do not change other Spaces.`, 'creating a Space in Chats', null, { sid: '__new__', away: true, seal: false, captureId: 'space-fill:' + space.id });
+    if (!it) toast('!', 'Space created; fill message wasn’t saved. Ask the agent to fill it from a new chat.', 5000);
+  }
+
   function bindFocusStrip(el) {
     const strip = el.querySelector('.ch-focus-strip'); if (!strip) return;
     if (!strip._focusBound) {
       strip._focusBound = true;
+      let held = null, timer = 0;
+      const cancel = () => { clearTimeout(timer); timer = 0; held = null; };
+      const open = tab => { const w = W[idOf(tab)]; if (w) openSpacePicker(w, tab.dataset.chfocusopt.slice(6), tab); };
+      strip.addEventListener('pointerdown', e => {
+        const tab = e.target.closest('[data-chfocusopt^="agent:"]'); if (!tab || e.button > 0) return;
+        cancel(); held = { tab, x: e.clientX, y: e.clientY };
+        timer = setTimeout(() => { if (!held) return; const t = held.tab; cancel(); focusHoldUntil = Date.now() + 750; open(t); }, 450);
+      });
+      strip.addEventListener('pointermove', e => { if (held && Math.hypot(e.clientX - held.x, e.clientY - held.y) > 8) cancel(); }, { passive: true });
+      for (const type of ['pointerup', 'pointercancel', 'pointerleave']) strip.addEventListener(type, cancel, { passive: true });
+      strip.addEventListener('contextmenu', e => { const t = e.target.closest('[data-chfocusopt^="agent:"]'); if (t) { e.preventDefault(); cancel(); focusHoldUntil = Date.now() + 300; open(t); } });
+      strip.addEventListener('keydown', e => { const t = e.target.closest('[data-chfocusopt^="agent:"]'); if (t && (e.key === 'ArrowUp' || e.key === 'ContextMenu' || e.key === 'F10' && e.shiftKey)) { e.preventDefault(); e.stopPropagation(); open(t); } });
       // Native horizontal scrolling owns this gesture, not an ancestor's desk swipe.
       // Do not preventDefault: taps and the browser's pan-x scrolling stay native.
       for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'touchstart', 'touchmove', 'touchend', 'touchcancel'])
@@ -789,18 +885,42 @@ window.WizCore.chats = function createChats(H) {
       if (row) { const d = row.getBoundingClientRect().top - edge - anchor.y; if (Math.abs(d) >= 1) sc.scrollTop += d; break; }
     }
   }
+  /* Put the return bookmark back; true once it landed. A scroller with no layout yet (its window hidden, parked or
+   * mid-transition on the phone) ignores scrollTop and sits at 0, and rows not painted yet clamp it short. Every
+   * later paint then read that 0 as the place, so a reply or Done sent James to the top of Chats although Back kept
+   * his spot (James, 24 Oct 2026). */
   function restoreListPlace(sc, place) {
-    if (!sc || !place) return;
+    if (!sc || !place) return true;
+    if (place.top < 1) { sc.scrollTop = 0; return true; }
+    if (!sc.isConnected || !sc.getClientRects().length || !sc.clientHeight) return false;
     sc.scrollTop = place.top;
     const rows = [...sc.querySelectorAll('[data-chopen]')];
     for (const anchor of place.rows) {
       // Done can leave the same ID visible in expanded Archive. Follow a surviving
       // neighbor in the original section, never the archived row to its new home.
       const row = rows.find(r => r.dataset.chopen === anchor.id && r.closest('[data-sec]')?.dataset.sec === anchor.section);
-      if (row) { sc.scrollTop += row.getBoundingClientRect().top - sc.getBoundingClientRect().top - anchor.y; break; }
+      if (row) { sc.scrollTop += row.getBoundingClientRect().top - sc.getBoundingClientRect().top - anchor.y; return true; }
     }
+    return Math.abs(sc.scrollTop - place.top) < 2;
+  }
+  // Keep putting an unlanded bookmark back each frame (≤3 s) until it lands, the thread changes, James touches the
+  // list, or anything else scrolls it.
+  // The window body can be remounted meanwhile, so each frame looks up the live scroller.
+  function holdListPlace(w, el, place) {
+    const c = ch(w.id), until = Date.now() + 3000; c.listPending = place;
+    let box = el.querySelector('.ch-scroll'), mine = box?.scrollTop ?? 0;
+    const step = () => {
+      if (c.listPending !== place) return;
+      const sc = (elOf(w.id) || el).querySelector('.ch-scroll');
+      if (sc !== box) { box = sc; mine = sc?.scrollTop ?? 0; }
+      if (w.thread || !sc || Date.now() > until || Math.abs(sc.scrollTop - mine) >= 1) { c.listPending = null; return; }
+      if (restoreListPlace(sc, place)) { c.listPending = null; return; }
+      mine = sc.scrollTop; requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   }
   function renderChatList(w, el) {
+    syncListTitle(w);
     closeStream(ch(w.id));
     if (!el) return;
     if (H.renderView?.(w, el, () => renderChatList(w, el), 'list')) return;
@@ -813,8 +933,8 @@ window.WizCore.chats = function createChats(H) {
     const F = c.filter && STATUS[c.filter] ? STATUS[c.filter] : null, focus = focusOf(w);
     const fids = F?.ids ? F.ids(AGID) : null;
     const space = focus?.kind === 'space' ? spaces().find(s => s.id === focus.key) : null;
-    const members = space && LST.ok ? LIVE.spaceSessions?.(space.threads) : null;
-    const all = (LST.ok ? (members ? members.rows : LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).filter(s => !s.hidden) : []).filter(s => (!F || (fids ? fids.has(s.id) : F.test(s))) && focusMatches(w, s));
+    const members = space && LST.ok ? LIVE.spaceSessions?.(space.threads, { agent: spaceAgent(space) }) : null;
+    const all = (LST.ok ? (members ? members.rows : n && LIVE.searchRows ? LIVE.searchRows(AGID) : LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).filter(s => !s.hidden) : []).filter(s => (!F || (fids ? fids.has(s.id) : F.test(s))) && focusMatches(w, s));
     const filtered = !!(F || focus);
     const titleHit = n ? all.filter(s => norm(s.title).includes(n) || norm(s.preview).includes(n)) : all;
     // Message bodies: searched lazily in the background (core/chat-search.js); hits stream in with a snippet.
@@ -864,6 +984,7 @@ window.WizCore.chats = function createChats(H) {
     if (false) {}
     else if (!LST.ok && !LST.error) body = draftSec + skelRows(AGID ? `Connecting to ${agentName(AGID)}` : 'Connecting to Wizard');
     else if (!LST.ok) body = draftSec + `<div class="ch-empty">${esc(window.WizReach?.failure().message || 'Checking the connection to Wizard…')}</div>`;
+    else if (focus?.kind === 'space' && !hit.length && !n && !F) body = `<div class="ch-empty">${esc(agentRec(focusedAgent(focus)).label)} is filling this Space…</div>`;
     else if (AGID && !all.length && !n && !F) body = `<div class="ch-empty"><b>No chats with ${esc(agentName(AGID))} yet</b><br><button type="button" class="ch-fclear" data-chnew data-chemptynew>Start a new chat</button><br> ${agentRec(AGID).privacy === 'private' ? 'They stay with this agent: the main agent can’t search or read them.' : 'They stay in this agent’s chats.'}</div>`;
     else if (filtered && !hit.length) body = `<div class="ch-empty">${n ? 'No chats match' : F ? F.empty : `No chats in ${esc(focusLabel(w))}`}<br><button type="button" class="ch-fclear" ${n || F ? 'data-chfclear' : 'data-chfbtn'}>${n || F ? 'Clear filter' : 'Change focus'}</button></div>`;
     else if (!hit.length && !drafts.length) body = `<div class="ch-empty">${bs && (bs.busy || bs.scanned < Math.min(bs.want, bs.total || 0)) ? `No titles match “${esc(c.q)}” · searching messages…` : `No threads match “${esc(c.q)}”.`}</div>`;
@@ -888,7 +1009,8 @@ window.WizCore.chats = function createChats(H) {
     }).join('');
     // Progress sits above the results (James, 25 Oct 2026: it was hidden below a long Archive); the final line stays under them.
     if (bs && LST.ok) body = BS.scanning(bs) || bs.busy ? BS.footer(bs) + body : body + BS.footer(bs);
-    const place = listPlace(el) || c.listPlace;
+    // An unlanded return bookmark outranks the scroller's own reading: that reading is the 0 it fell to.
+    const place = c.listPending || listPlace(el) || c.listPlace;
     // Results stream in while typing: keep the search box focused with the caret where it was.
     const inp0 = el.querySelector('[data-chsearch]'), had = inp0 && document.activeElement === inp0, sel = had ? [inp0.selectionStart, inp0.selectionEnd] : null;
     // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
@@ -904,7 +1026,7 @@ window.WizCore.chats = function createChats(H) {
       : LST.cached ? syncBar('', `${spin}<span>Updating…${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}</span>`)
       : LST.ok && age > STALE_LIST ? syncBar('stale', `${LST.loading ? spin : ''}<span><b>Not up to date</b> · ${esc(since)}${LST.loading ? ' · updating…' : ''}</span>`)
       : c.ptrState === 'done' ? syncBar('ok', '<span>Up to date</span>') : '';
-    const html = `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${focus?.kind === 'agent' ? ` style="--agc:${AGS()?.colour(agentRec(focus.key)) || ''};--ch-agent-hue:${AGS()?.distinctHues().get(focus.key) ?? AGS()?.hue(agentRec(focus.key))}"` : ''}><div data-slot="list-top"></div>${head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${focusStrip(w)}${c.sheet ? filterSheet(w, c) : ''}</div>`;
+    const html = `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${focusedAgent(focus) ? ` style="--agc:${AGS()?.colour(agentRec(focusedAgent(focus))) || ''};--ch-agent-hue:${AGS()?.distinctHues().get(focusedAgent(focus)) ?? AGS()?.hue(agentRec(focusedAgent(focus)))}"` : ''}><div data-slot="list-top"></div>${head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${focusStrip(w)}${c.sheet ? filterSheet(w, c) : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
@@ -915,12 +1037,14 @@ window.WizCore.chats = function createChats(H) {
       clearReading(w.id); c.listHTML = html;
       // The morph keeps a typed field's live value; a cleared search (×, Back, a chip) must empty the box too.
       const box = root.querySelector('[data-chsearch]'); if (box && !c.q && box.value) box.value = '';
-      anchorListPlace(el.querySelector('.ch-scroll'), place);
+      if (c.listPending) { if (restoreListPlace(el.querySelector('.ch-scroll'), place)) c.listPending = null; }
+      else anchorListPlace(el.querySelector('.ch-scroll'), place);
     } else {
       const keepSheet = keptSheet(el);
       clearReading(w.id); el.innerHTML = html; c.listHTML = html; c.listRoot = el.firstElementChild;
       restoreSheet(el, keepSheet);
-      restoreListPlace(el.querySelector('.ch-scroll'), place);
+      if (restoreListPlace(el.querySelector('.ch-scroll'), place)) c.listPending = null;
+      else if (c.listPending !== place) holdListPlace(w, el, place);
     }
     PW?.paint(w.id, el);
     bindFocusStrip(el);
@@ -936,7 +1060,7 @@ window.WizCore.chats = function createChats(H) {
    * Every attachment goes through the resumable /wizard/v1/uploads API when the box offers it (core/uploads.js):
    * chunked, any size, resumes after a dropped network or a Wizard restart, progress on the chip. A box without
    * capabilities.resumable_uploads keeps the old one-shot POST /wizard/files/upload (its own 64 MB limit). */
-  const MAX_FILES = 8, OLD_ROUTE_MAX = 64 * 1024 * 1024;
+  const MAX_FILES = 10, OLD_ROUTE_MAX = 64 * 1024 * 1024;
   const PEND = window.WizUploads?.pending || null;
   // A placeholder for a file still uploading (sent before it finished) shows its local thumbnail until it lands.
   const pendRef = f => { const r = PEND ? PEND.ref(f) : (f && f.id && !f.uploading ? fileRef(f) : null); if (r && PEND?.isPending(r.id) && f.preview) PREVIEW[r.id] = f.preview; return r; };
@@ -1176,7 +1300,7 @@ window.WizCore.chats = function createChats(H) {
    * threads and starts new chats on it. Focus derives that same route; the thread keeps its
    * conversation title and model picker without repeating the agent banner. ---- */
   const AGS = () => window.WosAgents || null;
-  function winAgent(w) { const o = (w && W[owner(w.id)]) || w; const f = focusOf(o), id = f?.kind === 'agent' ? f.key : o?.agent || ''; const A = AGS(); return id && (!A || A.isOther(id)) ? id : ''; }
+  function winAgent(w) { const o = (w && W[owner(w.id)]) || w; const f = focusOf(o), id = focusedAgent(f) || o?.agent || ''; const A = AGS(); return id && (!A || A.isOther(id)) ? id : ''; }
   // The thread row this window shows. A window focused on an agent lists that agent's rows, so a same-id thread
   // opened from it is that agent's row; anything else (All, the main agent, a main thread opened from a link while
   // an agent is focused) keeps the shared lookup. Watcher actions then scope to this row's own owner.
@@ -1195,6 +1319,8 @@ window.WizCore.chats = function createChats(H) {
     vib(8);
     if (a === 'unread') {
       closeRowSheet();
+      // Like an inbox: marking an open thread unread steps out of it first, or the open pane reads it straight back.
+      for (const id of Object.keys(CH)) { const x = W[id]; if (x && x.thread === sid) threadBack(x); }
       const ok = await LIVE.markUnread(sid);
       toast(ok ? '●' : '!', ok ? 'Marked unread' : 'Couldn’t mark unread', ok ? 1600 : 3200);
       for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
@@ -1232,7 +1358,8 @@ window.WizCore.chats = function createChats(H) {
       <button type="button" data-rsopen>${'<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'}Open</button>
       <button type="button" data-rsrename>${RENAME_SVG}Rename</button>
       <button type="button" data-part="pin-button" data-rspin>${PIN_SVG}${PIN.has(sid) ? 'Unpin' : 'Pin'}</button>
-      ${spaces().map(space => `<button type="button" data-rsspace="${esc(space.id)}" data-add="${!space.threads.includes(sid)}">${PIN_SVG}${space.threads.includes(sid) ? 'Remove from' : 'Add to'} ${SPACE.one} · ${esc(space.name)}</button>`).join('')}
+      <button type="button" data-rsspacepicker>${PIN_SVG}Add to a Space…</button>
+      ${visibleSpaces().filter(space => spaceAgent(space) === (LIVE.agentOf(sid) || AGS()?.defaultId() || 'hermes') && space.threads.includes(sid)).map(space => `<button type="button" data-rsspace="${esc(space.id)}" data-add="${!space.threads.includes(sid)}">${PIN_SVG}${space.threads.includes(sid) ? 'Remove from' : 'Add to'} ${SPACE.one} · ${esc(space.name)}</button>`).join('')}
       ${topicOn() ? `<button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>` : ''}
       ${acts.map(a => `<button type="button" data-rsact="${a}">${ACT[a].icon}${actionLabel(s, a)}</button>`).join('')}
       ${acts.length ? '' : `<p class="ch-sheet-n">${isWorking(s) || ['waiting_for_approval', 'unknown'].includes(s.status) ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
@@ -1591,7 +1718,7 @@ window.WizCore.chats = function createChats(H) {
     const privTag = TAG && AGS()?.isPrivate(agentRec(TAG)) ? `<span class="ch-privtag" data-wiz-private="" title="Private agent: ${esc(agentName(TAG))}">${AGS().lock()}<span>Private</span></span>` : '';
     const state = threadState(s, TAG), working = state.working;
     const sub = isNew ? `Starts a new thread with ${agentName(TAG)}` : state.sub;
-    const turns = c.loadedFor === w.thread || c.cachedFor === w.thread ? c.turns || [] : null;
+    const turns = (c.loadedFor === w.thread || c.cachedFor === w.thread) && turnsCurrent(c, s) ? c.turns || [] : null;
     c.media = []; c.texts = [];
     let msgs;
     // A message the transcript on screen already shows is never drawn again below it as pending: reopening a thread
@@ -1759,7 +1886,11 @@ window.WizCore.chats = function createChats(H) {
     });
   }
   function bindPull(root) {
+    // James's own touch or wheel on the list owns its scroll from here: drop any return bookmark still being held.
+    const own = e => { const sc = e.target.closest?.('.ch-list > .ch-scroll'); const id = sc && idOf(sc); if (id) ch(id).listPending = null; };
+    root.addEventListener('wheel', own, { capture: true, passive: true });
     root.addEventListener('touchstart', e => {
+      own(e);
       ptr = null;
       if (e.touches.length !== 1) return;
       const sc = e.target.closest?.('.ch-list > .ch-scroll'); if (!sc || sc.scrollTop > 0) return;
@@ -1949,9 +2080,17 @@ window.WizCore.chats = function createChats(H) {
     return `<div class="ch-empty ch-readerr" role="status"><b>Couldn’t load this thread</b><br>${esc(why)} Retrying automatically.<br><button type="button" class="pbtn" data-chretry>Retry now</button>${r && !['checking', 'send'].includes(r.layer) ? ' ' + troubleshoot : ''}</div>`;
   }
   function renderChats(w) {
+    syncListTitle(w);
     const el = track.querySelector(`[data-chats="${w.id}"]`); if (!el) return;
 
     if (w.thread) { renderThread(w, el); loadThread(w); } else renderChatList(w, el);
+  }
+  // Turns kept from an earlier open may only paint a new open when the live list says the thread still holds the
+  // same messages; otherwise the previous reply showed until the read landed (James, 24 Oct 2026). Within one open
+  // (this open's own read or cached paint) the turns on screen stay put while the next read runs, so polls never blank it.
+  function turnsCurrent(c, s) {
+    if (c.loadedNav === c.readNav || c.cachedNav === c.readNav || !s || !LIVE.contentKey) return true;
+    return !!LIVE.listTrusted?.() && c.readCk === LIVE.contentKey(s);
   }
   async function loadThread(w, force) {
     const c = ch(w.id), sid = w.thread, nav = c.readNav;
@@ -1967,12 +2106,13 @@ window.WizCore.chats = function createChats(H) {
     const quiet = s && (!s.status || ['completed', 'cancelled', 'failed', 'interrupted'].includes(s.status))
       && Number.isSafeInteger(s.messageCount) && !LIVE.busy(w.thread) && !c.err && !pendingFor(w).length;
     const age = isWorking(s) ? 3500 : quiet ? 60000 : 15000;
-    const fresh = c.loadedFor === w.thread && Date.now() - c.at < age && (!quiet || c.readRevision === revision);
+    const fresh = c.loadedFor === w.thread && Date.now() - c.at < age && (!quiet || c.readRevision === revision) && turnsCurrent(c, s);
     // Status changes (Stopping…, Deferred, Archived) re-render the header even between message reads.
     const hk = s ? [s.status, !!s.archived, !!s.deferred, s.runId].join('|') : '';
     // Speed: a thread not yet read this page paints its last on-device copy at once (no skeleton);
     // the read below still runs and replaces it.
-    if (c.loadedFor !== sid && c.cachedFor !== sid && LIVE.cachedMessages) {
+    // A stored copy also replaces turns from an earlier open that the list says are out of date (preload often has the newer one).
+    if (!((c.loadedFor === sid || c.cachedFor === sid) && turnsCurrent(c, s)) && LIVE.cachedMessages) {
       const cached = LIVE.cachedMessages(sid);
       if (cached && cached.length) {
         try {
@@ -1980,7 +2120,7 @@ window.WizCore.chats = function createChats(H) {
           // that thread treat sid's cached body as its own fresh copy (James, 23 Oct 2026: Morning projects → linked
           // thread → Back showed the linked thread under the Morning header until the 60 s re-read). The server read
           // below still runs and sets loadedFor.
-          Object.assign(c, { turns: toTurns(cached), cachedFor: sid, loadedFor: '', err: '' });
+          Object.assign(c, { turns: toTurns(cached), cachedFor: sid, cachedNav: nav, loadedFor: '', err: '' });
           const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderLive(w, el);
         } catch (e) {}
       }
@@ -2004,7 +2144,7 @@ window.WizCore.chats = function createChats(H) {
     }
     // Every read owns a captured thread AND navigation generation. A -> B -> A is a new read;
     // an old completion must neither publish into it nor release its loading lock.
-    const read = { sid, nav }; c.loading = read;
+    const read = { sid, nav }, readCk = LIVE.contentKey ? LIVE.contentKey(s) : ''; c.loading = read;
     const current = () => W[w.id] === w && w.thread === sid && c.readNav === nav && c.loading === read;
     try {
       const rows = await LIVE.messages(sid);
@@ -2012,7 +2152,7 @@ window.WizCore.chats = function createChats(H) {
       const turns = toTurns(rows);
       const sig = JSON.stringify(turns.slice(-3));
       let changed = c.loadedFor !== w.thread || sig !== c.sig;
-      Object.assign(c, { turns, cachedFor: '', loadedFor: w.thread, loadedNav: nav, at: Date.now(), err: '', sig, readRevision: revision, detailNav: nav, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
+      Object.assign(c, { turns, cachedFor: '', loadedFor: w.thread, loadedNav: nav, readCk, at: Date.now(), err: '', sig, readRevision: revision, detailNav: nav, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
       // A sent message has landed once a recent user turn in the thread matches it.
       // Transcript absence is not a rejection receipt. Never replay accepted steering.
       if (retireLanded(w.thread, turns)) changed = true;
@@ -2046,7 +2186,7 @@ window.WizCore.chats = function createChats(H) {
   function openChat(wid, sid, opts = {}) {
     window.WizCore.chatSearch?.park(wid); // Back returns to these results, not a fresh search
     const w = W[wid]; if (!w) return;
-    if (!w.thread) { const place = listPlace(elOf(wid)); if (place) ch(wid).listPlace = place; }
+    if (!w.thread) { const c0 = ch(wid), place = c0.listPending || listPlace(elOf(wid)); c0.listPending = null; if (place) c0.listPlace = place; }
     if (w.thread) saveDraft(wid);
     closeRowSheet();
     const c = ch(wid); c.approval = null; c.cachedFor = ''; // a cached paint belongs to one open only
@@ -2150,7 +2290,7 @@ window.WizCore.chats = function createChats(H) {
       return;
     }
     const now = peekComposer(wid, sid);
-    const back = { text: [String(text || '').trim(), now.text.trim()].filter(Boolean).join('\n'), files: [...files, ...now.all.filter(f => !files.some(x => x.id === f.id))].slice(0, 8) };
+    const back = { text: [String(text || '').trim(), now.text.trim()].filter(Boolean).join('\n'), files: [...files, ...now.all.filter(f => !files.some(x => x.id === f.id))].slice(0, MAX_FILES) };
     if (reply && !now.reply) KIT.drafts.setReply(composerKey(sid), reply);
     if (now.here) { setDraft(wid, back.text, back.files); renderChats(W[wid]); } else KIT.drafts.set(composerKey(sid), back.text, back.files);
   }
@@ -2206,7 +2346,7 @@ window.WizCore.chats = function createChats(H) {
     const sealed = opts.seal === true ? takeComposer(wid, sid) : opts.seal || null;
     const tray = here && !voice ? (c.files || []) : [];
     // Files still uploading go too, as placeholders the outbox fills in before delivery (never a "wait" gate).
-    const files = [...(opts.files || []), ...(sealed ? sealed.files : []), ...tray.map(pendRef)].filter(f => f && f.id && !f.uploading).filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, 8);
+    const files = [...(opts.files || []), ...(sealed ? sealed.files : []), ...tray.map(pendRef)].filter(f => f && f.id && !f.uploading).filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, MAX_FILES);
     // A recording not yet transcribed carries the typed words beside it (the outbox puts them before the
     // transcript); anything already in words is joined now.
     let typed = sealed ? sealed.text : '';
@@ -2269,7 +2409,7 @@ window.WizCore.chats = function createChats(H) {
     if (spaceKey && it?.sessionId) spaceMember(spaceKey, it.sessionId, true);
     sealed?.done(it);
     if (!left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
-    window.WosSkinHost?.emit('sent', { thread: sid, wid, isNew });
+    window.WosSkinHost?.emit?.('sent', { thread: sid, wid, isNew });
     return it;
   }
   const picker = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true });
@@ -2374,7 +2514,15 @@ window.WizCore.chats = function createChats(H) {
     const dr = e.target.closest('[data-chdraft]'); if (dr) { openNewDraft(owner(id), dr.dataset.chdraft); return true; }
     if (e.target.closest('[data-chbsmore]')) { window.WizCore.chatSearch?.more(id); renderChatList(w, elOf(id)); return true; }
     const cx = e.target.closest('[data-chchipx]'); if (cx) { const c = ch(id); c.filter = ''; c.filterFrom = null; c.coach = false; rerenderList(w); return true; }
-    const fp = e.target.closest('[data-chfocusopt]'); if (fp) { const [kind, ...key] = fp.dataset.chfocusopt.split(':'); setFocus(w, { kind, key: key.join(':') }); return true; }
+    const newSpace = e.target.closest('[data-chspacenew]');
+    if (newSpace) { openSpacePicker(w, focusAgents()[0].id, newSpace, { naming: true }); return true; }
+    const fp = e.target.closest('[data-chfocusopt]'); if (fp) {
+      if (Date.now() < focusHoldUntil) return true;
+      const [kind, ...parts] = fp.dataset.chfocusopt.split(':'), key = parts.join(':');
+      if (fp.classList.contains('ch-focus-tab') && kind === 'agent' && focusedAgent(focusOf(w)) === key) openSpacePicker(w, key, fp);
+      else setFocus(w, { kind, key });
+      return true;
+    }
     if (e.target.closest('[data-chfbtn]')) { const c = ch(id); c.sheet = c.sheet === 'status' ? false : 'status'; c.focus = false; rerenderList(w); return true; }
     if (e.target.closest('[data-chfclear]')) { const c = ch(id); c.sheet = false; c.coach = false; clearAll(w); return true; }
     const lay = e.target.closest('[data-chlayout]'); if (lay) { LIVE.chatLayout = lay.dataset.chlayout; for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
@@ -2399,6 +2547,10 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chemoclear]') && rowSheet?.emoji) { const sheet = e.target.closest('.ch-emoji-sheet'), input = sheet?.querySelector('[data-chemosearch]'); if (input) { input.value = ''; renderEmojiSearch(sheet, ''); input.focus(); } return true; }
     const emoji = e.target.closest('[data-chtopicemoji]'); if (emoji && rowSheet?.emoji) { const { key } = rowSheet; if (TOPIC.set(key, emoji.dataset.chtopicemoji)) { closeRowSheet(); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww && !ww.thread) renderChats(ww); } toast(emoji.dataset.chtopicemoji, 'Topic emoji saved', 1400); } return true; }
     if (e.target.closest('[data-rsemo]') && rowSheet?.sid) { const { wid: rw, sid } = rowSheet, s = LIVE.session(sid); openEmojiSheet(rw, `thread:${sid}`, s?.title || 'Choose emoji'); return true; }
+    if (e.target.closest('[data-rsspacepicker]') && rowSheet?.sid) {
+      const { sid, trigger } = rowSheet; closeRowSheet();
+      openSpacePicker(w, LIVE.agentOf(sid) || AGS()?.defaultId() || 'hermes', trigger, { sid }); return true;
+    }
     const rsSpace = e.target.closest('[data-rsspace]');
     if (rsSpace && rowSheet?.sid) { const { sid } = rowSheet; closeRowSheet(); spaceMember(rsSpace.dataset.rsspace, sid, rsSpace.dataset.add === 'true'); return true; }
     if (e.target.closest('[data-rspin]') && rowSheet?.sid) { const { sid } = rowSheet, on = PIN.toggle(sid); closeRowSheet(); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
@@ -2513,7 +2665,7 @@ window.WizCore.chats = function createChats(H) {
   };
   // Back / Esc: the media viewer, then the actions sheet. Returns what it closed, or ''.
   function closeFilterSheet() { for (const id of Object.keys(CH)) { const c = CH[id]; if (c.sheet) { c.sheet = false; const w = H.win(id); if (w) rerenderList(w); return true; } } return false; }
-  const closeOverlay = () => (closeFilterSheet() ? 'filter-sheet' : null) || (window.WizCore.status?.back() || (KIT.viewer.close() ? 'viewer' : closeRowSheet() ? 'thread-actions' : PW?.closeSheet() ? 'chat-sheet' : ''));
+  const closeOverlay = () => (closeSpacePicker() ? 'space-picker' : null) || (closeFilterSheet() ? 'filter-sheet' : null) || (window.WizCore.status?.back() || (KIT.viewer.close() ? 'viewer' : closeRowSheet() ? 'thread-actions' : PW?.closeSheet() ? 'chat-sheet' : ''));
   // Put words (and already-uploaded files) back into a composer, e.g. editing an unsent message.
   function setDraft(wid, text, files) {
     const w = W[wid], c = ch(wid); if (!w) return;
@@ -2537,7 +2689,7 @@ window.WizCore.chats = function createChats(H) {
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
   const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
-  return { tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
     KIT, threadAct, openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };

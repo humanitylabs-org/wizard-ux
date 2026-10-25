@@ -84,6 +84,7 @@ html.wos-doc-scroll :is(#dock,.general-voice,.pill) { position: fixed; }
 .ch-list[style*="--agc"] .ch-sec-h b:not(.wait) { background: var(--agc); color: var(--wz-base, var(--bg)); }
 .ch-list[style*="--agc"] .ch-row.unread .tp time { color: var(--agc); }
 .ch-list[style*="--agc"] .ch-fab { background: linear-gradient(145deg, color-mix(in oklab, var(--agc) 85%, #fff), color-mix(in oklab, var(--agc) 80%, #000)); color: #111; box-shadow: 0 10px 26px color-mix(in srgb, var(--agc) 50%, transparent), inset 0 1px 0 rgba(255,255,255,.25); }
+
 .ch-focus-tab[data-chfocusopt^="space:"]::before { border-color: var(--wz-line, var(--line-2)); }
 .ch-focus-tab:focus-visible { outline: 2px solid var(--violet-2); outline-offset: -3px; }
 .ch-focus-tab > span { overflow: hidden; text-overflow: ellipsis; }
@@ -477,7 +478,9 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-row .emo.sti.working { background: rgba(90, 220, 255, .08); }
 .ch-row .emo.sti .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(90, 220, 255, .22); border-top-color: var(--cyan); animation: sti-spin .9s linear infinite; }
 @keyframes sti-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .ch-row .emo.sti .spin { animation-duration: 3s; } }
+/* A Working spinner is status, not decoration: Reduce Motion slows it, never stops it. !important out-ranks the global
+ * reduced-motion kill switch in styles.css (`*` + !important), which froze it (Robert, 24 Oct 2026). */
+@media (prefers-reduced-motion: reduce) { .ch-row .emo.sti .spin { animation-duration: 3s !important; animation-iteration-count: infinite !important; } }
 .ch-topic-mark { position: relative; flex: 0 0 auto; width: 44px; height: 38px; }
 .ch-topic-emoji { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; font-size: 21px; line-height: 1; background: color-mix(in srgb, var(--ink) 7%, transparent); }
 .ch-row .emo.sti.ch-topic-status, .ch-topic-status.draft-status { position: absolute; right: 0; bottom: -1px; width: 17px; height: 17px; min-width: 0; border-radius: 6px; border: 1px solid var(--bg); z-index: 1; }
@@ -571,6 +574,36 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-fopt { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 99px; border: 1px solid var(--line-2); font-size: 14px; color: var(--ink); background: rgba(205, 190, 255, .04); }
 .ch-fopt.on { background: rgba(185, 155, 255, .2); border-color: rgba(185, 155, 255, .5); }
 .ch-fopt b { color: var(--violet-2, #b99bff); font-size: 12px; }
+
+/* Agent-owned Spaces: same Focus rows, a single local picker above the strip. */
+.ch-focus-caret { flex: none; font-style: normal; font-size: 12px; opacity: .65; }
+.ch-focus-tab > span { max-width: 18ch; }
+.ch-space-nested { padding: 8px 0 0 20px; }
+.ch-focus-group { margin-top: 12px; }
+.ch-space-shade { position: fixed; z-index: 1900; inset: 0; background: color-mix(in srgb, var(--wz-base, #080610) 48%, transparent); }
+.ch-space-picker { position: absolute; left: 8px; right: 8px; max-height: min(55vh, 440px); display: flex; flex-direction: column; border: 1px solid var(--wz-line, var(--line-2)); border-radius: 18px; background: linear-gradient(var(--wz-overlay, #120b26), var(--wz-overlay, #120b26)), var(--wz-base, var(--bg, #080610)); color: var(--wz-ink, var(--ink, #f4edff)); box-shadow: 0 12px 48px #0007; padding: 8px; overflow: hidden; }
+.ch-space-grab { width: 36px; height: 4px; border-radius: 4px; background: var(--wz-line, var(--line-2)); align-self: center; margin: 0 0 4px; flex: none; }
+.ch-space-picker header { display: flex; align-items: center; gap: 8px; min-height: 44px; padding-left: 10px; flex: none; }
+.ch-space-picker header > i { width: 8px; height: 8px; border-radius: 50%; background: var(--ch-agent-colour); }
+.ch-space-picker header b { flex: 1; font-size: 14px; }
+.ch-space-picker header button { width: 44px; height: 44px; border: 0; border-radius: 12px; background: transparent; color: inherit; font-size: 24px; }
+.ch-space-rows { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.ch-space-picker .ch-fopt { display: flex; width: 100%; min-height: 48px; height: auto; border: 0; border-radius: 10px; background: transparent; padding: 10px 12px; text-align: left; color: inherit; }
+.ch-space-picker .ch-fopt > span { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.ch-space-picker .ch-fopt small { font-size: 12px; color: var(--wz-ink-3, var(--ink-3)); font-variant-numeric: tabular-nums; }
+.ch-space-picker .ch-fopt.on { background: color-mix(in srgb, var(--ch-agent-colour) 14%, transparent); box-shadow: inset 3px 0 var(--ch-agent-colour); }
+.ch-space-picker .ch-fopt b { color: var(--ch-agent-colour); }
+.ch-space-picker .ch-focus-dot { position: static; flex: none; width: 6px; height: 6px; margin: 0 2px; }
+.ch-space-picker button:focus-visible, .ch-space-picker input:focus-visible { outline: 2px solid var(--ch-agent-colour); outline-offset: -2px; }
+.ch-space-new { flex: none; min-height: 48px; text-align: left; padding: 10px 12px; margin-top: 6px; border: 0; border-top: 1px solid var(--wz-line, var(--line)); background: transparent; color: var(--ch-agent-colour); font: inherit; font-size: 14px; font-weight: 600; }
+.ch-space-form { flex: none; padding: 12px 4px 4px; border-top: 1px solid var(--wz-line, var(--line)); margin-top: 6px; }
+.ch-space-form label { display: block; color: var(--wz-ink-3, var(--ink-3)); font-size: 12px; margin: 0 8px 8px; }
+.ch-space-form > div { display: flex; gap: 8px; }
+.ch-space-form input { flex: 1; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid var(--wz-line, var(--line-2)); border-radius: 10px; background: var(--wz-base, var(--bg)); color: inherit; font: inherit; font-size: 16px; }
+.ch-space-form button { min-height: 44px; border: 0; border-radius: 10px; padding: 0 14px; background: var(--ch-agent-colour); color: var(--wz-base, var(--bg)); font: inherit; font-size: 14px; font-weight: 650; }
+.ch-space-form button:disabled { opacity: .45; }
+.ch-space-form p { margin: 8px; font-size: 13px; color: var(--wz-danger, var(--red, #ff6b86)); }
+@media (min-width: 641px) { .ch-space-picker { right: auto; width: 280px; max-height: min(60vh, 420px); border-radius: 16px; } .ch-space-grab { display: none; } }
 
 /* New chat button: bottom-right of the Chats list, clear of the orb (dock sits below the window; corner orb lifts it). */
 .ch-fab { position: absolute; right: 16px; bottom: 16px; z-index: 5; width: 54px; height: 54px; border-radius: 18px; display: grid; place-items: center;
@@ -704,7 +737,7 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 .ch-sync { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 2px 16px 6px; font-size: 12px; color: var(--ink-3); animation: ch-fade .2s ease; }
 .ch-sync.off { color: var(--ink-2); }
 .ch-spin { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--line-2, rgba(255,255,255,.18)); border-top-color: var(--ink-2, currentColor); animation: ch-attspin .8s linear infinite; flex: none; }
-@media (prefers-reduced-motion: reduce) { .ch-spin { animation-duration: 2.4s; } }
+@media (prefers-reduced-motion: reduce) { .ch-spin { animation-duration: 2.4s !important; animation-iteration-count: infinite !important; } }
 
 /* New chat greeting: Miguel's skins switch it on in their own web/skins/<dir>/skin.css. Default skins keep the boxed .nc-classic. */
 .ch-newchat { display: none; }

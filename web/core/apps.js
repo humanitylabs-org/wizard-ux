@@ -136,7 +136,7 @@
         sgc: AG.colour(a), sgh: window.WizSigil?.html({ icon: AG.glyph(a) }),
       });
       const main = AG?.list.find(a => a.is_default);
-      const agents = (AG?.list || []).filter(a => !a.is_default).map(agentTile);
+      const agents = (AG?.visible?.() || AG?.list || []).filter(a => !a.is_default).map(agentTile);
       // Reserve the agent namespace even after deletion: a stale remote app must never impersonate it.
       const views = window.WizChatsHost?.tiles() || [];
       const merged = [...ALL.slice(0, chats), main ? agentTile(main) : ALL[chats], ...agents, ...views, ...REMOTE.filter(r => !r.id.startsWith('agent:') && !ALL.some(a => a.id === r.id) && !views.some(a => a.id === r.id)), ...ALL.slice(chats + 1)];

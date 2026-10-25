@@ -346,7 +346,11 @@
     if (caps.has('layout')) {
       Object.assign(api, { listen: base.listen, frame: base.frame, gesture: base.gesture });
       // Borrow a built-in layout through the same host; disposal invalidates the handle.
-      api.layout = Object.freeze({ use(id) {
+      api.layout = Object.freeze({ foundation(id) {
+        if (a.dead) return () => {};
+        const release = window.WosSkin?.useFoundation(id) || (() => {});
+        a.offs.add(release); return release;
+      }, use(id) {
         if (a.dead || !layoutOf(id)) return () => {};
         setLayout(id);
         let released = false;
@@ -391,6 +395,15 @@
       },
       snoozeSomeday: sessionId => { if (!trusted || a.dead) throw new Error('Trusted navigation required'); return window.WosBoomerang.someday({ sessionId }); },
     });
+    // A layout+navigation package may borrow the shell's overview renderer/input adapter.
+    // No DOM or package IDs cross this boundary; the handle is released on every teardown.
+    if (caps.has('layout') && caps.has('nav')) api.overview = Object.freeze({ use(options = {}) {
+      if (a.dead) return () => {};
+      if (!['arrange','offer'].includes(options.hold) || ![null,'home-screen'].includes(options.appAction ?? null) || typeof options.appHold !== 'boolean') throw new Error('Invalid overview mode');
+      const release = shell?.overview?.use?.(Object.freeze({ hold:options.hold, appAction:options.appAction ?? null, appHold:options.appHold })) || (() => {});
+      let released = false; const off = () => { if (!released) { released = true; release(); } };
+      a.offs.add(off); return off;
+    } });
     if (caps.has('models')) {
       api.models = Object.freeze({ list: async () => {
         const options = await shell?.models?.() || [];

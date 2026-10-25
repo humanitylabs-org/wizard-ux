@@ -69,17 +69,18 @@ test('a core repaint removes the origin marker: teardown never resurrects stale 
 });
 
 function wizardExperience(storage = new Map()) {
+  const requests = [];
   let skin = 'nebula', active = [], layout = storage.get('wos.layout') || 'classic';
   const window = { WosSkin: { get current() { return skin; }, familyOf: id => id === 'nebula' ? 'wizard' : 'novairecito', families: [{id:'wizard',tweaks:'wizard'}, {id:'novairecito'}] },
     WosSkinHost: { personalState:{ready:false}, get tweakState() { return active; }, get layout() { return layout; }, setLayout: id => { layout = id; }, loadTweaks: async ids => { active = ids; } }, addEventListener() {}, dispatchEvent() {} };
   vm.runInNewContext(read('web/core/experience.js'), {window, document:{baseURI:'https://wizard.test/wizard-os-home/',addEventListener(){}}, Event, URL, AbortSignal,
-    localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)}, fetch:async url=>({ok:true,json:async()=>JSON.parse(read('web/'+url.pathname.split('/wizard-os-home/')[1]))})});
-  return { E:window.WosExperience, storage, skin:id=>{skin=id;}, active:()=>Array.from(active) };
+    localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)}, fetch:async url=>{ requests.push(url.pathname); return {ok:true,json:async()=>JSON.parse(read('web/'+url.pathname.split('/wizard-os-home/')[1]))}; }});
+  return { window, E:window.WosExperience, storage, requests, skin:id=>{skin=id;}, active:()=>Array.from(active) };
 }
 test('profile default-off applies until the owner stores a deliberate choice, including an empty off list', async () => {
   let f = wizardExperience(); await f.E.refresh(); assert.deepEqual(f.active(), []); assert.equal(f.E.state.tweaks[0].on, false);
   await f.E.toggle('wizard/two-orbs'); assert.deepEqual(f.active(), ['wizard/two-orbs']);
-  assert.deepEqual(JSON.parse(f.storage.get('wos.skin-tweaks.v1')).off.wizard, []);
+  assert.deepEqual(JSON.parse(f.storage.get('wos.skin-tweaks.v1')).off.wizard, ['wizard/app-borders']);
   f = wizardExperience(f.storage); await f.E.refresh(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
   f.skin('novairecito'); await f.E.chooseSkin(); assert.deepEqual(f.active(), []);
   f.skin('nebula'); await f.E.chooseSkin(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
@@ -92,11 +93,63 @@ test('legacy two-orb migration opts in exactly once, preserving a later owner of
   const saved = new Map([['wos.layout','two-orb'], ['wos.skin-tweaks.v1',JSON.stringify({version:1,off:{wizard:['wizard/two-orbs']}})]]);
   f = wizardExperience(saved); await f.E.refresh(); assert.deepEqual(f.active(), []);
 });
+test('overview mode is capability gated, revoked on teardown, and stale handles cannot reactivate it', async () => {
+  const f=fixture(); let api;
+  f.host._test.setImporter(async()=>({default:a=>{api=a;return()=>{};}}));
+  await f.mount('miguel/hidden-pin'); assert.equal(api.overview,undefined);
+  await f.mount('miguel/arrange-download');
+  assert.throws(()=>api.overview.use({hold:'exit',appHold:false}),/Invalid overview mode/);
+  const release=api.overview.use({hold:'arrange',appAction:'home-screen',appHold:false});
+  assert.equal(f.overview.hold,'arrange'); await f.clear(); assert.equal(f.overview,null);
+  release(); release(); api.overview.use({hold:'arrange',appAction:'home-screen',appHold:false}); assert.equal(f.overview,null);
+});
 test('layout handles become inert on disposal and their cleanup is idempotent', async () => {
   const f = fixture(); let api;
   f.host._test.setImporter(async () => ({default:a=>{api=a;return()=>{};}}));
   await f.mount('wizard/two-orbs'); await f.clear();
   api.layout.use('two-orb')(); assert.equal(f.host.layout,'classic');
+});
+
+
+test('App borders migrates stored framed exactly once, leaves everyone else borderless and respects later off', async () => {
+  for (const foundation of ['framed', 'borderless', null]) {
+    const storage = new Map(foundation ? [['wos.skin.composition.v1', JSON.stringify({version:1,extends:'nebula',frame:{foundation}})]] : []);
+    let f = wizardExperience(storage); await f.E.refresh();
+    assert.equal(f.active().includes('wizard/app-borders'), foundation === 'framed');
+    if (foundation === 'framed') { await f.E.toggle('wizard/app-borders'); f = wizardExperience(storage); await f.E.refresh(); assert.deepEqual(f.active(), []); }
+  }
+});
+test('own recipes expose all installed tweaks, use published defaults and isolate builtin choices', async () => {
+  const f = wizardExperience();
+  f.window.WosSkin.familyOf = id => id === 'obsidian-light' ? 'mizel' : 'wizard';
+  f.window.WosSkin.families.push({id:'mizel',name:'Mizel',tweaks:'miguel'});
+  const defaults = await f.E.defaults('nebula');
+  assert.equal(defaults['wizard/app-borders'], false); assert.equal(defaults['wizard/two-orbs'], false);
+  assert.equal(defaults['miguel/model-pills'], false);
+  const mizel = await f.E.defaults('obsidian-light'); assert.equal(mizel['miguel/model-pills'],true);
+  const skin = {id:'quiet',tweaks:{...defaults,'miguel/model-pills':true}};
+  f.window.WosMySkin = {active:skin,update(v){ Object.assign(skin.tweaks,v.tweaks); }};
+  await f.E.refresh(); assert.equal(f.E.state.tweaks.length, JSON.parse(read('web/tweaks/catalog.json')).tweaks.length);
+  assert.deepEqual(f.active(),['miguel/model-pills']);
+  await f.E.toggle('wizard/app-borders'); assert.ok(f.active().includes('wizard/app-borders'));
+  f.window.WosMySkin.active=null; await f.E.refresh(); assert.deepEqual(f.active(),[]);
+});
+
+test('installed list warms base profiles so picking Mizel does not wait for another network request', async () => {
+  const f = wizardExperience(); f.window.WosSkin.families.push({ id: 'mizel', tweaks: 'miguel' });
+  f.window.WosSkin.familyOf = id => id === 'obsidian-light' ? 'mizel' : 'wizard';
+  await f.E.installed();
+  const count = () => f.requests.filter(p => p.endsWith('/miguel/profile.json')).length;
+  assert.equal(count(), 1);
+  assert.equal((await f.E.defaults('obsidian-light'))['miguel/model-pills'], true);
+  await f.E.defaults('obsidian-light'); assert.equal(count(), 1);
+});
+
+test('disposed foundation capability cannot change windows', async () => {
+  const f = fixture(); let api;
+  f.host._test.setImporter(async () => ({default:a=>{api=a;return()=>{};}}));
+  await f.mount('wizard/app-borders'); await f.clear(); api.layout.foundation('framed')();
+  assert.equal(f.ctx.window.WosSkin.frame.foundation, 'borderless');
 });
 
 test('slot lookup prefers a visible instance over hidden Chats copies (desktop)', async () => {

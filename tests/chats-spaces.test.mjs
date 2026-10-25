@@ -2,6 +2,25 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { editSpaces, run } from '../skills/wizard-spaces/scripts/wizard-spaces.mjs'
 const sample = () => [{id:'launch',name:'Launch',threads:['wizard_1'],createdAt:'2026-10-24T00:00:00.000Z'}]
+
+test('agent ownership is explicit on create, legacy main is respected, foreign edits are refused',()=>{
+ const current=sample();const next=editSpaces(current,['create','--agent','philosopher','Launch','phil_1']);
+ assert.equal(next[1].agent,'philosopher');assert.equal(editSpaces([],['create','Default'])[0].agent,'hermes');
+ assert.equal(editSpaces(next,['list','--agent','philosopher']).length,1);
+ assert.deepEqual(editSpaces(next,['list']),current);
+ assert.throws(()=>editSpaces(next,['delete',next[1].id]),/different agent/);
+ assert.throws(()=>editSpaces(next,['add','launch','--agent','philosopher','phil_2']),/different agent/);
+ for(const id of ['../bad','hermes\n','Bad',''])assert.throws(()=>editSpaces([],['create','--agent',id,'X']));
+ assert.deepEqual(editSpaces(next,['add',next[1].id,'--agent','philosopher','phil_2'])[1].threads,['phil_1','phil_2']);
+});
+test('search uses exact Space owner and canonical scoped list route, never cross-agent fallback',async()=>{
+ const calls=[];const request=async(u,o)=>{calls.push(String(u));return String(u).includes('ui-preferences')?Response.json({spaces:[{...sample()[0],agent:'philosopher'}]}):Response.json({data:[{id:'phil_1',title:'Reading'}]});};
+ const result=await run(['search','launch','--agent','philosopher','reading'],{request});assert.equal(result.agent,'philosopher');
+ const target=new URL(calls[1]);assert.equal(target.pathname,'/wizard/hermes/api/sessions');assert.equal(target.searchParams.get('agent'),'philosopher');assert.equal(target.searchParams.get('q'),'reading');assert.equal(result.threads[0].id,'phil_1');
+ await assert.rejects(run(['search','launch','--agent','hermes','reading'],{request}),/different agent/);
+ await assert.rejects(run(['search','launch','reading'],{request}),/different agent/);
+});
+
 test('Spaces helper creates, renames, deduplicates, adds, removes and deletes without mutating input', () => {
   const original=sample(), created=editSpaces(original,['create','Reading','wizard_2','wizard_2'])
   assert.equal(created.length,2);assert.equal(original.length,1)

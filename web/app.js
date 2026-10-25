@@ -199,6 +199,7 @@
   }
   function winTitle(w) {
     if (!w) return '';
+    if (w.app === 'chats' && !w.thread) { const title = CHATS.listTitle?.(w); if (title) return title; }
     if (agentWin(w) && !w.thread) return `${agentApp(w).name} · Chats`;
     if (w.app === 'chats') return w.thread === '__new__' ? 'New chat' : w.thread ? (LIVE?.session(w.thread)?.title || OUTBOX?.forThread(w.thread)[0]?.title || 'Thread') : 'Chats';
     if (w.app === 'review') return { month: 'Month in review', week: 'Week in review', day: 'Day in review', group: 'Day in review', thread: 'Thread' }[w.z?.level] || 'Review';
@@ -498,6 +499,27 @@
     const S = window.WizSigil, s = S.of(a.sigil || a);
     return { color: a.sgc || s.color, glyph: a.sgh || S.html(a.sigil || a) };
   }
+  // Generic overview input/action adapter; packages choose a mode through the capability-gated host.
+  const overviewModes = [], overviewMode = () => overviewModes.at(-1) || {};
+  const arrangeDesks = () => overviewMode().hold === 'arrange';
+  const overviewAdapter = { use(options) {
+    const mode = Object.freeze({ ...options }); overviewModes.push(mode);
+    const repaint = () => { if (ovEl?.classList.contains('open')) renderOverview(); }; repaint();
+    let released = false;
+    return () => { if (released) return; released = true; const at = overviewModes.indexOf(mode); if (at >= 0) overviewModes.splice(at, 1); repaint(); };
+  } };
+  /* Arrange/download tweak: holding a desk only arranges it (drag to reorder, ✕ to close, like an app switcher). A desk that
+   * shows exactly one registered frontend app also gets a small download button beside its ✕ in arrange mode, which
+   * opens the existing Add to home screen flow (native pin on Android, the two-step direct-link guide elsewhere). */
+  function ovDeskApp(d) {
+    const w = d && !d.home && d.wins.length === 1 ? W[d.wins[0]] : null, a = w?.app === 'frame' ? APP[w.appId] : null;
+    return a && !a.system && window.WizHomeScreenApps?.canOffer?.(a) ? a : null;
+  }
+  function ovDl(d) {
+    const a = overviewMode().appAction === 'home-screen' && ovDeskApp(d); if (!a) return '';
+    const label = `Add ${esc(window.WizHomeScreenPolicy?.displayName?.(a) || a.name)} to home screen`;
+    return `<button class="ov-dl" data-ovdl="${d.id}" aria-label="${label}" title="${label}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-4.5-4.5L12 15l4.5-4.5M5 19.5h14"/></svg></button>`;
+  }
   function ovCard(i) {
     const d = desks[i], wins = d.wins.map(id => W[id]).filter(Boolean), rv = isReviewDesk(i), here = i === idx;
     const lead = W[d.focus] || wins[0], primary = lead ? ovMark(winApp(lead)) : { color: '#C9BEFF' };
@@ -516,7 +538,7 @@
     // Miguel's skins: each desk card carries the same count badge as its dock mark (Ready chats, unread notifications…).
     const badge = (() => { if (!oursSkin()) return ''; const n = window.WizCore?.workspaceNav?.deskCount(d, W, winApp) || 0; return n ? `<b class="ov-badge" aria-label="${n} new">${window.WizCore.workspaceNav.fmt(n)}</b>` : ''; })();
     return `<div class="ov-card${here ? ' here' : ''}${d.home ? ' ov-home' : ''}${rv ? ' review' : ''}" data-ov="${d.id}" role="button" tabindex="0"${here ? ' aria-current="true"' : ''} style="--ov-c:${primary.color};--ov-c2:${c2}" aria-label="${esc(accessible)}${here ? ', current desk' : ''}${rv ? ', review' : ''}">
-      <div class="ov-chrome"><span class="ov-state">${here ? '<span class="ov-here">Here</span>' : ''}${rv ? '<span class="ov-review">Review</span>' : ''}</span>${d.home ? '' : `<button class="ov-x" data-ovx="${d.id}" aria-label="Close ${esc(name)}">✕</button>`}</div>
+      <div class="ov-chrome"><span class="ov-state">${here ? '<span class="ov-here">Here</span>' : ''}${rv ? '<span class="ov-review">Review</span>' : ''}</span>${d.home ? '' : `${ovDl(d)}<button class="ov-x" data-ovx="${d.id}" aria-label="Close ${esc(name)}">✕</button>`}</div>
       ${badge}<div class="ov-body ov-n${Math.min(wins.length, 4)}">${body}</div>
       <div class="ov-top"><b>${esc(wins.length > 1 ? `${wins.length} windows` : name)}</b>${cap ? `<small>${esc(cap)}</small>` : ''}</div></div>`;
   }
@@ -530,7 +552,7 @@
     // Pill mode is the dock itself with room to spare: the same desk icons and badges in a grid, an ✕ where the pill was.
     const cell = i => {
       const d = desks[i], here = i === idx, name = d.home ? 'Home' : deskName(i);
-      return `<div class="ov-card ov-cell${here ? ' here' : ''}${d.home ? ' ov-home' : ''}" data-ov="${d.id}" role="button" tabindex="0"${here ? ' aria-current="true"' : ''} aria-label="${esc(name)}${here ? ', current desk' : ''}"><span class="ov-ic">${deskSigil(i)}</span><span class="ov-nm">${esc(name)}</span>${d.home ? '' : `<button class="ov-x" data-ovx="${d.id}" aria-label="Close ${esc(name)}">✕</button>`}</div>`;
+      return `<div class="ov-card ov-cell${here ? ' here' : ''}${d.home ? ' ov-home' : ''}" data-ov="${d.id}" role="button" tabindex="0"${here ? ' aria-current="true"' : ''} aria-label="${esc(name)}${here ? ', current desk' : ''}"><span class="ov-ic">${deskSigil(i)}</span><span class="ov-nm">${esc(name)}</span>${d.home ? '' : `<button class="ov-x" data-ovx="${d.id}" aria-label="Close ${esc(name)}">✕</button>${ovDl(d)}`}</div>`;
     };
     const pillInner = `<div class="ov-grid">${desks.map((_, i) => cell(i)).join('')}<button class="ov-card ov-cell ov-new" data-ovadd aria-label="New desk: pick an app"><span class="ov-ic"><span class="dsg"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="3.2" stroke-dasharray="3.1 2.6"/></svg></span></span><span class="ov-nm">New desk</span></button></div>`;
     ovEl.innerHTML = ovEl.classList.contains('ov-pill') ? `<div class="ov-sheet"><div class="ov-scroll">${pillInner}</div><button class="ov-close" data-ovdone aria-label="Close desks"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>` : inner;
@@ -576,6 +598,8 @@
     el.addEventListener('click', e => {
       if (Date.now() < ovTapBlock) return;
       if (e.target.closest('[data-ovdone]')) return closeOverview();
+      const dl = e.target.closest('[data-ovdl]');
+      if (dl) { if (overviewMode().appAction !== 'home-screen') return; const a = ovDeskApp(desks[posOf(dl.dataset.ovdl)]); if (a) window.WizHomeScreenApps?.offer(a); return; }
       const x = e.target.closest('[data-ovx]'); if (x) { closeDesk(posOf(x.dataset.ovx)); if (desks.length) renderOverview(); return; }
       if (e.target.closest('[data-ovadd]')) { closeOverview(); return newDesk(); }
       const c = e.target.closest('[data-ov]'); if (c) { const i = posOf(c.dataset.ov); closeOverview(); if (i >= 0) goDesk(i); return; }
@@ -593,7 +617,7 @@
       if (e.touches.length !== 1) return;
       const t = e.touches[0], c = cardAt(t.clientX, t.clientY);
       OV = { x: t.clientX, y: t.clientY, c, moved: false, drag: false };
-      if (c && !c.classList.contains('ov-home') && !e.target.closest('.ov-x')) OV.hold = setTimeout(() => { if (OV && !OV.moved && !OV.pinch) startDrag(c, t.clientX, t.clientY); }, 380);
+      if (c && !c.classList.contains('ov-home') && !e.target.closest('.ov-x, .ov-dl')) OV.hold = setTimeout(() => { if (OV && !OV.moved && !OV.pinch) startDrag(c, t.clientX, t.clientY); }, 380);
     }, { passive: true });
     el.addEventListener('touchmove', e => {
       if (!OV) return;
@@ -622,6 +646,8 @@
         return;
       }
       clearTimeout(OV.hold);
+      // Arrange/download tweak: held and let go in place just stays in arrange mode (✕ and download buttons), no sheet.
+      if (arrangeDesks() && OV.drag && !OV.reordered) { endDrag(false); el.classList.add('editing'); ovTapBlock = Date.now() + 400; OV = null; return; }
       if (OV.drag && !OV.reordered && e.changedTouches?.[0] && Math.hypot(e.changedTouches[0].clientX - OV.dx, e.changedTouches[0].clientY - OV.dy) < 12) {
         // Held and let go in place: nothing moved, so offer Add to home screen for a one-app desk (drag still reorders).
         const d = desks[posOf(OV.card.dataset.ov)], w = d && d.wins.length === 1 ? W[d.wins[0]] : null, a = w?.app === 'frame' ? APP[w.appId] : null;
@@ -1987,9 +2013,10 @@
     const r = store.get('recent', []).filter(x => x !== a.id); r.unshift(a.id); store.set('recent', r.slice(0, 8));
     closeSheets(); setTimeout(() => openApp(a), 120);
   }
-  window.WizHomeScreenApps?.attach(launcher, id => APP[id]);
+  // Arrange/download tweak: hold no longer opens Add to home screen on app lists (the Desks download button does).
+  window.WizHomeScreenApps?.attach(launcher, id => APP[id], { available: () => overviewMode().appHold !== false });
   // Miguel's skins open apps from the New desk grid (swipe up shows Desks, not the Apps sheet): same long-press there.
-  window.WizHomeScreenApps?.attach(track, id => APP[id], { rows: '.new-desk [data-app]', live: row => !!row.closest('.new-desk') && row.getClientRects().length > 0 });
+  window.WizHomeScreenApps?.attach(track, id => APP[id], { available: () => overviewMode().appHold !== false, rows: '.new-desk [data-app]', live: row => !!row.closest('.new-desk') && row.getClientRects().length > 0 });
   launcher.addEventListener('click', e => {
     const sk = e.target.closest('[data-storekind]'); if (sk) return openStoreKind(sk.dataset.storekind);
     const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app]);
@@ -2172,9 +2199,10 @@
   // survives an app kill on disk. Browsers/PWAs and older shells keep the in-page MediaRecorder.
   // When James leaves the app mid-take, the floating orb (Everywhere) shows and drives this same take
   // through __wosVoiceCmd below; it never starts a second recorder.
-  const DEV = () => { const d = window.WizardOSDevice; return d && typeof d.recStart === 'function' ? d : null; };
+  // Wizard Shell (android/shell): the same recorder surface over wizardDevicePort, only when it offers device.recording.
+  const DEV = () => { const d = window.WizardOSDevice; return d && typeof d.recStart === 'function' ? d : window.WosDeviceRecording?.device() || null; };
   function nativeBlob(id, expected) {
-    return window.WosDevice.readRecording(id, expected);
+    return DEV()?.fetched?.(id)?.blob || window.WosDevice.readRecording(id, expected);
   }
   /* Stop (or claim an already-stopped) native take and hand its audio to the normal pipeline. */
   function nativeTakeAppOwned(id) {
@@ -2196,8 +2224,19 @@
     localStorage.setItem(VOICE_RECOVERY_KEY, JSON.stringify(rows));
   }
   window.__wosVoiceRecovery = () => { try { return Object.values(JSON.parse(localStorage.getItem(VOICE_RECOVERY_KEY) || '{}')); } catch (_) { return []; } };
+  const nativeFetching = new Set();
   function nativeFinish(id, stopped) {
     if (nativeTakeAppOwned(id)) { setVoice('paused'); toast('🎙', 'This recording belongs to another app'); return; }
+    // The shell recorder stops and reads asynchronously: fetch both first, then finish exactly as below.
+    const shell = DEV();
+    if (shell?.fetch && !shell.fetched(id)) {
+      if (nativeFetching.has(id)) return;
+      nativeFetching.add(id);
+      shell.fetch(id).then(() => { nativeFetching.delete(id); nativeFinish(id, stopped); }, () => {
+        nativeFetching.delete(id); V.native = null; setVoice('idle'); txHide(); toast('!', 'Could not read recording · original kept on this phone');
+      });
+      return;
+    }
     // Notification/Everywhere Send enters here directly, bypassing finishVoice. Seal the model before claiming
     // audio or awaiting STT. A recreated page restores the last route saved for this native take.
     if (V.kind === 'dictation' || window.__wosDictationTake(id)) {
@@ -2461,7 +2500,7 @@
       V.snap ||= sendSnap();if(!(V.snap.route?.model&&V.snap.route?.provider))V.snap.route=CHATS.modelRoute(V.replyTo.wid,V.replyTo.sid);
       if(!(V.snap.route?.model&&V.snap.route?.provider)){V.snap.route=null;throw Error('Choose a model before parking the reply');}
       let parkedNativeId=null;
-      if(V.native){const id=V.native;voiceRecovery(id,{kind:V.kind,ms:V.acc});const meta=JSON.parse(DEV().recStop(id)||'null');if(!meta?.id)throw Error('Native reply is still held');V.parts.push(nativeBlob(id,meta.bytes));V.native=null;V.resumeNative=true;parkedNativeId=id;}
+      if(V.native){const id=V.native;voiceRecovery(id,{kind:V.kind,ms:V.acc});const dev=DEV();if(dev.fetch&&!dev.fetched(id))await dev.fetch(id);const meta=JSON.parse(dev.recStop(id)||'null');if(!meta?.id)throw Error('Native reply is still held');V.parts.push(nativeBlob(id,meta.bytes));V.native=null;V.resumeNative=true;parkedNativeId=id;}
       if(V.rec && V.rec.state!=='inactive')await new Promise(resolve=>{V.rec.onstop=resolve;V.rec.stop();});
       if(V.chunks.length)V.parts.push(new Blob(V.chunks,{type:V.mime}));V.chunks=[];stopStream();V.rec=null;
       if(!V.seal){const seal=CHATS.takeComposer(V.replyTo.wid,V.replyTo.sid);V.seal=seal.text||seal.files.length||seal.reply?seal:null;}
@@ -2792,7 +2831,7 @@
         // durable recovery owner, then mark this explicitly cancelled (never queued).
         // Otherwise focus recovery can mistake the still-closing file for a Send.
         let meta;
-        try { voiceRecovery(id,{kind:V.kind,ms:V.acc});meta=JSON.parse(DEV().recStop(id)||'null'); }
+        try { voiceRecovery(id,{kind:V.kind,ms:V.acc});const dev=DEV();if(dev.fetch&&!dev.fetched(id))await dev.fetch(id);meta=JSON.parse(dev.recStop(id)||'null'); }
         catch { setVoice('paused');V.meetingLoan=loan;toast('!','Could not close recording · original retained');return; }
         if(!meta?.id){setVoice('paused');V.meetingLoan=loan;return;}
         V.native=null;
@@ -3576,6 +3615,7 @@
     return result || 'notReady';
   }
   function backStep(skipHosted) {
+    if (window.WizShareWizard?.back()) return 'share-wizard';
     if (window.WizHomeScreenApps?.back()) return 'pin-sheet';
     { const t = window.WosTour?.back(); if (t) { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } return t; } } // the first-run tour and the Help sheet sit above everything
     { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above everything, incl. the selection menu that opened it
@@ -3938,6 +3978,7 @@
   }
   const skinChatsWin = () => { const f = desks[idx]?.focus; if (W[f]?.app === 'chats') return W[f]; const id = desks[idx]?.wins.find(x => W[x]?.app === 'chats'); return id ? W[id] : null; };
   window.WosSkinHost?.attach({
+    overview: overviewAdapter,
     route() { const w = skinChatsWin(), f = W[desks[idx]?.focus]; let ag = ''; try { ag = agentHere().id; } catch (_) {} return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: idx, app: f ? (f.appId || f.app || null) : null, agent: ag || null }; },
     back: () => backStep(),
     openList: () => openChatsList(),
@@ -3952,7 +3993,7 @@
     locked: pointerId => !!(DS && DS.id === pointerId && DS.h),
     toast: text => toast('◇', text, 2400),
     // Layouts (two-orb): who the screen routes to, and the orb's recorder.
-    agents: () => (window.WosAgents?.list || []).map(agentInfo),
+    agents: () => (window.WosAgents?.visible?.() || window.WosAgents?.list || []).map(agentInfo),
     agentHere: () => agentHere(),
     agentSigil: id => { const AG = window.WosAgents, a = AG?.get(id); return a ? AG.sigil(a, 'ag-sig') : ''; },
     openAgent: id => openAgentChats(id),
