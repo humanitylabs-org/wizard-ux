@@ -207,6 +207,8 @@ async function pickerAcceptance(browser, mode) {
  await activate(p,'[data-spspace="main-only"]');
  ok((await p.locator('.ch-focus-tab.on:visible').innerText()).includes('Main plans'),mode+' Space replaces agent label');
  ok((await p.locator('.ch-focus-tab.on:visible').getAttribute('data-chfocusopt'))==='agent:hermes',mode+' Space retains agent tab identity');
+ await activate(p,'.ch-focus-strip:visible [data-chfocusopt="all:"]');await activate(p,'.ch-focus-strip:visible [data-chfocusopt="agent:hermes"]');
+ ok((await p.locator('.ch-focus-tab.on:visible').innerText()).includes('Main plans')&&!await p.locator('[data-chspacepicker]').count(),mode+' All then agent tab returns to its last Space');
  await activate(p,'.ch-focus-tab.on:visible');await activate(p,'[data-spall]');
  ok((await p.locator('.ch-focus-tab.on:visible').innerText()).includes('Archimedes'),mode+' All restores agent label');
  const phi=p.locator('.ch-focus-strip:visible [data-chfocusopt="agent:philosopher"]');
@@ -263,6 +265,11 @@ async function soloAcceptance(b) {
    const at=writes.length;await p.locator('.ch-space-form input').fill('First space');await p.locator('.ch-space-form').evaluate(f=>f.requestSubmit());await p.waitForTimeout(400);
    ok(sharedSpaces.length===1&&sharedSpaces[0].threads.includes('main_wos'),mode+' first Space contains the held thread');
    ok(!writes.slice(at).some(w=>w.path.endsWith('/v1/runs')),mode+' row-created Space starts no fill run');
+   const row2=p.locator('[data-chopen]:visible:not([data-chopen="main_wos"])').first(),sid2=await row2.getAttribute('data-chopen');
+   await row2.click({button:'right'});await activate(p,'[data-rsspacepicker]');
+   ok(!await p.locator('[data-spspace].on').count(),mode+' Add picker ticks only Spaces holding this thread');
+   await activate(p,`[data-spspace="${sharedSpaces[0].id}"]`);await p.waitForTimeout(400);
+   ok(sharedSpaces[0].threads.includes(sid2)&&(await p.locator('#toast').innerText()).includes('Added to First space'),mode+' Add to a Space saves and confirms with a toast');
   } finally {await ctx.close();}
   sharedSpaces=[{id:'solo',name:'Solo space',threads:['main_wos']},{id:'reading',name:'Reading',threads:['main_phil']}];
   const r=await boot(b,desktop);
@@ -417,7 +424,9 @@ async function soloAcceptance(b) {
   await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');a.chats.openContextDraft(w.id,'qa-focus:item',{title:'Fixture app item',message:'Fixture public app context'});});
   ok(await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');return !a.chats.winAgent(w)&&w.thread==='__new__';}),mode+' app-item reply keeps its explicit main-agent route');
   await p.evaluate(()=>{const a=window.__wos||window.__wux;if(window.__wos)a.onBack();else a.escStep();});
-  await choose(p,'agent:hermes');ok(JSON.stringify(await ids(p))===JSON.stringify(['main_phil','main_plain','main_wos']),mode+' main excludes other agents');
+  await choose(p,'agent:hermes');ok((await p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText()).includes('Wizard OS launch'),mode+' agent tab returns to its remembered Space');
+  await activate(p,'.ch-focus-strip:visible [data-chfocusopt="agent:hermes"]');await activate(p,'[data-spall]');
+  ok(JSON.stringify(await ids(p))===JSON.stringify(['main_phil','main_plain','main_wos']),mode+' main excludes other agents');
   // Both typed and held commands go through the same existing grammar and executor.
   for(const typed of [false,true]){
    await p.evaluate(async({typed})=>{const a=window.__wos||window.__wux;if(window.__wos)await a.handleText('focus Wizard OS launch',typed?'auto':'command',typed,300,null);else a.localCommand('focus Wizard OS launch');},{typed});
