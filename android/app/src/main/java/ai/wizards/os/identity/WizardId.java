@@ -346,8 +346,7 @@ public final class WizardId {
     private boolean matches(String value) { try { return vault.matchesBackup(value); } catch (Exception e) { return false; } }
     private void manualBackup(String secret, Runnable done, Runnable back) {
         LinearLayout b = sheet("Save your key",true,back,true); text(b,WARNING,16);
-        TextView key = text(b,secret,12); EditText confirm = input(b,"Paste the saved key to check",true);
-        TextView status = text(b,"Paste the saved key to check",16);
+        TextView key = text(b,secret,12);
         row(b,"Copy","Cleared from the clipboard after 45 seconds",() -> {
             ClipboardManager cm = (ClipboardManager)activity.getSystemService(Context.CLIPBOARD_SERVICE);
             ClipData clip = ClipData.newPlainText("Wizard ID secret",secret);
@@ -355,6 +354,11 @@ public final class WizardId {
             cm.setPrimaryClip(clip);
             main.postDelayed(() -> { if (cm.getPrimaryClipDescription() != null && "Wizard ID secret".contentEquals(cm.getPrimaryClipDescription().getLabel())) cm.clearPrimaryClip(); },45000);
         });
+        EditText confirm = input(b,"Paste the saved key to check",true);
+        TextView status = text(b,"Paste the saved key to check",16);
+        // Inline, not pinned: Android's copy preview sits over the bottom of the screen and its Share chip
+        // would catch a tap meant for a bottom pill, putting the key in a share sheet.
+        footer.setVisibility(View.GONE); footer = null;
         button(b,"Check backup",() -> {
             boolean match = matches(confirm.getText().toString()); confirm.getText().clear();
             if (match) { key.setText(""); vault.markBackedUp(); done.run(); } else status.setText("That key does not match. Save the key above and try again.");
