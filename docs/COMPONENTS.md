@@ -82,6 +82,12 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Tour and help sheet (Talk → Hide → end card; per-step skip); desktop composer guide `WosTour.desk` | `WosTour` (`web/core/tour.js`) | — |
 | First launch and explicit Setup/tour; VM auto-onboarding; alongside launch starts only the orientation | `WosSetupLaunch` (`web/core/setup-launch.js`); built-in checklist `web/setup/setup.js` distinguishes ready-to-open from phone-connected | shell-specific first-run checks, a second tour launcher |
 
+## Release tooling
+
+| Need | Use | Never hand-roll |
+|---|---|---|
+| Canonical origin-less signed Android phone release and draft GitHub assets | `tools/phone_release.py` over `android-build-thales`; `tools/qa_phone_origin_upgrade.py` for exact-byte origin custody; `docs/phone-canonical-release.md` | a per-owner APK, a second origin store, unverified metadata, live-feed writes in release tooling |
+
 ## Shell plumbing (owned by one module; never duplicate, rarely called directly)
 
 `WizardApp` (`web/core/app-client.js`), `WizAppCapture` (`web/core/app-capture.js`, behind `WizardApp.capture`), `WosSkinFrame` (`web/core/skin-frame.js`), `WosDevice` (`web/device.js`), `WizAppServices` (`web/core/app-services.js`), `WizCore` (`web/core/core.js`, `web/core/bridge.js`), `WizConfig` (`web/core/config.js`), `WizReach` (`web/core/reach.js`), `WizAndroidRelay` (`web/core/android-relay.js`), `WizBackgroundAudio` (`web/core/background-audio.js`), `WizHomeScreenApps` (`web/core/home-screen-apps.js`), `WizHomeScreenPolicy` (`web/core/home-screen-policy.js`), `WosOwnViews` (`web/core/own-views.js`), `WosOrbHandoff` (`web/core/orb-handoff.js`), `WosSetupLaunch` (`web/core/setup-launch.js`), `WosShareSheet` (`web/core/share-sheet.js`), `WosBell` (`web/core/notif-bell.js`), `WosResources` (`web/core/resources.js`), `WosUsage` (`web/core/usage.js`), `WizPhotosRelay` (`web/core/photos-relay.js`), `WosMusic` (`web/core/music-voice.js`), `WizVideoDesks` (`web/core/video-desks.js`), `WosUsuals` (`web/usuals.js`), phone shell openers `WizAppOpen`, `WizCanOpen`, `WizOpenApp`, `WizOpenAgentChats` (`web/app.js`), `WosBoundView` (`web/core/bound-view.js`, bound-thread feedback lifecycle), `WosWorkspaceSync` (`web/core/workspace-sync.js`, the same desks on every device).
