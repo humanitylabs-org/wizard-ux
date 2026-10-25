@@ -43,7 +43,8 @@ test('Space includes 82 members / 62 archived beyond the global archive-50 witho
   assert.equal(h.L.session(ids[81]).id,ids[81], 'actions can resolve supplemental rows');
   for (let i=0;i<10;i++) h.L.spaceSessions(ids);
   assert.equal(h.calls.length,62, 'repaints and ordinary polls do not reread members');
-  h.advance(180001); await ready(h.L,ids); assert.equal(h.calls.length,124);
+  h.advance(180001); await ready(h.L,ids); assert.equal(h.calls.length,62,"archived members are not reread on the 3-minute walk");
+  h.advance(30*60*1000); await ready(h.L,ids); assert.equal(h.calls.length,124);
 });
 
 test('main, host-profile, container and restricted members use authoritative routes', async () => {
@@ -99,7 +100,7 @@ test('loaded hidden rows outrank cache, membership edits apply immediately, fail
   assert.equal((await ready(h.L,['old'])).rows.length,1);
   assert.equal(h.L.spaceSessions([]).rows.length,0);
   h.L.sessions=[row('old','',{hidden:true})]; assert.equal(h.L.spaceSessions(['old']).rows.length,0);
-  h.L.sessions=[]; h.advance(180001); h.replies.delete('old');
+  h.L.sessions=[]; h.advance(30*60*1000+1); h.replies.delete('old');
   assert.equal((await ready(h.L,['old'])).rows.length,0);
 });
 
@@ -112,4 +113,13 @@ test('peek (Focus badges) counts hydrated members without starting reads', async
   await ready(h.L,ids);
   assert.equal(h.L.spaceSessions(ids,{peek:true}).rows.length,6,'badge sees hydrated members');
   assert.equal(h.calls.length,4);
+});
+
+test("an agent-owned Space scopes reads for members beyond that agent's window", async () => {
+  const h=harness(); h.replies.set('old_private',row('old_private','private'));
+  const got=await (async()=>{for(let i=0;i<100;i++){const g=h.L.spaceSessions(['old_private'],{agent:'private'});if(!g.pending)return g;await settle();}})();
+  assert.equal(h.calls[0].searchParams.get('agent'),'private','read is scoped to the Space owner');
+  assert.equal(got.rows.map(s=>s.id).join(),'old_private');
+  const u=harness(); u.replies.set('x',row('x','private')); u.L.spaceSessions(['x'],{agent:'unknown'}); await settle();
+  assert.equal(u.calls[0].searchParams.get('agent'),null,'unknown owners never scope reads');
 });

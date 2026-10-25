@@ -395,3 +395,6 @@ html:is([data-skin^="obsidian"], [data-skin="landscapes"]) .mine-home .constella
 html:is([data-skin^="obsidian"], [data-skin="landscapes"]) .mine-home .now-card { cursor: pointer; color: var(--c); }
 html:is([data-skin^="obsidian"], [data-skin="landscapes"]) .mine-home .now-card:hover { background: color-mix(in srgb, var(--c) 10%, transparent); }
 html:is([data-skin^="obsidian"], [data-skin="landscapes"]) .mine-home .home-unsent { width: auto; margin-top: 14px; }
+/* Keys sheet: replay the first-message guide (core/tour.js WosTour.desk) */
+.keys-head .keys-tour { border: 1px solid var(--line-2); background: none; color: var(--ink-2); border-radius: 99px; padding: 4px 12px; font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.keys-head .keys-tour:hover { color: var(--ink); }

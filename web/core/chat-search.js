@@ -15,7 +15,7 @@
 (() => {
   'use strict';
   const C = window.WizCore = window.WizCore || {};
-  const BATCH = 30, LIMIT = 200, CONC = 4, CACHE_N = 150, MAX_SCAN = 300, STALE = 5 * 60 * 1000;
+  const BATCH = 30, LIMIT = 200, CONC = 2, CACHE_N = 150, MAX_SCAN = 300, STALE = 5 * 60 * 1000;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const cache = new Map(); // id → { sig, texts: [string] }
   const runs = {};         // wid → { q, want, scanned, hits, ctrl, done, busy, onUpdate, stats }
@@ -60,11 +60,13 @@
   function candidates(agent = '') {
     const L = window.WizLive; if (!L?.ok) return [];
     const at = s => Date.parse(L.cardAt ? L.cardAt(s) : s.updatedAt) || 0;
-    return (L.sessionsFor ? L.sessionsFor(agent) : L.sessions).filter(s => !s.hidden && !s.optimistic && s.id && !String(s.id).startsWith('wizard_pending_')).sort((a, b) => at(b) - at(a));
+    return (L.searchRows ? L.searchRows(agent) : L.sessionsFor ? L.sessionsFor(agent) : L.sessions).filter(s => !s.hidden && !s.optimistic && s.id && !String(s.id).startsWith('wizard_pending_')).sort((a, b) => at(b) - at(a));
   }
   async function pump(wid, r) {
     if (r.busy) return; r.busy = true;
-    const ws = words(r.q), list = candidates(r.agent);
+    const ws = words(r.q);
+    let list = candidates(r.agent);
+    if(!ws.some(w=>w.length>=3) || ws.some(w=>!/^[\x00-\x7f]+$/.test(w))) { r.titlesOnly=true; r.serverDone=true; r.total=list.length; r.scanned=list.length; r.busy=false; r.onUpdate?.(); return; }
     try {
       if (!r.serverDone && window.WizLive?.searchSessions) {
         try {
@@ -78,10 +80,12 @@
           };
           const rows = await window.WizLive.searchSessions(r.q, r.agent, r.ctrl.signal, publish);
           if (r.ctrl.signal.aborted || runs[wid] !== r) return;
-          r.serverDone = true; r.server = rows !== null; r.partial = !!rows?.partial;
+          r.serverDone = true; r.server = rows !== null && !rows?.fallbackScopes?.length; r.partial = !!rows?.partial; r.capped = !!rows?.capped;
+          r.fallbackScopes=rows===null ? null : rows?.fallbackScopes||[];
           publish(rows);
-        } catch(e) { if(e.name==='AbortError') throw e; r.errors++; r.serverError=true; }
+        } catch(e) { if(e.name==='AbortError') throw e; r.errors++; r.serverError=true; r.serverDone=true; r.fallbackScopes=[]; }
       }
+      if(r.serverDone && Array.isArray(r.fallbackScopes)) list=list.filter(s=>r.fallbackScopes.includes((s.agent||'hermes')==='hermes'?'':s.agent));
       while (!r.ctrl.signal.aborted && !r.paused && r.scanned < Math.min(r.want, list.length)) {
         const slice = list.slice(r.scanned, Math.min(r.want, list.length, r.scanned + CONC));
         await Promise.all(slice.map(async s => {
@@ -107,14 +111,16 @@
       const m = match([s.title, s.preview, s.searchSnippet].filter(Boolean), ws); if (m) { r.rows.set(id, s); r.hits.set(id, m); }
     }
     for (const s of candidates(r.agent)) {
+      const title=match([s.title,s.preview].filter(Boolean),ws);
+      if(title) { r.rows.set(s.id,s); r.hits.set(s.id,title); }
       const hit = cache.get(`${s.agent || 'hermes'}:${s.id}`);
-      if (hit && hit.sig === sigOf(s) && !r.hits.has(s.id)) { const m = match(hit.texts, ws); if (m) r.hits.set(s.id, m); }
+      if (hit && hit.sig === sigOf(s) && !r.hits.has(s.id)) { const m = match(hit.texts, ws); if (m) { r.rows.set(s.id,s); r.hits.set(s.id, m); } }
     }
   }
   C.chatSearch = {
     query(wid, q, onUpdate, agent = '') {
       const ws = words(q);
-      if (!ws.length || ws.join(' ').length < 2) { cancel(wid); return null; }
+      if (!ws.length || ws.join(' ').length < 1) { cancel(wid); return null; }
       let r = runs[wid];
       const fresh = r && r.q === ws.join(' ') && r.agent === agent && !(r.doneAt && Date.now() - r.doneAt > STALE);
       if (!fresh) {
@@ -124,7 +130,7 @@
         // Wait for the typing to settle before reading anything.
         setTimeout(() => { if (runs[wid] === r) pump(wid, r); }, 250);
       } else {
-        r.onUpdate = onUpdate;
+        r.onUpdate = onUpdate; seed(r);
         // Back from a thread opened out of these results: the same answers, at once; finish a paused round.
         if (r.paused) { r.paused = false; if (!r.busy) pump(wid, r); }
       }
@@ -136,15 +142,17 @@
     scanning,
     more(wid) { const r = runs[wid]; if (!r) return; r.want = Math.min(MAX_SCAN, r.want + BATCH); pump(wid, r); },
     cancel,
+    reset() { for(const id of Object.keys(runs)) cancel(id); cache.clear(); },
     /* One line under the results: progress, the cap, and the button for older threads. */
     footer(r) {
       if (!r) return '';
-      const total = Math.min(r.total || candidates().length, MAX_SCAN), upto = Math.min(r.want, total);
+      const total = Math.min(r.total ?? candidates().length, MAX_SCAN), upto = Math.min(r.want, total);
       if (scanning(r) || (!r.paused && r.scanned < upto)) return `<div class="ch-bodysearch busy" data-chbs="busy"><span class="wx-spin" aria-hidden="true"></span>Searching messages · ${r.scanned} of ${upto} recent threads</div>`;
       const n = r.hits.size, more = upto < total;
       if (r.serverError) return '<div class="ch-bodysearch">Couldn’t search older threads · check your connection and try again</div>';
       if (r.partial) return `<div class="ch-bodysearch" data-chbs="done">Searched available agents · ${n} with matches · some agents could not be searched</div>`;
-      if (r.server) return `<div class="ch-bodysearch" data-chbs="done">Searched all thread titles and requests · ${n} with matches${more ? ' <button type="button" data-chbsmore>Search more message history</button>' : ''}</div>`;
+      if (r.titlesOnly) return '<div class="ch-bodysearch">Type 3 letters to search messages</div>';
+      if (r.server) return `<div class="ch-bodysearch" data-chbs="done">Searched titles and messages · ${n} with matches${r.capped ? ' · newest message matches shown' : ''}</div>`;
       return `<div class="ch-bodysearch" data-chbs="done">Searched messages in the ${r.scanned} most recent threads${n ? ` · ${n} with matches` : ''}${more ? ` <button type="button" data-chbsmore>Search older threads</button>` : ''}</div>`;
     },
     get stats() { return { ...stats, cached: cache.size, runs: Object.fromEntries(Object.entries(runs).map(([k, r]) => [k, { q: r.q, scanned: r.scanned, want: r.want, hits: [...r.hits.keys()], busy: r.busy }])) }; },

@@ -197,7 +197,7 @@
     const on = enabled(), n = N();
     const sub = own() ? 'Select words in a chat · choose what the menu offers' : n ? 'Update the Wizard OS app (0.9.7) to use it' : 'Works in the Wizard OS Android app';
     return `<div class="st-group" data-selmenu><h4>Text selection menu</h4><p class="st-note">${esc(sub)}</p>
-      ${ITEMS.map(it => `<button class="st-row" data-smset="${it.id}"><span class="st-ic">${svg(it.icon)}</span><span class="st-tx"><b>${esc(it.label)}</b><small>${esc(it.note)}</small></span><span class="sw ${on.includes(it.id) ? 'on' : ''}"><i></i></span></button>`).join('')}</div>`;
+      ${ITEMS.map(it => `<button class="st-row" data-smset="${it.id}"><span class="st-tx"><b>${esc(it.label)}</b><small>${esc(it.note)}</small></span><span class="sw ${on.includes(it.id) ? 'on' : ''}"><i></i></span></button>`).join('')}</div>`;
   }
   function act(target) {
     const b = target.closest?.('[data-smset]'); if (!b) return false;

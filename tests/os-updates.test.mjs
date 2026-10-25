@@ -33,19 +33,21 @@ test('reads the App Manager through the Store listener and registers one Setting
   assert.equal(registered[0].id, 'updates');
   assert.equal(registered[0].available(), true);
   const h = U.html();
-  assert.match(h, /<h4>Updates<\/h4>/);
-  assert.match(h, /<b data-osu-title>Update available<\/b><small>Wizard OS 0\.3\.15 → 0\.3\.16<\/small>/);
-  assert.match(h, /data-osu="apply"[^>]*>Update now</);
+  assert.match(h, /<div class="osu-card" data-osu-card="behind" role="status"><div class="osu-tx"><b data-osu-title>Update available<\/b><span>Wizard OS 0\.3\.15 → 0\.3\.16<\/span><\/div><button type="button" class="osu-go" data-osu="apply" >Update<\/button>/);
+  assert.equal(U.cardHtml(), U.card() && h.slice(h.indexOf('<div class="osu-card"'), h.indexOf('</button></div>') + 15), 'the page leads with the same card Settings puts on top');
   assert.match(h, /data-osu="auto" role="radio" aria-checked="true"/);   // Automatic is the default
   assert.match(h, /data-osu="ask" role="radio" aria-checked="false"/);
+  assert.match(h, /<p class="st-hint">Overnight, never during a chat\.<\/p>/, 'one short line under the choice');
 });
 
 test('up to date shows installed version and no Update button; Ask me is shown when chosen', async () => {
   const { U } = await load(() => [200, { ...STATUS, mode: 'ask', chosen: true, latest: '0.3.15', update_available: false }]);
   const h = U.html();
-  assert.match(h, /Wizard OS 0\.3\.15<\/b><small>Up to date/);
-  assert.doesNotMatch(h, /data-osu="apply"/);
+  assert.equal(U.card(), null); assert.equal(U.cardHtml(), '', 'nothing to do: no card');
+  assert.match(h, /<b data-osu-title>Wizard OS 0\.3\.15<\/b><\/span><span class="st-val">Up to date<\/span>/, 'a quiet value, not an Up to date pill');
+  assert.doesNotMatch(h, /data-osu="apply"|osu-card/);
   assert.match(h, /data-osu="ask" role="radio" aria-checked="true"/);
+  assert.match(h, /Nothing installs until you tap Update\./);
 });
 
 test('an unpinned box says it is updated by hand and offers no Update', async () => {
@@ -84,8 +86,8 @@ test('choosing a mode and Update now POST the exact bodies with the Store header
   const apply = calls.filter(x => x.method === 'POST').at(-1);
   assert.deepEqual(apply.body, { action: 'apply' });
   assert.equal(U.state.installing, true);
-  assert.match(U.html(), /Updating…/);
-  assert.doesNotMatch(U.html(), /data-osu="apply"/);
+  assert.match(U.html(), /data-osu-card="building"[^]*<b data-osu-title>Updating…<\/b>/);
+  assert.match(U.html(), /data-osu="apply" disabled>Update</, 'same card, button disabled while it runs');
   assert.ok(!calls.some(x => x.body && 'force' in x.body));
 });
 
@@ -101,10 +103,10 @@ test('a refused write keeps the old state and tells the owner', async () => {
 test('an update cut short by a reboot says interrupted, retrying, and offers Update now again', async () => {
   const { U } = await load(() => [200, { ...STATUS, installing: false, interrupted: true }]);
   const h = U.html();
-  assert.match(h, /<b data-osu-title>Update interrupted · retrying<\/b><small>Wizard OS 0\.3\.15 → 0\.3\.16 · tries again tonight, or tap Update now/);
-  assert.match(h, /data-osu="apply"[^>]*>Update now</);
+  assert.match(h, /data-osu-card="failed"[^]*<b data-osu-title>Update interrupted<\/b><span>Wizard OS 0\.3\.15 → 0\.3\.16<\/span>/);
+  assert.match(h, /data-osu="apply" >Try again</);
   const ask = await load(() => [200, { ...STATUS, mode: 'ask', chosen: true, interrupted: true }]);
-  assert.match(ask.U.html(), /<b data-osu-title>Update interrupted<\/b><small>[^<]*tap Update now to try again/);
+  assert.match(ask.U.html(), /<b data-osu-title>Update interrupted<\/b>[^]*>Try again</);
   const old = await load(() => [200, { ...STATUS }]);              // an App Manager without the field: unchanged
   assert.match(old.U.html(), /<b data-osu-title>Update available<\/b>/);
 });
@@ -114,9 +116,8 @@ test('channel picker: hidden on an App Manager without channels, shown with Stab
   assert.doesNotMatch(old.U.html(), /Release channel/);
   const { U } = await load(() => [200, { ...STATUS, channel: 'stable', stable: '0.3.16' }]);
   const h = U.html();
-  assert.match(h, /data-osu="ch-stable" role="radio" aria-checked="true"/);
-  assert.match(h, /Stable \(recommended\)/);
-  assert.match(h, /Latest \(every release, for testers\)/);
+  assert.match(h, /<div class="st-seg" role="radiogroup" aria-label="Release channel"><button type="button" data-osu="ch-stable" role="radio" aria-checked="true" >Stable<\/button><button type="button" data-osu="ch-latest" role="radio" aria-checked="false" >Latest<\/button>/);
+  assert.match(h, /Tested releases only\./);
 });
 
 test('on latest with Automatic it says Automatic installs stable only; choosing a channel POSTs only {channel}', async () => {
@@ -133,7 +134,7 @@ test('on latest with Automatic it says Automatic installs stable only; choosing 
   assert.equal(post.headers['X-Wizard-Store'], '1');
   assert.equal(U.state.channel, 'latest');
   assert.match(U.html(), /data-osu="ch-latest" role="radio" aria-checked="true"/);
-  assert.match(U.html(), /Automatic installs stable only/);
+  assert.match(U.html(), /Every release, for testers\. Automatic installs Stable only\./);
   assert.match(c.t[0][1], /Channel: Latest/);
   const n = calls.length;
   U.act(btn('ch-latest'), ctx()); await tick();
