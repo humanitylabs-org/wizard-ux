@@ -7,14 +7,11 @@
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const vib = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
-  const D = window.WIZ_DATA || { threads: [], projects: {} };
   const LIVE = window.WizLive;
   const OUTBOX = window.WosOutbox || null;
-  const S = window.WIZ_SUMM || { days: {}, weeks: {}, month: '' };
   const device = $('#device');
   // In-app browser for links tapped in Wizard (core/links.js). Mounted once the window manager exists.
   let LINKS = null;
-  const TODAY = (D.generated || '2026-10-08').slice(0, 10);
   // Desk strip (James, 10 Oct 2026): Home is pinned at the far left, Chats sits next to it, every new thing
   // opens on its own desk right beside the one in front, and a desk goes away when its last window closes.
   const HOME = 0;
@@ -24,32 +21,6 @@
   const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const DOWL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const dt = d => new Date(d + 'T00:00:00Z');
-  const iso = x => x.toISOString().slice(0, 10);
-  const addDays = (d, n) => { const x = dt(d); x.setUTCDate(x.getUTCDate() + n); return iso(x); };
-  const weekOf = d => { const x = dt(d); return addDays(d, -((x.getUTCDay() + 6) % 7)); };
-  const fmtDay = d => { const x = dt(d); return `${DOW[x.getUTCDay()]} ${x.getUTCDate()} ${MON[x.getUTCMonth()]}`; };
-  const fmtDayLong = d => { const x = dt(d); return `${DOWL[x.getUTCDay()]} ${x.getUTCDate()} ${MON[x.getUTCMonth()]}`; };
-  const fmtRange = (a, b) => { const x = dt(a), y = dt(b); return x.getUTCMonth() === y.getUTCMonth() ? `${x.getUTCDate()} – ${y.getUTCDate()} ${MON[y.getUTCMonth()]}` : `${x.getUTCDate()} ${MON[x.getUTCMonth()]} – ${y.getUTCDate()} ${MON[y.getUTCMonth()]}`; };
-  const YESTERDAY = addDays(TODAY, -1);
-
-  /* ---------------- data ---------------- */
-  const PCOL = { 'wizard-os': '#b99bff', 'wizard-app': '#7c5cff', mizel: '#3fe0ff', clips: '#ffbe55', signal: '#ff5ccf', music: '#4ff0b0', wisdom: '#a6e35f', business: '#ff8a5c', infra: '#8aa0c8', life: '#e9dcff' };
-  const PICON = { 'wizard-os': window.WizBrand.html, 'wizard-app': '◈', mizel: '◉', clips: '▶', signal: '◎', music: '♫', wisdom: '☯', business: '◆', infra: '⌬', life: '✺' };
-  const byDay = {}, byId = {};
-  for (const t of D.threads) { (byDay[t.day] = byDay[t.day] || []).push(t); byId[t.id] = t; }
-  const allDays = []; { let d = weekOf(D.threads.length ? D.threads.reduce((m, t) => t.day < m ? t.day : m, TODAY) : TODAY); while (d <= TODAY) { allDays.push(d); d = addDays(d, 1); } }
-  const weeks = [...new Set(allDays.map(weekOf))].sort();
-  const threadsIn = days => days.flatMap(d => byDay[d] || []);
-  const msgCount = ts => ts.reduce((s, t) => s + (t.n || 0), 0);
-  function projMix(ts) {
-    const m = {}; for (const t of ts) m[t.p] = (m[t.p] || 0) + (t.n || 1);
-    return Object.entries(m).sort((a, b) => b[1] - a[1]);
-  }
-  function bars(ts) {
-    const mix = projMix(ts), tot = mix.reduce((s, x) => s + x[1], 0) || 1;
-    return `<div class="bars">${mix.map(([p, v]) => `<i style="flex:${v / tot};background:${PCOL[p]}"></i>`).join('')}</div>`;
-  }
   const clip = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s; };
 
   /* ---------------- apps ---------------- */
@@ -95,11 +66,11 @@
   function freshLayout() {
     W = {}; desks = [blank({ id: 'home', home: true })];
     const c = { id: newId(), app: 'chats', thread: null }; W[c.id] = c; desks.push(blank({ wins: [c.id], focus: c.id }));
-    if (APP['v-day']) { const r = { id: newId(), app: 'review', z: { level: 'day', day: YESTERDAY } }; W[r.id] = r; desks.push(blank({ wins: [r.id], focus: r.id })); }
     seedApps();
   }
   const okStrip = () => W && typeof W === 'object' && Array.isArray(desks) && desks.length > 0 && desks[0] && desks[0].home && desks.every(d => d && d.id && Array.isArray(d.wins));
   if (!okStrip()) { if (migrateFive()) store.set('stripSeeded', true); else { freshLayout(); store.set('stripSeeded', !!(APP.topics || APP.mizel)); } }
+  window.WosFeatures.pruneWindows(W);
   desks = window.WizCore.migrateChatsFocus(W, desks);
   // Mizel.ai moved from the old Meetings view (/meetings/, /mizel-preview/) to the canonical Mizel Live view.
   // A frame window remembers the page it was on, so a saved Mizel desk would keep the retired view: move it.
@@ -192,8 +163,6 @@
   function winApp(w) {
     if (agentWin(w)) return agentApp(w);
     if (w.app === 'chats') return { ...CHATS_APP, sgc: window.WosAgents?.colour(window.WosAgents.get(window.WosAgents.defaultId())) || '#C1AAFF' };
-    if (w.app === 'review') return APP[w.z?.level === 'month' ? 'v-month' : w.z?.level === 'week' ? 'v-week' : 'v-day'] || { name: 'Review', icon: '◐', g: ['#444a60', '#22263a'] };
-    if (w.app === 'maps') return APP.maps;
     if (w.app === 'usuals') return APP.usuals || { name: 'Food', icon: '🍜', g: ['#00b14f', '#0a5c32'] };
     return APP[w.appId] || { name: w.title || 'Page', icon: '◇', g: ['#444a60', '#22263a'], url: w.url };
   }
@@ -202,8 +171,6 @@
     if (w.app === 'chats' && !w.thread) { const title = CHATS.listTitle?.(w); if (title) return title; }
     if (agentWin(w) && !w.thread) return `${agentApp(w).name} · Chats`;
     if (w.app === 'chats') return w.thread === '__new__' ? 'New chat' : w.thread ? (LIVE?.session(w.thread)?.title || OUTBOX?.forThread(w.thread)[0]?.title || 'Thread') : 'Chats';
-    if (w.app === 'review') return { month: 'Month in review', week: 'Week in review', day: 'Day in review', group: 'Day in review', thread: 'Thread' }[w.z?.level] || 'Review';
-    if (w.app === 'maps') return w.dest ? `Maps · ${w.dest}` : 'Maps';
     return winApp(w).name;
   }
   function deskTitle(i) {
@@ -225,9 +192,7 @@
     switch (w.app) {
       case 'chats': return `<div class="chats" data-chats="${w.id}"></div>`;
       case 'feature': return '<div class="shared-feature"></div>';
-      case 'review': return renderReviewShell(w.id);
       case 'frame': return renderFrame(w);
-      case 'maps': return renderMaps(w);
       case 'usuals': return `<div class="usuals" data-usuals="${w.id}"></div>`;
       default: return renderApp(w);
     }
@@ -236,7 +201,7 @@
     const a = winApp(w);
     const el = document.createElement('article');
     const rv = !!(w.from && w.from.sid);
-    el.className = `win app-${w.app}${['app-store', 'system', 'agents', 'setup'].includes(w.appId) ? ' store-window' : ''}${agentWin(w) ? ' agent-chats' : ''}${rv ? ' reviewing' : ''}${w.bound ? ' bound' : ''}`; el.dataset.win = w.id;
+    el.className = `win app-${w.app}${['app-store', 'agents', 'setup'].includes(w.appId) ? ' store-window' : ''}${agentWin(w) ? ' agent-chats' : ''}${rv ? ' reviewing' : ''}${w.bound ? ' bound' : ''}`; el.dataset.win = w.id;
     el.innerHTML = `<header class="wbar">${w.app === 'chats' ? window.WosAgents.titlebar(w.agent || '', 'wic', 'wt') : `${ico('span', 'wic', a)}<span class="wt">${esc(winTitle(w))}</span>`}${window.WosBoundView.badge(w)}
       ${w.from ? '<button class="wb wpin wopen" data-wact="detach" aria-label="Open as an app on its own desk" title="Keep a copy open on its own desk"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg><span>Open app</span></button>' : ''}
       ${w.app === 'frame' ? window.WosOwnViews?.marker(a) || '' : ''}${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}<button class="wb" data-wact="full" aria-label="Full screen"><svg viewBox="0 0 24 24"><path class="i-grow" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="i-shrink" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
@@ -246,8 +211,6 @@
   }
   function mountWin(w, el) {
     if (w.app === 'feature') window.WosFeatures.mount(w.featureId, el.querySelector('.shared-feature'),w.featureOptions);
-    if (w.app === 'maps') window.WosViews.bindMaps(el, w, save);
-    if (w.app === 'review') mountReview(w.id, null);
     if (w.app === 'chats') renderChats(w);
     if (w.app === 'usuals') window.WosUsuals?.mount(el.querySelector('[data-usuals]'));
     watchFrames(el);
@@ -310,7 +273,6 @@
   function refreshWin(id) {
     const w = W[id], el = winEl(id); if (!w || !el) return;
     if (w.app === 'chats') renderChats(w);
-    else if (w.app === 'review') mountReview(id, null);
     else if (w.app !== 'frame') $('.wbody', el).innerHTML = winBody(w);
     applyLayout(deskOf(id));
   }
@@ -988,7 +950,7 @@
     window.WizLinks.intercept(device, LINKS);
   }
   /* A tapped internal link opens on its own desk right beside the one it came from, full screen at once.
-   * Tapped in a Chats thread, that desk is in review mode: amber edge, "Review" tag, and the orb sends what
+   * Tapped in a Chats thread, that desk is in thread-feedback mode: amber edge, "Review" tag, and the orb sends what
    * James says as feedback to that thread. Back or ✕ closes it and lands on the thread again; Pin keeps it
    * as a normal desk. Links tapped inside a review desk navigate that same window (Back steps back). */
   function linkTitle(u) {
@@ -1143,26 +1105,26 @@
   addEventListener('message', async e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-app' || typeof d.id !== 'string') return;
     const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
-    const w = host && W[host.dataset.win]; if (!w || !['app-store', 'system', 'agents', 'setup'].includes(w.appId)) return;
+    const w = host && W[host.dataset.win]; if (!w || !['app-store', 'agents', 'setup'].includes(w.appId)) return;
     // Setup may have just installed it: apps-changed is asynchronous. Wait for the registry, not a guessed delay.
     if (!hostedOpenable(d.id)) await window.WizCore.refreshApps?.();
     if (!host.isConnected || W[host.dataset.win] !== w) return;
     const a = hostedOpenable(d.id); if (a) openApp(a);
   });
   /* App → agent binding: an app's settings sheet (core/app-route.js). Its Agents button opens the Agents app
-   * at that agent; System and Agents frames may ask for an app's sheet. */
+   * at that agent; Agents frames may ask for an app's sheet. */
   window.WosAppRoute?.init({ openAgents: (id, o = {}) => { openApp(APP.agents); const msg = o.newPreset ? { type: 'wizard:agents-new', preset: o.newPreset } : id ? { type: 'wizard:agents-show', id } : null; if (msg) [400, 1100, 2200].forEach(t => setTimeout(() => { for (const f of document.querySelectorAll('iframe[title="Agents"]')) f.contentWindow?.postMessage(msg, location.origin); }, t)); } });
   addEventListener('message', e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:app-route' || typeof d.id !== 'string') return;
     const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
-    const w = host && W[host.dataset.win]; if (!w || !['system', 'agents', 'app-store'].includes(w.appId)) return;
+    const w = host && W[host.dataset.win]; if (!w || !['agents', 'app-store'].includes(w.appId)) return;
     window.WosAppRoute?.request(d);
   });
-  /* The Agents app (and System) open an agent's own Chats. Only those frames may ask; the agent must exist. */
+  /* The Agents app opens an agent's own Chats. Only those frames may ask; the agent must exist. */
   addEventListener('message', e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-agent-chats' || typeof d.id !== 'string') return;
     const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
-    const w = host && W[host.dataset.win]; if (!w || !['system', 'agents'].includes(w.appId)) return;
+    const w = host && W[host.dataset.win]; if (!w || !['agents'].includes(w.appId)) return;
     openAgentChats(d.id, { backTo: w.id, thread: d.thread === '__new__' ? '__new__' : '' });
   });
   /* Agent shortcuts select Focus in the main Chats window; no per-agent window or desk. */
@@ -1185,12 +1147,7 @@
     if (a.kind === 'wizard' && a.url && !opts.setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openApp(a, extra, { ...opts, setupChecked: true }));
     if (a.id === 'side-button') { closeSheets(true); if (idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
-    if (a.kind === 'view') {
-      if (a.view === 'inbox') { openSheet('inbox'); return true; }
-      openReview(a.view, extra.date, opts); return true;
-    }
     if (a.id === 'usuals') { openUsuals(opts); return true; }
-    if (a.id === 'maps') { openMaps(extra.query ? 'search' : 'home', extra.query || '', opts); return true; }
     if (a.kind === 'chats') {
       if (a.agent) return openAgentChats(a.agent);
       const chatsProvider = a.chatsProvider || CHATS.views.defaultId();
@@ -1208,17 +1165,9 @@
     placeApp(w => w.app === 'app' && w.appId === a.id, { app: 'app', appId: a.id, query: q }, opts, q ? (w, t) => { w.query = q; renderDesk(t); } : null);
     return true;
   }
-  function openMaps(mode, dest, opts = {}) {
-    closeSheets(true);
-    placeApp(w => w.app === 'maps', { app: 'maps', dest, mode }, opts, dest || mode === 'home' ? (w, t) => { if (!dest && w.dest) return; w.dest = dest; w.mode = mode; renderDesk(t); } : null);
-  }
   function openUsuals(opts = {}) {
     closeSheets(true);
     placeApp(w => w.app === 'usuals', { app: 'usuals' }, opts, () => window.WosUsuals?.refresh());
-  }
-  function openReview(level, date, opts = {}) {
-    const z = level === 'month' ? { level: 'month' } : level === 'week' ? { level: 'week', week: weekOf(date || YESTERDAY) } : { level: 'day', day: date || YESTERDAY };
-    placeApp(w => w.app === 'review', { app: 'review', z }, opts, (w, t) => { w.z = z; w.zd = 0; setTimeout(() => { mountReview(w.id, null); applyLayout(deskOf(w.id)); }, 0); });
   }
   /* Move an open window to where a new app would open (insertPos: right beside this desk, Home included.
    * A window alone on its desk takes its whole desk along; one sharing a desk gets a desk of its own. */
@@ -1401,9 +1350,8 @@
     const RD = LIVE && LIVE.ok ? (LIVE.workGroups().ready || []) : [], ready = RD.length;
     // Working counts what the Chats Working list (and the Working card's filter) shows, sending messages included.
     const W0 = LIVE && LIVE.ok ? (LIVE.workGroups().working || []) : [], working = W0.length;
-    const yd = byDay[YESTERDAY] || [];
     const now = new Date();
-    return `<div class="home"><nav class="home-tools" aria-label="System and settings"><button class="home-system home-agents" data-act="agents" aria-label="Agents" title="Agents"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.3 2.8-5.2 5.5-5.2s4.9 1.9 5.5 5.2"/><circle cx="17" cy="9.5" r="2.4"/><path d="M15.6 14.6c2.6-.3 4.4 1.4 4.9 4.4"/></svg></button><button class="home-system" data-act="system" aria-label="Your system" title="Your system"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/></svg></button>${gearBtn()}</nav>
+    return `<div class="home"><nav class="home-tools" aria-label="System and settings"><button class="home-system home-agents" data-act="agents" aria-label="Agents" title="Agents"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.3 2.8-5.2 5.5-5.2s4.9 1.9 5.5 5.2"/><circle cx="17" cy="9.5" r="2.4"/><path d="M15.6 14.6c2.6-.3 4.4 1.4 4.9 4.4"/></svg></button>${gearBtn()}</nav>
       <div class="home-top">
         <div class="home-date" id="homeDate">${(() => { const p = window.WizConfig.dayParts(now.getTime()); return `${DOWL[p.dow]} · ${p.d} ${MON[p.m - 1]}`; })()}</div>
         <div class="home-time" id="homeTime">${window.WizConfig.hm()}</div>
@@ -1507,7 +1455,6 @@
       <div class="body"><h3>${esc(a.name)}${w.query ? ` · “${esc(w.query)}”` : ''}</h3><p>${esc(a.desc || '')}${native ? '. Opens the real Android app.' : ''}</p>
       <a class="cta" href="${esc(href)}" target="${native ? '_self' : '_blank'}" rel="noopener">Open ${esc(a.name)}</a></div></div></div>`;
   }
-  function renderMaps(w) { return window.WosViews.renderMaps(w); }
   function renderFrame(w) {
     const a = APP[w.appId] || winApp(w);
     return renderFrameCore(w, a);
@@ -1630,7 +1577,7 @@
       // open over it, and the pop really changed its page. Anything else (an app on another desk, a boot-time
       // guard, a stray hash entry) is the user's Back for the shell, so a Back is never silently swallowed.
       const wid = f.closest('.win')?.dataset.win;
-      const mine = !same && wid && desks[idx]?.focus === wid && desks[idx].wins.includes(wid) && !sheet && !menuFor && V.state === 'idle' && !document.querySelector('.peek.open, .ov.open') && !window.LiveMode?.card;
+      const mine = !same && wid && desks[idx]?.focus === wid && desks[idx].wins.includes(wid) && !sheet && !menuFor && V.state === 'idle' && !document.querySelector('.peek.open, .ov.open');
       if (mine) return;
       e.stopImmediatePropagation();
       guardOn = history.state?.wos === 'guard'; // the shell's own guard is still under the popped app entry
@@ -1662,95 +1609,6 @@
     if (!wid) { const d = desks.findIndex(dd => dd.wins.some(mine)); if (d >= 0) { wid = desks[d].wins.find(mine); goDesk(d, true); } }
     if (!wid) { const w = openWin({ app: 'chats', thread: null }, opts); if (!w) return; wid = w.id; }
     focusWin(wid); openChat(wid, id);
-  }
-
-  /* ---------------- review (semantic zoom) ---------------- */
-  const { LEVELS, LNAME, renderReviewShell, renderLevel, parentOf, chain, crumbLabel } = window.WosViews;
-  function mountReview(id, dir, origin) {
-    const we = winEl(id), w = W[id]; const root = we?.querySelector('.review'); if (!root || !w) return;
-    const z = w.z || { level: 'day', day: YESTERDAY };
-    const stage = $('.zstage', root);
-    const li = LEVELS.indexOf(z.level);
-    $$('.lvl', root).forEach((b, k) => { b.classList.toggle('on', k === li); b.classList.toggle('past', k < li); });
-    const chn = chain(z);
-    const crumbEl = $('.crumb', root); crumbEl.innerHTML = chn.map((c, k) => `${k ? '<i>›</i>' : ''}<button data-crumb="${k}">${esc(crumbLabel(c))}</button>`).join(''); crumbEl.scrollLeft = crumbEl.scrollWidth;
-    root._chain = chn;
-    const layer = document.createElement('div');
-    layer.className = 'zlayer'; layer.innerHTML = `<div class="desk-scroll">${renderLevel(z)}</div>`;
-    const old = $$('.zlayer', stage);
-    if (dir && old.length) {
-      const o = origin || { x: stage.clientWidth / 2, y: stage.clientHeight / 3 };
-      const ox = `${o.x}px ${o.y}px`;
-      old.forEach(l => { l.style.transformOrigin = ox; l.classList.add(dir === 'in' ? 'leave-in' : 'leave-out'); setTimeout(() => l.remove(), 430); });
-      layer.style.transformOrigin = ox; layer.classList.add(dir === 'in' ? 'enter-in' : 'enter-out');
-    } else old.forEach(l => l.remove());
-    stage.appendChild(layer);
-    bindPinch(stage, id);
-  }
-  function setZ(id, z, dir, origin) {
-    const w = W[id]; if (!w) return;
-    // Back walks dives in reverse: zd counts how far below the opened level we are.
-    if (dir === 'in') w.zd = (w.zd || 0) + 1; else if (dir === 'out') w.zd = Math.max(0, (w.zd || 0) - 1);
-    w.z = z; save(); mountReview(id, dir, origin); applyLayout(deskOf(id));
-    vib(dir === 'in' ? 10 : 6);
-  }
-  function zoomIn(id, card) {
-    const stage = winEl(id)?.querySelector('.zstage'); if (!stage) return;
-    card = card || stage.querySelector('.zlayer:last-child [data-z]');
-    if (!card) return bounce(stage);
-    const r = card.getBoundingClientRect(), s = stage.getBoundingClientRect();
-    setZ(id, JSON.parse(card.dataset.z), 'in', { x: r.left - s.left + r.width / 2, y: r.top - s.top + r.height / 2 });
-  }
-  function zoomOut(id) {
-    const w = W[id]; if (!w) return;
-    const p = parentOf(w.z);
-    if (!p) return bounce(winEl(id).querySelector('.zstage'));
-    setZ(id, p, 'out');
-  }
-  function bounce(stage) { const l = stage?.querySelector('.zlayer:last-child'); if (!l) return; l.animate([{ transform: 'scale(1)' }, { transform: 'scale(.96)' }, { transform: 'scale(1)' }], { duration: 300, easing: 'ease-out' }); }
-
-  function bindPinch(stage, id) {
-    if (stage._pinch) return; stage._pinch = true;
-    let p = null;
-    const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-    stage.addEventListener('touchstart', e => {
-      if (e.touches.length === 2) {
-        e.preventDefault();
-        const [a, b] = e.touches, mid = { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
-        const el = document.elementFromPoint(mid.x, mid.y);
-        p = { d0: dist(a, b), s: 1, mid, card: el && el.closest('.zlayer:last-child [data-z]'), layer: stage.querySelector('.zlayer:last-child') };
-        const r = stage.getBoundingClientRect(); p.layer.style.transformOrigin = `${mid.x - r.left}px ${mid.y - r.top}px`;
-        p.layer.classList.add('pinching');
-      }
-    }, { passive: false });
-    stage.addEventListener('touchmove', e => {
-      if (!p || e.touches.length !== 2) return; e.preventDefault();
-      p.s = dist(e.touches[0], e.touches[1]) / p.d0;
-      const s = p.s > 1 ? 1 + (p.s - 1) * .5 : 1 - (1 - p.s) * .6;
-      p.layer.style.transform = `scale(${s.toFixed(3)})`; p.layer.style.opacity = String(Math.max(.4, 1 - Math.abs(p.s - 1) * .7));
-      if (p.card) p.card.classList.toggle('target', p.s > 1.08);
-    }, { passive: false });
-    const end = () => {
-      if (!p) return; const q = p; p = null;
-      q.layer.classList.remove('pinching');
-      if (q.card) q.card.classList.remove('target');
-      store.set('pinched', store.get('pinched', 0) + 1);
-      if (q.s > 1.22) { q.layer.style.transform = ''; q.layer.style.opacity = ''; zoomIn(id, q.card); }
-      else if (q.s < .82) { q.layer.style.transform = ''; q.layer.style.opacity = ''; zoomOut(id); }
-      else { q.layer.animate([{ transform: q.layer.style.transform }, { transform: 'scale(1)' }], { duration: 260, easing: 'cubic-bezier(.2,.9,.25,1)' }); q.layer.style.transform = ''; q.layer.style.opacity = ''; }
-      const h = stage.parentElement.querySelector('.pinch-hint'); if (h) h.classList.add('gone');
-    };
-    stage.addEventListener('touchend', e => { if (p && e.touches.length < 2) end(); });
-    stage.addEventListener('touchcancel', end);
-    let acc = 0, wt = 0;
-    stage.addEventListener('wheel', e => {
-      if (!e.ctrlKey) return; e.preventDefault(); acc += -e.deltaY;
-      clearTimeout(wt); wt = setTimeout(() => {
-        if (acc > 40) { const el = document.elementFromPoint(e.clientX, e.clientY); zoomIn(id, el && el.closest('.zlayer:last-child [data-z]')); }
-        else if (acc < -40) zoomOut(id);
-        acc = 0;
-      }, 90);
-    }, { passive: false });
   }
 
   /* ---------------- window interactions ---------------- */
@@ -1792,11 +1650,9 @@
     if (act === 'inbox') return openSheet('inbox');
     if (act === 'settings') return openSettings(false);
     if (act === 'unsent') return openSettings(true);
-    if (act === 'yesterday') return openReview('day', YESTERDAY);
     if (act === 'ready') return openApp(APP.wizard);
     if (act === 'unread' || act === 'working') return openChatsFiltered(act, { card: true });
     if (act === 'side-button') return sideButtonTap(false);
-    if (act === 'system') return openApp(APP.system);
     if (act === 'agents') return openApp(APP.agents);
     if (act === 'side-button-hide') { store.set('sideHidden', true); return refreshHome(true); }
     const we = e.target.closest('.win'); if (!we) return;
@@ -1814,14 +1670,6 @@
       if (lastBarTap.id === id && now - lastBarTap.t < 450) { lastBarTap = { id: '', t: 0 }; const d = desks[deskOf(id)]; return setFull(id, !(d.full && d.focus === id)); }
       lastBarTap = { id, t: now }; return;
     }
-    if (w.app === 'review') {
-      const zc = e.target.closest('[data-z]'); if (zc) return zoomIn(id, zc);
-      const rail = e.target.closest('[data-rail]');
-      if (rail) { const next=window.WosViews.railTarget(w.z,rail.dataset.rail,$('.review',we));if(next)setZ(id,next,LEVELS.indexOf(next.level)<LEVELS.indexOf(w.z.level)?'out':'in');return; }
-      const cr = e.target.closest('[data-crumb]');
-      if (cr) { const chn = $('.review', we)._chain; const k = +cr.dataset.crumb; if (k < chn.length - 1) setZ(id, chn[k], 'out'); return; }
-      const wt = e.target.closest('[data-wizthread]'); if (wt) return openWizardThread(wt.dataset.wizthread);
-    }
     if ((w.app === 'chats' || CHATS.isHosted(id)) && CHATS.click(e, id)) return;
   });
   track.addEventListener('dblclick', e => {
@@ -1838,8 +1686,7 @@
   let menuFor = null;
   function closeMenu() { menuFor = null; menuEl?.classList.remove('open'); }
 
-  /* Pinch a window: spread to fill the screen, pinch in to tile it again.
-   * Review windows keep their own pinch for Day → Week → Month. */
+  /* Pinch a window: spread to fill the screen, pinch in to tile it again. */
   function bindWinPinch(root, fixedId) {
     if (root._wpinch) return; root._wpinch = true;
     let p = null;
@@ -1847,7 +1694,6 @@
     root.addEventListener('touchstart', e => {
       if (e.touches.length !== 2) return;
       const t0 = e.touches[0].target, el = t0.closest ? t0 : t0.parentElement;
-      if (!fixedId && el.closest('.zstage')) return;
       const id = fixedId || el.closest('.win')?.dataset.win;
       if (!id) { if (el.closest('.desk')) p = { id: null, d0: dist(e.touches[0], e.touches[1]), s: 1 }; return; }
       // A framed app that zooms its own content (maps, photos, PDFs) opts out of the shell's pinch with
@@ -1949,7 +1795,7 @@
   }
   function openSheet(which, q) {
     // The pull-down notifications panel is retired (James, 18 Oct 2026): every way in (the Inbox tile, "open
-    // inbox"/"notifications", ?view=inbox, the critical banner, the arrow key) opens Chats, whose Working and Ready
+    // inbox"/"notifications", the critical banner, the arrow key) opens Chats, whose Working and Ready
     // sections hold the same threads and which can stay open on a desk.
     if (which === 'inbox') return openChatsList();
     closeSheets(true); closeMenu();
@@ -1998,8 +1844,7 @@
     if (!q) {
       const recentIds = store.get('recent', ['wizard', 'wizard-signal', 'wisdom', 'shopping']).filter(id => APP[id] && APP[id].kind !== 'native' && !window.WizCore.isMaintenanceApp(APP[id])).slice(0, 4);
       paint(`<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
-        ${APPS.some(a => a.kind === 'view') ? `<div class="lgroup"><h4>Views <span>zoomable</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'view').map(appTile).join('')}</div></div>` : ''}
-        <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).length}</span></h4><div class="lgrid">${APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).map(appTile).join('')}<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button></div></div>`); // preserve current tiles/order; Get apps opens a normal app frame
+        <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).length}</span></h4><div class="lgrid">${APPS.filter(a => !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).map(appTile).join('')}<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button></div></div>`); // preserve current tiles/order; Get apps opens a normal app frame
       return;
     }
     const n = norm(q);
@@ -3109,8 +2954,6 @@
     if (w.app === 'frame' && w.from && w.from.sid) return { id, mode: '', kind: 'review', review: true, thread: w.from.sid, threadTitle: w.from.title || '', name: `Review of ${winTitle(w)}`, url: frameHref(id) || w.url };
     if (w.app === 'frame') return { id, mode: '', kind: 'app', name: winApp(w).name, url: frameHref(id) || winApp(w).url };
     if (w.app === 'chats') return { id, mode: '', kind: 'thread list', name: 'Chats' };
-    if (w.app === 'review') return { id, mode: '', kind: 'review', name: winTitle(w), z: w.z };
-    if (w.app === 'maps') return { id, mode: '', kind: 'maps', name: winTitle(w) };
     return { id, mode: '', kind: 'app', name: winTitle(w) };
   }
   // Rides as the run's ephemeral system note: the agent knows the view, the thread stays clean.
@@ -3316,15 +3159,10 @@
   }
   function execute(c, text, opts = {}) {
     return window.WosCommands.execute(c, text, {
-      maps: (mode, dest) => openMaps(mode, dest, opts), search: openSearch, settings: openSettings,
-      focused: () => W[opts.snap?.id || desks[idx].focus], chats: CHATS, inbox: () => openSheet('inbox'), launcher: q => openSheet('launcher', q),
+      search: openSearch, settings: openSettings,
+      focused: () => W[opts.snap?.id || desks[idx].focus], chats: CHATS, chatList: () => openSheet('inbox'), launcher: q => openSheet('launcher', q),
       findApp, openApp: app => openApp(app, {}, opts), musicDone: opts.musicDone, layout: c => {
         const a = c.action, f = opts.snap?.id || desks[idx].focus;
-    if (a === 'zoom') {
-      let id = W[f]?.app === 'review' ? f : desks[idx].wins.find(x => W[x].app === 'review');
-      if (!id) { openReview('day', null, opts); return true; }
-      focusWin(id); setTimeout(() => (c.dir === 'out' ? zoomOut(id) : zoomIn(id)), 200); return true;
-    }
     if (a === 'desk') {
       const to = c.to; closeSheets();
       if (to === 'next') goDesk(idx + 1); else if (to === 'prev') goDesk(idx - 1); else if (to === 'home') goDesk(HOME); else if (+to >= 1) goDesk(+to - 1);
@@ -3636,7 +3474,6 @@
     // Explicit bypass capture follows the retain-on-Back contract; ordinary recordings keep navigating.
     if (V.snap?.general && ['listen', 'command'].includes(V.state)) { V.stopAsked = true; pauseCommandCapture(); return 'recording'; }
     if (document.querySelector('#txChips [data-handoff], #txChips [data-hold]')) { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(0); return 'draft'; }
-    const lm = window.LiveMode?.back?.(); if (lm) return lm;
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
     const ov = CHATS.closeOverlay(); if (ov) { if (settingsReturn === 'files') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="files"]')?.focus(); } return ov; } // media viewer, then the thread actions sheet
@@ -3667,7 +3504,6 @@
         if (['handled', 'pending', 'stay'].includes(result)) return 'hosted';
         if (result === 'notReady') { const nav = frameNav(f.id); if (nav?.canGoBack) { try { selfPop(winEl(f.id).querySelector('iframe').contentWindow); } catch (e) {} nav.back(); return 'frame'; } }
       }
-      if (f.app === 'review' && (f.zd || 0) > 0) { zoomOut(f.id); return 'zoom'; }
       if (d.full) { setFull(f.id, false); return 'tile'; }
       // A bound view: Back slides back to its thread; the view stays beside it until James leaves the thread.
       if (f.bound && W[f.bound] && deskOf(f.bound) >= 0) { goDesk(deskOf(f.bound)); return 'bound-back'; }
@@ -3904,7 +3740,6 @@
     get voiceBorrowing() { return parking || !!parkedReply || !!V.admitting; },
     openAgentChats,
     live: LIVE, openPeek, closePeek, openOverview, closeOverview, mergeDesks, splitDesk, reorderDesks, closeDesk, openLinkDesk, pinWin, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
-    zoomIn: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomIn(f); }, zoomOut: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomOut(f); },
     HOME, get idx() { return idx; }, get desks() { return desks; }, get ovLog() { return window.__ovLog || []; }, get wins() { return W; }, get voice() { return V.state; }, get voiceHandedOff() { return !!V.handedOff && OUTBOX.handedOff?.(V.handedOff); }, get sheet() { return sheet; },
     get back() { return { watchers: watchers.size, guardOn, exitArmed: Date.now() < exitUntil, log: window.__backLog || [] }; },
     openSearch,
@@ -3917,7 +3752,7 @@
 
   /* ---------------- banners, deep links, voice card (core/status.js, core/deeplink.js, core/voice-status.js) ---------------- */
   const chatsInFront = () => { const f = W[desks[idx].focus]; return f?.app === 'chats' && f.thread && f.thread !== '__new__' ? f.thread : ''; };
-  window.WizCore.status?.attach({ openInbox: () => openSheet('inbox'), inboxOpen: () => sheet === 'inbox', current: chatsInFront });
+  window.WizCore.status?.attach({ openChats: () => openSheet('inbox'), inboxOpen: () => sheet === 'inbox', current: chatsInFront });
   window.WizCore.voiceStatus?.onChange(() => { if (sheet === 'settings') renderSettings(); });
   // The list may still be loading: wait for the section (up to ~5 s), open it, bring it into view.
   function showSection(k, tries = 50) {
@@ -3930,7 +3765,6 @@
     if (scroller) scroller.scrollTop += target.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
   }
   window.WosFeatures.install({
-    review: (level,date) => { closeSheets(true); return openReview(level,date); }, maps: (mode,dest) => {closeSheets(true);return openMaps(mode,dest);},
     context: () => {const id=desks[idx].focus,v=viewOf(id);return {id,view:{kind:v?.kind,appId:W[id]?.appId}};},
     openFeature: (id,opts) => {closeSheets(true);return openWin({app:'feature',featureId:id,featureOptions:opts,title:window.WosFeatures.entries.find(f=>f.id===id)?.title});},
     command: (text,snap=sendSnap()) => { const c = localParse(text, snap, 'command'); return c ? execute(c, text,{snap}) : false; }
@@ -3944,14 +3778,11 @@
       if (v === 'help') { closeSheets(true); return window.WosTour?.openHelp(); }
       closeSheets(true);
       if (v === 'home') { window.WosResources?.back(); return goDesk(0, true); }
-      if (v === 'inbox') return openSheet('inbox');
       if (v === 'apps') return openSheet('launcher');
       if (v === 'store') return openApp(APP['app-store']);
-      if (v === 'system') return openApp(APP.system);
       if (v === 'agents') return openApp(APP.agents);
       if (window.WosFeatures.open(v)) return;
       if (window.WosSettings.route(v, openSettings)) return;
-      if (v === 'day' || v === 'week' || v === 'month') return openReview(v);
       if (v === 'files') { const a = findApp('files') || APP.files; if (a) return openApp(a); toast('◇', 'Files isn’t on this Wizard', 1800); return; }
       // work / chats: the Chats window, at the asked-for section.
       const here = desks.findIndex(d => d.wins.some(x => mainChats(W[x])));

@@ -71,11 +71,6 @@
       "classification": "adapter",
       "reason": "Desktop browser recorder input; cancellation now uses the common recording store."
     },
-    "live-mode.js": {
-      "shell": "phone",
-      "classification": "preview",
-      "reason": "Explicit opt-in experimental simulated Live Mode, not enabled live; no desktop preview yet."
-    },
     "motion/wizard-motion.js": {
       "shell": "phone",
       "classification": "preview",
@@ -198,19 +193,16 @@
     "core/usage.js",
     "core/video-desks.js",
     "core/views.css",
-    "core/views.js",
     "core/voice-status.js",
     "core/web-update.js",
     "core/workspace-navigation.js",
     "core/workspace-sync.js",
-    "data.js",
     "favicon.ico",
     "icon-192.png",
     "live.js",
     "manifest.webmanifest",
     "outbox.js",
-    "pwa-install.js",
-    "summaries.js"
+    "pwa-install.js"
   ],
   "coreModules": {
     "core/agents.js": {
@@ -698,13 +690,6 @@
       "note": "Direct entrypoint import"
     },
     "core/features.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Direct entrypoint import"
-    },
-    "core/views.js": {
       "loadedBy": [
         "phone",
         "desktop"

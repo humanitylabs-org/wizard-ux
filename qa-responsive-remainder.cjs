@@ -17,25 +17,13 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
   await p.locator('#future-action').click();
   ok(await p.evaluate(()=>__sharedRan.join(',')==='registered-action,action'),`${label}: registered action and view execute through shared registry`);
   ok(await p.evaluate(()=>WizCore.deeplink.parse('?view=parity-future').view==='parity-future'),`${label}: future view automatically deep-links`);
-  await p.evaluate(()=>WosFeatures.open('command'));
-  const input=p.locator('.shared-command input').last();await input.fill('a completely unknown explicit command');await input.press('Enter');
-  ok(await p.locator('.shared-command [role=status]').last().textContent().then(x=>x.includes('Nothing sent')),`${label}: explicit command miss never agent-sends`);
-  ok(!f.state.posts.length,`${label}: command miss has zero fixture mutations`);
-  for(const text of ['show this week','open maps','help']){
-   const parsed=await p.evaluate(text=>{
-    const C=WizCore.apps('desktop');const P=WosCommands.create({CHATS:{matchFilters:()=>[]},APP:C.APP,appByName:C.appByName,findApp:C.findApp,quickSearch:C.quickSearch,sendSnap:()=>({})});return P.parse(text,{},'command');
-   },text);ok(!!parsed,`${label}: shared grammar recognizes ${text}`,parsed);
+  const removed=await p.evaluate(()=>['day','week','month','maps','command'].every(id=>!WosFeatures.has(id)));
+  ok(removed,`${label}: retired view registrations absent`);
+  const miss=await p.evaluate(desktop=>desktop?__wux.localCommand('a completely unknown explicit command'):__wos.execute({action:'open_view',view:'week'},'retired view'),desktop);
+  ok(!miss&&!f.state.posts.length,`${label}: explicit command miss never agent-sends`);
+  for(const view of ['day','week','month','maps','system','inbox']){
+   ok(await p.evaluate(view=>WizCore.deeplink.parse('?view='+view)===null,view),`${label}: ${view} removed from deep links`);
   }
-  for(const level of ['day','week','month']){
-   await p.evaluate(level=>WizCore.deeplink.route('?view='+level),level);
-   await p.waitForSelector('.review .summary');
-   ok(await p.locator('.review .summary').count()>0,`${label}: ${level} review mounted through actual shell`);
-  }
-  await p.screenshot({path:path.join(out,label+'-review.png')});
-  await p.evaluate(()=>WosFeatures.open('maps'));
-  const form=p.locator('.map-query').last();await form.locator('input').fill('Bangkok');await form.locator('[value=dir]').click();
-  ok(await p.locator('a[href*="google.com/maps/dir/"]').last().getAttribute('href').then(x=>x.includes('Bangkok')),`${label}: local Maps search and directions preserve destination`);
-  await p.screenshot({path:path.join(out,label+'-maps.png')});
   await p.evaluate(()=>history.back());await sleep(500);
   ok(await p.evaluate(()=>!!(window.__wux||window.__wos))&&p.url().includes('wizard-os-home'),`${label}: nested Back keeps app open`);
   // Browser selection actions use the same menu on both shells.
@@ -54,9 +42,9 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
   await p.evaluate(()=>{window.__prompts=0;const e=new Event('beforeinstallprompt',{cancelable:true});e.prompt=async()=>{__prompts++;};e.userChoice=Promise.resolve({outcome:'accepted'});window.dispatchEvent(e);});
   await p.locator('#wizard-pwa-install').locator('button.action').click();
   ok(await p.evaluate(()=>__prompts===1&&!document.getElementById('wizard-pwa-install')),`${label}: supported install prompt runs only on activation`);
-  // Shared command drawer operates on the origin list, not its own new window.
-  await p.evaluate(({desktop,wid})=>{const H=desktop?__wux:__wos;H.chats.chatsBack(H.wins[wid]);H.focusWin(wid);WosFeatures.open('command');},{desktop,wid:f.wid});
-  await p.locator('.shared-command input').fill('search custody');await p.locator('.shared-command input').press('Enter');
+  // Held commands operate directly on the current Chats list.
+  await p.evaluate(({desktop,wid})=>{const H=desktop?__wux:__wos;H.chats.chatsBack(H.wins[wid]);H.focusWin(wid);},{desktop,wid:f.wid});
+  await p.evaluate(desktop=>desktop?__wux.localCommand('search custody'):__wos.handleText('search custody','command',true),desktop);
   ok(await p.evaluate(({desktop,wid})=>(desktop?__wux:__wos).chats.ch(wid).q==='custody',{desktop,wid:f.wid}),`${label}: common search command targets originating chat list`);
   await f.done(label+' install and local search');
  }
@@ -70,7 +58,7 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
   ok(b.from.sid===sid&&b.url==='/qa-bound-report/',`${label}: latest thread reply creates real bound iframe`,b);
   await p.evaluate(({desktop,id})=>(desktop?__wux:__wos).focusWin(id),{desktop,id:b.id});
   await p.evaluate(desktop=>desktop?__wux.talk('start'):__wos.startVoice('auto'),desktop);await sleep(1100);
-  await p.evaluate(()=>WosFeatures.open('maps'));await p.evaluate(desktop=>desktop?__wux.talk('send'):__wos.finishVoice(),desktop);await sleep(600);
+  await p.evaluate(desktop=>(desktop?__wux:__wos).openSettings(),desktop);await p.evaluate(desktop=>desktop?__wux.talk('send'):__wos.finishVoice(),desktop);await sleep(600);
   const row=(await f.rows()).find(x=>x.blob&&x.kind==='reply');
   ok(row?.sessionId===sid&&row.model===model,`${label}: actual bound feedback after focus change replies to original thread`,row);
   await f.done(label+' bound caller');
@@ -92,7 +80,7 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
   const busy=await p.evaluate(desktop=>desktop?__wux.talk('send'):(__wos.finishVoice(),'busy'),desktop);
   ok(busy==='busy',`${label}: screenshot reserves take before chooser/upload resolves`);
   await p.evaluate(()=>__wosScreenResult(__capturePending,'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZFkAAAAASUVORK5CYII=',''));
-  await sleep(250);await p.evaluate(desktop=>desktop?__wux.openMaps('search','different focus'):WosFeatures.open('maps'),desktop);
+  await sleep(250);await p.evaluate(desktop=>desktop?__wux.openSettings():__wos.openSettings(),desktop);
   await p.evaluate(desktop=>desktop?__wux.talk('send'):__wos.finishVoice(),desktop);await sleep(700);
   const rows=await f.rows();const row=rows.find(x=>x.files?.some(f=>f.id==='screenshot-fixture'));
   ok(row?.sessionId===sid&&row.model===model&&row.blob>0,`${label}: screenshot/audio sent as one take to recording-start destination`,row);
@@ -123,8 +111,8 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
   ok(stale?val==='Changed while recording':val==='before spoken original words',`${label}: ${stale?'stale focused field preserved':'dictation replaces captured cursor range'}`,val);
   ok(!f.state.posts.length,`${label}: ${stale?'stale':'cursor'} dictation cannot send to agent`);await f.done(label+' focused dictation');
  }
- // Normal desktop global talk recognizes an unambiguous local command; no backend message.
- {const f=await boot(true);f.state.text='show this week';await f.p.evaluate(()=>__wux.talk('start'));await sleep(1100);const result=await f.p.evaluate(()=>__wux.talk('send'));ok(result==='local'&&!f.state.posts.length,'desktop: normal global talk dispatches local commands instead of agent-send');ok(await f.p.locator('.review').count()>0,'desktop: normal voice opens actual shared review');await f.done('desktop automatic local command');}
+ // Desktop held command recognizes an unambiguous local command; no backend message.
+ {const f=await boot(true);f.state.text='open settings';await f.p.evaluate(()=>__wux.commandVoice());await sleep(1100);const result=await f.p.evaluate(()=>__wux.commandVoice());ok(!f.state.posts.length,'desktop: held command dispatches local commands instead of agent-send');ok(await f.p.locator('#dsettings:not([hidden])').count()>0,'desktop: held command opens shared Settings');await f.done('desktop automatic local command');}
  // Current model changes while recording cannot change the sealed route.
  {const f=await boot(true);await f.p.locator(`[data-chats="${f.wid}"] .ch-mic`).click();await sleep(1100);await f.p.evaluate(()=>{WosModels.snapshot=()=>({model:'replacement-model',provider:'replacement-provider'});});await f.p.evaluate(()=>__wux.talk('send'));await sleep(250);ok((await f.rows()).some(x=>x.blob&&x.model===model&&x.provider===provider),'desktop: recorder START pins model/provider against later edits');await f.done('desktop model pin');}
  // Fine-pointer narrow desktop does not hide browser recording controls behind the toolbar.

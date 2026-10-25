@@ -8,7 +8,7 @@
  *               no shell API a few seconds after load), or a caller hands one over with WizCore.status.fatal().
  *
  * Loaded right after core/config.js so it can see boot errors. A shell plugs in with
- *   WizCore.status.attach({ openInbox(), inboxOpen(), current() })     current() = the thread in front, or ''
+ *   WizCore.status.attach({ openChats(), inboxOpen(), current() })     current() = the thread in front, or ''
  * Back: WizCore.status.back() closes the fatal card (Chats' closeOverlay asks it first), returns a step name or ''.
  */
 (() => {
@@ -48,7 +48,7 @@
     if (e.target.closest('[data-wxmore]')) { netOpen = !netOpen; log('net:' + (netOpen ? 'open' : 'fold')); unfold(); return; }
     if (e.target.closest('[data-wxretry]')) { window.WosOutbox?.retryAll(); LIVE()?.refresh(); return; }
     if (e.target.closest('[data-wxcrit-x]')) { critHidden = critSig(); log('critical:dismiss'); render(); return; }
-    if (e.target.closest('[data-wxcrit]')) { log('critical:open'); H.openInbox?.(); render(); }
+    if (e.target.closest('[data-wxcrit]')) { log('critical:open'); H.openChats?.(); render(); }
   }
   function unfold() {
     const b = document.querySelector?.('#wxBanners .wx-banner.net'); if (!b?.classList) return;
