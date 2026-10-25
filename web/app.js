@@ -100,6 +100,7 @@
   }
   const okStrip = () => W && typeof W === 'object' && Array.isArray(desks) && desks.length > 0 && desks[0] && desks[0].home && desks.every(d => d && d.id && Array.isArray(d.wins));
   if (!okStrip()) { if (migrateFive()) store.set('stripSeeded', true); else { freshLayout(); store.set('stripSeeded', !!(APP.topics || APP.mizel)); } }
+  desks = window.WizCore.migrateChatsFocus(W, desks);
   // Mizel.ai moved from the old Meetings view (/meetings/, /mizel-preview/) to the canonical Mizel Live view.
   // A frame window remembers the page it was on, so a saved Mizel desk would keep the retired view: move it.
   Object.values(W).forEach(w => { if (w && w.app === 'frame' && w.appId === 'mizel' && /^\/(meetings|mizel-preview|apps)(\/|$)|^\/$/.test(w.url || '')) delete w.url; });
@@ -198,6 +199,7 @@
   }
   function winTitle(w) {
     if (!w) return '';
+    if (w.app === 'chats' && !w.thread) { const title = CHATS.listTitle?.(w); if (title) return title; }
     if (agentWin(w) && !w.thread) return `${agentApp(w).name} · Chats`;
     if (w.app === 'chats') return w.thread === '__new__' ? 'New chat' : w.thread ? (LIVE?.session(w.thread)?.title || OUTBOX?.forThread(w.thread)[0]?.title || 'Thread') : 'Chats';
     if (w.app === 'review') return { month: 'Month in review', week: 'Week in review', day: 'Day in review', group: 'Day in review', thread: 'Thread' }[w.z?.level] || 'Review';
@@ -419,7 +421,7 @@
     const h = deskSigil(idx); if (h !== orbAppHtml) { orbAppHtml = h; el.innerHTML = h; }
   }
   function renderDots() {
-    window.WosBell?.paint();
+    window.WosBell?.paint?.();
     if (typeof paintOrbBadge === 'function') try { paintOrbBadge(); } catch (_) {}
     paintOrbApp();
     const mk = i => `<button class="ddot sig${desks[i].wins.length ? ' filled' : ''}${desks[i].home ? ' dhome' : ''}${isReviewDesk(i) ? ' review' : ''}" data-goto="${i}" aria-label="${esc(deskName(i))}">${deskSigil(i)}</button>`;
@@ -497,6 +499,27 @@
     const S = window.WizSigil, s = S.of(a.sigil || a);
     return { color: a.sgc || s.color, glyph: a.sgh || S.html(a.sigil || a) };
   }
+  // Generic overview input/action adapter; packages choose a mode through the capability-gated host.
+  const overviewModes = [], overviewMode = () => overviewModes.at(-1) || {};
+  const arrangeDesks = () => overviewMode().hold === 'arrange';
+  const overviewAdapter = { use(options) {
+    const mode = Object.freeze({ ...options }); overviewModes.push(mode);
+    const repaint = () => { if (ovEl?.classList.contains('open')) renderOverview(); }; repaint();
+    let released = false;
+    return () => { if (released) return; released = true; const at = overviewModes.indexOf(mode); if (at >= 0) overviewModes.splice(at, 1); repaint(); };
+  } };
+  /* Arrange/download tweak: holding a desk only arranges it (drag to reorder, ✕ to close, like an app switcher). A desk that
+   * shows exactly one registered frontend app also gets a small download button beside its ✕ in arrange mode, which
+   * opens the existing Add to home screen flow (native pin on Android, the two-step direct-link guide elsewhere). */
+  function ovDeskApp(d) {
+    const w = d && !d.home && d.wins.length === 1 ? W[d.wins[0]] : null, a = w?.app === 'frame' ? APP[w.appId] : null;
+    return a && !a.system && window.WizHomeScreenApps?.canOffer?.(a) ? a : null;
+  }
+  function ovDl(d) {
+    const a = overviewMode().appAction === 'home-screen' && ovDeskApp(d); if (!a) return '';
+    const label = `Add ${esc(window.WizHomeScreenPolicy?.displayName?.(a) || a.name)} to home screen`;
+    return `<button class="ov-dl" data-ovdl="${d.id}" aria-label="${label}" title="${label}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-4.5-4.5L12 15l4.5-4.5M5 19.5h14"/></svg></button>`;
+  }
   function ovCard(i) {
     const d = desks[i], wins = d.wins.map(id => W[id]).filter(Boolean), rv = isReviewDesk(i), here = i === idx;
     const lead = W[d.focus] || wins[0], primary = lead ? ovMark(winApp(lead)) : { color: '#C9BEFF' };
@@ -515,7 +538,7 @@
     // Miguel's skins: each desk card carries the same count badge as its dock mark (Ready chats, unread notifications…).
     const badge = (() => { if (!oursSkin()) return ''; const n = window.WizCore?.workspaceNav?.deskCount(d, W, winApp) || 0; return n ? `<b class="ov-badge" aria-label="${n} new">${window.WizCore.workspaceNav.fmt(n)}</b>` : ''; })();
     return `<div class="ov-card${here ? ' here' : ''}${d.home ? ' ov-home' : ''}${rv ? ' review' : ''}" data-ov="${d.id}" role="button" tabindex="0"${here ? ' aria-current="true"' : ''} style="--ov-c:${primary.color};--ov-c2:${c2}" aria-label="${esc(accessible)}${here ? ', current desk' : ''}${rv ? ', review' : ''}">
-      <div class="ov-chrome"><span class="ov-state">${here ? '<span class="ov-here">Here</span>' : ''}${rv ? '<span class="ov-review">Review</span>' : ''}</span>${d.home ? '' : `<button class="ov-x" data-ovx="${d.id}" aria-label="Close ${esc(name)}">✕</button>`}</div>
+      <div class="ov-chrome"><span class="ov-state">${here ? '<span class="ov-here">Here</span>' : ''}${rv ? '<span class="ov-review">Review</span>' : ''}</span>${d.home ? '' : `${ovDl(d)}<button class="ov-x" data-ovx="${d.id}" aria-label="Close ${esc(name)}">✕</button>`}</div>
       ${badge}<div class="ov-body ov-n${Math.min(wins.length, 4)}">${body}</div>
       <div class="ov-top"><b>${esc(wins.length > 1 ? `${wins.length} windows` : name)}</b>${cap ? `<small>${esc(cap)}</small>` : ''}</div></div>`;
   }
@@ -529,7 +552,7 @@
     // Pill mode is the dock itself with room to spare: the same desk icons and badges in a grid, an ✕ where the pill was.
     const cell = i => {
       const d = desks[i], here = i === idx, name = d.home ? 'Home' : deskName(i);
-      return `<div class="ov-card ov-cell${here ? ' here' : ''}${d.home ? ' ov-home' : ''}" data-ov="${d.id}" role="button" tabindex="0"${here ? ' aria-current="true"' : ''} aria-label="${esc(name)}${here ? ', current desk' : ''}"><span class="ov-ic">${deskSigil(i)}</span><span class="ov-nm">${esc(name)}</span>${d.home ? '' : `<button class="ov-x" data-ovx="${d.id}" aria-label="Close ${esc(name)}">✕</button>`}</div>`;
+      return `<div class="ov-card ov-cell${here ? ' here' : ''}${d.home ? ' ov-home' : ''}" data-ov="${d.id}" role="button" tabindex="0"${here ? ' aria-current="true"' : ''} aria-label="${esc(name)}${here ? ', current desk' : ''}"><span class="ov-ic">${deskSigil(i)}</span><span class="ov-nm">${esc(name)}</span>${d.home ? '' : `<button class="ov-x" data-ovx="${d.id}" aria-label="Close ${esc(name)}">✕</button>${ovDl(d)}`}</div>`;
     };
     const pillInner = `<div class="ov-grid">${desks.map((_, i) => cell(i)).join('')}<button class="ov-card ov-cell ov-new" data-ovadd aria-label="New desk: pick an app"><span class="ov-ic"><span class="dsg"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="3.2" stroke-dasharray="3.1 2.6"/></svg></span></span><span class="ov-nm">New desk</span></button></div>`;
     ovEl.innerHTML = ovEl.classList.contains('ov-pill') ? `<div class="ov-sheet"><div class="ov-scroll">${pillInner}</div><button class="ov-close" data-ovdone aria-label="Close desks"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>` : inner;
@@ -575,6 +598,8 @@
     el.addEventListener('click', e => {
       if (Date.now() < ovTapBlock) return;
       if (e.target.closest('[data-ovdone]')) return closeOverview();
+      const dl = e.target.closest('[data-ovdl]');
+      if (dl) { if (overviewMode().appAction !== 'home-screen') return; const a = ovDeskApp(desks[posOf(dl.dataset.ovdl)]); if (a) window.WizHomeScreenApps?.offer(a); return; }
       const x = e.target.closest('[data-ovx]'); if (x) { closeDesk(posOf(x.dataset.ovx)); if (desks.length) renderOverview(); return; }
       if (e.target.closest('[data-ovadd]')) { closeOverview(); return newDesk(); }
       const c = e.target.closest('[data-ov]'); if (c) { const i = posOf(c.dataset.ov); closeOverview(); if (i >= 0) goDesk(i); return; }
@@ -592,7 +617,7 @@
       if (e.touches.length !== 1) return;
       const t = e.touches[0], c = cardAt(t.clientX, t.clientY);
       OV = { x: t.clientX, y: t.clientY, c, moved: false, drag: false };
-      if (c && !c.classList.contains('ov-home') && !e.target.closest('.ov-x')) OV.hold = setTimeout(() => { if (OV && !OV.moved && !OV.pinch) startDrag(c, t.clientX, t.clientY); }, 380);
+      if (c && !c.classList.contains('ov-home') && !e.target.closest('.ov-x, .ov-dl')) OV.hold = setTimeout(() => { if (OV && !OV.moved && !OV.pinch) startDrag(c, t.clientX, t.clientY); }, 380);
     }, { passive: true });
     el.addEventListener('touchmove', e => {
       if (!OV) return;
@@ -621,6 +646,15 @@
         return;
       }
       clearTimeout(OV.hold);
+      // Arrange/download tweak: held and let go in place just stays in arrange mode (✕ and download buttons), no sheet.
+      if (arrangeDesks() && OV.drag && !OV.reordered) { endDrag(false); el.classList.add('editing'); ovTapBlock = Date.now() + 400; OV = null; return; }
+      if (OV.drag && !OV.reordered && e.changedTouches?.[0] && Math.hypot(e.changedTouches[0].clientX - OV.dx, e.changedTouches[0].clientY - OV.dy) < 12) {
+        // Held and let go in place: nothing moved, so offer Add to home screen for a one-app desk (drag still reorders).
+        const d = desks[posOf(OV.card.dataset.ov)], w = d && d.wins.length === 1 ? W[d.wins[0]] : null, a = w?.app === 'frame' ? APP[w.appId] : null;
+        endDrag(false); ovTapBlock = Date.now() + 400; OV = null;
+        if (a) window.WizHomeScreenApps?.offer(a);
+        return;
+      }
       if (OV.drag) { endDrag(true); ovTapBlock = Date.now() + 400; }
       else if (el.classList.contains('ov-pill') && e.changedTouches?.[0]) {
         // Pill mode: a clear swipe down (list at its top) folds it back into the pill.
@@ -631,7 +665,7 @@
     };
     el.addEventListener('touchend', end); el.addEventListener('touchcancel', end);
     function startDrag(c, x, y) {
-      OV.drag = true; OV.card = c; const r = c.getBoundingClientRect(); OV.ox = x - r.left; OV.oy = y - r.top;
+      OV.drag = true; OV.card = c; OV.dx = x; OV.dy = y; OV.reordered = false; const r = c.getBoundingClientRect(); OV.ox = x - r.left; OV.oy = y - r.top;
       c.classList.add('drag'); el.classList.add('dragging', 'editing'); vib(16); ovLog('drag');
       OV.ghost = c.cloneNode(true); OV.ghost.classList.add('ghost'); OV.ghost.style.width = r.width + 'px'; OV.ghost.style.height = r.height + 'px'; el.appendChild(OV.ghost);
       moveDrag(x, y);
@@ -646,7 +680,7 @@
         // Home stays first, but its drop zone means "first app", before Chats or any other tab.
         // Rejecting Home as a target made the left edge feel like a pinned Chats slot.
         const before = over.classList.contains('ov-home') || a < b ? over.nextSibling : over;
-        if (before !== OV.card) { grid.insertBefore(OV.card, before); vib(6); }
+        if (before !== OV.card) { grid.insertBefore(OV.card, before); OV.reordered = true; vib(6); }
       }
       // Near the top or bottom edge: scroll so far desks can be reached while dragging.
       const sc = el.querySelector('.ov-scroll'), sr = sc ? sc.getBoundingClientRect() : dr, so = sc || el;
@@ -1112,15 +1146,15 @@
     const w = host && W[host.dataset.win]; if (!w || !['system', 'agents'].includes(w.appId)) return;
     openAgentChats(d.id, { backTo: w.id, thread: d.thread === '__new__' ? '__new__' : '' });
   });
-  /* An agent's own Chats: one window per agent, on its own desk. The default agent's chats are the main Chats. */
+  /* Agent shortcuts select Focus in the main Chats window; no per-agent window or desk. */
   async function openAgentChats(id, o = {}) {
     const AG = window.WosAgents; if (!AG || !/^[a-z0-9][a-z0-9-]{0,40}$/.test(String(id || ''))) return false;
     if (!AG.get(id)) await AG.load(true);
     if (!AG.get(id)) { toast('!', 'That agent isn’t on this Wizard', 2000); return false; }
-    if (!AG.isOther(id)) { openApp(APP.wizard); return true; }
     closeSheets(true);
-    const w = placeApp(x => x.app === 'chats' && x.agent === id, { app: 'chats', thread: null, agent: id }, {}, x => { if (o.backTo) x.backTo = o.backTo; });
-    if (w && o.backTo) { w.backTo = o.backTo; save(); }
+    const w = placeApp(mainChats, { app: 'chats', thread: null });
+    if (!w) return false;
+    CHATS.setFocus(w, { kind: 'agent', key: id });
     if (w && o.thread === '__new__') CHATS.openNewDraft(w.id, '');
     LIVE?.refreshAgents?.().then(() => LIVE.emit());
     return true;
@@ -1186,7 +1220,7 @@
     if (!here) return;
     const t = deskOf(here); if (t !== idx) goDesk(t, true);
     focusWin(here); const w = W[here], d = desks[t]; if (d.full && d.focus !== here) setFull(d.focus, false);
-    const c = CHATS.ch(here); c.subject = ''; c.q = ''; c.sheet = false; c.fromCard = false; c.coach = false; c.filterFrom = null;
+    const c = CHATS.ch(here); c.q = ''; c.sheet = false; c.fromCard = false; c.coach = false; c.filterFrom = null;
     if (!CHATS.setFilter(w, '')) CHATS.renderChats(w);
     requestAnimationFrame(() => { const sc = winEl(here)?.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; });
   }
@@ -1200,7 +1234,7 @@
     if (!here) return;
     const t = deskOf(here); if (t !== idx) goDesk(t, true);
     focusWin(here); const w = W[here], d = desks[t]; if (d.full && d.focus !== here) setFull(d.focus, false);
-    const c = CHATS.ch(here); c.subject = ''; c.q = ''; c.sheet = false; c.lastChip = 'status';
+    const c = CHATS.ch(here); c.q = ''; c.sheet = false; c.lastChip = 'status';
     // The chip is the same one James can add himself from the filter button; the first time, one coach line.
     c.coach = !store.get('chipCoached', false); store.set('chipCoached', true);
     c.fromCard = !!opts.card;
@@ -1390,43 +1424,29 @@
    * or My skin then carries the .ov-pill styling, as Miguel's skin.css does). */
   const orbUpVar = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-orb-swipe-up').trim(); } catch (_) { return ''; } };
   const orbUpDesks = () => oursSkin() || ['desks', 'pill'].includes(orbUpVar());
-  const CONNECTOR_IDS = new Set(['wizard-chatgpt', 'wizard-claude', 'wizard-tinfoil', 'wizard-cloudflare']);
-  const isConnector = a => CONNECTOR_IDS.has(a.id) || /^(connect|sign in to)\b/i.test(a.desc || '');
-  /* System apps: the defaults Wizard OS ships for its parking spots (wizard-os docs/SYSTEM_APPS.md): files,
-   * notifications, transcription, browser, secrets, Setup, the main agent and the AI connections. They lead their group
-   * and wear a ring that reads as "this fills a spot"; everything else follows alphabetically. */
-  const SYSTEM_IDS = new Set(['wizard', 'setup', 'files', 'notifications', 'transcriber', 'browser', 'secret-drop', 'wizard-chatgpt', 'wizard-claude']);
-  const isSystem = a => SYSTEM_IDS.has(a.id) || a.system === true;
-  const inDev = a => !isSystem(a) && (window.WizCore.isInDevelopment?.(a) || a.source === 'launcher.json' || /-next$/.test(a.id) || /\(test\)\s*$/i.test(a.name || ''));
-  function appKinds() {
-    const byName = (x, y) => (isSystem(y) - isSystem(x)) || x.name.localeCompare(y.name, undefined, { sensitivity: 'base' });
-    const mine = APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && ['wizard', 'chats', 'usuals', 'view'].includes(a.kind));
-    const conns = mine.filter(a => a.kind === 'wizard' && isConnector(a));
-    // Agents: each agent's chats (main agent first, as registered) plus the Agents app that manages them.
-    const agents = [...mine.filter(a => a.kind === 'chats'), ...(APP.agents ? [APP.agents] : [])].sort((x, y) => isSystem(y) - isSystem(x));
-    const people = mine.filter(a => a.kind !== 'chats' && !conns.includes(a)).sort(byName);
-    // In development (James, 23 Oct 2026): screens linked from the owner's launcher list rather than installed by the
-    // App Manager, and test copies of an installed app. They fold under their own row, shown only when there are any;
-    // once a screen ships as an installed app it moves up to Apps by itself.
-    const apps = people.filter(a => !inDev(a)), dev = people.filter(inDev);
-    const back = (window.WizCore.backendApps?.() || []).filter(a => !APP[a.id]);
-    return { apps, dev, agents, wiz: back.filter(a => !isConnector(a)).sort(byName), conns: [...conns, ...back.filter(isConnector)].sort(byName) };
-  }
+  /* App kinds (core/app-kinds.js, shared with the desktop selector): Apps, Agent apps, Agents, Connectors, system apps
+   * first and ringed; every group ends with a "+ Get ..." tile for its App Store section, and Agents also has
+   * "+ Build agents" (the Agents app, where agents are made and managed). */
+  const AK = window.WosAppKinds;
+  const { isSystem } = AK;
+  const appKinds = () => AK.kinds(APPS, APP);
   const sysMark = html => html.replace('class="lapp', 'class="lapp lapp-sys').replace('<span class="nm">', '<span class="nm" title="System app">');
   const backTile = a => `<button class="lapp lapp-back${isSystem(a) ? ' lapp-sys' : ''}" data-appinfo="${esc(a.id)}" data-name="${esc(a.name)}" style="--i:${tileN++}">${ico('span', 'ic', a)}<span class="nm">${esc(a.name)}</span></button>`;
   const kindTile = a => a.url || a.kind !== 'wizard' ? (isSystem(a) ? sysMark(appTile(a)) : appTile(a)) : backTile(a);
-  const getApps = '<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button>';
+  const plusTile = (attrs, label) => `<button class="lapp lapp-get" ${attrs}><span class="ic">+</span><span class="nm">${esc(label)}</span></button>`;
+  const getTile = k => plusTile(`data-storekind="${AK.GET[k][0]}"`, AK.GET[k][1]);
   // System apps lead their group in the same grid; their purple tile (skin.css .lapp-sys) marks them, no label or box.
-  function sysSplit(list, tile) { return [...list.filter(isSystem), ...list.filter(a => !isSystem(a))].map(tile).join(''); }
+  function sysSplit(list, tile) { return AK.sysFirst(list).map(tile).join(''); }
   function kindGroups(order) {
     const K = appKinds();
+    const grp = (k, body) => `<div class="lgroup kg-${k}"><h4>${AK.LABELS[k]}</h4><div class="lgrid">${body}${getTile(k)}</div></div>`;
     const G = {
-      apps: `<div class="lgroup kg-apps"><h4>Apps</h4><div class="lgrid">${sysSplit(K.apps, kindTile)}${getApps}</div></div>`,
-      wiz: K.wiz.length ? `<div class="lgroup kg-wiz"><h4>Wizard apps</h4><div class="lgrid">${sysSplit(K.wiz, backTile)}</div></div>` : '',
-      agents: K.agents.length ? `<div class="lgroup kg-agents"><h4>Agents</h4><div class="lgrid">${sysSplit(K.agents, kindTile)}</div></div>` : '',
-      conns: K.conns.length ? `<div class="lgroup kg-conns"><h4>Connectors</h4><div class="lgrid">${sysSplit(K.conns, kindTile)}</div></div>` : '',
+      apps: grp('apps', sysSplit(K.apps, kindTile)),
+      wiz: grp('wiz', sysSplit(K.wiz, backTile)),
+      agents: grp('agents', sysSplit(K.agents, kindTile) + (K.builder ? plusTile('data-app="agents"', 'Build agents') : '')),
+      conns: grp('conns', sysSplit(K.conns, kindTile)),
     };
-    // Apps are for people; Wizard apps, Agents and Connectors are mostly for agents: one "For agents" section,
+    // Apps are for people; Agent apps, Agents and Connectors are mostly for agents: one "For agents" section,
     // folded by default (each open of the sheet or a New desk starts folded), tap the row to open it.
     const fa = order.filter(k => k !== 'apps' && G[k]);
     const n = (K.wiz.length + K.agents.length + K.conns.length);
@@ -1434,6 +1454,13 @@
     const dev = order.includes('apps') && K.dev.length ? fold('dev', 'In development', K.dev.length, `<div class="lgroup kg-dev"><h4>In development</h4><div class="lgrid">${K.dev.map(kindTile).join('')}</div></div>`) : '';
     const folded = fa.length ? fold('agents', 'For agents', n, fa.map(k => G[k]).join('')) : '';
     return (order.includes('apps') ? G.apps : '') + dev + folded;
+  }
+  // "+ Get ..." tiles open the App Store on that section (store.js reads ?kind=).
+  function openStoreKind(kind) {
+    closeSheets(); // not quiet: the Apps sheet must close even when it was opened without a tracked sheet
+    const url = AK.storeUrl(kind), id = Object.keys(W).find(k => W[k].appId === 'app-store' && deskOf(k) >= 0);
+    if (id) { const f = winEl(id)?.querySelector('iframe'); W[id].url = url; if (f) f.src = url; const t = deskOf(id); if (t !== idx) goDesk(t, true); focusWin(id); save(); return; }
+    openWin({ app: 'frame', appId: 'app-store', url });
   }
   const foldOpen = { agents: false, dev: false };
   document.addEventListener('click', e => {
@@ -1607,12 +1634,11 @@
   /* Open a real thread: in a Chats window on this desk, else any Chats window, else a new one here. */
   function openWizardThread(id, opts = {}) {
     if (!id) return;
-    // A thread opens in the Chats of the agent it is pinned to (main Chats for the main agent's threads).
-    const ag = LIVE?.agentOf?.(id) || '';
-    const mine = x => W[x] && W[x].app === 'chats' && (W[x].agent || '') === ag && (ag || CHATS.views.providerFor(W[x]) === CHATS.views.defaultId());
+    // Any agent's thread opens in the main Chats window, without changing its list Focus.
+    const mine = x => mainChats(W[x]);
     let wid = desks[idx].wins.find(mine);
     if (!wid) { const d = desks.findIndex(dd => dd.wins.some(mine)); if (d >= 0) { wid = desks[d].wins.find(mine); goDesk(d, true); } }
-    if (!wid) { const w = openWin({ app: 'chats', thread: null, ...(ag ? { agent: ag } : {}) }, opts); if (!w) return; wid = w.id; }
+    if (!wid) { const w = openWin({ app: 'chats', thread: null }, opts); if (!w) return; wid = w.id; }
     focusWin(wid); openChat(wid, id);
   }
 
@@ -1736,6 +1762,7 @@
   });
   track.addEventListener('click', e => {
     const say = e.target.closest('[data-say]'); if (say) return runUtterance(say.dataset.say, 'auto');
+    const sk = e.target.closest('.new-desk [data-storekind]'); if (sk) return openStoreKind(sk.dataset.storekind);
     const info = e.target.closest('.new-desk [data-appinfo]'); if (info) return openAppInfo(info);
     const pick = e.target.closest('.new-desk [data-app]');
     if (pick) { const a = APP[pick.dataset.app]; if (a) { const r = store.get('recent', []).filter(x => x !== a.id); r.unshift(a.id); store.set('recent', r.slice(0, 8)); openApp(a); } return; }
@@ -1894,7 +1921,7 @@
     settingsEl.style.transform = `translate3d(${off}px,0,0)`;
     if (at === idx && !dx && !sheet) { // home again: Settings is the open sheet once more
       dropParkedSettings(); if (anim) settingsEl.style.transition = 'transform 520ms var(--ease)';
-      sheet = 'settings'; device.classList.add('sheet-open');
+      sheet = 'settings'; device.classList.add('sheet-open'); tourEv('sheet', { which: 'settings' }); // same handoff as openSheet
       window.WosResources?.sync(); window.WosScenery?.update();
     }
   }
@@ -1986,8 +2013,12 @@
     const r = store.get('recent', []).filter(x => x !== a.id); r.unshift(a.id); store.set('recent', r.slice(0, 8));
     closeSheets(); setTimeout(() => openApp(a), 120);
   }
-  window.WizHomeScreenApps?.attach(launcher, id => APP[id]);
+  // Arrange/download tweak: hold no longer opens Add to home screen on app lists (the Desks download button does).
+  window.WizHomeScreenApps?.attach(launcher, id => APP[id], { available: () => overviewMode().appHold !== false });
+  // Miguel's skins open apps from the New desk grid (swipe up shows Desks, not the Apps sheet): same long-press there.
+  window.WizHomeScreenApps?.attach(track, id => APP[id], { available: () => overviewMode().appHold !== false, rows: '.new-desk [data-app]', live: row => !!row.closest('.new-desk') && row.getClientRects().length > 0 });
   launcher.addEventListener('click', e => {
+    const sk = e.target.closest('[data-storekind]'); if (sk) return openStoreKind(sk.dataset.storekind);
     const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app]);
     const bi = e.target.closest('[data-appinfo]'); if (bi) { closeSheets(); return openAppInfo(bi); }
     const t = e.target.closest('[data-thread]'); if (t) { closeSheets(); return openWizardThread(t.dataset.thread); }
@@ -2168,9 +2199,10 @@
   // survives an app kill on disk. Browsers/PWAs and older shells keep the in-page MediaRecorder.
   // When James leaves the app mid-take, the floating orb (Everywhere) shows and drives this same take
   // through __wosVoiceCmd below; it never starts a second recorder.
-  const DEV = () => { const d = window.WizardOSDevice; return d && typeof d.recStart === 'function' ? d : null; };
+  // Wizard Shell (android/shell): the same recorder surface over wizardDevicePort, only when it offers device.recording.
+  const DEV = () => { const d = window.WizardOSDevice; return d && typeof d.recStart === 'function' ? d : window.WosDeviceRecording?.device() || null; };
   function nativeBlob(id, expected) {
-    return window.WosDevice.readRecording(id, expected);
+    return DEV()?.fetched?.(id)?.blob || window.WosDevice.readRecording(id, expected);
   }
   /* Stop (or claim an already-stopped) native take and hand its audio to the normal pipeline. */
   function nativeTakeAppOwned(id) {
@@ -2192,8 +2224,19 @@
     localStorage.setItem(VOICE_RECOVERY_KEY, JSON.stringify(rows));
   }
   window.__wosVoiceRecovery = () => { try { return Object.values(JSON.parse(localStorage.getItem(VOICE_RECOVERY_KEY) || '{}')); } catch (_) { return []; } };
+  const nativeFetching = new Set();
   function nativeFinish(id, stopped) {
     if (nativeTakeAppOwned(id)) { setVoice('paused'); toast('🎙', 'This recording belongs to another app'); return; }
+    // The shell recorder stops and reads asynchronously: fetch both first, then finish exactly as below.
+    const shell = DEV();
+    if (shell?.fetch && !shell.fetched(id)) {
+      if (nativeFetching.has(id)) return;
+      nativeFetching.add(id);
+      shell.fetch(id).then(() => { nativeFetching.delete(id); nativeFinish(id, stopped); }, () => {
+        nativeFetching.delete(id); V.native = null; setVoice('idle'); txHide(); toast('!', 'Could not read recording · original kept on this phone');
+      });
+      return;
+    }
     // Notification/Everywhere Send enters here directly, bypassing finishVoice. Seal the model before claiming
     // audio or awaiting STT. A recreated page restores the last route saved for this native take.
     if (V.kind === 'dictation' || window.__wosDictationTake(id)) {
@@ -2457,7 +2500,7 @@
       V.snap ||= sendSnap();if(!(V.snap.route?.model&&V.snap.route?.provider))V.snap.route=CHATS.modelRoute(V.replyTo.wid,V.replyTo.sid);
       if(!(V.snap.route?.model&&V.snap.route?.provider)){V.snap.route=null;throw Error('Choose a model before parking the reply');}
       let parkedNativeId=null;
-      if(V.native){const id=V.native;voiceRecovery(id,{kind:V.kind,ms:V.acc});const meta=JSON.parse(DEV().recStop(id)||'null');if(!meta?.id)throw Error('Native reply is still held');V.parts.push(nativeBlob(id,meta.bytes));V.native=null;V.resumeNative=true;parkedNativeId=id;}
+      if(V.native){const id=V.native;voiceRecovery(id,{kind:V.kind,ms:V.acc});const dev=DEV();if(dev.fetch&&!dev.fetched(id))await dev.fetch(id);const meta=JSON.parse(dev.recStop(id)||'null');if(!meta?.id)throw Error('Native reply is still held');V.parts.push(nativeBlob(id,meta.bytes));V.native=null;V.resumeNative=true;parkedNativeId=id;}
       if(V.rec && V.rec.state!=='inactive')await new Promise(resolve=>{V.rec.onstop=resolve;V.rec.stop();});
       if(V.chunks.length)V.parts.push(new Blob(V.chunks,{type:V.mime}));V.chunks=[];stopStream();V.rec=null;
       if(!V.seal){const seal=CHATS.takeComposer(V.replyTo.wid,V.replyTo.sid);V.seal=seal.text||seal.files.length||seal.reply?seal:null;}
@@ -2502,7 +2545,7 @@
     // One recorder pathway (James, 18 Oct 2026: "the orb works … shouldn't the microphone button be triggering the same
     // pathway"): startVoice owns admission, so a Mizel meeting lends its microphone to the composer mic exactly as it
     // does to the orb, and the reply pin is set before the take opens (it survives the asynchronous loan).
-    startVoice('auto', { replyTo: { wid, sid, steerRunId: CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : '' } });
+    startVoice('auto', { replyTo: { wid, sid, steerRunId: CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : '' } });
     // No pill (James, 10 Oct 2026: "a giant pillbox pops up and covers my orb … I know I'm replying. The orb
     // animates."): the lit mic, the orb and its timer already say a reply is recording.
     return 'recording';
@@ -2515,7 +2558,7 @@
     }
     if (V.state !== 'idle') return;
     const initialSnap=kind==='dictation'?null:kind==='general'?generalVoiceSnap():sendSnap();
-    if(initialSnap) initialSnap.route=CHATS.modelRoute(initialSnap.view?.id,initialSnap.view?.thread||'');
+    if(initialSnap && !initialSnap.route) initialSnap.route=CHATS.modelRoute(initialSnap.view?.id,initialSnap.view?.thread||'__new__');
     // An explicit agent pick (two-orb layout's agent orb): a new chat with that agent, its own route only.
     if (initialSnap && kind === 'general' && opt.agent && window.WosAgents?.isOther(opt.agent)) {
       let r = null; try { r = window.WosModels.snapshot('', null, opt.agent); } catch (e) { toast('!', esc(e.message), 2600); return 'busy'; }
@@ -2788,7 +2831,7 @@
         // durable recovery owner, then mark this explicitly cancelled (never queued).
         // Otherwise focus recovery can mistake the still-closing file for a Send.
         let meta;
-        try { voiceRecovery(id,{kind:V.kind,ms:V.acc});meta=JSON.parse(DEV().recStop(id)||'null'); }
+        try { voiceRecovery(id,{kind:V.kind,ms:V.acc});const dev=DEV();if(dev.fetch&&!dev.fetched(id))await dev.fetch(id);meta=JSON.parse(dev.recStop(id)||'null'); }
         catch { setVoice('paused');V.meetingLoan=loan;toast('!','Could not close recording · original retained');return; }
         if(!meta?.id){setVoice('paused');V.meetingLoan=loan;return;}
         V.native=null;
@@ -2894,7 +2937,7 @@
     }
     const it = await OUTBOX.stage({ ...(snap.route || {}), kind: sid && sid !== '__new__' ? 'reply' : 'new',
       sessionId: sid && sid !== '__new__' ? sid : '',
-      steerRunId: snap.meetingEventId ? '' : rt?.steerRunId ?? (CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '', ...(snap.seal?.reply ? { reply: snap.seal.reply } : {}),
+      steerRunId: snap.meetingEventId ? '' : rt?.steerRunId ?? (CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '', ...(snap.seal?.reply ? { reply: snap.seal.reply } : {}),
       meetingEventId:snap.meetingEventId,sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || snap.route?.agent || '',
       files: [...takeFiles(), ...(snap.seal?.files || [])].filter(f => f?.id),
       instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: rt?.wid || sv?.id || '' });
@@ -3040,9 +3083,10 @@
    * and the shared WizardApp.voiceInput receiver; app-authored meta tags grant nothing. */
   function viewOf(id) {
     const w = W[id]; if (!w) return null;
-    if (agentWin(w)) { // an agent's Chats: what is said here goes to that agent, and private titles never leave it
-      const a = agentApp(w);
-      return { id, mode: 'auto', kind: w.thread ? 'chat thread' : 'agent chats', thread: w.thread || '', agent: a.agent, agentLabel: a.name, private: a.private,
+    if (agentWin(w) || (w.app === 'chats' && (!w.thread || w.thread === '__new__') && CHATS.winAgent(w))) {
+      // A Focus list/draft has the same destination as the former per-agent window. Existing threads keep theirs.
+      const a = agentApp({ ...w, agent: CHATS.winAgent(w) || w.agent });
+      return { id, mode: 'auto', kind: w.thread ? 'chat thread' : w.agent ? 'agent chats' : 'thread list', thread: w.thread || '', agent: a.agent, agentLabel: a.name, private: a.private,
         name: a.private ? `${a.name} chats (private agent)` : w.thread ? `${a.name} thread “${winTitle(w)}”` : `${a.name} chats` };
     }
     // Unified Chats: a private agent's thread open in the main Chats is named like its own Chats, never by title.
@@ -3293,6 +3337,10 @@
     setTimeout(() => { setVoice('idle'); }, 1200);
     txHide(isPill() ? 1400 : 2600);
     const ctx = viewContext(desks[idx].focus, opts.how || 'voice', opts.snap);
+    // Chats new-voice uses the shared draft path, including Space membership, but no composer or screen context.
+    if (opts.snap?.newChatWid && W[opts.snap.newChatWid]?.app === 'chats') {
+      return sendChat(opts.snap.newChatWid, text, 'new voice chat', opts.audio || opts.snap.audio || null, { custodyId: opts.snap.custodyId, sid: '__new__', route: opts.snap.route, seal: false, files: opts.files || [], instructions: 'Explicit new voice chat. No foreground app or private thread context shared.' });
+    }
     // Saved before it is sent: a dropped connection can delay this, never lose it.
     const item = await OUTBOX.enqueue({ sealKey: opts.snap?.seal?.key, custodyId: opts.snap?.custodyId, kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || opts.snap?.audio || null, source: opts.source || 'orb', files: opts.files || [], ...(opts.reply ? { reply: opts.reply } : {}) });
     renderMoons(); refreshHome(); renderDots();
@@ -3333,7 +3381,9 @@
   }
   function generalVoiceSnap() {
     // An explicit general take contains no private/app screen, composer or thread context.
-    return { id: null, desk: idx, view: null, screen: '', conversation: null, others: [], general: true, route: CHATS.modelRoute() };
+    const w = W[desks[idx].focus];
+    const route = w?.app === 'chats' ? CHATS.modelRoute(w.id, '__new__') : CHATS.modelRoute();
+    return { id: null, desk: idx, view: null, screen: '', conversation: null, others: [], general: true, route, newChatWid: w?.app === 'chats' ? w.id : null };
   }
   function paintVoiceDestination() {
     const label = V.snap?.conversation?.label;
@@ -3565,8 +3615,10 @@
     return result || 'notReady';
   }
   function backStep(skipHosted) {
+    if (window.WizShareWizard?.back()) return 'share-wizard';
     if (window.WizHomeScreenApps?.back()) return 'pin-sheet';
     { const t = window.WosTour?.back(); if (t) { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } return t; } } // the first-run tour and the Help sheet sit above everything
+    { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above everything, incl. the selection menu that opened it
     { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
     if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet sits above the windows
     if (window.WosBoomerang?.back()) return 'boomerang'; // the Boomerang picker sits above the thread it was opened from
@@ -3732,7 +3784,7 @@
   });
   const firstRun = !store.get('coached', false) && !window.WosTour?.done();
   // Setup (core/setup-launch.js) opens first on a box's first run; the tour then waits for the first return to Home.
-  if (window.WosSetupLaunch) window.WosSetupLaunch.boot({ firstRunTour: firstRun, open: id => { const a = APP[id]; if (a) openApp(a); }, tour: why => window.WosTour?.start(why), markTour: () => window.WosTour?.mark(), isHome: () => idx === HOME && !sheet && !document.hidden && !window.WosTour?.active });
+  if (window.WosSetupLaunch) window.WosSetupLaunch.boot({ firstRunTour: firstRun, open: id => { const a = APP[id]; if (a) openApp(a); }, tour: why => window.WosTour?.start(why), markTour: () => window.WosTour?.mark(), isHome: () => idx === HOME && !sheet && !document.hidden && !window.WosTour?.active, busy: () => V.state !== 'idle' || !!sheet || idx !== HOME });
   else if (firstRun) setTimeout(() => { if (!(window.__deeplinkLog || []).length) window.WosTour?.start('first-run'); else window.WosTour?.mark(); }, 600);
   // Native shell (Wizard OS Android app): the app hands every hardware/gesture Back to the shell. A step that
   // undoes something returns its name; at the true root the shell stays put and says so. The app never exits
@@ -3768,6 +3820,8 @@
       return true;
     }
     if (h.action === 'usuals') { openUsuals(); return true; }
+    // Photos is its own app: older Wizard OS builds still ask for Settings › photos-backup (notification, native screen).
+    if (h.action === 'settings' && (h.focus === 'photos-backup' || h.focus === 'photos')) { if (!window.WizOpenApp?.('photos')) toast('▣', 'Photos backup lives in the Photos app · install it from the App Store', 3200); return true; }
     if (h.action === 'unsent' || h.action === 'settings') { onUnsentChange(); openSettings(h.action === 'unsent' || (typeof h.focus === 'string' && window.WosSettings?.features.some(f => f.id === h.focus) ? h.focus : undefined)); return true; }
     if (h.action === 'side-button') { store.set('sideHidden', false); refreshHome(true); if (SIDE && (SIDE.step === 'mic' || SIDE.step === 'assistant')) sideButtonTap(false); else toast('◉', 'Side button is on. Hold it to talk.', 2600); return true; }
     const text = String(h.text || '').trim().slice(0, 2000);
@@ -3921,7 +3975,7 @@
     const AG = window.WosAgents, def = AG?.defaultId() || 'hermes';
     const f = desks[idx]?.focus, w = f && W[f];
     let id = '', why = 'main', app = '';
-    if (w && agentWin(w)) { id = w.agent; why = 'chats'; }
+    if (w && w.app === 'chats' && (!w.thread || w.thread === '__new__') && CHATS.winAgent(w)) { id = CHATS.winAgent(w); why = 'chats'; }
     else if (w && (w.app === 'chats' || CHATS.isHosted(f)) && w.thread && AG?.isOther(LIVE?.agentOf?.(w.thread))) { id = LIVE.agentOf(w.thread); why = 'thread'; }
     else if (w?.appId) {
       const b = AG?.binding?.(w.appId);
@@ -3941,18 +3995,22 @@
   }
   const skinChatsWin = () => { const f = desks[idx]?.focus; if (W[f]?.app === 'chats') return W[f]; const id = desks[idx]?.wins.find(x => W[x]?.app === 'chats'); return id ? W[id] : null; };
   window.WosSkinHost?.attach({
+    overview: overviewAdapter,
     route() { const w = skinChatsWin(), f = W[desks[idx]?.focus]; let ag = ''; try { ag = agentHere().id; } catch (_) {} return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: idx, app: f ? (f.appId || f.app || null) : null, agent: ag || null }; },
     back: () => backStep(),
     openList: () => openChatsList(),
     openThread: id => openWizardThread(id),
     goDesk: i => goDesk(i),
+    newThread: () => { const w = skinChatsWin(); if (w) CHATS.openChat(w.id, '__new__'); },
+    models: () => { const w = skinChatsWin(); return w ? CHATS.tweakModels(w.id) : []; },
+    model: (choice, alive) => { const w = skinChatsWin(); return w ? CHATS.tweakModel(w.id, choice, alive) : null; },
     deskCount: () => desks.length,
     root() { const w = skinChatsWin(); return w ? track.querySelector(`[data-chats="${w.id}"]`) : null; },
     dock: () => $('#dock'),
     locked: pointerId => !!(DS && DS.id === pointerId && DS.h),
     toast: text => toast('◇', text, 2400),
     // Layouts (two-orb): who the screen routes to, and the orb's recorder.
-    agents: () => (window.WosAgents?.list || []).map(agentInfo),
+    agents: () => (window.WosAgents?.visible?.() || window.WosAgents?.list || []).map(agentInfo),
     agentHere: () => agentHere(),
     agentSigil: id => { const AG = window.WosAgents, a = AG?.get(id); return a ? AG.sigil(a, 'ag-sig') : ''; },
     openAgent: id => openAgentChats(id),

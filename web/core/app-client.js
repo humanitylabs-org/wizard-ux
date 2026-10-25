@@ -8,6 +8,9 @@
   // Ordinary workspace/standalone clients are unchanged: the policy is session-only.
   try { if (parent !== window && parent.WizHomeScreenPolicy?.mode) parent.WizHomeScreenPolicy.installPresentationStorage(window); } catch (_) {}
   if (window.WizardApp) return;
+  // Home-screen identity (manifest, apple-touch-icon, title) for an app opened directly at its own path:
+  // the shared, registry-backed core/app-identity.js. Top-level documents only; it is a no-op in the shell.
+  try { if (parent === window && !window.WizardAppIdentity) { const s = document.createElement('script'); s.src = '/wizard-os-home/core/app-identity.js'; (document.head || document.documentElement).appendChild(s); } } catch (_) {}
   const ORIGIN = location.origin, VERSION = 1, overlays = [], handlers = [], themes = new Set(), updates = new Set();
   let service = null, transportReady = false, currentTheme = null, updateAvailable = null, rootWatcher = null, guarded = false, exitUntil = 0, requestId = 0;
   const requests = new Map();
@@ -58,13 +61,56 @@
       if (service) { try { rootWatcher?.destroy(); } catch (_) {} rootWatcher = null; }
       parent.postMessage({ type: 'wizard:appearance:ready', version: VERSION, app: String(meta.name || '').slice(0, 96) }, ORIGIN);
     }
-    if (service) return Promise.resolve(service.ready());
+    if (service) { const r = service.ready(); registerShare(); return Promise.resolve(r); }
     if (!framed) return Promise.resolve({ version: VERSION, hosted: false });
     return request('ready', null, 1500).then(result => {
       transportReady = result?.version === VERSION && result.hosted === true;
+      if (transportReady) registerShare();
       return transportReady ? result : { version: VERSION, hosted: false };
     }, () => { transportReady = false; return { version: VERSION, hosted: false }; });
   }
+  /* Receiving shares from Wizard's share sheet (docs/SHARE-SHEET.md). Hosted apps only: the shell keeps each item
+   * pending until receive() returns true (the item is visibly placed, e.g. in the app's composer), then it is acked. */
+  let shareRecv = null, sharePull = null;
+  function shareOp(op, args) {
+    if (service) return Promise.resolve().then(() => op === 'receive' ? service.share.receive(args) : op === 'targets' ? service.share.targets(args.targets) : op === 'pending' ? service.share.pending() : service.share.ack(args.id));
+    if (transportReady) return request('share.' + op, args);
+    return Promise.reject(new Error('Receiving shares needs the Wizard host'));
+  }
+  function pullShares() {
+    if (!shareRecv) return Promise.resolve(0);
+    if (sharePull) { sharePull.again = true; return sharePull.done; }
+    const run = sharePull = { again: false };
+    run.done = (async () => {
+      let n = 0;
+      try {
+        do {
+          run.again = false;
+          const items = await shareOp('pending').catch(() => []);
+          for (const it of Array.isArray(items) ? items : []) {
+            if (!shareRecv) break;
+            let ok = false;
+            try { ok = (await shareRecv.receive(Object.freeze({ ...it }))) === true; } catch (e) { console.warn('WizardApp share receive', e); }
+            if (ok) { await shareOp('ack', { id: it.id }).catch(() => {}); n++; }
+          }
+        } while (run.again && shareRecv);
+      } finally { sharePull = null; }
+      return n;
+    })();
+    return run.done;
+  }
+  function registerShare() {
+    if (!shareRecv || (!service && !transportReady)) return Promise.resolve(false);
+    return shareOp('receive', { accepts: shareRecv.accepts, targets: shareRecv.targets }).then(ok => { if (ok) pullShares(); return ok === true; }, () => false);
+  }
+  function receiveShares({ accepts, targets, receive } = {}) {
+    if (typeof receive !== 'function') throw new TypeError('Share receiver needs receive(item)');
+    shareRecv = { accepts: Array.isArray(accepts) ? accepts.slice(0, 8) : [], targets: Array.isArray(targets) ? targets.slice(0, 24) : undefined, receive };
+    registerShare();
+    const mine = shareRecv;
+    return () => { if (shareRecv !== mine) return; shareRecv = null; shareOp('receive', { accepts: [] }).catch(() => {}); };
+  }
+  function shareTargets(list) { if (shareRecv && Array.isArray(list)) shareRecv.targets = list.slice(0, 24); return shareRecv && Array.isArray(list) ? shareOp('targets', { targets: list.slice(0, 24) }).then(v => v === true, () => false) : Promise.resolve(false); }
   function register({ canGoBack, back: fn }) {
     if (typeof canGoBack !== 'function' || typeof fn !== 'function') throw new TypeError('Back needs synchronous canGoBack/back callbacks');
     const h = { canGoBack, back: fn }; handlers.push(h);
@@ -99,6 +145,33 @@
   }
   const listen = (set, fn, value) => { if (typeof fn !== 'function') throw new TypeError('Subscriber must be a function'); set.add(fn); if (value) fn(value); return () => set.delete(fn); };
   const TOKENS = ['canvas', 'base', 'chrome', 'overlay', 'surface', 'surface-raised', 'text', 'text-secondary', 'text-muted', 'border', 'accent', 'accent-soft', 'on-accent', 'reader-surface'];
+  /* Shared kit + skin layer (James, 23 Oct 2026). A hosted app that uses the Wizard UI kit gets the shell's live copy
+   * (/wizard-os-home/kit/wizard-ui.css) instead of its vendored snapshot, and every themed app gets the active skin's
+   * stylesheets (core/skins.css, loaded skin package css, then My skin) after its own styles, so a skin can restyle
+   * .wz-* components. Same-origin parent only; mirrored on every appearance push, so a skin change follows live. */
+  const KIT = '/wizard-os-home/kit/wizard-ui.css', KIT_TOKENS = '/wizard-os-home/kit/wizard-tokens.css';
+  function syncSkinLayer() {
+    let pd = null; try { pd = parent.document; } catch (_) { return false; }
+    const head = document.head; if (!pd || !head) return false;
+    const vendored = [...head.querySelectorAll('link[rel="stylesheet"]')].find(l => /(^|\/)wizard-ui\.css(\?|$)/.test(l.getAttribute('href') || '') && l.dataset.wzShared !== 'kit');
+    if (vendored && !head.querySelector('link[data-wz-shared="kit"]')) {
+      // Tokens travel with the kit: older vendored kits carried their own fallbacks and no tokens file.
+      const mk = (href, kind) => { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = new URL(href, location.origin).href; l.dataset.wzShared = kind; return l; };
+      const t = mk(KIT_TOKENS, 'tokens'), k = mk(KIT, 'kit');
+      let ready = 0; const done = () => { if (++ready === 2) vendored.disabled = true; };
+      t.addEventListener('load', done, { once: true }); k.addEventListener('load', done, { once: true });
+      vendored.after(t, k);
+    }
+    const want = [...pd.querySelectorAll('link[rel="stylesheet"]')].filter(l => /(^|\/)core\/skins\.css(\?|$)/.test(l.getAttribute('href') || '') || l.dataset.skinPkg).filter(l => !l.disabled).map(l => l.href);
+    const have = new Map([...head.querySelectorAll('link[data-wz-skin-layer]')].map(l => [l.href, l]));
+    for (const [href, l] of have) if (!want.includes(href)) l.remove();
+    for (const href of want) if (!have.has(href)) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = href; l.dataset.wzSkinLayer = ''; head.appendChild(l); }
+    const mine = pd.getElementById('wosMySkin'), css = mine && !mine.disabled ? String(mine.textContent || '') : '';
+    let s = head.querySelector('style[data-wz-my-skin]');
+    if (css) { if (!s) { s = document.createElement('style'); s.dataset.wzMySkin = ''; } s.textContent = css; head.appendChild(s); }
+    else if (s) s.remove();
+    return true;
+  }
   function applyTheme(a) {
     if (!a || a.version !== VERSION || !Number.isSafeInteger(a.revision) || a.revision < 0 || !['window', 'immersive'].includes(a.presentation) || !['light', 'dark'].includes(a.colorScheme) || !/^[a-z0-9-]{1,40}$/.test(a.skin || '') || !a.tokens) return false;
     if (!TOKENS.every(k => typeof a.tokens[k] === 'string' && a.tokens[k].length < 96 && a.tokens[k].length > 0 && !/[;{}]|url\(/i.test(a.tokens[k]) && (!window.CSS?.supports || CSS.supports('color', a.tokens[k])))) return false;
@@ -109,6 +182,7 @@
     root.style.colorScheme = a.colorScheme;
     root.dataset.skin = a.skin; root.dataset.presentation = a.presentation; root.dataset.colorScheme = a.colorScheme;
     root.setAttribute('data-wz-hosted', '');
+    if (framed) { try { syncSkinLayer(); } catch (e) { console.warn('WizardApp skin layer', e); } }
     currentTheme = Object.freeze({ ...a, tokens: Object.freeze({ ...a.tokens }) });
     notify(themes, currentTheme);
     if (!window.WizardTheme) dispatchEvent(new CustomEvent('wizard:theme', { detail: currentTheme }));
@@ -126,6 +200,7 @@
     if (d.type === 'wizard:appearance' && applyTheme(d.appearance)) parent.postMessage({ type: 'wizard:appearance:ack', version: VERSION, revision: currentTheme.revision }, ORIGIN);
     if (d.type === 'wizard:app:tool' && d.version === VERSION && toolHandler && typeof d.id === 'string') { try { toolHandler({ id: d.id, value: typeof d.value === 'string' ? d.value : undefined }); } catch (err) { console.warn('WizardApp tool', err); } }
     if (d.type === 'wizard:app:update' && d.version === VERSION) { updateAvailable = d.available; notify(updates, updateAvailable); }
+    if (d.type === 'wizard:app:share' && d.version === VERSION) pullShares();
   });
   function hold(reason) {
     if (service) return service.update.hold(reason);
@@ -231,7 +306,9 @@
     view: Object.freeze({ isVisible: () => !document.hidden && (!framed || service?.view?.isVisible() === true) }),
     nav: Object.freeze({ get threadAgents() { return service?.nav?.threadAgents === true; }, openThread: (id, opts) => service?.nav?.openThread(id, opts) === true, openContextDraft: data => { if (!service?.nav?.openContextDraft) throw new Error('Context drafts need the verified Wizard host'); return service.nav.openContextDraft(data); } }),
     theme: Object.freeze({ get: () => currentTheme || window.WizardTheme?.current || null, onChange: fn => listen(themes, fn, currentTheme || window.WizardTheme?.current) }),
-    share: Object.freeze({ text: data => service ? service.share.text(data) : transportReady ? sharedResult(request('share.text', data)) : fallbackText(data), file: (file, opts) => service ? service.share.file(file, opts) : transportReady ? sharedResult(request('share.file', { file, options: opts })) : fallbackFile(file, opts) }),
+    voice: Object.freeze({ transcribe: (file, opts = {}) => service?.voice ? service.voice.transcribe(file, opts) : transportReady ? request('voice.transcribe', { file, language: opts.language }, 180000) : Promise.resolve({ unavailable: true }) }),
+    share: Object.freeze({ get wizard() { return service?.share?.wizard ? data => service.share.wizard(data) : transportReady ? data => request('share.wizard', data, 600000) : undefined; }, text: data => service ? service.share.text(data) : transportReady ? sharedResult(request('share.text', data)) : fallbackText(data), file: (file, opts) => service ? service.share.file(file, opts) : transportReady ? sharedResult(request('share.file', { file, options: opts })) : fallbackFile(file, opts),
+      receive: receiveShares, targets: shareTargets, check: () => pullShares() }),
     titlebar: Object.freeze({ set: (tools, onTool) => { toolHandler = typeof onTool === 'function' ? onTool : null; return service ? Promise.resolve(service.titlebar.set(tools)) : transportReady ? request('titlebar.set', { tools }).then(v => v === true, () => false) : Promise.resolve(false); },
       shown: () => { try { return !!service?.titlebar.shown(); } catch (_) { return false; } } }),
     badge: Object.freeze({ set: n => service ? service.badge.set(n) : transportReady ? request('badge.set', { n }).then(() => true, () => false) : Promise.resolve(false) }),

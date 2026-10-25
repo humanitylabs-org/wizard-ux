@@ -251,6 +251,23 @@ const ok = (condition, name, extra = '') => {
   await desktopPage.waitForSelector('.ch-sheet');
   const desktopActions = await desktopPage.locator('.ch-sheet [data-rsact]').evaluateAll(buttons => buttons.map(button => button.dataset.rsact));
   ok(desktopActions.includes('unread'), 'desktop keyboard context menu offers Mark unread on a read Ready item', desktopActions);
+  await desktopPage.keyboard.press('Escape'); await desktopPage.waitForSelector('.ch-sheet', { state: 'detached' });
+  // The thread is open beside the list, then marked unread from its own row: the open pane must not read it straight back.
+  const threadOpen = () => desktopPage.evaluate(id => Object.values(window.__wux?.wins || {}).some(w => w.app === 'chats' && w.thread === id), SID);
+  await desktopRow.click(); await desktopPage.waitForFunction(id => Object.values(window.__wux?.wins || {}).some(w => w.app === 'chats' && w.thread === id), SID, { timeout: 10000 }).catch(() => {}); await sleep(800);
+  const openedDesktop = await threadOpen();
+  ok(openedDesktop, 'desktop: the thread opens beside the list');
+  await desktopRow.dispatchEvent('contextmenu', { button: 2 });
+  await desktopPage.waitForSelector('.ch-sheet');
+  const openActions = await desktopPage.locator('.ch-sheet [data-rsact]').evaluateAll(buttons => buttons.map(button => button.dataset.rsact));
+  ok(openActions.includes('unread'), 'desktop: the open thread\'s row offers Mark unread', { openActions, openedDesktop });
+  await desktopPage.locator('.ch-sheet [data-rsact="unread"]').evaluate(button => button.click());
+  await sleep(1500); // longer than the attended-thread auto-read pass
+  const openRows = await desktopPage.locator(selector(SID)).evaluateAll(rows => rows.map(row => ({ unreadClass: row.classList.contains('unread'), weight: Number(getComputedStyle(row.querySelector('.tp b')).fontWeight) })));
+  ok(openRows.length > 0 && openRows.every(row => row.unreadClass && row.weight >= 700), 'desktop: marking the open thread unread keeps it bold (the open pane does not re-read it)', { openRows, openedDesktop });
+  ok(!await threadOpen(), 'desktop: marking the open thread unread steps back out of it');
+  const openStored = seenState.threads[`direct:${SID}`];
+  ok(openStored.unreadAt > openStored.seenAt, 'desktop: the saved unread marker is not overwritten by a read', openStored);
   await screenshot(desktopPage, 'desktop');
   ok(desktopErrors.length === 0, 'desktop has no page errors', desktopErrors);
   await desktop.close();

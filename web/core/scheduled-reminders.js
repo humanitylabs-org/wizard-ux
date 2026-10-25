@@ -10,7 +10,7 @@
   const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
   const WEEKDAYS=['Su','Mo','Tu','We','Th','Fr','Sa'];
   const PRESETS=[
-    ['today','Later today'],['tomorrow-am','Tomorrow 9:00'],['1w','Next week']
+    ['today','Later today'],['tomorrow-am','Tomorrow'],['2d','In 2 days'],['3d','In 3 days'],['5d','In 5 days'],['1w','Next week']
   ];
   let reminders=[], loaded=false, sheet=null, listeners=new Set(), poll=0, restoreFocus=null;
   const focused=new Set(), watchedAt=new Map();
@@ -86,10 +86,10 @@
     if(kind==='tomorrow-am')return{date:addWallDays(today,1),time:'09:00'};
     if(kind==='tomorrow-pm')return{date:addWallDays(today,1),time:'14:00'};
     if(kind==='1m')return{date:addWallMonths(today,1),time:'09:00'};
-    const n={ '2d':2,'4d':4,'1w':7,'2w':14 }[kind]||1;return{date:addWallDays(today,n),time:'09:00'};
+    const n={ '2d':2,'3d':3,'4d':4,'5d':5,'1w':7,'2w':14 }[kind]||1;return{date:addWallDays(today,n),time:'09:00'};
   }
   function formatPreset(v,z){const utc=wallToUtc(v.date,v.time,z);return new Intl.DateTimeFormat('en',{timeZone:z,weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(utc))}
-  function presetButtons(z,selected=''){return PRESETS.map(([id,label])=>{const v=preset(id,z);return `<button type="button" data-boom-preset="${id}" class="${selected===`${v.date}T${v.time}`?'selected':''}"${Date.parse(wallToUtc(v.date,v.time,z))<=Date.now()?' disabled':''}><span>${label}</span><small>${esc(formatPreset(v,z))}</small></button>`}).join('')+'<button type="button" data-boom-exact><span>Pick a time</span><small>Choose date &amp; time</small></button><button type="button" data-boom-someday><span>Someday</span><small>No time · bottom of Ready</small></button>'}
+  function presetButtons(z,selected=''){return PRESETS.map(([id,label])=>{const v=preset(id,z);return `<button type="button" data-boom-preset="${id}" class="${selected===`${v.date}T${v.time}`?'selected':''}"${Date.parse(wallToUtc(v.date,v.time,z))<=Date.now()?' disabled':''}><span>${label}</span><small>${esc(formatPreset(v,z))}</small></button>`}).join('')+'<button type="button" data-boom-someday><span>Someday</span><small>No time · bottom of Ready</small></button><button type="button" data-boom-exact><span>Other date…</span><small>Pick an exact date &amp; time</small></button>'}
   function years(selected){const now=new Date().getUTCFullYear(),from=Math.min(now-2,selected),to=Math.max(now+10,selected);let html='';for(let y=from;y<=to;y++)html+=`<option value="${y}"${y===selected?' selected':''}>${y}</option>`;return html}
   function calendarHtml(selected){const {y,m,d}=parseDate(selected);return `<section class="boom-calendar" data-boom-calendar hidden aria-label="Choose date"><div class="boom-cal-head"><button type="button" data-cal-prev aria-label="Previous month">‹</button><select name="cal-month" aria-label="Month">${MONTHS.map((x,i)=>`<option value="${i+1}"${i+1===m?' selected':''}>${x}</option>`).join('')}</select><select name="cal-year" aria-label="Year">${years(y)}</select><button type="button" data-cal-next aria-label="Next month">›</button></div><div class="boom-weekdays" aria-hidden="true">${WEEKDAYS.map(x=>`<span>${x}</span>`).join('')}</div><div class="boom-grid" role="grid" aria-label="${MONTHS[m-1]} ${y}" data-cal-grid data-year="${y}" data-month="${m}"></div></section>`}
   function renderCalendar(form,focusDate=''){
@@ -138,7 +138,7 @@
       if(existing)job=await req(`${API}/${encodeURIComponent(existing.id)}`,{method:'PATCH',headers:J,body:JSON.stringify({when:{once:due_at},timezone,prompt:note,enabled:true})});
       else{const message=opts.targetKind==='message'&&Number(opts.anchorAt)>0?Number(opts.anchorAt):null,ag=live()?.agentOf?.(opts.sessionId)||'';
         job=await req(API,{method:'POST',headers:J,body:JSON.stringify({name:('Snooze · '+String(opts.title||opts.context||'Thread').replace(/\s+/g,' ').trim()).slice(0,150),kind:'return',when:{once:due_at},timezone,thread:opts.sessionId,prompt:note,...(/^[a-z][a-z0-9-]{0,30}$/.test(ag)&&ag!=='hermes'?{agent:ag}:{}),target:{message,excerpt:message?String(opts.context||'').slice(0,280):''}})})}
-      askNotify();const r=fromJob(job);reminders=reminders.filter(x=>x.id!==r.id).concat(r);if(existing){const k=seen();k.delete(r.id);markSeen(k)}arm(r,true);emit();close();void refresh();window.dispatchEvent(new CustomEvent('wos:boomerang-set',{detail:{at:r.due_at,zone:r.timezone,label:returnLabel(r)}}));void away(opts.sessionId)}catch(err){error.textContent=err.message||'Could not snooze';submit.disabled=false}finally{saving=false}};
+      askNotify();const r=fromJob(job);reminders=reminders.filter(x=>x.id!==r.id).concat(r);if(existing){const k=seen();k.delete(r.id);markSeen(k)}arm(r,true);emit();close();void refresh();window.dispatchEvent(new CustomEvent('wos:boomerang-set',{detail:{session:opts.sessionId,at:r.due_at,zone:r.timezone,label:returnLabel(r)}}));void away(opts.sessionId)}catch(err){error.textContent=err.message||'Could not snooze';submit.disabled=false}finally{saving=false}};
     form.querySelector('[data-boom-close]').focus();
   }
   async function cancel(id){const sid=reminders.find(r=>r.id===id)?.session_id;await req(`${API}/${encodeURIComponent(id)}`,{method:'DELETE'});reminders=reminders.filter(r=>r.id!==id);emit();close();void refresh();const s=sid&&live()?.session?.(sid);if(s?.deferred&&!s.archived&&!nextFor(sid))void live().restore?.(sid)} // no snooze left: back in the list
@@ -159,5 +159,5 @@
     try{if(target.closest('[data-boom-done]')){await acknowledge(id);return true}if(target.closest('[data-boom-cancel]')){await cancel(id);return true}}catch{window.dispatchEvent(new CustomEvent('wos:boomerang-error'))}
     return false}
   function start(){if(poll)return;void refresh();poll=setInterval(refresh,15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refresh()});addEventListener('focus',()=>void refresh())}
-  window.WosBoomerang={start,refresh,open,close,back,banner,handle,dueFor,nextFor,forSession,focusFor,focusedOn,_returnLabel:returnLabel,_preset:preset,isOpen:()=>Boolean(sheet),_wallToUtc:wallToUtc,_addWallDays:addWallDays,_addWallMonths:addWallMonths,_daysInMonth:daysInMonth,_fromJob:fromJob,onChange(fn){listeners.add(fn);return()=>listeners.delete(fn)}};start();
+  window.WosBoomerang={someday,start,refresh,open,close,back,banner,handle,dueFor,nextFor,forSession,focusFor,focusedOn,_returnLabel:returnLabel,_preset:preset,isOpen:()=>Boolean(sheet),_wallToUtc:wallToUtc,_addWallDays:addWallDays,_addWallMonths:addWallMonths,_daysInMonth:daysInMonth,_fromJob:fromJob,onChange(fn){listeners.add(fn);return()=>listeners.delete(fn)}};start();
 })();

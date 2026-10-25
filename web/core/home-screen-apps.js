@@ -54,10 +54,41 @@
     overlay.addEventListener('pointercancel', () => { freshPress = false; });
     // Opening gesture's release/click can never activate the newly mounted action.
     overlay.addEventListener('click', e => {
+      // Selection can cancel its pointer stream. Guard actions, not native text selection.
+      if (e.target.dataset?.installLink !== undefined) return;
       if (!freshPress && e.detail !== 0) { e.preventDefault(); e.stopImmediatePropagation(); return; }
       freshPress = false;
       if (e.target === overlay && !pending) close();
     }, true);
+    if (!port()) {
+      // offer/attach validate the registered frontend with the shared same-origin policy.
+      const url = new URL(a.url, location.origin).href;
+      const ios = /iPad|iPhone|iPod/.test(navigator.userAgent || '') || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const android = /Android/i.test(navigator.userAgent || '');
+      const browser = ios ? 'Safari' : android ? 'Chrome' : 'your browser';
+      sheet.classList.add('home-pin-guide');
+      button.remove();
+      const steps = document.createElement('ol');
+      const first = document.createElement('li');
+      const heading = document.createElement('strong'); heading.textContent = 'Open this link in ' + browser;
+      const hint = document.createElement('p'); hint.textContent = 'Copy the link, open ' + browser + ', and paste it into the address bar.';
+      const copy = document.createElement('button'); copy.type = 'button'; copy.textContent = 'Copy link';
+      const address = document.createElement('textarea'); address.readOnly = true; address.rows = 4; address.value = url;
+      address.setAttribute('aria-label', 'App link'); address.setAttribute('data-install-link', ''); address.spellcheck = false;
+      const status = document.createElement('p'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+      const select = () => { address.focus(); address.select(); address.setSelectionRange(0, url.length); };
+      address.onclick = select;
+      copy.onclick = async () => {
+        try { await navigator.clipboard.writeText(url); status.textContent = 'Copied. Paste into ' + browser + '’s address bar.'; }
+        catch (_) { select(); status.textContent = 'Couldn’t copy automatically. Copy the selected link, then paste it into ' + browser + '.'; }
+      };
+      first.append(heading, hint, copy, address, status);
+      const second = document.createElement('li');
+      const save = document.createElement('strong'); save.textContent = 'Save to Home Screen';
+      const instruction = document.createElement('p'); instruction.textContent = ios ? 'In Safari, tap Share → Add to Home Screen → Add.' : android ? 'In Chrome, open the ⋮ menu → Add to Home screen / Install app, then confirm.' : 'Open your browser’s menu → Install app / Add to Home screen, if available, then confirm.';
+      second.append(save, instruction); steps.append(first, second); sheet.append(steps);
+      return;
+    }
     try { png = await iconPNG(a, header); } catch (_) { if (active === a) paint('error'); return; }
     if (active !== a) return;
     const response = await request('status', a);
@@ -72,17 +103,23 @@
       });
     };
   }
-  function attach(menu, appFor) {
+  const pinnable = a => !!a && a.kind === 'wizard' && !!a.url && window.WizHomeScreenPolicy.validId(a.id) && !window.WizHomeScreenPolicy.isShell(a.url) && window.WizHomeScreenPolicy.within(a.url,a.url);
+  // Desks overview: hold a one-app desk and let go without dragging → the same sheet (drag still reorders).
+  function offer(a) { if (!pinnable(a)) return false; try { navigator.vibrate?.(12); } catch (_) {} show(a); return true; }
+  // rows: which tiles inside `menu` can be held; live(row): the surface is still showing when the hold fires.
+  // Default is the Apps sheet (#launcher, live while .open). The New desk grid passes its own (it has no .open).
+  function attach(menu, appFor, opts = {}) {
+    const rows = opts.rows || '[data-app]', live = opts.live || (() => menu.classList.contains('open'));
     let hold = null, timer = null, blockedUntil = 0;
     function cancel() { clearTimeout(timer); timer = null; hold = null; }
     const block = () => { blockedUntil = performance.now() + 700; };
     menu.addEventListener('pointerdown', e => {
       if (hold) { cancel(); block(); return; }
-      if (!port()) return; // inert until the installed Android app provides the pin bridge (older APKs, browsers, desktop)
-      const row = e.target.closest('[data-app]'), a = row && appFor(row.dataset.app);
-      if (!e.isTrusted || !e.isPrimary || e.button !== 0 || !a || a.kind !== 'wizard' || !a.url || !window.WizHomeScreenPolicy.validId(a.id) || window.WizHomeScreenPolicy.isShell(a.url) || !window.WizHomeScreenPolicy.within(a.url,a.url)) return;
+      if (opts.available && !opts.available()) return;
+      const row = e.target.closest(rows), a = row && appFor(row.dataset.app);
+      if (!e.isTrusted || !e.isPrimary || e.button !== 0 || !pinnable(a)) return;
       hold = { id:e.pointerId, x:e.clientX, y:e.clientY, a };
-      timer = setTimeout(() => { if (!hold || !row.isConnected || !menu.classList.contains('open')) { cancel(); return; } block(); try { navigator.vibrate?.(12); } catch (_) {} show(a); },450);
+      timer = setTimeout(() => { if (!hold || !row.isConnected || !live(row) || (opts.available && !opts.available())) { cancel(); return; } block(); try { navigator.vibrate?.(12); } catch (_) {} show(a); },450);
     }, true);
     document.addEventListener('pointerdown', e => { if (hold && e.pointerId !== hold.id) { cancel(); block(); } },true);
     menu.addEventListener('pointermove', e => { if (hold && e.pointerId === hold.id && Math.hypot(e.clientX-hold.x,e.clientY-hold.y) > 8) { cancel(); block(); } },true);
@@ -101,5 +138,5 @@
     if (r.status === 'pinned') { paint('confirmed'); setTimeout(() => { if (active === a) close(); },1200); }
     else close(); // OS cancellation is silent; dispatch isn't success.
   });
-  window.WizHomeScreenApps = Object.freeze({ attach, back() { if (!overlay) return false; if (!pending) close(); return true; }, get state() { return { open:!!overlay, appId:active?.id || '', pending }; } });
+  window.WizHomeScreenApps = Object.freeze({ attach, offer, canOffer: a => pinnable(a), back() { if (!overlay) return false; if (!pending) close(); return true; }, get state() { return { open:!!overlay, appId:active?.id || '', pending }; } });
 })();

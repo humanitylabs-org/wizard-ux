@@ -1,6 +1,9 @@
 {
   "purpose": "Every entrypoint-exclusive asset must be explicit; new common features must be shared by default, not added to these exceptions.",
   "exceptions": {
+    "core/device-port.js": { "shell": "phone", "classification": "native", "reason": "Optional exact-origin Android shell capability transport." },
+    "core/device-recording.js": { "shell": "phone", "classification": "native", "reason": "Android shell foreground-service recorder; browsers retain their recorder." },
+    "core/device-orb.js": { "shell": "phone", "classification": "native", "reason": "Android shell overlay capability; not a desktop overlay." },
     "core/orb-handoff.js": {
       "shell": "phone",
       "classification": "open-gap",
@@ -66,16 +69,6 @@
       "classification": "native",
       "reason": "Android Food bridge UI."
     },
-    "core/tour.js": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone gestures tutorial; desktop keyboard help is a layout/input-specific guide."
-    },
-    "core/tour.css": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone gesture spotlights; desktop keyboard sheet remains shell-local."
-    },
     "core/voice.js": {
       "shell": "desktop",
       "classification": "adapter",
@@ -121,6 +114,7 @@
     "/wizard-os-home/apple-touch-icon.png",
     "core/agents.js",
     "core/app-capture.js",
+    "core/app-kinds.js",
     "core/app-reading-position.js",
     "core/app-route.css",
     "core/app-route.js",
@@ -155,6 +149,7 @@
     "core/core.js",
     "core/deeplink.js",
     "core/dom-morph.js",
+    "core/experience.js",
     "core/features.js",
     "core/files.js",
     "core/focused-field.js",
@@ -167,7 +162,7 @@
     "core/os-updates.js",
     "core/own-views.css",
     "core/own-views.js",
-    "core/photos-settings.js",
+    "core/photos-relay.js",
     "core/polish.css",
     "core/reach.js",
     "core/resources.css",
@@ -183,6 +178,10 @@
     "core/settings.css",
     "core/settings.js",
     "core/setup-launch.js",
+    "core/share-sheet.css",
+    "core/share-sheet.js",
+    "core/share-wizard.css",
+    "core/share-wizard.js",
     "core/shell.js",
     "core/sigils.css",
     "core/sigils.js",
@@ -193,6 +192,8 @@
     "core/skins.js",
     "core/status.js",
     "core/thread-swipe-back.js",
+    "core/tour.css",
+    "core/tour.js",
     "core/update-banner.css",
     "core/uploads.js",
     "core/usage.js",
@@ -213,6 +214,9 @@
     "summaries.js"
   ],
   "coreModules": {
+    "core/device-port.js": { "loadedBy": ["phone"], "note": "Optional Android shell transport" },
+    "core/device-recording.js": { "loadedBy": ["phone"], "note": "Optional Android shell recorder" },
+    "core/device-orb.js": { "loadedBy": ["phone"], "note": "Optional Android shell overlay" },
     "core/agents.js": {
       "loadedBy": [
         "phone",
@@ -380,7 +384,10 @@
       "note": "Dev-only Chats slot module, dynamically loaded only with explicit fixture opt-in"
     },
     "core/chats-view.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Versioned in-document Chats provider admission and lifecycle"
     },
     "core/chats.js": {
@@ -454,7 +461,10 @@
       "note": "Boomerang picker and return banner on the shared scheduler (kind return)"
     },
     "core/schedules.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Shared Settings → Schedules; hidden when Agent Service schedules returns 404"
     },
     "core/os-updates.js": {
@@ -462,18 +472,21 @@
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import; Settings \u2192 Updates shows only where the App Manager answers store-install/_updates"
+      "note": "Direct entrypoint import; Settings → Updates shows only where the App Manager answers store-install/_updates"
     },
     "core/own-views.js": {
-      "loadedBy": ["phone", "desktop"],
-      "note": "Shared own-screen fallback and shell-only Settings confirmation; same App Manager owner listener as Updates"
-    },
-    "core/photos-settings.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import after settings.js; Settings › Photos backup shows only where the Android app's window.wizardPhotosPort exists"
+      "note": "Shared own-screen fallback and shell-only Settings confirmation; same App Manager owner listener as Updates"
+    },
+    "core/photos-relay.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shell relay for the optional Photos app frame (/photos/) to the Android app's window.wizardPhotosPort; draws no UI. Without the port it answers no-bridge"
     },
     "core/music-voice.js": {
       "loadedBy": [
@@ -517,6 +530,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/share-sheet.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
     "core/skin-frame.js": {
       "loadedBy": [
         "phone",
@@ -553,7 +573,10 @@
       "note": "Direct entrypoint import"
     },
     "core/setup-launch.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Shared first-run Setup admission; adapters supply only open/home callbacks."
     },
     "core/shell.js": {
@@ -593,9 +616,10 @@
     },
     "core/tour.js": {
       "loadedBy": [
-        "phone"
+        "phone",
+        "desktop"
       ],
-      "note": "Direct entrypoint import"
+      "note": "Phone gesture tour (Talk, Hide) and the desktop first-message guide (WosTour.desk) share one module and one done flag."
     },
     "core/uploads.js": {
       "loadedBy": [
@@ -718,6 +742,31 @@
         "desktop"
       ],
       "note": "My skin: the owner's own CSS (Skins/My skin.css in Files, served by the Agent Service at /wizard/v1/my-skin) applied last, on top of the picked skin"
+    },
+    "core/experience.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Owner experience storage boundary; published profiles, overrides and multi-tweak package lifecycle via skin-host"
+    },
+    "core/app-kinds.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/share-wizard.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Extracted native/app internal share sheet"
+    },
+    "core/app-identity.js": {
+      "loadedBy": [],
+      "note": "Support/client/export module; not directly mounted by either shell"
     }
   }
 }
