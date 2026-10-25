@@ -14,7 +14,7 @@ function harness(doc = false) {
   const ctx = { console, Date, setTimeout: () => 1, clearTimeout() {}, addEventListener: (n, f) => { hooks[n] = f; }, document: { addEventListener() {} }, localStorage: { getItem: k => storage[k], setItem: (k, v) => { storage[k] = v; } }, WizCore: { esc: String }, WosModels: {}, WizLive: { session: () => ({ status: 'completed' }) } };
   ctx.window = ctx; vm.createContext(ctx); vm.runInContext(source, ctx);
   const api = ctx.WosChatPower({ ch: () => state, CH: { win: state }, H: { win: () => w }, threadOnScreen: () => shown, scrollBox: () => doc ? sc : nb, isWorking: () => false });
-  const events = {}; nb.matches = s => s === '.ch-msgs'; api.bind({ addEventListener: (name, f) => { events[name] = f; } });
+  const events = {}; nb.classList = { contains: s => s === 'ch-msgs' }; api.bind({ addEventListener: (name, f) => { events[name] = f; } });
   return { api, nb, sc, hooks, storage, row, state, fireScroll: () => events.scroll({ target: nb }), setShown: b => { shown = b; }, writes: () => writes };
 }
 test('other tabs merge newest places without discarding an unflushed local scroll', () => {
