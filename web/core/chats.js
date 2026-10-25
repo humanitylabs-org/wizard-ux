@@ -405,7 +405,7 @@ window.WizCore.chats = function createChats(H) {
   const morningInstalled = () => typeof window.WizCanOpen === 'function' ? window.WizCanOpen('morning') : false;
   function morningSet(d) {
     const ok = d && typeof d.done === 'number' && typeof d.total === 'number' && typeof d.day === 'string';
-    const next = ok ? { day: d.day, done: d.done, total: d.total, next_label: String(d.next_label || '') } : null;
+    const next = ok ? { day: d.day, done: d.done, total: d.total, next_label: String(d.next_label || ''), hidden: !!d.hidden } : null;
     if (JSON.stringify(next) === JSON.stringify(MORNING.data)) return;
     MORNING.data = next;
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && el.querySelector('.ch-list') && !holdList(id)) renderChatList(w, el); }
@@ -418,13 +418,24 @@ window.WizCore.chats = function createChats(H) {
   }
   addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'wizard:morning') { MORNING.at = Date.now(); morningSet(e.data.status); } });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { MORNING.at = 0; morningPoll(); } });
+  // × on the card: hide it for the rest of Morning's day without ticking any step (James, 25 Oct 2026: missed the
+  // routine, it's evening, stop showing it). Morning owns the flag so every device agrees; undo lives in Morning.
+  function morningHide() {
+    if (!MORNING.data) return;
+    const prev = MORNING.data; morningSet({ ...prev, hidden: true });
+    fetch('/morning/api/hide', { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{"hidden":true}' })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(st => { MORNING.at = Date.now(); morningSet(st); toast('☀', 'Morning hidden until tomorrow', 2200); },
+        () => { morningSet(prev); toast('!', 'Couldn’t hide Morning · try again', 2400); });
+  }
   function morningCard() {
     // Done for today = gone until the next morning (the day rolls at the owner's day start, on Morning's side).
-    const d = MORNING.data; if (!d || !morningInstalled() || d.done >= d.total) return '';
+    // Hidden for today (the owner tapped × or Morning's "Skip today") = gone too, steps untouched; back at rollover.
+    const d = MORNING.data; if (!d || !morningInstalled() || d.done >= d.total || d.hidden) return '';
     const all = false;
     const sub = all ? 'Done for today' : d.done ? `${d.done} of ${d.total} done · next: ${d.next_label}` : 'Workout · Meditate · Read';
     const dots = Array.from({ length: d.total }, (_, i) => `<i${i < d.done ? ' class="on"' : ''}></i>`).join('');
-    return `<button type="button" class="ch-morning${all ? ' done' : ''}" data-chmorning aria-label="Open Morning · ${esc(sub)}"><span class="sun" aria-hidden="true"></span><span class="tx"><span class="hd"><b>Morning</b><i>${all ? 'Done' : 'Pinned'}</i></span><small>${esc(sub)}</small>${all ? '' : `<span class="dots" aria-hidden="true">${dots}</span>`}</span><span class="go" aria-hidden="true">›</span></button>`;
+    return `<div class="ch-morning-w"><button type="button" class="ch-morning${all ? ' done' : ''}" data-chmorning aria-label="Open Morning · ${esc(sub)}"><span class="sun" aria-hidden="true"></span><span class="tx"><span class="hd"><b>Morning</b><i>${all ? 'Done' : 'Pinned'}</i></span><small>${esc(sub)}</small>${all ? '' : `<span class="dots" aria-hidden="true">${dots}</span>`}</span></button><button type="button" class="ch-morning-x" data-chmorninghide aria-label="Hide Morning until tomorrow" title="Hide until tomorrow">×</button></div>`;
   }
   // The agent's status line for a finished thread (live.js attention): what it asks of James.
   const ATT = { needs_you: { cls: 'needs', label: 'Needs you' }, check: { cls: 'check', label: 'Your call' }, done: { cls: 'done', label: 'Done' }, fyi: { cls: 'fyi', label: '' } };
@@ -2561,6 +2572,7 @@ window.WizCore.chats = function createChats(H) {
     const recovery = e.target.closest('[data-obrecover]'); if (recovery) { H.recoverUnsent?.(recovery.dataset.obrecover); return true; }
     const rb = e.target.closest('[data-obretry]'); if (rb) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retry(rb.dataset.obretry)), 2400); return true; }
     if (e.target.closest('[data-chunsent]')) { H.openUnsent?.(); return true; }
+    if (e.target.closest('[data-chmorninghide]')) { morningHide(); return true; }
     if (e.target.closest('[data-chmorning]')) { MORNING.at = 0; if (!(window.WizOpenApp?.('morning'))) H.openLink?.('/morning/', 'Morning'); return true; }
     if (e.target.closest('[data-obretryall]')) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retryAll(winAgent(w))), 2400); return true; }
     const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) H.editUnsent(it); return true; }

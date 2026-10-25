@@ -711,6 +711,10 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 .ch-morning { display: flex; align-items: center; gap: 12px; width: 100%; margin: 4px 0 10px; padding: 13px 14px; border-radius: 18px; text-align: left; color: inherit; font: inherit; cursor: pointer;
   border: 1px solid rgba(255, 184, 107, .38); background: linear-gradient(135deg, rgba(255, 184, 107, .15), rgba(255, 111, 145, .09) 45%, rgba(143, 99, 255, .08)); }
 .ch-morning:active { transform: scale(.99); }
+.ch-morning-w { position: relative; margin: 4px 0 10px; }
+.ch-morning-w > .ch-morning { margin: 0; padding-right: 52px; }
+.ch-morning-x { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); width: 40px; height: 40px; border: 0; border-radius: 50%; background: none; color: inherit; font: inherit; font-size: 22px; line-height: 1; opacity: .6; cursor: pointer; }
+.ch-morning-x:hover, .ch-morning-x:focus-visible { opacity: 1; background: rgba(255, 255, 255, .08); }
 .ch-morning .sun { flex: none; width: 40px; height: 40px; border-radius: 50%; background: radial-gradient(circle at 50% 70%, #fff3d6, #ffb86b 40%, #ff6f91 75%); box-shadow: 0 0 18px rgba(255, 184, 107, .4); }
 .ch-morning .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .ch-morning .hd { display: flex; align-items: center; gap: 8px; }
