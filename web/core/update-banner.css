@@ -90,6 +90,9 @@
 @keyframes wb-in { from { opacity: 0; scale: .6; } to { opacity: 1; scale: 1; } }
 @keyframes wb-spin { to { rotate: 360deg; } }
 @keyframes wb-dot { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
+/* Reduce Motion: on the phone shell, styles.css's kill switch stops the flash, rings and sparks, and froze this ring too.
+ * The ring is the only sign the reload is still on its way, so it keeps turning, slower (Robert, 25 Oct 2026). */
+@media (prefers-reduced-motion: reduce) { .wos-burst .wb-core { animation: wb-spin 2.4s linear infinite !important; } }
 
 /* Home update pop-up (core/os-updates.js, wizard-os#186): the Settings update card's words and button, small, on Home only.
  * Phone: just above the dock (bottom set in JS from the dock's own top). Desktop: top right, under the bar. Never modal. */
