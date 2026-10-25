@@ -54,6 +54,13 @@ http {
       proxy_pass $wizard_api; include /tmp/wizard-proxy.conf;
     }
 
+    # App install identities are registry-backed, never user-supplied manifest data.
+    location ^~ /wizard-os-home/install/ {
+      limit_except GET { deny all; }
+      proxy_pass http://unix:/tmp/wizard-install.sock:;
+      include /tmp/wizard-proxy.conf;
+    }
+
     # Static UX (both prefixes). Each prefix's service worker may control its own prefix.
     location = /wizard-os-home/sw.js {
       root /usr/share/nginx/wizard-ux; try_files /sw.js =404;
