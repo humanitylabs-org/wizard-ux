@@ -194,6 +194,7 @@
     })();
     return loadingRecipes;
   }
+  let leaveBox;
   function boxAction(local, remote) {
     return (...args) => {
       if (serverMode === false) return local(...args);
@@ -296,7 +297,8 @@
     get FILE() { return own() ? 'Skins/' + own().id + '/skin.css' : FILE; },
     get recipes() { return clone(recipes.skins); },
     get active() { return own() ? clone(own()) : null; },
-    create: boxAction(create, createOnBox), wear: boxAction(wear, wearOnBox), leave: boxAction(leave, leaveOnBox), update: boxAction(update, updateOnBox), remove: boxAction(remove, removeOnBox), restore: boxAction(restore, restoreOnBox),
+    create: (leaveBox = boxAction(leave, leaveOnBox), boxAction(create, createOnBox)), wear: boxAction(wear, wearOnBox), // Wearing a built-in skin is never blocked: without a confirmed box connection it is a local choice.
+    leave: (...a) => (serverMode === true ? leaveBox(...a) : leave(...a)), update: boxAction(update, updateOnBox), remove: boxAction(remove, removeOnBox), restore: boxAction(restore, restoreOnBox),
     get storage() { return serverMode === true ? 'box' : serverMode === false ? 'local' : 'offline'; },
     get state() { return state; },
     // The owner overlay stays above the skin and the tweaks it brings; changing skin never clears it.
