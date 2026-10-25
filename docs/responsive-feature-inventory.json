@@ -1,6 +1,9 @@
 {
   "purpose": "Every entrypoint-exclusive asset must be explicit; new common features must be shared by default, not added to these exceptions.",
   "exceptions": {
+    "core/device-port.js": { "shell": "phone", "classification": "native", "reason": "Optional exact-origin Android shell capability transport." },
+    "core/device-recording.js": { "shell": "phone", "classification": "native", "reason": "Android shell foreground-service recorder; browsers retain their recorder." },
+    "core/device-orb.js": { "shell": "phone", "classification": "native", "reason": "Android shell overlay capability; not a desktop overlay." },
     "core/orb-handoff.js": {
       "shell": "phone",
       "classification": "open-gap",
@@ -206,6 +209,9 @@
     "pwa-install.js"
   ],
   "coreModules": {
+    "core/device-port.js": { "loadedBy": ["phone"], "note": "Optional Android shell transport" },
+    "core/device-recording.js": { "loadedBy": ["phone"], "note": "Optional Android shell recorder" },
+    "core/device-orb.js": { "loadedBy": ["phone"], "note": "Optional Android shell overlay" },
     "core/agents.js": {
       "loadedBy": [
         "phone",
