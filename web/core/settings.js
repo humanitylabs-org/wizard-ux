@@ -394,10 +394,9 @@
       // About & updates leads with the update card and its choices; the connection rows follow.
       if (selected === 'about') fs.sort((x, y) => (y.id === 'updates') - (x.id === 'updates'));
       const content = fs.map(f => `<section data-settings-feature="${esc(f.id)}">${f.html(ctx)}</section>`).join('');
-      const footer = `<footer class="st-shortcuts">${window.WosFiles ? '<button data-st-shortcut="files" data-st="files">Files</button>' : ''}${(window.WosFeatures?.entries || []).filter(f => !f.available || f.available()).map(f => `<button data-st-shortcut="${esc(f.id)}">${esc(f.title || f.id)}</button>`).join('')}</footer>`;
       root.dataset.settingsPage = page;
       root.dataset.settingsNested = ctx.skinDraft ? 'true' : 'false';
-      root.innerHTML = `<div class="st-inner ${desktop ? 'st-desktop' : 'st-phone'} ${page ? 'st-in-page' : ''}"><div class="st-index"><h3 class="st-title" tabindex="-1">Settings</h3>${card}${attentionHtml}<nav aria-label="Settings categories">${nav}</nav>${footer}</div><div class="st-page" ${selected ? '' : 'hidden'}><header class="st-page-head"><button data-st-back aria-label="${ctx.skinDraft ? 'Back to Look' : 'Back to Settings'}">‹</button><h3 tabindex="-1">${ctx.skinDraft ? 'New skin' : heading}</h3></header>${content}</div></div>${confirm ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="st-confirm-title"><h3 id="st-confirm-title">Use ${esc(chatsName(confirm.id))} for all your chats?</h3><p>You can switch back here any time.</p><div class="st-actions"><button data-chats-cancel ${ctx.chatsBusy ? 'disabled' : ''}>Cancel</button><button data-chats-confirm ${ctx.chatsBusy ? 'disabled' : ''}>${ctx.chatsBusy ? 'Switching…' : 'Use ' + esc(chatsName(confirm.id))}</button></div></section></div>` : ''}`;
+      root.innerHTML = `<div class="st-inner ${desktop ? 'st-desktop' : 'st-phone'} ${page ? 'st-in-page' : ''}"><div class="st-index"><h3 class="st-title" tabindex="-1">Settings</h3>${card}${attentionHtml}<nav aria-label="Settings categories">${nav}</nav></div><div class="st-page" ${selected ? '' : 'hidden'}><header class="st-page-head"><button data-st-back aria-label="${ctx.skinDraft ? 'Back to Look' : 'Back to Settings'}">‹</button><h3 tabindex="-1">${ctx.skinDraft ? 'New skin' : heading}</h3></header>${content}</div></div>${confirm ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="st-confirm-title"><h3 id="st-confirm-title">Use ${esc(chatsName(confirm.id))} for all your chats?</h3><p>You can switch back here any time.</p><div class="st-actions"><button data-chats-cancel ${ctx.chatsBusy ? 'disabled' : ''}>Cancel</button><button data-chats-confirm ${ctx.chatsBusy ? 'disabled' : ''}>${ctx.chatsBusy ? 'Switching…' : 'Use ' + esc(chatsName(confirm.id))}</button></div></section></div>` : ''}`;
       for (const f of fs) if (f.painted) { try { f.painted(ctx, root.querySelector(`[data-settings-feature="${CSS.escape(f.id)}"]`)); } catch (e) { console.error(e); } }
       root.scrollTop = top;
       const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = paneTop;
@@ -451,8 +450,6 @@
       const nav = el.closest('[data-st-page]'), att = el.closest('[data-st-attention]');
       if (nav || att) { focus(nav ? nav.dataset.stPage : att.dataset.stAttention); return true; }
       if (el.closest('[data-st-back]')) return back();
-      const shortcut = el.closest('[data-st-shortcut]');
-      if (shortcut) { const id = shortcut.dataset.stShortcut; if (id === 'files') ctx.openSub('files'); else window.WosFeatures?.open(id); return true; }
       const choose = el.closest('[data-chats-choice]'); if (choose) { askChats(choose.dataset.chatsChoice); return true; }
       if (el.closest('[data-chats-store]')) { openStore(); return true; }
       const id = el.closest('[data-settings-feature]')?.dataset.settingsFeature, f = features.get(id);

@@ -97,9 +97,6 @@
 .st-category[aria-current="page"] .st-tx b { font-weight: 700; }
 .st-desktop .st-category[aria-current="page"] { color: var(--wz-accent); }
 .st-index .st-title { margin-bottom: 8px; }
-.st-shortcuts { display: flex; flex-wrap: wrap; gap: 0 4px; margin-top: 18px; }
-.st-shortcuts { margin-inline: 0; }
-.st-root[data-settings-root] .st-shortcuts button { padding: 4px; margin-right: 12px; font-size: 15px; color: var(--wz-text-secondary); background: transparent; text-align: left; }
 .st-page-head { display: flex; gap: 6px; align-items: center; margin-bottom: 16px; }
 .st-page-head h3 { margin: 0; font-size: 24px; font-weight: 700; }
 .st-page-head button { font-size: 30px; background: transparent; color: var(--wz-text); }
@@ -124,9 +121,6 @@
 .st-desktop .st-page { overflow-y: auto; min-width: 0; padding-right: 8px; }
 .st-desktop .st-page-head button { display: none; }
 .st-desktop .st-page-head { min-height: 48px; }
-/* Desktop: shortcuts sit in the narrow category column; list them evenly instead of wrapping. */
-.st-desktop .st-shortcuts { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; margin-top: 16px; }
-.st-root[data-settings-root] .st-desktop .st-shortcuts button { min-width: 0; text-align: left; padding: 4px; margin-right: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 700px) {
   .st-desktop { grid-template-columns: 220px minmax(0, 1fr); gap: 12px; }
 }

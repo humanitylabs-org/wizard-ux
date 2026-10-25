@@ -1,4 +1,4 @@
-/* Small common action/view registry. Register once; Settings, deep links and both window hosts see it. */
+/* Small common action/view registry for voice commands, deep links and both window hosts. Never listed in Settings (James, 25 Oct 2026). */
 (() => {
   'use strict';
   const entries = new Map(); let H;
@@ -11,7 +11,6 @@
     mount(id, root, opts = {}) { const f = entries.get(id); if (!f) return; return f.mount?.(root, H, opts); },
     get entries() { return [...entries.values()]; }
   };
-  window.WosSettings.register({ id: 'features', aliases: ['features'], html() { return `<footer class="st-shortcuts">${api.entries.filter(f => !f.available || f.available()).map(f => `<button data-feature-open="${esc(f.id)}">${esc(f.title || f.id)}</button>`).join('')}</footer>`; }, act(_ctx, el) { const b = el.closest('[data-feature-open]'); return !!b && api.open(b.dataset.featureOpen); } });
   for (const level of ['day', 'week', 'month']) api.register({ id: level, title: `${level[0].toUpperCase() + level.slice(1)} in review`, icon: '◷', run: (h, o) => h.review(level, o.date) });
   api.register({ id: 'maps', title: 'Maps', icon: '⌖', run: (h, o) => h.maps(o.mode || 'search', o.query || '') });
   api.register({ id: 'command', title: 'Local command', icon: '⚡', mount(root, _host, opts) {
