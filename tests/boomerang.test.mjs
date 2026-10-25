@@ -97,7 +97,7 @@ test('Back closes the picker before anything under it, on phone and desktop', ()
 
 test('one Snooze action replaces Defer and Boomerang, with no second Snooze under each reply', () => {
   const js = read('web/core/chats.js')
-  assert.match(js, /return \['snooze', 'done'\]/)
+  assert.match(js, /watching \? \['snooze', 'stop_watch', 'done'\] : \['snooze', 'done'\]/)
   assert.doesNotMatch(js, /label: '(Defer|Boomerang)'|🪃/)
   assert.match(read('web/core/scheduled-reminders.js'), /live\(\)\.defer\(opts.sessionId\)/)
   assert.doesNotMatch(js, /data-mboom/)
