@@ -86,7 +86,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 
 | Need | Use | Never hand-roll |
 |---|---|---|
-| Canonical origin-less signed Android phone release and draft GitHub assets | `tools/phone_release.py` over `android-build-thales`; `tools/qa_phone_origin_upgrade.py` for exact-byte origin custody; `docs/phone-canonical-release.md` | a per-owner APK, a second origin store, unverified metadata, live-feed writes in release tooling |
+| Canonical phone release | `tools/phone_release.py`; `docs/phone-canonical-release.md` | per-owner APKs, live-feed writes |
 
 ## Shell plumbing (owned by one module; never duplicate, rarely called directly)
 
