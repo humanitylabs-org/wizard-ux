@@ -143,6 +143,12 @@ class InstallTest(unittest.TestCase):
         icons = json.loads(self.at('custom-thing')[2])['icons']
         self.assertTrue(all(i['src'].startswith('/wizard-os-home/') and i['type'] == 'image/png' for i in icons))
 
+    def test_app_level_manifest_preserves_registered_hash_route(self):
+        Registry.records = [{'id':'mizel', 'name':'Mizel', 'url':'/mizel-live/?view=main#/'}]
+        manifest = json.loads(self.at('mizel-live')[2])
+        self.assertEqual(manifest['start_url'], '/mizel-live/?view=main#/')
+        self.assertEqual(manifest['scope'], '/mizel-live/')
+
     def test_app_level_manifest_rejects_unregistered_and_unsafe(self):
         Registry.records = [{'id':'evil', 'name':'Evil', 'url':'https://evil.example/evil/'},
                             {'id':'shell', 'name':'Shell', 'url':'/wizard-os-home/'},

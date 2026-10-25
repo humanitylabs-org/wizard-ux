@@ -95,7 +95,7 @@ def app_by_path(snapshot, segment):
 def app_manifest(app):
     """Clean app-level PWA: registry name, house icon, opens at the registered app root."""
     root = urlsplit(app['url'])
-    start = root.path + ('?' + root.query if root.query else '')
+    start = root.path + ('?' + root.query if root.query else '') + ('#' + root.fragment if root.fragment else '')
     icons = icon_set(app['id'])
     return {'id': root.path, 'name': app['name'], 'short_name': app['name'],
             'start_url': start, 'scope': root.path, 'display': 'standalone',

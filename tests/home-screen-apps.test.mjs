@@ -235,11 +235,12 @@ test('Pinned home-screen apps keep the floating orb', async () => {
 // download button beside ✕ (one-app desks only) opens the same Add to home screen flow.
 test('Arrange/download tweak: hold arranges desks; download button beside ✕ opens Add to home screen', () => {
   const app = read('app.js');
+  assert.doesNotMatch(app, /miguel\/arrange-download/);
   assert.match(app, /if \(arrangeDesks\(\) && OV\.drag && !OV\.reordered\) \{ endDrag\(false\); el\.classList\.add\('editing'\);[^\n]*return; \}/);
   const releaseHold = app.indexOf("if (arrangeDesks() && OV.drag && !OV.reordered)"), stockOffer = app.lastIndexOf('if (a) window.WizHomeScreenApps?.offer(a);');
   assert.ok(releaseHold > 0 && releaseHold < stockOffer, 'release hold returns before the stock hold-to-offer path');
-  assert.match(app, /attach\(launcher, id => APP\[id\], \{ available: \(\) => !arrangeDesks\(\)/);
-  assert.match(app, /attach\(track, id => APP\[id\], \{ available: \(\) => !arrangeDesks\(\)/);
+  assert.match(app, /attach\(launcher, id => APP\[id\], \{ available: \(\) => overviewMode\(\)\.appHold !== false/);
+  assert.match(app, /attach\(track, id => APP\[id\], \{ available: \(\) => overviewMode\(\)\.appHold !== false/);
   // Download only for a one-app desk whose window is a registered frontend that passes the pin policy.
   assert.match(app, /function ovDeskApp\(d\) \{\s*const w = d && !d\.home && d\.wins\.length === 1 \? W\[d\.wins\[0\]\] : null, a = w\?\.app === 'frame' \? APP\[w\.appId\] : null;\s*return a && !a\.system && window\.WizHomeScreenApps\?\.canOffer\?\.\(a\) \? a : null;/);
   assert.match(app, /aria-label="\$\{label\}"/); assert.match(app, /const label = `Add \$\{esc\(/);

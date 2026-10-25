@@ -498,7 +498,15 @@
     const S = window.WizSigil, s = S.of(a.sigil || a);
     return { color: a.sgc || s.color, glyph: a.sgh || S.html(a.sigil || a) };
   }
-  const arrangeDesks = () => (document.documentElement.dataset.tweaks || '').split(/\s+/).includes('miguel/arrange-download');
+  // Generic overview input/action adapter; packages choose a mode through the capability-gated host.
+  const overviewModes = [], overviewMode = () => overviewModes.at(-1) || {};
+  const arrangeDesks = () => overviewMode().hold === 'arrange';
+  const overviewAdapter = { use(options) {
+    const mode = Object.freeze({ ...options }); overviewModes.push(mode);
+    const repaint = () => { if (ovEl?.classList.contains('open')) renderOverview(); }; repaint();
+    let released = false;
+    return () => { if (released) return; released = true; const at = overviewModes.indexOf(mode); if (at >= 0) overviewModes.splice(at, 1); repaint(); };
+  } };
   /* Arrange/download tweak: holding a desk only arranges it (drag to reorder, ✕ to close, like an app switcher). A desk that
    * shows exactly one registered frontend app also gets a small download button beside its ✕ in arrange mode, which
    * opens the existing Add to home screen flow (native pin on Android, the two-step direct-link guide elsewhere). */
@@ -507,7 +515,7 @@
     return a && !a.system && window.WizHomeScreenApps?.canOffer?.(a) ? a : null;
   }
   function ovDl(d) {
-    const a = arrangeDesks() && ovDeskApp(d); if (!a) return '';
+    const a = overviewMode().appAction === 'home-screen' && ovDeskApp(d); if (!a) return '';
     const label = `Add ${esc(window.WizHomeScreenPolicy?.displayName?.(a) || a.name)} to home screen`;
     return `<button class="ov-dl" data-ovdl="${d.id}" aria-label="${label}" title="${label}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-4.5-4.5L12 15l4.5-4.5M5 19.5h14"/></svg></button>`;
   }
@@ -590,7 +598,7 @@
       if (Date.now() < ovTapBlock) return;
       if (e.target.closest('[data-ovdone]')) return closeOverview();
       const dl = e.target.closest('[data-ovdl]');
-      if (dl) { if (!arrangeDesks()) return; const a = ovDeskApp(desks[posOf(dl.dataset.ovdl)]); if (a) window.WizHomeScreenApps?.offer(a); return; }
+      if (dl) { if (overviewMode().appAction !== 'home-screen') return; const a = ovDeskApp(desks[posOf(dl.dataset.ovdl)]); if (a) window.WizHomeScreenApps?.offer(a); return; }
       const x = e.target.closest('[data-ovx]'); if (x) { closeDesk(posOf(x.dataset.ovx)); if (desks.length) renderOverview(); return; }
       if (e.target.closest('[data-ovadd]')) { closeOverview(); return newDesk(); }
       const c = e.target.closest('[data-ov]'); if (c) { const i = posOf(c.dataset.ov); closeOverview(); if (i >= 0) goDesk(i); return; }
@@ -2005,9 +2013,9 @@
     closeSheets(); setTimeout(() => openApp(a), 120);
   }
   // Arrange/download tweak: hold no longer opens Add to home screen on app lists (the Desks download button does).
-  window.WizHomeScreenApps?.attach(launcher, id => APP[id], { available: () => !arrangeDesks() });
+  window.WizHomeScreenApps?.attach(launcher, id => APP[id], { available: () => overviewMode().appHold !== false });
   // Miguel's skins open apps from the New desk grid (swipe up shows Desks, not the Apps sheet): same long-press there.
-  window.WizHomeScreenApps?.attach(track, id => APP[id], { available: () => !arrangeDesks(), rows: '.new-desk [data-app]', live: row => !!row.closest('.new-desk') && row.getClientRects().length > 0 });
+  window.WizHomeScreenApps?.attach(track, id => APP[id], { available: () => overviewMode().appHold !== false, rows: '.new-desk [data-app]', live: row => !!row.closest('.new-desk') && row.getClientRects().length > 0 });
   launcher.addEventListener('click', e => {
     const sk = e.target.closest('[data-storekind]'); if (sk) return openStoreKind(sk.dataset.storekind);
     const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app]);
@@ -3957,6 +3965,7 @@
   }
   const skinChatsWin = () => { const f = desks[idx]?.focus; if (W[f]?.app === 'chats') return W[f]; const id = desks[idx]?.wins.find(x => W[x]?.app === 'chats'); return id ? W[id] : null; };
   window.WosSkinHost?.attach({
+    overview: overviewAdapter,
     route() { const w = skinChatsWin(), f = W[desks[idx]?.focus]; let ag = ''; try { ag = agentHere().id; } catch (_) {} return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: idx, app: f ? (f.appId || f.app || null) : null, agent: ag || null }; },
     back: () => backStep(),
     openList: () => openChatsList(),

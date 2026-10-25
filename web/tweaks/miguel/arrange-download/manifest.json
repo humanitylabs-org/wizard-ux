@@ -5,7 +5,8 @@
   "author": "miguel",
   "apiVersion": 1,
   "capabilities": [
-    "layout"
+    "layout",
+    "nav"
   ],
   "description": "Holding a desk arranges it; a download button opens home-screen setup for one-app desks"
 }
