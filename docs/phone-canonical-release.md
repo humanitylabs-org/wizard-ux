@@ -14,12 +14,12 @@ The Thales shared Gradle home may contain owner-specific `gradle.properties`. Th
 
 ## Prepare, admit, collect
 
-No Gradle, SDK, emulator or signing execution runs on the controller. Supply the established private WOS signing-env path as an argument; never commit machine paths or credentials.
+No Gradle, SDK, emulator or signing execution runs on the controller. Set `WIZARD_BUILD_HOST` to the SSH alias of the signing worker for `prepare` and `collect`. Supply the established private WOS signing-env path as an argument; never commit machine paths or credentials.
 
 ```sh
 python3 tools/phone_release.py prepare \
   --source "$RELEASE_WORKTREE" --output "$PRIVATE_EVIDENCE/build" \
-  --signing-env "$PRIVATE_THales_SIGNING_ENV" \
+  --signing-env "$PRIVATE_SIGNING_ENV" \
   --previous-apk "$PREVIOUS_SIGNED_APK" --previous-sha256 "$PREVIOUS_SHA256" \
   --notes 'This release pairs on first launch and keeps existing connections.'
 ```

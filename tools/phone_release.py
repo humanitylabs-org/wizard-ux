@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import socket
 import struct
 import subprocess
 import sys
@@ -44,6 +45,12 @@ def digest(path):
 
 def write_json(path, data):
     Path(path).write_text(json.dumps(data, indent=2) + '\n')
+
+
+def build_host():
+    host = os.environ.get('WIZARD_BUILD_HOST', '').strip()
+    require(re.fullmatch(r'[A-Za-z0-9._-]+', host or ''), 'Set WIZARD_BUILD_HOST to the SSH alias of the signing worker')
+    return host
 
 
 def reject_origin_environment(env):
@@ -165,7 +172,7 @@ def prepare(args):
     job = prepared['job']
     inputs = dict(revision=revision, notes=args.notes, minimum=args.min_box_snapshot, previous_sha256=args.previous_sha256)
     write_json(args.output / 'release-inputs.json', inputs)
-    remote = 'thales:' + job + '/'
+    remote = build_host() + ':' + job + '/'
     here = Path(__file__).resolve().parent
     run(['scp', '-q', here / 'phone_release.py', here / 'qa_phone_origin_upgrade.py', args.output / 'release-inputs.json', remote])
     run(['scp', '-q', args.previous_apk, remote + 'previous.apk'])
@@ -179,7 +186,7 @@ def worker(args):
     require(sys.platform == 'darwin' and os.environ.get('WIZARD_HEAVY_LOCK_FD'), 'Use the durable Thales worker lease')
     reject_origin_environment(os.environ)
     job = args.job.resolve()
-    require(job.is_relative_to('/Volumes/ThalesMedia/AndroidBuilds/jobs'), 'Job outside worker volume')
+    require(job.parent.name == 'jobs' and job.parent.parent.name == 'AndroidBuilds', 'Job outside the AndroidBuilds worker root')
     cfg = json.loads((job / 'job.json').read_text())
     inputs = json.loads((job / 'release-inputs.json').read_text())
     require(cfg['revision'] == inputs['revision'] and not cfg.get('dirty'), 'Prepared source identity mismatch')
@@ -205,7 +212,7 @@ def worker(args):
     with (out / 'build.log').open('w') as log:
         run(['/bin/bash', '-c', command], env=env, stdout=log, stderr=subprocess.STDOUT, pass_fds=(fd,))
     receipt = json.loads((job / 'receipt.json').read_text())
-    require(receipt['status'] == 'ok' and receipt['host'] == 'thales' and receipt['source_revision'] == inputs['revision'] and receipt['source_manifest_sha256'] == cfg['manifest_sha256'], 'Build receipt mismatch')
+    require(receipt['status'] == 'ok' and receipt['source_revision'] == inputs['revision'] and receipt['source_manifest_sha256'] == cfg['manifest_sha256'], 'Build receipt mismatch')
     require(len(receipt['artifacts']) == 1, 'Expected one APK')
     artifact = receipt['artifacts'][0]
     rel = Path(artifact['path'])
@@ -229,22 +236,22 @@ def worker(args):
     (out / f'wizard-os-{phone["versionName"]}.apk').write_bytes(apk.read_bytes())
     run([sys.executable, job / 'qa_phone_origin_upgrade.py', job / 'previous.apk', apk, out / 'origin-qa', inputs['previous_sha256']], env=env, pass_fds=(fd,))
     write_json(out / 'phone.json', phone)
-    write_json(out / 'receipt.json', dict(status='ok', host='thales', job=str(job), phone=phone, upgrade_receipt=str(out / 'origin-qa/receipt.json'), source_manifest_sha256=cfg['manifest_sha256']))
+    write_json(out / 'receipt.json', dict(status='ok', host=socket.gethostname(), job=str(job), phone=phone, upgrade_receipt=str(out / 'origin-qa/receipt.json'), source_manifest_sha256=cfg['manifest_sha256']))
     print(json.dumps(dict(status='ok', source_commit=inputs['revision'], sha256=phone['sha256'], evidence=str(out))))
 
 
 def collect(args):
     args.output.mkdir(parents=True, mode=0o700, exist_ok=True)
-    require(re.fullmatch(r'/Volumes/ThalesMedia/AndroidBuilds/jobs/[A-Za-z0-9-]+', args.job), 'Invalid remote job')
-    run(['scp', '-q', 'thales:' + args.job + '/canonical/phone.json', 'thales:' + args.job + '/canonical/receipt.json', args.output])
+    require(re.fullmatch(r'(/[A-Za-z0-9._-]+)+/AndroidBuilds/jobs/[A-Za-z0-9-]+', args.job) and '/../' not in args.job + '/', 'Invalid remote job')
+    run(['scp', '-q', build_host() + ':' + args.job + '/canonical/phone.json', build_host() + ':' + args.job + '/canonical/receipt.json', args.output])
     phone = json.loads((args.output / 'phone.json').read_text())
     receipt = json.loads((args.output / 'receipt.json').read_text())
     require(receipt['status'] == 'ok' and receipt['phone'] == phone, 'Canonical receipt mismatch')
     name = f'wizard-os-{phone["versionName"]}.apk'
     require(re.fullmatch(r'wizard-os-\d+\.\d+\.\d+\.apk', name), 'Invalid artifact filename')
-    run(['scp', '-q', 'thales:' + args.job + '/canonical/' + name, args.output / name])
+    run(['scp', '-q', build_host() + ':' + args.job + '/canonical/' + name, args.output / name])
     require(digest(args.output / name) == phone['sha256'] and (args.output / name).stat().st_size == phone['bytes'], 'Copied APK mismatch')
-    run(['scp', '-q', 'thales:' + args.job + '/canonical/origin-qa/receipt.json', args.output / 'origin-upgrade-receipt.json'])
+    run(['scp', '-q', build_host() + ':' + args.job + '/canonical/origin-qa/receipt.json', args.output / 'origin-upgrade-receipt.json'])
     qa = json.loads((args.output / 'origin-upgrade-receipt.json').read_text())
     require(qa['ok'] and qa['new_sha256'] == phone['sha256'], 'Missing exact-byte origin proof')
     if args.draft:

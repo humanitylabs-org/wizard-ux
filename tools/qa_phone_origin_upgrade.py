@@ -7,6 +7,7 @@ never seeds, edits, restores or replaces the origin. All evidence remains privat
 import json
 import os
 from pathlib import Path
+import socket
 import subprocess
 import sys
 import time
@@ -30,7 +31,7 @@ def main():
     adb = sdk / 'platform-tools/adb'
     serial = 'emulator-5684'
     emulator = None
-    receipt = dict(ok=False, host='thales', api=35, package=APP, old_sha256=old_sha, new_sha256=digest(new), signer=SIGNER)
+    receipt = dict(ok=False, host=socket.gethostname(), api=35, package=APP, old_sha256=old_sha, new_sha256=digest(new), signer=SIGNER)
     def run(args, **kw):
         return subprocess.run(list(map(str, args)), env=env, check=True, timeout=150, **kw)
     def adb_text(*args):
