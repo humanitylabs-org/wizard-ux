@@ -154,6 +154,16 @@ public final class AppsBridge implements AppsInstaller.Listener {
             catch (JSONException e) { deviceAnswer(reply, request.id, null, "Something went wrong"); }
             return;
         }
+        final String automation = DeviceMessageProtocol.automationMethod(request.method);
+        if (automation != null) {
+            // Accessibility automation drives the UI and its overlay: main thread. Same port checks as packages.
+            Object result = null; String error = null;
+            try { result = ai.wizards.os.automation.AutomationPort.call(activity, automation, request.params); }
+            catch (ai.wizards.os.automation.AutomationPort.Refusal e) { error = e.getMessage(); }
+            catch (JSONException | RuntimeException e) { Log.w(AppsInstaller.TAG, "automation " + automation + ": " + e); error = "Something went wrong"; }
+            deviceAnswer(reply, request.id, result, error);
+            return;
+        }
         final String method = DeviceMessageProtocol.packageMethod(request.method);
         if (method == null || !AppsPolicy.method(method)) {
             deviceAnswer(reply, request.id, null, "unknown method");
