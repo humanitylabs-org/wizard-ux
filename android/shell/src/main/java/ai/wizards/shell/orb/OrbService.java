@@ -82,6 +82,9 @@ public class OrbService extends Service {
         else { OrbService s = live; if (s != null) s.main.post(s::place); }
     }
 
+    /** A pinned home-screen app came to the front (its own task): the orb stays over it, as over any other app. */
+    public static void refresh(Context c) { sync(c); }
+
     private static void sync(Context c) {
         boolean on = wanted(c) && permitted(c) && ShellOrigin.selected(c) != null;
         if (!on) { OrbService s = live; if (s != null) s.main.post(s::shutdown); return; }

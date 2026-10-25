@@ -60,14 +60,13 @@ function harness(caps) {
 }
 const settle = async () => { for (let i = 0; i < 10; i++) await new Promise(r => setTimeout(r, 0)); };
 
-test('no device.orb → no Settings row; with it → one switch that enables and disables', async () => {
+test('device.orb adds no Settings row of its own (Everywhere in Settings → Phone is its one switch)', async () => {
   const none = harness({}); await settle();
   assert.equal(none.regs.length, 0);
   assert.equal(none.window.WosDeviceOrb.ready, false);
   const h = harness({ 'device.orb': { v: 1, methods: ['device.orb.status', 'device.orb.enable', 'device.orb.disable'] } }); await settle();
-  assert.equal(h.regs.length, 1);
-  assert.equal(h.regs[0].id, 'shell-orb');
-  assert.match(h.regs[0].html(), /data-st="shell-orb"/);
+  assert.equal(h.regs.length, 0, 'no duplicate Floating orb row');
+  assert.equal(h.window.WosDeviceOrb.ready, true);
   await h.window.WosDeviceOrb.toggle();
   assert.ok(h.sent.includes('device.orb.enable'));
 });
