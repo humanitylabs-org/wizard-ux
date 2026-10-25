@@ -187,6 +187,7 @@
    * rises to page 1. The between-walk poll used to re-read ~6 pages (~1 MB) every 15 s;
    * one page carries the same news. The full walk still catches edits that don't bump activity. */
   const LIST_SUPPORT = new Map(), DETAIL = new Map();
+  const SEARCH_CLIENT=globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : Math.random().toString(36).slice(2);
   const LIST_DEADLINE = 30000;
   const listSignal = () => typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(LIST_DEADLINE) } : {};
   async function fetchSessions(full, agent = '', onFirst = null) {
@@ -211,12 +212,64 @@
       out.push(...rows.map(normalize).filter(Boolean));
       offset += rows.length;
       const more = typeof p.has_more === 'boolean' ? p.has_more : typeof p.pagination?.has_more === 'boolean' ? p.pagination.has_more : rows.length >= 100;
-      if (!more) return { sessions:out, complete:true, meta };
+      if (!more) { setTimeout(()=>{void fetchTitleIndex(agent)},0); return { sessions:out, complete:true, meta }; }
       if (!rows.length) throw new Error('Incomplete session window');
       if (!full) return { sessions:out, complete:false, meta };
       if (onFirst && offset === rows.length) await onFirst({ sessions:out.slice(), complete:false, meta });
     }
     throw new Error('Session window limit reached');
+  }
+  // A compact, scope-separated title/preview index. Never persist private-agent rows.
+  const TITLE_PREFIX='wos.chats.titles.v1:', TITLE_INDEX=new Map(), TITLE_LOADING=new Map();
+  let titleAccount='', titleEpoch=0;
+  function clearTitleIndex() {
+    TITLE_INDEX.clear(); TITLE_LOADING.clear(); titleAccount=''; titleEpoch++;
+    try { for(const k of Object.keys(localStorage)) if(k.startsWith(TITLE_PREFIX)) localStorage.removeItem(k); } catch {}
+    window.WizCore?.chatSearch?.reset?.();
+  }
+  window.addEventListener('wizard-account-change',clearTitleIndex);
+  function indexRow(raw,scope) {
+    if(!raw?.id || (raw.agent || 'hermes')!==(scope || 'hermes')) return null;
+    return normalize({...raw,listVersion:1,agent:scope||'',agent_id:scope||'hermes',updatedAt:raw.cardTime||raw.updatedAt,activityAt:raw.cardTime||raw.activityAt,previewAt:raw.cardTime||raw.previewAt});
+  }
+  async function fetchTitleIndex(scope='') {
+    if(TITLE_LOADING.has(scope)) return TITLE_LOADING.get(scope);
+    const task=(async()=>{
+      let cursor='', snapshot='', offset=0, build='', rows=[], epoch=titleEpoch;
+      const overrides=JSON.stringify(listOverrides(scope));
+      for(let pages=0; pages<30; pages++) {
+        const p=new URLSearchParams({view:'list',window:'archive-50',fields:'slim',limit:'500',offset:String(offset),include_children:'false',overrides});
+        if(scope) p.set('agent',scope); if(cursor) p.set('cursor',cursor); else if(snapshot) p.set('snapshot',snapshot);
+        const value=await (await req(`/wizard/hermes/api/sessions?${p}`,listSignal())).json();
+        if(epoch!==titleEpoch) return;
+        if(value.fields!=='slim' || !value.build) return; // an older service: retain existing search
+        if(!scope && value.account_scope) {
+          let previous=titleAccount;
+          try { previous ||= localStorage.getItem(TITLE_PREFIX+'account')||''; } catch {}
+          if(previous && previous!==value.account_scope) { clearTitleIndex(); epoch=titleEpoch; }
+          titleAccount=value.account_scope;
+          try { localStorage.setItem(TITLE_PREFIX+'account',titleAccount); } catch {}
+        }
+        const key=TITLE_PREFIX+(titleAccount||SCOPE)+':'+(scope||'hermes');
+        if(!build) {
+          build=value.build; snapshot=value.snapshot;
+          if(TITLE_INDEX.get(scope)?.build===build) return;
+          // Validate the account and the current server build before using any persisted rows.
+          if(!scope && titleAccount) try {
+            const cached=JSON.parse(localStorage.getItem(key)||'null');
+            if(cached?.build===build && Array.isArray(cached.rows) && cached.rows.length<=10000) { TITLE_INDEX.set(scope,cached); store.emit(); return; }
+          } catch {}
+        }
+        rows.push(...(value.data||[]).map(raw=>indexRow(raw,scope)).filter(Boolean));
+        if(rows.length>10000) throw new Error('Title index limit reached');
+        if(value.has_more && !cursor) { offset+=value.data.length; continue; }
+        if(value.archive_cursor) { cursor=value.archive_cursor; offset=0; continue; }
+        const entry={build,rows}; TITLE_INDEX.set(scope,entry);
+        if(!scope && titleAccount) try { const data=JSON.stringify(entry); if(data.length<2000000) localStorage.setItem(key,data); } catch {}
+        store.emit(); return;
+      }
+    })().catch(e=>{if(e.status===403) clearTitleIndex();}).finally(()=>{ if(TITLE_LOADING.get(scope)===task) TITLE_LOADING.delete(scope); });
+    TITLE_LOADING.set(scope,task); return task;
   }
   const FULL_EVERY = 3 * 60 * 1000;
   const AGENT_WAIT = 1200; // ms a snapshot reload waits for other agents' threads before its one repaint
@@ -275,15 +328,16 @@
     spaces: ['wos.chats.spaces.v1', v => Array.isArray(v), JSON.stringify],
   };
   let prefsOff = false;
-  const putPrefs = patch => {
-    if (prefsOff) return prefsWrites;
+  const putPrefs = (patch, { requireShared = false } = {}) => {
+    if (prefsOff) return Promise.resolve(!requireShared);
     prefsPending++; prefsRevision++;
     prefsWrites = prefsWrites.then(async () => {
       try {
         const r = await req(PREFS_URL, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
-        if (r.status === 404) { prefsOff = true; return; } // this Agent Service has no shared preferences yet: keep the choice on this device, quietly
+        if (r.status === 404) { prefsOff = true; return !requireShared; } // this Agent Service has no shared preferences yet: keep the choice on this device, quietly
         if (!r.ok) throw new Error('Preferences unavailable');
-      } catch (e) { window.dispatchEvent(new Event('wos:prefs-error')); }
+        return true;
+      } catch (e) { window.dispatchEvent(new Event('wos:prefs-error')); return false; }
       finally { prefsPending--; }
     });
     return prefsWrites;
@@ -552,7 +606,18 @@
     agentSessions: {}, agentStatus: {}, // non-default agents: id -> sessions / { ok, error, at }
     onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
     emit() { for (const fn of this.listeners) { try { fn(this); } catch (e) { console.error(e); } } },
-    isNew(s) { return hasNew(s, this.seenOf(s)); },
+    // Archived threads are read (James, 24 Oct 2026): Archive (Done, or aged past archiveAfterDays) never shows unread.
+    isNew(s) { return !this.inArchive(s) && hasNew(s, this.seenOf(s)); },
+    // Same rule as groupWork's Archive section, without the per-row day maths.
+    inArchive(s) {
+      if (!s || s.hidden || needsApproval(s) || inWorking(s) || isDeferred(s) || isErr(s)) return false;
+      if (s.archived) return true;
+      const d = archiveAfterDays(), t = sectionTime(s);
+      return !!d && isFinite(t) && t <= Date.now() - d * DAY;
+    },
+    // Visible unread: threads the Chats list actually shows unread (not hidden, archived or snoozed). Focus badges
+    // (agents, Spaces) count only these, so a dot never points at nothing.
+    visibleUnread(rows) { const g = groupWork(rows || []), out = []; for (const [k, list] of Object.entries(g)) if (k !== 'archive' && k !== 'deferred') for (const s of list) if (hasNew(s, this.seenOf(s))) out.push(s); return out; },
     // Server-owned, agent-qualified receipts: activity metadata only, never transcript text.
     seenOf(s) { return this.seen; },
     seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
@@ -688,12 +753,16 @@
       return out;
     },
     // peek: badges/strip read loaded + already-hydrated rows only; never start reads.
-    spaceSessions(ids, { peek = false } = {}) {
+    // agent: the Space's owner. A routed agent's Space member beyond its list window has no
+    // AGENT_OF yet; the owner-made Space scopes its read (the proxy still enforces that agent).
+    spaceSessions(ids, { peek = false, agent = '' } = {}) {
       const loaded = new Map(this.unified().map(s => [s.id, s])), rows = [];
+      const scope = otherAgent(agent) && AG()?.get(agent) ? agent : '';
       let pending = false, failed = false;
       for (const id of new Set(ids)) {
         if (typeof id !== 'string' || !/^[A-Za-z0-9._:-]{1,256}$/.test(id)) continue;
         if (loaded.has(id)) { const s = loaded.get(id); if (!s.hidden) rows.push(s); continue; }
+        if (scope && !AGENT_OF.has(id)) AGENT_OF.set(id, scope);
         let entry = SPACE_ROWS.get(id);
         if (!peek && !document.hidden && (!entry || (!entry.pending && Date.now() - entry.at >= (entry.failed ? STALE_AFTER : SPACE_EVERY)))) {
           if (!entry) { entry = { row: null, at: 0 }; SPACE_ROWS.set(id, entry); }
@@ -831,41 +900,55 @@
       return rows;
     },
     async searchSessions(q, agent = '', signal, onBatch) {
-      const scopes = otherAgent(agent) ? [agent] : ['', ...(AG()?.others() || []).map(a=>a.id)];
-      const settled = await Promise.allSettled(scopes.map(async scope => {
-        const found=[]; let snapshot='', resets=0;
+      const scopes=otherAgent(agent)?[agent]:['',...(AG()?.others()||[]).filter(a=>a.privacy!=='private').map(a=>a.id)];
+      const settled=await Promise.allSettled(scopes.map(async scope=>{
+        const found=[]; let snapshot='', resets=0, legacy=false;
         for(let offset=0; offset<100000;) {
           const params=new URLSearchParams({view:'list',q,limit:'100',offset:String(offset),include_children:'false'});
+          if(!legacy) params.set('mode','body');
           if(scope) params.set('agent',scope); if(snapshot) params.set('snapshot',snapshot);
           let p;
-          try { p=await (await req(`/wizard/hermes/api/sessions?${params}`,{signal})).json(); }
+          try { p=await (await req(`/wizard/hermes/api/sessions?${params}`,{signal,headers:{'X-Wizard-Search-Scope':`${SEARCH_CLIENT}:${scope||'hermes'}`}})).json(); }
           catch(e) {
-            if([400,404].includes(e.status)) return null;
+            if([400,404,501].includes(e.status)) { if(!legacy) {legacy=true;continue;} return null; }
             if(e.status===409 && offset && resets++<1) {offset=0;snapshot='';found.length=0;continue;}
             throw e;
           }
           if(p.list_version!==1 || !Number.isInteger(p.search_total)) return null;
-          snapshot=p.snapshot || snapshot;
-          const rows=p.data||p.sessions||p.items||[];
-          for(const raw of rows) {
-            const s=normalize(raw); if(!s || (s.agent||'hermes')!==(scope||'hermes')) continue;
+          const body=p.mode==='body'||p.mode==='titles';
+          const available=this.searchRows(scope).filter(s=>(s.agent||'hermes')===(scope||'hermes'));
+          snapshot=p.snapshot||snapshot;
+          for(const raw of p.data||[]) {
+            if((raw.agent||'hermes')!==(scope||'hermes')) continue;
+            const s=body ? {...(available.find(s=>s.id===raw.id)||indexRow({id:raw.id,agent:raw.agent,title:'Chat'},scope)),searchSnippet:raw.snippet} : normalize(raw);
+            if(!s) continue;
             if(signal?.aborted) throw new DOMException('Aborted','AbortError');
             if(scope) AGENT_OF.set(s.id,scope);
             found.push(s);
           }
-          if(!signal?.aborted) onBatch?.(found); // each page shows as it lands
-          if(!p.has_more) return found;
-          if(!rows.length) throw new Error('Incomplete search');
-          offset+=rows.length;
+          found.partial=!!p.partial;
+          if(!signal?.aborted) onBatch?.(found);
+          if(body || !p.has_more) return found;
+          if(!p.data?.length) throw new Error('Incomplete search'); offset+=p.data.length;
         }
         throw new Error('Search limit reached');
       }));
       if(signal?.aborted) throw new DOMException('Aborted','AbortError');
-      const good=settled.filter(x=>x.status==='fulfilled' && Array.isArray(x.value));
+      const good=settled.filter(x=>x.status==='fulfilled'&&Array.isArray(x.value));
       const failed=settled.filter(x=>x.status==='rejected');
-      if(!good.length) { if(failed.length) throw failed[0].reason; return null; }
-      const found=good.flatMap(x=>x.value); found.partial=good.length!==scopes.length;
+      const fallbackScopes=scopes.filter((_,i)=>settled[i].status==='fulfilled'&&settled[i].value===null);
+      if(!good.length && !fallbackScopes.length && failed.length) throw failed[0].reason;
+      const found=good.flatMap(x=>x.value); found.partial=failed.length>0; found.capped=good.some(x=>x.value.partial); found.fallbackScopes=fallbackScopes; // capped: the server showed only its newest message matches
       return found;
+    },
+    searchRows(agent='') {
+      const scopes=otherAgent(agent)?[agent]:['',...(AG()?.others()||[]).filter(a=>a.privacy!=='private').map(a=>a.id)];
+      const rows=new Map();
+      for(const scope of scopes) {
+        for(const s of TITLE_INDEX.get(scope)?.rows||[]) rows.set(`${scope}:${s.id}`,s);
+        for(const s of (scope?this.agentSessions[scope]||[]:this.sessions)) rows.set(`${scope}:${s.id}`,s);
+      }
+      return [...rows.values()];
     },
     rememberSearch(s) { if(s?.id) { if(otherAgent(s.agent)) AGENT_OF.set(s.id,s.agent); DETAIL.set(s.id,s); while(DETAIL.size>300) DETAIL.delete(DETAIL.keys().next().value); } },
     async sessionInfo(id) {
@@ -920,6 +1003,8 @@
     },
     // Done: archive the thread (PATCH archived). Close & file: the Helm filing route, idempotent by command id.
     archive(id, { file = false } = {}) {
+      // Done marks the thread read too, so it stays read on every client and if it is ever restored.
+      if (this.session(id) && hasNew(this.session(id), this.seenOf(this.session(id)))) this.markSeen(id);
       return this._act(id, { archived: true, deferred: false }, async s => {
         const all = readRestored(); if (all[id]) { delete all[id]; writeRestored(all); }
         if (!file) { await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: true }) }); return; }
@@ -1165,7 +1250,22 @@
     return startRead(id, true);
   };
   const bgRead = id => { const e = INFLIGHT.get(id); return e ? e.p : startRead(id, false); };
-  L.cachedMessages = id => (keepable(id) && TC.get(id)?.rows) || null;
+  // What the transcript contains, as the list reports it: message count and the newest user/assistant times.
+  // Status and tool activity are left out, so they never invalidate a copy whose messages are unchanged.
+  const ckOf = s => s ? [s.messageCount, s.lastAssistantAt, s.lastUserAt].join('|') : '';
+  L.contentKey = ckOf;
+  // The list can vouch for a copy only after a live list read since the page last came to the front: a stored
+  // snapshot or a list from before the phone slept describes the same old transcript the copy has.
+  let shownAt = Date.now();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) shownAt = Date.now(); });
+  L.listTrusted = () => !L.cached && (L.at || 0) >= shownAt;
+  // A stored copy paints only when it matches what the live list says the thread holds. Painting an older copy
+  // showed the previous reply for 1-2 s before the fresh read replaced it (James, 24 Oct 2026); a skeleton is
+  // honest, an outdated reply is not.
+  L.cachedMessages = id => {
+    const c = keepable(id) && TC.get(id), s = L.session(id); if (!c || !s || !L.listTrusted()) return null;
+    return String(c.rev || '').split('|').slice(0, 3).join('|') === ckOf(s) ? c.rows : null;
+  };
   // A thread the server answered 404 for is gone: drop its memory and IndexedDB copy so a reopen can't repaint it.
   L.forgetMessages = async id => {
     if (!id) return; TC.delete(id);
