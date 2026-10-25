@@ -480,7 +480,9 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-row .emo.sti.working { background: rgba(90, 220, 255, .08); }
 .ch-row .emo.sti .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(90, 220, 255, .22); border-top-color: var(--cyan); animation: sti-spin .9s linear infinite; }
 @keyframes sti-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .ch-row .emo.sti .spin { animation-duration: 3s; } }
+/* A Working spinner is status, not decoration: Reduce Motion slows it, never stops it. !important out-ranks the global
+ * reduced-motion kill switch in styles.css (`*` + !important), which froze it (Robert, 24 Oct 2026). */
+@media (prefers-reduced-motion: reduce) { .ch-row .emo.sti .spin { animation-duration: 3s !important; animation-iteration-count: infinite !important; } }
 .ch-topic-mark { position: relative; flex: 0 0 auto; width: 44px; height: 38px; }
 .ch-topic-emoji { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; font-size: 21px; line-height: 1; background: color-mix(in srgb, var(--ink) 7%, transparent); }
 .ch-row .emo.sti.ch-topic-status, .ch-topic-status.draft-status { position: absolute; right: 0; bottom: -1px; width: 17px; height: 17px; min-width: 0; border-radius: 6px; border: 1px solid var(--bg); z-index: 1; }
@@ -737,7 +739,7 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 .ch-sync { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 2px 16px 6px; font-size: 12px; color: var(--ink-3); animation: ch-fade .2s ease; }
 .ch-sync.off { color: var(--ink-2); }
 .ch-spin { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--line-2, rgba(255,255,255,.18)); border-top-color: var(--ink-2, currentColor); animation: ch-attspin .8s linear infinite; flex: none; }
-@media (prefers-reduced-motion: reduce) { .ch-spin { animation-duration: 2.4s; } }
+@media (prefers-reduced-motion: reduce) { .ch-spin { animation-duration: 2.4s !important; animation-iteration-count: infinite !important; } }
 
 /* New chat greeting: Miguel's skins switch it on in their own web/skins/<dir>/skin.css. Default skins keep the boxed .nc-classic. */
 .ch-newchat { display: none; }
