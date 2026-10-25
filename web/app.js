@@ -142,6 +142,8 @@
     finishVoice: () => finishVoice(),
     // A private-origin link in a message opens in a window on this desk: the shell never navigates away.
     openLink: (url, title) => openLinkDesk(url, null),
+    // An installed app opened from a Chats row/card remembers this window, so Back (or the app's own done/dismiss) lands here.
+    openApp: (id, srcEl) => { const a = hostedOpenable(id); if (!a) return false; const srcId = srcEl?.closest?.('.win')?.dataset.win; return openApp(a, {}, srcId && W[srcId] ? { from: fromOf(srcId) } : {}); },
     overlay: open => { if (open) { closeMenu(); armBack(); } },
     vib: ms => vib(ms),
     threadShown: (wid, el) => threadShown(wid, el),
@@ -1505,7 +1507,7 @@
       if(W[audioId]?.appId === 'wizard-music') audioFrames.add(f);
       // servicesAs: a second view of an installed app (Video Editor's Feedback) gets that app's Back/services.
       const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
-      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), openContextDraft: (key, text) => { closeSheets(true); const cw = placeApp(mainChats, { app: 'chats', thread: null }, {}); if (!cw) throw new Error('Chats unavailable'); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); return receipt; }, isVisible: () => desks[idx].wins.includes(w.id) && (!desks[idx].full || desks[idx].focus === w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) });
+      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), back: () => { if (desks[idx].focus !== w.id) return false; const did = backStep(w.id); if (did) { exitUntil = 0; window.__backLog = (window.__backLog || []).concat('app-done:' + did).slice(-30); } return !!did; }, openContextDraft: (key, text) => { closeSheets(true); const cw = placeApp(mainChats, { app: 'chats', thread: null }, {}); if (!cw) throw new Error('Chats unavailable'); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); return receipt; }, isVisible: () => desks[idx].wins.includes(w.id) && (!desks[idx].full || desks[idx].focus === w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) });
       watchEarly(f);
       const wrap = f.closest('.frame-wrap');
       if (f.dataset.probe) { wrap.classList.add('coming'); f.removeAttribute('src'); probeFrame(f, f.dataset.probe); }
