@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
-          ref: a66ea7e1a162f22a1dc61f26e1548d5cc4c3e4ee
+          ref: 0bf63e70ea050c8703d100595a425a13bd4bf3ab
           path: candidate
           persist-credentials: false
       - name: Disposable HTTPS fixture tooling
@@ -77,13 +77,13 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -memory 3072
           script: |
             sleep 60
-            bash audit/smoke.sh audit/public.apk audit/results
+            adb install -r audit/public.apk
             adb shell dumpsys package ai.wizards.shell > audit/package.txt
             QA_WEB="$GITHUB_WORKSPACE/candidate/web" python3 tools/qa_signed_shell.py
       - name: Evidence scope
         if: always()
         run: |
-          printf '%s\n' 'Exact public signed APK, candidate a66ea7e1a162f22a1dc61f26e1548d5cc4c3e4ee. Native baseline plus real device modules/outbox on disposable trusted HTTPS fixture. No debug rebuild, TLS exception, real provider or physical-phone claim. See compat/checks.json for actual gates.' >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' 'Exact public signed APK, candidate 0bf63e70ea050c8703d100595a425a13bd4bf3ab. Real device modules/outbox on disposable trusted HTTPS fixture. Native Connect baseline is prior run 40162076238, not repeated here. No debug rebuild, TLS exception, real provider or physical-phone claim. See compat/checks.json for actual gates.' >> "$GITHUB_STEP_SUMMARY"
           cat audit/results/result.txt >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()

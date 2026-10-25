@@ -28,6 +28,7 @@ if(c.op==='stop'){
  d.recDone(c.id);__wos.V.native=null;await wait(700);r.pendingAfter=(await call('device.recording.pending')).some(t=>t.id===c.id);
 }
 if(c.op==='pending')r=await call('device.recording.pending');
+if(c.op==='retain'){await d.fetch(c.id);r=d.fetched(c.id).meta;__wos.V.native=null;}
 if(c.op==='read')r=await call('device.recording.read',{id:c.id,offset:0}).then(()=>({unexpected:true}),e=>({error:e.message}));
 if(c.op==='orb'){await WosDeviceOrb.toggle();await wait(700);r=WosDeviceOrb.state;}
 if(c.op==='recovered'){await WosDeviceRecording.collect('qa');r={pending:await call('device.recording.pending'),rows:WosOutbox.recordings().map(t=>({id:t.id,bytes:t.audio.size,durable:t.durable,state:t.state}))};}
@@ -38,7 +39,7 @@ await log({serial:c.serial,op:c.op,result:r});document.getElementById('status').
 </script>'''
 PROBE = '''<script>let answered=false;const p=window.wizardDevicePort;if(p){p.onmessage=()=>answered=true;p.postMessage(JSON.stringify({v:1,id:'iframe-probe',method:'device.capabilities',params:{}}))}setTimeout(()=>parent.postMessage({port:!!p,answered},location.origin),3000)</script>'''
 class Handler(http.server.BaseHTTPRequestHandler):
-    def log_message(self,*args): pass
+    def log_message(self,format,*args): pass
     def send(self,data,ctype='text/html'):
         if isinstance(data,str): data=data.encode()
         self.send_response(200);self.send_header('Content-Type',ctype);self.send_header('Content-Length',str(len(data)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(data)
@@ -91,14 +92,21 @@ def tap(text):
 def connect(origin):
     before=len(events)
     adb('shell','am','start','-W','-a','android.intent.action.VIEW','-d','wizard://connect?origin='+urllib.parse.quote(origin,safe=''),PKG)
-    until(lambda:tap('Connect') or (tap('Wait') and False),40)
-    boot=until(lambda:next((e for e in events[before:] if e.get('boot')),None),90)
+    def loaded():
+        boot=next((e for e in events[before:] if e.get('boot')),None)
+        if boot:return boot
+        # A repeated Launcher ANR can obscure a tap after a previous dump. Close that unrelated
+        # system dialog, then retry the still-visible Connect button; never skip the web boot gate.
+        if not tap('Close app'):tap('Connect')
+        return None
+    boot=until(loaded,120)
     check('trusted HTTPS loads real candidate clients',boot['ready'] and boot['orb'] and boot['switches']==1)
     return boot
 
 def main():
     server=http.server.ThreadingHTTPServer(('127.0.0.1',18881),Handler);threading.Thread(target=server.serve_forever,daemon=True).start()
     log=open(OUT/'tunnel.log','w');tunnel=subprocess.Popen(['cloudflared','tunnel','--url','http://127.0.0.1:18881','--no-autoupdate'],stdout=log,stderr=log)
+    tunnel2=None;log2=None
     try:
         origin=until(lambda: (re.search(r'https://[a-z0-9-]+\.trycloudflare.com',(OUT/'tunnel.log').read_text()) or [None])[0],60)
         (OUT/'origin.txt').write_text(origin)
@@ -124,9 +132,22 @@ def main():
         windows=adb('shell','dumpsys','window','windows');(OUT/'orb-windows.txt').write_text(windows)
         check('native orb window exists', 'WizardShellOrb' in windows)
         (OUT/'orb-logcat.txt').write_text(adb('logcat','-d','-s','ShellOrb:I'))
+        adb('shell','am','start','-W','-n',ACT);send('orb')
+        st=send('start');time.sleep(4);retained=send('retain',id=st['id'])
+        check('origin-bound take retained before switching',retained['bytes']>0)
+        log2=open(OUT/'tunnel2.log','w');tunnel2=subprocess.Popen(['cloudflared','tunnel','--url','http://127.0.0.1:18881','--no-autoupdate'],stdout=log2,stderr=log2)
+        second=until(lambda:(re.search(r'https://[a-z0-9-]+\.trycloudflare.com',(OUT/'tunnel2.log').read_text()) or [None])[0],60)
+        check('second trusted origin is distinct',second!=origin)
+        connect(second)
+        check('other Wizard cannot list retained take',not any(t['id']==st['id'] for t in send('pending')))
+        check('other Wizard cannot read retained take',send('read',id=st['id']).get('error')=='unknown take')
+        connect(origin);r=send('recovered')
+        check('original Wizard recovers its own retained take',any(t['id']=='native-'+st['id'] and t['durable'] and t['bytes']==retained['bytes'] for t in r['rows']))
         print(json.dumps({'pass':True,'checks':len(checks),'scope':'Signed Android14 emulator + candidate modules/real outbox on HTTPS fixture, not whole shell/provider/OEM proof'}),flush=True)
     finally:
         (OUT/'logcat.txt').write_text(adb('logcat','-d'))
         subprocess.run(['adb','exec-out','screencap','-p'],stdout=open(OUT/'screen.png','wb'))
         tunnel.terminate();tunnel.wait(timeout=15);server.shutdown();log.close()
+        if tunnel2:tunnel2.terminate();tunnel2.wait(timeout=15)
+        if log2:log2.close()
 if __name__=='__main__':main()
