@@ -777,7 +777,10 @@ window.WizCore.chats = function createChats(H) {
   }
   function focusOption(w, o, strip = false) {
     const f = focusOf(w), on = o.kind === 'all' ? !f : strip && o.kind === 'agent' ? focusedAgent(f) === o.key : f?.kind === o.kind && f.key === o.key;
-    const label = strip && on && o.kind === 'agent' && f?.kind === 'space' ? spaces().find(s => s.id === f.key)?.name || o.label : o.label;
+    // An agent tab names the Space it will open: the focused one, or the one it remembers while All is in front
+    // (James, 25 Oct 2026: SS stays in that slot until he picks All Archimedes in its picker).
+    const shown = strip && o.kind === 'agent' ? (on ? f : rememberedFocus(w, o.key)) : null;
+    const label = shown?.kind === 'space' ? spaces().find(s => s.id === shown.key)?.name || o.label : o.label;
     const caret = strip && on && o.kind === 'agent' ? '<i class="ch-focus-caret" aria-hidden="true">⌄</i>' : '';
     return `<button type="button" class="${strip ? 'ch-focus-tab' : 'ch-fopt'}${on ? ' on' : ''}" data-chfocusopt="${o.kind}:${esc(o.key)}" aria-pressed="${on}"${strip && o.kind === 'agent' ? ' aria-haspopup="dialog" aria-expanded="false"' : ''}${strip && o.kind === 'agent' ? ` style="--ch-agent-colour:${AGS()?.colour(agentRec(o.key)) || ''}"` : ''}${strip ? ` aria-label="${esc(label !== o.label ? o.label + ' · ' + label : o.label)}${o.unread ? ` · ${o.unread} unread` : ''}"` : ''}>${o.badge}<span>${esc(label)}</span>${caret}${strip ? o.unread ? '<i class="ch-focus-dot" aria-hidden="true"></i>' : '' : `<small>${o.kind === 'agent' ? o.unread : o.count}</small>${on ? '<b>✓</b>' : ''}`}</button>`;
   }
