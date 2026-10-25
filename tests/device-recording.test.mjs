@@ -12,7 +12,7 @@ const settle = async (n = 20) => { for (let i = 0; i < n; i++) await tick(); };
 
 function harness({ port = true, caps = ['status', 'level', 'start', 'pause', 'stop', 'cancel', 'pending', 'read', 'ack'], full = false } = {}) {
   const sent = [], audio = new Map(), takes = new Map(), toasts = [];
-  let live = null;
+  let live = null, paused = false, poll;
   const answer = (m, result, error) => queueMicrotask(() => fake.onmessage?.({ data: JSON.stringify(error ? { v: 1, id: m.id, ok: false, error } : { v: 1, id: m.id, ok: true, result }) }));
   const fake = {
     onmessage: null,
@@ -20,7 +20,7 @@ function harness({ port = true, caps = ['status', 'level', 'start', 'pause', 'st
       const m = JSON.parse(s); sent.push(m); const p = m.params || {};
       if (m.method === 'device.capabilities') return answer(m, { v: 1, capabilities: { 'device.recording': { v: 1, methods: caps.map(c => 'device.recording.' + c) } } });
       const name = m.method.replace('device.recording.', '');
-      if (name === 'status') return answer(m, { id: live, state: live ? 'recording' : 'idle', ms: 1200, level: 40, last: { id: '', state: '' } });
+      if (name === 'status') return answer(m, { id: live, state: live ? paused ? 'paused' : 'recording' : 'idle', ms: 1200, level: 40, last: { id: '', state: '' } });
       if (name === 'start') { live = p.id; audio.set(p.id, 'abcdefgh'); takes.set(p.id, { id: p.id, kind: p.kind, state: 'recording' }); return answer(m, { id: p.id }); }
       if (name === 'stop') { live = null; const t = { ...takes.get(p.id), state: 'stopped', ms: 4000, bytes: audio.get(p.id).length, mime: 'audio/aac', released: false }; takes.set(p.id, t); return answer(m, t); }
       if (name === 'read') { const a = audio.get(p.id); return a ? answer(m, { b64: Buffer.from(a).toString('base64'), next: -1, size: a.length }) : answer(m, null, 'unknown take'); }
@@ -43,12 +43,20 @@ function harness({ port = true, caps = ['status', 'level', 'start', 'pause', 'st
       async transition(id, state, error) { Object.assign(outbox.get(id), { state, error }); return outbox.get(id); },
     },
   };
-  const ctx = { window, document: { readyState: 'complete', hidden: false, addEventListener() {} }, crypto: webcrypto, Blob, atob, setTimeout, clearTimeout, setInterval: () => 1, clearInterval() {}, queueMicrotask, console };
+  const ctx = { window, document: { readyState: 'complete', hidden: false, addEventListener() {} }, performance, crypto: webcrypto, Blob, atob, setTimeout, clearTimeout, setInterval: fn => { poll = fn; return 1; }, clearInterval() {}, queueMicrotask, console };
   vm.createContext(ctx);
   vm.runInContext(portSrc, ctx);
   vm.runInContext(src, ctx);
-  return { window, sent, takes, audio, outbox, toasts, seed: t => { takes.set(t.id, t); audio.set(t.id, t.data); }, get live() { return live; } };
+  return { window, sent, takes, audio, outbox, toasts, nativePause: on => { paused = on; return poll(); }, seed: t => { takes.set(t.id, t); audio.set(t.id, t.data); }, get live() { return live; } };
 }
+
+test('native hold pause and resume reconcile the same foreground take and timer', async () => {
+  const h = harness(); await settle();
+  const id = h.window.WosDeviceRecording.device().recStart('auto'); await settle();
+  const w = h.window.__wos; w.V.native = id; w.voice = 'listen'; w.setVoice = s => { w.voice = s; };
+  await h.nativePause(true); assert.equal(w.voice, 'paused'); assert.equal(w.V.acc, 1200);
+  await h.nativePause(false); assert.equal(w.voice, 'listen'); assert.equal(w.V.native, id);
+});
 
 test('no port, or the full Wizard OS app: inert, the orb keeps today\'s recorder', async () => {
   for (const opts of [{ port: false }, { full: true }]) {

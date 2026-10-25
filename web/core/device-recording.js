@@ -34,6 +34,16 @@
     const last = status.last || {};
     // The notification's Stop (or a lost mic) ended the take the orb is holding.
     const w = W$(), held = w?.V?.native;
+    // Native overlay/notification controls can pause while the page is hidden. Reconcile the same take,
+    // rather than showing a running timer over a paused recorder when the owner returns.
+    if (held && status.id === held && !inflight.has(held) && ['listen', 'paused', 'command'].includes(w.voice)) {
+      const paused = status.state === 'paused';
+      if (paused !== (w.voice === 'paused')) {
+        w.V.acc = (w.V.nativeSegmentBase || 0) + (Number(status.ms) || 0);
+        w.V.t0 = performance.now();
+        w.setVoice(paused ? 'paused' : w.V.kind === 'command' ? 'command' : 'listen');
+      }
+    }
     if (held && status.id !== held && last.id === held && lastSeenEnd !== held && !inflight.has(held)) {
       lastSeenEnd = held;
       w.V.native = null; w.setVoice('idle'); w.txHide();

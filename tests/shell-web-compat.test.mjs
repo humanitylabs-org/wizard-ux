@@ -17,6 +17,16 @@ function settings({ shell = true, ready = true, full = false } = {}) {
   return { root, view, calls };
 }
 const tap = { closest: sel => sel === '[data-st]' ? { dataset: { st: 'everywhere' } } : sel === '[data-settings-feature]' ? { dataset: { settingsFeature: 'assistant' } } : null };
+test('repeated Send while native bytes load performs a single stop/read', async () => {
+  const app = read('web/app.js');
+  const body = 'const nativeFetching = new Set();\n' + app.slice(app.indexOf('  function nativeFinish'), app.indexOf('    // Notification/Everywhere Send enters here directly')) + '\n}';
+  let count = 0, resolve, fetched = false;
+  const d = { fetched: () => fetched, fetch: () => { count++; return new Promise(r => { resolve = () => { fetched = true; r(); }; }); } };
+  const ctx = { DEV: () => d, nativeTakeAppOwned: () => false, setVoice() {}, toast() {}, txHide() {}, V: {} };
+  vm.createContext(ctx); vm.runInContext(body, ctx);
+  ctx.nativeFinish('take-A', false); ctx.nativeFinish('take-A', false);
+  assert.equal(count, 1); resolve(); await new Promise(r => setImmediate(r)); assert.equal(count, 1);
+});
 test('shell Everywhere drives exactly one optional switch and hold means pause', async () => {
   const h = settings();
   assert.equal((h.root.innerHTML.match(/data-st="everywhere"/g) || []).length, 1);

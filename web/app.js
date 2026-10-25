@@ -2197,10 +2197,19 @@
     localStorage.setItem(VOICE_RECOVERY_KEY, JSON.stringify(rows));
   }
   window.__wosVoiceRecovery = () => { try { return Object.values(JSON.parse(localStorage.getItem(VOICE_RECOVERY_KEY) || '{}')); } catch (_) { return []; } };
+  const nativeFetching = new Set();
   function nativeFinish(id, stopped) {
     if (nativeTakeAppOwned(id)) { setVoice('paused'); toast('🎙', 'This recording belongs to another app'); return; }
     // The shell recorder stops and reads asynchronously: fetch both first, then finish exactly as below.
-    const shell = DEV(); if (shell?.fetch && !shell.fetched(id)) { shell.fetch(id).then(() => nativeFinish(id, stopped), () => { V.native = null; setVoice('idle'); txHide(); toast('!', 'Could not read recording · original kept on this phone'); }); return; }
+    const shell = DEV();
+    if (shell?.fetch && !shell.fetched(id)) {
+      if (nativeFetching.has(id)) return;
+      nativeFetching.add(id);
+      shell.fetch(id).then(() => { nativeFetching.delete(id); nativeFinish(id, stopped); }, () => {
+        nativeFetching.delete(id); V.native = null; setVoice('idle'); txHide(); toast('!', 'Could not read recording · original kept on this phone');
+      });
+      return;
+    }
     // Notification/Everywhere Send enters here directly, bypassing finishVoice. Seal the model before claiming
     // audio or awaiting STT. A recreated page restores the last route saved for this native take.
     if (V.kind === 'dictation' || window.__wosDictationTake(id)) {
