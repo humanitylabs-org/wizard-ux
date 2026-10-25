@@ -48,7 +48,16 @@ window.WosChatPower = function chatPower(A) {
       clearTimeout(saveT); saveT = setTimeout(flushPlace, 200);
     },
   };
-  const flushPlace = () => { clearTimeout(saveT); if (places) try { localStorage.setItem(RP_KEY, JSON.stringify(RP.all())); } catch (_) {} };
+  function mergePlaces(text) {
+    try {
+      const other = JSON.parse(text || '{}'); if (!other || typeof other !== 'object' || Array.isArray(other)) return;
+      const all = RP.all();
+      for (const [sid, p] of Object.entries(other)) if (p?.savedAt > (all[sid]?.savedAt || 0)) all[sid] = p;
+      places = Object.fromEntries(Object.entries(RP.all()).sort((a, b) => b[1].savedAt - a[1].savedAt).slice(0, RP_MAX));
+    } catch (_) {}
+  }
+  const flushPlace = () => { clearTimeout(saveT); if (places) try { mergePlaces(localStorage.getItem(RP_KEY)); localStorage.setItem(RP_KEY, JSON.stringify(RP.all())); } catch (_) {} };
+  addEventListener('storage', e => { if (e.key === RP_KEY) mergePlaces(e.newValue); });
   addEventListener('pagehide', flushPlace);
   addEventListener('beforeunload', flushPlace);
   document.addEventListener('visibilitychange', () => { if (document.hidden) flushPlace(); });
@@ -168,7 +177,11 @@ window.WosChatPower = function chatPower(A) {
   }
   function reflow(nb) {
     const el = nb?.closest('[data-chats]'), w = el && H.win(el.dataset.chats), c = w && ch(w.id);
-    if (c && !c.placeTouching && Date.now() - (c.placeUserAt || 0) > 600) restore(nb, RP.read(w.thread));
+    if (!c || c.placeTouching) return;
+    clearTimeout(c.reflowT);
+    const wait = 600 - (Date.now() - (c.placeUserAt || 0));
+    if (wait > 0) { c.reflowT = setTimeout(() => reflow(nb), wait + 1); return; }
+    restore(nb, RP.read(w.thread));
   }
   const SETTLE_MS = 3000;
   function settle(c, nb, apply, until) {
@@ -187,7 +200,7 @@ window.WosChatPower = function chatPower(A) {
   function onScroll(nb) {
     if (!onScreen(nb)) return;
     const el = nb.closest('[data-chats]'), w = H.win(el.dataset.chats); if (!w?.thread) return;
-    const c = ch(w.id); if (!settling(c)) c.readerMoved = true;
+    const c = ch(w.id); if (!settling(c)) { c.readerMoved = true; c.placeUserAt = Date.now(); }
     capture(nb); paintLatest(el, nb);
   }
   // Pick from what's already in Wizard Files (#23), next to the paperclip.

@@ -16,6 +16,14 @@ function harness(doc = false) {
   const api = ctx.WosChatPower({ ch: () => state, CH: { win: state }, H: { win: () => w }, threadOnScreen: () => shown, scrollBox: () => doc ? sc : nb, isWorking: () => false });
   return { api, nb, sc, hooks, storage, row, setShown: b => { shown = b; }, writes: () => writes };
 }
+test('other tabs merge newest places without discarding an unflushed local scroll', () => {
+  const h = harness(), key = 'wizard.mobile.reading-positions.v1'; h.api.capture(h.nb);
+  const own = h.api.RP.read('thread'), remote = { ...own, sessionId: 'other-thread', savedAt: own.savedAt + 1 };
+  h.storage[key] = JSON.stringify({ 'other-thread': remote }); h.hooks.pagehide();
+  const flushed = JSON.parse(h.storage[key]); assert.equal(flushed.thread.anchor.key, 'row'); assert.equal(flushed['other-thread'].sessionId, 'other-thread');
+  h.hooks.storage({ key, newValue: JSON.stringify({ thread: { ...own, scrollTop: 123, savedAt: own.savedAt + 2 } }) });
+  assert.equal(h.api.RP.read('thread').scrollTop, 123);
+});
 for (const doc of [false, true]) {
   test(`one synchronous eye-line place, hidden scroll ignored, lifecycle flushed (${doc ? 'document' : 'box'})`, () => {
     const h = harness(doc); h.api.capture(h.nb);
