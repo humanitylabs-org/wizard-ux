@@ -181,7 +181,7 @@
   // Short name for the bottom label and scrubber: the app ("Chats"), never a long thread title.
   function deskName(i) {
     const d = desks[i]; if (!d.wins.length) return i === HOME ? 'Home' : 'Empty';
-    const f = W[d.focus] || W[d.wins[0]], n = f.app === 'frame' || f.app === 'maps' || f.app === 'chats' ? winApp(f).name : winTitle(f);
+    const f = W[d.focus] || W[d.wins[0]], n = f.app === 'frame' || f.app === 'chats' ? winApp(f).name : winTitle(f);
     return d.wins.length > 1 ? `${n} +${d.wins.length - 1}` : n;
   }
   const deskOf = id => desks.findIndex(d => d.wins.includes(id));

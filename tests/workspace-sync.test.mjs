@@ -4,9 +4,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
+const features = fs.readFileSync(new URL('../web/core/features.js', import.meta.url), 'utf8');
 const src = fs.readFileSync(new URL('../web/core/workspace-sync.js', import.meta.url), 'utf8');
 function load() {
   const sb = { console, JSON, Map, Set, Math, Date, setTimeout() {}, clearTimeout() {}, addEventListener() {}, navigator: { userAgent: 'iPhone' }, localStorage: { getItem: () => null, setItem() {} } };
+  vm.runInNewContext(features, { window: sb });
   sb.window = sb; vm.runInNewContext(src, sb); return sb.WosWorkspaceSync;
 }
 const S = load();
@@ -38,6 +40,7 @@ test('a window moved to another desk here is not duplicated', () => {
 test('bound views, review peeks and New chat drafts never travel', () => {
   const n = plain(S.norm({ desks: [D('a', { id: 'w1', app: 'chats', thread: '__new__' }, { id: 'w2', app: 'frame', appId: 'x', bound: 's1' }, { id: 'w3', app: 'frame', appId: 'y', from: { sid: 's' } }, { id: 'w4', app: 'usuals' })] }));
   assert.deepEqual(n.desks[0].wins, [{ id: 'w1', app: 'chats' }]);
+  assert.deepEqual(plain(S.norm({ desks: [D('retired', { id: 'old-review', app: 'review' }, { id: 'old-maps', app: 'maps' }, app('old-system', 'system'), { id: 'old-command', app: 'feature', featureId: 'command' })] })).desks, []);
 });
 
 test('reconcile keeps local window objects and layout, adds new desks, closes removed ones, caps per device', () => {
@@ -50,6 +53,8 @@ test('reconcile keeps local window objects and layout, adds new desks, closes re
   assert.equal(r.desks[0].full, true, 'layout stays per device');
   assert.deepEqual(plain(r.desks[1].more), [{ id: 'n3', app: 'frame', appId: 'c' }], 'over-cap windows stay in the shared copy');
   assert.deepEqual(plain(r.removed), ['w5'], 'desk z was closed on another device');
+  const retired = S.reconcile([], {}, { desks: [D('retired', { id: 'old-review', app: 'review' }, app('old-system', 'system'))] }, { fresh: id => ({ id, wins: [] }) });
+  assert.deepEqual(plain(retired.desks), [], 'old box checkpoints cannot revive removed views');
 });
 
 // Client sync loop against a fake box: per-shell checkpoints and offline edits that survive a reload.
@@ -58,6 +63,7 @@ function client(store, box, shell, desks) {
     navigator: { userAgent: 'iPhone' }, addEventListener() {}, dispatchEvent() {}, setTimeout: (f, ms) => (ms > 1000 ? 0 : setTimeout(f, 0)), clearTimeout,
     localStorage: { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)) },
     fetch: async (url, o = {}) => box.handle(url, o) };
+  vm.runInNewContext(features, { window: sb });
   sb.window = sb; vm.runInNewContext(src, sb);
   const st = { desks };
   const api = sb.WosWorkspaceSync.create({ shell, read: () => st, apply: (s) => { if (s) st.desks = s.desks.map(d => ({ id: d.id, wins: d.wins })); } });

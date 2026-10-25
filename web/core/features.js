@@ -2,11 +2,13 @@
 (() => {
   'use strict';
   const entries = new Map(); let H;
+  const retired = w => !!w && (['review', 'maps'].includes(w.app) || w.appId === 'system' || w.app === 'feature' && ['day', 'week', 'month', 'maps', 'command'].includes(w.featureId));
   const api = window.WosFeatures = {
+    retired,
     register(f) { if (!f.id || entries.has(f.id)) throw Error('Unique feature id required'); entries.set(f.id, f); window.WosSettings.refresh?.(); return () => entries.delete(f.id); },
     pruneWindows(wins) {
       for (const [id, w] of Object.entries(wins)) {
-        if (w && (['review', 'maps'].includes(w.app) || w.appId === 'system' || w.app === 'feature' && ['day', 'week', 'month', 'maps', 'command'].includes(w.featureId))) delete wins[id];
+        if (retired(w)) delete wins[id];
       }
     },
     install(host) { H = host; },
