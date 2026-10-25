@@ -14,7 +14,8 @@ function harness(doc = false) {
   const ctx = { console, Date, setTimeout: () => 1, clearTimeout() {}, addEventListener: (n, f) => { hooks[n] = f; }, document: { addEventListener() {} }, localStorage: { getItem: k => storage[k], setItem: (k, v) => { storage[k] = v; } }, WizCore: { esc: String }, WosModels: {}, WizLive: { session: () => ({ status: 'completed' }) } };
   ctx.window = ctx; vm.createContext(ctx); vm.runInContext(source, ctx);
   const api = ctx.WosChatPower({ ch: () => state, CH: { win: state }, H: { win: () => w }, threadOnScreen: () => shown, scrollBox: () => doc ? sc : nb, isWorking: () => false });
-  return { api, nb, sc, hooks, storage, row, setShown: b => { shown = b; }, writes: () => writes };
+  const events = {}; nb.matches = s => s === '.ch-msgs'; api.bind({ addEventListener: (name, f) => { events[name] = f; } });
+  return { api, nb, sc, hooks, storage, row, state, fireScroll: () => events.scroll({ target: nb }), setShown: b => { shown = b; }, writes: () => writes };
 }
 test('other tabs merge newest places without discarding an unflushed local scroll', () => {
   const h = harness(), key = 'wizard.mobile.reading-positions.v1'; h.api.capture(h.nb);
@@ -38,6 +39,12 @@ for (const doc of [false, true]) {
     h.api.restore(h.nb, { atBottom: true }); assert.equal(h.sc.scrollTop, 1500);
     const pinnedWrites = h.writes(); h.api.restore(h.nb, { atBottom: true }); assert.equal(h.writes(), pinnedWrites);
     h.setShown(false); assert.equal(h.api.restore(h.nb, saved), false); assert.equal(h.writes(), pinnedWrites);
+  });
+  test(`restore acknowledgements are not reader gestures (${doc ? 'document' : 'box'})`, () => {
+    const h = harness(doc); h.api.capture(h.nb); const place = h.api.RP.read('thread');
+    h.sc.scrollTop = 600; h.api.restore(h.nb, place); h.fireScroll();
+    assert.equal(h.state.readerMoved, undefined); assert.equal(h.state.placeUserAt, undefined);
+    h.sc.scrollTop = 500; h.fireScroll(); assert.equal(h.state.readerMoved, true); assert.ok(h.state.placeUserAt > 0);
   });
   test(`previous-version latest-reply record still restores (${doc ? 'document' : 'box'})`, () => {
     const h = harness(doc); h.api.restore(h.nb, { anchorOffset: -40, scrollTop: 123 }); assert.equal(h.sc.scrollTop, 380);

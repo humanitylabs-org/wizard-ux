@@ -76,10 +76,11 @@ window.WosChatPower = function chatPower(A) {
     }
     return null;
   }
+  const placed = new WeakMap(); // pending browser scroll acknowledgements, never a saved reading spot
   function moveTo(nb, top) {
     const s = scrollBox(nb), to = Math.max(0, Math.min(s.scrollHeight - s.clientHeight, top));
     // Even an unchanged assignment kills a handset's momentum fling.
-    if (Math.abs(s.scrollTop - to) >= 1) s.scrollTop = to;
+    if (Math.abs(s.scrollTop - to) >= 1) { placed.set(s, to); s.scrollTop = to; }
   }
   // The only restore / stick-to-bottom rule, for open, repaint, app/desk return and layout changes.
   function restore(nb, place) {
@@ -200,7 +201,9 @@ window.WosChatPower = function chatPower(A) {
   function onScroll(nb) {
     if (!onScreen(nb)) return;
     const el = nb.closest('[data-chats]'), w = H.win(el.dataset.chats); if (!w?.thread) return;
-    const c = ch(w.id); if (!settling(c)) { c.readerMoved = true; c.placeUserAt = Date.now(); }
+    const c = ch(w.id), sc = scrollBox(nb), own = placed.has(sc) && Math.abs(sc.scrollTop - placed.get(sc)) < 1;
+    placed.delete(sc);
+    if (!own && !settling(c)) { c.readerMoved = true; c.placeUserAt = Date.now(); }
     capture(nb); paintLatest(el, nb);
   }
   // Pick from what's already in Wizard Files (#23), next to the paperclip.
@@ -609,7 +612,7 @@ window.WosChatPower = function chatPower(A) {
     const contact = e => {
       const nb = e.target.closest?.('[data-chats]')?.querySelector('.ch-msgs');
       if (!onScreen(nb)) return;
-      const c = ch(nb.closest('[data-chats]').dataset.chats);
+      const c = ch(nb.closest('[data-chats]').dataset.chats); placed.delete(scrollBox(nb));
       c.placeTouching = e.type === 'touchstart' || e.type === 'touchmove'; c.placeUserAt = Date.now();
     };
     ['touchstart', 'touchmove', 'touchend', 'touchcancel', 'wheel'].forEach(e => root.addEventListener(e, contact, { capture: true, passive: true }));
