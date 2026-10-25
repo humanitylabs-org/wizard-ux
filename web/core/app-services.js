@@ -10,7 +10,13 @@
   // only a fingerprint unlocks. The shell names the app (st.appId), so apps can never ask for each other's secret.
   let vaultSeq = 0, vaultBound = null; const vaultWaits = new Map();
   function vaultPort() { const p = window.wizardVaultPort; if (!p?.postMessage) return null; if (vaultBound !== p) { vaultBound = p; p.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (_) { return; } const w = vaultWaits.get(m?.id); if (!w) return; vaultWaits.delete(m.id); clearTimeout(w.timer); m.ok ? w.resolve(m.result || {}) : w.reject(Object.assign(new Error(m.error || 'failed'), { code: m.error || 'failed' })); }; } return p; }
+  // APK 0.10.8 exposes its own wizardVaultPort; 0.10.9+ answers vault.* on the shared device envelope (wizardDevicePort).
+  async function deviceVaultCall(appId, method, extra) {
+    try { return await window.WizCore.bridge.call('vault.' + method, { ...extra, appId }); }
+    catch (e) { const code = e.message === 'unknown method' || e.message === 'unavailable' ? 'unavailable' : e.message || 'failed'; if (method === 'has' && code === 'unavailable') return { available: false, saved: false }; throw Object.assign(new Error(code), { code }); }
+  }
   function vaultCall(appId, method, extra = {}) {
+    if (!window.wizardVaultPort?.postMessage && window.wizardDevicePort?.postMessage && window.WizCore?.bridge?.call) return deviceVaultCall(appId, method, extra);
     const p = vaultPort(); if (!p) return Promise.resolve(method === 'has' ? { available: false, saved: false } : Promise.reject(Object.assign(new Error('unavailable'), { code: 'unavailable' })));
     const id = 'vault-' + (++vaultSeq);
     return new Promise((resolve, reject) => {
@@ -253,10 +259,11 @@
       orb: Object.freeze({ set(spec) { check(); return setOrb(st, spec); }, shown() { check(); return orbShown(st.frame); } }),
 
       vault: Object.freeze({
-        has() { check(); return vaultCall(st.appId, 'has'); },
-        seal(secret, title) { check(); return vaultCall(st.appId, 'seal', { secret: String(secret ?? ''), title: String(title || '') }); },
-        open(title) { check(); return vaultCall(st.appId, 'open', { title: String(title || '') }); },
-        forget() { check(); return vaultCall(st.appId, 'forget'); },
+        // check() again after the await: a reloaded, closed or foreign document never receives a late secret.
+        has: async () => { check(); const r = await vaultCall(st.appId, 'has'); check(); return r; },
+        seal: async (secret, title) => { check(); const r = await vaultCall(st.appId, 'seal', { secret: String(secret ?? ''), title: String(title || '') }); check(); return r; },
+        open: async title => { check(); const r = await vaultCall(st.appId, 'open', { title: String(title || '') }); check(); return r; },
+        forget: async () => { check(); const r = await vaultCall(st.appId, 'forget'); check(); return r; },
       }),
       titlebar: Object.freeze({ set(list) { check(); return setTools(st, list); },
         shown() { check(); const b = barOf(st)?.querySelector(':scope > .wtools'); return !!b && b.getClientRects().length > 0 && b.offsetHeight > 0; } }),

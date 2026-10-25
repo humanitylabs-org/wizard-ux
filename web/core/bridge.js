@@ -81,9 +81,37 @@
   }
   const native = () => (window.webkit?.messageHandlers?.wizardNative ? 'mac' : window.WizardNative || window.WizardOSNative ? 'android' : '');
 
+  // Fingerprint vault uses the same device envelope and pending map as other native adapters.
+  // Sharing correlation also permits Wizard ID's listener to receive a vault reply (and vice versa).
+  let vaultListening = null;
+  function vaultCall(method, params = {}) {
+    const port = window.wizardDevicePort;
+    if (!port?.postMessage) return Promise.reject(new Error('unavailable'));
+    const id = 'vault-' + (++seq);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { if (waiting.delete(id)) reject(new Error('timeout')); }, 120000);
+      waiting.set(id, { resolve: value => { clearTimeout(timer); resolve(value); }, reject: error => { clearTimeout(timer); reject(error); } });
+      try {
+        if (vaultListening !== port) {
+          const previous = port.onmessage;
+          const receive = ev => {
+            let msg; try { msg = JSON.parse(ev.data); } catch (_) { return; }
+            if (msg?.v !== 1 || typeof msg.id !== 'string') return;
+            const pending = waiting.get(msg.id);
+            if (!pending) { if (typeof previous === 'function') previous.call(port, ev); return; }
+            waiting.delete(msg.id); msg.ok ? pending.resolve(msg.result) : pending.reject(new Error(msg.error || 'failed'));
+          };
+          if (typeof port.addEventListener === 'function') port.addEventListener('message', receive); else port.onmessage = receive;
+          vaultListening = port;
+        }
+        port.postMessage(JSON.stringify({ v: 1, id, method, params }));
+      } catch (error) { waiting.delete(id); clearTimeout(timer); reject(error); }
+    });
+  }
+
   window.WizCore = window.WizCore || {};
   window.WizCore.bridge = {
-    VERSION, EVENTS, call, native,
+    VERSION, EVENTS, call: (method, params) => method.startsWith('vault.') ? vaultCall(method, params) : call(method, params), native,
     handle(h) {
       Object.assign(H, h);
       window.wizardUX = { shell: window.WIZ_SHELL || '', version: VERSION, events: EVENTS };
