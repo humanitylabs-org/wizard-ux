@@ -434,8 +434,13 @@ async function soloAcceptance(b) {
   await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');a.chats.openContextDraft(w.id,'qa-focus:item',{title:'Fixture app item',message:'Fixture public app context'});});
   ok(await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');return !a.chats.winAgent(w)&&w.thread==='__new__';}),mode+' app-item reply keeps its explicit main-agent route');
   await p.evaluate(()=>{const a=window.__wos||window.__wux;if(window.__wos)a.onBack();else a.escStep();});
+  const hermesTab=()=>p.locator('.ch-focus-strip:visible [data-chfocusopt="agent:hermes"]').innerText();
+  // With All in front, the agent tab still names the Space it remembers (James, 25 Oct 2026).
+  await choose(p,'all:');for(const sk of ['obsidian','nebula']){await p.evaluate(sk=>{document.documentElement.dataset.skin=sk;},sk);await capture(p,mode+'-all-remembered-'+sk);}await p.evaluate(()=>{document.documentElement.dataset.skin='obsidian';});ok((await hermesTab()).includes('Wizard OS launch'),mode+' agent tab keeps its remembered Space name under All');
   await choose(p,'agent:hermes');ok((await p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText()).includes('Wizard OS launch'),mode+' agent tab returns to its remembered Space');
   await activate(p,'.ch-focus-strip:visible [data-chfocusopt="agent:hermes"]');await activate(p,'[data-spall]');
+  await choose(p,'all:');ok(!(await hermesTab()).includes('Wizard OS launch'),mode+' All Archimedes in the picker clears the remembered Space name');
+  await choose(p,'agent:hermes');
   ok(JSON.stringify(await ids(p))===JSON.stringify(['main_phil','main_plain','main_wos']),mode+' main excludes other agents');
   // Both typed and held commands go through the same existing grammar and executor.
   for(const typed of [false,true]){
