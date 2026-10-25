@@ -82,9 +82,16 @@ def send(op,**kw):
     assert not ev.get('error'),ev
     return ev.get('result')
 def ui():
-    adb('shell','uiautomator','dump','/sdcard/ui.xml')
-    s=adb('exec-out','cat','/sdcard/ui.xml');(OUT/'latest-ui.xml').write_text(s)
-    return ET.fromstring(s)
+    for attempt in range(3):
+        try:
+            adb('shell','uiautomator','dump','/sdcard/ui.xml')
+            s=adb('exec-out','cat','/sdcard/ui.xml');(OUT/'latest-ui.xml').write_text(s)
+            return ET.fromstring(s)
+        except (subprocess.CalledProcessError,ET.ParseError) as error:
+            print('UI dump retry',attempt+1,str(error),flush=True)
+            if attempt==2:raise
+            time.sleep(2)
+    raise RuntimeError('UI hierarchy unavailable')
 def tap(text):
     for n in ui().iter('node'):
         if n.attrib.get('text')==text:
@@ -94,7 +101,9 @@ def tap(text):
 def orb_point(control=0):
     text=adb('shell','dumpsys','input');(OUT/'orb-input.txt').write_text(text)
     line=next(l for l in text.splitlines() if "WizardShellOrb', id=" in l)
-    x1,y1,x2,y2=map(int,re.search(r'touchableRegion=\[(\d+),(\d+)\]\[(\d+),(\d+)\]',line).groups())
+    region=re.search(r'touchableRegion=\[(\d+),(\d+)\]\[(\d+),(\d+)\]',line)
+    assert region,'orb must expose a bounded touchable region'
+    x1,y1,x2,y2=map(int,region.groups())
     return str(int(x1+control*(x2-x1-(y2-y1))/4 if control else x2-(y2-y1)/2)),str((y1+y2)//2)
 
 def orb_visible(windows):

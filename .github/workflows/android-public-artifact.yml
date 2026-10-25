@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
-          ref: 0bf63e70ea050c8703d100595a425a13bd4bf3ab
+          ref: 6c5d1649b1284235410b8a6f402ac29340c014f8
           path: candidate
           persist-credentials: false
       - name: Disposable HTTPS fixture tooling
