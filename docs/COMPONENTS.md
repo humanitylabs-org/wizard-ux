@@ -1,8 +1,8 @@
 # Wizard OS components: reuse before build
 
-**One implementation per capability.** Find the need below and reuse its entry point. Extend near-fit modules instead of building beside them. NEW lands in `web/core/` with a row here, never inside an app.
+**One implementation per capability.** Reuse or extend the entry below. NEW belongs in `web/core/` with a row here, never in an app.
 
-Every PR body carries a `Reuse:` block (see `.github/pull_request_template.md`); CI checks it (`tools/reuse-check.mjs`) and checks that every shell global is listed here (`tests/components-inventory.test.mjs`).
+CI checks the PR `Reuse:` block and shell globals.
 
 ```
 Reuse:
@@ -38,12 +38,12 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 
 | Need | Use | Never hand-roll |
 |---|---|---|
-| Chats: list, Focus strip/Filter (All / agent / Space; 32px colour pills, 44px targets, persisted collapse), search, thread, composer (text/attachments), drop, cards/read state, Copy · Share (Regenerate: `--wos-reply-regenerate: on`); history only when populated | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); `setFocus(w, {kind, key})` / `setFocus(w, null)` persist `w.focus` via shell save; `WizCore.migrateChatsFocus` folds legacy `w.agent` windows on restore; live data `WizLive` (`web/live.js`) | a second thread, composer, Focus/command parser or per-agent thread logic; extra per-reply buttons on every skin |
+| Chat list, bottom Focus strip (one agent: All/Spaces/＋; no Spaces: none; multiple agents: All/agent → owned Spaces), nested Filter, shared section collapse, search, thread, composer, attachments, read state and Copy/Share | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); `setFocus` persists `w.focus`; `migrateChatsFocus` folds legacy agent windows; `WizLive` owns data; historical sections appear only when populated | second thread/composer/Focus parser; per-agent or per-shell routing |
 | Alternative Chats list | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
 | Model picker, errors and retry, composer mic, work receipts, reading place | `WosChatPower` (`web/core/chat-power.js`) + `WosModels` (`web/core/chat-models.js`), `WosErrors` (`web/core/chat-errors.js`), `WosWork` (`web/core/chat-work.js`) | own model list, own error card, own reading-position store |
 | Markdown, drafts, rich copy, Bangkok time, media viewer | `WosChat` (`web/core/chat-kit.js`: `md`, `copyRich`, `viewer`) | a markdown library, own lightbox |
-| Spaces / Focus | `WizCore` Chats (`web/core/chats.js`), `WizLive.putPrefs` (`spaces` in box-wide ui-preferences); `WizLive.spaceSessions(ids)` hydrates missing focused members outside global list windows (memory-only, four concurrent reads); `winAgent` / `modelRoute` drive every new-chat adapter; `WosAgents.colour` / `distinctHues` drive tab identity and `--ch-agent-hue` list tint | automatic subject tabs, separate collection store, per-shell Focus routing or section implementations |
+| Owner-created Spaces / Focus | `WizCore` Chats (`web/core/chats.js`), `WizLive.putPrefs` (`spaces` in box-wide ui-preferences); shared Space naming form from the ＋ chip or thread-row Add to a Space picker (including zero Spaces); `WizLive.spaceSessions(ids)` hydrates missing focused members outside global list windows (memory-only, four concurrent reads); `winAgent` / `modelRoute` drive every new-chat adapter; `WosAgents.colour` / `distinctHues` drive tab identity and `--ch-agent-hue` list tint | automatic subject tabs, separate collection store, per-shell Focus routing or section implementations |
 | Pinned threads (synced across devices) | `WosChatPins` (`web/core/chat-pins.js`) | device-local pin lists |
 | Snooze thread/message: Later today · Tomorrow · In 2/3/5 days · Next week · Someday; Other date… last; success returns via threadBack like Done | `WosBoomerang` (`web/core/scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`web/core/schedules.js`) | own timers or reminder stores |
 | Thread topic emoji | `WosTopicEmoji` (`web/core/chat-topic-emojis.js`, data `WosTopicEmojiData`) | — |
@@ -69,7 +69,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Update banners, Settings card, Home pop-up | `WizWebUpdate`, `WizAppUpdates` (`web/core/web-update.js`), `WizAppVersions` (`web/core/app-versions.js`), `WosUpdates` (`web/core/os-updates.js`: `card`/`popup`) | own reload timers, a second card |
 | Provider login (Claude, ChatGPT) for agents and apps | the installed login apps (`wizard-claude`, `wizard-chatgpt`; skill `app-owned-codex-connections`) | setup-tokens or bespoke auth flows |
 | Native mic recording on the phone (voice notes, orb takes, live dictation) | `NoteRecorder` (`android/app/src/main/java/ai/wizards/os/audio/NoteRecorder.java`) over `MicRoute` (`audio/MicRoute.java`: `MicRoute.start` with `MicRoute.NOTE_SOURCES` for notes people listen to, `MicRoute.SOURCES` for speech-to-text) | `new MediaRecorder`, `AudioRecord` or `setAudioSource` outside `audio/` | `MicRouteTest`, `NoteRecorderTest` (source order, bitrate, every recorder goes through `MicRoute`) |
-| Native Android device capability called from the shell (packages today; later mic, automation, notifications) | `wizardDevicePort` v1 (`android/app/src/main/java/ai/wizards/os/device/DeviceMessageProtocol.java`; add an adapter and list it in `device.capabilities`; see `docs/android-device-message-port.md`) | feature-named `@JavascriptInterface` methods, a second envelope on `wizardAppsPort`, native feature screens or wording |
+| Android shell capabilities | `WosDevicePort` (`web/core/device-port.js`), `WosDeviceRecording` (`web/core/device-recording.js`), `WosDeviceOrb` (`web/core/device-orb.js`); `wizardDevicePort` v1 | another envelope or recorder/store; ack before durable custody |
 | Add an app to the home screen | `WizHomeScreenApps.attach / offer / canOffer` (`web/core/home-screen-apps.js`): native pin or direct-link guide; optional `WosExperience` arrange/download tweak; docs/pwa-app-install.md | a second long-press menu or pin sheet per surface |
 | Android long-screenshot (scroll capture) and text selection in the WebView | `ScrollAccessibilityProvider`, `ChatScrollCapture` + `android/app/src/main/assets/scroll-capture.js`, `SelectionWebView` (`android/app/src/main/java/ai/wizards/os/`) | a second accessibility provider or capture path | capture of a long Chats thread on a real device |
 
@@ -78,7 +78,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Need | Use | Never hand-roll |
 |---|---|---|
 | The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`); Android mirror `android/app/src/main/assets/assist/everywhere.html` | PNG + CSS spin, Lottie, SVG |
-| Skins, backgrounds, scenery, skin feature switches (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`), `WosSkinHost` (`web/core/skin-host.js`; tweaks: `core/slots.json`, `api.overview.use`), `WosExperience` (`web/core/experience.js`: a family's tweaks), `WosMySkin` (`web/core/my-skin.js`), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own gradients, canvases or colour constants |
+| Skins, backgrounds, scenery, skin feature switches (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`), `WosSkinHost` (`web/core/skin-host.js`; tweaks on `core/slots.json`; `.builtin` gestures, `api.gesture.intent`, disposable `api.layout.foundation`), `WosExperience` (`web/core/experience.js`: a family's tweaks), `WosMySkin` (`web/core/my-skin.js`; box recipes/cache + active overlay), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own gradients, canvases or colour constants |
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) | own keyframe sets |
 | Tour and help sheet (Talk → Hide → end card; per-step skip); desktop composer guide `WosTour.desk` | `WosTour` (`web/core/tour.js`) | — |
 | First launch and explicit Setup/tour; VM auto-onboarding; alongside launch starts only the orientation | `WosSetupLaunch` (`web/core/setup-launch.js`); built-in checklist `web/setup/setup.js` distinguishes ready-to-open from phone-connected | shell-specific first-run checks, a second tour launcher |
