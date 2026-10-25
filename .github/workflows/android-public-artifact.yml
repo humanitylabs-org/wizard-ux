@@ -11,6 +11,17 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: a66ea7e1a162f22a1dc61f26e1548d5cc4c3e4ee
+          path: candidate
+          persist-credentials: false
+      - name: Disposable HTTPS fixture tooling
+        run: |
+          mkdir -p "$RUNNER_TEMP/fixture-bin"
+          curl -fL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o "$RUNNER_TEMP/fixture-bin/cloudflared"
+          chmod +x "$RUNNER_TEMP/fixture-bin/cloudflared"
+          printf '%s\n' "$RUNNER_TEMP/fixture-bin" >> "$GITHUB_PATH"
       - name: Download unchanged public APK and bounded native smoke
         shell: bash
         run: |
@@ -68,10 +79,11 @@ jobs:
             sleep 60
             bash audit/smoke.sh audit/public.apk audit/results
             adb shell dumpsys package ai.wizards.shell > audit/package.txt
+            QA_WEB="$GITHUB_WORKSPACE/candidate/web" python3 tools/qa_signed_shell.py
       - name: Evidence scope
         if: always()
         run: |
-          printf '%s\n' 'Exact public signed APK; native install/Connect/HTTPS rejection/deeplink/offline/restart/Back only. No debug rebuild, fixture TLS exception, real Wizard/provider, recording or Everywhere claim.' >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' 'Exact public signed APK, candidate a66ea7e1a162f22a1dc61f26e1548d5cc4c3e4ee. Native baseline plus real device modules/outbox on disposable trusted HTTPS fixture. No debug rebuild, TLS exception, real provider or physical-phone claim. See compat/checks.json for actual gates.' >> "$GITHUB_STEP_SUMMARY"
           cat audit/results/result.txt >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
