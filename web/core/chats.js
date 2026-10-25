@@ -905,8 +905,8 @@ window.WizCore.chats = function createChats(H) {
   // Keep putting an unlanded bookmark back each frame (≤3 s) until it lands, the thread changes, James touches the
   // list, or anything else scrolls it.
   // The window body can be remounted meanwhile, so each frame looks up the live scroller.
-  function holdListPlace(w, el, place) {
-    const c = ch(w.id), until = Date.now() + 3000; c.listPending = place;
+  function holdListPlace(w, el, place, ms = 3000) {
+    const c = ch(w.id), until = Date.now() + ms; c.listPending = place;
     let box = el.querySelector('.ch-scroll'), mine = box?.scrollTop ?? 0;
     const step = () => {
       if (c.listPending !== place) return;
@@ -918,6 +918,33 @@ window.WizCore.chats = function createChats(H) {
     };
     requestAnimationFrame(step);
   }
+  /* One remembered place per Chats list, whatever repaints or replaces it (James, 25 Oct 2026: tapping Reload on an
+   * update put him back at the top; Back, Done and a reply had each been fixed one route at a time). Every scroll of a
+   * laid-out list saves its bookmark here, and so does leaving the page; a list painted with no place of its own (a
+   * fresh page after Reload, an app restart within the hour) takes it back. The key includes what the list shows, so
+   * a different agent, Space, filter or search starts at its own top. */
+  const LIST_PLACE_KEY = 'wos.chats.list-place.v1', LIST_PLACE_TTL = 60 * 60 * 1000;
+  const listSig = w => { const f = focusOf(w); return [winAgent(w), f ? f.kind + ':' + f.key : '', ch(w.id).filter || '', norm(ch(w.id).q)].join('|'); };
+  function readListPlaces() { try { return JSON.parse(localStorage.getItem(LIST_PLACE_KEY) || '{}') || {}; } catch (e) { return {}; } }
+  function storeListPlace(wid) {
+    const w = W[wid], c = CH[wid], el = elOf(wid), sc = el?.querySelector('.ch-list > .ch-scroll');
+    // A list without layout (hidden, parked desk, mid-transition) reads 0: that is not where James is.
+    if (!w || w.thread || !c || c.listPending || !sc || !sc.isConnected || !sc.clientHeight) return;
+    const place = listPlace(el); if (!place) return;
+    const all = readListPlaces(), now = Date.now();
+    for (const k of Object.keys(all)) if (!(now - (all[k]?.at || 0) < LIST_PLACE_TTL)) delete all[k];
+    all[wid] = { ...place, sig: listSig(w), at: now };
+    try { localStorage.setItem(LIST_PLACE_KEY, JSON.stringify(all)); } catch (e) {}
+  }
+  function storedListPlace(w) {
+    const r = readListPlaces()[w.id];
+    return r && Date.now() - (r.at || 0) < LIST_PLACE_TTL && r.sig === listSig(w) ? { top: r.top, rows: r.rows || [] } : null;
+  }
+  const listSaveT = {};
+  function queueListPlace(wid) { clearTimeout(listSaveT[wid]); listSaveT[wid] = setTimeout(() => storeListPlace(wid), 200); }
+  function flushListPlaces() { for (const wid of Object.keys(listSaveT)) { clearTimeout(listSaveT[wid]); delete listSaveT[wid]; } for (const el of H.root().querySelectorAll('[data-chats]')) storeListPlace(el.dataset.chats); }
+  window.addEventListener('pagehide', flushListPlaces);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) flushListPlaces(); });
   function renderChatList(w, el) {
     syncListTitle(w);
     closeStream(ch(w.id));
@@ -1010,7 +1037,10 @@ window.WizCore.chats = function createChats(H) {
     // Progress sits above the results (James, 25 Oct 2026: it was hidden below a long Archive); the final line stays under them.
     if (bs && LST.ok) body = BS.scanning(bs) || bs.busy ? BS.footer(bs) + body : body + BS.footer(bs);
     // An unlanded return bookmark outranks the scroller's own reading: that reading is the 0 it fell to.
-    const place = c.listPending || listPlace(el) || c.listPlace;
+    // A fresh page has no scroller yet: fall back to the place this list last saved (once per page per window).
+    const fresh = !el.querySelector('.ch-scroll') && !c.listPlace && !c.listPending && !c.storedTried;
+    if (!el.querySelector('.ch-scroll')) c.storedTried = true;
+    const place = c.listPending || listPlace(el) || c.listPlace || (fresh ? storedListPlace(w) : null);
     // Results stream in while typing: keep the search box focused with the caret where it was.
     const inp0 = el.querySelector('[data-chsearch]'), had = inp0 && document.activeElement === inp0, sel = had ? [inp0.selectionStart, inp0.selectionEnd] : null;
     // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
@@ -1044,7 +1074,8 @@ window.WizCore.chats = function createChats(H) {
       clearReading(w.id); el.innerHTML = html; c.listHTML = html; c.listRoot = el.firstElementChild;
       restoreSheet(el, keepSheet);
       if (restoreListPlace(el.querySelector('.ch-scroll'), place)) c.listPending = null;
-      else if (c.listPending !== place) holdListPlace(w, el, place);
+      // After a reload the rows come from the snapshot or the first read, which can take a few seconds.
+      else if (c.listPending !== place) holdListPlace(w, el, place, fresh ? 8000 : 3000);
     }
     PW?.paint(w.id, el);
     bindFocusStrip(el);
@@ -1913,6 +1944,7 @@ window.WizCore.chats = function createChats(H) {
     }, { capture: true, passive: true });
     root.addEventListener('scroll', e => {
       if (!e.target.matches?.('.ch-msgs, .ch-scroll')) return;
+      if (e.target.matches('.ch-list > .ch-scroll')) { const id = idOf(e.target); if (id) queueListPlace(id); }
       const g = readGuard(e.target); g.until = Date.now() + SCROLL_IDLE; scheduleHeld();
     }, { capture: true, passive: true });
     // A finger on the messages holds background re-renders (see selectingIn) until it lifts.
