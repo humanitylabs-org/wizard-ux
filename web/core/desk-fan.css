@@ -11,7 +11,7 @@
 .wdf-item .dsg { width: 26px; height: 26px; opacity: .9; }
 .wdf-item.cur { border-color: color-mix(in oklab, var(--wz-accent, #a78bfa) 70%, transparent); }
 .wdf-item.cur::after { content: ""; position: absolute; bottom: 5px; left: 50%; width: 10px; height: 2px; margin-left: -5px; border-radius: 2px; background: var(--wz-accent, #a78bfa); }
-.wdf.on .wdf-item.sel { transform: scale(1.38); background: color-mix(in oklab, var(--wz-accent, #a78bfa) 30%, var(--wz-surface, #171427)); border-color: var(--wz-accent, #a78bfa); transition-delay: 0ms; z-index: 2; }
+.wdf.on .wdf-item.sel { transform: scale(1.22); background: color-mix(in oklab, var(--wz-accent, #a78bfa) 30%, var(--wz-surface, #171427)); border-color: var(--wz-accent, #a78bfa); transition-delay: 0ms; z-index: 2; }
 .wdf-item.sel .dsg { opacity: 1; }
 .wdf-label { position: absolute; left: 50%; transform: translateX(-50%); padding: 5px 12px; border-radius: 12px; white-space: nowrap; max-width: 86vw; overflow: hidden; text-overflow: ellipsis;
   background: var(--wz-surface, #171427); border: 1px solid var(--wz-line, rgba(205, 190, 255, .18)); color: var(--wz-ink, var(--ink, #ece8ff)); font: 650 13px/1.2 var(--wz-font, system-ui); opacity: 0; transition: opacity 160ms; }

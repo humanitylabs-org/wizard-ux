@@ -3320,7 +3320,8 @@
     window.WosDeskFan.open({ x: r.left + r.width / 2, y: r.top + r.height / 2, current: idx,
       items: desks.map((_, i) => ({ html: deskSigil(i), label: deskName(i) + (i === from ? ' · here' : '') })),
       // The hovered desk slides in behind the fan, so James sees where he will land before releasing.
-      onHover: i => placeTrack(i == null ? 0 : (from - i) * w, true) });
+      // Parked desks (two+ away) render nothing, so the hovered one is woken first; release re-parks via goDesk.
+      onHover: i => { if (i != null) secOf(i)?.classList.remove('parked'); placeTrack(i == null ? 0 : (from - i) * w, false); } });
   }
   // Slide-to-aim is retired (James, 11 Oct 2026): a held command already opens on the desk beside this one, so
   // sliding while holding does nothing (no desk label, no aim). A hold that starts travelling at once is a swipe.
@@ -3406,7 +3407,7 @@
       return orbTapBusy();
     } else if (g.mode === 'fan') {
       const to = window.WosDeskFan.release();
-      if (cancelled || to == null || to === idx) { placeTrack(0, true); return; }
+      if (cancelled || to == null || to === idx) { placeTrack(0, true); parkDesks(false); return; }
       goDesk(to);
     } else if (g.mode === 'hold') {
 
