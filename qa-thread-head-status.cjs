@@ -111,7 +111,7 @@ function routeFor() {
       const r = await head(id);
       ok(r.cls.split(' ').includes(k) && r.svg, `header of ${id} shows the ${k} icon`, r);
       ok(r.between, `${id}: icon sits between Back and the title`, r);
-      if (k === 'needs') { ok((process.env.QA_SKIN ? r.color !== 'rgb(0, 0, 0)' : /rgb\(255, 184, 77\)/.test(r.color)) && r.h >= 28 && r.h <= 32, 'needs icon is the amber raised hand at header size', r); await p.screenshot({ path: path.join(OUT, `needs-head${process.env.QA_SKIN ? '-' + process.env.QA_SKIN : ''}.png`) }); }
+      if (k === 'needs') { ok((process.env.QA_SKIN ? r.color !== 'rgb(0, 0, 0)' : /rgb\(255, 184, 77\)/.test(r.color)) && r.h >= 22 && r.h <= 26, 'needs icon is the amber raised hand at title-text size (24 px)', r); await p.screenshot({ path: path.join(OUT, `needs-head${process.env.QA_SKIN ? '-' + process.env.QA_SKIN : ''}.png`) }); }
       await back();
     }
     const plain = await head('qa_rs_plain');
