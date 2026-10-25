@@ -6,24 +6,27 @@ const read=p=>fs.readFileSync(new URL('../web/'+p,import.meta.url),'utf8');
 function grammar(){
  const events=[],norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9 ]/g,'').trim();
  const app={id:'wizard-music',name:'Music'},box={console,Map,Set,URL,location:{href:'https://fixture.invalid/',origin:'https://fixture.invalid',hostname:'fixture.invalid'}};box.window=box;
- box.WizCore={norm};box.WosViews={TODAY:'2026-10-15',YESTERDAY:'2026-10-14'};
+ box.WizCore={norm};
  box.WosMusic={available:()=>true,parse:s=>s==='pause the music'?{op:'pause',strong:true}:s==='next track'?{op:'next',strong:true}:null,run:c=>{events.push(['music',c.op]);return true;}};
- box.WosFeatures={entries:[{id:'maps',title:'Maps'},{id:'week',title:'Week in review'},{id:'future',title:'Future view'}],open:(id,o)=>{events.push(['view',id,o]);return ['maps','future'].includes(id);}};
+ box.WosFeatures={entries:[{id:'future',title:'Future view'}],open:(id,o)=>{events.push(['view',id,o]);return ['future'].includes(id);}};
  box.WosSettings={route:(id,open)=>{if(!['help','skin','settings'].includes(id))return false;open(id);return true;}};
  vm.runInNewContext(read('core/config.js'),Object.assign(box,{document:{addEventListener(){}}}));
  vm.runInNewContext(read('core/commands.js'),box);
  const CHATS={matchFilters:s=>s==='ready'?[{field:'status',value:'ready'}]:[],addFilter:(_w,f)=>events.push(['filter',f]),clearAll:()=>events.push(['clear']),setQuery:(_w,q)=>events.push(['query',q])};
  const find=s=>['Music','music','wizard-music'].includes(s)?app:null;
  const parser=box.WosCommands.create({CHATS,APP:{'wizard-music':app},findApp:find,appByName:find,quickSearch:s=>/^web search /.test(s)?{query:s.slice(11),tab:'all',strong:true}:null,sendSnap:()=>({})});
- const host={focused:()=>({app:'chats'}),chats:CHATS,maps:(...x)=>events.push(['maps',...x]),search:(...x)=>{events.push(['search',...x]);return true;},settings:id=>events.push(['settings',id]),inbox:()=>{},launcher:()=>{},findApp:find,openApp:a=>{events.push(['app',a.id]);return true;},layout:c=>{events.push(['layout',c.action]);return true;}};
+ const host={focused:()=>({app:'chats'}),chats:CHATS,search:(...x)=>{events.push(['search',...x]);return true;},settings:id=>events.push(['settings',id]),chatList:()=>{},launcher:()=>{},findApp:find,openApp:a=>{events.push(['app',a.id]);return true;},layout:c=>{events.push(['layout',c.action]);return true;}};
  return {box,events,parser,host};
 }
-test('one grammar handles music, app, filter, Maps, search, help and future registrations',()=>{
+test('one grammar handles music, app, filter, search, help and future registrations',()=>{
  const {box,events,parser,host}=grammar();
- for(const text of ['pause the music','next track','open music','filter ready','clear filters','web search custody','search maps for Bangkok','directions to Bangkok','help','open future']){
+ for(const text of ['pause the music','next track','open music','filter ready','clear filters','web search custody','help','open future']){
   const c=parser.parse(text,{view:{kind:'thread list'}},'command');assert(c,text);assert.notEqual(box.WosCommands.execute(c,text,host),false,text);
  }
- assert(events.some(x=>x[0]==='music'));assert(events.some(x=>x[0]==='filter'));assert(events.some(x=>x[0]==='maps'&&x[2]==='bangkok'));assert(events.some(x=>x[0]==='view'&&x[1]==='future'));
+ assert(events.some(x=>x[0]==='music'));assert(events.some(x=>x[0]==='filter'));assert(events.some(x=>x[0]==='view'&&x[1]==='future'));
+ for (const text of ['open week in review','open day','open month','zoom in','zoom out','directions to Bangkok','maps search Bangkok']) assert.equal(parser.parse(text,{},'command'),null,text);
+ assert.equal(parser.parse('open inbox',{},'command').view,'chats');
+ assert.equal(parser.parse('open notifications',{},'command').view,'chats');
  assert.equal(parser.parse('this is not a command',{},'command'),null);
  assert.equal(parser.parse('my normal one word reply',{view:{kind:'chat thread'}},'auto'),null);
 });
@@ -50,14 +53,14 @@ test('feedback rejects a missing route rather than targeting current focus',asyn
  assert.equal(await box.WosBoundView.feedback({enqueue:()=>calls++},{thread:'original'},'words'),false);assert.equal(calls,0);
 });
 test('both adapters mount common nonsettings views, command grammar and capture tools',()=>{
- for(const p of ['index.html','desktop.html'])for(const asset of ['views.js','views.css','commands.js','features.js','bound-view.js','capture-tools.js','music-voice.js','screen-capture.js','sel-menu.js'])assert(read(p).includes('core/'+asset),p+': '+asset);
+ for(const p of ['index.html','desktop.html'])for(const asset of ['views.css','commands.js','features.js','bound-view.js','capture-tools.js','music-voice.js','screen-capture.js','sel-menu.js'])assert(read(p).includes('core/'+asset),p+': '+asset);
  for(const p of ['app.js','desktop/desktop.js']){const s=read(p);assert(s.includes('WosFeatures.install('));assert(s.includes('WosCommands.create('));assert(s.includes('WosCommands.execute('));assert(s.includes('WosBoundView.create('));assert(s.includes('WosCaptureTools.'));assert(!s.includes('function localParse('));assert(!s.includes('function renderLevel('));}
 });
 
 
 test('ordinary thread words remain replies while explicit commands still work',()=>{
  const {parser}=grammar();
- for(const text of ['help','week','settings','maps','directions to Bangkok']){
+ for(const text of ['help','settings','open music','open inbox']){
   const snap={view:{kind:'chat thread'}};
   assert.equal(parser.parse(text,snap,'auto'),null,text);
   assert(parser.parse(text,snap,'command'),text);
