@@ -1459,18 +1459,6 @@ window.WizCore.chats = function createChats(H) {
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
     const w = W[wid]; if (w && w.thread === sid) renderThreadNow(w);
   }
-  /* Insert pasted text at the caret as one undoable edit; the input event saves the draft as typing would. */
-  function insertPasted(ta, text) {
-    text = text.replace(/\r\n?/g, '\n');
-    if (document.activeElement !== ta) ta.focus({ preventScroll: true });
-    const before = ta.value;
-    let ok = false; try { ok = document.execCommand('insertText', false, text); } catch (_) {}
-    if (!ok || ta.value === before) {
-      const a = ta.selectionStart ?? ta.value.length, b = ta.selectionEnd ?? a;
-      ta.setRangeText(text, a, b, 'end');
-      ta.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste', data: text }));
-    }
-  }
   /* Live repaints rebuild the chat pane; an open sheet (rename, thread actions) and its focused field survive them,
    * or Rename closed itself before a new name could be typed (Novaire, 21 Oct 2026). */
   function keptSheet(el) {
@@ -1994,51 +1982,13 @@ window.WizCore.chats = function createChats(H) {
     root.addEventListener('pointerup', lpEnd); root.addEventListener('pointercancel', lpEnd);
     // Right-click (a mouse) opens the same sheet; a touch long-press already did.
     root.addEventListener('contextmenu', e => { const row = e.target.closest('.ch-list [data-chopen]'); if (!row) return; e.preventDefault(); if (!rowSheet && !lp) { lpUntil = Date.now() + 700; openRowSheet(idOf(row), row.dataset.chopen); } });
-    // Dragging a local screenshot/file onto the composer reuses addFiles, the paperclip/paste upload path.
-    // Only file drags are claimed: selected text and links keep the browser's normal drag/drop behaviour.
-    const hasDraggedFiles = dt => !!dt && ([...(dt.items || [])].some(it => it.kind === 'file') || [...(dt.types || [])].includes('Files') || (dt.files?.length || 0) > 0);
-    root.addEventListener('dragover', e => {
-      const compose = e.target.closest?.('.ch-compose');
-      if (!compose || !hasDraggedFiles(e.dataTransfer)) return;
-      e.preventDefault();
-      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
-      compose.classList.add('is-file-drag');
-    });
-    root.addEventListener('dragleave', e => {
-      const compose = e.target.closest?.('.ch-compose');
-      if (!compose || (e.relatedTarget && compose.contains(e.relatedTarget))) return;
-      compose.classList.remove('is-file-drag');
-    });
-    root.addEventListener('drop', e => {
-      const compose = e.target.closest?.('.ch-compose');
-      if (!compose || !hasDraggedFiles(e.dataTransfer)) return;
-      e.preventDefault();
-      compose.classList.remove('is-file-drag');
-      const items = [...(e.dataTransfer?.items || [])].filter(it => it.kind === 'file').map(it => it.getAsFile()).filter(Boolean);
-      const files = items.length ? items : [...(e.dataTransfer?.files || [])];
-      if (files.length) addFiles(idOf(compose), files);
-    });
-    /* Paste a photo or file into the composer: it uploads into the tray like the paperclip.
-     * Text pastes insert from the paste event's own snapshot. Dictation apps (Wispr Flow, Superwhisper, MacWhisper)
-     * paste with a synthetic Cmd+V and restore the old clipboard straight after; Chrome's default paste re-reads the
-     * system clipboard, so on a busy page (a working thread repainting) a long take vanished: paste and beforeinput
-     * fired, nothing landed (Novaire, 21 Oct 2026; wizard-ux #243). The page never reads the clipboard itself. */
-    root.addEventListener('paste', e => {
-      const ta = e.target.closest?.('.ch-compose textarea'); if (!ta) return;
-      const files = [...(e.clipboardData?.items || [])].filter(it => it.kind === 'file').map(it => it.getAsFile()).filter(Boolean);
-      if (!files.length) {
-        let text = ''; try { text = e.clipboardData?.getData('text/plain') || ''; } catch (_) {}
-        if (text) { e.preventDefault(); insertPasted(ta, text); return; }
-        // Empty paste: the dictation app restored its clipboard before the page saw the words. Nothing on the page
-        // can recover them; say how to get the take back instead of failing silently. Never reads the clipboard.
-        const before = ta.value;
-        setTimeout(() => { if (ta.isConnected && ta.value === before && document.activeElement === ta) toast('!', `Paste arrived empty · Wispr Flow: ${/Mac|iP(hone|ad)/.test(navigator.platform || navigator.userAgent) ? '⌃⌘V' : 'Alt+Shift+Z'} pastes your last take`, 4200); }, 400);
-        return;
-      }
-      e.preventDefault();
-      const id = idOf(ta);
-      const named = files.map((f, i) => f.name && f.name !== 'image.png' ? f : new File([f], `pasted-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}${files.length > 1 ? '-' + (i + 1) : ''}.${(f.type.split('/')[1] || 'png').replace('jpeg', 'jpg')}`, { type: f.type }));
-      addFiles(id, named);
+    // Paste, drag/drop and the Enter policy come from the shared WizComposerInput (web/core/composer-input.js), the
+    // same implementation apps get as WizardApp.composer: files go to addFiles (the paperclip upload path), text
+    // pastes insert from the event snapshot (dictation-app safe), an empty paste explains how to get the take back.
+    window.WizComposerInput.bind(root, {
+      field: '.ch-compose textarea', zone: '.ch-compose',
+      onFiles: (files, ta) => addFiles(idOf(ta), files),
+      notice: msg => toast('!', msg, 4200),
     });
   }
   /* ---- durable outbox: every message is saved on the phone before it is sent ---- */
@@ -2669,8 +2619,7 @@ window.WizCore.chats = function createChats(H) {
         const row = e.target.closest('.ch-list [data-chopen]');
         if (row) { e.preventDefault(); openRowSheet(idOf(row), row.dataset.chopen); return; }
       }
-      // Opinionated: with a hardware keyboard, Enter sends and Shift+Enter is a new line (touch keyboards keep Enter = new line).
-      if (e.target.matches('.ch-compose textarea') && e.key === 'Enter' && !e.isComposing && !e.shiftKey && (e.metaKey || e.ctrlKey || !matchMedia('(pointer: coarse)').matches)) { e.preventDefault(); e.target.form.requestSubmit(); }
+      // Enter / Shift+Enter / Ctrl+Enter in the composer: WizComposerInput (bound with the paste and drop handlers).
     });
     bindGestures(root); bindPull(root);
     PW?.bind(root);
