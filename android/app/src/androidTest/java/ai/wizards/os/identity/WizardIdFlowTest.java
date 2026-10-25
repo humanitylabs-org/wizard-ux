@@ -48,11 +48,19 @@ public class WizardIdFlowTest {
             scenario.onActivity(a -> { try { java.lang.reflect.Field f=MainActivity.class.getDeclaredField("web"); f.setAccessible(true); web=(WebView)f.get(a); } catch(Exception e) { throw new AssertionError(e); } });
             waitFor(() -> "true".equals(evaluate("!!window.qaReplies && !!window.WizCore?.bridge && typeof wizardDevicePort==='object'")));
             assertTrue(result(call("before","identity.info",null)).getBoolean("none"));
-            call("cancel-setup","identity.setup",null); visible("Create your Wizard ID"); screenshot("onboarding-dark.png");
+            call("cancel-setup","identity.setup",null); visible("Create your Wizard ID");
+            visible("Import the nsec you already use"); visible("A fresh ID made on this phone");
+            assertEquals("#ff05030c",ai.wizards.os.WizardLook.identityColors(context).getString("base"));
+            assertNotNull(device.findObject(By.desc("Close Wizard ID"))); assertFalse(device.hasObject(By.text("Cancel")));
+            screenshot("onboarding-dark.png");
+            click("Use my existing Nostr key"); visible("I have a Wizard ID");
+            device.findObject(By.desc("Back")).click(); visible("Create your Wizard ID"); alive();
+            click("Create a new key"); visible("Your name");
+            device.pressBack(); visible("Create your Wizard ID"); alive();
             device.pressBack(); assertTrue(result("cancel-setup").getBoolean("cancelled")); alive();
-            call("setup","identity.setup",null); visible("Create your Wizard ID");
+            call("setup","identity.setup",null); visible("Create your Wizard ID"); click("Create a new key"); visible("Your name"); screenshot("create-dark.png");
             device.findObjects(By.clazz("android.widget.EditText")).get(0).setText("Emulator Wizard");
-            click("Create key"); pin(); visible("Save your key");
+            click("Create key"); pin(); visible("Save your key"); screenshot("backup-options-dark.png");
             click("No password manager? Copy and check"); pin();
             UiObject2 secretView=device.wait(Until.findObject(By.textStartsWith("nsec1")),15000);
             assertNotNull(secretView); String nsec=secretView.getText();
@@ -69,7 +77,7 @@ public class WizardIdFlowTest {
             JSONObject event=new JSONObject().put("kind",30117).put("tags",new JSONArray("[[\"name\",\"Midnight\"],[\"d\",\"midnight\"]]")).put("content","").put("description","Harmless login from requester");
             call("deny","identity.sign",new JSONObject().put("event",event)); visible("Publish Midnight as your skin");
             assertFalse(device.hasObject(By.textContains("Harmless login"))); screenshot("approval-skin-dark.png");
-            click("Cancel"); assertTrue(result("deny").getBoolean("denied"));
+            device.findObject(By.desc("Close Wizard ID")).click(); assertTrue(result("deny").getBoolean("denied"));
             call("skin","identity.sign",new JSONObject().put("event",event)); visible("Publish Midnight as your skin"); click("Approve & sign"); pin();
             JSONObject signed=result("skin"); verify(signed); write("signed-event.json",signed.toString(2));
             JSONObject capture=result(call("capture","view.capture",new JSONObject().put("rect",new JSONObject().put("x",0).put("y",0).put("width",80).put("height",50))));
@@ -79,14 +87,21 @@ public class WizardIdFlowTest {
             assertEquals(capture.getInt("width"),bitmap.getWidth()); assertEquals(capture.getInt("height"),bitmap.getHeight()); bitmap.recycle();
             Files.write(new File(output,"capture.webp").toPath(),image);
             assertTrue(result(call("bad-capture","view.capture",new JSONObject().put("rect",new JSONObject().put("x",-1).put("y",0).put("width",80).put("height",50)))).getBoolean("denied"));
-            evaluate("document.documentElement.style.cssText='--wz-base:#faf5ec;--wz-text:#201c30;--wz-accent:#6140a0;--wz-warning:#855000'");
-            call("settings","identity.setup",null); visible("Backed up"); screenshot("settings-light.png"); device.pressBack(); result("settings"); alive();
+            call("dark-settings","identity.setup",null); visible("Backed up"); screenshot("settings-dark.png"); device.pressBack(); result("dark-settings"); alive();
+            evaluate("document.documentElement.dataset.skin='paper';document.documentElement.style.cssText='--wz-base:#faf5ec;--wz-text:#201c30;--wz-text-secondary:#575060;--wz-text-muted:#685e73;--wz-border:#d5cddb;--wz-accent:#6140a0;--wz-warning:#855000;--wz-overlay:#f2edf7'");
+            call("settings","identity.setup",null); visible("Backed up");
+            JSONObject paper=ai.wizards.os.WizardLook.identityColors(context);
+            assertEquals("#fffaf5ec",paper.getString("base")); assertEquals("#fff2edf7",paper.getString("sheet")); assertEquals("#ff6140a0",paper.getString("accent"));
+            screenshot("settings-light.png"); device.pressBack(); result("settings"); alive();
             JSONObject app=new JSONObject().put("kind",30617).put("tags",new JSONArray("[[\"d\",\"editor\"]]")).put("content","");
             call("app","identity.sign",new JSONObject().put("event",app)); visible("Publish editor as your app"); screenshot("approval-app-light.png"); device.pressBack(); assertTrue(result("app").getBoolean("denied")); alive();
             installedAppIdentity(info);
             // Restore the backed-up key after simulating a fresh install.
             assertTrue(context.getSharedPreferences("wizard-id-v1",0).edit().clear().commit()); store.deleteEntry(KeyVault.ALIAS);
-            call("restore","identity.setup",null); visible("Create your Wizard ID"); click("Use my existing key"); visible("I have a Wizard ID");
+            evaluate("document.documentElement.dataset.skin='paper';document.documentElement.style.cssText='--wz-base:#faf5ec;--wz-text:#201c30;--wz-text-secondary:#575060;--wz-text-muted:#685e73;--wz-border:#d5cddb;--wz-accent:#6140a0;--wz-warning:#855000;--wz-overlay:#f2edf7'");
+            call("restore","identity.setup",null); visible("Create your Wizard ID"); screenshot("onboarding-light.png"); click("Create a new key"); visible("Your name"); screenshot("create-light.png");
+            device.findObject(By.desc("Back")).click(); visible("Create your Wizard ID");
+            click("Use my existing Nostr key"); visible("I have a Wizard ID");
             java.util.List<UiObject2> inputs=device.findObjects(By.clazz("android.widget.EditText")); inputs.get(0).setText("Restored Wizard"); inputs.get(1).setText(nsec); hideKeyboard();
             click("Import key"); pin(); visible("Save your key"); click("Not now"); visible("Update your profile"); click("Approve & sign"); pin();
             JSONObject restored=result("restore"); assertEquals(info.getString("npub"),restored.getString("npub")); assertFalse(restored.getBoolean("backed_up")); verify(restored.getJSONObject("profile_event"));
@@ -113,7 +128,7 @@ public class WizardIdFlowTest {
             .put(new JSONArray().put("p").put(publicKey).put("wss://relay.example").put("inbox")));
         // The app cannot rename itself with requester fields; every visible label is catalog-owned.
         for (String skin : new String[]{"light", "dark"}) {
-            if ("dark".equals(skin)) evaluate("document.documentElement.style.cssText='--wz-base:#101018;--wz-text:#f8f4ec;--wz-accent:#b89cff;--wz-warning:#ffd080'");
+            if ("dark".equals(skin)) evaluate("document.documentElement.dataset.skin='nebula';document.documentElement.style.cssText='--wz-base:#05030c;--wz-text:#f3efff;--wz-text-secondary:#b9b0d8;--wz-text-muted:#7d74a3;--wz-border:#cdbeff3d;--wz-accent:#b99bff;--wz-warning:#ffd080;--wz-overlay:#120c25'");
             appCall("devices-" + skin, "sign", devices); visible("Let this Wizard receive for you"); visible("Profiles asks:"); visible("Wizard: " + shortKey);
             screenshot("approval-devices-" + skin + ".png");
             if ("light".equals(skin)) { device.pressBack(); assertTrue(result("devices-" + skin).getBoolean("denied")); alive(); }
@@ -198,7 +213,7 @@ public class WizardIdFlowTest {
         private void respond(Socket s)throws IOException {
             try(Socket client=s){client.setSoTimeout(3000);BufferedReader in=new BufferedReader(new InputStreamReader(client.getInputStream(),StandardCharsets.UTF_8));String request=in.readLine();if(request==null)return;String line;while((line=in.readLine())!=null&&!line.isEmpty()){}
                 String path = request.split(" ")[1]; boolean script = scripts.containsKey(path);
-                String html="<!doctype html><html style='--wz-base:#0f1014;--wz-text:#f4f0e8;--wz-accent:#b69fff;--wz-warning:#ffc15c'><title>Wizard OS</title><!-- core/ isolated fixture --><meta name='viewport' content='width=device-width,initial-scale=1'><body style='background:#0f1014;color:white;padding:100px 24px'><h1>Wizard ID isolated QA</h1><script>window.qaReplies={};</script><script src='/bridge.js'></script>"
+                String html="<!doctype html><html data-skin='nebula' style='--wz-base:#05030c;--wz-text:#f3efff;--wz-text-secondary:#b9b0d8;--wz-text-muted:#7d74a3;--wz-border:#cdbeff3d;--wz-accent:#b99bff;--wz-warning:#ffd080;--wz-overlay:#120c25'><title>Wizard OS</title><!-- core/ isolated fixture --><meta name='viewport' content='width=device-width,initial-scale=1'><body style='background:#05030c;color:white;padding:100px 24px'><h1>Wizard ID isolated QA</h1><script>window.qaReplies={};</script><script src='/bridge.js'></script>"
                     + "<script>WizCore.apps=()=>({APPS:[{id:'profiles',name:'Profiles',kind:'wizard',source:'apps.json',url:'/profiles/'}]});</script><script src='/app-services.js'></script>"
                     + "<iframe id='profiles' src='/profiles/'></iframe><script>WizAppServices.attach(document.getElementById('profiles'),{appId:'profiles',path:'/profiles/'});</script></body></html>";
                 if(path.equals("/profiles/")) html="<!doctype html><title>Profiles</title><script src='/app-client.js'></script><script>WizardApp.ready({name:'Profiles'});</script>";

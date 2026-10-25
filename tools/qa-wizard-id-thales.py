@@ -106,7 +106,8 @@ def acceptance(job, receipt):
         files = ["signed-event.json", "receipt.json", "capture.webp", "onboarding-dark.png",
                  "approval-skin-dark.png", "settings-light.png", "approval-app-light.png", "apps-receipt.json",
                  "approval-devices-light.png", "approval-devices-dark.png", "approval-revoke-dark.png",
-                 "approval-encrypt-dark.png", "approval-decrypt-dark.png", "approval-seal-dark.png"]
+                 "approval-encrypt-dark.png", "approval-decrypt-dark.png", "approval-seal-dark.png",
+                 "create-dark.png", "backup-options-dark.png", "settings-dark.png", "onboarding-light.png", "create-light.png"]
         for name in ("pin-timeout.png", "pin-timeout.xml"):  # failure diagnostics, optional
             subprocess.run([str(adb), "-s", serial, "pull", "/sdcard/Android/data/ai.wizards.os.qa/files/identity-qa/" + name,
                             str(output / name)], env=env, capture_output=True)
