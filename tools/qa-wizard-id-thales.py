@@ -108,7 +108,7 @@ def acceptance(job, receipt):
                  "approval-devices-light.png", "approval-devices-dark.png", "approval-revoke-dark.png",
                  "approval-encrypt-dark.png", "approval-decrypt-dark.png", "approval-seal-dark.png",
                  "create-dark.png", "backup-options-dark.png", "settings-dark.png", "onboarding-light.png", "create-light.png"]
-        for name in ("pin-timeout.png", "pin-timeout.xml", "click-timeout.xml"):  # failure diagnostics, optional
+        for name in ("pin-timeout.png", "pin-timeout.xml", "click-timeout.xml", "visible-timeout.xml"):  # failure diagnostics, optional
             subprocess.run([str(adb), "-s", serial, "pull", "/sdcard/Android/data/ai.wizards.os.qa/files/identity-qa/" + name,
                             str(output / name)], env=env, capture_output=True)
         (output / "logcat.txt").write_text(device("logcat", "-d", "-t", "4000", capture_output=True, text=True).stdout)

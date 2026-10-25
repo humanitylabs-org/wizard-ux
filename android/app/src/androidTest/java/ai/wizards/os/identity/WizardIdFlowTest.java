@@ -177,7 +177,7 @@ public class WizardIdFlowTest {
         CountDownLatch latch=new CountDownLatch(1); AtomicReference<String> v=new AtomicReference<>("null");
         scenario.onActivity(a -> web.evaluateJavascript(script,x -> { v.set(x); latch.countDown(); })); assertTrue(latch.await(10,TimeUnit.SECONDS)); return v.get();
     }
-    private void visible(String text) { assertTrue("Missing native UI: "+text,device.wait(Until.hasObject(By.text(text)),15000)); }
+    private void visible(String text) { if(!device.wait(Until.hasObject(By.text(text)),15000)){try{device.dumpWindowHierarchy(new File(output,"visible-timeout.xml"));}catch(Exception ignored){}fail("Missing native UI: "+text);} }
     private void click(String text) {
         for(int i=0;i<10;i++){UiObject2 v=device.findObject(By.text(text));if(v!=null&&!v.getVisibleBounds().isEmpty()){v.click();return;}java.util.List<UiObject2> ss=device.findObjects(By.scrollable(true));for(int k=ss.size()-1;k>=0;k--)ss.get(k).scroll(Direction.DOWN,.65f);device.waitForIdle();}
         try{device.dumpWindowHierarchy(new File(output,"click-timeout.xml"));}catch(Exception ignored){}fail("Cannot reach "+text);
