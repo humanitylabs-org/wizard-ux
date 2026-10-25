@@ -55,6 +55,23 @@
     }
     return false;
   }
+  // Composer input (paste files/text, drop, Enter policy): the shell's one implementation, core/composer-input.js,
+  // the same code Chats uses. Loaded on first use; a bind made before it lands is queued, unbind is synchronous.
+  let composerLoad = null;
+  function composerModule() {
+    if (window.WizComposerInput) return Promise.resolve(window.WizComposerInput);
+    return composerLoad || (composerLoad = new Promise(resolve => {
+      const s = document.createElement('script'); s.src = '/wizard-os-home/core/composer-input.js';
+      s.onload = () => resolve(window.WizComposerInput || null); s.onerror = () => { composerLoad = null; resolve(null); };
+      (document.head || document.documentElement).appendChild(s);
+    }));
+  }
+  composerModule(); // eager: the first paste must not wait on a network fetch
+  function composerBind(root, opts) {
+    let off = null, dead = false;
+    composerModule().then(m => { if (!dead && m) off = m.bind(root, opts); });
+    return () => { dead = true; if (off) { off(); off = null; } };
+  }
   function ready(meta = {}) {
     if (framed) {
       try { service = parent.WizAppServices?.connect(window, conversationClient) || null; } catch (_) { service = null; }
@@ -318,6 +335,7 @@
       };
     })()),
     badge: Object.freeze({ set: n => service ? service.badge.set(n) : transportReady ? request('badge.set', { n }).then(() => true, () => false) : Promise.resolve(false) }),
+    composer: Object.freeze({ bind: composerBind, insertText: (field, text) => window.WizComposerInput ? window.WizComposerInput.insertText(field, text) : (composerModule(), false) }),
     update: Object.freeze({ hold, onAvailable: fn => listen(updates, fn, updateAvailable || service?.update.available()) }),
     capture: Object.freeze({ start: async opts => { if (['auto', 'command'].includes(opts?.kind)) throw new Error('Capture kind is reserved for Wizard voice; use audio/meeting and task metadata'); if (service) return service.capture.start(opts); if (framed) throw new Error('Shared capture needs the verified synchronous host connection'); const resource=captureModule(); return opts?.resumeId && resource.resume ? resource.resume(standaloneId(),opts.resumeId,opts) : resource.start(standaloneId(), opts); },
       prepare: opts => { if(service) return service.capture.prepare(opts); if(framed) throw new Error('Capture preparation needs the verified host connection'); return captureModule().prepare(standaloneId(),opts); },
