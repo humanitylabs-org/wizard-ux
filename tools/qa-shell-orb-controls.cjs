@@ -32,10 +32,27 @@ const check = (name, condition) => { assert(condition, name); checks.push(name);
         window.wizardOrbPort = {postMessage(text) { window.qaCalls.push(JSON.parse(text)); }};
       });
       const page = await context.newPage();
-      const errors = [];
-      page.on('pageerror', e => errors.push(e.message));
+      const errors = [], consoleErrors = [], requests = [];
+      page.on('pageerror', e => errors.push(e.stack || e.message));
+      page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+      page.on('response', response => requests.push({url: response.url(), status: response.status()}));
+      page.on('requestfailed', request => requests.push({url: request.url(), failure: request.failure()}));
       await page.goto(pageUrl, {waitUntil: 'networkidle'});
-      check(`${bundled}: functional API with controls`, await page.evaluate(() => !!(window.Orb && window.E && window.WosShellOrb?.v === 1)));
+      const readiness = await page.evaluate(() => ({orb: !!window.Orb, e: !!window.E,
+        controls: window.WosShellOrb?.v === 1, port: typeof window.wizardOrbPort?.postMessage,
+        readyState: document.readyState, scripts: [...document.scripts].map(script => script.src)}));
+      if (!readiness.orb || !readiness.e || !readiness.controls) {
+        const crypto = require('node:crypto');
+        const assets = ['assist/everywhere.html', 'assist/everywhere.js', 'assist/orb-size.js', 'orb.js'].map(rel => {
+          const file = path.join(base, rel);
+          return {file, sha256: fs.existsSync(file) ? crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex') : null};
+        });
+        const diagnostic = {root, base, bundled, readiness, errors, consoleErrors, requests, assets};
+        fs.writeFileSync(path.join(out, 'readiness-failure.json'), JSON.stringify(diagnostic, null, 2));
+        console.error(JSON.stringify(diagnostic, null, 2));
+        await page.screenshot({path: path.join(out, 'readiness-failure.png')});
+      }
+      check(`${bundled}: functional API with controls`, readiness.orb && readiness.e && readiness.controls);
       check(`${bundled}: idle controls hidden`, !await page.locator('#shellControls').isVisible());
       await page.evaluate(() => WosShellOrb.status({id: 'take-A', state: 'recording', ms: 8000}));
       for (const id of ['shellCancel', 'shellPause']) {
