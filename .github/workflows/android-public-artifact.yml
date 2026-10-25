@@ -1,0 +1,59 @@
+name: Public Android signed artifact audit
+on:
+  push:
+    branches: [qa/public-android-artifact-20261025]
+    paths: [.github/workflows/android-public-artifact.yml]
+permissions:
+  contents: read
+jobs:
+  signed-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download unchanged public APK and bounded native smoke
+        shell: bash
+        run: |
+          mkdir -p audit
+          curl -fL https://github.com/humanitylabs-org/wizard-ux/releases/download/android-shell-v1.0.1-early-access/wizard-android-companion-1.0.1.apk -o audit/public.apk
+          printf '%s  %s\n' c778c82f240279f7caa039aef929aef6c339cf36d83e3fdd6b7ab3c264b24ee6 audit/public.apk | sha256sum -c -
+          curl -fL https://raw.githubusercontent.com/humanitylabs-org/wizard-ux/4315358891d4bf726c3b98761359092588a98f32/tools/android_shell_smoke.sh -o audit/original-smoke.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('audit/original-smoke.sh').read_text().split('# ---- Optional background recording')[0]
+          assert 'PKG=ai.wizards.shell.test;' in s
+          s=s.replace('PKG=ai.wizards.shell.test;', 'PKG=ai.wizards.shell;')
+          s+='\nadb logcat -d > "$OUT/logcat.txt"\nif grep -q "FATAL EXCEPTION" "$OUT/logcat.txt"; then bad "fatal exception observed"; else pass "no fatal exception observed"; fi\nexit "$fail"\n'
+          Path('audit/smoke.sh').write_text(s)
+          PY
+          bash -n audit/smoke.sh
+      - name: Enable runner KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install and exercise exact signed release (no rebuild)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -memory 3072
+          script: |
+            sleep 60
+            bash audit/smoke.sh audit/public.apk audit/results
+            adb shell dumpsys package ai.wizards.shell > audit/package.txt
+      - name: Evidence scope
+        if: always()
+        run: |
+          printf '%s\n' 'Exact public signed APK; native install/Connect/HTTPS rejection/deeplink/offline/restart/Back only. No debug rebuild, fixture TLS exception, real Wizard/provider, recording or Everywhere claim.' >> "$GITHUB_STEP_SUMMARY"
+          cat audit/results/result.txt >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-android-signed-artifact-audit
+          path: audit
+          retention-days: 7
