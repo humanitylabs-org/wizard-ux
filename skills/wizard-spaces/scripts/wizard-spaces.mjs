@@ -7,7 +7,7 @@ const AGENT_ID = /^[a-z0-9][a-z0-9-]{0,47}(?![\s\S])/u
 const agentOf = s => s.agent || 'hermes'
 function argumentsFor(argv) {
   const args = [...argv], i = args.indexOf('--agent')
-  let agent
+  let agent = 'hermes'
   if (i >= 0) { agent = args[i + 1]; if (!AGENT_ID.test(agent || '')) throw new Error('Invalid agent id'); args.splice(i, 2) }
   return { args, agent }
 }
@@ -15,7 +15,7 @@ const validName = s => typeof s === 'string' && s.trim().length > 0 && s.length 
 export function editSpaces(current, argv) {
   const { args: [command, id, ...args], agent } = argumentsFor(argv)
   const spaces = structuredClone(current)
-  if (command === 'list') return agent ? spaces.filter(s => agentOf(s) === agent) : spaces
+  if (command === 'list') return spaces.filter(s => agentOf(s) === agent)
   if (command === 'create') {
     const name = id
     if (!validName(name)) throw new Error('Name must be 1–60 characters without control characters')
@@ -71,7 +71,7 @@ export async function run(args, { url = process.env.WIZARD_UI_PREFERENCES_URL ||
     const after = await prefs()
     if (JSON.stringify(after.spaces) !== JSON.stringify(next)) throw new Error('Spaces read-back differs; concurrent edit or failed persistence. Re-read before retrying.')
   }
-  return { spaces: next, ...(parsed.args[0] === 'create' ? { created: next.at(-1) } : {}) }
+  return { spaces: next.filter(s => agentOf(s) === parsed.agent), ...(parsed.args[0] === 'create' ? { created: next.at(-1) } : {}) }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   run(process.argv.slice(2)).then(value => console.log(JSON.stringify(value, null, 2))).catch(error => { console.error(error.message); process.exitCode = 1 })
