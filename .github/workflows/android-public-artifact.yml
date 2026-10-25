@@ -23,6 +23,28 @@ jobs:
           s=Path('audit/original-smoke.sh').read_text().split('# ---- Optional background recording')[0]
           assert 'PKG=ai.wizards.shell.test;' in s
           s=s.replace('PKG=ai.wizards.shell.test;', 'PKG=ai.wizards.shell;')
+          # Fix the inherited selector's replace(..., 0): it never matched class="...".
+          s=s.replace("f'{want}\"' in n.replace('class=\"','class=',0) and want[6:] in n", "f'class=\"{want[6:]}\"' in n")
+          # A launcher ANR can arrive between the first assertion and typing. Dismiss then retry
+          # the untouched first-launch screen, without weakening the HTTPS rejection assertion.
+          old='tap_text first "class=android.widget.EditText"\nadb shell input text "http://not-https.example"\ndump typed; tap_text typed "Connect"'
+          new='''for attempt in 1 2 3; do
+            dump inputready
+            if system_anr inputready; then dump inputready; fi
+            tap_text inputready "class=android.widget.EditText"
+            adb shell input text "http://not-https.example"
+            dump typed
+            if has typed 'text="http://not-https.example"'; then break; fi
+            system_anr typed || true
+            adb shell am force-stop "$PKG"
+            adb shell am start -W -n "$ACT" >/dev/null 2>&1
+            wait_for first "Connect to your Wizard" 20
+          done
+          has typed 'text="http://not-https.example"' && pass "invalid address actually entered" || bad "invalid address actually entered"
+          adb shell input keyevent KEYCODE_BACK
+          dump typed; tap_text typed "Connect"'''
+          assert old in s
+          s=s.replace(old,new)
           s+='\nadb logcat -d > "$OUT/logcat.txt"\nif grep -q "FATAL EXCEPTION" "$OUT/logcat.txt"; then bad "fatal exception observed"; else pass "no fatal exception observed"; fi\nexit "$fail"\n'
           Path('audit/smoke.sh').write_text(s)
           PY
