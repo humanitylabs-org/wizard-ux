@@ -55,6 +55,32 @@
     }
     return false;
   }
+  // Composer input (paste files/text, drop, Enter policy): the shell's one implementation, core/composer-input.js,
+  // the same code Chats uses. Loaded on first use; a bind made before it lands is queued, unbind is synchronous.
+  let composerLoad = null;
+  function composerModule() {
+    if (window.WizComposerInput) return Promise.resolve(window.WizComposerInput);
+    return composerLoad || (composerLoad = new Promise(resolve => {
+      const s = document.createElement('script'); s.src = '/wizard-os-home/core/composer-input.js';
+      s.onload = () => resolve(window.WizComposerInput || null); s.onerror = () => { composerLoad = null; resolve(null); };
+      (document.head || document.documentElement).appendChild(s);
+    }));
+  }
+  composerModule(); // eager: the first paste must not wait on a network fetch
+  function composerBind(root, opts) {
+    let off = null, dead = false;
+    composerModule().then(m => { if (!dead && m) off = m.bind(root, opts); });
+    return () => { dead = true; if (off) { off(); off = null; } };
+  }
+  // Esc in an app opened on its own (not inside Wizard, which routes Esc to Back itself): close the topmost
+  // overlay from anywhere; leave a nested view only when the key is not typed into a field.
+  if (!framed) addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || e.repeat) return;
+    const t = e.target, typing = !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ''));
+    if (!overlays.length && typing) return;
+    let did = false; try { did = back(); } catch (_) {}
+    if (did) e.preventDefault();
+  });
   function ready(meta = {}) {
     if (framed) {
       try { service = parent.WizAppServices?.connect(window, conversationClient) || null; } catch (_) { service = null; }
@@ -314,6 +340,7 @@
     titlebar: Object.freeze({ set: (tools, onTool) => { toolHandler = typeof onTool === 'function' ? onTool : null; return service ? Promise.resolve(service.titlebar.set(tools)) : transportReady ? request('titlebar.set', { tools }).then(v => v === true, () => false) : Promise.resolve(false); },
       shown: () => { try { return !!service?.titlebar.shown(); } catch (_) { return false; } } }),
     badge: Object.freeze({ set: n => service ? service.badge.set(n) : transportReady ? request('badge.set', { n }).then(() => true, () => false) : Promise.resolve(false) }),
+    composer: Object.freeze({ bind: composerBind, insertText: (field, text) => window.WizComposerInput ? window.WizComposerInput.insertText(field, text) : (composerModule(), false) }),
     update: Object.freeze({ hold, onAvailable: fn => listen(updates, fn, updateAvailable || service?.update.available()) }),
     capture: Object.freeze({ start: async opts => { if (['auto', 'command'].includes(opts?.kind)) throw new Error('Capture kind is reserved for Wizard voice; use audio/meeting and task metadata'); if (service) return service.capture.start(opts); if (framed) throw new Error('Shared capture needs the verified synchronous host connection'); const resource=captureModule(); return opts?.resumeId && resource.resume ? resource.resume(standaloneId(),opts.resumeId,opts) : resource.start(standaloneId(), opts); },
       prepare: opts => { if(service) return service.capture.prepare(opts); if(framed) throw new Error('Capture preparation needs the verified host connection'); return captureModule().prepare(standaloneId(),opts); },

@@ -140,6 +140,7 @@
     "core/chats.css",
     "core/chats.js",
     "core/commands.js",
+    "core/composer-input.js",
     "core/config.js",
     "core/core.js",
     "core/deeplink.js",
@@ -683,6 +684,13 @@
       "note": "Direct entrypoint import"
     },
     "core/commands.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/composer-input.js": {
       "loadedBy": [
         "phone",
         "desktop"
