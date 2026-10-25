@@ -136,7 +136,7 @@ async function routingMatrix(b) {
    const scoped=agent.startsWith('space:')?(sharedSpaces.find(s=>s.id===agent.slice(6))?.agent||'hermes'):agent;const target=scoped==='hermes'?'':scoped;
    ok(actual.length===2&&actual.every(w=>(new URLSearchParams(w.query).get('agent')||'')===target&&(JSON.parse(w.body).agent||'')===target),mode+' ROUTING '+name+' → '+agent,actual);return actual;
   };
-  for(const agent of ['philosopher','hermes','private']) {
+  for(const agent of ['philosopher','hermes','private','archimedes-new']) {
    await check('list +',async()=>{await activate(p,'[data-chfab]:visible');await send();},agent);
    await check('__new__ composer',async()=>{await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');a.chats.openChat(w.id,'__new__');});await send();},agent);
   }
