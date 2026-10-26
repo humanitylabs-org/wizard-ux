@@ -231,3 +231,12 @@ test('a dismissal holds for the tour too: banner × before the tour, or a skippe
   r.T.start('help'); r.tap('[data-tnext]'); r.tap('[data-tnext]');
   assert.equal(r.T.step, r.T.DONE, 'skipped once: Practice again does not offer it for the snooze period');
 });
+
+test('Skip tour on the Android install beat also snoozes the banner (Codex P2 on #549)', () => {
+  const t = boot({ ua: UA.androidChrome });
+  t.fire('beforeinstallprompt', t.promptEvent());
+  t.toInstall(); assert.equal(t.T.step, t.T.INSTALL);
+  t.tap('[data-tskip]');
+  assert.ok(!t.T.active);
+  assert.equal(t.shown().length, 0, 'no banner right after saying no to installing');
+});

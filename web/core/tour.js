@@ -227,6 +227,8 @@
   function finish(how) {
     if (!el) return;
     clearTimers(); log('finish:' + how);
+    // Skip tour on the Install beat is a no to installing as well: snooze the banner like Skip this step does.
+    if (how === 'skip' && step === INSTALL && offer?.kind === 'prompt') window.WizardPwaInstall?.dismiss?.();
     step = 0; inbox = false; busy = false; mark();
     H.orbWrap.classList.remove('tr-pulse');
     el.classList.remove('on'); H.device.classList.remove('touring');
