@@ -2608,14 +2608,18 @@
     if (!vv || navigator.standalone === true || mm('(display-mode: standalone)') || mm('(display-mode: fullscreen)') || DEV() || window.WizardOSNative) return;
     let cur = 0;
     const typing = () => { const a = document.activeElement; return !!a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName || '')); };
-    const apply = () => {
-      if (typing()) return;
-      const shown = vv.offsetTop + vv.height, bottom = device.getBoundingClientRect().bottom;
-      const cover = Math.round(bottom - shown);
-      const v = cover > 6 && cover < 220 ? cover : 0;
+    const set = v => {
       if (v === cur) return;
       cur = v; root.style.setProperty('--vv-b', v + 'px'); root.dataset.browserBar = v ? String(v) : '';
       window.__vvLog = (window.__vvLog || []).concat('vv-b:' + v).slice(-20);
+    };
+    const apply = () => {
+      // Typing: the keyboard replaces Safari's bottom bar, and the composers handle the keyboard themselves, so no
+      // bar inset at all (and the keyboard-sized viewport change is never mistaken for a bar).
+      if (typing()) return set(0);
+      const shown = vv.offsetTop + vv.height, bottom = device.getBoundingClientRect().bottom;
+      const cover = Math.round(bottom - shown);
+      set(cover > 6 && cover < 220 ? cover : 0);
     };
     vv.addEventListener('resize', apply); vv.addEventListener('scroll', apply); addEventListener('resize', apply);
     addEventListener('focusout', () => setTimeout(apply, 350)); addEventListener('orientationchange', () => setTimeout(apply, 350));
@@ -2627,6 +2631,10 @@
   function micNeverOpened(why) {
     if (V.rec || V.native || V.state === 'idle') return;
     window.__voiceLog = (window.__voiceLog || []).concat('mic-never-opened:' + why).slice(-20);
+    // A microphone borrowed from a browser meeting goes straight back: nothing was recorded, so no recording custody
+    // (cancelVoice would otherwise keep an empty "cancelled meeting interruption").
+    const loan = V.meetingLoan;
+    if (loan && !V.parts.length && !(V.chunks || []).length) { V.meetingLoan = null; Promise.resolve().then(() => window.WosOrbHandoff?.end?.(loan, { status: 'cancelled' })).catch(() => {}); }
     cancelVoice(true);
     const text = why === 'timeout' ? 'The microphone didn’t start. Allow it for this site, then tap the orb again.' : 'The microphone didn’t start, so nothing was recorded. Tap the orb to try again.';
     toast('🎙', text, 5200); tourEv('voicefail', { text });
