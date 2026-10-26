@@ -506,6 +506,18 @@ body {
 /* ---------- coming-soon frame (app published from another thread) ---------- */
 .frame-coming { display: none; position: absolute; inset: 0; z-index: 2; place-content: center; text-align: center; padding: 0 26px; background: radial-gradient(120% 80% at 50% 30%, rgba(63, 224, 255, .08), transparent 60%), #0c0a18; }
 .frame-wrap.coming .frame-coming { display: grid; justify-items: center; }
+/* Opening feedback: a tapped app tile answers at once, and a window shows its app with a spinner until the
+   app's page has loaded, so a slow app never looks like a missed tap (James, 26 Oct 2026). */
+.wos-spin { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 2px solid color-mix(in oklab, currentColor 25%, transparent); border-top-color: var(--violet-2, #b69cff); animation: spin .8s linear infinite; vertical-align: -2px; }
+.frame-loading { display: none; position: absolute; inset: 0; z-index: 1; place-content: center; justify-items: center; gap: 18px; background: inherit; pointer-events: none; }
+.frame-wrap.loading .frame-loading { display: grid; }
+.frame-wrap.loading.coming .frame-loading, .frame-wrap.loading.blocked .frame-loading { display: none; }
+.frame-loading .glyph { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; font-size: 30px; background: linear-gradient(135deg, var(--g1), var(--g2)); box-shadow: 0 10px 30px rgba(0, 0, 0, .3); }
+.frame-loading .wos-spin { width: 22px; height: 22px; color: var(--ink-3, #8d8aa3); }
+.lapp.opening .ic { transform: scale(.92); }
+.lapp.opening .ic::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid transparent; border-top-color: var(--violet-2, #b69cff); border-right-color: var(--violet-2, #b69cff); animation: spin .8s linear infinite; pointer-events: none; }
+.lapp.opening .nm { opacity: .7; }
+@media (prefers-reduced-motion: reduce) { .wos-spin, .lapp.opening .ic::after { animation: spin 1.6s linear infinite !important; animation-iteration-count: infinite !important; animation-duration: 1.6s !important; } }
 .frame-wrap.coming .appframe { visibility: hidden; }
 .frame-coming .glyph { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; font-size: 30px; background: linear-gradient(135deg, var(--g1), var(--g2)); box-shadow: 0 10px 30px rgba(63, 224, 255, .2); margin-bottom: 16px; }
 .frame-coming h3 { margin: 0 0 6px; font-size: 18px; font-weight: 700; }
