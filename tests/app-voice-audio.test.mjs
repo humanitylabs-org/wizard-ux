@@ -39,6 +39,10 @@ for(const options of [{id:'foreign'},{id:'radio',provides:['background-audio'],a
 for(const alter of [f=>f.frame.isConnected=false,f=>f.win.location=new URL('https://foreign.example/wizard-music/'),f=>f.win.location=new URL('https://wizard.example/adjacent/'),f=>f.frame.src='https://wizard.example/adjacent/',f=>f.win.document={}])test('foreign, navigated or closed document cannot invoke native audio '+alter.toString(),async()=>{
   const f=fixture();alter(f);await assert.rejects(Promise.resolve().then(()=>f.service.device.backgroundAudio.request('play')));assert.equal(f.sent.length,0);
 });
+test('legacy pilot id cannot grant a renamed or foreign document',()=>{
+  const f=fixture();f.app.url='/adjacent/';assert.equal(f.c.WizBackgroundAudio.canAttach(f.win),false);
+  f.app.url='https://foreign.example/wizard-music/';assert.equal(f.c.WizBackgroundAudio.canAttach(f.win),false);
+});
 test('voice handler claims app grammar and receives unchanged utterance, once',async()=>{
   const f=fixture({id:'reader'}),claim=f.c.WizAppServices.voiceCommand('test provider grammar',{kind:'command',view:{kind:'home'}});
   assert.equal(claim.action,'app_voice');assert.equal(claim.appId,'reader');let done;

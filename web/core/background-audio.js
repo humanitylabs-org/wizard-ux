@@ -5,7 +5,7 @@
   const TYPE = 'wizard:background-audio:v1', pending = new Map(), states = new Map();
   const METHODS = new Set(['capabilities','attach','state','load','play','pause','seek','next','previous','jump','enqueueNext','removeCurrent','removeUpcoming','volume','detach','stop']);
   let registry = () => ({}), admit = () => false, seq = 0, boundPort, owner = null;
-  const granted = (id, app) => !!app && (app.provides?.includes('background-audio') || window.WizBackgroundAudioLegacy?.granted(id));
+  const granted = (id, app) => !!app && (app.provides?.includes('background-audio') || window.WizBackgroundAudioLegacy?.granted(id, app));
   function frameApp(win, origin = location.origin) {
     if (!win || win === window || origin !== location.origin) return null;
     const f = [...document.querySelectorAll('iframe.appframe')].find(f => f.contentWindow === win);
