@@ -1,8 +1,8 @@
-# Wizard OS components: reuse before build
+# Wizard OS components
 
-**One implementation per capability.** Reuse/extend below. NEW: `web/core/` plus a row, never an app.
+**One implementation per capability.** Extend below; NEW lives in `web/core/`.
 
-CI: Reuse block, globals; apps: [reuse gate](app-reuse-gate.md).
+CI: Reuse + globals; [app gate](app-reuse-gate.md).
 
 ```
 Reuse:
@@ -59,8 +59,9 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Settings in both shells | `WosSettings.register` (`web/core/settings.js`); `focus(id)` routes aliases (empty/false opens root); `WosFeatures` actions/views | shell-only pages |
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`web/core/agents.js`) | hard-coded agent names or colours |
 | App source labels, `wizard://install` | `sourceLabel`, `parseInstallLink` (`web/store/`) | own badges |
-| App routing to an agent, incl. the private-app note and Set up private agent (also from the Store install sheet) | `WosAppRoute` (`web/core/app-route.js`) | — |
+| App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`web/core/app-route.js`) | — |
 | App glyph tiles | `WizSigil` (`web/core/sigils.js`, `web/core/sigils.css`) | PNG/emoji icons |
+| Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs + temporary defaults | app lists |
 | App groups | `WosAppKinds` (`web/core/app-kinds.js`) | forks |
 | Brand hat | `WizBrand` (`web/core/brand.js`) | redrawn logos |
 | Links: in-app sheet, image links, long-press Open in your browser / Download / Copy link | `WizLinks` (`web/core/links.js`; Android: `WizardOSNative.openInBrowser` / `download`) | `window.open`, own iframe sheet, own link menu |

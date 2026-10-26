@@ -18,8 +18,9 @@
  *   ⌥/            all keys                    ⌥[ ⌥]      previous / next workspace
  *   Esc           close the top layer (never leaves the app)
  */
-(() => {
+(async () => {
   'use strict';
+  if (window.WizLauncher?.ready) await window.WizLauncher.ready;
   if (document.documentElement.dataset.leaving) return; // core/shell.js is switching to the other shell
   const C = window.WizCore;
   const { esc, clip, norm, ago, emoOf } = C;
@@ -664,7 +665,7 @@
     const pending = OUTBOX?.unsent() || [];
     const working = LIVE?.ok ? LIVE.workGroups().working || [] : [];
     const rows = list => list.slice(0, 6).map(s => `<button class="home-row" data-thread="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span><span class="nm">${esc(s.title)}</span><time>${esc(ago(LIVE.cardAt(s)))}</time></button>`).join('') || '<div class="home-none">Nothing here.</div>';
-    const quick = ['wizard', ...APPS.filter(a => a.agent).map(a => a.id), 'wizard-signal', 'wisdom', 'shopping', 'mizel', 'files', 'console', 'legacy-wizard', 'app-store'].map(id => APP[id]).filter(Boolean);
+    const quick = (window.WizLauncher?.get('desktopQuick') || []).flatMap(id => id === 'wizard' ? [id, ...APPS.filter(a => a.agent).map(a => a.id)] : [id]).map(id => APP[id]).filter(Boolean);
     return `<div class="home-in">
       <nav class="home-tools" aria-label="System and settings"><button data-home-settings>Settings</button></nav>
       <div class="home-time">${window.WizConfig.hm()}</div>
