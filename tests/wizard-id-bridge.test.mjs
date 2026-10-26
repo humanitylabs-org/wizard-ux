@@ -96,7 +96,8 @@ test('pending ID reply stays bound to the exact requesting document, including s
 test('identity helpers use the existing app-client transport and approval-sized timeout', async () => {
   const sent = [], timers = [], listeners = {}, parent = { postMessage(m) { sent.push(m); } };
   const window = { parent, addEventListener(t, f) { listeners[t] = f; }, dispatchEvent() {} };
-  const document = { hidden: false, readyState: 'loading', referrer: 'https://wizard.example/wizard-os-home/', documentElement: { dataset: {} }, addEventListener() {} };
+  const el = () => ({ dataset: {}, style: {}, setAttribute() {}, appendChild() {}, append() {} });
+  const document = { hidden: false, readyState: 'loading', referrer: 'https://wizard.example/wizard-os-home/', documentElement: { dataset: {}, appendChild() {} }, head: { appendChild() {}, querySelectorAll: () => [] }, createElement: el, querySelector: () => null, querySelectorAll: () => [], addEventListener() {} };
   vm.runInNewContext(readFileSync(new URL('../web/core/app-client.js', import.meta.url), 'utf8'), { window, parent, document, location: new URL('https://wizard.example/profiles/'), URL, history: { pushState() {}, replaceState() {}, back() {} }, CustomEvent: class {}, addEventListener(t, f) { listeners[t] = f; }, setTimeout(f, ms) { timers.push(ms); return timers.length; }, clearTimeout() {}, console });
   for (const method of ['info', 'sign', 'nip44_encrypt', 'nip44_decrypt']) {
     const pending = window.WizardApp.identity[method]({ kind: 13, pubkey: 'public', plaintext: 'text', ciphertext: 'sealed' });

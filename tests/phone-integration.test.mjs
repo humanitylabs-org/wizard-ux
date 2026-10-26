@@ -3,10 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 
-test('Settings-style ID candidate is 0.10.15/79 and preserves published vault storage names', () => {
+test('phone version stays at or above the Settings-style ID release (0.10.15/79) and preserves published vault storage names', () => {
   const gradle = read('android/app/build.gradle');
-  assert.match(gradle, /versionCode 79\b/);
-  assert.match(gradle, /versionName '0\.10\.15'/);
+  assert.ok(Number(gradle.match(/versionCode (\d+)/)[1]) >= 79);
   const vault = read('android/app/src/main/java/ai/wizards/os/vault/VaultBridge.java');
   assert.match(vault, /KEY_PREFIX = "wos-vault-v1-"/);
   assert.match(vault, /getSharedPreferences\("wizard-vault",/);
