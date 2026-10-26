@@ -84,6 +84,12 @@
       "classification": "preview",
       "reason": "Opt-in Live Mode motion styles."
     },
+    "core/offline-apps.js": {
+      "shell": "phone", "classification": "native", "reason": "Reviewed opt-in capability table for Android pinned single-app tasks; imported by the scoped shell worker too."
+    },
+    "core/offline-session.js": {
+      "shell": "phone", "classification": "native", "reason": "Prepare a pinned Android app's small offline host before mounting its existing frame."
+    },
     "core/home-screen-policy.js": {
       "shell": "phone",
       "classification": "native",
@@ -211,6 +217,10 @@
     "pwa-install.js"
   ],
   "coreModules": {
+    "core/offline-apps.js": { "loadedBy": ["phone"], "note": "Reviewed offline app capabilities, also imported by the shell worker" },
+    "core/offline-session.js": { "loadedBy": ["phone"], "note": "Android pinned app-session offline host preparation" },
+    "core/offline-kit.js": { "loadedBy": [], "note": "Opt-in shared app replica/outbox client, vendored by offline-capable apps" },
+    "core/offline-sw.js": { "loadedBy": [], "note": "Shared scoped worker runtime, imported only by configured offline workers" },
     "core/device-port.js": { "loadedBy": ["phone"], "note": "Optional Android shell transport" },
     "core/device-recording.js": { "loadedBy": ["phone"], "note": "Optional Android shell recorder" },
     "core/device-orb.js": { "loadedBy": ["phone"], "note": "Optional Android shell overlay" },

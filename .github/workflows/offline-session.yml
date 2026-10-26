@@ -1,0 +1,22 @@
+name: Offline app-session shell
+on:
+  pull_request:
+    paths:
+      - 'web/**'
+      - 'tools/build-offline-session.py'
+      - 'tests/*offline*'
+      - '.github/workflows/offline-session.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  scoped-cache-and-back:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python3 tools/build-offline-session.py --check
+      - run: node tests/offline-worker.test.cjs
+      - run: node --test tests/home-screen-apps.test.mjs tests/responsive-features.test.mjs tests/wizard-pin-opens-wisdom-offline.test.cjs

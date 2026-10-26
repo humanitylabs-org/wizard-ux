@@ -47,7 +47,9 @@
   // Never migrate /sw.js at scope / (Social's historical root worker is not app-owned).
   window.WizCore.appMigrations = Object.freeze({
     'wizard-signal': { scope: '/wizard-signal/', scripts: ['/wizard-signal/sw.js'], caches: [] },
-    wisdom: { scope: '/wisdom/', scripts: ['/wisdom/sw.js'], caches: [] },
+    // Wisdom now owns an opt-in offline reading worker at this exact URL.
+    // Unregistering it on frame load races clients.claim() and strands pinned readers.
+    // Its generation updates through the shared offline kit, not legacy cleanup.
     'wisdom-next': { scope: '/wisdom-next/', scripts: ['/wisdom-next/sw.js'], caches: [] },
     social: { scope: '/wizard-social/', scripts: ['/wizard-social/sw.js'], caches: [] },
     trackhunt: { scope: '/trackhunt/', scripts: ['/trackhunt/sw.js', '/trackhunt/__pwa/service-worker.js'], caches: ['trackhunt-v1-20260711d'] },
@@ -67,6 +69,7 @@
     url: a.source === 'apps.json' && a.view?.mode === 'own' && a.view.url === `/wizard/views/${a.id}/` ? a.view.url : a.url || '', desc: a.desc || '',
     ...(a.desktop_only ? { desktopOnly: true } : {}), source: a.source || '', system: a.system === true,
     receives_voice_input: trusted === true && a.receives_voice_input === true,
+    offline: window.WizOfflineApps?.allows(String(a.id), a.source === 'apps.json' && a.view?.mode === 'own' ? a.view.url : a.url || '') === true,
     sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [] },
   });
   let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).map(toTile); } catch (e) { return []; } })();
