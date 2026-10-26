@@ -56,6 +56,7 @@ public final class HomeScreenShortcuts {
             && ("/wizard-os-home/".equals(u.getPath()) || "/wizard-os-home/index.html".equals(u.getPath()))
             && u.getQueryParameter("app-session") == null;
     }
+    private static final java.util.concurrent.ExecutorService WORKER = java.util.concurrent.Executors.newSingleThreadExecutor();
     public static void attach(Activity activity, WebView web) {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) return;
         final HomeScreenPolicy.TapGate touch = new HomeScreenPolicy.TapGate(android.view.ViewConfiguration.get(activity).getScaledTouchSlop());
@@ -81,6 +82,8 @@ public final class HomeScreenShortcuts {
                     java.util.function.Consumer<String> send = status -> {
                         try { if (trusted(view,origin)) reply.postMessage(new JSONObject().put("requestId",request).put("status",status).toString()); } catch (Exception ignored) { /* navigation closed port */ }
                     };
+                    // ShortcutManager queries/updates are @WorkerThread; replies go back on the UI thread.
+                    java.util.function.Consumer<String> sendLater = status -> activity.runOnUiThread(() -> send.accept(status));
                     ShortcutManager manager = activity.getSystemService(ShortcutManager.class);
                     if (manager == null) { send.accept("unsupported"); return; }
                     String op = data.optString("op");
@@ -88,21 +91,32 @@ public final class HomeScreenShortcuts {
                         // One bounded candidate query; never enumerate another package or create a shortcut.
                         org.json.JSONArray candidates = data.optJSONArray("candidates"), found = new org.json.JSONArray();
                         if (candidates == null || candidates.length() > 128) return;
-                        java.util.List<ShortcutInfo> shortcuts = manager.getPinnedShortcuts();
-                        java.util.Set<String> seen = new java.util.HashSet<>();
+                        java.util.List<String> ids = new java.util.ArrayList<>();
                         for (int i = 0; i < candidates.length(); i++) {
                             String candidate = candidates.getString(i);
                             if (!HomeScreenPolicy.validId(candidate)) return;
-                            String id = HomeScreenPolicy.identity(origin,candidate);
-                            for (ShortcutInfo shortcut : shortcuts)
-                                if (ownsPinned(activity,shortcut,id) && seen.add(candidate)) found.put(candidate);
+                            ids.add(candidate);
                         }
-                        if (trusted(view,origin)) reply.postMessage(new JSONObject().put("requestId",request)
-                            .put("status","pinned-list").put("appIds",found).toString());
+                        WORKER.execute(() -> {
+                            try {
+                                java.util.List<ShortcutInfo> shortcuts = manager.getPinnedShortcuts();
+                                java.util.Set<String> seen = new java.util.HashSet<>();
+                                for (String candidate : ids) {
+                                    String id = HomeScreenPolicy.identity(origin,candidate);
+                                    for (ShortcutInfo shortcut : shortcuts)
+                                        if (ownsPinned(activity,shortcut,id) && seen.add(candidate)) found.put(candidate);
+                                }
+                                String out = new JSONObject().put("requestId",request).put("status","pinned-list").put("appIds",found).toString();
+                                activity.runOnUiThread(() -> { try { if (trusted(view,origin)) reply.postMessage(out); } catch (Exception ignored) { /* port closed */ } });
+                            } catch (Exception ignored) { /* fail closed */ }
+                        });
                         return;
                     }
                     if (!HomeScreenPolicy.validId(app)) return;
-                    if ("refresh".equals(op)) { send.accept(refresh(activity,data)); return; }
+                    if ("refresh".equals(op)) {
+                        WORKER.execute(() -> { String r; try { r = refresh(activity,data); } catch (Exception error) { r = "error"; } sendLater.accept(r); });
+                        return;
+                    }
                     if (!manager.isRequestPinShortcutSupported()) { send.accept("unsupported"); return; }
                     if ("status".equals(op)) { send.accept(pinned(activity,app) ? "pinned" : "ready"); return; }
                     if (!"pin".equals(op)) return;
