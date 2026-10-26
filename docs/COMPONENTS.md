@@ -78,6 +78,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Android shell capabilities | `WosDevicePort` (`web/core/device-port.js`), `WosDeviceRecording` (`web/core/device-recording.js`), `WosDeviceOrb` (`web/core/device-orb.js`); `wizardDevicePort` v1 | another envelope or recorder/store; ack before durable custody |
 | Add an app to the home screen | `WizHomeScreenApps.attach / offer / canOffer` (`web/core/home-screen-apps.js`): native pin or direct-link guide; pins self-refresh; optional `WosExperience` arrange/download tweak; docs/pwa-app-install.md | a second long-press menu or pin sheet per surface |
 | Android long-screenshot (scroll capture) and text selection in the WebView | `ScrollAccessibilityProvider`, `ChatScrollCapture` + `android/app/src/main/assets/scroll-capture.js`, `SelectionWebView` (`android/app/src/main/java/ai/wizards/os/`) | a second accessibility provider or capture path | capture of a long Chats thread on a real device |
+| Thin Android client: open the selected Wizard with connect / change Wizard, can't-reach, mic and camera for that exact origin, file picking, Back | `WizardShell` (`android/shell/`, package `ai.wizards.shell`; no JS bridge, the Wizard sees an ordinary browser; see `android/shell/README.md`) | a feature, screen or `@JavascriptInterface` in the shell; a second connect flow | `tools/android_shell_smoke.sh` on an emulator (CI `android-shell.yml`) |
 
 ## Visual (drawn/animated: side-by-side screenshot under `Visual:`)
 
