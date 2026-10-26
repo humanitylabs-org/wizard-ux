@@ -9,10 +9,12 @@ const ok=(c,n)=>{assert(c,n);console.log('PASS '+n)};
 const shot=n=>fs.writeFileSync(path.join(out,n+'.png'),execFileSync(adbBin,['exec-out','screencap','-p'],{timeout:20000}));
 // Android WebView rejects Playwright's connectOverCDP (Browser.setDownloadBehavior: "Browser context
 // management is not supported"), so this test drives the page over its own CDP websocket.
+let wvOrigin=null;
 function webviewOrigin(){
- adb('shell','uiautomator','dump','/data/local/tmp/wv.xml');const x=adb('shell','cat','/data/local/tmp/wv.xml');
+ if(wvOrigin)return wvOrigin;let x='';
+ try{adb('shell','uiautomator','dump','/data/local/tmp/wv.xml');x=adb('shell','cat','/data/local/tmp/wv.xml');}catch(e){console.log('uiautomator dump failed; assuming edge-to-edge WebView at 0,0');return wvOrigin={x:0,y:0};}
  const m=[...x.matchAll(/class="android\.webkit\.WebView"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/g)].map(m=>m.slice(1).map(Number)).sort((a,b)=>(b[2]-b[0])*(b[3]-b[1])-(a[2]-a[0])*(a[3]-a[1]))[0];
- if(!m)throw Error('WebView bounds not found on screen');return {x:m[0],y:m[1]};
+ if(!m){console.log('WebView bounds not in dump; assuming 0,0');return wvOrigin={x:0,y:0};}console.log('WebView origin',m[0],m[1]);return wvOrigin={x:m[0],y:m[1]};
 }
 function cdpPage(wsUrl){
  return new Promise((resolve,reject)=>{
