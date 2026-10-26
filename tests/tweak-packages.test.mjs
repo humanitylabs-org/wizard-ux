@@ -158,3 +158,23 @@ test('slot lookup prefers a visible instance over hidden Chats copies (desktop)'
   assert.match(src, /getClientRects\(\)\.length > 0\)/);
   assert.match(src, /querySelectorAll\(selector\)\]\.find\(seen\)/);
 });
+
+test('beside hook: layout-gated event on change only, never a route event, and route().beside for late packages', async () => {
+  const f = fixture(); let api; const seen = [], routes = [];
+  f.host._test.setImporter(async () => ({ default: a => { api = a; return () => {}; } }));
+  await f.host.loadTweaks(['miguel/snooze-someday'], f.slots, { teamAuthors: ['miguel'] });
+  assert.throws(() => api.on('beside', () => {}), /requires layout/); assert.equal(api.mount, undefined);
+  await f.host.loadTweaks(['miguel/swipe-strip'], f.slots, { teamAuthors: ['miguel'] });
+  api.on('beside', b => seen.push(b.side)); api.on('route', r => routes.push(r));
+  f.setRoute({ beside: 1 }); f.setRoute({ beside: 1 }); f.setRoute({ beside: -1 }); f.setRoute({ beside: 0 });
+  assert.deepEqual(seen, [1, -1, 0]); assert.equal(routes.length, 0, 'route listeners see nothing new');
+  f.setRoute({ beside: 7 }); assert.equal(api.route().beside, 1, 'normalised to -1 | 0 | 1');
+  const node = f.doc.createElement('button'); api.mount(node); assert.ok(f.doc.body.children.includes(node));
+  await f.clear(); assert.ok(!f.doc.body.children.includes(node), 'host removes mounted controls'); f.setRoute({ beside: -1 }); assert.deepEqual(seen, [1, -1, 0, 1]);
+});
+test('app.js tells the host when the bound view beside a thread changes, and reports it in route()', () => {
+  const app = read('web/app.js');
+  const peek = app.slice(app.indexOf('function syncPeek()'), app.indexOf('function detachBound('));
+  assert.match(peek, /device\.classList\.toggle\('bound-view-peeking', left\);\s*window\.WosSkinHost\?\.beside\?\.\(\);/);
+  assert.match(app, /beside: device\.classList\.contains\('bound-peeking'\) \? 1 : device\.classList\.contains\('bound-view-peeking'\) \? -1 : 0/);
+});
