@@ -32,6 +32,19 @@ Stays core: Chats, Settings, Agents, App Store, Setup, Troubleshooter, side butt
 | 11 | Food on real Grab: James teaches and replays one order to the checkout stop | handset recording, or logged pre-existing defect + James's call | none | handset |
 | 12 | APK release B: legacy methods, Mizel constants and server aliases deleted | A installed for a stated period, no legacy caller in logs | none | APK |
 
+## Web slices 5+6 contract
+
+Reuse: `WizCore.apps`, verified `WizAppServices` / `WizardApp` frame connection, native audio port.
+Extend: registry `voice_names` for literal open-app aliases; registry `provides` for `background-audio` admission; existing command dispatch and shared SDK.
+New: `app-voice.js` routing only; `voice-legacy.js` and `background-audio-legacy.js` deletion-bounded compatibility (COMPONENTS rows).
+
+- Registry order is the install order for competing `voice_names`: the first declaration wins; later conflicting claims are refused with a console warning. Names are normalized exactly like existing app lookup. Cached registry entries retain aliases, but new audio grants require a fresh trusted registry response.
+- `WizardApp.voice.commands.register({claims(text, context), receive(text, context)})` registers one synchronous boolean claim and an async/sync receiver on the verified current app document; returns unregister. The shell keeps its own navigation priority; app grammar then gets the original transcription, never a shell-parsed intent. Typed text and tap-to-message still use their pre-refactor routes. A claim token expires on consumption, document replacement, receiver replacement, frame close or registry removal.
+- Live Music source was traced from its systemd unit to its release checkout, `src/music/voice.ts`: it accepts `wizard-os:voice` raw text and `wizard-os:music` parsed commands. It has no shared SDK claim registration; its raw parser does not include the shell's open-and-play spell. `voice-legacy.js` therefore freezes *all* current shell phrases and the ack/done transport together, including Food browse/open and saved-order priority. It does not fork or edit Music. Delete this adapter when installed apps supply names and claim handlers with equivalent grammar, and Food ordering moves to its app over APK A automation. The Food native UI/ordering bridge stays unchanged.
+- `WizardApp.device.backgroundAudio.request(method, params)` uses the existing verified service connection and the same native port as the old message envelope, not another broker. A live app's registry `provides: ["background-audio"]` is the owner-installed grant (no new manifest field). The exact installed document, origin, shell attachment and grant are rechecked at invocation/reply. There is one device player/session; the latest attach/load/play owns explicit-close pause. Reload/detach preserves playback; explicit close pauses while retaining queue and position.
+- `background-audio-legacy.js` alone seeds the current Music pilot's grant and maps every admitted provider to the old native `wizard-music` token. Delete this module after APK release A accepts grant-keyed actual app ids. No Android files change here. Current-APK lock-screen/handset proof remains the APK release gate, not a claim made by browser unit tests.
+- `tests/fixtures/voice-baseline` is frozen from origin/main `dafb1ad7`. The generated table expands every finite regex alternative; infinite query/name captures use representative values, and all five view contexts and three input modes compare exact action objects. This proves grammar branches, not infinitely many arbitrary song names.
+
 ## Failure modes and the test that catches each
 
 - Blank launcher from a saved desk naming a removed id: boot both shells with James's exported desks/recents.

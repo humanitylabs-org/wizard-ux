@@ -11,6 +11,10 @@ function grammar(){
  box.WosFeatures={entries:[{id:'future',title:'Future view'}],open:(id,o)=>{events.push(['view',id,o]);return ['future'].includes(id);}};
  box.WosSettings={route:(id,open)=>{if(!['help','skin','settings'].includes(id))return false;open(id);return true;}};
  vm.runInNewContext(read('core/config.js'),Object.assign(box,{document:{addEventListener(){}}}));
+ vm.runInNewContext(read('core/voice-legacy.js'),Object.assign(box,{addEventListener(){}}));
+ vm.runInNewContext(read('core/app-voice.js'),box);
+ // Retain the narrow player stub: this test covers dispatch, not app grammar.
+ box.WosMusic={available:()=>true,parse:s=>s==='pause the music'?{op:'pause',strong:true}:s==='next track'?{op:'next',strong:true}:null,run:c=>{events.push(['music',c.op]);return true;}};
  vm.runInNewContext(read('core/commands.js'),box);
  const CHATS={matchFilters:s=>s==='ready'?[{field:'status',value:'ready'}]:[],addFilter:(_w,f)=>events.push(['filter',f]),clearAll:()=>events.push(['clear']),setQuery:(_w,q)=>events.push(['query',q])};
  const find=s=>['Music','music','wizard-music'].includes(s)?app:null;
@@ -53,7 +57,7 @@ test('feedback rejects a missing route rather than targeting current focus',asyn
  assert.equal(await box.WosBoundView.feedback({enqueue:()=>calls++},{thread:'original'},'words'),false);assert.equal(calls,0);
 });
 test('both adapters mount common nonsettings views, command grammar and capture tools',()=>{
- for(const p of ['index.html','desktop.html'])for(const asset of ['views.css','commands.js','features.js','bound-view.js','capture-tools.js','music-voice.js','screen-capture.js','sel-menu.js'])assert(read(p).includes('core/'+asset),p+': '+asset);
+ for(const p of ['index.html','desktop.html'])for(const asset of ['views.css','commands.js','features.js','bound-view.js','capture-tools.js','voice-legacy.js','app-voice.js','screen-capture.js','sel-menu.js'])assert(read(p).includes('core/'+asset),p+': '+asset);
  for(const p of ['app.js','desktop/desktop.js']){const s=read(p);assert(s.includes('WosFeatures.install('));assert(s.includes('WosCommands.create('));assert(s.includes('WosCommands.execute('));assert(s.includes('WosBoundView.create('));assert(s.includes('WosCaptureTools.'));assert(!s.includes('function localParse('));assert(!s.includes('function renderLevel('));}
 });
 

@@ -28,6 +28,7 @@
   const LIVE = window.WizLive;
   const OUTBOX = window.WosOutbox || null;
   const { APPS, APP, findApp, appAt, appByName, searchApps, quickSearch, searchUrl } = C.apps('desktop');
+  window.WizBackgroundAudio?.init(() => APP, f => window.WizAppServices?.authorized(f));
   const store = C.store('wux.desk.');
   const freshDesk = () => ({ id: 'd' + uid(), wins: [], focus: null, mono: false });
   const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
@@ -191,7 +192,10 @@
   }
   function closeWin(id, internal = false) {
     const t = wsOf(id); if (t < 0) return;
-    if (!internal) boundManager?.dismiss(W[id]);
+    if (!internal) {
+      boundManager?.dismiss(W[id]);
+      window.WizBackgroundAudio?.closeApp(W[id]?.appId)?.catch(() => toast('♫','Audio could not stop. Pause it from the media controls.'));
+    }
     if (W[id]?.app === 'chats') threadShown(id,null);
     const d = ws[t], i = d.wins.indexOf(id);
     CHATS.saveDraft(id);
@@ -1652,7 +1656,7 @@
   /* Deep links (core/deeplink.js): ?session= opens the thread in a Chats window, ?view= a screen, ?video= the player.
    * Back/Esc then walks thread → list → stays; the page is never left. */
   window.WosFeatures.install({command:localCommand,context:commandSnapshot,openFeature:(id,opts)=>{closeSettings();newWin({app:'feature',featureId:id,featureOptions:opts,title:window.WosFeatures.entries.find(f=>f.id===id)?.title});}});
-  window.WosMusic.install({app:()=>APP['wizard-music'],findWin:()=>findWin(w=>w.app==='frame'&&w.appId==='wizard-music')?.id,openMusic:()=>{openApp(APP['wizard-music']);return findWin(w=>w.appId==='wizard-music')?.id;},frameOf:id=>winEl(id)?.querySelector('iframe'),toast});
+  window.WosAppVoice.install({apps:()=>APP,findWin:appId=>findWin(w=>w.app==='frame'&&w.appId===appId)?.id,open:appId=>{openApp(APP[appId]);return findWin(w=>w.appId===appId)?.id;},frameOf:id=>winEl(id)?.querySelector('iframe'),toast});
   // First-message guide (core/tour.js WosTour.desk): once per browser on an alongside install's first launch, or from
   // ?view=tour and the Keys sheet's "Show me again". VM launches keep Setup only (alongsideOnly).
   const DESK_TOUR = window.WosTour?.desk || null;
