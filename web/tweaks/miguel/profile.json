@@ -10,7 +10,8 @@
     "miguel/hidden-pin",
     "miguel/snooze-someday",
     "miguel/home-bars",
-    "miguel/arrange-download"
+    "miguel/arrange-download",
+    "miguel/refresh-button"
   ],
   "flags": {}
 }
