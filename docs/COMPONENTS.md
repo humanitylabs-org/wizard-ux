@@ -18,7 +18,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 
 | Need | Use | Never hand-roll | Test the shared path by |
 |---|---|---|---|
-| Agent chat: composer, Stop/retry/outbox, models, dictation, attachments | `WizardApp.nav.openThread(sessionId, {reply})` (wizard-builder chat.md) | app composer/transcript/streaming/retries; `wizard-ui.css` is look only | shell `[data-chats]` session; no app textarea; 503: one outbox item/message |
+| Agent chat | `WizardApp.nav.openThread(sessionId, {reply})` | own composer/transcript/retries | shell `[data-chats]`; 503: one outbox item/message |
 | Top-level home-screen name, icon and app root | `WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK | per-app manifest injectors | app-owned manifest wins; frames untouched |
 | Own chat-box input: paste, drop, Enter | `WizardApp.composer.bind` (Chats' `web/core/composer-input.js`) | own paste/drop/Enter | `qa-composer-input.cjs` |
 | File chip before send | `WizardApp.attachChip.node` (Chats' tray, `core/attach-chip.js`) | own chip | `qa-attach-chip.cjs` |
@@ -29,8 +29,8 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Native Android screens in the worn skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`: shell `--wz-*` roles saved natively, Nebula fallback) | literal colours in native screens |
 | Native offline/connect | `ReachScreen` (`android/app/src/main/java/ai/wizards/os/ReachScreen.java`, `ReachPolicy`), `ConnectActivity` (`android/app/src/main/java/ai/wizards/os/ConnectActivity.java`, `ServerSettings`) | duplicate offline/address UI |
 | Transcribe audio | `WizardApp.voice.transcribe(blob, {language})` → `{text}` / `{unavailable:true}`; verified frame, 25 MB; `WizConfig.transcribe` | app transcriber | stale/foreign denied; unavailable explicit |
-| Share text or a file out (Wizard's share sheet first: people → Wizard apps → Other apps…) | `WizardApp.share.text / file` | `navigator.share`, an own share picker | cancelled is not reported as shared |
-| Receive shares (people as direct targets) | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound share route, URL-fragment payloads | pending until `receive` is true, acked once |
+| Share out (people → apps → Other apps) | `WizardApp.share.text / file` | own picker | cancel ≠ shared |
+| Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound route | pending until accepted, ack once |
 | Mic, camera, screen capture | `WizardApp.capture.start / pending / ack`, `WizardApp.voiceInput.register` | `getUserMedia`, `MediaRecorder`, mic AudioContext | pending survives Back; ack once |
 | Title-bar tools | `WizardApp.titlebar.set(tools)` | an app header repeating the title | tools appear in the shell title bar |
 | Protect unsaved work from updates | `WizardApp.update.hold` | app service worker, forced reload | hold released only after save + readback |

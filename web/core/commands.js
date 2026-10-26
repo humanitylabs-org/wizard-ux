@@ -35,7 +35,7 @@
     const feature=window.WosFeatures?.entries.find(f=>[f.id,norm(f.title||f.id)].includes(explicit.replace(/^(open|show) /,'')));
     if(feature)return {action:'open_view',view:feature.id};
     }
-    const context = {APP, kind, text:String(text || '').trim(), view:(snap || sendSnap()).view};
+    const context = {APP, kind, text:String(t || '').trim(), view:(snap || sendSnap()).view};
     { const c=window.WosAppVoice?.parse('priority',t,context); if(c) return c; }
     // The strong quick-search spells ("ask AI …", "image search …", "find images of …") win everywhere too: on the
     // Chats list a held "find images of cats" used to filter the list instead of opening Search.
