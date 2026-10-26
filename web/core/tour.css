@@ -114,3 +114,7 @@
 @media (prefers-reduced-motion: reduce) { .dtr { animation: none; } }
 /* The header tools sit under the top-right Skip tour pill and take no taps while the tour runs: hide them then. */
 .device.touring .home-tools { visibility: hidden; }
+/* While a take is running, the orb and its Cancel/Pause controls sit above everything the tour draws, so nothing
+   the tour shows can cover them (the tour itself never takes those taps). */
+.device.touring:is([data-voice="listen"], [data-voice="paused"], [data-voice="command"]) #dock { z-index: 91; }
+.device.touring:is([data-voice="listen"], [data-voice="paused"], [data-voice="command"]) #voice { z-index: 92; } /* arcs over the dock, as without the tour */
