@@ -195,8 +195,9 @@
       media: Object.freeze({ view(items, index = 0) {
         check();
         if (st.isVisible?.() !== true || !window.WosChat?.viewer || !Array.isArray(items)) return false;
-        const base = source.location.href, clean = [];
-        for (const it of items.slice(0, 500)) {
+        const base = source.location.href, clean = [], want = Math.floor(+index) || 0; let i = 0;
+        for (const [n, it] of items.slice(0, 500).entries()) {
+          if (n === want) i = clean.length; // the tapped item keeps its place after unsafe entries are dropped
           let u; try { u = new URL(String(it?.url || ''), base); } catch (_) { continue; }
           const own = u.origin === location.origin && /^https?:$/.test(u.protocol);
           const blob = u.protocol === 'blob:' && u.href.startsWith('blob:' + location.origin + '/');
@@ -204,8 +205,7 @@
           const kind = it?.kind === 'video' ? 'video' : 'image';
           clean.push({ url: u.href, kind, name: String(it?.name || '').slice(0, 200), mime: String(it?.mime || (kind === 'video' ? 'video/mp4' : 'image/jpeg')).slice(0, 100) });
         }
-        const i = Math.max(0, Math.min(clean.length - 1, Math.floor(+index) || 0));
-        return clean.length ? window.WosChat.viewer.open(clean, i) === true : false;
+        return clean.length ? window.WosChat.viewer.open(clean, Math.max(0, Math.min(clean.length - 1, i))) === true : false;
       } }),
       nav: Object.freeze({ threadAgents: true,
       /* The app finished what the owner came for (dismissed, archived, saved, deleted): take one Back past the app's
