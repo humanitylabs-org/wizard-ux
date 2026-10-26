@@ -351,6 +351,11 @@
         targets(list) { check(); return !!shareOps?.setTargets(st.appId, list); },
         pending() { check(); return shareOps?.pending(st.appId, { owner: st, alive: () => frames.get(st.frame) === st && st.frame.isConnected && valid(st, st.doc) }) || []; },
         ack(id) { check(); return typeof id === 'string' && !!shareOps?.ack(st.appId, id); } }),
+      device: Object.freeze({ backgroundAudio: Object.freeze({request(method, params) {
+        check();
+        if (!window.WizBackgroundAudio) return Promise.reject(fault('Background audio unavailable'));
+        return window.WizBackgroundAudio.request(source, method, params);
+      }}) }),
       voice: Object.freeze({ async transcribe(file, opts) { check(); const result = await transcribeFile(file, opts); check(); return result; } }),
       theme: Object.freeze({ get() { check(); return window.WizAppearance?.get(frameOf(st)) || null; } }),
       update: Object.freeze({ hold, available() { check(); return available; } }),
@@ -658,7 +663,32 @@
     if (!openProvider || sweepTimer) return;
     sweepTimer = setTimeout(() => { sweepTimer = 0; try { appsClosed(openProvider()); } catch (_) {} }, 0);
   }
-  window.WizAppServices = Object.freeze({ authorized: frame => { const st = frames.get(frame); return valid(st, st?.doc); }, version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
+  const voiceClaims = new Map();
+  function voiceCommand(text, context) {
+    if (typeof text !== 'string' || !text.trim() || text.length > 8000) return null;
+    const meta = Object.freeze({kind:context.kind, view:Object.freeze({kind:String(context.view?.kind || ''), appId:String(context.view?.appId || '')})});
+    for (const app of apps()) for (const st of frames.values()) {
+      try {
+        const handler = st.client?.voiceCommands;
+        if (st.appId !== app.id || typeof handler?.claims !== 'function' || typeof handler?.receive !== 'function' || !valid(st, st.doc)) continue;
+        if (handler.claims(text, meta) !== true || !valid(st, st.doc)) continue;
+        const token = uid();
+        if (voiceClaims.size >= 32) voiceClaims.delete(voiceClaims.keys().next().value);
+        voiceClaims.set(token, {st, doc:st.doc, handler, text, meta});
+        return {action:'app_voice', appId:st.appId, token};
+      } catch (_) {} // An app's bad claim cannot swallow shell commands.
+    }
+    return null;
+  }
+  function runVoiceCommand(command, done) {
+    const claim = voiceClaims.get(command.token); voiceClaims.delete(command.token);
+    if (!claim || !valid(claim.st, claim.doc) || claim.st.client?.voiceCommands !== claim.handler) return false;
+    try {
+      Promise.resolve(claim.handler.receive(claim.text, claim.meta)).then(ok => done?.(ok === true), () => done?.(false));
+      return true;
+    } catch (_) { done?.(false); return false; }
+  }
+  window.WizAppServices = Object.freeze({ voiceCommand, runVoiceCommand, authorized: frame => { const st = frames.get(frame); return valid(st, st?.doc); }, version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
     orb: Object.freeze({ of: orbOf, tap: orbTap, presenter(fn) { orbShown = typeof fn === 'function' ? fn : () => false; } }),
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),

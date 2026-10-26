@@ -17,7 +17,13 @@
   let toolHandler = null, orbHandler = null;
   const guardPush = history.pushState.bind(history);
   let guardBase = null, standaloneIsRoot = null;
-  let conversation = null;
+  let conversation = null, commandHandler = null;
+  const commands = Object.freeze({ register(handler) {
+    if (typeof handler?.claims !== 'function' || typeof handler?.receive !== 'function') throw new TypeError('Commands need claims and receive');
+    if (commandHandler) throw new Error('Commands already registered');
+    const registered = commandHandler = Object.freeze({claims:handler.claims,receive:handler.receive});
+    return () => { if (commandHandler === registered) commandHandler = null; };
+  } });
   const voiceInput = Object.freeze({ register(handler) {
     if (typeof handler?.snapshot !== 'function' || typeof handler?.receive !== 'function') throw new TypeError('Voice input needs snapshot and receive');
     if (conversation) throw new Error('Voice input already registered');
@@ -26,6 +32,7 @@
     return () => { if (conversation === registered) conversation = null; };
   } });
   const conversationClient = Object.freeze({
+    get voiceCommands() { return commandHandler; },
     get voiceInput() { return conversation; },
     get conversation() { return conversation; },
     back, alive: () => true,
@@ -356,7 +363,13 @@
       const it = Array.isArray(items) ? items[Math.max(0, Math.floor(+index) || 0)] : null;
       if (!it?.url) return false; window.open(String(it.url), '_blank', 'noopener'); return true;
     } }),
-    voice: Object.freeze({ transcribe: (file, opts = {}) => service?.voice ? service.voice.transcribe(file, opts) : transportReady ? request('voice.transcribe', { file, language: opts.language }, 180000) : Promise.resolve({ unavailable: true }) }),
+    device: Object.freeze({ backgroundAudio: Object.freeze({
+      request(method, params = {}) {
+        if (!service?.device?.backgroundAudio) return Promise.reject(new Error('Background audio unavailable'));
+        return service.device.backgroundAudio.request(method, params);
+      },
+    }) }),
+    voice: Object.freeze({ commands, transcribe: (file, opts = {}) => service?.voice ? service.voice.transcribe(file, opts) : transportReady ? request('voice.transcribe', { file, language: opts.language }, 180000) : Promise.resolve({ unavailable: true }) }),
     share: Object.freeze({ get wizard() { return service?.share?.wizard ? data => service.share.wizard(data) : transportReady ? data => request('share.wizard', data, 600000) : undefined; }, text: data => service ? service.share.text(data) : transportReady ? sharedResult(request('share.text', data)) : fallbackText(data), file: (file, opts) => service ? service.share.file(file, opts) : transportReady ? sharedResult(request('share.file', { file, options: opts })) : fallbackFile(file, opts),
       receive: receiveShares, targets: shareTargets, check: () => pullShares() }),
     titlebar: Object.freeze({ set: (tools, onTool) => { toolHandler = typeof onTool === 'function' ? onTool : null; return service ? Promise.resolve(service.titlebar.set(tools)) : transportReady ? request('titlebar.set', { tools }).then(v => v === true, () => false) : Promise.resolve(false); },

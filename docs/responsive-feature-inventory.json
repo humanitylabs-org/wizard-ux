@@ -172,7 +172,6 @@
     "core/links.css",
     "core/links.js",
     "core/mic.js",
-    "core/music-voice.js",
     "core/my-skin.js",
     "core/notif-bell.js",
     "core/offline-chats.css",
@@ -227,7 +226,10 @@
     "live.js",
     "manifest.webmanifest",
     "outbox.js",
-    "pwa-install.js"
+    "pwa-install.js",
+    "core/app-voice.js",
+    "core/background-audio-legacy.js",
+    "core/voice-legacy.js"
   ],
   "coreModules": {
     "core/offline-chats.js": {
@@ -559,13 +561,6 @@
       ],
       "note": "Shell relay for the optional Photos app frame (/photos/) to the Android app's window.wizardPhotosPort; draws no UI. Without the port it answers no-bridge"
     },
-    "core/music-voice.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Direct entrypoint import"
-    },
     "core/resources.js": {
       "loadedBy": [
         "phone",
@@ -853,7 +848,42 @@
       "loadedBy": [],
       "note": "Support/client/export module; not directly mounted by either shell"
     },
-    "core/launcher-defaults.js": { "loadedBy": ["phone", "desktop"], "classification": "shared", "note": "Synced launcher policy; temporary defaults for old releases" },
-    "core/launcher.js": { "loadedBy": ["phone", "desktop"], "classification": "shared", "note": "Synced launcher policy; temporary defaults for old releases" }
+    "core/launcher-defaults.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "classification": "shared",
+      "note": "Synced launcher policy; temporary defaults for old releases"
+    },
+    "core/launcher.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "classification": "shared",
+      "note": "Synced launcher policy; temporary defaults for old releases"
+    },
+    "core/voice-legacy.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Frozen pre-app-owned voice grammar and transport; delete after app declarations/handlers and Food APK A."
+    },
+    "core/app-voice.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Registry voice names and admitted app-owned utterance routing."
+    },
+    "core/background-audio-legacy.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Pilot grant seed and single native token until APK A."
+    }
   }
 }
