@@ -141,9 +141,15 @@
       } catch (e) { clearTimeout(timer); reject(e); }
     })));
   }
-  let identityInfo = null;
+  let identityInfo = null, identityAsked = false;
+  // identity.info is a plain status read (no prompt): fetch it once so the row shows Backed up / Not backed up from the start.
+  const loadIdentityInfo = ctx => {
+    if (identityAsked || !window.WizCore?.bridge?.call) return;
+    identityAsked = true;
+    window.WizCore.bridge.call('identity.info').then(info => { if (info?.npub) { identityInfo = info; ctx?.render?.(); } }, () => { identityAsked = false; });
+  };
   register({ id: 'wizard-id', page: 'phone', aliases: ['wizard-id'], available: () => !!window.wizardDevicePort,
-    html() { return row('wizard-id', '◇', 'Wizard ID', identityInfo?.npub ? `${identityInfo.name || 'Your ID'} · ${identityInfo.backed_up ? 'Backed up' : 'Not backed up'}` : 'Your signing key stays on this phone'); },
+    html(ctx) { loadIdentityInfo(ctx); return row('wizard-id', 'Wizard ID', identityInfo?.npub ? `${identityInfo.name || 'Your ID'} · ${identityInfo.backed_up ? 'Backed up' : 'Not backed up'}` : 'Your signing key stays on this phone'); },
     act(ctx, el) {
       if (!el.closest('[data-st="wizard-id"]')) return false;
       window.WizCore.bridge.call('identity.setup').then(async result => {

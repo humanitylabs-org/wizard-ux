@@ -30,7 +30,7 @@ import org.json.JSONObject;
  * Keep v1 aliases/preferences so the owner's installed 0.10.8 sealed secrets remain readable.
  */
 public final class VaultBridge {
-    private static final String KEY_PREFIX = "wos-vault-v1-"; // distinct from Wizard ID's owner-wrap aliases
+    // Key aliases ("wos-vault-v1-" + app, plus a ".b" slot) live in VaultSlots; distinct from Wizard ID's owner-wrap aliases.
     private final Activity activity;
     private final Handler main = new Handler(Looper.getMainLooper());
     private CancellationSignal active;
@@ -44,6 +44,19 @@ public final class VaultBridge {
     }
 
     private SharedPreferences prefs() { return activity.getSharedPreferences("wizard-vault", Context.MODE_PRIVATE); }
+
+    private final VaultSlots slots = new VaultSlots(new VaultSlots.Store() {
+        @Override public String get(String key) { return prefs().getString(key, null); }
+        @Override public boolean write(String[] keys, String[] values) {
+            SharedPreferences.Editor edit = prefs().edit();
+            for (int i = 0; i < keys.length; i++) { if (values[i] == null) edit.remove(keys[i]); else edit.putString(keys[i], values[i]); }
+            return edit.commit();
+        }
+        @Override public void deleteKey(String alias) throws Exception {
+            KeyStore store = KeyStore.getInstance("AndroidKeyStore"); store.load(null);
+            if (store.containsAlias(alias)) store.deleteEntry(alias);
+        }
+    });
 
     public void dispatch(String method, JSONObject params, BiConsumer<JSONObject, String> reply, BooleanSupplier trusted) {
         if (!trusted.getAsBoolean()) return;
@@ -82,9 +95,8 @@ public final class VaultBridge {
         return manager != null && manager.isHardwareDetected() && manager.hasEnrolledFingerprints();
     }
 
-    private SecretKey key(String app, boolean create) throws Exception {
+    private SecretKey key(String alias, boolean create) throws Exception {
         KeyStore store = KeyStore.getInstance("AndroidKeyStore"); store.load(null);
-        String alias = KEY_PREFIX + app;
         if (store.containsAlias(alias)) return (SecretKey) store.getKey(alias, null);
         if (!create) return null;
         KeyGenParameterSpec.Builder spec = new KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
@@ -96,49 +108,55 @@ public final class VaultBridge {
         generator.init(spec.build()); return generator.generateKey();
     }
 
-    private void forget(String app) throws Exception {
-        KeyStore store = KeyStore.getInstance("AndroidKeyStore"); store.load(null); store.deleteEntry(KEY_PREFIX + app);
-        if (!prefs().edit().remove(app).commit()) throw new IllegalStateException("Save failed");
-    }
+    private void forget(String app) throws Exception { slots.forget(app); }
 
     private void seal(String app, String secret, String title, BiConsumer<JSONObject, String> reply, BooleanSupplier trusted) throws Exception {
-        // As in v1, saving rotates the app's biometric-bound key. No other app or identity key is touched.
-        forget(app);
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.ENCRYPT_MODE, key(app, true));
+        // Saving rotates the app's biometric-bound key into the spare slot. The saved secret and its key stay
+        // until the new ciphertext is committed, so cancelling or failing the prompt never erases it.
+        String next = slots.begin(app);
+        Cipher cipher;
+        try { cipher = Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.ENCRYPT_MODE, key(next, true)); }
+        catch (Exception e) { slots.abort(app, next); throw e; }
         prompt(cipher, title, "Use your fingerprint to save it on this phone", reply, trusted, done -> {
             byte[] clear = secret.getBytes(StandardCharsets.UTF_8);
             try {
                 byte[] encrypted = done.doFinal(clear);
-                if (!prefs().edit().putString(app, VaultPolicy.pack(done.getIV(), encrypted)).commit()) throw new IllegalStateException("Save failed");
+                slots.commit(app, next, VaultPolicy.pack(done.getIV(), encrypted));
                 return new JSONObject().put("saved", true);
             } finally { Arrays.fill(clear, (byte) 0); }
-        });
+        }, () -> slots.abort(app, next));
     }
 
     private void open(String app, String sealed, String title, BiConsumer<JSONObject, String> reply, BooleanSupplier trusted) throws Exception {
         try {
             byte[][] parts = VaultPolicy.unpack(sealed);
-            SecretKey key = key(app, false);
+            SecretKey key = key(slots.currentAlias(app), false);
             if (key == null || parts == null) { forget(app); reply.accept(null, "not_saved"); return; }
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, parts[0]));
             prompt(cipher, title, "Use your fingerprint", reply, trusted, done -> {
                 byte[] clear = done.doFinal(parts[1]);
                 try { return new JSONObject().put("secret", new String(clear, StandardCharsets.UTF_8)); }
                 finally { Arrays.fill(clear, (byte) 0); }
-            });
+            }, () -> { });
         } catch (KeyPermanentlyInvalidatedException e) { forget(app); reply.accept(null, "invalidated"); }
     }
 
     interface Done { JSONObject run(Cipher cipher) throws Exception; }
 
-    private void prompt(Cipher cipher, String title, String subtitle, BiConsumer<JSONObject, String> reply, BooleanSupplier trusted, Done done) {
+    /** onFail runs for every outcome except success, including revoked documents and timeouts. */
+    private void prompt(Cipher cipher, String title, String subtitle, BiConsumer<JSONObject, String> reply, BooleanSupplier trusted, Done done, Runnable onFail) {
         CancellationSignal token = new CancellationSignal(); active = token;
+        boolean[] settled = {false};
         Runnable timeout = () -> {
             if (active != token) return;
-            cancel(); if (trusted.getAsBoolean()) reply.accept(null, "timeout");
+            cancel();
+            if (!settled[0]) { settled[0] = true; onFail.run(); }
+            if (trusted.getAsBoolean()) reply.accept(null, "timeout");
         };
         BiConsumer<JSONObject, String> finish = (result, error) -> {
-            if (active != token) return;
+            boolean mine = active == token;
+            if ((error != null || !mine) && !settled[0]) { settled[0] = true; onFail.run(); }
+            if (!mine) return;
             active = null; main.removeCallbacks(timeout);
             if (trusted.getAsBoolean()) reply.accept(result, error);
         };
@@ -150,7 +168,7 @@ public final class VaultBridge {
         try {
             builder.build().authenticate(new BiometricPrompt.CryptoObject(cipher), token, activity.getMainExecutor(), new BiometricPrompt.AuthenticationCallback() {
                 @Override public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult result) {
-                    if (active != token || !trusted.getAsBoolean()) { cancel(); return; }
+                    if (active != token || !trusted.getAsBoolean()) { cancel(); finish.accept(null, "cancelled"); return; }
                     try { finish.accept(done.run(result.getCryptoObject().getCipher()), null); }
                     catch (Exception e) { finish.accept(null, "failed"); }
                 }
