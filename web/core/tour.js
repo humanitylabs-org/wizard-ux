@@ -107,13 +107,19 @@
     if (!copy) return;
     const rows = ['.tr-glyphs', '.tr-mic', '.tr-tapon'].map(sel => $(sel, el)).filter(Boolean);
     const gap = box.height < 500 ? 8 : 22;
+    const style = getComputedStyle(el);
+    const topBound = Math.max(64, parseFloat(style.paddingTop) || 0);
+    const bottomBound = Math.max(16, parseFloat(style.paddingBottom) || 0);
     const height = copy.getBoundingClientRect().height + rows.reduce((n, x) => n + x.getBoundingClientRect().height + gap, 0);
-    // Keep the full stack above the bottom on short/rotated screens. At extreme zoom the tour can scroll,
-    // but never put copy underneath Skip tour at the top.
-    let y = Math.max(64, Math.min(box.height * .28, box.height - 16 - height));
+    // Resolved CSS padding includes the native safe areas. If the stack cannot fit, the padded tour scrolls
+    // far enough to clear the home indicator, without placing the copy under the top controls.
+    let y = Math.max(topBound, Math.min(box.height * .28, box.height - bottomBound - height));
     copy.style.top = Math.round(y) + 'px';
     y += copy.getBoundingClientRect().height + gap;
     for (const x of rows) { x.style.top = Math.round(y) + 'px'; y += x.getBoundingClientRect().height + gap; }
+    // Absolute rows do not extend a scroll container's padding in WebKit. A real flow spacer reserves
+    // the complete measured stack, so the last row can scroll above the native bottom inset.
+    el.style.setProperty('--tr-scroll-height', Math.ceil(Math.max(0, y - gap - topBound)) + 'px');
   }
   window.addEventListener('resize', endLayout);
   const glyph = (k, a, b) => `<div class="tr-g ${k}"><span class="tr-gi ${k}"><i></i></span><b>${a}</b><small>${b}</small></div>`;

@@ -12,7 +12,7 @@ const SRC = readFileSync(new URL('../web/core/tour.js', import.meta.url), 'utf8'
 function mk() {
   const kids = new Map(), set = new Set();
   return {
-    dataset: {}, style: {}, innerHTML: '', textContent: '', hidden: false, offsetWidth: 1, _l: {},
+    dataset: {}, style: { setProperty(k, v) { this[k] = v; } }, innerHTML: '', textContent: '', hidden: false, offsetWidth: 1, _l: {},
     classList: { add: (...c) => c.forEach(x => set.add(x)), remove: (...c) => c.forEach(x => set.delete(x)), contains: c => set.has(c),
       toggle: (c, on) => { if (on === undefined) on = !set.has(c); if (on) set.add(c); else set.delete(c); return on; } },
     setAttribute() {}, appendChild: c => c, remove() {}, focus() {}, blur() {},
@@ -30,6 +30,7 @@ function boot({ noMic = false } = {}) {
   const window = { addEventListener() {} };
   const ctx = vm.createContext({
     window, document, console,
+    getComputedStyle: () => ({ paddingTop: '64px', paddingBottom: '16px' }),
     localStorage: { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)) },
     setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {},
     requestAnimationFrame: fn => fn(),
