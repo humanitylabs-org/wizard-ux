@@ -15,6 +15,7 @@ const shots = process.env.QA_SHOTS || path.dirname(output); fs.mkdirSync(shots,{
   try {
     for(const skin of ['nebula','signal']) for(const state of ['fresh-defaults','owner-export']) for(const shell of ['phone','desktop']) {
       const mobile=shell==='phone', key=[shell,skin,state].join('-');
+      if (process.env.QA_CASE && key !== process.env.QA_CASE) continue;
       const context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1280,height:800},hasTouch:mobile,isMobile:mobile,
         ...(mobile?{userAgent:'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Mobile Safari/537.36'}:{})});
       await context.addInitScript(skin=>localStorage.setItem('wos.skin',skin),skin);
@@ -66,7 +67,7 @@ const shots = process.env.QA_SHOTS || path.dirname(output); fs.mkdirSync(shots,{
     }
     fs.writeFileSync(output,JSON.stringify({result,errors,writes,seeds},null,2)+'\n');
     assert.deepEqual(errors,[],'zero page errors');
-    console.log('PASS 8 launcher cases, zero page errors; '+seeds.length+' isolated seed requests; '+writes.length+' unrelated writes blocked');
+    console.log('PASS '+Object.keys(result).length+' launcher cases, zero page errors; '+seeds.length+' isolated seed requests; '+writes.length+' unrelated writes blocked');
     if(baseline){
       const expected=JSON.parse(fs.readFileSync(baseline,'utf8')).result;
       for(const key of Object.keys(expected))for(const field of Object.keys(expected[key]))assert.deepEqual(result[key][field],expected[key][field],key+' '+field);
