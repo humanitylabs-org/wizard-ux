@@ -66,16 +66,6 @@
       "classification": "native",
       "reason": "Android Food bridge UI."
     },
-    "core/tour.js": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone gestures tutorial; desktop keyboard help is a layout/input-specific guide."
-    },
-    "core/tour.css": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone gesture spotlights; desktop keyboard sheet remains shell-local."
-    },
     "core/voice.js": {
       "shell": "desktop",
       "classification": "adapter",
@@ -193,6 +183,8 @@
     "core/skins.js",
     "core/status.js",
     "core/thread-swipe-back.js",
+    "core/tour.css",
+    "core/tour.js",
     "core/update-banner.css",
     "core/uploads.js",
     "core/usage.js",
@@ -592,9 +584,10 @@
     },
     "core/tour.js": {
       "loadedBy": [
-        "phone"
+        "phone",
+        "desktop"
       ],
-      "note": "Direct entrypoint import"
+      "note": "Phone gesture tour and desktop first-message guide share one module and done flag."
     },
     "core/uploads.js": {
       "loadedBy": [
