@@ -431,7 +431,7 @@
   }
   function watchFrame(f, el) {
     if (!f) return;
-    // servicesAs: a second view of an installed app (Video Editor's Feedback) gets that app's Back/services.
+    // servicesAs: a companion view gets its owning installed app's Back/services.
     const w = W[el.dataset.win], a = w && APP[w.servicesAs || w.appId];
     if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), openContextDraft: (key, text) => { let cw = ws[cur].wins.map(id => W[id]).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }, isVisible: () => !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) });
     f.addEventListener('load', () => {
@@ -917,6 +917,7 @@
     if (pal.hidden) palPrev = a && a !== document.body && !pal.contains(a) ? a : null;
     palDesk = o.desk || null; palMode = mode; palPaint();
     pal.hidden = false; palIn.value = q; palSel = 0; palRender(); palIn.focus(); palIn.select();
+    window.WizCore.refreshApps?.({afterPending:true}); // also refresh after a pending pre-opening snapshot
   }
   const openPicker = (o = {}) => openPalette('', 'apps', o);
   // ⌘K and ⌘O switch an open box between its modes, keeping the query; the same key again closes it.
@@ -924,6 +925,7 @@
     if (pal.hidden) return openPalette('', mode);
     if (palMode === mode) return closePalette();
     palMode = mode; palPaint(); palSel = 0; palRender(); palIn.focus();
+    window.WizCore.refreshApps?.({afterPending:true});
   }
   function closePalette({ restore = true } = {}) {
     if (pal.hidden) return;
@@ -1453,6 +1455,7 @@
       const result = window.WizAppServices?.back(winEl(f.id)?.querySelector('iframe'));
       if (['handled', 'pending', 'stay'].includes(result)) return 'hosted';
     }
+    if (f && window.WizCompanionPane?.back(f.id)) return 'companion-back';
     if (f?.appId === 'app-store') {
       if (!ws[cur].mono) { closeWin(f.id); return 'store-parent'; }
     }
