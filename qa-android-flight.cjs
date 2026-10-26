@@ -34,12 +34,17 @@ function cdpPage(wsUrl){
   const loc=(sel,text)=>{const find=`(()=>{const els=[...document.querySelectorAll(${JSON.stringify(sel)})].filter(e=>e.getClientRects().length);return ${text==null?'els[0]':`els.find(e=>e.textContent.trim()===${JSON.stringify(text)})`}||null;})()`;
    const api={first:()=>api,
     waitFor:async(o={})=>waitForFunction(`!!${find}`,undefined,{timeout:o.timeout||30000}),
-    click:async()=>{await api.waitFor();const r=await evaluate(`(()=>{const e=${find};e.scrollIntoView({block:'center'});const b=e.getBoundingClientRect();return {x:b.left+b.width/2,y:b.top+b.height/2,dpr:devicePixelRatio};})()`);
-     // A real Android tap (adb input) on the WebView's on-screen bounds: WebView never acknowledges CDP touch input.
-     const o=webviewOrigin(),tx=Math.round(o.x+r.x*r.dpr),ty=Math.round(o.y+r.y*r.dpr);
-     await evaluate(`(()=>{window.__taps=[];for(const t of ['pointerdown','pointerup','click','touchstart'])document.addEventListener(t,e=>__taps.push([t,(e.target.closest('[data-flight-download],button')||e.target).outerHTML.slice(0,80),Math.round(e.clientX||0),Math.round(e.clientY||0),e.defaultPrevented]),true);return 1;})()`);
-     adb('shell','input','tap',String(tx),String(ty));await pause(600);
-     const taps=await evaluate('JSON.stringify(window.__taps)');console.log('TAP',sel,JSON.stringify(r),tx,ty,taps,'flight busy/line:',await evaluate(`document.querySelector('[data-flight-ready]')?.textContent||''`));},
+    click:async()=>{await api.waitFor();
+     // Tap only once layout is still and the target is what sits under the finger; retry if the tap lands elsewhere.
+     for(let attempt=1;;attempt++){
+      let r,prev=null;for(let n=0;n<20;n++){r=await evaluate(`(()=>{const e=${find};e.scrollIntoView({block:'center'});const b=e.getBoundingClientRect(),x=b.left+b.width/2,y=b.top+b.height/2,h=document.elementFromPoint(x,y);return {x,y,dpr:devicePixelRatio,hit:!!h&&(h===e||e.contains(h))};})()`);
+       if(prev&&Math.abs(prev.x-r.x)<1&&Math.abs(prev.y-r.y)<1&&r.hit)break;prev=r;await pause(250);}
+      const o=webviewOrigin(),tx=Math.round(o.x+r.x*r.dpr),ty=Math.round(o.y+r.y*r.dpr);
+      await evaluate(`(()=>{window.__hit=false;const e=${find};window.__taps=[];const h=ev=>{__taps.push([ev.type,(ev.target.closest('button')||ev.target).outerHTML.slice(0,80)]);if(ev.type==='click'&&e&&(ev.target===e||e.contains(ev.target)))__hit=true;};for(const t of ['pointerdown','click'])document.addEventListener(t,h,{capture:true,once:false});return 1;})()`);
+      adb('shell','input','tap',String(tx),String(ty));await pause(600);
+      const got=await evaluate('({hit:window.__hit,taps:window.__taps})');console.log('TAP',sel,attempt,tx,ty,JSON.stringify(got).slice(0,300));
+      if(got.hit)return;if(attempt>=3)throw Error('tap on '+sel+' never reached it: '+JSON.stringify(got).slice(0,300));await pause(700);
+     }},
     fill:async v=>{await api.waitFor();await evaluate(`(()=>{const e=${find};e.focus();const d=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');d.set.call(e,${JSON.stringify(v)});e.dispatchEvent(new Event('input',{bubbles:true}));return true;})()`);},
     innerText:async()=>{await api.waitFor();return evaluate(`${find}.innerText`);}};return api;};
   const page={_send:(...a)=>sendNow(...a),evaluate,waitForFunction,locator:sel=>loc(sel),getByText:t=>loc('button,a,div,span,p,h1,h2,h3,li,summary,label,b,[role]',t)};
