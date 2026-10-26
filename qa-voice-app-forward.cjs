@@ -26,7 +26,8 @@ fs.mkdirSync(shots,{recursive:true});
    await frame.waitForSelector('.music-chip',{timeout:60000});
    await page.waitForFunction(()=>window.__qaMusicEvents.some(e=>e.type==='wizard-os:music:ack'),null,{timeout:30000});
    const command=await frame.evaluate(()=>window.__qaMusicEvents.find(e=>e.type==='wizard-os:music'));
-   assert.deepEqual(command.cmd,{op:'play',said:'Play music Guy Barato Trap'});
+   // Main's parse() preserves the raw play utterance, including STT punctuation.
+   assert.deepEqual(command.cmd,{op:'play',said:'Play music Guy Barato Trap.'});
    const ack=await page.evaluate(()=>window.__qaMusicEvents.find(e=>e.type==='wizard-os:music:ack'));
    assert.equal(ack.id,command.id);assert.equal(errors.length,0,errors.join('\n'));
    await page.screenshot({path:path.join(shots,'real-music-'+shell+'.png')});
