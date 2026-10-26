@@ -58,9 +58,9 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
   const docPath = path.join(out, 'document.conf'); fs.writeFileSync(docPath, doc);
   let exact = '';
   for (const prefix of ['wizard-os-home', 'wizard-ux']) for (const page of ['', 'index.html', 'desktop.html']) exact += `location = /${prefix}/${page} { root ${web}; try_files /${page || 'index.html'} =404; include ${docPath}; }\n`;
-  const config = `worker_processes 1; pid ${path.join(out, 'nginx.pid')}; error_log ${path.join(out, 'nginx.log')}; events { worker_connections 256; } http { include ${process.env.QA_NGINX_MIME || '/etc/nginx/mime.types'}; access_log off; server { listen 127.0.0.1:${np}; ${exact} location /wizard-os-home/ { alias ${web}/; } location /fixture-app/ { proxy_pass http://127.0.0.1:${fp}; } location /wizard/ { proxy_pass http://127.0.0.1:${sp}; } location / { return 404; } } }`;
+  const config = `worker_processes 1; pid ${path.join(out, 'nginx.pid')}; error_log ${path.join(out, 'nginx.log')}; events { worker_connections 256; } http { client_body_temp_path ${path.join(out, 'client_body')}; proxy_temp_path ${path.join(out, 'proxy_temp')}; fastcgi_temp_path ${path.join(out, 'fastcgi_temp')}; uwsgi_temp_path ${path.join(out, 'uwsgi_temp')}; scgi_temp_path ${path.join(out, 'scgi_temp')}; include ${process.env.QA_NGINX_MIME || '/etc/nginx/mime.types'}; access_log off; server { listen 127.0.0.1:${np}; ${exact} location /wizard-os-home/ { alias ${web}/; } location /fixture-app/ { proxy_pass http://127.0.0.1:${fp}; } location /wizard/ { proxy_pass http://127.0.0.1:${sp}; } location / { return 404; } } }`;
   const configPath = path.join(out, 'nginx.conf'); fs.writeFileSync(configPath, config);
-  const nginx = spawn(process.env.QA_NGINX || 'nginx', ['-c', configPath, '-g', 'daemon off;'], { stdio: ['ignore', 'ignore', 'pipe'] });
+  const nginx = spawn(process.env.QA_NGINX || 'nginx', ['-p', out + '/', '-e', path.join(out, 'nginx-startup.log'), '-c', configPath, '-g', 'daemon off;'], { stdio: ['ignore', 'ignore', 'pipe'] });
   let stderr = ''; nginx.stderr.on('data', b => { stderr += b; });
   let browser;
   try {
