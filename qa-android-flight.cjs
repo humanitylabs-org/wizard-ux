@@ -63,8 +63,9 @@ async function list(p){await p.evaluate(()=>{let w=Object.values(__wos.wins).fin
   let {b,p}=await attach();browser=b;await p.waitForFunction(()=>window.__wos?.live?.ok,{},{timeout:60000});
   await p.evaluate(()=>{localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.done','1');});
   await list(p);await p.locator('[data-flight-download]').first().click();
-  await p.waitForFunction(()=>document.querySelector('[data-flight-ready]')?.textContent.startsWith('Ready for flight'),{},{timeout:90000});
-  shot('android-ready');ok(await p.evaluate(()=>!!navigator.serviceWorker.controller),'native WebView is controlled by the scoped offline worker');
+  await p.waitForFunction(()=>/^(Ready|Not ready) for flight/.test(document.querySelector('[data-flight-ready]')?.textContent||''),{},{timeout:90000});
+  const readyText=await p.evaluate(()=>document.querySelector('[data-flight-ready]').textContent);shot('android-ready');
+  fs.writeFileSync(path.join(out,'ready-line.txt'),readyText);ok(readyText.startsWith('Ready for flight'),'native Download for flight: '+readyText);ok(await p.evaluate(()=>!!navigator.serviceWorker.controller),'native WebView is controlled by the scoped offline worker');
   await b.close();browser=null;
   // Real Android radio state plus a fixture which refuses every non-QA request.
   f.state.online=false;adb('shell','cmd','connectivity','airplane-mode','enable');adb('shell','svc','wifi','disable');
