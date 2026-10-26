@@ -1919,6 +1919,42 @@ window.WizCore.chats = function createChats(H) {
   }
   /* Long-press or swipe left on a thread row → thread actions (listeners in bind()). */
   let lp = null, lpUntil = 0;
+  /* Gmail-style swipe (Novaire, 23 Oct 2026): in the Novairecito phone skin family, swipe a row left and it stays
+   * open over two explicit buttons: Recall (🪄, schedule a return) and Done (Archive, restorable). Swiping never
+   * performs an action. Tapping elsewhere, scrolling or swiping back closes it; list repaints wait while open. */
+  let swipeOpen = null; // { wid, sid, wrap }
+  const SWIPE_W = 148;
+  const ownerSwipe = () => document.documentElement.dataset.shell === 'phone' && ['novairecito', 'sepia'].includes(document.documentElement.dataset.skin || '');
+  function swipeActs(sid) {
+    const s = LIVE.session(sid), acts = threadActions(s, null);
+    const file = acts.includes('done') ? 'done' : acts.includes('restore') ? 'restore' : '';
+    return { recall: !!BOOM(), file };
+  }
+  function swipeTray(wrap, sid) {
+    let tray = wrap.querySelector(':scope > .ch-swipe-acts'); if (tray) return tray;
+    const a = swipeActs(sid), s = LIVE.session(sid), t = esc(s?.title || 'chat');
+    const btn = (k, cls, glyph, label, aria) => `<button type="button" class="ch-swipe-act ${cls}" data-chswipe="${k}" aria-label="${aria} ${t}" tabindex="-1">${glyph}<span>${label}</span></button>`;
+    wrap.insertAdjacentHTML('afterbegin', `<div class="ch-swipe-acts" aria-hidden="true">${a.recall ? btn('recall', 'recall', '<i aria-hidden="true">🪄</i>', 'Recall', 'Recall') : ''}${a.file ? btn(a.file, a.file, ACT[a.file].icon, ACT[a.file].label, ACT[a.file].hint + ':') : ''}</div>`);
+    tray = wrap.firstElementChild; tray.style.setProperty('--n', String((a.recall ? 1 : 0) + (a.file ? 1 : 0)) || '1');
+    return tray;
+  }
+  function swipeA11y(wrap, open) {
+    const tray = wrap?.querySelector(':scope > .ch-swipe-acts'); if (!tray) return;
+    tray.setAttribute('aria-hidden', open ? 'false' : 'true');
+    for (const b of tray.querySelectorAll('button')) b.tabIndex = open ? 0 : -1;
+    if (!open && tray.contains(document.activeElement)) wrap.querySelector('.ch-row')?.focus?.({ preventScroll: true });
+  }
+  function closeSwipe(instant) {
+    if (!swipeOpen) return false;
+    const { wrap, wid } = swipeOpen; swipeOpen = null;
+    const row = wrap.querySelector('.ch-row'); swipeA11y(wrap, false);
+    if (row) { if (instant) row.style.transition = 'none'; row.style.transform = ''; if (instant) requestAnimationFrame(() => { row.style.transition = ''; }); }
+    wrap.style.setProperty('--sw', '0px');
+    wrap.classList.remove('swiping', 'swiped');
+    setTimeout(() => { if (swipeOpen?.wrap !== wrap) wrap.querySelector(':scope > .ch-swipe-acts')?.remove(); }, instant ? 0 : 180);
+    const c = CH[wid]; if (c?.heldList) setTimeout(() => repaintList(wid), 200);
+    return true;
+  }
   // Long-press / swipe / right-click on rows, and paste-to-attach; bound to each shell's root in bind().
   function bindGestures(root) {
     root.addEventListener('touchstart', e => {
@@ -1932,6 +1968,7 @@ window.WizCore.chats = function createChats(H) {
     root.addEventListener('scroll', e => {
       if (!e.target.matches?.('.ch-msgs, .ch-scroll')) return;
       if (e.target.matches('.ch-list > .ch-scroll')) { const id = idOf(e.target); if (id) queueListPlace(id); }
+      if (swipeOpen) closeSwipe(true);
       const g = readGuard(e.target); g.until = Date.now() + SCROLL_IDLE; scheduleHeld();
     }, { capture: true, passive: true });
     // A finger on the messages holds background re-renders (see selectingIn) until it lifts.
@@ -1956,23 +1993,53 @@ window.WizCore.chats = function createChats(H) {
       const row = e.target.closest('.ch-list [data-chopen]'); if (!row || e.button > 0) return;
       LIVE.warm?.(row.dataset.chopen);
       const wid = idOf(row);
-      lp = { row, wid, pid: e.pointerId, sid: row.dataset.chopen, x: e.clientX, y: e.clientY, dx: 0, t: setTimeout(() => { if (!lp || window.WosSkinHost?.claimed(lp.pid)) return; lpUntil = Date.now() + 700; openRowSheet(lp.wid, lp.sid); lp = null; }, 480) };
+      const wrap = row.closest('.ch-row-wrap');
+      // A touch on another row (or the open one) first closes an open swipe, like Gmail.
+      const wasOpen = swipeOpen && swipeOpen.wrap === wrap;
+      if (swipeOpen && !wasOpen) closeSwipe();
+      const swipe = e.pointerType !== 'mouse' && ownerSwipe();
+      lp = { row, wrap, wid, sid: row.dataset.chopen, swipe, base: swipe && wasOpen ? -SWIPE_W : 0, pid: e.pointerId, pointerId: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, moved: false, t: setTimeout(() => { if (!lp || lp.moved || window.WosSkinHost?.claimed(lp.pid)) return; lpUntil = Date.now() + 700; if (swipeOpen) closeSwipe(true); openRowSheet(lp.wid, lp.sid); lp = null; }, 480) };
     });
     root.addEventListener('pointermove', e => {
       if (!lp) return;
       if (window.WosSkinHost?.claimed(e.pointerId)) { clearTimeout(lp.t); lp.row.style.transform = ''; lp = null; return; } // a skin gesture owns this finger
       const dx = e.clientX - lp.x, dy = e.clientY - lp.y;
-      if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { clearTimeout(lp.t); lp.row.style.transform = ''; lp = null; return; }
-      if (Math.abs(dx) > 10) clearTimeout(lp.t);
-      if (dx < 0) { lp.dx = dx; lp.row.style.transform = `translateX(${Math.max(dx, -90)}px)`; }
+      if (!lp.swipe) {
+        if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { clearTimeout(lp.t); lp.row.style.transform = ''; lp = null; return; }
+        if (Math.abs(dx) > 10) clearTimeout(lp.t);
+        if (dx < 0) { lp.dx = dx; lp.row.style.transform = `translateX(${Math.max(dx, -90)}px)`; }
+        return;
+      }
+      if (!lp.moved && Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { clearTimeout(lp.t); if (!lp.base) lp.row.style.transform = ''; lp = null; return; }
+      if (Math.abs(dx) > 10) { clearTimeout(lp.t); if (!lp.moved) { lp.moved = true; swipeTray(lp.wrap, lp.sid); lp.wrap.classList.add('swiping'); lp.row.style.transition = 'none'; try { lp.row.setPointerCapture?.(lp.pointerId); } catch (_) {} } }
+      if (!lp.moved) return;
+      const w = lp.wrap.clientWidth || 360, off = Math.min(0, Math.max(lp.base + dx, -w * 0.9));
+      lp.dx = off; lp.row.style.transform = `translateX(${off}px)`; lp.wrap.style.setProperty('--sw', `${-off}px`);
+      lp.wrap.classList.toggle('commit', off < -w * 0.5);
     });
     const lpEnd = () => {
-      if (!lp) return; const q = lp; lp = null; clearTimeout(q.t); q.row.style.transform = '';
-      // A Done / FYI row needs nothing from James: a swipe files it straight away (Archive keeps it, restorable).
-      if (q.dx < -60 && q.row.dataset.quiet === '1' && threadActions(rowOf(q.wid, q.sid), null).includes('done')) { lpUntil = Date.now() + 700; threadAct(q.wid, q.sid, 'done'); }
-      else if (q.dx < -60) { lpUntil = Date.now() + 700; openRowSheet(q.wid, q.sid); }
+      if (!lp) return; const q = lp; lp = null; clearTimeout(q.t);
+      if (!q.swipe) {
+        q.row.style.transform = '';
+        // Preserve the stock gesture outside Novairecito phone skins and on desktop.
+        if (q.dx < -60 && q.row.dataset.quiet === '1' && threadActions(rowOf(q.wid, q.sid), null).includes('done')) { lpUntil = Date.now() + 700; threadAct(q.wid, q.sid, 'done'); }
+        else if (q.dx < -60) { lpUntil = Date.now() + 700; openRowSheet(q.wid, q.sid); }
+        return;
+      }
+      if (!q.moved) return;
+      try { q.row.releasePointerCapture?.(q.pointerId); } catch (_) {}
+      q.row.style.transition = ''; lpUntil = Date.now() + 500;
+      if (q.dx < -SWIPE_W * 0.4) { q.row.style.transform = `translateX(${-SWIPE_W}px)`; q.wrap.style.setProperty('--sw', `${SWIPE_W}px`); q.wrap.classList.add('swiped'); swipeOpen = { wid: q.wid, sid: q.sid, wrap: q.wrap }; swipeA11y(q.wrap, true); vib(6); return; }
+      swipeOpen = { wid: q.wid, sid: q.sid, wrap: q.wrap }; closeSwipe();
     };
-    root.addEventListener('pointerup', lpEnd); root.addEventListener('pointercancel', lpEnd);
+    const lpCancel = () => {
+      if (!lp) return; const q = lp; lp = null; clearTimeout(q.t);
+      try { q.row.releasePointerCapture?.(q.pointerId); } catch (_) {}
+      q.row.style.transition = ''; q.row.style.transform = q.base ? `translateX(${-SWIPE_W}px)` : '';
+      if (q.base) { q.wrap.style.setProperty('--sw', `${SWIPE_W}px`); q.wrap.classList.remove('swiping'); q.wrap.classList.add('swiped'); swipeOpen = { wid: q.wid, sid: q.sid, wrap: q.wrap }; swipeA11y(q.wrap, true); }
+      else { q.wrap.style.setProperty('--sw', '0px'); q.wrap.classList.remove('swiping', 'swiped'); q.wrap.querySelector(':scope > .ch-swipe-acts')?.remove(); }
+    };
+    root.addEventListener('pointerup', lpEnd); root.addEventListener('pointercancel', lpCancel);
     // Right-click (a mouse) opens the same sheet; a touch long-press already did.
     root.addEventListener('contextmenu', e => { const row = e.target.closest('.ch-list [data-chopen]'); if (!row) return; e.preventDefault(); if (!rowSheet && !lp) { lpUntil = Date.now() + 700; openRowSheet(idOf(row), row.dataset.chopen); } });
     // Paste, drag/drop and the Enter policy come from the shared WizComposerInput (web/core/composer-input.js), the
@@ -2471,7 +2538,12 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-obretryall]')) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retryAll(winAgent(w))), 2400); return true; }
     const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) H.editUnsent(it); return true; }
     if (PW && PW.click(e, id)) return true;
+    const sw = e.target.closest('[data-chswipe]');
+    if (sw && swipeOpen) { const { wid: rw, sid } = swipeOpen, k = sw.dataset.chswipe; closeSwipe(true);
+      if (k === 'recall') { const s = LIVE.session(sid); BOOM()?.open({ sessionId: sid, targetKind: 'thread', context: s?.title || 'This thread', note: s?.attention?.ask || '' }); }
+      else threadAct(rw, sid, k); return true; }
     if (justPressed() && e.target.closest('[data-chopen]')) return true; // a long-press/swipe just opened the actions sheet
+    if (swipeOpen) { closeSwipe(); if (e.target.closest('.ch-list')) return true; } // a tap anywhere closes an open swipe first
     const pick = topicOn() && e.target.closest('[data-chpick]'); if (pick) { const key = pick.dataset.chpick, sid = key.startsWith('thread:') ? key.slice(7) : '', s = sid && LIVE.session(sid); openEmojiSheet(id, key, s?.title || 'Draft emoji'); return true; }
     const pn = e.target.closest('[data-chpin]'); if (pn) { const on = PIN.toggle(pn.dataset.chpin); vib(8); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
     const o = e.target.closest('[data-chopen]'); if (o) { openChat(id, o.dataset.chopen); return true; }
@@ -2629,13 +2701,13 @@ window.WizCore.chats = function createChats(H) {
   function justPressed() { return Date.now() < lpUntil; }
   // A list must not re-render under an open actions sheet or a finger mid-press.
   const holdList = id => {
-    const el = elOf(id), hold = rowSheet?.wid === id || (!!lp && lp.wid === id) || !!PW?.holds(id) || (!!el && readingIn(el));
+    const el = elOf(id), hold = rowSheet?.wid === id || (!!lp && lp.wid === id) || (!!swipeOpen && swipeOpen.wid === id && swipeOpen.wrap.isConnected) || !!PW?.holds(id) || (!!el && readingIn(el));
     if (hold) ch(id).heldList = true;
     return hold;
   };
   // Back / Esc: the media viewer, then the actions sheet. Returns what it closed, or ''.
   function closeFilterSheet() { for (const id of Object.keys(CH)) { const c = CH[id]; if (c.sheet) { c.sheet = false; const w = H.win(id); if (w) rerenderList(w); return true; } } return false; }
-  const closeOverlay = () => (closeSpacePicker() ? 'space-picker' : null) || (closeFilterSheet() ? 'filter-sheet' : null) || (window.WizCore.status?.back() || (KIT.viewer.close() ? 'viewer' : closeRowSheet() ? 'thread-actions' : PW?.closeSheet() ? 'chat-sheet' : ''));
+  const closeOverlay = () => (closeSwipe() ? 'row-swipe' : null) || (closeSpacePicker() ? 'space-picker' : null) || (closeFilterSheet() ? 'filter-sheet' : null) || (window.WizCore.status?.back() || (KIT.viewer.close() ? 'viewer' : closeRowSheet() ? 'thread-actions' : PW?.closeSheet() ? 'chat-sheet' : ''));
   // Put words (and already-uploaded files) back into a composer, e.g. editing an unsent message.
   function setDraft(wid, text, files) {
     const w = W[wid], c = ch(wid); if (!w) return;
