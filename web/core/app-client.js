@@ -67,6 +67,28 @@
     }));
   }
   composerModule(); // eager: the first paste must not wait on a network fetch
+  // Wizard's one attachment chip (core/attach-chip.js + .css), the same chip Chats' tray shows. Loaded eagerly;
+  // until it lands node() returns a plain name + Remove chip so a fast pick never waits (James, 26 Oct 2026).
+  let chipLoad = null;
+  function chipModule() {
+    if (window.WizAttachChip) return Promise.resolve(window.WizAttachChip);
+    return chipLoad || (chipLoad = new Promise(resolve => {
+      const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/wizard-os-home/core/attach-chip.css';
+      (document.head || document.documentElement).appendChild(css);
+      const s = document.createElement('script'); s.src = '/wizard-os-home/core/attach-chip.js';
+      s.onload = () => resolve(window.WizAttachChip || null); s.onerror = () => { chipLoad = null; resolve(null); };
+      (document.head || document.documentElement).appendChild(s);
+    }));
+  }
+  chipModule();
+  function chipNode(c, opts = {}) {
+    if (window.WizAttachChip) return window.WizAttachChip.node(c, opts);
+    const el = document.createElement('span'); el.className = 'ch-att'; el.dataset.attkey = String(c?.key ?? '');
+    const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = String(c?.name || 'File');
+    const rm = document.createElement('button'); rm.type = 'button'; rm.className = 'ch-attrm'; rm.setAttribute('aria-label', 'Remove'); rm.textContent = '×';
+    rm.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); opts.onRemove?.(c?.key); });
+    el.append(nm, rm); return el;
+  }
   function composerBind(root, opts) {
     let off = null, dead = false;
     composerModule().then(m => { if (!dead && m) off = m.bind(root, opts); });
@@ -352,6 +374,7 @@
       };
     })()),
     badge: Object.freeze({ set: n => service ? service.badge.set(n) : transportReady ? request('badge.set', { n }).then(() => true, () => false) : Promise.resolve(false) }),
+    attachChip: Object.freeze({ node: chipNode, paint: (el, c) => window.WizAttachChip?.paint(el, c), ready: () => chipModule().then(m => !!m) }),
     composer: Object.freeze({ bind: composerBind, insertText: (field, text) => window.WizComposerInput ? window.WizComposerInput.insertText(field, text) : (composerModule(), false) }),
     update: Object.freeze({ hold, onAvailable: fn => listen(updates, fn, updateAvailable || service?.update.available()) }),
     capture: Object.freeze({ start: async opts => { if (['auto', 'command'].includes(opts?.kind)) throw new Error('Capture kind is reserved for Wizard voice; use audio/meeting and task metadata'); if (service) return service.capture.start(opts); if (framed) throw new Error('Shared capture needs the verified synchronous host connection'); const resource=captureModule(); return opts?.resumeId && resource.resume ? resource.resume(standaloneId(),opts.resumeId,opts) : resource.start(standaloneId(), opts); },
