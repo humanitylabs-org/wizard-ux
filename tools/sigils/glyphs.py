@@ -380,6 +380,16 @@ def g_gauge():
 def g_letter():
     return D(circle(256, 256, 156), circle(256, 256, 120))
 
+@glyph('notes', 'A page with a pencil cut in from its corner: you write here, and it keeps.')
+def g_notes():
+    page = rrect(124, 92, 264, 328, 44)
+    x0, y0, x1, y1, w = 430, 70, 214, 286, 58          # pencil: end (off the corner) -> tip
+    dx, dy = x1 - x0, y1 - y0; L = math.hypot(dx, dy); ux, uy = dx / L, dy / L; nx, ny = -uy, ux
+    bx, by, h = x1 - ux * w * 1.25, y1 - uy * w * 1.25, w / 2
+    body = poly((x0 + nx * h, y0 + ny * h), (bx + nx * h, by + ny * h), (bx - nx * h, by - ny * h), (x0 - nx * h, y0 - ny * h))
+    tip = poly((bx + nx * h, by + ny * h), (x1, y1), (bx - nx * h, by - ny * h))
+    return D(page, U(body, tip))
+
 # ---------- normalise + emit ----------
 def fmt(p):
     pen = SVGPathPen(None, ntos=lambda v: str(int(round(v))))
