@@ -9,7 +9,7 @@
 .tr-spot::after { content: ""; position: absolute; inset: -6px; border-radius: inherit; border: 1.5px solid rgba(185, 155, 255, .55); animation: trRing 1.8s ease-out infinite; }
 .tour[data-step="3"] .tr-spot::after { display: none; }
 @keyframes trRing { from { opacity: .9; transform: scale(.92); } to { opacity: 0; transform: scale(1.35); } }
-.tr-skip { position: absolute; top: calc(var(--safe-t, 0px) + 14px); right: 14px; pointer-events: auto; border: 1px solid var(--line-2); background: rgba(12, 8, 26, .7);
+.tr-skip { position: absolute; z-index: 2; top: calc(var(--safe-t, 0px) + 14px); right: 14px; pointer-events: auto; border: 1px solid var(--line-2); background: rgba(12, 8, 26, .7);
   color: var(--ink-2); border-radius: 99px; padding: 7px 14px; font: inherit; font-size: 13px; letter-spacing: .02em; cursor: pointer; }
 .tr-steps { position: absolute; top: calc(var(--safe-t, 0px) + 26px); left: 18px; display: flex; gap: 6px; }
 .tr-steps i { width: 18px; height: 3px; border-radius: 2px; background: rgba(205, 190, 255, .18); transition: background 300ms; }
@@ -72,7 +72,7 @@
 .hs-go { display: block; width: 100%; margin-top: 14px; padding: 13px; border-radius: 16px; border: 0; font: inherit; font-size: 15px; font-weight: 600; color: #fff;
   background: linear-gradient(135deg, #6b46ff, #c04dff); cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .tour *, .help-sheet * { animation: none !important; transition: none !important; } }
-.tour[data-step="3"] { pointer-events: auto; cursor: pointer; }
+.tour[data-step="3"] { pointer-events: auto; cursor: pointer; overflow-y: auto; }
 
 /* v2: real voice. While the user is really talking (or the shell shows a result), the dim lifts so the real
    transcript, arc and desks show; the copy moves to the top out of their way. */
