@@ -118,6 +118,8 @@
     "core/appearance-host.css",
     "core/appearance-host.js",
     "core/apps.js",
+    "core/attach-chip.css",
+    "core/attach-chip.js",
     "core/base.css",
     "core/bound-view.js",
     "core/brand.css",
@@ -677,6 +679,13 @@
       "note": "Direct entrypoint import"
     },
     "core/capture-tools.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/attach-chip.js": {
       "loadedBy": [
         "phone",
         "desktop"

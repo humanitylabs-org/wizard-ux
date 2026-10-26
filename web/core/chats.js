@@ -1121,16 +1121,10 @@ window.WizCore.chats = function createChats(H) {
   }
   // A multi-pick stages every file at once (each shows immediately), then they upload side by side.
   // Progress paints into the chip in place (no tray re-render per tick); removing a chip cancels its upload.
-  const pct = f => f.total ? Math.floor(100 * (f.sent || 0) / f.total) : 0;
-  const upLabel = f => f.upState === 'reconnecting' ? (f.sent ? `Reconnecting · ${pct(f)}%` : 'Waiting for Wizard…') : f.upState === 'finishing' ? 'Finishing…' : f.total > 0 ? `${pct(f)}% · ${fsize(f.total)}` : 'Uploading…';
   function paintUpload(wid, f) {
-    const el = track.querySelector(`[data-chats="${wid}"] [data-attkey="${CSS.escape(f.key)}"]`); if (!el) return;
-    el.style.setProperty('--up', pct(f) + '%');
-    el.classList.toggle('wait', f.upState === 'reconnecting');
-    const s = el.querySelector('small'); if (s) s.textContent = upLabel(f);
-    const r = el.querySelector('.ch-attpct'); if (r) r.textContent = f.upState === 'reconnecting' ? '…' : pct(f) + '%';
-    el.setAttribute('aria-label', `Uploading ${f.name || 'file'} · ${upLabel(f)}`);
+    window.WizAttachChip.paint(track.querySelector(`[data-chats="${wid}"] [data-attkey="${CSS.escape(f.key)}"]`), chipOf(f));
   }
+
   async function addFiles(wid, list) {
     const c = ch(wid); c.files = c.files || [];
     const picked = [...list], room = Math.max(0, MAX_FILES - c.files.length);
@@ -1159,15 +1153,14 @@ window.WizCore.chats = function createChats(H) {
   }
   const UPLOAD_ABORT = new Map();
   // Photos and screenshots stage as big thumbnails only; other files keep a name chip.
+  // The tray's chips are Wizard's one attachment chip (core/attach-chip.js), shared with every app's chat box.
+  const chipOf = f => { const k = fileKind(f); return { key: f.key, name: f.name, bytes: f.bytes, kind: k === 'voice' || k === 'image' ? k : 'file', preview: f.preview, uploading: !!f.uploading, sent: f.sent, total: f.total, state: f.upState }; };
   function attachTray(c) {
     const files = c.files || [];
     if (!files.length) return '';
-    const rm = f => `<button type="button" data-attrm="${esc(f.key)}" aria-label="Remove">×</button>`;
-    const up = f => f.uploading ? ` style="--up:${pct(f)}%"` : '';
-    return `<div class="ch-tray">${files.map(f => f.preview && fileKind(f) === 'image'
-      ? `<span class="ch-att ch-attimg${f.uploading ? ' up' : ''}" data-attkey="${esc(f.key)}"${up(f)}><img src="${esc(f.preview)}" alt="${esc(f.name || 'Photo')}">${f.uploading ? `<i class="ch-attspin" aria-label="Uploading"></i><b class="ch-attpct">${pct(f)}%</b><i class="ch-attbar"></i>` : ''}${rm(f)}</span>`
-      : `<span class="ch-att${f.uploading ? ' up' : ''}" data-attkey="${esc(f.key)}"${up(f)}>${f.preview ? `<img src="${esc(f.preview)}" alt="">` : `<span class="ic">${fileKind(f) === 'voice' ? MIC_SVG : CLIP_SVG}</span>`}<span class="nm">${esc(fileKind(f) === 'voice' ? 'Voice note' : f.name)}<small>${f.uploading ? esc(upLabel(f)) : esc(fsize(f.bytes))}</small></span>${f.uploading ? '<i class="ch-attbar"></i>' : ''}${rm(f)}</span>`).join('')}</div>`;
+    return `<div class="ch-tray">${files.map(f => window.WizAttachChip.html(chipOf(f))).join('')}</div>`;
   }
+
   /* Mic only while the draft is completely empty. Typed words or a staged attachment (.has-text) swap it for Send;
    * a voice take already recording in this thread still turns the mic itself into Send (.ch-mic.on). */
   const hasContent = (text, files = []) => !!String(text || '').trim() || files.some(f => f && (f.id || f.uploading));
