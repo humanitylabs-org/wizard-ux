@@ -18,7 +18,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 
 | Need | Use | Never hand-roll | Test the shared path by |
 |---|---|---|---|
-| Agent chat: composer, Stop/retry/outbox, models, dictation, attachments | `WizardApp.nav.openThread(sessionId, {reply})` (wizard-builder chat.md) | app composer/transcript/streaming/retries; `wizard-ui.css` is look only | shell `[data-chats]` session; no app textarea; 503: one outbox item/message |
+| Agent chat: composer, Stop/retry/outbox, models, dictation, attachments | `WizardApp.nav.openThread(sessionId, {reply})`, `nav.openContextDraft` (wizard-builder chat.md) | app composer/transcript/streaming/retries; `wizard-ui.css` is look only | shell `[data-chats]` session; no app textarea; 503: one outbox item/message |
 | Top-level home-screen name, icon and app root | `WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK | per-app manifest injectors | app-owned manifest wins; frames untouched |
 | Own chat-box input: paste, drop, Enter | `WizardApp.composer.bind` (Chats' `web/core/composer-input.js`) | own paste/drop/Enter | `qa-composer-input.cjs` |
 | File chip before send | `WizardApp.attachChip.node` (Chats' tray, `core/attach-chip.js`) | own chip | `qa-attach-chip.cjs` |

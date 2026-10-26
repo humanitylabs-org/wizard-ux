@@ -1,1 +1,3 @@
-/* No additional presentation. */
+/* Miguel's Dark/Light/Landscapes colours reverse the phone list (column-reverse): keep snoozed rows below awake Ready rows, above the order bar. */
+html[data-tweaks~="miguel/snooze-someday"]:is([data-skin^="obsidian"], [data-skin="landscapes"]):not([data-shell="desktop"]) .ch-list [data-sec="ready"] .ch-sec-b > .ch-row-wrap:has(.ch-row.deferred) { order: -1; }
+html[data-tweaks~="miguel/snooze-someday"]:is([data-skin^="obsidian"], [data-skin="landscapes"]):not([data-shell="desktop"]) .ch-list [data-sec="ready"] .ch-sec-b > .ch-rdy-bar { order: -2; }
