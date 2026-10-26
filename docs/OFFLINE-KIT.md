@@ -12,7 +12,7 @@
 - `assetURLs(state)`: exact same-origin asset URLs referenced in the canonical library; download concurrency defaults to four. Cache hits make downloads resumable. `navigator.storage.persist()` is requested, not guaranteed.
 - `project(state,item)`: pure local overlay; failed rows stay available for recovery, not silently discarded.
 - `reconcile(state,result,item)`, `queuedResult(state,item)`: adapt endpoint response shapes.
-- `resolve(later,item,result)`, `blocked(item,all)`: optional temporary-id dependencies.
+- `resolve(later,item,result)`, `blocked(item,all)`: optional temporary-id dependencies. `alias(item,result)` persists a `{from,to}` identity mapping; `prepare(item,lookup)` resolves a stale temporary reference in a still-open draft after replay. Do not discard these aliases when removing the original outbox row.
 - `onStatus`, `onFailure`, `onSynced`: render calm progress, pending work and recoverable failures without replacing an open sheet.
 
 `request(path,body?)` persists mutations **before** the first network attempt; `flush()` retries in sequence under an app Web Lock. A network/transient server failure stops replay; a permanent error is kept and surfaced, its dependent rows remain blocked, and independent later work can continue. Visible clients retry on reconnect, focus and a 30-second retry interval. Closed apps sync on next open, not through unpromised background execution. Target browsers must support service workers, IndexedDB and Web Locks for multi-tab replay exclusion. No credentials leave the origin.
