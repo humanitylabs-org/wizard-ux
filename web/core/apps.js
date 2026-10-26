@@ -240,5 +240,9 @@
   // Maintenance stays addressable by deep link/voice, but is not an ordinary Apps entry.
   window.WizCore.isMaintenanceApp = a => a?.id === 'wizard-supervisor';
   window.WizCore.isInDevelopment = a => !!a && DEV.has(String(a.id));
-  window.WizCore.apps = registry;
+  // One registry per shell, built once and shared. Building one dispatches 'wizard:apps' and subscribes it
+  // forever, so a fresh registry per call looped (home-screen icon refresh → registry → event → refresh)
+  // and leaked listeners until Android killed the app (26 Oct 2026).
+  const REGISTRIES = new Map();
+  window.WizCore.apps = shell => { if (!REGISTRIES.has(shell)) REGISTRIES.set(shell, registry(shell)); return REGISTRIES.get(shell); };
 })();
