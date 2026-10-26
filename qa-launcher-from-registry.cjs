@@ -70,8 +70,9 @@ const shots = process.env.QA_SHOTS || path.dirname(output); fs.mkdirSync(shots,{
     console.log('PASS '+Object.keys(result).length+' launcher cases, zero page errors; '+seeds.length+' isolated seed requests; '+writes.length+' unrelated writes blocked');
     if(baseline){
       const expected=JSON.parse(fs.readFileSync(baseline,'utf8')).result;
+      assert.deepEqual(Object.keys(result),Object.keys(expected),'same case coverage');
       for(const key of Object.keys(expected))for(const field of Object.keys(expected[key]))assert.deepEqual(result[key][field],expected[key][field],key+' '+field);
-      console.log('PASS identical apps/native/recents/grid/desktopQuick/windows/sigils/shortcutNames in all 8 cases');
+      console.log('PASS identical apps/native/recents/grid/desktopQuick/windows/sigils/shortcutNames in '+Object.keys(expected).length+' cases');
     }
   }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
