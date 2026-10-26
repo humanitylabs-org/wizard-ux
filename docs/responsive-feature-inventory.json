@@ -163,6 +163,8 @@
     "core/features.js",
     "core/files.js",
     "core/focused-field.js",
+    "core/launcher-defaults.js",
+    "core/launcher.js",
     "core/links.css",
     "core/links.js",
     "core/mic.js",
@@ -797,6 +799,7 @@
       "loadedBy": [],
       "note": "Support/client/export module; not directly mounted by either shell"
     },
+<<<<<<< HEAD
     "core/voice-legacy.js": {
       "loadedBy": [
         "phone",
@@ -818,5 +821,9 @@
       ],
       "note": "Pilot grant seed and single native token until APK A."
     }
+=======
+    "core/launcher-defaults.js": { "loadedBy": ["phone", "desktop"], "classification": "shared", "note": "Synced launcher policy; temporary defaults for old releases" },
+    "core/launcher.js": { "loadedBy": ["phone", "desktop"], "classification": "shared", "note": "Synced launcher policy; temporary defaults for old releases" }
+>>>>>>> origin/main
   }
 }

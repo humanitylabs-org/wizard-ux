@@ -12,7 +12,7 @@
   }
   const key = (origin, id) => 'wos.single.v1:' + JSON.stringify([origin, id]);
   // Registry names stay unchanged in desks; launcher/task names are app names.
-  const displayName = app => app.id === 'wizard-signal' ? 'Signal' : app.name;
+  const displayName = app => window.WizLauncher?.displayName(app) || app.name;
   const requested = new URLSearchParams(location.search).get('app-session');
   // Even malformed session links must not reveal the workspace.
   const mode = requested !== null;

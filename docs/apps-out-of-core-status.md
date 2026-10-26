@@ -2,29 +2,51 @@
 
 ## Slice 1: implemented
 
-`tests/feature-ids-in-core.test.mjs` runs in the existing `node --test tests/*.test.mjs` command. `tests/feature-id-scan.mjs` counts literal references throughout `web/` and `android/app/src/main/java`, excluding skin packages, `web/core/skins*`, tests and binary files. `tests/feature-id-allowlist.json` records the existing `path:pattern -> count` ceiling. New paths and increased counts fail; reductions pass with a hint to lower/delete allowlist entries. Tests cover the scanner exclusions and the ratchet itself.
+`tests/feature-ids-in-core.test.mjs` ratchets literal feature app references in `web/` and
+Android against `tests/feature-id-allowlist.json`. Slice 3 lowers the old ceilings and
+moves compatibility literals to one explicitly temporary module, rather than excluding it.
 
-The approved plan is copied verbatim into `docs/apps-out-of-core.md`.
+## Slice 3: implemented; companion service rollout required for synced choices
 
-## Slice 3: blocked before changing runtime code
+The companion Agent Service extends `ui-preferences` with validated optional `launcher`
+and `migrations` fields and owner-only `POST /wizard/v1/ui-preferences/seed`.
+`core/launcher.js` waits for bootstrap, reads shared prefs and sends `launcher-seed-v1`
+only when absent. The server fills absent launcher keys and writes the marker in the same
+atomic rename. Existing choices, including empty arrays, win over migration values.
+Browser storage is only an offline read cache; there is no per-device migration marker.
+Old services reject the seed route; the shell uses `core/launcher-defaults.js`, clearly
+marked for deletion after rollout. Either deployment order is supported.
 
-The required shared owner-preference transport exists, but its schema cannot store launcher data or a versioned migration marker:
+- Registry app ids/names/views/icons/colors/voice metadata remain the source of installed apps.
+- Native phone-link records (including Android Settings), recents defaults, desktop quick
+  ids, boot auto-open ids and hosted-thread admission ids now come from shared launcher prefs.
+- Agent tiles are still registry-generated, inserted after the main Chats quick item.
+- `displayNames` preserves the owner's short shortcut name without changing registry/desk names.
+- Sigils consult registry metadata first. Recognized mask names and same-origin icon files win;
+  HOUSE remains only the legacy fallback for records without a usable mask (including emojis).
+- Food's Usuals, side-button device tools, agent-family ordering, app aliases, voice grammars,
+  recorder route aliases and the separately owned companion pane are unchanged.
 
-- `web/live.js:325-370` uses Agent Service `GET/PUT /wizard/v1/ui-preferences`; browser storage is only an offline cache.
-- The running service's `server/ui-preferences.mjs` only validates `spaces`, `archiveAfterDays`, `compact`, `chatLayout`, `readyOrder`, `subjectOrder` and `pinnedChats`. Unknown PUT fields are rejected with HTTP 400; unknown stored fields are omitted from GET responses.
-- `web/core/workspace-sync.js` uses `/wizard/v1/workspaces` for desks/windows, not arbitrary owner preferences. It has no migration-marker/launcher field.
-- The direct read-only `GET http://127.0.0.1:8923/wizard/v1/workspaces` returned HTTP 403 under the installed owner-proof access policy. No live write was attempted and no real-state export was produced.
-
-Do not disguise a per-device localStorage migration or a static JSON default as synced owner preferences. A companion Agent Service schema extension, including atomic seed-if-absent semantics and a marker beside the seeded launcher data, is needed before slice 3 can safely proceed. The web-only scope does not authorize that backend change.
-
-Consequently all native tiles, launcher lists, recents defaults, auto-open defaults, hosted-thread admission lists, sigil fallbacks and display names remain unchanged. Food, agent-family ordering, Android sources and the separately owned companion pane remain untouched. No seeded preference key or migration marker has been created.
+Reuse:
+- REUSE: app registry, `WizCore.apps`, `WizSigil`, UI-preference pull and workspace sync.
+- EXTEND: shared UI-preference refresh consumes launcher policy; shell adapters read it.
+- NEW: `WizLauncher` policy + one temporary defaults module, listed in COMPONENTS.md.
 
 ## Verification
 
-- Origin/main baseline: 1008 tests, 1007 pass, 1 fail. The pre-existing failure was the COMPONENTS.md 14,000-byte ceiling (14,013 bytes). Shortening one introductory sentence without deleting any component entry fixes it.
-- Candidate: 1011 tests, 1011 pass, 0 fail.
-- `node --check` passes for both new `.mjs` sources.
-- Adding an unallowlisted `usuals` occurrence in a temporary `web/core/feature-guard-probe.js` makes the actual guard fail: `web/core/feature-guard-probe.js:usuals: 1 > 0`, exit 1. The probe was removed before the passing suite.
-- Browser/list-diff/screenshots and live-owner-state assertions are not claimed: slice 3 was not implemented and the owner-state export was denied. This PR changes no runtime shell bytes.
-
-Reuse: n/a (tests and documentation only; runtime implementation is blocked on the shared preference schema).
+- Web baseline: 1020 tests, 1020 pass, 0 fail.
+- Candidate: 1026 tests, 1026 pass, 0 fail (includes old-server fallback, seed response,
+  marker/no-marker/retry, empty owner choices, registry-first sigils and removal guards).
+- Companion service baseline: 1489 Vitest tests; candidate: 1493; additional Node/Python
+  suites pass with bounded Vitest workers. Targeted seed HTTP tests cover owner proof,
+  cross-site refusal, strict validation and concurrent seeds/PUT.
+- Isolated service with a read-only copy of owner preferences: seed once; repeat is a
+  no-op with identical whole-file bytes and mtime; all existing fields' JSON encodings
+  identical; all seven old fields round-trip. No live write or deployment.
+- `qa-launcher-from-registry.cjs` records phone/desktop at two skins, fresh defaults and
+  exported owner workspaces, all app/grid/native/recents/quick/window/sigil/name lists,
+  screenshots and page errors. It compares whole lists with an origin/main baseline.
+  Registry/preferences are real HTTP; exported workspaces/agent catalogue are replayed
+  identically; app bodies are inert. This is launcher acceptance, not app-internal QA.
+- Full remote browser matrix, live candidate failure-name comparison and parity output
+  must be attached by the release coordinator before declaring the slice accepted.
