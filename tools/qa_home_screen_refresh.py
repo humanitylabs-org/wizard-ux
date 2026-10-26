@@ -90,7 +90,8 @@ with lock:
         tap('#offer'); wait(lambda:page.ev('!!document.querySelector(".home-pin-sheet button") && !document.querySelector(".home-pin-sheet button").disabled'),10)
         tap('.home-pin-sheet button'); time.sleep(1)
         check('real Android pin confirmation accepted',bool(emu.tap_text(r'^(Add|Add automatically|Add to home screen|ADD)$')))
-        if not wait(lambda:bool(prefs().get(identity)),20): raise RuntimeError('pin preferences missing')
+        # The pending token is removed once Android confirms the pin; the stored icon/name stay.
+        if not wait(lambda:(identity+':icon') in prefs(),20): raise RuntimeError('pin preferences missing')
         wait(lambda:identity in emu.sx('dumpsys shortcut'),20); time.sleep(2)
         before = snapshot('01-pinned'); check('actual package-owned pinned shortcut exists',identity in (out/'01-pinned.txt').read_text() and before['name']=='Shortcut QA')
         emu.sx('input keyevent KEYCODE_HOME'); time.sleep(1); emu.shot(out,'01-launcher-before'); launch(); time.sleep(2)
