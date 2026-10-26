@@ -29,6 +29,10 @@
   const SUB = 'claude-subscription-directsdk-experimental';
   const CLAUDE_PROVIDERS = new Set([SUB, 'anthropic']);
   const SUBSCRIPTIONS = ['openai-codex', SUB];
+  // Connection metadata only: native subscriptions belong to Hermes' Anthropic pool,
+  // not the legacy Claude Code login. An unavailable connector leaves legacy intact.
+  const hasNativeClaude = connection => arr(obj(connection).accounts).some(a =>
+    a.id !== 'legacy-claude-code' && a.source !== 'legacy-claude-code' && a.status === 'ready');
   const CLAUDE_ORDER = ['fable', 'opus', 'sonnet', 'haiku'];
   const GPT_ORDER = ['astra', 'sol', 'terra', 'luna', 'codex-spark'];
   // The models closest to the thumb in the compact model menu (James 18 Oct 2026). Everything else is one tap away.
@@ -87,7 +91,7 @@
   const longTwin = m => /-900k$/i.test(m);
 
   /* normalizers.ts normalizeModels (direct routes only; Wizard UX has no private operator runtime). */
-  function normalize(payload) {
+  function normalize(payload, nativeClaude = false) {
     const root = obj(payload);
     const providers = arr(root.providers).map(obj);
     const curProvider = str(root.provider), curModel = str(root.model);
@@ -96,22 +100,27 @@
       const pslug = str(provider.slug), pname = str(provider.name) || pslug;
       const currentSlug = provider.is_user_defined === true && !pslug.startsWith('custom:') ? `custom:${pslug}` : pslug;
       const defProvider = !curProvider || curProvider === pslug ? currentSlug : curProvider;
-      const visible = [provider, ...providers.filter(p => str(p.slug) !== pslug && (SUBSCRIPTIONS.includes(str(p.slug)) || p.is_user_defined === true) && p.authenticated === true)];
+      const visible = [provider, ...providers.filter(p => str(p.slug) !== pslug && (SUBSCRIPTIONS.includes(str(p.slug)) || (nativeClaude && p.slug === 'anthropic') || p.is_user_defined === true) && p.authenticated === true)];
       const options = visible.flatMap(vp => {
         const slug = str(vp.slug), name = str(vp.name) || slug;
         const route = vp.is_user_defined === true && !slug.startsWith('custom:') ? `custom:${slug}` : slug;
         return arr(vp.models).map(v => {
           const it = obj(v), model = typeof v === 'string' ? v : str(it.value, it.id, it.model);
           if (!model) return null;
-          return { value: model, provider: route, isGlobalDefault: model === curModel && (slug === defProvider || route === defProvider),
+          return { value: model, provider: route, ...(nativeClaude && slug === 'anthropic' ? { nativeClaude: true } : {}), isGlobalDefault: model === curModel && (slug === defProvider || route === defProvider),
             name: claudeName(model, slug) || str(it.name, it.display_name, it.label) || friendly(model),
-            description: routeLabel(slug) || str(it.description) || name };
+            description: nativeClaude && slug === 'anthropic' ? 'Claude subscription · Hermes pool' : nativeClaude && slug === SUB ? 'Claude subscription · legacy Claude Code' : routeLabel(slug) || str(it.description) || name };
         }).filter(Boolean);
       });
       const unique = [...new Map(options.map(o => [JSON.stringify([o.provider, o.value]), o])).values()];
       // The configured route is authoritative even when a static catalogue lags.
       if (curModel && currentSlug === defProvider && !unique.some(o => o.value === curModel && o.provider === defProvider))
         unique.unshift({ value: curModel, provider: currentSlug, isGlobalDefault: true, name: claudeName(curModel, pslug) || friendly(curModel), description: pname });
+      // A default on the legacy Claude Code login (one subscription, no rotation) moves to the ready
+      // Hermes pool's same model, so new chats don't lock onto an exhausted login. Explicit thread picks stay.
+      const legacy = nativeClaude && unique.find(o => o.isGlobalDefault && o.provider === SUB && claudeFamily(o.value, SUB));
+      const pooled = legacy && unique.find(o => o.nativeClaude && o.provider === 'anthropic' && versionKey(o.value) === versionKey(legacy.value));
+      if (pooled) { legacy.isGlobalDefault = false; pooled.isGlobalDefault = true; }
       return curModel ? unique.sort((a, b) => Number(!!b.isGlobalDefault) - Number(!!a.isGlobalDefault)) : unique;
     }
     const raw = Array.isArray(payload) ? payload : arr(root.options).length ? arr(root.options) : arr(root.models);
@@ -129,6 +138,11 @@
     const pref = m => (selected(m) ? 2 : m.isGlobalDefault ? 1 : 0);
     const better = (m, prior) => {
       if (pref(m) !== pref(prior)) return pref(m) > pref(prior);
+      // Prefer the available native pool for an unselected Claude family, even
+      // when the legacy catalogue advertises a newer/long-context variant.
+      // Explicit selected routes and the global default above stay authoritative.
+      if ((m.nativeClaude || prior.nativeClaude) && CLAUDE_PROVIDERS.has(m.provider) && CLAUDE_PROVIDERS.has(prior.provider) && m.provider !== prior.provider)
+        return m.provider === 'anthropic';
       const v = versionKey(m.value).localeCompare(versionKey(prior.value), 'en', { numeric: true });
       if (v !== 0) return v > 0;
       if (longTwin(m.value) !== longTwin(prior.value)) return !longTwin(m.value);
@@ -159,14 +173,16 @@
       // The app owns the upstream key. Hermes' local bearer is not proof that a key is saved.
       const connection = fetch('/wizard-tinfoil/api/status', { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(4000) })
         .then(r => r.ok ? r.json() : null).catch(() => null);
+      const claude = fetch('/wizard-claude/api/accounts', { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(4000) })
+        .then(r => r.ok ? r.json() : null).catch(() => null);
       M.loading = fetch('/wizard/hermes/api/model/options', { cache: 'no-store', credentials: 'same-origin' })
         .then(r => { if (!r.ok) throw new Error(`Models unavailable (${r.status})`); return r.json(); })
-        .then(async j => { M.tinfoil = await connection; M.providers = arr(obj(j).providers); M.options = normalize(j).filter(o => !isTinfoil(o.provider) || M.tinfoilReady()); M.ready = true; M.error = ''; M.at = Date.now(); return M.options; })
+        .then(async j => { M.tinfoil = await connection; M.providers = arr(obj(j).providers); M.options = normalize(j, hasNativeClaude(await claude)).filter(o => !isTinfoil(o.provider) || M.tinfoilReady()); M.ready = true; M.error = ''; M.at = Date.now(); return M.options; })
         .catch(e => { M.error = String(e.message || e); return M.options; })
         .finally(() => { M.loading = null; });
       return M.loading;
     },
-    normalize, visibleChoices, PRIMARY, family, privateName, isPrivateRoute: isTinfoil, ours,
+    normalize, hasNativeClaude, visibleChoices, PRIMARY, family, privateName, isPrivateRoute: isTinfoil, ours,
     tinfoilReady() { return M.tinfoil?.provider === 'tinfoil' && M.tinfoil?.credentialStored === true; },
     defaultOption() { return M.options.find(o => o.isGlobalDefault) || null; },
     find(model, provider) { if (!model) return null; return M.options.find(o => o.value === model && (!provider || o.provider === provider)) || null; },
