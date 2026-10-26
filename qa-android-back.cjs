@@ -1,8 +1,4 @@
-// Existing browser fixture plus actual Wizard WebView acceptance on a disposable emulator.
-if (process.env.QA_NATIVE_APP) {
-  require('./tools/qa-android-native-back.cjs')().catch(e=>{console.error(e);process.exitCode=1});
-} else {
-// Legacy browser fixture remains unchanged below.
+// Real Android Back on a real Chrome (Thales emulator): CDP for state + trusted taps, adb KEYCODE_BACK for Back.
 const { chromium } = require('./tools/qa-playwright.cjs');
 const { execSync } = require('child_process');
 const OUT = require('node:path').join(require('./tools/qa-paths.cjs').repoRoot, 'qa-live/android');
@@ -60,4 +56,3 @@ const ok = (c, name, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS'
   await b.close().catch(() => {});
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(2); });
-}

@@ -223,10 +223,6 @@
       if (sid && M.pending.has(sid)) throw new Error('Model change is still saving · send after it finishes');
       const ag = M.agentFor(sid, agent || choice?.agent || '');
       if (ag?.missing) throw new Error('Agent unavailable · open Agents and check it is running');
-      if (window.WosFlight?.offline() && !ag) {
-        const saved=window.WosFlight.route(sid);
-        if(!choice?.model && saved)return {...saved};
-      }
       return M.currentRoute(sid, choice, agent || choice?.agent || '');
     },
     keepVoiceRoute(id, route) {

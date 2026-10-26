@@ -2835,7 +2835,7 @@
     }
     const it = await OUTBOX.stage({ ...(snap.route || {}), kind: sid && sid !== '__new__' ? 'reply' : 'new',
       sessionId: sid && sid !== '__new__' ? sid : '',
-      durationMs:V.acc, steerRunId: snap.meetingEventId ? '' : rt?.steerRunId ?? (CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '', ...(snap.seal?.reply ? { reply: snap.seal.reply } : {}),
+      steerRunId: snap.meetingEventId ? '' : rt?.steerRunId ?? (CHATS.isWorking(LIVE.session(sid)) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '', ...(snap.seal?.reply ? { reply: snap.seal.reply } : {}),
       meetingEventId:snap.meetingEventId,sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || snap.route?.agent || '',
       files: [...takeFiles(), ...(snap.seal?.files || [])].filter(f => f?.id),
       instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: rt?.wid || sv?.id || '' });
@@ -2843,13 +2843,6 @@
     snap.custodyId = it.id; snap.audio = audio;
     if(V.meetingLoan){if(!it.durable){setVoice('paused');toast('!','Save failed · original retained here; meeting remains paused');return;}await returnMeeting({status:'captured',voiceTakeId:nid||it.id,deliveryKey:it.id});}
     snap.seal?.done(it);
-    if (it.offlineContext && it.intent !== 'command') {
-      if(!it.durable || it.storageError){setVoice('paused');toast('!','Save failed · original retained here; keep Wizard open');return;}
-      await OUTBOX.enqueue({custodyId:it.id,kind:it.kind,sessionId:it.sessionId,text:it.text,audio:it.audio,...(snap.route||{})});
-      V.custodyCapture=null;V.handedOff=true;
-      if(nid)try{window.WizardOSNative?.recDone(nid);}catch(_){}
-      setVoice('idle');dropHold();restoreReply();return;
-    }
     // A tap take with a fixed destination is the outbox's from here: Reload no longer waits for upload + transcription.
     V.handedOff = (!rt && aimAt == null && kind !== 'command' && !snap.general && !snap.meetingEventId && !V.meetingLoan && !sv?.review && sv?.mode !== 'capture' && await OUTBOX.handOff?.(it.id)) ? it.id : null;
     // Released a moment after this take is handled: by then its outbox item (if any) has replaced the hold.

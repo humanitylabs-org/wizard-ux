@@ -158,9 +158,6 @@
     "core/mic.js",
     "core/my-skin.js",
     "core/notif-bell.js",
-    "core/offline-chats.css",
-    "core/offline-chats.js",
-    "core/offline-kit.js",
     "core/os-updates.js",
     "core/own-views.css",
     "core/own-views.js",
@@ -184,7 +181,6 @@
     "core/share-sheet.js",
     "core/share-wizard.css",
     "core/share-wizard.js",
-    "core/shell-offline.js",
     "core/shell.js",
     "core/sigils.css",
     "core/sigils.js",
@@ -214,39 +210,6 @@
     "pwa-install.js"
   ],
   "coreModules": {
-    "core/offline-chats.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Flight replica adapter and explicit landing UI; existing outbox custody"
-    },
-    "core/offline-kit.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Shared opt-in replica kit and transactional keyed collection"
-    },
-    "core/offline-sw.js": {
-      "loadedBy": [
-        "service-worker"
-      ],
-      "note": "Shared isolated opt-in offline worker"
-    },
-    "core/offline-shell-manifest.js": {
-      "loadedBy": [
-        "service-worker"
-      ],
-      "note": "Generated content-bound shell assets only"
-    },
-    "core/shell-offline.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Explicit shell cache warming on the one scoped worker"
-    },
     "core/device-port.js": {
       "loadedBy": [
         "phone"
@@ -323,10 +286,7 @@
       "note": "Direct entrypoint import"
     },
     "core/app-setup.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
+      "loadedBy": ["phone", "desktop"],
       "note": "Shared per-app needs checklist and app-open admission"
     },
     "core/app-versions.js": {
