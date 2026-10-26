@@ -103,6 +103,28 @@ test('overview mode is capability gated, revoked on teardown, and stale handles 
   assert.equal(f.overview.hold,'arrange'); await f.clear(); assert.equal(f.overview,null);
   release(); release(); api.overview.use({hold:'arrange',appAction:'home-screen',appHold:false}); assert.equal(f.overview,null);
 });
+test('window refresh is layout+nav gated, revoked on teardown, and stale handles cannot reactivate it', async () => {
+  const f=fixture(); let api;
+  f.host._test.setImporter(async()=>({default:a=>{api=a;return()=>{};}}));
+  await f.mount('miguel/hidden-pin'); assert.equal(api.windowRefresh,undefined);
+  await f.mount('miguel/refresh-button'); assert.equal(f.windowRefresh,null);
+  assert.throws(()=>api.windowRefresh.use({}),/Invalid window refresh mode/);
+  const release=api.windowRefresh.use({pull:false,extra:1}); assert.deepEqual({...f.windowRefresh},{pull:false});
+  release(); release(); assert.equal(f.windowRefresh,null);
+  api.windowRefresh.use({pull:true}); assert.equal(f.windowRefresh.pull,true);
+  await f.clear(); assert.equal(f.windowRefresh,null);
+  api.windowRefresh.use({pull:false}); assert.equal(f.windowRefresh,null);
+});
+test('stock shell: no ↻ in window bars and pull-to-refresh stays unless a package holds window refresh', () => {
+  const app=read('web/app.js'), chats=read('web/core/chats.js');
+  assert.match(app,/\$\{refreshModes\.length \? RELOAD_BTN : ''\}<button class="wb" data-wact="full"/);
+  assert.equal((app.match(/data-wact="reload"/g)||[]).length,2,'only RELOAD_BTN markup and its sync selector');
+  assert.match(app,/pullRefresh: \(\) => !refreshModes\.some\(m => m\.pull === false\)/);
+  assert.match(app,/windowRefresh: windowRefreshAdapter/);
+  assert.match(app,/fresh\.style\.cssText = el\.style\.cssText; el\.replaceWith\(fresh\); mountWin\(w, fresh\); applyLayout\(deskOf\(id\)\);/,'a remounted window keeps its tile placement');
+  assert.match(chats,/if \(H\.pullRefresh\?\.\(\) === false\) return;/);
+  assert.doesNotMatch(app+chats,/refresh-button/,'core never names the package');
+});
 test('layout handles become inert on disposal and their cleanup is idempotent', async () => {
   const f = fixture(); let api;
   f.host._test.setImporter(async () => ({default:a=>{api=a;return()=>{};}}));
@@ -157,4 +179,26 @@ test('slot lookup prefers a visible instance over hidden Chats copies (desktop)'
   const src = await readFile(new URL('../web/core/skin-host.js', import.meta.url), 'utf8');
   assert.match(src, /getClientRects\(\)\.length > 0\)/);
   assert.match(src, /querySelectorAll\(selector\)\]\.find\(seen\)/);
+});
+
+test('beside hook: layout-gated event on change only, never a route event, and route().beside for late packages', async () => {
+  const f = fixture(); let api; const seen = [], routes = [];
+  f.host._test.setImporter(async () => ({ default: a => { api = a; return () => {}; } }));
+  await f.host.loadTweaks(['miguel/snooze-someday'], f.slots, { teamAuthors: ['miguel'] });
+  assert.throws(() => api.on('beside', () => {}), /requires layout/);
+  await f.host.loadTweaks(['miguel/swipe-strip'], f.slots, { teamAuthors: ['miguel'] });
+  api.on('beside', b => seen.push(b.side)); api.on('route', r => routes.push(r));
+  f.setRoute({ beside: 1 }); f.setRoute({ beside: 1 }); f.setRoute({ beside: -1 }); f.setRoute({ beside: 0 });
+  assert.deepEqual(seen, [1, -1, 0]); assert.equal(routes.length, 0, 'route listeners see nothing new');
+  f.setRoute({ beside: 7 }); assert.equal(api.route().beside, 1, 'normalised to -1 | 0 | 1');
+  assert.equal(api.mount, undefined, 'device controls go through the declared device-edge slot, not a raw mount');
+  await f.clear(); f.setRoute({ beside: -1 }); assert.deepEqual(seen, [1, -1, 0, 1], 'a torn-down package hears nothing');
+});
+test('app.js tells the host when the bound view beside a thread changes, and reports it in route()', () => {
+  const app = read('web/app.js');
+  const peek = app.slice(app.indexOf('function syncPeek()'), app.indexOf('function detachBound('));
+  assert.match(peek, /device\.classList\.toggle\('bound-view-peeking', left\);\s*window\.WosSkinHost\?\.beside\?\.\(\);/);
+  assert.match(read('web/index.html'), /<div id="device" class="device" data-slot="device-edge">/);
+  assert.ok(JSON.parse(read('web/core/slots.json')).slots['device-edge']);
+  assert.match(app, /beside: device\.classList\.contains\('bound-peeking'\) \? 1 : device\.classList\.contains\('bound-view-peeking'\) \? -1 : 0/);
 });

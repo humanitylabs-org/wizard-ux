@@ -1,0 +1,12 @@
+{
+  "id": "miguel/edge-peek",
+  "name": "Edge peek",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout",
+    "nav"
+  ],
+  "description": "Tap or swipe the edge to reach the view beside a thread"
+}

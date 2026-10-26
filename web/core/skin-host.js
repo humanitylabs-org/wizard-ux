@@ -17,7 +17,7 @@
 (function () {
   'use strict';
   const ERR_LIMIT = 3, ERR_WINDOW = 60000;
-  const EVENTS = ['route', 'render', 'voice', 'sent'];
+  const EVENTS = ['route', 'render', 'voice', 'sent', 'beside'];
   /* Layouts (James, 22 Oct 2026): a third, opt-in layer for UX changes (gestures, orbs, controls) that any
    * colour skin can wear. Classic is the shell as everyone has it and loads nothing. A layout lives in
    * web/layouts/<id>/{layout.css,layout.js}; its css applies only under html[data-layout="<id>"]. */
@@ -43,7 +43,7 @@
   let personal = null, personalSeq = 0, packageReady = Promise.resolve();
   // Built-in gestures every skin wears (core files register them; same API, guards and cleanup as a skin script).
   const builtinDefs = new Map(), builtins = new Map();
-  const record = (id, label = id) => ({ id, label, offs: new Set(), frames: new Set(), claims: new Set(), mounts: new Set(), taps: new Set(), levels: new Set(), orbs: new Set(), on: { route: new Set(), render: new Set(), voice: new Set(), sent: new Set() }, errs: [], dead: false, teardown: null });
+  const record = (id, label = id) => ({ id, label, offs: new Set(), frames: new Set(), claims: new Set(), mounts: new Set(), taps: new Set(), levels: new Set(), orbs: new Set(), on: { route: new Set(), render: new Set(), voice: new Set(), sent: new Set(), beside: new Set() }, errs: [], dead: false, teardown: null });
 
   const skinOf = id => (typeof window !== 'undefined' && window.WosSkin && window.WosSkin.pkgOf) ? window.WosSkin.pkgOf(id) : null;
   const dirOf = (id, pkg) => (pkg && pkg.dir) || id;
@@ -209,7 +209,7 @@
     for (const g of a.levels) levels.delete(g); a.levels.clear();
     for (const o of a.orbs) { try { o.sleep(true); } catch (_) {} } a.orbs.clear();
     if (layoutRec === a) layoutRec = null;
-    a.offs.clear(); a.frames.clear(); a.mounts.clear(); a.taps.clear(); a.on.route.clear(); a.on.render.clear(); a.on.voice.clear(); a.on.sent.clear();
+    a.offs.clear(); a.frames.clear(); a.mounts.clear(); a.taps.clear(); a.on.route.clear(); a.on.render.clear(); a.on.voice.clear(); a.on.sent.clear(); a.on.beside.clear();
     for (const id of a.claims) { if (!layers().some(l => l !== a && l.claims.has(id))) claims.delete(id); }
     a.claims.clear();
   }
@@ -240,7 +240,15 @@
   }
   function routeOf() {
     const r = shell ? shell.route() : { view: 'desk', thread: null, desk: 0 };
-    return Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0, app: r.app || null, agent: r.agent || null });
+    return Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0, app: r.app || null, agent: r.agent || null, beside: Math.sign(r.beside | 0) });
+  }
+  /* The view bound beside a chat thread (app.js syncPeek): 1 = it leans in on the right of the thread, -1 = on that
+   * view, its thread leans in on the left, 0 = none. Its own event, so route listeners never see extra calls. */
+  let lastBeside = 0;
+  function emitBeside() {
+    const side = shell ? routeOf().beside : 0;
+    if (side === lastBeside) return; lastBeside = side;
+    if (layers().length) emit('beside', Object.freeze({ side }));
   }
   function emitRoute() {
     if (!layers().length || !shell) return;
@@ -322,7 +330,7 @@
   }
 
   /* Tweaks extend the existing package host: same guards, listeners, frames and disposal. */
-  const tweaks = new Map(), interceptors = new Map();
+  const tweaks = new Map(), interceptors = new Map(), snoozeLast = new Set(); // snoozeLast: packages holding snoozeOrder('last')
   let tweakSeq = 0, slotContract = null;
   const safeTweakId = id => /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/.test(id);
   const tweakUrl = (id, file) => stamp(new URL(`tweaks/${id}/${file}`, document.baseURI).href);
@@ -341,6 +349,7 @@
       if (type === 'render' && !caps.has('layout')) throw new Error('render requires layout');
       if (type === 'sent' && (!caps.has('nav') || !trusted)) throw new Error('sent requires trusted navigation');
       if (type === 'voice' && !caps.has('layout')) throw new Error('voice requires layout');
+      if (type === 'beside' && !caps.has('layout')) throw new Error('beside requires layout');
       return base.on(type, payload => fn(type === 'render' ? Object.freeze({ part: payload.part }) : payload));
     }, toast: base.toast, storage: base.storage };
     if (caps.has('layout')) {
@@ -393,7 +402,14 @@
         const handler = context => Promise.resolve().then(() => !a.dead && fn(Object.freeze({ ...context }))).catch(e => base.toast(e.message));
         interceptors.set(a.id, { action, handler }); a.offs.add(() => interceptors.delete(a.id));
       },
-      snoozeSomeday: sessionId => { if (!trusted || a.dead) throw new Error('Trusted navigation required'); return window.WosBoomerang.someday({ sessionId }); },
+      snoozeSomeday: sessionId => { if (!trusted || a.dead) throw new Error('Trusted navigation required'); return window.WosBoomerang.someday({ sessionId, restore: true }); },
+      // Snooze = lowest priority, bottom of Ready (live.js / chats.js read host.snoozeOrder). Released on teardown.
+      snoozeOrder(order) {
+        if (!trusted || a.dead) throw new Error('Trusted navigation required');
+        if (order !== 'last') throw new Error('Unknown order');
+        if (snoozeLast.has(a.id)) return;
+        snoozeLast.add(a.id); a.offs.add(() => { if (snoozeLast.delete(a.id)) window.dispatchEvent?.(new Event('wos:prefs')); });
+      },
     });
     // A layout+navigation package may borrow the shell's overview renderer/input adapter.
     // No DOM or package IDs cross this boundary; the handle is released on every teardown.
@@ -401,6 +417,15 @@
       if (a.dead) return () => {};
       if (!['arrange','offer'].includes(options.hold) || ![null,'home-screen'].includes(options.appAction ?? null) || typeof options.appHold !== 'boolean') throw new Error('Invalid overview mode');
       const release = shell?.overview?.use?.(Object.freeze({ hold:options.hold, appAction:options.appAction ?? null, appHold:options.appHold })) || (() => {});
+      let released = false; const off = () => { if (!released) { released = true; release(); } };
+      a.offs.add(off); return off;
+    } });
+    // A layout+navigation package may ask the shell for ↻ in every window bar and (pull:false) drop Chats pull-to-refresh.
+    // The shell owns the button and the refresh; the handle is released on every teardown.
+    if (caps.has('layout') && caps.has('nav')) api.windowRefresh = Object.freeze({ use(options = {}) {
+      if (a.dead) return () => {};
+      if (typeof options.pull !== 'boolean') throw new Error('Invalid window refresh mode');
+      const release = shell?.windowRefresh?.use?.(Object.freeze({ pull: options.pull })) || (() => {});
       let released = false; const off = () => { if (!released) { released = true; release(); } };
       a.offs.add(off); return off;
     } });
@@ -449,6 +474,8 @@
   const host = {
     loadTweaks, emit,
     get tweakState() { return [...tweaks.keys()]; },
+    /* live.js / chats.js: 'last' while a live tweak holds api.nav.snoozeOrder('last'); otherwise 'default' (stock). */
+    get snoozeOrder() { return snoozeLast.size ? 'last' : 'default'; },
     action(name, context) { for (const { action, handler } of interceptors.values()) if (action === name) { void handler(context); return true; } return false; },
     /* core/skins.js: picker landed near a skin (preview or commit). Stylesheet only. */
     preview(id) { ensureCss(id); },
@@ -475,6 +502,8 @@
     rendered(part, el) { if (!layers().length) return; emit('render', Object.freeze({ part, el })); emitRoute(); },
     /* app.js: desk or focus changed. */
     changed() { emitRoute(); },
+    /* app.js syncPeek: the bound view beside a thread appeared, moved or went away. */
+    beside() { emitBeside(); },
     /* app.js dock swipe: true when a skin gesture owns this pointer. Cleared on pointerup/cancel. */
     claimed: pointerId => claims.has(pointerId),
     release,

@@ -1,6 +1,6 @@
-# Wizard OS components
+# Shared components
 
-**One implementation per capability.** Extend below; NEW lives in `web/core/`.
+Extend shared capabilities below. NEW lives in `web/core/`.
 
 CI: Reuse + globals; [app gate](app-reuse-gate.md).
 
@@ -18,7 +18,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 
 | Need | Use | Never hand-roll | Test the shared path by |
 |---|---|---|---|
-| Agent chat: composer, Stop/retry/outbox, models, dictation, attachments | `WizardApp.nav.openThread(sessionId, {reply})` (wizard-builder chat.md) | app composer/transcript/streaming/retries; `wizard-ui.css` is look only | shell `[data-chats]` session; no app textarea; 503: one outbox item/message |
+| Agent chat: composer, Stop/retry/outbox, models, dictation, attachments | `WizardApp.nav.openThread(sessionId, {reply})`, `nav.openContextDraft` (wizard-builder chat.md) | app composer/transcript/streaming/retries; `wizard-ui.css` is look only | shell `[data-chats]` session; no app textarea; 503: one outbox item/message |
 | Top-level home-screen name, icon and app root | `WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK | per-app manifest injectors | app-owned manifest wins; frames untouched |
 | Own chat-box input: paste, drop, Enter | `WizardApp.composer.bind` (Chats' `web/core/composer-input.js`) | own paste/drop/Enter | `qa-composer-input.cjs` |
 | File chip before send | `WizardApp.attachChip.node` (Chats' tray, `core/attach-chip.js`) | own chip | `qa-attach-chip.cjs` |
@@ -61,7 +61,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | App source labels, `wizard://install` | `sourceLabel`, `parseInstallLink` (`web/store/`) | own badges |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`web/core/app-route.js`) | — |
 | App glyph tiles | `WizSigil` (`web/core/sigils.js`, `web/core/sigils.css`) | PNG/emoji icons |
-| Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs + temporary defaults | app lists |
+| Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs + old-service defaults | lists |
 | App groups | `WosAppKinds` (`web/core/app-kinds.js`) | forks |
 | Brand hat | `WizBrand` (`web/core/brand.js`) | redrawn logos |
 | Links: in-app sheet, image links, long-press Open in your browser / Download / Copy link | `WizLinks` (`web/core/links.js`; Android: `WizardOSNative.openInBrowser` / `download`) | `window.open`, own iframe sheet, own link menu |
@@ -83,7 +83,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Need | Use | Never hand-roll |
 |---|---|---|
 | The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`); Android mirror `android/app/src/main/assets/assist/everywhere.html` | PNG + CSS spin, Lottie, SVG |
-| Skins, backgrounds, scenery, skin feature switches (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`), `WosSkinHost` (`web/core/skin-host.js`; tweaks on `core/slots.json`), `WosExperience` (`web/core/experience.js`), `WosMySkin` (`web/core/my-skin.js`), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own gradients, canvases or colour constants |
+| Skins, backgrounds, scenery, skin switches (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`), `WosSkinHost` (`web/core/skin-host.js`; tweaks: `core/slots.json`, `windowRefresh`, beside), `WosExperience` (`web/core/experience.js`), `WosMySkin` (`web/core/my-skin.js`), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own gradients, canvases or colour constants |
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) | own keyframe sets |
 | Tour/help, responsive Done, skip/exit; desktop guide `WosTour.desk` | `WosTour` (`web/core/tour.js`) | — |
 | First launch and explicit Setup/tour; VM auto-onboarding; alongside launch starts only the orientation | `WosSetupLaunch` (`web/core/setup-launch.js`); built-in checklist `web/setup/setup.js` distinguishes ready-to-open from phone-connected | shell-specific first-run checks, a second tour launcher |
