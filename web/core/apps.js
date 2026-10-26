@@ -5,14 +5,11 @@
   const { norm } = window.WizCore;
   const ALL = [
     { id: 'app-store', kind: 'wizard', name: 'App Store', icon: '+', g: ['#8f63ff', '#ff5ccf'], url: '/wizard-os-home/store/index.html', desc: 'Get apps · Browse the Wizard App Index' },
-    // Agents: a system app of its own, reached from Home and System; never in Apps or the Store.
+    // Agents: a system app of its own, reached from Home; never in Apps or the Store.
     // Its sigil is the house `agents` mark (two layered hats), never a single hat that could pass for one agent.
     { id: 'agents', kind: 'wizard', name: 'Agents', icon: 'secret', g: ['#4ff0b0', '#3fe0ff'], url: '/wizard-os-home/agents/index.html', desc: 'Your agents: harness, model provider, permissions and their own chats', system: true, sigil: { id: 'agents', name: 'Agents' } },
-    { id: 'system', kind: 'wizard', name: 'System', icon: '◈', g: ['#3fe0ff', '#8f63ff'], url: '/wizard-os-home/system/index.html', desc: 'Your agents, agent apps, connections and routines' },
     // Gateway-served recovery remains launchable even if the remote app catalog is down.
     { id: 'troubleshooter', kind: 'wizard', name: 'Troubleshooter', icon: '⚒', g: ['var(--wz-accent, var(--violet-2))', 'var(--wz-text-secondary, var(--ink-2))'], url: '/troubleshoot/', desc: 'Fix Wizard · Check connection, sign-in and agent health' },
-    // Wizard OS views
-    { id: 'v-inbox', kind: 'view', name: 'Inbox', icon: '⬇', g: ['#ffbe55', '#ff6b86'], view: 'inbox', desc: 'Needs you, ready for review, working' },
     // Setup: built-in system app (web/setup/), beside Chats. Opens by itself on first launch (core/setup-launch.js).
     { id: 'setup', kind: 'wizard', name: 'Setup', icon: 'S', colors: ['#4ff0b0'], g: ['#4ff0b0', '#3fe0ff'], url: '/wizard-os-home/setup/index.html', desc: 'Get Wizard ready · use it on your phone' },
     // Chats: the one built-in Wizard app. Everything else comes from the box (GET /wizard/v1/apps).
@@ -31,19 +28,13 @@
     { id: 'side-button', kind: 'native', name: 'Side button', icon: '◉', g: ['#8f63ff', '#ff5ccf'], desc: 'Hold the side button to talk to Wizard' },
     { id: 'settings', kind: 'native', name: 'Settings', icon: '⚙', g: ['#6a7088', '#2a2f42'], href: 'intent:#Intent;action=android.settings.SETTINGS;end', desc: 'Android settings' },
   ];
-  // Platform: 'mobile' gets everything except desktop-only entries; 'desktop' drops Android intents and
-  // the review views (semantic-zoom review still lives in the phone shell; it moves to core next).
+  // Platform: 'mobile' gets everything except desktop-only entries; 'desktop' drops Android intents.
   function appsFor(shell, list = ALL) {
     const nativeSide = !!(window.WizardOSNative && typeof window.WizardOSNative.sideButton === 'function');
-    // The review views read this owner's own history export (data.js); without it they have nothing to show.
-    const hasHistory = !!(window.WIZ_DATA && Array.isArray(window.WIZ_DATA.threads) && window.WIZ_DATA.threads.length);
     return list.filter(a => {
-      if (a.kind === 'view' && a.view !== 'inbox' && !hasHistory) return false;
-      // Phone: no Inbox tile; notifications are the Chats list ("open inbox" still opens Chats).
-      if (shell !== 'desktop' && a.view === 'inbox') return false;
       if (a.id === 'side-button' && !nativeSide) return false;
       if (a.id === 'usuals' && !(window.WizardOSNative && typeof window.WizardOSNative.usuals === 'function')) return false;
-      if (shell === 'desktop') return a.kind !== 'native' && !(a.kind === 'view' && a.view !== 'inbox');
+      if (shell === 'desktop') return a.kind !== 'native';
       return !a.desktopOnly;
     });
   }
@@ -154,7 +145,7 @@
   function findApp(q, exact) {
       q = norm(q).replace(/^(the|my) /, '').replace(/ (app|application|view)$/, '');
       if (!q) return null;
-      const alias = { troubleshooter: 'troubleshooter', troubleshooting: 'troubleshooter', troubleshoot: 'troubleshooter', 'fix wizard': 'troubleshooter', wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', 'google maps': 'maps', map: 'maps', 'cine queue': 'cinequeue', movies: 'cinequeue', 'i ching': 'iching', notifications: 'v-inbox', 'side key': 'side-button', 'power button': 'side-button', 'side button assistant': 'side-button', inbox: 'v-inbox', terminal: 'console', music: 'spotify', reader: 'wisdom', 'wisdom reader': 'wisdom', 'wizard reader': 'wisdom', collections: 'wisdom', jobs: 'wisdom', 'steve jobs': 'wisdom', signal: 'wizard-signal', shop: 'shopping', meetings: 'mizel', 'meeting recorder': 'mizel', usual: 'usuals', usuals: 'usuals', 'food app': 'usuals', 'my food': 'usuals', 'grab app': 'usuals', 'saved orders': 'usuals', eats: 'usuals', 'wizard eats': 'usuals', bites: 'usuals', 'wizard bites': 'usuals', 'wizard food': 'usuals', grab: 'usuals', 'my usuals': 'usuals', 'grab food': 'usuals', food: 'usuals', 'order food': 'usuals' };
+      const alias = { troubleshooter: 'troubleshooter', troubleshooting: 'troubleshooter', troubleshoot: 'troubleshooter', 'fix wizard': 'troubleshooter', wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', 'google maps': 'maps', map: 'maps', 'cine queue': 'cinequeue', movies: 'cinequeue', 'i ching': 'iching', notifications: 'wizard', 'side key': 'side-button', 'power button': 'side-button', 'side button assistant': 'side-button', inbox: 'wizard', terminal: 'console', music: 'spotify', reader: 'wisdom', 'wisdom reader': 'wisdom', 'wizard reader': 'wisdom', collections: 'wisdom', jobs: 'wisdom', 'steve jobs': 'wisdom', signal: 'wizard-signal', shop: 'shopping', meetings: 'mizel', 'meeting recorder': 'mizel', usual: 'usuals', usuals: 'usuals', 'food app': 'usuals', 'my food': 'usuals', 'grab app': 'usuals', 'saved orders': 'usuals', eats: 'usuals', 'wizard eats': 'usuals', bites: 'usuals', 'wizard bites': 'usuals', 'wizard food': 'usuals', grab: 'usuals', 'my usuals': 'usuals', 'grab food': 'usuals', food: 'usuals', 'order food': 'usuals' };
       // "Open music" is Wizard Music when this Wizard has it; Spotify only by name or as the fallback.
       if (/^(music|my music|the music|songs|music app|music player|wizard music)$/.test(q) && APP['wizard-music']) return APP['wizard-music'];
       if (alias[q] && APP[alias[q]]) return APP[alias[q]];

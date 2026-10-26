@@ -13,7 +13,7 @@ test('every docker-ignored script the shell loads gets an empty placeholder in t
   for (const page of ['web/index.html', 'web/desktop.html']) {
     const scripts = [...read(page).matchAll(/<script src="([^"]+)"/g)].map(m => m[1]);
     const runtime = scripts.filter(s => ignored.includes(s));
-    assert.deepEqual(runtime.sort(), ['data.js', 'summaries.js'], page);
+    assert.deepEqual(runtime.sort(), [], page);
     for (const s of runtime) assert.match(dockerfile, new RegExp(`\\b${s.replace('.', '\\.')}\\b`), `Dockerfile must create ${s}`);
   }
   // Placeholders never overwrite an owner's generated file and are created before dropping root.

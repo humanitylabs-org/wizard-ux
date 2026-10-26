@@ -416,7 +416,6 @@ body {
 .ibx-all { color: var(--green); font-weight: 800; font-size: 12px; }
 .note .sb { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-.summary + .cta, .zlayer .cta[data-wizthread] { display: block; width: 100%; margin-top: 12px; }
 
 /* ---------- desks hold tiled windows (Omarchy-style) ----------
    Small gaps, rounded corners, the wallpaper bleeding through between tiles. */
@@ -455,7 +454,6 @@ body {
 .wb:active { background: rgba(205, 190, 255, .1); color: var(--ink); }
 .wbody { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 .wbody > .desk-scroll { padding: 12px 12px 14px; }
-.win .review { padding: 6px 10px 0; }
 .win .frame-wrap { position: absolute; inset: 0; border-radius: 0; }
 .appframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #0f1014; color-scheme: dark; }
 .frame-wrap { background: #0f1014; }
@@ -474,7 +472,6 @@ body {
 .tiles[data-n="4"] .wbar { padding-left: 8px; gap: 5px; }
 .tiles[data-n="4"] .ch-top, .tiles[data-n="3"] .win:not(:first-child) .ch-top { display: none; }
 .tiles[data-n="4"] .ch-row .pv, .tiles[data-n="3"] .win:not(:first-child) .ch-row .pv { -webkit-line-clamp: 1; }
-.tiles[data-n="4"] .zoom-rail, .tiles[data-n="4"] .pinch-hint { display: none; }
 
 /* voice: windows stay live and undimmed (see "Voice never fades" above) */
 .tiles { transition: opacity 260ms var(--ease), filter 260ms var(--ease), inset 380ms var(--ease); }
@@ -497,19 +494,31 @@ body {
 .tiles[data-n="4"] .ch-compose, .tiles[data-n="3"] .win:not(:first-child) .ch-compose { display: none; }
 .tiles[data-n="4"] .win.focus .ch-compose { display: flex; }
 
-/* narrow tiles (3- and 4-up stacks): compact review + app headers */
-.tiles[data-n="3"] .win:not(:first-child) .zoom-rail, .tiles[data-n="3"] .win:not(:first-child) .pinch-hint { display: none; }
+/* narrow tiles (3- and 4-up stacks): compact app headers */
 .tiles[data-n="3"] .win:not(:first-child) .wbar .wb[data-wact="menu"] { width: 26px; }
-.tiles[data-n="3"] .win:not(:first-child) .review, .tiles[data-n="4"] .review { padding: 4px 6px 0; }
-.tiles[data-n="3"] .win:not(:first-child) .zlayer .desk-scroll, .tiles[data-n="4"] .zlayer .desk-scroll { padding: 0 0 10px; }
-.tiles[data-n="3"] .win:not(:first-child) .zlayer h2, .tiles[data-n="4"] .zlayer h2 { font-size: 22px; }
-.win .pinch-hint { bottom: 8px; }
 /* desk label sits above the orb, clear of the tiles */
 .desk-label { bottom: calc(var(--dock-h) + var(--safe-b) - 6px); }
 
 /* ---------- coming-soon frame (app published from another thread) ---------- */
 .frame-coming { display: none; position: absolute; inset: 0; z-index: 2; place-content: center; text-align: center; padding: 0 26px; background: radial-gradient(120% 80% at 50% 30%, rgba(63, 224, 255, .08), transparent 60%), #0c0a18; }
 .frame-wrap.coming .frame-coming { display: grid; justify-items: center; }
+/* Opening feedback: a tapped app tile answers at once, and a window shows its app with a spinner until the
+   app's page has loaded, so a slow app never looks like a missed tap (James, 26 Oct 2026). */
+.wos-spin { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 2px solid color-mix(in oklab, currentColor 25%, transparent); border-top-color: var(--violet-2, #b69cff); animation: spin .8s linear infinite; vertical-align: -2px; }
+.frame-loading { display: none; position: absolute; inset: 0; z-index: 1; place-content: center; justify-items: center; gap: 18px; background: inherit; pointer-events: none; }
+.frame-wrap.loading .frame-loading { display: grid; }
+.frame-wrap.loading.coming .frame-loading, .frame-wrap.loading.blocked .frame-loading { display: none; }
+.frame-loading .glyph { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; font-size: 30px; background: linear-gradient(135deg, var(--g1), var(--g2)); box-shadow: 0 10px 30px rgba(0, 0, 0, .3); }
+.frame-loading .wos-spin { width: 22px; height: 22px; color: var(--ink-3, #8d8aa3); }
+/* The tapped icon itself answers: it sinks, its picture dims under a dark veil, a spinner turns in its centre, and it
+   stops looking (and acting) tappable until the app is up. */
+:is(.lapp, .lrow).opening { pointer-events: none; }
+:is(.lapp, .lrow).opening .ic { transform: scale(.84) !important; filter: saturate(.6); transition: transform 120ms var(--spring, ease), filter 120ms; }
+:is(.lapp, .lrow).opening .ic > :not(.open-spin) { opacity: .3; }
+.open-spin { position: absolute; inset: 0; margin: auto; width: 46%; height: 46%; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .28); border-top-color: #fff; animation: spin .7s linear infinite; pointer-events: none; z-index: 2; }
+.lapp.opening .ic::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: rgba(0, 0, 0, .45); z-index: 1; }
+.lapp.opening .nm { opacity: .5; }
+@media (prefers-reduced-motion: reduce) { .wos-spin, .open-spin { animation: spin 1.6s linear infinite !important; animation-iteration-count: infinite !important; animation-duration: 1.6s !important; } }
 .frame-wrap.coming .appframe { visibility: hidden; }
 .frame-coming .glyph { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; font-size: 30px; background: linear-gradient(135deg, var(--g1), var(--g2)); box-shadow: 0 10px 30px rgba(63, 224, 255, .2); margin-bottom: 16px; }
 .frame-coming h3 { margin: 0 0 6px; font-size: 18px; font-weight: 700; }
@@ -640,23 +649,6 @@ body {
 .rec-row.run .rs { animation: pip 1.6s ease-in-out infinite; }
 .rec-row.sum .rs { color: #3fe0ff; }
 .rec-empty { padding: 8px 4px; font-size: 13px; color: var(--ink-3); }
-
-/* ================= Live Mode (preview slice) =================
- * Motion and components come from the shared kit (motion/wizard-motion.css).
- * Only Wizard OS placement and layering live here. */
-.device { --wm-bottom: calc(var(--dock-h) + var(--safe-b) + 34px); --wm-violet-2: var(--violet-2); --wm-green: var(--green); --wm-red: var(--red); }
-.lm-words { z-index: 0; }
-.lm-pill { position: absolute; top: calc(var(--sb) + var(--safe-t) + 12px); right: 14px; z-index: 60; }
-.lm-pill small { font-weight: 500; font-size: 10.5px; color: var(--ink-3); letter-spacing: .02em; white-space: nowrap; }
-.lm-layer { z-index: 70; }
-.lm-hint { z-index: 72; bottom: calc(var(--dock-h) + var(--safe-b) + 2px); }
-.lm-x { position: absolute; top: 10px; right: 12px; width: 30px; height: 30px; border: 0; background: none; color: var(--ink-3); font-size: 14px; border-radius: 50%; }
-.lm-ideas { z-index: 65; padding: calc(var(--sb) + var(--safe-t) + 70px) 8vw calc(var(--dock-h) + var(--safe-b) + 70px); }
-.lm-ideas-top .k { font: 600 11px/1 system-ui, sans-serif; color: var(--violet-2); letter-spacing: .2em; text-transform: uppercase; }
-.lm-ideas-top h2 { font-size: 30px; font-weight: 300; margin: 6px 0 14px; color: var(--ink); }
-/* In Live Mode the orb is already listening: the hint line replaces the "say" chips. */
-.device.lm-on .hint-row { display: none; }
-.device.lm-on .home { padding-bottom: 40px; }
 
 /* ---------- Settings gear (Home + empty desks) ---------- */
 .gear { position: absolute; z-index: 5; top: calc(var(--sb) + var(--safe-t) + 10px); right: 14px; width: 40px; height: 40px; border-radius: 50%;

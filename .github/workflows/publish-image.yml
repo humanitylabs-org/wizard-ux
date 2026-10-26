@@ -85,8 +85,10 @@ jobs:
     needs: validate
     if: >-
       github.repository == 'humanitylabs-org/wizard-ux' &&
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      ((github.ref == 'refs/heads/main' &&
+        (github.event_name == 'push' || github.event_name == 'workflow_dispatch')) ||
+       (github.ref == 'refs/heads/release/stable-onboarding' &&
+        github.event_name == 'workflow_dispatch' && inputs.expected_sha == github.sha))
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -125,7 +127,7 @@ jobs:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
         run: >-
           python3 scripts/ci/ghcr_image.py publish
-          --image "$IMAGE" --sha "$GITHUB_SHA" --branch main
+          --image "$IMAGE" --sha "$GITHUB_SHA" --branch "$GITHUB_REF_NAME"
           --builder "${{ steps.buildx.outputs.name }}"
           --release "$RELEASE_TAG" --confirm "$CONFIRM_TAG" --expected-sha "$EXPECTED_SHA"
 
@@ -134,8 +136,10 @@ jobs:
     if: >-
       needs.publish.outputs.built == 'true' &&
       github.repository == 'humanitylabs-org/wizard-ux' &&
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      ((github.ref == 'refs/heads/main' &&
+        (github.event_name == 'push' || github.event_name == 'workflow_dispatch')) ||
+       (github.ref == 'refs/heads/release/stable-onboarding' &&
+        github.event_name == 'workflow_dispatch' && inputs.expected_sha == github.sha))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -165,7 +169,7 @@ jobs:
           gh attestation verify "oci://$IMAGE@$DIGEST"
           --repo "$GITHUB_REPOSITORY" --bundle-from-oci
           --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/publish-image.yml"
-          --source-ref refs/heads/main --source-digest "$GITHUB_SHA"
+          --source-ref "$GITHUB_REF" --source-digest "$GITHUB_SHA"
 
   finalize:
     needs: [publish, attest]
@@ -179,8 +183,10 @@ jobs:
       (needs.attest.result == 'success' ||
        (needs.publish.outputs.built == 'false' && needs.attest.result == 'skipped')) &&
       github.repository == 'humanitylabs-org/wizard-ux' &&
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      ((github.ref == 'refs/heads/main' &&
+        (github.event_name == 'push' || github.event_name == 'workflow_dispatch')) ||
+       (github.ref == 'refs/heads/release/stable-onboarding' &&
+        github.event_name == 'workflow_dispatch' && inputs.expected_sha == github.sha))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -212,7 +218,7 @@ jobs:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
         run: >-
           python3 scripts/ci/ghcr_image.py finalize
-          --image "$IMAGE" --sha "$GITHUB_SHA" --digest "$DIGEST" --branch main
+          --image "$IMAGE" --sha "$GITHUB_SHA" --digest "$DIGEST" --branch "$GITHUB_REF_NAME"
           --builder "${{ steps.buildx.outputs.name }}"
           --release "$RELEASE_TAG" --confirm "$CONFIRM_TAG" --expected-sha "$EXPECTED_SHA"
 
@@ -222,8 +228,10 @@ jobs:
       needs.publish.result == 'success' &&
       needs.finalize.result == 'success' &&
       github.repository == 'humanitylabs-org/wizard-ux' &&
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      ((github.ref == 'refs/heads/main' &&
+        (github.event_name == 'push' || github.event_name == 'workflow_dispatch')) ||
+       (github.ref == 'refs/heads/release/stable-onboarding' &&
+        github.event_name == 'workflow_dispatch' && inputs.expected_sha == github.sha))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:

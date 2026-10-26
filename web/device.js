@@ -182,7 +182,7 @@
     const snap = window.WosOrbHandoff?.takeSnap(t.id), target = snap?.view;
     const route = snap?.route || window.WosModels.voiceRoute(t.id);
     const sid = target?.thread || pin?.sid || '';
-    const it = await OUTBOX.enqueue({ nativeId: t.id, ...(route || {}), meetingEventId:snap?.meetingEventId||'', agent:target?.agent||'', kind: sid && sid!=='__new__' ? 'reply' : 'new', sessionId: sid==='__new__'?'':sid, steerRunId: snap?.meetingEventId ? '' : pin?.steerRunId || '', text: '', audio: blob, source: pin ? 'chat' : 'orb', how,
+    const it = await OUTBOX.enqueue({ nativeId: t.id, ...(how === 'recovered' ? { space: false } : {}), ...(route || {}), meetingEventId:snap?.meetingEventId||'', agent:target?.agent||'', kind: sid && sid!=='__new__' ? 'reply' : 'new', sessionId: sid==='__new__'?'':sid, steerRunId: snap?.meetingEventId ? '' : pin?.steerRunId || '', text: '', audio: blob, source: pin ? 'chat' : 'orb', how,
       instructions: (window.WizConfig.owner() ? window.WizConfig.owner() + ' recorded' : 'The owner recorded') + ' this with the Wizard OS orb on their Android phone' + (pin ? ' as a voice reply in this thread' : '') + (how === 'recovered' ? '; the recording was interrupted and recovered' : '') + '. The original recording is attached as a voice note.' });
     releaseNativeCustody();
     log('rec:sent', t.id, it.id, how);
