@@ -70,7 +70,10 @@ async function list(p){await p.evaluate(()=>{let w=Object.values(__wos.wins).fin
   ok(adb('shell','run-as',app,'cat','files/qa_home.txt').trim()==='http://localhost:9397','QA app points only at the loopback fake Wizard');
   adb('shell','am','start','-n',app+'/ai.wizards.os.MainActivity');
   let {b,p}=await attach();browser=b;await p.waitForFunction(()=>window.__wos?.live?.ok,{},{timeout:60000});
-  await p.evaluate(()=>{localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.done','1');});
+  await p.evaluate(()=>{localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.v1','true');});
+  // A fresh phone opens the first-run tour over Chats; skip it with a real tap, as a new owner would.
+  if(await p.evaluate(()=>!!document.querySelector('[data-tskip],[data-dskip]')&&[...document.querySelectorAll('[data-tskip],[data-dskip]')].some(e=>e.getClientRects().length)))await p.locator('[data-tskip],[data-dskip]').first().click();
+  await p.waitForFunction(()=>![...document.querySelectorAll('[data-tskip],[data-dskip]')].some(e=>e.getClientRects().length),{},{timeout:10000});shot('android-after-tour');
   await list(p);await p.locator('[data-flight-download]').first().click();
   try{await p.waitForFunction(()=>/^(Ready|Not ready) for flight/.test(document.querySelector('[data-flight-ready]')?.textContent||''),{},{timeout:240000});}
   catch(e){const st=await p.evaluate(()=>({line:document.querySelector('[data-flight-ready]')?.textContent,online:navigator.onLine,secure:isSecureContext,controller:!!navigator.serviceWorker?.controller,warm:!!window.WosShellOffline,href:location.href})).catch(x=>String(x));fs.writeFileSync(path.join(out,'ready-state.json'),JSON.stringify(st,null,2));shot('ready-timeout');throw Error(e.message+' state='+JSON.stringify(st));}
