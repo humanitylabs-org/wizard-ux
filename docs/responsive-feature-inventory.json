@@ -149,6 +149,7 @@
     "core/core.js",
     "core/deeplink.js",
     "core/dom-morph.js",
+    "core/edge-peek.js",
     "core/experience.js",
     "core/features.js",
     "core/files.js",
@@ -553,6 +554,13 @@
         "desktop"
       ],
       "note": "Skin host built-in: swipe right in a chat thread goes back one step on every skin (touch only)"
+    },
+    "core/edge-peek.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin host built-in: tap or swipe the edge to reach the view bound beside a chat thread (no-op on desktop)"
     },
     "core/skin-host.js": {
       "loadedBy": [
