@@ -1,7 +1,8 @@
 :root {
   --dock-h: 124px;
   --sb: 0px;
-  --safe-b: env(safe-area-inset-bottom, 0px);
+  /* --vv-b: the part of the page a browser's own bottom bar covers (app.js browserBarInset; 0 in an installed app). */
+  --safe-b: calc(env(safe-area-inset-bottom, 0px) + var(--vv-b, 0px));
   /* Native shell draws the page under the status bar and tells it how tall the bar is (--nat-t). */
   --safe-t: max(env(safe-area-inset-top, 0px), var(--nat-t, 0px));
 }

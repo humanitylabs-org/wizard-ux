@@ -2572,11 +2572,16 @@
       if (id) { V.native = id;if (V.replyTo) replyTake(id, V.replyTo);try{window.WosOrbHandoff?.bind(meetingLoan,id,V.snap);}catch(e){await cancelVoice(true);toast('!','Could not save microphone link · original retained');return;} if (V.snap?.general) { try { voiceRecovery(id, { kind:'general', general:true, conversation:null }); saveVoiceRoute(id,V.snap.route); } catch (_) { V.stopAsked=true;pauseCommandCapture();toast('!','General destination could not be saved · recording kept');return; } } voiceTake(id, kind === 'general' ? 'auto' : kind); reportVoice(V.state); if(V.admitSend){V.admitSend=false;finishVoice();}else if (V.stopAsked) { pauseCommandCapture(); if (V.sendAsked) finishVoice(); } return; }
       if(meetingLoan?.native){await cancelVoice(true);toast('!', 'Native handoff refused · meeting restored');return;}
     } // A refused native loan NEVER falls through to browser capture.
+    // The browser may never answer the microphone request (a permission prompt that never resolves): after a few
+    // seconds the take ends with a message instead of a recording UI that cannot record.
+    const micWatch = setTimeout(() => { if (captureEpoch === V.captureEpoch && !V.cancelled && !V.rec && !V.native && !V.sim && V.state !== 'idle' && V.state !== 'think') micNeverOpened('timeout'); }, MIC_OPEN_TIMEOUT_MS);
     try {
-      if (!(await openRec(captureEpoch))) return;
+      const opened = await openRec(captureEpoch); clearTimeout(micWatch);
+      if (!opened) return;
       if(V.admitSend){V.admitSend=false;finishVoice();}
       if (V.stopAsked && V.sendAsked) finishVoice();
     } catch (err) {
+      clearTimeout(micWatch);
       if (captureEpoch !== V.captureEpoch || V.cancelled || V.state === 'idle') return;
       stopStream(); V.rec = null;
       if (err?.code === 'external_mic') { await cancelVoice(true); toast('!', 'Bluetooth has the mic · Wizard uses the phone mic · change in Settings → Microphone', 5000); return; }
@@ -2591,6 +2596,40 @@
       $('#txChips').innerHTML = `<span class="lbl">Try</span>` + ex.map(x => `<button data-sim="${esc(x)}">${esc(x)}</button>`).join('');
       if (V.stopAsked) { cancelVoice(true); }
     }
+  }
+  /* A browser tab (not the installed app) can draw its own toolbar over the bottom of the page: iPhone Safari's bottom
+   * bar does, and only the visual viewport knows it. The dock, the orb and its Cancel/Pause controls would then sit
+   * under the toolbar, where taps go to Safari and the orb looks frozen. Lift everything above the visible bottom
+   * (--vv-b feeds --safe-b). Never while typing: the keyboard also shrinks the visual viewport and the composers
+   * handle it themselves. Installed apps and the native shells have no browser bar, so this stays 0 there. */
+  function browserBarInset() {
+    const vv = window.visualViewport, root = document.documentElement;
+    const mm = q => { try { return matchMedia(q).matches; } catch (e) { return false; } };
+    if (!vv || navigator.standalone === true || mm('(display-mode: standalone)') || mm('(display-mode: fullscreen)') || DEV() || window.WizardOSNative) return;
+    let cur = 0;
+    const typing = () => { const a = document.activeElement; return !!a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName || '')); };
+    const apply = () => {
+      if (typing()) return;
+      const shown = vv.offsetTop + vv.height, bottom = device.getBoundingClientRect().bottom;
+      const cover = Math.round(bottom - shown);
+      const v = cover > 6 && cover < 220 ? cover : 0;
+      if (v === cur) return;
+      cur = v; root.style.setProperty('--vv-b', v + 'px'); root.dataset.browserBar = v ? String(v) : '';
+      window.__vvLog = (window.__vvLog || []).concat('vv-b:' + v).slice(-20);
+    };
+    vv.addEventListener('resize', apply); vv.addEventListener('scroll', apply); addEventListener('resize', apply);
+    addEventListener('focusout', () => setTimeout(apply, 350)); addEventListener('orientationchange', () => setTimeout(apply, 350));
+    apply();
+  }
+  // The microphone never opened for this take (no answer from the browser, or a second tap before it did): end the
+  // take, keep nothing (nothing was recorded) and say why where the person is looking (the tour hides toasts).
+  const MIC_OPEN_TIMEOUT_MS = 8000;
+  function micNeverOpened(why) {
+    if (V.rec || V.native || V.state === 'idle') return;
+    window.__voiceLog = (window.__voiceLog || []).concat('mic-never-opened:' + why).slice(-20);
+    cancelVoice(true);
+    const text = why === 'timeout' ? 'The microphone didn’t start. Allow it for this site, then tap the orb again.' : 'The microphone didn’t start, so nothing was recorded. Tap the orb to try again.';
+    toast('🎙', text, 5200); tourEv('voicefail', { text });
   }
   $('#txChips').addEventListener('click', e => { const b = e.target.closest('[data-sim]'); if (!b) return; const k = V.kind; cancelVoice(true); runUtterance(b.dataset.sim, k); });
   // Only a tap (or Cancel) ends a take. If Android takes the mic away (a call, another app, the system), the
@@ -2756,6 +2795,10 @@
     V.snap = V.snap || sendSnap(); // pinned when the take started; browsing since can't move it
     if (V.target != null || V.replyTo || V.kind === 'command') V.snap.conversation = null; // only explicit gestures override
     if (V.sim) { if (V.kind === 'command') cancelVoice(true); else toast('✦', 'No mic here · nothing recorded'); return; }
+    // A tap on a take whose microphone never opened (iPhone Safari can leave getUserMedia unanswered) ends it visibly
+    // instead of silently waiting for a recorder that may never come: the orb must never look frozen. Nothing was
+    // recorded, so nothing is kept, sealed or navigated. A held command keeps its release latch (below).
+    if (!V.rec && !V.native && !V.parts.length && V.kind !== 'command') return micNeverOpened('tap');
     // Files still uploading (or failed with their bytes here) never hold the send: they ride as placeholders and the
     // outbox finishes them behind the message (James, 19 Oct 2026: "Send the message and process it in the background").
     // Text, photos and voice go as ONE message (legacy H4; James, 10 Oct 2026: "when I paste a link in the text
@@ -3703,6 +3746,7 @@
 
   /* ---------------- boot ---------------- */
   buildDesks(); setVoice('idle'); armBack();
+  browserBarInset();
   // Decorative motion lives only on a visible, recently touched Home with nothing over it (core/scenery.js).
   window.WosScenery?.attach({ device, homeInView: () => idx === HOME && !desks[idx]?.full, deskIdx: () => idx });
   if (LIVE) LIVE.refresh();

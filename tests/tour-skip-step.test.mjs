@@ -160,3 +160,11 @@ test('Help sheet keeps commands and Practice again', () => {
   assert.match(SRC, /data-hsgo>Practice again</);
   assert.match(SRC, /if \(e\.target\.closest\('\[data-hsgo\]'\)\) \{ closeHelp\(\); return start\('help'\); \}/);
 });
+
+test('a take whose microphone never opened is explained in the tour copy (toasts are hidden while it runs)', () => {
+  const t = boot();
+  t.T.start('qa');
+  t.T.event('voicefail', { text: 'The microphone didn’t start. Allow it for this site, then tap the orb again.' });
+  assert.equal(t.T.step, 1); assert.match(t.view().copy, /microphone didn’t start/);
+  t.runTimers(); assert.match(t.view().copy, /^Tap the orb and say hello\. Tap again to send\.$/, 'then the Talk instruction returns');
+});

@@ -182,6 +182,9 @@
     if (type === 'voice') { el.classList.toggle('tr-live', d.state !== 'idle'); return; }
     // An explicit Settings action wins over the tour; release its tap guard.
     if (type === 'sheet' && d.which === 'settings') return finish('handoff');
+    // The shell could not start or finish a take (the microphone never opened, ...): say so in the tour's own copy,
+    // because toasts are hidden while the tour runs. Never leave the orb looking frozen.
+    if (type === 'voicefail') { if (step === 1) { busy = false; el.classList.remove('tr-live'); nudge(d.text || 'The microphone didn’t start. Tap the orb to try again.', 5200); } return; }
     if (type === 'nomic') { if (!typed) { typed = true; log('typed'); later(() => { if (!active()) return; H.prepare(); el.classList.remove('tr-live'); go(step); }, 700); } return; }
     if (step === 1) {
       // Only a real message moves Talk on. A hold is a wrong gesture (below), whether or not it ran as a command.
