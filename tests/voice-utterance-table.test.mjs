@@ -75,7 +75,15 @@ function expand(source) {
   return [...new Set(choice(undefined))].filter(s=>new RegExp(source).test(s));
 }
 function literalPatterns(source) {
-  return [...source.matchAll(/\/(\^(?:\\.|[^/\n])+?)\/[a-z]*/g)].map(m=>m[1]);
+  const patterns=[];
+  for(let start=source.indexOf('/^');start>=0;start=source.indexOf('/^',start+2)) {
+    let end=start+2;
+    while(end<source.length && source[end]!=='\n' && source[end]!=='/') {
+      end += source[end]==='\\' ? 2 : 1;
+    }
+    if(source[end]==='/')patterns.push(source.slice(start+1,end));
+  }
+  return patterns;
 }
 test('every pre-refactor voice table alternative routes to the identical action',async t=>{
   const old=await fixture(true),current=await fixture(false);
