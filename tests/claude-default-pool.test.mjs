@@ -12,8 +12,8 @@ const options = ({ nativeAuth = true, nativeModels = ['claude-opus-5-5', 'claude
     { slug: 'openai-codex', authenticated: true, models: ['gpt-6.1-sol'] },
     { slug: 'anthropic', authenticated: nativeAuth, models: nativeModels },
   ] });
-async function load(connection, opts = {}, fail = false) {
-  const window = {};
+async function load(connection, opts = {}, fail = false, extra = {}) {
+  const window = { ...extra };
   const fetch = async url => {
     if (url.includes('wizard-claude')) { if (fail) throw Error('offline'); return { ok: true, json: async () => connection }; }
     return { ok: true, json: async () => (url.includes('model/options') ? options(opts) : null) };
@@ -58,4 +58,20 @@ test('pool without the same model, or not signed in to Hermes, keeps the legacy 
   assert.equal((await load(native, { nativeModels: ['claude-sonnet-5-5'] })).defaultOption().provider, SUB);
   assert.equal((await load(native, { nativeModels: ['claude-opus-5-6'] })).defaultOption().provider, SUB);
   assert.equal((await load(native, { nativeAuth: false })).defaultOption().provider, SUB);
+});
+
+test('routed agents (host-profile, container, restricted) keep their own legacy Claude route', async () => {
+  const kinds = ['host-profile', 'container', 'restricted'];
+  const agents = Object.fromEntries(kinds.map(k => [k, { id: k, kind: k, label: k, model: { provider: SUB, model: 'claude-opus-5-5[1m]', allowed_models: ['claude-opus-5-5[1m]'] } }]));
+  const allows = (a, m) => a.model.allowed_models.includes(m);
+  const WosAgents = { isOther: id => id in agents, get: id => agents[id] || null, allows,
+    route: (a, m) => ({ model: m && allows(a, m) ? m : a.model.model, provider: a.model.provider, agent: a.id }) };
+  const WizLive = { session: () => null, agentOf: sid => sid.replace(/^thread-/, '') };
+  const M = await load(native, {}, false, { WosAgents, WizLive });
+  assert.equal(M.snapshot('').provider, 'anthropic'); // main agent: pool
+  for (const k of kinds) {
+    assert.deepEqual({ ...M.snapshot('', null, k) }, { model: 'claude-opus-5-5[1m]', provider: SUB, agent: k }, `new ${k} chat`);
+    assert.deepEqual({ ...M.snapshot(`thread-${k}`) }, { model: 'claude-opus-5-5[1m]', provider: SUB, agent: k }, `routed ${k} thread`);
+    assert.equal((await M.resolveRoute(M.snapshot('', null, k))).provider, SUB);
+  }
 });
