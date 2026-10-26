@@ -1183,7 +1183,7 @@
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
     if (a.kind === 'wizard' && a.url && !opts.setupChecked && window.WosAppSetup)
-      return window.WosAppSetup.gate(a, () => openApp(a, extra, { ...opts, setupChecked: true }));
+      return window.WosAppSetup.gate(a, () => openApp(a, extra, { ...opts, setupChecked: true }), { settled: () => openingEnd(a.id) });
     if (a.id === 'side-button') { closeSheets(true); if (idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
     if (a.kind === 'chats') {
       if (a.agent) return openAgentChats(a.agent);

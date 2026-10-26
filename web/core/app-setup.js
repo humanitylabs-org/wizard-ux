@@ -174,20 +174,23 @@
   document.addEventListener('keydown', e => { if (alternative && !overlay) trapFocus(e, alternative.el); });
   // Admission preserves the shells' boolean openApp contract. Only the captured continuation
   // can create a window; cancelling or a newer launch invalidates an in-flight read.
-  function gate(app, resume) {
+  // settled: called once the check is over (the app opens, its setup sheet shows, or another open replaced it),
+  // so the shell's "Opening …" feedback ends exactly then.
+  function gate(app, resume, { settled } = {}) {
+    let once = false; const settle = () => { if (once) return; once = true; try { settled?.(); } catch (_) {} };
     const ticket = ++serial;
     if (current || overlay || pending) { close(); serial = ticket; }
     pending = true;
     (async () => {
       let result;
       try { await ready; result = await R.routerNeeds(app.id); } catch (_) { result = {}; }
-      if (ticket !== serial) return;
+      if (ticket !== serial) { settle(); return; }
       pending = false;
-      if (!result.data || !needsSetup(result.data)) { resume(); return; }
+      if (!result.data || !needsSetup(result.data)) { resume(); settle(); return; }
       current = { app: app.id, record: app, name: app.name || app.id, resume, data: result.data, apps: [], installed: [], note: '', focus: document.activeElement };
       const c = current;
       overlay = document.createElement('section'); overlay.className = 'was-overlay'; overlay.setAttribute('aria-label', 'App setup');
-      overlay.innerHTML = `<div class="was-card" role="dialog" aria-modal="true" aria-label="Set up ${esc(c.name)}"></div>`; document.body.appendChild(overlay); paint();
+      overlay.innerHTML = `<div class="was-card" role="dialog" aria-modal="true" aria-label="Set up ${esc(c.name)}"></div>`; document.body.appendChild(overlay); paint(); settle();
       overlay.addEventListener('keydown', e => {
         if (!links?.isOpen()) trapFocus(e, alternative?.el || overlay.querySelector('.was-card'));
       });
