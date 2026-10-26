@@ -22,8 +22,12 @@ function cdpPage(wsUrl){
   ws.onmessage=ev=>{const m=JSON.parse(ev.data);if(m.method==='Runtime.consoleAPICalled'||m.method==='Runtime.exceptionThrown'){try{fs.appendFileSync(path.join(out,'page-console.txt'),JSON.stringify(m.params.args?.map(a=>a.value??a.description)||m.params.exceptionDetails?.exception?.description||m.params)+'\n');}catch(_){}}if(m.id&&waits.has(m.id)){const w=waits.get(m.id);waits.delete(m.id);m.error?w.reject(Error(m.error.message)):w.resolve(m.result);}};
   ws.onerror=e=>reject(Error('CDP websocket error'));
   const send=(method,params={})=>new Promise((res,rej)=>{const i=++id;const t=setTimeout(()=>{waits.delete(i);rej(Error('CDP '+method+' did not answer in 20 s'))},20000);waits.set(i,{resolve:v=>{clearTimeout(t);res(v)},reject:e=>{clearTimeout(t);rej(e)}});ws.send(JSON.stringify({id:i,method,params}));});
+  let sendNow=send;
+  // WebView swaps the page target when Wizard reloads during start-up; reconnect to the live target instead of waiting on a dead one.
+  const reconnect=async()=>{try{ws.close();}catch(_){}const fresh=await attach();sendNow=fresh.p._send;};
   const evaluate=async(fn,arg)=>{const expr=typeof fn==='function'?`(${fn})(${JSON.stringify(arg===undefined?null:arg)})`:fn;
-   const r=await send('Runtime.evaluate',{expression:expr,awaitPromise:true,returnByValue:true});
+   let r;try{r=await sendNow('Runtime.evaluate',{expression:expr,awaitPromise:true,returnByValue:true});}
+   catch(e){if(!/did not answer/.test(e.message))throw e;console.log('CDP stalled; reconnecting');await reconnect();r=await sendNow('Runtime.evaluate',{expression:expr,awaitPromise:true,returnByValue:true});}
    if(r.exceptionDetails)throw Error('page: '+(r.exceptionDetails.exception?.description||r.exceptionDetails.text));return r.result.value;};
   const waitForFunction=async(fn,arg,opt={})=>{const end=Date.now()+(opt.timeout||30000);let last;
    for(;;){try{if(await evaluate(fn,arg))return;}catch(e){last=e;}if(Date.now()>end)throw Error('waitForFunction timed out: '+String(fn).slice(0,120)+(last?' ('+last.message+')':''));await pause(250);}};
@@ -38,11 +42,12 @@ function cdpPage(wsUrl){
      const taps=await evaluate('JSON.stringify(window.__taps)');console.log('TAP',sel,JSON.stringify(r),tx,ty,taps,'flight busy/line:',await evaluate(`document.querySelector('[data-flight-ready]')?.textContent||''`));},
     fill:async v=>{await api.waitFor();await evaluate(`(()=>{const e=${find};e.focus();const d=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');d.set.call(e,${JSON.stringify(v)});e.dispatchEvent(new Event('input',{bubbles:true}));return true;})()`);},
     innerText:async()=>{await api.waitFor();return evaluate(`${find}.innerText`);}};return api;};
-  const page={evaluate,waitForFunction,locator:sel=>loc(sel),getByText:t=>loc('button,a,div,span,p,h1,h2,h3,li,[role]',t)};
+  const page={_send:(...a)=>sendNow(...a),evaluate,waitForFunction,locator:sel=>loc(sel),getByText:t=>loc('button,a,div,span,p,h1,h2,h3,li,[role]',t)};
   ws.onopen=async()=>{try{await send('Runtime.enable');resolve({b:{close:async()=>ws.close()},p:page});}catch(e){reject(e);}};
  });
 }
 async function attach(){
+ await pause(4000);
  let last='',seen='';
  for(let n=0;n<90;n++){
   try{
