@@ -36,10 +36,11 @@ enum WizardAddress {
     static var pendingError: String?
     static var showConnect = false
 
-    /// `wizard://connect?origin=…` from the Camera app, Safari or another app. Returns true when it was ours.
+    /// `wizard://connect?origin=…` from the Camera app, Safari or another app. Returns true when it was ours; other
+    /// `wizard://` routes (Store install links) return false so Capacitor delivers them to the Wizard's pages.
     @discardableResult
     static func receive(_ url: URL) -> Bool {
-        guard url.scheme?.lowercased() == "wizard" else { return false }
+        guard WizardOrigin.isConnectLink(url) else { return false }
         if let origin = WizardOrigin.parse(url.absoluteString) { pendingPair = origin; pendingError = nil }
         else { pendingPair = nil; pendingError = "That link isn't a Wizard address." }
         showConnect = true

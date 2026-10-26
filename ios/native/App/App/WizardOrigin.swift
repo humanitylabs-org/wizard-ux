@@ -6,6 +6,12 @@ enum WizardOrigin {
     /// A Setup QR code or `wizard://` link: `wizard://connect?origin=<percent-encoded https origin>`, or a plain https
     /// origin (`https://host[:port]`, optionally ending in `/` or `/wizard-os-home/`).
     /// Returns `https://host[:port]` (port 443 dropped, host lower-cased) or nil.
+    /// True for `wizard://connect…` links, the only `wizard:` route the app handles itself. Other routes (e.g. the
+    /// Store's `wizard://install?…`) go on to Capacitor so the Wizard's pages receive them.
+    static func isConnectLink(_ url: URL) -> Bool {
+        url.scheme?.lowercased() == "wizard" && url.host?.lowercased() == "connect"
+    }
+
     static func parse(_ text: String) -> String? {
         guard text.utf8.count <= 4096 else { return nil }
         let input = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -83,7 +89,10 @@ final class WizardProbe: NSObject, URLSessionDataDelegate {
     /// served as 200 text/html, so a missing or other Content-Type is refused.
     static func headerProblem(status: Int, contentType: String?, host: String) -> String? {
         if status != 200 { return "\(host) answered, but didn't open Wizard (HTTP \(status))." }
-        guard let type = contentType, type.lowercased().contains("text/html") else { return "\(host) answered, but it isn't a Wizard." }
+        guard let type = contentType,
+              type.split(separator: ";", maxSplits: 1, omittingEmptySubsequences: false).first?
+                  .trimmingCharacters(in: .whitespaces).lowercased() == "text/html"
+        else { return "\(host) answered, but it isn't a Wizard." }
         return nil
     }
 

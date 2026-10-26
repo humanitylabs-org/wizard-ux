@@ -52,6 +52,13 @@ if WizardProbe.headerProblem(status: 200, contentType: nil, host: "h") == nil { 
 if WizardProbe.headerProblem(status: 200, contentType: "application/json", host: "h") == nil { failures += 1; print("FAIL: JSON passed") }
 if WizardProbe.headerProblem(status: 302, contentType: "text/html", host: "h") == nil { failures += 1; print("FAIL: redirect status passed") }
 if WizardProbe.headerProblem(status: 200, contentType: "text/html; charset=utf-8", host: "h") != nil { failures += 1; print("FAIL: shell headers refused") }
+if WizardProbe.headerProblem(status: 200, contentType: "application/x-text/html-data", host: "h") == nil { failures += 1; print("FAIL: text/html substring passed") }
+if WizardProbe.headerProblem(status: 200, contentType: "TEXT/HTML ; charset=utf-8", host: "h") != nil { failures += 1; print("FAIL: TEXT/HTML refused") }
+// Only wizard://connect is consumed by the app; other wizard:// routes (Store install links) pass through
+if !WizardOrigin.isConnectLink(URL(string: "wizard://connect?origin=https%3A%2F%2Fbox.example")!) { failures += 1; print("FAIL: connect link not ours") }
+if !WizardOrigin.isConnectLink(URL(string: "WIZARD://Connect?origin=x")!) { failures += 1; print("FAIL: connect link case") }
+if WizardOrigin.isConnectLink(URL(string: "wizard://install?repo=github.com%2Fa%2Fb&commit=abc")!) { failures += 1; print("FAIL: install link swallowed") }
+if WizardOrigin.isConnectLink(URL(string: "https://connect/")!) { failures += 1; print("FAIL: https consumed") }
 // Shell check (WizardProbeTest)
 if WizardOrigin.looksLikeWizard("<title>Sign in</title>") { failures += 1; print("FAIL: sign-in page passed") }
 if WizardOrigin.looksLikeWizard("<title>Wizard OS</title>") { failures += 1; print("FAIL: title alone passed") }
