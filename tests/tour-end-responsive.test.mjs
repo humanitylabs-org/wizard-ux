@@ -14,7 +14,7 @@ test('Done stack fits a landscape viewport and reflows on resize (Codex #531)',(
  vm.runInContext(fn+'\nendLayout();',ctx);
  assert.equal(typeof listeners.resize,'function','resize recomputes the real stack');
  for(const h of [390,874,390]){height=h;listeners.resize();let bottom=0;for(const x of [copy,glyphs,mic,tap]){const r=x.getBoundingClientRect();assert(r.top>=bottom,'rows do not overlap');assert(r.bottom<=height-15,'all rows stay above bottom');bottom=r.bottom;}}
- assert.match(css,/\.tour\[data-step="3"\][^{]*\{[^}]*overflow-y:\s*auto/,'extreme zoom can scroll rather than hide content');
+ assert.match(css,/\.tour\[data-step="4"\][^{]*\{[^}]*overflow-y:\s*auto/,'extreme zoom can scroll rather than hide content');
 });
 test('Done reserves resolved top and bottom safe-area padding (Codex #533)',()=>{
  const fn=src.slice(src.indexOf('  function endLayout() {'),src.indexOf('  const glyph ='));

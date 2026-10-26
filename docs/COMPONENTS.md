@@ -83,7 +83,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`); Android mirror `android/app/src/main/assets/assist/everywhere.html` | PNG + CSS spin, Lottie, SVG |
 | Skins, backgrounds, scenery, skin feature switches (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`), `WosSkinHost` (`web/core/skin-host.js`; tweaks on `core/slots.json`), `WosExperience` (`web/core/experience.js`), `WosMySkin` (`web/core/my-skin.js`), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own gradients, canvases or colour constants |
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) | own keyframe sets |
-| Tour/help, responsive Done, skip/exit; desktop guide `WosTour.desk` | `WosTour` (`web/core/tour.js`) | — |
+| Tour/help + Install beat (`WizardPwaInstall`), Done, skip; desktop `WosTour.desk` | `WosTour` (`web/core/tour.js`, `web/pwa-install.js`) | — |
 | First launch and explicit Setup/tour; VM auto-onboarding; alongside launch starts only the orientation | `WosSetupLaunch` (`web/core/setup-launch.js`); built-in checklist `web/setup/setup.js` distinguishes ready-to-open from phone-connected | shell-specific first-run checks, a second tour launcher |
 
 ## Shell plumbing (owned by one module; never duplicate, rarely called directly)

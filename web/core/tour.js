@@ -4,7 +4,8 @@
  *
  *   1 Talk     tap the orb, say hello, tap again: a real message to the Wizard (a real first thread)
  *   2 Hide     swipe the orb down: the bars hide (distraction-free); swipe up from the bottom brings them back
- *   3 Done     "Everything you see is customizable. Try asking your Wizard for one change." (+ "say help" line)
+ *   3 Install  phones only, and only where it can work and Wizard isn't installed yet (installOffer below)
+ *   4 Done     "Everything you see is customizable. Try asking your Wizard for one change." (+ "say help" line)
  *
  * Miguel, 24 Oct 2026: the old beat 2 (hold the orb and say "Open Calendar") is gone: it didn't work reliably and
  * a first run doesn't need it. Commands stay in the Help sheet. Each beat has "Skip this step" (moves to the next
@@ -35,20 +36,64 @@
     null,
     { title: 'Talk', copy: () => typed ? 'Type “hello” and send it to your Wizard.' : 'Tap the orb and say hello. Tap again to send.' },
     { title: 'Hide', copy: () => 'Swipe the orb down to hide everything but your screen.' },
+    { title: 'Install', copy: () => 'Add Wizard to your Home Screen.' },
     { title: 'Done', copy: () => 'Everything you see is customizable. Try asking your Wizard for one change.' },
   ];
   const DONE = BEATS.length - 1; // the end card; every beat before it can be skipped on its own
+  const INSTALL = 3;
+
+  /* Install beat (Miguel, 26 Oct 2026): adding Wizard to the Home Screen is part of onboarding, not chat text. It is
+   * the last beat, optional like every other, and only offered where it can work and Wizard isn't installed yet:
+   *   prompt  the browser's own install prompt (Android Chrome), shared with pwa-install.js so it is used once
+   *   ios     iPhone/iPad Safari, which has no prompt: Share, then Add to Home Screen
+   *   inapp   an app's in-app browser (Telegram, WhatsApp, Instagram...): open the link in Safari/Chrome first
+   * Anything else (already installed, the Wizard apps, Chrome/Firefox on iPhone, no prompt) simply has no beat. */
+  const INAPP = /FBAN|FBAV|FB_IAB|Instagram|\bLine\/|Telegram|WhatsApp|MicroMessenger|Snapchat|LinkedInApp|TikTok|musical_ly|BytedanceWebview|Twitter/i;
+  const IOS_OTHER = /CriOS|FxiOS|EdgiOS|OPiOS|OPT\/|GSA\/|YaBrowser|DuckDuckGo/i;
+  function installOffer() {
+    const w = window, n = w.navigator || {}, ua = String(n.userAgent || '');
+    const mm = q => { try { return !!(w.matchMedia && w.matchMedia(q).matches); } catch (e) { return false; } };
+    if (n.standalone === true || mm('(display-mode: standalone)') || mm('(display-mode: fullscreen)') || mm('(display-mode: minimal-ui)')) return null;
+    if (w.top !== w.self || w.webkit?.messageHandlers?.wizardNative || w.WizardNative || w.WizardOSNative) return null;
+    if (w.WizardPwaInstall?.available) return { kind: 'prompt' };
+    if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && (n.maxTouchPoints || 0) > 1)) {
+      // Safari always names itself; an app's own web view (no "Safari/") cannot add to the Home Screen.
+      if (INAPP.test(ua) || !/Safari\//.test(ua)) return { kind: 'inapp', browser: 'Safari' };
+      return IOS_OTHER.test(ua) ? null : { kind: 'ios' };
+    }
+    if (/Android/.test(ua) && (INAPP.test(ua) || /; wv\)/.test(ua))) return { kind: 'inapp', browser: 'Chrome' };
+    return null;
+  }
+  let offer = null;
+  const count = () => (installOffer() ? INSTALL : INSTALL - 1);
+  const SHARE = '<svg class="tr-share" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v11M8 7.5l4-4 4 4M8.5 10.5H6v10h12v-10h-2.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  function installAlt(o) {
+    if (!o) return '';
+    if (o.kind === 'prompt') return '<button type="button" class="tr-go" data-tinstall>Install</button>';
+    const how = o.kind === 'ios' ? `Tap ${SHARE} Share, then Add to Home Screen.` : `Open this link in ${o.browser} to install it.`;
+    return `<span class="tr-how">${how}</span><button type="button" class="tr-go" data-tidone>Done</button>`;
+  }
+  /* The browser's prompt has to open inside this tap; whatever the person picks, the tour moves to its end card. */
+  function install() {
+    const P = window.WizardPwaInstall, n = step;
+    if (busy || !P || !P.available) return go(DONE);
+    busy = true;
+    let r = null; try { r = P.prompt(); } catch (e) {}
+    Promise.resolve(r).catch(() => '').then(out => { log('install:' + (out || 'unavailable')); if (active() && step === n) go(DONE); });
+  }
 
   function build() {
     el = document.createElement('div'); el.id = 'tour'; el.className = 'tour'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Learn Wizard OS');
     el.innerHTML = `<div class="tr-spot"></div>
       <button type="button" class="tr-skip" data-tskip>Skip tour</button>
-      <div class="tr-steps" aria-hidden="true">${'<i></i>'.repeat(DONE - 1)}</div>
+      <div class="tr-steps" aria-hidden="true">${'<i></i>'.repeat(count())}</div>
       <div class="tr-stage"></div>
       <div class="tr-copy" aria-live="polite"><small></small><b></b><span class="tr-alt"></span><span class="tr-nx"></span></div>`;
     el.addEventListener('click', e => {
       if (e.target.closest('[data-tskip]')) return finish('skip');
       if (e.target.closest('[data-tnext]')) return skipStep();
+      if (e.target.closest('[data-tinstall]')) return install();
+      if (e.target.closest('[data-tidone]')) return go(DONE);
       if (e.target.closest('[data-ttype]')) { typed = true; return go(step); }
       const say = e.target.closest('[data-tsay]'); if (say) { busy = true; H.say(say.dataset.tsay, say.dataset.tkind || 'auto'); return; }
       if (step === DONE) return finish('done');
@@ -65,7 +110,7 @@
     $('.tr-nx', c).innerHTML = step > 0 && step < DONE ? '<button type="button" class="tr-link tr-next" data-tnext>Skip this step</button>' : '';
     c.classList.add('in');
   }
-  const sub = n => n < DONE ? `${n} of ${DONE - 1} · ${BEATS[n].title}` : '';
+  const sub = n => n < DONE ? `${n} of ${Math.max(n, count())} · ${BEATS[n].title}` : '';
   /* The spotlight hole: around the orb while a beat waits on it; wide open while the shell is showing a result. */
   function spot(mode) {
     const s = $('.tr-spot', el); if (!s) return;
@@ -78,19 +123,24 @@
   function fallback(n) {
     if (n === 1 && typed) return `<form class="tr-type"><input type="text" placeholder="Type hello here" enterkeyhint="send" aria-label="Message to your Wizard" autocomplete="off"><button type="submit">Send</button></form>`;
     if (n === 1 && misses >= 2) return `<button type="button" class="tr-link" data-ttype>Type instead</button>`;
+    if (n === INSTALL) return installAlt(offer);
     if (n === DONE) return '<span class="tr-note">Need this again? Hold the orb and say “help”.</span>';
     return '';
   }
   function go(n) {
+    if (n === INSTALL && !(offer = installOffer())) n = DONE; // nothing to install here: straight to the end card
     clearTimers(); step = n; busy = false; inbox = false; log('beat:' + n);
     if (n !== 1) misses = 0;
     el.dataset.step = String(n);
+    const dots = $('.tr-steps', el), c = Math.max(Math.min(n, INSTALL), count());
+    if (n < DONE && dots && (dots.children?.length ?? c) !== c) dots.innerHTML = '<i></i>'.repeat(c);
     [...el.querySelectorAll('.tr-steps i')].forEach((d, i) => d.classList.toggle('on', i < n));
-    H.orbWrap.classList.toggle('tr-pulse', n < DONE && !typed);
+    H.orbWrap.classList.toggle('tr-pulse', n < INSTALL && !typed);
     if (n < DONE) { H.goHome(); $('.tr-copy', el).style.top = ''; }
     setCopy(BEATS[n].copy(), sub(n), fallback(n));
     $('.tr-stage', el).innerHTML = '';
-    if (n < DONE) requestAnimationFrame(() => { if (step === n) spot('orb'); });
+    if (n < INSTALL) requestAnimationFrame(() => { if (step === n) spot('orb'); });
+    if (n === INSTALL) spot('closed');
     if (n === DONE) {
       H.goHome(); spot('closed');
       $('.tr-stage', el).innerHTML = `<div class="tr-glyphs">${glyph('tap', 'Tap', 'talk')}${glyph('down', 'Swipe ↓', 'hide')}</div>
@@ -147,13 +197,13 @@
       // No entrance animation here: WebKit can hold it for a second behind the bars' own hide transition, and this
       // is the one line that says how to get them back.
       if (type === 'zen' && d.on) { inbox = true; spot('closed'); setCopy('Nothing in the way. Swipe up from the bottom edge to bring it back.', sub(2)); $('.tr-copy', el).classList.remove('in'); return; }
-      if (type === 'zen' && !d.on && inbox) { inbox = false; return later(() => go(DONE), 250); }
+      if (type === 'zen' && !d.on && inbox) { inbox = false; return later(() => go(INSTALL), 250); }
     }
     // Wrong gesture: undo what the shell did and steer back to the beat.
     // A hold (the tour no longer teaches commands): drop the take, close whatever a command opened, back to Home.
     if ((type === 'command' || type === 'nomatch') && step < DONE) {
       busy = false; H.dismissVoice(); H.closeSheets(); H.goHome();
-      return nudge(step === 1 ? 'That was a hold. For this one, just tap.' : 'That was a hold. Swipe the orb down instead.');
+      return nudge(step === 1 ? 'That was a hold. For this one, just tap.' : step === 2 ? 'That was a hold. Swipe the orb down instead.' : 'That was a hold. Use the buttons above, or skip this step.');
     }
     if (type === 'sheet' && d.which === 'launcher') { H.closeSheets(); return nudge(step === 2 ? 'Down, not up.' : 'That’s every app. We’ll come back to it.'); }
     if (type === 'desk' && step < DONE && !busy && !d.home) { H.goHome(); return nudge('That moves between desks. Try the beat above.'); }
@@ -171,6 +221,7 @@
     if (!el) build();
     typed = !!(H.noMic && H.noMic()); misses = 0;
     el.hidden = false; el.classList.add('on'); H.device.classList.add('touring'); log('start:' + (why || ''));
+    window.WizardPwaInstall?.hold?.(true); // the tour's own Install beat replaces the top banner while it runs
     go(1); return true;
   }
   function finish(how) {
@@ -179,6 +230,7 @@
     step = 0; inbox = false; busy = false; mark();
     H.orbWrap.classList.remove('tr-pulse');
     el.classList.remove('on'); H.device.classList.remove('touring');
+    window.WizardPwaInstall?.hold?.(false);
     const e0 = el; el = null; setTimeout(() => e0.remove(), 300);
     if (how === 'skip') H.toast('?', 'Say “help” any time to see the gestures', 2600);
   }
@@ -186,6 +238,7 @@
   function skipStep() {
     if (!active() || step >= DONE) return false;
     const n = step + 1; log('skip-step:' + step);
+    if (step === INSTALL && offer?.kind === 'prompt') window.WizardPwaInstall?.dismiss?.(); // no banner right after a skip
     if (inbox) { inbox = false; H.setZen?.(false); }
     H.prepare(); el.classList.remove('tr-live', 'tr-open');
     go(n); return true;
@@ -197,6 +250,7 @@
     if (el.classList.contains('tr-live')) return ''; // recording: Back navigates as always, the tour stays
     if (step === 1) { finish('skip'); return 'tour-skip'; }
     if (step === 2) { if (inbox) { H.setZen?.(false); return 'tour-step'; } go(1); return 'tour-step'; }
+    if (step === INSTALL) { go(2); return 'tour-step'; }
     finish('done'); return 'tour-done';
   }
 
@@ -303,7 +357,7 @@
     desk,
     attach(host) { H = host; },
     start, finish, back, event, skipStep, openHelp, closeHelp, _go: n => active() && go(n),
-    beats: BEATS.slice(1).map(b => b.title), DONE,
+    beats: BEATS.slice(1).map(b => b.title), DONE, INSTALL, installOffer,
     isHelp: t => HELP_RE.test(String(t || '').trim()),
     get active() { return active(); }, get step() { return step; }, get helpOpen() { return !!helpEl; }, get typed() { return typed; },
     done, mark,
