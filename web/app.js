@@ -3765,6 +3765,8 @@
     dismissVoice: () => { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(1200); },
     prepare: () => { if (V.state !== 'idle') cancelVoice(true); closeMenu(); closeOverview(); closeSheets(true); const d = desks[idx]; if (d.full && d.focus) setFull(d.focus, false); },
     say: (t, kind) => runUtterance(t, kind || 'auto'),
+    openChats: () => { closeSheets(); openChatsList(); },
+    atHome: () => idx === HOME && !sheet,
   });
   const firstRun = !store.get('coached', false) && !window.WosTour?.done();
   // Setup (core/setup-launch.js) opens first on a box's first run; the tour then waits for the first return to Home.
