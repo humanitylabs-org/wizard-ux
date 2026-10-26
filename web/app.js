@@ -2758,15 +2758,16 @@
     if(V.admitting){V.admitSend=true;return;}
     if (V.state === 'idle' || V.state === 'think') return;
     V.sendAsked = true;
+    // A tap on a take whose microphone never opened (iPhone Safari can leave getUserMedia unanswered) ends it visibly
+    // instead of silently waiting for a recorder that may never come: the orb must never look frozen. Nothing was
+    // recorded, so nothing is kept, sealed or navigated. Checked before the dictation dispatch so a dictation take is
+    // covered too (Codex P2 on #569). A held command keeps its release latch; a no-mic sim take is handled below.
+    if (!V.sim && !V.rec && !V.native && !V.parts.length && V.kind !== 'command') return micNeverOpened('tap');
     if (V.kind === 'dictation') return finishDictation();
     if (V.kind === 'command') { V.stopAsked = true; pauseCommandCapture(); }
     V.snap = V.snap || sendSnap(); // pinned when the take started; browsing since can't move it
     if (V.target != null || V.replyTo || V.kind === 'command') V.snap.conversation = null; // only explicit gestures override
     if (V.sim) { if (V.kind === 'command') cancelVoice(true); else toast('✦', 'No mic here · nothing recorded'); return; }
-    // A tap on a take whose microphone never opened (iPhone Safari can leave getUserMedia unanswered) ends it visibly
-    // instead of silently waiting for a recorder that may never come: the orb must never look frozen. Nothing was
-    // recorded, so nothing is kept, sealed or navigated. A held command keeps its release latch (below).
-    if (!V.rec && !V.native && !V.parts.length && V.kind !== 'command') return micNeverOpened('tap');
     // Files still uploading (or failed with their bytes here) never hold the send: they ride as placeholders and the
     // outbox finishes them behind the message (James, 19 Oct 2026: "Send the message and process it in the background").
     // Text, photos and voice go as ONE message (legacy H4; James, 10 Oct 2026: "when I paste a link in the text
