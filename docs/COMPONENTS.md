@@ -18,6 +18,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 
 | Need | Use | Never hand-roll | Test the shared path by |
 |---|---|---|---|
+| Phone owner signatures/private sealing | `WizardApp.identity.{info,sign,nip44_encrypt,nip44_decrypt}` (`web/core/app-client.js`) → `wizardDevicePort` | app keys, signer ports, desktop fake success | `tests/wizard-id-bridge.test.mjs` |
 | Talk to an agent: composer, Stop/retry/outbox, models, dictation, attachments | `WizardApp.nav.openThread(sessionId, {reply})`, the real Chats thread over the app (wizard-builder chat.md) | composer, transcript, streaming client or retry loop in the app; `wizard-ui.css` is look only | the shell shows the `[data-chats]` thread for that session; the app frame has no textarea; forced 503: one outbox item, one message |
 | Top-level home-screen name, icon and app root | `WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK | per-app manifest injectors | app-owned manifest wins; frames untouched |
 | Own chat-box input: paste, drop, Enter | `WizardApp.composer.bind` (Chats' `web/core/composer-input.js`) | own paste/drop/Enter | `qa-composer-input.cjs` |
@@ -32,12 +33,13 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Receive shares (people as direct targets) | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound share route, URL-fragment payloads | pending until `receive` is true, acked once |
 | Mic, camera, screen capture | `WizardApp.capture.start / pending / ack`, `WizardApp.voiceInput.register` | `getUserMedia`, `MediaRecorder`, mic AudioContext | pending survives Back; ack once |
 | Title-bar tools | `WizardApp.titlebar.set(tools)` | an app header repeating the title | tools appear in the shell title bar |
+| One biometric-protected app secret | `WizardApp.vault.has / seal / open / forget` (`web/core/app-client.js`, `app-services.js`; `wizardDevicePort` vault adapter in `vault/VaultBridge.java`) | own ports, server sealed copies, identity aliases | cancel/reload denies plaintext; app-key isolation |
 | Protect unsaved work from updates | `WizardApp.update.hold` | app service worker, forced reload | hold released only after save + readback |
 | Reading place in an app document | shell-owned `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic for registered apps | app-local scroll store | reopen lands at the saved place |
 | Motion, haptics, press feel | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own spring/haptic helpers | — |
 | App look: rows, sections, empty state, single-line add field | `WizardApp` swaps vendored `wizard-ui.css` for live `web/kit/wizard-ui.css` + `--wz-*`, then layers active skin (`core/skins.css`, package, My skin) after app styles | a forked kit; `.wz-field-row` as a chat composer; literal colours | two skins + My skin restyle the app's `.wz-*` rows live |
 
-## Shell (`web/core/`, shared by both shells; every row serves every agent kind: main, host-profile, container, restricted; a per-kind variant is a fork, declare it EXTEND)
+## Shell (`web/core/`, both shells/all agent kinds: main, host-profile, container, restricted; per-kind forks need EXTEND)
 
 | Need | Use | Never hand-roll |
 |---|---|---|
@@ -75,8 +77,9 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Android shell capabilities | `WosDevicePort` (`web/core/device-port.js`), `WosDeviceRecording` (`web/core/device-recording.js`), `WosDeviceOrb` (`web/core/device-orb.js`); `wizardDevicePort` v1 | another envelope or recorder/store; ack before durable custody |
 | Add an app to the home screen | `WizHomeScreenApps.attach / offer / canOffer` (`web/core/home-screen-apps.js`): native pin or direct-link guide; pins self-refresh; optional `WosExperience` arrange/download tweak; docs/pwa-app-install.md | a second long-press menu or pin sheet per surface |
 | Android long-screenshot (scroll capture) and text selection in the WebView | `ScrollAccessibilityProvider`, `ChatScrollCapture` + `android/app/src/main/assets/scroll-capture.js`, `SelectionWebView` (`android/app/src/main/java/ai/wizards/os/`) | a second accessibility provider or capture path | capture of a long Chats thread on a real device |
+| Native packages, identity, WebP capture | `wizardDevicePort` v1 (`device/DeviceMessageProtocol.java`; `docs/android-device-message-port.md`) | feature-named `@JavascriptInterface`, a second envelope |
 
-## Visual (anything drawn or animated: attach a side-by-side screenshot under `Visual:`)
+## Visual (drawn/animated work: `Visual:` side-by-side screenshots)
 
 | Need | Use | Never hand-roll |
 |---|---|---|
