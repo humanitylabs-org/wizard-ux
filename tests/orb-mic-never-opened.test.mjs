@@ -42,14 +42,15 @@ test('a second tap while the microphone has not opened ends the take visibly (ne
 
 test('a borrowed meeting microphone goes straight back, with no empty recording kept (Codex P2 on #567)', async () => {
   const loan = { id: 'event-1' };
-  const V = { state: 'listen', kind: 'auto', rec: null, native: null, parts: [], chunks: [], snap: null, files: [], meetingLoan: loan };
+  const V = { state: 'listen', kind: 'auto', rec: null, native: null, parts: [], chunks: [], snap: null, files: [], meetingLoan: loan, captureEpoch: 5 };
   const { ctx, calls } = shell(V);
   const ended = [];
-  ctx.window.WosOrbHandoff = { end: async (l, o) => { ended.push([l, o]); } };
+  ctx.window.WosOrbHandoff = { end: async (l, o) => { ended.push([l, o, V.captureEpoch]); } };
   let loanAtCancel = 'unset';
   ctx.cancelVoice = q => { loanAtCancel = V.meetingLoan; calls.push('cancel:' + !!q); V.state = 'idle'; };
   await ctx.finishVoice();
   assert.equal(ended.length, 1); assert.equal(ended[0][0], loan); assert.equal(ended[0][1].status, 'cancelled', 'the loan is returned as cancelled');
+  assert.ok(ended[0][2] > 5, 'the capture still opening is invalidated before the handoff, so a mic that opens meanwhile is stopped (Codex P2 on #567)');
   assert.equal(loanAtCancel, null, 'cancelVoice runs only after the loan is back, so it keeps no recording custody');
   assert.ok(calls.includes('cancel:true'));
 });
