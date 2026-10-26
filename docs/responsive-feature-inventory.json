@@ -156,6 +156,8 @@
     "core/chats.css",
     "core/chats.js",
     "core/commands.js",
+    "core/companion-legacy.js",
+    "core/companion-pane.js",
     "core/composer-input.js",
     "core/config.js",
     "core/core.js",
@@ -165,6 +167,8 @@
     "core/features.js",
     "core/files.js",
     "core/focused-field.js",
+    "core/launcher-defaults.js",
+    "core/launcher.js",
     "core/links.css",
     "core/links.js",
     "core/mic.js",
@@ -213,7 +217,6 @@
     "core/update-banner.css",
     "core/uploads.js",
     "core/usage.js",
-    "core/video-desks.js",
     "core/views.css",
     "core/voice-status.js",
     "core/web-update.js",
@@ -703,12 +706,19 @@
       ],
       "note": "Direct entrypoint import"
     },
-    "core/video-desks.js": {
+    "core/companion-legacy.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import"
+      "note": "One-release wire adapter using the shared companion pane"
+    },
+    "core/companion-pane.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Generic companion pane; registered app frame authority from App Services"
     },
     "core/voice-status.js": {
       "loadedBy": [
@@ -842,6 +852,8 @@
     "core/app-identity.js": {
       "loadedBy": [],
       "note": "Support/client/export module; not directly mounted by either shell"
-    }
+    },
+    "core/launcher-defaults.js": { "loadedBy": ["phone", "desktop"], "classification": "shared", "note": "Synced launcher policy; temporary defaults for old releases" },
+    "core/launcher.js": { "loadedBy": ["phone", "desktop"], "classification": "shared", "note": "Synced launcher policy; temporary defaults for old releases" }
   }
 }

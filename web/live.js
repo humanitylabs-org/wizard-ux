@@ -360,6 +360,7 @@
       if (!r.ok) return;
       const j = await r.json();
       if (!j || prefsPending || rev !== prefsRevision) return;
+      window.WizLauncher?.accept(j);
       let changed = false;
       for (const [name, [key, valid, encode]] of Object.entries(prefsFields)) if (valid(j[name])) {
         const value = encode(j[name]);
