@@ -223,14 +223,20 @@ def bring_wos():
     sx(f'settings put secure enabled_accessibility_services {PKG}/ai.wizards.os.everywhere.WizardKeyboardService')
     sx('settings put secure accessibility_enabled 1'); time.sleep(3)
 
-em = None
+em = None; adb_owned = False
 with (BASE / 'worker.lock').open('a') as lock:
     fcntl.flock(lock, fcntl.LOCK_EX)
     try:
+        if int(env['ANDROID_ADB_SERVER_PORT']) == 5037: raise RuntimeError('Refuse shared ADB server')
+        for port in (int(env['ANDROID_ADB_SERVER_PORT']), PORT, PORT + 1, DEVTOOLS, FAKE):
+            with socket.socket() as probe:
+                if probe.connect_ex(('127.0.0.1', port)) == 0: raise RuntimeError(f'QA port {port} already belongs to another process')
         srv = http.server.ThreadingHTTPServer(('127.0.0.1', FAKE), Fake)
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'us', '-k', f'system-images;android-35;google_apis;{ABI}', '-d', 'pixel_7', '-p', job / 'dev', stdin='no\n')
         sh(ADB, 'start-server')
+        if COMMANDS[-1]['code']: raise RuntimeError('Private ADB startup failed')
+        adb_owned = True
         em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'us', '-port', str(PORT), '-accel', 'on', '-no-window', '-no-snapshot', '-no-audio', *(['-gpu', 'swangle', '-feature', '-Vulkan,-GLDirectMem'] if sys.platform.startswith('linux') else ['-gpu', 'swiftshader_indirect']), '-verbose', '-memory', '2560', '-cores', '4'], env=env, stdout=open(job / 'em.log', 'w'), stderr=subprocess.STDOUT)
         for _ in range(120):
             if em.poll() is not None: raise RuntimeError('emulator exited ' + str(em.returncode))
@@ -490,13 +496,14 @@ with (BASE / 'worker.lock').open('a') as lock:
         (OUT / 'commands.json').write_text(json.dumps(COMMANDS, indent=2))
         (OUT / 'events.json').write_text(json.dumps(EVENTS, indent=2))
         (OUT / 'checks.json').write_text(json.dumps(CHECKS, indent=2))
-        try: (OUT / 'logcat.txt').write_text(sx('logcat -d'))
+        try:
+            if adb_owned: (OUT / 'logcat.txt').write_text(sx('logcat -d'))
         except Exception: pass
         if em:
             try: sh(ADB, '-s', f'emulator-{PORT}', 'emu', 'kill'); em.wait(40)
             except Exception: em.terminate(); em.wait(20)
         import shutil
-        shutil.copyfile(job / 'em.log', OUT / 'emulator.log')
-        sh(ADB, 'kill-server') # Only this job's private server, never the shared 5037 server.
+        if (job / 'em.log').exists(): shutil.copyfile(job / 'em.log', OUT / 'emulator.log')
+        if adb_owned: sh(ADB, 'kill-server') # Only this job's private server.
         if srv: srv.shutdown()
 print(f'{sum(res)}/{len(res)} passed · shots {OUT}'); sys.exit(0 if all(res) else 1)
