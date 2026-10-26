@@ -2607,19 +2607,19 @@
     const mm = q => { try { return matchMedia(q).matches; } catch (e) { return false; } };
     if (!vv || navigator.standalone === true || mm('(display-mode: standalone)') || mm('(display-mode: fullscreen)') || DEV() || window.WizardOSNative) return;
     let cur = 0;
-    const typing = () => { const a = document.activeElement; return !!a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName || '')); };
     const set = v => {
       if (v === cur) return;
       cur = v; root.style.setProperty('--vv-b', v + 'px'); root.dataset.browserBar = v ? String(v) : '';
       window.__vvLog = (window.__vvLog || []).concat('vv-b:' + v).slice(-20);
     };
+    // A browser bar covers 6–160 px. Anything taller is the on-screen keyboard, which the composers handle
+    // themselves: then no bar inset at all, so the keyboard is never mistaken for a bar and no stale bar height stays
+    // on top of it. Measured by size, not focus: a focused field with a hardware keyboard still has Safari's bar.
+    const BAR_MAX = 160;
     const apply = () => {
-      // Typing: the keyboard replaces Safari's bottom bar, and the composers handle the keyboard themselves, so no
-      // bar inset at all (and the keyboard-sized viewport change is never mistaken for a bar).
-      if (typing()) return set(0);
       const shown = vv.offsetTop + vv.height, bottom = device.getBoundingClientRect().bottom;
       const cover = Math.round(bottom - shown);
-      set(cover > 6 && cover < 220 ? cover : 0);
+      set(cover > 6 && cover <= BAR_MAX ? cover : 0);
     };
     vv.addEventListener('resize', apply); vv.addEventListener('scroll', apply); addEventListener('resize', apply);
     addEventListener('focusout', () => setTimeout(apply, 350)); addEventListener('orientationchange', () => setTimeout(apply, 350));
