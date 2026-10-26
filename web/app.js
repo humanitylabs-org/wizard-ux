@@ -323,13 +323,16 @@
     parkT = setTimeout(wake, 900);
   }
   function swipeDesk(step) {
+    const from = desks[idx]?.id;
     // The ＋ is the next destination after the last occupied desk, for swipes as well as taps.
-    if (step > 0 && idx === desks.length - 1) return newDesk();
-    goDesk(idx + step);
+    if (step > 0 && idx === desks.length - 1) newDesk(); else goDesk(idx + step);
+    // Only a swipe can be the iPhone's swipe home in disguise (undoLastMove below).
+    if (desks[idx]?.id !== from) lastMove = { from, at: Date.now() };
   }
   /* iPhone: a quick swipe home along the bottom edge also reaches the dock and flips a desk just as the app
-   * goes away, so it reopens one desk over. A desk change in the last moment before the page is hidden was
-   * that swipe, not a choice: put the desk back. */
+   * goes away, so it reopens one desk over. A desk SWIPE in the last moment before the page is hidden was
+   * that swipe, not a choice: put the desk back. Opening an app is never undone: its file picker or camera
+   * hides the page too, and that put James back on Chats mid-message (James, 26 Oct 2026). */
   let lastMove = null;
   const undoLastMove = () => {
     if (!lastMove || Date.now() - lastMove.at > 1500) return;
@@ -349,7 +352,7 @@
     const moved = from !== to;
     if (moved && sheet === 'settings') liftSettings(from && from.id); // Settings stays open on the desk you leave
     idx = n;
-    if (moved) lastMove = { from: from && from.id, at: Date.now() };
+    if (moved) lastMove = null; // a tap, link or app open is a choice; swipeDesk re-marks swipes
     if (moved) window.WosResources?.back();
     // A Home card's chip is a quick look: leaving the Chats desk puts it back to all chats. Chips James picks stay.
     // Miguel's skins (Dark, Light, Landscapes): Chats you leave go back to the session list, so coming back to Chats
