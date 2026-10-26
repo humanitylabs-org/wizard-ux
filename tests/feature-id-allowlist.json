@@ -137,7 +137,6 @@
   "web/core/launcher-defaults.js:wizard-manager": 1,
   "web/core/launcher-defaults.js:wizard-signal": 3,
   "web/core/offline-shell-manifest.js:photos": 1,
-  "web/core/offline-shell-manifest.js:usuals": 2,
   "web/core/orb-handoff.js:mizel": 1,
   "web/core/photos-relay.js:photos": 10,
   "web/core/photos-relay.js:Photos": 13,
