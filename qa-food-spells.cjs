@@ -11,7 +11,7 @@ const WEB = process.env.QA_WEB_DIR || __dirname, SHOTS = process.env.QA_SHOTS ||
 // The assertions stay identical after extraction; only registry/static transport
 // and traversal of the real app window cross the new package boundary.
 const FOOD = process.env.QA_FOOD_APP_DIR || '';
-const FOOD_REGISTRY = {id:'usuals',name:'Food',url:'/usuals/',provides:['voice-commands'],voice_names:['Food','Usuals','usual','food app','my food','saved orders','eats','bites']};
+const FOOD_REGISTRY = {id:'usuals',name:'Food',url:'/usuals/',provides:['voice-commands'],voice_names:['Food','Usuals','usual','food app','wizard eats','saved orders','eats','bites']};
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
