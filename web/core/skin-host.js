@@ -303,7 +303,7 @@
   function personalFailed(file, e, notify = true) {
     const message = String((e && (e.message || e)) || 'error').split('\n')[0].slice(0, 160);
     personalError = { file, message };
-    try { console.warn(`[${file}] turned off:`, e); } catch (_) {}
+    try { console.warn('[%s] turned off:', file, e); } catch (_) {}
     if (notify) try { shell && shell.toast(`${file} turned off · ${message}`); } catch (_) {}
     try { window.dispatchEvent?.(new CustomEvent('wos:personal-error', { detail: { ...personalError } })); } catch (_) {}
   }
