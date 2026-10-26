@@ -39,7 +39,7 @@ const shots = process.env.QA_SHOTS || path.dirname(output); fs.mkdirSync(shots,{
       await page.waitForTimeout(1800);
       const skipTour = async () => {
         const skip = page.getByText('Skip tour', { exact: true });
-        if (await skip.isVisible().catch(() => false)) { await skip.click({ force: true }); await page.waitForTimeout(200); }
+        if (await skip.isVisible().catch(() => false)) { await skip.click({ force: true }); await page.waitForTimeout(2800); }
       };
       await skipTour();
       const entry=await page.evaluate(mobile=>{
@@ -51,10 +51,11 @@ const shots = process.env.QA_SHOTS || path.dirname(output); fs.mkdirSync(shots,{
           quick:[...document.querySelectorAll('.home-apps [data-app]')].map(e=>({id:e.dataset.app,name:e.textContent.trim()})),
           shortcutNames:APPS.map(a=>({id:a.id,name:window.WizHomeScreenPolicy?.displayName(a)||a.name}))};
       },mobile);
-      await page.screenshot({path:path.join(shots,path.basename(output,'.json')+'-'+key+'-home.png'),fullPage:false,animations:'disabled'});
+      await page.screenshot({path:path.join(shots,path.basename(output,'.json')+'-'+key+'-home.png'),fullPage:false});
       if(mobile){
         await page.evaluate(()=>window.__wos.openSheet('launcher'));
-        await page.waitForTimeout(700); await skipTour();
+        await page.waitForTimeout(1800); await skipTour();
+        await page.locator('#launcherBody').evaluate(el => { el.scrollTop = 0; });
         Object.assign(entry,await page.evaluate(()=>{
           const root=document.querySelector('#launcherBody');
           const group=[...root.querySelectorAll('.lgroup')].find(g=>g.querySelector('h4')?.textContent==='Recent');
@@ -64,7 +65,7 @@ const shots = process.env.QA_SHOTS || path.dirname(output); fs.mkdirSync(shots,{
         await page.evaluate(()=>window.__wux.openPicker());await page.waitForTimeout(700);
         entry.grid=await page.locator('.pal-app .nm').allTextContents();entry.recents=[];
       }
-      await page.screenshot({path:path.join(shots,path.basename(output,'.json')+'-'+key+'-grid.png'),fullPage:false,animations:'disabled'});
+      await page.screenshot({path:path.join(shots,path.basename(output,'.json')+'-'+key+'-grid.png'),fullPage:false});
       result[key]=entry;
       await context.close();
     }
