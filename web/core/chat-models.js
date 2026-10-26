@@ -116,6 +116,11 @@
       // The configured route is authoritative even when a static catalogue lags.
       if (curModel && currentSlug === defProvider && !unique.some(o => o.value === curModel && o.provider === defProvider))
         unique.unshift({ value: curModel, provider: currentSlug, isGlobalDefault: true, name: claudeName(curModel, pslug) || friendly(curModel), description: pname });
+      // A default on the legacy Claude Code login (one subscription, no rotation) moves to the ready
+      // Hermes pool's same model, so new chats don't lock onto an exhausted login. Explicit thread picks stay.
+      const legacy = nativeClaude && unique.find(o => o.isGlobalDefault && o.provider === SUB && claudeFamily(o.value, SUB));
+      const pooled = legacy && unique.find(o => o.nativeClaude && o.provider === 'anthropic' && versionKey(o.value) === versionKey(legacy.value));
+      if (pooled) { legacy.isGlobalDefault = false; pooled.isGlobalDefault = true; }
       return curModel ? unique.sort((a, b) => Number(!!b.isGlobalDefault) - Number(!!a.isGlobalDefault)) : unique;
     }
     const raw = Array.isArray(payload) ? payload : arr(root.options).length ? arr(root.options) : arr(root.models);
