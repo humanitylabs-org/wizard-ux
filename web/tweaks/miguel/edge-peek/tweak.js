@@ -33,7 +33,7 @@ export default function setup(api) {
     el.classList.remove('glow');
     if (side) { void el.offsetWidth; el.classList.add('glow'); }
   };
-  api.mount(el);
+  if (!api.slot.mount('device-edge', el)) return () => {}; // the phone screen; no slot on other shells
   paint(api.route().beside | 0);
   api.on('beside', b => paint(b.side | 0));
   return () => { g = null; };

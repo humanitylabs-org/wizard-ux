@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 export default async function check(f) {
-  const grab = () => f.doc.body.children.find(n => n.className === 'bound-grab');
-  const el = grab(); assert.ok(el, 'the handle is mounted on the device'); assert.equal(el.hidden, true, 'hidden with no bound view');
+  const find = n => n.className === 'bound-grab' ? n : n.children.map(find).find(Boolean);
+  const grab = () => find(f.doc.body);
+  const el = grab(); assert.ok(el?.parentNode?.dataset.slot === 'device-edge', 'the handle is mounted in the device-edge slot'); assert.equal(el.hidden, true, 'hidden with no bound view');
   const press = (x0, x1, type = 'pointerup', y1 = 400) => { el.fire('pointerdown', { clientX: x0, clientY: 400, pointerId: 1 }); el.fire('pointermove', { clientX: x1, clientY: y1, pointerId: 1 }); el.fire(type, { type, clientX: x1, clientY: y1, pointerId: 1 }); };
   f.setRoute({ beside: 1 });
   assert.equal(el.hidden, false); assert.ok(el.classList.contains('right') && el.classList.contains('glow'));

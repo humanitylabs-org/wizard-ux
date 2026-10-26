@@ -353,8 +353,7 @@
       return base.on(type, payload => fn(type === 'render' ? Object.freeze({ part: payload.part }) : payload));
     }, toast: base.toast, storage: base.storage };
     if (caps.has('layout')) {
-      // mount: a control of the package's own on the device, removed by the host on teardown.
-      Object.assign(api, { listen: base.listen, frame: base.frame, gesture: base.gesture, mount: base.mount });
+      Object.assign(api, { listen: base.listen, frame: base.frame, gesture: base.gesture });
       // Borrow a built-in layout through the same host; disposal invalidates the handle.
       api.layout = Object.freeze({ foundation(id) {
         if (a.dead) return () => {};

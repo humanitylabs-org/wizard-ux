@@ -1,9 +1,9 @@
 // Edge peek QA (phone): a view bound beside a chat thread can be reached by tapping or swiping the edge where it
 // leans in, and the thread's edge on that view goes back. The handle and the next dock dot glow when it appears.
 // Read-only: every write is answered 204 locally; the thread and the bound page are fixtures (no private content).
-// Usage: PW=<playwright module> QA_OUT=<dir> node qa-edge-peek.cjs http://127.0.0.1:<port> [--skin nebula] [--expect on|off]
+// Usage: QA_PLAYWRIGHT=<playwright module> QA_OUT=<dir> node qa-edge-peek.cjs http://127.0.0.1:<port> [--skin nebula] [--expect on|off]
 const fs = require('fs'), path = require('path'), assert = require('node:assert/strict');
-const { chromium, devices } = require(process.env.PW || 'playwright');
+const { chromium, devices } = require('./tools/qa-playwright.cjs');
 const origin = process.argv[2] || 'http://127.0.0.1:8894';
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const skin = arg('--skin', 'nebula'), expect = arg('--expect', 'on');
