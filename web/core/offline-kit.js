@@ -57,6 +57,7 @@
           if(c.blocked?.(item,await all()))continue;
           try {
             const result=await response(item.path,item.body,item.id);
+            const alias=c.alias?.(item,result);if(alias)await store('meta','readwrite',s=>s.put(alias.to,'alias:'+alias.from));
             let state=await meta();state=c.reconcile(state,result,item);await save(state);
             if(c.resolve)for(const later of await all())if(later.seq>item.seq){const changed=c.resolve(later,item,result);if(changed)await write(changed)}
             await remove(item);if(item.id===target)targetResult=result;
@@ -74,7 +75,8 @@
       if(onlineOnly(path)&&!navigator.onLine)throw Error('Needs a connection');
       if(body&&queueable(path))return lock(async()=>{
         // Store before the first network attempt: a killed tab cannot lose an accepted edit.
-        const id=crypto.randomUUID(),item={id,path,body:structuredClone(body),created:new Date().toISOString(),tempId:-(Date.now()*1000+Math.floor(Math.random()*1000))};
+        const id=crypto.randomUUID();let item={id,path,body:structuredClone(body),created:new Date().toISOString(),tempId:-(Date.now()*1000+Math.floor(Math.random()*1000))};
+        if(c.prepare)item=await c.prepare(item,old=>store('meta','readonly',s=>s.get('alias:'+old)));
         item.seq=await store('outbox','readwrite',s=>s.add(item));await notify();
         const result=await flushLocked(id);
         if(result)return result;
