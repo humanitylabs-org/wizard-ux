@@ -2588,6 +2588,9 @@
     // (cancelVoice would otherwise keep an empty "cancelled meeting interruption"). returnMeeting keeps the loan and
     // says so when the return fails; the take then stays, and the next tap tries the return again.
     if (V.meetingLoan && !V.parts.length && !(V.chunks || []).length) {
+      // First invalidate the capture still opening, so a microphone that opens during the handoff is stopped at once
+      // (openRec checks the epoch) and never becomes a live recorder behind the stop gesture.
+      V.captureEpoch = (V.captureEpoch || 0) + 1;
       await returnMeeting({ status: 'cancelled' });
       if (V.meetingLoan) { tourEv('voicefail', { text: 'The microphone didn’t start, and the meeting still has it. Tap the orb to try again.' }); return; }
       if (V.rec || V.native || V.state === 'idle') return;
