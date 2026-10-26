@@ -3,8 +3,10 @@
  * to do, the real shell does it, and the tour watches the shell's events (app.js tourEv) to move on.
  *
  *   1 Talk     tap the orb, say hello, tap again: a real message to the Wizard (a real first thread)
- *   2 Hide     swipe the orb down: the bars hide (distraction-free); swipe up from the bottom brings them back
- *   3 Done     "Everything you see is customizable. Try asking your Wizard for one change." (+ "say help" line)
+ *   2 Reply    open Chats, read the Wizard's answer, type a reply: moves on only when a typed reply really sends
+ *   3 Done     what this server is and what apps add (Miguel's approved end card)
+ * Every beat shows "Step N of 3". Miguel, 26 Oct 2026: the Hide (swipe the orb down) and Install (Add to Home
+ * Screen) beats are gone; installing is explained in the chat message that hands over the link.
  *
  * Miguel, 24 Oct 2026: the old beat 2 (hold the orb and say "Open Calendar") is gone: it didn't work reliably and
  * a first run doesn't need it. Commands stay in the Help sheet. Each beat has "Skip this step" (moves to the next
@@ -31,24 +33,51 @@
   const log = s => { window.__tourLog = (window.__tourLog || []).concat(s).slice(-40); };
   const cmd = () => (H && H.cmdExample ? H.cmdExample() : 'Open Calendar');
 
+  // The end card's words are the owner's, verbatim (Miguel, 26 Oct 2026); the desktop guide ends with the same card.
+  const DONE_COPY = 'You’re set. This is your own server, and your Wizard can do a lot on it. Apps add new skills, like Files, a web Browser, Calendar, Music or video editing. Ask your Wizard what apps you have, or what’s in the App Store.';
   const BEATS = [
     null,
     { title: 'Talk', copy: () => typed ? 'Type “hello” and send it to your Wizard.' : 'Tap the orb and say hello. Tap again to send.' },
-    { title: 'Hide', copy: () => 'Swipe the orb down to hide everything but your screen.' },
-    { title: 'Done', copy: () => 'Everything you see is customizable. Try asking your Wizard for one change.' },
+    { title: 'Reply', copy: () => 'Open Chats to see your Wizard’s answer, then type a reply.' },
+    { title: 'Done', copy: () => DONE_COPY },
   ];
   const DONE = BEATS.length - 1; // the end card; every beat before it can be skipped on its own
+  const REPLY = 2;
+  const count = () => DONE;
+
+  /* Reply beat: only a reply the person typed into a chat thread, and only once it has really been delivered,
+   * moves it on (the outbox's onSent). A voice take, a new chat or a message still waiting in the outbox does not. */
+  let replyOff = null, replyT0 = 0;
+  // (A delivered voice note has already dropped its audio bytes; its server copy, capture or native take still show.)
+  const typedReply = it => !!it && it.kind === 'reply' && it.source === 'chat' && !!it.sessionId
+    && !it.audio && !it.audioFile && !it.nativeId && !it.captureId
+    && !!String(it.text || '').trim() && (it.createdAt || 0) >= replyT0;
+  /* Once they leave Home for Chats, the card steps out of the way entirely (it would cover the list and the thread);
+   * back on Home it returns with its skip links. */
+  function awayTick() {
+    if (!active() || step !== REPLY) return;
+    el.classList.toggle('tr-away', H.atHome ? !H.atHome() : false);
+    later(awayTick, 400);
+  }
+  function watchReply(on) {
+    try { replyOff?.(); } catch (e) {}
+    replyOff = null;
+    if (!on) return;
+    replyT0 = Date.now();
+    replyOff = window.WosOutbox?.onSent?.(it => { if (active() && step === REPLY && typedReply(it)) { log('reply:sent'); go(DONE); } }) || null;
+  }
 
   function build() {
     el = document.createElement('div'); el.id = 'tour'; el.className = 'tour'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Learn Wizard OS');
     el.innerHTML = `<div class="tr-spot"></div>
       <button type="button" class="tr-skip" data-tskip>Skip tour</button>
-      <div class="tr-steps" aria-hidden="true">${'<i></i>'.repeat(DONE - 1)}</div>
+      <div class="tr-steps" aria-hidden="true">${'<i></i>'.repeat(count())}</div>
       <div class="tr-stage"></div>
       <div class="tr-copy" aria-live="polite"><small></small><b></b><span class="tr-alt"></span><span class="tr-nx"></span></div>`;
     el.addEventListener('click', e => {
       if (e.target.closest('[data-tskip]')) return finish('skip');
       if (e.target.closest('[data-tnext]')) return skipStep();
+      if (e.target.closest('[data-tchats]')) return H.openChats?.();
       if (e.target.closest('[data-ttype]')) { typed = true; return go(step); }
       const say = e.target.closest('[data-tsay]'); if (say) { busy = true; H.say(say.dataset.tsay, say.dataset.tkind || 'auto'); return; }
       if (step === DONE) return finish('done');
@@ -65,7 +94,7 @@
     $('.tr-nx', c).innerHTML = step > 0 && step < DONE ? '<button type="button" class="tr-link tr-next" data-tnext>Skip this step</button>' : '';
     c.classList.add('in');
   }
-  const sub = n => n < DONE ? `${n} of ${DONE - 1} · ${BEATS[n].title}` : '';
+  const sub = n => (BEATS[n] ? `Step ${n} of ${count()} · ${BEATS[n].title}` : '');
   /* The spotlight hole: around the orb while a beat waits on it; wide open while the shell is showing a result. */
   function spot(mode) {
     const s = $('.tr-spot', el); if (!s) return;
@@ -78,23 +107,28 @@
   function fallback(n) {
     if (n === 1 && typed) return `<form class="tr-type"><input type="text" placeholder="Type hello here" enterkeyhint="send" aria-label="Message to your Wizard" autocomplete="off"><button type="submit">Send</button></form>`;
     if (n === 1 && misses >= 2) return `<button type="button" class="tr-link" data-ttype>Type instead</button>`;
-    if (n === DONE) return '<span class="tr-note">Need this again? Hold the orb and say “help”.</span>';
+    if (n === REPLY) return '<button type="button" class="tr-go" data-tchats>Open Chats</button>';
     return '';
   }
   function go(n) {
     clearTimers(); step = n; busy = false; inbox = false; log('beat:' + n);
     if (n !== 1) misses = 0;
     el.dataset.step = String(n);
+    el.classList.toggle('tr-free', n === REPLY); // Reply: no dim and no tap guard, the whole shell is theirs
+    if (n !== REPLY) el.classList.remove('tr-away');
+    el.classList.remove('tr-live', 'tr-open');
+    watchReply(n === REPLY);
     [...el.querySelectorAll('.tr-steps i')].forEach((d, i) => d.classList.toggle('on', i < n));
-    H.orbWrap.classList.toggle('tr-pulse', n < DONE && !typed);
-    if (n < DONE) { H.goHome(); $('.tr-copy', el).style.top = ''; }
+    H.orbWrap.classList.toggle('tr-pulse', n === 1 && !typed);
+    if (n < DONE) H.goHome(); // each practice beat starts from Home; the end card leaves them where they are
+    if (n < DONE) $('.tr-copy', el).style.top = '';
     setCopy(BEATS[n].copy(), sub(n), fallback(n));
     $('.tr-stage', el).innerHTML = '';
-    if (n < DONE) requestAnimationFrame(() => { if (step === n) spot('orb'); });
+    if (n === 1) requestAnimationFrame(() => { if (step === n) spot('orb'); });
+    if (n === REPLY) { spot('open'); awayTick(); }
     if (n === DONE) {
-      H.goHome(); spot('closed');
-      $('.tr-stage', el).innerHTML = `<div class="tr-glyphs">${glyph('tap', 'Tap', 'talk')}${glyph('down', 'Swipe ↓', 'hide')}</div>
-        ${typed ? '<div class="tr-mic">Turn on the microphone in your phone’s settings to talk instead of type.</div>' : ''}<div class="tr-tapon">Tap anywhere to start</div>`;
+      spot('closed');
+      $('.tr-stage', el).innerHTML = `${typed ? '<div class="tr-mic">Turn on the microphone in your phone’s settings to talk instead of type.</div>' : ''}<div class="tr-tapon">Tap anywhere to start</div>`;
     }
     if (n === 1 && typed) later(() => el.querySelector('.tr-type input')?.focus(), 120);
     if (n === DONE) { requestAnimationFrame(endLayout); later(endLayout, 420); } // after the copy's entrance settles
@@ -105,7 +139,7 @@
     if (!el || step !== DONE) return;
     const copy = $('.tr-copy', el), box = H.device.getBoundingClientRect();
     if (!copy) return;
-    const rows = ['.tr-glyphs', '.tr-mic', '.tr-tapon'].map(sel => $(sel, el)).filter(Boolean);
+    const rows = ['.tr-mic', '.tr-tapon'].map(sel => $(sel, el)).filter(Boolean);
     const gap = box.height < 500 ? 8 : 22;
     const style = getComputedStyle(el);
     const topBound = Math.max(64, parseFloat(style.paddingTop) || 0);
@@ -122,7 +156,6 @@
     el.style.setProperty('--tr-scroll-height', Math.ceil(Math.max(0, y - gap - topBound)) + 'px');
   }
   window.addEventListener('resize', endLayout);
-  const glyph = (k, a, b) => `<div class="tr-g ${k}"><span class="tr-gi ${k}"><i></i></span><b>${a}</b><small>${b}</small></div>`;
   function nudge(t, ms = 2200) { if (!active()) return; const n = step; setCopy(t, sub(n), fallback(n)); H.vib(6); later(() => { if (active() && step === n && !busy && !inbox) setCopy(BEATS[n].copy(), sub(n), fallback(n)); }, ms); }
 
   /* ---- the shell tells the tour what really happened (app.js tourEv) ---- */
@@ -133,6 +166,9 @@
     // Settings opened mid-tour (a deeplink, a notification, a voice command): the owner went somewhere on purpose.
     // Step aside; the tour's tap guard would otherwise swallow every tap in Settings under its scrim.
     if (type === 'sheet' && d.which === 'settings') return finish('handoff');
+    // The shell could not start or finish a take (the microphone never opened, ...): say so in the tour's own copy,
+    // because toasts are hidden while the tour runs. Never leave the orb looking frozen.
+    if (type === 'voicefail') { if (step === 1) { busy = false; el.classList.remove('tr-live'); nudge(d.text || 'The microphone didn’t start. Tap the orb to try again.', 5200); } return; }
     if (type === 'nomic') { if (!typed) { typed = true; log('typed'); later(() => { if (!active()) return; H.prepare(); el.classList.remove('tr-live'); go(step); }, 700); } return; }
     if (step === 1) {
       // Only a real message moves Talk on. A hold is a wrong gesture (below), whether or not it ran as a command.
@@ -143,27 +179,24 @@
       }
       if (type === 'nospeech') { misses++; busy = false; return nudge('Didn’t hear anything. Tap, speak, then tap again.', 3200); }
     }
-    if (step === 2) {
-      // No entrance animation here: WebKit can hold it for a second behind the bars' own hide transition, and this
-      // is the one line that says how to get them back.
-      if (type === 'zen' && d.on) { inbox = true; spot('closed'); setCopy('Nothing in the way. Swipe up from the bottom edge to bring it back.', sub(2)); $('.tr-copy', el).classList.remove('in'); return; }
-      if (type === 'zen' && !d.on && inbox) { inbox = false; return later(() => go(DONE), 250); }
-    }
+    // Reply: they are using the real shell (Chats, the launcher, desks, voice). Nothing they do is a wrong gesture.
+    if (step === REPLY) return;
     // Wrong gesture: undo what the shell did and steer back to the beat.
     // A hold (the tour no longer teaches commands): drop the take, close whatever a command opened, back to Home.
     if ((type === 'command' || type === 'nomatch') && step < DONE) {
       busy = false; H.dismissVoice(); H.closeSheets(); H.goHome();
-      return nudge(step === 1 ? 'That was a hold. For this one, just tap.' : 'That was a hold. Swipe the orb down instead.');
+      return nudge('That was a hold. For this one, just tap.');
     }
-    if (type === 'sheet' && d.which === 'launcher') { H.closeSheets(); return nudge(step === 2 ? 'Down, not up.' : 'That’s every app. We’ll come back to it.'); }
+    if (type === 'sheet' && d.which === 'launcher') { H.closeSheets(); return nudge('That’s every app. We’ll come back to it.'); }
     if (type === 'desk' && step < DONE && !busy && !d.home) { H.goHome(); return nudge('That moves between desks. Try the beat above.'); }
   }
 
   const active = () => !!(el && step > 0);
-  // While the tour runs, only the orb, the voice controls and the tour itself take taps.
+  // While the tour runs, only the orb, the voice controls and the tour itself take taps (Reply leaves the shell free).
   const allowed = t => !!(t.closest && t.closest('.tour, #orbWrap, #voice, .arc, #txChips, .help-sheet, #dock, #inbox, #zenEdge'));
-  window.addEventListener('pointerdown', e => { if (active() && !allowed(e.target)) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
-  window.addEventListener('click', e => { if (active() && !allowed(e.target)) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+  const guarded = t => active() && step !== REPLY && !allowed(t);
+  window.addEventListener('pointerdown', e => { if (guarded(e.target)) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+  window.addEventListener('click', e => { if (guarded(e.target)) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
 
   function start(why) {
     if (!H) return false;
@@ -171,14 +204,16 @@
     if (!el) build();
     typed = !!(H.noMic && H.noMic()); misses = 0;
     el.hidden = false; el.classList.add('on'); H.device.classList.add('touring'); log('start:' + (why || ''));
+    window.WizardPwaInstall?.hold?.(true); // no install banner over the tour's own controls while it runs
     go(1); return true;
   }
   function finish(how) {
     if (!el) return;
-    clearTimers(); log('finish:' + how);
+    clearTimers(); log('finish:' + how); watchReply(false);
     step = 0; inbox = false; busy = false; mark();
     H.orbWrap.classList.remove('tr-pulse');
     el.classList.remove('on'); H.device.classList.remove('touring');
+    window.WizardPwaInstall?.hold?.(false);
     const e0 = el; el = null; setTimeout(() => e0.remove(), 300);
     if (how === 'skip') H.toast('?', 'Say “help” any time to see the gestures', 2600);
   }
@@ -186,17 +221,17 @@
   function skipStep() {
     if (!active() || step >= DONE) return false;
     const n = step + 1; log('skip-step:' + step);
-    if (inbox) { inbox = false; H.setZen?.(false); }
-    H.prepare(); el.classList.remove('tr-live', 'tr-open');
+    if (step === 1) H.prepare(); // stop a take in progress; in Reply the shell is theirs and stays where it is
+    el.classList.remove('tr-live', 'tr-open');
     go(n); return true;
   }
-  /* Back: one step back. In beat 2 with the bars hidden, Back brings them back: that is the success. */
+  /* Back: at Talk it skips the tour. In Reply, Back is the shell's own (out of a thread, out of Chats): the beat stays. */
   function back() {
     if (helpEl) { closeHelp(); return 'help'; }
     if (!active()) return '';
     if (el.classList.contains('tr-live')) return ''; // recording: Back navigates as always, the tour stays
     if (step === 1) { finish('skip'); return 'tour-skip'; }
-    if (step === 2) { if (inbox) { H.setZen?.(false); return 'tour-step'; } go(1); return 'tour-step'; }
+    if (step === REPLY) return '';
     finish('done'); return 'tour-done';
   }
 
@@ -254,10 +289,10 @@
     const n = D.step, mod = D.H.mod || 'Alt+';
     D.el.dataset.step = String(n);
     D.el.innerHTML = n === 1
-      ? `<small>Start here</small><b>Type “hello” below and press Enter to send it to your Wizard.</b>
+      ? `<small>Step 1 of 2</small><b>Type “hello” below and press Enter to send it to your Wizard.</b>
          <span class="dtr-sub">Prefer to talk? Click the mic next to the box.</span>
          <span class="dtr-acts"><button type="button" class="dtr-link" data-dnext>Skip this step</button><button type="button" class="dtr-link" data-dskip>Skip tour</button></span>`
-      : `<small>${D.sent ? 'Sent' : 'You’re set'}</small><b>${D.sent ? 'Your Wizard is working on it. Its reply shows up in your chat list on the left.' : 'Type in the box at the bottom of any chat and press Enter to talk to your Wizard.'}</b>
+      : `<small>Step 2 of 2</small><b>${DONE_COPY}</b>
          <span class="dtr-sub">Setup and your apps: <kbd>${mod}O</kbd> · every key: <kbd>${mod}/</kbd></span>
          <span class="dtr-acts"><button type="button" class="dtr-go" data-ddone>Done</button></span>`;
     dPlace(); log('desk:beat:' + n);
@@ -303,7 +338,7 @@
     desk,
     attach(host) { H = host; },
     start, finish, back, event, skipStep, openHelp, closeHelp, _go: n => active() && go(n),
-    beats: BEATS.slice(1).map(b => b.title), DONE,
+    beats: BEATS.slice(1).map(b => b.title), DONE, REPLY, DONE_COPY,
     isHelp: t => HELP_RE.test(String(t || '').trim()),
     get active() { return active(); }, get step() { return step; }, get helpOpen() { return !!helpEl; }, get typed() { return typed; },
     done, mark,
