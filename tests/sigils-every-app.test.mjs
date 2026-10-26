@@ -20,7 +20,7 @@ function sigil() {
 const STORE_APPS = [
   'browser', 'card-benefits', 'cinequeue', 'defleur-video', 'files', 'messenger', 'morning-report', 'notifications', 'secret-drop',
   'sniper', 'transcriber', 'wisdom', 'wizard-agent-service', 'wizard-calendar', 'wizard-chatgpt', 'wizard-claude',
-  'wizard-cloudflare', 'wizard-search', 'wizard-shopping', 'wizard-tinfoil', 'wizard-ux',
+  'wizard-cloudflare', 'wizard-search', 'wizard-shopping', 'wizard-notes', 'wizard-tinfoil', 'wizard-ux',
 ];
 
 test('every known Wizard App Store app has a designed sigil (no letter fallback)', () => {
