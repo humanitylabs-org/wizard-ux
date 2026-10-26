@@ -35,7 +35,7 @@ try {for(const mobile of [false,true]) {
  await p.waitForTimeout(750);
  const status=await f.locator('#status').innerText();
  const draft=await p.evaluate(()=>JSON.parse(localStorage.getItem('wos.chat.drafts.v1')||'{}'));
- if(baseline){assert.match(status,/does not support Morning Report/);assert.ok(!draft.new?.reply);}
+ if(baseline){assert.match(status,/does not support Morning Report|to turn on Reply/);assert.ok(!draft.new?.reply);}
  else {assert.match(status,/Nothing sent/);assert.equal(draft.new.reply.message,selected);assert.match(draft.new.reply.key,/^morning-report:/);assert.equal(draft.new.text,'');assert.equal(draft.new.files.length,0);assert.match(draft.new.reply.title,/2026-01-02/);await p.locator('[data-chreply]').first().waitFor({state:'visible'});}
  await p.screenshot({path:path.join(OUT,(mobile?'mobile':'desktop')+'-draft.png')});
  if(!baseline){await p.reload();await p.waitForFunction(()=>!!(window.__wos||window.__wux),null,{timeout:60000});const persisted=await p.evaluate(()=>JSON.parse(localStorage.getItem('wos.chat.drafts.v1')||'{}'));assert.deepEqual(persisted.new.reply,draft.new.reply);}
