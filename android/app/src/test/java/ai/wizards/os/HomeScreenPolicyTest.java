@@ -3,6 +3,19 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class HomeScreenPolicyTest {
+    @Test public void readdingPinnedAppUpdatesChangedIconOrNameButUnchangedRefreshIsNoop() {
+        assertTrue(HomeScreenPolicy.needsUpdate(true,"Wisdom","old png","Wisdom","new png"));
+        assertTrue(HomeScreenPolicy.needsUpdate(true,"Old name","png","New name","png"));
+        assertFalse(HomeScreenPolicy.needsUpdate(true,"Wisdom","png","Wisdom","png"));
+    }
+    @Test public void refreshNeverUpdatesUnownedOrUnpinnedShortcutEvenWithChangedMetadata() {
+        assertFalse(HomeScreenPolicy.needsUpdate(false,"old","old png","new","new png"));
+        assertFalse(HomeScreenPolicy.needsUpdate(false,null,null,"Wisdom","png"));
+    }
+    @Test public void legacyPinnedShortcutWithMissingPreferencesGetsOneRefresh() {
+        assertTrue(HomeScreenPolicy.needsUpdate(true,null,null,"Wisdom","png"));
+        assertFalse(HomeScreenPolicy.needsUpdate(true,"Wisdom","png","Wisdom","png"));
+    }
     @Test public void signalHomeNameDoesNotChangeRegistryIdentity() {
         assertEquals("Signal",HomeScreenPolicy.displayName("wizard-signal","Wizard Signal"));
         assertEquals("Wisdom",HomeScreenPolicy.displayName("wisdom","Wisdom"));
