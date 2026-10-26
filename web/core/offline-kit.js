@@ -131,5 +131,39 @@
     return Object.freeze({request,flush,status,started,warm,projected,
       dispose(){clearInterval(timer);channel?.close()}});
   }
-  globalThis.WizOffline=Object.freeze({version:1,create});
+  // Keyed replicas share one transaction boundary for rows + their readiness manifest.
+  // No queue or worker is started: callers retain their existing submission custody.
+  function collection(c) {
+    if (!/^wos-[a-z0-9-]+$/.test(c.name)) throw Error('Scoped collection name required');
+    const opened = new Promise((resolve, reject) => {
+      const r = indexedDB.open(c.name, 1);
+      r.onupgradeneeded = () => { r.result.createObjectStore('rows'); r.result.createObjectStore('meta'); };
+      r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error);
+      r.onblocked = () => reject(Error('Close another Wizard window to save offline'));
+    });
+    async function transaction(mode, fn) {
+      const db = await opened;
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(['rows', 'meta'], mode); let result;
+        let request;
+        try { request = fn(tx.objectStore('rows'), tx.objectStore('meta')); }
+        catch (error) { tx.abort(); reject(error); return; }
+        if (request) request.onsuccess = () => { result = request.result; };
+        tx.oncomplete = () => resolve(result);
+        tx.onerror = tx.onabort = () => reject(tx.error || Error('Offline storage unavailable'));
+      });
+    }
+    return Object.freeze({
+      get: key => transaction('readonly', rows => rows.get(key)),
+      manifest: () => transaction('readonly', (_, meta) => meta.get('manifest')),
+      keys: () => transaction('readonly', rows => rows.getAllKeys()),
+      // Replacing a flight atomically also evicts previously selected thread bodies.
+      replace: (entries, manifest) => transaction('readwrite', (rows, meta) => {
+        rows.clear(); for (const [key, value] of entries) rows.put(value, key);
+        meta.put(manifest, 'manifest');
+      }),
+      clear: () => transaction('readwrite', (rows, meta) => { rows.clear(); meta.clear(); })
+    });
+  }
+  globalThis.WizOffline=Object.freeze({version:1,create,collection});
 })();

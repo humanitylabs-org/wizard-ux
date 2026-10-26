@@ -1057,7 +1057,7 @@ window.WizCore.chats = function createChats(H) {
       : LST.cached ? syncBar('', `${spin}<span>Updating…${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}</span>`)
       : LST.ok && age > STALE_LIST ? syncBar('stale', `${LST.loading ? spin : ''}<span><b>Not up to date</b> · ${esc(since)}${LST.loading ? ' · updating…' : ''}</span>`)
       : c.ptrState === 'done' ? syncBar('ok', '<span>Up to date</span>') : '';
-    const html = `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${focusedAgent(focus) ? ` style="--agc:${AGS()?.colour(agentRec(focusedAgent(focus))) || ''};--ch-agent-hue:${AGS()?.distinctHues().get(focusedAgent(focus)) ?? AGS()?.hue(agentRec(focusedAgent(focus)))}"` : ''}><div data-slot="list-top"></div>${head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${focusStrip(w)}${c.sheet ? filterSheet(w, c) : ''}</div>`;
+    const html = `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${focusedAgent(focus) ? ` style="--agc:${AGS()?.colour(agentRec(focusedAgent(focus))) || ''};--ch-agent-hue:${AGS()?.distinctHues().get(focusedAgent(focus)) ?? AGS()?.hue(agentRec(focusedAgent(focus)))}"` : ''}><div data-slot="list-top"></div>${head}${!AGID ? window.WosFlight?.statusHTML() || '' : ''}${!AGID ? window.WosFlight?.trayHTML() || '' : ''}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${focusStrip(w)}${c.sheet ? filterSheet(w, c) : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
@@ -1478,6 +1478,7 @@ window.WizCore.chats = function createChats(H) {
   }
   /* Controls are bound to the displayed identity, never to whichever prompt arrives next. */
   function approvalHtml(c, s) {
+    if (window.WosFlight?.offline() && (c.approval || s?.status==='waiting_for_approval')) return '<div class="appr" role="status">Needs a connection</div>';
     const ap = c.approval;
     if (!ap || !s || ap.runId !== s.runId) return '';
     if (ap.resolved) return `<div class="appr done">${esc(ap.stale ? 'No longer waiting · already answered or expired' : ap.kind === 'unknown' ? 'Recovery acknowledged · execution interrupted' : ap.kind === 'clarify' ? 'Answer sent' : KIT.choiceReceipt(ap.resolved))}</div>`;
@@ -1523,6 +1524,7 @@ window.WizCore.chats = function createChats(H) {
   async function chooseApproval(wid, choice, key, answer) {
     const w = W[wid], c = ch(wid), ap = c.approval;
     if (!w || !ap || ap.pending || ap.resolved || ap.key !== key || !(ap.choices.some(x => x.value === choice) || ap.kind === 'clarify' && choice === '__answer')) return;
+    if (window.WosFlight?.offline()) { ap.error='Needs a connection'; renderThreadNow(w); return; }
     const sid = w.thread, nav = c.readNav;
     const owns = () => W[wid] === w && w.thread === sid && c.readNav === nav && c.approval?.key === key;
     if (ap.kind === 'clarify') { ap.answer = choice === '__answer' ? answer : choice; if (!ap.answer?.trim()) return; }
@@ -1772,6 +1774,7 @@ window.WizCore.chats = function createChats(H) {
         + pend.map(p => pendingHtml(p, c)).join('')
         + (pend.some(p => ['queued', 'sending', 'waiting'].includes(p.state)) && !working ? `<details class="steps live"><summary><i class="dots"><b></b><b></b><b></b></i> ${pend.some(p => p.state === 'waiting') ? 'Waiting for Wizard · will retry' : 'Sending'}</summary></details>` : '');
     }
+    if (c.offlineFor === w.thread && c.offlineSavedAt) msgs = (window.WosFlight?.banner(c.offlineSavedAt) || '') + msgs;
     msgs += syncStream(w, c, turns, TAG);
     const acts = isNew ? [] : threadActions(s, turns);
     const box = el.querySelector('.ch-msgs');
@@ -2021,6 +2024,7 @@ window.WizCore.chats = function createChats(H) {
     const recover = H.recoverUnsent ? `<button type="button" class="pbtn" data-obrecover="${esc(p.id)}">Recover</button>` : '';
     if (p.state === 'unconfirmed') return `<span class="pst fail">${esc(p.error)}</span>${recover}`;
     if (p.state === 'empty') return `<span class="pst fail">No speech detected · recording kept</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry transcription</button><button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
+    if (p.offlineContext && p.state !== 'sent') return `<span class="pst">${p.state === 'unconfirmed' ? 'Could not confirm · review in landing tray' : p.state === 'sending' ? 'Sending…' : 'Queued for landing · held on this device'}</span>`;
     if (p.state === 'held') return `<span class="pst">Kept on this device · not queued</span>${recover}<button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
     if (p.state === 'failed') return `<span class="pst fail">Not sent · ${esc(p.error || 'Wizard didn’t take it')}</span>${OUTBOX.canRetry(p) ? `<button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry</button>` : ''}${p.audio || p.audioFile || p.body ? recover : `<button type="button" class="pbtn ghost" data-obedit="${esc(p.id)}">Edit</button>`}`;
     if (p.state === 'waiting') return `<span class="pst wait">${esc(reach().short)}</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry now</button>${troubleshoot}`;
@@ -2063,11 +2067,19 @@ window.WizCore.chats = function createChats(H) {
     if (c.loadedNav === c.readNav || c.cachedNav === c.readNav || !s || !LIVE.contentKey) return true;
     return !!LIVE.listTrusted?.() && c.readCk === LIVE.contentKey(s);
   }
+  async function loadSavedFlight(w, sid, nav) {
+    const saved = await window.WosFlight.saved(sid), c = ch(w.id);
+    if (W[w.id] !== w || w.thread !== sid || c.readNav !== nav) return;
+    Object.assign(c, {offlineFor:sid, offlineSavedAt:saved?.at || 0, turns:saved ? toTurns(saved.messages) : [], loadedFor:saved ? sid : '', loadedNav:nav, cachedFor:'', cachedNav:nav, approval:null, err:saved ? '' : 'Not saved for offline', failN:0});
+    clearTimeout(c.retryT);
+    renderThreadLive(w);
+  }
   async function loadThread(w, force) {
     const c = ch(w.id), sid = w.thread, nav = c.readNav;
     if (!sid || sid === '__new__' || (c.loading && c.loading.sid === sid && c.loading.nav === nav)) return;
     if (c.goneFor === sid && c.goneNav === nav) return; // answered 404 in this open: gone, not worth polling
     const s = LIVE.session(sid);
+    if (window.WosFlight?.offline()) { await loadSavedFlight(w, sid, nav); return; }
     // Cache finished history while its session revision is unchanged. Its existing session poll remains live;
     // any new message/activity/status immediately invalidates this cache, with a 60 s safety re-read.
     // Working, approvals, failed reads and pending send/steer receipts keep their existing cadence.
@@ -2077,7 +2089,7 @@ window.WizCore.chats = function createChats(H) {
     const quiet = s && (!s.status || ['completed', 'cancelled', 'failed', 'interrupted'].includes(s.status))
       && Number.isSafeInteger(s.messageCount) && !LIVE.busy(w.thread) && !c.err && !pendingFor(w).length;
     const age = isWorking(s) ? 3500 : quiet ? 60000 : 15000;
-    const fresh = c.loadedFor === w.thread && Date.now() - c.at < age && (!quiet || c.readRevision === revision) && turnsCurrent(c, s);
+    const fresh = !c.offlineFor && c.loadedFor === w.thread && Date.now() - c.at < age && (!quiet || c.readRevision === revision) && turnsCurrent(c, s);
     // Status changes (Stopping…, Deferred, Archived) re-render the header even between message reads.
     const hk = s ? [s.status, !!s.archived, !!s.deferred, s.runId].join('|') : '';
     // Speed: a thread not yet read this page paints its last on-device copy at once (no skeleton);
@@ -2120,6 +2132,7 @@ window.WizCore.chats = function createChats(H) {
     try {
       const rows = await LIVE.messages(sid);
       if (!current()) return;
+      c.offlineFor = ''; c.offlineSavedAt = 0;
       const turns = toTurns(rows);
       const sig = JSON.stringify(turns.slice(-3));
       // A new open may be showing a skeleton because its old list revision was stale. Even identical
@@ -2135,6 +2148,9 @@ window.WizCore.chats = function createChats(H) {
       if (hk2 !== c.hk) { c.hk = hk2; changed = true; }
       if (changed) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && current()) renderLive(w, el); }
     } catch (e) {
+      if (current() && !e.status && window.WosFlight) {
+        window.WosFlight.connection(false); await loadSavedFlight(w, sid, nav); return;
+      }
       if (current()) {
         // A failed read is a moment, not a verdict (James, 21 Oct 2026: a 130-message thread showed a bare
         // "Couldn’t load this thread" after one dropped read). Retry on our own with a short backoff, name the
@@ -2160,7 +2176,8 @@ window.WizCore.chats = function createChats(H) {
     if (!w.thread) { const c0 = ch(wid), place = c0.listPending || listPlace(elOf(wid)); c0.listPending = null; if (place) c0.listPlace = place; }
     if (w.thread) saveDraft(wid);
     closeRowSheet();
-    const c = ch(wid); c.approval = null; c.cachedFor = ''; // a cached paint belongs to one open only
+    window.WosFlight?.opened(sid);
+    const c = ch(wid); c.offlineSavedAt = 0; c.offlineFor = ''; c.approval = null; c.cachedFor = ''; // a cached paint belongs to one open only
     c.err = ''; c.failN = 0; clearTimeout(c.retryT); // a read error belongs to the thread that failed, never the next one opened
     c.readNav = (c.readNav || 0) + 1;
     if (w.thread !== sid) H.threadShown?.(wid, null); // close the old preview immediately, even while the new thread loads
@@ -2447,6 +2464,7 @@ window.WizCore.chats = function createChats(H) {
   const idOf = t => t.closest('[data-chats]')?.dataset.chats || '';
   /* Clicks inside a Chats window. Returns true when it handled the click. */
   function click(e, id) {
+    if (window.WosFlight?.click(e.target)) return true;
     if (e.target.closest('[data-chtroubleshoot]')) { window.WizReach?.open(); return true; }
     const w = H.win(id); if (!w) return false;
     const hc = e.target.closest('[data-helper-continue]');

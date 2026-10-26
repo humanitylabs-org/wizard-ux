@@ -184,6 +184,7 @@
   /* ---- network ---- */
   const J = { 'Content-Type': 'application/json' };
   async function req(path, init = {}) {
+    if (init.method && !['GET','HEAD'].includes(init.method) && window.WosFlight?.offline()) throw new Error('Needs a connection');
     const r = await fetch(path, { cache: 'no-store', credentials: 'same-origin', ...init });
     if (!r.ok) { let detail; try { detail = (await r.json()).error; } catch {} const e = new Error(detail?.message || 'HTTP ' + r.status); e.status = r.status; e.code = detail?.code; throw e; }
     return r;
@@ -692,6 +693,7 @@
           if (Object.entries(merged.threads).some(([key,r])=>r.seenAt>(remote?.threads?.[key]?.seenAt || 0)))
             putSeen(merged).then(r=>{this.seen=merge(this.seen,r);writeLocal(this.seen);this.emit();}).catch(()=>{});
           this.ok = true; this.error = ''; this.at = Date.now(); this.cached = false;
+          window.WosFlight?.connection(true);
           };
           // Only a cold list paints early; a later full walk replaces a list that is already on screen in one go.
           // A stored snapshot counts as on screen: painting page 1 over it, then the full walk, then other agents'
@@ -710,7 +712,7 @@
           if (fromSnap) await Promise.race([agents, new Promise(r => setTimeout(r, AGENT_WAIT))]);
           this.emit();
           await agents;
-        } catch (e) { this.error = e.status === 403 ? 'access' : 'offline'; }
+        } catch (e) { this.error = e.status === 403 ? 'access' : 'offline'; if (!e.status || e.status >= 500) window.WosFlight?.connection(false); }
         finally { this.loading = null; this.emit(); }
       })();
       return this.loading;
@@ -798,6 +800,7 @@
     // The non-default agent a thread is pinned to, or '' for the main agent.
     agentOf(id) { if (!id || id === '__new__') return ''; const a = AGENT_OF.get(id); return a && otherAgent(a) ? a : ''; },
     pinAgent(id, agent) { if (id && agent && otherAgent(agent)) AGENT_OF.set(id, agent); },
+    saveSnapshot() { writeSnap(this); },
     markSeen(ids) {
       const all = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
       const ts = Date.now();
@@ -924,6 +927,7 @@
         const n = Number(p.pagination?.returned ?? page.length);
         if (!isFinite(n) || n < 500 || !page.length) break;
       }
+      window.WosFlight?.observe(id, rows);
       return rows;
     },
     async searchSessions(q, agent = '', signal, onBatch) {
@@ -1102,6 +1106,7 @@
     async run(runId) { return (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${rq(runId)}`)).json(); },
     async runCapabilities(runId) { return (await req(`/wizard/hermes/v1/capabilities${rq(runId)}`)).json(); },
     async approve(runId, choice, requestId, generation) {
+      if (window.WosFlight?.offline()) throw new Error('Needs a connection');
       const body = { choice }; if (requestId) body.request_id = requestId;
       if (generation !== undefined) body.execution_generation = generation;
       await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/approval${rq(runId)}`, { method: 'POST', headers: J, body: JSON.stringify(body) });

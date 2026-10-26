@@ -15,6 +15,7 @@
   // One authority check for explicit retry and automatic delivery. Terminal/ambiguous
   // custody is not a queue. Empty speech requires a per-recording choice, never bulk.
   function eligible(it, states) {
+    if (it?.offlineContext) return false; // landing tray is the sole delivery authority
     return !!it && !localCompletions.has(it.id) && !it.localCompleted && !quarantine.has(it.id) && ['new', 'reply'].includes(it.kind) &&
       (it.intent !== 'command' || it.deliveryRequested === true) && it.steerDispatch !== 'started' && states.includes(it.state);
   }
@@ -210,6 +211,11 @@
     if (it.kind === 'dictation' && it.state === 'transcribing') it.state = 'held';
     if (it.state === 'capturing') { it.state = 'held'; it.error = 'Interrupted recording · original bytes kept'; }
     if (it.steerDispatch === 'started' && it.state !== 'sent') { it.state = 'unconfirmed'; it.error = unconfirmed; }
+    if (it.offlineContext && it.state !== 'sent') {
+      if (['sending','transcribing'].includes(it.state)) { it.state='unconfirmed'; it.error='Could not confirm · original kept in landing tray'; }
+      else if(it.state !== 'unconfirmed')it.state='held';
+      it.nextAt=0;
+    }
     if (it.state === 'sending') it.state = 'waiting';
     // A timed-out transcription is not an admitted message. Replaying the same recovered audio forever makes its
     // thread look permanently Working; keep the recording and require an explicit retry instead.
@@ -441,7 +447,12 @@
     }
     if (!it.body) {
       const body = { session_id: it.sessionId, input };
-      if (it.instructions) body.instructions = String(it.instructions).slice(0, 2000);
+      if (it.offlineContext) {
+        body.offline_context = structuredClone(it.offlineContext);
+        // The existing service frames this instruction channel as untrusted background,
+        // while input stays byte-for-byte the owner's words. No server/Hermes change.
+        body.instructions = '[Wizard OS context] ' + JSON.stringify({offlineReply:it.offlineContext});
+      } else if (it.instructions) body.instructions = String(it.instructions).slice(0, 2000);
       if (fileIds.length) body.wizard_file_ids = fileIds;
       Object.assign(body, { model: it.model, provider: it.provider, require_model_lock: true });
       if (it.agent) body.agent = it.agent;
@@ -467,7 +478,8 @@
       it.attempts = (it.attempts || 0) + 1; it.error = reason(e); it.errorStatus = e.status || 0; it.lastAttemptAt = now();
       // A finite STT deadline keeps the recording but releases the thread; automatic replay of the same body can
       // otherwise spend almost all its time in Sending. Other transport failures still retry from durable custody.
-      if (transcriptionTimedOut(it, e)) { it.state = 'failed'; it.nextAt = 0; it.error = 'Transcription timed out · original recording kept. Retry when ready.'; }
+      if (it.offlineContext) { it.state = it.body && transient(e) ? 'unconfirmed' : 'failed'; it.nextAt=0; it.error=it.state==='unconfirmed' ? 'Could not confirm · original kept in landing tray' : reason(e)+' · original kept in landing tray'; }
+      else if (transcriptionTimedOut(it, e)) { it.state = 'failed'; it.nextAt = 0; it.error = 'Transcription timed out · original recording kept. Retry when ready.'; }
       else if (transient(e)) { it.state = 'waiting'; it.nextAt = now() + BACKOFF[Math.min(it.attempts - 1, BACKOFF.length - 1)]; }
       else { it.state = 'failed'; it.nextAt = 0; }
       await put(it);
@@ -500,11 +512,12 @@
   const replyOf = o => window.WosChat?.reply?.clean(o?.reply) || null;
   const newSessionId = () => `wizard_${now()}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
   function make(o) {
-    return { id: o.nativeId ? 'wos-native-' + o.nativeId : 'wos-' + crypto.randomUUID(), createdAt: now(), attempts: 0, state: 'preparing',
+    const offlineContext = o.offlineContext || window.WosFlight?.stamp(o.sessionId, o.agent);
+    return { ...(offlineContext ? {offlineContext, steerRunId:''} : {}), id: o.nativeId ? 'wos-native-' + o.nativeId : 'wos-' + crypto.randomUUID(), createdAt: now(), attempts: 0, state: 'preparing',
       meetingEventId: o.meetingEventId || '', parkedDraft: o.parkedDraft || null, nativeIds: [...new Set([...(o.nativeIds || []), o.nativeId].filter(Boolean))],
-      kind: o.kind === 'conversation' ? 'conversation' : o.kind === 'reply' ? 'reply' : 'new', conversation: o.conversation || null, sessionId: o.kind === 'conversation' ? '' : o.sessionId || newSessionId(), steerRunId: o.meetingEventId ? '' : o.steerRunId || '',
+      kind: o.kind === 'conversation' ? 'conversation' : o.kind === 'reply' ? 'reply' : 'new', conversation: o.conversation || null, sessionId: o.kind === 'conversation' ? '' : o.sessionId || newSessionId(), steerRunId: offlineContext || o.meetingEventId ? '' : o.steerRunId || '',
       text: String(o.text || '').trim(), typed: o.audio && !String(o.text || '').trim() ? String(o.typed || '').trim() : '', instructions: o.instructions || '', files: (o.files || []).map(f => ({ ...f })),
-      audio: o.audio || null, audioType: o.audio?.type || '', model: o.model || '', provider: o.provider || '',
+      audio: o.audio || null, audioType: o.audio?.type || '', durationMs:Math.max(0,Number(o.durationMs)||0), model: o.model || '', provider: o.provider || '',
       pendingBlobs: keepPending(o.files), sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', deliveryRequested: false, source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false,
       // A Notifications Reply: the item, framed after his words only in the message that is delivered (deliver()).
       ...(replyOf(o) ? { reply: replyOf(o) } : {}) };
@@ -531,7 +544,25 @@
       el.textContent = text;
     }
   }
+  let flightWork = null;
   const api = {
+    sendFlight(progress) {
+      if(flightWork)return flightWork;
+      const run=async()=>{
+        await load();
+        const batch=[...items.values()].filter(it=>it.offlineContext && ['held','unconfirmed','failed','waiting'].includes(it.state) && it.durable && !it.storageError && !quarantine.has(it.id));
+        let cursor=0,started=0;
+        await Promise.all(Array.from({length:Math.min(2,batch.length)},async()=>{
+          while(cursor<batch.length){const it=batch[cursor++];
+            if(window.WosFlight?.offline())break;
+            progress?.(++started,batch.length);
+            await attempt(it);
+          }
+        }));
+      };
+      flightWork=(navigator.locks?navigator.locks.request('wos-flight-delivery',run):run()).finally(()=>{flightWork=null;});
+      return flightWork;
+    },
     async sendConversation(o) {
       await load();
       const existing = (o.captureId && items.get(o.captureId)) || (o.nativeId && api.nativeItem(o.nativeId));
@@ -612,7 +643,7 @@
       if (prior && (localCompletions.has(prior.id) || prior.localCompleted || quarantine.has(prior.id) || prior.state === 'sent' || prior.body || prior.steerBody)) return prior;
       const it = make(o); if (prior) { it.id = prior.id; it.createdAt = prior.createdAt; it.nativeId ||= prior.nativeId; it.nativeIds = [...new Set([...(prior.nativeIds || []), prior.nativeId, ...it.nativeIds].filter(Boolean))]; }
       // Parking is held at its first durable boundary, even before transition.
-      it.state = it.parkedDraft ? 'held' : 'processing'; await put(it); schedule(); return it;
+      it.state = it.parkedDraft || it.offlineContext ? 'held' : 'processing'; await put(it); schedule(); return it;
     },
     capture(blob, id, parts) {
       let it = items.get(id);
@@ -673,6 +704,14 @@
       // Only the delivery caller (including an explicit Send-to-agent choice) may
       // promote a command. Recovery and reconnect never create this authorization.
       it.deliveryRequested = true;
+      const flight = it.offlineContext || window.WosFlight?.stamp(it.sessionId,it.agent);
+      if(flight)it.offlineContext=flight;
+      if (it.offlineContext) {
+        it.steerRunId='';
+        if (!it.model && snapshot) Object.assign(it,snapshot);
+        it.state='held'; it.error='Recorded offline · held for landing'; it.nextAt=0;
+        await put(it); return it;
+      }
       await put(it); // own the entire submission even if route discovery fails
       // A new thread is announced once it is saved (Chats files it into the Space in front).
       if (it.kind === 'new' && it.sessionId) for (const fn of newHooks) try { fn(it, o); } catch (e) { console.error(e); }
