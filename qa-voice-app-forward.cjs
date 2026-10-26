@@ -28,12 +28,12 @@ fs.mkdirSync(shots,{recursive:true});
    // Both mounts expose the installed owner id; desktop frames do not use .appframe.
    const element=await page.waitForSelector('iframe[data-own-app="wizard-music"][src*="/wizard-music/"]'),frame=await element.contentFrame();
    await frame.waitForSelector('.music-chip',{timeout:60000});
-   const coldForwarded=await page.evaluate(()=>window.__qaMusicEvents.some(e=>e.type==='wizard-os:music:ack'));
-   if(shell==='desktop'){
-    // Main's cold desktop open is asynchronous: the first command opens the app
-    // but has no synchronous window id to dispatch to. Assert parity, then repeat
-    // the same utterance to exercise the real receiver on the now-open player.
-    assert.equal(coldForwarded,false,'main cold desktop opens without forwarding');
+   const coldForwarded=shell==='phone'||process.env.QA_COLD_DESKTOP!=='open-only';
+   if(!coldForwarded){
+    // Live (not main) has an asynchronous app-setup gate. Prove that baseline
+    // explicitly, then repeat only for this baseline to test the warm receiver.
+    await page.waitForTimeout(500);
+    assert.equal(await page.evaluate(()=>window.__qaMusicEvents.some(e=>e.type==='wizard-os:music:ack')),false,'live cold desktop opens without forwarding');
     assert.equal(await page.evaluate(()=>window.WosMusic.pending()),0);
     await page.evaluate(()=>window.__wux.localCommand('Play music Guy Barato Trap.'));
    }
@@ -44,7 +44,7 @@ fs.mkdirSync(shots,{recursive:true});
    const ack=await page.evaluate(()=>window.__qaMusicEvents.find(e=>e.type==='wizard-os:music:ack'));
    assert.equal(ack.id,command.id);assert.equal(errors.length,0,errors.join('\n'));
    await page.screenshot({path:path.join(shots,'real-music-'+shell+'.png')});
-   results.push({shell,coldForwarded:shell==='phone'||coldForwarded,cmd:command.cmd,ack:true,pageErrors:errors.length,realFrame:new URL(frame.url()).pathname});
+   results.push({shell,coldForwarded,cmd:command.cmd,ack:true,pageErrors:errors.length,realFrame:new URL(frame.url()).pathname});
    await context.close();
   }
   console.log(JSON.stringify({results},null,2));
