@@ -5,6 +5,14 @@
   food.mount(root);
   WizardApp.back.register({canGoBack:() => !!document.querySelector('[data-us-sheet], .us-teach'), back:() => !!food.back()});
   function command(text, meta) {
+    if (meta.stage === 'app') {
+      // Legacy fallback aliases are reached only AFTER exact launcher names.
+      // In particular held "open Grab" still opens Grab, not Food.
+      const s = WizardApp.voice.stripAddress(text).toLowerCase().replace(/[^a-z0-9ก-๙ ]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/ please$/, '');
+      const m = s.match(/^(?:open|launch|show|start|go to|switch to)\s+(?:me\s+)?(.+)$/);
+      const q = m?.[1].replace(/^(the|my) /, '').replace(/ (app|application|view)$/, '');
+      return ['usual','usuals','food','grab','saved orders','eats','wizard eats','bites','wizard bites','wizard food','grab food'].includes(q) ? {open:true} : null;
+    }
     if (meta.stage !== 'beforeNames') return null;
     const id = food.match(text);
     if (id) return {id};
