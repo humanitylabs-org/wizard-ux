@@ -70,7 +70,7 @@ async function attach(){
  try{fs.writeFileSync(path.join(out,'attach-debug.txt'),[last,seen].join('\n\n'));}catch(_){}
  throw Error('Wizard WebView debugging target unavailable: '+last+' | targets '+seen);
 }
-async function list(p){await p.evaluate(()=>{let w=Object.values(__wos.wins).find(w=>w.app==='chats');if(w){if(w.thread)__wos.chats.threadBack(w);__wos.goDesk(__wos.desks.findIndex(d=>d.wins.includes(w.id)));}else __wos.openWin({app:'chats'});});await p.locator('[data-flight-download]').first().waitFor();}
+async function list(p){await p.evaluate(()=>{let w=Object.values(__wos.wins).find(w=>w.app==='chats');if(w){if(w.thread)__wos.chats.threadBack(w);__wos.goDesk(__wos.desks.findIndex(d=>d.wins.includes(w.id)));}else __wos.openWin({app:'chats'});});await p.locator('[data-chfbtn]').first().waitFor();}
 (async()=>{
  const f=fixture(),origin=await f.start(9397);let browser;
  try{
@@ -89,7 +89,7 @@ async function list(p){await p.evaluate(()=>{let w=Object.values(__wos.wins).fin
   // A fresh phone opens the first-run tour over Chats; skip it with a real tap, as a new owner would.
   if(await p.evaluate(()=>!!document.querySelector('[data-tskip],[data-dskip]')&&[...document.querySelectorAll('[data-tskip],[data-dskip]')].some(e=>e.getClientRects().length)))await p.locator('[data-tskip],[data-dskip]').first().click();
   await p.waitForFunction(()=>![...document.querySelectorAll('[data-tskip],[data-dskip]')].some(e=>e.getClientRects().length),{},{timeout:10000});shot('android-after-tour');
-  await list(p);await p.locator('[data-flight-download]').first().click();
+  await list(p);await p.locator('[data-chfbtn]').first().click();await p.locator('[data-chfsheet] [data-flight-download]').first().click();
   try{await p.waitForFunction(()=>/^(Ready|Not ready) for flight/.test(document.querySelector('[data-flight-ready]')?.textContent||''),{},{timeout:240000});}
   catch(e){const st=await p.evaluate(()=>({line:document.querySelector('[data-flight-ready]')?.textContent,online:navigator.onLine,secure:isSecureContext,controller:!!navigator.serviceWorker?.controller,warm:!!window.WosShellOffline,href:location.href})).catch(x=>String(x));fs.writeFileSync(path.join(out,'ready-state.json'),JSON.stringify(st,null,2));shot('ready-timeout');throw Error(e.message+' state='+JSON.stringify(st));}
   const readyText=await p.evaluate(()=>document.querySelector('[data-flight-ready]').textContent);shot('android-ready');

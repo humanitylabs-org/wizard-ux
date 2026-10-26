@@ -12,3 +12,5 @@
 .wos-flight-toolbar{position:sticky;top:0;z-index:1;display:flex;gap:10px;align-items:center;padding:8px 0;background:var(--wz-surface,var(--sk-win,#20252b))}
 .wos-flight-toolbar button{flex-shrink:0}
 .wos-flight-saved{font-size:.8em;flex-shrink:0}
+
+.ch-fcard .wos-flight{margin:0;padding:0;border:0;background:none}

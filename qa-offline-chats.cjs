@@ -5,7 +5,8 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const out=process.env.QA_OUT||path.resolve('qa-live/offline-chats');fs.mkdirSync(out,{recursive:true});
 const ok=(c,name)=>{assert(c,name);console.log('PASS '+name);};
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
-async function openList(p){await p.evaluate(()=>{const current=Object.values(__wos.wins).find(w=>w.app==='chats');if(current){if(current.thread)__wos.chats.threadBack(current);__wos.goDesk(__wos.desks.findIndex(d=>d.wins.includes(current.id)));__wos.focusWin(current.id);}else __wos.openWin({app:'chats'});});await p.locator('[data-flight-download]').first().waitFor();}
+async function openList(p){await p.evaluate(()=>{const current=Object.values(__wos.wins).find(w=>w.app==='chats');if(current){if(current.thread)__wos.chats.threadBack(current);__wos.goDesk(__wos.desks.findIndex(d=>d.wins.includes(current.id)));__wos.focusWin(current.id);}else __wos.openWin({app:'chats'});});await p.locator('[data-chfbtn]').first().waitFor();}
+async function flightBtn(p){if(!await p.locator('[data-chfsheet] [data-flight-download]').count())await p.locator('[data-chfbtn]').first().click();await p.locator('[data-chfsheet] [data-flight-download]').first().click();}
 async function openThread(p,id){await p.evaluate(id=>__wos.openWizardThread(id),id);await p.locator('[data-part="thread"]').first().waitFor();}
 async function boot(p,url){await p.goto(url+'/wizard-os-home/',{waitUntil:'load'});await p.waitForFunction(()=>window.__wos&&window.WosFlight&&window.WosOutbox);await p.evaluate(()=>WosFlight.ready);}
 (async()=>{
@@ -18,18 +19,18 @@ async function boot(p,url){await p.goto(url+'/wizard-os-home/',{waitUntil:'load'
   let p=await context.newPage();const errors=[];p.on('pageerror',e=>errors.push(e.message));
   await boot(p,origin);await p.waitForFunction(()=>WizLive.ok&&!WizLive.cached);await openThread(p,'recent-older');await p.waitForFunction(()=>document.querySelector('.ch-msgs')?.textContent.includes('Saved answer'));await openList(p);
   await p.evaluate(async()=>{const c=await caches.open('foreign-offline-sentinel');await c.put('/sentinel',new Response('sibling-safe'));});
-  await p.locator('[data-flight-download]').first().click();
+  await flightBtn(p);
   await p.waitForFunction(()=>document.querySelector('[data-flight-ready]')?.textContent.startsWith('Ready for flight'),null,{timeout:90000});
   const ready=await p.locator('[data-flight-ready]').first().innerText();
   ok(/5 threads/.test(ready),skin+' Download for flight confirms Ready plus recently opened archived main thread');
   await p.screenshot({path:path.join(out,skin+'-ready.png')});
   // A partial refresh must refuse readiness; the prior committed flight stays intact.
   await context.route('**/wizard/hermes/api/sessions/flight-4/messages?*',r=>r.fulfill({status:503,json:{error:'Fixture read unavailable'}}));
-  await p.locator('[data-flight-download]').first().click();
+  await flightBtn(p);
   await p.waitForFunction(()=>document.querySelector('[data-flight-ready]')?.textContent.startsWith('Not ready for flight'));
   ok((await p.locator('[data-flight-ready]').first().innerText()).includes('did not save'),skin+' partial download fails loudly with the unsaved thread');
   await context.unroute('**/wizard/hermes/api/sessions/flight-4/messages?*');
-  await p.locator('[data-flight-download]').first().click();
+  await flightBtn(p);
   await p.waitForFunction(()=>document.querySelector('[data-flight-ready]')?.textContent.startsWith('Ready for flight'),null,{timeout:90000});
   ok(await p.evaluate(async()=>{const c=await caches.open('foreign-offline-sentinel');return await(await c.match('/sentinel')).text()==='sibling-safe'}),skin+' own worker preserves foreign cache');
   ok(!f.state.messagesReads.includes('private-thread'),skin+' private bodies were never requested for download');
@@ -44,7 +45,7 @@ async function boot(p,url){await p.goto(url+'/wizard-os-home/',{waitUntil:'load'
     ok(/Saved \d\d:\d\d · offline/.test(await p.locator('.wos-flight-saved').first().innerText()),skin+' '+id+' saved offline banner');
     ok((await p.locator('.ch-msgs').first().innerText()).includes('Saved answer for '+id),skin+' '+id+' saved messages render');
     if(id==='flight-1')await p.screenshot({path:path.join(out,skin+'-offline-thread.png')});
-    await p.locator('[data-chback]').first().click();await p.locator('[data-flight-download]').first().waitFor();
+    await p.locator('[data-chback]').first().click();await p.locator('[data-chfbtn]').first().waitFor();
   }
   ok(p.url().includes('/wizard-os-home/')&&!await p.evaluate(()=>__wos.back.exitArmed),skin+' nested Back stays in Wizard and returns to list');
   await openThread(p,'unsaved');await p.getByText('Not saved for offline',{exact:false}).first().waitFor();

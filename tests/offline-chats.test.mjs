@@ -34,3 +34,13 @@ test('offline chats flight loop: stamp and replay live in existing custody, not 
  assert.doesNotMatch(adapter,/WizOffline\.create\(/);
  assert.match(outbox,/if \(it\.offlineContext && it\.state !== 'sent'\)/);
 });
+
+// James, 26 Oct 2026: "I never asked you to screw up the UX with a hideous box that displays 24/7 ... for something
+// used 0.1% of the time." Download for flight lives only in the Chats filter sheet, never on the list itself.
+test('download for flight never renders on the Chats list, only inside the filter sheet', () => {
+  const src = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+  const list = src.split('\n').find(l => l.includes('data-part="list" class="ch-list'));
+  assert.ok(list && !list.includes('statusHTML'), 'list markup must not include the flight control');
+  const sheet = src.slice(src.indexOf('function filterSheet('), src.indexOf('function focusLabel('));
+  assert.ok(sheet.includes('WosFlight.statusHTML()'), 'filter sheet carries the flight control');
+});
