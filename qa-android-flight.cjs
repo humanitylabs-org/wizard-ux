@@ -34,8 +34,9 @@ async function list(p){await p.evaluate(()=>{let w=Object.values(__wos.wins).fin
   ok(app==='ai.wizards.os.qa','isolated QA APK package, not owner app');
   adb('reverse','tcp:9397','tcp:9397');adb('shell','am','force-stop',app);
   // Debug/QA builds read the fake Wizard address from files/qa_home.txt (AppState.qaOrigin), never the owner setting.
-  adb('shell','run-as',app,'mkdir','-p','files');
-  for(const f of ['qa_home.txt','qa_origin.txt'])execFileSync(adbBin,['exec-in','run-as',app,'tee','files/'+f],{input:'http://localhost:9397',timeout:15000});
+  // Same proven route as tools/qa_background_audio.py: push, then copy inside run-as.
+  fs.writeFileSync(path.join(out,'qaorigin'),'http://localhost:9397');execFileSync(adbBin,['push',path.join(out,'qaorigin'),'/data/local/tmp/qaorigin'],{timeout:20000});
+  adb('shell','run-as',app,'sh','-c','"mkdir -p files && cp /data/local/tmp/qaorigin files/qa_home.txt && cp /data/local/tmp/qaorigin files/qa_origin.txt"');
   ok(adb('shell','run-as',app,'cat','files/qa_home.txt').trim()==='http://localhost:9397','QA app points only at the loopback fake Wizard');
   adb('shell','am','start','-n',app+'/ai.wizards.os.MainActivity');
   let {b,p}=await attach();browser=b;await p.waitForFunction(()=>window.__wos?.live?.ok,{},{timeout:60000});
