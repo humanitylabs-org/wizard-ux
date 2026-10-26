@@ -37,7 +37,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Motion, haptics, press feel | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own spring/haptic helpers | — |
 | App look: rows, sections, empty state, single-line add field | `WizardApp` swaps vendored `wizard-ui.css` for live `web/kit/wizard-ui.css` + `--wz-*`, then layers active skin (`core/skins.css`, package, My skin) after app styles | a forked kit; `.wz-field-row` as a chat composer; literal colours | two skins + My skin restyle the app's `.wz-*` rows live |
 
-## Shell (`web/core/`, shared by both shells; every row serves every agent kind: main, host-profile, container, restricted; a per-kind variant is a fork, declare it EXTEND)
+## Shell (`web/core/`; both shells; main/host-profile/container/restricted; per-kind forks require EXTEND)
 
 | Need | Use | Never hand-roll |
 |---|---|---|
@@ -86,7 +86,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Tour/help, responsive Done, skip/exit; desktop guide `WosTour.desk` | `WosTour` (`web/core/tour.js`) | — |
 | First launch and explicit Setup/tour; VM auto-onboarding; alongside launch starts only the orientation | `WosSetupLaunch` (`web/core/setup-launch.js`); built-in checklist `web/setup/setup.js` distinguishes ready-to-open from phone-connected | shell-specific first-run checks, a second tour launcher |
 
-## Shell plumbing (owned by one module; never duplicate, rarely called directly)
+## Plumbing (one owner; reuse)
 
 Default-off: `WizBrowserBoundary`, `WizBoundaryClient`.
 
