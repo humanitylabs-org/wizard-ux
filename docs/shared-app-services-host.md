@@ -56,6 +56,10 @@ time updates the binding, and open-video focuses/replies to the bound owner. Del
 
 Hosted apps have no independent root guard. Phone retains its host guard; desktop now guards browser/native Back as well. Shared standalone fallback uses CloseWatcher/history, stays at installed root, and offers the browser-tab two-press exit floor. Desktop Back no longer cancels a recording: its voice pill has an explicit Cancel button.
 
+## Context drafts (Reply)
+
+`WizardApp.nav.openContextDraft({id, title, message})` lets any installed, registered Wizard app (`kind:'wizard'`) attach bounded reference data (id ≤128 `[A-Za-z0-9_-]`, title ≤1000, message ≤32000 chars) to a fresh, unsent main Chats draft. It never sends or runs. The draft key is `<appId>:<id>`, where `appId` comes from the attached, visible, live frame — never from the payload — so an app cannot write another app's namespace. Hidden, detached, reloaded, foreign-origin, sibling-path and `srcdoc` frames are refused. Tests: `tests/app-context-draft.test.mjs`; browser QA: `qa-app-context-draft.cjs`.
+
 ## Sharing and native limitations
 
 The host uses `WosChat.sharePayload` / `shareFile`, calling immediately inside the originating gesture. Web Share retains separate title/text/url fields; Android text sharing combines text and URL into the bridge's one EXTRA_TEXT payload without losing either. Relative share URLs resolve against the authorized app document, not the shell; absolute input strings are preserved. Files preserve bytes/name/MIME across frame realms; URL-shaped file payloads cannot cause privileged host fetches. Clipboard outcomes resolve only after successful writes. AbortError is cancelled. Native Promises have a 15-second bound.
