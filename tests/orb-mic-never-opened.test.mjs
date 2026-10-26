@@ -40,6 +40,22 @@ test('a second tap while the microphone has not opened ends the take visibly (ne
   assert.ok(!calls.includes('leaveOnSend'), 'nothing was recorded, so nothing navigates as if it was sent');
 });
 
+test('a borrowed meeting microphone goes straight back, with no empty recording kept (Codex P2 on #567)', () => {
+  const loan = { id: 'event-1' };
+  const V = { state: 'listen', kind: 'auto', rec: null, native: null, parts: [], chunks: [], snap: null, files: [], meetingLoan: loan };
+  const { ctx, calls } = shell(V);
+  const ended = [];
+  ctx.window.WosOrbHandoff = { end: (l, o) => { ended.push([l, o]); return Promise.resolve(); } };
+  let loanAtCancel = 'unset';
+  ctx.cancelVoice = q => { loanAtCancel = V.meetingLoan; calls.push('cancel:' + !!q); V.state = 'idle'; };
+  ctx.finishVoice();
+  assert.equal(loanAtCancel, null, 'cancelVoice no longer sees the loan, so it keeps no recording custody');
+  return Promise.resolve().then(() => Promise.resolve()).then(() => {
+    assert.equal(ended.length, 1); assert.equal(ended[0][0], loan); assert.equal(ended[0][1].status, 'cancelled', 'the loan is returned as cancelled');
+    assert.ok(calls.includes('cancel:true'));
+  });
+});
+
 test('a held command released before the microphone opens keeps its latch (unchanged)', () => {
   const V = { state: 'command', kind: 'command', rec: null, native: null, parts: [], chunks: [], snap: null, files: [] };
   const { ctx, calls } = shell(V);
@@ -84,8 +100,11 @@ test('a browser bar over the bottom of the page lifts the dock, orb and Cancel a
   vv.height = 579; vvl.resize();
   assert.equal(style['--vv-b'], '80px', 'Safari\'s bottom bar covers 80 px: everything lifts by 80 px');
   ctx.document.activeElement = { tagName: 'TEXTAREA' }; vv.height = 300; vvl.resize();
-  assert.equal(style['--vv-b'], '80px', 'the keyboard is not a browser bar: no change while typing');
-  ctx.document.activeElement = null; vv.height = 659; vvl.resize();
+  assert.equal(style['--vv-b'], '0px', 'typing: the keyboard replaces the bar, so no bar inset stays on top of the keyboard handling (Codex P2 on #567)');
+  vv.height = 579; vvl.resize(); assert.equal(style['--vv-b'], '0px', 'still typing: never re-lifted');
+  ctx.document.activeElement = null; vvl.resize();
+  assert.equal(style['--vv-b'], '80px', 'keyboard gone, the bar is back: lift again');
+  vv.height = 659; vvl.resize();
   assert.equal(style['--vv-b'], '0px');
   // Installed app (standalone) and the native shells have no browser bar.
   const st = {}; const c2 = vm.createContext({ window: { visualViewport: { ...vv, height: 500, addEventListener() {} } }, navigator: { standalone: true }, matchMedia: () => ({ matches: false }), DEV: () => null,
