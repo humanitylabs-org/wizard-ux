@@ -25,7 +25,7 @@ test('without native bridge automatic load/resume refresh does not even read app
   assert.equal(f.loads,0);assert.equal(f.renders,0);assert.equal(f.messages.length,0);
 });
 test('no-bridge regression rejects removal of the entry guard',async()=>{
-  const f=fixture({bridge:false,code:source.replace('if (!port() || refreshing) return;','if (refreshing) return;')});await drain();assert.equal(f.loads,1);
+  const f=fixture({bridge:false,code:source.replace('if (!port()) return;\n    if (refreshing)','if (refreshing)')});await drain();assert.equal(f.loads,1);
 });
 test('load queries bounded valid frontend candidates and renders only native-confirmed pinned apps',async()=>{
   const f=fixture({ids:['wisdom','../bad','foreign']});await drain();
@@ -51,4 +51,16 @@ test('PNG render error stays silent, cleans the temporary glyph and does not sen
 test('candidate list and native response are capped; duplicate candidates cannot multiply work',async()=>{
   const apps=Object.fromEntries(Array.from({length:200},(_,i)=>['a'+i,{id:'app'+i,name:'App',kind:'wizard',url:'/app/'}]));apps.duplicate=apps.a0;
   const f=fixture({apps,ids:Array(129).fill('app0')});await drain();assert.equal(f.messages[0].candidates.length,128);assert.equal(f.renders,0);
+});
+test('a registry update during a refresh reruns it with the new apps instead of dropping it',async()=>{
+  const f=fixture({reply:'timeout'});await drain();
+  assert.deepEqual(f.messages.map(x=>x.op),['pinned']);
+  // Registry changes while the first pass awaits native: mark dirty, no second flight yet.
+  f.app.name='Wisdom renamed';f.app.color='#123456';f.events['wizard:apps']();await drain();
+  assert.equal(f.messages.length,1);
+  const answer=m=>f.window.wizardHomeScreenPort.onmessage({data:JSON.stringify({requestId:m.requestId,status:m.op==='pinned'?'pinned-list':'updated',appIds:['wisdom']})});
+  for(let n=0;n<12;n++){const open=f.messages.filter(m=>!m.done);for(const m of open){m.done=true;answer(m);}await drain();}
+  const r=f.messages.filter(x=>x.op==='refresh');
+  assert.equal(f.messages.filter(x=>x.op==='pinned').length,2,'dirty pass reran once');
+  assert.equal(r.at(-1).name,'Wisdom renamed');assert.equal(r.at(-1).icon,'data:image/png;base64,#123456');
 });

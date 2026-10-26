@@ -104,11 +104,13 @@
     };
   }
   const pinnable = a => !!a && a.kind === 'wizard' && !!a.url && window.WizHomeScreenPolicy.validId(a.id) && !window.WizHomeScreenPolicy.isShell(a.url) && window.WizHomeScreenPolicy.within(a.url,a.url);
-  let refreshing = false;
+  let refreshing = false, rerun = false;
   async function refreshPinned() {
     // Browser/desktop and old APKs stay inert. One bounded query before rendering any icons.
-    if (!port() || refreshing) return;
-    refreshing = true;
+    // A registry update mid-pass marks the pass dirty and reruns it with the new apps afterwards.
+    if (!port()) return;
+    if (refreshing) { rerun = true; return; }
+    refreshing = true; rerun = false;
     try {
       bindPort();
       await window.WizCore?.appsLoaded?.();
@@ -134,7 +136,7 @@
         finally { header?.remove(); }
       }
     } catch (_) { /* unavailable registry, bridge, decode or old-APK timeout: silent no-op */ }
-    finally { refreshing = false; }
+    finally { refreshing = false; if (rerun) void refreshPinned(); }
   }
   // scripts load after the app registry; appsLoaded waits for installed apps on first shell load.
   void refreshPinned();
