@@ -125,6 +125,7 @@ test('Launch: Nebula is the default skin, My skin leads Look and invites the fir
   assert.match(s, /const reset = st\.empty \? '' :/);
   // No skin marketplace or community shelf for launch (comes later with Nostr IDs).
   assert.doesNotMatch(s, /browse skins|get skins|skin store|community skins/i);
-  assert.match(read('web/core/tour.js'), /Everything you see is customizable\. Try asking your Wizard for one change\./);
+  // The tour's end card now carries Miguel's approved words (26 Oct 2026); Setup keeps the skin invitation.
+  assert.match(read('web/core/tour.js'), /You’re set\. This is your own server, and your Wizard can do a lot on it\./);
   assert.match(read('web/setup/setup.js'), /Everything you see is customizable\. Try asking your Wizard for one change\./);
 });
