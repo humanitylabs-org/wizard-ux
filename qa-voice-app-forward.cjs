@@ -21,6 +21,9 @@ fs.mkdirSync(shots,{recursive:true});
    const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(String(e)));
    await page.goto(origin+'/wizard-os-home/?shell='+shell,{waitUntil:'load'});
    await page.waitForFunction(s=>!!(s==='phone'?window.__wos:window.__wux)&&!!window.WizCore.apps(s==='phone'?'mobile':'desktop').APP['wizard-music'],shell);
+   // Use the real tour dismissal: stored flags are not the launcher's current contract.
+   const skip=page.getByText('Skip tour',{exact:true});
+   if(await skip.isVisible().catch(()=>false))await skip.click();
    await page.evaluate(s=>s==='phone'?window.__wos.handleText('Play music Guy Barato Trap.','command',false,300,null):window.__wux.localCommand('Play music Guy Barato Trap.'),shell);
    const element=await page.waitForSelector('iframe.appframe[src*="/wizard-music/"]'),frame=await element.contentFrame();
    await frame.waitForSelector('.music-chip',{timeout:60000});

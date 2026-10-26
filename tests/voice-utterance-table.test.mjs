@@ -27,7 +27,10 @@ async function fixture(old) {
   // Capture dynamic RegExp tables as well as the regex literals extracted below.
   c.record = source => patterns.add(source);
   vm.runInContext(`const OriginalRegExp=RegExp; RegExp=class extends OriginalRegExp {constructor(s,f){super(s,f);record(this.source);}};`,c);
-  if (!old) {vm.runInContext(read('web/core/voice-legacy.js'),c);vm.runInContext(read('web/core/app-voice.js'),c);}
+  if (!old) {
+    // Apps now consumes the real shared launcher policy for native links (e.g. Settings).
+    for (const file of ['launcher-defaults.js','launcher.js','voice-legacy.js','app-voice.js']) vm.runInContext(read('web/core/'+file),c);
+  }
   else vm.runInContext(baseline('music-voice.js'),c);
   vm.runInContext(old?baseline('usuals.js'):read('web/usuals.js'),c);
   vm.runInContext(old?baseline('apps.js'):read('web/core/apps.js'),c);
