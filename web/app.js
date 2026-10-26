@@ -1077,23 +1077,24 @@
    * seconds and tap it twice"). The tile shows it is opening; if the window is not on screen within a beat, an
    * "Opening Notes…" notice with a spinner stays up until it is; a second tap on the same app while it opens is
    * the same open, never a second one. The window itself shows a loading veil until the app's page has loaded. */
-  const OPENING = { id: null, el: null, t: 0, pill: 0, safety: 0 };
+  const OPENING = { id: null, el: null, t: 0, pill: 0, safety: 0, sheet: false };
   function openingStart(a, el) {
     openingEnd(); OPENING.id = a.id; OPENING.el = el || null; OPENING.t = Date.now();
-    if (el) { el.classList.add('opening'); el.setAttribute('aria-busy', 'true'); }
+    // The feedback sits on the icon the finger is on (James, 26 Oct 2026): it sinks, dims and spins in place.
+    if (el) { el.classList.add('opening'); el.setAttribute('aria-busy', 'true'); el.setAttribute('aria-label', `Opening ${a.name || 'app'}`);
+      const ic = el.querySelector('.ic'); if (ic && !ic.querySelector('.open-spin')) ic.insertAdjacentHTML('beforeend', '<i class="open-spin" aria-hidden="true"></i>'); }
     vib(6);
-    OPENING.pill = setTimeout(() => { if (OPENING.id !== a.id) return; const t = $('#toast');
-      t.innerHTML = `<span class="ti"><i class="wos-spin" aria-hidden="true"></i></span><span>Opening ${esc(a.name || 'app')}…</span>`;
-      t.dataset.opening = a.id; t.classList.add('show'); clearTimeout(toastT); }, 180);
     OPENING.safety = setTimeout(() => openingEnd(a.id), 10000);
   }
   function openingEnd(id) {
     if (!OPENING.id || (id && id !== OPENING.id)) return;
     clearTimeout(OPENING.pill); clearTimeout(OPENING.safety);
-    const el = OPENING.el; if (el) { el.classList.remove('opening'); el.removeAttribute('aria-busy'); }
-    const t = $('#toast'); if (t.dataset.opening === OPENING.id) { delete t.dataset.opening; t.classList.remove('show'); }
-    OPENING.id = null; OPENING.el = null;
+    const el = OPENING.el; if (el) { el.classList.remove('opening'); el.removeAttribute('aria-busy'); el.removeAttribute('aria-label'); el.querySelectorAll('.open-spin').forEach(x => x.remove()); }
+    const sh = OPENING.sheet; OPENING.id = null; OPENING.el = null; OPENING.sheet = false;
+    if (sh) closeSheets();
   }
+  // The Apps sheet stays up, its tapped icon spinning, until the app's window is about to show (or its setup sheet).
+  function openingReady() { if (OPENING.sheet) { OPENING.sheet = false; closeSheets(); } }
   const isOpening = id => OPENING.id === id && Date.now() - OPENING.t < 10000;
   // A tile tap (Apps sheet or New desk). fromSheet: the sheet closes first, then the app opens.
   function tapOpen(a, el, fromSheet) {
@@ -1101,11 +1102,13 @@
     if (isOpening(a.id)) { vib(4); return; }
     const r = store.get('recent', []).filter(x => x !== a.id); r.unshift(a.id); store.set('recent', r.slice(0, 8));
     openingStart(a, el);
-    const go = () => { if (OPENING.id !== a.id) return; openApp(a); if (!window.WosAppSetup?.gate || a.kind !== 'wizard' || !a.url) openingEnd(a.id); };
-    if (fromSheet) { closeSheets(); setTimeout(go, 120); } else go();
+    OPENING.sheet = !!fromSheet;
+    // One frame so the pressed, spinning icon paints before any work starts.
+    requestAnimationFrame(() => { if (OPENING.id !== a.id) return; openApp(a); if (!window.WosAppSetup?.gate || a.kind !== 'wizard' || !a.url) openingEnd(a.id); });
   }
   function placeApp(mine, obj, opts = {}, refresh) {
     const here = opts.desk == null ? Object.keys(W).find(id => deskOf(id) >= 0 && mine(W[id])) : null;
+    openingReady();
     if (!here) { const w = openWin(obj, opts); openingEnd(); return w; }
     if (W[here].app !== 'chats') bringBeside(here);
     const t = deskOf(here);
