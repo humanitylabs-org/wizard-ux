@@ -65,7 +65,8 @@
       // The pin worker supplies this single scoped shell cache, extended for opt-in Chats.
       if (!window.WosShellOffline?.warm) throw Error('Wizard offline shell unavailable');
       await window.WosShellOffline.warm({chats:true});
-      let persistent=false; try{persistent=await navigator.storage?.persist?.()||false;}catch(_){}
+      // Some WebViews never answer persist(); never let that hold the flight download open.
+      let persistent=false; try{persistent=await Promise.race([navigator.storage?.persist?.()||false,new Promise(r=>setTimeout(()=>r(false),3000))]);}catch(_){}
       const at=Date.now(), manifest={at,ids:entries.map(([id])=>id),persistent};
       if(generation!==epoch)throw Error('Wizard account changed · download again');
       await db.replace(entries,manifest);

@@ -12,7 +12,7 @@ const shot=n=>fs.writeFileSync(path.join(out,n+'.png'),execFileSync(adbBin,['exe
 function cdpPage(wsUrl){
  return new Promise((resolve,reject)=>{
   const ws=new WebSocket(wsUrl);let id=0;const waits=new Map();
-  ws.onmessage=ev=>{const m=JSON.parse(ev.data);if(m.id&&waits.has(m.id)){const w=waits.get(m.id);waits.delete(m.id);m.error?w.reject(Error(m.error.message)):w.resolve(m.result);}};
+  ws.onmessage=ev=>{const m=JSON.parse(ev.data);if(m.method==='Runtime.consoleAPICalled'||m.method==='Runtime.exceptionThrown'){try{fs.appendFileSync(path.join(out,'page-console.txt'),JSON.stringify(m.params.args?.map(a=>a.value??a.description)||m.params.exceptionDetails?.exception?.description||m.params)+'\n');}catch(_){}}if(m.id&&waits.has(m.id)){const w=waits.get(m.id);waits.delete(m.id);m.error?w.reject(Error(m.error.message)):w.resolve(m.result);}};
   ws.onerror=e=>reject(Error('CDP websocket error'));
   const send=(method,params={})=>new Promise((res,rej)=>{const i=++id;waits.set(i,{resolve:res,reject:rej});ws.send(JSON.stringify({id:i,method,params}));});
   const evaluate=async(fn,arg)=>{const expr=typeof fn==='function'?`(${fn})(${JSON.stringify(arg===undefined?null:arg)})`:fn;
@@ -63,7 +63,8 @@ async function list(p){await p.evaluate(()=>{let w=Object.values(__wos.wins).fin
   let {b,p}=await attach();browser=b;await p.waitForFunction(()=>window.__wos?.live?.ok,{},{timeout:60000});
   await p.evaluate(()=>{localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.done','1');});
   await list(p);await p.locator('[data-flight-download]').first().click();
-  await p.waitForFunction(()=>/^(Ready|Not ready) for flight/.test(document.querySelector('[data-flight-ready]')?.textContent||''),{},{timeout:90000});
+  try{await p.waitForFunction(()=>/^(Ready|Not ready) for flight/.test(document.querySelector('[data-flight-ready]')?.textContent||''),{},{timeout:240000});}
+  catch(e){const st=await p.evaluate(()=>({line:document.querySelector('[data-flight-ready]')?.textContent,online:navigator.onLine,secure:isSecureContext,controller:!!navigator.serviceWorker?.controller,warm:!!window.WosShellOffline,href:location.href})).catch(x=>String(x));fs.writeFileSync(path.join(out,'ready-state.json'),JSON.stringify(st,null,2));shot('ready-timeout');throw Error(e.message+' state='+JSON.stringify(st));}
   const readyText=await p.evaluate(()=>document.querySelector('[data-flight-ready]').textContent);shot('android-ready');
   fs.writeFileSync(path.join(out,'ready-line.txt'),readyText);ok(readyText.startsWith('Ready for flight'),'native Download for flight: '+readyText);ok(await p.evaluate(()=>!!navigator.serviceWorker.controller),'native WebView is controlled by the scoped offline worker');
   await b.close();browser=null;
