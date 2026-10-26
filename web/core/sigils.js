@@ -26,11 +26,13 @@
 
   function of(a) {
     a = a || {};
+    a = { ...window.WizCore?.appMetadata?.(a.id), ...a };
     const own = typeof a.icon === 'string' && NAMES.has(a.icon) ? a.icon : '';
     const col = Array.isArray(a.colors) && HEX.test(a.colors[0] || '') ? a.colors[0] : '';
     if (own) return { glyph: own, color: col || (HOUSE[a.id] || [])[1] || pick(a.id) };
-    if (HOUSE[a.id]) return { glyph: HOUSE[a.id][0], color: HOUSE[a.id][1] };
     const img = typeof a.icon === 'string' && ICON.test(a.icon) ? a.icon : '';
+    // Legacy emoji/no icon is not a registered mask: only those apps use HOUSE.
+    if (!img && HOUSE[a.id]) return { glyph: HOUSE[a.id][0], color: HOUSE[a.id][1] };
     return { glyph: '', color: col || pick(a.id || a.name), letter: String(a.name || a.id || '?').trim().charAt(0).toUpperCase() || '?', ...(img ? { img } : {}) };
   }
   // Fallback marks are masks too, never painted text or an <img>: whatever a skin paints into `.sgi` (a gradient,
