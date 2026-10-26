@@ -78,6 +78,7 @@
   // Apps from the Agent Service can arrive after first paint (fresh install, cleared cache): a frame window
   // painted before its app was known has no page yet, so draw that desk again once the app list lands.
   const reframe = () => {
+    for (const w of Object.values(W)) if (APP[w.app]?.kind === 'wizard' && APP[w.app]?.url) { w.appId = w.app; w.app = 'frame'; winEl(w.id)?.remove(); }
     desks.forEach((d, i) => { if (d.wins.some(id => { const w = W[id], u = w?.app === 'frame' && !w.url && APP[w.appId]?.url;
       if (!u) return false; const f = document.querySelector(`.win[data-win="${id}"] iframe`); if (f && f.getAttribute('src') === u) return false;
       winEl(id)?.remove(); return true; })) { try { renderDesk(i); } catch (e) {} } });
@@ -183,8 +184,7 @@
   function winApp(w) {
     if (agentWin(w)) return agentApp(w);
     if (w.app === 'chats') return { ...CHATS_APP, sgc: window.WosAgents?.colour(window.WosAgents.get(window.WosAgents.defaultId())) || '#C1AAFF' };
-    if (w.app === 'usuals') return APP.usuals || { name: 'Food', icon: '🍜', g: ['#00b14f', '#0a5c32'] };
-    return APP[w.appId] || { name: w.title || 'Page', icon: '◇', g: ['#444a60', '#22263a'], url: w.url };
+    return APP[w.appId || w.app] || { name: w.title || 'Page', icon: '◇', g: ['#444a60', '#22263a'], url: w.url };
   }
   function winTitle(w) {
     if (!w) return '';
@@ -213,11 +213,12 @@
       case 'chats': return `<div class="chats" data-chats="${w.id}"></div>`;
       case 'feature': return '<div class="shared-feature"></div>';
       case 'frame': return renderFrame(w);
-      case 'usuals': return `<div class="usuals" data-usuals="${w.id}"></div>`;
       default: return renderApp(w);
     }
   }
   function makeWin(w) {
+    // Legacy inline-app descriptors retain their id, desk and pin; the registry now owns their view.
+    if (APP[w.app]?.kind === 'wizard' && APP[w.app]?.url) { w.appId = w.app; w.app = 'frame'; }
     const a = winApp(w);
     const el = document.createElement('article');
     const rv = !!(w.from && w.from.sid);
@@ -232,7 +233,6 @@
   function mountWin(w, el) {
     if (w.app === 'feature') window.WosFeatures.mount(w.featureId, el.querySelector('.shared-feature'),w.featureOptions);
     if (w.app === 'chats') renderChats(w);
-    if (w.app === 'usuals') window.WosUsuals?.mount(el.querySelector('[data-usuals]'));
     watchFrames(el);
   }
   // Desk sections are keyed by desk id and laid out with CSS order, so reordering, merging or closing desks
@@ -1045,8 +1045,7 @@
     if (!w.bound) return pinWin(id); // a manually opened review becomes its own app desk
     const href = frameHref(id) || w.url || '';
     const a = w.appId && w.appId !== 'link' ? (APP[w.appId] || findApp(w.appId)) : null;
-    if (w.app === 'usuals') { const here = Object.keys(W).find(k => W[k].app === 'usuals' && !W[k].bound && deskOf(k) >= 0); if (here) goDesk(deskOf(here)); else openWin({ app: 'usuals' }); }
-    else if (a) {
+    if (a) {
       const here = Object.keys(W).find(k => W[k].app === 'frame' && W[k].appId === a.id && !W[k].from && deskOf(k) >= 0);
       if (here) { bringBeside(here); goDesk(deskOf(here), true); focusWin(here); }
       else openWin({ app: 'frame', appId: a.id, ...(href && href !== a.url ? { url: href } : {}) });
@@ -1183,7 +1182,6 @@
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
     if (a.id === 'side-button') { closeSheets(true); if (idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
-    if (a.id === 'usuals') { openUsuals(opts); return true; }
     if (a.kind === 'chats') {
       if (a.agent) return openAgentChats(a.agent);
       const chatsProvider = a.chatsProvider || CHATS.views.defaultId();
@@ -1200,10 +1198,6 @@
     const q = extra.query || '';
     placeApp(w => w.app === 'app' && w.appId === a.id, { app: 'app', appId: a.id, query: q }, opts, q ? (w, t) => { w.query = q; renderDesk(t); } : null);
     return true;
-  }
-  function openUsuals(opts = {}) {
-    closeSheets(true);
-    placeApp(w => w.app === 'usuals', { app: 'usuals' }, opts, () => window.WosUsuals?.refresh());
   }
   /* Move an open window to where a new app would open (insertPos: right beside this desk, Home included.
    * A window alone on its desk takes its whole desk along; one sharing a desk gets a desk of its own. */
@@ -3601,7 +3595,6 @@
     const ov = CHATS.closeOverlay(); if (ov) { if (settingsReturn === 'files') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="files"]')?.focus(); } return ov; } // media viewer, then the thread actions sheet
     const dv = window.WosDevice?.back?.(); if (dv) return dv; // share picker, recovered-recording card
     if (window.WosResources?.back()) return 'resources';
-    { const fw = W[desks[idx]?.focus]; if (fw?.app === 'usuals') { const u = window.WosUsuals?.back?.(); if (u) return u; } }
     if (closeOverview()) return 'overview';
     if (closeReviewCoach()) return 'review-coach';
     if (menuFor) { closeMenu(); return 'menu'; }
@@ -3792,7 +3785,7 @@
       }).catch(() => { if (generation === threadHandoffGeneration) toast('◉', 'Could not locate that chat · reconnect and tap again'); });
       return true;
     }
-    if (h.action === 'usuals') { openUsuals(); return true; }
+    if (APP[h.action]?.kind === 'wizard') return openApp(APP[h.action]);
     // Photos is its own app: older Wizard OS builds still ask for Settings › photos-backup (notification, native screen).
     if (h.action === 'settings' && (h.focus === 'photos-backup' || h.focus === 'photos')) { if (!window.WizOpenApp?.('photos')) toast('▣', 'Photos backup lives in the Photos app · install it from the App Store', 3200); return true; }
     if (h.action === 'unsent' || h.action === 'settings') { onUnsentChange(); openSettings(h.action === 'unsent' || (typeof h.focus === 'string' && window.WosSettings?.features.some(f => f.id === h.focus) ? h.focus : undefined)); return true; }

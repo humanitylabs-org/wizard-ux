@@ -367,6 +367,7 @@
       closeCompanion: () => shellOp('closeCompanion'),
       postCompanion: data => shellOp('postCompanion', data),
       focusApp: () => shellOp('focusApp'),
+      toast: (icon, message) => service?.shell?.toast(icon, message) || false,
       onCompanionMessage: fn => listen(companionMessages, fn),
     }),
     voiceInput, conversation: voiceInput, // backwards-compatible name, identical receiver/authority
@@ -384,13 +385,16 @@
       const it = Array.isArray(items) ? items[Math.max(0, Math.floor(+index) || 0)] : null;
       if (!it?.url) return false; window.open(String(it.url), '_blank', 'noopener'); return true;
     } }),
-    device: Object.freeze({ backgroundAudio: Object.freeze({
+    device: Object.freeze({ legacy: Object.freeze({
+      available(method) { return !!service?.device?.legacy?.available(method); },
+      call(method, args = []) { if (!service?.device?.legacy) throw new Error('Legacy device unavailable'); return service.device.legacy.call(method, args); },
+    }), backgroundAudio: Object.freeze({
       request(method, params = {}) {
         if (!service?.device?.backgroundAudio) return Promise.reject(new Error('Background audio unavailable'));
         return service.device.backgroundAudio.request(method, params);
       },
     }) }),
-    voice: Object.freeze({ commands, transcribe: (file, opts = {}) => service?.voice ? service.voice.transcribe(file, opts) : transportReady ? request('voice.transcribe', { file, language: opts.language }, 180000) : Promise.resolve({ unavailable: true }) }),
+    voice: Object.freeze({ commands, stripAddress: text => service ? service.voice.stripAddress(text) : String(text || ''), transcribe: (file, opts = {}) => service?.voice ? service.voice.transcribe(file, opts) : transportReady ? request('voice.transcribe', { file, language: opts.language }, 180000) : Promise.resolve({ unavailable: true }) }),
     share: Object.freeze({ get wizard() { return service?.share?.wizard ? data => service.share.wizard(data) : transportReady ? data => request('share.wizard', data, 600000) : undefined; }, text: data => service ? service.share.text(data) : transportReady ? sharedResult(request('share.text', data)) : fallbackText(data), file: (file, opts) => service ? service.share.file(file, opts) : transportReady ? sharedResult(request('share.file', { file, options: opts })) : fallbackFile(file, opts),
       receive: receiveShares, targets: shareTargets, check: () => pullShares() }),
     titlebar: Object.freeze({ set: (tools, onTool) => { toolHandler = typeof onTool === 'function' ? onTool : null; return service ? Promise.resolve(service.titlebar.set(tools)) : transportReady ? request('titlebar.set', { tools }).then(v => v === true, () => false) : Promise.resolve(false); },

@@ -16,8 +16,11 @@
     return names;
   }
   function parse(stage, text, ctx) {
-    if (stage === 'priority' && ctx.kind === 'command') {
-      const claim = window.WizAppServices?.voiceCommand(ctx.text ?? text, ctx);
+    // The legacy contextual player already owned this later stage. Installed
+    // fallback aliases must not overtake it (for example, while music is open).
+    if (stage === 'app') { const c = window.WosVoiceLegacy?.parse(stage, text, ctx); if (c) return c; }
+    if (stage === 'beforeNames' || stage === 'app' || stage === 'priority' && ctx.kind === 'command') {
+      const claim = window.WizAppServices?.voiceCommand(ctx.text ?? text, {...ctx, stage});
       if (claim) return claim;
     }
     return window.WosVoiceLegacy?.parse(stage, text, ctx) || null;

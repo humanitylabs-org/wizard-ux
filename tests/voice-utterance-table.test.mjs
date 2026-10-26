@@ -13,11 +13,13 @@ const catalog = [
   ['shopping','Shopping'], ['mizel','Recorder'], ['console','Console'],
   ['calendar','Calendar'], ['airlock','Airlock'],
 ].map(([id,name])=>({id,name,url:'/'+id+'/'}));
+// Food is now an installed provider; its pinned test dependency is not shell UI.
+catalog.push({id:'usuals',name:'Food',url:'/usuals/',voice_names:['Food','Usuals','usual','food app','wizard eats','saved orders','eats','bites']});
 async function fixture(old) {
   const listeners = {}, actions = [], patterns = new Set();
   const c = {console,URL,Map,Set,Date,Math,performance:{now:()=>0},setTimeout:()=>1,clearTimeout(){},setInterval(){},
     location:new URL('https://wizard.example/wizard-os-home/'),CustomEvent:class{},
-    localStorage:{getItem:()=>null,setItem(){}},document:{addEventListener(){}},
+    localStorage:{getItem:()=>null,setItem(){}},document:{addEventListener(){},querySelector:()=>null},
     fetch:async()=>({ok:true,json:async()=>({apps:catalog})}),
     addEventListener:(n,f)=>{(listeners[n] ||= []).push(f);},dispatchEvent(){},
     WizCore:{norm},WizConfig:{stripAddress:s=>String(s).replace(/^(?:hey |ok |okay )?(?:wizard|archimedes)\s*/i,''),endpoint:()=>'/apps'},
@@ -32,7 +34,25 @@ async function fixture(old) {
     for (const file of ['launcher-defaults.js','launcher.js','voice-legacy.js','app-voice.js']) vm.runInContext(read('web/core/'+file),c);
   }
   else vm.runInContext(baseline('music-voice.js'),c);
-  vm.runInContext(old?baseline('usuals.js'):read('web/usuals.js'),c);
+  let handler = null, receipt = null;
+  if (!old) {
+    c.WizardApp={ready(){},back:{register(){}},
+      device:{legacy:{available:method=>method==='usuals',call:(method,args)=>c.WizardOSNative[method](...args)}},
+      voice:{stripAddress:c.WizConfig.stripAddress,commands:{register:h=>handler=h}},
+      shell:{toast(){},focusApp:()=>{receipt={action:'open_app',app:'Food'};return true;}}};
+    c.WizAppServices={voiceCommand(text,meta) {
+      if(!handler?.claims(text,meta))return null;
+      return {action:'app_voice',appId:'usuals',token:{text,meta}};
+    }};
+  }
+  vm.runInContext(old?baseline('usuals.js'):read('tests/fixtures/food-app/usuals.js'),c);
+  if (!old) vm.runInContext(read('tests/fixtures/food-app/app.js'),c);
+  const canonical = command => {
+    if(command?.action!=='app_voice')return command;
+    receipt=null;const before=actions.length;handler.receive(command.token.text,command.token.meta);
+    if(!receipt && actions.length>before)receipt={action:'usual',id:actions.at(-1)[1]};
+    return receipt;
+  };
   vm.runInContext(old?baseline('apps.js'):read('web/core/apps.js'),c);
   await c.WizCore.appsLoaded();
   const registry=c.WizCore.apps('mobile');
@@ -40,7 +60,7 @@ async function fixture(old) {
   vm.runInContext(old?baseline('commands.js'):read('web/core/commands.js'),c);
   const CHATS={matchFilters:s=>s==='ready'?[{kind:'status',value:'ready'}]:s==='private'?[{kind:'agent',value:'private'}]:[]};
   const parser=c.WosCommands.create({...registry,CHATS,sendSnap:()=>({view:{kind:'home'}})});
-  return {c,parser,patterns,registry,actions};
+  return {c,parser,patterns,registry,actions,canonical};
 }
 // Enumerate every finite alternative in the actual baseline regex tables. Infinite
 // query/name captures use Custody; arbitrary whitespace uses one space. This is a
@@ -105,7 +125,7 @@ test('every pre-refactor voice table alternative routes to the identical action'
   let comparisons=0,recognized=0;
   const contexts=[{kind:'home'},{kind:'thread list'},{kind:'chat thread'},{kind:'app',appId:'wizard-music'},{kind:'app',appId:'calendar'}];
   for(const text of phrases)for(const view of contexts)for(const [kind,typed] of [['command',false],['auto',true],['auto',false]]) {
-    const a=old.parser.parse(text,{view},kind,typed),b=current.parser.parse(text,{view},kind,typed);
+    const a=old.parser.parse(text,{view},kind,typed),b=current.canonical(current.parser.parse(text,{view},kind,typed));
     assert.equal(JSON.stringify(b),JSON.stringify(a),JSON.stringify({text,view,kind,typed,a,b}));
     comparisons++;if(a)recognized++;
   }
