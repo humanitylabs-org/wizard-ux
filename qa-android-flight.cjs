@@ -42,7 +42,7 @@ function cdpPage(wsUrl){
      const taps=await evaluate('JSON.stringify(window.__taps)');console.log('TAP',sel,JSON.stringify(r),tx,ty,taps,'flight busy/line:',await evaluate(`document.querySelector('[data-flight-ready]')?.textContent||''`));},
     fill:async v=>{await api.waitFor();await evaluate(`(()=>{const e=${find};e.focus();const d=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');d.set.call(e,${JSON.stringify(v)});e.dispatchEvent(new Event('input',{bubbles:true}));return true;})()`);},
     innerText:async()=>{await api.waitFor();return evaluate(`${find}.innerText`);}};return api;};
-  const page={_send:(...a)=>sendNow(...a),evaluate,waitForFunction,locator:sel=>loc(sel),getByText:t=>loc('button,a,div,span,p,h1,h2,h3,li,[role]',t)};
+  const page={_send:(...a)=>sendNow(...a),evaluate,waitForFunction,locator:sel=>loc(sel),getByText:t=>loc('button,a,div,span,p,h1,h2,h3,li,summary,label,b,[role]',t)};
   ws.onopen=async()=>{try{await send('Runtime.enable');resolve({b:{close:async()=>ws.close()},p:page});}catch(e){reject(e);}};
  });
 }
