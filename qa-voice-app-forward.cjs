@@ -25,8 +25,18 @@ fs.mkdirSync(shots,{recursive:true});
    const skip=page.getByText('Skip tour',{exact:true});
    if(await skip.isVisible().catch(()=>false))await skip.click();
    await page.evaluate(s=>s==='phone'?window.__wos.handleText('Play music Guy Barato Trap.','command',false,300,null):window.__wux.localCommand('Play music Guy Barato Trap.'),shell);
-   const element=await page.waitForSelector('iframe.appframe[src*="/wizard-music/"]'),frame=await element.contentFrame();
+   // Both mounts expose the installed owner id; desktop frames do not use .appframe.
+   const element=await page.waitForSelector('iframe[data-own-app="wizard-music"][src*="/wizard-music/"]'),frame=await element.contentFrame();
    await frame.waitForSelector('.music-chip',{timeout:60000});
+   const coldForwarded=await page.evaluate(()=>window.__qaMusicEvents.some(e=>e.type==='wizard-os:music:ack'));
+   if(shell==='desktop'){
+    // Main's cold desktop open is asynchronous: the first command opens the app
+    // but has no synchronous window id to dispatch to. Assert parity, then repeat
+    // the same utterance to exercise the real receiver on the now-open player.
+    assert.equal(coldForwarded,false,'main cold desktop opens without forwarding');
+    assert.equal(await page.evaluate(()=>window.WosMusic.pending()),0);
+    await page.evaluate(()=>window.__wux.localCommand('Play music Guy Barato Trap.'));
+   }
    await page.waitForFunction(()=>window.__qaMusicEvents.some(e=>e.type==='wizard-os:music:ack'),null,{timeout:30000});
    const command=await frame.evaluate(()=>window.__qaMusicEvents.find(e=>e.type==='wizard-os:music'));
    // Main's parse() preserves the raw play utterance, including STT punctuation.
@@ -34,7 +44,7 @@ fs.mkdirSync(shots,{recursive:true});
    const ack=await page.evaluate(()=>window.__qaMusicEvents.find(e=>e.type==='wizard-os:music:ack'));
    assert.equal(ack.id,command.id);assert.equal(errors.length,0,errors.join('\n'));
    await page.screenshot({path:path.join(shots,'real-music-'+shell+'.png')});
-   results.push({shell,cmd:command.cmd,ack:true,pageErrors:errors.length,realFrame:new URL(frame.url()).pathname});
+   results.push({shell,coldForwarded:shell==='phone'||coldForwarded,cmd:command.cmd,ack:true,pageErrors:errors.length,realFrame:new URL(frame.url()).pathname});
    await context.close();
   }
   console.log(JSON.stringify({results},null,2));
