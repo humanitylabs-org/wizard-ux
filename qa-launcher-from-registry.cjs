@@ -11,7 +11,7 @@ const workspace = exported('workspaces-export.json'), agents = exported('agents-
 const shots = process.env.QA_SHOTS || path.dirname(output); fs.mkdirSync(shots,{recursive:true});
 (async()=>{
   const browser=await chromium.launch({executablePath:process.env.QA_CHROME,headless:true,args:['--no-sandbox']});
-  const result={}, errors=[], writes=[], seeds=[];
+  const result={}, errors=[], writes=[], seeds=[], blockedSeeds=[];
   try {
     for(const skin of ['nebula','signal']) for(const state of ['fresh-defaults','owner-export']) for(const shell of ['phone','desktop']) {
       const mobile=shell==='phone', key=[shell,skin,state].join('-');
@@ -23,7 +23,7 @@ const shots = process.env.QA_SHOTS || path.dirname(output); fs.mkdirSync(shots,{
         const req=route.request(), url=new URL(req.url());
         if (!['GET','HEAD'].includes(req.method())) {
           if(process.env.QA_ALLOW_SEED==='1'&&url.pathname==='/wizard/v1/ui-preferences/seed'&&req.method()==='POST') { seeds.push(JSON.parse(req.postData())); return route.continue(); }
-          writes.push({path:url.pathname,method:req.method()}); return route.fulfill({status:403,contentType:'application/json',body:'{"error":"launcher QA read-only"}'});
+          (url.pathname==='/wizard/v1/ui-preferences/seed' ? blockedSeeds : writes).push({path:url.pathname,method:req.method()}); return route.fulfill({status:403,contentType:'application/json',body:'{"error":"launcher QA read-only"}'});
         }
         if(url.pathname==='/wizard/v1/workspaces')return route.fulfill({status:state==='owner-export'?200:403,contentType:'application/json',body:JSON.stringify(state==='owner-export'?workspace:{error:'fresh-defaults fixture disables workspace restore'})});
         if(url.pathname==='/wizard/v1/agents')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(agents)});
@@ -36,9 +36,12 @@ const shots = process.env.QA_SHOTS || path.dirname(output); fs.mkdirSync(shots,{
       await page.waitForFunction(mobile=>mobile?!!window.__wos:!!window.__wux,mobile,{timeout:20000});
       await page.evaluate(()=>window.WizCore.appsLoaded?.());
       // First-run setup may precede the tour. Keep its visible Skip control, rather than marking it done in storage.
-      const skip=page.getByRole('button',{name:/Skip tour/i});
-      if(await skip.count())await skip.first().click({force:true});
       await page.waitForTimeout(1800);
+      const skipTour = async () => {
+        const skip = page.getByText('Skip tour', { exact: true });
+        if (await skip.isVisible().catch(() => false)) { await skip.click({ force: true }); await page.waitForTimeout(200); }
+      };
+      await skipTour();
       const entry=await page.evaluate(mobile=>{
         const {APPS}=window.WizCore.apps(mobile?'mobile':'desktop');
         const host=mobile?window.__wos:window.__wux;
@@ -46,12 +49,12 @@ const shots = process.env.QA_SHOTS || path.dirname(output); fs.mkdirSync(shots,{
         return {apps:APPS.map(a=>({id:a.id,name:a.name,kind:a.kind,url:a.url||''})),native:APPS.filter(a=>a.kind==='native').map(a=>({id:a.id,name:a.name,href:a.href})),
           sigils:APPS.map(a=>({id:a.id,...window.WizSigil.of(a.sigil||a)})),windows:wins,
           quick:[...document.querySelectorAll('.home-apps [data-app]')].map(e=>({id:e.dataset.app,name:e.textContent.trim()})),
-          shortcutNames:APPS.map(a=>({id:a.id,name:window.WizHomeScreenPolicy.displayName(a)}))};
+          shortcutNames:APPS.map(a=>({id:a.id,name:window.WizHomeScreenPolicy?.displayName(a)||a.name}))};
       },mobile);
-      await page.screenshot({path:path.join(shots,path.basename(output,'.json')+'-'+key+'-home.png'),fullPage:false});
+      await page.screenshot({path:path.join(shots,path.basename(output,'.json')+'-'+key+'-home.png'),fullPage:false,animations:'disabled'});
       if(mobile){
         await page.evaluate(()=>window.__wos.openSheet('launcher'));
-        await page.waitForTimeout(700);
+        await page.waitForTimeout(700); await skipTour();
         Object.assign(entry,await page.evaluate(()=>{
           const root=document.querySelector('#launcherBody');
           const group=[...root.querySelectorAll('.lgroup')].find(g=>g.querySelector('h4')?.textContent==='Recent');
@@ -61,13 +64,13 @@ const shots = process.env.QA_SHOTS || path.dirname(output); fs.mkdirSync(shots,{
         await page.evaluate(()=>window.__wux.openPicker());await page.waitForTimeout(700);
         entry.grid=await page.locator('.pal-app .nm').allTextContents();entry.recents=[];
       }
-      await page.screenshot({path:path.join(shots,path.basename(output,'.json')+'-'+key+'-grid.png'),fullPage:false});
+      await page.screenshot({path:path.join(shots,path.basename(output,'.json')+'-'+key+'-grid.png'),fullPage:false,animations:'disabled'});
       result[key]=entry;
       await context.close();
     }
-    fs.writeFileSync(output,JSON.stringify({result,errors,writes,seeds},null,2)+'\n');
+    fs.writeFileSync(output,JSON.stringify({result,errors,writes,seeds,blockedSeeds},null,2)+'\n');
     assert.deepEqual(errors,[],'zero page errors');
-    console.log('PASS '+Object.keys(result).length+' launcher cases, zero page errors; '+seeds.length+' isolated seed requests; '+writes.length+' unrelated writes blocked');
+    console.log('PASS '+Object.keys(result).length+' launcher cases, zero page errors; '+seeds.length+' isolated seed requests; '+blockedSeeds.length+' compatibility seed requests blocked; '+writes.length+' unrelated writes blocked');
     if(baseline){
       const expected=JSON.parse(fs.readFileSync(baseline,'utf8')).result;
       assert.deepEqual(Object.keys(result),Object.keys(expected),'same case coverage');
