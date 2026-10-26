@@ -8,11 +8,24 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
 const ok=(c,n)=>{assert(c,n);console.log('PASS '+n)};
 const shot=n=>fs.writeFileSync(path.join(out,n+'.png'),execFileSync(adbBin,['exec-out','screencap','-p'],{timeout:20000}));
 async function attach(){
- for(let n=0;n<60;n++){
-  try{const pid=adb('shell','pidof',app).trim().split(' ')[0];if(pid){adb('forward','tcp:9333','localabstract:webview_devtools_remote_'+pid);const r=await fetch('http://127.0.0.1:9333/json/list');const list=await r.json();if(list.some(x=>x.url.includes('/wizard-os-home/'))){const b=await chromium.connectOverCDP('http://127.0.0.1:9333');const p=b.contexts()[0].pages().find(x=>x.url().includes('/wizard-os-home/'));return {b,p};}}}catch(_){}
-  await pause(500);
+ let last='',seen='';
+ for(let n=0;n<90;n++){
+  try{
+   const pid=adb('shell','pidof',app).trim().split(' ')[0];
+   if(!pid){last='app not running';await pause(500);continue;}
+   adb('forward','tcp:9333','localabstract:webview_devtools_remote_'+pid);
+   const list=await (await fetch('http://127.0.0.1:9333/json/list')).json();seen=JSON.stringify(list.map(x=>[x.type,x.url]));
+   if(list.some(x=>x.url.includes('/wizard-os-home/'))){
+    const b=await chromium.connectOverCDP('http://127.0.0.1:9333',{timeout:20000});
+    const pages=b.contexts().flatMap(c=>c.pages());const p=pages.find(x=>x.url().includes('/wizard-os-home/'));
+    if(p)return {b,p};last='playwright saw pages '+JSON.stringify(pages.map(x=>x.url()));await b.close().catch(()=>{});
+   }else last='no shell target yet';
+  }catch(e){last=String(e&&e.message||e).slice(0,400);}
+  await pause(700);
  }
- throw Error('Wizard WebView debugging target unavailable');
+ try{shot('attach-failed');}catch(_){}
+ try{fs.writeFileSync(path.join(out,'attach-debug.txt'),[last,seen,adb('shell','cat','/proc/net/unix').split('\n').filter(l=>l.includes('devtools')).join('\n')].join('\n\n'));}catch(_){}
+ throw Error('Wizard WebView debugging target unavailable: '+last+' | targets '+seen);
 }
 async function list(p){await p.evaluate(()=>{let w=Object.values(__wos.wins).find(w=>w.app==='chats');if(w){if(w.thread)__wos.chats.threadBack(w);__wos.goDesk(__wos.desks.findIndex(d=>d.wins.includes(w.id)));}else __wos.openWin({app:'chats'});});await p.locator('[data-flight-download]').first().waitFor();}
 (async()=>{
