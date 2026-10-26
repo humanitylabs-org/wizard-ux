@@ -14,6 +14,7 @@
     const cache = await caches.open(names[kind]);
     try {
       const response = await fetch(request, {cache:'no-store'});
+      if(response.status>=500){const saved=await cache.match(request,{ignoreSearch:kind==='shell'});if(saved)return saved;}
       // Never replace good data with an error, redirect, or login HTML.
       if (response.ok && !response.redirected && kind !== 'shell') await cache.put(request, response.clone());
       return response;
