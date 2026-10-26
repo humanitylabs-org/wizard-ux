@@ -22,7 +22,8 @@ if hashlib.sha256(apk.read_bytes()).hexdigest() != artifact['sha256']: raise Sys
 state = {'id':'shortcut-qa','kind':'wizard','url':'/shortcut-qa/','name':'Shortcut QA','icon':'wisdom','colors':['#00aaff']}
 checks = []; failure = None; page = None
 assets = ['core/home-screen-policy.js','core/home-screen-apps.js','core/sigils.js','core/sigils.css','core/home-screen-apps.css']
-asset_hashes = {p:hashlib.sha256((web / p).read_bytes()).hexdigest() for p in assets}
+asset_bytes = {p:(web / p).read_bytes() for p in assets}  # served from memory: request paths never reach the filesystem
+asset_hashes = {p:hashlib.sha256(b).hexdigest() for p,b in asset_bytes.items()}
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *args): pass
     def do_GET(self):
@@ -38,7 +39,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 <script src="core/sigils.js"></script><script src="core/home-screen-policy.js"></script><script src="core/home-screen-apps.js"></script>
 <script>document.querySelector('#offer').onclick=()=>WizHomeScreenApps.offer(app);</script>'''.replace('RECORD',record)).encode(); mime = 'text/html'
         elif path.startswith('/wizard-os-home/') and path[len('/wizard-os-home/'):] in assets:
-            f = path[len('/wizard-os-home/'):]; body = (web / f).read_bytes(); mime = 'text/css' if f.endswith('.css') else 'application/javascript'
+            f = path[len('/wizard-os-home/'):]; body = asset_bytes[f]; mime = 'text/css' if f.endswith('.css') else 'application/javascript'
         elif path == '/wizard-os-home/core/service-worker.js' or path.endswith('/sw.js'): code = 404
         self.send_response(code); self.send_header('Content-Type',mime); self.send_header('Content-Length',str(len(body))); self.send_header('Cache-Control','no-store'); self.end_headers(); self.wfile.write(body)
     def do_POST(self):
