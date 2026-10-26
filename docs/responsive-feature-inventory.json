@@ -129,11 +129,14 @@
     "core/app-setup.css",
     "core/app-setup.js",
     "core/app-versions.js",
+    "core/app-voice.js",
     "core/appearance-host.css",
     "core/appearance-host.js",
     "core/apps.js",
     "core/attach-chip.css",
     "core/attach-chip.js",
+    "core/background-audio-legacy.js",
+    "core/background-audio.js",
     "core/base.css",
     "core/bound-view.js",
     "core/brand.css",
@@ -217,6 +220,7 @@
     "core/uploads.js",
     "core/usage.js",
     "core/views.css",
+    "core/voice-legacy.js",
     "core/voice-status.js",
     "core/web-update.js",
     "core/workspace-navigation.js",
@@ -226,10 +230,7 @@
     "live.js",
     "manifest.webmanifest",
     "outbox.js",
-    "pwa-install.js",
-    "core/app-voice.js",
-    "core/background-audio-legacy.js",
-    "core/voice-legacy.js"
+    "pwa-install.js"
   ],
   "coreModules": {
     "core/offline-chats.js": {
