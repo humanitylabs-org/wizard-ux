@@ -180,3 +180,25 @@ test('slot lookup prefers a visible instance over hidden Chats copies (desktop)'
   assert.match(src, /getClientRects\(\)\.length > 0\)/);
   assert.match(src, /querySelectorAll\(selector\)\]\.find\(seen\)/);
 });
+
+test('beside hook: layout-gated event on change only, never a route event, and route().beside for late packages', async () => {
+  const f = fixture(); let api; const seen = [], routes = [];
+  f.host._test.setImporter(async () => ({ default: a => { api = a; return () => {}; } }));
+  await f.host.loadTweaks(['miguel/snooze-someday'], f.slots, { teamAuthors: ['miguel'] });
+  assert.throws(() => api.on('beside', () => {}), /requires layout/);
+  await f.host.loadTweaks(['miguel/swipe-strip'], f.slots, { teamAuthors: ['miguel'] });
+  api.on('beside', b => seen.push(b.side)); api.on('route', r => routes.push(r));
+  f.setRoute({ beside: 1 }); f.setRoute({ beside: 1 }); f.setRoute({ beside: -1 }); f.setRoute({ beside: 0 });
+  assert.deepEqual(seen, [1, -1, 0]); assert.equal(routes.length, 0, 'route listeners see nothing new');
+  f.setRoute({ beside: 7 }); assert.equal(api.route().beside, 1, 'normalised to -1 | 0 | 1');
+  assert.equal(api.mount, undefined, 'device controls go through the declared device-edge slot, not a raw mount');
+  await f.clear(); f.setRoute({ beside: -1 }); assert.deepEqual(seen, [1, -1, 0, 1], 'a torn-down package hears nothing');
+});
+test('app.js tells the host when the bound view beside a thread changes, and reports it in route()', () => {
+  const app = read('web/app.js');
+  const peek = app.slice(app.indexOf('function syncPeek()'), app.indexOf('function detachBound('));
+  assert.match(peek, /device\.classList\.toggle\('bound-view-peeking', left\);\s*window\.WosSkinHost\?\.beside\?\.\(\);/);
+  assert.match(read('web/index.html'), /<div id="device" class="device" data-slot="device-edge">/);
+  assert.ok(JSON.parse(read('web/core/slots.json')).slots['device-edge']);
+  assert.match(app, /beside: device\.classList\.contains\('bound-peeking'\) \? 1 : device\.classList\.contains\('bound-view-peeking'\) \? -1 : 0/);
+});
