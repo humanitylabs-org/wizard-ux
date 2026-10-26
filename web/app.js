@@ -1823,7 +1823,7 @@
     if (which === 'settings' && stDesk) dropParkedSettings(); // Settings opened on this desk moves here
     sheet = which; device.classList.add('sheet-open'); device.dataset.sheet = which; tourEv('sheet', { which });
     window.WosResources?.back(); window.WosResources?.sync();
-    if (which === 'launcher') { foldOpen.agents = foldOpen.dev = false; renderLauncher(q || ''); launcher.classList.add('open'); const s = $('#search'); s.value = q || ''; }
+    if (which === 'launcher') { foldOpen.agents = foldOpen.dev = false; renderLauncher(q || ''); launcher.classList.add('open'); const s = $('#search'); s.value = q || ''; window.WizCore.refreshApps?.({afterPending:true}); }
     else if (which === 'settings') { settingsFocus = document.activeElement; renderSettings(); settingsEl.classList.add('open'); $('#settingsBody').scrollTop = 0; settingsView?.focus(); }
     else { renderInbox(); inboxEl.classList.add('open'); }
     [launcher, inboxEl, settingsEl].forEach(el => { if (el === settingsEl && stDesk) return; el.style.transform = ''; el.style.opacity = ''; });
