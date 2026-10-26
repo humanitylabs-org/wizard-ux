@@ -42,7 +42,8 @@ const DELAY = 2500;
     const feedback = () => p.evaluate(id => {
       const shown = el => !!el && getComputedStyle(el).display !== 'none' && el.getClientRects().length > 0;
       const t = document.querySelector('#toast');
-      return { tile: !!document.querySelector(`.lapp.opening[data-app="${id}"]`), toast: !!t?.classList.contains('show') && /Opening/.test(t.textContent),
+      const tl = document.querySelector(`.lapp.opening[data-app="${id}"]`), sp = tl?.querySelector('.ic .open-spin'), sr = sp?.getBoundingClientRect(), ir = tl?.querySelector('.ic')?.getBoundingClientRect();
+      return { tile: !!tl, spinOnIcon: !!sr && sr.width > 8 && sr.left >= ir.left && sr.right <= ir.right && sr.top >= ir.top && sr.bottom <= ir.bottom && getComputedStyle(tl).pointerEvents === 'none', toast: !!t?.classList.contains('show') && /Opening/.test(t.textContent),
         veil: [...document.querySelectorAll('.frame-loading')].some(shown), sheetClosing: !document.querySelector('.sheet.open, .launcher.open') };
     }, tile.id);
     await tap(tile.x, tile.y); await p.waitForTimeout(120);
@@ -52,8 +53,9 @@ const DELAY = 2500;
     await p.waitForTimeout(DELAY * 2 + 800); const after = await feedback();
     const wins = await p.evaluate(() => document.querySelectorAll('.win').length);
     const ownWins = await p.evaluate(id => [...document.querySelectorAll('.win iframe.appframe')].filter(f => f.dataset.ownApp === id).length, tile.id);
-    const instant = at120.tile || at120.toast || at120.veil;
-    const holding = at1s.tile || at1s.toast || at1s.veil;
+    // The answer must be on the icon the finger is on (James, 26 Oct: "spin on the icon they tapped itself"), or the app already up.
+    const instant = at120.spinOnIcon || at120.veil;
+    const holding = (at1s.spinOnIcon || at1s.veil) && !at1s.toast;
     const ok = instant && holding && ownWins === 1 && !after.veil && !after.toast && !after.tile && !errs.length;
     console.log(JSON.stringify({ skin, app: tile.id, surface, needsHits, at120, at1s, after, windowsBefore: before, windowsAfter: wins, ownWins, errs: errs.slice(0, 2), ok }));
     if (!ok) fails++;
