@@ -13,7 +13,7 @@
   try { if (parent === window && !window.WizardAppIdentity) { const s = document.createElement('script'); s.src = '/wizard-os-home/core/app-identity.js'; (document.head || document.documentElement).appendChild(s); } } catch (_) {}
   const ORIGIN = location.origin, VERSION = 1, overlays = [], handlers = [], themes = new Set(), updates = new Set();
   let service = null, transportReady = false, currentTheme = null, updateAvailable = null, rootWatcher = null, guarded = false, exitUntil = 0, requestId = 0;
-  const requests = new Map();
+  const requests = new Map(), companionMessages = new Set();
   let toolHandler = null;
   const guardPush = history.pushState.bind(history);
   let guardBase = null, standaloneIsRoot = null;
@@ -347,8 +347,24 @@
       stayBack(); if (!exitUntil) pushStandaloneGuard();
     });
   }
+  function shellOp(op, args) {
+    if (service?.shell) return Promise.resolve().then(() => service.shell[op](args));
+    if (transportReady) return request('shell.' + op, args);
+    return Promise.reject(new Error('Companion panes need the Wizard workspace host'));
+  }
+  addEventListener('message', e => {
+    if (e.source === parent && e.origin === ORIGIN && e.data?.type === 'wizard:app:companion' && e.data.version === VERSION)
+      notify(companionMessages, { from: e.data.from, data: e.data.data });
+  });
   const sharedResult = promise => promise.then(value => ['shared', 'copied', 'cancelled', 'unsupported'].includes(value) ? value : 'unsupported', () => 'unsupported');
   window.WizardApp = Object.freeze({ version: VERSION, get hosted() { return !!service || transportReady; }, ready,
+    shell: Object.freeze({
+      openCompanion: opts => shellOp('openCompanion', opts),
+      closeCompanion: () => shellOp('closeCompanion'),
+      postCompanion: data => shellOp('postCompanion', data),
+      focusApp: () => shellOp('focusApp'),
+      onCompanionMessage: fn => listen(companionMessages, fn),
+    }),
     voiceInput, conversation: voiceInput, // backwards-compatible name, identical receiver/authority
     back: Object.freeze({ register, push, useHistory }),
     view: Object.freeze({ isVisible: () => !document.hidden && (!framed || service?.view?.isVisible() === true) }),

@@ -142,6 +142,8 @@
     "core/chats.css",
     "core/chats.js",
     "core/commands.js",
+    "core/companion-legacy.js",
+    "core/companion-pane.js",
     "core/composer-input.js",
     "core/config.js",
     "core/core.js",
@@ -195,7 +197,6 @@
     "core/update-banner.css",
     "core/uploads.js",
     "core/usage.js",
-    "core/video-desks.js",
     "core/views.css",
     "core/voice-status.js",
     "core/web-update.js",
@@ -630,12 +631,19 @@
       ],
       "note": "Direct entrypoint import"
     },
-    "core/video-desks.js": {
+    "core/companion-legacy.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import"
+      "note": "One-release wire adapter using the shared companion pane"
+    },
+    "core/companion-pane.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Generic companion pane; registered app frame authority from App Services"
     },
     "core/voice-status.js": {
       "loadedBy": [
