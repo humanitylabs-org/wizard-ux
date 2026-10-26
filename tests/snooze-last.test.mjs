@@ -47,3 +47,17 @@ test('stock subject grouping is unchanged: same HTML as readyBody without the sn
     return c.readyBody([snoozed('s'), row('a', { attention: { subject: 'A' } }), row('b', { attention: { subject: 'B' } })], s => `<row>${s.id}</row>`); };
   assert.equal(run(src), run(stockSrc));
 });
+test('shared attention groups (Inbox, moons, Home): a snoozed approval is not Needs you only with snoozeOrder last', () => {
+  const src = block(live, '    groups(agent = \'\') {', '    async refresh() {').replace(/,\s*$/, '');
+  const run = last => {
+    const c = vm.createContext({ Date, snoozeLast: () => last, isDeferred: s => !!s.deferred && !s.archived, WORKING: new Set(['running']), WEEK: 7 * 864e5, seenKeyOf: s => s.id, assistantAt: s => s.at, hasNew: () => true });
+    vm.runInContext(`this.L = { sessionsFor: () => this.rows, deferred: {}, seenOf: () => ({}), ${src.trim()} };`, Object.assign(c, { rows: [
+      { id: 'appr', status: 'waiting_for_approval', deferred: true, at: new Date().toISOString() },
+      { id: 'run', status: 'running', deferred: true, at: new Date().toISOString() },
+      { id: 'live', status: 'waiting_for_approval', at: new Date().toISOString() },
+    ] }));
+    const g = c.L.groups(); return { needs: ids(g.needs).sort(), working: ids(g.working) };
+  };
+  assert.deepEqual(run(false), { needs: ['appr', 'live'], working: ['run'] });
+  assert.deepEqual(run(true), { needs: ['live'], working: ['run'] });
+});
