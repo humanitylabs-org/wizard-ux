@@ -27,8 +27,7 @@
   /* ---------------- apps ---------------- */
   // The registry lives in core/apps.js (shared with the desktop shell); the phone gets its own list.
   const { APPS, APP, findApp, appAt, appByName, quickSearch, searchUrl } = window.WizCore.apps('mobile');
-  const audioFrames = new WeakSet();
-  window.WizBackgroundAudio?.init(() => APP, f => { const id=f.closest('.win')?.dataset.win; return audioFrames.has(f) && W[id]?.appId === 'wizard-music' && deskOf(id) >= 0; });
+  window.WizBackgroundAudio?.init(() => APP, f => { const id=f.closest('.win')?.dataset.win; return !!W[id]?.appId && deskOf(id) >= 0 && window.WizAppServices?.authorized(f); });
   const norm = window.WizCore.norm;
 
   /* ---------------- state ---------------- */
@@ -766,7 +765,7 @@
     return w;
   }
   function closeAppPlayback(w) {
-    window.WizBackgroundAudio?.closeApp(w?.appId)?.catch(() => toast('♫', 'Music could not stop. Pause it from the media controls.'));
+    window.WizBackgroundAudio?.closeApp(w?.appId)?.catch(() => toast('♫', 'Audio could not stop. Pause it from the media controls.'));
   }
   function closeWin(id, quiet, preservePlayback = false) {
     const i = deskOf(id); if (i < 0) return;
@@ -1559,8 +1558,6 @@
   function watchFrames(root) {
     $$('iframe.appframe', root).forEach(f => {
       if (f._watched) return; f._watched = true;
-      const audioId=f.closest('.win')?.dataset.win;
-      if(W[audioId]?.appId === 'wizard-music') audioFrames.add(f);
       // servicesAs: a companion view gets its owning installed app's Back/services.
       const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
       if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), back: () => { if (desks[idx].focus !== w.id) return false; const did = backStep(w.id); if (did) { exitUntil = 0; window.__backLog = (window.__backLog || []).concat('app-done:' + did).slice(-30); } return !!did; }, openContextDraft: (key, text) => { closeSheets(true); const cw = placeApp(mainChats, { app: 'chats', thread: null }, {}); if (!cw) throw new Error('Chats unavailable'); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); return receipt; }, isVisible: () => desks[idx].wins.includes(w.id) && (!desks[idx].full || desks[idx].focus === w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) });
@@ -3791,14 +3788,14 @@
     back() { window.__wosNativeBack(); },
   });
   mountLinks();
-  // Music by voice (core/music-voice.js): the Wizard Music window is the player it drives.
-  window.WosMusic?.install({
-    app: () => APP['wizard-music'] || null,
-    findWin: () => {
-      const mine = id => W[id]?.app === 'frame' && W[id].appId === 'wizard-music';
+  // Shared app command delivery; compatibility ownership is confined to voice-legacy.
+  window.WosAppVoice?.install({
+    apps: () => APP,
+    findWin: appId => {
+      const mine = id => W[id]?.app === 'frame' && W[id].appId === appId;
       return desks[idx].wins.find(mine) || Object.keys(W).find(id => mine(id) && deskOf(id) >= 0) || null;
     },
-    openMusic: () => { closeSheets(true); const w = placeApp(x => x.app === 'frame' && x.appId === 'wizard-music' && !x.from, { app: 'frame', appId: 'wizard-music' }); return w ? w.id : null; },
+    open: appId => { closeSheets(true); const w = placeApp(x => x.app === 'frame' && x.appId === appId && !x.from, { app: 'frame', appId }); return w ? w.id : null; },
     frameOf: id => winEl(id)?.querySelector('iframe.appframe') || null,
     toast,
   });

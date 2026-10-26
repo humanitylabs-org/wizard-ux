@@ -55,8 +55,10 @@
       (a.view.mode !== 'own' || a.view.url === `/wizard/views/${a.id}/`) ? a.view : { mode: 'original', url: a.url || '' },
     url: a.source === 'apps.json' && a.view?.mode === 'own' && a.view.url === `/wizard/views/${a.id}/` ? a.view.url : a.url || '', desc: a.desc || '',
     ...(a.desktop_only ? { desktopOnly: true } : {}), source: a.source || '', system: a.system === true,
-    provides: Array.isArray(a.provides) ? a.provides : [], voice_names: Array.isArray(a.voice_names) ? a.voice_names : [], status: a.status,
+    status: a.status,
     receives_voice_input: trusted === true && a.receives_voice_input === true,
+    voice_names: Array.isArray(a.voice_names) ? a.voice_names.filter(n => typeof n === 'string') : [],
+    provides: trusted && Array.isArray(a.provides) ? a.provides.filter(n => typeof n === 'string') : [],
     sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [] },
   });
   let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).map(toTile); } catch (e) { return []; } })();
@@ -158,10 +160,10 @@
   function findApp(q, exact) {
       q = norm(q).replace(/^(the|my) /, '').replace(/ (app|application|view)$/, '');
       if (!q) return null;
-      const alias = { troubleshooter: 'troubleshooter', troubleshooting: 'troubleshooter', troubleshoot: 'troubleshooter', 'fix wizard': 'troubleshooter', wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', 'google maps': 'maps', map: 'maps', 'cine queue': 'cinequeue', movies: 'cinequeue', 'i ching': 'iching', notifications: 'wizard', 'side key': 'side-button', 'power button': 'side-button', 'side button assistant': 'side-button', inbox: 'wizard', terminal: 'console', music: 'spotify', reader: 'wisdom', 'wisdom reader': 'wisdom', 'wizard reader': 'wisdom', collections: 'wisdom', jobs: 'wisdom', 'steve jobs': 'wisdom', signal: 'wizard-signal', shop: 'shopping', meetings: 'mizel', 'meeting recorder': 'mizel', usual: 'usuals', usuals: 'usuals', 'food app': 'usuals', 'my food': 'usuals', 'grab app': 'usuals', 'saved orders': 'usuals', eats: 'usuals', 'wizard eats': 'usuals', bites: 'usuals', 'wizard bites': 'usuals', 'wizard food': 'usuals', grab: 'usuals', 'my usuals': 'usuals', 'grab food': 'usuals', food: 'usuals', 'order food': 'usuals' };
-      // "Open music" is Wizard Music when this Wizard has it; Spotify only by name or as the fallback.
-      if (/^(music|my music|the music|songs|music app|music player|wizard music)$/.test(q) && APP['wizard-music']) return APP['wizard-music'];
-      if (alias[q] && APP[alias[q]]) return APP[alias[q]];
+      const named = window.WosAppVoice?.aliases(APPS,norm).get(q);
+      if (named) return named;
+      const legacy = window.WosVoiceLegacy?.alias(q,APP);
+      if (legacy) return legacy;
       if (exact) return null; // appByName: name or alias only, no fuzzy guess
       let best = null, bs = 0;
       for (const a of APPS) {
@@ -181,7 +183,9 @@
     // matches only (name, name without its "Wizard" prefix, or an alias), so ordinary words never open apps.
     function appByName(q) {
       q = norm(q).replace(/^(open |the |my )+/, '').replace(/ (app|application)$/, '');
-      if (!q || q.split(' ').length > 4) return null;
+      if (!q) return null;
+      const named = window.WosAppVoice?.aliases(APPS,norm).get(q); if (named) return named;
+      if (q.split(' ').length > 4) return null;
       const bare = n => n.replace(/^wizard /, '');
       const hit = APPS.find(a => a.kind !== 'view' && (norm(a.name) === q || tight(bare(norm(a.name))) === tight(bare(q))));
       if (hit) return hit;
