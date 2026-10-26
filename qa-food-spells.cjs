@@ -8,6 +8,10 @@ const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const ORIGIN = require('./tools/qa-paths.cjs').origin(), URL_ = ORIGIN + '/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || __dirname, SHOTS = process.env.QA_SHOTS || '';
+// The assertions stay identical after extraction; only registry/static transport
+// and traversal of the real app window cross the new package boundary.
+const FOOD = process.env.QA_FOOD_APP_DIR || '';
+const FOOD_REGISTRY = {id:'usuals',name:'Food',url:'/usuals/',provides:['voice-commands'],voice_names:['usual','usuals','food app','my food','saved orders','eats','wizard eats','bites','wizard bites','wizard food','my usuals','grab food','food','order food']};
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -22,6 +26,11 @@ async function boot(b) {
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), m = q.method();
     if (u.hostname !== new URL(require('./tools/qa-paths.cjs').origin()).hostname) return r.abort();
+    if (FOOD && u.pathname.startsWith('/usuals/')) {
+      const base = path.resolve(FOOD, 'app/static'), file = path.resolve(base, u.pathname.slice('/usuals/'.length) || 'index.html');
+      if (!file.startsWith(base + path.sep) || !fs.existsSync(file)) return r.fulfill({status:404,body:'not found'});
+      return r.fulfill({status:200,contentType:CT[path.extname(file)] || 'application/octet-stream',body:fs.readFileSync(file)});
+    }
     const sh = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (sh && (m === 'GET' || m === 'HEAD')) {
       const f = sh[1] || 'index.html', p = path.join(WEB, 'web', f);
@@ -43,7 +52,7 @@ async function boot(b) {
     if (sm) { const t = THREADS.find(x => x.id === decodeURIComponent(sm[1])); return t ? json(r, { session: t }) : json(r, { error: 'not_found' }, 404); }
     if (u.pathname === '/wizard/thread-seen') return json(r, { state: { initializedAt: NOW - 864e5, threads: {} } });
     if (u.pathname === '/wizard/thread-dispositions') return json(r, { state: {} });
-    if (u.pathname === '/wizard/v1/apps') return json(r, { apps: [] });
+    if (u.pathname === '/wizard/v1/apps') return json(r, { apps: FOOD ? [FOOD_REGISTRY] : [] });
     return json(r, {});
   });
   await ctx.addInitScript(() => {
@@ -70,10 +79,10 @@ async function boot(b) {
 }
 const shot = async (p, n) => { if (SHOTS) await p.screenshot({ path: path.join(SHOTS, n + '.png') }); };
 const runs = p => p.evaluate(() => window.__runs.slice());
-const foodWin = p => p.evaluate(() => { const el = document.querySelector('[data-usuals]'); const w = el && el.closest('.win'); return { open: !!el, title: w ? (w.querySelector('.wt, .win-title, .wtitle, header')?.innerText || w.innerText.split('\n')[0]) : '', text: el ? el.innerText : '' }; });
+const foodWin = p => p.evaluate(() => { const frame = [...document.querySelectorAll('iframe:not([data-voice-service])')].find(f => new URL(f.src, location.href).pathname === '/usuals/' && f.closest('.win')); const el = document.querySelector('[data-usuals]') || frame?.contentDocument?.querySelector('[data-usuals]'); const w = frame?.closest('.win') || el?.closest('.win'); return { open: !!el, title: w ? (w.querySelector('.wt, .win-title, .wtitle, header')?.innerText || w.innerText.split('\n')[0]) : '', text: el ? el.innerText : '' }; });
 
 (async () => {
-  const b = await chromium.launch();
+  const b = await chromium.launch({executablePath:process.env.QA_CHROME || undefined});
   const { p, writes } = await boot(b);
 
   // 1. The app is called Food: the list entry and the voice lookups.
