@@ -38,7 +38,7 @@ class HostedWorkflow(unittest.TestCase):
         self.assertIn("needs.publish.outputs.built == 'true'", attest)
         self.assertIn('--bundle-from-oci', attest)
         self.assertIn('--source-digest "$GITHUB_SHA"', attest)
-        self.assertIn('--source-ref refs/heads/main', attest)
+        self.assertIn('--source-ref "$GITHUB_REF"', attest)
 
     def test_finalize_waits_for_attestation_or_verified_reuse(self):
         finalize = self.job('finalize', 'anonymous-pull')
@@ -68,8 +68,13 @@ class HostedWorkflow(unittest.TestCase):
         for name, following in [('publish', 'attest'), ('attest', 'finalize'),
                                 ('finalize', 'anonymous-pull')]:
             job = self.job(name, following)
-            for guard in ('github.repository ==', "github.ref == 'refs/heads/main'", "github.event_name == 'push'", "github.event_name == 'workflow_dispatch'"):
+            for guard in ('github.repository ==', "github.ref == 'refs/heads/main'", "github.event_name == 'push'", "github.event_name == 'workflow_dispatch'", "github.ref == 'refs/heads/release/stable-onboarding'", 'inputs.expected_sha == github.sha'):
                 self.assertIn(guard, job)
+        # No branch glob, arbitrary checkout ref or pull_request_target publication.
+        self.assertNotIn('pull_request_target', self.workflow)
+        self.assertNotIn('release/*', self.workflow)
+        self.assertEqual(self.workflow.count('--branch "$GITHUB_REF_NAME"'), 2)
+        self.assertIn('branches: [main]', self.workflow)
 
 
 if __name__ == '__main__':

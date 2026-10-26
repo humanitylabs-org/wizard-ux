@@ -1,5 +1,5 @@
 /* Settings lists categories only: no Files / Day / Week / Month in review / Maps / Local command
- * shortcut footer on phone or desktop (James, 25 Oct 2026). Voice/deep-link routes stay.
+ * shortcut footer on phone or desktop (James, 25 Oct 2026). Removed view routes must stay absent.
  * node qa-settings-no-shortcuts.cjs http://127.0.0.1:<port>/wizard-os-home/ */
 const { chromium } = require('./tools/qa-playwright.cjs');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9461/wizard-os-home/';
@@ -26,7 +26,7 @@ const ok = (c, n, x = '') => { console.log(c ? 'PASS' : 'FAIL', n, c ? '' : x); 
     }));
     ok(r.nav > 0, `${label}: Settings categories render`, r);
     ok(r.footer === 0 && !/in review|Local command|\bMaps\b/.test(r.text), `${label}: no shortcut footer in Settings`, r);
-    ok(['day', 'week', 'month', 'maps', 'command'].every(id => r.registry.includes(id)), `${label}: voice/deep-link registry intact`, r.registry);
+    ok(['day', 'week', 'month', 'maps', 'command'].every(id => !r.registry.includes(id)), `${label}: unused view registrations absent`, r.registry);
     if (SHOTS) await p.screenshot({ path: `${SHOTS}/settings-${label}.png` });
     await ctx.close();
   }

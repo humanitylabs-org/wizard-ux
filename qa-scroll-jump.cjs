@@ -3,12 +3,13 @@
 // The words under the reader's eyes must not move. Reads hit the real backend read-only; every write is fulfilled locally.
 // Run: node tools/qa-origin.cjs 9391 web &  then  ID=<finished thread with 60+ turns> node qa-scroll-jump.cjs http://127.0.0.1:9391/wizard-os-home/
 const { chromium } = require('./tools/qa-playwright.cjs');
+const { context, geometry } = require('./tools/qa-thread-place.cjs');
 const URL_ = process.argv[2], ID = process.env.ID; if (!ID) throw Error('set ID');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let cut = 0; // drop this many turns from the end of the thread's history
 (async () => {
   const b = await chromium.launch();
-  const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, serviceWorkers: 'block', bypassCSP: true });
+  const ctx = await b.newContext(context);
   const p = await ctx.newPage();
   await p.route('**/*', async r => {
     const q = r.request(); if (!['GET', 'HEAD'].includes(q.method())) return r.fulfill({ status: 200, body: '{}' });
@@ -21,10 +22,10 @@ let cut = 0; // drop this many turns from the end of the thread's history
   });
   await p.goto(URL_, { waitUntil: 'domcontentloaded' });
   await p.waitForFunction(() => window.__wos?.live?.ok, null, { timeout: 90000 }); await sleep(2500);
-  const nb = `(()=>{const w=Object.values(__wos.wins).find(x=>x.app==='chats'&&x.thread===${JSON.stringify(ID)});return w&&document.querySelector('[data-chats="'+w.id+'"] .ch-msgs');})()`;
+  const nb = `(()=>{const w=Object.values(__wos.wins).sort((a,b)=>Number(__wos.desks[__wos.idx]?.wins.includes(b.id))-Number(__wos.desks[__wos.idx]?.wins.includes(a.id))).find(x=>x.app==='chats'&&x.thread===${JSON.stringify(ID)});return w&&document.querySelector('[data-chats="'+w.id+'"] .ch-msgs');})()`;
   // The words at the reader's eye line (a third of the way down the list): which message and how far it sits from the top.
-  const eye = `(()=>{const n=${nb};const r=n.getBoundingClientRect();const y=r.top+r.height/3;const m=[...n.querySelectorAll('[data-morph-key]')].find(e=>{const b=e.getBoundingClientRect();return b.top<=y&&b.bottom>y});return m?{key:m.dataset.morphKey,off:Math.round(m.getBoundingClientRect().top-r.top),st:Math.round(n.scrollTop),gap:Math.round(n.scrollHeight-n.scrollTop-n.clientHeight),turns:n.querySelectorAll('.msg.u').length}:{st:Math.round(n.scrollTop)}})()`;
-  const park = frac => p.evaluate(`(()=>{const n=${nb};n.dispatchEvent(new TouchEvent('touchstart',{bubbles:true}));n.scrollTop=Math.round(n.scrollHeight*${frac});n.dispatchEvent(new Event('scroll'));n.dispatchEvent(new TouchEvent('touchend',{bubbles:true}));})()`);
+  const eye = `(()=>{const n=${nb};const e=${geometry(nb)},r={top:e.top,height:e.doc?innerHeight-e.top-180:(n.closest('.wos-doc-thread') ? document.scrollingElement : n).clientHeight};const y=r.top+r.height/3;const m=[...n.querySelectorAll('[data-morph-key]')].find(e=>{const b=e.getBoundingClientRect();return b.top<=y&&b.bottom>y});return m?{key:m.dataset.morphKey,off:Math.round(m.getBoundingClientRect().top-r.top),st:Math.round((n.closest('.wos-doc-thread') ? document.scrollingElement : n).scrollTop),gap:Math.round((n.closest('.wos-doc-thread') ? document.scrollingElement : n).scrollHeight-(n.closest('.wos-doc-thread') ? document.scrollingElement : n).scrollTop-(n.closest('.wos-doc-thread') ? document.scrollingElement : n).clientHeight),turns:n.querySelectorAll('.msg.u').length}:{st:Math.round((n.closest('.wos-doc-thread') ? document.scrollingElement : n).scrollTop)}})()`;
+  const park = frac => p.evaluate(`(()=>{const n=${nb};n.dispatchEvent(new TouchEvent('touchstart',{bubbles:true}));(n.closest('.wos-doc-thread') ? document.scrollingElement : n).scrollTop=Math.round((n.closest('.wos-doc-thread') ? document.scrollingElement : n).scrollHeight*${frac});n.dispatchEvent(new Event('scroll'));n.dispatchEvent(new TouchEvent('touchend',{bubbles:true}));})()`);
   const bump = (status, n) => p.evaluate(([id, status, n]) => { const s = __wos.live.session(id); s.status = status; s.messageCount += n; s.lastAssistantAt = new Date().toISOString(); }, [ID, status, n]);
   const waitFor = async (pred, ms = 20000) => { const t = Date.now(); while (Date.now() - t < ms) { if (await p.evaluate(pred)) return true; await sleep(250); } return false; };
   const results = [];
@@ -54,5 +55,5 @@ let cut = 0; // drop this many turns from the end of the thread's history
   check('reply-lands-while-reading', a, await p.evaluate(eye), landed);
 
   console.log(JSON.stringify({ ok: results.every(Boolean) }));
-  await b.close();
+  await p.unrouteAll({ behavior: 'ignoreErrors' }); await b.close();
 })().catch(e => { console.error(e); process.exit(1); });

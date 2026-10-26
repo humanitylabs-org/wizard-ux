@@ -12,7 +12,7 @@
  *   ⌥Enter        new chat                    ⇧⌥1…9      send window to workspace
  *   Right ⌘ tap   talk (tap again to send)    ⌥←↑→↓/HJKL focus window
  *   Right ⌥ tap   dictate (tap again: insert at the cursor, else copy)
- *   ⌥I            inbox                       ⇧⌥←→       swap window
+ *   ⌥I            Chats                       ⇧⌥←→       swap window
  *   ⌘W / ⌥W       close app                   ⌥F         full screen
  *   ⌥R            refresh the focused window (keeps it open, in place)
  *   ⌥/            all keys                    ⌥[ ⌥]      previous / next workspace
@@ -43,6 +43,7 @@
     // First run: Chats on 1, so Wizard opens on the thing you use most.
     const id = uid(); W[id] = { id, app: 'chats', thread: null }; ws[0].wins.push(id); ws[0].focus = id;
   }
+  window.WosFeatures.pruneWindows(W);
   const oldActive = ws[cur];
   ws = C.migrateChatsFocus(W, ws); cur = Math.max(0, ws.indexOf(oldActive));
   const placed = new Set(), deskIds = new Set();
@@ -81,6 +82,7 @@
     title: w => winTitle(w),
     viewContext: (id, how) => viewContext(id, how),
     visible: () => homeOpen ? [] : ws[cur].wins,
+    front: () => homeOpen ? null : ws[cur].focus,
     editUnsent: it => editUnsent(it),
     recoverUnsent: id => { openSettings('unsent'); window.WosSettings.focusUnsent(id); },
     openUnsent: () => openSettings('unsent'),
@@ -101,30 +103,6 @@
     openThread: (sid, options) => openThread(sid, options),
   });
 
-  function openReview(level, date) {
-    closeSettings();
-    const V = window.WosViews, day = date || V.YESTERDAY;
-    return newWin({ app:'review', title:level[0].toUpperCase()+level.slice(1)+' in review', z: level === 'month' ? {level} : level === 'week' ? {level,week:V.weekOf(day)} : {level:'day',day} });
-  }
-  function openMaps(mode, dest) { closeSettings();return newWin({app:'maps',title:'Maps',mode,dest}); }
-  function mountReview(w, el) {
-    const V = window.WosViews, root = el.querySelector('.review'); if (!root) return;
-    const paint = () => {
-      const chain = V.chain(w.z);
-      root.querySelector('.crumb').innerHTML = chain.map((z,i)=>`<button data-review-parent="${i}">${esc(V.crumbLabel(z))}</button>`).join(' › ');
-      root.querySelector('.zstage').innerHTML = `<div class="zlayer"><div class="desk-scroll">${V.renderLevel(w.z)}</div></div>`;
-      root.querySelectorAll('[data-rail]').forEach(b=>b.classList.toggle('on',b.dataset.rail===w.z.level));
-    };
-    root.onclick = e => {
-      const card = e.target.closest('[data-z]'), parent = e.target.closest('[data-review-parent]'), rail = e.target.closest('[data-rail]'), thread = e.target.closest('[data-wizthread]');
-      if (thread) { openThread(thread.dataset.wizthread); return; }
-      if (card) w.z = JSON.parse(card.dataset.z);
-      else if (parent) w.z = V.chain(w.z)[+parent.dataset.reviewParent];
-      else if (rail) { const next=V.railTarget(w.z,rail.dataset.rail,root);if(!next)return;w.z=next; }
-      else return;
-      save(); paint();
-    }; paint();
-  }
   function openSearch(query, tab='all') {
     const a=APP['wizard-search'],url=searchUrl(query,tab);
     if(!a||!url){toast('⌕','Search app is not installed',1800);return false;}
@@ -133,14 +111,13 @@
   function commandSnapshot() { const w=focused(); return {id:w?.id,thread:w?.thread,view:{appId:w?.appId,kind:w?.app==='chats' ? w.thread ? 'chat thread' : 'thread list' : 'app'}}; }
   const LOCAL_COMMANDS = window.WosCommands.create({CHATS,APP,findApp,appByName,quickSearch,sendSnap:commandSnapshot});
   function executeCommand(c,text,snap,musicDone) {
-    return window.WosCommands.execute(c,text,{maps:openMaps,search:openSearch,settings:openSettings,focused:()=>snap?.id?W[snap.id]:focused(),chats:CHATS,inbox:openInbox,launcher:openPalette,findApp,openApp,musicDone,
+    return window.WosCommands.execute(c,text,{search:openSearch,settings:openSettings,focused:()=>snap?.id?W[snap.id]:focused(),chats:CHATS,chatList:openChatsList,launcher:openPalette,findApp,openApp,musicDone,
       layout(c) { const f=snap?.id?W[snap.id]:focused();
         if(c.action==='desk') { if(c.to==='home') goHome(); else goWs(c.to==='next'?cur+1:c.to==='prev'?cur-1:+c.to-1); return true; }
         if(c.action==='close_window') { if(!f)return false;closeWin(f.id);return true; }
         if(c.action==='fullscreen') { if(!f)return false;if(ws[cur].mono!==(c.on!==false))toggleMono();return true; }
         if(c.action==='move_window') { if(!f)return false;moveWin(f.id,c.to==='prev'?cur-1:cur+1);return true; }
         if(c.action==='clear_desk') { closeDesktop(cur);return true; }
-        if(c.action==='zoom') { if(f?.app!=='review'){openReview('day');return true;} const V=window.WosViews;if(c.dir==='out'){const z=V.parentOf(f.z);if(z)f.z=z;}else{const card=winEl(f.id)?.querySelector('[data-z]');if(card)f.z=JSON.parse(card.dataset.z);}save();mountReview(f,winEl(f.id));return true; }
         return false;
       }});
   }
@@ -267,7 +244,7 @@
   }
 
   /* Open an app the desktop way: Chats and apps already open get focused, not duplicated. */
-  // Hosted Wizard apps (App Store, System) ask the shell to open another installed app in its own window.
+  // Hosted Wizard apps (App Store) ask the shell to open another installed app in its own window.
   const hostedOpenable = id => { const a = APP[id]; if (!a?.url || a.kind !== 'wizard') return null; try { if (new URL(a.url, location.origin).origin !== location.origin) return null; } catch (e) { return null; } return a; };
   window.WizCanOpen = id => !!hostedOpenable(id);
   window.WizAppOpen = id => Object.values(W).some(w => w && w.appId === id);
@@ -276,26 +253,26 @@
   addEventListener('message', async e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-app' || typeof d.id !== 'string') return;
     const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
-    const w = host && W[host.dataset.win]; if (!w || !['app-store', 'system', 'agents', 'setup'].includes(w.appId)) return;
+    const w = host && W[host.dataset.win]; if (!w || !['app-store', 'agents', 'setup'].includes(w.appId)) return;
     // Setup may have just installed it: apps-changed is asynchronous. Wait for the registry, not a guessed delay.
     if (!hostedOpenable(d.id)) await window.WizCore.refreshApps?.();
     if (!host.isConnected || W[host.dataset.win] !== w) return;
     const a = hostedOpenable(d.id); if (a) openApp(a);
   });
   /* App → agent binding: an app's settings sheet (core/app-route.js). Its Agents button opens the Agents app
-   * at that agent; System and Agents frames may ask for an app's sheet. */
+   * at that agent; Agents frames may ask for an app's sheet. */
   window.WosAppRoute?.init({ openAgents: (id, o = {}) => { openApp(APP.agents); const msg = o.newPreset ? { type: 'wizard:agents-new', preset: o.newPreset } : id ? { type: 'wizard:agents-show', id } : null; if (msg) [400, 1100, 2200].forEach(t => setTimeout(() => { for (const f of document.querySelectorAll('iframe[title="Agents"]')) f.contentWindow?.postMessage(msg, location.origin); }, t)); } });
   addEventListener('message', e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:app-route' || typeof d.id !== 'string') return;
     const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
-    const w = host && W[host.dataset.win]; if (!w || !['system', 'agents', 'app-store'].includes(w.appId)) return;
+    const w = host && W[host.dataset.win]; if (!w || !['agents', 'app-store'].includes(w.appId)) return;
     window.WosAppRoute?.request(d);
   });
-  // The Agents app (and System) open an agent's own Chats. Only those frames may ask; the agent must exist.
+  // The Agents app opens an agent's own Chats. Only those frames may ask; the agent must exist.
   addEventListener('message', e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-agent-chats' || typeof d.id !== 'string') return;
     const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
-    const w = host && W[host.dataset.win]; if (!w || !['system', 'agents'].includes(w.appId)) return;
+    const w = host && W[host.dataset.win]; if (!w || !['agents'].includes(w.appId)) return;
     openAgentChats(d.id, { thread: d.thread === '__new__' ? '__new__' : '' });
   });
   async function openAgentChats(id, o = {}) {
@@ -312,9 +289,6 @@
   window.WizOpenAgentChats = openAgentChats;
   function openApp(a, opts = {}) {
     if (!a) return false;
-    if (a.kind === 'view' && ['day','week','month'].includes(a.view)) { openReview(a.view); return true; }
-    if (a.id === 'maps') { openMaps('search',''); return true; }
-    if (a.kind === 'view' && a.view === 'inbox') { openInbox(); return true; }
     if (a.kind === 'chats') {
       if (a.agent) return openAgentChats(a.agent);
       const chatsProvider = a.chatsProvider || CHATS.views.defaultId();
@@ -343,6 +317,12 @@
     if (!w) w = newWin({ app: 'chats', thread: null }, opts);
     focusWin(w.id); CHATS.openChat(w.id, sid);
     setTimeout(() => focusInside(w.id), 30);
+  }
+  function openChatsList() {
+    window.WosResources?.back(); closeSettings(); closePalette();
+    openApp(APP.wizard);
+    const w = focused();
+    if (w?.app === 'chats' && w.thread) { CHATS.chatsBack(w); syncChatsPane(w.id); }
   }
   function newChat(opts = {}) {
     // ⌘Enter in an agent's Chats starts a chat with that agent; anywhere else, with the main agent.
@@ -382,8 +362,6 @@
       <div class="wbody">${bodyHtml(w)}</div>`;
   }
   function bodyHtml(w) {
-    if (w.app === 'review') return window.WosViews.renderReviewShell(w.id);
-    if (w.app === 'maps') return window.WosViews.renderMaps(w);
     if (w.app === 'feature') return '<div class="shared-feature"></div>';
     if (w.app === 'chats') return `<div class="dchats" data-thread="${esc(w.thread || '')}" style="--list-w:${listW()}px"><div class="pane-list"><div class="chats" data-chats="${w.id}::list"></div></div>
       <div class="pane-split" data-split role="separator" aria-orientation="vertical" aria-label="Resize the thread list" tabindex="0" title="Drag to resize · double-click to reset"></div>
@@ -447,9 +425,7 @@
       CHATS.renderChatList(listWin(w.id), el.querySelector(`[data-chats="${w.id}::list"]`));
       if (w.thread) CHATS.renderChats(w);
       syncChatsPane(w.id);
-    } else if (w.app === 'review') mountReview(w,el);
-    else if (w.app === 'maps') window.WosViews.bindMaps(el,w,save);
-    else if (w.app === 'feature') window.WosFeatures.mount(w.featureId,el.querySelector('.shared-feature'),w.featureOptions);
+    } else if (w.app === 'feature') window.WosFeatures.mount(w.featureId,el.querySelector('.shared-feature'),w.featureOptions);
     else watchFrame(el.querySelector('iframe'), el);
     return el;
   }
@@ -633,7 +609,7 @@
   $('#wsList').addEventListener('click', e => { if (e.target.closest('[data-newdesk]')) return newDesktop(); const b = e.target.closest('[data-ws]'); if (b) goWs(+b.dataset.ws); });
   $('#logo').addEventListener('click', () => goHome());
   $('#searchBtn').addEventListener('click', () => openPalette());
-  $('#status').addEventListener('click', () => toggleInbox());
+  $('#status').addEventListener('click', () => openChatsList());
   $('#clock').addEventListener('click', () => goHome());
   $('#keysBtn').addEventListener('click', () => toggleKeys());
   $('#micBtn').addEventListener('click', () => talk());
@@ -653,7 +629,7 @@
   function goHome() {
     window.WosResources?.back();
     for (const id of Object.keys(W)) if (W[id].app === 'chats') CHATS.saveDraft(id);
-    closePalette(); toggleKeys(false); closeInbox(); closeSettings(); closeUsage();
+    closePalette(); toggleKeys(false); closeSettings(); closeUsage();
     window.WizWebUpdate?.back(); // Preserve the accepted shared banner; fold its navigation list.
     LINKS?.close();
     for (let i = 0; i < 20 && CHATS.closeOverlay(); i++) { /* Close navigation sheets, never the recorder. */ }
@@ -689,7 +665,7 @@
     const pending = OUTBOX?.unsent() || [];
     const working = LIVE?.ok ? LIVE.workGroups().working || [] : [];
     const rows = list => list.slice(0, 6).map(s => `<button class="home-row" data-thread="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span><span class="nm">${esc(s.title)}</span><time>${esc(ago(LIVE.cardAt(s)))}</time></button>`).join('') || '<div class="home-none">Nothing here.</div>';
-    const quick = ['wizard', ...APPS.filter(a => a.agent).map(a => a.id), 'wizard-signal', 'wisdom', 'shopping', 'mizel', 'files', 'console', 'legacy-wizard', 'system', 'app-store'].map(id => APP[id]).filter(Boolean);
+    const quick = ['wizard', ...APPS.filter(a => a.agent).map(a => a.id), 'wizard-signal', 'wisdom', 'shopping', 'mizel', 'files', 'console', 'legacy-wizard', 'app-store'].map(id => APP[id]).filter(Boolean);
     return `<div class="home-in">
       <nav class="home-tools" aria-label="System and settings"><button data-home-settings>Settings</button></nav>
       <div class="home-time">${window.WizConfig.hm()}</div>
@@ -704,7 +680,7 @@
   }
   stage.addEventListener('click', e => {
     if (e.target.closest('[data-home-settings]')) return openSettings();
-    if (e.target.closest('[data-home-unsent]')) return openInbox();
+    if (e.target.closest('[data-home-unsent]')) return openSettings('unsent');
     const ha = e.target.closest('.home [data-home-act]')?.dataset.homeAct;
     if (ha) { openApp(APP.wizard); const w = ws[cur].wins.map(id => W[id]).find(x => x?.app === 'chats' && !x.agent); if (w) { if (ha === 'working') CHATS.setFilter(w, 'working'); else CHATS.clearFilter?.(w); } return; }
     const hr = e.target.closest('.home [data-thread]'); if (hr) return openThread(hr.dataset.thread);
@@ -792,7 +768,6 @@
       { kind: 'cmd', name: 'Open an app', icon: '▦', keys: `${MOD}O`, run: () => openPicker() },
       ...(window.WosResources ? [{ kind: 'cmd', name: 'Resources', icon: '◔', run: () => { goHome(); $('#desktopHome [data-res-open="server"]')?.click(); } }] : []),
       { kind: 'cmd', name: 'Get apps', icon: '+', run: () => openApp(APP['app-store']) },
-      { kind: 'cmd', name: 'Your system', icon: '◈', run: () => openApp(APP.system) },
       { kind: 'cmd', name: 'New desktop', icon: '+', keys: `${MOD}T`, run: () => newDesktop() },
       { kind: 'cmd', name: 'Next desktop', icon: '→', keys: `${MOD}]`, run: () => goWs((cur + 1) % ws.length) },
       { kind: 'cmd', name: 'Previous desktop', icon: '←', keys: `${MOD}[`, run: () => goWs((cur - 1 + ws.length) % ws.length) },
@@ -800,7 +775,7 @@
       { kind: 'cmd', name: 'New voice chat', icon: '🎙', keys: `${MOD}V`, run: () => talkNew() },
       { kind: 'cmd', name: `Talk to ${window.WizConfig.agent()}`, icon: '🎙', keys: 'Right ⌘', run: () => talk() },
       { kind: 'cmd', name: 'Dictate', icon: '✎', keys: 'Right ⌥', run: () => dictate() },
-      { kind: 'cmd', name: 'Inbox', icon: '⬇', keys: `${MOD}I`, run: () => openInbox() },
+      { kind: 'cmd', name: 'Chats', icon: '⬇', keys: `${MOD}I`, run: () => openChatsList() },
       ...(window.WosFiles ? [{ kind: 'cmd', name: 'Files', icon: '▤', run: () => openFiles() }] : []),
       ...(window.WosUsage ? [{ kind: 'cmd', name: 'AI usage', icon: '◔', run: () => openUsage() }] : []),
       { kind: 'cmd', name: 'Close app / empty desktop', icon: '✕', keys: `${MOD}W`, run: () => closeCurrent() },
@@ -848,10 +823,10 @@
     return out;
   }
   const WORKING_ST = new Set(['submitting', 'queued', 'running', 'stopping']);
-  // The app selector's apps: Chats first, installed apps in registry order, Inbox, then the system apps.
+  // The app selector's apps: Chats first, installed apps in registry order, then the system apps.
   // A query ranks them like ⌘K's Apps group does.
-  const SYS_APPS = ['agents', 'system', 'app-store'];
-  const pickRank = a => a.kind === 'chats' ? 0 : SYS_APPS.includes(a.id) ? 3 : a.kind === 'view' ? 2 : 1;
+  const SYS_APPS = ['agents', 'app-store'];
+  const pickRank = a => a.kind === 'chats' ? 0 : SYS_APPS.includes(a.id) ? 3 : 1;
   function pickBuild(q) {
     const list = norm(q) ? searchApps(q) : APPS.slice().sort((a, b) => pickRank(a) - pickRank(b) || SYS_APPS.indexOf(a.id) - SYS_APPS.indexOf(b.id));
     return list.filter(a => a.kind !== 'native' && a.id !== 'agents' && !C.isMaintenanceApp(a)).map(a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, run: o => openApp(a, o) }));
@@ -1019,7 +994,7 @@
   pal.addEventListener('pointerdown', e => { if (e.target === pal) closePalette(); });
 
   /* Ask Archimedes from anywhere: a new thread, through the durable outbox, delegated in the background.
-   * Nothing opens or takes focus; the thread shows up in Chats and the Inbox when James wants it. */
+   * Nothing opens or takes focus; the thread shows up in Chats when James wants it. */
   async function ask(text, how = 'typing in the desktop launcher', audio = null, route = null) {
     text = String(text || '').trim(); if (!text && !audio) return;
     const ctx = viewContext(null, how);
@@ -1047,29 +1022,6 @@
     if (e.target.closest('[data-usage-refresh]')) { window.WosUsage.load(true).then(paintUsage); paintUsage(); }
   });
 
-  /* ---------------- inbox drawer ---------------- */
-  const ib = $('#inbox');
-  let ibSel = 0;
-  function renderInbox() {
-    if (ib.hidden) return;
-    const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
-    const unsent = OUTBOX ? OUTBOX.unsent() : [];
-    $('#ibSub').textContent = LIVE?.ok ? `${L.needs.length} need you · ${L.ready.length} unread · ${L.working.length} working` : 'Connecting…';
-    const row = (s, k) => `<button class="ib-row" data-thread="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span><span class="bd"><b>${esc(s.title)}</b><span>${esc(clip(s.preview || '', 140))}</span></span><time>${esc(ago(LIVE.cardAt(s)))}</time>${k === 'ready' ? `<span class="rd" data-read="${esc(s.id)}">Mark read</span>` : ''}</button>`;
-    const sec = (k, label, list) => `<div class="ib-sec" data-k="${k}"><h4>${label}${list.length ? ` · ${list.length}` : ''}</h4>${list.length ? list.map(s => row(s, k)).join('') : '<div class="ib-none">None</div>'}</div>`;
-    $('#ibBody').innerHTML = (unsent.length ? `<div class="ib-sec" data-k="unsent"><h4>Not sent yet · ${unsent.length}</h4>${unsent.map(u => `<div class="ib-row"><span class="emo">⏳</span><span class="bd"><b>${esc(clip(u.text || 'Voice note', 60))}</b><span>${esc(OUTBOX.quarantined(u.id) ? 'Waiting for device storage verification' : u.state === 'unconfirmed' ? u.error : u.state === 'empty' ? 'No speech detected · recording kept' : u.state === 'held' ? 'Kept on this device · not queued' : u.state === 'failed' ? 'Not sent · ' + (u.error || '') : 'Sending…')}</span></span></div>`).join('')}</div>` : '')
-      + sec('needs', 'Needs you', L.needs) + sec('ready', 'Unread', L.ready) + sec('working', 'Working', L.working);
-    const rows = $$('.ib-row[data-thread]', ib); ibSel = Math.min(ibSel, rows.length - 1); rows[ibSel]?.classList.add('sel');
-  }
-  function openInbox() { window.WosResources?.back(); ib.hidden = false; ibSel = 0; renderInbox(); }
-  function closeInbox() { ib.hidden = true; }
-  function toggleInbox() { ib.hidden ? openInbox() : closeInbox(); }
-  ib.addEventListener('click', e => {
-    if (e.target.closest('[data-close]')) return closeInbox();
-    const rd = e.target.closest('[data-read]'); if (rd) { e.stopPropagation(); LIVE.markSeen(rd.dataset.read); return; }
-    const r = e.target.closest('[data-thread]'); if (r) { closeInbox(); openThread(r.dataset.thread); }
-  });
-
   /* Shared responsive feature surface; this adapter owns only desktop navigation and focus. */
   const setEl = document.createElement('section');
   setEl.id = 'dsettings'; setEl.className = 'dsettings'; setEl.hidden = true;
@@ -1093,7 +1045,7 @@
   });
   function renderSettings() { settingsView.render(); }
   function openSettings(focus) {
-    window.WosResources?.back(); closePalette(); closeInbox(); toggleKeys(false);
+    window.WosResources?.back(); closePalette(); toggleKeys(false);
     settingsFocus = document.activeElement; setEl.hidden = false; settingsReturn = '';
     renderSettings(); settingsView.focus(focus); window.WosScenery?.update();
   }
@@ -1132,7 +1084,7 @@
   })();
   /* ---------------- keys sheet ---------------- */
   const KEYS = [
-    ['Open and find', [[`${MOD}Space`, 'Search everything'], [`${MOD}O`, 'Open an app'], [`${MOD}1`, 'Home'], [`${MOD}I`, 'Inbox'], [`${MOD},`, 'Settings'], [`${MOD}/`, 'This list']]],
+    ['Open and find', [[`${MOD}Space`, 'Search everything'], [`${MOD}O`, 'Open an app'], [`${MOD}1`, 'Home'], [`${MOD}I`, 'Chats'], [`${MOD},`, 'Settings'], [`${MOD}/`, 'This list']]],
     ['Chat', [[`${MOD}N`, 'New chat'], [`${MOD}V`, 'New voice chat (again to send)'], ['Enter', 'Send (⇧Enter for a new line)'], [`${MOD}↑  ${MOD}↓`, 'Previous / next chat'], ['Esc', 'Back'], ['/', 'Search chats']]],
     ['Desktops', [[`${MOD}T`, 'New desktop'], [`${MOD}2 … 9`, 'Go to desktop'], [`${MOD}[  ${MOD}]`, 'Previous / next desktop'], [`${MOD}\``, 'Last desktop'], [`${MOD}⇧2 … 9`, 'Send window to desktop']]],
     ['Windows', [[`${MOD}← ↑ → ↓`, 'Focus window (or H J K L)'], [`${MOD}⇧← →`, 'Swap window'], [`${MOD}F`, 'Full screen'], [`${MOD}R`, 'Refresh window'], [`${MOD}W`, 'Close app']]],
@@ -1470,7 +1422,7 @@
     if (!best && d.mono) { const i = d.wins.indexOf(d.focus); best = d.wins[(i + (dx || dy) + d.wins.length) % d.wins.length]; }
     if (best) focusWin(best);
   }
-  // Esc peels one layer: palette → keys → inbox → voice → thread → (nothing: stays put, never leaves).
+  // Esc peels one layer: palette → keys → voice → thread → (nothing: stays put, never leaves).
   function escStep() {
     if (window.WizShareWizard?.back()) return 'share-wizard';
     { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above everything, incl. the selection menu
@@ -1486,7 +1438,6 @@
     if (closeUsage()) return 'usage';
     if (settingsReturn === 'files') { const nested = CHATS.closeOverlay(); if (nested) { returnToSettings(); return nested; } settingsReturn = ''; }
     if (setEl && !setEl.hidden) { if (settingsView.back()) return 'settings-page'; closeSettings(); return 'settings'; }
-    if (!ib.hidden) { closeInbox(); return 'inbox'; }
     const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
     if (window.WosSkinFrame?.back()) return 'skin-controls';
     // The first-message guide: once nothing sits above it, Esc/Back dismisses it (= Skip tour) before any navigation.
@@ -1497,15 +1448,14 @@
     if (ws[cur].mono) { toggleMono(); return 'mono'; }
     // Back navigates while recording; only the explicit Cancel control may discard audio.
     const f = focused();
-    if (f?.app === 'review') { const z=window.WosViews.parentOf(f.z);if(z){f.z=z;save();mountReview(f,winEl(f.id));}else closeWin(f.id);return 'review'; }
-    if (['maps','feature'].includes(f?.app)) { closeWin(f.id);return 'view'; }
+    if (f?.app === 'feature') { closeWin(f.id);return 'view'; }
     if (f?.app === 'chats' && f.thread) { const r = CHATS.threadBack(f); syncChatsPane(f.id); winEl(f.id)?.focus({ preventScroll: true }); return r; }
     if (f?.app === 'frame') {
       if (window.WizBrowserBoundary?.enabled) { window.WizBrowserBoundary.back(winEl(f.id)?.querySelector('iframe')); return 'hosted'; }
       const result = window.WizAppServices?.back(winEl(f.id)?.querySelector('iframe'));
       if (['handled', 'pending', 'stay'].includes(result)) return 'hosted';
     }
-    if (f?.appId === 'app-store' || f?.appId === 'system') {
+    if (f?.appId === 'app-store') {
       if (!ws[cur].mono) { closeWin(f.id); return 'store-parent'; }
     }
     return '';
@@ -1522,12 +1472,12 @@
     // Home is the first icon (⌥1); app desktops follow left to right (⌥2…9).
     if (alt && !shift && code === 'Digit1') return hit(() => { if (!e.repeat) goHome(); });
     if ((menu || alt) && !shift && code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
-    if ((menu || alt) && !shift && code === 'KeyT') return hit(() => { if (!e.repeat) { closePalette(); closeInbox(); toggleKeys(false); closeSettings(); closeUsage(); newDesktop(); } });
+    if ((menu || alt) && !shift && code === 'KeyT') return hit(() => { if (!e.repeat) { closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newDesktop(); } });
     if (alt && !shift && (code === 'ArrowUp' || code === 'ArrowDown') && focused()?.app === 'chats') return hit(() => stepThread(focused().id, code === 'ArrowDown' ? 1 : -1));
     // ⌥N new chat; ⌥V new voice chat (⌥V again sends).
-    if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); closeInbox(); toggleKeys(false); closeSettings(); closeUsage(); newChat({ fresh: true }); });
+    if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newChat({ fresh: true }); });
     if (alt && !shift && code === 'Enter') return hit(() => { if (!e.repeat) newChat(); });
-    if (alt && code === 'KeyV') return hit(() => { if (e.repeat) return; closePalette(); closeInbox(); toggleKeys(false); closeSettings(); closeUsage(); talkNew(`${MOD}V`); });
+    if (alt && code === 'KeyV') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); talkNew(`${MOD}V`); });
     // ⌥Space search everything, ⌥O open an app: from anywhere, even while typing.
     if (alt && !shift && code === 'Space') return hit(() => palToggle('all'));
     if (alt && !shift && code === 'KeyO') return hit(() => { if (!e.repeat) palToggle('apps'); });
@@ -1550,7 +1500,7 @@
     {
       const f = focused(), plain = !e.altKey && !e.metaKey && !e.ctrlKey;
       const inList = !!e.target.closest?.('.pane-list'), inSearch = e.target.matches?.('[data-chsearch]');
-      if (f?.app === 'chats' && ib.hidden && keysEl.hidden && plain && !fromFrame) {
+      if (f?.app === 'chats' && keysEl.hidden && plain && !fromFrame) {
         const free = !typing(e.target) || inSearch;
         if (free && (inList || inSearch || !f.thread || e.target === winEl(f.id)) && (k === 'ArrowDown' || k === 'ArrowUp' || (!inSearch && (k === 'j' || k === 'k')))) { if (stepThread(f.id, k === 'ArrowDown' || k === 'j' ? 1 : -1)) return hit(() => {}); }
         if (k === '/' && !typing(e.target)) return hit(() => { const s = winEl(f.id)?.querySelector('[data-chsearch]'); if (s) { s.focus(); s.select(); } });
@@ -1558,13 +1508,6 @@
       }
     }
     if (!e.altKey || e.metaKey || e.ctrlKey) {
-      // Inbox navigation without modifiers.
-      if (!ib.hidden && !typing(e.target)) {
-        const rows = $$('.ib-row[data-thread]', ib);
-        if (k === 'ArrowDown' || k === 'j') return hit(() => { ibSel = Math.min(rows.length - 1, ibSel + 1); renderInbox(); });
-        if (k === 'ArrowUp' || k === 'k') return hit(() => { ibSel = Math.max(0, ibSel - 1); renderInbox(); });
-        if (k === 'Enter' && rows[ibSel]) return hit(() => { closeInbox(); openThread(rows[ibSel].dataset.thread); });
-      }
       return;
     }
     // ⌥ (Option/Alt) keys. Use e.code: on a Mac, ⌥ turns e.key into symbols (⌥V = √).
@@ -1577,7 +1520,7 @@
       else if (target.kind === 'new') newDesktop();
       else { lastWs = cur; goWs(target.index); }
     });
-    if (code === 'KeyI') return hit(() => toggleInbox());
+    if (code === 'KeyI') return hit(() => openChatsList());
     if (code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
     if (code === 'KeyF') return hit(() => { if (!e.repeat) toggleMono(); });
     if (code === 'KeyR' && !shift) return hit(() => { if (!e.repeat) reloadCurrent(); });
@@ -1613,7 +1556,7 @@
 
   /* ---------------- live data ---------------- */
   if (LIVE) LIVE.onChange(() => {
-    paintBar(); renderInbox(); CHATS.markVisibleThreadsSeen();
+    paintBar(); CHATS.markVisibleThreadsSeen();
     for (const id of Object.keys(W)) {
       const w = W[id]; if (w.app !== 'chats' && !CHATS.isHosted(id)) continue;
       const el = winEl(id); if (!el) continue;
@@ -1625,7 +1568,7 @@
     const d = ws[cur]; if (!d.wins.length) { const h = wsEl(cur).querySelector('.home'); if (h) h.innerHTML = homeHtml(cur); }
     if (homeOpen) $('#desktopHome').innerHTML = homeHtml(null);
   });
-  OUTBOX?.onChange(() => { renderInbox(); if (homeOpen) $('#desktopHome').innerHTML = homeHtml(null); else if (!ws[cur].wins.length) { const h = wsEl(cur).querySelector('.home'); if (h) h.innerHTML = homeHtml(cur); } for (const id of ws[cur].wins) { const w = W[id]; if ((w?.app === 'chats' || CHATS.isHosted(id)) && w.thread) { const el = stage.querySelector(`[data-chats="${id}"]`); if (el) CHATS.renderThread(w, el); } } });
+  OUTBOX?.onChange(() => { if (homeOpen) $('#desktopHome').innerHTML = homeHtml(null); else if (!ws[cur].wins.length) { const h = wsEl(cur).querySelector('.home'); if (h) h.innerHTML = homeHtml(cur); } for (const id of ws[cur].wins) { const w = W[id]; if ((w?.app === 'chats' || CHATS.isHosted(id)) && w.thread) { const el = stage.querySelector(`[data-chats="${id}"]`); if (el) CHATS.renderThread(w, el); } } });
   OUTBOX?.onSent((it, res) => {
     if (it.kind === 'new' && LIVE && !LIVE.session(it.sessionId)) {
       LIVE.sessions.unshift({ id: it.sessionId, runtime: 'direct', title: (it.text || 'Voice note').slice(0, 60), status: 'running', runId: res.runId, updatedAt: new Date().toISOString(), lastUserAt: new Date().toISOString(), preview: it.text, source: 'wizard-mobile' });
@@ -1651,7 +1594,7 @@
       const sid = d.thread || (String(path).match(/[?&]session=([^&#]+)/) || [])[1];
       if (sid) return openThread(decodeURIComponent(sid));
       if (/^\/?apps\/?$/.test(path) || /^\/?search\/?$/.test(path)) return openPalette();
-      if (/^\/?inbox\/?$/.test(path)) return openInbox();
+      if (/^\/?inbox\/?$/.test(path)) return openChatsList();
       if (d.app) return openApp(APP[d.app] || findApp(d.app));
       if (/^\/wizard\/?(\?.*)?$/.test(path)) return openApp(APP.wizard);
       const base = String(path).replace(/[#?].*$/, '');
@@ -1709,7 +1652,7 @@
   LIVE?.refresh();
   /* Deep links (core/deeplink.js): ?session= opens the thread in a Chats window, ?view= a screen, ?video= the player.
    * Back/Esc then walks thread → list → stays; the page is never left. */
-  window.WosFeatures.install({review:openReview,maps:openMaps,command:localCommand,context:commandSnapshot,openFeature:(id,opts)=>{closeSettings();newWin({app:'feature',featureId:id,featureOptions:opts,title:window.WosFeatures.entries.find(f=>f.id===id)?.title});}});
+  window.WosFeatures.install({command:localCommand,context:commandSnapshot,openFeature:(id,opts)=>{closeSettings();newWin({app:'feature',featureId:id,featureOptions:opts,title:window.WosFeatures.entries.find(f=>f.id===id)?.title});}});
   window.WosMusic.install({app:()=>APP['wizard-music'],findWin:()=>findWin(w=>w.app==='frame'&&w.appId==='wizard-music')?.id,openMusic:()=>{openApp(APP['wizard-music']);return findWin(w=>w.appId==='wizard-music')?.id;},frameOf:id=>winEl(id)?.querySelector('iframe'),toast});
   // First-message guide (core/tour.js WosTour.desk): once per browser on an alongside install's first launch, or from
   // ?view=tour and the Keys sheet's "Show me again". VM launches keep Setup only (alongsideOnly).
@@ -1719,19 +1662,21 @@
     pane: () => { const f = focused(); return f?.app === 'chats' ? winEl(f.id)?.querySelector('.pane-main') || null : null; } });
   C.deeplink.handle({
     thread: sid => openThread(sid),
-    view(v, section) {
+    view(v, section, installQuery) {
       if (v === 'tour' && window.WosTour?.desk) { closeSettings(); toggleKeys(false); return window.WosTour.desk.start('link'); }
       if (v === 'help') { closeSettings(); return toggleKeys(true); }
       if (v === 'home') return goHome();
-      if (v === 'inbox') return openInbox();
       if (v === 'apps') return openPicker();
+      if (v === 'install') {
+        openApp(APP['app-store']);
+        const w=findWin(w=>w.appId==='app-store');
+        return C.deeplink.installInFrame(w && winEl(w.id)?.querySelector('iframe'),installQuery);
+      }
       if (v === 'store') return openApp(APP['app-store']);
-      if (v === 'system') return openApp(APP.system);
       if (v === 'agents') return openApp(APP.agents);
       if (window.WosFeatures.open(v)) return;
       if (window.WosSettings.route(v, openSettings)) return;
       if (v === 'files') { const a = findApp('files') || APP.files; if (a) return openApp(a); return toast('◇', 'Files isn’t on this Wizard', 1800); }
-      if (v === 'day' || v === 'week' || v === 'month') { const a = APP['v-' + v]; if (a?.url) return openApp(a); }
       openApp(APP.wizard);
       { const f = focused(); if (f?.app === 'chats' && f.thread) { CHATS.chatsBack(f); syncChatsPane(f.id); } }
       const show = (tries = 50) => { const f = focused(); const sec = f && winEl(f.id)?.querySelector(`.pane-list [data-sec="${section}"]`); if (!sec) { if (tries > 0) setTimeout(() => show(tries - 1), 100); return; } if (!sec.classList.contains('open')) sec.querySelector('[data-sectoggle]')?.click(); winEl(f.id)?.querySelector(`.pane-list [data-sec="${section}"]`)?.scrollIntoView({ block: 'start' }); };
@@ -1747,12 +1692,12 @@
     toast,
   });
   C.deeplink.consume();
-  window.WosScenery?.attach({ device: document.body, homeInView: () => (homeOpen || !ws[cur].wins.length) && setEl.hidden && pal.hidden && keysEl.hidden && ib.hidden && usageEl.hidden && !window.WosResources?.state?.panel });
+  window.WosScenery?.attach({ device: document.body, homeInView: () => (homeOpen || !ws[cur].wins.length) && setEl.hidden && pal.hidden && keysEl.hidden && usageEl.hidden && !window.WosResources?.state?.panel });
   new MutationObserver(() => window.WosScenery?.update()).observe(stage, { attributes: true, subtree: true, attributeFilter: ['class', 'hidden'] });
   window.WosSetupLaunch?.boot({ open: id => { const a = APP[id]; if (a) openApp(a); }, alongsideOnly: true,
     firstRunTour: !!DESK_TOUR && !window.WosTour.done(), tour: why => DESK_TOUR?.start(why), markTour: () => window.WosTour?.mark(),
     busy: () => VOICE.state !== 'idle' || !setEl.hidden || !pal.hidden || [...document.querySelectorAll('.ch-compose textarea')].some(t => t.value.trim()) }); // Setup opens itself on first run
-  C.status?.attach({ openInbox, inboxOpen: () => !ib.hidden, current: () => { const f = focused(); return f?.app === 'chats' && f.thread !== '__new__' ? f.thread || '' : ''; } });
+  C.status?.attach({ openChats: openChatsList, current: () => { const f = focused(); return f?.app === 'chats' && f.thread !== '__new__' ? f.thread || '' : ''; } });
   const f0 = focused(); if (f0) setTimeout(() => focusInside(f0.id), 50);
 
   /* "Update ready" pill in the top bar: the same banner as the phone (core/web-update.js), names the thread that made the
@@ -1771,8 +1716,8 @@
     shell: 'desktop', get ws() { return ws; }, get voiceState() { return VOICE.state; },
  get wins() { return W; }, get cur() { return cur; }, live: LIVE, outbox: OUTBOX, chats: CHATS, canSearch: () => !!APP['wizard-search'],
     get homeOpen() { return homeOpen; }, goHome, get palMode() { return pal.hidden ? '' : palMode; },
-    goWs, newDesktop, closeDesktop, closeCurrent, newWin, closeWin, focusWin, moveWin, openApp, openThread, newChat, openPalette, closePalette, openPicker, openInbox, talk, ask, escStep, viewContext,
-    openFiles, openUsage, recordReply, openSearch, openReview, openMaps, localCommand, commandVoice, dictate, toast,
+    goWs, newDesktop, closeDesktop, closeCurrent, newWin, closeWin, focusWin, moveWin, openApp, openThread, newChat, openPalette, closePalette, openPicker, openChatsList, talk, ask, escStep, viewContext,
+    openFiles, openUsage, recordReply, openSearch, localCommand, commandVoice, dictate, toast,
     pauseVoice: () => VOICE.state === 'paused' ? VOICE.resume() : VOICE.pause(),
     openSettings, closeSettings, stepThread, setListW, get listW() { return listW(); },
     get voice() { return VOICE.state; }, get log() { return window.__wuxLog || []; },

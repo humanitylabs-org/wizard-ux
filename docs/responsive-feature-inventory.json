@@ -74,11 +74,6 @@
       "classification": "adapter",
       "reason": "Desktop browser recorder input; cancellation now uses the common recording store."
     },
-    "live-mode.js": {
-      "shell": "phone",
-      "classification": "preview",
-      "reason": "Explicit opt-in experimental simulated Live Mode, not enabled live; no desktop preview yet."
-    },
     "motion/wizard-motion.js": {
       "shell": "phone",
       "classification": "preview",
@@ -123,6 +118,8 @@
     "core/appearance-host.css",
     "core/appearance-host.js",
     "core/apps.js",
+    "core/attach-chip.css",
+    "core/attach-chip.js",
     "core/base.css",
     "core/bound-view.js",
     "core/brand.css",
@@ -145,6 +142,7 @@
     "core/chats.css",
     "core/chats.js",
     "core/commands.js",
+    "core/composer-input.js",
     "core/config.js",
     "core/core.js",
     "core/deeplink.js",
@@ -199,19 +197,16 @@
     "core/usage.js",
     "core/video-desks.js",
     "core/views.css",
-    "core/views.js",
     "core/voice-status.js",
     "core/web-update.js",
     "core/workspace-navigation.js",
     "core/workspace-sync.js",
-    "data.js",
     "favicon.ico",
     "icon-192.png",
     "live.js",
     "manifest.webmanifest",
     "outbox.js",
-    "pwa-install.js",
-    "summaries.js"
+    "pwa-install.js"
   ],
   "coreModules": {
     "core/device-port.js": { "loadedBy": ["phone"], "note": "Optional Android shell transport" },
@@ -698,6 +693,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/attach-chip.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
     "core/commands.js": {
       "loadedBy": [
         "phone",
@@ -705,14 +707,14 @@
       ],
       "note": "Direct entrypoint import"
     },
-    "core/features.js": {
+    "core/composer-input.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
       "note": "Direct entrypoint import"
     },
-    "core/views.js": {
+    "core/features.js": {
       "loadedBy": [
         "phone",
         "desktop"

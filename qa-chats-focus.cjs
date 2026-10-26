@@ -162,14 +162,24 @@ async function routingMatrix(b) {
   sharedSpaces=[{id:'route-space',name:'Route space',agent:spaceAgent,threads:[]}];
   await p.evaluate(()=>window.dispatchEvent(new Event('focus')));
   await p.waitForTimeout(250);
-  for(const voice of [false,true]) {
-   const req=await check(voice?'Space new voice':'Space list +',async()=>{
-    if(!voice){await activate(p,'[data-chfab]:visible');await send();}
+  // Every way of starting a new thread while the Space is open joins it (James, 25 Oct 2026), including a plain
+  // orb tap on the list, which goes through the shell's toAgent path rather than the Chats composer.
+  for(const how of ['typed','voice','orb'].filter(h=>h!=='orb'||spaceAgent==='hermes')) {
+   const req=await check({typed:'Space list +',voice:'Space new voice',orb:'Space orb tap'}[how],async()=>{
+    if(how==='typed'){await activate(p,'[data-chfab]:visible');await send();}
+    else if(how==='orb'&&desktop){await p.locator('#micBtn').click();await p.waitForTimeout(900);await p.locator('#micBtn').click();}
+    else if(how==='orb'){await p.locator('#orbWrap').tap();await p.waitForTimeout(900);await p.locator('#orbWrap').tap();}
     else if(desktop){await p.locator('#generalVoice').click();await p.waitForTimeout(900);await p.locator('#generalVoice').click();}
     else{await p.evaluate(()=>__wos.startVoice('general'));await p.waitForTimeout(900);await p.evaluate(()=>__wos.finishVoice());}
    },'space:route-space');
    const sid=JSON.parse(req?.find(r=>r.path.endsWith('/v1/runs'))?.body||'{}').session_id;
-   ok(!!sid&&sharedSpaces[0]?.threads.includes(sid),mode+' Space '+(voice?'voice':'typed')+' joins durable thread id',sharedSpaces);
+   ok(!!sid&&sharedSpaces[0]?.threads.includes(sid),mode+' Space '+how+' joins durable thread id',sharedSpaces);
+  }
+  // Out of the Space (All in front), a new thread stays out of it.
+  if(spaceAgent==='hermes'){
+   const before=sharedSpaces[0].threads.length;
+   const req=await check('All orb tap',async()=>{if(desktop){await p.locator('#micBtn').click();await p.waitForTimeout(900);await p.locator('#micBtn').click();}else{await p.locator('#orbWrap').tap();await p.waitForTimeout(900);await p.locator('#orbWrap').tap();}},'hermes');
+   ok(!!req&&sharedSpaces[0].threads.length===before,mode+' new thread outside the Space stays out',sharedSpaces);
   }
   }
   if(desktop)await check('Alt+N fresh window',async()=>{await p.keyboard.press('Alt+N');await send();});
@@ -253,6 +263,8 @@ async function pickerAcceptance(browser, mode) {
  await activate(p,'[data-spspace="main-only"]');
  ok((await p.locator('.ch-focus-tab.on:visible').innerText()).includes('Main plans'),mode+' Space replaces agent label');
  ok((await p.locator('.ch-focus-tab.on:visible').getAttribute('data-chfocusopt'))==='agent:hermes',mode+' Space retains agent tab identity');
+ await activate(p,'.ch-focus-strip:visible [data-chfocusopt="all:"]');await activate(p,'.ch-focus-strip:visible [data-chfocusopt="agent:hermes"]');
+ ok((await p.locator('.ch-focus-tab.on:visible').innerText()).includes('Main plans')&&!await p.locator('[data-chspacepicker]').count(),mode+' All then agent tab returns to its last Space');
  await activate(p,'.ch-focus-tab.on:visible');await activate(p,'[data-spall]');
  ok((await p.locator('.ch-focus-tab.on:visible').innerText()).includes('Archimedes'),mode+' All restores agent label');
  const phi=p.locator('.ch-focus-strip:visible [data-chfocusopt="agent:philosopher"]');
@@ -320,6 +332,11 @@ async function soloAcceptance(b) {
    const at=writes.length;await p.locator('.ch-space-form input').fill('First space');await p.locator('.ch-space-form').evaluate(f=>f.requestSubmit());await p.waitForTimeout(400);
    ok(sharedSpaces.length===1&&sharedSpaces[0].threads.includes('main_wos'),mode+' first Space contains the held thread');
    ok(!writes.slice(at).some(w=>w.path.endsWith('/v1/runs')),mode+' row-created Space starts no fill run');
+   const row2=p.locator('[data-chopen]:visible:not([data-chopen="main_wos"])').first(),sid2=await row2.getAttribute('data-chopen');
+   await row2.click({button:'right'});await activate(p,'[data-rsspacepicker]');
+   ok(!await p.locator('[data-spspace].on').count(),mode+' Add picker ticks only Spaces holding this thread');
+   await activate(p,`[data-spspace="${sharedSpaces[0].id}"]`);await p.waitForTimeout(400);
+   ok(sharedSpaces[0].threads.includes(sid2)&&(await p.locator('#toast').innerText()).includes('Added to First space'),mode+' Add to a Space saves and confirms with a toast');
   } finally {await ctx.close();}
   sharedSpaces=[{id:'solo',name:'Solo space',threads:['main_wos']},{id:'reading',name:'Reading',threads:['main_phil']}];
   const r=await boot(b,desktop);
@@ -475,7 +492,14 @@ async function soloAcceptance(b) {
   await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');a.chats.openContextDraft(w.id,'qa-focus:item',{title:'Fixture app item',message:'Fixture public app context'});});
   ok(await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');return !a.chats.winAgent(w)&&w.thread==='__new__';}),mode+' app-item reply keeps its explicit main-agent route');
   await p.evaluate(()=>{const a=window.__wos||window.__wux;if(window.__wos)a.onBack();else a.escStep();});
-  await choose(p,'agent:hermes');ok(JSON.stringify(await ids(p))===JSON.stringify(['main_phil','main_plain','main_wos']),mode+' main excludes other agents');
+  const hermesTab=()=>p.locator('.ch-focus-strip:visible [data-chfocusopt="agent:hermes"]').innerText();
+  // With All in front, the agent tab still names the Space it remembers (James, 25 Oct 2026).
+  await choose(p,'all:');for(const sk of ['obsidian','nebula']){await p.evaluate(sk=>{document.documentElement.dataset.skin=sk;},sk);await capture(p,mode+'-all-remembered-'+sk);}await p.evaluate(()=>{document.documentElement.dataset.skin='obsidian';});ok((await hermesTab()).includes('Wizard OS launch'),mode+' agent tab keeps its remembered Space name under All');
+  await choose(p,'agent:hermes');ok((await p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText()).includes('Wizard OS launch'),mode+' agent tab returns to its remembered Space');
+  await activate(p,'.ch-focus-strip:visible [data-chfocusopt="agent:hermes"]');await activate(p,'[data-spall]');
+  await choose(p,'all:');ok(!(await hermesTab()).includes('Wizard OS launch'),mode+' All Archimedes in the picker clears the remembered Space name');
+  await choose(p,'agent:hermes');
+  ok(JSON.stringify(await ids(p))===JSON.stringify(['main_phil','main_plain','main_wos']),mode+' main excludes other agents');
   // Both typed and held commands go through the same existing grammar and executor.
   for(const typed of [false,true]){
    await p.evaluate(async({typed})=>{const a=window.__wos||window.__wux;if(window.__wos)await a.handleText('focus Wizard OS launch',typed?'auto':'command',typed,300,null);else a.localCommand('focus Wizard OS launch');},{typed});

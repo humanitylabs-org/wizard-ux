@@ -52,12 +52,12 @@
       if (st.doc && !valid(st, st.doc)) reset(st);
     }
   }
-  function attach(frame, { appId, path, openThread, openContextDraft, isVisible, readingStorage } = {}) {
+  function attach(frame, { appId, path, openThread, openContextDraft, isVisible, back, readingStorage } = {}) {
     if (window.WizBrowserBoundary?.enabled) return window.WizBrowserBoundary.attach(frame);
     frames.get(frame)?.detach();
     if (!frame || frame.tagName !== 'IFRAME' || !appId || !path) return () => {};
     let url; try { url = new URL(path, ORIGIN); } catch (_) { return () => {}; }
-    const st = { frame, appId, url, openThread, openContextDraft, isVisible, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
+    const st = { frame, appId, url, openThread, openContextDraft, isVisible, back, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
     if (!registered(st)) return () => {};
     const load = () => { if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); restoreReturn(st); };
     st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); if (st.badged) setBadge(st.appId, 0); };
@@ -190,7 +190,30 @@
       titlebar: Object.freeze({ set(list) { check(); return setTools(st, list); },
         shown() { check(); const b = barOf(st)?.querySelector(':scope > .wtools'); return !!b && b.getClientRects().length > 0 && b.offsetHeight > 0; } }),
       view: Object.freeze({ isVisible() { check(); return !document.hidden && st.isVisible?.() === true; } }),
-      nav: Object.freeze({ threadAgents: true, openContextDraft(data) {
+      /* Photos and videos an app shows open in Wizard's one media viewer (pinch/double-tap zoom, pan, swipe between
+       * items, Save/Share, Back/Esc closes) above the app, exactly as in Chats (James, 26 Oct 2026). Only this app's
+       * own origin (or its blob: URLs) is opened; relative URLs resolve against the app's document. */
+      media: Object.freeze({ view(items, index = 0) {
+        check();
+        if (st.isVisible?.() !== true || !window.WosChat?.viewer || !Array.isArray(items)) return false;
+        const base = source.location.href, clean = [], list = items.slice(0, 500), want = Math.floor(+index) || 0;
+        let i = want >= list.length ? Infinity : 0; // past the end (stale index, intake cap) still clamps to the last item
+        for (const [n, it] of list.entries()) {
+          if (n === want) i = clean.length; // the tapped item keeps its place after unsafe entries are dropped
+          let u; try { u = new URL(String(it?.url || ''), base); } catch (_) { continue; }
+          const own = u.origin === location.origin && /^https?:$/.test(u.protocol);
+          const blob = u.protocol === 'blob:' && u.href.startsWith('blob:' + location.origin + '/');
+          if (!own && !blob) continue;
+          const kind = it?.kind === 'video' ? 'video' : 'image';
+          clean.push({ url: u.href, kind, name: String(it?.name || '').slice(0, 200), mime: String(it?.mime || (kind === 'video' ? 'video/mp4' : 'image/jpeg')).slice(0, 100) });
+        }
+        return clean.length ? window.WosChat.viewer.open(clean, Math.max(0, Math.min(clean.length - 1, i))) === true : false;
+      } }),
+      nav: Object.freeze({ threadAgents: true,
+      /* The app finished what the owner came for (dismissed, archived, saved, deleted): take one Back past the app's
+       * own views, landing on the previous screen exactly as the shell's Back would (James, 25 Oct 2026). */
+      back() { check(); if (st.isVisible?.() !== true || typeof st.back !== 'function') return false; return st.back() === true; },
+      openContextDraft(data) {
         check();
         if (st.appId !== 'notifications' || st.isVisible?.() !== true || typeof st.openContextDraft !== 'function') throw fault('Context draft unavailable');
         if (!data || typeof data.id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(data.id) || typeof data.title !== 'string' || data.title.length > 1000 || typeof data.message !== 'string' || data.message.length > 32000) throw fault('Invalid notification context');

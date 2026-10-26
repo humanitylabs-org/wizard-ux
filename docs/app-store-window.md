@@ -1,5 +1,7 @@
 # App Store window candidate (James-approved Store slice)
 
+For the current source labels, installed-only rows, selected link-install preview/share contract and acceptance commands, see [Store sources and install links](store-sources.md). The candidate notes below describe the earlier window extraction, before selected installs were enabled.
+
 ## Entry and scope
 
 - Private phone: `${QA_ORIGIN}/wizard-os-home/?shell=phone&view=apps` → My Apps → Get apps. Set `QA_ORIGIN` to an isolated tailnet preview; the original custom domain is retired.
