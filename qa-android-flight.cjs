@@ -20,8 +20,10 @@ async function list(p){await p.evaluate(()=>{let w=Object.values(__wos.wins).fin
  try{
   ok(app==='ai.wizards.os.qa','isolated QA APK package, not owner app');
   adb('reverse','tcp:9397','tcp:9397');adb('shell','am','force-stop',app);
-  adb('shell','run-as',app,'mkdir','-p','shared_prefs');
-  execFileSync(adbBin,['exec-in','run-as',app,'tee','shared_prefs/wizard_server.xml'],{input:'<?xml version="1.0" encoding="utf-8" standalone="yes"?><map><string name="origin">http://localhost:9397</string></map>',timeout:15000});
+  // Debug/QA builds read the fake Wizard address from files/qa_home.txt (AppState.qaOrigin), never the owner setting.
+  adb('shell','run-as',app,'mkdir','-p','files');
+  for(const f of ['qa_home.txt','qa_origin.txt'])execFileSync(adbBin,['exec-in','run-as',app,'tee','files/'+f],{input:'http://localhost:9397',timeout:15000});
+  ok(adb('shell','run-as',app,'cat','files/qa_home.txt').trim()==='http://localhost:9397','QA app points only at the loopback fake Wizard');
   adb('shell','am','start','-n',app+'/ai.wizards.os.MainActivity');
   let {b,p}=await attach();browser=b;await p.waitForFunction(()=>window.__wos?.live?.ok,{},{timeout:60000});
   await p.evaluate(()=>{localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.done','1');});
