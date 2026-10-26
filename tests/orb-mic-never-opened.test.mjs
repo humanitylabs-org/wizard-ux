@@ -113,10 +113,11 @@ test('a browser bar over the bottom of the page lifts the dock, orb and Cancel a
   vv.height = 579; vvl.resize();
   assert.equal(style['--vv-b'], '80px', 'Safari\'s bottom bar covers 80 px: everything lifts by 80 px');
   ctx.document.activeElement = { tagName: 'TEXTAREA' }; vv.height = 300; vvl.resize();
-  assert.equal(style['--vv-b'], '0px', 'typing: the keyboard replaces the bar, so no bar inset stays on top of the keyboard handling (Codex P2 on #567)');
-  vv.height = 579; vvl.resize(); assert.equal(style['--vv-b'], '0px', 'still typing: never re-lifted');
-  ctx.document.activeElement = null; vvl.resize();
-  assert.equal(style['--vv-b'], '80px', 'keyboard gone, the bar is back: lift again');
+  assert.equal(style['--vv-b'], '0px', 'the on-screen keyboard (taller than any bar) is not a bar, and no stale bar inset stays on top of it (Codex P2 on #567)');
+  vv.height = 579; vvl.resize();
+  assert.equal(style['--vv-b'], '80px', 'a field still focused with no on-screen keyboard (hardware keyboard): Safari\'s bar is measured, not ignored');
+  ctx.document.activeElement = null; vv.height = 659 - 161; vvl.resize();
+  assert.equal(style['--vv-b'], '0px', 'taller than any browser bar: treated as a keyboard');
   vv.height = 659; vvl.resize();
   assert.equal(style['--vv-b'], '0px');
   // Installed app (standalone) and the native shells have no browser bar.
