@@ -110,7 +110,7 @@
   }
 
   // DELETE with APK A: installed legacy bridge method names, never UI or grammar.
-  window.WizDeviceLegacy = [{appId:'usuals', path:'/usuals/', probe:'usuals', methods:[
+  window.WizDeviceLegacy = [{appId:'usuals', path:'/usuals/', probe:'usuals', phoneOnly:true, methods:[
     'usuals', 'usualsTeach', 'usualsCancel', 'usualsKeepName', 'usualsRun', 'usualsDelete', 'usualsSave', 'usualsMatch', 'voiceTypingSettings'
   ]}];
   window.__wosUsuals = () => window.WizAndroidRelay?.resume();
