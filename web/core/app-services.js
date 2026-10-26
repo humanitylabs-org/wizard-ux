@@ -228,8 +228,9 @@
       openContextDraft(data) {
         check();
         // Installed Wizard apps may attach bounded reference data to a fresh MAIN Chats draft, never send or run.
-        // Identity and namespace come from the attached live frame, never from the caller's payload.
-        if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(st.appId) || !apps().some(a => a.id === st.appId && a.kind === 'wizard') || st.isVisible?.() !== true || typeof st.openContextDraft !== 'function') throw fault('Context draft unavailable');
+        // Identity and namespace come from the attached live frame, never from the caller's payload. The id grammar
+        // matches WosChat.reply.clean's key namespace, so every admitted app can produce a valid reply key.
+        if (!/^[a-z][a-z0-9-]{0,40}$/.test(st.appId) || !apps().some(a => a.id === st.appId && a.kind === 'wizard') || st.isVisible?.() !== true || typeof st.openContextDraft !== 'function') throw fault('Context draft unavailable');
         if (!data || typeof data.id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(data.id) || typeof data.title !== 'string' || data.title.length > 1000 || typeof data.message !== 'string' || data.message.length > 32000) throw fault('Invalid app context');
         // A Reply: the composer stays empty; the item rides beside the draft and is framed as quoted, untrusted
         // reference DATA only in the message that is sent (WosChat.reply).
