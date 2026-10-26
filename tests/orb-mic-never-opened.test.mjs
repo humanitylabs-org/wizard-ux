@@ -98,7 +98,8 @@ test('a microphone request the browser never answers times out into the same vis
 });
 
 test('a browser bar over the bottom of the page lifts the dock, orb and Cancel above it (visual viewport)', () => {
-  assert.match(CSS, /--safe-b: calc\(env\(safe-area-inset-bottom, 0px\) \+ var\(--vv-b, 0px\)\);/);
+  // The covered strip is measured from the shell's bottom, so it already includes the home indicator: a union, not a sum (Codex P2 on #567).
+  assert.match(CSS, /--safe-b: max\(env\(safe-area-inset-bottom, 0px\), var\(--vv-b, 0px\)\);/);
   const body = fn('  function browserBarInset() {', '  // The microphone never opened');
   const listeners = {}, vvl = {}, style = {};
   const vv = { offsetTop: 0, height: 659, addEventListener: (t, f) => (vvl[t] = f) };
