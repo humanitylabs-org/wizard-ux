@@ -32,7 +32,10 @@ function cdpPage(wsUrl){
     waitFor:async(o={})=>waitForFunction(`!!${find}`,undefined,{timeout:o.timeout||30000}),
     click:async()=>{await api.waitFor();const r=await evaluate(`(()=>{const e=${find};e.scrollIntoView({block:'center'});const b=e.getBoundingClientRect();return {x:b.left+b.width/2,y:b.top+b.height/2,dpr:devicePixelRatio};})()`);
      // A real Android tap (adb input) on the WebView's on-screen bounds: WebView never acknowledges CDP touch input.
-     const o=webviewOrigin();adb('shell','input','tap',String(Math.round(o.x+r.x*r.dpr)),String(Math.round(o.y+r.y*r.dpr)));await pause(400);},
+     const o=webviewOrigin(),tx=Math.round(o.x+r.x*r.dpr),ty=Math.round(o.y+r.y*r.dpr);
+     await evaluate(`(()=>{window.__taps=[];for(const t of ['pointerdown','pointerup','click','touchstart'])document.addEventListener(t,e=>__taps.push([t,(e.target.closest('[data-flight-download],button')||e.target).outerHTML.slice(0,80),Math.round(e.clientX||0),Math.round(e.clientY||0),e.defaultPrevented]),true);return 1;})()`);
+     adb('shell','input','tap',String(tx),String(ty));await pause(600);
+     const taps=await evaluate('JSON.stringify(window.__taps)');console.log('TAP',sel,JSON.stringify(r),tx,ty,taps,'flight busy/line:',await evaluate(`document.querySelector('[data-flight-ready]')?.textContent||''`));},
     fill:async v=>{await api.waitFor();await evaluate(`(()=>{const e=${find};e.focus();const d=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');d.set.call(e,${JSON.stringify(v)});e.dispatchEvent(new Event('input',{bubbles:true}));return true;})()`);},
     innerText:async()=>{await api.waitFor();return evaluate(`${find}.innerText`);}};return api;};
   const page={evaluate,waitForFunction,locator:sel=>loc(sel),getByText:t=>loc('button,a,div,span,p,h1,h2,h3,li,[role]',t)};
