@@ -35,8 +35,9 @@ APK = P(sys.argv[1]); GRAB = P(sys.argv[2]); WEB = P(sys.argv[3])
 job = BASE / 'qa' / ('wos-usuals-' + uuid.uuid4().hex[:8]); job.mkdir(parents=True)
 OUT = P(sys.argv[4]) if len(sys.argv) > 4 else job / 'shots'; OUT.mkdir(parents=True, exist_ok=True)
 env = os.environ.copy(); env.update(JAVA_HOME=java_home(),
-    ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
-env['PATH'] = env['JAVA_HOME'] + '/bin:' + env['PATH']; (job / 'avd').mkdir()
+    ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'), ANDROID_EMULATOR_HOME=str(job / 'avd'), ANDROID_USER_HOME=str(job / 'android-user'))
+env['PATH'] = env['JAVA_HOME'] + '/bin:' + env['PATH']; (job / 'avd').mkdir(); (job / 'android-user').mkdir()
+AVD = job.name
 env['ANDROID_ADB_SERVER_PORT'] = os.environ.get('QA_ADB_PORT', '5048')
 env.pop('ADB_SERVER_SOCKET', None)
 ADB = str(SDK / 'platform-tools/adb'); PORT = int(os.environ.get('QA_EMULATOR_PORT', '5680')); S = f'127.0.0.1:{PORT+1}'; DEVTOOLS = int(os.environ.get('QA_DEVTOOLS_PORT', '9361')); FAKE = int(os.environ.get('QA_FAKE_PORT', '18791'))
@@ -244,11 +245,11 @@ with (BASE / 'worker.lock').open('a') as lock:
                 if probe.connect_ex(('127.0.0.1', port)) == 0: raise RuntimeError(f'QA port {port} already belongs to another process')
         srv = http.server.ThreadingHTTPServer(('127.0.0.1', FAKE), Fake)
         threading.Thread(target=srv.serve_forever, daemon=True).start()
-        sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'us', '-k', f'system-images;android-35;google_apis;{ABI}', '-d', 'pixel_7', '-p', job / 'dev', stdin='no\n')
+        sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', AVD, '-k', f'system-images;android-35;google_apis;{ABI}', '-d', 'pixel_7', '-p', job / 'dev', stdin='no\n')
         sh(ADB, 'start-server')
         if COMMANDS[-1]['code']: raise RuntimeError('Private ADB startup failed')
         adb_owned = True
-        em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'us', '-port', str(PORT), '-accel', 'on', '-no-window', '-no-snapshot', '-no-audio', *(['-gpu', 'swangle', '-feature', '-Vulkan,-GLDirectMem'] if sys.platform.startswith('linux') else ['-gpu', 'swiftshader_indirect']), '-verbose', '-memory', '2560', '-cores', '4'], env=env, stdout=open(job / 'em.log', 'w'), stderr=subprocess.STDOUT)
+        em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', AVD, '-port', str(PORT), '-accel', 'on', '-no-window', '-no-snapshot', '-no-audio', *(['-gpu', 'swangle', '-feature', '-Vulkan,-GLDirectMem'] if sys.platform.startswith('linux') else ['-gpu', 'swiftshader_indirect']), '-verbose', '-memory', '2560', '-cores', '4'], env=env, stdout=open(job / 'em.log', 'w'), stderr=subprocess.STDOUT)
         for _ in range(120):
             if em.poll() is not None: raise RuntimeError('emulator exited ' + str(em.returncode))
             if sx('getprop sys.boot_completed').strip() == '1': break
@@ -518,6 +519,7 @@ with (BASE / 'worker.lock').open('a') as lock:
             if adb_owned: (OUT / 'logcat.txt').write_text(sx('logcat -d'))
         except Exception: pass
         if em:
+            (OUT / 'emulator-exit-before-cleanup.json').write_text(json.dumps({'returncode': em.poll()}))
             try: sh(ADB, '-s', f'emulator-{PORT}', 'emu', 'kill'); em.wait(40)
             except Exception: em.terminate(); em.wait(20)
         import shutil
