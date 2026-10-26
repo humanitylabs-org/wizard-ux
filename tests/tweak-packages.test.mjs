@@ -103,6 +103,28 @@ test('overview mode is capability gated, revoked on teardown, and stale handles 
   assert.equal(f.overview.hold,'arrange'); await f.clear(); assert.equal(f.overview,null);
   release(); release(); api.overview.use({hold:'arrange',appAction:'home-screen',appHold:false}); assert.equal(f.overview,null);
 });
+test('window refresh is layout+nav gated, revoked on teardown, and stale handles cannot reactivate it', async () => {
+  const f=fixture(); let api;
+  f.host._test.setImporter(async()=>({default:a=>{api=a;return()=>{};}}));
+  await f.mount('miguel/hidden-pin'); assert.equal(api.windowRefresh,undefined);
+  await f.mount('miguel/refresh-button'); assert.equal(f.windowRefresh,null);
+  assert.throws(()=>api.windowRefresh.use({}),/Invalid window refresh mode/);
+  const release=api.windowRefresh.use({pull:false,extra:1}); assert.deepEqual({...f.windowRefresh},{pull:false});
+  release(); release(); assert.equal(f.windowRefresh,null);
+  api.windowRefresh.use({pull:true}); assert.equal(f.windowRefresh.pull,true);
+  await f.clear(); assert.equal(f.windowRefresh,null);
+  api.windowRefresh.use({pull:false}); assert.equal(f.windowRefresh,null);
+});
+test('stock shell: no ↻ in window bars and pull-to-refresh stays unless a package holds window refresh', () => {
+  const app=read('web/app.js'), chats=read('web/core/chats.js');
+  assert.match(app,/\$\{refreshModes\.length \? RELOAD_BTN : ''\}<button class="wb" data-wact="full"/);
+  assert.equal((app.match(/data-wact="reload"/g)||[]).length,2,'only RELOAD_BTN markup and its sync selector');
+  assert.match(app,/pullRefresh: \(\) => !refreshModes\.some\(m => m\.pull === false\)/);
+  assert.match(app,/windowRefresh: windowRefreshAdapter/);
+  assert.match(app,/fresh\.style\.cssText = el\.style\.cssText; el\.replaceWith\(fresh\); mountWin\(w, fresh\); applyLayout\(deskOf\(id\)\);/,'a remounted window keeps its tile placement');
+  assert.match(chats,/if \(H\.pullRefresh\?\.\(\) === false\) return;/);
+  assert.doesNotMatch(app+chats,/refresh-button/,'core never names the package');
+});
 test('layout handles become inert on disposal and their cleanup is idempotent', async () => {
   const f = fixture(); let api;
   f.host._test.setImporter(async () => ({default:a=>{api=a;return()=>{};}}));
