@@ -24,7 +24,7 @@ public class AppsPolicyTest {
 
     @Test
     public void onlyAllowlistedMethods() {
-        for (String m : new String[]{"list", "icon", "launch", "openPlay", "appInfo", "uninstall", "install", "status"}) assertTrue(m, AppsPolicy.method(m));
+        for (String m : new String[]{"list", "icon", "launch", "openPlay", "appInfo", "uninstall", "install", "status", "scheduleUpdates"}) assertTrue(m, AppsPolicy.method(m));
         for (String m : new String[]{"", "exec", "installUrl", "LIST", "evaluate", null}) assertFalse(String.valueOf(m), AppsPolicy.method(m));
     }
 
@@ -79,14 +79,12 @@ public class AppsPolicyTest {
     }
 
     @Test
-    public void badgesAndOwnership() {
-        assertEquals("Wizard", AppsPolicy.badge(false, SELF, null, SELF));
-        assertEquals("Wizard", AppsPolicy.badge(false, "dev.imranr.obtainium", SELF, SELF));
-        assertEquals("Play", AppsPolicy.badge(false, "com.android.vending", "com.android.vending", SELF));
-        assertEquals("Obtainium", AppsPolicy.badge(false, "dev.imranr.obtainium", null, SELF));
-        assertEquals("Other", AppsPolicy.badge(false, "com.android.shell", null, SELF));
-        assertEquals("System", AppsPolicy.badge(true, null, null, SELF));
-        assertEquals("Play", AppsPolicy.badge(true, "com.android.vending", null, SELF));
+    public void ownershipAndUpdates() {
+        assertTrue(AppsPolicy.owned(SELF, null, SELF));
+        assertTrue(AppsPolicy.owned("dev.imranr.obtainium", SELF, SELF));
+        assertFalse(AppsPolicy.owned("com.android.vending", "com.android.vending", SELF));
+        assertTrue(AppsPolicy.scheduleOnList(0));
+        assertFalse(AppsPolicy.scheduleOnList(1));
         assertTrue(AppsPolicy.autoUpdate(true, true, 81, 82));
         assertFalse(AppsPolicy.autoUpdate(true, false, 81, 82));
         assertFalse(AppsPolicy.autoUpdate(true, true, 82, 82));

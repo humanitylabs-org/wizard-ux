@@ -19,7 +19,7 @@ public final class AppsPolicy {
 
     /** Methods the shell relay may forward from the Android Apps view (and nothing else). */
     public static final Set<String> METHODS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
-            "list", "icon", "launch", "openPlay", "appInfo", "uninstall", "install", "status")));
+            "list", "icon", "launch", "openPlay", "appInfo", "uninstall", "install", "status", "scheduleUpdates")));
 
     public static final String APK_PATH = "/android-apps/apk/";
     public static final long MAX_BYTES = 250L * 1024 * 1024;
@@ -100,14 +100,8 @@ public final class AppsPolicy {
         return self != null && (self.equals(installer) || self.equals(updateOwner));
     }
 
-    /** Badge for the list: who keeps the app updated. */
-    public static String badge(boolean system, String installer, String updateOwner, String self) {
-        if (owned(installer, updateOwner, self)) return "Wizard";
-        if (system && (installer == null || installer.isEmpty())) return "System";
-        if ("com.android.vending".equals(installer)) return "Play";
-        if ("dev.imranr.obtainium".equals(installer)) return "Obtainium";
-        return system ? "System" : "Other";
-    }
+    /** Callers before message v1 (shell relay without {v}) relied on list scheduling the update job; v1 asks with scheduleUpdates. */
+    public static boolean scheduleOnList(int v) { return v < 1; }
 
     /** Background update job: install this update silently? */
     public static boolean autoUpdate(boolean installed, boolean owned, long installedVc, long offeredVc) {
