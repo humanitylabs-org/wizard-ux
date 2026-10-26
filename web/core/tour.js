@@ -87,7 +87,7 @@
     el.dataset.step = String(n);
     [...el.querySelectorAll('.tr-steps i')].forEach((d, i) => d.classList.toggle('on', i < n));
     H.orbWrap.classList.toggle('tr-pulse', n < DONE && !typed);
-    if (n < DONE) H.goHome();
+    if (n < DONE) { H.goHome(); $('.tr-copy', el).style.top = ''; }
     setCopy(BEATS[n].copy(), sub(n), fallback(n));
     $('.tr-stage', el).innerHTML = '';
     if (n < DONE) requestAnimationFrame(() => { if (step === n) spot('orb'); });
@@ -103,13 +103,25 @@
    * narrow or short screen (iPhone in Telegram) never runs the rows into each other. */
   function endLayout() {
     if (!el || step !== DONE) return;
-    const top = H.device.getBoundingClientRect().top, c = $('.tr-copy', el)?.getBoundingClientRect();
-    let y = c ? c.bottom - top + 26 : 0;
-    for (const sel of ['.tr-glyphs', '.tr-mic', '.tr-tapon']) {
-      const x = $(sel, el); if (!x || !y) continue;
-      x.style.top = Math.round(y) + 'px'; y += x.getBoundingClientRect().height + (sel === '.tr-glyphs' ? 22 : 14);
-    }
+    const copy = $('.tr-copy', el), box = H.device.getBoundingClientRect();
+    if (!copy) return;
+    const rows = ['.tr-glyphs', '.tr-mic', '.tr-tapon'].map(sel => $(sel, el)).filter(Boolean);
+    const gap = box.height < 500 ? 8 : 22;
+    const style = getComputedStyle(el);
+    const topBound = Math.max(64, parseFloat(style.paddingTop) || 0);
+    const bottomBound = Math.max(16, parseFloat(style.paddingBottom) || 0);
+    const height = copy.getBoundingClientRect().height + rows.reduce((n, x) => n + x.getBoundingClientRect().height + gap, 0);
+    // Resolved CSS padding includes the native safe areas. If the stack cannot fit, the padded tour scrolls
+    // far enough to clear the home indicator, without placing the copy under the top controls.
+    let y = Math.max(topBound, Math.min(box.height * .28, box.height - bottomBound - height));
+    copy.style.top = Math.round(y) + 'px';
+    y += copy.getBoundingClientRect().height + gap;
+    for (const x of rows) { x.style.top = Math.round(y) + 'px'; y += x.getBoundingClientRect().height + gap; }
+    // Absolute rows do not extend a scroll container's padding in WebKit. A real flow spacer reserves
+    // the complete measured stack, so the last row can scroll above the native bottom inset.
+    el.style.setProperty('--tr-scroll-height', Math.ceil(Math.max(0, y - gap - topBound)) + 'px');
   }
+  window.addEventListener('resize', endLayout);
   const glyph = (k, a, b) => `<div class="tr-g ${k}"><span class="tr-gi ${k}"><i></i></span><b>${a}</b><small>${b}</small></div>`;
   function nudge(t, ms = 2200) { if (!active()) return; const n = step; setCopy(t, sub(n), fallback(n)); H.vib(6); later(() => { if (active() && step === n && !busy && !inbox) setCopy(BEATS[n].copy(), sub(n), fallback(n)); }, ms); }
 
