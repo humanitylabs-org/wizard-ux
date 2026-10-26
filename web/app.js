@@ -2048,7 +2048,7 @@
     }
     const f = el.querySelector('.wbody iframe');
     if (f) { try { f.contentWindow.location.reload(); } catch (e) { f.src = f.src; return toast('↻', 'Restarted', 1100); } }
-    else { const fresh = makeWin(w); fresh.className = el.className; el.replaceWith(fresh); mountWin(w, fresh); }
+    else { const fresh = makeWin(w); fresh.className = el.className; fresh.style.cssText = el.style.cssText; el.replaceWith(fresh); mountWin(w, fresh); applyLayout(deskOf(id)); }
     toast('↻', 'Refreshed', 900);
   }
   let toastT = 0;

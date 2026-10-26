@@ -121,6 +121,7 @@ test('stock shell: no ↻ in window bars and pull-to-refresh stays unless a pack
   assert.equal((app.match(/data-wact="reload"/g)||[]).length,2,'only RELOAD_BTN markup and its sync selector');
   assert.match(app,/pullRefresh: \(\) => !refreshModes\.some\(m => m\.pull === false\)/);
   assert.match(app,/windowRefresh: windowRefreshAdapter/);
+  assert.match(app,/fresh\.style\.cssText = el\.style\.cssText; el\.replaceWith\(fresh\); mountWin\(w, fresh\); applyLayout\(deskOf\(id\)\);/,'a remounted window keeps its tile placement');
   assert.match(chats,/if \(H\.pullRefresh\?\.\(\) === false\) return;/);
   assert.doesNotMatch(app+chats,/refresh-button/,'core never names the package');
 });
