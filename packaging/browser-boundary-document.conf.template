@@ -1,0 +1,14 @@
+# Generated only when WIZARD_BROWSER_BOUNDARY=1. Never serve this configuration.
+if ($http_sec_fetch_dest != document) { return 403; }
+if ($http_sec_fetch_mode != navigate) { return 403; }
+limit_except GET { deny all; }
+add_header Cache-Control "private, no-store" always;
+add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' blob: data:; media-src 'self' blob:; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" always;
+add_header Cross-Origin-Opener-Policy "noopener-allow-popups" always;
+add_header X-Frame-Options "DENY" always;
+add_header Referrer-Policy "no-referrer" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-Robots-Tag "noindex, nofollow" always;
+add_header Permissions-Policy "camera=(), geolocation=(), microphone=(self), payment=(), usb=()" always;
+sub_filter_once on;
+sub_filter '<head>' '<head><meta name="wizard-shell-token" content="${WIZARD_SHELL_TOKEN}"><script src="core/browser-boundary.js"></script>';
