@@ -9,12 +9,17 @@ const ok=(c,n)=>{assert(c,n);console.log('PASS '+n)};
 const shot=n=>fs.writeFileSync(path.join(out,n+'.png'),execFileSync(adbBin,['exec-out','screencap','-p'],{timeout:20000}));
 // Android WebView rejects Playwright's connectOverCDP (Browser.setDownloadBehavior: "Browser context
 // management is not supported"), so this test drives the page over its own CDP websocket.
+function webviewOrigin(){
+ adb('shell','uiautomator','dump','/data/local/tmp/wv.xml');const x=adb('shell','cat','/data/local/tmp/wv.xml');
+ const m=[...x.matchAll(/class="android\.webkit\.WebView"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/g)].map(m=>m.slice(1).map(Number)).sort((a,b)=>(b[2]-b[0])*(b[3]-b[1])-(a[2]-a[0])*(a[3]-a[1]))[0];
+ if(!m)throw Error('WebView bounds not found on screen');return {x:m[0],y:m[1]};
+}
 function cdpPage(wsUrl){
  return new Promise((resolve,reject)=>{
   const ws=new WebSocket(wsUrl);let id=0;const waits=new Map();
   ws.onmessage=ev=>{const m=JSON.parse(ev.data);if(m.method==='Runtime.consoleAPICalled'||m.method==='Runtime.exceptionThrown'){try{fs.appendFileSync(path.join(out,'page-console.txt'),JSON.stringify(m.params.args?.map(a=>a.value??a.description)||m.params.exceptionDetails?.exception?.description||m.params)+'\n');}catch(_){}}if(m.id&&waits.has(m.id)){const w=waits.get(m.id);waits.delete(m.id);m.error?w.reject(Error(m.error.message)):w.resolve(m.result);}};
   ws.onerror=e=>reject(Error('CDP websocket error'));
-  const send=(method,params={})=>new Promise((res,rej)=>{const i=++id;waits.set(i,{resolve:res,reject:rej});ws.send(JSON.stringify({id:i,method,params}));});
+  const send=(method,params={})=>new Promise((res,rej)=>{const i=++id;const t=setTimeout(()=>{waits.delete(i);rej(Error('CDP '+method+' did not answer in 20 s'))},20000);waits.set(i,{resolve:v=>{clearTimeout(t);res(v)},reject:e=>{clearTimeout(t);rej(e)}});ws.send(JSON.stringify({id:i,method,params}));});
   const evaluate=async(fn,arg)=>{const expr=typeof fn==='function'?`(${fn})(${JSON.stringify(arg===undefined?null:arg)})`:fn;
    const r=await send('Runtime.evaluate',{expression:expr,awaitPromise:true,returnByValue:true});
    if(r.exceptionDetails)throw Error('page: '+(r.exceptionDetails.exception?.description||r.exceptionDetails.text));return r.result.value;};
@@ -23,9 +28,9 @@ function cdpPage(wsUrl){
   const loc=(sel,text)=>{const find=`(()=>{const els=[...document.querySelectorAll(${JSON.stringify(sel)})].filter(e=>e.getClientRects().length);return ${text==null?'els[0]':`els.find(e=>e.textContent.trim()===${JSON.stringify(text)})`}||null;})()`;
    const api={first:()=>api,
     waitFor:async(o={})=>waitForFunction(`!!${find}`,undefined,{timeout:o.timeout||30000}),
-    click:async()=>{await api.waitFor();const r=await evaluate(`(()=>{const e=${find};e.scrollIntoView({block:'center'});const b=e.getBoundingClientRect();return {x:b.left+b.width/2,y:b.top+b.height/2};})()`);
-     // Real touch input: Wizard handles taps from pointer events, which a synthetic element.click() never produces.
-     await send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:r.x,y:r.y}]});await pause(60);await send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await pause(150);},
+    click:async()=>{await api.waitFor();const r=await evaluate(`(()=>{const e=${find};e.scrollIntoView({block:'center'});const b=e.getBoundingClientRect();return {x:b.left+b.width/2,y:b.top+b.height/2,dpr:devicePixelRatio};})()`);
+     // A real Android tap (adb input) on the WebView's on-screen bounds: WebView never acknowledges CDP touch input.
+     const o=webviewOrigin();adb('shell','input','tap',String(Math.round(o.x+r.x*r.dpr)),String(Math.round(o.y+r.y*r.dpr)));await pause(400);},
     fill:async v=>{await api.waitFor();await evaluate(`(()=>{const e=${find};e.focus();const d=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');d.set.call(e,${JSON.stringify(v)});e.dispatchEvent(new Event('input',{bubbles:true}));return true;})()`);},
     innerText:async()=>{await api.waitFor();return evaluate(`${find}.innerText`);}};return api;};
   const page={evaluate,waitForFunction,locator:sel=>loc(sel),getByText:t=>loc('button,a,div,span,p,h1,h2,h3,li,[role]',t)};
