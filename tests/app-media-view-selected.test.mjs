@@ -26,4 +26,6 @@ test('a dropped tapped entry falls to the next safe item, and plain lists keep t
   f.service.media.view([{url: 'a.jpg'}, {url: 'b.jpg'}, {url: 'c.jpg'}], 2);
   assert.equal(f.opened[1].i, 2);
   assert.equal(f.service.media.view([{url: 'https://evil.example/x.jpg'}], 0), false);
+  f.service.media.view([{url: 'a.jpg'}, {url: 'b.jpg'}], 9);
+  assert.equal(f.opened[2].i, 1, 'an index past the end opens the last item, as before');
 });

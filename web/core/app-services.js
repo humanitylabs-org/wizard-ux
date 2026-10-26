@@ -195,8 +195,9 @@
       media: Object.freeze({ view(items, index = 0) {
         check();
         if (st.isVisible?.() !== true || !window.WosChat?.viewer || !Array.isArray(items)) return false;
-        const base = source.location.href, clean = [], want = Math.floor(+index) || 0; let i = 0;
-        for (const [n, it] of items.slice(0, 500).entries()) {
+        const base = source.location.href, clean = [], list = items.slice(0, 500), want = Math.floor(+index) || 0;
+        let i = want >= list.length ? Infinity : 0; // past the end (stale index, intake cap) still clamps to the last item
+        for (const [n, it] of list.entries()) {
           if (n === want) i = clean.length; // the tapped item keeps its place after unsafe entries are dropped
           let u; try { u = new URL(String(it?.url || ''), base); } catch (_) { continue; }
           const own = u.origin === location.origin && /^https?:$/.test(u.protocol);
