@@ -23,7 +23,9 @@ function cdpPage(wsUrl){
   const loc=(sel,text)=>{const find=`(()=>{const els=[...document.querySelectorAll(${JSON.stringify(sel)})].filter(e=>e.getClientRects().length);return ${text==null?'els[0]':`els.find(e=>e.textContent.trim()===${JSON.stringify(text)})`}||null;})()`;
    const api={first:()=>api,
     waitFor:async(o={})=>waitForFunction(`!!${find}`,undefined,{timeout:o.timeout||30000}),
-    click:async()=>{await api.waitFor();await evaluate(`(()=>{const e=${find};e.scrollIntoView({block:'center'});e.click();return true;})()`);},
+    click:async()=>{await api.waitFor();const r=await evaluate(`(()=>{const e=${find};e.scrollIntoView({block:'center'});const b=e.getBoundingClientRect();return {x:b.left+b.width/2,y:b.top+b.height/2};})()`);
+     // Real touch input: Wizard handles taps from pointer events, which a synthetic element.click() never produces.
+     await send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:r.x,y:r.y}]});await pause(60);await send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await pause(150);},
     fill:async v=>{await api.waitFor();await evaluate(`(()=>{const e=${find};e.focus();const d=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');d.set.call(e,${JSON.stringify(v)});e.dispatchEvent(new Event('input',{bubbles:true}));return true;})()`);},
     innerText:async()=>{await api.waitFor();return evaluate(`${find}.innerText`);}};return api;};
   const page={evaluate,waitForFunction,locator:sel=>loc(sel),getByText:t=>loc('button,a,div,span,p,h1,h2,h3,li,[role]',t)};
