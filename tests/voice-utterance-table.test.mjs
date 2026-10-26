@@ -14,7 +14,7 @@ const catalog = [
   ['calendar','Calendar'], ['airlock','Airlock'],
 ].map(([id,name])=>({id,name,url:'/'+id+'/'}));
 // Food is now an installed provider; its pinned test dependency is not shell UI.
-catalog.push({id:'usuals',name:'Food',url:'/usuals/',voice_names:['Food','Usuals','usual','food app','my food','saved orders','eats','bites']});
+catalog.push({id:'usuals',name:'Food',url:'/usuals/',voice_names:['Food','Usuals','usual','food app','wizard eats','saved orders','eats','bites']});
 async function fixture(old) {
   const listeners = {}, actions = [], patterns = new Set();
   const c = {console,URL,Map,Set,Date,Math,performance:{now:()=>0},setTimeout:()=>1,clearTimeout(){},setInterval(){},
