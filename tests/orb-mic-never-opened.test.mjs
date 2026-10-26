@@ -24,8 +24,8 @@ function shell(V) {
     nativeFinish: () => calls.push('nativeFinish'), saveVoiceRoute() {}, shock() {},
   });
   // finishVoice as shipped, plus the helper it calls (absent on the old code, where the latch path never reaches it).
-  vm.runInContext(fn('  function finishVoice() {', '  async function cancelVoice(') + '\n' +
-    (APP.includes('  function micNeverOpened(') ? fn('  function micNeverOpened(', "  $('#txChips').addEventListener") : 'function micNeverOpened() {}'), ctx);
+  vm.runInContext(fn('  function finishVoice() {', '  async function cancelVoice(') + '\n' + fn('  async function returnMeeting(', '  async function parkReply(') + '\n' +
+    (APP.includes('function micNeverOpened(') ? fn(APP.includes('  async function micNeverOpened(') ? '  async function micNeverOpened(' : '  function micNeverOpened(', "  $('#txChips').addEventListener") : 'function micNeverOpened() {}'), ctx);
   return { ctx, calls };
 }
 
@@ -40,20 +40,32 @@ test('a second tap while the microphone has not opened ends the take visibly (ne
   assert.ok(!calls.includes('leaveOnSend'), 'nothing was recorded, so nothing navigates as if it was sent');
 });
 
-test('a borrowed meeting microphone goes straight back, with no empty recording kept (Codex P2 on #567)', () => {
+test('a borrowed meeting microphone goes straight back, with no empty recording kept (Codex P2 on #567)', async () => {
   const loan = { id: 'event-1' };
   const V = { state: 'listen', kind: 'auto', rec: null, native: null, parts: [], chunks: [], snap: null, files: [], meetingLoan: loan };
   const { ctx, calls } = shell(V);
   const ended = [];
-  ctx.window.WosOrbHandoff = { end: (l, o) => { ended.push([l, o]); return Promise.resolve(); } };
+  ctx.window.WosOrbHandoff = { end: async (l, o) => { ended.push([l, o]); } };
   let loanAtCancel = 'unset';
   ctx.cancelVoice = q => { loanAtCancel = V.meetingLoan; calls.push('cancel:' + !!q); V.state = 'idle'; };
-  ctx.finishVoice();
-  assert.equal(loanAtCancel, null, 'cancelVoice no longer sees the loan, so it keeps no recording custody');
-  return Promise.resolve().then(() => Promise.resolve()).then(() => {
-    assert.equal(ended.length, 1); assert.equal(ended[0][0], loan); assert.equal(ended[0][1].status, 'cancelled', 'the loan is returned as cancelled');
-    assert.ok(calls.includes('cancel:true'));
-  });
+  await ctx.finishVoice();
+  assert.equal(ended.length, 1); assert.equal(ended[0][0], loan); assert.equal(ended[0][1].status, 'cancelled', 'the loan is returned as cancelled');
+  assert.equal(loanAtCancel, null, 'cancelVoice runs only after the loan is back, so it keeps no recording custody');
+  assert.ok(calls.includes('cancel:true'));
+});
+
+test('a meeting loan that cannot be returned is kept, said, and retried on the next tap (Codex P2 on #567)', async () => {
+  const loan = { id: 'event-2' };
+  const V = { state: 'listen', kind: 'auto', rec: null, native: null, parts: [], chunks: [], snap: null, files: [], meetingLoan: loan };
+  const { ctx, calls } = shell(V);
+  let fail = true, tries = 0;
+  ctx.window.WosOrbHandoff = { end: async () => { tries++; if (fail) throw new Error('borrow busy'); } };
+  await ctx.finishVoice();
+  assert.equal(V.meetingLoan, loan, 'the loan is not discarded');
+  assert.ok(!calls.includes('cancel:true'), 'nothing is cancelled while the meeting still has its microphone');
+  assert.ok(calls.some(c => /^toast:Meeting remains paused/.test(c)) && calls.some(c => /^tour:voicefail:.*meeting still has it/.test(c)), JSON.stringify(calls));
+  fail = false; await ctx.finishVoice();
+  assert.equal(tries, 2, 'the next tap tries the return again'); assert.equal(V.meetingLoan, null); assert.ok(calls.includes('cancel:true'));
 });
 
 test('a held command released before the microphone opens keeps its latch (unchanged)', () => {
