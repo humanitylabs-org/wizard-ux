@@ -105,9 +105,12 @@
   // Exact owner-zone time, shared by confirmation and the persistent banner (idea: Novaire #355).
   function returnLabel(r){const p=parts(Date.parse(r.due_at),r.timezone),date=new Intl.DateTimeFormat('en-GB',{timeZone:r.timezone,day:'numeric',month:'short'}).format(new Date(r.due_at));return `Back ${date} at ${p.h}:${pad(p.min)}`}
   // Someday is the existing Defer operation: no timer and no change to existing return jobs.
+  // opts.restore (tweak one-tap Snooze only): an archived thread is restored first so it lands in Ready.
   async function someday(opts){
     if(!live()?.defer)throw new Error('Snooze is still loading.');
-    if(!await live().defer(opts.sessionId))throw new Error('Could not snooze · thread kept where it was.');
+    const restored=opts.restore&&live().session?.(opts.sessionId)?.archived;
+    if(restored&&!await live().restore?.(opts.sessionId))throw new Error('Could not snooze · thread kept where it was.');
+    if(!await live().defer(opts.sessionId))throw new Error(restored?'Could not snooze · thread restored to Ready.':'Could not snooze · thread kept where it was.');
     close();window.dispatchEvent(new CustomEvent('wos:snooze-someday',{detail:{session:opts.sessionId}}));
   }
   // A timed Snooze also takes the thread out of the list (James, 23 Oct 2026): the existing Defer disposition, restored when it comes back.
