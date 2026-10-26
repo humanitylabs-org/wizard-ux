@@ -22,16 +22,20 @@
       if (b.outerHTML !== nb.outerHTML) b.replaceWith(nb);
     }
   }
+  // At most one count read every 10 s (60 s after a failure): a burst of registry events must
+  // never become a request storm against the Notifications app (26 Oct 2026: ~50 req/s).
+  let inflight = false, nextAt = 0;
   async function refresh() {
-    if (!installed()) return;
+    if (!installed() || inflight || Date.now() < nextAt) return;
+    inflight = true; nextAt = Date.now() + 10000;
     try {
       const r = await fetch('/notifications/api/count', { cache: 'no-store', credentials: 'same-origin' });
-      if (!r.ok) return;
+      if (!r.ok) { nextAt = Date.now() + 60000; return; }
       const d = await r.json();
       const ch = d.unread !== S.unread || d.needs !== S.needs;
       Object.assign(S, { unread: d.unread | 0, needs: d.needs | 0, ok: true, at: Date.now() });
       if (ch) { paint(); window.dispatchEvent(new CustomEvent('wizard:notifications', { detail: { ...S } })); }
-    } catch (e) {}
+    } catch (e) { nextAt = Date.now() + 60000; } finally { inflight = false; }
   }
   // The Notifications window tells us its count as soon as something is marked read.
   addEventListener('message', e => {
