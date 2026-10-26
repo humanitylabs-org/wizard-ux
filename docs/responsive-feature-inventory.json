@@ -56,25 +56,10 @@
       "classification": "adapter",
       "reason": "Phone orb renderer; desktop microphone/chords remain the input adapter."
     },
-    "core/android-relay.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "WizardAndroidRelay required; Android-only transport."
-    },
     "device.js": {
       "shell": "phone",
       "classification": "native",
       "reason": "Android update, notification, foreground recorder bridge; web updater already shared."
-    },
-    "usuals.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Grab automation uses Android usuals bridge; never copy non-working purchase controls."
-    },
-    "usuals.css": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Android Food bridge UI."
     },
     "core/voice.js": {
       "shell": "desktop",
@@ -115,6 +100,7 @@
   "sharedAssets": [
     "/wizard-os-home/apple-touch-icon.png",
     "core/agents.js",
+    "core/android-relay.js",
     "core/app-capture.js",
     "core/app-kinds.js",
     "core/app-reading-position.js",
@@ -883,3 +869,4 @@
     }
   }
 }
+

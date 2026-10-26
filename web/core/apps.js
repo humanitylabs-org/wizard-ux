@@ -14,7 +14,6 @@
     { id: 'setup', kind: 'wizard', name: 'Setup', icon: 'S', colors: ['#4ff0b0'], g: ['#4ff0b0', '#3fe0ff'], url: '/wizard-os-home/setup/index.html', desc: 'Get Wizard ready · use it on your phone' },
     // Chats: the one built-in Wizard app. Everything else comes from the box (GET /wizard/v1/apps).
     { id: 'wizard', kind: 'chats', name: 'Chats', icon: '✦', g: ['#6b46ff', '#c04dff'], desc: 'Your threads with your Wizard' },
-    { id: 'usuals', kind: 'usuals', name: 'Food', icon: '🍜', g: ['#00b14f', '#0a5c32'], desc: 'Order Grab food: say “order food”, or tap a saved order' },
     { id: 'side-button', kind: 'native', name: 'Side button', icon: '◉', g: ['#8f63ff', '#ff5ccf'], desc: 'Hold the side button to talk to Wizard' },
   ];
   // Platform: 'mobile' gets everything except desktop-only entries; 'desktop' drops Android intents.
@@ -22,7 +21,6 @@
     const nativeSide = !!(window.WizardOSNative && typeof window.WizardOSNative.sideButton === 'function');
     return list.filter(a => {
       if (a.id === 'side-button' && !nativeSide) return false;
-      if (a.id === 'usuals' && !(window.WizardOSNative && typeof window.WizardOSNative.usuals === 'function')) return false;
       if (shell === 'desktop') return a.kind !== 'native' && !a.phoneOnly;
       return !a.desktopOnly;
     });

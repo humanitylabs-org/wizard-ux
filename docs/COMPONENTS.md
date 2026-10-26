@@ -98,6 +98,10 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 
 | Module | Contract |
 |---|---|
-| web/core/app-voice.js (WosAppVoice) | Registry names and admitted app-owned claims. |
-| web/core/voice-legacy.js (WosVoiceLegacy) | Frozen grammar and Music transport until equivalent app claims/APK A. |
-| web/core/background-audio-legacy.js (WizBackgroundAudioLegacy) | Pilot grant/native token until APK A. |
+| `web/core/app-voice.js` (`WosAppVoice`) | Registry names and admitted app-owned claims. |
+| `web/core/voice-legacy.js` (`WosVoiceLegacy`) | Frozen Music grammar and legacy device schema until APK A; Food owns its grammar. |
+| `web/core/background-audio-legacy.js` (`WizBackgroundAudioLegacy`) | Pilot grant/native token until APK A. |
+
+## Plumbing (single owner)
+
+`WizCompanionPane` (`web/core/companion-pane.js`), `WizardApp` (`web/core/app-client.js`), `WizAppCapture` (`web/core/app-capture.js`), `WizComposerInput` (`web/core/composer-input.js`), `WizAttachChip` (`web/core/attach-chip.js`), `WosSkinFrame` (`web/core/skin-frame.js`), `WosDevice` (`web/device.js`), `WizAppServices` (`web/core/app-services.js`), `WizCore` (`web/core/core.js`, `web/core/bridge.js`), `WizConfig` (`web/core/config.js`), `WizReach` (`web/core/reach.js`), `WizAndroidRelay` (`web/core/android-relay.js`), `WizPhotosRelay` (`web/core/photos-relay.js`), `WosSkinHost` (`web/core/skin-host.js`), `WosSettings` (`web/core/settings.js`), `WosTour` (`web/tour.js`), `WosMusic`, `WizDeviceLegacy` (`web/core/voice-legacy.js`).
