@@ -1897,6 +1897,7 @@ window.WizCore.chats = function createChats(H) {
     root.addEventListener('touchstart', e => {
       own(e);
       ptr = null;
+      if (H.pullRefresh?.() === false) return; // a package moved refresh to the ↻ in the window bar
       if (e.touches.length !== 1) return;
       const sc = e.target.closest?.('.ch-list > .ch-scroll'); if (!sc || sc.scrollTop > 0) return;
       if (e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
