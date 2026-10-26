@@ -12,13 +12,13 @@
 
   const read = () => { try { return Number(localStorage.getItem(key)) || 0; } catch (_) { return 0; } };
   const dismiss = () => { try { localStorage.setItem(key, String(Date.now() + 86400000)); } catch (_) {} };
-  let deferred = null, host = null, root = null, busy = false, installed = false, dismissedHere = false;
+  let deferred = null, host = null, root = null, busy = false, installed = false, dismissedHere = false, held = false;
   const clear = () => { host?.remove(); host = root = null; };
 
   function render() {
     // No event means unknown state. It never warrants an install suggestion.
     // A real install capability outranks an inherited parent-container display mode.
-    if (!deferred || installed || dismissedHere || read() > Date.now()) { clear(); return; }
+    if (!deferred || installed || held || dismissedHere || read() > Date.now()) { clear(); return; }
     if (!document.body) { document.addEventListener('DOMContentLoaded', render, {once: true}); return; }
     if (!host) {
       host = document.createElement('aside');
@@ -42,22 +42,35 @@
   }
 
   async function act() {
-    if (busy || !deferred) return;
+    if (busy || !deferred) return 'unavailable';
     const event = deferred;
     busy = true;
+    let outcome = 'unavailable';
     try {
       // Keep the real native prompt inside this click's user activation.
       const pending = event.prompt();
       render();
       await pending;
       const choice = await event.userChoice;
-      if (choice?.outcome === 'accepted') installed = true;
+      outcome = choice?.outcome === 'accepted' ? 'accepted' : 'dismissed';
+      if (outcome === 'accepted') installed = true;
       else { dismissedHere = true; dismiss(); }
     } catch (error) {
       // A rejected/consumed capability is not a reason to advertise installation.
       console.warn('Wizard OS installation prompt unavailable', error?.name || 'Error');
     } finally { deferred = null; busy = false; render(); }
+    return outcome;
   }
+
+  // One install prompt per page: the phone tour's Install beat (core/tour.js) uses this same deferred event, and
+  // holds the banner while the tour runs so the two never show at once.
+  window.WizardPwaInstall = {
+    // A dismissal (the banner's ×, a dismissed prompt or a skipped Install beat) holds for both surfaces.
+    get available() { return !!deferred && !installed && !busy && !dismissedHere && read() <= Date.now(); },
+    prompt: act,
+    hold(on) { held = !!on; render(); },
+    dismiss() { dismissedHere = true; dismiss(); clear(); },
+  };
 
   window.addEventListener('beforeinstallprompt', event => {
     event.preventDefault();

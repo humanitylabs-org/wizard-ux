@@ -52,9 +52,9 @@ function boot({ noMic = false } = {}) {
   return { T, H, calls, store, tour, q, tap, runTimers, view };
 }
 
-test('the tour has no Command beat: Talk, Hide, then the end card, counted "of 2"', () => {
+test('the tour has no Command beat: Talk, Hide, then the end card, counted "of 2" where nothing can be installed', () => {
   const t = boot();
-  assert.deepEqual([...t.T.beats], ['Talk', 'Hide', 'Done']);
+  assert.deepEqual([...t.T.beats], ['Talk', 'Hide', 'Install', 'Done']);
   assert.ok(t.T.start('qa'));
   let v = t.view();
   assert.equal(v.step, 1); assert.equal(v.sub, '1 of 2 · Talk'); assert.match(v.copy, /Tap the orb and say hello/);
@@ -62,7 +62,7 @@ test('the tour has no Command beat: Talk, Hide, then the end card, counted "of 2
   t.tap('[data-tnext]'); v = t.view();
   assert.equal(v.step, 2); assert.equal(v.sub, '2 of 2 · Hide'); assert.match(v.copy, /Swipe the orb down/);
   t.tap('[data-tnext]'); v = t.view();
-  assert.equal(v.step, 3); assert.equal(v.sub, ''); assert.match(v.copy, /Everything you see is customizable/);
+  assert.equal(v.step, t.T.DONE); assert.equal(v.sub, ''); assert.match(v.copy, /Everything you see is customizable/);
   assert.doesNotMatch(t.q('.tr-stage').innerHTML, /command|tr-gi hold/i, 'end card shows Tap + Swipe only');
 });
 
@@ -87,7 +87,7 @@ test('"Skip this step" moves one beat on, the tour keeps running, and is not off
   assert.ok(t.T.active); assert.equal(t.T.step, 2); assert.equal(t.store.get('wos.tour.v1'), undefined, 'a skipped step does not finish the tour');
   assert.match(t.view().next, /Skip this step/);
   t.tap('[data-tnext]');
-  assert.equal(t.T.step, 3); assert.equal(t.view().next, '', 'end card: no per-step skip, a tap finishes');
+  assert.equal(t.T.step, t.T.DONE); assert.equal(t.view().next, '', 'end card: no per-step skip, a tap finishes');
   assert.equal(t.T.skipStep(), false);
   t.tap('[data-tother]'); // a plain tap anywhere on the end card
   assert.ok(!t.T.active); assert.equal(t.store.get('wos.tour.v1'), 'true', 'completion marks the tour done');
@@ -114,7 +114,7 @@ test('Talk still advances only on a real sent message; Hide on hide + bring back
   t.T.event('sent', { text: 'hello' }); assert.match(t.view().copy, /^Sent\./);
   t.runTimers(); assert.equal(t.T.step, 2);
   t.T.event('zen', { on: true }); assert.match(t.view().copy, /Swipe up from the bottom/);
-  t.T.event('zen', { on: false }); t.runTimers(); assert.equal(t.T.step, 3);
+  t.T.event('zen', { on: false }); t.runTimers(); assert.equal(t.T.step, t.T.DONE);
 });
 
 test('a hold during Talk never advances it, even when it ran as a command (Codex P2 on #456)', () => {
@@ -145,7 +145,7 @@ test('skipping Hide while the bars are hidden brings them back first', () => {
   t.T.start('qa'); t.tap('[data-tnext]');
   t.T.event('zen', { on: true });
   t.tap('[data-tnext]');
-  assert.ok(t.calls.includes('zen:false')); assert.equal(t.T.step, 3);
+  assert.ok(t.calls.includes('zen:false')); assert.equal(t.T.step, t.T.DONE);
 });
 
 test('Back still steps back: beat 2 → beat 1, beat 1 skips the tour', () => {
