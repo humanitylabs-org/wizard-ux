@@ -182,18 +182,8 @@ html[data-shell="phone"] .ch-fsheet:has([data-chfocusopt]) { bottom: calc(var(--
 .ch-compose .ch-attach svg { width: 20px; height: 20px; stroke: var(--ink-2); stroke-width: 1.8; }
 .ch-tray { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px 0; }
 .ch-tray::-webkit-scrollbar { display: none; }
-.ch-att { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; max-width: 220px; padding: 5px 6px 5px 5px; border-radius: 14px; background: rgba(205, 190, 255, .07); border: 1px solid var(--line); }
-.ch-att.up { opacity: .7; }
-.ch-att img, .ch-att .ic { flex: 0 0 auto; width: 38px; height: 38px; border-radius: 10px; object-fit: cover; display: grid; place-items: center; background: rgba(0, 0, 0, .25); }
-.ch-att .ic svg { width: 18px; height: 18px; fill: none; stroke: var(--ink-2); stroke-width: 1.8; stroke-linecap: round; }
-.ch-att .nm { min-width: 0; display: flex; flex-direction: column; font-size: 12.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ch-att .nm small { font-size: 11px; color: var(--ink-3); }
-.ch-compose .ch-att button { width: 24px; height: 24px; border-radius: 50%; background: rgba(0, 0, 0, .35); color: var(--ink-2); font-size: 16px; line-height: 1; }
-.ch-att.ch-attimg { position: relative; display: block; max-width: none; width: 92px; height: 92px; padding: 0; overflow: hidden; border-radius: 14px; }
-.ch-att.ch-attimg img { width: 100%; height: 100%; border-radius: 0; object-fit: cover; display: block; }
-.ch-compose .ch-att.ch-attimg button { position: absolute; top: 5px; right: 5px; width: 24px; height: 24px; background: rgba(0, 0, 0, .6); color: #fff; }
-.ch-attspin { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; border: 2.5px solid rgba(255, 255, 255, .3); border-top-color: #fff; animation: ch-attspin .8s linear infinite; }
 @keyframes ch-attspin { to { transform: rotate(360deg); } }
+/* Upload spinner is status: Reduce Motion slows it, never stops it (out-ranks the styles.css kill switch, see .ch-spin). */
 /* Sections: same groups as Wizard's Work view */
 .ch-sec { margin: 0 0 2px; }
 .ch-sec-h { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 8px 8px; text-align: left; font-size: 11.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); }
@@ -376,7 +366,8 @@ a.fchip { color: inherit; text-decoration: none; }
 .mv-ti { min-width: 0; display: flex; flex-direction: column; }
 .mv-ti b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mv-ti small { font-size: 11.5px; color: var(--ink-3); }
-.mv-stage { flex: 1; min-height: 0; position: relative; display: grid; place-items: center; overflow: hidden; }
+/* Fixed tracks: an image's own height must never size the row, or contain can't fit a tall screenshot and its bottom is cut off. */
+.mv-stage { flex: 1; min-height: 0; position: relative; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; overflow: hidden; }
 .mv-stage img { width: 100%; height: 100%; object-fit: contain; transform-origin: center; transition: transform 200ms var(--ease); user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
 .mv-stage video { max-width: 100%; max-height: 100%; background: #000; }
 .mviewer[data-kind="file"] .mv-stage, .mviewer[data-kind="audio"] .mv-stage { touch-action: pan-y; }
@@ -650,12 +641,6 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-model.agent { color: color-mix(in oklab, var(--agc, var(--violet-2)) 70%, var(--ink)); background: color-mix(in oklab, var(--agc, #8f63ff) 16%, transparent); }
 
 /* Resumable upload progress (core/uploads.js): a thin bar along the chip's foot, a % on photo tiles. */
-.ch-att.up { position: relative; overflow: hidden; }
-.ch-att .ch-attbar { position: absolute; left: 0; bottom: 0; height: 3px; width: var(--up, 0%); background: var(--accent, #b9a6ff); border-radius: 0 2px 2px 0; transition: width .2s linear; }
-.ch-att.up.wait .ch-attbar { background: var(--ink-3, #888); animation: ch-attwait 1.2s ease-in-out infinite; }
-@keyframes ch-attwait { 50% { opacity: .35; } }
-.ch-att.ch-attimg .ch-attpct { position: absolute; left: 0; right: 0; top: 50%; margin-top: 14px; text-align: center; font: 600 11px/1 system-ui, sans-serif; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .7); }
-.ch-att.up .nm small { font-variant-numeric: tabular-nums; }
 /* Opinionated: Archive header selector for the auto-archive age. */
 .ch-arch-sel { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 12px 10px; font-size: 12.5px; color: var(--ink-3); }
 .ch-arch-sel select { font: inherit; color: var(--ink); background: var(--glass); border: 1px solid var(--line-2); border-radius: 10px; padding: 4px 8px; }
@@ -711,6 +696,10 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 .ch-morning { display: flex; align-items: center; gap: 12px; width: 100%; margin: 4px 0 10px; padding: 13px 14px; border-radius: 18px; text-align: left; color: inherit; font: inherit; cursor: pointer;
   border: 1px solid rgba(255, 184, 107, .38); background: linear-gradient(135deg, rgba(255, 184, 107, .15), rgba(255, 111, 145, .09) 45%, rgba(143, 99, 255, .08)); }
 .ch-morning:active { transform: scale(.99); }
+.ch-morning-w { position: relative; margin: 4px 0 10px; }
+.ch-morning-w > .ch-morning { margin: 0; padding-right: 52px; }
+.ch-morning-x { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); width: 40px; height: 40px; border: 0; border-radius: 50%; background: none; color: inherit; font: inherit; font-size: 22px; line-height: 1; opacity: .6; cursor: pointer; }
+.ch-morning-x:hover, .ch-morning-x:focus-visible { opacity: 1; background: rgba(255, 255, 255, .08); }
 .ch-morning .sun { flex: none; width: 40px; height: 40px; border-radius: 50%; background: radial-gradient(circle at 50% 70%, #fff3d6, #ffb86b 40%, #ff6f91 75%); box-shadow: 0 0 18px rgba(255, 184, 107, .4); }
 .ch-morning .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .ch-morning .hd { display: flex; align-items: center; gap: 8px; }

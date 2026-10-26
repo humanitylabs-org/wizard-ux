@@ -11,7 +11,7 @@ import ghcr_image as ci
 
 SHA = 'a' * 40
 DIGEST = 'sha256:' + 'b' * 64
-IMAGE = 'ghcr.io/humanitylabs-org/' + Path.cwd().name.removeprefix('hosted-')
+IMAGE = 'ghcr.io/humanitylabs-org/wizard-ux'
 REPOSITORY = IMAGE.removeprefix('ghcr.io/')
 
 
@@ -69,6 +69,42 @@ class ImageContract(unittest.TestCase):
                         self.env(temp) | changed, clear=True):
                     with self.assertRaisesRegex(RuntimeError, message):
                         ci.publish(self.args())
+
+    def test_onboarding_dispatch_requires_exact_branch_repository_event_and_sha(self):
+        with tempfile.TemporaryDirectory() as temp:
+            env = self.env(temp, event='workflow_dispatch',
+                GITHUB_REF='refs/heads/release/stable-onboarding', GITHUB_SHA=SHA)
+            args = self.args(branch='release/stable-onboarding', expected_sha=SHA)
+            with patch.dict(os.environ, env, clear=True):
+                ci.validate_publication(args)
+            for changed_env, changed_args in [
+                ({'GITHUB_EVENT_NAME': 'push'}, {}),
+                ({'GITHUB_EVENT_NAME': 'pull_request'}, {}),
+                ({'GITHUB_REF': 'refs/heads/release/other'}, {}),
+                ({'GITHUB_REF': 'refs/tags/release/stable-onboarding'}, {}),
+                ({'GITHUB_REPOSITORY': 'attacker/fork'}, {}),
+                ({'GITHUB_SHA': 'c' * 40}, {}),
+                ({}, {'expected_sha': ''}),
+                ({}, {'expected_sha': 'c' * 40}),
+                ({}, {'branch': 'main'}),
+                ({'GITHUB_REPOSITORY': 'humanitylabs-org/wizard-agent-service'},
+                 {'image': 'ghcr.io/humanitylabs-org/wizard-agent-service'}),
+            ]:
+                with self.subTest(env=changed_env, args=changed_args), patch.dict(
+                        os.environ, env | changed_env, clear=True):
+                    with self.assertRaises(RuntimeError):
+                        ci.validate_publication(argparse.Namespace(**(vars(args) | changed_args)))
+
+    @patch.object(ci.subprocess, 'run')
+    def test_maintenance_provenance_uses_real_ref_not_main(self, run):
+        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ,
+                self.env(temp), clear=True):
+            ci.verify_existing_provenance(
+                self.args(branch='release/stable-onboarding'), DIGEST, temp)
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index('--source-ref') + 1],
+                         'refs/heads/release/stable-onboarding')
+        self.assertEqual(command[command.index('--source-digest') + 1], SHA)
 
     def test_release_requires_dispatch_confirmation_exact_sha_and_version(self):
         with tempfile.TemporaryDirectory() as temp:
