@@ -3,7 +3,8 @@
 com.grabtaxi.passenger) on a fresh API35 emulator.
 
 usage: qa_usuals.py WOS_QA_APK FAKE_GRAB_APK WEB_DIR [OUT_DIR]
-Set ANDROID_HOME, JAVA_HOME and WIZARD_WORK_ROOT. SLICE8_FOOD_APP points to
+Set ANDROID_HOME, JAVA_HOME and WIZARD_WORK_ROOT. Optional QA_WEBVIEW_APK
+uses a supplied x86_64 SystemWebView on the disposable device (never on a phone). SLICE8_FOOD_APP points to
 the installed Food app checkout for candidate runs. For an old-to-new move in
 the SAME native store, also set SLICE8_MOVE_WEB and SLICE8_MOVE_FOOD.
 
@@ -113,6 +114,8 @@ class Fake(http.server.BaseHTTPRequestHandler):
         self.end_headers(); self.wfile.write(body)
     def do_GET(self):
         u = self.path.split('?')[0]
+        if u == '/wizard/v1/ui-preferences': return self._send(200, b'{"migrations":{"launcher-seed-v1":true}}')
+        if u.endswith('/store-install/_updates'): return self._send(200, b'{"mode":"ask","update_available":false}')
         if u == '/wizard-os-home': return self._send(301, b'', extra={'Location': '/wizard-os-home/'})
         m = re.match(r'^/wizard-os-home/(.*)$', u)
         if m:
@@ -122,8 +125,8 @@ class Fake(http.server.BaseHTTPRequestHandler):
                 ct = {'js': 'text/javascript', 'css': 'text/css', 'html': 'text/html', 'json': 'application/json', 'svg': 'image/svg+xml', 'png': 'image/png', 'webmanifest': 'application/manifest+json'}.get(p.suffix[1:], 'application/octet-stream')
                 return self._send(200, p.read_bytes(), ct)
         if FOOD_APP and u.startswith('/usuals/'):
-            file = (P(FOOD_APP) / 'app/static' / (u[len('/usuals/'):] or 'index.html')).resolve()
-            if not file.is_relative_to((P(FOOD_APP) / 'app/static').resolve()) or not file.is_file(): return self._send(404, b'')
+            file = FOOD_FILES.get(u[len('/usuals/'):] or 'index.html')
+            if file is None: return self._send(404, b'')
             ct = {'.html':'text/html','.css':'text/css','.js':'text/javascript'}.get(file.suffix,'application/octet-stream')
             return self._send(200, file.read_bytes(), ct)
         if u == '/wizard/v1/bootstrap':
@@ -134,12 +137,20 @@ class Fake(http.server.BaseHTTPRequestHandler):
         if u.startswith('/wizard/hermes/api/sessions'): return self._send(200, b'{"sessions":[]}')
         if 'update' in u or u.endswith('latest.json'): return self._send(404, b'{}')
         return self._send(200, b'{}')
+    def do_PUT(self):
+        n = int(self.headers.get('Content-Length') or 0); self.rfile.read(n) if n else b''
+        if self.path == '/wizard/thread-seen': return self._send(200, b'{}')
+        return self._send(503, b'{"error":"qa: no writes"}')
     def do_POST(self):
         n = int(self.headers.get('Content-Length') or 0); self.rfile.read(n) if n else b''
         WRITES.append(self.path)
         return self._send(503, b'{"error":"qa: no writes"}')
 WRITES = []
 FOOD_APP = os.environ.get('SLICE8_FOOD_APP', '')
+def food_files(root):
+    base = P(root) / 'app/static'
+    return {file.relative_to(base).as_posix(): file for file in base.rglob('*') if file.is_file() and file.resolve().is_relative_to(base.resolve())} if root else {}
+FOOD_FILES = food_files(FOOD_APP)
 srv = None
 
 class Page:
@@ -191,7 +202,7 @@ class Page:
             expr = re.sub(r"document\.querySelector\((['\"])(?=\[data-us|\.us-)", lambda m: frame + '.contentDocument.querySelector(' + m.group(1), expr)
             expr = expr.replace('window.WosUsuals', frame + '.contentWindow.WosUsuals')
         self.id += 1; my = self.id
-        self._send({'id': my, 'method': 'Runtime.evaluate', 'params': {'expression': expr, 'awaitPromise': True, 'returnByValue': True}})
+        self._send({'id': my, 'method': 'Runtime.evaluate', 'params': {'expression': expr, 'awaitPromise': True, 'returnByValue': True, 'userGesture': True}})
         while True:
             d = self._recv()
             if 'method' in d: EVENTS.append(d)
@@ -246,6 +257,11 @@ with (BASE / 'worker.lock').open('a') as lock:
         time.sleep(10)
         for k in ('window_animation_scale', 'transition_animation_scale', 'animator_duration_scale'): sx(f'settings put global {k} 0')
         sx('input keyevent KEYCODE_WAKEUP'); sx('wm dismiss-keyguard'); sx('settings put system screen_off_timeout 1800000')
+        if os.environ.get('QA_WEBVIEW_APK'):
+            sh(ADB, '-s', S, 'install', '-r', os.environ['QA_WEBVIEW_APK'])
+            provider = sx('cmd webviewupdate set-webview-implementation com.android.webview')
+            if 'Success' not in provider: raise RuntimeError('QA WebView provider failed: ' + provider)
+        (OUT / 'webview-provider.txt').write_text(sx('dumpsys webviewupdate'))
         out1 = sh(ADB, '-s', S, 'install', '-r', APK).strip().splitlines()[-1]
         out2 = sh(ADB, '-s', S, 'install', '-r', GRAB).strip().splitlines()[-1]
         check('install Wizard OS QA + stand-in Grab', out1 == 'Success' and out2 == 'Success', out1 + ' / ' + out2)
@@ -399,11 +415,12 @@ with (BASE / 'worker.lock').open('a') as lock:
         # Optional in-place web move: preserve this device and its native store.
         if os.environ.get('SLICE8_MOVE_WEB'):
             before = json.loads(pg.ev('window.WizardOSNative.usuals()'))['list']
-            WEB = P(os.environ['SLICE8_MOVE_WEB']); FOOD_APP = os.environ['SLICE8_MOVE_FOOD']
+            WEB = P(os.environ['SLICE8_MOVE_WEB']); FOOD_APP = os.environ['SLICE8_MOVE_FOOD']; FOOD_FILES = food_files(FOOD_APP)
             sx(f'am force-stop {PKG}'); bring_wos(); pg.close(); pg = page()
             pg.ev("window.WizCore.appsLoaded().then(() => window.WizOpenApp('usuals'))"); time.sleep(3)
             shot('migration-open')
             print('MIGRATION_HOST', pg.ev("JSON.stringify({apps:window.WizCore.apps('mobile').APPS.map(a=>({id:a.id,url:a.url})),frames:[...document.querySelectorAll('iframe')].map(f=>f.src)})"), flush=True)
+            check('native bridge ready after web move', json.loads(pg.ev('window.WizardOSNative.usuals()')).get('blocker') == '')
             after = json.loads(pg.ev('window.WizardOSNative.usuals()'))['list']
             (OUT / 'native-before-move.json').write_text(json.dumps(before, indent=2))
             (OUT / 'native-after-move.json').write_text(json.dumps(after, indent=2))
@@ -411,7 +428,8 @@ with (BASE / 'worker.lock').open('a') as lock:
             shot('migration-listed')
             pg.ev("document.querySelector('[data-us=run]').click()")
             covered = wait_for(lambda: find(r'^Ordering your Kra pao'),15,.5)
-            check('old saved order replays under new with cover', covered is not None)
+            print('MIGRATION_REPLAY_STATE ' + str(pg.ev('window.WizardOSNative.usuals()')), flush=True)
+            check('old saved order replays under new with cover', bool(covered))
             shot('migration-cover')
             ready = wait_for(lambda: find(r'^Place order'),90,1)
             check('old saved order stops at checkout under new, total 200, no placement', ready is not None and '฿200' in ready['text'] and grablog().count('ORDER PLACED') == 1)
@@ -488,7 +506,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         after = pg.ev("!!document.querySelector('.us-sheet')")
         check('G: Back closes the edit sheet and Wizard OS stays open', sheet and not after and PKG in top(), (sheet, after, top()))
         crashed = sx('logcat -d -b crash')
-        check('no crashes', 'FATAL EXCEPTION' not in crashed, crashed[:300])
+        check('no crashes', not re.search(r'FATAL EXCEPTION|Fatal signal|BEGIN CRASHPAD MINIDUMP', crashed), crashed[:300])
         errors = [e for e in EVENTS if e.get('method') == 'Runtime.exceptionThrown' or e.get('method') == 'Runtime.consoleAPICalled' and e.get('params', {}).get('type') == 'error' or e.get('method') == 'Log.entryAdded' and e.get('params', {}).get('entry', {}).get('level') == 'error']
         check('zero WebView console errors', not errors, errors)
     finally:
