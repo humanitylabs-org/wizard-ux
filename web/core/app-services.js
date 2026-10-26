@@ -670,8 +670,11 @@
   // Installed providers may opt into cold command handling with the existing
   // `provides` capability list. The app owns grammar; core only warms its page.
   const voiceFrames = new Map();
+  let warmingVoice = false;
   function warmVoice() {
-    if (!document.createElement || !document.body) return;
+    if (warmingVoice || !document.createElement || !document.body) return;
+    warmingVoice = true;
+    try {
     const wanted = new Map(apps().filter(a => a.provides?.includes('voice-commands')).slice(0, 64).map(a => [a.id, a]));
     for (const [id, entry] of voiceFrames) if (!wanted.has(id) || wanted.get(id).url !== entry.url) { entry.detach(); entry.frame.remove(); voiceFrames.delete(id); }
     for (const [id, app] of wanted) {
@@ -684,6 +687,7 @@
       const detach = attach(frame, {appId:id, path:app.url});
       voiceFrames.set(id, {frame, detach, url:app.url});
     }
+    } finally { warmingVoice = false; }
   }
   addEventListener('wizard:apps', warmVoice);
   addEventListener('DOMContentLoaded', warmVoice);
