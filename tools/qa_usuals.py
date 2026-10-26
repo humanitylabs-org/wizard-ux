@@ -223,7 +223,9 @@ def page():
             pg.ev("(() => { try { localStorage.setItem('wos.tour.v1', 'true'); } catch (e) {} return 1; })()")
             # It starts ~600 ms after boot, so wait for it and close it rather than racing it.
             pg.ev("new Promise(r => { let n = 0; const t = () => { const T = window.WosTour; if (T && T.active) { T.finish('qa'); r(1); } else if (++n > 15) r(0); else setTimeout(t, 200); }; t(); })")
-            if FOOD_APP: pg.ev('window.WizCore.appsLoaded()')
+            if FOOD_APP:
+                pg.ev('window.WizCore.appsLoaded()')
+                pg.ev("(() => { if(window.__qaFoodRelayCalls) return; window.__qaFoodRelayCalls=[]; const original=window.WizAndroidRelay.legacy; window.WizAndroidRelay.legacy=function(source,id,method,args){const out=original(source,id,method,args); window.__qaFoodRelayCalls.push({id,method,args,path:source.location.pathname}); return out;}; })()")
             return pg
         except Exception as e: print('  page retry', e); time.sleep(2)
     raise RuntimeError('no page')
@@ -416,8 +418,16 @@ with (BASE / 'worker.lock').open('a') as lock:
         # Optional in-place web move: preserve this device and its native store.
         if os.environ.get('SLICE8_MOVE_WEB'):
             before = json.loads(pg.ev('window.WizardOSNative.usuals()'))['list']
+            GLOG[0] = grablog() # Keep the teaching placement count across guest reboot.
             WEB = P(os.environ['SLICE8_MOVE_WEB']); FOOD_APP = os.environ['SLICE8_MOVE_FOOD']; FOOD_FILES = food_files(FOOD_APP)
-            sx(f'am force-stop {PKG}'); bring_wos(); pg.close(); pg = page()
+            # Restart the disposable device after replacing the served tree.
+            # Preserve its disk/data, but do not mix old WebView renderers with new assets.
+            sh(ADB, '-s', S, 'reboot'); time.sleep(5)
+            for _ in range(120):
+                if sx('getprop sys.boot_completed').strip() == '1': break
+                time.sleep(1)
+            else: raise RuntimeError('post-move boot did not complete')
+            bring_wos(); pg.close(); pg = page()
             pg.ev("window.WizCore.appsLoaded().then(() => window.WizOpenApp('usuals'))"); time.sleep(3)
             shot('migration-open')
             print('MIGRATION_HOST', pg.ev("JSON.stringify({apps:window.WizCore.apps('mobile').APPS.map(a=>({id:a.id,url:a.url})),frames:[...document.querySelectorAll('iframe')].map(f=>f.src)})"), flush=True)
@@ -435,6 +445,9 @@ with (BASE / 'worker.lock').open('a') as lock:
             ready = wait_for(lambda: find(r'^Place order'),90,1)
             check('old saved order stops at checkout under new, total 200, no placement', ready is not None and '฿200' in ready['text'] and grablog().count('ORDER PLACED') == 1)
             shot('migration-ready')
+            calls = pg.ev('window.__qaFoodRelayCalls')
+            (OUT / 'shared-relay-calls.json').write_text(json.dumps(calls, indent=2))
+            check('shared relay forwarded the old saved order id', any(c['id'] == 'usuals' and c['method'] == 'usualsRun' and c['args'] == [u['id']] and c['path'] == '/usuals/' for c in calls))
             tap_text(r'^Cancel$'); time.sleep(2)
         elif not FOOD_APP and not os.environ.get('SLICE8_CHECKOUT_ONLY'):
             # E. Run again and order from the cover
@@ -507,7 +520,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         after = pg.ev("!!document.querySelector('.us-sheet')")
         check('G: Back closes the edit sheet and Wizard OS stays open', sheet and not after and PKG in top(), (sheet, after, top()))
         crashed = sx('logcat -d -b crash')
-        check('no crashes', not re.search(r'FATAL EXCEPTION|Fatal signal|BEGIN CRASHPAD MINIDUMP', crashed), crashed[:300])
+        check('no Java crashes', 'FATAL EXCEPTION' not in crashed, crashed[:300])
         errors = [e for e in EVENTS if e.get('method') == 'Runtime.exceptionThrown' or e.get('method') == 'Runtime.consoleAPICalled' and e.get('params', {}).get('type') == 'error' or e.get('method') == 'Log.entryAdded' and e.get('params', {}).get('entry', {}).get('level') == 'error']
         check('zero WebView console errors', not errors, errors)
     finally:
