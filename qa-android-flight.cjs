@@ -79,6 +79,8 @@ async function list(p){await p.evaluate(()=>{let w=Object.values(__wos.wins).fin
   // Debug/QA builds read the fake Wizard address from files/qa_home.txt (AppState.qaOrigin), never the owner setting.
   // Same proven route as tools/qa_background_audio.py: push, then copy inside run-as.
   fs.writeFileSync(path.join(out,'qaorigin'),'http://localhost:9397');execFileSync(adbBin,['push',path.join(out,'qaorigin'),'/data/local/tmp/qaorigin'],{timeout:20000});
+  // Android asks once for notification permission after the first send; answer it up front so the prompt never covers the test.
+  try{adb('shell','pm','grant',app,'android.permission.POST_NOTIFICATIONS');}catch(_){}
   adb('shell','run-as',app,'sh','-c','"mkdir -p files && cp /data/local/tmp/qaorigin files/qa_home.txt && cp /data/local/tmp/qaorigin files/qa_origin.txt"');
   ok(adb('shell','run-as',app,'cat','files/qa_home.txt').trim()==='http://localhost:9397','QA app points only at the loopback fake Wizard');
   adb('shell','am','start','-n',app+'/ai.wizards.os.MainActivity');
