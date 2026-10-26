@@ -22,7 +22,7 @@ for (const [file, selector, dur] of [
   ['web/core/chats.css', '.ch-row .emo.sti .spin', '3s'], // Working row
   ['web/core/chats.css', '.ch-head .emo.sti .spin, .ch-row .emo.sti .spin', '3s'], // Working row / thread header
   ['web/core/chats.css', '.ch-spin', '2.4s'], // Chats list "Updating…"
-  ['web/core/chats.css', '.ch-attspin', '2.4s'], // photo uploading in the composer
+  ['web/core/attach-chip.css', '.ch-attspin', '2.4s'], // photo uploading in the composer (shared attachment chip)
   ['web/core/polish.css', '.wx-spin', '2.4s'], // "Reconnecting to Wizard" banner, message search
 ]) {
   test(`${selector}: reduced motion slows the spinner instead of freezing it`, () => {
