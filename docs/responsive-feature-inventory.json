@@ -61,11 +61,6 @@
       "classification": "native",
       "reason": "WizardAndroidRelay required; Android-only transport."
     },
-    "core/background-audio.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Origin-scoped Android Media3 transport through wizardAudioPort; hosted Music retains shared browser playback without this native port."
-    },
     "device.js": {
       "shell": "phone",
       "classification": "native",
