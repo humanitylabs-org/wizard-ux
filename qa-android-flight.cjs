@@ -1,5 +1,5 @@
 // Real Wizard APK/WebView flight loop on a disposable emulator; no external Wizard.
-const {chromium}=require('./tools/qa-playwright.cjs'),{fixture}=require('./tools/offline-chats-fixture.cjs');
+const {fixture}=require('./tools/offline-chats-fixture.cjs');
 const {execFileSync,spawnSync}=require('node:child_process'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const adbBin=process.env.QA_ADB||'adb',app=process.env.QA_NATIVE_APP||'ai.wizards.os.qa';
 const adb=(...args)=>execFileSync(adbBin,args,{encoding:'utf8',timeout:25000});
@@ -7,6 +7,29 @@ const out=process.env.QA_OUT||path.resolve('qa-live/android-flight');fs.mkdirSyn
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
 const ok=(c,n)=>{assert(c,n);console.log('PASS '+n)};
 const shot=n=>fs.writeFileSync(path.join(out,n+'.png'),execFileSync(adbBin,['exec-out','screencap','-p'],{timeout:20000}));
+// Android WebView rejects Playwright's connectOverCDP (Browser.setDownloadBehavior: "Browser context
+// management is not supported"), so this test drives the page over its own CDP websocket.
+function cdpPage(wsUrl){
+ return new Promise((resolve,reject)=>{
+  const ws=new WebSocket(wsUrl);let id=0;const waits=new Map();
+  ws.onmessage=ev=>{const m=JSON.parse(ev.data);if(m.id&&waits.has(m.id)){const w=waits.get(m.id);waits.delete(m.id);m.error?w.reject(Error(m.error.message)):w.resolve(m.result);}};
+  ws.onerror=e=>reject(Error('CDP websocket error'));
+  const send=(method,params={})=>new Promise((res,rej)=>{const i=++id;waits.set(i,{resolve:res,reject:rej});ws.send(JSON.stringify({id:i,method,params}));});
+  const evaluate=async(fn,arg)=>{const expr=typeof fn==='function'?`(${fn})(${JSON.stringify(arg===undefined?null:arg)})`:fn;
+   const r=await send('Runtime.evaluate',{expression:expr,awaitPromise:true,returnByValue:true});
+   if(r.exceptionDetails)throw Error('page: '+(r.exceptionDetails.exception?.description||r.exceptionDetails.text));return r.result.value;};
+  const waitForFunction=async(fn,arg,opt={})=>{const end=Date.now()+(opt.timeout||30000);let last;
+   for(;;){try{if(await evaluate(fn,arg))return;}catch(e){last=e;}if(Date.now()>end)throw Error('waitForFunction timed out: '+String(fn).slice(0,120)+(last?' ('+last.message+')':''));await pause(250);}};
+  const loc=(sel,text)=>{const find=`(()=>{const els=[...document.querySelectorAll(${JSON.stringify(sel)})].filter(e=>e.getClientRects().length);return ${text==null?'els[0]':`els.find(e=>e.textContent.trim()===${JSON.stringify(text)})`}||null;})()`;
+   const api={first:()=>api,
+    waitFor:async(o={})=>waitForFunction(`!!${find}`,undefined,{timeout:o.timeout||30000}),
+    click:async()=>{await api.waitFor();await evaluate(`(()=>{const e=${find};e.scrollIntoView({block:'center'});e.click();return true;})()`);},
+    fill:async v=>{await api.waitFor();await evaluate(`(()=>{const e=${find};e.focus();const d=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');d.set.call(e,${JSON.stringify(v)});e.dispatchEvent(new Event('input',{bubbles:true}));return true;})()`);},
+    innerText:async()=>{await api.waitFor();return evaluate(`${find}.innerText`);}};return api;};
+  const page={evaluate,waitForFunction,locator:sel=>loc(sel),getByText:t=>loc('button,a,div,span,p,h1,h2,h3,li,[role]',t)};
+  ws.onopen=async()=>{try{await send('Runtime.enable');resolve({b:{close:async()=>ws.close()},p:page});}catch(e){reject(e);}};
+ });
+}
 async function attach(){
  let last='',seen='';
  for(let n=0;n<90;n++){
@@ -15,16 +38,14 @@ async function attach(){
    if(!pid){last='app not running';await pause(500);continue;}
    adb('forward','tcp:9333','localabstract:webview_devtools_remote_'+pid);
    const list=await (await fetch('http://127.0.0.1:9333/json/list')).json();seen=JSON.stringify(list.map(x=>[x.type,x.url]));
-   if(list.some(x=>x.url.includes('/wizard-os-home/'))){
-    const b=await chromium.connectOverCDP('http://127.0.0.1:9333',{timeout:20000});
-    const pages=b.contexts().flatMap(c=>c.pages());const p=pages.find(x=>x.url().includes('/wizard-os-home/'));
-    if(p)return {b,p};last='playwright saw pages '+JSON.stringify(pages.map(x=>x.url()));await b.close().catch(()=>{});
-   }else last='no shell target yet';
+   const t=list.find(x=>x.type==='page'&&x.url.includes('/wizard-os-home/'));
+   if(t)return await cdpPage(t.webSocketDebuggerUrl.replace(/ws:\/\/[^/]+/,'ws://127.0.0.1:9333'));
+   last='no shell target yet';
   }catch(e){last=String(e&&e.message||e).slice(0,400);}
   await pause(700);
  }
  try{shot('attach-failed');}catch(_){}
- try{fs.writeFileSync(path.join(out,'attach-debug.txt'),[last,seen,adb('shell','cat','/proc/net/unix').split('\n').filter(l=>l.includes('devtools')).join('\n')].join('\n\n'));}catch(_){}
+ try{fs.writeFileSync(path.join(out,'attach-debug.txt'),[last,seen].join('\n\n'));}catch(_){}
  throw Error('Wizard WebView debugging target unavailable: '+last+' | targets '+seen);
 }
 async function list(p){await p.evaluate(()=>{let w=Object.values(__wos.wins).find(w=>w.app==='chats');if(w){if(w.thread)__wos.chats.threadBack(w);__wos.goDesk(__wos.desks.findIndex(d=>d.wins.includes(w.id)));}else __wos.openWin({app:'chats'});});await p.locator('[data-flight-download]').first().waitFor();}
@@ -69,7 +90,13 @@ async function list(p){await p.evaluate(()=>{let w=Object.values(__wos.wins).fin
   await p.locator('[data-flight-send]').first().click();await p.waitForFunction(()=>!WosOutbox.unsent().some(it=>it.text.startsWith('Android typed')));
   ok(f.state.runs.length===1&&f.state.runs[0].body.offline_context?.recordedOfflineAt,'native Send all admits one stamped typed reply');
   await b.close();browser=null;
-  const back=spawnSync(process.execPath,['qa-android-back.cjs'],{cwd:__dirname,env:{...process.env,QA_CDP_URL:'http://127.0.0.1:9333',QA_NATIVE_APP:app},encoding:'utf8',timeout:60000});process.stdout.write(back.stdout);process.stderr.write(back.stderr);ok(back.status===0,'existing qa-android-back native branch passes');
+  // Back never exits: open a saved thread, press the real Android Back key, stay in Wizard on the list.
+  ({b,p}=await attach());browser=b;await list(p);await p.evaluate(()=>__wos.openWizardThread('flight-1'));
+  await p.waitForFunction(()=>Object.values(__wos.wins).some(w=>w.app==='chats'&&w.thread));
+  adb('shell','input','keyevent','KEYCODE_BACK');await pause(1500);
+  ok(/ai\.wizards\.os\.qa/.test(adb('shell','dumpsys','activity','activities').split('\n').find(l=>/topResumedActivity|mResumedActivity/.test(l))||''),'native Back from a thread keeps Wizard open');
+  ok(await p.evaluate(()=>!Object.values(__wos.wins).some(w=>w.app==='chats'&&w.thread)),'native Back returns from the thread to the chat list');
+  await b.close();browser=null;
   fs.writeFileSync(path.join(out,'android-result.json'),JSON.stringify({verdict:'PASS',package:app,actualApk:true,nativeChanges:false,reply:'typed (audio capture not exercised on emulator)',runs:f.state.runs.map(r=>({key:r.key,body:r.body})),origin:'disposable loopback fixture'},null,2));
  }finally{if(browser)await browser.close().catch(()=>{});try{adb('shell','cmd','connectivity','airplane-mode','disable')}catch(_){};await f.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});
