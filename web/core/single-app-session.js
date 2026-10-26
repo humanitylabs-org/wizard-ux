@@ -80,7 +80,9 @@
   };
   window.WizAppServices?.guardBack(() => { window.__wosNativeBack(); return true; }, toast);
   window.WizCore.bridge?.handle({ back:window.__wosNativeBack });
-  function mount() {
+  async function mount() {
+    // Prepare the small host document before Wisdom can announce Ready offline.
+    if (window.WizOfflineApps?.apps[id]?.offline) await window.WizOfflineSession?.ready;
     const next = registry.APP[id];
     if (!next || next.kind !== 'wizard' || !next.url || !policy.within(next.url, next.url) || policy.isShell(next.url)) { unavailable(); return; }
     if (frame && mountedURL === next.url) { app = next; return; }
