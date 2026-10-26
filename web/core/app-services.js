@@ -268,6 +268,24 @@
       titlebar: Object.freeze({ set(list) { check(); return setTools(st, list); },
         shown() { check(); const b = barOf(st)?.querySelector(':scope > .wtools'); return !!b && b.getClientRects().length > 0 && b.offsetHeight > 0; } }),
       view: Object.freeze({ isVisible() { check(); return !document.hidden && st.isVisible?.() === true; } }),
+      /* Photos and videos an app shows open in Wizard's one media viewer (pinch/double-tap zoom, pan, swipe between
+       * items, Save/Share, Back/Esc closes) above the app, exactly as in Chats (James, 26 Oct 2026). Only this app's
+       * own origin (or its blob: URLs) is opened; relative URLs resolve against the app's document. */
+      media: Object.freeze({ view(items, index = 0) {
+        check();
+        if (st.isVisible?.() !== true || !window.WosChat?.viewer || !Array.isArray(items)) return false;
+        const base = source.location.href, clean = [];
+        for (const it of items.slice(0, 500)) {
+          let u; try { u = new URL(String(it?.url || ''), base); } catch (_) { continue; }
+          const own = u.origin === location.origin && /^https?:$/.test(u.protocol);
+          const blob = u.protocol === 'blob:' && u.href.startsWith('blob:' + location.origin + '/');
+          if (!own && !blob) continue;
+          const kind = it?.kind === 'video' ? 'video' : 'image';
+          clean.push({ url: u.href, kind, name: String(it?.name || '').slice(0, 200), mime: String(it?.mime || (kind === 'video' ? 'video/mp4' : 'image/jpeg')).slice(0, 100) });
+        }
+        const i = Math.max(0, Math.min(clean.length - 1, Math.floor(+index) || 0));
+        return clean.length ? window.WosChat.viewer.open(clean, i) === true : false;
+      } }),
       nav: Object.freeze({ threadAgents: true,
       /* The app finished what the owner came for (dismissed, archived, saved, deleted): take one Back past the app's
        * own views, landing on the previous screen exactly as the shell's Back would (James, 25 Oct 2026). */

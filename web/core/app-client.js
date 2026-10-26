@@ -313,6 +313,14 @@
       // Call after a finishing action (dismiss, archive, delete, save-and-close): returns the owner to the screen before the app.
       back: () => { try { return service?.nav?.back?.() === true; } catch (_) { return false; } }, openContextDraft: data => { if (!service?.nav?.openContextDraft) throw new Error('Context drafts need the verified Wizard host'); return service.nav.openContextDraft(data); } }),
     theme: Object.freeze({ get: () => currentTheme || window.WizardTheme?.current || null, onChange: fn => listen(themes, fn, currentTheme || window.WizardTheme?.current) }),
+    // Wizard's media viewer for the app's photos/videos ([{url, kind: 'image'|'video', name}], start index). Opened on
+    // its own (no Wizard around it) the photo opens in a browser tab, which zooms natively.
+    media: Object.freeze({ view: (items, index = 0) => {
+      try { if (service?.media?.view) return service.media.view(items, index) === true; } catch (_) {}
+      if (framed) return false;
+      const it = Array.isArray(items) ? items[Math.max(0, Math.floor(+index) || 0)] : null;
+      if (!it?.url) return false; window.open(String(it.url), '_blank', 'noopener'); return true;
+    } }),
     voice: Object.freeze({ transcribe: (file, opts = {}) => service?.voice ? service.voice.transcribe(file, opts) : transportReady ? request('voice.transcribe', { file, language: opts.language }, 180000) : Promise.resolve({ unavailable: true }) }),
     share: Object.freeze({ get wizard() { return service?.share?.wizard ? data => service.share.wizard(data) : transportReady ? data => request('share.wizard', data, 600000) : undefined; }, text: data => service ? service.share.text(data) : transportReady ? sharedResult(request('share.text', data)) : fallbackText(data), file: (file, opts) => service ? service.share.file(file, opts) : transportReady ? sharedResult(request('share.file', { file, options: opts })) : fallbackFile(file, opts),
       receive: receiveShares, targets: shareTargets, check: () => pullShares() }),
