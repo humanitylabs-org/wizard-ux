@@ -413,6 +413,15 @@
       let released = false; const off = () => { if (!released) { released = true; release(); } };
       a.offs.add(off); return off;
     } });
+    // A layout+navigation package may ask the shell for ↻ in every window bar and (pull:false) drop Chats pull-to-refresh.
+    // The shell owns the button and the refresh; the handle is released on every teardown.
+    if (caps.has('layout') && caps.has('nav')) api.windowRefresh = Object.freeze({ use(options = {}) {
+      if (a.dead) return () => {};
+      if (typeof options.pull !== 'boolean') throw new Error('Invalid window refresh mode');
+      const release = shell?.windowRefresh?.use?.(Object.freeze({ pull: options.pull })) || (() => {});
+      let released = false; const off = () => { if (!released) { released = true; release(); } };
+      a.offs.add(off); return off;
+    } });
     if (caps.has('models')) {
       api.models = Object.freeze({ list: async () => {
         const options = await shell?.models?.() || [];
