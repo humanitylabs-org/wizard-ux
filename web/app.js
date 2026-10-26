@@ -1073,14 +1073,48 @@
    * picks a desk. Not open yet: its own desk right beside the one in front (openWin). Already open: that window,
    * brought beside the desk in front on a desk of its own (refresh lets the app take the new query/date).
    * Chats is the hub and stays where it is; an explicit user placement (opts.desk) always gets a fresh window. */
+  /* Every app tap answers at once (James, 26 Oct 2026: "tapping an app like notes I get no UX response for a few
+   * seconds and tap it twice"). The tile shows it is opening; if the window is not on screen within a beat, an
+   * "Opening Notes…" notice with a spinner stays up until it is; a second tap on the same app while it opens is
+   * the same open, never a second one. The window itself shows a loading veil until the app's page has loaded. */
+  const OPENING = { id: null, el: null, t: 0, pill: 0, safety: 0, sheet: false };
+  function openingStart(a, el) {
+    openingEnd(); OPENING.id = a.id; OPENING.el = el || null; OPENING.t = Date.now();
+    // The feedback sits on the icon the finger is on (James, 26 Oct 2026): it sinks, dims and spins in place.
+    if (el) { el.classList.add('opening'); el.setAttribute('aria-busy', 'true'); el.setAttribute('aria-label', `Opening ${a.name || 'app'}`);
+      const ic = el.querySelector('.ic'); if (ic && !ic.querySelector('.open-spin')) ic.insertAdjacentHTML('beforeend', '<i class="open-spin" aria-hidden="true"></i>'); }
+    vib(6);
+    OPENING.safety = setTimeout(() => openingEnd(a.id), 10000);
+  }
+  function openingEnd(id) {
+    if (!OPENING.id || (id && id !== OPENING.id)) return;
+    clearTimeout(OPENING.pill); clearTimeout(OPENING.safety);
+    const el = OPENING.el; if (el) { el.classList.remove('opening'); el.removeAttribute('aria-busy'); el.removeAttribute('aria-label'); el.querySelectorAll('.open-spin').forEach(x => x.remove()); }
+    const sh = OPENING.sheet; OPENING.id = null; OPENING.el = null; OPENING.sheet = false;
+    if (sh) closeSheets();
+  }
+  // The Apps sheet stays up, its tapped icon spinning, until the app's window is about to show (or its setup sheet).
+  function openingReady() { if (OPENING.sheet) { OPENING.sheet = false; closeSheets(); } }
+  const isOpening = id => OPENING.id === id && Date.now() - OPENING.t < 10000;
+  // A tile tap (Apps sheet or New desk). fromSheet: the sheet closes first, then the app opens.
+  function tapOpen(a, el, fromSheet) {
+    if (!a) return;
+    if (isOpening(a.id)) { vib(4); return; }
+    const r = store.get('recent', []).filter(x => x !== a.id); r.unshift(a.id); store.set('recent', r.slice(0, 8));
+    openingStart(a, el);
+    OPENING.sheet = !!fromSheet;
+    // One frame so the pressed, spinning icon paints before any work starts.
+    requestAnimationFrame(() => { if (OPENING.id !== a.id) return; openApp(a); if (!window.WosAppSetup?.gate || a.kind !== 'wizard' || !a.url) openingEnd(a.id); });
+  }
   function placeApp(mine, obj, opts = {}, refresh) {
     const here = opts.desk == null ? Object.keys(W).find(id => deskOf(id) >= 0 && mine(W[id])) : null;
-    if (!here) return openWin(obj, opts);
+    openingReady();
+    if (!here) { const w = openWin(obj, opts); openingEnd(); return w; }
     if (W[here].app !== 'chats') bringBeside(here);
     const t = deskOf(here);
     if (refresh) refresh(W[here], t);
     if (t !== idx) goDesk(t, true);
-    focusWin(here); save();
+    focusWin(here); save(); openingEnd();
     return W[here];
   }
   // Hosted Wizard apps (App Store, System) ask the shell to open another installed app in its own window.
@@ -1445,7 +1479,7 @@
   }
   function renderFrameCore(w, a) {
     const frameUrl = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
-    return `<div class="frame-wrap">${window.WosOwnViews?.noteHtml(a) || ''}<div class="frame-coming">${ico('span', 'glyph', a)}<h3>${esc(a.name)} is on its way</h3><p>${esc(a.desc || '')}. It’s being built in another thread and appears here on its own once it’s published.</p></div><iframe class="appframe" ${a.probe ? `data-probe="${esc(w.url || a.url)}"` : ''} data-own-app="${esc(a.id || '')}" src="${esc(frameUrl)}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen" referrerpolicy="same-origin"></iframe>
+    return `<div class="frame-wrap loading">${window.WosOwnViews?.noteHtml(a) || ''}<div class="frame-loading" role="status" aria-label="Loading ${esc(a.name || 'app')}">${ico('span', 'glyph', a)}<i class="wos-spin" aria-hidden="true"></i></div><div class="frame-coming">${ico('span', 'glyph', a)}<h3>${esc(a.name)} is on its way</h3><p>${esc(a.desc || '')}. It’s being built in another thread and appears here on its own once it’s published.</p></div><iframe class="appframe" ${a.probe ? `data-probe="${esc(w.url || a.url)}"` : ''} data-own-app="${esc(a.id || '')}" src="${esc(frameUrl)}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen" referrerpolicy="same-origin"></iframe>
       <div class="frame-fallback">${ico('span', 'glyph', a)}<h3>${esc(a.name)} can’t run in a window yet</h3><p>It opens in its own tab instead.</p><a class="cta" href="${esc(a.url || '/')}" target="_blank" rel="noopener">Open ${esc(a.name)}</a></div></div>`;
   }
   // A refused frame lands on an unreadable error document: show the fallback card.
@@ -1513,9 +1547,12 @@
       if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), back: () => { if (desks[idx].focus !== w.id) return false; const did = backStep(w.id); if (did) { exitUntil = 0; window.__backLog = (window.__backLog || []).concat('app-done:' + did).slice(-30); } return !!did; }, openContextDraft: (key, text) => { closeSheets(true); const cw = placeApp(mainChats, { app: 'chats', thread: null }, {}); if (!cw) throw new Error('Chats unavailable'); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); return receipt; }, isVisible: () => desks[idx].wins.includes(w.id) && (!desks[idx].full || desks[idx].focus === w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) });
       watchEarly(f);
       const wrap = f.closest('.frame-wrap');
-      if (f.dataset.probe) { wrap.classList.add('coming'); f.removeAttribute('src'); probeFrame(f, f.dataset.probe); }
+      if (f.dataset.probe) { wrap.classList.remove('loading'); wrap.classList.add('coming'); f.removeAttribute('src'); probeFrame(f, f.dataset.probe); }
+      // The loading veil lifts when the app's page has loaded (or after 12 s, so a slow app is never hidden for good).
+      const unveil = () => wrap?.classList.remove('loading'); setTimeout(unveil, 12000);
       f.addEventListener('load', () => {
         let ok = false, why = '';
+        try { if (f.contentWindow.location.href !== 'about:blank') unveil(); } catch (e) { unveil(); }
         try { const doc = f.contentDocument; why = doc ? doc.location.href : 'nodoc'; ok = !!doc && doc.location.href !== 'about:blank'; } catch (e) { ok = false; why = 'x:' + e.name; }
         window.__frameLog = (window.__frameLog || []).concat(why).slice(-40); // bounded: the shell may run for weeks
         if (why === 'about:blank') {
@@ -1629,7 +1666,7 @@
     const sk = e.target.closest('.new-desk [data-storekind]'); if (sk) return openStoreKind(sk.dataset.storekind);
     const info = e.target.closest('.new-desk [data-appinfo]'); if (info) return openAppInfo(info);
     const pick = e.target.closest('.new-desk [data-app]');
-    if (pick) { const a = APP[pick.dataset.app]; if (a) { const r = store.get('recent', []).filter(x => x !== a.id); r.unshift(a.id); store.set('recent', r.slice(0, 8)); openApp(a); } return; }
+    if (pick) { tapOpen(APP[pick.dataset.app], pick); return; }
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (act === 'inbox') return openSheet('inbox');
     if (act === 'settings') return openSettings(false);
@@ -1856,21 +1893,17 @@
   $('#searchForm').addEventListener('submit', e => {
     e.preventDefault(); const q = $('#search').value.trim(); if (!q) return;
     const sel = $('#launcherBody .lrow.sel');
-    if (sel?.dataset.app) { launch(APP[sel.dataset.app]); return; }
+    if (sel?.dataset.app) { launch(APP[sel.dataset.app], sel); return; }
     closeSheets(); runUtterance(q, 'command', true);
   });
-  function launch(a) {
-    if (!a) return;
-    const r = store.get('recent', []).filter(x => x !== a.id); r.unshift(a.id); store.set('recent', r.slice(0, 8));
-    closeSheets(); setTimeout(() => openApp(a), 120);
-  }
+  function launch(a, el) { tapOpen(a, el, true); }
   // Arrange/download tweak: hold no longer opens Add to home screen on app lists (the Desks download button does).
   window.WizHomeScreenApps?.attach(launcher, id => APP[id], { available: () => overviewMode().appHold !== false });
   // Miguel's skins open apps from the New desk grid (swipe up shows Desks, not the Apps sheet): same long-press there.
   window.WizHomeScreenApps?.attach(track, id => APP[id], { available: () => overviewMode().appHold !== false, rows: '.new-desk [data-app]', live: row => !!row.closest('.new-desk') && row.getClientRects().length > 0 });
   launcher.addEventListener('click', e => {
     const sk = e.target.closest('[data-storekind]'); if (sk) return openStoreKind(sk.dataset.storekind);
-    const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app]);
+    const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app], a);
     const bi = e.target.closest('[data-appinfo]'); if (bi) { closeSheets(); return openAppInfo(bi); }
     const t = e.target.closest('[data-thread]'); if (t) { closeSheets(); return openWizardThread(t.dataset.thread); }
     const dw = e.target.closest('[data-dw]');
@@ -1984,7 +2017,7 @@
   /* ---------------- toast ---------------- */
   let toastT = 0;
   function toast(icon, text, ms = 2200) {
-    const t = $('#toast'); t.innerHTML = `<span class="ti">${window.WizBrand.icon(icon)}</span><span>${text}</span>`; t.classList.add('show');
+    const t = $('#toast'); delete t.dataset.opening; t.innerHTML = `<span class="ti">${window.WizBrand.icon(icon)}</span><span>${text}</span>`; t.classList.add('show');
     clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms);
   }
 
