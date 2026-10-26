@@ -95,7 +95,8 @@ async function current(p, mobile) { return p.evaluate(m => { const s=m?__wos:__w
       assert.equal(actual, skin, 'requested skin must exist');
       await p.evaluate(m=>m?__wos.closeSheets():__wux.closeSettings(),mobile);
       await p.evaluate(({id,m})=>{const s=m?__wos:__wux;if(m)s.goDesk(s.desks.findIndex(d=>d.wins.includes(id)),true);s.focusWin(id);},{id:peer.id,m:mobile});
-      await p.waitForTimeout(200);
+      await p.waitForTimeout(1000); // let Settings close/skin-entry transitions settle
+      await p.locator('.mz-intro').waitFor({state:'detached'});
       await p.screenshot({path:path.join(out,label+'-generic-'+actual+'.png')});
       ok(label+' '+actual+' skin retains draft and bound view',await app.locator('#draft').inputValue()==='retained draft' && await p.evaluate(id=>!!(window.__wos||window.__wux).wins[id],peer.id));
      }
