@@ -1540,7 +1540,11 @@
   function watchFrames(root) {
     $$('iframe.appframe', root).forEach(f => {
       if (f._watched) return; f._watched = true;
-      if (window.WizBrowserBoundary?.enabled) { f._appDetach = window.WizBrowserBoundary.attach(f); return; }
+      if (window.WizBrowserBoundary?.enabled) {
+        const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
+        f._appDetach = a?.url ? window.WizAppServices.attach(f, { appId: a.id, path: a.url }) : window.WizBrowserBoundary.attach(f);
+        return;
+      }
       const audioId=f.closest('.win')?.dataset.win;
       if(W[audioId]?.appId === 'wizard-music') audioFrames.add(f);
       // servicesAs: a second view of an installed app (Video Editor's Feedback) gets that app's Back/services.

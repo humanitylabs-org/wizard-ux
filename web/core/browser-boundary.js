@@ -1,6 +1,7 @@
 /* Experimental browser boundary. Loaded ONLY by the flag-on server's navigation
  * response, before the shell. The secret never enters storage, a URL or this API.
- * No generic fetch/native/share/install proxy is exposed to an app. */
+ * No generic fetch/native/install proxy is exposed to an app. Sharing requires
+ * a trusted shell click; transcription is a bounded per-app capability. */
 (() => {
   'use strict';
   const node = document.querySelector('meta[name="wizard-shell-token"]');
@@ -77,6 +78,12 @@
     enabled: true,
     frameAttributes: () => 'sandbox="allow-scripts allow-forms allow-downloads" referrerpolicy="no-referrer"',
     attach,
+    // Shell-only admission for the two bounded app services. Origin:null is
+    // never an identity; bind the registered element's WindowProxy + load seal.
+    admits(frame, source, channel) {
+      const st = target(frame);
+      return !!(connected(st) && st.ready && frame.contentWindow === source && st.channel === channel);
+    },
     async back(frame, atRoot) {
       const st = target(frame);
       if (!st || !frameVisible(frame)) return 'stay';

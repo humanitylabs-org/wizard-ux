@@ -8,6 +8,7 @@
   const blob = x => x && ['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(x));
   const fsize = b => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB';
   let active = null;
+  const CONFIRM_TIMEOUT_MS = 60000; // opaque apps cannot keep an unattended confirmation open forever
   function valid(data) {
     const files = data?.files ?? [];
     if (!Array.isArray(files) || files.length > 10 || files.some(f => !blob(f)) || files.reduce((n,f) => n + f.size, 0) > 100 * 1048576) throw new Error('Use up to 10 files / 100 MB');
@@ -16,13 +17,14 @@
     if (!files.length && !data?.text?.trim()) throw new Error('Nothing to share');
     return {files, text: data?.text || '', title: data?.title || ''};
   }
-  function finish(result) {
-    const a = active; if (!a) return;
-    active = null; a.el.remove(); a.mount.classList.remove('dv-share-open');
+  function finish(result, expected = active) {
+    const a = active; if (!a || a !== expected) return;
+    active = null; clearTimeout(a.confirmTimer); clearInterval(a.authorityTimer); a.el.remove(); a.mount.classList.remove('dv-share-open');
     a.urls.forEach(u => URL.revokeObjectURL(u)); a.resolve(result); a.focus?.focus?.();
   }
   function back() { if (!active) return false; if (!active.busy) finish('cancelled'); return true; }
-  function open({items = [], text = '', title = '', skipped = 0, stay = false} = {}, authorize = () => true) {
+  function open({items = [], text = '', title = '', skipped = 0, stay = false, requireTrusted = false} = {}, authorize = () => true) {
+    if (requireTrusted && !authorize()) return Promise.resolve('denied');
     const w = host(), chats = w?.chats;
     if (!w || !chats?.uploadFile || !chats?.sendChat || !(w.openWizardThread || w.openThread)) return Promise.resolve('unsupported');
     if (active) return Promise.resolve('unsupported'); // never replace a sheet holding someone's unsent note
@@ -39,6 +41,10 @@
       <div class="dv-status" aria-live="polite"></div></section>`;
     return new Promise(resolve => {
       const a = active = {el, mount, resolve, busy: false, urls: [], uploaded: [], focus: document.activeElement};
+      if (requireTrusted) {
+        a.confirmTimer = setTimeout(() => { if (active === a) finish('denied'); }, CONFIRM_TIMEOUT_MS);
+        a.authorityTimer = setInterval(() => { if (active === a && !authorize()) finish('denied'); }, 250);
+      }
       mount.append(el); mount.classList.add('dv-share-open'); el.querySelector('[role=dialog]').focus({preventScroll:true});
       items.forEach((f,n) => { if (/^image\//.test(f.mime) && f.bytes < 6e6) {
         try { const u = URL.createObjectURL(f.blob || f.read()); a.urls.push(u); el.querySelector(`[data-n="${n}"] img`).src = u; } catch (_) {}
@@ -46,18 +52,20 @@
       el.addEventListener('click', async e => {
         if (e.target.closest('[data-dvclose]')) return back();
         const b = e.target.closest('[data-shareto]'); if (!b || a.busy) return;
-        if (!authorize()) return finish('unsupported');
+        if (requireTrusted && (e.isTrusted !== true || e.target.ownerDocument !== document || b.ownerDocument !== document || !b.isConnected || !el.isConnected || !el.contains(b))) return finish('denied', a);
+        if (!authorize()) return finish(requireTrusted ? 'denied' : 'unsupported', a);
         const note = el.querySelector('.dv-text').value.trim(), status = el.querySelector('.dv-status');
         if (!note && !items.length) { status.textContent = 'Add a message first'; return; }
+        clearTimeout(a.confirmTimer);
         a.busy = true; el.querySelectorAll('button').forEach(x => x.disabled = true);
         try {
           // Retain successful upload receipts across retries; there is still exactly one send.
           for (let n = a.uploaded.length; n < items.length; n++) {
-            if (!authorize()) return finish('unsupported');
+            if (!authorize()) return finish(requireTrusted ? 'denied' : 'unsupported', a);
             const f = items[n]; status.textContent = `Uploading ${n + 1} of ${items.length}…`;
             a.uploaded.push(await chats.uploadFile(new File([f.blob || f.read()], f.name, {type: f.mime})));
           }
-          if (!authorize()) return finish('unsupported');
+          if (!authorize()) return finish(requireTrusted ? 'denied' : 'unsupported', a);
           status.textContent = 'Sending…';
           const target = b.dataset.shareto;
           // From an installed app (stay): send in the background and leave the owner where they were. Any existing
@@ -76,7 +84,7 @@
             if (focusWas != null && w.wins?.[focusWas]) w.focusWin?.(focusWas);
           }
           if (!receipt) throw new Error('Could not save the message');
-          finish('sent'); w.toast?.('✦', 'Sent to Wizard', 1800);
+          finish('sent', a); w.toast?.('✦', 'Sent to Wizard', 1800);
         } catch (err) {
           a.busy = false; el.querySelectorAll('button').forEach(x => x.disabled = false);
           status.textContent = (err.user ? err.message : 'Couldn’t send · check the connection and try again');
@@ -84,9 +92,9 @@
       });
     });
   }
-  function wizard(data, authorize) {
+  function wizard(data, authorize, { requireTrusted = false } = {}) {
     const p = valid(data);
-    return open({stay:true, text:p.text, title:p.title, items:p.files.map((f,n) => ({name:f.name || `attachment-${n+1}`, mime:f.type, bytes:f.size, blob:f}))}, authorize);
+    return open({stay:true, requireTrusted, text:p.text, title:p.title, items:p.files.map((f,n) => ({name:f.name || `attachment-${n+1}`, mime:f.type, bytes:f.size, blob:f}))}, authorize);
   }
   document.addEventListener('keydown', e => {
     if (!active) return;

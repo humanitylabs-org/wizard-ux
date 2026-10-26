@@ -4,11 +4,17 @@
   'use strict';
   if (parent === window || globalThis.origin !== 'null') return;
   let channel = '', back = null, applyTheme = null;
-  const seals = new Map();
+  const seals = new Map(), requests = new Map();
+  let serial = 0;
+  const error = (code, message) => Object.assign(new Error(message), { code });
+  function cancelRequests() {
+    for (const wait of requests.values()) { clearTimeout(wait.timer); wait.reject(error('denied', 'App document changed')); }
+    requests.clear();
+  }
   const send = data => parent.postMessage({ type: 'wizard:boundary', version: 1, channel, ...data }, location.origin);
   function release(id) { const s = seals.get(id); if (s) { s.el.removeEventListener('input', s.changed); seals.delete(id); } }
-  function clear() { for (const id of seals.keys()) release(id); }
-  addEventListener('pagehide', clear);
+  function clear() { for (const id of seals.keys()) release(id); cancelRequests(); }
+  addEventListener('pagehide', () => { clear(); channel = ''; });
   function editable(el) {
     return el?.isConnected && el.matches('textarea,input[type=text],input[type=search],input[type=url],input[type=tel],input:not([type])') && !el.disabled && !el.readOnly && !el.closest('[inert],[data-no-dictation]') && typeof el.selectionStart === 'number';
   }
@@ -19,6 +25,12 @@
       clear(); channel = d.channel; send({ op: 'ready' }); return;
     }
     if (!channel || d.channel !== channel) return;
+    if (d.op === 'service.reply') {
+      const wait = requests.get(d.id); if (!wait) return;
+      clearTimeout(wait.timer); requests.delete(d.id);
+      if (d.error) wait.reject(error(d.error.code || 'failed', d.error.message || 'App request failed')); else wait.resolve(d.value);
+      return;
+    }
     const reply = (status, extra = {}) => send({ op: 'reply', id: d.id, status, ...extra });
     if (d.op === 'theme') { try { if (applyTheme?.(d.appearance) === true) send({ op: 'theme.applied', revision: d.appearance.revision }); } catch (_) {} return; }
     if (d.op === 'back') { try { reply(back?.() === true ? 'handled' : back ? 'atRoot' : 'refused'); } catch (_) { reply('refused'); } return; }
@@ -46,5 +58,17 @@
   });
   window.WizBoundaryClient = Object.freeze({
     connect({ onBack, onTheme }) { back = onBack; applyTheme = onTheme; },
+    get ready() { return !!channel; },
+    request(method, args, timeout = 15000) {
+      if (!channel || !['ready', 'share.wizard', 'voice.transcribe'].includes(method)) return Promise.reject(error('unavailable', 'Shared app capability unavailable'));
+      if (requests.size >= 32) return Promise.reject(error('busy', 'Too many pending app requests'));
+      const id = 'wbs-' + (++serial);
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => { requests.delete(id); reject(error('timeout', 'Shared app request timed out')); }, timeout);
+        requests.set(id, { resolve, reject, timer });
+        try { send({ op: 'service.request', id, method, args }); }
+        catch (err) { clearTimeout(timer); requests.delete(id); reject(err); }
+      });
+    },
   });
 })();

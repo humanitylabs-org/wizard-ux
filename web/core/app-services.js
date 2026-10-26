@@ -12,12 +12,26 @@
   const claimShare = ops => { if (shareOps || !ops) return false; shareOps = ops; return true; };
   const uid = () => 'as-' + (++serial) + '-' + Math.random().toString(36).slice(2);
   const fault = message => new Error(message);
+  // Shell-owned, per-app sliding window (shared across frames/reloads). Tune here,
+  // never from app arguments. Boundary-off behaviour retains its existing limit.
+  const TRANSCRIBE_LIMITS = Object.freeze({ maxBytes: 25 * 1024 * 1024, calls: 10, windowMs: 10 * 60 * 1000 });
+  const transcribeBudgets = new Map();
+  const codedFault = (code, message) => Object.assign(fault(message), { code });
   // Apps use the box's one configured transcriber; no microphone or provider credentials cross the frame.
-  async function transcribeFile(file, opts = {}) {
-    if (!file || !['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(file)) || !file.size || file.size > 25 * 1024 * 1024) throw fault('Use an audio file up to 25 MB');
+  async function transcribeFile(file, opts = {}, { appId = null, authorize = () => true } = {}) {
+    if (file?.size > TRANSCRIBE_LIMITS.maxBytes) throw codedFault('too_large', 'Use an audio file up to 25 MB');
+    if (!file || !['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(file)) || !file.size) throw codedFault('invalid_request', 'Use an audio file up to 25 MB');
     if (opts.language != null && (typeof opts.language !== 'string' || !/^[a-zA-Z-]{0,35}$/.test(opts.language))) throw fault('Invalid transcription language');
+    if (!authorize()) throw codedFault('denied', 'App frame is no longer authorized');
+    if (appId !== null) {
+      const now = Date.now();
+      const calls = (transcribeBudgets.get(appId) || []).filter(t => now - t < TRANSCRIBE_LIMITS.windowMs);
+      if (calls.length >= TRANSCRIBE_LIMITS.calls) throw codedFault('rate_limited', 'Too many transcription requests; try again later');
+      calls.push(now); transcribeBudgets.set(appId, calls); // reserve before any await, including concurrent calls
+    }
     const config = window.WizConfig;
     await config?.ready;
+    if (!authorize()) throw codedFault('denied', 'App frame is no longer authorized');
     if (!config?.transcribe || !config.endpoint('transcribe')) return { unavailable: true };
     try { const result = await config.transcribe(file, { language: opts.language || '', prompt: config.voicePrompt?.() || '' }); return { text: String(result.text || '').trim() }; }
     catch (e) { if (e.code === 'no_voice') return { unavailable: true }; throw e; }
@@ -36,7 +50,7 @@
     return root !== '/' ? url.pathname.startsWith(root) : url.pathname === base.pathname;
   }
   function valid(st, doc) {
-    if (!st || frames.get(st.frame) !== st || !st.frame.isConnected || !registered(st)) return false;
+    if (!st || st.opaque || frames.get(st.frame) !== st || !st.frame.isConnected || !registered(st)) return false;
     try {
       const w = st.frame.contentWindow;
       return !!w && !st.frame.hasAttribute('srcdoc') && within(new URL(st.frame.src), st.url) && w.location.origin === ORIGIN && within(new URL(w.location.href), st.url) && (!doc || w.document === doc);
@@ -53,12 +67,20 @@
     }
   }
   function attach(frame, { appId, path, openThread, openContextDraft, isVisible, back, readingStorage } = {}) {
-    if (window.WizBrowserBoundary?.enabled) return window.WizBrowserBoundary.attach(frame);
     frames.get(frame)?.detach();
     if (!frame || frame.tagName !== 'IFRAME' || !appId || !path) return () => {};
     let url; try { url = new URL(path, ORIGIN); } catch (_) { return () => {}; }
     const st = { frame, appId, url, openThread, openContextDraft, isVisible, back, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
     if (!registered(st)) return () => {};
+    if (window.WizBrowserBoundary?.enabled) {
+      // Do not revive synchronous legacy connect or child-document reads.
+      if (!frame.matches?.('iframe[sandbox]') || frame.sandbox.contains('allow-same-origin') || frame.hasAttribute('srcdoc') || !within(new URL(frame.src), st.url)) return () => {};
+      st.opaque = true; frames.set(frame, st);
+      const off = window.WizBrowserBoundary.attach(frame), load = () => reset(st);
+      frame.addEventListener('load', load);
+      st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); off(); reset(st); };
+      return st.detach;
+    }
     const load = () => { if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); restoreReturn(st); };
     st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); if (st.badged) setBadge(st.appId, 0); };
     frames.set(frame, st); frame.addEventListener('load', load);
@@ -337,6 +359,41 @@
     for (const name of policy.caches) { if (!valid(st)) return removed; if (await window.caches?.delete(name)) removed.push(name); }
     return removed;
   }
+  function opaqueValid(st, source, channel) {
+    if (!st?.opaque || frames.get(st.frame) !== st || !st.frame.isConnected || !registered(st)) return false;
+    try {
+      return st.frame.matches('iframe[sandbox]') && !st.frame.hasAttribute('srcdoc') && !st.frame.sandbox.contains('allow-same-origin') && within(new URL(st.frame.src), st.url) && window.WizBrowserBoundary.admits(st.frame, source, channel);
+    } catch (_) { return false; }
+  }
+  // Only these methods exist under the boundary. All legacy/global/native RPCs
+  // remain closed; app identity comes from shell registration, never the payload.
+  addEventListener('message', async e => {
+    const d = e.data;
+    if (!window.WizBrowserBoundary?.enabled || e.origin !== 'null' || !d || d.type !== 'wizard:boundary' || d.version !== VERSION || d.op !== 'service.request' || !['ready', 'share.wizard', 'voice.transcribe'].includes(d.method) || typeof d.id !== 'string' || !d.id || d.id.length > 96) return;
+    const st = from(e.source), authorize = () => opaqueValid(st, e.source, d.channel);
+    if (!authorize()) return;
+    const key = d.channel + ':' + d.id;
+    st.requests ||= new Set();
+    if (st.requests.size >= 32 || st.requests.has(key)) return;
+    st.requests.add(key);
+    const reply = (value, error) => { if (authorize()) e.source.postMessage({ type: 'wizard:boundary', version: VERSION, op: 'service.reply', channel: d.channel, id: d.id, value, error }, '*'); };
+    const hold = uid();
+    st.holds.set(hold, d.method === 'share.wizard' ? 'Share to Wizard' : 'App transcription'); changed();
+    try {
+      let value;
+      if (d.method === 'ready') value = { version: VERSION, hosted: true, appId: st.appId };
+      if (d.method === 'share.wizard') {
+        if (!window.WizShareWizard) value = 'unsupported';
+        else {
+          window.WizShareWizard.valid(d.args);
+          value = await window.WizShareWizard.wizard(d.args, authorize, { requireTrusted: true });
+        }
+      }
+      if (d.method === 'voice.transcribe') value = await transcribeFile(d.args?.file, { language: d.args?.language }, { appId: st.appId, authorize });
+      reply(value);
+    } catch (err) { reply(null, { code: ['rate_limited', 'too_large', 'denied', 'invalid_request'].includes(err.code) ? err.code : 'failed', message: String(err.message || err).slice(0, 200) }); }
+    finally { st.requests.delete(key); st.holds.delete(hold); changed(); }
+  });
   addEventListener('message', async e => {
     const d = e.data; if (!d || d.type !== 'wizard:app:request' || d.version !== VERSION || !OPS.has(d.op) || typeof d.id !== 'string' || d.id.length > 96) return;
     const st = from(e.source); if (!st || e.origin !== ORIGIN || !valid(st, st.doc)) return;
