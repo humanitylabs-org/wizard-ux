@@ -2581,13 +2581,17 @@
   // The microphone never opened for this take (no answer from the browser, or a second tap before it did): end the
   // take, keep nothing (nothing was recorded) and say why where the person is looking (the tour hides toasts).
   const MIC_OPEN_TIMEOUT_MS = 8000;
-  function micNeverOpened(why) {
+  async function micNeverOpened(why) {
     if (V.rec || V.native || V.state === 'idle') return;
     window.__voiceLog = (window.__voiceLog || []).concat('mic-never-opened:' + why).slice(-20);
     // A microphone borrowed from a browser meeting goes straight back: nothing was recorded, so no recording custody
-    // (cancelVoice would otherwise keep an empty "cancelled meeting interruption").
-    const loan = V.meetingLoan;
-    if (loan && !V.parts.length && !(V.chunks || []).length) { V.meetingLoan = null; Promise.resolve().then(() => window.WosOrbHandoff?.end?.(loan, { status: 'cancelled' })).catch(() => {}); }
+    // (cancelVoice would otherwise keep an empty "cancelled meeting interruption"). returnMeeting keeps the loan and
+    // says so when the return fails; the take then stays, and the next tap tries the return again.
+    if (V.meetingLoan && !V.parts.length && !(V.chunks || []).length) {
+      await returnMeeting({ status: 'cancelled' });
+      if (V.meetingLoan) { tourEv('voicefail', { text: 'The microphone didn’t start, and the meeting still has it. Tap the orb to try again.' }); return; }
+      if (V.rec || V.native || V.state === 'idle') return;
+    }
     cancelVoice(true);
     const text = why === 'timeout' ? 'The microphone didn’t start. Allow it for this site, then tap the orb again.' : 'The microphone didn’t start, so nothing was recorded. Tap the orb to try again.';
     toast('🎙', text, 5200); tourEv('voicefail', { text });
