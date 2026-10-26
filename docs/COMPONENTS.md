@@ -1,6 +1,6 @@
 # Shared components
 
-Extend shared capabilities below. NEW lives in `web/core/`.
+Shared first; NEW: `web/core/` + row.
 
 CI: Reuse + globals; [app gate](app-reuse-gate.md).
 
