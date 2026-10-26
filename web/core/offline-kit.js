@@ -38,9 +38,9 @@
     channel?.addEventListener('message',()=>notify(false).catch(()=>{}));
     const onlineOnly=p=>(c.onlineOnly||[]).some(x=>absolute(p).startsWith(absolute(x)));
     const queueable=p=>(c.writes||[]).some(x=>absolute(p)===absolute(x));
-    async function response(p,body,id) {
+    async function response(p,body,id,timeout=c.timeout||20000) {
       const r=await fetch(absolute(p),{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json',...(id?{'X-Wizard-Offline-Id':id}:{})}:{},
-        body:body?JSON.stringify(body):undefined,cache:'no-store',signal:AbortSignal.timeout(c.timeout||12000)});
+        body:body?JSON.stringify(body):undefined,cache:'no-store',signal:AbortSignal.timeout(timeout)});
       let d;try{d=await r.json()}catch{throw Object.assign(Error('Invalid server response'),{status:r.status})}
       if(!r.ok)throw Object.assign(Error(d.error||'Unable to connect'),{status:r.status});return d;
     }
@@ -69,8 +69,8 @@
       } finally {syncing=false;await notify()}
       return targetResult;
     }
-    async function flush(){return lock(async()=>{await flushLocked();c.onSynced?.(await projected())}).catch(e=>{lastError=e.message;return notify()})}
-    async function request(path,body) {
+    async function flush(){return lock(async()=>{const before=await all();await flushLocked();if(before.some(i=>!i.error))c.onSynced?.(await projected())}).catch(e=>{lastError=e.message;return notify()})}
+    async function request(path,body,timeout) {
       if(onlineOnly(path)&&!navigator.onLine)throw Error('Needs a connection');
       if(body&&queueable(path))return lock(async()=>{
         // Store before the first network attempt: a killed tab cannot lose an accepted edit.
@@ -80,7 +80,7 @@
         if(result)return result;
         const state=await projected();return c.queuedResult(state,item);
       });
-      const result=await response(path,body);
+      const result=await response(path,body,undefined,timeout);
       if(!body&&(c.data||[]).includes(path)) {
         await lock(async()=>{await save(result)});
         // The worker caches the canonical snapshot; pending local edits remain a separate overlay.
