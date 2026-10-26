@@ -1,0 +1,5 @@
+/* Refresh lives in the title bar: ↻ sits just left of ✕ (borderless frames hide other bar buttons, so show it
+   explicitly), and Chats shows no pull-to-refresh indicator. Desktop already has its own ↻ and ⌥R. */
+html[data-tweaks~="miguel/refresh-button"]:not([data-shell="desktop"]) .ch-ptr { display: none; }
+html[data-tweaks~="miguel/refresh-button"]:not([data-shell="desktop"]) .wbar > [data-wact="reload"] { display: grid; flex: 0 0 auto; width: 34px; height: 34px; place-items: center; border-radius: 10px; color: var(--ink-2); }
+html[data-tweaks~="miguel/refresh-button"]:not([data-shell="desktop"]) .wbar > [data-wact="reload"]:hover { color: var(--ink); background: var(--glass-2); }

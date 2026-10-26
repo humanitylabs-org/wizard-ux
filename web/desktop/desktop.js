@@ -921,6 +921,7 @@
     if (pal.hidden) palPrev = a && a !== document.body && !pal.contains(a) ? a : null;
     palDesk = o.desk || null; palMode = mode; palPaint();
     pal.hidden = false; palIn.value = q; palSel = 0; palRender(); palIn.focus(); palIn.select();
+    window.WizCore.refreshApps?.({afterPending:true}); // also refresh after a pending pre-opening snapshot
   }
   const openPicker = (o = {}) => openPalette('', 'apps', o);
   // ⌘K and ⌘O switch an open box between its modes, keeping the query; the same key again closes it.
@@ -928,6 +929,7 @@
     if (pal.hidden) return openPalette('', mode);
     if (palMode === mode) return closePalette();
     palMode = mode; palPaint(); palSel = 0; palRender(); palIn.focus();
+    window.WizCore.refreshApps?.({afterPending:true});
   }
   function closePalette({ restore = true } = {}) {
     if (pal.hidden) return;

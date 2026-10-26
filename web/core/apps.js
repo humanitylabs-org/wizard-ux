@@ -80,7 +80,18 @@
     return a;
   });
   const listeners = new Set();
-  async function loadRemote() {
+  let remoteLoad = null, remoteAfter = null;
+  // Focus and visibility share a read. A newly opened picker must also see a
+  // snapshot taken after that opening, even when an older read is still pending.
+  function loadRemote(options = {}) {
+    if (options.afterPending && remoteLoad) {
+      if (!remoteAfter) remoteAfter = remoteLoad.then(() => { remoteAfter = null; return loadRemote(); });
+      return remoteAfter;
+    }
+    if (!remoteLoad) remoteLoad = readRemote().finally(() => { remoteLoad = null; });
+    return remoteLoad;
+  }
+  async function readRemote() {
     try {
       if (window.WizConfig?.ready) await window.WizConfig.ready;
       const url = window.WizConfig?.endpoint('apps');
@@ -88,6 +99,7 @@
       const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
       if (!r.ok) return;
       const snapshot = await r.json();
+      if (!snapshot || !Array.isArray(snapshot.apps)) return;
       window.WizChatsHost?.configure(snapshot);
       // Owner's In development list (launcher.json in_development, James 23 Oct 2026): any app id, built-ins included.
       DEV = new Set(Array.isArray(snapshot.in_development) ? snapshot.in_development.map(String) : []);
@@ -107,6 +119,7 @@
   // ?open=<id> before the box's app list arrived (first run, no cache): wait for it once, then retry.
   window.WizCore.appsLoaded = () => Promise.all([firstLoad, window.WosAgents?.load()]);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadRemote(); });
+  addEventListener('focus', () => { if (!document.hidden) loadRemote(); });
   // A Store Get (or another same-origin Wizard window) says the box's apps changed: read the list again now, so
   // the new app can be opened (Store "Open") without reloading the shell. Refetching is all it can trigger.
   addEventListener('message', e => {
