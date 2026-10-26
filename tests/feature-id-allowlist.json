@@ -127,7 +127,7 @@
   "web/core/apps.js:wisdom": 13,
   "web/core/apps.js:wizard-music": 2,
   "web/core/apps.js:wizard-signal": 4,
-  "web/core/background-audio.js:wizard-music": 5,
+  "web/core/background-audio.js:wizard-music": 6,
   "web/core/bound-view.js:usuals": 3,
   "web/core/chat-kit.js:cinequeue": 1,
   "web/core/chat-kit.js:photos": 1,
@@ -177,6 +177,7 @@
   "web/device.js:Mizel": 1,
   "web/index.html:photos": 1,
   "web/index.html:usuals": 2,
+  "web/layouts/two-orb/layout.js:Mizel": 1,
   "web/live.js:photos": 1,
   "web/store/store-status.js:android-apps": 4,
   "web/store/store-status.js:wizard-music": 4,
@@ -185,5 +186,6 @@
   "web/usuals.css:usuals": 2,
   "web/usuals.css:Usuals": 1,
   "web/usuals.js:usuals": 21,
-  "web/usuals.js:Usuals": 4
+  "web/usuals.js:Usuals": 4,
+  "web/ux-changes.json:Photos": 1
 }
