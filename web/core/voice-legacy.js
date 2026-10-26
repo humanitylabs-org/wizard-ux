@@ -4,7 +4,7 @@
  * contract, and its parser lacks open-and-play. Do not grow this grammar. */
 (() => {
   'use strict';
-  const legacyAliases = { troubleshooter: 'troubleshooter', troubleshooting: 'troubleshooter', troubleshoot: 'troubleshooter', 'fix wizard': 'troubleshooter', wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', 'google maps': 'maps', map: 'maps', 'cine queue': 'cinequeue', movies: 'cinequeue', 'i ching': 'iching', notifications: 'wizard', 'side key': 'side-button', 'power button': 'side-button', 'side button assistant': 'side-button', inbox: 'wizard', terminal: 'console', music: 'spotify', reader: 'wisdom', 'wisdom reader': 'wisdom', 'wizard reader': 'wisdom', collections: 'wisdom', jobs: 'wisdom', 'steve jobs': 'wisdom', signal: 'wizard-signal', shop: 'shopping', meetings: 'mizel', 'meeting recorder': 'mizel', usual: 'usuals', usuals: 'usuals', 'food app': 'usuals', 'my food': 'usuals', 'grab app': 'usuals', 'saved orders': 'usuals', eats: 'usuals', 'wizard eats': 'usuals', bites: 'usuals', 'wizard bites': 'usuals', 'wizard food': 'usuals', grab: 'usuals', 'my usuals': 'usuals', 'grab food': 'usuals', food: 'usuals', 'order food': 'usuals' };
+  const legacyAliases = { troubleshooter: 'troubleshooter', troubleshooting: 'troubleshooter', troubleshoot: 'troubleshooter', 'fix wizard': 'troubleshooter', wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', 'google maps': 'maps', map: 'maps', 'cine queue': 'cinequeue', movies: 'cinequeue', 'i ching': 'iching', notifications: 'wizard', 'side key': 'side-button', 'power button': 'side-button', 'side button assistant': 'side-button', inbox: 'wizard', terminal: 'console', music: 'spotify', reader: 'wisdom', 'wisdom reader': 'wisdom', 'wizard reader': 'wisdom', collections: 'wisdom', jobs: 'wisdom', 'steve jobs': 'wisdom', signal: 'wizard-signal', shop: 'shopping', meetings: 'mizel', 'meeting recorder': 'mizel' };
   const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9ก-๙ ]+/g, ' ').replace(/\s+/g, ' ').trim();
   const MUSIC = '(?: the)?(?: music| song| track| tune| playback| it| this)?';
   const MUSIC_WORD = /\b(music|song|songs|track|tune|tunes|playlist|radio|spotify)\b/;
@@ -109,33 +109,19 @@
     return true;
   }
 
-  const NEW_SPELL = /^(?!(?:.* )?get (?:me |us )?something$)(?:(?:please |can you |could you |let'?s |i(?: want to| wanna| would like to|'d like to) )?(?:order|get)(?: me| us)? (?:some |a |my )?(?:food|foods|grab|grab ?food|lunch|dinner|breakfast|brunch|supper|a snack|snacks|takeout|takeaway|take out|take away|delivery|food delivery|something(?: new| different| else)?(?: to eat)?)(?: (?:from|on|with|through) grab)?|order (?:from|on) grab|(?:a )?(?:food|grab|grab food) order|grab (?:me )?(?:some )?food|grab me something(?: new)? to eat|new (?:food|grab) order)$/;
-  const OPEN_SPELL = /^(?:food|wizard food|wizard eats|eats|my food|grab food app|food app|my orders|my saved orders|saved orders|my usuals|usuals)$/;
-  function spell(text) {
-    const s = window.WizConfig.stripAddress(text).toLowerCase().replace(/[’]/g, "'").replace(/[.!?,]+/g, ' ').replace(/\s+/g, ' ').trim()
-      .replace(/ (please|now|for me)$/, '').trim();
-    if (NEW_SPELL.test(s)) return 'new';
-    if (OPEN_SPELL.test(s)) return 'open';
-    return '';
-  }
-
+  // DELETE with APK A: installed legacy bridge method names, never UI or grammar.
+  window.WizDeviceLegacy = [{appId:'usuals', path:'/usuals/', probe:'usuals', phoneOnly:true, methods:[
+    'usuals', 'usualsTeach', 'usualsCancel', 'usualsKeepName', 'usualsRun', 'usualsDelete', 'usualsSave', 'usualsMatch', 'voiceTypingSettings'
+  ]}];
+  window.__wosUsuals = () => window.WizAndroidRelay?.resume();
   window.WosVoiceLegacy = {
-    spell,
     alias(q, APP) {
       if (/^(music|my music|the music|songs|music app|music player|wizard music)$/.test(q) && APP['wizard-music']) return APP['wizard-music'];
       return APP[legacyAliases[q]] || null;
     },
-    food(text, {APP, kind, view}) {
-      const us = window.WosUsuals?.match(text); if (us) return {action:'usual', id:us};
-      if (!window.WosUsuals?.available()) return null;
-      const fs = spell(text);
-      if (fs === 'new') return {action:'usual', id:'+new'};
-      if (fs === 'open' && (kind === 'command' || view?.kind !== 'chat thread')) return {action:'open_app', app:(APP.usuals || {}).name || 'Food'};
-      return null;
-    },
     parse(stage, text, ctx) {
       const music = window.WosMusic;
-      if (stage === 'beforeNames') return this.food(text,ctx);
+      if (stage === 'beforeNames') return null;
       if (!music.available()) return null;
       if (stage === 'priority') { const cmd=music.parse(text,false,false); return cmd?.op === 'search' ? {action:'music',cmd} : null; }
       const front=ctx.view?.appId === 'wizard-music';
@@ -146,7 +132,6 @@
     execute(c, text, H) {
       if (c.action === 'music') return window.WosMusic.run(c.cmd,H.musicDone) || false;
       if (c.action === 'play_music') return window.WosMusic.run({op:'play',said:'play '+String(c.query || '').trim()},H.musicDone) || false;
-      if (c.action === 'usual') return window.WosUsuals?.run(c.id) || false;
       return null;
     },
     install(h) { window.WosMusic.install({app:()=>h.apps()['wizard-music'],findWin:()=>h.findWin('wizard-music'),openMusic:()=>h.open('wizard-music'),frameOf:h.frameOf,toast:h.toast}); },

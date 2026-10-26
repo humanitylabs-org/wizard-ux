@@ -196,7 +196,8 @@
         },
         closeCompanion() { check(); return window.WizCompanionPane?.close(st.frame) === true; },
         postCompanion(value) { check(); return window.WizCompanionPane?.post(st.frame, value) === true; },
-        focusApp() { check(); return window.WizCompanionPane?.focusApp(st.frame) === true; },
+        focusApp() { check(); return window.WizCompanionPane?.focusApp(st.frame) === true || window.WizOpenApp?.(st.appId) === true; },
+        toast(icon, message) { check(); if (typeof icon !== 'string' || typeof message !== 'string') return false; const shell = window.__wos || window.__wux; shell?.toast?.(icon.slice(0, 20), message.slice(0, 2000), 2600); return !!shell?.toast; },
       }),
       badge: Object.freeze({ set(n) { check(); setBadge(st.appId, n); st.badged = true; return true; } }),
       titlebar: Object.freeze({ set(list) { check(); return setTools(st, list); },
@@ -276,15 +277,18 @@
         targets(list) { check(); return !!shareOps?.setTargets(st.appId, list); },
         pending() { check(); return shareOps?.pending(st.appId, { owner: st, alive: () => frames.get(st.frame) === st && st.frame.isConnected && valid(st, st.doc) }) || []; },
         ack(id) { check(); return typeof id === 'string' && !!shareOps?.ack(st.appId, id); } }),
-      device: Object.freeze({ backgroundAudio: Object.freeze({request(method, params) {
+      device: Object.freeze({ legacy: Object.freeze({
+        available(method) { check(); return !!window.WizAndroidRelay?.legacyAvailable(source, st.appId, method); },
+        call(method, args = []) { check(); if (!window.WizAndroidRelay) throw fault('Legacy device unavailable'); return window.WizAndroidRelay.legacy(source, st.appId, method, args); },
+      }), backgroundAudio: Object.freeze({request(method, params) {
         check();
         if (!window.WizBackgroundAudio) return Promise.reject(fault('Background audio unavailable'));
         return window.WizBackgroundAudio.request(source, method, params);
       }}) }),
-      voice: Object.freeze({ async transcribe(file, opts) { check(); const result = await transcribeFile(file, opts); check(); return result; } }),
+      voice: Object.freeze({ stripAddress(text) { check(); return window.WizConfig.stripAddress(String(text || '')); }, async transcribe(file, opts) { check(); const result = await transcribeFile(file, opts); check(); return result; } }),
       theme: Object.freeze({ get() { check(); return window.WizAppearance?.get(frameOf(st)) || null; } }),
       update: Object.freeze({ hold, available() { check(); return available; } }),
-      capture: Object.freeze({ start,
+      capture: Object.freeze({ start: opts => { if (st.frame.dataset?.voiceService) throw fault('Voice service has no capture authority'); return start(opts); },
         prepare(opts) {
           check(); const shell=window.__wos||window.__wux;
           if(shell?.voice && shell.voice!=='idle') throw Object.assign(fault('Microphone held by Wizard voice'),{code:'busy',appId:'wizard-voice'});
@@ -563,7 +567,7 @@
     const open = new Set([...(openIds || [])].filter(Boolean)), cap = window.WizAppCapture;
     if (!cap?.closeApp) return [];
     reconcile(); // a still-mounted frame of the app (any surface) also counts as open
-    for (const f of frames.values()) if (f.frame.isConnected) open.add(f.appId);
+    for (const f of frames.values()) if (f.frame.isConnected && !f.frame.dataset?.voiceService) open.add(f.appId);
     const st = cap.getState?.() || {}, owners = new Set();
     if (st.active && st.appId) owners.add(st.appId);
     const stopped = [];
@@ -579,10 +583,35 @@
     if (!openProvider || sweepTimer) return;
     sweepTimer = setTimeout(() => { sweepTimer = 0; try { appsClosed(openProvider()); } catch (_) {} }, 0);
   }
+  // Installed providers may opt into cold command handling with the existing
+  // `provides` capability list. The app owns grammar; core only warms its page.
+  const voiceFrames = new Map();
+  let warmingVoice = false;
+  function warmVoice() {
+    if (warmingVoice || !document.createElement || !document.body) return;
+    warmingVoice = true;
+    try {
+    const wanted = new Map(apps().filter(a => a.provides?.includes('voice-commands')).slice(0, 64).map(a => [a.id, a]));
+    for (const [id, entry] of voiceFrames) if (!wanted.has(id) || wanted.get(id).url !== entry.url) { entry.detach(); entry.frame.remove(); voiceFrames.delete(id); }
+    for (const [id, app] of wanted) {
+      if (voiceFrames.has(id)) continue;
+      let url; try { url = new URL(app.url, location.href); } catch (_) { continue; }
+      if (url.origin !== location.origin) continue;
+      const frame = document.createElement('iframe'); frame.className = 'appframe'; frame.hidden = true; frame.dataset.voiceService = id;
+      frame.src = url.href; frame.style.display = 'none'; frame.setAttribute('aria-hidden', 'true'); frame.setAttribute('tabindex', '-1');
+      document.body.appendChild(frame);
+      const detach = attach(frame, {appId:id, path:app.url});
+      voiceFrames.set(id, {frame, detach, url:app.url});
+    }
+    } finally { warmingVoice = false; }
+  }
+  addEventListener('wizard:apps', warmVoice);
+  addEventListener('DOMContentLoaded', warmVoice);
+  setTimeout(warmVoice, 0);
   const voiceClaims = new Map();
   function voiceCommand(text, context) {
     if (typeof text !== 'string' || !text.trim() || text.length > 8000) return null;
-    const meta = Object.freeze({kind:context.kind, view:Object.freeze({kind:String(context.view?.kind || ''), appId:String(context.view?.appId || '')})});
+    const meta = Object.freeze({stage:context.stage, kind:context.kind, view:Object.freeze({kind:String(context.view?.kind || ''), appId:String(context.view?.appId || '')})});
     for (const app of apps()) for (const st of frames.values()) {
       try {
         const handler = st.client?.voiceCommands;
