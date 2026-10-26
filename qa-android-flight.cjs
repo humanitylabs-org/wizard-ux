@@ -93,7 +93,9 @@ async function list(p){await p.evaluate(()=>{let w=Object.values(__wos.wins).fin
   adb('shell','am','force-stop',app);adb('shell','am','start','-n',app+'/ai.wizards.os.MainActivity');
   ({b,p}=await attach());browser=b;
   await p.waitForFunction(()=>window.__wos&&window.WosFlight,{},{timeout:30000});await list(p);
-  await p.evaluate(()=>__wos.openWizardThread('flight-1'));await p.locator('.wos-flight-saved').first().waitFor();
+  // Open the thread the way the owner does (a real tap on its row), so Back has a real history step to undo.
+  await p.evaluate(()=>{const c=Object.values(__wos.wins).find(w=>w.app==='chats');if(c?.thread)__wos.onBack();});await pause(1200);
+  await p.locator('.ch-row[data-chopen]').first().click();await p.locator('.wos-flight-saved').first().waitFor();
   ok((await p.locator('.ch-msgs').first().innerText()).includes('Saved answer for flight-1'),'airplane-mode cold native launch reads a saved chat');
   shot('android-offline-thread');
   adb('shell','uiautomator','dump','/data/local/tmp/offline-chats.xml');adb('pull','/data/local/tmp/offline-chats.xml',path.join(out,'android-offline-thread.xml'));
@@ -113,11 +115,14 @@ async function list(p){await p.evaluate(()=>{let w=Object.values(__wos.wins).fin
   ok(f.state.runs.length===1&&f.state.runs[0].body.offline_context?.recordedOfflineAt,'native Send all admits one stamped typed reply');
   await b.close();browser=null;
   // Back never exits: open a saved thread, press the real Android Back key, stay in Wizard on the list.
-  ({b,p}=await attach());browser=b;await list(p);await p.evaluate(()=>__wos.openWizardThread('flight-1'));
+  ({b,p}=await attach());browser=b;await list(p);// Open the thread the way the owner does (a real tap on its row), so Back has a real history step to undo.
+  await p.evaluate(()=>{const c=Object.values(__wos.wins).find(w=>w.app==='chats');if(c?.thread)__wos.onBack();});await pause(1200);
+  await p.locator('.ch-row[data-chopen]').first().click();
   await p.waitForFunction(()=>Object.values(__wos.wins).some(w=>w.app==='chats'&&w.thread));
   adb('shell','input','keyevent','KEYCODE_BACK');await pause(1500);
   ok(/ai\.wizards\.os\.qa/.test(adb('shell','dumpsys','activity','activities').split('\n').find(l=>/topResumedActivity|mResumedActivity/.test(l))||''),'native Back from a thread keeps Wizard open');
-  ok(await p.evaluate(()=>!Object.values(__wos.wins).some(w=>w.app==='chats'&&w.thread)),'native Back returns from the thread to the chat list');
+  const afterBack=await p.evaluate(()=>({thread:Object.values(__wos.wins).find(w=>w.app==='chats')?.thread||null,idx:__wos.idx,sheet:__wos.sheet,h:history.length}));shot('android-after-back');
+  ok(!afterBack.thread,'native Back returns from the thread to the chat list '+JSON.stringify(afterBack));
   await b.close();browser=null;
   fs.writeFileSync(path.join(out,'android-result.json'),JSON.stringify({verdict:'PASS',package:app,actualApk:true,nativeChanges:false,reply:'typed (audio capture not exercised on emulator)',runs:f.state.runs.map(r=>({key:r.key,body:r.body})),origin:'disposable loopback fixture'},null,2));
  }finally{if(browser)await browser.close().catch(()=>{});try{adb('shell','cmd','connectivity','airplane-mode','disable')}catch(_){};await f.close();}
