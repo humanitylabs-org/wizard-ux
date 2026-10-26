@@ -55,7 +55,7 @@
       (a.view.mode !== 'own' || a.view.url === `/wizard/views/${a.id}/`) ? a.view : { mode: 'original', url: a.url || '' },
     url: a.source === 'apps.json' && a.view?.mode === 'own' && a.view.url === `/wizard/views/${a.id}/` ? a.view.url : a.url || '', desc: a.desc || '',
     ...(a.desktop_only ? { desktopOnly: true } : {}), source: a.source || '', system: a.system === true,
-    provides: Array.isArray(a.provides) ? a.provides : [], voice_names: Array.isArray(a.voice_names) ? a.voice_names : [], status: a.status,
+    status: a.status,
     receives_voice_input: trusted === true && a.receives_voice_input === true,
     voice_names: Array.isArray(a.voice_names) ? a.voice_names.filter(n => typeof n === 'string') : [],
     provides: trusted && Array.isArray(a.provides) ? a.provides.filter(n => typeof n === 'string') : [],

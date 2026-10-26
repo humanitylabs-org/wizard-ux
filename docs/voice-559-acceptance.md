@@ -13,6 +13,10 @@ Visual: none (no UI changes).
 2. qa-origin correctly strips QA_READ_APP_PREFIX by default. Music server/index.mjs owns /wizard-music (rejects paths outside BASE); it needs QA_READ_APP_UPSTREAM_PREFIX=/wizard-music. Video Editor at :9592 is root-hosted and must retain the empty upstream prefix. Forum's runner exported Music's upstream prefix to every subprocess; the unit fixture overrode app prefix/port but not upstream prefix, unlike CI's clean environment. Explicitly set all three fixture variables, testing both empty and nonempty upstream prefixes without forwarding credentials or writes.
 3. Both main and live parse plain play as said:String(text).trim(), retaining the trailing period. Only the finding toast strips terminal punctuation; it is not the wire payload. Fix real-Music browser assertion to preserve the period on both shells. Do not alter the branch parser.
 
+## Harness updates for current main/live
+
+The current launcher split requires loading launcher-defaults.js + launcher.js in the utterance VM; the frozen baseline and all 970845 expected comparisons stay unchanged. Both real browser mounts expose data-own-app; only phone frames have .appframe. Use the shared owner attribute, dismiss the real tour, and test the real receiver. Main's cold desktop Music open is asynchronous: first play opens the app without forwarding (no pending command); repeating the utterance after the app opens forwards the exact payload. Assert that same cold behavior on every tree, then repeat on desktop to prove receiver dispatch and ACK. This is a preserved main limitation, not a newly claimed working cold desktop play. Phone cold dispatch and desktop warm dispatch both retain the period.
+
 ## Live music-voice.js function-by-function mapping
 
 All old functions remain in web/core/voice-legacy.js; web/core/app-voice.js routes to that adapter while adding app-owned claims.
