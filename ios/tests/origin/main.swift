@@ -47,6 +47,11 @@ for value in ["", "http://box.example", "ftp://box.example", "box.example/other"
     expect(WizardOrigin.typed(value), nil, value)
 }
 
+// Response headers (fail-closed: the shell is always 200 text/html)
+if WizardProbe.headerProblem(status: 200, contentType: nil, host: "h") == nil { failures += 1; print("FAIL: missing Content-Type passed") }
+if WizardProbe.headerProblem(status: 200, contentType: "application/json", host: "h") == nil { failures += 1; print("FAIL: JSON passed") }
+if WizardProbe.headerProblem(status: 302, contentType: "text/html", host: "h") == nil { failures += 1; print("FAIL: redirect status passed") }
+if WizardProbe.headerProblem(status: 200, contentType: "text/html; charset=utf-8", host: "h") != nil { failures += 1; print("FAIL: shell headers refused") }
 // Shell check (WizardProbeTest)
 if WizardOrigin.looksLikeWizard("<title>Sign in</title>") { failures += 1; print("FAIL: sign-in page passed") }
 if WizardOrigin.looksLikeWizard("<title>Wizard OS</title>") { failures += 1; print("FAIL: title alone passed") }

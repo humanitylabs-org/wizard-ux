@@ -70,40 +70,83 @@ enum WizardOrigin {
 
 /// Read-only, bounded check that an address serves the Wizard shell before the app saves it (Android `WizardProbe`).
 /// Never follows a redirect and never bypasses TLS. This is not authentication: the Wizard's owner check still applies.
-final class WizardProbe: NSObject, URLSessionTaskDelegate {
+/// The body is streamed and the request cancelled once `limit` bytes arrived, so a huge or endless answer can't fill memory.
+final class WizardProbe: NSObject, URLSessionDataDelegate {
+    static let limit = 262_144
     private var session: URLSession?
+    private var completion: ((String?) -> Void)?
+    private var origin = ""
+    private var body = Data()
+    private var done = false
+
+    /// nil when the response headers may belong to the Wizard shell, else why not. Fail-closed: the shell is always
+    /// served as 200 text/html, so a missing or other Content-Type is refused.
+    static func headerProblem(status: Int, contentType: String?, host: String) -> String? {
+        if status != 200 { return "\(host) answered, but didn't open Wizard (HTTP \(status))." }
+        guard let type = contentType, type.lowercased().contains("text/html") else { return "\(host) answered, but it isn't a Wizard." }
+        return nil
+    }
 
     /// Calls back on the main queue with nil when `origin` is a Wizard, else a message for the owner.
     static func check(_ origin: String, completion: @escaping (String?) -> Void) {
+        guard let url = URL(string: origin + "/wizard-os-home/") else { completion("That isn't a Wizard address."); return }
         let probe = WizardProbe()
+        probe.origin = origin
+        probe.completion = completion
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 8
         config.timeoutIntervalForResource = 12
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
-        let session = URLSession(configuration: config, delegate: probe, delegateQueue: nil)
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        let session = URLSession(configuration: config, delegate: probe, delegateQueue: queue)
         probe.session = session
-        guard let url = URL(string: origin + "/wizard-os-home/") else { completion("That isn't a Wizard address."); return }
         var request = URLRequest(url: url)
         request.setValue("text/html", forHTTPHeaderField: "Accept")
-        let host = WizardOrigin.host(origin)
-        session.dataTask(with: request) { data, response, error in
-            let message: String?
-            if let error = error as NSError? {
-                message = error.code == NSURLErrorCancelled || WizardOrigin.needsTailscale(origin)
-                    ? "Couldn't reach \(host). Make sure Tailscale is on and signed in to the same account as your Wizard."
-                    : "Couldn't reach \(host). Check the address and your connection."
-            } else if let http = response as? HTTPURLResponse, http.statusCode != 200 {
-                message = "\(host) answered, but didn't open Wizard (HTTP \(http.statusCode))."
-            } else if let type = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type"), !type.lowercased().contains("text/html") {
-                message = "\(host) answered, but it isn't a Wizard."
-            } else if let data, WizardOrigin.looksLikeWizard(String(decoding: data.prefix(262_144), as: UTF8.self)) {
-                message = nil
-            } else {
-                message = "\(host) answered, but it isn't a Wizard."
-            }
-            DispatchQueue.main.async { completion(message) }
-            probe.session?.finishTasksAndInvalidate(); probe.session = nil
-        }.resume()
+        session.dataTask(with: request).resume()
+    }
+
+    private func finish(_ message: String?) {
+        if done { return }
+        done = true
+        let completion = self.completion
+        self.completion = nil
+        DispatchQueue.main.async { completion?(message) }
+        session?.invalidateAndCancel(); session = nil
+    }
+
+    private func bodyVerdict() -> String? {
+        WizardOrigin.looksLikeWizard(String(decoding: body, as: UTF8.self))
+            ? nil : "\(WizardOrigin.host(origin)) answered, but it isn't a Wizard."
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
+                    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        let http = response as? HTTPURLResponse
+        if let problem = WizardProbe.headerProblem(status: http?.statusCode ?? 0,
+                                                    contentType: http?.value(forHTTPHeaderField: "Content-Type"),
+                                                    host: WizardOrigin.host(origin)) {
+            completionHandler(.cancel); finish(problem); return
+        }
+        completionHandler(.allow)
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        if done { return }
+        body.append(data.prefix(WizardProbe.limit - body.count))
+        if body.count >= WizardProbe.limit { dataTask.cancel(); finish(bodyVerdict()) }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if done { return }
+        if let error = error as NSError? {
+            let host = WizardOrigin.host(origin)
+            finish(error.code == NSURLErrorCancelled || WizardOrigin.needsTailscale(origin)
+                ? "Couldn't reach \(host). Make sure Tailscale is on and signed in to the same account as your Wizard."
+                : "Couldn't reach \(host). Check the address and your connection.")
+        } else {
+            finish(bodyVerdict())
+        }
     }
 
     /// Never follow a redirect (a login page or another site must not pass as the Wizard).
