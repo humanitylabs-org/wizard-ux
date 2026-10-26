@@ -16,8 +16,8 @@
     return names;
   }
   function parse(stage, text, ctx) {
-    if (stage === 'priority' && ctx.kind === 'command') {
-      const claim = window.WizAppServices?.voiceCommand(ctx.text ?? text, ctx);
+    if (stage === 'beforeNames' || stage === 'priority' && ctx.kind === 'command') {
+      const claim = window.WizAppServices?.voiceCommand(ctx.text ?? text, {...ctx, stage});
       if (claim) return claim;
     }
     return window.WosVoiceLegacy?.parse(stage, text, ctx) || null;

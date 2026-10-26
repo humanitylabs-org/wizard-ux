@@ -5,8 +5,8 @@
  * This file is only the window: the list, Order something new, Order, rename/edit, and what the last run did. */
 (() => {
   'use strict';
-  const N = () => window.WizardOSNative;
-  const has = () => !!(N() && typeof N().usuals === 'function');
+  const N = () => new Proxy({}, {get: (_, method) => (...args) => WizardApp.device.legacy.call(method, args)});
+  const has = () => WizardApp.device.legacy.available('usuals');
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const els = new Set();
   let editing = null; // { id } while the edit sheet is open
@@ -76,7 +76,7 @@
 
   function paint() { els.forEach(el => { if (!el.isConnected) { els.delete(el); return; } const f = document.activeElement; const keep = f && el.contains(f) && f.name; el.innerHTML = html(); if (keep) { const n = el.querySelector(`[name="${keep}"]`); if (n) { n.focus(); n.setSelectionRange?.(n.value.length, n.value.length); } } }); }
 
-  function toast(i, t) { window.__wos?.toast?.(i, t, 2600); }
+  function toast(i, t) { WizardApp.shell.toast(i, t); }
   function why(b) {
     return b === 'accessibility' ? 'Turn on Wizard OS accessibility first' : b === 'grab' ? "Grab isn't installed" : b === 'busy' ? 'Finish the order in progress first' : b === 'missing' ? 'That order is gone' : b;
   }
@@ -115,8 +115,17 @@
     }
   }
 
-  // Frozen phrases live in the voice compatibility adapter until APK A.
-  const spell = text => window.WosVoiceLegacy?.spell(text) || '';
+  const NEW_SPELL = /^(?!(?:.* )?get (?:me |us )?something$)(?:(?:please |can you |could you |let'?s |i(?: want to| wanna| would like to|'d like to) )?(?:order|get)(?: me| us)? (?:some |a |my )?(?:food|foods|grab|grab ?food|lunch|dinner|breakfast|brunch|supper|a snack|snacks|takeout|takeaway|take out|take away|delivery|food delivery|something(?: new| different| else)?(?: to eat)?)(?: (?:from|on|with|through) grab)?|order (?:from|on) grab|(?:a )?(?:food|grab|grab food) order|grab (?:me )?(?:some )?food|grab me something(?: new)? to eat|new (?:food|grab) order)$/;
+  const OPEN_SPELL = /^(?:food|wizard food|wizard eats|eats|my food|grab food app|food app|my orders|my saved orders|saved orders|my usuals|usuals)$/;
+  function spell(text) {
+    const s = WizardApp.voice.stripAddress(text).toLowerCase().replace(/[’]/g, "'").replace(/[.!?,]+/g, ' ').replace(/\s+/g, ' ').trim()
+      .replace(/ (please|now|for me)$/, '').trim();
+    if (NEW_SPELL.test(s)) return 'new';
+    if (OPEN_SPELL.test(s)) return 'open';
+    return '';
+  }
+
+
   window.WosUsuals = {
     available: has,
     mount(el) {
@@ -140,6 +149,6 @@
     match(text) { if (!has() || typeof N().usualsMatch !== 'function') return ''; try { return N().usualsMatch(String(text || '')) || ''; } catch (e) { return ''; } },
     run(id) { const r = N().usualsRun(id); if (r) toast('🍜', why(r)); return !r; },
   };
-  window.__wosUsuals = paint; // native onResume: the list may have changed (taught, ran)
+  window.addEventListener('message', ev => { if (ev.source === parent && ev.origin === location.origin && ev.data?.type === 'wizard-os:device-resume') paint(); });
   setInterval(() => { if (els.size && !document.hidden) { const st = read().state || {}; if (st.mode && st.mode !== 'idle') paint(); } }, 1500);
 })();
