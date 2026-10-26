@@ -479,9 +479,8 @@
     return { accepted: true, request_id: message.request_id };
   }
   // Same list as chats.js HOSTED_APPS: apps whose conversations are the real Chats thread over their window.
-  const HOSTED_THREAD_APPS = new Set(['wizard-manager', 'wisdom']);
   function hostedThreadAuthorized(st) {
-    if (!st || !HOSTED_THREAD_APPS.has(st.appId) || !valid(st, st.doc) || typeof st.openThread !== 'function') return false;
+    if (!st || !window.WizLauncher?.hasHostedThread(st.appId) || !valid(st, st.doc) || typeof st.openThread !== 'function') return false;
     const app = apps().find(a => a.id === st.appId && a.kind === 'wizard' && a.url);
     try { return !!app && new URL(app.url, location.href).href === st.url.href; } catch (_) { return false; }
   }

@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { launcherFixture } from './launcher-fixture.mjs';
 
 const root = process.env.HOME_SCREEN_SOURCE || new URL('../',import.meta.url).pathname;
 const read = path => fs.readFileSync(root + '/web/' + path,'utf8');
 function policy(search='') {
   const attributes = {}, window = {};
   const ctx = vm.createContext({ window, document:{documentElement:{setAttribute:(k,v)=>attributes[k]=v}}, location:{origin:'https://box.example',search}, URL, URLSearchParams, Object, Proxy, Reflect });
-  vm.runInContext(read('core/home-screen-policy.js'),ctx);
+  launcherFixture(ctx); vm.runInContext(read('core/home-screen-policy.js'),ctx);
   return {p:window.WizHomeScreenPolicy,ctx,attributes};
 }
 function storage() {
