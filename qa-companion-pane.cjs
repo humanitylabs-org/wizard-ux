@@ -8,7 +8,7 @@ const out = process.env.QA_OUT || path.join(process.env.TMPDIR || '.', 'companio
 fs.mkdirSync(out, { recursive: true });
 const receipt = { baseline, app: 'real installed Video Editor via qa-origin read-only app proxy', checks: [], layouts: {}, errors: [], blockedWrites: [] };
 function ok(name, value, detail) { receipt.checks.push({ name, pass: !!value, detail }); console.log(`${value ? 'PASS' : 'FAIL'} ${name}${detail === undefined ? '' : ' ' + JSON.stringify(detail)}`); assert.ok(value, name); }
-const fixtureHTML = '<!doctype html><html data-app="qa-companion"><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/wizard-os-home/kit/wizard-ui.css"><body class="wz-app"><h1 class="wz-title">Companion SDK fixture</h1><input class="wz-input" id="draft" value="retained draft"><output id="depth">1</output><script src="/wizard-os-home/core/app-client.js"></script><script src="/qa-companion/fixture.js"></script></body></html>';
+const fixtureHTML = '<!doctype html><html data-app="qa-companion"><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/wizard-os-home/kit/wizard-ui.css"><body><main class="wz-app"><section class="wz-scroll"><h2 class="wz-sec-h">Bound selection</h2><p>Shared companion view</p><p>Nested view: <output id="depth">1</output></p><div class="wz-field-row"><input class="wz-field" aria-label="Unsent draft" id="draft" value="retained draft"></div></section></main><script src="/wizard-os-home/core/app-client.js"></script><script src="/qa-companion/fixture.js"></script></body></html>';
 const fixtureJS = `window.depth=1;window.messages=[];WizardApp.back.register({canGoBack:()=>depth>0,back:()=>{if(!depth)return false;document.querySelector('#depth').textContent=--depth;return true}});WizardApp.shell?.onCompanionMessage(msg=>messages.push(msg));window.sdkReady=WizardApp.ready();`;
 async function frameFor(p, part) { const locator = p.locator(`.win iframe[src*="${part}"]`).first(); await locator.waitFor({state:'attached'}); const f = await (await locator.elementHandle()).contentFrame(); await f.waitForURL(url => url.href.includes(part)); await f.waitForLoadState('domcontentloaded'); return f; }
 async function back(p, mobile) { const step = await p.evaluate(m => m ? __wosNativeBack() : __wux.escStep(), mobile); await p.waitForTimeout(150); return step; }
@@ -24,6 +24,8 @@ async function current(p, mobile) { return p.evaluate(m => { const s=m?__wos:__w
     const req=r.request(), u=new URL(req.url());
     if (u.origin !== origin) return r.abort();
     if (!['GET','HEAD'].includes(req.method())) { receipt.blockedWrites.push({method:req.method(),path:u.pathname}); return r.fulfill({status:403,contentType:'application/json',body:'{"error":"QA read-only"}'}); }
+    // Isolate unrelated owner skin recipes; 404 exercises the supported local-preview fallback.
+    if (/^\/wizard\/v1\/(skins|my-skin)(\/|$)/.test(u.pathname)) return r.fulfill({status:404,body:'{}'});
     if (u.pathname === '/qa-companion/fixture.js') return r.fulfill({contentType:'application/javascript',body:fixtureJS});
     if (u.pathname === '/qa-companion/') return r.fulfill({contentType:'text/html',body:fixtureHTML});
     if (u.pathname.endsWith('/data.js') || u.pathname.endsWith('/summaries.js')) return r.fulfill({contentType:'application/javascript',body:''});
@@ -82,8 +84,16 @@ async function current(p, mobile) { return p.evaluate(m => { const s=m?__wos:__w
      await back(p,mobile); ok(label+' next Back returns to app',await current(p,mobile)===own);
      await back(p,mobile); ok(label+' app Back returns to previous nested view, shell stays open',await app.evaluate(()=>depth===0) && p.url().startsWith(origin+'/wizard-os-home/'));
      for(const skin of ['nebula','obsidian-light']) {
-      const actual=await p.evaluate(skin=>{WosSkin.set(skin);return WosSkin.current;},skin);
+      await p.evaluate(()=>WizCore.deeplink.route(location.pathname+'?view=skin'));
+      const family = skin === 'nebula' ? 'wizard' : 'mizel';
+      const familyButton = p.locator('#settingsBody [data-skinfamily="'+family+'"]:visible').first();
+      await familyButton.click();
+      await p.locator('#settingsBody [data-skinpick="'+skin+'"]:visible').first().click();
+      await p.waitForFunction(skin=>document.documentElement.dataset.skin===skin,skin);
+      await p.locator('.mz-intro').waitFor({state:'detached'});
+      const actual=await p.evaluate(()=>WosSkin.current);
       assert.equal(actual, skin, 'requested skin must exist');
+      await p.evaluate(m=>m?__wos.closeSheets():__wux.closeSettings(),mobile);
       await p.evaluate(({id,m})=>{const s=m?__wos:__wux;if(m)s.goDesk(s.desks.findIndex(d=>d.wins.includes(id)),true);s.focusWin(id);},{id:peer.id,m:mobile});
       await p.waitForTimeout(200);
       await p.screenshot({path:path.join(out,label+'-generic-'+actual+'.png')});

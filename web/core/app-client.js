@@ -241,6 +241,7 @@
   addEventListener('message', e => {
     if (!framed || e.source !== parent || e.origin !== ORIGIN || !e.data) return;
     const d = e.data;
+    if (d.type === 'wizard:app:companion' && d.version === VERSION) notify(companionMessages, { from: d.from, data: d.data });
     if (d.type === 'wizard:app:reply' && d.version === VERSION && requests.has(d.id)) {
       const pending = requests.get(d.id); clearTimeout(pending.timer); requests.delete(d.id);
       if (d.error) pending.reject(new Error(String(d.error))); else pending.resolve(d.value);
@@ -352,10 +353,6 @@
     if (transportReady) return request('shell.' + op, args);
     return Promise.reject(new Error('Companion panes need the Wizard workspace host'));
   }
-  addEventListener('message', e => {
-    if (e.source === parent && e.origin === ORIGIN && e.data?.type === 'wizard:app:companion' && e.data.version === VERSION)
-      notify(companionMessages, { from: e.data.from, data: e.data.data });
-  });
   const sharedResult = promise => promise.then(value => ['shared', 'copied', 'cancelled', 'unsupported'].includes(value) ? value : 'unsupported', () => 'unsupported');
   window.WizardApp = Object.freeze({ version: VERSION, get hosted() { return !!service || transportReady; }, ready,
     shell: Object.freeze({
