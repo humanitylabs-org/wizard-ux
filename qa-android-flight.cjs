@@ -115,8 +115,11 @@ async function list(p){await p.evaluate(()=>{let w=Object.values(__wos.wins).fin
   // Back never exits: open a saved thread, press the real Android Back key, stay in Wizard on the list.
   ({b,p}=await attach());browser=b;await list(p);// Open the thread the way the owner does (a real tap on its row), so Back has a real history step to undo.
   await p.evaluate(()=>{const c=Object.values(__wos.wins).find(w=>w.app==='chats');if(c?.thread)__wos.onBack();});await pause(1200);
+  shot('android-before-row-tap');
   await p.locator('.ch-row[data-chopen="flight-1"]').first().click();
-  await p.waitForFunction(()=>Object.values(__wos.wins).some(w=>w.app==='chats'&&w.thread));
+  try{await p.waitForFunction(()=>Object.values(__wos.wins).some(w=>w.app==='chats'&&w.thread),{},{timeout:8000});}
+  catch(e){shot('android-row-tap-missed');fs.writeFileSync(path.join(out,'row-tap-state.json'),JSON.stringify(await p.evaluate(()=>({href:location.href,idx:__wos.idx,sheet:__wos.sheet,active:document.activeElement?.outerHTML?.slice(0,120),top:document.elementFromPoint(innerWidth/2,innerHeight/2)?.outerHTML?.slice(0,160)})).catch(x=>String(x)),null,1));
+   fs.writeFileSync(path.join(out,'row-tap-window.txt'),adb('shell','dumpsys','window','windows').split('\n').filter(l=>/mCurrentFocus|mFocusedApp|InputMethod.*isVisible|mInputMethodTarget/.test(l)).join('\n'));throw e;}
   adb('shell','input','keyevent','KEYCODE_BACK');await pause(1500);
   ok(/ai\.wizards\.os\.qa/.test(adb('shell','dumpsys','activity','activities').split('\n').find(l=>/topResumedActivity|mResumedActivity/.test(l))||''),'native Back from a thread keeps Wizard open');
   const afterBack=await p.evaluate(()=>({thread:Object.values(__wos.wins).find(w=>w.app==='chats')?.thread||null,idx:__wos.idx,sheet:__wos.sheet,h:history.length}));shot('android-after-back');
