@@ -21,6 +21,8 @@
     const nativeSide = !!(window.WizardOSNative && typeof window.WizardOSNative.sideButton === 'function');
     return list.filter(a => {
       if (a.id === 'side-button' && !nativeSide) return false;
+      const device = window.WizDeviceLegacy?.find(d => d.appId === a.id);
+      if (device && typeof window.WizardOSNative?.[device.probe] !== 'function') return false;
       if (shell === 'desktop') return a.kind !== 'native' && !a.phoneOnly;
       return !a.desktopOnly;
     });
@@ -52,7 +54,8 @@
     view: a.source === 'apps.json' && ['original', 'overlay', 'own'].includes(a.view?.mode) &&
       (a.view.mode !== 'own' || a.view.url === `/wizard/views/${a.id}/`) ? a.view : { mode: 'original', url: a.url || '' },
     url: a.source === 'apps.json' && a.view?.mode === 'own' && a.view.url === `/wizard/views/${a.id}/` ? a.view.url : a.url || '', desc: a.desc || '',
-    ...(a.desktop_only ? { desktopOnly: true } : {}), source: a.source || '', system: a.system === true,
+    ...(a.desktop_only ? { desktopOnly: true } : {}),
+    phoneOnly: a.phone_only === true || window.WizDeviceLegacy?.some(d => d.appId === a.id && d.phoneOnly === true), source: a.source || '', system: a.system === true,
     status: a.status,
     receives_voice_input: trusted === true && a.receives_voice_input === true,
     voice_names: Array.isArray(a.voice_names) ? a.voice_names.filter(n => typeof n === 'string') : [],
