@@ -99,19 +99,20 @@ html:not([data-skin="nebula"]) .device { background: var(--bg); }
 .sk-sub { padding: 0 2px 6px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
 /* My skin row (Settings › Look): Edit opens skin.css in Files, Reset empties it. Optional script approval is device-local. Skin tokens only. */
 .my-skin-row { margin: 8px 0 0; }
+/* My skin worn: the owner's own skin leads Look, ringed in ink so it reads on dark and light palettes alike. */
+.my-skin-row[data-myskin-row] { margin: 0 0 8px; }
+.my-skin-row.worn { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 55%, transparent); border-radius: 16px; }
 .my-skin-row .st-tx { min-width: 0; overflow-wrap: anywhere; }
 .my-skin-row .ms-acts button:disabled { opacity: .5; cursor: wait; }
 .my-skin-row .ms-acts { display: flex; gap: 6px; flex: none; }
 .my-skin-row .ms-acts button { min-height: 44px; padding: 6px 14px; border-radius: 99px; background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); font-size: 13px; font-weight: 650; }
 .my-skin-row .ms-acts button.ghost { background: transparent; border: 1px solid var(--line-2); color: var(--ink-2); }
 
-/* Skin picker (Settings › Look): small preview cards, one per colour, grouped under each skin's name.
+/* Skin picker (Settings › Look): small preview cards in one flat grid, one per look.
  * Each card is a miniature of its look drawn from that look's own tokens (--p-*): background, two reply lines, a sent
  * bubble, the dock and its orb. The name below is set in the look's own face (inline, from WosSkin.list face).
  * Selected = a ring with a gap plus a small check. */
 .st-root .skp-all { margin: 2px 0 4px; }
-.st-root .skp-fam { padding: 14px 2px 0; font-size: 12px; font-weight: 650; color: var(--ink-2); }
-.st-root .skp-fam:first-child { padding-top: 0; }
 .st-root .skp { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px clamp(10px, 3.6vw, 16px); margin: 10px 0 0; padding: 4px; }
 html[data-shell="desktop"] .st-root .skp { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
 .st-root .skp-card { position: relative; container-type: inline-size; display: flex; flex-direction: column; align-items: stretch; gap: 10px; min-width: 0; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
@@ -156,3 +157,8 @@ html[data-shell="desktop"] .st-root .skp { grid-template-columns: repeat(auto-fi
 .st-root .skp-mini[data-skp="landscapes"] .skp-dock { border-radius: 0 0 14px 14px; background: rgba(11,10,16,.5); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 .st-root .skp-mini[data-skp^="obsidian"] .skp-orb { background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--p-ink) 35%, var(--p-bg)), var(--p-ink) 80%); box-shadow: none; }
 .st-root .skp-mini[data-skp="landscapes"] .skp-orb { background: radial-gradient(circle at 35% 30%, #fff, #d8e9ee 55%, #6fb3c4); box-shadow: 0 0 8px rgba(255,255,255,.45); }
+/* Settings › Look › Layout (core: the row exists for every skin; layouts themselves live in web/layouts/). */
+.layout-row { flex-wrap: wrap; }
+.layout-row .layout-acts { display: flex; gap: 6px; flex: none; }
+.layout-row .layout-acts button { min-height: 44px; padding: 6px 14px; border-radius: 99px; background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); font-size: 13px; font-weight: 650; }
+.layout-row .layout-acts button[aria-pressed="true"] { background: var(--wz-accent, var(--violet-2, #8f63ff)); color: var(--wz-on-accent, #fff); }

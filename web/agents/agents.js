@@ -102,7 +102,7 @@
     else if (AG.error && !agents.length) body = `<div class="ag-err">${esc(AG.error)} · <button type="button" class="ag-link" data-reload>Try again</button></div>`;
     else body = `<div class="ag-list">${agents.map(a => `<button type="button" class="ag-row" data-open="${esc(a.id)}" style="--ag:${AG.colour(a)}">${sigil(a)}
         <span class="tx"><b>${esc(a.label)}</b><small>${esc(harness(a.harness).label)} · ${esc(providerLine(a) || 'No model')}</small>
-        <span class="ag-badges">${privBadge(a)}${a.is_default ? '<span class="ag-badge main">Main agent</span>' : ''}${statusHtml(a)}${waiting(a)}</span></span>${CHEV}</button>`).join('')}</div>`;
+        <span class="ag-badges">${privBadge(a)}${a.hidden ? '<span class="ag-badge">Hidden</span>' : ''}${a.is_default ? '<span class="ag-badge main">Main agent</span>' : ''}${statusHtml(a)}${waiting(a)}</span></span>${CHEV}</button>`).join('')}</div>`;
     return `<header class="ag-top"><h1>Agents</h1></header>
       <p class="ag-lede">Each agent has its own harness, model provider, permissions and chats.</p>
       ${body}
@@ -240,7 +240,7 @@
       ${privacy === 'private' ? `<div class="ag-sec">Standard chats</div><div class="ag-card"><div class="ag-tog"><span class="tx"><b>Read standard chats</b><small>Read-only search, conversation history and memory. Nothing flows back.</small></span><button type="button" class="sw" role="switch" aria-checked="${p.read_standard_chats === true}" aria-label="Read standard chats" data-standard-chats ${editable && typeof p.read_standard_chats === 'boolean' ? '' : 'disabled'}></button></div>${typeof p.read_standard_chats !== 'boolean' ? '<p class="ag-note">Available after the Agent Service update.</p>' : ''}</div>` : ''}
       <div class="ag-sec">Other agents</div>
       <div class="ag-seg" role="radiogroup" aria-label="Other agents" style="--n:${o.other_agents.length}">${o.other_agents.map(x => `<button type="button" role="radio" aria-checked="${(p.other_agents || 'none') === x.id}" data-others="${esc(x.id)}" ${dis}>${esc(x.label)}</button>`).join('')}</div>
-      ${draft ? '' : `<p class="ag-note">${privacy === 'private' ? 'Sealed: no other agent can read this agent’s chats, memory or files, whatever its own setting says.' : 'Private agents are never readable, whatever this says.'}</p>`}`;
+      ${draft ? '' : `<p class="ag-note">${privacy === 'private' ? 'Sealed: no other agent can read this agent’s chats, memory or files, whatever its own setting says. The Agent Service keeps them apart; it is not encryption, so this box’s administrators (and, on an install beside your own Hermes, that Hermes) can still read them.' : 'Private agents are never readable, whatever this says.'}</p>`}`;
   }
 
   /* ---------------- detail ---------------- */
@@ -252,10 +252,11 @@
     const allowed = a.model.allowed_models.length ? a.model.allowed_models : [a.model.model].filter(Boolean);
     return `<header class="ag-top">${BACK}<h1 class="sm">Agent</h1></header>
       <section class="ag-hero" style="--ag:${AG.colour(a)}">${sigil(a, 'ag-sig lg')}<span class="tx"><b>${esc(a.label)}</b>
-        <span class="ag-badges">${privBadge(a)}${a.is_default ? '<span class="ag-badge main">Main agent</span>' : ''}${statusHtml(a)}</span></span>
+        <span class="ag-badges">${privBadge(a)}${a.hidden ? '<span class="ag-badge">Hidden</span>' : ''}${a.is_default ? '<span class="ag-badge main">Main agent</span>' : ''}${statusHtml(a)}</span></span>
         ${editable ? `<button type="button" class="ag-back" data-rename aria-label="Rename ${esc(a.label)}"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/></svg></button>` : ''}</section>
       ${a.status === 'error' && a.status_detail ? `<p class="ag-note bad">${esc(a.status_detail)}</p>` : ''}
       <div class="ag-hero-acts"><button type="button" class="ag-btn" data-chats>Open chats</button>${editable ? `<button type="button" class="ag-btn ghost" data-${running ? 'stop' : 'start'} ${S.saving.has('run') ? 'disabled' : ''}>${running ? 'Stop' : 'Start'}</button>` : ''}</div>
+      <div class="ag-card"><div class="ag-tog"><span class="tx"><b>Show in Chats</b><small>Hidden agents keep running and receiving work.</small></span><button type="button" class="sw" role="switch" aria-label="Show in Chats" aria-checked="${!a.hidden}" data-hidden ${S.saving.has('["hidden"]') ? 'disabled' : ''}></button></div></div>
       ${boundHtml(a)}
       <div class="ag-sec">Harness</div>
       <div class="ag-card"><div class="ag-kv"><span>Harness</span><b>${esc(harness(a.harness).label)}</b></div></div>
@@ -326,7 +327,7 @@
       const busy = S.saving.has('route:' + sh.app);
       inner = `<h2>${esc(b ? b.label : sh.app)}</h2><p class="ag-note">${esc(b?.purpose || 'Work from this app goes to one agent.')}</p>
         <div class="ag-label" style="margin-top:14px">Sends its work to</div>
-        <div role="radiogroup" aria-label="Sends its work to">${AG.list.map(x => `<button type="button" class="ag-choice" role="radio" aria-checked="${b?.agent === x.id}" data-routepick="${esc(x.id)}" style="--ag:${AG.colour(x)}" ${busy ? 'disabled' : ''}>${sigil(x, 'ag-sig sm')}<span class="tx"><b>${esc(x.label)}${x.privacy === 'private' ? `<span class="ag-badge priv">${LOCK}Private</span>` : ''}${x.is_default ? '<span class="ag-badge main">Main agent</span>' : ''}</b><small>${statusHtml(x)}</small></span><span class="rd"></span></button>`).join('')}</div>
+        <div role="radiogroup" aria-label="Sends its work to">${AG.visible().map(x => `<button type="button" class="ag-choice" role="radio" aria-checked="${b?.agent === x.id}" data-routepick="${esc(x.id)}" style="--ag:${AG.colour(x)}" ${busy ? 'disabled' : ''}>${sigil(x, 'ag-sig sm')}<span class="tx"><b>${esc(x.label)}${x.privacy === 'private' ? `<span class="ag-badge priv">${LOCK}Private</span>` : ''}${x.is_default ? '<span class="ag-badge main">Main agent</span>' : ''}</b><small>${statusHtml(x)}</small></span><span class="rd"></span></button>`).join('')}</div>
         ${b?.held ? `<p class="ag-note bad">${esc(heldLine(b, b.target ? b.target.label : ''))}</p>` : ''}
         <p class="ag-note">${b?.is_default ? 'Default: your main agent. ' : ''}The app never picks an agent itself.</p>
         <div class="acts" style="grid-template-columns:1fr"><button type="button" class="ag-btn ghost" data-sheetclose>Close</button></div>`;
@@ -371,13 +372,14 @@
     if (d.pick && S.view.name === 'new') {
       const dr = S.draft;
       if (d.pick === 'harness') dr.harness = d.v;
-      if (d.pick === 'provider' && dr.provider !== d.v) { dr.provider = d.v; const p = provider(d.v); dr.model = p?.models.length === 1 || p?.confidential ? p.models[0]?.id || '' : ''; /* Tinfoil: its default (first) model, still changeable */ dr.preset = ''; }
+      if (d.pick === 'provider' && dr.provider !== d.v) { dr.provider = d.v; const p = provider(d.v); dr.model = p?.models.length === 1 || p?.confidential ? p.models[0]?.id || '' : ''; /* Tinfoil: its default (first) model, still changeable */ if (dr.wantPrivate) applyPreset(dr, 'private'); else dr.preset = ''; /* asked for a private agent: a public provider stays blocked, never silently Standard */ }
       if (d.pick === 'model') dr.model = d.v;
-      if (d.pick === 'preset') applyPreset(dr, d.v);
+      if (d.pick === 'preset') { dr.wantPrivate = d.v === 'private'; applyPreset(dr, d.v); } /* an explicit preset choice replaces the Set up private agent intent */
       render(); return;
     }
     if ('next' in d) { if (stepOk(S.draft, S.view.step)) { S.view = { ...S.view, step: S.view.step + 1 }; render(); scrollTo(0, 0); } return; }
     if ('create' in d) { create(); return; }
+    if ('hidden' in d) { const a = AG.get(S.view.id); if (a) patch(a, { hidden: !a.hidden }, a.hidden ? 'Agent shown in Chats' : 'Agent hidden from Chats'); return; }
     // permissions (flow or detail)
     if (d.tool) {
       const id = d.tool, on = t.getAttribute('aria-checked') !== 'true';
@@ -417,6 +419,8 @@
   addEventListener('message', e => {
     const d = e.data; if (e.origin !== ORIGIN || e.source !== parent || !d) return;
     if (d.type === 'wizard:bindings-changed') { AG.load(true).then(() => AG.loadBindings(true)); return; }
+    // A private app's install sheet: start the New agent flow with Private chosen (James, 23 Oct 2026).
+    if (d.type === 'wizard:agents-new') { if (S.view.name !== 'new' && AG.available) { startNew(); if (d.preset === 'private') { S.draft.wantPrivate = true; applyPreset(S.draft, 'private'); } render(); } return; }
     if (d.type !== 'wizard:agents-show' || typeof d.id !== 'string') return;
     if (S.view.name === 'detail' && S.view.id === d.id) return;
     if (AG.get(d.id)) { S.sheet = null; go({ name: 'detail', id: d.id }); }

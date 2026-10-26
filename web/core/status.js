@@ -8,7 +8,7 @@
  *               no shell API a few seconds after load), or a caller hands one over with WizCore.status.fatal().
  *
  * Loaded right after core/config.js so it can see boot errors. A shell plugs in with
- *   WizCore.status.attach({ openInbox(), inboxOpen(), current() })     current() = the thread in front, or ''
+ *   WizCore.status.attach({ openChats(), inboxOpen(), current() })     current() = the thread in front, or ''
  * Back: WizCore.status.back() closes the fatal card (Chats' closeOverlay asks it first), returns a step name or ''.
  */
 (() => {
@@ -16,6 +16,7 @@
   const C = window.WizCore = window.WizCore || {};
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const agent = () => { try { return window.WizConfig?.agent() || 'Wizard'; } catch (e) { return 'Wizard'; } };
+  let netOpen = false;
   let H = {}, net = navigator.onLine === false ? 'offline' : 'online', restoredT = 0, critHidden = '', fatalMsg = '', fatalOpen = false;
   const log = s => { window.__statusLog = (window.__statusLog || []).concat(s).slice(-40); };
 
@@ -26,6 +27,12 @@
   function shellUp() { return !!(window.__wos || window.__wux); }
   addEventListener('load', () => setTimeout(() => {
     if (shellUp() || document.documentElement.dataset.leaving) return;
+    // A boot error is most often a phone mixing cached files from two releases: reload once to fetch one matching
+    // set before showing the card (Robert's iPhone, 24 Oct 2026). Once per minute per tab, so a real bug can't loop.
+    if (bootErrors.length) try {
+      const k = 'wos.bootReloadAt', t = +sessionStorage.getItem(k) || 0;
+      if (Date.now() - t > 60e3) { sessionStorage.setItem(k, String(Date.now())); log('fatal:auto-reload'); location.reload(); return; }
+    } catch (e) {}
     fatal(bootErrors.length ? `${agent()} couldn’t start on this device: ${bootErrors[0].replace(/^Uncaught\s+/, '').slice(0, 160)}` : `${agent()} couldn’t start on this device.`);
   }, 2500));
 
@@ -38,9 +45,14 @@
   }
   function onClick(e) {
     if (e.target.closest('[data-wxtroubleshoot]')) { window.WizReach?.open(); return; }
+    if (e.target.closest('[data-wxmore]')) { netOpen = !netOpen; log('net:' + (netOpen ? 'open' : 'fold')); unfold(); return; }
     if (e.target.closest('[data-wxretry]')) { window.WosOutbox?.retryAll(); LIVE()?.refresh(); return; }
     if (e.target.closest('[data-wxcrit-x]')) { critHidden = critSig(); log('critical:dismiss'); render(); return; }
-    if (e.target.closest('[data-wxcrit]')) { log('critical:open'); H.openInbox?.(); render(); }
+    if (e.target.closest('[data-wxcrit]')) { log('critical:open'); H.openChats?.(); render(); }
+  }
+  function unfold() {
+    const b = document.querySelector?.('#wxBanners .wx-banner.net'); if (!b?.classList) return;
+    b.classList.toggle('open', netOpen); b.querySelector('[data-wxmore]')?.setAttribute('aria-expanded', String(netOpen));
   }
   const LIVE = () => window.WizLive || null;
 
@@ -87,12 +99,17 @@
   let lastHtml = '';
   function render() {
     const parts = [];
-    const waiting = window.WosOutbox?.unsent().some(it => it.state === 'waiting');
+    // Only a message the outbox will actually retry may hold the retrying banner up; anything else is a stated failure.
+    const O = window.WosOutbox, waiting = O?.unsent().some(it => it.state === 'waiting' && (!O.canRetry || O.canRetry(it)));
+    if (!(net === 'offline' || net === 'reconnecting' || waiting)) netOpen = false;
     if (net === 'offline' || net === 'reconnecting' || waiting) {
       const diagnosis = window.WizReach?.failure();
       const full = diagnosis?.message || 'Checking the connection to Wizard. Messages are kept on this device while we retry.';
-      // Desktop shows one line in the top bar (short text, full message on hover); the phone shows the full card.
-      parts.push(`<div class="wx-banner net ${net === 'offline' ? 'offline' : 'reconnecting'}" role="status" title="${esc(full)}" data-wxnet="${net === 'offline' ? 'offline' : 'reconnecting'}"><span class="wx-spin" aria-hidden="true"></span><span class="wx-m">${esc(full)}</span><span class="wx-s">${esc(diagnosis?.short || 'Reconnecting to Wizard · retrying')}</span><span class="wx-actions"><button type="button" data-wxretry aria-label="Retry now">Retry<span class="wx-long"> now</span></button><button type="button" data-wxtroubleshoot aria-label="Open Troubleshooter"><span class="wx-long">Open </span>Troubleshooter</button></span></div>`);
+      // One quiet pill in both shells (James, 22 Oct): short line + two small taps; tapping the line unfolds the full
+      // diagnosis under it. It never grows into a card that pushes the screen down.
+      const kind = net === 'offline' ? 'offline' : 'reconnecting';
+      const short = String(diagnosis?.short || 'Reconnecting to Wizard').replace(/ · retrying$/, ''); // the spinner already says it
+      parts.push(`<div class="wx-banner net ${kind}" role="status" title="${esc(full)}" data-wxnet="${kind}"><span class="wx-row"><span class="wx-spin" aria-hidden="true"></span><button type="button" class="wx-s" data-wxmore aria-expanded="false" aria-label="${esc(full)}">${esc(short)}</button><span class="wx-actions"><button type="button" data-wxretry aria-label="Retry now">Retry</button><button type="button" data-wxtroubleshoot aria-label="Open Troubleshooter">Troubleshoot</button></span></span><span class="wx-m">${esc(full)}</span></div>`);
     }
     else if (net === 'restored') parts.push(`<div class="wx-banner net restored" role="status" data-wxnet="restored"><span class="wx-i">✓</span><span class="wx-m">Back online</span></div>`);
     const crit = criticals(), sig = crit.map(s => s.id).sort().join(',');
@@ -104,8 +121,9 @@
     const html = parts.join('');
     if (html === lastHtml && document.getElementById('wxBanners')) return;
     lastHtml = html;
-    const el = box(); el.innerHTML = html; el.hidden = !html;
-    document.documentElement.style?.setProperty('--wx-banner-height', `${Math.ceil(el.getBoundingClientRect?.().height || 28) + 16}px`);
+    const el = box(); el.innerHTML = html; el.hidden = !html; unfold();
+    // The unfolded diagnosis floats over the screen; only the one-line pill makes room.
+    document.documentElement.style?.setProperty('--wx-banner-height', `${Math.ceil((el.getBoundingClientRect?.().height || 28) - (el.querySelector?.('.wx-banner.net.open .wx-m')?.getBoundingClientRect?.().height || 0)) + 10}px`);
     document.getElementById('device')?.classList.toggle('wx-on', !!html);
     document.documentElement.classList.toggle('wx-banner-on', !!html);
   }

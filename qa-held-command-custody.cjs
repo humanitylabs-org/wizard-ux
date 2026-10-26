@@ -18,6 +18,17 @@ module.exports=async({boot,ok,sleep,sid,model,provider})=>{
   ok(rows.length===0&&f.state.posts.length===0,'phone held: router command leaves no Unsent row and sends nothing',{rows,posts:f.state.posts.length});
   await f.done('held router command');}
 
+ // 1b. Held over an open thread (James, 23 Oct 2026 screenshot): while the take is transcribing, the thread shows no
+ // "Voice note · words come when it sends" bubble. A held take is a system command, never a message in any chat.
+ {const f=await boot();f.state.text='Open air lock.';f.state.cmd={route:'agent',summary:'x'};f.state.sttDelay=2500;
+  await f.p.evaluate(s=>__wos.openWizardThread(s),sid);await sleep(1500);
+  await f.p.evaluate(()=>document.activeElement?.blur());await f.p.evaluate(()=>__wos.startVoice('command'));await f.p.waitForFunction(()=>['listen','command'].includes(__wos.voice));await sleep(1100);await f.p.evaluate(()=>__wos.finishVoice());
+  await sleep(1200);
+  const mid=await f.p.evaluate(s=>({bubbles:document.querySelectorAll('.msg.pending').length,staged:[...WosOutbox._items.values()].filter(x=>x.intent==='command').length,inThread:WosOutbox.forThread(s).length}),sid);
+  ok(mid.staged>0&&mid.bubbles===0&&mid.inThread===0,'phone held over a thread: the take never shows as a voice note in that chat',mid);
+  await settle(f);f.state.sttDelay=0;
+  await f.done('held over thread');}
+
  // 2. Router says "agent" (not a command): choice card, nothing sent, no failed-voice row.
  {const f=await boot();f.state.text='what is the capital of peru';f.state.cmd={route:'agent',summary:'x'};
   await holdTake(f);await settle(f);await sleep(400);
@@ -52,6 +63,19 @@ module.exports=async({boot,ok,sleep,sid,model,provider})=>{
   ok(rows.length===0&&f.state.posts.length===0,`desktop held ${label}: no Unsent row, nothing sent`,{rows});
   await f.done('desktop held '+label);}
 
+ // 5b. Silent long press (James, 23 Oct 2026: "If I do a long press and there's no speech detected, please don't
+ // accumulate those voice notes in a recovery section. Those are just quick commands."): no row, nothing sent.
+ {const f=await boot();f.state.text='';
+  await holdTake(f);await settle(f);await sleep(400);
+  const rows=await unsent(f),recs=await f.p.evaluate(()=>WosOutbox.recordings().length);
+  ok(rows.length===0&&recs===0&&f.state.posts.length===0,'phone held silent: no Unsent/Recordings row, nothing sent',{rows,recs});
+  await f.done('held silent');}
+ {const f=await boot(true);f.state.text='';
+  await f.p.evaluate(()=>__wux.commandVoice());await sleep(1100);await f.p.evaluate(()=>__wux.commandVoice());await sleep(2000);
+  const rows=await unsent(f),recs=await f.p.evaluate(()=>WosOutbox.recordings().length);
+  ok(rows.length===0&&recs===0&&f.state.posts.length===0,'desktop held silent: no Unsent/Recordings row, nothing sent',{rows,recs});
+  await f.done('desktop held silent');}
+
  // 6. Upgrade: settled command rows left by earlier builds clear on load; unheard/interrupted and messages stay.
  {const f=await boot();
   const ids=await f.p.evaluate(async({model,provider})=>{
@@ -60,8 +84,10 @@ module.exports=async({boot,ok,sleep,sid,model,provider})=>{
     ['delivery','Delivery not confirmed · original recording kept; not queued for retry','command','Open meditation.',old],
     ['fresh','Command accepted · completion unconfirmed; original recording kept','command','zoom in',Date.now()],
     ['unheard','Command not heard · recording kept; nothing sent','command','',old],
+    ['silent','No speech detected · original recording and composer kept together','command','',old,'empty'],
+    ['silentMsg','No speech detected · original recording and composer kept together','message','',old,'empty'],
     ['message','Delivery not confirmed · original recording kept; not queued for retry','message','hello there',old]];
-   const ids={};for(const [k,error,intent,text,at] of cases){const x=await WosOutbox.stage({kind:'new',model,provider,intent,audio:new Blob(['orig '+k])});if(text)await WosOutbox.keepTranscript(x.id,text);await WosOutbox.transition(x.id,'held',error);const it=WosOutbox._items.get(x.id);it.createdAt=it.updatedAt=at;
+   const ids={};for(const [k,error,intent,text,at,state='held'] of cases){const x=await WosOutbox.stage({kind:'new',model,provider,intent,audio:new Blob(['orig '+k])});if(text)await WosOutbox.keepTranscript(x.id,text);await WosOutbox.transition(x.id,state,error);const it=WosOutbox._items.get(x.id);it.createdAt=it.updatedAt=at;
     await new Promise(res=>{const q=indexedDB.open('wos-outbox',1);q.onsuccess=()=>{const d=q.result,t=d.transaction('items','readwrite');t.objectStore('items').put(it);t.oncomplete=()=>{d.close();res();};};});ids[k]=x.id;}
    return ids;},{model,provider});
   await f.p.reload();await f.p.waitForFunction(()=>WosOutbox?.recoveryComplete);await sleep(300);
@@ -69,6 +95,8 @@ module.exports=async({boot,ok,sleep,sid,model,provider})=>{
   ok(st.accepted.completion==='local'&&st.delivery.completion==='local','upgrade: old settled held-command rows are cleared',st);
   ok(st.fresh.state==='held'&&st.fresh.bytes>0,'upgrade: a just-made pending command keeps its recording',st);
   ok(st.unheard.state==='held'&&st.unheard.bytes>0&&st.message.state==='held'&&st.message.bytes>0,'upgrade: unheard commands and real messages keep their recordings',st);
+  ok(st.silent.completion==='local','upgrade: old silent held-command rows are cleared',st);
+  ok(st.silentMsg.state==='empty'&&st.silentMsg.bytes>0,'upgrade: silent tap-to-talk notes keep their recordings',st);
   ok(f.state.posts.length===0,'upgrade: cleanup never replays or sends anything');
   await f.done('held upgrade');}
 };

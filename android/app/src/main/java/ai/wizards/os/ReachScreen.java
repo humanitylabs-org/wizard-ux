@@ -32,7 +32,7 @@ final class ReachScreen {
 
     private final Activity a;
     private final FrameLayout view;
-    private final TextView title, body, status, detail, retry, tailscale;
+    private final TextView title, body, status, detail, retry, tailscale, server;
     private boolean offline;
     private ReachPolicy.Why shown;
 
@@ -68,8 +68,17 @@ final class ReachScreen {
         col.addView(body, lp(dp(10)));
         col.addView(retry, lp(dp(26)));
         col.addView(tailscale, lp(dp(12)));
+        // The address it is trying, quiet, with a way to fix a wrong one. Not a peer of Try again: a stuck owner
+        // should never read "Change Wizard" as the cure for a box that is merely down (James, 24 Oct 2026).
+        server = text(13, INK, false);
+        server.setAlpha(0.55f);
+        server.setPadding(dp(16), dp(10), dp(16), dp(10));
+        server.setClickable(true);
+        server.setFocusable(true);
+        server.setOnClickListener(v -> a.startActivity(new android.content.Intent(a, ConnectActivity.class)));
         col.addView(status, lp(dp(18)));
         col.addView(detail, lp(dp(6)));
+        col.addView(server, lp(dp(28)));
         view.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
         parent.addView(view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -90,6 +99,7 @@ final class ReachScreen {
         retry.setVisibility(View.GONE);
         tailscale.setVisibility(View.GONE);
         detail.setVisibility(View.GONE);
+        server.setVisibility(View.GONE);
         status.setVisibility(View.VISIBLE);
         status.setText("Connecting to your Wizard…");
         view.setVisibility(View.VISIBLE);
@@ -107,6 +117,11 @@ final class ReachScreen {
         retry.setAlpha(1f);
         tailscale.setVisibility(ReachPolicy.offerTailscale(why, tailscaleInstalled) ? View.VISIBLE : View.GONE);
         status.setVisibility(View.GONE);
+        // The address actually being tried (QA override included), with any port: a wrong port is a real cause.
+        String where = android.net.Uri.parse(ai.wizards.os.device.AppState.origin(a)).getAuthority();
+        server.setText(where == null || where.isEmpty() ? "Edit address" : where + "  ·  Edit address");
+        server.setContentDescription("Edit Wizard address");
+        server.setVisibility(View.VISIBLE);
         String d = ReachPolicy.detail(raw);
         detail.setText(d);
         detail.setVisibility(d.isEmpty() ? View.GONE : View.VISIBLE);
@@ -149,7 +164,7 @@ final class ReachScreen {
 
     static ReachPolicy.Why why(Context c) {
         boolean[] n = net(c);
-        return ReachPolicy.why(n[0], n[1]);
+        return ReachPolicy.why(n[0], n[1], ServerOrigin.needsTailscale(ai.wizards.os.device.AppState.origin(c)));
     }
 
     static boolean tailscaleInstalled(Context c) {

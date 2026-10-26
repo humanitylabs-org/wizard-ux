@@ -1,0 +1,24 @@
+{
+  "teamAuthors": [
+    "miguel",
+    "wizard"
+  ],
+  "profiles": [
+    "miguel",
+    "wizard"
+  ],
+  "tweaks": [
+    "miguel/switch-row-actions",
+    "miguel/swipe-strip",
+    "miguel/send-and-go",
+    "miguel/model-pills",
+    "miguel/hidden-pin",
+    "miguel/snooze-someday",
+    "miguel/home-bars",
+    "wizard/two-orbs",
+    "miguel/arrange-download",
+    "miguel/edge-peek",
+    "wizard/app-borders",
+    "miguel/refresh-button"
+  ]
+}

@@ -415,6 +415,14 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     for (let k = 0; k < 2; k++) { await p.evaluate(() => { const w = Object.values(__wos.wins).find(x => x.app === 'chats'); __wos.renderChats(w); }); await sleep(120); }
     const back1 = await p.evaluate(sel => document.querySelector(sel).scrollTop, await S('.ch-msgs'));
     ok(Math.abs(back1 - mid) < 30, '#18 phone: reopening within the hour returns to the same place', { back1, mid });
+    // A Working thread (James, 22 Oct: the slow Philosopher thread): leave it mid-run after scrolling up, come back
+    // while it is still working, and the place holds instead of jumping to the bottom.
+    await back();
+    await p.evaluate(() => { __wos.live.session('qa_pw_long').status = 'running'; });
+    await openThread('qa_pw_long');
+    const backW = await p.evaluate(sel => { const nb = document.querySelector(sel); return { top: Math.round(nb.scrollTop), gap: Math.round(nb.scrollHeight - nb.scrollTop - nb.clientHeight) }; }, await S('.ch-msgs'));
+    ok(Math.abs(backW.top - mid) < 30 && backW.gap > 200, '#18 phone: reopening a Working thread keeps the place you scrolled to (never jumps to the bottom)', { backW, mid });
+    await p.evaluate(() => { __wos.live.session('qa_pw_long').status = 'completed'; });
     await p.click(await S('[data-chlatest]'));
     await until(async () => p.evaluate(sel => { const nb = document.querySelector(sel); return nb.scrollHeight - nb.scrollTop - nb.clientHeight < 10; }, await S('.ch-msgs')), 4000);
     await sleep(300);
@@ -436,14 +444,11 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     realFiles = ((await (await fetch(origin + '/wizard/files')).json()).files || []).filter(f => !f.status || f.status === 'ready');
     await openThread('qa_pw_ready');
     ok(!(await p.evaluate(sel => !!document.querySelector(sel), await S('.ch-compose [data-chfiles]'))), '#23 phone: the composer has no Files button (paperclip only)');
-    // Files from Settings
+    // Files lives in the Wizard Files app, not Settings (James, 25 Oct 2026)
     await back();
     await p.evaluate(() => __wos.openSettings()); await sleep(400);
-    await p.click('#settingsBody [data-st="files"]');
-    await p.waitForFunction(() => document.querySelectorAll('.ch-psheet [data-fiid]').length > 0, null, { timeout: 10000 }).catch(() => {});
-    ok(await p.evaluate(() => __wos.sheet === null && document.querySelectorAll('.ch-psheet [data-fiid]').length > 0), '#23 phone: Settings › Files opens the Files screen');
+    ok(await p.evaluate(() => !document.querySelector('#settingsBody [data-st="files"], #settingsBody .st-shortcuts')), '#23 phone: Settings has no Files or launcher shortcuts');
     await back();
-    ok(!(await sheetOpen()) && await p.evaluate(() => !!window.__wos) && p.url().startsWith(URL_.replace(/\/$/, '')), '#23 phone: Back closes it; app still open');
   } catch (e) { ok(false, '#23 Files section crashed', String(e).split('\n')[0]); }
 
   /* ===== #24 AI usage ===== */

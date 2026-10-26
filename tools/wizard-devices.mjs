@@ -3,13 +3,14 @@
 // The owner asks by voice ("monitor Thales too", "stop watching the old laptop"); the agent runs this.
 //
 //   wizard-devices list                         registry + live reading of every device + tailnet nodes
-//   wizard-devices add <id> --ssh <host> [--name N] [--role R] [--tailnet name,...] [--force]
+//   wizard-devices add <id> --ssh <host> [--name N] [--role R] [--tailnet name,...] [--group agent|human|client|other] [--shell powershell] [--force]
 //                                               adds a machine the Wizard already reaches over SSH
 //                                               (refuses unless a live probe succeeds, unless --force)
 //   wizard-devices remove <id>
 //   wizard-devices this [--name N] [--role R] [--tailnet name,...]   name the box the Wizard runs on
 //   wizard-devices hide <tailnet-name> | unhide <tailnet-name>       tidy the "On your network" list
 //   wizard-devices probe <id|this>              one live reading as JSON
+//   wizard-devices group <tailnet-name> <human|client|other|clear>   which group an unread tailnet machine shows under
 import {readRegistry, writeRegistry, probeSsh, probeLocal, createDevicesReader, REGISTRY_PATH} from './system-devices.mjs';
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -33,7 +34,7 @@ switch (cmd) {
     out.devices.forEach(d => console.log(fmt(d)));
     if (out.network.available) {
       console.log('\nOn your network (not monitored):');
-      out.network.peers.forEach(p => console.log(`  ${p.online ? '●' : '○'} ${p.name} · ${p.os}${p.lastSeen ? ' · last seen ' + p.lastSeen : ''}`));
+      out.network.peers.forEach(p => console.log(`  ${p.online ? '●' : '○'} ${p.name} · ${p.os} · ${p.group}${p.lastSeen ? ' · last seen ' + p.lastSeen : ''}`));
     }
     break;
   }
@@ -42,8 +43,9 @@ switch (cmd) {
     if (!id || typeof host !== 'string') die('usage: wizard-devices add <id> --ssh <host> [--name N] [--role R]');
     if (reg.devices.some(d => d.id === id)) die(`device "${id}" already exists; remove it first`);
     let reading = null;
-    try { reading = await probeSsh(host); } catch (e) { if (!flags.force) die(`could not read ${host} over SSH (${e.message}). Fix access first, or pass --force.`); }
-    const next = writeRegistry({...reg, devices: [...reg.devices, {id, name: typeof flags.name === 'string' ? flags.name : id, role: typeof flags.role === 'string' ? flags.role : undefined, connect: {type: 'ssh', host}, tailnet: list(flags.tailnet)}]});
+    const shell = flags.shell === 'powershell' ? 'powershell' : undefined;
+    try { reading = await probeSsh(host, shell); } catch (e) { if (!flags.force) die(`could not read ${host} over SSH (${e.message}). Fix access first, or pass --force.`); }
+    const next = writeRegistry({...reg, devices: [...reg.devices, {id, name: typeof flags.name === 'string' ? flags.name : id, role: typeof flags.role === 'string' ? flags.role : undefined, group: typeof flags.group === 'string' ? flags.group : 'agent', connect: {type: 'ssh', host, shell}, tailnet: list(flags.tailnet)}]});
     if (!next.devices.some(d => d.id === id)) die('rejected: id must be lowercase letters/digits/dashes and host a plain SSH host alias');
     console.log(`added ${id}` + (reading ? ` · ${reading.platform} · ${reading.disks.map(x => `${x.label} ${x.pct}%`).join(', ')}` : ' (no live reading yet)'));
     break;
@@ -71,8 +73,16 @@ switch (cmd) {
     const id = String(pos[0] || 'this');
     const d = reg.devices.find(x => x.id === id);
     if (id !== 'this' && !d) die(`no device "${id}"`);
-    console.log(JSON.stringify(id === 'this' ? await probeLocal() : await probeSsh(d.connect.host), null, 2));
+    console.log(JSON.stringify(id === 'this' ? await probeLocal() : await probeSsh(d.connect.host, d.connect.shell), null, 2));
     break;
   }
-  default: die('commands: list | add | remove | this | hide | unhide | probe');
+  case 'group': {
+    const n = String(pos[0] || '').toLowerCase(), g = String(pos[1] || '');
+    if (!n || !['human', 'client', 'other', 'clear'].includes(g)) die('usage: wizard-devices group <tailnet-name> <human|client|other|clear>');
+    const groups = {...reg.groups}; if (g === 'clear') delete groups[n]; else groups[n] = g;
+    writeRegistry({...reg, groups});
+    console.log(`${n} -> ${g}`);
+    break;
+  }
+  default: die('commands: list | add | remove | this | hide | unhide | probe | group');
 }

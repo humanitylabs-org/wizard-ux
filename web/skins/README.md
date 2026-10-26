@@ -1,3 +1,19 @@
+# Look packages and behaviour tweaks
+
+The 24 October decision supersedes the historical behaviour-in-skins instructions below. New skins are look only (tokens, CSS, backgrounds, icons). Behaviour belongs in `web/tweaks/<owner>/<tweak>/`, never in a new skin script or core patch. Existing non-Miguel skin scripts and My skin consent remain compatibility surfaces; do not add new behaviour there.
+
+A tweak ships `manifest.json` (`id`, `version`, `author`, `apiVersion`, `capabilities`), `tweak.js` default `setup(api)` returning teardown, optional `tweak.css`, and `contract.mjs`. Core CI discovers each shipped contract. `slots.json` owns the versioned mounts. Remove/rename a v1 slot only with an API bump; additions are compatible. Select only literal `[data-slot]` / `[data-part]`, never shell classes. `api.slot(name)` reads a mount; `api.slot.mount(name,node,order)` inserts in numeric order and restores borrowed core elements on teardown. Missing mounts are safe no-ops until the next render.
+
+Declared capabilities: `layout` exposes slot/part/listen/frame/gesture; `nav` exposes shell navigation, the existing Snooze action and `nav.snoozeOrder('last')` (trusted: Snooze = lowest priority, bottom of Ready; released on teardown); `models` exposes `models.list()` and `thread.model([choice])`; `data.read` exposes the shared resources snapshot/refresh (resources.js and usage.js keep polling ownership). Common env/route/on/toast/storage are scoped to each package. The host gates namespaces, catches setup errors and bounds package reads/imports. An incompatible API disables that package with a toast and continues. Disabling removes CSS/listeners/frames/mounts/interceptors.
+
+Trust is defence in depth, **not a JavaScript sandbox**: same-origin code can still reach the DOM. Week one admits only repository-shipped, build-pinned packages from `tweaks/catalog.json`; its team-author list is core-owned, never taken from a manifest. Non-team authors receive layout/nav only unless explicitly passed in the host's trusted author list. There is no remote installation or trust UI yet. Publisher signatures and digest-pinned external package installation are not implemented; do not treat a manifest author as proof of identity.
+
+`WosExperience` is the single persistence boundary. No Agent Service owner-profile route exists beside `/wizard/v1/my-skin`, so week one uses `wos.experience.v1` device storage. A future Files route can replace Store. The provisional human label lives in one constant. `Try Miguel’s` follows `tweaks/miguel/profile.json`, keeps overrides keyed by tweak id, and re-reads it on reopen/tab return. `Back to my setup` restores skin/list/overrides in one tap; `Make a copy` forks and stops following. My skin is independent and stays on top. Selecting Miguel's skin alone no longer enables behaviour; try his experience for the complete setup.
+
+Miguel's seven tweaks: switch-row actions, swipe strip, desktop send-and-go (after successful outbox acceptance), model pills, hidden pins, one-tap Snooze (lowest priority, bottom of Ready; host `nav.snoozeOrder`), Home resource bars. His existing appearance CSS and palettes stay intact.
+
+## Historical v1 skin API (compatibility only)
+
 # Skin packages
 
 A skin can change how Wizard looks **and** how it behaves, without changing the default shell.
@@ -44,6 +60,11 @@ whichever skin is picked. It starts empty, and empty means the picked skin exact
   `Skins/My skin/skin.js` after three errors a minute. **Turn off** revokes approval. Never runs in previews.
 - **Safety:** A box without the route (404), an error or a non-CSS answer shows the base
   skin; a bad rule only drops that rule. `?myskin=off` skips CSS and JS for one load. The shell CSP allows `script-src blob:` for verified modules, not inline scripts or eval.
+- **Orb swipe-up → Desks:** `html[data-skin] { --wos-orb-swipe-up: desks; }` makes a swipe up on the orb open the
+  Desks overview (Miguel's gesture) instead of Apps, with no script or approval tap. `pill` instead opens Miguel's
+  pill panel (`.ov.ov-pill` markup); the stylesheet setting it carries the `.ov-pill` rules, as `obsidian/skin.css` does.
+- **Regenerate under replies:** `html[data-skin] { --wos-reply-regenerate: on; }` shows a Regenerate button under
+  the last finished reply. Stock skins leave it off; scope the selector to your own palettes so nobody else gets it.
 - **Settings › Look:** a "My skin" row says what it sits on, with Edit (opens the file in Files) and Reset.
 - **Agents:** asked to "change my skin", an agent edits My skin only, never a skin in this folder
   (Agent Service run instructions and skill say so).
@@ -95,12 +116,15 @@ export default function setup(api) {
 | `api.env` | `{ touch, platform: 'android'\|'ios'\|'desktop', webview, edgeInset, shell }` |
 | `api.route()` | `{ view: 'list'\|'thread'\|'desk', thread, desk }` |
 | `api.on('route' \| 'render', fn)` | route changes; `{ part, el }` after a chats list or thread repaints |
+| `api.on('beside', fn)` | `{ side }` when the view bound beside a thread appears or goes: 1 = it leans in on the right of the thread, -1 = you are on it and the thread leans in on the left, 0 = none (also `api.route().beside`). Tweaks: `layout` |
+| `api.slot.mount('device-edge', node)` | tweaks: a control positioned over the phone screen (the slot is `#device`; phone only) |
 | `api.nav.back()` | the shell's own Back step (overlay → thread → list → Home). Never exits; false at the root |
 | `api.nav.openList()`, `openThread(id)`, `goDesk(i)`, `deskCount()` | shell navigation |
 | `api.part(name)` | `'thread'`, `'list'`, `'composer'`: the focused chats window's container; `'dock'`: the dock |
 | `api.listen(target, type, fn, opts)` | tracked event listener |
 | `api.frame(fn)` | tracked `requestAnimationFrame`, for drags. Settle with CSS transitions |
 | `api.gesture.claim(pointerId)` | take a finger before the shell's desk swipe does; false if the shell already has it |
+| `api.gesture.intent(dx, dy, ms)` | the shell's one swipe threshold (`core/swipe-intent.js`, same as swipe-back): true for an intentional sideways swipe either way. Use it for every horizontal skin gesture instead of your own numbers |
 | `api.toast(text)` | a short shell toast |
 | `api.storage.get/set(key, value)` | JSON storage namespaced to your skin |
 

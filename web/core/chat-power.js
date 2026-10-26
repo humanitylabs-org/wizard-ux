@@ -20,6 +20,7 @@ window.WosChatPower = function chatPower(A) {
   const LIVE = window.WizLive, OUTBOX = window.WosOutbox || null;
   const M = window.WosModels || null, WK = window.WosWork || null, E = window.WosErrors || null, F = window.WosFiles || null;
   const { ch, toast, H } = A;
+  const scrollBox = A.scrollBox || (nb => nb);
   const agent = () => window.WizConfig.agent();
   const FAILED = new Set(['failed', 'interrupted']);
   const FOLDER_SVG = '<svg viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.2h7a2 2 0 0 1 2 2v7.8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/></svg>';
@@ -27,94 +28,167 @@ window.WosChatPower = function chatPower(A) {
   /* ================= #18 reading position ================= */
   // wizard-mobile ff86db8c readingPosition.ts: same key, one hour, newest 32 threads.
   const RP_KEY = 'wizard.mobile.reading-positions.v1', RP_TTL = 60 * 60 * 1000, RP_MAX = 32;
+  let places = null, saveT = 0;
   const RP = {
     all(now = Date.now()) {
-      try {
-        const raw = JSON.parse(localStorage.getItem(RP_KEY) || '{}'), out = {};
-        for (const [k, v] of Object.entries(raw && typeof raw === 'object' ? raw : {})) {
-          if (!v || v.sessionId !== k || typeof v.messageId !== 'string' || !isFinite(v.savedAt) || !isFinite(v.scrollTop)) continue;
-          if (now - v.savedAt >= RP_TTL || v.savedAt > now + RP_TTL) continue;
-          out[k] = v;
-        }
-        return out;
-      } catch (e) { return {}; }
+      if (!places) {
+        try { places = JSON.parse(localStorage.getItem(RP_KEY) || '{}'); } catch (_) {}
+        if (!places || typeof places !== 'object' || Array.isArray(places)) places = {};
+      }
+      for (const [k, v] of Object.entries(places)) {
+        if (!v || v.sessionId !== k || typeof v.messageId !== 'string' || !isFinite(v.savedAt)
+          || !isFinite(v.scrollTop) || now - v.savedAt >= RP_TTL || v.savedAt > now + RP_TTL) delete places[k];
+      }
+      return places;
     },
     read(sid) { return sid ? RP.all()[sid] || null : null; },
     save(p) {
       const all = RP.all(p.savedAt); all[p.sessionId] = p;
-      const keep = Object.fromEntries(Object.entries(all).sort((a, b) => b[1].savedAt - a[1].savedAt).slice(0, RP_MAX));
-      try { localStorage.setItem(RP_KEY, JSON.stringify(keep)); } catch (e) {}
+      places = Object.fromEntries(Object.entries(all).sort((a, b) => b[1].savedAt - a[1].savedAt).slice(0, RP_MAX));
+      clearTimeout(saveT); saveT = setTimeout(flushPlace, 200);
     },
   };
+  function mergePlaces(text) {
+    try {
+      const other = JSON.parse(text || '{}'); if (!other || typeof other !== 'object' || Array.isArray(other)) return;
+      const all = RP.all();
+      for (const [sid, p] of Object.entries(other)) if (p?.savedAt > (all[sid]?.savedAt || 0)) all[sid] = p;
+      places = Object.fromEntries(Object.entries(RP.all()).sort((a, b) => b[1].savedAt - a[1].savedAt).slice(0, RP_MAX));
+    } catch (_) {}
+  }
+  const flushPlace = () => { clearTimeout(saveT); if (places) try { mergePlaces(localStorage.getItem(RP_KEY)); localStorage.setItem(RP_KEY, JSON.stringify(RP.all())); } catch (_) {} };
+  addEventListener('storage', e => { if (e.key === RP_KEY) mergePlaces(e.newValue); });
+  addEventListener('pagehide', flushPlace);
+  addEventListener('beforeunload', flushPlace);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) flushPlace(); });
   const latestId = turns => { for (let i = turns.length - 1; i >= 0; i--) if (turns[i].a) return `${i}:${turns[i].a.at ?? ''}`; return ''; };
   const lastReply = nb => { const a = nb.querySelectorAll('.msg.a'); return a.length ? a[a.length - 1] : null; };
-  const relTop = (nb, el) => el.getBoundingClientRect().top - nb.getBoundingClientRect().top;
-  const bottomGap = nb => nb.scrollHeight - nb.scrollTop - nb.clientHeight;
-  const toBottom = nb => { nb.scrollTop = nb.scrollHeight; };
-  function paintLatest(el, nb) {
-    const b = el.querySelector('[data-chlatest]'); if (!b || !nb) return;
-    b.hidden = bottomGap(nb) < 160;
+  const onScreen = A.threadOnScreen;
+  const relTop = (nb, el) => el.getBoundingClientRect().top - (scrollBox(nb) === nb ? nb.getBoundingClientRect().top : nb.closest('.ch-thread').querySelector('.ch-head').getBoundingClientRect().bottom);
+  const bottomGap = nb => { const s = scrollBox(nb); return s.scrollHeight - s.scrollTop - s.clientHeight; };
+  function anchorOf(nb) {
+    if (!onScreen(nb)) return null;
+    const seen = {};
+    for (const m of nb.querySelectorAll('[data-morph-key]')) {
+      const k = m.dataset.morphKey; seen[k] = (seen[k] || 0) + 1;
+      if (m.getBoundingClientRect().height && relTop(nb, m) + m.getBoundingClientRect().height > 1)
+        return { key: k, nth: seen[k] - 1, off: relTop(nb, m) };
+    }
+    return null;
   }
-  // Threads already placed in this page. The first placement after a page load is a restore (a reload, an
-  // update, the app coming back): the saved place wins even in a Working thread, as long as it is for the same reply.
-  const placedThisPage = new Set();
-  /* Called by renderThread after the new DOM is in. Returns true when it placed the scroll itself. */
+  const placed = new WeakMap(); // pending browser scroll acknowledgements, never a saved reading spot
+  function moveTo(nb, top) {
+    const s = scrollBox(nb), to = Math.max(0, Math.min(s.scrollHeight - s.clientHeight, top));
+    // Even an unchanged assignment kills a handset's momentum fling.
+    if (Math.abs(s.scrollTop - to) >= 1) { placed.set(s, to); s.scrollTop = to; }
+  }
+  // The only restore / stick-to-bottom rule, for open, repaint, app/desk return and layout changes.
+  function restore(nb, place) {
+    if (!onScreen(nb) || !place) return false;
+    if (place.atBottom) moveTo(nb, scrollBox(nb).scrollHeight);
+    else {
+      let n = -1, m = null;
+      if (place.anchor) for (const e of nb.querySelectorAll('[data-morph-key]'))
+        if (e.dataset.morphKey === place.anchor.key && ++n === place.anchor.nth) { m = e; break; }
+      if (m) moveTo(nb, scrollBox(nb).scrollTop + relTop(nb, m) - place.anchor.off);
+      // Migrate the previous hour's latest-reply-relative records without losing them.
+      else { const r = lastReply(nb); moveTo(nb, !place.anchor && r && isFinite(place.anchorOffset)
+        ? scrollBox(nb).scrollTop + relTop(nb, r) - place.anchorOffset : place.scrollTop); }
+    }
+    return true;
+  }
+  function capture(nb) {
+    if (!onScreen(nb)) return;
+    const el = nb.closest('[data-chats]'), w = H.win(el.dataset.chats), c = w && ch(w.id);
+    if (!w?.thread || w.thread === '__new__' || !c.lid || c.posFor !== w.thread || settling(c)) return;
+    RP.save({ sessionId: w.thread, messageId: c.lid, anchor: anchorOf(nb), shown: c.show,
+      scrollTop: scrollBox(nb).scrollTop, savedAt: Date.now(), atBottom: bottomGap(nb) < 80,
+      working: !!A.isWorking?.(LIVE.session?.(w.thread)) });
+  }
+  function follow(wid) {
+    const w = H.win(wid); if (!w?.thread || w.thread === '__new__') return;
+    RP.save({ ...RP.read(w.thread), sessionId: w.thread, messageId: ch(wid).lid || '',
+      scrollTop: 0, atBottom: true, savedAt: Date.now(), working: !!A.isWorking?.(LIVE.session?.(w.thread)) });
+    const nb = A.elOf?.(wid)?.querySelector('.ch-msgs'); if (nb) { endSettle(ch(wid)); restore(nb, RP.read(w.thread)); }
+  }
+  function paintLatest(el, nb) {
+    const b = el.querySelector('[data-chlatest]'), hidden = bottomGap(nb) < 160;
+    if (b && onScreen(nb) && b.hidden !== hidden) b.hidden = hidden;
+  }
   function position(w, el, nb, o) {
     const c = ch(w.id), sid = w.thread;
-    if (o.keep || !nb) return false;
+    c.placeOptions = o;
+    if (!nb) return false;
     if (c.placeWait) { c.placeWait.disconnect(); c.placeWait = null; }
-    if (sid === '__new__' || !o.turns) { toBottom(nb); return true; }
+    if (!onScreen(nb)) {
+      if (typeof ResizeObserver === 'function') {
+        const ro = c.placeWait = new ResizeObserver(() => {
+          if (onScreen(nb) && nb.isConnected && w.thread === sid) position(w, el, nb, c.placeOptions);
+        });
+        ro.observe(nb);
+      }
+      return true; // never adopt the scroll of a hidden / parked thread
+    }
+    if (sid === '__new__' || !o.turns) { restore(nb, { atBottom: true }); return true; }
     c.lid = latestId(o.turns);
     if (c.posFor !== sid) {
-      // No layout yet (the shell boots after a reload with the thread already open; desktop renders before it
-      // reveals its pane): every scrollTop clamps to 0, and marking the thread placed kept it at the top for good
-      // (James, 20 Oct: "an update reloads me to the very top of the chat"). Place it once the list has a size.
-      if (!nb.clientHeight) {
-        if (typeof ResizeObserver === 'function') {
-          const ro = c.placeWait = new ResizeObserver(() => {
-            if (!nb.clientHeight) return;
-            ro.disconnect(); if (c.placeWait === ro) c.placeWait = null;
-            if (nb.isConnected && el.querySelector('.ch-msgs') === nb && w.thread === sid && c.posFor !== sid) position(w, el, nb, o);
-          });
-          ro.observe(nb);
-        }
-        return true;
+      c.posFor = sid; c.posLid = c.lid; c.readerMoved = false;
+      c.posCached = !(c.loadedFor === sid && c.loadedNav === c.readNav);
+      const kept = c.unreadOpen === sid ? null : RP.read(sid);
+      const saved = kept && !(kept.atBottom && kept.working) && kept.messageId === c.lid ? kept : null;
+      const reply = lastReply(nb), last = o.turns[o.turns.length - 1];
+      let place = saved;
+      if (!place) {
+        const waiting = o.working && !last?.a;
+        const key = reply?.dataset.morphKey;
+        const nth = reply ? [...nb.querySelectorAll('[data-morph-key]')].filter(e => e.dataset.morphKey === key).indexOf(reply) : 0;
+        place = { sessionId: sid, messageId: c.lid, shown: c.show, scrollTop: 0, savedAt: Date.now(),
+          atBottom: waiting || !reply, working: o.working,
+          anchor: reply ? { key, nth, off: 8 } : null };
+        if (saved == null && !place.atBottom) c.atStart = sid;
+        RP.save(place);
       }
-      c.posFor = sid;
-      const restore = !placedThisPage.has(sid); placedThisPage.add(sid);
-      const saved = RP.read(sid), reply = lastReply(nb);
-      let apply = null;
-      if (o.working && !(restore && saved && !saved.atBottom && c.lid && saved.messageId === c.lid)) { c.follow = true; toBottom(nb); }
-      else if (saved && c.lid && saved.messageId === c.lid) {
-        // Back where you were: anchored to the latest reply, so layout changes don't shift it.
-        apply = saved.atBottom ? toBottom : box => { const r = lastReply(box); box.scrollTop = r && isFinite(saved.anchorOffset) ? box.scrollTop + relTop(box, r) - saved.anchorOffset : saved.scrollTop; };
-        c.follow = !!saved.atBottom;
-      } else if (reply) {
-        // A fresh reply: open at its first line, not the end of it.
-        apply = box => { const r = lastReply(box); if (r) box.scrollTop = Math.max(0, box.scrollTop + relTop(box, r) - 8); };
-        c.atStart = sid;
-      } else { c.follow = true; toBottom(nb); }
-      if (apply) { apply(nb); if (!saved || saved.messageId !== c.lid) c.follow = bottomGap(nb) < 80; settle(c, nb, apply); }
-      paintLatest(el, nb);
-      return true;
+      restore(nb, place);
+      settle(c, nb, () => restore(nb, RP.read(sid)));
+      if (!c.posCached) c.unreadOpen = '';
+    } else {
+      if (c.posCached && c.loadedFor === sid && c.loadedNav === c.readNav) {
+        c.posCached = false;
+        if (c.lid === c.posLid || c.readerMoved) c.unreadOpen = '';
+        if (c.lid !== c.posLid && !c.readerMoved) { endSettle(c); c.posFor = null; return position(w, el, nb, o); }
+      }
+      if (settling(c)) { const s = c.settle; settle(c, nb, () => restore(nb, RP.read(sid)), s.until); }
+      restore(nb, RP.read(sid));
     }
-    // Later renders: a place still settling is placed again; a thread that follows stays on the bottom; otherwise the reading place holds.
-    if (settling(c)) { const s = c.settle; s.apply(nb); settle(c, nb, s.apply, s.until); }
-    else if (c.follow || (o.working && o.atBottom)) toBottom(nb);
-    else if (o.boxTop != null) nb.scrollTop = o.boxTop; // read before the old list was replaced (a detached box reads 0)
+    // Content or chrome can grow without a repaint. Both modes use the same restore rule.
+    const nodes = [nb, ...nb.children, nb.closest('.ch-thread')?.querySelector('.ch-compose')].filter(Boolean);
+    if (typeof ResizeObserver === 'function' && (!c.placeNodes || nodes.length !== c.placeNodes.length || nodes.some((n, i) => c.placeNodes[i] !== n))) {
+      c.placeResize?.disconnect(); c.placeNodes = nodes;
+      c.placeResize = new ResizeObserver(() => reflow(nb)); nodes.forEach(n => c.placeResize.observe(n));
+    }
+    nb.querySelectorAll('img').forEach(im => { if (!im.complete && !im.__placeLoad) {
+      im.__placeLoad = true; im.addEventListener('load', () => reflow(nb), { once: true });
+    } });
     paintLatest(el, nb);
     return true;
   }
-  /* A place lands while the layout is still moving: after a reload the desktop pane slides in narrow and short
-   * (James, 20 Oct: the reload put him back at the wrong place), photos land, live repaints replace the list.
-   * Until the reader touches the list or SETTLE_MS pass, place it again on every size change, photo load and
-   * repaint, and hold the save so a mid-slide clamp never overwrites the good place. */
+  function resume(nb) {
+    const el = nb?.closest('[data-chats]'), w = el && H.win(el.dataset.chats), c = w && ch(w.id);
+    if (c?.placeOptions) position(w, el, nb, c.placeOptions);
+  }
+  function reflow(nb) {
+    const el = nb?.closest('[data-chats]'), w = el && H.win(el.dataset.chats), c = w && ch(w.id);
+    if (!c || c.placeTouching) return;
+    clearTimeout(c.reflowT);
+    const wait = 600 - (Date.now() - (c.placeUserAt || 0));
+    if (wait > 0) { c.reflowT = setTimeout(() => reflow(nb), wait + 1); return; }
+    restore(nb, RP.read(w.thread));
+  }
   const SETTLE_MS = 3000;
   function settle(c, nb, apply, until) {
     endSettle(c);
     const s = c.settle = { nb, apply, until: until || Date.now() + SETTLE_MS };
-    const stop = () => endSettle(c, s), again = () => { if (settling(c) && c.settle === s) apply(nb); else stop(); };
-    // Any touch in the thread (the list, ↓ Latest, the composer) hands the place back to the reader.
+    const stop = () => endSettle(c, s), again = () => { if (settling(c) && c.settle === s) apply(); else stop(); };
     const evs = ['wheel', 'touchstart', 'pointerdown', 'keydown'], host = nb.closest('[data-chats]') || nb;
     evs.forEach(e => host.addEventListener(e, stop, { passive: true }));
     nb.addEventListener('load', again, true);
@@ -124,28 +198,14 @@ window.WosChatPower = function chatPower(A) {
   }
   function endSettle(c, s) { const cur = c.settle; if (!cur || (s && cur !== s)) return; c.settle = null; cur.off?.(); clearTimeout(cur.t); }
   const settling = c => !!(c.settle && Date.now() < c.settle.until);
-  let saveT = 0, savePending = null;
   function onScroll(nb) {
-    const el = nb.closest('[data-chats]'); if (!el) return;
-    const id = el.dataset.chats, w = H.win(id); if (!w || !w.thread || w.thread === '__new__') return;
-    const c = ch(id);
-    if (settling(c) && c.settle.nb === nb) { paintLatest(el, nb); return; } // our own placement, not the reader
-    c.follow = bottomGap(nb) < 80;
-    paintLatest(el, nb);
-    clearTimeout(saveT);
-    savePending = () => {
-      savePending = null;
-      if (!c.lid || c.posFor !== w.thread || !nb.isConnected) return;
-      const reply = lastReply(nb);
-      RP.save({ sessionId: w.thread, messageId: c.lid, anchorOffset: reply ? relTop(nb, reply) : 0, scrollTop: Math.max(0, Math.round(nb.scrollTop)), savedAt: Date.now(), atBottom: bottomGap(nb) < 80, following: !!c.follow });
-    };
-    saveT = setTimeout(savePending, 200);
+    if (!onScreen(nb)) return;
+    const el = nb.closest('[data-chats]'), w = H.win(el.dataset.chats); if (!w?.thread) return;
+    const c = ch(w.id), sc = scrollBox(nb), own = placed.has(sc) && Math.abs(sc.scrollTop - placed.get(sc)) < 1;
+    placed.delete(sc);
+    if (!own && !settling(c)) { c.readerMoved = true; c.placeUserAt = Date.now(); }
+    capture(nb); paintLatest(el, nb);
   }
-  // A reload (Update ready · Reload) or the app going away inside the 200 ms debounce must still keep the place.
-  const flushPlace = () => { clearTimeout(saveT); savePending?.(); };
-  addEventListener('pagehide', flushPlace);
-  addEventListener('beforeunload', flushPlace);
-  document.addEventListener('visibilitychange', () => { if (document.hidden) flushPlace(); });
   // Pick from what's already in Wizard Files (#23), next to the paperclip.
   const filesBtn = () => (F ? `<button type="button" class="ch-fromfiles" data-chfiles aria-label="Attach from Wizard Files" title="From Wizard Files">${FOLDER_SVG}</button>` : '');
   const latestBtn = () => '<button type="button" class="ch-latest" data-chlatest hidden aria-label="Jump to the latest message">↓ Latest</button>';
@@ -163,7 +223,7 @@ window.WosChatPower = function chatPower(A) {
     return M?.currentRoute(s?.id || '') || { model: '', provider: '' };
   }
   // Agents MVP: the agent a window or thread belongs to (null = the main agent).
-  const agentOfWin = (w, s) => { const AG = window.WosAgents; const id = (s && LIVE.agentOf?.(s.id)) || (w && w.agent) || ''; return AG && id && AG.isOther(id) ? AG.get(id) || { id, label: id, missing: true } : null; };
+  const agentOfWin = (w, s) => { const AG = window.WosAgents; const id = s ? (LIVE.agentOf?.(s.id) || (typeof s.agent === 'string' ? s.agent : s.agent?.id) || '') : A.winAgent(w); return AG && id && AG.isOther(id) ? AG.get(id) || { id, label: id, missing: true } : null; };
   function newModel(c, w) {
     if (c.newModel) return c.newModel;
     const ag = agentOfWin(w || H.win(Object.keys(A.CH).find(k => A.CH[k] === c) || ''), null);
@@ -242,7 +302,7 @@ window.WosChatPower = function chatPower(A) {
     M.load().then(() => { for (const id of Object.keys(A.CH)) { const w = H.win(id); if (w?.thread) (A.renderThreadLive || A.renderThreadNow)(w); } }); // background: waits for a selection
   }
   async function pickModel(o, direct) {
-    const sh = direct || sheet; if (!sh || (!direct && sh.type !== 'model')) return;
+    const sh = direct || sheet; if (!sh || (!direct && sh.type !== 'model') || (direct?.alive && !direct.alive())) return;
     const c = ch(sh.wid), w = H.win(sh.wid); if (!direct) closeSheet();
     if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', o.private ? `New private chat on ${o.name}` : `New chat on ${o.name}`, 1400); if (w) A.renderThreadNow(w); return; }
     const s = LIVE.session(sh.sid); if (!s) return;
@@ -255,6 +315,7 @@ window.WosChatPower = function chatPower(A) {
       let route;
       try { route = await M.setThreadModel(sh.sid, o); }
       catch (e) { toast('!', 'Couldn’t change the model · try again', 2600); return; }
+      if (direct?.alive && !direct.alive()) return;
       Object.assign(s, route);
     }
     if (sh.mode === 'retry') return retryThread(sh.wid, sh.sid, o);
@@ -310,10 +371,42 @@ window.WosChatPower = function chatPower(A) {
         ...(cur.model ? { model: cur.model, provider: cur.provider } : {}) });
       E?.cleared.set(sid, Date.now());
       toast('↻', o ? `Retrying on ${o.name}` : 'Retrying', 1600);
-      if (c) c.follow = true;
+      if (c) follow(wid);
       return true;
     } catch (e) { toast('!', 'Couldn’t queue the retry', 2400); return false; }
     finally { if (c) c.retrying = ''; rerenderAll(); }
+  }
+  // Regeneration is a new, idempotent turn, never a history rewrite. Hydrate the
+  // authorized display history so native screenshots and file chips survive too.
+  async function regenerateThread(wid, sid) {
+    const w = H.win(wid), c = w ? ch(wid) : null;
+    if (!w || w.thread !== sid || !OUTBOX || c.regenerating || OUTBOX.unsent?.().some(it => it.sessionId === sid && it.how === 'regenerate')) return false;
+    c.regenerating = true;
+    try {
+      const s = await LIVE.sessionInfo(sid);
+      if (!s || LIVE.busy(sid) || ['queued','running','stopping','waiting_for_approval','unknown'].includes(s.status)) return false;
+      const turns = window.WosChat.parseRows(await LIVE.messages(sid));
+      const u = [...turns].reverse().find(t => t.u)?.u;
+      if (!u) throw new Error('No owner request');
+      const files = [...u.files];
+      for (const [i, url] of (u.images || []).entries()) {
+        const m = /^\/wizard\/files\/([A-Za-z0-9._:-]+)\/content$/.exec(url);
+        if (m && files.some(f => f.id === m[1])) continue;
+        if (!/^data:image\//.test(url) && !/^\/wizard\/(files|attachments)\//.test(url)) throw new Error('Image unavailable');
+        const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
+        if (!response.ok) throw new Error('Image unavailable');
+        const blob = await response.blob();
+        if (!blob.size || blob.size > 32 * 1024 * 1024 || !/^image\//.test(blob.type)) throw new Error('Image unavailable');
+        files.push(await window.WizUploads.upload(new File([blob], `image-${i + 1}.${blob.type === 'image/png' ? 'png' : 'jpg'}`, { type: blob.type })));
+      }
+      if (!u.text && !files.length && !u.reply) throw new Error('No owner request');
+      const cur = threadModel(s);
+      await OUTBOX.enqueue({ kind:'reply', sessionId:sid, wid, text:u.text || '', files, ...(u.reply ? { reply:u.reply } : {}),
+        how:'regenerate', source:'chat', instructions:'The owner pressed Regenerate on the last response. Answer the same owner request again, using its attached files. Preserve this thread’s selected model.',
+        ...(cur.model ? { model:cur.model, provider:cur.provider } : {}) });
+      follow(wid); toast('↻','Regenerating',1600); return true;
+    } catch (_) { toast('!', 'Couldn’t regenerate · original request kept',2600); return false; }
+    finally { c.regenerating = false; rerenderAll(); }
   }
   const RECONNECT_APPS = new Set(['wizard-claude', 'wizard-chatgpt']);
   function openReconnect(appId, installed) {
@@ -370,7 +463,7 @@ window.WosChatPower = function chatPower(A) {
     const w = H.win(wid), c = ch(wid);
     const isNew = sid === '__new__';
     const s = isNew ? null : LIVE.session(sid);
-    const steerRunId = capturedRunId ?? (s && A.WORKING_ST.has(s.status) && s.runId ? s.runId : '');
+    const steerRunId = capturedRunId ?? (A.isWorking(s) && s.runId ? s.runId : '');
     const nm = route || (isNew ? (c.newModel || null) : null);
     // The thread's composer rides with the recording as ONE message (legacy H4): the words typed or pasted
     // there (a link, say) go before the transcript, its photos and files with the voice note, and the composer
@@ -380,7 +473,7 @@ window.WosChatPower = function chatPower(A) {
     const all = [...(files || []), ...sealed.files].filter((f, i, a) => f && f.id && a.findIndex(x => x.id === f.id) === i).slice(0, 8);
     const wasHere = !!w && w.thread === sid;
     if (isNew) c.newModel = null;
-    c.follow = true;
+    follow(wid);
     const instructions = H.viewContext(wid, 'a voice reply recorded in this thread');
     // Send and go: a voice reply steps back one level like a typed send (chats.js), on
     // the tap, not after the recording has been written to the phone's storage (a blob commit can take seconds).
@@ -391,7 +484,7 @@ window.WosChatPower = function chatPower(A) {
     try {
       it = await OUTBOX.enqueue({ captureId, custodyId, sealKey: sealed.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: transcript ? [sealed.text, transcript].filter(Boolean).join('\n\n') : '', typed: sealed.text, audio: blob,
         instructions, files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), ...(sealed.reply ? { reply: sealed.reply } : {}),
-        wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && (nm?.agent || w?.agent) ? { agent: nm?.agent || w.agent } : {}) });
+        wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && (nm?.agent || A.winAgent(w)) ? { agent: nm?.agent || A.winAgent(w) } : {}) });
     } catch (e) { // not saved anywhere: the words and attachments go back, and so does James if he is still on the list
       if (hold) LIVE.releaseSend?.(hold);
       if (isNew && nm) c.newModel = nm;
@@ -447,7 +540,7 @@ window.WosChatPower = function chatPower(A) {
     const cur = mode === 'new' ? newModel(ch(wid), w) : threadModel(s);
     const agent = agentOfWin(w, s);
     // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
-    const priv = !agent && !w.agent && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
+    const priv = !agent && !A.winAgent(w) && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
     openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false, agent, priv, pop: !!pop && mode !== 'retry' });
     if (!M.ready) M.load().then(() => { if (sheet?.type === 'model') paint(sheet.pane, A.elOf(sheet.pane)); });
   }
@@ -488,7 +581,7 @@ window.WosChatPower = function chatPower(A) {
     const w = H.win(id);
     if (t.closest('[data-chfiles]')) { openFiles(id); return true; }
     if (t.closest('[data-chmodel]')) { const ww = H.win(A.owner(id)); openModels(id, ww?.thread === '__new__' ? 'new' : 'thread', !!t.closest('.ch-mlabel')); return true; }
-    if (t.closest('[data-chlatest]')) { const nb = A.elOf(id)?.querySelector('.ch-msgs'); if (nb) { ch(id).follow = true; nb.scrollTo({ top: nb.scrollHeight, behavior: 'smooth' }); } return true; }
+    if (t.closest('[data-chlatest]')) { const nb = A.elOf(id)?.querySelector('.ch-msgs'); if (nb) { follow(id); } return true; }
     if (t.closest('[data-chmic]')) {
       if (!w?.thread || !H.recordReply) return true;
       const r = H.recordReply(id, w.thread);
@@ -498,6 +591,7 @@ window.WosChatPower = function chatPower(A) {
     // Failed thread panel. Signed out: open the provider's connection app in this shell, or the Store on it.
     const rc = t.closest('[data-chreconnect]'); if (rc) { openReconnect(rc.dataset.chreconnect, rc.dataset.installed !== '0'); return true; }
     // Failed thread panel
+    if (t.closest('[data-mregen]') && w?.thread) { regenerateThread(id, w.thread); return true; }
     if (t.closest('[data-chretry]') && w?.thread) { retryThread(id, w.thread); return true; }
     if (t.closest('[data-chretrymodel]') && w?.thread) { openModels(id, 'retry'); if (sheet) sheet.mode = 'retry'; paint(id, A.elOf(id)); return true; }
     if (t.closest('[data-chdismiss]') && w?.thread) { dismissThread(w.thread); return true; }
@@ -515,6 +609,13 @@ window.WosChatPower = function chatPower(A) {
     return false;
   }
   function bind(root) {
+    const contact = e => {
+      const nb = e.target.closest?.('[data-chats]')?.querySelector('.ch-msgs');
+      if (!onScreen(nb)) return;
+      const c = ch(nb.closest('[data-chats]').dataset.chats); placed.delete(scrollBox(nb));
+      c.placeTouching = e.type === 'touchstart' || e.type === 'touchmove'; c.placeUserAt = Date.now();
+    };
+    ['touchstart', 'touchmove', 'touchend', 'touchcancel', 'wheel'].forEach(e => root.addEventListener(e, contact, { capture: true, passive: true }));
     root.addEventListener('scroll', e => { const t = e.target; if (t && t.classList && t.classList.contains('ch-msgs')) onScroll(t); }, true);
     root.addEventListener('toggle', e => {
       const d = e.target; if (!d || !d.matches || !d.matches('details[data-wk]')) return;
@@ -528,8 +629,28 @@ window.WosChatPower = function chatPower(A) {
       const inp = el?.querySelector('[data-fiq]'); if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
     });
   }
-  const opened = (wid, sid) => { const c = ch(wid); c.posFor = ''; c.follow = false; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
+  const opened = (wid, sid) => { const c = ch(wid), s = sid && sid !== '__new__' ? LIVE.session(sid) : null; c.unreadOpen = s && LIVE.isNew(s) ? sid : ''; c.posFor = ''; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
   const holds = id => !!sheet && sheet.pane === id;
-  return { position, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
+  async function tweakModels(wid) {
+    const w = H.win(wid); if (!w) return [];
+    await M.load(); const s = w.thread && w.thread !== '__new__' ? LIVE.session(w.thread) : null;
+    const agent = agentOfWin(w, s), cur = s ? threadModel(s) : newModel(ch(wid), w);
+    if (agent) return agent.missing ? [] : window.WosAgents.modelOptions(agent);
+    return M.visible(cur?.model || '', cur?.provider || '').concat(!w.agent ? M.privateOptions() : []);
+  }
+  async function tweakModel(wid, choice, alive = () => true) {
+    const w = H.win(wid); if (!w) return null;
+    const sid = w.thread && w.thread !== '__new__' ? w.thread : '';
+    if (!choice) return M.snapshot(sid, sid ? null : newModel(ch(wid), w), sid ? '' : A.winAgent(w));
+    const target = w.thread, session = sid ? LIVE.session(sid) : null;
+    const sameTarget = () => alive() && H.win(wid) === w && w.thread === target && (!sid || LIVE.session(sid) === session);
+    const options = await tweakModels(wid);
+    if (!sameTarget()) return null;
+    const m = options.find(x => x.value === choice.id && x.provider === choice.provider && (x.agent || '') === (choice.agent || ''));
+    if (!m) throw new Error('That model is unavailable');
+    await pickModel(m, { wid, sid, alive: sameTarget, mode: sid ? 'thread' : 'new' });
+    return sameTarget() ? tweakModel(wid) : null;
+  }
+  return { tweakModels, tweakModel, position, capture, resume, reflow, follow, restore, anchorOf, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
     paint, closeSheet, click, bind, opened, holds, openFiles, openModels, retryThread, FOLDER_SVG, RP, newModel: c => c.newModel || null };
 };

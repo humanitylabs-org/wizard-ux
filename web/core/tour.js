@@ -1,16 +1,20 @@
-/* Wizard OS first run: a three-beat tour on the live shell with the real microphone, plus the Help sheet.
+/* Wizard OS first run: a two-beat tour on the live shell with the real microphone, plus the Help sheet.
  * James, 11 Oct 2026: practise the real thing. The tour never fakes what the user said; it tells them what
  * to do, the real shell does it, and the tour watches the shell's events (app.js tourEv) to move on.
  *
  *   1 Talk     tap the orb, say hello, tap again: a real message to the Wizard (a real first thread)
- *   2 Command  hold the orb, say "Open Calendar", let go: the app opens on the desk next door
- *   3 Hide     swipe the orb down: the bars hide (distraction-free); swipe up from the bottom brings them back
- *   4 Done     "Need this again? Hold the orb, say help."
+ *   2 Hide     swipe the orb down: the bars hide (distraction-free); swipe up from the bottom brings them back
+ *   3 Done     "Everything you see is customizable. Try asking your Wizard for one change." (+ "say help" line)
+ *
+ * Miguel, 24 Oct 2026: the old beat 2 (hold the orb and say "Open Calendar") is gone: it didn't work reliably and
+ * a first run doesn't need it. Commands stay in the Help sheet. Each beat has "Skip this step" (moves to the next
+ * beat) beside the top-right "Skip tour" (ends the whole tour), so skipping is no longer all or nothing.
  *
  * No mic (denied, or none here): the shell's own "tap a line" chips appear and count. Two empty takes in a row:
- * a "Type instead" path appears (beat 1: a text box that sends for real; beat 2: the command as a button).
- * Wrong gesture (swipe up, desk swipe): the shell's result is undone and the tour nudges. Skip is always there;
- * Back steps back (at beat 1 it skips). Re-entry: say "help", or Settings → Gestures & help → Practice again.
+ * a "Type instead" path appears (beat 1: a text box that sends for real). Wrong gesture (a hold, swipe up, desk
+ * swipe): the shell's result is undone and the tour nudges. Back steps back (at beat 1 it skips the tour).
+ * Re-entry: say "help", or Settings → Gestures & help → Practice again.
+ * Desktop (WosTour.desk, below): the Talk beat only, as a card on a New chat's composer; Keys sheet → Practice.
  * Spec settled with Claude Fable: context/sources/projects/wizard-os/claude-transcripts/2026-10-11-tour-v2-*.
  */
 (() => {
@@ -30,23 +34,24 @@
   const BEATS = [
     null,
     { title: 'Talk', copy: () => typed ? 'Type “hello” and send it to your Wizard.' : 'Tap the orb and say hello. Tap again to send.' },
-    { title: 'Command', copy: () => typed ? `Tap the orb’s command: “${cmd()}”.` : `Hold the orb and say “${cmd()}”. Let go when you’re done.` },
     { title: 'Hide', copy: () => 'Swipe the orb down to hide everything but your screen.' },
-    { title: 'Done', copy: () => 'Need this again? Hold the orb and say “help”.' },
+    { title: 'Done', copy: () => 'Everything you see is customizable. Try asking your Wizard for one change.' },
   ];
+  const DONE = BEATS.length - 1; // the end card; every beat before it can be skipped on its own
 
   function build() {
     el = document.createElement('div'); el.id = 'tour'; el.className = 'tour'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Learn Wizard OS');
     el.innerHTML = `<div class="tr-spot"></div>
-      <button type="button" class="tr-skip" data-tskip>Skip</button>
-      <div class="tr-steps" aria-hidden="true"><i></i><i></i><i></i></div>
+      <button type="button" class="tr-skip" data-tskip>Skip tour</button>
+      <div class="tr-steps" aria-hidden="true">${'<i></i>'.repeat(DONE - 1)}</div>
       <div class="tr-stage"></div>
-      <div class="tr-copy" aria-live="polite"><small></small><b></b><span class="tr-alt"></span></div>`;
+      <div class="tr-copy" aria-live="polite"><small></small><b></b><span class="tr-alt"></span><span class="tr-nx"></span></div>`;
     el.addEventListener('click', e => {
       if (e.target.closest('[data-tskip]')) return finish('skip');
+      if (e.target.closest('[data-tnext]')) return skipStep();
       if (e.target.closest('[data-ttype]')) { typed = true; return go(step); }
       const say = e.target.closest('[data-tsay]'); if (say) { busy = true; H.say(say.dataset.tsay, say.dataset.tkind || 'auto'); return; }
-      if (step === 4) return finish('done');
+      if (step === DONE) return finish('done');
     });
     el.addEventListener('submit', e => {
       e.preventDefault(); const inp = e.target.querySelector('input'); const t = (inp?.value || '').trim(); if (!t) return;
@@ -56,9 +61,11 @@
   }
   function setCopy(text, sub, alt) {
     const c = $('.tr-copy', el); c.classList.remove('in'); void c.offsetWidth;
-    $('b', c).textContent = text; $('small', c).textContent = sub || ''; $('.tr-alt', c).innerHTML = alt || ''; c.classList.add('in');
+    $('b', c).textContent = text; $('small', c).textContent = sub || ''; $('.tr-alt', c).innerHTML = alt || '';
+    $('.tr-nx', c).innerHTML = step > 0 && step < DONE ? '<button type="button" class="tr-link tr-next" data-tnext>Skip this step</button>' : '';
+    c.classList.add('in');
   }
-  const sub = n => n < 4 ? `${n} of 3 · ${BEATS[n].title}` : '';
+  const sub = n => n < DONE ? `${n} of ${DONE - 1} · ${BEATS[n].title}` : '';
   /* The spotlight hole: around the orb while a beat waits on it; wide open while the shell is showing a result. */
   function spot(mode) {
     const s = $('.tr-spot', el); if (!s) return;
@@ -69,28 +76,52 @@
     const pad = 12; s.style.cssText = `left:${o.left - dev.left - pad}px;top:${o.top - dev.top - pad}px;width:${o.width + pad * 2}px;height:${o.height + pad * 2}px;border-radius:999px`;
   }
   function fallback(n) {
-    if (n === 1 && typed) return `<form class="tr-type"><input type="text" placeholder="hello" enterkeyhint="send" aria-label="Message to your Wizard" autocomplete="off"><button type="submit">Send</button></form>`;
-    if (n === 2 && typed) return `<button type="button" class="tr-cmd" data-tsay="${esc(cmd())}" data-tkind="command">${esc(cmd())}</button>`;
-    if ((n === 1 || n === 2) && misses >= 2) return `<button type="button" class="tr-link" data-ttype>Type instead</button>`;
+    if (n === 1 && typed) return `<form class="tr-type"><input type="text" placeholder="Type hello here" enterkeyhint="send" aria-label="Message to your Wizard" autocomplete="off"><button type="submit">Send</button></form>`;
+    if (n === 1 && misses >= 2) return `<button type="button" class="tr-link" data-ttype>Type instead</button>`;
+    if (n === DONE) return '<span class="tr-note">Need this again? Hold the orb and say “help”.</span>';
     return '';
   }
   function go(n) {
     clearTimers(); step = n; busy = false; inbox = false; log('beat:' + n);
-    if (n !== 1 && n !== 2) misses = 0;
+    if (n !== 1) misses = 0;
     el.dataset.step = String(n);
     [...el.querySelectorAll('.tr-steps i')].forEach((d, i) => d.classList.toggle('on', i < n));
-    H.orbWrap.classList.toggle('tr-pulse', n < 4 && !typed);
-    if (n <= 3) H.goHome();
+    H.orbWrap.classList.toggle('tr-pulse', n < DONE && !typed);
+    if (n < DONE) { H.goHome(); $('.tr-copy', el).style.top = ''; }
     setCopy(BEATS[n].copy(), sub(n), fallback(n));
     $('.tr-stage', el).innerHTML = '';
-    if (n < 4) requestAnimationFrame(() => { if (step === n) spot('orb'); });
-    if (n === 4) {
+    if (n < DONE) requestAnimationFrame(() => { if (step === n) spot('orb'); });
+    if (n === DONE) {
       H.goHome(); spot('closed');
-      $('.tr-stage', el).innerHTML = `<div class="tr-glyphs">${glyph('tap', 'Tap', 'talk')}${glyph('hold', 'Hold', 'command')}${glyph('down', 'Swipe ↓', 'hide')}</div>
+      $('.tr-stage', el).innerHTML = `<div class="tr-glyphs">${glyph('tap', 'Tap', 'talk')}${glyph('down', 'Swipe ↓', 'hide')}</div>
         ${typed ? '<div class="tr-mic">Turn on the microphone in your phone’s settings to talk instead of type.</div>' : ''}<div class="tr-tapon">Tap anywhere to start</div>`;
     }
     if (n === 1 && typed) later(() => el.querySelector('.tr-type input')?.focus(), 120);
+    if (n === DONE) { requestAnimationFrame(endLayout); later(endLayout, 420); } // after the copy's entrance settles
   }
+  /* End card: stack copy → glyphs → mic note → "Tap anywhere" from measured heights, so a three-line headline on a
+   * narrow or short screen (iPhone in Telegram) never runs the rows into each other. */
+  function endLayout() {
+    if (!el || step !== DONE) return;
+    const copy = $('.tr-copy', el), box = H.device.getBoundingClientRect();
+    if (!copy) return;
+    const rows = ['.tr-glyphs', '.tr-mic', '.tr-tapon'].map(sel => $(sel, el)).filter(Boolean);
+    const gap = box.height < 500 ? 8 : 22;
+    const style = getComputedStyle(el);
+    const topBound = Math.max(64, parseFloat(style.paddingTop) || 0);
+    const bottomBound = Math.max(16, parseFloat(style.paddingBottom) || 0);
+    const height = copy.getBoundingClientRect().height + rows.reduce((n, x) => n + x.getBoundingClientRect().height + gap, 0);
+    // Resolved CSS padding includes the native safe areas. If the stack cannot fit, the padded tour scrolls
+    // far enough to clear the home indicator, without placing the copy under the top controls.
+    let y = Math.max(topBound, Math.min(box.height * .28, box.height - bottomBound - height));
+    copy.style.top = Math.round(y) + 'px';
+    y += copy.getBoundingClientRect().height + gap;
+    for (const x of rows) { x.style.top = Math.round(y) + 'px'; y += x.getBoundingClientRect().height + gap; }
+    // Absolute rows do not extend a scroll container's padding in WebKit. A real flow spacer reserves
+    // the complete measured stack, so the last row can scroll above the native bottom inset.
+    el.style.setProperty('--tr-scroll-height', Math.ceil(Math.max(0, y - gap - topBound)) + 'px');
+  }
+  window.addEventListener('resize', endLayout);
   const glyph = (k, a, b) => `<div class="tr-g ${k}"><span class="tr-gi ${k}"><i></i></span><b>${a}</b><small>${b}</small></div>`;
   function nudge(t, ms = 2200) { if (!active()) return; const n = step; setCopy(t, sub(n), fallback(n)); H.vib(6); later(() => { if (active() && step === n && !busy && !inbox) setCopy(BEATS[n].copy(), sub(n), fallback(n)); }, ms); }
 
@@ -99,33 +130,33 @@
     if (!active()) return;
     log('ev:' + type + (d.which ? ':' + d.which : ''));
     if (type === 'voice') { el.classList.toggle('tr-live', d.state !== 'idle'); return; }
+    // Settings opened mid-tour (a deeplink, a notification, a voice command): the owner went somewhere on purpose.
+    // Step aside; the tour's tap guard would otherwise swallow every tap in Settings under its scrim.
+    if (type === 'sheet' && d.which === 'settings') return finish('handoff');
     if (type === 'nomic') { if (!typed) { typed = true; log('typed'); later(() => { if (!active()) return; H.prepare(); el.classList.remove('tr-live'); go(step); }, 700); } return; }
     if (step === 1) {
-      if (type === 'sent' || (type === 'command' && d.ok)) {
+      // Only a real message moves Talk on. A hold is a wrong gesture (below), whether or not it ran as a command.
+      if (type === 'sent') {
         busy = true; misses = 0; spot('open');
-        setCopy(type === 'sent' ? 'Sent. Your Wizard is working on it.' : 'That ran as a command. Nice.', sub(1));
+        setCopy('Sent. Your Wizard is working on it.', sub(1));
         return later(() => go(2), 2200);
       }
       if (type === 'nospeech') { misses++; busy = false; return nudge('Didn’t hear anything. Tap, speak, then tap again.', 3200); }
-      if (type === 'nomatch') { busy = false; H.dismissVoice(); return nudge('That was a hold. For this one, just tap.'); }
     }
     if (step === 2) {
-      if (type === 'command' && d.ok) {
-        busy = true; misses = 0; spot('open');
-        setCopy('That’s a command. It opened on the desk next door.', sub(2));
-        return later(() => go(3), 2600);
-      }
-      if (type === 'nomatch' || (type === 'command' && !d.ok)) { misses++; busy = false; H.dismissVoice(); return nudge(`Didn’t catch a command. Try “${cmd()}”.`, 3200); }
-      if (type === 'nospeech') { misses++; busy = false; return nudge('Hold, speak, then let go.', 3200); }
-      if (type === 'sent') { busy = false; return nudge(`That went to your Wizard as a message. Hold the orb for a command.`, 3200); }
-    }
-    if (step === 3) {
-      if (type === 'zen' && d.on) { inbox = true; spot('closed'); setCopy('Nothing in the way. Swipe up from the bottom edge to bring it back.', sub(3)); return; }
-      if (type === 'zen' && !d.on && inbox) { inbox = false; return later(() => go(4), 250); }
+      // No entrance animation here: WebKit can hold it for a second behind the bars' own hide transition, and this
+      // is the one line that says how to get them back.
+      if (type === 'zen' && d.on) { inbox = true; spot('closed'); setCopy('Nothing in the way. Swipe up from the bottom edge to bring it back.', sub(2)); $('.tr-copy', el).classList.remove('in'); return; }
+      if (type === 'zen' && !d.on && inbox) { inbox = false; return later(() => go(DONE), 250); }
     }
     // Wrong gesture: undo what the shell did and steer back to the beat.
-    if (type === 'sheet' && d.which === 'launcher') { H.closeSheets(); return nudge(step === 3 ? 'Down, not up.' : 'That’s every app. We’ll come back to it.'); }
-    if (type === 'desk' && step <= 3 && !busy && !d.home) { H.goHome(); return nudge('That moves between desks. Try the beat above.'); }
+    // A hold (the tour no longer teaches commands): drop the take, close whatever a command opened, back to Home.
+    if ((type === 'command' || type === 'nomatch') && step < DONE) {
+      busy = false; H.dismissVoice(); H.closeSheets(); H.goHome();
+      return nudge(step === 1 ? 'That was a hold. For this one, just tap.' : 'That was a hold. Swipe the orb down instead.');
+    }
+    if (type === 'sheet' && d.which === 'launcher') { H.closeSheets(); return nudge(step === 2 ? 'Down, not up.' : 'That’s every app. We’ll come back to it.'); }
+    if (type === 'desk' && step < DONE && !busy && !d.home) { H.goHome(); return nudge('That moves between desks. Try the beat above.'); }
   }
 
   const active = () => !!(el && step > 0);
@@ -151,14 +182,21 @@
     const e0 = el; el = null; setTimeout(() => e0.remove(), 300);
     if (how === 'skip') H.toast('?', 'Say “help” any time to see the gestures', 2600);
   }
-  /* Back: one step back. In beat 3 with the bars hidden, Back brings them back: that is the success. */
+  /* Skip this step: leave the current beat (stopping a take in progress, bringing hidden bars back) and show the next. */
+  function skipStep() {
+    if (!active() || step >= DONE) return false;
+    const n = step + 1; log('skip-step:' + step);
+    if (inbox) { inbox = false; H.setZen?.(false); }
+    H.prepare(); el.classList.remove('tr-live', 'tr-open');
+    go(n); return true;
+  }
+  /* Back: one step back. In beat 2 with the bars hidden, Back brings them back: that is the success. */
   function back() {
     if (helpEl) { closeHelp(); return 'help'; }
     if (!active()) return '';
     if (el.classList.contains('tr-live')) return ''; // recording: Back navigates as always, the tour stays
     if (step === 1) { finish('skip'); return 'tour-skip'; }
-    if (step === 2) { go(1); return 'tour-step'; }
-    if (step === 3) { if (inbox) { H.setZen?.(false); return 'tour-step'; } go(2); return 'tour-step'; }
+    if (step === 2) { if (inbox) { H.setZen?.(false); return 'tour-step'; } go(1); return 'tour-step'; }
     finish('done'); return 'tour-done';
   }
 
@@ -170,6 +208,7 @@
     { k: 'filter', a: 'In Chats', b: 'Tap the filter button in search, or hold the orb and say “filter by unread” or “search budget”.' },
     { k: 'dots', a: 'Dots under the orb', b: 'Tap to jump to a desk. Long-press to see them all.' },
     { k: 'back', a: 'Back', b: 'Always one step back. It never closes Wizard.' },
+    { k: 'skin', a: 'Make it yours', b: 'Everything you see is customizable. Ask your Wizard for one change, and it becomes My skin.', say: ['Make my chat text a little bigger'] },
   ];
   function openHelp() {
     if (!H || helpEl) return;
@@ -188,9 +227,83 @@
   function closeHelp() { if (!helpEl) return false; const h = helpEl; helpEl = null; h.classList.remove('open'); setTimeout(() => h.remove(), 260); log('help:close'); return true; }
   const HELP_RE = /^(help|help me|show (me )?(the )?help|gestures|show (me )?(the )?gestures|how does (this|wizard) work|how do i use (this|wizard)|tutorial|show (me )?the tutorial|practice again)[.!?]*$/i;
 
+  /* ---------------- Desktop: one first-message guide on the real composer ----------------
+   * The desktop shell has no orb, gestures or desks to teach, so its first run is the phone's Talk beat only:
+   * a small card beside a New chat's composer ("Type hello and press Enter"), nothing dimmed and no tap guard, so
+   * chatting is never blocked. Any real message (typed or the mic) moves it to a short end card. Same storage key
+   * as the phone tour: finished or skipped once, it never starts by itself again. The desktop adapter (desktop.js)
+   * attaches { newChat, composer, toast, keys }. */
+  const D = { H: null, el: null, step: 0, t0: 0, off: null, tick: 0, ring: null };
+  const dActive = () => !!(D.el && D.step > 0);
+  function dPlace() {
+    if (!D.el) return;
+    const f = D.H.composer?.() || null, card = D.el;
+    // Centred over the composer it points at; with no composer in view (after a send the pane may show the list),
+    // centred low in the Chats pane, or the window, so it never covers the top bar or a sidebar edge.
+    const shown = x => !!(x && x.getClientRects().length);
+    const r = shown(f) ? f.getBoundingClientRect() : null, pane = !r && D.H.pane?.(), pr = shown(pane) ? pane.getBoundingClientRect() : null;
+    const box = r || pr || { left: 0, right: innerWidth, bottom: innerHeight, width: innerWidth };
+    const w = Math.min(440, Math.max(280, box.width - 32));
+    const left = Math.max(8, Math.min(innerWidth - w - 8, box.left + (box.width - w) / 2));
+    const bottom = r ? Math.max(8, innerHeight - r.top + 14) : Math.max(16, innerHeight - box.bottom + 24);
+    card.style.cssText = `left:${Math.round(left)}px;bottom:${Math.round(bottom)}px;width:${Math.round(w)}px`;
+    // The ring is its own element over the message box: Chats re-renders the composer and would drop a class on it.
+    if (D.ring) D.ring.style.cssText = r && D.step === 1 ? `left:${r.left - 4}px;top:${r.top - 4}px;width:${r.width + 8}px;height:${r.height + 8}px` : 'display:none';
+  }
+  function dPaint() {
+    const n = D.step, mod = D.H.mod || 'Alt+';
+    D.el.dataset.step = String(n);
+    D.el.innerHTML = n === 1
+      ? `<small>Start here</small><b>Type “hello” below and press Enter to send it to your Wizard.</b>
+         <span class="dtr-sub">Prefer to talk? Click the mic next to the box.</span>
+         <span class="dtr-acts"><button type="button" class="dtr-link" data-dnext>Skip this step</button><button type="button" class="dtr-link" data-dskip>Skip tour</button></span>`
+      : `<small>${D.sent ? 'Sent' : 'You’re set'}</small><b>${D.sent ? 'Your Wizard is working on it. Its reply shows up in your chat list on the left.' : 'Type in the box at the bottom of any chat and press Enter to talk to your Wizard.'}</b>
+         <span class="dtr-sub">Setup and your apps: <kbd>${mod}O</kbd> · every key: <kbd>${mod}/</kbd></span>
+         <span class="dtr-acts"><button type="button" class="dtr-go" data-ddone>Done</button></span>`;
+    dPlace(); log('desk:beat:' + n);
+  }
+  function dStart(why) {
+    if (!D.H) return false;
+    if (dActive()) return true;
+    D.H.newChat?.(); // a New chat in the main Chats window, composer focused
+    D.el = document.createElement('div'); D.el.className = 'dtr'; D.el.setAttribute('role', 'dialog'); D.el.setAttribute('aria-label', 'Send your first message');
+    D.el.addEventListener('click', e => {
+      if (e.target.closest('[data-dskip]')) return dFinish('skip');
+      if (e.target.closest('[data-dnext]')) { D.sent = false; D.step = 2; return dPaint(); }
+      if (e.target.closest('[data-ddone]')) return dFinish('done');
+    });
+    D.ring = document.createElement('div'); D.ring.className = 'dtr-ring'; D.ring.setAttribute('aria-hidden', 'true');
+    document.body.append(D.ring, D.el);
+    D.step = 1; D.sent = false; D.t0 = Date.now(); log('desk:start:' + (why || ''));
+    // Any real message after the guide started (typed, the composer mic or a voice take) moves it on.
+    const OB = window.WosOutbox;
+    D.off = OB?.onChange?.(api => {
+      if (D.step !== 1) return;
+      if (api.unsent().some(it => it.createdAt >= D.t0 && api.isMessage(it))) { D.sent = true; D.step = 2; dPaint(); }
+    }) || null;
+    D.tick = setInterval(dPlace, 400); addEventListener('resize', dPlace);
+    dPaint(); return true;
+  }
+  function dFinish(how) {
+    if (!D.el) return false;
+    log('desk:finish:' + how); mark();
+    clearInterval(D.tick); removeEventListener('resize', dPlace); try { D.off?.(); } catch (e) {}
+    D.ring?.remove(); D.ring = null;
+    D.el.remove(); D.el = null; D.step = 0; D.off = null;
+    if (how === 'skip') D.H?.toast?.('?', 'Keys and help any time: ' + (D.H.mod || 'Alt+') + '/', 2600);
+    return true;
+  }
+  const desk = {
+    attach(host) { D.H = host; }, start: dStart, finish: dFinish,
+    skipStep: () => { if (D.step !== 1) return false; D.sent = false; D.step = 2; dPaint(); return true; },
+    get active() { return dActive(); }, get step() { return D.step; },
+  };
+
   window.WosTour = {
+    desk,
     attach(host) { H = host; },
-    start, finish, back, event, openHelp, closeHelp, _go: n => active() && go(n),
+    start, finish, back, event, skipStep, openHelp, closeHelp, _go: n => active() && go(n),
+    beats: BEATS.slice(1).map(b => b.title), DONE,
     isHelp: t => HELP_RE.test(String(t || '').trim()),
     get active() { return active(); }, get step() { return step; }, get helpOpen() { return !!helpEl; }, get typed() { return typed; },
     done, mark,

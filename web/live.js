@@ -58,6 +58,12 @@
     const ask = String(v.ask || '').replace(/\s+/g, ' ').trim().slice(0, 140); if (!ask) return null;
     return { state: v.state, ask, subject: String(v.subject || '').replace(/\s+/g, ' ').trim().slice(0, 40) };
   }
+  function followUpOf(v) {
+    if (!v || typeof v !== 'object' || v.active !== true || !Number.isSafeInteger(v.count) || v.count < 1) return null;
+    const names = Array.isArray(v.names) ? v.names.map(name => String(name).replace(/\s+/g, ' ').trim().slice(0, 160)).filter(Boolean).slice(0, 3) : [];
+    const nextRun = optIso(v.nextRun);
+    return { active: true, count: v.count, names, ...(nextRun ? { nextRun } : {}) };
+  }
   function normalize(item) {
     if (item.listVersion === 1) return { safeError:'', reconnect:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, runtime: 'direct', request: '', renames: [], detailNeeded: true };
     const id = item.id || item.session_id; if (!id) return null;
@@ -99,6 +105,8 @@
       helperStatus: item.wizard_helper_status && typeof item.wizard_helper_status === 'object' ? item.wizard_helper_status : null,
       // What the finished thread asks of James (the agent's hidden status line): needs_you / check / done / fyi.
       attention: attentionOf(item.wizard_attention),
+      // A durable quiet one-shot checker bound to this thread. The prompt never reaches the list.
+      followUp: followUpOf(item.wizard_follow_up),
       // Thread titles (Agent Service thread-titles.mjs): every rename with its time, so the thread shows
       // "Renamed from …" right after the reply that renamed it. The list shows only the current title.
       renames: Array.isArray(item.wizard_title_renames) ? item.wizard_title_renames.filter(r => r && typeof r.from === 'string' && isFinite(r.at)).slice(-6).map(r => ({ from: r.from.slice(0, 120), to: String(r.to || '').slice(0, 120), at: Number(r.at), by: r.by === 'you' ? 'you' : 'agent' })) : [],
@@ -116,8 +124,16 @@
   const vis = v => (typeof v === 'string' ? v : '').replace(/\s+/gu, ' ').trim().slice(0, 80).toLocaleLowerCase();
   function fingerprint(v) { let h = 2166136261; for (const c of vis(v)) { h ^= c.codePointAt(0) ?? 0; h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
   const keyOf = s => `${s.runtime}:${s.id}`;
+  // Side state (seen, snoozed) for another agent's thread is keyed agent/<id>/<runtime>:<id> on the server; the
+  // dispositions route takes agent_id in the body and refuses any query string (so agent snoozes used to fail).
   const seenKeyOf = s => s.agent && s.agent !== 'hermes' ? `agent/${s.agent}/${keyOf(s)}` : keyOf(s);
-  function assistantAt(s) { const v = s.lastAssistantAt ?? (s.previewRole === 'assistant' ? s.previewAt : undefined); return isFinite(Date.parse(v ?? '')) ? v : undefined; }
+  // The newest assistant message the list knows. lastAssistantAt counts model replies only; reports that apps and
+  // scheduled jobs append (Topics roundup, daily moves, audits) arrive as the latest message (previewAt) without moving
+  // it, so those threads came in already read (James, 23 Oct 2026). Take whichever is newer.
+  function assistantAt(s) {
+    const c = [s.lastAssistantAt, s.previewRole === 'assistant' ? s.previewAt : undefined].filter(v => isFinite(Date.parse(v ?? '')));
+    return c.length > 1 && Date.parse(c[1]) > Date.parse(c[0]) ? c[1] : c[0];
+  }
   function recordFor(s, seenAt) {
     const a = assistantAt(s);
     return { ...(typeof s.messageCount === 'number' ? { messageCount: s.messageCount } : {}), ...(s.status && s.status !== 'submitting' ? { status: s.status } : {}),
@@ -126,6 +142,7 @@
   function hasNew(s, state) {
     if (!state) return false;
     const r = state.threads[seenKeyOf(s)]; if (!r) return true;
+    if ((r.unreadAt ?? -1) > r.seenAt) return true;
     const cur = Date.parse(assistantAt(s) ?? ''), seenA = Date.parse(r.assistantActivityAt ?? '');
     const comparable = typeof s.messageCount === 'number' && typeof r.messageCount === 'number';
     const previewChanged = !otherAgent(s.agent) && !comparable && fingerprint(s.preview) !== r.previewFingerprint;
@@ -144,9 +161,10 @@
     if (lu !== ru) pick = ru > lu ? r : l;
     else { const lc = l.messageCount ?? -1, rc = r.messageCount ?? -1; pick = lc !== rc ? (rc > lc ? r : l) : (r.seenAt > l.seenAt ? r : l); }
     const seenAt = Math.max(l.seenAt, r.seenAt);
+    const unreadAt = Math.max(l.unreadAt ?? -1, r.unreadAt ?? -1);
     const la = Date.parse(l.assistantActivityAt ?? ''), ra = Date.parse(r.assistantActivityAt ?? '');
     const aa = !isFinite(la) ? r.assistantActivityAt : !isFinite(ra) ? l.assistantActivityAt : ra > la ? r.assistantActivityAt : l.assistantActivityAt;
-    return { ...pick, ...(aa ? { assistantActivityAt: aa } : {}), seenAt };
+    return { ...pick, ...(aa ? { assistantActivityAt: aa } : {}), seenAt, ...(unreadAt >= 0 ? { unreadAt } : {}) };
   }
   function merge(a, b) {
     if (!a) return b; if (!b) return a;
@@ -177,6 +195,7 @@
    * rises to page 1. The between-walk poll used to re-read ~6 pages (~1 MB) every 15 s;
    * one page carries the same news. The full walk still catches edits that don't bump activity. */
   const LIST_SUPPORT = new Map(), DETAIL = new Map();
+  const SEARCH_CLIENT=globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : Math.random().toString(36).slice(2);
   const LIST_DEADLINE = 30000;
   const listSignal = () => typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(LIST_DEADLINE) } : {};
   async function fetchSessions(full, agent = '', onFirst = null) {
@@ -201,14 +220,67 @@
       out.push(...rows.map(normalize).filter(Boolean));
       offset += rows.length;
       const more = typeof p.has_more === 'boolean' ? p.has_more : typeof p.pagination?.has_more === 'boolean' ? p.pagination.has_more : rows.length >= 100;
-      if (!more) return { sessions:out, complete:true, meta };
+      if (!more) { setTimeout(()=>{void fetchTitleIndex(agent)},0); return { sessions:out, complete:true, meta }; }
       if (!rows.length) throw new Error('Incomplete session window');
       if (!full) return { sessions:out, complete:false, meta };
       if (onFirst && offset === rows.length) await onFirst({ sessions:out.slice(), complete:false, meta });
     }
     throw new Error('Session window limit reached');
   }
+  // A compact, scope-separated title/preview index. Never persist private-agent rows.
+  const TITLE_PREFIX='wos.chats.titles.v1:', TITLE_INDEX=new Map(), TITLE_LOADING=new Map();
+  let titleAccount='', titleEpoch=0;
+  function clearTitleIndex() {
+    TITLE_INDEX.clear(); TITLE_LOADING.clear(); titleAccount=''; titleEpoch++;
+    try { for(const k of Object.keys(localStorage)) if(k.startsWith(TITLE_PREFIX)) localStorage.removeItem(k); } catch {}
+    window.WizCore?.chatSearch?.reset?.();
+  }
+  window.addEventListener('wizard-account-change',clearTitleIndex);
+  function indexRow(raw,scope) {
+    if(!raw?.id || (raw.agent || 'hermes')!==(scope || 'hermes')) return null;
+    return normalize({...raw,listVersion:1,agent:scope||'',agent_id:scope||'hermes',updatedAt:raw.cardTime||raw.updatedAt,activityAt:raw.cardTime||raw.activityAt,previewAt:raw.cardTime||raw.previewAt});
+  }
+  async function fetchTitleIndex(scope='') {
+    if(TITLE_LOADING.has(scope)) return TITLE_LOADING.get(scope);
+    const task=(async()=>{
+      let cursor='', snapshot='', offset=0, build='', rows=[], epoch=titleEpoch;
+      const overrides=JSON.stringify(listOverrides(scope));
+      for(let pages=0; pages<30; pages++) {
+        const p=new URLSearchParams({view:'list',window:'archive-50',fields:'slim',limit:'500',offset:String(offset),include_children:'false',overrides});
+        if(scope) p.set('agent',scope); if(cursor) p.set('cursor',cursor); else if(snapshot) p.set('snapshot',snapshot);
+        const value=await (await req(`/wizard/hermes/api/sessions?${p}`,listSignal())).json();
+        if(epoch!==titleEpoch) return;
+        if(value.fields!=='slim' || !value.build) return; // an older service: retain existing search
+        if(!scope && value.account_scope) {
+          let previous=titleAccount;
+          try { previous ||= localStorage.getItem(TITLE_PREFIX+'account')||''; } catch {}
+          if(previous && previous!==value.account_scope) { clearTitleIndex(); epoch=titleEpoch; }
+          titleAccount=value.account_scope;
+          try { localStorage.setItem(TITLE_PREFIX+'account',titleAccount); } catch {}
+        }
+        const key=TITLE_PREFIX+(titleAccount||SCOPE)+':'+(scope||'hermes');
+        if(!build) {
+          build=value.build; snapshot=value.snapshot;
+          if(TITLE_INDEX.get(scope)?.build===build) return;
+          // Validate the account and the current server build before using any persisted rows.
+          if(!scope && titleAccount) try {
+            const cached=JSON.parse(localStorage.getItem(key)||'null');
+            if(cached?.build===build && Array.isArray(cached.rows) && cached.rows.length<=10000) { TITLE_INDEX.set(scope,cached); store.emit(); return; }
+          } catch {}
+        }
+        rows.push(...(value.data||[]).map(raw=>indexRow(raw,scope)).filter(Boolean));
+        if(rows.length>10000) throw new Error('Title index limit reached');
+        if(value.has_more && !cursor) { offset+=value.data.length; continue; }
+        if(value.archive_cursor) { cursor=value.archive_cursor; offset=0; continue; }
+        const entry={build,rows}; TITLE_INDEX.set(scope,entry);
+        if(!scope && titleAccount) try { const data=JSON.stringify(entry); if(data.length<2000000) localStorage.setItem(key,data); } catch {}
+        store.emit(); return;
+      }
+    })().catch(e=>{if(e.status===403) clearTitleIndex();}).finally(()=>{ if(TITLE_LOADING.get(scope)===task) TITLE_LOADING.delete(scope); });
+    TITLE_LOADING.set(scope,task); return task;
+  }
   const FULL_EVERY = 3 * 60 * 1000;
+  const AGENT_WAIT = 1200; // ms a snapshot reload waits for other agents' threads before its one repaint
   const STALE_AFTER = 60 * 1000; // the list polls every 15 s, so a minute without a fresh read is worth saying
   /* ---- agents (Agents MVP): each non-default agent's threads are read from its own list (agent=<id>), always
    * through the owner's own Agent Service. Every thread/run call for such a thread names its agent, so a private
@@ -248,6 +320,8 @@
   // Miguel's skins (Dark, Light, Landscapes) always list by status: Working, Ready, Archive. No Yesterday or Past week.
   const OUR_SKINS = new Set(['obsidian', 'obsidian-light', 'landscapes']);
   const oursSkin = () => { try { return OUR_SKINS.has(document.documentElement.dataset.skin || ''); } catch (e) { return false; } };
+  // A tweak asked the skin host for Snooze = lowest priority, bottom of Ready (api.nav.snoozeOrder('last'); docs/snooze-last.md).
+  const snoozeLast = () => { try { return window.WosSkinHost?.snoozeOrder === 'last'; } catch (e) { return false; } };
   const chatLayout = () => { if (oursSkin()) return 'status'; try { return localStorage.getItem(LAYOUT_KEY) === 'status' ? 'status' : 'day'; } catch (e) { return 'day'; } };
   const archiveAfterDays = () => { try { const v = localStorage.getItem(ARCH_KEY); if (v != null && isFinite(+v)) return +v; } catch (e) {} return 7; };
   // Agent Service owns box-wide preferences. localStorage is only an offline cache.
@@ -259,17 +333,21 @@
     chatLayout: ['wos.chats.layout.v1', v => v === 'day' || v === 'status', String],
     readyOrder: ['wos.chats.readyOrder.v1', v => ['newest', 'oldest', 'priority', 'subject'].includes(v), String],
     subjectOrder: ['wos.chats.subjectOrder.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
+    // Pinned chats (core/chat-pins.js): the same pins on every device.
+    pinnedChats: ['wos.chats.pinned.v2', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
+    spaces: ['wos.chats.spaces.v1', v => Array.isArray(v), JSON.stringify],
   };
   let prefsOff = false;
-  const putPrefs = patch => {
-    if (prefsOff) return prefsWrites;
+  const putPrefs = (patch, { requireShared = false } = {}) => {
+    if (prefsOff) return Promise.resolve(!requireShared);
     prefsPending++; prefsRevision++;
     prefsWrites = prefsWrites.then(async () => {
       try {
         const r = await req(PREFS_URL, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
-        if (r.status === 404) { prefsOff = true; return; } // this Agent Service has no shared preferences yet: keep the choice on this device, quietly
+        if (r.status === 404) { prefsOff = true; return !requireShared; } // this Agent Service has no shared preferences yet: keep the choice on this device, quietly
         if (!r.ok) throw new Error('Preferences unavailable');
-      } catch (e) { window.dispatchEvent(new Event('wos:prefs-error')); }
+        return true;
+      } catch (e) { window.dispatchEvent(new Event('wos:prefs-error')); return false; }
       finally { prefsPending--; }
     });
     return prefsWrites;
@@ -283,6 +361,7 @@
       if (!r.ok) return;
       const j = await r.json();
       if (!j || prefsPending || rev !== prefsRevision) return;
+      window.WizLauncher?.accept(j);
       let changed = false;
       for (const [name, [key, valid, encode]] of Object.entries(prefsFields)) if (valid(j[name])) {
         const value = encode(j[name]);
@@ -299,23 +378,29 @@
   //   Priority = approvals, then needs you, then things to test, then everything else (newest first within each).
   // Status labels never move a thread between days (James, 11 Oct 2026: Ready, Yesterday and Past week stay
   // filtered by day in Newest and Priority); Priority only reorders within Ready.
-  // Deferred threads sit at the bottom of Ready marked Deferred (James, 10 Oct 2026: "defer could just go at the
-  // bottom of today … and just change the status to deferred"), whatever their day and in every order, until
-  // restored or done.
-  const isDeferred = s => !!s.deferred && !s.archived;
-  const readyRank = s => needsApproval(s) ? 0 : isDeferred(s) ? 9 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
+  // Snoozed (deferred) threads leave the list (James, 23 Oct 2026: "It doesn't remove the thread from my list,
+  // which is the purpose of snoozing it"; supersedes 10 Oct "bottom of today"). They wait in the collapsed Snoozed
+  // section until their return time, Restore or Done. A message James sends after snoozing brings the thread back.
+  const isDeferred = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt));
+  const readyRank = s => snoozeLast() && isDeferred(s) ? 9 : needsApproval(s) ? 0 : isDeferred(s) ? 9 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
   const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
+  // Oldest (James, 23 Oct 2026: "oldest messages at the top … the newest one at the bottom"): Newest's pins kept
+  // (approvals first, deferred last), only time reversed in between. Yesterday and Past week stay newest first.
+  // snoozeOrder('last'): Snooze is a lower place in Ready, ahead of no unsnoozed row (even approvals).
+  const snoozeOrder = (l, r) => snoozeLast() ? Number(isDeferred(l)) - Number(isDeferred(r)) : 0;
+  const byOldest = list => list.slice().sort((l, r) => snoozeOrder(l, r) || Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(r, l));
   function groupWork(sessions, now = Date.now()) {
     const g = { errors: [], working: [], ready: [], yesterday: [], pastWeek: [], deferred: [], archive: [] };
     const readyB = workDayStart(now), yB = readyB - DAY, archDays = archiveAfterDays(), archB = archDays ? now - archDays * DAY : -Infinity;
     for (const s of sessions) {
       if (s.hidden) continue;
       const t = sectionTime(s);
-      if (needsApproval(s)) g.ready.push(s);
+      if (s.archived) g.archive.push(s);
+      else if (snoozeLast() && isDeferred(s) && !inWorking(s)) g.ready.push(s);
+      else if (needsApproval(s)) g.ready.push(s);
       else if (inWorking(s)) g.working.push(s);
-      else if (isDeferred(s)) g.ready.push(s);
+      else if (isDeferred(s)) g.deferred.push(s);
       else if (isErr(s)) g.errors.push(s);
-      else if (s.archived) g.archive.push(s);
       else if (isFinite(t) && t <= archB) g.archive.push(s);
       else if (chatLayout() === 'status') g.ready.push(s); // By status: everything not yet archived is Ready
       else if (!isFinite(t) || t < yB) g.pastWeek.push(s);
@@ -324,7 +409,7 @@
     }
     for (const list of Object.values(g)) list.sort(newestFirst);
     // Newest: approvals pinned, then recency; deferred threads always last (Priority re-sorts with readyRank).
-    g.ready.sort((l, r) => Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(l, r));
+    g.ready.sort((l, r) => snoozeOrder(l, r) || Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(l, r));
     return g;
   }
   async function fetchDispositions() {
@@ -477,12 +562,48 @@
     } catch (e) { try { localStorage.removeItem(SNAP_KEY); } catch (_) {} }
   }
 
+  /* A Space is an explicit membership list, not an archive window. Read only its
+   * missing members, four at a time across all windows. Keep these rows in memory,
+   * outside unified()/the disk snapshot, so All and agent Focus keep their windows.
+   * Successful reads refresh on the existing full-walk cadence; failures retry no
+   * more than once a minute. Repaints/polls never fan out duplicate requests. */
+  // Hydrated members are archived rows: any new activity brings them back through the
+  // ordinary list (loaded rows win), so they refresh rarely (~60 x 2.6 KB reads per half hour).
+  const SPACE_ROWS = new Map(), SPACE_QUEUE = [], SPACE_EVERY = 30 * 60 * 1000;
+  let spaceReads = 0;
+  function drainSpaceReads() {
+    while (!document.hidden && spaceReads < 4 && SPACE_QUEUE.length) {
+      const [id, entry] = SPACE_QUEUE.shift(); spaceReads++;
+      (async () => {
+        const agent = L.agentOf(id);
+        try {
+          const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}?view=detail${agent ? `&agent=${encodeURIComponent(agent)}` : ''}`, listSignal())).json();
+          const s = normalize(p.session || p);
+          if (!s || s.id !== id || L.agentOf(id) !== agent || (agent && s.agent && s.agent !== agent)) throw new Error('Thread scope changed');
+          if (otherAgent(s.agent)) {
+            const A = AG(), a = A?.get(s.agent);
+            // An id in preferences is not permission to discover a private agent.
+            if (!a || (!agent && A.isPrivate(a))) throw new Error('Thread scope changed');
+            AGENT_OF.set(id, s.agent);
+          }
+          if (agent) s.agent = agent;
+          entry.row = s.hidden ? null : s;
+          entry.failed = false;
+        } catch (_) { entry.row = null; entry.failed = true; }
+        finally {
+          entry.at = Date.now(); entry.pending = false; spaceReads--;
+          drainSpaceReads(); L.emit();
+        }
+      })();
+    }
+  }
+
   /* ---- store ---- */
   function listOverrides(agent = '') {
     const out = {}, scoped = id => (L.agentOf(id) || '') === (otherAgent(agent) ? agent : '');
     for (const [id, at] of Object.entries(readRestored())) if (scoped(id) && Date.now()-Date.parse(at)<WEEK) out[id]={restoredAt:at};
     for (const [key,d] of Object.entries(L.deferred)) {
-      const id=key.replace(/^direct:/,''); if (!scoped(id)) continue;
+      const id=key.replace(/^agent\/[^/]+\//,'').replace(/^[a-z]+:/,''); if (!scoped(id)) continue;
       out[id]={...(d.deferred ? {deferred:true} : {restoredAt:d.updatedAt}),...out[id]};
     }
     for (const [id,o] of OVER) if (scoped(id)) {
@@ -499,12 +620,24 @@
     agentSessions: {}, agentStatus: {}, // non-default agents: id -> sessions / { ok, error, at }
     onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
     emit() { for (const fn of this.listeners) { try { fn(this); } catch (e) { console.error(e); } } },
-    isNew(s) { return hasNew(s, this.seenOf(s)); },
+    // Archived threads are read (James, 24 Oct 2026): Archive (Done, or aged past archiveAfterDays) never shows unread.
+    isNew(s) { return !this.inArchive(s) && hasNew(s, this.seenOf(s)); },
+    // Same rule as groupWork's Archive section, without the per-row day maths.
+    inArchive(s) {
+      if (!s || s.hidden || needsApproval(s) || inWorking(s) || isDeferred(s) || isErr(s)) return false;
+      if (s.archived) return true;
+      const d = archiveAfterDays(), t = sectionTime(s);
+      return !!d && isFinite(t) && t <= Date.now() - d * DAY;
+    },
+    // Visible unread: threads the Chats list actually shows unread (not hidden, archived or snoozed). Focus badges
+    // (agents, Spaces) count only these, so a dot never points at nothing.
+    visibleUnread(rows) { const g = groupWork(rows || []), out = []; for (const [k, list] of Object.entries(g)) if (k !== 'archive' && k !== 'deferred') for (const s of list) if (hasNew(s, this.seenOf(s))) out.push(s); return out; },
     // Server-owned, agent-qualified receipts: activity metadata only, never transcript text.
     seenOf(s) { return this.seen; },
     seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
     workGroups(sessions, now) { return groupWork(sessions || this.unified(), now); },
     readyByPriority: byPriority,
+    readyByOldest: byOldest,
     get archiveAfterDays() { return archiveAfterDays(); },
     get chatLayout() { return chatLayout(); },
     set chatLayout(v) { const x = v === 'status' ? 'status' : 'day'; try { localStorage.setItem(LAYOUT_KEY, x); } catch (e) {} putPrefs({ chatLayout: x }); },
@@ -515,16 +648,17 @@
       const now = Date.now(), needs = [], ready = [], working = [];
       for (const s of this.sessionsFor(agent)) {
         if (s.archived || s.hidden) continue;
-        const def = this.deferred[keyOf(s)]?.deferred;
+        const def = this.deferred[seenKeyOf(s)]?.deferred;
+        if (snoozeLast() && isDeferred(s) && !WORKING.has(s.status)) continue; // snoozeOrder('last'): not Needs you until restored/replied
         if (['waiting_for_approval', 'unknown'].includes(s.status)) { needs.push(s); continue; }
         if (WORKING.has(s.status)) { working.push(s); continue; }
         if (def) continue;
-        const at = Date.parse(s.lastAssistantAt || s.activityAt || s.updatedAt);
+        const at = Date.parse(assistantAt(s) || s.activityAt || s.updatedAt);
         if (isFinite(at) && at < now - WEEK) continue;
         if (!hasNew(s, this.seenOf(s))) continue;
         if (s.status === 'failed' || s.status === 'interrupted' || s.critical) needs.push(s); else ready.push(s);
       }
-      const t = s => Date.parse(s.lastAssistantAt || s.activityAt || s.updatedAt) || 0;
+      const t = s => Date.parse(assistantAt(s) || s.activityAt || s.updatedAt) || 0;
       for (const g of [needs, ready, working]) g.sort((a, b) => t(b) - t(a));
       return { needs, ready, working };
     },
@@ -545,9 +679,9 @@
           if (got.complete) this.fullAt = Date.now();
           else { const fresh = new Set(sessions.map(s => s.id)); sessions = sessions.concat(this.sessions.filter(s => !fresh.has(s.id) && !s.optimistic)); }
           for (const s of sessions) {
-            const d = deferred[keyOf(s)];
-            delete s.deferred; delete s.restoredAt;
-            if (d) { if (d.deferred) s.deferred = true; else s.restoredAt = d.updatedAt; }
+            const d = deferred[seenKeyOf(s)];
+            delete s.deferred; delete s.deferredAt; delete s.restoredAt;
+            if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
             applyLocal(s);
           }
           // A settled action stays applied until a list read that started after it lands.
@@ -566,15 +700,22 @@
           this.ok = true; this.error = ''; this.at = Date.now(); this.cached = false;
           };
           // Only a cold list paints early; a later full walk replaces a list that is already on screen in one go.
+          // A stored snapshot counts as on screen: painting page 1 over it, then the full walk, then other agents'
+          // threads made a reload flicker through four different lists (James, 23 Oct 2026). From a snapshot the
+          // list now changes once, straight to the fresh one.
           // A first run anywhere (no read state on device or server) waits for the whole list, which it marks read.
-          const early = (!this.ok || this.cached) && full ? async page => { const [d, r] = await side; if (!merge(readLocal(), merge(this.seen, r))) return; apply(page, d, r); this.emit(); } : null;
+          const fromSnap = this.cached;
+          const early = !this.ok && full ? async page => { const [d, r] = await side; if (!merge(readLocal(), merge(this.seen, r))) return; apply(page, d, r); this.emit(); } : null;
           const got = await fetchSessions(full, '', early);
           const [deferred, remote] = await side;
           apply(got, deferred, remote);
           if (Date.now() - this.snapAt > SNAP_EVERY) writeSnap(this);
           // Other agents' threads merge in after the main list is on screen; one slow agent never holds Chats.
+          // Replacing a snapshot, they get a short head start so main and agents land in the same repaint.
+          const agents = this.refreshAgents(deferred);
+          if (fromSnap) await Promise.race([agents, new Promise(r => setTimeout(r, AGENT_WAIT))]);
           this.emit();
-          await this.refreshAgents(deferred);
+          await agents;
         } catch (e) { this.error = e.status === 403 ? 'access' : 'offline'; }
         finally { this.loading = null; this.emit(); }
       })();
@@ -592,9 +733,9 @@
           if (got.meta) this.windows[id] = got.meta;
           const list = got.sessions.filter(s => !s.agent || s.agent === id).map(s => { s.agent = id; AGENT_OF.set(s.id, id); return s; });
           for (const s of list) {
-            const d = deferred[keyOf(s)];
-            delete s.deferred; delete s.restoredAt;
-            if (d) { if (d.deferred) s.deferred = true; else s.restoredAt = d.updatedAt; }
+            const d = deferred[seenKeyOf(s)];
+            delete s.deferred; delete s.deferredAt; delete s.restoredAt;
+            if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
             applyLocal(s);
           }
           addSynthetic(list, id);
@@ -626,6 +767,34 @@
       for (const [, list] of extra) for (const s of list) if (!seen.has(s.id)) { seen.add(s.id); out.push(s); }
       return out;
     },
+    // peek: badges/strip read loaded + already-hydrated rows only; never start reads.
+    // agent: the Space's owner. A routed agent's Space member beyond its list window has no
+    // AGENT_OF yet; the owner-made Space scopes its read (the proxy still enforces that agent).
+    spaceSessions(ids, { peek = false, agent = '' } = {}) {
+      const loaded = new Map(this.unified().map(s => [s.id, s])), rows = [];
+      const scope = otherAgent(agent) && AG()?.get(agent) ? agent : '';
+      let pending = false, failed = false;
+      for (const id of new Set(ids)) {
+        if (typeof id !== 'string' || !/^[A-Za-z0-9._:-]{1,256}$/.test(id)) continue;
+        if (loaded.has(id)) { const s = loaded.get(id); if (!s.hidden) rows.push(s); continue; }
+        if (scope && !AGENT_OF.has(id)) AGENT_OF.set(id, scope);
+        let entry = SPACE_ROWS.get(id);
+        if (!peek && !document.hidden && (!entry || (!entry.pending && Date.now() - entry.at >= (entry.failed ? STALE_AFTER : SPACE_EVERY)))) {
+          if (!entry) { entry = { row: null, at: 0 }; SPACE_ROWS.set(id, entry); }
+          entry.pending = true; SPACE_QUEUE.push([id, entry]);
+        }
+        pending ||= !!entry?.pending; failed ||= !!entry?.failed;
+        const s = entry?.row;
+        // Removed agents and scope changes cannot resurrect a cached row.
+        if (!s || s.hidden || (otherAgent(s.agent) && (!AG()?.get(s.agent) || this.agentOf(id) !== s.agent))) continue;
+        const d = this.deferred[seenKeyOf(s)];
+        delete s.deferred; delete s.deferredAt; delete s.restoredAt;
+        if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
+        applyLocal(s); rows.push(s);
+      }
+      if (!peek) drainSpaceReads();
+      return { rows, pending, failed };
+    },
     // A private agent's thread (by id): its rows carry the lock and its words never enter another agent's context.
     isPrivate(id) { const a = this.agentOf(id), A = AG(); return !!a && !!A && A.isPrivate(A.get(a)); },
     statusFor(agent = '') { return otherAgent(agent) ? (this.agentStatus[agent] || { ok: false, error: '' }) : { ok: this.ok, error: this.error, cached: this.cached, cachedAt: this.cachedAt, loading: !!this.loading, at: this.at || 0 }; },
@@ -644,10 +813,58 @@
       this.seen = state; writeLocal(state); this.emit();
       putSeen(state).then(r => { this.seen = merge(this.seen, r); writeLocal(this.seen); this.emit(); }).catch(() => {});
     },
+    async markUnread(ids) {
+      const list = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
+      if (!list.length) return false;
+      const before = merge(readLocal(), this.seen) || { initializedAt: Date.now(), threads: {} };
+      const unreadAt = Math.max(Date.now(), ...list.map(s => (before.threads[seenKeyOf(s)]?.seenAt ?? 0) + 1));
+      const threads = { ...before.threads };
+      for (const s of list) {
+        const key = seenKeyOf(s), prior = threads[key];
+        threads[key] = { ...recordFor(s, prior?.seenAt ?? 0), ...(prior?.assistantActivityAt ? { assistantActivityAt: prior.assistantActivityAt } : {}), unreadAt };
+      }
+      const pending = { ...before, threads };
+      this.seen = pending; writeLocal(pending); this.emit();
+      try {
+        const remote = await putSeen(pending);
+        if (!list.every(s => (remote?.threads?.[seenKeyOf(s)]?.unreadAt ?? -1) >= unreadAt)) throw new Error('Unread marker was not saved');
+        this.seen = merge(this.seen, remote); writeLocal(this.seen); this.emit();
+        // A second device may have read the thread while this write was in
+        // flight. Its newer seenAt wins; do not claim the row was marked.
+        return list.every(s => {
+          const record = this.seen?.threads?.[seenKeyOf(s)];
+          return (record?.unreadAt ?? -1) > (record?.seenAt ?? 0);
+        });
+      } catch (e) {
+        const current = this.seen || pending, rolledBack = { ...current, threads: { ...current.threads } };
+        for (const s of list) {
+          const key = seenKeyOf(s);
+          if (rolledBack.threads[key]?.unreadAt !== unreadAt) continue;
+          if (before.threads[key]) rolledBack.threads[key] = before.threads[key]; else delete rolledBack.threads[key];
+        }
+        this.seen = rolledBack; writeLocal(rolledBack); this.emit();
+        return false;
+      }
+    },
     session(id) {
       const s = this.sessions.find(x => x.id === id); if (s) return s;
       for (const list of Object.values(this.agentSessions)) { const a = list.find(x => x.id === id); if (a) return a; }
-      return DETAIL.get(id) || null;
+      return DETAIL.get(id) || SPACE_ROWS.get(id)?.row || null;
+    },
+    /* The row a Chats window actually shows. An agent window reads its own list, so a routed agent and main can
+     * share one thread id without either window resolving the other owner's row. Main windows keep session(). */
+    sessionFor(id, agent = '') {
+      if (!otherAgent(agent)) return this.session(id);
+      const a = (this.agentSessions[agent] || []).find(x => x.id === id); if (a) return a;
+      const d = DETAIL.get(id); if (d && d.agent === agent) return d;
+      const f = this.session(id); return f && this.ownerOf(f) === agent ? f : null;
+    },
+    // The owning agent of one row object ('' for main), from the row itself rather than the id-only pin map.
+    ownerOf(s) {
+      if (!s) return '';
+      if (otherAgent(s.agent)) return s.agent;
+      for (const [a, list] of Object.entries(this.agentSessions)) if (otherAgent(a) && list.includes(s)) return a;
+      return '';
     },
     chatUrl(id) { return id ? `/wizard/?session=${encodeURIComponent(id)}` : '/wizard/?view=work'; },
     /* A real Archimedes request: same admission path the Wizard app uses.
@@ -713,40 +930,55 @@
       return rows;
     },
     async searchSessions(q, agent = '', signal, onBatch) {
-      const scopes = otherAgent(agent) ? [agent] : ['', ...(AG()?.others() || []).map(a=>a.id)];
-      const settled = await Promise.allSettled(scopes.map(async scope => {
-        const found=[]; let snapshot='', resets=0;
+      const scopes=otherAgent(agent)?[agent]:['',...(AG()?.others()||[]).filter(a=>a.privacy!=='private').map(a=>a.id)];
+      const settled=await Promise.allSettled(scopes.map(async scope=>{
+        const found=[]; let snapshot='', resets=0, legacy=false;
         for(let offset=0; offset<100000;) {
           const params=new URLSearchParams({view:'list',q,limit:'100',offset:String(offset),include_children:'false'});
+          if(!legacy) params.set('mode','body');
           if(scope) params.set('agent',scope); if(snapshot) params.set('snapshot',snapshot);
           let p;
-          try { p=await (await req(`/wizard/hermes/api/sessions?${params}`,{signal})).json(); }
+          try { p=await (await req(`/wizard/hermes/api/sessions?${params}`,{signal,headers:{'X-Wizard-Search-Scope':`${SEARCH_CLIENT}:${scope||'hermes'}`}})).json(); }
           catch(e) {
-            if([400,404].includes(e.status)) return null;
+            if([400,404,501].includes(e.status)) { if(!legacy) {legacy=true;continue;} return null; }
             if(e.status===409 && offset && resets++<1) {offset=0;snapshot='';found.length=0;continue;}
             throw e;
           }
           if(p.list_version!==1 || !Number.isInteger(p.search_total)) return null;
-          snapshot=p.snapshot || snapshot;
-          const rows=p.data||p.sessions||p.items||[];
-          for(const raw of rows) {
-            const s=normalize(raw); if(!s || (s.agent||'hermes')!==(scope||'hermes')) continue;
+          const body=p.mode==='body'||p.mode==='titles';
+          const available=this.searchRows(scope).filter(s=>(s.agent||'hermes')===(scope||'hermes'));
+          snapshot=p.snapshot||snapshot;
+          for(const raw of p.data||[]) {
+            if((raw.agent||'hermes')!==(scope||'hermes')) continue;
+            const s=body ? {...(available.find(s=>s.id===raw.id)||indexRow({id:raw.id,agent:raw.agent,title:'Chat'},scope)),searchSnippet:raw.snippet} : normalize(raw);
+            if(!s) continue;
             if(signal?.aborted) throw new DOMException('Aborted','AbortError');
             if(scope) AGENT_OF.set(s.id,scope);
             found.push(s);
           }
-          if(!p.has_more) { if(!signal?.aborted) onBatch?.(found); return found; }
-          if(!rows.length) throw new Error('Incomplete search');
-          offset+=rows.length;
+          found.partial=!!p.partial;
+          if(!signal?.aborted) onBatch?.(found);
+          if(body || !p.has_more) return found;
+          if(!p.data?.length) throw new Error('Incomplete search'); offset+=p.data.length;
         }
         throw new Error('Search limit reached');
       }));
       if(signal?.aborted) throw new DOMException('Aborted','AbortError');
-      const good=settled.filter(x=>x.status==='fulfilled' && Array.isArray(x.value));
+      const good=settled.filter(x=>x.status==='fulfilled'&&Array.isArray(x.value));
       const failed=settled.filter(x=>x.status==='rejected');
-      if(!good.length) { if(failed.length) throw failed[0].reason; return null; }
-      const found=good.flatMap(x=>x.value); found.partial=good.length!==scopes.length;
+      const fallbackScopes=scopes.filter((_,i)=>settled[i].status==='fulfilled'&&settled[i].value===null);
+      if(!good.length && !fallbackScopes.length && failed.length) throw failed[0].reason;
+      const found=good.flatMap(x=>x.value); found.partial=failed.length>0; found.capped=good.some(x=>x.value.partial); found.fallbackScopes=fallbackScopes; // capped: the server showed only its newest message matches
       return found;
+    },
+    searchRows(agent='') {
+      const scopes=otherAgent(agent)?[agent]:['',...(AG()?.others()||[]).filter(a=>a.privacy!=='private').map(a=>a.id)];
+      const rows=new Map();
+      for(const scope of scopes) {
+        for(const s of TITLE_INDEX.get(scope)?.rows||[]) rows.set(`${scope}:${s.id}`,s);
+        for(const s of (scope?this.agentSessions[scope]||[]:this.sessions)) rows.set(`${scope}:${s.id}`,s);
+      }
+      return [...rows.values()];
     },
     rememberSearch(s) { if(s?.id) { if(otherAgent(s.agent)) AGENT_OF.set(s.id,s.agent); DETAIL.set(s.id,s); while(DETAIL.size>300) DETAIL.delete(DETAIL.keys().next().value); } },
     async sessionInfo(id) {
@@ -789,18 +1021,20 @@
     busy(id) { const o = OVER.get(id); return !!o && !o.settled; },
     async _act(id, patch, write) {
       const s = this.session(id); if (!s || this.busy(id)) return false;
-      const snap = { archived: s.archived, deferred: s.deferred, restoredAt: s.restoredAt };
+      const snap = { archived: s.archived, deferred: s.deferred, deferredAt: s.deferredAt, restoredAt: s.restoredAt };
       const entry = { patch }; OVER.set(id, entry); Object.assign(s, patch); this.emit();
       try { await write(s); entry.settled = Date.now(); this.emit(); setTimeout(() => this.refresh(), 50); return true; }
       catch (e) {
         if (OVER.get(id) === entry) OVER.delete(id);
         const c = this.session(id);
-        if (c) { Object.assign(c, snap); if (snap.deferred === undefined) delete c.deferred; if (snap.restoredAt === undefined) delete c.restoredAt; }
+        if (c) { Object.assign(c, snap); if (snap.deferred === undefined) delete c.deferred; if (snap.deferredAt === undefined) delete c.deferredAt; if (snap.restoredAt === undefined) delete c.restoredAt; }
         this.emit(); return false;
       }
     },
     // Done: archive the thread (PATCH archived). Close & file: the Helm filing route, idempotent by command id.
     archive(id, { file = false } = {}) {
+      // Done marks the thread read too, so it stays read on every client and if it is ever restored.
+      if (this.session(id) && hasNew(this.session(id), this.seenOf(this.session(id)))) this.markSeen(id);
       return this._act(id, { archived: true, deferred: false }, async s => {
         const all = readRestored(); if (all[id]) { delete all[id]; writeRestored(all); }
         if (!file) { await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: true }) }); return; }
@@ -814,15 +1048,36 @@
         if (!r.ok || r.status === 202) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
       });
     },
+    // Stop exactly the watcher on the row the owner pressed: `agent` is the window's agent scope ('' = main).
+    async stopWatching(id, agent) {
+      const s = agent === undefined ? this.session(id) : this.sessionFor(id, agent);
+      if (!s) return false;
+      const owner = this.ownerOf(s);
+      // One Stop per row at a time: a second tap shares the first request's answer instead of racing it to a
+      // zero-count reply and reporting a failure for a stop that worked.
+      const key = `${owner}\u0000${id}`, stopping = (this._stopping ||= new Map());
+      if (stopping.has(key)) return stopping.get(key);
+      if (this.busy(id) || !s.followUp?.active) return false;
+      const pending = (async () => {
+        try {
+          const result = await (await req('/wizard/follow-ups/stop', { method: 'POST', headers: J,
+            body: JSON.stringify({ session_id: id, ...(owner ? { agent_id: owner } : {}) }) })).json();
+          if (result?.ok !== true || !Number.isSafeInteger(result.stopped) || result.stopped < 1) throw new Error('follow-up stop not confirmed');
+          s.followUp = null; this.emit(); setTimeout(() => this.refresh(), 50); return true;
+        } catch (e) { return false; } finally { stopping.delete(key); }
+      })();
+      stopping.set(key, pending);
+      return pending;
+    },
     async _defer(id, deferred) {
       const s = this.session(id); if (!s) throw new Error('gone');
       const ag = this.agentOf(id);
-      const p = await (await req('/wizard/thread-dispositions' + aq(id), { method: 'PUT', headers: J, body: JSON.stringify({ sessionId: id, runtime: s.runtime || 'direct', deferred, ...(ag ? { agent: ag } : {}) }) })).json();
+      const p = await (await req('/wizard/thread-dispositions', { method: 'PUT', headers: J, body: JSON.stringify({ sessionId: id, runtime: s.runtime || 'direct', deferred, ...(ag && ag !== 'hermes' ? { agent_id: ag } : {}) }) })).json();
       if (p?.record?.deferred !== deferred || !isFinite(Date.parse(p.record.updatedAt))) throw new Error('Thread disposition was not saved.');
-      this.deferred[keyOf(s)] = p.record;
+      this.deferred[seenKeyOf(s)] = p.record;
       return p.record;
     },
-    defer(id) { return this._act(id, { deferred: true }, () => this._defer(id, true)); },
+    defer(id) { return this._act(id, { deferred: true, deferredAt: new Date().toISOString() }, () => this._defer(id, true)); },
     /* Rename: James's own title for a thread. It locks the name: the agent never renames it after this. */
     async rename(id, title) {
       const s = this.session(id), t = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 60);
@@ -877,6 +1132,70 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) L.refresh(); });
   setInterval(() => { if (!document.hidden) L.refresh(); }, 15000);
   // outbox.js loads after this file: follow it once every script has run.
+  /* Open-thread delta subscriptions. Read-only: a failed stream never replays a send.
+   * Hermes uses unnamed SSE data frames with data.event; other runtimes name events. */
+  const RUN_STREAMS = new Map();
+  L.openRunStream = function (sid, agent, runId, paint) {
+    const registry = window.WosAgents;
+    const rec = registry?.get(agent || registry.defaultId());
+    if ((agent && !rec) || rec?.privacy === 'private' || !window.EventSource || !runId) return null;
+    const key = JSON.stringify([agent, sid, runId]);
+    let r = RUN_STREAMS.get(key);
+    if (!r) {
+      r = { text: '', terminal: false, listeners: new Set(), frame: null, stopped: false };
+      RUN_STREAMS.set(key, r);
+      const url = `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${agent ? '?agent=' + encodeURIComponent(agent) : ''}`;
+      const notify = () => {
+        if (r.frame != null || r.stopped) return;
+        r.frame = requestAnimationFrame(() => { r.frame = null; for (const fn of r.listeners) fn(r); });
+      };
+      const close = () => { r.source?.close(); r.source = null; };
+      const terminal = () => { if (!r.terminal) { r.terminal = true; close(); notify(); } };
+      let retries = 0;
+      const event = e => {
+        if (r.stopped || r.terminal) return;
+        let d; try { d = JSON.parse(e.data); } catch (_) { return; }
+        if ((d.session_id && d.session_id !== sid) || (d.run_id && d.run_id !== runId)) return;
+        const type = d.event || e.type;
+        if (type === 'message.delta' && typeof d.delta === 'string') { r.text += d.delta; notify(); }
+        // reasoning.available is deliberately not answer text.
+        if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) terminal();
+      };
+      const connect = () => {
+        if (r.stopped || r.terminal) return;
+        try {
+          r.source = new window.EventSource(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
+          r.source.onmessage = event;
+          for (const name of ['message.delta', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted']) r.source.addEventListener(name, event);
+          r.source.onerror = () => {
+            close();
+            // Some queued main sends close before yielding any answer bytes.
+            // Retry only before ANY answer bytes: no duplicated/replayed text. This is
+            // another read of the same run, never another admission/send.
+            if (!r.stopped && !r.terminal && !r.text && retries++ < 3) r.reconnect = setTimeout(connect, 500);
+          };
+        } catch (_) { close(); }
+      };
+      connect();
+      const poll = async () => {
+        if (r.stopped || r.terminal) return;
+        try {
+          const d = await (await req(url)).json();
+          if (r.stopped) return;
+          if ((d.run_id || d.id) === runId && d.session_id === sid && ['completed', 'failed', 'cancelled', 'interrupted'].includes(d.status)) terminal();
+        } catch (_) { /* connectivity recovery is the ordinary read poll, never another send */ }
+        if (!r.stopped && !r.terminal) r.timer = setTimeout(poll, 500);
+      };
+      r.dispose = () => { r.stopped = true; close(); clearTimeout(r.timer); clearTimeout(r.reconnect); if (r.frame != null) cancelAnimationFrame(r.frame); RUN_STREAMS.delete(key); };
+      r.timer = setTimeout(poll, 500);
+    }
+    r.listeners.add(paint);
+    return { snapshot: r, close() { r.listeners.delete(paint); if (!r.listeners.size) r.dispose(); } };
+  };
+  L.pendingRun = sid => PEND.get(sid)?.runId || (window.WosOutbox?.forThread(sid) || [])
+    .filter(it => it.state === 'sent' && it.runId && Date.now() - (it.sentAt || it.createdAt) < PEND_MAX)
+    .sort((a, b) => b.createdAt - a.createdAt)[0]?.runId || '';
+
   function attachOutbox() {
     const OB = window.WosOutbox; if (!OB || L._outbox) return; L._outbox = true;
     const sync = () => { if (syncPending(OB)) L.emit(); };
@@ -982,7 +1301,28 @@
     return startRead(id, true);
   };
   const bgRead = id => { const e = INFLIGHT.get(id); return e ? e.p : startRead(id, false); };
-  L.cachedMessages = id => (keepable(id) && TC.get(id)?.rows) || null;
+  // What the transcript contains, as the list reports it: message count and the newest user/assistant times.
+  // Status and tool activity are left out, so they never invalidate a copy whose messages are unchanged.
+  const ckOf = s => s ? [s.messageCount, s.lastAssistantAt, s.lastUserAt].join('|') : '';
+  L.contentKey = ckOf;
+  // The list can vouch for a copy only after a live list read since the page last came to the front: a stored
+  // snapshot or a list from before the phone slept describes the same old transcript the copy has.
+  let shownAt = Date.now();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) shownAt = Date.now(); });
+  L.listTrusted = () => !L.cached && (L.at || 0) >= shownAt;
+  // A stored copy paints only when it matches what the live list says the thread holds. Painting an older copy
+  // showed the previous reply for 1-2 s before the fresh read replaced it (James, 24 Oct 2026); a skeleton is
+  // honest, an outdated reply is not.
+  L.cachedMessages = id => {
+    const c = keepable(id) && TC.get(id), s = L.session(id); if (!c || !s || !L.listTrusted()) return null;
+    return String(c.rev || '').split('|').slice(0, 3).join('|') === ckOf(s) ? c.rows : null;
+  };
+  // A thread the server answered 404 for is gone: drop its memory and IndexedDB copy so a reopen can't repaint it.
+  L.forgetMessages = async id => {
+    if (!id) return; TC.delete(id);
+    const db = await tcOpen(); if (!db) return;
+    try { db.transaction('t', 'readwrite').objectStore('t').delete(id); } catch (e) {}
+  };
   const saving = () => !!navigator.connection?.saveData;
   L.warm = id => {
     const s = L.session(id); if (!s || s.archived || s.optimistic || saving() || INFLIGHT.has(id) || !keepable(id)) return;

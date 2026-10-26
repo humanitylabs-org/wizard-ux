@@ -11,8 +11,8 @@
  * Threads and runs take agent=<id>; a thread carries agent:{id,label,privacy,appearance} from server metadata.
  *
  * The default agent (is_default, normally id "hermes") is the Wizard's main agent: its chats are the ordinary
- * Chats window, unchanged. Every other agent's chats live in a Chats window pinned to that agent (w.agent) and
- * never mix with the main list.
+ * Chats window's All focus. A persisted per-window Focus selects All, an agent or a subject.
+ * Agent focus reuses the scoped list/composer route; legacy w.agent windows migrate into the main window.
  *
  *   WosAgents.load(force)        → Promise<agents[]> (404/absent API → [] and available=false)
  *   WosAgents.list / ready / available / error
@@ -38,7 +38,8 @@
  * ticked, private agents unticked; the gateway serves an agent only its own apps.
  *   GET/PUT /wizard/v1/apps/<app_id>/agents   → { app_id, kind, agents: [{ id, label, privacy, enabled }] }; PUT { agents: [ids] }
  *   WosAgents.appKnown(appId)        → true when the Agent Service offers the app to agents (agent-options)
- *   WosAgents.appAgents(appId)       → Promise<{ kind, agents:[{ id, enabled }] } | null> (falls back to permissions)
+ *   WosAgents.appAgents(appId)       → Promise<{ kind, privacy, needs_private_agent, agents:[{ id, enabled }] } | null>
+ *                                      (falls back to permissions). privacy 'private' = the app's optional wizard.md tag.
  *   WosAgents.setAppAgents(appId, ids) → Promise<same> (reloads the agents so their pages stay in sync)
  */
 (() => {
@@ -115,15 +116,35 @@
     defaultId() { return (A.list.find(a => a.is_default) || {}).id || 'hermes'; },
     // A non-default agent: its threads, sends and models never go through the main agent's route.
     isOther(id) { return !!id && id !== A.defaultId(); },
-    others() { return A.list.filter(a => !a.is_default); },
-    colour(a) {
+    visible() { return A.list.filter(a => !a.hidden); },
+    others() { return A.visible().filter(a => !a.is_default); },
+    hue(a) {
       let h = Number(a?.appearance?.hue);
       if (!Number.isFinite(h)) {
         // Stable identity for future agents without a chosen hue.
         h = a?.privacy === 'private' ? 160 : !a || a.is_default ? 265
           : Array.from(String(a.id || a.label || 'agent')).reduce((n, c) => (n * 31 + c.codePointAt(0)) % 360, 0);
       }
-      return `hsl(${Math.round(((h % 360) + 360) % 360)} 72% 62%)`;
+      return ((Math.round(h) % 360) + 360) % 360;
+    },
+    // Every agent on this Wizard gets a colour you can tell apart: the main agent keeps its hue, then each agent in
+    // order keeps its own unless it sits within 28° of one already taken, in which case it steps round the wheel.
+    distinctHues() {
+      const list = A.list || [];
+      if (A._hueFor === list) return A._hues;
+      const taken = [], out = new Map(), gap = (x, y) => { const d = Math.abs(x - y) % 360; return Math.min(d, 360 - d); };
+      const order = [...list].sort((x, y) => (y.is_default ? 1 : 0) - (x.is_default ? 1 : 0));
+      for (const ag of order) {
+        let h = A.hue(ag);
+        for (let i = 0; i < 24 && taken.some(t => gap(t, h) < 28); i++) h = (h + 47) % 360;
+        taken.push(h); out.set(ag.id, h);
+      }
+      A._hueFor = list; A._hues = out;
+      return out;
+    },
+    colour(a) {
+      const h = (a?.id && A.distinctHues().get(a.id)) ?? A.hue(a);
+      return `hsl(${h} 72% 62%)`;
     },
     glyph(a) {
       // Agents share the company hat; privacy changes its cutout, hue identifies the agent.
@@ -142,17 +163,23 @@
     titleRecord(id) {
       return A.get(id || A.defaultId()) || { id: id || 'hermes', label: id || 'Hermes', is_default: !id, appearance: {} };
     },
-    titleContent(id, iconClass, titleClass) {
+    titleContent(id, iconClass, titleClass, label = '') {
       const a = A.titleRecord(id);
-      return A.sigil(a, iconClass) + `<span class="${titleClass}" style="color:var(--ink)">${esc(A.title(a))}</span>`;
+      return A.sigil(a, iconClass) + `<span class="${titleClass}" style="color:var(--ink)">${esc(label || A.title(a))}</span>`;
     },
     titlebar(id = '', iconClass = 'ic', titleClass = 't') {
       return `<span class="agent-titlebar" data-agent-titlebar="${esc(id)}" data-icon-class="${iconClass}" data-title-class="${titleClass}">${A.titleContent(id, iconClass, titleClass)}</span>`;
     },
+    setTitlebarLabel(el, label = '') {
+      if (!el) return;
+      el.dataset.titleLabel = label;
+      const html = A.titleContent(el.dataset.agentTitlebar, el.dataset.iconClass, el.dataset.titleClass, label);
+      if (el.innerHTML !== html) el.innerHTML = html;
+    },
     refreshTitlebars() {
       // Registry updates only repaint the small identity wrapper, preserving drafts and scroll position.
       document.querySelectorAll('[data-agent-titlebar]').forEach(el => {
-        const html = A.titleContent(el.dataset.agentTitlebar, el.dataset.iconClass, el.dataset.titleClass);
+        const html = A.titleContent(el.dataset.agentTitlebar, el.dataset.iconClass, el.dataset.titleClass, el.dataset.titleLabel);
         if (el.innerHTML !== html) el.innerHTML = html;
       });
     },
@@ -177,7 +204,7 @@
     async appAgents(appId) {
       try {
         const r = await fetch(`/wizard/v1/apps/${encodeURIComponent(appId)}/agents`, { cache: 'no-store', credentials: 'same-origin' });
-        if (r.ok) { const j = await r.json(); if (Array.isArray(j?.agents)) return { kind: String(j.kind || ''), agents: j.agents.filter(x => x && typeof x.id === 'string').map(x => ({ id: x.id, enabled: x.enabled === true })) }; }
+        if (r.ok) { const j = await r.json(); if (Array.isArray(j?.agents)) return { kind: String(j.kind || ''), privacy: j.privacy === 'private' ? 'private' : 'standard', needs_private_agent: j.needs_private_agent === true, agents: j.agents.filter(x => x && typeof x.id === 'string').map(x => ({ id: x.id, enabled: x.enabled === true })) }; }
         if (r.status === 404 && (await r.clone().json().catch(() => null))?.check === 'app.id') return null;
       } catch (_) {}
       // Older Agent Service: the agents' own app lists say the same thing.
@@ -194,7 +221,10 @@
         throw Object.assign(new Error(human + (j?.check ? ` (${j.check})` : '')), { status: r.status, check: j?.check || '' });
       }
       await A.load(true); A.emit();
-      return { kind: String(j?.kind || ''), agents: (j?.agents || []).map(x => ({ id: x.id, enabled: x.enabled === true })) };
+      const out = { kind: String(j?.kind || ''), agents: (j?.agents || []).map(x => ({ id: x.id, enabled: x.enabled === true })) };
+      if (j && 'privacy' in j) out.privacy = j.privacy === 'private' ? 'private' : 'standard';
+      if (j && 'needs_private_agent' in j) out.needs_private_agent = j.needs_private_agent === true;
+      return out;
     },
     modelName(a, model) {
       if (!model) return '';
@@ -234,7 +264,7 @@
       model: { provider: String(model.provider || ''), model: String(model.model || ''), allowed_models: Array.isArray(model.allowed_models) ? model.allowed_models.map(String) : [], fallback: model.fallback !== false },
       permissions: a.permissions && typeof a.permissions === 'object' ? a.permissions : {},
       status: ['running', 'stopped', 'starting', 'error'].includes(a.status) ? a.status : 'stopped',
-      status_detail: String(a.status_detail || ''), is_default: a.is_default === true,
+      status_detail: String(a.status_detail || ''), is_default: a.is_default === true, hidden: a.hidden === true,
       bound_apps: (Array.isArray(a.bound_apps) ? a.bound_apps : []).map(x => typeof x === 'string' ? { id: x } : x).filter(x => x && typeof x.id === 'string' && x.id)
         .map(x => ({ id: x.id, label: String(x.label || x.name || x.id).slice(0, 60), purpose: String(x.purpose || '').slice(0, 160) })),
     };

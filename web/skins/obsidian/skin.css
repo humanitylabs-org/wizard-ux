@@ -30,22 +30,22 @@ html[data-skin^="obsidian"] :is(.sw.on, .dv-update button, .ch-sec-h b:not(.wait
 html[data-skin^="obsidian"] #device > #generalVoice.selected { color: var(--bg); }
 /* Status icons and labels: shape carries meaning, not colour. Needs-you / failed keep full ink, the rest step down. */
 /* Status icons keep a faint hue so categories stay learnable: muted colour, neutral tile. */
-html[data-skin^="obsidian"] .ch-row .emo.sti { background: var(--ob-tint); box-shadow: inset 0 0 0 1px var(--ob-edge); }
-html[data-skin="obsidian"] .ch-row .emo.sti:is(.needs, .approval, .offline) { color: #d9b98a; }
-html[data-skin="obsidian"] .ch-row .emo.sti.check { color: #9cc4d1; }
-html[data-skin="obsidian"] .ch-row .emo.sti.done { color: #9cc7a8; }
-html[data-skin="obsidian"] .ch-row .emo.sti.fyi { color: #d6cc9a; }
-html[data-skin="obsidian"] .ch-row .emo.sti.failed { color: #d99a9a; }
-html[data-skin="obsidian-light"] .ch-row .emo.sti:is(.needs, .approval, .offline) { color: #8a6430; }
-html[data-skin="obsidian-light"] .ch-row .emo.sti.check { color: #3f6f80; }
-html[data-skin="obsidian-light"] .ch-row .emo.sti.done { color: #3d6e4b; }
-html[data-skin="obsidian-light"] .ch-row .emo.sti.fyi { color: #7a6d2c; }
-html[data-skin="obsidian-light"] .ch-row .emo.sti.failed { color: #8f3a3a; }
-html[data-skin^="obsidian"] .ch-row .emo.sti.deferred { color: var(--ink-2); }
-html[data-skin^="obsidian"] .ch-row .emo.sti.working { background: var(--ob-tint); }
-html[data-skin^="obsidian"] .ch-row .emo.sti .spin { border-color: var(--ob-edge); border-top-color: var(--ink); }
-html[data-skin^="obsidian"] .ch-row .emo.sti svg .k { stroke: var(--bg); }
-html[data-skin^="obsidian"] .ch-row .emo.sti svg .kd { fill: var(--bg); }
+html[data-skin^="obsidian"] :is(.ch-row, .ch-head) .emo.sti { background: var(--ob-tint); box-shadow: inset 0 0 0 1px var(--ob-edge); }
+html[data-skin="obsidian"] :is(.ch-row, .ch-head) .emo.sti:is(.needs, .approval, .offline) { color: #d9b98a; }
+html[data-skin="obsidian"] :is(.ch-row, .ch-head) .emo.sti.check { color: #9cc4d1; }
+html[data-skin="obsidian"] :is(.ch-row, .ch-head) .emo.sti.done { color: #9cc7a8; }
+html[data-skin="obsidian"] :is(.ch-row, .ch-head) .emo.sti.fyi { color: #d6cc9a; }
+html[data-skin="obsidian"] :is(.ch-row, .ch-head) .emo.sti.failed { color: #d99a9a; }
+html[data-skin="obsidian-light"] :is(.ch-row, .ch-head) .emo.sti:is(.needs, .approval, .offline) { color: #8a6430; }
+html[data-skin="obsidian-light"] :is(.ch-row, .ch-head) .emo.sti.check { color: #3f6f80; }
+html[data-skin="obsidian-light"] :is(.ch-row, .ch-head) .emo.sti.done { color: #3d6e4b; }
+html[data-skin="obsidian-light"] :is(.ch-row, .ch-head) .emo.sti.fyi { color: #7a6d2c; }
+html[data-skin="obsidian-light"] :is(.ch-row, .ch-head) .emo.sti.failed { color: #8f3a3a; }
+html[data-skin^="obsidian"] :is(.ch-row, .ch-head) .emo.sti.deferred { color: var(--ink-2); }
+html[data-skin^="obsidian"] :is(.ch-row, .ch-head) .emo.sti.working { background: var(--ob-tint); }
+html[data-skin^="obsidian"] :is(.ch-row, .ch-head) .emo.sti .spin { border-color: var(--ob-edge); border-top-color: var(--ink); }
+html[data-skin^="obsidian"] :is(.ch-row, .ch-head) .emo.sti svg .k { stroke: var(--bg); }
+html[data-skin^="obsidian"] :is(.ch-row, .ch-head) .emo.sti svg .kd { fill: var(--bg); }
 html[data-skin^="obsidian"] .ch-row .pv em.att { color: var(--ink); font-weight: 700; }
 html[data-skin^="obsidian"] .ch-sec-h b.wait { background: var(--ob-tint); color: var(--ink); }
 /* App sigils and the brand mark go grey; each app keeps its silhouette. */
@@ -212,7 +212,10 @@ html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner)
 /* Fade: a soft scrim rises from the bottom edge behind the pill, so whatever sits above the bar melts into the
  * background (iOS tab-bar look) instead of ending in a hard line. Hidden whenever the bar itself is hidden. */
 html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats:has(.ch-list)::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--pill-top) + 64px); z-index: 4; pointer-events: none; background: linear-gradient(to top, var(--bg) var(--pill-b), color-mix(in srgb, var(--bg) 92%, transparent) calc(var(--pill-top) - 20px), color-mix(in srgb, var(--bg) 55%, transparent) calc(var(--pill-top) + 22px), transparent 100%); }
-html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-list .ch-scroll { padding-bottom: calc(var(--pill-top) + 14px); }
+/* The room under the last row is a real flex item, not scroll padding: iPhone Safari leaves a flex scroller's
+ * bottom padding out of the scroll range, so a just-full list would not scroll the last row clear of + and the pill. */
+html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-list .ch-scroll { padding-bottom: 0; }
+html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-list .ch-scroll::after { content: ""; display: block; order: 99; flex: 0 0 calc(var(--pill-top) + 66px); }
 /* Opinionated (phone): just the orb. No ring, spinning arcs, orbit dots, halo or handle line; the count badge and the
  * tap ripple stay. Gestures unchanged (the scrub strip still works, it just draws nothing at rest). */
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock :is(.orb-ring, .moons, .orb-halo) { display: none; }
@@ -502,3 +505,287 @@ html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head { 
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head .ch-back { width: 28px; height: 28px; border-radius: 9px; color: var(--ink-3); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head .ch-back svg { width: 16px; height: 16px; stroke-width: 2.2; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .voice .arc { bottom: calc(var(--pill-b) + var(--pill-h) / 2); }
+
+/* Chat reading size: the stock phone default is 17px (core/chats.css); this skin keeps its original 15px. */
+html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .msg .bub { font-size: 15px; line-height: 1.45; }
+html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub h1 { font-size: 19px; }
+html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub h2 { font-size: 17.5px; }
+html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub h3 { font-size: 16px; }
+html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub :is(h4, h5, h6) { font-size: 15px; }
+html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub code { font-size: 13px; }
+html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub pre { font-size: 12px; }
+html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub .code pre code { font-size: 12.5px; }
+html[data-skin^="obsidian"][data-shell="phone"] .ch-msgs .bub table { font-size: 13.5px; }
+
+/* Desks overview (Miguel, 22 Oct). Pinch-out: smaller cards, three across, each with its desk's count badge.
+ * Swipe up on the orb: the pill itself grows taller and lays the same dock icons and badges out in a grid, with an ✕ in the orb's spot. */
+/* Miguel's skins (phone): Desks overview. Smaller desk cards (three across) with each desk's count badge, used by both
+ * the pinch overview and the swipe-up version, which grows out of the bottom pill as one panel (the pill's own icons stay
+ * as its bottom row, the orb is the handle: tap or swipe down closes). */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-card { min-height: 116px; padding: 8px 6px 8px; border-radius: 18px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-card:has(.ov-n3), html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-card:has(.ov-n4) { min-height: 132px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-body { padding-top: 14px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-n3, html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-n4 { padding-top: 16px; gap: 2px 4px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-symbol { width: 50px; height: 50px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-symbol .sgi.sgl { font-size: 25px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-n2 .ov-symbol { width: 32px; height: 32px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov :is(.ov-n3, .ov-n4) .ov-symbol { width: 24px; height: 24px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-n2 .sgi.sgl { font-size: 16px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov :is(.ov-n3, .ov-n4) .sgi.sgl { font-size: 12px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-win em { font-size: 9.5px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov :is(.ov-n3, .ov-n4) .ov-win em { height: 1.2em; -webkit-line-clamp: 1; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-top b { font-size: 12px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-top small { font-size: 10px; -webkit-line-clamp: 1; }
+/* The current desk is already outlined: drop the "Here" tag; ✕ moves to the top-left so the badge owns the top-right. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-here { display: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-chrome { top: 0; left: 0; right: auto; flex-direction: row-reverse; min-height: 30px; gap: 2px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-x { width: 30px; height: 30px; font-size: 12px; border-radius: 10px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-review { font-size: 9px; line-height: 16px; padding: 0 5px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-badge { position: absolute; top: 6px; right: 6px; z-index: 2; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 99px; font: 800 11px/20px system-ui, sans-serif; text-align: center; color: #160b05; background: var(--amber); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--bg) 90%, transparent); pointer-events: none; }
+html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .ov .ov-badge { background: #000; color: #fff; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-add { flex-direction: column; gap: 4px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-add span { font-size: 28px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-add b { font-size: 12px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-head b { font-size: 21px; }
+
+/* Swipe-up version: the pill extended. A light scrim over the desk; the panel shares the pill's side insets, radius,
+ * frosted material and bottom edge, so the pill visibly grows upward. The real dock rides on top as its bottom row. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill { padding: 0; overflow: hidden; background: rgba(0, 0, 0, .32); -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { position: absolute; left: var(--pill-x, 12px); right: var(--pill-x, 12px); bottom: var(--pill-b, 8px); max-height: calc(100% - var(--safe-t, 0px) - 64px); display: flex; flex-direction: column; padding-bottom: var(--pill-h, 66px); border-radius: calc(var(--pill-h, 66px) / 2); border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); background: color-mix(in srgb, var(--bg) 86%, transparent); -webkit-backdrop-filter: blur(26px) saturate(1.4); backdrop-filter: blur(26px) saturate(1.4); box-shadow: 0 -10px 40px rgba(0, 0, 0, .32), inset 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent); overflow: hidden; transform-origin: 50% 100%; transform: translateY(14px) scaleY(.4); opacity: 0; transition: transform 300ms var(--spring, cubic-bezier(.2, .9, .2, 1.05)), opacity 160ms; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill.open .ov-sheet { transform: none; opacity: 1; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 10px 6px; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-head { padding: 0 6px 12px 10px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-done { height: 34px; border-radius: 17px; padding: 0 14px; font-size: 13px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card { background: color-mix(in srgb, var(--ink) 5%, transparent); border-color: color-mix(in srgb, var(--ink) 9%, transparent); box-shadow: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card.here { border-color: var(--violet-2); box-shadow: 0 0 0 1px var(--violet-2); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card.ov-add { background: transparent; border: 1px dashed color-mix(in srgb, var(--ink) 18%, transparent); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-hint { margin: 12px 8px 4px; font-size: 11px; }
+/* The dock stays visible above the panel and drops its own pill shell, so it reads as the panel's bottom row. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.ov-pill-open .desk-label { opacity: 0; }
+/* Draw the New desk plus as two bars (the fullwidth ＋ glyph is missing from some fonts and shows as a box). */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov:not(.ov-pill) :is(.ov-add span, .ov-empty-symbol) { font-size: 0; width: 24px; height: 24px; background: linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat, linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat; }
+/* Near-opaque so the panel reads as one even surface over any page (a bright frame showed through at 86%). */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { background: color-mix(in srgb, var(--bg) 95%, transparent); }
+
+/* Swipe-up, round 2: the pill itself with room to spare. It grows upward from its own shape (clip-path), shows the
+ * dock's own desk icons and badges in a grid (each rises from its spot in the pill), and an ✕ takes the orb's place. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.ov-pill-open .dock { opacity: 0; pointer-events: none; transition: opacity 140ms; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { transform: none; opacity: 1; background: color-mix(in srgb, var(--bg) 78%, transparent); border-color: color-mix(in srgb, var(--ink) 7%, transparent); box-shadow: 0 10px 30px rgba(0, 0, 0, .22); clip-path: inset(calc(100% - var(--pill-h, 66px)) 0 0 0 round calc(var(--pill-h, 66px) / 2)); transition: clip-path 320ms cubic-bezier(.2, .9, .25, 1); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill.open .ov-sheet { clip-path: inset(0 0 0 0 round calc(var(--pill-h, 66px) / 2)); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill { background: rgba(0, 0, 0, .28); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-scroll { padding: 22px 12px 4px; -webkit-mask-image: none; mask-image: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-grid { grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 14px 4px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell { min-height: 0; height: auto; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; transform: none; display: flex; flex-direction: column; align-items: center; gap: 6px; font: inherit; color: var(--ink); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.here, html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card.here { border: 0; box-shadow: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic { position: relative; width: 52px; height: 52px; display: grid; place-items: center; border-radius: 50%; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.here .ov-ic { background: color-mix(in srgb, var(--ink) 9%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 16%, transparent), 0 0 18px color-mix(in srgb, var(--violet-2, #a58bff) 22%, transparent); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg { width: 32px; height: 32px; opacity: .9; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.here .ov-ic .dsg { opacity: 1; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg .sgi { width: 88%; height: 88%; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg .sgi.sgl { font-size: 23px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg .sgi:is(.sg-hat, .sg-hat-private) { -webkit-mask-size: auto 80%; mask-size: auto 80%; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-new .dsg { color: color-mix(in srgb, var(--ink) 82%, transparent); }
+html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .ov.ov-pill .ov-new .dsg { color: #1b1b1f; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-new .dsg svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-nm { max-width: 100%; font-size: 11px; font-weight: 550; line-height: 1.2; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.here .ov-nm { color: var(--ink); font-weight: 650; }
+/* Closing a desk: hold any icon (that also starts drag-to-reorder) and small ✕s appear, like an iPhone home screen. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell .ov-x { position: absolute; left: calc(50% - 32px); top: -6px; width: 22px; height: 22px; padding: 0; border-radius: 50%; font-size: 10px; color: var(--ink); background: color-mix(in srgb, var(--bg) 70%, var(--ink) 30%); display: none; place-items: center; z-index: 3; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill.editing .ov-cell .ov-x { display: grid; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill.editing .ov-cell:not(.ov-home):not(.ov-new) .ov-ic { animation: ovJiggle .32s ease-in-out infinite alternate; }
+@keyframes ovJiggle { from { transform: rotate(-2.5deg); } to { transform: rotate(2.5deg); } }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.drag { opacity: .25; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card.ghost { background: none; box-shadow: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.merging .ov-ic { box-shadow: 0 0 0 2px var(--violet-2); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell.splitting .ov-ic { box-shadow: 0 0 0 2px #5cd6ff; }
+/* The ✕ sits exactly where the orb was, inside the pill-height bottom row. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-close { position: absolute; left: 50%; bottom: calc((var(--pill-h, 66px) - 52px) / 2); width: 52px; height: 52px; margin-left: -26px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; color: var(--ink); background: color-mix(in srgb, var(--ink) 9%, transparent); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-close svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-close:active { transform: scale(.92); }
+/* Four per row across the full width (the dock's own rhythm), even breathing room, and an even fill over any page. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px 4px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-scroll { padding: 24px 12px 14px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { background: color-mix(in srgb, var(--bg) 94%, transparent); }
+
+/* Same icon size as the pill dock (42px), with a ring for the desk in view. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic { width: 60px; height: 60px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg { width: 42px; height: 42px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic .dsg .sgi.sgl { font-size: 29px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-new .dsg svg { width: 38px; height: 38px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell .ov-x { left: calc(50% - 35px); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { max-height: calc(100% - var(--safe-t, 0px) - 24px); }
+
+/* Credit fuel gauge (Tinfoil, 22 Oct): same gauge with E / F at the ends; needle = credit left of the last top-up,
+   readout = dollars left. Amber once under a quarter tank, like a low-fuel light. */
+html[data-skin^="obsidian"] .rs-fuel .rs-gauge :is(.rs-e, .rs-f) { position: absolute; bottom: 12%; font-style: normal; font-size: calc(var(--g) * .15); font-weight: 700; line-height: 1; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-fuel .rs-gauge .rs-e { left: 2%; }
+html[data-skin^="obsidian"] .rs-fuel .rs-gauge .rs-f { right: 2%; }
+html[data-skin^="obsidian"] .rs-fuel .rs-gauge b { font-size: calc(var(--g) * .18); }
+html[data-skin^="obsidian"] .rs-dial { --g: clamp(36px, min(13.4vw, calc((100vw - 44px) / var(--n, 6) - 3px)), 56px); }
+html[data-skin^="obsidian"] .rs-fuel .rs-gauge :is(.rs-e, .rs-f) { bottom: 0; font-size: calc(var(--g) * .14); }
+html[data-skin^="obsidian"] .rs-fuel.rs-empty .rs-gauge .rs-arc { stroke: var(--amber, #b7791f); }
+html[data-skin^="obsidian"] .rs-fuel.rs-empty .rs-gauge :is(.rs-ndl path, .rs-hub) { fill: var(--amber, #b7791f); }
+html[data-skin^="obsidian"] .rs-fuel.rs-empty .rs-gauge b { color: var(--amber, #b7791f); }
+
+/* All dials as fuel gauges of what is left (Miguel, 23 Oct): E to F, amber under a quarter, red under a tenth.
+   Computer and AI on two separate centred lines. */
+html[data-skin^="obsidian"] [data-home-resources] .rs-dialed.rs-widget.wz-home-widget { flex-direction: column; align-items: center; gap: 8px; }
+html[data-skin^="obsidian"] [data-home-resources] .rs-dialed.rs-widget.wz-home-widget .rs-dials { justify-content: center; }
+html[data-skin^="obsidian"] [data-home-resources] .rs-dialed.rs-widget.wz-home-widget .rs-dials + .rs-dials { margin: 0; padding: 0; border: 0; }
+html[data-skin^="obsidian"] .rs-fuel .rs-gauge b:not(:empty):not([data-money] b)::after { content: "%"; font-size: .72em; font-weight: 600; margin-left: 1px; opacity: .8; }
+html[data-skin^="obsidian"] .rs-fuel[data-money] .rs-gauge b::after { content: none; }
+html[data-skin^="obsidian"] .rs-fuel.rs-empty .rs-gauge .rs-arc { stroke: var(--amber, #d08a1e); }
+html[data-skin^="obsidian"] .rs-fuel.rs-empty .rs-gauge :is(.rs-ndl path, .rs-hub) { fill: var(--amber, #d08a1e); }
+html[data-skin^="obsidian"] .rs-fuel.rs-empty .rs-gauge b { color: var(--amber, #d08a1e); }
+html[data-skin^="obsidian"] .rs-fuel.rs-crit .rs-gauge .rs-arc { stroke: #e5484d; }
+html[data-skin^="obsidian"] .rs-fuel.rs-crit .rs-gauge :is(.rs-ndl path, .rs-hub) { fill: #e5484d; }
+html[data-skin^="obsidian"] .rs-fuel.rs-crit .rs-gauge b { color: #e5484d; }
+
+/* E / F once (first dial only) and muted: a legend, not a label on every gauge (Miguel, 23 Oct). */
+html[data-skin^="obsidian"] .rs-fuel .rs-gauge :is(.rs-e, .rs-f) { opacity: .5; font-weight: 600; }
+
+/* Devices sheet (Miguel's skins, 23 Oct): Agent devices with gauges, then Your devices / Client Wizards / Other as
+   online lights. Same quiet type as Home; no boxes inside boxes. */
+html[data-skin^="obsidian"] .rs-dv-wrap { display: flex; flex-direction: column; gap: 22px; padding: 4px 2px 18px; }
+html[data-skin^="obsidian"] .rs-dv-g h3 { margin: 0 0 8px; font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-dv-total { margin: -2px 0 10px; font-size: 13px; color: var(--wz-text, var(--ink)); font-variant-numeric: tabular-nums; }
+html[data-skin^="obsidian"] .rs-dv { padding: 10px 0 12px; border-top: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); }
+html[data-skin^="obsidian"] .rs-dv header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; min-width: 0; }
+html[data-skin^="obsidian"] .rs-dv header b { font-size: 14.5px; font-weight: 600; color: var(--wz-text, var(--ink)); white-space: nowrap; }
+html[data-skin^="obsidian"] .rs-dv header small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-dv .rs-dials { display: flex; justify-content: center; gap: 14px; }
+html[data-skin^="obsidian"] .rs-dv .rs-dial { --g: 58px; }
+html[data-skin^="obsidian"] .rs-dv-off { margin: 0; font-size: 12.5px; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] :is(.rs-dv, .rs-dv-net li) .rs-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 35%, transparent); align-self: center; }
+html[data-skin^="obsidian"] :is(.rs-dv.rs-st-online, .rs-dv-net li.rs-st-online) .rs-dot { background: var(--green, #4ade80); }
+html[data-skin^="obsidian"] .rs-dv.rs-st-stale .rs-dot { background: var(--amber, #f5b642); }
+html[data-skin^="obsidian"] .rs-dv-net { list-style: none; margin: 0; padding: 0; }
+html[data-skin^="obsidian"] .rs-dv-net li { display: flex; align-items: center; gap: 9px; padding: 9px 0; border-top: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); font-size: 14px; color: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .rs-dv-net li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-skin^="obsidian"] .rs-dv-net li small { font-size: 12px; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-dv-net li.rs-st-offline { opacity: .6; }
+html[data-skin^="obsidian"] .rs-dv-total { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+html[data-skin^="obsidian"] .rs-dv-total span { white-space: nowrap; }
+html[data-skin^="obsidian"] .rs-dv-role { margin: -4px 0 8px 15px; font-size: 12px; color: var(--wz-text-secondary, var(--ink-2)); }
+
+/* Capacity bars in the devices sheet (Miguel, 23 Oct): segment length = real capacity, fill = used. */
+html[data-skin^="obsidian"] .rs-caps { display: flex; flex-direction: column; gap: 14px; margin: 2px 0 14px; }
+html[data-skin^="obsidian"] .rs-cap-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 6px; font-size: 13px; }
+html[data-skin^="obsidian"] .rs-cap-h b { font-weight: 600; color: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .rs-cap-h span { color: var(--wz-text-secondary, var(--ink-2)); font-variant-numeric: tabular-nums; white-space: nowrap; }
+html[data-skin^="obsidian"] .rs-cap-bar { display: flex; gap: 3px; }
+html[data-skin^="obsidian"] .rs-cap-seg { position: relative; min-width: 26px; height: 30px; padding: 0; border: 0; border-radius: 7px; overflow: hidden; cursor: pointer; background: color-mix(in srgb, var(--ink) 13%, transparent); -webkit-tap-highlight-color: transparent; }
+html[data-skin^="obsidian"] .rs-cap-seg i { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--ink) 62%, transparent); transition: width .9s cubic-bezier(.33, 1, .68, 1); }
+html[data-skin^="obsidian"] .rs-cap-seg small { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 8px; font-size: 11px; font-weight: 600; color: var(--wz-text, var(--ink)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; mix-blend-mode: normal; text-shadow: 0 0 4px color-mix(in srgb, var(--bg) 85%, transparent); }
+html[data-skin^="obsidian"] .rs-cap-seg.rs-empty i { background: #d08a1e; }
+html[data-skin^="obsidian"] .rs-cap-seg.rs-crit i { background: #e5484d; }
+html[data-skin^="obsidian"] .rs-cap-seg:active { opacity: .8; }
+html[data-skin^="obsidian"] .rs-dv-ms { list-style: none; margin: 0; padding: 0; }
+html[data-skin^="obsidian"] .rs-dv-m { display: grid; grid-template-columns: auto 1fr; column-gap: 9px; row-gap: 2px; padding: 9px 6px; border-top: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); border-radius: 8px; transition: background .2s; }
+html[data-skin^="obsidian"] .rs-dv-m .rs-dot { grid-row: 1; margin-top: 5px; }
+html[data-skin^="obsidian"] .rs-dv-m span { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+html[data-skin^="obsidian"] .rs-dv-m span b { font-size: 14px; font-weight: 600; color: var(--wz-text, var(--ink)); white-space: nowrap; }
+html[data-skin^="obsidian"] .rs-dv-m span small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-dv-m em { grid-column: 2; font-style: normal; font-size: 12px; color: var(--wz-text-secondary, var(--ink-2)); font-variant-numeric: tabular-nums; }
+html[data-skin^="obsidian"] .rs-dv-m .rs-dot { width: 7px; height: 7px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 35%, transparent); }
+html[data-skin^="obsidian"] .rs-dv-m.rs-st-online .rs-dot { background: var(--green, #4ade80); }
+html[data-skin^="obsidian"] .rs-dv-m.rs-picked { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+html[data-skin^="obsidian"] .rs-cap-col { min-width: 30px; display: flex; flex-direction: column; gap: 4px; }
+html[data-skin^="obsidian"] .rs-cap-col .rs-cap-seg { width: 100%; height: 14px; border-radius: 5px; }
+html[data-skin^="obsidian"] .rs-cap-col small { font-size: 11px; font-weight: 500; color: var(--wz-text-secondary, var(--ink-2)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html[data-skin^="obsidian"] .rs-cap-bar { gap: 4px; }
+html[data-skin^="obsidian"] .device:has(.rs-sheet) .home-tools { visibility: hidden; }
+
+/* Home resources as bars (Miguel, 23 Oct): label | bar | value, one row each. AI first, then compute. Fill = what is left.
+   No panel; Landscapes gets a soft dark halo per row so it reads over bright photos. */
+html[data-skin^="obsidian"] [data-home-resources] .rs-barsw.rs-widget.wz-home-widget { display: flex; flex-direction: column; gap: 12px; width: min(100%, 340px); margin: 0 auto; padding: 0; background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-skin^="obsidian"] .rs-bg { display: flex; flex-direction: column; gap: 7px; }
+html[data-skin^="obsidian"] .rs-br { display: grid; grid-template-columns: 54px 1fr 58px; align-items: center; column-gap: 10px; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; -webkit-tap-highlight-color: transparent; }
+html[data-skin^="obsidian"] .rs-br:active { opacity: .7; }
+html[data-skin^="obsidian"] .rs-bl { font-size: 12px; font-weight: 500; color: var(--wz-text-secondary, var(--ink-2)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html[data-skin^="obsidian"] .rs-bv { font-size: 12px; font-weight: 600; text-align: right; color: var(--wz-text, var(--ink)); font-variant-numeric: tabular-nums; white-space: nowrap; }
+html[data-skin^="obsidian"] .rs-bt { display: flex; gap: 3px; height: 6px; }
+html[data-skin^="obsidian"] .rs-bs { position: relative; min-width: 8px; height: 100%; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--ink) 14%, transparent); }
+html[data-skin^="obsidian"] .rs-bf { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--wz-text, var(--ink)); transition: width 1.1s cubic-bezier(.33, 1, .68, 1); }
+html[data-skin^="obsidian"] .rs-bs.rs-empty .rs-bf, html[data-skin^="obsidian"] .rs-bv.rs-empty { background: #d08a1e; }
+html[data-skin^="obsidian"] .rs-bv.rs-empty { background: none; color: #d08a1e; }
+html[data-skin^="obsidian"] .rs-bs.rs-crit .rs-bf { background: #e5484d; }
+html[data-skin^="obsidian"] .rs-bv.rs-crit { color: #e5484d; }
+html[data-skin^="obsidian"] .rs-br-off .rs-bv { color: var(--wz-text-secondary, var(--ink-2)); text-decoration: underline; text-underline-offset: 2px; }
+html[data-skin^="obsidian"] .rs-br-off .rs-bs { background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink) 18%, transparent) 0 4px, transparent 4px 7px); }
+
+/* Home bars never clip at the corners (the widget base rounds and hides overflow). */
+html[data-skin^="obsidian"] [data-home-resources] .rs-barsw.rs-widget.wz-home-widget { overflow: visible; border-radius: 0; }
+
+/* Resources pop-up, quiet version (Miguel, 23 Oct): solid sheet so Home never ghosts through, bare back / refresh
+   icons, plain text tabs with no pill or divider, sentence-case section titles, no row dividers, a dot only when a
+   machine is offline. */
+html[data-skin^="obsidian"] .rs-sheet { background: var(--bg); border: 0; box-shadow: 0 18px 50px rgba(0, 0, 0, .28); -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-skin^="obsidian"] .device:has(.rs-sheet) [data-home-resources] { visibility: hidden; }
+html[data-skin^="obsidian"] .rs-detail-head { padding: 12px 10px 4px; gap: 6px; }
+html[data-skin^="obsidian"] .rs-detail-head button { width: 38px; height: 38px; background: none; border: 0; border-radius: 50%; font-size: 26px; color: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .rs-detail-head [data-res-refresh] { font-size: 19px; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-detail-head h2 { font-size: 17px; font-weight: 600; }
+html[data-skin^="obsidian"] .rs-tabs { gap: 18px; padding: 2px 20px 10px; border-bottom: 0; }
+html[data-skin^="obsidian"] .rs-tabs button { flex: none; padding: 6px 0; border: 0; border-radius: 0; background: none; font-size: 13.5px; font-weight: 500; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-tabs .selected { background: none; color: var(--wz-text, var(--ink)); font-weight: 650; box-shadow: inset 0 -2px 0 currentColor; }
+html[data-skin^="obsidian"] .rs-dv-wrap { padding: 6px 4px 18px; gap: 26px; }
+html[data-skin^="obsidian"] .rs-dv-g h3 { font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--wz-text, var(--ink)); margin-bottom: 10px; }
+html[data-skin^="obsidian"] :is(.rs-dv-m, .rs-dv-net li) { border-top: 0; padding: 7px 0; }
+html[data-skin^="obsidian"] :is(.rs-dv-m, .rs-dv-net li) .rs-dot { visibility: hidden; }
+html[data-skin^="obsidian"] :is(.rs-dv-m, .rs-dv-net li):is(.rs-st-offline, .rs-st-unreachable, .rs-st-stale) .rs-dot { visibility: visible; }
+html[data-skin^="obsidian"] .rs-dv-m { grid-template-columns: 0 1fr; column-gap: 0; }
+html[data-skin^="obsidian"] .rs-dv-net li { gap: 0; }
+html[data-skin^="obsidian"] .rs-dv-net li:is(.rs-st-offline) { gap: 8px; }
+html[data-skin^="obsidian"] .rs-dv-net li .rs-dot { width: 0; }
+html[data-skin^="obsidian"] .rs-dv-net li.rs-st-offline .rs-dot { width: 7px; }
+html[data-skin^="obsidian"] .rs-caps { gap: 16px; margin-bottom: 18px; }
+html[data-skin^="obsidian"] .rs-cap-h { font-size: 12.5px; }
+html[data-skin^="obsidian"] .rs-cap-h b { font-weight: 500; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-cap-h span { color: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .device:has(.rs-sheet) .home :is(.constellation, .home-attn) { visibility: hidden; }
+html[data-skin^="obsidian"] .rs-detail-head button:focus:not(:focus-visible) { outline: none; box-shadow: none; }
+html[data-skin^="obsidian"] .rs-detail-head button { outline-offset: 0; }
+html[data-skin^="obsidian"][data-shell="phone"] .rs-detail-head button:focus { outline: none; box-shadow: none; }
+
+/* Home: AI and Computers as two clearly separate blocks (Miguel, 23 Oct). Each block has a small heading; compute
+   bars are stacked by machine, each machine in its own colour with a legend. Warnings stay amber/red. */
+html[data-skin^="obsidian"] [data-home-resources] .rs-barsw.rs-widget.wz-home-widget { gap: 22px; }
+html[data-skin^="obsidian"] .rs-gh { display: flex; align-items: baseline; gap: 6px; margin: 0 0 2px; font-size: 11px; }
+html[data-skin^="obsidian"] .rs-gh b { font-weight: 700; letter-spacing: .04em; color: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .rs-gh span { color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-bg-hw { padding-top: 14px; border-top: 1px solid color-mix(in srgb, var(--ink) 16%, transparent); }
+html[data-skin^="obsidian"] .rs-lg { display: flex; gap: 14px; margin: 0 0 3px; font-size: 11px; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .rs-lg span { display: inline-flex; align-items: center; gap: 5px; }
+html[data-skin^="obsidian"] .rs-lg i { width: 8px; height: 8px; border-radius: 2px; background: var(--dc); }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bt { height: 9px; gap: 2px; }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bs { border-radius: 2px; background: color-mix(in srgb, var(--dc) 22%, transparent); }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bs:first-child { border-radius: 4px 2px 2px 4px; }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bs:last-child { border-radius: 2px 4px 4px 2px; }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bs .rs-bf { background: var(--dc); }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bs.rs-empty .rs-bf { background: #d08a1e; }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bs.rs-crit .rs-bf { background: #e5484d; }
+html[data-skin="obsidian"] .rs-d0 { --dc: #f4f4f5; }
+html[data-skin="obsidian"] .rs-d1 { --dc: #7dd3fc; }
+html[data-skin="obsidian"] .rs-d2 { --dc: #c4b5fd; }
+html[data-skin="obsidian"] .rs-d3 { --dc: #86efac; }
+html[data-skin="obsidian-light"] .rs-d0 { --dc: #18181b; }
+html[data-skin="obsidian-light"] .rs-d1 { --dc: #0284c7; }
+html[data-skin="obsidian-light"] .rs-d2 { --dc: #7c3aed; }
+html[data-skin="obsidian-light"] .rs-d3 { --dc: #16a34a; }
+
+/* Readability pass (Miguel, 23 Oct): bars show USED of available; group titles "AI resources" / "Compute resources". */
+html[data-skin^="obsidian"] .rs-gh { font-size: 12.5px; margin-bottom: 4px; }
+html[data-skin^="obsidian"] .rs-gh b { font-weight: 650; letter-spacing: 0; }
+html[data-skin^="obsidian"] .rs-gh span { font-size: 11.5px; }
+html[data-skin^="obsidian"] .rs-bg { gap: 9px; }
+html[data-skin^="obsidian"] .rs-br { grid-template-columns: 58px 1fr 78px; }
+html[data-skin^="obsidian"] .rs-bl { font-size: 13px; }
+html[data-skin^="obsidian"] .rs-bv { font-size: 12.5px; }
+html[data-skin^="obsidian"] .rs-bt { height: 8px; }
+html[data-skin^="obsidian"] .rs-bg-hw .rs-bt { height: 10px; }
+html[data-skin^="obsidian"] .rs-lg { font-size: 11.5px; margin-bottom: 5px; }
+html[data-skin^="obsidian"] .rs-br { grid-template-columns: 58px minmax(60px, 1fr) max-content; }
+
+/* Miguel's skins: no chat pins (row pin button and the Pin action in the row sheet). Rows get their full width back. */

@@ -1,0 +1,11 @@
+{
+  "id": "miguel/send-and-go",
+  "name": "Send and go",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "nav"
+  ],
+  "description": "On desktop, sending opens a fresh chat"
+}

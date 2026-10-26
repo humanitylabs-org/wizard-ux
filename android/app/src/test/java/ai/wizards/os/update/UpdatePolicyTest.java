@@ -45,7 +45,7 @@ public class UpdatePolicyTest {
         assertEquals("mic", UpdatePolicy.Hold.MIC.reason);
     }
 
-    static final String FEED = "https://wizard.example.ts.net/reports/wizard-os/latest.json";
+    static final String FEED = "https://box.example.ts.net/reports/wizard-os/latest.json";
     static final String SHA = "864663a75a0dd19a134da46fea51931571d1fb03e7e50b0c05d089344039d771";
 
     @Test
@@ -53,7 +53,7 @@ public class UpdatePolicyTest {
         UpdatePolicy.Release r = UpdatePolicy.parse(new JSONObject().put("versionCode", 6).put("versionName", "0.5.1")
                 .put("url", "wizard-os-0.5.1.apk").put("sha256", SHA).put("bytes", 437029), FEED);
         assertNotNull(r);
-        assertEquals("https://wizard.example.ts.net/reports/wizard-os/wizard-os-0.5.1.apk", r.url);
+        assertEquals("https://box.example.ts.net/reports/wizard-os/wizard-os-0.5.1.apk", r.url);
         assertEquals(6, r.versionCode);
         assertFalse(UpdatePolicy.newer(r, 6));
         assertTrue(UpdatePolicy.newer(r, 5));
@@ -62,7 +62,7 @@ public class UpdatePolicyTest {
     @Test
     public void rejectsForeignOriginsBadHashesAndDowngrades() throws Exception {
         assertNull(UpdatePolicy.parse(new JSONObject().put("versionCode", 9).put("versionName", "9").put("url", "https://evil.example/x.apk").put("sha256", SHA), FEED));
-        assertNull(UpdatePolicy.parse(new JSONObject().put("versionCode", 9).put("versionName", "9").put("url", "http://wizard.example.ts.net/x.apk").put("sha256", SHA), FEED));
+        assertNull(UpdatePolicy.parse(new JSONObject().put("versionCode", 9).put("versionName", "9").put("url", "http://box.example.ts.net/x.apk").put("sha256", SHA), FEED));
         assertNull(UpdatePolicy.parse(new JSONObject().put("versionCode", 9).put("versionName", "9").put("url", "x.apk").put("sha256", "abc"), FEED));
         assertNull(UpdatePolicy.parse(new JSONObject().put("versionCode", 0).put("versionName", "9").put("url", "x.apk").put("sha256", SHA), FEED));
         assertNull(UpdatePolicy.parse(null, FEED));

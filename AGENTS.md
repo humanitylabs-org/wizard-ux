@@ -28,7 +28,15 @@ are covered. See `android/README.md` and `ios/README.md` for local configuration
   - Web-only changes need no APK.
 - **Back never exits.** Android and browser Back always take one step back inside the app: close the top overlay, then leave the nested view, then return to Home. At Home, Back stays put. In a plain browser tab, the first Back at Home shows "Press back again to exit", and only a second Back within about 2 seconds may leave. Every Back change ships with a test that opens a nested view, presses Back, and asserts the app is still open.
 
-### Shared responsive feature contract
+### Agent chat parity
+
+Every new or changed chat feature must add/update the canonical `wizard-agent-service/qa/agent-parity/features.json` entry and a main-versus-routed-thread behavioral test. Exercise a host-profile, container and restricted route as appropriate; shared renderer code alone is not parity proof. Keep browser and live evidence separate from fixture/unit passes. Never open existing private-agent sessions for QA; use disposable synthetic threads and block production mutations independently at browser and origin. Preserve the Back and Appearance contracts below.
+
+### Reuse before build
+
+`docs/COMPONENTS.md` lists every shared capability by need: read it before building any UI, chat, auth, upload, settings, visual or per-agent-kind logic. Every PR body carries a `Reuse:` block (REUSE / EXTEND / NEW per capability, checked by CI). Extend a near-fit module instead of building beside it; NEW adds a module in `web/core/` plus a row in the same PR. `wizard-ui.css` is look only, never a chat. Every chat row serves every agent kind.
+
+# Shared responsive feature contract
 
 New cross-platform UX belongs in `web/core/`. Register it once, and both shells render it. A shell adapter may own layout, navigation and input (touch and the orb on the phone, keyboard and window manager on desktop). Each feature's markup, state and action dispatch exist once, in `web/core/`.
 
@@ -47,11 +55,15 @@ New cross-platform UX belongs in `web/core/`. Register it once, and both shells 
 - **Claiming parity:** an import test alone never proves universal parity. Whether a feature is reachable, whether its actions work, and native-specific limits all need runtime evidence. A screenshot-only or mocked-API-only pass does not count.
 - **Concurrent work:** when integrating, preserve voice-custody work that is in flight on other branches.
 
-### Skins: your look and your UX live in your own skin (James, 18–19 Oct 2026)
+### Tweaks / experiences (James, 24 Oct 2026; wizard-os #186)
+
+Skins are look only. New behaviour is a tweak package or an approved core flag; never a skin script. Extend `core/skin-host.js`, mount only at `slots.json` names, declare capabilities, ship a CI contract, and preserve My skin on top. One-tap Snooze stays a tweak. Profiles use `core/experience.js` until Agent Service exposes a dedicated owner Files route. No WAM rebases or owner release builds.
+
+### Historical skins contract (superseded for new behaviour)
 
 - **James's skins:** Nebula (the default), Grove, Tide, Ember and Signal, together with the base shell look in `web/core/base.css` (palette and body font). They define the default shell.
 - **Your own look and behaviour:** taste goes into a skin of your own, never into the default shell and never as a Settings toggle. A skin is a `SKINS` entry in `web/core/skins.js` (tokens, orb, background) plus its own folder `web/skins/<dir>/` with `skin.css` and an optional `skin.js` (gestures, small layout tweaks) that only load for people who pick that skin. The skin API, lint rules and a worked example are in `web/skins/README.md`. Obsidian and Landscapes are working examples.
-- **Merging:** a PR that only touches your own skin (your `SKINS` entry and `web/skins/<yours>/`) is yours to self-merge once checks pass; it needs no `needs: james review`. A new hook in the skin API is a small core PR that Archimedes reviews. Bring James only "make this the default for everyone", with a preview he can use.
+- **Merging:** a PR that only touches your own skin (your `SKINS` entry and `web/skins/<yours>/`) needs no `needs: james review`; any admin who is not the author can approve and merge it once checks pass. A new hook in the skin API is a small core PR that Archimedes reviews. Bring James only "make this the default for everyone", with a preview he can use.
 - **What stays as it is:** James's five skins and the shared base. Scope fonts to your own skin, rather than to `body`, `.win` or controls.
 - **The guards:** `tests/owner-skins-guard.test.mjs` fingerprints James's skins and fails on any change to them and on any shell-wide font rule. `tests/fixtures/owner-skins.json` changes only with James's explicit approval, named in the commit message. `tests/skin-packages.test.mjs` keeps skin packages in their lane: James's skins load nothing extra, skin CSS stays scoped, skin scripts use only the skin API.
 
@@ -59,7 +71,7 @@ New cross-platform UX belongs in `web/core/`. Register it once, and both shells 
 
 - Every app in the Wizard App Store gets a designed sigil in the same PR that publishes it: a `HOUSE` entry in `tools/sigils/build.py` and its id in `STORE_APPS` in `tests/sigils-every-app.test.mjs`. CI fails without them. Unknown third-party apps fall back to their own icon file or a disc with their initial cut out, both drawn as masks in the same box, so a fallback never shows up as a square slab. How to add one: `tools/sigils/README.md`.
 
-<!-- wizard-os-team-rules v2 (19 Oct 2026). Same text in every Wizard OS repo; the canonical copy is humanitylabs-org/wizard-os AGENTS.md. Change it there first, then copy the block to every repo in one round of PRs. -->
+<!-- wizard-os-team-rules v4 (24 Oct 2026). Same text in every Wizard OS repo; the canonical copy is humanitylabs-org/wizard-os AGENTS.md. Change it there first, then copy the block to every repo in one round of PRs. -->
 ## Wizard OS team rules (identical in every repo)
 
 Wizard OS is built by James, Jan and Miguel together with their agents. Archimedes commits as `defleur-agents` and Oscar as `oscarhenrycollins`. Every repo belongs to Wizard OS as a whole, and no repo belongs to one person. Make the change that is best for the whole system, and build on each other's work.
@@ -101,9 +113,9 @@ Wizard OS is built by James, Jan and Miguel together with their agents. Archimed
   - `priority: 1` (review first), `priority: 2` (review next) and `priority: 3` (when there is time).
   - `needs: james review`: the PR waits for James to accept it or drop it.
   - `preview only`: an experiment that must not be merged.
-  - `from: <where it already runs>`, for example `from: miguel test port`: the change is already in daily use there.
+  - `from: <where it already runs>`, for example `from: miguel test port`: the change is already in daily use there. A box in developer mode (below) uses `from: <owner> dev build`.
 
-  Use the same tiers for issues.
+  Use the same tiers for issues. **Add the label when you open the PR** (`gh pr create --label "tier: ..."`); a PR without one shows as "No tier" on the board below. Agents label every PR they open, and add the missing label when they find one of their own without it.
 - **Open the PR once your first commit is pushed.** Use a draft until it is ready: `gh pr create --base main --draft`.
 - **Keep each PR to one change** that a reader can follow in a few minutes. Split unrelated fixes into separate PRs.
 - **Title:** after the tier prefix, state the outcome in plain words ("Recommended fix: threads open instantly from the on-device cache"), rather than the mechanism.
@@ -114,18 +126,32 @@ Wizard OS is built by James, Jan and Miguel together with their agents. Archimed
   4. **Links:** related issues, the matching PRs in other repos, and the decision or spec this change follows.
 - **If `main` moves while you work,** merge `origin/main` into your branch and re-run the checks.
 
+### Two routes for every change
+
+Every change reaches `main` one of two ways: **propose a fix** (`tier: recommended fix`) or **propose a feature** (any other tier). There is no third "my build" lane. Owners who only want Wizard to look or behave differently use their skin, settings or apps. People who change Wizard itself can run their branch first on a box in **developer mode**, which follows a named branch or fork instead of `latest`/`stable` (DECISIONS #97, wizard-os `releases/README.md`). That box is a test bench; the change still lands as a fix or feature PR.
+
+### Tracking
+
+**The [Wizard OS · PR pipeline](https://github.com/orgs/humanitylabs-org/projects/1) board is the source of truth for where every PR is**, across all repos: Draft → In review → Merged → On Latest → On Stable, or Dropped. wizard-os `tools/pr_board.py` syncs it every 15 minutes from the PRs and the release pointers, so nobody moves cards by hand; keep the tier label right and the board stays right. Check it before asking someone where a change is, and link it in status updates instead of listing PRs.
+
 ### Merging
 
-- **The author merges their own PR** once three things hold:
-  - the required checks are green;
-  - the Verified section reflects real results;
-  - nothing in the PR needs a decision (see the next section).
+DECISIONS #96 (24 Oct 2026). `main` keeps **0 required approvals** and non-strict status checks, so process never blocks work.
 
-  There is no wait for a human approval.
+- **Humans are the only admins:** James (`jdefleur`), Jan (`JanMesaric`) and Miguel (`mistermizel`). Agent accounts (`defleur-agents`, `oscarhenrycollins`) hold Write and sit on `main`'s review-bypass list; they never change branch rules, collaborators or repository settings.
+- **Fixes ship immediately.** A `tier: recommended fix` PR that is not on the high-risk list below merges by its author, human or agent, without waiting for another review, once all of these hold:
+  - a regression test that fails on `main` before the fix and passes after it;
+  - the required checks are green;
+  - every review thread is resolved (Codex or Agent review findings fixed or answered).
+
+  The release carrying it can go to stable the same day (DECISIONS #82).
+- **Everything else needs a review by someone other than its author**, and that reviewer may be an agent (the Agent review workflow or another collaborator's agent). This covers features, maintenance, taste and defaults, and the **high-risk list, fixes included**: security or privacy boundaries, host powers or credentials, migrations or anything that deletes or rewrites owner data, and a release that reaches every install. A high-risk fix still ships the same day; it just gets that review first. Once the review, the required checks and resolved conversations hold, the author's agent merges; no human has to visit GitHub to click merge.
+- **Every PR gets an agent review.** The **Agent review** workflow (`humanitylabs-org/wizard-ux` `tools/pr-agent-review.mjs`) posts one review on each push to a ready PR. It flags taste changed for everyone instead of in your own skin, likely breaking changes, secrets and personal paths or private hosts, and `docs/COMPONENTS.md` reuse problems. Fix every 🔴 before merging; each 🟡 is something the reviewer checks.
+- **The Verified section must reflect real results** before anything merges.
 - **What each tier means for merging:**
-  - **Recommended fixes and maintenance** merge on those conditions.
-  - **Strong suggestions** merge on them too, unless they change something James sees or uses every day. In that case add `needs: james review` and wait.
-  - **Opinionated changes** to the shell's look or UX go into your own skin: wizard-ux `web/skins/<yours>/` plus your `SKINS` entry (see wizard-ux `web/skins/README.md`). A PR that only touches your own skin merges on the conditions above. Never add a Settings toggle or core code for one person's taste.
+  - **Recommended fixes** merge on the fix conditions above.
+  - **Strong suggestions and maintenance** merge after a non-author review, unless they change something James sees or uses every day. In that case add `needs: james review` and wait.
+  - **Opinionated changes** to the shell's look or UX go into your own skin: wizard-ux `web/skins/<yours>/` plus your `SKINS` entry (see wizard-ux `web/skins/README.md`). Never add a Settings toggle or core code for one person's taste.
   - **Making something the default for everyone** (any opinionated change outside your own skin) carries `needs: james review` and waits for James. Bring it once you have used it in your skin, with a preview he can try.
   - **`preview only`** PRs never merge.
 - **Use "Create a merge commit"**, then delete the branch.

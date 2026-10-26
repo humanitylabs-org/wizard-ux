@@ -10,6 +10,10 @@ public final class HomeScreenPolicy {
     public static String displayName(String id, String registeredName) {
         return "wizard-signal".equals(id) ? "Signal" : registeredName;
     }
+    /** Refresh and re-add share this decision. Never update an unowned/unpinned shortcut. */
+    public static boolean needsUpdate(boolean ownPinned, String oldName, String oldIcon, String name, String icon) {
+        return ownPinned && (!java.util.Objects.equals(oldName,name) || !java.util.Objects.equals(oldIcon,icon));
+    }
     /** One intentional tap, not a scroll/cancel/multi-touch or reused activation. */
     public static final class TapGate {
         private float x, y;

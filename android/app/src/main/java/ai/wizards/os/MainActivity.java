@@ -31,7 +31,7 @@ import android.widget.Toast;
 import android.window.OnBackInvokedDispatcher;
 
 /**
- * Wizard OS: a native home for the owner's private shell (BuildConfig.HOME_URL).
+ * Wizard OS: a native home for the owner's configured Wizard OS shell.
  *
  * Rules this activity enforces:
  *  - Back never exits. Every Back is handed to the shell (window.__wosNativeBack), which closes the top
@@ -51,6 +51,8 @@ public class MainActivity extends Activity {
     public static final String ACTION_SIDE_BUTTON = "ai.wizards.os.action.SIDE_BUTTON";
     /** Notifications and the Everywhere button open Wizard OS on Settings / the Unsent list / a thread. */
     public static final String ACTION_SETTINGS = "ai.wizards.os.action.SETTINGS";
+    /** With ACTION_SETTINGS: the Settings feature to open on (e.g. "photos-backup"). Older web ignores it. */
+    public static final String EXTRA_SETTINGS_FOCUS = "ai.wizards.os.extra.SETTINGS_FOCUS";
     public static final String ACTION_UNSENT = "ai.wizards.os.action.UNSENT";
     public static final String ACTION_THREAD = "ai.wizards.os.action.THREAD";
     /** The floating orb's Screen button (voice typing / screenshots not set up yet) opens the setup dialog. */
@@ -67,7 +69,7 @@ public class MainActivity extends Activity {
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
     private String pendingHandoff; // JSON handed to window.__wosHandoff once the shell is ready
     private int handoffTries;
-    private WebView web;
+    private SelectionWebView web;
     private FrameLayout root;
     private PermissionRequest pendingMic;
     private ValueCallback<Uri[]> pendingFiles;
@@ -82,6 +84,7 @@ public class MainActivity extends Activity {
     private ai.wizards.os.mizel.MizelBridge mizel; // window.wizardMizelPort, private origin only
     private ai.wizards.os.audio.BackgroundAudioBridge audio;
     private ai.wizards.os.apps.AppsBridge apps; // window.wizardAppsPort: the shell only (Android Apps relay)
+    private ai.wizards.os.photos.PhotosBridge photos; // window.wizardPhotosPort: Settings › Photos backup (web page)
 
     private String screenCaptureId;
 
@@ -106,21 +109,12 @@ public class MainActivity extends Activity {
                 });
     }
 
-    /** Main-frame settings navigation only; no media or credential bridge. */
-    private void installPhotosPort(WebView target) {
-        if (!androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_MESSAGE_LISTENER)) return;
-        java.util.Set<String> origins = java.util.Collections.singleton(ai.wizards.os.device.AppState.primaryOrigin(this));
-        androidx.webkit.WebViewCompat.addWebMessageListener(target, "wizardPhotosPort", origins,
-                (view, message, sourceOrigin, isMainFrame, reply) -> {
-                    if (!isMainFrame || web != target || sourceOrigin == null || !origins.contains(sourceOrigin.toString())) return;
-                    if (message != null && "open".equals(message.getData()))
-                        startActivity(new Intent(this, ai.wizards.os.photos.PhotosActivity.class));
-                });
-    }
-
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        if (ai.wizards.os.device.AppState.origin(this).isEmpty()) {
+            startActivity(new Intent(this, ConnectActivity.class)); finish(); return;
+        }
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.rgb(5, 3, 12));
         // targetSdk 35 draws edge to edge. The page itself runs under the status bar so its background reaches the
@@ -150,7 +144,7 @@ public class MainActivity extends Activity {
         buildWebView();
         reach = new ReachScreen(this, root, this::retryReach, this::openTailscale);
         watchNetwork();
-        if (state != null) web.restoreState(state);
+        if (state != null && ai.wizards.os.device.AppState.origin(this).equals(state.getString("serverOrigin"))) web.restoreState(state);
         if (this instanceof AppSessionActivity && web.getUrl() != null && !((AppSessionActivity)this).acceptsUrl(web.getUrl())) web.clearHistory();
         if (web.getUrl() == null || (this instanceof AppSessionActivity && !((AppSessionActivity)this).acceptsUrl(web.getUrl()))) go(startUrl(getIntent()));
         installBack();
@@ -189,12 +183,13 @@ public class MainActivity extends Activity {
         }
         installScreenPort(web);
         if (!(this instanceof AppSessionActivity)) HomeScreenShortcuts.attach(this, web);
-        installPhotosPort(web);
+        if (photos != null) photos.detach();
+        photos = ai.wizards.os.photos.PhotosBridge.install(this, web); // status/settings only; no media or credentials
         ai.wizards.os.photos.BackupScheduler.schedule(this);
         device = new ai.wizards.os.device.DeviceBridge(this, web);
         web.addJavascriptInterface(device, "WizardOSDevice");
         if (mizel != null) mizel.detach();
-        mizel = ai.wizards.os.mizel.MizelBridge.install(web, BuildConfig.ORIGIN);
+        mizel = ai.wizards.os.mizel.MizelBridge.install(web, ai.wizards.os.device.AppState.origin(this));
         if (apps != null) apps.detach();
         apps = ai.wizards.os.apps.AppsBridge.install(this, web);
         if (audio != null) audio.detach();
@@ -212,7 +207,7 @@ public class MainActivity extends Activity {
                     // Same-box, shell, custom-scheme and gestureless hops are never forwarded.
                     if (req.hasGesture() && ("https".equals(u.getScheme()) || "http".equals(u.getScheme()))
                             && !HomeScreenShortcuts.origin(MainActivity.this).equals(u.getScheme() + "://" + u.getEncodedAuthority())
-                            && !Origin.isPrivate(u) && u.getPath() != null && !Origin.isShellPath(u.getPath())) {
+                            && !Origin.isPrivate(MainActivity.this, u) && u.getPath() != null && !Origin.isShellPath(u.getPath())) {
                         openOutside(u); return true;
                     }
                     // Never route a rejected task navigation through ACTION_VIEW: a same-box
@@ -220,7 +215,7 @@ public class MainActivity extends Activity {
                     Toast.makeText(MainActivity.this,"Use Android Home to switch apps",Toast.LENGTH_SHORT).show();
                     return true;
                 }
-                if (Origin.isPrivate(u) || ai.wizards.os.device.AppState.isQaPage(MainActivity.this, u)) { if (req.isForMainFrame()) navStarted(u.toString()); return false; }
+                if (Origin.isPrivate(MainActivity.this, u) || ai.wizards.os.device.AppState.isQaPage(MainActivity.this, u)) { if (req.isForMainFrame()) navStarted(u.toString()); return false; }
                 if (!req.isForMainFrame()) return false; // hosted app frames stay inside their window
                 openOutside(u);
                 return true;
@@ -258,6 +253,7 @@ public class MainActivity extends Activity {
 
             @Override
             public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
+                if (view instanceof SelectionWebView) ((SelectionWebView)view).refreshScrollProxy();
                 // A commit (also a same-document hop). Never fires for a load that was abandoned or still hangs.
                 if (isWeb(url) && !mainFailed && sameHost(url, wantUrl) && reach != null && reach.isShowing() && !reach.isOffline()) landed();
             }
@@ -271,7 +267,7 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
-                if (view instanceof SelectionWebView) ((SelectionWebView)view).cancelScrollCapture();
+                if (view instanceof SelectionWebView) ((SelectionWebView)view).scrollPageStarted();
                 pageUrl = url;
                 screenCaptureId = null;
                 setKeepAwake(false);
@@ -279,6 +275,7 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
+                if (view instanceof SelectionWebView) ((SelectionWebView)view).installScrollProxy();
                 topSent = -1; cutoutSent = -1; reportTop(topPx); reportCutout(cutoutPx); // a reload starts fresh: push both again
             }
 
@@ -288,7 +285,7 @@ public class MainActivity extends Activity {
                 root.removeView(web);
                 web.destroy();
                 buildWebView();
-                go(MainActivity.this instanceof AppSessionActivity ? startUrl(getIntent()) : BuildConfig.HOME_URL);
+                go(MainActivity.this instanceof AppSessionActivity ? startUrl(getIntent()) : ai.wizards.os.device.AppState.homeUrl(MainActivity.this));
                 return true;
             }
         });
@@ -349,7 +346,7 @@ public class MainActivity extends Activity {
 
     String startUrl(Intent intent) {
         Uri data = intent == null ? null : intent.getData();
-        String target = data != null && Origin.isInApp(data) ? inAppUrl(data.toString()) : null;
+        String target = data != null && Origin.isInApp(MainActivity.this, data) ? inAppUrl(data.toString()) : null;
         if (target != null) return target;
         return ai.wizards.os.device.AppState.homeUrl(this); // HOME_URL; QA builds may point at a fake Wizard
     }
@@ -367,7 +364,7 @@ public class MainActivity extends Activity {
         if (this instanceof AppSessionActivity) return; // document root owns resume; no workspace handoff/navigation
         setIntent(intent);
         Uri data = intent.getData();
-        if (data != null && Origin.isInApp(data)) {
+        if (data != null && Origin.isInApp(MainActivity.this, data)) {
             go(inAppUrl(data.toString()));
         }
         if (ACTION_ACCESSIBILITY.equals(intent.getAction())) { intent.setAction(Intent.ACTION_MAIN); main.post(() -> offerAccessibility(true)); return; }
@@ -382,7 +379,7 @@ public class MainActivity extends Activity {
         if (intent == null) return;
         String act = intent.getAction();
         String json = ACTION_SIDE_BUTTON.equals(act) ? "{\"action\":\"side-button\"}"
-                : ACTION_SETTINGS.equals(act) ? "{\"action\":\"settings\"}"
+                : ACTION_SETTINGS.equals(act) ? Handoff.settings(intent.getStringExtra(EXTRA_SETTINGS_FOCUS))
                 : ACTION_UNSENT.equals(act) ? "{\"action\":\"unsent\"}"
                 : ACTION_USUALS.equals(act) ? "{\"action\":\"usuals\"}"
                 : ACTION_THREAD.equals(act) && intent.getStringExtra(EXTRA_THREAD) != null
@@ -430,6 +427,19 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void openInOwnBrowser(Uri u) {
+        Intent view = new Intent(Intent.ACTION_VIEW, u).addCategory(Intent.CATEGORY_BROWSABLE);
+        // This app may claim its own Wizard's links: send them to the default browser explicitly.
+        android.content.pm.ResolveInfo ri = getPackageManager().resolveActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")).addCategory(Intent.CATEGORY_BROWSABLE), android.content.pm.PackageManager.MATCH_DEFAULT_ONLY);
+        String pkg = ri == null || ri.activityInfo == null ? null : ri.activityInfo.packageName;
+        if (pkg != null && !"android".equals(pkg) && !getPackageName().equals(pkg)) view.setPackage(pkg);
+        try { startActivity(view); }
+        catch (ActivityNotFoundException e) {
+            try { startActivity(Intent.createChooser(new Intent(Intent.ACTION_VIEW, u), "Open in")); }
+            catch (ActivityNotFoundException e2) { Toast.makeText(this, "No browser can open that link", Toast.LENGTH_SHORT).show(); }
+        }
+    }
+
     private void openOutside(Uri u) {
         try {
             startActivity(new Intent(Intent.ACTION_VIEW, u).addCategory(Intent.CATEGORY_BROWSABLE));
@@ -462,7 +472,7 @@ public class MainActivity extends Activity {
     private final Runnable reachMark = () -> {
         if (reach == null) return;
         boolean[] n = ReachScreen.net(this);
-        if (ReachPolicy.failNow(n[0], n[1])) showOffline(null);
+        if (ReachPolicy.failNow(n[0], n[1], ServerOrigin.needsTailscale(ai.wizards.os.device.AppState.origin(this)))) showOffline(null);
         else reach.connecting();
     };
 
@@ -533,6 +543,13 @@ public class MainActivity extends Activity {
         if (resumed) main.postDelayed(reachRetry, ReachPolicy.RETRY_MS);
     }
 
+    void changeServer() {
+        Intent target = new Intent(this, ConnectActivity.class);
+        if (web == null) { startActivity(target); return; }
+        // Connect dresses in the worn skin: resolve the shell's colour roles first (colours only, validated natively).
+        web.evaluateJavascript(WizardLook.READ_JS, raw -> { WizardLook.save(this, raw); startActivity(target); });
+    }
+
     void openTailscale() {
         android.content.Intent i = getPackageManager().getLaunchIntentForPackage(ReachPolicy.TAILSCALE_PKG);
         if (i == null) { Toast.makeText(this, "Tailscale isn't installed on this phone", Toast.LENGTH_SHORT).show(); return; }
@@ -569,7 +586,7 @@ public class MainActivity extends Activity {
     /* ---------------- Microphone for the orb ---------------- */
 
     private void handleWebPermission(PermissionRequest request) {
-        if (!Origin.isPrivate(request.getOrigin())) { request.deny(); return; }
+        if (!Origin.isPrivate(MainActivity.this, request.getOrigin())) { request.deny(); return; }
         boolean wantsMic = false;
         for (String r : request.getResources()) if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)) wantsMic = true;
         if (!wantsMic) { request.deny(); return; }
@@ -586,6 +603,7 @@ public class MainActivity extends Activity {
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
         super.onRequestPermissionsResult(code, perms, results);
         if (code == REQ_EVERYWHERE) { continueEverywhere(); return; }
+        if (code == ai.wizards.os.photos.PhotosBridge.REQ_PERMISSIONS) { if (photos != null) photos.onPermissions(); return; }
         if (code == REQ_SIDE_MIC) {
             boolean ok = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
             if (ok) continueSideButton();
@@ -627,23 +645,25 @@ public class MainActivity extends Activity {
     @Override
     protected void onSaveInstanceState(Bundle out) {
         super.onSaveInstanceState(out);
-        web.saveState(out);
+        if (web != null) web.saveState(out);
+        out.putString("serverOrigin", ai.wizards.os.device.AppState.origin(this));
     }
 
     @Override
     protected void onStart() {
         super.onStart();
         if (!(this instanceof AppSessionActivity)) current = new java.lang.ref.WeakReference<>(this);
+        if (device == null) return;
         device.onStart();
-        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.front());
+        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.shellFront());
         ai.wizards.os.everywhere.EverywhereOutbox.get(this).pump();
         ai.wizards.os.mizel.MeetingRecorderService.recover(this); // a meeting cut off by a process death is closed and uploaded
     }
 
     @Override
     protected void onStop() {
-        device.onStop();
-        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.front());
+        if (device != null) device.onStop();
+        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.shellFront());
         super.onStop();
     }
 
@@ -694,13 +714,20 @@ public class MainActivity extends Activity {
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
+        if(!hasFocus)ScrollCaptureDiagnostics.arm("window-focus-lost");
+        ScrollCaptureDiagnostics.record("Activity.onWindowFocusChanged",ScrollCaptureDiagnostics.fields("hasFocus",hasFocus));
+        if(web!=null) {web.recordProxyState();web.refreshScrollProxy();}
         super.onWindowFocusChanged(hasFocus);
+        if(hasFocus)ScrollCaptureDiagnostics.resumed(this);
         if (hasFocus && immersive) applyImmersive(true); // a dialog or the shade can bring the bars back
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        ScrollCaptureDiagnostics.record("Activity.onResume",ScrollCaptureDiagnostics.fields());
+        if (web == null) return; // Connect owns the screen until an origin is set
+        ScrollCaptureDiagnostics.resumed(this);
         web.onResume();
         ai.wizards.os.share.ShareService.resumeIfPending(this); // shares left queued (force-stop, reboot) carry on
         ai.wizards.os.mizel.MeetingEventSync.kick(this); // meeting markers from the floating orb / side button still unsent
@@ -721,10 +748,21 @@ public class MainActivity extends Activity {
         web.evaluateJavascript("(window.__wosUsuals && window.__wosUsuals())", null);
         device.onResume();
         if (apps != null) apps.onResume();
+        if (photos != null) photos.onResume();
         if (sideSetupActive) {
             sideSetupActive = false;
             if (SideButton.assistant(this)) Toast.makeText(this, "Side button is on. Hold it to talk.", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    @Override public void onTopResumedActivityChanged(boolean top) {
+        if(android.os.Build.VERSION.SDK_INT>=29)super.onTopResumedActivityChanged(top);
+        ScrollCaptureDiagnostics.record("Activity.onTopResumedActivityChanged",ScrollCaptureDiagnostics.fields("top",top));
+    }
+    @Override public void onConfigurationChanged(android.content.res.Configuration c) {
+        super.onConfigurationChanged(c);
+        ScrollCaptureDiagnostics.record("Activity.onConfigurationChanged",ScrollCaptureDiagnostics.fields(
+            "orientation",c.orientation,"widthDp",c.screenWidthDp,"heightDp",c.screenHeightDp,"densityDpi",c.densityDpi));
     }
 
     /* ---------------- Side button switch ----------------
@@ -757,10 +795,14 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        ScrollCaptureDiagnostics.arm("activity-pause");
+        ScrollCaptureDiagnostics.record("Activity.onPause",ScrollCaptureDiagnostics.fields());
+        if(web!=null)web.recordProxyState();
+        if (web != null && !(this instanceof AppSessionActivity)) web.evaluateJavascript(WizardLook.READ_JS, raw -> WizardLook.save(this, raw)); // the reach/Connect screens wear the last skin
         if (this instanceof AppSessionActivity && web != null) web.evaluateJavascript("window.__wosSessionCheckpoint?.()", null);
         if (mizel != null) mizel.setPcmForeground(false);
         // Mid-recording the page must keep running in the background (the floating orb can send/pause/cancel it).
-        if (!ai.wizards.os.everywhere.EverywhereService.appIsRecording()) web.onPause();
+        if (web != null && !ai.wizards.os.everywhere.EverywhereService.appIsRecording()) web.onPause();
         CookieManager.getInstance().flush();
         resumed = false;
         main.removeCallbacks(reachRetry);
@@ -894,6 +936,7 @@ public class MainActivity extends Activity {
         }
         if (mizel != null) { mizel.detach(); mizel = null; }
         if (apps != null) { apps.detach(); apps = null; }
+        if (photos != null) { photos.detach(); photos = null; }
         if (audio != null) { audio.detach(); audio = null; }
         if (web != null) { root.removeView(web); web.destroy(); }
         super.onDestroy();
@@ -906,7 +949,20 @@ public class MainActivity extends Activity {
     }
 
     /** Small, read-mostly bridge: the shell can ask for a haptic tick and learn it runs natively. */
-    final class Bridge {
+    private final class Bridge {
+        /** Long-press › Open in your browser, also for this Wizard's own pages: the phone's default browser, never this app. */
+        @JavascriptInterface public void openInBrowser(String url) {
+            final Uri u = Uri.parse(String.valueOf(url));
+            if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) return;
+            runOnUiThread(() -> openInOwnBrowser(u));
+        }
+        /** A file link (APK, PDF…) on this Wizard: Android's download manager, so it lands in Downloads with a notification. */
+        @JavascriptInterface public void download(String url) {
+            final Uri u = Uri.parse(String.valueOf(url));
+            if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) return;
+            runOnUiThread(() -> downloadOutside(u.toString(), web == null ? null : web.getSettings().getUserAgentString(), null, null));
+        }
+        @JavascriptInterface public void changeServer() { runOnUiThread(MainActivity.this::changeServer); }
         @JavascriptInterface
         public String platform() { return "android:" + BuildConfig.VERSION_NAME; }
 
@@ -1054,7 +1110,7 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 final WebView target = web;
                 final String url = target == null ? "" : target.getUrl();
-                boolean trusted = Origin.isShell(Uri.parse(url == null ? "" : url));
+                boolean trusted = Origin.isShell(MainActivity.this, Uri.parse(url == null ? "" : url));
                 if (BuildConfig.DEBUG) {
                     Uri u = Uri.parse(url == null ? "" : url);
                     trusted = trusted || (ai.wizards.os.device.AppState.isQaPage(MainActivity.this, u)

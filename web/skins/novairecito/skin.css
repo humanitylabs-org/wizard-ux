@@ -43,3 +43,26 @@ html[data-skin="novairecito"] .ch-pin-toggle[aria-pressed="true"] svg {
   fill-opacity: 1;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .55));
 }
+/* Chat reading size: the stock phone default is 17px (core/chats.css); this skin keeps its original 15px. */
+html[data-skin="novairecito"][data-shell="phone"] .ch-msgs .msg .bub { font-size: 15px; line-height: 1.45; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-msgs .bub h1 { font-size: 19px; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-msgs .bub h2 { font-size: 17.5px; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-msgs .bub h3 { font-size: 16px; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-msgs .bub :is(h4, h5, h6) { font-size: 15px; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-msgs .bub code { font-size: 13px; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-msgs .bub pre { font-size: 12px; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-msgs .bub .code pre code { font-size: 12.5px; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-msgs .bub table { font-size: 13.5px; }
+/* Phone row swipe: reveal explicit Recall and Done buttons; core owns the shared action dispatch. */
+html[data-skin="novairecito"][data-shell="phone"] .ch-row-wrap:is(.swiping, .swiped) { overflow: hidden; border-radius: 14px; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-row-wrap:is(.swiping, .swiped) .ch-pin-toggle { opacity: 0; pointer-events: none; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-swipe-acts { position: absolute; z-index: 0; top: 0; bottom: 0; right: 0; width: var(--sw, 0px); display: flex; overflow: hidden; border-radius: 14px; transition: width 160ms var(--ease); }
+html[data-skin="novairecito"][data-shell="phone"] .ch-row-wrap.swiping .ch-swipe-acts { transition: none; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-row-wrap:is(.swiping, .swiped) .ch-row { position: relative; z-index: 1; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-swipe-act { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 12px; font-weight: 700; letter-spacing: .01em; color: var(--ink); white-space: nowrap; overflow: hidden; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-swipe-act i { font-style: normal; font-size: 19px; line-height: 1; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-swipe-act svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+html[data-skin="novairecito"][data-shell="phone"] .ch-swipe-act.recall { background: var(--violet); color: var(--bg); }
+html[data-skin="novairecito"][data-shell="phone"] .ch-swipe-act.done { background: var(--green); color: var(--bg); }
+html[data-skin="novairecito"][data-shell="phone"] .ch-swipe-act.restore { background: var(--ink-3); color: var(--bg); }
+html[data-skin="novairecito"][data-shell="phone"] .ch-swipe-act:active { filter: brightness(1.15); }
