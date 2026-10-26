@@ -214,3 +214,20 @@ test('a hold during the install beat is undone and never mentions the orb swipe'
   assert.ok(['dismissVoice', 'closeSheets', 'home'].every(c => t.calls.includes(c)));
   assert.doesNotMatch(t.view().copy, /Swipe the orb/);
 });
+
+test('a dismissal holds for the tour too: banner × before the tour, or a skipped beat on replay, means no Install beat (Codex P2 on #548)', () => {
+  const t = boot({ ua: UA.androidChrome });
+  t.fire('beforeinstallprompt', t.promptEvent());
+  assert.equal(t.shown().length, 1, 'banner offered before the tour starts');
+  t.shown()[0].querySelector('.close')._l.click.forEach(f => f());
+  assert.equal(t.ctx.WizardPwaInstall.available, false);
+  t.toInstall();
+  assert.equal(t.T.step, t.T.DONE, 'dismissed in the banner: the tour does not offer it again');
+
+  const r = boot({ ua: UA.androidChrome });
+  r.fire('beforeinstallprompt', r.promptEvent());
+  r.toInstall(); assert.equal(r.T.step, r.T.INSTALL);
+  r.tap('[data-tnext]'); r.T.finish('done');
+  r.T.start('help'); r.tap('[data-tnext]'); r.tap('[data-tnext]');
+  assert.equal(r.T.step, r.T.DONE, 'skipped once: Practice again does not offer it for the snooze period');
+});

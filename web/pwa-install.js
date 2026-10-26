@@ -65,7 +65,8 @@
   // One install prompt per page: the phone tour's Install beat (core/tour.js) uses this same deferred event, and
   // holds the banner while the tour runs so the two never show at once.
   window.WizardPwaInstall = {
-    get available() { return !!deferred && !installed && !busy; },
+    // A dismissal (the banner's ×, a dismissed prompt or a skipped Install beat) holds for both surfaces.
+    get available() { return !!deferred && !installed && !busy && !dismissedHere && read() <= Date.now(); },
     prompt: act,
     hold(on) { held = !!on; render(); },
     dismiss() { dismissedHere = true; dismiss(); clear(); },
