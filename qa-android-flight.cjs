@@ -93,9 +93,7 @@ async function list(p){await p.evaluate(()=>{let w=Object.values(__wos.wins).fin
   adb('shell','am','force-stop',app);adb('shell','am','start','-n',app+'/ai.wizards.os.MainActivity');
   ({b,p}=await attach());browser=b;
   await p.waitForFunction(()=>window.__wos&&window.WosFlight,{},{timeout:30000});await list(p);
-  // Open the thread the way the owner does (a real tap on its row), so Back has a real history step to undo.
-  await p.evaluate(()=>{const c=Object.values(__wos.wins).find(w=>w.app==='chats');if(c?.thread)__wos.onBack();});await pause(1200);
-  await p.locator('.ch-row[data-chopen]').first().click();await p.locator('.wos-flight-saved').first().waitFor();
+  await p.evaluate(()=>__wos.openWizardThread('flight-1'));await p.locator('.wos-flight-saved').first().waitFor();
   ok((await p.locator('.ch-msgs').first().innerText()).includes('Saved answer for flight-1'),'airplane-mode cold native launch reads a saved chat');
   shot('android-offline-thread');
   adb('shell','uiautomator','dump','/data/local/tmp/offline-chats.xml');adb('pull','/data/local/tmp/offline-chats.xml',path.join(out,'android-offline-thread.xml'));
@@ -117,7 +115,7 @@ async function list(p){await p.evaluate(()=>{let w=Object.values(__wos.wins).fin
   // Back never exits: open a saved thread, press the real Android Back key, stay in Wizard on the list.
   ({b,p}=await attach());browser=b;await list(p);// Open the thread the way the owner does (a real tap on its row), so Back has a real history step to undo.
   await p.evaluate(()=>{const c=Object.values(__wos.wins).find(w=>w.app==='chats');if(c?.thread)__wos.onBack();});await pause(1200);
-  await p.locator('.ch-row[data-chopen]').first().click();
+  await p.locator('.ch-row[data-chopen="flight-1"]').first().click();
   await p.waitForFunction(()=>Object.values(__wos.wins).some(w=>w.app==='chats'&&w.thread));
   adb('shell','input','keyevent','KEYCODE_BACK');await pause(1500);
   ok(/ai\.wizards\.os\.qa/.test(adb('shell','dumpsys','activity','activities').split('\n').find(l=>/topResumedActivity|mResumedActivity/.test(l))||''),'native Back from a thread keeps Wizard open');
