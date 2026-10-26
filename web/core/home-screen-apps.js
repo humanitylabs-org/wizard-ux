@@ -73,6 +73,41 @@
     };
   }
   const pinnable = a => !!a && a.kind === 'wizard' && !!a.url && window.WizHomeScreenPolicy.validId(a.id) && !window.WizHomeScreenPolicy.isShell(a.url) && window.WizHomeScreenPolicy.within(a.url,a.url);
+  let refreshing = false;
+  async function refreshPinned() {
+    // Browser/desktop and old APKs stay inert. One bounded query before rendering any icons.
+    if (!port() || refreshing) return;
+    refreshing = true;
+    try {
+      bindPort();
+      await window.WizCore?.appsLoaded?.();
+      if (!port()) return;
+      const apps = Object.values(window.WizCore?.apps('mobile')?.APP || {}).filter(pinnable);
+      const candidates = [...new Map(apps.map(a => [a.id,a])).values()].slice(0,128);
+      if (!candidates.length) return;
+      const r = await request('pinned', { id:'' }, { candidates:candidates.map(a => a.id) });
+      if (r.status !== 'pinned-list' || !Array.isArray(r.appIds) || r.appIds.length > 128) return;
+      const pinned = new Set(r.appIds);
+      for (const a of candidates) {
+        if (!pinned.has(a.id) || !port()) continue;
+        let header;
+        try {
+          // Connect the glyph so CSS masks resolve exactly as they do in the existing pin sheet.
+          header = document.createElement('header');
+          header.style.cssText = 'position:fixed;left:-10000px;visibility:hidden;pointer-events:none';
+          header.setAttribute('aria-hidden','true'); header.innerHTML = window.WizSigil.box('span','',a);
+          document.body.append(header);
+          const icon = await iconPNG(a,header);
+          await request('refresh',a,{ name:window.WizHomeScreenPolicy.displayName(a), icon });
+        } catch (_) { /* one broken app cannot block the remaining pinned shortcuts */ }
+        finally { header?.remove(); }
+      }
+    } catch (_) { /* unavailable registry, bridge, decode or old-APK timeout: silent no-op */ }
+    finally { refreshing = false; }
+  }
+  // scripts load after the app registry; appsLoaded waits for installed apps on first shell load.
+  void refreshPinned();
+  addEventListener('wizard:apps', () => { void refreshPinned(); });
   // Desks overview: hold a one-app desk and let go without dragging → the same sheet (drag still reorders).
   function offer(a) { if (!port() || !pinnable(a)) return false; try { navigator.vibrate?.(12); } catch (_) {} show(a); return true; }
   // rows: which tiles inside `menu` can be held; live(row): the surface is still showing when the hold fires.
@@ -100,6 +135,7 @@
     document.addEventListener('visibilitychange', () => { if (hold) block(); cancel(); });
   }
   addEventListener('wos-native-resume', async () => {
+    void refreshPinned();
     if (!pending || !active) return;
     const a = active, r = await request('status',a);
     if (active !== a) return;
