@@ -20,6 +20,12 @@
     const spell = food.spell(text);
     if (spell === 'new') return {id:'+new'};
     if (spell === 'open' && (meta.kind === 'command' || meta.view?.kind !== 'chat thread')) return {open:true};
+    // Names beyond wizard.md's eight-name limit stay app-owned. They occupy
+    // the original exact-name stage, ahead of contextual Music fallback.
+    if (meta.kind === 'command' || meta.view?.kind !== 'chat thread') {
+      const q = WizardApp.voice.stripAddress(text).toLowerCase().replace(/[^a-z0-9ก-๙ ]+/g,' ').replace(/\s+/g,' ').trim().replace(/^(open |the |my )+/,'').replace(/ (app|application)$/,'');
+      if (['usual','usuals','food','saved orders','eats','wizard eats','bites','wizard bites','wizard food','grab food','order food'].includes(q)) return {open:true};
+    }
     return null;
   }
   WizardApp.voice.commands.register({
