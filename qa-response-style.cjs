@@ -30,6 +30,8 @@ const { pathToFileURL } = require('node:url');
         await page.evaluate(skin => WosSkin.set(skin), skin);
         await page.locator('[data-response-style]').selectOption('summary');
         await page.waitForFunction(() => document.querySelector('[data-response-style]')?.value === 'summary' && !document.querySelector('[data-response-style]').disabled);
+        // Let the shell/skin entrance transform finish before measuring or capturing.
+        await page.waitForTimeout(800);
         await page.screenshot({ path: path.join(out, kind + '-' + skin + '-summary.png') });
         const layout = await page.locator('[data-response-style]').evaluate(el => ({ value: el.value, height: el.getBoundingClientRect().height, color: getComputedStyle(el).color, background: getComputedStyle(el).backgroundColor, overflow: document.documentElement.scrollWidth > innerWidth }));
         assert.equal(layout.overflow, false); assert.ok(layout.height >= 44); assert.equal(layout.value, 'summary'); ok(kind + ' ' + skin + ' skinned Summary and touch target');
