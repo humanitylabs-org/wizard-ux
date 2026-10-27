@@ -215,7 +215,7 @@ window.WosChatPower = function chatPower(A) {
   function workHtml(c, tn, live, helperStatus) {
     if (!WK) return null;
     const key = turnKey(tn);
-    return WK.html(tn, { live, helperStatus, open: !!c.wkOpen?.has(key), md: A.md, esc, clip, key });
+    return WK.html(tn, { live, helperStatus, streamSteps: live && !c.stream?.landed && !c.stream?.terminal ? c.stream?.steps : [], open: !!c.wkOpen?.has(key), md: A.md, esc, clip, key });
   }
 
   /* ================= #11 models ================= */

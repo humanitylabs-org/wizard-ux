@@ -1319,9 +1319,19 @@ window.WizCore.chats = function createChats(H) {
     }
     h += steersHtml;
     if (tn.a || tn.media.length) {
-      const k = tn.a ? c.texts.push(tn.a.text) - 1 : -1;
+      const text = tn.a?.plainText ?? tn.a?.text;
+      const k = text ? c.texts.push(text) - 1 : -1;
       const bAt = tn.a?.at ?? tn.mediaAt;
-      h += `<div class="msg a"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}><div class="bub">${tn.a ? md(tn.a.text) : ''}${mediaBlock(c, tn.media)}</div>`
+      const placed = new Set();
+      const body = tn.a ? md(tn.a.text, (url, marker) => {
+        if (!marker || tn.a.inlineMedia?.[marker] !== url) return null;
+        const image = tn.media.find(m => m.kind === 'image' && m.url === url);
+        if (!image) return null; // no metadata: keep the ordinary safe image link
+        if (placed.has(image.id)) return '';
+        placed.add(image.id);
+        return mediaBlock(c, [image]); // same thumbnail, gallery and viewer as bottom attachments
+      }) : '';
+      h += `<div class="msg a"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}><div class="bub">${body}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}</div>`
         + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>${last && !working && regenOn() ? '<button type="button" data-mregen aria-label="Regenerate response">↻ Regenerate</button>' : ''}` : ''}</div></div>`;
     }
     return h;
@@ -1718,8 +1728,6 @@ window.WizCore.chats = function createChats(H) {
     }
     return s.trimEnd();
   };
-  // Tool ids as the owner reads them in the live step list ("browser_exec" -> "Browser exec").
-  const stepName = tool => { const t = String(tool || '').replace(/^mcp__(wizard__)?/, '').replace(/__/g, ' · ').replace(/_/g, ' ').trim(); return t ? t[0].toUpperCase() + t.slice(1) : 'Working'; };
   // A replay of the turn on screen: the streamed words end with its answer AND add nothing beyond that turn's own
   // words (its interim notes). A new run that merely ends like an old short answer ("Yes.") never matches.
   const bare = v => streamAnswer(v).replace(/\s+/g, '');
@@ -1764,11 +1772,9 @@ window.WizCore.chats = function createChats(H) {
       st.landed = true; st.handle?.close(); clearTimeout(st.retry);
     }
     const visible = st && !st.landed ? streamAnswer(st.text) : '';
-    const steps = st && !st.landed && !st.terminal ? st.steps || [] : [];
-    const stepHtml = steps.length ? `<ol class="ch-steps" aria-label="Working">${steps.map(x => `<li class="${x.done ? (x.error ? 'err' : 'done') : 'run'}"><b>${esc(stepName(x.tool))}</b>${x.preview ? ` <span>${esc(clip(x.preview, 90))}</span>` : ''}</li>`).join('')}</ol>` : '';
-    if (!visible && !stepHtml) return '';
-    const meta = st.terminal ? 'Finishing…' : visible ? 'Replying…' : 'Working…';
-    return `<div class="msg a" data-streaming="${esc(st.rid)}">${stepHtml}${visible ? `<div class="bub">${md(visible)}</div>` : ''}<div class="mmeta">${meta}</div></div>`;
+    // James: one activity surface. Timed tool rows belong to the existing WosWork disclosure;
+    // the stream adds only answer text, never a second steps list or a steps-only bubble.
+    return visible ? `<div class="msg a" data-streaming="${esc(st.rid)}"><div class="bub">${md(visible)}</div><div class="mmeta">${st.terminal ? 'Finishing…' : 'Replying…'}</div></div>` : '';
   }
   function threadState(s, agent) {
     const working = isWorking(s);
