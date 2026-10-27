@@ -599,7 +599,7 @@
     C.workspaceNav.setCount(APP.wizard?.id || 'wizard', LIVE?.ok ? (LIVE.workGroups().ready || []).length : 0);
     $('#logo').setAttribute('aria-current', homeOpen ? 'page' : 'false');
     $('#logo').innerHTML = C.workspaceNav.icon({ home: true }, W, appOf);
-    $('#wsList').innerHTML = ws.map((d, i) => {
+    if (!$('#wsList').classList.contains('arranging')) $('#wsList').innerHTML = ws.map((d, i) => {
       const hot = d.wins.some(id => { const w = W[id]; if (w?.app !== 'chats' || !w.thread) return false; const s = LIVE?.session(w.thread); return s && LIVE.isNew(s); });
       const names = d.wins.map(id => winTitle(W[id])).join(', ');
       return `<button class="ws${!homeOpen && i === cur ? ' cur' : ''}${d.wins.length ? ' used' : ''}${hot ? ' hot' : ''}" data-ws="${i}" aria-label="${esc(names || 'Empty desktop')} · Desktop ${C.workspaceNav.slot(i)}" aria-current="${!homeOpen && i === cur ? 'page' : 'false'}"${C.workspaceNav.slot(i) <= 9 ? ` aria-keyshortcuts="Alt+${C.workspaceNav.slot(i)}"` : ''} title="${esc(names || 'Empty desktop')}${C.workspaceNav.slot(i) <= 9 ? ` (${MOD}${C.workspaceNav.slot(i)})` : ''}">${C.workspaceNav.icon(d, W, appOf)}</button>`;
@@ -611,6 +611,45 @@
   function tickClock() { const C = window.WizConfig; $('#clock').textContent = C.dateLabel() + '  ' + C.hm(); }
   setInterval(tickClock, 15000); tickClock(); window.addEventListener('wizard:config', tickClock);
   $('#wsList').addEventListener('click', e => { if (e.target.closest('[data-newdesk]')) return newDesktop(); const b = e.target.closest('[data-ws]'); if (b) goWs(+b.dataset.ws); });
+  /* Arrange desktops: drag one along the top bar (touch: press and hold, then drag), or ⌥⇧[ / ⌥⇧] for the one in
+   * front. Desks keep their stable IDs, so open apps never remount; the new order syncs like any desk change. */
+  function moveDesk(from, to) {
+    if (from === to || !ws[from] || to < 0 || to >= ws.length) return false;
+    const curD = ws[cur], lastD = ws[lastWs];
+    ws.splice(to, 0, ws.splice(from, 1)[0]);
+    cur = ws.indexOf(curD); lastWs = Math.max(0, ws.indexOf(lastD)); save(); render(); return true;
+  }
+  {
+    const list = $('#wsList'), slots = () => $$('.ws[data-ws]', list);
+    let dd = null, swallow = 0;
+    const start = () => { dd.on = true; dd.b.classList.add('ws-moving'); list.classList.add('arranging'); try { list.setPointerCapture(dd.id); } catch (e) { /* already released */ } navigator.vibrate?.(8); };
+    list.addEventListener('pointerdown', e => {
+      const b = e.target.closest('.ws[data-ws]'); if (!b || e.button !== 0 || ws.length < 2) return;
+      dd = { from: +b.dataset.ws, b, x: e.clientX, y: e.clientY, on: false, id: e.pointerId, touch: e.pointerType !== 'mouse' };
+      if (dd.touch) dd.hold = setTimeout(() => { if (dd && !dd.on) start(); }, 400);
+    });
+    list.addEventListener('pointermove', e => {
+      if (!dd || e.pointerId !== dd.id) return;
+      const far = Math.hypot(e.clientX - dd.x, e.clientY - dd.y) > 6;
+      if (!dd.on) { if (!far) return; if (dd.touch) { clearTimeout(dd.hold); dd = null; return; } start(); }
+      e.preventDefault();
+      const next = slots().find(x => x !== dd.b && (r => e.clientX < r.left + r.width / 2)(x.getBoundingClientRect()));
+      const ref = next || list.querySelector('[data-newdesk]');
+      if (dd.b.nextElementSibling !== ref) list.insertBefore(dd.b, ref);
+    });
+    const end = () => {
+      if (!dd) return; const d = dd; dd = null; clearTimeout(d.hold);
+      if (!d.on) return;
+      swallow = Date.now() + 400;
+      d.b.classList.remove('ws-moving'); list.classList.remove('arranging');
+      const to = d.b.isConnected ? slots().indexOf(d.b) : -1;
+      if (!moveDesk(d.from, to)) paintBar();
+    };
+    list.addEventListener('pointerup', end); list.addEventListener('pointercancel', end);
+    list.addEventListener('click', e => { if (Date.now() < swallow) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+    // Right-click (or a touch hold) on a desktop never opens the browser menu; a right-click says how to move it.
+    list.addEventListener('contextmenu', e => { if (!e.target.closest('.ws[data-ws]')) return; e.preventDefault(); if (!dd?.on && e.button === 2) toast('⇄', `Drag a desktop to move it (or ${MOD}⇧[ / ${MOD}⇧])`, 2200); });
+  }
   $('#logo').addEventListener('click', () => goHome());
   $('#searchBtn').addEventListener('click', () => openPalette());
   $('#status').addEventListener('click', () => openChatsList());
@@ -1092,7 +1131,7 @@
   const KEYS = [
     ['Open and find', [[`${MOD}Space`, 'Search everything'], [`${MOD}O`, 'Open an app'], [`${MOD}1`, 'Home'], [`${MOD}I`, 'Chats'], [`${MOD},`, 'Settings'], [`${MOD}/`, 'This list']]],
     ['Chat', [[`${MOD}N`, 'New chat'], [`${MOD}V`, 'New voice chat (again to send)'], ['Enter', 'Send (⇧Enter for a new line)'], [`${MOD}↑  ${MOD}↓`, 'Previous / next chat'], ['Esc', 'Back'], ['/', 'Search chats']]],
-    ['Desktops', [[`${MOD}T`, 'New desktop'], [`${MOD}2 … 9`, 'Go to desktop'], [`${MOD}[  ${MOD}]`, 'Previous / next desktop'], [`${MOD}\``, 'Last desktop'], [`${MOD}⇧2 … 9`, 'Send window to desktop']]],
+    ['Desktops', [[`${MOD}T`, 'New desktop'], [`${MOD}2 … 9`, 'Go to desktop'], [`${MOD}[  ${MOD}]`, 'Previous / next desktop'], [`${MOD}⇧[  ${MOD}⇧]`, 'Move desktop left / right (or drag it)'], [`${MOD}\``, 'Last desktop'], [`${MOD}⇧2 … 9`, 'Send window to desktop']]],
     ['Windows', [[`${MOD}← ↑ → ↓`, 'Focus window (or H J K L)'], [`${MOD}⇧← →`, 'Swap window'], [`${MOD}F`, 'Full screen'], [`${MOD}R`, 'Refresh window'], [`${MOD}W`, 'Close app']]],
     ['Wizard for Mac (any app)', [['Caps Lock', 'Search and launch'], ['Caps Lock + letter', 'Jump to an app'], ['Right ⌘', 'Talk to Wizard'], ['Right ⌥', 'Dictate into any app']]],
   ];
@@ -1532,8 +1571,8 @@
     if (code === 'KeyR' && !shift) return hit(() => { if (!e.repeat) reloadCurrent(); });
     if (code === 'Slash') return hit(() => toggleKeys());
     if (code === 'Comma') return hit(() => (setEl.hidden ? openSettings() : closeSettings()));
-    if (code === 'BracketLeft') return hit(() => { lastWs = cur; goWs((cur - 1 + ws.length) % ws.length); });
-    if (code === 'BracketRight') return hit(() => { lastWs = cur; goWs((cur + 1) % ws.length); });
+    if (code === 'BracketLeft') return hit(() => { if (shift) return moveDesk(cur, cur - 1); lastWs = cur; goWs((cur - 1 + ws.length) % ws.length); });
+    if (code === 'BracketRight') return hit(() => { if (shift) return moveDesk(cur, cur + 1); lastWs = cur; goWs((cur + 1) % ws.length); });
     if (code === 'Backquote') return hit(() => { const t = lastWs; lastWs = cur; goWs(t); });
     const dir = { ArrowLeft: [-1, 0], KeyH: [-1, 0], ArrowRight: [1, 0], KeyL: [1, 0], ArrowUp: [0, -1], KeyK: [0, -1], ArrowDown: [0, 1], KeyJ: [0, 1] }[code];
     // ⌥ arrows are word/paragraph jumps while typing on a Mac: leave them to the text field (⌥HJKL still move focus).
