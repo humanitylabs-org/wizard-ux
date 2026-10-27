@@ -6,6 +6,10 @@ Native, and nothing else:
 
 - Choose the Wizard: a Connect screen (paste an address) and `wizard://connect?origin=…` Setup links; launcher
   shortcut **Change Wizard**. Any HTTPS origin, any port. Changing Wizard starts a fresh WebView.
+  Every Wizard that answered is remembered (`SavedWizards.java`: newest first, at most 10, each entry rechecked by
+  `ShellOrigin.parse`). Connect lists them at the top: tap one to switch, hold one to remove it (the current one is
+  marked and stays). The launcher's long-press also offers the three most recent other Wizards. Switching is refused
+  while a recording for the current Wizard is still going; takes and pinned apps stay with the Wizard that made them.
 - A can't-reach screen (Try again, Open Tailscale for `*.ts.net`, Change Wizard).
 - Microphone and camera, granted only to the selected Wizard's exact origin.
 - File picking for uploads; downloads and other sites go to the phone's own apps.
