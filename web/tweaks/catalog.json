@@ -19,6 +19,7 @@
     "miguel/arrange-download",
     "miguel/edge-peek",
     "wizard/app-borders",
-    "miguel/refresh-button"
+    "miguel/refresh-button",
+    "miguel/unified-inbox"
   ]
 }

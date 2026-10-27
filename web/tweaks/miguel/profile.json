@@ -12,7 +12,8 @@
     "miguel/home-bars",
     "miguel/arrange-download",
     "miguel/refresh-button",
-    "miguel/edge-peek"
+    "miguel/edge-peek",
+    "miguel/unified-inbox"
   ],
   "flags": {}
 }

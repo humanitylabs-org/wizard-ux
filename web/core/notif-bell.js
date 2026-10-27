@@ -22,7 +22,43 @@
       if (b.outerHTML !== nb.outerHTML) b.replaceWith(nb);
     }
   }
+  /* Inbox items for a trusted tweak (skin-host `inbox` capability): unread, not archived, newest first. Fetched only
+   * while something watches, on the bell's own cadence. Text stays data; the tweak renders it with textContent. */
+  const IN = { items: [], subs: new Set(), seq: 0 };
+  const str = (v, n) => String(v == null ? '' : v).slice(0, n);
+  const cleanItem = i => Object.freeze({ id: str(i.id, 80), title: str(i.title, 300), message: str(i.message, 8000), time: Number(i.time) || 0, source: str(i.source, 40), priority: Number(i.priority) || 3, link: str(i.link, 2000) });
+  async function loadItems() {
+    if (!IN.subs.size || !installed()) return;
+    const seq = ++IN.seq;
+    try {
+      const r = await fetch('/notifications/api/items?view=inbox&limit=50', { cache: 'no-store', credentials: 'same-origin' });
+      if (!r.ok) return;
+      const d = await r.json();
+      if (seq !== IN.seq || !Array.isArray(d.items)) return;
+      IN.items = Object.freeze(d.items.filter(i => i && i.id && !i.read && !i.archived).map(cleanItem).sort((a, b) => b.time - a.time));
+      for (const fn of [...IN.subs]) { try { fn(IN.items); } catch (e) {} }
+    } catch (e) {}
+  }
+  function watch(fn) {
+    if (typeof fn !== 'function') return () => {};
+    IN.subs.add(fn); if (IN.items.length) { try { fn(IN.items); } catch (e) {} }
+    loadItems();
+    return () => { IN.subs.delete(fn); };
+  }
+  async function mark(ids, marks) {
+    ids = (ids || []).map(String).filter(Boolean); if (!ids.length || !installed()) return false;
+    // Gone from the list at once; a failed write brings it back on the reload below.
+    IN.items = Object.freeze(IN.items.filter(i => !ids.includes(i.id))); for (const fn of [...IN.subs]) { try { fn(IN.items); } catch (e) {} }
+    let ok = false;
+    try {
+      const r = await fetch('/notifications/api/mark', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, ...marks }) });
+      ok = r.ok;
+    } catch (e) {}
+    await refresh(); await loadItems();
+    return ok;
+  }
   async function refresh() {
+    loadItems();
     if (!installed()) return;
     try {
       const r = await fetch('/notifications/api/count', { cache: 'no-store', credentials: 'same-origin' });
@@ -36,7 +72,7 @@
   // The Notifications window tells us its count as soon as something is marked read.
   addEventListener('message', e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:notifications:count') return;
-    S.unread = d.unread | 0; S.needs = d.needs | 0; paint();
+    S.unread = d.unread | 0; S.needs = d.needs | 0; paint(); loadItems();
   });
   document.addEventListener('click', e => {
     if (!e.target.closest('[data-chbell]')) return;
@@ -47,5 +83,5 @@
   addEventListener('wizard:apps', () => { refresh(); paint(); });
   setInterval(() => { if (!document.hidden) refresh(); }, 60000);
   setTimeout(refresh, 800);
-  window.WosBell = { html, refresh, paint, get state() { return { ...S }; } };
+  window.WosBell = { html, refresh, paint, watch, mark, item: id => IN.items.find(i => i.id === String(id)) || null, get state() { return { ...S }; } };
 })();

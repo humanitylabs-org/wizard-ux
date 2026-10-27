@@ -21,6 +21,9 @@
     },
     "device-edge": {
       "since": 1
+    },
+    "ready-top": {
+      "since": 1
     }
   }
 }
