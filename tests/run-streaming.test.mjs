@@ -110,3 +110,40 @@ test('an early empty stream disconnect retries the same read, bounded to three r
   assert.ok(h.sources.every(s => s.url === '/wizard/hermes/v1/runs/rid/events'));
   assert.equal(h.calls.length, 0, 'no admission or send was made');
 });
+test('live tool steps stream like the CLI; reconnect replays without duplicates', () => {
+  const h = harness(); let snap;
+  h.L.openRunStream('sid', '', 'rid', r => snap = r);
+  h.sources[0].emit({ event: 'tool.started', tool: 'terminal', preview: 'df -h' }, 'tool.started');
+  h.sources[0].emit({ event: 'tool.completed', tool: 'terminal', error: false }, 'tool.completed');
+  h.sources[0].emit({ event: 'tool.started', tool: 'mcp__wizard__backup__backup_status', preview: '' }, 'tool.started');
+  h.paint();
+  assert.equal(JSON.stringify(snap.steps.map(s => [s.tool, s.done])), JSON.stringify([['terminal', true], ['mcp__wizard__backup__backup_status', false]]));
+  for (let i = 0; i < 6; i++) h.sources[0].emit({ event: 'tool.started', tool: 't' + i }, 'tool.started');
+  h.paint(); assert.equal(snap.steps.length, 4, 'only the latest steps are kept');
+  h.timers.shift(); h.sources[0].onerror(); h.timers.shift()();
+  assert.equal(snap.steps.length, 0, 'reconnect replays the run from the start');
+});
+test('status poll backs off while the live stream is open', async () => {
+  const h = harness(), delays = [];
+  h.c.setTimeout = (fn, ms) => (h.timers.push(fn), delays.push(ms), h.timers.length);
+  h.L.openRunStream('sid', '', 'rid', () => {});
+  h.sources[0].onopen();
+  h.c.receipt = { run_id: 'rid', session_id: 'sid', status: 'running' };
+  await h.timers.shift()();
+  assert.equal(delays.at(-1), 10000);
+  h.sources[0].onerror(); h.timers.pop(); delays.pop();
+  await h.timers.shift()();
+  assert.equal(delays.at(-1), 1500);
+});
+test('a turn with steps but no words yet shows a Working bubble with readable tool names', () => {
+  const w = { id: 'w', thread: 'sid' }, c = {}, row = {};
+  let callback;
+  const ctx = { LIVE: { pendingRun: () => 'rid', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close() {} }) },
+    WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }), clip: (s, n) => s.slice(0, n),
+    esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => {}, loadThread: async () => {}, setTimeout: () => 1, clearTimeout: () => {} };
+  vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+  assert.equal(ctx.syncStream(w, c, [], ''), '');
+  callback({ text: '', steps: [{ tool: 'mcp__wizard__backup__backup_status', preview: '', done: false }], terminal: false });
+  const html = ctx.syncStream(w, c, [], '');
+  assert.match(html, /Backup · backup status/); assert.match(html, /Working…/); assert.doesNotMatch(html, /class="bub"/);
+});
