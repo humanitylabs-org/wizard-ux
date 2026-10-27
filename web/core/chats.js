@@ -1697,6 +1697,11 @@ window.WizCore.chats = function createChats(H) {
     }
     return s.trimEnd();
   };
+  const flat = v => streamAnswer(v).replace(/\s+/g, ' ').trim();
+  const streamShown = (st, turns) => {
+    const a = turns.findLast(t => t.a && t.a.final !== false)?.a, tail = flat(a?.text).slice(-160);
+    return !!tail && flat(st.text).endsWith(tail);
+  };
   function closeStream(c) { c.stream?.handle?.close(); clearTimeout(c.stream?.retry); c.stream = null; }
   function syncStream(w, c, turns, agent) {
     const sid = w.thread, s = LIVE.session(sid), pendingRun = LIVE.pendingRun?.(sid), rid = pendingRun || s?.runId;
@@ -1712,7 +1717,9 @@ window.WizCore.chats = function createChats(H) {
           st.reconciling = true;
           const until = Date.now() + 60000;
           const reconcile = async () => {
-            if (c.stream !== st || w.thread !== sid || st.landed || Date.now() > until) return;
+            if (c.stream !== st || w.thread !== sid || st.landed) return;
+            // The transcript is the authority: a provisional that never matched it must not linger as a second copy.
+            if (Date.now() > until) { st.landed = true; st.handle?.close(); renderThreadLive(w); return; }
             await loadThread(w, true);
             if (c.stream === st && !st.landed) st.retry = setTimeout(reconcile, 500);
           };
@@ -1724,7 +1731,10 @@ window.WizCore.chats = function createChats(H) {
     const st = c.stream;
     // Publish the authoritative transcript and retire the provisional in the SAME paint.
     // Keep the last words visible while terminal receipts race transcript persistence.
-    if (st && !st.landed && turns && assistantStamp(turns) !== st.baseline) {
+    // Or the transcript already shows these words: reopening a thread while the outbox still names its run (or the list
+    // still says working) starts a new subscriber whose baseline already includes the answer, and the run replays from
+    // its first event. Without this the whole reply showed twice under "Finishing…" (Miguel, 27 Oct 2026).
+    if (st && !st.landed && turns && (assistantStamp(turns) !== st.baseline || streamShown(st, turns))) {
       st.landed = true; st.handle?.close(); clearTimeout(st.retry);
     }
     const visible = st && !st.landed ? streamAnswer(st.text) : '';
