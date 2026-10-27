@@ -361,6 +361,8 @@
   window.WosRecommended?.init(renderList, () => S.screen === 'list' && !document.hidden && (!ioList || S.listVisible));
   try { WA?.ready({ name: 'Setup' }); } catch (e) {}
   renderList(); if (!ioList) loadList();
+  // Settings › Phones & devices › Connect a phone asks for the phone screen directly.
+  try { if (sessionStorage.getItem('wizard:setup:screen') === 'phone') { sessionStorage.removeItem('wizard:setup:screen'); openPhone(); } } catch (_) {}
   // Owner name for the greeting: the shell's settings when hosted, else the bootstrap the shell reads.
   if (!framed || !shellApi()?.WizConfig) fetch('/wizard/v1/bootstrap', { credentials: 'same-origin', cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(b => { const n = b?.settings?.owner?.name; if (typeof n === 'string' && n.trim()) { S.owner = n.trim(); renderList(); } }).catch(() => {});
   addEventListener('wizard:theme', () => fitUrls($('phone')));
