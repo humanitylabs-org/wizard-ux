@@ -2110,7 +2110,10 @@ window.WizCore.chats = function createChats(H) {
       // Admission is not delivery: keep the saved request held through its automatic resend.
       const held = p.runId && (s?.reconnect?.runId === p.runId
         || (s?.lastRunKey === `wizard-saved-retry-${p.runId}` && s.lastRunStatus !== 'completed'));
-      if (held) return '<span class="pst wait">Waiting for sign-in</span>';
+      if (held) {
+        if (!s?.reconnect && ['failed', 'interrupted', 'cancelled'].includes(s?.lastRunStatus)) return '<span class="pst fail">Not sent · message saved</span>';
+        return '<span class="pst wait">Waiting for sign-in</span>';
+      }
       const label = p.steered ? `${CHECK_SVG}${p.steerQueued ? 'Added to the queued request' : `Delivered · ${agent} sees it next step`}` : 'Sent';
       return `<span class="pst ok">${label}</span><button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
     }

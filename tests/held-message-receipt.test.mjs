@@ -20,10 +20,14 @@ test('held message says Waiting for sign-in, not Sent or Dismiss', () => {
   assert.match(source, /pend\.map\(p => pendingHtml\(p, c, s\)\)/);
 });
 test('held receipt stays waiting until the automatic resend completes', () => {
-  for (const status of ['queued', 'running', 'waiting_for_approval', 'failed', 'interrupted']) {
+  for (const status of ['queued', 'running', 'waiting_for_approval']) {
     const html = receipt(pending, { lastRunKey: 'wizard-saved-retry-held-run', lastRunStatus: status });
     assert.match(html, /Waiting for sign-in/, status);
     assert.doesNotMatch(html, />Sent</, status);
+  }
+  for (const status of ['failed', 'interrupted', 'cancelled']) {
+    const failed = receipt(pending, { lastRunKey: 'wizard-saved-retry-held-run', lastRunStatus: status });
+    assert.match(failed, /Not sent · message saved/); assert.doesNotMatch(failed, />Sent<|Waiting for sign-in/);
   }
   const html = receipt(pending, { lastRunKey: 'wizard-saved-retry-held-run', lastRunStatus: 'completed' });
   assert.match(html, />Sent</);
