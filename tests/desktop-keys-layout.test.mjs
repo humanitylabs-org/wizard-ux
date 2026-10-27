@@ -80,3 +80,8 @@ test('⌥G Pick anything: letter chips on every clickable, typed letters click i
   assert.match(js, /querySelectorAll\('iframe'\)/);
   assert.ok(js.includes("['G', 'Pick anything',"));
 });
+
+test('the window card in the keys guide never covers the Speak / Switch cards', () => {
+  assert.match(js, /function settle\(c\) \{[\s\S]*?\.kh-speak, \.kh-go[\s\S]*?r\.bottom \+ 12/);
+  assert.equal((js.match(/settle\(c\);/g) || []).length, 2);
+});
