@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { fixture, contract, read } from './fixtures/tweaks.mjs';
 const catalog = JSON.parse(read('web/tweaks/catalog.json'));
+const MH = 'wizard/machines-home';
 for (const id of catalog.tweaks) {
   const check = (await import(new URL(`../web/tweaks/${id}/contract.mjs`, import.meta.url))).default;
   test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, id === 'miguel/send-and-go' ? 'desktop' : 'phone'));
@@ -31,7 +32,7 @@ test('capabilities are namespace gated; author metadata alone cannot grant model
   assert.ok(api.models); assert.ok(api.thread); assert.equal(api.data, undefined); assert.equal(api.nav, undefined); await f.clear();
 });
 test('multiple ordered packages clean listeners, CSS, mounts and action interception on replacement', async () => {
-  const f = fixture(); await f.host.loadTweaks(catalog.tweaks, f.slots, { teamAuthors: ['miguel'] });
+  const f = fixture(); await f.host.loadTweaks(catalog.tweaks, f.slots, { teamAuthors: catalog.teamAuthors });
   assert.equal(f.host.tweakState.length, catalog.tweaks.length); assert.equal(f.host.action('snooze', {sessionId:'s1'}), true);
   await f.clear(); assert.equal(f.doc.head.children.length, 0); assert.equal(f.thread.handlers.get('touchend').size, 0); assert.equal(f.host.action('snooze', {sessionId:'s1'}), false);
 });
@@ -78,20 +79,21 @@ function wizardExperience(storage = new Map()) {
   return { window, E:window.WosExperience, storage, requests, skin:id=>{skin=id;}, active:()=>Array.from(active) };
 }
 test('profile default-off applies until the owner stores a deliberate choice, including an empty off list', async () => {
-  let f = wizardExperience(); await f.E.refresh(); assert.deepEqual(f.active(), []); assert.equal(f.E.state.tweaks[0].on, false);
-  await f.E.toggle('wizard/two-orbs'); assert.deepEqual(f.active(), ['wizard/two-orbs']);
+  // Machines on Home ships on for the Wizard skin (not in the profile's off list); the other two stay opt-in.
+  let f = wizardExperience(); await f.E.refresh(); assert.deepEqual(f.active(), [MH]); assert.equal(f.E.state.tweaks[0].on, false);
+  await f.E.toggle('wizard/two-orbs'); assert.deepEqual(f.active(), ['wizard/two-orbs', MH]);
   assert.deepEqual(JSON.parse(f.storage.get('wos.skin-tweaks.v1')).off.wizard, ['wizard/app-borders']);
-  f = wizardExperience(f.storage); await f.E.refresh(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
+  f = wizardExperience(f.storage); await f.E.refresh(); assert.deepEqual(f.active(), ['wizard/two-orbs', MH]);
   f.skin('novairecito'); await f.E.chooseSkin(); assert.deepEqual(f.active(), []);
-  f.skin('nebula'); await f.E.chooseSkin(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
-  await f.E.toggle('wizard/two-orbs'); await f.E.refresh(); assert.deepEqual(f.active(), []);
+  f.skin('nebula'); await f.E.chooseSkin(); assert.deepEqual(f.active(), ['wizard/two-orbs', MH]);
+  await f.E.toggle('wizard/two-orbs'); await f.E.refresh(); assert.deepEqual(f.active(), [MH]);
 });
 test('legacy two-orb migration opts in exactly once, preserving a later owner off choice', async () => {
-  let f = wizardExperience(new Map([['wos.layout','two-orb']])); await f.E.refresh(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
+  let f = wizardExperience(new Map([['wos.layout','two-orb']])); await f.E.refresh(); assert.deepEqual(f.active(), ['wizard/two-orbs', MH]);
   await f.E.toggle('wizard/two-orbs');
-  f = wizardExperience(f.storage); await f.E.refresh(); assert.deepEqual(f.active(), []);
+  f = wizardExperience(f.storage); await f.E.refresh(); assert.deepEqual(f.active(), [MH]);
   const saved = new Map([['wos.layout','two-orb'], ['wos.skin-tweaks.v1',JSON.stringify({version:1,off:{wizard:['wizard/two-orbs']}})]]);
-  f = wizardExperience(saved); await f.E.refresh(); assert.deepEqual(f.active(), []);
+  f = wizardExperience(saved); await f.E.refresh(); assert.deepEqual(f.active(), [MH]);
 });
 test('overview mode is capability gated, revoked on teardown, and stale handles cannot reactivate it', async () => {
   const f=fixture(); let api;
@@ -138,7 +140,7 @@ test('App borders migrates stored framed exactly once, leaves everyone else bord
     const storage = new Map(foundation ? [['wos.skin.composition.v1', JSON.stringify({version:1,extends:'nebula',frame:{foundation}})]] : []);
     let f = wizardExperience(storage); await f.E.refresh();
     assert.equal(f.active().includes('wizard/app-borders'), foundation === 'framed');
-    if (foundation === 'framed') { await f.E.toggle('wizard/app-borders'); f = wizardExperience(storage); await f.E.refresh(); assert.deepEqual(f.active(), []); }
+    if (foundation === 'framed') { await f.E.toggle('wizard/app-borders'); f = wizardExperience(storage); await f.E.refresh(); assert.deepEqual(f.active(), [MH]); }
   }
 });
 test('own recipes expose all installed tweaks, use published defaults and isolate builtin choices', async () => {
@@ -147,14 +149,14 @@ test('own recipes expose all installed tweaks, use published defaults and isolat
   f.window.WosSkin.families.push({id:'mizel',name:'Mizel',tweaks:'miguel'});
   const defaults = await f.E.defaults('nebula');
   assert.equal(defaults['wizard/app-borders'], false); assert.equal(defaults['wizard/two-orbs'], false);
-  assert.equal(defaults['miguel/model-pills'], false);
+  assert.equal(defaults['miguel/model-pills'], false); assert.equal(defaults[MH], true);
   const mizel = await f.E.defaults('obsidian-light'); assert.equal(mizel['miguel/model-pills'],true);
   const skin = {id:'quiet',tweaks:{...defaults,'miguel/model-pills':true}};
   f.window.WosMySkin = {active:skin,update(v){ Object.assign(skin.tweaks,v.tweaks); }};
   await f.E.refresh(); assert.equal(f.E.state.tweaks.length, JSON.parse(read('web/tweaks/catalog.json')).tweaks.length);
-  assert.deepEqual(f.active(),['miguel/model-pills']);
+  assert.deepEqual(f.active(),['miguel/model-pills', MH]);
   await f.E.toggle('wizard/app-borders'); assert.ok(f.active().includes('wizard/app-borders'));
-  f.window.WosMySkin.active=null; await f.E.refresh(); assert.deepEqual(f.active(),[]);
+  f.window.WosMySkin.active=null; await f.E.refresh(); assert.deepEqual(f.active(),[MH]);
 });
 
 test('installed list warms base profiles so picking Mizel does not wait for another network request', async () => {

@@ -1,0 +1,12 @@
+{
+  "id": "wizard/machines-home",
+  "name": "Machines on Home",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout",
+    "data.read"
+  ],
+  "description": "Home shows your machines by role: storage, main, standby, helpers"
+}

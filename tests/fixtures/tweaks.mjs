@@ -19,6 +19,20 @@ class Element {
   removeEventListener(t, fn) { this.handlers.get(t)?.delete(fn); }
   fire(t, e) { for (const fn of this.handlers.get(t) || []) fn(e); }
 }
+// A tweak module in the fixture's vm: its default setup, its named function exports, and relative
+// `import { … } from './x.js'` of another package's module (loaded the same way, once per fixture).
+function loadModule(path, ctx, cache = ctx.__modules ||= new Map()) {
+  if (cache.has(path)) return cache.get(path);
+  const deps = [];
+  let src = read(path).replace(/^import \{([^}]+)\} from '(\.\.?\/[^'?]+)';?$/gm, (_, names, rel) => {
+    deps.push(loadModule(new URL(rel, `https://fixture.test/${path}`).pathname.slice(1), ctx, cache));
+    return `const {${names}} = __deps[${deps.length - 1}];`;
+  });
+  const named = [...src.matchAll(/^export function (\w+)/gm)].map(m => m[1]);
+  src = src.replace(/^export function /gm, 'function ').replace('export default function setup', 'function setup');
+  const mod = vm.runInNewContext(`(__deps) => { ${src}\n; return { default: typeof setup === 'function' ? setup : undefined, ${named.join(', ')} }; }`, ctx)(deps);
+  cache.set(path, mod); return mod;
+}
 export function fixture({ shell = 'phone', manifests = {} } = {}) {
   const html = new Element('html'), body = new Element('body'), thread = new Element(), list = new Element(), head = new Element(); html.dataset.shell = shell; body.append(thread, list);
   thread.setAttribute('data-part', 'thread'); list.setAttribute('data-part', 'list');
@@ -33,8 +47,8 @@ export function fixture({ shell = 'phone', manifests = {} } = {}) {
   window.WosSkin = { frame: { foundation: 'borderless' }, useFoundation(id) { this.frame.foundation = id; return () => { this.frame.foundation = 'borderless'; }; } };
   const ctx = { window, document: doc, URL, Event, console, setTimeout, clearTimeout, requestAnimationFrame: fn => setTimeout(fn, 0), cancelAnimationFrame: clearTimeout, performance, innerWidth: 390, structuredClone, localStorage: { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v) }, fetch: async url => { const id = url.split('/tweaks/')[1].split('/').slice(0, 2).join('/'); return { ok: true, json: async () => manifests[id] || JSON.parse(read(`web/tweaks/${id}/manifest.json`)) }; } };
   vm.runInNewContext(read('web/core/skin-host.js'), ctx); const host = window.WosSkinHost;
-  host._test.setImporter(async url => { if (url.includes('/layouts/')) return { default: () => () => {} }; const src = read('web/tweaks/' + url.split('/tweaks/')[1].split('?')[0]); return vm.runInNewContext(`(() => { ${src.replace('export default function setup', 'function setup')} ; return { default: setup }; })()`, ctx); });
+  host._test.setImporter(async url => { if (url.includes('/layouts/')) return { default: () => () => {} }; return loadModule('web/tweaks/' + url.split('/tweaks/')[1].split('?')[0], ctx); });
   host.attach({ overview: { use: options => { overview = options; return () => { if (overview === options) overview = null; }; } }, windowRefresh: { use: options => { windowRefresh = options; return () => { if (windowRefresh === options) windowRefresh = null; }; } }, route: () => route, root: () => body, dock: () => null, back: () => { if (route.view !== 'thread') return false; route = { view: 'list', thread: null, desk: 1 }; return true; }, newThread: () => { newThreads++; }, contextDraft: (key, item, words) => { inbox.replies.push([key.replace(/^notifications:/, ''), words]); return true; }, openThread: id => { route = { ...route, view: 'thread', thread: id }; }, deskCount: () => 3, goDesk(i) { gone.push(i); }, toast: t => toasts.push(t), models: async () => [{ value: 'test-model', provider: 'test', name: 'Test model' }], model: async choice => ({ model: choice?.id || 'test-model', provider: 'test' }) });
-  return { host, ctx, doc, inbox, actions, thread, list, slots, toasts, get overview() { return overview; }, get windowRefresh() { return windowRefresh; }, get newThreads() { return newThreads; }, get refreshes() { return refreshes; }, get deferred() { return deferred; }, async mount(id) { await host.loadTweaks([id], slots, { teamAuthors: ['miguel'] }); }, async clear() { await host.loadTweaks([], slots); }, route: () => route, gone, setRoute(patch) { route = { ...route, ...patch }; host.beside(); } };
+  return { host, ctx, doc, inbox, actions, thread, list, slots, toasts, get overview() { return overview; }, get windowRefresh() { return windowRefresh; }, get newThreads() { return newThreads; }, get refreshes() { return refreshes; }, get deferred() { return deferred; }, async mount(id) { await host.loadTweaks([id], slots, { teamAuthors: JSON.parse(read('web/tweaks/catalog.json')).teamAuthors }); }, async clear() { await host.loadTweaks([], slots); }, route: () => route, gone, setRoute(patch) { route = { ...route, ...patch }; host.beside(); } };
 }
 export async function contract(id, check, shell) { const f = fixture({ shell }); await f.mount(id); assert.ok(f.host.tweakState.includes(id)); await check(f); await f.clear(); assert.equal(f.host.tweakState.length, 0); }

@@ -50,7 +50,8 @@ test('stock Home markup carries an empty home-main slot that takes no space; cor
   assert.ok(JSON.parse(read('web/tweaks/miguel/profile.json')).tweaks.includes('miguel/machines-home'));
 });
 test('machines-home: read-only, no owner data in the bundle, every add says coming soon', () => {
-  const src = read('web/tweaks/miguel/machines-home/tweak.js');
+  // Miguel's package runs the shared Wizard map (wizard/machines-home); the bundle he loads is both files.
+  const src = read('web/tweaks/miguel/machines-home/tweak.js') + read('web/tweaks/wizard/machines-home/tweak.js');
   assert.doesNotMatch(src, /method:\s*'(POST|PUT|PATCH|DELETE)'/);
   assert.match(src, /api\.data\.read\.app\('backup', 'overview'\)/);
   // Roles and managed Wizards come from the owner's devices registry via the Devices feed, never from this file.
