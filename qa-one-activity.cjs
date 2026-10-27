@@ -35,7 +35,7 @@ const server = http.createServer(async(req,res) => {
    let payload = {data:[],apps:[],agents:[],items:[]};
    if (u.pathname.endsWith('/v1/agents')) payload={agents:[{id:'hermes',label:'Main',is_default:true,status:'running'},{id:'qa-host',label:'Synthetic routed',harness:'hermes',privacy:'standard',status:'running'}]};
    else if (u.pathname.endsWith('/messages')) payload={data:messages.slice(0,historyCaughtUp?4:3),has_more:false,pagination:{has_more:false}};
-   else if (/\/api\/sessions$/.test(u.pathname)) payload={data:[session],has_more:false};
+   else if (/\/api\/sessions$/.test(u.pathname)) payload={data:(u.searchParams.get('agent')||'')===AGENT?[session]:[],has_more:false};
    else if (u.pathname.endsWith('/sessions/'+sid)) payload={session};
    else if (u.pathname.endsWith('/runs/'+rid)) payload={run_id:rid,session_id:sid,status:'running'};
    else if (u.pathname.endsWith('/thread-seen')) payload={state:{initializedAt:Date.now(),threads:{}}};
