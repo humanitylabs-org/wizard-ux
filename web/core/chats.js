@@ -518,11 +518,13 @@ window.WizCore.chats = function createChats(H) {
   const archSel = () => { const cur = LIVE.archiveAfterDays; return `<label class="ch-arch-sel">Auto-archive after <select data-archafter>${ARCH_OPTS.map(([d, l]) => `<option value="${d}"${d === cur ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`; };
   // Opinionated: tapping Newest again flips it to Oldest (same button, no fourth option).
   const readyOrdered = list => readyOrder === 'newest' ? list : readyOrder === 'oldest' ? (LIVE.readyByOldest ? LIVE.readyByOldest(list) : list.slice().reverse()) : LIVE.readyByPriority(list);
+  // List mode can end while no list is on screen (a thread, search): let the watcher go on the host's change event too.
+  window.addEventListener('wos:prefs', () => { if (notesOff && !window.WosSkinHost?.inboxList) { notesOff(); notesOff = null; } });
   function readyBody(list, rowFn, nt = null) {
-    const later = nt ? nt.later.slice().sort(noteOrder).map(noteRow).join('') : '', awake = nt ? nt.awake.slice().sort(noteOrder) : [];
+    const later = nt ? nt.later.slice().sort(noteTimeOrder).map(noteRow).join('') : '', awake = nt ? nt.awake.slice().sort(noteOrder) : [];
     // Subject grouping must not pull a snoozed row ahead of another subject's awake rows.
     // Keep one order bar, then all awake groups, then the snoozed tail (no new category).
-    if (snoozeLast() && list.some(deferredOf)) return readyBody(list.filter(s => !deferredOf(s)), rowFn, nt && { awake, later: [] }) + withNotes(list.filter(deferredOf), nt ? nt.later.slice().sort(noteOrder) : [], rowFn, noteByTime);
+    if (snoozeLast() && list.some(deferredOf)) return readyBody(list.filter(s => !deferredOf(s)), rowFn, nt && { awake, later: [] }) + withNotes(list.filter(deferredOf), nt ? nt.later.slice().sort(noteTimeOrder) : [], rowFn, noteByTime);
     const bar = `<div class="ch-rdy-bar" role="group" aria-label="Order Ready">${READY_ORDERS.map(o => { const on = readyOrder === o || (o === 'newest' && readyOrder === 'oldest'); return `<button type="button" data-rdyorder="${o}" aria-pressed="${on}"${on ? ' class="on"' : ''}>${o === 'newest' && readyOrder === 'oldest' ? 'Oldest' : READY_ORDER_LABEL[o]}</button>`; }).join('')}</div>`;
     if (readyOrder !== 'subject') return bar + withNotes(list, awake, rowFn) + later;
     const groups = new Map();
@@ -567,7 +569,8 @@ window.WizCore.chats = function createChats(H) {
     return `<div class="ch-row-wrap ch-notif-wrap${later ? ' later' : ''}" data-morph-key="notif:${esc(it.id)}"><button type="button" class="ch-row ch-notif-row${later ? ' deferred' : ' unread'}" data-chnotif="${esc(it.id)}" title="Open notification"><span class="emo ch-notif-ic" aria-hidden="true">${window.WosBell?.icon || ''}</span>
       <span class="bd"><span class="tp"><b>${esc(clip(title, 120))}</b><time>${esc(ago(new Date(noteAt(it)).toISOString()))}</time></span><span class="pv">${later ? '<em class="att ch-notif-snz">Snoozed:</em> ' : ''}${esc(pv)}</span></span></button></div>`;
   }
-  // The snoozed tail is one time-ordered run (Oldest reverses it), snoozed notes included.
+  // The snoozed tail is one time-ordered run (Oldest reverses it), snoozed notes included, whatever the order.
+  const noteTimeOrder = (a, b) => readyOrder === 'oldest' ? noteAt(a) - noteAt(b) : noteAt(b) - noteAt(a);
   const noteByTime = (it, s) => readyOrder === 'oldest' ? noteAt(it) <= sesAt(s) : noteAt(it) >= sesAt(s);
   function withNotes(list, nts, rowFn, before = noteBefore) {
     const out = []; let i = 0;
