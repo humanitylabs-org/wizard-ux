@@ -47,6 +47,16 @@ test('Incognito browser transcript and draft remain exclusively in memory; close
   assert.ok(!s.el.innerHTML.includes('unique-synthetic')); assert.equal(s.component.draft('one'), '')
   assert.equal(s.calls.at(-1).method, 'DELETE')
 })
+test('James: Incognito reuses the skinned Settings switch, not a browser checkbox', async () => {
+  assert.match(chats, /class="pbtn ch-incog-toggle" role="switch" aria-checked="false"/)
+  assert.match(chats, /<span class="sw" aria-hidden="true"><i><\/i><\/span>/)
+  assert.ok(!chats.includes('type="checkbox" role="switch" data-incog-start'))
+  const s = rig(); await s.component.start('one', s.agent)
+  assert.match(s.el.innerHTML, /role="switch" aria-checked="true"/)
+  assert.match(s.el.innerHTML, /class="sw on" aria-hidden="true"/)
+  assert.ok(!s.el.innerHTML.includes('type="checkbox"'))
+  s.component.close('one', true)
+})
 test('reload/BFCache lifecycle ends the target and cannot restore a transcript', async () => {
   const s = rig(); await s.component.start('one', s.agent)
   await s.component.send('one', 'synthetic-pagehide-canary')

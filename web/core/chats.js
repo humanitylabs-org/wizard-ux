@@ -1783,7 +1783,7 @@ window.WizCore.chats = function createChats(H) {
     // The thread's own agent (pinned at creation); a new chat belongs to the window's agent.
     const TAG = isNew ? (winAgent(w) || (AGS()?.isOther(c.newModel?.agent) ? c.newModel.agent : '')) : (LIVE.agentOf ? LIVE.agentOf(w.thread) : '');
     // Unified Chats: a private agent's thread opened from the owner's main list says so in its header.
-    const incognitoAction = isNew && INC && agentRec(TAG)?.incognito_available && AGS()?.isPrivate(agentRec(TAG)) ? '<label class="pbtn ch-incog-toggle"><input type="checkbox" role="switch" data-incog-start aria-label="Incognito">Incognito</label>' : '';
+    const incognitoAction = isNew && INC && agentRec(TAG)?.incognito_available && AGS()?.isPrivate(agentRec(TAG)) ? '<button type="button" class="pbtn ch-incog-toggle" role="switch" aria-checked="false" data-incog-start aria-label="Incognito"><span>Incognito</span><span class="sw" aria-hidden="true"><i></i></span></button>' : '';
     const privTag = TAG && AGS()?.isPrivate(agentRec(TAG)) ? `<span class="ch-privtag" data-wiz-private="" title="Private agent: ${esc(agentName(TAG))}">${AGS().lock()}<span>Private</span></span>` : '';
     const state = threadState(s, TAG), working = state.working;
     const sub = isNew ? `Starts a new thread with ${agentName(TAG)}` : state.sub;
