@@ -39,11 +39,12 @@ test('⌥↓/⌥↑ walk Ready chats from anywhere into the message box; no ⌥�
   assert.ok(js.includes("'Next ready chat'"));
 });
 
-test('⌥E Done and ⌥Z Snooze act on the open chat; the guide shows chat keys in a thread', () => {
-  assert.match(js, /code === 'KeyE' \|\| code === 'KeyZ'/);
+test('⌥→ Done and ⌥← Snooze act on the open chat (not mid-text); no hidden ⌥E/⌥Z; the guide shows chat keys', () => {
+  assert.doesNotMatch(js, /code === 'KeyE'|code === 'KeyZ'/);
+  assert.match(js, /const midText = typing\(e\.target\) && String\(e\.target\.value \?\? e\.target\.textContent \?\? ''\)\.trim\(\) !== '';/);
   assert.match(js, /CHATS\.threadAct\(f\.id, f\.thread, act\)/);
-  assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\)\) return hit/);
-  assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\)\) return hit\(\(\) => \{ if \(!e\.repeat\) chatAct\(code === 'ArrowRight' \? 'done' : 'snooze'/);
+  assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\) && !midText\) return hit/);
+  assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\) && !midText\) return hit\(\(\) => \{ if \(!e\.repeat\) chatAct\(code === 'ArrowRight' \? 'done' : 'snooze'/);
   assert.match(js, /\['\[data-chact="done"\]', '→', 'Done'\], \['\[data-chact="snooze"\]', '←', 'Snooze'\]/);
   assert.match(js, /chip\(next, '↓', 'inside'\)/);
 });
