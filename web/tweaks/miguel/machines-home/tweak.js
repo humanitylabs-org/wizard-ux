@@ -1,7 +1,9 @@
 /* Miguel's Home = his Machines map (owner-approved Machines mockup v2, Backup app 0.5.4), read-only and on real data.
- * Rows by role: Storage on top, Main + Standby side by side, Helpers below. Node size follows the machine's
+ * Rows: Storage on top; Helpers, Main and Standby side by side (machines in parallel); people at the bottom,
+ * talking up to Main (Miguel, 27 Oct 2026). Node size follows the machine's
  * resources; Main is marked by its glow and label. Lines carry backup freshness. The workspace switcher lists his
- * network and the company Wizards he manages; human devices sit behind one quiet icon.
+ * network and the company Wizards he manages. People sit below Main: on his network his own devices, on a Wizard
+ * he manages one node per person who uses it (registry `people`, or just `peopleCount`).
  * Data: the shell's Devices feed (api.data.read.resources) and the Backup app's read API (api.data.read.app).
  * Nothing here writes: every add / switch / restore says "Coming soon". */
 // Nothing about the owner's network is written here: roles and managed Wizards come from his own devices registry
@@ -27,6 +29,7 @@ const ICONS = {
     restore: [["path",{"d":"M4.5 12a7.5 7.5 0 1 0 2.2-5.3L4.5 9"}],["path",{"d":"M4.5 4.5V9H9M12 8v4l2.5 2"}]],
     arrow: [["path",{"d":"M4 12h15M14 7l5 5-5 5"}]],
     net: [["circle",{"cx":"12","cy":"5.5","r":"2.2"}],["circle",{"cx":"5.5","cy":"18","r":"2.2"}],["circle",{"cx":"18.5","cy":"18","r":"2.2"}],["path",{"d":"M11 7.5 6.6 16M13 7.5l4.4 8.5M7.7 18h8.6"}]],
+    person: [["circle",{"cx":"12","cy":"8","r":"3.6"}],["path",{"d":"M4.8 20a7.2 7.2 0 0 1 14.4 0"}]],
     bolt: [["path",{"d":"M13 3 5 13.5h6L10 21l8-10.5h-6L13 3Z"}]],
 };
 const SVG = 'http://www.w3.org/2000/svg';
@@ -97,15 +100,44 @@ export default function setup(api) {
   }
   const humans = () => peers().filter(p => p.group === 'human').map(p => ({ ...p, name: p.name === 'localhost' && /ios/i.test(p.os || '') ? 'iPhone' : p.name, kind: /ios|android/i.test(p.os || '') ? 'phone' : 'laptop' }));
 
+  // People of a managed Wizard: the names in the registry, plus an unnamed rest when only a count is known.
+  function peopleOf(g) {
+    const names = Array.isArray(g?.people) ? g.people.filter(n => typeof n === 'string' && n) : [];
+    const count = Math.max(names.length, Number.isInteger(g?.peopleCount) ? g.peopleCount : 0);
+    return { names, count, rest: count - names.length };
+  }
+  const PEEK = 7;  // people nodes shown beside Main before a "+N" node
+  // The people row, below Main: small nodes, one per device (his network) or per person (a managed Wizard).
+  function peopleGroup(items, label, moreGo) {
+    const shown = items.length > PEEK + 1 ? items.slice(0, PEEK) : items;
+    const kids = shown.map(it => h('button', { type: 'button', cls: 'mh-pnode', data: { go: it.go, pid: it.go }, 'aria-label': it.aria || it.name },
+      h('span', { cls: 'mh-pd' }, it.icon ? ico(it.icon) : h('b', { text: it.initial }), it.online == null ? null : h('span', { cls: 'mh-dot' + (it.online ? '' : ' off'), 'aria-hidden': 'true' })),
+      h('span', { cls: 'n', text: it.name })));
+    if (shown.length < items.length) kids.push(h('button', { type: 'button', cls: 'mh-pnode is-more', data: { go: moreGo, pid: moreGo }, 'aria-label': `${items.length - shown.length} more` },
+      h('span', { cls: 'mh-pd' }, h('b', { text: '+' + (items.length - shown.length) })), h('span', { cls: 'n', text: 'more' })));
+    return h('div', { cls: 'mh-people', data: { role: 'people' } }, h('div', { cls: 'mh-people-col' }, kids), h('span', { cls: 'mh-role', text: label }));
+  }
+  function minePeople() {
+    const hs = humans();
+    if (!hs.length) return null;
+    return peopleGroup(hs.map(p => ({ name: p.name, icon: p.kind, online: !!p.online, go: 'humans', aria: `${p.name}, ${p.online ? 'online' : 'offline'}` })), hs.length === 1 ? 'Device' : 'Devices', 'humans');
+  }
+  function managedPeople(g) {
+    const { names, count, rest } = peopleOf(g);
+    if (!count) return null;
+    const items = names.map((n, i) => ({ name: n, initial: n.trim()[0].toUpperCase(), go: `person:${i}` }));
+    if (rest > 0) items.push({ name: names.length ? `${rest} more` : `${rest} people`, icon: 'person', go: 'people', aria: `${rest} ${names.length ? 'more people' : 'people'}` });
+    return peopleGroup(items, count === 1 ? 'Person' : 'People', 'people');
+  }
+
   /* ---------- skeleton ---------- */
   const root = h('section', { cls: 'mh-root', 'aria-label': 'Your machines', data: { mhRoot: '' } });
   const wsBar = h('div', { cls: 'mh-ws', role: 'tablist', 'aria-label': 'Network' });
-  const humansBtn = h('button', { type: 'button', cls: 'mh-humans', 'aria-label': 'Your devices', data: { act: 'humans' } });
-  const top = h('header', { cls: 'mh-top' }, wsBar, humansBtn);
+  const top = h('header', { cls: 'mh-top' }, wsBar);
   const oneway = h('p', { cls: 'mh-oneway', hidden: true });
   const lines = sv('svg', { class: 'mh-lines', 'aria-hidden': 'true' });
   const lane = (cls, label) => { const row = h('div', { cls: 'mh-lane-row' }); return [h('div', { cls: 'mh-lane ' + cls }, h('h2', { cls: 'mh-lane-h', text: label }), row), row]; };
-  const [laneSt, rowSt] = lane('is-storage', 'Storage'), [laneMn, rowMn] = lane('is-mainrow', 'Main and standby'), [laneHp, rowHp] = lane('is-helpers', 'Helpers');
+  const [laneSt, rowSt] = lane('is-storage', 'Storage'), [laneMn, rowMn] = lane('is-mainrow', 'Main and standby'), [laneHp, rowHp] = lane('is-people', 'People');
   const map = h('div', { cls: 'mh-map' }, lines, laneSt, laneMn, laneHp);
   const note = h('div', { cls: 'mh-managed', hidden: true });
   const stage = h('div', { cls: 'mh-stage' }, oneway, map, note);
@@ -124,9 +156,6 @@ export default function setup(api) {
     for (const g of managedList()) tabs.push(h('button', { type: 'button', role: 'tab', data: { ws: g.id }, 'aria-selected': String(S.ws === g.id), title: `${g.org || g.name} · status coming soon` }, h('span', { cls: 'mh-dot unk', 'aria-hidden': 'true' }), h('span', { text: g.name })));
     tabs.push(h('button', { type: 'button', cls: 'mh-ws-add', 'aria-label': 'Add a Main you manage', data: { act: 'add-managed' } }, ico('plus')));
     wsBar.replaceChildren(...tabs);
-    const hs = humans();
-    humansBtn.replaceChildren(ico('phone'), h('b', { text: String(hs.length) }));
-    humansBtn.hidden = !hs.length || S.ws !== 'mine';
     const g = managedOf(S.ws);
     oneway.hidden = !g;
     if (g) oneway.replaceChildren(ico('arrow'), h('span', {}, 'You manage ', h('b', { text: g.name }), '. It can’t reach yours.'));
@@ -139,13 +168,17 @@ export default function setup(api) {
     sv('circle', { class: 'v', cx: 50, cy: 50, r: 46, 'stroke-dasharray': `${(C * clamp(frac, .02, 1)).toFixed(1)} ${C.toFixed(1)}` }, s);
     return s;
   }
+  // What the disc size stands for, in words: cores and memory for a computer, capacity for storage.
+  const spec = m => m.cloud ? '' : [m.cores ? `${m.cores} cores` : '', m.ramGB ? `${Math.round(m.ramGB)} GB` : ''].filter(Boolean).join(' · ');
   function node(m, role, opts = {}) {
     const s = opts.size || sizeOf(m, role), fit = opts.fit || '';
     const disc = h('span', { cls: 'mh-disc' }, ico(m.kind));
     if (role === 'main' && m.mem != null) disc.append(ring(clamp((m.disk ?? 0) / 100, .02, 1)));
     if (role !== 'main' && fit) { disc.append(ring({ ok: 1, tight: .62, no: .3 }[fit])); disc.append(h('span', { cls: 'mh-badge', 'aria-hidden': 'true' }, fit === 'ok' ? ico('check') : h('b', { text: '!' }))); }
     const el = h('button', { type: 'button', cls: `mh-node is-${role}`, data: { id: m.id, role, fit }, 'aria-pressed': String(S.sel === m.id), 'aria-label': `${m.name}, ${opts.roleText || role}`, style: { '--s': String(s) } },
-      h('span', { cls: 'mh-hold' }, disc), h('span', { cls: 'mh-name', text: m.name }), h('span', { cls: 'mh-role', text: opts.roleText || role }));
+      h('span', { cls: 'mh-hold' }, disc), h('span', { cls: 'mh-name', text: m.name }), h('span', { cls: 'mh-role', text: opts.roleText || role }),
+      opts.state ? h('span', { cls: 'mh-state', data: { fit }, text: opts.state }) : null,
+      spec(m) ? h('span', { cls: 'mh-spec', text: spec(m) }) : null);
     return el;
   }
   function plus(role, label, lead) {
@@ -161,8 +194,8 @@ export default function setup(api) {
     if (g) {
       // Their network's shape, honestly empty: the rows are there, what fills them is not readable yet.
       const ghost = (role, label) => { const n = plus(role, label, SOON); n.dataset.act = 'soon'; n.dataset.what = `${g.name}’s ${label.toLowerCase()}`; n.classList.add('is-ghost'); return n; };
-      setLane(rowMn, [node({ id: 'managed-' + g.id, name: g.name, kind: 'server' }, 'main', { size: 72, roleText: 'Main' }), ghost('standby', 'Standby')]);
-      setLane(rowSt, [ghost('storage', 'Storage')]); setLane(rowHp, [ghost('helper', 'Helpers')]);
+      setLane(rowMn, [ghost('helper', 'Helpers'), node({ id: 'managed-' + g.id, name: g.name, kind: 'server' }, 'main', { size: 72, roleText: 'Main' }), ghost('standby', 'Standby devices')]);
+      setLane(rowSt, [ghost('storage', 'Storage')]); setLane(rowHp, [managedPeople(g)].filter(Boolean));
       note.replaceChildren(managedCard(g));
       panel.replaceChildren(managedCard(g, true));
       api.frame(drawLines); return;
@@ -171,8 +204,9 @@ export default function setup(api) {
     // Only a real answer from the Backup app may say "no storage yet"; a failed read says so instead.
     setLane(rowSt, st ? [node(st, 'storage', { fit: st.state, roleText: 'Storage' })] : S.backup?.backup ? [plus('storage', 'Add storage', 'Holds encrypted backups')]
       : [h('p', { cls: 'mh-wait', text: S.backupErr ? 'Backup status unavailable right now' : 'Checking backups…' })]);
-    setLane(rowMn, [node(main, 'main', { roleText: 'Main' }), ...sbs.map(m => node(m, 'standby', { fit: m.fit, roleText: m.fit === 'ok' ? 'Standby' : 'Not ready' }))]);
-    setLane(rowHp, hps.length ? hps.map(id => node(machine(id), 'helper', { roleText: 'Helper' })) : [plus('helper', 'Add helper', SOON)]);
+    const helpers = hps.length ? hps.map(id => node(machine(id), 'helper', { roleText: 'Helper device' })) : [plus('helper', 'Add helper', SOON)];
+    setLane(rowMn, [...helpers, node(main, 'main', { roleText: 'Main' }), ...sbs.map(m => node(m, 'standby', { fit: m.fit, roleText: 'Standby device', state: m.fit === 'ok' ? 'Ready' : 'Not ready' }))]);
+    setLane(rowHp, [minePeople()].filter(Boolean));
     if (wide()) { if (!S.sel) S.sel = 'this'; panel.replaceChildren(card(S.sel)); }
     api.frame(drawLines);
   }
@@ -217,16 +251,21 @@ export default function setup(api) {
       else line(d, 'backup', st.state === 'ok' ? 'var(--mh-accent)' : 'var(--mh-warn)', agoS(st.age));
     }
     // Standby (beside): a level line from Main's disc edge. Dashed and labelled while nothing reaches it.
-    const row = [...rowMn.children];
+    const row = [...rowMn.children], mi = row.indexOf(mainEl);
+    // Helpers (left): a level line from each helper disc into Main's left edge.
     row.forEach((el, i) => {
-      if (!i) return;
+      if (i >= mi) return;
+      const b = box(el.firstElementChild.firstElementChild), sx = b.r + 6, ex = md.l - 6; if (ex <= sx) return;
+      line(`M${sx.toFixed(1)} ${b.cy.toFixed(1)} L${ex.toFixed(1)} ${md.cy.toFixed(1)}`, 'slot');
+    });
+    row.forEach((el, i) => {
+      if (i <= mi) return;
       const b = box(el.firstElementChild.firstElementChild), sx = md.r + 6, ex = b.l - 6; if (ex <= sx) return;
       line(`M${sx.toFixed(1)} ${md.cy.toFixed(1)} L${ex.toFixed(1)} ${b.cy.toFixed(1)}`, 'slot', '', el.dataset.act || el.dataset.fit === 'ok' ? '' : 'off');
     });
-    // Helpers (below): from under Main's name to above each helper disc.
-    for (const el of rowHp.children) {
-      const disc = el.firstElementChild?.firstElementChild; if (!disc) continue;
-      const b = box(disc), sx = mn.cx, sy = mn.b + 2, ex = b.cx, ey = b.t - 6, k = (ey - sy) * .55;
+    // People (below): from under Main's name up from each person or device, as if talking to it.
+    for (const el of rowHp.querySelectorAll?.('.mh-pnode') || []) {
+      const b = box(el), sx = mn.cx, sy = mn.b + 2, ex = b.cx, ey = b.t - 4, k = (ey - sy) * .55; if (ey <= sy) continue;
       line(`M${sx.toFixed(1)} ${sy.toFixed(1)} C${sx.toFixed(1)} ${(sy + k).toFixed(1)} ${ex.toFixed(1)} ${(ey - k).toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}`, 'slot');
     }
   }
@@ -245,6 +284,15 @@ export default function setup(api) {
       return h('div', { cls: 'mh-card' }, h('div', { cls: 'mh-card-h' }, h('span', { cls: 'mh-disc' }, ico('phone')), h('div', {}, h('h3', { text: 'Your devices' }), h('span', { cls: 'mh-pill', text: 'Screens' }))),
         h('p', { cls: 'mh-lead', text: 'Screens you use. They open your Wizard but don’t run it.' }),
         h('ul', { cls: 'mh-rows' }, humans().map(p => h('li', {}, h('div', { cls: 'mh-row' }, h('span', { cls: 't' }, ico(p.kind)), h('span', { cls: 'm' }, h('b', { text: p.name }), h('small', { text: p.online ? 'Online' : p.lastSeen ? `Offline · seen ${agoL((Date.now() - Date.parse(p.lastSeen)) / 1000)} ago` : 'Offline' })), h('span', { cls: 'mh-dot' + (p.online ? '' : ' off'), 'aria-hidden': 'true' }))))));
+    }
+    const g = managedOf(S.ws);
+    if (g && (id === 'people' || id.startsWith('person:'))) {
+      const { names, count, rest } = peopleOf(g), who = id === 'people' ? null : names[+id.slice(7)];
+      if (who) return h('div', { cls: 'mh-card' }, h('div', { cls: 'mh-card-h' }, h('span', { cls: 'mh-disc' }, h('b', { cls: 'mh-initial', text: who.trim()[0].toUpperCase() })), h('div', {}, h('h3', { text: who }), h('span', { cls: 'mh-pill', text: 'Uses ' + g.name }))),
+        facts([['Devices', SOON, 'soon']]), h('p', { cls: 'mh-note' }, ico('lock'), `Their devices aren’t readable from here yet.`));
+      return h('div', { cls: 'mh-card' }, h('div', { cls: 'mh-card-h' }, h('span', { cls: 'mh-disc' }, ico('person')), h('div', {}, h('h3', { text: `${count} ${count === 1 ? 'person' : 'people'}` }), h('span', { cls: 'mh-pill', text: 'Use ' + g.name }))),
+        names.length ? h('ul', { cls: 'mh-rows' }, names.map((n, i) => h('li', {}, h('button', { type: 'button', cls: 'mh-row', data: { go: `person:${i}` } }, h('span', { cls: 't' }, h('b', { cls: 'mh-initial', text: n.trim()[0].toUpperCase() })), h('span', { cls: 'm' }, h('b', { text: n }), h('small', { text: 'Devices: coming soon' })))))) : null,
+        rest > 0 ? h('p', { cls: 'mh-lead', text: names.length ? `${rest} more not named yet.` : 'Names not added yet.' }) : null);
     }
     if (id === 'storage') {
       const st = storage(); if (!st) return h('div', { cls: 'mh-card' }, h('p', { cls: 'mh-lead', text: 'Backup status unavailable right now.' }));
@@ -291,8 +339,9 @@ export default function setup(api) {
   function select(id) {
     S.sel = id;
     for (const el of [...rowSt.children, ...rowMn.children, ...rowHp.children]) if (el.dataset?.id) el.setAttribute('aria-pressed', String(el.dataset.id === id));
+    for (const el of rowHp.querySelectorAll?.('.mh-pnode') || []) el.setAttribute('aria-pressed', String(el.dataset.pid === id));
     const c = card(id);
-    if (wide() && id !== 'humans') { panel.replaceChildren(c); return; }
+    if (wide() && id !== 'humans' && S.ws === 'mine') { panel.replaceChildren(c); return; }
     sheetIn.replaceChildren(c);
     if (!sheet.open) { try { sheet.showModal(); } catch (_) { sheet.setAttribute('open', ''); } }
     if (!releaseBack) releaseBack = api.back.push(() => closeSheet());  // phone / browser Back and Esc close it first
@@ -323,14 +372,14 @@ export default function setup(api) {
   /* ---------- data ---------- */
   // Repaint the map only when what it draws changed (roles, reachability, sizes, backup age); cards follow every poll.
   let drawn = '';
-  const mapSig = () => JSON.stringify([S.ws, devices().map(d => [d.id, d.status, d.cpus, d.memoryTotalGB, diskGB(d)]), humans().map(p => [p.name, p.online]),
+  const mapSig = () => JSON.stringify([S.ws, managedList().map(m => [m.id, peopleOf(m).names, peopleOf(m).count]), devices().map(d => [d.id, d.status, d.cpus, d.memoryTotalGB, diskGB(d)]), humans().map(p => [p.name, p.online]),
     S.backupErr, S.backup?.backup ? [S.backup.backup.state, S.backup.backup.last?.last_success_at, storage()?.age == null ? null : agoS(storage().age)] : !!S.backup, (S.backup?.standby?.space_warnings || []).map(w => w.fits)]);
   const read = state => {
     if (state) S.res = state;
     const sig = mapSig();
     if (sig !== drawn || !rowMn.firstChild) { drawn = sig; renderTabs(); renderMap(); }
     else if (wide() && S.ws === 'mine' && S.sel) panel.replaceChildren(card(S.sel));
-    if (S.sheet && S.sheet !== 'humans' && sheet.open) sheetIn.replaceChildren(card(S.sheet));
+    if (S.sheet && S.sheet !== 'humans' && S.sheet !== 'people' && !S.sheet.startsWith('person:') && sheet.open) sheetIn.replaceChildren(card(S.sheet));
   };
   async function readBackup(force) {
     const now = Date.now(); if (!force && now - S.backupTried < 60000) return; S.backupTried = now;
