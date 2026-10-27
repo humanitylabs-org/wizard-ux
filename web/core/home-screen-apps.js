@@ -104,30 +104,29 @@
     };
   }
   const pinnable = a => !!a && a.kind === 'wizard' && !!a.url && window.WizHomeScreenPolicy.validId(a.id) && !window.WizHomeScreenPolicy.isShell(a.url) && window.WizHomeScreenPolicy.within(a.url,a.url);
-  let refreshing = false, rerun = false, lastSig = '', lastAt = 0, cooldown = null;
+  let refreshing = false, rerun = false, lastSig = '';
   // Fingerprint of what a pass would draw: a pass whose own work re-announces the registry
   // ('wizard:apps') must not start another identical pass. That loop ran ~10 passes/s on the
   // phone, rendering icons and hitting native shortcuts until Android killed the app (26 Oct 2026).
-  const signature = list => list.map(a => `${a.id}\u0001${window.WizHomeScreenPolicy.displayName(a)}\u0001${a.sgh || ''}\u0001${a.sgc || ''}`).join('\u0002');
-  async function refreshPinned() {
-    // Browser/desktop and old APKs stay inert. One bounded query before rendering any icons.
-    // A registry update mid-pass marks the pass dirty and reruns it with the new apps afterwards,
-    // but only when the apps actually changed, and never more than once every 5 s.
+  const signature = list => list.map(a => `${a.id}\u0001${window.WizHomeScreenPolicy.displayName(a)}\u0001${a.sgh || ''}\u0001${a.sgc || ''}\u0001${a.color || ''}\u0001${JSON.stringify(a.sigil || '')}`).join('\u0002');
+  const candidatesNow = () => [...new Map(Object.values(window.WizCore?.apps('mobile')?.APP || {}).filter(pinnable).map(a => [a.id,a])).values()].slice(0,128);
+  async function refreshPinned(force = false) {
+    // Resume can retry an old/temporarily silent APK. Registry echoes cannot multiply work.
+    // A changed signature reruns immediately: delaying a genuine change drops main's refresh contract.
     if (!port()) return;
     if (refreshing) { rerun = true; return; }
-    const wait = lastAt + 5000 - Date.now();
-    if (wait > 0) { if (!cooldown) cooldown = setTimeout(() => { cooldown = null; void refreshPinned(); }, wait); return; }
+    if (force) lastSig = '';
+    if (lastSig && signature(candidatesNow()) === lastSig) return;
     refreshing = true; rerun = false;
     try {
       bindPort();
       await window.WizCore?.appsLoaded?.();
       if (!port()) return;
-      const apps = Object.values(window.WizCore?.apps('mobile')?.APP || {}).filter(pinnable);
-      const candidates = [...new Map(apps.map(a => [a.id,a])).values()].slice(0,128);
+      const candidates = candidatesNow();
       if (!candidates.length) return;
       const sig = signature(candidates);
       if (sig === lastSig) return;
-      lastSig = sig; lastAt = Date.now();
+      lastSig = sig;
       const r = await request('pinned', { id:'' }, { candidates:candidates.map(a => a.id) });
       if (r.status !== 'pinned-list' || !Array.isArray(r.appIds) || r.appIds.length > 128) return;
       const pinned = new Set(r.appIds);
@@ -178,7 +177,7 @@
     document.addEventListener('visibilitychange', () => { if (hold) block(); cancel(); });
   }
   addEventListener('wos-native-resume', async () => {
-    void refreshPinned();
+    void refreshPinned(true);
     if (!pending || !active) return;
     const a = active, r = await request('status',a);
     if (active !== a) return;

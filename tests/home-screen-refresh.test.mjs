@@ -64,3 +64,13 @@ test('a registry update during a refresh reruns it with the new apps instead of 
   assert.equal(f.messages.filter(x=>x.op==='pinned').length,2,'dirty pass reran once');
   assert.equal(r.at(-1).name,'Wisdom renamed');assert.equal(r.at(-1).icon,'data:image/png;base64,#123456');
 });
+
+// James: native shortcut refresh must not loop just because it re-announces the app registry.
+test('James: repeated unchanged registry announcements never redraw pinned icons', async () => {
+  const f = fixture(); await drain();
+  const n = f.messages.length, draws = f.renders;
+  for (let i = 0; i < 100; i++) { f.events['wizard:apps'](); await drain(); }
+  assert.equal(f.messages.length, n); assert.equal(f.renders, draws);
+  f.app.name = 'A real rename'; f.events['wizard:apps'](); await drain();
+  assert.equal(f.messages.filter(m => m.op === 'refresh').at(-1).name, 'A real rename');
+});
