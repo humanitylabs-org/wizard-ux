@@ -1852,12 +1852,12 @@
     if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newChat({ fresh: true }); });
     if (alt && !shift && code === 'Enter') return hit(() => { if (!e.repeat) newChat(); });
     if (alt && code === 'KeyV') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); talkNew(`${MOD}V`); });
-    // ⌥E Done, ⌥Z Snooze: the chat that's open in the focused Chats (or the main Chats on this desk), from either side.
-    // ⌥→ Done, ⌥← Snooze (Miguel, 27 Oct 2026): with a chat open in Chats, the arrows act on it, even from the
-    // message box; anywhere else they stay the window-focus keys. ⌥E / ⌥Z do the same from any window.
+    // ⌥→ Done, ⌥← Snooze (Miguel, 27 Oct 2026): with a chat open in Chats, the arrows act on it, also from an EMPTY
+    // message box (the Ready loop). Once there is text in the box, ⌥←/→ jump words as usual: an accidental ⌥→ while
+    // typing archived a chat. The hidden duplicates ⌥E / ⌥Z are gone (Miguel: only the keys the guide shows).
     const chatOpen = () => { const f = focused(); return !homeOpen && f?.app === 'chats' && f.thread && (f.thread !== '__new__' || !!CHATS.notifOpen?.(f.id)); };
-    if (alt && !shift && (code === 'ArrowLeft' || code === 'ArrowRight') && chatOpen()) return hit(() => { if (!e.repeat) chatAct(code === 'ArrowRight' ? 'done' : 'snooze', code === 'ArrowRight' ? '→' : '←'); });
-    if (alt && !shift && (code === 'KeyE' || code === 'KeyZ')) return hit(() => { if (!e.repeat) chatAct(code === 'KeyE' ? 'done' : 'snooze', code.slice(3)); });
+    const midText = typing(e.target) && String(e.target.value ?? e.target.textContent ?? '').trim() !== '';
+    if (alt && !shift && (code === 'ArrowLeft' || code === 'ArrowRight') && chatOpen() && !midText) return hit(() => { if (!e.repeat) chatAct(code === 'ArrowRight' ? 'done' : 'snooze', code === 'ArrowRight' ? '→' : '←'); });
     // ⌥X Resolve this: an open notification goes to the agent to stop these or fix the cause.
     if (alt && !shift && code === 'KeyX') return hit(() => { if (!e.repeat) chatAct('resolve', 'X'); });
     function chatAct(act, keyName) {
