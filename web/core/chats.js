@@ -1893,7 +1893,9 @@ window.WizCore.chats = function createChats(H) {
     const keepTa = oldTa && el.dataset.draftFor === dkey ? oldTa : null;
     const keepRange = keepTa && [keepTa.selectionStart, keepTa.selectionEnd, keepTa.selectionDirection];
     const keepScroll = keepTa ? keepTa.scrollTop : 0;
-    const canStop = working && !!s?.runId && s.status !== 'stopping';
+    // Stop shows the moment a send is pending (Sending…/Starting…, upload, transcription), not only once the run
+    // id arrives: before the run exists it withdraws the send (LIVE.cancelSend), after that it stops the run.
+    const canStop = working && s.status !== 'stopping' && (!!s.runId || s.pend !== undefined);
     const rpl = !(isNew && TAG) ? KIT.drafts.get(dkey).reply : null; // an app item (Notifications, Wisdom passage) waiting with this draft
     PW?.ensureModels();
     // The model lives in the message box, bottom-right (James 18 Oct 2026); the header keeps the whole width for the title.
@@ -2395,6 +2397,27 @@ window.WizCore.chats = function createChats(H) {
    * Return an owned recovery receipt so a failed local save can restore the composer without stealing a
    * newer navigation (including an A → B → A round trip). */
   const PHONE = () => (document.documentElement.dataset.shell || 'phone') !== 'desktop';
+  /* Stop before the agent's run exists: the send is withdrawn from the outbox and nothing reaches the agent. Typed
+   * words and files go back into the composer they came from; a recording stays kept under Unsent. A send whose
+   * run had already started is stopped like any run (LIVE.cancelSend stops it by the receipt's run id). */
+  function stopPendingSend(w, sid) {
+    toast('■', 'Stopping…', 1400);
+    LIVE.cancelSend(sid).then(async r => {
+      if (r.outcome === 'stopped' || r.outcome === 'busy') return;
+      if (r.outcome !== 'cancelled') { toast('!', 'Nothing to stop', 2000); return; }
+      let words = false, kept = false;
+      for (const it of r.items || []) {
+        if (it.audio || it.audioFile) { kept = true; continue; } // the recording stays kept (Unsent); never deleted here
+        const to = it.kind === 'new' ? '__new__' : it.sessionId;
+        const files = (it.files || []).map(fileRef);
+        if (String(it.text || '').trim() || files.length || it.reply) { restoreInto(W[w.id] ? w.id : '', to, it.text || '', files, it.reply || null); words = true; }
+        await OUTBOX.remove(it.id).catch(() => {});
+      }
+      // A new chat that never started has no thread to stay in: back to the New chat draft with the words.
+      if (W[w.id] && w.thread === sid && r.items?.some(it => it.kind === 'new')) openChat(w.id, '__new__');
+      toast('■', kept ? 'Stopped before sending · recording kept in Unsent' : words ? 'Stopped before sending · your words are back' : 'Stopped before sending', 2800);
+    }).catch(() => toast('!', 'Couldn’t stop · try again', 2600)).finally(() => { if (W[w.id]) renderThreadNow(w); });
+  }
   function leaveAfterSend(wid, sid, isNew, how = '') {
     const w = W[wid];
     if (w && sid && w.thread === sid && hosted.has(wid)) {
@@ -2723,7 +2746,7 @@ window.WizCore.chats = function createChats(H) {
     if (rowSheet && e.target.closest('.ch-sheet') && !e.target.closest('.ch-sheet-b')) { if (!justPressed()) closeRowSheet(); return true; }
     if (e.target.closest('[data-boom-id]') && w.thread) { const el = elOf(id); void BOOM()?.handle(e.target, r => { if (!showBoomMessage(el, r.anchor_at)) toast('!', 'That message is no longer in this thread', 2200); }); return true; }
     const ca = e.target.closest('[data-chact]'); if (ca && w.thread) { threadAct(id, w.thread, ca.dataset.chact); return true; }
-    if (e.target.closest('[data-chstop]')) { const s = LIVE.session(w.thread); if (s?.runId) { e.target.closest('[data-chstop]').disabled = true; toast('■', 'Stopping…', 1400); LIVE.stop(s.runId).catch(() => { toast('!', 'Couldn’t stop · try again', 2600); renderThreadNow(w); }); } return true; }
+    if (e.target.closest('[data-chstop]')) { const s = LIVE.session(w.thread); if (s?.runId) { e.target.closest('[data-chstop]').disabled = true; toast('■', 'Stopping…', 1400); LIVE.stop(s.runId).catch(() => { toast('!', 'Couldn’t stop · try again', 2600); renderThreadNow(w); }); } else if (s && LIVE.cancelSend) { e.target.closest('[data-chstop]').disabled = true; stopPendingSend(w, w.thread); } return true; }
     const apb = e.target.closest('[data-approve]'); if (apb) { chooseApproval(id, apb.dataset.approve, apb.dataset.controlKey, apb.closest('.appr')?.querySelector('[data-clarify-answer]')?.value); return true; }
     if (e.target.closest('[data-chearlier]')) { const c = ch(id), el = elOf(id); c.show = (c.show || PAGE) + PAGE; renderThread(w, el, true); return true; }
     const mi = e.target.closest('[data-mi]'); if (mi) { e.preventDefault(); openMedia(id, +mi.dataset.mi); return true; }

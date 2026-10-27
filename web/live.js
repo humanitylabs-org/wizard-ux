@@ -465,6 +465,7 @@
    * longer on a bad line), so the thread is held in Working from the tap: replaced by the outbox item the moment it
    * exists, released if the take turns out empty or becomes a phone command, and never longer than TAP_MAX. */
   const TAPS = new Map(); // sessionId -> { at, until }
+  const CANCELLING = new Set(); // sessionIds whose pending send the owner stopped before its run existed
   const TAP_MAX = 60e3;
   const RELEASED = new Set(); // outbox item ids whose hold is over (so a later outbox change doesn't re-hold them)
   function applyPend(s) {
@@ -478,9 +479,11 @@
       s.status = p.state === 'sent' ? 'running' : 'submitting';
       s.runId = p.runId || ''; // never an older finished run (a quick second reply must not try to steer it)
       s.assignedAt = at; s.requestAt = at;
-    }
+    } else if (s.status === 'stopping' && !CANCELLING.has(s.id) && !(s.runId && STOPPING.has(s.runId))) s.status = s.orig.status;
     // What the row says: Sending… → (Offline · will retry) → Starting… → (Wizard reports the run) Working.
     s.pend = p.acknowledged ? '' : p.state === 'sent' ? 'starting' : p.state;
+    // Stop tapped before the run existed: Stopping… until the send is withdrawn (or its run is stopped).
+    if (CANCELLING.has(s.id) && WORKING.has(s.status)) s.status = 'stopping';
     s.pendText = p.text; // shown in the row; s.preview stays Wizard's so read-state fingerprints are untouched
   }
   function unPend(s) {
@@ -1247,7 +1250,10 @@
       };
       tick();
     };
-    OB.onSent(follow);
+    // The receipt already carries the run id (PEND → s.runId, so Stop works at once); read Wizard's list soon after
+    // admission too, instead of waiting for the 15 s poll, so the thread's own status follows the real run.
+    const readSoon = it => { if (!it.steered && !otherAgent(it.agent) && ['new', 'reply'].includes(it.kind)) setTimeout(() => { if (!document.hidden) L.refresh(); }, 800); };
+    OB.onSent(it => { follow(it); readSoon(it); });
     OB.load().then(() => { for (const it of OB._items.values()) if (it.state === 'sent' && Date.now() - it.sentAt < PEND_MAX) follow(it); }).catch(() => {});
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attachOutbox); else setTimeout(attachOutbox, 0);
@@ -1255,6 +1261,37 @@
   const attachAgents = () => { const A = AG(); if (!A || L._agents) return; L._agents = true; A.onChange(() => { if (L.ok) L.refreshAgents().then(() => L.emit()); else L.emit(); }); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attachAgents); else setTimeout(attachAgents, 0);
   L.pending = id => PEND.get(id) || null;
+  /* Stop on a thread whose send has no run yet (Miguel, 28 Oct 2026: the Stop button came only after upload,
+   * transcription and the next list read). Withdraws every pending send for the thread from the outbox; a send
+   * whose run POST already left is stopped by the run id in its receipt. An orb take still being transcribed on the
+   * phone (only a send-tap hold so far) is withdrawn the moment it reaches the outbox.
+   * Resolves { outcome: 'cancelled', items } | { outcome: 'stopped', runId } | { outcome: 'none' }. */
+  const STOPPABLE = ['preparing', 'processing', 'queued', 'waiting', 'sending'];
+  L.cancelSend = async sid => {
+    const OB = window.WosOutbox;
+    if (!sid || CANCELLING.has(sid)) return { outcome: 'busy' };
+    CANCELLING.add(sid); resync(); L.emit();
+    const until = Date.now() + TAP_MAX;
+    try {
+      for (;;) {
+        const p = PEND.get(sid);
+        if (p?.runId) { await L.stop(p.runId); return { outcome: 'stopped', runId: p.runId }; }
+        const mine = OB ? [...OB._items.values()].filter(it => it.sessionId === sid && ['new', 'reply'].includes(it.kind) && !it.compact && !it.cancelled && STOPPABLE.includes(it.state)) : [];
+        if (mine.length) {
+          const res = await Promise.all(mine.map(it => OB.cancel(it.id)));
+          const started = res.find(r => r?.outcome === 'started' && r.runId);
+          if (started) { await L.stop(started.runId); return { outcome: 'stopped', runId: started.runId }; }
+          const items = res.filter(r => r?.outcome === 'cancelled').map(r => r.item);
+          for (const it of items) RELEASED.add(it.id);
+          const t = TAPS.get(sid); if (t) TAPS.delete(sid);
+          return { outcome: items.length ? 'cancelled' : 'none', items };
+        }
+        // Only the send tap's hold so far (the phone is still transcribing/routing): wait for the take to arrive.
+        if (!(p && String(p.key).startsWith('tap:') && TAPS.has(sid)) || Date.now() > until) return { outcome: 'none' };
+        await new Promise(r => setTimeout(r, 200));
+      }
+    } finally { CANCELLING.delete(sid); resync(); L.emit(); }
+  };
   const resync = () => { const OB = window.WosOutbox; if (OB && syncPending(OB)) L.emit(); };
   // Returns a token for releaseSend. '__new__' has no row to move (a new chat is listed once it is in the outbox).
   L.holdSend = sid => {
