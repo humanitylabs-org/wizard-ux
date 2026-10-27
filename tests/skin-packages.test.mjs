@@ -141,6 +141,22 @@ function page({ stored = 'nebula', touch = true } = {}) {
 }
 const settle = () => new Promise(r => setTimeout(r, 20));
 
+test('James: the live edge handle receives beside events through the real skin host', () => {
+  const P = page(), sides = []; let api;
+  P.host.builtin('edge-host-probe', a => { api = a; a.on('beside', b => sides.push(b.side)); return () => {}; }, { when: 'always' });
+  P.host.attach(P.adapter);
+  assert.equal(typeof P.host.beside, 'function', 'backport the additive host hook, not just the handle');
+  assert.equal(api.route().beside, 0);
+  P.setRoute({ view: 'thread', thread: 's1', desk: 1, beside: 1 }); P.host.beside(); P.host.beside();
+  P.setRoute({ view: 'desk', thread: null, desk: 2, beside: -1 }); P.host.beside();
+  assert.equal(api.route().beside, -1);
+  P.setRoute({ view: 'desk', thread: null, desk: 2, beside: 0 }); P.host.beside();
+  assert.deepEqual(sides, [1, -1, 0], 'one side event per appearance/change');
+  const app = read('web/app.js');
+  assert.match(app, /WosSkinHost\?\.beside\?\.\(\)/, 'syncPeek notifies the host');
+  assert.match(app, /beside: device\.classList\.contains\('bound-peeking'\)/, 'the adapter projects the real peek state');
+});
+
 test('Nebula (stored) loads no skin files at all', async () => {
   const P = page({ stored: 'nebula' });
   P.host.attach(P.adapter); await settle();

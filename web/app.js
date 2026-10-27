@@ -1040,6 +1040,7 @@
     if (vsec) vsec.classList.add('bound-view-host');
     device.classList.toggle('bound-peeking', on);
     device.classList.toggle('bound-view-peeking', left);
+    window.WosSkinHost?.beside?.();
   }
   // "Open app": a normal copy on a desk of its own, beside the bound one; the bound view stays with the thread.
   function detachBound(id) {
@@ -3882,7 +3883,7 @@
   const skinChatsWin = () => { const f = desks[idx]?.focus; if (W[f]?.app === 'chats') return W[f]; const id = desks[idx]?.wins.find(x => W[x]?.app === 'chats'); return id ? W[id] : null; };
   window.WosSkinHost?.attach({
     overview: overviewAdapter,
-    route() { const w = skinChatsWin(), f = W[desks[idx]?.focus]; let ag = ''; try { ag = agentHere().id; } catch (_) {} return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: idx, app: f ? (f.appId || f.app || null) : null, agent: ag || null }; },
+    route() { const w = skinChatsWin(), f = W[desks[idx]?.focus]; let ag = ''; try { ag = agentHere().id; } catch (_) {} return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: idx, app: f ? (f.appId || f.app || null) : null, agent: ag || null, beside: device.classList.contains('bound-peeking') ? 1 : device.classList.contains('bound-view-peeking') ? -1 : 0 }; },
     back: () => backStep(),
     openList: () => openChatsList(),
     openThread: id => openWizardThread(id),
