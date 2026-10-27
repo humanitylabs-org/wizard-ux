@@ -301,8 +301,8 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
     ok(await p.evaluate(() => window.WosDevice.handle({ action: 'share', id: 'sh-qa-1' })), 'share handoff accepted');
     await sleep(600);
     const txt = await p.locator('.dv-sheet').innerText();
-    ok(/Share to Wizard/.test(txt) && /beach\.png/.test(txt) && /notes\.pdf/.test(txt) && /Existing QA thread/.test(txt), 'share sheet lists the items and recent chats', txt.replace(/\s+/g, ' ').slice(0, 200));
-    ok(await p.locator('.dv-text').inputValue() === 'Look at this', 'shared text prefilled as the message');
+    ok(/Share to Wizard/.test(txt) && await p.locator('.dv-items img[alt="beach.png"]').count() === 1 && /notes\.pdf/.test(txt) && /Existing QA thread/.test(txt), 'share sheet lists the items and recent chats', txt.replace(/\s+/g, ' ').slice(0, 200));
+    ok(await p.locator('.dv-quote').innerText() === 'Look at this' && await p.locator('.dv-text').inputValue() === '', 'shared text shown as a read-only quote, comment box empty');
     await shot(p, '20-share-sheet');
     // Back closes it (and drops the share), app stays.
     const did = await p.evaluate(() => window.__wosNativeBack());
@@ -311,7 +311,7 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
     // Again, then send to a new chat.
     await p.evaluate(() => { const S = window.__dev; S.shares['sh-qa-2'] = { meta: { id: 'sh-qa-2', text: 'Look at this', items: [{ n: 0, name: 'beach.png', mime: 'image/png', bytes: 6000 }, { n: 1, name: 'notes.pdf', mime: 'application/pdf', bytes: 4000 }] }, files: [Array.from({ length: 6000 }, (_, i) => i & 255), Array.from({ length: 4000 }, (_, i) => (i * 3) & 255)] }; window.WosDevice.handle({ action: 'share', id: 'sh-qa-2' }); });
     await sleep(500);
-    await p.locator('[data-shareto="__new__"]').click(); await sleep(2500);
+    await p.locator('[data-sharesend]').click(); await sleep(2500);
     const ups = W.uploads.slice(up0);
     ok(ups.length === 2 && ups[0].filename === 'beach.png' && ups[0].mime === 'image/png' && ups[0].bytes === 6000 && ups[1].bytes === 4000, 'both items uploaded to Wizard Files with names, types and exact bytes', JSON.stringify(ups));
     const run = W.runs[W.runs.length - 1];
@@ -326,7 +326,7 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
     // Share into an existing thread.
     await p.evaluate(() => { const S = window.__dev; S.shares['sh-qa-3'] = { meta: { id: 'sh-qa-3', text: 'https://example.com/a', items: [] }, files: [] }; window.WosDevice.handle({ action: 'share', id: 'sh-qa-3' }); });
     await sleep(500);
-    await p.locator('[data-shareto="qa_old_thread"]').click(); await sleep(2000);
+    await p.locator('.dv-chat').selectOption('qa_old_thread'); await p.locator('[data-sharesend]').click(); await sleep(2000);
     const run2 = W.runs[W.runs.length - 1];
     ok(run2.body.session_id === 'qa_old_thread' && run2.body.input === 'https://example.com/a', 'text share added to an existing thread', JSON.stringify(run2.body));
     ok(errs.length === 0, 'no page errors (share)', errs.join(' | '));
