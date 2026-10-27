@@ -71,16 +71,16 @@
   // Browser connectivity is a hint: Android/VPN networks can report offline while
   // Wizard is reachable. Only fresh evidence may overrule an offline event:
   // a new successful live read, or a healthy same-origin Wizard status probe.
-  let offlineReadAt = 0, offlineGeneration = 0, verifying = null, verifyAgain = false, verifiedAt = 0;
+  let offlineReadAt = 0, evidenceGeneration = 0, liveEvidenceAt = 0, verifying = null, verifyAgain = false, verifiedAt = 0;
   function verifyWizard(force = false) {
     if (verifying) { if (force) verifyAgain = true; return verifying; }
     verifiedAt = Date.now();
-    const generation = offlineGeneration;
+    const generation = evidenceGeneration;
     verifying = (async () => {
       try {
         const r = await fetch('/troubleshoot/api/status?source=connection-banner', { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(5000) });
         const body = r.ok ? await r.json() : null;
-        if (body?.overall === 'ok' && generation === offlineGeneration) { log('net:verified'); setNet('online'); return true; }
+        if (body?.overall === 'ok' && generation === evidenceGeneration) { log('net:verified'); setNet('online'); return true; }
       } catch (e) {}
       return false;
     })().finally(() => {
@@ -91,12 +91,13 @@
   }
   function fromLive() {
     const L = LIVE(); if (!L) return;
+    if (L.at && L.at !== liveEvidenceAt) { liveEvidenceAt = L.at; evidenceGeneration++; }
     if (L.ok && !L.error && L.at > offlineReadAt) return setNet('online');
     if (navigator.onLine === false) return setNet('offline');
     if (L.error) { if (net !== 'offline' || navigator.onLine) setNet('reconnecting'); return; }
   }
   addEventListener('offline', () => {
-    const L = LIVE(); offlineReadAt = L?.at || 0; offlineGeneration++;
+    const L = LIVE(); offlineReadAt = L?.at || 0; evidenceGeneration++;
     setNet('offline');
     // Verify against Wizard itself, even if the browser never emits 'online'.
     verifyWizard(); L?.refresh();

@@ -99,3 +99,14 @@ test('a probe from before a newer offline event cannot clear the newer failure',
   await turn(); await turn();
   assert.equal(calls, 1); assert.equal(h.state(), 'offline');
 });
+test('a probe from before a newer failed live read cannot hide that failure', async () => {
+  let calls = 0, resolveProbe;
+  const fetch = () => { calls++; return new Promise(resolve => { resolveProbe = resolve; }); };
+  const h = setup(true, fetch); h.success(); h.ctx.navigator.onLine = false; h.event('offline');
+  h.ctx.navigator.onLine = true;
+  h.L.at++; h.L.ok = false; h.L.error = 'offline'; h.L.emit();
+  assert.equal(h.state(), 'reconnecting');
+  resolveProbe({ ok: true, json: async () => ({ overall: 'ok' }) });
+  await turn(); await turn();
+  assert.equal(calls, 1); assert.equal(h.state(), 'reconnecting');
+});
