@@ -43,7 +43,7 @@ Visual: <side-by-side screenshot, or "none">
 
 | Need | Use | Never hand-roll |
 |---|---|---|
-| Chat list, bottom Focus strip (one agent: All/Spaces/＋; no Spaces: none; multiple agents: All/agent → owned Spaces), nested Filter, shared section collapse, search, thread, composer, attachments, read state and Copy/Share; Novairecito phone swipe reveals Recall/Done | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); `setFocus` persists `w.focus`; `migrateChatsFocus` folds legacy agent windows; `WizLive` owns data | second thread/composer/Focus parser; per-agent or per-shell routing |
+| Chat list, bottom Focus strip (one agent: All/Spaces/＋; no Spaces: none; multiple agents: All/agent → owned Spaces), nested Filter, shared section collapse, search, thread, composer, attachments, read state and Copy/Share; Novairecito phone swipe reveals Recall/Done | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); `setFocus` persists `w.focus`; `migrateChatsFocus` folds legacy agent windows; `WizLive` owns data, run stream + tool steps | second thread/composer/Focus parser; per-agent or per-shell routing |
 | Alternative Chats list | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`web/core/edge-peek.js`), host storage | skin-local duplicate |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |

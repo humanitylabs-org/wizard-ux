@@ -1603,6 +1603,23 @@
       for (const [k, v] of Object.entries(pos)) c.style[k] = Math.round(v) + 'px';
       return c;
     }
+    // The window card centres on its window but never covers the Speak / Switch cards: slide it into the gap
+    // between them, else drop it below whichever it would hit; keep it on screen.
+    function settle(c) {
+      const fixed = $$('.kh-speak, .kh-go', el).map(n => n.getBoundingClientRect());
+      const w = c.offsetWidth, h = c.offsetHeight, top0 = parseFloat(c.style.top) || 0;
+      let x = Math.round(parseFloat(c.style.left) - w / 2), y = top0;
+      const hits = (x, y) => fixed.filter(r => x < r.right + 12 && x + w > r.left - 12 && y < r.bottom + 12 && y + h > r.top - 12);
+      const clampX = v => Math.max(12, Math.min(innerWidth - w - 12, v));
+      x = clampX(x);
+      if (hits(x, y).length) {
+        const lo = Math.max(12, ...fixed.filter(r => r.left < innerWidth / 2).map(r => r.right + 12));
+        const hi = Math.min(innerWidth - 12, ...fixed.filter(r => r.left >= innerWidth / 2).map(r => r.left - 12));
+        if (hi - lo >= w) x = Math.max(lo, Math.min(hi - w, x));
+        else for (const r of hits(x, y)) y = Math.max(y, r.bottom + 12);
+      }
+      c.style.left = x + 'px'; c.style.top = Math.max(12, Math.min(y, innerHeight - h - 12)) + 'px'; c.style.transform = 'none';
+    }
     function show(pin = pinned) {
       pinned = !!pin;
       el.innerHTML = ''; el.hidden = false; el.classList.toggle('pinned', pinned); // visible first, so chips can be measured
@@ -1627,11 +1644,11 @@
           : [['↓', 'Next ready chat', 'Opens it ready to reply']];
         const plain = f.thread ? [['Enter', 'Send', 'Then back to New chat'], ['⇧ Enter', 'New line', ''], ['Esc', 'Back to the list', '']] : [['/', 'Search chats', ''], ['↑ ↓', 'Move (no ⌥ when the list is focused)', '']];
         const c = card('kh-win kh-chat', `<h5>${f.thread ? 'This chat' : 'Chat list'}</h5>${rows(here)}<h5>No ⌥ needed</h5>${rows(plain)}<h5>Window</h5>${rows([['F W R', 'Full screen, close, refresh', '']])}`, { top: Math.max(top, pr.top + 44), left: pr.left + pr.width / 2 });
-        c.style.transform = 'translateX(-50%)';
+        settle(c);
       } else if (r && r.width > 420 && r.height > 260) {
         const list = ws[cur].wins.length > 1 ? WIN : WIN.filter(([k]) => !/←/.test(k));
         const c = card('kh-win', `<h5>This window</h5>${rows(list)}`, { top: Math.max(top, r.top + 44), left: r.left + r.width / 2 });
-        c.style.transform = 'translateX(-50%)';
+        settle(c);
       }
       const foot = document.createElement('div'); foot.className = 'kh-foot';
       foot.innerHTML = (pinned ? `<span>Press <kbd>Esc</kbd> to close</span>` : `<span>Hold <kbd>${esc(ALT)}</kbd> and press a key · let go to hide · <kbd>${esc(ALT)}/</kbd> keeps this open</span>`)
