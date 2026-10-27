@@ -46,6 +46,7 @@
     const id = uid(); W[id] = { id, app: 'chats', thread: null }; ws[0].wins.push(id); ws[0].focus = id;
   }
   window.WosFeatures.pruneWindows(W);
+  for (const [id, w] of Object.entries(W)) if (w?.app === 'settings') delete W[id]; // Settings is a window, never restored
   const oldActive = ws[cur];
   ws = C.migrateChatsFocus(W, ws); cur = Math.max(0, ws.indexOf(oldActive));
   const placed = new Set(), deskIds = new Set();
@@ -148,6 +149,7 @@
   function appOf(w) {
     if (!w) return null;
     if (agentWin(w)) return agentApp(w);
+    if (w.app === 'settings') return { id: 'settings', name: 'Settings', icon: '⚙', g: ['#5b5578', '#2a2640'] };
     if (w.app === 'chats') return { ...APP.wizard, sgc: window.WosAgents?.colour(window.WosAgents.get(window.WosAgents.defaultId())) || '#C1AAFF' };
     return APP[w.appId] || { name: w.title || w.url || 'App', icon: '◇', g: ['#444a60', '#22263a'], url: w.url };
   }
@@ -368,6 +370,7 @@
   }
   function bodyHtml(w) {
     if (w.app === 'feature') return '<div class="shared-feature"></div>';
+    if (w.app === 'settings') return '<div class="settings-host"></div>';
     if (w.app === 'chats') return `<div class="dchats" data-thread="${esc(w.thread || '')}" style="--list-w:${listW()}px"><div class="pane-list"><div class="chats" data-chats="${w.id}::list"></div></div>
       <div class="pane-split" data-split role="separator" aria-orientation="vertical" aria-label="Resize the thread list" tabindex="0" title="Drag to resize · double-click to reset"></div>
       <div class="pane-main"><div class="chats" data-chats="${w.id}"></div><div class="pane-empty"><div><b>Your conversations, side by side.</b><br>Choose a chat on the left, or start one.<br><button type="button" class="pane-newchat" data-panenew>Start a new chat</button><br><kbd>${MOD}↓</kbd> top ready chat · <kbd>${MOD}N</kbd> new chat · <kbd>${MOD}V</kbd> new voice chat · hold <kbd>${IS_MAC ? '⌥' : 'Alt'}</kbd> for every key</div></div></div></div>`;
@@ -506,6 +509,7 @@
       if (w.thread) CHATS.renderChats(w);
       syncChatsPane(w.id);
     } else if (w.app === 'feature') window.WosFeatures.mount(w.featureId,el.querySelector('.shared-feature'),w.featureOptions);
+    else if (w.app === 'settings') afterRender?.();
     else watchFrame(el.querySelector('iframe'), el);
     return el;
   }
@@ -551,7 +555,9 @@
     // desktop is left or closed, it steps aside and focus goes where the shell now points.
     if (!pal.hidden && palDesk && (homeOpen || ws[cur].id !== palDesk || ws[cur].wins.length)) { closePalette({ restore: false }); restFocus(); }
     queueMicrotask(() => window.WosResources?.sync());
+    afterRender?.();
   }
+  let afterRender = null; // Settings' window hosts the one Settings panel (set below, once it exists)
   /* Tiling: capped windows form a centered group; 2 split; 3+ = master + stack.
    * Host-window fullscreen keeps this readable width; explicit monocle remains immersive. */
   function layout() {
@@ -1145,7 +1151,7 @@
   /* Shared responsive feature surface; this adapter owns only desktop navigation and focus. */
   const setEl = document.createElement('section');
   setEl.id = 'dsettings'; setEl.className = 'dsettings'; setEl.hidden = true;
-  setEl.setAttribute('role', 'dialog'); setEl.setAttribute('aria-label', 'Settings'); setEl.setAttribute('aria-modal', 'true');
+  setEl.setAttribute('role', 'region'); setEl.setAttribute('aria-label', 'Settings');
   setEl.innerHTML = '<button class="st-close" data-close aria-label="Close settings">✕</button><div id="settingsBody"></div>';
   document.body.appendChild(setEl);
   let settingsFocus = null, settingsReturn = '';
@@ -1164,21 +1170,34 @@
     },
   });
   function renderSettings() { settingsView.render(); }
-  function openSettings(focus) {
-    window.WosResources?.back(); closePalette(); toggleKeys(false);
-    settingsFocus = document.activeElement; setEl.hidden = false; settingsReturn = '';
-    renderSettings(); settingsView.focus(focus); window.WosScenery?.update();
-  }
-  function closeSettings() {
+  /* Settings is a normal window (APP-DESIGN-RULES.md rule 7, wizard-os#265): the same title bar as any app, closed by
+   * its ✕, ⌥W, Esc or ⌥, like every window. There is still one Settings panel (setEl); the window hosts it, and when
+   * the window goes (however it goes) the panel is hidden and parked on <body>. */
+  const settingsWin = () => Object.values(W).find(w => w?.app === 'settings') || null;
+  const settingsFocused = () => !homeOpen && focused()?.app === 'settings';
+  function hostSettings() {
+    const w = settingsWin(), host = w && winEl(w.id)?.querySelector('.settings-host');
+    if (host) { if (setEl.parentNode !== host) host.appendChild(setEl); return; }
+    if (w) return;
+    if (setEl.parentNode !== document.body) document.body.appendChild(setEl);
     if (setEl.hidden) return;
     setEl.hidden = true;
     if (settingsFocus?.isConnected && settingsFocus.getClientRects().length) settingsFocus.focus({ preventScroll: true });
     else if (focused()) focusInside(focused().id);
     window.WosScenery?.update();
   }
+  afterRender = hostSettings;
+  function openSettings(focus) {
+    window.WosResources?.back(); closePalette(); toggleKeys(false);
+    const w = settingsWin();
+    if (w) focusWin(w.id); else { settingsFocus = document.activeElement; newWin({ app: 'settings' }); }
+    setEl.hidden = false; settingsReturn = '';
+    renderSettings(); settingsView.focus(focus); window.WosScenery?.update();
+  }
+  function closeSettings() { const w = settingsWin(); if (w) closeWin(w.id); else hostSettings(); }
+  function toggleSettings() { if (settingsFocused()) closeSettings(); else openSettings(); }
   function returnToSettings() { if (!settingsReturn) return; const from = settingsReturn; openSettings(); setEl.querySelector(`[data-st="${from}"]`)?.focus({ preventScroll: true }); }
   setEl.addEventListener('click', e => { if (e.target.closest('[data-close]')) closeSettings(); });
-  setEl.addEventListener('keydown', e => window.WosSettings.trap(e, setEl));
   $('#settingsBtn').addEventListener('click', () => openSettings());
   C.voiceStatus?.onChange(() => renderSettings());
   OUTBOX?.onChange(() => renderSettings());
@@ -1553,7 +1572,7 @@
     if (window.WosResources?.back()) return 'resources';
     if (closeUsage()) return 'usage';
     if (settingsReturn === 'files') { const nested = CHATS.closeOverlay(); if (nested) { returnToSettings(); return nested; } settingsReturn = ''; }
-    if (setEl && !setEl.hidden) { if (settingsView.back()) return 'settings-page'; closeSettings(); return 'settings'; }
+    if (settingsFocused()) { if (settingsView.back()) return 'settings-page'; closeSettings(); return 'settings'; }
     const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
     if (window.WosSkinFrame?.back()) return 'skin-controls';
     // The first-message guide: once nothing sits above it, Esc/Back dismisses it (= Skip tour) before any navigation.
@@ -1569,6 +1588,7 @@
     if (f?.app === 'frame') {
       const result = window.WizAppServices?.back(winEl(f.id)?.querySelector('iframe'));
       if (['handled', 'pending', 'stay'].includes(result)) return 'hosted';
+      if (f.preview) { closeWin(f.id); return 'preview'; }
     }
     if (f && window.WizCompanionPane?.back(f.id)) return 'companion-back';
     if (f?.appId === 'app-store') {
@@ -1672,7 +1692,7 @@
     // One base key for everything: ⌥ (Option / Alt). macOS and browsers own ⌘ and Ctrl, Omarchy owns Super.
     // Inside the Wizard Mac app only, its own menu items (⌘N, ⌘T, ⌘W, ⌘,) forward here with their usual Mac meaning.
     const menu = NATIVE_MENU && e.metaKey && !e.ctrlKey && !e.altKey && !shift;
-    if (code === 'Comma' && !shift && (alt || menu)) return hit(() => setEl.hidden ? openSettings() : closeSettings());
+    if (code === 'Comma' && !shift && (alt || menu)) return hit(toggleSettings);
     // Home is the first icon (⌥1); app desktops follow left to right (⌥2…9).
     if (alt && !shift && code === 'Digit1') return hit(() => { if (!e.repeat) goHome(); });
     if ((menu || alt) && !shift && code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
@@ -1721,7 +1741,7 @@
       closePalette({ restore: false });
       queueMicrotask(() => { const a = document.activeElement; if (!a || a === document.body || !a.getClientRects().length) restFocus(); });
     }
-    if (setEl && !setEl.hidden && !(e.altKey && code === 'Comma')) return; // so does Settings (⌥, closes it)
+    if (settingsFocused() && !e.altKey) return; // the Settings window keeps its plain keys; ⌥ window keys work as in any window
     // Chats: ↑/↓ or j/k walk the thread list (from the list, the search box or an empty thread pane), / focuses search.
     {
       const f = focused(), plain = !e.altKey && !e.metaKey && !e.ctrlKey;
@@ -1751,7 +1771,7 @@
     if (code === 'KeyF') return hit(() => { if (!e.repeat) toggleMono(); });
     if (code === 'KeyR' && !shift) return hit(() => { if (!e.repeat) reloadCurrent(); });
     if (code === 'Slash') return hit(() => toggleKeys());
-    if (code === 'Comma') return hit(() => (setEl.hidden ? openSettings() : closeSettings()));
+    if (code === 'Comma') return hit(toggleSettings);
     if (code === 'BracketLeft') return hit(() => { if (shift) return moveDesk(cur, cur - 1); lastWs = cur; goWs((cur - 1 + ws.length) % ws.length); });
     if (code === 'BracketRight') return hit(() => { if (shift) return moveDesk(cur, cur + 1); lastWs = cur; goWs((cur + 1) % ws.length); });
     if (code === 'Backquote') return hit(() => { const t = lastWs; lastWs = cur; goWs(t); });
@@ -1867,6 +1887,8 @@
   const LINKS = window.WizLinks ? window.WizLinks.mount({
     parent: document.body, mode: 'pane',
     onKeep: (url, title) => { const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === url.replace(/[#?].*$/, '')); if (a) openApp(a, { fresh: false }); else { const o = appAt(url); newWin({ app: 'frame', url, title: o ? o.name : title, ...(o ? { appId: o.id } : {}) }); } },
+    // A page preview opens as a window like any other (wizard-os#265 rule 7): ✕, ⌥W and Esc close it, Keep is not needed.
+    asWindow: (url, title) => { const o = appAt(url); newWin({ app: 'frame', url, title: o ? o.name : title, preview: true, ...(o ? { appId: o.id } : {}) }); return true; },
   }) : null;
   // A link to a page inside an installed app opens as that app's window (its services: shared microphone,
   // Back, theme), not in the plain link pane (James, 19 Oct 2026: Outline said "not connected to Wizard").

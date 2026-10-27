@@ -1855,6 +1855,12 @@
   settingsEl.setAttribute('role', 'dialog'); settingsEl.setAttribute('aria-modal', 'true');
   settingsEl.addEventListener('keydown', e => window.WosSettings.trap(e, settingsEl));
   $('#scrim').addEventListener('click', () => closeSheets());
+  /* Swipe the grip down to close Settings, like every sheet (wizard-os#265 rule 7). Only the grip drags; the body scrolls. */
+  { const grip = settingsEl.querySelector('.sheet-grip'); let y0 = null, dy = 0, t0 = 0;
+    grip?.addEventListener('pointerdown', e => { if (sheet !== 'settings') return; y0 = e.clientY; dy = 0; t0 = performance.now(); settingsEl.style.transition = 'none'; try { grip.setPointerCapture(e.pointerId); } catch (_) {} });
+    grip?.addEventListener('pointermove', e => { if (y0 == null) return; dy = Math.max(0, e.clientY - y0); settingsEl.style.transform = `translateY(${dy}px)`; });
+    const end = () => { if (y0 == null) return; y0 = null; settingsEl.style.transition = ''; if (dy > 90 || dy / ((performance.now() - t0) || 1) > .6) closeSheets(); else settingsEl.style.transform = ''; };
+    grip?.addEventListener('pointerup', end); grip?.addEventListener('pointercancel', end); }
   settingsEl.addEventListener('click', e => {
     if (e.target.closest('[data-stclose]')) return closeSheets();
 
