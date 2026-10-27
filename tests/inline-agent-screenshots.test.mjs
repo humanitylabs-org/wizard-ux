@@ -28,12 +28,15 @@ test('agent screenshots appear inline where the reply mentions them', () => {
   const t = turns([{ role: 'assistant', content: source, timestamp: 1 }]);
   assert.equal(t[0].media.length, 2);
   assert.equal(t[0].a.text, h.text);
+  assert.equal(t[0].a.plainText, 'First layout.\n\nSecond layout.\n\nChoose either.');
+  assert.ok(!t[0].a.plainText.includes('/wizard/attachments/'));
 });
 
 test('legacy attachments retain bottom-only rendering and repeated envelopes do not duplicate images', () => {
   assert.equal(helm(`Legacy.\n${envelope([first], false)}`).text, 'Legacy.');
   const h = helm(`${envelope([first], false)}\nFirst.\n${envelope([first])}\n${envelope([first])}`);
   assert.equal(h.attachments.length, 1);
+  assert.ok(!helm(envelope([{ ...first, mime: 'application/pdf', kind: 'file' }], false) + envelope([first])).text.includes('![Image]'));
   assert.equal((h.text.match(/!\[Image\]/g) || []).length, 1);
 });
 

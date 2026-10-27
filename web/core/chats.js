@@ -1319,7 +1319,8 @@ window.WizCore.chats = function createChats(H) {
     }
     h += steersHtml;
     if (tn.a || tn.media.length) {
-      const k = tn.a ? c.texts.push(tn.a.text) - 1 : -1;
+      const text = tn.a?.plainText ?? tn.a?.text;
+      const k = text ? c.texts.push(text) - 1 : -1;
       const bAt = tn.a?.at ?? tn.mediaAt;
       const placed = new Set();
       const body = tn.a ? md(tn.a.text, url => {

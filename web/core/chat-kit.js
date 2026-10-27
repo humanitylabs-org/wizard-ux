@@ -39,8 +39,9 @@
       if (start === null) { cursor = end; continue; }
       blocks.push({ raw: source.slice(start, m.index), slot: visible.length }); visible.push(''); start = null; cursor = end;
     }
-    if (!found) return { text: source, attachments: [] };
+    if (!found) return { text: source, plainText: source, attachments: [] };
     if (start === null) visible.push(source.slice(cursor));
+    const plainText = visible.join('').replace(/\n{3,}/g, '\n\n').trim();
     const attachments = [], placed = new Set();
     for (const { raw, slot } of blocks) {
       try {
@@ -54,7 +55,7 @@
           if (!prior && attachments.length >= 16) continue;
           // The same envelope is understood by old clients as a bottom attachment.
           // Only validated image IDs become positioned Markdown, never raw paths/HTML.
-          if (p.inline === true && mime.startsWith('image/') && !placed.has(id)) {
+          if (p.inline === true && (prior ? prior.kind === 'image' : mime.startsWith('image/')) && !placed.has(id)) {
             visible[slot] += `\n\n![Image](/wizard/attachments/${id})\n\n`; placed.add(id);
           }
           if (attachments.some(a => a.id === id)) continue;
@@ -64,7 +65,7 @@
         }
       } catch (e) { /* malformed metadata stays hidden */ }
     }
-    return { text: visible.join('').replace(/\n{3,}/g, '\n\n').trim(), attachments };
+    return { text: visible.join('').replace(/\n{3,}/g, '\n\n').trim(), plainText, attachments };
   }
   // Same-origin and canonical links in a sibling preview become paths. Different
   // ports remain distinct origins; never turn another preview into a private frame.
@@ -180,7 +181,7 @@
         if (!t) { if (!h.attachments.length) cur.steps++; continue; }
         if (kind === 'commentary') { cur.notes.push(t); cur.steps++; continue; }
         if (cur.a) cur.notes.push(cur.a.text);
-        cur.a = { text: t, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length) };
+        cur.a = { text: t, plainText: h.plainText, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length) };
         // Hermes' own "Your request was not processed" boundary row (display_kind failed_turn), not the model's words.
         if (kind === 'failed_turn') cur.a.failed = true;
       } else if (cur) { if (later(cur, at)) { const prev = cur; newTurn(null); cur.at = at; cur.later = { at, after: prev.a.at }; } cur.steps++; noteWork(cur, m, at); }
