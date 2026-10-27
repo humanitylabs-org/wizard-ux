@@ -1587,7 +1587,7 @@
       ['D', 'Type with your voice', 'Your words go into the box you’re typing in'],
     ];
     const TYPE = [['N', 'New chat', 'Type a new message'], ['␣', 'Search', 'Apps, chats and commands'], ['I', 'Inbox', 'All your chats']];
-    const READY = [['↓', 'Next ready chat', 'From anywhere. Opens it ready to reply'], ['E  Z', 'Done / Snooze', 'The open chat']];
+    const READY = [['↓', 'Next ready chat', 'From anywhere. Opens it ready to reply'], ['→  ←', 'Done / Snooze', 'The open chat (E / Z work too)']];
     const GO = [['G', 'Pick anything', 'Letters appear on every button, app and chat; type them to click'], ['`', 'Home', 'Again to go back'], ['1–9', 'Desktop 1 to 9', 'Jump straight to it'], ['[ ]', 'Previous / next desktop', ''], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
     const WIN = [['F', 'Full screen', ''], ['W', 'Close', ''], ['R', 'Refresh window', ''], ['H J K L', 'Next window', 'Left, down, up, right'], ['⇧ ← →', 'Swap places', ''], ['⇧ 1–9', 'Send to a desktop', '']];
     const vis = n => n && !n.hidden && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
@@ -1612,7 +1612,7 @@
       const add = $('#wsList [data-newdesk]'); if (vis(add)) chip(add, 'T');
       const top = ($('#bar')?.getBoundingClientRect().bottom || 40) + 26;
       const inChat = !homeOpen && focused()?.app === 'chats' && !!focused()?.thread; // the chat card carries the chat keys; keep this one short
-      card('kh-speak', `<h5>Speak <em>press the same key again to send</em></h5>${rows(SPEAK)}<h5>Ready chats</h5>${rows(inChat ? READY.filter(([k]) => !/E/.test(k)) : READY)}${inChat ? '' : `<h5>Type and find</h5>${rows(TYPE)}`}`, { top, right: 12 });
+      card('kh-speak', `<h5>Speak <em>press the same key again to send</em></h5>${rows(SPEAK)}<h5>Ready chats</h5>${rows(inChat ? READY.filter(([k]) => !/→/.test(k)) : READY)}${inChat ? '' : `<h5>Type and find</h5>${rows(TYPE)}`}`, { top, right: 12 });
       card('kh-go', `<h5>Switch what you see</h5>${rows(GO)}`, { top, left: 12 });
       const f = !homeOpen && focused(), r = f && winEl(f.id)?.getBoundingClientRect();
       const pane = f?.app === 'chats' && winEl(f.id)?.querySelector(f.thread ? '.pane-main' : '.pane-list');
@@ -1621,9 +1621,9 @@
         // In Chats the guide shows what works right here: the open chat or the list.
         const wel = winEl(f.id);
         if (f.thread) {
-          for (const [q, l] of [['[data-chact="done"]', 'E'], ['[data-chact="snooze"]', 'Z'], ['.pane-main .ch-send', '↵']]) wel.querySelectorAll(q).forEach(n => { if (vis(n)) chip(n, l); });
+          for (const [q, l] of [['[data-chact="done"]', '→'], ['[data-chact="snooze"]', '←'], ['.pane-main .ch-send', '↵']]) wel.querySelectorAll(q).forEach(n => { if (vis(n)) chip(n, l); });
         }
-        const here = f.thread ? [['↓', 'Next ready chat', ''], ['E', 'Done', 'Clears it from Ready'], ['Z', 'Snooze', 'Bring it back later']]
+        const here = f.thread ? [['↓', 'Next ready chat', ''], ['→', 'Done', 'Clears it from Ready'], ['←', 'Snooze', 'Bring it back later']]
           : [['↓', 'Next ready chat', 'Opens it ready to reply']];
         const plain = f.thread ? [['Enter', 'Send', 'Then back to New chat'], ['⇧ Enter', 'New line', ''], ['Esc', 'Back to the list', '']] : [['/', 'Search chats', ''], ['↑ ↓', 'Move (no ⌥ when the list is focused)', '']];
         const c = card('kh-win kh-chat', `<h5>${f.thread ? 'This chat' : 'Chat list'}</h5>${rows(here)}<h5>No ⌥ needed</h5>${rows(plain)}<h5>Window</h5>${rows([['F W R', 'Full screen, close, refresh', '']])}`, { top: Math.max(top, pr.top + 44), left: pr.left + pr.width / 2 });
@@ -1757,14 +1757,18 @@
     if (alt && !shift && code === 'Enter') return hit(() => { if (!e.repeat) newChat(); });
     if (alt && code === 'KeyV') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); talkNew(`${MOD}V`); });
     // ⌥E Done, ⌥Z Snooze: the chat that's open in the focused Chats (or the main Chats on this desk), from either side.
-    if (alt && !shift && (code === 'KeyE' || code === 'KeyZ')) return hit(() => {
-      if (e.repeat) return;
+    // ⌥→ Done, ⌥← Snooze (Miguel, 27 Oct 2026): with a chat open in Chats, the arrows act on it, even from the
+    // message box; anywhere else they stay the window-focus keys. ⌥E / ⌥Z do the same from any window.
+    const chatOpen = () => { const f = focused(); return !homeOpen && f?.app === 'chats' && f.thread && f.thread !== '__new__'; };
+    if (alt && !shift && (code === 'ArrowLeft' || code === 'ArrowRight') && chatOpen()) return hit(() => { if (!e.repeat) chatAct(code === 'ArrowRight' ? 'done' : 'snooze', code === 'ArrowRight' ? '→' : '←'); });
+    if (alt && !shift && (code === 'KeyE' || code === 'KeyZ')) return hit(() => { if (!e.repeat) chatAct(code === 'KeyE' ? 'done' : 'snooze', code.slice(3)); });
+    function chatAct(act, keyName) {
       const f0 = focused(), f = f0?.app === 'chats' ? f0 : ws[cur].wins.map(x => W[x]).find(mainChats);
-      const act = code === 'KeyE' ? 'done' : 'snooze', name = act === 'done' ? 'Done' : 'Snooze';
-      if (homeOpen || !f?.thread || f.thread === '__new__') return toast('✓', `Open a chat first, then ${MOD}${code.slice(3)} = ${name}`, 1800);
+      const name = act === 'done' ? 'Done' : 'Snooze';
+      if (homeOpen || !f?.thread || f.thread === '__new__') return toast('✓', `Open a chat first, then ${MOD}${keyName} = ${name}`, 1800);
       if (!winEl(f.id)?.querySelector(`[data-chact="${act}"]`)) return toast('◷', `${name} appears once the reply is in`, 1800);
       CHATS.threadAct(f.id, f.thread, act);
-    });
+    }
     // ⌥S speak about this screen (replies to the open chat), ⌥C speak a local command, ⌥D dictate into the text box.
     // Same key again sends. Like ⌥V these work from anywhere, even while typing.
     if (alt && !shift && (code === 'KeyS' || code === 'KeyC' || code === 'KeyD')) return hit(() => {
