@@ -236,3 +236,10 @@ test('chats.js shows a notification draft as its thread only while notification 
   assert.match(src, /if \(sid === '__new__'\) \{ notifAct\(wid, a\); return; \}/);
   assert.match(read('web/desktop/desktop.js'), /f\.thread !== '__new__' \|\| !!CHATS\.notifOpen\?\.\(f\.id\)/, 'Done / Snooze keys reach an open notification');
 });
+
+test('desktop keys: ⌥↓ walks notification rows with Ready, ⌥X resolves an open notification', () => {
+  const d = read('web/desktop/desktop.js');
+  assert.match(d, /\.ch-sec\[data-sec="ready"\] \[data-chnotif\]', document\)/, 'Ready walk includes [data-chnotif] rows');
+  assert.match(d, /code === 'KeyX'\) return hit\(\(\) => \{ if \(!e\.repeat\) chatAct\('resolve', 'X'\)/);
+  assert.match(read('web/tweaks/miguel/unified-inbox/tweak.js'), /b\.dataset\.chnotif = it\.id/, 'the package marks its rows');
+});
