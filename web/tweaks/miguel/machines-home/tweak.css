@@ -142,34 +142,31 @@ html[data-skin="landscapes"] .mh-lines .base { stroke: rgba(255, 255, 255, .55);
 html[data-skin="landscapes"] :is(.mh-people > .mh-role, .mh-spec) { text-shadow: 0 1px 3px rgba(0, 0, 0, .75); }
 @container (max-width: 599px) { .mh-pnode { max-width: 150px; font-size: 12px; } .mh-root .mh-lane.is-mainrow .mh-lane-row { gap: 16px; padding-inline: 2px; } .mh-lane.is-mainrow .mh-lane-row > .mh-node { width: max(var(--d) + 6px, 76px); } .mh-lane.is-mainrow .mh-lane-row > .mh-node.is-main { width: max(var(--d) + 6px, 96px); } .mh-spec { font-size: 10px; } }
 
-/* ---------- AI fuel: shared by every machine, so it sits above the whole map ---------- */
-.mh-fuel { align-self: center; display: flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: 6px 14px; margin: 8px 8px 2px; padding: 8px 14px !important; border-radius: 18px; background: var(--mh-fill) !important; color: var(--ink-2); max-width: calc(100% - 16px); }
+/* ---------- AI subscriptions: one battery each, shared by every machine, so above the whole map ---------- */
+.mh-fuel { align-self: center; display: flex; align-items: flex-start; flex-wrap: wrap; justify-content: center; gap: 8px 18px; margin: 8px 8px 2px; padding: 8px 14px !important; border-radius: 18px; background: var(--mh-fill) !important; color: var(--ink-2); max-width: calc(100% - 16px); }
 .mh-fuel:hover { background: var(--mh-fill-2) !important; }
-.mh-fuel-k { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
-.mh-fuel-k .mh-i { width: 14px; height: 14px; color: var(--mh-accent); stroke-width: 2; }
-.mh-tank { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 650; white-space: nowrap; }
-.mh-tank b { font-size: 11.5px; font-weight: 750; font-variant-numeric: tabular-nums; color: var(--ink); min-width: 3ch; }
-.mh-tank-g { position: relative; width: 46px; height: 10px; border-radius: 3px; box-shadow: inset 0 0 0 1.4px color-mix(in srgb, var(--ink) 38%, transparent); padding: 2px; }
-.mh-tank-g::after { content: ""; position: absolute; right: -4px; top: 3px; width: 2.5px; height: 4px; border-radius: 0 1px 1px 0; background: color-mix(in srgb, var(--ink) 38%, transparent); }
+.mh-fgroup { display: inline-flex; align-items: flex-start; gap: 10px; }
+.mh-fname { font-size: 12px; font-weight: 700; color: var(--ink-2); line-height: 14px; }
+.mh-tank { display: inline-grid; grid-template-columns: auto auto; align-items: center; column-gap: 6px; row-gap: 2px; white-space: nowrap; }
+.mh-tank b { font-size: 11.5px; font-weight: 750; font-variant-numeric: tabular-nums; color: var(--ink); }
+.mh-tank small { grid-column: 1 / -1; font-size: 10px; font-weight: 600; color: var(--ink-3); max-width: 84px; overflow: hidden; text-overflow: ellipsis; }
+.mh-tank-g { position: relative; width: 40px; height: 14px; border-radius: 3px; box-shadow: inset 0 0 0 1.4px color-mix(in srgb, var(--ink) 38%, transparent); padding: 2px; }
+.mh-tank-g::after { content: ""; position: absolute; right: -4px; top: 4px; width: 2.5px; height: 6px; border-radius: 0 1px 1px 0; background: color-mix(in srgb, var(--ink) 38%, transparent); }
 .mh-tank-g i { display: block; height: 100%; width: var(--f); border-radius: 1.5px; background: var(--mh-good); transform-origin: left; animation: mh-fill-x 900ms var(--mh-ease) both; }
 .mh-tank[data-s="tight"] .mh-tank-g i { background: var(--mh-warn); }
 .mh-tank[data-s="no"] .mh-tank-g i { background: var(--mh-bad); }
 @keyframes mh-fill-x { from { transform: scaleX(0); } }
 
-/* ---------- compute: three arcs around each machine (CPU, memory, disk), filled to use ---------- */
-.mh-use { position: absolute; inset: -11px; width: calc(100% + 22px); height: calc(100% + 22px); transform: rotate(-90deg); pointer-events: none; overflow: visible; }
-.mh-use circle { fill: none; stroke-width: 2.6; stroke-linecap: round; vector-effect: non-scaling-stroke; }
-.mh-use .t { stroke: color-mix(in srgb, var(--ink) 10%, transparent); }
-.mh-use .v { animation: mh-arc 1100ms var(--mh-ease) both; }
-.mh-use .cpu.v, .mh-legend .cpu { stroke: var(--mh-cpu); background: var(--mh-cpu); }
-.mh-use .mem.v, .mh-legend .mem { stroke: var(--mh-mem); background: var(--mh-mem); }
-.mh-use .disk.v, .mh-legend .disk { stroke: var(--mh-disk); background: var(--mh-disk); }
-@keyframes mh-arc { from { stroke-dasharray: 0 var(--c, 300); } }
-.mh-node.is-main .mh-use { inset: -19px; width: calc(100% + 38px); height: calc(100% + 38px); }
-.mh-legend { display: flex; align-items: center; justify-content: center; gap: 5px; margin: 0 0 6px; font-size: 10.5px; font-weight: 650; color: var(--ink-3); }
-.mh-legend i { width: 8px; height: 3px; border-radius: 2px; margin-left: 6px; }
-.mh-legend .sep { width: 1px; height: 10px; margin: 0 6px; background: var(--line-2); }
-.mh-root.is-managed .mh-legend { display: none; }
+/* ---------- compute: stacked bars across machines (segment = machine, width = capacity, fill = use) ---------- */
+.mh-compute { align-self: center; width: min(100% - 16px, 560px); display: flex; flex-direction: column; gap: 12px; margin: 4px 8px 10px; }
+.mh-ch { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--ink-2); margin-bottom: 6px; }
+.mh-ch span:last-child { color: var(--ink); font-variant-numeric: tabular-nums; }
+.mh-cbar { display: flex; gap: 5px; }
+.mh-cseg { flex: 1 1 0; min-width: 18px; display: flex; flex-direction: column; gap: 5px; }
+.mh-cseg i { display: block; height: 10px; border-radius: 99px; background: linear-gradient(90deg, var(--ink-3) var(--f), color-mix(in srgb, var(--ink) 12%, transparent) var(--f)); animation: mh-fill-x 900ms var(--mh-ease) both; transform-origin: left; }
+.mh-cseg small { font-size: 10.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html[data-skin="landscapes"] :is(.mh-ch, .mh-cseg small) { text-shadow: 0 1px 3px rgba(0, 0, 0, .75); }
+.mh-btn:disabled { opacity: .45; cursor: not-allowed; }
 
 /* ---------- sessions inside Main: an orbit of working dots, and Working / Ready taps under it ---------- */
 .mh-orbit { position: absolute; inset: -4px; pointer-events: none; animation: mh-spin 9s linear infinite; }
@@ -185,8 +182,8 @@ html[data-skin="landscapes"] :is(.mh-people > .mh-role, .mh-spec) { text-shadow:
 .mh-chip.ready.on i { background: var(--mh-good); opacity: 1; }
 .mh-chip:active { transform: scale(.95); }
 .mh-node.is-main { width: max(var(--d) + 14px, 168px) !important; }
-@container (max-width: 599px) { .mh-root .mh-lane.is-mainrow .mh-lane-row > .mh-node.is-main { width: max(var(--d) + 6px, 112px) !important; } .mh-sess { flex-direction: column; align-items: center; gap: 4px; } .mh-node:not(.is-main) .mh-role { white-space: normal; text-align: center; line-height: 1.2; } .mh-chip { padding: 0 8px 0 7px !important; font-size: 11px; } .mh-fuel { gap: 5px 10px; padding: 7px 10px !important; } .mh-tank-g { width: 36px; } }
-html[data-skin="landscapes"] :is(.mh-legend, .mh-fuel-k) { text-shadow: 0 1px 3px rgba(0, 0, 0, .75); }
+@container (max-width: 599px) { .mh-root .mh-lane.is-mainrow .mh-lane-row > .mh-node.is-main { width: max(var(--d) + 6px, 112px) !important; } .mh-sess { flex-direction: column; align-items: center; gap: 4px; } .mh-node:not(.is-main) .mh-role { white-space: normal; text-align: center; line-height: 1.2; } .mh-chip { padding: 0 8px 0 7px !important; font-size: 11px; } .mh-fuel { gap: 6px 12px; padding: 7px 10px !important; } .mh-tank-g { width: 34px; } }
+html[data-skin="landscapes"] :is(.mh-fname, .mh-tank small) { text-shadow: 0 1px 3px rgba(0, 0, 0, .75); }
 
 /* ---------- lines ---------- */
 .mh-lines .base { fill: none; stroke: var(--line-2); stroke-width: 1.6; }
