@@ -366,7 +366,7 @@ window.WosChatPower = function chatPower(A) {
     const cur = o ? { model: o.value, provider: o.provider } : threadModel(s);
     const c = w ? ch(wid) : null; if (c) c.retrying = sid;
     try {
-      await OUTBOX.enqueue({ kind: 'reply', sessionId: sid, text, retryRunId: s.retryRunId || '', wid: w && w.thread === sid ? wid : '', how: 'retry', source: 'chat',
+      await OUTBOX.enqueue({ kind: 'reply', sessionId: sid, agent: s.agent || A.winAgent?.(w) || '', text, retryRunId: s.retryRunId || '', wid: w && w.thread === sid ? wid : '', how: 'retry', source: 'chat',
         instructions: `${window.WizConfig.owner() || 'The owner'} pressed Retry on this thread after the last request failed${o ? `, choosing ${o.name}` : ''}. ${text === RETRY_WORD ? 'Carry out the last request in this thread again (it may be a follow-through note rather than a typed message).' : 'This is the same request again.'}`,
         ...(cur.model ? { model: cur.model, provider: cur.provider } : {}) });
       E?.cleared.set(sid, Date.now());
