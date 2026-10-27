@@ -70,3 +70,11 @@ test('Home is ⌥` (again goes back); desktops are ⌥1…9 from the first desk'
   assert.doesNotMatch(js, /code === 'Digit1'\) return hit/);
   assert.ok(js.includes("['`', 'Home', 'Again to go back']") && js.includes("['1–9', 'Desktop 1 to 9'"));
 });
+
+test('⌥G Pick anything: letter chips on every clickable, typed letters click it, guide lists it', () => {
+  assert.match(js, /code === 'KeyG'\) return hit\(\(\) => \{ if \(!e\.repeat\) pick\.start\(\); \}\)/);
+  assert.match(js, /function onKey\(e, fromFrame = false\) \{\n    if \(pick\.active\(\)\) return pick\.key\(e\);/);
+  assert.match(js, /\[data-chopen\],\[data-chdraft\]/);
+  assert.match(js, /querySelectorAll\('iframe'\)/);
+  assert.ok(js.includes("['G', 'Pick anything',"));
+});

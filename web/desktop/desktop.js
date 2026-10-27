@@ -1588,7 +1588,7 @@
     ];
     const TYPE = [['N', 'New chat', 'Type a new message'], ['␣', 'Search', 'Apps, chats and commands'], ['I', 'Inbox', 'All your chats']];
     const READY = [['↓', 'Next ready chat', 'From anywhere. Opens it ready to reply'], ['E  Z', 'Done / Snooze', 'The open chat']];
-    const GO = [['`', 'Home', 'Again to go back'], ['1–9', 'Desktop 1 to 9', 'Jump straight to it'], ['[ ]', 'Previous / next desktop', ''], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
+    const GO = [['G', 'Pick anything', 'Letters appear on every button, app and chat; type them to click'], ['`', 'Home', 'Again to go back'], ['1–9', 'Desktop 1 to 9', 'Jump straight to it'], ['[ ]', 'Previous / next desktop', ''], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
     const WIN = [['F', 'Full screen', ''], ['W', 'Close', ''], ['R', 'Refresh window', ''], ['H J K L', 'Next window', 'Left, down, up, right'], ['⇧ ← →', 'Swap places', ''], ['⇧ 1–9', 'Send to a desktop', '']];
     const vis = n => n && !n.hidden && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
     function chip(n, label) {
@@ -1655,8 +1655,87 @@
       up(e) { if (pinned) return; if (e.code === 'AltLeft' || e.key === 'Alt') { const was = !el.hidden; hide(); if (was) e.preventDefault(); } },
     };
   })();
+
+  /* ⌥G Pick anything (Miguel, 27 Oct 2026: "never touch the trackpad"): every visible button, link, field, app tile
+   * and chat row on screen, the bar and same-origin app windows included, gets a letter chip. Type the letters
+   * (with or without ⌥ still held) to click or focus it; Backspace undoes a letter; Esc, a click or a scroll cancels. */
+  const pick = (() => {
+    const layer = document.createElement('div'); layer.id = 'pickHints'; layer.className = 'pick-hints'; layer.hidden = true;
+    layer.setAttribute('aria-hidden', 'true'); document.body.appendChild(layer);
+    const SEL = 'a[href],button,input:not([type="hidden"]),textarea,select,summary,[contenteditable="true"],[role="button"],[role="link"],[role="option"],[role="tab"],[role="menuitem"],[role="checkbox"],[role="switch"],[data-chopen],[data-chdraft],[tabindex]:not([tabindex="-1"])';
+    const KEYS = 'asdfjklghqwertyuiopzxcvbnm';
+    let items = [], typed = '', on = false;
+    function shown(n, view) {
+      if (n.disabled || n.closest('[hidden],[inert],#pickHints,#keyHints')) return null;
+      const r = n.getBoundingClientRect(); if (r.width < 4 || r.height < 4) return null;
+      const cs = n.ownerDocument.defaultView.getComputedStyle(n); if (cs.visibility === 'hidden' || +cs.opacity === 0 || cs.pointerEvents === 'none') return null;
+      const x = r.left + view.x, y = r.top + view.y;
+      if (x + r.width < view.l || y + r.height < view.t || x > view.r || y > view.b) return null;
+      // Something else painted over its centre (a covered window or a closed sheet) is not pickable.
+      const cx = Math.min(r.right - 1, Math.max(r.left + 1, r.left + r.width / 2)), cy = Math.min(r.bottom - 1, Math.max(r.top + 1, r.top + r.height / 2));
+      const top = n.ownerDocument.elementFromPoint(cx, cy); if (top && top !== n && !n.contains(top) && !top.contains(n)) return null;
+      return { x: Math.max(view.l, x), y: Math.max(view.t, y) };
+    }
+    function collect() {
+      const out = [], seen = new Set();
+      const scan = (doc, view) => {
+        for (const n of doc.querySelectorAll(SEL)) {
+          if (seen.has(n) || (n.parentElement?.closest(SEL) && !n.matches('[data-chopen],[data-chdraft]') && n.parentElement.closest(SEL).matches('a[href],button'))) continue;
+          const at = shown(n, view); if (!at) continue; seen.add(n); out.push({ n, ...at });
+        }
+        for (const f of doc.querySelectorAll('iframe')) {
+          let d = null; try { d = f.contentDocument; } catch (_) {} if (!d || !d.body) continue;
+          const fr = f.getBoundingClientRect(); if (!fr.width || !fr.height || !shown(f, view)) continue;
+          scan(d, { x: view.x + fr.left + f.clientLeft, y: view.y + fr.top + f.clientTop, l: Math.max(view.l, view.x + fr.left), t: Math.max(view.t, view.y + fr.top), r: Math.min(view.r, view.x + fr.right), b: Math.min(view.b, view.y + fr.bottom) });
+        }
+      };
+      scan(document, { x: 0, y: 0, l: 0, t: 0, r: innerWidth, b: innerHeight });
+      return out.sort((a, b) => (a.y - b.y) || (a.x - b.x)).slice(0, KEYS.length * KEYS.length);
+    }
+    function labels(n) {
+      if (n <= KEYS.length) return [...KEYS].slice(0, n);
+      const out = []; for (const a of KEYS) for (const b of KEYS) out.push(a + b); return out.slice(0, n);
+    }
+    function paint() {
+      for (const it of items) {
+        const hit = it.label.startsWith(typed); it.chip.hidden = !hit;
+        if (hit) it.chip.innerHTML = `<u>${typed}</u>${it.label.slice(typed.length)}`.toUpperCase();
+      }
+    }
+    function stop() { if (!on) return; on = false; typed = ''; items = []; layer.hidden = true; layer.innerHTML = ''; document.documentElement.classList.remove('pick-on'); }
+    function start() {
+      closePalette(); toggleKeys(false);
+      const found = collect(); if (!found.length) { toast('◌', 'Nothing to pick here', 1200); return false; }
+      const names = labels(found.length); layer.innerHTML = ''; layer.hidden = false; on = true; typed = '';
+      items = found.map((it, i) => { const c = document.createElement('b'); c.className = 'pick-chip'; layer.appendChild(c);
+        c.style.left = Math.min(innerWidth - 30, it.x) + 'px'; c.style.top = Math.min(innerHeight - 18, it.y) + 'px'; return { ...it, label: names[i], chip: c }; });
+      paint(); document.documentElement.classList.add('pick-on'); log('pick:' + items.length); return true;
+    }
+    function act(n) {
+      const doc = n.ownerDocument, win = (doc === document ? n : doc.defaultView.frameElement)?.closest?.('[data-win]');
+      if (win && W[win.dataset.win]) focusWin(win.dataset.win, { scroll: false });
+      const field = n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName) && !/^(button|submit|checkbox|radio|reset|file)$/.test(n.type);
+      try { n.focus({ preventScroll: true }); } catch (_) {}
+      if (!field) n.click();
+      log('pick:act:' + (n.getAttribute('aria-label') || n.textContent || n.tagName).trim().slice(0, 40));
+    }
+    function key(e) {
+      e.preventDefault(); e.stopPropagation();
+      if (/^(Alt|Shift|Meta|Control)/.test(e.code)) return;
+      if (e.key === 'Escape') return stop();
+      if (e.key === 'Backspace') { typed = typed.slice(0, -1); return paint(); }
+      const m = /^Key([A-Z])$/.exec(e.code); if (!m) return stop();
+      const next = typed + m[1].toLowerCase(), left = items.filter(it => it.label.startsWith(next));
+      if (!left.length) return; typed = next;
+      const exact = left.length === 1 && left[0].label === typed ? left[0] : null;
+      if (exact) { stop(); act(exact.n); } else paint();
+    }
+    addEventListener('pointerdown', stop, true); addEventListener('resize', stop); addEventListener('wheel', stop, { capture: true, passive: true });
+    return { start, stop, key, active: () => on };
+  })();
   const NATIVE_MENU = !!window.webkit?.messageHandlers?.wizardNative;
   function onKey(e, fromFrame = false) {
+    if (pick.active()) return pick.key(e);
     if (e.key === 'Escape' && keyHints.pinned()) { e.preventDefault(); e.stopPropagation(); toggleKeys(false); returnToSettings(); return; }
     keyHints.down(e);
     const k = e.key, code = e.code, alt = e.altKey && !e.metaKey && !e.ctrlKey, shift = e.shiftKey;
@@ -1668,6 +1747,7 @@
     if (code === 'Comma' && !shift && (alt || menu)) return hit(toggleSettings);
     // Home is ⌥` (the key left of 1, like the Home icon left of the desks); desktops are ⌥1…9 left to right.
     // ⌥` again from Home goes back to the desktop you were on.
+    if (alt && !shift && code === 'KeyG') return hit(() => { if (!e.repeat) pick.start(); });
     if (alt && !shift && code === 'Backquote') return hit(() => { if (e.repeat) return; if (homeOpen) { leaveHome(); log('home:back'); } else { goHome(); log('home'); } });
     if ((menu || alt) && !shift && code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
     if ((menu || alt) && !shift && code === 'KeyT') return hit(() => { if (!e.repeat) { closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newDesktop(); } });
@@ -1710,7 +1790,7 @@
     if (!pal.hidden) {
       // ⌘K's palette owns the keyboard while open. The app selector lets the window manager's ⌥ chords
       // through (⌥Enter, ⌥1…9, ⌥[ ], ⌥W…), stepping aside first, so a fresh desktop never traps them.
-      if (palMode !== 'apps' || !alt || !/^(Digit[1-9]|Key[IWFHJKLNTV]|Slash|Comma|Bracket(Left|Right))$/.test(code)) return;
+      if (palMode !== 'apps' || !alt || !/^(Digit[1-9]|Key[GIWFHJKLNTV]|Slash|Comma|Bracket(Left|Right))$/.test(code)) return;
       closePalette({ restore: false });
       queueMicrotask(() => { const a = document.activeElement; if (!a || a === document.body || !a.getClientRects().length) restFocus(); });
     }
