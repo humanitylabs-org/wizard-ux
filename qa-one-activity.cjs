@@ -6,6 +6,8 @@ const { chromium } = require('./tools/qa-playwright.cjs');
 const WEB = path.resolve(process.env.QA_WEB_DIR || path.join(__dirname, 'web'));
 const OUT = process.env.QA_OUT || path.join(process.env.TMPDIR || '.', 'one-activity');
 const STATIC = process.env.QA_STATIC_ORIGIN || '';
+const AGENT = process.env.QA_AGENT || '';
+const scopes = new Set();
 const types = {'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.woff2':'font/woff2'};
 fs.mkdirSync(OUT, {recursive:true});
 const sec = Math.floor(Date.now()/1000), sid = 'synthetic-one-activity', rid = 'synthetic-running';
@@ -15,21 +17,24 @@ const messages = [
   {role:'tool',content:'Synthetic check complete',tool_call_id:'check',timestamp:sec-35},
   {role:'assistant',content:'',timestamp:sec-34,tool_calls:[{id:'review',display_label:'Reviewing the result',function:{name:'terminal',arguments:'{}'}}]}
 ];
-const session = {id:sid,title:'One activity section',source:'wizard-mobile',status:'running',wizard_run_id:rid,started_at:sec-37,updated_at:sec,wizard_last_user_at:sec-37,message_count:messages.length,last_user_message:messages[0]};
+const session = {id:sid,agent:AGENT,title:'One activity section',source:'wizard-mobile',status:'running',wizard_run_id:rid,started_at:sec-37,updated_at:sec,wizard_last_user_at:sec-37,message_count:messages.length,last_user_message:messages[0]};
 const streams = new Set();
+let historyCaughtUp = false;
 const server = http.createServer(async(req,res) => {
  try {
   const u = new URL(req.url,'http://fixture');
   if (u.pathname.startsWith('/wizard/')) {
    if (u.pathname.endsWith('/events')) {
+    scopes.add(u.searchParams.get('agent') || '');
     res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache'}); streams.add(res);
     const emit = (name,data) => res.write(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
-    emit('tool.started',{tool:'terminal',preview:'git status --short'});
+    emit('tool.started',{step_id:'review',tool:'terminal',preview:'git status --short'});
     emit('message.delta',{delta:'The check is complete. I’m reviewing the result.'});
     req.on('close',()=>streams.delete(res)); return;
    }
    let payload = {data:[],apps:[],agents:[],items:[]};
-   if (u.pathname.endsWith('/messages')) payload={data:messages,has_more:false,pagination:{has_more:false}};
+   if (u.pathname.endsWith('/v1/agents')) payload={agents:[{id:'hermes',label:'Main',is_default:true,status:'running'},{id:'qa-host',label:'Synthetic routed',harness:'hermes',privacy:'standard',status:'running'}]};
+   else if (u.pathname.endsWith('/messages')) payload={data:messages.slice(0,historyCaughtUp?4:3),has_more:false,pagination:{has_more:false}};
    else if (/\/api\/sessions$/.test(u.pathname)) payload={data:[session],has_more:false};
    else if (u.pathname.endsWith('/sessions/'+sid)) payload={session};
    else if (u.pathname.endsWith('/runs/'+rid)) payload={run_id:rid,session_id:sid,status:'running'};
@@ -53,6 +58,7 @@ const server = http.createServer(async(req,res) => {
  const browser=await chromium.launch({headless:true});const results=[];
  try {
   for (const skin of ['nebula','sepia']) {
+   historyCaughtUp = false; scopes.clear();
    const ctx=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true,serviceWorkers:'block'});
    await ctx.addInitScript(skin=>{localStorage.setItem('wos.skin',skin);localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.v1','true');localStorage.setItem('wos.voiceTipSeen','true');},skin);
    const page=await ctx.newPage(), errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -71,14 +77,27 @@ const server = http.createServer(async(req,res) => {
    assert.equal(await root.locator('.wk-steps li').count(),2);
    assert.match(await root.locator('.wk-steps').innerText(),/Checked the release state/);
    assert.match(await root.locator('.wk-steps time').first().innerText(),/1s/);
+   assert.match(await root.locator('.wk-preview').innerText(),/git status --short/);
+   assert.deepEqual([...scopes],[AGENT],'stream belongs to the selected main/routed agent');
    const shot=path.join(OUT,skin+'.jpg');await page.screenshot({path:shot,type:'jpeg',quality:80});
    assert.ok(fs.statSync(shot).size<1000000);
    const state=await page.evaluate(()=>({skin:WosSkin.current,overflow:document.documentElement.scrollWidth>390}));
    assert.equal(state.skin,skin);assert.equal(state.overflow,false);
    await summary.click();assert.equal(await root.locator('[data-wk]').evaluate(el=>el.open),false);
    await summary.click();assert.equal(await root.locator('[data-wk]').evaluate(el=>el.open),true);
+   historyCaughtUp=true;
+   await page.reload({waitUntil:'domcontentloaded'});
+   await page.waitForFunction(()=>window.WizLive?.session('synthetic-one-activity'));
+   await page.evaluate(sid=>window.__wos.openWizardThread(sid),sid);
+   await page.waitForSelector('[data-streaming] .bub');
+   const refreshed=page.locator('[data-chats]:visible').last();
+   const disclosure=refreshed.locator('[data-wk]');
+   if (!await disclosure.evaluate(el=>el.open)) await disclosure.locator('summary').click();
+   assert.equal(await refreshed.locator('.wk-steps li').count(),2,'history refresh binds the live ID without duplicating the tool row');
+   assert.match(await refreshed.locator('.wk-steps').innerText(),/Reviewing the result/);
+   assert.match(await refreshed.locator('.wk-preview').innerText(),/git status --short/);
    assert.deepEqual(errors,[]);
-   results.push({...state,sections:1,rows:2,shot,bytes:fs.statSync(shot).size,errors});
+   results.push({...state,agent:AGENT,sections:1,rows:2,liveOnly:true,historyReconciled:true,shot,bytes:fs.statSync(shot).size,errors});
    await ctx.close();
   }
   fs.writeFileSync(path.join(OUT,'results.json'),JSON.stringify(results,null,2));console.log(JSON.stringify(results,null,2));

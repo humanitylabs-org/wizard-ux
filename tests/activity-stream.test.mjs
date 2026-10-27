@@ -1,0 +1,31 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import { readFileSync } from 'node:fs';
+const sb = {window:{}};
+vm.runInNewContext(readFileSync(new URL('../web/core/chat-work.js',import.meta.url),'utf8'),sb);
+const esc = s => String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+const opts = {live:true,open:true,key:'turn',now:5000,md:esc,esc,clip:(s,n)=>s.slice(0,n)};
+const turn = {u:{at:1000},notes:[],work:[{at:2000,calls:[{id:'first',label:'Checked the release state'}]},{at:3000,role:'tool',callId:'first'}]};
+const rows = html => (html.match(/<li\b/g)||[]).length;
+test('a tool starting between history reads appears inside the existing activity group',()=>{
+ const streamSteps=[{id:'next',tool:'terminal',preview:'git status --short',done:false}];
+ const before=sb.window.WosWork.html(turn,{...opts,streamSteps});
+ assert.equal(rows(before),2);assert.equal((before.match(/<details\b/g)||[]).length,1);
+ assert.match(before,/Checked the release state<\/span><time>1s/);
+ assert.match(before,/Terminal<small class="wk-preview">git status --short/);
+ const refreshed={...turn,work:[...turn.work,{at:4000,calls:[{id:'next',label:'Reviewing the release'}]}]};
+ const after=sb.window.WosWork.html(refreshed,{...opts,streamSteps});
+ assert.equal(rows(after),2,'stable ID replaces transient row without duplicate');
+ assert.match(after,/Reviewing the release<small class="wk-preview">git status --short/);
+ assert.doesNotMatch(after,/>Terminal</);
+ assert.equal(turn.work.length,2,'stream rendering must not mutate history');
+});
+test('ID-less live status stays separate from named history; completed replay cannot add duplicate rows',()=>{
+ const started=sb.window.WosWork.html(turn,{...opts,streamSteps:[{tool:'terminal',preview:'echo <script>\n  hello',done:false}]});
+ assert.equal(rows(started),2);assert.match(started,/echo &lt;script&gt; hello/);assert.doesNotMatch(started,/<script>/);
+ const completed=sb.window.WosWork.html(turn,{...opts,streamSteps:[{tool:'terminal',preview:'echo old',done:true}]});
+ assert.equal(rows(completed),1);assert.doesNotMatch(completed,/echo old/);
+ const ended=sb.window.WosWork.html(turn,{...opts,live:false,streamSteps:[{tool:'terminal',preview:'echo stale',done:false}]});
+ assert.equal(rows(ended),1);assert.doesNotMatch(ended,/echo stale/);
+});

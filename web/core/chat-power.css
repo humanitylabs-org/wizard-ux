@@ -74,6 +74,7 @@
 .wk-steps li span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); }
 .wk-steps li time { flex: 0 0 auto; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .wk-steps li.run span { color: var(--ink); }
+.wk-steps .wk-preview { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-3); font-size: 11px; font-weight: 400; }
 .wk-steps .wk-more { color: var(--ink-3); font-style: italic; }
 
 /* #18 ↓ Latest */

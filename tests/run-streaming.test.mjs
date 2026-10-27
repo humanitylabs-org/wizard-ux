@@ -123,6 +123,15 @@ test('live tool steps stream like the CLI; reconnect replays without duplicates'
   h.timers.shift(); h.sources[0].onerror(); h.timers.shift()();
   assert.equal(snap.steps.length, 0, 'reconnect replays the run from the start');
 });
+test('same-name concurrent tool completion uses stable step IDs', () => {
+  const h = harness(); let snap;
+  h.L.openRunStream('sid', '', 'rid', s => { snap = s; });
+  const es = h.sources[0];
+  es.emit({ event: 'tool.started', step_id: 'a', tool: 'terminal', preview: 'command a' });
+  es.emit({ event: 'tool.started', step_id: 'b', tool: 'terminal', preview: 'command b' });
+  es.emit({ event: 'tool.completed', step_id: 'a', tool: 'terminal' }); h.paint();
+  assert.equal(JSON.stringify(snap.steps.map(s => [s.id, s.done])), JSON.stringify([['a', true], ['b', false]]));
+});
 test('status poll backs off while the live stream is open', async () => {
   const h = harness(), delays = [];
   h.c.setTimeout = (fn, ms) => (h.timers.push(fn), delays.push(ms), h.timers.length);
@@ -149,14 +158,19 @@ test('running reply shows one activity section, not two', () => {
     { at: 2000, calls: [{ id: 'command', label: 'Checked the release state' }] },
     { role: 'tool', at: 3000, callId: 'command' }
   ] };
-  const activity = work.window.WosWork.html(tn, { live: true, open: true, key: 'turn', now: 38000, esc: s => s, clip: s => s, md: s => s });
+  const power = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
+  const receipt = { WK: work.window.WosWork, A: { md: s => s }, esc: s => s, clip: s => s };
+  vm.runInNewContext(power.slice(power.indexOf('  const turnKey ='), power.indexOf('  /* ================= #11 models')), receipt);
+  c.wkOpen = new Set(['1000:0']);
   for (const agent of ['', 'host-profile', 'container', 'restricted']) {
     // The one history-owned disclosure is present before words, during tokens and at completion.
     for (const [text, terminal] of [['', false], ['Checking the release.', false], ['Checked.', true]]) {
       callback({ text, steps: [{ tool: 'terminal', preview: 'git status --short', done: terminal }], terminal });
-      const stream = ctx.syncStream(w, c, [], agent), html = activity + stream;
+      const stream = ctx.syncStream(w, c, [], agent), html = receipt.workHtml(c, tn, true) + stream;
       assert.equal((html.match(/<details\b/g) || []).length, 1);
-      assert.doesNotMatch(html, /ch-steps|git status --short/);
+      assert.doesNotMatch(html, /ch-steps/);
+      assert.doesNotMatch(stream, /git status --short/);
+      if (!terminal) assert.match(html, /wk-preview">git status --short/);
       assert.match(html, /Checked the release state/);
       assert.match(html, /<time>1s<\/time>/);
       assert.equal(stream === '', !text, 'no separate steps-only Working bubble');
