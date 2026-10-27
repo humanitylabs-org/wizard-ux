@@ -24,7 +24,7 @@ export default function setup(api) {
 
   // One row, the same shape as a thread row.
   function row(it, kind) {
-    const b = el('button', 'ch-row ui-row' + (kind === 'new' ? ' unread' : '')); b.type = 'button'; b.dataset.uiId = it.id;
+    const b = el('button', 'ch-row ui-row' + (kind === 'new' ? ' unread' : '')); b.type = 'button'; b.dataset.uiId = it.id; b.dataset.chnotif = it.id;
     const mark = el('span', 'emo ui-ic'); mark.append(icon());
     const bd = el('span', 'bd'), tp = el('span', 'tp');
     tp.append(el('b', null, plain(titleOf(it))), el('time', null, ago(it.time)));
