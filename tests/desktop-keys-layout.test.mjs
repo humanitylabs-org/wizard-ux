@@ -7,7 +7,7 @@ const html = readFileSync(new URL('../web/desktop.html', import.meta.url), 'utf8
 
 test('holding ⌥ is the one keys guide: speak keys named and explained, no separate sheet', () => {
   assert.doesNotMatch(js, /const KEYS = \[/);
-  for (const name of ['Talk about this', 'New voice chat', 'Tell the computer', 'Type with your voice', 'Switch what you see', 'This window']) assert.ok(js.includes(name), name);
+  for (const name of ['Talk about this', 'New voice chat', 'Tell the computer', 'Type with your voice']) assert.ok(js.includes(name), name);
   assert.match(js, /function toggleKeys\(on\) \{[^\n]*keyHints\.show\(true\)/);
   assert.match(js, /if \(keyHints\.pinned\(\)\) \{ toggleKeys\(false\)/);
 });
@@ -36,7 +36,7 @@ test('⌥↓/⌥↑ walk Ready chats from anywhere into the message box; no ⌥�
   assert.match(js, /function chatsUpDown\(dir\) \{ return stepReady\(dir\); \}/);
   assert.doesNotMatch(js, /chatsSide|chatsZone/);
   assert.match(js, /focusInside\(f\.id\); \}, 30\); \/\/ straight into the message box/);
-  assert.ok(js.includes("'Next ready chat'") && js.includes("<h5>Ready chats</h5>"));
+  assert.ok(js.includes("'Next ready chat'"));
 });
 
 test('⌥E Done and ⌥Z Snooze act on the open chat; the guide shows chat keys in a thread', () => {
@@ -44,8 +44,8 @@ test('⌥E Done and ⌥Z Snooze act on the open chat; the guide shows chat keys 
   assert.match(js, /CHATS\.threadAct\(f\.id, f\.thread, act\)/);
   assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\)\) return hit/);
   assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\)\) return hit\(\(\) => \{ if \(!e\.repeat\) chatAct\(code === 'ArrowRight' \? 'done' : 'snooze'/);
-  assert.match(js, /\['\[data-chact="done"\]', '→'\], \['\[data-chact="snooze"\]', '←'\]/);
-  assert.ok(js.includes("['Enter', 'Send', 'Then back to New chat']") && js.includes("'This chat'"));
+  assert.match(js, /\['\[data-chact="done"\]', '→', 'Done'\], \['\[data-chact="snooze"\]', '←', 'Snooze'\]/);
+  assert.match(js, /chip\(next, '↓', 'inside'\)/);
 });
 
 test('after a text or voice reply is sent, the window goes back to a focused New chat', () => {
@@ -81,7 +81,10 @@ test('⌥G Pick anything: letter chips on every clickable, typed letters click i
   assert.ok(js.includes("['G', 'Pick anything',"));
 });
 
-test('the window card in the keys guide never covers the Speak / Switch cards', () => {
-  assert.match(js, /function settle\(c\) \{[\s\S]*?\.kh-speak, \.kh-go[\s\S]*?r\.bottom \+ 12/);
-  assert.equal((js.match(/settle\(c\);/g) || []).length, 2);
-});
+test('the keys guide is chips in place, no boxes: ↓ on the next Ready chat, F W R on window buttons, H J K L on neighbours, words only on Speak', () => {
+  assert.doesNotMatch(js, /kh-card|function card\(/);
+  assert.match(js, /rows\[0\] : rows\[\(i \+ 1\) % rows\.length\]/);
+  assert.match(js, /\['\[data-wact="mono"\]', 'F'\], \['\[data-wact="close"\]', 'W'\], \['\[data-wact="reload"\]', 'R'\]/);
+  assert.match(js, /\(dx < 0 \? 'H' : 'L'\) : \(dy < 0 \? 'K' : 'J'\)/);
+  assert.match(js, /\['#micBtn', 'S', 'Talk about this'\]/);
+})
