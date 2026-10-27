@@ -93,7 +93,7 @@ def acceptance(job, receipt):
                        "ai.wizards.os.qa.test/androidx.test.runner.AndroidJUnitRunner",
                        capture_output=True, text=True, timeout=600)
         (output / "instrumentation.txt").write_text(tests.stdout + tests.stderr)
-        ok = bool(re.search(r"OK \\(2 tests\\)", tests.stdout)) and "FAILURES" not in tests.stdout
+        ok = bool(re.search(r"OK \(2 tests\)", tests.stdout)) and "FAILURES" not in tests.stdout
         crash = device("logcat", "-d", "-b", "crash", capture_output=True, text=True).stdout
         (output / "crash.txt").write_text(crash)
         assert ok, "Vault device tests did not pass; inspect instrumentation.txt"
