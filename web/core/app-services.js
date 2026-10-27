@@ -240,7 +240,7 @@
       return { release() { if (released) return; released = true; st.holds.delete(id); changed(); } };
     };
     // Capture holds start before permission, end only after stop/cancel settles. Lifecycle never cancels capture.
-    const start = async opts => {
+    const start = async (opts, attaching = false) => {
       check(); if (!window.WizAppCapture) throw fault('Shared capture unavailable');
       if (['auto', 'command'].includes(opts?.kind)) throw fault('Capture kind is reserved for Wizard voice; use audio/meeting and task metadata');
       const shell = window.__wos || window.__wux;
@@ -250,9 +250,11 @@
       const release = () => { h.release(); removeEventListener('wizard-app-capture-state', onCaptureState); };
       const onCaptureState = () => { if (resource.getState?.().active === false) release(); }; // actual recorder state, never elapsed time
       addEventListener('wizard-app-capture-state', onCaptureState);
+      let session;
       try {
         const safe = {}; for (const key of ['kind','mime','audio','pcm','chunkMs','maxMs','maxBytes','systemAudio','meta','seqBase','offsetMs','preparedId','resumeId']) if(opts?.[key] !== undefined) safe[key]=opts[key];
-        const session = await (safe.resumeId && resource.resume ? resource.resume(st.appId, safe.resumeId, safe) : resource.start(st.appId, safe));
+        session = await (attaching ? resource.attach(st.appId) : safe.resumeId && resource.resume ? resource.resume(st.appId, safe.resumeId, safe) : resource.start(st.appId, safe));
+        if (!session) { release(); check(); return null; }
         let finished;
         const finish = method => {
           check();
@@ -272,7 +274,16 @@
           stop: () => finish('stop'), cancel: () => finish('cancel'),
           pause() { check(); if (!session.pause) return Promise.reject(fault('Capture pause unavailable')); return session.pause(); },
           resume() { check(); if (!session.resume) return Promise.reject(fault('Capture resume unavailable')); return session.resume(); } });
-      } catch (e) { release(); throw e; }
+      } catch (e) {
+        // The permission/native await can outlive this document. Stop and retain the take before rejecting.
+        if (session) { try { await session.stop(); } catch (_) { /* capture service retains retryable custody */ } }
+        release();
+        if (e.code === 'busy' && e.appId) {
+          const owner = apps().find(a => a.id === e.appId);
+          e.message = 'The microphone is recording in ' + (owner?.name || String(e.appId).replace(/[-_]/g, ' ')) + '. Stop that recording first.';
+        }
+        throw e;
+      }
     };
     source.addEventListener('pagehide', () => { if (st.doc === doc) reset(st); }, { once: true });
     return Object.freeze({ version: VERSION, appId: st.appId,
@@ -393,7 +404,8 @@
       voice: Object.freeze({ stripAddress(text) { check(); return window.WizConfig.stripAddress(String(text || '')); }, async transcribe(file, opts) { check(); const result = await transcribeFile(file, opts); check(); return result; } }),
       theme: Object.freeze({ get() { check(); return window.WizAppearance?.get(frameOf(st)) || null; } }),
       update: Object.freeze({ hold, available() { check(); return available; } }),
-      capture: Object.freeze({ start: opts => { if (st.frame.dataset?.voiceService) throw fault('Voice service has no capture authority'); return start(opts); },
+      capture: Object.freeze({ attach: () => { check(); if (st.frame.dataset?.voiceService) throw fault('Voice service has no capture authority'); return start({}, true); },
+        start: opts => { if (st.frame.dataset?.voiceService) throw fault('Voice service has no capture authority'); return start(opts); },
         prepare(opts) {
           check(); const shell=window.__wos||window.__wux;
           if(shell?.voice && shell.voice!=='idle') throw Object.assign(fault('Microphone held by Wizard voice'),{code:'busy',appId:'wizard-voice'});
