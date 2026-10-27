@@ -432,6 +432,9 @@
   const byTop = (a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top;
   const readyRows = id => {
     const threads = $$('.pane-list .ch-sec[data-sec="ready"] .ch-row[data-chopen]', winEl(id) || document.createElement('div')).filter(r => r.getClientRects().length).sort(byTop);
+    // Listed among the chats (inbox list mode): the list's own rows, in on-screen order with everything else.
+    const own = $$('.pane-list .ch-sec[data-sec="ready"] .ch-notif-row[data-chnotif]', winEl(id) || document.createElement('div')).filter(r => r.getClientRects().length);
+    if (own.length) return [...threads, ...own].sort(byTop);
     const notes = $$('.pane-list .ch-sec[data-sec="ready"] [data-chnotif]', document).filter(r => r.getClientRects().length).sort(byTop);
     const end = r => r.closest('[data-slot]')?.dataset.slot === 'ready-end';
     return [...notes.filter(r => !end(r)), ...threads, ...notes.filter(end)];
