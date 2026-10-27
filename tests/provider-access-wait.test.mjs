@@ -17,3 +17,15 @@ test('A saved request waiting for sign-in says it will send automatically, not E
  assert.match(live,/queueReason: item.queue_reason === 'provider_access' \? 'provider_access' : ''/)
  assert.match(live,/queueReason: s.queueReason, status: s.status/)
 })
+
+test('the list preview and open header both show a waiting clock, never Working or Offline',()=>{
+ const ctx={};
+ for(const name of ['stiKind','workLabel']) {
+  const start=chats.indexOf(`  function ${name}(s) {`),end=chats.indexOf('\n  }',start)+4;
+  vm.runInNewContext(chats.slice(start,end),ctx);
+ }
+ const s={status:'queued',queueReason:'provider_access'};
+ assert.equal(ctx.stiKind(s),'signin');
+ assert.equal(ctx.workLabel(s),'Waiting for AI sign-in');
+ assert.match(chats,/STI.signin = STI.deferred/);
+});
