@@ -147,6 +147,7 @@
     "core/core.js",
     "core/deeplink.js",
     "core/dom-morph.js",
+    "core/edge-peek.js",
     "core/experience.js",
     "core/features.js",
     "core/files.js",
@@ -432,6 +433,10 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/edge-peek.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Skin host built-in: tap or swipe beside a thread; no-op on desktop"
     },
     "core/dom-morph.js": {
       "loadedBy": [

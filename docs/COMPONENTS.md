@@ -7,14 +7,14 @@ CI: Reuse + globals; [app gate](app-reuse-gate.md).
 ```
 Reuse:
 - chat: REUSE WizardApp.nav.openThread
-- orb: EXTEND Orb.create (adds R option; row updated)
-- habit streak card: NEW (no row; web/core/streaks.js + row)
-Visual: <side-by-side screenshot of the existing element and yours, or "none">
+- orb: EXTEND Orb.create (row updated)
+- streak: NEW web/core/streaks.js + row
+Visual: <side-by-side screenshot, or "none">
 ```
 
-`Reuse: n/a (<reason>)` is accepted only when the PR changes nothing under `web/` or `android/`.
+`Reuse: n/a (reason)` requires no `web/` or `android/` changes.
 
-## Apps (hosted frames: use only `WizardApp` from `/wizard-os-home/core/app-client.js`)
+## Apps (`WizardApp` via `/wizard-os-home/core/app-client.js` only)
 
 | Need | Use | Never hand-roll | Test the shared path by |
 |---|---|---|---|
@@ -37,12 +37,13 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Motion, haptics, press feel | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own spring/haptic helpers | — |
 | App look: rows, sections, empty state | the template's `wizard-ui.css` + `--wz-*` | its composer styling as a chat; literal colours | — |
 
-## Shell (`web/core/`): both shells, all agent kinds. Per-kind variants are forks; declare EXTEND.
+## Shell (`web/core/`): both shells and all agents; per-kind variants must EXTEND.
 
 | Need | Use | Never hand-roll |
 |---|---|---|
 | Chat list, bottom Focus strip (one agent: All/Spaces/＋; no Spaces: none; multiple agents: All/agent → owned Spaces), nested Filter, shared section collapse, search, thread, composer, attachments, read state and Copy/Share; Novairecito phone swipe reveals Recall/Done | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); `setFocus` persists `w.focus`; `migrateChatsFocus` folds legacy agent windows; `WizLive` owns data, run stream + tool steps; historical sections appear only when populated | second thread/composer/Focus parser; per-agent or per-shell routing or section implementations |
 | Alternative Chats list | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
+| Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`web/core/edge-peek.js`), host storage | skin-local duplicate |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
 | Models, retry, composer mic, receipts, reading place | `WosChatPower` (`web/core/chat-power.js`: one per-thread anchor/offset/atBottom) + `WosModels` (`web/core/chat-models.js`), `WosErrors` (`web/core/chat-errors.js`), `WosWork` (`web/core/chat-work.js`) | model/error/reading-place forks |
 | Chats composer paste, drop, Enter | `WizComposerInput.bind` (`web/core/composer-input.js`), shared with apps as `WizardApp.composer` | inline paste/drop/keydown handlers |
