@@ -279,11 +279,14 @@ PY
   }
   echo everywhere > "$FIXTURE_OUT/mode"
   adb shell am force-stop "$PKG"; adb logcat -c
+  # Since 1.0.1 a hold pauses instead of hiding, so Everywhere is still on here. Start this check from "off", as an
+  # owner who turned it off would (the orb's own saved switch), so the tap below must turn it on.
+  adb shell run-as "$PKG" sed -i 's/name="on" value="true"/name="on" value="false"/' shared_prefs/orb.xml
   adb shell am start -W -n "$ACT" >/dev/null 2>&1
   wait_ev everywhere 40; ev everywhere > "$OUT/everywhere.json"
   [ "$(ev everywhere ready)" = "true" ] && [ "$(ev everywhere switches)" = "1" ] && [ "$(ev everywhere orbRows)" = "0" ] && [ "$(ev everywhere dead)" = "0" ] \
     && pass "everywhere: Settings shows one Wizard Everywhere switch (no duplicate orb row, no full-app-only rows)" || bad "everywhere: one switch in Settings ($(cat "$OUT/everywhere.json"))"
-  [ "$(ev everywhere on)" = "false" ] && pass "everywhere: off after the orb was held away" || bad "everywhere: off after the orb was held away"
+  [ "$(ev everywhere on)" = "false" ] && pass "everywhere: Settings shows it off when the owner turned it off" || bad "everywhere: Settings shows it off when the owner turned it off"
   sleep 1; web_tap everywhere everywhere
   for _ in $(seq 1 15); do [ "$(ev everywhere-switch on)" = "true" ] && break; sleep 1; done
   [ "$(ev everywhere-switch on)" = "true" ] && [ "$(ev everywhere-switch checked)" = "true" ] \
