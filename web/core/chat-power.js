@@ -412,7 +412,7 @@ window.WosChatPower = function chatPower(A) {
   function openReconnect(appId, installed, runId = '') {
     if (!RECONNECT_APPS.has(appId)) return false;
     const provider = appId === 'wizard-claude' ? 'claude' : 'chatgpt';
-    if (window.WizOpenApp?.('wizard-troubleshooter', `/troubleshoot/?provider=${provider}&run_id=${encodeURIComponent(runId)}`)) return true;
+    if (window.WizOpenApp?.('troubleshooter', `/troubleshoot/?provider=${provider}&run_id=${encodeURIComponent(runId)}`)) return true;
     return !!H.openLink?.(`/troubleshoot/?provider=${provider}&run_id=${encodeURIComponent(runId)}`, 'Fix Wizard');
 
   }
