@@ -13,7 +13,7 @@ Reuse:
 Visual: <side-by-side screenshot of the existing element and yours, or "none">
 ```
 
-`Reuse: n/a (<reason>)` is accepted only when the PR changes nothing under `web/` or `android/`.
+`Reuse: n/a (<reason>)`: no `web/` or `android/` changes.
 
 ## Apps (hosted frames: use only `WizardApp` from `/wizard-os-home/core/app-client.js`)
 
@@ -62,6 +62,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | App source labels, `wizard://install` | `sourceLabel`, `parseInstallLink` (`web/store/`) | own badges |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`web/core/app-route.js`) | — |
 | App glyph tiles | `WizSigil` (`web/core/sigils.js`, `web/core/sigils.css`) | PNG/emoji icons |
+| App list | `WizCore.apps` (`web/core/apps.js`): one cached registry per shell | repeated builds |
 | Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs + old-service defaults | lists |
 | App groups | `WosAppKinds` (`web/core/app-kinds.js`) | forks |
 | Brand hat | `WizBrand` (`web/core/brand.js`) | redrawn logos |
