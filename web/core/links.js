@@ -19,6 +19,7 @@
  *
  * Use: const L = WizLinks.mount({ parent, mode: 'sheet' | 'pane', onKeep(url, title), onChange(open) });
  *      L.open(url) · L.back() → bool · L.close() · L.isOpen() · L.state()
+ *      asWindow(path, title) → bool: the host opens same-origin pages as its own window instead of the sheet/pane.
  *      WizLinks.intercept(root, L) wires every http(s) link inside `root` (chat bubbles) to the sheet.
  */
 (() => {
@@ -88,7 +89,7 @@
     return p.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   }
 
-  function mount({ parent, mode = 'sheet', onKeep, onChange, allowURL = () => true } = {}) {
+  function mount({ parent, mode = 'sheet', onKeep, onChange, allowURL = () => true, asWindow = null } = {}) {
     const el = document.createElement('section');
     el.className = `linksheet ${mode}`; el.setAttribute('aria-label', 'Link'); el.hidden = true;
     el.innerHTML = `<div class="ls-scrim" data-ls="close"></div><div class="ls-panel"><header class="ls-bar">
@@ -136,6 +137,8 @@
       if (inApp(u) && isImage(u) && viewImage(u, doc)) return true;
       if (!inApp(u)) { external(u); return true; }
       if (isFile(u)) return download(u, doc);
+      // Desktop: a page preview is a normal window (wizard-os#265 rule 7), not a side pane. Images and files stay above.
+      if (asWindow && asWindow(u.pathname + u.search + u.hash, nice(u))) return true;
       if (cur() && cur().url === u.href) { show(); return true; }
       stack.push({ url: u.href, title: '' }); paint(); show(); load(u.href);
       return true;

@@ -106,6 +106,10 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 .dchats .pane-newchat:hover { background: rgba(143, 99, 255, .34); }
 .dchats .ch-row.kbd { outline: 1px solid var(--line-2); }
 .dsettings .set-card { width: min(520px, calc(100vw - 32px)); }
+/* Settings is a window (wizard-os#265 rule 7): its panel fills the window body; the title bar's ✕ closes it. */
+.win .settings-host { height: 100%; overflow: hidden; }
+.win .dsettings { position: relative; inset: auto; width: auto; height: 100%; z-index: auto; border-left: 0; box-shadow: none; background: transparent; }
+.win .dsettings > .st-close { display: none; }
 .dsettings .set-body { padding: 4px 14px 6px; }
 .dchats .pane-main { position: relative; flex: 1; min-width: 0; }
 .dchats .pane-empty { position: absolute; inset: 0; display: none; place-items: center; text-align: center; color: var(--ink-3); font-size: 13.5px; line-height: 1.7; }

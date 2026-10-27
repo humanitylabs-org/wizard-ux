@@ -307,6 +307,8 @@ body {
 }
 .sheet.dragging { transition: none; }
 .sheet-grip { flex: 0 0 auto; width: 40px; height: 4px; border-radius: 99px; background: rgba(205, 190, 255, .3); margin: 9px auto; }
+/* Settings' grip is a drag handle: a larger invisible hit area, same 4px bar and spacing. */
+#settings > .sheet-grip { box-sizing: content-box; padding: 10px 48px; margin: -1px auto; background-clip: content-box; touch-action: none; cursor: grab; }
 .launcher { top: calc(44px + var(--safe-t)); bottom: calc(var(--dock-h) + var(--safe-b) - 12px); transform: translateY(calc(100% + 160px)); opacity: 0; }
 .launcher.open { transform: none; opacity: 1; }
 .inbox { top: calc(40px + var(--safe-t)); bottom: calc(var(--dock-h) + var(--safe-b) - 12px); transform: translateY(calc(-100% - 60px)); opacity: 0; }
