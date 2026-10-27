@@ -53,8 +53,8 @@ Archimedes, owner of this launch, explicitly directs: live `8fa9804` is the acce
 
 ## Current-main review, 27 October
 
-The latest merged main for this review is `ee2f918208a8a5e556a1360585c15430b87b5521`.
-`npm test` on that exact main: **1196 pass, 0 fail**. On the merged source before this documentation-only addition: **1205 pass, 2 fail** (1207 tests).
+The latest merged main for this review is `a341a3832d58ad2e60148190400fc66d3101d681`.
+`npm test` on that exact main: **1198 pass, 0 fail**. On the merged source: **1207 pass, 2 fail** (1209 tests).
 The original seven failures are not seven current failures:
 
 | Original assertion | Current main | Merged candidate |
@@ -72,7 +72,7 @@ Both failing assertions expect `0f1797f835ddfa6f7435cba758d6086368cff1dd78bcf21f
 
 **Open decision:** may the protected full-CSS fingerprint now include main's newer skin-picker appearance as well as the previously accepted live dock? Do not drop main's picker or the Mac/live glyphs, and do not silently change the owner-protected fingerprint. Leave this PR draft until that decision and both tests are resolved. No appearance fixture was changed in this review.
 
-Other integration fixes retain main's sheet/agent/thread checks and 15-second model refresh policy; the older branch-only refresh test now checks that policy and navigation safety. The duplicate transcription inventory entry and an app-specific example in a layout comment were removed; no app behavior was removed.
+Other integration fixes retain main's sheet/agent/thread checks and 15-second model refresh policy; the older branch-only refresh test now checks that policy and navigation safety. The duplicate transcription inventory entry and an app-specific example in a layout comment were removed; no app behavior was removed. Main's new `ready-top` extension point remains beside the live day-ordered chat rows. The SDK inventory row was shortened and its redundant usage example removed to stay below the unchanged 14 KB inventory limit; the linked reuse guide retains the format.
 
 REUSE: existing shell, SDK, skin host and background-audio owner.
 EXTEND: the same SDK/host with app orb, audio ducking and vault hooks; companion cleanup remains.

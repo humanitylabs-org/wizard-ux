@@ -5,14 +5,6 @@
 CI: [reuse gate](app-reuse-gate.md).
 
 
-```
-Reuse:
-- chat: REUSE WizardApp.nav.openThread
-- orb: EXTEND Orb.create (row updated)
-- streak: NEW web/core/streaks.js + row
-Visual: <side-by-side screenshot, or "none">
-```
-
 `Reuse: n/a (reason)` requires no `web/` or `android/` changes.
 
 ## Apps (`WizardApp` via `/wizard-os-home/core/app-client.js` only)
@@ -34,7 +26,7 @@ Visual: <side-by-side screenshot, or "none">
 | Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound route | pending until accepted, ack once |
 | Mic, camera, screen capture | `WizardApp.capture.start / pending / ack`, `WizardApp.voiceInput.register` | `getUserMedia`, `MediaRecorder`, mic AudioContext | pending survives Back; ack once |
 | Title-bar tools | `WizardApp.titlebar.set(tools)` | an app header repeating the title | tools appear in the shell title bar |
-| App primary action, audio ducking and private saved values | `WizardApp.orb.set`, `audio.duck`, `vault.has/seal/open/forget` through `WizAppServices` (`web/core/app-services.js`) | app-specific shell buttons, player ducking or key storage | verified current app; foreign/stale frames denied; existing companion teardown stays |
+| Orb, audio, vault | `WizardApp.orb.set`, `audio.duck`, `vault.has/seal/open/forget` via `WizAppServices` | per-app implementations | verified frame; companion cleanup |
 | Protect unsaved work from updates | `WizardApp.update.hold` | app service worker, forced reload | released only after save+readback |
 | Reading place in an app document | shell-owned `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic for registered apps | app-local scroll store | reopen lands at the saved place |
 | Motion, haptics, press feel | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own spring/haptic helpers | — |
