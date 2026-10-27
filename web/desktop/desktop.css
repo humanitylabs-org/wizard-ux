@@ -401,3 +401,10 @@ html:is([data-skin^="obsidian"], [data-skin="landscapes"]) .mine-home .home-unse
 .pick-hints { position: fixed; inset: 0; z-index: 2147483000; pointer-events: none; }
 .pick-chip { position: fixed; padding: 1px 4px; border-radius: 4px; font: 700 11px/1.3 Inter, system-ui, sans-serif; letter-spacing: .02em; background: #ffd84d; color: #1a1400; border: 1px solid rgba(0,0,0,.35); box-shadow: 0 1px 4px rgba(0,0,0,.35); animation: pop 100ms var(--ease); }
 .pick-chip u { text-decoration: none; opacity: .45; }
+
+/* Hold ⌥: the Speak keys' meaning as one line in the bar (desktop.js keyHints); the clock steps aside for it. */
+.kh-legend { position: fixed; display: flex; gap: 12px; align-items: center; white-space: nowrap; padding: 3px 8px; border-radius: 7px; font: 600 11.5px/1.2 Inter, system-ui, sans-serif; background: var(--ink); color: var(--bg); box-shadow: 0 2px 8px rgba(0,0,0,.35); animation: pop 120ms var(--ease); z-index: 2; }
+.kh-legend span { display: inline-flex; gap: 5px; align-items: center; }
+.kh-legend kbd { min-width: 15px; height: 15px; padding: 0 3px; border-radius: 4px; display: grid; place-items: center; font: inherit; font-weight: 700; background: var(--bg); color: var(--ink); }
+html.key-hints-on #clock { visibility: hidden; }
+.kh-foot.pinned { top: auto; bottom: 18px; }

@@ -96,9 +96,17 @@ test('guide: → ← sit above Done / Snooze; no "/" chip on chat search', () =>
 
 test('guide extras: ↓ on Home, [ ] on neighbour desks, ↑ on the previous Ready chat, I on chat search; ⌥I again searches chats', () => {
   assert.match(js, /\$\('#desktopHome \[data-home-act="ready"\]'\) \|\| \$\('#desktopHome \.home-card \.home-row'\)/);
-  assert.match(js, /\[\['\[', \(cur - 1 \+ ws\.length\) % ws\.length\], \['\]', \(cur \+ 1\) % ws\.length\]\]/);
+  assert.match(js, /cur === 0 \? \$\('#logo'\)/);
   assert.match(js, /chip\(prev, '↑', 'inside'\)/);
   assert.match(js, /chip\(srch, 'I', 'inside'\)/);
   assert.match(js, /log\('key:search-chats'\)/);
   assert.match(js, /chip\(cancel, 'Esc'\)/);
+});
+
+test('⌥[ ⌥] never wrap: left of desktop 1 is Home, nothing left of Home or right of the last desk; Speak words sit in the bar', () => {
+  assert.match(js, /if \(dir < 0 && cur === 0\) \{ lastWs = cur; goHome\(\); return; \}/);
+  assert.match(js, /const t = cur \+ dir; if \(t < 0 \|\| t >= ws\.length\) return;/);
+  assert.doesNotMatch(js, /\(cur - 1 \+ ws\.length\) % ws\.length|\(cur \+ 1\) % ws\.length/);
+  assert.match(js, /stepDesk\(-1\); \}\);/);
+  assert.match(js, /leg\.classList\.add\('in-bar'\)/);
 });

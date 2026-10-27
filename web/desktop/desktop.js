@@ -116,7 +116,7 @@
   function executeCommand(c,text,snap,musicDone) {
     return window.WosCommands.execute(c,text,{search:openSearch,settings:openSettings,focused:()=>snap?.id?W[snap.id]:focused(),chats:CHATS,chatList:openChatsList,launcher:openPalette,findApp,openApp,musicDone,
       layout(c) { const f=snap?.id?W[snap.id]:focused();
-        if(c.action==='desk') { if(c.to==='home') goHome(); else goWs(c.to==='next'?cur+1:c.to==='prev'?cur-1:+c.to-1); return true; }
+        if(c.action==='desk') { if(c.to==='home') goHome(); else c.to==='next'?stepDesk(1):c.to==='prev'?stepDesk(-1):goWs(+c.to-1); return true; }
         if(c.action==='close_window') { if(!f)return false;closeWin(f.id);return true; }
         if(c.action==='fullscreen') { if(!f)return false;if(ws[cur].mono!==(c.on!==false))toggleMono();return true; }
         if(c.action==='move_window') { if(!f)return false;moveWin(f.id,c.to==='prev'?cur-1:cur+1);return true; }
@@ -599,6 +599,14 @@
     const f = focused(); document.title = f ? `${winTitle(f)} · Wizard` : 'Wizard';
     if (d.mono) layout();
   }
+  // ⌥[ / ⌥]: one step left or right along the bar, no wrapping (Miguel, 27 Oct 2026). Left of desktop 1 is Home;
+  // nothing is left of Home and nothing right of the last desktop.
+  function stepDesk(dir) {
+    if (homeOpen) { if (dir > 0 && ws.length) { lastWs = cur; goWs(0); if (cur === 0 && homeOpen) leaveHome(); } return; }
+    if (dir < 0 && cur === 0) { lastWs = cur; goHome(); return; }
+    const t = cur + dir; if (t < 0 || t >= ws.length) return;
+    lastWs = cur; goWs(t);
+  }
   function goWs(i, { from } = {}) {
     window.WosResources?.back();
     if (!Number.isInteger(i) || i < 0 || i >= ws.length) return;
@@ -879,8 +887,8 @@
       ...(window.WosResources ? [{ kind: 'cmd', name: 'Resources', icon: '◔', run: () => { goHome(); $('#desktopHome [data-res-open="server"]')?.click(); } }] : []),
       { kind: 'cmd', name: 'Get apps', icon: '+', run: () => openApp(APP['app-store']) },
       { kind: 'cmd', name: 'New desktop', icon: '+', keys: `${MOD}T`, run: () => newDesktop() },
-      { kind: 'cmd', name: 'Next desktop', icon: '→', keys: `${MOD}]`, run: () => goWs((cur + 1) % ws.length) },
-      { kind: 'cmd', name: 'Previous desktop', icon: '←', keys: `${MOD}[`, run: () => goWs((cur - 1 + ws.length) % ws.length) },
+      { kind: 'cmd', name: 'Next desktop', icon: '→', keys: `${MOD}]`, run: () => stepDesk(1) },
+      { kind: 'cmd', name: 'Previous desktop', icon: '←', keys: `${MOD}[`, run: () => stepDesk(-1) },
       { kind: 'cmd', name: 'New chat', icon: '✎', keys: `${MOD}N`, run: () => newChat({ fresh: true }) },
       { kind: 'cmd', name: 'New voice chat', icon: '🎙', keys: `${MOD}V`, run: () => talkNew() },
       { kind: 'cmd', name: `Talk to ${window.WizConfig.agent()}`, icon: '🎙', keys: 'Right ⌘', run: () => talk() },
@@ -1638,16 +1646,17 @@
       pinned = !!pin;
       el.innerHTML = ''; el.hidden = false; el.classList.toggle('pinned', pinned); // visible first, so chips can be measured
       // Top bar: Home, desktops, new desktop, and the Speak buttons with their one-word meaning.
+      // [ ] ride on the chip of whatever is one step left / right (Home left of desktop 1; nothing past either end).
+      const stepL = homeOpen ? null : cur === 0 ? $('#logo') : $(`#wsList .ws[data-ws="${cur - 1}"]`);
+      const stepR = homeOpen ? $('#wsList .ws[data-ws="0"]') : $(`#wsList .ws[data-ws="${cur + 1}"]`);
+      const withStep = (n, l) => n === stepL ? `[ ${l}` : n === stepR ? `${l} ]` : l;
       const marks = [['#searchBtn', '␣'], ['#status', 'I'], ['#settingsBtn', ','], ['#keysBtn', '/'], ['#logo', '`']];
-      for (const [q, l] of marks) { const n = $(q); if (vis(n)) chip(n, l); }
-      $$('#wsList .ws[data-ws]').forEach(n => { const slot = C.workspaceNav.slot(+n.dataset.ws); if (slot <= 9 && vis(n)) chip(n, String(slot)); });
+      for (const [q, l] of marks) { const n = $(q); if (vis(n)) chip(n, withStep(n, l)); }
+      $$('#wsList .ws[data-ws]').forEach(n => { const slot = C.workspaceNav.slot(+n.dataset.ws); if (slot <= 9 && vis(n)) chip(n, withStep(n, String(slot))); });
       const add = $('#wsList [data-newdesk]'); if (vis(add)) chip(add, 'T');
       // Home: ↓ on the Ready count (Miguel's skins) or the first unread row (stock Home): ⌥↓ opens it from here.
       if (homeOpen) { const r = $('#desktopHome [data-home-act="ready"]') || $('#desktopHome .home-card .home-row'); if (vis(r)) chip(r, '↓', 'inside'); }
       // [ ] on the desktops either side of this one (they wrap), under their numbers.
-      if (!homeOpen && ws.length > 1) for (const [k, j] of [['[', (cur - 1 + ws.length) % ws.length], [']', (cur + 1) % ws.length]]) {
-        const n = $(`#wsList .ws[data-ws="${j}"]`); if (vis(n) && !(k === ']' && j === (cur - 1 + ws.length) % ws.length && ws.length === 2)) chip(n, k);
-      }
       // While recording: the same key again sends, Esc cancels, right on the pill.
       if (VOICE.state !== 'idle') { const send = $('#voiceSend'), cancel = $('#voiceCancel'); if (vis(send)) chip(send, ($('#voiceKey')?.textContent || '').replace(MOD, '') || 'S'); if (vis(cancel)) chip(cancel, 'Esc'); }
       const f = !homeOpen && focused(), d = ws[cur];
@@ -1694,12 +1703,21 @@
       // Speak keys last: their words step around anything already placed.
       const speak = [['#micBtn', 'S', 'Talk about this'], ['#generalVoice', 'V', 'New voice chat'], ['#commandBtn', 'C', 'Tell the computer'], ['#dictateBtn', 'D', 'Dictate']]
         .map(([q, l, w]) => [$(q), l, w]).filter(([n]) => vis(n)).sort((x, y) => x[0].getBoundingClientRect().left - y[0].getBoundingClientRect().left);
+      // Speak keys: the letter under each button like every bar key, and their meaning as one line inside the bar,
+      // just left of them, so nothing covers a window. Too narrow for that: the words drop under the buttons.
       if (speak.length) {
-        const last = speak[speak.length - 1][0].getBoundingClientRect(), row = { x: last.right, y: last.bottom + 24 };
-        for (let i = speak.length - 1; i >= 0; i--) chip(speak[i][0], speak[i][1], row, speak[i][2]);
+        speak.forEach(([n, l]) => chip(n, l));
+        const sb = $('#searchBtn'), bar = $('#bar')?.getBoundingClientRect(), wl = $('#wsList')?.getBoundingClientRect();
+        const end = (vis(sb) ? sb : speak[0][0]).getBoundingClientRect().left - 10, min = (wl?.right || 0) + 12;
+        const leg = document.createElement('div'); leg.className = 'kh-legend';
+        leg.innerHTML = [['G', 'Pick anything'], ...speak.map(([, l, w]) => [l, w])].map(([l, w]) => `<span><kbd>${esc(l)}</kbd>${esc(w)}</span>`).join(''); el.appendChild(leg);
+        const lw = leg.offsetWidth, lh = leg.offsetHeight;
+        if (bar && end - lw >= min) { leg.style.left = Math.round(end - lw) + 'px'; leg.style.top = Math.round(bar.top + (bar.height - lh) / 2) + 'px'; leg.classList.add('in-bar'); }
+        else { const last = speak[speak.length - 1][0].getBoundingClientRect(); leg.style.left = Math.round(Math.max(4, last.right - lw)) + 'px'; leg.style.top = Math.round(last.bottom + 24) + 'px'; }
       }
       // One quiet line for the keys that have no single place: pick anything, keep this open.
-      const foot = document.createElement('div'); foot.className = 'kh-foot';
+      if (!pinned && el.querySelector('.kh-legend.in-bar')) { document.documentElement.classList.add('key-hints-on'); return; } // the bar line already says G
+      const foot = document.createElement('div'); foot.className = 'kh-foot' + (pinned ? ' pinned' : '');
       foot.innerHTML = (pinned ? `<span><kbd>Esc</kbd> close</span>` : `<span><kbd>G</kbd> letters on everything</span><span><kbd>/</kbd> keep open</span>`)
         + (pinned && nativeDesktop ? `<span>Any Mac app: <kbd>Caps Lock</kbd> search · <kbd>Right ⌘</kbd> talk · <kbd>Right ⌥</kbd> dictate</span>` : '')
         + (pinned && window.WosTour?.desk ? `<button type="button" data-keystour>Show me the tour again</button>` : '');
@@ -1901,8 +1919,8 @@
     if (code === 'KeyR' && !shift) return hit(() => { if (!e.repeat) reloadCurrent(); });
     if (code === 'Slash') return hit(() => toggleKeys());
     if (code === 'Comma') return hit(toggleSettings);
-    if (code === 'BracketLeft') return hit(() => { if (shift) return moveDesk(cur, cur - 1); lastWs = cur; goWs((cur - 1 + ws.length) % ws.length); });
-    if (code === 'BracketRight') return hit(() => { if (shift) return moveDesk(cur, cur + 1); lastWs = cur; goWs((cur + 1) % ws.length); });
+    if (code === 'BracketLeft') return hit(() => { if (shift) return moveDesk(cur, cur - 1); stepDesk(-1); });
+    if (code === 'BracketRight') return hit(() => { if (shift) return moveDesk(cur, cur + 1); stepDesk(1); });
     const dir = { ArrowLeft: [-1, 0], KeyH: [-1, 0], ArrowRight: [1, 0], KeyL: [1, 0], ArrowUp: [0, -1], KeyK: [0, -1], ArrowDown: [0, 1], KeyJ: [0, 1] }[code];
     // ⌥ arrows are word/paragraph jumps while typing on a Mac: leave them to the text field (⌥HJKL still move focus).
     if (dir && /^Arrow/.test(code) && typing(e.target)) return;
