@@ -15,6 +15,11 @@ scripts.set('/mount.js', `const f=document.querySelector('iframe');window.openAp
 const server = http.createServer((req, res) => {
   res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; connect-src 'self'; media-src 'self' blob:; frame-src 'self'");
   if (scripts.has(req.url)) { res.setHeader('Content-Type', 'text/javascript'); return res.end(scripts.get(req.url)); }
+  const pathname = new URL(req.url, 'http://fixture').pathname.replace(/^\/wizard-os-home\//, '/');
+  if (pathname.startsWith('/core/') && /^\/core\/[a-z0-9-]+\.js$/.test(pathname)) {
+    const file = path.join(root, 'web', pathname);
+    if (fs.existsSync(file)) { res.setHeader('Content-Type', 'text/javascript'); return res.end(fs.readFileSync(file)); }
+  }
   res.setHeader('Content-Type', 'text/html');
   if (req.url === '/outline/') return res.end('<!doctype html><html data-app="voice-outline"><button id="go">Capture</button><script src="/core/app-client.js"></script></html>');
   res.end('<!doctype html><iframe></iframe><script src="/boot.js"></script><script src="/core/app-capture.js"></script><script src="/core/app-services.js"></script><script src="/core/voice.js"></script><script src="/mount.js"></script>');
@@ -76,6 +81,26 @@ async function rejectStart(p) {
   await new Promise(r => server.listen(0, '127.0.0.1', r)); origin = 'http://127.0.0.1:' + server.address().port;
   try {
     browser = await chromium.launch({ executablePath: process.env.CHROMIUM, headless: true, args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
+    await test('James-Messenger-own-take-reattach-is-owner-scoped-after-frame-reload', async ({p, frame}) => {
+      await begin({p, frame}, {kind:'audio',meta:{purpose:'messenger-voice',person:'synthetic'}});
+      const id=await frame().evaluate(()=>session.id);
+      assert.equal(await p.evaluate(()=>WizAppCapture.attach('other-app')),null,'another app cannot attach this take');
+      await p.evaluate(()=>{const f=document.querySelector('iframe');window.oldCaptureDoc=f.contentDocument;f.contentWindow.location.reload();});
+      await p.waitForFunction(()=>{const f=document.querySelector('iframe');return f.contentDocument!==oldCaptureDoc && f.contentWindow.WizardApp?.hosted;});
+      const actual=await frame().evaluate(async()=>{window.session=await WizardApp.capture.attach();return session.id;});
+      assert.equal(actual,id);await frame().evaluate(()=>session.cancel());
+      assert.equal(await p.evaluate(()=>WizAppCapture.getState().active),false);
+    });
+    await test('James-Messenger-detached-bridge-after-native-start-stops-and-keeps-take', async ({p,frame}) => {
+      await p.evaluate(()=>{window.bridgeStopped=0;WizAppCapture.configureNative({name:'synthetic-delayed',start:()=>new Promise(resolve=>{window.resolveNative=()=>resolve({nativeId:'fixture-delayed',mime:'audio/aac',stop:async()=>{bridgeStopped++;return{blob:new Blob(['kept'])};},cancel:async()=>{throw new Error('must retain');}});})});});
+      await frame().evaluate(()=>{window.startOutcome=WizardApp.capture.start({kind:'audio'}).then(()=> 'unexpected',e=>e.message);});
+      await p.waitForFunction(()=>!!window.resolveNative);
+      await p.evaluate(()=>detachOutline());
+      await p.evaluate(()=>resolveNative());
+      await p.waitForFunction(()=>bridgeStopped===1);
+      assert.equal(await p.evaluate(()=>WizAppCapture.getState().active),false);
+      assert.equal(await p.evaluate(async()=>(await WizAppCapture.pending('voice-outline')).length),1);
+    });
     await test('capabilities-select-browser-PCM-without-starting-native', async ({ p, frame }) => {
       const caps = await frame().evaluate(opts => WizardApp.capture.capabilities(opts), options);
       assert.equal(caps.pcm, true); assert.equal(caps.native, null);
