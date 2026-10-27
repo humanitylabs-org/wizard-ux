@@ -1193,6 +1193,13 @@
   $('#voiceScreenshot').onclick=()=>vFiles?.screenshot(()=>{pill.style.visibility='hidden';return ()=>pill.style.visibility='';}).catch(e=>toast('!',e.message,2600));
   $('#voiceFiles').onclick=e=>{const b=e.target.closest('button');if(!b)return;const t=vFiles;if(b.dataset.vretry!=null)t.retry(t.files[+b.dataset.vretry]);if(b.dataset.vremove!=null)t.remove(t.files[+b.dataset.vremove]);};
 
+  // ⌥S: starts screen speech / a reply; again sends only that kind of take, never a ⌥V or ⌥C one.
+  function speakScreen() {
+    if (VOICE.state === 'idle') return talk();
+    if (['listen','paused'].includes(VOICE.state) && vMode === 'talk' && !vNewChat && !commandTake) return talk('send');
+    toast('🎙', 'Finish the current recording first', 2000);
+    return 'busy';
+  }
   // A separate chord always starts a new thread, even with an existing thread focused.
   // Never retarget an in-flight reply/dictation or discard it when the new-voice chord is pressed.
   function talkNew(key = `${MOD}V`) {
@@ -1526,7 +1533,7 @@
     }
     function show() {
       if (!keysEl.hidden) return;
-      el.innerHTML = '';
+      el.innerHTML = ''; el.hidden = false; // visible first, so chips can be measured and centred
       const marks = [['#searchBtn', '␣'], ['#micBtn', 'S'], ['#generalVoice', 'V'], ['#commandBtn', 'C'], ['#dictateBtn', 'D'], ['#status', 'I'], ['#settingsBtn', ','], ['#keysBtn', '/'], ['#logo', '1']];
       for (const [q, l] of marks) { const n = $(q); if (vis(n)) chip(n, l); }
       $$('#wsList .ws[data-ws]').forEach(n => { const slot = C.workspaceNav.slot(+n.dataset.ws); if (slot <= 9 && vis(n)) chip(n, String(slot)); });
@@ -1534,7 +1541,7 @@
       const strip = document.createElement('div'); strip.className = 'kh-strip';
       strip.innerHTML = `<span class="kh-base">Keep holding ${esc(IS_MAC ? '⌥' : 'Alt')} and press</span>` + STRIP.map(([h, rows]) => `<span class="kh-grp"><em>${esc(h)}</em>${rows.map(([k, d]) => `<span><kbd>${esc(k)}</kbd>${esc(d)}</span>`).join('')}</span>`).join('');
       el.appendChild(strip);
-      el.hidden = false; document.documentElement.classList.add('key-hints-on');
+      document.documentElement.classList.add('key-hints-on');
     }
     function hide() { clearTimeout(timer); armed = false; if (el.hidden) return; el.hidden = true; el.innerHTML = ''; document.documentElement.classList.remove('key-hints-on'); }
     return {
@@ -1572,7 +1579,7 @@
       if (e.repeat) return;
       if (code === 'KeyD') return dictate();
       closePalette(); toggleKeys(false); closeSettings(); closeUsage();
-      code === 'KeyS' ? talk() : commandVoice();
+      code === 'KeyS' ? speakScreen() : commandVoice();
     });
     // ⌥Space search everything, ⌥O open an app: from anywhere, even while typing.
     if (alt && !shift && code === 'Space') return hit(() => palToggle('all'));
