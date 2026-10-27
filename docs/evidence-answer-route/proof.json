@@ -1,0 +1,130 @@
+{
+  "synthetic": true,
+  "checks": [
+    "phone/nebula: switch sends PUT and read-back; persistent direct indicator",
+    "phone/nebula: Back closes sheet and retains thread",
+    "phone/nebula: mixed history labels both actual answer routes",
+    "phone/nebula: live skin switch retains route and thread",
+    "phone/nebula: switch back removes indicator, preserves historical direct chip",
+    "phone/grove: switch sends PUT and read-back; persistent direct indicator",
+    "phone/grove: Back closes sheet and retains thread",
+    "phone/grove: mixed history labels both actual answer routes",
+    "phone/grove: live skin switch retains route and thread",
+    "phone/grove: switch back removes indicator, preserves historical direct chip",
+    "phone: untouched history has no route chips",
+    "phone: untouched assistant markup byte-identical to origin/main",
+    "phone: API failure and fix_url visible, no silent fallback/optimistic indicator",
+    "phone: private agent never offers control or requests public route",
+    "phone: authoritative 409 hides control and exposes explanation",
+    "phone: no browser exceptions",
+    "desktop/nebula: switch sends PUT and read-back; persistent direct indicator",
+    "desktop/nebula: Back closes sheet and retains thread",
+    "desktop/nebula: mixed history labels both actual answer routes",
+    "desktop/nebula: live skin switch retains route and thread",
+    "desktop/nebula: switch back removes indicator, preserves historical direct chip",
+    "desktop/grove: switch sends PUT and read-back; persistent direct indicator",
+    "desktop/grove: Back closes sheet and retains thread",
+    "desktop/grove: mixed history labels both actual answer routes",
+    "desktop/grove: live skin switch retains route and thread",
+    "desktop/grove: switch back removes indicator, preserves historical direct chip",
+    "desktop: untouched history has no route chips",
+    "desktop: untouched assistant markup byte-identical to origin/main",
+    "desktop: API failure and fix_url visible, no silent fallback/optimistic indicator",
+    "desktop: private agent never offers control or requests public route",
+    "desktop: authoritative 409 hides control and exposes explanation",
+    "desktop: no browser exceptions",
+    "review origin refuses every write; only synthetic browser route interception can toggle"
+  ],
+  "screenshots": [
+    "phone-nebula-sheet.png",
+    "phone-nebula-direct.png",
+    "phone-grove-sheet.png",
+    "phone-grove-direct.png",
+    "desktop-nebula-sheet.png",
+    "desktop-nebula-direct.png",
+    "desktop-grove-sheet.png",
+    "desktop-grove-direct.png"
+  ],
+  "writes": [
+    {
+      "shell": "phone",
+      "id": "answer_route_sample",
+      "method": "PUT",
+      "body": {
+        "route": "opus-direct"
+      }
+    },
+    {
+      "shell": "phone",
+      "id": "answer_route_sample",
+      "method": "PUT",
+      "body": {
+        "route": "hermes"
+      }
+    },
+    {
+      "shell": "phone",
+      "id": "answer_route_sample",
+      "method": "PUT",
+      "body": {
+        "route": "opus-direct"
+      }
+    },
+    {
+      "shell": "phone",
+      "id": "answer_route_sample",
+      "method": "PUT",
+      "body": {
+        "route": "hermes"
+      }
+    },
+    {
+      "shell": "phone",
+      "id": "answer_untouched_sample",
+      "method": "PUT",
+      "body": {
+        "route": "opus-direct"
+      }
+    },
+    {
+      "shell": "desktop",
+      "id": "answer_route_sample",
+      "method": "PUT",
+      "body": {
+        "route": "opus-direct"
+      }
+    },
+    {
+      "shell": "desktop",
+      "id": "answer_route_sample",
+      "method": "PUT",
+      "body": {
+        "route": "hermes"
+      }
+    },
+    {
+      "shell": "desktop",
+      "id": "answer_route_sample",
+      "method": "PUT",
+      "body": {
+        "route": "opus-direct"
+      }
+    },
+    {
+      "shell": "desktop",
+      "id": "answer_route_sample",
+      "method": "PUT",
+      "body": {
+        "route": "hermes"
+      }
+    },
+    {
+      "shell": "desktop",
+      "id": "answer_untouched_sample",
+      "method": "PUT",
+      "body": {
+        "route": "opus-direct"
+      }
+    }
+  ]
+}
