@@ -42,5 +42,16 @@ test('⌥E Done and ⌥Z Snooze act on the open chat; the guide shows chat keys 
   assert.match(js, /code === 'KeyE' \|\| code === 'KeyZ'/);
   assert.match(js, /CHATS\.threadAct\(f\.id, f\.thread, act\)/);
   assert.match(js, /\['\[data-chact="done"\]', 'E'\], \['\[data-chact="snooze"\]', 'Z'\]/);
-  assert.ok(js.includes("['Enter', 'Send', '']") && js.includes("'This chat'"));
+  assert.ok(js.includes("['Enter', 'Send', `Then") && js.includes("'This chat'"));
+});
+
+test('after a send, focus returns to the chat list; list-side ⌥↑↓ walk Ready only', () => {
+  assert.match(js, /stage\.addEventListener\('submit', e => \{[\s\S]*?send:list-focus/);
+  assert.match(js, /return stepReady\(dir\); \/\/ list side/);
+});
+test('desktop recordings skip echo cancellation (no music ducking) and pick a wired mic explicitly', async () => {
+  const { readFileSync: r } = await import('node:fs');
+  const v = r(new URL('../web/core/voice.js', import.meta.url), 'utf8');
+  assert.match(v, /echoCancellation: PHONE/);
+  assert.match(v, /if \(wired\) return wired\.deviceId/);
 });
