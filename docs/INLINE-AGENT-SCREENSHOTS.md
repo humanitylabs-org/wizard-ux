@@ -13,7 +13,7 @@ Compatibility:
 
 ## Read-only review
 
-Private preview: <https://wizard.tailc0f369.ts.net:9459/>
+Private preview: use the current paired pull requests' staging link (`PREVIEW_URL` when running the browser check).
 
 This is a **sample reply**, not James's chat history. `tools/inline-images-preview.mjs` runs the paired service against a synthetic upstream, an explicit disposable state folder and two generated PNG illustrations. The outer origin rejects all non-GET/HEAD requests. It cannot send messages, forward writes to live Wizard, or use owner credentials. The staging banner is injected by the existing private staging router. No live release or merge is authorized.
 
