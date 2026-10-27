@@ -37,6 +37,6 @@ Local bounded parsing and `git diff --check` are performed before push. Full Nod
 
 ## First CI / conflict follow-up
 
-At `a7500347`, shared-features ran 1308 tests: 1293 passed, 14 failed and one was skipped. The guard failures were not waived. The follow-up preserves owner registry-echo deduplication while allowing main's genuine icon/name changes and explicit resume retries, restores owner model-sheet revalidation plus main's current/default safety checks, uses the shared portable Playwright loader, and verifies the additive read-only app metadata skin API. A named repeated-registry-echo regression was added.
+At `a7500347`, shared-features ran 1308 tests: 1293 passed, 14 failed and one was skipped. The guard failures were not waived. The follow-up preserves owner registry-echo deduplication while allowing main's genuine icon/name changes and explicit resume retries, restores owner model-sheet revalidation plus main's current/default safety checks, uses the shared portable Playwright loader, and verifies the additive bounded app-orb skin API. A named repeated-registry-echo regression was added.
 
 The five protected owner-skin hashes and old skin-only dock assumptions are still an explicit acceptance issue: the live white current-app glyph intentionally changes those owner rules. The native identity navigation assertion belongs to the separately owned native signer work, not a web-only fake implementation. Do not claim a green reference or regenerate approved owner hashes to conceal this.
