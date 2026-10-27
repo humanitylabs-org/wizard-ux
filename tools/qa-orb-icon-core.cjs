@@ -62,17 +62,17 @@ const types = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/htm
       if (skin === 'nebula' && variant === 'after') await page.screenshot({ path: `${OUT}/orb-no-dot-nebula.png` });
       const states = [];
       if (variant === 'after') {
-        for (const state of ['listen', 'paused', 'launcher', 'idle']) {
+        for (const state of ['listen', 'paused', 'command', 'launcher', 'idle']) {
           await page.evaluate(state => {
             const device = document.getElementById('device');
             delete device.dataset.sheet; delete device.dataset.voice;
             if (state === 'launcher') device.dataset.sheet = 'launcher';
             else if (state !== 'idle') device.dataset.voice = state;
-            Orb.setMode(state === 'listen' || state === 'paused' ? state : 'idle');
+            Orb.setMode(['listen', 'paused', 'command'].includes(state) ? state : 'idle');
           }, state);
           await page.waitForTimeout(1800);
           const value = await page.evaluate(() => ({ opacity: +getComputedStyle(document.getElementById('orbApp')).opacity, core: window.__qaCore }));
-          assert.ok(state === 'idle' ? value.opacity > .5 && value.core < .001 : value.opacity < .01 && value.core > (state === 'listen' ? .99 : state === 'paused' ? .299 : .549), JSON.stringify({ skin, state, value }));
+          assert.ok(state === 'idle' ? value.opacity > .5 && value.core < .001 : value.opacity < .01 && value.core > (state === 'listen' ? .99 : state === 'paused' ? .299 : state === 'command' ? 1.149 : .549), JSON.stringify({ skin, state, value }));
           states.push({ state, ...value });
         }
       }
