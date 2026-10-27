@@ -69,7 +69,7 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
   {
     const { ctx, p, writes, errs, toasts, R } = await boot(b);
     const wid = await p.evaluate(() => __wos.desks[1].wins.find(id => __wos.wins[id].app === 'chats'));
-    const X = await p.evaluate(() => __wos.live.sessions.filter(s => !s.archived)[0].id);
+    const X = await p.evaluate(() => __wos.live.sessions.filter(s => !s.archived && !['running', 'queued', 'starting', 'waiting', 'stopping'].includes(s.status) && !s.runId)[0].id); // an idle thread: a Working one can flip back mid-test and take the steer path
     await p.evaluate(([w, x]) => { __wos.openChat(w, x); const s = __wos.live.session(x); if (s) Object.assign(s, { status: 'completed', runId: '' }); }, [wid, X]);
     await p.waitForTimeout(600);
     R.createDelay = 2500; writes.length = 0;
