@@ -20,7 +20,7 @@ test('⌥R refreshes what is in front; Home when no window is focused', () => {
 });
 
 test('Refresh is listed in the keys sheet and the command palette', () => {
-  assert.match(js, /\[`\$\{MOD\}R`, 'Refresh window'\]/);
+  assert.match(js, /\['R', 'Refresh window', ''\]/);
   assert.match(js, /name: 'Refresh window', icon: '↻', keys: `\$\{MOD\}R`/);
 });
 
