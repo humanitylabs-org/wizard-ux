@@ -143,9 +143,13 @@
       } catch (e) { clearTimeout(timer); reject(e); }
     })));
   }
-  let identityInfo = null;
+  let identityInfo = null, identityAsked = false;
   register({ id: 'wizard-id', page: 'phone', aliases: ['wizard-id'], available: () => !!window.wizardDevicePort,
-    html() { return row('wizard-id', '◇', 'Wizard ID', identityInfo?.npub ? `${identityInfo.name || 'Your ID'} · ${identityInfo.backed_up ? 'Backed up' : 'Not backed up'}` : 'Your signing key stays on this phone'); },
+    html(ctx) {
+      if (!identityAsked) { identityAsked = true; window.WizCore?.bridge?.call('identity.info').then(info => { identityInfo = info?.npub ? info : null; (ctx?.render || ctx?.changed)?.(); }).catch(() => { identityAsked = false; }); }
+      const sub = identityInfo?.npub ? `${identityInfo.name || 'Your ID'} · ${identityInfo.backed_up ? 'Backed up' : 'Not backed up'}` : 'Not set up · your signing key stays on this phone';
+      return `<div class="st-group"><h4>Identity</h4>${row('wizard-id', 'Wizard ID', sub)}</div>`;
+    },
     act(ctx, el) {
       if (!el.closest('[data-st="wizard-id"]')) return false;
       window.WizCore.bridge.call('identity.setup').then(async result => {

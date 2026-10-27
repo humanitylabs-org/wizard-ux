@@ -7,7 +7,7 @@ test('phone version stays at or above the Settings-style ID release (0.10.15/79)
   const gradle = read('android/app/build.gradle');
   assert.ok(Number(gradle.match(/versionCode (\d+)/)[1]) >= 79);
   const vault = read('android/app/src/main/java/ai/wizards/os/vault/VaultBridge.java');
-  assert.match(vault, /KEY_PREFIX = "wos-vault-v1-"/);
+  assert.match(read('android/app/src/main/java/ai/wizards/os/vault/VaultSlots.java'), /KEY_PREFIX = "wos-vault-v1-"/);
   assert.match(vault, /getSharedPreferences\("wizard-vault",/);
 });
 
