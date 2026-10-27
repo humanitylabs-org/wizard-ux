@@ -38,6 +38,23 @@ html[data-skin="landscapes"] .ch-model.private, html[data-skin="landscapes"] .mr
 html[data-skin="landscapes"] .mrow.secure .mn b { display: inline-flex; align-items: center; gap: 6px; }
 html[data-skin="landscapes"] .mrow.secure .ag-lock { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 html[data-skin="landscapes"][data-shell="desktop"] .ch-swrow .ms { flex: 0 1 340px; }
+/* Model switch: when other controls leave it too little room, the four slots fold into one chip (current model + ⋯) that opens the full model menu, so it always fits. */
+html[data-skin="landscapes"] .ms { container: ms / inline-size; position: relative; }
+@container ms (max-width: 250px) {
+  html[data-skin="landscapes"] .ms-track { flex: 0 1 auto; display: flex; background: none; pointer-events: none; }
+  html[data-skin="landscapes"] .ms-track.off, html[data-skin="landscapes"] .ms-thumb, html[data-skin="landscapes"] .ms-o:not(.on) { display: none; }
+  html[data-skin="landscapes"] .ms-o.on { flex-direction: row; gap: 5px; padding: 0 14px; min-width: 0; max-width: 100%; border-radius: 19px; background: var(--ink); overflow: hidden; }
+  html[data-skin="landscapes"] .ms.secure-on .ms-o.on { background: var(--secure); }
+  html[data-skin="landscapes"] .ms-o.on .ms-name { flex: 0 0 auto; }
+  html[data-skin="landscapes"] .ms-o.on .ms-version { font-size: 12px; min-width: 0; overflow: hidden; }
+  html[data-skin="landscapes"] .ms-more { position: static; }
+  html[data-skin="landscapes"] .ms-more::after { content: ""; position: absolute; inset: 0; z-index: 2; }
+}
+@container ms (max-width: 140px) {
+  html[data-skin="landscapes"] .ms-o.on { padding: 0 12px; }
+  html[data-skin="landscapes"] .ms-o.on .ms-version { display: none; }
+  html[data-skin="landscapes"] .ms-more { min-width: 28px; padding: 0 4px; }
+}
 
 /* Miguel's layout (ported from his test port, 20 Oct 2026): phone list order, edge-to-edge apps, quiet composer,
  * lower dock, desktop list order and slim header. Scoped to this skin; James's skins keep the stock layout. */
