@@ -126,8 +126,9 @@
       // Reading/building the registry can announce that same registry synchronously.
       // Its state is already in this snapshot; only later updates need another pass.
       rerun = resumePending;
-      if (!candidates.length || (!force && sig === lastSig)) return;
+      if (!force && sig === lastSig) return;
       lastSig = sig;
+      if (!candidates.length) return;
       const r = await request('pinned', { id:'' }, { candidates:candidates.map(a => a.id) });
       if (r.status !== 'pinned-list' || !Array.isArray(r.appIds) || r.appIds.length > 128) return;
       const pinned = new Set(r.appIds);
