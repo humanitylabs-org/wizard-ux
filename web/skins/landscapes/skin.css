@@ -282,7 +282,7 @@ html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsR:has(> .ddot[data-goto]:nth-child(3))::after { content: ""; flex: 0 0 auto; width: 3px; height: 3px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 40%, transparent); }
 
 /* App kinds on New desk (Apps · Wizard apps · Connectors): the panel stops above the pill dock and scrolls inside. */
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .new-desk.kinds { height: calc(100% - 20px); max-height: none; overflow-y: auto; } /* the desk already stops above the pill dock: fill all of it */
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .new-desk.kinds { height: calc(100% - 20px); max-height: none; overflow-y: auto; padding-bottom: 78px; } /* the desk already stops above the pill dock: fill all of it */
 
 /* App kinds: the Apps sheet uses the whole screen between the status bar and the pill dock, same as New desk. */
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .launcher { top: calc(30px + var(--safe-t)); bottom: calc(var(--pill-top, 90px) + 8px); }
@@ -773,5 +773,15 @@ html[data-skin="landscapes"] .rs-lg { font-size: 11.5px; margin-bottom: 5px; }
 html[data-skin="landscapes"] .rs-br { grid-template-columns: 58px minmax(60px, 1fr) max-content; }
 
 /* Miguel's skins: no chat pins (row pin button and the Pin action in the row sheet). Rows get their full width back. */
-html[data-skin="landscapes"] .ch-pin-toggle, html[data-skin="landscapes"] .ch-sheet [data-rspin] { display: none; }
-html[data-skin="landscapes"] .ch-row-wrap > .ch-row { padding-right: 8px; }
+
+/* New chat mark: frosted glass like the rest of the skin instead of core's violet tile. */
+html[data-skin="landscapes"] .ch-newchat .nc-mark { background: rgba(255, 255, 255, .16); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3); box-shadow: 0 10px 30px rgba(0, 0, 0, .28), inset 0 0 0 1px rgba(255, 255, 255, .28), inset 0 1px 0 rgba(255, 255, 255, .35); }
+
+/* Text selection and the selection menu: white on dark frosted glass, no violet (core/sel-menu.css). */
+html[data-skin="landscapes"] ::selection { background: rgba(255, 255, 255, .32); color: #fff; }
+html[data-skin="landscapes"] .selmenu { background: rgba(16, 18, 22, .78); border-color: rgba(255, 255, 255, .22); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
+html[data-skin="landscapes"] .selmenu.drag { box-shadow: 0 16px 40px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .3); }
+html[data-skin="landscapes"] .selmenu button { color: #fff; }
+html[data-skin="landscapes"] .selmenu button:active { background: rgba(255, 255, 255, .16); }
+html[data-skin="landscapes"] .selmenu svg { stroke: #fff; }
+html[data-skin="landscapes"] .selmenu .sm-grip svg, html[data-skin="landscapes"] .selmenu.drag .sm-grip svg { fill: rgba(255, 255, 255, .55); stroke: none; }

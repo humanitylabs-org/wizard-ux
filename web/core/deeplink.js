@@ -1,7 +1,7 @@
 /* Wizard UX core: deep links (feature/chat-polish). Both shells.
  *
  *   ?session=<id>          open that thread inside the app (same path as the Android ACTION_THREAD handoff)
- *   ?view=<name>[&section] open a screen: inbox | work | chats | apps | settings | files | day | week | month | help | tour
+ *   ?view=<name>[&section] open a screen: work | chats | apps | settings | files | help | tour
  *   ?video=<32 hex>        play a Wizard attachment in the in-app viewer (checked with HEAD: must be video/*)
  *   ?open=<app id>         open an app (the desktop already had this; the phone gets it too)
  *   ?agent=<agent id>      open that agent's own Chats (Agents MVP)
@@ -18,7 +18,7 @@
   const C = window.WizCore = window.WizCore || {};
   const SESSION_ID = /^(?!\.{1,2}$)[A-Za-z0-9._:-]{1,180}$/;
   const VIDEO_ID = /^[a-f0-9]{32}$/;
-  const VIEWS = new Set(['home', 'inbox', 'work', 'chats', 'apps', 'store', 'system', 'agents', 'settings', 'files', 'day', 'week', 'month', 'usage', 'help', 'tour', 'skin']);
+  const VIEWS = new Set(['home', 'work', 'chats', 'apps', 'store', 'install', 'agents', 'settings', 'files', 'usage', 'help', 'tour', 'skin']);
   const SECTIONS = new Set(['errors', 'working', 'ready', 'yesterday', 'pastWeek', 'deferred', 'archive', 'drafts']);
   const KEYS = ['session', 'view', 'section', 'video', 'open', 'agent'];
   let H = null;
@@ -27,8 +27,10 @@
   function parse(href) {
     let u; try { u = new URL(href, location.href); } catch (e) { return null; }
     const q = u.searchParams, out = {};
-    const sid = q.get('session') || ''; if (SESSION_ID.test(sid)) out.session = sid;
-    const view = (q.get('view') || '').trim(); if (!out.session && (VIEWS.has(view) || window.WosFeatures?.has(view) || window.WosSettings?.features.some(f => f.aliases.includes(view)))) { out.view = view; const s = q.get('section') || ''; if (SECTIONS.has(s)) out.section = s === 'deferred' ? 'ready' : s; } // Deferred lives at the bottom of Ready
+    const installing=q.get('view')==='install' || (u.protocol==='wizard:' && u.hostname==='install');
+    const sid = q.get('session') || ''; if (!installing && SESSION_ID.test(sid)) out.session = sid;
+    const view = u.protocol==='wizard:' && u.hostname==='install' ? 'install' : (q.get('view') || '').trim(); if (!out.session && (VIEWS.has(view) || window.WosFeatures?.has(view) || window.WosSettings?.features.some(f => f.aliases.includes(view)))) { out.view = view; const s = q.get('section') || ''; if (SECTIONS.has(s)) out.section = s === 'deferred' ? 'ready' : s; } // Deferred lives at the bottom of Ready
+    if (out.view === 'install') { const q=new URLSearchParams(u.search), shell=q.has('shell'); q.delete('shell'); out.install=u.protocol==='wizard:'?u.href:shell?'?'+q:u.search; }
     const vid = (q.get('video') || '').trim().toLowerCase(); if (VIDEO_ID.test(vid)) out.video = vid;
     const open = (q.get('open') || '').trim(); if (!out.session && !out.view && (/^[a-z0-9-]{1,40}$/i.test(open) || /^agent:[a-z0-9][a-z0-9-]{0,40}$/.test(open))) out.open = open;
     // ?agent=<id>: that agent's own Chats (Agents MVP).
@@ -37,6 +39,7 @@
   }
   // Is this a link to this app (the Wizard UX page itself), as opposed to another app on the origin?
   function isOwn(u) {
+    if(u?.protocol==='wizard:' && u.hostname==='install') return true;
     if (!u || u.origin !== location.origin) return false;
     // Only thread links own the old launcher roots; /?open=… and attachments are not shell routes.
     if ((u.pathname === '/' || u.pathname === '/wizard/') && SESSION_ID.test(u.searchParams.get('session') || '')) return true;
@@ -58,7 +61,7 @@
   function run(d, src) {
     if (!d || !H) return false;
     if (d.session) { log('session:' + d.session); H.thread(d.session); }
-    else if (d.view) { log('view:' + d.view); H.view(d.view, d.section || ''); }
+    else if (d.view) { log('view:' + d.view); H.view(d.view, d.section || '', d.install || ''); }
     else if (d.open) { log('open:' + d.open); H.app?.(d.open, src || null); }
     else if (d.agent) { log('agent:' + d.agent); H.agent?.(d.agent); }
     if (d.video) playVideo(d.video);
@@ -66,11 +69,19 @@
   }
   function strip() {
     const u = new URL(location.href); let had = false;
+    if (u.searchParams.get('view') === 'install') for(const k of ['repo','commit','from']) u.searchParams.delete(k);
     for (const k of KEYS) if (u.searchParams.has(k)) { u.searchParams.delete(k); had = true; }
     if (had) history.replaceState(history.state, '', u.pathname + (u.searchParams.toString() ? '?' + u.searchParams : '') + u.hash);
   }
   C.deeplink = {
     parse, isOwn,
+    // Normal Store window creation/reuse stays with each shell. Deliver without reloading its previous view.
+    installInFrame(frame, query) {
+      if(!frame) return false;
+      const send=()=>frame.contentWindow?.__store?.openInstallLink(query);
+      if(frame.contentWindow?.__store) send(); else frame.addEventListener('load',send,{once:true});
+      return true;
+    },
     handle(h) { H = h; },
     /* Use the page's own deep link once, then take it out of the address bar. */
     consume() { const d = parse(location.href); strip(); if (d) run(d); return d; },

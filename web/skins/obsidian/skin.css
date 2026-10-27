@@ -30,22 +30,22 @@ html[data-skin^="obsidian"] :is(.sw.on, .dv-update button, .ch-sec-h b:not(.wait
 html[data-skin^="obsidian"] #device > #generalVoice.selected { color: var(--bg); }
 /* Status icons and labels: shape carries meaning, not colour. Needs-you / failed keep full ink, the rest step down. */
 /* Status icons keep a faint hue so categories stay learnable: muted colour, neutral tile. */
-html[data-skin^="obsidian"] .ch-row .emo.sti { background: var(--ob-tint); box-shadow: inset 0 0 0 1px var(--ob-edge); }
-html[data-skin="obsidian"] .ch-row .emo.sti:is(.needs, .approval, .offline) { color: #d9b98a; }
-html[data-skin="obsidian"] .ch-row .emo.sti.check { color: #9cc4d1; }
-html[data-skin="obsidian"] .ch-row .emo.sti.done { color: #9cc7a8; }
-html[data-skin="obsidian"] .ch-row .emo.sti.fyi { color: #d6cc9a; }
-html[data-skin="obsidian"] .ch-row .emo.sti.failed { color: #d99a9a; }
-html[data-skin="obsidian-light"] .ch-row .emo.sti:is(.needs, .approval, .offline) { color: #8a6430; }
-html[data-skin="obsidian-light"] .ch-row .emo.sti.check { color: #3f6f80; }
-html[data-skin="obsidian-light"] .ch-row .emo.sti.done { color: #3d6e4b; }
-html[data-skin="obsidian-light"] .ch-row .emo.sti.fyi { color: #7a6d2c; }
-html[data-skin="obsidian-light"] .ch-row .emo.sti.failed { color: #8f3a3a; }
-html[data-skin^="obsidian"] .ch-row .emo.sti.deferred { color: var(--ink-2); }
-html[data-skin^="obsidian"] .ch-row .emo.sti.working { background: var(--ob-tint); }
-html[data-skin^="obsidian"] .ch-row .emo.sti .spin { border-color: var(--ob-edge); border-top-color: var(--ink); }
-html[data-skin^="obsidian"] .ch-row .emo.sti svg .k { stroke: var(--bg); }
-html[data-skin^="obsidian"] .ch-row .emo.sti svg .kd { fill: var(--bg); }
+html[data-skin^="obsidian"] :is(.ch-row, .ch-head) .emo.sti { background: var(--ob-tint); box-shadow: inset 0 0 0 1px var(--ob-edge); }
+html[data-skin="obsidian"] :is(.ch-row, .ch-head) .emo.sti:is(.needs, .approval, .offline) { color: #d9b98a; }
+html[data-skin="obsidian"] :is(.ch-row, .ch-head) .emo.sti.check { color: #9cc4d1; }
+html[data-skin="obsidian"] :is(.ch-row, .ch-head) .emo.sti.done { color: #9cc7a8; }
+html[data-skin="obsidian"] :is(.ch-row, .ch-head) .emo.sti.fyi { color: #d6cc9a; }
+html[data-skin="obsidian"] :is(.ch-row, .ch-head) .emo.sti.failed { color: #d99a9a; }
+html[data-skin="obsidian-light"] :is(.ch-row, .ch-head) .emo.sti:is(.needs, .approval, .offline) { color: #8a6430; }
+html[data-skin="obsidian-light"] :is(.ch-row, .ch-head) .emo.sti.check { color: #3f6f80; }
+html[data-skin="obsidian-light"] :is(.ch-row, .ch-head) .emo.sti.done { color: #3d6e4b; }
+html[data-skin="obsidian-light"] :is(.ch-row, .ch-head) .emo.sti.fyi { color: #7a6d2c; }
+html[data-skin="obsidian-light"] :is(.ch-row, .ch-head) .emo.sti.failed { color: #8f3a3a; }
+html[data-skin^="obsidian"] :is(.ch-row, .ch-head) .emo.sti.deferred { color: var(--ink-2); }
+html[data-skin^="obsidian"] :is(.ch-row, .ch-head) .emo.sti.working { background: var(--ob-tint); }
+html[data-skin^="obsidian"] :is(.ch-row, .ch-head) .emo.sti .spin { border-color: var(--ob-edge); border-top-color: var(--ink); }
+html[data-skin^="obsidian"] :is(.ch-row, .ch-head) .emo.sti svg .k { stroke: var(--bg); }
+html[data-skin^="obsidian"] :is(.ch-row, .ch-head) .emo.sti svg .kd { fill: var(--bg); }
 html[data-skin^="obsidian"] .ch-row .pv em.att { color: var(--ink); font-weight: 700; }
 html[data-skin^="obsidian"] .ch-sec-h b.wait { background: var(--ob-tint); color: var(--ink); }
 /* App sigils and the brand mark go grey; each app keeps its silhouette. */
@@ -56,6 +56,21 @@ html[data-skin="obsidian-light"] .sgi { filter: grayscale(1) brightness(.35); }
 :is(html[data-skin="obsidian"], html[data-skin="obsidian-light"]) .ch-empty.nc-classic { display: none; }
 :is(html[data-skin="obsidian"], html[data-skin="obsidian-light"]) .ch-newchat { margin: auto; padding: 28px 16px 36px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; max-width: 440px; animation: ncIn .32s ease-out both; }
 html[data-skin^="obsidian"] .ch-newchat .nc-mark { background: radial-gradient(120% 120% at 30% 20%, #3a3a3a, #0c0c0c); box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.18); }
+/* Light: the skin-wide sigil dimmer (grayscale + brightness .35) turned the white hat grey on the black tile. Keep it crisp white, with a lighter shadow on paper. */
+html[data-skin="obsidian-light"] .ch-newchat .nc-mark { background: radial-gradient(120% 120% at 30% 20%, #2a2a2a, #000); box-shadow: 0 8px 22px rgba(0,0,0,.16), inset 0 1px 0 rgba(255,255,255,.14); }
+html[data-skin="obsidian-light"] .ch-newchat .nc-mark .sgi { filter: none; }
+
+/* Text selection and the selection menu (core/sel-menu.css paints them violet with ink text, which went black-on-purple
+   in Light). Here they follow the skin: neutral highlight, and the menu is the same surface as the page with ink on it. */
+html[data-skin="obsidian"] ::selection { background: rgba(255, 255, 255, .26); color: #fff; }
+html[data-skin="obsidian-light"] ::selection { background: rgba(0, 0, 0, .13); color: #000; }
+html[data-skin^="obsidian"] .selmenu { background: color-mix(in srgb, var(--bg) 94%, transparent); border-color: var(--ob-edge); box-shadow: 0 10px 30px rgba(0, 0, 0, .28), 0 0 0 1px var(--ob-tint); }
+html[data-skin="obsidian-light"] .selmenu { box-shadow: 0 10px 28px rgba(0, 0, 0, .14), 0 1px 2px rgba(0, 0, 0, .08); }
+html[data-skin^="obsidian"] .selmenu.drag { box-shadow: 0 16px 40px rgba(0, 0, 0, .32), 0 0 0 1px var(--ob-edge); }
+html[data-skin^="obsidian"] .selmenu button { color: var(--ink); }
+html[data-skin^="obsidian"] .selmenu button:active { background: var(--ob-tint); }
+html[data-skin^="obsidian"] .selmenu svg { stroke: var(--ink); }
+html[data-skin^="obsidian"] .selmenu .sm-grip svg, html[data-skin^="obsidian"] .selmenu.drag .sm-grip svg { fill: var(--ink-3); stroke: none; }
 /* Model switch (Miguel's skins): four slots above the composer, Opus · Astra · Sol · the private Tinfoil model.
  * The private slot shows its model id (Kimi K3) in private-browsing purple with a small lock, never a provider name. */
 html[data-skin^="obsidian"] .ch-swrow { flex: 0 0 auto; display: flex; align-items: center; padding: 4px 10px 0; }
@@ -789,5 +804,3 @@ html[data-skin^="obsidian"] .rs-lg { font-size: 11.5px; margin-bottom: 5px; }
 html[data-skin^="obsidian"] .rs-br { grid-template-columns: 58px minmax(60px, 1fr) max-content; }
 
 /* Miguel's skins: no chat pins (row pin button and the Pin action in the row sheet). Rows get their full width back. */
-html[data-skin^="obsidian"] .ch-pin-toggle, html[data-skin^="obsidian"] .ch-sheet [data-rspin] { display: none; }
-html[data-skin^="obsidian"] .ch-row-wrap > .ch-row { padding-right: 8px; }

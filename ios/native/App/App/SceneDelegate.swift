@@ -7,6 +7,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
 
+        // Launched from a `wizard://connect` link (e.g. the Camera app on the Setup QR): open on the connect screen.
+        if let url = connectionOptions.urlContexts.first?.url { WizardAddress.receive(url) }
+
         window = UIWindow(windowScene: windowScene)
         window?.backgroundColor = UIColor(red: 0x05 / 255, green: 0x03 / 255, blue: 0x0c / 255, alpha: 1)
         window?.rootViewController = WizardViewController()
@@ -16,6 +19,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        // A `wizard://connect` link while the app runs: the connect screen connects to it at once. Nothing is saved
+        // unless the address passes the Wizard check.
+        if let url = URLContexts.first?.url, WizardAddress.receive(url) {
+            WizardViewController.restart(in: window)
+            return
+        }
         SceneDelegateProxy.shared.scene(scene, openURLContexts: URLContexts)
     }
 

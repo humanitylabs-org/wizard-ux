@@ -1,0 +1,31 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const js = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+const html = readFileSync(new URL('../web/desktop.html', import.meta.url), 'utf8');
+
+test('holding ⌥ is the one keys guide: speak keys named and explained, no separate sheet', () => {
+  assert.doesNotMatch(js, /const KEYS = \[/);
+  for (const name of ['Talk about this', 'New voice chat', 'Tell the computer', 'Type with your voice', 'Switch what you see', 'This window']) assert.ok(js.includes(name), name);
+  assert.match(js, /function toggleKeys\(on\) \{[^\n]*keyHints\.show\(true\)/);
+  assert.match(js, /if \(keyHints\.pinned\(\)\) \{ toggleKeys\(false\)/);
+});
+
+test('⌥S speaks about the screen, ⌥C speaks a command, ⌥D dictates', () => {
+  assert.match(js, /code === 'KeyS' \|\| code === 'KeyC' \|\| code === 'KeyD'/);
+  assert.match(js, /code === 'KeyS' \? speakScreen\(\) : commandVoice\(\)/);
+  assert.match(js, /if \(code === 'KeyD'\) return dictate\(\)/);
+  for (const [id, key] of [['micBtn', 'Alt\\+S'], ['commandBtn', 'Alt\\+C'], ['dictateBtn', 'Alt\\+D']]) assert.match(html, new RegExp(`id="${id}"[^>]*aria-keyshortcuts="${key}"`));
+});
+
+test('holding left ⌥ alone shows key hints; any other key or release hides them', () => {
+  assert.match(js, /if \(pinned \|\| e\.repeat \|\| e\.code !== 'AltLeft'/);
+  assert.match(js, /keyHints\.down\(e\)/);
+  assert.match(js, /addEventListener\('keyup', e => keyHints\.up\(e\), true\)/);
+  assert.match(js, /doc\.addEventListener\('keyup', e => keyHints\.up\(e\), true\)/);
+});
+
+test('⌥S only sends its own kind of take', () => {
+  assert.match(js, /function speakScreen\(\) \{[\s\S]*?vMode === 'talk' && !vNewChat && !commandTake\) return talk\('send'\)/);
+});

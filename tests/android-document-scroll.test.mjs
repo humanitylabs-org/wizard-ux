@@ -16,9 +16,13 @@ test('document scrolling is opted in only by APKs that declare WizardOS-DocScrol
 test('reading place, jump latest, prepend and repaint share the document adapter',()=>{
  const cp=read('web/core/chat-power.js'),ch=read('web/core/chats.js');
  assert.doesNotMatch(cp,/\bnb\.(scrollTop|scrollHeight|clientHeight|scrollTo)\b|\bbox\.(scrollTop|scrollHeight)\b/);
- assert.match(ch,/if \(keep\) ns.scrollTop = ns.scrollHeight - keep.h \+ keep.top/);
- assert.match(cp,/shown: scrollBox\(nb\) !== nb \? c.show : undefined/);
+ assert.match(ch,/PW\?\.capture\(box\)/);
+ assert.match(ch,/PW\?\.position\(w, el, nb, \{ turns, working \}\)/);
+ assert.match(cp,/anchor: anchorOf\(nb\), shown: c.show/);
  assert.match(ch,/PW\?\.RP.read\(w.thread\)\?\.shown/);
+ assert.doesNotMatch(ch,/docAway|docLast|docAnchor|docRestore|docOwnedAt|docAside/);
+ assert.equal((cp.match(/function restore\(/g)||[]).length,1);
+ assert.match(cp,/Math.abs\(s.scrollTop - to\) >= 1/);
 });
 test('header/composer and skin animation cannot acquire a document-sized fixed containing block',()=>{
  const css=read('web/core/chats.css');

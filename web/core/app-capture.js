@@ -31,7 +31,7 @@
     const nativeDeviceTakeIds = [...new Set(deviceRows.map(r => r.nativeId).filter(Boolean))];
     let live = [...recoveryLive].map(id => ownedRows.get(id)).find(Boolean), unknownNative = false;
     try {
-      const a = JSON.parse(W.WizardOSDevice?.recActive?.() || 'null');
+      const a = JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null');
       live ||= deviceRows.find(r => r.nativeId && r.nativeId === a?.id);
       if(a?.id && !live) {
         const inPageVoice=W.__wos?.V?.native===a.id && !['idle',undefined].includes(W.__wos?.voice);
@@ -265,7 +265,7 @@
   // Sync activation before app domain requests. Tokens are owner-bound and never time-expire.
   function prepare(appId, opts = {}) {
     validate(appId, opts);
-    let nativeActive;try{nativeActive=JSON.parse(W.WizardOSDevice?.recActive?.()||'null');}catch(_){throw fail('busy','Native recorder ownership is unknown.');}
+    let nativeActive;try{nativeActive=JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.()||'null');}catch(_){throw fail('busy','Native recorder ownership is unknown.');}
     if(nativeActive?.id)throw fail('busy','An existing native recorder is held.',{appId:'native-recording'});
     const st = state(); if (st.hold) throw fail('busy', 'Microphone held by ' + (st.appId || 'another app'), { appId: st.appId });
     const p = { id: crypto.randomUUID(), appId, ctx: null, display: null };
@@ -360,7 +360,7 @@
     // The browser path does not pass through native.start's admission guard.
     // Recheck under the shared lock, after recovery, including direct (unprepared) starts.
     let nativeActive;
-    try { nativeActive = JSON.parse(W.WizardOSDevice?.recActive?.() || 'null'); }
+    try { nativeActive = JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null'); }
     catch (_) { throw fail('busy', 'Native recorder ownership is unknown.'); }
     const nativeOwner = [...ownedRows.values()].find(r => recoveryLive.has(r.id) || (r.native && !r.nativeId && r.status === 'recoverable'));
     if (nativeActive?.id || nativeOwner || unknownMeetingActive) throw fail('busy', 'An existing native recorder is held.', { appId: nativeOwner?.appId || 'native-recording' });
@@ -718,7 +718,7 @@
     }
     // Positive proof that no native recorder runs: the device reports no take and the meeting bridge (if any) is not recording.
     let nativeQuiet = false;
-    try { nativeQuiet = JSON.parse(W.WizardOSDevice?.recActive?.() || 'null') === null && !unknownMeetingActive &&
+    try { nativeQuiet = JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null') === null && !unknownMeetingActive &&
       !(meeting?.status && (await meeting.status())?.recording); } catch (_) { nativeQuiet = false; }
     for (const row of all) {
       if (!['starting', 'recording', 'recoverable'].includes(row.status)) continue;
@@ -874,7 +874,7 @@
     const no = reason => ({ safe: false, reason, keeps: null });
     if (preparations.size) return no('capture_starting');
     if (unknownMeetingActive || [...ownedRows.values()].some(r => r.native && !r.nativeId && ['starting', 'recording', 'recoverable'].includes(r.status))) return no('native_owner_uncertain');
-    try { if (JSON.parse(W.WizardOSDevice?.recActive?.() || 'null')?.id) return no('device_recording'); } catch (_) { return no('device_recording'); }
+    try { if (JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null')?.id) return no('device_recording'); } catch (_) { return no('device_recording'); }
     // Only the Android app's meeting port (MeetingRecorderService) is known to record and upload on its own
     // through a page reload. The Mac app's recorder and any bridge attached in-page wait for the end instead.
     const survives = !attachedMeetingBridge && !W.wizardNative?.meetings && !!W.wizardMizelPort;

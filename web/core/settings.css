@@ -1,6 +1,6 @@
 /* Schedules uses the existing Settings cards and confirmation sheet in both shells. */
 .sc-group > .st-actions { margin: 0 0 16px; }
-.sc-row { padding: 14px; margin-bottom: 12px; border: 1px solid var(--wz-border); border-radius: 18px; background: var(--wz-surface); }
+.sc-row { padding: 14px 4px; border-bottom: 1px solid var(--wz-border); }
 .sc-head { display: flex; gap: 12px; align-items: center; }
 .sc-head button { flex: none; border: 1px solid var(--wz-border); border-radius: 16px; padding: 8px 14px; color: var(--wz-text-secondary); background: var(--wz-surface-raised); }
 .sc-head button[aria-checked="true"] { color: var(--wz-text); background: var(--wz-accent-soft); border-color: var(--wz-accent); }
@@ -24,37 +24,36 @@
 
 /* Shared approved phone Settings controls, responsive container authored by Claude Opus.
  * Feature selectors belong here, never in a shell-only stylesheet. */
-.st-title { margin: 2px 4px 10px; font-size: 22px; font-weight: 650; }
-.st-group { margin: 0 0 16px; }
-.st-group h4 { display: flex; gap: 8px; align-items: baseline; margin: 0 4px 8px; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--wz-text-muted); }
+.st-title { margin: 6px 4px 14px; font-size: 28px; font-weight: 700; letter-spacing: -.01em; }
+.st-group { margin: 0 0 28px; }
+.st-group h4 { display: flex; gap: 8px; align-items: baseline; margin: 0 4px 4px; font-size: 13px; font-weight: 650; letter-spacing: .02em; text-transform: none; color: var(--wz-text-muted); }
 .st-group h4 span { color: var(--wz-warning); }
-.st-row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px; margin-bottom: 8px; border-radius: 18px; background: var(--wz-surface); border: 1px solid var(--wz-border); text-align: left; color: var(--wz-text); }
+/* Every row is a plain line on the page, split by a hairline. No boxes, no icon tiles. */
+.st-row { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 12px 4px; margin: 0; border: 0; border-bottom: 1px solid var(--wz-border); border-radius: 0; background: transparent; text-align: left; color: var(--wz-text); }
 .st-row[disabled] { opacity: .5; }
 .st-row.static { cursor: default; }
-.st-ic { flex: 0 0 34px; height: 34px; border-radius: 12px; display: grid; place-items: center; background: var(--wz-accent-soft); color: var(--wz-accent); font-size: 16px; }
 .st-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.st-tx b { font-size: 15px; font-weight: 600; }
-.st-tx small { font-size: 12.5px; color: var(--wz-text-muted); margin-top: 2px; }
+.st-tx b { font-size: 17px; font-weight: 550; line-height: 1.3; }
+.st-tx small { font-size: 14px; line-height: 1.4; color: var(--wz-text-muted); margin-top: 2px; }
 .st-go { color: var(--wz-text-muted); font-size: 22px; }
 .sw { flex: 0 0 44px; height: 26px; border-radius: 99px; background: var(--wz-surface-raised); position: relative; transition: background 200ms; }
 .sw i { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--wz-text); transition: transform 220ms var(--ease); }
 .sw.on { background: var(--wz-accent); }
 .sw.on i { transform: translateX(18px); }
-.st-empty { padding: 14px; border-radius: 18px; background: var(--wz-surface); border: 1px solid var(--wz-border); color: var(--wz-text-secondary); font-size: 14px; }
+.st-empty { padding: 14px 4px; color: var(--wz-text-secondary); font-size: 15px; }
 .st-note { margin: 8px 4px 0; font-size: 12px; color: var(--wz-text-muted); }
-.st-wide { width: 100%; padding: 12px; border-radius: 16px; background: var(--wz-accent-soft); color: var(--wz-text); font-weight: 650; }
-.ub-row { padding: 12px; margin-bottom: 8px; border-radius: 18px; background: var(--wz-surface); border: 1px solid var(--wz-border); }
-.ub-row.failed { border-color: var(--wz-warning); }
-.ub-t { display: flex; gap: 8px; align-items: flex-start; font-size: 14.5px; line-height: 1.35; }
+.st-wide { width: 100%; margin-top: 12px; padding: 12px; border-radius: 99px; border: 1px solid var(--wz-border); background: transparent; color: var(--wz-text); font-size: 15px; font-weight: 650; }
+.ub-row { padding: 14px 4px; border-bottom: 1px solid var(--wz-border); }
+.ub-t { display: flex; gap: 8px; align-items: flex-start; font-size: 16px; line-height: 1.4; }
 .ub-t svg { flex: 0 0 16px; width: 16px; height: 16px; margin-top: 2px; fill: none; stroke: var(--wz-accent); stroke-width: 1.8; }
 .ub-t span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.ub-m { margin-top: 5px; font-size: 12px; color: var(--wz-text-muted); }
+.ub-m { margin-top: 5px; font-size: 13.5px; color: var(--wz-text-muted); }
 .ub-m .fail { color: var(--wz-warning); font-weight: 700; }
 .ub-a { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-.ub-a button { min-height: 48px; min-width: 48px; padding: 8px 14px; border-radius: 99px; background: var(--wz-accent-soft); color: var(--wz-text); font-size: 13px; font-weight: 650; }
+.ub-a button { min-height: 44px; min-width: 48px; padding: 8px 14px; border-radius: 99px; border: 1px solid var(--wz-border); background: transparent; color: var(--wz-text); font-size: 14px; font-weight: 600; }
 .ub-a button.ghost { background: transparent; border: 1px solid var(--wz-border); color: var(--wz-text-secondary); }
 
-.cx-row { padding: 12px; margin-bottom: 8px; border-radius: 18px; background: var(--wz-surface); border: 1px solid var(--wz-border); }
+.cx-row { padding: 14px 4px; border-bottom: 1px solid var(--wz-border); }
 .cx-t { font-size: 14px; color: var(--wz-text-secondary); }
 .cx-t b { color: var(--wz-text); font-weight: 650; font-variant-numeric: tabular-nums; }
 .cx-text { margin-top: 8px; padding: 10px 12px; border-radius: 12px; background: var(--wz-surface); font-size: 14px; line-height: 1.45; color: var(--wz-text); white-space: pre-wrap; max-height: 40vh; overflow: auto; user-select: text; -webkit-user-select: text; }
@@ -68,7 +67,7 @@
 .st-root button:disabled { cursor: default; }
 .st-root button:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: -2px; }
 .st-root .st-tx small, .st-root .ub-m { overflow-wrap: anywhere; }
-@media (hover: hover) and (pointer: fine) { .st-root .st-row { min-height: 48px; } .st-root .st-row:not(:disabled):not(.static):hover { background: color-mix(in srgb, var(--wz-text) 6%, transparent); } }
+@media (hover: hover) and (pointer: fine) { .st-root .st-row:not(:disabled):not(.static):hover, .st-root .st-category:not([aria-current="page"]):hover { background: color-mix(in srgb, var(--wz-text) 5%, transparent); } }
 .dsettings { position: fixed; inset: var(--bar-h, 34px) 0 0 auto; width: min(960px, 100vw); z-index: 40; display: flex; flex-direction: column; background: linear-gradient(var(--wz-overlay), var(--wz-overlay)), var(--wz-base); border-left: 1px solid var(--wz-border); box-shadow: -12px 0 32px color-mix(in srgb, var(--wz-base) 40%, transparent); }
 .dsettings[hidden] { display: none; }
 .dsettings .st-root { flex: 1; }
@@ -90,22 +89,21 @@
 .st-root[data-settings-root] button:not(.st-close), .st-root summary { min-height: 48px; min-width: 48px; }
 .st-root [hidden] { display: none !important; }
 .st-root .st-inner { max-inline-size: none; }
-.st-category { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 68px; padding: 8px 10px; border: 1px solid transparent; border-bottom-color: var(--wz-border); text-align: left; color: var(--wz-text); background: transparent; }
-.st-category .st-tx small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
-.st-category:hover, .st-category[aria-current="page"] { background: var(--wz-surface-raised); border-radius: 12px; }
+.st-category { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 10px 4px; border: 0; border-bottom: 1px solid var(--wz-border); border-radius: 0; text-align: left; color: var(--wz-text); background: transparent; }
+.st-category .st-tx b { font-size: 17px; font-weight: 550; }
+/* A quiet value on the right (the skin name, a count) instead of a second line. */
+.st-val { flex: none; max-width: 45%; font-size: 15px; color: var(--wz-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.st-val:empty { display: none; }
+.st-category[aria-current="page"] .st-tx b { font-weight: 700; }
+.st-desktop .st-category[aria-current="page"] { color: var(--wz-accent); }
 .st-index .st-title { margin-bottom: 8px; }
-.st-shortcuts { display: flex; flex-wrap: wrap; gap: 0 4px; margin-top: 12px; }
-.st-shortcuts button { padding: 4px 8px; font-size: 12px; color: var(--wz-text-secondary); background: transparent; text-decoration: underline; text-underline-offset: 3px; }
 .st-page-head { display: flex; gap: 6px; align-items: center; margin-bottom: 16px; }
-.st-page-head h3 { margin: 0; font-size: 20px; }
+.st-page-head h3 { margin: 0; font-size: 24px; font-weight: 700; }
 .st-page-head button { font-size: 30px; background: transparent; color: var(--wz-text); }
 .st-phone.st-in-page .st-index { display: none; }
 .st-phone:not(.st-in-page) .st-page { display: none; }
-.st-attention { padding: 8px; margin-bottom: 12px; border: 1px solid var(--wz-border); border-radius: 12px; background: var(--wz-accent-soft); }
-.st-attention h4 { font-size: 12px; margin: 0 8px 4px; color: var(--wz-text-secondary); }
-.st-attention button { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 8px; background: transparent; color: var(--wz-text); text-align: left; }
-.st-suggestion { padding: 14px; margin: 12px 0; background: var(--wz-accent-soft); border: 1px solid var(--wz-border); border-radius: 16px; }
-.st-suggestion b { font-size: 15px; }
+.st-attention { margin-bottom: 4px; }
+.st-attention button { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 56px; padding: 10px 4px; border-bottom: 1px solid var(--wz-border); background: transparent; color: var(--wz-warning); font-size: 16px; font-weight: 600; text-align: left; }
 .st-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .st-actions button { padding: 10px 16px; border: 1px solid var(--wz-border); border-radius: 12px; background: var(--wz-surface-raised); color: var(--wz-text); }
 .st-actions .ghost { background: transparent; }
@@ -123,38 +121,110 @@
 .st-desktop .st-page { overflow-y: auto; min-width: 0; padding-right: 8px; }
 .st-desktop .st-page-head button { display: none; }
 .st-desktop .st-page-head { min-height: 48px; }
-/* Desktop: shortcuts sit in the narrow category column; list them evenly instead of wrapping. */
-.st-desktop .st-shortcuts { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--wz-border); }
-.st-root[data-settings-root] .st-desktop .st-shortcuts button { min-width: 0; text-align: left; padding: 4px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 700px) {
   .st-desktop { grid-template-columns: 220px minmax(0, 1fr); gap: 12px; }
 }
 
 .st-title:focus, .st-page-head h3:focus { outline: none; }
 
-/* Settings › Photos backup (core/photos-settings.js): one flat form, rows split by hairlines, no cards inside cards. */
-.st-group h4.ph-h { text-transform: none; letter-spacing: 0; font-size: 15px; font-weight: 650; color: var(--wz-text); }
-.ph { display: flex; flex-direction: column; }
-.ph-intro, .ph-note, .ph-server { margin: 0 4px 10px; font-size: 13px; line-height: 1.4; color: var(--wz-text-secondary); }
-.ph-server { margin-top: 12px; color: var(--wz-text-muted); overflow-wrap: anywhere; }
-.ph-status { margin: 10px 4px 8px; font-size: 14px; color: var(--wz-text); }
-.ph-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 10px 4px; border: 0; border-bottom: 1px solid var(--wz-border); background: transparent; color: var(--wz-text); text-align: left; }
-.ph-row:disabled { opacity: .55; }
-.ph-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.ph-tx b { font-size: 15px; font-weight: 600; }
-.ph-tx small { margin-top: 2px; font-size: 12.5px; color: var(--wz-text-muted); }
-.ph-field { display: flex; flex-direction: column; gap: 6px; padding: 12px 4px; border-bottom: 1px solid var(--wz-border); font-size: 13px; color: var(--wz-text-secondary); }
-.ph-field input { min-height: 44px; padding: 0 12px; border: 1px solid var(--wz-border); border-radius: 10px; background: var(--wz-surface); color: var(--wz-text); font: inherit; font-size: 15px; }
-.ph-field input:focus { outline: 2px solid var(--wz-accent); outline-offset: 0; }
-.ph-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-.ph-btn { padding: 10px 16px; border: 1px solid var(--wz-border); border-radius: 12px; background: var(--wz-surface); color: var(--wz-text); font-size: 14px; font-weight: 600; }
-.ph-btn.primary { align-self: flex-start; margin: 0 4px 10px; background: var(--wz-accent); border-color: var(--wz-accent); color: var(--wz-base); }
-.ph-btn.ghost { background: transparent; color: var(--wz-text-secondary); }
-.ph-btn.danger { border-color: var(--wz-warning); color: var(--wz-warning); background: transparent; }
-.ph-btn:disabled { opacity: .55; }
-.ph-link { padding: 0; min-height: 0; background: transparent; color: var(--wz-accent); text-decoration: underline; font: inherit; }
-.st-root[data-settings-root] .ph-link { min-height: 0; min-width: 0; }
-.ph-albums { display: flex; flex-direction: column; padding: 2px 0 6px 4px; border-bottom: 1px solid var(--wz-border); }
-.ph-album { display: flex; align-items: center; gap: 12px; padding: 8px 4px; background: transparent; color: var(--wz-text); text-align: left; font-size: 15px; }
-.ph-check { flex: 0 0 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--wz-text-muted); }
-.ph-album[aria-checked="true"] .ph-check { background: var(--wz-accent); border-color: var(--wz-accent); box-shadow: inset 0 0 0 3px var(--wz-base); }
+
+/* Tweaks that come with the picked skin: one disclosure under the picker. */
+.tw-set > summary { list-style: none; cursor: pointer; }
+.tw-set > summary::-webkit-details-marker { display: none; }
+.tw-set[open] > summary .st-go { transform: rotate(90deg); }
+.tw-set .tw-row { padding-left: 18px; }
+/* About & updates: flat on the page. One update card when there is something to do, then two segmented choices.
+ * Nothing boxed inside a box; type large enough to read at arm's length; every target ≥ 48px. */
+.st-hint { margin: 0 4px 16px; font-size: 14px; line-height: 1.45; color: var(--wz-text-secondary); }
+.st-hint { margin-top: 10px; }
+/* The update card: one look for Update, Updating…, Couldn’t update and Reload; only its words change. */
+.osu-card { display: flex; align-items: center; gap: 12px; margin: 0 0 18px; padding: 16px 14px 16px 18px; border-radius: 20px; background: var(--wz-accent-soft); color: var(--wz-text); }
+.osu-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.osu-tx b { font-size: 17px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; text-wrap: balance; }
+.osu-tx > span { font-size: 15px; line-height: 1.35; color: var(--wz-text-secondary); text-wrap: balance; }
+.st-root[data-settings-root] button.osu-go { flex: none; min-height: 48px; min-width: 88px; padding: 10px 18px; border: 0; border-radius: 99px; background: var(--wz-accent); color: var(--wz-base); font-size: 16px; font-weight: 700; touch-action: manipulation; }
+.st-root[data-settings-root] button.osu-go:disabled { opacity: .5; }
+.st-root .osu-card button:focus:not(:focus-visible) { outline: none; }
+.st-root .osu-card button:focus-visible { outline: 2px solid color-mix(in srgb, var(--wz-accent) 70%, transparent); outline-offset: 2px; }
+.st-card-wrap { display: block; }
+/* No box on tap; a soft rounded ring only for keyboard focus. */
+/* Fixed hues so the three lanes read apart on every skin, light or dark; text stays the skin's own ink. */
+.st-seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px; border-radius: 18px; background: var(--wz-surface); }
+.st-seg button { min-height: 48px; padding: 8px 12px; border: 0; border-radius: 14px; background: transparent; color: var(--wz-text-secondary); font-size: 16px; font-weight: 600; touch-action: manipulation; }
+.st-seg button[aria-checked="true"] { background: var(--wz-accent); color: var(--wz-base); font-weight: 700; }
+.st-seg button:disabled { opacity: .6; }
+/* Look: the skin picker sits flat on the page under a plain heading. */
+.st-root .sk-row { padding: 0; margin: 0 0 8px; }
+.st-root .sk-row .sk-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding: 0; margin: 0 4px 6px; }
+.st-root .sk-row .sk-head small { font-size: 14px; font-weight: 500; color: var(--wz-text-secondary); }
+/* Phone: the dock floats over the sheet's foot, so the last line must scroll clear of it. */
+.st-phone { padding-bottom: calc(104px + env(safe-area-inset-bottom)); }
+.st-desktop .st-seg { max-width: 360px; }
+.st-desktop .st-page { padding-bottom: 32px; }
+
+/* Minimal: feature modules keep their own markup, but nothing reads as a box on the page. */
+.st-root .us-row { padding: 12px 4px; margin: 0; border: 0; border-bottom: 1px solid var(--wz-border); border-radius: 0; background: transparent; }
+.st-root .us-t b { font-size: 16px; }
+.st-root .st-usage .st-empty { padding: 14px 4px; font-size: 15px; }
+.st-root .my-skin-row { margin: 0; }
+.st-root .sk-row { border-bottom: 1px solid var(--wz-border); padding-bottom: 16px; }
+.st-root .st-chats-options .st-row { gap: 14px; }
+.st-root .st-info summary { background: transparent; }
+
+/* About & updates without a card: one quiet line naming what is installed; the choices sit under plain labels. */
+.osu-sec { margin-top: 26px; }
+.osu-lbl { display: block; margin: 0 4px 8px; font-size: 13px; font-weight: 650; letter-spacing: .02em; color: var(--wz-text-muted); }
+
+/* My skin: the last tile of the grid, same size, dashed; ringed in ink while worn. Its controls open under the grid. */
+.st-root .skp-my .skp-mini-my { background: transparent; box-shadow: none; border: 0; outline: 1.5px dashed color-mix(in srgb, var(--ink) 40%, transparent); outline-offset: -1.5px; }
+.st-root .skp-my[aria-expanded="true"] .skp-mini-my, .st-root .skp-my.worn .skp-mini-my { outline-color: var(--ink); }
+.st-root .skp-my.worn .skp-mini-my { outline-style: solid; }
+.st-root .skp-my .skp-plus { left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; background: linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat, linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat; color: color-mix(in srgb, var(--ink) 55%, transparent); }
+.st-root .skp-my:focus-visible .skp-mini-my { outline: 2px solid color-mix(in srgb, var(--ink) 70%, transparent); }
+.st-root .ms-panel { border-bottom: 1px solid var(--wz-border); }
+.st-root .ms-panel .my-skin-row { margin: 0; border-bottom: 0; flex-wrap: wrap; }
+.st-root .ms-panel .my-skin-row.worn { box-shadow: none; }
+.st-root .ms-panel .my-skin-row + .my-skin-row { border-top: 1px solid var(--wz-border); }
+.st-root .ms-invite { margin: 8px 4px 16px; }
+
+/* Named recipes and New skin extend the shared settings sheet, cards and switch rows. */
+.st-root .skp-families .skp-nm { overflow-wrap: anywhere; }
+.st-root[data-settings-nested="true"] .st-page-head button { display: grid; }
+.st-root .skin-create { width: 100%; max-width: none; max-height: none; overflow: visible; }
+.st-root .skin-create > .st-actions { bottom: 0; margin: 12px 0 0; padding: 12px 0; z-index: 1; }
+.st-root .st-skin-toast { position: sticky; bottom: 12px; display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--wz-border); border-radius: 12px; background: linear-gradient(var(--wz-overlay), var(--wz-overlay)), var(--wz-base); color: var(--wz-text); z-index: 2; }
+.st-root .st-skin-toast button { min-height: 44px; padding: 8px 12px; background: var(--wz-surface); color: var(--wz-text); border: 1px solid var(--wz-border); border-radius: 8px; }
+/* Family first, then its colours: four compact family tiles, never the full palette catalogue. */
+.st-root .skp.skp-families { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 24px; }
+.st-root .skp-families .skp-mini { aspect-ratio: 1; border-radius: 12px; }
+.st-root .skp-families .skp-nm { font-size: 12px; }
+.st-root .skp-colours { margin-bottom: 20px; }
+/* Settings › Resources: the Home resource bars (core/resources.js, WosResources.bars), left-aligned on the page, in
+ * the skin's own ink. Label | bar | value per row; AI first, then Compute split by machine. Amber under a quarter
+ * left, red under a tenth. Skins that already draw bars on Home (e.g. Obsidian) keep their own look here too. */
+.st-root .st-res .rs-barsw.rs-widget.wz-home-widget { display: flex; flex-direction: column; gap: 22px; width: 100%; max-width: 480px; margin: 4px 0 0; padding: 0 4px; background: none; border: 0; box-shadow: none; overflow: visible; border-radius: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.st-res .rs-bg { --dc: var(--wz-text); display: flex; flex-direction: column; gap: 9px; }
+.st-res .rs-bg-hw { padding-top: 14px; border-top: 1px solid var(--wz-border); }
+.st-res .rs-gh { display: flex; align-items: baseline; gap: 6px; margin: 0 0 4px; font-size: 13px; }
+.st-res .rs-gh b { font-weight: 650; color: var(--wz-text); }
+.st-res .rs-gh span { font-size: 12px; color: var(--wz-text-secondary); }
+.st-root[data-settings-root] .st-res button.rs-br { display: grid; grid-template-columns: 64px minmax(60px, 1fr) 104px; align-items: center; column-gap: 10px; width: 100%; min-width: 0; min-height: 36px; padding: 0; border: 0; border-radius: 0; background: none; color: inherit; font: inherit; text-align: left; -webkit-tap-highlight-color: transparent; }
+.st-res .rs-br:active { opacity: .7; }
+.st-res .rs-bl { font-size: 14px; font-weight: 500; color: var(--wz-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-res .rs-bv { font-size: 13px; font-weight: 600; text-align: right; color: var(--wz-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.st-res .rs-bt { display: flex; gap: 2px; height: 8px; }
+.st-res .rs-bg-hw .rs-bt { height: 10px; }
+.st-res .rs-bs { position: relative; min-width: 8px; height: 100%; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--dc) 16%, transparent); }
+.st-res .rs-bf { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--dc); transition: width 1.1s cubic-bezier(.33, 1, .68, 1); }
+.st-res .rs-d1 { --dc: var(--wz-accent); }
+.st-res .rs-d2 { --dc: color-mix(in srgb, var(--wz-accent) 55%, var(--wz-text)); }
+.st-res .rs-d3 { --dc: var(--wz-text-secondary); }
+.st-res .rs-bs.rs-empty .rs-bf { background: color-mix(in srgb, var(--wz-danger) 55%, var(--wz-text)); }
+.st-res .rs-bs.rs-crit .rs-bf { background: var(--wz-danger); }
+.st-res .rs-bv.rs-empty { color: color-mix(in srgb, var(--wz-danger) 55%, var(--wz-text)); }
+.st-res .rs-bv.rs-crit { color: var(--wz-danger); }
+.st-res .rs-br-off .rs-bv { color: var(--wz-text-secondary); text-decoration: underline; text-underline-offset: 2px; }
+.st-res .rs-br-off .rs-bs { background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--wz-text) 18%, transparent) 0 4px, transparent 4px 7px); }
+.st-res .rs-lg { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 5px; font-size: 12px; color: var(--wz-text-secondary); }
+.st-res .rs-lg span { display: inline-flex; align-items: center; gap: 5px; }
+.st-res .rs-lg i { width: 8px; height: 8px; border-radius: 2px; background: var(--dc); }

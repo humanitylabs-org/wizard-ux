@@ -1,6 +1,9 @@
 # Wizard shell: the phone and desktop Wizard UX (web/), served by nginx, with every API path passed to the
 # Wizard Agent Service (its own container and app). Android/Mac native wrappers load this same surface.
 FROM nginx:1.28-alpine
+# Read-only registry-backed PWA manifests, supervised with nginx.
+RUN apk add --no-cache python3
+COPY packaging/app-install.py packaging/shell-processes.py /etc/wizard-shell/
 COPY web /usr/share/nginx/wizard-ux
 # Stamp each script/stylesheet link with its file's hash so a phone never mixes cached files from two releases.
 COPY tools/stamp-assets.sh /tmp/stamp-assets.sh
