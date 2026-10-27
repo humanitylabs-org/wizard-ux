@@ -52,8 +52,13 @@ const { pathToFileURL } = require('node:url');
       await page.unroute('**/wizard/v1/settings', deny); await page.locator('[data-response-style-retry]').click();
       await page.waitForSelector('[data-response-style]:not([disabled])');
       assert.equal(await page.locator('[data-response-style-retry]').count(), 0); ok(kind + ' retry reads current owner value');
-      await page.locator('[data-st-back]').click();
-      assert.equal(await page.locator('[data-settings-root]').getAttribute('data-settings-page'), ''); assert.equal(page.isClosed(), false); ok(kind + ' nested Back returns to Settings');
+      if (phone) {
+        await page.locator('[data-st-back]').click();
+        assert.equal(await page.locator('[data-settings-root]').getAttribute('data-settings-page'), ''); assert.equal(page.isClosed(), false); ok(kind + ' nested Back returns to Settings');
+      } else {
+        await page.locator('[data-st-page="appearance"]').click();
+        assert.equal(await page.locator('[data-settings-root]').getAttribute('data-settings-page'), 'appearance'); ok(kind + ' shared category navigation stays in Settings');
+      }
       await context.close();
     }
     const raw = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
