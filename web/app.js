@@ -1138,7 +1138,15 @@
   const hostedOpenable = id => { const a = APP[id]; if (!a?.url || a.kind !== 'wizard') return null; try { if (new URL(a.url, location.origin).origin !== location.origin) return null; } catch (e) { return null; } return a; };
   window.WizCanOpen = id => !!hostedOpenable(id);
   window.WizAppOpen = id => Object.values(W).some(w => w && w.appId === id);
-  window.WizOpenApp = id => { const x = hostedOpenable(id); return x ? openApp(x) : false; };
+  window.WizOpenApp = (id, path = '') => {
+    const x = hostedOpenable(id); if (!x) return false;
+    if (!path) return openApp(x);
+    let u; try { u = new URL(path, location.href); } catch (_) { return false; }
+    const rel = u.pathname + u.search + u.hash;
+    if (u.origin !== location.origin || appAt(rel)?.id !== id) return false;
+    // An explicit repair action is an app workflow, not a page sent for review.
+    return !!openWin({ app: 'frame', appId: id, url: rel });
+  };
   // Only trusted system windows may ask; check the actual sender frame, never a claimed app id.
   addEventListener('message', async e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-app' || typeof d.id !== 'string') return;
