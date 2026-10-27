@@ -30,6 +30,9 @@
     },
     "archive-top": {
       "since": 1
+    },
+    "home-main": {
+      "since": 1
     }
   }
 }
