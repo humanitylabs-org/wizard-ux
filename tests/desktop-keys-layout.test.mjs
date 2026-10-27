@@ -37,3 +37,10 @@ test('⌥↓/⌥↑ walk Ready chats only; ⌥←/⌥→ hop between list and me
   assert.match(js, /if \(!chatsSide\(d\)\) dirFocus\(d, 0\)/);
   assert.ok(js.includes("'Top ready chat'") && js.includes("<h5>Ready chats</h5>"));
 });
+
+test('⌥E Done and ⌥Z Snooze act on the open chat; the guide shows chat keys in a thread', () => {
+  assert.match(js, /code === 'KeyE' \|\| code === 'KeyZ'/);
+  assert.match(js, /CHATS\.threadAct\(f\.id, f\.thread, act\)/);
+  assert.match(js, /\['\[data-chact="done"\]', 'E'\], \['\[data-chact="snooze"\]', 'Z'\]/);
+  assert.ok(js.includes("['Enter', 'Send', '']") && js.includes("'This chat'"));
+});
