@@ -1687,6 +1687,8 @@ window.WizCore.chats = function createChats(H) {
     }
     return s.trimEnd();
   };
+  // Tool ids as the owner reads them in the live step list ("browser_exec" -> "Browser exec").
+  const stepName = tool => { const t = String(tool || '').replace(/^mcp__(wizard__)?/, '').replace(/__/g, ' · ').replace(/_/g, ' ').trim(); return t ? t[0].toUpperCase() + t.slice(1) : 'Working'; };
   function closeStream(c) { c.stream?.handle?.close(); clearTimeout(c.stream?.retry); c.stream = null; }
   function syncStream(w, c, turns, agent) {
     const sid = w.thread, s = LIVE.session(sid), pendingRun = LIVE.pendingRun?.(sid), rid = pendingRun || s?.runId;
@@ -1696,7 +1698,7 @@ window.WizCore.chats = function createChats(H) {
       c.stream = st;
       st.handle = LIVE.openRunStream?.(sid, agent, rid, snapshot => {
         if (c.stream !== st || W[w.id] !== w || w.thread !== sid || !elOf(w.id)) { closeStream(c); return; }
-        st.text = snapshot.text; st.terminal = snapshot.terminal;
+        st.text = snapshot.text; st.steps = snapshot.steps || []; st.terminal = snapshot.terminal;
         renderThreadLive(w);
         if (st.terminal && !st.reconciling) {
           st.reconciling = true;
@@ -1718,7 +1720,11 @@ window.WizCore.chats = function createChats(H) {
       st.landed = true; st.handle?.close(); clearTimeout(st.retry);
     }
     const visible = st && !st.landed ? streamAnswer(st.text) : '';
-    return visible ? `<div class="msg a" data-streaming="${esc(st.rid)}"><div class="bub">${md(visible)}</div><div class="mmeta">${st.terminal ? 'Finishing…' : 'Replying…'}</div></div>` : '';
+    const steps = st && !st.landed && !st.terminal ? st.steps || [] : [];
+    const stepHtml = steps.length ? `<ol class="ch-steps" aria-label="Working">${steps.map(x => `<li class="${x.done ? (x.error ? 'err' : 'done') : 'run'}"><b>${esc(stepName(x.tool))}</b>${x.preview ? ` <span>${esc(clip(x.preview, 90))}</span>` : ''}</li>`).join('')}</ol>` : '';
+    if (!visible && !stepHtml) return '';
+    const meta = st.terminal ? 'Finishing…' : visible ? 'Replying…' : 'Working…';
+    return `<div class="msg a" data-streaming="${esc(st.rid)}">${stepHtml}${visible ? `<div class="bub">${md(visible)}</div>` : ''}<div class="mmeta">${meta}</div></div>`;
   }
   function threadState(s, agent) {
     const working = isWorking(s);
