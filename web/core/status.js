@@ -71,17 +71,21 @@
   // Browser connectivity is a hint: Android/VPN networks can report offline while
   // Wizard is reachable. Only fresh evidence may overrule an offline event:
   // a new successful live read, or a healthy same-origin Wizard status probe.
-  let offlineReadAt = 0, evidenceGeneration = 0, liveEvidenceAt = 0, verifying = null, verifyAgain = false, verifiedAt = 0;
+  let offlineReadAt = 0, evidenceGeneration = 0, liveEvidenceAt = 0, verifying = null, verifyAgain = false, verifiedAt = 0, probedGeneration = -1;
   function verifyWizard(force = false) {
     if (verifying) { if (force) verifyAgain = true; return verifying; }
     verifiedAt = Date.now();
     const generation = evidenceGeneration;
     verifying = (async () => {
+      // AbortController + timer, not AbortSignal.timeout: iOS 16.0-16.3 WebViews lack it.
+      const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = ctl ? setTimeout(() => ctl.abort(), 5000) : 0;
       try {
-        const r = await fetch('/troubleshoot/api/status?source=connection-banner', { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(5000) });
+        const r = await fetch('/troubleshoot/api/status?source=connection-banner', { cache: 'no-store', credentials: 'same-origin', signal: ctl?.signal });
         const body = r.ok ? await r.json() : null;
-        if (body?.overall === 'ok' && generation === evidenceGeneration) { log('net:verified'); setNet('online'); return true; }
-      } catch (e) {}
+        // Remember which evidence this probe beat, so later non-network emits keep it.
+        if (body?.overall === 'ok' && generation === evidenceGeneration) { probedGeneration = generation; log('net:verified'); setNet('online'); return true; }
+      } catch (e) {} finally { if (timer) clearTimeout(timer); }
       return false;
     })().finally(() => {
       verifying = null;
@@ -96,6 +100,8 @@
     const liveAt = Math.max(L.at || 0, L.errorAt || 0);
     if (liveAt && liveAt !== liveEvidenceAt) { liveEvidenceAt = liveAt; evidenceGeneration++; }
     if (L.ok && !L.error && L.at > offlineReadAt) return setNet('online');
+    // A healthy probe stands until a newer offline event or live result moves the generation.
+    if (probedGeneration === evidenceGeneration) return setNet('online');
     if (navigator.onLine === false) return setNet('offline');
     if (L.error) { if (net !== 'offline' || navigator.onLine) setNet('reconnecting'); return; }
   }

@@ -115,3 +115,21 @@ test('live.js stamps failed reads so status can order them against probes', () =
   const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
   assert.match(live, /this\.error = e\.status === 403 \? 'access' : 'offline'; this\.errorAt = Date\.now\(\);/);
 });
+test('a healthy probe survives later non-network live emits while the browser still says offline', async () => {
+  const fetch = async () => ({ ok: true, json: async () => ({ overall: 'ok' }) });
+  const h = setup(true, fetch); h.success(); h.ctx.navigator.onLine = false; h.event('offline');
+  await turn(); await turn();
+  assert.equal(h.state(), 'restored');
+  h.L.emit(); // e.g. a thread marked read; no new read, no failure
+  assert.equal(h.state(), 'restored');
+  h.event('offline'); // a genuinely newer offline event still wins
+  assert.equal(h.state(), 'offline');
+});
+test('the probe works without AbortSignal.timeout (iOS 16.0-16.3)', async () => {
+  let opts;
+  const fetch = async (url, o) => { opts = o; return { ok: true, json: async () => ({ overall: 'ok' }) }; };
+  const h = setup(true, fetch); delete h.ctx.AbortSignal;
+  h.success(); h.ctx.navigator.onLine = false; h.event('offline');
+  await turn(); await turn();
+  assert.ok(opts); assert.equal(h.state(), 'restored');
+});
