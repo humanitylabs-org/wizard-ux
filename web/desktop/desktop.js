@@ -1656,14 +1656,15 @@
       pinned = !!pin;
       el.innerHTML = ''; el.hidden = false; el.classList.toggle('pinned', pinned); // visible first, so chips can be measured
       // Top bar: Home, desktops, new desktop, and the Speak buttons with their one-word meaning.
-      // [ ] ride on the chip of whatever is one step left / right (Home left of desktop 1; nothing past either end).
+      // [ ] go on whatever is one step left / right (Home left of desktop 1; nothing past either end).
       const stepL = homeOpen ? null : cur === 0 ? $('#logo') : $(`#wsList .ws[data-ws="${cur - 1}"]`);
       const stepR = homeOpen ? $('#wsList .ws[data-ws="0"]') : $(`#wsList .ws[data-ws="${cur + 1}"]`);
-      const withStep = (n, l) => n === stepL ? `[ ${l}` : n === stepR ? `${l} ]` : l;
       const marks = [['#searchBtn', '␣'], ['#status', 'I'], ['#settingsBtn', ','], ['#keysBtn', '/'], ['#logo', '`']];
-      for (const [q, l] of marks) { const n = $(q); if (vis(n)) chip(n, withStep(n, l)); }
-      $$('#wsList .ws[data-ws]').forEach(n => { const slot = C.workspaceNav.slot(+n.dataset.ws); if (slot <= 9 && vis(n)) chip(n, withStep(n, String(slot))); });
+      for (const [q, l] of marks) { const n = $(q); if (vis(n)) chip(n, l); }
+      $$('#wsList .ws[data-ws]').forEach(n => { const slot = C.workspaceNav.slot(+n.dataset.ws); if (slot <= 9 && vis(n)) chip(n, String(slot)); });
       const add = $('#wsList [data-newdesk]'); if (vis(add)) chip(add, 'T');
+      // Their own chip on a second row under the neighbour's key, so it reads as "either 2 or ]", not one combo.
+      if (vis(stepL)) chip(stepL, '['); if (vis(stepR)) chip(stepR, ']');
       // Home: ↓ on the Ready count (Miguel's skins) or the first unread row (stock Home): ⌥↓ opens it from here.
       if (homeOpen) { const r = $('#desktopHome [data-home-act="ready"]') || $('#desktopHome .home-card .home-row'); if (vis(r)) chip(r, '↓', 'inside'); }
       // [ ] on the desktops either side of this one (they wrap), under their numbers.

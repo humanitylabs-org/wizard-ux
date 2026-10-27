@@ -110,3 +110,8 @@ test('⌥[ ⌥] never wrap: left of desktop 1 is Home, nothing left of Home or r
   assert.match(js, /stepDesk\(-1\); \}\);/);
   assert.match(js, /leg\.classList\.add\('in-bar'\)/);
 });
+
+test('[ ] chips are their own second-row chips, never merged into the neighbour key', () => {
+  assert.doesNotMatch(js, /withStep/);
+  assert.match(js, /if \(vis\(stepL\)\) chip\(stepL, '\['\); if \(vis\(stepR\)\) chip\(stepR, '\]'\);/);
+});
