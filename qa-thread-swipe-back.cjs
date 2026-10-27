@@ -25,7 +25,10 @@ const where = p => p.evaluate(() => {
     await p.goto(BASE + '/wizard-os-home/?myskin=off'); await p.waitForSelector('#orbWrap'); await p.waitForTimeout(3000);
     const built = await p.evaluate(() => window.WosSkinHost?.builtinState || []);
     ok(built.includes('core:thread-swipe-back'), `${skin}: swipe-back built-in running (${JSON.stringify(built)})`);
-    await p.evaluate(() => window.__wos.openSheet('inbox')); await p.waitForTimeout(1500);
+    await p.evaluate(() => window.__wos.openSheet('inbox'));
+    // Wait for real sessions, not a fixed delay: the read-only upstream can be
+    // slower while another hosted app loads. A timeout still fails below.
+    await p.waitForFunction(() => !!document.querySelector('[data-chopen]') || !!window.__wos.live?.sessions?.find(s => !s.archived), null, { timeout: 30000 }).catch(() => {});
     const sid = await p.evaluate(() => document.querySelector('[data-chopen]')?.dataset.chopen || window.__wos.live?.sessions?.find(s => !s.archived)?.id || null);
     if (!sid) { ok(false, `${skin}: found a thread to open`); await ctx.close(); continue; }
     await p.evaluate(id => window.__wos.openWizardThread(id), sid); await p.waitForTimeout(1500);
