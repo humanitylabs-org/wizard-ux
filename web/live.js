@@ -441,7 +441,6 @@
     const st = s.runId && STOPPING.get(s.runId);
     if (st) { if (!WORKING.has(s.status) || Date.now() - st > 120000) STOPPING.delete(s.runId); else s.status = 'stopping'; }
   }
-  const STOPPING = new Map();
 
   /* ---- a send puts its thread in Working at once (James, 10 Oct 2026: "move it out of the ready list immediately
    * and into working… I don't want to see the thread I just replied to in my feed and then have a UX update") ----
@@ -451,6 +450,7 @@
    * this run settles (its idempotency key = the outbox item id); 2 min after acceptance it releases anyway.
    * A message that truly can't be sent puts the thread back where it was (the pill keeps Retry/Edit). */
   const PEND = new Map(); // sessionId -> { key, kind, text, at, state: 'sending'|'waiting'|'sent', sentAt, runId }
+  const STOPPING = new Map(); // runId -> when Stop was asked (applyLocal)
   const PEND_MAX = 2 * 60e3;
   // Admission is not completion: the newest receipt can arrive with an older thread status.
   // Keep the bounded hold through active acknowledgement, so a late stale poll cannot undo it.
