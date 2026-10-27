@@ -51,6 +51,15 @@ for value in ["", "http://box.example", "ftp://box.example", "box.example/other"
 if WizardOrigin.looksLikeWizard("<title>Sign in</title>") { failures += 1; print("FAIL: sign-in page passed") }
 if WizardOrigin.looksLikeWizard("<title>Wizard OS</title>") { failures += 1; print("FAIL: title alone passed") }
 if !WizardOrigin.looksLikeWizard("<title>Wizard OS</title><script src='core/app.js'></script>") { failures += 1; print("FAIL: shell refused") }
+
+// Probe verdicts (fail closed): HTTP 200 + a text/html Content-Type + the shell markers, all required.
+let shell = "<title>Wizard OS</title><script src='core/app.js'></script>"
+expect(WizardOrigin.probeVerdict(status: 200, contentType: "text/html; charset=utf-8", body: shell, host: "box"), nil, "shell")
+expect(WizardOrigin.probeVerdict(status: 200, contentType: nil, body: shell, host: "box"), "box answered, but it isn't a Wizard.", "no Content-Type")
+expect(WizardOrigin.probeVerdict(status: 200, contentType: "text/plain", body: shell, host: "box"), "box answered, but it isn't a Wizard.", "text/plain")
+expect(WizardOrigin.probeVerdict(status: 200, contentType: "text/html", body: "<title>Sign in</title>", host: "box"), "box answered, but it isn't a Wizard.", "sign-in page")
+expect(WizardOrigin.probeVerdict(status: 302, contentType: "text/html", body: shell, host: "box"), "box answered, but didn't open Wizard (HTTP 302).", "redirect")
+if WizardOrigin.probeLimit > 1 << 20 { failures += 1; print("FAIL: probe limit above 1 MiB") }
 if !WizardOrigin.needsTailscale("https://box.example.ts.net") || WizardOrigin.needsTailscale("https://box.example") {
     failures += 1; print("FAIL: needsTailscale")
 }
