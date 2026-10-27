@@ -55,7 +55,7 @@ test('James: Incognito reuses the skinned Settings switch, not a browser checkbo
   assert.match(s.el.innerHTML, /role="switch" aria-checked="true"/)
   assert.match(s.el.innerHTML, /class="sw on" aria-hidden="true"/)
   assert.ok(!s.el.innerHTML.includes('type="checkbox"'))
-  const bridge = fs.readFileSync(new URL('../web/core/chats-view.css', import.meta.url), 'utf8')
+  const bridge = readFileSync(new URL('../web/core/chats-view.css', import.meta.url), 'utf8')
   assert.match(bridge, /\.chats-view, \.ch-incog-toggle, \.ch-incognito \{/)
   assert.match(bridge, /--wz-text: var\(--ink/)
   s.component.close('one', true)
