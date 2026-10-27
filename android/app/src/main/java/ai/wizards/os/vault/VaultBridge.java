@@ -37,9 +37,15 @@ public final class VaultBridge {
 
     public VaultBridge(Activity activity) { this.activity = activity; }
 
-    /** Navigation/detach revokes the old document before cancelling Android's prompt. */
+    /** Runs the active prompt's failure path; set while a prompt is in flight. */
+    private Runnable settleActive;
+
+    /** Navigation/detach revokes the old document before cancelling Android's prompt. The op is settled
+     * here, so its late ERROR_CANCELED callback is a no-op and cannot touch a newer seal's key. */
     public void cancel() {
         CancellationSignal previous = active; active = null;
+        Runnable settle = settleActive; settleActive = null;
+        if (settle != null) settle.run();
         if (previous != null) previous.cancel();
     }
 
@@ -113,18 +119,18 @@ public final class VaultBridge {
     private void seal(String app, String secret, String title, BiConsumer<JSONObject, String> reply, BooleanSupplier trusted) throws Exception {
         // Saving rotates the app's biometric-bound key into the spare slot. The saved secret and its key stay
         // until the new ciphertext is committed, so cancelling or failing the prompt never erases it.
-        String next = slots.begin(app);
+        VaultSlots.Op next = slots.begin(app);
         Cipher cipher;
-        try { cipher = Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.ENCRYPT_MODE, key(next, true)); }
-        catch (Exception e) { slots.abort(app, next); throw e; }
+        try { cipher = Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.ENCRYPT_MODE, key(next.alias, true)); }
+        catch (Exception e) { slots.abort(next); throw e; }
         prompt(cipher, title, "Use your fingerprint to save it on this phone", reply, trusted, done -> {
             byte[] clear = secret.getBytes(StandardCharsets.UTF_8);
             try {
                 byte[] encrypted = done.doFinal(clear);
-                slots.commit(app, next, VaultPolicy.pack(done.getIV(), encrypted));
+                slots.commit(next, VaultPolicy.pack(done.getIV(), encrypted));
                 return new JSONObject().put("saved", true);
             } finally { Arrays.fill(clear, (byte) 0); }
-        }, () -> slots.abort(app, next));
+        }, () -> slots.abort(next));
     }
 
     private void open(String app, String sealed, String title, BiConsumer<JSONObject, String> reply, BooleanSupplier trusted) throws Exception {
@@ -147,6 +153,7 @@ public final class VaultBridge {
     private void prompt(Cipher cipher, String title, String subtitle, BiConsumer<JSONObject, String> reply, BooleanSupplier trusted, Done done, Runnable onFail) {
         CancellationSignal token = new CancellationSignal(); active = token;
         boolean[] settled = {false};
+        settleActive = () -> { if (!settled[0]) { settled[0] = true; onFail.run(); } };
         Runnable timeout = () -> {
             if (active != token) return;
             cancel();
@@ -157,7 +164,7 @@ public final class VaultBridge {
             boolean mine = active == token;
             if ((error != null || !mine) && !settled[0]) { settled[0] = true; onFail.run(); }
             if (!mine) return;
-            active = null; main.removeCallbacks(timeout);
+            active = null; settleActive = null; main.removeCallbacks(timeout);
             if (trusted.getAsBoolean()) reply.accept(result, error);
         };
         BiometricPrompt.Builder builder = new BiometricPrompt.Builder(activity).setTitle(title).setSubtitle(subtitle)
@@ -168,7 +175,8 @@ public final class VaultBridge {
         try {
             builder.build().authenticate(new BiometricPrompt.CryptoObject(cipher), token, activity.getMainExecutor(), new BiometricPrompt.AuthenticationCallback() {
                 @Override public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult result) {
-                    if (active != token || !trusted.getAsBoolean()) { cancel(); finish.accept(null, "cancelled"); return; }
+                    // A stale success must not cancel a newer prompt: only cancel when this op is still active.
+                    if (active != token || !trusted.getAsBoolean()) { if (active == token) cancel(); finish.accept(null, "cancelled"); return; }
                     try { finish.accept(done.run(result.getCryptoObject().getCipher()), null); }
                     catch (Exception e) { finish.accept(null, "failed"); }
                 }

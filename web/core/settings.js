@@ -146,7 +146,7 @@
   let identityInfo = null, identityAsked = false;
   register({ id: 'wizard-id', page: 'phone', aliases: ['wizard-id'], available: () => !!window.wizardDevicePort,
     html(ctx) {
-      if (!identityAsked) { identityAsked = true; window.WizCore?.bridge?.call('identity.info').then(info => { identityInfo = info?.npub ? info : null; (ctx?.render || ctx?.changed)?.(); }).catch(() => {}); }
+      if (!identityAsked) { identityAsked = true; window.WizCore?.bridge?.call('identity.info').then(info => { identityInfo = info?.npub ? info : null; (ctx?.render || ctx?.changed)?.(); }).catch(() => { identityAsked = false; }); }
       const sub = identityInfo?.npub ? `${identityInfo.name || 'Your ID'} · ${identityInfo.backed_up ? 'Backed up' : 'Not backed up'}` : 'Not set up · your signing key stays on this phone';
       return `<div class="st-group"><h4>Identity</h4>${row('wizard-id', 'Wizard ID', sub)}</div>`;
     },

@@ -33,7 +33,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Receive shares (people as direct targets) | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound share route, URL-fragment payloads | pending until `receive` is true, acked once |
 | Mic, camera, screen capture | `WizardApp.capture.start / pending / ack`, `WizardApp.voiceInput.register` | `getUserMedia`, `MediaRecorder`, mic AudioContext | pending survives Back; ack once |
 | Title-bar tools | `WizardApp.titlebar.set(tools)` | an app header repeating the title | tools appear in the shell title bar |
-| One biometric-protected app secret | `WizardApp.vault.has / seal / open / forget` (`web/core/app-client.js`, `app-services.js`; `wizardDevicePort` vault adapter in `vault/VaultBridge.java`) | own ports, server sealed copies, identity aliases | cancel/reload denies plaintext; app-key isolation |
+| One biometric-protected app secret | `WizardApp.vault.has / seal / open / forget` (`web/core/app-client.js`, `app-services.js`; `wizardDevicePort` vault adapter in `vault/VaultBridge.java`, two-slot `VaultSlots`) | own ports, server sealed copies, identity aliases | cancel/reload denies plaintext; app-key isolation; cancelled reseal keeps old |
 | Protect unsaved work from updates | `WizardApp.update.hold` | app service worker, forced reload | hold released only after save + readback |
 | Reading place in an app document | shell-owned `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic for registered apps | app-local scroll store | reopen lands at the saved place |
 | Motion, haptics, press feel | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own spring/haptic helpers | — |

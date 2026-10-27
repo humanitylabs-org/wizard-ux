@@ -19,13 +19,17 @@ public class VaultSlotsTest {
             for (int i = 0; i < k.length; i++) { if (v[i] == null) prefs.remove(k[i]); else prefs.put(k[i], v[i]); }
             return true;
         }
-        @Override public void deleteKey(String alias) { keys.remove(alias); }
+        String failDelete;
+        @Override public void deleteKey(String alias) throws Exception {
+            if (alias.equals(failDelete)) throw new Exception("keystore busy");
+            keys.remove(alias);
+        }
     }
 
     /** What VaultBridge.seal does around the prompt; `ok` is whether the prompt succeeded. */
     static void seal(VaultSlots slots, Fake f, String app, String packed, boolean ok) throws Exception {
-        String next = slots.begin(app); f.keys.add(next);
-        if (ok) slots.commit(app, next, packed); else slots.abort(app, next);
+        VaultSlots.Op next = slots.begin(app); f.keys.add(next.alias);
+        if (ok) slots.commit(next, packed); else slots.abort(next);
     }
 
     @Test public void cancellingAResealKeepsTheSavedSecretAndItsKey() throws Exception {
@@ -65,20 +69,20 @@ public class VaultSlotsTest {
         Fake f = new Fake(); VaultSlots s = new VaultSlots(f);
         seal(s, f, "messenger", "old", true);
         String oldAlias = s.currentAlias("messenger");
-        String next = s.begin("messenger"); f.keys.add(next);
+        VaultSlots.Op next = s.begin("messenger"); f.keys.add(next.alias);
         f.failWrites = true;
-        assertThrows(IllegalStateException.class, () -> s.commit("messenger", next, "new"));
-        s.abort("messenger", next);
+        assertThrows(IllegalStateException.class, () -> s.commit(next, "new"));
+        s.abort(next);
         assertEquals("old", f.prefs.get("messenger"));
         assertEquals(Set.of(oldAlias), f.keys);
     }
 
     @Test public void aLateAbortNeverDeletesTheCommittedKey() throws Exception {
         Fake f = new Fake(); VaultSlots s = new VaultSlots(f);
-        String next = s.begin("messenger"); f.keys.add(next);
-        s.commit("messenger", next, "saved");
-        s.abort("messenger", next);
-        assertTrue(f.keys.contains(next));
+        VaultSlots.Op next = s.begin("messenger"); f.keys.add(next.alias);
+        s.commit(next, "saved");
+        s.abort(next);
+        assertTrue(f.keys.contains(next.alias));
         assertEquals("saved", f.prefs.get("messenger"));
     }
 
@@ -90,5 +94,41 @@ public class VaultSlotsTest {
         assertNull(f.prefs.get("messenger")); assertNull(f.prefs.get("slot.messenger"));
         assertEquals("m", f.prefs.get("music"));
         assertEquals(Set.of(s.currentAlias("music")), f.keys);
+    }
+
+    /** Review on the vault fix: navigation cancels A, the new page seals B on the same spare alias, then A's late cancel arrives. */
+    @Test public void aLateAbortFromAnEarlierSealNeverTouchesTheNewerSeal() throws Exception {
+        Fake f = new Fake(); VaultSlots s = new VaultSlots(f);
+        seal(s, f, "messenger", "old", true);
+        String oldAlias = s.currentAlias("messenger");
+        VaultSlots.Op a = s.begin("messenger"); f.keys.add(a.alias);
+        VaultSlots.Op b = s.begin("messenger"); f.keys.add(b.alias);
+        assertEquals(a.alias, b.alias);
+        s.abort(a);
+        assertTrue("B's key survives A's late abort", f.keys.contains(b.alias));
+        s.commit(b, "new");
+        assertEquals("new", f.prefs.get("messenger"));
+        assertEquals(b.alias, s.currentAlias("messenger"));
+        assertEquals(Set.of(b.alias), f.keys);
+        assertFalse(f.keys.contains(oldAlias));
+    }
+
+    @Test public void aSupersededSealCannotCommit() throws Exception {
+        Fake f = new Fake(); VaultSlots s = new VaultSlots(f);
+        seal(s, f, "messenger", "old", true);
+        VaultSlots.Op a = s.begin("messenger"); f.keys.add(a.alias);
+        s.begin("messenger");
+        assertThrows(IllegalStateException.class, () -> s.commit(a, "stale"));
+        assertEquals("old", f.prefs.get("messenger"));
+    }
+
+    @Test public void failingToDropTheOldKeyAfterCommitStillReportsSaved() throws Exception {
+        Fake f = new Fake(); VaultSlots s = new VaultSlots(f);
+        seal(s, f, "messenger", "old", true);
+        f.failDelete = s.currentAlias("messenger");
+        VaultSlots.Op next = s.begin("messenger"); f.keys.add(next.alias);
+        s.commit(next, "new"); // must not throw: the new secret is saved
+        assertEquals("new", f.prefs.get("messenger"));
+        assertEquals(next.alias, s.currentAlias("messenger"));
     }
 }
