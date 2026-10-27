@@ -66,3 +66,17 @@ test('phone Settings sheet closes by swiping its grip down (×, Back and the scr
   assert.match(phoneCss, /#settings > \.sheet-grip \{[^}]*touch-action: none;/);
   assert.match(phone, /if \(e\.target\.closest\('\[data-stclose\]'\)\) return closeSheets\(\);/);
 });
+
+test('a form in a window aimed at _top or _parent stays in its window (guardFrame), other targets are left alone', () => {
+  const sb = { location: { origin: 'http://w.test', href: 'http://w.test/wizard-os-home/desktop.html' }, navigator: { userAgent: 'x' }, URL };
+  sb.window = sb; vm.runInNewContext(links, sb);
+  const ls = {}, doc = { addEventListener: (t, f) => { (ls[t] ||= []).push(f); } };
+  const win = { document: doc, location: { href: 'http://w.test/files/a.html' }, open() {} };
+  sb.WizLinks.guardFrame(win, '/files/', { open() {}, route: () => false });
+  const form = t => { const a = { target: t }; return { getAttribute: k => a[k] ?? null, setAttribute: (k, v) => { a[k] = v; }, a }; };
+  const submit = (f, b) => ls.submit.forEach(fn => fn({ target: f, submitter: b }));
+  for (const t of ['_top', '_parent', '_TOP']) { const f = form(t); submit(f); assert.equal(f.a.target, '_self', t); }
+  for (const t of ['_blank', 'named', null]) { const f = form(t); submit(f); assert.equal(f.a.target, t, String(t)); }
+  const f = form(null), b = { attrs: { formtarget: '_top' }, hasAttribute(k) { return k in this.attrs; }, getAttribute(k) { return this.attrs[k]; }, setAttribute(k, v) { this.attrs[k] = v; } };
+  submit(f, b); assert.equal(b.attrs.formtarget, '_self', 'a submit button\'s formtarget too');
+});

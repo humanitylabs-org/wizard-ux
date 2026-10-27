@@ -350,6 +350,12 @@
       if (!leaves(u, a.getAttribute('target'))) return;
       e.preventDefault(); e.stopPropagation(); go(u);
     }, true);
+    // A form aimed at _top/_parent would replace the whole shell (desktop previews and kept pages are windows): it stays in its window.
+    doc.addEventListener('submit', e => {
+      const f = e.target, b = e.submitter, own = b && b.hasAttribute && b.hasAttribute('formtarget');
+      const t = ((own ? b.getAttribute('formtarget') : f && f.getAttribute && f.getAttribute('target')) || '').toLowerCase();
+      if (t === '_top' || t === '_parent') (own ? b : f).setAttribute(own ? 'formtarget' : 'target', '_self');
+    }, true);
     try {
       const orig = win.open;
       win.open = function (href, tgt, feat) {
