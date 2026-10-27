@@ -23,7 +23,7 @@ test('a tool starting between history reads appears inside the existing activity
 });
 test('ID-less live status stays separate from named history; completed replay cannot add duplicate rows',()=>{
  const started=sb.window.WosWork.html(turn,{...opts,streamSteps:[{tool:'terminal',preview:'echo <script>\n  hello',done:false}]});
- assert.equal(rows(started),2);assert.match(started,/echo &lt;script&gt; hello/);assert.doesNotMatch(started,/<script>/);
+ assert.equal(rows(started),2);assert.match(started,/echo &lt;script&gt; hello/);assert.doesNotMatch(started,/<script>/i);
  const completed=sb.window.WosWork.html(turn,{...opts,streamSteps:[{tool:'terminal',preview:'echo old',done:true}]});
  assert.equal(rows(completed),1);assert.doesNotMatch(completed,/echo old/);
  const ended=sb.window.WosWork.html(turn,{...opts,live:false,streamSteps:[{tool:'terminal',preview:'echo stale',done:false}]});
