@@ -796,6 +796,9 @@ html[data-shell="phone"] .ch-msgs .bub table { font-size: 15px; }
 /* Pinned chats (synced per owner; design: Novaire, wizard-ux PR 250) and Boomerang markers. */
 .ch-row-wrap { position: relative; }
 .ch-row-wrap > .ch-row { padding-right: 42px; }
+.ch-fail.diagnosed .lb { text-transform: none; letter-spacing: 0; font-size: 17px; }
+.ch-row-wrap.diagnosed .ch-row { padding-right: 122px; }
+.ch-row-signin { position: absolute; z-index: 2; right: 44px; top: 50%; transform: translateY(-50%); padding: 8px 10px; border: 1px solid var(--wz-border, var(--line)); border-radius: 10px; background: var(--wz-surface, var(--surface)); color: var(--wz-text, var(--ink)); font: inherit; font-size: 13px; cursor: pointer; }
 .ch-pin-toggle { position: absolute; z-index: 1; right: 7px; top: 50%; width: 32px; height: 32px; margin-top: -16px; display: grid; place-items: center; border-radius: 10px; color: var(--ink-3); opacity: .38; transition: opacity .14s ease, color .14s ease, background .14s ease; }
 .ch-pin-toggle::after { content: ''; position: absolute; inset: -6px; }
 .ch-pin-toggle svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
