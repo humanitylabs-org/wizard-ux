@@ -2,7 +2,7 @@
 
 **One implementation per capability.** NEW: `web/core/` + row, never an app.
 
-CI: [reuse gate](app-reuse-gate.md).
+CI: [reuse](app-reuse-gate.md).
 
 
 ```
@@ -33,7 +33,7 @@ Visual: <side-by-side screenshot, or "none">
 | Share out (people → apps → Other apps) | `WizardApp.share.text / file` | own picker | cancel ≠ shared |
 | Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound route | pending until accepted, ack once |
 | Mic, camera, screen capture | `WizardApp.capture.start / pending / ack`, `WizardApp.voiceInput.register` | `getUserMedia`, `MediaRecorder`, mic AudioContext | pending survives Back; ack once |
-| Title-bar tools | `WizardApp.titlebar.set(tools)` | an app header repeating the title | tools appear in the shell title bar |
+| Title tools | `WizardApp.titlebar.set(tools)` | duplicate header | shell title bar |
 | Protect unsaved work from updates | `WizardApp.update.hold` | app service worker, forced reload | released only after save+readback |
 | Reading place in an app document | shell-owned `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic for registered apps | app-local scroll store | reopen lands at the saved place |
 | Motion, haptics, press feel | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own spring/haptic helpers | — |
@@ -44,10 +44,10 @@ Visual: <side-by-side screenshot, or "none">
 | Need | Use | Never hand-roll |
 |---|---|---|
 | Chats: agent/Space Focus, Filter, sections, search, composer, files, read state, Copy/Share; Novairecito Recall/Done | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); `setFocus` persists `w.focus`; `migrateChatsFocus` migrates; `WizLive` owns data, stream + tool steps; diagnosis: Sign in; revision invalidates cache | second Chats/Focus parser; per-agent/shell routing |
-| Incognito disposable text conversation | `WizCore.incognitoChats` (`web/core/incognito-chat.js`), composed by Chats; shared Markdown, `WosWork` and `WizLive.openRunStream` with explicit ephemeral target; memory-only manual Retry | durable drafts/outbox, per-app or per-shell incognito implementation |
-| Alternative Chats list | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
+| Incognito | `WizCore.incognitoChats` (`web/core/incognito-chat.js`); `WizLive.openRunStream`, RAM Retry | durable state or forks |
+| Chats slot | `WizChatsHost` (`web/core/chats-view.js`) | forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`web/core/edge-peek.js`), host storage | skin-local duplicate |
-| Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
+| Repaint: only changed nodes move | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
 | Models, retry, composer mic, receipts, reading place | `WosChatPower` (`web/core/chat-power.js`: per-thread anchor/offset/atBottom; repair workflow) + `WosModels` (`web/core/chat-models.js`; pooled Claude first, fresh on open; diagnosed variant: model-aware Sign in, no Retry), `WosErrors` (`web/core/chat-errors.js`), `WosWork` (`web/core/chat-work.js`: one expandable activity group: timed history + live tool previews) | model/error/reading-place forks; duplicate diagnosis notice or parallel live steps list |
 | Markdown, drafts, rich copy, Bangkok time, media viewer | `WosChat` (`chat-kit.js`: `md`, `copyRich`, `viewer`) | markdown library, own lightbox |
 | Owner-created Spaces / Focus | `WizCore` Chats (`web/core/chats.js`), `WizLive.putPrefs` (`spaces`); one Space naming form; `WizLive.spaceSessions(ids)` hydrates focused members; `winAgent` / `modelRoute` drive every new-chat adapter; new threads join the Space in front (`WosOutbox.onNew`); restored Focus waits for a complete agent census, hidden agents stay explicit-route targets, New Space fills use the scoped Spaces tool for main and routed agents; `WosAgents.colour` / `distinctHues` drive tab identity and `--ch-agent-hue` | automatic subject tabs, separate collection store, per-shell Focus routing or section implementations |
@@ -85,7 +85,7 @@ Visual: <side-by-side screenshot, or "none">
 
 | Need | Use | Never hand-roll |
 |---|---|---|
-| The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`); Android mirror `android/app/src/main/assets/assist/everywhere.html` | PNG + CSS spin, Lottie, SVG |
+| Orb | `Orb.create(canvas, fallback, {R})` (`web/orb.js`); Android: `android/app/src/main/assets/assist/everywhere.html` | images/CSS spin |
 | Skins, backgrounds, scenery, skin switches (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`), `WosSkinHost` (`web/core/skin-host.js`; tweaks: `core/slots.json` incl. `home-main` + `paintHome`, `windowRefresh`, beside, inbox, `data.read` resources/app, `back.push`), `WosExperience` (`web/core/experience.js`), `WosMySkin` (`web/core/my-skin.js`), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own gradients, canvases or colour constants |
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) | own keyframe sets |
 | Tour/help ("Step N of 3": Talk, Reply in Chats, Done), responsive Done, skip/exit; desktop guide `WosTour.desk` ("Step N of 2") | `WosTour` (`web/core/tour.js`) | — |

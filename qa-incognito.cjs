@@ -26,19 +26,23 @@ async function browserState(page) {
       p.on('pageerror', e => errors.push(String(e)));
       p.on('request', r => { if (!['GET', 'HEAD'].includes(r.method())) writes.push({ url: r.url(), body: r.postData() || '' }); });
       await p.goto(BASE + (mobile ? '' : 'desktop.html'));
-      await p.waitForFunction(() => window.WosAgents?.ready && WosAgents.get('private')?.incognito_available);
+      await p.waitForFunction(() => window.WosAgents?.get('private')?.incognito_available);
+      // Finish the real first-device workspace join before choosing a window;
+      // otherwise the phone's shared desk can replace the desktop's starter ID.
+      await p.waitForFunction(() => window.WosWorkspaceSync?.current?.ok === true);
       await p.evaluate(() => window.WizOpenAgentChats('private'));
-      await p.waitForFunction(() => Object.values((window.__wos || window.__wux).wins).some(w => w.app === 'chats' && w.agent === 'private'));
-      const wid = await p.evaluate(() => Object.values((window.__wos || window.__wux).wins).find(w => w.app === 'chats' && w.agent === 'private').id);
+      await p.waitForFunction(() => Object.values((window.__wos || window.__wux).wins).some(w => w.app === 'chats' && (w.agent === 'private' || (w.focus?.kind === 'agent' && w.focus.key === 'private'))));
+      const wid = await p.evaluate(() => Object.values((window.__wos || window.__wux).wins).find(w => w.app === 'chats' && (w.agent === 'private' || (w.focus?.kind === 'agent' && w.focus.key === 'private'))).id);
       if (mobile) await p.evaluate(id => __wos.goDesk(__wos.desks.findIndex(d => d.wins.includes(id))), wid);
-      const pane = p.locator(`[data-chats="${wid}"]`);
-      await pane.locator('[data-chopen="synthetic-normal"]').first().click();
+      const pane = p.locator(`[data-chats="${wid}"]`), listPane = p.locator(`[data-chats="${wid}${mobile ? '' : '::list'}"]`);
+      await listPane.locator('[data-chopen="synthetic-normal"]').first().click();
       await pane.getByText('Normal private history stays saved.', { exact: false }).waitFor();
       check(await pane.locator('[data-incog-start]').count() === 0, tag + ': no toggle in existing private threads');
-      await pane.locator('[data-chback]').click();
-      check(await pane.locator('[data-incog-start]').count() === 0, tag + ': no toggle on the Chats list');
-      await pane.locator('[data-chnew]').first().click();
-      await pane.locator('[data-incog-start]').waitFor();
+      if (mobile) await pane.locator('[data-chback]').click(); else await p.keyboard.press('Escape');
+      check(await listPane.locator('[data-incog-start]').count() === 0, tag + ': no toggle on the Chats list');
+      await listPane.locator('[data-chnew]').first().click();
+      try { await pane.locator('[data-incog-start]').waitFor(); }
+      catch (e) { console.error('synthetic-toggle-state', await p.evaluate(() => ({ agents: WosAgents.list, wins: (window.__wos || window.__wux).wins, incognito: typeof WizCore.incognitoChats, headers: [...document.querySelectorAll('.ch-head')].map(x => x.textContent) })), errors); throw e; }
       if (mobile) await p.screenshot({ path: path.join(OUT, 'phone-new-chat-toggle.png') });
       const ordinaryDraft = 'ordinary-draft-kept-' + crypto.randomUUID();
       await pane.locator('.ch-compose textarea').fill(ordinaryDraft);
@@ -68,10 +72,11 @@ async function browserState(page) {
       check(await pane.locator('.ch-compose textarea').inputValue() === ordinaryDraft, tag + ': ordinary private draft unchanged');
       check(!(await browserState(p)).includes(canary), tag + ': no browser resurrection after close');
       await pane.locator('[data-incog-start]').click(); await pane.locator('[data-incog-field]:not([disabled])').waitFor();
-      p.once('dialog', d => d.accept()); await pane.locator('.ch-back[data-incog-close]').click();
-      await pane.locator('[data-chnew]').first().waitFor();
+      p.once('dialog', d => d.accept());
+      if (mobile) await pane.locator('.ch-back[data-incog-close]').click(); else await p.keyboard.press('Escape');
+      await listPane.locator('[data-chnew]').first().waitFor();
       check(await pane.locator('[data-incog-thread]').count() === 0, tag + ': nested Back ends one thread level without exiting the app');
-      await pane.locator('[data-chnew]').first().click();
+      await listPane.locator('[data-chnew]').first().click();
       await pane.locator('[data-incog-start]').click(); await pane.locator('[data-incog-field]:not([disabled])').waitFor();
       await pane.locator('[data-incog-field]').fill(canary + '-reload');
       await p.reload(); await p.waitForFunction(() => window.WosAgents?.ready);
