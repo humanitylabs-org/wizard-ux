@@ -431,7 +431,7 @@ window.WosChatPower = function chatPower(A) {
     if (!E) return rowHtml;
     const busy = E.busy.get(s.id);
     const rc = s.reconnect ? `<button type="button" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : '';
-    if (rc) return `<div class="ch-err diagnosed" data-errsid="${esc(s.id)}">${rowHtml}<div class="ch-err-b">${rc}</div></div>`;
+    if (rc) return `<div class="ch-err diagnosed" data-errsid="${esc(s.id)}">${rowHtml}</div>`;
     return `<div class="ch-err" data-errsid="${esc(s.id)}">${rowHtml}<div class="ch-err-b">${rc}<button type="button"${rc ? ' class="ghost"' : ''} data-errretry="${esc(s.id)}" ${busy ? 'disabled' : ''}>Retry</button><button type="button" class="ghost" data-errdismiss="${esc(s.id)}" ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></div>`;
   }
   function errorsExtra() {

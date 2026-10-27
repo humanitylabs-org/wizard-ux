@@ -14,7 +14,7 @@ test('an undiagnosed failure keeps the existing Retry, model choice and Dismiss'
 });
 test('the held message reply is re-read after sign-in without an extra tap',()=>{
  const source=read('web/core/chats.js');assert.match(source,/const fresh = .*c.readRevision === revision && turnsCurrent/);assert.doesNotMatch(source,/!quiet \|\| c.readRevision === revision/);
- const shell=read('web/app.js');assert.match(shell,/window.WizOpenApp = \(id, path = ''\)/);assert.match(shell,/appAt\(rel\)\?\.id !== id/);assert.match(shell,/return !!openWin\(\{ app: 'frame', appId: id, url: rel \}\)/);
+ const shell=read('web/app.js');assert.match(shell,/window.WizOpenApp = \(id, path = ''\)/);assert.match(shell,/appAt\(rel\)\?\.id !== id/);assert.match(shell,/url: rel, from: \{ \.\.\.fromOf\(desks\[idx\].focus\), sid: '' \}, workflow: true/);assert.match(shell,/w.from && !w.workflow/);
 });
 test('diagnosed list rows name the sign-in problem and open the same in-shell fix path',()=>{
  assert.match(read('web/core/chats.js'),/s.reconnect && needs \? esc\(s.reconnect.name\) \+ ' sign-in expired'/);const power=read('web/core/chat-power.js');assert.match(power,/Sign in<\/button>/);assert.match(power,/H.openLink\?\.\(`\/troubleshoot\/\?provider=/);assert.match(power,/if \(rc\) return/);
