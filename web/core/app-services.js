@@ -4,7 +4,7 @@
   'use strict';
   if (window.WizAppServices) return;
   const VERSION = 1, ORIGIN = location.origin, frames = new Map();
-  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.receive', 'share.targets', 'share.pending', 'share.ack', 'voice.transcribe', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set', 'orb.set', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget']);
+  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'share.receive', 'share.targets', 'share.pending', 'share.ack', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set', 'shell.openCompanion', 'shell.closeCompanion', 'shell.postCompanion', 'shell.focusApp', 'orb.set', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget']);
 
   // Fingerprint vault (Android app only): one small secret per app, sealed on this phone by a Keystore key that
   // only a fingerprint unlocks. The shell names the app (st.appId), so apps can never ask for each other's secret.
@@ -58,7 +58,7 @@
   }
   function from(source) { return [...frames.values()].find(st => st.frame.contentWindow === source); }
   const changed = () => window.dispatchEvent(new CustomEvent('wizard:app-holds'));
-  function reset(st) { window.WizBackgroundAudio?.duck?.(st, false); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
+  function reset(st) { window.WizCompanionPane?.detach(st.frame); window.WizBackgroundAudio?.duck?.(st, false); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
   function reconcile() {
     for (const st of frames.values()) {
       if (st.tools && st.frame.isConnected && !barOf(st)?.querySelector(':scope > .wtools')) paintTools(st);
@@ -66,11 +66,11 @@
       if (st.doc && !valid(st, st.doc)) reset(st);
     }
   }
-  function attach(frame, { appId, path, openThread, openContextDraft, isVisible, readingStorage } = {}) {
+  function attach(frame, { appId, path, openThread, openContextDraft, isVisible, back, readingStorage } = {}) {
     frames.get(frame)?.detach();
     if (!frame || frame.tagName !== 'IFRAME' || !appId || !path) return () => {};
     let url; try { url = new URL(path, ORIGIN); } catch (_) { return () => {}; }
-    const st = { frame, appId, url, openThread, openContextDraft, isVisible, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
+    const st = { frame, appId, url, openThread, openContextDraft, isVisible, back, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
     if (!registered(st)) return () => {};
     const load = () => { if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); restoreReturn(st); };
     st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); if (st.badged) setBadge(st.appId, 0); };
@@ -172,7 +172,7 @@
     const st = from(source); if (!valid(st)) return null;
     const doc = source.document;
     if (st.doc && st.doc !== doc) reset(st);
-    st.doc = doc; st.client = client; st.lastAlive = Date.now();
+    st.doc = doc; if (client !== undefined) st.client = client; st.lastAlive = Date.now();
     const check = () => { if (!valid(st, doc)) throw fault('App frame is no longer authorized'); st.lastAlive = Date.now(); };
     const hold = reason => {
       check(); if (st.holds.size >= 64) throw fault('Too many update holds');
@@ -217,7 +217,21 @@
     };
     source.addEventListener('pagehide', () => { if (st.doc === doc) reset(st); }, { once: true });
     return Object.freeze({ version: VERSION, appId: st.appId,
-      ready() { check(); return { version: VERSION, hosted: true, appId: st.appId }; },
+      ready() { check(); window.WizCompanionPane?.ready(st.frame); return { version: VERSION, hosted: true, appId: st.appId }; },
+      shell: Object.freeze({
+        openCompanion(opts = {}) {
+          check();
+          if (typeof opts.path !== 'string' || !opts.path || opts.path.length > 4096) throw fault('Companion needs an app path');
+          const url = new URL(opts.path, source.location.href);
+          if (!within(url, st.url) || url.username || url.password) throw fault('Companion must stay inside the registered app path');
+          if (!window.WizCompanionPane) throw fault('Companion panes unavailable');
+          return window.WizCompanionPane.open(st, { ...opts, path: url.pathname + url.search + url.hash });
+        },
+        closeCompanion() { check(); return window.WizCompanionPane?.close(st.frame) === true; },
+        postCompanion(value) { check(); return window.WizCompanionPane?.post(st.frame, value) === true; },
+        focusApp() { check(); return window.WizCompanionPane?.focusApp(st.frame) === true || window.WizOpenApp?.(st.appId) === true; },
+        toast(icon, message) { check(); if (typeof icon !== 'string' || typeof message !== 'string') return false; const shell = window.__wos || window.__wux; shell?.toast?.(icon.slice(0, 20), message.slice(0, 2000), 2600); return !!shell?.toast; },
+      }),
       badge: Object.freeze({ set(n) { check(); setBadge(st.appId, n); st.badged = true; return true; } }),
       // Lower Wizard Music while this app plays a short sound; duck(false) restores it. Resolves true when ducked.
       audio: Object.freeze({ duck(on) { check(); return window.WizBackgroundAudio?.duck ? window.WizBackgroundAudio.duck(st, !!on) : Promise.resolve(false); } }),
@@ -232,13 +246,39 @@
       titlebar: Object.freeze({ set(list) { check(); return setTools(st, list); },
         shown() { check(); const b = barOf(st)?.querySelector(':scope > .wtools'); return !!b && b.getClientRects().length > 0 && b.offsetHeight > 0; } }),
       view: Object.freeze({ isVisible() { check(); return !document.hidden && st.isVisible?.() === true; } }),
-      nav: Object.freeze({ threadAgents: true, openContextDraft(data) {
+      /* Photos and videos an app shows open in Wizard's one media viewer (pinch/double-tap zoom, pan, swipe between
+       * items, Save/Share, Back/Esc closes) above the app, exactly as in Chats (James, 26 Oct 2026). Only this app's
+       * own origin (or its blob: URLs) is opened; relative URLs resolve against the app's document. */
+      media: Object.freeze({ view(items, index = 0) {
         check();
-        if (st.appId !== 'notifications' || st.isVisible?.() !== true || typeof st.openContextDraft !== 'function') throw fault('Context draft unavailable');
-        if (!data || typeof data.id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(data.id) || typeof data.title !== 'string' || data.title.length > 1000 || typeof data.message !== 'string' || data.message.length > 32000) throw fault('Invalid notification context');
+        if (st.isVisible?.() !== true || !window.WosChat?.viewer || !Array.isArray(items)) return false;
+        const base = source.location.href, clean = [], list = items.slice(0, 500), want = Math.floor(+index) || 0;
+        let i = want >= list.length ? Infinity : 0; // past the end (stale index, intake cap) still clamps to the last item
+        for (const [n, it] of list.entries()) {
+          if (n === want) i = clean.length; // the tapped item keeps its place after unsafe entries are dropped
+          let u; try { u = new URL(String(it?.url || ''), base); } catch (_) { continue; }
+          const own = u.origin === location.origin && /^https?:$/.test(u.protocol);
+          const blob = u.protocol === 'blob:' && u.href.startsWith('blob:' + location.origin + '/');
+          if (!own && !blob) continue;
+          const kind = it?.kind === 'video' ? 'video' : 'image';
+          clean.push({ url: u.href, kind, name: String(it?.name || '').slice(0, 200), mime: String(it?.mime || (kind === 'video' ? 'video/mp4' : 'image/jpeg')).slice(0, 100) });
+        }
+        return clean.length ? window.WosChat.viewer.open(clean, Math.max(0, Math.min(clean.length - 1, i))) === true : false;
+      } }),
+      nav: Object.freeze({ threadAgents: true,
+      /* The app finished what the owner came for (dismissed, archived, saved, deleted): take one Back past the app's
+       * own views, landing on the previous screen exactly as the shell's Back would (James, 25 Oct 2026). */
+      back() { check(); if (st.isVisible?.() !== true || typeof st.back !== 'function') return false; return st.back() === true; },
+      openContextDraft(data) {
+        check();
+        // Installed Wizard apps may attach bounded reference data to a fresh MAIN Chats draft, never send or run.
+        // Identity and namespace come from the attached live frame, never from the caller's payload. The id grammar
+        // matches WosChat.reply.clean's key namespace, so every admitted app can produce a valid reply key.
+        if (!/^[a-z][a-z0-9-]{0,40}$/.test(st.appId) || !apps().some(a => a.id === st.appId && a.kind === 'wizard') || st.isVisible?.() !== true || typeof st.openContextDraft !== 'function') throw fault('Context draft unavailable');
+        if (!data || typeof data.id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(data.id) || typeof data.title !== 'string' || data.title.length > 1000 || typeof data.message !== 'string' || data.message.length > 32000) throw fault('Invalid app context');
         // A Reply: the composer stays empty; the item rides beside the draft and is framed as quoted, untrusted
         // reference DATA only in the message that is sent (WosChat.reply).
-        return st.openContextDraft('notifications:' + data.id, { title: data.title, message: data.message });
+        return st.openContextDraft(st.appId + ':' + data.id, { title: data.title, message: data.message });
       }, openThread(id, opts) {
         check();
         // This bounded workflow is admitted only for an admitted installed app's current document (Manager, Wisdom).
@@ -265,6 +305,14 @@
         }
         return window.WosChat?.sharePayload(data) || Promise.resolve('unsupported');
       },
+        async wizard(data) {
+          check();
+          if (!window.WizShareWizard) return 'unsupported';
+          window.WizShareWizard.valid(data);
+          const h = hold('Share to Wizard');
+          try { return await window.WizShareWizard.wizard(data, () => valid(st, doc)); }
+          finally { h.release(); }
+        },
         file(file, opts) { check(); if (!file || !['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(file))) return Promise.resolve('unsupported'); return window.WosChat?.shareFile(file, opts) || Promise.resolve('unsupported'); },
         // Receiving (docs/SHARE-SHEET.md): this verified frame registers its own app id only; items stay pending
         // until the app acks that it placed one in its own composer.
@@ -272,10 +320,18 @@
         targets(list) { check(); return !!shareOps?.setTargets(st.appId, list); },
         pending() { check(); return shareOps?.pending(st.appId, { owner: st, alive: () => frames.get(st.frame) === st && st.frame.isConnected && valid(st, st.doc) }) || []; },
         ack(id) { check(); return typeof id === 'string' && !!shareOps?.ack(st.appId, id); } }),
-      voice: Object.freeze({ async transcribe(file, opts) { check(); const result = await transcribeFile(file, opts); check(); return result; } }),
+      device: Object.freeze({ legacy: Object.freeze({
+        available(method) { check(); return !!window.WizAndroidRelay?.legacyAvailable(source, st.appId, method); },
+        call(method, args = []) { check(); if (!window.WizAndroidRelay) throw fault('Legacy device unavailable'); return window.WizAndroidRelay.legacy(source, st.appId, method, args); },
+      }), backgroundAudio: Object.freeze({request(method, params) {
+        check();
+        if (!window.WizBackgroundAudio) return Promise.reject(fault('Background audio unavailable'));
+        return window.WizBackgroundAudio.request(source, method, params);
+      }}) }),
+      voice: Object.freeze({ stripAddress(text) { check(); return window.WizConfig.stripAddress(String(text || '')); }, async transcribe(file, opts) { check(); const result = await transcribeFile(file, opts); check(); return result; } }),
       theme: Object.freeze({ get() { check(); return window.WizAppearance?.get(frameOf(st)) || null; } }),
       update: Object.freeze({ hold, available() { check(); return available; } }),
-      capture: Object.freeze({ start,
+      capture: Object.freeze({ start: opts => { if (st.frame.dataset?.voiceService) throw fault('Voice service has no capture authority'); return start(opts); },
         prepare(opts) {
           check(); const shell=window.__wos||window.__wux;
           if(shell?.voice && shell.voice!=='idle') throw Object.assign(fault('Microphone held by Wizard voice'),{code:'busy',appId:'wizard-voice'});
@@ -357,7 +413,9 @@
     try {
       const svc = connect(e.source, st.client); let value;
       if (d.op === 'ready') value = svc.ready();
+      if (d.op.startsWith('shell.')) value = svc.shell[d.op.slice(6)](d.args);
       if (d.op === 'share.text') value = await svc.share.text(d.args);
+      if (d.op === 'share.wizard') value = await svc.share.wizard(d.args);
       if (d.op === 'share.file') value = await svc.share.file(d.args?.file, d.args?.options);
       if (d.op === 'voice.transcribe') value = await svc.voice.transcribe(d.args?.file, { language: d.args?.language });
       if (d.op === 'share.receive') value = svc.share.receive(d.args);
@@ -477,9 +535,8 @@
     return { accepted: true, request_id: message.request_id };
   }
   // Same list as chats.js HOSTED_APPS: apps whose conversations are the real Chats thread over their window.
-  const HOSTED_THREAD_APPS = new Set(['wizard-manager', 'wisdom']);
   function hostedThreadAuthorized(st) {
-    if (!st || !HOSTED_THREAD_APPS.has(st.appId) || !valid(st, st.doc) || typeof st.openThread !== 'function') return false;
+    if (!st || !window.WizLauncher?.hasHostedThread(st.appId) || !valid(st, st.doc) || typeof st.openThread !== 'function') return false;
     const app = apps().find(a => a.id === st.appId && a.kind === 'wizard' && a.url);
     try { return !!app && new URL(app.url, location.href).href === st.url.href; } catch (_) { return false; }
   }
@@ -557,7 +614,7 @@
     const open = new Set([...(openIds || [])].filter(Boolean)), cap = window.WizAppCapture;
     if (!cap?.closeApp) return [];
     reconcile(); // a still-mounted frame of the app (any surface) also counts as open
-    for (const f of frames.values()) if (f.frame.isConnected) open.add(f.appId);
+    for (const f of frames.values()) if (f.frame.isConnected && !f.frame.dataset?.voiceService) open.add(f.appId);
     const st = cap.getState?.() || {}, owners = new Set();
     if (st.active && st.appId) owners.add(st.appId);
     const stopped = [];
@@ -573,7 +630,57 @@
     if (!openProvider || sweepTimer) return;
     sweepTimer = setTimeout(() => { sweepTimer = 0; try { appsClosed(openProvider()); } catch (_) {} }, 0);
   }
-  window.WizAppServices = Object.freeze({ version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
+  // Installed providers may opt into cold command handling with the existing
+  // `provides` capability list. The app owns grammar; core only warms its page.
+  const voiceFrames = new Map();
+  let warmingVoice = false;
+  function warmVoice() {
+    if (warmingVoice || !document.createElement || !document.body) return;
+    warmingVoice = true;
+    try {
+    const wanted = new Map(apps().filter(a => a.provides?.includes('voice-commands')).slice(0, 64).map(a => [a.id, a]));
+    for (const [id, entry] of voiceFrames) if (!wanted.has(id) || wanted.get(id).url !== entry.url) { entry.detach(); entry.frame.remove(); voiceFrames.delete(id); }
+    for (const [id, app] of wanted) {
+      if (voiceFrames.has(id)) continue;
+      let url; try { url = new URL(app.url, location.href); } catch (_) { continue; }
+      if (url.origin !== location.origin) continue;
+      const frame = document.createElement('iframe'); frame.className = 'appframe'; frame.hidden = true; frame.dataset.voiceService = id;
+      frame.src = url.href; frame.style.display = 'none'; frame.setAttribute('aria-hidden', 'true'); frame.setAttribute('tabindex', '-1');
+      document.body.appendChild(frame);
+      const detach = attach(frame, {appId:id, path:app.url});
+      voiceFrames.set(id, {frame, detach, url:app.url});
+    }
+    } finally { warmingVoice = false; }
+  }
+  addEventListener('wizard:apps', warmVoice);
+  addEventListener('DOMContentLoaded', warmVoice);
+  setTimeout(warmVoice, 0);
+  const voiceClaims = new Map();
+  function voiceCommand(text, context) {
+    if (typeof text !== 'string' || !text.trim() || text.length > 8000) return null;
+    const meta = Object.freeze({stage:context.stage, kind:context.kind, view:Object.freeze({kind:String(context.view?.kind || ''), appId:String(context.view?.appId || '')})});
+    for (const app of apps()) for (const st of frames.values()) {
+      try {
+        const handler = st.client?.voiceCommands;
+        if (st.appId !== app.id || typeof handler?.claims !== 'function' || typeof handler?.receive !== 'function' || !valid(st, st.doc)) continue;
+        if (handler.claims(text, meta) !== true || !valid(st, st.doc)) continue;
+        const token = uid();
+        if (voiceClaims.size >= 32) voiceClaims.delete(voiceClaims.keys().next().value);
+        voiceClaims.set(token, {st, doc:st.doc, handler, text, meta});
+        return {action:'app_voice', appId:st.appId, token};
+      } catch (_) {} // An app's bad claim cannot swallow shell commands.
+    }
+    return null;
+  }
+  function runVoiceCommand(command, done) {
+    const claim = voiceClaims.get(command.token); voiceClaims.delete(command.token);
+    if (!claim || !valid(claim.st, claim.doc) || claim.st.client?.voiceCommands !== claim.handler) return false;
+    try {
+      Promise.resolve(claim.handler.receive(claim.text, claim.meta)).then(ok => done?.(ok === true), () => done?.(false));
+      return true;
+    } catch (_) { done?.(false); return false; }
+  }
+  window.WizAppServices = Object.freeze({ voiceCommand, runVoiceCommand, authorized: frame => { const st = frames.get(frame); return valid(st, st?.doc); }, version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
     orb: Object.freeze({ of: orbOf, tap: orbTap, presenter(fn) { orbShown = typeof fn === 'function' ? fn : () => false; } }),
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),

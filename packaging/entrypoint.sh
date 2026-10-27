@@ -21,4 +21,4 @@ cp /etc/wizard-shell/proxy-mcp.conf /tmp/wizard-proxy-mcp.conf
 # Substitute only these two names; nginx's own $variables stay as they are.
 envsubst '${WIZARD_AGENT_SERVICE_ORIGIN} ${WIZARD_SHELL_LISTEN}' < /etc/wizard-shell/nginx.conf.template > /tmp/nginx.conf
 nginx -t -q -c /tmp/nginx.conf
-exec nginx -c /tmp/nginx.conf -g 'daemon off;'
+exec python3 /etc/wizard-shell/shell-processes.py

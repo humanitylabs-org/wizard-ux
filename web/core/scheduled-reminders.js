@@ -105,9 +105,12 @@
   // Exact owner-zone time, shared by confirmation and the persistent banner (idea: Novaire #355).
   function returnLabel(r){const p=parts(Date.parse(r.due_at),r.timezone),date=new Intl.DateTimeFormat('en-GB',{timeZone:r.timezone,day:'numeric',month:'short'}).format(new Date(r.due_at));return `Back ${date} at ${p.h}:${pad(p.min)}`}
   // Someday is the existing Defer operation: no timer and no change to existing return jobs.
+  // opts.restore (tweak one-tap Snooze only): an archived thread is restored first so it lands in Ready.
   async function someday(opts){
     if(!live()?.defer)throw new Error('Snooze is still loading.');
-    if(!await live().defer(opts.sessionId))throw new Error('Could not snooze · thread kept where it was.');
+    const restored=opts.restore&&live().session?.(opts.sessionId)?.archived;
+    if(restored&&!await live().restore?.(opts.sessionId))throw new Error('Could not snooze · thread kept where it was.');
+    if(!await live().defer(opts.sessionId))throw new Error(restored?'Could not snooze · thread restored to Ready.':'Could not snooze · thread kept where it was.');
     close();window.dispatchEvent(new CustomEvent('wos:snooze-someday',{detail:{session:opts.sessionId}}));
   }
   // A timed Snooze also takes the thread out of the list (James, 23 Oct 2026): the existing Defer disposition, restored when it comes back.
@@ -159,5 +162,5 @@
     try{if(target.closest('[data-boom-done]')){await acknowledge(id);return true}if(target.closest('[data-boom-cancel]')){await cancel(id);return true}}catch{window.dispatchEvent(new CustomEvent('wos:boomerang-error'))}
     return false}
   function start(){if(poll)return;void refresh();poll=setInterval(refresh,15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refresh()});addEventListener('focus',()=>void refresh())}
-  window.WosBoomerang={start,refresh,open,close,back,banner,handle,dueFor,nextFor,forSession,focusFor,focusedOn,_returnLabel:returnLabel,_preset:preset,isOpen:()=>Boolean(sheet),_wallToUtc:wallToUtc,_addWallDays:addWallDays,_addWallMonths:addWallMonths,_daysInMonth:daysInMonth,_fromJob:fromJob,onChange(fn){listeners.add(fn);return()=>listeners.delete(fn)}};start();
+  window.WosBoomerang={someday,start,refresh,open,close,back,banner,handle,dueFor,nextFor,forSession,focusFor,focusedOn,_returnLabel:returnLabel,_preset:preset,isOpen:()=>Boolean(sheet),_wallToUtc:wallToUtc,_addWallDays:addWallDays,_addWallMonths:addWallMonths,_daysInMonth:daysInMonth,_fromJob:fromJob,onChange(fn){listeners.add(fn);return()=>listeners.delete(fn)}};start();
 })();

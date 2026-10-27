@@ -2,12 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-// Opening the model sheet must refetch the catalogue (a newly entitled model like Astra appears without a
-// Wizard reload) and repaint only when the list actually changed.
-test('model sheet revalidates the catalogue on every open', () => {
+// Main now refreshes a stale catalogue after ~15 seconds rather than on every tap.
+// Keep that behavior and the guard against a refresh repainting a different chat.
+test('model sheet revalidates stale catalogues without repainting a different thread', () => {
   const src = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
   const open = src.slice(src.indexOf("openSheet({ type: 'model'"), src.indexOf('function openFiles'));
-  assert.match(open, /M\.load\(M\.ready\)/, 'forces a refresh once the cache is warm');
-  assert.doesNotMatch(open, /if \(!M\.ready\) M\.load\(\)/, 'no longer loads only on a cold cache');
-  assert.match(open, /key\(\) !== before/, 'repaints only on change');
+  assert.match(open, /M\.stale \? M\.stale\(\) : !M\.ready\) M\.load\(M\.ready\)/);
+  assert.doesNotMatch(open, /if \(!M\.ready\) M\.load\(\)/);
+  assert.match(open, /sheet !== opened/);
+  assert.match(open, /H\.win\(wid\)\?\.thread !== opened\.sid/);
+  assert.match(open, /newModel\(ch\(wid\), w\)/);
+  assert.match(open, /paint\(sheet\.pane, A\.elOf\(sheet\.pane\)\)/);
 });

@@ -31,6 +31,9 @@ kbd { display: inline-block; min-width: 18px; padding: 1px 5px; border-radius: 5
 .ws.cur { color: #fff; background: linear-gradient(140deg, rgba(122, 77, 255, .55), rgba(192, 77, 255, .4)); }
 .ws.cur::after { background: #fff; }
 .ws.drop { outline: 2px dashed var(--violet-2); }
+.ws[data-ws] { touch-action: none; }
+.ws-list.arranging, .ws-list.arranging .ws { cursor: grabbing; }
+.ws.ws-moving { outline: 2px solid var(--violet-2); outline-offset: 1px; transform: translateY(1px) scale(1.06); z-index: 1; }
 .ws.hot::before { content: ''; position: absolute; top: 2px; right: 2px; width: 5px; height: 5px; border-radius: 50%; background: var(--violet-2); }
 .clock { font: 600 12.5px/1 ui-sans-serif, system-ui, -apple-system, sans-serif; color: var(--ink-2); padding: 5px 10px; border-radius: 7px; font-variant-numeric: tabular-nums; }
 .clock:hover { background: rgba(205, 190, 255, .08); }
@@ -103,6 +106,10 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 .dchats .pane-newchat:hover { background: rgba(143, 99, 255, .34); }
 .dchats .ch-row.kbd { outline: 1px solid var(--line-2); }
 .dsettings .set-card { width: min(520px, calc(100vw - 32px)); }
+/* Settings is a window (wizard-os#265 rule 7): its panel fills the window body; the title bar's ✕ closes it. */
+.win .settings-host { height: 100%; overflow: hidden; }
+.win .dsettings { position: relative; inset: auto; width: auto; height: 100%; z-index: auto; border-left: 0; box-shadow: none; background: transparent; }
+.win .dsettings > .st-close { display: none; }
 .dsettings .set-body { padding: 4px 14px 6px; }
 .dchats .pane-main { position: relative; flex: 1; min-width: 0; }
 .dchats .pane-empty { position: absolute; inset: 0; display: none; place-items: center; text-align: center; color: var(--ink-3); font-size: 13.5px; line-height: 1.7; }
@@ -164,29 +171,8 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 .app-chip:hover { background: rgba(205, 190, 255, .1); color: var(--ink); }
 .app-chip > i { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 11px; color: #fff; background: linear-gradient(140deg, var(--g1), var(--g2)); }
 
-/* ---------- inbox drawer ---------- */
-.inbox { position: fixed; top: calc(var(--bar-h) + 6px); right: 6px; bottom: 6px; width: 380px; z-index: 25; display: flex; flex-direction: column;
-  border-radius: 14px; background: rgba(12, 8, 26, .96); border: 1px solid var(--line-2); box-shadow: 0 20px 60px rgba(0, 0, 0, .5); animation: slidein 160ms var(--ease); }
-.inbox[hidden] { display: none; }
-@keyframes slidein { from { transform: translateX(16px); opacity: 0; } }
-.ib-head { display: flex; align-items: baseline; gap: 8px; padding: 12px 12px 8px 16px; border-bottom: 1px solid var(--line); }
-.ib-head b { font-size: 15px; }
-.ib-head small { flex: 1; color: var(--ink-3); }
 .x { width: 26px; height: 26px; border-radius: 8px; color: var(--ink-3); }
 .x:hover { background: rgba(205, 190, 255, .1); color: var(--ink); }
-.ib-body { flex: 1; overflow-y: auto; padding: 6px 8px 12px; }
-.ib-sec h4 { margin: 12px 8px 4px; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
-.ib-sec[data-k="needs"] h4 { color: var(--amber); }
-.ib-row { display: flex; align-items: flex-start; gap: 9px; width: 100%; padding: 8px; border-radius: 10px; text-align: left; position: relative; }
-.ib-row:hover, .ib-row.sel { background: rgba(205, 190, 255, .07); }
-.ib-row .emo { width: 22px; text-align: center; padding-top: 1px; }
-.ib-row .bd { flex: 1; min-width: 0; }
-.ib-row .bd b { display: block; font-size: 13.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ib-row .bd span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 12.5px; color: var(--ink-3); }
-.ib-row time { font-size: 11.5px; color: var(--ink-3); }
-.ib-row .rd { position: absolute; right: 8px; bottom: 8px; display: none; padding: 2px 8px; border-radius: 99px; font-size: 11.5px; color: var(--ink-2); background: rgba(205, 190, 255, .12); }
-.ib-row:hover .rd { display: block; }
-.ib-none { padding: 4px 8px; font-size: 12.5px; color: var(--ink-3); }
 
 /* ---------- palette ---------- */
 .palette { position: fixed; inset: 0; z-index: 40; display: grid; justify-items: center; align-items: start; padding-top: 12vh; background: rgba(3, 2, 8, .45); backdrop-filter: blur(2px); }
@@ -245,7 +231,7 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 .toast.on { opacity: 1; transform: translate(-50%, 0); }
 
 
-.win .desk-scroll{height:100%;overflow:auto;padding:12px}.win .review{padding:10px}.win .review .pinch-hint{display:none}
+.win .desk-scroll{height:100%;overflow:auto;padding:12px}
 
 @media(max-width:700px){#bar{display:flex;gap:8px;overflow-x:auto}.bar-l,.bar-r{flex:0 0 auto}.bar-r{margin-left:auto}.bar-c #clock{display:none}}
 
@@ -303,7 +289,7 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 .keys kbd { font: 600 12.5px/18px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: .01em; }
 
 /* Opinionated: instant hover tips for every top-bar control */
-.bar-tip { position: fixed; z-index: 60; max-width: 280px; padding: 5px 9px; border-radius: 7px; font: 500 12px/1.35 ui-sans-serif, system-ui, -apple-system, sans-serif; color: var(--ink); background: color-mix(in oklab, var(--bg) 94%, var(--ink) 6%); border: 1px solid var(--line-2); box-shadow: 0 6px 20px rgba(0,0,0,.35); pointer-events: none; white-space: nowrap; }
+.bar-tip { position: fixed; z-index: 60; width: max-content; max-width: min(280px, calc(100vw - 16px)); padding: 5px 9px; border-radius: 7px; font: 500 12px/1.35 ui-sans-serif, system-ui, -apple-system, sans-serif; color: var(--ink); background: color-mix(in oklab, var(--bg) 94%, var(--ink) 6%); border: 1px solid var(--line-2); box-shadow: 0 6px 20px rgba(0,0,0,.35); pointer-events: none; white-space: normal; overflow-wrap: anywhere; text-wrap: pretty; }
 .bar-tip[hidden] { display: none; }
 
 /* ---------- Voice capture: synthwave edge glow + compact top-centre pill ----------
@@ -395,3 +381,28 @@ html:is([data-skin^="obsidian"], [data-skin="landscapes"]) .mine-home .constella
 html:is([data-skin^="obsidian"], [data-skin="landscapes"]) .mine-home .now-card { cursor: pointer; color: var(--c); }
 html:is([data-skin^="obsidian"], [data-skin="landscapes"]) .mine-home .now-card:hover { background: color-mix(in srgb, var(--c) 10%, transparent); }
 html:is([data-skin^="obsidian"], [data-skin="landscapes"]) .mine-home .home-unsent { width: auto; margin-top: 14px; }
+/* Keys sheet: replay the first-message guide (core/tour.js WosTour.desk) */
+.keys-head .keys-tour { border: 1px solid var(--line-2); background: none; color: var(--ink-2); border-radius: 99px; padding: 4px 12px; font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.keys-head .keys-tour:hover { color: var(--ink); }
+
+/* Hold left ⌥ / Alt: the keys guide. Chips on bar controls, named keys laid out where they act. Skin tokens only. */
+.key-hints { position: fixed; inset: 0; z-index: 60; pointer-events: none; }
+.key-hints.pinned { pointer-events: auto; background: color-mix(in oklab, var(--bg) 35%, transparent); }
+.key-hints[hidden] { display: none; }
+.kh-chip { position: fixed; min-width: 17px; height: 17px; padding: 0 5px; border-radius: 5px; display: grid; place-items: center; font: 650 11px/1 Inter, system-ui, sans-serif; background: var(--ink); color: var(--bg); box-shadow: 0 2px 8px rgba(0,0,0,.35); animation: pop 120ms var(--ease); }
+.kh-card { position: fixed; width: 296px; padding: 10px 14px 8px; border-radius: 14px; background: color-mix(in oklab, var(--bg) 95%, var(--ink) 5%); border: 1px solid var(--line-2); box-shadow: 0 18px 56px rgba(0,0,0,.42); color: var(--ink); animation: pop 140ms var(--ease); }
+.kh-card h5 { margin: 4px 0 6px; font-size: 11.5px; font-weight: 650; color: var(--ink-3); }
+.kh-card h5 + .kh-row { border-top: 0; }
+.kh-card .kh-row + h5 { margin-top: 12px; }
+.kh-card h5 em { font-style: normal; font-weight: 500; }
+.kh-row { display: grid; grid-template-columns: 54px 1fr; gap: 10px; align-items: start; padding: 6px 0; border-top: 1px solid var(--line); }
+.kh-row kbd { justify-self: start; min-width: 22px; padding: 3px 6px; border-radius: 6px; font: 650 12px/1.2 Inter, system-ui, sans-serif; text-align: center; white-space: nowrap; background: var(--ink); color: var(--bg); }
+.kh-row b { display: block; font-size: 13.5px; font-weight: 650; }
+.kh-row small { display: block; margin-top: 1px; font-size: 12px; line-height: 1.35; color: var(--ink-2); }
+.kh-win { width: 250px; }
+.kh-foot { position: fixed; left: 0; right: 0; bottom: 18px; margin: 0 auto; width: max-content; max-width: calc(100vw - 32px); display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 16px; padding: 8px 14px; border-radius: 12px; background: color-mix(in oklab, var(--bg) 95%, var(--ink) 5%); border: 1px solid var(--line-2); font-size: 12.5px; color: var(--ink-2); animation: pop 140ms var(--ease); }
+.kh-foot kbd { padding: 1px 5px; border-radius: 5px; font: 650 11px/1.2 Inter, system-ui, sans-serif; background: color-mix(in oklab, var(--ink) 12%, transparent); color: var(--ink); }
+.kh-foot button { padding: 4px 10px; border-radius: 8px; font-size: 12.5px; color: var(--ink); background: color-mix(in oklab, var(--ink) 10%, transparent); }
+.kh-chat { width: 280px; }
+.kh-chat .kh-row { grid-template-columns: 68px 1fr; }
+.kh-chip { z-index: 2; }

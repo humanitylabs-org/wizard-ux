@@ -1,219 +1,4 @@
 {
-  "purpose": "Every entrypoint-exclusive asset must be explicit; new common features must be shared by default, not added to these exceptions.",
-  "exceptions": {
-    "core/orb-handoff.js": {
-      "shell": "phone",
-      "classification": "open-gap",
-      "reason": "Meeting-loan coordinator is currently wired only to the phone orb; desktop admission remains a separate acceptance gap, not claimed parity."
-    },
-    "app.js": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone layout, orb/gesture input, shell navigation; shared feature rendering forbidden here."
-    },
-    "desktop/desktop.js": {
-      "shell": "desktop",
-      "classification": "adapter",
-      "reason": "Desktop window manager and keyboard/input adapter."
-    },
-    "styles.css": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone shell geometry; common Settings controls extracted."
-    },
-    "desktop/desktop.css": {
-      "shell": "desktop",
-      "classification": "adapter",
-      "reason": "Desktop shell geometry."
-    },
-    "core/desks.css": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone desk indicators and dock layout."
-    },
-    "core/home-surfaces.css": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone Home geometry; desktop Home retained from PR22."
-    },
-    "orb.js": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone orb renderer; desktop microphone/chords remain the input adapter."
-    },
-    "core/android-relay.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "WizardAndroidRelay required; Android-only transport."
-    },
-    "core/background-audio.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Origin-scoped Android Media3 transport through wizardAudioPort; hosted Music retains shared browser playback without this native port."
-    },
-    "device.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Android update, notification, foreground recorder bridge; web updater already shared."
-    },
-    "usuals.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Grab automation uses Android usuals bridge; never copy non-working purchase controls."
-    },
-    "usuals.css": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Android Food bridge UI."
-    },
-    "core/tour.js": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone gestures tutorial; desktop keyboard help is a layout/input-specific guide."
-    },
-    "core/tour.css": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone gesture spotlights; desktop keyboard sheet remains shell-local."
-    },
-    "core/voice.js": {
-      "shell": "desktop",
-      "classification": "adapter",
-      "reason": "Desktop browser recorder input; cancellation now uses the common recording store."
-    },
-    "live-mode.js": {
-      "shell": "phone",
-      "classification": "preview",
-      "reason": "Explicit opt-in experimental simulated Live Mode, not enabled live; no desktop preview yet."
-    },
-    "motion/wizard-motion.js": {
-      "shell": "phone",
-      "classification": "preview",
-      "reason": "Opt-in Live Mode motion primitives."
-    },
-    "motion/wizard-motion.css": {
-      "shell": "phone",
-      "classification": "preview",
-      "reason": "Opt-in Live Mode motion styles."
-    },
-    "core/home-screen-policy.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Android launcher-shortcut task policy; desktop has no home-screen pinning."
-    },
-    "core/home-screen-apps.css": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Android Add to home screen sheet styling; native ShortcutManager only."
-    },
-    "core/home-screen-apps.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Android Add to home screen via ShortcutManager pin request; no desktop equivalent."
-    },
-    "core/single-app-session.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Android pinned-shortcut app-only task (AppSessionActivity); desktop windows already isolate apps."
-    }
-  },
-  "sharedAssets": [
-    "/wizard-os-home/apple-touch-icon.png",
-    "core/agents.js",
-    "core/app-capture.js",
-    "core/app-kinds.js",
-    "core/app-reading-position.js",
-    "core/app-route.css",
-    "core/app-route.js",
-    "core/app-services.js",
-    "core/app-versions.js",
-    "core/appearance-host.css",
-    "core/appearance-host.js",
-    "core/apps.js",
-    "core/base.css",
-    "core/bound-view.js",
-    "core/brand.css",
-    "core/brand.js",
-    "core/bridge.js",
-    "core/cancelled.js",
-    "core/capture-tools.js",
-    "core/chat-errors.js",
-    "core/chat-kit.js",
-    "core/chat-models.js",
-    "core/chat-pins.js",
-    "core/chat-power.css",
-    "core/chat-power.js",
-    "core/chat-search.js",
-    "core/chat-topic-emojis-data.js",
-    "core/chat-topic-emojis.js",
-    "core/chat-work.js",
-    "core/chats-view.css",
-    "core/chats-view.js",
-    "core/chats.css",
-    "core/chats.js",
-    "core/commands.js",
-    "core/config.js",
-    "core/core.js",
-    "core/deeplink.js",
-    "core/dom-morph.js",
-    "core/features.js",
-    "core/files.js",
-    "core/focused-field.js",
-    "core/links.css",
-    "core/links.js",
-    "core/mic.js",
-    "core/music-voice.js",
-    "core/my-skin.js",
-    "core/notif-bell.js",
-    "core/os-updates.js",
-    "core/own-views.css",
-    "core/own-views.js",
-    "core/photos-settings.js",
-    "core/polish.css",
-    "core/reach.js",
-    "core/resources.css",
-    "core/resources.js",
-    "core/scenery.js",
-    "core/scheduled-reminders.css",
-    "core/scheduled-reminders.js",
-    "core/schedules.js",
-    "core/screen-capture.js",
-    "core/screen-text.js",
-    "core/sel-menu.css",
-    "core/sel-menu.js",
-    "core/settings.css",
-    "core/settings.js",
-    "core/setup-launch.js",
-    "core/share-sheet.css",
-    "core/share-sheet.js",
-    "core/shell.js",
-    "core/sigils.css",
-    "core/sigils.js",
-    "core/skin-frame.css",
-    "core/skin-frame.js",
-    "core/skin-host.js",
-    "core/skins.css",
-    "core/skins.js",
-    "core/status.js",
-    "core/thread-swipe-back.js",
-    "core/update-banner.css",
-    "core/uploads.js",
-    "core/usage.js",
-    "core/video-desks.js",
-    "core/views.css",
-    "core/views.js",
-    "core/voice-status.js",
-    "core/web-update.js",
-    "core/workspace-navigation.js",
-    "data.js",
-    "favicon.ico",
-    "icon-192.png",
-    "live.js",
-    "manifest.webmanifest",
-    "outbox.js",
-    "pwa-install.js",
-    "summaries.js"
-  ],
   "coreModules": {
     "core/agents.js": {
       "loadedBy": [
@@ -228,12 +13,6 @@
       ],
       "note": "Direct entrypoint import"
     },
-    "core/background-audio.js": {
-      "loadedBy": [
-        "phone"
-      ],
-      "note": "Android-only background playback transport; no separate common Music renderer."
-    },
     "core/app-capture.js": {
       "loadedBy": [
         "phone",
@@ -241,15 +20,20 @@
       ],
       "note": "Direct entrypoint import"
     },
-    "core/orb-handoff.js": {
-      "loadedBy": [
-        "phone"
-      ],
-      "note": "Phone orb meeting-loan coordinator; desktop admission not yet claimed."
-    },
     "core/app-client.js": {
       "loadedBy": [],
       "note": "Support/client/export module; not directly mounted by either shell"
+    },
+    "core/app-identity.js": {
+      "loadedBy": [],
+      "note": "Support/client/export module; not directly mounted by either shell"
+    },
+    "core/app-kinds.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
     },
     "core/app-reading-position.js": {
       "loadedBy": [
@@ -279,6 +63,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/app-voice.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Registry voice names and admitted app-owned utterance routing."
+    },
     "core/appearance-host.js": {
       "loadedBy": [
         "phone",
@@ -287,6 +78,34 @@
       "note": "Direct entrypoint import"
     },
     "core/apps.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/attach-chip.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/background-audio-legacy.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Pilot grant seed and single native token until APK A."
+    },
+    "core/background-audio.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Generic registry-granted background audio; native port optional."
+    },
+    "core/bound-view.js": {
       "loadedBy": [
         "phone",
         "desktop"
@@ -314,6 +133,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/capture-tools.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
     "core/chat-errors.js": {
       "loadedBy": [
         "phone",
@@ -328,19 +154,19 @@
       ],
       "note": "Direct entrypoint import"
     },
-    "core/chat-pins.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Pinned chats, synced per owner through ui-preferences pinnedChats"
-    },
     "core/chat-models.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/chat-pins.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Pinned chats, synced per owner through ui-preferences pinnedChats"
     },
     "core/chat-power.js": {
       "loadedBy": [
@@ -395,6 +221,34 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/commands.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/companion-legacy.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "One-release wire adapter using the shared companion pane"
+    },
+    "core/companion-pane.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Generic companion pane; registered app frame authority from App Services"
+    },
+    "core/composer-input.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
     "core/config.js": {
       "loadedBy": [
         "phone",
@@ -416,7 +270,39 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/device-orb.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Optional Android shell overlay"
+    },
+    "core/device-port.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Optional Android shell transport"
+    },
+    "core/device-recording.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Optional Android shell recorder"
+    },
     "core/dom-morph.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/experience.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Owner experience storage boundary; published profiles, overrides and multi-tweak package lifecycle via skin-host"
+    },
+    "core/features.js": {
       "loadedBy": [
         "phone",
         "desktop"
@@ -437,6 +323,34 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/home-screen-apps.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Long-press Add to home screen sheet; Android ShortcutManager bridge"
+    },
+    "core/home-screen-policy.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Android pinned app-only task policy (home-screen shortcut sessions)"
+    },
+    "core/launcher-defaults.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "classification": "shared",
+      "note": "Synced launcher policy; temporary defaults for old releases"
+    },
+    "core/launcher.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "classification": "shared",
+      "note": "Synced launcher policy; temporary defaults for old releases"
+    },
     "core/links.js": {
       "loadedBy": [
         "phone",
@@ -451,19 +365,25 @@
       ],
       "note": "Direct entrypoint import; Settings \u2192 Microphone shows only where WizardOSDevice.micPolicy exists"
     },
-    "core/scheduled-reminders.js": {
+    "core/my-skin.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
-      "note": "Boomerang picker and return banner on the shared scheduler (kind return)"
+      "note": "My skin: the owner's own CSS (Skins/My skin.css in Files, served by the Agent Service at /wizard/v1/my-skin) applied last, on top of the picked skin"
     },
-    "core/schedules.js": {
+    "core/notif-bell.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
-      "note": "Shared Settings \u2192 Schedules; hidden when Agent Service schedules returns 404"
+      "note": "Direct entrypoint import"
+    },
+    "core/orb-handoff.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Phone orb meeting-loan coordinator; desktop admission not yet claimed."
     },
     "core/os-updates.js": {
       "loadedBy": [
@@ -479,14 +399,14 @@
       ],
       "note": "Shared own-screen fallback and shell-only Settings confirmation; same App Manager owner listener as Updates"
     },
-    "core/photos-settings.js": {
+    "core/photos-relay.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import after settings.js; Settings \u203a Photos backup shows only where the Android app's window.wizardPhotosPort exists"
+      "note": "Shell relay for the optional Photos app frame (/photos/) to the Android app's window.wizardPhotosPort; draws no UI. Without the port it answers no-bridge"
     },
-    "core/music-voice.js": {
+    "core/reach.js": {
       "loadedBy": [
         "phone",
         "desktop"
@@ -506,6 +426,20 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/scheduled-reminders.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Boomerang picker and return banner on the shared scheduler (kind return)"
+    },
+    "core/schedules.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared Settings \u2192 Schedules; hidden when Agent Service schedules returns 404"
     },
     "core/screen-capture.js": {
       "loadedBy": [
@@ -528,41 +462,6 @@
       ],
       "note": "Direct entrypoint import"
     },
-    "core/share-sheet.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Direct entrypoint import"
-    },
-    "core/skin-frame.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Shared validated skin frame foundations, loaded before skin composition"
-    },
-    "core/swipe-intent.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Swipe-back intent thresholds, imported by core/thread-swipe-back.js"
-    },
-    "core/thread-swipe-back.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Skin host built-in: swipe right in a chat thread goes back one step on every skin (touch only)"
-    },
-    "core/skin-host.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Skin packages: loads only the active skin's own folder (web/skins/<dir>/) and gives its script a small API; desktop gets stylesheets"
-    },
     "core/settings.js": {
       "loadedBy": [
         "phone",
@@ -576,6 +475,20 @@
         "desktop"
       ],
       "note": "Shared first-run Setup admission; adapters supply only open/home callbacks."
+    },
+    "core/share-sheet.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/share-wizard.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Extracted native/app internal share sheet"
     },
     "core/shell.js": {
       "loadedBy": [
@@ -591,6 +504,26 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/single-app-session.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Pinned home-screen app task: one app full screen with its own Back history"
+    },
+    "core/skin-frame.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared validated skin frame foundations, loaded before skin composition"
+    },
+    "core/skin-host.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin packages: loads only the active skin's own folder (web/skins/<dir>/) and gives its script a small API; desktop gets stylesheets"
+    },
     "core/skins.js": {
       "loadedBy": [
         "phone",
@@ -605,18 +538,26 @@
       ],
       "note": "Direct entrypoint import"
     },
-    "core/reach.js": {
+    "core/swipe-intent.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import"
+      "note": "Swipe-back intent thresholds, imported by core/thread-swipe-back.js"
+    },
+    "core/thread-swipe-back.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin host built-in: swipe right in a chat thread goes back one step on every skin (touch only)"
     },
     "core/tour.js": {
       "loadedBy": [
-        "phone"
+        "phone",
+        "desktop"
       ],
-      "note": "Direct entrypoint import"
+      "note": "Phone gesture tour (Talk, Hide) and the desktop first-message guide (WosTour.desk) share one module and one done flag."
     },
     "core/uploads.js": {
       "loadedBy": [
@@ -632,12 +573,12 @@
       ],
       "note": "Direct entrypoint import"
     },
-    "core/video-desks.js": {
+    "core/voice-legacy.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import"
+      "note": "Frozen pre-app-owned voice grammar and transport; delete after app declarations/handlers and Food APK A."
     },
     "core/voice-status.js": {
       "loadedBy": [
@@ -666,79 +607,220 @@
       ],
       "note": "Direct entrypoint import"
     },
-    "core/bound-view.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Direct entrypoint import"
-    },
-    "core/capture-tools.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Direct entrypoint import"
-    },
-    "core/commands.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Direct entrypoint import"
-    },
-    "core/features.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Direct entrypoint import"
-    },
-    "core/views.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Direct entrypoint import"
-    },
-    "core/notif-bell.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Direct entrypoint import"
-    },
-    "core/home-screen-policy.js": {
-      "loadedBy": [
-        "phone"
-      ],
-      "note": "Android pinned app-only task policy (home-screen shortcut sessions)"
-    },
-    "core/home-screen-apps.js": {
-      "loadedBy": [
-        "phone"
-      ],
-      "note": "Long-press Add to home screen sheet; Android ShortcutManager bridge"
-    },
-    "core/single-app-session.js": {
-      "loadedBy": [
-        "phone"
-      ],
-      "note": "Pinned home-screen app task: one app full screen with its own Back history"
-    },
-    "core/my-skin.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "My skin: the owner's own CSS (Skins/My skin.css in Files, served by the Agent Service at /wizard/v1/my-skin) applied last, on top of the picked skin"
-    },
-    "core/app-kinds.js": {
+    "core/workspace-sync.js": {
       "loadedBy": [
         "phone",
         "desktop"
       ],
       "note": "Direct entrypoint import"
     }
-  }
+  },
+  "exceptions": {
+    "core/device-port.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Optional exact-origin Android shell capability transport."
+    },
+    "core/device-recording.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android shell foreground-service recorder; browsers retain their recorder."
+    },
+    "core/device-orb.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android shell overlay capability; not a desktop overlay."
+    },
+    "core/orb-handoff.js": {
+      "shell": "phone",
+      "classification": "open-gap",
+      "reason": "Meeting-loan coordinator is currently wired only to the phone orb; desktop admission remains a separate acceptance gap, not claimed parity."
+    },
+    "app.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone layout, orb/gesture input, shell navigation; shared feature rendering forbidden here."
+    },
+    "desktop/desktop.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop window manager and keyboard/input adapter."
+    },
+    "styles.css": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell geometry; common Settings controls extracted."
+    },
+    "desktop/desktop.css": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell geometry."
+    },
+    "core/desks.css": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone desk indicators and dock layout."
+    },
+    "core/home-surfaces.css": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone Home geometry; desktop Home retained from PR22."
+    },
+    "orb.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone orb renderer; desktop microphone/chords remain the input adapter."
+    },
+    "device.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android update, notification, foreground recorder bridge; web updater already shared."
+    },
+    "core/voice.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop browser recorder input; cancellation now uses the common recording store."
+    },
+    "motion/wizard-motion.js": {
+      "shell": "phone",
+      "classification": "preview",
+      "reason": "Opt-in Live Mode motion primitives."
+    },
+    "motion/wizard-motion.css": {
+      "shell": "phone",
+      "classification": "preview",
+      "reason": "Opt-in Live Mode motion styles."
+    },
+    "core/home-screen-policy.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android launcher-shortcut task policy; desktop has no home-screen pinning."
+    },
+    "core/home-screen-apps.css": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android Add to home screen sheet styling; native ShortcutManager only."
+    },
+    "core/home-screen-apps.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android Add to home screen via ShortcutManager pin request; no desktop equivalent."
+    },
+    "core/single-app-session.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android pinned-shortcut app-only task (AppSessionActivity); desktop windows already isolate apps."
+    }
+  },
+  "purpose": "Every entrypoint-exclusive asset must be explicit; new common features must be shared by default, not added to these exceptions.",
+  "sharedAssets": [
+    "/wizard-os-home/apple-touch-icon.png",
+    "core/agents.js",
+    "core/android-relay.js",
+    "core/app-capture.js",
+    "core/app-kinds.js",
+    "core/app-reading-position.js",
+    "core/app-route.css",
+    "core/app-route.js",
+    "core/app-services.js",
+    "core/app-versions.js",
+    "core/app-voice.js",
+    "core/appearance-host.css",
+    "core/appearance-host.js",
+    "core/apps.js",
+    "core/attach-chip.css",
+    "core/attach-chip.js",
+    "core/background-audio-legacy.js",
+    "core/background-audio.js",
+    "core/base.css",
+    "core/bound-view.js",
+    "core/brand.css",
+    "core/brand.js",
+    "core/bridge.js",
+    "core/cancelled.js",
+    "core/capture-tools.js",
+    "core/chat-errors.js",
+    "core/chat-kit.js",
+    "core/chat-models.js",
+    "core/chat-pins.js",
+    "core/chat-power.css",
+    "core/chat-power.js",
+    "core/chat-search.js",
+    "core/chat-topic-emojis-data.js",
+    "core/chat-topic-emojis.js",
+    "core/chat-work.js",
+    "core/chats-view.css",
+    "core/chats-view.js",
+    "core/chats.css",
+    "core/chats.js",
+    "core/commands.js",
+    "core/companion-legacy.js",
+    "core/companion-pane.js",
+    "core/composer-input.js",
+    "core/config.js",
+    "core/core.js",
+    "core/deeplink.js",
+    "core/dom-morph.js",
+    "core/experience.js",
+    "core/features.js",
+    "core/files.js",
+    "core/focused-field.js",
+    "core/launcher-defaults.js",
+    "core/launcher.js",
+    "core/links.css",
+    "core/links.js",
+    "core/mic.js",
+    "core/my-skin.js",
+    "core/notif-bell.js",
+    "core/os-updates.js",
+    "core/own-views.css",
+    "core/own-views.js",
+    "core/photos-relay.js",
+    "core/polish.css",
+    "core/reach.js",
+    "core/resources.css",
+    "core/resources.js",
+    "core/scenery.js",
+    "core/scheduled-reminders.css",
+    "core/scheduled-reminders.js",
+    "core/schedules.js",
+    "core/screen-capture.js",
+    "core/screen-text.js",
+    "core/sel-menu.css",
+    "core/sel-menu.js",
+    "core/settings.css",
+    "core/settings.js",
+    "core/setup-launch.js",
+    "core/share-sheet.css",
+    "core/share-sheet.js",
+    "core/share-wizard.css",
+    "core/share-wizard.js",
+    "core/shell.js",
+    "core/sigils.css",
+    "core/sigils.js",
+    "core/skin-frame.css",
+    "core/skin-frame.js",
+    "core/skin-host.js",
+    "core/skins.css",
+    "core/skins.js",
+    "core/status.js",
+    "core/thread-swipe-back.js",
+    "core/tour.css",
+    "core/tour.js",
+    "core/update-banner.css",
+    "core/uploads.js",
+    "core/usage.js",
+    "core/views.css",
+    "core/voice-legacy.js",
+    "core/voice-status.js",
+    "core/web-update.js",
+    "core/workspace-navigation.js",
+    "core/workspace-sync.js",
+    "favicon.ico",
+    "icon-192.png",
+    "live.js",
+    "manifest.webmanifest",
+    "outbox.js",
+    "pwa-install.js"
+  ]
 }

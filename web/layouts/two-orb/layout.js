@@ -198,7 +198,7 @@ export default function setup(api) {
       return;
     }
     if (cancelled || g.moved) return;
-    if (claimed && api.voice.state().state === 'idle' && api.app.tap()) return; // the app's own button (e.g. Mizel: new recording)
+    if (claimed && api.voice.state().state === 'idle' && api.app.tap()) return; // the app's own primary button
     api.voice.tap(); // idle: talk to the screen's agent; recording: send; paused: resume
   }
   api.listen(orb, 'pointerup', e => end(e, false));

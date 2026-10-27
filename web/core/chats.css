@@ -84,6 +84,7 @@ html.wos-doc-scroll :is(#dock,.general-voice,.pill) { position: fixed; }
 .ch-list[style*="--agc"] .ch-sec-h b:not(.wait) { background: var(--agc); color: var(--wz-base, var(--bg)); }
 .ch-list[style*="--agc"] .ch-row.unread .tp time { color: var(--agc); }
 .ch-list[style*="--agc"] .ch-fab { background: linear-gradient(145deg, color-mix(in oklab, var(--agc) 85%, #fff), color-mix(in oklab, var(--agc) 80%, #000)); color: #111; box-shadow: 0 10px 26px color-mix(in srgb, var(--agc) 50%, transparent), inset 0 1px 0 rgba(255,255,255,.25); }
+
 .ch-focus-tab[data-chfocusopt^="space:"]::before { border-color: var(--wz-line, var(--line-2)); }
 .ch-focus-tab:focus-visible { outline: 2px solid var(--violet-2); outline-offset: -3px; }
 .ch-focus-tab > span { overflow: hidden; text-overflow: ellipsis; }
@@ -181,18 +182,8 @@ html[data-shell="phone"] .ch-fsheet:has([data-chfocusopt]) { bottom: calc(var(--
 .ch-compose .ch-attach svg { width: 20px; height: 20px; stroke: var(--ink-2); stroke-width: 1.8; }
 .ch-tray { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px 0; }
 .ch-tray::-webkit-scrollbar { display: none; }
-.ch-att { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; max-width: 220px; padding: 5px 6px 5px 5px; border-radius: 14px; background: rgba(205, 190, 255, .07); border: 1px solid var(--line); }
-.ch-att.up { opacity: .7; }
-.ch-att img, .ch-att .ic { flex: 0 0 auto; width: 38px; height: 38px; border-radius: 10px; object-fit: cover; display: grid; place-items: center; background: rgba(0, 0, 0, .25); }
-.ch-att .ic svg { width: 18px; height: 18px; fill: none; stroke: var(--ink-2); stroke-width: 1.8; stroke-linecap: round; }
-.ch-att .nm { min-width: 0; display: flex; flex-direction: column; font-size: 12.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ch-att .nm small { font-size: 11px; color: var(--ink-3); }
-.ch-compose .ch-att button { width: 24px; height: 24px; border-radius: 50%; background: rgba(0, 0, 0, .35); color: var(--ink-2); font-size: 16px; line-height: 1; }
-.ch-att.ch-attimg { position: relative; display: block; max-width: none; width: 92px; height: 92px; padding: 0; overflow: hidden; border-radius: 14px; }
-.ch-att.ch-attimg img { width: 100%; height: 100%; border-radius: 0; object-fit: cover; display: block; }
-.ch-compose .ch-att.ch-attimg button { position: absolute; top: 5px; right: 5px; width: 24px; height: 24px; background: rgba(0, 0, 0, .6); color: #fff; }
-.ch-attspin { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; border: 2.5px solid rgba(255, 255, 255, .3); border-top-color: #fff; animation: ch-attspin .8s linear infinite; }
 @keyframes ch-attspin { to { transform: rotate(360deg); } }
+/* Upload spinner is status: Reduce Motion slows it, never stops it (out-ranks the styles.css kill switch, see .ch-spin). */
 /* Sections: same groups as Wizard's Work view */
 .ch-sec { margin: 0 0 2px; }
 .ch-sec-h { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 8px 8px; text-align: left; font-size: 11.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); }
@@ -375,7 +366,8 @@ a.fchip { color: inherit; text-decoration: none; }
 .mv-ti { min-width: 0; display: flex; flex-direction: column; }
 .mv-ti b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mv-ti small { font-size: 11.5px; color: var(--ink-3); }
-.mv-stage { flex: 1; min-height: 0; position: relative; display: grid; place-items: center; overflow: hidden; }
+/* Fixed tracks: an image's own height must never size the row, or contain can't fit a tall screenshot and its bottom is cut off. */
+.mv-stage { flex: 1; min-height: 0; position: relative; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; overflow: hidden; }
 .mv-stage img { width: 100%; height: 100%; object-fit: contain; transform-origin: center; transition: transform 200ms var(--ease); user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
 .mv-stage video { max-width: 100%; max-height: 100%; background: #000; }
 /* Long screenshots fit the width and scroll (chat-kit.js fit/clampPan): top-anchored, scaled from the top edge. */
@@ -464,29 +456,36 @@ body > .mviewer { position: fixed; z-index: 200; }
 /* Ready status icons: the row icon is the thread's status, not a per-thread star.
    Two separate signals: the icon = what the thread wants; bold/plain = unread/read (like an inbox).
    Status never changes a row's weight or opacity, so every status reads at full strength. */
-.ch-row .emo.sti { position: relative; font-size: 0; color: var(--ink-3); background: rgba(205, 190, 255, .06); }
-.ch-row .emo.sti svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.ch-row .emo.sti svg .f { fill: currentColor; stroke: none; }
-.ch-row .emo.sti svg .k { stroke: #0b0a12; stroke-width: 2.6; }
-.ch-row .emo.sti svg .kd { fill: #0b0a12; stroke: none; }
-.ch-row .emo.sti.needs { color: #ffb84d; background: rgba(255, 184, 77, .16); box-shadow: inset 0 0 0 1px rgba(255, 184, 77, .30); }
-.ch-row .emo.sti.check { color: #5adcff; background: rgba(90, 220, 255, .14); box-shadow: inset 0 0 0 1px rgba(90, 220, 255, .28); }
-.ch-row .emo.sti.done { color: #3ddc84; background: rgba(61, 220, 132, .14); box-shadow: inset 0 0 0 1px rgba(61, 220, 132, .28); }
-.ch-row .emo.sti.fyi { color: #ffd84a; background: rgba(255, 216, 74, .13); box-shadow: inset 0 0 0 1px rgba(255, 216, 74, .26); }
-.ch-row .emo.sti.approval { color: #ffb84d; background: rgba(255, 184, 77, .16); box-shadow: inset 0 0 0 1px rgba(255, 184, 77, .30); }
-.ch-row .emo.sti.failed { color: #ff6b6b; background: rgba(255, 107, 107, .15); box-shadow: inset 0 0 0 1px rgba(255, 107, 107, .28); }
-.ch-row .emo.sti.offline { color: #ffb84d; background: rgba(255, 184, 77, .10); }
-.ch-row .emo.sti.deferred { color: var(--violet-2); background: rgba(143, 99, 255, .14); box-shadow: inset 0 0 0 1px rgba(185, 155, 255, .30); } /* matches the violet Deferred label */
-.ch-row .emo.sti.working { background: rgba(90, 220, 255, .08); }
-.ch-row .emo.sti .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(90, 220, 255, .22); border-top-color: var(--cyan); animation: sti-spin .9s linear infinite; }
+:is(.ch-row, .ch-head) .emo.sti { position: relative; font-size: 0; color: var(--ink-3); background: rgba(205, 190, 255, .06); }
+:is(.ch-row, .ch-head) .emo.sti svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+:is(.ch-row, .ch-head) .emo.sti svg .f { fill: currentColor; stroke: none; }
+:is(.ch-row, .ch-head) .emo.sti svg .k { stroke: #0b0a12; stroke-width: 2.6; }
+:is(.ch-row, .ch-head) .emo.sti svg .kd { fill: #0b0a12; stroke: none; }
+:is(.ch-row, .ch-head) .emo.sti.needs { color: #ffb84d; background: rgba(255, 184, 77, .16); box-shadow: inset 0 0 0 1px rgba(255, 184, 77, .30); }
+:is(.ch-row, .ch-head) .emo.sti.check { color: #5adcff; background: rgba(90, 220, 255, .14); box-shadow: inset 0 0 0 1px rgba(90, 220, 255, .28); }
+:is(.ch-row, .ch-head) .emo.sti.done { color: #3ddc84; background: rgba(61, 220, 132, .14); box-shadow: inset 0 0 0 1px rgba(61, 220, 132, .28); }
+:is(.ch-row, .ch-head) .emo.sti.fyi { color: #ffd84a; background: rgba(255, 216, 74, .13); box-shadow: inset 0 0 0 1px rgba(255, 216, 74, .26); }
+:is(.ch-row, .ch-head) .emo.sti.approval { color: #ffb84d; background: rgba(255, 184, 77, .16); box-shadow: inset 0 0 0 1px rgba(255, 184, 77, .30); }
+:is(.ch-row, .ch-head) .emo.sti.failed { color: #ff6b6b; background: rgba(255, 107, 107, .15); box-shadow: inset 0 0 0 1px rgba(255, 107, 107, .28); }
+:is(.ch-row, .ch-head) .emo.sti.offline { color: #ffb84d; background: rgba(255, 184, 77, .10); }
+:is(.ch-row, .ch-head) .emo.sti.deferred { color: var(--violet-2); background: rgba(143, 99, 255, .14); box-shadow: inset 0 0 0 1px rgba(185, 155, 255, .30); } /* matches the violet Deferred label */
+:is(.ch-row, .ch-head) .emo.sti.working { background: rgba(90, 220, 255, .08); }
+:is(.ch-row, .ch-head) .emo.sti .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(90, 220, 255, .22); border-top-color: var(--cyan); animation: sti-spin .9s linear infinite; }
 @keyframes sti-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .ch-row .emo.sti .spin { animation-duration: 3s; } }
+/* The open thread's header wears its row's status icon beside the title, at about the title's text height
+ * (James, 25 Oct 2026: 30 px read "much larger" than the 16 px title; 24 px box, 14 px glyph). */
+.ch-head .emo.ch-head-sti { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; margin-left: -2px; }
+.ch-head .emo.ch-head-sti svg { width: 14px; height: 14px; stroke-width: 2.2; }
+.ch-head .emo.ch-head-sti .spin { width: 12px; height: 12px; border-width: 1.5px; }
+/* A Working spinner is status, not decoration: Reduce Motion slows it, never stops it. !important out-ranks the global
+ * reduced-motion kill switch in styles.css (`*` + !important), which froze it (Robert, 24 Oct 2026). */
+@media (prefers-reduced-motion: reduce) { .ch-head .emo.sti .spin, .ch-row .emo.sti .spin { animation-duration: 3s !important; animation-iteration-count: infinite !important; } }
 .ch-topic-mark { position: relative; flex: 0 0 auto; width: 44px; height: 38px; }
 .ch-topic-emoji { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; font-size: 21px; line-height: 1; background: color-mix(in srgb, var(--ink) 7%, transparent); }
-.ch-row .emo.sti.ch-topic-status, .ch-topic-status.draft-status { position: absolute; right: 0; bottom: -1px; width: 17px; height: 17px; min-width: 0; border-radius: 6px; border: 1px solid var(--bg); z-index: 1; }
-.ch-row .emo.sti.ch-topic-status svg { width: 11px; height: 11px; }
-.ch-row .emo.sti.ch-topic-status .spin { width: 10px; height: 10px; border-width: 1.5px; }
-.ch-row .emo.sti.ch-topic-status .dot { width: 4px; height: 4px; }
+:is(.ch-row, .ch-head) .emo.sti.ch-topic-status, .ch-topic-status.draft-status { position: absolute; right: 0; bottom: -1px; width: 17px; height: 17px; min-width: 0; border-radius: 6px; border: 1px solid var(--bg); z-index: 1; }
+:is(.ch-row, .ch-head) .emo.sti.ch-topic-status svg { width: 11px; height: 11px; }
+:is(.ch-row, .ch-head) .emo.sti.ch-topic-status .spin { width: 10px; height: 10px; border-width: 1.5px; }
+:is(.ch-row, .ch-head) .emo.sti.ch-topic-status .dot { width: 4px; height: 4px; }
 .ch-topic-status.draft-status { display: grid; place-items: center; font-size: 11px; color: var(--amber); background: var(--bg); box-shadow: inset 0 0 0 1px var(--line-2); }
 .ch-emoji-sheet { max-height: min(76%, 620px); display: flex; flex-direction: column; padding-bottom: calc(10px + var(--safe-b, 0px)); overflow: hidden; }
 .ch-emoji-sheet > .ch-sheet-t { flex: 0 0 auto; padding-bottom: 8px; }
@@ -505,7 +504,7 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-sheet-b .ch-emoji-grid button { display: grid; place-items: center; min-width: 0; padding: 8px 4px; border-radius: 11px; font-size: 23px; line-height: 1; background: color-mix(in srgb, var(--ink) 6%, transparent); border: 1px solid var(--line); }
 .ch-sheet-b .ch-emoji-grid button:active, .ch-sheet-b .ch-emoji-grid button:focus-visible { background: color-mix(in srgb, var(--violet) 20%, transparent); border-color: var(--violet-2); }
 .ch-sheet-emoji { width: 24px; text-align: center; font-size: 18px; }
-.ch-row .emo.sti .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); opacity: .55; }
+:is(.ch-row, .ch-head) .emo.sti .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); opacity: .55; }
 /* Read state is the only thing that sets weight: unread = bold white title + brighter preview + violet time; read = plain. */
 .ch-row .tp b, .ch-row.att-needs .tp b, .ch-row.att-check .tp b { color: var(--ink-2); font-weight: 500; }
 .ch-row .pv, .ch-row.att-needs .pv, .ch-row.att-check .pv { color: var(--ink-3); }
@@ -575,6 +574,36 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-fopt.on { background: rgba(185, 155, 255, .2); border-color: rgba(185, 155, 255, .5); }
 .ch-fopt b { color: var(--violet-2, #b99bff); font-size: 12px; }
 
+/* Agent-owned Spaces: same Focus rows, a single local picker above the strip. */
+.ch-focus-caret { flex: none; font-style: normal; font-size: 12px; opacity: .65; }
+.ch-focus-tab > span { max-width: 18ch; }
+.ch-space-nested { padding: 8px 0 0 20px; }
+.ch-focus-group { margin-top: 12px; }
+.ch-space-shade { position: fixed; z-index: 1900; inset: 0; background: color-mix(in srgb, var(--wz-base, #080610) 48%, transparent); }
+.ch-space-picker { position: absolute; left: 8px; right: 8px; max-height: min(55vh, 440px); display: flex; flex-direction: column; border: 1px solid var(--wz-line, var(--line-2)); border-radius: 18px; background: linear-gradient(var(--wz-overlay, #120b26), var(--wz-overlay, #120b26)), var(--wz-base, var(--bg, #080610)); color: var(--wz-ink, var(--ink, #f4edff)); box-shadow: 0 12px 48px #0007; padding: 8px; overflow: hidden; }
+.ch-space-grab { width: 36px; height: 4px; border-radius: 4px; background: var(--wz-line, var(--line-2)); align-self: center; margin: 0 0 4px; flex: none; }
+.ch-space-picker header { display: flex; align-items: center; gap: 8px; min-height: 44px; padding-left: 10px; flex: none; }
+.ch-space-picker header > i { width: 8px; height: 8px; border-radius: 50%; background: var(--ch-agent-colour); }
+.ch-space-picker header b { flex: 1; font-size: 14px; }
+.ch-space-picker header button { width: 44px; height: 44px; border: 0; border-radius: 12px; background: transparent; color: inherit; font-size: 24px; }
+.ch-space-rows { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.ch-space-picker .ch-fopt { display: flex; width: 100%; min-height: 48px; height: auto; border: 0; border-radius: 10px; background: transparent; padding: 10px 12px; text-align: left; color: inherit; }
+.ch-space-picker .ch-fopt > span { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.ch-space-picker .ch-fopt small { font-size: 12px; color: var(--wz-ink-3, var(--ink-3)); font-variant-numeric: tabular-nums; }
+.ch-space-picker .ch-fopt.on { background: color-mix(in srgb, var(--ch-agent-colour) 14%, transparent); box-shadow: inset 3px 0 var(--ch-agent-colour); }
+.ch-space-picker .ch-fopt b { color: var(--ch-agent-colour); }
+.ch-space-picker .ch-focus-dot { position: static; flex: none; width: 6px; height: 6px; margin: 0 2px; }
+.ch-space-picker button:focus-visible, .ch-space-picker input:focus-visible { outline: 2px solid var(--ch-agent-colour); outline-offset: -2px; }
+.ch-space-new { flex: none; min-height: 48px; text-align: left; padding: 10px 12px; margin-top: 6px; border: 0; border-top: 1px solid var(--wz-line, var(--line)); background: transparent; color: var(--ch-agent-colour); font: inherit; font-size: 14px; font-weight: 600; }
+.ch-space-form { flex: none; padding: 12px 4px 4px; border-top: 1px solid var(--wz-line, var(--line)); margin-top: 6px; }
+.ch-space-form label { display: block; color: var(--wz-ink-3, var(--ink-3)); font-size: 12px; margin: 0 8px 8px; }
+.ch-space-form > div { display: flex; gap: 8px; }
+.ch-space-form input { flex: 1; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid var(--wz-line, var(--line-2)); border-radius: 10px; background: var(--wz-base, var(--bg)); color: inherit; font: inherit; font-size: 16px; }
+.ch-space-form button { min-height: 44px; border: 0; border-radius: 10px; padding: 0 14px; background: var(--ch-agent-colour); color: var(--wz-base, var(--bg)); font: inherit; font-size: 14px; font-weight: 650; }
+.ch-space-form button:disabled { opacity: .45; }
+.ch-space-form p { margin: 8px; font-size: 13px; color: var(--wz-danger, var(--red, #ff6b86)); }
+@media (min-width: 641px) { .ch-space-picker { right: auto; width: 280px; max-height: min(60vh, 420px); border-radius: 16px; } .ch-space-grab { display: none; } }
+
 /* New chat button: bottom-right of the Chats list, clear of the orb (dock sits below the window; corner orb lifts it). */
 .ch-fab { position: absolute; right: 16px; bottom: 16px; z-index: 5; width: 54px; height: 54px; border-radius: 18px; display: grid; place-items: center;
   background: linear-gradient(145deg, #9b6bff, #6d45e6); color: #fff; box-shadow: 0 10px 26px rgba(70, 30, 160, .55), inset 0 1px 0 rgba(255, 255, 255, .22); }
@@ -615,12 +644,6 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-model.agent { color: color-mix(in oklab, var(--agc, var(--violet-2)) 70%, var(--ink)); background: color-mix(in oklab, var(--agc, #8f63ff) 16%, transparent); }
 
 /* Resumable upload progress (core/uploads.js): a thin bar along the chip's foot, a % on photo tiles. */
-.ch-att.up { position: relative; overflow: hidden; }
-.ch-att .ch-attbar { position: absolute; left: 0; bottom: 0; height: 3px; width: var(--up, 0%); background: var(--accent, #b9a6ff); border-radius: 0 2px 2px 0; transition: width .2s linear; }
-.ch-att.up.wait .ch-attbar { background: var(--ink-3, #888); animation: ch-attwait 1.2s ease-in-out infinite; }
-@keyframes ch-attwait { 50% { opacity: .35; } }
-.ch-att.ch-attimg .ch-attpct { position: absolute; left: 0; right: 0; top: 50%; margin-top: 14px; text-align: center; font: 600 11px/1 system-ui, sans-serif; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .7); }
-.ch-att.up .nm small { font-variant-numeric: tabular-nums; }
 /* Opinionated: Archive header selector for the auto-archive age. */
 .ch-arch-sel { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 12px 10px; font-size: 12.5px; color: var(--ink-3); }
 .ch-arch-sel select { font: inherit; color: var(--ink); background: var(--glass); border: 1px solid var(--line-2); border-radius: 10px; padding: 4px 8px; }
@@ -676,6 +699,10 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 .ch-morning { display: flex; align-items: center; gap: 12px; width: 100%; margin: 4px 0 10px; padding: 13px 14px; border-radius: 18px; text-align: left; color: inherit; font: inherit; cursor: pointer;
   border: 1px solid rgba(255, 184, 107, .38); background: linear-gradient(135deg, rgba(255, 184, 107, .15), rgba(255, 111, 145, .09) 45%, rgba(143, 99, 255, .08)); }
 .ch-morning:active { transform: scale(.99); }
+.ch-morning-w { position: relative; margin: 4px 0 10px; }
+.ch-morning-w > .ch-morning { margin: 0; padding-right: 52px; }
+.ch-morning-x { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); width: 40px; height: 40px; border: 0; border-radius: 50%; background: none; color: inherit; font: inherit; font-size: 22px; line-height: 1; opacity: .6; cursor: pointer; }
+.ch-morning-x:hover, .ch-morning-x:focus-visible { opacity: 1; background: rgba(255, 255, 255, .08); }
 .ch-morning .sun { flex: none; width: 40px; height: 40px; border-radius: 50%; background: radial-gradient(circle at 50% 70%, #fff3d6, #ffb86b 40%, #ff6f91 75%); box-shadow: 0 0 18px rgba(255, 184, 107, .4); }
 .ch-morning .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .ch-morning .hd { display: flex; align-items: center; gap: 8px; }
@@ -707,7 +734,7 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 .ch-sync { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 2px 16px 6px; font-size: 12px; color: var(--ink-3); animation: ch-fade .2s ease; }
 .ch-sync.off { color: var(--ink-2); }
 .ch-spin { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--line-2, rgba(255,255,255,.18)); border-top-color: var(--ink-2, currentColor); animation: ch-attspin .8s linear infinite; flex: none; }
-@media (prefers-reduced-motion: reduce) { .ch-spin { animation-duration: 2.4s; } }
+@media (prefers-reduced-motion: reduce) { .ch-spin { animation-duration: 2.4s !important; animation-iteration-count: infinite !important; } }
 
 /* New chat greeting: Miguel's skins switch it on in their own web/skins/<dir>/skin.css. Default skins keep the boxed .nc-classic. */
 .ch-newchat { display: none; }

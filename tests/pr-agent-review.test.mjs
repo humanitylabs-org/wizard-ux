@@ -71,7 +71,8 @@ test('renders one marked review with a verdict', () => {
   const body = renderReview({ pr: { author: 'oscar' }, headSha: 'abcdef1234567', findings, filesCount: 1 });
   assert.ok(body.startsWith(`${MARKER} sha=abcdef1234567 -->`));
   assert.match(body, /must-fix/);
-  assert.match(body, /admin other than @oscar/);
+  assert.match(body, /non-author review for @oscar/);
+  assert.doesNotMatch(body, /admin other than/);
   const clean = renderReview({ pr: { author: 'a' }, headSha: 'f'.repeat(40), findings: [], filesCount: 2 });
   assert.match(clean, /No problems found/);
 });
