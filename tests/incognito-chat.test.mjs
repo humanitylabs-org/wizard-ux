@@ -10,6 +10,12 @@ function rig(extra = {}) {
   const forbidden = new Proxy({}, { get() { throw new Error('Incognito touched persistent browser storage') } })
   const context = { window: { WizCore: {} }, document: { activeElement: null }, addEventListener: (name, fn) => events[name] = fn,
     setInterval, clearInterval, setTimeout, clearTimeout, AbortController, Promise, localStorage: forbidden, sessionStorage: forbidden, indexedDB: forbidden, caches: forbidden }
+  const streams = []
+  context.window.WizLive = { openRunStream(sid, agent, run, notify, target) {
+    const stream = { sid, agent, run, target, notify, closed: false, close() { this.closed = true } }; streams.push(stream)
+    if (!extra.manualStream) notify({ terminal: true, status: 'completed', text: 'Synthetic answer', steps: [] })
+    return stream
+  } }
   vm.runInNewContext(source, context)
   let choice = true, component
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -23,7 +29,7 @@ function rig(extra = {}) {
   }
   component = context.window.WizCore.incognitoChats({ win: () => ({ id: 'one', thread: '__new__' }), elOf: () => el, paint: () => component.render('one', el), grow() {}, toast() {}, kit: { esc, md: esc }, fetchImpl, confirm: () => choice })
   const agent = { id: 'private-synthetic', label: 'Synthetic private', privacy: 'private' }
-  return { component, el, field, events, calls, agent, setConfirm: c => choice = c }
+  return { component, el, field, events, calls, agent, streams, setConfirm: c => choice = c }
 }
 test('Incognito browser transcript and draft remain exclusively in memory; close really wipes them', async () => {
   const s = rig(); await s.component.start('one', s.agent)
@@ -56,7 +62,7 @@ test('start-close race destroys late target instead of resurrecting it', async (
   resolve({ ok: true, json: async () => ({ session_id: 'incog_' + 'b'.repeat(32) }) }); await start
   assert.equal(s.component.active('one'), false); assert.equal(s.calls.at(-1).method, 'DELETE')
 })
-test('offline sends are never retried or copied into a durable queue', async () => {
+test('failed sends retry only on owner action with the same RAM text and no durable queue', async () => {
   let count = 0
   const s = rig({ fetchImpl: async path => {
     if (path.endsWith('/incognito')) return { ok: true, json: async () => ({ session_id: 'incog_' + 'c'.repeat(32) }) }
@@ -64,7 +70,10 @@ test('offline sends are never retried or copied into a durable queue', async () 
     return { ok: true, json: async () => ({}) }
   } })
   await s.component.start('one', s.agent); await s.component.send('one', 'synthetic-offline')
-  assert.equal(count, 1); assert.match(s.el.innerHTML, /will not be retried or saved/)
+  assert.equal(count, 1); assert.match(s.el.innerHTML, /Retry sends the same message again here/)
+  await s.component.send('one', 'synthetic-offline', true)
+  assert.equal(count, 2); assert.equal(s.calls.filter(c => c.path.endsWith('/v1/runs')).length, 2)
+  assert.equal((s.el.innerHTML.match(/synthetic-offline/g) || []).length, 1)
   s.component.close('one', true)
 })
 test('leaving for another view confirms once and destroys only temporary chats', async () => {

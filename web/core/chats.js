@@ -2586,6 +2586,7 @@ window.WizCore.chats = function createChats(H) {
   const idOf = t => t.closest('[data-chats]')?.dataset.chats || '';
   /* Clicks inside a Chats window. Returns true when it handled the click. */
   function click(e, id) {
+    if (INC?.click(id, e)) return true;
     if (e.target.closest('.ch-back[data-incog-close]')) { chatsBack(W[id]); return true; }
     if (e.target.closest('[data-incog-close]')) { if (INC?.close(id)) renderChats(W[id]); return true; }
     if (e.target.closest('[data-incog-off]')) { INC?.close(id); renderChats(W[id]); return true; }
