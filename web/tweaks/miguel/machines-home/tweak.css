@@ -8,6 +8,7 @@ html[data-tweaks~="miguel/machines-home"] {
   --mh-cpu: var(--violet-2, var(--mh-accent)); --mh-mem: var(--cyan); --mh-disk: var(--amber);
   --mh-shadow: 0 18px 50px -18px rgba(0, 0, 0, .7), 0 2px 8px -2px rgba(0, 0, 0, .35);
 }
+html[data-skin^="obsidian"][data-tweaks~="miguel/machines-home"] { --mh-cpu: #7A5CFF; --mh-mem: #2fa8d8; }
 html[data-skin="obsidian-light"][data-tweaks~="miguel/machines-home"] { --mh-shadow: 0 18px 44px -20px rgba(0, 0, 0, .25), 0 2px 8px -2px rgba(0, 0, 0, .08); }
 
 /* ---------- where it sits: the map replaces Home's content (Ready / Working stay) ---------- */
