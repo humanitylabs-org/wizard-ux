@@ -182,7 +182,7 @@ export default function setup(api) {
         h('div', { cls: 'mh-legend', hidden: !S.bars, 'aria-hidden': 'true' }, h('span', { text: 'Memory' }), h('span', { text: 'Disk' }), h('span', { text: 'CPU' })),
         machineNode(main, 'main', maxOf, { roleText: 'Main', sessions: sessions() }),
         ...others.map(m => machineNode(m, qualifies(m.id) ? 'standby' : 'helper', maxOf,
-          { roleText: qualifies(m.id) ? 'Standby device' : m.status === 'online' ? 'Helper' : 'Helper · offline', warn: m.status !== 'online' }))]);
+          { roleText: qualifies(m.id) ? 'Standby device' : m.status === 'online' ? 'Helper' : 'Offline', warn: m.status !== 'online' }))]);
     }
     const ps = people();
     setRow(rowPp, ps.map(personNode));

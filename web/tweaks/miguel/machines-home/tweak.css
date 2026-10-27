@@ -81,6 +81,7 @@ html[data-shell="phone"] .mh-top { padding-right: 60px; justify-content: flex-st
 .mh-node.is-storage[data-fit="tight"] .mh-disc { border-color: var(--mh-warn); }
 .mh-node.is-storage[data-fit="no"] .mh-disc { border-color: var(--mh-bad); }
 .mh-node.is-main { width: 118px; }
+.mh-row.is-storage .mh-node { width: 140px; }
 .mh-node.is-main .mh-disc { border: 0; color: var(--mh-on-accent);
   background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--mh-accent) 70%, white), var(--mh-accent) 60%, color-mix(in srgb, var(--mh-accent) 70%, black));
   box-shadow: 0 0 0 5px color-mix(in srgb, var(--mh-accent) 18%, transparent), 0 0 0 12px color-mix(in srgb, var(--mh-accent) 7%, transparent), 0 14px 40px -12px var(--mh-accent); }
@@ -133,8 +134,9 @@ html[data-skin="landscapes"] :is(.mh-name, .mh-role, .mh-fname, .mh-batt small, 
 @container (max-width: 599px) {
   .mh-root { --mh-k: .72; }
   .mh-row.is-machines { gap: 4px; }
-  .mh-node { width: 70px; }
+  .mh-node { width: 84px; }
   .mh-node.is-main { width: 96px; }
+  .mh-row.is-storage .mh-node { width: 130px; }
   .mh-name { font-size: 11.5px; }
   .mh-role { font-size: 10px; }
   .mh-bar small { font-size: 9px; }
