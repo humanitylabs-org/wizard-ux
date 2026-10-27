@@ -43,7 +43,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 
 | Need | Use | Never hand-roll |
 |---|---|---|
-| Chat list, Focus (one agent: All/Spaces/＋; no Spaces: none; multiple: All/agent → owned Spaces), Filter, collapse, search, thread, composer, attachments, read state, Copy/Share; Novairecito phone swipe Recall/Done | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); `setFocus` persists `w.focus`; `migrateChatsFocus` folds legacy agent windows; `WizLive` owns data; diagnosed rows: Sign in; revision invalidates cache | second thread/composer/Focus parser; per-agent or per-shell routing |
+| Chats: agent/Space Focus, Filter, collapse, search, thread/composer, files, read state, Copy/Share; Novairecito swipe Recall/Done | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); `setFocus` persists `w.focus`; `migrateChatsFocus` migrates; `WizLive` owns data; diagnosis: Sign in; revision invalidates cache | second thread/composer/Focus parser; per-agent/shell routing |
 | Alternative Chats list | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
 | Models, retry, composer mic, receipts, reading place | `WosChatPower` (`web/core/chat-power.js`: per-thread anchor/offset/atBottom; repair workflow) + `WosModels` (`web/core/chat-models.js`; pooled Claude first, fresh on open; diagnosed variant: model-aware Sign in, no Retry), `WosErrors` (`web/core/chat-errors.js`), `WosWork` (`web/core/chat-work.js`) | model/error/reading-place forks; duplicate diagnosis notice |
