@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
+import { withoutApprovedOrbIcon } from './approved-orb-icon-css.mjs';
 const web = new URL('../web/', import.meta.url);
 const read = p => readFileSync(new URL(p, web), 'utf8');
 
@@ -24,7 +25,7 @@ test('only our skin packages style the symmetric dock and the orb X', () => {
     assert.match(css, /\.ddot\.dnew \.dsg svg/);
   }
   for (const f of readdirSync(new URL('core/', web)).filter(f => f.endsWith('.css')).map(f => `core/${f}`).concat(['styles.css'])) {
-    const src = read(f);
+    const src = withoutApprovedOrbIcon(read(f));
     assert.ok(!/\.desk-dots\.sym|\.dnew\b|data-sheet="launcher"/.test(src), `${f} must not carry our skins' dock`);
   }
 });
