@@ -155,7 +155,7 @@ test('a reopened thread whose answer already landed never shows the replayed run
     esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => {}, loadThread: async () => {}, setTimeout: () => 1, clearTimeout: () => {} };
   vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
   const answer = "**You're right, and that's fixed.**\n\n**What I did:** switched the job.";
-  const turns = [{ u: { text: 'hi' }, a: { at: 5, text: answer, final: true } }];
+  const turns = [{ u: { text: 'hi' }, notes: ["Now I'll save the rule."], a: { at: 5, text: answer, final: true } }];
   assert.equal(ctx.syncStream(w, c, turns, ''), '');
   // The run replays from its first event: an interim line, then the same answer with its status trailer.
   callback({ text: "Now I'll save the rule." + answer + '\n\n[WIZARD_STATUS_V1]{"state":"done"}[/WIZARD_STATUS_V1]', steps: [], terminal: false });
@@ -183,4 +183,24 @@ test('a terminal provisional that never matches the transcript retires after the
   clock += 61000; await timer(); await settle();
   assert.equal(c.stream.landed, true);
   assert.equal(ctx.syncStream(w, c, turns, ''), '');
+});
+test('a new run that only ends like the previous short answer keeps streaming (main and routed threads)', () => {
+  for (const agent of ['', 'philosopher']) {
+    const w = { id: 'w', thread: 'sid' }, c = {}, row = {};
+    let callback;
+    const ctx = { LIVE: { pendingRun: () => 'rid', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close() {} }) },
+      WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }), clip: (s, n) => s.slice(0, n),
+      esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => {}, loadThread: async () => {}, setTimeout: () => 1, clearTimeout: () => {} };
+    vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+    const turns = [{ notes: [], a: { at: 5, text: 'Yes.', final: true } }];
+    ctx.syncStream(w, c, turns, agent);
+    callback({ text: 'I checked the request. Yes.', steps: [], terminal: false });
+    assert.match(ctx.syncStream(w, c, turns, agent), /I checked the request/, `agent=${agent || 'main'}`);
+    assert.equal(c.stream.landed, false);
+    // The same thread reopened after that answer landed: the replay is retired on both routes.
+    const c2 = {}, landed = [...turns, { notes: [], a: { at: 9, text: 'I checked the request. Yes.', final: true } }];
+    ctx.syncStream(w, c2, landed, agent);
+    callback({ text: 'I checked the request. Yes.', steps: [], terminal: true });
+    assert.equal(ctx.syncStream(w, c2, landed, agent), '', `agent=${agent || 'main'}`);
+  }
 });
