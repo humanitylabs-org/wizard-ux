@@ -456,6 +456,11 @@
         a.offs.add(off); return off;
       },
     }),
+    // Trusted packages only: Ready / Working counts as Home shows them, and opening those same lists.
+    ...(trusted ? { sessions: Object.freeze({
+      counts: () => { if (a.dead) return null; const c = shell?.sessions?.(); return c ? Object.freeze({ working: c.working | 0, ready: c.ready | 0 }) : null; },
+      open: kind => { if (!a.dead && (kind === 'working' || kind === 'ready')) shell?.openSessions?.(kind); },
+    }) } : {}),
     // Trusted packages only: one same-origin GET of an installed app's read API (/<app>/api/<path>), JSON back.
     // No method, header, body or other origin crosses this boundary; null on any failure or after teardown.
     ...(trusted ? { app: async (id, path) => {

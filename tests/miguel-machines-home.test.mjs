@@ -87,3 +87,17 @@ test('machines-home: storage above, helpers | Main | standby across, people belo
   assert.match(css, /\.mh-pnode \{/); assert.match(css, /\.mh-spec \{/);
   assert.match(src, /roleText: 'Standby device', state: m\.fit === 'ok' \? 'Ready' : 'Not ready'/, 'category label and status are separate');
 });
+test('machines-home: sessions live in Main, AI fuel is shared on top, compute arcs per machine, backup comet only while running', () => {
+  const src = read('web/tweaks/miguel/machines-home/tweak.js'), css = read('web/tweaks/miguel/machines-home/tweak.css');
+  assert.match(src, /api\.data\.read\.sessions\?\.counts\(\)/, 'counts come from the shell, not its DOM');
+  assert.match(src, /api\.data\.read\.sessions\?\.open\(d\.fwd\)/, 'taps open the same Working / Ready lists');
+  const host = read('web/core/skin-host.js'), app = read('web/app.js'), desk = read('web/desktop/desktop.js');
+  assert.match(host, /\.\.\.\(trusted \? \{ sessions: Object\.freeze/, 'sessions is trusted-only');
+  for (const s of [app, desk]) { assert.match(s, /sessions: \(\) => \{/); assert.match(s, /openSessions: kind =>/); }
+  assert.match(css, /:is\(\.home, \.home-in\):has\(\[data-slot="home-main"\] > \.mh-root\) \.constellation \{ display: none; \}/);
+  assert.match(src, /data: \{ resOpen: 'ai' \}/, 'AI fuel opens the shell AI sheet');
+  assert.match(src, /backupRunning\(\)\) line\(d, 'backup', 'var\(--mh-accent\)', 'backing up', true\)/);
+  assert.match(src, /note\.hidden = true;/, 'no info card under a managed Wizard diagram');
+  for (const k of ['.mh-orbit', '.mh-use', '.mh-tank-g']) assert.ok(css.includes(k + ' '), k);
+  for (const b of ['setTimeout', 'setInterval', 'requestAnimationFrame', 'innerHTML', 'localStorage']) assert.ok(!src.includes(b), b);
+});
