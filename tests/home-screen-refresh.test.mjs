@@ -80,6 +80,13 @@ test('a registry read that announces itself cannot perpetuate refresh reruns',as
   f.events['wizard:apps']();await drain();
   assert.equal(reads,1);assert.equal(f.renders,1);assert.equal(f.messages.length,2);
 });
+test('removing and restoring the same apps invalidates the registry signature',async()=>{
+  const f=fixture();await drain();const saved={...f.registry};
+  for(const key of Object.keys(f.registry))delete f.registry[key];
+  f.events['wizard:apps']();await drain();assert.equal(f.renders,1);
+  Object.assign(f.registry,saved);f.events['wizard:apps']();await drain();
+  assert.equal(f.renders,2);assert.equal(f.messages.filter(m=>m.op==='pinned').length,2);
+});
 test('resume refreshes unchanged metadata because the native pinned set may have changed',async()=>{
   const ids=[],f=fixture({ids});await drain();assert.equal(f.renders,0);
   ids.push('wisdom');await f.events['wos-native-resume']();await drain();
