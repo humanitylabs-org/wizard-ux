@@ -10,10 +10,10 @@ Reuse:
 - chat: REUSE WizardApp.nav.openThread
 - orb: EXTEND Orb.create (adds R option; row updated)
 - habit streak card: NEW (no row; web/core/streaks.js + row)
-Visual: <side-by-side screenshot of the existing element and yours, or "none">
+Visual: <side-by-side screenshot, or "none">
 ```
 
-`Reuse: n/a (<reason>)` is accepted only when the PR changes nothing under `web/` or `android/`.
+`Reuse: n/a (<reason>)`: no `web/` or `android/` changes.
 
 ## Apps (hosted frames: use only `WizardApp` from `/wizard-os-home/core/app-client.js`)
 
@@ -61,7 +61,7 @@ Visual: <side-by-side screenshot of the existing element and yours, or "none">
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`web/core/agents.js`) | hard-coded agent names or colours |
 | App source labels, `wizard://install` | `sourceLabel`, `parseInstallLink` (`web/store/`) | own badges |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`web/core/app-route.js`) | — |
-| Per-app Connection Router checklist, install follow-through, required-needs open gate | `WosAppSetup` (`web/core/app-setup.js`, `web/core/app-setup.css`); REUSE `routerNeeds`/`routerApprove` and EXTEND `serviceRow` in `web/store/store-router.js`, Store transaction `installRelease` (`web/store/store-install.js`), `WosAppRoute` for private agents, `WizLinks` for connect pages | app-local setup gates or install clients |
+| App setup | `WosAppSetup` (`web/core/app-setup.js`, `web/core/app-setup.css`); Store router/install | app-local setup |
 | App glyph tiles | `WizSigil` (`web/core/sigils.js`, `web/core/sigils.css`) | PNG/emoji icons |
 | Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs + old-service defaults | lists |
 | App groups | `WosAppKinds` (`web/core/app-kinds.js`) | forks |
