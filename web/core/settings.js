@@ -11,7 +11,8 @@
   const row = (id, title, sub) => `<button class="st-row" data-st="${esc(id)}"><span class="st-tx"><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="st-go">›</span></button>`;
   // My release (wizard-os#186) leads when the box has one (WosUpdates.release: my-release.json or the App Manager's
   // `release`); About folds into its foot. A box without a release keeps About & updates last, as before.
-  const release = () => !!window.WosUpdates?.release;
+  const updates = () => window.WosUpdates;
+  const release = () => updates()?.developer === true && !!updates()?.release;
   const PAGES = [
     { id: 'release', title: 'My release', available: release },
     { id: 'appearance', title: 'Appearance' },
@@ -289,6 +290,12 @@
     apps.sort((a, b) => (b.id === 'wizard-chats') - (a.id === 'wizard-chats'));
     return `<div class="st-group"><h4>Default Chats</h4><div class="st-chats-options" role="radiogroup" aria-label="Default Chats">${apps.map(a => `<button class="st-row" role="radio" aria-checked="${a.id === current}" data-chats-choice="${esc(a.id)}" ${ctx.chatsBusy ? 'disabled' : ''}><span aria-hidden="true">${a.id === current ? '◉' : '○'}</span><span class="st-tx"><b>${esc(a.id === 'wizard-chats' ? 'Wizard Chats (built in)' : a.name)}</b></span></button>`).join('')}</div>${apps.length === 1 ? '<div class="st-store-hint">Install another Chats from the <button data-chats-store>Store</button> to switch</div>' : ''}</div>`;
   } });
+  // EXTEND the existing About page and os-updates action bridge; one shared setting,
+  // persisted by WAM. Neither a release file nor a cached layer enables this.
+  register({ id: 'developer-mode', page: 'about', title: 'Developer mode',
+    html: () => `<div class="st-group"><button class="st-row" data-osu="developer" role="switch" aria-checked="${updates()?.developer === true}" ${updates()?.state ? '' : 'disabled'}><span class="st-tx"><b>Developer mode</b><small>Show tools for building and testing your own release.</small></span><span class="st-toggle ${updates()?.developer ? 'on' : ''}" aria-hidden="true"></span></button></div>`,
+    act: (ctx, el) => updates()?.act?.(el, ctx)
+  });
   function mount(root, adapter) {
     root.classList.add('st-root'); root.dataset.settingsRoot = '';
     const ctx = { ...adapter, root }, api = { render, focus, back, destroy, dispatch, context: ctx, get page() { return page; } };

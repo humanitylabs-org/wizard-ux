@@ -20,10 +20,10 @@
  *                              behind = how many Latest changes are not under them yet.
  * A box whose App Manager has no such route (older, or no Serve mount) shows nothing.
  *
- * My release (wizard-os#186) switches on by DATA only: when the box serves ../my-release.json
+ * My release (wizard-os#186) is developer-only: the server must first confirm developer_mode:true, then ../my-release.json
  *   {name, base:{ref,label}, build?, changes:[{sha, title, label?, status: Mine|Proposed feature|Proposed fix|Merged,
  *    date?}]}
- * (or the App Manager returns `release`), the page is called My release and shows the release's own name (e.g.
+ * (or the App Manager returns `release`) enables the My release page and shows the release's own name (e.g.
  * "James's release"), what it is built on, and Your changes with a status chip each. A Mine change offers Propose:
  * Settings closes and a fresh chat opens with the change attached as a reply (the shell's openContextDraft hook).
  * A box without either behaves exactly as before: same words, same card, nothing read beyond the status.
@@ -70,10 +70,16 @@
   let mine = null, mineOpen = false, newOpen = false, build0 = '', buildNow = '', sawBehind = false, noFile = false;
 
   const valid = d => d && typeof d === 'object' && ['auto', 'ask'].includes(d.mode) && 'update_available' in d;
-  const rel = () => (st?.release && typeof st.release === 'object' ? st.release : null);
-  const isRelease = () => !!(mine || rel());
+  const developer = () => st?.developer_mode === true;
+  const rel = () => (developer() && st?.release && typeof st.release === 'object' ? st.release : null);
+  const isRelease = () => developer() && !!(mine || rel());
   function changed() { try { window.WosSettings?.refresh(); } catch (_) {} try { popup(); } catch (_) {} }
-  function take(d) { st = d; if (rel()?.behind > 0) sawBehind = true; }
+  function take(d) {
+    st = d;
+    if (!developer()) { mine = null; build0 = ''; buildNow = ''; }
+    if (rel()?.behind > 0) sawBehind = true;
+    try { window.dispatchEvent(new CustomEvent('wos:developer-mode', { detail: developer() })); } catch (_) {}
+  }
   function load(force) {
     if (off && !force) return Promise.resolve(st);
     if (!force && st && Date.now() - at < FRESH) return Promise.resolve(st);
@@ -98,6 +104,7 @@
   // ../my-release.json: absent (404) on a stock box, so nothing changes there. A box that never had one is not
   // asked again on the poll; a box that has one is re-read so a new build can offer Reload.
   async function readRelease() {
+    if (!developer()) return;
     if (noFile && !mine) return;
     try {
       const r = await fetch(RELEASE, { credentials: 'same-origin', cache: 'no-store' });
@@ -109,16 +116,15 @@
       if (b && b !== buildNow) { buildNow = b; changed(); }
     } catch (_) { if (!mine) noFile = true; }
   }
-  function poll() {
-    const work = [readRelease()];
-    // A release box keeps asking the App Manager even when its first answer failed, so the page gets its controls back.
-    if ((st && (rel() || st.installing)) || (mine && !st)) work.push(load(true));
-    return Promise.all(work).then(() => card());
+  async function poll() {
+    await load(true);
+    await readRelease();
+    return card();
   }
 
   // Every change in a release says where it is headed (wizard-os#186). Anything unlabelled is Mine.
-  const KINDS = { mine: 'Mine', feature: 'Proposed feature', fix: 'Proposed fix', merged: 'Merged' };
-  const kind = v => { v = String(v || '').toLowerCase(); return v.includes('fix') ? 'fix' : v.includes('feature') ? 'feature' : v.includes('merged') ? 'merged' : 'mine'; };
+  const KINDS = { mine: 'Mine', proposed: 'Proposed', feature: 'Proposed feature', fix: 'Proposed fix', merged: 'Merged' };
+  const kind = v => { v = String(v || '').toLowerCase(); return v.includes('fix') ? 'fix' : v.includes('feature') ? 'feature' : v.includes('merged') ? 'merged' : v === 'proposed' ? 'proposed' : 'mine'; };
   // A change in plain words: its own label, else the commit title without a conventional prefix ("fix:", "Docs:",
   // "feat(chats):") or a trailing issue reference ("(wizard-os#186)").
   const PREFIX = /^(?:feat|feature|fix|docs?|chore|refactor|tests?|style|perf|build|ci|revert)(?:\([^)]*\))?!?:\s*/i;
@@ -155,6 +161,7 @@
 
   // The one card. Same shape for every state; null when there is nothing to do.
   function card() {
+    if (st?.release && !developer()) return null;
     const rc = releaseCard(); if (rc !== undefined) return rc;
     if (window.WizWebUpdate?.pending) return { state: 'reload', title: 'Wizard OS was updated', line: 'Reload to see it', action: 'reload', label: 'Reload' };
     if (!st) return null;
@@ -180,13 +187,15 @@
   const title = () => (isRelease() ? 'My release' : 'About & updates');
   function changesHtml() {
     if (!mine) return '';
-    const n = mine.changes.length;
+    const changes = Array.isArray(rel()?.changes) ? rel().changes : mine.changes;
+    const n = changes.length;
     const toggle = `<button type="button" class="rl-toggle" data-osu="mine" aria-expanded="${mineOpen}"><span class="rl-tl">Your changes</span><span class="st-val">${n}</span><span class="st-go" aria-hidden="true">›</span></button>`;
     if (!mineOpen) return toggle;
-    const rows = mine.changes.map(c => {
+    const rows = changes.map(c => {
       const k = kind(c.status), name = label(c);
       const go = k === 'mine' ? `<button type="button" class="rl-propose" data-osu="propose" data-sha="${esc(c.sha)}" aria-label="Propose ${esc(name)} for everyone">Propose</button>` : '';
-      return `<li data-osu-change="${esc(c.sha)}"><span class="rl-ct"><b>${esc(name)}</b><span class="rl-meta"><span class="rl-chip rl-${k}">${KINDS[k]}</span>${c.date ? `<small>${esc(day(c.date))}</small>` : ''}</span></span>${go}</li>`;
+      const pr = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/[1-9][0-9]*$/.test(c.pr || '') ? `<a href="${esc(c.pr)}" target="_blank" rel="noopener noreferrer">Proposal</a>` : '';
+      return `<li data-osu-change="${esc(c.sha)}"><span class="rl-ct"><b>${esc(name)}</b><span class="rl-meta"><span class="rl-chip rl-${k}">${KINDS[k]}</span>${c.date ? `<small>${esc(day(c.date))}</small>` : ''}${pr}</span></span>${go}</li>`;
     }).join('');
     const legend = `<details class="rl-legend"><summary>What the labels mean</summary><p><b>Mine</b> only on your Wizard · <b>Feature</b> review, then Latest, then Stable · <b>Fix</b> fast lane to Stable. All are reapplied on every update.</p></details>`;
     return `${toggle}${n ? `<ul class="rl-changes">${rows}</ul>` : '<p class="st-hint">None yet · everything you have is in main</p>'}${legend}`;
@@ -197,13 +206,16 @@
     const R = rel(), auto = st?.mode === 'auto';
     const b = mine ? mine.base.label || mine.base.ref : R?.base ? (typeof R.base === 'object' ? R.base.label || R.base.ref : R.base) : '';
     const head = `<div class="rl-head"><b class="rl-name" data-osu-title>${esc(mine?.name || R?.name || 'My release')}</b>${b ? `<small class="rl-base">Built on ${esc(String(b).replace(/^Built on /, ''))}</small>` : ''}</div>`;
-    const hint = auto ? 'New changes from Latest are applied under yours by themselves.' : 'You choose when. Your own changes always apply right away.';
-    const install = st ? `<div class="osu-sec"><span class="osu-lbl">Updates</span>${seg('Updates', [['auto', 'Automatic', auto], ['ask', 'Ask me', !auto]])}<p class="st-hint">${hint}</p></div>` : '';
-    return `<div class="st-group rl" data-osu-group data-osu-release>${cardHtml()}${head}${changesHtml()}${install}</div>`;
+    const install = `<p class="st-hint">Fixes apply automatically within three days. Features wait in one test build until you say go. Keep at most five changes mine; agent changes need an open proposal.</p>`;
+    const base = seg('Release base', ['main', 'latest', 'stable'].map(v => ['ch-' + v, v[0].toUpperCase() + v.slice(1), st?.channel === v]));
+    const staging = R?.staging ? `<div class="osu-sec"><b>Ready to review</b><p class="st-hint">Your test build is ready. Name any changes you want to hold before saying go.</p><ul>${(R.held || []).map(x => `<li>${esc(x.title)}</li>`).join('')}</ul><button data-osu="review">Review update</button></div>` : '';
+    const resolvers = R?.resolver_merges?.length ? `<details><summary>Resolved conflicts</summary><ul>${R.resolver_merges.map(x => `<li>${esc(x.sha.slice(0, 8))}${x.core ? ' · core change, requires review' : ''}</li>`).join('')}</ul></details>` : '';
+    return `<div class="st-group rl" data-osu-group data-osu-release>${cardHtml()}${head}${base}${changesHtml()}${install}${staging}${resolvers}</div>`;
   }
   function html() {
     if (isRelease()) { if (st && Date.now() - at > FRESH) load(); else if (!st && !off) load(); return releaseHtml(); }
     if (!st) { if (!off) load(); return ''; }
+    if (st.release && !developer()) return '';
     if (Date.now() - at > FRESH) load();
     const auto = st.mode === 'auto';
     const ch = ['stable', 'latest'].includes(st.channel) ? st.channel : '';
@@ -212,7 +224,7 @@
     return `<div class="st-group" data-osu-group>${cardHtml()}${quietHead()}${install}${channel}</div>`;
   }
   function pick(chan, ctx) {
-    if (!['stable', 'latest'].includes(chan) || chan === st.channel) return true;
+    if (!(isRelease() ? ['main', 'stable', 'latest'] : ['stable', 'latest']).includes(chan) || chan === st.channel) return true;
     busy = 'ch'; ctx?.render?.(); ctx?.haptic?.(8);
     post({ channel: chan }).then(d => {
       if (valid(d)) take(d); else st = { ...st, channel: chan };
@@ -251,6 +263,11 @@
       if (event?.detail > 0) { const t = ctx?.root?.querySelector?.(`[data-osu="${what}"]`); if (t && t === document.activeElement) t.blur(); }
       return true;
     }
+    if (what === 'review' && developer()) {
+      const open = window.__wux?.openContextDraft || window.__wos?.openContextDraft;
+      open?.('release-go', { title: 'Review my update', message: 'Review the staged release and its listed conflicts. Do not promote until I say go. I can name items to hold. Use wam release go --hold with exact item titles or PR links. Staging: ' + JSON.stringify(rel()?.staging) });
+      return true;
+    }
     if (what === 'propose') return propose(b.dataset.sha, ctx);
     if (what === 'reload') { ctx?.haptic?.(8); reload(); return true; }
     if (busy || !st) return true;
@@ -258,9 +275,11 @@
     if ((what === 'auto' || what === 'ask') && what === st.mode && st.chosen) return true;
     if (what === 'apply' && card()?.disabled) return true;
     busy = what; ctx?.render?.(); ctx?.haptic?.(8);
-    const body = what === 'apply' ? { action: 'apply' } : { mode: what };
+    const body = what === 'developer' ? { developer_mode: !developer() } : what === 'apply' ? { action: 'apply' } : { mode: what };
     post(body).then(d => {
-      if (what === 'apply') {
+      if (what === 'developer') {
+        if (valid(d)) { take(d); noFile = false; readRelease(); }
+      } else if (what === 'apply') {
         if (d.started) {
           const R = rel();
           st = R ? { ...st, release: { ...R, building: true, failed: null } } : { ...st, installing: true };
@@ -338,10 +357,9 @@
     if (k && k !== store.get() && typeof setInterval === 'function') { popTimer = setInterval(popup, 1000); popTimer?.unref?.(); }
   }
   window.WosUpdates = { html, act, load, poll, card, cardHtml, title, kind, label, popup, popKey, ownsReload, homeInView,
-    get state() { return st; }, get mine() { return mine; }, get release() { return isRelease(); }, get build() { return { loaded: build0, now: buildNow }; } };
+    get state() { return st; }, get developer() { return developer(); }, get mine() { return mine; }, get release() { return isRelease(); }, get build() { return { loaded: build0, now: buildNow }; } };
   window.WosSettings?.register({ id: 'updates', aliases: ['updates', 'release', 'my-release'], available: () => !!(st || mine), html: () => html(), act: (ctx, el, event) => act(el, ctx, event) });
-  load();
-  readRelease();
+  load().then(readRelease);
   // Look again by itself so Home hears about a new release without a reload: every minute while an update runs,
   // otherwise every 10 minutes (the App Manager caches stable ~10 min), and whenever the page comes back into view.
   const IDLE = 10 * FRESH;

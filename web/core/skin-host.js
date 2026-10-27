@@ -340,6 +340,7 @@
     loadPersonal, scriptProblem,
     /* core/*.js: a gesture every skin wears. `when: 'touch'` skips desktop pointers. */
     builtin(name, setup, { when = 'touch', label = name } = {}) { if (typeof setup !== 'function' || builtinDefs.has(name)) return false; builtinDefs.set(name, { setup, when, label }); return startBuiltin(name) || !shell; },
+    removeBuiltin(name) { builtinDefs.delete(name); dispose(builtins.get('core:' + name), 'off'); },
     get builtinState() { return [...builtins.keys()]; },
     stopPersonal() { personalSeq++; dispose(personal, 'off'); },
     get personalState() { return { ready: !!shell, active: !!personal, disabled: disabled.has('my-skin'), listeners: personal?.offs.size || 0, handlers: personal ? personal.on.route.size + personal.on.render.size : 0 }; },
