@@ -243,6 +243,12 @@ window.WosChatPower = function chatPower(A) {
     const secure = !ag && !!cur?.provider && !!M.ours?.() && !!M.isPrivateRoute?.(cur.provider);
     return `<button type="button" class="ch-model${ag ? ' agent' : ''}${priv || secure ? ' private' : ''}" data-chmodel aria-label="Model: ${esc(full)}${priv ? ', private' : ''}. Change model" title="${esc(cur?.model || '')}">${priv || secure ? (AG?.lock?.() || '') : ''}${esc(label)}<i aria-hidden="true">▾</i></button>`;
   }
+  // Only routed/mixed histories get Hermes labels; untouched transcripts stay byte-identical.
+  function answerLabel(reply, routed) {
+    const kind = reply?.route?.kind;
+    if (kind !== 'opus-direct' && !(routed && reply && (!kind || kind === 'hermes'))) return '';
+    return `<span class="ch-answer-chip" data-answer-kind="${kind || 'hermes'}">${kind === 'opus-direct' ? 'Opus direct' : 'Hermes'}</span>`;
+  }
   /* The model label inside the message box, bottom-right (James 18 Oct: just the name, small, white; no bubble).
    * Tapping it opens the compact model menu over the right side, just above it. */
   function modelLabel(w, s) {
@@ -659,6 +665,6 @@ window.WosChatPower = function chatPower(A) {
     await pickModel(m, { wid, sid, alive: sameTarget, mode: sid ? 'thread' : 'new' });
     return sameTarget() ? tweakModel(wid) : null;
   }
-  return { tweakModels, tweakModel, position, capture, resume, reflow, follow, restore, anchorOf, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
+  return { answerLabel, tweakModels, tweakModel, position, capture, resume, reflow, follow, restore, anchorOf, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
     paint, closeSheet, click, bind, opened, holds, openFiles, openModels, retryThread, FOLDER_SVG, RP, newModel: c => c.newModel || null };
 };

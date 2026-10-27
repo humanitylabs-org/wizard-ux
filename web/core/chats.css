@@ -1,4 +1,15 @@
 /* Wizard UX core: Chats (list, thread, composer, attachments, voice notes, unsent bubbles). Shared by every shell. */
+/* Answer routes extend the shared title and reply metadata, never skin-specific chrome. */
+.ch-head .ti:has(.ch-answer-control) { flex-wrap: wrap; column-gap: 8px; }
+.ch-head .ti .ch-answer-control { min-height: 28px; padding: 2px 0; border: 0; background: none; color: var(--wz-text-secondary); font: inherit; font-size: 11px; text-align: left; cursor: pointer; }
+.ch-answer-control.on { color: var(--wz-accent); }
+.ch-answer-control:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; border-radius: 4px; }
+.ch-answer-chip { display: inline-flex; align-items: center; padding: 2px 6px; border: 1px solid var(--wz-border); border-radius: 6px; color: var(--wz-text-secondary); background: var(--wz-surface); font-size: 10px; line-height: 1.3; white-space: nowrap; }
+.ch-answer-error { margin: 6px 12px; padding: 8px 10px; border: 1px solid var(--wz-border); border-radius: 10px; color: var(--wz-text); background: var(--wz-surface); font-size: 12px; overflow-wrap: anywhere; }
+.ch-answer-error a { color: var(--wz-accent); text-decoration: underline; }
+.ch-sheet-b [data-chanswerpick][aria-pressed="true"] { color: var(--wz-accent); }
+.ch-sheet-b [data-chanswerpick]:disabled { opacity: .55; }
+
 /* Native app only: a real root-scrolling WebView for Android's built-in capture.
  * No clones, capture callbacks, scroll proxies or alternate chat renderer. */
 html.wos-doc-scroll { height: auto !important; overflow-y: auto !important; overflow-x: clip !important; }

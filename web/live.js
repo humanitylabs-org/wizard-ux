@@ -81,6 +81,7 @@
     const userAt = optIso(lastUser?.timestamp ?? lastUser?.created_at);
     return {
       id, runtime: 'direct',
+      ...(item.answer_route === 'opus-direct' ? { answer_route: item.answer_route } : {}),
       title: String(item.title || item.name || 'Untitled chat'),
       source: item.source || '',
       status,
@@ -185,7 +186,7 @@
   const J = { 'Content-Type': 'application/json' };
   async function req(path, init = {}) {
     const r = await fetch(path, { cache: 'no-store', credentials: 'same-origin', ...init });
-    if (!r.ok) { let detail; try { detail = (await r.json()).error; } catch {} const e = new Error(detail?.message || 'HTTP ' + r.status); e.status = r.status; e.code = detail?.code; throw e; }
+    if (!r.ok) { let detail, body; try { body = await r.json(); detail = body.error; } catch {} const e = new Error(detail?.message || 'HTTP ' + r.status); e.status = r.status; e.code = detail?.code; e.fix_url = detail?.fix_url || body?.fix_url; throw e; }
     return r;
   }
   /* Every thread Wizard lists (same endpoint, same paging). A full walk runs at boot and
@@ -1010,12 +1011,23 @@
       const list = agent ? (this.agentSessions[agent] = this.agentSessions[agent] || []) : this.sessions;
       const i = list.findIndex(x => x.id === id);
       if (s.id !== id || (s.agent && otherAgent(s.agent) && s.agent !== agent)) throw new Error('Thread scope changed');
-      if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, renames: s.renames, detailNeeded: false,
+      if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, renames: s.renames, answer_route: s.answer_route, detailNeeded: false,
         ...(s.model ? { model: s.model, provider: s.provider, modelLockAt: s.modelLockAt } : {}) };
       else if (this.windows[agent || 'hermes']) DETAIL.set(id, { ...s, detailNeeded: false });
       else list.push({ ...s, detailNeeded: false });
       applyLocal(i >= 0 ? list[i] : DETAIL.get(id) || s);
       return s;
+    },
+    // Answer routing is thread metadata, not a model pick or an alternative send path.
+    async threadRoute(id, route) {
+      const path = `/wizard/v1/threads/${encodeURIComponent(id)}/route`;
+      if (route) await req(path, { method: 'PUT', headers: J, body: JSON.stringify({ route }) });
+      // Read back the exact target after PUT; never paint an optimistic route as saved.
+      const value = await (await req(path)).json();
+      if (value.session_id !== id || !['hermes', 'opus-direct'].includes(value.route)) throw new Error('Invalid answer route response');
+      const s = this.session(id);
+      if (s) { if (value.route === 'opus-direct') s.answer_route = value.route; else delete s.answer_route; }
+      return value;
     },
     /* ---- thread actions ---- */
     busy(id) { const o = OVER.get(id); return !!o && !o.settled; },
