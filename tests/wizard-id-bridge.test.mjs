@@ -40,14 +40,19 @@ test('missing bridge refuses without pretending to create an ID', async () => {
   const f = fixture({ wizardDevicePort: undefined }); await assert.rejects(f.call('identity.setup'), /no native shell/);
 });
 
-test('page navigation retains scroll reset and native signer cancellation', () => {
+test('page navigation retains scroll reset on the shipped web-only identity source', () => {
+  // 1522804f ports only web identity from #497. Do not require a signer hook
+  // whose native implementation is not in this source, or pretend to port it.
   const activity = readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/MainActivity.java', import.meta.url), 'utf8');
   const pageStarted = activity.split('public void onPageStarted(')[1]?.split('@Override')[0];
   assert.ok(pageStarted, 'MainActivity must keep its navigation lifecycle hook');
   assert.match(pageStarted, /\(\(SelectionWebView\)view\)\.scrollPageStarted\(\)/);
-  assert.match(pageStarted, /if \(device != null\) device\.onPageStarted\(\)/);
   const selection = readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/SelectionWebView.java', import.meta.url), 'utf8');
   assert.match(selection, /void scrollPageStarted\(\)\s*\{\s*scrollMetrics = null;\s*cancelScrollCapture\(\);\s*\}/);
+  const device = readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/device/DeviceBridge.java', import.meta.url), 'utf8');
+  const apps = readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/apps/AppsBridge.java', import.meta.url), 'utf8');
+  assert.doesNotMatch(device, /dispatchIdentity|identityDocument|wizardId\./, 'a future native signer must port its navigation cancellation contract with it');
+  assert.doesNotMatch(apps, /wizardDevicePort|identity\.sign/, 'the legacy APK must not advertise unsupported signing');
 });
 
 const servicesSource = readFileSync(new URL('../web/core/app-services.js', import.meta.url), 'utf8');

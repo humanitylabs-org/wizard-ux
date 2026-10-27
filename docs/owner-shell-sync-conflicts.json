@@ -1377,5 +1377,12 @@
       }
     ]
   },
-  "notes": "Block order is the original git merge conflict order; combined blocks were manually integrated. Later syntax/inventory/back corrections are described in owner-shell-sync-20261027.md."
+  "notes": "Block order is the original git merge conflict order; combined blocks were manually integrated. Later syntax/inventory/back corrections are described in owner-shell-sync-20261027.md.",
+  "forumFollowUp": {
+    "back": "Correct offscreen-phone visibility and legitimate desktop entrypoint assertions; preserve one nested step. Remove the shared ordinary-browser exit fallback without adding a second history consumer.",
+    "identity": "Track the web-only port boundary: actual scroll cancellation and unsupported native signing refusal, not a nonexistent signer lifecycle hook.",
+    "hostedApps": "Isolate disposable focused workspaces; follow Wisdom's actual collection parent and use fresh cold/restored contexts. Separate real Notes lifecycle test; no synthesized server data or allowed writes.",
+    "appearance": "Seven approval-boundary tests intentionally remain failing; no hash, CSS, glyph or guard waiver.",
+    "ownerUiPreference": "Decisions 7 and 8 remain visible, unaccepted main-vs-live differences. No owner acceptance or release claim."
+  }
 }

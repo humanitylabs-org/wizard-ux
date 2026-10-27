@@ -1,3 +1,4 @@
+// Disposable QA workspace sync is off: background restored apps are tested separately.
 // QA: swipe right inside an open chat thread goes back to the list on every skin (one step, never exits, never twice).
 // Usage: QA_BASE=http://127.0.0.1:<port> [QA_SHOTS=dir] node qa-thread-swipe-back.cjs
 const { chromium } = require('./tools/qa-playwright.cjs');
@@ -18,7 +19,7 @@ const where = p => p.evaluate(() => {
   const browser = await chromium.launch();
   for (const skin of ['nebula', 'grove', 'obsidian', 'landscapes']) {
     const ctx = await browser.newContext({ serviceWorkers: 'block', viewport: { width: 412, height: 892 }, isMobile: true, hasTouch: true });
-    await ctx.addInitScript(s => { if (window !== top) return; try { localStorage.setItem('wos.skin', s); localStorage.setItem('wos.tour.done', '1'); localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.rvCoached', 'true'); localStorage.setItem('wos.obsidian.live', 'true'); } catch (_) {} }, skin);
+    await ctx.addInitScript(s => { if (window !== top) return; try { localStorage.setItem('wos.wsync.off', 'true'); localStorage.setItem('wos.skin', s); localStorage.setItem('wos.tour.done', '1'); localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.rvCoached', 'true'); localStorage.setItem('wos.obsidian.live', 'true'); } catch (_) {} }, skin);
     const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(String(e)));
     p.cdp = await ctx.newCDPSession(p);
     await p.goto(BASE + '/wizard-os-home/?myskin=off'); await p.waitForSelector('#orbWrap'); await p.waitForTimeout(3000);
