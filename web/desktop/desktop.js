@@ -1658,7 +1658,7 @@
         }
         if (cw === f) {
           // → ← on the Done / Snooze buttons; scrolled out of sight, they sit on the chat's header with their word.
-          if (f.thread && f.thread !== '__new__') for (const [q, l, word] of [['[data-chact="done"]', '→', 'Done'], ['[data-chact="snooze"]', '←', 'Snooze']]) {
+          if (f.thread && (f.thread !== '__new__' || CHATS.notifOpen?.(f.id))) for (const [q, l, word] of [['[data-chact="done"]', '→', 'Done'], ['[data-chact="snooze"]', '←', 'Snooze']]) {
             const on = [...wel.querySelectorAll(q)].filter(vis).map(n => chip(n, l, 'above')).some(Boolean);
             const head = wel.querySelector('.pane-main .ch-head');
             if (!on && wel.querySelector(q) && vis(head)) chip(head, l, l === '→' ? 'inside' : 'inside-2', word);
@@ -1815,13 +1815,13 @@
     // ⌥E Done, ⌥Z Snooze: the chat that's open in the focused Chats (or the main Chats on this desk), from either side.
     // ⌥→ Done, ⌥← Snooze (Miguel, 27 Oct 2026): with a chat open in Chats, the arrows act on it, even from the
     // message box; anywhere else they stay the window-focus keys. ⌥E / ⌥Z do the same from any window.
-    const chatOpen = () => { const f = focused(); return !homeOpen && f?.app === 'chats' && f.thread && f.thread !== '__new__'; };
+    const chatOpen = () => { const f = focused(); return !homeOpen && f?.app === 'chats' && f.thread && (f.thread !== '__new__' || !!CHATS.notifOpen?.(f.id)); };
     if (alt && !shift && (code === 'ArrowLeft' || code === 'ArrowRight') && chatOpen()) return hit(() => { if (!e.repeat) chatAct(code === 'ArrowRight' ? 'done' : 'snooze', code === 'ArrowRight' ? '→' : '←'); });
     if (alt && !shift && (code === 'KeyE' || code === 'KeyZ')) return hit(() => { if (!e.repeat) chatAct(code === 'KeyE' ? 'done' : 'snooze', code.slice(3)); });
     function chatAct(act, keyName) {
       const f0 = focused(), f = f0?.app === 'chats' ? f0 : ws[cur].wins.map(x => W[x]).find(mainChats);
       const name = act === 'done' ? 'Done' : 'Snooze';
-      if (homeOpen || !f?.thread || f.thread === '__new__') return toast('✓', `Open a chat first, then ${MOD}${keyName} = ${name}`, 1800);
+      if (homeOpen || !f?.thread || (f.thread === '__new__' && !CHATS.notifOpen?.(f.id))) return toast('✓', `Open a chat first, then ${MOD}${keyName} = ${name}`, 1800);
       if (!winEl(f.id)?.querySelector(`[data-chact="${act}"]`)) return toast('◷', `${name} appears once the reply is in`, 1800);
       CHATS.threadAct(f.id, f.thread, act);
     }
