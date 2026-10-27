@@ -839,4 +839,4 @@ html[data-skin="landscapes"]:not([data-shell="desktop"]) .mrow .mck { color: #ff
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .mrow.more { color: rgba(255, 255, 255, .78); }
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .wx-spin { border-color: rgba(255, 255, 255, .25); border-top-color: #fff; }
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .dock .ddot.dhome .dsg .sgi { --c: #fff; }
-html[data-skin="landscapes"]:not([data-shell="desktop"]) .dock :is(.orb, .orb-fallback) { filter: saturate(0) brightness(1.15); }
+/* The orb keeps its Wizard violet on every Mizel skin (Miguel, 27 Oct 2026): it is the centre of how people talk to Wizard. */

@@ -26,6 +26,8 @@ test('feature reference scanner covers both shells, ignores skins/tests and coun
     put('web/core/skins-mizel.css', 'mizel');
     put('web/skins/miguel/skin.css', 'mizel');
     put('web/tests/fixture.js', 'usuals');
+    put('web/data.js', 'mizel wisdom topics');
+    put('web/summaries.js', 'Mizel wisdom topics');
     put('android/app/src/main/java/ai/wizards/App.java', 'wizard-recorder wizard-music');
     assert.deepEqual(scanFeatureIds(dir), {
       'android/app/src/main/java/ai/wizards/App.java:wizard-music': 1,

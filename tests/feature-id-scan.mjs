@@ -15,6 +15,9 @@ export function scanFeatureIds(root) {
     for (const entry of readdirSync(join(root, relative), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const path = `${relative}/${entry.name}`;
       if (entry.name === 'tests' || path === 'web/skins' || path.startsWith('web/core/skins')) continue;
+      // .gitignore reserves these two outputs for the owner's private session export.
+      // Their content is user data, not feature routing or shell implementation.
+      if (path === 'web/data.js' || path === 'web/summaries.js') continue;
       if (entry.isDirectory()) { walk(path); continue; }
       if (!entry.isFile()) continue; // Never follow symlinks outside the source tree.
       const bytes = readFileSync(join(root, path));
