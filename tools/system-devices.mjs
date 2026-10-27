@@ -241,6 +241,7 @@ export function createDevicesReader({registryPath, probeLocalImpl = probeLocal, 
     const hide = new Set(reg.hide);
     const network = net ? {available: true, peers: net.peers.filter(p => !used.has(p.name.toLowerCase()) && !used.has(p.dns) && !hide.has(p.name.toLowerCase()) && !hide.has(p.dns)).map(({name, dns, os, online, lastSeen}) => ({name, os, online, lastSeen: online ? null : lastSeen, group: peerGroup(os, reg.groups[dns] ? dns : name, reg)})).sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name))} : {available: false, peers: []};
     const managed = (reg.managed || []).map(m => { const p = m.peer && net?.peers.find(x => x.name.toLowerCase() === m.peer || x.dns === m.peer); return {...m, ...(m.peer ? {peerOnline: p ? !!p.online : null} : {})}; });
-    return {at: new Date(now()).toISOString(), devices, network, ...(managed.length ? {managed} : {})};
+    const me = {...(reg.this?.wizard ? {wizard: reg.this.wizard} : {}), ...(reg.this?.owner ? {owner: reg.this.owner} : {})};
+    return {at: new Date(now()).toISOString(), devices, network, ...(Object.keys(me).length ? {this: me} : {}), ...(managed.length ? {managed} : {})};
   };
 }
