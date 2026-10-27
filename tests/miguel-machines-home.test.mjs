@@ -75,3 +75,13 @@ test('api.back.push: newest package overlay closes first on shell Back; released
   assert.match(app, /if \(window\.WosSkinHost\?\.back\?\.\(\)\) return 'tweak-overlay';.*\n    if \(window\.WosResources\?\.back\(\)\)/);
   assert.match(desk, /if \(window\.WosSkinHost\?\.back\?\.\(\)\) return 'tweak-overlay';/);
 });
+
+test('machines-home: people sit left of Main (devices on his network, one node per person on a managed Wizard)', () => {
+  const src = read('web/tweaks/miguel/machines-home/tweak.js'), css = read('web/tweaks/miguel/machines-home/tweak.css');
+  assert.doesNotMatch(src, /mh-humans/, 'no devices button in the header any more');
+  assert.doesNotMatch(css, /\.mh-humans/);
+  assert.match(src, /setLane\(rowMn, \[minePeople\(\), node\(main, 'main'/);
+  assert.match(src, /setLane\(rowMn, \[managedPeople\(g\), node\(/);
+  assert.match(src, /g\?\.peopleCount/); assert.match(src, /g\?\.people\)/);
+  assert.match(css, /\.mh-pnode \{/);
+});
