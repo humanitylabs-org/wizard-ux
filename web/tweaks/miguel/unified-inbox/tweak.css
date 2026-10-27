@@ -21,3 +21,5 @@ html[data-color-scheme="light"] .ui-inbox, html[data-skin="obsidian-light"] .ui-
 html[data-skin="obsidian-light"] .ui-act.resolve { color: #fff !important; }
 /* Phone (his skins list Ready bottom-up, newest nearest the thumb): newest notification lowest too. */
 html:not([data-shell="desktop"]) .ch-list .ch-sec-b > [data-slot="ready-top"] > .ui-inbox { flex-direction: column-reverse; }
+/* An opened notification scrolls clear of the phone's dock and New chat button, so its buttons are reachable. */
+html:not([data-shell="desktop"]) .ui-item { scroll-margin-bottom: 170px; scroll-margin-top: 12px; }
