@@ -88,3 +88,8 @@ test('the keys guide is chips in place, no boxes: ↓ on the next Ready chat, F 
   assert.match(js, /\(dx < 0 \? 'H' : 'L'\) : \(dy < 0 \? 'K' : 'J'\)/);
   assert.match(js, /\['#micBtn', 'S', 'Talk about this'\]/);
 })
+
+test('guide: → ← sit above Done / Snooze; no "/" chip on chat search', () => {
+  assert.match(js, /filter\(vis\)\.map\(n => chip\(n, l, 'above'\)\)/);
+  assert.doesNotMatch(js, /chip\(srch, '\/'/);
+});
