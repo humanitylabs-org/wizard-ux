@@ -44,7 +44,7 @@
     screen: 'list',
     phone: { status: 'loading', data: null, banner: false },
     starting: false, startUntil: 0, opErr: '', openedAuth: '',
-    menu: false, sheet: false,
+    menu: false, sheet: false, linkDevice: false,
   };
 
   async function api(method, path) {
@@ -159,7 +159,7 @@
 
   /* ---------------- layers + Back ---------------- */
   const WA = window.WizardApp;
-  let menuHold = null, sheetHold = null;
+  let menuHold = null, sheetHold = null, linkDeviceHold = null;
   function openPhone() {
     if (S.screen === 'phone') return;
     S.screen = 'phone'; S.opErr = '';
@@ -171,7 +171,7 @@
   }
   function closePhone() {
     if (S.screen !== 'phone') return false;
-    closeSheet(); closeMenu();
+    closeLinkDevice(); closeSheet(); closeMenu();
     S.screen = 'list'; schedule(0); phoneSeq++; S.starting = false;
     $('phone').hidden = true; $('list').hidden = false; scrollTo(0, 0);
     log('screen:list'); if (!ioList) loadList(); else renderList();
@@ -181,7 +181,36 @@
   function closeMenu(fromBack) { if (!S.menu) return; S.menu = false; $('menu').hidden = true; if (!S.sheet) $('scrim').hidden = true; const h = menuHold; menuHold = null; if (!fromBack) h?.release(); }
   function openSheet() { closeMenu(); S.sheet = true; $('sheet').hidden = false; $('scrim').hidden = false; sheetHold = WA?.back.push(() => { closeSheet(true); return true; }); }
   function closeSheet(fromBack) { if (!S.sheet) return; S.sheet = false; $('sheet').hidden = true; $('scrim').hidden = true; const h = sheetHold; sheetHold = null; if (!fromBack) h?.release(); }
-  WA?.back.register({ canGoBack: () => S.screen === 'phone', back: () => closePhone() });
+  const canLinkDevice = d => d && ['serving', 'phone_seen'].includes(d.step) && !!connectPayload(d.wizard_url);
+  function openLinkDevice() {
+    if (S.linkDevice || S.phone.status !== 'ok' || !canLinkDevice(S.phone.data)) return;
+    closeSheet(); closeMenu();
+    S.linkDevice = true; renderLinkDevice();
+    $('linkDevice').hidden = false; $('scrim').hidden = false; $('app').inert = true;
+    linkDeviceHold = WA?.back.push(() => { closeLinkDevice(true); return true; });
+    $('linkDevice').scrollTop = 0; fitUrls($('linkDevice'));
+    $('linkDevice').querySelector('[data-act="close-link-device"]').focus();
+  }
+  function closeLinkDevice(fromBack) {
+    if (!S.linkDevice) return false;
+    S.linkDevice = false; $('linkDevice').hidden = true; $('scrim').hidden = true; $('app').inert = false;
+    const h = linkDeviceHold; linkDeviceHold = null; if (!fromBack) h?.release();
+    $('phone').querySelector('[data-act="link-device"]')?.focus({ preventScroll: true });
+    return true;
+  }
+  let lastLinkDeviceHtml = '';
+  function renderLinkDevice() {
+    if (!S.linkDevice) return;
+    const d = S.phone.data;
+    if (S.phone.status !== 'ok' || !canLinkDevice(d)) { closeLinkDevice(); return; }
+    const h = '<div class="bar"><button class="backb" data-act="close-link-device">Back</button></div>'
+      + '<h2 id="linkDeviceTitle">Link another device</h2>'
+      + '<div class="steps">' + step1(d) + step2(d, true) + step3(d, true) + '</div>';
+    const el = $('linkDevice');
+    if (h !== lastLinkDeviceHtml) { lastLinkDeviceHtml = h; el.innerHTML = h; drawQrs(el); }
+    fitUrls(el);
+  }
+  WA?.back.register({ canGoBack: () => S.screen === 'phone', back: () => closeLinkDevice() || closePhone() });
   window.__setup = { get state() { return S; }, get polling() { return !!pollT; }, get inView() { return inView; }, back: () => WA ? WA.back : null, layout };
 
   /* ---------------- leaving Wizard ---------------- */
@@ -245,22 +274,22 @@
     if (d.step === 'https') return step(1, 'attn', T, body, https ? `<div class="act">${out('primary', https, 'Turn on secure addresses')}</div>` : '');
     return step(1, 'todo', T, body);
   }
-  function step2(d) {
-    const T = 'Get Tailscale on your phone', inst = httpUrl(d.install_url) || 'https://tailscale.com/download';
-    const phones = Array.isArray(d.phones) ? d.phones.filter(p => p && typeof p === 'object') : [];
+  function step2(d, another = false) {
+    const T = another ? 'Get Tailscale on your other phone' : 'Get Tailscale on your phone', inst = httpUrl(d.install_url) || 'https://tailscale.com/download';
+    const phones = !another && Array.isArray(d.phones) ? d.phones.filter(p => p && typeof p === 'object') : [];
     const found = phones.length ? `<p>${phones[0].name ? `Found ${esc(phones[0].name)}.` : 'Found your phone.'}</p>` : '';
     const lead = '<p>Install it and sign in with the same Tailscale account.</p>';
-    if (phoneLayout) return step(2, phones.length ? 'done' : 'todo', T, found + lead, `<div class="act">${out('secondary', inst, 'Get Tailscale')}</div>${urlRow(inst)}`);
+    if (phoneLayout && !another) return step(2, phones.length ? 'done' : 'todo', T, found + lead, `<div class="act">${out('secondary', inst, 'Get Tailscale')}</div>${urlRow(inst)}`);
     return step(2, phones.length ? 'done' : 'todo', T, '', `<div class="split"><div>${found}${lead}<p class="muted">Scan with your phone’s camera.</p></div>${qr(inst)}</div>${urlRow(inst)}`);
   }
-  function step3(d) {
-    const T = 'Open Wizard on your phone', payload = connectPayload(d.wizard_url), wiz = payload ? httpUrl(d.wizard_url) : '';
+  function step3(d, another = false) {
+    const T = another ? 'Connect your other phone to Wizard' : 'Open Wizard on your phone', payload = connectPayload(d.wizard_url), wiz = payload ? httpUrl(d.wizard_url) : '';
     if (!(d.step === 'serving' || d.step === 'phone_seen') || !wiz) return step(3, 'locked', T, '<p>Your Wizard’s address appears here after step 1.</p>', '', 'locked');
-    const seen = d.step === 'phone_seen', err = seen && str(d.error) ? `<p class="err">${esc(d.error)}</p>` : '';
-    const text = seen ? '<p>Your phone is connected. Add Wizard to your home screen.</p><p class="muted">Safari: Share, then Add to Home Screen. Chrome: the menu, then Add to Home screen.</p>'
+    const seen = !another && d.step === 'phone_seen', err = seen && str(d.error) ? `<p class="err">${esc(d.error)}</p>` : '';
+    const text = another ? '<p>Scan this with the Wizard app on your other phone (Scan QR code).</p>' : seen ? '<p>Your phone is connected. Add Wizard to your home screen.</p><p class="muted">Safari: Share, then Add to Home Screen. Chrome: the menu, then Add to Home screen.</p>'
       : phoneLayout ? '<p>Open this address in your phone’s browser.</p><p class="muted">This turns green once your phone connects.</p>'
       : '<p>Scan with your phone, then open the link.</p><p class="muted">This turns green once your phone connects.</p>';
-    if (phoneLayout) return step(3, seen ? 'done' : 'todo', T, text + err, `<div class="act">${out('primary', wiz, 'Open Wizard at this address')}</div>${urlRow(wiz)}`);
+    if (phoneLayout && !another) return step(3, seen ? 'done' : 'todo', T, text + err, `<div class="act">${out('primary', wiz, 'Open Wizard at this address')}</div>${urlRow(wiz)}`);
     return step(3, seen ? 'done' : 'todo', T, '', `<div class="split"><div>${text}${err}</div>${qr(payload)}</div>${urlRow(wiz)}`);
   }
 
@@ -281,7 +310,9 @@
       else if (P.status === 'neterr') h += step(1, 'attn', 'Sign in to Tailscale on this Wizard', '<p>Can’t check right now.</p>', '<div class="act"><button class="btn primary" data-act="retry-phone">Try again</button></div>') + step(2, 'locked', 'Get Tailscale on your phone', '', '', 'locked') + step(3, 'locked', 'Open Wizard on your phone', '', '', 'locked');
       else h += step1(d) + step2(d) + step3(d);
       h += '</div>';
+      if (P.status === 'ok' && canLinkDevice(d)) h += '<button class="btn secondary" data-act="link-device">Link another device</button>';
     }
+    renderLinkDevice();
     if (h === lastPhoneHtml) return;
     lastPhoneHtml = h;
     const el = $('phone'); el.innerHTML = h;
@@ -325,7 +356,7 @@
       const a = Math.ceil(lo / 2), b = Math.floor(lo / 2); u.textContent = full.slice(0, a) + '…' + full.slice(full.length - b);
     });
   }
-  let fitT = 0; addEventListener('resize', () => { clearTimeout(fitT); fitT = setTimeout(() => fitUrls($('phone')), 120); });
+  let fitT = 0; addEventListener('resize', () => { clearTimeout(fitT); fitT = setTimeout(() => { fitUrls($('phone')); if (S.linkDevice) fitUrls($('linkDevice')); }, 120); });
   async function copy(url) {
     let ok = false;
     try { if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(url); ok = true; } } catch (e) {}
@@ -344,7 +375,9 @@
     const act = t.dataset.act;
     if (!act && t.matches('.url')) { if (phoneLayout) copy(t.dataset.url); return; }
     if (act === 'open-phone') openPhone();
-    else if (act === 'back') closePhone();
+    else if (act === 'back') closeLinkDevice() || closePhone();
+    else if (act === 'link-device') openLinkDevice();
+    else if (act === 'close-link-device') closeLinkDevice();
     else if (act === 'retry-list') { S.list.status = 'loading'; renderList(); loadList(); }
     else if (act === 'retry-phone') { S.phone.status = 'loading'; renderPhone(); loadPhone().then(() => schedule(2000)); }
     else if (act === 'start') start();
@@ -355,7 +388,7 @@
     else if (act === 'copy') { e.stopPropagation(); copy(t.dataset.url); }
     else if (act === 'tour') { try { parent.postMessage({ type: 'wizard:setup:tour' }, location.origin); } catch (er) {} log('tour'); setTimeout(renderList, 50); }
   });
-  $('scrim').addEventListener('click', () => { closeSheet(); closeMenu(); });
+  $('scrim').addEventListener('click', () => { closeLinkDevice(); closeSheet(); closeMenu(); });
 
   /* ---------------- boot ---------------- */
   window.WosRecommended?.init(renderList, () => S.screen === 'list' && !document.hidden && (!ioList || S.listVisible));

@@ -91,7 +91,7 @@ Visual: <side-by-side screenshot, or "none">
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) | own keyframe sets |
 | Tour/help ("Step N of 3": Talk, Reply in Chats, Done), responsive Done, skip/exit; desktop guide `WosTour.desk` ("Step N of 2") | `WosTour` (`web/core/tour.js`) | — |
 | Install prompt (banner, held while the tour runs) | `WizardPwaInstall` (`web/pwa-install.js`) | a second `beforeinstallprompt` listener |
-| First launch and explicit Setup/tour; VM auto-onboarding; alongside launch starts only the orientation | `WosSetupLaunch` (`web/core/setup-launch.js`); built-in checklist `web/setup/setup.js` distinguishes ready-to-open from phone-connected | shell-specific first-run checks, a second tour launcher |
+| First launch and explicit Setup/tour; VM auto-onboarding; alongside launch starts only the orientation | `WosSetupLaunch` (`web/core/setup-launch.js`); built-in checklist `web/setup/setup.js` distinguishes ready-to-open from phone-connected; `step`/`qr`/`urlRow` and `step2`/`step3`'s another-device mode reuse both QRs on every layout | shell-specific first-run checks, a second tour launcher |
 
 ## App voice/audio
 
