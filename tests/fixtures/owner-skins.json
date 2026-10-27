@@ -1,5 +1,5 @@
 {
-  "note": "Approved launch baseline: Archimedes explicitly accepts owner-live 8fa9804 on 2026-10-24; see docs/ux-472-review.md and its candidate/live screenshots. Base remains unchanged.",
+  "note": "Approved launch baseline: Archimedes explicitly accepts owner-live 8fa9804 on 2026-10-24; see docs/ux-472-review.md and its candidate/live screenshots. Base remains unchanged. James approved main's skin picker with the live dock and orb, 27 Oct 2026; approvedCoreSkinsSha256 records that combination.",
   "hashes": {
     "base": "6b08a59778a37980",
     "nebula": "1a9173933fd7cbce",
@@ -8,5 +8,5 @@
     "ember": "f8fb1091c187cb11",
     "signal": "8b1f66c98ff178f0"
   },
-  "approvedCoreSkinsSha256": "0f1797f835ddfa6f7435cba758d6086368cff1dd78bcf21f42ddcc6dc89b9cdf"
+  "approvedCoreSkinsSha256": "b920743ba59e339cbcfc83fdf3360a7f6df1cb83f282e4ec0a954b459b83213f"
 }
