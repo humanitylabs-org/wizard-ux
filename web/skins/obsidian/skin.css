@@ -811,3 +811,17 @@ html[data-skin^="obsidian"] .rs-br { grid-template-columns: 58px minmax(60px, 1f
 html[data-skin^="obsidian"][data-shell="desktop"] .dchats .ch-fab { width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--ob-fill); color: var(--ob-on); box-shadow: none; }
 html[data-skin^="obsidian"][data-shell="desktop"] .dchats .ch-fab svg { stroke: var(--ob-on); }
 html[data-skin^="obsidian"][data-shell="desktop"] .ch-compose textarea { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+
+/* Phone polish (Miguel 27 Oct, same pass as the desktop one): sheets, the long-press menu and the count badge follow
+ * the skin. The long-press menu used to run under the pill dock (its lower actions were hidden behind it). */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-sheet-b { padding-bottom: calc(var(--pill-top) + 10px); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-sheet-b button:focus-visible { outline: none; background: var(--ob-tint); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-sheet-b button:active { background: var(--ob-tint); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-sheet-b .ch-emoji-grid button:is(:active, :focus-visible) { border-color: var(--ob-edge); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-emoji-search:focus-within { border-color: var(--ob-edge); box-shadow: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .sheet { border-color: color-mix(in srgb, var(--ink) 14%, transparent); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-sheet-b { -webkit-backdrop-filter: blur(22px) saturate(1.3); backdrop-filter: blur(22px) saturate(1.3); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-latest { background: color-mix(in srgb, var(--bg) 92%, transparent); border-color: var(--ob-edge); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .win.solo.app-chats .ch-latest { bottom: calc(var(--pill-top) + 100px); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock .orb-badge { box-shadow: 0 0 0 2px var(--bg); }
+html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .dock .orb-badge { color: #fff; }
