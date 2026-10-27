@@ -44,8 +44,9 @@ export function createAnswerRoutePreview({ web = resolve(fileURLToPath(new URL('
       if (route[1] === 'answer_private_sample') return json(res, { error: { code: 'thread_route.private_agent', message: 'Private chats stay on their private agent.' } }, 409);
       return json(res, { session_id: route[1], route: route[1] === SID && direct ? 'opus-direct' : 'hermes', available: false, reason: 'Read-only sample. Switching is demonstrated in the browser QA, not saved here.' });
     }
-    if (p.includes('ui-preferences') || p.includes('launcher')) return json(res, {}, 404);
-    if (/models/.test(p)) return json(res, { models: [], data: [] });
+    const api = p.startsWith('/wizard/') || p.startsWith('/api/');
+    if (api && (p.includes('ui-preferences') || p.includes('launcher'))) return json(res, {}, 404);
+    if (api && /models/.test(p)) return json(res, { models: [], data: [] });
     if (p.startsWith('/wizard/') || p.startsWith('/api/')) return json(res, {});
     let rel; try { rel = decodeURIComponent(p.slice('/wizard-os-home/'.length)) || 'index.html'; } catch { return json(res, {}, 400); }
     if (!p.startsWith('/wizard-os-home/') || rel.split('/').some(s => s === '..' || s.startsWith('.'))) return json(res, {}, 404);
