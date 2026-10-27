@@ -45,10 +45,15 @@ html[data-skin="landscapes"] .ms { container: ms / inline-size; position: relati
   html[data-skin="landscapes"] .ms-track.off, html[data-skin="landscapes"] .ms-thumb, html[data-skin="landscapes"] .ms-o:not(.on) { display: none; }
   html[data-skin="landscapes"] .ms-o.on { flex-direction: row; gap: 5px; padding: 0 14px; min-width: 0; max-width: 100%; border-radius: 19px; background: var(--ink); overflow: hidden; }
   html[data-skin="landscapes"] .ms.secure-on .ms-o.on { background: var(--secure); }
-  html[data-skin="landscapes"] .ms-o.on .ms-name { overflow: hidden; text-overflow: ellipsis; }
-  html[data-skin="landscapes"] .ms-o.on .ms-version { font-size: 12px; }
+  html[data-skin="landscapes"] .ms-o.on .ms-name { flex: 0 0 auto; }
+  html[data-skin="landscapes"] .ms-o.on .ms-version { font-size: 12px; min-width: 0; overflow: hidden; }
   html[data-skin="landscapes"] .ms-more { position: static; }
   html[data-skin="landscapes"] .ms-more::after { content: ""; position: absolute; inset: 0; z-index: 2; }
+}
+@container ms (max-width: 140px) {
+  html[data-skin="landscapes"] .ms-o.on { padding: 0 12px; }
+  html[data-skin="landscapes"] .ms-o.on .ms-version { display: none; }
+  html[data-skin="landscapes"] .ms-more { min-width: 28px; padding: 0 4px; }
 }
 
 /* Miguel's layout (ported from his test port, 20 Oct 2026): phone list order, edge-to-edge apps, quiet composer,

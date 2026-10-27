@@ -104,10 +104,15 @@ html[data-skin^="obsidian"] .ms { container: ms / inline-size; position: relativ
   html[data-skin^="obsidian"] .ms-track.off, html[data-skin^="obsidian"] .ms-thumb, html[data-skin^="obsidian"] .ms-o:not(.on) { display: none; }
   html[data-skin^="obsidian"] .ms-o.on { flex-direction: row; gap: 5px; padding: 0 14px; min-width: 0; max-width: 100%; border-radius: 19px; background: var(--ink); overflow: hidden; }
   html[data-skin^="obsidian"] .ms.secure-on .ms-o.on { background: var(--secure); }
-  html[data-skin^="obsidian"] .ms-o.on .ms-name { overflow: hidden; text-overflow: ellipsis; }
-  html[data-skin^="obsidian"] .ms-o.on .ms-version { font-size: 12px; }
+  html[data-skin^="obsidian"] .ms-o.on .ms-name { flex: 0 0 auto; }
+  html[data-skin^="obsidian"] .ms-o.on .ms-version { font-size: 12px; min-width: 0; overflow: hidden; }
   html[data-skin^="obsidian"] .ms-more { position: static; }
   html[data-skin^="obsidian"] .ms-more::after { content: ""; position: absolute; inset: 0; z-index: 2; }
+}
+@container ms (max-width: 140px) {
+  html[data-skin^="obsidian"] .ms-o.on { padding: 0 12px; }
+  html[data-skin^="obsidian"] .ms-o.on .ms-version { display: none; }
+  html[data-skin^="obsidian"] .ms-more { min-width: 28px; padding: 0 4px; }
 }
 html[data-skin="obsidian-light"] .ch-model.private { color: hsl(282 70% 44%); }
 
