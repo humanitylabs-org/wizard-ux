@@ -27,7 +27,8 @@ function orb(skin = 'nebula', id = 'orb') {
     MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe() {} } });
   function frame() { now += 100; const fn = next; next = null; fn(now); }
   function settle() { window.Orb.press(false); for (let i = 0; i < 14; i++) frame(); }
-  return { api: window.Orb, icon, style, root, host, observers, uniforms, frame, settle, reads: () => reads };
+  function drain() { for (let i = 0; next && i < 40; i++) frame(); }
+  return { api: window.Orb, icon, style, root, host, observers, uniforms, frame, settle, drain, pending: () => !!next, reads: () => reads };
 }
 
 test('the orb hides its white centre dot while it shows the white app icon', () => {
@@ -64,10 +65,18 @@ test('other skins and secondary/native orbs retain their core without reading ic
 });
 
 test('icon paint and appearance changes wake a frozen idle orb without self-waking on frame styles', () => {
-  const o = orb(); o.api.setRestingMotion(false); o.settle();
+  const o = orb(); o.api.setRestingMotion(false); o.drain();
+  assert.equal(o.pending(), false, 'resting orb is truly frozen');
   o.observers[0].fn([{ type: 'attributes', attributeName: 'style', target: o.host }]);
+  assert.equal(o.pending(), false, 'per-frame CSS variables never self-wake');
+  o.icon.content = false;
   o.observers[0].fn([{ type: 'childList', target: o.host }]);
-  o.icon.content = false; o.settle(); assert.ok(o.uniforms.core > .5499);
+  assert.equal(o.pending(), true, 'desk paint wakes the frozen orb');
+  o.drain(); assert.ok(o.uniforms.core > .5499);
+  o.icon.content = true;
   o.observers[1].fn([]);
-  o.icon.content = true; o.settle(); assert.ok(o.uniforms.core < .0001);
+  assert.equal(o.pending(), true, 'appearance changes wake the frozen orb');
+  o.drain(); assert.ok(o.uniforms.core < .0001);
+  o.root.dataset.skin = 'obsidian'; o.observers[1].fn([]); o.drain();
+  assert.ok(o.uniforms.core > .5499, 'switching to another skin restores the original core');
 });
