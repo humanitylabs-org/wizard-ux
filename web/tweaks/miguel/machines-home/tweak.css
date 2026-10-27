@@ -184,7 +184,7 @@ html[data-skin="landscapes"] :is(.mh-people > .mh-role, .mh-spec) { text-shadow:
 .mh-chip.ready.on i { background: var(--mh-good); opacity: 1; }
 .mh-chip:active { transform: scale(.95); }
 .mh-node.is-main { width: max(var(--d) + 14px, 168px) !important; }
-@container (max-width: 599px) { .mh-root .mh-lane.is-mainrow .mh-lane-row > .mh-node.is-main { width: max(var(--d) + 6px, 150px) !important; } .mh-chip { padding: 0 8px 0 7px !important; font-size: 11px; } .mh-fuel { gap: 5px 10px; padding: 7px 10px !important; } .mh-tank-g { width: 36px; } }
+@container (max-width: 599px) { .mh-root .mh-lane.is-mainrow .mh-lane-row > .mh-node.is-main { width: max(var(--d) + 6px, 112px) !important; } .mh-sess { flex-direction: column; align-items: center; gap: 4px; } .mh-node:not(.is-main) .mh-role { white-space: normal; text-align: center; line-height: 1.2; } .mh-chip { padding: 0 8px 0 7px !important; font-size: 11px; } .mh-fuel { gap: 5px 10px; padding: 7px 10px !important; } .mh-tank-g { width: 36px; } }
 html[data-skin="landscapes"] :is(.mh-legend, .mh-fuel-k) { text-shadow: 0 1px 3px rgba(0, 0, 0, .75); }
 
 /* ---------- lines ---------- */
