@@ -1142,7 +1142,7 @@
     const key = JSON.stringify([agent, sid, runId]);
     let r = RUN_STREAMS.get(key);
     if (!r) {
-      r = { text: '', terminal: false, listeners: new Set(), frame: null, stopped: false };
+      r = { text: '', steps: [], live: false, terminal: false, listeners: new Set(), frame: null, stopped: false };
       RUN_STREAMS.set(key, r);
       const url = `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${agent ? '?agent=' + encodeURIComponent(agent) : ''}`;
       const notify = () => {
@@ -1158,16 +1158,25 @@
         if ((d.session_id && d.session_id !== sid) || (d.run_id && d.run_id !== runId)) return;
         const type = d.event || e.type;
         if (type === 'message.delta' && typeof d.delta === 'string') { r.text += d.delta; notify(); }
+        // Live steps, like the CLI: the tool that is running and the ones just finished.
+        if (type === 'tool.started' && d.tool) { r.steps = [...r.steps, { tool: String(d.tool), preview: typeof d.preview === 'string' ? d.preview : '', done: false }].slice(-4); notify(); }
+        if (type === 'tool.completed' && d.tool) {
+          const i = r.steps.findLastIndex(s => !s.done && s.tool === String(d.tool));
+          if (i >= 0) { r.steps = r.steps.map((s, n) => n === i ? { ...s, done: true, error: !!d.error } : s); notify(); }
+        }
         // reasoning.available is deliberately not answer text.
         if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) terminal();
       };
       const connect = () => {
         if (r.stopped || r.terminal) return;
+        r.steps = []; // a reconnect replays the run from its first event
         try {
           r.source = new window.EventSource(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
           r.source.onmessage = event;
-          for (const name of ['message.delta', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted']) r.source.addEventListener(name, event);
+          for (const name of ['message.delta', 'tool.started', 'tool.completed', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted']) r.source.addEventListener(name, event);
+          r.source.onopen = () => { r.live = true; };
           r.source.onerror = () => {
+            r.live = false;
             close();
             // Some queued main sends close before yielding any answer bytes.
             // Retry only before ANY answer bytes: no duplicated/replayed text. This is
@@ -1184,7 +1193,8 @@
           if (r.stopped) return;
           if ((d.run_id || d.id) === runId && d.session_id === sid && ['completed', 'failed', 'cancelled', 'interrupted'].includes(d.status)) terminal();
         } catch (_) { /* connectivity recovery is the ordinary read poll, never another send */ }
-        if (!r.stopped && !r.terminal) r.timer = setTimeout(poll, 500);
+        // The status read is only the safety net while the live stream is open.
+        if (!r.stopped && !r.terminal) r.timer = setTimeout(poll, r.live ? 10000 : 1500);
       };
       r.dispose = () => { r.stopped = true; close(); clearTimeout(r.timer); clearTimeout(r.reconnect); if (r.frame != null) cancelAnimationFrame(r.frame); RUN_STREAMS.delete(key); };
       r.timer = setTimeout(poll, 500);
