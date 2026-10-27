@@ -805,3 +805,38 @@ html[data-skin="landscapes"][data-shell="desktop"] .win.focus { border-color: rg
 html[data-skin="landscapes"][data-shell="desktop"] .ch-row.unread .tp time { color: #fff; }
 html[data-skin="landscapes"][data-shell="desktop"] .st.unread { background: #fff; box-shadow: none; }
 html[data-skin="landscapes"][data-shell="desktop"] .st.deferred { border-color: rgba(255, 255, 255, .8); background: transparent; }
+
+/* Phone polish (Miguel 27 Oct, same pass as the desktop one): sheets, the long-press menu and the count badge follow
+ * the skin. The long-press menu used to run under the pill dock (its lower actions were hidden behind it). */
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-sheet-b { padding-bottom: calc(var(--pill-top) + 10px); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-sheet-b:not(.ch-emoji-sheet) { max-height: calc(100% - 24px); overflow-y: auto; overscroll-behavior: contain; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-compose button.ch-mic.on { animation: none; box-shadow: 0 0 0 4px rgba(255, 255, 255, .24); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-sheet-b button:focus-visible { outline: none; background: rgba(255, 255, 255, .14); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-sheet-b button:active { background: rgba(255, 255, 255, .14); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-sheet-b .ch-emoji-grid button:is(:active, :focus-visible) { border-color: rgba(255, 255, 255, .5); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-emoji-search:focus-within { border-color: rgba(255, 255, 255, .5); box-shadow: none; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .sheet { border-color: rgba(255, 255, 255, .2); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-sheet-b { -webkit-backdrop-filter: blur(22px) saturate(1.3); backdrop-filter: blur(22px) saturate(1.3); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-latest { background: rgba(16, 18, 22, .78); border-color: rgba(255, 255, 255, .22); color: #fff; -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .win.solo.app-chats .ch-latest { bottom: calc(var(--pill-top) + 100px); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .dock .orb-badge { box-shadow: 0 0 0 2px var(--bg); }
+/* Landscapes on the phone: the same frosted white glass and white ink as the desktop polish, so no core violet is left
+ * (+ New chat, send, sent bubbles, sort chip, unread time, model menu, Home mark, the orb). Private Kimi K3 purple stays. */
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-fab { border: 0; color: #fff; background: rgba(255, 255, 255, .16); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .28); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-fab svg { stroke: #fff; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-compose button:is(.ch-send, .ch-mic.on) { background: #fff; border-color: transparent; box-shadow: none; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-compose button:is(.ch-send, .ch-mic.on) svg { stroke: #111; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-compose textarea:focus { border-color: rgba(255, 255, 255, .5); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-rdy-bar button.on { color: #fff; background: rgba(255, 255, 255, .16); border-color: rgba(255, 255, 255, .42); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .msg.u .bub { background: rgba(255, 255, 255, .14); border-color: rgba(255, 255, 255, .24); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-row.unread .tp time { color: #fff; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .st.unread { background: #fff; box-shadow: none; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .st.deferred { border-color: rgba(255, 255, 255, .8); background: transparent; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) :is(.ch-row, .ch-head) .emo.sti.deferred { color: rgba(255, 255, 255, .86); background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .3); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-row .pv em.att.deferred { color: rgba(255, 255, 255, .86); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .mrow.on { background: rgba(255, 255, 255, .14); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .mrow .mck { color: #fff; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .mrow.more { color: rgba(255, 255, 255, .78); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .wx-spin { border-color: rgba(255, 255, 255, .25); border-top-color: #fff; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .dock .ddot.dhome .dsg .sgi { --c: #fff; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .dock :is(.orb, .orb-fallback) { filter: saturate(0) brightness(1.15); }

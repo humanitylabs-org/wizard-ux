@@ -1,23 +1,32 @@
-/* Notifications in Chats: yellow one-message threads at the top of Ready. The Chats bell goes (one inbox). */
+/* Notifications in Chats: yellow one-message threads. The Chats bell goes (one inbox). */
 html[data-tweaks~="miguel/unified-inbox"] [data-chbell] { display: none !important; }
-.ui-inbox { --ui-y: #f2c230; display: flex; flex-direction: column; gap: 4px; margin: 2px 0 8px; }
-.ui-inbox[hidden] { display: none; }
+html[data-tweaks~="miguel/unified-inbox"] { --ui-y: #f2c230; --ui-y-ink: #1d1600; }
+html[data-tweaks~="miguel/unified-inbox"]:is([data-color-scheme="light"], [data-skin="obsidian-light"]) { --ui-y: #b98a00; --ui-y-ink: #fff; }
+.ui-inbox { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 8px; }
+.ui-inbox[hidden], .ui-done[hidden] { display: none; }
 .ui-item { border-radius: 14px; background: color-mix(in srgb, var(--ui-y) 11%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-y) 45%, transparent); }
 .ui-item .ui-row { background: none; }
-.ui-item .ui-row .tp b { color: var(--ink) !important; font-weight: 700 !important; }
-.ui-item .ui-row .tp time { color: var(--ui-y) !important; font-weight: 700; }
-.ui-item .ui-row .pv { color: var(--ink-2) !important; }
-.ui-item.open .ui-row .pv { display: none; }
+.ui-item.new .ui-row .tp b { color: var(--ink) !important; font-weight: 700 !important; }
+.ui-item.new .ui-row .tp time { color: var(--ui-y) !important; font-weight: 700; }
+.ui-item.new .ui-row .pv { color: var(--ink-2) !important; }
 .ui-item .ui-ic { background: color-mix(in srgb, var(--ui-y) 22%, transparent) !important; color: var(--ui-y); }
 .ui-item .ui-ic svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.ui-open { padding: 0 12px 12px; }
-.ui-item.open .ui-row .tp b { white-space: normal; overflow: visible; }
-.ui-msg { margin: 0 0 12px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.5; color: var(--ink); max-height: 45vh; overflow-y: auto; }
-.ui-msg a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
-.ui-acts { display: flex; gap: 8px; flex-wrap: wrap; }
-.ui-act { min-height: 38px; padding: 0 14px; border-radius: 99px; font: inherit; font-size: 14px; font-weight: 650; color: var(--ink) !important; background: color-mix(in srgb, var(--ink) 8%, transparent) !important; border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent) !important; cursor: pointer; }
-.ui-act.resolve { color: #1d1600 !important; background: var(--ui-y) !important; border-color: var(--ui-y) !important; }
-html[data-color-scheme="light"] .ui-inbox, html[data-skin="obsidian-light"] .ui-inbox { --ui-y: #b98a00; }
-html[data-skin="obsidian-light"] .ui-act.resolve { color: #fff !important; }
+/* Snoozed and completed: quiet, like a snoozed thread; still yellow-edged so they read as notifications. */
+.ui-item.snoozed, .ui-item.done { background: none; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-y) 28%, transparent); opacity: .78; }
+.ui-snz { color: var(--ui-y); font-style: normal; }
+/* Ready says "None" only when there is truly nothing in it. */
+[data-slot="ready-top"]:has(> .ui-inbox) ~ .ch-none, [data-slot="ready-top"]:has(> .ui-inbox) ~ * .ch-none { display: none; }
+.ui-done { margin: 2px 0 8px; }
+.ui-done-btn { min-height: 34px; padding: 0 14px; border-radius: 99px; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink-2) !important; background: color-mix(in srgb, var(--ui-y) 10%, transparent) !important; border: 1px solid color-mix(in srgb, var(--ui-y) 35%, transparent) !important; cursor: pointer; }
+.ui-done .ui-inbox { margin-top: 6px; }
 /* Phone (his skins list Ready bottom-up, newest nearest the thumb): newest notification lowest too. */
-html:not([data-shell="desktop"]) .ch-list .ch-sec-b > [data-slot="ready-top"] > .ui-inbox { flex-direction: column-reverse; }
+html:not([data-shell="desktop"]) .ch-list .ch-sec-b > [data-slot] > .ui-inbox { flex-direction: column-reverse; }
+
+/* The notification open in the chat window: one yellow message, its actions where a thread keeps them. */
+.ch-notif-thread .msg.ch-notif .bub { background: color-mix(in srgb, var(--ui-y) 13%, transparent) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-y) 50%, transparent) !important; border-radius: 16px; padding: 12px 14px; }
+.ch-notif-thread .ch-head .ti b { color: var(--ui-y); }
+.ch-notif-src { margin-left: 8px; color: var(--ui-y); font-size: 12px; }
+.ch-notif-thread [data-chact="resolve"] { color: var(--ui-y-ink) !important; background: var(--ui-y) !important; border-color: var(--ui-y) !important; }
+.ch-notif-thread [data-chact="resolve"] svg { stroke: currentColor; }
+/* The message above is the notification itself: no second copy as a reply bubble over the composer. */
+.ch-notif-thread .ch-reply { display: none !important; }

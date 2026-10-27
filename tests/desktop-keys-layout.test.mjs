@@ -39,11 +39,12 @@ test('⌥↓/⌥↑ walk Ready chats from anywhere into the message box; no ⌥�
   assert.ok(js.includes("'Next ready chat'"));
 });
 
-test('⌥E Done and ⌥Z Snooze act on the open chat; the guide shows chat keys in a thread', () => {
-  assert.match(js, /code === 'KeyE' \|\| code === 'KeyZ'/);
+test('⌥→ Done and ⌥← Snooze act on the open chat (not mid-text); no hidden ⌥E/⌥Z; the guide shows chat keys', () => {
+  assert.doesNotMatch(js, /code === 'KeyE'|code === 'KeyZ'/);
+  assert.match(js, /const midText = typing\(e\.target\) && String\(e\.target\.value \?\? e\.target\.textContent \?\? ''\)\.trim\(\) !== '';/);
   assert.match(js, /CHATS\.threadAct\(f\.id, f\.thread, act\)/);
-  assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\)\) return hit/);
-  assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\)\) return hit\(\(\) => \{ if \(!e\.repeat\) chatAct\(code === 'ArrowRight' \? 'done' : 'snooze'/);
+  assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\) && !midText\) return hit/);
+  assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\) && !midText\) return hit\(\(\) => \{ if \(!e\.repeat\) chatAct\(code === 'ArrowRight' \? 'done' : 'snooze'/);
   assert.match(js, /\['\[data-chact="done"\]', '→', 'Done'\], \['\[data-chact="snooze"\]', '←', 'Snooze'\]/);
   assert.match(js, /chip\(next, '↓', 'inside'\)/);
 });
@@ -88,3 +89,30 @@ test('the keys guide is chips in place, no boxes: ↓ on the next Ready chat, F 
   assert.match(js, /\(dx < 0 \? 'H' : 'L'\) : \(dy < 0 \? 'K' : 'J'\)/);
   assert.match(js, /\['#micBtn', 'S', 'Talk about this'\]/);
 })
+
+test('guide: → ← sit above Done / Snooze; no "/" chip on chat search', () => {
+  assert.match(js, /filter\(vis\)\.map\(n => chip\(n, l, 'above'\)\)/);
+  assert.doesNotMatch(js, /chip\(srch, '\/'/);
+});
+
+test('guide extras: ↓ on Home, [ ] on neighbour desks, ↑ on the previous Ready chat, I on chat search; ⌥I again searches chats', () => {
+  assert.match(js, /\$\('#desktopHome \[data-home-act="ready"\]'\) \|\| \$\('#desktopHome \.home-card \.home-row'\)/);
+  assert.match(js, /cur === 0 \? \$\('#logo'\)/);
+  assert.match(js, /chip\(prev, '↑', 'inside'\)/);
+  assert.match(js, /chip\(srch, 'I', 'inside'\)/);
+  assert.match(js, /log\('key:search-chats'\)/);
+  assert.match(js, /chip\(cancel, 'Esc'\)/);
+});
+
+test('⌥[ ⌥] never wrap: left of desktop 1 is Home, nothing left of Home or right of the last desk; Speak words sit in the bar', () => {
+  assert.match(js, /if \(dir < 0 && cur === 0\) \{ lastWs = cur; goHome\(\); return; \}/);
+  assert.match(js, /const t = cur \+ dir; if \(t < 0 \|\| t >= ws\.length\) return;/);
+  assert.doesNotMatch(js, /\(cur - 1 \+ ws\.length\) % ws\.length|\(cur \+ 1\) % ws\.length/);
+  assert.match(js, /stepDesk\(-1\); \}\);/);
+  assert.match(js, /leg\.classList\.add\('in-bar'\)/);
+});
+
+test('[ ] chips are their own second-row chips, never merged into the neighbour key', () => {
+  assert.doesNotMatch(js, /withStep/);
+  assert.match(js, /if \(vis\(stepL\)\) chip\(stepL, '\['\); if \(vis\(stepR\)\) chip\(stepR, '\]'\);/);
+});
