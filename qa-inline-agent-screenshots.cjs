@@ -2,7 +2,7 @@
 // Run against tools/inline-images-preview.mjs, never the owner's live Wizard.
 // PREVIEW_URL=https://<private-preview>/ OUT=<evidence-dir> PLAYWRIGHT_MODULE=<module> node qa-inline-agent-screenshots.cjs
 // Optional LEGACY_WEB=<base checkout web> verifies an actual old renderer too.
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path');
 const base = process.env.PREVIEW_URL || 'http://127.0.0.1:9532';
 const out = path.resolve(process.env.OUT || 'qa-out/inline-agent-screenshots');

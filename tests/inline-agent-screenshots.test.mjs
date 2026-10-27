@@ -40,6 +40,23 @@ test('legacy attachments retain bottom-only rendering and repeated envelopes do 
   assert.equal((h.text.match(/!\[Image\]/g) || []).length, 1);
 });
 
+test('legacy Markdown matching an attachment stays a link and leaves the bottom attachment', () => {
+  const literal = `![old](${url(first)} "wizard-inline-0")`;
+  const h = helm(`Before.\n${literal}\nAfter.\n${envelope([first], false)}`);
+  const placed = new Set();
+  const rendered = md(h.text, (u, marker) => {
+    if (!marker || h.inlineMedia[marker] !== u) return null;
+    placed.add(u); return '<THUMB/>';
+  });
+  assert.match(rendered, /<a /);
+  assert.equal(placed.size, 0);
+  assert.equal(h.attachments.filter(a => !placed.has(a.url)).length, 1);
+  const mixed = helm(`Before.\n${literal}\nAfter.\n${envelope([first])}`);
+  const output = md(mixed.text, (u, marker) => mixed.inlineMedia[marker] === u ? '<THUMB/>' : null);
+  assert.equal((output.match(/<THUMB\/>/g) || []).length, 1);
+  assert.ok(output.indexOf('After.') < output.indexOf('<THUMB/>'), 'source markers cannot steal the positioned image');
+});
+
 test('non-images, malformed or unsafe metadata never become inline thumbnails', () => {
   for (const item of [{ ...first, mime: 'text/plain', kind: 'file' }, { ...first, id: '../secret' }, { ...first, name: '' }]) {
     assert.ok(!helm(envelope([item])).text.includes('![Image]'));

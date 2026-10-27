@@ -39,10 +39,10 @@
       if (start === null) { cursor = end; continue; }
       blocks.push({ raw: source.slice(start, m.index), slot: visible.length }); visible.push(''); start = null; cursor = end;
     }
-    if (!found) return { text: source, plainText: source, attachments: [] };
+    if (!found) return { text: source, plainText: source, attachments: [], inlineMedia: {} };
     if (start === null) visible.push(source.slice(cursor));
     const plainText = visible.join('').replace(/\n{3,}/g, '\n\n').trim();
-    const attachments = [], placed = new Set();
+    const attachments = [], placed = new Set(), inlineMedia = {};
     for (const { raw, slot } of blocks) {
       try {
         const p = JSON.parse(raw);
@@ -56,7 +56,10 @@
           // The same envelope is understood by old clients as a bottom attachment.
           // Only validated image IDs become positioned Markdown, never raw paths/HTML.
           if (p.inline === true && (prior ? prior.kind === 'image' : mime.startsWith('image/')) && !placed.has(id)) {
-            visible[slot] += `\n\n![Image](/wizard/attachments/${id})\n\n`; placed.add(id);
+            let marker = `wizard-inline-${Object.keys(inlineMedia).length}`;
+            while (source.includes(marker) || inlineMedia[marker]) marker += '-';
+            inlineMedia[marker] = `/wizard/attachments/${id}`;
+            visible[slot] += `\n\n![Image](/wizard/attachments/${id} "${marker}")\n\n`; placed.add(id);
           }
           if (attachments.some(a => a.id === id)) continue;
           attachments.push({ id, name, mime, kind: kindOf(mime, typeof it.kind === 'string' ? it.kind : ''), bytes: Number(it.bytes) || 0, url: `/wizard/attachments/${id}`,
@@ -65,7 +68,7 @@
         }
       } catch (e) { /* malformed metadata stays hidden */ }
     }
-    return { text: visible.join('').replace(/\n{3,}/g, '\n\n').trim(), plainText, attachments };
+    return { text: visible.join('').replace(/\n{3,}/g, '\n\n').trim(), plainText, attachments, inlineMedia };
   }
   // Same-origin and canonical links in a sibling preview become paths. Different
   // ports remain distinct origins; never turn another preview into a private frame.
@@ -181,7 +184,7 @@
         if (!t) { if (!h.attachments.length) cur.steps++; continue; }
         if (kind === 'commentary') { cur.notes.push(t); cur.steps++; continue; }
         if (cur.a) cur.notes.push(cur.a.text);
-        cur.a = { text: t, plainText: h.plainText, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length) };
+        cur.a = { text: t, plainText: h.plainText, inlineMedia: h.inlineMedia, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length) };
         // Hermes' own "Your request was not processed" boundary row (display_kind failed_turn), not the model's words.
         if (kind === 'failed_turn') cur.a.failed = true;
       } else if (cur) { if (later(cur, at)) { const prev = cur; newTurn(null); cur.at = at; cur.later = { at, after: prev.a.at }; } cur.steps++; noteWork(cur, m, at); }
@@ -266,7 +269,7 @@
   const LI = /^( {0,16})([-*+•]|\d{1,9}[.)])(?:[ \t]+(.*)|$)/;
   const TSEP = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
   const isTable = (lines, i) => lines[i].includes('|') && i + 1 < lines.length && lines[i + 1].includes('|') && TSEP.test(lines[i + 1]);
-  const MEDIA_IMAGE = /^ {0,3}!\[[^\]\n]*\]\((\/wizard\/attachments\/[0-9a-f]{32})\)[ \t]*$/;
+  const MEDIA_IMAGE = /^ {0,3}!\[[^\]\n]*\]\((\/wizard\/attachments\/[0-9a-f]{32})(?: "(wizard-inline-[0-9]+-*)")?\)[ \t]*$/;
   const startsBlock = (lines, i) => { const l = lines[i]; return MEDIA_IMAGE.test(l) || FENCE.test(l) || HEAD.test(l) || HR.test(l) || QUOTE.test(l) || LI.test(l) || isTable(lines, i); };
   const cells = row => { let r = row.trim(); if (r.startsWith('|')) r = r.slice(1); if (r.endsWith('|') && !r.endsWith('\\|')) r = r.slice(0, -1); return r.split(/(?<!\\)\|/).map(c => c.trim().replace(/\\\|/g, '|')); };
   function codeBlock(code, lang) {
@@ -320,7 +323,7 @@
         i++; out += codeBlock(body.join('\n'), m[2]); continue;
       }
       if (renderMedia && (m = l.match(MEDIA_IMAGE))) {
-        const media = renderMedia(m[1]);
+        const media = renderMedia(m[1], m[2]);
         if (media != null) { out += media; i++; continue; }
       }
       if ((m = l.match(HEAD))) { const n = m[1].length; out += `<h${n}>${inline(m[2] || '')}</h${n}>`; i++; continue; }
