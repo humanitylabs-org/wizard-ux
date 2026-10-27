@@ -57,3 +57,16 @@ test('desktop recordings skip echo cancellation (no music ducking) and pick a wi
   assert.match(v, /echoCancellation: PHONE/);
   assert.match(v, /if \(wired\) return wired\.deviceId/);
 });
+
+test('Home is ⌥` (again goes back); desktops are ⌥1…9 from the first desk', async () => {
+  const { readFileSync: r } = await import('node:fs');
+  const nav = r(new URL('../web/core/workspace-navigation.js', import.meta.url), 'utf8');
+  const C = {}; new Function('window', nav)({ WizCore: C });
+  assert.deepEqual(C.workspaceNav.digitTarget(1, 3), { kind: 'desktop', index: 0 });
+  assert.deepEqual(C.workspaceNav.digitTarget(4, 3), { kind: 'new', index: 3 });
+  assert.equal(C.workspaceNav.digitTarget(5, 3), null);
+  assert.equal(C.workspaceNav.slot(0), 1);
+  assert.match(js, /code === 'Backquote'\) return hit\(\(\) => \{ if \(e\.repeat\) return; if \(homeOpen\) \{ leaveHome\(\)/);
+  assert.doesNotMatch(js, /code === 'Digit1'\) return hit/);
+  assert.ok(js.includes("['`', 'Home', 'Again to go back']") && js.includes("['1–9', 'Desktop 1 to 9'"));
+});
