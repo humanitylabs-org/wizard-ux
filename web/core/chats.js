@@ -1695,10 +1695,13 @@ window.WizCore.chats = function createChats(H) {
   };
   // Tool ids as the owner reads them in the live step list ("browser_exec" -> "Browser exec").
   const stepName = tool => { const t = String(tool || '').replace(/^mcp__(wizard__)?/, '').replace(/__/g, ' · ').replace(/_/g, ' ').trim(); return t ? t[0].toUpperCase() + t.slice(1) : 'Working'; };
-  const flat = v => streamAnswer(v).replace(/\s+/g, ' ').trim();
+  // A replay of the turn on screen: the streamed words end with its answer AND add nothing beyond that turn's own
+  // words (its interim notes). A new run that merely ends like an old short answer ("Yes.") never matches.
+  const bare = v => streamAnswer(v).replace(/\s+/g, '');
   const streamShown = (st, turns) => {
-    const a = turns.findLast(t => t.a && t.a.final !== false)?.a, tail = flat(a?.text).slice(-160);
-    return !!tail && flat(st.text).endsWith(tail);
+    const t = turns.findLast(x => x.a && x.a.final !== false), ans = bare(t?.a?.text), got = bare(st.text);
+    if (!ans || !got.endsWith(ans)) return false;
+    return got.length <= [...(t.notes || []), t.a.text].map(bare).join('').length;
   };
   function closeStream(c) { c.stream?.handle?.close(); clearTimeout(c.stream?.retry); c.stream = null; }
   function syncStream(w, c, turns, agent) {
