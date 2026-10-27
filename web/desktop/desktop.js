@@ -1609,6 +1609,7 @@
       if (at === 'inside') { x = r.right - w - 8; y = r.top + r.height / 2 - h / 2; }
       if (at === 'start') { x = r.left - w - 4; y = r.top + r.height / 2 - h / 2; if (x < 4) x = r.left + 4; }
       if (at === 'inside-2') { x = r.right - w - 8 - 76; y = r.top + r.height / 2 - h / 2; }
+      if (at === 'above') y = r.top - h - 3 < 4 ? r.bottom + 3 : r.top - h - 3;
       if (at === 'corner') { x = r.left - 4; y = r.top - 4; }
       if (at === 'bottom-in') { x = r.left + r.width / 2 - w / 2; y = r.bottom - h - 6; }
       if (at && typeof at === 'object') { x = at.x - w; y = at.y; at.x = x - 6; } // Speak words: one row, right to left, ending under the last speak button
@@ -1644,12 +1645,12 @@
         if (cw === f) {
           // → ← on the Done / Snooze buttons; scrolled out of sight, they sit on the chat's header with their word.
           if (f.thread && f.thread !== '__new__') for (const [q, l, word] of [['[data-chact="done"]', '→', 'Done'], ['[data-chact="snooze"]', '←', 'Snooze']]) {
-            const on = [...wel.querySelectorAll(q)].filter(vis).map(n => chip(n, l)).some(Boolean);
+            const on = [...wel.querySelectorAll(q)].filter(vis).map(n => chip(n, l, 'above')).some(Boolean);
             const head = wel.querySelector('.pane-main .ch-head');
             if (!on && wel.querySelector(q) && vis(head)) chip(head, l, l === '→' ? 'inside' : 'inside-2', word);
           }
           const send = wel.querySelector('.pane-main .ch-send'); if (f.thread && vis(send)) chip(send, '↵', 'start');
-          const srch = wel.querySelector('[data-chsearch]'); if (vis(srch)) chip(srch, '/', 'inside');
+          // No chip on chat search: ⌥/ is this guide, so a "/" there read as the wrong key (Miguel, 27 Oct 2026).
           const fab = wel.querySelector('.pane-list [data-chfab]'); if (vis(fab)) chip(fab, 'N', 'corner');
         }
       }
