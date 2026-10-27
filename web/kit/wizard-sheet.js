@@ -1,7 +1,8 @@
 /* Wizard UI kit · the one pop-up (APP-DESIGN-RULES.md rule 4).
  * Use: <dialog class="wz-sheet"><h2>Title</h2>…</dialog>, then WzSheet.open(dialog).
  * Adds the grip and × if missing, and closes five ways: ×, Esc (native), tap outside, Back
- * (window.__wizardCloseOverlay, which the shell calls) and a downward swipe on the grip. No dependencies. */
+ * and a downward swipe on the grip. Back: in an app that uses WizardApp, each open sheet is pushed on WizardApp.back
+ * (the shell asks the app client first); window.__wizardCloseOverlay stays as the fallback for apps without it. No dependencies. */
 (() => {
   'use strict';
   const open = [];
@@ -13,7 +14,7 @@
       if (e.target.closest('.wz-sheet-x')) return close(d);
       if (e.target === d) { const r = d.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) close(d); }
     });
-    d.addEventListener('close', () => { const i = open.indexOf(d); if (i >= 0) open.splice(i, 1); });
+    d.addEventListener('close', () => { const i = open.indexOf(d); if (i >= 0) open.splice(i, 1); if (d.__wzBack) { d.__wzBack.release(); d.__wzBack = null; } });
     let y0 = null; const g = d.querySelector('.wz-sheet-grip');
     g.addEventListener('pointerdown', e => { y0 = e.clientY; g.setPointerCapture(e.pointerId); });
     g.addEventListener('pointermove', e => { if (y0 != null) d.style.transform = `translateY(${Math.max(0, e.clientY - y0)}px)`; });
@@ -21,7 +22,13 @@
     g.addEventListener('pointerup', end); g.addEventListener('pointercancel', end);
     return d;
   }
-  function show(d) { wire(d); if (!d.open) d.showModal(); if (!open.includes(d)) open.push(d); return d; }
+  function show(d) {
+    wire(d); if (!d.open) d.showModal();
+    if (!open.includes(d)) open.push(d);
+    const B = window.WizardApp && window.WizardApp.back;
+    if (!d.__wzBack && B && typeof B.push === 'function') { try { d.__wzBack = B.push(() => { close(d); return true; }); } catch (_) {} }
+    return d;
+  }
   function close(d) { if (d && d.open) d.close(); }
   const prev = window.__wizardCloseOverlay;
   window.__wizardCloseOverlay = () => { const d = open.pop(); if (d) { close(d); return true; } return typeof prev === 'function' ? !!prev() : false; };
