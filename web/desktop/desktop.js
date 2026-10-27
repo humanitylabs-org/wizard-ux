@@ -1591,68 +1591,92 @@
     const GO = [['G', 'Pick anything', 'Letters appear on every button, app and chat; type them to click'], ['`', 'Home', 'Again to go back'], ['1–9', 'Desktop 1 to 9', 'Jump straight to it'], ['[ ]', 'Previous / next desktop', ''], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
     const WIN = [['F', 'Full screen', ''], ['W', 'Close', ''], ['R', 'Refresh window', ''], ['H J K L', 'Next window', 'Left, down, up, right'], ['⇧ ← →', 'Swap places', ''], ['⇧ 1–9', 'Send to a desktop', '']];
     const vis = n => n && !n.hidden && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
-    function chip(n, label) {
-      const r = n.getBoundingClientRect(), c = document.createElement('b');
-      c.className = 'kh-chip'; c.textContent = label; el.appendChild(c);
-      c.style.left = Math.max(4, Math.min(innerWidth - c.offsetWidth - 4, r.left + r.width / 2 - c.offsetWidth / 2)) + 'px';
-      c.style.top = (r.bottom + 24 > innerHeight ? r.top - c.offsetHeight - 3 : r.bottom + 3) + 'px'; // near the bottom: above it
-    }
-    const rows = list => list.map(([k, name, what]) => `<div class="kh-row"><kbd>${esc(k)}</kbd><span><b>${esc(name)}</b>${what ? `<small>${esc(what)}</small>` : ''}</span></div>`).join('');
-    function card(cls, html, pos) {
-      const c = document.createElement('div'); c.className = 'kh-card ' + cls; c.innerHTML = html; el.appendChild(c);
-      for (const [k, v] of Object.entries(pos)) c.style[k] = Math.round(v) + 'px';
+    // Every key is a small chip on the thing it acts on (Miguel, 27 Oct 2026: no boxes to read). Only the four
+    // Speak keys carry a word, since their buttons don't say what they do. The lists above name each chip for
+    // screen readers.
+    const NAMES = Object.fromEntries([...SPEAK, ...TYPE, ...READY, ...GO, ...WIN].map(([k, n]) => [k, n]));
+    function chip(n, label, at = 'below', word = '') {
+      const r = n.getBoundingClientRect();
+      // Only on things you can see right now: not scrolled away, not under another window.
+      if (r.bottom <= 0 || r.top >= innerHeight || r.right <= 0 || r.left >= innerWidth) return null;
+      const hitEl = document.elementFromPoint(Math.min(innerWidth - 1, Math.max(0, r.left + r.width / 2)), Math.min(innerHeight - 1, Math.max(0, r.top + r.height / 2)));
+      if (!hitEl || (hitEl !== n && !n.contains(hitEl) && !hitEl.contains(n) && !el.contains(hitEl))) return null;
+      const c = document.createElement('b');
+      c.className = 'kh-chip' + (word ? ' kh-lab' : ''); c.innerHTML = word ? `<kbd>${esc(label)}</kbd>${esc(word)}` : esc(label);
+      c.setAttribute('aria-label', `${ALT} ${label}: ${NAMES[label] || word || label}`); el.appendChild(c);
+      const w = c.offsetWidth, h = c.offsetHeight;
+      let x = r.left + r.width / 2 - w / 2, y = r.bottom + 24 > innerHeight ? r.top - h - 3 : r.bottom + 3; // near the bottom: above it
+      if (at === 'inside') { x = r.right - w - 8; y = r.top + r.height / 2 - h / 2; }
+      if (at === 'start') { x = r.left - w - 4; y = r.top + r.height / 2 - h / 2; if (x < 4) x = r.left + 4; }
+      if (at === 'inside-2') { x = r.right - w - 8 - 76; y = r.top + r.height / 2 - h / 2; }
+      if (at === 'corner') { x = r.left - 4; y = r.top - 4; }
+      if (at === 'bottom-in') { x = r.left + r.width / 2 - w / 2; y = r.bottom - h - 6; }
+      if (at && typeof at === 'object') { x = at.x - w; y = at.y; at.x = x - 6; } // Speak words: one row, right to left, ending under the last speak button
+      x = Math.round(Math.max(4, Math.min(innerWidth - w - 4, x))); y = Math.round(Math.max(4, y));
+      // Never on top of another chip: step down until clear.
+      const taken = [...el.querySelectorAll('.kh-chip')].filter(o => o !== c).map(o => o.getBoundingClientRect());
+      for (let k = 0; k < 8 && taken.some(o => x < o.right + 2 && x + w > o.left - 2 && y < o.bottom + 2 && y + h > o.top - 2); k++) y += h + 3;
+      c.style.left = x + 'px'; c.style.top = y + 'px';
       return c;
-    }
-    // The window card centres on its window but never covers the Speak / Switch cards: slide it into the gap
-    // between them, else drop it below whichever it would hit; keep it on screen.
-    function settle(c) {
-      const fixed = $$('.kh-speak, .kh-go', el).map(n => n.getBoundingClientRect());
-      const w = c.offsetWidth, h = c.offsetHeight, top0 = parseFloat(c.style.top) || 0;
-      let x = Math.round(parseFloat(c.style.left) - w / 2), y = top0;
-      const hits = (x, y) => fixed.filter(r => x < r.right + 12 && x + w > r.left - 12 && y < r.bottom + 12 && y + h > r.top - 12);
-      const clampX = v => Math.max(12, Math.min(innerWidth - w - 12, v));
-      x = clampX(x);
-      if (hits(x, y).length) {
-        const lo = Math.max(12, ...fixed.filter(r => r.left < innerWidth / 2).map(r => r.right + 12));
-        const hi = Math.min(innerWidth - 12, ...fixed.filter(r => r.left >= innerWidth / 2).map(r => r.left - 12));
-        if (hi - lo >= w) x = Math.max(lo, Math.min(hi - w, x));
-        else for (const r of hits(x, y)) y = Math.max(y, r.bottom + 12);
-      }
-      c.style.left = x + 'px'; c.style.top = Math.max(12, Math.min(y, innerHeight - h - 12)) + 'px'; c.style.transform = 'none';
     }
     function show(pin = pinned) {
       pinned = !!pin;
       el.innerHTML = ''; el.hidden = false; el.classList.toggle('pinned', pinned); // visible first, so chips can be measured
-      const marks = [['#searchBtn', '␣'], ['#micBtn', 'S'], ['#generalVoice', 'V'], ['#commandBtn', 'C'], ['#dictateBtn', 'D'], ['#status', 'I'], ['#settingsBtn', ','], ['#keysBtn', '/'], ['#logo', '`']];
+      // Top bar: Home, desktops, new desktop, and the Speak buttons with their one-word meaning.
+      const marks = [['#searchBtn', '␣'], ['#status', 'I'], ['#settingsBtn', ','], ['#keysBtn', '/'], ['#logo', '`']];
       for (const [q, l] of marks) { const n = $(q); if (vis(n)) chip(n, l); }
       $$('#wsList .ws[data-ws]').forEach(n => { const slot = C.workspaceNav.slot(+n.dataset.ws); if (slot <= 9 && vis(n)) chip(n, String(slot)); });
       const add = $('#wsList [data-newdesk]'); if (vis(add)) chip(add, 'T');
-      const top = ($('#bar')?.getBoundingClientRect().bottom || 40) + 26;
-      const inChat = !homeOpen && focused()?.app === 'chats' && !!focused()?.thread; // the chat card carries the chat keys; keep this one short
-      card('kh-speak', `<h5>Speak <em>press the same key again to send</em></h5>${rows(SPEAK)}<h5>Ready chats</h5>${rows(inChat ? READY.filter(([k]) => !/→/.test(k)) : READY)}${inChat ? '' : `<h5>Type and find</h5>${rows(TYPE)}`}`, { top, right: 12 });
-      card('kh-go', `<h5>Switch what you see</h5>${rows(GO)}`, { top, left: 12 });
-      const f = !homeOpen && focused(), r = f && winEl(f.id)?.getBoundingClientRect();
-      const pane = f?.app === 'chats' && winEl(f.id)?.querySelector(f.thread ? '.pane-main' : '.pane-list');
-      const pr = pane && vis(pane) && pane.getBoundingClientRect();
-      if (pr && pr.width > 300 && pr.height > 260) {
-        // In Chats the guide shows what works right here: the open chat or the list.
-        const wel = winEl(f.id);
-        if (f.thread) {
-          for (const [q, l] of [['[data-chact="done"]', '→'], ['[data-chact="snooze"]', '←'], ['.pane-main .ch-send', '↵']]) wel.querySelectorAll(q).forEach(n => { if (vis(n)) chip(n, l); });
+      if (homeOpen) { const r = $('#desktopHome [data-home-act="ready"]'); if (vis(r)) chip(r, '↓', 'inside'); }
+      const f = !homeOpen && focused(), d = ws[cur];
+      // Chats: ↓ sits on the Ready chat it opens next; → ← on Done / Snooze; ↵ on Send; / on search; N on New chat.
+      const cw = !homeOpen && (f?.app === 'chats' ? f : d.wins.map(x => W[x]).find(mainChats));
+      if (cw) {
+        const wel = winEl(cw.id), rows = readyRows(cw.id), i = cw === f ? rows.findIndex(r => r.dataset.chopen === cw.thread) : -1;
+        const next = rows.length && (i < 0 ? rows[0] : rows[(i + 1) % rows.length]);
+        if (next && next.dataset.chopen !== cw.thread && vis(next)) {
+          // Scrolled out of the list: the chip goes on the Ready heading instead, so it never hangs off the edge.
+          const lr = wel.querySelector('.pane-list')?.getBoundingClientRect(), nr = next.getBoundingClientRect();
+          const head = wel.querySelector('.pane-list [data-sectoggle="ready"]');
+          const pl = wel.querySelector('.pane-list');
+          if (!lr || (nr.top >= lr.top && nr.bottom <= lr.bottom - 4)) chip(next, '↓', 'inside'); else if (!(vis(head) && chip(head, '↓', 'inside')) && pl) chip(pl, '↓', 'bottom-in');
         }
-        const here = f.thread ? [['↓', 'Next ready chat', ''], ['→', 'Done', 'Clears it from Ready'], ['←', 'Snooze', 'Bring it back later']]
-          : [['↓', 'Next ready chat', 'Opens it ready to reply']];
-        const plain = f.thread ? [['Enter', 'Send', 'Then back to New chat'], ['⇧ Enter', 'New line', ''], ['Esc', 'Back to the list', '']] : [['/', 'Search chats', ''], ['↑ ↓', 'Move (no ⌥ when the list is focused)', '']];
-        const c = card('kh-win kh-chat', `<h5>${f.thread ? 'This chat' : 'Chat list'}</h5>${rows(here)}<h5>No ⌥ needed</h5>${rows(plain)}<h5>Window</h5>${rows([['F W R', 'Full screen, close, refresh', '']])}`, { top: Math.max(top, pr.top + 44), left: pr.left + pr.width / 2 });
-        settle(c);
-      } else if (r && r.width > 420 && r.height > 260) {
-        const list = ws[cur].wins.length > 1 ? WIN : WIN.filter(([k]) => !/←/.test(k));
-        const c = card('kh-win', `<h5>This window</h5>${rows(list)}`, { top: Math.max(top, r.top + 44), left: r.left + r.width / 2 });
-        settle(c);
+        if (cw === f) {
+          // → ← on the Done / Snooze buttons; scrolled out of sight, they sit on the chat's header with their word.
+          if (f.thread && f.thread !== '__new__') for (const [q, l, word] of [['[data-chact="done"]', '→', 'Done'], ['[data-chact="snooze"]', '←', 'Snooze']]) {
+            const on = [...wel.querySelectorAll(q)].filter(vis).map(n => chip(n, l)).some(Boolean);
+            const head = wel.querySelector('.pane-main .ch-head');
+            if (!on && wel.querySelector(q) && vis(head)) chip(head, l, l === '→' ? 'inside' : 'inside-2', word);
+          }
+          const send = wel.querySelector('.pane-main .ch-send'); if (f.thread && vis(send)) chip(send, '↵', 'start');
+          const srch = wel.querySelector('[data-chsearch]'); if (vis(srch)) chip(srch, '/', 'inside');
+          const fab = wel.querySelector('.pane-list [data-chfab]'); if (vis(fab)) chip(fab, 'N', 'corner');
+        }
       }
+      // The window in front: F W R on its own buttons; H J K L on the windows they jump to.
+      if (f) {
+        const wel = winEl(f.id);
+        for (const [q, l] of [['[data-wact="mono"]', 'F'], ['[data-wact="close"]', 'W'], ['[data-wact="reload"]', 'R']]) { const n = wel?.querySelector(`.wbar ${q}`); if (vis(n)) chip(n, l); }
+        const me = wel?.getBoundingClientRect(), best = {};
+        if (me) for (const id of d.wins) {
+          if (id === f.id) continue; const o = winEl(id), r = o?.getBoundingClientRect(); if (!r || o.classList.contains('gone')) continue;
+          const dx = r.left + r.width / 2 - (me.left + me.width / 2), dy = r.top + r.height / 2 - (me.top + me.height / 2);
+          const k = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'H' : 'L') : (dy < 0 ? 'K' : 'J'), dist = Math.hypot(dx, dy);
+          if (!best[k] || dist < best[k].dist) best[k] = { o, dist };
+        }
+        for (const [k, { o }] of Object.entries(best)) { const t = o.querySelector('.wbar .t') || o.querySelector('.wbar'); if (vis(t)) chip(t, k, 'start'); }
+      }
+      // Speak keys last: their words step around anything already placed.
+      const speak = [['#micBtn', 'S', 'Talk about this'], ['#generalVoice', 'V', 'New voice chat'], ['#commandBtn', 'C', 'Tell the computer'], ['#dictateBtn', 'D', 'Dictate']]
+        .map(([q, l, w]) => [$(q), l, w]).filter(([n]) => vis(n)).sort((x, y) => x[0].getBoundingClientRect().left - y[0].getBoundingClientRect().left);
+      if (speak.length) {
+        const last = speak[speak.length - 1][0].getBoundingClientRect(), row = { x: last.right, y: last.bottom + 24 };
+        for (let i = speak.length - 1; i >= 0; i--) chip(speak[i][0], speak[i][1], row, speak[i][2]);
+      }
+      // One quiet line for the keys that have no single place: pick anything, keep this open.
       const foot = document.createElement('div'); foot.className = 'kh-foot';
-      foot.innerHTML = (pinned ? `<span>Press <kbd>Esc</kbd> to close</span>` : `<span>Hold <kbd>${esc(ALT)}</kbd> and press a key · let go to hide · <kbd>${esc(ALT)}/</kbd> keeps this open</span>`)
-        + (nativeDesktop ? `<span>Wizard for Mac, any app: <kbd>Caps Lock</kbd> search · <kbd>Right ⌘</kbd> talk · <kbd>Right ⌥</kbd> dictate</span>` : '')
+      foot.innerHTML = (pinned ? `<span><kbd>Esc</kbd> close</span>` : `<span><kbd>G</kbd> letters on everything</span><span><kbd>/</kbd> keep open</span>`)
+        + (pinned && nativeDesktop ? `<span>Any Mac app: <kbd>Caps Lock</kbd> search · <kbd>Right ⌘</kbd> talk · <kbd>Right ⌥</kbd> dictate</span>` : '')
         + (pinned && window.WosTour?.desk ? `<button type="button" data-keystour>Show me the tour again</button>` : '');
       el.appendChild(foot);
       document.documentElement.classList.add('key-hints-on');
