@@ -219,7 +219,7 @@
       if(force||Date.now()-S.healthAt>=(S.panel&&S.tab==='health'?14000:60000))jobs.push(read('/api/system/health',controller.signal).then(j=>{if(typeof j?.available!=='boolean')throw new Error('Unavailable');S.health=j;S.healthAt=Date.now();S.healthError='';}).catch(e=>{if(viewing())S.healthError='Unavailable';}));
       if(force||Date.now()-S.aiAt>=60000)jobs.push(read('/wizard/ai-usage',controller.signal).then(j=>{S.ai=window.WosUsage.normalize(j);S.aiAt=Date.now();S.aiError='';window.WosUsage.snap=S.ai;window.WosUsage.at=S.aiAt;window.WosUsage.error='';}).catch(e=>{if(viewing()){S.aiError='Unavailable';window.WosUsage.error='Latest AI usage unavailable';}}));
       await Promise.all(jobs.map(j=>j.then(()=>{if(viewing())paint();})));/* paint as each reading lands: a slow AI read must not hold back a failing health check */
-    })().finally(()=>{clearTimeout(timeout);S.busy=null;S.controller=null;schedule();});return S.busy;
+    })().finally(()=>{clearTimeout(timeout);S.busy=null;S.controller=null;schedule();window.dispatchEvent?.(new Event('wos:resources'));});return S.busy;
   }
   function schedule(){clearTimeout(S.timer);S.timer=null;if(viewing())S.timer=setTimeout(()=>{S.timer=null;update();},15000);}
   function sync(){if(!viewing()){clearTimeout(S.timer);S.timer=null;S.controller?.abort();return;}paint();if(!S.busy)update();}

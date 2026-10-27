@@ -50,7 +50,7 @@
   function reconnectOf(v) {
     const app = v && typeof v === 'object' && v.kind === 'provider_signed_out' ? RECONNECT[v.provider] : null;
     if (!app || v.app_id !== app[0]) return null;
-    return { provider: v.provider, appId: app[0], name: app[1], installed: v.installed !== false };
+    return { provider: v.provider, appId: app[0], name: app[1], runId: String(v.run_id || ''), installed: v.installed !== false };
   }
   const ATTN = new Set(['needs_you', 'check', 'done', 'fyi']);
   function attentionOf(v) {
@@ -320,6 +320,8 @@
   // Miguel's skins (Dark, Light, Landscapes) always list by status: Working, Ready, Archive. No Yesterday or Past week.
   const OUR_SKINS = new Set(['obsidian', 'obsidian-light', 'landscapes']);
   const oursSkin = () => { try { return OUR_SKINS.has(document.documentElement.dataset.skin || ''); } catch (e) { return false; } };
+  // A tweak asked the skin host for Snooze = lowest priority, bottom of Ready (api.nav.snoozeOrder('last'); docs/snooze-last.md).
+  const snoozeLast = () => { try { return window.WosSkinHost?.snoozeOrder === 'last'; } catch (e) { return false; } };
   const chatLayout = () => { if (oursSkin()) return 'status'; try { return localStorage.getItem(LAYOUT_KEY) === 'status' ? 'status' : 'day'; } catch (e) { return 'day'; } };
   const archiveAfterDays = () => { try { const v = localStorage.getItem(ARCH_KEY); if (v != null && isFinite(+v)) return +v; } catch (e) {} return 7; };
   // Agent Service owns box-wide preferences. localStorage is only an offline cache.
@@ -359,6 +361,7 @@
       if (!r.ok) return;
       const j = await r.json();
       if (!j || prefsPending || rev !== prefsRevision) return;
+      window.WizLauncher?.accept(j);
       let changed = false;
       for (const [name, [key, valid, encode]] of Object.entries(prefsFields)) if (valid(j[name])) {
         const value = encode(j[name]);
@@ -379,11 +382,13 @@
   // which is the purpose of snoozing it"; supersedes 10 Oct "bottom of today"). They wait in the collapsed Snoozed
   // section until their return time, Restore or Done. A message James sends after snoozing brings the thread back.
   const isDeferred = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt));
-  const readyRank = s => needsApproval(s) ? 0 : isDeferred(s) ? 9 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
+  const readyRank = s => snoozeLast() && isDeferred(s) ? 9 : needsApproval(s) ? 0 : isDeferred(s) ? 9 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
   const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
   // Oldest (James, 23 Oct 2026: "oldest messages at the top … the newest one at the bottom"): Newest's pins kept
   // (approvals first, deferred last), only time reversed in between. Yesterday and Past week stay newest first.
-  const byOldest = list => list.slice().sort((l, r) => Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(r, l));
+  // snoozeOrder('last'): Snooze is a lower place in Ready, ahead of no unsnoozed row (even approvals).
+  const snoozeOrder = (l, r) => snoozeLast() ? Number(isDeferred(l)) - Number(isDeferred(r)) : 0;
+  const byOldest = list => list.slice().sort((l, r) => snoozeOrder(l, r) || Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(r, l));
   function groupWork(sessions, now = Date.now()) {
     const g = { errors: [], working: [], ready: [], yesterday: [], pastWeek: [], deferred: [], archive: [] };
     const readyB = workDayStart(now), yB = readyB - DAY, archDays = archiveAfterDays(), archB = archDays ? now - archDays * DAY : -Infinity;
@@ -391,6 +396,7 @@
       if (s.hidden) continue;
       const t = sectionTime(s);
       if (s.archived) g.archive.push(s);
+      else if (snoozeLast() && isDeferred(s) && !inWorking(s)) g.ready.push(s);
       else if (needsApproval(s)) g.ready.push(s);
       else if (inWorking(s)) g.working.push(s);
       else if (isDeferred(s)) g.deferred.push(s);
@@ -403,7 +409,7 @@
     }
     for (const list of Object.values(g)) list.sort(newestFirst);
     // Newest: approvals pinned, then recency; deferred threads always last (Priority re-sorts with readyRank).
-    g.ready.sort((l, r) => Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(l, r));
+    g.ready.sort((l, r) => snoozeOrder(l, r) || Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(l, r));
     return g;
   }
   async function fetchDispositions() {
@@ -643,6 +649,7 @@
       for (const s of this.sessionsFor(agent)) {
         if (s.archived || s.hidden) continue;
         const def = this.deferred[seenKeyOf(s)]?.deferred;
+        if (snoozeLast() && isDeferred(s) && !WORKING.has(s.status)) continue; // snoozeOrder('last'): not Needs you until restored/replied
         if (['waiting_for_approval', 'unknown'].includes(s.status)) { needs.push(s); continue; }
         if (WORKING.has(s.status)) { working.push(s); continue; }
         if (def) continue;
@@ -709,7 +716,7 @@
           if (fromSnap) await Promise.race([agents, new Promise(r => setTimeout(r, AGENT_WAIT))]);
           this.emit();
           await agents;
-        } catch (e) { this.error = e.status === 403 ? 'access' : 'offline'; }
+        } catch (e) { this.error = e.status === 403 ? 'access' : 'offline'; this.errorAt = Date.now(); }
         finally { this.loading = null; this.emit(); }
       })();
       return this.loading;
@@ -1135,7 +1142,7 @@
     const key = JSON.stringify([agent, sid, runId]);
     let r = RUN_STREAMS.get(key);
     if (!r) {
-      r = { text: '', terminal: false, listeners: new Set(), frame: null, stopped: false };
+      r = { text: '', steps: [], live: false, terminal: false, listeners: new Set(), frame: null, stopped: false };
       RUN_STREAMS.set(key, r);
       const url = `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${agent ? '?agent=' + encodeURIComponent(agent) : ''}`;
       const notify = () => {
@@ -1151,16 +1158,26 @@
         if ((d.session_id && d.session_id !== sid) || (d.run_id && d.run_id !== runId)) return;
         const type = d.event || e.type;
         if (type === 'message.delta' && typeof d.delta === 'string') { r.text += d.delta; notify(); }
+        // Live steps, like the CLI: the tool that is running and the ones just finished.
+        if (type === 'tool.started' && d.tool) { const id = d.tool_call_id || d.step_id || d.id; r.steps = [...r.steps, { ...(typeof id === 'string' && id ? { id } : {}), tool: String(d.tool), preview: typeof d.preview === 'string' ? d.preview : '', done: false }].slice(-4); notify(); }
+        if (type === 'tool.completed' && d.tool) {
+          const id = d.tool_call_id || d.step_id || d.id;
+          const i = r.steps.findLastIndex(s => !s.done && (typeof id === 'string' && id ? s.id === id : s.tool === String(d.tool)));
+          if (i >= 0) { r.steps = r.steps.map((s, n) => n === i ? { ...s, done: true, error: !!d.error } : s); notify(); }
+        }
         // reasoning.available is deliberately not answer text.
         if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) terminal();
       };
       const connect = () => {
         if (r.stopped || r.terminal) return;
+        r.steps = []; // a reconnect replays the run from its first event
         try {
           r.source = new window.EventSource(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
           r.source.onmessage = event;
-          for (const name of ['message.delta', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted']) r.source.addEventListener(name, event);
+          for (const name of ['message.delta', 'tool.started', 'tool.completed', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted']) r.source.addEventListener(name, event);
+          r.source.onopen = () => { r.live = true; };
           r.source.onerror = () => {
+            r.live = false;
             close();
             // Some queued main sends close before yielding any answer bytes.
             // Retry only before ANY answer bytes: no duplicated/replayed text. This is
@@ -1177,7 +1194,8 @@
           if (r.stopped) return;
           if ((d.run_id || d.id) === runId && d.session_id === sid && ['completed', 'failed', 'cancelled', 'interrupted'].includes(d.status)) terminal();
         } catch (_) { /* connectivity recovery is the ordinary read poll, never another send */ }
-        if (!r.stopped && !r.terminal) r.timer = setTimeout(poll, 500);
+        // The status read is only the safety net while the live stream is open.
+        if (!r.stopped && !r.terminal) r.timer = setTimeout(poll, r.live ? 10000 : 1500);
       };
       r.dispose = () => { r.stopped = true; close(); clearTimeout(r.timer); clearTimeout(r.reconnect); if (r.frame != null) cancelAnimationFrame(r.frame); RUN_STREAMS.delete(key); };
       r.timer = setTimeout(poll, 500);

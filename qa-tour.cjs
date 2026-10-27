@@ -1,12 +1,13 @@
 // QA: first-run tour (core/tour.js) — real voice. James, 11 Oct 2026: practise the real thing; never fake what
-// the user said. Miguel, 24 Oct 2026: no Command beat, and each beat can be skipped on its own.
+// the user said. Miguel, 24 Oct 2026: no Command beat, each beat can be skipped on its own. Miguel, 26 Oct 2026:
+// three beats labelled "Step N of 3" (Talk, Reply, Done); no Hide and no Install beat.
 // Chromium's fake microphone records real audio; /transcribe is intercepted so the test controls what was "heard".
 // Asserts the tour advances only on what the shell actually did:
-//  beat 1 Talk (1 of 2): silence → "didn't hear" nudge (no advance); real speech → sent → beat 2 Hide
-//  beat 2 Hide (2 of 2): swipe up is steered; swipe down → bars hide → Back brings them back → end card → tap
-//         finishes and remembers. No beat mentions or teaches a command.
-//  Skip this step: moves one beat on (Talk → Hide → end card) without finishing; Skip tour ends it from any beat.
-//  No mic (permission denied) → typed fallback that sends what was typed, then Hide (no command button).
+//  Step 1 Talk: silence → "didn't hear" nudge (no advance); real speech → sent → Step 2 Reply
+//  Step 2 Reply: the shell is free (a hold is not a wrong gesture); Skip this step → Step 3 Done (owner's words) → tap
+//         finishes and remembers. (A delivered typed thread reply moving Reply on is covered by the release matrix.)
+//  Skip this step: moves one beat on (Talk → Reply → end card) without finishing; Skip tour ends it from any beat.
+//  No mic (permission denied) → typed fallback that sends what was typed, then Reply (no command button).
 //  Help: "help" opens the sheet (no agent run); Settings → Gestures & help; Practice again; ?view=tour.
 //  Desktop 1440x900 (desktop.html): no phone tour, no page errors.
 // Usage: node qa-tour.cjs [origin=http://127.0.0.1:9431/wizard-os-home/]   (QA_VIEWPORT=390x844 by default)
@@ -51,8 +52,8 @@ const settle = (p, ms = 3500) => p.waitForFunction(() => document.querySelector(
   await p.waitForTimeout(1600);
   let t = await T(p);
   ok(t.active && t.step === 1 && t.idx === 0, 'fresh install: tour starts on Home at beat 1', JSON.stringify(t));
-  ok(/Tap the orb and say hello/.test(t.copy) && t.sub === '1 of 2 · Talk', 'beat 1 copy: "1 of 2 · Talk" + "Tap the orb and say hello. Tap again to send."', JSON.stringify(t));
-  ok(t.dots === 2 && t.next === 'Skip this step' && t.skip === 'Skip tour', 'beat 1: two progress dots, "Skip this step" and "Skip tour"', JSON.stringify(t));
+  ok(/Tap the orb and say hello/.test(t.copy) && t.sub === 'Step 1 of 3 · Talk', 'beat 1 copy: "Step 1 of 3 · Talk" + "Tap the orb and say hello. Tap again to send."', JSON.stringify(t));
+  ok(t.dots === 3 && t.next === 'Skip this step' && t.skip === 'Skip tour', 'beat 1: three progress dots, "Skip this step" and "Skip tour"', JSON.stringify(t));
   ok(await p.locator('#coach').count() === 0, 'old Enter overlay is gone');
   await p.screenshot({ path: `${SHOTS}/01-beat1.png` });
 
@@ -76,26 +77,17 @@ const settle = (p, ms = 3500) => p.waitForFunction(() => document.querySelector(
   ok(S.writes.slice(w0).some(w => /upload|transcribe|runs|sessions/.test(w)), 'beat 1: the take left the shell as a real write', JSON.stringify(S.writes.slice(w0)));
   await p.screenshot({ path: `${SHOTS}/03-beat1-sent.png` });
   await p.waitForFunction(() => WosTour.step === 2, null, { timeout: 4000 }).catch(() => {});
-  t = await T(p); ok(t.step === 2 && /^2 of 2 · Hide$/.test(t.sub) && /Swipe the orb down/.test(t.copy), 'sent → beat 2 is Hide ("2 of 2 · Hide"); no Command beat', JSON.stringify(t));
-  ok(!/command|Open Calendar|Open Files/i.test(t.copy + t.alt), 'beat 2 does not teach a command', t.copy + t.alt);
-  ok(t.dots === 2 && t.next === 'Skip this step' && t.skip === 'Skip tour', 'two progress dots, "Skip this step" and "Skip tour" shown', JSON.stringify(t));
-  await p.screenshot({ path: `${SHOTS}/04-beat2-hide.png` });
+  t = await T(p); ok(t.step === 2 && t.sub === 'Step 2 of 3 · Reply' && /^Open Chats to see your Wizard’s answer, then type a reply\.$/.test(t.copy), 'sent → Step 2 of 3 · Reply; no Hide or Command beat', JSON.stringify(t));
+  ok(!/command|Open Calendar|Open Files/i.test(t.copy + t.alt) && /data-tchats/.test(t.alt), 'Reply has an Open Chats button and does not teach a command', t.copy + t.alt);
+  ok(t.dots === 3 && t.next === 'Skip this step' && t.skip === 'Skip tour', 'three progress dots, "Skip this step" and "Skip tour" shown', JSON.stringify(t));
+  await p.screenshot({ path: `${SHOTS}/04-beat2-reply.png` });
 
-  // Beat 2, a hold that opens Settings by command: closed again, Hide stays (Codex P2 on #456).
-  await p.evaluate(() => __wos.runUtterance('Settings', 'command')); await p.waitForTimeout(900);
-  t = await T(p); ok(t.step === 2 && !(await p.evaluate(() => __wos.sheet)) && t.idx === 0 && /That was a hold/.test(t.copy), 'beat 2: a hold that opened Settings → sheet closed, still on Hide', JSON.stringify(t));
-  await p.waitForTimeout(2400);
-  // Beat 2 Hide: swipe up is steered; swipe down hides the bars (distraction-free); Back brings them back.
-  await swipe(p, -120); t = await T(p);
-  ok(t.step === 2 && /Down, not up/.test(t.copy) && !(await p.evaluate(() => __wos.sheet)), 'beat 2: swipe up → "Down, not up."', t.copy);
-  await p.waitForTimeout(2400);
-  await swipe(p, 140); await p.waitForTimeout(400);
-  t = await T(p); ok(!(await p.evaluate(() => __wos.sheet)) && (await p.evaluate(() => document.querySelector('#device').classList.contains('zen'))) && /Swipe up from the bottom/.test(t.copy), 'beat 2: swipe down hides the bars, "Swipe up from the bottom edge…"', JSON.stringify(t));
-  await p.screenshot({ path: `${SHOTS}/06-beat3-hidden.png` });
-  await p.evaluate(() => __wos.onBack()); await p.waitForTimeout(700);
-  t = await T(p); ok(t.step === 3 && t.idx === 0 && !(await p.evaluate(() => document.querySelector('#device').classList.contains('zen'))), 'beat 2: Back brings the bars back → end card on Home', JSON.stringify(t));
-  ok(await p.evaluate(() => document.visibilityState === 'visible' && !!document.querySelector('#orbWrap')), 'Back in the tour: app still open');
-  ok(/Everything you see is customizable/.test(t.copy) && /say “help”/.test(t.alt) && !t.next && t.glyphs.join() === 'Tap,Swipe ↓', 'end card: "Everything you see is customizable…" + "Need this again? Hold the orb and say “help”."', t.copy + ' | ' + t.alt);
+  // Reply leaves the shell free: a hold that opens Settings is the person's own action (Settings hands the tour off).
+  await p.evaluate(() => __wos.runUtterance('Open Files', 'command')); await p.waitForTimeout(900);
+  t = await T(p); ok(t.step === 2 && !/That was a hold/.test(t.copy), 'Reply: a hold is not a wrong gesture (no nudge, Reply stays)', JSON.stringify(t));
+  await p.evaluate(() => __wos.goDesk(0, true)); await p.waitForTimeout(500);
+  await p.locator('#tour [data-tnext]').tap(); await p.waitForTimeout(700);
+  t = await T(p); ok(t.step === 3 && t.sub === 'Step 3 of 3 · Done' && /^You’re set\. This is your own server/.test(t.copy) && !t.next && !t.glyphs.length, 'Step 3 of 3 · Done: the owner’s words, no swipe glyphs, no per-step skip', JSON.stringify(t));
   await p.screenshot({ path: `${SHOTS}/07-done.png` });
   await p.mouse.click(206, 300); await p.waitForTimeout(500);
   t = await T(p); ok(!t.active && await p.evaluate(() => localStorage.getItem('wos.tour.v1') === 'true'), 'end card: a tap finishes and remembers', JSON.stringify(t));
@@ -119,15 +111,13 @@ const settle = (p, ms = 3500) => p.waitForFunction(() => document.querySelector(
   ok((await T(p)).help, 'Settings → Gestures & help opens the sheet');
   await p.locator('[data-hsgo]').tap(); await p.waitForTimeout(800);
   t = await T(p); ok(t.active && t.step === 1 && t.idx === 0, 'Practice again restarts at beat 1 on Home', JSON.stringify(t));
-  // Skip one step at a time: Talk → Hide → end card, without finishing; nothing is sent.
+  // Skip one step at a time: Talk → Reply → end card, without finishing; nothing is sent.
   const r1 = S.runs;
   await p.locator('[data-tnext]').tap(); await p.waitForTimeout(600);
-  t = await T(p); ok(t.active && t.step === 2 && t.sub === '2 of 2 · Hide', 'Skip this step on Talk → Hide, tour still running', JSON.stringify(t));
-  await p.screenshot({ path: `${SHOTS}/10-skipped-to-hide.png` });
-  await swipe(p, 140); await p.waitForTimeout(400);
-  ok(await p.evaluate(() => document.querySelector('#device').classList.contains('zen')), 'Hide: bars hidden before skipping');
+  t = await T(p); ok(t.active && t.step === 2 && t.sub === 'Step 2 of 3 · Reply', 'Skip this step on Talk → Reply, tour still running', JSON.stringify(t));
+  await p.screenshot({ path: `${SHOTS}/10-skipped-to-reply.png` });
   await p.locator('[data-tnext]').tap(); await p.waitForTimeout(700);
-  t = await T(p); ok(t.active && t.step === 3 && !(await p.evaluate(() => document.querySelector('#device').classList.contains('zen'))) && !t.next, 'Skip this step on Hide (bars hidden) → bars back, end card, no per-step skip there', JSON.stringify(t));
+  t = await T(p); ok(t.active && t.step === 3 && t.sub === 'Step 3 of 3 · Done' && !t.next, 'Skip this step on Reply → end card, no per-step skip there', JSON.stringify(t));
   ok(S.runs === r1, 'skipping steps sends nothing', String(S.runs - r1));
   await p.screenshot({ path: `${SHOTS}/11-skipped-to-done.png` });
   await p.mouse.click(VW / 2, VH / 3); await p.waitForTimeout(500);
@@ -155,7 +145,7 @@ const settle = (p, ms = 3500) => p.waitForFunction(() => document.querySelector(
   await p.screenshot({ path: `${SHOTS}/09-nomic.png` });
   await p.locator('.tr-type input').fill('hello'); await p.locator('.tr-type button').tap();
   await p.waitForFunction(() => WosTour.step === 2, null, { timeout: 5000 }).catch(() => {});
-  t = await T(p); ok(t.step === 2 && /Swipe the orb down/.test(t.copy) && !/tr-cmd|data-tsay/.test(t.alt), 'no mic: typed hello sends → beat 2 Hide, no command button', JSON.stringify(t));
+  t = await T(p); ok(t.step === 2 && t.sub === 'Step 2 of 3 · Reply' && !/tr-cmd|data-tsay/.test(t.alt), 'no mic: typed hello sends → Step 2 Reply, no command button', JSON.stringify(t));
   ok(!errs.length, 'no page errors (no mic)', errs.join(' | '));
 
   // Desktop shell: the gesture tour is phone-only; desktop loads clean.
