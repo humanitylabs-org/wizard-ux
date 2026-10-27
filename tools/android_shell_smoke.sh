@@ -281,7 +281,7 @@ PY
   adb shell am force-stop "$PKG"; adb logcat -c
   # Since 1.0.1 a hold pauses instead of hiding, so Everywhere is still on here. Start this check from "off", as an
   # owner who turned it off would (the orb's own saved switch), so the tap below must turn it on.
-  adb shell run-as "$PKG" sed -i 's/name="on" value="true"/name="on" value="false"/' shared_prefs/orb.xml
+  adb shell "run-as $PKG sed -i 's/name=\"on\" value=\"true\"/name=\"on\" value=\"false\"/' shared_prefs/orb.xml"
   adb shell am start -W -n "$ACT" >/dev/null 2>&1
   wait_ev everywhere 40; ev everywhere > "$OUT/everywhere.json"
   [ "$(ev everywhere ready)" = "true" ] && [ "$(ev everywhere switches)" = "1" ] && [ "$(ev everywhere orbRows)" = "0" ] && [ "$(ev everywhere dead)" = "0" ] \
