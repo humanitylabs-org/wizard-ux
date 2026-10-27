@@ -40,7 +40,7 @@ async function browserState(page) {
       await pane.locator('[data-incog-field]:not([disabled])').waitFor();
       check((await pane.innerText()).includes('This chat is never saved.'), tag + ': permanent privacy warning');
       check(await pane.locator('[data-chfiles],[data-chvoice],[data-chat-model]').count() === 0, tag + ': no uploads/voice/model picker');
-      const canary = 'incognito-browser-' + crypto.randomUUID();
+      const canary = 'incognito-canary-' + crypto.randomUUID();
       for (const input of [canary + '-one', canary + '-two']) {
         await pane.locator('[data-incog-field]').fill(input);
         await pane.locator('[data-incog-form] button[type="submit"]').click();
