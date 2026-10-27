@@ -130,6 +130,22 @@ export default function setup(api) {
     return peopleGroup(items, count === 1 ? 'Person' : 'People', 'people');
   }
 
+  // Sessions: the same Ready / Working counts Home shows (api.data.read.sessions). The map hides Home's two cards and
+  // shows the counts inside Main; tapping opens the same lists those cards open.
+  const sessions = () => api.data.read.sessions?.counts() || { working: 0, ready: 0 };
+  const backupRunning = () => Array.isArray(S.backup?.active) && S.backup.active.length > 0;
+  // AI fuel: one tank per AI service, shared by every machine. Level = weekly allowance left, averaged over its accounts.
+  function fuel() {
+    const fam = new Map();
+    for (const p of S.res.ai?.providers || []) {
+      const ls = Array.isArray(p.limits) ? p.limits : [];
+      const w = ls.find(l => /week/i.test(l.label)) || ls.reduce((a, l) => !a || l.remainingPercent < a.remainingPercent ? l : a, null);
+      if (!w) continue;
+      const f = fam.get(p.provider) || { name: p.providerName, left: [] }; f.left.push(w.remainingPercent); fam.set(p.provider, f);
+    }
+    return [...fam.entries()].map(([id, f]) => ({ id, name: f.name, n: f.left.length, left: Math.round(f.left.reduce((a, b) => a + b, 0) / f.left.length) }));
+  }
+
   /* ---------- skeleton ---------- */
   const root = h('section', { cls: 'mh-root', 'aria-label': 'Your machines', data: { mhRoot: '' } });
   const wsBar = h('div', { cls: 'mh-ws', role: 'tablist', 'aria-label': 'Network' });
@@ -140,7 +156,9 @@ export default function setup(api) {
   const [laneSt, rowSt] = lane('is-storage', 'Storage'), [laneMn, rowMn] = lane('is-mainrow', 'Main and standby'), [laneHp, rowHp] = lane('is-people', 'People');
   const map = h('div', { cls: 'mh-map' }, lines, laneSt, laneMn, laneHp);
   const note = h('div', { cls: 'mh-managed', hidden: true });
-  const stage = h('div', { cls: 'mh-stage' }, oneway, map, note);
+  const fuelBar = h('button', { type: 'button', cls: 'mh-fuel', hidden: true, data: { resOpen: 'ai' }, 'aria-label': 'AI fuel, shared by every machine' });
+  const legend = h('p', { cls: 'mh-legend', 'aria-hidden': 'true' }, h('i', { cls: 'cpu' }), 'CPU', h('i', { cls: 'mem' }), 'Memory', h('i', { cls: 'disk' }), 'Disk', h('span', { cls: 'sep' }), 'Size = power');
+  const stage = h('div', { cls: 'mh-stage' }, oneway, fuelBar, map, legend, note);
   const panel = h('aside', { cls: 'mh-panel', 'aria-live': 'polite' });
   const body = h('div', { cls: 'mh-body' }, stage, panel);
   const sheetIn = h('div', { cls: 'mh-sheet-in' });
@@ -159,6 +177,40 @@ export default function setup(api) {
     const g = managedOf(S.ws);
     oneway.hidden = !g;
     if (g) oneway.replaceChildren(ico('arrow'), h('span', {}, 'You manage ', h('b', { text: g.name }), '. It can’t reach yours.'));
+    renderFuel();
+  }
+
+  function renderFuel() {
+    const rows = S.ws === 'mine' ? fuel() : [];
+    fuelBar.hidden = !rows.length;
+    fuelBar.replaceChildren(h('span', { cls: 'mh-fuel-k' }, ico('bolt'), h('span', { text: 'AI fuel' })),
+      ...rows.map(r => h('span', { cls: 'mh-tank', data: { s: r.left <= 10 ? 'no' : r.left <= 25 ? 'tight' : 'ok' }, title: `${r.name}: ${r.left}% of this week left${r.n > 1 ? ` (${r.n} accounts)` : ''}` },
+        h('span', { cls: 'mh-tank-n', text: r.name }), h('span', { cls: 'mh-tank-g', style: { '--f': r.left + '%' } }, h('i')), h('b', { text: r.left + '%' }))));
+  }
+  // Compute on a machine: three thin arcs around its disc (outside in: CPU, memory, disk), each filled to its use.
+  function gauges(m) {
+    if (m.cpu == null && m.mem == null && m.disk == null) return null;
+    const s = sv('svg', { class: 'mh-use', viewBox: '0 0 100 100', 'aria-hidden': 'true' });
+    [['cpu', m.cpu, 48], ['mem', m.mem, 43.5], ['disk', m.disk, 39]].forEach(([k, v, r]) => {
+      if (v == null) return;
+      const C = 2 * Math.PI * r;
+      sv('circle', { class: 't ' + k, cx: 50, cy: 50, r }, s);
+      const c = sv('circle', { class: 'v ' + k, cx: 50, cy: 50, r, 'stroke-dasharray': `${(C * clamp(v / 100, .015, 1)).toFixed(1)} ${C.toFixed(1)}` }, s);
+      c.style.setProperty('--c', C.toFixed(1));
+    });
+    return s;
+  }
+  // Sessions inside Main: one orbiting dot per working session (they circle while the agent works), and two taps
+  // under it that open the same Working / Ready lists as the Home cards did.
+  function orbit(n) {
+    if (!n) return null;
+    const k = Math.min(n, 8);
+    return h('span', { cls: 'mh-orbit', 'aria-hidden': 'true', style: { '--k': String(k) } }, Array.from({ length: k }, (_, i) => h('i', { style: { '--i': String(i) } })));
+  }
+  function sessionChips(x) {
+    return h('span', { cls: 'mh-sess' },
+      h('button', { type: 'button', cls: 'mh-chip work' + (x.working ? ' on' : ''), data: { fwd: 'working' }, 'aria-label': `Working ${x.working}` }, h('i'), h('b', { text: String(x.working) }), 'working'),
+      h('button', { type: 'button', cls: 'mh-chip ready' + (x.ready ? ' on' : ''), data: { fwd: 'ready' }, 'aria-label': `Ready ${x.ready}` }, h('i'), h('b', { text: String(x.ready) }), 'ready'));
   }
 
   /* ---------- the map ---------- */
@@ -173,12 +225,15 @@ export default function setup(api) {
   function node(m, role, opts = {}) {
     const s = opts.size || sizeOf(m, role), fit = opts.fit || '';
     const disc = h('span', { cls: 'mh-disc' }, ico(m.kind));
-    if (role === 'main' && m.mem != null) disc.append(ring(clamp((m.disk ?? 0) / 100, .02, 1)));
-    if (role !== 'main' && fit) { disc.append(ring({ ok: 1, tight: .62, no: .3 }[fit])); disc.append(h('span', { cls: 'mh-badge', 'aria-hidden': 'true' }, fit === 'ok' ? ico('check') : h('b', { text: '!' }))); }
+    const use = role === 'storage' ? null : gauges(m);
+    if (use) disc.append(use);
+    if (role === 'main' && opts.sessions) { const o = orbit(opts.sessions.working); if (o) disc.append(o); }
+    if (role !== 'main' && fit) { if (!use) disc.append(ring({ ok: 1, tight: .62, no: .3 }[fit])); disc.append(h('span', { cls: 'mh-badge', 'aria-hidden': 'true' }, fit === 'ok' ? ico('check') : h('b', { text: '!' }))); }
     const el = h('button', { type: 'button', cls: `mh-node is-${role}`, data: { id: m.id, role, fit }, 'aria-pressed': String(S.sel === m.id), 'aria-label': `${m.name}, ${opts.roleText || role}`, style: { '--s': String(s) } },
       h('span', { cls: 'mh-hold' }, disc), h('span', { cls: 'mh-name', text: m.name }), h('span', { cls: 'mh-role', text: opts.roleText || role }),
       opts.state ? h('span', { cls: 'mh-state', data: { fit }, text: opts.state }) : null,
       spec(m) ? h('span', { cls: 'mh-spec', text: spec(m) }) : null);
+    if (role === 'main' && opts.sessions) el.append(sessionChips(opts.sessions));
     return el;
   }
   function plus(role, label, lead) {
@@ -190,13 +245,12 @@ export default function setup(api) {
     if (S.ws !== 'mine' && !managedOf(S.ws) && S.res.devices) S.ws = 'mine';
     const g = managedOf(S.ws);
     root.classList.toggle('is-managed', !!g);
-    note.hidden = !g;
+    note.hidden = true;  // no info card under the diagram (Miguel, 27 Oct 2026); the side panel on wide keeps it
     if (g) {
       // Their network's shape, honestly empty: the rows are there, what fills them is not readable yet.
       const ghost = (role, label) => { const n = plus(role, label, SOON); n.dataset.act = 'soon'; n.dataset.what = `${g.name}’s ${label.toLowerCase()}`; n.classList.add('is-ghost'); return n; };
       setLane(rowMn, [ghost('helper', 'Helpers'), node({ id: 'managed-' + g.id, name: g.name, kind: 'server' }, 'main', { size: 72, roleText: 'Main' }), ghost('standby', 'Standby devices')]);
       setLane(rowSt, [ghost('storage', 'Storage')]); setLane(rowHp, [managedPeople(g)].filter(Boolean));
-      note.replaceChildren(managedCard(g));
       panel.replaceChildren(managedCard(g, true));
       api.frame(drawLines); return;
     }
@@ -205,7 +259,7 @@ export default function setup(api) {
     setLane(rowSt, st ? [node(st, 'storage', { fit: st.state, roleText: 'Storage' })] : S.backup?.backup ? [plus('storage', 'Add storage', 'Holds encrypted backups')]
       : [h('p', { cls: 'mh-wait', text: S.backupErr ? 'Backup status unavailable right now' : 'Checking backups…' })]);
     const helpers = hps.length ? hps.map(id => node(machine(id), 'helper', { roleText: 'Helper device' })) : [plus('helper', 'Add helper', SOON)];
-    setLane(rowMn, [...helpers, node(main, 'main', { roleText: 'Main' }), ...sbs.map(m => node(m, 'standby', { fit: m.fit, roleText: 'Standby device', state: m.fit === 'ok' ? 'Ready' : 'Not ready' }))]);
+    setLane(rowMn, [...helpers, node(main, 'main', { roleText: 'Main', sessions: sessions() }), ...sbs.map(m => node(m, 'standby', { fit: m.fit, roleText: 'Standby device', state: m.fit === 'ok' ? 'Ready' : 'Not ready' }))]);
     setLane(rowHp, [minePeople()].filter(Boolean));
     if (wide()) { if (!S.sel) S.sel = 'this'; panel.replaceChildren(card(S.sel)); }
     api.frame(drawLines);
@@ -222,9 +276,9 @@ export default function setup(api) {
     map.style.setProperty('--cx', md.cx + 'px'); map.style.setProperty('--cy', md.cy + 'px');
     for (const row of [rowSt, rowMn, rowHp]) { row.classList.toggle('more-l', row.scrollLeft > 2); row.classList.toggle('more-r', row.scrollLeft + row.clientWidth < row.scrollWidth - 2); }
     const defs = sv('defs', {}, lines); let gi = 0;
-    const line = (d, kind, col, label) => {
+    const line = (d, kind, col, label, flow = true) => {
       const base = sv('path', { d, class: 'base ' + kind }, lines);
-      if (kind === 'slot') { if (label) pill(base.getPointAtLength(base.getTotalLength() * .5), label, col || 'var(--mh-warn)'); return; }
+      if (kind === 'slot' || !flow) { if (kind !== 'slot') { base.style.stroke = col; base.style.strokeOpacity = '.45'; if (label) pill(base.getPointAtLength(base.getTotalLength() * .7), label, col); return; } if (label) pill(base.getPointAtLength(base.getTotalLength() * .5), label, col || 'var(--mh-warn)'); return; }
       const L = base.getTotalLength(), i = gi++, a = base.getPointAtLength(0), z = base.getPointAtLength(L);
       const g = sv('linearGradient', { id: 'mhg' + i, gradientUnits: 'userSpaceOnUse', x1: a.x, y1: a.y, x2: z.x, y2: z.y }, defs);
       const s1 = sv('stop', { offset: '0' }, g), s2 = sv('stop', { offset: '1' }, g);
@@ -248,7 +302,9 @@ export default function setup(api) {
       if (el.dataset.act === 'add') { line(d, 'slot'); continue; }
       const st = S.ws === 'mine' && storage(); if (!st) continue;
       if (st.state === 'no') line(d, 'slot', 'var(--mh-bad)', 'none yet');
-      else line(d, 'backup', st.state === 'ok' ? 'var(--mh-accent)' : 'var(--mh-warn)', agoS(st.age));
+      // The comet runs only while a backup is actually uploading; at rest the line just carries the last copy's age.
+      else if (backupRunning()) line(d, 'backup', 'var(--mh-accent)', 'backing up', true);
+      else line(d, 'backup', st.state === 'ok' ? 'var(--mh-accent)' : 'var(--mh-warn)', agoS(st.age), false);
     }
     // Standby (beside): a level line from Main's disc edge. Dashed and labelled while nothing reaches it.
     const row = [...rowMn.children], mi = row.indexOf(mainEl);
@@ -264,9 +320,12 @@ export default function setup(api) {
       line(`M${sx.toFixed(1)} ${md.cy.toFixed(1)} L${ex.toFixed(1)} ${b.cy.toFixed(1)}`, 'slot', '', el.dataset.act || el.dataset.fit === 'ok' ? '' : 'off');
     });
     // People (below): from under Main's name up from each person or device, as if talking to it.
+    // Drawn from the person up to Main; while sessions are working, a comet travels up each line toward Main.
+    const talking = S.ws === 'mine' && sessions().working > 0;
     for (const el of rowHp.querySelectorAll?.('.mh-pnode') || []) {
       const b = box(el), sx = mn.cx, sy = mn.b + 2, ex = b.cx, ey = b.t - 4, k = (ey - sy) * .55; if (ey <= sy) continue;
-      line(`M${sx.toFixed(1)} ${sy.toFixed(1)} C${sx.toFixed(1)} ${(sy + k).toFixed(1)} ${ex.toFixed(1)} ${(ey - k).toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}`, 'slot');
+      const d = `M${ex.toFixed(1)} ${ey.toFixed(1)} C${ex.toFixed(1)} ${(ey - k).toFixed(1)} ${sx.toFixed(1)} ${(sy + k).toFixed(1)} ${sx.toFixed(1)} ${sy.toFixed(1)}`;
+      if (talking) line(d, 'talk', 'var(--mh-accent)', '', true); else line(d, 'slot');
     }
   }
 
@@ -359,6 +418,8 @@ export default function setup(api) {
     if (!b || b === root) return;
     const d = b.dataset || {};
     if (d.ws) return setWs(d.ws);
+    if (d.fwd) return api.data.read.sessions?.open(d.fwd);
+    if (d.resOpen) return;  // the shell's resources sheet opens the AI view itself
     if (d.act === 'close') return closeSheet();
     if (d.act === 'humans') return select('humans');
     if (d.act === 'add-managed') return soon('Adding a Main you manage');
@@ -372,7 +433,7 @@ export default function setup(api) {
   /* ---------- data ---------- */
   // Repaint the map only when what it draws changed (roles, reachability, sizes, backup age); cards follow every poll.
   let drawn = '';
-  const mapSig = () => JSON.stringify([S.ws, managedList().map(m => [m.id, peopleOf(m).names, peopleOf(m).count]), devices().map(d => [d.id, d.status, d.cpus, d.memoryTotalGB, diskGB(d)]), humans().map(p => [p.name, p.online]),
+  const mapSig = () => JSON.stringify([S.ws, sessions(), backupRunning(), fuel(), devices().map(d => [d.cpu, d.memory, d.disks?.[0]?.pct].map(v => v == null ? null : Math.round(v / 5))), managedList().map(m => [m.id, peopleOf(m).names, peopleOf(m).count]), devices().map(d => [d.id, d.status, d.cpus, d.memoryTotalGB, diskGB(d)]), humans().map(p => [p.name, p.online]),
     S.backupErr, S.backup?.backup ? [S.backup.backup.state, S.backup.backup.last?.last_success_at, storage()?.age == null ? null : agoS(storage().age)] : !!S.backup, (S.backup?.standby?.space_warnings || []).map(w => w.fits)]);
   const read = state => {
     if (state) S.res = state;
@@ -391,7 +452,7 @@ export default function setup(api) {
 
   /* ---------- mount at Home; keep it there across Home repaints ---------- */
   const mount = () => { if (api.slot.mount('home-main', root)) { api.data.read.resources.refresh(); api.frame(drawLines); } };
-  api.on('home', mount);
+  api.on('home', () => { mount(); read(); });
   api.on('route', () => { mount(); readBackup(); });
   let ro = null;
   if (typeof ResizeObserver === 'function') { ro = new ResizeObserver(() => api.frame(() => { drawLines(); if (wide() && S.ws === 'mine' && !panel.firstChild) renderMap(); })); ro.observe(map); }
