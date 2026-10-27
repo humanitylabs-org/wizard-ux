@@ -3996,6 +3996,8 @@
     openThread: id => openWizardThread(id),
     goDesk: i => goDesk(i),
     newThread: () => { const w = skinChatsWin(); if (w) CHATS.openChat(w.id, '__new__'); },
+    // Inbox tweak: answer a notification in this Chats window (the Notifications Reply path); words send it at once.
+    contextDraft: (key, item, words) => { const w = skinChatsWin(); if (!w) return false; CHATS.openContextDraft(w.id, key, item); CHATS.renderChats(w); if (words) CHATS.sendChat(w.id, words, 'tapping Resolve this on a notification in Chats'); return true; },
     models: () => { const w = skinChatsWin(); return w ? CHATS.tweakModels(w.id) : []; },
     model: (choice, alive) => { const w = skinChatsWin(); return w ? CHATS.tweakModel(w.id, choice, alive) : null; },
     deskCount: () => desks.length,

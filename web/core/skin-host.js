@@ -445,6 +445,23 @@
     if (caps.has('data.read')) api.data = Object.freeze({ read: Object.freeze({ resources: Object.freeze({
       snapshot: () => structuredClone(window.WosResources?.state || {}), refresh: () => window.WosResources?.sync(),
     }) }) });
+    // Trusted packages may show the Notifications inbox (core/notif-bell.js) in Chats: watch unread items, mark one
+    // done, or answer it in a new chat (the shell's context-draft path; `words` sends at once). No fetch crosses this
+    // boundary and every handle dies with the package.
+    if (caps.has('inbox')) api.inbox = Object.freeze({
+      watch(fn) {
+        if (a.dead || typeof fn !== 'function' || !window.WosBell?.watch) return () => {};
+        const g = guard(a, 'inbox.watch', fn);
+        const off = window.WosBell.watch(items => { if (!a.dead) g(items); });
+        a.offs.add(off); return off;
+      },
+      done: id => a.dead || !window.WosBell?.mark ? Promise.resolve(false) : window.WosBell.mark([String(id)], { archived: true, read: true }),
+      reply(id, words = '') {
+        if (a.dead) return false;
+        const it = window.WosBell?.item?.(id); if (!it || typeof shell?.contextDraft !== 'function') return false;
+        return !!shell.contextDraft('notifications:' + it.id, { title: it.title, message: it.message }, String(words || ''));
+      },
+    });
     return Object.freeze(api);
   }
   async function loadTweaks(entries, contract, { teamAuthors = [], trustedAuthors = [] } = {}) {
@@ -459,7 +476,7 @@
         const response = await bounded(fetch(tweakUrl(id, 'manifest.json'), { cache: 'no-store' }));
         if (!response.ok) throw new Error('Manifest unavailable');
         const m = await response.json();
-        if (m.id !== id || m.author !== id.split('/')[0] || typeof m.version !== 'string' || !Array.isArray(m.capabilities) || m.capabilities.some(c => !['layout','nav','models','data.read'].includes(c))) throw new Error('Invalid manifest');
+        if (m.id !== id || m.author !== id.split('/')[0] || typeof m.version !== 'string' || !Array.isArray(m.capabilities) || m.capabilities.some(c => !['layout','nav','models','data.read','inbox'].includes(c))) throw new Error('Invalid manifest');
         if (m.apiVersion !== contract.apiVersion) throw new Error('Incompatible API version');
         const mod = await bounded(importer(tweakUrl(id, 'tweak.js')));
         if (seq !== tweakSeq) return false;

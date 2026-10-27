@@ -202,3 +202,19 @@ test('app.js tells the host when the bound view beside a thread changes, and rep
   assert.ok(JSON.parse(read('web/core/slots.json')).slots['device-edge']);
   assert.match(app, /beside: device\.classList\.contains\('bound-peeking'\) \? 1 : device\.classList\.contains\('bound-view-peeking'\) \? -1 : 0/);
 });
+
+test('inbox capability is trusted-only, and its handles die with the package', async () => {
+  const f = fixture(); let api;
+  f.host._test.setImporter(async () => ({ default: value => { api = value; return () => {}; } }));
+  await f.host.loadTweaks(['miguel/unified-inbox'], f.slots);
+  assert.equal(api.inbox, undefined, 'an untrusted package gets no inbox');
+  await f.host.loadTweaks(['miguel/unified-inbox'], f.slots, { teamAuthors: ['miguel'] });
+  const seen = []; api.inbox.watch(items => seen.push(items.length));
+  f.inbox.push([{ id: 'a', title: 't', message: 'm', time: 1 }]); assert.deepEqual(seen, [1]);
+  assert.equal(api.inbox.reply('a', 'go'), true); assert.deepEqual(f.inbox.replies, [['a', 'go']]);
+  assert.equal(api.inbox.reply('missing'), false, 'only a listed notification can be answered');
+  await api.inbox.done('a'); assert.deepEqual(f.inbox.done, ['a']);
+  const stale = api.inbox; await f.clear();
+  assert.equal(f.inbox.watchers(), 0, 'teardown stops watching');
+  assert.equal(stale.reply('a'), false); assert.equal(await stale.done('a'), false); f.inbox.push([]); assert.deepEqual(seen, [1], 'stale handles are inert');
+});
