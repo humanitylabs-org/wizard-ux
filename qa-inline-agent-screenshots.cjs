@@ -27,12 +27,14 @@ fs.mkdirSync(out, { recursive: true });
       await page.goto(base + '/?session=inline_screenshots_preview', { waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => document.querySelectorAll('.msg.a .mimg').length === 2);
       await page.waitForFunction(() => [...document.querySelectorAll('.msg.a .mimg img')].every(i => i.complete && i.naturalWidth > 0));
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(700); // let skin-package layout and view-entry transitions settle
       const positions = await page.evaluate(() => {
         const bub = document.querySelector('.msg.a .bub'), imgs = [...bub.querySelectorAll('.mimg')];
         const paragraphs = [...bub.querySelectorAll(':scope > p')];
         return { ys: [paragraphs[0], imgs[0], paragraphs[1], imgs[1], paragraphs[2]].map(e => e.getBoundingClientRect().top),
           ids: imgs.map(e => e.getAttribute('data-med')), count: imgs.length,
-          raw: /helm_attachments|MEDIA:|!\[Image\]/.test(bub.textContent), overflow: document.documentElement.scrollWidth > innerWidth,
+          raw: /helm_attachments|MEDIA:|!\[Image\]/.test(bub.textContent), overflow: document.documentElement.scrollWidth > innerWidth || bub.getBoundingClientRect().right > innerWidth + 1,
           skin: WosSkin.current };
       });
       ok(positions.ys.every((y, i, a) => !i || y > a[i - 1]), skin + ': text/image/text/image/text order');
@@ -47,7 +49,10 @@ fs.mkdirSync(out, { recursive: true });
       ok(copied.copy === copied.share && copied.copy.includes('First screenshot') && copied.copy.includes('Second screenshot') && !/attachments\/|!\[Image\]|helm_attachments/.test(copied.copy), skin + ': copy/share preserve explanation without private image URLs');
       for (let i = 0; i < 2; i++) {
         await page.locator('.msg.a .mimg').nth(i).tap();
-        await page.waitForFunction(() => WosChat.viewer.state.open && document.querySelector('.mv-stage img')?.naturalWidth > 0);
+        await page.waitForFunction(() => {
+          const viewer = document.querySelector('.mviewer.open'), image = viewer?.querySelector('.mv-stage img');
+          return WosChat.viewer.state.open && image?.naturalWidth > 0 && getComputedStyle(viewer).opacity === '1';
+        });
         const state = await page.evaluate(() => WosChat.viewer.state);
         ok(state.i === i && state.n === 2 && state.kind === 'image', skin + ': thumbnail ' + (i + 1) + ' opens full gallery viewer');
         if (i === 0) { const name = `${skin}-viewer-phone.png`; await page.screenshot({ path: path.join(out, name) }); evidence.screenshots.push(name); }
