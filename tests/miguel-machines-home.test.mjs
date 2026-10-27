@@ -85,4 +85,5 @@ test('machines-home: storage above, helpers | Main | standby across, people belo
   assert.match(src, /setLane\(rowHp, \[managedPeople\(g\)\]/);
   assert.match(src, /g\?\.peopleCount/); assert.match(src, /g\?\.people\)/);
   assert.match(css, /\.mh-pnode \{/); assert.match(css, /\.mh-spec \{/);
+  assert.match(src, /roleText: 'Standby device', state: m\.fit === 'ok' \? 'Ready' : 'Not ready'/, 'category label and status are separate');
 });

@@ -177,6 +177,7 @@ export default function setup(api) {
     if (role !== 'main' && fit) { disc.append(ring({ ok: 1, tight: .62, no: .3 }[fit])); disc.append(h('span', { cls: 'mh-badge', 'aria-hidden': 'true' }, fit === 'ok' ? ico('check') : h('b', { text: '!' }))); }
     const el = h('button', { type: 'button', cls: `mh-node is-${role}`, data: { id: m.id, role, fit }, 'aria-pressed': String(S.sel === m.id), 'aria-label': `${m.name}, ${opts.roleText || role}`, style: { '--s': String(s) } },
       h('span', { cls: 'mh-hold' }, disc), h('span', { cls: 'mh-name', text: m.name }), h('span', { cls: 'mh-role', text: opts.roleText || role }),
+      opts.state ? h('span', { cls: 'mh-state', data: { fit }, text: opts.state }) : null,
       spec(m) ? h('span', { cls: 'mh-spec', text: spec(m) }) : null);
     return el;
   }
@@ -193,7 +194,7 @@ export default function setup(api) {
     if (g) {
       // Their network's shape, honestly empty: the rows are there, what fills them is not readable yet.
       const ghost = (role, label) => { const n = plus(role, label, SOON); n.dataset.act = 'soon'; n.dataset.what = `${g.name}’s ${label.toLowerCase()}`; n.classList.add('is-ghost'); return n; };
-      setLane(rowMn, [ghost('helper', 'Helpers'), node({ id: 'managed-' + g.id, name: g.name, kind: 'server' }, 'main', { size: 72, roleText: 'Main' }), ghost('standby', 'Standby')]);
+      setLane(rowMn, [ghost('helper', 'Helpers'), node({ id: 'managed-' + g.id, name: g.name, kind: 'server' }, 'main', { size: 72, roleText: 'Main' }), ghost('standby', 'Standby devices')]);
       setLane(rowSt, [ghost('storage', 'Storage')]); setLane(rowHp, [managedPeople(g)].filter(Boolean));
       note.replaceChildren(managedCard(g));
       panel.replaceChildren(managedCard(g, true));
@@ -203,8 +204,8 @@ export default function setup(api) {
     // Only a real answer from the Backup app may say "no storage yet"; a failed read says so instead.
     setLane(rowSt, st ? [node(st, 'storage', { fit: st.state, roleText: 'Storage' })] : S.backup?.backup ? [plus('storage', 'Add storage', 'Holds encrypted backups')]
       : [h('p', { cls: 'mh-wait', text: S.backupErr ? 'Backup status unavailable right now' : 'Checking backups…' })]);
-    const helpers = hps.length ? hps.map(id => node(machine(id), 'helper', { roleText: 'Helper' })) : [plus('helper', 'Add helper', SOON)];
-    setLane(rowMn, [...helpers, node(main, 'main', { roleText: 'Main' }), ...sbs.map(m => node(m, 'standby', { fit: m.fit, roleText: m.fit === 'ok' ? 'Standby' : 'Not ready' }))]);
+    const helpers = hps.length ? hps.map(id => node(machine(id), 'helper', { roleText: 'Helper device' })) : [plus('helper', 'Add helper', SOON)];
+    setLane(rowMn, [...helpers, node(main, 'main', { roleText: 'Main' }), ...sbs.map(m => node(m, 'standby', { fit: m.fit, roleText: 'Standby device', state: m.fit === 'ok' ? 'Ready' : 'Not ready' }))]);
     setLane(rowHp, [minePeople()].filter(Boolean));
     if (wide()) { if (!S.sel) S.sel = 'this'; panel.replaceChildren(card(S.sel)); }
     api.frame(drawLines);
