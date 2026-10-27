@@ -23,3 +23,5 @@ html[data-skin="obsidian-light"] .ui-act.resolve { color: #fff !important; }
 html:not([data-shell="desktop"]) .ch-list .ch-sec-b > [data-slot="ready-top"] > .ui-inbox { flex-direction: column-reverse; }
 /* An opened notification scrolls clear of the phone's dock and New chat button, so its buttons are reachable. */
 html:not([data-shell="desktop"]) .ui-item { scroll-margin-bottom: 170px; scroll-margin-top: 12px; }
+/* Desktop: clear the list's New chat button too. */
+.ui-item { scroll-margin-bottom: 76px; }
