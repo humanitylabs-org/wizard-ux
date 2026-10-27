@@ -9,9 +9,9 @@
  *                                 (web/skins/README.md), run as a WosSkinHost.builtin on every skin
  * Both paths are fixed and same-origin: the layer is part of the box's own shell build, not an agent-editable file.
  *
- * Nothing loads unless the box provides one. A stock box (no my-release.json, or one without `layer`) never sets
- * html[data-mine] and requests nothing else. The last answer is cached so a box with a layer paints it with the first
- * frame; the file is re-read on every load and a layer that went away is removed again.
+ * Nothing loads unless Developer mode is confirmed on by the server and the box provides a layer. A stock box (no my-release.json, or one without `layer`) never sets
+ * html[data-mine] and requests nothing else. Cached layers never bypass Developer mode; the file is re-read after
+ * the shared setting is known, and a layer that went away is removed again.
  * `?mine=off` skips the layer for one load (stock behaviour on the picked skin), for comparing or for a layer that
  * breaks something.
  *
@@ -32,7 +32,6 @@
   try { off = new URLSearchParams(location.search).get('mine') === 'off'; } catch (_) {}
   const state = { off, css: false, js: false, checked: false };
   let link = null, jsStarted = false;
-  const cached = () => { try { return JSON.parse(localStorage.getItem(CACHE) || 'null'); } catch (_) { return null; } };
   const remember = v => { try { if (v) localStorage.setItem(CACHE, JSON.stringify(v)); else localStorage.removeItem(CACHE); } catch (_) {} };
 
   // Right after core/skins.css. This script runs first in <head>, before the parser has made that link, so a cached
@@ -69,23 +68,33 @@
     state.css = !!v?.css; state.js = !!v?.js;
     if (off || !(state.css || state.js)) {
       delete root.dataset.mine;
+      window.WosSkinHost?.removeBuiltin?.('owner-layer'); jsStarted = false;
       if (link) { link.remove(); link = null; }
       return;
     }
     root.dataset.mine = '';
     if (state.css) addCss(); else if (link) { link.remove(); link = null; }
-    if (state.js) startJs();
+    if (state.js) startJs(); else { window.WosSkinHost?.removeBuiltin?.('owner-layer'); jsStarted = false; }
   }
-  // First paint from the last answer; then the real answer from the box.
-  if (!off) apply(cached());
-  const ready = off ? Promise.resolve(state) : fetch(FILE, { credentials: 'same-origin', cache: 'no-store' })
-    .then(r => (r.ok ? r.json().catch(() => null) : null))
-    .then(d => {
+  // Fail closed until the shared server-backed Developer mode setting is known.
+  // A stale release file or cached layer must never turn developer tools on.
+  let resolveReady;
+  const ready = new Promise(resolve => { resolveReady = resolve; });
+  async function mode(enabled) {
+    if (!enabled || off) { remember(null); apply(null); state.checked = true; resolveReady(state); return; }
+    try {
+      const r = await fetch(FILE, { credentials: 'same-origin', cache: 'no-store' });
+      const d = r.ok ? await r.json().catch(() => null) : null;
+      // Mode may have changed while the file was in flight.
+      if (!window.WosUpdates?.developer) { apply(null); return; }
       const L = d && typeof d === 'object' && d.layer && typeof d.layer === 'object' ? { css: d.layer.css === true, js: d.layer.js === true } : null;
       const v = L && (L.css || L.js) ? L : null;
       remember(v); apply(v);
-    })
-    .catch(() => {}) // unreachable: keep the cached answer for this load
-    .finally(() => { state.checked = true; });
+    } catch (_) { apply(null); }
+    finally { state.checked = true; resolveReady(state); }
+  }
+  window.addEventListener('wos:developer-mode', e => mode(e.detail === true));
+  if (window.WosUpdates?.state) mode(window.WosUpdates.developer);
+  if (off) mode(false);
   window.WosOwnerLayer = Object.freeze({ on: () => root.dataset.mine != null, get state() { return { ...state }; }, ready: ready.then(() => ({ ...state })) });
 })();

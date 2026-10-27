@@ -1,5 +1,5 @@
-// My release (wizard-os#186) as a general feature: it switches on by DATA (the box serves ../my-release.json or the
-// App Manager returns `release`), never by an owner's name or flag. A stock box looks exactly as before.
+// My release is developer-only; the shared default-off setting must be confirmed by WAM.
+// Release data alone never enables it. A stock box keeps its existing update behaviour.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -9,7 +9,7 @@ const root = new URL('..', import.meta.url).pathname;
 const read = p => readFileSync(join(root, p), 'utf8');
 const src = read('web/core/os-updates.js');
 const tick = () => new Promise(r => setTimeout(r, 0));
-const ST = (o = {}) => ({ mode: 'ask', chosen: true, channel: 'stable', installed: '0.3.32', latest: '0.3.33', stable: '0.3.33', update_available: false, unpinned: false, checked: true, installing: false, interrupted: false, ...o });
+const ST = (o = {}) => ({ developer_mode: true, mode: 'ask', chosen: true, channel: 'stable', installed: '0.3.32', latest: '0.3.33', stable: '0.3.33', update_available: false, unpinned: false, checked: true, installing: false, interrupted: false, ...o });
 const RELEASE = (o = {}) => ({ name: "James's release", base: { ref: 'abc1234', label: 'Latest abc1234' }, build: 'b1', changes: [
   { sha: 'aaa1111', title: 'feat: Home shows the weather (wizard-os#12)', status: 'Mine', date: '2026-10-20' },
   { sha: 'bbb2222', title: 'Bigger send button', status: 'Proposed feature', date: '2026-10-21' },
@@ -53,7 +53,7 @@ test('(b) with my-release.json: the release name, its base, Your changes with ch
   assert.match(h, /<b class="rl-name" data-osu-title>James&#39;s release<\/b>/);
   assert.match(h, /Built on Latest abc1234/);
   assert.match(h, /Your changes<\/span><span class="st-val">4</);
-  assert.doesNotMatch(h, /data-osu="ch-stable"/, 'a release builds on Latest; no channel picker');
+  assert.match(h, /data-osu="ch-main"/, 'developer release can build on Main');
   tap(b.U, 'mine'); h = b.U.html();
   assert.match(h, /<b>Home shows the weather<\/b>/, 'conventional prefix and issue ref dropped');
   assert.match(h, /<b>Quieter notices<\/b>/, 'own label wins');
@@ -97,10 +97,10 @@ test('release card states: Update (behind), Updating, Couldn’t update, Reload 
 test('a release box retries the App Manager status after a failed first read', async () => {
   const b = boot({ release: RELEASE(), failStatus: 1 }); await settle();
   assert.equal(b.U.state, null, 'first status read failed');
-  assert.equal(b.U.release, true);
+  assert.equal(b.U.release, false, 'fail closed until server confirms developer mode');
   await b.U.poll(); await settle();
   assert.equal(b.U.state?.mode, 'ask', 'the poll asked again and got it');
-  assert.match(b.U.html(), /data-osu="ask"/, 'Automatic / Ask me are back');
+  assert.match(b.U.html(), /data-osu="ch-main"/, 'developer controls return after verification');
 });
 
 test('a stock box asks for my-release.json once, then never polls it again', async () => {
@@ -115,13 +115,13 @@ test('Settings: My release leads and folds About in only when the box has a rele
   const s = read('web/core/settings.js');
   assert.match(s, /\{ id: 'release', title: 'My release', available: release \}/);
   assert.match(s, /\{ id: 'about', title: 'About & updates', available: \(\) => !release\(\) \}/);
-  assert.match(s, /const release = \(\) => !!window\.WosUpdates\?\.release;/);
+  assert.match(s, /const release = \(\) => updates\(\)\?\.developer === true/);
   assert.match(s, /return p === 'about' && release\(\) \? 'release' : p;/);
 });
 
 /* ---- (c) owner layer: loads only when the box provides one; ?mine=off disables it ---- */
 const layerSrc = read('web/core/owner-layer.js');
-async function bootLayer({ file = null, search = '', cache = null } = {}) {
+async function bootLayer({ file = null, search = '', cache = null, developer = true } = {}) {
   const store = new Map(cache ? [['wos.ownerLayer.v1', JSON.stringify(cache)]] : []);
   const links = [], imports = [], builtins = [], fetched = [];
   const root = { dataset: {} };
@@ -130,7 +130,7 @@ async function bootLayer({ file = null, search = '', cache = null } = {}) {
     createElement: () => ({ dataset: {}, parentNode: null, remove() { links.splice(links.indexOf(this), 1); this.parentNode = null; } }),
     querySelector: sel => sel.includes('core/skins.css') ? anchor : null, addEventListener() {} };
   const anchor = { nextSibling: null, parentNode: { insertBefore: (l, ref) => { links.push(l); l.parentNode = anchor.parentNode; anchor.nextSibling = l; } } };
-  const window = { WosSkinHost: { builtin: (n, f, o) => builtins.push([n, o]) } };
+  const window = { addEventListener() {}, WosUpdates: { state: {}, developer }, WosSkinHost: { builtin: (n, f, o) => builtins.push([n, o]) } };
   const fetch = async url => { fetched.push(url); return file ? { ok: true, json: async () => file } : { ok: false, status: 404, json: async () => ({}) }; };
   const localStorage = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v), removeItem: k => store.delete(k) };
   const code = layerSrc.replace('import(JS)', '__import(JS)');
@@ -180,6 +180,47 @@ test('(c) both shells load the owner layer first in <head>; skin packages stack 
     assert.ok(h.indexOf('core/owner-layer.js') > 0 && h.indexOf('core/owner-layer.js') < h.indexOf('core/shell.js'), f);
   }
   assert.match(read('web/core/skin-host.js'), /link\[data-owner-layer\]/);
+});
+
+test('developer mode off ignores release data and cached owner layers', async () => {
+  for (const developer_mode of [false, undefined]) {
+    const b = boot({ status: ST({ developer_mode, release: { name: 'Private release', behind: 3 } }), release: RELEASE() });
+    await settle();
+    assert.equal(b.U.release, false);
+    assert.equal(b.U.card(), null);
+    assert.doesNotMatch(b.U.html(), /My release|Your changes|Private release/);
+    assert.equal(b.calls.filter(u => u.endsWith('/my-release.json')).length, 0);
+  }
+  const b = await bootLayer({ developer: false, cache: { css: true, js: true }, file: RELEASE({ layer: { css: true, js: true } }) });
+  assert.equal(b.L.on(), false);
+  assert.deepEqual(b.fetched, []);
+  assert.deepEqual(b.imports, []);
+});
+
+test('ordinary owner polling remains unchanged and never reads a release file', async () => {
+  const b = boot({ status: ST({ developer_mode: false }) }); await settle();
+  const requests = b.calls.length;
+  await b.U.poll(); await b.U.poll();
+  assert.equal(b.calls.length, requests);
+  assert.equal(b.calls.filter(u => u.endsWith('/my-release.json')).length, 0);
+});
+
+test('choosing Main names Main in the confirmation', async () => {
+  const b = boot({ release: RELEASE() }); await settle();
+  const messages = [];
+  b.U.act({ closest: s => s === '[data-osu]' ? { dataset: { osu: 'ch-main' } } : null }, { toast: (...args) => messages.push(args) });
+  await settle();
+  assert.equal(b.U.state.channel, 'main');
+  assert.equal(messages[0][1], 'Release base: Main');
+});
+
+test('staging lists held features and resolved conflicts, never offers automatic feature install', async () => {
+  const b = boot({ status: ST({ channel: 'main', release: { name: 'Developer release', staging: { image: 'test:staged' }, held: [{ title: 'Held feature' }], resolver_merges: [{ sha: 'abcdef123456', core: true }] } }), release: RELEASE() });
+  await settle();
+  assert.match(b.U.html(), /Ready to review/);
+  assert.match(b.U.html(), /Held feature/);
+  assert.match(b.U.html(), /core change, requires review/);
+  assert.doesNotMatch(b.U.html(), /data-osu="auto"/);
 });
 
 test('(d) no file this feature touches names an owner', () => {

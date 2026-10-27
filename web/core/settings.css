@@ -122,7 +122,7 @@
 .st-desktop { display: grid; grid-template-columns: 280px minmax(0, 1fr); height: 100%; gap: 24px; }
 .st-desktop .st-index { overflow-y: auto; padding-right: 16px; border-right: 1px solid var(--wz-border); }
 .st-desktop .st-page { overflow-y: auto; min-width: 0; padding-right: 8px; }
-.st-desktop .st-page-head button { display: none; }
+.st-page-head [data-st-back] { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; flex: none; }
 .st-desktop .st-page-head { min-height: 48px; }
 /* Desktop: shortcuts sit in the narrow category column; list them evenly instead of wrapping. */
 .st-desktop .st-shortcuts { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; margin-top: 16px; }
