@@ -27,7 +27,13 @@ Recommended missing providers reuse `installRelease`: exact source/repo/commit/o
 - EXTEND `WizAppearance` frame discovery for registered same-origin apps in shared link sheets; origin/path checks remain enforced.
 - NEW `WosAppSetup` is the original PR's per-app admission capability in `web/core`, registered in COMPONENTS.md and the responsive inventory. This redesign adds no parallel module.
 
-## Executed verification
+## Current-main integration
+
+The current candidate keeps main's Store sharing/source labels and shell navigation. Nested app links now use the same admission check as launcher opens on both shells; `tests/app-setup-link-admission.test.mjs` exercises the actual entry functions and preserves the deep path. The previously live-only Opening… settlement callback is included so the opening notice ends when the check does.
+
+Focused setup/link tests: 16 passed. The component inventory tests pass without raising their existing size ceiling. Full CI and a fresh disposable-worker browser pass must verify this candidate; the screenshots and counts below describe the earlier checklist revision, not new evidence for the integration.
+
+## Previous checklist evidence
 
 - `npm test`: **761 passed**, zero failed/skipped, including **14 setup unit tests**.
 - `QA_OUT=<evidence-dir> node tests/qa-app-setup.cjs`: **132 browser checks passed**. Real phone/desktop entrypoints in Nebula and Grove, 390 × 844 / 1280 × 844; shared Store rows, hidden advanced copy, one visible primary, expanded-row Back, provider-sheet Back, qualified install → connect, installed signed-out connect without reinstall, ready/optional/private states, nested Store filtering and Appearance, focus/visibility/provider-return rechecks, compatibility fallback, and zero page errors.
