@@ -45,7 +45,7 @@ const server = http.createServer(async(req,res) => {
   const file=path.resolve(WEB,rel);
   if(!file.startsWith(WEB+path.sep)||!fs.existsSync(file)||fs.statSync(file).isDirectory()){res.writeHead(404);return res.end();}
   res.writeHead(200,{'content-type':types[path.extname(file)]||'application/octet-stream'});fs.createReadStream(file).pipe(res);
- } catch(e) {res.writeHead(500);res.end(String(e));}
+ } catch(e) {console.error(e);res.writeHead(500);res.end('Synthetic fixture error');}
 });
 (async()=>{
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
