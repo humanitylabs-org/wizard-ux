@@ -1033,10 +1033,11 @@
   function boundTip(wid) {
     const n = store.get('boundTips', 0); if (n >= 3) return;
     store.set('boundTips', n + 1);
-    const b = boundOf(wid); if (b) toast('▸', `<b>${esc(clip(winTitle(b), 28))}</b> is open beside this thread · swipe the bottom bar to look`, 2600);
+    const b = boundOf(wid); if (b) toast('▸', `<b>${esc(clip(winTitle(b), 28))}</b> is open beside this thread · tap or swipe the right edge to look`, 2600);
   }
   /* The peek (James, 12 Oct 2026: no tab, the bottom bar swipe is enough): on the thread the bound desk leans
-   * 36 px in from the right; on the bound view its thread leans 12 px in from the left. */
+   * 36 px in from the right; on the bound view its thread leans 12 px in from the left. The leaning edge is a
+   * handle too (core/edge-peek.js, told through WosSkinHost.beside): tap or swipe it to move across. */
   function syncPeek() {
     const f = W[desks[idx]?.focus], b0 = f && f.app === 'chats' && f.thread ? boundOf(f.id) : null, b = b0 && b0.bsid === f.thread ? b0 : null;
     const on = !!(b && deskOf(b.id) === idx + 1);
@@ -1088,7 +1089,7 @@
     rvCoach.innerHTML = `<div class="rv-card"><div class="rv-h"><i></i>Review mode</div>
       <p><b>Tap the orb and talk.</b> Your feedback goes to <b>${esc(clip(LIVE?.session(f.from.sid)?.title || (f.from.title !== 'Thread' && f.from.title) || 'the thread you came from', 48))}</b>.</p>
       <p><b>Open app</b> keeps the app on its own desk${f.bound ? ", while this review stays with the thread" : ""}.</p>
-      <p>${f.bound ? "<b>Swipe right on the bottom bar</b> to return to the thread. <b>Back</b> returns too; leaving the thread closes its review view." : "<b>Back</b> or <b>✕</b> closes the review and takes you back."}</p>
+      <p>${f.bound ? "<b>Tap the left edge</b> or swipe right on the bottom bar to return to the thread. <b>Back</b> returns too; leaving the thread closes its review view." : "<b>Back</b> or <b>✕</b> closes the review and takes you back."}</p>
       <button class="rv-ok" type="button">Got it</button></div>`;
     rvCoach.addEventListener('click', () => closeReviewCoach());
     device.appendChild(rvCoach); void rvCoach.offsetWidth; rvCoach.classList.add('open');

@@ -42,7 +42,9 @@ test('⌥↓/⌥↑ walk Ready chats from anywhere into the message box; no ⌥�
 test('⌥E Done and ⌥Z Snooze act on the open chat; the guide shows chat keys in a thread', () => {
   assert.match(js, /code === 'KeyE' \|\| code === 'KeyZ'/);
   assert.match(js, /CHATS\.threadAct\(f\.id, f\.thread, act\)/);
-  assert.match(js, /\['\[data-chact="done"\]', 'E'\], \['\[data-chact="snooze"\]', 'Z'\]/);
+  assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\)\) return hit/);
+  assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\)\) return hit\(\(\) => \{ if \(!e\.repeat\) chatAct\(code === 'ArrowRight' \? 'done' : 'snooze'/);
+  assert.match(js, /\['\[data-chact="done"\]', '→'\], \['\[data-chact="snooze"\]', '←'\]/);
   assert.ok(js.includes("['Enter', 'Send', 'Then back to New chat']") && js.includes("'This chat'"));
 });
 
@@ -56,4 +58,30 @@ test('desktop recordings skip echo cancellation (no music ducking) and pick a wi
   const v = r(new URL('../web/core/voice.js', import.meta.url), 'utf8');
   assert.match(v, /echoCancellation: PHONE/);
   assert.match(v, /if \(wired\) return wired\.deviceId/);
+});
+
+test('Home is ⌥` (again goes back); desktops are ⌥1…9 from the first desk', async () => {
+  const { readFileSync: r } = await import('node:fs');
+  const nav = r(new URL('../web/core/workspace-navigation.js', import.meta.url), 'utf8');
+  const C = {}; new Function('window', nav)({ WizCore: C });
+  assert.deepEqual(C.workspaceNav.digitTarget(1, 3), { kind: 'desktop', index: 0 });
+  assert.deepEqual(C.workspaceNav.digitTarget(4, 3), { kind: 'new', index: 3 });
+  assert.equal(C.workspaceNav.digitTarget(5, 3), null);
+  assert.equal(C.workspaceNav.slot(0), 1);
+  assert.match(js, /code === 'Backquote'\) return hit\(\(\) => \{ if \(e\.repeat\) return; if \(homeOpen\) \{ leaveHome\(\)/);
+  assert.doesNotMatch(js, /code === 'Digit1'\) return hit/);
+  assert.ok(js.includes("['`', 'Home', 'Again to go back']") && js.includes("['1–9', 'Desktop 1 to 9'"));
+});
+
+test('⌥G Pick anything: letter chips on every clickable, typed letters click it, guide lists it', () => {
+  assert.match(js, /code === 'KeyG'\) return hit\(\(\) => \{ if \(!e\.repeat\) pick\.start\(\); \}\)/);
+  assert.match(js, /function onKey\(e, fromFrame = false\) \{\n    if \(pick\.active\(\)\) return pick\.key\(e\);/);
+  assert.match(js, /\[data-chopen\],\[data-chdraft\]/);
+  assert.match(js, /querySelectorAll\('iframe'\)/);
+  assert.ok(js.includes("['G', 'Pick anything',"));
+});
+
+test('the window card in the keys guide never covers the Speak / Switch cards', () => {
+  assert.match(js, /function settle\(c\) \{[\s\S]*?\.kh-speak, \.kh-go[\s\S]*?r\.bottom \+ 12/);
+  assert.equal((js.match(/settle\(c\);/g) || []).length, 2);
 });

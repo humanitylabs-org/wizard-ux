@@ -295,6 +295,10 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/edge-peek.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Skin host built-in: tap or swipe the edge beside a chat thread; no-op on desktop"
+    },
     "core/experience.js": {
       "loadedBy": [
         "phone",
@@ -761,6 +765,7 @@
     "core/core.js",
     "core/deeplink.js",
     "core/dom-morph.js",
+    "core/edge-peek.js",
     "core/experience.js",
     "core/features.js",
     "core/files.js",

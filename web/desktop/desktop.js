@@ -8,7 +8,7 @@
  * Wizard's live data and read state, the durable outbox, voice capture and the native bridge.
  *
  * Keys use ⌥ (Option/Alt) as the window-manager modifier, so they never fight the browser's ⌘ keys:
- *   ⌘K / ⌥Space   search and launch           ⌥1…⌥9      go to workspace
+ *   ⌘K / ⌥Space   search and launch           ⌥` Home, ⌥1…⌥9 go to desktop
  *   ⌥Enter        new chat                    ⇧⌥1…9      send window to workspace
  *   Right ⌘ tap   talk (tap again to send)    ⌥←↑→↓/HJKL focus window
  *   Right ⌥ tap   dictate (tap again: insert at the cursor, else copy)
@@ -172,7 +172,7 @@
     const w = homeOpen && !id ? null : W[id || ws[cur].focus], others = homeOpen ? [] : ws[cur].wins.filter(x => x !== w?.id).map(x => priv(W[x]) ? privName(W[x]) : winTitle(W[x]));
     const a = appOf(w);
     return [
-      `[Wizard OS context] ${window.WizConfig.owner() || 'The user'} sent this by ${how} from Wizard UX on their desktop (workspace ${homeOpen ? 1 : C.workspaceNav.slot(cur)}).`,
+      `[Wizard OS context] ${window.WizConfig.owner() || 'The user'} sent this by ${how} from Wizard UX on their desktop (${homeOpen ? 'Home' : 'workspace ' + C.workspaceNav.slot(cur)}).`,
       w ? `Window in front: ${priv(w) ? privName(w) : winTitle(w)}${a?.url ? ` (${a.url})` : ''}.` : homeOpen ? 'Home screen in front.' : 'No window was open.',
       (s => s ? `Visible on screen: ${s}` : '')(w && w.app !== 'chats' ? (window.WizScreen?.read(winEl(w.id)) || '') : ''),
       others.length ? `Also open on this workspace: ${others.join(', ')}.` : '',
@@ -772,7 +772,7 @@
       ${pending.length ? `<button class="home-unsent" data-home-unsent>${pending.length} ${pending.some(u => u.state === 'failed') ? 'not sent' : 'waiting to send'} · View unsent messages</button>` : ''}
       <h3 class="home-resources-title">Resources</h3>${window.WosResources?.home() || ''}
       <div class="home-apps">${quick.map(a => `<button class="app-chip" data-app="${a.id}">${ico('i', '', a)}${esc(a.name)}</button>`).join('')}</div>
-      <div class="home-keys"><span><kbd>${MOD}1</kbd> Home</span><span><kbd>${MOD}O</kbd> open an app</span><span><kbd>${MOD}Space</kbd> search</span><span><kbd>${MOD}N</kbd> new chat</span><span><kbd>${MOD}V</kbd> new voice chat</span><span><kbd>${MOD}T</kbd> new desktop</span><span><kbd>${MOD}/</kbd> all keys</span></div>
+      <div class="home-keys"><span><kbd>${MOD}\`</kbd> Home</span><span><kbd>${MOD}O</kbd> open an app</span><span><kbd>${MOD}Space</kbd> search</span><span><kbd>${MOD}N</kbd> new chat</span><span><kbd>${MOD}V</kbd> new voice chat</span><span><kbd>${MOD}T</kbd> new desktop</span><span><kbd>${MOD}/</kbd> all keys</span></div>
     </div>`;
   }
   stage.addEventListener('click', e => {
@@ -861,7 +861,7 @@
   nameLabels(); window.addEventListener('wizard:config', nameLabels);
   function commands() {
     return [
-      { kind: 'cmd', name: 'Home', icon: '⌂', keys: `${MOD}1`, run: () => goHome() },
+      { kind: 'cmd', name: 'Home', icon: '⌂', keys: `${MOD}\``, run: () => goHome() },
       { kind: 'cmd', name: 'Open an app', icon: '▦', keys: `${MOD}O`, run: () => openPicker() },
       ...(window.WosResources ? [{ kind: 'cmd', name: 'Resources', icon: '◔', run: () => { goHome(); $('#desktopHome [data-res-open="server"]')?.click(); } }] : []),
       { kind: 'cmd', name: 'Get apps', icon: '+', run: () => openApp(APP['app-store']) },
@@ -1588,9 +1588,9 @@
       ['D', 'Type with your voice', 'Your words go into the box you’re typing in'],
     ];
     const TYPE = [['N', 'New chat', 'Type a new message'], ['␣', 'Search', 'Apps, chats and commands'], ['I', 'Inbox', 'All your chats']];
-    const READY = [['↓', 'Next ready chat', 'From anywhere. Opens it ready to reply'], ['E  Z', 'Done / Snooze', 'The open chat']];
-    const GO = [['1', 'Home', 'Your home screen'], ['2–9', 'Desktop 2 to 9', 'Jump straight to it'], ['[ ]', 'Previous / next desktop', ''], ['`', 'Last desktop', 'Back to where you were'], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
-    const WIN = [['F', 'Full screen', ''], ['W', 'Close', ''], ['R', 'Refresh window', ''], ['H J K L', 'Next window', 'Left, down, up, right'], ['⇧ ← →', 'Swap places', ''], ['⇧ 2–9', 'Send to a desktop', '']];
+    const READY = [['↓', 'Next ready chat', 'From anywhere. Opens it ready to reply'], ['→  ←', 'Done / Snooze', 'The open chat (E / Z work too)']];
+    const GO = [['G', 'Pick anything', 'Letters appear on every button, app and chat; type them to click'], ['`', 'Home', 'Again to go back'], ['1–9', 'Desktop 1 to 9', 'Jump straight to it'], ['[ ]', 'Previous / next desktop', ''], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
+    const WIN = [['F', 'Full screen', ''], ['W', 'Close', ''], ['R', 'Refresh window', ''], ['H J K L', 'Next window', 'Left, down, up, right'], ['⇧ ← →', 'Swap places', ''], ['⇧ 1–9', 'Send to a desktop', '']];
     const vis = n => n && !n.hidden && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
     function chip(n, label) {
       const r = n.getBoundingClientRect(), c = document.createElement('b');
@@ -1604,16 +1604,33 @@
       for (const [k, v] of Object.entries(pos)) c.style[k] = Math.round(v) + 'px';
       return c;
     }
+    // The window card centres on its window but never covers the Speak / Switch cards: slide it into the gap
+    // between them, else drop it below whichever it would hit; keep it on screen.
+    function settle(c) {
+      const fixed = $$('.kh-speak, .kh-go', el).map(n => n.getBoundingClientRect());
+      const w = c.offsetWidth, h = c.offsetHeight, top0 = parseFloat(c.style.top) || 0;
+      let x = Math.round(parseFloat(c.style.left) - w / 2), y = top0;
+      const hits = (x, y) => fixed.filter(r => x < r.right + 12 && x + w > r.left - 12 && y < r.bottom + 12 && y + h > r.top - 12);
+      const clampX = v => Math.max(12, Math.min(innerWidth - w - 12, v));
+      x = clampX(x);
+      if (hits(x, y).length) {
+        const lo = Math.max(12, ...fixed.filter(r => r.left < innerWidth / 2).map(r => r.right + 12));
+        const hi = Math.min(innerWidth - 12, ...fixed.filter(r => r.left >= innerWidth / 2).map(r => r.left - 12));
+        if (hi - lo >= w) x = Math.max(lo, Math.min(hi - w, x));
+        else for (const r of hits(x, y)) y = Math.max(y, r.bottom + 12);
+      }
+      c.style.left = x + 'px'; c.style.top = Math.max(12, Math.min(y, innerHeight - h - 12)) + 'px'; c.style.transform = 'none';
+    }
     function show(pin = pinned) {
       pinned = !!pin;
       el.innerHTML = ''; el.hidden = false; el.classList.toggle('pinned', pinned); // visible first, so chips can be measured
-      const marks = [['#searchBtn', '␣'], ['#micBtn', 'S'], ['#generalVoice', 'V'], ['#commandBtn', 'C'], ['#dictateBtn', 'D'], ['#status', 'I'], ['#settingsBtn', ','], ['#keysBtn', '/'], ['#logo', '1']];
+      const marks = [['#searchBtn', '␣'], ['#micBtn', 'S'], ['#generalVoice', 'V'], ['#commandBtn', 'C'], ['#dictateBtn', 'D'], ['#status', 'I'], ['#settingsBtn', ','], ['#keysBtn', '/'], ['#logo', '`']];
       for (const [q, l] of marks) { const n = $(q); if (vis(n)) chip(n, l); }
       $$('#wsList .ws[data-ws]').forEach(n => { const slot = C.workspaceNav.slot(+n.dataset.ws); if (slot <= 9 && vis(n)) chip(n, String(slot)); });
       const add = $('#wsList [data-newdesk]'); if (vis(add)) chip(add, 'T');
       const top = ($('#bar')?.getBoundingClientRect().bottom || 40) + 26;
       const inChat = !homeOpen && focused()?.app === 'chats' && !!focused()?.thread; // the chat card carries the chat keys; keep this one short
-      card('kh-speak', `<h5>Speak <em>press the same key again to send</em></h5>${rows(SPEAK)}<h5>Ready chats</h5>${rows(inChat ? READY.filter(([k]) => !/E/.test(k)) : READY)}${inChat ? '' : `<h5>Type and find</h5>${rows(TYPE)}`}`, { top, right: 12 });
+      card('kh-speak', `<h5>Speak <em>press the same key again to send</em></h5>${rows(SPEAK)}<h5>Ready chats</h5>${rows(inChat ? READY.filter(([k]) => !/→/.test(k)) : READY)}${inChat ? '' : `<h5>Type and find</h5>${rows(TYPE)}`}`, { top, right: 12 });
       card('kh-go', `<h5>Switch what you see</h5>${rows(GO)}`, { top, left: 12 });
       const f = !homeOpen && focused(), r = f && winEl(f.id)?.getBoundingClientRect();
       const pane = f?.app === 'chats' && winEl(f.id)?.querySelector(f.thread ? '.pane-main' : '.pane-list');
@@ -1622,17 +1639,17 @@
         // In Chats the guide shows what works right here: the open chat or the list.
         const wel = winEl(f.id);
         if (f.thread) {
-          for (const [q, l] of [['[data-chact="done"]', 'E'], ['[data-chact="snooze"]', 'Z'], ['.pane-main .ch-send', '↵']]) wel.querySelectorAll(q).forEach(n => { if (vis(n)) chip(n, l); });
+          for (const [q, l] of [['[data-chact="done"]', '→'], ['[data-chact="snooze"]', '←'], ['.pane-main .ch-send', '↵']]) wel.querySelectorAll(q).forEach(n => { if (vis(n)) chip(n, l); });
         }
-        const here = f.thread ? [['↓', 'Next ready chat', ''], ['E', 'Done', 'Clears it from Ready'], ['Z', 'Snooze', 'Bring it back later']]
+        const here = f.thread ? [['↓', 'Next ready chat', ''], ['→', 'Done', 'Clears it from Ready'], ['←', 'Snooze', 'Bring it back later']]
           : [['↓', 'Next ready chat', 'Opens it ready to reply']];
         const plain = f.thread ? [['Enter', 'Send', 'Then back to New chat'], ['⇧ Enter', 'New line', ''], ['Esc', 'Back to the list', '']] : [['/', 'Search chats', ''], ['↑ ↓', 'Move (no ⌥ when the list is focused)', '']];
         const c = card('kh-win kh-chat', `<h5>${f.thread ? 'This chat' : 'Chat list'}</h5>${rows(here)}<h5>No ⌥ needed</h5>${rows(plain)}<h5>Window</h5>${rows([['F W R', 'Full screen, close, refresh', '']])}`, { top: Math.max(top, pr.top + 44), left: pr.left + pr.width / 2 });
-        c.style.transform = 'translateX(-50%)';
+        settle(c);
       } else if (r && r.width > 420 && r.height > 260) {
         const list = ws[cur].wins.length > 1 ? WIN : WIN.filter(([k]) => !/←/.test(k));
         const c = card('kh-win', `<h5>This window</h5>${rows(list)}`, { top: Math.max(top, r.top + 44), left: r.left + r.width / 2 });
-        c.style.transform = 'translateX(-50%)';
+        settle(c);
       }
       const foot = document.createElement('div'); foot.className = 'kh-foot';
       foot.innerHTML = (pinned ? `<span>Press <kbd>Esc</kbd> to close</span>` : `<span>Hold <kbd>${esc(ALT)}</kbd> and press a key · let go to hide · <kbd>${esc(ALT)}/</kbd> keeps this open</span>`)
@@ -1656,8 +1673,87 @@
       up(e) { if (pinned) return; if (e.code === 'AltLeft' || e.key === 'Alt') { const was = !el.hidden; hide(); if (was) e.preventDefault(); } },
     };
   })();
+
+  /* ⌥G Pick anything (Miguel, 27 Oct 2026: "never touch the trackpad"): every visible button, link, field, app tile
+   * and chat row on screen, the bar and same-origin app windows included, gets a letter chip. Type the letters
+   * (with or without ⌥ still held) to click or focus it; Backspace undoes a letter; Esc, a click or a scroll cancels. */
+  const pick = (() => {
+    const layer = document.createElement('div'); layer.id = 'pickHints'; layer.className = 'pick-hints'; layer.hidden = true;
+    layer.setAttribute('aria-hidden', 'true'); document.body.appendChild(layer);
+    const SEL = 'a[href],button,input:not([type="hidden"]),textarea,select,summary,[contenteditable="true"],[role="button"],[role="link"],[role="option"],[role="tab"],[role="menuitem"],[role="checkbox"],[role="switch"],[data-chopen],[data-chdraft],[tabindex]:not([tabindex="-1"])';
+    const KEYS = 'asdfjklghqwertyuiopzxcvbnm';
+    let items = [], typed = '', on = false;
+    function shown(n, view) {
+      if (n.disabled || n.closest('[hidden],[inert],#pickHints,#keyHints')) return null;
+      const r = n.getBoundingClientRect(); if (r.width < 4 || r.height < 4) return null;
+      const cs = n.ownerDocument.defaultView.getComputedStyle(n); if (cs.visibility === 'hidden' || +cs.opacity === 0 || cs.pointerEvents === 'none') return null;
+      const x = r.left + view.x, y = r.top + view.y;
+      if (x + r.width < view.l || y + r.height < view.t || x > view.r || y > view.b) return null;
+      // Something else painted over its centre (a covered window or a closed sheet) is not pickable.
+      const cx = Math.min(r.right - 1, Math.max(r.left + 1, r.left + r.width / 2)), cy = Math.min(r.bottom - 1, Math.max(r.top + 1, r.top + r.height / 2));
+      const top = n.ownerDocument.elementFromPoint(cx, cy); if (top && top !== n && !n.contains(top) && !top.contains(n)) return null;
+      return { x: Math.max(view.l, x), y: Math.max(view.t, y) };
+    }
+    function collect() {
+      const out = [], seen = new Set();
+      const scan = (doc, view) => {
+        for (const n of doc.querySelectorAll(SEL)) {
+          if (seen.has(n) || (n.parentElement?.closest(SEL) && !n.matches('[data-chopen],[data-chdraft]') && n.parentElement.closest(SEL).matches('a[href],button'))) continue;
+          const at = shown(n, view); if (!at) continue; seen.add(n); out.push({ n, ...at });
+        }
+        for (const f of doc.querySelectorAll('iframe')) {
+          let d = null; try { d = f.contentDocument; } catch (_) {} if (!d || !d.body) continue;
+          const fr = f.getBoundingClientRect(); if (!fr.width || !fr.height || !shown(f, view)) continue;
+          scan(d, { x: view.x + fr.left + f.clientLeft, y: view.y + fr.top + f.clientTop, l: Math.max(view.l, view.x + fr.left), t: Math.max(view.t, view.y + fr.top), r: Math.min(view.r, view.x + fr.right), b: Math.min(view.b, view.y + fr.bottom) });
+        }
+      };
+      scan(document, { x: 0, y: 0, l: 0, t: 0, r: innerWidth, b: innerHeight });
+      return out.sort((a, b) => (a.y - b.y) || (a.x - b.x)).slice(0, KEYS.length * KEYS.length);
+    }
+    function labels(n) {
+      if (n <= KEYS.length) return [...KEYS].slice(0, n);
+      const out = []; for (const a of KEYS) for (const b of KEYS) out.push(a + b); return out.slice(0, n);
+    }
+    function paint() {
+      for (const it of items) {
+        const hit = it.label.startsWith(typed); it.chip.hidden = !hit;
+        if (hit) it.chip.innerHTML = `<u>${typed}</u>${it.label.slice(typed.length)}`.toUpperCase();
+      }
+    }
+    function stop() { if (!on) return; on = false; typed = ''; items = []; layer.hidden = true; layer.innerHTML = ''; document.documentElement.classList.remove('pick-on'); }
+    function start() {
+      closePalette(); toggleKeys(false);
+      const found = collect(); if (!found.length) { toast('◌', 'Nothing to pick here', 1200); return false; }
+      const names = labels(found.length); layer.innerHTML = ''; layer.hidden = false; on = true; typed = '';
+      items = found.map((it, i) => { const c = document.createElement('b'); c.className = 'pick-chip'; layer.appendChild(c);
+        c.style.left = Math.min(innerWidth - 30, it.x) + 'px'; c.style.top = Math.min(innerHeight - 18, it.y) + 'px'; return { ...it, label: names[i], chip: c }; });
+      paint(); document.documentElement.classList.add('pick-on'); log('pick:' + items.length); return true;
+    }
+    function act(n) {
+      const doc = n.ownerDocument, win = (doc === document ? n : doc.defaultView.frameElement)?.closest?.('[data-win]');
+      if (win && W[win.dataset.win]) focusWin(win.dataset.win, { scroll: false });
+      const field = n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName) && !/^(button|submit|checkbox|radio|reset|file)$/.test(n.type);
+      try { n.focus({ preventScroll: true }); } catch (_) {}
+      if (!field) n.click();
+      log('pick:act:' + (n.getAttribute('aria-label') || n.textContent || n.tagName).trim().slice(0, 40));
+    }
+    function key(e) {
+      e.preventDefault(); e.stopPropagation();
+      if (/^(Alt|Shift|Meta|Control)/.test(e.code)) return;
+      if (e.key === 'Escape') return stop();
+      if (e.key === 'Backspace') { typed = typed.slice(0, -1); return paint(); }
+      const m = /^Key([A-Z])$/.exec(e.code); if (!m) return stop();
+      const next = typed + m[1].toLowerCase(), left = items.filter(it => it.label.startsWith(next));
+      if (!left.length) return; typed = next;
+      const exact = left.length === 1 && left[0].label === typed ? left[0] : null;
+      if (exact) { stop(); act(exact.n); } else paint();
+    }
+    addEventListener('pointerdown', stop, true); addEventListener('resize', stop); addEventListener('wheel', stop, { capture: true, passive: true });
+    return { start, stop, key, active: () => on };
+  })();
   const NATIVE_MENU = !!window.webkit?.messageHandlers?.wizardNative;
   function onKey(e, fromFrame = false) {
+    if (pick.active()) return pick.key(e);
     if (e.key === 'Escape' && keyHints.pinned()) { e.preventDefault(); e.stopPropagation(); toggleKeys(false); returnToSettings(); return; }
     keyHints.down(e);
     const k = e.key, code = e.code, alt = e.altKey && !e.metaKey && !e.ctrlKey, shift = e.shiftKey;
@@ -1667,8 +1763,10 @@
     // Inside the Wizard Mac app only, its own menu items (⌘N, ⌘T, ⌘W, ⌘,) forward here with their usual Mac meaning.
     const menu = NATIVE_MENU && e.metaKey && !e.ctrlKey && !e.altKey && !shift;
     if (code === 'Comma' && !shift && (alt || menu)) return hit(toggleSettings);
-    // Home is the first icon (⌥1); app desktops follow left to right (⌥2…9).
-    if (alt && !shift && code === 'Digit1') return hit(() => { if (!e.repeat) goHome(); });
+    // Home is ⌥` (the key left of 1, like the Home icon left of the desks); desktops are ⌥1…9 left to right.
+    // ⌥` again from Home goes back to the desktop you were on.
+    if (alt && !shift && code === 'KeyG') return hit(() => { if (!e.repeat) pick.start(); });
+    if (alt && !shift && code === 'Backquote') return hit(() => { if (e.repeat) return; if (homeOpen) { leaveHome(); log('home:back'); } else { goHome(); log('home'); } });
     if ((menu || alt) && !shift && code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
     if ((menu || alt) && !shift && code === 'KeyT') return hit(() => { if (!e.repeat) { closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newDesktop(); } });
     if (alt && !shift && (code === 'ArrowUp' || code === 'ArrowDown')) return hit(() => { if (!e.repeat || focused()?.app === 'chats') { closePalette(); toggleKeys(false); chatsUpDown(code === 'ArrowDown' ? 1 : -1); } });
@@ -1677,14 +1775,18 @@
     if (alt && !shift && code === 'Enter') return hit(() => { if (!e.repeat) newChat(); });
     if (alt && code === 'KeyV') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); talkNew(`${MOD}V`); });
     // ⌥E Done, ⌥Z Snooze: the chat that's open in the focused Chats (or the main Chats on this desk), from either side.
-    if (alt && !shift && (code === 'KeyE' || code === 'KeyZ')) return hit(() => {
-      if (e.repeat) return;
+    // ⌥→ Done, ⌥← Snooze (Miguel, 27 Oct 2026): with a chat open in Chats, the arrows act on it, even from the
+    // message box; anywhere else they stay the window-focus keys. ⌥E / ⌥Z do the same from any window.
+    const chatOpen = () => { const f = focused(); return !homeOpen && f?.app === 'chats' && f.thread && f.thread !== '__new__'; };
+    if (alt && !shift && (code === 'ArrowLeft' || code === 'ArrowRight') && chatOpen()) return hit(() => { if (!e.repeat) chatAct(code === 'ArrowRight' ? 'done' : 'snooze', code === 'ArrowRight' ? '→' : '←'); });
+    if (alt && !shift && (code === 'KeyE' || code === 'KeyZ')) return hit(() => { if (!e.repeat) chatAct(code === 'KeyE' ? 'done' : 'snooze', code.slice(3)); });
+    function chatAct(act, keyName) {
       const f0 = focused(), f = f0?.app === 'chats' ? f0 : ws[cur].wins.map(x => W[x]).find(mainChats);
-      const act = code === 'KeyE' ? 'done' : 'snooze', name = act === 'done' ? 'Done' : 'Snooze';
-      if (homeOpen || !f?.thread || f.thread === '__new__') return toast('✓', `Open a chat first, then ${MOD}${code.slice(3)} = ${name}`, 1800);
+      const name = act === 'done' ? 'Done' : 'Snooze';
+      if (homeOpen || !f?.thread || f.thread === '__new__') return toast('✓', `Open a chat first, then ${MOD}${keyName} = ${name}`, 1800);
       if (!winEl(f.id)?.querySelector(`[data-chact="${act}"]`)) return toast('◷', `${name} appears once the reply is in`, 1800);
       CHATS.threadAct(f.id, f.thread, act);
-    });
+    }
     // ⌥S speak about this screen (replies to the open chat), ⌥C speak a local command, ⌥D dictate into the text box.
     // Same key again sends. Like ⌥V these work from anywhere, even while typing.
     if (alt && !shift && (code === 'KeyS' || code === 'KeyC' || code === 'KeyD')) return hit(() => {
@@ -1709,8 +1811,8 @@
     if (k === 'Escape') { const did = escStep(); if (did || fromFrame) { e.preventDefault(); e.stopPropagation(); } log('esc:' + (did || 'root')); return; }
     if (!pal.hidden) {
       // ⌘K's palette owns the keyboard while open. The app selector lets the window manager's ⌥ chords
-      // through (⌥Enter, ⌥2…9, ⌥[ ], ⌥W…), stepping aside first, so a fresh desktop never traps them.
-      if (palMode !== 'apps' || !alt || !/^(Digit[2-9]|Key[IWFHJKLNTV]|Slash|Comma|Bracket(Left|Right)|Backquote)$/.test(code)) return;
+      // through (⌥Enter, ⌥1…9, ⌥[ ], ⌥W…), stepping aside first, so a fresh desktop never traps them.
+      if (palMode !== 'apps' || !alt || !/^(Digit[1-9]|Key[GIWFHJKLNTV]|Slash|Comma|Bracket(Left|Right))$/.test(code)) return;
       closePalette({ restore: false });
       queueMicrotask(() => { const a = document.activeElement; if (!a || a === document.body || !a.getClientRects().length) restFocus(); });
     }
@@ -1747,7 +1849,6 @@
     if (code === 'Comma') return hit(toggleSettings);
     if (code === 'BracketLeft') return hit(() => { if (shift) return moveDesk(cur, cur - 1); lastWs = cur; goWs((cur - 1 + ws.length) % ws.length); });
     if (code === 'BracketRight') return hit(() => { if (shift) return moveDesk(cur, cur + 1); lastWs = cur; goWs((cur + 1) % ws.length); });
-    if (code === 'Backquote') return hit(() => { const t = lastWs; lastWs = cur; goWs(t); });
     const dir = { ArrowLeft: [-1, 0], KeyH: [-1, 0], ArrowRight: [1, 0], KeyL: [1, 0], ArrowUp: [0, -1], KeyK: [0, -1], ArrowDown: [0, 1], KeyJ: [0, 1] }[code];
     // ⌥ arrows are word/paragraph jumps while typing on a Mac: leave them to the text field (⌥HJKL still move focus).
     if (dir && /^Arrow/.test(code) && typing(e.target)) return;
