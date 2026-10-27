@@ -62,7 +62,7 @@ test('Landscapes phone controls are frosted white glass, not core violet', () =>
     assert.doesNotMatch(r, VIOLET, `${sel} has no violet`);
     assert.match(r, /rgba\(255, 255, 255|#fff/, `${sel} uses white glass or ink`);
   }
-  assert.match(rule(landscapes, `${L} .dock :is(.orb, .orb-fallback)`) || '', /saturate\(0\)/, 'the orb is neutral glass, not violet');
+  assert.equal(rule(landscapes, `${L} .dock :is(.orb, .orb-fallback)`), null, 'the orb keeps its Wizard violet (Miguel, 27 Oct 2026)');
 });
 
 test('phone polish never reaches desktop and keeps the private purple', () => {
@@ -73,4 +73,15 @@ test('phone polish never reaches desktop and keeps the private purple', () => {
     assert.doesNotMatch(block, /\.ms-o\.secure|--secure/, 'private model colour untouched');
   }
   assert.match(landscapes, /html\[data-skin="landscapes"\] \.ms-o\.secure \{ color: var\(--secure\); \}/);
+});
+
+test('Mizel skins keep the violet orb on Dark, Light and Landscapes', () => {
+  const skins = readFileSync(new URL('../web/core/skins.js', import.meta.url), 'utf8');
+  for (const id of ['obsidian', 'obsidian-light', 'landscapes']) {
+    const m = skins.match(new RegExp(`id: '${id}'[^\\n]*orb: \\[([^\\]]+)\\]`));
+    assert.ok(m, `${id} has an orb filter`);
+    const [hue, sat] = m[1].split(',').map(Number);
+    assert.equal(hue, 0, `${id} orb keeps the Wizard hue`);
+    assert.ok(sat >= 1, `${id} orb is coloured, not grey`);
+  }
 });
