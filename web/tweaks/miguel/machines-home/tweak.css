@@ -66,7 +66,7 @@ html[data-shell="phone"] .mh-top { padding-right: 60px; justify-content: flex-st
 .mh-row { position: relative; display: flex; justify-content: center; align-items: flex-start; gap: 12px; }
 .mh-row.is-storage, .mh-row.is-people { gap: 18px; }
 
-.mh-node { --d: calc(var(--s) * var(--mh-k) * 1px); flex: none; width: 96px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.mh-node { --d: calc(var(--s) * var(--mh-k) * 1px); flex: none; width: 112px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .mh-hold { height: var(--hold); width: 100%; display: grid; place-items: center; }
 .mh-row.is-storage .mh-hold { height: calc(var(--d) + 6px); }
 .mh-tap { display: grid; place-items: center; border-radius: 50%; }
