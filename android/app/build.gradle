@@ -42,8 +42,8 @@ android {
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         minSdk 28
         targetSdk 35
-        versionCode 72
-        versionName '0.10.8'
+        versionCode 82
+        versionName '0.10.18'
         // Empty default leaves backup unconfigured; the native Photos screen can connect a server.
         buildConfigField 'String', 'PHOTOS_SERVER', javaString(photosServer)
         buildConfigField 'String', 'HOME_URL', javaString(defaultOrigin ? defaultOrigin + '/wizard-os-home/' : '')
@@ -52,6 +52,9 @@ android {
         // The one certificate (SHA-256) an in-app update must be signed with: the Wizard OS release key.
         buildConfigField 'String', 'UPDATE_SIGNER', '"3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd"'
     }
+
+    // Exercise the real shared JS bridge in the emulator fixture, not a test-side replacement.
+    sourceSets.androidTest.assets.srcDir(rootProject.file('../web/core'))
 
     buildFeatures {
         buildConfig true
@@ -127,6 +130,16 @@ androidComponents {
 }
 
 dependencies {
+    implementation 'androidx.fragment:fragment:1.8.6'
+    implementation 'androidx.biometric:biometric:1.1.0'
+    implementation 'androidx.credentials:credentials:1.5.0'
+    implementation 'androidx.credentials:credentials-play-services-auth:1.5.0'
+    implementation 'fr.acinq.secp256k1:secp256k1-kmp-jvm:0.19.0'
+    implementation 'fr.acinq.secp256k1:secp256k1-kmp-jni-android:0.19.0'
+    // Lightweight RFC8439 ChaCha20 engine; no process-wide JCA provider registration.
+    implementation 'org.bouncycastle:bcprov-jdk18on:1.80'
+    testRuntimeOnly 'fr.acinq.secp256k1:secp256k1-kmp-jni-jvm:0.19.0'
+    testImplementation 'org.json:json:20240303'
     implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
     // window.wizardMizelPort: WebViewCompat.addWebMessageListener (origin-scoped page ⇄ native port).
     implementation 'androidx.webkit:webkit:1.12.1'

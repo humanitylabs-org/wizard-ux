@@ -14,7 +14,7 @@ function setup(online = true, fetch = failedProbe) {
   const L = { ok: false, at: 0, error: '', sessions: [], refreshes: 0, listeners: [], refresh() { this.refreshes++; }, onChange(fn) { this.listeners.push(fn); }, emit() { this.listeners.forEach(fn => fn()); } };
   const ctx = { navigator: { onLine: online }, document: { body, documentElement: element(), getElementById(id) { return nodes.get(id); }, createElement: element }, addEventListener(name, fn) { (events[name] ||= []).push(fn); }, setTimeout(fn) { timers.set(++tid, fn); return tid; }, clearTimeout(id) { timers.delete(id); }, setInterval() {}, AbortSignal: { timeout() { return {}; } }, fetch, console };
   ctx.window = ctx; ctx.WizLive = L;
-  ctx.WizReach = { calls: 0, opened: 0, failure() { this.calls++; return { message: 'Wizard’s Agent Service isn’t responding.', short: 'Agent Service needs attention · retrying' }; }, open() { this.opened++; } };
+  ctx.WizReach = { calls: 0, opened: 0, failure() { this.calls++; return { message: 'Wizard’s Agent Service isn’t responding.', short: 'Reconnecting…' }; }, open() { this.opened++; } };
   ctx.WosOutbox = { waiting: false, retries: 0, listeners: [], unsent() { return this.waiting ? [{ state: 'waiting' }] : []; }, onChange(fn) { this.listeners.push(fn); }, retryAll() { this.retries++; } };
   vm.runInNewContext(source, ctx); ctx.WizCore.status.attach({});
   return { ctx, L, state: () => ctx.WizCore.status.state.net, event(name) { events[name].forEach(fn => fn()); }, success() { L.at++; L.ok = true; L.error = ''; L.emit(); }, settle() { for (const fn of timers.values()) fn(); timers.clear(); } };
