@@ -5,6 +5,8 @@
 .ch-incog-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 4px 8px; color: var(--wz-text); background: var(--wz-surface); border-radius: 12px; flex: 0 0 auto; }
 .ch-incog-toggle:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
 .ch-incognito .ch-head .pbtn { flex: 0 0 auto; }
+.ch-incognito .ch-head .ti { flex-direction: column; align-items: flex-start; gap: 2px; }
+.ch-incognito .ch-incog-toggle > span:first-child { display: none; }
 .ch-incognito .ch-compose { flex: 0 0 auto; }
 .ch-incognito .ch-msgs { min-height: 0; overflow-y: auto; }
 
