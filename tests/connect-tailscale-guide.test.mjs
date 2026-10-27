@@ -26,7 +26,7 @@ test('the step needed now follows what the phone shows; the button sits on that 
   assert.equal((off.match(/data-guide="tailscale"/g) || []).length, 1);
   const on = G.html({ host: 'wizard.tail1234.ts.net', on: true });
   assert.equal(steps(on), 'done,now,done,todo');
-  assert.match(on, /Tailscale is on, but this phone isn’t on your Wizard’s network\./);
+  assert.match(on, /Tailscale is on, but this phone isn’t on your Wizard’s network, or your Wizard is turned off\./);
   assert.match(on, /removed from yours/);
   assert.match(on, /Open Tailscale<\/button>/);
   const android = G.html({ host: 'wizard.tail1234.ts.net', on: false, installed: true, platform: 'android' });

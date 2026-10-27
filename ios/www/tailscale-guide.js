@@ -19,7 +19,7 @@
     eyebrow: 'Can’t reach your Wizard',
     title: 'Your phone isn’t on your Wizard’s private network',
     off: 'Tailscale isn’t running on this phone yet.',
-    wrong: 'Tailscale is on, but this phone isn’t on your Wizard’s network.',
+    wrong: 'Tailscale is on, but this phone isn’t on your Wizard’s network, or your Wizard is turned off.',
     lead: 'Your Wizard is private. Only your own devices can reach it, through <b>Tailscale</b>, a free app that links them securely.',
     get: 'Get Tailscale', signin: 'Sign in with your Wizard’s account', turnOn: 'Turn it on', back: 'Come back here',
     free: 'Free, from Tailscale Inc.', installed: 'Installed and on.', isOn: 'Tailscale is on.',

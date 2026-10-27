@@ -21,7 +21,7 @@ final class TailscaleGuide {
     static final String EYEBROW = "Can’t reach your Wizard";
     static final String TITLE = "Your phone isn’t on your Wizard’s private network";
     static final String OFF = "Tailscale isn’t running on this phone yet.";
-    static final String WRONG = "Tailscale is on, but this phone isn’t on your Wizard’s network.";
+    static final String WRONG = "Tailscale is on, but this phone isn’t on your Wizard’s network, or your Wizard is turned off.";
     static final String LEAD = "Your Wizard is private. Only your own devices can reach it, through <b>Tailscale</b>, a free app that links them securely.";
     static final String GET = "Get Tailscale", SIGN_IN = "Sign in with your Wizard’s account", TURN_ON = "Turn it on", BACK = "Come back here";
     static final String FREE = "Free, from Tailscale Inc.", INSTALLED_ON = "Installed and on.", INSTALLED = "Installed.", IS_ON = "Tailscale is on.";
