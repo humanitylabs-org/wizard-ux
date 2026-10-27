@@ -539,13 +539,13 @@
       for (const id of d.wins) { const ex = stage.querySelector(`.win[data-win="${id}"]`); if (!ex) mountWin(W[id], host); else if (ex.parentNode !== host) host.appendChild(ex); }
       host.hidden = homeOpen || i !== cur;
       let home = host.querySelector('.home');
-      if (!d.wins.length) { if (!home) { home = document.createElement('div'); home.className = 'home'; home.tabIndex = -1; home.setAttribute('role', 'region'); host.appendChild(home); } home.setAttribute('aria-label', `Empty desktop ${C.workspaceNav.slot(i)}`); home.innerHTML = homeHtml(i); }
+      if (!d.wins.length) { if (!home) { home = document.createElement('div'); home.className = 'home'; home.tabIndex = -1; home.setAttribute('role', 'region'); host.appendChild(home); } home.setAttribute('aria-label', `Empty desktop ${C.workspaceNav.slot(i)}`); paintHome(home, homeHtml(i)); }
       else if (home) home.remove();
     }
     $$('.wsp', stage).forEach(el => { if (!ws.some(d => d.id === el.dataset.desk)) el.remove(); });
     const home = $('#desktopHome');
     home.hidden = !homeOpen;
-    if (homeOpen) home.innerHTML = homeHtml(null);
+    if (homeOpen) paintHome(home, homeHtml(null));
     layout(); paintBar(); paintFocus();
     // The selector a new desktop opened belongs to that empty desktop: once an app lands there, or the
     // desktop is left or closed, it steps aside and focus goes where the shell now points.
@@ -776,7 +776,7 @@
   function mineHomeHtml() {
     const G = LIVE?.ok ? LIVE.workGroups() : {}, ready = (G.ready || []).length, working = (G.working || []).length;
     const pending = OUTBOX?.unsent() || [];
-    return `<div class="home-in mine-home">
+    return `<div class="home-in mine-home"><div data-slot="home-main" hidden></div>
       <div class="mh-res">${window.WosResources?.home() || ''}</div>
       <div class="mh-gap"></div>
       ${LIVE?.ok ? '' : '<div class="home-line">Connecting to Wizard…</div>'}
@@ -787,6 +787,8 @@
       ${pending.length ? `<button class="home-unsent" data-home-unsent>${pending.length} ${pending.some(u => u.state === 'failed') ? 'not sent' : 'waiting to send'} · View unsent messages</button>` : ''}
     </div>`;
   }
+  // Home repaints go through the skin host so a tweak's home-main mount survives (plain innerHTML without one).
+  function paintHome(el, html) { if (window.WosSkinHost?.paintHome) window.WosSkinHost.paintHome(el, html); else el.innerHTML = html; }
   function homeHtml(i) {
     if (mine()) return mineHomeHtml();
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
@@ -794,7 +796,7 @@
     const working = LIVE?.ok ? LIVE.workGroups().working || [] : [];
     const rows = list => list.slice(0, 6).map(s => `<button class="home-row" data-thread="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span><span class="nm">${esc(s.title)}</span><time>${esc(ago(LIVE.cardAt(s)))}</time></button>`).join('') || '<div class="home-none">Nothing here.</div>';
     const quick = (window.WizLauncher?.get('desktopQuick') || []).flatMap(id => id === 'wizard' ? [id, ...APPS.filter(a => a.agent).map(a => a.id)] : [id]).map(id => APP[id]).filter(Boolean);
-    return `<div class="home-in">
+    return `<div class="home-in"><div data-slot="home-main" hidden></div>
       <nav class="home-tools" aria-label="System and settings"><button data-home-settings>Settings</button></nav>
       <div class="home-time">${window.WizConfig.hm()}</div>
       <div class="home-date">${window.WizConfig.dateLabel(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' })}${i == null ? '' : ` · Desktop ${C.workspaceNav.slot(i)}`}</div>
@@ -1077,8 +1079,8 @@
   }
   window.addEventListener('wizard:apps', () => {
     if (!pal.hidden) palRender();
-    if (homeOpen) $('#desktopHome').innerHTML = homeHtml(null);
-    const h = wsEl(cur)?.querySelector('.home'); if (h) h.innerHTML = homeHtml(cur);
+    if (homeOpen) paintHome($('#desktopHome'), homeHtml(null));
+    const h = wsEl(cur)?.querySelector('.home'); if (h) paintHome(h, homeHtml(cur));
   });
   palIn.addEventListener('input', () => { palSel = 0; palRender(); });
   palIn.addEventListener('keydown', e => {
@@ -1573,6 +1575,7 @@
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
     if (keyHints.pinned()) { toggleKeys(false); returnToSettings(); return 'keys'; }
+    if (window.WosSkinHost?.back?.()) return 'tweak-overlay'; // a package's own sheet (api.back.push)
     if (window.WosResources?.back()) return 'resources';
     if (closeUsage()) return 'usage';
     if (settingsReturn === 'files') { const nested = CHATS.closeOverlay(); if (nested) { returnToSettings(); return nested; } settingsReturn = ''; }
@@ -1973,10 +1976,10 @@
       if (w.thread) CHATS.loadThread(w);
       syncChatsPane(id);
     }
-    const d = ws[cur]; if (!d.wins.length) { const h = wsEl(cur).querySelector('.home'); if (h) h.innerHTML = homeHtml(cur); }
-    if (homeOpen) $('#desktopHome').innerHTML = homeHtml(null);
+    const d = ws[cur]; if (!d.wins.length) { const h = wsEl(cur).querySelector('.home'); if (h) paintHome(h, homeHtml(cur)); }
+    if (homeOpen) paintHome($('#desktopHome'), homeHtml(null));
   });
-  OUTBOX?.onChange(() => { if (homeOpen) $('#desktopHome').innerHTML = homeHtml(null); else if (!ws[cur].wins.length) { const h = wsEl(cur).querySelector('.home'); if (h) h.innerHTML = homeHtml(cur); } for (const id of ws[cur].wins) { const w = W[id]; if ((w?.app === 'chats' || CHATS.isHosted(id)) && w.thread) { const el = stage.querySelector(`[data-chats="${id}"]`); if (el) CHATS.renderThread(w, el); } } });
+  OUTBOX?.onChange(() => { if (homeOpen) paintHome($('#desktopHome'), homeHtml(null)); else if (!ws[cur].wins.length) { const h = wsEl(cur).querySelector('.home'); if (h) paintHome(h, homeHtml(cur)); } for (const id of ws[cur].wins) { const w = W[id]; if ((w?.app === 'chats' || CHATS.isHosted(id)) && w.thread) { const el = stage.querySelector(`[data-chats="${id}"]`); if (el) CHATS.renderThread(w, el); } } });
   OUTBOX?.onSent((it, res) => {
     if (it.kind === 'new' && LIVE && !LIVE.session(it.sessionId)) {
       LIVE.sessions.unshift({ id: it.sessionId, runtime: 'direct', title: (it.text || 'Voice note').slice(0, 60), status: 'running', runId: res.runId, updatedAt: new Date().toISOString(), lastUserAt: new Date().toISOString(), preview: it.text, source: 'wizard-mobile' });
