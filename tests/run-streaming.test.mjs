@@ -147,3 +147,40 @@ test('a turn with steps but no words yet shows a Working bubble with readable to
   const html = ctx.syncStream(w, c, [], '');
   assert.match(html, /Backup · backup status/); assert.match(html, /Working…/); assert.doesNotMatch(html, /class="bub"/);
 });
+test('a reopened thread whose answer already landed never shows the replayed run twice', () => {
+  const w = { id: 'w', thread: 'sid' }, c = {}, row = {};
+  let callback, closed = 0;
+  const ctx = { LIVE: { pendingRun: () => 'rid', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close: () => closed++ }) },
+    WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }), clip: (s, n) => s.slice(0, n),
+    esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => {}, loadThread: async () => {}, setTimeout: () => 1, clearTimeout: () => {} };
+  vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+  const answer = "**You're right, and that's fixed.**\n\n**What I did:** switched the job.";
+  const turns = [{ u: { text: 'hi' }, a: { at: 5, text: answer, final: true } }];
+  assert.equal(ctx.syncStream(w, c, turns, ''), '');
+  // The run replays from its first event: an interim line, then the same answer with its status trailer.
+  callback({ text: "Now I'll save the rule." + answer + '\n\n[WIZARD_STATUS_V1]{"state":"done"}[/WIZARD_STATUS_V1]', steps: [], terminal: false });
+  assert.equal(ctx.syncStream(w, c, turns, ''), '', 'no provisional copy under the landed answer');
+  assert.equal(c.stream.landed, true); assert.equal(closed, 1);
+  // A real new run whose words are not in the transcript yet still streams.
+  const c2 = {};
+  ctx.LIVE.pendingRun = () => 'rid2';
+  assert.equal(ctx.syncStream(w, c2, turns, ''), '');
+  callback({ text: 'Fresh words', steps: [], terminal: false });
+  assert.match(ctx.syncStream(w, c2, turns, ''), /Fresh words/);
+});
+test('a terminal provisional that never matches the transcript retires after the reconcile window', async () => {
+  const w = { id: 'w', thread: 'sid' }, c = {}, row = {};
+  let callback, clock = 1000, timer = null, repaints = 0;
+  const ctx = { LIVE: { pendingRun: () => 'rid', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close() {} }) },
+    WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }), clip: (s, n) => s.slice(0, n),
+    esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => repaints++, loadThread: async () => {}, setTimeout: fn => (timer = fn, 1), clearTimeout: () => {},
+    Date: { now: () => clock } };
+  vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+  const turns = [{ a: { at: 5, text: 'older answer', final: true } }];
+  ctx.syncStream(w, c, turns, '');
+  callback({ text: 'words never persisted', steps: [], terminal: true }); await settle();
+  assert.match(ctx.syncStream(w, c, turns, ''), /Finishing/);
+  clock += 61000; await timer(); await settle();
+  assert.equal(c.stream.landed, true);
+  assert.equal(ctx.syncStream(w, c, turns, ''), '');
+});
