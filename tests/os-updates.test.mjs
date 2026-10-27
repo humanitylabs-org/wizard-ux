@@ -33,7 +33,7 @@ test('reads the App Manager through the Store listener and registers one Setting
   assert.equal(registered[0].id, 'updates');
   assert.equal(registered[0].available(), true);
   const h = U.html();
-  assert.match(h, /<div class="osu-card" data-osu-card="behind" role="status"><div class="osu-tx"><b data-osu-title>Update available<\/b><span>Wizard OS 0\.3\.15 → 0\.3\.16<\/span><\/div><button type="button" class="osu-go" data-osu="apply" >Update<\/button>/);
+  assert.match(h, /<div class="osu-card" data-osu-card="behind" role="status"><div class="osu-tx"><b data-osu-title>Wizard OS update<\/b><span>Installs tonight when it’s quiet<\/span><\/div><button type="button" class="osu-go" data-osu="apply" >Install now<\/button>/);
   assert.equal(U.cardHtml(), U.card() && h.slice(h.indexOf('<div class="osu-card"'), h.indexOf('</button></div>') + 15), 'the page leads with the same card Settings puts on top');
   assert.match(h, /data-osu="auto" role="radio" aria-checked="true"/);   // Automatic is the default
   assert.match(h, /data-osu="ask" role="radio" aria-checked="false"/);
@@ -47,7 +47,7 @@ test('up to date shows installed version and no Update button; Ask me is shown w
   assert.match(h, /<b data-osu-title>Wizard OS 0\.3\.15<\/b><\/span><span class="st-val">Up to date<\/span>/, 'a quiet value, not an Up to date pill');
   assert.doesNotMatch(h, /data-osu="apply"|osu-card/);
   assert.match(h, /data-osu="ask" role="radio" aria-checked="true"/);
-  assert.match(h, /Nothing installs until you tap Update\./);
+  assert.match(h, /Nothing installs until you tap Install\./);
 });
 
 test('an unpinned box says it is updated by hand and offers no Update', async () => {
@@ -86,8 +86,8 @@ test('choosing a mode and Update now POST the exact bodies with the Store header
   const apply = calls.filter(x => x.method === 'POST').at(-1);
   assert.deepEqual(apply.body, { action: 'apply' });
   assert.equal(U.state.installing, true);
-  assert.match(U.html(), /data-osu-card="building"[^]*<b data-osu-title>Updating…<\/b>/);
-  assert.match(U.html(), /data-osu="apply" disabled>Update</, 'same card, button disabled while it runs');
+  assert.match(U.html(), /data-osu-card="building"[^]*<b data-osu-title>Updating Wizard OS…<\/b>/);
+  assert.match(U.html(), /data-osu="apply" disabled>Install</, 'same card, button disabled while it runs');
   assert.ok(!calls.some(x => x.body && 'force' in x.body));
 });
 
@@ -103,12 +103,12 @@ test('a refused write keeps the old state and tells the owner', async () => {
 test('an update cut short by a reboot says interrupted, retrying, and offers Update now again', async () => {
   const { U } = await load(() => [200, { ...STATUS, installing: false, interrupted: true }]);
   const h = U.html();
-  assert.match(h, /data-osu-card="failed"[^]*<b data-osu-title>Update interrupted<\/b><span>Wizard OS 0\.3\.15 → 0\.3\.16<\/span>/);
+  assert.match(h, /data-osu-card="failed"[^]*<b data-osu-title>Wizard OS update didn’t finish<\/b><span>Tries again tonight<\/span>/);
   assert.match(h, /data-osu="apply" >Try again</);
   const ask = await load(() => [200, { ...STATUS, mode: 'ask', chosen: true, interrupted: true }]);
-  assert.match(ask.U.html(), /<b data-osu-title>Update interrupted<\/b>[^]*>Try again</);
+  assert.match(ask.U.html(), /<b data-osu-title>Wizard OS update didn’t finish<\/b>[^]*>Try again</);
   const old = await load(() => [200, { ...STATUS }]);              // an App Manager without the field: unchanged
-  assert.match(old.U.html(), /<b data-osu-title>Update available<\/b>/);
+  assert.match(old.U.html(), /<b data-osu-title>Wizard OS update<\/b>/);
 });
 
 test('channel picker: hidden on an App Manager without channels, shown with Stable checked when it has them', async () => {
