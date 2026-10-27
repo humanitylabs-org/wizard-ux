@@ -37,19 +37,27 @@
       found = true; const end = m.index + m[0].length;
       if (m[1] !== '/') { if (start === null) visible.push(source.slice(cursor, m.index)); start = end; continue; }
       if (start === null) { cursor = end; continue; }
-      blocks.push(source.slice(start, m.index)); start = null; cursor = end;
+      blocks.push({ raw: source.slice(start, m.index), slot: visible.length }); visible.push(''); start = null; cursor = end;
     }
     if (!found) return { text: source, attachments: [] };
     if (start === null) visible.push(source.slice(cursor));
-    const attachments = [];
-    for (const raw of blocks) {
+    const attachments = [], placed = new Set();
+    for (const { raw, slot } of blocks) {
       try {
         const p = JSON.parse(raw);
         for (const it of Array.isArray(p?.items) ? p.items : []) {
           if (!it || typeof it !== 'object') continue;
           const id = typeof it.id === 'string' ? it.id : '', name = typeof it.name === 'string' ? it.name.trim().slice(0, 120) : '';
           const mime = typeof it.mime === 'string' ? it.mime.trim().toLowerCase().slice(0, 160) : '';
-          if (!HELM_ID.test(id) || !name || !mime || attachments.some(a => a.id === id)) continue;
+          if (!HELM_ID.test(id) || !name || !mime) continue;
+          const prior = attachments.find(a => a.id === id);
+          if (!prior && attachments.length >= 16) continue;
+          // The same envelope is understood by old clients as a bottom attachment.
+          // Only validated image IDs become positioned Markdown, never raw paths/HTML.
+          if (p.inline === true && mime.startsWith('image/') && !placed.has(id)) {
+            visible[slot] += `\n\n![Image](/wizard/attachments/${id})\n\n`; placed.add(id);
+          }
+          if (attachments.some(a => a.id === id)) continue;
           attachments.push({ id, name, mime, kind: kindOf(mime, typeof it.kind === 'string' ? it.kind : ''), bytes: Number(it.bytes) || 0, url: `/wizard/attachments/${id}`,
             transcript: mime.startsWith('audio/') && typeof it.transcript === 'string' ? it.transcript.replace(/\s+/g, ' ').trim().slice(0, 4000) : '' });
           if (attachments.length === 16) break;
@@ -257,12 +265,13 @@
   const LI = /^( {0,16})([-*+•]|\d{1,9}[.)])(?:[ \t]+(.*)|$)/;
   const TSEP = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
   const isTable = (lines, i) => lines[i].includes('|') && i + 1 < lines.length && lines[i + 1].includes('|') && TSEP.test(lines[i + 1]);
-  const startsBlock = (lines, i) => { const l = lines[i]; return FENCE.test(l) || HEAD.test(l) || HR.test(l) || QUOTE.test(l) || LI.test(l) || isTable(lines, i); };
+  const MEDIA_IMAGE = /^ {0,3}!\[[^\]\n]*\]\((\/wizard\/attachments\/[0-9a-f]{32})\)[ \t]*$/;
+  const startsBlock = (lines, i) => { const l = lines[i]; return MEDIA_IMAGE.test(l) || FENCE.test(l) || HEAD.test(l) || HR.test(l) || QUOTE.test(l) || LI.test(l) || isTable(lines, i); };
   const cells = row => { let r = row.trim(); if (r.startsWith('|')) r = r.slice(1); if (r.endsWith('|') && !r.endsWith('\\|')) r = r.slice(0, -1); return r.split(/(?<!\\)\|/).map(c => c.trim().replace(/\\\|/g, '|')); };
   function codeBlock(code, lang) {
     return `<div class="code"><div class="code-h"><span>${esc(lang || 'Code')}</span><button type="button" data-codecopy>Copy</button><button type="button" data-codeshare>Share</button></div><pre><code>${esc(code)}</code></pre></div>`;
   }
-  function list(lines, i, depth) {
+  function list(lines, i, depth, renderMedia) {
     const first = lines[i].match(LI), base = first[1].length, ordered = /\d/.test(first[2]);
     const start = ordered ? parseInt(first[2], 10) : 1;
     const items = []; let cur = null, loose = false;
@@ -291,13 +300,13 @@
       const t = it.lines[0].match(/^\[([ xX])\][ \t]+(.*)$/);
       if (t) { task = `<span class="tick${t[1] === ' ' ? '' : ' on'}" aria-hidden="true"></span>`; it.lines[0] = t[2]; }
       while (it.lines.length && !it.lines[it.lines.length - 1].trim()) it.lines.pop();
-      let h = blocks(it.lines, depth + 1);
+      let h = blocks(it.lines, depth + 1, renderMedia);
       if (!loose) h = h.replace(/^<p>([\s\S]*?)<\/p>/, '$1');
       return `<li${task ? ' class="task"' : ''}>${task}${h}</li>`;
     }).join('');
     return { html: `<${tag}${ordered && start !== 1 ? ` start="${start}"` : ''}>${lis}</${tag}>`, i };
   }
-  function blocks(lines, depth = 0) {
+  function blocks(lines, depth = 0, renderMedia) {
     let out = '', i = 0, m;
     while (i < lines.length) {
       const l = lines[i];
@@ -309,12 +318,16 @@
         while (i < lines.length && !close.test(lines[i])) body.push(lines[i++]);
         i++; out += codeBlock(body.join('\n'), m[2]); continue;
       }
+      if (renderMedia && (m = l.match(MEDIA_IMAGE))) {
+        const media = renderMedia(m[1]);
+        if (media != null) { out += media; i++; continue; }
+      }
       if ((m = l.match(HEAD))) { const n = m[1].length; out += `<h${n}>${inline(m[2] || '')}</h${n}>`; i++; continue; }
       if (HR.test(l)) { out += '<hr>'; i++; continue; }
       if (QUOTE.test(l)) {
         const body = [];
         while (i < lines.length && lines[i].trim() && ((m = lines[i].match(QUOTE)) || !startsBlock(lines, i))) { body.push(m ? m[1] : lines[i]); m = null; i++; }
-        out += `<blockquote data-quote-source="${esc(body.join("\n"))}">${blocks(body, depth + 1)}<div class="quote-actions" role="group" aria-label="Quote actions"><button type="button" data-quotecopy aria-label="Copy quote">Copy</button><button type="button" data-quoteshare aria-label="Share quote">Share</button></div></blockquote>`; continue;
+        out += `<blockquote data-quote-source="${esc(body.join("\n"))}">${blocks(body, depth + 1, renderMedia)}<div class="quote-actions" role="group" aria-label="Quote actions"><button type="button" data-quotecopy aria-label="Copy quote">Copy</button><button type="button" data-quoteshare aria-label="Share quote">Share</button></div></blockquote>`; continue;
       }
       if (isTable(lines, i)) {
         const head = cells(lines[i]), al = cells(lines[i + 1]).map(c => /^:-+:$/.test(c) ? 'center' : /-:$/.test(c) ? 'right' : /^:/.test(c) ? 'left' : '');
@@ -324,14 +337,14 @@
         out += `<div class="tbl"><table><thead><tr>${head.map((c, k) => td('th', c, k)).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${head.map((_, k) => td('td', r[k] ?? '', k)).join('')}</tr>`).join('')}</tbody></table></div>`;
         continue;
       }
-      if (LI.test(l)) { const r = list(lines, i, depth); out += r.html; i = r.i; continue; }
+      if (LI.test(l)) { const r = list(lines, i, depth, renderMedia); out += r.html; i = r.i; continue; }
       const para = [];
       while (i < lines.length && lines[i].trim() && !(para.length && startsBlock(lines, i))) para.push(lines[i++].trim());
       out += `<p>${inline(para.join('\n')).replace(/\n/g, '<br>')}</p>`;
     }
     return out;
   }
-  const md = src => blocks(String(src || '').replace(/\r\n?/g, '\n').replace(/\t/g, '    ').split('\n'));
+  const md = (src, renderMedia) => blocks(String(src || '').replace(/\r\n?/g, '\n').replace(/\t/g, '    ').split('\n'), 0, renderMedia);
 
   /* ================= Bangkok time ================= */
   const TZ = () => (window.WizConfig && window.WizConfig.timeZone && window.WizConfig.timeZone()) || 'UTC';
