@@ -15,7 +15,7 @@
  *   ⌥I            Chats                       ⇧⌥←→       swap window
  *   ⌘W / ⌥W       close app                   ⌥F         full screen
  *   ⌥R            refresh the focused window (keeps it open, in place)
- *   ⌥/            all keys                    ⌥[ ⌥]      previous / next workspace
+ *   ⌥/            all keys                    ⌥[ ⌥]      previous / next window, then desktop
  *   Esc           close the top layer (never leaves the app)
  */
 (async () => {
@@ -620,6 +620,51 @@
     const t = cur + dir; if (t < 0 || t >= ws.length) return;
     lastWs = cur; goWs(t);
   }
+  // ⌥] / ⌥[ (Miguel, 28 Oct 2026): walk this desk's windows left to right first (the order H J K L use), and only
+  // past the last (or first) one step on to the next (or previous) desk. Chats with a chat open is two stops: the
+  // chat list, then the message box. Arriving on a desk with ] starts at its leftmost stop, with [ at its rightmost.
+  // ⌥← / ⌥→ stay Snooze / Done on an open chat.
+  function chatsZone(f) {
+    const el = winEl(f.id), a = document.activeElement;
+    if (a && el?.contains(a)) { if (a.closest('.pane-list')) return 'list'; if (a.closest('.pane-main')) return 'thread'; }
+    return 'list';
+  }
+  const shown = n => !!n && !!n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
+  const twoSides = w => !!(w && w.app === 'chats' && w.thread && shown(winEl(w.id)?.querySelector('.pane-list')) && shown(winEl(w.id)?.querySelector('.pane-main textarea')));
+  // Put the keyboard on one side of a Chats window: the open chat's row in the list, or the message box.
+  function chatsSide(f, side) {
+    const el = winEl(f.id); if (!el) return false;
+    if (side === 'thread') { const ta = el.querySelector('.pane-main textarea'); if (!ta) return false; ta.focus({ preventScroll: true }); return true; }
+    const row = el.querySelector(`.pane-list .ch-row[data-chopen="${CSS.escape(f.thread || '')}"]`) || el.querySelector('.pane-list .ch-row.kbd') || listRows(f.id)[0];
+    if (!row) return false;
+    $$('.pane-list .ch-row.kbd', el).forEach(x => x.classList.remove('kbd')); row.classList.add('kbd');
+    row.focus({ preventScroll: true }); row.scrollIntoView({ block: 'nearest' }); return true;
+  }
+  function deskStops() {
+    const d = ws[cur]; if (homeOpen || !d) return [];
+    const mid = id => { const r = winEl(id).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+    const ids = d.mono ? d.wins.filter(id => winEl(id)) // full screen: the others are hidden; keep the tiling order
+      : d.wins.filter(id => winEl(id) && !winEl(id).classList.contains('gone')).map(id => [id, mid(id)]).sort((a, b) => a[1][0] - b[1][0] || a[1][1] - b[1][1]).map(x => x[0]);
+    return ids.flatMap(id => twoSides(W[id]) ? [[id, 'list'], [id, 'thread']] : [[id, '']]);
+  }
+  // The stop ⌥] (dir 1) or ⌥[ (dir -1) goes to on this desk, or null when it goes on to the next/previous desk.
+  function nextStop(dir) {
+    const stops = deskStops(), f = focused(); if (!stops.length) return null;
+    const i = f ? stops.findIndex(([id, s]) => id === f.id && (!s || s === chatsZone(f))) : -1;
+    if (i < 0) return f && stops.some(([id]) => id === f.id) ? null : stops[dir > 0 ? 0 : stops.length - 1];
+    return stops[i + dir] || null;
+  }
+  function goStop([id, side]) {
+    focusWin(id, { scroll: false });
+    if (!(side && chatsSide(W[id], side))) focusInside(id);
+    log('step:' + (W[id]?.app || id) + (side ? ':' + side : ''));
+  }
+  function stepWin(dir) {
+    const st = !homeOpen && nextStop(dir); if (st) return goStop(st);
+    const from = ws[cur], wasHome = homeOpen; stepDesk(dir); // by desk, not index: leaving an empty desk prunes it
+    if (homeOpen || (ws[cur] === from && !wasHome)) return;
+    const stops = deskStops(); if (stops.length) goStop(stops[dir > 0 ? 0 : stops.length - 1]);
+  }
   function goWs(i, { from } = {}) {
     window.WosResources?.back();
     if (!Number.isInteger(i) || i < 0 || i >= ws.length) return;
@@ -902,8 +947,10 @@
       ...(window.WosResources ? [{ kind: 'cmd', name: 'Resources', icon: '◔', run: () => { goHome(); $('#desktopHome [data-res-open="server"]')?.click(); } }] : []),
       { kind: 'cmd', name: 'Get apps', icon: '+', run: () => openApp(APP['app-store']) },
       { kind: 'cmd', name: 'New desktop', icon: '+', keys: `${MOD}T`, run: () => newDesktop() },
-      { kind: 'cmd', name: 'Next desktop', icon: '→', keys: `${MOD}]`, run: () => stepDesk(1) },
-      { kind: 'cmd', name: 'Previous desktop', icon: '←', keys: `${MOD}[`, run: () => stepDesk(-1) },
+      { kind: 'cmd', name: 'Next window', icon: '→', keys: `${MOD}]`, run: () => stepWin(1) },
+      { kind: 'cmd', name: 'Previous window', icon: '←', keys: `${MOD}[`, run: () => stepWin(-1) },
+      { kind: 'cmd', name: 'Next desktop', icon: '→', run: () => stepDesk(1) },
+      { kind: 'cmd', name: 'Previous desktop', icon: '←', run: () => stepDesk(-1) },
       { kind: 'cmd', name: 'New chat', icon: '✎', keys: `${MOD}N`, run: () => newChat({ fresh: true }) },
       { kind: 'cmd', name: 'New voice chat', icon: '🎙', keys: `${MOD}V`, run: () => talkNew() },
       { kind: 'cmd', name: `Talk to ${window.WizConfig.agent()}`, icon: '🎙', keys: 'Right ⌘', run: () => talk() },
@@ -1625,9 +1672,9 @@
       ['D', 'Type with your voice', 'Your words go into the box you’re typing in'],
     ];
     const TYPE = [['N', 'New chat', 'Type a new message'], ['␣', 'Search', 'Apps, chats and commands'], ['I', 'Inbox', 'All your chats']];
-    const READY = [['↓', 'Next ready chat', 'From anywhere. Opens it ready to reply'], ['→  ←', 'Done / Snooze', 'The open chat (E / Z work too)'], ['X', 'Resolve this', 'An open notification: stop these or fix the cause']];
-    const GO = [['G', 'Pick anything', 'Letters appear on every button, app and chat; type them to click'], ['`', 'Home', 'Again to go back'], ['1–9', 'Desktop 1 to 9', 'Jump straight to it'], ['[ ]', 'Previous / next desktop', ''], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
-    const WIN = [['F', 'Full screen', ''], ['W', 'Close', ''], ['R', 'Refresh window', ''], ['H J K L', 'Next window', 'Left, down, up, right'], ['⇧ ← →', 'Swap places', ''], ['⇧ 1–9', 'Send to a desktop', '']];
+    const READY = [['↓', 'Next ready chat', 'From anywhere. Opens it ready to reply'], ['→  ←', 'Done / Snooze', 'The open chat'], ['X', 'Resolve this', 'An open notification: stop these or fix the cause']];
+    const GO = [['G', 'Pick anything', 'Letters appear on every button, app and chat; type them to click'], ['`', 'Home', 'Again to go back'], ['1–9', 'Desktop 1 to 9', 'Jump straight to it'], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
+    const WIN = [['F', 'Full screen', ''], ['W', 'Close', ''], ['R', 'Refresh window', ''], ['H J K L', 'Window to the left, below, above, right', ''], [']', 'Next window', 'Past the last one: the next desktop'], ['[', 'Previous window', 'Past the first one: the previous desktop'], ['⇧ ← →', 'Swap places', ''], ['⇧ 1–9', 'Send to a desktop', '']];
     const vis = n => n && !n.hidden && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
     // Every key is a small chip on the thing it acts on (Miguel, 27 Oct 2026: no boxes to read). Only the four
     // Speak keys carry a word, since their buttons don't say what they do. The lists above name each chip for
@@ -1662,9 +1709,11 @@
       pinned = !!pin;
       el.innerHTML = ''; el.hidden = false; el.classList.toggle('pinned', pinned); // visible first, so chips can be measured
       // Top bar: Home, desktops, new desktop, and the Speak buttons with their one-word meaning.
-      // [ ] go on whatever is one step left / right (Home left of desktop 1; nothing past either end).
-      const stepL = homeOpen ? null : cur === 0 ? $('#logo') : $(`#wsList .ws[data-ws="${cur - 1}"]`);
-      const stepR = homeOpen ? $('#wsList .ws[data-ws="0"]') : $(`#wsList .ws[data-ws="${cur + 1}"]`);
+      // [ ] sit on where they go: the next window or Chats side on this desk (left to right), else the desk one
+      // step left / right (Home left of desktop 1; nothing past either end).
+      const winL = nextStop(-1), winR = nextStop(1);
+      const stepL = winL ? null : homeOpen ? null : cur === 0 ? $('#logo') : $(`#wsList .ws[data-ws="${cur - 1}"]`);
+      const stepR = winR ? null : homeOpen ? $('#wsList .ws[data-ws="0"]') : $(`#wsList .ws[data-ws="${cur + 1}"]`);
       const marks = [['#searchBtn', '␣'], ['#status', 'I'], ['#settingsBtn', ','], ['#keysBtn', '/'], ['#logo', '`']];
       for (const [q, l] of marks) { const n = $(q); if (vis(n)) chip(n, l); }
       $$('#wsList .ws[data-ws]').forEach(n => { const slot = C.workspaceNav.slot(+n.dataset.ws); if (slot <= 9 && vis(n)) chip(n, String(slot)); });
@@ -1716,6 +1765,12 @@
           if (!best[k] || dist < best[k].dist) best[k] = { o, dist };
         }
         for (const [k, { o }] of Object.entries(best)) { const t = o.querySelector('.wbar .t') || o.querySelector('.wbar'); if (vis(t)) chip(t, k, 'start'); }
+      }
+      // ] and [ inside this desk: on the title of the window they go to, or on the Chats side (list / message box).
+      for (const [st, l] of [[winR, ']'], [winL, '[']]) {
+        if (!st) continue; const o = winEl(st[0]);
+        const t = st[1] === 'thread' ? o?.querySelector('.pane-main textarea') : st[1] === 'list' ? o?.querySelector('.pane-list') : (o?.querySelector('.wbar .t') || o?.querySelector('.wbar'));
+        if (vis(t)) chip(t, l, st[1] ? 'corner' : 'start');
       }
       // Speak keys last: their words step around anything already placed.
       const speak = [['#micBtn', 'S', 'Talk about this'], ['#generalVoice', 'V', 'New voice chat'], ['#commandBtn', 'C', 'Tell the computer'], ['#dictateBtn', 'D', 'Dictate']]
@@ -1938,8 +1993,9 @@
     if (code === 'KeyR' && !shift) return hit(() => { if (!e.repeat) reloadCurrent(); });
     if (code === 'Slash') return hit(() => toggleKeys());
     if (code === 'Comma') return hit(toggleSettings);
-    if (code === 'BracketLeft') return hit(() => { if (shift) return moveDesk(cur, cur - 1); stepDesk(-1); });
-    if (code === 'BracketRight') return hit(() => { if (shift) return moveDesk(cur, cur + 1); stepDesk(1); });
+    // ⌥] / ⌥[ next / previous window on this desk (Chats: list, then message box), then on to the next / previous desk.
+    if (code === 'BracketLeft') return hit(() => { if (shift) return moveDesk(cur, cur - 1); stepWin(-1); });
+    if (code === 'BracketRight') return hit(() => { if (shift) return moveDesk(cur, cur + 1); stepWin(1); });
     const dir = { ArrowLeft: [-1, 0], KeyH: [-1, 0], ArrowRight: [1, 0], KeyL: [1, 0], ArrowUp: [0, -1], KeyK: [0, -1], ArrowDown: [0, 1], KeyJ: [0, 1] }[code];
     // ⌥ arrows are word/paragraph jumps while typing on a Mac: leave them to the text field (⌥HJKL still move focus).
     if (dir && /^Arrow/.test(code) && typing(e.target)) return;
