@@ -57,3 +57,8 @@ test('managed Wizards keep who uses them: named people and a head count, bounded
   assert.equal(reg.managed[2].peopleCount, undefined, 'a count below the named people adds nothing');
   assert.deepEqual(reg.managed[3], { id: 'd', name: 'D' });
 });
+
+test('registry keeps this Wizard\'s name and its owner for the network map', () => {
+  assert.deepEqual([cleanRegistry({ this: { name: 'Box', wizard: 'Ada', owner: 'Sam' } }).this.wizard, cleanRegistry({ this: { owner: 'Sam' } }).this.owner], ['Ada', 'Sam']);
+  assert.equal(cleanRegistry({ this: { name: 'Box' } }).this.wizard, undefined);
+});

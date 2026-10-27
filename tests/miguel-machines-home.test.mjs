@@ -49,17 +49,15 @@ test('stock Home markup carries an empty home-main slot that takes no space; cor
   assert.doesNotMatch(app + desk + host + read('web/core/resources.js'), /machines-home/);
   assert.ok(JSON.parse(read('web/tweaks/miguel/profile.json')).tweaks.includes('miguel/machines-home'));
 });
-test('machines-home: read-only, no owner data in the bundle, every add says coming soon', () => {
+test('machines-home: read-only, no owner data in the bundle', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js');
   assert.doesNotMatch(src, /method:\s*'(POST|PUT|PATCH|DELETE)'/);
   assert.match(src, /api\.data\.read\.app\('backup', 'overview'\)/);
-  // Roles and managed Wizards come from the owner's devices registry via the Devices feed, never from this file.
+  // Roles, names and managed Wizards come from the owner's devices registry via the Devices feed, never from this file.
   assert.doesNotMatch(src, /['"`][a-z0-9.-]+\.(com|net|org|io|solutions|ts\.net)\b/i, 'no hostnames');
-  assert.doesNotMatch(src, /const (NET|MANAGED)\b/, 'no owner role table');
-  assert.match(src, /S\.res\.devices\?\.managed/); assert.match(src, /d\.use === use/);
-  for (const act of ["'add-managed'", "act: 'add'", "'soon'"]) assert.ok(src.includes(act));
-  assert.match(src, /const soon = what => api\.toast/);
-  assert.match(src, /api\.back\.push\(\(\) => closeSheet\(\)\)/, 'the sheet joins the shell Back order');
+  assert.doesNotMatch(src.replace(/\/\*[\s\S]*?\*\//g, ''), /Miguel|Oscar|HomeServer/, 'no owner names');
+  assert.match(src, /reg\(\)\.this\?\.wizard/); assert.match(src, /reg\(\)\.this\?\.owner/);
+  assert.match(src, /'add-managed'/);
 });
 test('api.back.push: newest package overlay closes first on shell Back; released and teardown entries are gone', async () => {
   const f = fixture(); let api; const closed = [];
@@ -76,32 +74,21 @@ test('api.back.push: newest package overlay closes first on shell Back; released
   assert.match(desk, /if \(window\.WosSkinHost\?\.back\?\.\(\)\) return 'tweak-overlay';/);
 });
 
-test('machines-home: storage above, helpers | Main | standby across, people below talking up to Main', () => {
+test('machines-home: one inline map, the same on every workspace', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), css = read('web/tweaks/miguel/machines-home/tweak.css');
-  assert.doesNotMatch(src, /mh-humans/, 'no devices button in the header any more');
-  assert.doesNotMatch(css, /\.mh-humans/);
-  assert.match(src, /setLane\(rowMn, \[\.\.\.helpers, node\(main, 'main'/);
-  assert.match(src, /setLane\(rowHp, \[minePeople\(\)\]/);
-  assert.match(src, /setLane\(rowHp, \[managedPeople\(g\)\]/);
-  assert.match(src, /g\?\.peopleCount/); assert.match(src, /g\?\.people\)/);
-  assert.match(css, /\.mh-pnode \{/); assert.match(css, /\.mh-spec \{/);
-  assert.match(src, /roleText: 'Standby device', state: m\.fit === 'ok' \? 'Ready' : 'Not ready'/, 'category label and status are separate');
-  assert.match(src, /sbs = helperIds\(\)\.filter\(qualifies\)/, 'a helper that qualifies sits right as a standby device');
-  assert.match(src, /disabled: !ok/, 'Make this a standby device is greyed out unless it qualifies');
-});
-test('machines-home: sessions live in Main, AI fuel is shared on top, compute arcs per machine, backup comet only while running', () => {
-  const src = read('web/tweaks/miguel/machines-home/tweak.js'), css = read('web/tweaks/miguel/machines-home/tweak.css');
-  assert.match(src, /api\.data\.read\.sessions\?\.counts\(\)/, 'counts come from the shell, not its DOM');
-  assert.match(src, /api\.data\.read\.sessions\?\.open\(d\.fwd\)/, 'taps open the same Working / Ready lists');
+  assert.doesNotMatch(src, /showModal|'dialog'|mh-panel|mh-sheet|managedCard/, 'no cards, sheets or side panels');
+  assert.doesNotMatch(src, /ICONS|ico\(/, 'no icons on the map');
+  assert.match(src, /\[main, \.\.\.others\]/); assert.match(src, /sort\(\(a, b\) => power\(b\) - power\(a\)\)/, 'Main first, then by power');
+  assert.match(src, /qualifies\(m\.id\) \? 'standby' : 'helper'/);
+  assert.match(src, /S\.open\.has\(p\.id\)/, 'a person expands to their devices in place');
+  assert.match(src, /data: \{ nick: r\.id \}/); assert.match(src, /input\.focus/, 'the nickname field is ready after one tap');
+  assert.doesNotMatch(src, /r\.left \+ '%' \}\), h\('b'/, 'no percentage next to a battery');
+  assert.match(src, /api\.data\.read\.sessions\?\.counts\(\)/); assert.match(src, /api\.data\.read\.sessions\?\.open\(d\.open\)/);
+  assert.match(src, /agoS\(st\.age\) \+ ' ago'/);
+  assert.match(css, /:is\(\.home, \.home-in\):has\(\[data-slot="home-main"\] > \.mh-root\) \.constellation \{ display: none; \}/);
+  assert.doesNotMatch(css, /mh-orbit|mh-spin|rotate\(360/, 'nothing spins');
+  for (const b of ['setTimeout', 'setInterval', 'requestAnimationFrame', 'innerHTML', 'localStorage', 'querySelector']) assert.ok(!src.includes(b), b);
   const host = read('web/core/skin-host.js'), app = read('web/app.js'), desk = read('web/desktop/desktop.js');
   assert.match(host, /\.\.\.\(trusted \? \{ sessions: Object\.freeze/, 'sessions is trusted-only');
   for (const s of [app, desk]) { assert.match(s, /sessions: \(\) => \{/); assert.match(s, /openSessions: kind =>/); }
-  assert.match(css, /:is\(\.home, \.home-in\):has\(\[data-slot="home-main"\] > \.mh-root\) \.constellation \{ display: none; \}/);
-  assert.match(src, /data: \{ resOpen: 'ai' \}/, 'AI fuel opens the shell AI sheet');
-  assert.match(src, /backupRunning\(\)\) line\(d, 'backup', 'var\(--mh-accent\)', 'backing up', true\)/);
-  assert.match(src, /note\.hidden = true;/, 'no info card under a managed Wizard diagram');
-  for (const k of ['.mh-orbit', '.mh-cbar', '.mh-tank-g']) assert.ok(css.includes(k + ' '), k);
-  assert.doesNotMatch(src, /'AI fuel'/, 'no label on the batteries');
-  assert.match(src, /paid\.type === 'credits'/, 'prepaid credit (Tinfoil) gets a battery too');
-  for (const b of ['setTimeout', 'setInterval', 'requestAnimationFrame', 'innerHTML', 'localStorage']) assert.ok(!src.includes(b), b);
 });
