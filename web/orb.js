@@ -117,6 +117,16 @@ void main(){
     if (canvas.width !== w || canvas.height !== hh) { canvas.width = w; canvas.height = hh; }
   }
   const lerp = (a, b, k) => a + (b - a) * k;
+  // James approved the white app icon in the orb and removal of the centre dot, 27 Oct 2026.
+  // Only the phone's main orb in James's five skins opts in; other skins/native orbs stay unchanged.
+  function coreTarget() {
+    if (canvas.id !== 'orb' || !['nebula', 'grove', 'tide', 'ember', 'signal'].includes(document.documentElement.dataset.skin)) return 1;
+    const icon = canvas.parentElement.querySelector('.orb-app');
+    if (!icon || !icon.hasChildNodes()) return 1;
+    const style = getComputedStyle(icon); // One style read; no geometry/layout query.
+    return style.display !== 'none' && style.visibility !== 'hidden' && style.visibility !== 'collapse' && +style.opacity > .5 ? 0 : 1;
+  }
+  let coreMultiplier = 1;
   const t0 = performance.now();
   let last = t0, phase = 0;
   /* Battery (0.8.5): the orb used to redraw its shader at the screen's full refresh rate (up to 120 fps)
@@ -150,6 +160,7 @@ void main(){
     for (const key of ['a','b','c']) for (let i = 0; i < 3; i++) cur[key][i] = lerp(cur[key][i], target[key][i], k);
     levelS = lerp(levelS, level, 1 - Math.pow(.00002, dt));
     press = lerp(press, pressT, 1 - Math.pow(.0000001, dt));
+    coreMultiplier = lerp(coreMultiplier, coreTarget(), k);
     phase += dt * (0.6 + cur.spin);
     // Not laid out (display:none, immersive full screen): skip the GPU work and check again at the resting rate.
     if (gl && prog && canvas.clientWidth > 0) {
@@ -160,7 +171,7 @@ void main(){
       gl.uniform1f(U.t, (now - t0) / 1000);
       gl.uniform1f(U.lvl, levelS); gl.uniform1f(U.energy, cur.energy);
       gl.uniform1f(U.spin, cur.spin); gl.uniform1f(U.ring, cur.ring);
-      gl.uniform1f(U.core, cur.core); gl.uniform1f(U.press, press); gl.uniform1f(U.R, opts.R || window.ORB_R || .5);
+      gl.uniform1f(U.core, cur.core * coreMultiplier); gl.uniform1f(U.press, press); gl.uniform1f(U.R, opts.R || window.ORB_R || .5);
       gl.uniform3fv(U.cA, cur.a); gl.uniform3fv(U.cB, cur.b); gl.uniform3fv(U.cC, cur.c);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       frames++;
@@ -172,6 +183,20 @@ void main(){
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { last = performance.now(); wake(); } });
   window.addEventListener('resize', wake);
+
+  // Wake even when the host has frozen idle animation: desk paint, CSS transitions, skin,
+  // launcher and recording changes can all change whether the icon is actually visible.
+  if (canvas.id === 'orb' && typeof MutationObserver !== 'undefined') {
+    const host = canvas.parentElement;
+    const iconChanges = new MutationObserver(records => {
+      if (records.some(r => r.type === 'childList' || r.attributeName !== 'style' || r.target !== host)) wake();
+    });
+    iconChanges.observe(host, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'hidden', 'style'] });
+    const appearanceChanges = new MutationObserver(wake);
+    appearanceChanges.observe(document.documentElement, { attributes: true, attributeFilter: ['data-skin', 'data-layout', 'data-shell', 'class', 'style'] });
+    const device = canvas.closest?.('.device');
+    if (device) appearanceChanges.observe(device, { attributes: true, attributeFilter: ['data-voice', 'data-sheet', 'class'] });
+  }
 
   let ok = false;
   if (gl) { try { init(); ok = true; } catch (e) { console.warn('orb shader', e); } }
