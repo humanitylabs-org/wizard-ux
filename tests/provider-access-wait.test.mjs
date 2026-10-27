@@ -15,5 +15,6 @@ test('A saved request waiting for sign-in says it will send automatically, not E
  assert.match(chats,/s\?\.queueReason === 'provider_access' \? '<div class="appr" role="status"><b>Waiting for AI sign-in/)
  assert.match(chats,/s\?\.safeError && !s\?\.reconnect \? \(s\?\.queueReason === 'provider_access' \? ''/)
  assert.match(live,/queueReason: item.queue_reason === 'provider_access' \? 'provider_access' : ''/)
- assert.match(live,/queueReason: s.queueReason, status: s.status/)
+ assert.match(live,/queueReason: s.queueReason/)
+ assert.match(live,/\.\.\.\(s\.status \? \{ status: s\.status \} : \{\}\)/)
 })

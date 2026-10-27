@@ -1010,7 +1010,12 @@
       const list = agent ? (this.agentSessions[agent] = this.agentSessions[agent] || []) : this.sessions;
       const i = list.findIndex(x => x.id === id);
       if (s.id !== id || (s.agent && otherAgent(s.agent) && s.agent !== agent)) throw new Error('Thread scope changed');
-      if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, retryRunId: s.retryRunId, queueReason: s.queueReason, status: s.status, safeError: s.safeError, reconnect: s.reconnect, renames: s.renames, detailNeeded: false,
+      // Detail hydrates content, not list lifecycle: Hermes normally omits status here.
+      // Erasing the projected helper wait makes a finished parent turn flash into Ready
+      // on every open/preload, then back to Working on the next list poll. Explicit
+      // retry failures still carry a status and must remain actionable.
+      if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, retryRunId: s.retryRunId, queueReason: s.queueReason, safeError: s.safeError, reconnect: s.reconnect, renames: s.renames, detailNeeded: false,
+        ...(s.status ? { status: s.status } : {}),
         ...(s.model ? { model: s.model, provider: s.provider, modelLockAt: s.modelLockAt } : {}) };
       else if (this.windows[agent || 'hermes']) DETAIL.set(id, { ...s, detailNeeded: false });
       else list.push({ ...s, detailNeeded: false });
