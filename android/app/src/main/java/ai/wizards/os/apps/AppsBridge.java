@@ -47,19 +47,26 @@ public final class AppsBridge implements AppsInstaller.Listener {
 
     private final Activity activity;
     private final WebView web;
+    private final ai.wizards.os.device.DeviceBridge device;
     private final LinkedHashSet<JavaScriptReplyProxy> frames = new LinkedHashSet<>();
+    // Fingerprint vault is a separate adapter, never Wizard ID key custody.
+    private ai.wizards.os.vault.VaultBridge vault;
+    private long vaultDocument;
+    private boolean vaultDetached;
+    public void onVaultPageStarted() { vaultDocument++; if (vault != null) vault.cancel(); }
+
     private final ExecutorService bg = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
 
-    private AppsBridge(Activity a, WebView w) { activity = a; web = w; }
+    private AppsBridge(Activity a, WebView w, ai.wizards.os.device.DeviceBridge d) { activity = a; web = w; device = d; }
 
     /** Installs the port on {@code web}; null if this WebView can't (old WebView: the view says "update"). */
-    public static AppsBridge install(Activity a, WebView web) {
+    public static AppsBridge install(Activity a, WebView web, ai.wizards.os.device.DeviceBridge device) {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             Log.w(AppsInstaller.TAG, "WebView lacks WEB_MESSAGE_LISTENER: no Android Apps bridge");
             return null;
         }
-        AppsBridge b = new AppsBridge(a, web);
+        AppsBridge b = new AppsBridge(a, web, device);
         try {
             java.util.Set<String> allow = new java.util.HashSet<>(Collections.singleton(AppState.primaryOrigin(a)));
             WebViewCompat.addWebMessageListener(web, NAME, allow, b::onMessage);
@@ -76,6 +83,8 @@ public final class AppsBridge implements AppsInstaller.Listener {
 
     public void detach() {
         if (AppsInstaller.listener == this) AppsInstaller.listener = null;
+        vaultDetached = true;
+        onVaultPageStarted();
         frames.clear();
         bg.shutdown();
     }
@@ -149,11 +158,22 @@ public final class AppsBridge implements AppsInstaller.Listener {
             deviceAnswer(reply, "", null, "invalid request");
             return;
         }
+        // Vault dispatch retains the existing main-frame/origin/path boundary above, plus document revocation.
+        if (ai.wizards.os.vault.VaultPolicy.method(request.method) != null) {
+            if (vault == null) vault = new ai.wizards.os.vault.VaultBridge(activity);
+            final long document = vaultDocument; final String origin = want;
+            vault.dispatch(request.method, request.params, (result, error) -> deviceAnswer(reply, request.id, result, error),
+                    () -> !vaultDetached && document == vaultDocument && origin.equals(AppState.origin(activity)) && shellOnTop());
+            return;
+        }
         if ("device.capabilities".equals(request.method)) {
             try { deviceAnswer(reply, request.id, DeviceMessageProtocol.capabilities(), null); }
             catch (JSONException e) { deviceAnswer(reply, request.id, null, "Something went wrong"); }
             return;
         }
+        final String trustedOrigin = want;
+        if (device.dispatchIdentity(request.method, request.params, result -> deviceAnswer(reply, request.id, result, null),
+                () -> trustedOrigin.equals(AppState.origin(activity)) && shellOnTop())) return;
         final String method = DeviceMessageProtocol.packageMethod(request.method);
         if (method == null || !AppsPolicy.method(method)) {
             deviceAnswer(reply, request.id, null, "unknown method");
