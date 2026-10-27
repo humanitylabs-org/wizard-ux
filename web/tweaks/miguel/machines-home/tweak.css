@@ -130,6 +130,11 @@ html[data-skin="landscapes"] .mh-lines .base { stroke: rgba(255, 255, 255, .55);
 .mh-pnode.is-more { color: var(--ink-3); }
 .mh-initial { font-size: 20px; font-weight: 750; color: var(--ink); }
 .mh-row .t .mh-initial { font-size: 14px; }
+/* Category (role) and status are separate lines: "Standby device" always, then Ready / Not ready. */
+.mh-state { margin-top: -2px; font-size: 11px; font-weight: 700; color: var(--mh-good); white-space: nowrap; }
+.mh-state[data-fit="tight"] { color: var(--mh-warn); }
+.mh-state[data-fit="no"] { color: var(--mh-bad); }
+.mh-node.is-standby .mh-role { color: var(--ink-3) !important; }
 .mh-spec { margin-top: -2px; font-size: 10.5px; font-weight: 600; color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
 html[data-skin="landscapes"] :is(.mh-people > .mh-role, .mh-spec) { text-shadow: 0 1px 3px rgba(0, 0, 0, .75); }
 @container (max-width: 599px) { .mh-pnode { max-width: 150px; font-size: 12px; } .mh-root .mh-lane.is-mainrow .mh-lane-row { gap: 16px; padding-inline: 2px; } .mh-lane.is-mainrow .mh-lane-row > .mh-node { width: max(var(--d) + 6px, 76px); } .mh-lane.is-mainrow .mh-lane-row > .mh-node.is-main { width: max(var(--d) + 6px, 96px); } .mh-spec { font-size: 10px; } }
