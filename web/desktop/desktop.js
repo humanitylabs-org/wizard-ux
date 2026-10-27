@@ -408,7 +408,7 @@
     e.preventDefault(); e.stopPropagation(); setListW(listW() + d);
   });
   /* ---- keyboard through the thread list: ↑/↓ (or j/k) open the previous/next chat, / searches ---- */
-  function listRows(id) { return $$('.pane-list .ch-row[data-chopen], .pane-list .ch-row[data-chdraft]', winEl(id) || document.createElement('div')); }
+  function listRows(id) { return $$('.pane-list .ch-row[data-chopen], .pane-list .ch-row[data-chdraft]', winEl(id) || document.createElement('div')).filter(r => r.getClientRects().length).sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top); }
   // ⌥↓ / ⌥↑: walk the Ready chats only (Working and the rest are skipped), top first, from anywhere.
   // Rows are taken in on-screen order so "top" is what the owner sees at the top of Ready.
   const readyRows = id => $$('.pane-list .ch-sec[data-sec="ready"] .ch-row[data-chopen]', winEl(id) || document.createElement('div'))
@@ -437,9 +437,26 @@
     const again = winEl(f.id)?.querySelector(`.pane-list .ch-row[data-chopen="${CSS.escape(r.dataset.chopen)}"]`);
     $$('.pane-list .ch-row.kbd', winEl(f.id)).forEach(x => x.classList.remove('kbd'));
     if (again) { again.classList.add('kbd'); again.scrollIntoView({ block: 'nearest' }); }
-    setTimeout(() => focusInside(f.id), 30); // ready to type a reply straight away
+    setTimeout(() => { const row = winEl(f.id)?.querySelector(`.pane-list .ch-row[data-chopen="${CSS.escape(r.dataset.chopen)}"]`); row ? row.focus({ preventScroll: true }) : focusInside(f.id); }, 30); // focus stays on the list: ⌥↑↓ keep walking, ⌥→ to reply
     log('ready:' + r.dataset.chopen);
     return true;
+  }
+  // Chats has two places the keyboard can be: the chat list (left) or the open chat (right).
+  // ⌥↑↓ act on whichever side you are on: walk the list, or scroll the conversation.
+  function chatsZone(f) {
+    const el = winEl(f.id), a = document.activeElement;
+    if (a && el?.contains(a)) { if (a.closest('.pane-list')) return 'list'; if (a.closest('.pane-main')) return 'thread'; }
+    return 'list';
+  }
+  function chatsUpDown(dir) {
+    const f = focused();
+    if (homeOpen || !mainChats(f)) return stepReady(dir); // from anywhere else: top of Ready
+    if (chatsZone(f) === 'thread' && f.thread) {
+      const m = winEl(f.id)?.querySelector('.pane-main .ch-msgs'); if (!m) return false;
+      m.scrollBy({ top: dir * Math.round(m.clientHeight * 0.8), behavior: 'smooth' }); return true;
+    }
+    const onRow = winEl(f.id)?.querySelector('.pane-list .ch-row.kbd') || (f.thread && winEl(f.id)?.querySelector(`.pane-list .ch-row[data-chopen="${CSS.escape(f.thread)}"]`));
+    return onRow ? stepThread(f.id, dir) : stepReady(dir);
   }
   // ⌥← / ⌥→ inside Chats: hop between the chat list and the message box. Already there: move to the next window.
   function chatsSide(dir) {
@@ -1566,7 +1583,7 @@
       ['D', 'Type with your voice', 'Your words go into the box you’re typing in'],
     ];
     const TYPE = [['N', 'New chat', 'Type a new message'], ['␣', 'Search', 'Apps, chats and commands'], ['I', 'Inbox', 'All your chats']];
-    const READY = [['↓ ↑', 'Next ready chat', 'Starts at the top of Ready and skips anything still working'], ['← →', 'List or message box', 'Hop between the chat list and where you type']];
+    const READY = [['↓', 'Top ready chat', 'From anywhere. Skips anything still working'], ['←', 'Chat list', 'Then ↑ ↓ move through your chats'], ['→', 'Open chat', 'Then ↑ ↓ scroll it; just type to reply']];
     const GO = [['1', 'Home', 'Your home screen'], ['2–9', 'Desktop 2 to 9', 'Jump straight to it'], ['[ ]', 'Previous / next desktop', ''], ['`', 'Last desktop', 'Back to where you were'], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
     const WIN = [['F', 'Full screen', ''], ['W', 'Close', ''], ['R', 'Refresh window', ''], ['H J K L', 'Next window', 'Left, down, up, right'], ['⇧ ← →', 'Swap places', ''], ['⇧ 2–9', 'Send to a desktop', '']];
     const vis = n => n && !n.hidden && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
@@ -1635,7 +1652,7 @@
     if (alt && !shift && code === 'Digit1') return hit(() => { if (!e.repeat) goHome(); });
     if ((menu || alt) && !shift && code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
     if ((menu || alt) && !shift && code === 'KeyT') return hit(() => { if (!e.repeat) { closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newDesktop(); } });
-    if (alt && !shift && (code === 'ArrowUp' || code === 'ArrowDown')) return hit(() => { if (!e.repeat || focused()?.app === 'chats') { closePalette(); toggleKeys(false); stepReady(code === 'ArrowDown' ? 1 : -1); } });
+    if (alt && !shift && (code === 'ArrowUp' || code === 'ArrowDown')) return hit(() => { if (!e.repeat || focused()?.app === 'chats') { closePalette(); toggleKeys(false); chatsUpDown(code === 'ArrowDown' ? 1 : -1); } });
     if (alt && !shift && (code === 'ArrowLeft' || code === 'ArrowRight') && focused()?.app === 'chats' && !homeOpen) return hit(() => { const d = code === 'ArrowLeft' ? -1 : 1; if (!chatsSide(d)) dirFocus(d, 0); });
     // ⌥N new chat; ⌥V new voice chat (⌥V again sends).
     if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newChat({ fresh: true }); });
@@ -1645,7 +1662,11 @@
     // Same key again sends. Like ⌥V these work from anywhere, even while typing.
     if (alt && !shift && (code === 'KeyS' || code === 'KeyC' || code === 'KeyD')) return hit(() => {
       if (e.repeat) return;
-      if (code === 'KeyD') return dictate();
+      if (code === 'KeyD') { // in Chats, dictation always lands in the open chat's message box, even from the list
+        const f = focused(), ta = !homeOpen && mainChats(f) && f.thread && winEl(f.id)?.querySelector('.pane-main textarea');
+        if (ta && VOICE.state === 'idle' && document.activeElement !== ta) { ta.focus({ preventScroll: true }); fields().refresh?.(); }
+        return dictate();
+      }
       closePalette(); toggleKeys(false); closeSettings(); closeUsage();
       code === 'KeyS' ? speakScreen() : commandVoice();
     });
