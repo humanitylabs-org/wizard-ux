@@ -118,6 +118,8 @@ export default function setup(api) {
 | `api.on('route' \| 'render', fn)` | route changes; `{ part, el }` after a chats list or thread repaints |
 | `api.on('beside', fn)` | `{ side }` when the view bound beside a thread appears or goes: 1 = it leans in on the right of the thread, -1 = you are on it and the thread leans in on the left, 0 = none (also `api.route().beside`). Tweaks: `layout` |
 | `api.slot.mount('device-edge', node)` | tweaks: a control positioned over the phone screen (the slot is `#device`; phone only) |
+| `api.slot.mount('ready-top', node)` | tweaks: rows at the top of the Chats Ready section (main agent, not while searching or filtering) |
+| `api.inbox.watch(fn)`, `done(id)`, `reply(id, words?)` | trusted tweaks with `inbox`: unread Notifications items (`core/notif-bell.js`), mark one done, or answer it in a new chat (`words` sends at once). `api.on('sent')` carries the reply key |
 | `api.nav.back()` | the shell's own Back step (overlay → thread → list → Home). Never exits; false at the root |
 | `api.nav.openList()`, `openThread(id)`, `goDesk(i)`, `deskCount()` | shell navigation |
 | `api.part(name)` | `'thread'`, `'list'`, `'composer'`: the focused chats window's container; `'dock'`: the dock |
