@@ -274,7 +274,9 @@ a.fchip { color: inherit; text-decoration: none; }
 .ch-steps li.done::before { content: '✓'; }
 .ch-steps li.err::before { content: '!'; }
 .ch-steps b { font-weight: 600; color: var(--ink-2, var(--ink)); flex: none; }
-.ch-steps span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-family: ui-monospace, monospace; font-size: 11px; }
+.ch-steps span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-size: 11px; }
+/* Miguel's release: tool previews read as code. */
+html[data-mine] .ch-steps span { font-family: ui-monospace, monospace; }
 .mmeta { display: flex; align-items: center; gap: 2px; margin-top: 3px; min-height: 0; font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .msg.u .mmeta { padding-right: 4px; }
 .mmeta time { padding: 0 4px; }
