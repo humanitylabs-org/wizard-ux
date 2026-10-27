@@ -9,34 +9,59 @@
   --wz-accent-soft: color-mix(in srgb, var(--violet-2, #b99bff) 18%, transparent);
   --wz-canvas: var(--bg, #05030c);
 }
+/* Look (James, 27 Oct 2026: "consistent with the rest of the OS, modern and sleek"): a glass bottom sheet like the
+ * Chats sheets, no icon tile, one message card (comment over the read-only quote), Settings-style hairline rows for
+ * the destination, a pill Send. Every colour comes from the skin roles above. */
 .wz-share.dv-wrap { position:absolute; inset:0; z-index:80; pointer-events:auto; color:var(--wz-text); font:inherit; }
 body > .wz-share.dv-wrap { position:fixed; }
-.wz-share .dv-scrim { position:absolute; inset:0; background:var(--wz-scrim, #0009); opacity:1; }
-.wz-share .dv-sheet { position:absolute; left:8px; right:8px; bottom:calc(var(--safe-b, 0px) + 8px); margin:auto; max-width:560px; max-height:78%; overflow:auto; padding:16px 14px 14px; border-radius:26px; border:1px solid var(--wz-border); background:var(--wz-surface); color:var(--wz-text); transform:none; }
+.wz-share .dv-scrim { position:absolute; inset:0; background:var(--wz-scrim, rgba(3, 1, 10, .55)); backdrop-filter:blur(2px); animation:dv-fade 180ms both; }
+.wz-share .dv-sheet { position:absolute; left:8px; right:8px; bottom:calc(var(--safe-b, 0px) + 8px); margin:auto; max-width:520px; max-height:82%; overflow:auto; overscroll-behavior:contain; box-sizing:border-box; padding:6px 16px 16px; border-radius:24px; border:1px solid var(--wz-border); background:linear-gradient(color-mix(in srgb, var(--wz-text) 4%, transparent), transparent 120px), color-mix(in srgb, var(--wz-surface) 94%, transparent); backdrop-filter:blur(28px) saturate(1.2); box-shadow:0 18px 48px rgba(0, 0, 0, .45); color:var(--wz-text); outline:0; scrollbar-width:none; animation:dv-rise 220ms cubic-bezier(.2, .8, .2, 1) both; }
 .device.dv-share-open .wz-share .dv-sheet { bottom:calc(var(--safe-b, 0px) + var(--dock-h, 0px) + 4px); max-height:calc(100% - var(--safe-b, 0px) - var(--dock-h, 0px) - 40px); }
 .device.dv-share-open .dock, .device.dv-share-open .voice { z-index:82; }
 .device.dv-share-open .desk-dots { visibility:hidden; }
-.wz-share .dv-head { display:flex; gap:12px; align-items:center; margin-bottom:12px; }
-.wz-share .dv-head b { display:block; font-size:17px; font-weight:650; }
-.wz-share small, .wz-share .dv-source { display:block; font-size:12px; color:var(--wz-text-secondary); margin-top:2px; }
-.wz-share .dv-source { overflow-wrap:anywhere; }
-.wz-share .dv-ic { flex:0 0 38px; height:38px; border-radius:13px; display:grid; place-items:center; background:var(--wz-accent-soft); color:var(--wz-accent); }
-.wz-share .dv-cancel { margin-left:auto; min-width:44px; min-height:44px; border:0; border-radius:50%; background:transparent; color:var(--wz-text-secondary); font-size:24px; }
-.wz-share .dv-items { display:flex; gap:8px; overflow-x:auto; margin-bottom:10px; }
+@keyframes dv-rise { from { transform:translateY(24px); opacity:0; } }
+@keyframes dv-fade { from { opacity:0; } }
+@media (prefers-reduced-motion: reduce) { .wz-share .dv-sheet, .wz-share .dv-scrim { animation:none; } }
+.wz-share .dv-grab { width:36px; height:4px; margin:4px auto 10px; border-radius:2px; background:var(--wz-border); }
+.wz-share .dv-head { display:flex; gap:12px; align-items:center; margin:0 0 14px; }
+.wz-share .dv-head > div { flex:1; min-width:0; }
+.wz-share .dv-head b { display:block; font-size:18px; font-weight:700; letter-spacing:-.01em; }
+.wz-share .dv-head small { display:block; margin-top:2px; font-size:13px; color:var(--wz-text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.wz-share .dv-cancel { flex:0 0 auto; display:grid; place-items:center; width:34px; height:34px; margin:-2px -4px 0 0; padding:0; border:0; border-radius:50%; background:var(--wz-surface-raised); color:var(--wz-text-secondary); cursor:pointer; position:relative; }
+.wz-share .dv-cancel::after { content:""; position:absolute; inset:-5px; } /* 44px touch target */
+.wz-share svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.wz-share .dv-items { display:flex; align-items:center; gap:8px; overflow-x:auto; margin:0 -16px 12px; padding:2px 16px; scrollbar-width:none; }
+.wz-share .dv-items::-webkit-scrollbar { display:none; }
 .wz-share .dv-items:empty { display:none; }
-.wz-share .dv-items { scrollbar-width:none; padding:2px 0; }
-.wz-share .dv-text { width:100%; box-sizing:border-box; resize:vertical; margin-bottom:10px; padding:10px 12px; border-radius:16px; background:var(--wz-canvas); border:1px solid var(--wz-border); color:var(--wz-text); font:inherit; font-size:14px; }
-.wz-share .dv-btn { min-height:44px; padding:10px 12px; border-radius:14px; background:var(--wz-surface-raised); border:1px solid var(--wz-border); color:var(--wz-text); font:inherit; }
-.wz-share .dv-btn.primary { background:var(--wz-accent); color:var(--wz-on-accent); border-color:transparent; }
+/* One message card: the owner's comment on top, the forwarded words below as a quiet, locked quote. */
+.wz-share .dv-msg { margin:0 0 18px; border-radius:18px; border:1px solid var(--wz-border); background:color-mix(in srgb, var(--wz-canvas) 55%, transparent); transition:border-color 150ms; }
+.wz-share .dv-msg:focus-within { border-color:color-mix(in srgb, var(--wz-accent) 60%, transparent); }
+.wz-share .dv-text { display:block; width:100%; box-sizing:border-box; min-height:48px; max-height:30vh; resize:none; margin:0; padding:13px 14px 8px; border:0; outline:0; background:transparent; color:var(--wz-text); font:inherit; font-size:15px; line-height:1.4; field-sizing:content; }
+.wz-share .dv-text::placeholder { color:var(--wz-text-muted); }
+.wz-share .dv-quote { margin:0 10px 10px; padding:8px 12px; max-height:8.5em; overflow:auto; border:0; border-left:2px solid var(--wz-accent); border-radius:2px 12px 12px 2px; background:var(--wz-surface-raised); color:var(--wz-text-secondary); font-size:13px; line-height:1.45; white-space:pre-wrap; overflow-wrap:anywhere; scrollbar-width:thin; outline:0; }
+.wz-share .dv-text:only-child { padding-bottom:13px; }
+/* Destination: two plain rows split by a hairline, like Settings; the picked one gets the accent dot. */
+.wz-share .dv-label { margin:0 4px 6px; font-size:13px; font-weight:650; letter-spacing:.02em; color:var(--wz-text-muted); }
+.wz-share .dv-dest { margin:0 0 16px; border-radius:16px; border:1px solid var(--wz-border); background:var(--wz-surface-raised); overflow:hidden; }
+.wz-share .dv-opt { position:relative; display:flex; align-items:center; gap:12px; min-height:50px; padding:0 14px; cursor:pointer; font-size:15px; transition:background 150ms; }
+.wz-share .dv-opt + .dv-opt { border-top:1px solid var(--wz-border); }
+.wz-share .dv-opt:active { background:var(--wz-accent-soft); }
+.wz-share .dv-opt input { position:absolute; left:14px; top:50%; width:20px; height:20px; margin:-10px 0 0; opacity:0; cursor:pointer; }
+.wz-share .dv-dot { flex:0 0 auto; width:20px; height:20px; box-sizing:border-box; border-radius:50%; border:1.5px solid var(--wz-text-muted); transition:border-color 150ms, box-shadow 150ms; }
+.wz-share .dv-opt input:checked + .dv-dot { border-color:var(--wz-accent); box-shadow:inset 0 0 0 4px var(--wz-surface), inset 0 0 0 10px var(--wz-accent); }
+.wz-share .dv-opt input:focus-visible + .dv-dot { outline:2px solid var(--wz-accent); outline-offset:2px; }
+.wz-share .dv-optx { flex:1; }
+.wz-share .dv-chat { flex:1; min-width:0; min-height:48px; margin:0; padding:0 28px 0 0; border:0; outline:0; appearance:none; -webkit-appearance:none; background:transparent; color:var(--wz-text); font:inherit; font-size:15px; text-overflow:ellipsis; cursor:pointer; }
+.wz-share .dv-chat:has(option[value=""]:checked) { color:var(--wz-text-secondary); }
+.wz-share .dv-chat option { background:var(--wz-surface); color:var(--wz-text); }
+.wz-share .dv-chev { position:absolute; right:14px; color:var(--wz-text-muted); pointer-events:none; }
+.wz-share .dv-btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:48px; padding:0 18px; border-radius:999px; border:1px solid var(--wz-border); background:var(--wz-surface-raised); color:var(--wz-text); font:inherit; font-size:15px; font-weight:650; cursor:pointer; transition:transform 120ms, filter 150ms; }
+.wz-share .dv-btn.primary { background:var(--wz-accent); color:var(--wz-on-accent); border-color:transparent; box-shadow:0 6px 18px color-mix(in srgb, var(--wz-accent) 30%, transparent); }
+.wz-share .dv-btn.primary:hover { filter:brightness(1.06); }
+.wz-share .dv-btn:active { transform:scale(.98); }
 .wz-share .dv-btn.wide { width:100%; }
 .wz-share button:disabled { opacity:.5; }
-.wz-share .dv-status { min-height:18px; margin-top:8px; font-size:12px; color:var(--wz-text-secondary); text-align:center; }
+.wz-share .dv-status { min-height:18px; margin-top:10px; font-size:13px; color:var(--wz-text-secondary); text-align:center; }
 .wz-share .dv-status:empty { display:none; }
-/* Forwarded content: read-only quote under the owner's own comment; two destination choices (James, 27 Oct 2026). */
-.wz-share .dv-quote { margin:0 0 12px; padding:8px 12px; max-height:9.5em; overflow:auto; border-left:3px solid var(--wz-border); border-radius:4px 12px 12px 4px; background:var(--wz-surface-raised); color:var(--wz-text-secondary); font-size:13px; line-height:1.45; white-space:pre-wrap; overflow-wrap:anywhere; }
-.wz-share .dv-dest { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
-.wz-share .dv-opt { display:flex; align-items:center; gap:10px; min-height:44px; padding:0 12px; border-radius:14px; border:1px solid var(--wz-border); background:var(--wz-surface-raised); cursor:pointer; }
-.wz-share .dv-opt:has(input:checked) { border-color:var(--wz-accent); background:var(--wz-accent-soft); }
-.wz-share .dv-opt input { flex:0 0 auto; width:18px; height:18px; margin:0; accent-color:var(--wz-accent); }
-.wz-share .dv-chat { flex:1; min-width:0; min-height:42px; padding:0; border:0; background:transparent; color:var(--wz-text); font:inherit; text-overflow:ellipsis; }
-.wz-share .dv-chat option { background:var(--wz-surface); color:var(--wz-text); }
+@media (min-width:700px) { .wz-share .dv-sheet { padding:8px 20px 20px; } .wz-share .dv-items { margin:0 -20px 12px; padding:2px 20px; } }
+@media (hover:hover) and (pointer:fine) { .wz-share .dv-grab { visibility:hidden; height:0; margin-bottom:8px; } }
