@@ -11,7 +11,8 @@
     "miguel/snooze-someday",
     "miguel/home-bars",
     "miguel/arrange-download",
-    "miguel/refresh-button"
+    "miguel/refresh-button",
+    "miguel/unified-inbox"
   ],
   "flags": {}
 }
