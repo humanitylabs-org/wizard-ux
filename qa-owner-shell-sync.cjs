@@ -63,7 +63,11 @@ const visible = p => p.evaluate(geometry => {
     await p.locator('body').click({ position: { x: 25, y: 110 } });
     await check('actual Chats list and nested thread Back', async () => {
      if (desktop) await p.evaluate(() => __wux.openChatsList()); else await p.evaluate(() => __wos.openSheet('inbox'));
-     await p.waitForTimeout(1200);
+     // Live lists arrive asynchronously; a fixed 1200 ms delay can observe the
+     // honest loading state and falsely report missing nested coverage.
+     await p.waitForFunction(() => [...document.querySelectorAll('[data-chopen]')].some(el => {
+      const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.left >= 0 && r.left < innerWidth;
+     }), null, { timeout: 30000 });
      let sid = await p.evaluate(() => [...document.querySelectorAll('[data-chopen]')].find(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.left >= 0 && r.left < innerWidth; })?.dataset.chopen || null);
      assert(sid, 'No actual read-only thread row was available; cannot claim nested coverage');
      await shot('chats');
