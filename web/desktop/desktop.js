@@ -255,7 +255,20 @@
   const hostedOpenable = id => { const a = APP[id]; if (!a?.url || a.kind !== 'wizard') return null; try { if (new URL(a.url, location.origin).origin !== location.origin) return null; } catch (e) { return null; } return a; };
   window.WizCanOpen = id => !!hostedOpenable(id);
   window.WizAppOpen = id => Object.values(W).some(w => w && w.appId === id);
-  window.WizOpenApp = id => { const x = hostedOpenable(id); return x ? openApp(x) : false; };
+  function closeWorkflow(w) {
+    if (!w?.workflow || W[w.id] !== w) return false;
+    const origin = w.returnWid; closeWin(w.id);
+    if (W[origin]) focusWin(origin);
+    return true;
+  }
+  window.WizOpenApp = (id, path = '') => {
+    const x = hostedOpenable(id); if (!x) return false;
+    if (!path) return openApp(x);
+    let u; try { u = new URL(path, location.href); } catch (_) { return false; }
+    const rel = u.pathname + u.search + u.hash;
+    if (u.origin !== location.origin || appAt(rel)?.id !== id) return false;
+    return !!newWin({ app: 'frame', appId: id, url: rel, workflow: true, returnWid: ws[cur].focus });
+  };
   // Only trusted system windows may ask; check the actual sender frame, never a claimed app id.
   addEventListener('message', async e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-app' || typeof d.id !== 'string') return;
@@ -490,7 +503,7 @@
     if (!f) return;
     // servicesAs: a companion view gets its owning installed app's Back/services.
     const w = W[el.dataset.win], a = w && APP[w.servicesAs || w.appId];
-    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), openContextDraft: (key, text) => { let cw = ws[cur].wins.map(id => W[id]).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }, isVisible: () => !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) });
+    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, back: () => closeWorkflow(w), openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), openContextDraft: (key, text) => { let cw = ws[cur].wins.map(id => W[id]).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }, isVisible: () => !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) });
     f.addEventListener('load', () => {
       // A refused frame (CSP frame-ancestors / X-Frame-Options) lands on an unreadable error document.
       let bad = false;
@@ -1561,6 +1574,7 @@
     if (f?.app === 'frame') {
       const result = window.WizAppServices?.back(winEl(f.id)?.querySelector('iframe'));
       if (['handled', 'pending', 'stay'].includes(result)) return 'hosted';
+      if (f.workflow && closeWorkflow(f)) return 'workflow';
       if (f.preview) { closeWin(f.id); return 'preview'; }
     }
     if (f && window.WizCompanionPane?.back(f.id)) return 'companion-back';
@@ -1628,13 +1642,22 @@
       for (const [q, l] of marks) { const n = $(q); if (vis(n)) chip(n, l); }
       $$('#wsList .ws[data-ws]').forEach(n => { const slot = C.workspaceNav.slot(+n.dataset.ws); if (slot <= 9 && vis(n)) chip(n, String(slot)); });
       const add = $('#wsList [data-newdesk]'); if (vis(add)) chip(add, 'T');
-      if (homeOpen) { const r = $('#desktopHome [data-home-act="ready"]'); if (vis(r)) chip(r, '↓', 'inside'); }
+      // Home: ↓ on the Ready count (Miguel's skins) or the first unread row (stock Home): ⌥↓ opens it from here.
+      if (homeOpen) { const r = $('#desktopHome [data-home-act="ready"]') || $('#desktopHome .home-card .home-row'); if (vis(r)) chip(r, '↓', 'inside'); }
+      // [ ] on the desktops either side of this one (they wrap), under their numbers.
+      if (!homeOpen && ws.length > 1) for (const [k, j] of [['[', (cur - 1 + ws.length) % ws.length], [']', (cur + 1) % ws.length]]) {
+        const n = $(`#wsList .ws[data-ws="${j}"]`); if (vis(n) && !(k === ']' && j === (cur - 1 + ws.length) % ws.length && ws.length === 2)) chip(n, k);
+      }
+      // While recording: the same key again sends, Esc cancels, right on the pill.
+      if (VOICE.state !== 'idle') { const send = $('#voiceSend'), cancel = $('#voiceCancel'); if (vis(send)) chip(send, ($('#voiceKey')?.textContent || '').replace(MOD, '') || 'S'); if (vis(cancel)) chip(cancel, 'Esc'); }
       const f = !homeOpen && focused(), d = ws[cur];
       // Chats: ↓ sits on the Ready chat it opens next; → ← on Done / Snooze; ↵ on Send; / on search; N on New chat.
       const cw = !homeOpen && (f?.app === 'chats' ? f : d.wins.map(x => W[x]).find(mainChats));
       if (cw) {
         const wel = winEl(cw.id), rows = readyRows(cw.id), i = cw === f ? rows.findIndex(r => r.dataset.chopen === cw.thread) : -1;
         const next = rows.length && (i < 0 ? rows[0] : rows[(i + 1) % rows.length]);
+        const prev = i > 0 && rows.length > 2 ? rows[i - 1] : null; // ⌥↑ goes back one Ready chat
+        if (prev && vis(prev)) { const lr = wel.querySelector('.pane-list')?.getBoundingClientRect(), pr = prev.getBoundingClientRect(); if (!lr || (pr.top >= lr.top && pr.bottom <= lr.bottom - 4)) chip(prev, '↑', 'inside'); }
         if (next && next.dataset.chopen !== cw.thread && vis(next)) {
           // Scrolled out of the list: the chip goes on the Ready heading instead, so it never hangs off the edge.
           const lr = wel.querySelector('.pane-list')?.getBoundingClientRect(), nr = next.getBoundingClientRect();
@@ -1650,7 +1673,8 @@
             if (!on && wel.querySelector(q) && vis(head)) chip(head, l, l === '→' ? 'inside' : 'inside-2', word);
           }
           const send = wel.querySelector('.pane-main .ch-send'); if (f.thread && vis(send)) chip(send, '↵', 'start');
-          // No chip on chat search: ⌥/ is this guide, so a "/" there read as the wrong key (Miguel, 27 Oct 2026).
+          // ⌥I opens the chat list; pressed again it searches chats and messages.
+          const srch = wel.querySelector('[data-chsearch]'); if (vis(srch) && document.activeElement !== srch) chip(srch, 'I', 'inside');
           const fab = wel.querySelector('.pane-list [data-chfab]'); if (vis(fab)) chip(fab, 'N', 'corner');
         }
       }
@@ -1776,6 +1800,7 @@
     return { start, stop, key, active: () => on };
   })();
   const NATIVE_MENU = !!window.webkit?.messageHandlers?.wizardNative;
+  const vis0 = n => !!n && !!n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
   function onKey(e, fromFrame = false) {
     if (pick.active()) return pick.key(e);
     if (e.key === 'Escape' && keyHints.pinned()) { e.preventDefault(); e.stopPropagation(); toggleKeys(false); returnToSettings(); return; }
@@ -1865,7 +1890,12 @@
       else if (target.kind === 'new') newDesktop();
       else { lastWs = cur; goWs(target.index); }
     });
-    if (code === 'KeyI') return hit(() => openChatsList());
+    // ⌥I: the chat list; again (list already in front): search chats and messages.
+    if (code === 'KeyI') return hit(() => {
+      const f = focused(), s = !homeOpen && f?.app === 'chats' && !f.thread && winEl(f.id)?.querySelector('[data-chsearch]');
+      if (s && vis0(s) && document.activeElement !== s && !e.repeat) { s.focus(); s.select(); log('key:search-chats'); return; }
+      openChatsList();
+    });
     if (code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
     if (code === 'KeyF') return hit(() => { if (!e.repeat) toggleMono(); });
     if (code === 'KeyR' && !shift) return hit(() => { if (!e.repeat) reloadCurrent(); });

@@ -93,3 +93,12 @@ test('guide: → ← sit above Done / Snooze; no "/" chip on chat search', () =>
   assert.match(js, /filter\(vis\)\.map\(n => chip\(n, l, 'above'\)\)/);
   assert.doesNotMatch(js, /chip\(srch, '\/'/);
 });
+
+test('guide extras: ↓ on Home, [ ] on neighbour desks, ↑ on the previous Ready chat, I on chat search; ⌥I again searches chats', () => {
+  assert.match(js, /\$\('#desktopHome \[data-home-act="ready"\]'\) \|\| \$\('#desktopHome \.home-card \.home-row'\)/);
+  assert.match(js, /\[\['\[', \(cur - 1 \+ ws\.length\) % ws\.length\], \['\]', \(cur \+ 1\) % ws\.length\]\]/);
+  assert.match(js, /chip\(prev, '↑', 'inside'\)/);
+  assert.match(js, /chip\(srch, 'I', 'inside'\)/);
+  assert.match(js, /log\('key:search-chats'\)/);
+  assert.match(js, /chip\(cancel, 'Esc'\)/);
+});

@@ -11,5 +11,7 @@ test('an opened notification scrolls clear of the phone dock and New chat button
   assert.ok(rule, 'phone-only .ui-item rule present');
   const m = rule[1].match(/scroll-margin-bottom:\s*(\d+)px/);
   assert.ok(m && Number(m[1]) >= 150, 'bottom scroll margin clears dock (~90px) + New chat button (~56px)');
+  const all = css.match(/\n\.ui-item \{ scroll-margin-bottom:\s*(\d+)px/);
+  assert.ok(all && Number(all[1]) >= 64, 'desktop clears the New chat button');
   assert.match(js, /scrollIntoView\(\{ block: 'nearest'/, 'opening an item scrolls it into view (the margin applies to this scroll)');
 });
