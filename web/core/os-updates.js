@@ -117,7 +117,8 @@
     } catch (_) { if (!mine) noFile = true; }
   }
   async function poll() {
-    await load(true);
+    // Preserve stock polling: only release/install activity needs another status read.
+    if (!st || st.release || mine || st.installing) await load(true);
     await readRelease();
     return card();
   }
@@ -228,7 +229,7 @@
     busy = 'ch'; ctx?.render?.(); ctx?.haptic?.(8);
     post({ channel: chan }).then(d => {
       if (valid(d)) take(d); else st = { ...st, channel: chan };
-      ctx?.toast?.('✓', chan === 'latest' ? (st.mode === 'auto' ? 'Channel: Latest · Automatic still installs stable only' : 'Channel: Latest') : 'Channel: Stable', 2200);
+      ctx?.toast?.('✓', chan === 'main' ? 'Release base: Main' : chan === 'latest' ? (isRelease() ? 'Release base: Latest' : st.mode === 'auto' ? 'Channel: Latest · Automatic still installs stable only' : 'Channel: Latest') : 'Channel: Stable', 2200);
       at = Date.now();
     }).catch(e => ctx?.toast?.('!', e.message || 'Couldn’t reach the App Manager', 2600))
       .finally(() => { busy = ''; changed(); });

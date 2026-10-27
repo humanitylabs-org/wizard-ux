@@ -197,6 +197,23 @@ test('developer mode off ignores release data and cached owner layers', async ()
   assert.deepEqual(b.imports, []);
 });
 
+test('ordinary owner polling remains unchanged and never reads a release file', async () => {
+  const b = boot({ status: ST({ developer_mode: false }) }); await settle();
+  const requests = b.calls.length;
+  await b.U.poll(); await b.U.poll();
+  assert.equal(b.calls.length, requests);
+  assert.equal(b.calls.filter(u => u.endsWith('/my-release.json')).length, 0);
+});
+
+test('choosing Main names Main in the confirmation', async () => {
+  const b = boot({ release: RELEASE() }); await settle();
+  const messages = [];
+  b.U.act({ closest: s => s === '[data-osu]' ? { dataset: { osu: 'ch-main' } } : null }, { toast: (...args) => messages.push(args) });
+  await settle();
+  assert.equal(b.U.state.channel, 'main');
+  assert.equal(messages[0][1], 'Release base: Main');
+});
+
 test('staging lists held features and resolved conflicts, never offers automatic feature install', async () => {
   const b = boot({ status: ST({ channel: 'main', release: { name: 'Developer release', staging: { image: 'test:staged' }, held: [{ title: 'Held feature' }], resolver_merges: [{ sha: 'abcdef123456', core: true }] } }), release: RELEASE() });
   await settle();
