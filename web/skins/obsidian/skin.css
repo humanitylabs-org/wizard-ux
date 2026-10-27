@@ -97,6 +97,18 @@ html[data-skin^="obsidian"] .mrow.secure .mn b { display: inline-flex; align-ite
 html[data-skin^="obsidian"] .mrow.secure .ag-lock { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 html[data-skin^="obsidian"][data-shell="desktop"] .ch-swrow .ms { flex: 0 1 340px; }
 html[data-skin="obsidian-light"] .ms { --secure: hsl(282 70% 44%); --secure-on: #ffffff; }
+/* Model switch: when other controls leave it too little room, the four slots fold into one chip (current model + ⋯) that opens the full model menu, so it always fits. */
+html[data-skin^="obsidian"] .ms { container: ms / inline-size; position: relative; }
+@container ms (max-width: 250px) {
+  html[data-skin^="obsidian"] .ms-track { flex: 0 1 auto; display: flex; background: none; pointer-events: none; }
+  html[data-skin^="obsidian"] .ms-track.off, html[data-skin^="obsidian"] .ms-thumb, html[data-skin^="obsidian"] .ms-o:not(.on) { display: none; }
+  html[data-skin^="obsidian"] .ms-o.on { flex-direction: row; gap: 5px; padding: 0 14px; min-width: 0; max-width: 100%; border-radius: 19px; background: var(--ink); overflow: hidden; }
+  html[data-skin^="obsidian"] .ms.secure-on .ms-o.on { background: var(--secure); }
+  html[data-skin^="obsidian"] .ms-o.on .ms-name { overflow: hidden; text-overflow: ellipsis; }
+  html[data-skin^="obsidian"] .ms-o.on .ms-version { font-size: 12px; }
+  html[data-skin^="obsidian"] .ms-more { position: static; }
+  html[data-skin^="obsidian"] .ms-more::after { content: ""; position: absolute; inset: 0; z-index: 2; }
+}
 html[data-skin="obsidian-light"] .ch-model.private { color: hsl(282 70% 44%); }
 
 /* Miguel's layout (ported from his test port, 20 Oct 2026): phone list order, edge-to-edge apps, quiet composer,
