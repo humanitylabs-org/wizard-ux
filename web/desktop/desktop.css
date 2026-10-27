@@ -31,6 +31,9 @@ kbd { display: inline-block; min-width: 18px; padding: 1px 5px; border-radius: 5
 .ws.cur { color: #fff; background: linear-gradient(140deg, rgba(122, 77, 255, .55), rgba(192, 77, 255, .4)); }
 .ws.cur::after { background: #fff; }
 .ws.drop { outline: 2px dashed var(--violet-2); }
+.ws[data-ws] { touch-action: none; }
+.ws-list.arranging, .ws-list.arranging .ws { cursor: grabbing; }
+.ws.ws-moving { outline: 2px solid var(--violet-2); outline-offset: 1px; transform: translateY(1px) scale(1.06); z-index: 1; }
 .ws.hot::before { content: ''; position: absolute; top: 2px; right: 2px; width: 5px; height: 5px; border-radius: 50%; background: var(--violet-2); }
 .clock { font: 600 12.5px/1 ui-sans-serif, system-ui, -apple-system, sans-serif; color: var(--ink-2); padding: 5px 10px; border-radius: 7px; font-variant-numeric: tabular-nums; }
 .clock:hover { background: rgba(205, 190, 255, .08); }
@@ -103,6 +106,10 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 .dchats .pane-newchat:hover { background: rgba(143, 99, 255, .34); }
 .dchats .ch-row.kbd { outline: 1px solid var(--line-2); }
 .dsettings .set-card { width: min(520px, calc(100vw - 32px)); }
+/* Settings is a window (wizard-os#265 rule 7): its panel fills the window body; the title bar's ✕ closes it. */
+.win .settings-host { height: 100%; overflow: hidden; }
+.win .dsettings { position: relative; inset: auto; width: auto; height: 100%; z-index: auto; border-left: 0; box-shadow: none; background: transparent; }
+.win .dsettings > .st-close { display: none; }
 .dsettings .set-body { padding: 4px 14px 6px; }
 .dchats .pane-main { position: relative; flex: 1; min-width: 0; }
 .dchats .pane-empty { position: absolute; inset: 0; display: none; place-items: center; text-align: center; color: var(--ink-3); font-size: 13.5px; line-height: 1.7; }
@@ -282,7 +289,7 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 .keys kbd { font: 600 12.5px/18px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: .01em; }
 
 /* Opinionated: instant hover tips for every top-bar control */
-.bar-tip { position: fixed; z-index: 60; max-width: 280px; padding: 5px 9px; border-radius: 7px; font: 500 12px/1.35 ui-sans-serif, system-ui, -apple-system, sans-serif; color: var(--ink); background: color-mix(in oklab, var(--bg) 94%, var(--ink) 6%); border: 1px solid var(--line-2); box-shadow: 0 6px 20px rgba(0,0,0,.35); pointer-events: none; white-space: nowrap; }
+.bar-tip { position: fixed; z-index: 60; width: max-content; max-width: min(280px, calc(100vw - 16px)); padding: 5px 9px; border-radius: 7px; font: 500 12px/1.35 ui-sans-serif, system-ui, -apple-system, sans-serif; color: var(--ink); background: color-mix(in oklab, var(--bg) 94%, var(--ink) 6%); border: 1px solid var(--line-2); box-shadow: 0 6px 20px rgba(0,0,0,.35); pointer-events: none; white-space: normal; overflow-wrap: anywhere; text-wrap: pretty; }
 .bar-tip[hidden] { display: none; }
 
 /* ---------- Voice capture: synthwave edge glow + compact top-centre pill ----------
@@ -377,3 +384,30 @@ html:is([data-skin^="obsidian"], [data-skin="landscapes"]) .mine-home .home-unse
 /* Keys sheet: replay the first-message guide (core/tour.js WosTour.desk) */
 .keys-head .keys-tour { border: 1px solid var(--line-2); background: none; color: var(--ink-2); border-radius: 99px; padding: 4px 12px; font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
 .keys-head .keys-tour:hover { color: var(--ink); }
+
+/* Hold left ⌥ / Alt: the keys guide. Chips on bar controls, named keys laid out where they act. Skin tokens only. */
+.key-hints { position: fixed; inset: 0; z-index: 60; pointer-events: none; }
+.key-hints.pinned { pointer-events: auto; background: color-mix(in oklab, var(--bg) 35%, transparent); }
+.key-hints[hidden] { display: none; }
+.kh-chip { position: fixed; min-width: 17px; height: 17px; padding: 0 5px; border-radius: 5px; display: grid; place-items: center; font: 650 11px/1 Inter, system-ui, sans-serif; background: var(--ink); color: var(--bg); box-shadow: 0 2px 8px rgba(0,0,0,.35); animation: pop 120ms var(--ease); }
+.kh-card { position: fixed; width: 296px; padding: 10px 14px 8px; border-radius: 14px; background: color-mix(in oklab, var(--bg) 95%, var(--ink) 5%); border: 1px solid var(--line-2); box-shadow: 0 18px 56px rgba(0,0,0,.42); color: var(--ink); animation: pop 140ms var(--ease); }
+.kh-card h5 { margin: 4px 0 6px; font-size: 11.5px; font-weight: 650; color: var(--ink-3); }
+.kh-card h5 + .kh-row { border-top: 0; }
+.kh-card .kh-row + h5 { margin-top: 12px; }
+.kh-card h5 em { font-style: normal; font-weight: 500; }
+.kh-row { display: grid; grid-template-columns: 54px 1fr; gap: 10px; align-items: start; padding: 6px 0; border-top: 1px solid var(--line); }
+.kh-row kbd { justify-self: start; min-width: 22px; padding: 3px 6px; border-radius: 6px; font: 650 12px/1.2 Inter, system-ui, sans-serif; text-align: center; white-space: nowrap; background: var(--ink); color: var(--bg); }
+.kh-row b { display: block; font-size: 13.5px; font-weight: 650; }
+.kh-row small { display: block; margin-top: 1px; font-size: 12px; line-height: 1.35; color: var(--ink-2); }
+.kh-win { width: 250px; }
+.kh-foot { position: fixed; left: 0; right: 0; bottom: 18px; margin: 0 auto; width: max-content; max-width: calc(100vw - 32px); display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 16px; padding: 8px 14px; border-radius: 12px; background: color-mix(in oklab, var(--bg) 95%, var(--ink) 5%); border: 1px solid var(--line-2); font-size: 12.5px; color: var(--ink-2); animation: pop 140ms var(--ease); }
+.kh-foot kbd { padding: 1px 5px; border-radius: 5px; font: 650 11px/1.2 Inter, system-ui, sans-serif; background: color-mix(in oklab, var(--ink) 12%, transparent); color: var(--ink); }
+.kh-foot button { padding: 4px 10px; border-radius: 8px; font-size: 12.5px; color: var(--ink); background: color-mix(in oklab, var(--ink) 10%, transparent); }
+.kh-chat { width: 280px; }
+.kh-chat .kh-row { grid-template-columns: 68px 1fr; }
+.kh-chip { z-index: 2; }
+
+/* ⌥G Pick anything: letter chips on every clickable thing (desktop.js `pick`). */
+.pick-hints { position: fixed; inset: 0; z-index: 2147483000; pointer-events: none; }
+.pick-chip { position: fixed; padding: 1px 4px; border-radius: 4px; font: 700 11px/1.3 Inter, system-ui, sans-serif; letter-spacing: .02em; background: #ffd84d; color: #1a1400; border: 1px solid rgba(0,0,0,.35); box-shadow: 0 1px 4px rgba(0,0,0,.35); animation: pop 100ms var(--ease); }
+.pick-chip u { text-decoration: none; opacity: .45; }

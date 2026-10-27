@@ -14,27 +14,16 @@
     { id: 'setup', kind: 'wizard', name: 'Setup', icon: 'S', colors: ['#4ff0b0'], g: ['#4ff0b0', '#3fe0ff'], url: '/wizard-os-home/setup/index.html', desc: 'Get Wizard ready · use it on your phone' },
     // Chats: the one built-in Wizard app. Everything else comes from the box (GET /wizard/v1/apps).
     { id: 'wizard', kind: 'chats', name: 'Chats', icon: '✦', g: ['#6b46ff', '#c04dff'], desc: 'Your threads with your Wizard' },
-    // Android natives (real intents on Android Chrome)
-    { id: 'maps', kind: 'native', name: 'Maps', icon: '📍', g: ['#34a853', '#4285f4'], href: 'https://www.google.com/maps', desc: 'Google Maps' },
-    { id: 'camera', kind: 'native', name: 'Camera', icon: '📷', g: ['#4a4f63', '#1b1e2b'], href: 'intent:#Intent;action=android.media.action.STILL_IMAGE_CAMERA;end', desc: 'Camera' },
-    { id: 'phone', kind: 'native', name: 'Phone', icon: '📞', g: ['#4ff0b0', '#13805a'], href: 'tel:', desc: 'Dialer' },
-    { id: 'messages', kind: 'native', name: 'Messages', icon: '💬', g: ['#3f8cff', '#1b4ab8'], href: 'sms:', desc: 'SMS' },
-    { id: 'spotify', kind: 'native', name: 'Spotify', icon: '🎧', g: ['#1ed760', '#0b5c2b'], href: 'intent://#Intent;package=com.spotify.music;end', desc: 'Music' },
-    { id: 'telegram', kind: 'native', name: 'Telegram', icon: '✈', g: ['#2aabee', '#1868a8'], href: 'intent://#Intent;package=org.telegram.messenger;end', desc: 'Telegram' },
-    { id: 'line', kind: 'native', name: 'LINE', icon: 'L', g: ['#06c755', '#04773a'], href: 'intent://#Intent;package=jp.naver.line.android;end', desc: 'LINE' },
-    { id: 'grab', kind: 'native', name: 'Grab', icon: 'G', g: ['#00b14f', '#0a5c32'], href: 'intent://#Intent;package=com.grabtaxi.passenger;end', desc: 'Rides and food' },
-    { id: 'chrome', kind: 'native', name: 'Chrome', icon: '◍', g: ['#fbbc05', '#ea4335'], href: 'https://www.google.com/', desc: 'Browser' },
-    { id: 'usuals', kind: 'usuals', name: 'Food', icon: '🍜', g: ['#00b14f', '#0a5c32'], desc: 'Order Grab food: say “order food”, or tap a saved order' },
     { id: 'side-button', kind: 'native', name: 'Side button', icon: '◉', g: ['#8f63ff', '#ff5ccf'], desc: 'Hold the side button to talk to Wizard' },
-    { id: 'settings', kind: 'native', name: 'Settings', icon: '⚙', g: ['#6a7088', '#2a2f42'], href: 'intent:#Intent;action=android.settings.SETTINGS;end', desc: 'Android settings' },
   ];
   // Platform: 'mobile' gets everything except desktop-only entries; 'desktop' drops Android intents.
   function appsFor(shell, list = ALL) {
     const nativeSide = !!(window.WizardOSNative && typeof window.WizardOSNative.sideButton === 'function');
     return list.filter(a => {
       if (a.id === 'side-button' && !nativeSide) return false;
-      if (a.id === 'usuals' && !(window.WizardOSNative && typeof window.WizardOSNative.usuals === 'function')) return false;
-      if (shell === 'desktop') return a.kind !== 'native';
+      const device = window.WizDeviceLegacy?.find(d => d.appId === a.id);
+      if (device && typeof window.WizardOSNative?.[device.probe] !== 'function') return false;
+      if (shell === 'desktop') return a.kind !== 'native' && !a.phoneOnly;
       return !a.desktopOnly;
     });
   }
@@ -65,13 +54,18 @@
     view: a.source === 'apps.json' && ['original', 'overlay', 'own'].includes(a.view?.mode) &&
       (a.view.mode !== 'own' || a.view.url === `/wizard/views/${a.id}/`) ? a.view : { mode: 'original', url: a.url || '' },
     url: a.source === 'apps.json' && a.view?.mode === 'own' && a.view.url === `/wizard/views/${a.id}/` ? a.view.url : a.url || '', desc: a.desc || '',
-    ...(a.desktop_only ? { desktopOnly: true } : {}), source: a.source || '', system: a.system === true,
+    ...(a.desktop_only ? { desktopOnly: true } : {}),
+    phoneOnly: a.phone_only === true || window.WizDeviceLegacy?.some(d => d.appId === a.id && d.phoneOnly === true), source: a.source || '', system: a.system === true,
+    status: a.status,
     receives_voice_input: trusted === true && a.receives_voice_input === true,
+    voice_names: Array.isArray(a.voice_names) ? a.voice_names.filter(n => typeof n === 'string') : [],
+    provides: trusted && Array.isArray(a.provides) ? a.provides.filter(n => typeof n === 'string') : [],
     sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [] },
   });
   let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).map(toTile); } catch (e) { return []; } })();
   // The Agent Service is Wizard itself, not an app the owner manages.
   const BACK_KEY = 'wux.apps.backend.v1', BACK_HIDDEN = new Set(['wizard-agent-service']);
+  window.WizCore.appMetadata = id => [...REMOTE, ...BACK].find(a => a.id === id)?.sigil;
   let BACK = (() => { try { return (JSON.parse(localStorage.getItem(BACK_KEY) || '[]') || []).map(a => toTile(a)); } catch (e) { return []; } })();
   window.WizCore.backendApps = () => BACK.map(a => {
     if (!a.sgh && window.WizSigil) { const g = window.WizSigil.of(a.sigil || a); a.sgc = g.color; a.sgh = window.WizSigil.html(a.sigil || a); }
@@ -94,6 +88,7 @@
       if (window.WizConfig?.ready) await window.WizConfig.ready;
       const url = window.WizConfig?.endpoint('apps');
       if (!url) return;
+      if (window.WizLauncher?.ready) await window.WizLauncher.ready;
       const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
       if (!r.ok) return;
       const snapshot = await r.json();
@@ -143,7 +138,14 @@
       const agents = (AG?.visible?.() || AG?.list || []).filter(a => !a.is_default).map(agentTile);
       // Reserve the agent namespace even after deletion: a stale remote app must never impersonate it.
       const views = window.WizChatsHost?.tiles() || [];
-      const merged = [...ALL.slice(0, chats), main ? agentTile(main) : ALL[chats], ...agents, ...views, ...REMOTE.filter(r => !r.id.startsWith('agent:') && !ALL.some(a => a.id === r.id) && !views.some(a => a.id === r.id)), ...ALL.slice(chats + 1)];
+      const native = (window.WizLauncher?.get('nativeLinks') || []).filter(a => !ALL.some(b => b.id === a.id) && !REMOTE.some(b => b.id === a.id)).map(a => ({
+        ...a, kind: 'native', g: a.colors, sigil: { id: a.id, name: a.name, icon: a.icon },
+      }));
+      const tail = ALL.slice(chats + 1);
+      // The Android settings shortcut historically followed the two built-in device tools.
+      const ordinary = native.filter(a => !a.href.includes('action=android.settings.'));
+      const deviceSettings = native.filter(a => a.href.includes('action=android.settings.'));
+      const merged = [...ALL.slice(0, chats), main ? agentTile(main) : ALL[chats], ...agents, ...views, ...REMOTE.filter(r => !r.id.startsWith('agent:') && !ALL.some(a => a.id === r.id) && !views.some(a => a.id === r.id)), ...ordinary, ...tail, ...deviceSettings];
       const list = appsFor(shell, merged);
       // Every app wears its sigil (core/sigils.js): sgc = its one colour, sgh = the glyph markup.
       if (window.WizSigil) for (const a of list) if (!a.sgh) { const s = window.WizSigil.of(a.sigil || a); a.sgc = s.color; a.sgh = window.WizSigil.html(a.sigil || a); }
@@ -153,15 +155,16 @@
       window.dispatchEvent(new CustomEvent('wizard:apps', { detail: { shell, count: APPS.length } }));
     };
     rebuild(); listeners.add(rebuild);
+    window.WizLauncher?.onChange(rebuild);
     window.WosAgents?.onChange(rebuild);
   const tight = s => s.replace(/ /g, '');
   function findApp(q, exact) {
       q = norm(q).replace(/^(the|my) /, '').replace(/ (app|application|view)$/, '');
       if (!q) return null;
-      const alias = { troubleshooter: 'troubleshooter', troubleshooting: 'troubleshooter', troubleshoot: 'troubleshooter', 'fix wizard': 'troubleshooter', wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', 'google maps': 'maps', map: 'maps', 'cine queue': 'cinequeue', movies: 'cinequeue', 'i ching': 'iching', notifications: 'wizard', 'side key': 'side-button', 'power button': 'side-button', 'side button assistant': 'side-button', inbox: 'wizard', terminal: 'console', music: 'spotify', reader: 'wisdom', 'wisdom reader': 'wisdom', 'wizard reader': 'wisdom', collections: 'wisdom', jobs: 'wisdom', 'steve jobs': 'wisdom', signal: 'wizard-signal', shop: 'shopping', meetings: 'mizel', 'meeting recorder': 'mizel', usual: 'usuals', usuals: 'usuals', 'food app': 'usuals', 'my food': 'usuals', 'grab app': 'usuals', 'saved orders': 'usuals', eats: 'usuals', 'wizard eats': 'usuals', bites: 'usuals', 'wizard bites': 'usuals', 'wizard food': 'usuals', grab: 'usuals', 'my usuals': 'usuals', 'grab food': 'usuals', food: 'usuals', 'order food': 'usuals' };
-      // "Open music" is Wizard Music when this Wizard has it; Spotify only by name or as the fallback.
-      if (/^(music|my music|the music|songs|music app|music player|wizard music)$/.test(q) && APP['wizard-music']) return APP['wizard-music'];
-      if (alias[q] && APP[alias[q]]) return APP[alias[q]];
+      const named = window.WosAppVoice?.aliases(APPS,norm).get(q);
+      if (named) return named;
+      const legacy = window.WosVoiceLegacy?.alias(q,APP);
+      if (legacy) return legacy;
       if (exact) return null; // appByName: name or alias only, no fuzzy guess
       let best = null, bs = 0;
       for (const a of APPS) {
@@ -181,7 +184,9 @@
     // matches only (name, name without its "Wizard" prefix, or an alias), so ordinary words never open apps.
     function appByName(q) {
       q = norm(q).replace(/^(open |the |my )+/, '').replace(/ (app|application)$/, '');
-      if (!q || q.split(' ').length > 4) return null;
+      if (!q) return null;
+      const named = window.WosAppVoice?.aliases(APPS,norm).get(q); if (named) return named;
+      if (q.split(' ').length > 4) return null;
       const bare = n => n.replace(/^wizard /, '');
       const hit = APPS.find(a => a.kind !== 'view' && (norm(a.name) === q || tight(bare(norm(a.name))) === tight(bare(q))));
       if (hit) return hit;

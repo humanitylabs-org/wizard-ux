@@ -361,6 +361,7 @@
       if (!r.ok) return;
       const j = await r.json();
       if (!j || prefsPending || rev !== prefsRevision) return;
+      window.WizLauncher?.accept(j);
       let changed = false;
       for (const [name, [key, valid, encode]] of Object.entries(prefsFields)) if (valid(j[name])) {
         const value = encode(j[name]);
@@ -715,7 +716,7 @@
           if (fromSnap) await Promise.race([agents, new Promise(r => setTimeout(r, AGENT_WAIT))]);
           this.emit();
           await agents;
-        } catch (e) { this.error = e.status === 403 ? 'access' : 'offline'; }
+        } catch (e) { this.error = e.status === 403 ? 'access' : 'offline'; this.errorAt = Date.now(); }
         finally { this.loading = null; this.emit(); }
       })();
       return this.loading;

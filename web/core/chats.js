@@ -69,10 +69,9 @@ window.WizCore.chats = function createChats(H) {
   const hosted = new Map();
   // Apps admitted to open the standard thread over their window (app-services.js keeps the same list).
   // Wisdom (James, 22 Oct 2026): Ask AI is the real Chats thread, never an app-built chat.
-  const HOSTED_APPS = new Set(['wizard-manager', 'wisdom']);
   function openHosted(wid, frame, sid, opts = {}) {
     const w = W[wid];
-    if (!w || !HOSTED_APPS.has(w.appId) || !frame?.isConnected || frame.closest('[data-win]')?.dataset.win !== wid) return false;
+    if (!w || !window.WizLauncher?.hasHostedThread(w.appId) || !frame?.isConnected || frame.closest('[data-win]')?.dataset.win !== wid) return false;
     // A newly-created agent thread may not be in the next session-list refresh yet.
     if (opts?.agent != null) {
       const a = typeof opts.agent === 'string' ? window.WosAgents?.get(opts.agent) : null;
@@ -1076,6 +1075,9 @@ window.WizCore.chats = function createChats(H) {
       clearReading(w.id); c.listHTML = html;
       // The morph keeps a typed field's live value; a cleared search (×, Back, a chip) must empty the box too.
       const box = root.querySelector('[data-chsearch]'); if (box && !c.q && box.value) box.value = '';
+      // The auto-archive picker is a saved setting, not a draft: show the saved value after every repaint, or a
+      // window painted before the choice changed (another desk, another device, first paint) keeps saying "1 week".
+      const arch = root.querySelector('[data-archafter]'); if (arch && arch.value !== String(LIVE.archiveAfterDays)) arch.value = String(LIVE.archiveAfterDays);
       if (c.listPending) { if (restoreListPlace(el.querySelector('.ch-scroll'), place)) c.listPending = null; }
       else anchorListPlace(el.querySelector('.ch-scroll'), place);
     } else {

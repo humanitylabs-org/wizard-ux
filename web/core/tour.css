@@ -71,6 +71,9 @@
 .hs-say button::before { content: "“"; color: var(--violet-2); } .hs-say button::after { content: "”"; color: var(--violet-2); }
 .hs-go { display: block; width: 100%; margin-top: 14px; padding: 13px; border-radius: 16px; border: 0; font: inherit; font-size: 15px; font-weight: 600; color: #fff;
   background: linear-gradient(135deg, #6b46ff, #c04dff); cursor: pointer; }
+/* Reply beat (2): the "Open Chats" button under the instruction. */
+.tr-go { border: 0; border-radius: 99px; min-height: 44px; padding: 10px 28px; font: inherit; font-size: 15px; font-weight: 650; color: #fff;
+  background: linear-gradient(140deg, #7a4dff, #c04dff); cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .tour *, .help-sheet * { animation: none !important; transition: none !important; } }
 .tour[data-step="3"] { pointer-events: auto; cursor: pointer; overflow-y: auto; box-sizing: border-box;
   padding-top: calc(var(--safe-t, 0px) + 64px); padding-bottom: calc(var(--safe-b, 0px) + 16px); }
@@ -107,3 +110,20 @@
 @media (prefers-reduced-motion: reduce) { .dtr { animation: none; } }
 /* The header tools sit under the top-right Skip tour pill and take no taps while the tour runs: hide them then. */
 .device.touring .home-tools { visibility: hidden; }
+
+/* Reply beat (2): the shell is theirs. No dim, no spotlight ring, the instruction small at the top; only its own
+   buttons take taps (the card itself lets taps through to Chats underneath). */
+.tour.tr-free .tr-spot { box-shadow: 0 0 0 200vmax rgba(3, 1, 10, 0); }
+.tour.tr-free .tr-spot::after { display: none; }
+.tour.tr-free .tr-copy { top: calc(var(--safe-t, 0px) + 56px); padding: 10px 14px; gap: 4px; }
+.tour.tr-free .tr-copy b { font-size: 16px; }
+.tour.tr-free .tr-alt { margin-top: 2px; }
+.tour.tr-free .tr-go { min-height: 38px; padding: 7px 22px; font-size: 14px; }
+/* Reply, away from Home (Chats open): nothing of the tour covers the list or the thread. */
+.tour.tr-free.tr-away .tr-copy, .tour.tr-free.tr-away .tr-skip, .tour.tr-free.tr-away .tr-steps { display: none; }
+/* Done (3): the end card carries a longer paragraph, so it reads as body text, not a headline. */
+.tour[data-step="3"] .tr-copy b { font-size: 17px; line-height: 1.45; font-weight: 500; }
+/* While a take is running, the orb and its Cancel/Pause controls sit above everything the tour draws, so nothing
+   the tour shows can cover them (the tour itself never takes those taps). */
+.device.touring:is([data-voice="listen"], [data-voice="paused"], [data-voice="command"]) #dock { z-index: 91; }
+.device.touring:is([data-voice="listen"], [data-voice="paused"], [data-voice="command"]) #voice { z-index: 92; } /* arcs over the dock, as without the tour */

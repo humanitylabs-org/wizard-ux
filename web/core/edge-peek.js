@@ -1,7 +1,8 @@
 /* Edge peek (Miguel's gesture, proposed for every skin): when a view is bound beside a chat thread (bound views,
  * app.js syncPeek), the edge where it leans in is a handle. Tap it, or swipe it toward the middle, to move to the
- * view; on the view, the thread's edge on the left goes back. The handle and the next dock dot glow three times
- * when it appears (desks.css; none with reduced motion). The bottom-bar swipe keeps working as before.
+ * view; on the view, the thread's edge on the left goes back. The handle glows on its first three appearances
+ * only (persisted by the host's localStorage API, across skins and reloads; none with reduced motion).
+ * The bottom-bar swipe keeps working as before.
  * Gestures: swipes use the shell's one threshold (swipe-intent.js via api.gesture.intent); a tap (<10 px) moves;
  * short, outward and vertical drags do nothing. The handle never prevents a default and ignores pointercancel, so
  * the OS's own edge gestures (the iOS left-edge back swipe) win as before. It sits outside the chats container,
@@ -13,6 +14,8 @@
     const el = document.createElement('button');
     el.type = 'button'; el.className = 'bound-grab'; el.hidden = true;
     let side = 0, g = null;
+    const saved = Number(api.storage.get('glowAppearances'));
+    let glowAppearances = Number.isInteger(saved) && saved >= 0 ? Math.min(saved, 3) : 0;
     const go = () => { const s = side; if (s) api.nav.goDesk(api.route().desk + s); };
     api.listen(el, 'pointerdown', e => {
       g = { x: e.clientX, y: e.clientY, at: performance.now(), id: e.pointerId, moved: false };
@@ -36,7 +39,10 @@
       el.classList.toggle('right', side > 0); el.classList.toggle('left', side < 0);
       el.setAttribute('aria-label', side > 0 ? 'Show the view beside this thread' : 'Back to the thread');
       el.classList.remove('glow');
-      if (side) { void el.offsetWidth; el.classList.add('glow'); }
+      if (side && glowAppearances < 3) {
+        api.storage.set('glowAppearances', ++glowAppearances);
+        void el.offsetWidth; el.classList.add('glow');
+      }
     };
     api.mount(el);
     paint(api.route().beside | 0);

@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-"""Usuals device QA (runs on Thales): Wizard OS (QA build) + a stand-in Grab app (tools/fake-grab, package
+"""Food device QA (runs on a Linux/KVM worker): Wizard OS (QA build) + a stand-in Grab app (tools/fake-grab, package
 com.grabtaxi.passenger) on a fresh API35 emulator.
 
 usage: qa_usuals.py WOS_QA_APK FAKE_GRAB_APK WEB_DIR [OUT_DIR]
+Set ANDROID_HOME, JAVA_HOME and WIZARD_WORK_ROOT. Optional QA_WEBVIEW_APK
+uses a supplied x86_64 SystemWebView on the disposable device (never on a phone). SLICE8_FOOD_APP points to
+the installed Food app checkout for candidate runs. For an old-to-new move in
+the SAME native store, also set SLICE8_MOVE_WEB and SLICE8_MOVE_FOOD.
 
 A. Usuals shows in the app list (native bridge present); without accessibility it says so; with it, the empty state
    leads with "Order something new" (no name asked first).
@@ -15,31 +19,43 @@ B. Order something new: Grab opens with the "Saving this order" card. A person (
 C. Run: tap Order → Grab opens fresh (promo shows on that launch), the cover is up, the run reaches checkout,
    the cover shows "Place order · ฿200"; NO order was placed by the run.
 D. Look first → cover gone, Grab is on checkout, still no order.
-E. Run again → Place order on the cover → FakeGrab logs exactly one more ORDER PLACED, 2x Kra pao + 1x iced tea.
-F. Voice: "order my usual kra pao" runs it (handleText → localParse), "order something new" opens Grab to browse,
-   nothing written to Wizard; ordinary talk doesn't start anything. Cancel/Don't save leave no order and no usual.
+Default legacy mode retains the full cover-confirmation and voice-routing E/F tests.
+SLICE8_CHECKOUT_ONLY skips those extra legacy tests.
+E. Optional old-to-new web move: native record unchanged, listed in hosted Food,
+   replay still shows its cover and stops at checkout without another placement.
 G. Back: edit sheet open → Back closes the sheet, app stays open. No crashes.
 """
-import fcntl, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid, urllib.request
+import fcntl, http.server, json, os, pathlib, platform, re, socket, subprocess, sys, threading, time, uuid, urllib.request
 from qa_paths import work_root
 from qa_paths import android_sdk, java_home
 P = pathlib.Path
 BASE = P(str(work_root() / 'AndroidBuilds')); SDK = android_sdk()
+ABI = os.environ.get('QA_ANDROID_ABI', 'arm64-v8a' if platform.machine().lower() in ('arm64', 'aarch64') else 'x86_64')
 APK = P(sys.argv[1]); GRAB = P(sys.argv[2]); WEB = P(sys.argv[3])
 job = BASE / 'qa' / ('wos-usuals-' + uuid.uuid4().hex[:8]); job.mkdir(parents=True)
 OUT = P(sys.argv[4]) if len(sys.argv) > 4 else job / 'shots'; OUT.mkdir(parents=True, exist_ok=True)
 env = os.environ.copy(); env.update(JAVA_HOME=java_home(),
-    ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
-env['PATH'] = env['JAVA_HOME'] + '/bin:' + env['PATH']; (job / 'avd').mkdir()
-ADB = str(SDK / 'platform-tools/adb'); PORT = 5730; S = f'emulator-{PORT}'; DEVTOOLS = 9361; FAKE = 18791
+    ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'), ANDROID_EMULATOR_HOME=str(job / 'avd'), ANDROID_USER_HOME=str(job / 'android-user'))
+env['PATH'] = env['JAVA_HOME'] + '/bin:' + env['PATH']; (job / 'avd').mkdir(); (job / 'android-user').mkdir()
+AVD = job.name
+env['ANDROID_ADB_SERVER_PORT'] = os.environ.get('QA_ADB_PORT', '5048')
+env.pop('ADB_SERVER_SOCKET', None)
+ADB = str(SDK / 'platform-tools/adb'); PORT = int(os.environ.get('QA_EMULATOR_PORT', '5680')); S = f'127.0.0.1:{PORT+1}'; DEVTOOLS = int(os.environ.get('QA_DEVTOOLS_PORT', '9361')); FAKE = int(os.environ.get('QA_FAKE_PORT', '18791'))
 PKG = 'ai.wizards.os.qa'; GPKG = 'com.grabtaxi.passenger'; ORIGIN = f'http://10.0.2.2:{FAKE}'
-res = []
-def check(n, ok, d=''):
-    res.append(bool(ok)); print(('PASS ' if ok else 'FAIL ') + n + (' — ' + str(d)[:400] if d else ''), flush=True)
+res = []; EVENTS = []; CHECKS = []
+print('JOB', job, flush=True)
+COMMANDS = []
+def check(n, ok, d: object=''):
+    CHECKS.append({'name': n, 'ok': bool(ok), 'detail': str(d)}); res.append(bool(ok)); print(('PASS ' if ok else 'FAIL ') + n + (' — ' + str(d)[:400] if d else ''), flush=True)
 def sh(*a, stdin=None, binary=False):
-    r = subprocess.run([str(x) for x in a], env=env, capture_output=True, input=stdin, text=not binary)
+    r = subprocess.run([str(x) for x in a], env=env, capture_output=True, input=stdin, text=not binary, timeout=90)
+    COMMANDS.append({'argv':[str(x) for x in a], 'code':r.returncode, 'stdout':f'{len(r.stdout)} binary bytes' if binary else str(r.stdout)[-3000:], 'stderr':str(r.stderr)[-3000:]})
     return r.stdout
-def sx(c): return sh(ADB, '-s', S, 'shell', c)
+def sx(c):
+    result = sh(ADB, '-s', S, 'shell', c)
+    if COMMANDS[-1]['code'] and ('not found' in COMMANDS[-1]['stderr'] or 'offline' in COMMANDS[-1]['stderr']):
+        sh(ADB, 'connect', S); time.sleep(.5); result = sh(ADB, '-s', S, 'shell', c)
+    return result
 def shot(name): (OUT / (name + '.png')).write_bytes(sh(ADB, '-s', S, 'exec-out', 'screencap', '-p', binary=True))
 # No uiautomator: a dump re-binds UiAutomation and knocks Wizard OS's accessibility service (and its cover) off.
 # The stand-in Grab and the cover (debug builds) log their labels and centres instead.
@@ -99,6 +115,8 @@ class Fake(http.server.BaseHTTPRequestHandler):
         self.end_headers(); self.wfile.write(body)
     def do_GET(self):
         u = self.path.split('?')[0]
+        if u == '/wizard/v1/ui-preferences': return self._send(200, b'{"migrations":{"launcher-seed-v1":true}}')
+        if u.endswith('/store-install/_updates'): return self._send(200, b'{"mode":"ask","update_available":false}')
         if u == '/wizard-os-home': return self._send(301, b'', extra={'Location': '/wizard-os-home/'})
         m = re.match(r'^/wizard-os-home/(.*)$', u)
         if m:
@@ -107,17 +125,34 @@ class Fake(http.server.BaseHTTPRequestHandler):
             if str(p).startswith(str(WEB.resolve())) and p.is_file():
                 ct = {'js': 'text/javascript', 'css': 'text/css', 'html': 'text/html', 'json': 'application/json', 'svg': 'image/svg+xml', 'png': 'image/png', 'webmanifest': 'application/manifest+json'}.get(p.suffix[1:], 'application/octet-stream')
                 return self._send(200, p.read_bytes(), ct)
-        if u.startswith('/wizard/v1/apps'): return self._send(200, b'{"schema":1,"apps":[]}')
+        if FOOD_APP and u.startswith('/usuals/'):
+            file = FOOD_FILES.get(u[len('/usuals/'):] or 'index.html')
+            if file is None: return self._send(404, b'')
+            ct = {'.html':'text/html','.css':'text/css','.js':'text/javascript'}.get(file.suffix,'application/octet-stream')
+            return self._send(200, file.read_bytes(), ct)
+        if u == '/wizard/v1/bootstrap':
+            return self._send(200, json.dumps({'bootstrap':1,'settings':{'owner':{},'agent':{'name':'Wizard'},'clock':{},'appearance':{}},'capabilities':{},'endpoints':{'apps':'/wizard/v1/apps','agents':'/wizard/v1/agents','uiPreferences':'/wizard/v1/ui-preferences'}}).encode())
+        if u.startswith('/wizard/v1/apps'):
+            apps = [{'id':'usuals','name':'Food','url':'/usuals/','view':{'mode':'original','url':'/usuals/'},'source':'apps.json','status':'running','provides':['voice-commands'],'voice_names':['Food','Usuals','usual','food app','wizard eats','saved orders','eats','bites']}] if FOOD_APP else []
+            return self._send(200, json.dumps({'schema':1,'apps':apps}).encode())
         if u.startswith('/wizard/hermes/api/sessions'): return self._send(200, b'{"sessions":[]}')
         if 'update' in u or u.endswith('latest.json'): return self._send(404, b'{}')
         return self._send(200, b'{}')
+    def do_PUT(self):
+        n = int(self.headers.get('Content-Length') or 0); self.rfile.read(n) if n else b''
+        if self.path == '/wizard/thread-seen': return self._send(200, b'{}')
+        return self._send(503, b'{"error":"qa: no writes"}')
     def do_POST(self):
         n = int(self.headers.get('Content-Length') or 0); self.rfile.read(n) if n else b''
         WRITES.append(self.path)
         return self._send(503, b'{"error":"qa: no writes"}')
 WRITES = []
-srv = http.server.ThreadingHTTPServer(('127.0.0.1', FAKE), Fake)
-threading.Thread(target=srv.serve_forever, daemon=True).start()
+FOOD_APP = os.environ.get('SLICE8_FOOD_APP', '')
+def food_files(root):
+    base = P(root) / 'app/static'
+    return {file.relative_to(base).as_posix(): file for file in base.rglob('*') if file.is_file() and file.resolve().is_relative_to(base.resolve())} if root else {}
+FOOD_FILES = food_files(FOOD_APP)
+srv = None
 
 class Page:
     def __init__(self):
@@ -139,6 +174,8 @@ class Page:
         buf = b''
         while b'\r\n\r\n' not in buf: buf += self.s.recv(4096)
         self.buf = buf.split(b'\r\n\r\n', 1)[1]
+        for i, method in enumerate(['Runtime.enable', 'Log.enable'], 10000):
+            self._send({'id':i,'method':method})
     def _send(self, obj):
         data = json.dumps(obj).encode(); hdr = bytearray([0x81]); mask = os.urandom(4); n = len(data)
         if n < 126: hdr.append(0x80 | n)
@@ -160,10 +197,16 @@ class Page:
             msg += payload
             if b1 & 0x80: return json.loads(msg.decode())
     def ev(self, expr):
+        if FOOD_APP:
+            frame = "document.querySelector('iframe.appframe:not([data-voice-service])[src*=\"/usuals/\"]')"
+            expr = expr.replace("window.__wos.openApp({ id: 'usuals', name: 'Food', kind: 'usuals' })", "window.WizOpenApp('usuals')")
+            expr = re.sub(r"document\.querySelector\((['\"])(?=\[data-us|\.us-)", lambda m: frame + '.contentDocument.querySelector(' + m.group(1), expr)
+            expr = expr.replace('window.WosUsuals', frame + '.contentWindow.WosUsuals')
         self.id += 1; my = self.id
-        self._send({'id': my, 'method': 'Runtime.evaluate', 'params': {'expression': expr, 'awaitPromise': True, 'returnByValue': True}})
+        self._send({'id': my, 'method': 'Runtime.evaluate', 'params': {'expression': expr, 'awaitPromise': True, 'returnByValue': True, 'userGesture': True}})
         while True:
             d = self._recv()
+            if 'method' in d: EVENTS.append(d)
             if d.get('id') == my:
                 rr = d.get('result', {})
                 if rr.get('exceptionDetails'): raise RuntimeError(json.dumps(rr['exceptionDetails'])[:400])
@@ -180,31 +223,57 @@ def page():
             pg.ev("(() => { try { localStorage.setItem('wos.tour.v1', 'true'); } catch (e) {} return 1; })()")
             # It starts ~600 ms after boot, so wait for it and close it rather than racing it.
             pg.ev("new Promise(r => { let n = 0; const t = () => { const T = window.WosTour; if (T && T.active) { T.finish('qa'); r(1); } else if (++n > 15) r(0); else setTimeout(t, 200); }; t(); })")
+            if FOOD_APP:
+                pg.ev('window.WizCore.appsLoaded()')
+                pg.ev("(() => { if(window.__qaFoodRelayCalls) return; window.__qaFoodRelayCalls=[]; const original=window.WizAndroidRelay.legacy; window.WizAndroidRelay.legacy=function(source,id,method,args){const out=original(source,id,method,args); window.__qaFoodRelayCalls.push({id,method,args,path:source.location.pathname}); return out;}; })()")
             return pg
         except Exception as e: print('  page retry', e); time.sleep(2)
     raise RuntimeError('no page')
 
 def bring_wos():
     sx(f'am start -n {PKG}/ai.wizards.os.MainActivity'); time.sleep(2.5)
+    # Android force-stop intentionally unbinds accessibility; restore the user's fixture switch.
+    sx('settings put secure enabled_accessibility_services null')
+    sx(f'settings put secure enabled_accessibility_services {PKG}/ai.wizards.os.everywhere.WizardKeyboardService')
+    sx('settings put secure accessibility_enabled 1'); time.sleep(3)
 
-em = None
+em = None; adb_owned = False
 with (BASE / 'worker.lock').open('a') as lock:
     fcntl.flock(lock, fcntl.LOCK_EX)
     try:
-        sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'us', '-k', 'system-images;android-35;google_apis;arm64-v8a', '-d', 'pixel_7', '-p', job / 'dev', stdin='no\n')
-        em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'us', '-port', str(PORT), '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect'], env=env, stdout=open(job / 'em.log', 'w'), stderr=subprocess.STDOUT)
+        if int(env['ANDROID_ADB_SERVER_PORT']) == 5037: raise RuntimeError('Refuse shared ADB server')
+        for port in (int(env['ANDROID_ADB_SERVER_PORT']), PORT, PORT + 1, DEVTOOLS, FAKE):
+            with socket.socket() as probe:
+                if probe.connect_ex(('127.0.0.1', port)) == 0: raise RuntimeError(f'QA port {port} already belongs to another process')
+        srv = http.server.ThreadingHTTPServer(('127.0.0.1', FAKE), Fake)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', AVD, '-k', f'system-images;android-35;google_apis;{ABI}', '-d', 'pixel_7', '-p', job / 'dev', stdin='no\n')
+        sh(ADB, 'start-server')
+        if COMMANDS[-1]['code']: raise RuntimeError('Private ADB startup failed')
+        adb_owned = True
+        em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', AVD, '-port', str(PORT), '-accel', 'on', '-no-window', '-no-snapshot', '-no-audio', *(['-gpu', 'swangle', '-feature', '-Vulkan,-GLDirectMem'] if sys.platform.startswith('linux') else ['-gpu', 'swiftshader_indirect']), '-verbose', '-memory', '2560', '-cores', '4'], env=env, stdout=open(job / 'em.log', 'w'), stderr=subprocess.STDOUT)
         for _ in range(120):
+            if em.poll() is not None: raise RuntimeError('emulator exited ' + str(em.returncode))
             if sx('getprop sys.boot_completed').strip() == '1': break
             time.sleep(3)
+        else: raise RuntimeError('boot timeout')
         time.sleep(10)
         for k in ('window_animation_scale', 'transition_animation_scale', 'animator_duration_scale'): sx(f'settings put global {k} 0')
         sx('input keyevent KEYCODE_WAKEUP'); sx('wm dismiss-keyguard'); sx('settings put system screen_off_timeout 1800000')
+        if os.environ.get('QA_WEBVIEW_APK'):
+            sh(ADB, '-s', S, 'install', '-r', os.environ['QA_WEBVIEW_APK'])
+            provider = sx('cmd webviewupdate set-webview-implementation com.android.webview')
+            if 'Success' not in provider: raise RuntimeError('QA WebView provider failed: ' + provider)
+        (OUT / 'webview-provider.txt').write_text(sx('dumpsys webviewupdate'))
         out1 = sh(ADB, '-s', S, 'install', '-r', APK).strip().splitlines()[-1]
         out2 = sh(ADB, '-s', S, 'install', '-r', GRAB).strip().splitlines()[-1]
         check('install Wizard OS QA + stand-in Grab', out1 == 'Success' and out2 == 'Success', out1 + ' / ' + out2)
         sx(f'run-as {PKG} mkdir -p files'); sx(f"run-as {PKG} sh -c 'echo {ORIGIN} > files/qa_home.txt; echo {ORIGIN} > files/qa_origin.txt'")
         sx(f'pm grant {PKG} android.permission.RECORD_AUDIO'); sx(f'pm grant {PKG} android.permission.POST_NOTIFICATIONS')
         sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity'); time.sleep(8)
+        print('SLICE8_SETUP ' + json.dumps(COMMANDS[-8:]), flush=True)
+        print('TRANSPORT', sh(ADB, 'devices', '-l'), 'PID', sx(f'pidof {PKG}'), 'ACTIVITY', top(), flush=True)
+        shot('pre-page')
         pg = page()
 
         # A. app list + blocker without accessibility
@@ -294,7 +363,8 @@ with (BASE / 'worker.lock').open('a') as lock:
         u = (lst.get('list') or [{}])[0]
         script = u.get('script', '')
         print('  recorded:', script.replace('\n', ' | '))
-        print('  usual:', {k: u.get(k) for k in ('name', 'basket', 'place', 'lastTotal', 'needsName', 'lastResult')})
+        print('  usual:', {k: u.get(k) for k in ['name','basket','place','lastTotal','needsName','lastResult']})
+        (OUT / 'native-order.json').write_text(json.dumps(u, indent=2))
         check('B: named after the food', u.get('name') == 'Kra pao moo saap + Thai iced tea' and u.get('needsName') is True, u.get('name'))
         check('B: basket and place read off the route', u.get('basket') == '2× Kra pao moo saap · 1× Thai iced tea' and u.get('place') == 'Krua Thai Kitchen', (u.get('basket'), u.get('place')))
         check('B: route keeps the search, the restaurant and Add by the item',
@@ -312,7 +382,15 @@ with (BASE / 'worker.lock').open('a') as lock:
         pg.ev("(() => { const i = document.querySelector('.us-name input'); i.value = 'Kra pao'; document.querySelector('.us-name button[type=submit]').click(); })()"); time.sleep(.8)
         lst = json.loads(pg.ev("window.WizardOSNative.usuals()") or '{}'); u = (lst.get('list') or [{}])[0]
         check('B: renamed to Kra pao, name field gone', u.get('name') == 'Kra pao' and not u.get('needsName') and not pg.ev("!!document.querySelector('.us-name')"), (u.get('name'), u.get('needsName')))
-        pg.ev("window.WosUsuals.refresh()"); time.sleep(.5); shot('b-saved')
+        pg.ev("window.WosUsuals.refresh()"); time.sleep(.5); shot('b-saved'); print('SLICE8_NATIVE_ORDER ' + json.dumps({k:u.get(k) for k in ['name','basket','place','script','steps','lastTotal']}, sort_keys=True), flush=True)
+
+        # Close and reopen the real app, without clearing native state.
+        sx(f'am force-stop {PKG}'); bring_wos(); pg.close(); pg = page()
+        pg.ev("window.__wos.openApp({ id: 'usuals', name: 'Food', kind: 'usuals' })"); time.sleep(2)
+        check('saved order survives force-stop and reopen', 'Kra pao' in pg.ev("document.querySelector('[data-usuals]').innerText") and json.loads(pg.ev('window.WizardOSNative.usuals()'))['list'][0]['id'] == u['id'])
+        pg.ev('window.WosUsuals.refresh()'); time.sleep(1)
+        check('accessibility is rebound after fixture force-stop', json.loads(pg.ev('window.WizardOSNative.usuals()')).get('blocker') == '')
+        shot('b-reopened')
 
         # C. Run → cover → checkout, nothing ordered
         t0 = time.time()
@@ -337,65 +415,103 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('D: still nothing ordered', grablog().count('ORDER PLACED') == 1)
         shot('d-look-first')
 
-        # E. Run again and order from the cover
-        bring_wos(); pg.close(); pg = page()
-        pg.ev("window.__wos.openApp({ id: 'usuals', name: 'Food', kind: 'usuals' })"); time.sleep(1)
-        pg.ev("document.querySelector('[data-us=run]').click()")
-        ready = wait_for(lambda: find(r'^Place order'), 90, 1)
-        check('E: second run reaches checkout', ready is not None, uslog()[-400:])
-        if ready: tap(ready)
-        placed = wait_for(lambda: grablog().count('ORDER PLACED') >= 2, 15, .5)
-        gl = grablog()
-        check('E: James\'s tap on Place order places exactly one more order', placed and gl.count('ORDER PLACED') == 2, gl[-300:])
-        check('E: the order is 2× kra pao + 1× iced tea, ฿200', 'ORDER PLACED total=200 items=2x Kra pao moo saap; 1x Thai iced tea;' in gl, gl[-200:])
-        time.sleep(1.5); shot('e-ordered')
-        wait_for(lambda: find(r'^Ordered') is None, 6, .5)
+        # Optional in-place web move: preserve this device and its native store.
+        if os.environ.get('SLICE8_MOVE_WEB'):
+            before = json.loads(pg.ev('window.WizardOSNative.usuals()'))['list']
+            GLOG[0] = grablog() # Keep the teaching placement count across guest reboot.
+            WEB = P(os.environ['SLICE8_MOVE_WEB']); FOOD_APP = os.environ['SLICE8_MOVE_FOOD']; FOOD_FILES = food_files(FOOD_APP)
+            # Restart the disposable device after replacing the served tree.
+            # Preserve its disk/data, but do not mix old WebView renderers with new assets.
+            sh(ADB, '-s', S, 'reboot'); time.sleep(5)
+            for _ in range(120):
+                if sx('getprop sys.boot_completed').strip() == '1': break
+                time.sleep(1)
+            else: raise RuntimeError('post-move boot did not complete')
+            bring_wos(); pg.close(); pg = page()
+            pg.ev("window.WizCore.appsLoaded().then(() => window.WizOpenApp('usuals'))"); time.sleep(3)
+            shot('migration-open')
+            print('MIGRATION_HOST', pg.ev("JSON.stringify({apps:window.WizCore.apps('mobile').APPS.map(a=>({id:a.id,url:a.url})),frames:[...document.querySelectorAll('iframe')].map(f=>f.src)})"), flush=True)
+            check('native bridge ready after web move', json.loads(pg.ev('window.WizardOSNative.usuals()')).get('blocker') == '')
+            after = json.loads(pg.ev('window.WizardOSNative.usuals()'))['list']
+            (OUT / 'native-before-move.json').write_text(json.dumps(before, indent=2))
+            (OUT / 'native-after-move.json').write_text(json.dumps(after, indent=2))
+            check('old saved native order is unchanged under new web', before == after and 'Kra pao' in pg.ev("document.querySelector('[data-usuals]').innerText"))
+            shot('migration-listed')
+            pg.ev("document.querySelector('[data-us=run]').click()")
+            covered = wait_for(lambda: find(r'^Ordering your Kra pao'),15,.5)
+            print('MIGRATION_REPLAY_STATE ' + str(pg.ev('window.WizardOSNative.usuals()')), flush=True)
+            check('old saved order replays under new with cover', bool(covered))
+            shot('migration-cover')
+            ready = wait_for(lambda: find(r'^Place order'),90,1)
+            check('old saved order stops at checkout under new, total 200, no placement', ready is not None and '฿200' in ready['text'] and grablog().count('ORDER PLACED') == 1)
+            shot('migration-ready')
+            calls = pg.ev('window.__qaFoodRelayCalls')
+            (OUT / 'shared-relay-calls.json').write_text(json.dumps(calls, indent=2))
+            check('shared relay forwarded the old saved order id', any(c['id'] == 'usuals' and c['method'] == 'usualsRun' and c['args'] == [u['id']] and c['path'] == '/usuals/' for c in calls))
+            tap_text(r'^Cancel$'); time.sleep(2)
+        elif not FOOD_APP and not os.environ.get('SLICE8_CHECKOUT_ONLY'):
+            # E. Run again and order from the cover
+            bring_wos(); pg.close(); pg = page()
+            pg.ev("window.__wos.openApp({ id: 'usuals', name: 'Food', kind: 'usuals' })"); time.sleep(1)
+            pg.ev("document.querySelector('[data-us=run]').click()")
+            ready = wait_for(lambda: find(r'^Place order'), 90, 1)
+            check('E: second run reaches checkout', ready is not None, uslog()[-400:])
+            if ready: tap(ready)
+            placed = wait_for(lambda: grablog().count('ORDER PLACED') >= 2, 15, .5)
+            gl = grablog()
+            check('E: James\'s tap on Place order places exactly one more order', placed and gl.count('ORDER PLACED') == 2, gl[-300:])
+            check('E: the order is 2× kra pao + 1× iced tea, ฿200', 'ORDER PLACED total=200 items=2x Kra pao moo saap; 1x Thai iced tea;' in gl, gl[-200:])
+            time.sleep(1.5); shot('e-ordered')
+            wait_for(lambda: find(r'^Ordered') is None, 6, .5)
 
-        # F. Voice routing (in-app orb / typed): "order my usual kra pao" starts a run; nothing written to Wizard
-        bring_wos(); pg.close(); pg = page()
-        n0 = len(WRITES); g0 = grablog().count('screen checkout')
-        pg.ev("window.__wos.handleText('Order my usual kra pao', 'auto')")
-        covered = wait_for(lambda: find(r'^Ordering your Kra pao'), 15, .5)
-        check('F: "order my usual kra pao" starts the run on the phone', covered is not None, uslog()[-300:])
-        check('F: …and sends nothing to Wizard', len(WRITES) == n0, WRITES[n0:])
-        ready = wait_for(lambda: find(r'^Place order'), 90, 1)
-        tap_text(r'^Cancel$'); time.sleep(2)
-        check('F: Cancel on the cover: nothing ordered, back in Wizard OS', grablog().count('ORDER PLACED') == 2 and PKG in top(), top())
-        nm = pg.ev("window.WosUsuals.match('what is a good kra pao place')")
-        check('F: ordinary talk about kra pao does not start an order', nm == '', nm)
-        nm2 = pg.ev("window.WosUsuals.match('I want something else')")
-        check('F: "I want something else" is ordinary talk too', nm2 == '', nm2)
-        # "Order something new" by voice opens Grab to browse; "Don't save" leaves nothing behind
-        pg.close(); pg = page()
-        n0 = len(WRITES); c0 = len(json.loads(pg.ev("window.WizardOSNative.usuals()") or '{}').get('list') or [])
-        pg.ev("window.__wos.handleText('Order something new', 'auto')")
-        card = wait_for(lambda: find(r'^Save$'), 15, .5)
-        check('F: "order something new" opens Grab with the Saving card', card is not None and GPKG in top() and len(WRITES) == n0, (top(), WRITES[n0:]))
-        tap_text(r'^✕$'); time.sleep(2.5)
-        pg.close(); pg = page()
-        c1 = len(json.loads(pg.ev("window.WizardOSNative.usuals()") or '{}').get('list') or [])
-        check('F: ✕ (don\'t save) → back in Wizard OS, no new usual, no order', PKG in top() and c1 == c0 and grablog().count('ORDER PLACED') == 2, (top(), c0, c1))
-        # Food spells (James, 12 Oct): "order grab" / "order food" / "I want to order lunch" open Grab for a new order
-        for said in ('Order grab', 'Order food.', 'I want to order lunch'):
-            pg.close(); pg = page(); n0 = len(WRITES)
-            m = pg.ev(f"window.WosUsuals.match({json.dumps(said)})")
-            pg.ev(f"window.__wos.handleText({json.dumps(said)}, 'auto')")
+            # F. Voice routing (in-app orb / typed): "order my usual kra pao" starts a run; nothing written to Wizard
+            bring_wos(); pg.close(); pg = page()
+            n0 = len(WRITES); g0 = grablog().count('screen checkout')
+            pg.ev("window.__wos.handleText('Order my usual kra pao', 'auto')")
+            covered = wait_for(lambda: find(r'^Ordering your Kra pao'), 15, .5)
+            check('F: "order my usual kra pao" starts the run on the phone', covered is not None, uslog()[-300:])
+            check('F: …and sends nothing to Wizard', len(WRITES) == n0, WRITES[n0:])
+            ready = wait_for(lambda: find(r'^Place order'), 90, 1)
+            tap_text(r'^Cancel$'); time.sleep(2)
+            check('F: Cancel on the cover: nothing ordered, back in Wizard OS', grablog().count('ORDER PLACED') == 2 and PKG in top(), top())
+            nm = pg.ev("window.WosUsuals.match('what is a good kra pao place')")
+            check('F: ordinary talk about kra pao does not start an order', nm == '', nm)
+            nm2 = pg.ev("window.WosUsuals.match('I want something else')")
+            check('F: "I want something else" is ordinary talk too', nm2 == '', nm2)
+            # "Order something new" by voice opens Grab to browse; "Don't save" leaves nothing behind
+            pg.close(); pg = page()
+            n0 = len(WRITES); c0 = len(json.loads(pg.ev("window.WizardOSNative.usuals()") or '{}').get('list') or [])
+            pg.ev("window.__wos.handleText('Order something new', 'auto')")
             card = wait_for(lambda: find(r'^Save$'), 15, .5)
-            check(f'F: spell "{said}" opens Grab with the Saving card (native match {m!r}), nothing to Wizard',
-                  card is not None and GPKG in top() and len(WRITES) == n0 and m == '+new', (m, top(), WRITES[n0:]))
+            check('F: "order something new" opens Grab with the Saving card', card is not None and GPKG in top() and len(WRITES) == n0, (top(), WRITES[n0:]))
             tap_text(r'^✕$'); time.sleep(2.5)
-        # "Food" on its own opens the Food app, titled Food
-        pg.close(); pg = page(); bring_wos(); time.sleep(1); n0 = len(WRITES)
-        pg.ev("window.__wos.handleText('Food', 'command')"); time.sleep(1.5)
-        opened = pg.ev("!!document.querySelector('[data-usuals]')")
-        title = pg.ev("(document.querySelector('.win.focus .wt, .win .wt, .win-title')||{}).innerText || ''")
-        spells = pg.ev("document.querySelector('.us-spells')?.innerText || ''")
-        shot('f-food-spells')
-        check('F: "Food" opens the Food app with the spells listed, nothing to Wizard',
-              opened and 'order food' in (spells or '') and len(WRITES) == n0, (opened, title, spells[:120], WRITES[n0:]))
+            pg.close(); pg = page()
+            c1 = len(json.loads(pg.ev("window.WizardOSNative.usuals()") or '{}').get('list') or [])
+            check('F: ✕ (don\'t save) → back in Wizard OS, no new usual, no order', PKG in top() and c1 == c0 and grablog().count('ORDER PLACED') == 2, (top(), c0, c1))
+            # Food spells (James, 12 Oct): "order grab" / "order food" / "I want to order lunch" open Grab for a new order
+            for said in ('Order grab', 'Order food.', 'I want to order lunch'):
+                pg.close(); pg = page(); n0 = len(WRITES)
+                m = pg.ev(f"window.WosUsuals.match({json.dumps(said)})")
+                pg.ev(f"window.__wos.handleText({json.dumps(said)}, 'auto')")
+                card = wait_for(lambda: find(r'^Save$'), 15, .5)
+                check(f'F: spell "{said}" opens Grab with the Saving card (native match {m!r}), nothing to Wizard',
+                      card is not None and GPKG in top() and len(WRITES) == n0 and m == '+new', (m, top(), WRITES[n0:]))
+                tap_text(r'^✕$'); time.sleep(2.5)
+            # "Food" on its own opens the Food app, titled Food
+            pg.close(); pg = page(); bring_wos(); time.sleep(1); n0 = len(WRITES)
+            pg.ev("window.__wos.handleText('Food', 'command')"); time.sleep(1.5)
+            opened = pg.ev("!!document.querySelector('[data-usuals]')")
+            title = pg.ev("(document.querySelector('.win.focus .wt, .win .wt, .win-title')||{}).innerText || ''")
+            spells = pg.ev("document.querySelector('.us-spells')?.innerText || ''")
+            shot('f-food-spells')
+            check('F: "Food" opens the Food app with the spells listed, nothing to Wizard',
+                  opened and 'order food' in (spells or '') and len(WRITES) == n0, (opened, title, spells[:120], WRITES[n0:]))
+
+        else:
+            bring_wos(); pg.close(); pg = page()
 
         # G. Back from the edit sheet stays in the app
-        pg.close(); pg = page()
+        bring_wos(); pg.close(); pg = page()
         pg.ev("window.__wos.openApp({ id: 'usuals', name: 'Food', kind: 'usuals' })"); time.sleep(1)
         pg.ev("document.querySelector('[data-us=edit]').click()"); time.sleep(.6)
         shot('g-edit')
@@ -404,10 +520,23 @@ with (BASE / 'worker.lock').open('a') as lock:
         after = pg.ev("!!document.querySelector('.us-sheet')")
         check('G: Back closes the edit sheet and Wizard OS stays open', sheet and not after and PKG in top(), (sheet, after, top()))
         crashed = sx('logcat -d -b crash')
-        check('no crashes', 'FATAL EXCEPTION' not in crashed, crashed[:300])
+        check('no Java crashes', 'FATAL EXCEPTION' not in crashed, crashed[:300])
+        errors = [e for e in EVENTS if e.get('method') == 'Runtime.exceptionThrown' or e.get('method') == 'Runtime.consoleAPICalled' and e.get('params', {}).get('type') == 'error' or e.get('method') == 'Log.entryAdded' and e.get('params', {}).get('entry', {}).get('level') == 'error']
+        check('zero WebView console errors', not errors, errors)
     finally:
-        try: (job / 'logcat.txt').write_text(sx('logcat -d'))
+        print('COMMAND_LOG ' + str(OUT / 'commands.json'), flush=True)
+        (OUT / 'commands.json').write_text(json.dumps(COMMANDS, indent=2))
+        (OUT / 'events.json').write_text(json.dumps(EVENTS, indent=2))
+        (OUT / 'checks.json').write_text(json.dumps(CHECKS, indent=2))
+        try:
+            if adb_owned: (OUT / 'logcat.txt').write_text(sx('logcat -d'))
         except Exception: pass
-        if em: sh(ADB, '-s', S, 'emu', 'kill'); em.wait(40)
-        srv.shutdown()
-print(f'{sum(res)}/{len(res)} passed · shots {OUT}')
+        if em:
+            (OUT / 'emulator-exit-before-cleanup.json').write_text(json.dumps({'returncode': em.poll()}))
+            try: sh(ADB, '-s', f'emulator-{PORT}', 'emu', 'kill'); em.wait(40)
+            except Exception: em.terminate(); em.wait(20)
+        import shutil
+        if (job / 'em.log').exists(): shutil.copyfile(job / 'em.log', OUT / 'emulator.log')
+        if adb_owned: sh(ADB, 'kill-server') # Only this job's private server.
+        if srv: srv.shutdown()
+print(f'{sum(res)}/{len(res)} passed · shots {OUT}'); sys.exit(0 if all(res) else 1)

@@ -12,7 +12,7 @@ class El {
   setPointerCapture() {}
   get offsetWidth() { return 1; }
 }
-function load({ shell = 'phone', beside = 0 } = {}) {
+function load({ shell = 'phone', beside = 0, saved = new Map() } = {}) {
   let setup = null, opts = null;
   const window = { WosSkinHost: { builtin: (name, fn, o) => { assert.equal(name, 'edge-peek'); setup = fn; opts = o; } } };
   vm.runInNewContext(read('web/core/edge-peek.js'), { window, document: { createElement: () => new El() }, performance, Math });
@@ -21,6 +21,7 @@ function load({ shell = 'phone', beside = 0 } = {}) {
   const realNow = performance.now;
   const api = {
     env: { shell }, route: () => route,
+    storage: { get: k => saved.get(k) ?? null, set: (k, v) => saved.set(k, v) },
     nav: { goDesk: i => { gone.push(i); route = { ...route, desk: i }; } },
     gesture: { intent: (dx, dy, ms) => Math.abs(dx) > 120 || (Math.abs(dx) > 80 && Math.abs(dx) / ms > .6) }, // swipe-intent.js numbers
     listen: (el, type, fn) => { el.handlers[type] = fn; }, mount: el => { mounted = el; }, on: (type, fn) => { assert.equal(type, 'beside'); onBeside = fn; },
@@ -50,6 +51,34 @@ test('tap or an intentional inward swipe moves across; the left edge comes back'
   t.side(-1); assert.deepEqual(t.press(10, 11), [1], 'tap the left edge');
   t.side(1); assert.deepEqual(t.press(370, 200, { ms: 200 }), [2], 'a long swipe toward the middle');
   t.side(-1); assert.deepEqual(t.press(8, 110, { ms: 90 }), [1], 'a fast flick toward the middle');
+});
+
+test('James: edge glow plays only the first three appearances, persisted across reloads', () => {
+  const saved = new Map();
+  const first = load({ beside: 1, saved });
+  assert.ok(first.el.cls.has('glow')); assert.equal(saved.get('glowAppearances'), 1);
+  first.side(1); assert.equal(saved.get('glowAppearances'), 1, 'same visible side is not another appearance');
+  first.side(0); first.side(1);
+  assert.ok(first.el.cls.has('glow')); assert.equal(saved.get('glowAppearances'), 2);
+  first.teardown();
+  const reloaded = load({ beside: -1, saved });
+  assert.ok(reloaded.el.cls.has('glow')); assert.equal(saved.get('glowAppearances'), 3);
+  reloaded.side(1);
+  assert.equal(reloaded.el.hidden, false); assert.equal(reloaded.el.cls.has('glow'), false);
+  reloaded.side(0); reloaded.side(-1);
+  assert.equal(reloaded.el.cls.has('glow'), false, 'later appearances keep a quiet working handle');
+  assert.deepEqual(reloaded.press(10, 11), [0], 'the quiet handle still works');
+  assert.equal(saved.get('glowAppearances'), 3, 'counter is capped');
+  const again = load({ beside: 1, saved });
+  assert.equal(again.el.cls.has('glow'), false, 'another reload does not replay the glow');
+});
+
+test('invalid saved edge-glow counters start at zero; larger valid counters stay quiet', () => {
+  for (const value of ['bad', -1, 1.5, Infinity]) {
+    const saved = new Map([['glowAppearances', value]]), t = load({ beside: 1, saved });
+    assert.ok(t.el.cls.has('glow')); assert.equal(saved.get('glowAppearances'), 1);
+  }
+  assert.equal(load({ beside: 1, saved: new Map([['glowAppearances', 10]]) }).el.cls.has('glow'), false);
 });
 
 test('short, outward, vertical and cancelled drags do nothing (the OS edge gesture keeps the finger)', () => {

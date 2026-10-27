@@ -46,7 +46,7 @@
   function onClick(e) {
     if (e.target.closest('[data-wxtroubleshoot]')) { window.WizReach?.open(); return; }
     if (e.target.closest('[data-wxmore]')) { netOpen = !netOpen; log('net:' + (netOpen ? 'open' : 'fold')); unfold(); return; }
-    if (e.target.closest('[data-wxretry]')) { window.WosOutbox?.retryAll(); LIVE()?.refresh(); return; }
+    if (e.target.closest('[data-wxretry]')) { window.WosOutbox?.retryAll(); verifyWizard(true); LIVE()?.refresh(); return; }
     if (e.target.closest('[data-wxcrit-x]')) { critHidden = critSig(); log('critical:dismiss'); render(); return; }
     if (e.target.closest('[data-wxcrit]')) { log('critical:open'); H.openChats?.(); render(); }
   }
@@ -69,20 +69,47 @@
     render();
   }
   // Browser connectivity is a hint: Android/VPN networks can report offline while
-  // Wizard is reachable. Only a NEW successful read may overrule an offline event;
-  // cached sessions and local optimistic updates are not connectivity evidence.
-  let offlineReadAt = 0;
+  // Wizard is reachable. Only fresh evidence may overrule an offline event:
+  // a new successful live read, or a healthy same-origin Wizard status probe.
+  let offlineReadAt = 0, evidenceGeneration = 0, liveEvidenceAt = 0, verifying = null, verifyAgain = false, verifiedAt = 0, probedGeneration = -1;
+  function verifyWizard(force = false) {
+    if (verifying) { if (force) verifyAgain = true; return verifying; }
+    verifiedAt = Date.now();
+    const generation = evidenceGeneration;
+    verifying = (async () => {
+      // AbortController + timer, not AbortSignal.timeout: iOS 16.0-16.3 WebViews lack it.
+      const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = ctl ? setTimeout(() => ctl.abort(), 5000) : 0;
+      try {
+        const r = await fetch('/troubleshoot/api/status?source=connection-banner', { cache: 'no-store', credentials: 'same-origin', signal: ctl?.signal });
+        const body = r.ok ? await r.json() : null;
+        // Remember which evidence this probe beat, so later non-network emits keep it.
+        if (body?.overall === 'ok' && generation === evidenceGeneration) { probedGeneration = generation; log('net:verified'); setNet('online'); return true; }
+      } catch (e) {} finally { if (timer) clearTimeout(timer); }
+      return false;
+    })().finally(() => {
+      verifying = null;
+      if (verifyAgain) { verifyAgain = false; verifyWizard(); }
+    });
+    return verifying;
+  }
   function fromLive() {
     const L = LIVE(); if (!L) return;
+    // A failed read leaves L.at alone, so failures carry their own errorAt: any new live
+    // result (success or failure) invalidates a Wizard probe that started before it.
+    const liveAt = Math.max(L.at || 0, L.errorAt || 0);
+    if (liveAt && liveAt !== liveEvidenceAt) { liveEvidenceAt = liveAt; evidenceGeneration++; }
     if (L.ok && !L.error && L.at > offlineReadAt) return setNet('online');
+    // A healthy probe stands until a newer offline event or live result moves the generation.
+    if (probedGeneration === evidenceGeneration) return setNet('online');
     if (navigator.onLine === false) return setNet('offline');
     if (L.error) { if (net !== 'offline' || navigator.onLine) setNet('reconnecting'); return; }
   }
   addEventListener('offline', () => {
-    const L = LIVE(); offlineReadAt = L?.at || 0;
+    const L = LIVE(); offlineReadAt = L?.at || 0; evidenceGeneration++;
     setNet('offline');
     // Verify against Wizard itself, even if the browser never emits 'online'.
-    L?.refresh();
+    verifyWizard(); L?.refresh();
   });
   addEventListener('online', () => { setNet('reconnecting'); const L = LIVE(); if (L) L.refresh(); else setNet('online'); });
 
@@ -146,7 +173,7 @@
   function closeFatal() { const el = document.getElementById('wxFatal'); if (!el || el.hidden) return false; el.hidden = true; fatalOpen = false; log('fatal:close'); return true; }
 
   C.status = {
-    attach(h) { H = Object.assign({}, H, h || {}); fromLive(); render(); const L = LIVE(); if (L && !L.__wxStatus) { L.__wxStatus = true; L.onChange(() => { fromLive(); render(); }); } const O = window.WosOutbox; if (O && !O.__wxStatus) { O.__wxStatus = true; O.onChange(render); } },
+    attach(h) { H = Object.assign({}, H, h || {}); fromLive(); render(); if (net === 'offline' || net === 'reconnecting') verifyWizard(); const L = LIVE(); if (L && !L.__wxStatus) { L.__wxStatus = true; L.onChange(() => { fromLive(); render(); }); } const O = window.WosOutbox; if (O && !O.__wxStatus) { O.__wxStatus = true; O.onChange(render); } },
     refresh() { fromLive(); render(); },
     fatal, back: () => (closeFatal() ? 'fatal' : ''),
     get state() { return { net, critical: criticals().map(s => s.id), fatal: fatalOpen ? fatalMsg : '' }; },
@@ -154,5 +181,9 @@
   // Cheap catch-all for things with no event (the thread in front changed, the inbox opened or closed).
   addEventListener('wizreachchange', render);
   addEventListener('resize', () => { lastHtml = ''; render(); });
-  setInterval(() => { if (!document.hidden && document.getElementById('wxBanners')) render(); }, 1200);
+  setInterval(() => {
+    if (document.hidden || !document.getElementById('wxBanners')) return;
+    render();
+    if ((net === 'offline' || net === 'reconnecting') && Date.now() - verifiedAt >= 5000) verifyWizard();
+  }, 1200);
 })();
