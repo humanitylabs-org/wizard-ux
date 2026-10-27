@@ -449,7 +449,7 @@
         const doc = f.contentDocument; if (!doc || doc.__wuxHooked) return; doc.__wuxHooked = true;
         fields().bind(doc);
         doc.addEventListener('pointerdown', () => focusWin(el.dataset.win, { scroll: false }), true);
-        doc.addEventListener('keydown', e => onKey(e, true), true);
+        doc.addEventListener('keydown', e => onKey(e, true), true); doc.addEventListener('keyup', e => keyHints.up(e), true);
         try { const w0 = W[el.dataset.win]; if (LINKS && window.WizLinks?.guardFrame) window.WizLinks.guardFrame(f.contentWindow, (w0 && ((APP[w0.appId] || {}).url || w0.url)) || f.contentWindow.location.pathname, LINKS); } catch (e) {}
       } catch (e) {}
     });
@@ -1128,16 +1128,17 @@
     bar.addEventListener('pointerleave', hide); bar.addEventListener('pointerdown', hide);
   })();
   /* ---------------- keys sheet ---------------- */
+  // Grouped by what you want to do: speak/ask first, then switch what you see, then arrange.
   const KEYS = [
-    ['Open and find', [[`${MOD}Space`, 'Search everything'], [`${MOD}O`, 'Open an app'], [`${MOD}1`, 'Home'], [`${MOD}I`, 'Chats'], [`${MOD},`, 'Settings'], [`${MOD}/`, 'This list']]],
-    ['Chat', [[`${MOD}N`, 'New chat'], [`${MOD}V`, 'New voice chat (again to send)'], ['Enter', 'Send (⇧Enter for a new line)'], [`${MOD}↑  ${MOD}↓`, 'Previous / next chat'], ['Esc', 'Back'], ['/', 'Search chats']]],
-    ['Desktops', [[`${MOD}T`, 'New desktop'], [`${MOD}2 … 9`, 'Go to desktop'], [`${MOD}[  ${MOD}]`, 'Previous / next desktop'], [`${MOD}⇧[  ${MOD}⇧]`, 'Move desktop left / right (or drag it)'], [`${MOD}\``, 'Last desktop'], [`${MOD}⇧2 … 9`, 'Send window to desktop']]],
-    ['Windows', [[`${MOD}← ↑ → ↓`, 'Focus window (or H J K L)'], [`${MOD}⇧← →`, 'Swap window'], [`${MOD}F`, 'Full screen'], [`${MOD}R`, 'Refresh window'], [`${MOD}W`, 'Close app']]],
+    ['Speak and ask · same key again sends', [[`${MOD}S`, 'Speak about this screen / reply'], [`${MOD}V`, 'New voice chat'], [`${MOD}C`, 'Speak a command (“open calendar”)'], [`${MOD}D`, 'Dictate into the text box'], [`${MOD}N`, 'New typed chat'], [`${MOD}Space`, 'Search apps, chats, commands']]],
+    ['Switch what you see', [[`${MOD}1`, 'Home'], [`${MOD}2 … 9`, 'Go to desktop'], [`${MOD}[  ${MOD}]`, 'Previous / next desktop'], [`${MOD}\``, 'Last desktop'], [`${MOD}T`, 'New desktop'], [`${MOD}O`, 'Open an app'], [`${MOD}I`, 'Chats inbox'], [`${MOD}← ↑ → ↓`, 'Focus window (or H J K L)']]],
+    ['Arrange windows', [[`${MOD}F`, 'Full screen'], [`${MOD}W`, 'Close app'], [`${MOD}R`, 'Refresh window'], [`${MOD}⇧← →`, 'Swap window'], [`${MOD}⇧2 … 9`, 'Send window to desktop'], [`${MOD}⇧[  ${MOD}⇧]`, 'Move desktop left / right']]],
+    ['In Chats', [['Enter', 'Send (⇧Enter for a new line)'], ['Esc', 'Back · cancels a recording'], [`${MOD}↑  ${MOD}↓`, 'Previous / next chat'], ['/', 'Search chats'], [`${MOD},`, 'Settings'], [`${MOD}/`, 'This list']]],
     ['Wizard for Mac (any app)', [['Caps Lock', 'Search and launch'], ['Caps Lock + letter', 'Jump to an app'], ['Right ⌘', 'Talk to Wizard'], ['Right ⌥', 'Dictate into any app']]],
   ];
   const keysEl = $('#keys');
   const nativeDesktop = !!window.webkit?.messageHandlers?.wizardNative;
-  $('#keys .keys-head small').textContent = IS_MAC ? 'Every Wizard key is ⌥ (Option) plus one key, so nothing clashes with macOS, the browser or Omarchy.' : 'Every Wizard key is Alt plus one key, so nothing clashes with the browser or Omarchy (Super).';
+  $('#keys .keys-head small').textContent = IS_MAC ? 'Every Wizard key is ⌥ (Option) plus one key. Hold left ⌥ to see them on screen.' : 'Every Wizard key is Alt plus one key. Hold left Alt to see them on screen.';
   $('#keysBody').innerHTML = KEYS.map(([h, rows]) => `<section class="kgrp"><h4>${h}</h4>` + rows.map(([k, d]) => `<div class="krow"><span>${esc(d)}</span><span class="kk">${k.split(/\s{2,}/).map(x => `<kbd>${esc(x)}</kbd>`).join('<i>or</i>')}</span></div>`).join('') + '</section>').join('');
   function toggleKeys(on) { keysEl.hidden = on == null ? !keysEl.hidden : !on; if (!keysEl.hidden) window.WosResources?.back(); }
   keysEl.addEventListener('click', e => {
@@ -1167,7 +1168,7 @@
       $('#clock').hidden = st !== 'idle';
       pill.classList.toggle('dict', vMode === 'dictate');
       pill.classList.toggle('app-voice', vMode === 'talk' && !!vConversation);
-      $('#voiceKey').textContent = vMode === 'dictate' ? '✎' : commandTake ? '⚡' : vNewChat ? vNewKey : 'Right ⌘';
+      $('#voiceKey').textContent = vMode === 'dictate' ? `${MOD}D` : commandTake ? `${MOD}C` : vNewChat ? vNewKey : nativeDesktop ? 'Right ⌘' : `${MOD}S`;
       $('#voiceAct').textContent = vMode === 'dictate' ? 'insert' : commandTake ? 'run locally' : 'send';
       $('#voiceText').textContent = vMode === 'dictate' ? (st === 'think' ? 'Transcribing…' : 'Dictating')
         : st === 'think' ? 'Sending…' : commandTake ? 'Local command · nothing sent to agent' : vConversation ? 'Listening · ' + vConversation.label : vFeedback ? 'Feedback · '+clip(vFeedback.title || vFeedback.thread,28) : vTarget ? `Listening · to “${clip(winTitle(W[vTarget]), 28)}”` : 'Listening · new chat';
@@ -1180,7 +1181,7 @@
     const root=$('#voiceFiles'); if (!root) return;
     root.innerHTML=(vFiles?.files||[]).map((f,i)=>`<div>${esc(f.name||f.filename)} ${f.uploading?'Uploading…':f.error?'Upload failed':''} ${f.error?`<button data-vretry="${i}">Retry</button>`:''}${!f.uploading?`<button data-vremove="${i}">Remove</button>`:''}</div>`).join('');
   }
-  async function commandVoice() { if(VOICE.state==='idle') { const r=await talk('start'); if(r==='voice'){commandTake=true;vConversation=null;$('#voiceKey').textContent='⚡';$('#voiceText').textContent='Local command · nothing sent to agent';$('#voiceAct').textContent='run locally';$('#voiceAttach').disabled=$('#voiceScreenshot').disabled=true;}return r; } if(commandTake)return talk('send');return 'busy'; }
+  async function commandVoice() { if(VOICE.state==='idle') { const r=await talk('start'); if(r==='voice'){commandTake=true;vConversation=null;$('#voiceKey').textContent=`${MOD}C`;$('#voiceText').textContent='Local command · nothing sent to agent';$('#voiceAct').textContent='run locally';$('#voiceAttach').disabled=$('#voiceScreenshot').disabled=true;}return r; } if(commandTake)return talk('send');return 'busy'; }
   $('#voicePause').onclick=()=>VOICE.state==='paused'?VOICE.resume():VOICE.pause();
   $('#voiceSend').onclick=()=>vMode==='dictate'?dictate():talk('send');
   $('#commandBtn').onclick=()=>commandVoice();
@@ -1505,8 +1506,50 @@
     }
     return '';
   }
+  /* ---------------- hold left ⌥ / Alt: key hints on screen ----------------
+   * Holding the base key alone for a moment labels the bar (S speak, V voice chat, C command, D dictate,
+   * 1 Home, 2…9 desktops…) and shows a short strip of the rest. Any other key or letting go hides it. */
+  const keyHints = (() => {
+    const el = document.createElement('div'); el.id = 'keyHints'; el.className = 'key-hints'; el.hidden = true; el.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(el);
+    let timer = 0, armed = false;
+    const STRIP = [
+      ['Speak', [['␣', 'search'], ['S', 'about this screen'], ['V', 'new voice chat'], ['C', 'command'], ['D', 'dictate'], ['N', 'new chat']]],
+      ['Go to', [['1', 'Home'], ['2–9', 'desktops'], ['[ ]', 'prev / next'], ['O', 'apps'], ['I', 'inbox'], ['/', 'all keys']]],
+    ];
+    const vis = n => n && !n.hidden && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
+    function chip(n, label) {
+      const r = n.getBoundingClientRect(), c = document.createElement('b');
+      c.className = 'kh-chip'; c.textContent = label; el.appendChild(c);
+      c.style.left = Math.max(4, Math.min(innerWidth - c.offsetWidth - 4, r.left + r.width / 2 - c.offsetWidth / 2)) + 'px';
+      c.style.top = (r.bottom + 3) + 'px';
+    }
+    function show() {
+      if (!keysEl.hidden) return;
+      el.innerHTML = '';
+      const marks = [['#searchBtn', '␣'], ['#micBtn', 'S'], ['#generalVoice', 'V'], ['#commandBtn', 'C'], ['#dictateBtn', 'D'], ['#status', 'I'], ['#settingsBtn', ','], ['#keysBtn', '/'], ['#logo', '1']];
+      for (const [q, l] of marks) { const n = $(q); if (vis(n)) chip(n, l); }
+      $$('#wsList .ws[data-ws]').forEach(n => { const slot = C.workspaceNav.slot(+n.dataset.ws); if (slot <= 9 && vis(n)) chip(n, String(slot)); });
+      const add = $('#wsList [data-newdesk]'); if (vis(add)) chip(add, 'T');
+      const strip = document.createElement('div'); strip.className = 'kh-strip';
+      strip.innerHTML = `<span class="kh-base">Keep holding ${esc(IS_MAC ? '⌥' : 'Alt')} and press</span>` + STRIP.map(([h, rows]) => `<span class="kh-grp"><em>${esc(h)}</em>${rows.map(([k, d]) => `<span><kbd>${esc(k)}</kbd>${esc(d)}</span>`).join('')}</span>`).join('');
+      el.appendChild(strip);
+      el.hidden = false; document.documentElement.classList.add('key-hints-on');
+    }
+    function hide() { clearTimeout(timer); armed = false; if (el.hidden) return; el.hidden = true; el.innerHTML = ''; document.documentElement.classList.remove('key-hints-on'); }
+    return {
+      hide, show,
+      down(e) {
+        if (e.code === 'AltLeft' && !e.repeat && !e.metaKey && !e.ctrlKey && !e.shiftKey) { hide(); armed = true; timer = setTimeout(() => { if (armed) show(); }, 300); return; }
+        if (e.code === 'AltLeft' && e.repeat) return;
+        hide();
+      },
+      up(e) { if (e.code === 'AltLeft' || e.key === 'Alt') { const was = !el.hidden; hide(); if (was) e.preventDefault(); } },
+    };
+  })();
   const NATIVE_MENU = !!window.webkit?.messageHandlers?.wizardNative;
   function onKey(e, fromFrame = false) {
+    keyHints.down(e);
     const k = e.key, code = e.code, alt = e.altKey && !e.metaKey && !e.ctrlKey, shift = e.shiftKey;
     const digit = /^Digit([1-9])$/.exec(code);
     const hit = fn => { e.preventDefault(); e.stopPropagation(); fn(); };
@@ -1523,6 +1566,14 @@
     if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newChat({ fresh: true }); });
     if (alt && !shift && code === 'Enter') return hit(() => { if (!e.repeat) newChat(); });
     if (alt && code === 'KeyV') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); talkNew(`${MOD}V`); });
+    // ⌥S speak about this screen (replies to the open chat), ⌥C speak a local command, ⌥D dictate into the text box.
+    // Same key again sends. Like ⌥V these work from anywhere, even while typing.
+    if (alt && !shift && (code === 'KeyS' || code === 'KeyC' || code === 'KeyD')) return hit(() => {
+      if (e.repeat) return;
+      if (code === 'KeyD') return dictate();
+      closePalette(); toggleKeys(false); closeSettings(); closeUsage();
+      code === 'KeyS' ? talk() : commandVoice();
+    });
     // ⌥Space search everything, ⌥O open an app: from anywhere, even while typing.
     if (alt && !shift && code === 'Space') return hit(() => palToggle('all'));
     if (alt && !shift && code === 'KeyO') return hit(() => { if (!e.repeat) palToggle('apps'); });
@@ -1580,6 +1631,9 @@
     if (dir) return hit(() => { if (shift && dir[0]) swapWin(dir[0]); else dirFocus(dir[0], dir[1]); });
   }
   addEventListener('keydown', e => onKey(e), true);
+  addEventListener('keyup', e => keyHints.up(e), true);
+  addEventListener('blur', () => keyHints.hide());
+  addEventListener('pointerdown', () => keyHints.hide(), true);
   // Composer: ⌘/Ctrl+Enter sends (shared Chats binds it); Enter stays a newline, as in the phone.
   const log = s => { window.__wuxLog = (window.__wuxLog || []).concat(s).slice(-40); };
 
