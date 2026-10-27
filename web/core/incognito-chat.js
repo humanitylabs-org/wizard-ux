@@ -14,7 +14,7 @@
     const destroyRemote = s => s.base && fetchImpl(s.base, { method: 'DELETE', credentials: 'same-origin', cache: 'no-store', keepalive: true }).catch(() => {});
     function close(wid, force = false) {
       const s = open.get(wid); if (!s) return true;
-      if (!force && !confirm('End this Incognito chat? Everything in it will be discarded.')) return false;
+      if (!force && !confirm('End incognito chat? It will be erased.')) return false;
       open.delete(wid); clearInterval(s.lease); s.abort.abort();
       // Wipe DOM before dropping strings. No copy is moved to Chats, draft storage, or the normal composer.
       const el = elOf(wid); if (el?.querySelector('[data-incog-thread]')) el.replaceChildren();
@@ -22,7 +22,7 @@
     }
     async function start(wid, agent) {
       if (!agent || agent.privacy !== 'private' || open.has(wid)) return;
-      const s = { agent, draft: '', messages: [], output: '', working: true, starting: true, error: '', abort: new AbortController(), base: '' };
+      const s = { agent, draft: '', messages: [], output: '', working: true, starting: true, sent: false, error: '', abort: new AbortController(), base: '' };
       open.set(wid, s); paint(wid);
       try {
         const route = `/wizard/v1/agents/${encodeURIComponent(agent.id)}/incognito`;
@@ -50,7 +50,7 @@
       const old = el.querySelector('[data-incog-field]'), focused = !!old && old === document.activeElement;
       const selection = old ? [old.selectionStart, old.selectionEnd] : null;
       el.innerHTML = `<div class="ch-thread ch-incognito" data-incog-thread>
-        <div class="ch-head"><button type="button" class="ch-back" data-incog-close aria-label="End Incognito chat">‹</button><div class="ti"><b>Incognito</b><span class="ch-privtag">Private · temporary</span></div><button type="button" class="pbtn" data-incog-close>Close</button></div>
+        <div class="ch-head"><button type="button" class="ch-back" data-incog-close aria-label="End Incognito chat">‹</button><div class="ti"><b>Incognito</b><span class="ch-privtag">Private · temporary</span></div>${!s.sent ? '<label class="pbtn ch-incog-toggle"><input type="checkbox" role="switch" data-incog-off aria-label="Incognito" checked>Incognito</label>' : ''}<button type="button" class="pbtn" data-incog-close>Close</button></div>
         <div class="ch-incog-note" role="note"><b>This chat is never saved.</b><span>Closing or leaving discards it. Text only — no attachments, voice, reminders, app changes or memory edits.</span></div>
         <div class="ch-msgs">${s.messages.map(bubble).join('')}${s.output ? bubble({ role: 'assistant', text: s.output }) : ''}${s.working ? '<p class="ch-empty" role="status">' + (s.starting ? 'Opening Incognito…' : 'Replying…') + '</p>' : ''}${s.error ? `<p class="ch-empty" role="alert">${esc(s.error)}</p>` : ''}</div>
         <form class="ch-compose" data-incog-form><div class="ch-row2"><div class="ch-field"><textarea data-incog-field rows="1" placeholder="Message ${esc(s.agent.label || 'Private agent')}" aria-label="Incognito message" autocomplete="off" autocorrect="off" spellcheck="false" ${s.starting || s.error ? 'disabled' : ''}>${esc(s.draft)}</textarea></div><button type="submit" class="ch-send" aria-label="Send Incognito message" ${s.working || s.error ? 'disabled' : ''}>↑</button></div></form></div>`;
@@ -62,7 +62,7 @@
     async function send(wid, text) {
       const s = open.get(wid); text = String(text || '').trim();
       if (!s || s.working || s.error || !text) return false;
-      s.draft = ''; s.working = true; s.error = ''; s.messages.push({ role: 'user', text }); paint(wid);
+      s.draft = ''; s.sent = true; s.working = true; s.error = ''; s.messages.push({ role: 'user', text }); paint(wid);
       try {
         const admitted = await request(s, '/v1/runs', 'POST', { input: text });
         if (!alive(wid, s)) return false;
@@ -94,7 +94,7 @@
     function beforeNavigate(ids = []) {
       const leaving = [...open.keys()].filter(id => !ids.includes(id));
       if (!leaving.length) return true;
-      if (!confirm('End this Incognito chat? Everything in it will be discarded.')) return false;
+      if (!confirm('End incognito chat? It will be erased.')) return false;
       for (const id of leaving) { close(id, true); paint(id); }
       return true;
     }

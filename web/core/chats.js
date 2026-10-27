@@ -1783,7 +1783,7 @@ window.WizCore.chats = function createChats(H) {
     // The thread's own agent (pinned at creation); a new chat belongs to the window's agent.
     const TAG = isNew ? (winAgent(w) || (AGS()?.isOther(c.newModel?.agent) ? c.newModel.agent : '')) : (LIVE.agentOf ? LIVE.agentOf(w.thread) : '');
     // Unified Chats: a private agent's thread opened from the owner's main list says so in its header.
-    const incognitoAction = INC && agentRec(TAG)?.incognito_available && AGS()?.isPrivate(agentRec(TAG)) ? '<button type="button" class="pbtn" data-incog-start title="Start a separate chat that is never saved">Incognito</button>' : '';
+    const incognitoAction = isNew && INC && agentRec(TAG)?.incognito_available && AGS()?.isPrivate(agentRec(TAG)) ? '<label class="pbtn ch-incog-toggle"><input type="checkbox" role="switch" data-incog-start aria-label="Incognito">Incognito</label>' : '';
     const privTag = TAG && AGS()?.isPrivate(agentRec(TAG)) ? `<span class="ch-privtag" data-wiz-private="" title="Private agent: ${esc(agentName(TAG))}">${AGS().lock()}<span>Private</span></span>` : '';
     const state = threadState(s, TAG), working = state.working;
     const sub = isNew ? `Starts a new thread with ${agentName(TAG)}` : state.sub;
@@ -2336,7 +2336,7 @@ window.WizCore.chats = function createChats(H) {
     if (W[wid]) renderThreadNow(W[wid]);
     toast('◇', `New private chat on ${o.name}`, 1600);
   }
-  function chatsBack(w) { if (INC?.active(w.id)) { if (INC.close(w.id)) { renderChats(w); applyLayout(w.id); } return; } if (closeHosted(w.id)) return; if (w.thread) saveDraft(w.id); const c = ch(w.id); if (c.carry) { c.carry = null; c.newModel = null; } c.readNav = (c.readNav || 0) + 1; c.files = []; c.draft = ''; c.draftFor = ''; c.trail = []; w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); }
+  function chatsBack(w) { if (INC?.active(w.id)) { if (INC.close(w.id)) { const c = ch(w.id); c.readNav = (c.readNav || 0) + 1; c.trail = []; c.files = []; c.draft = ''; c.draftFor = ''; w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); } return; } if (closeHosted(w.id)) return; if (w.thread) saveDraft(w.id); const c = ch(w.id); if (c.carry) { c.carry = null; c.newModel = null; } c.readNav = (c.readNav || 0) + 1; c.files = []; c.draft = ''; c.draftFor = ''; c.trail = []; w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); }
   /* One step back from a thread: to the thread it was opened from (trail), else to the list. */
   function threadBack(w) {
     const c = ch(w.id), prev = (c.trail || []).pop();
@@ -2586,8 +2586,10 @@ window.WizCore.chats = function createChats(H) {
   const idOf = t => t.closest('[data-chats]')?.dataset.chats || '';
   /* Clicks inside a Chats window. Returns true when it handled the click. */
   function click(e, id) {
+    if (e.target.closest('.ch-back[data-incog-close]')) { chatsBack(W[id]); return true; }
     if (e.target.closest('[data-incog-close]')) { if (INC?.close(id)) renderChats(W[id]); return true; }
-    if (e.target.closest('[data-incog-start]')) { const w = W[id], c = ch(id), agentId = winAgent(w) || c.newModel?.agent || LIVE.agentOf?.(w.thread); const a = AGS()?.get(agentId); if (a?.privacy === 'private') { saveDraft(id); void INC?.start(id, a); } return true; }
+    if (e.target.closest('[data-incog-off]')) { INC?.close(id); renderChats(W[id]); return true; }
+    if (e.target.closest('[data-incog-start]')) { const w = W[id]; if (!w || w.thread !== '__new__') return true; const c = ch(id), agentId = winAgent(w) || c.newModel?.agent; const a = AGS()?.get(agentId); if (a?.privacy === 'private' && a.incognito_available) { saveDraft(id); void INC?.start(id, a); } return true; }
     if (e.target.closest('[data-chtroubleshoot]')) { window.WizReach?.open(); return true; }
     const w = H.win(id); if (!w) return false;
     const hc = e.target.closest('[data-helper-continue]');

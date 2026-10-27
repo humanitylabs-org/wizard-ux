@@ -34,6 +34,12 @@ async function browserState(page) {
       const pane = p.locator(`[data-chats="${wid}"]`);
       await pane.locator('[data-chopen="synthetic-normal"]').first().click();
       await pane.getByText('Normal private history stays saved.', { exact: false }).waitFor();
+      check(await pane.locator('[data-incog-start]').count() === 0, tag + ': no toggle in existing private threads');
+      await pane.locator('[data-chback]').click();
+      check(await pane.locator('[data-incog-start]').count() === 0, tag + ': no toggle on the Chats list');
+      await pane.locator('[data-chnew]').first().click();
+      await pane.locator('[data-incog-start]').waitFor();
+      if (mobile) await p.screenshot({ path: path.join(OUT, 'phone-new-chat-toggle.png') });
       const ordinaryDraft = 'ordinary-draft-kept-' + crypto.randomUUID();
       await pane.locator('.ch-compose textarea').fill(ordinaryDraft);
       await pane.locator('[data-incog-start]').click();
@@ -47,6 +53,7 @@ async function browserState(page) {
         await pane.locator('.msg.a').filter({ hasText: input }).waitFor();
       }
       check(await pane.locator('.msg.a').count() === 2, tag + ': multiple temporary turns');
+      check(await pane.locator('[data-incog-off],[data-incog-start]').count() === 0, tag + ': toggle disappears after the first send');
       check(!(await browserState(p)).includes(canary), tag + ': no canary in local/session storage, IndexedDB, or cache');
       check(!writes.some(r => r.body.includes(canary) && !r.url.includes('/incognito/')), tag + ': no canary reaches normal Service writes');
       for (const skin of ['nebula', 'grove']) {
@@ -60,6 +67,11 @@ async function browserState(page) {
       check(!await pane.innerText().then(x => x.includes(canary)), tag + ': close removes transcript');
       check(await pane.locator('.ch-compose textarea').inputValue() === ordinaryDraft, tag + ': ordinary private draft unchanged');
       check(!(await browserState(p)).includes(canary), tag + ': no browser resurrection after close');
+      await pane.locator('[data-incog-start]').click(); await pane.locator('[data-incog-field]:not([disabled])').waitFor();
+      p.once('dialog', d => d.accept()); await pane.locator('.ch-back[data-incog-close]').click();
+      await pane.locator('[data-chnew]').first().waitFor();
+      check(await pane.locator('[data-incog-thread]').count() === 0, tag + ': nested Back ends one thread level without exiting the app');
+      await pane.locator('[data-chnew]').first().click();
       await pane.locator('[data-incog-start]').click(); await pane.locator('[data-incog-field]:not([disabled])').waitFor();
       await pane.locator('[data-incog-field]').fill(canary + '-reload');
       await p.reload(); await p.waitForFunction(() => window.WosAgents?.ready);
