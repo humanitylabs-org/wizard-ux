@@ -25,6 +25,10 @@ test('the long-press and model menus end above the pill dock on all three skins'
     const r = rule(css, `${p} ${SOLO} .ch-sheet-b`);
     assert.ok(r, `${p} pads the chat sheets`);
     assert.match(r, /padding-bottom:\s*calc\(var\(--pill-top\)/);
+    // A thread in many Spaces gets one action per Space: the padded sheet must scroll, never clip its top actions.
+    const sc = rule(css, `${p} ${SOLO} .ch-sheet-b:not(.ch-emoji-sheet)`) || '';
+    assert.match(sc, /max-height:\s*calc\(100% - /);
+    assert.match(sc, /overflow-y:\s*auto/);
   }
 });
 
@@ -38,6 +42,11 @@ test('phone sheets, menu rows and the count badge follow the skin (no violet edg
     assert.match(rule(css, `${p} .ch-sheet-b button:focus-visible`), /outline:\s*none/, 'no heavy focus ring on the first action');
     const badge = rule(css, `${p} .dock .orb-badge`) || '';
     assert.match(badge, /box-shadow:\s*0 0 0 2px var\(--bg\)/, 'badge ring in the pill colour, no amber glow');
+  }
+  for (const [css, p] of [[obsidian, O], [landscapes, L]]) {
+    const mic = rule(css, `${p} .ch-compose button.ch-mic.on`) || '';
+    assert.match(mic, /animation:\s*none/, 'core pink recording pulse is off (an animated box-shadow beats a plain one)');
+    assert.doesNotMatch(mic, /255, 77, 109|VIOLET/);
   }
   assert.match(rule(obsidian, 'html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .dock .orb-badge') || '', /color:\s*#fff/, 'Light badge number readable');
 });

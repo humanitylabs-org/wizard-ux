@@ -815,6 +815,8 @@ html[data-skin^="obsidian"][data-shell="desktop"] .ch-compose textarea { backgro
 /* Phone polish (Miguel 27 Oct, same pass as the desktop one): sheets, the long-press menu and the count badge follow
  * the skin. The long-press menu used to run under the pill dock (its lower actions were hidden behind it). */
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-sheet-b { padding-bottom: calc(var(--pill-top) + 10px); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-sheet-b:not(.ch-emoji-sheet) { max-height: calc(100% - 24px); overflow-y: auto; overscroll-behavior: contain; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-compose button.ch-mic.on { animation: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--ink) 22%, transparent); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-sheet-b button:focus-visible { outline: none; background: var(--ob-tint); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-sheet-b button:active { background: var(--ob-tint); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-sheet-b .ch-emoji-grid button:is(:active, :focus-visible) { border-color: var(--ob-edge); }
