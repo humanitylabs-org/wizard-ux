@@ -15,7 +15,7 @@ Visual: <side-by-side screenshot, or "none">
 
 `Reuse: n/a (reason)` requires no `web/` or `android/` changes.
 
-## Apps (hosted frames: use only `WizardApp` from `/wizard-os-home/core/app-client.js`)
+## Apps (`WizardApp` via `/wizard-os-home/core/app-client.js` only)
 
 | Need | Use | Never hand-roll | Test the shared path by |
 |---|---|---|---|
