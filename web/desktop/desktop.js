@@ -824,7 +824,7 @@
       { kind: 'cmd', name: 'Close app / empty desktop', icon: '✕', keys: `${MOD}W`, run: () => closeCurrent() },
       { kind: 'cmd', name: 'Full screen', icon: '⤢', keys: `${MOD}F`, run: () => toggleMono() },
       { kind: 'cmd', name: 'Refresh window', icon: '↻', keys: `${MOD}R`, run: () => reloadCurrent() },
-      { kind: 'cmd', name: 'Keyboard shortcuts', icon: '⌨', keys: `${MOD}/`, run: () => toggleKeys(true) },
+      { kind: 'cmd', name: 'Keys guide', icon: '⌨', keys: `${MOD}/`, run: () => toggleKeys(true) },
       { kind: 'cmd', name: 'Settings', icon: '⚙', keys: `${MOD},`, run: () => openSettings() },
       { kind: 'cmd', name: 'Use the phone layout here', icon: '📱', run: () => { location.href = './?shell=phone'; } },
       { kind: 'cmd', name: 'Reset desktop layout', icon: '↺', run: () => { Object.keys(localStorage).filter(k => k.startsWith('wux.desk.')).forEach(k => localStorage.removeItem(k)); location.reload(); } },
@@ -1129,35 +1129,11 @@
   })();
   /* ---------------- keys sheet ---------------- */
   // Grouped by what you want to do: speak/ask first, then switch what you see, then arrange.
-  // Speaking comes first and each way is explained in plain words; rows are [key, name, what it does].
-  const KEYS = [
-    ['Speak · press the same key again to send', [
-      [`${MOD}S`, 'Talk about this', 'Ask about what you’re looking at. With a chat open, it replies there. Wizard reads the window’s text, never a screenshot.'],
-      [`${MOD}V`, 'New voice chat', 'A blank new chat. Nothing from your screen is shared.'],
-      [`${MOD}C`, 'Tell the computer', 'Quick commands that run right here; nothing goes to the AI. See “Things to say” below.'],
-      [`${MOD}D`, 'Type with your voice', 'Your words appear in the box you’re typing in. Nothing is sent.'],
-    ], 'wide'],
-    ['Things to say after ' + MOD + 'C', [['“calendar”', 'Any app’s name opens it'], ['“next desk”  “previous desk”', 'Switch desktop'], ['“go home”', 'Home'], ['“full screen”', 'Or “exit full screen”'], ['“close this window”', 'Close it'], ['“search for …”', 'Search'], ['“settings”', 'Open Settings']], 'say'],
-    ['Type and find', [[`${MOD}N`, 'New typed chat'], [`${MOD}Space`, 'Search apps, chats, commands'], [`${MOD}O`, 'Open an app'], [`${MOD}I`, 'Chats inbox']]],
-    ['Switch what you see', [[`${MOD}1`, 'Home'], [`${MOD}2 … 9`, 'Go to desktop'], [`${MOD}[  ${MOD}]`, 'Previous / next desktop'], [`${MOD}\``, 'Last desktop'], [`${MOD}T`, 'New desktop'], [`${MOD}← ↑ → ↓`, 'Focus window (or H J K L)']]],
-    ['Arrange windows', [[`${MOD}F`, 'Full screen'], [`${MOD}W`, 'Close app'], [`${MOD}R`, 'Refresh window'], [`${MOD}⇧← →`, 'Swap window'], [`${MOD}⇧2 … 9`, 'Send window to desktop'], [`${MOD}⇧[  ${MOD}⇧]`, 'Move desktop left / right']]],
-    ['In Chats', [['Enter', 'Send (⇧Enter for a new line)'], ['Esc', 'Back · cancels a recording'], [`${MOD}↑  ${MOD}↓`, 'Previous / next chat'], ['/', 'Search chats'], [`${MOD},`, 'Settings'], [`${MOD}/`, 'This list']]],
-    ['Wizard for Mac (any app)', [['Caps Lock', 'Search and launch'], ['Caps Lock + letter', 'Jump to an app'], ['Right ⌘', 'Talk to Wizard'], ['Right ⌥', 'Dictate into any app']]],
-  ];
+  // The keys guide is the hold-⌥ overlay (keyHints below); ⌥/ and the bar's ⌥/ button pin it open.
   const keysEl = $('#keys');
   const nativeDesktop = !!window.webkit?.messageHandlers?.wizardNative;
-  $('#keys .keys-head small').textContent = IS_MAC ? 'Every key is ⌥ (Option) plus one letter. Hold left ⌥ to see them on screen.' : 'Every key is Alt plus one letter. Hold left Alt to see them on screen.';
-  const keyChips = k => k.split(/\s{2,}/).map(x => /^“/.test(x) ? `<q>${esc(x.slice(1, -1))}</q>` : `<kbd>${esc(x)}</kbd>`).join(/^“/.test(k) ? ' ' : '<i>or</i>');
-  $('#keysBody').innerHTML = KEYS.map(([h, rows, kind]) => `<section class="kgrp${kind ? ' kgrp-' + kind : ''}"><h4>${esc(h)}</h4>` + rows.map(([k, d, more]) => kind === 'wide'
-    ? `<div class="krow kbig"><span class="kk">${keyChips(k)}</span><span class="kwhat"><b>${esc(d)}</b><small>${esc(more)}</small></span></div>`
-    : kind === 'say' ? `<div class="krow ksay"><span class="kk">${keyChips(k)}</span><span>${esc(d)}</span></div>`
-    : `<div class="krow"><span>${esc(d)}</span><span class="kk">${keyChips(k)}</span></div>`).join('') + '</section>').join('');
-  function toggleKeys(on) { keysEl.hidden = on == null ? !keysEl.hidden : !on; if (!keysEl.hidden) window.WosResources?.back(); }
-  keysEl.addEventListener('click', e => {
-    if (e.target.closest('[data-keystour]')) { toggleKeys(false); settingsReturn = ''; window.WosTour?.desk?.start('help'); return; }
-    if (e.target === keysEl || e.target.closest('[data-close]')) toggleKeys(false);
-  });
-  if (window.WosTour?.desk) { const b = document.createElement('button'); b.type = 'button'; b.className = 'keys-tour'; b.dataset.keystour = ''; b.textContent = 'Show me again'; $('#keys .keys-head .x')?.before(b); }
+  function toggleKeys(on) { const want = on == null ? !keyHints.pinned() : !!on; if (want) { window.WosResources?.back(); keyHints.show(true); } else keyHints.hide(); }
+  function replayTour() { toggleKeys(false); settingsReturn = ''; window.WosTour?.desk?.start('help'); }
 
   /* ---------------- voice: Right ⌘ talk, Right ⌥ dictate (taps), mic button ----------------
    * Tap to start, tap again to send (never hold). Lands in the focused thread when one is open,
@@ -1498,7 +1474,7 @@
     if (window.WizWebUpdate?.back()) return 'update-list'; // the update card's thread list folds first
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
-    if (!keysEl.hidden) { toggleKeys(false); returnToSettings(); return 'keys'; }
+    if (keyHints.pinned()) { toggleKeys(false); returnToSettings(); return 'keys'; }
     if (window.WosResources?.back()) return 'resources';
     if (closeUsage()) return 'usage';
     if (settingsReturn === 'files') { const nested = CHATS.closeOverlay(); if (nested) { returnToSettings(); return nested; } settingsReturn = ''; }
@@ -1525,18 +1501,26 @@
     }
     return '';
   }
-  /* ---------------- hold left ⌥ / Alt: key hints on screen ----------------
-   * Holding the base key alone for a moment labels the bar (S speak, V voice chat, C command, D dictate,
-   * 1 Home, 2…9 desktops…) and shows a short strip of the rest. Any other key or letting go hides it. */
+  /* ---------------- hold left ⌥ / Alt: the keys guide ----------------
+   * The one keys guide. Holding left ⌥ alone for a moment labels every bar control with its key and lays the
+   * keys out where they act: speaking under the speak buttons, switching under the desktops, window keys on the
+   * focused window. Each key has a name and a one-line meaning. Letting go hides it; ⌥/ or the bar's ⌥/ button
+   * pins it open until Esc or a click. */
   const keyHints = (() => {
-    const el = document.createElement('div'); el.id = 'keyHints'; el.className = 'key-hints'; el.hidden = true; el.setAttribute('aria-hidden', 'true');
+    const el = document.createElement('div'); el.id = 'keyHints'; el.className = 'key-hints'; el.hidden = true;
+    el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Keys guide');
     document.body.appendChild(el);
-    let timer = 0, armed = false;
-    const STRIP = [
-      ['Speak', [['S', 'talk about this'], ['V', 'new voice chat'], ['C', 'tell the computer'], ['D', 'type by voice']]],
-      ['Type', [['N', 'new chat'], ['␣', 'search'], ['O', 'apps'], ['I', 'inbox']]],
-      ['Go to', [['1', 'Home'], ['2–9', 'desktops'], ['[ ]', 'prev / next'], ['/', 'all keys explained']]],
+    let timer = 0, armed = false, pinned = false;
+    const ALT = IS_MAC ? '⌥' : 'Alt';
+    const SPEAK = [
+      ['S', 'Talk about this', 'Ask about this window, or reply to the open chat'],
+      ['V', 'New voice chat', 'A fresh start; nothing on screen is shared'],
+      ['C', 'Tell the computer', 'Say “calendar”, “next desk”, “full screen”, “go home”. Stays on this box'],
+      ['D', 'Type with your voice', 'Your words go into the box you’re typing in'],
     ];
+    const TYPE = [['N', 'New chat', 'Type a new message'], ['␣', 'Search', 'Apps, chats and commands'], ['I', 'Inbox', 'Chats that are ready or need you']];
+    const GO = [['1', 'Home', 'Your home screen'], ['2–9', 'Desktop 2 to 9', 'Jump straight to it'], ['[ ]', 'Previous / next desktop', ''], ['`', 'Last desktop', 'Back to where you were'], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
+    const WIN = [['F', 'Full screen', ''], ['W', 'Close', ''], ['R', 'Refresh window', ''], ['← →', 'Next window', 'Or H J K L'], ['⇧ ← →', 'Swap places', ''], ['⇧ 2–9', 'Send to a desktop', '']];
     const vis = n => n && !n.hidden && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
     function chip(n, label) {
       const r = n.getBoundingClientRect(), c = document.createElement('b');
@@ -1544,31 +1528,53 @@
       c.style.left = Math.max(4, Math.min(innerWidth - c.offsetWidth - 4, r.left + r.width / 2 - c.offsetWidth / 2)) + 'px';
       c.style.top = (r.bottom + 3) + 'px';
     }
-    function show() {
-      if (!keysEl.hidden) return;
-      el.innerHTML = ''; el.hidden = false; // visible first, so chips can be measured and centred
+    const rows = list => list.map(([k, name, what]) => `<div class="kh-row"><kbd>${esc(k)}</kbd><span><b>${esc(name)}</b>${what ? `<small>${esc(what)}</small>` : ''}</span></div>`).join('');
+    function card(cls, html, pos) {
+      const c = document.createElement('div'); c.className = 'kh-card ' + cls; c.innerHTML = html; el.appendChild(c);
+      for (const [k, v] of Object.entries(pos)) c.style[k] = Math.round(v) + 'px';
+      return c;
+    }
+    function show(pin = pinned) {
+      pinned = !!pin;
+      el.innerHTML = ''; el.hidden = false; el.classList.toggle('pinned', pinned); // visible first, so chips can be measured
       const marks = [['#searchBtn', '␣'], ['#micBtn', 'S'], ['#generalVoice', 'V'], ['#commandBtn', 'C'], ['#dictateBtn', 'D'], ['#status', 'I'], ['#settingsBtn', ','], ['#keysBtn', '/'], ['#logo', '1']];
       for (const [q, l] of marks) { const n = $(q); if (vis(n)) chip(n, l); }
       $$('#wsList .ws[data-ws]').forEach(n => { const slot = C.workspaceNav.slot(+n.dataset.ws); if (slot <= 9 && vis(n)) chip(n, String(slot)); });
       const add = $('#wsList [data-newdesk]'); if (vis(add)) chip(add, 'T');
-      const strip = document.createElement('div'); strip.className = 'kh-strip';
-      strip.innerHTML = `<span class="kh-base">Keep holding ${esc(IS_MAC ? '⌥' : 'Alt')} and press</span>` + STRIP.map(([h, rows]) => `<span class="kh-grp"><em>${esc(h)}</em>${rows.map(([k, d]) => `<span><kbd>${esc(k)}</kbd>${esc(d)}</span>`).join('')}</span>`).join('');
-      el.appendChild(strip);
+      const top = ($('#bar')?.getBoundingClientRect().bottom || 40) + 26;
+      card('kh-speak', `<h5>Speak <em>press the same key again to send</em></h5>${rows(SPEAK)}<h5>Type and find</h5>${rows(TYPE)}`, { top, right: 12 });
+      card('kh-go', `<h5>Switch what you see</h5>${rows(GO)}`, { top, left: 12 });
+      const f = !homeOpen && focused(), r = f && winEl(f.id)?.getBoundingClientRect();
+      if (r && r.width > 420 && r.height > 260) {
+        const list = ws[cur].wins.length > 1 ? WIN : WIN.filter(([k]) => !/←/.test(k));
+        const c = card('kh-win', `<h5>This window</h5>${rows(list)}`, { top: Math.max(top, r.top + 44), left: r.left + r.width / 2 });
+        c.style.transform = 'translateX(-50%)';
+      }
+      const foot = document.createElement('div'); foot.className = 'kh-foot';
+      foot.innerHTML = (pinned ? `<span>Press <kbd>Esc</kbd> to close</span>` : `<span>Hold <kbd>${esc(ALT)}</kbd> and press a key · let go to hide · <kbd>${esc(ALT)}/</kbd> keeps this open</span>`)
+        + (nativeDesktop ? `<span>Wizard for Mac, any app: <kbd>Caps Lock</kbd> search · <kbd>Right ⌘</kbd> talk · <kbd>Right ⌥</kbd> dictate</span>` : '')
+        + (pinned && window.WosTour?.desk ? `<button type="button" data-keystour>Show me the tour again</button>` : '');
+      el.appendChild(foot);
       document.documentElement.classList.add('key-hints-on');
     }
-    function hide() { clearTimeout(timer); armed = false; if (el.hidden) return; el.hidden = true; el.innerHTML = ''; document.documentElement.classList.remove('key-hints-on'); }
+    function hide() { clearTimeout(timer); armed = false; pinned = false; if (el.hidden) return; el.hidden = true; el.innerHTML = ''; el.classList.remove('pinned'); document.documentElement.classList.remove('key-hints-on'); }
+    el.addEventListener('click', e => { if (e.target.closest('[data-keystour]')) replayTour(); else if (pinned) hide(); });
     return {
-      hide, show,
+      hide, show, pinned: () => pinned, mine: t => !!t?.closest?.('#keyHints, #keysBtn'),
       down(e) {
-        if (e.code === 'AltLeft' && !e.repeat && !e.metaKey && !e.ctrlKey && !e.shiftKey) { hide(); armed = true; timer = setTimeout(() => { if (armed) show(); }, 300); return; }
-        if (e.code === 'AltLeft' && e.repeat) return;
+        if (e.code === 'AltLeft' || e.code === 'AltRight' || e.key === 'Alt') {
+          if (pinned || e.repeat || e.code !== 'AltLeft' || e.metaKey || e.ctrlKey || e.shiftKey) return;
+          hide(); armed = true; timer = setTimeout(() => { if (armed) show(false); }, 300); return;
+        }
+        if (pinned && e.altKey && e.code === 'Slash') return; // ⌥/ closes it via toggleKeys
         hide();
       },
-      up(e) { if (e.code === 'AltLeft' || e.key === 'Alt') { const was = !el.hidden; hide(); if (was) e.preventDefault(); } },
+      up(e) { if (pinned) return; if (e.code === 'AltLeft' || e.key === 'Alt') { const was = !el.hidden; hide(); if (was) e.preventDefault(); } },
     };
   })();
   const NATIVE_MENU = !!window.webkit?.messageHandlers?.wizardNative;
   function onKey(e, fromFrame = false) {
+    if (e.key === 'Escape' && keyHints.pinned()) { e.preventDefault(); e.stopPropagation(); toggleKeys(false); returnToSettings(); return; }
     keyHints.down(e);
     const k = e.key, code = e.code, alt = e.altKey && !e.metaKey && !e.ctrlKey, shift = e.shiftKey;
     const digit = /^Digit([1-9])$/.exec(code);
@@ -1616,7 +1622,7 @@
     {
       const f = focused(), plain = !e.altKey && !e.metaKey && !e.ctrlKey;
       const inList = !!e.target.closest?.('.pane-list'), inSearch = e.target.matches?.('[data-chsearch]');
-      if (f?.app === 'chats' && keysEl.hidden && plain && !fromFrame) {
+      if (f?.app === 'chats' && !keyHints.pinned() && plain && !fromFrame) {
         const free = !typing(e.target) || inSearch;
         if (free && (inList || inSearch || !f.thread || e.target === winEl(f.id)) && (k === 'ArrowDown' || k === 'ArrowUp' || (!inSearch && (k === 'j' || k === 'k')))) { if (stepThread(f.id, k === 'ArrowDown' || k === 'j' ? 1 : -1)) return hit(() => {}); }
         if (k === '/' && !typing(e.target)) return hit(() => { const s = winEl(f.id)?.querySelector('[data-chsearch]'); if (s) { s.focus(); s.select(); } });
@@ -1653,7 +1659,7 @@
   addEventListener('keydown', e => onKey(e), true);
   addEventListener('keyup', e => keyHints.up(e), true);
   addEventListener('blur', () => keyHints.hide());
-  addEventListener('pointerdown', () => keyHints.hide(), true);
+  addEventListener('pointerdown', e => { if (!keyHints.mine(e.target)) keyHints.hide(); }, true);
   // Composer: ⌘/Ctrl+Enter sends (shared Chats binds it); Enter stays a newline, as in the phone.
   const log = s => { window.__wuxLog = (window.__wuxLog || []).concat(s).slice(-40); };
 
@@ -1811,7 +1817,7 @@
     toast,
   });
   C.deeplink.consume();
-  window.WosScenery?.attach({ device: document.body, homeInView: () => (homeOpen || !ws[cur].wins.length) && setEl.hidden && pal.hidden && keysEl.hidden && usageEl.hidden && !window.WosResources?.state?.panel });
+  window.WosScenery?.attach({ device: document.body, homeInView: () => (homeOpen || !ws[cur].wins.length) && setEl.hidden && pal.hidden && !keyHints.pinned() && usageEl.hidden && !window.WosResources?.state?.panel });
   new MutationObserver(() => window.WosScenery?.update()).observe(stage, { attributes: true, subtree: true, attributeFilter: ['class', 'hidden'] });
   window.WosSetupLaunch?.boot({ open: id => { const a = APP[id]; if (a) openApp(a); }, alongsideOnly: true,
     firstRunTour: !!DESK_TOUR && !window.WosTour.done(), tour: why => DESK_TOUR?.start(why), markTour: () => window.WosTour?.mark(),

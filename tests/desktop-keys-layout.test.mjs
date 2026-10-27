@@ -5,9 +5,11 @@ import { readFileSync } from 'node:fs';
 const js = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../web/desktop.html', import.meta.url), 'utf8');
 
-test('keys sheet leads with speaking, then switching what you see', () => {
-  const groups = [...js.slice(js.indexOf('const KEYS = ['), js.indexOf("const keysEl = $('#keys')")).matchAll(/^\s{4}\['([^']+)'/gm)].map(m => m[1]);
-  assert.deepEqual(groups, ['Speak · press the same key again to send', 'Things to say after ', 'Type and find', 'Switch what you see', 'Arrange windows', 'In Chats', 'Wizard for Mac (any app)']);
+test('holding ⌥ is the one keys guide: speak keys named and explained, no separate sheet', () => {
+  assert.doesNotMatch(js, /const KEYS = \[/);
+  for (const name of ['Talk about this', 'New voice chat', 'Tell the computer', 'Type with your voice', 'Switch what you see', 'This window']) assert.ok(js.includes(name), name);
+  assert.match(js, /function toggleKeys\(on\) \{[^\n]*keyHints\.show\(true\)/);
+  assert.match(js, /if \(keyHints\.pinned\(\)\) \{ toggleKeys\(false\)/);
 });
 
 test('⌥S speaks about the screen, ⌥C speaks a command, ⌥D dictates', () => {
@@ -18,7 +20,7 @@ test('⌥S speaks about the screen, ⌥C speaks a command, ⌥D dictates', () =>
 });
 
 test('holding left ⌥ alone shows key hints; any other key or release hides them', () => {
-  assert.match(js, /e\.code === 'AltLeft' && !e\.repeat/);
+  assert.match(js, /if \(pinned \|\| e\.repeat \|\| e\.code !== 'AltLeft'/);
   assert.match(js, /keyHints\.down\(e\)/);
   assert.match(js, /addEventListener\('keyup', e => keyHints\.up\(e\), true\)/);
   assert.match(js, /doc\.addEventListener\('keyup', e => keyHints\.up\(e\), true\)/);

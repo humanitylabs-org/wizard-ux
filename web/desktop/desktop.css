@@ -381,25 +381,21 @@ html:is([data-skin^="obsidian"], [data-skin="landscapes"]) .mine-home .home-unse
 .keys-head .keys-tour { border: 1px solid var(--line-2); background: none; color: var(--ink-2); border-radius: 99px; padding: 4px 12px; font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
 .keys-head .keys-tour:hover { color: var(--ink); }
 
-/* Hold left ⌥ / Alt: key hints over the bar plus a short strip of the rest (follows skin tokens). */
+/* Hold left ⌥ / Alt: the keys guide. Chips on bar controls, named keys laid out where they act. Skin tokens only. */
 .key-hints { position: fixed; inset: 0; z-index: 60; pointer-events: none; }
+.key-hints.pinned { pointer-events: auto; background: color-mix(in oklab, var(--bg) 35%, transparent); }
 .key-hints[hidden] { display: none; }
 .kh-chip { position: fixed; min-width: 17px; height: 17px; padding: 0 5px; border-radius: 5px; display: grid; place-items: center; font: 650 11px/1 Inter, system-ui, sans-serif; background: var(--ink); color: var(--bg); box-shadow: 0 2px 8px rgba(0,0,0,.35); animation: pop 120ms var(--ease); }
-.kh-strip { position: fixed; top: 46px; left: 0; right: 0; margin: 0 auto; width: max-content; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; max-width: calc(100vw - 32px); padding: 10px 16px 12px; border-radius: 12px; background: color-mix(in oklab, var(--bg) 94%, var(--ink) 6%); border: 1px solid var(--line-2); box-shadow: 0 16px 50px rgba(0,0,0,.4); font-size: 12.5px; color: var(--ink-2); animation: pop 140ms var(--ease); }
-.kh-strip .kh-base { font-size: 11.5px; font-weight: 600; color: var(--ink-3); }
-.kh-strip .kh-grp { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.kh-strip em { width: 46px; font-style: normal; font-weight: 650; color: var(--ink-3); }
-.kh-strip span > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-.kh-strip kbd { min-width: 16px; padding: 2px 5px; border-radius: 5px; font: 650 11px/1.2 Inter, system-ui, sans-serif; text-align: center; background: color-mix(in oklab, var(--ink) 12%, transparent); color: var(--ink); }
-
-/* Keys sheet: the Speak group spans the sheet with a plain explanation per key; spoken commands as quotes. */
-.keys-body .kgrp-wide { grid-column: 1 / -1; }
-.keys-body .kgrp-wide .krow { display: grid; grid-template-columns: 74px 1fr; gap: 14px; align-items: start; padding: 9px 0; }
-.krow.kbig .kk { justify-content: flex-start; padding-top: 1px; }
-.krow.kbig .kwhat { display: flex; flex-direction: column; gap: 2px; white-space: normal; }
-.krow.kbig .kwhat b { font-size: 14px; font-weight: 650; color: var(--ink); }
-.krow.kbig .kwhat small { font-size: 12.5px; line-height: 1.4; color: var(--ink-2); }
-.krow.ksay { justify-content: flex-start; }
-.krow.ksay .kk { min-width: 190px; }
-.krow.ksay span:last-child { color: var(--ink-2); }
-.krow q { quotes: '“' '”'; font-size: 12.5px; color: var(--ink); white-space: nowrap; }
+.kh-card { position: fixed; width: 296px; padding: 10px 14px 8px; border-radius: 14px; background: color-mix(in oklab, var(--bg) 95%, var(--ink) 5%); border: 1px solid var(--line-2); box-shadow: 0 18px 56px rgba(0,0,0,.42); color: var(--ink); animation: pop 140ms var(--ease); }
+.kh-card h5 { margin: 4px 0 6px; font-size: 11.5px; font-weight: 650; color: var(--ink-3); }
+.kh-card h5 + .kh-row { border-top: 0; }
+.kh-card .kh-row + h5 { margin-top: 12px; }
+.kh-card h5 em { font-style: normal; font-weight: 500; }
+.kh-row { display: grid; grid-template-columns: 54px 1fr; gap: 10px; align-items: start; padding: 6px 0; border-top: 1px solid var(--line); }
+.kh-row kbd { justify-self: start; min-width: 22px; padding: 3px 6px; border-radius: 6px; font: 650 12px/1.2 Inter, system-ui, sans-serif; text-align: center; white-space: nowrap; background: var(--ink); color: var(--bg); }
+.kh-row b { display: block; font-size: 13.5px; font-weight: 650; }
+.kh-row small { display: block; margin-top: 1px; font-size: 12px; line-height: 1.35; color: var(--ink-2); }
+.kh-win { width: 250px; }
+.kh-foot { position: fixed; left: 0; right: 0; bottom: 18px; margin: 0 auto; width: max-content; max-width: calc(100vw - 32px); display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 16px; padding: 8px 14px; border-radius: 12px; background: color-mix(in oklab, var(--bg) 95%, var(--ink) 5%); border: 1px solid var(--line-2); font-size: 12.5px; color: var(--ink-2); animation: pop 140ms var(--ease); }
+.kh-foot kbd { padding: 1px 5px; border-radius: 5px; font: 650 11px/1.2 Inter, system-ui, sans-serif; background: color-mix(in oklab, var(--ink) 12%, transparent); color: var(--ink); }
+.kh-foot button { padding: 4px 10px; border-radius: 8px; font-size: 12.5px; color: var(--ink); background: color-mix(in oklab, var(--ink) 10%, transparent); }
