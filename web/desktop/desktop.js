@@ -1129,17 +1129,29 @@
   })();
   /* ---------------- keys sheet ---------------- */
   // Grouped by what you want to do: speak/ask first, then switch what you see, then arrange.
+  // Speaking comes first and each way is explained in plain words; rows are [key, name, what it does].
   const KEYS = [
-    ['Speak and ask · same key again sends', [[`${MOD}S`, 'Speak about this screen / reply'], [`${MOD}V`, 'New voice chat'], [`${MOD}C`, 'Speak a command (“open calendar”)'], [`${MOD}D`, 'Dictate into the text box'], [`${MOD}N`, 'New typed chat'], [`${MOD}Space`, 'Search apps, chats, commands']]],
-    ['Switch what you see', [[`${MOD}1`, 'Home'], [`${MOD}2 … 9`, 'Go to desktop'], [`${MOD}[  ${MOD}]`, 'Previous / next desktop'], [`${MOD}\``, 'Last desktop'], [`${MOD}T`, 'New desktop'], [`${MOD}O`, 'Open an app'], [`${MOD}I`, 'Chats inbox'], [`${MOD}← ↑ → ↓`, 'Focus window (or H J K L)']]],
+    ['Speak · press the same key again to send', [
+      [`${MOD}S`, 'Talk about this', 'Ask about what you’re looking at. With a chat open, it replies there. Wizard reads the window’s text, never a screenshot.'],
+      [`${MOD}V`, 'New voice chat', 'A blank new chat. Nothing from your screen is shared.'],
+      [`${MOD}C`, 'Tell the computer', 'Quick commands that run right here; nothing goes to the AI. See “Things to say” below.'],
+      [`${MOD}D`, 'Type with your voice', 'Your words appear in the box you’re typing in. Nothing is sent.'],
+    ], 'wide'],
+    ['Things to say after ' + MOD + 'C', [['“calendar”', 'Any app’s name opens it'], ['“next desk”  “previous desk”', 'Switch desktop'], ['“go home”', 'Home'], ['“full screen”', 'Or “exit full screen”'], ['“close this window”', 'Close it'], ['“search for …”', 'Search'], ['“settings”', 'Open Settings']], 'say'],
+    ['Type and find', [[`${MOD}N`, 'New typed chat'], [`${MOD}Space`, 'Search apps, chats, commands'], [`${MOD}O`, 'Open an app'], [`${MOD}I`, 'Chats inbox']]],
+    ['Switch what you see', [[`${MOD}1`, 'Home'], [`${MOD}2 … 9`, 'Go to desktop'], [`${MOD}[  ${MOD}]`, 'Previous / next desktop'], [`${MOD}\``, 'Last desktop'], [`${MOD}T`, 'New desktop'], [`${MOD}← ↑ → ↓`, 'Focus window (or H J K L)']]],
     ['Arrange windows', [[`${MOD}F`, 'Full screen'], [`${MOD}W`, 'Close app'], [`${MOD}R`, 'Refresh window'], [`${MOD}⇧← →`, 'Swap window'], [`${MOD}⇧2 … 9`, 'Send window to desktop'], [`${MOD}⇧[  ${MOD}⇧]`, 'Move desktop left / right']]],
     ['In Chats', [['Enter', 'Send (⇧Enter for a new line)'], ['Esc', 'Back · cancels a recording'], [`${MOD}↑  ${MOD}↓`, 'Previous / next chat'], ['/', 'Search chats'], [`${MOD},`, 'Settings'], [`${MOD}/`, 'This list']]],
     ['Wizard for Mac (any app)', [['Caps Lock', 'Search and launch'], ['Caps Lock + letter', 'Jump to an app'], ['Right ⌘', 'Talk to Wizard'], ['Right ⌥', 'Dictate into any app']]],
   ];
   const keysEl = $('#keys');
   const nativeDesktop = !!window.webkit?.messageHandlers?.wizardNative;
-  $('#keys .keys-head small').textContent = IS_MAC ? 'Every Wizard key is ⌥ (Option) plus one key. Hold left ⌥ to see them on screen.' : 'Every Wizard key is Alt plus one key. Hold left Alt to see them on screen.';
-  $('#keysBody').innerHTML = KEYS.map(([h, rows]) => `<section class="kgrp"><h4>${h}</h4>` + rows.map(([k, d]) => `<div class="krow"><span>${esc(d)}</span><span class="kk">${k.split(/\s{2,}/).map(x => `<kbd>${esc(x)}</kbd>`).join('<i>or</i>')}</span></div>`).join('') + '</section>').join('');
+  $('#keys .keys-head small').textContent = IS_MAC ? 'Every key is ⌥ (Option) plus one letter. Hold left ⌥ to see them on screen.' : 'Every key is Alt plus one letter. Hold left Alt to see them on screen.';
+  const keyChips = k => k.split(/\s{2,}/).map(x => /^“/.test(x) ? `<q>${esc(x.slice(1, -1))}</q>` : `<kbd>${esc(x)}</kbd>`).join(/^“/.test(k) ? ' ' : '<i>or</i>');
+  $('#keysBody').innerHTML = KEYS.map(([h, rows, kind]) => `<section class="kgrp${kind ? ' kgrp-' + kind : ''}"><h4>${esc(h)}</h4>` + rows.map(([k, d, more]) => kind === 'wide'
+    ? `<div class="krow kbig"><span class="kk">${keyChips(k)}</span><span class="kwhat"><b>${esc(d)}</b><small>${esc(more)}</small></span></div>`
+    : kind === 'say' ? `<div class="krow ksay"><span class="kk">${keyChips(k)}</span><span>${esc(d)}</span></div>`
+    : `<div class="krow"><span>${esc(d)}</span><span class="kk">${keyChips(k)}</span></div>`).join('') + '</section>').join('');
   function toggleKeys(on) { keysEl.hidden = on == null ? !keysEl.hidden : !on; if (!keysEl.hidden) window.WosResources?.back(); }
   keysEl.addEventListener('click', e => {
     if (e.target.closest('[data-keystour]')) { toggleKeys(false); settingsReturn = ''; window.WosTour?.desk?.start('help'); return; }
@@ -1521,8 +1533,9 @@
     document.body.appendChild(el);
     let timer = 0, armed = false;
     const STRIP = [
-      ['Speak', [['␣', 'search'], ['S', 'about this screen'], ['V', 'new voice chat'], ['C', 'command'], ['D', 'dictate'], ['N', 'new chat']]],
-      ['Go to', [['1', 'Home'], ['2–9', 'desktops'], ['[ ]', 'prev / next'], ['O', 'apps'], ['I', 'inbox'], ['/', 'all keys']]],
+      ['Speak', [['S', 'talk about this'], ['V', 'new voice chat'], ['C', 'tell the computer'], ['D', 'type by voice']]],
+      ['Type', [['N', 'new chat'], ['␣', 'search'], ['O', 'apps'], ['I', 'inbox']]],
+      ['Go to', [['1', 'Home'], ['2–9', 'desktops'], ['[ ]', 'prev / next'], ['/', 'all keys explained']]],
     ];
     const vis = n => n && !n.hidden && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
     function chip(n, label) {

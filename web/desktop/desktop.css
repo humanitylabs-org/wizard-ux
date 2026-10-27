@@ -391,3 +391,15 @@ html:is([data-skin^="obsidian"], [data-skin="landscapes"]) .mine-home .home-unse
 .kh-strip em { width: 46px; font-style: normal; font-weight: 650; color: var(--ink-3); }
 .kh-strip span > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .kh-strip kbd { min-width: 16px; padding: 2px 5px; border-radius: 5px; font: 650 11px/1.2 Inter, system-ui, sans-serif; text-align: center; background: color-mix(in oklab, var(--ink) 12%, transparent); color: var(--ink); }
+
+/* Keys sheet: the Speak group spans the sheet with a plain explanation per key; spoken commands as quotes. */
+.keys-body .kgrp-wide { grid-column: 1 / -1; }
+.keys-body .kgrp-wide .krow { display: grid; grid-template-columns: 74px 1fr; gap: 14px; align-items: start; padding: 9px 0; }
+.krow.kbig .kk { justify-content: flex-start; padding-top: 1px; }
+.krow.kbig .kwhat { display: flex; flex-direction: column; gap: 2px; white-space: normal; }
+.krow.kbig .kwhat b { font-size: 14px; font-weight: 650; color: var(--ink); }
+.krow.kbig .kwhat small { font-size: 12.5px; line-height: 1.4; color: var(--ink-2); }
+.krow.ksay { justify-content: flex-start; }
+.krow.ksay .kk { min-width: 190px; }
+.krow.ksay span:last-child { color: var(--ink-2); }
+.krow q { quotes: '“' '”'; font-size: 12.5px; color: var(--ink); white-space: nowrap; }
