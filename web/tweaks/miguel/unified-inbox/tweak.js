@@ -1,8 +1,9 @@
 /* Notifications in Chats (unified inbox): a notification is a yellow thread with one message.
- * Unread ones sit at the top of Ready; tapping one opens it in the chat window like any thread, with Done, Snooze and
- * Resolve this where a thread keeps them (same keys), and the message box: sending starts a real chat with the
- * notification attached and finishes it. Snoozed = read and kept: quiet rows at the bottom of Ready. Done = archived:
- * "Completed notifications" under Archive, where one can be opened and restored.
+ * Chats lists them in Ready like any chat (host list mode): Newest / Oldest by when they arrived, Priority by their
+ * priority, By subject under "Notifications". Tapping one opens it in the chat window like any thread, with Done,
+ * Snooze and Resolve this where a thread keeps them (same keys), and the message box: sending starts a real chat with
+ * the notification attached and finishes it. Snoozed = read and kept: quiet rows with the snoozed chats. Done =
+ * archived: "Completed notifications" under Archive, where one can be opened and restored.
  * Data and writes go through the host's inbox capability; text is only ever set with textContent. */
 const RESOLVE = 'Resolve this notification: either stop sending notifications like this one, or fix whatever keeps causing it. Your call which. Tell me briefly what you did.';
 const BELL = 'M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0';
@@ -37,33 +38,30 @@ export default function setup(api) {
     return wrap;
   }
   const list = (cls, label) => { const n = el('div', 'ui-inbox ' + cls); n.setAttribute('role', 'list'); n.setAttribute('aria-label', label); return n; };
-  const fresh = list('new', 'Notifications'), later = list('snoozed', 'Snoozed notifications');
   const done = el('div', 'ui-done'), doneBtn = el('button', 'ui-done-btn'), doneList = list('done', 'Completed notifications');
   doneBtn.type = 'button'; done.append(doneBtn, doneList);
-  fresh.hidden = later.hidden = done.hidden = true;
+  done.hidden = true;
   let items = [], showDone = false;
   api.listen(doneBtn, 'click', () => { showDone = !showDone; paint(); });
 
   function paint() {
-    const unread = items.filter(i => !i.read && !i.archived), snoozed = items.filter(i => i.read && !i.archived), past = items.filter(i => i.archived);
-    fresh.replaceChildren(...unread.map(i => row(i, 'new')));
-    later.replaceChildren(...snoozed.map(i => row(i, 'snoozed')));
+    // Unread and snoozed ones are rows in the Chats list itself (host list mode); only the completed fold lives here.
+    const past = items.filter(i => i.archived);
     doneBtn.textContent = (showDone ? 'Hide' : 'Completed notifications') + ` · ${past.length}`;
     doneBtn.setAttribute('aria-expanded', String(showDone));
     doneList.replaceChildren(...(showDone ? past.slice(0, DONE_SHOWN).map(i => row(i, 'done')) : []));
-    fresh.hidden = !unread.length; later.hidden = !snoozed.length; done.hidden = !past.length;
+    done.hidden = !past.length;
     sync();
   }
   function sync() {
-    for (const [node, slot] of [[fresh, 'ready-top'], [later, 'ready-end'], [done, 'archive-top']]) {
-      if (node.hidden) node.remove(); else api.slot.mount(slot, node);
-    }
+    if (done.hidden) done.remove(); else api.slot.mount('archive-top', done);
   }
 
   api.inbox.watch(next => { items = next; paint(); });
   // Done / Snooze / Restore / Resolve this in the chat window (buttons and keys) land here.
-  api.inbox.threads({ act(action, id) {
-    if (action === 'done') api.inbox.done(id);
+  api.inbox.threads({ list: true, act(action, id) {
+    if (action === 'open') open(id);
+    else if (action === 'done') api.inbox.done(id);
     else if (action === 'snooze') api.inbox.set(id, { read: true });
     else if (action === 'restore') api.inbox.set(id, { archived: false, read: false });
     else if (action === 'resolve' && !api.inbox.reply(id, RESOLVE)) api.toast('Couldn’t start that chat here');
