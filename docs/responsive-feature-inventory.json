@@ -152,6 +152,7 @@
     "core/features.js",
     "core/files.js",
     "core/focused-field.js",
+    "core/incognito-chat.js",
     "core/launcher-defaults.js",
     "core/launcher.js",
     "core/links.css",
