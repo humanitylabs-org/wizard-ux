@@ -111,6 +111,12 @@
   const PARSED = SKINS.map(s => Object.fromEntries(Object.entries(s.t).map(([k, v]) => [k, parse(v)])));
   const mixc = (A, B, f) => { const r = A.map((v, i) => v + (B[i] - v) * f); return `rgba(${r[0] | 0},${r[1] | 0},${r[2] | 0},${+r[3].toFixed(3)})`; };
   const root = document.documentElement;
+  /* Window opacity (Settings › Look): one per-device number for the glass behind every window, Chats and every app
+     alike. Unset = the skin's own --sk-win. Only the alpha changes; the skin keeps its tint. */
+  const GLASS_KEY = 'wos.window.opacity', GLASS_MIN = .6, GLASS_MAX = 1;
+  const glassOk = v => typeof v === 'number' && Number.isFinite(v) && v >= GLASS_MIN && v <= GLASS_MAX;
+  let glass = null;
+  try { const v = parseFloat(localStorage.getItem(GLASS_KEY)); if (glassOk(v)) glass = v; } catch (_) {}
   let pos = idxOf(stored()), shown = -1;
   function paint(p) {
     p = Math.max(0, Math.min(N - 1, p)); pos = p;
@@ -121,6 +127,11 @@
       for (const k of Object.keys(SKINS[0].t)) st.setProperty('--' + k, mixc(PARSED[a][k], PARSED[b][k], f));
       const o = SKINS[a].orb.map((v, i) => v + (SKINS[b].orb[i] - v) * f);
       st.setProperty('--sk-orb', `hue-rotate(${o[0].toFixed(1)}deg) saturate(${o[1].toFixed(3)}) brightness(${o[2].toFixed(3)})`);
+    }
+    if (glass == null) delete root.dataset.winGlass;
+    else {
+      const A = PARSED[a]['sk-win'], B = PARSED[b]['sk-win'], w = A.map((v, i) => v + (B[i] - v) * f);
+      st.setProperty('--sk-win', `rgba(${w[0] | 0},${w[1] | 0},${w[2] | 0},${glass})`); root.dataset.winGlass = '';
     }
     // space layers belong to Nebula only
     const space = a === 0 ? 1 - f : 0; st.setProperty('--sk-space', space.toFixed(3));
@@ -387,6 +398,17 @@
       if (!['framed', 'borderless'].includes(foundation)) throw new Error('Unknown foundation');
       const token = {}; borrowedFoundation = foundation; this._foundationToken = token; applyFrame(SKINS[Math.round(pos)]);
       return () => { if (this._foundationToken === token) { borrowedFoundation = null; this._foundationToken = null; applyFrame(SKINS[Math.round(pos)]); } };
+    },
+    // Window opacity: null = the skin's own glass. setGlass(null) returns to it.
+    get glass() { return glass; },
+    get skinGlass() { return PARSED[Math.round(pos)]['sk-win'][3]; },
+    glassRange: Object.freeze({ min: GLASS_MIN, max: GLASS_MAX }),
+    setGlass(v) {
+      const n = v == null ? null : Math.round(Math.max(GLASS_MIN, Math.min(GLASS_MAX, Number(v))) * 100) / 100;
+      if (n != null && !glassOk(n)) throw new Error('Window opacity must be a number');
+      glass = n; try { n == null ? localStorage.removeItem(GLASS_KEY) : localStorage.setItem(GLASS_KEY, String(n)); } catch (_) {}
+      paint(pos); try { dispatchEvent(new CustomEvent('wos:window-glass', { detail: { glass: n } })); } catch (_) {}
+      return n;
     },
     get composition() { return { version: 1, extends: this.current, frame: this.frame }; },
     compose(value) {
