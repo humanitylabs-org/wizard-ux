@@ -16,7 +16,7 @@
     { id: 'chats', title: 'Chats & app screens' },
     { id: 'voice', title: 'Voice & typing' },
     // Phones over Tailscale (Phone Setup). Hidden on a Wizard without Phone Setup or for a non-owner.
-    // Shown once the Wizard confirms Phone Setup for this owner (an unknown, absent or refused answer keeps it hidden).
+    // Hidden only for a non-owner; a Wizard without phone access shows the shared "not available yet" note.
     { id: 'phones', title: 'Phones & devices', available: phonesAvailable },
     { id: 'phone', title: 'Phone', available: () => shell() ? !!shellOrb() : android() },
     { id: 'recovery', title: 'Unsent & recovered' },
@@ -41,7 +41,7 @@
   }
   // A quiet value on the right of a row, only where it tells you something at a glance; '' otherwise.
   function subtitle(id, ctx) {
-    if (id === 'phones') { loadPhones(); const d = PH.data; if (!d) return ''; const n = phoneList(d).length; return phoneOn(d) ? (n ? `${n} ${n === 1 ? 'phone' : 'phones'}` : 'On') : phoneMid(d) ? 'Setting up' : 'Off'; }
+    if (id === 'phones') { const pc = phones(), v = pc?.view; if (!v) return ''; const n = v.phones.length; return pc.on ? (n ? `${n} ${n === 1 ? 'phone' : 'phones'}` : 'On') : pc.settingUp ? 'Setting up' : v.step === 'off' ? 'Off' : ''; }
     if (id === 'appearance') return window.WosSkin ? (mySkinWorn() ? window.WosMySkin.active.name + ' · ' : '') + lookName(window.WosSkin, window.WosSkin.current) : '';
     if (id === 'phone') { if (shell()) return shellOrb()?.state.on ? 'Everywhere on' : ''; try { return JSON.parse(native()?.everywhere?.() || '{}').enabled ? 'Everywhere on' : ''; } catch (_) { return ''; } }
     if (id === 'recovery') { const n = new Set([...unsentAll(ctx), ...recovered()].map(x => x.id)).size; return n ? String(n) : ''; }
@@ -320,76 +320,63 @@
     if (st === 'side' && N) { ctx.openSub('side'); return true; } return false;
   } });
   /* ---------------- Phones & devices ----------------
-   * The owner's phones over Tailscale, from the Agent Service's Phone Setup (GET /wizard/v1/setup/phone, owner-only;
-   * wizard-os spec/PHONE_SETUP.md). Connecting (Tailscale sign-in, HTTPS, the QR code) stays in the Setup app: this page
-   * opens Setup's phone screen. It shows whether phone access is on and which phones are on the owner's tailnet, and
-   * turns access off with the same reset as Setup's Disconnect. A phone is a device on the owner's Tailscale account,
-   * so removing one happens in Tailscale's admin; the page links there. Loaded when Settings asks, at most every 15 s. */
-  const PH = { state: 'idle', data: null, at: 0, confirm: false, busy: false, error: '', wanted: false };
-  const phoneOn = d => !!d && ['serving', 'phone_seen'].includes(d.step);
-  const phoneMid = d => !!d && ['signin', 'https'].includes(d.step);
-  const phoneList = d => (Array.isArray(d?.phones) ? d.phones : []).filter(p => p && typeof p === 'object');
-  const phoneHost = d => { try { return new URL(d.wizard_url).host; } catch (_) { return String(d?.device_name || ''); } };
-  const osName = os => ({ ios: 'iPhone', android: 'Android', ipados: 'iPad' })[String(os || '').toLowerCase()] || 'Phone';
-  // Listed once the Wizard confirms Phone Setup; while the first answer is pending it stays only if the owner asked for
-  // it (a ?view=phones link or a tap), so a Wizard without Phone Setup never flashes the entry.
-  function phonesAvailable() { loadPhones(); return PH.state === 'ok' || (PH.state !== 'none' && (!!PH.data || PH.wanted)); }
-  function loadPhones(force) {
-    if (typeof fetch !== 'function') { PH.state = 'none'; return; } // no network (tests, old hosts): the page stays hidden
-    if (PH.state === 'loading' || (!force && PH.at && Date.now() - PH.at < 15000)) return;
-    PH.state = 'loading';
-    fetch('/wizard/v1/setup/phone', { credentials: 'same-origin', cache: 'no-store' })
-      .then(r => r.status === 200 ? r.json() : Promise.reject(r.status))
-      .then(d => { PH.data = d && typeof d === 'object' ? d : null; PH.state = PH.data && PH.data.step !== 'unavailable' ? 'ok' : 'none'; })
-      .catch(s => { PH.state = s === 404 || s === 403 ? 'none' : 'error'; })
-      .finally(() => { PH.at = Date.now(); for (const m of mounts) m.render(); });
+   * The owner's phones over Tailscale. Connecting is the shared phone-connect component (web/core/phone-connect.js),
+   * the same one Setup's phone screen and Mac onboarding show, so every place says the same thing, including when
+   * this Wizard can't do phone access yet. Below it: the phones on the owner's tailnet and turning phone access off
+   * (the same reset as Setup's Disconnect, behind a confirmation sheet). A phone is a device on the owner's Tailscale
+   * account, so removing one happens in Tailscale's admin; the page links there. Hidden only for a non-owner. */
+  const PH = { pc: null, wanted: false, confirm: false, error: '', summary: '' };
+  const phoneShell = () => document.documentElement.dataset.shell === 'phone' ? 'phone' : 'desktop';
+  function phones() {
+    if (PH.pc || typeof window.WizPhoneConnect?.create !== 'function' || typeof fetch !== 'function') return PH.pc;
+    PH.pc = window.WizPhoneConnect.create({
+      layout: phoneShell(), qrScript: 'setup/vendor/qrcode.js',
+      active: () => PH.wanted && document.visibilityState === 'visible',
+      // Settings redraws only when what it shows itself changes (the list entry, phones, Turn off); the component
+      // redraws its own part.
+      onChange: pc => {
+        const v = pc.view, key = JSON.stringify([pc.status, v?.step, v?.phones]);
+        if (key !== PH.summary) { PH.summary = key; for (const m of mounts) m.render(); }
+      },
+    });
+    return PH.pc;
   }
+  function phonesAvailable() { const pc = phones(); if (!pc) return false; pc.refresh(15000); return pc.status !== 'denied'; }
+  const osName = os => ({ ios: 'iPhone', android: 'Android', ipados: 'iPad' })[String(os || '').toLowerCase()] || 'Phone';
+  function closePhonesSheet(ctx) { PH.confirm = false; PH.error = ''; ctx.render(); ctx.root.querySelector('[data-st="phones-off"]')?.focus(); }
   register({ id: 'phones', page: 'phones', aliases: ['phones', 'devices', 'phone-access'], available: phonesAvailable, html() {
-    loadPhones();
-    const d = PH.data;
-    if (!d) return `<div class="st-group"><h4>Phone access</h4><div class="st-row static"><span class="st-tx"><b>${PH.state === 'error' ? 'Can’t check right now' : 'Checking…'}</b></span></div></div>`;
-    const on = phoneOn(d), mid = phoneMid(d), phones = phoneList(d);
-    let h = '<div class="st-group"><h4>Phone access</h4>';
-    h += `<div class="st-row static"><span class="st-tx"><b>${on ? 'On' : mid ? 'Setting up' : 'Off'}</b><small>${on ? `${esc(phoneHost(d))} · only your Tailscale account can reach it` : mid ? 'Finish signing in to Tailscale in Setup.' : 'Use Wizard on your phone, anywhere, over your private Tailscale network.'}</small></span></div>`;
-    h += row('phones-connect', on ? 'Connect another phone' : mid ? 'Continue in Setup' : 'Connect a phone', on ? 'Shows the code to scan with the Wizard app' : 'Sign in to Tailscale, then scan a code with your phone');
-    h += '</div>';
-    if (!on) return h;
-    h += '<div class="st-group"><h4>Your phones</h4>';
-    h += phones.length ? phones.map(p => `<div class="st-row static"><span class="st-tx"><b>${esc(p.name || 'Phone')}</b><small>${esc(osName(p.os))} · ${p.online ? 'Online' : 'Offline'}</small></span></div>`).join('')
-      : '<div class="st-empty">No phone on your Tailscale account yet.</div>';
-    h += '<a class="st-row" data-st="phones-manage" href="https://login.tailscale.com/admin/machines" target="_blank" rel="noopener noreferrer"><span class="st-tx"><b>Remove a phone</b><small>Phones are devices on your Tailscale account. Remove one there and it can’t reach Wizard any more.</small></span><span class="st-go">↗</span></a>';
-    h += '</div>';
-    h += '<div class="st-group"><h4>Turn off</h4>' + row('phones-off', 'Turn off phone access', 'Disconnects this Wizard from Tailscale. Your chats stay here.') + '</div>';
-    if (PH.confirm) h += `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="phones-off-title" aria-describedby="phones-off-text"><h3 id="phones-off-title">Turn off phone access?</h3><p id="phones-off-text">Every phone loses access to this Wizard until you connect one again. Your chats stay here.</p>${PH.error ? `<p class="sc-error" role="alert">${esc(PH.error)}</p>` : ''}<div class="st-actions"><button data-st="phones-off-cancel" ${PH.busy ? 'disabled' : ''}>Cancel</button><button data-st="phones-off-confirm" ${PH.busy ? 'disabled' : ''}>${PH.busy ? 'Turning off…' : 'Turn off'}</button></div></section></div>`;
+    const pc = phones(); if (!pc) return '';
+    const v = pc.view, busy = pc.busy;
+    let h = '<div class="st-group"><h4>Phone access</h4><div class="st-pc" data-phone-connect></div></div>';
+    if (pc.on) {
+      h += '<div class="st-group"><h4>Your phones</h4>';
+      h += v.phones.length ? v.phones.map(p => `<div class="st-row static"><span class="st-tx"><b>${esc(p.name)}</b><small>${esc(osName(p.os))} · ${p.online ? 'Online' : 'Offline'}</small></span></div>`).join('')
+        : '<div class="st-empty">No phone on your Tailscale account yet.</div>';
+      h += '<a class="st-row" data-st="phones-manage" href="https://login.tailscale.com/admin/machines" target="_blank" rel="noopener noreferrer"><span class="st-tx"><b>Remove a phone</b><small>Phones are devices on your Tailscale account. Remove one there and it can’t reach Wizard any more.</small></span><span class="st-go">↗</span></a>';
+      h += '</div>';
+    }
+    if (pc.on || pc.settingUp) h += '<div class="st-group"><h4>Turn off</h4>' + row('phones-off', 'Turn off phone access', 'Disconnects this Wizard from Tailscale. Your chats stay here.') + '</div>';
+    if (PH.confirm) h += `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="phones-off-title" aria-describedby="phones-off-text"><h3 id="phones-off-title">Turn off phone access?</h3><p id="phones-off-text">Every phone loses access to this Wizard until you connect one again. Your chats stay here.</p>${PH.error ? `<p class="sc-error" role="alert">${esc(PH.error)}</p>` : ''}<div class="st-actions"><button data-st="phones-off-cancel" ${busy ? 'disabled' : ''}>Cancel</button><button data-st="phones-off-confirm" ${busy ? 'disabled' : ''}>${busy ? 'Turning off…' : 'Turn off'}</button></div></section></div>`;
     return h;
+  }, painted(ctx, section) {
+    const host = section?.querySelector('[data-phone-connect]'); if (host) phones()?.attach(host);
   }, deferRefresh: () => PH.confirm,
   enter() { PH.wanted = true; },
-  leave() { PH.wanted = false; if (!PH.busy) { PH.confirm = false; PH.error = ''; } },
-  back(ctx) {
-    if (!PH.confirm) return false;
-    if (!PH.busy) { PH.confirm = false; PH.error = ''; ctx.render(); ctx.root.querySelector('[data-st="phones-off"]')?.focus(); }
-    return true;
-  },
+  leave() { PH.wanted = false; if (!PH.pc?.busy) { PH.confirm = false; PH.error = ''; } },
+  back(ctx) { if (!PH.confirm) return false; if (!PH.pc?.busy) closePhonesSheet(ctx); return true; },
   act(ctx, el) {
     const st = el.closest('[data-st]')?.dataset.st;
     if (st === 'phones-manage') return false; // the link leaves on its own
-    if (st === 'phones-connect') {
-      // Setup opens its phone screen when it finds this (same-origin frames share sessionStorage).
-      try { sessionStorage.setItem('wizard:setup:screen', 'phone'); } catch (_) {}
-      // openLink closes Settings and opens the URL as the Setup app (both shells).
-      if (!ctx.openLink?.('/wizard-os-home/setup/index.html', 'Setup')) location.assign('/wizard-os-home/setup/');
-      return true;
-    }
     if (st === 'phones-off') { PH.confirm = true; PH.error = ''; ctx.render(); ctx.root.querySelector('[data-st="phones-off-cancel"]')?.focus(); return true; }
-    if (st === 'phones-off-cancel') { if (!PH.busy) { PH.confirm = false; PH.error = ''; ctx.render(); ctx.root.querySelector('[data-st="phones-off"]')?.focus(); } return true; }
-    if (st === 'phones-off-confirm' && !PH.busy) {
-      PH.busy = true; PH.error = ''; ctx.render();
-      fetch('/wizard/v1/setup/phone/reset', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-        .then(r => {
-          if (!r.ok) throw r.status;
-          PH.busy = false; PH.confirm = false; ctx.toast?.('✓', 'Phone access is off', 2200); loadPhones(true);
-        })
-        .catch(() => { PH.busy = false; PH.error = 'Couldn’t turn off phone access. Try again.'; ctx.render(); });
+    if (st === 'phones-off-cancel') { if (!PH.pc?.busy) closePhonesSheet(ctx); return true; }
+    if (st === 'phones-off-confirm' && PH.pc && !PH.pc.busy) {
+      const done = PH.pc.reset();
+      ctx.render(); // the sheet shows "Turning off…"
+      done.then(ok => {
+        if (ok) { PH.confirm = false; ctx.toast?.('✓', 'Phone access is off', 2200); }
+        else PH.error = 'Couldn’t turn off phone access. Try again.';
+        ctx.render();
+      });
       return true;
     }
     return false;

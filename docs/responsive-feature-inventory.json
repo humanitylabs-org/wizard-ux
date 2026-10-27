@@ -399,6 +399,13 @@
       ],
       "note": "Shared own-screen fallback and shell-only Settings confirmation; same App Manager owner listener as Updates"
     },
+    "core/phone-connect.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
     "core/photos-relay.js": {
       "loadedBy": [
         "phone",
@@ -775,6 +782,8 @@
     "core/os-updates.js",
     "core/own-views.css",
     "core/own-views.js",
+    "core/phone-connect.css",
+    "core/phone-connect.js",
     "core/photos-relay.js",
     "core/polish.css",
     "core/reach.js",
@@ -824,4 +833,3 @@
     "pwa-install.js"
   ]
 }
-
