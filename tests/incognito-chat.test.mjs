@@ -93,7 +93,7 @@ test('every persistent Chats adapter has an Incognito early return; both shells 
     const start = chats.indexOf('function ' + method + '('); assert.ok(start >= 0, method)
     assert.match(chats.slice(start, start + 350), /INC\?\.active/, method)
   }
-  assert.match(chats, /const incognitoAction = isNew &&/); assert.match(chats, /w.thread !== '__new__'/)
+  assert.match(chats, /const incognitoAction = isNew &&/); assert.ok(chats.includes('${chip}${incognitoAction}')); assert.match(chats, /w.thread !== '__new__'/)
   assert.match(chats, /beforeLeave: id => !INC\?\.active/)
   for (const file of ['index.html', 'desktop.html']) assert.match(readFileSync(new URL('../web/' + file, import.meta.url), 'utf8'), /core\/incognito-chat.js/)
   for (const file of ['app.js', 'desktop/desktop.js']) assert.match(readFileSync(new URL('../web/' + file, import.meta.url), 'utf8'), /CHATS.beforeLeave\(id\)/)
