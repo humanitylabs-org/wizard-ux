@@ -39,6 +39,13 @@ public final class ConnectActivity extends Activity {
     private int generation;
     private WizardLook look;
     private Typeface labelFace = Typeface.DEFAULT_BOLD;
+    /* The Tailscale guide over this screen (TailscaleGuide) while a Wizard on Tailscale doesn't answer. */
+    private FrameLayout root;
+    private TailscaleGuideView guide;
+    private String guideOrigin;
+    private boolean resumed, guideChecking;
+    private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable guideTick = this::checkGuide;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -49,7 +56,7 @@ public final class ConnectActivity extends Activity {
         if (switching && installPath(getIntent()) != null) { returnToWizard(); return; }
         getWindow().setStatusBarColor(Color.TRANSPARENT); getWindow().setNavigationBarColor(Color.TRANSPARENT);
 
-        FrameLayout root = new FrameLayout(this);
+        root = new FrameLayout(this);
         // The shell's .device glow: the accent rising softly from the bottom into the skin's base.
         GradientDrawable sky = new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
                 new int[]{ WizardLook.over(WizardLook.withAlpha(look.accent, 0.16f), look.base), look.base, look.base });
@@ -64,9 +71,11 @@ public final class ConnectActivity extends Activity {
                 android.graphics.Insets bars = in.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
                 int ime = in.getInsets(WindowInsets.Type.ime()).bottom;
                 scroll.setPadding(bars.left, bars.top, bars.right, Math.max(bars.bottom, ime));
+                if (guide != null) guide.view().setPadding(bars.left, bars.top, bars.right, bars.bottom);
                 return WindowInsets.CONSUMED;
             }
             scroll.setPadding(in.getSystemWindowInsetLeft(), in.getSystemWindowInsetTop(), in.getSystemWindowInsetRight(), in.getSystemWindowInsetBottom());
+            if (guide != null) guide.view().setPadding(in.getSystemWindowInsetLeft(), in.getSystemWindowInsetTop(), in.getSystemWindowInsetRight(), in.getSystemWindowInsetBottom());
             return in.consumeSystemWindowInsets();
         });
 
@@ -229,6 +238,9 @@ public final class ConnectActivity extends Activity {
         if (checking) return;
         final String origin = ServerOrigin.parse(address.getText().toString(), BuildConfig.DEBUG);
         if (origin == null) { say("Enter your Wizard's https:// address, like https://wizard.your-tailnet.ts.net", true); return; }
+        boolean[] net = ReachScreen.net(this);
+        // A Tailscale address while Tailscale is off can't answer: show the guide now instead of waiting out the check.
+        if (TailscaleGuide.applies(origin) && net[0] && !net[1]) { say("", false); showGuide(origin); return; }
         final int attempt = ++generation;
         checking = true; busy(true);
         say("Checking your Wizard…", false);
@@ -240,6 +252,7 @@ public final class ConnectActivity extends Activity {
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed() || generation != attempt) return;
                 checking = false; busy(false);
+                if (failure != null && TailscaleGuide.applies(origin)) { say("", false); showGuide(origin); return; }
                 if (failure != null) { say(failure, true); return; }
                 if (!ServerSettings.save(this, origin)) { say("Couldn't switch yet. Let any recording or upload finish, then try again.", true); return; }
                 returnToWizard();
@@ -260,10 +273,52 @@ public final class ConnectActivity extends Activity {
         startActivity(home); finish();
     }
     private void back() {
+        if (guideOrigin != null) { hideGuide(); return; }
         if (checking) { generation++; checking = false; busy(false); say("", false); }
         if (!ServerSettings.origin(this).isEmpty()) returnToWizard();
         // Unconfigured root stays open. Camera/keyboard Back are consumed by their own nested surfaces first.
     }
     @Override public void onBackPressed() { back(); }
-    @Override protected void onDestroy() { generation++; super.onDestroy(); }
+
+    /* ---------- Tailscale guide: checks again every few seconds and on return (from Tailscale or Google Play) ---------- */
+    private void showGuide(String origin) {
+        guideOrigin = origin;
+        if (guide == null) {
+            guide = new TailscaleGuideView(this, new TailscaleGuideView.Palette(look.base, look.text, look.text2, look.muted, look.accent,
+                    look.accent, look.onAccent(), look.surface(), look.border), this::hideGuide);
+            root.addView(guide.view(), new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            root.requestApplyInsets(); // the root's listener pads the guide too
+        }
+        boolean[] net = ReachScreen.net(this);
+        guide.show(origin, net[1], ReachScreen.tailscaleInstalled(this));
+        main.removeCallbacks(guideTick);
+        main.postDelayed(guideTick, 4000);
+    }
+    private void hideGuide() {
+        guideOrigin = null; generation++; guideChecking = false;
+        main.removeCallbacks(guideTick);
+        if (guide != null) guide.hide();
+    }
+    private void checkGuide() {
+        main.removeCallbacks(guideTick);
+        final String origin = guideOrigin;
+        if (origin == null || !resumed || guideChecking) return;
+        guide.show(origin, ReachScreen.net(this)[1], ReachScreen.tailscaleInstalled(this));
+        final int attempt = ++generation;
+        guideChecking = true;
+        new Thread(() -> {
+            boolean ok;
+            try { WizardProbe.check(origin); ok = true; } catch (Exception e) { ok = false; }
+            final boolean reached = ok;
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed() || generation != attempt || !origin.equals(guideOrigin)) return;
+                guideChecking = false;
+                if (reached && ServerSettings.save(this, origin)) { returnToWizard(); return; }
+                main.postDelayed(guideTick, 4000);
+            });
+        }, "WizardGuideCheck").start();
+    }
+    @Override protected void onResume() { super.onResume(); resumed = true; if (guideOrigin != null) main.postDelayed(guideTick, 300); }
+    @Override protected void onPause() { resumed = false; main.removeCallbacks(guideTick); super.onPause(); }
+    @Override protected void onDestroy() { generation++; main.removeCallbacks(guideTick); super.onDestroy(); }
 }

@@ -200,6 +200,9 @@ public class WizardShellPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "changeWizard", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "cancelChange", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "openSettings", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "tailscale", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "check", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openTailscale", returnType: CAPPluginReturnPromise),
     ]
 
     private var connectMode: Bool { (bridge?.viewController as? WizardViewController)?.connectMode ?? false }
@@ -269,7 +272,7 @@ public class WizardShellPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         WizardProbe.check(origin) { [weak self] problem in
-            if let problem { call.reject(problem, "unreachable"); return }
+            if let problem { call.reject(problem, WizardProbe.noAnswer(problem) ? "offline" : "unreachable"); return }
             WizardAddress.save(origin: origin)
             WizardAddress.pendingPair = nil
             call.resolve(["origin": origin])
@@ -296,6 +299,32 @@ public class WizardShellPlugin: CAPPlugin, CAPBridgedPlugin {
         WizardAddress.pendingPair = nil
         call.resolve()
         DispatchQueue.main.async { [weak self] in WizardViewController.restart(from: self?.bridge?.viewController) }
+    }
+
+    /// `{ on }`: whether Tailscale's VPN is running on this iPhone (TailscaleNet). The guide's first line only.
+    @objc func tailscale(_ call: CAPPluginCall) {
+        call.resolve(["on": TailscaleNet.isOn()])
+    }
+
+    /// `{ address }` → `{ ok, problem }`: the same check as `connect`, without saving or opening anything. The guide asks
+    /// this every few seconds and on return to the app, then connects once the Wizard answers.
+    @objc func check(_ call: CAPPluginCall) {
+        guard let raw = call.getString("address"), let origin = WizardOrigin.typed(raw) else {
+            call.reject("That isn't an https Wizard address.", "invalid")
+            return
+        }
+        WizardProbe.check(origin) { problem in
+            call.resolve(["ok": problem == nil, "offline": problem.map(WizardProbe.noAnswer) ?? false, "problem": problem ?? ""])
+        }
+    }
+
+    /// Tailscale's App Store page: Get, or Open when it is already installed (iOS has no supported way to open
+    /// another app directly).
+    @objc func openTailscale(_ call: CAPPluginCall) {
+        call.resolve()
+        DispatchQueue.main.async {
+            if let url = URL(string: "https://apps.apple.com/app/tailscale/id1470499037") { UIApplication.shared.open(url) }
+        }
     }
 
     @objc func openSettings(_ call: CAPPluginCall) {

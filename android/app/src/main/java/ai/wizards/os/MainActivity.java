@@ -551,9 +551,7 @@ public class MainActivity extends Activity {
     }
 
     void openTailscale() {
-        android.content.Intent i = getPackageManager().getLaunchIntentForPackage(ReachPolicy.TAILSCALE_PKG);
-        if (i == null) { Toast.makeText(this, "Tailscale isn't installed on this phone", Toast.LENGTH_SHORT).show(); return; }
-        startActivity(i); // coming back (onResume) tries again
+        TailscaleGuideView.openTailscale(this); // Tailscale, or Google Play when it isn't installed; onResume tries again
     }
 
     /** Tailscale turning on (or the network coming back) retries at once instead of waiting for the next tick. */

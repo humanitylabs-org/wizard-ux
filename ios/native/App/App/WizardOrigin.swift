@@ -87,6 +87,10 @@ final class WizardProbe: NSObject, URLSessionDataDelegate {
 
     /// nil when the response headers may belong to the Wizard shell, else why not. Fail-closed: the shell is always
     /// served as 200 text/html, so a missing or other Content-Type is refused.
+    /// True for a probe problem where nothing answered at all (the connection failed or timed out), as opposed to an
+    /// address that answered but isn't a Wizard. Only the first can be Tailscale's fault.
+    static func noAnswer(_ problem: String) -> Bool { problem.hasPrefix("Couldn't reach") }
+
     static func headerProblem(status: Int, contentType: String?, host: String) -> String? {
         if status != 200 { return "\(host) answered, but didn't open Wizard (HTTP \(status))." }
         guard let type = contentType,
@@ -162,5 +166,30 @@ final class WizardProbe: NSObject, URLSessionDataDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
         completionHandler(nil)
+    }
+}
+
+/// Is Tailscale running on this phone? Read from the phone's own network interfaces: Tailscale's VPN gives the device
+/// an address in 100.64.0.0/10 (the CGNAT range Tailscale uses) on a `utun` tunnel. No permission or network request.
+/// Used only to choose what the "can't reach your Wizard" guide says first; connecting never depends on it.
+enum TailscaleNet {
+    /// One interface address, as `getifaddrs` reports it: a `utun` tunnel holding a Tailscale (100.64.0.0/10) IPv4.
+    static func isTailscale(interface name: String, ipv4 address: UInt32) -> Bool {
+        name.hasPrefix("utun") && (address >> 22) == (100 << 2 | 1) // 100.64.0.0/10: first octet 100, 01 in the next 2 bits
+    }
+
+    /// True when any interface on this device looks like Tailscale's.
+    static func isOn() -> Bool {
+        var list: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&list) == 0, let first = list else { return false }
+        defer { freeifaddrs(list) }
+        var cursor: UnsafeMutablePointer<ifaddrs>? = first
+        while let entry = cursor {
+            defer { cursor = entry.pointee.ifa_next }
+            guard let sa = entry.pointee.ifa_addr, sa.pointee.sa_family == UInt8(AF_INET) else { continue }
+            let address = sa.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { UInt32(bigEndian: $0.pointee.sin_addr.s_addr) }
+            if isTailscale(interface: String(cString: entry.pointee.ifa_name), ipv4: address) { return true }
+        }
+        return false
     }
 }

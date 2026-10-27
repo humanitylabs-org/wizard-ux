@@ -50,6 +50,8 @@
             <data android:scheme="https" />
         </intent>
         <package android:name="com.android.vending" />
+        <!-- The Tailscale guide: is it installed, and open it. -->
+        <package android:name="com.tailscale.ipn" />
         <!-- Usuals: see and open Grab. -->
         <package android:name="com.grabtaxi.passenger" />
     </queries>
