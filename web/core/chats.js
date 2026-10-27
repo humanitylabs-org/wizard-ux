@@ -1695,6 +1695,14 @@ window.WizCore.chats = function createChats(H) {
   };
   // Tool ids as the owner reads them in the live step list ("browser_exec" -> "Browser exec").
   const stepName = tool => { const t = String(tool || '').replace(/^mcp__(wizard__)?/, '').replace(/__/g, ' · ').replace(/_/g, ' ').trim(); return t ? t[0].toUpperCase() + t.slice(1) : 'Working'; };
+  // A replay of the turn on screen: the streamed words end with its answer AND add nothing beyond that turn's own
+  // words (its interim notes). A new run that merely ends like an old short answer ("Yes.") never matches.
+  const bare = v => streamAnswer(v).replace(/\s+/g, '');
+  const streamShown = (st, turns) => {
+    const t = turns.findLast(x => x.a && x.a.final !== false), ans = bare(t?.a?.text), got = bare(st.text);
+    if (!ans || !got.endsWith(ans)) return false;
+    return got.length <= [...(t.notes || []), t.a.text].map(bare).join('').length;
+  };
   function closeStream(c) { c.stream?.handle?.close(); clearTimeout(c.stream?.retry); c.stream = null; }
   function syncStream(w, c, turns, agent) {
     const sid = w.thread, s = LIVE.session(sid), pendingRun = LIVE.pendingRun?.(sid), rid = pendingRun || s?.runId;
@@ -1710,7 +1718,9 @@ window.WizCore.chats = function createChats(H) {
           st.reconciling = true;
           const until = Date.now() + 60000;
           const reconcile = async () => {
-            if (c.stream !== st || w.thread !== sid || st.landed || Date.now() > until) return;
+            if (c.stream !== st || w.thread !== sid || st.landed) return;
+            // The transcript is the authority: a provisional that never matched it must not linger as a second copy.
+            if (Date.now() > until) { st.landed = true; st.handle?.close(); renderThreadLive(w); return; }
             await loadThread(w, true);
             if (c.stream === st && !st.landed) st.retry = setTimeout(reconcile, 500);
           };
@@ -1722,7 +1732,10 @@ window.WizCore.chats = function createChats(H) {
     const st = c.stream;
     // Publish the authoritative transcript and retire the provisional in the SAME paint.
     // Keep the last words visible while terminal receipts race transcript persistence.
-    if (st && !st.landed && turns && assistantStamp(turns) !== st.baseline) {
+    // Or the transcript already shows these words: reopening a thread while the outbox still names its run (or the list
+    // still says working) starts a new subscriber whose baseline already includes the answer, and the run replays from
+    // its first event. Without this the whole reply showed twice under "Finishing…" (Miguel, 27 Oct 2026).
+    if (st && !st.landed && turns && (assistantStamp(turns) !== st.baseline || streamShown(st, turns))) {
       st.landed = true; st.handle?.close(); clearTimeout(st.retry);
     }
     const visible = st && !st.landed ? streamAnswer(st.text) : '';
