@@ -409,6 +409,53 @@
   });
   /* ---- keyboard through the thread list: ↑/↓ (or j/k) open the previous/next chat, / searches ---- */
   function listRows(id) { return $$('.pane-list .ch-row[data-chopen], .pane-list .ch-row[data-chdraft]', winEl(id) || document.createElement('div')); }
+  // ⌥↓ / ⌥↑: walk the Ready chats only (Working and the rest are skipped), top first, from anywhere.
+  // Rows are taken in on-screen order so "top" is what the owner sees at the top of Ready.
+  const readyRows = id => $$('.pane-list .ch-sec[data-sec="ready"] .ch-row[data-chopen]', winEl(id) || document.createElement('div'))
+    .filter(r => r.getClientRects().length).sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
+  function stepReady(dir, tries = 0) {
+    let f = focused();
+    const fresh = tries > 0 || homeOpen || !mainChats(f); // arriving from elsewhere always starts at the top
+    if (homeOpen || !mainChats(f)) {
+      const w = ws[cur].wins.map(x => W[x]).find(mainChats);
+      if (w && !homeOpen) { focusWin(w.id); f = w; return setTimeout(() => stepReady(0, 1), 0); }
+      if (!tries) { openApp(APP.wizard); return setTimeout(() => stepReady(0, 1), 80); }
+    }
+    f = focused(); if (!f || f.app !== 'chats') return false;
+    const rows = readyRows(f.id);
+    if (!rows.length) {
+      const sec = winEl(f.id)?.querySelector('.pane-list [data-sectoggle="ready"][aria-expanded="false"]');
+      if (sec && tries < 2) { sec.click(); return setTimeout(() => stepReady(dir, tries + 1), 60); }
+      if (tries < 8 && !winEl(f.id)?.querySelector('.pane-list .ch-sec')) return setTimeout(() => stepReady(dir, tries + 1), 80);
+      toast('✓', 'Nothing ready right now', 1400); return false;
+    }
+    const i = fresh ? -1 : rows.findIndex(r => r.dataset.chopen === f.thread);
+    const j = i < 0 ? 0 : (i + (dir || 0) + rows.length) % rows.length, r = rows[j]; // wraps: past the last goes back to the top
+    if (i >= 0 && dir > 0 && j === 0) toast('↺', 'Back to the top of Ready', 1000);
+    if (i >= 0 && j === i) return true;
+    CHATS.openChat(f.id, r.dataset.chopen); syncChatsPane(f.id);
+    const again = winEl(f.id)?.querySelector(`.pane-list .ch-row[data-chopen="${CSS.escape(r.dataset.chopen)}"]`);
+    $$('.pane-list .ch-row.kbd', winEl(f.id)).forEach(x => x.classList.remove('kbd'));
+    if (again) { again.classList.add('kbd'); again.scrollIntoView({ block: 'nearest' }); }
+    setTimeout(() => focusInside(f.id), 30); // ready to type a reply straight away
+    log('ready:' + r.dataset.chopen);
+    return true;
+  }
+  // ⌥← / ⌥→ inside Chats: hop between the chat list and the message box. Already there: move to the next window.
+  function chatsSide(dir) {
+    const f = focused(); if (!f || f.app !== 'chats' || homeOpen) return false;
+    const el = winEl(f.id), a = document.activeElement;
+    if (dir < 0) {
+      if (a?.closest?.('.pane-list')) return false;
+      const row = el.querySelector(`.pane-list .ch-row[data-chopen="${CSS.escape(f.thread || '')}"]`) || el.querySelector('.pane-list .ch-row.kbd') || listRows(f.id)[0];
+      if (!row) return false;
+      $$('.pane-list .ch-row.kbd', el).forEach(x => x.classList.remove('kbd')); row.classList.add('kbd');
+      row.focus({ preventScroll: true }); row.scrollIntoView({ block: 'nearest' }); return true;
+    }
+    const ta = el.querySelector('.pane-main textarea');
+    if (!ta || a === ta) return false;
+    ta.focus({ preventScroll: true }); return true;
+  }
   function stepThread(id, dir) {
     const w = W[id]; if (!w || w.app !== 'chats') return false;
     const rows = listRows(id); if (!rows.length) return false;
@@ -1518,9 +1565,10 @@
       ['C', 'Tell the computer', 'Say “calendar”, “next desk”, “full screen”, “go home”. Stays on this box'],
       ['D', 'Type with your voice', 'Your words go into the box you’re typing in'],
     ];
-    const TYPE = [['N', 'New chat', 'Type a new message'], ['␣', 'Search', 'Apps, chats and commands'], ['I', 'Inbox', 'Chats that are ready or need you']];
+    const TYPE = [['N', 'New chat', 'Type a new message'], ['␣', 'Search', 'Apps, chats and commands'], ['I', 'Inbox', 'All your chats']];
+    const READY = [['↓ ↑', 'Next ready chat', 'Starts at the top of Ready and skips anything still working'], ['← →', 'List or message box', 'Hop between the chat list and where you type']];
     const GO = [['1', 'Home', 'Your home screen'], ['2–9', 'Desktop 2 to 9', 'Jump straight to it'], ['[ ]', 'Previous / next desktop', ''], ['`', 'Last desktop', 'Back to where you were'], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
-    const WIN = [['F', 'Full screen', ''], ['W', 'Close', ''], ['R', 'Refresh window', ''], ['← →', 'Next window', 'Or H J K L'], ['⇧ ← →', 'Swap places', ''], ['⇧ 2–9', 'Send to a desktop', '']];
+    const WIN = [['F', 'Full screen', ''], ['W', 'Close', ''], ['R', 'Refresh window', ''], ['H J K L', 'Next window', 'Left, down, up, right'], ['⇧ ← →', 'Swap places', ''], ['⇧ 2–9', 'Send to a desktop', '']];
     const vis = n => n && !n.hidden && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
     function chip(n, label) {
       const r = n.getBoundingClientRect(), c = document.createElement('b');
@@ -1542,7 +1590,7 @@
       $$('#wsList .ws[data-ws]').forEach(n => { const slot = C.workspaceNav.slot(+n.dataset.ws); if (slot <= 9 && vis(n)) chip(n, String(slot)); });
       const add = $('#wsList [data-newdesk]'); if (vis(add)) chip(add, 'T');
       const top = ($('#bar')?.getBoundingClientRect().bottom || 40) + 26;
-      card('kh-speak', `<h5>Speak <em>press the same key again to send</em></h5>${rows(SPEAK)}<h5>Type and find</h5>${rows(TYPE)}`, { top, right: 12 });
+      card('kh-speak', `<h5>Speak <em>press the same key again to send</em></h5>${rows(SPEAK)}<h5>Ready chats</h5>${rows(READY)}<h5>Type and find</h5>${rows(TYPE)}`, { top, right: 12 });
       card('kh-go', `<h5>Switch what you see</h5>${rows(GO)}`, { top, left: 12 });
       const f = !homeOpen && focused(), r = f && winEl(f.id)?.getBoundingClientRect();
       if (r && r.width > 420 && r.height > 260) {
@@ -1587,7 +1635,8 @@
     if (alt && !shift && code === 'Digit1') return hit(() => { if (!e.repeat) goHome(); });
     if ((menu || alt) && !shift && code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
     if ((menu || alt) && !shift && code === 'KeyT') return hit(() => { if (!e.repeat) { closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newDesktop(); } });
-    if (alt && !shift && (code === 'ArrowUp' || code === 'ArrowDown') && focused()?.app === 'chats') return hit(() => stepThread(focused().id, code === 'ArrowDown' ? 1 : -1));
+    if (alt && !shift && (code === 'ArrowUp' || code === 'ArrowDown')) return hit(() => { if (!e.repeat || focused()?.app === 'chats') { closePalette(); toggleKeys(false); stepReady(code === 'ArrowDown' ? 1 : -1); } });
+    if (alt && !shift && (code === 'ArrowLeft' || code === 'ArrowRight') && focused()?.app === 'chats' && !homeOpen) return hit(() => { const d = code === 'ArrowLeft' ? -1 : 1; if (!chatsSide(d)) dirFocus(d, 0); });
     // ⌥N new chat; ⌥V new voice chat (⌥V again sends).
     if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newChat({ fresh: true }); });
     if (alt && !shift && code === 'Enter') return hit(() => { if (!e.repeat) newChat(); });
