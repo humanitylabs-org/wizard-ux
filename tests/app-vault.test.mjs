@@ -35,3 +35,25 @@ test('WizardApp.vault exposes has/seal/open/forget with a long prompt timeout', 
   assert.match(client, /vault: Object\.freeze/);
   assert.match(client, /request\(op, args, 130000\)/);
 });
+// James, 27 Oct 2026: after a reload a background Messenger asked for his fingerprint over Chats. The shell holds
+// seal/open until that app is in front and has stayed there briefly, and gives up with not_in_front.
+test('fingerprint prompts wait until the asking app is in front', async () => {
+  const start = services.indexOf('const VAULT_STEADY_MS'), end = services.indexOf('let registry, available');
+  const doc = {hidden: false};
+  const {whenInFront, inFront} = new Function('document', 'frames', 'setInterval', services.slice(start, end).replace('VAULT_WAIT_MS = 60000', 'VAULT_WAIT_MS = 2500') + '; return {whenInFront, inFront};')(doc, new Map(), () => 0);
+  let front = false; const st = {isFront: () => front, isVisible: () => true};
+  assert.equal(inFront(st), false, 'isFront wins over isVisible');
+  let done = false; const p = whenInFront(st, () => true).then(() => { done = true; });
+  await new Promise(r => setTimeout(r, 900)); assert.equal(done, false, 'no prompt while another window is in front');
+  front = true; await new Promise(r => setTimeout(r, 300)); front = false; // a reload passing over the desk
+  await new Promise(r => setTimeout(r, 700)); assert.equal(done, false, 'a brief pass does not count');
+  front = true; await p; assert.equal(done, true, 'opened: the prompt goes ahead');
+  doc.hidden = true; assert.equal(inFront(st), false, 'a hidden Wizard never prompts');
+  await assert.rejects(whenInFront({isFront: () => false}, () => true), e => e.code === 'not_in_front');
+  await assert.rejects(whenInFront({isFront: () => false}, () => false), e => e.code === 'cancelled');
+});
+test('seal and open both wait for the app to be in front; has and forget do not', () => {
+  assert.match(services, /seal: async[^\n]*await whenInFront\(st/);
+  assert.match(services, /open: async[^\n]*await whenInFront\(st/);
+  assert.doesNotMatch(services, /has: async[^\n]*whenInFront/);
+});

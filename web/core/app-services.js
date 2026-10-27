@@ -25,6 +25,36 @@
       try { p.postMessage(JSON.stringify({ ...extra, id, v: 1, appId, method })); } catch (e) { clearTimeout(timer); vaultWaits.delete(id); reject(e); }
     });
   }
+  // A fingerprint prompt only for the app you are looking at (James, 27 Oct 2026: after a reload a background
+  // Messenger asked for his fingerprint over Chats). seal/open wait until the app is in front and has stayed there
+  // briefly (a reload passes desks on screen on its way to where you were); after VAULT_WAIT_MS the app gets
+  // code 'not_in_front' and simply asks again when opened.
+  const VAULT_STEADY_MS = 600, VAULT_WAIT_MS = 60000;
+  function inFront(st) {
+    if (document.hidden) return false;
+    try { return (st.isFront || st.isVisible || (() => true))() === true; } catch (_) { return false; }
+  }
+  // Already steadily in front (the usual tap on "Unlock with fingerprint"): no added wait.
+  function steadyFront(st) {
+    const now = Date.now();
+    if (!inFront(st)) { st.frontSince = 0; return false; }
+    st.frontSince ||= now; return now - st.frontSince >= VAULT_STEADY_MS;
+  }
+  setInterval(() => { for (const st of frames.values()) steadyFront(st); }, 250);
+  function whenInFront(st, alive) {
+    if (steadyFront(st)) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const t0 = Date.now(); let since = 0;
+      const tick = () => {
+        if (!alive()) return reject(Object.assign(new Error('closed'), { code: 'cancelled' }));
+        const now = Date.now();
+        if (inFront(st)) { since ||= now; if (now - since >= VAULT_STEADY_MS) return resolve(); } else since = 0;
+        if (now - t0 > VAULT_WAIT_MS) return reject(Object.assign(new Error('not_in_front'), { code: 'not_in_front' }));
+        setTimeout(tick, 150);
+      };
+      tick();
+    });
+  }
   let registry, available = null, serial = 0, rootArm = null;
   // Share receiving (docs/SHARE-SHEET.md): the share sheet hands its per-app ops here once, at shell load, before
   // any app frame exists; they are never on a global, so a frame reaches only its own app id's items.
@@ -72,11 +102,11 @@
       if (st.doc && !valid(st, st.doc)) reset(st);
     }
   }
-  function attach(frame, { appId, path, openThread, openContextDraft, isVisible, back, readingStorage } = {}) {
+  function attach(frame, { appId, path, openThread, openContextDraft, isVisible, isFront, back, readingStorage } = {}) {
     frames.get(frame)?.detach();
     if (!frame || frame.tagName !== 'IFRAME' || !appId || !path) return () => {};
     let url; try { url = new URL(path, ORIGIN); } catch (_) { return () => {}; }
-    const st = { frame, appId, url, openThread, openContextDraft, isVisible, back, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
+    const st = { frame, appId, url, openThread, openContextDraft, isVisible, isFront, back, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
     if (!registered(st)) return () => {};
     const load = () => { if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); restoreReturn(st); };
     st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); if (st.badged) setBadge(st.appId, 0); };
@@ -275,8 +305,8 @@
       vault: Object.freeze({
         // check() again after the await: a reloaded, closed or foreign document never receives a late secret.
         has: async () => { check(); const r = await vaultCall(st.appId, 'has'); check(); return r; },
-        seal: async (secret, title) => { check(); const r = await vaultCall(st.appId, 'seal', { secret: String(secret ?? ''), title: String(title || '') }); check(); return r; },
-        open: async title => { check(); const r = await vaultCall(st.appId, 'open', { title: String(title || '') }); check(); return r; },
+        seal: async (secret, title) => { check(); await whenInFront(st, () => { try { check(); return true; } catch (_) { return false; } }); const r = await vaultCall(st.appId, 'seal', { secret: String(secret ?? ''), title: String(title || '') }); check(); return r; },
+        open: async title => { check(); await whenInFront(st, () => { try { check(); return true; } catch (_) { return false; } }); const r = await vaultCall(st.appId, 'open', { title: String(title || '') }); check(); return r; },
         forget: async () => { check(); const r = await vaultCall(st.appId, 'forget'); check(); return r; },
       }),
       titlebar: Object.freeze({ set(list) { check(); return setTools(st, list); },
