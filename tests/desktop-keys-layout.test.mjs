@@ -42,7 +42,9 @@ test('⌥↓/⌥↑ walk Ready chats from anywhere into the message box; no ⌥�
 test('⌥E Done and ⌥Z Snooze act on the open chat; the guide shows chat keys in a thread', () => {
   assert.match(js, /code === 'KeyE' \|\| code === 'KeyZ'/);
   assert.match(js, /CHATS\.threadAct\(f\.id, f\.thread, act\)/);
-  assert.match(js, /\['\[data-chact="done"\]', 'E'\], \['\[data-chact="snooze"\]', 'Z'\]/);
+  assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\)\) return hit/);
+  assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\)\) return hit\(\(\) => \{ if \(!e\.repeat\) chatAct\(code === 'ArrowRight' \? 'done' : 'snooze'/);
+  assert.match(js, /\['\[data-chact="done"\]', '→'\], \['\[data-chact="snooze"\]', '←'\]/);
   assert.ok(js.includes("['Enter', 'Send', 'Then back to New chat']") && js.includes("'This chat'"));
 });
 
