@@ -716,7 +716,7 @@
           if (fromSnap) await Promise.race([agents, new Promise(r => setTimeout(r, AGENT_WAIT))]);
           this.emit();
           await agents;
-        } catch (e) { this.error = e.status === 403 ? 'access' : 'offline'; }
+        } catch (e) { this.error = e.status === 403 ? 'access' : 'offline'; this.errorAt = Date.now(); }
         finally { this.loading = null; this.emit(); }
       })();
       return this.loading;
