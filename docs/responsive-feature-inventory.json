@@ -529,6 +529,7 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/incognito-chat.js": {"loadedBy": ["phone", "desktop"], "note": "Shared RAM-only Incognito lifecycle composed by Chats"},
     "core/screen-text.js": {
       "loadedBy": [
         "phone",
