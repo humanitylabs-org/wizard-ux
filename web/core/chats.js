@@ -572,7 +572,7 @@ window.WizCore.chats = function createChats(H) {
   function newDrafts() {
     const all = KIT.drafts.all();
     return Object.keys(all).filter(k => SAVED_NEW.test(k)).map(k => ({ key: k, ...KIT.drafts.get(k), at: all[k].at || 0 }))
-      .filter(d => d.text.trim() || d.files.length || d.reply).sort((a, b) => b.at - a.at);
+      .filter(d => d.text.trim() || d.files.length || (d.reply && !(window.WosSkinHost?.inboxThreads && NOTIF_KEY.test(d.reply.key || '')))).sort((a, b) => b.at - a.at);
   }
   function draftRow(d, cur) {
     const t = d.text.trim().replace(/\s+/g, ' ');
@@ -697,6 +697,29 @@ window.WizCore.chats = function createChats(H) {
   }
   migrateOldReplies();
   // The reply bubble above the composer: who it answers, one or two lines of it, and × to drop it.
+  /* Notifications as threads (a live package holds WosSkinHost.inboxThreads): a New chat whose draft carries a
+   * Notifications item is shown as that notification's one-message thread. Its title, one yellow message, Done /
+   * Snooze (or Restore) where a thread keeps them, and the composer: sending starts a real chat with it attached. */
+  const NOTIF_KEY = /^notifications:([A-Za-z0-9_-]{1,128})$/;
+  function notifOf(w) {
+    if (!w || w.thread !== '__new__' || winAgent(w) || !window.WosSkinHost?.inboxThreads) return null;
+    const r = KIT.drafts.get('new').reply, m = r && NOTIF_KEY.exec(r.key || ''); if (!m) return null;
+    const it = window.WosBell?.item?.(m[1]) || null;
+    return { id: m[1], reply: r, item: it, acts: it?.archived ? ['restore'] : it?.read ? ['resolve', 'done'] : ['resolve', 'snooze', 'done'] };
+  }
+  function notifAct(wid, a) {
+    const w = W[owner(wid)], n = notifOf(w); if (!n || !n.acts.includes(a)) return false;
+    vib(8);
+    window.WosSkinHost.inboxAct(a, n.id);
+    if (a === 'resolve') return true; // the package sends the ask from this chat; sending moves on as usual
+    // The notification leaves the chat window; an untouched draft goes with it (typed words stay as a draft).
+    const d = KIT.drafts.get('new');
+    if (!String(ch(w.id).draft || d.text || '').trim() && !(d.files || []).length) KIT.drafts.clear('new'); else KIT.drafts.setReply('new', null);
+    ch(w.id).draft = ''; chatsBack(w);
+    toast({ done: '✓', snooze: '◷', restore: '↺' }[a], { done: 'Marked done', snooze: 'Snoozed', restore: 'Back in your inbox' }[a], 1600);
+    for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
+    return true;
+  }
   function replyBubble(r) {
     if (!r) return '';
     const pv = KIT.reply.preview(r, 180);
@@ -1040,7 +1063,7 @@ window.WizCore.chats = function createChats(H) {
       const archiveNote = k === 'archive' && !n && !filtered && windowMeta ? `<span class="ch-none">Newest ${list.length} of ${windowMeta.archiveTotal} · search to find older chats</span>` : '';
       const shown = c.more[k] ? list : list.slice(0, SEC_PAGE);
       return `<section class="ch-sec${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length + extra.n}</small>${waitN ? `<b class="wait">${waitN} need you</b>` : ''}${newN ? `<b>${newN} new</b>` : ''}<i aria-hidden="true"></i></button>
-        ${open ? `<div class="ch-sec-b">${k === 'archive' && !n && !filtered ? archSel() : ''}${archiveNote}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-top"></div>' + morningCard() : ''}${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : k === 'ready' && !n ? readyBody(shown, s => chatRow(s, null)) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
+        ${open ? `<div class="ch-sec-b">${k === 'archive' && !n && !filtered && !AGID ? '<div data-slot="archive-top"></div>' : ''}${k === 'archive' && !n && !filtered ? archSel() : ''}${archiveNote}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-top"></div>' + morningCard() : ''}${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : k === 'ready' && !n ? readyBody(shown, s => chatRow(s, null)) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-end"></div>' : ''}</div>` : ''}</section>`;
     }).join('');
     // Progress sits above the results (James, 25 Oct 2026: it was hidden below a long Archive); the final line stays under them.
     if (bs && LST.ok) body = BS.scanning(bs) || bs.busy ? BS.footer(bs) + body : body + BS.footer(bs);
@@ -1328,6 +1351,8 @@ window.WizCore.chats = function createChats(H) {
     stop_watch: { label: 'Stop watching', icon: '<svg viewBox="0 0 24 24"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z"/><path d="m4 4 16 16"/></svg>', hint: 'Stop watching this follow-up' },
     restore: { label: 'Restore', icon: '<svg viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v4h4"/></svg>', hint: 'Restore to Work' },
   };
+  // Notification-thread only: hand it to the agent to stop or fix (the package sends the ask).
+  const NACT = { resolve: { label: 'Resolve this', icon: '<svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0 5 5L12 19l-3 1 1-3 7.7-7.7M5 5l3 3"/></svg>', hint: 'Ask Wizard to stop these or fix the cause' }, restore: { ...ACT.restore, label: 'Restore', hint: 'Move back to your inbox' } };
   const actionLabel = (s, a, compact = false) => a === 'done' && followUpActive(s) ? 'Done for now'
     : a === 'stop_watch' && compact ? 'Stop' : ACT[a].label;
   const owner = id => (H.owner ? H.owner(id) : id);
@@ -1349,7 +1374,7 @@ window.WizCore.chats = function createChats(H) {
   const agentName = id => id ? agentRec(id).label : window.WizConfig.agent();
   async function threadAct(wid, sid, a) {
     wid = owner(wid);
-    const s = rowOf(wid, sid); if (!s || !ACT[a]) return;
+    const s = rowOf(wid, sid); if (sid === '__new__') { notifAct(wid, a); return; } if (!s || !ACT[a]) return;
     const w = W[wid];
     vib(8);
     if (a === 'unread') {
@@ -1768,7 +1793,9 @@ window.WizCore.chats = function createChats(H) {
     // until the server read retired it (James, 23 Oct 2026).
     const pend = pendingFor(w).filter(p => !(turns && echoed(turns, p)));
     const carry = isNew && c.carry && TAG ? `<div class="ch-carry" role="note"><b>${AGS()?.lock?.() || ''}Continues “${esc(clip(c.carry.title, 60))}” privately</b><span>Your first message takes the last ${c.carry.n === 1 ? 'message' : `${c.carry.n} messages`} with it as quoted context. That thread stays as it is.</span><button type="button" data-chcarryx>Don’t include</button></div>` : '';
-    if (isNew && !pend.length) msgs = newChatHtml(TAG) + `<div class="ch-empty nc-classic"><b>${TAG && AGS()?.isPrivate(agentRec(TAG)) ? `New private chat` : 'New chat'}</b><br>${esc(H.newChatHint || 'Type below.')}</div>${carry}`;
+    const NV = isNew && !pend.length ? notifOf(w) : null;
+    if (NV) msgs = `<div class="msg a ch-notif" data-morph-key="notif:${esc(NV.id)}"><div class="bub">${md(NV.item?.message ?? NV.reply.message)}</div><div class="mmeta">${NV.item?.time ? timeTag(NV.item.time * 1000) : ''}<span class="ch-notif-src">${NV.item?.source === 'cron' ? 'Scheduled job' : 'Notification'}</span></div></div>`;
+    else if (isNew && !pend.length) msgs = newChatHtml(TAG) + `<div class="ch-empty nc-classic"><b>${TAG && AGS()?.isPrivate(agentRec(TAG)) ? `New private chat` : 'New chat'}</b><br>${esc(H.newChatHint || 'Type below.')}</div>${carry}`;
     // A thread answered 404 in this open is gone: that verdict wins over cached turns and queued sends.
     else if (!isNew && c.goneFor === w.thread && c.goneNav === c.readNav) msgs = threadErrHtml(c);
     else if (!turns && !isNew && !pend.length) msgs = c.err && (c.failN > 1 || c.err !== 'Couldn’t load this thread') ? threadErrHtml(c) : skelThread();
@@ -1823,14 +1850,15 @@ window.WizCore.chats = function createChats(H) {
     const mlabel = PW?.modelLabel && !msw ? PW.modelLabel(w, s) : '';
     const chip = PW && !PW.modelLabel ? PW.modelChip(w, s) : '';
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
-    const tacts = acts.length && turns && !pend.length ? `<div class="ch-tacts" data-part="thread-actions">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${actionLabel(s, a, true)}</span></button>`).join('')}</div>` : '';
+    const tacts = NV ? `<div class="ch-tacts" data-part="thread-actions">${NV.acts.map(a => { const A = NACT[a] || ACT[a]; return `<button type="button" data-chact="${a}" aria-label="${A.hint}" title="${A.hint}">${A.icon}<span>${A.label}</span></button>`; }).join('')}</div>`
+      : acts.length && turns && !pend.length ? `<div class="ch-tacts" data-part="thread-actions">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${actionLabel(s, a, true)}</span></button>`).join('')}</div>` : '';
     clearReading(w.id);
     // Live repaints rebuild the thread. Keep each already-loaded photo node so it doesn't blank and reload (flicker).
     const keepImgs = keepLoadedImages(el);
     const keepSheet = keptSheet(el);
     const openContexts = el.dataset.draftFor === dkey ? new Set([...el.querySelectorAll('[data-run-original][open]')].map(e => e.dataset.runOriginal)) : new Set();
-    const threadHTML = `<div data-part="thread" class="ch-thread${TAG ? ' agent' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
-      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(winTitle(w))}</b>`}${privTag}</div>${chip}<span data-slot="thread-header-actions"></span></div>
+    const threadHTML = `<div data-part="thread" class="ch-thread${TAG ? ' agent' : ''}${NV ? ' ch-notif-thread' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
+      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(NV ? NV.reply.title || NV.item?.title || 'Notification' : winTitle(w))}</b>`}${privTag}</div>${chip}<span data-slot="thread-header-actions"></span></div>
       ${s && BOOM() ? BOOM().banner(s.id) : ''}<div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
       ${msw ? `<div class="ch-swrow">${msw}<span data-slot="thread-switch-row-end"></span></div>` : '<div data-slot="thread-switch-row-end"></div>'}<form data-slot="composer-end" data-part="composer" class="ch-compose${hasContent(draft, c.files || []) ? ' has-text' : ''}${rpl ? ' has-reply' : ''}" data-chform>${replyBubble(rpl)}${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${mlabel}</div>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
@@ -2770,5 +2798,5 @@ window.WizCore.chats = function createChats(H) {
   const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
   return { tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
-    KIT, threadAct, openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
+    KIT, threadAct, notifOpen: wid => !!notifOf(W[owner(wid)]), openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };

@@ -330,7 +330,7 @@
   }
 
   /* Tweaks extend the existing package host: same guards, listeners, frames and disposal. */
-  const tweaks = new Map(), interceptors = new Map(), snoozeLast = new Set(); // snoozeLast: packages holding snoozeOrder('last')
+  const tweaks = new Map(), interceptors = new Map(), snoozeLast = new Set(), inboxThreads = new Map(); // inboxThreads: package -> {act} // snoozeLast: packages holding snoozeOrder('last')
   let tweakSeq = 0, slotContract = null;
   const safeTweakId = id => /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/.test(id);
   const tweakUrl = (id, file) => stamp(new URL(`tweaks/${id}/${file}`, document.baseURI).href);
@@ -450,6 +450,19 @@
         a.offs.add(off); return off;
       },
       done: id => a.dead || !window.WosBell?.mark ? Promise.resolve(false) : window.WosBell.mark([String(id)], { archived: true, read: true }),
+      // read / archived only (snoozed = read and kept; restored = neither).
+      set(id, marks = {}) {
+        const m = Object.fromEntries(['read', 'archived'].filter(k => typeof marks[k] === 'boolean').map(k => [k, marks[k]]));
+        return a.dead || !Object.keys(m).length || !window.WosBell?.mark ? Promise.resolve(false) : window.WosBell.mark([String(id)], m);
+      },
+      // A notification opened from the list shows in the chat window as a one-message thread; its Done / Snooze /
+      // Restore buttons (and keys) call act(action, id). Held while the package lives (chats.js reads host.inboxThreads).
+      threads(handlers = {}) {
+        if (a.dead || typeof handlers.act !== 'function') return () => {};
+        inboxThreads.set(a.id, { act: guard(a, 'inbox.act', handlers.act) });
+        const off = () => { if (inboxThreads.delete(a.id)) window.dispatchEvent?.(new Event('wos:prefs')); };
+        a.offs.add(off); window.dispatchEvent?.(new Event('wos:prefs')); return off;
+      },
       reply(id, words = '') {
         if (a.dead) return false;
         const it = window.WosBell?.item?.(id); if (!it || typeof shell?.contextDraft !== 'function') return false;
@@ -493,6 +506,9 @@
     get tweakState() { return [...tweaks.keys()]; },
     /* live.js / chats.js: 'last' while a live tweak holds api.nav.snoozeOrder('last'); otherwise 'default' (stock). */
     get snoozeOrder() { return snoozeLast.size ? 'last' : 'default'; },
+    /* chats.js: a live package shows notifications as threads; inboxAct runs its Done / Snooze / Restore. */
+    get inboxThreads() { return inboxThreads.size > 0; },
+    inboxAct(action, id) { for (const h of inboxThreads.values()) { h.act(String(action), String(id)); return true; } return false; },
     action(name, context) { for (const { action, handler } of interceptors.values()) if (action === name) { void handler(context); return true; } return false; },
     /* core/skins.js: picker landed near a skin (preview or commit). Stylesheet only. */
     preview(id) { ensureCss(id); },

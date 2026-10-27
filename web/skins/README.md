@@ -119,7 +119,8 @@ export default function setup(api) {
 | `api.on('beside', fn)` | `{ side }` when the view bound beside a thread appears or goes: 1 = it leans in on the right of the thread, -1 = you are on it and the thread leans in on the left, 0 = none (also `api.route().beside`). Tweaks: `layout` |
 | `api.slot.mount('device-edge', node)` | tweaks: a control positioned over the phone screen (the slot is `#device`; phone only) |
 | `api.slot.mount('ready-top', node)` | tweaks: rows at the top of the Chats Ready section (main agent, not while searching or filtering) |
-| `api.inbox.watch(fn)`, `done(id)`, `reply(id, words?)` | trusted tweaks with `inbox`: unread Notifications items (`core/notif-bell.js`), mark one done, or answer it in a new chat (`words` sends at once). `api.on('sent')` carries the reply key |
+| `api.slot.mount('ready-end' \| 'archive-top', node)` | tweaks: rows at the end of Ready / the top of an open Archive (main agent, not while searching) |
+| `api.inbox.watch(fn)`, `done(id)`, `set(id, {read, archived})`, `reply(id, words?)`, `threads({ act })` | trusted tweaks with `inbox`: Notifications items with read/archived (`core/notif-bell.js`), mark them, or open one in the chat window (`words` sends at once). `threads` shows an opened notification as a one-message thread whose Done / Snooze / Restore / Resolve this (buttons and keys) call `act(action, id)`. `api.on('sent')` carries the reply key |
 | `api.nav.back()` | the shell's own Back step (overlay → thread → list → Home). Never exits; false at the root |
 | `api.nav.openList()`, `openThread(id)`, `goDesk(i)`, `deskCount()` | shell navigation |
 | `api.part(name)` | `'thread'`, `'list'`, `'composer'`: the focused chats window's container; `'dock'`: the dock |
