@@ -141,6 +141,7 @@ html.wz-hosted #wiz-staging-tag { display: none !important; }
 .wz-sheet { color: var(--ink); background: var(--wz-overlay); border: 1px solid var(--line-2); border-radius: var(--r); padding: var(--wz-space-4); width: min(520px, calc(100% - 24px)); max-width: none; max-height: 85%; overflow: auto; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
 .wz-sheet::backdrop { background: color-mix(in srgb, var(--wz-base) 74%, transparent); }
 .wz-sheet-x { position: sticky; top: 0; float: right; width: 36px; height: 36px; margin: -6px -6px 0 8px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-2); background: var(--fill); font-size: 18px; line-height: 1; z-index: 1; }
+.wz-sheet-x::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; } /* 44px touch target (APP-DESIGN-RULES rule 6) around the 36px visual */
 .wz-sheet-grip { display: none; }
 .wz-sheet > h2 { margin: 0 0 var(--wz-space-3); font-size: 17px; font-weight: 700; }
 @media (max-width: 599px) {
