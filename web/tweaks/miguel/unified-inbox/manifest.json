@@ -1,0 +1,13 @@
+{
+  "id": "miguel/unified-inbox",
+  "name": "Notifications in Chats",
+  "version": "2.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout",
+    "nav",
+    "inbox"
+  ],
+  "description": "Notifications are yellow threads in Chats: unread at the top of Ready, open in the chat window with Done, Snooze and Resolve this; snoozed at the bottom; done ones under Archive. No Chats bell."
+}

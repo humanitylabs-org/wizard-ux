@@ -288,8 +288,10 @@
       media: Object.freeze({ view(items, index = 0) {
         check();
         if (st.isVisible?.() !== true || !window.WosChat?.viewer || !Array.isArray(items)) return false;
-        const base = source.location.href, clean = [];
-        for (const it of items.slice(0, 500)) {
+        const base = source.location.href, clean = [], list = items.slice(0, 500), want = Math.floor(+index) || 0;
+        let i = want >= list.length ? Infinity : 0; // past the end (stale index, intake cap) still clamps to the last item
+        for (const [n, it] of list.entries()) {
+          if (n === want) i = clean.length; // the tapped item keeps its place after unsafe entries are dropped
           let u; try { u = new URL(String(it?.url || ''), base); } catch (_) { continue; }
           const own = u.origin === location.origin && /^https?:$/.test(u.protocol);
           const blob = u.protocol === 'blob:' && u.href.startsWith('blob:' + location.origin + '/');
@@ -297,8 +299,7 @@
           const kind = it?.kind === 'video' ? 'video' : 'image';
           clean.push({ url: u.href, kind, name: String(it?.name || '').slice(0, 200), mime: String(it?.mime || (kind === 'video' ? 'video/mp4' : 'image/jpeg')).slice(0, 100) });
         }
-        const i = Math.max(0, Math.min(clean.length - 1, Math.floor(+index) || 0));
-        return clean.length ? window.WosChat.viewer.open(clean, i) === true : false;
+        return clean.length ? window.WosChat.viewer.open(clean, Math.max(0, Math.min(clean.length - 1, i))) === true : false;
       } }),
       nav: Object.freeze({ threadAgents: true,
       /* The app finished what the owner came for (dismissed, archived, saved, deleted): take one Back past the app's
@@ -306,11 +307,14 @@
       back() { check(); if (st.isVisible?.() !== true || typeof st.back !== 'function') return false; return st.back() === true; },
       openContextDraft(data) {
         check();
-        if (st.appId !== 'notifications' || st.isVisible?.() !== true || typeof st.openContextDraft !== 'function') throw fault('Context draft unavailable');
-        if (!data || typeof data.id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(data.id) || typeof data.title !== 'string' || data.title.length > 1000 || typeof data.message !== 'string' || data.message.length > 32000) throw fault('Invalid notification context');
+        // Installed Wizard apps may attach bounded reference data to a fresh MAIN Chats draft, never send or run.
+        // Identity and namespace come from the attached live frame, never from the caller's payload. The id grammar
+        // matches WosChat.reply.clean's key namespace, so every admitted app can produce a valid reply key.
+        if (!/^[a-z][a-z0-9-]{0,40}$/.test(st.appId) || !apps().some(a => a.id === st.appId && a.kind === 'wizard') || st.isVisible?.() !== true || typeof st.openContextDraft !== 'function') throw fault('Context draft unavailable');
+        if (!data || typeof data.id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(data.id) || typeof data.title !== 'string' || data.title.length > 1000 || typeof data.message !== 'string' || data.message.length > 32000) throw fault('Invalid app context');
         // A Reply: the composer stays empty; the item rides beside the draft and is framed as quoted, untrusted
         // reference DATA only in the message that is sent (WosChat.reply).
-        return st.openContextDraft('notifications:' + data.id, { title: data.title, message: data.message });
+        return st.openContextDraft(st.appId + ':' + data.id, { title: data.title, message: data.message });
       }, openThread(id, opts) {
         check();
         // This bounded workflow is admitted only for an admitted installed app's current document (Manager, Wisdom).

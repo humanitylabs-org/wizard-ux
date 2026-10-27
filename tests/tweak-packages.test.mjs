@@ -69,17 +69,18 @@ test('a core repaint removes the origin marker: teardown never resurrects stale 
 });
 
 function wizardExperience(storage = new Map()) {
+  const requests = [];
   let skin = 'nebula', active = [], layout = storage.get('wos.layout') || 'classic';
   const window = { WosSkin: { get current() { return skin; }, familyOf: id => id === 'nebula' ? 'wizard' : 'novairecito', families: [{id:'wizard',tweaks:'wizard'}, {id:'novairecito'}] },
     WosSkinHost: { personalState:{ready:false}, get tweakState() { return active; }, get layout() { return layout; }, setLayout: id => { layout = id; }, loadTweaks: async ids => { active = ids; } }, addEventListener() {}, dispatchEvent() {} };
   vm.runInNewContext(read('web/core/experience.js'), {window, document:{baseURI:'https://wizard.test/wizard-os-home/',addEventListener(){}}, Event, URL, AbortSignal,
-    localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)}, fetch:async url=>({ok:true,json:async()=>JSON.parse(read('web/'+url.pathname.split('/wizard-os-home/')[1]))})});
-  return { E:window.WosExperience, storage, skin:id=>{skin=id;}, active:()=>Array.from(active) };
+    localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)}, fetch:async url=>{ requests.push(url.pathname); return {ok:true,json:async()=>JSON.parse(read('web/'+url.pathname.split('/wizard-os-home/')[1]))}; }});
+  return { window, E:window.WosExperience, storage, requests, skin:id=>{skin=id;}, active:()=>Array.from(active) };
 }
 test('profile default-off applies until the owner stores a deliberate choice, including an empty off list', async () => {
   let f = wizardExperience(); await f.E.refresh(); assert.deepEqual(f.active(), []); assert.equal(f.E.state.tweaks[0].on, false);
   await f.E.toggle('wizard/two-orbs'); assert.deepEqual(f.active(), ['wizard/two-orbs']);
-  assert.deepEqual(JSON.parse(f.storage.get('wos.skin-tweaks.v1')).off.wizard, []);
+  assert.deepEqual(JSON.parse(f.storage.get('wos.skin-tweaks.v1')).off.wizard, ['wizard/app-borders']);
   f = wizardExperience(f.storage); await f.E.refresh(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
   f.skin('novairecito'); await f.E.chooseSkin(); assert.deepEqual(f.active(), []);
   f.skin('nebula'); await f.E.chooseSkin(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
@@ -102,6 +103,28 @@ test('overview mode is capability gated, revoked on teardown, and stale handles 
   assert.equal(f.overview.hold,'arrange'); await f.clear(); assert.equal(f.overview,null);
   release(); release(); api.overview.use({hold:'arrange',appAction:'home-screen',appHold:false}); assert.equal(f.overview,null);
 });
+test('window refresh is layout+nav gated, revoked on teardown, and stale handles cannot reactivate it', async () => {
+  const f=fixture(); let api;
+  f.host._test.setImporter(async()=>({default:a=>{api=a;return()=>{};}}));
+  await f.mount('miguel/hidden-pin'); assert.equal(api.windowRefresh,undefined);
+  await f.mount('miguel/refresh-button'); assert.equal(f.windowRefresh,null);
+  assert.throws(()=>api.windowRefresh.use({}),/Invalid window refresh mode/);
+  const release=api.windowRefresh.use({pull:false,extra:1}); assert.deepEqual({...f.windowRefresh},{pull:false});
+  release(); release(); assert.equal(f.windowRefresh,null);
+  api.windowRefresh.use({pull:true}); assert.equal(f.windowRefresh.pull,true);
+  await f.clear(); assert.equal(f.windowRefresh,null);
+  api.windowRefresh.use({pull:false}); assert.equal(f.windowRefresh,null);
+});
+test('stock shell: no ↻ in window bars and pull-to-refresh stays unless a package holds window refresh', () => {
+  const app=read('web/app.js'), chats=read('web/core/chats.js');
+  assert.match(app,/\$\{refreshModes\.length \? RELOAD_BTN : ''\}<button class="wb" data-wact="full"/);
+  assert.equal((app.match(/data-wact="reload"/g)||[]).length,2,'only RELOAD_BTN markup and its sync selector');
+  assert.match(app,/pullRefresh: \(\) => !refreshModes\.some\(m => m\.pull === false\)/);
+  assert.match(app,/windowRefresh: windowRefreshAdapter/);
+  assert.match(app,/fresh\.style\.cssText = el\.style\.cssText; el\.replaceWith\(fresh\); mountWin\(w, fresh\); applyLayout\(deskOf\(id\)\);/,'a remounted window keeps its tile placement');
+  assert.match(chats,/if \(H\.pullRefresh\?\.\(\) === false\) return;/);
+  assert.doesNotMatch(app+chats,/refresh-button/,'core never names the package');
+});
 test('layout handles become inert on disposal and their cleanup is idempotent', async () => {
   const f = fixture(); let api;
   f.host._test.setImporter(async () => ({default:a=>{api=a;return()=>{};}}));
@@ -109,9 +132,114 @@ test('layout handles become inert on disposal and their cleanup is idempotent', 
   api.layout.use('two-orb')(); assert.equal(f.host.layout,'classic');
 });
 
+
+test('App borders migrates stored framed exactly once, leaves everyone else borderless and respects later off', async () => {
+  for (const foundation of ['framed', 'borderless', null]) {
+    const storage = new Map(foundation ? [['wos.skin.composition.v1', JSON.stringify({version:1,extends:'nebula',frame:{foundation}})]] : []);
+    let f = wizardExperience(storage); await f.E.refresh();
+    assert.equal(f.active().includes('wizard/app-borders'), foundation === 'framed');
+    if (foundation === 'framed') { await f.E.toggle('wizard/app-borders'); f = wizardExperience(storage); await f.E.refresh(); assert.deepEqual(f.active(), []); }
+  }
+});
+test('own recipes expose all installed tweaks, use published defaults and isolate builtin choices', async () => {
+  const f = wizardExperience();
+  f.window.WosSkin.familyOf = id => id === 'obsidian-light' ? 'mizel' : 'wizard';
+  f.window.WosSkin.families.push({id:'mizel',name:'Mizel',tweaks:'miguel'});
+  const defaults = await f.E.defaults('nebula');
+  assert.equal(defaults['wizard/app-borders'], false); assert.equal(defaults['wizard/two-orbs'], false);
+  assert.equal(defaults['miguel/model-pills'], false);
+  const mizel = await f.E.defaults('obsidian-light'); assert.equal(mizel['miguel/model-pills'],true);
+  const skin = {id:'quiet',tweaks:{...defaults,'miguel/model-pills':true}};
+  f.window.WosMySkin = {active:skin,update(v){ Object.assign(skin.tweaks,v.tweaks); }};
+  await f.E.refresh(); assert.equal(f.E.state.tweaks.length, JSON.parse(read('web/tweaks/catalog.json')).tweaks.length);
+  assert.deepEqual(f.active(),['miguel/model-pills']);
+  await f.E.toggle('wizard/app-borders'); assert.ok(f.active().includes('wizard/app-borders'));
+  f.window.WosMySkin.active=null; await f.E.refresh(); assert.deepEqual(f.active(),[]);
+});
+
+test('installed list warms base profiles so picking Mizel does not wait for another network request', async () => {
+  const f = wizardExperience(); f.window.WosSkin.families.push({ id: 'mizel', tweaks: 'miguel' });
+  f.window.WosSkin.familyOf = id => id === 'obsidian-light' ? 'mizel' : 'wizard';
+  await f.E.installed();
+  const count = () => f.requests.filter(p => p.endsWith('/miguel/profile.json')).length;
+  assert.equal(count(), 1);
+  assert.equal((await f.E.defaults('obsidian-light'))['miguel/model-pills'], true);
+  await f.E.defaults('obsidian-light'); assert.equal(count(), 1);
+});
+
+test('disposed foundation capability cannot change windows', async () => {
+  const f = fixture(); let api;
+  f.host._test.setImporter(async () => ({default:a=>{api=a;return()=>{};}}));
+  await f.mount('wizard/app-borders'); await f.clear(); api.layout.foundation('framed')();
+  assert.equal(f.ctx.window.WosSkin.frame.foundation, 'borderless');
+});
+
 test('slot lookup prefers a visible instance over hidden Chats copies (desktop)', async () => {
   const { readFile } = await import('node:fs/promises');
   const src = await readFile(new URL('../web/core/skin-host.js', import.meta.url), 'utf8');
   assert.match(src, /getClientRects\(\)\.length > 0\)/);
   assert.match(src, /querySelectorAll\(selector\)\]\.find\(seen\)/);
+});
+
+test('beside hook: layout-gated event on change only, never a route event, and route().beside for late packages', async () => {
+  const f = fixture(); let api; const seen = [], routes = [];
+  f.host._test.setImporter(async () => ({ default: a => { api = a; return () => {}; } }));
+  await f.host.loadTweaks(['miguel/snooze-someday'], f.slots, { teamAuthors: ['miguel'] });
+  assert.throws(() => api.on('beside', () => {}), /requires layout/);
+  await f.host.loadTweaks(['miguel/swipe-strip'], f.slots, { teamAuthors: ['miguel'] });
+  api.on('beside', b => seen.push(b.side)); api.on('route', r => routes.push(r));
+  f.setRoute({ beside: 1 }); f.setRoute({ beside: 1 }); f.setRoute({ beside: -1 }); f.setRoute({ beside: 0 });
+  assert.deepEqual(seen, [1, -1, 0]); assert.equal(routes.length, 0, 'route listeners see nothing new');
+  f.setRoute({ beside: 7 }); assert.equal(api.route().beside, 1, 'normalised to -1 | 0 | 1');
+  assert.equal(api.mount, undefined, 'device controls go through the declared device-edge slot, not a raw mount');
+  await f.clear(); f.setRoute({ beside: -1 }); assert.deepEqual(seen, [1, -1, 0, 1], 'a torn-down package hears nothing');
+});
+test('app.js tells the host when the bound view beside a thread changes, and reports it in route()', () => {
+  const app = read('web/app.js');
+  const peek = app.slice(app.indexOf('function syncPeek()'), app.indexOf('function detachBound('));
+  assert.match(peek, /device\.classList\.toggle\('bound-view-peeking', left\);\s*window\.WosSkinHost\?\.beside\?\.\(\);/);
+  assert.match(read('web/index.html'), /<div id="device" class="device" data-slot="device-edge">/);
+  assert.ok(JSON.parse(read('web/core/slots.json')).slots['device-edge']);
+  assert.match(app, /beside: device\.classList\.contains\('bound-peeking'\) \? 1 : device\.classList\.contains\('bound-view-peeking'\) \? -1 : 0/);
+});
+
+test('inbox capability is trusted-only, and its handles die with the package', async () => {
+  const f = fixture(); let api;
+  f.host._test.setImporter(async () => ({ default: value => { api = value; return () => {}; } }));
+  await f.host.loadTweaks(['miguel/unified-inbox'], f.slots);
+  assert.equal(api.inbox, undefined, 'an untrusted package gets no inbox');
+  await f.host.loadTweaks(['miguel/unified-inbox'], f.slots, { teamAuthors: ['miguel'] });
+  const seen = []; api.inbox.watch(items => seen.push(items.length));
+  f.inbox.push([{ id: 'a', title: 't', message: 'm', time: 1 }]); assert.deepEqual(seen, [1]);
+  assert.equal(api.inbox.reply('a', 'go'), true); assert.deepEqual(f.inbox.replies, [['a', 'go']]);
+  assert.equal(api.inbox.reply('missing'), false, 'only a listed notification can be answered');
+  await api.inbox.done('a'); assert.deepEqual(f.inbox.done, ['a']);
+  const stale = api.inbox; await f.clear();
+  assert.equal(f.inbox.watchers(), 0, 'teardown stops watching');
+  assert.equal(stale.reply('a'), false); assert.equal(await stale.done('a'), false); f.inbox.push([]); assert.deepEqual(seen, [1], 'stale handles are inert');
+});
+
+test('notification threads: the flag lives only while a trusted package holds it, and acts route to it', async () => {
+  const f = fixture(); let api;
+  f.host._test.setImporter(async () => ({ default: value => { api = value; return () => {}; } }));
+  await f.host.loadTweaks(['miguel/unified-inbox'], f.slots, { teamAuthors: ['miguel'] });
+  assert.equal(f.host.inboxThreads, false); assert.equal(f.host.inboxAct('done', 'x'), false);
+  const got = []; api.inbox.threads({ act: (a, id) => got.push(a + ':' + id) });
+  assert.equal(f.host.inboxThreads, true); assert.equal(f.host.inboxAct('snooze', 'n1'), true); assert.deepEqual(got, ['snooze:n1']);
+  assert.equal(await api.inbox.set('n1', { read: true, flag: true }), true); assert.equal(JSON.stringify(f.inbox.sets), JSON.stringify([['n1', { read: true }]]), 'only read / archived pass');
+  await f.clear(); assert.equal(f.host.inboxThreads, false, 'released on teardown');
+});
+test('chats.js shows a notification draft as its thread only while notification threads are on', () => {
+  const src = read('web/core/chats.js');
+  assert.match(src, /function notifOf\(w\) \{\n    if \(!w \|\| w\.thread !== '__new__' \|\| winAgent\(w\) \|\| !window\.WosSkinHost\?\.inboxThreads\) return null;/);
+  assert.match(src, /const NV = isNew && !pend\.length \? notifOf\(w\) : null;/);
+  assert.match(src, /if \(sid === '__new__'\) \{ notifAct\(wid, a\); return; \}/);
+  assert.match(read('web/desktop/desktop.js'), /f\.thread !== '__new__' \|\| !!CHATS\.notifOpen\?\.\(f\.id\)/, 'Done / Snooze keys reach an open notification');
+});
+
+test('desktop keys: ⌥↓ walks notification rows with Ready, ⌥X resolves an open notification', () => {
+  const d = read('web/desktop/desktop.js');
+  assert.match(d, /\.ch-sec\[data-sec="ready"\] \[data-chnotif\]', document\)/, 'Ready walk includes [data-chnotif] rows');
+  assert.match(d, /code === 'KeyX'\) return hit\(\(\) => \{ if \(!e\.repeat\) chatAct\('resolve', 'X'\)/);
+  assert.match(read('web/tweaks/miguel/unified-inbox/tweak.js'), /b\.dataset\.chnotif = it\.id/, 'the package marks its rows');
 });

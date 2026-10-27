@@ -221,7 +221,10 @@
         throw Object.assign(new Error(human + (j?.check ? ` (${j.check})` : '')), { status: r.status, check: j?.check || '' });
       }
       await A.load(true); A.emit();
-      return { kind: String(j?.kind || ''), agents: (j?.agents || []).map(x => ({ id: x.id, enabled: x.enabled === true })) };
+      const out = { kind: String(j?.kind || ''), agents: (j?.agents || []).map(x => ({ id: x.id, enabled: x.enabled === true })) };
+      if (j && 'privacy' in j) out.privacy = j.privacy === 'private' ? 'private' : 'standard';
+      if (j && 'needs_private_agent' in j) out.needs_private_agent = j.needs_private_agent === true;
+      return out;
     },
     modelName(a, model) {
       if (!model) return '';

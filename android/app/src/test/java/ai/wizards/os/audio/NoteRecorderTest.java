@@ -238,7 +238,7 @@ public class NoteRecorderTest {
         String engine = source("audio/NoteRecorder.java");
         assertTrue(engine.contains("MicRoute.start("));
         assertTrue(engine.contains("OutputFormat.AAC_ADTS"));
-        assertTrue(engine.contains("setAudioEncodingBitRate(64000)"));
+        assertTrue(engine.contains("setAudioEncodingBitRate(96000)"));
         assertTrue(engine.contains("setAudioSamplingRate(44100)"));
         assertEquals(".aac", TakeRecovery.ext(file.getName())); assertEquals("audio/aac", TakeRecovery.mime(file.getName()));
         assertEquals(".m4a", TakeRecovery.ext("legacy.m4a")); assertEquals("audio/mp4", TakeRecovery.mime("legacy.m4a"));

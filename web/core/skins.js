@@ -68,7 +68,7 @@
     { id: 'landscapes', pkg: { css: true, dir: 'landscapes' }, name: 'Landscapes', who: 'Miguel’s photo skin. A new view of the world every minute.', orb: [0, 1, 1.05],
       t: T({ bg: '#0B0A10', ink: '#ffffff', 'ink-2': 'rgba(255,255,255,.80)', 'ink-3': 'rgba(255,255,255,.58)', line: 'rgba(255,255,255,.16)', 'line-2': 'rgba(255,255,255,.28)', glass: 'rgba(16,14,22,.52)', 'glass-2': 'rgba(20,18,26,.74)',
         violet: '#7A5CFF', 'violet-2': '#A08CFF', pink: '#ff7ac8', cyan: '#6fd8ff', amber: '#ffbe55', green: '#62e6a8', red: '#ff6b86',
-        'sk-time-a': '#ffffff', 'sk-time-b': '#ffffff', 'sk-dock': 'rgba(11,10,16,.62)', 'sk-dock-line': 'rgba(255,255,255,.10)', 'sk-ddot': 'rgba(255,255,255,.6)', 'sk-tour': 'rgba(11,10,16,.80)', 'sk-dim': 'rgba(11,10,16,.70)', 'sk-win': 'rgba(16,14,22,.72)' }) },
+        'sk-time-a': '#ffffff', 'sk-time-b': '#ffffff', 'sk-dock': 'rgba(11,10,16,.62)', 'sk-dock-line': 'rgba(255,255,255,.10)', 'sk-ddot': 'rgba(255,255,255,.6)', 'sk-tour': 'rgba(11,10,16,.80)', 'sk-dim': 'rgba(11,10,16,.70)', 'sk-win': 'rgba(16,14,22,.85)' }) },
   ];
   // Each skin's own display face (the one its Home clock wears; fonts self-hosted in skins.css), for the preview cards
   // in the skin picker. Kept outside the entries so each skin definition stays as its author made it.
@@ -96,11 +96,10 @@
   const FRAME_KEY = 'wos.skin.composition.v1', F = window.WosSkinFrame;
   let composition = null;
   try { const saved = JSON.parse(localStorage.getItem(FRAME_KEY)); if (saved && F) composition = F.composition(saved, SKINS); } catch (_) { /* corrupt/old data: safe skin default */ }
-  // Borderless is the phone default; desktop always keeps its framed windows (James, 17 Oct 2026: "borderless mode on
-  // mobile, keep the borders on desktop; a toggle in settings, on by default"). A saved phone choice wins.
-  const PHONE = (document.documentElement.dataset.shell || 'phone') === 'phone';
-  const shellFrame = PHONE ? { foundation: 'borderless' } : null;
-  const frameOf = skin => PHONE ? (composition?.frame || skin.frame || shellFrame) : {};
+  // Borderless on both shells. The App borders tweak borrows a transient framed foundation.
+  let borrowedFoundation = null;
+  const shellFrame = { foundation: 'borderless' };
+  const frameOf = skin => ({ ...(composition?.frame || skin.frame || shellFrame), foundation: borrowedFoundation || 'borderless' });
   function applyFrame(skin) { F?.apply(frameOf(skin)); }
   function saveComposition() { try { localStorage.setItem(FRAME_KEY, JSON.stringify(composition)); } catch (_) {} }
 
@@ -383,7 +382,12 @@
     preview(p) { paint(p); },
     set(id) { const i = idxOf(id); if (composition) { composition.extends = SKINS[i].id; saveComposition(); } paint(i); try { localStorage.setItem(KEY, SKINS[i].id); localStorage.setItem(LAST + SKINS[i].family, SKINS[i].id); } catch (e) {} window.WosSkinHost?.commit(SKINS[i].id); try { dispatchEvent(new CustomEvent('wos:skin', { detail: SKINS[i].id })); } catch (e) {} return SKINS[i].id; },
     get frame() { return F ? F.frame(frameOf(SKINS[Math.round(pos)])) : { foundation: 'framed' }; },
-    get frameAdjustable() { return PHONE; },
+    get frameAdjustable() { return true; },
+    useFoundation(foundation) {
+      if (!['framed', 'borderless'].includes(foundation)) throw new Error('Unknown foundation');
+      const token = {}; borrowedFoundation = foundation; this._foundationToken = token; applyFrame(SKINS[Math.round(pos)]);
+      return () => { if (this._foundationToken === token) { borrowedFoundation = null; this._foundationToken = null; applyFrame(SKINS[Math.round(pos)]); } };
+    },
     get composition() { return { version: 1, extends: this.current, frame: this.frame }; },
     compose(value) {
       const next = F.composition(value, SKINS); // validate all fields before any mutation

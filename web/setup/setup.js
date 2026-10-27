@@ -208,6 +208,7 @@
     h += `<div class="rows"><button class="row" data-act="open-phone" data-state="${esc(st)}"><span class="ic" aria-hidden="true">📱</span><span class="bd"><b>${esc(str(item.title) || 'Use Wizard on your phone')}</b><small>${line}</small></span><span class="end">${end}</span></button></div>`;
     if (L.status === 'neterr') h += '<button class="link" data-act="retry-list">Try again</button>';
     if (L.status === 'ok') h += window.WosRecommended?.html() || '';
+    h += '<p class="foot custom" data-customize>Everything you see is customizable. Try asking your Wizard for one change.</p>';
     h += `<p class="foot">${phoneLayout && tourPending() ? 'The 30-second tour starts when you go back to Home.' : 'You can come back to Setup any time.'}</p>`;
     if (tourAvailable()) h += '<button class="link" data-act="tour">Show the 30-second tour</button>';
     $('list').innerHTML = h;

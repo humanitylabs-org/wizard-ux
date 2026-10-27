@@ -5,6 +5,16 @@
 
 <!-- What changes for the user or the system, and the problem it solves. -->
 
+Reuse:
+<!-- One line per capability, checked by CI against docs/COMPONENTS.md (read it first; extend a near-fit module instead of building beside it):
+- chat: REUSE WizardApp.nav.openThread
+- orb: EXTEND Orb.create (row updated)
+- streak card: NEW (no row; lands in web/core with a row)
+"Reuse: n/a (<reason>)" only when nothing under web/ or android/ changes. -->
+-
+
+Visual: <!-- anything drawn or animated: side-by-side screenshot of the existing element and yours -->
+
 ## Verified
 
 <!-- Exact commands and their results. Runtime evidence (live box, screenshots, short recording) where behaviour changed.

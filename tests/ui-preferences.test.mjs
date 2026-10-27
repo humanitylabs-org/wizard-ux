@@ -52,3 +52,10 @@ test('chat-list layout: By day is the default and keeps Yesterday / Past week; B
   assert.match(chats, /\(byStatus\(\) \? SECTIONS_STATUS : SECTIONS_DAY\)\.map/);
   assert.match(chats, /data-chlayout=/);
 });
+test('a repainted Chats list shows the saved auto-archive age, not the picker value it was first painted with', () => {
+  // WosMorph keeps every form field's live value, so a <select> painted with "1 week" kept saying so after the
+  // choice changed on another desk or device (owner: "I change it to Never and it switches back to one week").
+  const morphBranch = chats.slice(chats.indexOf('window.WosMorph?.morph(root, html)'), chats.indexOf('const keepSheet = keptSheet(el);'));
+  assert.match(morphBranch, /querySelector\('\[data-archafter\]'\)/);
+  assert.match(morphBranch, /\.value = String\(LIVE\.archiveAfterDays\)/);
+});

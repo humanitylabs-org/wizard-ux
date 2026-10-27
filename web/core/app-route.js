@@ -106,7 +106,7 @@
     const want = access.agents.filter(x => x.id === agentId ? !x.enabled : x.enabled).map(x => x.id);
     accessBusy = agentId; v.enabled = !v.enabled; note = ''; render();
     const a = AG.get(agentId);
-    try { const next = await AG.setAppAgents(appId, want); if (cur?.appId === appId) access = next.agents.length ? next : access; note = `${a ? a.label : agentId} ${v.enabled ? 'can' : 'can’t'} use ${app} now.`; }
+    try { const next = await AG.setAppAgents(appId, want); if (cur?.appId === appId) access = next.agents.length ? { ...access, ...next } : access; /* PUT may omit privacy: keep the sheet's private note */ note = `${a ? a.label : agentId} ${v.enabled ? 'can' : 'can’t'} use ${app} now.`; }
     catch (e) { v.enabled = !v.enabled; note = `!Not changed · ${e.message}`; }
     accessBusy = ''; if (el) render(); paint(); tellFrames();
   }

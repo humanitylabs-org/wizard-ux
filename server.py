@@ -5,11 +5,12 @@ Serves the static prototype and two small endpoints:
   POST /api/transcribe  -> Wizard Voice Core (wizard-stt, Tinfoil-attested Voxtral)
   POST /api/route       -> DeepSeek V4.1 Flash via the local Tinfoil proxy; returns a command JSON
 
-Loopback only. Same-origin POSTs only. No state is written; agent-route requests are never delivered.
+Loopback only. Same-origin POSTs only. Diagnostics are bounded append-only private files; agent-route requests are never delivered.
 """
 from __future__ import annotations
 
 import json
+import scroll_diagnostics
 import os
 import re
 import time
@@ -104,6 +105,8 @@ class Handler(SimpleHTTPRequestHandler):
         if "/." in self.path:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
+        if self.path.split("?")[0] == scroll_diagnostics.PATH:
+            return self._json(405, {"error": "append only"})
         if self.path.split("?")[0] == "/api/health":
             return self._json(200, {"ok": True, "router_model": ROUTER_MODEL})
         return super().do_GET()
@@ -113,6 +116,17 @@ class Handler(SimpleHTTPRequestHandler):
         if origin not in ALLOWED_ORIGINS:
             return self._json(403, {"error": "origin"})
         path = self.path.split("?")[0]
+        if path == scroll_diagnostics.PATH:
+            if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
+                return self._json(415, {"error": "json required"})
+            try:
+                body = self._body(scroll_diagnostics.LIMIT)
+                if body is None:
+                    return self._json(413, {"error": "size"})
+                name = scroll_diagnostics.store(body)
+            except (ValueError, TypeError, KeyError):
+                return self._json(400, {"error": "schema"})
+            return self._json(201, {"ok": True, "record": name})
         if path == "/api/transcribe":
             return self._transcribe()
         if path == "/api/route":

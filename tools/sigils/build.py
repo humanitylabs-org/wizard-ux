@@ -85,6 +85,8 @@ HOUSE = {
     'wizard-shopping':('bag',     55,  None),
     'sniper':        ('scope',    4,   0.12),
     'card-benefits': ('card',     145, None),
+    'money':         ('dollar',   152, 0.13),
+    'profiles':      ('profile',  296, None),
     'defleur-video': ('clip',     268, None),
     'notes':         ('notes',    356, None),   # Notes: rose, in the gap between Music (344) and Calendar (8)
     'wizard-notes':  ('notes',    356, None),

@@ -159,15 +159,7 @@ const maxStep = async p => { await p.waitForTimeout(2200); return p.evaluate(() 
   s = await state(p);
   ok(!(await zenOn(p)) && s.orbVis && s.imm, 'bottom swipe brings the corner orb back, still full screen', JSON.stringify(s));
   await p.evaluate(() => __wos.setFull(__wos.desks[__wos.idx].focus, false)); await p.waitForTimeout(600);
-  // 9. First-run tour Hide beat (beat 2 since the Command beat was dropped, 24 Oct 2026) teaches this gesture.
-  await p.evaluate(() => { __wos.goDesk(0, true); WosTour.start('qa'); WosTour._go(2); }); await p.waitForTimeout(900);
-  s = await state(p);
-  await swipe(p, s.orb.x + s.orb.w / 2, s.orb.y + s.orb.h / 2, s.orb.y + s.orb.h / 2 + 24, 2); await p.waitForTimeout(400);
-  const tc = await p.evaluate(() => ({ step: WosTour.step, copy: document.querySelector('#tour')?.innerText || '' }));
-  ok(await zenOn(p) && tc.step === 2 && /Swipe up from the bottom/.test(tc.copy), 'tour Hide beat: swipe down hides the bars and says how to get them back', JSON.stringify(tc));
-  await swipe(p, VW / 2, VH - 10, VH - 70, 8); await p.waitForTimeout(700);
-  const tc2 = await p.evaluate(() => ({ step: WosTour.step, done: WosTour.DONE }));
-  ok(!(await zenOn(p)) && tc2.step === tc2.done && tc2.done === 3, 'tour Hide beat: swipe up from the bottom finishes the beat (end card)', JSON.stringify(tc2));
+  // 9. (The first-run tour no longer teaches this gesture: Miguel, 26 Oct 2026, the Hide beat is gone.)
   ok(errs.length === 0, 'no page errors', errs.join(' | '));
   console.log(`\n${pass} passed, ${fail} failed`);
   await b.close(); process.exit(fail ? 1 : 0);

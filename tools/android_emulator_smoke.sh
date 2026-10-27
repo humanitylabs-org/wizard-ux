@@ -37,8 +37,24 @@ sleep 3   # let it settle, then check it is still alive
 
 adb logcat -d > "$OUT/logcat.txt" || true
 adb logcat -d -b crash > "$OUT/logcat-crash.txt" || true
-adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || true
-adb pull /sdcard/ui.xml "$OUT/ui.xml" >/dev/null 2>&1 || true
+dump_ui() {
+  adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || true
+  adb pull /sdcard/ui.xml "$OUT/ui.xml" >/dev/null 2>&1 || true
+}
+dump_ui
+# Fresh CI emulators sometimes show another app's "isn't responding" dialog (Pixel Launcher during boot) on top
+# of ours. Dismiss it with Wait and look again; an ANR dialog for Wizard OS itself still fails below.
+for _ in 1 2 3; do
+  grep -q "isn't responding" "$OUT/ui.xml" 2>/dev/null || break
+  grep -q "Wizard OS isn't responding" "$OUT/ui.xml" && fail "Wizard OS isn't responding (ANR dialog)"
+  echo "dismissing a system ANR dialog: $(grep -o "text=\"[^\"]*isn't responding\"" "$OUT/ui.xml" | head -1)"
+  cp "$OUT/ui.xml" "$OUT/ui-anr-dialog.xml"
+  b="$(grep -o 'text="Wait"[^>]*bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' "$OUT/ui.xml" | grep -o '\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]' | head -1)"
+  [ -n "$b" ] || break
+  set -- $(echo "$b" | tr '[],' '   ')
+  adb shell input tap $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 ))
+  sleep 2; dump_ui
+done
 adb exec-out screencap -p > "$OUT/screen.png" || true
 
 echo "== assertions"

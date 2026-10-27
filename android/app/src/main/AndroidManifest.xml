@@ -43,6 +43,12 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!-- Long-press › Open in your browser: find the default browser so this app's own links leave it. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
         <package android:name="com.android.vending" />
         <!-- Usuals: see and open Grab. -->
         <package android:name="com.grabtaxi.passenger" />
@@ -53,6 +59,7 @@
         android:networkSecurityConfig="@xml/wos_network"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
                 android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.WizardOS"
@@ -92,6 +99,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="wizard" android:host="connect" />
+                <data android:scheme="wizard" android:host="install" />
             </intent-filter>
         </activity>
 
@@ -294,5 +302,11 @@
             android:name=".apps.AppsUpdateJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- Connect › Scan QR code: zxing's CaptureActivity is declared sensorLandscape in the library, so the camera
+             opened sideways (James 24 Oct 2026). Follow the phone's orientation instead. -->
+        <activity
+            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+            android:screenOrientation="fullSensor"
+            tools:replace="screenOrientation" />
     </application>
 </manifest>

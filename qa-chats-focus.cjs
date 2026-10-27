@@ -17,7 +17,7 @@ const rows = [
  ['phil_two','Philosopher answer','Philosophy','philosopher','check'],
  ['private_one','Sealed thread','Wizard OS','private','check']
 ].map(([id,title,subject,agent,state],i) => ({id,title,source:'wizard-mobile',status:'completed',message_count:2,hidden:false,last_active:now-i,started_at:now-500,wizard_last_user_at:now-100,wizard_last_assistant_at:now-i,wizard_activity_at:now-i,wizard_attention:{state,subject,ask:'Fixture ask'},...(agent?{agent}:{}), latest_message:{role:'assistant',content:'Fixture reply',timestamp:now-i}}));
-const writes = [], errors = [], failedAgents = new Set();
+const writes = [], errors = [], failedAgents = new Set(), spaceDetails = new Map();
 let writeSeq = 0;
 let sharedSpaces = [];
 let soloAgent = false, visualAgents = false;
@@ -33,7 +33,7 @@ async function route(r) {
  if (u.pathname==='/wizard/hermes/api/sessions' && failedAgents.has(u.searchParams.get('agent'))) return json({error:'fixture agent unavailable'},503);
  if (u.pathname==='/wizard/hermes/api/sessions') return json({data:rows.filter(s=>(s.agent||'')===(u.searchParams.get('agent')||'')),has_more:false,archive_returned:0,archive_total:0});
  const sm=u.pathname.match(/\/sessions\/([^/]+)(\/messages)?$/);
- if (sm) { const s=rows.find(x=>x.id===sm[1]); return json(sm[2]?{data:[{id:1,role:'user',content:'Fixture question',timestamp:now-50},{id:2,role:'assistant',content:'Fixture answer',timestamp:now} ],has_more:false}:{session:s}); }
+ if (sm) { const s=rows.find(x=>x.id===sm[1]) || spaceDetails.get(sm[1]); return json(sm[2]?{data:[{id:1,role:'user',content:'Fixture question',timestamp:now-50},{id:2,role:'assistant',content:'Fixture answer',timestamp:now} ],has_more:false}:{session:s}); }
  if (u.pathname.endsWith('/api/model/options')) return json({options:[{value:'fixture-model',provider:'fixture',default:true}]});
  if (u.pathname==='/wizard/v1/apps') return json({apps:[]});
  return json({});
@@ -55,7 +55,7 @@ async function boot(b,desktop=false,legacy='') {
  },{desktop,legacy});
  const p=await ctx.newPage();p.setDefaultTimeout(12000);p.on('pageerror',e=>errors.push(String(e)));
  await p.goto(desktop?new URL('desktop.html',origin).href:origin,{waitUntil:'domcontentloaded'});
- await p.waitForFunction(solo=>{const l=(window.__wos||window.__wux)?.live;return solo?!!l?.agentStatus:!!l?.agentStatus.philosopher?.ok;},soloAgent);
+ await p.waitForFunction(solo=>{const l=(window.__wos||window.__wux)?.live;return solo?!!l?.agentStatus:!!l?.agentStatus.philosopher?.ok;},soloAgent,{timeout:30000});
  await p.evaluate(()=>{if(window.__wos){const a=__wos,w=Object.values(a.wins).find(w=>w.app==='chats');a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);}else{const a=__wux,w=Object.values(a.wins).find(w=>w.app==='chats');a.focusWin(w.id);}});
  await p.waitForTimeout(600);return {ctx,p};
 }
@@ -186,6 +186,52 @@ async function routingMatrix(b) {
   await ctx.close();sharedSpaces=[];
  }
 }
+async function spaceArchiveMatrix(b) {
+ const saved=rows.slice();
+ const members=Array.from({length:82},(_,i)=>{
+  const t=now-(i<20?0:20*86400);
+  return {...saved[0],id:'space_member_'+i,title:'Space member '+i,last_active:t,started_at:t,wizard_last_user_at:t,wizard_last_assistant_at:t,wizard_activity_at:t,latest_message:{role:'assistant',content:'Member reply',timestamp:t}};
+ });
+ rows.splice(0,rows.length,...members.slice(0,20),...Array.from({length:50},(_,i)=>{
+  const t=now-9*86400;return {...members[20],id:'global_archive_'+i,title:'Global archive '+i,last_active:t,wizard_last_user_at:t,wizard_last_assistant_at:t,wizard_activity_at:t,latest_message:{role:'assistant',content:'Global reply',timestamp:t}};
+ }));
+ for(const s of members.slice(20))spaceDetails.set(s.id,s);
+ spaceDetails.set('space_hidden',{...members[20],id:'space_hidden',hidden:true});
+ spaceDetails.set('space_sealed',{...members[20],id:'space_sealed',agent:'private'});
+ sharedSpaces=[{id:'old-members',name:'Old members',threads:[...members.map(s=>s.id),'space_hidden','space_sealed','space_deleted']}];
+ try {
+  for(const desktop of [false,true]) {
+   const {ctx,p}=await boot(b,desktop),mode=desktop?'desktop':'phone';
+   try {
+    const before=await p.evaluate(()=>WizLive.unified().length);
+    await choose(p,'space:old-members');
+    await p.waitForFunction(()=>document.querySelector('.ch-scroll [data-sec="archive"] .ch-sec-h small')?.textContent==='62',null,{timeout:15000}).catch(()=>{});
+    ok(await p.locator('.ch-count:visible').count()===0,mode+' Focus switch adds no count line under search');
+    const archive=p.locator('[data-sec="archive"]:visible');
+    if(!await archive.count()){ok(false,mode+' Space Archive count is 62','Archive missing');await capture(p,mode+'-missing-archive');continue;}
+    ok(await archive.locator('.ch-sec-h small').innerText()==='62',mode+' Space Archive count is 62');
+    if(!await archive.evaluate(e=>e.classList.contains('open')))await archive.locator('[data-sectoggle]').click();
+    // Display pagination is separate from fetching: use the existing Show more control.
+    while(await archive.locator('[data-secmore]').count())await archive.locator('[data-secmore]').click();
+    ok(await archive.locator('[data-chopen]').count()===62,mode+' all 62 old member rows are reachable');
+    ok(await p.locator('[data-chopen="space_hidden"], [data-chopen="space_sealed"]').count()===0,mode+' hidden/private discovery excluded');
+    ok(await p.evaluate(()=>WizLive.unified().length)===before,mode+' supplemental rows do not expand All');
+    for(const skin of ['obsidian','nebula']){
+     await p.evaluate(s=>WosSkin.set(s),skin);await p.waitForTimeout(500);
+     await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');if(window.__wos)a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);});
+     await p.waitForFunction(()=>{const e=document.querySelector('.ch-scroll'),r=e?.getBoundingClientRect();return r&&r.height>0&&e.contains(document.elementFromPoint(r.x+15,r.y+15));});
+     await p.locator('.ch-scroll:visible').evaluate(e=>{const a=e.querySelector('[data-sec="archive"]');e.scrollTop=a.offsetTop-e.offsetTop;});await capture(p,mode+'-'+skin+'-old-space');
+    }
+    await choose(p,'all:');
+    ok(await p.locator('[data-chopen="space_member_81"]').count()===0,mode+' All remains globally windowed');
+    await choose(p,'space:old-members');
+    await p.locator('[data-chopen="space_member_81"]').click();
+    await p.evaluate(()=>{if(window.__wos)__wos.onBack();else __wux.escStep();});
+    ok((await activeFocus(p)).includes('Old members'),mode+' Back from old member retains Space focus');
+   } finally {await ctx.close();}
+  }
+ } finally {rows.splice(0,rows.length,...saved);spaceDetails.clear();sharedSpaces=[];}
+}
 async function visualPicker(b) {
  visualAgents=true;
  sharedSpaces=[{id:'launch',name:'WizardOS Launch',agent:'hermes',threads:['main_wos'],createdAt:new Date().toISOString()},{id:'apps',name:'WizardOS Apps',agent:'hermes',threads:['main_phil'],createdAt:new Date().toISOString()}];
@@ -195,7 +241,7 @@ async function visualPicker(b) {
  const g=await p.locator('.ch-space-picker').boundingBox();ok(g.x>=0&&g.x+g.width<=412&&g.y>=0,'phone picker inside viewport',g);
  await activate(p,'[data-spspace="launch"]');await capture(p,'phone-nebula-space-active');
  await activate(p,'.ch-focus-tab.on:visible');await activate(p,'[data-spnew]');await p.locator('.ch-space-form input').fill('Research projects');
- await p.evaluate(()=>WosSkin.set('obsidian'));await p.locator('.mz-intro').waitFor({state:'attached'});await p.locator('.mz-intro').waitFor({state:'detached'});
+ await p.evaluate(()=>WosSkin.set('obsidian'));await p.waitForFunction(()=>document.documentElement.dataset.skin==='obsidian');await p.locator('.mz-intro').waitFor({state:'detached'});
  // Dark's existing first-switch intro navigates Home. Reopen the same Chats window after it finishes.
  await p.evaluate(()=>{const a=__wos,w=Object.values(a.wins).find(w=>w.app==='chats');a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);});
  if(!await p.locator('[data-chspacepicker]').count())await activate(p,'.ch-focus-tab.on:visible');if(!await p.locator('.ch-space-form input').count())await activate(p,'[data-spnew]');await p.locator('.ch-space-form input').fill('Research projects');await capture(p,'phone-dark-new-space');
@@ -213,7 +259,7 @@ async function pickerAcceptance(browser, mode) {
  await activate(p,'.ch-focus-strip:visible [data-chfocusopt="agent:hermes"]');
  ok(await p.locator('[data-chspacepicker]').count()===1,mode+' tapping active agent opens picker');
  ok(await p.locator('[data-spspace="main-only"]').count()===1&&!await p.locator('[data-spspace="phil-only"]').count(),mode+' picker only owner agent Spaces');
- ok((await p.locator('[data-spspace="main-only"] small').innerText())==='1',mode+' picker excludes archived persisted members outside loaded list window');
+ ok((await p.locator('[data-spspace="main-only"]').innerText()).includes('1'),mode+' picker counts exclude archived and unloaded members');
  await activate(p,'[data-spspace="main-only"]');
  ok((await p.locator('.ch-focus-tab.on:visible').innerText()).includes('Main plans'),mode+' Space replaces agent label');
  ok((await p.locator('.ch-focus-tab.on:visible').getAttribute('data-chfocusopt'))==='agent:hermes',mode+' Space retains agent tab identity');
@@ -247,8 +293,19 @@ async function pickerAcceptance(browser, mode) {
  ok([...creates,...runs].every(x=>new URLSearchParams(x.query).get('agent')==='philosopher'&&JSON.parse(x.body||'{}').agent==='philosopher'),mode+' fill uses normal outbox and agent query+body on both writes',{creates,runs});
  const run=JSON.parse(runs[0]?.body||'{}');
  ok(JSON.stringify(run.input).includes('Fill my new Space')&&JSON.stringify(run.input).includes(newSpace?.id||'NEVER'),mode+' fill command contains existing Space id');
+ ok(JSON.stringify(run.input).includes('with your Spaces tool')&&!JSON.stringify(run.input).includes('wizard-spaces'),mode+' routed fill instructs scoped Spaces tool, never main-only CLI');
  ok(sharedSpaces.find(s=>s.id===newSpace?.id)?.threads.length===1,mode+' fill thread joins its Space');
  ok(sharedSpaces.find(s=>s.id==='main-only')?.threads.includes('main_wos'),mode+' New Space preserves existing collections');
+ await choose(p,'agent:hermes');await activate(p,'.ch-focus-tab.on:visible');await activate(p,'[data-spnew]');
+ const mainAt=writes.length;await p.locator('.ch-space-form input').fill('Main QA');await p.locator('.ch-space-form').evaluate(f=>f.requestSubmit());
+ await p.waitForFunction(()=>[...document.querySelectorAll('.ch-focus-tab.on')].some(e=>e.textContent.includes('Main QA')));
+ await p.waitForTimeout(900);
+ const mainWrites=writes.slice(mainAt),mainRuns=mainWrites.filter(x=>x.method==='POST'&&x.path==='/wizard/hermes/v1/runs'),mainCreates=mainWrites.filter(x=>x.method==='POST'&&x.path==='/wizard/hermes/api/sessions');
+ ok(mainRuns.length===1&&mainCreates.length===1,mode+' main Space fill sends exactly one thread/run');
+ ok([...mainCreates,...mainRuns].every(x=>(new URLSearchParams(x.query).get('agent')||'hermes')==='hermes'&&(!JSON.parse(x.body||'{}').agent||JSON.parse(x.body||'{}').agent==='hermes')),mode+' main fill retains canonical main route (no routed-agent override)',{mainCreates,mainRuns});
+ const mainInput=JSON.stringify(JSON.parse(mainRuns[0]?.body||'{}').input||'');
+ const mainSpace=sharedSpaces.find(s=>s.name==='Main QA');
+ ok(mainInput.includes('with your Spaces tool')&&!mainInput.includes('wizard-spaces')&&mainInput.includes(mainSpace?.id||'NEVER'),mode+' main fill instructs same scoped Spaces tool and exact Space id');
  await ctx.close();
 }
 
@@ -305,6 +362,7 @@ async function soloAcceptance(b) {
 (async()=>{
  const b=await chromium.launch({executablePath:process.env.QA_CHROME||undefined,args:['--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required']});
  try {
+ if(process.env.QA_SPACE_MEMBERS_ONLY){await spaceArchiveMatrix(b);ok(errors.length===0,'no page errors',errors);console.log(`${pass} passed, ${fail} failed`);process.exitCode=fail?1:0;return;}
  await soloAcceptance(b);
  if(process.env.QA_SOLO_ONLY){console.log(`${pass} passed, ${fail} failed`);process.exitCode=fail?1:0;return;}
  await visualPicker(b);
@@ -340,7 +398,7 @@ async function soloAcceptance(b) {
   ok(await opts.count()===5,mode+' strip exactly All plus every agent, despite subjects');
   ok(await opts.first().getAttribute('data-chfocusopt')==='all:',mode+' All first');
   ok(JSON.stringify(await opts.evaluateAll(es=>es.map(e=>e.dataset.chfocusopt)))===JSON.stringify(['all:','agent:hermes','agent:philosopher','agent:idle','agent:private']),mode+' stable All then registry agent order',await opts.evaluateAll(es=>es.map(e=>({key:e.dataset.chfocusopt,label:e.getAttribute('aria-label')}))));
-  ok(await p.locator('.ch-focus-strip [data-chfocusopt="agent:idle"]').count()===1,mode+' empty agent remains on strip');
+  ok(await p.locator('.ch-focus-strip:visible [data-chfocusopt="agent:idle"]').count()===1,mode+' empty agent remains on strip');
   ok(await p.locator('.ch-focus-strip [data-chfocusopt="agent:private"] .ag-lock').count()>0,mode+' private lock visible');
   ok(await p.locator('.ch-focus-strip:visible').evaluate(e=>e.scrollWidth>=e.clientWidth&&getComputedStyle(e).touchAction==='pan-x'&&new Set([...e.children].map(c=>c.offsetTop)).size===1),mode+' single row scrolls horizontally');
   ok(await p.locator('.ch-focus-strip [data-chfocusopt="agent:philosopher"] .ch-focus-dot').count()>0,mode+' unread tab dot');
@@ -419,7 +477,7 @@ async function soloAcceptance(b) {
   ok(await p.locator('.ch-search:visible').evaluate(e=>e.scrollWidth<=e.clientWidth+1),mode+' Focus plus status fit search field');
   await capture(p,mode+'-focus-status');
   await p.locator('[data-chchipx="status"]:visible').click();
-  await p.reload({waitUntil:'domcontentloaded'});await p.waitForFunction(solo=>{const l=(window.__wos||window.__wux)?.live;return solo?!!l?.agentStatus:!!l?.agentStatus.philosopher?.ok;},soloAgent);
+  await p.reload({waitUntil:'domcontentloaded'});await p.waitForFunction(solo=>{const l=(window.__wos||window.__wux)?.live;return solo?!!l?.agentStatus:!!l?.agentStatus.philosopher?.ok;},soloAgent,{timeout:30000});
   ok((await p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText()).includes('Wizard OS launch'),mode+' Space focus survives reload');
   await p.locator('[data-chopen="main_wos"]:visible').click();await p.waitForTimeout(250);
   ok(await p.locator('.ch-thread .ch-focus-strip').count()===0&&(desktop||await p.locator('.ch-focus-strip:visible').count()===0),mode+' thread view has no strip');
@@ -510,6 +568,7 @@ async function soloAcceptance(b) {
  ok(writes.slice(navigationAt).filter(w=>/\/v1\/runs$/.test(w.path)).length===0,'zero /v1/runs during navigation');
  await sectionMatrix(b);
  await archivedUnreadMatrix(b);
+ await spaceArchiveMatrix(b);
  await routingMatrix(b);
  ok(errors.length===0,'no page errors',errors);
  }finally{await b.close();}

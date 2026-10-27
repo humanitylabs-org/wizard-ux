@@ -1,6 +1,6 @@
 // Obsidian (Miguel's skin): skin-switch intro and behaviour. Swipe right in a thread to go back is now every skin's
 // (web/core/thread-swipe-back.js, James 23 Oct 2026), so it no longer lives here.
-import { playIntro, noteSkin } from './intro.js';
+import { playIntro, noteSkin, toHome } from './intro.js';
 
 
 
@@ -12,6 +12,7 @@ export default function setup(api) {
   if (!api.storage.get('live')) {
     api.storage.set('live', true);
     intro = playIntro({ listen: api.listen });
+    toHome(api);
   } else noteSkin();
   return reason => { intro?.stop(); if (reason === 'switch') api.storage.set('live', false); };
 }

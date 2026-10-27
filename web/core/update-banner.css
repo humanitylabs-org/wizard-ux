@@ -63,7 +63,7 @@
 .app-upd button.app-upd-x { width: 26px; height: 26px; border-radius: 99px; background: transparent; color: var(--ink-3, #a79fc4); font-size: 16px; line-height: 1; }
 @keyframes app-upd-in { from { opacity: 0; transform: translate(-50%, -6px); } }
 
-/* Every skin: the "Update" tap explodes over the screen, then holds "Updating Wizard OS..." until the new build
+/* Every skin: the "Update" tap explodes over the screen, then holds "Reloading..." until the new build
  * paints (core/web-update.js adds .wos-burst). Without it the tapped banner sits frozen until reload and looks broken. */
 .wos-burst { position: fixed; inset: 0; z-index: 2147483000; display: grid; place-items: center; overflow: hidden; pointer-events: all;
   background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--ink, #fff) 18%, transparent) 0, color-mix(in srgb, var(--bg, #000) 88%, transparent) 55%);

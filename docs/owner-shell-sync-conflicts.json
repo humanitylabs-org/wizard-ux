@@ -1,0 +1,1381 @@
+{
+  "owner": "24ea55671a92904da538732a210ff673a0f21515",
+  "main": "4f50011b44d9c07891fe12b5d72cb3ee7b376ca2",
+  "files": {
+    "BRANCHES.md": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "docs/COMPONENTS.md": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      },
+      {
+        "block": 3,
+        "resolution": "main"
+      },
+      {
+        "block": 4,
+        "resolution": "combined"
+      },
+      {
+        "block": 5,
+        "resolution": "main"
+      },
+      {
+        "block": 6,
+        "resolution": "main"
+      },
+      {
+        "block": 7,
+        "resolution": "main"
+      }
+    ],
+    "docs/SHARE-SHEET.md": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "docs/brand-provenance.json": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "docs/home-screen-apps.md": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "docs/responsive-feature-inventory.json": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      },
+      {
+        "block": 3,
+        "resolution": "main"
+      },
+      {
+        "block": 4,
+        "resolution": "main"
+      },
+      {
+        "block": 5,
+        "resolution": "main"
+      },
+      {
+        "block": 6,
+        "resolution": "main"
+      },
+      {
+        "block": 7,
+        "resolution": "main"
+      },
+      {
+        "block": 8,
+        "resolution": "main"
+      },
+      {
+        "block": 9,
+        "resolution": "main"
+      },
+      {
+        "block": 10,
+        "resolution": "main"
+      },
+      {
+        "block": 11,
+        "resolution": "main"
+      },
+      {
+        "block": 12,
+        "resolution": "main"
+      },
+      {
+        "block": 13,
+        "resolution": "main"
+      },
+      {
+        "block": 14,
+        "resolution": "main"
+      }
+    ],
+    "qa-chats-focus.cjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      },
+      {
+        "block": 3,
+        "resolution": "main"
+      },
+      {
+        "block": 4,
+        "resolution": "main"
+      },
+      {
+        "block": 5,
+        "resolution": "main"
+      },
+      {
+        "block": 6,
+        "resolution": "main"
+      },
+      {
+        "block": 7,
+        "resolution": "main"
+      },
+      {
+        "block": 8,
+        "resolution": "main"
+      },
+      {
+        "block": 9,
+        "resolution": "main"
+      },
+      {
+        "block": 10,
+        "resolution": "main"
+      },
+      {
+        "block": 11,
+        "resolution": "main"
+      }
+    ],
+    "qa-thread-swipe-back.cjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "qa-tour.cjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      },
+      {
+        "block": 3,
+        "resolution": "main"
+      },
+      {
+        "block": 4,
+        "resolution": "main"
+      },
+      {
+        "block": 5,
+        "resolution": "main"
+      }
+    ],
+    "qa-zen.cjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "tests/app-share-wizard.browser.cjs": [
+      {
+        "block": 1,
+        "resolution": "ours"
+      },
+      {
+        "block": 2,
+        "resolution": "ours"
+      }
+    ],
+    "tests/app-share-wizard.test.mjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "tests/browser/share-sheet-browser.cjs": [
+      {
+        "block": 1,
+        "resolution": "ours"
+      },
+      {
+        "block": 2,
+        "resolution": "ours"
+      },
+      {
+        "block": 3,
+        "resolution": "ours"
+      },
+      {
+        "block": 4,
+        "resolution": "ours"
+      },
+      {
+        "block": 5,
+        "resolution": "ours"
+      }
+    ],
+    "tests/desktop-first-message-guide.test.mjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      }
+    ],
+    "tests/desktop-window-refresh.test.mjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "tests/feature-id-allowlist.json": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      },
+      {
+        "block": 3,
+        "resolution": "main"
+      },
+      {
+        "block": 4,
+        "resolution": "main"
+      },
+      {
+        "block": 5,
+        "resolution": "main"
+      },
+      {
+        "block": 6,
+        "resolution": "main"
+      },
+      {
+        "block": 7,
+        "resolution": "main"
+      },
+      {
+        "block": 8,
+        "resolution": "main"
+      },
+      {
+        "block": 9,
+        "resolution": "main"
+      }
+    ],
+    "tests/fixtures/tweaks.mjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      }
+    ],
+    "tests/my-skin.test.mjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "tests/os-updates.test.mjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      },
+      {
+        "block": 3,
+        "resolution": "main"
+      },
+      {
+        "block": 4,
+        "resolution": "main"
+      }
+    ],
+    "tests/outbox-voice-reload-handoff.test.mjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "tests/responsive-features.test.mjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "tests/run-streaming.test.mjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "tests/settings-redesign.test.mjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "tests/share-sheet.test.mjs": [
+      {
+        "block": 1,
+        "resolution": "ours"
+      },
+      {
+        "block": 2,
+        "resolution": "ours"
+      },
+      {
+        "block": 3,
+        "resolution": "ours"
+      }
+    ],
+    "tests/skin-palettes.test.mjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "tests/skin-swipe-intent.test.mjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      }
+    ],
+    "tests/space-members.test.mjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "tests/store-install-my-apps-link.test.mjs": [
+      {
+        "block": 1,
+        "resolution": "ours"
+      }
+    ],
+    "tests/tour-skip-step.test.mjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      },
+      {
+        "block": 3,
+        "resolution": "main"
+      },
+      {
+        "block": 4,
+        "resolution": "main"
+      },
+      {
+        "block": 5,
+        "resolution": "main"
+      },
+      {
+        "block": 6,
+        "resolution": "main"
+      },
+      {
+        "block": 7,
+        "resolution": "main"
+      },
+      {
+        "block": 8,
+        "resolution": "main"
+      },
+      {
+        "block": 9,
+        "resolution": "main"
+      },
+      {
+        "block": 10,
+        "resolution": "main"
+      },
+      {
+        "block": 11,
+        "resolution": "main"
+      },
+      {
+        "block": 12,
+        "resolution": "main"
+      },
+      {
+        "block": 13,
+        "resolution": "main"
+      }
+    ],
+    "tests/tweak-packages.test.mjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      },
+      {
+        "block": 3,
+        "resolution": "main"
+      },
+      {
+        "block": 4,
+        "resolution": "main"
+      },
+      {
+        "block": 5,
+        "resolution": "main"
+      },
+      {
+        "block": 6,
+        "resolution": "main"
+      }
+    ],
+    "tests/update-popup.test.mjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      },
+      {
+        "block": 3,
+        "resolution": "main"
+      },
+      {
+        "block": 4,
+        "resolution": "main"
+      },
+      {
+        "block": 5,
+        "resolution": "main"
+      },
+      {
+        "block": 6,
+        "resolution": "main"
+      },
+      {
+        "block": 7,
+        "resolution": "main"
+      }
+    ],
+    "tools/brand/render-pwa-icons.cjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "tools/qa-instant-app-open.cjs": [
+      {
+        "block": 1,
+        "resolution": "ours"
+      }
+    ],
+    "tools/sigils/glyphs.py": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "tools/sigils/sigils.json": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "tools/stamp-assets.sh": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      },
+      {
+        "block": 3,
+        "resolution": "main"
+      }
+    ],
+    "web/agents/agents.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/app.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      },
+      {
+        "block": 3,
+        "resolution": "main"
+      },
+      {
+        "block": 4,
+        "resolution": "ours"
+      },
+      {
+        "block": 5,
+        "resolution": "main"
+      },
+      {
+        "block": 6,
+        "resolution": "main"
+      },
+      {
+        "block": 7,
+        "resolution": "main"
+      }
+    ],
+    "web/core/app-client.js": [
+      {
+        "block": 1,
+        "resolution": "ours"
+      },
+      {
+        "block": 2,
+        "resolution": "ours"
+      }
+    ],
+    "web/core/app-services.js": [
+      {
+        "block": 1,
+        "resolution": "ours"
+      },
+      {
+        "block": 2,
+        "resolution": "ours"
+      },
+      {
+        "block": 3,
+        "resolution": "ours"
+      },
+      {
+        "block": 4,
+        "resolution": "main"
+      },
+      {
+        "block": 5,
+        "resolution": "ours"
+      }
+    ],
+    "web/core/apps.js": [
+      {
+        "block": 1,
+        "resolution": "ours"
+      }
+    ],
+    "web/core/chat-kit.js": [
+      {
+        "block": 1,
+        "resolution": "ours"
+      }
+    ],
+    "web/core/chat-power.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/core/chats.css": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/core/chats.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      },
+      {
+        "block": 3,
+        "resolution": "combined"
+      },
+      {
+        "block": 4,
+        "resolution": "ours"
+      },
+      {
+        "block": 5,
+        "resolution": "ours"
+      },
+      {
+        "block": 6,
+        "resolution": "main"
+      },
+      {
+        "block": 7,
+        "resolution": "ours"
+      },
+      {
+        "block": 8,
+        "resolution": "combined"
+      },
+      {
+        "block": 9,
+        "resolution": "main"
+      },
+      {
+        "block": 10,
+        "resolution": "ours"
+      },
+      {
+        "block": 11,
+        "resolution": "main"
+      },
+      {
+        "block": 12,
+        "resolution": "main"
+      },
+      {
+        "block": 13,
+        "resolution": "main"
+      },
+      {
+        "block": 14,
+        "resolution": "combined"
+      },
+      {
+        "block": 15,
+        "resolution": "ours"
+      },
+      {
+        "block": 16,
+        "resolution": "main"
+      },
+      {
+        "block": 17,
+        "resolution": "combined"
+      },
+      {
+        "block": 18,
+        "resolution": "main"
+      },
+      {
+        "block": 19,
+        "resolution": "combined"
+      },
+      {
+        "block": 20,
+        "resolution": "main"
+      }
+    ],
+    "web/core/deeplink.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/core/experience.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      },
+      {
+        "block": 3,
+        "resolution": "main"
+      },
+      {
+        "block": 4,
+        "resolution": "main"
+      },
+      {
+        "block": 5,
+        "resolution": "main"
+      },
+      {
+        "block": 6,
+        "resolution": "main"
+      }
+    ],
+    "web/core/home-screen-apps.js": [
+      {
+        "block": 1,
+        "resolution": "ours"
+      },
+      {
+        "block": 2,
+        "resolution": "ours"
+      }
+    ],
+    "web/core/links.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/core/notif-bell.js": [
+      {
+        "block": 1,
+        "resolution": "combined"
+      }
+    ],
+    "web/core/os-updates.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      },
+      {
+        "block": 3,
+        "resolution": "main"
+      },
+      {
+        "block": 4,
+        "resolution": "main"
+      },
+      {
+        "block": 5,
+        "resolution": "main"
+      },
+      {
+        "block": 6,
+        "resolution": "main"
+      }
+    ],
+    "web/core/resources.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/core/scheduled-reminders.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/core/settings.css": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/core/settings.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "combined"
+      },
+      {
+        "block": 3,
+        "resolution": "main"
+      },
+      {
+        "block": 4,
+        "resolution": "main"
+      },
+      {
+        "block": 5,
+        "resolution": "main"
+      },
+      {
+        "block": 6,
+        "resolution": "main"
+      },
+      {
+        "block": 7,
+        "resolution": "main"
+      },
+      {
+        "block": 8,
+        "resolution": "main"
+      },
+      {
+        "block": 9,
+        "resolution": "main"
+      },
+      {
+        "block": 10,
+        "resolution": "main"
+      },
+      {
+        "block": 11,
+        "resolution": "main"
+      },
+      {
+        "block": 12,
+        "resolution": "main"
+      },
+      {
+        "block": 13,
+        "resolution": "main"
+      },
+      {
+        "block": 14,
+        "resolution": "main"
+      }
+    ],
+    "web/core/share-sheet.css": [
+      {
+        "block": 1,
+        "resolution": "ours"
+      }
+    ],
+    "web/core/share-sheet.js": [
+      {
+        "block": 1,
+        "resolution": "ours"
+      },
+      {
+        "block": 2,
+        "resolution": "ours"
+      },
+      {
+        "block": 3,
+        "resolution": "ours"
+      },
+      {
+        "block": 4,
+        "resolution": "ours"
+      },
+      {
+        "block": 5,
+        "resolution": "ours"
+      },
+      {
+        "block": 6,
+        "resolution": "ours"
+      },
+      {
+        "block": 7,
+        "resolution": "ours"
+      }
+    ],
+    "web/core/share-wizard.css": [
+      {
+        "block": 1,
+        "resolution": "ours"
+      }
+    ],
+    "web/core/share-wizard.js": [
+      {
+        "block": 1,
+        "resolution": "ours"
+      },
+      {
+        "block": 2,
+        "resolution": "ours"
+      },
+      {
+        "block": 3,
+        "resolution": "ours"
+      },
+      {
+        "block": 4,
+        "resolution": "ours"
+      },
+      {
+        "block": 5,
+        "resolution": "ours"
+      }
+    ],
+    "web/core/sigils.css": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/core/sigils.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/core/skin-host.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      },
+      {
+        "block": 3,
+        "resolution": "main"
+      },
+      {
+        "block": 4,
+        "resolution": "main"
+      },
+      {
+        "block": 5,
+        "resolution": "main"
+      },
+      {
+        "block": 6,
+        "resolution": "main"
+      },
+      {
+        "block": 7,
+        "resolution": "main"
+      },
+      {
+        "block": 8,
+        "resolution": "main"
+      },
+      {
+        "block": 9,
+        "resolution": "main"
+      },
+      {
+        "block": 10,
+        "resolution": "main"
+      },
+      {
+        "block": 11,
+        "resolution": "main"
+      },
+      {
+        "block": 12,
+        "resolution": "main"
+      },
+      {
+        "block": 13,
+        "resolution": "main"
+      },
+      {
+        "block": 14,
+        "resolution": "main"
+      }
+    ],
+    "web/core/slots.json": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/core/tour.css": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      }
+    ],
+    "web/core/tour.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      },
+      {
+        "block": 3,
+        "resolution": "main"
+      },
+      {
+        "block": 4,
+        "resolution": "main"
+      },
+      {
+        "block": 5,
+        "resolution": "main"
+      },
+      {
+        "block": 6,
+        "resolution": "main"
+      },
+      {
+        "block": 7,
+        "resolution": "main"
+      },
+      {
+        "block": 8,
+        "resolution": "main"
+      },
+      {
+        "block": 9,
+        "resolution": "main"
+      },
+      {
+        "block": 10,
+        "resolution": "main"
+      },
+      {
+        "block": 11,
+        "resolution": "main"
+      },
+      {
+        "block": 12,
+        "resolution": "main"
+      },
+      {
+        "block": 13,
+        "resolution": "main"
+      },
+      {
+        "block": 14,
+        "resolution": "main"
+      }
+    ],
+    "web/core/workspace-sync.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/desktop/desktop.css": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/desktop/desktop.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "ours"
+      },
+      {
+        "block": 3,
+        "resolution": "main"
+      },
+      {
+        "block": 4,
+        "resolution": "main"
+      },
+      {
+        "block": 5,
+        "resolution": "main"
+      },
+      {
+        "block": 6,
+        "resolution": "main"
+      },
+      {
+        "block": 7,
+        "resolution": "ours"
+      },
+      {
+        "block": 8,
+        "resolution": "main"
+      },
+      {
+        "block": 9,
+        "resolution": "main"
+      },
+      {
+        "block": 10,
+        "resolution": "main"
+      },
+      {
+        "block": 11,
+        "resolution": "main"
+      },
+      {
+        "block": 12,
+        "resolution": "main"
+      },
+      {
+        "block": 13,
+        "resolution": "main"
+      },
+      {
+        "block": 14,
+        "resolution": "main"
+      },
+      {
+        "block": 15,
+        "resolution": "main"
+      },
+      {
+        "block": 16,
+        "resolution": "main"
+      },
+      {
+        "block": 17,
+        "resolution": "main"
+      },
+      {
+        "block": 18,
+        "resolution": "main"
+      },
+      {
+        "block": 19,
+        "resolution": "main"
+      }
+    ],
+    "web/kit/README.md": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/kit/wizard-ui.css": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/live.js": [
+      {
+        "block": 1,
+        "resolution": "ours"
+      },
+      {
+        "block": 2,
+        "resolution": "combined"
+      },
+      {
+        "block": 3,
+        "resolution": "main"
+      },
+      {
+        "block": 4,
+        "resolution": "main"
+      },
+      {
+        "block": 5,
+        "resolution": "main"
+      },
+      {
+        "block": 6,
+        "resolution": "main"
+      }
+    ],
+    "web/outbox.js": [
+      {
+        "block": 1,
+        "resolution": "combined"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      },
+      {
+        "block": 3,
+        "resolution": "main"
+      }
+    ],
+    "web/skins/README.md": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      }
+    ],
+    "web/skins/landscapes/skin.css": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/skins/landscapes/skin.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/skins/obsidian/intro.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/skins/obsidian/skin.css": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/skins/obsidian/skin.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/store/store.js": [
+      {
+        "block": 1,
+        "resolution": "combined"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      },
+      {
+        "block": 3,
+        "resolution": "combined"
+      },
+      {
+        "block": 4,
+        "resolution": "combined"
+      },
+      {
+        "block": 5,
+        "resolution": "ours"
+      },
+      {
+        "block": 6,
+        "resolution": "main"
+      },
+      {
+        "block": 7,
+        "resolution": "combined"
+      },
+      {
+        "block": 8,
+        "resolution": "combined"
+      },
+      {
+        "block": 9,
+        "resolution": "ours"
+      },
+      {
+        "block": 10,
+        "resolution": "ours"
+      }
+    ],
+    "web/tweaks/catalog.json": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/tweaks/miguel/home-bars/manifest.json": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/tweaks/miguel/model-pills/contract.mjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/tweaks/miguel/model-pills/manifest.json": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      }
+    ],
+    "web/tweaks/miguel/model-pills/tweak.css": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/tweaks/miguel/model-pills/tweak.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/tweaks/miguel/profile.json": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/tweaks/miguel/snooze-someday/contract.mjs": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/tweaks/miguel/snooze-someday/manifest.json": [
+      {
+        "block": 1,
+        "resolution": "main"
+      },
+      {
+        "block": 2,
+        "resolution": "main"
+      }
+    ],
+    "web/tweaks/miguel/snooze-someday/tweak.css": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/tweaks/miguel/snooze-someday/tweak.js": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ],
+    "web/tweaks/wizard/profile.json": [
+      {
+        "block": 1,
+        "resolution": "main"
+      }
+    ]
+  },
+  "notes": "Block order is the original git merge conflict order; combined blocks were manually integrated. Later syntax/inventory/back corrections are described in owner-shell-sync-20261027.md."
+}

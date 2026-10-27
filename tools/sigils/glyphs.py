@@ -350,6 +350,13 @@ def g_card():
     chip = rrect(148, 270, 62, 44, 11)
     return D(card, stripe, chip)
 
+@glyph('dollar', 'A dollar sign cut through a coin: what you spent, what you own.')
+def g_dollar():
+    coin = circle(256, 256, 170)
+    s_curve = stroke("M318 196 C306 168 282 158 256 158 C222 158 196 176 196 206 C196 238 226 248 256 256 C288 264 318 274 318 306 C318 336 290 354 256 354 C226 354 200 342 192 314", 36)
+    bar = U(rrect(238, 118, 36, 46, 12), rrect(238, 348, 36, 46, 12))
+    return D(coin, U(s_curve, bar))
+
 @glyph('clip', 'A film frame with play cut out: a video to edit.')
 def g_clip():
     frame = rrect(88, 132, 336, 248, 52)
@@ -382,6 +389,16 @@ def g_notes():
     body = poly((x0 + nx * h, y0 + ny * h), (bx + nx * h, by + ny * h), (bx - nx * h, by - ny * h), (x0 - nx * h, y0 - ny * h))
     tip = poly((bx + nx * h, by + ny * h), (x1, y1), (bx - nx * h, by - ny * h))
     return D(page, U(body, tip))
+
+@glyph('profile', 'A disc with a wizard cut out, hat over a bust running off the edge: who you are, as friends see you.')
+def g_profile():
+    disc = circle(256, 256, 176)
+    # Three big shapes so it still reads at 24 px: the hat, one bust (head and shoulders joined), and a wide band
+    # of disc between them. The shoulders run past the disc, so it is a person, never a pawn on a base.
+    hat_ = U(hat_at(256, 200, 106), rrect(170, 184, 172, 30, 15))   # tip stays inside the disc
+    bust = U(circle(256, 284, 46), P("M118 480 C124 372 188 326 256 326 C324 326 388 372 394 480 Z"))
+    bust = D(bust, rrect(140, 150, 232, 92, 0))      # flat-topped head: the hat sits on it across a clear gap
+    return D(disc, U(hat_, bust))
 
 # ---------- normalise + emit ----------
 def fmt(p):

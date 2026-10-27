@@ -85,6 +85,7 @@ html.wos-doc-scroll :is(#dock,.general-voice,.pill) { position: fixed; }
 .ch-list[style*="--agc"] .ch-row.unread .tp time { color: var(--agc); }
 .ch-list[style*="--agc"] .ch-fab { background: linear-gradient(145deg, color-mix(in oklab, var(--agc) 85%, #fff), color-mix(in oklab, var(--agc) 80%, #000)); color: #111; box-shadow: 0 10px 26px color-mix(in srgb, var(--agc) 50%, transparent), inset 0 1px 0 rgba(255,255,255,.25); }
 
+.ch-focus-tab[data-chfocusopt^="space:"]::before { border-color: var(--wz-line, var(--line-2)); }
 .ch-focus-tab:focus-visible { outline: 2px solid var(--violet-2); outline-offset: -3px; }
 .ch-focus-tab > span { overflow: hidden; text-overflow: ellipsis; }
 .ch-focus-tab .ag-sig { display: none; }

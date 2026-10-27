@@ -3,7 +3,9 @@
  * Get and explicit release changes use this Wizard's owner-authorized App Manager. Back: detail → list → Store root,
  * through the shell's canonical hook (window.__wizardCloseOverlay); standalone it guards its own history. */
 import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp, architectureReason} from './store-status.js';
-import {routerNeeds, hasNeeds, pending} from './store-router.js';
+import {routerNeeds, routerApprove, routerRows, hasNeeds, pending, nice} from './store-router.js';
+import {sourceLabel, installedOnlyApps} from './store-source.js';
+import {parseInstallLink, installShareLink} from './install-link.js';
 import {installRelease} from './store-install.js';
 await window.WosAppSetup.ready;
 const Setup = window.WosAppSetup;
@@ -36,9 +38,11 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
 
   const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set(), access: new Map() };
   const key = a => `${a.id}|${a.repo || ''}`;
-  const find = id => S.apps.find(a => key(a) === id) || S.apps.find(a => a.id === id);
+  const find = id => S.apps.find(a => key(a) === id) || S.apps.find(a => a.id === id) || (S.link?.app && (key(S.link.app) === id || S.link.app.id === id) ? S.link.app : null);
   const selected = a => ({...a, ...preferredRelease(a,S.installed.get(key(a))), ...(a.releases || []).find(r => `${r.source}:${r.commit}` === S.selections.get(key(a))), releases:a.releases, conflict:a.conflict, alpha_badge:a.alpha_badge});
-  const badge = a => (a.alpha_badge ? '<span class="alpha-badge">Alpha</span>' : '') + (a.conflict ? '<span class="conflict-badge">Source conflict</span>' : '');
+  const provenance = a => sourceLabel(a, S.installed.get(key(a)));
+  const chip = (a, installed=true) => { const s=installed?provenance(a):sourceLabel(a); return `<span class="source-chip" data-source="${s.kind}">${s.label}</span>`; };
+  const badge = a => chip(a) + (a.conflict ? '<span class="conflict-badge">Source conflict</span>' : '');
   try { const config = parent.WizConfig || window.WizConfig; const mark = () => { $('preview').hidden = !config?.isPreview?.(); }; mark(); config?.ready?.then(mark); } catch (_) {}
   try { const skin = parent.document.documentElement.dataset.skin; if (skin) document.documentElement.dataset.skin = skin; } catch (_) {}
 
@@ -52,10 +56,10 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     if (!a || typeof a !== 'object' || !ID.test(a.id || '')) return null;
     return { id: a.id, name: txt(a.name, 60) || a.id, summary: txt(a.summary, 280), publisher: txt(a.publisher, 60), version: txt(a.version, 40),
       type: ['view', 'service', 'agent', 'external'].includes(a.type) ? a.type : 'service', category: txt(a.category, 24), logo: typeof a.logo === 'string' && /^https:\/\//.test(a.logo),
-      url: txt(a.url, 250), repo: txt(a.repo, 201), source: ID.test(a.source || '') ? a.source : 'standard', source_name: txt(a.source_name,60), channel: a.channel === 'alpha' ? 'alpha' : 'standard', commit: /^[a-f0-9]{40}$/.test(a.commit || '') ? a.commit : '', release_notes: txt(a.release_notes,2000),
+      url: txt(a.url, 250), repo: txt(a.repo, 201), source: ID.test(a.source || '') ? a.source : 'standard', source_name: txt(a.source_name,60), channel: a.channel === 'alpha' ? 'alpha' : 'standard', commit: /^[a-fA-F0-9]{40}$/.test(a.commit || '') ? a.commit : '', release_notes: txt(a.release_notes,2000),
       releases: Array.isArray(a.releases) ? a.releases.slice(0,16).map(r => clean({...r,releases:null})).filter(Boolean) : [],
       alpha_badge: ['Alpha','Alpha available'].includes(a.alpha_badge) ? a.alpha_badge : '', conflict: a.conflict === true, installed_source: txt(a.installed_source,64), installed_commit: txt(a.installed_commit,40), installed_app_id: txt(a.installed_app_id,64), update_available: a.update_available === true,
-      private: a.private === true, tags: words(a.tags), provides: words(a.provides), uses: ids(a.uses), needs: words(a.needs), architectures: words(a.architectures),
+      installed_only: a.installed_only === true, from:txt(a.from,60), install_link:a.install_link===true, catalog_source:txt(a.catalog_source,64), private: a.private === true, tags: words(a.tags), provides: words(a.provides), uses: ids(a.uses), needs: words(a.needs), architectures: words(a.architectures),
       installs: Number.isSafeInteger(a.installs) && a.installs > 0 ? a.installs : 0, checked_at: Number.isFinite(a.checked_at) ? a.checked_at : 0 };
   }
   const get = p => fetch(DATA + p, { credentials: 'same-origin', cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
@@ -74,17 +78,13 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     $('refresh').disabled=true;
     const [idx, inst, registry] = await Promise.allSettled([allApps(force), get('api/apps/installed'), get('wizard/v1/installed-apps')]);
     $('refresh').disabled=false;
-    if (idx.status !== 'fulfilled') {
-      S.error = 'The App Index isn’t reachable right now.'; S.loaded = true; S.complete=false; paint();
-      if(top()==='detail') showDetail(S.stack.at(-1).arg);
-      else if(top()==='list') openKind(S.stack.at(-1).arg,true);
-      else if(top()==='search') search(S.q);
-      return;
-    }
-    S.error=''; S.sources=idx.value.sources;
-    S.apps = (Array.isArray(idx.value.apps) ? idx.value.apps : []).map(clean).filter(Boolean).filter(isUserApp).sort(compareApps);
+    const catalog=idx.status==='fulfilled'?idx.value:{apps:S.apps,sources:S.sources};
+    S.error=idx.status==='fulfilled'?'':'The App Index isn’t reachable right now.'; S.sources=catalog.sources;
+    S.apps = (Array.isArray(catalog.apps) ? catalog.apps : []).map(clean).filter(Boolean).filter(isUserApp).sort(compareApps);
     S.installed.clear();
-    const snapshot=registry.status==='fulfilled' ? registry.value : {wam:[],shell:[],complete:false};
+    const snapshot=registry.status==='fulfilled' ? registry.value : {wam:[],shell:[],complete:false}; S.snapshot=snapshot;
+    S.apps.push(...installedOnlyApps(S.apps,snapshot.wam || []).map(clean).filter(Boolean).filter(isUserApp));
+    S.apps.sort(compareApps);
     S.architecture=['amd64','arm64'].includes(snapshot.architecture) ? snapshot.architecture : '';
     const runtipi=inst.status==='fulfilled' && Array.isArray(inst.value.installed) ? inst.value.installed : [];
     S.complete=snapshot.complete===true && Array.isArray(snapshot.wam) && Array.isArray(snapshot.shell) && inst.status==='fulfilled' && Array.isArray(inst.value.installed);
@@ -99,6 +99,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     if(top()==='detail') showDetail(S.stack.at(-1).arg);
     else if(top()==='list') openKind(S.stack.at(-1).arg,true);
     else if(top()==='search') search(S.q);
+    else if(top()==='sheet') showSheet(S.stack.at(-1).arg);
     // Explicit setup search wins over a launcher's optional category hint.
     const initialQuery = new URLSearchParams(location.search).get('q');
     if (initialQuery && !S.stack.length) { $('q').value = initialQuery; search(initialQuery); }
@@ -113,7 +114,8 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     }
   }
   const isInstalled = a => !!S.installed.get(key(a)) && !S.installed.get(key(a)).conflict;
-  const status = a => S.selections.get(key(a))==='unavailable' ? 'unknown' : releaseState(a,S.installed.get(key(a)),S.selections.has(key(a)),S.complete);
+  // A share link pins an exact release: treat it as an explicit selection so a different installed commit offers Switch.
+  const status = a => S.selections.get(key(a))==='unavailable' ? 'unknown' : releaseState(a,S.installed.get(key(a)),S.selections.has(key(a)) || !!a.install_link,S.complete);
   // The shell knows which apps have a view it can open; only those get "Open".
   const openId = a => S.installed.get(key(a))?.id || '';
   const canOpen = a => { try { return framed && typeof parent.WizCanOpen === 'function' && parent.WizCanOpen(openId(a)); } catch (_) { return false; } };
@@ -136,11 +138,11 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     if (isInstalled(a)) return `<span class="get have ${cls}" aria-label="Installed">✓ Installed</span>`;
     return `<button class="get ${cls}" data-get="${esc(key(a))}">Get</button>`;
   }
-  const row = base => {const a=selected(base); return `<div class="row" data-app="${esc(key(a))}" role="button" tabindex="0">${icon(a)}<span class="tx"><b>${esc(a.name)}</b>${badge(base)}<small>${esc(kindOf(a).one)} · ${esc(a.summary)}</small></span>${action(a)}</div>`;};
+  const row = base => {const a=selected(base); return `<div class="row" data-app="${esc(key(a))}" role="button" tabindex="0">${icon(a)}<span class="tx"><b>${esc(a.name)}</b>${badge(a)}<small>${esc(kindOf(a).one)} · ${esc(a.summary)}</small></span>${action(a)}</div>`;};
 
   /* ---------------- screens ---------------- */
   function paint() {
-    $('kinds').innerHTML = KINDS.map(k => `<button type="button" class="kind" data-kind="${k.id}"${!S.loaded || S.error ? ' disabled' : ''}>
+    $('kinds').innerHTML = KINDS.map(k => `<button type="button" class="kind" data-kind="${k.id}"${!S.loaded || (S.error && !S.apps.length) ? ' disabled' : ''}>
       <svg class="kind-icon" viewBox="0 0 24 24" aria-hidden="true">${KIND_ICONS[k.id]}</svg>
       <span class="kind-copy"><b>${esc(k.many)}</b><small>${esc(k.blurb)}</small></span>
       <span class="kind-go" aria-hidden="true">›</span></button>`).join('');
@@ -177,11 +179,11 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     const powers = usedBy.length ? `<section class="d-sec"><h3>Powers</h3><div class="dep">${usedBy.map(u => `<div class="dep-i" data-app="${esc(u.id)}" role="button" tabindex="0">${icon(u, 's')}<b>${esc(u.name)}</b><small>${esc(kindOf(u).one)}</small></div>`).join('')}</div></section>` : '';
     const gives = (a.provides || []).length ? `<section class="d-sec"><h3>Gives your agent</h3><div class="chips">${a.provides.map(p => `<span>${esc(p.replace(/-/g, ' '))}</span>`).join('')}</div></section>` : '';
     const how = { view: 'Opens in its own Wizard window.', service: 'Runs in the background. Ask your agent to use it — no screen needed.', agent: 'An agent that lives on your Wizard.', external: 'Connect an account once; every agent can use it.' }[a.type] || '';
-    const info = [['Kind', k.one], ['Source', a.source_name || 'Standard'], ['Publisher', a.publisher], ['Version', a.version], ['Commit', a.commit], ['Runs on', (a.architectures || []).join(' · ')], ['Installs', a.installs > 0 ? String(a.installs) : 'New']]
+    const info = [['Kind', k.one], ['Source', provenance(a).label + (provenance(a).detail ? ' · ' + provenance(a).detail : '')], ['Publisher', a.publisher], ['Version', a.version], ['Commit', a.commit], ['Runs on', (a.architectures || []).join(' · ')], ['Installs', a.installs > 0 ? String(a.installs) : 'New']]
       .filter(([, v]) => v).map(([l, v]) => `<div><dt>${esc(l)}</dt><dd>${esc(v)}</dd></div>`).join('');
     $('detail').innerHTML = `<div class="d-hero" style="--c1:${c1};--c2:${c2}"><button class="back" data-back aria-label="Back">‹</button>
-        ${icon(a, 'l')}<div class="d-id"><h2>${esc(a.name)}</h2>${badge(base)}<p>${esc(k.one)}${a.publisher ? ` · ${esc(a.publisher)}` : ''}</p>${action(a, 'big')}</div></div>
-      ${base.releases.length ? `<section class="d-sec"><label class="release-label">Release <select id="release-choice" data-release="${esc(key(base))}">${S.selections.get(key(base))==='unavailable'?'<option selected disabled>Selected release no longer available</option>':''}${base.releases.map(r=>`<option value="${esc(`${r.source}:${r.commit}`)}" ${S.selections.get(key(base))!=='unavailable' && r.source===a.source && r.commit===a.commit?'selected':''}>${r.channel==='alpha'?'Alpha':'Standard'} · ${esc(r.version)} · ${esc(r.source_name)}</option>`).join('')}</select></label><p class="d-note">Alpha marks availability, not your installed channel. Open uses your existing app; choosing another release never installs it automatically.</p></section>` : ''}
+        ${icon(a, 'l')}<div class="d-id"><h2>${esc(a.name)}</h2>${badge(a)}<p>${esc(k.one)}${a.publisher ? ` · ${esc(a.publisher)}` : ''}</p>${action(a, 'big')}${['beta','link','local'].includes(provenance(a).kind) && installShareLink({...a,...S.installed.get(key(a))}) ? `<button type="button" class="share-action" data-share="${esc(key(a))}">Share</button>` : ''}</div></div>
+      ${base.releases.length ? `<section class="d-sec"><label class="release-label">Release <select id="release-choice" data-release="${esc(key(base))}">${S.selections.get(key(base))==='unavailable'?'<option selected disabled>Selected release no longer available</option>':''}${base.releases.map(r=>`<option value="${esc(`${r.source}:${r.commit}`)}" ${S.selections.get(key(base))!=='unavailable' && r.source===a.source && r.commit===a.commit?'selected':''}>${sourceLabel(r).label} · ${esc(r.version)} · ${esc(r.source_name)}</option>`).join('')}</select></label><p class="d-note">Beta marks availability, not your installed channel. Open uses your existing app; choosing another release never installs it automatically.</p></section>` : ''}
       ${base.conflict?'<section class="d-sec"><p class="d-note">This app ID belongs to different repositories across sources. Installation is blocked here; ask your agent to resolve the source conflict without overwriting an installed app.</p></section>':''}
       <div class="d-stats"><div><b>${esc(k.one)}</b><small>Kind</small></div><div><b>${a.installs > 0 ? a.installs : 'New'}</b><small>Installs</small></div><div><b>${esc((a.version || '—').split(/[-+]/)[0])}</b><small>Version</small></div><div><b>${(a.tags || [])[0] ? esc(cap(a.tags[0])) : '—'}</b><small>Topic</small></div></div>
       <section class="d-sec d-lead"><p class="d-sum">${esc(a.summary)}</p><p class="d-how">${esc(how)}</p></section>
@@ -215,6 +217,8 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       <div class="mc-list">${Setup.html(routerId(a), c.data, rctx())}</div>${Setup.controls(routerId(a), c.data, { ...rctx(), name: a.name, store: true })}</section>`;
   }
   function showSheet(k) {
+    if (k === '@link') return showLinkSheet();
+    $('sheet').setAttribute('aria-label','Models and connections');
     const base = find(k); if (!base) return; const a = selected(base), id = routerId(a), c = S.router.get(id);
     const left = pending(c?.data);
     // An app tagged `privacy: private` on a Wizard with no private agent: nobody can use it yet, so ask
@@ -226,6 +230,41 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     $('sheet').innerHTML = `<div class="list-head"><button class="back" data-back aria-label="Back">‹</button><div><h2>${esc(a.name)} is installed</h2>
       <p>${models || !privacy ? (left ? `${left} connection${left === 1 ? '' : 's'} need${left === 1 ? 's' : ''} setup` : 'Every connection is ready') : 'Private app'}</p></div></div>
       ${privacy}${models || !privacy ? `<div class="mc-list" data-mc-app="${esc(id)}">${c?.data ? Setup.html(id, c.data, rctx()) + Setup.controls(id, c.data, { ...rctx(), name: a.name, store: true }) : '<p class="empty">Checking connections…</p>'}</div>` : ''}`;
+  }
+  // Link previews share the existing sheet layer, preserving the screen underneath it.
+  async function openInstallLink(input) {
+    const parsed=parseInstallLink(input), entry={loading:parsed.ok, error:parsed.ok?'':parsed.error, from:parsed.from || ''};
+    S.link=entry; push('sheet','@link'); showLinkSheet(); window.scrollTo(0,0);
+    if (!parsed.ok) return;
+    try {
+      const q=new URLSearchParams({repo:parsed.repo,...(parsed.commit?{commit:parsed.commit}:{})});
+      const r=await fetch(DATA+'wizard/v1/link?'+q,{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(15000)}), j=await r.json();
+      if (!r.ok) throw Error(typeof j.error === 'string'?j.error:'This app could not be previewed.');
+      const app=clean({...j,source:'link',repo:parsed.repo,from:parsed.from,install_link:true});
+      if (!app || !app.commit || (parsed.commit && app.commit !== parsed.commit)) throw Error('The preview did not return the selected release.');
+      entry.app=app;
+      // Prove installed/conflict state for this exact preview, even when it is not in a catalog.
+      const i=resolveInstalled(app,S.snapshot || {wam:[],shell:[]},[]); if(i) S.installed.set(key(app),i);
+    } catch(err) { entry.error=err.message || 'This app could not be previewed.'; }
+    finally { entry.loading=false; if(S.link===entry && top()==='sheet' && S.stack.at(-1).arg==='@link') showLinkSheet(); }
+  }
+  function showLinkSheet() {
+    const l=S.link || {}, a=l.app, s=a?sourceLabel(a):null;
+    $('sheet').setAttribute('aria-label','Install shared app');
+    $('sheet').innerHTML=`<div class="list-head"><button class="back" data-back aria-label="Back">‹</button><div><h2>${a?esc(a.name):'Install shared app'}</h2><p>Review before installing</p></div></div>
+      ${l.loading?'<p class="mc-lede" role="status">Checking the GitHub app…</p>':''}
+      ${l.error?`<div class="link-error" role="alert">${a?'Installation not confirmed:':"This install link isn't valid:"} ${esc(l.error)}</div>`:''}
+      ${a?`<section class="d-sec"><p class="sheet-source">${chip(a,false)}</p><p class="d-note">${a.catalog_source?'Also available in the catalog.':'Not in the catalog.'} ${esc(s.detail || 'Shared by a link.')}</p><p class="d-sum">${esc(a.summary)}</p><dl class="info"><div><dt>Repository</dt><dd>${esc(a.repo)}</dd></div><div><dt>Commit</dt><dd>${esc(a.commit)}</dd></div><div><dt>Kind</dt><dd>${esc(kindOf(a).one)}</dd></div></dl><p class="d-note">Only install apps from people you trust. The App Manager checks this exact release before installing.</p></section><div class="mc-done">${S.busy.has(a.id)?'<span class="get wait" role="status">Installing…</span>':['get','update','switch'].includes(status(a))?`<button type="button" class="get big" data-link-install>${status(a)==='get'?'Install':status(a)==='update'?'Update':'Switch to this release'}</button>`:action(a)}</div>`:''}`;
+  }
+  async function shareApp(base) {
+    if(!base) return;
+    const a={...selected(base),...S.installed.get(key(base))}, url=installShareLink(a); if(!url) return;
+    try {
+      const share=framed ? parent.WosChat?.sharePayload : window.WosChat?.sharePayload;
+      if(share) await share({title:base.name,text:url});
+      else if(navigator.share) await navigator.share({title:base.name,text:url});
+      else { await navigator.clipboard.writeText(url); toast('<b>Install link copied</b>'); }
+    } catch(err) { if(err.name!=='AbortError') toast('<b>Couldn’t share this link.</b>'); }
   }
   async function setupAction(btn) {
     const app = btn.closest('[data-mc-app]')?.dataset.mcApp;
@@ -283,6 +322,9 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   let toastT = 0;
   function toast(html, duration=3600) { const t = $('toast'); t.innerHTML = html; t.hidden = false; requestAnimationFrame(() => t.classList.add('on')); clearTimeout(toastT); toastT = setTimeout(() => { t.classList.remove('on'); setTimeout(() => { if(!t.classList.contains('on')) t.hidden = true; }, 250); }, duration); }
 
+  // Identifiers select a server-authorized release, never a browser-supplied install URL or ref.
+  const INSTALL = DATA.replace(/store-data\/$/, 'store-install/');
+
   // Which agents can use an installed app (#58), plus its optional privacy tag. Null when unknown.
   async function appAccess(id) {
     try { const r = await fetch('/wizard/v1/apps/' + encodeURIComponent(id) + '/agents', { credentials: 'same-origin', cache: 'no-store' }); return r.ok ? await r.json() : null; } catch (_) { return null; }
@@ -290,6 +332,8 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   async function install(a, options = {}) {
     if (!a || architectureReason(a,S.architecture) || S.busy.has(a.id) || !['get','update','switch'].includes(status(a))) return;
     const operation = status(a)==='get'?'install':status(a);
+    const selection = {source:a.source,repo:a.repo,commit:a.commit,operation};
+    if(a.install_link && S.link) S.link.error='';
     S.busy.add(a.id); refresh();
     const say = (m, ok=false) => toast(renderInstallResult({ name: a.name, message: m, ok }));
     try {
@@ -299,12 +343,12 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       const actual=S.installed.get(key(a));
       if(!actual || actual.conflict || actual.repo!==a.repo || actual.commit!==a.commit) throw new Error('Installation finished, but the selected release is not registered yet. Refresh to check.');
       if (options.setup) return true;
-      // The Router reads the app's declaration once it is registered; any needs open the install sheet.
+      // The Router reads the app's declaration once it is registered; any model needs open the install sheet.
       const id = routerId(a), [need, access] = await Promise.all([routerNeeds(id), appAccess(id)]); S.router.set(id, { ...need, at: Date.now() });
       if (access) S.access.set(id, access);
-      if (hasNeeds(need.data) || access?.needs_private_agent) { if (top() !== 'sheet') push('sheet', key(a)); showSheet(key(a)); window.scrollTo(0, 0); }
+      if (hasNeeds(need.data) || access?.needs_private_agent) { if (top() !== 'sheet') push('sheet', key(a)); else S.stack.at(-1).arg=key(a); showSheet(key(a)); window.scrollTo(0, 0); }
       else say(successMessage(access), true);
-    } catch (err) { say(err.message || 'Install failed.'); }
+    } catch (err) { if(a.install_link && S.link) S.link.error=err.message || 'Install failed.'; say(err.message || 'Install failed.'); }
     finally { S.busy.delete(a.id); refresh(); }
   }
 
@@ -319,6 +363,8 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
 
   document.addEventListener('click', e => {
     if (e.target.closest('[data-back]')) { pop(); return; }
+    const sh = e.target.closest('[data-share]'); if(sh) { shareApp(find(sh.dataset.share)); return; }
+    const li = e.target.closest('[data-link-install]'); if(li) { install(S.link?.app); return; }
     const g = e.target.closest('[data-get]');
     if (g) { e.stopPropagation(); const base=find(g.dataset.get); if(!base) return; const a=selected(base), state=status(a);
       if(!['get','switch','update'].includes(state)) return;
@@ -363,7 +409,9 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   }
   // Broken or missing logos fall back to the gradient letter (inline onerror is blocked by CSP).
   document.addEventListener('error', e => { if (e.target.tagName === 'IMG') e.target.remove(); }, true);
-  window.__store = { state: () => ({ layers: S.stack.map(x => x.t), apps: S.apps.length, installed: [...S.installed.keys()], q: S.q }) };
+  window.__store = { openInstallLink: input => openInstallLink(typeof input === 'string' && input.startsWith('?') ? new URLSearchParams(input) : input), state: () => ({ loaded:S.loaded, busy:S.busy.size, layers: S.stack.map(x => x.t), apps: S.apps.length, installed: [...S.installed.keys()], q: S.q }) };
   adoptAppearance('App Store');
   paint(); load();
+  const initialLink=new URLSearchParams(location.search);
+  if(initialLink.get('view')==='install') openInstallLink(initialLink);
 })();
