@@ -36,8 +36,10 @@ const { pathToFileURL } = require('node:url');
         const layout = await page.locator('[data-response-style]').evaluate(el => ({ value: el.value, height: el.getBoundingClientRect().height, color: getComputedStyle(el).color, background: getComputedStyle(el).backgroundColor, overflow: document.documentElement.scrollWidth > innerWidth }));
         assert.equal(layout.overflow, false); assert.ok(layout.height >= 44); assert.equal(layout.value, 'summary'); ok(kind + ' ' + skin + ' skinned Summary and touch target');
       }
+      await page.locator('[data-response-style]').focus();
       await page.locator('[data-response-style]').selectOption('concise');
       await page.waitForFunction(() => document.querySelector('[data-response-style]')?.value === 'concise' && !document.querySelector('[data-response-style]').disabled);
+      assert.equal(await page.locator('[data-response-style]').evaluate(el => el === document.activeElement), true); ok(kind + ' keyboard focus survives owner style save');
       assert.equal((await (await fetch(base + '/wizard/v1/settings')).json()).settings.response_style, 'concise'); ok(kind + ' change is saved on Service');
       await page.reload();
       await page.waitForFunction(() => !!window.WosSettings && !!(window.__wos || window.__wux));
