@@ -39,7 +39,6 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -54,6 +53,10 @@ import java.util.List;
  */
 public class ShellActivity extends Activity {
     static final String ACTION_CHANGE = "ai.wizards.shell.CHANGE_WIZARD";
+    /** A launcher shortcut to one saved Wizard (carries this install's shortcut key, so only our shortcuts switch). */
+    static final String ACTION_SWITCH = "ai.wizards.shell.SWITCH_WIZARD";
+    private static final String EXTRA_ORIGIN = "origin", EXTRA_KEY = "key", KEY_SHORTCUTS = "shortcut-key";
+    private static final int SWITCH_SHORTCUTS = 3;
     private static final String PREFS = ShellOrigin.PREFS, KEY_ORIGIN = ShellOrigin.KEY;
     private static final String UA_TAG = " WizardOS-Android/" + BuildConfig.VERSION_NAME + " WizardShell/" + BuildConfig.VERSION_NAME;
     private static final int REQ_FILE = 1, REQ_MEDIA = 2, REQ_CAPABILITY = 3;
@@ -65,7 +68,7 @@ public class ShellActivity extends Activity {
     private String origin;
     private ValueCallback<Uri[]> pendingFiles;
     private PermissionRequest pendingMedia;
-    private boolean mainFrameFailed;
+    private boolean mainFrameFailed, mainFrameHttpError;
     private ShellPort port;
     private volatile java.util.concurrent.CountDownLatch capabilityAsk;
 
@@ -92,7 +95,7 @@ public class ShellActivity extends Activity {
         }
         origin = ShellOrigin.parse(prefs().getString(KEY_ORIGIN, null));
         if (session()) { begin(saved); return; }
-        addChangeShortcut();
+        refreshShortcuts();
         if (!handle(getIntent())) {
             if (origin == null) showConnect(null, null);
             else open(saved);
@@ -136,6 +139,18 @@ public class ShellActivity extends Activity {
         if (intent == null) return false;
         if (ACTION_CHANGE.equals(intent.getAction())) {
             showConnect(origin, null);
+            return true;
+        }
+        if (ACTION_SWITCH.equals(intent.getAction())) {
+            // Only our own launcher shortcuts (they carry this install's key), and only to a Wizard already used here.
+            String to = ShellOrigin.parse(intent.getStringExtra(EXTRA_ORIGIN));
+            String key = intent.getStringExtra(EXTRA_KEY);
+            if (to == null || key == null || !key.equals(shortcutKey()) || !SavedWizards.known(saved(), to)) {
+                showConnect(origin, null);
+                return true;
+            }
+            String why = switchTo(to);
+            if (why != null) showConnect(origin, why);
             return true;
         }
         Uri data = intent.getData();
@@ -279,11 +294,19 @@ public class ShellActivity extends Activity {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 mainFrameFailed = false;
+                mainFrameHttpError = false;
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                if (!mainFrameFailed && cover != null && ShellOrigin.same(origin, url)) hideCover();
+                if (mainFrameFailed || !ShellOrigin.same(origin, url)) return;
+                if (cover != null) hideCover();
+                if (!mainFrameHttpError && !session()) rememberCurrent();
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request, android.webkit.WebResourceResponse response) {
+                if (request.isForMainFrame()) mainFrameHttpError = true; // reached a server, but not a working Wizard
             }
 
             @Override
@@ -438,7 +461,17 @@ public class ShellActivity extends Activity {
     private void showConnect(String prefill, String note) {
         LinearLayout col = column();
         col.addView(text("Connect to your Wizard", 22, true), lp(0));
-        col.addView(dim(text("Paste your Wizard's address, or open its Setup link on this phone.", 15, false), 0.75f), lp(10));
+        TextView error = dim(text(note == null ? "" : note, 14, false), 0.85f);
+        error.setTextColor(Color.rgb(255, 150, 160));
+        List<String> saved = saved();
+        if (!saved.isEmpty()) {
+            // Wizards this phone has connected to: one tap switches, a long press removes one from the list.
+            col.addView(dim(text("Your Wizards", 13, true), 0.6f), lp(18));
+            for (String w : saved) col.addView(savedRow(w, prefill, error), lp(8));
+            col.addView(dim(text("Or paste another Wizard's address, or open its Setup link on this phone.", 15, false), 0.75f), lp(20));
+        } else {
+            col.addView(dim(text("Paste your Wizard's address, or open its Setup link on this phone.", 15, false), 0.75f), lp(10));
+        }
         EditText field = new EditText(this);
         field.setSingleLine(true);
         field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
@@ -448,23 +481,15 @@ public class ShellActivity extends Activity {
         field.setHintTextColor(Color.argb(110, 233, 228, 255));
         field.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
         if (prefill != null) field.setText(prefill);
-        col.addView(field, lp(22));
-        TextView error = dim(text(note == null ? "" : note, 14, false), 0.85f);
-        error.setTextColor(Color.rgb(255, 150, 160));
+        col.addView(field, lp(saved.isEmpty() ? 22 : 10));
         col.addView(error, lp(8));
         TextView go = pill("Connect", true);
         col.addView(go, lp(18));
         Runnable submit = () -> {
             String clean = ShellOrigin.parse(field.getText().toString());
             if (clean == null) { error.setText("Use the full https address of your Wizard."); return; }
-            boolean changed = !clean.equals(origin);
-            prefs().edit().putString(KEY_ORIGIN, clean).apply();
-            origin = clean;
-            if (changed && web != null) {
-                // A different Wizard starts clean: no history or page state carries over.
-                dropWebView();
-            }
-            open(null);
+            String why = switchTo(clean);
+            if (why != null) error.setText(why);
         };
         go.setOnClickListener(v -> submit.run());
         field.setOnEditorActionListener((v, id, e) -> { submit.run(); return true; });
@@ -473,7 +498,107 @@ public class ShellActivity extends Activity {
             cancel.setOnClickListener(v -> open(null));
             col.addView(cancel, lp(10));
         }
-        showCover(col);
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        scroll.addView(col);
+        showCover(scroll);
+    }
+
+    /**
+     * The one way the shell changes Wizard (Connect, a saved Wizard, a launcher shortcut). A different Wizard starts
+     * clean in a fresh WebView. Refused (with the reason) while a recording for the current Wizard is still going:
+     * that take belongs to the current Wizard and must be finished there.
+     */
+    private String switchTo(String clean) {
+        boolean changed = !clean.equals(origin);
+        if (changed && ai.wizards.shell.recorder.RecorderService.active() != null) {
+            return "A recording is still going for this Wizard. Finish or stop it first.";
+        }
+        prefs().edit().putString(KEY_ORIGIN, clean).apply();
+        origin = clean;
+        if (changed && web != null) {
+            // A different Wizard starts clean: no history or page state carries over.
+            dropWebView();
+        }
+        if (changed) refreshShortcuts();
+        open(null);
+        return null;
+    }
+
+    private View savedRow(String w, String current, TextView error) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(18), dp(10), dp(18), dp(10));
+        GradientDrawable g = new GradientDrawable();
+        g.setCornerRadius(dp(18));
+        boolean here = w.equals(origin);
+        g.setStroke(dp(1), here ? VIOLET : Color.argb(90, 233, 228, 255));
+        row.setBackground(g);
+        LinearLayout names = new LinearLayout(this);
+        names.setOrientation(LinearLayout.VERTICAL);
+        names.addView(text(SavedWizards.label(w), 16, true));
+        names.addView(dim(text(w, 12, false), 0.55f));
+        row.addView(names, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        if (here) {
+            TextView mark = text("Current", 13, true);
+            mark.setTextColor(VIOLET);
+            row.addView(mark);
+        }
+        row.setContentDescription((here ? "Current Wizard: " : "Switch to ") + SavedWizards.label(w));
+        row.setOnClickListener(v -> {
+            String why = switchTo(w);
+            if (why != null) error.setText(why);
+        });
+        row.setOnLongClickListener(v -> {
+            if (w.equals(origin)) { // it would come straight back: the open Wizard is always remembered
+                error.setText("This is the Wizard you're using. Switch to another one first to remove it.");
+                return true;
+            }
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("Remove " + SavedWizards.label(w) + " from this list?")
+                    .setMessage("Its recordings and home-screen apps stay on this phone and work again if you reconnect.")
+                    .setPositiveButton("Remove", (d, x) -> {
+                        saveList(SavedWizards.forget(saved(), w));
+                        showConnect(current, null);
+                    })
+                    .setNegativeButton("Cancel", null)
+                    .show();
+            return true;
+        });
+        return row;
+    }
+
+    /* ---------------- Saved Wizards (SavedWizards: the pure rules) ---------------- */
+
+    private List<String> saved() {
+        return SavedWizards.decode(prefs().getString(SavedWizards.KEY, null));
+    }
+
+    private void saveList(List<String> list) {
+        prefs().edit().putString(SavedWizards.KEY, SavedWizards.encode(list)).apply();
+        refreshShortcuts();
+    }
+
+    /** The selected Wizard answered: it joins (or moves to the top of) the saved list. */
+    private void rememberCurrent() {
+        List<String> list = saved();
+        if (origin == null || (!list.isEmpty() && list.get(0).equals(origin))) return;
+        List<String> next = SavedWizards.remember(list, origin);
+        if (next != null) saveList(next);
+    }
+
+    /** A random key only this install's launcher shortcuts carry. */
+    private String shortcutKey() {
+        String k = prefs().getString(KEY_SHORTCUTS, null);
+        if (k == null) {
+            byte[] b = new byte[16];
+            new java.security.SecureRandom().nextBytes(b);
+            StringBuilder sb = new StringBuilder();
+            for (byte x : b) sb.append(String.format(java.util.Locale.ROOT, "%02x", x));
+            k = sb.toString();
+            prefs().edit().putString(KEY_SHORTCUTS, k).apply();
+        }
+        return k;
     }
 
     private void showOffline(String why) {
@@ -524,13 +649,25 @@ public class ShellActivity extends Activity {
         cover = null;
     }
 
-    private void addChangeShortcut() {
+    /** Launcher long-press: Change Wizard, plus the most recent other saved Wizards for a one-tap switch. */
+    private void refreshShortcuts() {
+        if (session()) return;
         ShortcutManager sm = getSystemService(ShortcutManager.class);
         if (sm == null) return;
+        Icon icon = Icon.createWithResource(this, R.mipmap.ic_launcher);
+        List<ShortcutInfo> list = new ArrayList<>();
         Intent i = new Intent(ACTION_CHANGE).setClass(this, ShellActivity.class);
-        ShortcutInfo s = new ShortcutInfo.Builder(this, "change-wizard").setShortLabel("Change Wizard")
-                .setIcon(Icon.createWithResource(this, R.mipmap.ic_launcher)).setIntent(i).build();
-        try { sm.setDynamicShortcuts(Collections.singletonList(s)); } catch (Exception ignored) { }
+        list.add(new ShortcutInfo.Builder(this, "change-wizard").setShortLabel("Change Wizard")
+                .setIcon(icon).setIntent(i).setRank(0).build());
+        int rank = 1;
+        for (String w : SavedWizards.others(saved(), origin, SWITCH_SHORTCUTS)) {
+            Intent s = new Intent(ACTION_SWITCH).setClass(this, ShellActivity.class)
+                    .putExtra(EXTRA_ORIGIN, w).putExtra(EXTRA_KEY, shortcutKey());
+            list.add(new ShortcutInfo.Builder(this, "wizard-" + Integer.toHexString(w.hashCode()))
+                    .setShortLabel(SavedWizards.label(w)).setLongLabel("Switch to " + SavedWizards.label(w))
+                    .setIcon(icon).setIntent(s).setRank(rank++).build());
+        }
+        try { sm.setDynamicShortcuts(list); } catch (Exception ignored) { }
     }
 
     private LinearLayout column() {

@@ -357,6 +357,76 @@ PY
   bogus="wizard-homeapp://$PKG/homeapp-0000?app=qa-app"
   adb shell am start -W -a android.intent.action.VIEW -d "'$bogus'" -n "$PKG/ai.wizards.shell.home.AppSessionActivity" >/dev/null 2>&1; sleep 3
   dump bogus; has bogus "App unavailable" && pass "pin: an edited shortcut opens nothing of the Wizard" || bad "pin: an edited shortcut opens nothing of the Wizard"
+
+  # ---- Saved Wizards: each Wizard that answered is remembered; one tap switches; a long press removes one.
+  # A second origin for the same fixture: https://127.0.0.1:8443 (in its certificate) through adb reverse.
+  adb reverse tcp:8443 tcp:8443 >/dev/null
+  FXA="https://10.0.2.2:8443"; FXB="https://127.0.0.1:8443"
+  echo idle > "$FIXTURE_OUT/mode"
+  sprefs() { # <name>: the shell's saved origin and list, as "origin|a,b"
+    adb shell run-as "$PKG" cat shared_prefs/shell.xml 2>/dev/null > "$OUT/prefs-$1.xml"
+    python3 - "$OUT/prefs-$1.xml" <<'PY'
+import sys, xml.etree.ElementTree as ET
+try: r = ET.parse(sys.argv[1]).getroot()
+except Exception: print('|'); sys.exit()
+v = {e.get('name'): (e.text or '') for e in r.findall('string')}
+print(v.get('origin', '') + '|' + ','.join(x for x in v.get('wizards', '').split('\n') if x))
+PY
+  }
+  wait_prefs() { for _ in $(seq 1 "$2"); do [ "$(sprefs wait)" = "$1" ] && return 0; sleep 1; done; return 1; }
+  long_press() { # <dump-name> <text>
+    local b; b=$(python3 - "$OUT/ui-$1.xml" "$2" <<'PY'
+import re, sys
+for m in re.finditer(r'<node [^>]*>', open(sys.argv[1]).read()):
+    if f'text="{sys.argv[2]}"' in m.group(0):
+        x1, y1, x2, y2 = map(int, re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', m.group(0)).groups())
+        print((x1 + x2) // 2, (y1 + y2) // 2); break
+PY
+)
+    [ -n "$b" ] && adb shell input swipe $b $b 1200
+  }
+  adb shell am start -W -a android.intent.action.VIEW -d "wizard://connect?origin=https%3A%2F%2F127.0.0.1%3A8443" "$PKG" >/dev/null 2>&1
+  wait_for sw-list "Your Wizards" 15 && has sw-list 'text="10.0.2.2:8443"' && ! has sw-list 'text="wizard"' \
+    && pass "switch: Connect lists the Wizard that answered, not the one that never did" || bad "switch: Connect lists saved Wizards"
+  has sw-list 'text="Current"' && pass "switch: the current Wizard is marked" || bad "switch: the current Wizard is marked"
+  tap_text sw-list "Connect"
+  wait_prefs "$FXB|$FXB,$FXA" 40 && pass "switch: a newly connected Wizard is saved at the top" || bad "switch: newly connected Wizard saved ($(sprefs b))"
+  adb shell dumpsys shortcut > "$OUT/switch-shortcuts.txt" 2>/dev/null
+  grep -q "Switch to 10.0.2.2:8443" "$OUT/switch-shortcuts.txt" && grep -q "change-wizard" "$OUT/switch-shortcuts.txt" \
+    && pass "switch: launcher long-press offers the other saved Wizard" || bad "switch: launcher long-press offers the other saved Wizard"
+
+  # One tap on a saved Wizard switches to it (fresh page, connect screen gone).
+  adb shell am start -W -a ai.wizards.shell.CHANGE_WIZARD -n "$ACT" >/dev/null 2>&1
+  wait_for sw-pick 'text="10.0.2.2:8443"' 15; tap_text sw-pick "10.0.2.2:8443"
+  wait_prefs "$FXA|$FXA,$FXB" 20 && pass "switch: one tap switches to a saved Wizard" || bad "switch: one tap switches ($(sprefs a))"
+  sleep 5; dump sw-after; ! has sw-after "Connect to your Wizard" && pass "switch: the chosen Wizard opens" || bad "switch: the chosen Wizard opens"
+
+  # Another app can't switch Wizards: a switch without this install's shortcut key only opens Connect.
+  adb shell am start -W -a ai.wizards.shell.SWITCH_WIZARD --es origin "$FXB" -n "$ACT" >/dev/null 2>&1; sleep 3
+  dump sw-forged; [ "$(sprefs forged)" = "$FXA|$FXA,$FXB" ] && has sw-forged "Connect to your Wizard" \
+    && pass "switch: a forged switch intent changes nothing" || bad "switch: a forged switch intent changes nothing"
+
+  # Long press: the current one stays (with a note); another one is removed after a confirmation.
+  long_press sw-forged "10.0.2.2:8443"; sleep 2; dump sw-keep
+  has sw-keep "the Wizard you.re using" && [ "$(sprefs keep)" = "$FXA|$FXA,$FXB" ] && pass "switch: the current Wizard can't be removed" || bad "switch: the current Wizard can't be removed"
+  long_press sw-keep "127.0.0.1:8443"
+  wait_for sw-ask "from this list" 10 && tap_text sw-ask "Remove"
+  wait_prefs "$FXA|$FXA" 10 && { sleep 1; dump sw-gone; ! has sw-gone 'text="127.0.0.1:8443"'; } \
+    && pass "switch: long press removes a saved Wizard" || bad "switch: long press removes a saved Wizard ($(sprefs gone))"
+
+  # No switch while a take is recording for the current Wizard: it must be finished there first.
+  adb shell am start -W -a android.intent.action.VIEW -d "wizard://connect?origin=https%3A%2F%2F127.0.0.1%3A8443" "$PKG" >/dev/null 2>&1
+  wait_for sw-b2 "Your Wizards" 15; tap_text sw-b2 "Connect"; wait_prefs "$FXB|$FXB,$FXA" 40
+  n0=$(grep -c '"ev": "started"' "$FX"); echo record > "$FIXTURE_OUT/mode"
+  adb shell am start -W -a ai.wizards.shell.CHANGE_WIZARD -n "$ACT" >/dev/null 2>&1
+  wait_for sw-rec 'text="10.0.2.2:8443"' 15; tap_text sw-rec "10.0.2.2:8443"
+  for _ in $(seq 1 40); do [ "$(grep -c '"ev": "started"' "$FX")" -gt "$n0" ] && break; sleep 1; done
+  sleep 2; adb shell dumpsys activity services "$PKG" | grep -q "RecorderService" && pass "switch: the switched-to Wizard records" || bad "switch: the switched-to Wizard records"
+  adb shell am start -W -a ai.wizards.shell.CHANGE_WIZARD -n "$ACT" >/dev/null 2>&1
+  wait_for sw-busy 'text="127.0.0.1:8443"' 15; tap_text sw-busy "127.0.0.1:8443"; sleep 2; dump sw-busy2
+  has sw-busy2 "A recording is still going" && [ "$(sprefs busy | cut -d'|' -f1)" = "$FXA" ] \
+    && pass "switch: refused while a recording is going" || bad "switch: refused while a recording is going ($(sprefs busy))"
+  adb shell am force-stop "$PKG"; echo idle > "$FIXTURE_OUT/mode"
   cp "$FX" "$OUT/fixture.log" 2>/dev/null
 fi
 
