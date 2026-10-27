@@ -1332,7 +1332,7 @@ window.WizCore.chats = function createChats(H) {
         return mediaBlock(c, [image]); // same thumbnail, gallery and viewer as bottom attachments
       }) : '';
       h += `<div class="msg a"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}><div class="bub">${body}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}</div>`
-        + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>${last && !working && regenOn() ? '<button type="button" data-mregen aria-label="Regenerate response">↻ Regenerate</button>' : ''}` : ''}</div></div>`;
+        + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${PW?.answerLabel(tn.a, c.answerRouted) || ''}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>${last && !working && regenOn() ? '<button type="button" data-mregen aria-label="Regenerate response">↻ Regenerate</button>' : ''}` : ''}</div></div>`;
     }
     return h;
   }
@@ -1472,6 +1472,72 @@ window.WizCore.chats = function createChats(H) {
     const scroll = el.querySelector('.ch-emoji-sheet [data-chemoresults]');
     startEmojiCategories(scroll, TOPIC.categories);
     rowSheet = { wid, key, emoji: true }; vib(8);
+  }
+  // One per-open route receipt. No alternate send/stream path, shell fork or polling loop.
+  function canAnswerRoute(w) {
+    if (!w.thread || w.thread === '__new__') return false;
+    const s = LIVE.session(w.thread), tag = LIVE.agentOf(w.thread) || s?.agent || '';
+    const agent = agentRec(tag);
+    return !!s && !AGS()?.isOther(tag) && !AGS()?.isPrivate(agent)
+      && agent.privacy !== 'confidential' && !window.WosModels?.isPrivateRoute?.(s.provider);
+  }
+  function answerState(w) {
+    const c = ch(w.id);
+    return c.answerRoute?.sid === w.thread && c.answerRoute.nav === c.readNav ? c.answerRoute : null;
+  }
+  const directAnswer = w => answerState(w)?.value?.route === 'opus-direct'
+    || (!answerState(w)?.value && LIVE.session(w.thread)?.answer_route === 'opus-direct');
+  function answerNotice(state) {
+    const v = state?.error || (state?.value?.available === false ? state.value : null);
+    if (!v) return '';
+    const fix = typeof v.fix_url === 'string' && /^(\/(?![\/\\])|https?:\/\/)/.test(v.fix_url) ? v.fix_url : '';
+    return `<div class="ch-answer-error" role="alert">${esc(v.message || v.reason || 'Opus direct isn’t available.')}${fix ? ` <a href="${esc(fix)}">Fix connection</a>` : ''}</div>`;
+  }
+  function answerControl(w) {
+    if (!canAnswerRoute(w) || answerState(w)?.hidden) return '';
+    const direct = directAnswer(w);
+    return `<button type="button" class="ch-answer-control${direct ? ' on' : ''}" data-chanswer aria-haspopup="dialog" aria-label="Answered by: ${direct ? 'Opus direct' : 'Hermes'}"><span>Answered by:</span> ${direct ? 'Opus direct' : 'Hermes'}</button>`;
+  }
+  function answerSheet(w, state) {
+    const direct = directAnswer(w), busy = state?.busy;
+    return `<div class="ch-sheet-b"><div class="ch-sheet-t">Answered by</div>
+      <p class="ch-sheet-n">Choose who answers the next message in this thread.</p>
+      ${['hermes', 'opus-direct'].map(route => `<button type="button" data-chanswerpick="${route}" aria-pressed="${direct === (route === 'opus-direct')}"${busy || (route === 'opus-direct' && state?.value?.available === false) ? ' disabled' : ''}>${direct === (route === 'opus-direct') ? CHECK_SVG : ''}${route === 'hermes' ? 'Hermes' : 'Opus direct'}</button>`).join('')}
+      <p class="ch-sheet-n">Opus direct uses your Claude connection, without Hermes tools, memory or persona. Private chats stay on their private agent.</p>
+      ${busy ? '<p class="ch-sheet-n" role="status">Checking answer route…</p>' : ''}${answerNotice(state)}
+      <button type="button" data-rncancel>Close</button></div>`;
+  }
+  function openAnswerSheet(w) {
+    if (!canAnswerRoute(w) || answerState(w)?.hidden) return;
+    closeRowSheet();
+    const el = elOf(w.id), trigger = el?.querySelector('[data-chanswer]'); if (!el) return;
+    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Answered by">${answerSheet(w, answerState(w))}</div>`);
+    rowSheet = { wid: w.id, sid: w.thread, answer: true, trigger };
+    el.querySelector('[data-chanswerpick]')?.focus({ preventScroll: true });
+  }
+  async function readAnswerRoute(w, route) {
+    if (!canAnswerRoute(w)) return;
+    const c = ch(w.id), sid = w.thread, nav = c.readNav;
+    if (!route && answerState(w)) return;
+    if (answerState(w)?.busy) return;
+    const state = { sid, nav, value: answerState(w)?.value, busy: true };
+    c.answerRoute = state;
+    const current = () => W[w.id] === w && w.thread === sid && c.readNav === nav && c.answerRoute === state;
+    const paint = () => {
+      if (!current()) return;
+      renderThreadNow(w);
+      if (rowSheet?.answer && rowSheet.wid === w.id && rowSheet.sid === sid) {
+        if (state.hidden) closeRowSheet();
+        else { const sheet = elOf(w.id)?.querySelector(':scope > .ch-sheet'); if (sheet) sheet.innerHTML = answerSheet(w, state); }
+      }
+    };
+    paint();
+    try {
+      const value = await LIVE.threadRoute(sid, route);
+      if (current()) state.value = value;
+    } catch (e) {
+      if (current()) { state.hidden = e.status === 409; state.error = { message: e.message, fix_url: e.fix_url }; }
+    } finally { if (current()) { state.busy = false; paint(); } }
   }
   /* Rename (long-press a thread, or tap the title inside it). James's name locks the thread: the agent keeps it. */
   const RENAME_SVG = '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>';
@@ -1792,6 +1858,7 @@ window.WizCore.chats = function createChats(H) {
     const state = threadState(s, TAG), working = state.working;
     const sub = isNew ? `Starts a new thread with ${agentName(TAG)}` : state.sub;
     const turns = (c.loadedFor === w.thread || c.cachedFor === w.thread) && turnsCurrent(c, s) ? c.turns || [] : null;
+    c.answerRouted = !!s?.answer_route || !!turns?.some(t => t.a?.route?.kind === 'opus-direct');
     c.media = []; c.texts = [];
     let msgs;
     // A message the transcript on screen already shows is never drawn again below it as pending: reopening a thread
@@ -1852,8 +1919,8 @@ window.WizCore.chats = function createChats(H) {
     PW?.ensureModels();
     // The model lives in the message box, bottom-right (James 18 Oct 2026); the header keeps the whole width for the title.
     // Miguel's skins (Dark, Light, Landscapes): a slide switch row above the composer replaces the in-box label.
-    const msw = PW?.modelSwitch && s !== undefined ? PW.modelSwitch(w, s) : '';
-    const mlabel = PW?.modelLabel && !msw ? PW.modelLabel(w, s) : '';
+    const msw = !directAnswer(w) && PW?.modelSwitch && s !== undefined ? PW.modelSwitch(w, s) : '';
+    const mlabel = PW?.modelLabel && !msw && !directAnswer(w) ? PW.modelLabel(w, s) : '';
     const chip = PW && !PW.modelLabel ? PW.modelChip(w, s) : '';
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
     const tacts = NV ? `<div class="ch-tacts" data-part="thread-actions">${NV.acts.map(a => { const A = NACT[a] || ACT[a]; return `<button type="button" data-chact="${a}" aria-label="${A.hint}" title="${A.hint}">${A.icon}<span>${A.label}</span></button>`; }).join('')}</div>`
@@ -1864,8 +1931,8 @@ window.WizCore.chats = function createChats(H) {
     const keepSheet = keptSheet(el);
     const openContexts = el.dataset.draftFor === dkey ? new Set([...el.querySelectorAll('[data-run-original][open]')].map(e => e.dataset.runOriginal)) : new Set();
     const threadHTML = `<div data-part="thread" class="ch-thread${TAG ? ' agent' : ''}${NV ? ' ch-notif-thread' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
-      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(NV ? NV.reply.title || NV.item?.title || 'Notification' : winTitle(w))}</b>`}${privTag}</div>${chip}<span data-slot="thread-header-actions"></span></div>
-      ${s && BOOM() ? BOOM().banner(s.id) : ''}<div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
+      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(NV ? NV.reply.title || NV.item?.title || 'Notification' : winTitle(w))}</b>`}${privTag}${answerControl(w)}</div>${chip}<span data-slot="thread-header-actions"></span></div>
+      ${answerNotice(answerState(w))}${s && BOOM() ? BOOM().banner(s.id) : ''}<div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
       ${msw ? `<div class="ch-swrow">${msw}<span data-slot="thread-switch-row-end"></span></div>` : '<div data-slot="thread-switch-row-end"></div>'}<form data-slot="composer-end" data-part="composer" class="ch-compose${hasContent(draft, c.files || []) ? ' has-text' : ''}${rpl ? ' has-reply' : ''}" data-chform>${replyBubble(rpl)}${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${mlabel}</div>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
     // A focused composer must never leave the page during a live repaint: iPhone Safari closes the keyboard the
@@ -2202,6 +2269,7 @@ window.WizCore.chats = function createChats(H) {
     const c = ch(w.id), sid = w.thread, nav = c.readNav;
     if (!sid || sid === '__new__' || (c.loading && c.loading.sid === sid && c.loading.nav === nav)) return;
     if (c.goneFor === sid && c.goneNav === nav) return; // answered 404 in this open: gone, not worth polling
+    readAnswerRoute(w);
     const s = LIVE.session(sid);
     // Cache finished history while its session revision is unchanged. Its existing session poll remains live;
     // any new message/activity/status immediately invalidates this cache, with a 60 s safety re-read.
@@ -2670,6 +2738,9 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-rspin]') && rowSheet?.sid) { const { sid } = rowSheet, on = PIN.toggle(sid); closeRowSheet(); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
     if (e.target.closest('[data-rsrename]') && rowSheet) { const { wid: rw, sid } = rowSheet; openRenameSheet(rw, sid); return true; }
     if (e.target.closest('[data-rncancel]') && rowSheet) { closeRowSheet(); return true; }
+    if (e.target.closest('[data-chanswer]')) { openAnswerSheet(w); return true; }
+    const answerPick = e.target.closest('[data-chanswerpick]');
+    if (answerPick && rowSheet?.answer && rowSheet.wid === id && rowSheet.sid === w.thread) { readAnswerRoute(w, answerPick.dataset.chanswerpick); return true; }
     if (e.target.closest('[data-chrename]') && w.thread && w.thread !== '__new__' && LIVE.session(w.thread)) { openRenameSheet(id, w.thread); return true; }
     if (e.target.closest('[data-rsopen]') && rowSheet) { const { wid: rw, sid } = rowSheet; closeRowSheet(); openChat(owner(rw), sid); return true; }
     // The lift that ends a long-press can land on the sheet's backdrop (the row sat under it): keep the sheet open.
