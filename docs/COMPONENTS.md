@@ -13,7 +13,7 @@ Reuse:
 Visual: <side-by-side screenshot, or "none">
 ```
 
-`Reuse: n/a (<reason>)` is accepted only when the PR changes nothing under `web/` or `android/`.
+`Reuse: n/a (reason)` requires no `web/` or `android/` changes.
 
 ## Apps (hosted frames: use only `WizardApp` from `/wizard-os-home/core/app-client.js`)
 
@@ -39,7 +39,7 @@ Visual: <side-by-side screenshot, or "none">
 | Motion, haptics, press feel | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own spring/haptic helpers | — |
 | App look: rows, sections, empty state, single-line add field | `WizardApp` swaps vendored `wizard-ui.css` for live `web/kit/wizard-ui.css` + `--wz-*`, then layers active skin (`core/skins.css`, package, My skin) after app styles | a forked kit; `.wz-field-row` as a chat composer; literal colours | two skins + My skin restyle the app's `.wz-*` rows live |
 
-## Shell (`web/core/`): both shells, all agent kinds. Per-kind variants are forks; declare EXTEND.
+## Shell (`web/core/`): both shells and all agents; per-kind variants must EXTEND.
 
 | Need | Use | Never hand-roll |
 |---|---|---|
