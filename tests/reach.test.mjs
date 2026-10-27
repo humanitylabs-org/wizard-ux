@@ -16,11 +16,12 @@ test('offline device is diagnosed only after the Wizard probe fails', async () =
   assert.equal((await h.api.diagnose()).layer, 'device-offline'); assert.equal(h.calls.length, 1);
   const falseOffline = setup({ online: false }); assert.equal((await falseOffline.api.diagnose()).layer, 'send');
 });
-test('an unreachable Wizard on a Tailscale address names Tailscale and never probes another site', async () => {
+test('an unreachable Wizard on a Tailscale address names Tailscale and the Wizard computer, and never probes another site', async () => {
   // Wizard's CSP (connect-src 'self') blocks cross-site requests, so a public-internet probe always "fails".
   const h = setup({ fetch: async url => { if (!url.startsWith('/')) throw Error('blocked by CSP'); throw Error('network'); } });
   const d = await h.api.diagnose();
-  assert.equal(d.layer, 'tailscale'); assert.equal(d.short, 'Check Tailscale · retrying'); assert.match(d.message, /Tailscale app/);
+  assert.equal(d.layer, 'tailscale'); assert.equal(d.short, 'Can’t reach Wizard · retrying');
+  assert.match(d.message, /Tailscale is on/); assert.match(d.message, /computer running your Wizard is on/);
   assert.equal(d.action, 'troubleshoot');
   assert.deepEqual(h.calls.map(c => c[0]), ['/troubleshoot/api/ping']);
   const local = setup({ hostname: '127.0.0.1', fetch: async () => { throw Error('network'); } });

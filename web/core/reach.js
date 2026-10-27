@@ -22,10 +22,10 @@
     catch (_) {
       if (navigator.onLine === false) return result('device-offline', 'Your device is offline. Messages are saved and will send when you reconnect.', 'Device offline · retrying');
       // No request to another site: Wizard's content security policy (connect-src 'self') blocks it, so it would
-      // always look like "no internet". On a Tailscale address, Tailscale is off or signed out far more often than
-      // the internet is down (and a phone removed from the tailnet lands here), so name it first.
+      // always look like "no internet". On a Tailscale address the page can't tell Tailscale being off (or this
+      // device removed from the network) from the Wizard's computer being off, so it names both.
       if (/\.ts\.net$/i.test(String(location.hostname || ''))) {
-        return result('tailscale', 'Can’t reach your Wizard. Open the Tailscale app on this device and make sure it’s on and signed in to the same account as your Wizard, and that this device has internet. Messages are saved and will send when it’s back.', 'Check Tailscale · retrying');
+        return result('tailscale', 'Can’t reach your Wizard. Check that Tailscale is on on this device and signed in to the same account as your Wizard, and that the computer running your Wizard is on. Messages are saved and will send when it’s back.', 'Can’t reach Wizard · retrying');
       }
       return result('unreachable', 'Can’t reach your Wizard server. Check this device’s connection. Messages are saved and will send when it’s back.', 'Can’t reach Wizard · retrying');
     }
