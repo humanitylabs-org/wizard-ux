@@ -52,7 +52,7 @@ const server = http.createServer(async(req,res) => {
  const base=`http://127.0.0.1:${server.address().port}`;
  const browser=await chromium.launch({headless:true});const results=[];
  try {
-  for (const skin of ['nebula','grove']) {
+  for (const skin of ['nebula','sepia']) {
    const ctx=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true,serviceWorkers:'block'});
    await ctx.addInitScript(skin=>{localStorage.setItem('wos.skin',skin);localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.v1','true');localStorage.setItem('wos.voiceTipSeen','true');},skin);
    const page=await ctx.newPage(), errors=[];page.on('pageerror',e=>errors.push(e.message));
