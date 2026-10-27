@@ -4,13 +4,15 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const source = readFileSync(new URL('../web/core/status.js', import.meta.url), 'utf8');
-function setup(online = true) {
+const failedProbe = async () => { throw new Error('probe unavailable'); };
+const turn = () => new Promise(resolve => setImmediate(resolve));
+function setup(online = true, fetch = failedProbe) {
   const events = {}, timers = new Map(), nodes = new Map();
   let tid = 0;
   const element = () => ({ classList: { toggle() {} }, dataset: {}, handlers: {}, addEventListener(name, fn) { this.handlers[name] = fn; }, appendChild(el) { nodes.set(el.id, el); } });
   const body = element();
   const L = { ok: false, at: 0, error: '', sessions: [], refreshes: 0, listeners: [], refresh() { this.refreshes++; }, onChange(fn) { this.listeners.push(fn); }, emit() { this.listeners.forEach(fn => fn()); } };
-  const ctx = { navigator: { onLine: online }, document: { body, documentElement: element(), getElementById(id) { return nodes.get(id); }, createElement: element }, addEventListener(name, fn) { (events[name] ||= []).push(fn); }, setTimeout(fn) { timers.set(++tid, fn); return tid; }, clearTimeout(id) { timers.delete(id); }, setInterval() {}, console };
+  const ctx = { navigator: { onLine: online }, document: { body, documentElement: element(), getElementById(id) { return nodes.get(id); }, createElement: element }, addEventListener(name, fn) { (events[name] ||= []).push(fn); }, setTimeout(fn) { timers.set(++tid, fn); return tid; }, clearTimeout(id) { timers.delete(id); }, setInterval() {}, AbortSignal: { timeout() { return {}; } }, fetch, console };
   ctx.window = ctx; ctx.WizLive = L;
   ctx.WizReach = { calls: 0, opened: 0, failure() { this.calls++; return { message: 'Wizard’s Agent Service isn’t responding.', short: 'Agent Service needs attention · retrying' }; }, open() { this.opened++; } };
   ctx.WosOutbox = { waiting: false, retries: 0, listeners: [], unsent() { return this.waiting ? [{ state: 'waiting' }] : []; }, onChange(fn) { this.listeners.push(fn); }, retryAll() { this.retries++; } };
@@ -71,4 +73,29 @@ test('a waiting item the outbox can no longer retry never holds the retrying ban
   assert.equal(h.ctx.document.getElementById('wxBanners').hidden, true);
   O.canRetry = () => true; O.listeners.forEach(fn => fn());
   assert.match(h.ctx.document.getElementById('wxBanners').innerHTML, /data-wxnet="reconnecting"/);
+});
+test('Retry queues a fresh verification when a stale degraded probe is still in flight', async () => {
+  let calls = 0, resolveFirst;
+  const fetch = () => {
+    calls++;
+    if (calls === 1) return new Promise(resolve => { resolveFirst = resolve; });
+    return Promise.resolve({ ok: true, json: async () => ({ overall: 'ok' }) });
+  };
+  const h = setup(true, fetch); h.success(); h.ctx.navigator.onLine = false; h.event('offline');
+  assert.equal(calls, 1); assert.equal(h.state(), 'offline');
+  const banner = h.ctx.document.getElementById('wxBanners');
+  banner.handlers.click({ target: { closest: sel => sel === '[data-wxretry]' } });
+  assert.equal(calls, 1);
+  resolveFirst({ ok: true, json: async () => ({ overall: 'degraded' }) });
+  await turn(); await turn();
+  assert.equal(calls, 2); assert.equal(h.state(), 'restored');
+});
+test('a probe from before a newer offline event cannot clear the newer failure', async () => {
+  let calls = 0, resolveProbe;
+  const fetch = () => { calls++; return new Promise(resolve => { resolveProbe = resolve; }); };
+  const h = setup(true, fetch); h.success(); h.ctx.navigator.onLine = false;
+  h.event('offline'); h.event('offline');
+  resolveProbe({ ok: true, json: async () => ({ overall: 'ok' }) });
+  await turn(); await turn();
+  assert.equal(calls, 1); assert.equal(h.state(), 'offline');
 });
