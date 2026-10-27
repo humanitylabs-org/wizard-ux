@@ -92,6 +92,11 @@ export default function setup(api) {
     return { id: 'storage', name: t.kind === 'r2' ? 'Cloudflare R2' : t.kind === 's3' ? 'S3 storage' : 'Backup storage', kind: 'cloud', cloud: true,
       state, age, every: b.every, at: b.at, say: b.say || '', failed: last.ok === false, lastError: last.ok === false, enabled: !!b.enabled };
   }
+  // Every machine besides Main is a helper. One that qualifies to take over (Backup app's check) sits on the right as a
+  // standby device; the rest stay on the left. Qualifying is the Backup app's verdict, never guessed here.
+  const qualOf = id => (S.backup?.standby?.machines || []).find(x => x.id === id) || null;
+  const qualifies = id => /^(ok|yes|ready|fits)$/i.test(qualOf(id)?.verdict || '');
+  const helperIds = () => devices().filter(d => d.id !== MAIN).map(d => d.id);
   function standbyOf(id) {
     const m = machine(id), raw = devOf(id)?.name, warn = (S.backup?.standby?.space_warnings || []).find(w => w.machine === raw || w.machine === m.name);
     const reach = m.status === 'online';
@@ -134,16 +139,24 @@ export default function setup(api) {
   // shows the counts inside Main; tapping opens the same lists those cards open.
   const sessions = () => api.data.read.sessions?.counts() || { working: 0, ready: 0 };
   const backupRunning = () => Array.isArray(S.backup?.active) && S.backup.active.length > 0;
-  // AI fuel: one tank per AI service, shared by every machine. Level = weekly allowance left, averaged over its accounts.
+  // AI fuel: one battery per subscription (every ChatGPT and Claude account, Tinfoil credit), shared by every machine.
+  // Level = the tightest weekly allowance left; for prepaid credit, balance of the top-up.
   function fuel() {
-    const fam = new Map();
+    const out = [];
     for (const p of S.res.ai?.providers || []) {
-      const ls = Array.isArray(p.limits) ? p.limits : [];
-      const w = ls.find(l => /week/i.test(l.label)) || ls.reduce((a, l) => !a || l.remainingPercent < a.remainingPercent ? l : a, null);
-      if (!w) continue;
-      const f = fam.get(p.provider) || { name: p.providerName, left: [] }; f.left.push(w.remainingPercent); fam.set(p.provider, f);
+      const ls = Array.isArray(p.limits) ? p.limits : [], wk = ls.filter(l => /week/i.test(l.label));
+      const pick = (wk.length ? wk : ls).reduce((a, l) => !a || l.remainingPercent < a.remainingPercent ? l : a, null);
+      let left = pick ? pick.remainingPercent : null, what = pick ? `${pick.label} left` : '';
+      const paid = p.paid;
+      if (left == null && paid && paid.type === 'credits' && paid.limitMinor > 0 && paid.balanceMinor != null) {
+        left = Math.round(100 * paid.balanceMinor / paid.limitMinor);
+        what = `$${(paid.balanceMinor / 10 ** (paid.exponent ?? 2)).toFixed(2)} credit left`;
+      }
+      if (left == null) continue;
+      const who = String(p.name || '').split('@')[0];
+      out.push({ id: p.id, group: p.providerName, who: who && who !== p.providerName ? who : '', left: Math.round(left), what });
     }
-    return [...fam.entries()].map(([id, f]) => ({ id, name: f.name, n: f.left.length, left: Math.round(f.left.reduce((a, b) => a + b, 0) / f.left.length) }));
+    return out;
   }
 
   /* ---------- skeleton ---------- */
@@ -156,9 +169,9 @@ export default function setup(api) {
   const [laneSt, rowSt] = lane('is-storage', 'Storage'), [laneMn, rowMn] = lane('is-mainrow', 'Main and standby'), [laneHp, rowHp] = lane('is-people', 'People');
   const map = h('div', { cls: 'mh-map' }, lines, laneSt, laneMn, laneHp);
   const note = h('div', { cls: 'mh-managed', hidden: true });
-  const fuelBar = h('button', { type: 'button', cls: 'mh-fuel', hidden: true, data: { resOpen: 'ai' }, 'aria-label': 'AI fuel, shared by every machine' });
-  const legend = h('p', { cls: 'mh-legend', 'aria-hidden': 'true' }, h('i', { cls: 'cpu' }), 'CPU', h('i', { cls: 'mem' }), 'Memory', h('i', { cls: 'disk' }), 'Disk', h('span', { cls: 'sep' }), 'Size = power');
-  const stage = h('div', { cls: 'mh-stage' }, oneway, fuelBar, map, legend, note);
+  const fuelBar = h('button', { type: 'button', cls: 'mh-fuel', hidden: true, data: { resOpen: 'ai' }, 'aria-label': 'AI subscriptions left, shared by every machine' });
+  const compute = h('div', { cls: 'mh-compute', hidden: true });
+  const stage = h('div', { cls: 'mh-stage' }, oneway, fuelBar, map, compute, note);
   const panel = h('aside', { cls: 'mh-panel', 'aria-live': 'polite' });
   const body = h('div', { cls: 'mh-body' }, stage, panel);
   const sheetIn = h('div', { cls: 'mh-sheet-in' });
@@ -183,22 +196,29 @@ export default function setup(api) {
   function renderFuel() {
     const rows = S.ws === 'mine' ? fuel() : [];
     fuelBar.hidden = !rows.length;
-    fuelBar.replaceChildren(h('span', { cls: 'mh-fuel-k' }, ico('bolt'), h('span', { text: 'AI fuel' })),
-      ...rows.map(r => h('span', { cls: 'mh-tank', data: { s: r.left <= 10 ? 'no' : r.left <= 25 ? 'tight' : 'ok' }, title: `${r.name}: ${r.left}% of this week left${r.n > 1 ? ` (${r.n} accounts)` : ''}` },
-        h('span', { cls: 'mh-tank-n', text: r.name }), h('span', { cls: 'mh-tank-g', style: { '--f': r.left + '%' } }, h('i')), h('b', { text: r.left + '%' }))));
+    const groups = [];
+    for (const r of rows) { let g = groups.find(x => x.name === r.group); if (!g) groups.push(g = { name: r.group, rows: [] }); g.rows.push(r); }
+    fuelBar.replaceChildren(...groups.map(g => h('span', { cls: 'mh-fgroup' }, h('span', { cls: 'mh-fname', text: g.name }),
+      ...g.rows.map(r => h('span', { cls: 'mh-tank', data: { s: r.left <= 10 ? 'no' : r.left <= 25 ? 'tight' : 'ok' }, title: `${g.name}${r.who ? ' · ' + r.who : ''}: ${r.left}% ${r.what}` },
+        h('span', { cls: 'mh-tank-g', style: { '--f': r.left + '%' } }, h('i')), h('b', { text: r.left + '%' }), r.who && g.rows.length > 1 ? h('small', { text: r.who }) : null)))));
   }
-  // Compute on a machine: three thin arcs around its disc (outside in: CPU, memory, disk), each filled to its use.
-  function gauges(m) {
-    if (m.cpu == null && m.mem == null && m.disk == null) return null;
-    const s = sv('svg', { class: 'mh-use', viewBox: '0 0 100 100', 'aria-hidden': 'true' });
-    [['cpu', m.cpu, 48], ['mem', m.mem, 43.5], ['disk', m.disk, 39]].forEach(([k, v, r]) => {
-      if (v == null) return;
-      const C = 2 * Math.PI * r;
-      sv('circle', { class: 't ' + k, cx: 50, cy: 50, r }, s);
-      const c = sv('circle', { class: 'v ' + k, cx: 50, cy: 50, r, 'stroke-dasharray': `${(C * clamp(v / 100, .015, 1)).toFixed(1)} ${C.toFixed(1)}` }, s);
-      c.style.setProperty('--c', C.toFixed(1));
-    });
-    return s;
+  // Compute across machines: one stacked bar per resource, a segment per machine sized by its capacity and
+  // filled to what it uses (the shell's Agent devices chart, Miguel's pick).
+  function renderCompute() {
+    const ds = S.ws === 'mine' ? devices().filter(d => d.status === 'online' && d.memoryTotalGB) : [];
+    compute.hidden = !ds.length;
+    if (!ds.length) return;
+    const rows = [
+      ['Memory', d => d.memoryTotalGB, d => d.memoryUsedGB ?? d.memoryTotalGB * (d.memory || 0) / 100, v => `${Math.round(v)} GB`],
+      ['Disk', d => diskGB(d), d => (diskGB(d) || 0) - (freeGB(d) || 0), gbFmt],
+      ['CPU', d => d.cpus, d => (d.cpus || 0) * (d.cpu || 0) / 100, v => `${Math.round(v)} cores`]];
+    compute.replaceChildren(...rows.map(([k, cap, used, fmt], ri) => {
+      const parts = ds.map(d => ({ d, c: +cap(d) || 0, u: Math.max(0, +used(d) || 0) })).filter(x => x.c > 0);
+      const C = parts.reduce((a, x) => a + x.c, 0), U = parts.reduce((a, x) => a + Math.min(x.u, x.c), 0);
+      return h('div', { cls: 'mh-crow' }, h('div', { cls: 'mh-ch' }, h('span', { text: k }), h('span', { text: `${fmt(C - U)} free of ${fmt(C)}` })),
+        h('div', { cls: 'mh-cbar' }, parts.map(x => h('span', { cls: 'mh-cseg', style: { 'flex-grow': String(x.c) }, title: `${pretty(x.d.name)}: ${fmt(x.u)} of ${fmt(x.c)} used` },
+          h('i', { style: { '--f': (100 * Math.min(1, x.u / x.c)).toFixed(1) + '%' } }), ri === 0 ? h('small', { text: pretty(x.d.name) }) : null))));
+    }));
   }
   // Sessions inside Main: one orbiting dot per working session (they circle while the agent works), and two taps
   // under it that open the same Working / Ready lists as the Home cards did.
@@ -225,8 +245,7 @@ export default function setup(api) {
   function node(m, role, opts = {}) {
     const s = opts.size || sizeOf(m, role), fit = opts.fit || '';
     const disc = h('span', { cls: 'mh-disc' }, ico(m.kind));
-    const use = role === 'storage' ? null : gauges(m);
-    if (use) disc.append(use);
+    const use = null;
     if (role === 'main' && opts.sessions) { const o = orbit(opts.sessions.working); if (o) disc.append(o); }
     if (role !== 'main' && fit) { if (!use) disc.append(ring({ ok: 1, tight: .62, no: .3 }[fit])); disc.append(h('span', { cls: 'mh-badge', 'aria-hidden': 'true' }, fit === 'ok' ? ico('check') : h('b', { text: '!' }))); }
     const el = h('button', { type: 'button', cls: `mh-node is-${role}`, data: { id: m.id, role, fit }, 'aria-pressed': String(S.sel === m.id), 'aria-label': `${m.name}, ${opts.roleText || role}`, style: { '--s': String(s) } },
@@ -250,16 +269,18 @@ export default function setup(api) {
       // Their network's shape, honestly empty: the rows are there, what fills them is not readable yet.
       const ghost = (role, label) => { const n = plus(role, label, SOON); n.dataset.act = 'soon'; n.dataset.what = `${g.name}’s ${label.toLowerCase()}`; n.classList.add('is-ghost'); return n; };
       setLane(rowMn, [ghost('helper', 'Helpers'), node({ id: 'managed-' + g.id, name: g.name, kind: 'server' }, 'main', { size: 72, roleText: 'Main' }), ghost('standby', 'Standby devices')]);
-      setLane(rowSt, [ghost('storage', 'Storage')]); setLane(rowHp, [managedPeople(g)].filter(Boolean));
+      setLane(rowSt, [ghost('storage', 'Storage')]); setLane(rowHp, [managedPeople(g)].filter(Boolean)); renderCompute();
       panel.replaceChildren(managedCard(g, true));
       api.frame(drawLines); return;
     }
-    const main = machine(MAIN), st = storage(), sbs = usedAs('standby').map(standbyOf), hps = usedAs('helper');
+    const main = machine(MAIN), st = storage(), sbs = helperIds().filter(qualifies).map(standbyOf), hps = helperIds().filter(id => !qualifies(id));
     // Only a real answer from the Backup app may say "no storage yet"; a failed read says so instead.
     setLane(rowSt, st ? [node(st, 'storage', { fit: st.state, roleText: 'Storage' })] : S.backup?.backup ? [plus('storage', 'Add storage', 'Holds encrypted backups')]
       : [h('p', { cls: 'mh-wait', text: S.backupErr ? 'Backup status unavailable right now' : 'Checking backups…' })]);
-    const helpers = hps.length ? hps.map(id => node(machine(id), 'helper', { roleText: 'Helper device' })) : [plus('helper', 'Add helper', SOON)];
-    setLane(rowMn, [...helpers, node(main, 'main', { roleText: 'Main', sessions: sessions() }), ...sbs.map(m => node(m, 'standby', { fit: m.fit, roleText: 'Standby device', state: m.fit === 'ok' ? 'Ready' : 'Not ready' }))]);
+    const helpers = hps.length ? hps.map(id => node(machine(id), 'helper', { roleText: 'Helper' })) : [plus('helper', 'Add helper', SOON)];
+    const standbys = sbs.length ? sbs.map(m => node(m, 'standby', { fit: m.fit, roleText: 'Standby device', state: m.fit === 'ok' ? 'Ready' : 'Not ready' })) : [plus('standby', 'Standby device', 'None qualifies yet')];
+    setLane(rowMn, [...helpers, node(main, 'main', { roleText: 'Main', sessions: sessions() }), ...standbys]);
+    renderCompute();
     setLane(rowHp, [minePeople()].filter(Boolean));
     if (wide()) { if (!S.sel) S.sel = 'this'; panel.replaceChildren(card(S.sel)); }
     api.frame(drawLines);
@@ -304,7 +325,7 @@ export default function setup(api) {
       if (st.state === 'no') line(d, 'slot', 'var(--mh-bad)', 'none yet');
       // The comet runs only while a backup is actually uploading; at rest the line just carries the last copy's age.
       else if (backupRunning()) line(d, 'backup', 'var(--mh-accent)', 'backing up', true);
-      else line(d, 'backup', st.state === 'ok' ? 'var(--mh-accent)' : 'var(--mh-warn)', agoS(st.age), false);
+      else line(d, 'backup', st.state === 'ok' ? 'var(--mh-accent)' : 'var(--mh-warn)', agoS(st.age) + ' ago', false);
     }
     // Standby (beside): a level line from Main's disc edge. Dashed and labelled while nothing reaches it.
     const row = [...rowMn.children], mi = row.indexOf(mainEl);
@@ -363,7 +384,7 @@ export default function setup(api) {
         h('div', { cls: 'mh-actions' }, btn('Back up now', null, 'Back up now'), btn('Restore', 'restore', 'Restore')));
     }
     if (id === MAIN) {
-      const m = machine(MAIN), st = storage(), sbs = usedAs('standby').map(standbyOf);
+      const m = machine(MAIN), st = storage(), sbs = helperIds().filter(qualifies).map(standbyOf);
       const to = [];
       if (st) to.push(rowBtn(st, 'Storage', st.age == null ? 'none yet' : agoL(st.age), st.state === 'ok' ? 'ok' : st.state === 'no' ? 'no' : 'tight', 'storage'));
       for (const s of sbs) to.push(rowBtn(s, 'Standby', s.fit === 'ok' ? 'ready' : 'not ready', s.fit === 'ok' ? 'ok' : 'tight', s.id));
@@ -372,17 +393,15 @@ export default function setup(api) {
         m.status !== 'online' ? fitBox('tight', 'Readings unavailable right now') : null,
         h('p', { cls: 'mh-sec-h', text: 'Backups go to' }), to.length ? h('ul', { cls: 'mh-rows' }, to) : fitBox('tight', 'No backups yet', 'lock'));
     }
-    if (usedAs('standby').includes(id)) {
-      const s = standbyOf(id), need = S.backup?.standby?.minimum;
-      return h('div', { cls: 'mh-card' }, head(s, 'Standby'),
-        s.fit === 'ok' ? fitBox('ok', 'Ready to take over') : fitBox('tight', 'Not ready to take over'),
-        facts([['Reachable', s.reach ? 'Yes' : s.status === 'unreachable' ? 'No · can’t sign in' : 'Unknown', s.reach ? '' : 'warn'],
-          s.warn ? ['Space', s.warn.fits === false ? 'Too small' : 'Fits', s.warn.fits === false ? 'warn' : ''] : null,
-          s.warn?.total_gb ? ['Disk', `${gbFmt(s.warn.free_gb)} free of ${gbFmt(s.warn.total_gb)}`] : null,
-          need ? ['Needs', `${need.cores} cores · ${need.ram_gb} GB · ${gbFmt(need.free_gb)} free`] : null,
-          ['Backups here', 'Not set up yet', 'warn']]),
-        s.warn?.say ? h('p', { cls: 'mh-note', text: s.warn.say }) : null,
-        h('div', { cls: 'mh-actions' }, btn('Make this my Main', 'swap', 'Make this my Main', s.fit === 'ok' ? 'primary' : ''), btn('Restore here', 'restore', 'Restore here')));
+    if (helperIds().includes(id)) {
+      const s = standbyOf(id), q = qualOf(id), ok = qualifies(id), need = S.backup?.standby?.minimum;
+      const why = q?.say || (s.reach ? 'Not checked yet' : 'Can’t reach it to check');
+      const make = h('button', { type: 'button', cls: 'mh-btn' + (ok ? ' primary' : ''), disabled: !ok, title: ok ? '' : why, data: ok ? { act: 'soon', what: 'Make this a standby device' } : {} }, ico('swap'), 'Make this a standby device');
+      return h('div', { cls: 'mh-card' }, head(s, ok ? 'Standby device' : 'Helper'),
+        s.cpu != null ? usage([['CPU', 'cpu', s.cpu, s.cores ? `${s.cores} cores` : ''], ['Memory', 'mem', s.mem, s.ramGB ? `${s.ramUsedGB ?? '?'} / ${s.ramGB} GB` : ''], ['Disk', 'disk', s.disk, s.diskGB ? `${gbFmt(s.diskGB - (s.freeGB || 0))} / ${gbFmt(s.diskGB)}` : '']]) : fitBox('tight', s.reach ? 'Readings unavailable right now' : 'Can’t reach it right now'),
+        ok ? fitBox('ok', 'Can take over if Main fails') : fitBox('tight', why),
+        q?.checks?.length ? h('ul', { cls: 'mh-facts' }, q.checks.map(c => h('li', { cls: c.ok ? '' : 'warn' }, h('span', { cls: 'k', text: c.ok ? '✓' : '✕' }), h('span', { cls: 'v', text: c.say })))) : need ? facts([['Standby needs', `${need.cores} cores · ${need.ram_gb} GB · ${gbFmt(need.free_gb)} free`]]) : null,
+        h('div', { cls: 'mh-actions' }, make));
     }
     return h('div', { cls: 'mh-card' });
   }
@@ -433,7 +452,7 @@ export default function setup(api) {
   /* ---------- data ---------- */
   // Repaint the map only when what it draws changed (roles, reachability, sizes, backup age); cards follow every poll.
   let drawn = '';
-  const mapSig = () => JSON.stringify([S.ws, sessions(), backupRunning(), fuel(), devices().map(d => [d.cpu, d.memory, d.disks?.[0]?.pct].map(v => v == null ? null : Math.round(v / 5))), managedList().map(m => [m.id, peopleOf(m).names, peopleOf(m).count]), devices().map(d => [d.id, d.status, d.cpus, d.memoryTotalGB, diskGB(d)]), humans().map(p => [p.name, p.online]),
+  const mapSig = () => JSON.stringify([S.ws, (S.backup?.standby?.machines || []).map(x => [x.id, x.verdict]), sessions(), backupRunning(), fuel(), devices().map(d => [d.cpu, d.memory, d.disks?.[0]?.pct].map(v => v == null ? null : Math.round(v / 5))), managedList().map(m => [m.id, peopleOf(m).names, peopleOf(m).count]), devices().map(d => [d.id, d.status, d.cpus, d.memoryTotalGB, diskGB(d)]), humans().map(p => [p.name, p.online]),
     S.backupErr, S.backup?.backup ? [S.backup.backup.state, S.backup.backup.last?.last_success_at, storage()?.age == null ? null : agoS(storage().age)] : !!S.backup, (S.backup?.standby?.space_warnings || []).map(w => w.fits)]);
   const read = state => {
     if (state) S.res = state;

@@ -86,6 +86,8 @@ test('machines-home: storage above, helpers | Main | standby across, people belo
   assert.match(src, /g\?\.peopleCount/); assert.match(src, /g\?\.people\)/);
   assert.match(css, /\.mh-pnode \{/); assert.match(css, /\.mh-spec \{/);
   assert.match(src, /roleText: 'Standby device', state: m\.fit === 'ok' \? 'Ready' : 'Not ready'/, 'category label and status are separate');
+  assert.match(src, /sbs = helperIds\(\)\.filter\(qualifies\)/, 'a helper that qualifies sits right as a standby device');
+  assert.match(src, /disabled: !ok/, 'Make this a standby device is greyed out unless it qualifies');
 });
 test('machines-home: sessions live in Main, AI fuel is shared on top, compute arcs per machine, backup comet only while running', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), css = read('web/tweaks/miguel/machines-home/tweak.css');
@@ -98,6 +100,8 @@ test('machines-home: sessions live in Main, AI fuel is shared on top, compute ar
   assert.match(src, /data: \{ resOpen: 'ai' \}/, 'AI fuel opens the shell AI sheet');
   assert.match(src, /backupRunning\(\)\) line\(d, 'backup', 'var\(--mh-accent\)', 'backing up', true\)/);
   assert.match(src, /note\.hidden = true;/, 'no info card under a managed Wizard diagram');
-  for (const k of ['.mh-orbit', '.mh-use', '.mh-tank-g']) assert.ok(css.includes(k + ' '), k);
+  for (const k of ['.mh-orbit', '.mh-cbar', '.mh-tank-g']) assert.ok(css.includes(k + ' '), k);
+  assert.doesNotMatch(src, /'AI fuel'/, 'no label on the batteries');
+  assert.match(src, /paid\.type === 'credits'/, 'prepaid credit (Tinfoil) gets a battery too');
   for (const b of ['setTimeout', 'setInterval', 'requestAnimationFrame', 'innerHTML', 'localStorage']) assert.ok(!src.includes(b), b);
 });
