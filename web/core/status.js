@@ -91,7 +91,10 @@
   }
   function fromLive() {
     const L = LIVE(); if (!L) return;
-    if (L.at && L.at !== liveEvidenceAt) { liveEvidenceAt = L.at; evidenceGeneration++; }
+    // A failed read leaves L.at alone, so failures carry their own errorAt: any new live
+    // result (success or failure) invalidates a Wizard probe that started before it.
+    const liveAt = Math.max(L.at || 0, L.errorAt || 0);
+    if (liveAt && liveAt !== liveEvidenceAt) { liveEvidenceAt = liveAt; evidenceGeneration++; }
     if (L.ok && !L.error && L.at > offlineReadAt) return setNet('online');
     if (navigator.onLine === false) return setNet('offline');
     if (L.error) { if (net !== 'offline' || navigator.onLine) setNet('reconnecting'); return; }

@@ -104,9 +104,14 @@ test('a probe from before a newer failed live read cannot hide that failure', as
   const fetch = () => { calls++; return new Promise(resolve => { resolveProbe = resolve; }); };
   const h = setup(true, fetch); h.success(); h.ctx.navigator.onLine = false; h.event('offline');
   h.ctx.navigator.onLine = true;
-  h.L.at++; h.L.ok = false; h.L.error = 'offline'; h.L.emit();
+  // Like web/live.js: a failed read sets errorAt and leaves `at` (last success) unchanged.
+  h.L.errorAt = Date.now() + 1; h.L.ok = false; h.L.error = 'offline'; h.L.emit();
   assert.equal(h.state(), 'reconnecting');
   resolveProbe({ ok: true, json: async () => ({ overall: 'ok' }) });
   await turn(); await turn();
   assert.equal(calls, 1); assert.equal(h.state(), 'reconnecting');
+});
+test('live.js stamps failed reads so status can order them against probes', () => {
+  const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
+  assert.match(live, /this\.error = e\.status === 403 \? 'access' : 'offline'; this\.errorAt = Date\.now\(\);/);
 });
