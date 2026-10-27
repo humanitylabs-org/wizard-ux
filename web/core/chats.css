@@ -268,6 +268,13 @@ a.fchip { color: inherit; text-decoration: none; }
 /* Message text is selectable and copyable (the shell itself stays non-selectable). */
 .msg .bub, .msg .bub *, .msg .an-body, .msg .an-body *, .msg .rc-body, .msg .rc-body *, .note-line, .appr pre, .mviewer .mv-doc, .wk-steps li > span, .wk-plan li > span { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; }
 .msg .bub button, .msg .bub button * { user-select: none; -webkit-user-select: none; }
+.ch-steps { list-style: none; margin: 0 0 4px; padding: 0; display: grid; gap: 2px; font-size: 12px; color: var(--ink-3); }
+.ch-steps li { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+.ch-steps li::before { content: '…'; width: 12px; flex: none; text-align: center; }
+.ch-steps li.done::before { content: '✓'; }
+.ch-steps li.err::before { content: '!'; }
+.ch-steps b { font-weight: 600; color: var(--ink-2, var(--ink)); flex: none; }
+.ch-steps span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-family: ui-monospace, monospace; font-size: 11px; }
 .mmeta { display: flex; align-items: center; gap: 2px; margin-top: 3px; min-height: 0; font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .msg.u .mmeta { padding-right: 4px; }
 .mmeta time { padding: 0 4px; }
