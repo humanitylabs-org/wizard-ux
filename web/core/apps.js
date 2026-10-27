@@ -63,6 +63,9 @@
     sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [] },
   });
   let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).map(toTile); } catch (e) { return []; } })();
+  // True once this device has read the box's app list (now or cached from an earlier read): "not installed" means something.
+  let KNOWN = (() => { try { return localStorage.getItem(REMOTE_KEY) != null; } catch (e) { return false; } })();
+  window.WizCore.appsKnown = () => KNOWN;
   // The Agent Service is Wizard itself, not an app the owner manages.
   const BACK_KEY = 'wux.apps.backend.v1', BACK_HIDDEN = new Set(['wizard-agent-service']);
   window.WizCore.appMetadata = id => [...REMOTE, ...BACK].find(a => a.id === id)?.sigil;
@@ -102,7 +105,7 @@
       // Backend-only apps (no page of their own): listed only by skins that show them (Miguel's skins, app.js).
       const back = all.filter(a => !a.url && !BACK_HIDDEN.has(a.id) && !window.WizCore.isMaintenanceApp?.(a));
       try { localStorage.setItem(REMOTE_KEY, JSON.stringify(list)); localStorage.setItem(BACK_KEY, JSON.stringify(back)); } catch (e) {}
-      REMOTE = list.map(a => toTile(a, true));
+      REMOTE = list.map(a => toTile(a, true)); KNOWN = true;
       BACK = back.map(a => toTile(a));
       listeners.forEach(fn => fn());
     } catch (e) {}

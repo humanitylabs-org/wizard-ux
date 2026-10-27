@@ -29,9 +29,8 @@ const ICONS = {
 };
 const SVG = 'http://www.w3.org/2000/svg';
 
-// Shared by Miguel's skin (miguel/machines-home), which keeps its own look. `missingBackup`: what Storage shows
-// when the Backup app gives no answer: 'add' (an empty slot to fill) or 'unavailable' (say the read failed).
-export function machinesHome(api, { missingBackup = 'add' } = {}) {
+// Shared by Miguel's skin (miguel/machines-home), which keeps its own look.
+export function machinesHome(api) {
   if (!api.data?.read || !api.slot) return () => {};  // needs the trusted Devices / Backup reads and the Home slot
   const S = { ws: api.storage.get('ws') || 'mine', sel: null, res: {}, backup: null, backupErr: false, backupTried: 0, sheet: null };
   let releaseBack = null;
@@ -170,9 +169,9 @@ export function machinesHome(api, { missingBackup = 'add' } = {}) {
       api.frame(drawLines); return;
     }
     const main = machine(MAIN), st = storage(), sbs = usedAs('standby').map(standbyOf), hps = usedAs('helper');
-    // Only a real answer from the Backup app may say "no storage yet"; without the app (no answer ever) Storage is an
-    // empty slot to fill, unless this Home was asked to call a failed read unavailable.
-    const noApp = !S.backup && S.backupErr && missingBackup === 'add';
+    // Only a real answer from the Backup app may say "no storage yet"; only the box's app list saying it has no Backup
+    // app makes Storage an empty slot to fill. A failed read with the app installed (or an unknown list) says so.
+    const noApp = !S.backup && S.backupErr && S.backupApp === false;
     setLane(rowSt, st ? [node(st, 'storage', { fit: st.state, roleText: 'Storage' })] : S.backup?.backup || noApp ? [plus('storage', 'Add storage', 'Holds encrypted backups')]
       : [h('p', { cls: 'mh-wait', text: S.backupErr ? 'Backup status unavailable right now' : 'Checking backups…' })]);
     setLane(rowMn, [node(main, 'main', { roleText: 'Main' }), ...sbs.map(m => node(m, 'standby', { fit: m.fit, roleText: m.fit === 'ok' ? 'Standby' : 'Not ready' }))]);
@@ -329,7 +328,8 @@ export function machinesHome(api, { missingBackup = 'add' } = {}) {
   /* ---------- data ---------- */
   // Repaint the map only when what it draws changed (roles, reachability, sizes, backup age); cards follow every poll.
   let drawn = '';
-  const mapSig = () => JSON.stringify([S.ws, devices().map(d => [d.id, d.status, d.cpus, d.memoryTotalGB, diskGB(d)]), humans().map(p => [p.name, p.online]),
+  const mapSig = () => JSON.stringify([S.ws, devices().map(d => [d.id, d.name, d.use, d.status, d.cpus, d.memoryTotalGB, diskGB(d)]), humans().map(p => [p.name, p.online]),
+    managedList().map(m => [m.id, m.name]), S.backupApp,
     S.backupErr, S.backup?.backup ? [S.backup.backup.state, S.backup.backup.last?.last_success_at, storage()?.age == null ? null : agoS(storage().age)] : !!S.backup, (S.backup?.standby?.space_warnings || []).map(w => w.fits)]);
   const read = state => {
     if (state) S.res = state;
@@ -341,7 +341,8 @@ export function machinesHome(api, { missingBackup = 'add' } = {}) {
   async function readBackup(force) {
     const now = Date.now(); if (!force && now - S.backupTried < 60000) return; S.backupTried = now;
     const j = await api.data.read.app('backup', 'overview');
-    if (j && j.backup && typeof j.backup === 'object') { S.backup = j; S.backupErr = false; } else S.backupErr = true;  // keep the last good answer
+    if (j && j.backup && typeof j.backup === 'object') { S.backup = j; S.backupErr = false; S.backupApp = true; }
+    else { S.backupErr = true; S.backupApp = await api.data.read.installed('backup'); }  // keep the last good answer
     read();
   }
   api.data.read.resources.watch(state => { read(state); readBackup(); });

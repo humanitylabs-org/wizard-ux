@@ -17,9 +17,11 @@ const network = { devices: {
   network: { available: true, peers: [{ name: 'phone', os: 'iOS', group: 'human', online: true }, { name: 'build', os: 'linux', group: 'agent', online: true }] } } };
 const backupOk = { backup: { configured: true, enabled: true, every: 'daily', state: 'ok', target: { kind: 'r2' }, last: { ok: true, finished_at: Date.now() / 1000 - 3600 } } };
 
-async function home(id, state, backup, also = []) {
+// apps: the box's app list (ids) as the shell knows it; null = never read on this device.
+async function home(id, state, backup, { also = [], apps = [] } = {}) {
   const f = fixture();
   f.ctx.window.WosResources.state = state;
+  f.ctx.window.WizCore = { appsLoaded: async () => {}, appsKnown: () => apps !== null, appMetadata: x => (apps || []).includes(x) ? { id: x } : undefined };
   const fetchTweak = f.ctx.fetch, asked = [];
   f.ctx.fetch = async (url, opts) => {
     if (String(url).includes('/tweaks/')) return fetchTweak(String(url), opts);
@@ -68,19 +70,63 @@ test('a standby but no helper offers the next slot; a Backup app that is not set
   await h.f.clear();
 });
 
-test("Miguel's package reuses the same map and keeps his one difference: a failed read says unavailable", async () => {
-  const h = await home('miguel/machines-home', mainOnly, undefined);
+test('a failed read with the Backup app installed (or an unknown app list) says unavailable, never "Add storage"', async () => {
+  for (const apps of [['backup'], null]) {
+    const h = await home(MH, mainOnly, undefined, { apps });
+    assert.deepEqual(h.roles, ['main'], `apps ${JSON.stringify(apps)}`);
+    assert.match(text(h.lane('is-storage')), /Backup status unavailable right now/);
+    await h.f.clear();
+  }
+});
+
+test("Miguel's package runs the same map (his look stays in his own tweak.css)", async () => {
+  const h = await home('miguel/machines-home', network, backupOk, { apps: ['backup'] });
   assert.equal(h.roots.length, 1);
-  assert.deepEqual(h.roles, ['main']);
-  assert.match(text(h.lane('is-storage')), /Backup status unavailable right now/);
+  assert.deepEqual(h.roles, ['storage', 'main', 'standby', 'helper']);
   await h.f.clear();
   const src = read('web/tweaks/miguel/machines-home/tweak.js');
   assert.match(src, /import \{ machinesHome \} from '\.\.\/\.\.\/wizard\/machines-home\/tweak\.js';/);
-  assert.match(src, /machinesHome\(api, \{ missingBackup: 'unavailable' \}\)/);
+  assert.match(src, /export default function setup\(api\) \{ return machinesHome\(api\); \}/);
+});
+
+test('a role, name or managed-list change alone redraws the map', async () => {
+  const state = structuredClone(mainOnly);
+  const h = await home(MH, state, undefined);
+  assert.deepEqual(h.roles, ['add:storage', 'main']);
+  state.devices.devices.push({ id: 'spare', name: 'spare-box', status: 'online' });
+  const again = () => walk(h.root).filter(n => cls(n, 'mh-node')).map(n => n.dataset.act ? n.dataset.act + ':' + n.dataset.role : n.dataset.role);
+  const fire = async patch => { patch(state); h.f.ctx.window.WosResources.state = structuredClone(state); h.f.emit('wos:resources'); await tick(); };  // what resources.js does after each poll
+  await fire(() => {});
+  assert.deepEqual(again(), ['add:storage', 'main'], 'a device with no role is not on the map');
+  await fire(st => { st.devices.devices[1].use = 'standby'; });
+  assert.deepEqual(again(), ['add:storage', 'main', 'standby', 'add:helper'], 'a new `use` shows up without any other change');
+  const ws = () => walk(h.root).find(n => cls(n, 'mh-ws'));
+  assert.equal(ws().hidden, true);
+  await fire(st => { st.devices.managed = [{ id: 'family', name: 'Family' }]; });
+  assert.equal(ws().hidden, false, 'a new managed Main shows the switcher');
+  await fire(st => { st.devices.devices[1].name = 'renamed-box'; });
+  assert.match(text(h.lane('is-mainrow')), /renamed-box/, 'a rename shows up');
+  await h.f.clear();
+});
+
+test('data.read.installed: trusted only, id-bounded, null until the app list is known, inert after teardown', async () => {
+  const f = fixture(); let api;
+  f.ctx.window.WizCore = { appsLoaded: async () => {}, appsKnown: () => known, appMetadata: id => id === 'backup' ? { id } : undefined }; let known = true;
+  f.host._test.setImporter(async () => ({ default: a => { api = a; return () => {}; } }));
+  await f.host.loadTweaks([MH], f.slots);
+  assert.equal(api.data, undefined, 'untrusted authors get no data reads');
+  await f.host.loadTweaks([MH], f.slots, { teamAuthors: ['wizard'] });
+  assert.equal(await api.data.read.installed('backup'), true); assert.equal(await api.data.read.installed('music'), false);
+  for (const bad of ['../x', 'Backup', '', 'a/b']) assert.equal(await api.data.read.installed(bad), null);
+  known = false; assert.equal(await api.data.read.installed('music'), null, 'never read: unknown, not "missing"');
+  known = true; await f.clear(); assert.equal(await api.data.read.installed('backup'), null);
+  const apps = read('web/core/apps.js');
+  assert.match(apps, /let KNOWN = \(\(\) => \{ try \{ return localStorage\.getItem\(REMOTE_KEY\) != null;/);
+  assert.match(apps, /REMOTE = list\.map\(a => toTile\(a, true\)\); KNOWN = true;/);
 });
 
 test('both packages on (an own recipe can do that): still one map on Home', async () => {
-  const h = await home(MH, mainOnly, undefined, ['miguel/machines-home']);
+  const h = await home(MH, mainOnly, undefined, { also: ['miguel/machines-home'] });
   assert.equal(h.roots.length, 1);
   await h.f.clear(); assert.equal(h.slot.children.length, 0);
 });

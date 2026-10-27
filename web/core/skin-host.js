@@ -465,6 +465,13 @@
         if (!r.ok || !/json/.test(r.headers?.get?.('content-type') || 'application/json')) return null;
         const j = await r.json(); return a.dead ? null : structuredClone(j);
       } catch (_) { return null; }
+    },
+    // Trusted packages only: is an app with this id on the box (its app list)? null until that list has been read once.
+    installed: async id => {
+      if (a.dead || !/^[a-z0-9][a-z0-9-]{0,40}$/.test(String(id))) return null;
+      try { await bounded(Promise.resolve(window.WizCore?.appsLoaded?.())); } catch (_) {}
+      if (a.dead || !window.WizCore?.appsKnown?.() || typeof window.WizCore.appMetadata !== 'function') return null;
+      return !!window.WizCore.appMetadata(String(id));
     } } : {}),
     }) });
     // Trusted packages may show the Notifications inbox (core/notif-bell.js) in Chats: watch unread items, mark one
