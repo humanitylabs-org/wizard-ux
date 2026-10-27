@@ -12,6 +12,10 @@ test('a diagnosed sign-in failure shows Sign in, not Retry',()=>{
 test('an undiagnosed failure keeps the existing Retry, model choice and Dismiss',()=>{
  const html=M.failureHtml({s:{id:'plain',status:'failed',model:'other'},canRetry:true});assert.match(html,/Needs retry/);for(const control of ['data-chretry','data-chretrymodel','data-chdismiss'])assert.ok(html.includes(control));
 });
+test('the held message reply is re-read after sign-in without an extra tap',()=>{
+ const source=read('web/core/chats.js');assert.match(source,/const fresh = .*c.readRevision === revision && turnsCurrent/);assert.doesNotMatch(source,/!quiet \|\| c.readRevision === revision/);
+ const shell=read('web/app.js');assert.match(shell,/window.WizOpenApp = \(id, path = ''\)/);assert.match(shell,/appAt\(rel\)\?\.id !== id/);assert.match(shell,/return !!openWin\(\{ app: 'frame', appId: id, url: rel \}\)/);
+});
 test('diagnosed list rows name the sign-in problem and open the same in-shell fix path',()=>{
  assert.match(read('web/core/chats.js'),/s.reconnect && needs \? esc\(s.reconnect.name\) \+ ' sign-in expired'/);const power=read('web/core/chat-power.js');assert.match(power,/Sign in<\/button>/);assert.match(power,/H.openLink\?\.\(`\/troubleshoot\/\?provider=/);assert.match(power,/if \(rc\) return/);
 });

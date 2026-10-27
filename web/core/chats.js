@@ -2152,7 +2152,7 @@ window.WizCore.chats = function createChats(H) {
     const quiet = s && (!s.status || ['completed', 'cancelled', 'failed', 'interrupted'].includes(s.status))
       && Number.isSafeInteger(s.messageCount) && !LIVE.busy(w.thread) && !c.err && !pendingFor(w).length;
     const age = isWorking(s) ? 3500 : quiet ? 60000 : 15000;
-    const fresh = c.loadedFor === w.thread && Date.now() - c.at < age && (!quiet || c.readRevision === revision) && turnsCurrent(c, s);
+    const fresh = c.loadedFor === w.thread && Date.now() - c.at < age && c.readRevision === revision && turnsCurrent(c, s);
     // Status changes (Stopping…, Deferred, Archived) re-render the header even between message reads.
     const hk = s ? [s.status, !!s.archived, !!s.deferred, s.runId].join('|') : '';
     // Speed: a thread not yet read this page paints its last on-device copy at once (no skeleton);
