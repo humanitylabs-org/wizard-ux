@@ -2397,25 +2397,26 @@ window.WizCore.chats = function createChats(H) {
    * Return an owned recovery receipt so a failed local save can restore the composer without stealing a
    * newer navigation (including an A → B → A round trip). */
   const PHONE = () => (document.documentElement.dataset.shell || 'phone') !== 'desktop';
-  /* Stop before the agent's run exists: the send is withdrawn from the outbox and nothing reaches the agent. Typed
-   * words and files go back into the composer they came from; a recording stays kept under Unsent. A send whose
-   * run had already started is stopped like any run (LIVE.cancelSend stops it by the receipt's run id). */
-  function stopPendingSend(w, sid) {
+  /* Stop on a thread (Miguel, 28 Oct 2026: Stop must work the moment he sends). The live run stops through LIVE.stop
+   * as before; sends not yet admitted are withdrawn so nothing more reaches the agent. Their typed words and files go
+   * back into the composer they came from; a recording stays kept under Unsent. */
+  function stopPendingSend(w, sid, runId) {
     toast('■', 'Stopping…', 1400);
-    LIVE.cancelSend(sid).then(async r => {
-      if (r.outcome === 'stopped' || r.outcome === 'busy') return;
-      if (r.outcome !== 'cancelled') { toast('!', 'Nothing to stop', 2000); return; }
+    LIVE.cancelSend(sid, runId).then(async r => {
+      if (r.outcome === 'busy') return;
       let words = false, kept = false;
       for (const it of r.items || []) {
         if (it.audio || it.audioFile) { kept = true; continue; } // the recording stays kept (Unsent); never deleted here
-        const to = it.kind === 'new' ? '__new__' : it.sessionId;
         const files = (it.files || []).map(fileRef);
-        if (String(it.text || '').trim() || files.length || it.reply) { restoreInto(W[w.id] ? w.id : '', to, it.text || '', files, it.reply || null); words = true; }
+        if (String(it.text || '').trim() || files.length || it.reply) { restoreInto(W[w.id] ? w.id : '', it.kind === 'new' ? '__new__' : it.sessionId, it.text || '', files, it.reply || null); words = true; }
         await OUTBOX.remove(it.id).catch(() => {});
       }
       // A new chat that never started has no thread to stay in: back to the New chat draft with the words.
-      if (W[w.id] && w.thread === sid && r.items?.some(it => it.kind === 'new')) openChat(w.id, '__new__');
-      toast('■', kept ? 'Stopped before sending · recording kept in Unsent' : words ? 'Stopped before sending · your words are back' : 'Stopped before sending', 2800);
+      if (r.outcome === 'cancelled' && W[w.id] && w.thread === sid && r.items.some(it => it.kind === 'new')) openChat(w.id, '__new__');
+      if (r.outcome === 'none') { toast('!', 'Nothing to stop', 2000); return; }
+      const what = kept ? ' · recording kept in Unsent' : words ? ' · your words are back' : '';
+      if (r.outcome === 'cancelled') toast('■', 'Stopped before sending' + what, 2800);
+      else if (what) toast('■', 'Stopped · unsent message withdrawn' + what, 2800);
     }).catch(() => toast('!', 'Couldn’t stop · try again', 2600)).finally(() => { if (W[w.id]) renderThreadNow(w); });
   }
   function leaveAfterSend(wid, sid, isNew, how = '') {
@@ -2746,7 +2747,7 @@ window.WizCore.chats = function createChats(H) {
     if (rowSheet && e.target.closest('.ch-sheet') && !e.target.closest('.ch-sheet-b')) { if (!justPressed()) closeRowSheet(); return true; }
     if (e.target.closest('[data-boom-id]') && w.thread) { const el = elOf(id); void BOOM()?.handle(e.target, r => { if (!showBoomMessage(el, r.anchor_at)) toast('!', 'That message is no longer in this thread', 2200); }); return true; }
     const ca = e.target.closest('[data-chact]'); if (ca && w.thread) { threadAct(id, w.thread, ca.dataset.chact); return true; }
-    if (e.target.closest('[data-chstop]')) { const s = LIVE.session(w.thread); if (s?.runId) { e.target.closest('[data-chstop]').disabled = true; toast('■', 'Stopping…', 1400); LIVE.stop(s.runId).catch(() => { toast('!', 'Couldn’t stop · try again', 2600); renderThreadNow(w); }); } else if (s && LIVE.cancelSend) { e.target.closest('[data-chstop]').disabled = true; stopPendingSend(w, w.thread); } return true; }
+    if (e.target.closest('[data-chstop]')) { const s = LIVE.session(w.thread); if (s && LIVE.cancelSend) { e.target.closest('[data-chstop]').disabled = true; stopPendingSend(w, w.thread, s.runId || ''); } else if (s?.runId) { e.target.closest('[data-chstop]').disabled = true; toast('■', 'Stopping…', 1400); LIVE.stop(s.runId).catch(() => { toast('!', 'Couldn’t stop · try again', 2600); renderThreadNow(w); }); } return true; }
     const apb = e.target.closest('[data-approve]'); if (apb) { chooseApproval(id, apb.dataset.approve, apb.dataset.controlKey, apb.closest('.appr')?.querySelector('[data-clarify-answer]')?.value); return true; }
     if (e.target.closest('[data-chearlier]')) { const c = ch(id), el = elOf(id); c.show = (c.show || PAGE) + PAGE; renderThread(w, el, true); return true; }
     const mi = e.target.closest('[data-mi]'); if (mi) { e.preventDefault(); openMedia(id, +mi.dataset.mi); return true; }

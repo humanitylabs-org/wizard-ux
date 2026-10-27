@@ -131,41 +131,96 @@ test('a take stopped while the phone is still transcribing it is never enqueued 
   assert.equal(f.calls.length, 0, 'nothing reached Wizard');
 });
 
-test('composer shows Stop for a pending send without a run id; Stop without a run withdraws it', () => {
+test('composer shows Stop for a pending send without a run id; every Stop goes through cancelSend with the run id', () => {
   const line = chatsSrc.match(/const canStop = [^\n]+/)[0];
   assert.doesNotMatch(line, /working && !!s\?\.runId/, 'Stop no longer waits for the run id');
   assert.match(line, /s\.pend !== undefined/);
-  const click = chatsSrc.slice(chatsSrc.indexOf("if (e.target.closest('[data-chstop]'))"));
-  assert.match(click.slice(0, 600), /LIVE\.stop\(s\.runId\)/, 'a real run still stops through the existing endpoint');
-  assert.match(click.slice(0, 600), /stopPendingSend\(w, w\.thread\)/);
+  const click = chatsSrc.slice(chatsSrc.indexOf("if (e.target.closest('[data-chstop]'))")).slice(0, 700);
+  assert.match(click, /stopPendingSend\(w, w\.thread, s\.runId \|\| ''\)/);
+  assert.match(click, /LIVE\.stop\(s\.runId\)/, 'fallback: the plain run stop is kept');
 });
 
-test('LIVE.cancelSend stops the receipt run, withdraws pending sends, and waits for a take still on the phone', async () => {
+// The real cancelSend block from live.js, in a vm with a stub outbox and L.stop. One synthetic thread per agent kind.
+const KINDS = ['main', 'host-profile', 'container', 'restricted'];
+function liveCtx() {
   const body = liveSrc.slice(liveSrc.indexOf('  const STOPPABLE = '), liveSrc.indexOf('  const resync = () =>'));
-  const mk = () => {
-    const ctx = { PEND: new Map(), TAPS: new Map(), RELEASED: new Set(), CANCELLING: new Set(), TAP_MAX: 60000, Date, Promise, setTimeout,
-      stopped: [], emits: 0, cancelled: [], items: new Map() };
-    ctx.resync = () => {};
-    ctx.L = { stop: async id => { ctx.stopped.push(id); }, emit: () => { ctx.emits++; } };
-    ctx.window = { WosOutbox: { _items: ctx.items, cancel: async id => { ctx.cancelled.push(id); const it = ctx.items.get(id); it.state = 'held'; it.cancelled = true; return { outcome: 'cancelled', item: it }; } } };
-    vm.runInNewContext(body, ctx); return ctx;
-  };
-  let c = mk();
-  c.PEND.set('s1', { key: 'k', runId: 'run_1', state: 'sent' });
-  const first = await c.L.cancelSend('s1');
-  assert.equal(first.outcome, 'stopped'); assert.equal(first.runId, 'run_1');
-  assert.deepEqual([...c.stopped], ['run_1']);
+  assert.ok(body.includes('L.cancelSend') && body.includes('function applyStopMarks'), 'cancelSend block found');
+  const ctx = { PEND: new Map(), TAPS: new Map(), RELEASED: new Set(), CANCELLING: new Set(), Date, Promise, setTimeout,
+    stopped: [], cancelled: [], items: new Map() };
+  ctx.resync = () => {};
+  ctx.L = { stop: async id => { ctx.stopped.push(id); }, emit() {} };
+  ctx.window = { WosOutbox: { _items: ctx.items, cancel: async id => {
+    ctx.cancelled.push(id); const it = ctx.items.get(id);
+    if (it.admitted) { it.state = 'sent'; return { outcome: 'started', runId: it.admitted, item: it }; }
+    it.state = 'held'; it.cancelled = true; return { outcome: 'cancelled', item: it };
+  } } };
+  vm.runInNewContext(body + '\nthis.applyStopMarks = applyStopMarks;', ctx); return ctx;
+}
+const item = (id, sid, agent, extra = {}) => ({ id, sessionId: sid, agent, kind: 'reply', state: 'sending', createdAt: Date.now() - 1000, ...extra });
 
-  c = mk();
-  c.items.set('a', { id: 'a', sessionId: 's1', kind: 'reply', state: 'sending' });
-  c.PEND.set('s1', { key: 'a', runId: '', state: 'sending' });
-  const r = await c.L.cancelSend('s1');
-  assert.equal(r.outcome, 'cancelled'); assert.deepEqual([...c.cancelled], ['a']); assert.equal(c.stopped.length, 0);
-  assert.equal(c.CANCELLING.size, 0);
+test('main and routed threads: Stop withdraws only its own thread\'s pending send and stops only its own run', async () => {
+  for (const kind of KINDS) {
+    const c = liveCtx(), agent = kind === 'main' ? '' : `qa-${kind}`;
+    for (const k of KINDS) {
+      const a = k === 'main' ? '' : `qa-${k}`;
+      c.items.set(`send-${k}`, item(`send-${k}`, `thread-${k}`, a));
+      c.items.set(`late-${k}`, item(`late-${k}`, `thread-${k}`, a, { admitted: `run-${k}` }));
+    }
+    const r = await c.L.cancelSend(`thread-${kind}`);
+    assert.equal(r.outcome, 'stopped', kind);
+    assert.deepEqual([...c.cancelled].sort(), [`late-${kind}`, `send-${kind}`], `${kind}: only its own sends`);
+    assert.deepEqual([...c.stopped], [`run-${kind}`], `${kind}: only its own admitted run`);
+    assert.equal(c.items.get(`send-${kind}`).agent, agent);
+    for (const k of KINDS.filter(k => k !== kind)) assert.equal(c.items.get(`send-${k}`).state, 'sending', `${kind} left ${k} alone`);
+  }
+});
 
-  c = mk(); // only the send tap's hold: the take arrives from transcription a moment later
-  c.TAPS.set('s1', { at: 1 }); c.PEND.set('s1', { key: 'tap:1', runId: '', state: 'sending' });
-  const p = c.L.cancelSend('s1');
-  setTimeout(() => c.items.set('b', { id: 'b', sessionId: 's1', kind: 'reply', state: 'queued' }), 50);
-  assert.equal((await p).outcome, 'cancelled'); assert.deepEqual([...c.cancelled], ['b']); assert.equal(c.TAPS.size, 0);
+test('Stop on a live run also withdraws a reply queued to steer it (main and routed)', async () => {
+  for (const kind of KINDS) {
+    const c = liveCtx();
+    c.items.set('steer', item('steer', `thread-${kind}`, kind === 'main' ? '' : `qa-${kind}`, { steerRunId: `live-${kind}`, state: 'queued' }));
+    const r = await c.L.cancelSend(`thread-${kind}`, `live-${kind}`);
+    assert.equal(r.outcome, 'stopped');
+    assert.deepEqual([...c.stopped], [`live-${kind}`]);
+    assert.deepEqual([...c.cancelled], ['steer'], `${kind}: the queued steer never reaches the agent`);
+    assert.equal(r.items.length, 1);
+  }
+});
+
+test('a take still on the phone when Stop is tapped is withdrawn when it arrives, even after the tap hold expires', async () => {
+  const c = liveCtx();
+  c.TAPS.set('t1', { at: Date.now() - 2000 }); c.PEND.set('t1', { key: 'tap:1', runId: '', state: 'sending' });
+  const r = await c.L.cancelSend('t1');
+  assert.equal(r.outcome, 'cancelled'); assert.equal(c.TAPS.size, 0);
+  // 90 s later (past TAP_MAX) the slow transcription hands the take over; a message typed after the Stop is untouched
+  c.items.set('take', item('take', 't1', '', { state: 'queued', createdAt: Date.now() - 5000 }));
+  c.items.set('fresh', item('fresh', 't1', '', { state: 'queued', createdAt: Date.now() + 60000 }));
+  c.applyStopMarks(c.window.WosOutbox);
+  await new Promise(r => setTimeout(r, 10));
+  assert.deepEqual([...c.cancelled], ['take']);
+});
+
+test('a steer in flight when Stop is tapped and then rejected never becomes a new turn', async t => {
+  const calls = []; let releaseSteer;
+  const steerHeld = new Promise(r => { releaseSteer = r; });
+  const server = createServer(async (req, res) => {
+    for await (const _ of req) {}
+    calls.push(req.url);
+    const json = (s, v) => { res.writeHead(s, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(v)); };
+    if (req.url === '/wizard/hermes/v1/runs/live/steer') { await steerHeld; return json(409, { error: { code: 'run_not_accepting_steer', message: 'stopped' } }); }
+    if (req.url === '/wizard/hermes/v1/runs/live') return json(200, { run_id: 'live', session_id: 'wizard_t', status: 'cancelled' });
+    if (req.url === '/wizard/hermes/v1/runs') return json(202, { run_id: 'must_not_exist' });
+    json(500, { error: 'unexpected' });
+  });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  t.after(async () => { releaseSteer(); server.closeAllConnections(); await new Promise(r => server.close(r)); });
+  const page = client(`http://127.0.0.1:${server.address().port}`); t.after(page.close);
+  const it = await page.api.enqueue({ kind: 'reply', sessionId: 'wizard_t', model: 'm', provider: 'p', text: 'also do this', steerRunId: 'live' });
+  await until(() => calls.includes('/wizard/hermes/v1/runs/live/steer'));
+  const outcome = page.api.cancel(it.id);
+  releaseSteer();
+  assert.equal((await outcome).outcome, 'cancelled');
+  await new Promise(r => setTimeout(r, 60));
+  assert.equal(calls.filter(u => u === '/wizard/hermes/v1/runs').length, 0, 'no new turn admitted');
+  assert.equal(page.api.get(it.id).state, 'held');
 });

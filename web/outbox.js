@@ -473,6 +473,8 @@
               ['completed', 'failed', 'cancelled', 'interrupted', 'expired'].includes(run.status);
           } catch (_) { /* unknown status: keep the rejected message for explicit Retry */ }
         }
+        // Stop pressed while this steer was in flight: a rejected steer never becomes a new turn.
+        if (it.cancelRequested) { await finishCancel(it); return; }
         if (terminal) {
           // Freeze from the dispatched envelope, not the current composer/route.
           // Persist the handoff BEFORE admission; a lost receipt now replays only
@@ -772,7 +774,8 @@
       if (!it || it.compact || quarantine.has(id) || !['new', 'reply'].includes(it.kind)) return Promise.resolve({ outcome: 'none' });
       if (it.state === 'sent') return Promise.resolve(it.runId ? { outcome: 'started', runId: it.runId, steered: !!it.steered, item: it } : { outcome: 'none' });
       if (it.cancelled) return Promise.resolve({ outcome: 'cancelled', item: it });
-      if (it.steerDispatch === 'started' || it.state === 'unconfirmed') return Promise.resolve({ outcome: 'none' });
+      // A steer whose dispatch outcome this page no longer knows (reload, unconfirmed) is past withdrawal.
+      if ((it.steerDispatch === 'started' && !admitting.has(id)) || it.state === 'unconfirmed') return Promise.resolve({ outcome: 'none' });
       const wait = new Promise(resolve => { const list = cancelWaits.get(id) || []; list.push(resolve); cancelWaits.set(id, list); });
       if (!it.cancelRequested) {
         it.cancelRequested = true; // synchronous: an attempt already running sees it at its next step
