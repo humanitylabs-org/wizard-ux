@@ -35,7 +35,7 @@ public final class VaultBridge {
     private final Handler main = new Handler(Looper.getMainLooper());
     private CancellationSignal active;
 
-    public VaultBridge(Activity activity) { this.activity = activity; }
+    public VaultBridge(Activity activity) { this.activity = activity; this.slots = new VaultSlots(new VaultStore(activity)); }
 
     /** Navigation/detach revokes the old document before cancelling Android's prompt. */
     public void cancel() {
@@ -45,18 +45,7 @@ public final class VaultBridge {
 
     private SharedPreferences prefs() { return activity.getSharedPreferences("wizard-vault", Context.MODE_PRIVATE); }
 
-    private final VaultSlots slots = new VaultSlots(new VaultSlots.Store() {
-        @Override public String get(String key) { return prefs().getString(key, null); }
-        @Override public boolean write(String[] keys, String[] values) {
-            SharedPreferences.Editor edit = prefs().edit();
-            for (int i = 0; i < keys.length; i++) { if (values[i] == null) edit.remove(keys[i]); else edit.putString(keys[i], values[i]); }
-            return edit.commit();
-        }
-        @Override public void deleteKey(String alias) throws Exception {
-            KeyStore store = KeyStore.getInstance("AndroidKeyStore"); store.load(null);
-            if (store.containsAlias(alias)) store.deleteEntry(alias);
-        }
-    });
+    private final VaultSlots slots;
 
     public void dispatch(String method, JSONObject params, BiConsumer<JSONObject, String> reply, BooleanSupplier trusted) {
         if (!trusted.getAsBoolean()) return;
