@@ -29,7 +29,7 @@ export const peerGroup = (os, name, reg) => reg.groups[String(name).toLowerCase(
 export function cleanRegistry(raw) {
   const j = raw && typeof raw === 'object' ? raw : {};
   const names = v => (Array.isArray(v) ? v : []).map(x => clip(x, 64).toLowerCase()).filter(Boolean).slice(0, 8);
-  const thisBox = {name: clip(j.this?.name, 40) || null, role: clip(j.this?.role, 60) || null, tailnet: names(j.this?.tailnet)};
+  const thisBox = {name: clip(j.this?.name, 40) || null, role: clip(j.this?.role, 60) || null, tailnet: names(j.this?.tailnet), ...(clip(j.this?.wizard, 40) ? {wizard: clip(j.this.wizard, 40)} : {}), ...(clip(j.this?.owner, 40) ? {owner: clip(j.this.owner, 40)} : {})};
   const seen = new Set(['this']), devices = [];
   for (const d of Array.isArray(j.devices) ? j.devices : []) {
     const id = clip(d?.id, 32).toLowerCase();
