@@ -42,4 +42,3 @@ test('cold app-registry creation is safe when a wizard:apps listener immediately
   assert.equal(observed, registry); assert.equal(events(), 1);
   assert.ok(registry.APP.setup); assert.ok(registry.APP.troubleshooter);
 });
-

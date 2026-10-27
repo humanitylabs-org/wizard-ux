@@ -157,9 +157,7 @@
       for (const a of APPS) APP[a.id] = a;
       window.dispatchEvent(new CustomEvent('wizard:apps', { detail: { shell, count: APPS.length } }));
     };
-    rebuild(); listeners.add(rebuild);
-    window.WizLauncher?.onChange(rebuild);
-    window.WosAgents?.onChange(rebuild);
+
   const tight = s => s.replace(/ /g, '');
   function findApp(q, exact) {
       q = norm(q).replace(/^(the|my) /, '').replace(/ (app|application|view)$/, '');
@@ -203,7 +201,7 @@
     }
     // Quick search (the "image search …" / "search …" spell). The search app is whichever installed or
     // linked app has the id `wizard-search`; with none, the spell is off and the phrase routes as before.
-    const searchApp = () => APP['wizard-search'] || null;
+    function searchApp() { return APP['wizard-search'] || null; }
     function searchUrl(query, tab) {
       const a = searchApp(); if (!a || !a.url || !query) return '';
       const u = new URL(a.url, location.origin);
@@ -225,6 +223,9 @@
       }
       return best;
     }
+    rebuild(); listeners.add(rebuild);
+    window.WizLauncher?.onChange(rebuild);
+    window.WosAgents?.onChange(rebuild);
     return result;
   }
   /* "ask AI is milk bad for gout", "image search capybaras", "find images of eames chairs", "search why is the sky blue", "quick search …".
