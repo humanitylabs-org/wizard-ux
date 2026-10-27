@@ -29,3 +29,10 @@ test('holding left ⌥ alone shows key hints; any other key or release hides the
 test('⌥S only sends its own kind of take', () => {
   assert.match(js, /function speakScreen\(\) \{[\s\S]*?vMode === 'talk' && !vNewChat && !commandTake\) return talk\('send'\)/);
 });
+
+test('⌥↓/⌥↑ walk Ready chats only; ⌥←/⌥→ hop between list and message box; the guide explains both', () => {
+  assert.match(js, /\.ch-sec\[data-sec="ready"\] \.ch-row\[data-chopen\]/);
+  assert.match(js, /stepReady\(code === 'ArrowDown' \? 1 : -1\)/);
+  assert.match(js, /if \(!chatsSide\(d\)\) dirFocus\(d, 0\)/);
+  assert.ok(js.includes("'Next ready chat'") && js.includes("<h5>Ready chats</h5>"));
+});
