@@ -116,6 +116,11 @@
       // The configured route is authoritative even when a static catalogue lags.
       if (curModel && currentSlug === defProvider && !unique.some(o => o.value === curModel && o.provider === defProvider))
         unique.unshift({ value: curModel, provider: currentSlug, isGlobalDefault: true, name: claudeName(curModel, pslug) || friendly(curModel), description: pname });
+      // A default on the legacy Claude Code login (one subscription, no rotation) moves to the ready
+      // Hermes pool's same model, so new chats don't lock onto an exhausted login. Explicit thread picks stay.
+      const legacy = nativeClaude && unique.find(o => o.isGlobalDefault && o.provider === SUB && claudeFamily(o.value, SUB));
+      const pooled = legacy && unique.find(o => o.nativeClaude && o.provider === 'anthropic' && versionKey(o.value) === versionKey(legacy.value));
+      if (pooled) { legacy.isGlobalDefault = false; pooled.isGlobalDefault = true; }
       return curModel ? unique.sort((a, b) => Number(!!b.isGlobalDefault) - Number(!!a.isGlobalDefault)) : unique;
     }
     const raw = Array.isArray(payload) ? payload : arr(root.options).length ? arr(root.options) : arr(root.models);
@@ -161,15 +166,22 @@
   }
 
   const M = {
-    options: [], providers: [], tinfoil: null, selections: new Map(), pending: new Map(), ready: false, error: '', at: 0, loading: null,
+    options: [], providers: [], tinfoil: null, selections: new Map(), pending: new Map(), ready: false, error: '', at: 0, loading: null, claudeDown: false,
+    // The picker refetches on open when its list is older than this, so a just-added sign-in shows up right away.
+    FRESH_MS: 15e3,
+    stale() { return !M.ready || Date.now() - M.at > M.FRESH_MS; },
+    claudeNote() { return M.claudeDown ? '<p class="ch-sheet-n mwarn" role="status">Claude app not answering · Claude models may be missing</p>' : ''; },
     load(force) {
       if (M.loading) return M.loading;
       if (!force && M.ready && Date.now() - M.at < 5 * 60e3) return Promise.resolve(M.options);
       // The app owns the upstream key. Hermes' local bearer is not proof that a key is saved.
       const connection = fetch('/wizard-tinfoil/api/status', { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(4000) })
         .then(r => r.ok ? r.json() : null).catch(() => null);
+      // A Claude app that hangs or errors is "not answering", which is different from "no Claude app" (404 or the
+      // host's HTML fallback): only the first gets a line in the picker, so a broken app never looks like no subscription.
       const claude = fetch('/wizard-claude/api/accounts', { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(4000) })
-        .then(r => r.ok ? r.json() : null).catch(() => null);
+        .then(r => { M.claudeDown = r.status >= 500; return r.ok ? r.json() : null; })
+        .catch(e => { M.claudeDown = /abort|timeout/i.test(String(e?.name || '')) || e instanceof TypeError; return null; });
       M.loading = fetch('/wizard/hermes/api/model/options', { cache: 'no-store', credentials: 'same-origin' })
         .then(r => { if (!r.ok) throw new Error(`Models unavailable (${r.status})`); return r.json(); })
         .then(async j => { M.tinfoil = await connection; M.providers = arr(obj(j).providers); M.options = normalize(j, hasNativeClaude(await claude)).filter(o => !isTinfoil(o.provider) || M.tinfoilReady()); M.ready = true; M.error = ''; M.at = Date.now(); return M.options; })
@@ -335,7 +347,7 @@
         + privList.map((o, k) => { const i = main.length + k; return `<button type="button" class="mrow priv${isCur(o) ? ' on' : ''}" data-mpick="${i}" data-mprivate="${esc(o.agent)}" aria-pressed="${isCur(o)}"><span class="mn"><b>${lock}${esc(o.name)}</b><small>${esc([o.description, o.isGlobalDefault ? 'Default' : ''].filter(Boolean).join(' · '))}</small></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`; }).join('')
         + `<p class="msheet-gn">${esc(privNote)}</p></div>` : '';
       return { list, html: `<div class="ch-sheet ch-msheet" role="dialog" aria-label="${esc(head)}"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(title ? `${head} · ${title}` : head)}</div>
-        <div class="msheet-list">${rows}${!own && !privList.length && ours() && !M.options.some(o => isTinfoil(o.provider)) ? '<a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>' : ''}${!own && M.ready && !all && M.options.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${M.options.length}</button>` : ''}${privRows}</div>
+        <div class="msheet-list">${own ? '' : M.claudeNote()}${rows}${!own && !privList.length && ours() && !M.options.some(o => isTinfoil(o.provider)) ? '<a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>' : ''}${!own && M.ready && !all && M.options.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${M.options.length}</button>` : ''}${privRows}</div>
         <p class="ch-sheet-n">${esc(note)}</p></div></div>` };
     },
     /* The compact model menu opened from the label in the message box: a small card over the right side.
@@ -366,7 +378,7 @@
       // The section you're in sits at the bottom, by your thumb; the other section is right above it.
       const mainSec = sec(own ? agent.label : 'Models', mainRows), privSec = sec('Private agent', privRows, ' priv');
       const body = !M.ready && !primary.length && !own ? `<p class="ch-sheet-n">${M.error ? esc(M.error) : 'Loading models…'}</p>`
-        : (moreRows ? sec('More models', moreRows) : moreBtn) + (curPriv ? mainSec + privSec : privSec + mainSec);
+        : (moreRows ? sec('More models', moreRows) : moreBtn) + (curPriv ? mainSec + privSec : privSec + mainSec) + (own ? '' : M.claudeNote());
       return { list, html: `<div class="ch-sheet ch-mpop" role="dialog" aria-label="${mode === 'new' ? 'Model for this new chat' : 'Model for this thread'}"><div class="ch-sheet-b"><div class="msheet-list">${body}</div></div></div>` };
     },
     /* A failed thread: what happened, on which model, and the ways out (Retry · Choose another model · Dismiss). */
@@ -375,11 +387,10 @@
       // The provider's sign-in expired: Retry can't fix that, the provider's connection app can.
       const rc = s.reconnect;
       if (rc) {
-        const open = rc.installed ? `Open ${rc.name}` : `Get ${rc.name}`;
-        const what = s.safeError || `${rc.name} is signed out. ${open} to reconnect, then tap Retry.`;
-        return `<section class="ch-fail" role="alert" data-chfail="${esc(s.id)}"><span class="lb">Signed out · ${esc(rc.name)}</span>
-        <p>${esc(what)}</p>
-        <div class="ch-fail-b"><button type="button" data-chreconnect="${esc(rc.appId)}" data-installed="${rc.installed ? '1' : '0'}">${esc(open)}</button><button type="button" class="ghost" data-chretry ${busy || !canRetry ? 'disabled' : ''}>${busy === 'retry' ? 'Retrying…' : 'Retry'}</button><button type="button" data-chretrymodel ${busy || !canRetry ? 'disabled' : ''}>Choose another model</button><button type="button" class="ghost" data-chdismiss ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></section>`;
+        const target = M.short(s.model, s.provider) || model || rc.name;
+        return `<section class="ch-fail diagnosed" role="alert" data-chfail="${esc(s.id)}"><span class="lb">${esc(rc.name)} sign-in expired</span>
+        <p>This message is saved. Sign in to ${esc(rc.name)} and it will send to ${esc(target)} on its own.</p>
+        <div class="ch-fail-b"><button type="button" data-chreconnect="${esc(rc.appId)}" data-recovery-run="${esc(rc.runId || '')}">Sign in to ${esc(rc.name)}</button></div></section>`;
       }
       const what = s.status === 'interrupted' ? 'The last request was interrupted before it finished.' : 'The last request didn’t finish.';
       return `<section class="ch-fail" role="alert" data-chfail="${esc(s.id)}"><span class="lb">${s.status === 'interrupted' ? 'Interrupted' : 'Needs retry'}${model ? ` · ${esc(model)}` : ''}</span>

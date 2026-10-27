@@ -1,7 +1,8 @@
 :root {
   --dock-h: 124px;
   --sb: 0px;
-  --safe-b: env(safe-area-inset-bottom, 0px);
+  /* --vv-b: the part of the page a browser's own bottom bar covers (app.js browserBarInset; 0 in an installed app). */
+  --safe-b: max(env(safe-area-inset-bottom, 0px), var(--vv-b, 0px)); /* union: the covered strip already includes the home indicator */
   /* Native shell draws the page under the status bar and tells it how tall the bar is (--nat-t). */
   --safe-t: max(env(safe-area-inset-top, 0px), var(--nat-t, 0px));
 }
@@ -306,6 +307,8 @@ body {
 }
 .sheet.dragging { transition: none; }
 .sheet-grip { flex: 0 0 auto; width: 40px; height: 4px; border-radius: 99px; background: rgba(205, 190, 255, .3); margin: 9px auto; }
+/* Settings' grip is a drag handle: a larger invisible hit area, same 4px bar and spacing. */
+#settings > .sheet-grip { box-sizing: content-box; padding: 10px 48px; margin: -1px auto; background-clip: content-box; touch-action: none; cursor: grab; }
 .launcher { top: calc(44px + var(--safe-t)); bottom: calc(var(--dock-h) + var(--safe-b) - 12px); transform: translateY(calc(100% + 160px)); opacity: 0; }
 .launcher.open { transform: none; opacity: 1; }
 .inbox { top: calc(40px + var(--safe-t)); bottom: calc(var(--dock-h) + var(--safe-b) - 12px); transform: translateY(calc(-100% - 60px)); opacity: 0; }

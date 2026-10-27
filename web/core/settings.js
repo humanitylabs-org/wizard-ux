@@ -164,6 +164,36 @@
       return true;
     }
   });
+  const responseStyleState = ctx => ctx.responseStyle || (ctx.responseStyle = { value: '', busy: false, error: '' });
+  async function responseStyle(ctx, value) {
+    const state = responseStyleState(ctx);
+    if (state.busy) return;
+    const restoreFocus = document.activeElement?.matches?.('[data-response-style]') && ctx.root?.contains(document.activeElement);
+    state.busy = true; state.error = ''; ctx.render?.();
+    try {
+      if (!window.WizConfig?.responseStyle) throw Error('Response style is unavailable until your Wizard is updated');
+      state.value = await window.WizConfig.responseStyle(value);
+    } catch (error) { state.error = error.message || 'Could not change response style'; }
+    finally {
+      const focusWasLost = !document.activeElement || document.activeElement === document.body;
+      state.busy = false; ctx.render?.();
+      if (restoreFocus && focusWasLost) ctx.root?.querySelector('[data-response-style]')?.focus({ preventScroll: true });
+    }
+  }
+  register({ id: 'response-style', page: 'chats', aliases: ['response-style'],
+    enter(ctx) { responseStyle(ctx); },
+    html(ctx) {
+      const state = responseStyleState(ctx);
+      return `<div class="st-group"><label class="st-row static"><span class="st-tx"><b>Response style</b><small>Summary: context and labelled results.</small><small>Concise: short, plain replies.</small></span><select class="st-choice" aria-label="Response style" data-response-style ${state.busy || !state.value ? 'disabled' : ''}><option value="" ${!state.value ? 'selected' : ''} disabled>${state.busy ? 'Loading…' : 'Choose…'}</option><option value="summary" ${state.value === 'summary' ? 'selected' : ''}>Summary</option><option value="concise" ${state.value === 'concise' ? 'selected' : ''}>Concise</option></select></label>${state.error ? `<p class="st-note" role="alert">${esc(state.error)}</p><button class="st-wide" data-response-style-retry>Try again</button>` : ''}</div>`;
+    },
+    input(ctx, el) {
+      if (!el.matches?.('[data-response-style]')) return;
+      const state = responseStyleState(ctx), value = el.value;
+      el.value = state.value; // Never display an unverified save as the selected owner setting.
+      if (value !== state.value) responseStyle(ctx, value);
+    },
+    act(ctx, el) { if (!el.closest('[data-response-style-retry]')) return false; responseStyle(ctx); return true; },
+  });
   const mySkinWorn = () => !!window.WosMySkin?.active;
   function mySkinRow(skin) {
     const M = window.WosMySkin, st = M?.state, js = st?.script;

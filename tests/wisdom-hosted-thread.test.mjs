@@ -3,16 +3,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { launcherFixture } from './launcher-fixture.mjs';
 import { readFileSync } from 'node:fs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const chats = read('web/core/chats.js'), services = read('web/core/app-services.js'), client = read('web/core/app-client.js');
 const app = read('web/app.js'), desktop = read('web/desktop/desktop.js');
 
-test('Manager and Wisdom are the admitted hosts, in both lists', () => {
-  assert.match(chats, /const HOSTED_APPS = new Set\(\['wizard-manager', 'wisdom'\]\);/);
-  assert.match(services, /const HOSTED_THREAD_APPS = new Set\(\['wizard-manager', 'wisdom'\]\);/);
-  assert.match(chats, /!HOSTED_APPS\.has\(w\.appId\)/);
+test('Manager and Wisdom use one synced launcher admission policy in both consumers', () => {
+  const policy = launcherFixture({ window: {} });
+  assert.equal(policy.hasHostedThread('wizard-manager'), true);
+  assert.equal(policy.hasHostedThread('wisdom'), true);
+  assert.equal(policy.hasHostedThread('other-app'), false);
+  assert.match(chats, /!window\.WizLauncher\?\.hasHostedThread\(w\.appId\)/);
+  assert.match(services, /!window\.WizLauncher\?\.hasHostedThread\(st\.appId\)/);
+  policy.accept({ launcher: { hostedThreadApps: [] } });
+  assert.equal(policy.hasHostedThread('wisdom'), false);
 });
 
 test('openThread forwards an app-keyed reply item; foreign keys are refused', () => {
@@ -34,6 +40,7 @@ test('agent-aware hosted navigation pins a known running non-main agent before o
   const sandbox = {W:{w}, HOSTED_APPS:new Set(['wisdom']), window:{WosAgents:A}, LIVE:{pinAgent:(...args) => effects.push(['pin',...args])},
     KIT:{reply:{clean:r=>r}}, hosted, closeHosted(){}, document:{createElement:()=>({style:{},dataset:{}})}, getComputedStyle:()=>({position:'relative'}), openChat:(...args)=>effects.push(['open',...args])};
   w.appId = 'wisdom';
+  launcherFixture(sandbox);
   const fn = chats.slice(chats.indexOf('  function openHosted('), chats.indexOf('  function closeHosted('));
   vm.runInNewContext(fn + '; this.openHosted = openHosted;', sandbox);
   for (const agent of ['unknown','stopped','hermes',{},'']) assert.equal(sandbox.openHosted('w',frame,'sid',{agent}), false);

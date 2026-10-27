@@ -32,31 +32,31 @@ function live() {
 
 test('live.js keeps only the known connection apps from wizard_reconnect', () => {
   const reconnectOf = live();
-  assert.deepEqual({ ...reconnectOf(FIELD) }, { provider: 'claude', appId: 'wizard-claude', name: 'Claude', installed: true });
-  assert.deepEqual({ ...reconnectOf({ ...FIELD, provider: 'chatgpt', app_id: 'wizard-chatgpt', installed: false }) }, { provider: 'chatgpt', appId: 'wizard-chatgpt', name: 'ChatGPT', installed: false });
+  assert.deepEqual({ ...reconnectOf(FIELD) }, { provider: 'claude', appId: 'wizard-claude', name: 'Claude', runId: '', installed: true });
+  assert.deepEqual({ ...reconnectOf({ ...FIELD, provider: 'chatgpt', app_id: 'wizard-chatgpt', installed: false }) }, { provider: 'chatgpt', appId: 'wizard-chatgpt', name: 'ChatGPT', runId: '', installed: false });
   for (const bad of [null, {}, { ...FIELD, app_id: 'evil' }, { ...FIELD, kind: 'x' }, { ...FIELD, provider: 'tinfoil' }]) assert.equal(reconnectOf(bad), null);
   assert.match(read('web/live.js'), /reconnect: reconnectOf\(item\.wizard_reconnect\)/);
 });
 
-test('signed-out failure panel: plain message, Open Claude first, Retry still there', () => {
+test('a diagnosed sign-in failure shows Sign in, not Retry', () => {
   const M = models();
   const html = M.failureHtml({ s: { id: 's1', status: 'failed', model: 'claude-opus-5-5', provider: 'claude-subscription-directsdk-experimental',
     safeError: 'Claude is signed out. Open Claude to reconnect, then tap Retry.', reconnect: { provider: 'claude', appId: 'wizard-claude', name: 'Claude', installed: true } }, busy: '', canRetry: true });
-  assert.match(html, /Signed out · Claude/);
-  assert.match(html, /<p>Claude is signed out\. Open Claude to reconnect, then tap Retry\.<\/p>/);
+  assert.match(html, /Claude sign-in expired/);
+  assert.match(html, /This message is saved\. Sign in to Claude and it will send to Opus on its own\./);
   const buttons = [...html.matchAll(/<button[^>]*>([^<]+)<\/button>/g)].map(m => m[1]);
-  assert.deepEqual(buttons, ['Open Claude', 'Retry', 'Choose another model', 'Dismiss']);
-  assert.match(html, /data-chreconnect="wizard-claude" data-installed="1"/);
+  assert.deepEqual(buttons, ['Sign in to Claude']);
+  assert.match(html, /data-chreconnect="wizard-claude" data-recovery-run=""/);
   assert.doesNotMatch(html, /not processed/);
 });
 
-test('not installed: Get ChatGPT opens the Store on it', () => {
+test('diagnosed ChatGPT failures use the same focused repair path when the connection app is missing', () => {
   const html = models().failureHtml({ s: { id: 's2', status: 'failed', reconnect: { provider: 'chatgpt', appId: 'wizard-chatgpt', name: 'ChatGPT', installed: false } }, busy: '', canRetry: true });
-  assert.match(html, /data-chreconnect="wizard-chatgpt" data-installed="0">Get ChatGPT</);
-  assert.match(html, /ChatGPT is signed out\. Get ChatGPT to reconnect/);
+  assert.match(html, /data-chreconnect="wizard-chatgpt" data-recovery-run="">Sign in to ChatGPT</);
+  assert.match(html, /ChatGPT sign-in expired/);
   const power = read('web/core/chat-power.js');
-  assert.match(power, /installed && window\.WizOpenApp\?\.\(appId\)/);
-  assert.match(power, /H\.openLink\?\.\(`\/wizard-os-home\/store\/index\.html\?app=\$\{encodeURIComponent\(appId\)\}`/);
+  assert.match(power, /window\.WizOpenApp\?\.\('troubleshooter'/);
+  assert.match(power, /H\.openLink\?\.\(`\/troubleshoot\/\?provider=/);
   assert.match(power, /const RECONNECT_APPS = new Set\(\['wizard-claude', 'wizard-chatgpt'\]\)/);
 });
 

@@ -41,18 +41,18 @@
   <link rel="stylesheet" href="core/home-surfaces.css">
   <link rel="stylesheet" href="core/sigils.css">
   <link rel="stylesheet" href="core/app-route.css">
-  <link rel="stylesheet" href="usuals.css">
   <link rel="stylesheet" href="core/desks.css">
   <link rel="stylesheet" href="core/tour.css">
   <link rel="stylesheet" href="core/skins.css">
   <script src="core/skin-host.js"></script>
   <script type="module" src="core/thread-swipe-back.js"></script>
+  <script src="core/edge-peek.js"></script>
   <link rel="stylesheet" href="core/skin-frame.css">
   <script src="core/my-skin.js"></script>
   <script defer src="core/experience.js"></script>
 </head>
 <body>
-  <div id="device" class="device">
+  <div id="device" class="device" data-slot="device-edge">
     <canvas id="stars" class="stars" aria-hidden="true"></canvas>
     <div class="nebula" aria-hidden="true"><i></i><i></i><i></i></div>
     <div class="lean" aria-hidden="true"></div>
@@ -140,6 +140,8 @@
   <script src="core/sigils.js"></script>
   <script src="core/workspace-navigation.js"></script>
   <script src="core/chats-view.js"></script>
+  <script src="core/launcher-defaults.js"></script>
+  <script src="core/launcher.js"></script>
   <script src="core/apps.js"></script>
   <script src="core/app-kinds.js"></script>
   <script src="core/appearance-host.js"></script>
@@ -175,7 +177,8 @@
   <script src="core/dom-morph.js"></script>
   <script src="core/chats.js"></script>
   <script src="core/deeplink.js"></script>
-  <script src="core/video-desks.js"></script>
+  <script src="core/companion-pane.js"></script>
+  <script src="core/companion-legacy.js"></script>
   <script src="core/voice-status.js"></script>
   <script src="core/settings.js"></script>
   <script src="core/workspace-sync.js"></script>
@@ -192,10 +195,11 @@
   <script src="core/bridge.js"></script>
   <script src="core/focused-field.js"></script>
   <script src="core/android-relay.js"></script>
+  <script src="core/background-audio-legacy.js"></script>
   <script src="core/background-audio.js"></script>
   <script src="orb.js"></script>
-  <script src="usuals.js"></script>
-  <script src="core/music-voice.js"></script>
+  <script src="core/voice-legacy.js"></script>
+  <script src="core/app-voice.js"></script>
   <script src="core/tour.js"></script>
   <script src="core/commands.js"></script>
   <script src="core/features.js"></script>
