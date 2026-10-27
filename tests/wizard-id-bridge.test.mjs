@@ -40,14 +40,21 @@ test('missing bridge refuses without pretending to create an ID', async () => {
   const f = fixture({ wizardDevicePort: undefined }); await assert.rejects(f.call('identity.setup'), /no native shell/);
 });
 
-test('page navigation retains scroll reset and native signer cancellation', () => {
+test('page navigation retains scroll cancellation on the active legacy APK', () => {
+  // 1522804f intentionally ports the WEB half of Wizard ID. This checkout's
+  // Android bridge predates native identity (30a6644e on the native line) and
+  // uses public ChatScrollCapture (22f19915), not the ScrollProxyMetrics path.
+  // Do not assert native-only hooks that were never installed in this source.
   const activity = readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/MainActivity.java', import.meta.url), 'utf8');
   const pageStarted = activity.split('public void onPageStarted(')[1]?.split('@Override')[0];
   assert.ok(pageStarted, 'MainActivity must keep its navigation lifecycle hook');
-  assert.match(pageStarted, /\(\(SelectionWebView\)view\)\.scrollPageStarted\(\)/);
-  assert.match(pageStarted, /if \(device != null\) device\.onPageStarted\(\)/);
+  assert.match(pageStarted, /\(\(SelectionWebView\)view\)\.cancelScrollCapture\(\)/);
   const selection = readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/SelectionWebView.java', import.meta.url), 'utf8');
-  assert.match(selection, /void scrollPageStarted\(\)\s*\{\s*scrollMetrics = null;\s*cancelScrollCapture\(\);\s*\}/);
+  assert.match(selection, /void cancelScrollCapture\(\)\s*\{\s*if \(android\.os\.Build\.VERSION\.SDK_INT >= 31 && scrollCapture != null\) scrollCapture\.abort\(\);\s*\}/);
+  const device = readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/device/DeviceBridge.java', import.meta.url), 'utf8');
+  const apps = readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/apps/AppsBridge.java', import.meta.url), 'utf8');
+  assert.doesNotMatch(device, /dispatchIdentity|identityDocument|wizardId\./, 'adding a native signer must also port its navigation cancellation contract');
+  assert.doesNotMatch(apps, /wizardDevicePort|identity\.sign/, 'this old APK must not advertise unsupported signing');
 });
 
 const servicesSource = readFileSync(new URL('../web/core/app-services.js', import.meta.url), 'utf8');
