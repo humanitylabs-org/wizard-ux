@@ -1,8 +1,8 @@
 {
-  "id": "miguel/unified-inbox",
+  "id": "wizard/unified-inbox",
   "name": "Notifications in Chats",
   "version": "2.0.0",
-  "author": "miguel",
+  "author": "wizard",
   "apiVersion": 1,
   "capabilities": [
     "layout",
