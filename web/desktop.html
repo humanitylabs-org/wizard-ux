@@ -58,8 +58,8 @@
     </div>
     <div class="bar-r" data-slot="dock-end">
       <button id="searchBtn" class="mic" title="Search apps, chats and commands (⌥Space)" aria-label="Search and launch"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></button>
-      <button id="micBtn" class="mic" title="Talk about what's on screen (Right ⌘)" aria-label="Talk to Wizard"><svg viewBox="0 0 24 24"><path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a7 7 0 0 0 14 0M12 18v4"/></svg></button>
-      <button id="commandBtn" class="mic" title="Speak a command like “open calendar”; stays on this box" aria-label="Speak a local command"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg></button><button id="dictateBtn" class="mic" title="Dictate text into the field you're typing in" aria-label="Dictate into the focused field"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4ZM13.5 6.5l4 4"/></svg></button>
+      <button id="micBtn" class="mic" title="Speak about this screen or reply to the open chat (⌥S)" aria-keyshortcuts="Alt+S" aria-label="Talk to Wizard"><svg viewBox="0 0 24 24"><path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a7 7 0 0 0 14 0M12 18v4"/></svg></button>
+      <button id="commandBtn" class="mic" title="Speak a command like “open calendar” (⌥C)" aria-keyshortcuts="Alt+C" aria-label="Speak a local command"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg></button><button id="dictateBtn" class="mic" title="Dictate into the text box (⌥D)" aria-keyshortcuts="Alt+D" aria-label="Dictate into the focused field"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4ZM13.5 6.5l4 4"/></svg></button>
       <button id="status" class="status" title="Ready and working chats · opens the Inbox (⌥I)" aria-label="Inbox"></button>
       <button id="settingsBtn" class="mic" aria-label="Settings" title="Settings (⌥,)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></button>
       <button id="keysBtn" class="keys-btn" title="All keyboard shortcuts (⌥/)">⌥/</button>
@@ -80,7 +80,7 @@
 
   <div id="keys" class="keys" hidden>
     <div class="keys-card" role="dialog" aria-label="Keyboard shortcuts">
-      <div class="keys-head"><b>Keys</b><small>⌥ is Option. In Wizard for Mac, Caps Lock opens search and Right ⌘ talks.</small><button class="x" data-close="keys" aria-label="Close">✕</button></div>
+      <div class="keys-head"><b>Keys</b><small>⌥ is Option. Hold it to see the keys on screen.</small><button class="x" data-close="keys" aria-label="Close">✕</button></div>
       <div id="keysBody" class="keys-body"></div>
     </div>
   </div>
