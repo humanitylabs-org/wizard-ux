@@ -282,7 +282,7 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 .keys kbd { font: 600 12.5px/18px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: .01em; }
 
 /* Opinionated: instant hover tips for every top-bar control */
-.bar-tip { position: fixed; z-index: 60; max-width: 280px; padding: 5px 9px; border-radius: 7px; font: 500 12px/1.35 ui-sans-serif, system-ui, -apple-system, sans-serif; color: var(--ink); background: color-mix(in oklab, var(--bg) 94%, var(--ink) 6%); border: 1px solid var(--line-2); box-shadow: 0 6px 20px rgba(0,0,0,.35); pointer-events: none; white-space: nowrap; }
+.bar-tip { position: fixed; z-index: 60; width: max-content; max-width: min(280px, calc(100vw - 16px)); padding: 5px 9px; border-radius: 7px; font: 500 12px/1.35 ui-sans-serif, system-ui, -apple-system, sans-serif; color: var(--ink); background: color-mix(in oklab, var(--bg) 94%, var(--ink) 6%); border: 1px solid var(--line-2); box-shadow: 0 6px 20px rgba(0,0,0,.35); pointer-events: none; white-space: normal; overflow-wrap: anywhere; text-wrap: pretty; }
 .bar-tip[hidden] { display: none; }
 
 /* ---------- Voice capture: synthwave edge glow + compact top-centre pill ----------
