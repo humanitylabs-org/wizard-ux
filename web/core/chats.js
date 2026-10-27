@@ -2589,7 +2589,7 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('.ch-back[data-incog-close]')) { chatsBack(W[id]); return true; }
     if (e.target.closest('[data-incog-close]')) { if (INC?.close(id)) renderChats(W[id]); return true; }
     if (e.target.closest('[data-incog-off]')) { INC?.close(id); renderChats(W[id]); return true; }
-    if (e.target.closest('[data-incog-start]')) { const w = W[id]; if (!w || w.thread !== '__new__') return true; const c = ch(id), agentId = winAgent(w) || c.newModel?.agent; const a = AGS()?.get(agentId); if (a?.privacy === 'private' && a.incognito_available) { saveDraft(id); void INC?.start(id, a); } return true; }
+    if (e.target.closest('[data-incog-start]')) { const w = W[id]; if (!w || w.thread !== '__new__') return true; if (H.captureBusy?.()) { renderChats(w); toast('!', 'Finish recording before starting Incognito', 2600); return true; } const c = ch(id), agentId = winAgent(w) || c.newModel?.agent; const a = AGS()?.get(agentId); if (a?.privacy === 'private' && a.incognito_available) { saveDraft(id); void INC?.start(id, a); } return true; }
     if (e.target.closest('[data-chtroubleshoot]')) { window.WizReach?.open(); return true; }
     const w = H.win(id); if (!w) return false;
     const hc = e.target.closest('[data-helper-continue]');

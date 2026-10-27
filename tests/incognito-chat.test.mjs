@@ -73,6 +73,21 @@ test('leaving for another view confirms once and destroys only temporary chats',
   s.setConfirm(false); assert.equal(s.component.beforeNavigate([]), false); assert.equal(s.component.active('one'), true)
   s.setConfirm(true); assert.equal(s.component.beforeNavigate([]), true); assert.equal(s.component.active('one'), false)
 })
+test('Incognito blocks microphone admission before snapshots, custody or recorder access', () => {
+  const phone = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8')
+  const desktop = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8')
+  const mobileAdmission = phone.slice(phone.indexOf('async function startVoice'), phone.indexOf('async function startVoice') + 600)
+  assert.ok(mobileAdmission.indexOf('CHATS.incognitoActive') < mobileAdmission.indexOf('V.onAt'))
+  for (const name of ['talk(', 'dictate(', 'recordReply(']) {
+    const start = desktop.indexOf('async function ' + name)
+    assert.match(desktop.slice(start, start + 400), /CHATS.incognitoActive/)
+  }
+  assert.match(phone, /captureBusy:.*V.state !== 'idle'/)
+  assert.match(desktop, /captureBusy:.*VOICE.state !== 'idle'/)
+  const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8')
+  assert.match(chats, /if \(H.captureBusy\?\.\(\)\)/)
+})
+
 test('every persistent Chats adapter has an Incognito early return; both shells load the same core', () => {
   for (const method of ['saveDraft', 'addFiles', 'toggleVoice', 'refreshCompose', 'loadThread', 'takeComposer', 'sendChat', 'peekComposer', 'setDraft']) {
     const start = chats.indexOf('function ' + method + '('); assert.ok(start >= 0, method)
