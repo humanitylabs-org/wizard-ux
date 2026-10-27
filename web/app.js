@@ -967,11 +967,14 @@
     const src = W[srcId], sid = src?.app === 'chats' && src.thread && src.thread !== '__new__' ? src.thread : '';
     return { desk: desks[deskOf(srcId)]?.id || desks[idx].id, win: srcId || '', sid, title: sid ? (LIVE?.session(sid)?.title || winTitle(src)) : (src ? winTitle(src) : '') };
   }
-  function openLinkDesk(href, fromEl) {
+  function openLinkDesk(href, fromEl, setupChecked = false) {
     let u; try { u = new URL(href, location.href); } catch (e) { return false; }
     if (u.origin !== location.origin) return false;
     const srcId = (fromEl && fromEl.closest ? fromEl.closest('.win')?.dataset.win : '') || desks[idx].focus;
     const src = W[srcId], rel = u.pathname + u.search + u.hash;
+    const targetApp = appAt(rel);
+    if (targetApp && !setupChecked && window.WosAppSetup)
+      return window.WosAppSetup.gate(targetApp, () => openLinkDesk(href, fromEl, true));
     if (src && src.from && src.app === 'frame') { const f = winEl(srcId)?.querySelector('iframe'); if (f) { try { f.contentWindow.location.href = u.href; } catch (e) { f.src = u.href; } return true; } }
     const open = Object.values(W).find(w => w.from && w.url === rel); if (open) { goDesk(deskOf(open.id)); return true; }
     const from = fromOf(srcId);

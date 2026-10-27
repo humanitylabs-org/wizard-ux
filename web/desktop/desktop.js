@@ -100,7 +100,7 @@
     voiceInto: () => (['listen','paused'].includes(VOICE.state) && vMode === 'talk' ? (vReply?.sid || (vTarget && W[vTarget]?.thread) || '') : ''),
     finishVoice: () => talk('send'),
     // A private-origin link in a message opens as a window on this workspace; the shell never navigates away.
-    openLink: (url, title) => { const a = appAt(url); return !!newWin({ app: 'frame', appId: a ? a.id : 'link', url, title: a ? a.name : title }); },
+    openLink: (url, title) => openAppLink(url, title),
     changed: () => { for (const id of Object.keys(W)) if (W[id].app === 'chats') syncChatsPane(id); },
     openThread: (sid, options) => openThread(sid, options),
   });
@@ -292,6 +292,13 @@
     return true;
   }
   window.WizOpenAgentChats = openAgentChats;
+  // Keep deep app links on the same admission path as Home and the launcher.
+  function openAppLink(url, title, setupChecked = false) {
+    const a = appAt(url);
+    if (a && !setupChecked && window.WosAppSetup)
+      return window.WosAppSetup.gate(a, () => openAppLink(url, title, true));
+    return !!newWin({ app: 'frame', appId: a ? a.id : 'link', url, title: a ? a.name : title });
+  }
   window.WosAppSetup?.init({ getApp: id => APP[id] });
   function openApp(a, opts = {}) {
     if (!a) return false;
@@ -1082,7 +1089,7 @@
     helpSub: 'Keyboard shortcuts, desks and Back',
     openThread: id => { closeSettings(); openThread(id); },
     editUnsent: it => { closeSettings(); editUnsent(it); },
-    openLink: (url, title) => { closeSettings(); const a = appAt(url); return !!newWin({ app: 'frame', appId: a ? a.id : 'link', url, title: a ? a.name : title }); },
+    openLink: (url, title) => { closeSettings(); return openAppLink(url, title); },
     openStore: id => { closeSettings(); newWin({ app: 'frame', appId: 'app-store', url: '/wizard-os-home/store/index.html' + (id ? '?app=' + encodeURIComponent(id) : '') }); },
     chatsChanged: id => { for (const w of Object.values(W)) if (w.app === 'chats' && !w.agent) { w.chatsProvider = id; CHATS.renderChats(w); const list = winEl(w.id)?.querySelector(`[data-chats="${w.id}::list"]`); if (list) CHATS.renderChatList(listWin(w.id), list); syncChatsPane(w.id); } save(); },
     openSub: id => {
@@ -1775,7 +1782,7 @@
     const a = u.origin === location.origin && appAt(u.href); if (!a) return false;
     const rel = u.pathname + u.search + u.hash, same = new URL(a.url, location.href);
     if (same.pathname + same.search === u.pathname + u.search) { openApp(a, { fresh: false }); return true; }
-    newWin({ app: 'frame', appId: a.id, url: rel, title: a.name }); return true;
+    return openAppLink(rel, a.name);
   };
   if (LINKS) window.WizLinks.intercept(document.body, LINKS);
   LIVE?.refresh();
