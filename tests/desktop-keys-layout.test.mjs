@@ -15,7 +15,7 @@ test('holding ⌥ is the one keys guide: speak keys named and explained, no sepa
 test('⌥S speaks about the screen, ⌥C speaks a command, ⌥D dictates', () => {
   assert.match(js, /code === 'KeyS' \|\| code === 'KeyC' \|\| code === 'KeyD'/);
   assert.match(js, /code === 'KeyS' \? speakScreen\(\) : commandVoice\(\)/);
-  assert.match(js, /if \(code === 'KeyD'\) return dictate\(\)/);
+  assert.match(js, /if \(code === 'KeyD'\) \{[\s\S]*?return dictate\(\);/);
   for (const [id, key] of [['micBtn', 'Alt\\+S'], ['commandBtn', 'Alt\\+C'], ['dictateBtn', 'Alt\\+D']]) assert.match(html, new RegExp(`id="${id}"[^>]*aria-keyshortcuts="${key}"`));
 });
 
@@ -32,7 +32,8 @@ test('⌥S only sends its own kind of take', () => {
 
 test('⌥↓/⌥↑ walk Ready chats only; ⌥←/⌥→ hop between list and message box; the guide explains both', () => {
   assert.match(js, /\.ch-sec\[data-sec="ready"\] \.ch-row\[data-chopen\]/);
-  assert.match(js, /stepReady\(code === 'ArrowDown' \? 1 : -1\)/);
+  assert.match(js, /chatsUpDown\(code === 'ArrowDown' \? 1 : -1\)/);
+  assert.match(js, /chatsZone\(f\) === 'thread' && f\.thread/);
   assert.match(js, /if \(!chatsSide\(d\)\) dirFocus\(d, 0\)/);
-  assert.ok(js.includes("'Next ready chat'") && js.includes("<h5>Ready chats</h5>"));
+  assert.ok(js.includes("'Top ready chat'") && js.includes("<h5>Ready chats</h5>"));
 });
