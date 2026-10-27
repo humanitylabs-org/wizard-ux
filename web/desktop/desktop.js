@@ -440,53 +440,26 @@
     const again = winEl(f.id)?.querySelector(`.pane-list .ch-row[data-chopen="${CSS.escape(r.dataset.chopen)}"]`);
     $$('.pane-list .ch-row.kbd', winEl(f.id)).forEach(x => x.classList.remove('kbd'));
     if (again) { again.classList.add('kbd'); again.scrollIntoView({ block: 'nearest' }); }
-    setTimeout(() => { const row = winEl(f.id)?.querySelector(`.pane-list .ch-row[data-chopen="${CSS.escape(r.dataset.chopen)}"]`); row ? row.focus({ preventScroll: true }) : focusInside(f.id); }, 30); // focus stays on the list: ⌥↑↓ keep walking, ⌥→ to reply
+    setTimeout(() => { const row = winEl(f.id)?.querySelector(`.pane-list .ch-row[data-chopen="${CSS.escape(r.dataset.chopen)}"]`); focusInside(f.id); }, 30); // straight into the message box: type to reply, or ⌥↓ again for the next one
     log('ready:' + r.dataset.chopen);
     return true;
   }
-  // Chats has two places the keyboard can be: the chat list (left) or the open chat (right).
-  // ⌥↑↓ act on whichever side you are on: walk the list, or scroll the conversation.
-  function chatsZone(f) {
-    const el = winEl(f.id), a = document.activeElement;
-    if (a && el?.contains(a)) { if (a.closest('.pane-list')) return 'list'; if (a.closest('.pane-main')) return 'thread'; }
-    return 'list';
+  // ⌥↓ / ⌥↑ always walk Ready, wherever you are (Miguel, 27 Oct 2026: one key, no list/composer sides).
+  function chatsUpDown(dir) { return stepReady(dir); }
+  // After a send (Enter, or a Right ⌘ / mic voice reply) the window goes back to a focused New chat:
+  // type a new one straight away, or ⌥↓ to the next Ready chat.
+  function toNewChat(wid, why) {
+    const w = W[wid]; if (!mainChats(w) || homeOpen || focused()?.id !== wid) return;
+    CHATS.openNewDraft(wid, ''); syncChatsPane(wid); setTimeout(() => focusInside(wid), 30); log('send:new-chat:' + why);
   }
-  function chatsUpDown(dir) {
-    const f = focused();
-    if (homeOpen || !mainChats(f)) return stepReady(dir); // from anywhere else: top of Ready
-    if (chatsZone(f) === 'thread' && f.thread) {
-      const m = winEl(f.id)?.querySelector('.pane-main .ch-msgs'); if (!m) return false;
-      m.scrollBy({ top: dir * Math.round(m.clientHeight * 0.8), behavior: 'smooth' }); return true;
-    }
-    return stepReady(dir); // list side: Ready chats only (plain ↑↓ still walk the whole list); a chat that left Ready → top of Ready
-  }
-  // After a send from the message box, focus goes back to the chat list, so ⌥↓ moves straight on to the next Ready chat.
   stage.addEventListener('submit', e => {
     const form = e.target.closest?.('[data-chform]'), ta = form?.querySelector('textarea'); if (!ta?.value.trim()) return;
     const wel = form.closest('.win'), wid = wel?.dataset.win, w = W[wid]; if (!mainChats(w)) return;
     setTimeout(() => {
-      if (W[wid] !== w || focused()?.id !== wid || (document.activeElement && document.activeElement !== document.body && !wel.contains(document.activeElement))) return;
-      const row = (w.thread && wel.querySelector(`.pane-list .ch-row[data-chopen="${CSS.escape(w.thread)}"]`)) || listRows(wid)[0];
-      if (!row) return;
-      $$('.pane-list .ch-row.kbd', wel).forEach(x => x.classList.remove('kbd')); row.classList.add('kbd');
-      row.focus({ preventScroll: true }); row.scrollIntoView({ block: 'nearest' }); log('send:list-focus');
+      if (W[wid] !== w || (document.activeElement && document.activeElement !== document.body && !wel.contains(document.activeElement))) return;
+      toNewChat(wid, 'text');
     }, 180);
   }, true);
-  // ⌥← / ⌥→ inside Chats: hop between the chat list and the message box. Already there: move to the next window.
-  function chatsSide(dir) {
-    const f = focused(); if (!f || f.app !== 'chats' || homeOpen) return false;
-    const el = winEl(f.id), a = document.activeElement;
-    if (dir < 0) {
-      if (a?.closest?.('.pane-list')) return false;
-      const row = el.querySelector(`.pane-list .ch-row[data-chopen="${CSS.escape(f.thread || '')}"]`) || el.querySelector('.pane-list .ch-row.kbd') || listRows(f.id)[0];
-      if (!row) return false;
-      $$('.pane-list .ch-row.kbd', el).forEach(x => x.classList.remove('kbd')); row.classList.add('kbd');
-      row.focus({ preventScroll: true }); row.scrollIntoView({ block: 'nearest' }); return true;
-    }
-    const ta = el.querySelector('.pane-main textarea');
-    if (!ta || a === ta) return false;
-    ta.focus({ preventScroll: true }); return true;
-  }
   function stepThread(id, dir) {
     const w = W[id]; if (!w || w.app !== 'chats') return false;
     const rows = listRows(id); if (!rows.length) return false;
@@ -1388,7 +1361,7 @@
       }
     }
     const w = vTarget && W[vTarget];
-    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, extraFiles, sealed, modelRoute, stagedId, stagedId ? null : r.captureId, rp.steerRunId, transcript); toast('✦', 'Voice reply · waiting to send', 1400); return 'sent'; }
+    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, extraFiles, sealed, modelRoute, stagedId, stagedId ? null : r.captureId, rp.steerRunId, transcript); toast('✦', 'Voice reply · waiting to send', 1400); setTimeout(() => toNewChat(rp.wid, 'voice'), 180); return 'sent'; }
     if (w && aimSid) CHATS.sendChat(w.id, transcript, 'voice, aimed at this thread', r.blob, { custodyId: stagedId, captureId: stagedId ? null : r.captureId, sid: aimSid, seal: sealed, route: modelRoute, files: extraFiles });
     else {
       const item = await OUTBOX.enqueue({ ...modelRoute, custodyId: stagedId, captureId: stagedId ? null : r.captureId, sealKey: sealed?.key, typed: sealed?.text || '', ...(sealed?.reply ? { reply: sealed.reply } : {}), files: [...(sealed?.files || []), ...extraFiles], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: transcript, instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
@@ -1614,7 +1587,7 @@
       ['D', 'Type with your voice', 'Your words go into the box you’re typing in'],
     ];
     const TYPE = [['N', 'New chat', 'Type a new message'], ['␣', 'Search', 'Apps, chats and commands'], ['I', 'Inbox', 'All your chats']];
-    const READY = [['↓', 'Top ready chat', 'From anywhere. Skips anything still working'], ['E  Z', 'Done / Snooze', 'The open chat'], ['←', 'Chat list', 'Then ↑ ↓ next ready chat'], ['→', 'Open chat', 'Then ↑ ↓ scroll it; just type to reply']];
+    const READY = [['↓', 'Next ready chat', 'From anywhere. Opens it ready to reply'], ['E  Z', 'Done / Snooze', 'The open chat']];
     const GO = [['1', 'Home', 'Your home screen'], ['2–9', 'Desktop 2 to 9', 'Jump straight to it'], ['[ ]', 'Previous / next desktop', ''], ['`', 'Last desktop', 'Back to where you were'], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
     const WIN = [['F', 'Full screen', ''], ['W', 'Close', ''], ['R', 'Refresh window', ''], ['H J K L', 'Next window', 'Left, down, up, right'], ['⇧ ← →', 'Swap places', ''], ['⇧ 2–9', 'Send to a desktop', '']];
     const vis = n => n && !n.hidden && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
@@ -1646,13 +1619,13 @@
       const pr = pane && vis(pane) && pane.getBoundingClientRect();
       if (pr && pr.width > 300 && pr.height > 260) {
         // In Chats the guide shows what works right here: the open chat or the list.
-        const wel = winEl(f.id), onList = !f.thread || !!document.activeElement?.closest?.('.pane-list');
+        const wel = winEl(f.id);
         if (f.thread) {
           for (const [q, l] of [['[data-chact="done"]', 'E'], ['[data-chact="snooze"]', 'Z'], ['.pane-main .ch-send', '↵']]) wel.querySelectorAll(q).forEach(n => { if (vis(n)) chip(n, l); });
         }
-        const here = f.thread ? [['E', 'Done', 'Clears it from Ready'], ['Z', 'Snooze', 'Bring it back later'], onList ? ['→', 'Into this chat', 'Then ↑ ↓ scroll it'] : ['←', 'Back to the list', 'Then ↑ ↓ next ready chat']]
-          : [['↑ ↓', 'Next / previous ready chat', 'Skips anything still working']];
-        const plain = f.thread ? [['Enter', 'Send', `Then ${MOD}↓ for the next ready chat`], ['⇧ Enter', 'New line', ''], ['Esc', 'Back to the list', '']] : [['/', 'Search chats', ''], ['↑ ↓', 'Move (no ⌥ when the list is focused)', '']];
+        const here = f.thread ? [['↓', 'Next ready chat', ''], ['E', 'Done', 'Clears it from Ready'], ['Z', 'Snooze', 'Bring it back later']]
+          : [['↓', 'Next ready chat', 'Opens it ready to reply']];
+        const plain = f.thread ? [['Enter', 'Send', 'Then back to New chat'], ['⇧ Enter', 'New line', ''], ['Esc', 'Back to the list', '']] : [['/', 'Search chats', ''], ['↑ ↓', 'Move (no ⌥ when the list is focused)', '']];
         const c = card('kh-win kh-chat', `<h5>${f.thread ? 'This chat' : 'Chat list'}</h5>${rows(here)}<h5>No ⌥ needed</h5>${rows(plain)}<h5>Window</h5>${rows([['F W R', 'Full screen, close, refresh', '']])}`, { top: Math.max(top, pr.top + 44), left: pr.left + pr.width / 2 });
         c.style.transform = 'translateX(-50%)';
       } else if (r && r.width > 420 && r.height > 260) {
@@ -1698,7 +1671,6 @@
     if ((menu || alt) && !shift && code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
     if ((menu || alt) && !shift && code === 'KeyT') return hit(() => { if (!e.repeat) { closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newDesktop(); } });
     if (alt && !shift && (code === 'ArrowUp' || code === 'ArrowDown')) return hit(() => { if (!e.repeat || focused()?.app === 'chats') { closePalette(); toggleKeys(false); chatsUpDown(code === 'ArrowDown' ? 1 : -1); } });
-    if (alt && !shift && (code === 'ArrowLeft' || code === 'ArrowRight') && focused()?.app === 'chats' && !homeOpen) return hit(() => { const d = code === 'ArrowLeft' ? -1 : 1; if (!chatsSide(d)) dirFocus(d, 0); });
     // ⌥N new chat; ⌥V new voice chat (⌥V again sends).
     if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newChat({ fresh: true }); });
     if (alt && !shift && code === 'Enter') return hit(() => { if (!e.repeat) newChat(); });
