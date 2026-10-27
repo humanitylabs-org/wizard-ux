@@ -1164,9 +1164,10 @@
         const type = d.event || e.type;
         if (type === 'message.delta' && typeof d.delta === 'string') { r.text += d.delta; notify(); }
         // Live steps, like the CLI: the tool that is running and the ones just finished.
-        if (type === 'tool.started' && d.tool) { r.steps = [...r.steps, { tool: String(d.tool), preview: typeof d.preview === 'string' ? d.preview : '', done: false }].slice(-4); notify(); }
+        if (type === 'tool.started' && d.tool) { const id = d.tool_call_id || d.step_id || d.id; r.steps = [...r.steps, { ...(typeof id === 'string' && id ? { id } : {}), tool: String(d.tool), preview: typeof d.preview === 'string' ? d.preview : '', done: false }].slice(-4); notify(); }
         if (type === 'tool.completed' && d.tool) {
-          const i = r.steps.findLastIndex(s => !s.done && s.tool === String(d.tool));
+          const id = d.tool_call_id || d.step_id || d.id;
+          const i = r.steps.findLastIndex(s => !s.done && (typeof id === 'string' && id ? s.id === id : s.tool === String(d.tool)));
           if (i >= 0) { r.steps = r.steps.map((s, n) => n === i ? { ...s, done: true, error: !!d.error } : s); notify(); }
         }
         // reasoning.available is deliberately not answer text.
