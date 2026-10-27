@@ -455,9 +455,20 @@
       const m = winEl(f.id)?.querySelector('.pane-main .ch-msgs'); if (!m) return false;
       m.scrollBy({ top: dir * Math.round(m.clientHeight * 0.8), behavior: 'smooth' }); return true;
     }
-    const onRow = winEl(f.id)?.querySelector('.pane-list .ch-row.kbd') || (f.thread && winEl(f.id)?.querySelector(`.pane-list .ch-row[data-chopen="${CSS.escape(f.thread)}"]`));
-    return onRow ? stepThread(f.id, dir) : stepReady(dir);
+    return stepReady(dir); // list side: Ready chats only (plain ↑↓ still walk the whole list); a chat that left Ready → top of Ready
   }
+  // After a send from the message box, focus goes back to the chat list, so ⌥↓ moves straight on to the next Ready chat.
+  stage.addEventListener('submit', e => {
+    const form = e.target.closest?.('[data-chform]'), ta = form?.querySelector('textarea'); if (!ta?.value.trim()) return;
+    const wel = form.closest('.win'), wid = wel?.dataset.win, w = W[wid]; if (!mainChats(w)) return;
+    setTimeout(() => {
+      if (W[wid] !== w || focused()?.id !== wid || (document.activeElement && document.activeElement !== document.body && !wel.contains(document.activeElement))) return;
+      const row = (w.thread && wel.querySelector(`.pane-list .ch-row[data-chopen="${CSS.escape(w.thread)}"]`)) || listRows(wid)[0];
+      if (!row) return;
+      $$('.pane-list .ch-row.kbd', wel).forEach(x => x.classList.remove('kbd')); row.classList.add('kbd');
+      row.focus({ preventScroll: true }); row.scrollIntoView({ block: 'nearest' }); log('send:list-focus');
+    }, 180);
+  }, true);
   // ⌥← / ⌥→ inside Chats: hop between the chat list and the message box. Already there: move to the next window.
   function chatsSide(dir) {
     const f = focused(); if (!f || f.app !== 'chats' || homeOpen) return false;
@@ -1583,7 +1594,7 @@
       ['D', 'Type with your voice', 'Your words go into the box you’re typing in'],
     ];
     const TYPE = [['N', 'New chat', 'Type a new message'], ['␣', 'Search', 'Apps, chats and commands'], ['I', 'Inbox', 'All your chats']];
-    const READY = [['↓', 'Top ready chat', 'From anywhere. Skips anything still working'], ['E  Z', 'Done / Snooze', 'The open chat'], ['←', 'Chat list', 'Then ↑ ↓ move through your chats'], ['→', 'Open chat', 'Then ↑ ↓ scroll it; just type to reply']];
+    const READY = [['↓', 'Top ready chat', 'From anywhere. Skips anything still working'], ['E  Z', 'Done / Snooze', 'The open chat'], ['←', 'Chat list', 'Then ↑ ↓ next ready chat'], ['→', 'Open chat', 'Then ↑ ↓ scroll it; just type to reply']];
     const GO = [['1', 'Home', 'Your home screen'], ['2–9', 'Desktop 2 to 9', 'Jump straight to it'], ['[ ]', 'Previous / next desktop', ''], ['`', 'Last desktop', 'Back to where you were'], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
     const WIN = [['F', 'Full screen', ''], ['W', 'Close', ''], ['R', 'Refresh window', ''], ['H J K L', 'Next window', 'Left, down, up, right'], ['⇧ ← →', 'Swap places', ''], ['⇧ 2–9', 'Send to a desktop', '']];
     const vis = n => n && !n.hidden && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
@@ -1619,9 +1630,9 @@
         if (f.thread) {
           for (const [q, l] of [['[data-chact="done"]', 'E'], ['[data-chact="snooze"]', 'Z'], ['.pane-main .ch-send', '↵']]) wel.querySelectorAll(q).forEach(n => { if (vis(n)) chip(n, l); });
         }
-        const here = f.thread ? [['E', 'Done', 'Clears it from Ready'], ['Z', 'Snooze', 'Bring it back later'], onList ? ['→', 'Into this chat', 'Then ↑ ↓ scroll it'] : ['←', 'Back to the list', 'Then ↑ ↓ move through chats']]
-          : [['↑ ↓', 'Move through chats', 'Opens each one'], ['↓', 'Top ready chat', '']];
-        const plain = f.thread ? [['Enter', 'Send', ''], ['⇧ Enter', 'New line', ''], ['Esc', 'Back to the list', '']] : [['/', 'Search chats', ''], ['↑ ↓', 'Move (no ⌥ when the list is focused)', '']];
+        const here = f.thread ? [['E', 'Done', 'Clears it from Ready'], ['Z', 'Snooze', 'Bring it back later'], onList ? ['→', 'Into this chat', 'Then ↑ ↓ scroll it'] : ['←', 'Back to the list', 'Then ↑ ↓ next ready chat']]
+          : [['↑ ↓', 'Next / previous ready chat', 'Skips anything still working']];
+        const plain = f.thread ? [['Enter', 'Send', `Then ${MOD}↓ for the next ready chat`], ['⇧ Enter', 'New line', ''], ['Esc', 'Back to the list', '']] : [['/', 'Search chats', ''], ['↑ ↓', 'Move (no ⌥ when the list is focused)', '']];
         const c = card('kh-win kh-chat', `<h5>${f.thread ? 'This chat' : 'Chat list'}</h5>${rows(here)}<h5>No ⌥ needed</h5>${rows(plain)}<h5>Window</h5>${rows([['F W R', 'Full screen, close, refresh', '']])}`, { top: Math.max(top, pr.top + 44), left: pr.left + pr.width / 2 });
         c.style.transform = 'translateX(-50%)';
       } else if (r && r.width > 420 && r.height > 260) {
