@@ -61,6 +61,23 @@ test('page Back returns to root, then leaves closing to the shell; confirm Back 
   assert.match(h.root.innerHTML, /role="alertdialog"/); assert.equal(h.view.back(), true); assert.equal(h.view.page, 'chats');
   assert.equal(h.view.back(), true); assert.equal(h.view.page, ''); assert.equal(h.view.back(), false); assert.equal(h.posts.length, 0);
 });
+test('My release Back visibly returns to Settings on phone and desktop before the shell can close it', () => {
+  for (const shell of ['phone', 'desktop']) {
+    const h = harness({ shell });
+    h.s.WosUpdates = { developer: true, release: true, html: () => '<div data-osu-release>Release</div>' };
+    h.view.focus('release');
+    assert.equal(h.view.page, 'release');
+    assert.match(h.root.innerHTML, /data-st-back aria-label="Back to Settings"/);
+    h.act('data-st-back');
+    assert.equal(h.view.page, '');
+    assert.doesNotMatch(h.root.innerHTML, /data-osu-release|data-st-back/);
+    assert.equal(h.view.back(), false, 'only the next Back belongs to the shell');
+  }
+  const css = fs.readFileSync(new URL('../web/core/settings.css', import.meta.url), 'utf8');
+  assert.doesNotMatch(css, /\.st-desktop\s+\.st-page-head\s+button\s*\{\s*display:\s*none/);
+  assert.match(css, /\[data-st-back\][^}]*min-width: 44px; min-height: 44px/);
+});
+
 test('chooser confirms before POST, reads the exact slot, refreshes registry and rerenders only after confirmation', async () => {
   const h = harness(); h.view.focus('chats-default');
   assert.match(h.root.innerHTML, /Wizard Chats \(built in\)/); assert.match(h.root.innerHTML, /Mizel Chats/);

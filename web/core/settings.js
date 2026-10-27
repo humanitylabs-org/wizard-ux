@@ -317,7 +317,9 @@
       const selection = active && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
       const pages = PAGES.filter(p => !p.available || p.available(ctx));
       if (page && !pages.some(p => p.id === page)) page = '';
-      const selected = page || (desktop ? (release() ? 'release' : 'appearance') : '');
+      // The desktop's root companion is Appearance, never the nested My release
+      // page: Back must visibly leave that page before the shell can close Settings.
+      const selected = page || (desktop ? 'appearance' : '');
       const heading = PAGES.find(p => p.id === selected)?.title || '';
       const items = attention(ctx);
       const attentionHtml = items.length ? `<div class="st-attention" aria-label="Needs attention">${items.map(i => `<button data-st-attention="${esc(i.feature)}">${esc(i.title)}<span aria-hidden="true">›</span></button>`).join('')}</div>` : '';
@@ -330,7 +332,7 @@
       const content = fs.map(f => `<section data-settings-feature="${esc(f.id)}">${f.html(ctx)}</section>`).join('');
       const footer = `<footer class="st-shortcuts">${window.WosFiles ? '<button data-st-shortcut="files" data-st="files">Files</button>' : ''}${(window.WosFeatures?.entries || []).filter(f => !f.available || f.available()).map(f => `<button data-st-shortcut="${esc(f.id)}">${esc(f.title || f.id)}</button>`).join('')}</footer>`;
       root.dataset.settingsPage = page;
-      root.innerHTML = `<div class="st-inner ${desktop ? 'st-desktop' : 'st-phone'} ${page ? 'st-in-page' : ''}"><div class="st-index"><h3 class="st-title" tabindex="-1">Settings</h3>${card}${attentionHtml}<nav aria-label="Settings categories">${nav}</nav>${footer}</div><div class="st-page" ${selected ? '' : 'hidden'}><header class="st-page-head"><button data-st-back aria-label="Back to Settings">‹</button><h3 tabindex="-1">${heading}</h3></header>${content}</div></div>${confirm ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="st-confirm-title"><h3 id="st-confirm-title">Use ${esc(chatsName(confirm.id))} for all your chats?</h3><p>You can switch back here any time.</p><div class="st-actions"><button data-chats-cancel ${ctx.chatsBusy ? 'disabled' : ''}>Cancel</button><button data-chats-confirm ${ctx.chatsBusy ? 'disabled' : ''}>${ctx.chatsBusy ? 'Switching…' : 'Use ' + esc(chatsName(confirm.id))}</button></div></section></div>` : ''}`;
+      root.innerHTML = `<div class="st-inner ${desktop ? 'st-desktop' : 'st-phone'} ${page ? 'st-in-page' : ''}"><div class="st-index"><h3 class="st-title" tabindex="-1">Settings</h3>${card}${attentionHtml}<nav aria-label="Settings categories">${nav}</nav>${footer}</div><div class="st-page" ${selected ? '' : 'hidden'}><header class="st-page-head">${page ? '<button data-st-back aria-label="Back to Settings">‹</button>' : ''}<h3 tabindex="-1">${heading}</h3></header>${content}</div></div>${confirm ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="st-confirm-title"><h3 id="st-confirm-title">Use ${esc(chatsName(confirm.id))} for all your chats?</h3><p>You can switch back here any time.</p><div class="st-actions"><button data-chats-cancel ${ctx.chatsBusy ? 'disabled' : ''}>Cancel</button><button data-chats-confirm ${ctx.chatsBusy ? 'disabled' : ''}>${ctx.chatsBusy ? 'Switching…' : 'Use ' + esc(chatsName(confirm.id))}</button></div></section></div>` : ''}`;
       root.scrollTop = top;
       const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = paneTop;
       const importStatus = root.querySelector('[data-skinimport-status]'); if (importStatus) importStatus.textContent = skinImportMessage;

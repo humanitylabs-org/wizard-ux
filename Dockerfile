@@ -11,6 +11,10 @@ RUN for f in /usr/share/nginx/wizard-ux/data.js /usr/share/nginx/wizard-ux/summa
 COPY packaging/nginx.conf.template packaging/static.conf packaging/proxy.conf packaging/proxy-mcp.conf /etc/wizard-shell/
 COPY packaging/entrypoint.sh /usr/local/bin/wizard-shell-entrypoint
 COPY packaging/health.sh /usr/local/bin/wizard-shell-health
+# WAM builds from worktrees created by a private service (umask 077). COPY preserves
+# those owner-only modes; normalize public shell assets before dropping privileges.
+RUN chmod -R a+rX /usr/share/nginx/wizard-ux /etc/wizard-shell \
+    && chmod a+r /usr/local/bin/wizard-shell-entrypoint /usr/local/bin/wizard-shell-health
 ENV WIZARD_AGENT_SERVICE_ORIGIN=http://wizard-agent-service:8787 WIZARD_SHELL_LISTEN=8788
 USER 101:101
 EXPOSE 8788

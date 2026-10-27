@@ -20,3 +20,11 @@ test('every docker-ignored script the shell loads gets an empty placeholder in t
   assert.match(dockerfile, /\[ -e "\$f" \] \|\| /);
   assert.ok(dockerfile.indexOf('data.js') < dockerfile.indexOf('USER 101:101'));
 });
+
+test('private umask source remains readable by the non-root shell runtime', () => {
+  const dockerfile = read('Dockerfile');
+  const normalize = dockerfile.indexOf('RUN chmod -R a+rX /usr/share/nginx/wizard-ux /etc/wizard-shell');
+  assert.ok(normalize > dockerfile.indexOf('COPY packaging/health.sh'), 'normalize after every copied public runtime file');
+  assert.ok(normalize < dockerfile.indexOf('USER 101:101'), 'normalize before dropping root');
+  assert.match(dockerfile.slice(normalize), /chmod a\+r \/usr\/local\/bin\/wizard-shell-entrypoint \/usr\/local\/bin\/wizard-shell-health/);
+});
