@@ -7,7 +7,7 @@ const html = readFileSync(new URL('../web/desktop.html', import.meta.url), 'utf8
 
 test('keys sheet leads with speaking, then switching what you see', () => {
   const groups = [...js.slice(js.indexOf('const KEYS = ['), js.indexOf("const keysEl = $('#keys')")).matchAll(/^\s{4}\['([^']+)'/gm)].map(m => m[1]);
-  assert.deepEqual(groups, ['Speak and ask · same key again sends', 'Switch what you see', 'Arrange windows', 'In Chats', 'Wizard for Mac (any app)']);
+  assert.deepEqual(groups, ['Speak · press the same key again to send', 'Things to say after ', 'Type and find', 'Switch what you see', 'Arrange windows', 'In Chats', 'Wizard for Mac (any app)']);
 });
 
 test('⌥S speaks about the screen, ⌥C speaks a command, ⌥D dictates', () => {
