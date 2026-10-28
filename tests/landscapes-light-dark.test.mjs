@@ -29,8 +29,8 @@ test('the Landscapes package and Miguel\'s shell rules cover both palettes', () 
   assert.doesNotMatch(read('web/desktop/desktop.css'), /data-skin="landscapes"\]/);
 });
 
-test('Landscapes Light: 65% window glass, white send arrow, full-colour marks, bright badges', () => {
-  assert.match(js, /id: 'landscapes-light'[^\n]*\n[^\n]*\n[^\n]*\n[^\n]*'sk-win': 'rgba\(250,250,252,\.65\)'/);
+test('Landscapes Light: 85% window glass, white send arrow, full-colour marks, bright badges', () => {
+  assert.match(js, /id: 'landscapes-light'[^\n]*\n[^\n]*\n[^\n]*\n[^\n]*'sk-win': 'rgba\(250,250,252,\.85\)'/);
   const css = read('web/skins/landscapes/skin.css');
   assert.match(css, /landscapes-light[^\n]*\.ch-compose button:is\(\.ch-send, \.ch-mic\.on\) svg \{ stroke: #fff; \}/);
   assert.match(css, /landscapes-light[^\n]*\.dsg \{ opacity: 1; \}/);
@@ -41,4 +41,10 @@ test('skin names in the picker wrap to two lines instead of cutting off', () => 
   const css = read('web/core/skins.css');
   assert.match(css, /\.st-root \.skp-nm \{[^}]*-webkit-line-clamp: 2;[^}]*min-height: 18px;/);
   assert.doesNotMatch(css.match(/\.st-root \.skp-nm \{[^}]*\}/)[0], /nowrap/);
+});
+
+test('Landscapes Light: the Latest pill and the small in-thread notes read as ink on light glass', () => {
+  const css = read('web/skins/landscapes/skin.css');
+  assert.match(css, /landscapes-light"\]:is\(\[data-shell="desktop"\], :not\(\[data-shell="desktop"\]\)\) \.ch-latest \{ background: rgba\(250, 250, 252/);
+  assert.match(css, /landscapes-light[^\n]*:is\(\.msg\.agentnote > summary, \.laterrun, [^\n]*\{ color: var\(--ink-2\); \}/);
 });
