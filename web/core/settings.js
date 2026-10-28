@@ -479,7 +479,12 @@
       confirm = null; render(); root.scrollTop = 0;
       const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = 0;
       const g = id ? root.querySelector(`[data-settings-feature="${CSS.escape(f?.id || id)}"]`) : null;
-      g?.scrollIntoView?.({ block: 'nearest' });
+      // Scroll this Settings pane only. scrollIntoView also scrolls clipped shell/window
+      // ancestors horizontally, shifting a tiled window (or an opening phone sheet) off screen.
+      if (g) {
+        const scroller = desktop ? pane : root;
+        if (scroller) scroller.scrollTop += g.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      }
       (g?.querySelector('button:not(:disabled)') || root.querySelector(page ? '.st-page-head h3' : '.st-title'))?.focus({ preventScroll: true });
     }
     function back() {

@@ -54,6 +54,20 @@ test('falsy root focus from real shell settings buttons never treats a boolean a
     }
   }
 });
+test('deep-linked Settings scrolls only its own pane, never clipped shell/window ancestors', () => {
+  for (const shell of ['phone', 'desktop']) {
+    const h = harness({ shell });
+    h.s.WosSettings.register({ id: 'server-access', page: 'usage', html: () => 'Access' });
+    const pane = { scrollTop: 0, getBoundingClientRect: () => ({ top: 100 }) };
+    const feature = { querySelector: () => null, getBoundingClientRect: () => ({ top: 340 }), scrollIntoView: () => assert.fail('must not scroll shell ancestors') };
+    h.root.getBoundingClientRect = () => ({ top: 80 });
+    h.root.querySelector = sel => sel === '.st-page' ? pane : sel === '[data-settings-feature="server-access"]' ? feature : null;
+    h.view.focus('server-access');
+    assert.equal(h.view.page, 'usage');
+    assert.equal(shell === 'desktop' ? pane.scrollTop : h.root.scrollTop, shell === 'desktop' ? 240 : 260);
+    assert.equal(h.view.back(), true);assert.equal(h.view.page, '');
+  }
+});
 test('attention is conditional, counts real stores and routes each item; recovery subtitle deduplicates custody', () => {
   const h = harness();
   h.view.context.outbox = { canRetry: () => false, unsent: () => [{ id: 'same', createdAt: 1, state: 'failed' }] };
@@ -214,7 +228,8 @@ test('Resources: the page shows the Home resource bars from the shared renderer;
   assert.match(h.root.innerHTML, /<b>Resources<\/b><\/span><span class="st-val" data-st-subtitle="usage"><\/span>/, 'renamed, no value while nothing is low');
   low = { label: 'Disk', left: 12, value: '88/100 GB used' }; h.view.render();
   assert.match(h.root.innerHTML, /data-st-subtitle="usage">Disk 88\/100 GB used</, 'under a quarter left: the lowest one');
-  const section = { querySelector: sel => sel === '[data-st-resources]' ? { host: true } : null };
+  const section = { getBoundingClientRect: () => ({ top: 80 }), querySelector: sel => sel === '[data-st-resources]' ? { host: true } : null };
+  h.root.getBoundingClientRect = () => ({ top: 0 });
   h.root.querySelector = sel => sel === '[data-settings-feature="usage"]' ? section : null;
   h.view.focus('resources');
   assert.equal(h.view.page, 'usage');

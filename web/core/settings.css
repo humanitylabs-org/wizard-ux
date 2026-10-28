@@ -123,8 +123,15 @@
 .st-desktop .st-page { overflow-y: auto; min-width: 0; padding-right: 8px; }
 .st-desktop .st-page-head button { display: none; }
 .st-desktop .st-page-head { min-height: 48px; }
-@media (max-width: 700px) {
-  .st-desktop { grid-template-columns: 220px minmax(0, 1fr); gap: 12px; }
+/* Tiled Settings follows its own window width, not the desktop viewport width. */
+@container settings (max-width: 599px) {
+  .st-desktop { display: block; }
+  .st-desktop .st-index { border-right: 0; padding-right: 0; height: 100%; }
+  .st-desktop.st-in-page .st-index { display: none; }
+  .st-desktop:not(.st-in-page) .st-page { display: none; }
+  .st-desktop .st-page { height: 100%; }
+  .st-desktop .st-page-head button { display: block; }
+  .st-desktop .st-page-head h3 { min-width: 0; overflow-wrap: anywhere; font-size: clamp(18px, 5cqi, 24px); }
 }
 
 .st-title:focus, .st-page-head h3:focus { outline: none; }
