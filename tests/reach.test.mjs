@@ -73,9 +73,9 @@ test('4s deadline handles hung fetch and status bodies, without hanging consumer
   const bodyWork = b.api.diagnose(); for (let i = 0; i < 10; i++) await Promise.resolve();
   [...b.timers.values()][0](); assert.equal((await bodyWork).layer, 'diagnosis');
 });
-test('Troubleshooter navigation is same-tab on phone and a safe new tab on desktop', () => {
-  const h = setup(); h.api.open(); assert.deepEqual(h.opened[0], ['same', '/troubleshoot/']);
-  h.ctx.document.documentElement.dataset.shell = 'desktop'; h.api.open();
+test('Troubleshooter navigation is same-tab on phone and a safe new tab on desktop', async () => {
+  const h = setup(); await h.api.open(); assert.deepEqual(h.opened[0], ['same', '/troubleshoot/']);
+  h.ctx.document.documentElement.dataset.shell = 'desktop'; await h.api.open();
   assert.deepEqual(h.opened[1], ['/troubleshoot/', '_blank', 'noopener']);
 });
 
@@ -102,15 +102,26 @@ test('repair-chat engine probes (Tinfoil, Claude, ChatGPT) never become the conn
   const both = setup({ fetch: async () => response({ checks: [...checks, { id: 'hermes', label: 'Hermes', ok: false }], overall: 'down' }) });
   assert.equal((await both.api.diagnose()).layer, 'hermes');
 });
-test('Troubleshoot on an unreachable Wizard: the phone app shows its Tailscale guide; elsewhere nothing opens', async () => {
-  const h = setup({ hostname: 'wizard.example.ts.net', fetch: async () => { throw new TypeError('Load failed'); } });
-  await h.api.diagnose();
-  assert.equal(h.api.failure().layer, 'tailscale');
-  assert.equal(h.api.open(), false, 'Troubleshooter is served by the Wizard it can’t reach');
+test('Troubleshoot on an unreachable Wizard: the phone app shows its Tailscale guide; elsewhere the pill explains', async () => {
+  const h = setup({ hostname: 'wizard.example-tailnet.ts.net', fetch: async () => { throw new TypeError('Load failed'); } });
+  const before = h.events();
+  assert.equal(await h.api.open(), false, 'Troubleshooter is served by the Wizard it can’t reach');
   assert.deepEqual(h.opened, []);
+  assert.ok(h.events() > before, 'asks the connection pill to unfold what to check (any caller)');
   let restarted = 0;
   h.ctx.Capacitor = { Plugins: { WizardShell: { retry: async () => { restarted++; } } } };
-  assert.equal(h.api.open(), true);
+  assert.equal(await h.api.open(), true);
   assert.equal(restarted, 1, 'the app restarts into its connect screen and Tailscale guide');
   assert.deepEqual(h.opened, []);
+});
+test('Troubleshoot decides on a current diagnosis, not one from before the disconnect', async () => {
+  let up = true;
+  const h = setup({ hostname: 'wizard.example-tailnet.ts.net', fetch: async () => { if (!up) throw new TypeError('Load failed'); return response(); } });
+  await h.api.diagnose();                 // a healthy diagnosis is cached
+  up = false; h.advance(5000);            // the Wizard drops; the cache is still within its 10 s
+  assert.equal(await h.api.open(), false);
+  assert.deepEqual(h.opened, [], 'never opens the page that can’t load');
+  const fresh = setup({ hostname: 'wizard.example-tailnet.ts.net', fetch: async () => { throw new TypeError('Load failed'); } });
+  assert.equal(await fresh.api.open(), false, 'no diagnosis yet: diagnoses first');
+  assert.deepEqual(fresh.opened, []);
 });

@@ -44,8 +44,7 @@
     return el;
   }
   function onClick(e) {
-    // Nothing to open while the Wizard is unreachable (outside the phone app): unfold what to check instead.
-    if (e.target.closest('[data-wxtroubleshoot]')) { if (window.WizReach?.open() === false) { netOpen = true; log('net:open'); unfold(); } return; }
+    if (e.target.closest('[data-wxtroubleshoot]')) { window.WizReach?.open(); return; }
     if (e.target.closest('[data-wxmore]')) { netOpen = !netOpen; log('net:' + (netOpen ? 'open' : 'fold')); unfold(); return; }
     if (e.target.closest('[data-wxretry]')) { window.WosOutbox?.retryAll(); verifyWizard(true); LIVE()?.refresh(); return; }
     if (e.target.closest('[data-wxcrit-x]')) { critHidden = critSig(); log('critical:dismiss'); render(); return; }
@@ -181,6 +180,8 @@
   };
   // Cheap catch-all for things with no event (the thread in front changed, the inbox opened or closed).
   addEventListener('wizreachchange', render);
+  // Troubleshoot from any button while nothing of the Wizard answers (outside the phone app): unfold what to check.
+  addEventListener('wizreachexplain', () => { netOpen = true; log('net:open'); render(); unfold(); });
   addEventListener('resize', () => { lastHtml = ''; render(); });
   setInterval(() => {
     if (document.hidden || !document.getElementById('wxBanners')) return;

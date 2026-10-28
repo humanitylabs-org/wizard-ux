@@ -56,9 +56,9 @@
     } catch (_) { return result('diagnosis', 'Wizard’s gateway is reachable, but its health report isn’t available. Open Troubleshooter to check it. Messages are kept while we retry.', RECONNECTING); }
     return result('send', 'Wizard is online, but this message hasn’t gone through yet. It’s kept on this device while we retry.', 'Not sent yet · retrying');
   }
-  function diagnose() {
+  function diagnose(maxAge = 10000) {
     if (work) return work;
-    if (cached && Date.now() - cachedAt < 10000) return Promise.resolve(cached);
+    if (cached && Date.now() - cachedAt < maxAge) return Promise.resolve(cached);
     work = probe().then(value => {
       const changed = JSON.stringify(value) !== JSON.stringify(cached);
       cached = value; cachedAt = Date.now();
@@ -75,13 +75,17 @@
     },
     // Troubleshooter is an ordinary built-in app: open it in a shell window like any other app. Leaving the shell
     // for the bare page is only the last resort, when the shell can't open windows at all.
-    // When the Wizard can't be reached at all, Troubleshooter can't either (the same Wizard serves it): the Wizard
-    // phone app restarts into its own connect screen, which has the Tailscale guide; elsewhere the caller shows the
-    // full diagnosis. Returns false when it opened nothing.
-    open() {
-      if (cached && UNREACHABLE.has(cached.layer)) {
+    // When the Wizard can't be reached at all, Troubleshooter can't either (the same Wizard serves it). Decide on a
+    // current diagnosis (one from before the disconnect, or none yet, would open the page that never loads): the Wizard
+    // phone app then restarts into its own connect screen with the Tailscale guide; anywhere else the connection pill
+    // unfolds what to check ('wizreachexplain'), whichever button was tapped. Resolves false when nothing opened.
+    async open() {
+      let d = cached;
+      if (!d || Date.now() - cachedAt > 3000) { try { d = await diagnose(3000); } catch (e) { d = cached; } }
+      if (d && UNREACHABLE.has(d.layer)) {
         const shell = window.Capacitor?.Plugins?.WizardShell;
         if (typeof shell?.retry === 'function') { shell.retry().catch?.(() => {}); return true; }
+        window.dispatchEvent(new Event('wizreachexplain'));
         return false;
       }
       try { if (window.WizOpenApp?.('troubleshooter')) return true; } catch (e) {}
