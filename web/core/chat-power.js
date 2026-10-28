@@ -361,12 +361,12 @@ window.WosChatPower = function chatPower(A) {
     // Only the freshly hydrated input, never cached turns. A failed note-started turn (the server's request skips
     // follow-through notes, so it is empty or an older request) goes again as a plain "Retry".
     const note = noteTurn(w && w.thread === sid ? w : null, s);
-    const text = note ? RETRY_WORD : s?.request || (FAILED.has(s?.status) ? RETRY_WORD : '');
+    const text = s?.retryRunId ? s.request || RETRY_WORD : note ? RETRY_WORD : s?.request || (FAILED.has(s?.status) ? RETRY_WORD : '');
     if (!text) { toast('!', 'This thread has no request to send again · open it to reply', 2600); return false; }
     const cur = o ? { model: o.value, provider: o.provider } : threadModel(s);
     const c = w ? ch(wid) : null; if (c) c.retrying = sid;
     try {
-      await OUTBOX.enqueue({ kind: 'reply', sessionId: sid, text, wid: w && w.thread === sid ? wid : '', how: 'retry', source: 'chat',
+      await OUTBOX.enqueue({ kind: 'reply', sessionId: sid, text, retryRunId: s.retryRunId || '', wid: w && w.thread === sid ? wid : '', how: 'retry', source: 'chat',
         instructions: `${window.WizConfig.owner() || 'The owner'} pressed Retry on this thread after the last request failed${o ? `, choosing ${o.name}` : ''}. ${text === RETRY_WORD ? 'Carry out the last request in this thread again (it may be a follow-through note rather than a typed message).' : 'This is the same request again.'}`,
         ...(cur.model ? { model: cur.model, provider: cur.provider } : {}) });
       E?.cleared.set(sid, Date.now());
