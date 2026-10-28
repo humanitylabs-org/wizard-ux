@@ -44,6 +44,21 @@ const PAYLOAD = 'wizard://connect?origin=' + encodeURIComponent(new URL(WIZ).ori
         await page.waitForFunction(() => [...document.querySelectorAll('iframe')].some(el => el.contentWindow?.__setup));
         const f = page.frames().find(f => /\/setup\/(index\.html)?(?:\?|$)/.test(f.url()));
         assert.ok(f, 'Setup frame exists');
+        // James: "Don't see the option" — the checklist itself (done phone row) must offer it, no extra tap.
+        await f.waitForFunction(() => document.querySelector('#list .row[data-state="done"]'));
+        await check(`${mode}: link another device is on the Setup checklist right under the done phone row`, async () => {
+          const b = f.locator('#list [data-act="list-link-device"]');
+          assert.equal(await b.isVisible(), true);
+          assert.equal(await f.evaluate(() => document.querySelector('#list .rows').nextElementSibling.dataset.act), 'list-link-device');
+          await b.click();
+          const q = f.locator('#linkDevice [data-step="3"] canvas');
+          await q.waitFor({ state: 'visible' }); await q.scrollIntoViewIfNeeded();
+          assert.equal(await decode(q), PAYLOAD);
+          await page.screenshot({ path: path.join(SHOTS, `${mode}-from-checklist-qr.png`) });
+          await page.evaluate(() => document.documentElement.dataset.shell === 'phone' ? window.__wosNativeBack() : window.__wux.escStep());
+          await f.waitForFunction(() => !__setup.state.linkDevice && __setup.state.screen === 'list');
+          assert.equal(await f.locator('#list [data-act="list-link-device"]').isVisible(), true);
+        });
         await f.locator('[data-act="open-phone"]').click();
         await f.waitForFunction(() => __setup.state.phone.data?.step === 'phone_seen');
         await check(`${mode}: button visible after linking, below the normal steps`, async () => {

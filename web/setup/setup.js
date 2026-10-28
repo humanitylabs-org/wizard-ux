@@ -102,6 +102,7 @@
     else S.phone = { status: 'neterr', data: null, banner: false };
     if (S.starting && Date.now() > S.startUntil) { S.starting = false; S.opErr = 'That didn’t work. Try again.'; log('start:timeout'); }
     renderPhone();
+    if (S.pendingLink && S.phone.status !== 'loading') { S.pendingLink = false; if (S.phone.status === 'ok' && canLinkDevice(S.phone.data)) openLinkDevice(); else S.linkFromList = false; }
   }
   function applyPhone(d) {
     S.phone = { status: 'ok', data: d, banner: false };
@@ -171,7 +172,7 @@
   }
   function closePhone() {
     if (S.screen !== 'phone') return false;
-    closeLinkDevice(); closeSheet(); closeMenu();
+    S.pendingLink = false; S.linkFromList = false; closeLinkDevice(); closeSheet(); closeMenu();
     S.screen = 'list'; schedule(0); phoneSeq++; S.starting = false;
     $('phone').hidden = true; $('list').hidden = false; scrollTo(0, 0);
     log('screen:list'); if (!ioList) loadList(); else renderList();
@@ -196,6 +197,7 @@
     S.linkDevice = false; $('linkDevice').hidden = true; $('scrim').hidden = true; $('app').inert = false;
     const h = linkDeviceHold; linkDeviceHold = null; if (!fromBack) h?.release();
     $('phone').querySelector('[data-act="link-device"]')?.focus({ preventScroll: true });
+    if (S.linkFromList) { S.linkFromList = false; closePhone(); $('list').querySelector('[data-act="list-link-device"]')?.focus({ preventScroll: true }); } // opened from the checklist: Back lands back there
     return true;
   }
   let lastLinkDeviceHtml = '';
@@ -235,6 +237,8 @@
       : { loading: 'Checking…', neterr: 'Can’t check right now.', todo: 'From anywhere, not just at home.', in_progress: 'Not finished. Pick up where you left off.', done: 'Your phone is connected.' }[st] || 'From anywhere, not just at home.';
     const end = st === 'done' ? `<svg class="okmark" viewBox="0 0 24 24" aria-label="Done"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>` : st === 'in_progress' ? `<span class="dot" aria-label="In progress"></span>${CHEV}` : CHEV;
     h += `<div class="rows"><button class="row" data-act="open-phone" data-state="${esc(st)}"><span class="ic" aria-hidden="true">📱</span><span class="bd"><b>${esc(str(item.title) || 'Use Wizard on your phone')}</b><small>${line}</small></span><span class="end">${end}</span></button></div>`;
+    // Once a phone is linked, the next phone starts from the checklist itself, one tap below the done row.
+    if (st === 'done') h += '<button class="btn secondary" data-act="list-link-device">Link another device</button>';
     if (L.status === 'neterr') h += '<button class="link" data-act="retry-list">Try again</button>';
     if (L.status === 'ok') h += window.WosRecommended?.html() || '';
     h += '<p class="foot custom" data-customize>Everything you see is customizable. Try asking your Wizard for one change.</p>';
@@ -375,6 +379,7 @@
     const act = t.dataset.act;
     if (!act && t.matches('.url')) { if (phoneLayout) copy(t.dataset.url); return; }
     if (act === 'open-phone') openPhone();
+    else if (act === 'list-link-device') { S.pendingLink = true; S.linkFromList = true; openPhone(); if (S.phone.status === 'ok') { S.pendingLink = false; if (canLinkDevice(S.phone.data)) openLinkDevice(); } }
     else if (act === 'back') closeLinkDevice() || closePhone();
     else if (act === 'link-device') openLinkDevice();
     else if (act === 'close-link-device') closeLinkDevice();
