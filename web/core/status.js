@@ -44,7 +44,8 @@
     return el;
   }
   function onClick(e) {
-    if (e.target.closest('[data-wxtroubleshoot]')) { window.WizReach?.open(); return; }
+    // Nothing to open while the Wizard is unreachable (outside the phone app): unfold what to check instead.
+    if (e.target.closest('[data-wxtroubleshoot]')) { if (window.WizReach?.open() === false) { netOpen = true; log('net:open'); unfold(); } return; }
     if (e.target.closest('[data-wxmore]')) { netOpen = !netOpen; log('net:' + (netOpen ? 'open' : 'fold')); unfold(); return; }
     if (e.target.closest('[data-wxretry]')) { window.WosOutbox?.retryAll(); verifyWizard(true); LIVE()?.refresh(); return; }
     if (e.target.closest('[data-wxcrit-x]')) { critHidden = critSig(); log('critical:dismiss'); render(); return; }

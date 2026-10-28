@@ -4,6 +4,8 @@
 (() => {
   'use strict';
   const order = ['gateway', 'signin', 'shell', 'agent-service', 'hermes'];
+  /** Diagnoses where nothing of the Wizard answers, so Troubleshooter (served by it) can't open either. */
+  const UNREACHABLE = new Set(['tailscale', 'unreachable', 'device-offline']);
   const result = (layer, message, short) => ({ layer, message, short, action: 'troubleshoot' });
   const pending = result('checking', 'Checking the connection to Wizard. Messages are kept on this device while we retry.', 'Checking connection · retrying');
   let cached = null, cachedAt = 0, work = null, failureAt = -Infinity;
@@ -66,10 +68,19 @@
     },
     // Troubleshooter is an ordinary built-in app: open it in a shell window like any other app. Leaving the shell
     // for the bare page is only the last resort, when the shell can't open windows at all.
+    // When the Wizard can't be reached at all, Troubleshooter can't either (the same Wizard serves it): the Wizard
+    // phone app restarts into its own connect screen, which has the Tailscale guide; elsewhere the caller shows the
+    // full diagnosis. Returns false when it opened nothing.
     open() {
-      try { if (window.WizOpenApp?.('troubleshooter')) return; } catch (e) {}
+      if (cached && UNREACHABLE.has(cached.layer)) {
+        const shell = window.Capacitor?.Plugins?.WizardShell;
+        if (typeof shell?.retry === 'function') { shell.retry().catch?.(() => {}); return true; }
+        return false;
+      }
+      try { if (window.WizOpenApp?.('troubleshooter')) return true; } catch (e) {}
       if (document.documentElement.dataset.shell === 'desktop') window.open('/troubleshoot/', '_blank', 'noopener');
       else location.assign('/troubleshoot/');
+      return true;
     },
   };
 })();

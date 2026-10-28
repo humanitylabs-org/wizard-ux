@@ -77,3 +77,16 @@ test('Troubleshooter navigation is same-tab on phone and a safe new tab on deskt
   h.ctx.document.documentElement.dataset.shell = 'desktop'; h.api.open();
   assert.deepEqual(h.opened[1], ['/troubleshoot/', '_blank', 'noopener']);
 });
+
+test('Troubleshoot on an unreachable Wizard: the phone app shows its Tailscale guide; elsewhere nothing opens', async () => {
+  const h = setup({ hostname: 'wizard.example.ts.net', fetch: async () => { throw new TypeError('Load failed'); } });
+  await h.api.diagnose();
+  assert.equal(h.api.failure().layer, 'tailscale');
+  assert.equal(h.api.open(), false, 'Troubleshooter is served by the Wizard it can’t reach');
+  assert.deepEqual(h.opened, []);
+  let restarted = 0;
+  h.ctx.Capacitor = { Plugins: { WizardShell: { retry: async () => { restarted++; } } } };
+  assert.equal(h.api.open(), true);
+  assert.equal(restarted, 1, 'the app restarts into its connect screen and Tailscale guide');
+  assert.deepEqual(h.opened, []);
+});
