@@ -80,7 +80,9 @@
   const save = () => { store.set('wins', W); store.set('ws', ws); store.set('cur', cur); store.set('hud', hud); window.WosWorkspaceSync?.current?.changed(); };
   const wsOf = id => ws.findIndex(d => d.wins.includes(id));
   let homeOpen = store.get('homeOpen', false) === true;
-  const focused = () => homeOpen ? null : W[ws[cur].focus] || null;
+  // The keyboard in the heads-up chat makes it the window in front for keys, voice and chat actions.
+  function hudHasFocus() { return !!hud?.open && !!W[hud.id] && !!document.getElementById('hudLayer')?.contains(document.activeElement); }
+  const focused = () => hudHasFocus() ? W[hud.id] : homeOpen ? null : W[ws[cur].focus] || null;
   save(); // Persist normalization before the layout-version marker can affect another boot.
 
   /* ---------------- chats (shared core) ---------------- */
@@ -203,6 +205,7 @@
     return W[id];
   }
   function closeWin(id, internal = false) {
+    if (hud?.id === id) { hudClose(); return; }
     const t = wsOf(id); if (t < 0) return;
     if (!internal) {
       boundManager?.dismiss(W[id]);
@@ -217,6 +220,7 @@
     save(); render();
   }
   function focusWin(id, { scroll = true } = {}) {
+    if (hud?.id === id) { if (!hud.open) hudFold(false); else hudFocus(); return; }
     const t = wsOf(id); if (t < 0) return;
     const fromHome = homeOpen;
     leaveHome();
@@ -251,7 +255,7 @@
     [d.wins[i], d.wins[j]] = [d.wins[j], d.wins[i]]; save(); layout();
   }
   function toggleMono() {
-    if (homeOpen) return; // Home must not alter a parked desktop's fullscreen preference.
+    if (homeOpen || hudHasFocus()) return; // Home must not alter a parked desktop's fullscreen preference; nor the HUD.
     const d = ws[cur]; if (!d.wins.length) return;
     d.mono = !d.mono; save(); layout();
     if (d.mono && !store.get('fullHint', false)) {
@@ -336,7 +340,7 @@
   // Prefer this workspace, then any.
   function findWin(fn) {
     const here = ws[cur].wins.map(id => W[id]).find(fn); if (here) return here;
-    return Object.values(W).find(fn) || null;
+    return Object.values(W).find(w => w.id !== hud?.id && fn(w)) || null; // the heads-up chat is never reused as a desk window
   }
   function openThread(sid, opts = {}) {
     if (!sid) return;
@@ -492,7 +496,7 @@
   // After a send (Enter, or a Right ⌘ / mic voice reply) the window goes back to a focused New chat:
   // type a new one straight away, or ⌥↓ to the next Ready chat.
   function toNewChat(wid, why) {
-    const w = W[wid]; if (!mainChats(w) || homeOpen || focused()?.id !== wid) return;
+    const w = W[wid]; if (hud?.id === wid || !mainChats(w) || homeOpen || focused()?.id !== wid) return; // the HUD stays on its chat
     CHATS.openNewDraft(wid, ''); syncChatsPane(wid); setTimeout(() => focusInside(wid), 30); log('send:new-chat:' + why);
   }
   stage.addEventListener('submit', e => {
@@ -723,7 +727,6 @@
     log(fold ? 'hud:fold' : 'hud:open');
     return true;
   }
-  const hudHasFocus = () => !!hud?.open && !!winEl(hud.id)?.contains(document.activeElement);
   // Move by the title bar or the orb; resize by the top-left grip (the bottom-right corner stays put).
   let hudDrag = null;
   stage.addEventListener('pointerdown', e => {
