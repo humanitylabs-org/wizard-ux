@@ -38,7 +38,7 @@ test('failing checks use gateway/signin/shell/service/Hermes priority then unkno
     const checks = order.slice(i).reverse().map(id => ({ id, ok: false, label: id, detail: 'out of space' }));
     const h = setup({ fetch: async () => response({ checks }) }); const d = await h.api.diagnose();
     assert.equal(d.layer, order[i]); assert.equal(d.action, 'troubleshoot');
-    if (i === 3 || i === 4) assert.match(d.message, /restarts itself automatically/);
+    if (i === 3 || i === 4) assert.match(d.message, /comes back on its own/);
     if (i === 5) assert.equal(d.message, 'disk: out of space');
   }
 });
@@ -48,6 +48,7 @@ test('status failure, malformed JSON, missing checks and degraded overall stay a
     assert.equal((await h.api.diagnose()).layer, 'diagnosis');
   }
   const h = setup({ fetch: async () => response({ checks: [], overall: 'down', summary: 'Restarting Wizard' }) });
+  const d = await h.api.diagnose(); assert.equal(d.short, 'Reconnecting…');
   assert.equal((await h.api.diagnose()).message, 'Restarting Wizard');
 });
 test('healthy infrastructure with failed send reports retry; results cache 10s and coalesce', async () => {
@@ -78,6 +79,29 @@ test('Troubleshooter navigation is same-tab on phone and a safe new tab on deskt
   assert.deepEqual(h.opened[1], ['/troubleshoot/', '_blank', 'noopener']);
 });
 
+// James, 27 Oct: an Agent Service restart showed "Agent Service needs attention", then a Tinfoil repair-engine
+// failure; it reconnected on its own. A self-healing outage reads as reconnecting, never as an alarm.
+test('self-healing outages read as reconnecting, not an alarm', async () => {
+  for (const id of ['gateway', 'shell', 'agent-service', 'hermes', 'disk']) {
+    const h = setup({ fetch: async () => response({ checks: [{ id, label: id === 'agent-service' ? 'Agent Service' : id, ok: false, detail: 'Not running' }], overall: 'down' }) });
+    const d = await h.api.diagnose(); assert.equal(d.layer, id);
+    assert.equal(d.short, 'Reconnecting…'); assert.doesNotMatch(d.short, /needs attention/i);
+  }
+  const ping = setup({ fetch: async () => response({}, 503) }); assert.equal((await ping.api.diagnose()).short, 'Reconnecting…');
+  const service = setup({ fetch: async () => response({ checks: [{ id: 'agent-service', label: 'Agent Service', ok: false }], overall: 'down' }) });
+  assert.match((await service.api.diagnose()).message, /comes back on its own/);
+  const signin = setup({ fetch: async () => response({ checks: [{ id: 'signin', label: 'Sign-in', ok: false }], overall: 'down' }) });
+  assert.match((await signin.api.diagnose()).short, /Sign-in needs attention/);
+  assert.equal(setup().api.failure().short, 'Reconnecting…');
+});
+test('repair-chat engine probes (Tinfoil, Claude, ChatGPT) never become the connection diagnosis', async () => {
+  const checks = [{ id: 'agent-service', ok: true }, { id: 'reply-tinfoil', label: 'Tinfoil can answer repair chats', ok: false, detail: 'The Tinfoil app is not answering on this server.' }, { id: 'reply-claude', label: 'Claude can answer repair chats', ok: false }];
+  const h = setup({ fetch: async () => response({ checks, overall: 'degraded', summary: 'Tinfoil can answer repair chats: The Tinfoil app is not answering on this server.' }) });
+  const d = await h.api.diagnose(); assert.equal(d.layer, 'send');
+  assert.doesNotMatch(d.message + d.short, /tinfoil|claude|repair/i);
+  const both = setup({ fetch: async () => response({ checks: [...checks, { id: 'hermes', label: 'Hermes', ok: false }], overall: 'down' }) });
+  assert.equal((await both.api.diagnose()).layer, 'hermes');
+});
 test('Troubleshoot on an unreachable Wizard: the phone app shows its Tailscale guide; elsewhere nothing opens', async () => {
   const h = setup({ hostname: 'wizard.example.ts.net', fetch: async () => { throw new TypeError('Load failed'); } });
   await h.api.diagnose();

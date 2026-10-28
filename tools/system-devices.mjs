@@ -44,13 +44,19 @@ export function cleanRegistry(raw) {
   const groups = {};
   for (const [k, v] of Object.entries(j.groups && typeof j.groups === 'object' ? j.groups : {}).slice(0, 100)) { const n = clip(k, 64).toLowerCase(); if (n && GROUPS.has(v)) groups[n] = v; }
   // Wizards the owner looks after on other boxes (the Machines workspace switcher): what is known, never probed.
+  // Who uses a managed Wizard: names the owner wrote down and/or a head count. Shown beside its Main, never probed.
+  const managedPeople = m => {
+    const people = (Array.isArray(m.people) ? m.people : []).map(n => clip(n, 40)).filter(Boolean).slice(0, 24);
+    const n = Number(m.peopleCount), count = Number.isInteger(n) && n > people.length && n <= 999 ? n : 0;
+    return {...(people.length ? {people} : {}), ...(count ? {peopleCount: count} : {})};
+  };
   const managed = [], mseen = new Set();
   for (const m of Array.isArray(j.managed) ? j.managed : []) {
     const id = clip(m?.id, 32).toLowerCase(), name = clip(m?.name, 40);
     if (!ID_RE.test(id) || !name || mseen.has(id)) continue;
     mseen.add(id);
     const where = clip(m.where, 120), peer = clip(m.peer, 64).toLowerCase();
-    managed.push({id, name, ...(clip(m.org, 60) ? {org: clip(m.org, 60)} : {}), ...(/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(where) ? {where} : {}), ...(peer ? {peer, peerName: clip(m.peerName, 40) || peer} : {})});
+    managed.push({id, name, ...(clip(m.org, 60) ? {org: clip(m.org, 60)} : {}), ...(/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(where) ? {where} : {}), ...(peer ? {peer, peerName: clip(m.peerName, 40) || peer} : {}), ...managedPeople(m)});
     if (managed.length >= 12) break;
   }
   return {version: 1, this: thisBox, devices, hide: names(j.hide), groups, ...(managed.length ? {managed} : {})};

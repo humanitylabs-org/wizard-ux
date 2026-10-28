@@ -104,12 +104,17 @@
     };
   }
   const pinnable = a => !!a && a.kind === 'wizard' && !!a.url && window.WizHomeScreenPolicy.validId(a.id) && !window.WizHomeScreenPolicy.isShell(a.url) && window.WizHomeScreenPolicy.within(a.url,a.url);
-  let refreshing = false, rerun = false;
-  async function refreshPinned() {
+  let refreshing = false, rerun = false, resumePending = false, lastSig = '';
+  // Registry echoes must not redraw shortcuts. Resume is different: Android may have
+  // changed its pinned set, and an old/silent APK must be allowed to retry.
+  const signature = list => JSON.stringify(list.map(a => [a.id, a.url,
+    window.WizHomeScreenPolicy.displayName(a), window.WizSigil.of(a.sigil || a),
+    window.WizSigil.box('span','',a)]));
+  async function refreshPinned(force = false) {
     // Browser/desktop and old APKs stay inert. One bounded query before rendering any icons.
     // A registry update mid-pass marks the pass dirty and reruns it with the new apps afterwards.
     if (!port()) return;
-    if (refreshing) { rerun = true; return; }
+    if (refreshing) { rerun = true; resumePending ||= force; return; }
     refreshing = true; rerun = false;
     try {
       bindPort();
@@ -117,6 +122,12 @@
       if (!port()) return;
       const apps = Object.values(window.WizCore?.apps('mobile')?.APP || {}).filter(pinnable);
       const candidates = [...new Map(apps.map(a => [a.id,a])).values()].slice(0,128);
+      const sig = signature(candidates);
+      // Reading/building the registry can announce that same registry synchronously.
+      // Its state is already in this snapshot; only later updates need another pass.
+      rerun = resumePending;
+      if (!force && sig === lastSig) return;
+      lastSig = sig;
       if (!candidates.length) return;
       const r = await request('pinned', { id:'' }, { candidates:candidates.map(a => a.id) });
       if (r.status !== 'pinned-list' || !Array.isArray(r.appIds) || r.appIds.length > 128) return;
@@ -136,7 +147,10 @@
         finally { header?.remove(); }
       }
     } catch (_) { /* unavailable registry, bridge, decode or old-APK timeout: silent no-op */ }
-    finally { refreshing = false; if (rerun) void refreshPinned(); }
+    finally {
+      refreshing = false;
+      if (rerun) { const force = resumePending; resumePending = false; void refreshPinned(force); }
+    }
   }
   // scripts load after the app registry; appsLoaded waits for installed apps on first shell load.
   void refreshPinned();
@@ -168,7 +182,7 @@
     document.addEventListener('visibilitychange', () => { if (hold) block(); cancel(); });
   }
   addEventListener('wos-native-resume', async () => {
-    void refreshPinned();
+    void refreshPinned(true);
     if (!pending || !active) return;
     const a = active, r = await request('status',a);
     if (active !== a) return;
