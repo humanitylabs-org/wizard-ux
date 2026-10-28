@@ -180,6 +180,8 @@
   };
   // Cheap catch-all for things with no event (the thread in front changed, the inbox opened or closed).
   addEventListener('wizreachchange', render);
+  // Troubleshoot from any button while nothing of the Wizard answers (outside the phone app): unfold what to check.
+  addEventListener('wizreachexplain', () => { netOpen = true; log('net:open'); render(); unfold(); });
   addEventListener('resize', () => { lastHtml = ''; render(); });
   setInterval(() => {
     if (document.hidden || !document.getElementById('wxBanners')) return;

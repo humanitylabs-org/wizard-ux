@@ -38,7 +38,7 @@ test('multiple ordered packages clean listeners, CSS, mounts and action intercep
 test('a skin brings its tweaks; offs are remembered per skin; another skin drops them; new published tweaks arrive', async () => {
   const storage = new Map(); let skin = 'grove', published = { id: 'miguel', version: 1, skin: 'obsidian', tweaks: ['miguel/hidden-pin'], flags: {} }, active;
   const fams = [{ id: 'wizard', palettes: ['grove'] }, { id: 'mizel', tweaks: 'miguel', palettes: ['obsidian', 'landscapes'] }];
-  const window = { WosSkin: { get current() { return skin; }, families: fams, familyOf: id => fams.find(f => f.palettes.includes(id)).id }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active || []; }, loadTweaks: async ids => { active = ids; } }, addEventListener() {}, dispatchEvent() {} };
+  const window = { WosSkin: { get current() { return skin; }, families: fams, familyOf: id => fams.find(f => f.palettes.includes(id)).id }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active || []; }, loadTweaks: async ids => { active = ids.filter(id => id !== 'wizard/unified-inbox'); } }, addEventListener() {}, dispatchEvent() {} };
   const ctx = { window, document: { baseURI:'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal, localStorage: { getItem:k=>storage.get(k), setItem:(k,v)=>storage.set(k,v) }, fetch: async url => ({ ok:true, json: async () => url.pathname.endsWith('profile.json') ? published : JSON.parse(read('web/'+url.pathname.split('/wizard-os-home/')[1])) }) };
   vm.runInNewContext(read('web/core/experience.js'), ctx); const E = window.WosExperience;
   await E.refresh(); assert.equal(E.state.owner, null); assert.equal(active.length, 0);
@@ -46,7 +46,7 @@ test('a skin brings its tweaks; offs are remembered per skin; another skin drops
   await E.toggle('miguel/hidden-pin'); assert.equal(active.length, 0); assert.equal(E.state.tweaks[0].on, false);
   published = { ...published, version:2, tweaks: ['miguel/home-bars','miguel/hidden-pin'] }; await E.refresh();
   assert.deepEqual(Array.from(active), ['miguel/home-bars']);
-  skin = 'grove'; await E.chooseSkin(); assert.equal(E.state.owner, null); assert.equal(active.length, 0); assert.equal(E.state.tweaks.length, 0);
+  skin = 'grove'; await E.chooseSkin(); assert.equal(E.state.owner, null); assert.equal(active.length, 0); assert.equal(E.state.tweaks.filter(t => t.id !== 'wizard/unified-inbox').length, 0);
   skin = 'landscapes'; await E.chooseSkin(); assert.deepEqual(Array.from(active), ['miguel/home-bars']);
 });
 
@@ -229,6 +229,26 @@ test('notification threads: the flag lives only while a trusted package holds it
   assert.equal(f.host.inboxThreads, true); assert.equal(f.host.inboxAct('snooze', 'n1'), true); assert.deepEqual(got, ['snooze:n1']);
   assert.equal(await api.inbox.set('n1', { read: true, flag: true }), true); assert.equal(JSON.stringify(f.inbox.sets), JSON.stringify([['n1', { read: true }]]), 'only read / archived pass');
   await f.clear(); assert.equal(f.host.inboxThreads, false, 'released on teardown');
+});
+
+test('notification rows in the list: only a holder that asks for list mode turns it on', async () => {
+  const f = fixture(); let api;
+  f.host._test.setImporter(async () => ({ default: value => { api = value; return () => {}; } }));
+  await f.host.loadTweaks(['wizard/unified-inbox'], f.slots, { teamAuthors: ['wizard'] });
+  const off = api.inbox.threads({ act: () => {} });
+  assert.equal(f.host.inboxThreads, true); assert.equal(f.host.inboxList, false, 'threads alone keep the list unchanged');
+  off(); api.inbox.threads({ act: () => {}, list: 'yes' }); assert.equal(f.host.inboxList, false, 'only list: true');
+  api.inbox.threads({ act: () => {}, list: true }); assert.equal(f.host.inboxList, true);
+  await f.clear(); assert.equal(f.host.inboxList, false, 'released on teardown');
+});
+
+test('chats.js lists notifications among Ready chats only in list mode, in every Ready order', () => {
+  const src = read('web/core/chats.js');
+  assert.match(src, /const on = !!window\.WosSkinHost\?\.inboxList;/, 'gated on the host list flag');
+  assert.match(src, /const nt = k === 'ready' && !n && !filtered && !AGID \? notes\(\) : null/, 'main unfiltered Ready only');
+  assert.match(src, /return bar \+ withNotes\(list, awake, rowFn\) \+ later;/, 'Newest, Oldest and Priority interleave');
+  assert.match(src, /if \(awake\.length && !groups\.has\(NOTES_SUBJECT\)\) groups\.set\(NOTES_SUBJECT, \[\]\);/, 'By subject: their own subject');
+  assert.match(src, /\.ch-list \.ch-notif-row\[data-chnotif\]'\); if \(nr\) \{ window\.WosSkinHost\?\.inboxAct\?\.\('open'/, 'a tap goes to the package');
 });
 test('chats.js shows a notification draft as its thread only while notification threads are on', () => {
   const src = read('web/core/chats.js');

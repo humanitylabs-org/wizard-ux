@@ -17,7 +17,7 @@
 (function () {
   'use strict';
   const ERR_LIMIT = 3, ERR_WINDOW = 60000;
-  const EVENTS = ['route', 'render', 'voice', 'sent', 'beside'];
+  const EVENTS = ['route', 'render', 'voice', 'sent', 'beside', 'home'];
   /* Layouts (James, 22 Oct 2026): a third, opt-in layer for UX changes (gestures, orbs, controls) that any
    * colour skin can wear. Classic is the shell as everyone has it and loads nothing. A layout lives in
    * web/layouts/<id>/{layout.css,layout.js}; its css applies only under html[data-layout="<id>"]. */
@@ -43,7 +43,7 @@
   let personal = null, personalSeq = 0, packageReady = Promise.resolve();
   // Built-in gestures every skin wears (core files register them; same API, guards and cleanup as a skin script).
   const builtinDefs = new Map(), builtins = new Map();
-  const record = (id, label = id) => ({ id, label, offs: new Set(), frames: new Set(), claims: new Set(), mounts: new Set(), taps: new Set(), levels: new Set(), orbs: new Set(), on: { route: new Set(), render: new Set(), voice: new Set(), sent: new Set(), beside: new Set() }, errs: [], dead: false, teardown: null });
+  const record = (id, label = id) => ({ id, label, offs: new Set(), frames: new Set(), claims: new Set(), mounts: new Set(), taps: new Set(), levels: new Set(), orbs: new Set(), on: { route: new Set(), render: new Set(), voice: new Set(), sent: new Set(), beside: new Set(), home: new Set() }, errs: [], dead: false, teardown: null });
 
   const skinOf = id => (typeof window !== 'undefined' && window.WosSkin && window.WosSkin.pkgOf) ? window.WosSkin.pkgOf(id) : null;
   const dirOf = (id, pkg) => (pkg && pkg.dir) || id;
@@ -209,7 +209,7 @@
     for (const g of a.levels) levels.delete(g); a.levels.clear();
     for (const o of a.orbs) { try { o.sleep(true); } catch (_) {} } a.orbs.clear();
     if (layoutRec === a) layoutRec = null;
-    a.offs.clear(); a.frames.clear(); a.mounts.clear(); a.taps.clear(); a.on.route.clear(); a.on.render.clear(); a.on.voice.clear(); a.on.sent.clear(); a.on.beside.clear();
+    a.offs.clear(); a.frames.clear(); a.mounts.clear(); a.taps.clear(); a.on.route.clear(); a.on.render.clear(); a.on.voice.clear(); a.on.sent.clear(); a.on.beside.clear(); a.on.home.clear();
     for (const id of a.claims) { if (!layers().some(l => l !== a && l.claims.has(id))) claims.delete(id); }
     a.claims.clear();
   }
@@ -330,7 +330,7 @@
   }
 
   /* Tweaks extend the existing package host: same guards, listeners, frames and disposal. */
-  const tweaks = new Map(), interceptors = new Map(), snoozeLast = new Set(), inboxThreads = new Map(); // inboxThreads: package -> {act} // snoozeLast: packages holding snoozeOrder('last')
+  const tweaks = new Map(), interceptors = new Map(), snoozeLast = new Set(), inboxThreads = new Map(), overlays = []; // inboxThreads: package -> {act} // snoozeLast: packages holding snoozeOrder('last')
   let tweakSeq = 0, slotContract = null;
   const safeTweakId = id => /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/.test(id);
   const tweakUrl = (id, file) => stamp(new URL(`tweaks/${id}/${file}`, document.baseURI).href);
@@ -350,6 +350,7 @@
       if (type === 'sent' && (!caps.has('nav') || !trusted)) throw new Error('sent requires trusted navigation');
       if (type === 'voice' && !caps.has('layout')) throw new Error('voice requires layout');
       if (type === 'beside' && !caps.has('layout')) throw new Error('beside requires layout');
+      if (type === 'home' && !caps.has('layout')) throw new Error('home requires layout');
       return base.on(type, payload => fn(type === 'render' ? Object.freeze({ part: payload.part }) : payload));
     }, toast: base.toast, storage: base.storage };
     if (caps.has('layout')) {
@@ -367,6 +368,14 @@
         a.offs.add(release); return release;
       } });
       api.part = name => /^[a-z-]+$/.test(name) ? shell?.root()?.querySelector(`[data-part="${name}"]`) || null : null;
+      // A package's own overlay joins the shell's Back order (phone Back / browser Back / desktop Esc): the newest
+      // open one closes first. push(close) while it is open; the returned release (or teardown) takes it out.
+      api.back = Object.freeze({ push(close) {
+        if (a.dead || typeof close !== 'function') return () => {};
+        const entry = { a, close: guard(a, 'back', close) }; overlays.push(entry);
+        const off = () => { const i = overlays.indexOf(entry); if (i >= 0) overlays.splice(i, 1); a.offs.delete(off); };
+        a.offs.add(off); return off;
+      } });
       const slot = name => {
         if (!slotContract?.slots[name]) return null;
         const selector = `[data-slot="${name}"]`;
@@ -438,7 +447,26 @@
     }
     if (caps.has('data.read')) api.data = Object.freeze({ read: Object.freeze({ resources: Object.freeze({
       snapshot: () => structuredClone(window.WosResources?.state || {}), refresh: () => window.WosResources?.sync(),
-    }) }) });
+      // resources.js announces each finished poll ('wos:resources'); the handle dies with the package.
+      watch(fn) {
+        if (a.dead || typeof fn !== 'function' || typeof window.addEventListener !== 'function') return () => {};
+        const g = guard(a, 'resources.watch', () => fn(structuredClone(window.WosResources?.state || {})));
+        window.addEventListener('wos:resources', g);
+        const off = () => { window.removeEventListener('wos:resources', g); a.offs.delete(off); };
+        a.offs.add(off); return off;
+      },
+    }),
+    // Trusted packages only: one same-origin GET of an installed app's read API (/<app>/api/<path>), JSON back.
+    // No method, header, body or other origin crosses this boundary; null on any failure or after teardown.
+    ...(trusted ? { app: async (id, path) => {
+      if (a.dead || !/^[a-z0-9][a-z0-9-]{0,40}$/.test(String(id)) || !/^[a-z0-9][a-z0-9/_-]{0,80}$/.test(String(path))) return null;
+      try {
+        const r = await bounded(fetch(new URL(`/${id}/api/${path}`, document.baseURI).href, { method: 'GET', cache: 'no-store', credentials: 'same-origin', redirect: 'error' }));
+        if (!r.ok || !/json/.test(r.headers?.get?.('content-type') || 'application/json')) return null;
+        const j = await r.json(); return a.dead ? null : structuredClone(j);
+      } catch (_) { return null; }
+    } } : {}),
+    }) });
     // Trusted packages may show the Notifications inbox (core/notif-bell.js) in Chats: watch unread items, mark one
     // done, or answer it in a new chat (the shell's context-draft path; `words` sends at once). No fetch crosses this
     // boundary and every handle dies with the package.
@@ -457,9 +485,11 @@
       },
       // A notification opened from the list shows in the chat window as a one-message thread; its Done / Snooze /
       // Restore buttons (and keys) call act(action, id). Held while the package lives (chats.js reads host.inboxThreads).
+      // `list: true` also lists them in Ready as rows like any chat (time, priority and subject order); a tap on one
+      // calls act('open', id).
       threads(handlers = {}) {
         if (a.dead || typeof handlers.act !== 'function') return () => {};
-        inboxThreads.set(a.id, { act: guard(a, 'inbox.act', handlers.act) });
+        inboxThreads.set(a.id, { act: guard(a, 'inbox.act', handlers.act), list: handlers.list === true });
         const off = () => { if (inboxThreads.delete(a.id)) window.dispatchEvent?.(new Event('wos:prefs')); };
         a.offs.add(off); window.dispatchEvent?.(new Event('wos:prefs')); return off;
       },
@@ -508,6 +538,7 @@
     get snoozeOrder() { return snoozeLast.size ? 'last' : 'default'; },
     /* chats.js: a live package shows notifications as threads; inboxAct runs its Done / Snooze / Restore. */
     get inboxThreads() { return inboxThreads.size > 0; },
+    get inboxList() { for (const h of inboxThreads.values()) if (h.list) return true; return false; },
     inboxAct(action, id) { for (const h of inboxThreads.values()) { h.act(String(action), String(id)); return true; } return false; },
     action(name, context) { for (const { action, handler } of interceptors.values()) if (action === name) { void handler(context); return true; } return false; },
     /* core/skins.js: picker landed near a skin (preview or commit). Stylesheet only. */
@@ -531,6 +562,18 @@
     get builtinState() { return [...builtins.keys()]; },
     stopPersonal() { personalSeq++; dispose(personal, 'off'); },
     get personalState() { return { ready: !!shell, active: !!personal, disabled: disabled.has('my-skin'), listeners: personal?.offs.size || 0, handlers: personal ? personal.on.route.size + personal.on.render.size : 0 }; },
+    /* app.js backStep / desktop.js escStep: close the newest package overlay. True when one closed. */
+    back() { const e = overlays.pop(); if (!e) return false; e.close(); return true; },
+    /* app.js / desktop.js: repaint a Home. Nodes a tweak mounted at the home-main slot move to the new markup
+     * (no remount, no flash) and layout tweaks hear api.on('home'). Without a mount this is plain innerHTML. */
+    paintHome(el, html) {
+      if (!el) return;
+      const sel = '[data-slot="home-main"]', kept = [...(el.querySelector?.(sel)?.childNodes || [])];
+      el.innerHTML = html;
+      const slot = kept.length ? el.querySelector?.(sel) : null;
+      if (slot) slot.append(...kept);
+      if (layers().some(l => l.on.home.size)) emit('home', Object.freeze({}));
+    },
     /* chats.js: a chats window repainted part ('thread' | 'list'). */
     rendered(part, el) { if (!layers().length) return; emit('render', Object.freeze({ part, el })); emitRoute(); },
     /* app.js: desk or focus changed. */
