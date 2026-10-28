@@ -49,6 +49,7 @@ async function harness(t, { transcript = '' } = {}) {
     setTimeout(fn, ms) { const x = setTimeout(fn, ms); x.unref(); timers.add(x); return x; },
     fetch: (path, init) => fetch(origin + path, init),
     WosModels: { snapshot: (_, route) => route, resolveRoute: async route => route },
+    WosAgents: { isOther: id => id.startsWith('qa-') },
     WosChat: K, WizConfig: { transcribe: async () => ({ text: transcript }), voicePrompt: () => '' } };
   ctx.window = ctx; vm.runInNewContext(outboxSrc, ctx);
   t.after(async () => { for (const x of timers) clearTimeout(x); server.closeAllConnections(); await new Promise(r => server.close(r)); });
@@ -60,6 +61,19 @@ async function settled(api, id) {
 }
 const runInput = calls => JSON.parse(calls.find(c => c.path === '/wizard/hermes/v1/runs').body).input;
 
+for (const kind of ['main', 'host-profile', 'container', 'restricted']) test(`message reply preserves quote and destination for ${kind}`, async t => {
+  const h = await harness(t), agent = kind === 'main' ? '' : 'qa-' + kind;
+  const quote = { key: 'message:synthetic', title: 'Assistant · step 2', message: 'Run checks before release.' };
+  const it = await h.api.enqueue({ kind: 'reply', sessionId: 'synthetic-' + kind, agent, text: 'Where are we on this step?', model: 'm', provider: 'p', reply: quote });
+  assert.equal((await settled(h.api, it.id)).state, 'sent');
+  const body = JSON.parse(h.calls.find(c => c.path.startsWith('/wizard/hermes/v1/runs')).body);
+  assert.equal(body.session_id, 'synthetic-' + kind);
+  assert.equal(body.agent || '', agent);
+  assert.match(body.input, /Run checks before release/);
+  const parsed = K.parseRows([{ role: 'user', content: body.input, timestamp: 1 }]);
+  assert.equal(parsed[0].u.text, 'Where are we on this step?');
+  assert.equal(parsed[0].u.reply.message, quote.message);
+});
 test('typed send: his words first, then the framed and quoted notification', async t => {
   const h = await harness(t);
   const it = await h.api.enqueue({ kind: 'new', text: 'Can you clean this up?', model: 'm', provider: 'p', reply: item });

@@ -1251,6 +1251,7 @@ window.WizCore.chats = function createChats(H) {
     const r = KIT.drafts.get(draftKey(w)).reply;
     form.querySelector('[data-chreply]')?.remove(); form.classList.toggle('has-reply', !!r);
     if (r) form.insertAdjacentHTML('afterbegin', replyBubble(r));
+    applyLayout(deskOf(wid)); // the phone composer grows above its dock, not underneath it
   }
   function refreshCompose(wid) {
     const el = track.querySelector(`[data-chats="${wid}"]`); const form = el?.querySelector('[data-chform]'); if (!form) return;

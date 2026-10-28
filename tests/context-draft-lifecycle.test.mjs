@@ -84,7 +84,7 @@ test('message reply survives thread draft typing, reload and cancel without leak
   assert.equal(restored.drafts.get('direct:thread-a').reply.message, r.message);
   assert.equal(restored.drafts.get('direct:thread-b').reply, null);
   const payload = restored.reply.attach('Run this again', r);
-  assert.match(payload, /replying to the message quoted below/);
+  assert.match(payload, /replying to the message(?: or app item)? quoted below/);
   assert.match(payload, /untrusted reference DATA/);
   assert.equal(restored.reply.split(payload).text, 'Run this again');
   assert.equal(restored.reply.split(payload).reply.message, r.message);

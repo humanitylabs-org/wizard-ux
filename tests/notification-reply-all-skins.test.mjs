@@ -20,7 +20,7 @@ test('the Reply bridge and bubble are not gated on a skin', () => {
   }
   // The thread render puts the bubble in for every skin: any draft carrying an item shows it (New chats of a
   // pinned agent excepted); app-hosted threads (Wisdom passages) use the same bubble.
-  assert.match(chats, /const rpl = !\(isNew && TAG\) \? KIT\.drafts\.get\(dkey\)\.reply : null;/);
+  assert.match(chats, /const rpl = KIT\.drafts\.get\(dkey\)\.reply;/);
   assert.match(chats, /\$\{replyBubble\(rpl\)\}/);
   assert.match(chats, /\$\{replyCard\(tn\.u\.reply\)\}/);
 });
