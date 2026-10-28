@@ -49,6 +49,7 @@ async function harness(t, { transcript = '' } = {}) {
     setTimeout(fn, ms) { const x = setTimeout(fn, ms); x.unref(); timers.add(x); return x; },
     fetch: (path, init) => fetch(origin + path, init),
     WosModels: { snapshot: (_, route) => route, resolveRoute: async route => route },
+    WosAgents: { isOther: id => id.startsWith('qa-') },
     WosChat: K, WizConfig: { transcribe: async () => ({ text: transcript }), voicePrompt: () => '' } };
   ctx.window = ctx; vm.runInNewContext(outboxSrc, ctx);
   t.after(async () => { for (const x of timers) clearTimeout(x); server.closeAllConnections(); await new Promise(r => server.close(r)); });
