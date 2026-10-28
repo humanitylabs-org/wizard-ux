@@ -83,3 +83,19 @@ test('⌥P floats the Chats window on this desk whichever agent it belongs to; i
     assert.equal(W.m.thread, 'main-away'); assert.equal(W.h.thread, 't-' + kind);
   }
 });
+
+test('Back / Esc in the floating chat leaves its thread even with Home or a full-screen desk behind it (Codex P2)', () => {
+  const esc = js.slice(js.indexOf('function escStep('), js.indexOf('function escStep(') + 4000);
+  assert.ok(esc.indexOf('const hb = hudBack(); if (hb) return hb;') > 0);
+  assert.ok(esc.indexOf('hudBack()') < esc.indexOf("if (homeOpen) return '';"));
+  assert.ok(esc.indexOf('hudBack()') < esc.indexOf('if (ws[cur].mono)'));
+  const src = js.slice(js.indexOf('function hudBack('), js.indexOf('function hudClose('));
+  for (const kind of ['main', 'host-profile', 'container', 'restricted']) {
+    const w = { id: 'h', app: 'chats', thread: 't-' + kind, ...(kind === 'main' ? {} : { agent: kind }) }, other = { id: 'd', app: 'chats', thread: 'desk' }, calls = [];
+    const ctx = { W: { h: w, d: other }, hud: { id: 'h', open: true }, hudHasFocus: () => true, hudFocus: () => calls.push('focus'), syncChatsPane: id => calls.push('sync:' + id),
+      CHATS: { threadBack: x => { calls.push('back:' + x.id); x.thread = null; return 'thread'; } } };
+    assert.equal(vm.runInNewContext(src + '\nhudBack();', ctx), 'thread', kind);
+    assert.deepEqual(calls, ['back:h', 'sync:h', 'focus']); assert.equal(other.thread, 'desk');
+    calls.length = 0; assert.equal(vm.runInNewContext(src + '\nhudBack();', ctx), '', kind + ': on the list Back passes through'); assert.deepEqual(calls, []);
+  }
+});

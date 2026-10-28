@@ -708,6 +708,13 @@
     if (!w) w = findWin(mainChats) || newWin({ app: 'chats', thread: null });
     return hudOn(w.id);
   }
+  // Back / Esc inside the floating chat: thread → its list. On the list it stays floating (⌥P or 1 put it away).
+  function hudBack() {
+    if (!hudHasFocus()) return '';
+    const f = W[hud.id]; if (!f?.thread) return '';
+    const r = CHATS.threadBack(f); syncChatsPane(f.id); hudFocus();
+    return r || 'hud';
+  }
   function hudClose() {
     if (!hud) return false;
     const id = hud.id; hudKeepPlace(); hud = null;
@@ -1777,6 +1784,8 @@
     if (window.WosSkinFrame?.back()) return 'skin-controls';
     // The first-message guide: once nothing sits above it, Esc/Back dismisses it (= Skip tour) before any navigation.
     if (window.WosTour?.desk?.active) { window.WosTour.desk.finish('skip'); return 'tour'; }
+    // The floating chat, when the keyboard is in it, walks back from its open thread before anything behind it.
+    { const hb = hudBack(); if (hb) return hb; }
     // Leave fullscreen before navigating the app underneath; preserve its thread and draft.
     if (homeOpen) return '';
     if (focused() && CHATS.isHosted(focused().id)) return CHATS.threadBack(focused());
