@@ -408,3 +408,30 @@ html:is([data-skin^="obsidian"], [data-skin="landscapes"]) .mine-home .home-unse
 .kh-legend kbd { min-width: 15px; height: 15px; padding: 0 3px; border-radius: 4px; display: grid; place-items: center; font: inherit; font-weight: 700; background: var(--bg); color: var(--ink); }
 html.key-hints-on #clock { visibility: hidden; }
 .kh-foot.pinned { top: auto; bottom: 18px; }
+
+/* ---------- heads-up chat (HUD): one Chats window over every desk and Home; folded, the orb ---------- */
+.hud-layer { position: absolute; inset: 0; z-index: 150; pointer-events: none; } /* above Home sheets (Resources is 120); the bar, palette and toasts sit outside the stage, above it */
+.hud-layer[hidden] { display: none; }
+.hud-layer > * { pointer-events: auto; }
+.win.hud { z-index: 2; border-color: rgba(185, 155, 255, .45); box-shadow: 0 0 0 1px rgba(143, 99, 255, .3), 0 22px 70px rgba(0, 0, 0, .55); backdrop-filter: blur(18px) saturate(1.2); }
+.win.hud[hidden] { display: none; }
+/* It floats over anything (Home scenery, other apps): a solid sheet of the skin's own background, never see-through glass. */
+#hudLayer > .win.hud { background: var(--bg, #0e091e); border: 1px solid rgba(185, 155, 255, .45); }
+.win.hud .wbar { cursor: grab; }
+.win.hud .wbar .t { color: var(--ink); }
+.hud-layer.moving, .hud-layer.moving * { cursor: grabbing !important; user-select: none; }
+.hud-layer.moving .win.hud { transition: none; }
+.wbar [data-wact^="hud"] svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.hud-grip { position: absolute; left: 0; top: 0; width: 14px; height: 14px; z-index: 3; cursor: nwse-resize; }
+.hud-orb { position: absolute; width: 64px; height: 64px; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; touch-action: none; }
+.hud-orb[hidden] { display: none; }
+.hud-orb .orb, .hud-orb .orb-fallback { position: absolute; inset: -18px; width: calc(100% + 36px); height: calc(100% + 36px); pointer-events: none; }
+.hud-orb:focus-visible { outline: 2px solid var(--violet-2); outline-offset: 2px; }
+.hud-orb[data-state="done"]::after { content: ''; position: absolute; right: 4px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--pink, #ff5ccf); box-shadow: 0 0 0 2px rgba(10, 6, 22, .9); }
+/* Borderless frames show only ✕ in a title bar; the float button (and the HUD's own fold / put back) stand beside it. */
+html[data-skin-frame="borderless"] .wbar > [data-wact^="hud"] { position: absolute; top: 0; display: grid; place-items: center; min-width: 44px; width: 44px; height: 44px; border-radius: 50%; color: var(--ink-2); background: transparent; font-size: 18px; right: calc(var(--sf-padding, 16px) + 38px); }
+html[data-skin-frame="borderless"] .wbar > [data-wact="hud-min"] { right: calc(var(--sf-padding, 16px) + 82px); }
+html[data-skin-frame="borderless"] .wbar > [data-wact^="hud"]:hover { color: var(--ink); background: var(--glass-2); }
+html[data-skin-frame="borderless"] .wbar > [data-wact^="hud"]:focus-visible { outline: 2px solid var(--violet-2); outline-offset: -3px; }
+html[data-skin-frame="borderless"] .wbar:has(> [data-wact="hud"]) { padding-right: calc(96px + var(--sf-padding, 16px)); }
+html[data-skin-frame="borderless"] .win.hud > .wbar { padding-right: calc(140px + var(--sf-padding, 16px)); }
