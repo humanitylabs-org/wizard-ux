@@ -394,7 +394,7 @@ export default function setup(api) {
     const mainEl = [...rowMn.children].find(n => n.dataset?.role === 'main'); if (!mainEl) return;
     const md = box(discOf(mainEl)), mb = box(mainEl), specs = [];  // mb: Main with its label (and bars, when shown)
     // Main → storage, above. Fast while a backup uploads; otherwise it carries the last good copy's age.
-    const stEl = rowSt.querySelector('[data-id="storage"]');
+    const stEl = [...rowSt.children].find(n => n.dataset?.id === 'storage');
     if (stEl) {
       const sd = box(stEl), st = storage();  // from the bottom of its label (and its details, when open)
       const col = st?.state === 'ok' ? 'var(--mh-accent)' : st?.state === 'no' ? 'var(--mh-bad)' : 'var(--mh-warn)';
@@ -419,7 +419,7 @@ export default function setup(api) {
     map.style.setProperty('--cx', md.cx + 'px'); map.style.setProperty('--cy', md.cy + 'px');
     // The helper's panel sits right under the helper it belongs to (kept inside the map).
     // Tailscale / Storage details open under their node but never past the map's edges.
-    for (const mi of rowSt.querySelectorAll('.mh-more-info')) { mi.style.transform = ''; const pb = box(mi), dx = clamp(0, -pb.l + 4, M.width - pb.r - 4); if (dx) mi.style.transform = `translateX(${dx.toFixed(0)}px)`; }
+    for (const mi of [...rowSt.children].map(n => n.lastElementChild).filter(x => x?.classList.contains('mh-more-info'))) { mi.style.transform = ''; const pb = box(mi), dx = clamp(0, -pb.l + 4, M.width - pb.r - 4); if (dx) mi.style.transform = `translateX(${dx.toFixed(0)}px)`; }
     const ap = rowAct.firstElementChild;
     if (ap) { const n = ms.find(x => x.dataset.id === ap.dataset.of); if (n) { ap.style.transform = ''; const nb = box(n), pb = box(ap), dx = clamp(nb.cx - pb.cx, -pb.l + 4, M.width - pb.r - 4); ap.style.transform = `translateX(${dx.toFixed(0)}px)`; const ab = box(ap); specs.push([curveV(ab.cx, ab.t - 2, nb.cx, nb.b + 2), 'var(--mh-wire-off)', '', 1]); } }
     const key = JSON.stringify(specs); if (key === wired && lines.firstChild) return; wired = key;
