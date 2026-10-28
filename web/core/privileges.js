@@ -86,7 +86,7 @@
   window.WosPrivileges = {approval, from, approvalHtml, riskSentence, bannerHtml, accessHtml, accessText, load, get state() { return state; }};
   // App pages use this same renderer without starting a second box-status poller.
   if (!document.currentScript?.hasAttribute('data-privilege-notices-only')) {
-    window.WosSettings?.register({id:'server-access',page:'usage',html:() => accessHtml() || (state?.server_access?.available === false ? '<p>Can’t check whether your agent has full server access. Check the App Manager.</p>' : '')});
+    window.WosSettings?.register({id:'server-access',aliases:['server-access'],page:'usage',html:() => accessHtml() || (state?.server_access?.available === false ? '<p>Can’t check whether your agent has full server access. Check the App Manager.</p>' : '')});
     document.addEventListener('visibilitychange', () => { clearTimeout(timer); if (!document.hidden) load(); });
     window.addEventListener('focus', load);
     window.addEventListener('resize', () => { const h = document.getElementById('wz-privilege-banner'); if (h) document.documentElement.style.setProperty('--wz-privilege-banner-height', h.hidden ? '0px' : h.getBoundingClientRect().height + 'px'); });

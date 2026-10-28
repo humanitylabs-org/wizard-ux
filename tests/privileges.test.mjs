@@ -98,6 +98,23 @@ test('shell registration happens after Settings on both shells and contributes s
   assert.equal(h.registered.length,1);assert.equal(h.registered[0].id,'server-access');assert.equal(h.registered[0].page,'usage');
 });
 
+test('server access deep link renders the mocked Manager status through real Settings in both shells', async () => {
+  const h=harness(() => ({enabled:false,server_access:{active:true,expires_at:'2026-11-01T12:00:00Z'}}));
+  h.w.navigator={userAgent:'Fixture'};h.w.location=new URL('https://fixture.invalid/wizard-os-home/');h.w.URL=URL;h.w.URLSearchParams=URLSearchParams;
+  h.w.WizCore={};h.w.WizBrand={html:'W'};h.w.CSS={escape:String};
+  vm.runInContext(readFileSync(new URL('../web/core/settings.js',import.meta.url),'utf8'),h.w);
+  vm.runInContext(readFileSync(new URL('../web/core/deeplink.js',import.meta.url),'utf8'),h.w);
+  h.w.document.currentScript.hasAttribute=() => false;vm.runInContext(source,h.w);await h.w.WosPrivileges.load();
+  for (const shell of ['phone','desktop']) {
+    const root={innerHTML:'',scrollTop:0,classList:{add(){}},dataset:{},contains:()=>false,querySelector:()=>null,addEventListener(){},removeEventListener(){}};
+    const view=h.w.WosSettings.mount(root,{shell});
+    h.w.WizCore.deeplink.handle({view:v=>assert.equal(h.w.WosSettings.route(v,id=>view.focus(id)),true)});
+    assert.equal(h.w.WizCore.deeplink.route('/wizard-os-home/?view=server-access'),true);
+    assert.equal(view.page,'usage');assert.match(root.innerHTML,/class="wz-server-access"/);assert.match(root.innerHTML,/Your agent has full server access until/);
+    assert.equal(view.back(),true);assert.equal(view.page,'');assert.equal(view.back(),false);view.destroy();
+  }
+});
+
 test('chat approval remains visible outside collapsed activity and duplicate tool receipts do not duplicate cards', () => {
   const {w,P}=harness();vm.runInContext(readFileSync(new URL('../web/core/chat-work.js',import.meta.url),'utf8'),w);
   const html=w.WosWork.html({u:{at:0},work:[{at:10,ownerApproval:approval},{at:11,ownerApproval:approval}]},{live:false,open:false,key:'turn',now:50,md:String,esc:String,clip:String});
