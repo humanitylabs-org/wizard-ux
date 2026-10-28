@@ -430,12 +430,14 @@
       },
       snoozeSomeday: sessionId => { if (!trusted || a.dead) throw new Error('Trusted navigation required'); return window.WosBoomerang.someday({ sessionId, restore: true }); },
       // Ask the agent from a package view: a new chat carrying { title, message } as a quoted reply card (the shell's
-      // contextDraft path); `words` sends at once. Trusted only; the key is namespaced so it can't pose as another app.
-      ask(id, item = {}, words = '') {
+      // contextDraft path). `words` lands as an unsent draft for the owner to check and send; { send: true } sends at
+      // once. Trusted only; the key is namespaced so it can't pose as another app.
+      ask(id, item = {}, words = '', opts = {}) {
         if (!trusted || a.dead) throw new Error('Trusted navigation required');
         const key = 'home:' + String(id || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 100);
         if (key === 'home:' || typeof shell?.contextDraft !== 'function') return false;
-        return !!shell.contextDraft(key, { title: String(item.title || '').slice(0, 300), message: String(item.message || '').slice(0, 4000) }, String(words || '').slice(0, 1000));
+        const w = String(words || '').slice(0, 1000), send = opts?.send === true;
+        return !!shell.contextDraft(key, { title: String(item.title || '').slice(0, 300), message: String(item.message || '').slice(0, 4000) }, send ? w : '', send ? '' : w);
       },
       // Snooze = lowest priority, bottom of Ready (live.js / chats.js read host.snoozeOrder). Released on teardown.
       snoozeOrder(order) {

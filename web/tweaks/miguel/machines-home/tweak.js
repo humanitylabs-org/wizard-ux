@@ -84,8 +84,8 @@ export default function setup(api) {
     const span = [+r.daily > 0 && `any of the last ${r.daily} days`, +r.weekly > 0 && `one a week for ${r.weekly} weeks`, +r.monthly > 0 && `one a month for ${r.monthly} months`].filter(Boolean);
     const cf = (S.backup?.connector || []).find(c => c && /cloudflare/i.test(c.id || c.name || '') && c.connected);
     return { id: 'storage', where: t.kind === 'r2' ? 'Cloudflare R2' : t.kind === 's3' ? 'S3 storage' : 'Backup storage', bucket: t.bucket || '',
-      used, snaps: +last.snapshots || null, every: b.every === 'hourly' ? 'Backs up every hour' : b.at ? `Backs up daily at ${b.at}` : 'Backs up daily', age,
-      keep: span.length ? `Go back to ${span.join(', then ')}` : '', cf: !!cf,
+      used, snaps: +last.snapshots || null, every: b.every === 'hourly' ? 'every hour' : b.at ? `daily at ${b.at}` : 'daily', age,
+      keep: span.length ? 'Older backups thin out: daily for a week, weekly for a month, monthly for 6 months' : '', cf: !!cf,
       state: !okAt ? 'no' : b.state === 'failing' || age > 2 * every ? 'tight' : 'ok' };
   }
   const backupRunning = () => Array.isArray(S.backup?.active) && S.backup.active.length > 0;
@@ -197,7 +197,7 @@ export default function setup(api) {
     groups.sort((a, b) => (b.kind === want) - (a.kind === want));
     const btn = (text, app, cls = '') => app ? h('button', { type: 'button', cls: 'mh-ai-btn ' + cls, data: { resSignin: app } }, text) : null;
     aiList.replaceChildren(...groups.map(g => h('div', { cls: nw('mh-ai-group') },
-      h('div', { cls: 'mh-ai-head' }, h('b', { text: g.name }), g.kind === want ? h('span', { cls: 'mh-ai-def', text: 'on the gauge' }) : null),
+      h('div', { cls: 'mh-ai-head' }, h('b', { text: g.name }), g.kind === want ? h('span', { cls: 'mh-ai-def', text: 'Default' }) : null),
       g.rows.map(r => {
         const reset = r.resets && Date.parse(r.resets) > Date.now() ? ` · resets in ${agoS((Date.parse(r.resets) - Date.now()) / 1000)}` : '';
         return h('div', { cls: 'mh-ai-row', data: { s: r.out ? 'out' : level(r.left ?? 0) } },
@@ -261,13 +261,12 @@ export default function setup(api) {
         h('span', { cls: 'mh-hold' }, h('span', { cls: 'mh-disc' })), label('Storage', st.used == null ? st.where : gbFmt(st.used) + ' stored'), chev(open)),
       open ? h('span', { cls: 'mh-more-info' },
         h('span', { text: st.where + (st.bucket ? ` · bucket “${st.bucket}”` : '') }),
-        st.used != null && st.snaps ? h('span', { text: `${gbFmt(st.used)} holds all ${st.snaps} backups: each one adds only what changed` }) : null,
-        h('span', { text: st.every }),
+        h('span', { text: `Backs up ${st.every}${st.snaps ? ` · ${st.snaps} backups so far` : ''}${st.used != null && st.snaps ? `, ${gbFmt(st.used)} in all` : ''}` }),
         st.keep ? h('span', { text: st.keep }) : null,
         h('span', { cls: 'mh-act-btns' },
-          [['now', 'Back up now', 'Run a backup of this Wizard now.'], ['schedule', 'Change schedule', 'I want to change how often my Wizard backs up.'],
-            ['more', 'Add storage', 'Add another place to keep encrypted copies of my backups.']]
-            .map(([id, text, words]) => h('button', { type: 'button', cls: 'mh-act-btn is-small', data: { stAsk: id, words } }, h('b', { text }))))) : null);
+          [['now', 'Back up now', '~20 min, apps pause briefly', 'Run a backup of this Wizard now.'], ['schedule', 'Change schedule', 'how often it runs', 'I want to change how often my Wizard backs up to '],
+            ['more', 'Add storage', 'a second encrypted copy', 'Add another place to keep encrypted copies of my backups: ']]
+            .map(([id, text, note, words]) => h('button', { type: 'button', cls: 'mh-act-btn', data: { stAsk: id, words } }, h('b', { text }), h('small', { text: note }))))) : null);
   }
   const devOpen = p => p.devices ? S.open.has('devs') : S.open.has('p:' + p.id);
   function personNode(p) {
@@ -278,14 +277,19 @@ export default function setup(api) {
   }
   // Main in the middle; helpers alternate right, left, right… (the most powerful nearest to Main), so the row stays balanced.
   const around = (main, others) => { const L = [], R = []; others.forEach((m, i) => (i % 2 ? L : R).push(m)); return [...L.reverse(), main, ...R]; };
+  const plus = (act, label) => { const b = h('button', { type: 'button', cls: 'mh-plus', data: { act }, 'aria-label': label });
+    const s = sv('svg', { class: 'mh-i', viewBox: '0 0 24 24', 'aria-hidden': 'true' }, b); for (const [t, a] of PLUS) sv(t, a, s); return b; };
   function renderMap() {
+    if (!S.res.devices && S.ws === 'mine') { root.classList.add('is-loading'); setRow(rowSt, []); setRow(rowAct, []); setRow(rowMore, []); setRow(rowPp, []); setRow(rowDv, []); setRow(rowChev, []);
+      setRow(rowMn, [h('span', { cls: 'mh-wait', role: 'status', 'aria-label': 'Loading your network' })]); return; }
+    root.classList.remove('is-loading');
     if (S.ws !== 'mine' && !managedOf(S.ws) && S.res.devices) S.ws = 'mine';
     const g = managedOf(S.ws);
     root.classList.toggle('is-managed', !!g);
     if (g) {
       // Only what is known about a Wizard he manages: its Main and who uses it. Same design, less data.
       setRow(rowSt, []); setRow(rowMore, []); setRow(rowAct, []);
-      setRow(rowMn, [machineNode({ id: 'managed-' + g.id, name: g.name }, 'main', null, { size: 72, roleText: g.org || 'Main', managed: true })]);
+      setRow(rowMn, [machineNode({ id: 'managed-' + g.id, name: g.name }, 'main', null, { size: 72, roleText: g.org || 'Main', managed: true }), plus('add-device', `Add a device to ${g.name}`)]);
     } else {
       const st = storage();
       setRow(rowSt, st ? [storageNode(st)] : []);
@@ -296,14 +300,14 @@ export default function setup(api) {
         : machineNode(m, qualifies(m.id) ? 'standby' : 'helper', maxOf, { roleText: qualifies(m.id) ? 'Standby device' : m.status === 'online' ? 'Helper' : offText(m), warn: m.status !== 'online' });
       // The bar names sit left of the row; an invisible twin on the right keeps Main exactly in the middle.
       const legend = twin => h('div', { cls: 'mh-legend' + (twin ? ' is-twin' : ''), 'aria-hidden': 'true' }, h('span', { cls: 'mh-bars-in' }, h('span', { text: 'RAM' }), h('span', { text: 'Disk' }), h('span', { text: 'CPU' })));
-      setRow(rowMn, [legend(false), ...around(main, others).map(node), legend(true)]);
+      setRow(rowMn, [legend(false), ...around(main, others).map(node), legend(true), plus('add-device', 'Add a device to this network')]);
       const open = others.find(m => S.open.has('m:' + m.id));
       setRow(rowAct, open ? [actPanel(open)] : []);
       setRow(rowMore, all.length ? [h('button', { type: 'button', cls: 'mh-details', data: { toggle: 'bars' }, 'aria-expanded': String(S.bars), 'aria-label': 'Show or hide machine details' },
         h('i', { cls: 'mh-chev' + (S.bars ? ' is-up' : ''), 'aria-hidden': 'true' }))] : []);
     }
     const ps = people();
-    setRow(rowPp, ps.map(personNode));
+    setRow(rowPp, [...ps.map(personNode), plus('add-person', 'Give someone access')]);
     const devs = ps.filter(devOpen).flatMap(p => p.devices ? p.devices.map(d => h('span', { cls: nw('mh-dev'), data: { of: p.id } },
       h('i', { cls: 'mh-dot' + (d.online ? '' : ' off') }), d.name)) : [h('span', { cls: nw('mh-dev is-none'), data: { of: p.id }, text: `${p.name}’s devices aren’t visible yet` })]);
     setRow(rowDv, devs);
@@ -331,7 +335,7 @@ export default function setup(api) {
     if (stEl) {
       const sd = box(stEl), st = storage();  // from the bottom of its label (and its details, when open)
       const col = st?.state === 'ok' ? 'var(--mh-accent)' : st?.state === 'no' ? 'var(--mh-bad)' : 'var(--mh-warn)';
-      specs.push([curveV(md.cx, md.t - 4, sd.cx, sd.b + 4), col, backupRunning() ? 'backing up' : st?.age == null ? 'none yet' : agoS(st.age) + ' ago', backupRunning() ? 3 : 1]);
+      specs.push([curveV(md.cx, md.t - 4, sd.cx, sd.b + 4), col, backupRunning() ? 'backing up now' : st?.age == null ? 'no backup yet' : 'backed up ' + agoS(st.age) + ' ago', backupRunning() ? 3 : 1]);
     }
     // Machines: a chain outward from Main on each side, in row order.
     const ms = [...rowMn.children].filter(n => n.dataset?.role);
@@ -339,18 +343,18 @@ export default function setup(api) {
       const a = box(discOf(ms[i - 1])), b = box(discOf(ms[i])), off = discOf(ms[i - 1]).classList.contains('is-off') || discOf(ms[i]).classList.contains('is-off');
       if (b.l - 3 > a.r + 3) specs.push([`M${f(a.r + 3)} ${f(a.cy)} L${f(b.l - 3)} ${f(b.cy)}`, off ? 'var(--mh-wire-off)' : 'var(--mh-accent)', '', 1]);
     }
-    // An open helper → its panel below.
-    const act = rowAct.firstElementChild;
-    if (act) { const n = ms.find(x => x.dataset.id === act.dataset.of); if (n) { const nb = box(n), ab = box(act); specs.push([curveV(ab.cx, ab.t - 2, nb.cx, nb.b + 2), 'var(--mh-wire-off)', '', 1]); } }
     // People → the bottom of Main, from below (faster while sessions work; it runs behind Show details); devices → their person.
     const busy = S.ws === 'mine' && sessions().working > 0;
-    for (const p of rowPp.children) { const pd = box(discOf(p)); specs.push([curveV(pd.cx, pd.t - 4, md.cx, mb.b + 2), 'var(--mh-accent)', '', busy ? 2 : 1]); }
+    for (const p of rowPp.children) { if (!p.dataset.person) continue; const pd = box(discOf(p)); specs.push([curveV(pd.cx, pd.t - 4, md.cx, mb.b + 2), 'var(--mh-accent)', '', busy ? 2 : 1]); }
     for (const d of rowDv.children) {
       const p = [...rowPp.children].find(x => x.dataset.person === d.dataset.of); if (!p) continue;
       const pb = box(p), db = box(d);
       specs.push([curveV(db.cx, db.t - 2, pb.cx, pb.b + 2), 'var(--mh-wire-off)', '', 1]);
     }
     map.style.setProperty('--cx', md.cx + 'px'); map.style.setProperty('--cy', md.cy + 'px');
+    // The helper's panel sits right under the helper it belongs to (kept inside the map).
+    const ap = rowAct.firstElementChild;
+    if (ap) { const n = ms.find(x => x.dataset.id === ap.dataset.of); if (n) { ap.style.transform = ''; const nb = box(n), pb = box(ap), dx = clamp(nb.cx - pb.cx, -pb.l + 4, M.width - pb.r - 4); ap.style.transform = `translateX(${dx.toFixed(0)}px)`; const ab = box(ap); specs.push([curveV(ab.cx, ab.t - 2, nb.cx, nb.b + 2), 'var(--mh-wire-off)', '', 1]); } }
     const key = JSON.stringify(specs); if (key === wired && lines.firstChild) return; wired = key;
     lines.replaceChildren();
     const defs = sv('defs', {}, lines); let gi = 0;
@@ -379,7 +383,13 @@ export default function setup(api) {
     const d = b.dataset;
     if (d.open) return api.data.read.sessions?.open(d.open);
     if (d.ws) { if (S.ws === d.ws) return; S.ws = d.ws; api.storage.set('ws', d.ws); fresh = true; paint(true); return; }
-    if (d.act === 'add-managed') return api.toast('Adding a Wizard you manage: coming soon');
+    if (d.act) {
+      const g = managedOf(S.ws), where = g ? `${g.name}'s Wizard` : 'my network';
+      const ask = { 'add-managed': ['Add a Wizard I manage', 'Add a Wizard I manage to my map: '], 'add-device': ['Add a device', `Add a device to ${where} as a helper: `],
+        'add-person': ['Give someone access', `Give someone access to ${where}: `] }[d.act];
+      if (ask && !api.nav?.ask?.(d.act + (g ? '-' + g.id : ''), { title: ask[0], message: where }, ask[1])) api.toast('Open Chats, then try again');
+      return;
+    }
     if (d.person) { const p = people().find(x => x.id === d.person); if (p?.devices) { flip('devs'); api.storage.set('devs', S.open.has('devs') ? 'on' : 'off'); } else flip('p:' + d.person); paint(); return; }
     if (d.toggle === 'devs') { flip('devs'); api.storage.set('devs', S.open.has('devs') ? 'on' : 'off'); paint(); return; }
     if (d.stAsk) { const st = storage(); if (!api.nav?.ask?.('storage-' + d.stAsk, { title: 'Storage', message: st ? [st.where + ' · ' + st.bucket, st.every, st.keep].join('\n') : '' }, d.words)) api.toast('Open Chats, then try again'); return; }
@@ -388,7 +398,7 @@ export default function setup(api) {
       const [id, what] = d.ask.split(':'), m = machine(id), a = actions(m).find(x => x.id === what);
       if (!a || !a.ok || !a.words) return;
       const sent = api.nav?.ask?.(`${id}-${what}`, { title: `${m.name} · ${a.label}`, message: a.why || a.note }, a.words);
-      if (!sent) api.toast('Open Chats, then try again');
+      if (!sent) api.toast('Open Chats, then try again');  // the request waits as a draft for him to send
       return;
     }
     if (d.toggle === 'ai') { flip('ai'); paint(); return; }
