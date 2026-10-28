@@ -689,6 +689,9 @@
     if (!hud) return false;
     const id = hud.id; hudKeepPlace(); hud = null;
     if (!W[id]) { save(); render(); return false; }
+    // Back to desktop 1: Chats gets desktop 1 to itself. Anything already there moves one desk to the right,
+    // with every other desk (Miguel, 28 Oct 2026).
+    if (to === 0 && ws[0]?.wins.length) { ws.unshift(freshDesk()); cur += 1; lastWs += 1; }
     const t = Number.isInteger(to) && ws[to] ? to : cur;
     const d = ws[t], at = d.focus ? d.wins.indexOf(d.focus) + 1 : d.wins.length;
     d.wins.splice(at, 0, id); d.focus = id; d.mono = false;

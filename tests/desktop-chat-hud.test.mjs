@@ -99,3 +99,20 @@ test('Back / Esc in the floating chat leaves its thread even with Home or a full
     calls.length = 0; assert.equal(vm.runInNewContext(src + '\nhudBack();', ctx), '', kind + ': on the list Back passes through'); assert.deepEqual(calls, []);
   }
 });
+
+test('Back to desktop 1 gives Chats desktop 1 to itself and moves every other desk one to the right', () => {
+  const src = js.slice(js.indexOf('function hudDock('), js.indexOf('function hudKey('));
+  const run = desks => {
+    let n = 0; const calls = [];
+    const ctx = { hud: { id: 'h' }, W: { h: { id: 'h', app: 'chats' }, a: {}, b: {} }, ws: desks, cur: 1, lastWs: 1, homeOpen: false,
+      freshDesk: () => ({ id: 'dnew' + (n++), wins: [], focus: null, mono: false }), hudKeepPlace() {}, save() {}, render() {}, hudBar() {}, paintFocus() {}, paintBar() {}, focusInside() {}, log() {},
+      winEl: () => null, setTimeout() {}, store: { set() {} }, goWs(i) { calls.push('go:' + i); ctx.cur = i; } };
+    vm.runInNewContext(src + '\nhudDock({ to: 0 });', ctx);
+    return { ctx, calls };
+  };
+  const full = run([{ id: 'd1', wins: ['a'], focus: 'a' }, { id: 'd2', wins: ['b'], focus: 'b' }]);
+  assert.deepEqual(full.ctx.ws.map(d => d.wins), [['h'], ['a'], ['b']]);
+  assert.deepEqual(full.calls, ['go:0']);
+  const empty = run([{ id: 'd1', wins: [], focus: null }, { id: 'd2', wins: ['b'], focus: 'b' }]);
+  assert.deepEqual(empty.ctx.ws.map(d => d.wins), [['h'], ['b']]);
+});
