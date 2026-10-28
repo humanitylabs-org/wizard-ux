@@ -319,7 +319,6 @@ html[data-skin="obsidian-light"] .mh-root { --a-front: #eef2f6; --a-side: #c3ced
 .mh-node.is-ts .mh-art .a-front { fill: var(--a-front); }
 .mh-node.is-ts[data-fit="no"] .mh-art .a-led { fill: var(--mh-bad); }
 .mh-node.is-ts[data-fit="ok"] .mh-art .a-led { fill: var(--mh-good); }
-.mh-ts-n { position: absolute; z-index: 2; top: -2px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px; display: grid; place-items: center; font-size: 11px; font-weight: 850; color: #fff; background: var(--mh-bad); box-shadow: 0 0 0 2px rgba(255, 255, 255, .9); }
 .mh-disc.is-off .mh-art { filter: none; opacity: .55; }
 .mh-disc.is-off .mh-art :is(polygon, rect, path, ellipse, circle) { fill: none; stroke: var(--mh-wire-off); stroke-dasharray: 4 3; }
 .mh-disc.is-off.is-art { border: 0 !important; }
@@ -346,3 +345,20 @@ html[data-skin="landscapes"] .mh-ts-info .is-bad { color: #FF95A8; }
 html[data-skin="obsidian-light"] .mh-node.is-main .mh-disc.is-art::before { background: radial-gradient(closest-side, color-mix(in srgb, var(--mh-accent) 45%, transparent), transparent); }
 .mh-disc.is-art > .mh-sess .mh-dots { gap: 3px; }
 .mh-disc.is-art > .mh-sess .mh-dots i { width: 7px; height: 7px; }
+
+/* ---------- Tailscale: a dashed outline around everything on the network, one tab on its top edge ---------- */
+.mh-ts { fill: color-mix(in srgb, var(--mh-accent) 5%, transparent); stroke: var(--mh-accent); stroke-opacity: .55; stroke-width: 1.4; stroke-dasharray: 6 6; }
+.mh-root .mh-ts-tab { position: absolute; z-index: 3; left: 26px; transform: translateY(-50%); height: 26px; padding: 0 6px 0 11px !important; border-radius: 99px; display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 750; color: var(--mh-ink); background: var(--mh-card-solid); box-shadow: inset 0 0 0 1.3px color-mix(in srgb, var(--mh-accent) 60%, transparent); cursor: pointer; }
+.mh-root .mh-ts-tab[hidden] { display: none; }
+.mh-ts-tab .mh-chev-btn { transform: scale(.8); }
+.mh-ts-n { padding: 1px 7px; border-radius: 99px; font-size: 11px; font-weight: 800; color: #fff; background: var(--mh-bad); }
+.mh-row.is-ts:not(:empty) { margin-top: 6px; }
+
+/* ---------- the map sits on its own card, so the wallpaper never fights the labels ---------- */
+.mh-root { --mh-card: rgba(22, 30, 42, .78); --mh-card-solid: #1b2533; --mh-card-line: rgba(255, 255, 255, .1); }
+html[data-skin="obsidian-light"] .mh-root { --mh-card: rgba(255, 255, 255, .94); --mh-card-solid: #ffffff; --mh-card-line: rgba(20, 33, 49, .1); }
+html[data-skin="landscapes"] .mh-root { --mh-card: rgba(16, 24, 36, .66); --mh-card-solid: #1a2636; }
+.mh-map { padding: 22px 14px 14px; border-radius: 26px; background: var(--mh-card); box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 18px 50px -24px rgba(0, 0, 0, .55); -webkit-backdrop-filter: blur(22px) saturate(1.2); backdrop-filter: blur(22px) saturate(1.2); }
+html[data-skin="obsidian-light"] .mh-map { box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 14px 40px -22px rgba(20, 33, 49, .35); }
+@container (max-width: 599px) { .mh-map { padding: 20px 6px 10px; border-radius: 20px; } .mh-root .mh-ts-tab { left: 16px; height: 24px; font-size: 11px; } }
+.mh-root:not(.is-managed) .mh-row.is-storage:not(:empty) { margin-bottom: 30px; }
