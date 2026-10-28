@@ -203,30 +203,45 @@
     if (t !== cur) goWs(t); else render();
     return W[id];
   }
-  function closeWin(id, internal = false) {
-    if (hud?.id === id) { hudClose(); return; }
-    const t = wsOf(id); if (t < 0) return;
+  // A window may refuse to close (an in-progress recording or temporary chat asks first).
+  function canLeave(id) { return CHATS.beforeLeave?.(id) ?? true; }
+  // One cleanup path for a window close and a whole-desktop close. The caller owns
+  // leave checks, pruning and the final render (which detaches closed app frames).
+  function removeWin(id, internal = false) {
+    if (!W[id]) return;
     if (!internal) {
       boundManager?.dismiss(W[id]);
       window.WizBackgroundAudio?.closeApp(W[id]?.appId)?.catch(() => toast('♫','Audio could not stop. Pause it from the media controls.'));
     }
+    const t = wsOf(id); if (t < 0) return;
     if (W[id]?.app === 'chats') threadShown(id,null);
     const d = ws[t], i = d.wins.indexOf(id);
     CHATS.saveDraft(id);
     d.wins.splice(i, 1); delete W[id]; CHATS.forget(id);
     if (d.focus === id) d.focus = d.wins[Math.min(i, d.wins.length - 1)] || null;
     if (d.wins.length < 2) d.mono = false;
-    save(); render();
+  }
+  function closeWin(id, internal = false) {
+    if (!internal && !canLeave(id)) return;
+    if (hud?.id === id) { hudClose(); return; }
+    const t = wsOf(id); if (t < 0) return;
+    const d = ws[t];
+    removeWin(id, internal);
+    if (!internal && !d.wins.length && ws.length > 1) removeDesktop(d);
+    else { save(); render(); }
   }
   function focusWin(id, { scroll = true } = {}) {
     if (hud?.id === id) { hudFocus(); return; }
     const t = wsOf(id); if (t < 0) return;
-    const fromHome = homeOpen;
+    const fromHome = homeOpen, switched = t !== cur;
     leaveHome();
-    if (t !== cur) goWs(t);
+    if (switched) goWs(t);
     // goWs may prune an empty desktop and reindex the destination; use its new
     // current index, not the pre-navigation index of this stable window ID.
-    if (!fromHome && ws[cur].focus === id && document.querySelector(`.win[data-win="${id}"].focus`)) return;
+    if (wsOf(id) !== cur) return; // navigation was refused by an in-progress recording
+    // A cross-desktop return target needs real keyboard focus, even though render
+    // has already painted it as the focused window on its destination desktop.
+    if (!switched && !fromHome && ws[cur].focus === id && document.querySelector(`.win[data-win="${id}"].focus`)) return;
     ws[cur].focus = id; save(); paintFocus(); paintBar();
     if (scroll) focusInside(id);
     CHATS.markVisibleThreadsSeen();
@@ -846,11 +861,25 @@
     openPicker({ desk: ws[cur].id });
     return ws[cur];
   }
-  function closeDesktop() {
-    if (homeOpen || ws[cur].wins.length || ws.length === 1) return false;
-    const previous = lastWs !== cur && ws[lastWs] ? ws[lastWs] : ws[cur > 0 ? cur - 1 : 1];
-    ws.splice(cur, 1); cur = ws.indexOf(previous); lastWs = cur; save(); render();
-    if (focused()) focusInside(focused().id); CHATS.markVisibleThreadsSeen(); return true;
+  function removeDesktop(d) {
+    const i = ws.indexOf(d); if (i < 0 || ws.length === 1) return false;
+    const current = ws[cur], previous = ws[lastWs], active = current === d;
+    ws.splice(i, 1);
+    cur = active ? Math.max(0, i - 1) : ws.indexOf(current);
+    lastWs = Math.max(0, ws.indexOf(previous === d ? ws[cur] : previous));
+    if (active) { homeOpen = false; store.set('homeOpen', false); }
+    save(); render();
+    if (active) { if (focused()) focusInside(focused().id); CHATS.markVisibleThreadsSeen(); }
+    return true;
+  }
+  function closeDesktop(i = cur) {
+    const d = ws[i]; if (!d) return false;
+    // Check every window before destroying any: a recording can refuse the close.
+    if (!d.wins.every(canLeave)) return false;
+    const names = [...new Set(d.wins.map(id => appOf(W[id])?.name).filter(Boolean))].join(', ');
+    [...d.wins].forEach(id => removeWin(id));
+    if (!removeDesktop(d)) { save(); render(); goHome(); }
+    toast('✕', `Closed ${names || 'desktop'}`); return true;
   }
   /* Refresh what is in front, in place: app frames reload at the page they are on, Chats refetches its list and open
    * thread, built-in views remount, and Home refetches its data. Nothing closes or moves. */
@@ -881,7 +910,7 @@
     render(); toast('↻', 'Refreshed Home', 900); return true;
   }
   function reloadCurrent() { if (homeOpen || !ws[cur].wins.length) return refreshHome(); const f = focused(); return f ? reloadWin(f.id) : refreshHome(); }
-  function closeCurrent() { const f = focused(); if (f) { closeWin(f.id); return 'app'; } return closeDesktop() ? 'desktop' : 'root'; }
+  function closeCurrent() { const f = focused(); if (f) { closeWin(f.id); return 'app'; } if (homeOpen) return 'root'; return closeDesktop() ? 'desktop' : 'root'; }
 
   /* ---------------- top bar ---------------- */
   addEventListener('wizard:app-counts', () => paintBar());
@@ -895,7 +924,7 @@
     if (!$('#wsList').classList.contains('arranging')) $('#wsList').innerHTML = ws.map((d, i) => {
       const hot = d.wins.some(id => { const w = W[id]; if (w?.app !== 'chats' || !w.thread) return false; const s = LIVE?.session(w.thread); return s && LIVE.isNew(s); });
       const names = d.wins.map(id => winTitle(W[id])).join(', ');
-      return `<button class="ws${!homeOpen && i === cur ? ' cur' : ''}${d.wins.length ? ' used' : ''}${hot ? ' hot' : ''}" data-ws="${i}" aria-label="${esc(names || 'Empty desktop')} · Desktop ${C.workspaceNav.slot(i)}" aria-current="${!homeOpen && i === cur ? 'page' : 'false'}"${C.workspaceNav.slot(i) <= 9 ? ` aria-keyshortcuts="Alt+${C.workspaceNav.slot(i)}"` : ''} title="${esc(names || 'Empty desktop')}${C.workspaceNav.slot(i) <= 9 ? ` (${MOD}${C.workspaceNav.slot(i)})` : ''}">${C.workspaceNav.icon(d, W, appOf)}</button>`;
+      return `<button class="ws${!homeOpen && i === cur ? ' cur' : ''}${d.wins.length ? ' used' : ''}${hot ? ' hot' : ''}" data-ws="${i}" aria-label="${esc(names || 'Empty desktop')} · Desktop ${C.workspaceNav.slot(i)}" aria-current="${!homeOpen && i === cur ? 'page' : 'false'}"${C.workspaceNav.slot(i) <= 9 ? ` aria-keyshortcuts="Alt+${C.workspaceNav.slot(i)}"` : ''} title="${esc(names || 'Empty desktop')}${C.workspaceNav.slot(i) <= 9 ? ` (${MOD}${C.workspaceNav.slot(i)})` : ''}">${C.workspaceNav.icon(d, W, appOf)}${d.wins.length || ws.length > 1 ? `<span class="ws-close" role="button" data-wsclose="${i}" tabindex="-1" aria-label="Close desktop ${C.workspaceNav.slot(i)}" title="Close desktop">✕</span>` : ''}</button>`;
     }).join('') + `<button class="ws ws-add" data-newdesk aria-label="New desktop" title="New desktop (${MOD}T${C.workspaceNav.slot(ws.length) <= 9 ? ` / ${MOD}${C.workspaceNav.slot(ws.length)}` : ''})">+</button>`;
     const st = $('#status');
     if (!LIVE?.ok) st.innerHTML = `<span class="off">${LIVE?.error === 'access' ? 'Sign in to Wizard' : 'Connecting…'}</span>`;
@@ -903,7 +932,27 @@
   }
   function tickClock() { const C = window.WizConfig; $('#clock').textContent = C.dateLabel() + '  ' + C.hm(); }
   setInterval(tickClock, 15000); tickClock(); window.addEventListener('wizard:config', tickClock);
-  $('#wsList').addEventListener('click', e => { if (e.target.closest('[data-newdesk]')) return newDesktop(); const b = e.target.closest('[data-ws]'); if (b) goWs(+b.dataset.ws); });
+  $('#wsList').addEventListener('click', e => {
+    const close = e.target.closest('[data-wsclose]');
+    if (close) { e.preventDefault(); e.stopPropagation(); return closeDesktop(+close.dataset.wsclose); }
+    if (e.target.closest('[data-newdesk]')) return newDesktop();
+    const b = e.target.closest('[data-ws]'); if (b) goWs(+b.dataset.ws);
+  });
+  function desktopMenu(b, x, y) {
+    const d = ws[+b.dataset.ws]; if (!d) return;
+    window.WosContextMenu.open({ anchor: b, x, y, label: 'Desktop actions',
+      // Keep the stable desktop, not its index: a reorder must not close another desk.
+      items: [{ label: 'Close desktop', action: () => closeDesktop(ws.indexOf(d)) }] });
+  }
+  $('#wsList').addEventListener('contextmenu', e => {
+    const b = e.target.closest('.ws[data-ws]'); if (!b) return;
+    e.preventDefault(); desktopMenu(b, e.clientX, e.clientY);
+  });
+  $('#wsList').addEventListener('keydown', e => {
+    const b = e.target.closest('.ws[data-ws]'); if (!b) return;
+    if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) { e.preventDefault(); desktopMenu(b); }
+    else if (e.target.matches('[data-wsclose]') && ['Enter', ' '].includes(e.key)) { e.preventDefault(); e.stopPropagation(); closeDesktop(+e.target.dataset.wsclose); }
+  });
   /* Arrange desktops: drag one along the top bar (touch: press and hold, then drag), or ⌥⇧[ / ⌥⇧] for the one in
    * front. Desks keep their stable IDs, so open apps never remount; the new order syncs like any desk change. */
   function moveDesk(from, to) {
@@ -917,7 +966,7 @@
     let dd = null, swallow = 0;
     const start = () => { dd.on = true; dd.b.classList.add('ws-moving'); list.classList.add('arranging'); try { list.setPointerCapture(dd.id); } catch (e) { /* already released */ } navigator.vibrate?.(8); };
     list.addEventListener('pointerdown', e => {
-      const b = e.target.closest('.ws[data-ws]'); if (!b || e.button !== 0 || ws.length < 2) return;
+      const b = e.target.closest('.ws[data-ws]'); if (!b || e.target.closest('[data-wsclose]') || e.button !== 0 || ws.length < 2) return;
       dd = { from: +b.dataset.ws, b, x: e.clientX, y: e.clientY, on: false, id: e.pointerId, touch: e.pointerType !== 'mouse' };
       if (dd.touch) dd.hold = setTimeout(() => { if (dd && !dd.on) start(); }, 400);
     });
@@ -940,8 +989,6 @@
     };
     list.addEventListener('pointerup', end); list.addEventListener('pointercancel', end);
     list.addEventListener('click', e => { if (Date.now() < swallow) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
-    // Right-click (or a touch hold) on a desktop never opens the browser menu; a right-click says how to move it.
-    list.addEventListener('contextmenu', e => { if (!e.target.closest('.ws[data-ws]')) return; e.preventDefault(); if (!dd?.on && e.button === 2) toast('⇄', `Drag a desktop to move it (or ${MOD}⇧[ / ${MOD}⇧])`, 2200); });
   }
   $('#logo').addEventListener('click', () => goHome());
   $('#searchBtn').addEventListener('click', () => openPalette());
@@ -1779,6 +1826,7 @@
   }
   // Esc peels one layer: palette → keys → voice → thread → (nothing: stays put, never leaves).
   function escStep() {
+    if (window.WosContextMenu?.back()) return 'context-menu';
     if (window.WizShareWizard?.back()) return 'share-wizard';
     { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above everything, incl. the selection menu
     if (window.WosSelMenu?.back()) return 'selection';
