@@ -20,7 +20,7 @@ Visual: <side-by-side screenshot, or "none">
 |---|---|---|---|
 | Owner signatures | `WizardApp.identity.*` → `wizardDevicePort` | app keys | `wizard-id-bridge.test.mjs` |
 | Agent chat | `WizardApp.nav.openThread(sessionId, {reply})`, `nav.openContextDraft` | own composer/transcript/retries | shell `[data-chats]`; 503: one outbox item/message |
-| Top-level home-screen name, icon and app root | `WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK | per-app manifest injectors | app-owned manifest wins; frames untouched |
+| Home-screen name, icon, root | `WizardAppIdentity` (`web/core/app-identity.js`), SDK-loaded | app manifest injectors | app manifest wins; frames untouched |
 | Own chat-box input: paste, drop, Enter | `WizardApp.composer.bind` (Chats' `web/core/composer-input.js`) | own paste/drop/Enter | `qa-composer-input.cjs` |
 | File chip before send | `WizardApp.attachChip.node` (Chats' tray, `core/attach-chip.js`) | own chip | `qa-attach-chip.cjs` |
 | Open a photo/video full screen (pinch zoom, swipe) | `WizardApp.media.view(items, i)` = Chats' `WosChat.viewer` | own lightbox | Messenger `photo_viewer_browser.cjs` |
@@ -33,10 +33,10 @@ Visual: <side-by-side screenshot, or "none">
 | Share out (people → apps → Other apps) | `WizardApp.share.text / file` | own picker | cancel ≠ shared |
 | Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound route | pending until accepted, ack once |
 | Mic, camera, screen capture | `WizardApp.capture.start / pending / ack`, `WizardApp.voiceInput.register` | `getUserMedia`, `MediaRecorder`, mic AudioContext | pending survives Back; ack once |
-| Title-bar tools | `WizardApp.titlebar.set(tools)` | an app header repeating the title | tools appear in the shell title bar |
+| Title tools | `WizardApp.titlebar.set(tools)` | duplicate header | shell title bar |
 | Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, 2-slot `VaultSlots`) | own ports | cancel keeps old |
 | Protect unsaved work from updates | `WizardApp.update.hold` | app service worker, forced reload | released only after save+readback |
-| Reading place in an app document | shell-owned `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic for registered apps | app-local scroll store | reopen lands at the saved place |
+| App reading place | `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic | app-local scroll store | reopen restores place |
 | Motion, haptics, press feel | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own spring/haptic helpers | — |
 | App look: rows, sections, empty state, single-line add field | `WizardApp`: live `web/kit/wizard-ui.css` + `--wz-*`, then active skin (core/package/My skin) | forked kit; `.wz-field-row` chat composer; literal colours | two skins + My skin restyle `.wz-*` rows |
 
