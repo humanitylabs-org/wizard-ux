@@ -1,4 +1,4 @@
-// Heads-up chat (HUD) on the desktop: a Chats window floats over every desk and Home and folds into the orb.
+// Heads-up chat (HUD) on the desktop: a Chats window floats over every desk and Home and puts it back on desktop 1 (no orb, no other options).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -35,45 +35,36 @@ test('render keeps the HUD above every desk and Home; the open HUD counts as vis
   assert.match(css, /\.hud-layer \{ position: absolute; inset: 0; z-index: 150; pointer-events: none; \}/);
 });
 
-test('Esc in the HUD folds it into the orb before any other navigation; the orb shows work and new replies', () => {
-  const esc = js.slice(js.indexOf('function escStep('), js.indexOf('function escStep(') + 4000);
-  assert.ok(esc.indexOf('if (hudHasFocus()) { hudFold(true); return \'hud\'; }') > 0);
-  assert.ok(esc.indexOf('hudHasFocus()') < esc.indexOf('if (homeOpen) return \'\';'));
-  assert.match(js, /const mode = busy \? 'think' : fresh \? 'done' : 'idle';/);
-});
-
-test('the folded HUD is the shared orb (orb.js), loaded before the desktop shell', () => {
-  assert.match(html, /<button id="hudOrb" class="hud-orb"[^>]*hidden><canvas id="orb" class="orb"/);
-  assert.ok(html.indexOf('<script src="orb.js"></script>') > 0);
-  assert.ok(html.indexOf('<script src="orb.js"></script>') < html.indexOf('<script src="desktop/desktop.js"></script>'));
+test('two controls only: float over every desk, and back to desktop 1 (Miguel: no minimize, no orb, no put-back-here)', () => {
+  assert.doesNotMatch(js, /hud-min|hud-dock|hudFold|hudOrb|code === 'KeyB'/);
+  assert.doesNotMatch(html, /hudOrb|<script src="orb\.js">/);
+  const bar = js.slice(js.indexOf('function barHtml('), js.indexOf('return `<div class="wbar" data-drag>', js.indexOf('function barHtml(')));
+  assert.deepEqual([...bar.matchAll(/data-wact="([^"]+)"/g)].map(m => m[1]), ['hud-home', 'close']);
 });
 
 test('keys, voice and chat actions follow the keyboard into the HUD; desk routes never reuse it (Codex P1/P2)', () => {
   assert.match(js, /const focused = \(\) => hudHasFocus\(\) \? W\[hud\.id\] : homeOpen \? null : W\[ws\[cur\]\.focus\] \|\| null;/);
   assert.match(js, /function closeWin\(id, internal = false\) \{\n\s*if \(hud\?\.id === id\) \{ hudClose\(\); return; \}/);
-  assert.match(js, /function focusWin\(id, \{ scroll = true \} = \{\}\) \{\n\s*if \(hud\?\.id === id\) \{ if \(!hud\.open\) hudFold\(false\); else hudFocus\(\); return; \}/);
+  assert.match(js, /function focusWin\(id, \{ scroll = true \} = \{\}\) \{\n\s*if \(hud\?\.id === id\) \{ hudFocus\(\); return; \}/);
   assert.match(js, /return Object\.values\(W\)\.find\(w => w\.id !== hud\?\.id && fn\(w\)\) \|\| null;/);
   assert.match(js, /function toNewChat\(wid, why\) \{\n\s*const w = W\[wid\]; if \(hud\?\.id === wid \|\|/);
 });
 
-test('the heads-up chat is fully opaque and its orb sleeps unless folded (James: floating text panels are solid)', () => {
+test('the heads-up chat is fully opaque (James: floating text panels are solid)', () => {
   const rule = css.match(/\.win\.hud \{[^}]*\}/)[0];
   assert.doesNotMatch(rule, /backdrop-filter/);
-  assert.match(js, /if \(hudOrb\) hudOrb\.hidden = !hud \|\| hud\.open;\n\s*window\.Orb\?\.sleep\?\.\(!hud \|\| hud\.open\);/);
 });
 
-test('⌥P floats / folds / opens the heads-up chat and ⌥B puts it back on desktop 1, with their own buttons and guide chips', () => {
+test('⌥P floats the chat over every desk and, floating, puts it back on desktop 1; the 1 button does the same', () => {
   assert.match(js, /if \(alt && !shift && code === 'KeyP'\) return hit\(\(\) => \{ if \(!e\.repeat\) \{ closePalette\(\{ restore: false \}\); hudKey\(\); \} \}\);/);
-  assert.match(js, /if \(alt && !shift && code === 'KeyB'\) return hit\(\(\) => \{ if \(!e\.repeat && hud\) \{ closePalette\(\{ restore: false \}\); hudDock\(\{ to: 0 \}\); \} \}\);/);
-  assert.match(js, /<button data-wact="hud-home" title="Back to desktop 1 \(\$\{MOD\}B\)"/);
+  assert.match(js, /<button data-wact="hud-home" title="Back to desktop 1 \(\$\{MOD\}P\)"/);
   assert.match(js, /if \(act === 'hud-home'\) return hudDock\(\{ to: 0 \}\);/);
   const dock = js.slice(js.indexOf('function hudDock('), js.indexOf('function hudKey('));
   assert.match(dock, /const t = Number\.isInteger\(to\) && ws\[to\] \? to : cur;/);
   assert.match(dock, /if \(t !== cur\) \{ save\(\); render\(\); goWs\(t\); \}/);
   const key = js.slice(js.indexOf('function hudKey('), js.indexOf('function hudClose('));
-  assert.match(key, /if \(!hud\.open\) return hudFold\(false\);\s*\n\s*if \(hudHasFocus\(\)\) return hudFold\(true\);/);
+  assert.match(key, /if \(hud\) return hudDock\(\{ to: 0 \}\);/);
   assert.match(js, /\['P', 'Float chat', /);
-  assert.match(js, /\['\[data-wact="hud-min"\]', 'P'\], \['\[data-wact="hud-home"\]', 'B'\]/);
   assert.match(css, /html\[data-skin-frame="borderless"\] \.wbar > \[data-wact="hud-home"\]/);
 });
 
@@ -86,9 +77,25 @@ test('⌥P floats the Chats window on this desk whichever agent it belongs to; i
     const ctx = { W, ws: [{ wins: ['a', 'h'], focus: 'a' }, { wins: ['m'] }], cur: 0, homeOpen: false, hud: null,
       focused: () => W.a, mainChats: w => !!(w && w.app === 'chats' && !w.agent), findWin: fn => Object.values(W).find(fn) || null,
       newWin: () => { calls.push('new'); return { id: 'n' }; }, hudOn: id => { calls.push('on:' + id); return true; },
-      hudFold: () => calls.push('fold'), hudFocus: () => calls.push('focus'), hudHasFocus: () => false };
+      hudDock: () => calls.push('dock'), hudFocus: () => calls.push('focus'), hudHasFocus: () => false };
     vm.runInNewContext(src + '\nhudKey();', ctx);
     assert.deepEqual(calls, ['on:h'], kind + ': floats the window on this desk, touching only its own thread');
     assert.equal(W.m.thread, 'main-away'); assert.equal(W.h.thread, 't-' + kind);
+  }
+});
+
+test('Back / Esc in the floating chat leaves its thread even with Home or a full-screen desk behind it (Codex P2)', () => {
+  const esc = js.slice(js.indexOf('function escStep('), js.indexOf('function escStep(') + 4000);
+  assert.ok(esc.indexOf('const hb = hudBack(); if (hb) return hb;') > 0);
+  assert.ok(esc.indexOf('hudBack()') < esc.indexOf("if (homeOpen) return '';"));
+  assert.ok(esc.indexOf('hudBack()') < esc.indexOf('if (ws[cur].mono)'));
+  const src = js.slice(js.indexOf('function hudBack('), js.indexOf('function hudClose('));
+  for (const kind of ['main', 'host-profile', 'container', 'restricted']) {
+    const w = { id: 'h', app: 'chats', thread: 't-' + kind, ...(kind === 'main' ? {} : { agent: kind }) }, other = { id: 'd', app: 'chats', thread: 'desk' }, calls = [];
+    const ctx = { W: { h: w, d: other }, hud: { id: 'h', open: true }, hudHasFocus: () => true, hudFocus: () => calls.push('focus'), syncChatsPane: id => calls.push('sync:' + id),
+      CHATS: { threadBack: x => { calls.push('back:' + x.id); x.thread = null; return 'thread'; } } };
+    assert.equal(vm.runInNewContext(src + '\nhudBack();', ctx), 'thread', kind);
+    assert.deepEqual(calls, ['back:h', 'sync:h', 'focus']); assert.equal(other.thread, 'desk');
+    calls.length = 0; assert.equal(vm.runInNewContext(src + '\nhudBack();', ctx), '', kind + ': on the list Back passes through'); assert.deepEqual(calls, []);
   }
 });
