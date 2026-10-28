@@ -88,6 +88,16 @@ http {
     }
 
     # Everything else (/wizard/..., /api/..., /v1/...) is the Agent Service API, streamed.
+    # Chat images and files: random, never-reused ids, so the owner's browser keeps them instead of downloading every
+    # picture again each visit (private only; shared caches never store them). Matches the Agent Service's own headers.
+    location ~ "^/wizard/attachments/[0-9a-f]{32}$" {
+      proxy_pass $wizard_api$request_uri; include /tmp/wizard-proxy.conf;
+      proxy_hide_header Cache-Control; add_header Cache-Control "private, max-age=31536000, immutable" always;
+    }
+    location ~ "^/wizard/files/wf_[0-9a-f]{32}/content$" {
+      proxy_pass $wizard_api$request_uri; include /tmp/wizard-proxy.conf;
+      proxy_hide_header Cache-Control; add_header Cache-Control "private, max-age=86400" always;
+    }
     location / { proxy_pass $wizard_api$request_uri; include /tmp/wizard-proxy.conf; }
   }
 }
