@@ -307,7 +307,8 @@
     finally { URL.revokeObjectURL(href); }
     if (seq !== personalSeq || !allowed() || typeof mod?.default !== 'function') return false;
     const a = record('my-skin', 'Skins/My skin/skin.js'); personal = a;
-    try { a.teardown = mod.default(makeApi(a)); } catch (e) { fault(a, 'setup', e); }
+    // The owner's own tweak (approved by hash in Settings › Look) may also replace parts and use shared prefs.
+    try { a.teardown = mod.default(Object.freeze({ ...makeApi(a), parts: partsApi(a), prefs: prefsApi(a) })); } catch (e) { fault(a, 'setup', e); }
     lastRoute = ''; emitRoute();
     return personal === a;
   }
@@ -359,6 +360,42 @@
   function paintTweaks() {
     if (isDoc) document.documentElement.dataset.tweaks = [...new Set([...[...tweaks].filter(([, a]) => !a.dead).map(([id]) => id), ...expected])].join(' ');
     window.WosResources?.sync();
+  }
+  /* Replaceable parts (core/parts.js, docs/TWEAKS.md). The replacement lives and dies with the tweak; its errors
+   * count toward the tweak's three-strikes limit and fall back to stock. A contract version that no longer
+   * matches (an update changed the part) pauses the replacement with a plain note instead of breaking the screen. */
+  const pausedNote = label => `${label} paused after an update · ask your Wizard to update it`;
+  function partsApi(a) {
+    return Object.freeze({
+      list: () => window.WosParts?.list() || [],
+      replace(name, impl, opts = {}) {
+        const P = window.WosParts; if (!P || a.dead || !impl || typeof impl !== 'object') return false;
+        const wrapped = {};
+        for (const [k, fn] of Object.entries(impl)) if (typeof fn === 'function') wrapped[k] = (...args) => {
+          if (a.dead) throw new Error('turned off');
+          try { return fn(...args); } catch (e) { fault(a, `parts.${name}.${k}`, e); throw e; }
+        };
+        const r = P.replace(String(name), wrapped, { owner: a.id, version: opts?.version });
+        if (typeof r === 'function') { a.offs.add(r); return true; }
+        try { shell?.toast?.(r === 'version' ? pausedNote(a.label || a.id) : `${a.label || a.id} couldn't replace ${name} (${r})`); } catch (_) {}
+        return false;
+      },
+      changed: name => { if (!a.dead) window.WosParts?.changed(String(name)); },
+    });
+  }
+  /* Box-wide shell preferences (Agent Service /wizard/v1/ui-preferences): what a replaced part needs to stay the
+   * same on every device. The service validates every key; writes go through live.js's ordered queue. */
+  function prefsApi(a) {
+    return Object.freeze({
+      async get() {
+        if (a.dead) return null;
+        try { const r = await fetch('/wizard/v1/ui-preferences', { cache: 'no-store', credentials: 'same-origin' }); return r.ok && !a.dead ? Object.freeze(await r.json()) : null; } catch (_) { return null; }
+      },
+      async put(patch) {
+        if (a.dead || !patch || typeof patch !== 'object' || Array.isArray(patch)) return false;
+        return window.WizLive?.putPrefs ? await window.WizLive.putPrefs(JSON.parse(JSON.stringify(patch)), { requireShared: true }) === true : false;
+      },
+    });
   }
   function tweakApi(a, manifest, trusted) {
     const base = makeApi(a), caps = new Set(manifest.capabilities.filter(c => trusted || c === 'layout' || c === 'nav'));
@@ -533,6 +570,8 @@
         return !!shell.contextDraft('notifications:' + it.id, { title: it.title, message: it.message }, String(words || ''));
       },
     });
+    if (caps.has('parts')) api.parts = partsApi(a);
+    if (caps.has('prefs')) api.prefs = prefsApi(a);
     return Object.freeze(api);
   }
   async function loadTweaks(entries, contract, { teamAuthors = [], trustedAuthors = [] } = {}) {
@@ -550,8 +589,10 @@
       const response = await bounded(fetch(tweakUrl(id, 'manifest.json')), ms);  // release-stamped: cacheable
       if (!response.ok) throw new Error('Manifest unavailable');
       const m = await response.json();
-      if (m.id !== id || m.author !== id.split('/')[0] || typeof m.version !== 'string' || !Array.isArray(m.capabilities) || m.capabilities.some(c => !['layout','nav','models','data.read','inbox'].includes(c))) throw new Error('Invalid manifest');
-      if (m.apiVersion !== contract.apiVersion) throw new Error('Incompatible API version');
+      if (m.id !== id || m.author !== id.split('/')[0] || typeof m.version !== 'string' || !Array.isArray(m.capabilities) || m.capabilities.some(c => !['layout','nav','models','data.read','inbox','parts','prefs'].includes(c))) throw new Error('Invalid manifest');
+      if (m.apiVersion !== contract.apiVersion) throw Object.assign(new Error('Incompatible API version'), { paused: true });
+      // Parts it replaces, by contract version: a part an update changed pauses the tweak until it is updated.
+      if (m.parts !== undefined && (!m.parts || typeof m.parts !== 'object' || Array.isArray(m.parts) || Object.entries(m.parts).some(([n, v]) => window.WosParts?.version(n) !== v))) throw Object.assign(new Error('Part changed'), { paused: true });
       const mod = await bounded(importer(tweakUrl(id, 'tweak.js')), ms);
       if (typeof mod.default !== 'function') throw new Error('Missing setup');
       return { m, mod };
@@ -577,7 +618,7 @@
       } catch (e) {
         if (seq !== tweakSeq) return false;
         if (/timed out/i.test(e.message)) slow = true;
-        expected.delete(id); const l = preCss.get(id); if (l) { l.remove(); preCss.delete(id); } paintTweaks(); shell?.toast?.(`${id} turned off · ${e.message}`);
+        expected.delete(id); const l = preCss.get(id); if (l) { l.remove(); preCss.delete(id); } paintTweaks(); shell?.toast?.(e?.paused ? pausedNote(id) : `${id} turned off · ${e.message}`);
       }
     }
     // A run cut short by the network keeps the full list for next time, so the next load still paints them at once.

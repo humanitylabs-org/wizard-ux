@@ -207,7 +207,8 @@ window.WizCore.chats = function createChats(H) {
   // Parsing, Markdown, Bangkok time, drafts, copy/share and the media viewer live in chat-kit.js.
   const KIT = window.WosChat;
   // Pins (core/chat-pins.js, synced per owner) and Boomerang (core/scheduled-reminders.js, loads after this file).
-  const PIN = window.WosChatPins || { has: () => false, toggle: () => false, partition: rows => ({ pinned: [], rest: rows }) };
+  // The pins part (core/parts.js): stock core/chat-pins.js unless a tweak replaced it.
+  const PIN = window.WosParts?.use('pins') || window.WosChatPins || { has: () => false, toggle: () => false, partition: rows => ({ pinned: [], rest: rows }) };
   const BOOM = () => window.WosBoomerang || null;
   const PIN_SVG = '<svg class="ch-pin-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 4 5 5-4 2-3 5-2-2-5 5-1-1 5-5-2-2 5-3 2-4Z"/></svg>';
   const TOPIC = window.WosTopicEmoji;

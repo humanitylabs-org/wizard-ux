@@ -116,8 +116,9 @@ test('channel picker: hidden on an App Manager without channels, shown with Stab
   assert.doesNotMatch(old.U.html(), /Release channel/);
   const { U } = await load(() => [200, { ...STATUS, channel: 'stable', stable: '0.3.16' }]);
   const h = U.html();
-  assert.match(h, /<div class="st-seg" role="radiogroup" aria-label="Release channel"><button type="button" data-osu="ch-stable" role="radio" aria-checked="true" >Stable<\/button><button type="button" data-osu="ch-latest" role="radio" aria-checked="false" >Latest<\/button>/);
-  assert.match(h, /Tested releases only\./);
+  assert.match(h, /<div class="st-seg" role="radiogroup" aria-label="Release channel"><button type="button" data-osu="ch-stable" role="radio" aria-checked="true" >Standard<\/button><button type="button" data-osu="ch-latest" role="radio" aria-checked="false" >Early access<\/button>/);
+  assert.match(h, /The official version\./);
+  assert.match(h, /<span class="osu-lbl">Version<\/span>/);
 });
 
 test('on latest with Automatic it says Automatic installs stable only; choosing a channel POSTs only {channel}', async () => {
@@ -134,8 +135,8 @@ test('on latest with Automatic it says Automatic installs stable only; choosing 
   assert.equal(post.headers['X-Wizard-Store'], '1');
   assert.equal(U.state.channel, 'latest');
   assert.match(U.html(), /data-osu="ch-latest" role="radio" aria-checked="true"/);
-  assert.match(U.html(), /Every release, for testers\. Automatic installs Stable only\./);
-  assert.match(c.t[0][1], /Channel: Latest/);
+  assert.match(U.html(), /Newest changes first; may be rough\. Automatic installs Standard only\./);
+  assert.match(c.t[0][1], /^Early access/);
   const n = calls.length;
   U.act(btn('ch-latest'), ctx()); await tick();
   assert.equal(calls.length, n);   // re-tapping the current channel sends nothing

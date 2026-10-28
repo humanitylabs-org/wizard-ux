@@ -101,7 +101,8 @@
     if (Date.now() - at > FRESH) load();
     const auto = st.mode === 'auto';
     const ch = ['stable', 'latest'].includes(st.channel) ? st.channel : '';
-    const channel = ch ? `<div class="osu-sec"><span class="osu-lbl">Channel</span>${seg('Release channel', [['ch-stable', 'Stable', ch === 'stable'], ['ch-latest', 'Latest', ch === 'latest']])}<p class="st-hint">${ch === 'stable' ? 'Tested releases only.' : `Every release, for testers.${auto ? ' Automatic installs Stable only.' : ''}`}</p></div>` : '';
+    // Owner words (Miguel, 28 Oct 2026): Standard = releases/stable, Early access = releases/latest. Ids stay.
+    const channel = ch ? `<div class="osu-sec"><span class="osu-lbl">Version</span>${seg('Release channel', [['ch-stable', 'Standard', ch === 'stable'], ['ch-latest', 'Early access', ch === 'latest']])}<p class="st-hint">${ch === 'stable' ? 'The official version.' : `Newest changes first; may be rough.${auto ? ' Automatic installs Standard only.' : ''}`}</p></div>` : '';
     const install = `<div class="osu-sec"><span class="osu-lbl">Updates</span>${seg('Updates', [['auto', 'Automatic', auto], ['ask', 'Ask me', !auto]])}<p class="st-hint">${auto ? 'Overnight, never during a chat.' : 'Nothing installs until you tap Install.'}</p></div>`;
     return `<div class="st-group" data-osu-group>${cardHtml()}${quietHead()}${install}${channel}</div>`;
   }
@@ -110,7 +111,7 @@
     busy = 'ch'; ctx?.render?.(); ctx?.haptic?.(8);
     post({ channel: chan }).then(d => {
       st = valid(d) ? d : { ...st, channel: chan };
-      ctx?.toast?.('✓', chan === 'latest' ? (st.mode === 'auto' ? 'Channel: Latest · Automatic still installs stable only' : 'Channel: Latest') : 'Channel: Stable', 2200);
+      ctx?.toast?.('✓', chan === 'latest' ? (st.mode === 'auto' ? 'Early access · Automatic still installs Standard only' : 'Early access') : 'Standard version', 2200);
       at = Date.now();
     }).catch(e => ctx?.toast?.('!', e.message || 'Couldn’t reach the App Manager', 2600))
       .finally(() => { busy = ''; changed(); });
