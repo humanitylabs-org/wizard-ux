@@ -54,3 +54,9 @@ test('keys, voice and chat actions follow the keyboard into the HUD; desk routes
   assert.match(js, /return Object\.values\(W\)\.find\(w => w\.id !== hud\?\.id && fn\(w\)\) \|\| null;/);
   assert.match(js, /function toNewChat\(wid, why\) \{\n\s*const w = W\[wid\]; if \(hud\?\.id === wid \|\|/);
 });
+
+test('the heads-up chat is fully opaque and its orb sleeps unless folded (James: floating text panels are solid)', () => {
+  const rule = css.match(/\.win\.hud \{[^}]*\}/)[0];
+  assert.doesNotMatch(rule, /backdrop-filter/);
+  assert.match(js, /if \(hudOrb\) hudOrb\.hidden = !hud \|\| hud\.open;\n\s*window\.Orb\?\.sleep\?\.\(!hud \|\| hud\.open\);/);
+});

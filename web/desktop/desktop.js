@@ -652,6 +652,7 @@
     const hudLayer = hudLayerEl(), hudOrb = $('#hudOrb');
     hudLayer.hidden = !hud;
     if (hudOrb) hudOrb.hidden = !hud || hud.open;
+    window.Orb?.sleep?.(!hud || hud.open); // the orb draws only while it is the folded heads-up chat
     if (!hud) return;
     const SW = stage.clientWidth, SH = stage.clientHeight, el = winEl(hud.id);
     const w = Math.round(clampN(hud.w, HUD_MIN[0], Math.max(HUD_MIN[0], SW - 2 * HUD_GAP))), h = Math.round(clampN(hud.h, HUD_MIN[1], Math.max(HUD_MIN[1], SH - 2 * HUD_GAP)));
