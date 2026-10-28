@@ -413,6 +413,13 @@
       ],
       "note": "Shell relay for the optional Photos app frame (/photos/) to the Android app's window.wizardPhotosPort; draws no UI. Without the port it answers no-bridge"
     },
+    "core/privileges.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared App Manager privilege notices; server-access Settings alias and read-only status polling"
+    },
     "core/reach.js": {
       "loadedBy": [
         "phone",
@@ -785,6 +792,8 @@
     "core/own-views.js",
     "core/photos-relay.js",
     "core/polish.css",
+    "core/privileges.css",
+    "core/privileges.js",
     "core/reach.js",
     "core/resources.css",
     "core/resources.js",

@@ -45,6 +45,7 @@
   const bridge = () => window.WizardOSNative || null;
   // Opening in the phone's own browser needs the native bridge for this Wizard's own pages: a plain window.open
   // on Android loads in the main frame (multiple windows are off) and would replace Wizard.
+  const ownerPage = u => inApp(u) && /^\/wizard-os-home\/store-install\/_approve\/(?:developer|[a-z0-9][a-z0-9-]{0,63}\/[a-f0-9]{64})$/.test(u.pathname) && !u.search && !u.hash;
   const canBrowse = u => !!u && (!inApp(u) || !NATIVE || typeof bridge()?.openInBrowser === 'function');
   function browse(u) {
     const b = bridge();
@@ -331,6 +332,7 @@
     const home = String(base || '').split(/[?#]/)[0].replace(/[^/]*$/, '') || '/';
     const leaves = (u, tgt) => u.origin !== ORIGIN || /^_(blank|top|parent)$/i.test(tgt || '') || (home !== '/' && !u.pathname.startsWith(home));
     const go = u => {
+      if (ownerPage(u)) return browse(u);
       if (u.origin !== ORIGIN) return external(u);
       let fe = null; try { fe = win.frameElement; } catch (e) {}
       // Hosted apps use the same canonical thread/app navigation as chat links.
@@ -365,6 +367,14 @@
       };
     } catch (e) {}
   }
+
+  if (typeof document !== 'undefined') document.addEventListener('click', e => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const a = e.target.closest?.('a[data-owner-page]');
+    const u = a && abs(a.getAttribute('href'));
+    if (!ownerPage(u)) return;
+    e.preventDefault(); e.stopImmediatePropagation(); browse(u);
+  }, true);
 
   window.WizLinks = { mount, intercept, guardFrame, viewImage: href => viewImage(abs(href)), inApp: href => inApp(abs(href)) };
 })();

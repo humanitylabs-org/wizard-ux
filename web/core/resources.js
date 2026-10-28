@@ -96,9 +96,10 @@
   const HSTAT={error:'Needs attention',warn:'Warning',ok:'OK'},HRANK={error:0,warn:1,ok:2};
   const HABOUT={'root-inodes':'The server is running out of room for new files (it can hold only so many, however small). Clearing caches or old build folders fixes it.','services':'Services currently in a failed state. Zero means everything monitored is running cleanly.','hermes-backup':'Freshness, health check, storage and retained copies of the encrypted Hermes backup.','scheduled-jobs':'Your Wizard’s recurring jobs (briefs, watchers, syncs). A failing job is retried by the repair worker before you hear about it.','voice':'Voice notes are transcribed on Thales. While it is down, voice input waits.','claude-signin':'The agent’s Claude account. Signed out means it cannot think with Claude until it signs in again.','disk-runway':'A forecast from the last week of free space, so you hear about a filling disk before it is full.'};
   const healthChecks=()=>S.health?.available&&Array.isArray(S.health.checks)?S.health.checks:[];
-  function healthProblems(){const h=S.health;if(!h?.available)return [];const out=healthChecks().filter(c=>c.status!=='ok').sort((a,b)=>HRANK[a.status]-HRANK[b.status]).map(c=>({status:c.status,text:`${c.label} ${c.value||HSTAT[c.status].toLowerCase()}`}));if(h.stale)out.push({status:'warn',text:h.checkedAt?`Health checks last ran ${ago(h.checkedAt)}`:'Health checks have not reported'});return out;}
+  function healthProblems(){const h=S.health;const access=window.WosPrivileges?.accessText();const extra=access?[{status:'error',text:access}]:[];if(!h?.available)return extra;const out=healthChecks().filter(c=>c.status!=='ok').sort((a,b)=>HRANK[a.status]-HRANK[b.status]).map(c=>({status:c.status,text:`${c.label} ${c.value||HSTAT[c.status].toLowerCase()}`}));if(h.stale)out.push({status:'warn',text:h.checkedAt?`Health checks last ran ${ago(h.checkedAt)}`:'Health checks have not reported'});return [...extra,...out];}
   function healthAlert(){const list=healthProblems();if(!list.length)return '';const bad=list.some(x=>x.status==='error');return `<button class="rs-health-alert ${bad?'rs-health-error':''}" data-res-open="health" aria-label="Health: ${esc(list.map(x=>x.text).join(', '))}. Open health checks"><i class="rs-dot"></i><span>${esc(list.map(x=>x.text).join(' · '))}</span><em>›</em></button>`;}
-  function healthHtml(){const h=S.health;
+  function healthHtml(){return (window.WosPrivileges?.accessHtml() || '') + healthChecksHtml();}
+  function healthChecksHtml(){const h=S.health;
     if(!h)return `<p class="rs-detail-note">${S.healthError?'Health checks unavailable right now.':'Reading health checks…'}</p>`;
     if(!h.available)return '<p class="rs-detail-note">No health checks are set up on this server yet. Ask your Wizard to watch disk, memory, services or backups and they will appear here.</p>';
     const list=[...healthChecks()].sort((a,b)=>HRANK[a.status]-HRANK[b.status]),n=h.counts||{},bad=(n.error||0)+(n.warn||0);
@@ -235,6 +236,7 @@
   document.addEventListener('keydown',e=>{if(!S.panel)return;if(e.key==='Escape'){e.preventDefault();if(window.__wux)close();else window.__wos?.onBack();}else if(e.key==='Tab'){const list=[...S.panel.querySelectorAll('button:not(:disabled)')],first=list[0],last=list.at(-1);if(e.shiftKey&&(document.activeElement===first||!S.panel.contains(document.activeElement))){e.preventDefault();last?.focus();}else if(!e.shiftKey&&(document.activeElement===last||!S.panel.contains(document.activeElement))){e.preventDefault();first?.focus();}}});
   window.addEventListener('blur',()=>{S.pressing=false;});
   document.addEventListener('visibilitychange',sync);
+  window.addEventListener('wos:privileges',paint);
   // Settings › Resources (and any later host): the Home bars, same groups and layout, drawn into a given element and kept
   // live while it stays in the page. Readings older than Home's own cadence are refreshed once.
   function bars(host){if(!host)return;S.extra.add(host);paintBars(host,true);if(!S.busy&&(Date.now()-S.serverAt>14000||Date.now()-S.aiAt>60000||Date.now()-S.devicesAt>60000))update();}
