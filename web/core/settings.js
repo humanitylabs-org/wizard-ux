@@ -41,7 +41,7 @@
   }
   // A quiet value on the right of a row, only where it tells you something at a glance; '' otherwise.
   function subtitle(id, ctx) {
-    if (id === 'phones') { const pc = phones(), v = pc?.view; if (!v) return ''; const n = v.phones.length; return pc.on ? (n ? `${n} ${n === 1 ? 'phone' : 'phones'}` : 'On') : pc.settingUp ? 'Setting up' : v.step === 'off' ? 'Off' : ''; }
+    if (id === 'phones') { const pc = phones(), v = pc?.view; if (!v) return ''; if (pc.lost) return 'Can’t check'; const n = v.phones.length; return pc.on ? (n ? `${n} ${n === 1 ? 'phone' : 'phones'}` : 'On') : pc.settingUp ? 'Setting up' : v.step === 'off' ? 'Off' : ''; }
     if (id === 'appearance') return window.WosSkin ? (mySkinWorn() ? window.WosMySkin.active.name + ' · ' : '') + lookName(window.WosSkin, window.WosSkin.current) : '';
     if (id === 'phone') { if (shell()) return shellOrb()?.state.on ? 'Everywhere on' : ''; try { return JSON.parse(native()?.everywhere?.() || '{}').enabled ? 'Everywhere on' : ''; } catch (_) { return ''; } }
     if (id === 'recovery') { const n = new Set([...unsentAll(ctx), ...recovered()].map(x => x.id)).size; return n ? String(n) : ''; }
@@ -335,7 +335,7 @@
       // Settings redraws only when what it shows itself changes (the list entry, phones, Turn off); the component
       // redraws its own part.
       onChange: pc => {
-        const v = pc.view, key = JSON.stringify([pc.status, v?.step, v?.phones]);
+        const v = pc.view, key = JSON.stringify([pc.status, pc.lost, v?.step, v?.phones]);
         if (key !== PH.summary) { PH.summary = key; for (const m of mounts) m.render(); }
       },
     });
