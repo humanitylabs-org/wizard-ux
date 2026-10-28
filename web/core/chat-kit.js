@@ -198,6 +198,7 @@
     const ev = { at, role: m.role, kind: m.display_kind || '' };
     if (calls.length) ev.calls = calls;
     if (m.role === 'tool') { ev.callId = String(m.tool_call_id || ''); if (Array.isArray(m.plan)) ev.plan = m.plan; if (m.question && typeof m.question === 'object') ev.question = m.question; }
+    if (m.role === 'tool') { const a = window.WosPrivileges?.from(m.owner_approval || m.content); if (a) ev.ownerApproval = a; }
     if (cur.work.length < 2000) cur.work.push(ev);
   }
 

@@ -12,6 +12,7 @@ import { buildOverview, gatherSources } from './system-overview.mjs';
 import { withPrivateCatalog } from './store-private-catalog.mjs';
 import { createRouterOwnerRoutes } from './store-router-owner.mjs';
 import { linkPreview } from './store-link-preview.mjs';
+import { readPrivilegeStatus } from './privilege-status.mjs';
 export const PREFIX = '/wizard-os-home/store-data/';
 const APPS = process.env.WIZARD_STORE_APPS_JSON || join(homedir(), '.wizard-os/apps.json');
 const ENV = process.env.WIZARD_STORE_RUNTIPI_ENV || join(homedir(), 'runtipi/.env');
@@ -61,7 +62,7 @@ export function shellMetadata(doc) {
     status:str(a.status,24,/^[a-z_-]+$/), system:a.system === true,
   }));
 }
-export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCatalog(createIndexProxy()), readApps = () => readWizardApps(APPS), readWam = () => JSON.parse(readFileSync(APPS,'utf8')), readRuntipi = runtipi, overview, service = SERVICE, routerOwner = createRouterOwnerRoutes() } = {}) {
+export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCatalog(createIndexProxy()), readApps = () => readWizardApps(APPS), readWam = () => JSON.parse(readFileSync(APPS,'utf8')), readRuntipi = runtipi, overview, readPrivileges = () => readPrivilegeStatus({fetchImpl}), service = SERVICE, routerOwner = createRouterOwnerRoutes() } = {}) {
   // Installed list straight from Runtipi, reduced to validated scalars (used by the Store and the System overview).
   const installedList = async () => {
     const auth=readRuntipi();
@@ -87,6 +88,12 @@ export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCa
       if (!u.pathname.startsWith(PREFIX)) { send(404,{error:'not_found'}); return; }
       const path=u.pathname.slice(PREFIX.length);
       if (await routerOwner(req, res, path, u, send)) return;
+      if (path === 'wizard/v1/privilege-status') {
+        if (u.search) { send(400,{error:'invalid_query'}); return; }
+        if (req.headers['sec-fetch-site'] === 'cross-site') { send(403,{error:'cross_site_refused'}); return; }
+        try { send(200,await readPrivileges()); } catch (_) { send(503,{error:'privilege_status_unavailable'}); }
+        return;
+      }
       if (path === 'wizard/v1/installed-apps') {
         if (u.search) { send(400,{error:'invalid_query'}); return; }
         const [wam,shell] = await Promise.allSettled([

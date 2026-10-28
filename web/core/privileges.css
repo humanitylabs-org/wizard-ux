@@ -1,0 +1,22 @@
+/* Display-only privilege notices: every text panel has a solid fill, on every skin. */
+.wz-owner-approval,.wz-server-access,.wz-developer-banner{box-sizing:border-box;background:var(--wz-base,#15111f);color:var(--wz-text,#f3efff);border:1px solid var(--wz-border,#665b78);border-radius:var(--wz-radius,12px);padding:14px;font:inherit;line-height:1.5;text-align:left;overflow-wrap:anywhere}
+.wz-owner-approval{margin:12px 0}
+.wz-owner-approval b,.wz-server-access b{display:block;font-size:15px}
+.wz-owner-approval p,.wz-server-access p{margin:8px 0;font-size:13px}
+.wz-owner-approval ul{padding-inline-start:22px;margin:8px 0;font-size:14px}
+.wz-privilege-action{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:6px 12px;border:1px solid currentColor;border-radius:var(--wz-radius,10px);color:inherit;text-decoration:none;font-weight:650;font-size:13px}
+.wz-privilege-action:focus-visible{outline:3px solid var(--wz-accent,#b99bff);outline-offset:3px}
+.wz-server-access{color:var(--wz-danger,#ff6b86);border:2px solid currentColor;margin-block:12px}
+.wz-access-drift{font-weight:700}
+#wz-privilege-banner{position:absolute;inset:var(--safe-t,0px) 0 auto;z-index:250}
+#wz-privilege-banner[hidden]{display:none}
+.wz-developer-banner{border-radius:0;display:flex;align-items:center;justify-content:center;gap:8px 14px;flex-wrap:wrap;padding:8px 14px;font-size:12px}
+.wz-developer-banner b{font-size:13px}
+.wz-developer-banner small{flex-basis:100%;text-align:center}
+/* Reserve actual space above phone desks and desktop windows, including immersive apps. */
+.device>.desks{top:var(--wz-privilege-banner-height,0px)}
+html[data-shell="desktop"] .bar{top:var(--wz-privilege-banner-height,0px)}
+html[data-shell="desktop"] .stage,html[data-shell="desktop"] .dsettings{top:calc(var(--bar-h,34px) + var(--wz-privilege-banner-height,0px))}
+html[data-shell="desktop"].desktop-fullscreen .stage{top:var(--wz-privilege-banner-height,0px)}
+.device .rs-sheet{margin-top:var(--wz-privilege-banner-height,0px)}
+@media(max-width:480px){.wz-developer-banner{gap:4px 10px}.wz-developer-banner span{display:none}.wz-developer-banner .wz-privilege-action{font-size:12px}}

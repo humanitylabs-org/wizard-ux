@@ -183,6 +183,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       <section class="d-sec d-lead"><p class="d-sum">${esc(a.summary)}</p><p class="d-how">${esc(how)}</p></section>
       ${architectureReason(a,S.architecture) ? `<section class="d-sec"><p class="d-note" role="status">${esc(architectureReason(a,S.architecture))}</p></section>` : ''}
       ${(a.needs || []).includes('home-network') ? `<section class="d-sec d-home"><h3>Needs a home network</h3><p class="d-note" role="status">${esc(a.name)} only works when your Wizard runs on a home internet connection. On a cloud server (VPS), it needs a computer at home to route through. Its setup screen explains how.</p></section>` : ''}
+      ${window.WosPrivileges?.approvalHtml(ownerApprovals.get(a.id), a.name) || ''}
       ${needs}${powers}${gives}
       ${modelsSection(a)}
       ${a.release_notes ? `<section class="d-sec"><h3>Release notes</h3><p>${esc(a.release_notes)}</p></section>` : ''}
@@ -332,6 +333,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   async function appAccess(id) {
     try { const r = await fetch('/wizard/v1/apps/' + encodeURIComponent(id) + '/agents', { credentials: 'same-origin', cache: 'no-store' }); return r.ok ? await r.json() : null; } catch (_) { return null; }
   }
+  const ownerApprovals = new Map();
   async function install(a) {
     if (!a || architectureReason(a,S.architecture) || S.busy.has(a.id) || !['get','update','switch'].includes(status(a))) return;
     const operation = status(a)==='get'?'install':status(a);
@@ -343,6 +345,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       const r = await fetch(INSTALL + encodeURIComponent(a.id), { method: 'POST', credentials: 'same-origin', cache: 'no-store',
         headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: JSON.stringify(selection) });
       let j = await r.json().catch(() => ({}));
+      if (window.WosPrivileges?.approval(j)) { ownerApprovals.set(a.id, j); if (top() !== 'detail') openApp(key(a)); return; }
       if (r.status === 404 && !j.error) throw new Error('This Wizard’s App Manager needs updating before Store installs are available.');
       if (r.status === 403 || r.status === 404) throw new Error(j.error || 'Not allowed.');
       if (!r.ok && r.status !== 202) throw new Error(j.error || `Install failed (${r.status}).`);
@@ -351,8 +354,10 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
         const s = await fetch(INSTALL + encodeURIComponent(a.id), { credentials: 'same-origin', cache: 'no-store' });
         j = await s.json().catch(() => ({ state: 'installing' }));
       }
+      if (window.WosPrivileges?.approval(j)) { ownerApprovals.set(a.id, j); if (top() !== 'detail') openApp(key(a)); return; }
       if (j.state !== 'installed') throw new Error(j.error || 'The App Manager did not finish. Refresh to check its status.');
       if (!j.selection || ['source','repo','commit','operation'].some(k=>j.selection[k]!==selection[k])) throw new Error('The App Manager returned a different release. Refresh before retrying.');
+      ownerApprovals.delete(a.id);
       try { if (framed) parent.postMessage({ type: 'wizard:apps-changed', id: a.id }, location.origin); } catch (_) {}
       await load(true);
       const actual=S.installed.get(key(a));

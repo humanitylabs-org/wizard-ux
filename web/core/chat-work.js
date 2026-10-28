@@ -73,7 +73,10 @@
       }
     }
     const notes = tn.notes || [];
-    if (!r.count && !notes.length && !live) return '';
+    const approvals = new Map();
+    for (const ev of tn.work || []) if (ev.ownerApproval) approvals.set(ev.ownerApproval.approve_url, ev.ownerApproval);
+    const cards = [...approvals.values()].map(a => window.WosPrivileges?.approvalHtml(a) || '').join('');
+    if (!r.count && !notes.length && !live) return cards;
     const cur = r.plan?.find(p => p.status === 'in_progress');
     const waiting = live && r.question?.state === 'waiting';
     const progress = r.plan ? `${r.done} of ${r.plan.length} done${r.dropped ? ` · ${r.dropped} dropped` : ''}` : '';
@@ -106,7 +109,7 @@
       body += `<ul class="wk-steps">${r.steps.length > MAX ? `<li class="wk-more">${r.steps.length - MAX} earlier steps</li>` : ''}${shown.map(st => `<li${st.running ? ' class="run"' : ''}><span>${esc(st.label)}${st.preview ? `<small class="wk-preview">${esc(clip(String(st.preview).replace(/\s+/g, ' ').trim(), 90))}</small>` : ''}</span><time>${st.running ? '…' : st.streamDone ? (st.error ? '!' : '✓') : esc(dur(st.end - st.start))}</time></li>`).join('')}</ul>`;
     }
     if (notes.length) body += notes.map(x => `<div class="note-line">${md(x)}</div>`).join('');
-    return `<details class="steps wk${live ? ' live' : ''}${waiting ? ' asks' : ''}" data-wk="${esc(o.key)}"${open ? ' open' : ''}><summary>${icon} <span class="wk-l">${esc(label)}</span>${waiting ? '<em class="wk-dot" aria-hidden="true"></em>' : ''}</summary>${body}</details>`;
+    return `<details class="steps wk${live ? ' live' : ''}${waiting ? ' asks' : ''}" data-wk="${esc(o.key)}"${open ? ' open' : ''}><summary>${icon} <span class="wk-l">${esc(label)}</span>${waiting ? '<em class="wk-dot" aria-hidden="true"></em>' : ''}</summary>${body}</details>${cards}`;
   }
   function helperLabel(h, now = Date.now()) {
     if (!h || !['running','integrating','waiting','stalled','held','uncertain'].includes(h.phase)) return '';

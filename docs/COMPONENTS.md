@@ -59,6 +59,7 @@ Visual: <side-by-side screenshot, or "none">
 | Share to Wizard | `WizShareWizard` (`web/core/share-wizard.js`) | Native/app input → one phone/desktop sheet; `share.wizard` |
 | Uploads of any size | `WizUploads` (`web/core/uploads.js`) | file input + single fetch |
 | Files browse, preview, attach | `WosFiles` (`web/core/files.js`) | own picker |
+| App host-access review, personal-build banner, full-server-access warnings | `WosPrivileges` (`web/core/privileges.js`, `privileges.css`); read-only `tools/privilege-status.mjs` | inline approval calls or app-local permission renderers | `tests/privileges.test.mjs`, `tools/qa-privileges.cjs` |
 | Settings in both shells | `WosSettings.register` (`web/core/settings.js`), `focus(id)`, `WosFeatures`; Response style (+Own): `WizConfig.responseStyle`, PUT+GET | shell-only pages |
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`web/core/agents.js`) | hard-coded agent names or colours |
 | App source labels, `wizard://install` | `sourceLabel`, `parseInstallLink` (`web/store/`) | own badges |

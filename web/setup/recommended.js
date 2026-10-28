@@ -6,12 +6,13 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
   let apps = [], status = 'loading', changed = () => {}, onScreen = () => true, alive = true;
-  const busy = new Set(), errors = new Map();
+  const busy = new Set(), errors = new Map(), approvals = new Map();
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   async function request(path, body) {
     const r = await fetch(BASE + path, {credentials:'same-origin',cache:'no-store',
       ...(body ? {method:'POST',headers:{'Content-Type':'application/json','X-Wizard-Store':'1'},body:JSON.stringify(body)} : {})});
     const data = await r.json().catch(() => ({}));
+    if (window.WosPrivileges?.approval(data)) return data;
     if (!r.ok) throw Error(data.error || 'The App Manager is unavailable. Try again.');
     return data;
   }
@@ -31,7 +32,7 @@
     for (const a of apps) {
       const waiting = busy.has(a.id), blocked = !a.installed && !a.selection;
       const label = waiting ? 'Installing…' : a.installed ? 'Open sign-in' : blocked ? 'Not available yet' : 'Install and sign in';
-      h += `<button class="row" data-recommended="${esc(a.id)}" ${waiting || blocked ? 'disabled' : ''}><span class="bd"><b>${esc(a.name)}</b><small>${esc(errors.get(a.id) || (!a.installed && a.unavailable) || a.summary)}</small></span><span class="end recommended-action">${label}</span></button>`;
+      h += `<button class="row" data-recommended="${esc(a.id)}" ${waiting || blocked ? 'disabled' : ''}><span class="bd"><b>${esc(a.name)}</b><small>${esc(errors.get(a.id) || (!a.installed && a.unavailable) || a.summary)}</small></span><span class="end recommended-action">${label}</span></button>${window.WosPrivileges?.approvalHtml(approvals.get(a.id), a.name) || ''}`;
     }
     return h + '</div></section>';
   }
@@ -53,8 +54,10 @@
         if (!alive) return;
         result = await request(encodeURIComponent(id));
       }
+      if (window.WosPrivileges?.approval(result)) { approvals.set(id, result); return; }
       if (result.state !== 'installed') throw Error(result.error || 'Installation has not finished. Try again to check.');
       if (!result.selection || ['source','repo','commit','operation'].some(k => result.selection[k] !== selection[k])) throw Error('The installed release did not match. Refresh before retrying.');
+      approvals.delete(id);
       a.installed = true;
       if (parent !== window) parent.postMessage({type:'wizard:apps-changed',id}, location.origin);
       // Never steal focus if the owner left Setup while the install was running.
