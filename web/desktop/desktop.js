@@ -752,6 +752,7 @@
   function leaveHome() {
     window.WosResources?.back();
     if (!homeOpen) return;
+    if (settingsModal) closeSettings();
     homeOpen = false; store.set('homeOpen', false); render();
   }
   function goHome() {
@@ -1180,8 +1181,13 @@
    * its ✕, ⌥W, Esc or ⌥, like every window. There is still one Settings panel (setEl); the window hosts it, and when
    * the window goes (however it goes) the panel is hidden and parked on <body>. */
   const settingsWin = () => Object.values(W).find(w => w?.app === 'settings') || null;
-  const settingsFocused = () => !homeOpen && focused()?.app === 'settings';
+  // From Home, Settings opens as a centred panel over Home instead of a window on a desk (Home is not a desk).
+  let settingsModal = false;
+  const scrim = document.createElement('div'); scrim.className = 'dsettings-scrim'; scrim.hidden = true; document.body.appendChild(scrim);
+  scrim.addEventListener('click', () => closeSettings());
+  const settingsFocused = () => settingsModal ? !setEl.hidden : !homeOpen && focused()?.app === 'settings';
   function hostSettings() {
+    if (settingsModal) { if (setEl.parentNode !== document.body) document.body.appendChild(setEl); return; }
     const w = settingsWin(), host = w && winEl(w.id)?.querySelector('.settings-host');
     if (host) { if (setEl.parentNode !== host) host.appendChild(setEl); return; }
     if (w) return;
@@ -1196,11 +1202,24 @@
   function openSettings(focus) {
     window.WosResources?.back(); closePalette(); toggleKeys(false);
     const w = settingsWin();
-    if (w) focusWin(w.id); else { settingsFocus = document.activeElement; newWin({ app: 'settings' }); }
+    if (homeOpen && !w) {
+      if (!settingsModal) settingsFocus = document.activeElement;
+      settingsModal = true; setEl.classList.add('is-modal'); setEl.setAttribute('aria-modal', 'true'); setEl.setAttribute('role', 'dialog');
+      if (setEl.parentNode !== document.body) document.body.appendChild(setEl);
+      scrim.hidden = false;
+    } else if (w) focusWin(w.id); else { settingsFocus = document.activeElement; newWin({ app: 'settings' }); }
     setEl.hidden = false; settingsReturn = '';
     renderSettings(); settingsView.focus(focus); window.WosScenery?.update();
   }
-  function closeSettings() { const w = settingsWin(); if (w) closeWin(w.id); else hostSettings(); }
+  function closeSettings() {
+    if (settingsModal) {
+      settingsModal = false; setEl.classList.remove('is-modal'); setEl.removeAttribute('aria-modal'); setEl.setAttribute('role', 'region');
+      scrim.hidden = true; setEl.hidden = true;
+      if (settingsFocus?.isConnected && settingsFocus.getClientRects().length) settingsFocus.focus({ preventScroll: true });
+      window.WosScenery?.update(); return;
+    }
+    const w = settingsWin(); if (w) closeWin(w.id); else hostSettings();
+  }
   function toggleSettings() { if (settingsFocused()) closeSettings(); else openSettings(); }
   function returnToSettings() { if (!settingsReturn) return; const from = settingsReturn; openSettings(); setEl.querySelector(`[data-st="${from}"]`)?.focus({ preventScroll: true }); }
   setEl.addEventListener('click', e => { if (e.target.closest('[data-close]')) closeSettings(); });
