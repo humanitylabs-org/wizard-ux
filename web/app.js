@@ -3990,6 +3990,7 @@
     sessions: () => { const G = LIVE && LIVE.ok ? LIVE.workGroups() : null; return G ? { working: (G.working || []).length, ready: (G.ready || []).length } : null; },
     openSessions: kind => (kind === 'working' ? openChatsFiltered('working', { card: true }) : openApp(APP.wizard)),
     newThread: () => { const w = skinChatsWin(); if (w) CHATS.openChat(w.id, '__new__'); },
+    openSettings: page => openSettings(page),
     // Inbox tweak: answer a notification in this Chats window (the Notifications Reply path); words send it at once.
     contextDraft: (key, item, words, draft) => { const w = skinChatsWin(); if (!w) return false; CHATS.openContextDraft(w.id, key, item, draft); CHATS.renderChats(w); if (words) CHATS.sendChat(w.id, words, 'tapping Resolve this on a notification in Chats'); return true; },
     models: () => { const w = skinChatsWin(); return w ? CHATS.tweakModels(w.id) : []; },

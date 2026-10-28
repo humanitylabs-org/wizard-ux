@@ -504,6 +504,24 @@
     // Trusted packages may show the Notifications inbox (core/notif-bell.js) in Chats: watch unread items, mark one
     // done, or answer it in a new chat (the shell's context-draft path; `words` sends at once). No fetch crosses this
     // boundary and every handle dies with the package.
+    // Settings sections: a trusted package fills a System page of Settings (Your network, AI, Network & security,
+    // Storage & backups) with its own live node, and can open Settings at one of those pages. Released on teardown.
+    if (caps.has('settings')) api.settings = Object.freeze({
+      section(id, page, node, opts = {}) {
+        if (!trusted || a.dead) throw new Error('Trusted settings required');
+        if (!['overview', 'ai', 'network', 'storage'].includes(page) || !node || typeof node.append !== 'function') throw new Error('Invalid settings section');
+        const W = window.WosSettings; if (!W?.register) return () => {};
+        const fid = ('tweak-' + a.id + '-' + id).replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 80);
+        const subtitle = typeof opts.subtitle === 'function' ? guard(a, 'settings.subtitle', opts.subtitle) : null;
+        const off = W.register({ id: fid, page, ...(subtitle ? { subtitle } : {}), html: () => '<div class="st-tweak" data-st-tweak></div>',
+          painted: (ctx, el) => { const slot = el?.firstElementChild; if (slot && node.parentNode !== slot) slot.append(node); },
+          deferRefresh: () => node.contains?.(document.activeElement) });
+        let done = false; const release = () => { if (!done) { done = true; off(); node.remove?.(); } };
+        a.offs.add(release); return release;
+      },
+      open: page => { if (!a.dead && ['overview', 'ai', 'network', 'storage'].includes(page)) shell?.openSettings?.(page); },
+      refresh: () => { if (!a.dead) window.WosSettings?.refresh?.(); },
+    });
     if (caps.has('inbox')) api.inbox = Object.freeze({
       watch(fn) {
         if (a.dead || typeof fn !== 'function' || !window.WosBell?.watch) return () => {};
@@ -548,7 +566,7 @@
       const response = await bounded(fetch(tweakUrl(id, 'manifest.json')), ms);  // release-stamped: cacheable
       if (!response.ok) throw new Error('Manifest unavailable');
       const m = await response.json();
-      if (m.id !== id || m.author !== id.split('/')[0] || typeof m.version !== 'string' || !Array.isArray(m.capabilities) || m.capabilities.some(c => !['layout','nav','models','data.read','inbox'].includes(c))) throw new Error('Invalid manifest');
+      if (m.id !== id || m.author !== id.split('/')[0] || typeof m.version !== 'string' || !Array.isArray(m.capabilities) || m.capabilities.some(c => !['layout','nav','models','data.read','inbox','settings'].includes(c))) throw new Error('Invalid manifest');
       if (m.apiVersion !== contract.apiVersion) throw new Error('Incompatible API version');
       const mod = await bounded(importer(tweakUrl(id, 'tweak.js')), ms);
       if (typeof mod.default !== 'function') throw new Error('Missing setup');
