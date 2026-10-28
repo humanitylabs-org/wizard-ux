@@ -7,7 +7,7 @@ const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const js = read('web/desktop/desktop.js'), html = read('web/desktop.html'), css = read('web/desktop/desktop.css');
 
 test('Chats windows get a float button beside ✕; other windows do not', () => {
-  assert.match(js, /w\.app === 'chats' \? `<button data-wact="hud" title="Float over every desk"/);
+  assert.match(js, /w\.app === 'chats' \? `<button data-wact="hud" title="Float over every desk \(\$\{MOD\}P\)"/);
   assert.match(js, /if \(act === 'hud'\) return hudOn\(id\);/);
   assert.match(js, /if \(act === 'close' && hud\?\.id === id\) return hudClose\(\);\s*\n\s*if \(act === 'close'\) return closeWin\(id\);/);
   // Borderless frames hide title-bar buttons except ✕: the float button is re-shown next to it.
@@ -23,7 +23,7 @@ test('the HUD window lives outside the desks: never pruned at boot, never synced
   const on = js.slice(js.indexOf('function hudOn('), js.indexOf('function hudKeepPlace('));
   assert.match(on, /d\.wins\.splice\(i, 1\);/);
   const dock = js.slice(js.indexOf('function hudDock('), js.indexOf('function hudClose('));
-  assert.match(dock, /const d = ws\[cur\], at = /);
+  assert.match(dock, /const d = ws\[t\], at = /);
   assert.match(dock, /d\.wins\.splice\(at, 0, id\)/);
 });
 
@@ -59,4 +59,19 @@ test('the heads-up chat is fully opaque and its orb sleeps unless folded (James:
   const rule = css.match(/\.win\.hud \{[^}]*\}/)[0];
   assert.doesNotMatch(rule, /backdrop-filter/);
   assert.match(js, /if \(hudOrb\) hudOrb\.hidden = !hud \|\| hud\.open;\n\s*window\.Orb\?\.sleep\?\.\(!hud \|\| hud\.open\);/);
+});
+
+test('⌥P floats / folds / opens the heads-up chat and ⌥B puts it back on desktop 1, with their own buttons and guide chips', () => {
+  assert.match(js, /if \(alt && !shift && code === 'KeyP'\) return hit\(\(\) => \{ if \(!e\.repeat\) \{ closePalette\(\{ restore: false \}\); hudKey\(\); \} \}\);/);
+  assert.match(js, /if \(alt && !shift && code === 'KeyB'\) return hit\(\(\) => \{ if \(!e\.repeat && hud\) \{ closePalette\(\{ restore: false \}\); hudDock\(\{ to: 0 \}\); \} \}\);/);
+  assert.match(js, /<button data-wact="hud-home" title="Back to desktop 1 \(\$\{MOD\}B\)"/);
+  assert.match(js, /if \(act === 'hud-home'\) return hudDock\(\{ to: 0 \}\);/);
+  const dock = js.slice(js.indexOf('function hudDock('), js.indexOf('function hudKey('));
+  assert.match(dock, /const t = Number\.isInteger\(to\) && ws\[to\] \? to : cur;/);
+  assert.match(dock, /if \(t !== cur\) \{ save\(\); render\(\); goWs\(t\); \}/);
+  const key = js.slice(js.indexOf('function hudKey('), js.indexOf('function hudClose('));
+  assert.match(key, /if \(!hud\.open\) return hudFold\(false\);\s*\n\s*if \(hudHasFocus\(\)\) return hudFold\(true\);/);
+  assert.match(js, /\['P', 'Float chat', /);
+  assert.match(js, /\['\[data-wact="hud-min"\]', 'P'\], \['\[data-wact="hud-home"\]', 'B'\]/);
+  assert.match(css, /html\[data-skin-frame="borderless"\] \.wbar > \[data-wact="hud-home"\]/);
 });
