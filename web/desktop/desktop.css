@@ -423,26 +423,15 @@ html.key-hints-on #clock { visibility: hidden; }
 .hud-layer.moving .win.hud { transition: none; }
 .wbar [data-wact^="hud"] svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .hud-grip { position: absolute; left: 0; top: 0; width: 14px; height: 14px; z-index: 3; cursor: nwse-resize; }
-.hud-orb { position: absolute; width: 64px; height: 64px; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; touch-action: none; }
-.hud-orb[hidden] { display: none; }
-.hud-orb .orb, .hud-orb .orb-fallback { position: absolute; inset: -18px; width: calc(100% + 36px); height: calc(100% + 36px); pointer-events: none; }
-.hud-orb:focus-visible { outline: 2px solid var(--violet-2); outline-offset: 2px; }
-.hud-orb[data-state="done"]::after { content: ''; position: absolute; right: 4px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--pink, #ff5ccf); box-shadow: 0 0 0 2px rgba(10, 6, 22, .9); }
 /* Borderless frames show only ✕ in a title bar; the float button (and the HUD's own fold / put back) stand beside it. */
 html[data-skin-frame="borderless"] .wbar > [data-wact^="hud"] { position: absolute; top: 0; display: grid; place-items: center; min-width: 44px; width: 44px; height: 44px; border-radius: 50%; color: var(--ink-2); background: transparent; font-size: 18px; right: calc(var(--sf-padding, 16px) + 38px); }
-html[data-skin-frame="borderless"] .wbar > [data-wact="hud-home"] { right: calc(var(--sf-padding, 16px) + 78px); }
-html[data-skin-frame="borderless"] .wbar > [data-wact="hud-min"] { right: calc(var(--sf-padding, 16px) + 118px); }
+html[data-skin-frame="borderless"] .wbar > [data-wact="hud-home"] { right: calc(var(--sf-padding, 16px) + 38px); }
 html[data-skin-frame="borderless"] .wbar > [data-wact^="hud"]:hover { color: var(--ink); background: var(--glass-2); }
 html[data-skin-frame="borderless"] .wbar > [data-wact^="hud"]:focus-visible { outline: 2px solid var(--violet-2); outline-offset: -3px; }
 html[data-skin-frame="borderless"] .wbar:has(> [data-wact="hud"]) { padding-right: calc(96px + var(--sf-padding, 16px)); }
-html[data-skin-frame="borderless"] .win.hud > .wbar { padding-right: calc(170px + var(--sf-padding, 16px)); }
-/* Opening and folding glide from the corner the HUD is anchored to (bottom-right), like the orb breathing it out. */
+html[data-skin-frame="borderless"] .win.hud > .wbar { padding-right: calc(96px + var(--sf-padding, 16px)); }
+/* Floating glides in from the corner the HUD is anchored to (bottom-right). */
 .win.hud { transform-origin: 100% 100%; }
 .win.hud:not([hidden]) { animation: hud-in 200ms var(--ease, ease-out) both; }
-.hud-orb:not([hidden]) { animation: hud-orb-in 240ms var(--ease, ease-out) both; }
-.hud-orb { transition: transform 140ms var(--ease, ease-out); }
-.hud-orb:hover { transform: scale(1.06); }
-.hud-orb:active { transform: scale(.96); }
 @keyframes hud-in { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
-@keyframes hud-orb-in { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .win.hud:not([hidden]), .hud-orb:not([hidden]) { animation: none; } .hud-orb { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .win.hud:not([hidden]) { animation: none; } }

@@ -712,6 +712,11 @@
       "shell": "phone",
       "classification": "native",
       "reason": "Android pinned-shortcut app-only task (AppSessionActivity); desktop windows already isolate apps."
+    },
+    "orb.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone orb renderer; desktop microphone/chords remain the input adapter."
     }
   },
   "purpose": "Every entrypoint-exclusive asset must be explicit; new common features must be shared by default, not added to these exceptions.",
@@ -823,7 +828,6 @@
     "icon-192.png",
     "live.js",
     "manifest.webmanifest",
-    "orb.js",
     "outbox.js",
     "pwa-install.js"
   ]
