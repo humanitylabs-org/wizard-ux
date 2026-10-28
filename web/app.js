@@ -1182,7 +1182,7 @@
     return true;
   }
   window.WizOpenAgentChats = openAgentChats;
-  window.WosAppSetup?.init({ getApp: id => APP[id] });
+  window.WosAppSetup?.init({ getApp: id => APP[id], isFront: id => focusedWin()?.appId === id });
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
     if (a.kind === 'wizard' && a.url && !opts.setupChecked && window.WosAppSetup)

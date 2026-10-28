@@ -7,8 +7,9 @@ import { installRelease } from '../web/store/store-install.js';
 const read = p => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const provider = { id: 'wizard-tinfoil', name: 'Wizard Tinfoil', provides: ['live-transcription'], private: true, models: [{ id: 'flash', tier: 'fast' }] };
 const service = { slot: 'live-transcription', required: true, purpose: 'Words appear as you speak', recommend: provider.id, private_data: true, status: 'missing' };
-async function harness(result) {
-  const listeners = {}, sandbox = { URL, console, setTimeout, Map, Set, Promise, location: { href: 'https://fixture.test/wizard-os-home/' },
+async function harness(result, store = new Map()) {
+  const localStorage = { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)) };
+  const listeners = {}, sandbox = { URL, console, setTimeout, clearTimeout, Map, Set, Promise, JSON, localStorage, location: { href: 'https://fixture.test/wizard-os-home/' },
     document: { currentScript: { src: 'https://fixture.test/wizard-os-home/core/app-setup.js' }, addEventListener: (e, f) => listeners[e] = f, querySelectorAll: () => [] }, addEventListener: (e, f) => listeners[e] = f,
     load: async url => url.includes('store-router') ? { ...router, routerNeeds: async () => typeof result === 'function' ? result() : result } : { installRelease } };
   sandbox.window = sandbox;
@@ -58,6 +59,24 @@ test('Back cancels an in-flight needs read and a newer launch supersedes the old
   setup.gate({ id: 'recorder' }, () => opens++); await new Promise(setImmediate);
   assert.equal(setup.back(), true); release({ data: { models: [], services: [], ready_to_open: true } });
   await new Promise(setImmediate); assert.equal(opens, 0);
+});
+// James, 28 Oct 2026: tapping into an app sat for 3-5 s with nothing on screen while the Router check ran.
+test('a slow Router check never holds the window: it opens within the short wait, and at once once known ready', async () => {
+  const store = new Map(); let release;
+  let setup = await harness(() => new Promise(resolve => { release = resolve; }), store); let opens = 0;
+  const t0 = Date.now(); setup.gate({ id: 'notes' }, () => opens++);
+  await new Promise(r => setTimeout(r, 750)); assert.equal(opens, 1, 'opened before the check answered'); assert.ok(Date.now() - t0 < 1000);
+  assert.equal(setup.back(), false, 'Back after the window opened is the window\'s, not the check\'s');
+  release({ data: { models: [], services: [], ready_to_open: true } }); await new Promise(setImmediate); assert.equal(opens, 1, 'no second open');
+  setup = await harness(() => new Promise(() => {}), store); opens = 0;
+  setup.gate({ id: 'notes' }, () => opens++); assert.equal(opens, 1, 'known-ready app opens synchronously');
+});
+test('a late required gap does not put a sheet over a different app', async () => {
+  let release; const setup = await harness(() => new Promise(resolve => { release = resolve; })); let opens = 0;
+  setup.init({ isFront: () => false });
+  setup.gate({ id: 'recorder' }, () => opens++); await new Promise(r => setTimeout(r, 700)); assert.equal(opens, 1);
+  release({ data: { models: [], services: [service], providers: [], ready_to_open: false } }); await new Promise(setImmediate);
+  assert.equal(setup.isOpen(), false);
 });
 test('routerNeeds uses the shared owner proxy and handles an old Router 501', async () => {
   const previous = globalThis.fetch;
