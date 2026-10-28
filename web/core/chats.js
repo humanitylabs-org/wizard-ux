@@ -658,7 +658,7 @@ window.WizCore.chats = function createChats(H) {
   // fresh New chat whose composer stays empty: the item rides beside the draft as its reply (KIT.reply), shown as a
   // small bubble above the composer and framed into the message only when it is sent. Repeated taps reuse the
   // same draft; after it is sent or dismissed (×), a new tap starts a new reply.
-  function openContextDraft(wid, key, item) {
+  function openContextDraft(wid, key, item, text = '') {
     const w = W[wid]; if (!w) throw new Error('Main Chats unavailable');
     const reply = KIT.reply.clean(typeof item === 'string' ? { key, title: '', message: item } : { ...(item || {}), key });
     if (!reply) throw new Error('Invalid reply context');
@@ -669,7 +669,7 @@ window.WizCore.chats = function createChats(H) {
     let slot = Object.keys(all).find(k => all[k]?.reply?.key === key && (k === 'new' || SAVED_NEW.test(k)));
     if (!slot) {
       slot = 'new:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-      all[slot] = { text: '', files: [], at: Date.now(), reply };
+      all[slot] = { text: String(text || '').slice(0, 2000), files: [], at: Date.now(), reply };
       localStorage.setItem('wos.chat.drafts.v1', JSON.stringify(all));
     }
     openNewDraft(wid, slot);

@@ -253,3 +253,15 @@ html[data-skin="landscapes"] .mh-age-bg { fill: rgba(12, 16, 24, .72); }
 html[data-skin="landscapes"][data-tweaks~="miguel/machines-home"] { --mh-chip: rgba(10, 14, 22, .74); --mh-track: rgba(255, 255, 255, .26); }
 html[data-skin="landscapes"] .mh-bar i { background: linear-gradient(90deg, var(--mh-accent) var(--f), var(--mh-track) var(--f)), rgba(10, 14, 22, .7); box-shadow: 0 0 0 2px rgba(10, 14, 22, .55); }
 html[data-skin="landscapes"] .mh-bar small { background: rgba(10, 14, 22, .78); color: var(--mh-ink); }
+
+/* Badge for the gauge's own service; + to add a device or a person (quiet until hovered); first-load spinner. */
+.mh-ai-def { padding: 1px 7px; border-radius: 99px; font-size: 10.5px !important; font-weight: 750 !important; color: var(--mh-accent) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mh-accent) 60%, transparent); }
+.mh-root .mh-plus { flex: none; align-self: center; width: 26px; height: 26px; margin-left: 2px; border-radius: 50%; display: grid; place-items: center; color: var(--mh-ink-3) !important; background: var(--mh-chip) !important; box-shadow: inset 0 0 0 1px var(--mh-chip-line); opacity: .75; transition: opacity 200ms, color 200ms; }
+.mh-root .mh-plus:hover { opacity: 1; color: var(--mh-ink) !important; }
+.mh-plus .mh-i { width: 14px; height: 14px; }
+.mh-row.is-machines .mh-plus { align-self: flex-start; margin-top: calc(var(--hold) / 2 - 13px); }
+.mh-row.is-people .mh-plus { align-self: flex-start; margin-top: 6px; }
+.mh-row.is-act { justify-content: center; }
+.mh-act { transition: transform 260ms var(--mh-ease); }
+.mh-wait { width: 44px; height: 44px; margin: 60px 0; border-radius: 50%; background: var(--mh-pearl); opacity: .5; animation: mh-load 1.1s ease-in-out infinite; }
+@keyframes mh-load { 50% { opacity: .95; box-shadow: 0 0 0 10px color-mix(in srgb, var(--mh-accent) 25%, transparent); } }
