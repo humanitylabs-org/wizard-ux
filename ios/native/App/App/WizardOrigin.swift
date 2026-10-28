@@ -89,7 +89,24 @@ final class WizardProbe: NSObject, URLSessionDataDelegate {
     /// served as 200 text/html, so a missing or other Content-Type is refused.
     /// True for a probe problem where nothing answered at all (the connection failed or timed out), as opposed to an
     /// address that answered but isn't a Wizard. Only the first can be Tailscale's fault.
-    static func noAnswer(_ problem: String) -> Bool { problem.hasPrefix("Couldn't reach") }
+    static func noAnswer(_ problem: String) -> Bool { problem.hasPrefix("Couldn't reach") || notFound(problem) }
+
+    /// True when the Wizard's name doesn't exist from this phone. On Tailscale that means this phone isn't on the
+    /// Wizard's network (another account, or removed): Tailscale still knows an offline Wizard's name, so a Wizard
+    /// that is merely off or asleep gives "couldn't reach" (a timeout) instead.
+    static func notFound(_ problem: String) -> Bool { problem.hasPrefix("Couldn't find") }
+
+    /// The owner's message for a connection that failed with `code` (an NSURLError code).
+    static func failure(code: Int, origin: String) -> String {
+        let host = WizardOrigin.host(origin), tailscale = WizardOrigin.needsTailscale(origin)
+        if code == NSURLErrorCannotFindHost || code == NSURLErrorDNSLookupFailed {
+            return tailscale ? "Couldn't find \(host). Make sure Tailscale is on and signed in to the same account as your Wizard."
+                : "Couldn't find \(host). Check the address."
+        }
+        return code == NSURLErrorCancelled || tailscale
+            ? "Couldn't reach \(host). Make sure Tailscale is on and signed in to the same account as your Wizard."
+            : "Couldn't reach \(host). Check the address and your connection."
+    }
 
     static func headerProblem(status: Int, contentType: String?, host: String) -> String? {
         if status != 200 { return "\(host) answered, but didn't open Wizard (HTTP \(status))." }
@@ -153,10 +170,7 @@ final class WizardProbe: NSObject, URLSessionDataDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         if done { return }
         if let error = error as NSError? {
-            let host = WizardOrigin.host(origin)
-            finish(error.code == NSURLErrorCancelled || WizardOrigin.needsTailscale(origin)
-                ? "Couldn't reach \(host). Make sure Tailscale is on and signed in to the same account as your Wizard."
-                : "Couldn't reach \(host). Check the address and your connection.")
+            finish(WizardProbe.failure(code: error.code, origin: origin))
         } else {
             finish(bodyVerdict())
         }

@@ -37,6 +37,8 @@ final class ReachScreen {
     private final TailscaleGuideView guide;
     private boolean offline;
     private ReachPolicy.Why shown;
+    /** The WebView's error for this outage (kept when a network change redraws without one). */
+    private String lastError;
 
     ReachScreen(Activity a, FrameLayout parent, Runnable onRetry, Runnable onTailscale) {
         this.a = a;
@@ -121,7 +123,9 @@ final class ReachScreen {
         if (why != ReachPolicy.Why.NO_NETWORK && TailscaleGuide.applies(origin)) {
             // On a Tailscale address with a network: the guide. NOT_ANSWERING here means Tailscale is on.
             col.setVisibility(View.GONE);
-            guide.show(origin, why == ReachPolicy.Why.NOT_ANSWERING, tailscaleInstalled);
+            if (raw != null) lastError = raw;
+            // Tailscale on: a name that doesn't resolve means another network; a hang means the Wizard is off.
+            guide.show(origin, why == ReachPolicy.Why.NOT_ANSWERING, TailscaleGuide.missingFrom(lastError), tailscaleInstalled);
             view.setVisibility(View.VISIBLE);
             return;
         }
@@ -159,6 +163,7 @@ final class ReachScreen {
 
     void hide() {
         offline = false;
+        lastError = null;
         shown = null;
         view.setVisibility(View.GONE);
     }

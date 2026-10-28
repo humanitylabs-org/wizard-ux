@@ -19,9 +19,13 @@ final class TailscaleGuide {
     static final String PLAY_WEB = "https://play.google.com/store/apps/details?id=" + PACKAGE;
 
     static final String EYEBROW = "Can’t reach your Wizard";
-    static final String TITLE = "Your phone isn’t on your Wizard’s private network";
+    static final String TITLE = "Your phone isn’t on your Wizard’s private network", TITLE_AWAY = "Your Wizard isn’t answering";
     static final String OFF = "Tailscale isn’t running on this phone yet.";
-    static final String WRONG = "Tailscale is on, but this phone isn’t on your Wizard’s network, or your Wizard is turned off.";
+    static final String WRONG = "Tailscale is on, but this phone isn’t on your Wizard’s network.";
+    static final String QUIET = "Your phone is on your Wizard’s network, but your Wizard isn’t answering.";
+    static final String UNSURE = "Tailscale is on, but your Wizard isn’t answering this phone.";
+    static final String WAKE = "Check your Wizard is on";
+    static final String WAKE_BODY = "Make sure the computer running your Wizard is on and awake, with Wizard open. This phone connects by itself.";
     static final String LEAD = "Your Wizard is private. Only your own devices can reach it, through <b>Tailscale</b>, a free app that links them securely.";
     static final String GET = "Get Tailscale", SIGN_IN = "Sign in with your Wizard’s account", TURN_ON = "Turn it on", BACK = "Come back here";
     static final String FREE = "Free, from Tailscale Inc.", INSTALLED_ON = "Installed and on.", INSTALLED = "Installed.", IS_ON = "Tailscale is on.";
@@ -51,31 +55,62 @@ final class TailscaleGuide {
         return host.substring(host.indexOf('.') + 1);
     }
 
-    /** Steps 1–4. The first one that isn't done is the one the owner needs now. */
-    static Step[] steps(boolean on, boolean installed) {
-        if (on) return new Step[]{ Step.DONE, Step.NOW, Step.DONE, Step.TODO };
+    /**
+     * Steps 1–4. The first one that isn't done is the one the owner needs now. `missing` (with Tailscale on): true when
+     * the Wizard's name doesn't exist from this phone (another Tailscale account, or removed from the network); false
+     * when it exists but nothing answers (the Wizard's computer is off or asleep: Tailscale still knows an offline
+     * Wizard's name); null when not known yet.
+     */
+    static Step[] steps(boolean on, Boolean missing, boolean installed) {
+        if (on && Boolean.TRUE.equals(missing)) return new Step[]{ Step.DONE, Step.NOW, Step.DONE, Step.TODO };
+        if (on) return new Step[]{ Step.DONE, Boolean.FALSE.equals(missing) ? Step.DONE : Step.TODO, Step.DONE, Step.NOW };
         if (installed) return new Step[]{ Step.DONE, Step.TODO, Step.NOW, Step.TODO };
         return new Step[]{ Step.NOW, Step.TODO, Step.TODO, Step.TODO };
     }
 
-    static String status(boolean on) { return on ? WRONG : OFF; }
+    /** The headline: when the phone is fine and the Wizard is off, say that, not that the phone is off the network. */
+    static String headline(boolean on, Boolean missing) { return on && Boolean.FALSE.equals(missing) ? TITLE_AWAY : TITLE; }
+
+    static String status(boolean on, Boolean missing) {
+        if (!on) return OFF;
+        return Boolean.TRUE.equals(missing) ? WRONG : Boolean.FALSE.equals(missing) ? QUIET : UNSURE;
+    }
+
+    /** The phone is fine; the Wizard isn't answering. Step 4 then asks to check the Wizard's computer. */
+    static boolean away(boolean on, Boolean missing) { return on && !Boolean.TRUE.equals(missing); }
+
+    /** From the WebView's error text: the name didn't resolve (true), anything else, including a hang (false). */
+    static boolean missingFrom(String webError) { return webError != null && webError.contains("NAME_NOT_RESOLVED"); }
 
     /** Installed (or on): open it. Otherwise: Google Play. */
     static String button(boolean on, boolean installed) { return on || installed ? OPEN : GET; }
     static String hint(boolean on, boolean installed) { return on || installed ? "" : PLAY_HINT; }
 
+    /** The step titles, 1–4. */
+    static String title(int step, boolean on, Boolean missing) {
+        switch (step) {
+            case 1: return GET;
+            case 2: return SIGN_IN;
+            case 3: return TURN_ON;
+            default: return away(on, missing) ? WAKE : BACK;
+        }
+    }
+
     /** The text under a step's title. */
-    static String body(int step, boolean on, boolean installed, String tailnet) {
+    static String body(int step, boolean on, Boolean missing, boolean installed, String tailnet) {
         switch (step) {
             case 1: return on ? INSTALLED_ON : installed ? INSTALLED : FREE;
             case 2: return tailnet.isEmpty() ? SAME : SAME + " " + NETWORK;
             case 3: return on ? IS_ON : VPN;
-            default: return AUTO;
+            default: return away(on, missing) ? WAKE_BODY : AUTO;
         }
     }
 
+    /** The warning under step 2: only when this phone isn't on the Wizard's network. */
+    static boolean removed(boolean on, Boolean missing) { return on && Boolean.TRUE.equals(missing); }
+
     /** Which step carries the Get/Open Tailscale button: the one the owner needs now (step 4 never does). */
-    static boolean hasButton(int step, boolean on, boolean installed) {
-        return step < 4 && steps(on, installed)[step - 1] == Step.NOW;
+    static boolean hasButton(int step, boolean on, Boolean missing, boolean installed) {
+        return step < 4 && steps(on, missing, installed)[step - 1] == Step.NOW;
     }
 }

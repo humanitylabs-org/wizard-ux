@@ -213,15 +213,18 @@
       const G = window.WizardTailscaleGuide;
       const tailscaleOn = () => call('tailscale').then(r => !!(r && r.on), () => false);
       let guide = null, guideTimer = 0, guideBusy = false;
-      const paintGuide = on => {
-        if (!guide || guide.on === on) return;
+      // missing: the last check found no such name from this phone (another Tailscale network) rather than no answer.
+      const paintGuide = (on, missing = guide && guide.missing) => {
+        if (!guide) return;
+        const key = `${on}|${missing}`;
+        if (guide.key === key) return;
         const open = $('guide').querySelector('details')?.open;
-        guide.on = on;
-        $('guide').innerHTML = G.html({ host: guide.host, on, installed: null, platform: 'ios' });
+        guide.key = key; guide.on = on; guide.missing = missing;
+        $('guide').innerHTML = G.html({ host: guide.host, on, missing: on ? missing : null, installed: null, platform: 'ios' });
         if (open) $('guide').querySelector('details').open = true;
       };
       const showGuide = async (address, host, saved) => {
-        guide = { address, host, saved, on: undefined };
+        guide = { address, host, saved, on: undefined, missing: null, key: '' };
         $('connectCard').hidden = true; $('guide').hidden = false; document.querySelector('.stage').classList.add('guiding');
         paintGuide(await tailscaleOn());
         scrollTo(0, 0);
@@ -238,9 +241,11 @@
         guideBusy = true;
         const g = guide;
         try {
-          paintGuide(await tailscaleOn());
+          const on = await tailscaleOn();
+          paintGuide(on);
           const r = await call('check', { address: g.address }).catch(() => ({}));
           if (guide !== g) return;
+          if (r && r.offline) paintGuide(on, !!r.missing);
           if (r && r.ok) {
             setBusy(true, ['Connected. Opening Wizard…', g.host]);
             if (g.saved) await call('retry');

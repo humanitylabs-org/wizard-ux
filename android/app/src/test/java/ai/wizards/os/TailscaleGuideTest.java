@@ -24,13 +24,24 @@ public class TailscaleGuideTest {
     @Test
     public void theStepNeededNowFollowsWhatThePhoneShows() {
         // Not installed: get it.
-        assertArrayEquals(new Step[]{ Step.NOW, Step.TODO, Step.TODO, Step.TODO }, TailscaleGuide.steps(false, false));
+        assertArrayEquals(new Step[]{ Step.NOW, Step.TODO, Step.TODO, Step.TODO }, TailscaleGuide.steps(false, null, false));
         // Installed but off: turn it on.
-        assertArrayEquals(new Step[]{ Step.DONE, Step.TODO, Step.NOW, Step.TODO }, TailscaleGuide.steps(false, true));
-        // On, yet the Wizard doesn't answer: wrong account, or this phone was removed from the network.
-        assertArrayEquals(new Step[]{ Step.DONE, Step.NOW, Step.DONE, Step.TODO }, TailscaleGuide.steps(true, true));
-        assertEquals(TailscaleGuide.OFF, TailscaleGuide.status(false));
-        assertEquals(TailscaleGuide.WRONG, TailscaleGuide.status(true));
+        assertArrayEquals(new Step[]{ Step.DONE, Step.TODO, Step.NOW, Step.TODO }, TailscaleGuide.steps(false, null, true));
+        // On, and the Wizard's name doesn't exist from here: another account, or this phone was removed.
+        assertArrayEquals(new Step[]{ Step.DONE, Step.NOW, Step.DONE, Step.TODO }, TailscaleGuide.steps(true, true, true));
+        // On, the name exists, nothing answers: the Wizard's computer is off or asleep. Nothing to fix on the phone.
+        assertArrayEquals(new Step[]{ Step.DONE, Step.DONE, Step.DONE, Step.NOW }, TailscaleGuide.steps(true, false, true));
+        assertArrayEquals(new Step[]{ Step.DONE, Step.TODO, Step.DONE, Step.NOW }, TailscaleGuide.steps(true, null, true));
+        assertEquals(TailscaleGuide.OFF, TailscaleGuide.status(false, true));
+        assertEquals(TailscaleGuide.WRONG, TailscaleGuide.status(true, true));
+        assertEquals(TailscaleGuide.QUIET, TailscaleGuide.status(true, false));
+        assertEquals(TailscaleGuide.UNSURE, TailscaleGuide.status(true, null));
+        assertEquals(TailscaleGuide.TITLE_AWAY, TailscaleGuide.headline(true, false));
+        assertEquals(TailscaleGuide.TITLE, TailscaleGuide.headline(true, true));
+        assertEquals(TailscaleGuide.WAKE, TailscaleGuide.title(4, true, false));
+        assertEquals(TailscaleGuide.BACK, TailscaleGuide.title(4, true, true));
+        assertTrue(TailscaleGuide.removed(true, true));
+        assertFalse(TailscaleGuide.removed(true, false));
     }
 
     @Test
@@ -39,18 +50,27 @@ public class TailscaleGuideTest {
         assertEquals("Opens Google Play.", TailscaleGuide.hint(false, false));
         assertEquals("Open Tailscale", TailscaleGuide.button(false, true));
         assertEquals("Open Tailscale", TailscaleGuide.button(true, true));
-        assertTrue(TailscaleGuide.hasButton(1, false, false));
-        assertTrue(TailscaleGuide.hasButton(3, false, true));
-        assertTrue(TailscaleGuide.hasButton(2, true, true));
-        assertFalse(TailscaleGuide.hasButton(1, true, true));
-        for (int s = 1; s <= 4; s++) assertFalse(TailscaleGuide.hasButton(4, s % 2 == 0, s > 2));
+        assertTrue(TailscaleGuide.hasButton(1, false, null, false));
+        assertTrue(TailscaleGuide.hasButton(3, false, null, true));
+        assertTrue(TailscaleGuide.hasButton(2, true, true, true));
+        assertFalse(TailscaleGuide.hasButton(1, true, true, true));
+        for (int n = 1; n <= 4; n++) assertFalse("Wizard off: nothing to open on the phone", TailscaleGuide.hasButton(n, true, false, true));
+        for (int s = 1; s <= 4; s++) assertFalse(TailscaleGuide.hasButton(4, s % 2 == 0, null, s > 2));
     }
 
     @Test
     public void stepTwoNamesTheNetworkWhenThereIsOne() {
-        assertEquals(TailscaleGuide.SAME + " " + TailscaleGuide.NETWORK, TailscaleGuide.body(2, false, false, "tail1234.ts.net"));
-        assertEquals(TailscaleGuide.SAME, TailscaleGuide.body(2, false, false, ""));
-        assertEquals(TailscaleGuide.INSTALLED_ON, TailscaleGuide.body(1, true, true, ""));
-        assertEquals(TailscaleGuide.VPN, TailscaleGuide.body(3, false, true, ""));
+        assertEquals(TailscaleGuide.SAME + " " + TailscaleGuide.NETWORK, TailscaleGuide.body(2, false, null, false, "tail1234.ts.net"));
+        assertEquals(TailscaleGuide.SAME, TailscaleGuide.body(2, false, null, false, ""));
+        assertEquals(TailscaleGuide.INSTALLED_ON, TailscaleGuide.body(1, true, true, true, ""));
+        assertEquals(TailscaleGuide.VPN, TailscaleGuide.body(3, false, null, true, ""));
+        assertEquals(TailscaleGuide.WAKE_BODY, TailscaleGuide.body(4, true, false, true, ""));
+    }
+
+    @Test
+    public void aNameThatDoesNotResolveMeansAnotherNetworkAndAHangMeansTheWizardIsOff() {
+        assertTrue(TailscaleGuide.missingFrom("net::ERR_NAME_NOT_RESOLVED"));
+        assertFalse(TailscaleGuide.missingFrom("net::ERR_CONNECTION_TIMED_OUT"));
+        assertFalse(TailscaleGuide.missingFrom(null)); // the give-up mark: the load hung, so the name resolved
     }
 }

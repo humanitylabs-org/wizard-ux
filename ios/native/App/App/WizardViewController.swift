@@ -348,7 +348,8 @@ public class WizardShellPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         WizardProbe.check(origin) { problem in
-            call.resolve(["ok": problem == nil, "offline": problem.map(WizardProbe.noAnswer) ?? false, "problem": problem ?? ""])
+            call.resolve(["ok": problem == nil, "offline": problem.map(WizardProbe.noAnswer) ?? false,
+                          "missing": problem.map(WizardProbe.notFound) ?? false, "problem": problem ?? ""])
         }
     }
 

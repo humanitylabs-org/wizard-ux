@@ -2,9 +2,12 @@
  * address doesn't answer. Pure rendering, no bridge calls (index.html wires it up; tests/connect-tailscale-guide.test.mjs
  * runs it). The Android app shows the same steps and words (android/.../TailscaleGuide.java); keep them in step.
  *
- *   WizardTailscaleGuide.html({ host, on, installed, platform })
+ *   WizardTailscaleGuide.html({ host, on, missing, installed, platform })
  *     host       the Wizard's host, e.g. wizard.tail1234.ts.net (its tailnet name is shown when it has one)
  *     on         Tailscale is running on this phone (true/false); false when unknown
+ *     missing    with Tailscale on: true when the Wizard's name doesn't exist from this phone (another Tailscale
+ *                account, or removed from the network); false when it exists but nothing answers (the Wizard's
+ *                computer is off or asleep: Tailscale still knows an offline Wizard's name); null before the first check
  *     installed  true/false on Android; null on iPhone, which can't tell (the App Store page shows Get or Open)
  *   WizardTailscaleGuide.applies(host)   only Tailscale addresses (*.ts.net) get the guide
  *   WizardTailscaleGuide.tailnet(host)   'tail1234.ts.net' from 'wizard.tail1234.ts.net', else '' */
@@ -17,9 +20,12 @@
 
   const T = {
     eyebrow: 'Can’t reach your Wizard',
-    title: 'Your phone isn’t on your Wizard’s private network',
+    title: 'Your phone isn’t on your Wizard’s private network', titleAway: 'Your Wizard isn’t answering',
     off: 'Tailscale isn’t running on this phone yet.',
-    wrong: 'Tailscale is on, but this phone isn’t on your Wizard’s network, or your Wizard is turned off.',
+    wrong: 'Tailscale is on, but this phone isn’t on your Wizard’s network.',
+    quiet: 'Your phone is on your Wizard’s network, but your Wizard isn’t answering.',
+    unsure: 'Tailscale is on, but your Wizard isn’t answering this phone.',
+    wake: 'Check your Wizard is on', wakeBody: 'Make sure the computer running your Wizard is on and awake, with Wizard open. This phone connects by itself.',
     lead: 'Your Wizard is private. Only your own devices can reach it, through <b>Tailscale</b>, a free app that links them securely.',
     get: 'Get Tailscale', signin: 'Sign in with your Wizard’s account', turnOn: 'Turn it on', back: 'Come back here',
     free: 'Free, from Tailscale Inc.', installed: 'Installed and on.', isOn: 'Tailscale is on.',
@@ -37,14 +43,16 @@
   const ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" class="tsmark"><circle cx="5" cy="5" r="2.2"/><circle cx="12" cy="5" r="2.2" opacity=".4"/><circle cx="19" cy="5" r="2.2" opacity=".4"/><circle cx="5" cy="12" r="2.2"/><circle cx="12" cy="12" r="2.2"/><circle cx="19" cy="12" r="2.2"/><circle cx="5" cy="19" r="2.2" opacity=".4"/><circle cx="12" cy="19" r="2.2"/><circle cx="19" cy="19" r="2.2" opacity=".4"/></svg>';
 
   /** Which step needs the owner now: the first that isn't done. 'done' | 'now' | 'todo' for steps 1–4. */
-  function steps({ on, installed }) {
-    if (on) return ['done', 'now', 'done', 'todo'];
+  function steps({ on, missing = null, installed }) {
+    if (on && missing === true) return ['done', 'now', 'done', 'todo'];
+    if (on) return ['done', missing === false ? 'done' : 'todo', 'done', 'now'];
     if (installed === true) return ['done', 'todo', 'now', 'todo'];
     return ['now', 'todo', 'todo', 'todo'];
   }
 
-  function html({ host = '', on = false, installed = null, platform = 'ios' } = {}) {
-    const android = platform === 'android', net = tailnet(host), st = steps({ on, installed });
+  function html({ host = '', on = false, missing = null, installed = null, platform = 'ios' } = {}) {
+    const android = platform === 'android', net = tailnet(host), st = steps({ on, missing, installed });
+    const away = on && missing !== true; // the phone is fine; the Wizard isn't answering
     const open = on || installed === true;
     const hint = android ? (open ? '' : 'Opens Google Play.')
       : open ? 'Opens its App Store page; tap <b>Open</b> there.' : 'Opens the App Store. Already have it? The page shows <b>Open</b>.';
@@ -55,14 +63,15 @@
     };
     const chip = net ? `<p>${T.same} ${T.network}</p><div class="chip">${esc(net)}</div>` : `<p>${T.same}</p>`;
     return `<p class="eyebrow">${esc(T.eyebrow)}</p>
-      <h1>${esc(T.title)}</h1>
-      <div class="pill" role="status"><span class="dot" aria-hidden="true"></span><span data-guide-status>${esc(on ? T.wrong : T.off)}</span></div>
+      <h1>${esc(on && missing === false ? T.titleAway : T.title)}</h1>
+      <div class="pill" role="status"><span class="dot" aria-hidden="true"></span><span data-guide-status>${esc(!on ? T.off : missing === true ? T.wrong : missing === false ? T.quiet : T.unsure)}</span></div>
       <p class="lead">${T.lead}</p>
       <div class="steps">
         ${step(1, T.get, st[0] === 'done' ? `<p>${on ? T.installed : 'Installed.'}</p>` : `<p>${T.free}</p>${button}`)}
-        ${step(2, T.signin, chip + (on ? `<p class="warn">${T.removed}</p>${button}` : ''))}
+        ${step(2, T.signin, chip + (on && missing === true ? `<p class="warn">${T.removed}</p>${button}` : ''))}
         ${step(3, T.turnOn, on ? `<p>${T.isOn}</p>` : `<p>${android ? T.vpnAndroid : T.vpnIos}</p>${st[2] === 'now' ? button : ''}`)}
-        ${step(4, T.back, `<p>${T.auto}</p><div class="wait"><i aria-hidden="true"></i>${T.checking}</div>`)}
+        ${away ? step(4, T.wake, `<p>${T.wakeBody}</p><div class="wait"><i aria-hidden="true"></i>${T.checking}</div>`)
+               : step(4, T.back, `<p>${T.auto}</p><div class="wait"><i aria-hidden="true"></i>${T.checking}</div>`)}
       </div>
       <details><summary>${esc(T.about)}</summary><p>${T.about1}</p><p>${T.about2}</p><p>${T.about3}</p></details>
       <div class="foot"><button type="button" class="link" data-guide="other">${esc(T.other)}</button><span class="addr">${esc(host)}</span></div>`;

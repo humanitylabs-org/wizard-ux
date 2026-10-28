@@ -74,10 +74,10 @@ final class TailscaleGuideView {
     boolean isShowing() { return scroll.getVisibility() == View.VISIBLE; }
     void hide() { scroll.setVisibility(View.GONE); }
 
-    /** Show (or refresh) the guide for `origin`. Redraws only when what it says changes. */
-    void show(String origin, boolean on, boolean installed) {
-        String key = origin + "|" + on + "|" + installed;
-        if (!key.equals(shownKey)) { shownKey = key; build(origin, on, installed); }
+    /** Show (or refresh) the guide for `origin` (TailscaleGuide.steps for `missing`). Redraws only when it changes. */
+    void show(String origin, boolean on, Boolean missing, boolean installed) {
+        String key = origin + "|" + on + "|" + missing + "|" + installed;
+        if (!key.equals(shownKey)) { shownKey = key; build(origin, on, missing, installed); }
         if (!isShowing()) { scroll.setVisibility(View.VISIBLE); scroll.scrollTo(0, 0); scroll.requestApplyInsets(); }
     }
 
@@ -93,15 +93,15 @@ final class TailscaleGuideView {
         }
     }
 
-    private void build(String origin, boolean on, boolean installed) {
+    private void build(String origin, boolean on, Boolean missing, boolean installed) {
         body.removeAllViews();
         String net = TailscaleGuide.tailnet(origin);
-        TailscaleGuide.Step[] steps = TailscaleGuide.steps(on, installed);
+        TailscaleGuide.Step[] steps = TailscaleGuide.steps(on, missing, installed);
 
         TextView eyebrow = text(TailscaleGuide.EYEBROW.toUpperCase(java.util.Locale.ROOT), 11, p.accent, true);
         eyebrow.setLetterSpacing(0.16f);
         body.addView(eyebrow, lp(dp(8)));
-        body.addView(text(TailscaleGuide.TITLE, 22, p.text, true), lp(dp(6)));
+        body.addView(text(TailscaleGuide.headline(on, missing), 22, p.text, true), lp(dp(6)));
 
         LinearLayout pill = new LinearLayout(a);
         pill.setGravity(Gravity.CENTER_VERTICAL);
@@ -109,14 +109,13 @@ final class TailscaleGuideView {
         pill.setBackground(round(withAlpha(AMBER, 0.14f), 12));
         View dot = new View(a); dot.setBackground(round(AMBER, 99));
         pill.addView(dot, new LinearLayout.LayoutParams(dp(8), dp(8)));
-        TextView status = text(TailscaleGuide.status(on), 14, p.text, false);
+        TextView status = text(TailscaleGuide.status(on, missing), 14, p.text, false);
         status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1); sl.leftMargin = dp(10);
         pill.addView(status, sl);
         body.addView(pill, lp(dp(14)));
         body.addView(html(TailscaleGuide.LEAD, 15, p.text2), lp(dp(14)));
 
-        String[] titles = { TailscaleGuide.GET, TailscaleGuide.SIGN_IN, TailscaleGuide.TURN_ON, TailscaleGuide.BACK };
         for (int n = 1; n <= 4; n++) {
             TailscaleGuide.Step s = steps[n - 1];
             if (n > 1) body.addView(line(), lp(dp(12)));
@@ -128,8 +127,8 @@ final class TailscaleGuideView {
             glyph.setBackground(round(s == TailscaleGuide.Step.NOW ? p.accent : s == TailscaleGuide.Step.DONE ? withAlpha(GREEN, 0.2f) : p.surface, 11));
             row.addView(glyph, new LinearLayout.LayoutParams(dp(32), dp(32)));
             LinearLayout col = new LinearLayout(a); col.setOrientation(LinearLayout.VERTICAL);
-            col.addView(text(titles[n - 1], 16, p.text, true), lp(dp(4)));
-            col.addView(html(TailscaleGuide.body(n, on, installed, net), 14.5f, p.text2), lp(dp(3)));
+            col.addView(text(TailscaleGuide.title(n, on, missing), 16, p.text, true), lp(dp(4)));
+            col.addView(html(TailscaleGuide.body(n, on, missing, installed, net), 14.5f, p.text2), lp(dp(3)));
             if (n == 2 && !net.isEmpty()) {
                 TextView chip = text(net, 13, p.text, false);
                 chip.setTypeface(Typeface.MONOSPACE);
@@ -139,13 +138,13 @@ final class TailscaleGuideView {
                 cl.topMargin = dp(8);
                 col.addView(chip, cl);
             }
-            if (n == 2 && on) {
+            if (n == 2 && TailscaleGuide.removed(on, missing)) {
                 TextView warn = text(TailscaleGuide.REMOVED, 14.5f, p.text, false);
                 warn.setPadding(dp(10), 0, 0, 0);
                 warn.setBackground(rule(AMBER));
                 col.addView(warn, lp(dp(8)));
             }
-            if (TailscaleGuide.hasButton(n, on, installed)) {
+            if (TailscaleGuide.hasButton(n, on, missing, installed)) {
                 TextView b = text(TailscaleGuide.button(on, installed), 15, p.onButton, true);
                 b.setGravity(Gravity.CENTER);
                 b.setBackground(round(p.button, 14));

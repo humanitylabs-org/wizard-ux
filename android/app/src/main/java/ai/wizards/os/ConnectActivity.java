@@ -43,6 +43,7 @@ public final class ConnectActivity extends Activity {
     private FrameLayout root;
     private TailscaleGuideView guide;
     private String guideOrigin;
+    private Boolean guideMissing;
     private boolean resumed, guideChecking;
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable guideTick = this::checkGuide;
@@ -240,14 +241,18 @@ public final class ConnectActivity extends Activity {
         if (origin == null) { say("Enter your Wizard's https:// address, like https://wizard.your-tailnet.ts.net", true); return; }
         boolean[] net = ReachScreen.net(this);
         // A Tailscale address while Tailscale is off can't answer: show the guide now instead of waiting out the check.
-        if (TailscaleGuide.applies(origin) && net[0] && !net[1]) { say("", false); showGuide(origin); return; }
+        if (TailscaleGuide.applies(origin) && net[0] && !net[1]) { say("", false); guideMissing = null; showGuide(origin); return; }
         final int attempt = ++generation;
         checking = true; busy(true);
         say("Checking your Wizard…", false);
         InputMethodManager keyboard = getSystemService(InputMethodManager.class); if (keyboard != null) keyboard.hideSoftInputFromWindow(address.getWindowToken(), 0);
         new Thread(() -> {
             String error = null;
-            try { WizardProbe.check(origin); } catch (Exception e) { error = "Couldn't reach that Wizard. Check the address and that Tailscale is on, then try again."; }
+            try { WizardProbe.check(origin); }
+            catch (Exception e) {
+                error = "Couldn't reach that Wizard. Check the address and that Tailscale is on, then try again.";
+                guideMissing = e instanceof java.net.UnknownHostException;
+            }
             final String failure = error;
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed() || generation != attempt) return;
@@ -290,7 +295,7 @@ public final class ConnectActivity extends Activity {
             root.requestApplyInsets(); // the root's listener pads the guide too
         }
         boolean[] net = ReachScreen.net(this);
-        guide.show(origin, net[1], ReachScreen.tailscaleInstalled(this));
+        guide.show(origin, net[1], guideMissing, ReachScreen.tailscaleInstalled(this));
         main.removeCallbacks(guideTick);
         main.postDelayed(guideTick, 4000);
     }
@@ -303,17 +308,19 @@ public final class ConnectActivity extends Activity {
         main.removeCallbacks(guideTick);
         final String origin = guideOrigin;
         if (origin == null || !resumed || guideChecking) return;
-        guide.show(origin, ReachScreen.net(this)[1], ReachScreen.tailscaleInstalled(this));
+        guide.show(origin, ReachScreen.net(this)[1], guideMissing, ReachScreen.tailscaleInstalled(this));
         final int attempt = ++generation;
         guideChecking = true;
         new Thread(() -> {
-            boolean ok;
-            try { WizardProbe.check(origin); ok = true; } catch (Exception e) { ok = false; }
-            final boolean reached = ok;
+            boolean ok; Boolean missing = null;
+            try { WizardProbe.check(origin); ok = true; }
+            catch (Exception e) { ok = false; missing = e instanceof java.net.UnknownHostException; }
+            final boolean reached = ok; final Boolean notFound = missing;
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed() || generation != attempt || !origin.equals(guideOrigin)) return;
                 guideChecking = false;
                 if (reached && ServerSettings.save(this, origin)) { returnToWizard(); return; }
+                if (notFound != null) { guideMissing = notFound; guide.show(origin, ReachScreen.net(this)[1], guideMissing, ReachScreen.tailscaleInstalled(this)); }
                 main.postDelayed(guideTick, 4000);
             });
         }, "WizardGuideCheck").start();
