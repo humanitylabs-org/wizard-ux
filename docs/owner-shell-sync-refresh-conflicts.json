@@ -4,489 +4,559 @@
     "file": "docs/COMPONENTS.md",
     "block": 1,
     "choice": "combined",
-    "reason": "Keep compact shared inventory and add live contracts without removing independent shared capabilities"
+    "reason": "Keep compact shared inventory and add live contracts without removing independent shared capabilities",
+    "class": "disjoint-intent"
   },
   {
     "phase": "live",
     "file": "docs/COMPONENTS.md",
     "block": 2,
     "choice": "combined",
-    "reason": "Keep compact shared inventory and add live contracts without removing independent shared capabilities"
+    "reason": "Keep compact shared inventory and add live contracts without removing independent shared capabilities",
+    "class": "disjoint-intent"
   },
   {
     "phase": "live",
     "file": "docs/COMPONENTS.md",
     "block": 3,
     "choice": "combined",
-    "reason": "Keep compact shared inventory and add live contracts without removing independent shared capabilities"
+    "reason": "Keep compact shared inventory and add live contracts without removing independent shared capabilities",
+    "class": "disjoint-intent"
   },
   {
     "phase": "live",
     "file": "docs/COMPONENTS.md",
     "block": 4,
     "choice": "combined",
-    "reason": "Keep compact shared inventory and add live contracts without removing independent shared capabilities"
+    "reason": "Keep compact shared inventory and add live contracts without removing independent shared capabilities",
+    "class": "disjoint-intent"
   },
   {
     "phase": "live",
     "file": "docs/COMPONENTS.md",
     "block": 5,
     "choice": "combined",
-    "reason": "Keep compact shared inventory and add live contracts without removing independent shared capabilities"
+    "reason": "Keep compact shared inventory and add live contracts without removing independent shared capabilities",
+    "class": "disjoint-intent"
   },
   {
     "phase": "live",
     "file": "docs/COMPONENTS.md",
     "block": 6,
     "choice": "combined",
-    "reason": "Keep compact shared inventory and add live contracts without removing independent shared capabilities"
+    "reason": "Keep compact shared inventory and add live contracts without removing independent shared capabilities",
+    "class": "disjoint-intent"
   },
   {
     "phase": "live",
     "file": "docs/responsive-feature-inventory.json",
     "block": 1,
     "choice": "live",
-    "reason": "Retain current live behavior and capability contracts"
+    "reason": "Retain current live behavior and capability contracts",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "live",
     "file": "docs/shared-app-services-host.md",
     "block": 1,
     "choice": "combined",
-    "reason": "Independent context-draft and modal-backdrop contracts"
+    "reason": "Independent context-draft and modal-backdrop contracts",
+    "class": "disjoint-intent"
   },
   {
     "phase": "live",
     "file": "qa-app-orb.cjs",
     "block": 1,
     "choice": "live",
-    "reason": "Retain current live behavior and capability contracts"
+    "reason": "Retain current live behavior and capability contracts",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "live",
     "file": "qa-app-orb.cjs",
     "block": 2,
     "choice": "combined",
-    "reason": "Preserve all browser executable overrides"
+    "reason": "Preserve all browser executable overrides",
+    "class": "disjoint-intent"
   },
   {
     "phase": "live",
     "file": "tests/app-share-wizard.test.mjs",
     "block": 1,
     "choice": "live",
-    "reason": "Retain current live behavior and capability contracts"
+    "reason": "Retain current live behavior and capability contracts",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "live",
     "file": "tests/home-screen-refresh.test.mjs",
     "block": 1,
     "choice": "combined",
-    "reason": "Preserve rename regression plus live echo, sigil, removal and resume tests"
+    "reason": "Preserve rename regression plus live echo, sigil, removal and resume tests",
+    "class": "disjoint-intent"
   },
   {
     "phase": "live",
     "file": "tests/manager-orb-route.test.mjs",
     "block": 1,
     "choice": "live",
-    "reason": "Retain current live behavior and capability contracts"
+    "reason": "Retain current live behavior and capability contracts",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "live",
     "file": "tests/run-streaming.test.mjs",
     "block": 1,
     "choice": "sync",
-    "reason": "Keep stricter replay detection regression with interim notes and short-answer protection"
+    "reason": "Keep stricter replay detection regression with interim notes and short-answer protection",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "live",
     "file": "tests/run-streaming.test.mjs",
     "block": 2,
     "choice": "sync",
-    "reason": "Keep stricter replay detection regression with interim notes and short-answer protection"
+    "reason": "Keep stricter replay detection regression with interim notes and short-answer protection",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "live",
     "file": "tests/skin-packages.test.mjs",
     "block": 1,
     "choice": "live",
-    "reason": "Retain current live behavior and capability contracts"
+    "reason": "Retain current live behavior and capability contracts",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "live",
     "file": "tests/wizard-id-bridge.test.mjs",
     "block": 1,
     "choice": "sync",
-    "reason": "Merged Android source already uses scrollPageStarted, not legacy live cancelScrollCapture call"
+    "reason": "Merged Android source already uses scrollPageStarted, not legacy live cancelScrollCapture call",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "live",
     "file": "web/app.js",
     "block": 1,
     "choice": "combined",
-    "reason": "Live foreground biometric admission plus sync no-exit Back (no retired exitUntil)"
+    "reason": "Live foreground biometric admission plus sync no-exit Back (no retired exitUntil)",
+    "class": "disjoint-intent"
   },
   {
     "phase": "live",
     "file": "web/app.js",
     "block": 2,
     "choice": "combined",
-    "reason": "Outside click follows Back; retain Settings grip swipe"
+    "reason": "Outside click follows Back; retain Settings grip swipe",
+    "class": "disjoint-intent"
   },
   {
     "phase": "live",
     "file": "web/core/chats.js",
     "block": 1,
     "choice": "sync",
-    "reason": "Stricter replay detection avoids suppressing new run ending in previous short answer"
+    "reason": "Stricter replay detection avoids suppressing new run ending in previous short answer",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "live",
     "file": "web/core/chats.js",
     "block": 2,
     "choice": "combined",
-    "reason": "Notification title/layout plus live Incognito header action"
+    "reason": "Notification title/layout plus live Incognito header action",
+    "class": "disjoint-intent"
   },
   {
     "phase": "live",
     "file": "web/core/home-screen-apps.js",
     "block": 1,
     "choice": "live",
-    "reason": "Retain current live behavior and capability contracts"
+    "reason": "Retain current live behavior and capability contracts",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "live",
     "file": "web/core/home-screen-apps.js",
     "block": 2,
     "choice": "live",
-    "reason": "Retain current live behavior and capability contracts"
+    "reason": "Retain current live behavior and capability contracts",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "live",
     "file": "web/core/reach.js",
     "block": 1,
     "choice": "live",
-    "reason": "Retain current live behavior and capability contracts"
+    "reason": "Retain current live behavior and capability contracts",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "live",
     "file": "web/core/tour.css",
     "block": 1,
     "choice": "combined",
-    "reason": "Keep skip button stacking and opaque live material"
+    "reason": "Keep skip button stacking and opaque live material",
+    "class": "disjoint-intent"
   },
   {
     "phase": "live",
     "file": "web/core/tour.js",
     "block": 1,
     "choice": "combined",
-    "reason": "Preserve Reply interaction while outside tap follows Back on guarded steps"
+    "reason": "Preserve Reply interaction while outside tap follows Back on guarded steps",
+    "class": "disjoint-intent"
   },
   {
     "phase": "live",
     "file": "web/kit/wizard-sheet.js",
     "block": 1,
     "choice": "live",
-    "reason": "Retain current live behavior and capability contracts"
+    "reason": "Retain current live behavior and capability contracts",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "live",
     "file": "web/kit/wizard-ui.css",
     "block": 1,
     "choice": "combined",
-    "reason": "Responsive sheet/grid/meter helpers and grip retained; all floating text panels use live opaque material"
+    "reason": "Responsive sheet/grid/meter helpers and grip retained; all floating text panels use live opaque material",
+    "class": "disjoint-intent"
   },
   {
     "phase": "live",
     "file": "web/outbox.js",
     "block": 1,
     "choice": "combined",
-    "reason": "Lost recording refusal plus explicit late-held owner Send approval"
+    "reason": "Lost recording refusal plus explicit late-held owner Send approval",
+    "class": "disjoint-intent"
   },
   {
     "phase": "live",
     "file": "web/outbox.js",
     "block": 2,
     "choice": "combined",
-    "reason": "Retain lost-audio retry guard and live late-held Send/Discard"
+    "reason": "Retain lost-audio retry guard and live late-held Send/Discard",
+    "class": "disjoint-intent"
   },
   {
     "phase": "main",
     "file": "docs/COMPONENTS.md",
     "block": 1,
     "choice": "combined",
-    "reason": "Document main features alongside live Incognito and opaque overlay contracts"
+    "reason": "Document main features alongside live Incognito and opaque overlay contracts",
+    "class": "disjoint-intent"
   },
   {
     "phase": "main",
     "file": "docs/COMPONENTS.md",
     "block": 2,
     "choice": "combined",
-    "reason": "Document main features alongside live Incognito and opaque overlay contracts"
+    "reason": "Document main features alongside live Incognito and opaque overlay contracts",
+    "class": "disjoint-intent"
   },
   {
     "phase": "main",
     "file": "docs/COMPONENTS.md",
     "block": 3,
     "choice": "combined",
-    "reason": "Document main features alongside live Incognito and opaque overlay contracts"
+    "reason": "Document main features alongside live Incognito and opaque overlay contracts",
+    "class": "disjoint-intent"
   },
   {
     "phase": "main",
     "file": "docs/COMPONENTS.md",
     "block": 4,
     "choice": "combined",
-    "reason": "Document main features alongside live Incognito and opaque overlay contracts"
+    "reason": "Document main features alongside live Incognito and opaque overlay contracts",
+    "class": "disjoint-intent"
   },
   {
     "phase": "main",
     "file": "docs/RESPONSE-STYLE.md",
     "block": 1,
     "choice": "main",
-    "reason": "Retain independent main capability or current native contract"
+    "reason": "Retain independent main capability or current native contract",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "docs/responsive-feature-inventory.json",
     "block": 1,
     "choice": "sync",
-    "reason": "Keep complete responsive inventory (merged semantically below)"
+    "reason": "Keep complete responsive inventory (merged semantically below)",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "docs/responsive-feature-inventory.json",
     "block": 2,
     "choice": "sync",
-    "reason": "Keep complete responsive inventory (merged semantically below)"
+    "reason": "Keep complete responsive inventory (merged semantically below)",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "tests/app-vault.test.mjs",
     "block": 1,
     "choice": "live",
-    "reason": "Keep legacy vault compatibility and foreground prompt regressions; modern envelope tests preserved separately"
+    "reason": "Keep legacy and foreground regressions; main modern-device regressions already live in app-vault-device.test.mjs (no duplicate suite)",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "tests/home-screen-refresh.test.mjs",
     "block": 1,
     "choice": "sync",
-    "reason": "Preserve independent rename, Incognito fixture and animation-aware regression"
+    "reason": "Preserve independent rename, Incognito fixture and animation-aware regression",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "tests/outbox-late-voice-note.test.mjs",
     "block": 1,
     "choice": "sync",
-    "reason": "Preserve independent rename, Incognito fixture and animation-aware regression"
+    "reason": "Preserve independent rename, Incognito fixture and animation-aware regression",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "tests/reach.test.mjs",
     "block": 1,
     "choice": "main",
-    "reason": "Retain independent main capability or current native contract"
+    "reason": "Retain independent main capability or current native contract",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "tests/response-style.test.mjs",
     "block": 1,
     "choice": "main",
-    "reason": "Retain independent main capability or current native contract"
+    "reason": "Retain independent main capability or current native contract",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "tests/response-style.test.mjs",
     "block": 2,
     "choice": "main",
-    "reason": "Retain independent main capability or current native contract"
+    "reason": "Retain independent main capability or current native contract",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "tests/wizard-id-bridge.test.mjs",
     "block": 1,
     "choice": "main",
-    "reason": "Retain independent main capability or current native contract"
+    "reason": "Retain independent main capability or current native contract",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "tests/wizard-id-bridge.test.mjs",
     "block": 2,
     "choice": "combined",
-    "reason": "Full DOM fixture plus shared composer capabilities"
+    "reason": "Full DOM fixture plus shared composer capabilities",
+    "class": "disjoint-intent"
   },
   {
     "phase": "main",
     "file": "tools/qa-orb-desk-icon.cjs",
     "block": 1,
     "choice": "sync",
-    "reason": "Preserve independent rename, Incognito fixture and animation-aware regression"
+    "reason": "Preserve independent rename, Incognito fixture and animation-aware regression",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "web/core/app-client.js",
     "block": 1,
     "choice": "live",
-    "reason": "Keep app-owned orb and audio ducking APIs"
+    "reason": "Keep app-owned orb and audio ducking APIs",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "web/core/app-client.js",
     "block": 2,
     "choice": "main",
-    "reason": "Retain independent main capability or current native contract"
+    "reason": "Retain independent main capability or current native contract",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "web/core/app-services.js",
     "block": 1,
     "choice": "live",
-    "reason": "Keep legacy and modern vault, foreground prompts, orb and audio operations; remove duplicate modern helper below"
+    "reason": "Keep legacy and modern vault, foreground prompts, orb and audio operations; remove duplicate modern helper below; one vault facade, never duplicate object properties",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "web/core/app-services.js",
     "block": 2,
     "choice": "live",
-    "reason": "Keep legacy and modern vault, foreground prompts, orb and audio operations; remove duplicate modern helper below"
+    "reason": "Keep legacy and modern vault, foreground prompts, orb and audio operations; remove duplicate modern helper below; one vault facade, never duplicate object properties",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "web/core/chats.js",
     "block": 1,
     "choice": "combined",
-    "reason": "Ready notification ordering plus owner Yesterday/Past week ordering and section-specific morph keys"
+    "reason": "Ready notification ordering plus owner Yesterday/Past week ordering and section-specific morph keys",
+    "class": "disjoint-intent"
   },
   {
     "phase": "main",
     "file": "web/core/chats.js",
     "block": 2,
     "choice": "combined",
-    "reason": "Ready notification ordering plus owner Yesterday/Past week ordering and section-specific morph keys"
+    "reason": "Ready notification ordering plus owner Yesterday/Past week ordering and section-specific morph keys",
+    "class": "disjoint-intent"
   },
   {
     "phase": "main",
     "file": "web/core/chats.js",
     "block": 3,
     "choice": "combined",
-    "reason": "Ready notification ordering plus owner Yesterday/Past week ordering and section-specific morph keys"
+    "reason": "Ready notification ordering plus owner Yesterday/Past week ordering and section-specific morph keys",
+    "class": "disjoint-intent"
   },
   {
     "phase": "main",
     "file": "web/core/config.js",
     "block": 1,
     "choice": "main",
-    "reason": "Retain independent main capability or current native contract"
+    "reason": "Retain independent main capability or current native contract",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "web/core/config.js",
     "block": 2,
     "choice": "main",
-    "reason": "Retain independent main capability or current native contract"
+    "reason": "Retain independent main capability or current native contract",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "web/core/reach.js",
     "block": 1,
     "choice": "live",
-    "reason": "Keep owner reachable-send copy; main current Tailscale diagnosis and guide routing auto-merged"
+    "reason": "Keep owner reachable-send copy; main current Tailscale diagnosis and guide routing auto-merged",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "web/core/settings.js",
     "block": 1,
     "choice": "main",
-    "reason": "Retain independent main capability or current native contract"
+    "reason": "Retain independent main capability or current native contract",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "web/core/settings.js",
     "block": 2,
     "choice": "main",
-    "reason": "Retain independent main capability or current native contract"
+    "reason": "Retain independent main capability or current native contract",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "web/core/settings.js",
     "block": 3,
     "choice": "main",
-    "reason": "Retain independent main capability or current native contract"
+    "reason": "Retain independent main capability or current native contract",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "web/desktop/desktop.js",
     "block": 1,
     "choice": "combined",
-    "reason": "Incognito leave guard before HUD close routing"
+    "reason": "Incognito leave guard before HUD close routing",
+    "class": "disjoint-intent"
   },
   {
     "phase": "main",
     "file": "web/outbox.js",
     "block": 1,
     "choice": "main",
-    "reason": "Retain independent main capability or current native contract"
+    "reason": "Retain independent main capability or current native contract",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "web/outbox.js",
     "block": 2,
     "choice": "main",
-    "reason": "Retain independent main capability or current native contract"
+    "reason": "Retain independent main capability or current native contract",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "web/outbox.js",
     "block": 3,
     "choice": "main",
-    "reason": "Retain independent main capability or current native contract"
+    "reason": "Retain independent main capability or current native contract",
+    "class": "same-question-different-answer"
   },
   {
     "phase": "main",
     "file": "web/skins/landscapes/skin.css",
     "block": 1,
     "choice": "combined",
-    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed"
+    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed",
+    "class": "disjoint-intent"
   },
   {
     "phase": "main",
     "file": "web/skins/landscapes/skin.css",
     "block": 2,
     "choice": "combined",
-    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed"
+    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed",
+    "class": "disjoint-intent"
   },
   {
     "phase": "main",
     "file": "web/skins/landscapes/skin.css",
     "block": 3,
     "choice": "combined",
-    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed"
+    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed",
+    "class": "disjoint-intent"
   },
   {
     "phase": "main",
     "file": "web/skins/landscapes/skin.css",
     "block": 4,
     "choice": "combined",
-    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed"
+    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed",
+    "class": "disjoint-intent"
   },
   {
     "phase": "main",
     "file": "web/skins/landscapes/skin.css",
     "block": 5,
     "choice": "combined",
-    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed"
+    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed",
+    "class": "disjoint-intent"
   },
   {
     "phase": "main",
     "file": "web/skins/landscapes/skin.css",
     "block": 6,
     "choice": "combined",
-    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed"
+    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed",
+    "class": "disjoint-intent"
   },
   {
     "phase": "main",
     "file": "web/skins/landscapes/skin.css",
     "block": 7,
     "choice": "combined",
-    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed"
+    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed",
+    "class": "disjoint-intent"
   }
 ]

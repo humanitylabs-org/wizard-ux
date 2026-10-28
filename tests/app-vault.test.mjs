@@ -6,6 +6,7 @@ import {readFileSync} from 'node:fs';
 const services = readFileSync(new URL('../web/core/app-services.js', import.meta.url), 'utf8');
 const client = readFileSync(new URL('../web/core/app-client.js', import.meta.url), 'utf8');
 test('vault ops are relayed with the frame-owned appId only', () => {
+  assert.equal((services.match(/vault: Object\.freeze/g) || []).length, 1, 'one vault facade preserves foreground admission and document checks; no clean-merge shadowing');
   for (const op of ['vault.has', 'vault.seal', 'vault.open', 'vault.forget']) assert.ok(services.includes(`'${op}'`), op);
   assert.match(services, /vaultCall\(st\.appId, 'seal'/);
   assert.match(services, /vaultCall\(st\.appId, 'open'/);

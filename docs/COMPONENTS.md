@@ -64,7 +64,7 @@ Visual: <side-by-side screenshot, or "none">
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`web/core/agents.js`) | hard-coded agent names or colours |
 | App source labels, `wizard://install` | `sourceLabel`, `parseInstallLink` (`web/store/`) | own badges |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`web/core/app-route.js`) | — |
-| App setup/checklist/open gate | `WosAppSetup` (`web/core/app-setup.js`, `.css`), `routerNeeds` / `routerApprove` / `serviceRow` (`web/store/store-router.js`), `installRelease` (`web/store/store-install.js`), `WosAppRoute`, `WizLinks` | duplicate gates |
+| Per-app setup/open gate | `WosAppSetup` (`core/app-setup.js`, `.css`), Store `routerNeeds` / `routerApprove` / `serviceRow` / `installRelease`, `WosAppRoute`, `WizLinks` | duplicate gates |
 | App glyph tiles | `WizSigil` (`web/core/sigils.js`, `web/core/sigils.css`) | PNG/emoji icons |
 | Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs + old-service defaults | lists |
 | App groups | `WosAppKinds` (`web/core/app-kinds.js`) | forks |
