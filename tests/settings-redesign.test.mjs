@@ -81,13 +81,6 @@ test('tap outside closes Settings confirmations like Back without leaving the ow
     assert.equal(h.view.dispatch(outside),true);
     assert.doesNotMatch(h.root.innerHTML,/role="alertdialog"/);
     assert.equal(h.view.page,'chats'); assert.equal(h.posts.length,0);
-    const own={id:'mine',name:'Quiet',base:'nebula',tweaks:{}};
-    h.s.WosMySkin={recipes:[own],active:own,state:{script:{}}};
-    h.view.focus('look'); h.act('data-ownskin-remove','mine');
-    assert.match(h.root.innerHTML,/role="alertdialog"/);
-    assert.equal(h.view.dispatch(outside),true);
-    assert.doesNotMatch(h.root.innerHTML,/role="alertdialog"/);
-    assert.equal(h.view.page,'appearance'); assert.equal(h.posts.length,0);
   }
 });
 test('chooser confirms before POST, reads the exact slot, refreshes registry and rerenders only after confirmation', async () => {

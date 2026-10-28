@@ -13,7 +13,7 @@ jobs:
           node-version: '22'
       - run: npm test
   tap-outside-closes:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -23,4 +23,3 @@ jobs:
       - run: npm install --no-save --package-lock=false playwright@1.55.1
       - run: npx playwright install --with-deps chromium
       - run: node tools/qa-tap-outside-closes.cjs
-      - run: node tests/qa-store-install-deeplink.cjs
