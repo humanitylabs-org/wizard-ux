@@ -28,3 +28,17 @@ test('the Landscapes package and Miguel\'s shell rules cover both palettes', () 
   for (const f of ['web/app.js', 'web/live.js', 'web/core/chats.js', 'web/core/chat-models.js', 'web/desktop/desktop.js']) assert.match(read(f), /'landscapes', 'landscapes-light'/, f);
   assert.doesNotMatch(read('web/desktop/desktop.css'), /data-skin="landscapes"\]/);
 });
+
+test('Landscapes Light: 65% window glass, white send arrow, full-colour marks, bright badges', () => {
+  assert.match(js, /id: 'landscapes-light'[^\n]*\n[^\n]*\n[^\n]*\n[^\n]*'sk-win': 'rgba\(250,250,252,\.65\)'/);
+  const css = read('web/skins/landscapes/skin.css');
+  assert.match(css, /landscapes-light[^\n]*\.ch-compose button:is\(\.ch-send, \.ch-mic\.on\) svg \{ stroke: #fff; \}/);
+  assert.match(css, /landscapes-light[^\n]*\.dsg \{ opacity: 1; \}/);
+  assert.match(css, /landscapes-light[^\n]*:is\(\.dsg \.dbg, \.orb-badge\) \{ color: #160b05; background: #ffbe55;/);
+});
+
+test('skin names in the picker wrap to two lines instead of cutting off', () => {
+  const css = read('web/core/skins.css');
+  assert.match(css, /\.st-root \.skp-nm \{[^}]*-webkit-line-clamp: 2;[^}]*min-height: 18px;/);
+  assert.doesNotMatch(css.match(/\.st-root \.skp-nm \{[^}]*\}/)[0], /nowrap/);
+});
