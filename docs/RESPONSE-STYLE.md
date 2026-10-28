@@ -10,6 +10,8 @@ Reuse:
 
 | Row | Page | Choices |
 | --- | --- | --- |
-| Response style | Chats & app screens | Summary / Concise, each with one-line description |
+| Response style | Chats & app screens | Summary / Concise / Own, each with one-line description |
 
 Acceptance: both shells render the same owner choice; no device-local authority; failed saves retain the verified selection and offer retry; Back returns to Settings, never exits; Summary explains what we are doing and retains short/conversational exceptions; both styles reach main/profile/container/restricted run admission; synthetic phone Nebula and Signal evidence; service and UX live branches prepared but never deployed.
+
+Own (agent-service #230): Wizard sends only Wizard OS facts and protocol, so the agent keeps the style its owner already set up.

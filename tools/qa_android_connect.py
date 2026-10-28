@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Thales-only API35 Connect acceptance. Synthetic debug traffic; signed upgrade runs offline.
 Usage: qa_android_connect.py DEBUG_RECEIPT GENERIC_RECEIPT OWNER_RECEIPT OLD_APK OWNER_CONFIG OUT
-OWNER_CONFIG is a private JSON file with origin; never commit it. No publishing.
+OWNER_CONFIG is private JSON with origin and baseline_sha256; never commit it.
+Set pre_pref_baseline=true to prove skipped-version migration from an app that
+never stored wizard_server.xml. No publishing.
 """
 import fcntl
 import hashlib
@@ -13,6 +15,8 @@ import subprocess
 import sys
 import time
 import xml.etree.ElementTree as ET
+
+from apk_build_config import apk_build_config
 
 SDK = Path('/opt/homebrew/share/android-commandlinetools')
 BASE = Path(os.environ.get('ANDROID_BUILDS_ROOT') or Path.home() / 'AndroidBuilds')  # worker-local build root
@@ -101,6 +105,18 @@ def main():
             # Real published signed bytes, but no live-owner traffic: install/upgrade and launch with radios disabled.
             shell('svc', 'wifi', 'disable'); shell('svc', 'data', 'disable')
             adb_run('install', old)
+            # The old APK must be launched naturally, never preference-seeded.
+            # Optional pre_pref_baseline proves James's skipped-migration case,
+            # rather than the easier already-persisted-origin generic upgrade.
+            adb_run('root'); adb_run('wait-for-device')
+            shell('am', 'start', '-W', '-n', 'ai.wizards.os/.MainActivity'); time.sleep(4)
+            if config.get('pre_pref_baseline'):
+                old_fields = apk_build_config(old)
+                check('pre-preference baseline has the expected baked owner origin', old_fields.get('ORIGIN') == config['origin'])
+                absent = shell('if test -e /data/user/0/ai.wizards.os/shared_prefs/wizard_server.xml; then echo present; else echo absent; fi').strip()
+                check('old app never wrote an origin preference after launch', absent == 'absent')
+                if absent != 'absent': raise RuntimeError('Not a pre-preference baseline; refuse the easier upgrade proof')
+            shell('am', 'force-stop', 'ai.wizards.os')
             old_dump = shell('dumpsys', 'package', 'ai.wizards.os')
             old_uid = re.search(r'(?:userId|appId)=(\d+)', old_dump).group(1)
             first = next(l.strip() for l in old_dump.splitlines() if 'firstInstallTime=' in l)
@@ -110,7 +126,7 @@ def main():
             check('published release upgrades in place with same UID', bool(re.search(r'(?:userId|appId)=' + old_uid + r'\b', new_dump)) and first in new_dump)
             check('notification grant preserved', 'android.permission.POST_NOTIFICATIONS: granted=true' in new_dump)
             shell('logcat', '-c'); shell('am', 'start', '-W', '-n', 'ai.wizards.os/.MainActivity'); time.sleep(4)
-            check('owner default skips Connect without any tap', 'ai.wizards.os/.MainActivity' in top() and 'ConnectActivity' not in top(), top())
+            check('app update never signs the owner out (no Connect after offline upgrade)', 'ai.wizards.os/.MainActivity' in top() and 'ConnectActivity' not in top(), top())
             screenshot('owner-upgrade-offline')
             # google_apis emulator supports root; read the exact release's migrated SharedPreferences.
             adb_run('root'); adb_run('wait-for-device')
@@ -130,7 +146,10 @@ def main():
                 except subprocess.TimeoutExpired: em.terminate(); em.wait(timeout=20)
             receipt = {'checks': checks, 'passed': sum(x['passed'] for x in checks), 'total': len(checks),
                        'ok': completed and bool(checks) and all(x['passed'] for x in checks), 'physical_device': False,
-                       'upgrade_network': 'offline, deliberately no owner traffic', 'published': False}
+                       'upgrade_network': 'offline, deliberately no owner traffic', 'published': False,
+                       'pre_pref_baseline': config.get('pre_pref_baseline', False),
+                       'old_sha256': hashlib.sha256(old.read_bytes()).hexdigest(),
+                       'new_sha256': hashlib.sha256(owner_apk.read_bytes()).hexdigest()}
             (out / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
             print(json.dumps(receipt), flush=True)
     if not checks or not all(x['passed'] for x in checks): raise SystemExit(1)

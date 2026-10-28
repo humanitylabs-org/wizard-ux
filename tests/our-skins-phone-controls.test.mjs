@@ -17,7 +17,7 @@ const rule = (css, sel) => {
 };
 const VIOLET = /var\(--violet|143,\s*99,\s*255|122,\s*77,\s*255|185,\s*155,\s*255|160,\s*140,\s*255|205,\s*190,\s*255|#7a4dff|#c04dff|#C9BEFF/i;
 const O = 'html[data-skin^="obsidian"]:not([data-shell="desktop"])';
-const L = 'html[data-skin="landscapes"]:not([data-shell="desktop"])';
+const L = 'html[data-skin^="landscapes"]:not([data-shell="desktop"])';
 const SOLO = '.device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats';
 
 test('the long-press and model menus end above the pill dock on all three skins', () => {
@@ -62,15 +62,27 @@ test('Landscapes phone controls are frosted white glass, not core violet', () =>
     assert.doesNotMatch(r, VIOLET, `${sel} has no violet`);
     assert.match(r, /rgba\(255, 255, 255|#fff/, `${sel} uses white glass or ink`);
   }
-  assert.match(rule(landscapes, `${L} .dock :is(.orb, .orb-fallback)`) || '', /saturate\(0\)/, 'the orb is neutral glass, not violet');
+  assert.equal(rule(landscapes, `${L} .dock :is(.orb, .orb-fallback)`), null, 'the orb keeps its Wizard violet (Miguel, 27 Oct 2026)');
 });
 
 test('phone polish never reaches desktop and keeps the private purple', () => {
   for (const css of [obsidian, landscapes]) {
-    const block = css.slice(css.indexOf('/* Phone polish (Miguel 27 Oct'));
+    const from = css.indexOf('/* Phone polish (Miguel 27 Oct'), to = css.indexOf('/* Landscapes Light (', from);
+    const block = css.slice(from, to > 0 ? to : undefined);
     assert.ok(block.length > 100, 'phone polish block present');
     for (const line of block.split('\n').filter(l => l.startsWith('html'))) assert.match(line, /:not\(\[data-shell="desktop"\]\)/, line);
     assert.doesNotMatch(block, /\.ms-o\.secure|--secure/, 'private model colour untouched');
   }
-  assert.match(landscapes, /html\[data-skin="landscapes"\] \.ms-o\.secure \{ color: var\(--secure\); \}/);
+  assert.match(landscapes, /html\[data-skin\^="landscapes"\] \.ms-o\.secure \{ color: var\(--secure\); \}/);
+});
+
+test('Mizel skins keep the violet orb on Dark, Light and Landscapes', () => {
+  const skins = readFileSync(new URL('../web/core/skins.js', import.meta.url), 'utf8');
+  for (const id of ['obsidian', 'obsidian-light', 'landscapes']) {
+    const m = skins.match(new RegExp(`id: '${id}'[^\\n]*orb: \\[([^\\]]+)\\]`));
+    assert.ok(m, `${id} has an orb filter`);
+    const [hue, sat] = m[1].split(',').map(Number);
+    assert.equal(hue, 0, `${id} orb keeps the Wizard hue`);
+    assert.ok(sat >= 1, `${id} orb is coloured, not grey`);
+  }
 });

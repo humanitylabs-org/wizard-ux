@@ -34,7 +34,8 @@ test('an old in-flight GET cannot overwrite a newer local choice', async () => {
   assert.equal(d.store.has('wos.chats.readyOrder.v1'), false);
 });
 test('all list preference actions write through Agent Service, including clearing filters/order moves', () => {
-  for (const field of ['compact: on', 'readyOrder', 'subjectOrder: next.slice(0, 60)']) assert.ok(chats.includes(`LIVE.putPrefs?.({ ${field} })`));
+  for (const field of ['compact: on', 'readyOrder']) assert.ok(chats.includes(`LIVE.putPrefs?.({ ${field} })`));
+  assert.ok(chats.includes("LIVE.prefOps([{ op: 'front', key: 'subjectOrder', items: keys }]);")); // tests/synced-lists.test.mjs
   assert.match(live, /putPrefs\(\{ archiveAfterDays: d \}\)/);
   assert.doesNotMatch(live, /wizard-os-home\/ui-prefs/);
 });

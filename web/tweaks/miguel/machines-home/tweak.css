@@ -23,7 +23,7 @@ html[data-tweaks~="miguel/machines-home"] .home-in:has(> [data-slot="home-main"]
 .mh-root button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .mh-root [hidden] { display: none !important; }
 
-/* ---------- top: workspace switcher (left), your devices (right) ---------- */
+/* ---------- top: workspace switcher ---------- */
 .mh-top { flex: none; display: flex; align-items: center; gap: 8px; padding: calc(var(--sb, 0px) + var(--safe-t, 0px) + 8px) clamp(12px, 3cqi, 28px) 4px; }
 html[data-shell="phone"] .mh-top { padding-right: 62px; }
 .mh-ws { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; padding: 3px; gap: 2px; border-radius: 99px; background: var(--mh-fill); overflow-x: auto; scrollbar-width: none; scroll-padding-inline: 4px 44px; }
@@ -37,10 +37,6 @@ html[data-shell="phone"] .mh-top { padding-right: 62px; }
 .mh-dot.unk { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); opacity: .7; }
 .mh-ws .mh-ws-add { position: sticky; right: 0; width: 38px; padding: 0; justify-content: center; color: var(--ink-2); background: color-mix(in srgb, var(--ink) 9%, var(--bg)); }
 .mh-ws .mh-ws-add .mh-i { width: 18px; height: 18px; stroke-width: 2.2; }
-.mh-humans { flex: none; margin-left: auto; height: 44px; min-width: 44px; padding: 0 12px 0 10px !important; border-radius: 99px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; color: var(--ink-3) !important; }
-.mh-humans:hover { background: var(--mh-fill) !important; color: var(--ink-2) !important; }
-.mh-humans .mh-i { width: 19px; height: 19px; }
-.mh-humans b { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
 .mh-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
 .mh-body::-webkit-scrollbar { display: none; }
@@ -63,7 +59,7 @@ html[data-shell="phone"] .mh-top { padding-right: 62px; }
 .mh-lane-row.more-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent); }
 .mh-lane-row.more-l { -webkit-mask-image: linear-gradient(90deg, transparent, #000 44px); mask-image: linear-gradient(90deg, transparent, #000 44px); }
 .mh-lane.is-mainrow .mh-lane-row { gap: 44px; padding-top: 20px; padding-bottom: 8px; }
-.mh-lane.is-helpers .mh-lane-row { padding-top: 18px; }
+.mh-lane.is-people .mh-lane-row { padding-top: 26px; }
 .mh-wait { margin: 0; padding: 18px 0; font-size: 13px; color: var(--ink-3); }
 
 .mh-node { --s: 64; --d: calc(var(--s) * var(--mh-k) * 1px); position: relative; flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; width: max(var(--d) + 14px, 104px); color: var(--ink); scroll-snap-align: center; }
@@ -95,9 +91,9 @@ html[data-shell="phone"] .mh-top { padding-right: 62px; }
 .mh-node.is-main .mh-role { color: var(--violet-2, var(--mh-accent)); }
 .mh-node.is-main { width: max(var(--d) + 14px, 124px); }
 /* Over a photo (Landscapes): names and pills keep a soft shadow so they read on any picture. */
-html[data-skin="landscapes"] .mh-node :is(.mh-name, .mh-role), html[data-skin="landscapes"] .mh-oneway { text-shadow: 0 1px 3px rgba(0, 0, 0, .75), 0 0 12px rgba(0, 0, 0, .35); }
-html[data-skin="landscapes"] .mh-node.is-plus .mh-disc { background: rgba(0, 0, 0, .28); }
-html[data-skin="landscapes"] .mh-lines .base { stroke: rgba(255, 255, 255, .55); }
+html[data-skin^="landscapes"] .mh-node :is(.mh-name, .mh-role), html[data-skin^="landscapes"] .mh-oneway { text-shadow: 0 1px 3px rgba(0, 0, 0, .75), 0 0 12px rgba(0, 0, 0, .35); }
+html[data-skin^="landscapes"] .mh-node.is-plus .mh-disc { background: rgba(0, 0, 0, .28); }
+html[data-skin^="landscapes"] .mh-lines .base { stroke: rgba(255, 255, 255, .55); }
 .mh-node.is-standby[data-fit="tight"] .mh-role { color: var(--mh-warn); }
 .mh-node.is-standby[data-fit="no"] .mh-role { color: var(--mh-bad); }
 .mh-node:not(.is-plus):hover .mh-disc { transform: scale(1.05); }
@@ -117,6 +113,31 @@ html[data-skin="landscapes"] .mh-lines .base { stroke: rgba(255, 255, 255, .55);
 .mh-node.is-ghost .mh-disc .mh-i { opacity: .55; }
 .mh-node.is-ghost .mh-name { color: var(--ink-3); }
 @container (min-width: 960px) { .mh-root.is-managed .mh-map { flex: 1 1 auto; min-height: 440px; } }
+
+/* ---------- people, below Main: one small node per device (his network) or per person (a managed Wizard) ---------- */
+.mh-people { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.mh-people > .mh-role { margin-top: 2px; }
+.mh-people-col { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 560px; }
+.mh-pnode { display: flex; align-items: center; gap: 7px; min-height: 36px; max-width: 160px; padding: 3px 12px 3px 3px !important; border-radius: 99px; background: var(--mh-solid) !important; border: 1px solid var(--line) !important; box-shadow: 0 6px 18px -12px rgba(0, 0, 0, .6); font-size: 12.5px; font-weight: 650; color: var(--ink-2); transition: border-color 200ms, transform 200ms var(--mh-ease); }
+.mh-pnode:hover { border-color: var(--line-2) !important; color: var(--ink); }
+.mh-pnode:active { transform: scale(.96); }
+.mh-pnode[aria-pressed="true"] { border-color: var(--mh-accent) !important; color: var(--ink); }
+.mh-pnode .mh-pd { position: relative; flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--mh-fill-2); color: var(--ink); }
+.mh-pnode .mh-pd .mh-i { width: 15px; height: 15px; }
+.mh-pnode .mh-pd b { font-size: 12px; font-weight: 750; }
+.mh-pnode .mh-pd .mh-dot { position: absolute; right: -1px; bottom: -1px; width: 8px; height: 8px; box-shadow: 0 0 0 2px var(--bg); }
+.mh-pnode .n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mh-pnode.is-more { color: var(--ink-3); }
+.mh-initial { font-size: 20px; font-weight: 750; color: var(--ink); }
+.mh-row .t .mh-initial { font-size: 14px; }
+/* Category (role) and status are separate lines: "Standby device" always, then Ready / Not ready. */
+.mh-state { margin-top: -2px; font-size: 11px; font-weight: 700; color: var(--mh-good); white-space: nowrap; }
+.mh-state[data-fit="tight"] { color: var(--mh-warn); }
+.mh-state[data-fit="no"] { color: var(--mh-bad); }
+.mh-node.is-standby .mh-role { color: var(--ink-3) !important; }
+.mh-spec { margin-top: -2px; font-size: 10.5px; font-weight: 600; color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+html[data-skin^="landscapes"] :is(.mh-people > .mh-role, .mh-spec) { text-shadow: 0 1px 3px rgba(0, 0, 0, .75); }
+@container (max-width: 599px) { .mh-pnode { max-width: 150px; font-size: 12px; } .mh-root .mh-lane.is-mainrow .mh-lane-row { gap: 16px; padding-inline: 2px; } .mh-lane.is-mainrow .mh-lane-row > .mh-node { width: max(var(--d) + 6px, 76px); } .mh-lane.is-mainrow .mh-lane-row > .mh-node.is-main { width: max(var(--d) + 6px, 96px); } .mh-spec { font-size: 10px; } }
 
 /* ---------- lines ---------- */
 .mh-lines .base { fill: none; stroke: var(--line-2); stroke-width: 1.6; }
@@ -210,7 +231,6 @@ html[data-skin="landscapes"] .mh-lines .base { stroke: rgba(255, 255, 255, .55);
   .mh-ws .mh-ws-add { width: 34px; }
   .mh-ws .mh-dot.unk { display: none; }
   .mh-top { padding-left: 10px; }
-  .mh-humans { position: absolute; z-index: 2; right: 6px; top: calc(var(--sb, 0px) + var(--safe-t, 0px) + 64px); }
   html[data-shell="phone"] .mh-top { padding-right: 60px; }
 }
 @container (max-width: 360px) { .mh-root { --mh-k: .72; } .mh-ws button { padding: 0 10px 0 9px; } }

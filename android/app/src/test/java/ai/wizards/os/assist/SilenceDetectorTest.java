@@ -37,8 +37,8 @@ public class SilenceDetectorTest {
     @Test
     public void speechThenPauseSends() {
         SilenceDetector d = SilenceDetector.standard();
-        // 0.9 s room noise, 2 s talking, then quiet for 4.5 s.
-        int[] amps = concat(fill(10, 500), fill(22, 9000), fill(50, 500));
+        // 0.9 s room noise, 2 s talking, then quiet for 5.85 s.
+        int[] amps = concat(fill(10, 500), fill(22, 9000), fill(65, 500));
         assertEquals(SilenceDetector.Result.SEND, run(d, amps, 90));
     }
 
@@ -126,7 +126,7 @@ public class SilenceDetectorTest {
         for (int i = 0; i < 33; i++, t += 90) r = d.feed(120, t);
         assertEquals(SilenceDetector.Result.CONTINUE, r);
         // A real pause after that sends.
-        for (int i = 0; i < 20 && r == SilenceDetector.Result.CONTINUE; i++, t += 90) r = d.feed(120, t);
+        for (int i = 0; i < 30 && r == SilenceDetector.Result.CONTINUE; i++, t += 90) r = d.feed(120, t);
         assertEquals(SilenceDetector.Result.SEND, r);
     }
 
@@ -149,8 +149,43 @@ public class SilenceDetectorTest {
     }
 
     @Test
-    public void sidePauseIsLongerThanASplitSecond() {
-        assertTrue(SilenceDetector.SIDE_PAUSE_MS >= 3500);
+    public void sidePauseIsExactlyFiveSeconds() {
+        assertEquals(5000, SilenceDetector.SIDE_PAUSE_MS);
+        assertQuietBoundary(SilenceDetector.standard(), 4900, 5000);
+    }
+
+    @Test
+    public void dictationWaitsLongerThanSideButton() {
+        assertQuietBoundary(SilenceDetector.dictation(), 5400, 5500);
+    }
+
+    private static void assertQuietBoundary(SilenceDetector d, long beforeMs, long sendMs) {
+        long quietAt = 2000;
+        for (long t = 1000; t < quietAt; t += 100)
+            assertEquals(SilenceDetector.Result.CONTINUE, d.feed(6000, t));
+        assertTrue(d.heardSpeech());
+        for (long elapsed = 0; elapsed <= beforeMs; elapsed += 100)
+            assertEquals("quiet for " + elapsed + " ms", SilenceDetector.Result.CONTINUE,
+                    d.feed(300, quietAt + elapsed));
+        assertEquals(SilenceDetector.Result.SEND, d.feed(300, quietAt + sendMs));
+    }
+
+    @Test
+    public void softTrailingPhraseBetweenLongPausesRestartsFiveSecondClock() {
+        SilenceDetector d = SilenceDetector.standard();
+        for (long t = 1000; t < 2000; t += 100)
+            assertEquals(SilenceDetector.Result.CONTINUE, d.feed(6000, t));
+        // A thinking pause just short of five seconds must not close the take.
+        for (long t = 2000; t <= 6900; t += 100)
+            assertEquals(SilenceDetector.Result.CONTINUE, d.feed(300, t));
+        assertTrue(1200 < d.speechThreshold());
+        assertTrue(1200 >= d.voiceThreshold());
+        // Quiet trailing words reset the timer even below the speech-start threshold.
+        for (long t = 7000; t < 8000; t += 100)
+            assertEquals(SilenceDetector.Result.CONTINUE, d.feed(1200, t));
+        for (long t = 8000; t <= 12900; t += 100)
+            assertEquals(SilenceDetector.Result.CONTINUE, d.feed(300, t));
+        assertEquals(SilenceDetector.Result.SEND, d.feed(300, 13000));
     }
 
     @Test
