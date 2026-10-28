@@ -96,7 +96,7 @@ test('machines-home: one inline map, the same on every workspace', () => {
 
 test('machines-home: simple at rest, more on tap (one AI gauge, storage size, one details toggle)', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), css = read('web/tweaks/miguel/machines-home/tweak.css');
-  assert.match(src, /cls: nw\('mh-gauge'\)/, 'one AI fuel tag, not a battery per subscription');
+  assert.match(src, /cls: 'mh-gauge'/, 'one AI fuel tag, not a battery per subscription');
   assert.match(src, /cls: 'mh-g-cells'/, 'the tag fills cells from E to F');
   assert.doesNotMatch(src, /mh-batt/, 'batteries are gone');
   assert.match(src, /text: 'E'/); assert.match(src, /text: 'AI'/);
@@ -179,4 +179,18 @@ test('api.nav.ask: trusted only, namespaced home: key, sends through the shell c
   await f.loadTweaks?.(); await f.host.loadTweaks(['miguel/machines-home'], f.slots);
   assert.throws(() => api.nav.ask('a', {}, ''), /Trusted navigation required|Cannot read/);
   await f.clear();
+});
+
+test('machines-home: Home is one strip; the full views live in Settings › System', () => {
+  const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
+  const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));
+  assert.ok(man.capabilities.includes('settings'));
+  for (const page of ['overview', 'ai', 'network', 'storage']) assert.match(src, new RegExp(`api\\.settings\\?\\.section\\('[a-z]+', '${page}'`), page);
+  assert.match(src, /data: \{ toggle: 'wsm' \}/, 'the Wizard switcher sits in the strip');
+  assert.match(src, /api\.settings\?\.open\?\.\(d\.go\)/, 'strip parts open their Settings page');
+  assert.doesNotMatch(src, /h\('header', \{ cls: 'mh-top' \}/, 'no separate switcher above the strip');
+  assert.match(host, /if \(caps\.has\('settings'\)\) api\.settings = Object\.freeze/);
+  assert.match(host, /if \(!trusted \|\| a\.dead\) throw new Error\('Trusted settings required'\)/);
+  assert.match(set, /\{ id: 'overview', title: 'Your network', group: 'System', available: filled\('overview'\) \}/, 'System pages hide until a package fills them');
+  assert.match(set, /class="st-navgroup"/);
 });

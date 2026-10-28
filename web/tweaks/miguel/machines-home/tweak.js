@@ -24,7 +24,7 @@ const TOP_UP = { tinfoil: 'https://dash.tinfoil.sh/?tab=billing' };
 
 export default function setup(api) {
   const S = { ws: api.storage.get('ws') || 'mine', res: {}, backup: api.storage.get('backup') || null, backupTried: 0,
-    open: new Set(api.storage.get('devs') === 'off' ? [] : ['devs']), bars: api.storage.get('details') !== 'off', unread: 0, nick: api.storage.get('nick') || {}, def: api.storage.get('def') || '' };
+    open: new Set(api.storage.get('devs') === 'off' ? [] : ['devs']), bars: api.storage.get('details') !== 'off', unread: 0, full: api.storage.get('full') === 'on', nick: api.storage.get('nick') || {}, def: api.storage.get('def') || '' };
   let fresh = true;  // entry motion only on the first paint and on a workspace switch, never on a later reading
 
   /* ---------- tiny DOM helpers (no markup strings) ---------- */
@@ -42,6 +42,25 @@ export default function setup(api) {
   const sv = (tag, attrs = {}, parent) => { const e = document.createElementNS(SVG, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.append(e); return e; };
   const bell = () => { const s = sv('svg', { class: 'mh-i', viewBox: '0 0 24 24', 'aria-hidden': 'true' }); for (const [t, a] of BELL) sv(t, a, s); return s; };
   const nw = cls => fresh ? cls + ' mh-new' : cls;
+  // Little device pictures instead of plain discs (oblique 3D, drawn once, outlines trace in on first paint).
+  // box = a mini PC (Main), rack = a server in a data centre, laptop, store = storage, shield = the private network.
+  const P = pts => pts.map(p => p.join(',')).join(' ');
+  const ART = {
+    box: [['polygon', { class: 'a-top', points: P([[10, 40], [28, 24], [92, 24], [74, 40]]) }], ['polygon', { class: 'a-side', points: P([[74, 40], [92, 24], [92, 70], [74, 86]]) }],
+      ['rect', { class: 'a-front', x: 10, y: 40, width: 64, height: 46, rx: 3 }], ['rect', { class: 'a-led', x: 16, y: 79, width: 10, height: 2.6, rx: 1.3 }]],
+    rack: [['polygon', { class: 'a-top', points: P([[16, 30], [32, 16], [88, 16], [72, 30]]) }], ['polygon', { class: 'a-side', points: P([[72, 30], [88, 16], [88, 74], [72, 88]]) }],
+      ...[30, 50, 70].flatMap(y => [['rect', { class: 'a-front', x: 16, y, width: 56, height: 18, rx: 2.5 }], ['circle', { class: 'a-led', cx: 23, cy: y + 9, r: 2.4 }],
+        ['path', { class: 'a-line', d: `M36 ${y + 6.5}h28M36 ${y + 11.5}h28` }]])],
+    laptop: [['rect', { class: 'a-front', x: 20, y: 18, width: 60, height: 44, rx: 4 }], ['rect', { class: 'a-screen', x: 25, y: 23, width: 50, height: 34, rx: 2 }],
+      ['polygon', { class: 'a-top', points: P([[20, 64], [80, 64], [94, 80], [6, 80]]) }], ['rect', { class: 'a-side', x: 6, y: 80, width: 88, height: 5, rx: 2 }],
+      ['path', { class: 'a-line', d: 'M42 74h16' }]],
+    store: [['path', { class: 'a-front', d: 'M16 26v48a34 11 0 0 0 68 0V26' }], ['ellipse', { class: 'a-top', cx: 50, cy: 26, rx: 34, ry: 11 }],
+      ['path', { class: 'a-line', d: 'M16 42a34 11 0 0 0 68 0M16 58a34 11 0 0 0 68 0' }], ['circle', { class: 'a-led', cx: 74, cy: 70, r: 2.6 }]],
+    shield: [['path', { class: 'a-front', d: 'M50 10l34 13v24c0 22-14 37-34 45C30 84 16 69 16 47V23z' }], ['path', { class: 'a-side', d: 'M50 10l34 13v24c0 22-14 37-34 45z' }],
+      ...[[38, 38], [50, 38], [62, 38], [38, 50], [50, 50], [62, 50], [38, 62], [50, 62], [62, 62]].map(([cx, cy], i) => ['circle', { class: i >= 3 && i <= 5 ? 'a-led' : 'a-dot', cx, cy, r: 4.2 }])],
+  };
+  const art = kind => { const s = sv('svg', { class: 'mh-art is-' + kind, viewBox: '0 0 100 100', 'aria-hidden': 'true' }); for (const [t, a] of ART[kind]) sv(t, { ...a, pathLength: 1 }, s); return s; };
+  const artOf = m => m.id === MAIN || m.managed ? 'box' : /windows|mac/i.test(m.platform || '') || /laptop|book/i.test(m.name || '') ? 'laptop' : 'rack';
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const gbFmt = v => v == null ? '?' : v >= 1000 ? `${(v / 1000).toFixed(1).replace(/\.0$/, '')} TB` : v >= 100 ? `${Math.round(v)} GB` : `${v.toFixed(1).replace(/\.0$/, '')} GB`;
   const agoS = sec => sec < 3600 ? `${Math.max(1, Math.round(sec / 60))}m` : sec < 86400 ? `${Math.round(sec / 3600)}h` : `${Math.round(sec / 86400)}d`;
@@ -65,7 +84,7 @@ export default function setup(api) {
     const d = devOf(id);
     if (!d) return { id, name: id === MAIN ? pretty(reg().this?.name) || 'Main' : id, status: 'unknown' };
     const dg = diskGB(d), fg = freeGB(d);
-    return { id, name: pretty(d.name), status: d.status, error: d.error || '', cores: d.cpus || null, ramGB: d.memoryTotalGB || null,
+    return { id, name: pretty(d.name), status: d.status, error: d.error || '', use: d.use || '', platform: d.platform || '', access: d.access || null, cores: d.cpus || null, ramGB: d.memoryTotalGB || null,
       mem: d.memory, cpu: d.cpu, diskGB: dg, freeGB: fg, diskUsed: dg != null && fg != null ? dg - fg : null };
   }
   // Rough power, for size and order: cores, then memory, then disk.
@@ -155,15 +174,26 @@ export default function setup(api) {
   }
 
   /* ---------- skeleton ---------- */
-  const root = h('section', { cls: 'mh-root', 'aria-label': 'Your network', data: { mhRoot: '' } });
+  // Home keeps one slim strip; the full views live in Settings › System (Your network, AI, Network & security, Storage).
+  const root = h('section', { cls: 'mh-root is-home', 'aria-label': 'Your network', data: { mhRoot: '' } });
   const wsBar = h('div', { cls: 'mh-ws', role: 'tablist', 'aria-label': 'Network' });
   const aiRow = h('div', { cls: 'mh-ai', hidden: true });
-  const aiList = h('div', { cls: 'mh-ai-list', hidden: true, 'aria-label': 'AI accounts' });
+  const aiList = h('div', { cls: 'mh-ai-list', 'aria-label': 'AI accounts' });
   const lines = sv('svg', { class: 'mh-lines', 'aria-hidden': 'true' });
   const row = cls => h('div', { cls: 'mh-row ' + cls });
   const rowSt = row('is-storage'), rowMn = row('is-machines'), rowAct = row('is-act'), rowMore = row('is-more'), rowPp = row('is-people'), rowDv = row('is-devices'), rowChev = row('is-more is-devchev');
-  const map = h('div', { cls: 'mh-map' + (S.bars ? ' is-details' : '') }, lines, rowSt, rowMn, rowAct, rowMore, rowPp, rowDv, rowChev);
-  root.append(h('header', { cls: 'mh-top' }, wsBar), h('div', { cls: 'mh-body' }, aiRow, aiList, map));
+  // One button beside the Tailscale label when something is open: it drafts the fix in a new chat, never sends it.
+  const rowTs = row('is-ts');
+  const tsTab = h('button', { type: 'button', cls: 'mh-ts-tab', data: { toggle: 'ts' }, hidden: true });
+  const map = h('div', { cls: 'mh-map' + (S.bars ? ' is-details' : '') }, lines, tsTab, rowSt, rowTs, rowMn, rowAct, rowMore, rowPp, rowDv, rowChev);
+  // The strip: which Wizard, AI fuel, chats, last backup, network. Each part opens its page in Settings.
+  const glance = h('div', { cls: 'mh-glance', role: 'group', 'aria-label': 'Your Wizard at a glance' });
+  const wsMenu = h('div', { cls: 'mh-ws-menu', hidden: true });
+  root.append(h('div', { cls: 'mh-body' }, glance, wsMenu));
+  // Settings sections: each its own .mh-root so the same styles and size rules apply there.
+  const sec = (cls, ...kids) => h('div', { cls: 'mh-root is-settings ' + cls }, ...kids);
+  const netBox = h('div', { cls: 'mh-net' }), storeBox = h('div', { cls: 'mh-store' });
+  const secMap = sec('is-overview', wsBar, map), secAI = sec('is-ai', aiRow, aiList), secNet = sec('is-net', netBox), secStore = sec('is-store', storeBox);
 
   /* ---------- top ---------- */
   function renderTabs() {
@@ -173,10 +203,10 @@ export default function setup(api) {
     wsBar.replaceChildren(tab('mine', thisName()), ...managedList().map(g => tab(g.id, g.name)), add);
   }
   // A fuel tag: "AI", then E, ten cells that fill, F. No percentage at rest.
-  function gaugeEl(g) {
+  function gaugeEl(g, still) {
     const on = Math.round(g.left / 10);
-    return h('button', { type: 'button', cls: nw('mh-gauge'), data: { toggle: 'ai', s: level(g.left) }, 'aria-expanded': String(S.open.has('ai')),
-      'aria-label': `AI: ${g.name}, ${g.left}% left${g.n > 1 ? ` across ${g.n} accounts` : ''}. Show accounts` },
+    return h(still ? 'div' : 'button', { ...(still ? {} : { type: 'button', data: { go: 'ai' } }), cls: 'mh-gauge' + (still ? ' is-still' : ''), 'data-s': level(g.left),
+      'aria-label': `AI: ${g.name}, ${g.left}% left${g.n > 1 ? ` across ${g.n} accounts` : ''}${still ? '' : '. Open AI in Settings'}` },
       h('b', { cls: 'mh-g-label', text: 'AI' }), h('span', { cls: 'mh-g-ef', text: 'E' }),
       h('span', { cls: 'mh-g-cells', 'aria-hidden': 'true' }, Array.from({ length: 10 }, (_, i) => h('i', { cls: i < on ? 'on' : '', style: { '--i': String(i) } }))),
       h('span', { cls: 'mh-g-ef', text: 'F' }));
@@ -184,12 +214,11 @@ export default function setup(api) {
   function renderAI() {
     const g = S.ws === 'mine' ? gauge() : null;
     aiRow.hidden = !g;
-    aiRow.replaceChildren(...(g ? [gaugeEl(g)] : []));
-    if (!g) S.open.delete('ai');
+    aiRow.replaceChildren(...(g ? [gaugeEl(g, true)] : []));
   }
   // Every account, grouped by service (the gauge's own first): nickname, what is left, Sign out; one Sign in at the end.
   function renderAIList() {
-    const show = S.ws === 'mine' && S.open.has('ai');
+    const show = !!subs().length;
     aiList.hidden = !show;
     if (!show) return aiList.replaceChildren();
     const want = defKind(), groups = [];
@@ -223,13 +252,25 @@ export default function setup(api) {
     return h('span', { cls: 'mh-bars' }, h('span', { cls: 'mh-bars-in' },
       bar('Memory', m.ramGB, m.ramGB * (m.mem || 0) / 100, `${Math.round(m.mem || 0)}% of ${gbFmt(m.ramGB)} used`),
       bar('Disk', m.diskGB, m.diskUsed || 0, `${gbFmt(m.diskUsed)} of ${gbFmt(m.diskGB)} used`),
-      bar('CPU', m.cores, m.cores * (m.cpu || 0) / 100, `${Math.round(m.cpu || 0)}% of ${m.cores} cores busy`)));
+      bar('CPU', m.cores, m.cores * (m.cpu || 0) / 100, `${Math.round(m.cpu || 0)}% of ${m.cores} cores busy`),
+      h('span', { cls: 'mh-how', title: m.access?.how || '' }, m.access?.how ? h('code', { text: m.access.how }) : '–')));
   }
   const chev = (open, extra = {}) => h('span', { cls: 'mh-chev-btn', 'aria-hidden': 'true', ...extra }, h('i', { cls: 'mh-chev' + (open ? ' is-up' : '') }));
+  // Security: how open each machine is from outside, in plain words; only what was tested, never guessed.
+  const SHIELD = [['path', { d: 'M12 3l7 3v6c0 4.2-3 7.4-7 9-4-1.6-7-4.8-7-9V6z' }]];
+  const EXPO = { tailscale: ['Tailscale only', 'ok', 'Tailscale'], internet: ['Open to internet', 'bad', 'Open'], unchecked: ['Not checked yet', 'none', 'Not checked'] };
+  const shield = (a, id) => { if (a?.exposure !== 'internet') return null;  // only the warning shows on the map; the rest is in Tailscale's panel
+    const [text, s, short] = EXPO.internet;
+    const b = h(id ? 'button' : 'span', { ...(id ? { type: 'button', data: { machine: id } } : {}), cls: 'mh-shield', 'data-x': s, 'aria-label': `${text}${id ? '. Show how to get in' : ''}` });
+    const v = sv('svg', { class: 'mh-i', viewBox: '0 0 24 24', 'aria-hidden': 'true' }, b); for (const [t, x] of SHIELD) sv(t, x, v); b.append(h('span', { cls: 'mh-sh-long', text }), h('span', { cls: 'mh-sh-short', text: short })); return b; };
+  const accessInfo = a => a ? h('span', { cls: 'mh-access' },
+    a.how ? h('code', { text: a.how }) : null,
+    (a.details || []).map(t => h('span', { text: t })),
+    a.checked ? h('small', { text: `Checked ${a.checked}` }) : h('small', { text: 'Not checked yet' })) : null;
   const label = (name, role, cls = '') => h('span', { cls: 'mh-label ' + cls }, h('span', { cls: 'mh-name', text: name }), role ? h('span', { cls: 'mh-role', text: role }) : null);
   function machineNode(m, role, maxOf, extra = {}) {
     const s = extra.size || sizeOf(m), off = m.status && m.status !== 'online' && role !== 'main';
-    const disc = h('span', { cls: 'mh-disc' + (off ? ' is-off' : '') });
+    const disc = h('span', { cls: 'mh-disc is-art' + (off ? ' is-off' : '') }, art(artOf({ ...m, managed: extra.managed })));
     let tap;
     if (role === 'main' && extra.sessions) {
       // One tap for both: a working bubble (pulses while something runs) and a ready bubble, no words.
@@ -244,11 +285,15 @@ export default function setup(api) {
     }
     return h('div', { cls: nw(`mh-node is-${role}`) + (S.open.has('m:' + m.id) ? ' is-open' : ''), data: { id: m.id, role }, style: { '--s': String(s) } },
       h('span', { cls: 'mh-hold' }, tap || disc), label(m.name, extra.roleText, extra.warn ? 'warn' : ''),
+      shield(m.access, extra.managed ? null : m.id),
       maxOf ? bars(m, maxOf) : null);
   }
   function actPanel(m) {
+    if (m.id === MAIN) return h('div', { cls: nw('mh-act'), data: { of: m.id } },
+      h('span', { cls: 'mh-act-head' }, h('b', { text: m.name }), h('span', { text: 'Main' })), accessInfo(m.access) || h('span', { text: 'Not checked yet' }));
     return h('div', { cls: nw('mh-act'), data: { of: m.id } },
       h('span', { cls: 'mh-act-head' }, h('b', { text: m.name }), h('span', { text: m.status === 'online' ? (qualifies(m.id) ? 'Standby device' : 'Helper') : offText(m) })),
+      accessInfo(m.access),
       h('span', { cls: 'mh-act-btns' }, actions(m).map(a => h('button', { type: 'button', cls: 'mh-act-btn' + (a.ok ? '' : ' is-no'), disabled: !a.ok, data: { ask: `${m.id}:${a.id}` } },
         h('b', { text: a.label }), h('small', { text: a.note })))),
       ...actions(m).filter(a => !a.ok && a.no?.length).map(a => h('span', { cls: 'mh-act-why' },
@@ -258,15 +303,51 @@ export default function setup(api) {
     const open = S.open.has('storage');
     return h('div', { cls: nw('mh-node is-storage'), data: { id: 'storage', role: 'storage', fit: st.state }, style: { '--s': '50' } },
       h('button', { type: 'button', cls: 'mh-tap', data: { toggle: 'storage' }, 'aria-expanded': String(open), 'aria-label': `Storage, ${st.used == null ? 'size unknown' : gbFmt(st.used) + ' stored'}. Show where` },
-        h('span', { cls: 'mh-hold' }, h('span', { cls: 'mh-disc' })), label('Storage', st.used == null ? st.where : gbFmt(st.used) + ' stored'), chev(open)),
-      open ? h('span', { cls: 'mh-more-info' },
+        h('span', { cls: 'mh-hold' }, h('span', { cls: 'mh-disc is-art' }, art('store'))), label('Storage', (st.used == null ? st.where : gbFmt(st.used) + ' stored') + (st.age != null ? ` · ${agoS(st.age)} ago` : '')), chev(open)),
+      open ? storeInfo(st) : null);
+  }
+  const storeHead = st => h('div', { cls: 'mh-store-head' }, h('span', { cls: 'mh-disc is-art' }, art('store')),
+    h('span', {}, h('b', { text: st.used == null ? 'Storage' : gbFmt(st.used) + ' stored' }), h('small', { text: backupRunning() ? 'Backing up now' : st.age == null ? 'No backup yet' : `Last backed up ${agoS(st.age)} ago` })));
+  function storeInfo(st) {
+    return h('span', { cls: 'mh-more-info' },
         h('span', { text: st.where + (st.bucket ? ` · bucket “${st.bucket}”` : '') }),
         h('span', { text: `Backs up ${st.every}${st.snaps ? ` · ${st.snaps} backups so far` : ''}${st.used != null && st.snaps ? `, ${gbFmt(st.used)} in all` : ''}` }),
         st.keep ? h('span', { text: st.keep }) : null,
         h('span', { cls: 'mh-act-btns' },
           [['now', 'Back up now', '~20 min, apps pause briefly', 'Run a backup of this Wizard now.'], ['schedule', 'Change schedule', 'how often it runs', 'I want to change how often my Wizard backs up to '],
             ['more', 'Add storage', 'a second encrypted copy', 'Add another place to keep encrypted copies of my backups: ']]
-            .map(([id, text, note, words]) => h('button', { type: 'button', cls: 'mh-act-btn', data: { stAsk: id, words } }, h('b', { text }), h('small', { text: note }))))) : null);
+            .map(([id, text, note, words]) => h('button', { type: 'button', cls: 'mh-act-btn', data: { stAsk: id, words } }, h('b', { text }), h('small', { text: note })))));
+  }
+  // Tailscale: one node beside Storage. Simple on the map (is anything open?), the whole story when tapped.
+  const openOnes = () => devices().filter(d => d.access?.exposure === 'internet').map(d => machine(d.id));
+  const TS_ASK = {
+    fix: () => { const open = openOnes(), names = open.map(m => m.name).join(' and ');
+      return [`Close ${names} to the internet so ${open.length === 1 ? 'it is' : 'they are'} reachable only over Tailscale, like Main.`, '',
+        ...open.map(m => `${m.name}: ${(m.access.details || []).join('; ')}`), '',
+        'For each one: test its ports from another machine first, apply the fix with a safety net that undoes itself if access is lost, test again from outside, then update the map. Ask me before anything that needs my password, and tell me if a fix would cut off something I use (like AnyDesk).'].join('\n'); },
+    oneway: () => 'Make my Tailscale one-way: my phone and Mac can reach my machines, my machines can reach each other (sync and work), but my machines cannot reach my phone or Mac. Show me the exact rule change first, keep a way back, and don\u2019t apply it until I say so.',
+    check: () => 'Check again how open each of my machines is from the internet: test their ports from another machine over IPv4 and IPv6, then update the shields on my map. Don\u2019t change anything.',
+  };
+  // Tailscale is the network, not a device: a dashed outline around everything on it, with one small tab on its edge.
+  // The tab opens the details here, inside the outline.
+  function tsPanel() {
+    const bad = openOnes(), all = [machine(MAIN), ...devices().filter(d => d.id !== MAIN).map(d => machine(d.id))];
+    const word = m => m.access?.exposure === 'internet' ? ['Open to internet', 'bad'] : m.access?.exposure === 'tailscale' ? ['Tailscale only', 'ok'] : ['Not checked yet', 'none'];
+    return h('span', { cls: 'mh-more-info mh-ts-info' },
+      h('span', { text: 'Your private network. Everything inside the dashed line talks over it, encrypted.' }),
+      bad.length ? h('span', { cls: 'is-bad', text: `${bad.map(m => m.name).join(' and ')} ${bad.length === 1 ? 'is' : 'are'} on Tailscale too, but strangers on the internet can also knock on ${bad.length === 1 ? 'it' : 'them'}.` })
+        : h('span', { text: 'Nothing answers from the internet. Tailscale is the only way in.' }),
+      h('span', { cls: 'mh-ts-list' }, all.map(m => { const [w, x] = word(m); return h('span', { cls: 'mh-ts-row', 'data-x': x }, h('i'), h('b', { text: m.name }), h('span', { text: w })); })),
+      h('span', { text: 'Who can reach whom: right now any device on your Tailscale can reach any other, both ways (Tailscale’s starting rule).' }),
+      h('span', { cls: 'mh-act-btns' },
+        [bad.length ? ['fix', `Close ${bad.length === 1 ? 'it' : 'them'}`, 'Tailscale becomes the only way in'] : null, ['oneway', 'Make it one-way', 'phone and Mac reach machines, not back'], ['check', 'Check again', 'tests every machine from outside']]
+          .filter(Boolean).map(([id, text, note]) => h('button', { type: 'button', cls: 'mh-act-btn' + (id === 'fix' ? ' is-fix' : ''), data: { tsAsk: id } }, h('b', { text }), h('small', { text: note })))));
+  }
+  function paintTsTab() {
+    const bad = openOnes().length, open = S.open.has('ts');
+    tsTab.hidden = S.ws !== 'mine'; tsTab.setAttribute('aria-expanded', String(open));
+    tsTab.setAttribute('aria-label', `Tailscale, ${bad ? bad + ' open to the internet' : 'the only way in'}. ${open ? 'Hide' : 'Show'} details`);
+    tsTab.replaceChildren(h('span', { text: 'Tailscale' }), bad ? h('b', { cls: 'mh-ts-n', text: `${bad} open` }) : null, chev(open));
   }
   const devOpen = p => p.devices ? S.open.has('devs') : S.open.has('p:' + p.id);
   function personNode(p) {
@@ -288,20 +369,22 @@ export default function setup(api) {
     root.classList.toggle('is-managed', !!g);
     if (g) {
       // Only what is known about a Wizard he manages: its Main and who uses it. Same design, less data.
-      setRow(rowSt, []); setRow(rowMore, []); setRow(rowAct, []);
-      setRow(rowMn, [machineNode({ id: 'managed-' + g.id, name: g.name }, 'main', null, { size: 72, roleText: g.org || 'Main', managed: true }), plus('add-device', `Add a device to ${g.name}`)]);
+      setRow(rowSt, []); setRow(rowTs, []); setRow(rowMore, []); setRow(rowAct, []);
+      setRow(rowMn, [machineNode({ id: 'managed-' + g.id, name: g.name, access: g.access || null }, 'main', null, { size: 72, roleText: g.org || 'Main', managed: true }), plus('add-device', `Add a device to ${g.name}`)]);
     } else {
       const st = storage();
       setRow(rowSt, st ? [storageNode(st)] : []);
+      netBox.replaceChildren(tsPanel()); storeBox.replaceChildren(...(st ? [storeHead(st), storeInfo(st)] : [h('span', { cls: 'mh-more-info', text: 'No backup set up yet.' })]));
+      setRow(rowTs, S.open.has('ts') ? [tsPanel()] : []);
       const main = machine(MAIN), others = devices().filter(d => d.id !== MAIN).map(d => machine(d.id)).sort((a, b) => power(b) - power(a));
       const all = [main, ...others].filter(m => m.status === 'online');
       const maxOf = { Memory: Math.max(1, ...all.map(m => m.ramGB || 0)), Disk: Math.max(1, ...all.map(m => m.diskGB || 0)), CPU: Math.max(1, ...all.map(m => m.cores || 0)) };
       const node = m => m.id === MAIN ? machineNode(main, 'main', maxOf, { roleText: 'Main', sessions: sessions() })
         : machineNode(m, qualifies(m.id) ? 'standby' : 'helper', maxOf, { roleText: qualifies(m.id) ? 'Standby device' : m.status === 'online' ? 'Helper' : offText(m), warn: m.status !== 'online' });
       // The bar names sit left of the row; an invisible twin on the right keeps Main exactly in the middle.
-      const legend = twin => h('div', { cls: 'mh-legend' + (twin ? ' is-twin' : ''), 'aria-hidden': 'true' }, h('span', { cls: 'mh-bars-in' }, h('span', { text: 'RAM' }), h('span', { text: 'Disk' }), h('span', { text: 'CPU' })));
+      const legend = twin => h('div', { cls: 'mh-legend' + (twin ? ' is-twin' : ''), 'aria-hidden': 'true' }, h('span', { cls: 'mh-bars-in' }, h('span', { text: 'RAM' }), h('span', { text: 'Disk' }), h('span', { text: 'CPU' }), h('span', { cls: 'mh-how-l', text: 'SSH' })));
       setRow(rowMn, [legend(false), ...around(main, others).map(node), legend(true), plus('add-device', 'Add a device to this network')]);
-      const open = others.find(m => S.open.has('m:' + m.id));
+      const open = [main, ...others].find(m => S.open.has('m:' + m.id));
       setRow(rowAct, open ? [actPanel(open)] : []);
       setRow(rowMore, all.length ? [h('button', { type: 'button', cls: 'mh-details', data: { toggle: 'bars' }, 'aria-expanded': String(S.bars), 'aria-label': 'Show or hide machine details' },
         h('i', { cls: 'mh-chev' + (S.bars ? ' is-up' : ''), 'aria-hidden': 'true' }))] : []);
@@ -322,7 +405,7 @@ export default function setup(api) {
   /* ---------- wires: drawn from the real positions, a light running along each; untouched while nothing moved ---------- */
   let wired = '';
   function drawLines() {
-    if (!root.isConnected || typeof map.getBoundingClientRect !== 'function') return;
+    if (!map.isConnected || typeof map.getBoundingClientRect !== 'function') return;
     const M = map.getBoundingClientRect(); if (!M.width) return;
     const box = el => { const r = el.getBoundingClientRect(); return { l: r.left - M.left, r: r.right - M.left, t: r.top - M.top, b: r.bottom - M.top, cx: (r.left + r.right) / 2 - M.left, cy: (r.top + r.bottom) / 2 - M.top }; };
     const discOf = n => { let x = n?.firstElementChild; while (x && !x.classList.contains('mh-disc') && !x.classList.contains('mh-pdisc')) x = x.firstElementChild; return x || n; };
@@ -331,17 +414,19 @@ export default function setup(api) {
     const mainEl = [...rowMn.children].find(n => n.dataset?.role === 'main'); if (!mainEl) return;
     const md = box(discOf(mainEl)), mb = box(mainEl), specs = [];  // mb: Main with its label (and bars, when shown)
     // Main → storage, above. Fast while a backup uploads; otherwise it carries the last good copy's age.
-    const stEl = rowSt.firstElementChild;
+    const stEl = [...rowSt.children].find(n => n.dataset?.id === 'storage');
     if (stEl) {
       const sd = box(stEl), st = storage();  // from the bottom of its label (and its details, when open)
       const col = st?.state === 'ok' ? 'var(--mh-accent)' : st?.state === 'no' ? 'var(--mh-bad)' : 'var(--mh-warn)';
-      specs.push([curveV(md.cx, md.t - 4, sd.cx, sd.b + 4), col, backupRunning() ? 'backing up now' : st?.age == null ? 'no backup yet' : 'backed up ' + agoS(st.age) + ' ago', backupRunning() ? 3 : 1]);
+      specs.push([curveV(md.cx, md.t - 4, sd.cx, sd.b + 4), col, M.width < 600 && S.ws === 'mine' ? '' : backupRunning() ? 'backing up now' : st?.age == null ? 'no backup yet' : 'backed up ' + agoS(st.age) + ' ago', backupRunning() ? 3 : 1]);
     }
     // Machines: a chain outward from Main on each side, in row order.
     const ms = [...rowMn.children].filter(n => n.dataset?.role);
     for (let i = 1; i < ms.length; i++) {
       const a = box(discOf(ms[i - 1])), b = box(discOf(ms[i])), off = discOf(ms[i - 1]).classList.contains('is-off') || discOf(ms[i]).classList.contains('is-off');
-      if (b.l - 3 > a.r + 3) specs.push([`M${f(a.r + 3)} ${f(a.cy)} L${f(b.l - 3)} ${f(b.cy)}`, off ? 'var(--mh-wire-off)' : 'var(--mh-accent)', '', 1]);
+      // The Main ↔ standby link: the hourly sync, over Tailscale.
+      const pair = [ms[i - 1].dataset.id, ms[i].dataset.id], sync = pair.includes(MAIN) && pair.some(id => devOf(id)?.use === 'standby');
+      if (b.l - 3 > a.r + 3) specs.push([`M${f(a.r + 3)} ${f(a.cy)} L${f(b.l - 3)} ${f(b.cy)}`, off ? 'var(--mh-wire-off)' : 'var(--mh-accent)', sync && b.l - a.r > 64 ? 'sync' : '', 1]);
     }
     // People → the bottom of Main, from below (faster while sessions work; it runs behind Show details); devices → their person.
     const busy = S.ws === 'mine' && sessions().working > 0;
@@ -353,10 +438,18 @@ export default function setup(api) {
     }
     map.style.setProperty('--cx', md.cx + 'px'); map.style.setProperty('--cy', md.cy + 'px');
     // The helper's panel sits right under the helper it belongs to (kept inside the map).
+    // Tailscale / Storage details open under their node but never past the map's edges.
+    for (const mi of [...rowSt.children].map(n => n.lastElementChild).filter(x => x?.classList.contains('mh-more-info') && !x.classList.contains('mh-ts-info'))) { mi.style.transform = ''; const pb = box(mi), dx = clamp(0, -pb.l + 4, M.width - pb.r - 4); if (dx) mi.style.transform = `translateX(${dx.toFixed(0)}px)`; }
     const ap = rowAct.firstElementChild;
     if (ap) { const n = ms.find(x => x.dataset.id === ap.dataset.of); if (n) { ap.style.transform = ''; const nb = box(n), pb = box(ap), dx = clamp(nb.cx - pb.cx, -pb.l + 4, M.width - pb.r - 4); ap.style.transform = `translateX(${dx.toFixed(0)}px)`; const ab = box(ap); specs.push([curveV(ab.cx, ab.t - 2, nb.cx, nb.b + 2), 'var(--mh-wire-off)', '', 1]); } }
-    const key = JSON.stringify(specs); if (key === wired && lines.firstChild) return; wired = key;
+    // The Tailscale outline: around the machines, people and their devices (Storage sits outside, in Cloudflare).
+    paintTsTab();
+    const inside = S.ws === 'mine' ? [rowTs, rowMn, rowAct, rowMore, rowPp, rowDv].filter(r => !r.hidden && r.firstElementChild).map(box) : [];
+    const frame = inside.length ? [Math.min(...inside.map(x => x.t)) - 26, Math.max(...inside.map(x => x.b)) + 12] : null;
+    if (frame) { tsTab.style.top = f(frame[0]) + 'px'; }
+    const key = JSON.stringify([specs, frame, M.width]); if (key === wired && lines.firstChild) return; wired = key;
     lines.replaceChildren();
+    if (frame) sv('rect', { x: 6, y: f(frame[0]), width: f(M.width - 12), height: f(frame[1] - frame[0]), rx: 24, class: 'mh-ts' }, lines);
     const defs = sv('defs', {}, lines); let gi = 0;
     for (const [d, col, text, speed] of specs) {
       const base = sv('path', { d, class: 'base' }, lines); base.style.stroke = col;
@@ -368,7 +461,7 @@ export default function setup(api) {
       const seg = Math.min(46, L * .4), c = sv('path', { d, class: 'comet', stroke: `url(#mhg${i})`, 'stroke-dasharray': `${f(seg)} ${f(L + seg)}` }, lines);
       c.style.setProperty('--from', f(seg)); c.style.setProperty('--to', f(-L)); c.style.setProperty('--dur', ((1.6 + L / 120) / speed).toFixed(2) + 's');
       if (text) {
-        const pt = base.getPointAtLength(L * .5), grp = sv('g', {}, lines), txt = sv('text', { x: pt.x, y: pt.y + 4, 'text-anchor': 'middle', class: 'mh-age' }, grp);
+        const pt = base.getPointAtLength(L * (frame && /back/.test(text) ? .8 : .5)), grp = sv('g', {}, lines), txt = sv('text', { x: pt.x, y: pt.y + 4, 'text-anchor': 'middle', class: 'mh-age' }, grp);
         txt.textContent = text; const bb = txt.getBBox();
         grp.insertBefore(sv('rect', { x: bb.x - 7, y: bb.y - 4, width: bb.width + 14, height: bb.height + 8, rx: (bb.height + 8) / 2, class: 'mh-age-bg' }), txt);
       }
@@ -377,12 +470,15 @@ export default function setup(api) {
 
   /* ---------- taps: everything expands in place ---------- */
   const flip = k => { if (S.open.has(k)) S.open.delete(k); else S.open.add(k); };
-  api.listen(root, 'click', e => {
-    let b = e.target; while (b && b !== root && !(b.dataset && (b.dataset.ws || b.dataset.act || b.dataset.open || b.dataset.person || b.dataset.toggle || b.dataset.machine || b.dataset.ask || b.dataset.stAsk))) b = b.parentNode;
-    if (!b || b === root) return;  // Sign in / Sign out carry the shell's own data-res-signin, which opens that app
+  const onTap = e => {
+    const top = e.currentTarget;
+    let b = e.target; while (b && b !== top && !(b.dataset && (b.dataset.ws || b.dataset.act || b.dataset.open || b.dataset.go || b.dataset.person || b.dataset.toggle || b.dataset.machine || b.dataset.ask || b.dataset.stAsk || b.dataset.tsAsk))) b = b.parentNode;
+    if (!b || b === top) return;  // Sign in / Sign out carry the shell's own data-res-signin, which opens that app
     const d = b.dataset;
+    if (d.go) { if (d.go === 'chats') return api.data.read.sessions?.open('ready'); return api.settings?.open?.(d.go); }
+    if (d.toggle === 'wsm') { flip('wsm'); drawn.glance = ''; paint(); return; }
     if (d.open) return api.data.read.sessions?.open(d.open);
-    if (d.ws) { if (S.ws === d.ws) return; S.ws = d.ws; api.storage.set('ws', d.ws); fresh = true; paint(true); return; }
+    if (d.ws) { S.open.delete('wsm'); drawn.glance = ''; if (S.ws === d.ws) { paint(); return; } S.ws = d.ws; api.storage.set('ws', d.ws); fresh = true; paint(true); api.settings?.refresh?.(); return; }
     if (d.act) {
       const g = managedOf(S.ws), where = g ? `${g.name}'s Wizard` : 'my network';
       const ask = { 'add-managed': ['Add a Wizard I manage', 'Add a Wizard I manage to my map: '], 'add-device': ['Add a device', `Add a device to ${where} as a helper: `],
@@ -393,6 +489,12 @@ export default function setup(api) {
     if (d.person) { const p = people().find(x => x.id === d.person); if (p?.devices) { flip('devs'); api.storage.set('devs', S.open.has('devs') ? 'on' : 'off'); } else flip('p:' + d.person); paint(); return; }
     if (d.toggle === 'devs') { flip('devs'); api.storage.set('devs', S.open.has('devs') ? 'on' : 'off'); paint(); return; }
     if (d.stAsk) { const st = storage(); if (!api.nav?.ask?.('storage-' + d.stAsk, { title: 'Storage', message: st ? [st.where + ' · ' + st.bucket, st.every, st.keep].join('\n') : '' }, d.words)) api.toast('Open Chats, then try again'); return; }
+    if (d.tsAsk) {
+      const words = TS_ASK[d.tsAsk]?.(); if (!words) return;
+      const title = { fix: 'Network · Close open machines', oneway: 'Network · One-way Tailscale', check: 'Network · Check exposure' }[d.tsAsk];
+      if (!api.nav?.ask?.('ts-' + d.tsAsk, { title, message: 'Tailscale' }, words)) api.toast('Open Chats, then try again');  // a draft; he sends it
+      return;
+    }
     if (d.machine) { const k = 'm:' + d.machine, was = S.open.has(k); for (const x of [...S.open]) if (x.startsWith('m:')) S.open.delete(x); if (!was) S.open.add(k); fresh = !was; paint(); return; }
     if (d.ask) {
       const [id, what] = d.ask.split(':'), m = machine(id), a = actions(m).find(x => x.id === what);
@@ -404,14 +506,16 @@ export default function setup(api) {
     if (d.toggle === 'ai') { flip('ai'); paint(); return; }
     if (d.toggle === 'signin') { flip('signin'); renderAIList(); drawn.list = ''; return; }
     if (d.toggle === 'storage') { flip('storage'); paint(); return; }
+    if (d.toggle === 'ts') { flip('ts'); paint(); return; }
     if (d.toggle === 'bars') {
       // Fold the bars open or shut with one class: the CSS eases the height, nothing is rebuilt.
       S.bars = !S.bars; api.storage.set('details', S.bars ? 'on' : 'off');
       map.classList.toggle('is-details', S.bars); b.setAttribute('aria-expanded', String(S.bars));
       b.firstElementChild?.classList.toggle('is-up', S.bars);
     }
-  });
-  api.listen(root, 'input', e => {
+  };
+  for (const el of [root, secMap, secAI, secNet, secStore]) api.listen(el, 'click', onTap);
+  api.listen(secAI, 'input', e => {
     const id = e.target?.dataset?.nick; if (!id) return;
     const v = String(e.target.value || '').trim().slice(0, 24);
     if (v && v !== e.target.dataset.auto) S.nick[id] = v; else delete S.nick[id];
@@ -420,13 +524,37 @@ export default function setup(api) {
 
   /* ---------- data ---------- */
   // Repaint only the part whose drawing changed; a nickname being typed is never rebuilt under the finger.
-  const drawn = { top: '', ai: '', list: '', map: '' };
+  const drawn = { top: '', ai: '', list: '', map: '', glance: '' };
   const mapSig = () => { const st = storage();
-    return JSON.stringify([S.ws, [...S.open].filter(k => k !== 'ai' && k !== 'signin'), reg().this || null, managedList(),
+    return JSON.stringify([S.ws, [...S.open].filter(k => k !== 'ai' && k !== 'signin' && k !== 'wsm'), reg().this || null, managedList(),
       devices().map(d => [d.id, d.name, d.status, d.error, d.cpus, d.memoryTotalGB, diskGB(d), Math.round((d.memory || 0) / 5), Math.round((d.cpu || 0) / 5), Math.round((freeGB(d) || 0) / 5)]),
       myDevices(), sessions(), S.unread, backupRunning(), st && { ...st, age: st.age == null ? null : agoS(st.age), used: st.used == null ? null : gbFmt(st.used) },
       (S.backup?.standby?.machines || []).map(x => [x.id, x.verdict, (x.checks || []).map(c => c.ok)])]); };
+  function renderGlance() {
+    const g = managedOf(S.ws), x = sessions(), fuel = g ? null : gauge(), st = g ? null : storage(), bad = g ? 0 : openOnes().length;
+    const name = g ? g.name : thisName(), many = managedList().length > 0;
+    const sig = JSON.stringify([S.ws, name, many, S.open.has('wsm'), managedList().map(m => m.id), x.working, Math.min(x.ready, 6), S.unread, fuel && Math.round(fuel.left / 10), st && [st.state, st.age == null ? null : agoS(st.age)], bad, backupRunning(), devices().map(d => d.access?.exposure)]);
+    if (sig === drawn.glance) return; drawn.glance = sig;
+    const b = (go, cls, label, ...kids) => h('button', { type: 'button', cls: 'mh-gl-item ' + cls, data: { go }, 'aria-label': label }, ...kids);
+    const dots = (n, cls) => Array.from({ length: n }, () => h('i', { cls }));
+    const checked = devices().length && devices().every(d => d.access?.exposure === 'tailscale');
+    glance.replaceChildren(...[
+      h('button', { type: 'button', cls: 'mh-gl-item is-name', data: { toggle: 'wsm' }, 'aria-expanded': String(S.open.has('wsm')), 'aria-label': `${name}. Switch Wizard` }, h('b', { text: name }), chev(S.open.has('wsm'))),
+      fuel ? gaugeEl(fuel) : null,
+      g ? null : b('chats', 'is-chats', `${x.working} working, ${x.ready} ready${S.unread ? `, ${S.unread} unread` : ''}. Open your chats`,
+        h('span', { cls: 'mh-dots' }, dots(Math.min(x.working, 6), 'work'), dots(Math.min(x.ready, 6 - Math.min(x.working, 6)), 'ready')), S.unread ? h('span', { cls: 'mh-bell' }, bell(), h('b', { text: String(Math.min(S.unread, 99)) })) : null),
+      st ? b('storage', 'is-backup', `${backupRunning() ? 'Backing up now' : st.age == null ? 'No backup yet' : `Backed up ${agoS(st.age)} ago`}. Open Storage in Settings`,
+        h('span', { 'data-x': st.state }, h('span', { cls: 'mh-sh-long', text: backupRunning() ? 'Backing up' : st.age == null ? 'No backup' : 'Backed up ' }), backupRunning() || st.age == null ? null : h('span', { text: `${agoS(st.age)} ago` }))) : null,
+      bad || checked ? b('network', 'is-net', bad ? `${bad} machines open to the internet. Open Network in Settings` : 'Network private. Open Network in Settings', h('span', { 'data-x': bad ? 'no' : 'ok', text: bad ? `${bad} open` : 'Private' })) : null,
+      b('overview', 'is-more', 'Open your network in Settings', h('span', { cls: 'mh-sh-long', text: 'Details' }), h('i', { cls: 'mh-go', 'aria-hidden': 'true', text: '›' })),
+    ].filter(Boolean));
+    wsMenu.hidden = !S.open.has('wsm');
+    wsMenu.replaceChildren(...(S.open.has('wsm') ? [...[['mine', thisName()], ...managedList().map(m => [m.id, m.name])].map(([id, n]) =>
+      h('button', { type: 'button', role: 'menuitemradio', 'aria-checked': String(S.ws === id), data: { ws: id } }, n)),
+      h('button', { type: 'button', cls: 'is-add', data: { act: 'add-managed' } }, '+ Add a Wizard you manage')] : []));
+  }
   function paint(force) {
+    renderGlance();
     const top = JSON.stringify([thisName(), managedList().map(g => [g.id, g.name]), S.ws]);
     if (force || top !== drawn.top) { drawn.top = top; renderTabs(); }
     const gs = JSON.stringify([S.ws, gauge(), S.open.has('ai')]);
@@ -459,6 +587,12 @@ export default function setup(api) {
   api.on('route', () => { mount(); readBackup(); });
   let ro = null;
   if (typeof ResizeObserver === 'function') { ro = new ResizeObserver(() => api.frame(drawLines)); ro.observe(map); ro.observe(rowMn); }
+  // Settings › System pages, filled with the same live views (each released on teardown by the host).
+  const fuelText = () => { const g = gauge(); return g ? `${g.left}% left` : ''; };
+  api.settings?.section('map', 'overview', secMap, { subtitle: () => { const n = openOnes().length; return n ? `${n} open` : ''; } });
+  api.settings?.section('ai', 'ai', secAI, { subtitle: fuelText });
+  api.settings?.section('net', 'network', secNet, { subtitle: () => { const n = openOnes().length; return n ? `${n} open to internet` : ''; } });
+  api.settings?.section('store', 'storage', secStore, { subtitle: () => { const st = storage(); return st?.age != null ? `${agoS(st.age)} ago` : ''; } });
   S.res = api.storage.get('res') || {}; merge(api.data.read.resources.snapshot());
   paint(true); mount(); readBackup(true);
   return () => { ro?.disconnect(); };

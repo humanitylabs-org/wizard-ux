@@ -2147,6 +2147,7 @@
     sessions: () => { const G = LIVE?.ok ? LIVE.workGroups() : null; return G ? { working: (G.working || []).length, ready: (G.ready || []).length } : null; },
     openSessions: kind => { openApp(APP.wizard); const w = ws[cur].wins.map(id => W[id]).find(x => x?.app === 'chats' && !x.agent); if (w) { if (kind === 'working') CHATS.setFilter(w, 'working'); else CHATS.clearFilter?.(w); } },
     newThread: () => { const w = skinChatsWin(); if (w) CHATS.openChat(w.id, '__new__'); },
+    openSettings: page => openSettings(page),
     // Inbox tweak: answer a notification in this Chats window (the Notifications Reply path); words send it at once.
     contextDraft: (key, item, words, draft) => { const w = skinChatsWin(); if (!w) return false; focusWin(w.id); CHATS.openContextDraft(w.id, key, item, draft); CHATS.renderChats(w); syncChatsPane(w.id); if (words) CHATS.sendChat(w.id, words, 'tapping Resolve this on a notification in Chats'); else setTimeout(() => focusInside(w.id), 30); return true; },
     models: () => { const w = skinChatsWin(); return w ? CHATS.tweakModels(w.id) : []; },
