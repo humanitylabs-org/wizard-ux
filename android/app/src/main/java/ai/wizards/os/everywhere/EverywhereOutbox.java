@@ -92,6 +92,23 @@ public final class EverywhereOutbox {
         public boolean locked;
         public int attempts;
         boolean sessionReady;
+        boolean lateHeld, lateSendApproved;
+
+        /** Only a chat admission reaches this check; dictation/usual commands keep their existing paths. */
+        boolean holdLate(long now) {
+            if ("sent".equals(state) || !EverywherePolicy.lateMessage(dictation(), createdAt, now, lateSendApproved, runId, sentAt)) return false;
+            lateHeld = true; state = "held"; nextAt = 0;
+            error = "Recorded " + java.text.DateFormat.getDateTimeInstance(
+                    java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(new java.util.Date(createdAt)) + " · not sent yet";
+            return true;
+        }
+
+        /** The held -> waiting transition makes a second tap a no-op, even before the pump starts. */
+        boolean approveLate() {
+            if (!lateHeld || lateSendApproved || !"held".equals(state) || !runId.isEmpty() || sentAt != 0) return false;
+            lateSendApproved = true; state = "waiting"; attempts = 0; nextAt = 0; error = "";
+            return true;
+        }
         JSONObject audioFile;
         /** Screenshot paths (kept until Wizard accepts the message) and their Wizard Files records, in order. */
         JSONArray shots = new JSONArray(), shotFiles = new JSONArray();
@@ -104,7 +121,7 @@ public final class EverywhereOutbox {
                     .put("createdAt", createdAt).put("nextAt", nextAt).put("sentAt", sentAt).put("attempts", attempts)
                     .put("sessionReady", sessionReady).put("audioFile", audioFile == null ? JSONObject.NULL : audioFile)
                     .put("source", source).put("shots", shots).put("shotFiles", shotFiles).put("locked", locked)
-                    .put("meetingEvent", meetingEvent);
+                    .put("meetingEvent", meetingEvent).put("lateHeld", lateHeld).put("lateSendApproved", lateSendApproved);
         }
 
         static Item from(JSONObject o) {
@@ -117,6 +134,7 @@ public final class EverywhereOutbox {
             it.source = o.optString("source", SRC_EVERYWHERE);
             it.locked = o.optBoolean("locked");
             it.meetingEvent = o.optString("meetingEvent");
+            it.lateHeld = o.optBoolean("lateHeld"); it.lateSendApproved = o.optBoolean("lateSendApproved");
             JSONArray a = o.optJSONArray("shots"); if (a != null) it.shots = a;
             JSONArray f = o.optJSONArray("shotFiles"); if (f != null) it.shotFiles = f;
             return it;
@@ -127,7 +145,8 @@ public final class EverywhereOutbox {
             return new JSONObject().put("id", id).put("state", "sending".equals(state) ? "sending" : state)
                     .put("text", text).put("error", error).put("createdAt", createdAt).put("attempts", attempts)
                     .put("hasAudio", !audioPath.isEmpty()).put("sessionId", sessionId)
-                    .put("source", source).put("shots", shots.length());
+                    .put("source", source).put("shots", shots.length())
+                    .put("lateHeld", lateHeld).put("lateSendApproved", lateSendApproved);
         }
     }
 
@@ -196,7 +215,7 @@ public final class EverywhereOutbox {
     }
 
     /** Atomic write: temp file, fsync, rename. */
-    private synchronized void save() {
+    private synchronized boolean save() {
         try {
             JSONArray a = new JSONArray();
             for (Item it : items.values()) a.put(it.json());
@@ -206,8 +225,10 @@ public final class EverywhereOutbox {
                 o.getFD().sync();
             }
             if (!tmp.renameTo(file)) throw new IOException("rename failed");
+            return true;
         } catch (Exception e) {
             Log.e(TAG, "outbox save failed", e);
+            return false;
         }
     }
 
@@ -238,7 +259,8 @@ public final class EverywhereOutbox {
         String registered = custody.idFor(recording);
         it.id = registered != null ? registered : id != null ? id : newId(source);
         if (items.containsKey(it.id)) throw new IOException("Take already queued");
-        custody.register(it.id, source, "note", recording, System.currentTimeMillis());
+        long startedAt = recording.lastModified() > 0 ? recording.lastModified() : System.currentTimeMillis();
+        custody.register(it.id, source, "note", recording, startedAt);
         custody.stopped(it.id);
         it.meetingEvent = meetingEvent == null ? "" : meetingEvent;
         it.source = source == null ? SRC_EVERYWHERE : source;
@@ -251,7 +273,8 @@ public final class EverywhereOutbox {
                 it.shots.put(f.getAbsolutePath());
             }
         }
-        it.createdAt = System.currentTimeMillis();
+        JSONObject take = custody.entry(it.id);
+        it.createdAt = take != null && take.optLong("startedAt") > 0 ? take.optLong("startedAt") : startedAt;
         it.sessionId = "wizard_" + it.createdAt + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         File kept = new File(audioDir, it.id + ai.wizards.os.assist.TakeRecovery.ext(recording.getName()));
         custody.transfer(it.id, kept); // SUPERSEDED_COPY: verified, fsynced duplicate; same take id.
@@ -288,30 +311,46 @@ public final class EverywhereOutbox {
         return "";
     }
 
-    public void retry(String id) {
+    public boolean retry(String id) {
+        boolean queued = false;
         synchronized (this) {
             for (Item it : items.values()) {
                 if (!("*".equals(id) || it.id.equals(id))) continue;
                 if (!"failed".equals(it.state) && !"waiting".equals(it.state)) continue;
                 it.state = "waiting"; it.nextAt = 0;
                 it.attempts = Math.min(it.attempts, EverywherePolicy.AUTO_TRIES - 1);
+                queued = true;
             }
             save();
         }
         changed();
         pump();
+        return queued;
     }
 
-    public void delete(String id) {
+    /** Only the shell's per-item Send may authorize a held recording; retry("*") never does. */
+    public boolean sendLate(String id) {
         synchronized (this) {
-            Item it = items.remove(id);
-            if (it == null) return;
+            Item it = items.get(id);
+            if (it == null || !it.approveLate()) return false;
+            if (!save()) { it.lateSendApproved = false; it.state = "held"; it.holdLate(System.currentTimeMillis()); return false; }
+        }
+        changed(); pump(); return true;
+    }
+
+    /** Persist the removal before releasing custody, so a restart cannot resend a discarded take. */
+    public boolean delete(String id) {
+        synchronized (this) {
+            Item it = items.get(id);
+            if (it == null || "sending".equals(it.state)) return false;
+            items.remove(id);
+            if (!save()) { items.put(id, it); return false; }
             if (!it.audioPath.isEmpty()) //noinspection ResultOfMethodCallIgnored
                 custody.release(it.id, CaptureJournal.Reason.USER_DELETE); // the owner tapped Delete on this unsent message
             deleteShots(it);
-            save();
         }
         changed();
+        return true;
     }
 
     private static void deleteShots(Item it) {
@@ -450,6 +489,9 @@ public final class EverywhereOutbox {
             });
             return;
         }
+        // This is the chat boundary. Hold before uploads/session creation and recheck immediately before POST:
+        // transcription/uploads can cross six hours while offline or on a slow connection. Frozen bodies are not receipts.
+        if (holdLate(it)) return;
         // 2. The recording rides along as a voice note.
         if (it.audioFile == null && audio != null && audio.isFile()) {
             String name = "wizard-everywhere-" + new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH-mm-ss", java.util.Locale.US).format(new java.util.Date(it.createdAt)) + ai.wizards.os.assist.TakeRecovery.ext(audio.getName());
@@ -489,6 +531,7 @@ public final class EverywhereOutbox {
             if (ids.length() > 0) b.put("wizard_file_ids", ids);
             synchronized (this) { it.body = b.toString(); save(); }
         }
+        if (holdLate(it)) return;
         JSONObject run = request("POST", "/wizard/hermes/v1/runs", it.body.getBytes(StandardCharsets.UTF_8), "application/json",
                 new String[]{"Idempotency-Key", it.id});
         synchronized (this) {
@@ -508,6 +551,15 @@ public final class EverywhereOutbox {
                 "audioFileId", it.audioFile == null ? null : it.audioFile.optString("id", null), "text", it.text);
         main.post(() -> { changed(); for (Listener l : snapshot()) l.onSent(it); });
         if (!it.runId.isEmpty()) watchReply(it);
+    }
+
+    private boolean holdLate(Item it) {
+        synchronized (this) {
+            if (!it.holdLate(System.currentTimeMillis())) return false;
+            save(); // a failed write still never permits a POST; the next launch will hold it again
+        }
+        changed();
+        return true;
     }
 
     /** Sent items are kept (without audio) only for the reply watch; at most the newest 20. */

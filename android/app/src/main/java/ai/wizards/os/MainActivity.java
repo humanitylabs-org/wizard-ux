@@ -1076,10 +1076,14 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         public String unsent() { return ai.wizards.os.everywhere.EverywhereOutbox.get(MainActivity.this).unsentJson(); }
 
         @JavascriptInterface
-        public void retryUnsent(String id) { ai.wizards.os.everywhere.EverywhereOutbox.get(MainActivity.this).retry(String.valueOf(id)); }
+        public boolean retryUnsent(String id) {
+            ai.wizards.os.everywhere.EverywhereOutbox outbox = ai.wizards.os.everywhere.EverywhereOutbox.get(MainActivity.this);
+            // This existing bridge is a per-item owner tap. Background/bulk retries call retry(), which cannot approve holds.
+            return outbox.sendLate(String.valueOf(id)) || outbox.retry(String.valueOf(id));
+        }
 
         @JavascriptInterface
-        public void deleteUnsent(String id) { ai.wizards.os.everywhere.EverywhereOutbox.get(MainActivity.this).delete(String.valueOf(id)); }
+        public boolean deleteUnsent(String id) { return ai.wizards.os.everywhere.EverywhereOutbox.get(MainActivity.this).delete(String.valueOf(id)); }
 
         /** The web outbox's "not sent" count, so a notification is waiting if James leaves the app. */
         @JavascriptInterface
