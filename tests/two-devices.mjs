@@ -35,7 +35,13 @@ export function sharedBox(initial = {}, { patch = true } = {}) {
 export function liveDevice(box, local = {}, { pulled = true } = {}) {
   const store = new Map(Object.entries(local)), events = []
   let boot = !pulled
-  const req = (url, init) => { if (boot) { boot = false; return new Promise(() => {}) } return box.req(url, init) }
+  // Like live.js's req(): an HTTP error throws, carrying its status.
+  const req = async (url, init) => {
+    if (boot) { boot = false; return new Promise(() => {}) }
+    const r = await box.req(url, init)
+    if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { status: r.status })
+    return r
+  }
   const ctx = { req, console, Event: class { constructor(type) { this.type = type } }, setInterval() {}, setTimeout: () => 0, clearTimeout() {},
     localStorage: { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },
     addEventListener() {} }

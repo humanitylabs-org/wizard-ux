@@ -399,22 +399,24 @@
   const setQueue = ops => { try { localStorage.setItem(OPS_KEY, JSON.stringify(ops.slice(-200))); } catch (e) {} };
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   let patchOff = false, opsRetry = 0, opsTimer = 0;
+  // req() throws on any HTTP error; these answers decide what happens next, so read their status.
+  const ask = (url, init) => req(url, init).catch(e => { if (e?.status) return { ok: false, status: e.status }; throw e; });
   async function sendOps(ops) {
     if (!patchOff) {
-      const r = await req(PREFS_URL, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ops }) });
+      const r = await ask(PREFS_URL, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ops }) });
       if (r.status === 404) { prefsOff = true; return null; }
       if (r.ok) return await r.json();
       if (r.status === 400) return 'invalid';
       if (r.status !== 405 && r.status !== 501) throw new Error('Preferences unavailable');
       patchOff = true;
     }
-    const fields = [...new Set(ops.map(opField))], get = async () => { const g = await req(PREFS_URL, { cache: 'no-store' }); if (!g.ok) throw new Error('Preferences unavailable'); return g.json(); };
+    const fields = [...new Set(ops.map(opField))], get = async () => { const g = await ask(PREFS_URL, { cache: 'no-store' }); if (g.status === 404) prefsOff = true; if (!g.ok) throw new Error('Preferences unavailable'); return g.json(); };
     // Two devices can both read before either writes: read back, and replay onto the newer list if ours didn't stick.
     for (let pass = 0; pass < 6; pass++) {
       const fresh = await get(), next = applyPrefOps(fresh, ops), patch = {};
       for (const f of fields) if (!same(next[f], fresh[f])) patch[f] = next[f];
       if (!Object.keys(patch).length) return fresh;
-      const w = await req(PREFS_URL, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+      const w = await ask(PREFS_URL, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
       if (w.status === 400) return 'invalid';
       if (!w.ok) throw new Error('Preferences unavailable');
       const back = await get(), again = applyPrefOps(back, ops);
