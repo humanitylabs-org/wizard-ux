@@ -54,4 +54,9 @@ test('the iPhone connect screen loads the guide and connects by itself once the 
   const swift = read('ios/native/App/App/WizardViewController.swift');
   for (const method of ['tailscale', 'check', 'openTailscale']) assert.match(swift, new RegExp(`CAPPluginMethod\\(name: "${method}"`));
   assert.match(swift, /apps\.apple\.com\/app\/tailscale\/id1470499037/);
+  // A Wizard that hangs (Tailscale off, its computer off) must not leave a black screen: a watchdog shows the guide.
+  assert.match(swift, /func watchUnreachable\(/);
+  assert.match(swift, /hopeless \? 1\.5 : 10/);
+  assert.match(swift, /if !connectMode \{ watchUnreachable\(web\) \}/);
+  assert.match(swift, /"changing": connectMode && WizardAddress\.current != nil && !unreachableMode/, 'the guide, not Change Wizard');
 });

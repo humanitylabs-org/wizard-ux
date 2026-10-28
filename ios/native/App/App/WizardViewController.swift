@@ -35,6 +35,9 @@ enum WizardAddress {
     static var pendingPair: String?
     static var pendingError: String?
     static var showConnect = false
+    /// The saved Wizard didn't open in time (UnreachableWatch): the next start shows the connect screen's Tailscale
+    /// guide for it, not Change Wizard.
+    static var showUnreachable = false
 
     /// `wizard://connect?origin=…` from the Camera app, Safari or another app. Returns true when it was ours; other
     /// `wizard://` routes (Store install links) return false so Capacitor delivers them to the Wizard's pages.
@@ -69,6 +72,9 @@ final class WizardViewController: CAPBridgeViewController {
     private var mediaGate: MediaGate?
     /// True when this start shows the bundled connect screen (no Wizard yet, Change Wizard, or a pairing link).
     private(set) var connectMode = false
+    /// This start shows the connect screen because the saved Wizard didn't open (not Change Wizard).
+    private(set) var unreachableMode = false
+    private var unreachableTimer: Timer?
     private var foregroundObserver: NSObjectProtocol?
 
     override func instanceDescriptor() -> InstanceDescriptor {
@@ -77,7 +83,9 @@ final class WizardViewController: CAPBridgeViewController {
         // Mirrors the Android app's `WizardOS-Android/<version>` so Wizard UX can tell the native app from Safari.
         descriptor.appendedUserAgentString = "WizardOS-iOS/\(version)"
         connectMode = WizardAddress.showConnect || WizardAddress.home == nil
+        unreachableMode = connectMode && WizardAddress.showUnreachable && WizardAddress.home != nil
         WizardAddress.showConnect = false
+        WizardAddress.showUnreachable = false
         if !connectMode, let home = WizardAddress.home, let host = WizardAddress.current?.host {
             descriptor.serverURL = home.absoluteString
             // Every page of this Wizard (not only /wizard-os-home/) stays in the app, e.g. hosted apps and deep links.
@@ -104,6 +112,7 @@ final class WizardViewController: CAPBridgeViewController {
         }
 
         injectPluginProxies(into: web)
+        if !connectMode { watchUnreachable(web) }
 
         foregroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main
@@ -134,7 +143,31 @@ final class WizardViewController: CAPBridgeViewController {
             WKUserScript(source: core + register, injectionTime: .atDocumentStart, forMainFrameOnly: true))
     }
 
+    /// A Wizard that doesn't answer often doesn't fail either: with Tailscale off, or with the Wizard's computer off, the
+    /// connection just hangs and the web view stays black (Capacitor's errorPath only follows a failed load). If no
+    /// Wizard page has started by the mark, show the connect screen's Tailscale guide; it keeps checking and opens the
+    /// Wizard by itself. The mark is short when this is a Tailscale address and Tailscale is off on this phone (it
+    /// can't work), else long enough for a slow network. Android: ReachPolicy.CONNECTING_MS / GIVE_UP_MS.
+    private func watchUnreachable(_ web: WKWebView) {
+        guard let wizard = WizardAddress.current?.absoluteString else { return }
+        let hopeless = WizardOrigin.needsTailscale(wizard) && !TailscaleNet.isOn()
+        unreachableTimer = Timer.scheduledTimer(withTimeInterval: hopeless ? 1.5 : 10, repeats: false) { [weak self, weak web] _ in
+            guard let self, let web, self.view.window != nil else { return }
+            // Before a Wizard page commits, the web view still shows its empty start document (about:blank).
+            web.evaluateJavaScript("location.protocol") { result, _ in
+                let scheme = (result as? String) ?? ""
+                if scheme == "https:" || scheme == "capacitor:" { return } // the Wizard (or the connect screen) is showing
+                CAPLog.print("⚡️  Wizard: \(wizard) didn't open; showing the connect screen")
+                web.stopLoading()
+                WizardAddress.showConnect = true
+                WizardAddress.showUnreachable = true
+                WizardViewController.restart(from: self)
+            }
+        }
+    }
+
     deinit {
+        unreachableTimer?.invalidate()
         if let foregroundObserver { NotificationCenter.default.removeObserver(foregroundObserver) }
     }
 
@@ -206,6 +239,7 @@ public class WizardShellPlugin: CAPPlugin, CAPBridgedPlugin {
     ]
 
     private var connectMode: Bool { (bridge?.viewController as? WizardViewController)?.connectMode ?? false }
+    private var unreachableMode: Bool { (bridge?.viewController as? WizardViewController)?.unreachableMode ?? false }
 
     @objc func info(_ call: CAPPluginCall) {
         let pending = WizardAddress.pendingPair
@@ -213,7 +247,7 @@ public class WizardShellPlugin: CAPPlugin, CAPBridgedPlugin {
             "address": WizardAddress.current.map { WizardOrigin.host($0.absoluteString) } ?? "",
             "home": WizardAddress.home?.absoluteString ?? "",
             // The bundled screen opened on purpose (Change Wizard or a pairing link), not because the Wizard failed.
-            "changing": connectMode && WizardAddress.current != nil,
+            "changing": connectMode && WizardAddress.current != nil && !unreachableMode,
             "pending": pending ?? "",
             "pendingHost": pending.map(WizardOrigin.host) ?? "",
             "pendingError": WizardAddress.pendingError ?? "",
