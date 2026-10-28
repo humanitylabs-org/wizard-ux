@@ -118,6 +118,12 @@ test('read back: the shell turns its own block into a reply card and keeps the f
   const only = K.parseRows([{ role: 'user', content: K.reply.attach('', item), timestamp: 1 }]);
   assert.equal(only[0].u.text, ''); assert.equal(only[0].u.reply.title, 'Disk almost full');
 });
+test('steering readback retains its quote card context', () => {
+  const sent = K.reply.attach('Where are we on this?', {key:'message:step',title:'Assistant',message:'Run the checks.'});
+  const turns = K.parseRows([{role:'user',content:'Start',timestamp:1},{role:'user',display_kind:'steer',content:sent,timestamp:2}]);
+  assert.equal(turns[0].steers[0].text, 'Where are we on this?');
+  assert.equal(turns[0].steers[0].reply.message, 'Run the checks.');
+});
 test('chat list preview/title text drops the framed block', () => {
   const m = liveSrc.match(/const clean = s => String\(s \|\| ''\)([\s\S]*?\.trim\(\));/);
   const clean = vm.runInNewContext(`(chipLabel => s => String(s || '')${m[1]})(() => ' ')`);
