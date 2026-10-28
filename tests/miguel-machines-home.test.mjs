@@ -80,9 +80,9 @@ test('machines-home: one inline map, the same on every workspace', () => {
   assert.doesNotMatch(src, /ICONS|ico\(/, 'no icons on the map');
   assert.match(src, /\[main, \.\.\.others\]/); assert.match(src, /sort\(\(a, b\) => power\(b\) - power\(a\)\)/, 'Main first, then by power');
   assert.match(src, /qualifies\(m\.id\) \? 'standby' : 'helper'/);
-  assert.match(src, /S\.open\.has\(p\.id\)/, 'a person expands to their devices in place');
-  assert.match(src, /data: \{ nick: r\.id \}/); assert.match(src, /input\.focus/, 'the nickname field is ready after one tap');
-  assert.doesNotMatch(src, /r\.left \+ '%' \}\), h\('b'/, 'no percentage next to a battery');
+  assert.match(src, /S\.open\.has\('p:' \+ p\.id\)/, 'a person expands to their devices in place');
+  assert.match(src, /data: \{ nick: r\.id \}/, 'every subscription has its nickname field in the AI list');
+  assert.doesNotMatch(src, /r\.left \+ '%' \}\), h\('b'/, 'no percentage at rest');
   assert.match(src, /api\.data\.read\.sessions\?\.counts\(\)/); assert.match(src, /api\.data\.read\.sessions\?\.open\(d\.open\)/);
   assert.match(src, /agoS\(st\.age\) \+ ' ago'/);
   assert.match(css, /:is\(\.home, \.home-in\):has\(\[data-slot="home-main"\] > \.mh-root\) \.constellation \{ display: none; \}/);
@@ -91,4 +91,62 @@ test('machines-home: one inline map, the same on every workspace', () => {
   const host = read('web/core/skin-host.js'), app = read('web/app.js'), desk = read('web/desktop/desktop.js');
   assert.match(host, /\.\.\.\(trusted \? \{ sessions: Object\.freeze/, 'sessions is trusted-only');
   for (const s of [app, desk]) { assert.match(s, /sessions: \(\) => \{/); assert.match(s, /openSessions: kind =>/); }
+});
+
+test('machines-home: simple at rest, more on tap (one AI gauge, storage size, one details toggle)', () => {
+  const src = read('web/tweaks/miguel/machines-home/tweak.js'), css = read('web/tweaks/miguel/machines-home/tweak.css');
+  assert.match(src, /cls: nw\('mh-gauge'\)/, 'one AI fuel gauge, not a battery per subscription');
+  assert.doesNotMatch(src, /mh-batt/, 'batteries are gone');
+  assert.match(src, /textContent = 'E'/); assert.match(src, /text: 'AI'/);
+  assert.match(src, /api\.models\?\.default\?\.\(\)/, 'the gauge follows the default model');
+  assert.match(src, /data: \{ resSignin: APP_OF\[g\.kind\] \}/, 'sign in or out opens that app through the shell');
+  assert.match(src, /TOP_UP\[r\.kind\]/, 'prepaid services link to add credit');
+  assert.match(src, /repository_bytes/, 'storage shows how much is stored');
+  assert.match(src, /cls: 'mh-details', data: \{ toggle: 'bars' \}/, 'one Show details toggle under all machines');
+  assert.doesNotMatch(src, /data: \{ toggle: 'bars' \}, 'aria-label': `\$\{m\.name\}/, 'tapping a machine no longer folds the bars');
+  assert.doesNotMatch(css, /violet|#7A5CFF/i, 'no violet nodes');
+});
+test('machines-home: calm repaints (last readings first, motion once, parts redraw only when they change)', () => {
+  const src = read('web/tweaks/miguel/machines-home/tweak.js'), css = read('web/tweaks/miguel/machines-home/tweak.css');
+  assert.match(src, /api\.storage\.set\('res'/); assert.match(src, /S\.res = api\.storage\.get\('res'\)/, 'paints the last good readings at once');
+  assert.match(src, /api\.storage\.set\('backup', S\.backup\)/);
+  assert.match(src, /const nw = cls => fresh \? cls \+ ' mh-new' : cls/); assert.match(src, /fresh = false;/);
+  assert.match(css, /\.mh-new:is\(\.mh-node/, 'entry motion hangs off .mh-new only');
+  assert.doesNotMatch(css, /\.mh-map\.is-switch|^\.mh-bars \{[^}]*animation/m);
+  assert.match(src, /if \(key === wired && lines\.firstChild\) return;/, 'wires stay put while nothing moved');
+  assert.match(src, /!aiList\.contains\?\.\(document\.activeElement\)/, 'a nickname being typed is never rebuilt');
+  assert.match(css, /html\[data-tweaks~="miguel\/machines-home"\] \.home > :is\(\.home-top, \.home-gap, \[data-home-resources\]\)/, 'stock Home is hidden as soon as the package is listed');
+});
+test('tweak stylesheets are listed and loaded from the first frame; reapplying keeps them; a failed package drops out', async () => {
+  const host = read('web/core/skin-host.js');
+  assert.match(host, /const EXPECT_KEY = 'wos\.tweaks\.expect'/);
+  assert.match(host, /l\.setAttribute\('blocking', 'render'\)/);
+  assert.match(host, /for \(const id of want\) tweakCss\(id\);\n    expected\.clear\(\); for \(const id of want\) expected\.add\(id\);\n    for \(const a of \[\.\.\.tweaks\.values\(\)\]\) dispose\(a, 'replace'\);/, 'new links before old ones go');
+  const f = fixture();
+  await f.host.loadTweaks(['miguel/machines-home'], f.slots, { teamAuthors: ['miguel'] });
+  assert.ok(f.doc.documentElement.dataset.tweaks.includes('miguel/machines-home'));
+  assert.equal(f.doc.head.children.filter(l => String(l.href).includes('machines-home/tweak.css')).length, 1, 'one stylesheet');
+  assert.deepEqual(JSON.parse(f.ctx.localStorage.getItem('wos.tweaks.expect')), ['miguel/machines-home']);
+  await f.host.loadTweaks(['miguel/machines-home'], f.slots, { teamAuthors: ['miguel'] });
+  assert.equal(f.doc.head.children.filter(l => String(l.href).includes('machines-home/tweak.css')).length, 1, 'reapplying swaps, never doubles');
+  await f.clear();
+  assert.equal(f.doc.documentElement.dataset.tweaks, ''); assert.equal(f.doc.head.children.length, 0);
+  assert.deepEqual(JSON.parse(f.ctx.localStorage.getItem('wos.tweaks.expect')), []);
+});
+test('paintHome with unchanged markup leaves a mounted view in place (no detach, no restarted motion)', async () => {
+  const f = fixture(); let api, homes = 0, writes = 0;
+  f.host._test.setImporter(async () => ({ default: a => { api = a; return () => {}; } }));
+  await f.host.loadTweaks(['miguel/machines-home'], f.slots, { teamAuthors: ['miguel'] });
+  api.on('home', () => homes++);
+  const el = f.doc.createElement('div'); let slot = f.doc.createElement('div'); slot.setAttribute('data-slot', 'home-main');
+  Object.defineProperty(slot, 'childNodes', { get() { return this.children; } });
+  el.querySelector = q => (q === '[data-slot="home-main"]' ? slot : null);
+  Object.defineProperty(el, 'innerHTML', { set() { writes++; slot = f.doc.createElement('div'); slot.setAttribute('data-slot', 'home-main'); Object.defineProperty(slot, 'childNodes', { get() { return this.children; } }); el.replaceChildren(slot); } });
+  f.host.paintHome(el, '<div data-slot="home-main"></div>');
+  const node = f.doc.createElement('section'); slot.append(node);
+  f.host.paintHome(el, '<div data-slot="home-main"></div>');
+  assert.equal(writes, 1, 'same markup with a mounted view: no rewrite'); assert.equal(node.parentNode, slot); assert.equal(homes, 2);
+  f.host.paintHome(el, '<div data-slot="home-main"></div><p></p>');
+  assert.equal(writes, 2, 'new markup is written'); assert.equal(node.parentNode, slot, 'and the view moves along');
+  await f.clear();
 });
