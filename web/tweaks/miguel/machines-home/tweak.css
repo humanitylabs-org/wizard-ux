@@ -91,9 +91,9 @@ html[data-shell="phone"] .mh-top { padding-right: 62px; }
 .mh-node.is-main .mh-role { color: var(--violet-2, var(--mh-accent)); }
 .mh-node.is-main { width: max(var(--d) + 14px, 124px); }
 /* Over a photo (Landscapes): names and pills keep a soft shadow so they read on any picture. */
-html[data-skin="landscapes"] .mh-node :is(.mh-name, .mh-role), html[data-skin="landscapes"] .mh-oneway { text-shadow: 0 1px 3px rgba(0, 0, 0, .75), 0 0 12px rgba(0, 0, 0, .35); }
-html[data-skin="landscapes"] .mh-node.is-plus .mh-disc { background: rgba(0, 0, 0, .28); }
-html[data-skin="landscapes"] .mh-lines .base { stroke: rgba(255, 255, 255, .55); }
+html[data-skin^="landscapes"] .mh-node :is(.mh-name, .mh-role), html[data-skin^="landscapes"] .mh-oneway { text-shadow: 0 1px 3px rgba(0, 0, 0, .75), 0 0 12px rgba(0, 0, 0, .35); }
+html[data-skin^="landscapes"] .mh-node.is-plus .mh-disc { background: rgba(0, 0, 0, .28); }
+html[data-skin^="landscapes"] .mh-lines .base { stroke: rgba(255, 255, 255, .55); }
 .mh-node.is-standby[data-fit="tight"] .mh-role { color: var(--mh-warn); }
 .mh-node.is-standby[data-fit="no"] .mh-role { color: var(--mh-bad); }
 .mh-node:not(.is-plus):hover .mh-disc { transform: scale(1.05); }
@@ -136,7 +136,7 @@ html[data-skin="landscapes"] .mh-lines .base { stroke: rgba(255, 255, 255, .55);
 .mh-state[data-fit="no"] { color: var(--mh-bad); }
 .mh-node.is-standby .mh-role { color: var(--ink-3) !important; }
 .mh-spec { margin-top: -2px; font-size: 10.5px; font-weight: 600; color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
-html[data-skin="landscapes"] :is(.mh-people > .mh-role, .mh-spec) { text-shadow: 0 1px 3px rgba(0, 0, 0, .75); }
+html[data-skin^="landscapes"] :is(.mh-people > .mh-role, .mh-spec) { text-shadow: 0 1px 3px rgba(0, 0, 0, .75); }
 @container (max-width: 599px) { .mh-pnode { max-width: 150px; font-size: 12px; } .mh-root .mh-lane.is-mainrow .mh-lane-row { gap: 16px; padding-inline: 2px; } .mh-lane.is-mainrow .mh-lane-row > .mh-node { width: max(var(--d) + 6px, 76px); } .mh-lane.is-mainrow .mh-lane-row > .mh-node.is-main { width: max(var(--d) + 6px, 96px); } .mh-spec { font-size: 10px; } }
 
 /* ---------- lines ---------- */
