@@ -453,28 +453,22 @@
     }
   }, 15000);
   function guardBack(step, toast) {
-    let watcher = null, armed = false, exitUntil = 0;
-    const installed = () => matchMedia('(display-mode: standalone)').matches || !!window.WizardOSNative || !!window.WizardNative || !!window.webkit?.messageHandlers?.wizardNative;
+    let watcher = null, armed = false;
+    // James: every shell stays home at root, including an ordinary browser tab.
+    // Keep this in the shared guard too: adapters must not need to fake a handled
+    // step to prevent the old double-Back exit path.
     function consume() {
-      if (step()) return true;
-      if (installed()) { toast?.('⌂', "You're home", 1400); return true; }
-      if (Date.now() < exitUntil) return false;
-      exitUntil = Date.now() + 2000; toast?.('⌂', 'Press back again to exit', 2000);
-      try { watcher?.destroy(); } catch (_) {} watcher = null;
-      setTimeout(() => { if (Date.now() >= exitUntil) { exitUntil = 0; arm(); } }, 2100);
-      return true;
+      if (!step()) toast?.('⌂', "You're home · Back never leaves Wizard", 1400);
     }
     function arm() {
-      if (Date.now() < exitUntil) return;
       if (!armed && navigator.userActivation?.isActive) { history.pushState({ ...history.state, __wizardShellGuard: true }, ''); armed = true; }
-      if (!watcher && 'CloseWatcher' in window) { watcher = new CloseWatcher(); watcher.onclose = () => { watcher = null; if (!consume()) history.back(); else setTimeout(arm, 0); }; }
+      if (!watcher && 'CloseWatcher' in window) { watcher = new CloseWatcher(); watcher.onclose = () => { watcher = null; consume(); setTimeout(arm, 0); }; }
     }
     rootArm = arm; document.addEventListener('pointerdown', arm, true);
     addEventListener('popstate', e => {
       if (e.state?.__wizardApp?.version === VERSION) return;
       armed = false;
-      if (consume()) { history.pushState({ ...history.state, __wizardShellGuard: true }, ''); armed = true; }
-      else history.back();
+      consume(); history.pushState({ ...history.state, __wizardShellGuard: true }, ''); armed = true;
     });
   }
   // Only a trusted installed catalog capability admits app voice input.
