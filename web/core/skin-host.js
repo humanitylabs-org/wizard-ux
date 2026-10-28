@@ -547,7 +547,7 @@
     // Fetch every package at once (a slow network pays one wait, not one per package), and give a package that timed
     // out a second, longer try before turning it off: a slow wifi must not silently drop half of an owner's tweaks.
     const fetchPkg = async (id, ms) => {
-      const response = await bounded(fetch(tweakUrl(id, 'manifest.json'), { cache: 'no-store' }), ms);
+      const response = await bounded(fetch(tweakUrl(id, 'manifest.json')), ms);  // release-stamped: cacheable
       if (!response.ok) throw new Error('Manifest unavailable');
       const m = await response.json();
       if (m.id !== id || m.author !== id.split('/')[0] || typeof m.version !== 'string' || !Array.isArray(m.capabilities) || m.capabilities.some(c => !['layout','nav','models','data.read','inbox'].includes(c))) throw new Error('Invalid manifest');
