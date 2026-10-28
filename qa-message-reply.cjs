@@ -47,17 +47,18 @@ const out = process.env.QA_SHOTS;
   assert.match(await root.locator('[data-chreply]').innerText(),/Step 2/);
   const ta=root.locator('textarea'); await ta.fill('Run this again');
   await ta.evaluate(e=>window.qaTextarea=e);
-  for(let i=0;i<3;i++){await p.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await p.waitForTimeout(1000);}
+  for(let i=0;i<3;i++){await p.evaluate(wid=>{document.dispatchEvent(new Event('visibilitychange'));const s=window.__wos||window.__wux; (s.renderChats||s.chats.renderChats)(s.wins[wid]);},wid);await p.waitForTimeout(7000);}
   assert.equal(await ta.inputValue(),'Run this again');
   assert.equal(await ta.evaluate(e=>e===window.qaTextarea),true);
   const skins=await p.evaluate(()=>WosSkin.list.map(x=>x.id));
-  for(const skin of skins){await p.evaluate(id=>WosSkin.set(id),skin);await p.waitForTimeout(900);assert.equal(await ta.inputValue(),'Run this again');assert.match(await root.locator('[data-chreply]').innerText(),/Step 2/);
+  for(const skin of skins){await p.evaluate(id=>WosSkin.set(id),skin);await p.waitForTimeout(900);await p.evaluate(wid=>{const s=window.__wos||window.__wux;(s.renderChats||s.chats.renderChats)(s.wins[wid]);},wid);assert.equal(await ta.inputValue(),'Run this again');assert.match(await root.locator('[data-chreply]').innerText(),/Step 2/);
    await root.locator('[data-chreplyx]').click(); await root.locator('.msg.a [data-mreply]').last().click();
    await p.waitForTimeout(200);
    const fits=await root.locator('.ch-send').evaluate(e=>{const r=e.getBoundingClientRect(), dock=document.querySelector('.dock')?.getBoundingClientRect();return r.bottom<=(dock?.top||innerHeight)+1;}); assert.ok(fits,skin+' composer above dock');
    fs.mkdirSync(out,{recursive:true}); await p.screenshot({path:out+'/'+shell+'-'+skin+'-chip.png'});
   }
   await p.evaluate(()=>WosSkin.set('sepia')); await p.waitForTimeout(1500);
+  await p.evaluate(wid=>{const s=window.__wos||window.__wux;(s.renderChats||s.chats.renderChats)(s.wins[wid]);},wid);
   console.log('GEOMETRY',shell,await p.evaluate(()=>[...document.querySelectorAll('.ch-thread,.ch-msgs,.ch-compose,.ch-reply,.voice,.dock')].map(e=>({c:e.className,r:JSON.stringify(e.getBoundingClientRect()),height:getComputedStyle(e).height,min:getComputedStyle(e).minHeight,flex:getComputedStyle(e).flex}))));
   fs.mkdirSync(out,{recursive:true}); await p.screenshot({path:out+'/'+shell+'-chip.png'});
   await root.locator('[data-chreplyx]').click();assert.equal(await root.locator('[data-chreply]').count(),0);assert.equal(await ta.inputValue(),'Run this again');
