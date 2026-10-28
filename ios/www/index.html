@@ -170,6 +170,17 @@
   <script>
     (async () => {
       const $ = id => document.getElementById(id);
+      // #loading=<host>: only the full-screen loader. The app lays this page over its web view at launch while the
+      // saved Wizard opens (WizardViewController.showLoadingCover), so there is never a black screen. No bridge here.
+      const loading = new URLSearchParams(location.hash.slice(1)).get('loading');
+      if (loading !== null) {
+        document.querySelector('main').setAttribute('aria-hidden', 'true');
+        document.querySelector('.stage').hidden = true;
+        $('loaderText').textContent = 'Connecting to your Wizard…';
+        if (loading) { const d = document.createElement('small'); d.textContent = loading; $('loaderText').append(d); }
+        $('loader').hidden = false;
+        return;
+      }
       // Call the native plugin through the bridge Capacitor always injects (no @capacitor/core needed on this page).
       const C = window.Capacitor;
       if (!C || typeof C.nativePromise !== 'function') { $('err').textContent = 'This page only works inside the Wizard app.'; return; }

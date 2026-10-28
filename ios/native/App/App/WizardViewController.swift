@@ -75,6 +75,7 @@ final class WizardViewController: CAPBridgeViewController {
     /// This start shows the connect screen because the saved Wizard didn't open (not Change Wizard).
     private(set) var unreachableMode = false
     private var unreachableTimer: Timer?
+    private var loadingCover: WKWebView?
     private var foregroundObserver: NSObjectProtocol?
 
     override func instanceDescriptor() -> InstanceDescriptor {
@@ -144,19 +145,27 @@ final class WizardViewController: CAPBridgeViewController {
     }
 
     /// A Wizard that doesn't answer often doesn't fail either: with Tailscale off, or with the Wizard's computer off, the
-    /// connection just hangs and the web view stays black (Capacitor's errorPath only follows a failed load). If no
-    /// Wizard page has started by the mark, show the connect screen's Tailscale guide; it keeps checking and opens the
-    /// Wizard by itself. The mark is short when this is a Tailscale address and Tailscale is off on this phone (it
-    /// can't work), else long enough for a slow network. Android: ReachPolicy.CONNECTING_MS / GIVE_UP_MS.
+    /// connection just hangs (Capacitor's errorPath only follows a failed load). So from launch the connect screen's
+    /// full-screen loader covers the web view (`showLoadingCover`), until a Wizard page has started (the cover fades
+    /// out) or the mark passes (the app restarts into the connect screen's Tailscale guide, which keeps checking and
+    /// opens the Wizard by itself). The mark is short when this is a Tailscale address and Tailscale is off on this
+    /// phone (it can't work), else long enough for a slow network. Android: ReachPolicy.CONNECTING_MS / GIVE_UP_MS.
     private func watchUnreachable(_ web: WKWebView) {
         guard let wizard = WizardAddress.current?.absoluteString else { return }
+        showLoadingCover(over: web, host: WizardOrigin.host(wizard))
         let hopeless = WizardOrigin.needsTailscale(wizard) && !TailscaleNet.isOn()
-        unreachableTimer = Timer.scheduledTimer(withTimeInterval: hopeless ? 1.5 : 10, repeats: false) { [weak self, weak web] _ in
-            guard let self, let web, self.view.window != nil else { return }
+        let mark = Date().addingTimeInterval(hopeless ? 1.5 : 10)
+        unreachableTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self, weak web] timer in
+            guard let self, let web else { timer.invalidate(); return }
             // Before a Wizard page commits, the web view still shows its empty start document (about:blank).
             web.evaluateJavaScript("location.protocol") { result, _ in
+                guard timer.isValid else { return }
                 let scheme = (result as? String) ?? ""
-                if scheme == "https:" || scheme == "capacitor:" { return } // the Wizard (or the connect screen) is showing
+                if scheme == "https:" || scheme == "capacitor:" { // the Wizard (or Capacitor's error page) is showing
+                    timer.invalidate(); self.hideLoadingCover(); return
+                }
+                guard Date() >= mark, self.view.window != nil else { return }
+                timer.invalidate()
                 CAPLog.print("⚡️  Wizard: \(wizard) didn't open; showing the connect screen")
                 web.stopLoading()
                 WizardAddress.showConnect = true
@@ -164,6 +173,34 @@ final class WizardViewController: CAPBridgeViewController {
                 WizardViewController.restart(from: self)
             }
         }
+    }
+
+    /// The bundled connect page in loader-only mode (`www/index.html#loading=<host>`): the same full-screen loader the
+    /// connect screen shows while connecting. Its own small web view, laid over Capacitor's, which loads underneath.
+    private func showLoadingCover(over web: WKWebView, host: String) {
+        guard let page = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "public"),
+              var parts = URLComponents(url: page, resolvingAgainstBaseURL: false) else { return }
+        parts.fragment = "loading=" + (host.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: ".-:"))) ?? "")
+        guard let url = parts.url else { return }
+        let cover = WKWebView(frame: web.bounds, configuration: WKWebViewConfiguration())
+        cover.isOpaque = false
+        cover.backgroundColor = UIColor(red: 5 / 255, green: 3 / 255, blue: 12 / 255, alpha: 1)
+        cover.scrollView.backgroundColor = cover.backgroundColor
+        cover.scrollView.isScrollEnabled = false
+        cover.translatesAutoresizingMaskIntoConstraints = false
+        web.addSubview(cover)
+        NSLayoutConstraint.activate([
+            cover.topAnchor.constraint(equalTo: web.topAnchor), cover.bottomAnchor.constraint(equalTo: web.bottomAnchor),
+            cover.leadingAnchor.constraint(equalTo: web.leadingAnchor), cover.trailingAnchor.constraint(equalTo: web.trailingAnchor),
+        ])
+        cover.loadFileURL(url, allowingReadAccessTo: page.deletingLastPathComponent())
+        loadingCover = cover
+    }
+
+    private func hideLoadingCover() {
+        guard let cover = loadingCover else { return }
+        loadingCover = nil
+        UIView.animate(withDuration: 0.2, animations: { cover.alpha = 0 }, completion: { _ in cover.removeFromSuperview() })
     }
 
     deinit {

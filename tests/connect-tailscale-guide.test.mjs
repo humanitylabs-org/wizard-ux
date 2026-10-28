@@ -69,6 +69,10 @@ test('the iPhone connect screen loads the guide and connects by itself once the 
   // A Wizard that hangs (Tailscale off, its computer off) must not leave a black screen: a watchdog shows the guide.
   assert.match(swift, /func watchUnreachable\(/);
   assert.match(swift, /hopeless \? 1\.5 : 10/);
+  // No black screen meanwhile: the connect page's own full-screen loader covers the web view from launch.
+  assert.match(swift, /showLoadingCover\(over: web, host: WizardOrigin\.host\(wizard\)\)/);
+  assert.match(swift, /parts\.fragment = "loading=" \+/);
+  assert.match(page, /get\('loading'\);\n\s+if \(loading !== null\)/);
   assert.match(swift, /if !connectMode \{ watchUnreachable\(web\) \}/);
   assert.match(swift, /"changing": connectMode && WizardAddress\.current != nil && !unreachableMode/, 'the guide, not Change Wizard');
 });
