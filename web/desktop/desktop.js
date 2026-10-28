@@ -1167,7 +1167,7 @@
   /* Miguel's skins (Dark, Light, Landscapes): the selector is the phone launcher at desktop size (core/app-kinds.js): Apps with
    * system apps first and ringed, "+ Get apps", then one folded "For agents" row holding Agent apps, Agents (with
    * "+ Build agents") and Connectors, each ending in its own "+ Get ..." tile. Search stays one flat list. */
-  const mine = () => ['obsidian', 'obsidian-light', 'landscapes'].includes(document.documentElement.dataset.skin || ''); // Miguel's skins
+  const mine = () => ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'].includes(document.documentElement.dataset.skin || ''); // Miguel's skins
   let palFold = false;
   function openStoreKind(kind) {
     const url = window.WosAppKinds.storeUrl(kind);

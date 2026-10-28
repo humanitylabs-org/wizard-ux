@@ -318,7 +318,7 @@
   // Chat-list layout: 'day' (Ready = today, then Yesterday, Past week; the default) or 'status' (Working / Ready / Archive).
   const LAYOUT_KEY = 'wos.chats.layout.v1';
   // Miguel's skins (Dark, Light, Landscapes) always list by status: Working, Ready, Archive. No Yesterday or Past week.
-  const OUR_SKINS = new Set(['obsidian', 'obsidian-light', 'landscapes']);
+  const OUR_SKINS = new Set(['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light']);
   const oursSkin = () => { try { return OUR_SKINS.has(document.documentElement.dataset.skin || ''); } catch (e) { return false; } };
   // A tweak asked the skin host for Snooze = lowest priority, bottom of Ready (api.nav.snoozeOrder('last'); docs/snooze-last.md).
   const snoozeLast = () => { try { return window.WosSkinHost?.snoozeOrder === 'last'; } catch (e) { return false; } };

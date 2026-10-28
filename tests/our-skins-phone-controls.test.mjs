@@ -17,7 +17,7 @@ const rule = (css, sel) => {
 };
 const VIOLET = /var\(--violet|143,\s*99,\s*255|122,\s*77,\s*255|185,\s*155,\s*255|160,\s*140,\s*255|205,\s*190,\s*255|#7a4dff|#c04dff|#C9BEFF/i;
 const O = 'html[data-skin^="obsidian"]:not([data-shell="desktop"])';
-const L = 'html[data-skin="landscapes"]:not([data-shell="desktop"])';
+const L = 'html[data-skin^="landscapes"]:not([data-shell="desktop"])';
 const SOLO = '.device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats';
 
 test('the long-press and model menus end above the pill dock on all three skins', () => {
@@ -67,12 +67,13 @@ test('Landscapes phone controls are frosted white glass, not core violet', () =>
 
 test('phone polish never reaches desktop and keeps the private purple', () => {
   for (const css of [obsidian, landscapes]) {
-    const block = css.slice(css.indexOf('/* Phone polish (Miguel 27 Oct'));
+    const from = css.indexOf('/* Phone polish (Miguel 27 Oct'), to = css.indexOf('/* Landscapes Light (', from);
+    const block = css.slice(from, to > 0 ? to : undefined);
     assert.ok(block.length > 100, 'phone polish block present');
     for (const line of block.split('\n').filter(l => l.startsWith('html'))) assert.match(line, /:not\(\[data-shell="desktop"\]\)/, line);
     assert.doesNotMatch(block, /\.ms-o\.secure|--secure/, 'private model colour untouched');
   }
-  assert.match(landscapes, /html\[data-skin="landscapes"\] \.ms-o\.secure \{ color: var\(--secure\); \}/);
+  assert.match(landscapes, /html\[data-skin\^="landscapes"\] \.ms-o\.secure \{ color: var\(--secure\); \}/);
 });
 
 test('Mizel skins keep the violet orb on Dark, Light and Landscapes', () => {

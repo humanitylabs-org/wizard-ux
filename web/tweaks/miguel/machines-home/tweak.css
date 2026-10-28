@@ -209,7 +209,7 @@ html[data-shell="phone"] .mh-top { padding-right: 60px; justify-content: flex-st
 .mh-age { font: 700 10.5px/1 system-ui, sans-serif; font-variant-numeric: tabular-nums; fill: var(--mh-ink); }
 .mh-age-bg { fill: var(--mh-chip); stroke: var(--mh-chip-line); stroke-width: 1; }
 html[data-skin="obsidian-light"] .mh-age-bg { fill: #fff; }
-html[data-skin="landscapes"] .mh-age-bg { fill: rgba(12, 16, 24, .72); }
+html[data-skin^="landscapes"] .mh-age-bg { fill: rgba(12, 16, 24, .72); }
 
 /* ---------- entry motion: once ---------- */
 .mh-new:is(.mh-node, .mh-person, .mh-dev, .mh-ai-group) { animation: mh-in 380ms var(--mh-ease) both; }
@@ -250,9 +250,9 @@ html[data-skin="landscapes"] .mh-age-bg { fill: rgba(12, 16, 24, .72); }
 }
 
 /* Landscapes: pictures behind, so chips and bars get a darker, steadier backing. */
-html[data-skin="landscapes"][data-tweaks~="miguel/machines-home"] { --mh-chip: rgba(10, 14, 22, .74); --mh-track: rgba(255, 255, 255, .26); }
-html[data-skin="landscapes"] .mh-bar i { background: linear-gradient(90deg, var(--mh-accent) var(--f), var(--mh-track) var(--f)), rgba(10, 14, 22, .7); box-shadow: 0 0 0 2px rgba(10, 14, 22, .55); }
-html[data-skin="landscapes"] .mh-bar small { background: rgba(10, 14, 22, .78); color: var(--mh-ink); }
+html[data-skin^="landscapes"][data-tweaks~="miguel/machines-home"] { --mh-chip: rgba(10, 14, 22, .74); --mh-track: rgba(255, 255, 255, .26); }
+html[data-skin^="landscapes"] .mh-bar i { background: linear-gradient(90deg, var(--mh-accent) var(--f), var(--mh-track) var(--f)), rgba(10, 14, 22, .7); box-shadow: 0 0 0 2px rgba(10, 14, 22, .55); }
+html[data-skin^="landscapes"] .mh-bar small { background: rgba(10, 14, 22, .78); color: var(--mh-ink); }
 
 /* Badge for the gauge's own service; + to add a device or a person (quiet until hovered); first-load spinner. */
 .mh-ai-def { padding: 1px 7px; border-radius: 99px; font-size: 10.5px !important; font-weight: 750 !important; color: var(--mh-accent) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mh-accent) 60%, transparent); }

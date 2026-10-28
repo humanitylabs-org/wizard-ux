@@ -241,7 +241,7 @@ window.WizCore.chats = function createChats(H) {
   };
   const FILTERS = STATUS; // app.js (Home cards) names a status filter
   // Miguel's skins list by status only, so a Yesterday filter has nothing to show there.
-  const statusEntries = () => Object.entries(STATUS).filter(([k]) => !(k === 'yesterday' && ['obsidian', 'obsidian-light', 'landscapes'].includes(document.documentElement.dataset.skin || ''))).filter(([k]) => !(snoozeLast() && k === 'deferred'));
+  const statusEntries = () => Object.entries(STATUS).filter(([k]) => !(k === 'yesterday' && ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'].includes(document.documentElement.dataset.skin || ''))).filter(([k]) => !(snoozeLast() && k === 'deferred'));
   const subjectOf = s => String(s.attention?.subject || '').trim();
   function subjects() {
     const n = new Map(); for (const s of (LIVE.ok ? LIVE.unified() : [])) { if (s.hidden) continue; const k = subjectOf(s); if (k) n.set(k, (n.get(k) || 0) + 1); }
@@ -782,7 +782,7 @@ window.WizCore.chats = function createChats(H) {
   // Opinionated: Compact list (titles only, no previews), chosen in the Filter sheet, cached per device and persisted by Agent Service.
   const COMPACT_KEY = 'wos.chats.compact.v1';
   // Miguel's skins (Dark, Light, Landscapes) default to the compact list; an explicit choice in Filter always wins.
-  const OUR_SKINS = ['obsidian', 'obsidian-light', 'landscapes'];
+  const OUR_SKINS = ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'];
   // Regenerate sits under the last reply only for a skin (or My skin) that asks: `html[data-skin] { --wos-reply-regenerate: on; }`.
   const regenOn = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-reply-regenerate').trim() === 'on'; } catch (_) { return false; } };
   const ourSkin = () => OUR_SKINS.includes(document.documentElement.dataset.skin || '');

@@ -15,8 +15,9 @@ const rule = (css, sel) => {
 };
 
 test('each of Miguel\'s skins paints its own selection highlight with readable text', () => {
-  for (const [css, skin, colour] of [[obsidian, 'obsidian', '#fff'], [obsidian, 'obsidian-light', '#000'], [landscapes, 'landscapes', '#fff']]) {
-    const r = rule(css, `html[data-skin="${skin}"] ::selection`);
+  for (const [css, skin, colour] of [[obsidian, 'html[data-skin="obsidian"]', '#fff'], [obsidian, 'html[data-skin="obsidian-light"]', '#000'], [landscapes, 'html[data-skin^="landscapes"]', '#fff'],
+    [landscapes, 'html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"]))', '#000']]) {
+    const r = rule(css, `${skin} ::selection`);
     assert.ok(r, `${skin} sets ::selection`);
     assert.match(r, new RegExp(`color:\\s*${colour}`), `${skin} selection text is ${colour}`);
     assert.doesNotMatch(r, /143,\s*99,\s*255/, `${skin} highlight is not core violet`);
@@ -27,11 +28,11 @@ test('the selection menu uses skin ink on a skin surface, not core violet', () =
   assert.match(rule(obsidian, 'html[data-skin^="obsidian"] .selmenu') || '', /background:\s*color-mix\(in srgb, var\(--bg\)/);
   assert.match(rule(obsidian, 'html[data-skin^="obsidian"] .selmenu button') || '', /color:\s*var\(--ink\)/);
   assert.match(rule(obsidian, 'html[data-skin^="obsidian"] .selmenu svg') || '', /stroke:\s*var\(--ink\)/);
-  assert.match(rule(landscapes, 'html[data-skin="landscapes"] .selmenu') || '', /background:\s*rgba\(16, 18, 22/);
-  assert.match(rule(landscapes, 'html[data-skin="landscapes"] .selmenu svg') || '', /stroke:\s*#fff/);
+  assert.match(rule(landscapes, 'html[data-skin^="landscapes"] .selmenu') || '', /background:\s*rgba\(16, 18, 22/);
+  assert.match(rule(landscapes, 'html[data-skin^="landscapes"] .selmenu svg') || '', /stroke:\s*#fff/);
 });
 
 test('Light keeps the New chat hat crisp white; Landscapes uses glass instead of the violet tile', () => {
   assert.match(rule(obsidian, 'html[data-skin="obsidian-light"] .ch-newchat .nc-mark .sgi') || '', /filter:\s*none/);
-  assert.match(rule(landscapes, 'html[data-skin="landscapes"] .ch-newchat .nc-mark') || '', /background:\s*rgba\(255, 255, 255/);
+  assert.match(rule(landscapes, 'html[data-skin^="landscapes"] .ch-newchat .nc-mark') || '', /background:\s*rgba\(255, 255, 255/);
 });
