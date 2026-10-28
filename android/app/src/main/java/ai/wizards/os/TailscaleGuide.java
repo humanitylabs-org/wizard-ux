@@ -23,10 +23,10 @@ final class TailscaleGuide {
             TITLE_CHECKING = "Connecting to your Wizard";
     static final String OFF = "Tailscale isn’t running on this phone yet.";
     static final String WRONG = "Tailscale is on, but this phone isn’t on your Wizard’s network.";
-    static final String QUIET = "Your phone is on your Wizard’s network, but your Wizard isn’t answering.";
+    static final String QUIET = "Tailscale is on, but your Wizard isn’t answering this phone.";
     static final String UNSURE = "Tailscale is on. Checking that this phone is on your Wizard’s network…";
     static final String WAKE = "Check your Wizard is on";
-    static final String WAKE_BODY = "Make sure the computer running your Wizard is on and awake, with Wizard open. This phone connects by itself.";
+    static final String WAKE_BODY = "Make sure the computer running your Wizard is on and awake, with Wizard open. If it is, open Tailscale on this phone and turn it off and on again; if it asks you to log in, use your Wizard’s account. This phone connects by itself.";
     static final String LEAD = "Your Wizard is private. Only your own devices can reach it, through <b>Tailscale</b>, a free app that links them securely.";
     static final String GET = "Get Tailscale", SIGN_IN = "Sign in with your Wizard’s account", BACK = "Come back here";
     static final String FREE = "Free, from Tailscale Inc.", INSTALLED = "Installed.";

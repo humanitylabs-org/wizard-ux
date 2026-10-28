@@ -34,7 +34,10 @@ test('the step needed now follows what the phone shows; the button sits on that 
   const quiet = G.html({ host: 'wizard.tail1234.ts.net', on: true, missing: false });
   assert.equal(steps(quiet), 'done,done,checking');
   assert.doesNotMatch(quiet, /Add VPN Configurations/, 'the VPN tip goes once step 2 is done');
-  assert.match(quiet, /Your phone is on your Wizard’s network, but your Wizard isn’t answering\./);
+  assert.match(quiet, /Tailscale is on, but your Wizard isn’t answering this phone\./);
+  // A phone just removed from Tailscale can keep its old network list and still find the Wizard's name: the step
+  // that waits for the Wizard also says how to make Tailscale on the phone reconnect.
+  assert.match(quiet, /turn it off and on again; if it asks you to log in, use your Wizard’s account/);
   assert.match(quiet, /Check your Wizard is on/);
   assert.match(quiet, /<h1>Your Wizard isn’t answering<\/h1>/);
   assert.doesNotMatch(quiet, /removed from yours|data-guide="tailscale"/, 'nothing to fix on the phone');
