@@ -17,11 +17,14 @@
   // Tweak files are static per release: read each once per page (a failure is forgotten so the next call retries).
   const files = new Map();
   const fetchOnce = async (url, ms = 6000) => {
-    const r = await fetch(new URL(url, document.baseURI), { cache: 'no-cache', signal: AbortSignal.timeout(ms) });
+    const r = await fetch(new URL(url, document.baseURI), { cache: /[?&]v=/.test(url) ? 'default' : 'no-cache', signal: AbortSignal.timeout(ms) });
     if (!r.ok) throw new Error(`Could not read ${url} (${r.status})`); return r.json();
   };
+  // Release-stamped like every other shell file, so the browser keeps them until the next release.
+  const rel = () => document.querySelector?.('meta[name="wos-release"]')?.content || '';
   const read = url => {
     if (/profile\.json$/.test(url)) return fetchOnce(url); // a published profile can change; manifests cannot
+    if (/^[0-9a-f]{6,40}$/.test(rel())) url += (url.includes('?') ? '&' : '?') + 'v=' + rel();
     if (!files.has(url)) files.set(url, fetchOnce(url).catch(() => fetchOnce(url, 30000)).catch(e => { files.delete(url); throw e; }));
     return files.get(url).then(v => JSON.parse(JSON.stringify(v)));
   };
