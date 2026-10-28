@@ -81,6 +81,8 @@ Visual: <side-by-side screenshot, or "none">
 | Add an app to the home screen | `WizHomeScreenApps.attach / offer / canOffer` (`web/core/home-screen-apps.js`): native pin or direct-link guide; pins dedup echoes; resume retries; `WosExperience` arrange tweak; docs/pwa-app-install.md | a second long-press menu or pin sheet per surface |
 | Long screenshot, text selection | WebView document scroll, `SelectionWebView`, `ScrollCaptureCrashGuard` (`docs/android-document-scroll.md`) | second capture path | long Chats capture |
 
+| Temporary private-agent chat | `WizCore.incognitoChats` (`web/core/incognito-chat.js`); reuse Chats Markdown and WizLive.openRunStream, with memory-only state and an explicit ephemeral route | saved drafts, outbox, transcript catalog or normal-history adapters |
+
 ## Visual (drawn/animated: side-by-side screenshot under `Visual:`)
 
 | Need | Use | Never hand-roll |
