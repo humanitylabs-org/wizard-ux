@@ -1,20 +1,24 @@
 /* Miguel's Home = his network map, read-only and on real data. One map, the same on every workspace, everything inline
  * (no cards, no sheets): simple at rest, tap a thing to see more of it in place, tap again to fold it.
- *   - top: the workspace switcher (this Wizard by its name, then the Wizards he manages), then one AI fuel gauge for the
- *     default model's service (all its subscriptions combined). Tap it: every subscription with its nickname field,
- *     what is left, sign in or out, and add credit where that is how the service is paid.
- *   - Storage above (how much is stored; tap for where and how), machines in one row, Main first and the rest by rough
- *     power; one "Show details" under the row folds Memory / Disk / CPU for all machines; people below, wired to Main
- *   - inside Main: Working and Ready, which open the same lists the Home cards did
+ *   - top: the workspace switcher (this Wizard by its name, then the Wizards he manages), then one AI fuel tag for the
+ *     default model's service (all its subscriptions combined). Tap it: every account with its nickname, what is left,
+ *     Sign out per account, add credit where that is how the service is paid, and one "Sign in to another account".
+ *   - Storage above (how much is stored; tap for where, how often and what is kept)
+ *   - machines in one row with Main in the middle; helpers alternate right, left, right… biggest nearest to Main.
+ *     Tap a helper: what it can become (storage, standby) and whether it qualifies, or Reconnect when Wizard lost it.
+ *     One "Show details" under the row folds Memory / Disk / CPU for all machines, smoothly.
+ *   - inside Main: a working bubble and a ready bubble; one tap opens your chats
+ *   - people below, wired to Main; tap a person for their devices
  * Calm by design: the last good readings paint at once (kept on this device), entry motion plays once, and later
  * readings change only what changed; wires are redrawn only when they move.
  * Data: the shell's Devices feed (api.data.read.resources), the Backup app's read API (api.data.read.app), the shell's
  * session counts (api.data.read.sessions) and the default model (api.models.default). Roles, names and managed
  * Wizards come from the owner's devices registry (~/.wizard-os/devices.json), never from this file. Nothing here
- * writes, except nicknames and the last readings on this device. */
+ * writes: actions open the service's own app or ask the agent in a new chat (api.nav.ask). */
 const SVG = 'http://www.w3.org/2000/svg';
 const PLUS = [['path', { d: 'M12 6v12M6 12h12' }]];
 const APP_OF = { chatgpt: 'wizard-chatgpt', claude: 'wizard-claude', tinfoil: 'wizard-tinfoil' };
+const BUILT_IN = [['claude', 'Claude'], ['chatgpt', 'ChatGPT'], ['tinfoil', 'Tinfoil']];
 const TOP_UP = { tinfoil: 'https://dash.tinfoil.sh/?tab=billing' };
 
 export default function setup(api) {
@@ -59,23 +63,27 @@ export default function setup(api) {
     const d = devOf(id);
     if (!d) return { id, name: id === MAIN ? pretty(reg().this?.name) || 'Main' : id, status: 'unknown' };
     const dg = diskGB(d), fg = freeGB(d);
-    return { id, name: pretty(d.name), status: d.status, cores: d.cpus || null, ramGB: d.memoryTotalGB || null,
-      mem: d.memory, cpu: d.cpu, diskGB: dg, diskUsed: dg != null && fg != null ? dg - fg : null };
+    return { id, name: pretty(d.name), status: d.status, error: d.error || '', cores: d.cpus || null, ramGB: d.memoryTotalGB || null,
+      mem: d.memory, cpu: d.cpu, diskGB: dg, freeGB: fg, diskUsed: dg != null && fg != null ? dg - fg : null };
   }
   // Rough power, for size and order: cores, then memory, then disk.
   const power = m => (m.cores || m.ramGB) ? .45 * clamp((m.cores || 4) / 16, 0, 1.4) + .35 * clamp((m.ramGB || 4) / 64, 0, 1.4) + .2 * clamp((m.diskGB || 100) / 4000, 0, 1.4) : -1;
   const sizeOf = m => power(m) < 0 ? 50 : Math.round(clamp(46 + 56 * power(m), 46, 100));
   const qualOf = id => (S.backup?.standby?.machines || []).find(x => x.id === id) || null;
   const qualifies = id => /^(ok|yes|ready|fits)$/i.test(qualOf(id)?.verdict || '');
+  // Wizard reaches the machine's network but can't log in = Disconnected; not on the network at all = Offline.
+  const offText = m => m.status === 'unreachable' || /denied|refused|timed out|auth/i.test(m.error) ? 'Disconnected' : 'Offline';
   function storage() {
     const b = S.backup?.backup;
     if (!b || !b.configured || !b.target) return null;
     const t = b.target, last = b.last || {}, okAt = last.ok ? (last.finished_at || last.last_success_at) : last.last_success_at;
     const every = b.every === 'hourly' ? 3600 : 86400, age = okAt ? Math.max(0, Date.now() / 1000 - okAt) : null;
-    const used = +last.repository_bytes > 0 ? last.repository_bytes / 1e9 : null;
+    const used = +last.repository_bytes > 0 ? last.repository_bytes / 1e9 : null, r = b.retention || {};
+    const keep = ['daily', 'weekly', 'monthly'].filter(k => +r[k] > 0).map(k => `${r[k]} ${k}`);
     const cf = (S.backup?.connector || []).find(c => c && /cloudflare/i.test(c.id || c.name || ''));
     return { id: 'storage', where: t.kind === 'r2' ? 'Cloudflare R2' : t.kind === 's3' ? 'S3 storage' : 'Backup storage', bucket: t.bucket || '',
       used, snaps: +last.snapshots || null, every: b.every === 'hourly' ? 'Every hour' : b.at ? `Daily at ${b.at}` : 'Daily', age,
+      keep: keep.length ? `Keeps the newest, then ${keep.join(', ')}` : '',
       cf: cf ? (cf.connected ? 'Cloudflare app connected' : 'Cloudflare app not connected') : '',
       state: !okAt ? 'no' : b.state === 'failing' || age > 2 * every ? 'tight' : 'ok' };
   }
@@ -89,7 +97,23 @@ export default function setup(api) {
     const rest = Math.max(0, (Number.isInteger(g.peopleCount) ? g.peopleCount : 0) - names.length);
     return [...names.map((n, i) => ({ id: 'p' + i, name: n, devices: null })), ...(rest ? [{ id: 'rest', name: `${rest} more`, devices: null, count: rest }] : [])];
   }
-  // AI: every subscription. Level = the tightest weekly allowance left; prepaid credit = balance of top-up.
+  // What a helper can become, and whether it qualifies. Storage keeps copies of the backup (room for two, plus margin);
+  // standby is the Backup app's own verdict (big enough to take over from Main at once).
+  function actions(m) {
+    if (m.status !== 'online') return [{ id: 'reconnect', label: 'Reconnect', ok: true, note: m.error ? 'Wizard can’t log in' : 'Not on the network',
+      words: `Reconnect ${m.name} to this Wizard so it shows as a helper again.`, why: m.error || `${m.name} is ${offText(m).toLowerCase()}.` },
+      { id: 'storage', label: 'Use for storage', ok: false, note: 'Reconnect first' }, { id: 'standby', label: 'Make standby', ok: false, note: 'Reconnect first' }];
+    const repo = S.backup?.backup?.last?.repository_bytes ? S.backup.backup.last.repository_bytes / 1e9 : 25;
+    const need = Math.max(50, Math.ceil(2 * repo + 20)), free = m.freeGB == null ? null : Math.round(m.freeGB);
+    const q = qualOf(m.id), bad = (q?.checks || []).find(c => c && c.ok === false);
+    return [
+      { id: 'storage', label: 'Use for storage', ok: free != null && free >= need, note: free == null ? 'Disk not reported' : free >= need ? `${free} GB free` : `Needs ${need} GB free (has ${free})`,
+        words: `Make ${m.name} a storage device for my backups.`, why: `${m.name}: ${free} GB free; backup copies take ${gbFmt(repo)}.` },
+      { id: 'standby', label: qualifies(m.id) ? 'Standby device' : 'Make standby', ok: !!q && /^(ok|yes|ready|fits)$/i.test(q.verdict || ''),
+        note: !q || q.verdict === 'unknown' ? 'Checking…' : qualifies(m.id) ? 'Can take over' : bad?.say || q.say || 'Not suitable',
+        words: `Make ${m.name} my standby device.`, why: (q?.checks || []).map(c => c.say).join('; ') }];
+  }
+  // AI: every account. Level = the tightest weekly allowance left; prepaid credit = balance of top-up.
   const kindOf = p => String(p.provider || p.id || '').split(':')[0];
   function subs() {
     const out = [];
@@ -108,7 +132,12 @@ export default function setup(api) {
     }
     return out;
   }
-  // The gauge: the default model's service, all its subscriptions together (average left).
+  // Services you can sign in to: the three every Wizard ships with, plus any other AI connector the feed reports.
+  const signable = () => { const list = BUILT_IN.map(([k, n]) => ({ kind: k, name: n, app: APP_OF[k] }));
+    for (const s of subs()) if (!list.some(x => x.kind === s.kind) && /^[a-z0-9-]+$/.test(s.kind)) list.push({ kind: s.kind, name: s.group, app: APP_OF[s.kind] || `wizard-${s.kind}` });
+    return list; };
+  const appOf = kind => (signable().find(x => x.kind === kind) || {}).app || null;
+  // The gauge: the default model's service, all its accounts together (average left).
   const defKind = () => { const d = api.models?.default?.(); const p = String(d?.provider || '').toLowerCase();
     const k = /claude|anthropic/.test(p) ? 'claude' : /openai|codex|chatgpt/.test(p) ? 'chatgpt' : /tinfoil/.test(p) ? 'tinfoil' : '';
     if (k && k !== S.def) { S.def = k; api.storage.set('def', k); } return S.def; };
@@ -123,11 +152,11 @@ export default function setup(api) {
   const root = h('section', { cls: 'mh-root', 'aria-label': 'Your network', data: { mhRoot: '' } });
   const wsBar = h('div', { cls: 'mh-ws', role: 'tablist', 'aria-label': 'Network' });
   const aiRow = h('div', { cls: 'mh-ai', hidden: true });
-  const aiList = h('div', { cls: 'mh-ai-list', hidden: true, 'aria-label': 'AI subscriptions' });
+  const aiList = h('div', { cls: 'mh-ai-list', hidden: true, 'aria-label': 'AI accounts' });
   const lines = sv('svg', { class: 'mh-lines', 'aria-hidden': 'true' });
   const row = cls => h('div', { cls: 'mh-row ' + cls });
-  const rowSt = row('is-storage'), rowMn = row('is-machines'), rowMore = row('is-more'), rowPp = row('is-people'), rowDv = row('is-devices');
-  const map = h('div', { cls: 'mh-map' }, lines, rowSt, rowMn, rowMore, rowPp, rowDv);
+  const rowSt = row('is-storage'), rowMn = row('is-machines'), rowAct = row('is-act'), rowMore = row('is-more'), rowPp = row('is-people'), rowDv = row('is-devices');
+  const map = h('div', { cls: 'mh-map' + (S.bars ? ' is-details' : '') }, lines, rowSt, rowMn, rowAct, rowMore, rowPp, rowDv);
   root.append(h('header', { cls: 'mh-top' }, wsBar), h('div', { cls: 'mh-body' }, aiRow, aiList, map));
 
   /* ---------- top ---------- */
@@ -137,23 +166,14 @@ export default function setup(api) {
     const s = sv('svg', { class: 'mh-i', viewBox: '0 0 24 24', 'aria-hidden': 'true' }, add); for (const [t, a] of PLUS) sv(t, a, s);
     wsBar.replaceChildren(tab('mine', thisName()), ...managedList().map(g => tab(g.id, g.name)), add);
   }
-  // A fuel gauge, E to F: an arc that fills, a needle, "AI" under it. No percentage at rest.
+  // A fuel tag: "AI", then E, ten cells that fill, F. No percentage at rest.
   function gaugeEl(g) {
-    const open = S.open.has('ai');
-    const b = h('button', { type: 'button', cls: nw('mh-gauge'), data: { toggle: 'ai', s: level(g.left) }, 'aria-expanded': String(open),
-      'aria-label': `AI: ${g.name}, ${g.left}% left${g.n > 1 ? ` across ${g.n} subscriptions` : ''}. Show subscriptions` });
-    const s = sv('svg', { viewBox: '0 0 100 58', class: 'mh-gsvg', 'aria-hidden': 'true' }, b);
-    const arc = 'M14 50 A36 36 0 0 1 86 50';
-    sv('path', { d: arc, class: 'mh-g-track', pathLength: '100' }, s);
-    const fill = sv('path', { d: arc, class: 'mh-g-fill', pathLength: '100' }, s); fill.style.setProperty('--f', String(g.left));
-    for (let i = 0; i <= 4; i++) { const a = Math.PI * (1 - i / 4), c = Math.cos(a), n = Math.sin(a);
-      sv('line', { x1: (50 + 27 * c).toFixed(1), y1: (50 - 27 * n).toFixed(1), x2: (50 + 22 * c).toFixed(1), y2: (50 - 22 * n).toFixed(1), class: 'mh-g-tick' }, s); }
-    const nd = sv('g', { class: 'mh-g-needle' }, s); nd.style.setProperty('--a', `${(g.left / 100) * 180 - 90}deg`);
-    sv('line', { x1: '50', y1: '50', x2: '50', y2: '21' }, nd); sv('circle', { cx: '50', cy: '50', r: '4.5', class: 'mh-g-hub' }, s);
-    const e = sv('text', { x: '4', y: '57', class: 'mh-g-ef' }, s); e.textContent = 'E';
-    const f = sv('text', { x: '96', y: '57', class: 'mh-g-ef', 'text-anchor': 'end' }, s); f.textContent = 'F';
-    b.append(h('span', { cls: 'mh-g-label', text: 'AI' }));
-    return b;
+    const on = Math.round(g.left / 10);
+    return h('button', { type: 'button', cls: nw('mh-gauge'), data: { toggle: 'ai', s: level(g.left) }, 'aria-expanded': String(S.open.has('ai')),
+      'aria-label': `AI: ${g.name}, ${g.left}% left${g.n > 1 ? ` across ${g.n} accounts` : ''}. Show accounts` },
+      h('b', { cls: 'mh-g-label', text: 'AI' }), h('span', { cls: 'mh-g-ef', text: 'E' }),
+      h('span', { cls: 'mh-g-cells', 'aria-hidden': 'true' }, Array.from({ length: 10 }, (_, i) => h('i', { cls: i < on ? 'on' : '', style: { '--i': String(i) } }))),
+      h('span', { cls: 'mh-g-ef', text: 'F' }));
   }
   function renderAI() {
     const g = S.ws === 'mine' ? gauge() : null;
@@ -161,7 +181,7 @@ export default function setup(api) {
     aiRow.replaceChildren(...(g ? [gaugeEl(g)] : []));
     if (!g) S.open.delete('ai');
   }
-  // Every subscription, grouped by service (the gauge's own service first): nickname, what is left, sign in or out.
+  // Every account, grouped by service (the gauge's own first): nickname, what is left, Sign out; one Sign in at the end.
   function renderAIList() {
     const show = S.ws === 'mine' && S.open.has('ai');
     aiList.hidden = !show;
@@ -169,44 +189,60 @@ export default function setup(api) {
     const want = defKind(), groups = [];
     for (const s of subs()) { let g = groups.find(x => x.kind === s.kind); if (!g) groups.push(g = { kind: s.kind, name: s.group, rows: [] }); g.rows.push(s); }
     groups.sort((a, b) => (b.kind === want) - (a.kind === want));
+    const btn = (text, app, cls = '') => app ? h('button', { type: 'button', cls: 'mh-ai-btn ' + cls, data: { resSignin: app } }, text) : null;
     aiList.replaceChildren(...groups.map(g => h('div', { cls: nw('mh-ai-group') },
-      h('div', { cls: 'mh-ai-head' }, h('b', { text: g.name }),
-        g.kind === want ? h('span', { cls: 'mh-ai-def', text: 'on the gauge' }) : null,
-        APP_OF[g.kind] ? h('button', { type: 'button', cls: 'mh-ai-btn', data: { resSignin: APP_OF[g.kind] } }, g.rows.some(r => r.out) ? 'Sign in' : 'Sign in or out') : null),
+      h('div', { cls: 'mh-ai-head' }, h('b', { text: g.name }), g.kind === want ? h('span', { cls: 'mh-ai-def', text: 'on the gauge' }) : null),
       g.rows.map(r => {
         const reset = r.resets && Date.parse(r.resets) > Date.now() ? ` · resets in ${agoS((Date.parse(r.resets) - Date.now()) / 1000)}` : '';
         return h('div', { cls: 'mh-ai-row', data: { s: r.out ? 'out' : level(r.left ?? 0) } },
-          h('input', { cls: 'mh-nick', type: 'text', value: r.nick, placeholder: r.auto || 'Nickname', maxlength: '24',
-            'aria-label': `Nickname for ${g.name}${r.email ? ' ' + r.email : ''}`, data: { nick: r.id } }),
+          h('input', { cls: 'mh-nick', type: 'text', value: r.nick || r.auto, placeholder: 'Nickname', maxlength: '24',
+            'aria-label': `Nickname for ${g.name}${r.email ? ' ' + r.email : ''}`, data: { nick: r.id, auto: r.auto } }),
           h('span', { cls: 'mh-ai-use' }, h('span', { cls: 'mh-meter' }, h('i', { style: { '--f': (r.out ? 0 : r.left ?? 0) + '%' } })),
             h('span', { cls: 'mh-ai-txt', text: r.out ? 'Signed out' : r.money ? `${r.money} credit left` : `${r.left}% left${reset}` })),
-          TOP_UP[r.kind] ? h('a', { cls: 'mh-ai-btn is-link', href: TOP_UP[r.kind], target: '_blank', rel: 'noopener noreferrer' }, 'Add credit ↗') : null);
-      }))));
+          h('span', { cls: 'mh-ai-acts' },
+            TOP_UP[r.kind] && !r.out ? h('a', { cls: 'mh-ai-btn is-link', href: TOP_UP[r.kind], target: '_blank', rel: 'noopener noreferrer' }, 'Add credit ↗') : null,
+            r.out ? btn('Sign in', appOf(r.kind), 'is-in') : btn('Sign out', appOf(r.kind), 'is-out')));
+      }))),
+      h('div', { cls: 'mh-ai-foot' },
+        h('button', { type: 'button', cls: 'mh-ai-btn is-add', data: { toggle: 'signin' }, 'aria-expanded': String(S.open.has('signin')) }, '+ Sign in to another account'),
+        S.open.has('signin') ? h('div', { cls: 'mh-ai-pick' }, signable().map(p => btn(p.name, p.app))) : null));
   }
 
   /* ---------- the map ---------- */
+  // Bars are always there for online machines and fold open or shut with one class (smooth, no rebuild).
   function bars(m, maxOf) {
-    if (!S.bars || m.status !== 'online') return null;
+    if (m.status !== 'online') return null;
     const bar = (k, cap, used, text) => cap ? h('span', { cls: 'mh-bar', title: `${k}: ${text}` },
       h('i', { style: { '--w': (100 * clamp(cap / maxOf[k], .3, 1)).toFixed(0) + '%', '--f': (100 * clamp(used / cap, 0, 1)).toFixed(0) + '%' } }), h('small', { text: k === 'CPU' ? `${cap} cores` : gbFmt(cap) })) : h('span', { cls: 'mh-bar is-none' });
-    return h('span', { cls: nw('mh-bars') },
+    return h('span', { cls: 'mh-bars' }, h('span', { cls: 'mh-bars-in' },
       bar('Memory', m.ramGB, m.ramGB * (m.mem || 0) / 100, `${Math.round(m.mem || 0)}% of ${gbFmt(m.ramGB)} used`),
       bar('Disk', m.diskGB, m.diskUsed || 0, `${gbFmt(m.diskUsed)} of ${gbFmt(m.diskGB)} used`),
-      bar('CPU', m.cores, m.cores * (m.cpu || 0) / 100, `${Math.round(m.cpu || 0)}% of ${m.cores} cores busy`));
+      bar('CPU', m.cores, m.cores * (m.cpu || 0) / 100, `${Math.round(m.cpu || 0)}% of ${m.cores} cores busy`)));
   }
   const label = (name, role, cls = '') => h('span', { cls: 'mh-label ' + cls }, h('span', { cls: 'mh-name', text: name }), role ? h('span', { cls: 'mh-role', text: role }) : null);
   function machineNode(m, role, maxOf, extra = {}) {
     const s = extra.size || sizeOf(m), off = m.status && m.status !== 'online' && role !== 'main';
     const disc = h('span', { cls: 'mh-disc' + (off ? ' is-off' : '') });
+    let tap;
     if (role === 'main' && extra.sessions) {
+      // One tap for both: a working bubble (pulses while something runs) and a ready bubble, no words.
       const x = extra.sessions;
-      disc.append(h('span', { cls: 'mh-sess' },
-        h('button', { type: 'button', cls: 'mh-s work' + (x.working ? ' on' : ''), data: { open: 'working' }, 'aria-label': `Working ${x.working}` }, h('b', { text: String(x.working) }), 'working'),
-        h('button', { type: 'button', cls: 'mh-s ready' + (x.ready ? ' on' : ''), data: { open: 'ready' }, 'aria-label': `Ready ${x.ready}` }, h('b', { text: String(x.ready) }), 'ready')));
+      disc.append(h('span', { cls: 'mh-sess', 'aria-hidden': 'true' },
+        h('span', { cls: 'mh-bub work' + (x.working ? ' on' : '') }, h('i'), h('b', { text: String(x.working) })),
+        h('span', { cls: 'mh-bub ready' + (x.ready ? ' on' : '') }, h('i'), h('b', { text: String(x.ready) }))));
+      tap = h('button', { type: 'button', cls: 'mh-tap', data: { open: 'ready' }, 'aria-label': `${m.name}: ${x.working} working, ${x.ready} ready. Open your chats` }, disc);
+    } else if (role !== 'main' && !extra.managed) {
+      tap = h('button', { type: 'button', cls: 'mh-tap', data: { machine: m.id }, 'aria-expanded': String(S.open.has('m:' + m.id)), 'aria-label': `${m.name}, ${extra.roleText}. Show what it can do` }, disc);
     }
-    return h('div', { cls: nw(`mh-node is-${role}`), data: { id: m.id, role }, style: { '--s': String(s) }, 'aria-label': `${m.name}, ${extra.roleText}` },
-      h('span', { cls: 'mh-hold' }, disc), label(m.name, extra.roleText, extra.warn ? 'warn' : ''),
+    return h('div', { cls: nw(`mh-node is-${role}`) + (S.open.has('m:' + m.id) ? ' is-open' : ''), data: { id: m.id, role }, style: { '--s': String(s) } },
+      h('span', { cls: 'mh-hold' }, tap || disc), label(m.name, extra.roleText, extra.warn ? 'warn' : ''),
       maxOf ? bars(m, maxOf) : null);
+  }
+  function actPanel(m) {
+    return h('div', { cls: nw('mh-act'), data: { of: m.id } },
+      h('span', { cls: 'mh-act-head' }, h('b', { text: m.name }), h('span', { text: m.status === 'online' ? (qualifies(m.id) ? 'Standby device' : 'Helper') : offText(m) })),
+      h('span', { cls: 'mh-act-btns' }, actions(m).map(a => h('button', { type: 'button', cls: 'mh-act-btn' + (a.ok ? '' : ' is-no'), disabled: !a.ok, data: { ask: `${m.id}:${a.id}` } },
+        h('b', { text: a.label }), h('small', { text: a.note })))));
   }
   function storageNode(st) {
     const open = S.open.has('storage');
@@ -215,7 +251,8 @@ export default function setup(api) {
         h('span', { cls: 'mh-hold' }, h('span', { cls: 'mh-disc' })), label('Storage', st.used == null ? st.where : gbFmt(st.used) + ' stored')),
       open ? h('span', { cls: 'mh-more-info' },
         h('span', { text: st.where + (st.bucket ? ` · ${st.bucket}` : '') }),
-        h('span', { text: [st.snaps ? `${st.snaps} copies kept` : '', st.every].filter(Boolean).join(' · ') }),
+        h('span', { text: [st.snaps ? `${st.snaps} copies` : '', st.every].filter(Boolean).join(' · ') }),
+        st.keep ? h('span', { text: st.keep }) : null,
         st.cf ? h('span', { text: st.cf }) : null) : null);
   }
   function personNode(p) {
@@ -224,27 +261,31 @@ export default function setup(api) {
       h('span', { cls: 'mh-pdisc', text: p.count ? '+' + p.count : initial(p.name) }),
       label(p.name, n ? `${n} device${n === 1 ? '' : 's'}` : ''));
   }
+  // Main in the middle; helpers alternate right, left, right… (the most powerful nearest to Main), so the row stays balanced.
+  const around = (main, others) => { const L = [], R = []; others.forEach((m, i) => (i % 2 ? L : R).push(m)); return [...L.reverse(), main, ...R]; };
   function renderMap() {
     if (S.ws !== 'mine' && !managedOf(S.ws) && S.res.devices) S.ws = 'mine';
     const g = managedOf(S.ws);
     root.classList.toggle('is-managed', !!g);
     if (g) {
       // Only what is known about a Wizard he manages: its Main and who uses it. Same design, less data.
-      setRow(rowSt, []); setRow(rowMore, []);
-      setRow(rowMn, [machineNode({ id: 'managed-' + g.id, name: g.name }, 'main', null, { size: 72, roleText: g.org || 'Main' })]);
+      setRow(rowSt, []); setRow(rowMore, []); setRow(rowAct, []);
+      setRow(rowMn, [machineNode({ id: 'managed-' + g.id, name: g.name }, 'main', null, { size: 72, roleText: g.org || 'Main', managed: true })]);
     } else {
       const st = storage();
       setRow(rowSt, st ? [storageNode(st)] : []);
       const main = machine(MAIN), others = devices().filter(d => d.id !== MAIN).map(d => machine(d.id)).sort((a, b) => power(b) - power(a));
       const all = [main, ...others].filter(m => m.status === 'online');
       const maxOf = { Memory: Math.max(1, ...all.map(m => m.ramGB || 0)), Disk: Math.max(1, ...all.map(m => m.diskGB || 0)), CPU: Math.max(1, ...all.map(m => m.cores || 0)) };
-      setRow(rowMn, [
-        h('div', { cls: 'mh-legend', hidden: !S.bars, 'aria-hidden': 'true' }, h('span', { text: 'Memory' }), h('span', { text: 'Disk' }), h('span', { text: 'CPU' })),
-        machineNode(main, 'main', maxOf, { roleText: 'Main', sessions: sessions() }),
-        ...others.map(m => machineNode(m, qualifies(m.id) ? 'standby' : 'helper', maxOf,
-          { roleText: qualifies(m.id) ? 'Standby device' : m.status === 'online' ? 'Helper' : 'Offline', warn: m.status !== 'online' }))]);
+      const node = m => m.id === MAIN ? machineNode(main, 'main', maxOf, { roleText: 'Main', sessions: sessions() })
+        : machineNode(m, qualifies(m.id) ? 'standby' : 'helper', maxOf, { roleText: qualifies(m.id) ? 'Standby device' : m.status === 'online' ? 'Helper' : offText(m), warn: m.status !== 'online' });
+      // The bar names sit left of the row; an invisible twin on the right keeps Main exactly in the middle.
+      const legend = twin => h('div', { cls: 'mh-legend' + (twin ? ' is-twin' : ''), 'aria-hidden': 'true' }, h('span', { cls: 'mh-bars-in' }, h('span', { text: 'RAM' }), h('span', { text: 'Disk' }), h('span', { text: 'CPU' })));
+      setRow(rowMn, [legend(false), ...around(main, others).map(node), legend(true)]);
+      const open = others.find(m => S.open.has('m:' + m.id));
+      setRow(rowAct, open ? [actPanel(open)] : []);
       setRow(rowMore, all.length ? [h('button', { type: 'button', cls: 'mh-details', data: { toggle: 'bars' }, 'aria-expanded': String(S.bars) },
-        S.bars ? 'Hide details' : 'Show details', h('i', { cls: 'mh-chev', 'aria-hidden': 'true' }))] : []);
+        h('span', { text: S.bars ? 'Hide details' : 'Show details' }), h('i', { cls: 'mh-chev', 'aria-hidden': 'true' }))] : []);
     }
     const ps = people();
     setRow(rowPp, ps.map(personNode));
@@ -273,12 +314,15 @@ export default function setup(api) {
       const col = st?.state === 'ok' ? 'var(--mh-accent)' : st?.state === 'no' ? 'var(--mh-bad)' : 'var(--mh-warn)';
       specs.push([curveV(md.cx, md.t - 4, sd.cx, sd.b + 4), col, backupRunning() ? 'backing up' : st?.age == null ? 'none yet' : agoS(st.age) + ' ago', backupRunning() ? 3 : 1]);
     }
-    // Machines: a chain from Main through each machine, in row order.
+    // Machines: a chain outward from Main on each side, in row order.
     const ms = [...rowMn.children].filter(n => n.dataset?.role);
     for (let i = 1; i < ms.length; i++) {
-      const a = box(discOf(ms[i - 1])), b = box(discOf(ms[i]));
-      if (b.l - 3 > a.r + 3) specs.push([`M${f(a.r + 3)} ${f(a.cy)} L${f(b.l - 3)} ${f(b.cy)}`, discOf(ms[i]).classList.contains('is-off') ? 'var(--mh-wire-off)' : 'var(--mh-accent)', '', 1]);
+      const a = box(discOf(ms[i - 1])), b = box(discOf(ms[i])), off = discOf(ms[i - 1]).classList.contains('is-off') || discOf(ms[i]).classList.contains('is-off');
+      if (b.l - 3 > a.r + 3) specs.push([`M${f(a.r + 3)} ${f(a.cy)} L${f(b.l - 3)} ${f(b.cy)}`, off ? 'var(--mh-wire-off)' : 'var(--mh-accent)', '', 1]);
     }
+    // An open helper → its panel below.
+    const act = rowAct.firstElementChild;
+    if (act) { const n = ms.find(x => x.dataset.id === act.dataset.of); if (n) { const nb = box(n), ab = box(act); specs.push([curveV(ab.cx, ab.t - 2, nb.cx, nb.b + 2), 'var(--mh-wire-off)', '', 1]); } }
     // People → the bottom of Main, from below (faster while sessions work; it runs behind Show details); devices → their person.
     const busy = S.ws === 'mine' && sessions().working > 0;
     for (const p of rowPp.children) { const pd = box(discOf(p)); specs.push([curveV(pd.cx, pd.t - 4, md.cx, mb.b + 2), 'var(--mh-accent)', '', busy ? 2 : 1]); }
@@ -311,21 +355,35 @@ export default function setup(api) {
   /* ---------- taps: everything expands in place ---------- */
   const flip = k => { if (S.open.has(k)) S.open.delete(k); else S.open.add(k); };
   api.listen(root, 'click', e => {
-    let b = e.target; while (b && b !== root && !(b.dataset && (b.dataset.ws || b.dataset.act || b.dataset.open || b.dataset.person || b.dataset.toggle))) b = b.parentNode;
-    if (!b || b === root) return;  // sign-in buttons carry the shell's own data-res-signin, which opens that app
+    let b = e.target; while (b && b !== root && !(b.dataset && (b.dataset.ws || b.dataset.act || b.dataset.open || b.dataset.person || b.dataset.toggle || b.dataset.machine || b.dataset.ask))) b = b.parentNode;
+    if (!b || b === root) return;  // Sign in / Sign out carry the shell's own data-res-signin, which opens that app
     const d = b.dataset;
     if (d.open) return api.data.read.sessions?.open(d.open);
     if (d.ws) { if (S.ws === d.ws) return; S.ws = d.ws; api.storage.set('ws', d.ws); fresh = true; paint(true); return; }
     if (d.act === 'add-managed') return api.toast('Adding a Wizard you manage: coming soon');
     if (d.person) { flip('p:' + d.person); paint(); return; }
+    if (d.machine) { const k = 'm:' + d.machine, was = S.open.has(k); for (const x of [...S.open]) if (x.startsWith('m:')) S.open.delete(x); if (!was) S.open.add(k); fresh = !was; paint(); return; }
+    if (d.ask) {
+      const [id, what] = d.ask.split(':'), m = machine(id), a = actions(m).find(x => x.id === what);
+      if (!a || !a.ok || !a.words) return;
+      const sent = api.nav?.ask?.(`${id}-${what}`, { title: `${m.name} · ${a.label}`, message: a.why || a.note }, a.words);
+      if (!sent) api.toast('Open Chats, then try again');
+      return;
+    }
     if (d.toggle === 'ai') { flip('ai'); paint(); return; }
+    if (d.toggle === 'signin') { flip('signin'); drawn.list = ''; paint(); return; }
     if (d.toggle === 'storage') { flip('storage'); paint(); return; }
-    if (d.toggle === 'bars') { S.bars = !S.bars; api.storage.set('details', S.bars ? 'on' : 'off'); fresh = true; paint(); }
+    if (d.toggle === 'bars') {
+      // Fold the bars open or shut with one class: the CSS eases the height, nothing is rebuilt.
+      S.bars = !S.bars; api.storage.set('details', S.bars ? 'on' : 'off');
+      map.classList.toggle('is-details', S.bars); b.setAttribute('aria-expanded', String(S.bars));
+      if (b.firstElementChild) b.firstElementChild.textContent = S.bars ? 'Hide details' : 'Show details';
+    }
   });
   api.listen(root, 'input', e => {
     const id = e.target?.dataset?.nick; if (!id) return;
     const v = String(e.target.value || '').trim().slice(0, 24);
-    if (v) S.nick[id] = v; else delete S.nick[id];
+    if (v && v !== e.target.dataset.auto) S.nick[id] = v; else delete S.nick[id];
     api.storage.set('nick', S.nick);
   });
 
@@ -333,16 +391,16 @@ export default function setup(api) {
   // Repaint only the part whose drawing changed; a nickname being typed is never rebuilt under the finger.
   const drawn = { top: '', ai: '', list: '', map: '' };
   const mapSig = () => { const st = storage();
-    return JSON.stringify([S.ws, S.bars, [...S.open].filter(k => k !== 'ai'), reg().this || null, managedList(),
-      devices().map(d => [d.id, d.name, d.status, d.cpus, d.memoryTotalGB, diskGB(d), ...(S.bars ? [Math.round((d.memory || 0) / 5), Math.round((d.cpu || 0) / 5), Math.round((freeGB(d) || 0) / 5)] : [])]),
+    return JSON.stringify([S.ws, [...S.open].filter(k => k !== 'ai' && k !== 'signin'), reg().this || null, managedList(),
+      devices().map(d => [d.id, d.name, d.status, d.error, d.cpus, d.memoryTotalGB, diskGB(d), Math.round((d.memory || 0) / 5), Math.round((d.cpu || 0) / 5), Math.round((freeGB(d) || 0) / 5)]),
       myDevices(), sessions(), backupRunning(), st && { ...st, age: st.age == null ? null : agoS(st.age), used: st.used == null ? null : gbFmt(st.used) },
-      (S.backup?.standby?.machines || []).map(x => [x.id, x.verdict])]); };
+      (S.backup?.standby?.machines || []).map(x => [x.id, x.verdict, (x.checks || []).map(c => c.ok)])]); };
   function paint(force) {
     const top = JSON.stringify([thisName(), managedList().map(g => [g.id, g.name]), S.ws]);
     if (force || top !== drawn.top) { drawn.top = top; renderTabs(); }
     const gs = JSON.stringify([S.ws, gauge(), S.open.has('ai')]);
     if (force || gs !== drawn.ai) { drawn.ai = gs; renderAI(); }
-    const ls = JSON.stringify([S.ws, S.open.has('ai'), subs().map(s => [s.id, s.left, s.money, s.out, s.resets && agoS((Date.parse(s.resets) - Date.now()) / 1000)])]);
+    const ls = JSON.stringify([S.ws, S.open.has('ai'), S.open.has('signin'), subs().map(s => [s.id, s.left, s.money, s.out, s.resets && agoS((Date.parse(s.resets) - Date.now()) / 1000)])]);
     if ((force || ls !== drawn.list) && !aiList.contains?.(document.activeElement)) { drawn.list = ls; renderAIList(); }
     const ms = mapSig();
     if (force || ms !== drawn.map || !rowMn.firstChild) { drawn.map = ms; renderMap(); }
@@ -368,7 +426,7 @@ export default function setup(api) {
   api.on('home', () => { mount(); paint(); });
   api.on('route', () => { mount(); readBackup(); });
   let ro = null;
-  if (typeof ResizeObserver === 'function') { ro = new ResizeObserver(() => api.frame(drawLines)); ro.observe(map); }
+  if (typeof ResizeObserver === 'function') { ro = new ResizeObserver(() => api.frame(drawLines)); ro.observe(map); ro.observe(rowMn); }
   S.res = api.storage.get('res') || {}; merge(api.data.read.resources.snapshot());
   paint(true); mount(); readBackup(true);
   return () => { ro?.disconnect(); };

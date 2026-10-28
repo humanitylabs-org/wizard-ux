@@ -429,6 +429,14 @@
         interceptors.set(a.id, { action, handler }); a.offs.add(() => interceptors.delete(a.id));
       },
       snoozeSomeday: sessionId => { if (!trusted || a.dead) throw new Error('Trusted navigation required'); return window.WosBoomerang.someday({ sessionId, restore: true }); },
+      // Ask the agent from a package view: a new chat carrying { title, message } as a quoted reply card (the shell's
+      // contextDraft path); `words` sends at once. Trusted only; the key is namespaced so it can't pose as another app.
+      ask(id, item = {}, words = '') {
+        if (!trusted || a.dead) throw new Error('Trusted navigation required');
+        const key = 'home:' + String(id || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 100);
+        if (key === 'home:' || typeof shell?.contextDraft !== 'function') return false;
+        return !!shell.contextDraft(key, { title: String(item.title || '').slice(0, 300), message: String(item.message || '').slice(0, 4000) }, String(words || '').slice(0, 1000));
+      },
       // Snooze = lowest priority, bottom of Ready (live.js / chats.js read host.snoozeOrder). Released on teardown.
       snoozeOrder(order) {
         if (!trusted || a.dead) throw new Error('Trusted navigation required');
@@ -607,7 +615,7 @@
       if (el.querySelector?.(sel)?.childNodes?.length && homeHtml.has(el)) {
         const prev = homeHtml.get(el);
         if (prev === html) { if (layers().some(l => l.on.home.size)) emit('home', Object.freeze({})); return; }
-        const LIVE = ['[data-home-resources]', '.home-time', '.home-date'];
+        const LIVE = ['[data-home-resources]', '.home-time', '.home-date', '.constellation'];
         const parts = h => { const t = document.createElement('template'); if (typeof t.content?.querySelector !== 'function') return null;
           t.innerHTML = h; const inner = LIVE.map(q => { const r = t.content.querySelector(q), v = r ? r.innerHTML : null; if (r) r.innerHTML = ''; return v; }); return [t.innerHTML, inner]; };
         const a = parts(prev), b = parts(html), live = LIVE.map(q => el.querySelector(q));
