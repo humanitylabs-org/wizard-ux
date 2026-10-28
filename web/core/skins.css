@@ -126,7 +126,7 @@ html[data-shell="desktop"] .st-root .skp { grid-template-columns: repeat(auto-fi
 .st-root .skp-dock { left: 0; right: 0; bottom: 0; height: 21%; background: var(--p-dock, var(--p-bg)); border-top: 1px solid var(--p-dl, transparent); }
 .st-root .skp-orb { left: 50%; top: 50%; width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px; border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--p-ac2, var(--p-ac)) 70%, #fff), var(--p-ac) 55%, var(--p-pk, var(--p-ac))); box-shadow: 0 0 10px color-mix(in srgb, var(--p-ac) 50%, transparent); }
-.st-root .skp-nm { display: block; padding: 0; font-size: min(14px, 15.2cqi); line-height: 18px; height: 18px; letter-spacing: -.005em; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); transition: color .18s ease; }
+.st-root .skp-nm { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; padding: 0; font-size: min(14px, 15.2cqi); line-height: 18px; min-height: 18px; letter-spacing: -.005em; text-align: center; text-wrap: balance; overflow-wrap: anywhere; overflow: hidden; color: var(--ink-2); transition: color .18s ease; }
 /* optical match: each face at the size where it reads like the others */
 .st-root .skp-card[data-skinpick="tide"] .skp-nm { font-size: min(14.5px, 16cqi); }
 .st-root .skp-card[data-skinpick="ember"] .skp-nm { font-size: min(17px, 19cqi); }

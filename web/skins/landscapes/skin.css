@@ -911,3 +911,10 @@ html[data-skin="landscapes-light"]:not([data-shell="desktop"]) .device:not(.orb-
 html[data-skin="landscapes-light"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg { filter: none; }
 html[data-skin="landscapes-light"]:not([data-shell="desktop"]) .dock .ddot.dhome .dsg .sgi { --c: #111216; }
 html[data-skin="landscapes-light"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .sgi { background: #fff; filter: drop-shadow(0 0 4px rgba(0, 0, 0, .55)); }
+/* Light polish (Miguel, 28 Oct 2026): a white arrow on the dark send button; app marks in full, deeper colour (the stock lit
+ * gradient washes out on light glass); count badges in the bright amber Landscapes Dark uses, not the muddy text amber. */
+html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .ch-compose button:is(.ch-send, .ch-mic.on) svg { stroke: #fff; }
+html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .dsg { opacity: 1; }
+html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .sgi:not(.sgb) { background: linear-gradient(168deg, color-mix(in oklab, var(--c) 88%, #fff) 0%, var(--c) 45%, color-mix(in oklab, var(--c) 70%, #000) 100%); }
+html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .dsg .sgi { filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .22)); }
+html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) :is(.dsg .dbg, .orb-badge) { color: #160b05; background: #ffbe55; box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .95); }
