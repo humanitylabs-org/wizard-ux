@@ -53,10 +53,10 @@ html[data-shell="phone"] .mh-top { padding-right: 60px; justify-content: flex-st
 
 /* ---------- AI: one fuel gauge, E to F; tap for every subscription ---------- */
 .mh-ai { display: flex; justify-content: center; margin: 10px 0 0; }
-.mh-root .mh-gauge { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 13px 0 5px !important; border-radius: 99px; background: var(--mh-chip) !important; box-shadow: inset 0 0 0 1px var(--mh-chip-line); -webkit-backdrop-filter: var(--mh-chip-blur); backdrop-filter: var(--mh-chip-blur); transition: transform 200ms var(--mh-ease), box-shadow 200ms; }
+.mh-root .mh-gauge { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px 0 8px !important; border-radius: 99px; background: var(--mh-chip) !important; box-shadow: inset 0 0 0 1px var(--mh-chip-line); -webkit-backdrop-filter: var(--mh-chip-blur); backdrop-filter: var(--mh-chip-blur); transition: transform 200ms var(--mh-ease), box-shadow 200ms; }
 .mh-gauge:hover { transform: translateY(-1px); }
 .mh-gauge[aria-expanded="true"] { box-shadow: inset 0 0 0 1.5px var(--mh-accent); }
-.mh-g-label { height: 22px; padding: 0 9px; border-radius: 99px; display: grid; place-items: center; font-size: 11.5px; font-weight: 850; letter-spacing: .08em; color: var(--mh-pearl-ink); background: var(--mh-pearl); }
+.mh-g-label { padding: 0 2px 0 6px; font-size: 11px; font-weight: 800; letter-spacing: .1em; color: var(--mh-ink-3); }
 .mh-g-ef { font-size: 10px; font-weight: 800; color: var(--mh-ink-2); }
 .mh-g-cells { display: flex; gap: 2.5px; }
 .mh-g-cells i { width: 6px; height: 13px; border-radius: 2.5px; background: var(--mh-track); }
@@ -130,18 +130,19 @@ html[data-shell="phone"] .mh-top { padding-right: 60px; justify-content: flex-st
 .mh-node.is-main .mh-role { color: var(--mh-accent); }
 .mh-node.is-standby .mh-role { color: var(--mh-good); }
 .mh-node.is-storage .mh-role { color: var(--mh-ink); font-weight: 700; }
-.mh-more-info { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 5px 10px; border-radius: 10px; background: var(--mh-chip); box-shadow: inset 0 0 0 1px var(--mh-chip-line); font-size: 11.5px; font-weight: 600; color: var(--mh-ink-2); white-space: nowrap; animation: mh-in 220ms var(--mh-ease) both; }
+.mh-more-info { flex: none; width: min(420px, calc(100cqw - 24px)); text-align: center; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 12px 10px; border-radius: 10px; background: var(--mh-chip); box-shadow: inset 0 0 0 1px var(--mh-chip-line); font-size: 12px; font-weight: 600; color: var(--mh-ink-2); white-space: normal; animation: mh-in 220ms var(--mh-ease) both; }
 .mh-more-info span:first-child { color: var(--mh-ink); font-weight: 700; }
 
-/* Working / Ready inside Main: two little bubbles, no words; the whole disc is one tap. */
-.mh-sess { display: flex; gap: 6px; }
-.mh-bub { min-width: 30px; height: 26px; padding: 0 7px; border-radius: 99px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; background: rgba(20, 33, 49, .08); }
-.mh-bub i { width: 8px; height: 8px; border-radius: 50%; background: rgba(20, 33, 49, .28); }
-.mh-bub b { font-size: 14px; font-weight: 850; color: var(--mh-pearl-ink); font-variant-numeric: tabular-nums; }
-.mh-bub.work.on i { background: var(--mh-warn); box-shadow: 0 0 0 0 color-mix(in srgb, var(--mh-warn) 60%, transparent); animation: mh-pip 1.8s ease-out infinite; }
-.mh-bub.ready.on i { background: var(--mh-good); }
-@keyframes mh-pip { 70%, 100% { box-shadow: 0 0 0 6px transparent; } }
-.mh-node.is-main:has(.mh-bub.work.on) .mh-disc { animation: mh-breathe 2.4s ease-in-out infinite; }
+/* Inside Main: a dot per chat (amber pulsing = working, green = ready) and a bell with the unread count. Main itself
+ * stays still, so the working pulse is the one thing that moves there. */
+.mh-sess { display: flex; flex-direction: column; align-items: center; gap: 5px; max-width: 76%; }
+.mh-dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.mh-dots i { width: 9px; height: 9px; border-radius: 50%; background: #1FB57A; box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .9); }
+.mh-dots i.work { background: #F2A516; animation: mh-work 1.4s ease-out infinite; }
+@keyframes mh-work { 0% { box-shadow: 0 0 0 1.5px #fff, 0 0 0 0 rgba(242, 165, 22, .75); } 80%, 100% { box-shadow: 0 0 0 1.5px #fff, 0 0 0 9px rgba(242, 165, 22, 0); } }
+.mh-bell { display: inline-flex; align-items: center; gap: 2px; color: var(--mh-pearl-ink); }
+.mh-bell .mh-i { width: 14px; height: 14px; stroke-width: 2.2; }
+.mh-bell b { font-size: 12px; font-weight: 850; font-variant-numeric: tabular-nums; }
 
 /* A tapped helper: what it can become, below the row, wired to it. */
 .mh-row.is-act { margin-top: -6px; }
@@ -157,16 +158,22 @@ html[data-shell="phone"] .mh-top { padding-right: 60px; justify-content: flex-st
 .mh-root .mh-act-btn.is-no { cursor: default; background: transparent !important; box-shadow: inset 0 0 0 1px var(--mh-chip-line); }
 .mh-act-btn.is-no b { color: var(--mh-ink-2); }
 .mh-act-btn.is-no small { color: var(--mh-warn); }
+.mh-act-why { display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: 11.5px; font-weight: 600; color: var(--mh-ink-2); text-align: center; }
+.mh-act-why b { font-size: 11.5px; font-weight: 750; color: var(--mh-warn); }
+.mh-more-info .mh-act-btns { margin-top: 5px; }
+.mh-root .mh-act-btn.is-small { min-width: 0; padding: 5px 11px !important; border-radius: 99px; }
 .mh-node.is-open .mh-disc { box-shadow: 0 0 0 3px var(--mh-accent), 0 10px 24px -12px rgba(0, 0, 0, .55); }
 
 /* Working / Ready inside Main: two taps on the disc; a soft breath while sessions work, nothing spins. */
-@keyframes mh-breathe { 50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--mh-accent) 36%, transparent), 0 0 0 18px color-mix(in srgb, var(--mh-accent) 12%, transparent), 0 14px 44px -10px var(--mh-accent); } }
 
 /* One "Show details" under all machines: Memory, Disk, CPU. Width = capacity (vs the biggest machine), fill = use. */
 .mh-root .mh-details { height: 28px; padding: 0 12px 0 14px !important; border-radius: 99px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px !important; font-weight: 650; color: var(--mh-ink-2) !important; background: var(--mh-chip) !important; box-shadow: inset 0 0 0 1px var(--mh-chip-line); }
 .mh-details:hover { color: var(--mh-ink) !important; }
-.mh-chev { width: 7px; height: 7px; border: solid currentColor; border-width: 0 2px 2px 0; transform: translateY(-2px) rotate(45deg); transition: transform 200ms var(--mh-ease); }
-.mh-details[aria-expanded="true"] .mh-chev { transform: translateY(1px) rotate(225deg); }
+.mh-chev { width: 8px; height: 8px; border: solid currentColor; border-width: 0 2px 2px 0; transform: translateY(-2px) rotate(45deg); transition: transform 300ms var(--mh-ease); }
+.mh-chev.is-up { transform: translateY(2px) rotate(225deg); }
+.mh-root .mh-details { width: 34px; padding: 0 !important; justify-content: center; }
+.mh-chev-btn { display: grid; place-items: center; width: 30px; height: 20px; margin-top: -2px; border-radius: 99px; color: var(--mh-ink-2); background: var(--mh-chip); box-shadow: inset 0 0 0 1px var(--mh-chip-line); }
+.mh-row.is-devchev { margin-top: -10px; }
 /* Folded by default; "Show details" eases them open (grid rows 0fr -> 1fr), nothing is rebuilt. */
 .mh-bars, .mh-legend { display: grid; grid-template-rows: 0fr; opacity: 0; margin-top: -6px; transition: grid-template-rows 480ms var(--mh-ease), opacity 360ms ease, margin-top 480ms var(--mh-ease); }
 .mh-bars { width: 100%; }
@@ -241,3 +248,8 @@ html[data-skin="landscapes"] .mh-age-bg { fill: rgba(12, 16, 24, .72); }
   .mh-root *, .mh-root *::before, .mh-root *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
   .mh-lines .comet { display: none; }
 }
+
+/* Landscapes: pictures behind, so chips and bars get a darker, steadier backing. */
+html[data-skin="landscapes"][data-tweaks~="miguel/machines-home"] { --mh-chip: rgba(10, 14, 22, .74); --mh-track: rgba(255, 255, 255, .26); }
+html[data-skin="landscapes"] .mh-bar i { background: linear-gradient(90deg, var(--mh-accent) var(--f), var(--mh-track) var(--f)), rgba(10, 14, 22, .7); box-shadow: 0 0 0 2px rgba(10, 14, 22, .55); }
+html[data-skin="landscapes"] .mh-bar small { background: rgba(10, 14, 22, .78); color: var(--mh-ink); }

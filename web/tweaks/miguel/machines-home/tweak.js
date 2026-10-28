@@ -17,13 +17,14 @@
  * writes: actions open the service's own app or ask the agent in a new chat (api.nav.ask). */
 const SVG = 'http://www.w3.org/2000/svg';
 const PLUS = [['path', { d: 'M12 6v12M6 12h12' }]];
+const BELL = [['path', { d: 'M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z' }], ['path', { d: 'M10 20a2 2 0 0 0 4 0' }]];
 const APP_OF = { chatgpt: 'wizard-chatgpt', claude: 'wizard-claude', tinfoil: 'wizard-tinfoil' };
 const BUILT_IN = [['claude', 'Claude'], ['chatgpt', 'ChatGPT'], ['tinfoil', 'Tinfoil']];
 const TOP_UP = { tinfoil: 'https://dash.tinfoil.sh/?tab=billing' };
 
 export default function setup(api) {
   const S = { ws: api.storage.get('ws') || 'mine', res: {}, backup: api.storage.get('backup') || null, backupTried: 0,
-    open: new Set(), bars: api.storage.get('details') === 'on', nick: api.storage.get('nick') || {}, def: api.storage.get('def') || '' };
+    open: new Set(api.storage.get('devs') === 'off' ? [] : ['devs']), bars: api.storage.get('details') !== 'off', unread: 0, nick: api.storage.get('nick') || {}, def: api.storage.get('def') || '' };
   let fresh = true;  // entry motion only on the first paint and on a workspace switch, never on a later reading
 
   /* ---------- tiny DOM helpers (no markup strings) ---------- */
@@ -39,6 +40,7 @@ export default function setup(api) {
     return el;
   };
   const sv = (tag, attrs = {}, parent) => { const e = document.createElementNS(SVG, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.append(e); return e; };
+  const bell = () => { const s = sv('svg', { class: 'mh-i', viewBox: '0 0 24 24', 'aria-hidden': 'true' }); for (const [t, a] of BELL) sv(t, a, s); return s; };
   const nw = cls => fresh ? cls + ' mh-new' : cls;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const gbFmt = v => v == null ? '?' : v >= 1000 ? `${(v / 1000).toFixed(1).replace(/\.0$/, '')} TB` : v >= 100 ? `${Math.round(v)} GB` : `${v.toFixed(1).replace(/\.0$/, '')} GB`;
@@ -79,12 +81,11 @@ export default function setup(api) {
     const t = b.target, last = b.last || {}, okAt = last.ok ? (last.finished_at || last.last_success_at) : last.last_success_at;
     const every = b.every === 'hourly' ? 3600 : 86400, age = okAt ? Math.max(0, Date.now() / 1000 - okAt) : null;
     const used = +last.repository_bytes > 0 ? last.repository_bytes / 1e9 : null, r = b.retention || {};
-    const keep = ['daily', 'weekly', 'monthly'].filter(k => +r[k] > 0).map(k => `${r[k]} ${k}`);
-    const cf = (S.backup?.connector || []).find(c => c && /cloudflare/i.test(c.id || c.name || ''));
+    const span = [+r.daily > 0 && `any of the last ${r.daily} days`, +r.weekly > 0 && `one a week for ${r.weekly} weeks`, +r.monthly > 0 && `one a month for ${r.monthly} months`].filter(Boolean);
+    const cf = (S.backup?.connector || []).find(c => c && /cloudflare/i.test(c.id || c.name || '') && c.connected);
     return { id: 'storage', where: t.kind === 'r2' ? 'Cloudflare R2' : t.kind === 's3' ? 'S3 storage' : 'Backup storage', bucket: t.bucket || '',
-      used, snaps: +last.snapshots || null, every: b.every === 'hourly' ? 'Every hour' : b.at ? `Daily at ${b.at}` : 'Daily', age,
-      keep: keep.length ? `Keeps the newest, then ${keep.join(', ')}` : '',
-      cf: cf ? (cf.connected ? 'Cloudflare app connected' : 'Cloudflare app not connected') : '',
+      used, snaps: +last.snapshots || null, every: b.every === 'hourly' ? 'Backs up every hour' : b.at ? `Backs up daily at ${b.at}` : 'Backs up daily', age,
+      keep: span.length ? `Go back to ${span.join(', then ')}` : '', cf: !!cf,
       state: !okAt ? 'no' : b.state === 'failing' || age > 2 * every ? 'tight' : 'ok' };
   }
   const backupRunning = () => Array.isArray(S.backup?.active) && S.backup.active.length > 0;
@@ -99,18 +100,23 @@ export default function setup(api) {
   }
   // What a helper can become, and whether it qualifies. Storage keeps copies of the backup (room for two, plus margin);
   // standby is the Backup app's own verdict (big enough to take over from Main at once).
+  // Each action says why not, one short line per reason, so the owner knows what to fix.
+  const reason = c => c.what === 'system' ? `runs ${String(c.say || '').split(':')[0]}; Wizard needs Linux or a Mac`
+    : String(c.say || '').replace(/^(\d+) (cores|GB memory|GB free) \(needs (\d+)\)$/, (_, h, k, n) => `has ${h} ${k === 'cores' ? 'cores' : k === 'GB memory' ? 'GB memory' : 'GB free'}, needs ${n}`);
   function actions(m) {
     if (m.status !== 'online') return [{ id: 'reconnect', label: 'Reconnect', ok: true, note: m.error ? 'Wizard can’t log in' : 'Not on the network',
       words: `Reconnect ${m.name} to this Wizard so it shows as a helper again.`, why: m.error || `${m.name} is ${offText(m).toLowerCase()}.` },
-      { id: 'storage', label: 'Use for storage', ok: false, note: 'Reconnect first' }, { id: 'standby', label: 'Make standby', ok: false, note: 'Reconnect first' }];
+      { id: 'storage', label: 'Use for storage', ok: false, note: 'Not eligible', no: ['reconnect it first'] },
+      { id: 'standby', label: 'Make standby', ok: false, note: 'Not eligible', no: ['reconnect it first'] }];
     const repo = S.backup?.backup?.last?.repository_bytes ? S.backup.backup.last.repository_bytes / 1e9 : 25;
     const need = Math.max(50, Math.ceil(2 * repo + 20)), free = m.freeGB == null ? null : Math.round(m.freeGB);
-    const q = qualOf(m.id), bad = (q?.checks || []).find(c => c && c.ok === false);
+    const q = qualOf(m.id), ready = !!q && /^(ok|yes|ready|fits)$/i.test(q.verdict || '');
+    const stNo = free == null ? ['its disk isn’t reported yet'] : free >= need ? [] : [`has ${free} GB free, needs ${need}`];
+    const sbNo = !q || q.verdict === 'unknown' ? ['Wizard is still checking it'] : ready ? [] : (q.checks || []).filter(c => c && c.ok === false).map(reason);
     return [
-      { id: 'storage', label: 'Use for storage', ok: free != null && free >= need, note: free == null ? 'Disk not reported' : free >= need ? `${free} GB free` : `Needs ${need} GB free (has ${free})`,
+      { id: 'storage', label: 'Use for storage', ok: !stNo.length, note: stNo.length ? 'Not eligible' : `${free} GB free`, no: stNo,
         words: `Make ${m.name} a storage device for my backups.`, why: `${m.name}: ${free} GB free; backup copies take ${gbFmt(repo)}.` },
-      { id: 'standby', label: qualifies(m.id) ? 'Standby device' : 'Make standby', ok: !!q && /^(ok|yes|ready|fits)$/i.test(q.verdict || ''),
-        note: !q || q.verdict === 'unknown' ? 'Checking…' : qualifies(m.id) ? 'Can take over' : bad?.say || q.say || 'Not suitable',
+      { id: 'standby', label: qualifies(m.id) ? 'Standby device' : 'Make standby', ok: ready, note: ready ? 'Can take over' : 'Not eligible', no: ready ? [] : sbNo.length ? sbNo : [q.say || 'not suitable'],
         words: `Make ${m.name} my standby device.`, why: (q?.checks || []).map(c => c.say).join('; ') }];
   }
   // AI: every account. Level = the tightest weekly allowance left; prepaid credit = balance of top-up.
@@ -155,8 +161,8 @@ export default function setup(api) {
   const aiList = h('div', { cls: 'mh-ai-list', hidden: true, 'aria-label': 'AI accounts' });
   const lines = sv('svg', { class: 'mh-lines', 'aria-hidden': 'true' });
   const row = cls => h('div', { cls: 'mh-row ' + cls });
-  const rowSt = row('is-storage'), rowMn = row('is-machines'), rowAct = row('is-act'), rowMore = row('is-more'), rowPp = row('is-people'), rowDv = row('is-devices');
-  const map = h('div', { cls: 'mh-map' + (S.bars ? ' is-details' : '') }, lines, rowSt, rowMn, rowAct, rowMore, rowPp, rowDv);
+  const rowSt = row('is-storage'), rowMn = row('is-machines'), rowAct = row('is-act'), rowMore = row('is-more'), rowPp = row('is-people'), rowDv = row('is-devices'), rowChev = row('is-more is-devchev');
+  const map = h('div', { cls: 'mh-map' + (S.bars ? ' is-details' : '') }, lines, rowSt, rowMn, rowAct, rowMore, rowPp, rowDv, rowChev);
   root.append(h('header', { cls: 'mh-top' }, wsBar), h('div', { cls: 'mh-body' }, aiRow, aiList, map));
 
   /* ---------- top ---------- */
@@ -219,6 +225,7 @@ export default function setup(api) {
       bar('Disk', m.diskGB, m.diskUsed || 0, `${gbFmt(m.diskUsed)} of ${gbFmt(m.diskGB)} used`),
       bar('CPU', m.cores, m.cores * (m.cpu || 0) / 100, `${Math.round(m.cpu || 0)}% of ${m.cores} cores busy`)));
   }
+  const chev = (open, extra = {}) => h('span', { cls: 'mh-chev-btn', 'aria-hidden': 'true', ...extra }, h('i', { cls: 'mh-chev' + (open ? ' is-up' : '') }));
   const label = (name, role, cls = '') => h('span', { cls: 'mh-label ' + cls }, h('span', { cls: 'mh-name', text: name }), role ? h('span', { cls: 'mh-role', text: role }) : null);
   function machineNode(m, role, maxOf, extra = {}) {
     const s = extra.size || sizeOf(m), off = m.status && m.status !== 'online' && role !== 'main';
@@ -226,11 +233,12 @@ export default function setup(api) {
     let tap;
     if (role === 'main' && extra.sessions) {
       // One tap for both: a working bubble (pulses while something runs) and a ready bubble, no words.
-      const x = extra.sessions;
+      // A dot per chat: amber ones pulse while they work, green ones are ready; a bell with the unread count. No numbers.
+      const x = extra.sessions, cap = 12, dots = (n, cls) => Array.from({ length: Math.min(n, cap) }, () => h('i', { cls }));
       disc.append(h('span', { cls: 'mh-sess', 'aria-hidden': 'true' },
-        h('span', { cls: 'mh-bub work' + (x.working ? ' on' : '') }, h('i'), h('b', { text: String(x.working) })),
-        h('span', { cls: 'mh-bub ready' + (x.ready ? ' on' : '') }, h('i'), h('b', { text: String(x.ready) }))));
-      tap = h('button', { type: 'button', cls: 'mh-tap', data: { open: 'ready' }, 'aria-label': `${m.name}: ${x.working} working, ${x.ready} ready. Open your chats` }, disc);
+        h('span', { cls: 'mh-dots' }, dots(x.working, 'work'), dots(Math.min(x.ready, cap - Math.min(x.working, cap)), 'ready')),
+        S.unread ? h('span', { cls: 'mh-bell' }, bell(), h('b', { text: String(Math.min(S.unread, 99)) })) : null));
+      tap = h('button', { type: 'button', cls: 'mh-tap', data: { open: 'ready' }, 'aria-label': `${m.name}: ${x.working} working, ${x.ready} ready${S.unread ? `, ${S.unread} unread` : ''}. Open your chats` }, disc);
     } else if (role !== 'main' && !extra.managed) {
       tap = h('button', { type: 'button', cls: 'mh-tap', data: { machine: m.id }, 'aria-expanded': String(S.open.has('m:' + m.id)), 'aria-label': `${m.name}, ${extra.roleText}. Show what it can do` }, disc);
     }
@@ -242,21 +250,28 @@ export default function setup(api) {
     return h('div', { cls: nw('mh-act'), data: { of: m.id } },
       h('span', { cls: 'mh-act-head' }, h('b', { text: m.name }), h('span', { text: m.status === 'online' ? (qualifies(m.id) ? 'Standby device' : 'Helper') : offText(m) })),
       h('span', { cls: 'mh-act-btns' }, actions(m).map(a => h('button', { type: 'button', cls: 'mh-act-btn' + (a.ok ? '' : ' is-no'), disabled: !a.ok, data: { ask: `${m.id}:${a.id}` } },
-        h('b', { text: a.label }), h('small', { text: a.note })))));
+        h('b', { text: a.label }), h('small', { text: a.note })))),
+      ...actions(m).filter(a => !a.ok && a.no?.length).map(a => h('span', { cls: 'mh-act-why' },
+        h('b', { text: a.id === 'standby' ? 'Can’t be a standby:' : 'Can’t be storage:' }), a.no.map(t => h('span', { text: t })))));
   }
   function storageNode(st) {
     const open = S.open.has('storage');
     return h('div', { cls: nw('mh-node is-storage'), data: { id: 'storage', role: 'storage', fit: st.state }, style: { '--s': '50' } },
       h('button', { type: 'button', cls: 'mh-tap', data: { toggle: 'storage' }, 'aria-expanded': String(open), 'aria-label': `Storage, ${st.used == null ? 'size unknown' : gbFmt(st.used) + ' stored'}. Show where` },
-        h('span', { cls: 'mh-hold' }, h('span', { cls: 'mh-disc' })), label('Storage', st.used == null ? st.where : gbFmt(st.used) + ' stored')),
+        h('span', { cls: 'mh-hold' }, h('span', { cls: 'mh-disc' })), label('Storage', st.used == null ? st.where : gbFmt(st.used) + ' stored'), chev(open)),
       open ? h('span', { cls: 'mh-more-info' },
-        h('span', { text: st.where + (st.bucket ? ` · ${st.bucket}` : '') }),
-        h('span', { text: [st.snaps ? `${st.snaps} copies` : '', st.every].filter(Boolean).join(' · ') }),
+        h('span', { text: st.where + (st.bucket ? ` · bucket “${st.bucket}”` : '') }),
+        st.used != null && st.snaps ? h('span', { text: `${gbFmt(st.used)} holds all ${st.snaps} backups: each one adds only what changed` }) : null,
+        h('span', { text: st.every }),
         st.keep ? h('span', { text: st.keep }) : null,
-        st.cf ? h('span', { text: st.cf }) : null) : null);
+        h('span', { cls: 'mh-act-btns' },
+          [['now', 'Back up now', 'Run a backup of this Wizard now.'], ['schedule', 'Change schedule', 'I want to change how often my Wizard backs up.'],
+            ['more', 'Add storage', 'Add another place to keep encrypted copies of my backups.']]
+            .map(([id, text, words]) => h('button', { type: 'button', cls: 'mh-act-btn is-small', data: { stAsk: id, words } }, h('b', { text }))))) : null);
   }
+  const devOpen = p => p.devices ? S.open.has('devs') : S.open.has('p:' + p.id);
   function personNode(p) {
-    const open = S.open.has('p:' + p.id), n = p.devices ? p.devices.length : null;
+    const open = devOpen(p), n = p.devices ? p.devices.length : null;
     return h('button', { type: 'button', cls: nw('mh-person'), data: { person: p.id }, 'aria-expanded': String(open), 'aria-label': `${p.name}${n != null ? `, ${n} devices` : ''}` },
       h('span', { cls: 'mh-pdisc', text: p.count ? '+' + p.count : initial(p.name) }),
       label(p.name, n ? `${n} device${n === 1 ? '' : 's'}` : ''));
@@ -284,14 +299,18 @@ export default function setup(api) {
       setRow(rowMn, [legend(false), ...around(main, others).map(node), legend(true)]);
       const open = others.find(m => S.open.has('m:' + m.id));
       setRow(rowAct, open ? [actPanel(open)] : []);
-      setRow(rowMore, all.length ? [h('button', { type: 'button', cls: 'mh-details', data: { toggle: 'bars' }, 'aria-expanded': String(S.bars) },
-        h('span', { text: S.bars ? 'Hide details' : 'Show details' }), h('i', { cls: 'mh-chev', 'aria-hidden': 'true' }))] : []);
+      setRow(rowMore, all.length ? [h('button', { type: 'button', cls: 'mh-details', data: { toggle: 'bars' }, 'aria-expanded': String(S.bars), 'aria-label': 'Show or hide machine details' },
+        h('i', { cls: 'mh-chev' + (S.bars ? ' is-up' : ''), 'aria-hidden': 'true' }))] : []);
     }
     const ps = people();
     setRow(rowPp, ps.map(personNode));
-    const devs = ps.filter(p => S.open.has('p:' + p.id)).flatMap(p => p.devices ? p.devices.map(d => h('span', { cls: nw('mh-dev'), data: { of: p.id } },
+    const devs = ps.filter(devOpen).flatMap(p => p.devices ? p.devices.map(d => h('span', { cls: nw('mh-dev'), data: { of: p.id } },
       h('i', { cls: 'mh-dot' + (d.online ? '' : ' off') }), d.name)) : [h('span', { cls: nw('mh-dev is-none'), data: { of: p.id }, text: `${p.name}’s devices aren’t visible yet` })]);
     setRow(rowDv, devs);
+    // The same chevron as everywhere else, so it is plain the devices fold away.
+    const hasDevs = ps.some(p => p.devices && p.devices.length);
+    setRow(rowChev, hasDevs ? [h('button', { type: 'button', cls: 'mh-details is-bare', data: { toggle: 'devs' }, 'aria-expanded': String(S.open.has('devs')), 'aria-label': 'Show or hide devices' },
+      h('i', { cls: 'mh-chev' + (S.open.has('devs') ? ' is-up' : ''), 'aria-hidden': 'true' }))] : []);
     api.frame(drawLines);
   }
   function setRow(r, items) { r.replaceChildren(...items); r.hidden = !items.length; }
@@ -355,13 +374,15 @@ export default function setup(api) {
   /* ---------- taps: everything expands in place ---------- */
   const flip = k => { if (S.open.has(k)) S.open.delete(k); else S.open.add(k); };
   api.listen(root, 'click', e => {
-    let b = e.target; while (b && b !== root && !(b.dataset && (b.dataset.ws || b.dataset.act || b.dataset.open || b.dataset.person || b.dataset.toggle || b.dataset.machine || b.dataset.ask))) b = b.parentNode;
+    let b = e.target; while (b && b !== root && !(b.dataset && (b.dataset.ws || b.dataset.act || b.dataset.open || b.dataset.person || b.dataset.toggle || b.dataset.machine || b.dataset.ask || b.dataset.stAsk))) b = b.parentNode;
     if (!b || b === root) return;  // Sign in / Sign out carry the shell's own data-res-signin, which opens that app
     const d = b.dataset;
     if (d.open) return api.data.read.sessions?.open(d.open);
     if (d.ws) { if (S.ws === d.ws) return; S.ws = d.ws; api.storage.set('ws', d.ws); fresh = true; paint(true); return; }
     if (d.act === 'add-managed') return api.toast('Adding a Wizard you manage: coming soon');
-    if (d.person) { flip('p:' + d.person); paint(); return; }
+    if (d.person) { const p = people().find(x => x.id === d.person); if (p?.devices) { flip('devs'); api.storage.set('devs', S.open.has('devs') ? 'on' : 'off'); } else flip('p:' + d.person); paint(); return; }
+    if (d.toggle === 'devs') { flip('devs'); api.storage.set('devs', S.open.has('devs') ? 'on' : 'off'); paint(); return; }
+    if (d.stAsk) { const st = storage(); if (!api.nav?.ask?.('storage-' + d.stAsk, { title: 'Storage', message: st ? [st.where + ' · ' + st.bucket, st.every, st.keep].join('\n') : '' }, d.words)) api.toast('Open Chats, then try again'); return; }
     if (d.machine) { const k = 'm:' + d.machine, was = S.open.has(k); for (const x of [...S.open]) if (x.startsWith('m:')) S.open.delete(x); if (!was) S.open.add(k); fresh = !was; paint(); return; }
     if (d.ask) {
       const [id, what] = d.ask.split(':'), m = machine(id), a = actions(m).find(x => x.id === what);
@@ -371,13 +392,13 @@ export default function setup(api) {
       return;
     }
     if (d.toggle === 'ai') { flip('ai'); paint(); return; }
-    if (d.toggle === 'signin') { flip('signin'); drawn.list = ''; paint(); return; }
+    if (d.toggle === 'signin') { flip('signin'); renderAIList(); drawn.list = ''; return; }
     if (d.toggle === 'storage') { flip('storage'); paint(); return; }
     if (d.toggle === 'bars') {
       // Fold the bars open or shut with one class: the CSS eases the height, nothing is rebuilt.
       S.bars = !S.bars; api.storage.set('details', S.bars ? 'on' : 'off');
       map.classList.toggle('is-details', S.bars); b.setAttribute('aria-expanded', String(S.bars));
-      if (b.firstElementChild) b.firstElementChild.textContent = S.bars ? 'Hide details' : 'Show details';
+      b.firstElementChild?.classList.toggle('is-up', S.bars);
     }
   });
   api.listen(root, 'input', e => {
@@ -393,7 +414,7 @@ export default function setup(api) {
   const mapSig = () => { const st = storage();
     return JSON.stringify([S.ws, [...S.open].filter(k => k !== 'ai' && k !== 'signin'), reg().this || null, managedList(),
       devices().map(d => [d.id, d.name, d.status, d.error, d.cpus, d.memoryTotalGB, diskGB(d), Math.round((d.memory || 0) / 5), Math.round((d.cpu || 0) / 5), Math.round((freeGB(d) || 0) / 5)]),
-      myDevices(), sessions(), backupRunning(), st && { ...st, age: st.age == null ? null : agoS(st.age), used: st.used == null ? null : gbFmt(st.used) },
+      myDevices(), sessions(), S.unread, backupRunning(), st && { ...st, age: st.age == null ? null : agoS(st.age), used: st.used == null ? null : gbFmt(st.used) },
       (S.backup?.standby?.machines || []).map(x => [x.id, x.verdict, (x.checks || []).map(c => c.ok)])]); };
   function paint(force) {
     const top = JSON.stringify([thisName(), managedList().map(g => [g.id, g.name]), S.ws]);
@@ -419,6 +440,7 @@ export default function setup(api) {
     paint();
   }
   const merge = state => { const got = Object.fromEntries(Object.entries(state || {}).filter(([, v]) => v != null)); S.res = { ...S.res, ...got }; return got; };
+  api.inbox?.watch?.(items => { const n = (items || []).filter(i => !i.read && !i.archived).length; if (n !== S.unread) { S.unread = n; paint(); } });
   api.data.read.resources.watch(state => { const got = merge(state); if (got.devices || got.ai) keep(); paint(); readBackup(); });
 
   /* ---------- mount at Home; keep it there across Home repaints ---------- */
