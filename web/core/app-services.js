@@ -25,6 +25,36 @@
       try { p.postMessage(JSON.stringify({ ...extra, id, v: 1, appId, method })); } catch (e) { clearTimeout(timer); vaultWaits.delete(id); reject(e); }
     });
   }
+  // A fingerprint prompt only for the app you are looking at (James, 27 Oct 2026: after a reload a background
+  // Messenger asked for his fingerprint over Chats). seal/open wait until the app is in front and has stayed there
+  // briefly (a reload passes desks on screen on its way to where you were); after VAULT_WAIT_MS the app gets
+  // code 'not_in_front' and simply asks again when opened.
+  const VAULT_STEADY_MS = 600, VAULT_WAIT_MS = 60000;
+  function inFront(st) {
+    if (document.hidden) return false;
+    try { return (st.isFront || st.isVisible || (() => true))() === true; } catch (_) { return false; }
+  }
+  // Already steadily in front (the usual tap on "Unlock with fingerprint"): no added wait.
+  function steadyFront(st) {
+    const now = Date.now();
+    if (!inFront(st)) { st.frontSince = 0; return false; }
+    st.frontSince ||= now; return now - st.frontSince >= VAULT_STEADY_MS;
+  }
+  setInterval(() => { for (const st of frames.values()) steadyFront(st); }, 250);
+  function whenInFront(st, alive) {
+    if (steadyFront(st)) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const t0 = Date.now(); let since = 0;
+      const tick = () => {
+        if (!alive()) return reject(Object.assign(new Error('closed'), { code: 'cancelled' }));
+        const now = Date.now();
+        if (inFront(st)) { since ||= now; if (now - since >= VAULT_STEADY_MS) return resolve(); } else since = 0;
+        if (now - t0 > VAULT_WAIT_MS) return reject(Object.assign(new Error('not_in_front'), { code: 'not_in_front' }));
+        setTimeout(tick, 150);
+      };
+      tick();
+    });
+  }
   let registry, available = null, serial = 0, rootArm = null;
   // Share receiving (docs/SHARE-SHEET.md): the share sheet hands its per-app ops here once, at shell load, before
   // any app frame exists; they are never on a global, so a frame reaches only its own app id's items.
@@ -72,11 +102,11 @@
       if (st.doc && !valid(st, st.doc)) reset(st);
     }
   }
-  function attach(frame, { appId, path, openThread, openContextDraft, isVisible, back, readingStorage } = {}) {
+  function attach(frame, { appId, path, openThread, openContextDraft, isVisible, isFront, back, readingStorage } = {}) {
     frames.get(frame)?.detach();
     if (!frame || frame.tagName !== 'IFRAME' || !appId || !path) return () => {};
     let url; try { url = new URL(path, ORIGIN); } catch (_) { return () => {}; }
-    const st = { frame, appId, url, openThread, openContextDraft, isVisible, back, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
+    const st = { frame, appId, url, openThread, openContextDraft, isVisible, isFront, back, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
     if (!registered(st)) return () => {};
     const load = () => { if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); restoreReturn(st); };
     st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); if (st.badged) setBadge(st.appId, 0); };
@@ -210,7 +240,7 @@
       return { release() { if (released) return; released = true; st.holds.delete(id); changed(); } };
     };
     // Capture holds start before permission, end only after stop/cancel settles. Lifecycle never cancels capture.
-    const start = async opts => {
+    const start = async (opts, attaching = false) => {
       check(); if (!window.WizAppCapture) throw fault('Shared capture unavailable');
       if (['auto', 'command'].includes(opts?.kind)) throw fault('Capture kind is reserved for Wizard voice; use audio/meeting and task metadata');
       const shell = window.__wos || window.__wux;
@@ -220,9 +250,11 @@
       const release = () => { h.release(); removeEventListener('wizard-app-capture-state', onCaptureState); };
       const onCaptureState = () => { if (resource.getState?.().active === false) release(); }; // actual recorder state, never elapsed time
       addEventListener('wizard-app-capture-state', onCaptureState);
+      let session;
       try {
         const safe = {}; for (const key of ['kind','mime','audio','pcm','chunkMs','maxMs','maxBytes','systemAudio','meta','seqBase','offsetMs','preparedId','resumeId']) if(opts?.[key] !== undefined) safe[key]=opts[key];
-        const session = await (safe.resumeId && resource.resume ? resource.resume(st.appId, safe.resumeId, safe) : resource.start(st.appId, safe));
+        session = await (attaching ? resource.attach(st.appId) : safe.resumeId && resource.resume ? resource.resume(st.appId, safe.resumeId, safe) : resource.start(st.appId, safe));
+        if (!session) { release(); check(); return null; }
         let finished;
         const finish = method => {
           check();
@@ -242,7 +274,16 @@
           stop: () => finish('stop'), cancel: () => finish('cancel'),
           pause() { check(); if (!session.pause) return Promise.reject(fault('Capture pause unavailable')); return session.pause(); },
           resume() { check(); if (!session.resume) return Promise.reject(fault('Capture resume unavailable')); return session.resume(); } });
-      } catch (e) { release(); throw e; }
+      } catch (e) {
+        // The permission/native await can outlive this document. Stop and retain the take before rejecting.
+        if (session) { try { await session.stop(); } catch (_) { /* capture service retains retryable custody */ } }
+        release();
+        if (e.code === 'busy' && e.appId) {
+          const owner = apps().find(a => a.id === e.appId);
+          e.message = 'The microphone is recording in ' + (owner?.name || String(e.appId).replace(/[-_]/g, ' ')) + '. Stop that recording first.';
+        }
+        throw e;
+      }
     };
     source.addEventListener('pagehide', () => { if (st.doc === doc) reset(st); }, { once: true });
     return Object.freeze({ version: VERSION, appId: st.appId,
@@ -275,8 +316,8 @@
       vault: Object.freeze({
         // check() again after the await: a reloaded, closed or foreign document never receives a late secret.
         has: async () => { check(); const r = await vaultCall(st.appId, 'has'); check(); return r; },
-        seal: async (secret, title) => { check(); const r = await vaultCall(st.appId, 'seal', { secret: String(secret ?? ''), title: String(title || '') }); check(); return r; },
-        open: async title => { check(); const r = await vaultCall(st.appId, 'open', { title: String(title || '') }); check(); return r; },
+        seal: async (secret, title) => { check(); await whenInFront(st, () => { try { check(); return true; } catch (_) { return false; } }); const r = await vaultCall(st.appId, 'seal', { secret: String(secret ?? ''), title: String(title || '') }); check(); return r; },
+        open: async title => { check(); await whenInFront(st, () => { try { check(); return true; } catch (_) { return false; } }); const r = await vaultCall(st.appId, 'open', { title: String(title || '') }); check(); return r; },
         forget: async () => { check(); const r = await vaultCall(st.appId, 'forget'); check(); return r; },
       }),
       titlebar: Object.freeze({ set(list) { check(); return setTools(st, list); },
@@ -367,7 +408,8 @@
       voice: Object.freeze({ stripAddress(text) { check(); return window.WizConfig.stripAddress(String(text || '')); }, async transcribe(file, opts) { check(); const result = await transcribeFile(file, opts); check(); return result; } }),
       theme: Object.freeze({ get() { check(); return window.WizAppearance?.get(frameOf(st)) || null; } }),
       update: Object.freeze({ hold, available() { check(); return available; } }),
-      capture: Object.freeze({ start: opts => { if (st.frame.dataset?.voiceService) throw fault('Voice service has no capture authority'); return start(opts); },
+      capture: Object.freeze({ attach: () => { check(); if (st.frame.dataset?.voiceService) throw fault('Voice service has no capture authority'); return start({}, true); },
+        start: opts => { if (st.frame.dataset?.voiceService) throw fault('Voice service has no capture authority'); return start(opts); },
         prepare(opts) {
           check(); const shell=window.__wos||window.__wux;
           if(shell?.voice && shell.voice!=='idle') throw Object.assign(fault('Microphone held by Wizard voice'),{code:'busy',appId:'wizard-voice'});

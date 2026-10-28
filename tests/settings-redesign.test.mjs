@@ -72,6 +72,17 @@ test('page Back returns to root, then leaves closing to the shell; confirm Back 
   assert.match(h.root.innerHTML, /role="alertdialog"/); assert.equal(h.view.back(), true); assert.equal(h.view.page, 'chats');
   assert.equal(h.view.back(), true); assert.equal(h.view.page, ''); assert.equal(h.view.back(), false); assert.equal(h.posts.length, 0);
 });
+test('tap outside closes Settings confirmations like Back without leaving the owning page', () => {
+  for (const shell of ['phone','desktop']) {
+    const h = harness({shell});
+    const outside = {classList:{contains: c => c === 'st-confirm-scrim'},closest:()=>null};
+    h.view.focus('chats-default'); h.act('data-chats-choice','mizel-chats');
+    assert.match(h.root.innerHTML,/role="alertdialog"/);
+    assert.equal(h.view.dispatch(outside),true);
+    assert.doesNotMatch(h.root.innerHTML,/role="alertdialog"/);
+    assert.equal(h.view.page,'chats'); assert.equal(h.posts.length,0);
+  }
+});
 test('chooser confirms before POST, reads the exact slot, refreshes registry and rerenders only after confirmation', async () => {
   const h = harness(); h.view.focus('chats-default');
   assert.match(h.root.innerHTML, /Wizard Chats \(built in\)/); assert.match(h.root.innerHTML, /Mizel Chats/);

@@ -36,6 +36,8 @@
 .rs-na i{display:none}
 .rs-stale .rs-meters,.rs-account.rs-stale,.rs-detail-meters.rs-stale{opacity:.65}
 .rs-unavailable{font-size:12px;color:var(--wz-text-secondary,var(--ink-2));grid-column:1/-1;min-height:34px}
+.rs-backdrop{position:absolute;inset:0;z-index:119}
+body>.rs-backdrop{position:fixed}
 .rs-sheet{position:absolute;z-index:120;inset:calc(var(--safe-t) + 12px) 10px calc(var(--dock-h) + var(--safe-b) + 12px);display:flex;flex-direction:column;overflow:hidden}
 .rs-detail-head{display:flex;align-items:center;gap:12px;padding:14px 14px 8px;flex-shrink:0}
 .rs-detail-head h2{font-size:18px;margin:0;flex:1;font-weight:650}

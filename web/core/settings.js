@@ -64,7 +64,7 @@
     const when = ctx.ago?.(new Date(it.createdAt).toISOString()) || '';
     const blocked = it.state === 'unconfirmed' || ctx.outbox?.quarantined?.(it.id);
     const held = it.state === 'held', audio = !!(it.audio || it.audioFile || it.hasAudio);
-    const st = blocked ? esc(ctx.outbox?.quarantined?.(it.id) ? 'Waiting for device storage verification' : it.error || 'Could not confirm delivery · original kept') : it.state === 'empty' ? 'No speech detected · recording kept' : held ? esc(it.error || 'Kept on this device · no delivery intent confirmed; not queued') : it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : ['sending', 'queued'].includes(it.state) ? 'Queued / sending · awaiting receipt' : esc(window.WizReach?.failure().short || 'Checking connection · retrying');
+    const st = blocked ? esc(ctx.outbox?.quarantined?.(it.id) ? 'Waiting for device storage verification' : it.error || 'Could not confirm delivery · original kept') : it.state === 'empty' ? 'No speech detected · recording kept' : held ? esc(it.error || 'Kept on this device · no delivery intent confirmed; not queued') : it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : ['sending', 'queued'].includes(it.state) ? 'Queued / sending · awaiting receipt' : esc(window.WizReach?.failure().short || 'Reconnecting…');
     const src = it.origin === 'everywhere' ? 'Everywhere button' : it.source === 'orb' ? 'Orb' : 'Chat';
     const canRetry = it.origin === 'app' ? ctx.outbox?.canRetry(it) : !blocked && ['failed', 'waiting'].includes(it.state);
     const transcript = it.recoveryText || it.text || '';
@@ -143,6 +143,36 @@
       } catch (e) { clearTimeout(timer); reject(e); }
     })));
   }
+  const responseStyleState = ctx => ctx.responseStyle || (ctx.responseStyle = { value: '', busy: false, error: '' });
+  async function responseStyle(ctx, value) {
+    const state = responseStyleState(ctx);
+    if (state.busy) return;
+    const restoreFocus = document.activeElement?.matches?.('[data-response-style]') && ctx.root?.contains(document.activeElement);
+    state.busy = true; state.error = ''; ctx.render?.();
+    try {
+      if (!window.WizConfig?.responseStyle) throw Error('Response style is unavailable until your Wizard is updated');
+      state.value = await window.WizConfig.responseStyle(value);
+    } catch (error) { state.error = error.message || 'Could not change response style'; }
+    finally {
+      const focusWasLost = !document.activeElement || document.activeElement === document.body;
+      state.busy = false; ctx.render?.();
+      if (restoreFocus && focusWasLost) ctx.root?.querySelector('[data-response-style]')?.focus({ preventScroll: true });
+    }
+  }
+  register({ id: 'response-style', page: 'chats', aliases: ['response-style'],
+    enter(ctx) { responseStyle(ctx); },
+    html(ctx) {
+      const state = responseStyleState(ctx);
+      return `<div class="st-group"><label class="st-row static"><span class="st-tx"><b>Response style</b><small>Summary: context and labelled results.</small><small>Concise: short, plain replies.</small></span><select class="st-choice" aria-label="Response style" data-response-style ${state.busy || !state.value ? 'disabled' : ''}><option value="" ${!state.value ? 'selected' : ''} disabled>${state.busy ? 'Loading…' : 'Choose…'}</option><option value="summary" ${state.value === 'summary' ? 'selected' : ''}>Summary</option><option value="concise" ${state.value === 'concise' ? 'selected' : ''}>Concise</option></select></label>${state.error ? `<p class="st-note" role="alert">${esc(state.error)}</p><button class="st-wide" data-response-style-retry>Try again</button>` : ''}</div>`;
+    },
+    input(ctx, el) {
+      if (!el.matches?.('[data-response-style]')) return;
+      const state = responseStyleState(ctx), value = el.value;
+      el.value = state.value; // Never display an unverified save as the selected owner setting.
+      if (value !== state.value) responseStyle(ctx, value);
+    },
+    act(ctx, el) { if (!el.closest('[data-response-style-retry]')) return false; responseStyle(ctx); return true; },
+  });
   let identityInfo = null, identityAsked = false;
   register({ id: 'wizard-id', page: 'phone', aliases: ['wizard-id'], available: () => !!window.wizardDevicePort,
     html(ctx) {
@@ -480,6 +510,7 @@
       finally { ctx.chatsBusy = false; confirm = null; render(); root.querySelector('[data-chats-choice][aria-checked="true"]')?.focus({ preventScroll: true }); }
     }
     function dispatch(el, event) {
+      if (el.classList?.contains('st-confirm-scrim')) return back();
       if (el.closest('[data-chats-confirm]')) { useChats(); return true; }
       if (el.closest('[data-chats-cancel]')) { back(); return true; }
       if (confirm) return false;

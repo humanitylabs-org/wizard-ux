@@ -1,0 +1,212 @@
+[
+  {
+    "phase": "live",
+    "file": "docs/COMPONENTS.md",
+    "block": 1,
+    "choice": "combined",
+    "reason": "Keep compact shared inventory and add live contracts without removing independent shared capabilities"
+  },
+  {
+    "phase": "live",
+    "file": "docs/COMPONENTS.md",
+    "block": 2,
+    "choice": "combined",
+    "reason": "Keep compact shared inventory and add live contracts without removing independent shared capabilities"
+  },
+  {
+    "phase": "live",
+    "file": "docs/COMPONENTS.md",
+    "block": 3,
+    "choice": "combined",
+    "reason": "Keep compact shared inventory and add live contracts without removing independent shared capabilities"
+  },
+  {
+    "phase": "live",
+    "file": "docs/COMPONENTS.md",
+    "block": 4,
+    "choice": "combined",
+    "reason": "Keep compact shared inventory and add live contracts without removing independent shared capabilities"
+  },
+  {
+    "phase": "live",
+    "file": "docs/COMPONENTS.md",
+    "block": 5,
+    "choice": "combined",
+    "reason": "Keep compact shared inventory and add live contracts without removing independent shared capabilities"
+  },
+  {
+    "phase": "live",
+    "file": "docs/COMPONENTS.md",
+    "block": 6,
+    "choice": "combined",
+    "reason": "Keep compact shared inventory and add live contracts without removing independent shared capabilities"
+  },
+  {
+    "phase": "live",
+    "file": "docs/responsive-feature-inventory.json",
+    "block": 1,
+    "choice": "live",
+    "reason": "Retain current live behavior and capability contracts"
+  },
+  {
+    "phase": "live",
+    "file": "docs/shared-app-services-host.md",
+    "block": 1,
+    "choice": "combined",
+    "reason": "Independent context-draft and modal-backdrop contracts"
+  },
+  {
+    "phase": "live",
+    "file": "qa-app-orb.cjs",
+    "block": 1,
+    "choice": "live",
+    "reason": "Retain current live behavior and capability contracts"
+  },
+  {
+    "phase": "live",
+    "file": "qa-app-orb.cjs",
+    "block": 2,
+    "choice": "combined",
+    "reason": "Preserve all browser executable overrides"
+  },
+  {
+    "phase": "live",
+    "file": "tests/app-share-wizard.test.mjs",
+    "block": 1,
+    "choice": "live",
+    "reason": "Retain current live behavior and capability contracts"
+  },
+  {
+    "phase": "live",
+    "file": "tests/home-screen-refresh.test.mjs",
+    "block": 1,
+    "choice": "combined",
+    "reason": "Preserve rename regression plus live echo, sigil, removal and resume tests"
+  },
+  {
+    "phase": "live",
+    "file": "tests/manager-orb-route.test.mjs",
+    "block": 1,
+    "choice": "live",
+    "reason": "Retain current live behavior and capability contracts"
+  },
+  {
+    "phase": "live",
+    "file": "tests/run-streaming.test.mjs",
+    "block": 1,
+    "choice": "sync",
+    "reason": "Keep stricter replay detection regression with interim notes and short-answer protection"
+  },
+  {
+    "phase": "live",
+    "file": "tests/run-streaming.test.mjs",
+    "block": 2,
+    "choice": "sync",
+    "reason": "Keep stricter replay detection regression with interim notes and short-answer protection"
+  },
+  {
+    "phase": "live",
+    "file": "tests/skin-packages.test.mjs",
+    "block": 1,
+    "choice": "live",
+    "reason": "Retain current live behavior and capability contracts"
+  },
+  {
+    "phase": "live",
+    "file": "tests/wizard-id-bridge.test.mjs",
+    "block": 1,
+    "choice": "sync",
+    "reason": "Merged Android source already uses scrollPageStarted, not legacy live cancelScrollCapture call"
+  },
+  {
+    "phase": "live",
+    "file": "web/app.js",
+    "block": 1,
+    "choice": "combined",
+    "reason": "Live foreground biometric admission plus sync no-exit Back (no retired exitUntil)"
+  },
+  {
+    "phase": "live",
+    "file": "web/app.js",
+    "block": 2,
+    "choice": "combined",
+    "reason": "Outside click follows Back; retain Settings grip swipe"
+  },
+  {
+    "phase": "live",
+    "file": "web/core/chats.js",
+    "block": 1,
+    "choice": "sync",
+    "reason": "Stricter replay detection avoids suppressing new run ending in previous short answer"
+  },
+  {
+    "phase": "live",
+    "file": "web/core/chats.js",
+    "block": 2,
+    "choice": "combined",
+    "reason": "Notification title/layout plus live Incognito header action"
+  },
+  {
+    "phase": "live",
+    "file": "web/core/home-screen-apps.js",
+    "block": 1,
+    "choice": "live",
+    "reason": "Retain current live behavior and capability contracts"
+  },
+  {
+    "phase": "live",
+    "file": "web/core/home-screen-apps.js",
+    "block": 2,
+    "choice": "live",
+    "reason": "Retain current live behavior and capability contracts"
+  },
+  {
+    "phase": "live",
+    "file": "web/core/reach.js",
+    "block": 1,
+    "choice": "live",
+    "reason": "Retain current live behavior and capability contracts"
+  },
+  {
+    "phase": "live",
+    "file": "web/core/tour.css",
+    "block": 1,
+    "choice": "combined",
+    "reason": "Keep skip button stacking and opaque live material"
+  },
+  {
+    "phase": "live",
+    "file": "web/core/tour.js",
+    "block": 1,
+    "choice": "combined",
+    "reason": "Preserve Reply interaction while outside tap follows Back on guarded steps"
+  },
+  {
+    "phase": "live",
+    "file": "web/kit/wizard-sheet.js",
+    "block": 1,
+    "choice": "live",
+    "reason": "Retain current live behavior and capability contracts"
+  },
+  {
+    "phase": "live",
+    "file": "web/kit/wizard-ui.css",
+    "block": 1,
+    "choice": "combined",
+    "reason": "Responsive sheet/grid/meter helpers and grip retained; all floating text panels use live opaque material"
+  },
+  {
+    "phase": "live",
+    "file": "web/outbox.js",
+    "block": 1,
+    "choice": "combined",
+    "reason": "Lost recording refusal plus explicit late-held owner Send approval"
+  },
+  {
+    "phase": "live",
+    "file": "web/outbox.js",
+    "block": 2,
+    "choice": "combined",
+    "reason": "Retain lost-audio retry guard and live late-held Send/Discard"
+  }
+]

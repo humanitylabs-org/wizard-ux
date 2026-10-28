@@ -154,6 +154,7 @@
     // The composer's mic (#13): the orb's own recorder, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
     dictationField: () => FIELDS && V.kind === 'dictation' && V.state !== 'idle' ? V.field?.el : null,
+    captureBusy: () => V.state !== 'idle' || !!V.admitting || !!window.WizAppCapture?.getState?.()?.active,
     recordingFor: () => (V.replyTo && (V.state === 'listen' || V.state === 'paused') ? V.replyTo.sid : ''),
     // The thread a recording take will go into (its composer rides along); Send in that composer finishes the take.
     voiceInto: () => (V.state === 'listen' || V.state === 'paused' ? sealTarget()?.sid || '' : ''),
@@ -365,6 +366,7 @@
     n = Math.max(0, Math.min(desks.length - 1, n));
     // An empty desk (one the ＋ made, left without picking an app) goes away as soon as you leave it.
     const from = desks[idx], to = desks[n];
+    if (from !== to && !CHATS.beforeNavigate(to?.wins || [])) { placeTrack(0, true); return; }
     if (from && to && from !== to && !from.home && !from.wins.length) { desks = desks.filter(d => d !== from); syncDesks(); n = desks.indexOf(to); }
     const moved = from !== to;
     if (moved && sheet === 'settings') liftSettings(from && from.id); // Settings stays open on the desk you leave
@@ -770,8 +772,9 @@
   function closeWin(id, quiet, preservePlayback = false) {
     const i = deskOf(id); if (i < 0) return;
     const w = W[id], d = desks[i], name = winTitle(w);
+    if (!CHATS.beforeLeave(id)) return;
     if (!preservePlayback) closeAppPlayback(w);
-    CHATS.closeHosted(id);
+    CHATS.closeHosted(id); CHATS.forget(id);
     if (quiet) { d.wins = d.wins.filter(x => x !== id); delete W[id]; delete CH[id]; if (d.focus === id) d.focus = d.wins[d.wins.length - 1] || null; if (!d.wins.length) d.full = false; renderDesk(i); pruneDesks(); return; }
     // ✕ on a bound view: it stays closed for this reply (opening the thread again, or a new reply, binds again).
     if (w.bound) { boundOff[w.bound] = w.bsid + '|' + w.bkey; boundManager?.dismiss(w); }
@@ -1587,7 +1590,7 @@
       if (f._watched) return; f._watched = true;
       // servicesAs: a companion view gets its owning installed app's Back/services.
       const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
-      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), back: () => { if (desks[idx].focus !== w.id) return false; const did = backStep(w.id); if (did) { window.__backLog = (window.__backLog || []).concat('app-done:' + did).slice(-30); } return !!did; }, openContextDraft: (key, text) => { closeSheets(true); const cw = placeApp(mainChats, { app: 'chats', thread: null }, {}); if (!cw) throw new Error('Chats unavailable'); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); return receipt; }, isVisible: () => desks[idx].wins.includes(w.id) && (!desks[idx].full || desks[idx].focus === w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) });
+      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), isFront: () => desks[idx].focus === w.id && desks[idx].wins.includes(w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) && !device.classList.contains('st-parked'), back: () => { if (desks[idx].focus !== w.id) return false; const did = backStep(w.id); if (did) { window.__backLog = (window.__backLog || []).concat('app-done:' + did).slice(-30); } return !!did; }, openContextDraft: (key, text) => { closeSheets(true); const cw = placeApp(mainChats, { app: 'chats', thread: null }, {}); if (!cw) throw new Error('Chats unavailable'); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); return receipt; }, isVisible: () => desks[idx].wins.includes(w.id) && (!desks[idx].full || desks[idx].focus === w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) });
       watchEarly(f);
       const wrap = f.closest('.frame-wrap');
       if (f.dataset.probe) { wrap.classList.remove('loading'); wrap.classList.add('coming'); f.removeAttribute('src'); probeFrame(f, f.dataset.probe); }
@@ -1885,7 +1888,7 @@
   }
   settingsEl.setAttribute('role', 'dialog'); settingsEl.setAttribute('aria-modal', 'true');
   settingsEl.addEventListener('keydown', e => window.WosSettings.trap(e, settingsEl));
-  $('#scrim').addEventListener('click', () => closeSheets());
+  $('#scrim').addEventListener('click', () => backStep());
   /* Swipe the grip down to close Settings, like every sheet (wizard-os#265 rule 7). Only the grip drags; the body scrolls. */
   { const grip = settingsEl.querySelector('.sheet-grip'); let y0 = null, dy = 0, t0 = 0;
     grip?.addEventListener('pointerdown', e => { if (sheet !== 'settings') return; y0 = e.clientY; dy = 0; t0 = performance.now(); settingsEl.style.transition = 'none'; try { grip.setPointerCapture(e.pointerId); } catch (_) {} });
@@ -2338,11 +2341,22 @@
   }
   voicePicker.addEventListener('change', async () => {
     const list = [...voicePicker.files], files = V.files; voicePicker.value = '';
-    for (const file of list) {
-      if (!sameTake(files)) break;
-      if (files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); break; }
-      const f = { name: file.name, mime: file.type, bytes: file.size, uploading: true };
-      files.push(f); renderVoiceFiles();
+    if (!sameTake(files)) return;
+    // Every picked file joins the take at once, each tracked with its bytes, so a send before the uploads finish
+    // takes them all (James, 27 Oct 2026: picked two images, sent while the second was uploading, only the first
+    // arrived). Adding one row per finished upload left later files out of a send that happened in between.
+    const room = Math.max(0, 8 - files.length);
+    if (list.length > room) toast('!', 'Up to 8 files per message', 2400);
+    const rows = list.slice(0, room).map(file => {
+      const f = { name: file.name, mime: file.type, bytes: file.size, uploading: true, local: file };
+      window.WizUploads?.pending?.track(f, file);
+      files.push(f); return [file, f];
+    });
+    if (!rows.length) return;
+    renderVoiceFiles();
+    // One at a time; a row a send already took (handedOff) still uploads, because its message waits on it.
+    for (const [file, f] of rows) {
+      if (!f.handedOff && (!sameTake(files) || !files.includes(f))) { f.upSettle?.fail(new Error('Attachment removed')); continue; }
       await uploadVoiceFile(file, files, f);
     }
   });
@@ -2501,6 +2515,7 @@
     return 'recording';
   }
   async function startVoice(kind, opt = {}) {
+    if (CHATS.incognitoActive(opt.replyTo?.wid || focusedWin()?.id) || document.activeElement?.closest?.('[data-incog-thread]')) { toast('!', 'Incognito is text only · finish it before recording', 2600); return 'busy'; }
     V.onAt = performance.now();
     if(V.admitting||parking)return 'busy';
     if(V.state==='paused' && V.replyTo && ['dictation','command'].includes(kind)) {
@@ -3627,6 +3642,7 @@
     if (V.snap?.general && ['listen', 'command'].includes(V.state)) { V.stopAsked = true; pauseCommandCapture(); return 'recording'; }
     if (document.querySelector('#txChips [data-handoff], #txChips [data-hold]')) { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(0); return 'draft'; }
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
+    if (window.WizLinks?.backMenu()) return 'link-menu';
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
     const ov = CHATS.closeOverlay(); if (ov) { if (settingsReturn === 'files') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="files"]')?.focus(); } return ov; } // media viewer, then the thread actions sheet
     const dv = window.WosDevice?.back?.(); if (dv) return dv; // share picker, recovered-recording card
@@ -3746,7 +3762,7 @@
       if (!state) { const i = posOf(o.focus); if (i > 0) { closeSheets(true); goDesk(i); } return; }
       const here = desks[idx]?.id, at = idx;
       const r = window.WosWorkspaceSync.reconcile(desks.slice(1), W, state, { fresh: id => blank({ id }), max: MAXW });
-      r.removed.forEach(id => { closeAppPlayback(W[id]); CHATS.closeHosted(id); delete W[id]; delete CH[id]; });
+      r.removed.forEach(id => { closeAppPlayback(W[id]); CHATS.closeHosted(id); CHATS.forget(id); delete W[id]; delete CH[id]; });
       desks = [desks[0], ...r.desks].map(d => { if (!d.wins.length) d.full = false; return d; });
       syncDesks(); desks.forEach((_, i) => renderDesk(i));
       idx = posOf(here); if (idx < 0) idx = Math.max(0, Math.min(at, desks.length - 1));

@@ -4,13 +4,14 @@
 // Usage: node qa-app-orb.cjs [origin=http://127.0.0.1:9381/wizard-os-home/]   (MIZEL=8996 serves /mizel-live/)
 // Writes to /wizard/* are refused by qa-origin; Mizel writes go to a scratch canary and are counted.
 const { chromium } = require('./tools/qa-playwright.cjs');
+const fs = require('fs');
 const ORIGIN = process.argv[2] || 'http://127.0.0.1:9381/wizard-os-home/';
 const MIZEL = Number(process.env.MIZEL || 8996), SHOTS = process.env.QA_SHOTS || '';
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('PASS', m); } else { fail++; console.log('FAIL', m); } };
 (async () => {
-  const exe = process.env.QA_CHROMIUM || process.env.CH || undefined;
-  const b = await chromium.launch({ executablePath: exe, args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
+  const exe = process.env.QA_CHROMIUM || process.env.CH || process.env.CHROMIUM_PATH;
+  const b = await chromium.launch({ ...(exe ? { executablePath: exe } : {}), args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, colorScheme: 'dark', permissions: ['microphone'] });
   const runs = [], mizelWrites = [];
   await ctx.route('**/mizel-live/**', async r => {

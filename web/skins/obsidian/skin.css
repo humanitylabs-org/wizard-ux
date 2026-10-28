@@ -21,7 +21,7 @@ html[data-skin^="obsidian"] :is(.win.focus) { border-color: var(--ob-edge); box-
 html[data-skin^="obsidian"] :is(.ch-compose textarea:focus) { border-color: var(--ob-edge); }
 html[data-skin^="obsidian"] :is(.bub blockquote, .msg.agentnote .an-body, .rc-body) { border-left-color: var(--ob-edge); }
 html[data-skin^="obsidian"] :is(.us-bar i, .ls-load) { background: var(--ink); }
-html[data-skin^="obsidian"] .pal-card { background: var(--glass-2); }
+html[data-skin^="obsidian"] .pal-card { background: linear-gradient(var(--glass-2), var(--glass-2)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); }
 html[data-skin="obsidian-light"] :is(.msg.agentnote > summary, .laterrun, .msg.agentnote .an-body, .rc-body) { color: var(--ink-2); }
 
 /* Obsidian strictness: buttons painted with var(--violet) hard-code white text; under Obsidian --violet IS white
@@ -196,7 +196,7 @@ html[data-skin^="obsidian"] .toast { position: fixed; top: calc(env(safe-area-in
  * Same orb, desk icons, Back, scrubber and gestures; only the shape moves: an inset frosted capsule lifted off the
  * screen edge so desk swipes start well above the iPhone home-indicator swipe zone. Corner orb (full screen) unchanged. */
 html[data-skin^="obsidian"] { --pill-h: 66px; --pill-x: 12px; --pill-b: calc(var(--safe-b-low) + 8px); --pill-top: calc(var(--pill-b) + var(--pill-h)); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { left: var(--pill-x); right: var(--pill-x); bottom: var(--pill-b); height: var(--pill-h); padding: 0; gap: 18px; align-items: center; border-radius: calc(var(--pill-h) / 2); border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); background: color-mix(in srgb, var(--bg) 62%, transparent); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: 0 8px 28px rgba(0, 0, 0, .28), inset 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { left: var(--pill-x); right: var(--pill-x); bottom: var(--pill-b); height: var(--pill-h); padding: 0; gap: 18px; align-items: center; border-radius: calc(var(--pill-h) / 2); border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); background: linear-gradient(color-mix(in srgb, var(--bg) 62%, transparent), color-mix(in srgb, var(--bg) 62%, transparent)), var(--wz-panel, var(--wz-base, var(--bg, #05030c)));   box-shadow: 0 8px 28px rgba(0, 0, 0, .28), inset 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-wrap, html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots { margin-top: 0; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub { bottom: 2px; height: 10px; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub i { width: 30px; height: 3px; }
@@ -218,7 +218,7 @@ html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:
 html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats { border-radius: 0; }
 html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-thread { padding-bottom: calc(var(--pill-top) + 4px); }
 html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-msgs { -webkit-mask-image: linear-gradient(to top, transparent 0, #000 28px); mask-image: linear-gradient(to top, transparent 0, #000 28px); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { border-color: color-mix(in srgb, var(--ink) 7%, transparent); background: color-mix(in srgb, var(--bg) 78%, transparent); box-shadow: 0 10px 30px rgba(0, 0, 0, .22); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { border-color: color-mix(in srgb, var(--ink) 7%, transparent); background: linear-gradient(color-mix(in srgb, var(--bg) 78%, transparent), color-mix(in srgb, var(--bg) 78%, transparent)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); box-shadow: 0 10px 30px rgba(0, 0, 0, .22); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub:not(.on) i { opacity: 0; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-ring { opacity: .45; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock :is(.dock-back, .mz-dock-back) { background: transparent; border: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
@@ -453,9 +453,9 @@ html[data-skin^="obsidian"] .home .constellation .now-card.wz-home-widget { flex
 html[data-skin^="obsidian"] .home .constellation .now-card .n { font-size: 24px; line-height: 1; }
 html[data-skin^="obsidian"] .home .constellation .now-card .k { font-size: 10.5px; line-height: 1.1; }
 html[data-skin^="obsidian"] .home .constellation .now-card:active { transform: scale(.94); background: color-mix(in srgb, var(--c) 18%, transparent); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { background: color-mix(in srgb, var(--bg) 46%, transparent); border-color: color-mix(in srgb, var(--ink) 10%, transparent); box-shadow: 0 6px 22px rgba(0, 0, 0, .14); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { background: linear-gradient(color-mix(in srgb, var(--bg) 46%, transparent), color-mix(in srgb, var(--bg) 46%, transparent)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border-color: color-mix(in srgb, var(--ink) 10%, transparent); box-shadow: 0 6px 22px rgba(0, 0, 0, .14);   }
 html[data-skin="obsidian-light"] .home .constellation .now-card.wz-home-widget { background: color-mix(in srgb, var(--c) 7%, #fff 40%); }
-html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { background: color-mix(in srgb, #fff 58%, transparent); box-shadow: 0 4px 18px rgba(0, 0, 0, .07); }
+html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { background: linear-gradient(color-mix(in srgb, #fff 58%, transparent), color-mix(in srgb, #fff 58%, transparent)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); box-shadow: 0 4px 18px rgba(0, 0, 0, .07); }
 /* Symmetric dock (Miguel, 22 Oct): two fixed slots each side of the orb, mirrored, so the bar balances at every desk.
  * The orb is the current desk and the biggest thing on the bar; the nearest neighbours sit a touch larger and brighter
  * than the outer pair. Empty slots keep their space. New desk is a dashed empty-desk outline, never a plus. */
@@ -569,7 +569,7 @@ html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov .ov-head b { font-si
 /* Swipe-up version: the pill extended. A light scrim over the desk; the panel shares the pill's side insets, radius,
  * frosted material and bottom edge, so the pill visibly grows upward. The real dock rides on top as its bottom row. */
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill { padding: 0; overflow: hidden; background: rgba(0, 0, 0, .32); -webkit-backdrop-filter: none; backdrop-filter: none; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { position: absolute; left: var(--pill-x, 12px); right: var(--pill-x, 12px); bottom: var(--pill-b, 8px); max-height: calc(100% - var(--safe-t, 0px) - 64px); display: flex; flex-direction: column; padding-bottom: var(--pill-h, 66px); border-radius: calc(var(--pill-h, 66px) / 2); border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); background: color-mix(in srgb, var(--bg) 86%, transparent); -webkit-backdrop-filter: blur(26px) saturate(1.4); backdrop-filter: blur(26px) saturate(1.4); box-shadow: 0 -10px 40px rgba(0, 0, 0, .32), inset 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent); overflow: hidden; transform-origin: 50% 100%; transform: translateY(14px) scaleY(.4); opacity: 0; transition: transform 300ms var(--spring, cubic-bezier(.2, .9, .2, 1.05)), opacity 160ms; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { position: absolute; left: var(--pill-x, 12px); right: var(--pill-x, 12px); bottom: var(--pill-b, 8px); max-height: calc(100% - var(--safe-t, 0px) - 64px); display: flex; flex-direction: column; padding-bottom: var(--pill-h, 66px); border-radius: calc(var(--pill-h, 66px) / 2); border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); background: linear-gradient(color-mix(in srgb, var(--bg) 86%, transparent), color-mix(in srgb, var(--bg) 86%, transparent)), var(--wz-panel, var(--wz-base, var(--bg, #05030c)));   box-shadow: 0 -10px 40px rgba(0, 0, 0, .32), inset 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent); overflow: hidden; transform-origin: 50% 100%; transform: translateY(14px) scaleY(.4); opacity: 0; transition: transform 300ms var(--spring, cubic-bezier(.2, .9, .2, 1.05)), opacity 160ms; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill.open .ov-sheet { transform: none; opacity: 1; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 10px 6px; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-head { padding: 0 6px 12px 10px; }
@@ -583,12 +583,12 @@ html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.ov-pill-open .de
 /* Draw the New desk plus as two bars (the fullwidth ＋ glyph is missing from some fonts and shows as a box). */
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov:not(.ov-pill) :is(.ov-add span, .ov-empty-symbol) { font-size: 0; width: 24px; height: 24px; background: linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat, linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat; }
 /* Near-opaque so the panel reads as one even surface over any page (a bright frame showed through at 86%). */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { background: color-mix(in srgb, var(--bg) 95%, transparent); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { background: linear-gradient(color-mix(in srgb, var(--bg) 95%, transparent), color-mix(in srgb, var(--bg) 95%, transparent)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); }
 
 /* Swipe-up, round 2: the pill itself with room to spare. It grows upward from its own shape (clip-path), shows the
  * dock's own desk icons and badges in a grid (each rises from its spot in the pill), and an ✕ takes the orb's place. */
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.ov-pill-open .dock { opacity: 0; pointer-events: none; transition: opacity 140ms; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { transform: none; opacity: 1; background: color-mix(in srgb, var(--bg) 78%, transparent); border-color: color-mix(in srgb, var(--ink) 7%, transparent); box-shadow: 0 10px 30px rgba(0, 0, 0, .22); clip-path: inset(calc(100% - var(--pill-h, 66px)) 0 0 0 round calc(var(--pill-h, 66px) / 2)); transition: clip-path 320ms cubic-bezier(.2, .9, .25, 1); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { transform: none; opacity: 1; background: linear-gradient(color-mix(in srgb, var(--bg) 78%, transparent), color-mix(in srgb, var(--bg) 78%, transparent)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border-color: color-mix(in srgb, var(--ink) 7%, transparent); box-shadow: 0 10px 30px rgba(0, 0, 0, .22); clip-path: inset(calc(100% - var(--pill-h, 66px)) 0 0 0 round calc(var(--pill-h, 66px) / 2)); transition: clip-path 320ms cubic-bezier(.2, .9, .25, 1); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill.open .ov-sheet { clip-path: inset(0 0 0 0 round calc(var(--pill-h, 66px) / 2)); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill { background: rgba(0, 0, 0, .28); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-scroll { padding: 22px 12px 4px; -webkit-mask-image: none; mask-image: none; }
@@ -623,7 +623,7 @@ html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-close:ac
 /* Four per row across the full width (the dock's own rhythm), even breathing room, and an even fill over any page. */
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px 4px; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-scroll { padding: 24px 12px 14px; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { background: color-mix(in srgb, var(--bg) 94%, transparent); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-sheet { background: linear-gradient(color-mix(in srgb, var(--bg) 94%, transparent), color-mix(in srgb, var(--bg) 94%, transparent)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); }
 
 /* Same icon size as the pill dock (42px), with a ring for the desk in view. */
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ov.ov-pill .ov-ic { width: 60px; height: 60px; }

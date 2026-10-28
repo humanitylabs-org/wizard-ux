@@ -62,6 +62,44 @@
     }
     return false;
   }
+  // Tapping outside a modal is Back (James, 28 Oct 2026). Capture before app/kit
+  // click handlers: a drag out, or the lifting finger that opened a menu, is not a tap.
+  // cancel is the native Escape path, including apps that preventDefault and close themselves.
+  if (typeof MutationObserver !== 'undefined') {
+    const presses = new WeakMap();
+    const changed = records => {
+      for (const r of records) {
+        if (r.type === 'attributes' && r.target.tagName === 'DIALOG') presses.delete(r.target);
+        for (const n of r.addedNodes || []) {
+          if (n.tagName === 'DIALOG') presses.delete(n);
+          n.querySelectorAll?.('dialog').forEach(d => presses.delete(d));
+        }
+      }
+    };
+    const observer = new MutationObserver(changed);
+    observer.observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['open'] });
+    const modal = e => {
+      changed(observer.takeRecords()); // showModal + pointerdown may happen in one task
+      const d = e.target.closest?.('dialog');
+      return d?.open && d.matches(':modal') && !d.hasAttribute('data-wz-no-outside-close') ? d : null;
+    };
+    const outside = (d, e) => {
+      const r = d.getBoundingClientRect();
+      return e.target === d && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom);
+    };
+    addEventListener('pointerdown', e => {
+      const d = modal(e); if (d) presses.set(d, { outside: outside(d, e) });
+    }, true);
+    addEventListener('pointercancel', e => { const d = modal(e); if (d) presses.delete(d); }, true);
+    addEventListener('click', e => {
+      const d = modal(e); if (!d || e.detail === 0) return; // keyboard/AT activation is never swallowed
+      const press = presses.get(d); presses.delete(d);
+      if (!press || outside(d, e)) {
+        e.preventDefault(); e.stopImmediatePropagation();
+        if (press?.outside && outside(d, e) && d.dispatchEvent(new Event('cancel', { cancelable: true }))) d.close();
+      }
+    }, true);
+  }
   // Composer input (paste files/text, drop, Enter policy): the shell's one implementation, core/composer-input.js,
   // the same code Chats uses. Loaded on first use; a bind made before it lands is queued, unbind is synchronous.
   let composerLoad = null;
@@ -438,6 +476,7 @@
     capture: Object.freeze({ start: async opts => { if (['auto', 'command'].includes(opts?.kind)) throw new Error('Capture kind is reserved for Wizard voice; use audio/meeting and task metadata'); if (service) return service.capture.start(opts); if (framed) throw new Error('Shared capture needs the verified synchronous host connection'); const resource=captureModule(); return opts?.resumeId && resource.resume ? resource.resume(standaloneId(),opts.resumeId,opts) : resource.start(standaloneId(), opts); },
       prepare: opts => { if(service) return service.capture.prepare(opts); if(framed) throw new Error('Capture preparation needs the verified host connection'); return captureModule().prepare(standaloneId(),opts); },
       capabilities: opts => { if(service) return service.capture.capabilities(opts); if(framed) return {}; return captureModule().capabilities(opts); },
+      attach: () => { if(service) return service.capture.attach(); if(framed) throw new Error('Capture recovery needs the verified host connection'); return captureModule().attach(standaloneId()); },
       current: () => { if(service) return service.capture.current(); if(framed) return null; return captureModule().current(standaloneId()); },
       pending: async () => service ? service.capture.pending() : transportReady ? request('capture.pending') : captureModule().pending(standaloneId()), ack: async id => service ? service.capture.ack(id) : transportReady ? request('capture.ack', { id }) : captureModule().ack(standaloneId(), id) }),
   });

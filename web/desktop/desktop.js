@@ -96,6 +96,7 @@
     owner: id => String(id).replace(/::list$/, ''),
     // The composer's mic (#13): the same recorder as Right ⌘, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
+    captureBusy: () => VOICE.state !== 'idle' || dictationFinishing || !!window.WizAppCapture?.getState?.()?.active,
     recordingFor: () => (vReply && ['listen','paused'].includes(VOICE.state) ? vReply.sid : ''),
     // The thread a recording take will go into (its composer rides along); Send in that composer finishes the take.
     voiceInto: () => (['listen','paused'].includes(VOICE.state) && vMode === 'talk' ? (vReply?.sid || (vTarget && W[vTarget]?.thread) || '') : ''),
@@ -194,6 +195,7 @@
     return W[id];
   }
   function closeWin(id, internal = false) {
+    if (!internal && !CHATS.beforeLeave(id)) return;
     const t = wsOf(id); if (t < 0) return;
     if (!internal) {
       boundManager?.dismiss(W[id]);
@@ -623,6 +625,7 @@
   function goWs(i, { from } = {}) {
     window.WosResources?.back();
     if (!Number.isInteger(i) || i < 0 || i >= ws.length) return;
+    if (i !== cur && !CHATS.beforeNavigate(ws[i].wins)) return;
     if (i === cur) { if (homeOpen) { leaveHome(); if (focused()) focusInside(focused().id); CHATS.markVisibleThreadsSeen(); } return; }
     homeOpen = false; store.set('homeOpen', false);
     // Preserve the later-approved empty-desktop pruning contract.
@@ -758,6 +761,7 @@
     homeOpen = false; store.set('homeOpen', false); render();
   }
   function goHome() {
+    if (!CHATS.beforeNavigate([])) return;
     window.WosResources?.back();
     for (const id of Object.keys(W)) if (W[id].app === 'chats') CHATS.saveDraft(id);
     closePalette(); toggleKeys(false); closeSettings(); closeUsage();
@@ -1311,6 +1315,7 @@
     finally { clearTimeout(timer); }
   }
   async function talk(action = 'toggle', forceNew = false, newKey = `${MOD}V`) {
+    if (VOICE.state === 'idle' && CHATS.incognitoActive(focused()?.id)) { toast('!', 'Incognito is text only · finish it before recording', 2600); return 'busy'; }
     if (dictationFinishing || VOICE.state === 'think') return 'busy';
     if (action === 'cancel') { commandTake = false; if (VOICE.state !== 'idle') { vFiles?.close();vReply = null; const kept = VOICE.cancel(); toast('✕', kept ? 'Cancelled · kept in Settings → Cancelled recordings' : 'Cancelled', kept ? 2600 : 1000); } return 'none'; }
     if (VOICE.state !== 'idle' && vMode === 'dictate') return 'busy';
@@ -1411,6 +1416,7 @@
   // Composer mic: tap to record a reply to this thread, tap again (or Right ⌘) to send it there. The thread is
   // fixed when recording starts, so switching threads mid-take can't send it somewhere else.
   async function recordReply(wid, sid) {
+    if (CHATS.incognitoActive(wid)) { toast('!', 'Incognito is text only · finish it before recording', 2600); return 'busy'; }
     if (dictationFinishing || VOICE.state === 'think') return 'busy';
     if (['listen','paused'].includes(VOICE.state)) { if (vReply) return talk('send'); return 'busy'; } // sends to the thread it was started in
     if (!sid) return 'busy';
@@ -1495,6 +1501,7 @@
   window.WosOutbox?.load().then(paintRecordings);
   let dictationFinishing = false;
   async function dictate(action = 'toggle') {
+    if (VOICE.state === 'idle' && (CHATS.incognitoActive(focused()?.id) || document.activeElement?.closest?.('[data-incog-thread]'))) { toast('!', 'Incognito is text only · finish it before recording', 2600); return 'busy'; }
     if (dictationFinishing || VOICE.state === 'think') return 'busy';
     if (VOICE.state !== 'idle' && vMode === 'talk') return 'busy';
     if (action === 'cancel') { if (VOICE.state !== 'idle') { dictTarget?.release();dictTarget=null;const kept = VOICE.cancel(); toast('✕', kept ? 'Cancelled · kept in Settings → Cancelled recordings' : 'Cancelled', kept ? 2600 : 1000); } return 'none'; }
@@ -1577,6 +1584,7 @@
     if (window.WosAppSetup?.back()) return 'app-setup';
     if (window.WizWebUpdate?.back()) return 'update-list'; // the update card's thread list folds first
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
+    if (window.WizLinks?.backMenu()) return 'link-menu';
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
     if (keyHints.pinned()) { toggleKeys(false); returnToSettings(); return 'keys'; }
     if (window.WosSkinHost?.back?.()) return 'tweak-overlay'; // a package's own sheet (api.back.push)

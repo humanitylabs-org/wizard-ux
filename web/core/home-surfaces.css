@@ -20,10 +20,10 @@
 }
 .wz-home-popup {
   color: var(--wz-text, var(--ink));
-  background: var(--wz-home-popup-surface);
+  background: linear-gradient(var(--wz-home-popup-surface), var(--wz-home-popup-surface)), var(--wz-panel, var(--wz-base, var(--bg, #05030c)));
   border: 1px solid var(--wz-home-popup-border);
 
-  -webkit-backdrop-filter: blur(26px) saturate(1.5);
-  backdrop-filter: blur(26px) saturate(1.5);
+
+
 }
 .wz-home-popup {border-radius:var(--wz-home-popup-radius);box-shadow:var(--wz-home-popup-shadow)}

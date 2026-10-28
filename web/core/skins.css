@@ -25,17 +25,17 @@
 html[data-shell="desktop"] body { isolation: isolate; }
 html[data-shell="desktop"] .skin-bg { position: fixed; }
 html[data-shell="desktop"]:not([data-skin="nebula"]) body { background: var(--bg); }
-html[data-shell="desktop"]:not([data-skin="nebula"]) :is(.bar, .keys-card, .pal-card, .inbox) { background: var(--glass-2); color: var(--ink); }
+html[data-shell="desktop"]:not([data-skin="nebula"]) :is(.bar, .keys-card, .pal-card, .inbox) { background: linear-gradient(var(--glass-2), var(--glass-2)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink); }
 .skin-bg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; opacity: 0; }
 
 /* token-driven pieces of the real shell that were hard-coded to the space look */
 .home-time { background: linear-gradient(180deg, var(--sk-time-a) 30%, var(--sk-time-b) 100%); -webkit-background-clip: text; background-clip: text; }
-.dock { background: var(--sk-dock); border-top-color: var(--sk-dock-line); }
+.dock { background: linear-gradient(var(--sk-dock), var(--sk-dock)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border-top-color: var(--sk-dock-line); }
 .ddot { border-color: var(--sk-ddot); }
 .ddot.filled { background: var(--sk-ddot); }
 .orb, .orb-halo, .orb-ring, .orb-fallback { filter: var(--sk-orb); }
 .orb-halo { filter: blur(9px) var(--sk-orb); }
-.tr-copy { background: var(--sk-tour); }
+.tr-copy { background: linear-gradient(var(--sk-tour), var(--sk-tour)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); }
 .tr-spot { box-shadow: 0 0 0 200vmax var(--sk-dim); }
 .tour.tr-live .tr-spot, .tour.tr-open .tr-spot { box-shadow: 0 0 0 200vmax rgba(0, 0, 0, 0); }
 
@@ -59,16 +59,16 @@ html[data-skin="signal"] .now-card .pip { border-radius: 1px; }
 /* the space-only layers fade out under other skins (opacity set by skins.js while browsing) */
 .stars, .nebula { opacity: var(--sk-space, 1); }
 
-.tr-skip { background: var(--sk-tour); color: var(--ink); }
+.tr-skip { background: linear-gradient(var(--sk-tour), var(--sk-tour)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink); }
 
 /* Panels the space look paints with literal violet-blacks: every other skin paints them from its own tokens.
    Same boxes, same blur; only the fill and text colour change. */
 /* Windows (Chats and every hosted app) sit on the skin's window material: near-black tinted with the skin's hue,
    like Nebula's. Sheets and cards keep the richer --glass-2. (James, 12 Oct: app backgrounds closer to black.) */
 html:not([data-skin="nebula"]) .win { background: var(--sk-win); color: var(--ink); }
-html:not([data-skin="nebula"]) :is(.sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .ch-fcard, .wx-fcard, .ls-panel) { background: var(--glass-2); color: var(--ink); }
-html:not([data-skin="nebula"]) .ov-card.ov-home { background: var(--glass-2); }
-html:not([data-skin="nebula"]) :is(.desk-label, .timer, .arc, .transcript, .toast, .scrub .sc-label, .dv-update, .ch-pill, .wx-banner) { background: var(--sk-tour); color: var(--ink); }
+html:not([data-skin="nebula"]) :is(.sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .ch-fcard, .wx-fcard, .ls-panel) { background: linear-gradient(var(--glass-2), var(--glass-2)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink); }
+html:not([data-skin="nebula"]) .ov-card.ov-home { background: linear-gradient(var(--glass-2), var(--glass-2)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); }
+html:not([data-skin="nebula"]) :is(.desk-label, .timer, .arc, .transcript, .toast, .scrub .sc-label, .dv-update, .ch-pill, .wx-banner) { background: linear-gradient(var(--sk-tour), var(--sk-tour)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink); }
 html:not([data-skin="nebula"]) .device { background: var(--bg); }
 
 /* ---------- Settings → Look → Skin (picker: five swatches, tap applies at once) ---------- */
@@ -175,5 +175,5 @@ html:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-ski
   width: 100%; height: 100%; background: #fff; filter: drop-shadow(0 0 3px rgba(20, 10, 40, .55)) drop-shadow(0 1px 1.5px rgba(0, 0, 0, .45)); }
 html:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]):not([data-layout="two-orb"]) .device:not(.orb-corner) .dock .orb-app .sgi:is(.sg-hat, .sg-hat-private) { -webkit-mask-size: auto 82%; mask-size: auto 82%; }
 html:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]):not([data-layout="two-orb"]) .device:not(.orb-corner) .dock .orb-app :is(img, svg) { max-width: 100%; max-height: 100%; filter: brightness(0) invert(1) drop-shadow(0 0 3px rgba(20, 10, 40, .55)); }
-html:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]):not([data-layout="two-orb"]) .device:not(.orb-corner):is([data-voice="listen"], [data-voice="paused"]) .dock .orb-app,
+html:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]):not([data-layout="two-orb"]) .device:not(.orb-corner):is([data-voice="listen"], [data-voice="paused"], [data-voice="command"]) .dock .orb-app,
 html:is([data-skin="nebula"], [data-skin="grove"], [data-skin="tide"], [data-skin="ember"], [data-skin="signal"]):not([data-shell="desktop"]):not([data-layout="two-orb"]) .device:not(.orb-corner)[data-sheet="launcher"] .dock .orb-app { opacity: 0; }

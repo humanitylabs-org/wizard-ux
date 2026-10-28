@@ -18,6 +18,8 @@ function nativeFixture({modern = false} = {}) {
   };
   return {window, sent, timers, reply};
 }
+// The shell waits until the asking app has been in front for a moment before the fingerprint prompt.
+const sentSoon = async (f, n) => { for (let i = 0; i < 40 && f.sent.length < n; i++) await new Promise(r => setTimeout(r, 50)); };
 function hostedFixture(native = nativeFixture()) {
   const location = new URL('https://wizard.example/wizard-os-home/'), events = {};
   const app = {id: 'messenger', kind: 'wizard', url: '/messenger/'};
@@ -53,11 +55,11 @@ for (const modern of [false, true]) test(`native correlation, error, timeout and
 });
 test('registered frame owns appId on sync service and async message path, including hostile extra args', async () => {
   const f = hostedFixture();
-  const saved = f.service.vault.seal('fixture-secret', 'Unlock Messenger');
+  const saved = f.service.vault.seal('fixture-secret', 'Unlock Messenger'); await sentSoon(f, 1);
   assert.equal(f.sent[0].params.appId, 'messenger'); assert.equal(f.sent[0].params.secret, 'fixture-secret');
   f.reply(f.sent[0]); await saved;
   const replies = []; f.child.postMessage = value => replies.push(value);
-  const message = f.events.message({origin: f.child.location.origin, source: f.child, data: {type: 'wizard:app:request', version: 1, id: 'fixture-open', op: 'vault.open', args: {appId: 'other', title: 'Unlock Messenger'}}});
+  const message = f.events.message({origin: f.child.location.origin, source: f.child, data: {type: 'wizard:app:request', version: 1, id: 'fixture-open', op: 'vault.open', args: {appId: 'other', title: 'Unlock Messenger'}}}); await sentSoon(f, 2);
   assert.equal(f.sent[1].params.appId, 'messenger');
   f.reply(f.sent[1], {secret: 'fixture-secret'}); await message;
   assert.equal(replies[0].value.secret, 'fixture-secret');
@@ -65,7 +67,7 @@ test('registered frame owns appId on sync service and async message path, includ
 });
 test('reloaded, closed or foreign documents never receive a late secret', async () => {
   for (const revoke of [f => {f.child.document = {};}, f => {f.detach();}, f => {f.child.location = new URL('https://foreign.example/');}]) {
-    const f = hostedFixture(), opened = f.service.vault.open('Unlock Messenger');
+    const f = hostedFixture(), opened = f.service.vault.open('Unlock Messenger'); await sentSoon(f, 1);
     revoke(f); f.reply(f.sent[0], {secret: 'fixture-secret'});
     await assert.rejects(opened, /no longer authorized/);
     await assert.rejects(f.service.vault.open(), /no longer authorized/);
@@ -75,6 +77,6 @@ test('unregistered child cannot connect to a vault', () => {
   const f = hostedFixture(); assert.equal(f.window.WizAppServices.connect({location: f.child.location, document: {}}, {}), null);
 });
 test('old native APK missing the vault group maps unknown method to unavailable', async () => {
-  const f = hostedFixture(), opened = f.service.vault.open();
+  const f = hostedFixture(), opened = f.service.vault.open(); await sentSoon(f, 1);
   f.reply(f.sent[0], null, 'unknown method'); await assert.rejects(opened, error => error.code === 'unavailable');
 });

@@ -256,9 +256,13 @@ test('the API hands a skin no shell internals', async () => {
   P.host._test.setImporter(async () => ({ default: api => { seen = api; } }));
   P.host.attach(P.adapter); P.host.commit('fixture'); await settle();
   // Layout hooks (22 Oct 2026): timers, own controls, agents, the orb's recorder and its idle tap. Still no internals.
+  // App-orb capability shipped in 52462d5f: a frozen facade, not shell internals.
   assert.deepEqual(Object.keys(seen).sort(), ['after', 'agents', 'app', 'asset', 'env', 'frame', 'gesture', 'listen', 'mount', 'nav', 'on', 'orb', 'part', 'route', 'storage', 'toast', 'voice']);
-  assert.ok(Object.isFrozen(seen.agents) && Object.isFrozen(seen.voice) && Object.isFrozen(seen.orb) && Object.isFrozen(seen.app));
-  assert.deepEqual(Object.keys(seen.app).sort(), ['orb', 'tap'], 'bounded app-orb projection/action only, not the mutable registry');
+  assert.ok(Object.isFrozen(seen.app));
+  assert.deepEqual(Object.keys(seen.app).sort(), ['orb', 'tap']);
+  assert.equal(seen.app.orb(), null, 'no front app exposes no claim');
+  assert.equal(seen.app.tap(), false, 'no front app cannot dispatch a tap');
+  assert.ok(Object.isFrozen(seen.agents) && Object.isFrozen(seen.voice) && Object.isFrozen(seen.orb));
   assert.deepEqual(Object.keys(seen.voice).sort(), ['cancel', 'dictate', 'state', 'talk', 'tap']);
   assert.ok(Object.isFrozen(seen) && Object.isFrozen(seen.nav));
   assert.deepEqual(Object.keys(seen.nav).sort(), ['back', 'deskCount', 'goDesk', 'openList', 'openThread']);

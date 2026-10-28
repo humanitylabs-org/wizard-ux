@@ -76,7 +76,7 @@
     const working = WORKING.has(status) || status === 'waiting_for_approval';
     const latestText = clean(text(latest?.content ?? latest?.text));
     const userText = clean(text(lastUser?.content ?? lastUser?.text) || text(item.wizard_request_preview));
-    const preview = working ? (userText || latestText) : (latestText || userText || clean(text(item.preview)));
+    const preview = working ? (item.wizard_helper_status ? (latestText || clean(text(item.preview)) || userText) : (userText || latestText)) : (latestText || userText || clean(text(item.preview)));
     const latestAt = optIso(latest?.timestamp ?? latest?.created_at);
     const userAt = optIso(lastUser?.timestamp ?? lastUser?.created_at);
     return {
@@ -104,6 +104,7 @@
       critical: (item.wizard_attention_level || item.attention_level) === 'critical',
       waitingOn: item.wizard_waiting_on === 'helper' ? 'helper' : '',
       helperStatus: item.wizard_helper_status && typeof item.wizard_helper_status === 'object' ? item.wizard_helper_status : null,
+      background: ['helper', 'heavy'].includes(item.wizard_background) ? item.wizard_background : '',
       // What the finished thread asks of James (the agent's hidden status line): needs_you / check / done / fyi.
       attention: attentionOf(item.wizard_attention),
       // A durable quiet one-shot checker bound to this thread. The prompt never reaches the list.
@@ -1146,22 +1147,30 @@
   /* Open-thread delta subscriptions. Read-only: a failed stream never replays a send.
    * Hermes uses unnamed SSE data frames with data.event; other runtimes name events. */
   const RUN_STREAMS = new Map();
-  L.openRunStream = function (sid, agent, runId, paint) {
+  L.openRunStream = function (sid, agent, runId, paint, target = null) {
+    // Explicit ephemeral target: reuse SSE/progress/Stop, never ordinary catalogs/outbox.
+    const base = target?.base;
+    if (target && !/^\/wizard\/v1\/agents\/[a-z][a-z0-9-]*\/incognito\/incog_[a-f0-9]{32}$/.test(base || '')) return null;
+    const read = target?.read || req;
     const registry = window.WosAgents;
     const rec = registry?.get(agent || registry.defaultId());
-    if ((agent && !rec) || rec?.privacy === 'private' || !window.EventSource || !runId) return null;
-    const key = JSON.stringify([agent, sid, runId]);
+    if ((!target && ((agent && !rec) || rec?.privacy === 'private')) || !window.EventSource || !runId) return null;
+    const key = JSON.stringify([agent, sid, runId, base]);
     let r = RUN_STREAMS.get(key);
     if (!r) {
       r = { text: '', steps: [], live: false, terminal: false, listeners: new Set(), frame: null, stopped: false };
       RUN_STREAMS.set(key, r);
-      const url = `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${agent ? '?agent=' + encodeURIComponent(agent) : ''}`;
+      const url = base ? `${base}/v1/runs/${encodeURIComponent(runId)}` : `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${agent ? '?agent=' + encodeURIComponent(agent) : ''}`;
       const notify = () => {
         if (r.frame != null || r.stopped) return;
         r.frame = requestAnimationFrame(() => { r.frame = null; for (const fn of r.listeners) fn(r); });
       };
       const close = () => { r.source?.close(); r.source = null; };
-      const terminal = () => { if (!r.terminal) { r.terminal = true; close(); notify(); } };
+      const terminal = async status => { if (r.terminal) return; r.terminal = true; r.status = status; close();
+        // One final read releases the ephemeral service busy latch and recovers non-delta output.
+        if (target) { try { r.result = await (await read(url)).json(); r.status = r.result.status || status; } catch (_) { r.status = 'failed'; } }
+        notify();
+      };
       let retries = 0;
       const event = e => {
         if (r.stopped || r.terminal) return;
@@ -1177,13 +1186,13 @@
           if (i >= 0) { r.steps = r.steps.map((s, n) => n === i ? { ...s, done: true, error: !!d.error } : s); notify(); }
         }
         // reasoning.available is deliberately not answer text.
-        if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) terminal();
+        if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) void terminal(type.slice(4));
       };
       const connect = () => {
         if (r.stopped || r.terminal) return;
         r.steps = []; // a reconnect replays the run from its first event
         try {
-          r.source = new window.EventSource(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
+          r.source = new window.EventSource(base ? `${url}/events` : `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
           r.source.onmessage = event;
           for (const name of ['message.delta', 'tool.started', 'tool.completed', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted']) r.source.addEventListener(name, event);
           r.source.onopen = () => { r.live = true; };
@@ -1201,9 +1210,9 @@
       const poll = async () => {
         if (r.stopped || r.terminal) return;
         try {
-          const d = await (await req(url)).json();
+          const d = await (await read(url)).json();
           if (r.stopped) return;
-          if ((d.run_id || d.id) === runId && d.session_id === sid && ['completed', 'failed', 'cancelled', 'interrupted'].includes(d.status)) terminal();
+          if ((d.run_id || d.id) === runId && d.session_id === sid && ['completed', 'failed', 'cancelled', 'interrupted'].includes(d.status)) void terminal(d.status);
         } catch (_) { /* connectivity recovery is the ordinary read poll, never another send */ }
         // The status read is only the safety net while the live stream is open.
         if (!r.stopped && !r.terminal) r.timer = setTimeout(poll, r.live ? 10000 : 1500);

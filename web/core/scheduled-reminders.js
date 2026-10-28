@@ -6,7 +6,7 @@
 (() => {
   'use strict';
   const API='/wizard/v1/schedules', J={'Content-Type':'application/json'}, WATCH='wzb_', SEEN_STORE='wos.boomerang.seen.v1';
-  const DEFAULT_ZONE='Asia/Bangkok';
+  const zoneNow=()=>{try{return window.WizConfig?.timeZone?.()||Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'}catch{return 'UTC'}};
   const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
   const WEEKDAYS=['Su','Mo','Tu','We','Th','Fr','Sa'];
   const PRESETS=[
@@ -22,11 +22,11 @@
   function addWallDays(date,n){const {y,m,d}=parseDate(date),v=new Date(Date.UTC(y,m-1,d+n));return dateString(v.getUTCFullYear(),v.getUTCMonth()+1,v.getUTCDate())}
   function addWallMonths(date,n){const {y,m,d}=parseDate(date),v=new Date(Date.UTC(y,m-1+n,1));return dateString(v.getUTCFullYear(),v.getUTCMonth()+1,Math.min(d,daysInMonth(v.getUTCFullYear(),v.getUTCMonth()+1)))}
   const validZone=z=>{try{new Intl.DateTimeFormat('en',{timeZone:z}).format();return Boolean(z)}catch{return false}};
-  const zones=()=>[DEFAULT_ZONE,Intl.DateTimeFormat().resolvedOptions().timeZone,'UTC','America/New_York','Europe/London'].filter((z,i,a)=>validZone(z)&&a.indexOf(z)===i);
+  const zones=()=>[zoneNow(),Intl.DateTimeFormat().resolvedOptions().timeZone,'UTC','America/New_York','Europe/London'].filter((z,i,a)=>validZone(z)&&a.indexOf(z)===i);
   const zoneOptions=selected=>zones().map(z=>`<option value="${esc(z)}"${z===selected?' selected':''}>${esc(z)}</option>`).join('');
   const req=async(path,init={})=>{const r=await fetch(path,{cache:'no-store',credentials:'same-origin',...init});let p={};try{p=await r.json()}catch{}if(!r.ok)throw new Error(r.status===404?'This Wizard needs an update for Snooze.':p.error?.message||p.error||`HTTP ${r.status}`);return p};
   // A scheduler job of kind "return", in the picker's own shape.
-  const fromJob=j=>({id:j.id,session_id:j.thread,created_at:j.createdAt||null,due_at:j.when?.once||j.nextRun,timezone:validZone(j.timezone)?j.timezone:DEFAULT_ZONE,note:j.prompt||'',
+  const fromJob=j=>({id:j.id,session_id:j.thread,created_at:j.createdAt||null,due_at:j.when?.once||j.nextRun,timezone:validZone(j.timezone)?j.timezone:zoneNow(),note:j.prompt||'',
     anchor_at:j.target?.message??null,target_kind:j.target?.message!=null?'message':'thread',context:j.target?.excerpt||String(j.name||'').replace(/^(?:Boomerang|Snooze) · /,''),
     status:j.lastRun?.outcome==='returned'&&Date.parse(j.lastRun.scheduledFor)===Date.parse(j.when?.once||'')?'due':'scheduled',returned_at:j.lastRun?.finishedAt||null});
   const seen=()=>{try{return new Set(JSON.parse(localStorage.getItem(SEEN_STORE)||'[]'))}catch{return new Set()}};
@@ -70,16 +70,16 @@
   const forSession=id=>reminders.filter(r=>r.session_id===id);
   const dueFor=id=>forSession(id).filter(r=>r.status==='due');
   const nextFor=id=>forSession(id).filter(r=>r.status==='scheduled').sort((a,b)=>Date.parse(a.due_at)-Date.parse(b.due_at))[0]||null;
-  const parts=(t=Date.now(),z=DEFAULT_ZONE)=>{const p={};for(const x of new Intl.DateTimeFormat('en-CA',{timeZone:z,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(t)))p[x.type]=x.value;return{y:+p.year,m:+p.month,d:+p.day,h:+p.hour%24,min:+p.minute}};
+  const parts=(t=Date.now(),z=zoneNow())=>{const p={};for(const x of new Intl.DateTimeFormat('en-CA',{timeZone:z,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(t)))p[x.type]=x.value;return{y:+p.year,m:+p.month,d:+p.day,h:+p.hour%24,min:+p.minute}};
   function offsetAt(t,z){const p={};for(const x of new Intl.DateTimeFormat('en-CA',{timeZone:z,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(new Date(t)))p[x.type]=x.value;return Date.UTC(+p.year,+p.month-1,+p.day,+p.hour%24,+p.minute,+p.second)-Math.floor(t/1000)*1000}
-  function wallToUtc(date,time,z=DEFAULT_ZONE){
+  function wallToUtc(date,time,z=zoneNow()){
     const {y,m,d}=parseDate(date),[h,min]=time.split(':').map(Number);if(!validZone(z))throw new Error('Choose a valid timezone.');let guess=Date.UTC(y,m-1,d,h,min);
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^\d{2}:\d{2}$/.test(time)||m<1||m>12||d<1||d>daysInMonth(y,m)||h<0||h>23||min<0||min>59||!Number.isFinite(guess))throw new Error('Choose a real date and time.');
     for(let i=0;i<4;i++)guess=Date.UTC(y,m-1,d,h,min)-offsetAt(guess,z);
     const check=parts(guess,z);if(check.y!==y||check.m!==m||check.d!==d||check.h!==h||check.min!==min)throw new Error('That local time does not exist in this timezone.');
     return new Date(guess).toISOString();
   }
-  function preset(kind,z=DEFAULT_ZONE,now=Date.now()){
+  function preset(kind,z=zoneNow(),now=Date.now()){
     const p=parts(now,z),today=dateString(p.y,p.m,p.d);
     if(kind==='today'){const min=Math.min(23*60+59,p.h*60+p.min+240);return{date:today,time:`${pad(Math.floor(min/60))}:${pad(min%60)}`}}
     if(/^[124]h$/.test(kind)){const h=Number(kind[0]),q=parts(now+h*3600000,z);return{date:dateString(q.y,q.m,q.d),time:`${pad(q.h)}:${pad(q.min)}`}}
@@ -116,7 +116,7 @@
   // A timed Snooze also takes the thread out of the list (James, 23 Oct 2026): the existing Defer disposition, restored when it comes back.
   async function away(id){const s=live()?.session?.(id);if(!s||s.archived)return;if(!s.deferred&&!await live().defer?.(id)){window.dispatchEvent(new CustomEvent('wos:boomerang-error'));return}window.dispatchEvent(new CustomEvent('wos:snooze-someday',{detail:{session:id,quiet:true}}))}
   function open(opts,existing=null){
-    close();restoreFocus=document.activeElement;const selectedZone=validZone(existing?.timezone)?existing.timezone:DEFAULT_ZONE,ep=existing?parts(Date.parse(existing.due_at),selectedZone):null,p=existing?{date:dateString(ep.y,ep.m,ep.d),time:`${pad(ep.h)}:${pad(ep.min)}`}:preset('tomorrow-am',selectedZone),hasNote=Boolean(existing?.note||opts.note);
+    close();restoreFocus=document.activeElement;const selectedZone=validZone(existing?.timezone)?existing.timezone:zoneNow(),ep=existing?parts(Date.parse(existing.due_at),selectedZone):null,p=existing?{date:dateString(ep.y,ep.m,ep.d),time:`${pad(ep.h)}:${pad(ep.min)}`}:preset('tomorrow-am',selectedZone),hasNote=Boolean(existing?.note||opts.note);
     sheet=document.createElement('div');sheet.className='boom-sheet';sheet.innerHTML=`<form class="boom-card" data-boom-form role="dialog" aria-modal="true" aria-labelledby="boom-title"><header><span aria-hidden="true">◷</span><b id="boom-title">When should this come back?</b><button type="button" data-boom-close aria-label="Close">×</button></header>${opts.targetKind==='message'&&opts.context?`<q class="boom-context">${esc(opts.context)}</q>`:''}<section class="boom-quick" aria-label="Snooze until"><div class="boom-presets">${presetButtons(selectedZone,existing?`${p.date}T${p.time}`:'')}</div></section><section class="boom-exact" aria-labelledby="boom-exact-title" hidden><h3 id="boom-exact-title">Exact date &amp; time</h3><div class="boom-fields"><label>Date<span class="boom-date-control"><input required type="date" name="date" value="${p.date}"><button type="button" data-boom-calendar-toggle aria-expanded="false" aria-label="Open calendar">▣</button></span></label><label>Time<input required type="time" name="time" value="${p.time}" step="60"></label></div>${calendarHtml(p.date)}<label class="boom-zone">Timezone<select required name="timezone">${zoneOptions(selectedZone)}</select><small>Bangkok by default · saved as UTC</small></label></section><button type="button" class="boom-link" data-boom-note-toggle aria-expanded="${hasNote}">${hasNote?'Hide note':'＋ Add a note'}</button><label class="boom-note"${hasNote?'':' hidden'}>Note<input name="note" maxlength="500" value="${esc(existing?.note||opts.note||'')}" placeholder="What should Future You remember?"></label><p class="boom-error" role="alert"></p><footer${existing?'':' hidden'}>${existing?'<button type="button" class="danger" data-boom-cancel>Remove snooze</button>':''}<button type="submit" class="primary">${existing?'Save':'Snooze'}</button></footer></form>`;
     document.body.append(sheet);const form=sheet.querySelector('form'),calendar=form.querySelector('[data-boom-calendar]'),toggle=form.querySelector('[data-boom-calendar-toggle]');renderCalendar(form);
     let saving=false;
