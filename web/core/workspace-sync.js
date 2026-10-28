@@ -98,10 +98,16 @@
 
   function label(shell) {
     const ua = navigator.userAgent || '';
-    const what = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Mac/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /Linux|X11/.test(ua) ? 'Linux' : 'device';
+    let what = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Mac/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /Linux|X11/.test(ua) ? 'Linux' : 'device';
+    if (what === 'Android') {
+      // WebView includes the model; reduced browser UAs expose only "K". Never label two phones just Android.
+      const model = (ua.match(/Android[^;)]*;\s*([^;)]+)/)?.[1] || '').split(/\s+Build\//)[0].trim();
+      let id = ls.get('wos.wsync.device', '');
+      if (!id) { id = Math.random().toString(36).slice(2, 8); ls.set('wos.wsync.device', id); }
+      what = model && !/^(K|wv)$/i.test(model) ? model.slice(0, 45) : `Android ${id}`;
+    }
     return shell === 'desktop' ? `${what} desktop` : what;
   }
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   function create({ shell, read, apply, title }) {
     const name = label(shell);
@@ -124,8 +130,8 @@
       finally { applying = false; }
       lastLocal = now(); persist();
     }
-    async function req(method, path, body) {
-      const r = await fetch(API + path, { method, cache: 'no-store', credentials: 'same-origin', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+    async function req(method, path, body, signal) {
+      const r = await fetch(API + path, { method, signal, cache: 'no-store', credentials: 'same-origin', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
       const j = await r.json().catch(() => null);
       if (r.status === 404 && !(j && 'rev' in j)) { const e = new Error('absent'); e.absent = true; throw e; }
       if (j?.state) {
@@ -176,21 +182,49 @@
       if (!dirty) { put(j.state); return; }
       pending = merge(lastLocal, local, j.state); put(pending); unsent(); schedule();
     }
+    // One reader per client. A foreground/online event interrupts its hidden wait, backoff or suspended fetch;
+    // starting a second loop here would race the first one and could apply an older snapshot after a save.
+    let poll = null, wakeWait = null;
+    function pause(ms) {
+      return new Promise(resolve => {
+        const done = () => { clearTimeout(t); if (wakeWait === done) wakeWait = null; resolve(); };
+        const t = setTimeout(done, ms); wakeWait = done;
+      });
+    }
+    function wake() {
+      if (!alive || off() || document.hidden) return;
+      ok = null; // the next GET must be an immediate read, not another 25-second long-poll
+      if (poll) { poll.woken = true; poll.abort(); }
+      wakeWait?.();
+      if (st.base && lastLocal && !same(now(), lastLocal)) schedule();
+    }
     async function loop() {
       let fails = 0;
       while (alive) {
-        if (off()) { await sleep(5000); continue; }
+        if (off()) { await pause(5000); continue; }
+        const controller = new AbortController(), baseline = st;
+        poll = controller;
+        const deadline = setTimeout(() => controller.abort(), 35000);
         try {
           const wait = document.hidden || !st.base || ok !== true ? 0 : 25; // answer at once until in sync, then long-poll
-          const { status, j } = await req('GET', `?since=${st.base ? st.rev : -1}&wait=${wait}`);
+          const { status, j } = await req('GET', `?since=${st.base ? st.rev : -1}&wait=${wait}`, undefined, controller.signal);
+          if (!alive || controller.woken || off()) continue;
           if (status !== 200 || !j || !Array.isArray(j.state?.desks)) throw new Error('state ' + status);
-          if (!busy && (j.rev !== st.rev || !st.base)) arrive(j); else take(j);
+          // Revisions can be reused after restore/reset. Validate the snapshot too, including the first read of a
+          // saved checkpoint. Ignore a read overtaken by this client's PUT instead of rolling its baseline back.
+          if (!busy && st === baseline) {
+            if (j.rev !== st.rev || !st.base || !same(j.state, st.base)) arrive(j); else take(j);
+          }
           if (ok !== true) { ok = true; } emit(); fails = 0;
-          if (document.hidden) await sleep(15000);
+          if (document.hidden) await pause(15000);
         } catch (e) {
+          if (!alive) break;
+          if (controller.woken) continue;
           if (e.absent) { ok = null; emit(); return; } // this box has no workspace sync: one-device shell, quietly
           ok = false; emit(); fails++;
-          await sleep(Math.min(30000, 1500 * 2 ** Math.min(fails, 5)));
+          await pause(Math.min(30000, 1500 * 2 ** Math.min(fails, 5)));
+        } finally {
+          clearTimeout(deadline); if (poll === controller) poll = null;
         }
       }
     }
@@ -202,12 +236,20 @@
       finally { applying = false; }
       closed = closed.filter(x => x !== c); schedule(); emit(); return true;
     }
-    function setOff(v) { ls.set(OFF, !!v); if (!v) { st = { rev: -1, base: null, last: null }; lastLocal = null; persist(); } emit(); }
-    addEventListener('pagehide', () => { if (timer) { clearTimeout(timer); push(); } });
-    setTimeout(loop, 300);
+    function setOff(v) { ls.set(OFF, !!v); if (!v) { st = { rev: -1, base: null, last: null }; lastLocal = null; persist(); wake(); } emit(); }
+    const flush = () => { if (timer) { clearTimeout(timer); push(); } };
+    addEventListener('pagehide', flush);
+    for (const type of ['pageshow', 'focus', 'online']) addEventListener(type, wake);
+    for (const type of ['visibilitychange', 'resume']) document.addEventListener?.(type, wake);
+    const start = setTimeout(loop, 300);
     if (st.base && lastLocal && !same(now(), lastLocal)) setTimeout(schedule, 0); // offline edits from before a reload
     const api = {
-      changed, reopen, setOff, title, stop() { alive = false; },
+      changed, reopen, setOff, title, stop() {
+        alive = false; clearTimeout(start); clearTimeout(timer); poll?.abort(); wakeWait?.();
+        window.removeEventListener?.('pagehide', flush);
+        for (const type of ['pageshow', 'focus', 'online']) window.removeEventListener?.(type, wake);
+        for (const type of ['visibilitychange', 'resume']) document.removeEventListener?.(type, wake);
+      },
       get on() { return !off(); }, get ok() { return ok; }, get closed() { return closed; }, get info() { return info; }, get name() { return name; }, get rev() { return st.rev; },
     };
     window.WosWorkspaceSync.current = api;
