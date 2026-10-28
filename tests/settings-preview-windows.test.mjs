@@ -14,7 +14,11 @@ const slice = (s, from, to) => { const a = s.indexOf(from); assert.ok(a >= 0, fr
 test('desktop Settings opens as a window and every way of closing the window hides it', () => {
   const open = slice(desk, '  function openSettings(focus) {', '  function closeSettings()');
   assert.match(open, /if \(w\) focusWin\(w\.id\); else \{ settingsFocus = document\.activeElement; newWin\(\{ app: 'settings' \}\); \}/);
-  assert.match(desk, /function closeSettings\(\) \{ const w = settingsWin\(\); if \(w\) closeWin\(w\.id\); else hostSettings\(\); \}/);
+  assert.match(desk, /    const w = settingsWin\(\); if \(w\) closeWin\(w\.id\); else hostSettings\(\);\n  \}/, 'on a desk Settings is a window');
+  // From Home (not a desk) it is a centred panel over Home; Esc, ✕ or a click outside closes it.
+  assert.match(open, /if \(homeOpen && !w\) \{/);
+  assert.match(desk, /scrim\.addEventListener\('click', \(\) => closeSettings\(\)\);/);
+  assert.match(desk, /if \(settingsModal\) closeSettings\(\);\n    homeOpen = false;/, 'leaving Home closes the panel');
   // ✕ in the title bar, ⌥W and a synced desk all go through closeWin → render → hostSettings.
   assert.match(desk, /queueMicrotask\(\(\) => window\.WosResources\?\.sync\(\)\);\n    afterRender\?\.\(\);/);
   assert.match(desk, /afterRender = hostSettings;/);
@@ -32,7 +36,8 @@ test('desktop Settings keys: ⌥, toggles, Esc closes only the focused Settings 
   assert.match(desk, /if \(settingsFocused\(\)\) \{ if \(settingsView\.back\(\)\) return 'settings-page'; closeSettings\(\); return 'settings'; \}/);
   assert.match(desk, /if \(settingsFocused\(\) && !e\.altKey\) return;/);
   assert.doesNotMatch(desk, /setEl && !setEl\.hidden && !\(e\.altKey && code === 'Comma'\)/, 'the old modal swallow of every ⌥ key is gone');
-  assert.doesNotMatch(desk, /setEl\.setAttribute\('aria-modal'/, 'a window is not a modal dialog');
+  assert.equal((desk.match(/setEl\.setAttribute\('aria-modal'/g) || []).length, 1, 'only the Home panel is a dialog, never the window');
+  assert.match(desk, /settingsModal = true; setEl\.classList\.add\('is-modal'\); setEl\.setAttribute\('aria-modal', 'true'\)/);
 });
 
 test('desktop Settings window chrome: the panel fills the window, its own ✕ gives way to the title bar', () => {
