@@ -45,3 +45,15 @@ test('registry keeps a device\'s Machines use and the managed Wizards list; the 
   fs.writeFileSync(f, JSON.stringify({ devices: [] }));
   assert.equal((await createDevicesReader({ registryPath: f, probeLocalImpl: async () => ({ platform: 'linux', disks: [] }), tailnetImpl: async () => null })()).managed, undefined);
 });
+
+test('managed Wizards keep who uses them: named people and a head count, bounded', () => {
+  const reg = cleanRegistry({ managed: [
+    { id: 'a', name: 'A', people: ['Miguel', 'Buddy', '', 42, 'x'.repeat(80)] },
+    { id: 'b', name: 'B', peopleCount: 7 },
+    { id: 'c', name: 'C', people: ['One', 'Two'], peopleCount: 1 },
+    { id: 'd', name: 'D', peopleCount: 'lots' }] });
+  assert.deepEqual(reg.managed[0].people, ['Miguel', 'Buddy', '42', 'x'.repeat(40)]);
+  assert.equal(reg.managed[1].peopleCount, 7); assert.equal(reg.managed[1].people, undefined);
+  assert.equal(reg.managed[2].peopleCount, undefined, 'a count below the named people adds nothing');
+  assert.deepEqual(reg.managed[3], { id: 'd', name: 'D' });
+});

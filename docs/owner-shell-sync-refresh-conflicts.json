@@ -208,5 +208,285 @@
     "block": 2,
     "choice": "combined",
     "reason": "Retain lost-audio retry guard and live late-held Send/Discard"
+  },
+  {
+    "phase": "main",
+    "file": "docs/COMPONENTS.md",
+    "block": 1,
+    "choice": "combined",
+    "reason": "Document main features alongside live Incognito and opaque overlay contracts"
+  },
+  {
+    "phase": "main",
+    "file": "docs/COMPONENTS.md",
+    "block": 2,
+    "choice": "combined",
+    "reason": "Document main features alongside live Incognito and opaque overlay contracts"
+  },
+  {
+    "phase": "main",
+    "file": "docs/COMPONENTS.md",
+    "block": 3,
+    "choice": "combined",
+    "reason": "Document main features alongside live Incognito and opaque overlay contracts"
+  },
+  {
+    "phase": "main",
+    "file": "docs/COMPONENTS.md",
+    "block": 4,
+    "choice": "combined",
+    "reason": "Document main features alongside live Incognito and opaque overlay contracts"
+  },
+  {
+    "phase": "main",
+    "file": "docs/RESPONSE-STYLE.md",
+    "block": 1,
+    "choice": "main",
+    "reason": "Retain independent main capability or current native contract"
+  },
+  {
+    "phase": "main",
+    "file": "docs/responsive-feature-inventory.json",
+    "block": 1,
+    "choice": "sync",
+    "reason": "Keep complete responsive inventory (merged semantically below)"
+  },
+  {
+    "phase": "main",
+    "file": "docs/responsive-feature-inventory.json",
+    "block": 2,
+    "choice": "sync",
+    "reason": "Keep complete responsive inventory (merged semantically below)"
+  },
+  {
+    "phase": "main",
+    "file": "tests/app-vault.test.mjs",
+    "block": 1,
+    "choice": "live",
+    "reason": "Keep legacy vault compatibility and foreground prompt regressions; modern envelope tests preserved separately"
+  },
+  {
+    "phase": "main",
+    "file": "tests/home-screen-refresh.test.mjs",
+    "block": 1,
+    "choice": "sync",
+    "reason": "Preserve independent rename, Incognito fixture and animation-aware regression"
+  },
+  {
+    "phase": "main",
+    "file": "tests/outbox-late-voice-note.test.mjs",
+    "block": 1,
+    "choice": "sync",
+    "reason": "Preserve independent rename, Incognito fixture and animation-aware regression"
+  },
+  {
+    "phase": "main",
+    "file": "tests/reach.test.mjs",
+    "block": 1,
+    "choice": "main",
+    "reason": "Retain independent main capability or current native contract"
+  },
+  {
+    "phase": "main",
+    "file": "tests/response-style.test.mjs",
+    "block": 1,
+    "choice": "main",
+    "reason": "Retain independent main capability or current native contract"
+  },
+  {
+    "phase": "main",
+    "file": "tests/response-style.test.mjs",
+    "block": 2,
+    "choice": "main",
+    "reason": "Retain independent main capability or current native contract"
+  },
+  {
+    "phase": "main",
+    "file": "tests/wizard-id-bridge.test.mjs",
+    "block": 1,
+    "choice": "main",
+    "reason": "Retain independent main capability or current native contract"
+  },
+  {
+    "phase": "main",
+    "file": "tests/wizard-id-bridge.test.mjs",
+    "block": 2,
+    "choice": "combined",
+    "reason": "Full DOM fixture plus shared composer capabilities"
+  },
+  {
+    "phase": "main",
+    "file": "tools/qa-orb-desk-icon.cjs",
+    "block": 1,
+    "choice": "sync",
+    "reason": "Preserve independent rename, Incognito fixture and animation-aware regression"
+  },
+  {
+    "phase": "main",
+    "file": "web/core/app-client.js",
+    "block": 1,
+    "choice": "live",
+    "reason": "Keep app-owned orb and audio ducking APIs"
+  },
+  {
+    "phase": "main",
+    "file": "web/core/app-client.js",
+    "block": 2,
+    "choice": "main",
+    "reason": "Retain independent main capability or current native contract"
+  },
+  {
+    "phase": "main",
+    "file": "web/core/app-services.js",
+    "block": 1,
+    "choice": "live",
+    "reason": "Keep legacy and modern vault, foreground prompts, orb and audio operations; remove duplicate modern helper below"
+  },
+  {
+    "phase": "main",
+    "file": "web/core/app-services.js",
+    "block": 2,
+    "choice": "live",
+    "reason": "Keep legacy and modern vault, foreground prompts, orb and audio operations; remove duplicate modern helper below"
+  },
+  {
+    "phase": "main",
+    "file": "web/core/chats.js",
+    "block": 1,
+    "choice": "combined",
+    "reason": "Ready notification ordering plus owner Yesterday/Past week ordering and section-specific morph keys"
+  },
+  {
+    "phase": "main",
+    "file": "web/core/chats.js",
+    "block": 2,
+    "choice": "combined",
+    "reason": "Ready notification ordering plus owner Yesterday/Past week ordering and section-specific morph keys"
+  },
+  {
+    "phase": "main",
+    "file": "web/core/chats.js",
+    "block": 3,
+    "choice": "combined",
+    "reason": "Ready notification ordering plus owner Yesterday/Past week ordering and section-specific morph keys"
+  },
+  {
+    "phase": "main",
+    "file": "web/core/config.js",
+    "block": 1,
+    "choice": "main",
+    "reason": "Retain independent main capability or current native contract"
+  },
+  {
+    "phase": "main",
+    "file": "web/core/config.js",
+    "block": 2,
+    "choice": "main",
+    "reason": "Retain independent main capability or current native contract"
+  },
+  {
+    "phase": "main",
+    "file": "web/core/reach.js",
+    "block": 1,
+    "choice": "live",
+    "reason": "Keep owner reachable-send copy; main current Tailscale diagnosis and guide routing auto-merged"
+  },
+  {
+    "phase": "main",
+    "file": "web/core/settings.js",
+    "block": 1,
+    "choice": "main",
+    "reason": "Retain independent main capability or current native contract"
+  },
+  {
+    "phase": "main",
+    "file": "web/core/settings.js",
+    "block": 2,
+    "choice": "main",
+    "reason": "Retain independent main capability or current native contract"
+  },
+  {
+    "phase": "main",
+    "file": "web/core/settings.js",
+    "block": 3,
+    "choice": "main",
+    "reason": "Retain independent main capability or current native contract"
+  },
+  {
+    "phase": "main",
+    "file": "web/desktop/desktop.js",
+    "block": 1,
+    "choice": "combined",
+    "reason": "Incognito leave guard before HUD close routing"
+  },
+  {
+    "phase": "main",
+    "file": "web/outbox.js",
+    "block": 1,
+    "choice": "main",
+    "reason": "Retain independent main capability or current native contract"
+  },
+  {
+    "phase": "main",
+    "file": "web/outbox.js",
+    "block": 2,
+    "choice": "main",
+    "reason": "Retain independent main capability or current native contract"
+  },
+  {
+    "phase": "main",
+    "file": "web/outbox.js",
+    "block": 3,
+    "choice": "main",
+    "reason": "Retain independent main capability or current native contract"
+  },
+  {
+    "phase": "main",
+    "file": "web/skins/landscapes/skin.css",
+    "block": 1,
+    "choice": "combined",
+    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed"
+  },
+  {
+    "phase": "main",
+    "file": "web/skins/landscapes/skin.css",
+    "block": 2,
+    "choice": "combined",
+    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed"
+  },
+  {
+    "phase": "main",
+    "file": "web/skins/landscapes/skin.css",
+    "block": 3,
+    "choice": "combined",
+    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed"
+  },
+  {
+    "phase": "main",
+    "file": "web/skins/landscapes/skin.css",
+    "block": 4,
+    "choice": "combined",
+    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed"
+  },
+  {
+    "phase": "main",
+    "file": "web/skins/landscapes/skin.css",
+    "block": 5,
+    "choice": "combined",
+    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed"
+  },
+  {
+    "phase": "main",
+    "file": "web/skins/landscapes/skin.css",
+    "block": 6,
+    "choice": "combined",
+    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed"
+  },
+  {
+    "phase": "main",
+    "file": "web/skins/landscapes/skin.css",
+    "block": 7,
+    "choice": "combined",
+    "reason": "Apply live opaque material to both new main Landscapes variants; no independent main skin rules removed"
   }
 ]

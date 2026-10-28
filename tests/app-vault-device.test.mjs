@@ -31,9 +31,10 @@ function hostedFixture(native = nativeFixture()) {
   return {...native, child, frame, detach, events, service: native.window.WizAppServices.connect(child, {})};
 }
 
-test.skip('(live keeps the 0.10.8 wizardVaultPort fallback) vault is a separate allowlisted group using the existing device envelope, not a new port', () => {
+test('vault is a separate allowlisted group using the existing device envelope alongside the legacy APK fallback', () => {
   for (const op of ['vault.has', 'vault.seal', 'vault.open', 'vault.forget']) assert.ok(services.includes(`'${op}'`));
-  assert.doesNotMatch(services + bridge, /wizardVaultPort/);
+  assert.match(services, /deviceVaultCall/, 'modern envelope coexists with live legacy APK compatibility');
+  assert.doesNotMatch(bridge, /wizardVaultPort/, 'the shared device bridge never owns the legacy vault port');
   assert.match(services, /\{ \.\.\.extra, appId \}/, 'shell-owned appId overrides caller arguments');
   assert.match(client, /vault: Object\.freeze/);
   assert.match(client, /request\(op, args, 130000\)/);

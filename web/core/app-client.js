@@ -466,7 +466,7 @@
         has: () => call('vault.has').catch(() => ({ available: false, saved: false })),
         seal: (secret, title) => call('vault.seal', { secret, title }),
         open: title => call('vault.open', { title }).then(r => r.secret),
-        forget: () => call('vault.forget').catch(() => ({ saved: false })),
+        forget: () => call('vault.forget'),
       };
     })()),
     badge: Object.freeze({ set: n => service ? service.badge.set(n) : transportReady ? request('badge.set', { n }).then(() => true, () => false) : Promise.resolve(false) }),

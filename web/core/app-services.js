@@ -72,6 +72,7 @@
     try { const result = await config.transcribe(file, { language: opts.language || '', prompt: config.voicePrompt?.() || '' }); return { text: String(result.text || '').trim() }; }
     catch (e) { if (e.code === 'no_voice') return { unavailable: true }; throw e; }
   }
+
   function apps() { if (!registry) registry = [window.WizCore.apps('mobile'), window.WizCore.apps('desktop')]; return registry.flatMap(r => r.APPS); }
   function registered(st) {
     const a = apps().find(a => a.id === st.appId && a.kind !== 'native' && a.url);
@@ -285,9 +286,16 @@
         throw e;
       }
     };
+    // Recheck the exact requesting document after the biometric prompt as well as before it.
     source.addEventListener('pagehide', () => { if (st.doc === doc) reset(st); }, { once: true });
     return Object.freeze({ version: VERSION, appId: st.appId,
       ready() { check(); window.WizCompanionPane?.ready(st.frame); return { version: VERSION, hosted: true, appId: st.appId }; },
+      identity: Object.freeze({
+        info: () => identity(st, doc, 'info'),
+        sign: event => identity(st, doc, 'sign', { event }),
+        nip44_encrypt: args => identity(st, doc, 'nip44_encrypt', args),
+        nip44_decrypt: args => identity(st, doc, 'nip44_decrypt', args),
+      }),
       shell: Object.freeze({
         openCompanion(opts = {}) {
           check();

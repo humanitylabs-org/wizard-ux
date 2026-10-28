@@ -89,5 +89,5 @@
   addEventListener('wizard:apps', () => { refresh(); paint(); });
   setInterval(() => { if (!document.hidden) refresh(); }, 60000);
   setTimeout(refresh, 800);
-  window.WosBell = { html, refresh, paint, watch, mark, item: id => IN.items.find(i => i.id === String(id)) || null, get state() { return { ...S }; } };
+  window.WosBell = { html, refresh, paint, watch, mark, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
 })();

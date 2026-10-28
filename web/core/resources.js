@@ -108,7 +108,7 @@
   /* Miguel's skins (Dark, Light, Landscapes): Home shows one quiet row of ring dials per zone, every dial in the same
      column grid so Server and AI line up. No warning notes, alert marks, health line or freshness text; the detail sheet
      keeps all of that. An AI account that can't be read is a dial that opens its connection app to sign back in. */
-  const OURS=new Set(['obsidian','obsidian-light','landscapes']);
+  const OURS=new Set(['obsidian','obsidian-light','landscapes','landscapes-light']);
   const ours=()=>typeof document!=='undefined'&&(document.documentElement.dataset.tweaks||'').split(' ').includes('miguel/home-bars');
   const APP_OF={chatgpt:'wizard-chatgpt',claude:'wizard-claude',tinfoil:'wizard-tinfoil'};
   /* Speedometer dials (Miguel's skins, 22 Oct): a 240° car gauge per reading. Each dial remembers what it last showed

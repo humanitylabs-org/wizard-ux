@@ -329,8 +329,14 @@ def sweep():
 
 
 em = None
-with (BASE / 'worker.lock').open('a') as lock:
-    fcntl.flock(lock, fcntl.LOCK_EX)
+# Reuse the durable worker lease instead of blocking on our own ancestor's lock.
+_inherited = os.environ.get('WIZARD_HEAVY_LOCK_FD')
+_lockfile = os.fdopen(int(_inherited), 'a', closefd=False) if _inherited else (BASE / 'worker.lock').open('a')
+with _lockfile as lock:
+    if _inherited:
+        _want, _have = (BASE / 'worker.lock').stat(), os.fstat(lock.fileno())
+        if (_want.st_dev, _want.st_ino) != (_have.st_dev, _have.st_ino): raise SystemExit('inherited lock identity mismatch')
+    fcntl.flock(lock, fcntl.LOCK_EX | (fcntl.LOCK_NB if _inherited else 0))
     try:
         sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'np', '-k', 'system-images;android-35;google_apis;arm64-v8a', '-d', 'pixel_7', '-p', job / 'dev', stdin='no\n')
         # Dead DNS: nothing on the emulator can resolve the real Wizard's name (QA must never reach it).

@@ -491,9 +491,11 @@
       },
       // A notification opened from the list shows in the chat window as a one-message thread; its Done / Snooze /
       // Restore buttons (and keys) call act(action, id). Held while the package lives (chats.js reads host.inboxThreads).
+      // `list: true` also lists them in Ready as rows like any chat (time, priority and subject order); a tap on one
+      // calls act('open', id).
       threads(handlers = {}) {
         if (a.dead || typeof handlers.act !== 'function') return () => {};
-        inboxThreads.set(a.id, { act: guard(a, 'inbox.act', handlers.act) });
+        inboxThreads.set(a.id, { act: guard(a, 'inbox.act', handlers.act), list: handlers.list === true });
         const off = () => { if (inboxThreads.delete(a.id)) window.dispatchEvent?.(new Event('wos:prefs')); };
         a.offs.add(off); window.dispatchEvent?.(new Event('wos:prefs')); return off;
       },
@@ -542,6 +544,7 @@
     get snoozeOrder() { return snoozeLast.size ? 'last' : 'default'; },
     /* chats.js: a live package shows notifications as threads; inboxAct runs its Done / Snooze / Restore. */
     get inboxThreads() { return inboxThreads.size > 0; },
+    get inboxList() { for (const h of inboxThreads.values()) if (h.list) return true; return false; },
     inboxAct(action, id) { for (const h of inboxThreads.values()) { h.act(String(action), String(id)); return true; } return false; },
     action(name, context) { for (const { action, handler } of interceptors.values()) if (action === name) { void handler(context); return true; } return false; },
     /* core/skins.js: picker landed near a skin (preview or commit). Stylesheet only. */

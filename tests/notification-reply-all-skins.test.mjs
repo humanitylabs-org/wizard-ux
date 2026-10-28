@@ -50,7 +50,7 @@ test("James's skins have no rule that hides or flattens the reply bubble", () =>
 });
 
 test("Miguel's skins keep their flat quote line (square, untinted) over the new core bubble", () => {
-  for (const [f, pre] of [['web/skins/obsidian/skin.css', 'html[data-skin^="obsidian"]'], ['web/skins/landscapes/skin.css', 'html[data-skin="landscapes"]']]) {
+  for (const [f, pre] of [['web/skins/obsidian/skin.css', 'html[data-skin^="obsidian"]'], ['web/skins/landscapes/skin.css', 'html[data-skin^="landscapes"]']]) {
     const src = read(f);
     assert.ok(src.includes(pre + ' .ch-compose .ch-reply {') && /\.ch-compose \.ch-reply \{[^}]*background: none;[^}]*border-radius: 0;/.test(src), f);
     assert.ok(/\.msg\.u \.bub \.ch-rq \{[^}]*background: none;[^}]*border-radius: 0;/.test(src), f);

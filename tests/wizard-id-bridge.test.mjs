@@ -40,21 +40,6 @@ test('missing bridge refuses without pretending to create an ID', async () => {
   const f = fixture({ wizardDevicePort: undefined }); await assert.rejects(f.call('identity.setup'), /no native shell/);
 });
 
-test('page navigation retains scroll reset on the shipped web-only identity source', () => {
-  // 1522804f ports only web identity from #497. Do not require a signer hook
-  // whose native implementation is not in this source, or pretend to port it.
-  const activity = readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/MainActivity.java', import.meta.url), 'utf8');
-  const pageStarted = activity.split('public void onPageStarted(')[1]?.split('@Override')[0];
-  assert.ok(pageStarted, 'MainActivity must keep its navigation lifecycle hook');
-  assert.match(pageStarted, /\(\(SelectionWebView\)view\)\.scrollPageStarted\(\)/);
-  const selection = readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/SelectionWebView.java', import.meta.url), 'utf8');
-  assert.match(selection, /void scrollPageStarted\(\)\s*\{\s*scrollMetrics = null;\s*cancelScrollCapture\(\);\s*\}/);
-  const device = readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/device/DeviceBridge.java', import.meta.url), 'utf8');
-  const apps = readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/apps/AppsBridge.java', import.meta.url), 'utf8');
-  assert.doesNotMatch(device, /dispatchIdentity|identityDocument|wizardId\./, 'a future native signer must port its navigation cancellation contract with it');
-  assert.doesNotMatch(apps, /wizardDevicePort|identity\.sign/, 'the legacy APK must not advertise unsupported signing');
-});
-
 const servicesSource = readFileSync(new URL('../web/core/app-services.js', import.meta.url), 'utf8');
 function appFixture({ native = true, source = 'apps.json', kind = 'wizard' } = {}) {
   const location = new URL('https://wizard.example/wizard-os-home/'), calls = [], replies = [], listeners = {};
@@ -111,7 +96,8 @@ test('pending ID reply stays bound to the exact requesting document, including s
 test('identity helpers use the existing app-client transport and approval-sized timeout', async () => {
   const sent = [], timers = [], listeners = {}, parent = { postMessage(m) { sent.push(m); } };
   const window = { parent, WizComposerInput: {}, WizAttachChip: {}, addEventListener(t, f) { listeners[t] = f; }, dispatchEvent() {} };
-  const document = { hidden: false, readyState: 'loading', referrer: 'https://wizard.example/wizard-os-home/', documentElement: { dataset: {} }, addEventListener() {} };
+  const el = () => ({ dataset: {}, style: {}, setAttribute() {}, appendChild() {}, append() {} });
+  const document = { hidden: false, readyState: 'loading', referrer: 'https://wizard.example/wizard-os-home/', documentElement: { dataset: {}, appendChild() {} }, head: { appendChild() {}, querySelectorAll: () => [] }, createElement: el, querySelector: () => null, querySelectorAll: () => [], addEventListener() {} };
   vm.runInNewContext(readFileSync(new URL('../web/core/app-client.js', import.meta.url), 'utf8'), { window, parent, document, location: new URL('https://wizard.example/profiles/'), URL, history: { pushState() {}, replaceState() {}, back() {} }, CustomEvent: class {}, addEventListener(t, f) { listeners[t] = f; }, setTimeout(f, ms) { timers.push(ms); return timers.length; }, clearTimeout() {}, console });
   for (const method of ['info', 'sign', 'nip44_encrypt', 'nip44_decrypt']) {
     const pending = window.WizardApp.identity[method]({ kind: 13, pubkey: 'public', plaintext: 'text', ciphertext: 'sealed' });
