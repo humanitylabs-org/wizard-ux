@@ -4,7 +4,57 @@
   'use strict';
   if (window.WizAppServices) return;
   const VERSION = 1, ORIGIN = location.origin, frames = new Map();
-  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'share.receive', 'share.targets', 'share.pending', 'share.ack', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set', 'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt', 'shell.openCompanion', 'shell.closeCompanion', 'shell.postCompanion', 'shell.focusApp']);
+  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.wizard', 'share.receive', 'share.targets', 'share.pending', 'share.ack', 'voice.transcribe', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set', 'shell.openCompanion', 'shell.closeCompanion', 'shell.postCompanion', 'shell.focusApp', 'orb.set', 'audio.duck', 'vault.has', 'vault.seal', 'vault.open', 'vault.forget', 'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt']);
+
+  // Fingerprint vault (Android app only): one small secret per app, sealed on this phone by a Keystore key that
+  // only a fingerprint unlocks. The shell names the app (st.appId), so apps can never ask for each other's secret.
+  let vaultSeq = 0, vaultBound = null; const vaultWaits = new Map();
+  function vaultPort() { const p = window.wizardVaultPort; if (!p?.postMessage) return null; if (vaultBound !== p) { vaultBound = p; p.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (_) { return; } const w = vaultWaits.get(m?.id); if (!w) return; vaultWaits.delete(m.id); clearTimeout(w.timer); m.ok ? w.resolve(m.result || {}) : w.reject(Object.assign(new Error(m.error || 'failed'), { code: m.error || 'failed' })); }; } return p; }
+  // APK 0.10.8 exposes its own wizardVaultPort; 0.10.9+ answers vault.* on the shared device envelope (wizardDevicePort).
+  async function deviceVaultCall(appId, method, extra) {
+    try { return await window.WizCore.bridge.call('vault.' + method, { ...extra, appId }); }
+    catch (e) { const code = e.message === 'unknown method' || e.message === 'unavailable' ? 'unavailable' : e.message || 'failed'; if (method === 'has' && code === 'unavailable') return { available: false, saved: false }; throw Object.assign(new Error(code), { code }); }
+  }
+  function vaultCall(appId, method, extra = {}) {
+    if (!window.wizardVaultPort?.postMessage && window.wizardDevicePort?.postMessage && window.WizCore?.bridge?.call) return deviceVaultCall(appId, method, extra);
+    const p = vaultPort(); if (!p) return Promise.resolve(method === 'has' ? { available: false, saved: false } : Promise.reject(Object.assign(new Error('unavailable'), { code: 'unavailable' })));
+    const id = 'vault-' + (++vaultSeq);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { vaultWaits.delete(id); reject(Object.assign(new Error('timeout'), { code: 'timeout' })); }, 120000);
+      vaultWaits.set(id, { resolve, reject, timer });
+      try { p.postMessage(JSON.stringify({ ...extra, id, v: 1, appId, method })); } catch (e) { clearTimeout(timer); vaultWaits.delete(id); reject(e); }
+    });
+  }
+  // A fingerprint prompt only for the app you are looking at (James, 27 Oct 2026: after a reload a background
+  // Messenger asked for his fingerprint over Chats). seal/open wait until the app is in front and has stayed there
+  // briefly (a reload passes desks on screen on its way to where you were); after VAULT_WAIT_MS the app gets
+  // code 'not_in_front' and simply asks again when opened.
+  const VAULT_STEADY_MS = 600, VAULT_WAIT_MS = 60000;
+  function inFront(st) {
+    if (document.hidden) return false;
+    try { return (st.isFront || st.isVisible || (() => true))() === true; } catch (_) { return false; }
+  }
+  // Already steadily in front (the usual tap on "Unlock with fingerprint"): no added wait.
+  function steadyFront(st) {
+    const now = Date.now();
+    if (!inFront(st)) { st.frontSince = 0; return false; }
+    st.frontSince ||= now; return now - st.frontSince >= VAULT_STEADY_MS;
+  }
+  setInterval(() => { for (const st of frames.values()) steadyFront(st); }, 250);
+  function whenInFront(st, alive) {
+    if (steadyFront(st)) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const t0 = Date.now(); let since = 0;
+      const tick = () => {
+        if (!alive()) return reject(Object.assign(new Error('closed'), { code: 'cancelled' }));
+        const now = Date.now();
+        if (inFront(st)) { since ||= now; if (now - since >= VAULT_STEADY_MS) return resolve(); } else since = 0;
+        if (now - t0 > VAULT_WAIT_MS) return reject(Object.assign(new Error('not_in_front'), { code: 'not_in_front' }));
+        setTimeout(tick, 150);
+      };
+      tick();
+    });
+  }
   let registry, available = null, serial = 0, rootArm = null;
   // Share receiving (docs/SHARE-SHEET.md): the share sheet hands its per-app ops here once, at shell load, before
   // any app frame exists; they are never on a global, so a frame reaches only its own app id's items.
@@ -22,16 +72,7 @@
     try { const result = await config.transcribe(file, { language: opts.language || '', prompt: config.voicePrompt?.() || '' }); return { text: String(result.text || '').trim() }; }
     catch (e) { if (e.code === 'no_voice') return { unavailable: true }; throw e; }
   }
-  // Vault is an independent op group. Native uses the one device envelope, never an app-supplied appId.
-  for (const op of ['vault.has', 'vault.seal', 'vault.open', 'vault.forget']) OPS.add(op);
-  async function vaultCall(appId, method, extra = {}) {
-    if (!window.wizardDevicePort?.postMessage || !window.WizCore?.bridge?.call) {
-      if (method === 'has') return { available: false, saved: false };
-      throw Object.assign(new Error('unavailable'), { code: 'unavailable' });
-    }
-    try { return await window.WizCore.bridge.call('vault.' + method, { ...extra, appId }); }
-    catch (e) { throw Object.assign(new Error(e.message || 'failed'), { code: e.message === 'unknown method' ? 'unavailable' : e.message || 'failed' }); }
-  }
+
   function apps() { if (!registry) registry = [window.WizCore.apps('mobile'), window.WizCore.apps('desktop')]; return registry.flatMap(r => r.APPS); }
   function registered(st) {
     const a = apps().find(a => a.id === st.appId && a.kind !== 'native' && a.url);
@@ -54,7 +95,7 @@
   }
   function from(source) { return [...frames.values()].find(st => st.frame.contentWindow === source); }
   const changed = () => window.dispatchEvent(new CustomEvent('wizard:app-holds'));
-  function reset(st) { window.WizCompanionPane?.detach(st.frame); if (st.tools) setTools(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
+  function reset(st) { window.WizCompanionPane?.detach(st.frame); window.WizBackgroundAudio?.duck?.(st, false); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
   function reconcile() {
     for (const st of frames.values()) {
       if (st.tools && st.frame.isConnected && !barOf(st)?.querySelector(':scope > .wtools')) paintTools(st);
@@ -62,11 +103,11 @@
       if (st.doc && !valid(st, st.doc)) reset(st);
     }
   }
-  function attach(frame, { appId, path, openThread, openContextDraft, isVisible, back, readingStorage } = {}) {
+  function attach(frame, { appId, path, openThread, openContextDraft, isVisible, isFront, back, readingStorage } = {}) {
     frames.get(frame)?.detach();
     if (!frame || frame.tagName !== 'IFRAME' || !appId || !path) return () => {};
     let url; try { url = new URL(path, ORIGIN); } catch (_) { return () => {}; }
-    const st = { frame, appId, url, openThread, openContextDraft, isVisible, back, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
+    const st = { frame, appId, url, openThread, openContextDraft, isVisible, isFront, back, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
     if (!registered(st)) return () => {};
     const load = () => { if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); restoreReturn(st); };
     st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); if (st.badged) setBadge(st.appId, 0); };
@@ -143,6 +184,25 @@
     }
     bar.classList.add('has-tools');
     return true;
+  }
+  /* App orb claims: one fixed icon set, a short label, the app's own registry colour. The shell decides when it shows. */
+  const ORB_ICONS = new Set(['plus', 'mic', 'record', 'stop', 'send', 'search', 'edit']);
+  let orbShown = () => false;
+  function setOrb(st, spec) {
+    const icon = spec && ORB_ICONS.has(spec.icon) ? spec.icon : null;
+    const next = icon ? { icon, label: String(spec.label || '').replace(/[\x00-\x1f]/g, '').slice(0, 40) } : null;
+    if (JSON.stringify(next) === JSON.stringify(st.orb || null)) return orbShown(st.frame);
+    st.orb = next; window.dispatchEvent(new CustomEvent('wizard:app-orb', { detail: { appId: st.appId } }));
+    return orbShown(st.frame);
+  }
+  function orbOf(frame) {
+    const st = frames.get(frame); if (!st?.orb || !valid(st, st.doc)) return null;
+    const a = apps().find(x => x.id === st.appId);
+    return Object.freeze({ appId: st.appId, name: a?.name || st.appId, icon: st.orb.icon, label: st.orb.label || a?.name || st.appId, colors: Array.isArray(a?.colors) ? a.colors.slice(0, 2) : (a?.g || []) });
+  }
+  function orbTap(frame) {
+    const st = frames.get(frame); if (!st?.orb || !valid(st, st.doc)) return false;
+    try { st.frame.contentWindow.postMessage({ type: 'wizard:app:orb', version: VERSION }, ORIGIN); return true; } catch (_) { return false; }
   }
   function setTools(st, list) { st.tools = cleanTools(st, list); return paintTools(st); }
   // Owner-key access is narrower than ordinary app services: installed apps.json entries only,
@@ -241,6 +301,17 @@
         toast(icon, message) { check(); if (typeof icon !== 'string' || typeof message !== 'string') return false; const shell = window.__wos || window.__wux; shell?.toast?.(icon.slice(0, 20), message.slice(0, 2000), 2600); return !!shell?.toast; },
       }),
       badge: Object.freeze({ set(n) { check(); setBadge(st.appId, n); st.badged = true; return true; } }),
+      // Lower Wizard Music while this app plays a short sound; duck(false) restores it. Resolves true when ducked.
+      audio: Object.freeze({ duck(on) { check(); return window.WizBackgroundAudio?.duck ? window.WizBackgroundAudio.duck(st, !!on) : Promise.resolve(false); } }),
+      orb: Object.freeze({ set(spec) { check(); return setOrb(st, spec); }, shown() { check(); return orbShown(st.frame); } }),
+
+      vault: Object.freeze({
+        // check() again after the await: a reloaded, closed or foreign document never receives a late secret.
+        has: async () => { check(); const r = await vaultCall(st.appId, 'has'); check(); return r; },
+        seal: async (secret, title) => { check(); await whenInFront(st, () => { try { check(); return true; } catch (_) { return false; } }); const r = await vaultCall(st.appId, 'seal', { secret: String(secret ?? ''), title: String(title || '') }); check(); return r; },
+        open: async title => { check(); await whenInFront(st, () => { try { check(); return true; } catch (_) { return false; } }); const r = await vaultCall(st.appId, 'open', { title: String(title || '') }); check(); return r; },
+        forget: async () => { check(); const r = await vaultCall(st.appId, 'forget'); check(); return r; },
+      }),
       titlebar: Object.freeze({ set(list) { check(); return setTools(st, list); },
         shown() { check(); const b = barOf(st)?.querySelector(':scope > .wtools'); return !!b && b.getClientRects().length > 0 && b.offsetHeight > 0; } }),
       view: Object.freeze({ isVisible() { check(); return !document.hidden && st.isVisible?.() === true; } }),
@@ -342,12 +413,6 @@
         current() {check();return window.WizAppCapture?.current?.(st.appId) || null;},
         pending() { check(); if (!window.WizAppCapture) return Promise.reject(fault('Shared capture unavailable')); return window.WizAppCapture.pending(st.appId); },
         ack(id) { check(); if (!window.WizAppCapture) return Promise.reject(fault('Shared capture unavailable')); return window.WizAppCapture.ack(st.appId, id); } }),
-      vault: Object.freeze({
-        has: () => vault('has'),
-        seal: (secret, title) => vault('seal', { secret, title }),
-        open: title => vault('open', { title }),
-        forget: () => vault('forget'),
-      }),
       alive() { check(); return true; },
     });
   }
@@ -431,8 +496,11 @@
       if (d.op === 'capture.ack') value = await svc.capture.ack(d.args?.id);
       if (d.op === 'update.hold') { const h = svc.update.hold(d.args?.reason), id = uid(); st.messageHolds ||= new Map(); st.messageHolds.set(id, h); value = id; }
       if (d.op === 'badge.set') value = svc.badge.set(d.args?.n);
+      if (d.op === 'audio.duck') value = await svc.audio.duck(d.args?.on === true);
+
       if (d.op.startsWith('vault.')) { try { value = await svc.vault[d.op.slice(6)](d.op === 'vault.seal' ? d.args?.secret : d.args?.title, d.args?.title); } catch (err) { reply(null, 'vault:' + (err.code || 'failed')); return; } }
       if (d.op === 'titlebar.set') value = svc.titlebar.set(d.args?.tools);
+      if (d.op === 'orb.set') value = svc.orb.set(d.args?.spec);
       if (d.op === 'identity.info') value = await svc.identity.info();
       if (d.op === 'identity.sign') value = await svc.identity.sign(d.args?.event);
       if (d.op === 'identity.nip44_encrypt') value = await svc.identity.nip44_encrypt(d.args);
@@ -687,6 +755,7 @@
     } catch (_) { done?.(false); return false; }
   }
   window.WizAppServices = Object.freeze({ voiceCommand, runVoiceCommand, authorized: frame => { const st = frames.get(frame); return valid(st, st?.doc); }, version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
+    orb: Object.freeze({ of: orbOf, tap: orbTap, presenter(fn) { orbShown = typeof fn === 'function' ? fn : () => false; } }),
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     update: Object.freeze({ busy, announce, available: () => available, reloadPlan, prepareReload, frames: updateFrames }),
