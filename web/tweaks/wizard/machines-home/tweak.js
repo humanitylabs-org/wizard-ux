@@ -24,7 +24,7 @@ const TOP_UP = { tinfoil: 'https://dash.tinfoil.sh/?tab=billing' };
 
 export default function setup(api) {
   const S = { ws: api.storage.get('ws') || 'mine', res: {}, backup: api.storage.get('backup') || null, backupTried: 0,
-    open: new Set(api.storage.get('devs') === 'off' ? [] : ['devs']), bars: api.storage.get('details') !== 'off', unread: 0, nick: api.storage.get('nick') || {}, def: api.storage.get('def') || '' };
+    open: new Set(api.storage.get('devs') === 'off' ? [] : ['devs']), bars: api.storage.get('details') !== 'off', unread: 0, full: api.storage.get('full') === 'on', nick: api.storage.get('nick') || {}, def: api.storage.get('def') || '' };
   let fresh = true;  // entry motion only on the first paint and on a workspace switch, never on a later reading
 
   /* ---------- tiny DOM helpers (no markup strings) ---------- */
@@ -185,7 +185,10 @@ export default function setup(api) {
   const rowTs = row('is-ts');
   const tsTab = h('button', { type: 'button', cls: 'mh-ts-tab', data: { toggle: 'ts' }, hidden: true });
   const map = h('div', { cls: 'mh-map' + (S.bars ? ' is-details' : '') }, lines, tsTab, rowSt, rowTs, rowMn, rowAct, rowMore, rowPp, rowDv, rowChev);
-  root.append(h('header', { cls: 'mh-top' }, wsBar), h('div', { cls: 'mh-body' }, aiRow, aiList, map));
+  // At rest Home shows one slim glance strip (chats, AI fuel, last backup, network); a tap unfolds the full map in place.
+  const glance = h('button', { type: 'button', cls: 'mh-glance', data: { toggle: 'full' } });
+  root.classList.toggle('is-folded', !S.full);
+  root.append(h('header', { cls: 'mh-top' }, wsBar), h('div', { cls: 'mh-body' }, glance, aiRow, aiList, map));
 
   /* ---------- top ---------- */
   function renderTabs() {
@@ -487,6 +490,7 @@ export default function setup(api) {
       if (!sent) api.toast('Open Chats, then try again');  // the request waits as a draft for him to send
       return;
     }
+    if (d.toggle === 'full') { S.full = !S.full; api.storage.set('full', S.full ? 'on' : 'off'); root.classList.toggle('is-folded', !S.full); wired = ''; paint(); return; }
     if (d.toggle === 'ai') { flip('ai'); paint(); return; }
     if (d.toggle === 'signin') { flip('signin'); renderAIList(); drawn.list = ''; return; }
     if (d.toggle === 'storage') { flip('storage'); paint(); return; }
@@ -507,13 +511,32 @@ export default function setup(api) {
 
   /* ---------- data ---------- */
   // Repaint only the part whose drawing changed; a nickname being typed is never rebuilt under the finger.
-  const drawn = { top: '', ai: '', list: '', map: '' };
+  const drawn = { top: '', ai: '', list: '', map: '', glance: '' };
   const mapSig = () => { const st = storage();
     return JSON.stringify([S.ws, [...S.open].filter(k => k !== 'ai' && k !== 'signin'), reg().this || null, managedList(),
       devices().map(d => [d.id, d.name, d.status, d.error, d.cpus, d.memoryTotalGB, diskGB(d), Math.round((d.memory || 0) / 5), Math.round((d.cpu || 0) / 5), Math.round((freeGB(d) || 0) / 5)]),
       myDevices(), sessions(), S.unread, backupRunning(), st && { ...st, age: st.age == null ? null : agoS(st.age), used: st.used == null ? null : gbFmt(st.used) },
       (S.backup?.standby?.machines || []).map(x => [x.id, x.verdict, (x.checks || []).map(c => c.ok)])]); };
+  function renderGlance() {
+    const g = managedOf(S.ws), x = sessions(), fuel = gauge(), st = storage(), bad = openOnes().length;
+    const sig = JSON.stringify([S.ws, S.full, g ? g.name : [x.working, Math.min(x.ready, 6), S.unread, fuel && Math.round(fuel.left / 20), st && [st.state, st.age == null ? null : agoS(st.age)], bad, backupRunning()]]);
+    if (sig === drawn.glance) return; drawn.glance = sig;
+    glance.setAttribute('aria-expanded', String(S.full));
+    if (g) { glance.setAttribute('aria-label', `${g.name}. ${S.full ? 'Hide' : 'Show'} the map`); glance.replaceChildren(h('span', { cls: 'mh-gl-item' }, h('b', { text: g.name })), chev(S.full)); return; }
+    const item = (cls, ...kids) => h('span', { cls: 'mh-gl-item ' + cls }, ...kids);
+    const dots = (n, cls) => Array.from({ length: n }, () => h('i', { cls }));
+    const parts = [
+      item('is-chats', h('span', { cls: 'mh-dots' }, dots(Math.min(x.working, 6), 'work'), dots(Math.min(x.ready, 6 - Math.min(x.working, 6)), 'ready')), S.unread ? h('span', { cls: 'mh-bell' }, bell(), h('b', { text: String(Math.min(S.unread, 99)) })) : null),
+      fuel ? item('is-fuel', h('small', { text: 'AI' }), h('span', { cls: 'mh-gl-cells', data: { s: level(fuel.left) } }, Array.from({ length: 5 }, (_, i) => h('i', { cls: i < Math.round(fuel.left / 20) ? 'on' : '' })))) : null,
+      st ? item('is-backup', h('span', { 'data-x': st.state }, h('span', { cls: 'mh-sh-long', text: backupRunning() ? 'Backing up' : st.age == null ? 'No backup yet' : 'Backed up ' }), backupRunning() || st.age == null ? null : h('span', { text: `${agoS(st.age)} ago` }))) : null,
+      // Only say Private once every machine was actually checked; otherwise say nothing rather than guess.
+      bad || (devices().length && devices().every(d => d.access?.exposure === 'tailscale')) ? item('is-net', h('span', { 'data-x': bad ? 'no' : 'ok', text: bad ? `${bad} open` : 'Private' })) : null,
+    ].filter(Boolean);
+    glance.setAttribute('aria-label', `${x.working} working, ${x.ready} ready${fuel ? `, AI ${fuel.left}% left` : ''}${st?.age != null ? `, backed up ${agoS(st.age)} ago` : ''}, ${bad ? bad + ' machines open to the internet' : 'network private'}. ${S.full ? 'Hide' : 'Show'} the map`);
+    glance.replaceChildren(...parts, chev(S.full));
+  }
   function paint(force) {
+    renderGlance();
     const top = JSON.stringify([thisName(), managedList().map(g => [g.id, g.name]), S.ws]);
     if (force || top !== drawn.top) { drawn.top = top; renderTabs(); }
     const gs = JSON.stringify([S.ws, gauge(), S.open.has('ai')]);

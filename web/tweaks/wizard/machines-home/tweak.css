@@ -362,3 +362,31 @@ html[data-skin="landscapes"] .mh-root { --mh-card: rgba(16, 24, 36, .66); --mh-c
 html[data-skin="obsidian-light"] .mh-map { box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 14px 40px -22px rgba(20, 33, 49, .35); }
 @container (max-width: 599px) { .mh-map { padding: 20px 6px 10px; border-radius: 20px; } .mh-root .mh-ts-tab { left: 16px; height: 24px; font-size: 11px; } }
 .mh-root:not(.is-managed) .mh-row.is-storage:not(:empty) { margin-bottom: 30px; }
+
+/* ---------- glance strip: the calm default; tap to unfold the map ---------- */
+.mh-root .mh-glance { flex: none; margin: 10px auto 0; max-width: 100%; height: 40px; padding: 0 8px 0 14px !important; border-radius: 99px; display: inline-flex; align-items: center; gap: 14px; color: var(--mh-ink); background: var(--mh-card); box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 10px 30px -18px rgba(0, 0, 0, .55); -webkit-backdrop-filter: blur(22px) saturate(1.2); backdrop-filter: blur(22px) saturate(1.2); cursor: pointer; white-space: nowrap; overflow: hidden; }
+.mh-gl-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; }
+.mh-gl-item + .mh-gl-item { padding-left: 14px; box-shadow: inset 1px 0 0 var(--mh-card-line); }
+.mh-gl-item small { font-size: 10.5px; font-weight: 800; letter-spacing: .08em; color: var(--mh-ink-3); }
+.mh-glance .mh-dots { flex-wrap: nowrap; gap: 4px; }
+.mh-glance .mh-dots i { width: 8px; height: 8px; box-shadow: none; }
+.mh-glance .mh-bell { color: var(--mh-ink); }
+.mh-gl-cells { display: inline-flex; gap: 2px; }
+.mh-gl-cells i { width: 5px; height: 12px; border-radius: 2px; background: var(--mh-card-line); box-shadow: inset 0 0 0 1px var(--mh-card-line); }
+.mh-gl-cells i.on { background: var(--mh-good); box-shadow: none; }
+.mh-gl-cells[data-s="tight"] i.on { background: var(--mh-warn); }
+.mh-gl-cells[data-s="no"] i.on { background: var(--mh-bad); }
+.mh-glance [data-x="ok"] { color: var(--mh-ink); }
+.mh-glance .is-backup [data-x="tight"] { color: var(--mh-warn); }
+.mh-glance [data-x="no"] { color: var(--mh-bad); }
+html[data-skin="landscapes"] .mh-glance [data-x="no"] { color: #FF95A8; }
+.mh-glance .mh-chev-btn { transform: scale(.85); }
+.mh-root.is-folded :is(.mh-ai, .mh-ai-list, .mh-map) { display: none !important; }
+/* Unfolded: the card fits its content instead of filling the screen, a little more see-through. */
+.mh-root:not(.is-folded) .mh-map { flex: none; min-height: 0; margin-top: 12px; }
+html[data-skin="landscapes"] .mh-root { --mh-card: rgba(16, 24, 36, .52); }
+.mh-root { --mh-card: rgba(22, 30, 42, .66); }
+html[data-skin="obsidian-light"] .mh-root { --mh-card: rgba(255, 255, 255, .86); }
+@container (max-width: 599px) { .mh-root .mh-glance { gap: 10px; padding: 0 6px 0 11px !important; } .mh-gl-item + .mh-gl-item { padding-left: 10px; } .mh-gl-item { font-size: 11.5px; } .mh-glance .is-backup span { max-width: 104px; overflow: hidden; text-overflow: ellipsis; } }
+@container (max-width: 380px) { .mh-glance .is-fuel small { display: none; } }
+@container (max-width: 599px) { .mh-glance .is-backup span { max-width: none; } .mh-glance .mh-dots i:nth-child(n+5) { display: none; } .mh-root .mh-glance { gap: 9px; } }
