@@ -40,7 +40,15 @@
     if (r.status === 404) { off = true; return true; } // an Agent Service without shared preferences: pins stay on this device
     if (!r.ok) return false;
     const j = await r.json(), shared = clean(j?.pinnedChats), next = apply(shared, ops);
-    if (JSON.stringify(next) !== JSON.stringify(shared) && !(await write(next))) return false;
+    if (JSON.stringify(next) !== JSON.stringify(shared)) {
+      if (!(await write(next))) return false;
+      // Two devices syncing at the same moment can both read before either writes; the later write would drop the
+      // other's pin. Read back: if this pass's taps didn't stick, keep them queued and replay onto the newer list.
+      const back = await fetch(URL, { cache: 'no-store', credentials: 'same-origin' });
+      if (!back.ok) return false;
+      const stored = clean((await back.json())?.pinnedChats), want = new Map(ops.map(o => [o.id, o.on]));
+      if ([...want].some(([id, on]) => stored.includes(id) !== on)) return 'conflict';
+    }
     // Drop only the operations this pass delivered; a tap made meanwhile stays queued for the next pass.
     const now = parseOps(get(OPS)), sent = ops.length, same = now.slice(0, sent).every((o, i) => o.id === ops[i].id && o.on === ops[i].on);
     set(KEY, JSON.stringify(next)); set(OPS, JSON.stringify(same ? now.slice(sent) : now));
@@ -52,7 +60,10 @@
     clearTimeout(retryTimer);
     running = (async () => {
       let ok = false;
-      try { do { again = false; ok = await syncOnce(); } while (ok && again); } catch (_) { ok = false; }
+      try {
+        // A conflict replays at once onto the newer list, a few times; each pass re-reads, so it converges.
+        for (let pass = 0; pass < 6; pass++) { again = false; ok = await syncOnce(); if (ok === 'conflict') { ok = false; continue; } if (!ok || !again) break; }
+      } catch (_) { ok = false; }
       running = null;
       if (ok) retry = 0;
       else { retry = Math.min(retry + 1, 6); retryTimer = setTimeout(sync, 2000 * 2 ** retry); } // offline: keep the taps, try again
