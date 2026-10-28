@@ -609,8 +609,9 @@ window.WizCore.chats = function createChats(H) {
       cls = ' fail'; label = 'No speech detected · recordings kept';
       btns = one ? `<button type="button" class="pbtn ghost" data-obdismiss="${esc(one.id)}">Dismiss</button>` : '';
     } else if (items.every(it => it.state === 'held')) {
-      label = 'Kept on this device · not queued';
-      btns = one ? `<button type="button" class="pbtn ghost" data-obdismiss="${esc(one.id)}">Dismiss</button>` : '';
+      label = one?.lateHeld ? esc(OUTBOX.lateLabel(one)) : 'Kept on this device · not queued';
+      btns = one?.lateHeld ? `${OUTBOX.canRetry(one) ? `<button type="button" class="pbtn" data-obretry="${esc(one.id)}">Send</button>` : ''}<button type="button" class="pbtn ghost" data-obdiscard="${esc(one.id)}">Discard</button>`
+        : one ? `<button type="button" class="pbtn ghost" data-obdismiss="${esc(one.id)}">Dismiss</button>` : '';
     } else if (failed.length) {
       cls = ' fail';
       label = one ? `Not sent · ${esc(clip(name(one), 34))}` : `${failed.length} not sent`;
@@ -2110,6 +2111,7 @@ window.WizCore.chats = function createChats(H) {
     const recover = H.recoverUnsent ? `<button type="button" class="pbtn" data-obrecover="${esc(p.id)}">Recover</button>` : '';
     if (p.state === 'unconfirmed') return `<span class="pst fail">${esc(p.error)}</span>${recover}`;
     if (p.state === 'empty') return `<span class="pst fail">No speech detected · recording kept</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry transcription</button><button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
+    if (p.state === 'held' && p.lateHeld) return `<span class="pst">${esc(OUTBOX.lateLabel(p))}</span>${OUTBOX.canRetry(p) ? `<button type="button" class="pbtn" data-obretry="${esc(p.id)}">Send</button>` : recover}<button type="button" class="pbtn ghost" data-obdiscard="${esc(p.id)}">Discard</button>`;
     if (p.state === 'held') return `<span class="pst">Kept on this device · not queued</span>${recover}<button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
     if (p.state === 'failed') return `<span class="pst fail">Not sent · ${esc(p.error || 'Wizard didn’t take it')}</span>${OUTBOX.canRetry(p) ? `<button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry</button>` : ''}${p.audio || p.audioFile || p.body ? recover : `<button type="button" class="pbtn ghost" data-obedit="${esc(p.id)}">Edit</button>`}`;
     if (p.state === 'waiting') return `<span class="pst wait">${esc(reach().short)}</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry now</button>${troubleshoot}`;
@@ -2559,6 +2561,18 @@ window.WizCore.chats = function createChats(H) {
       Promise.resolve(OUTBOX.dismissBubble(dismiss.dataset.obdismiss)).then(ok => {
         H.toast(ok ? '✓' : '!', ok ? (sent ? 'Sent bubble dismissed · message stays in this chat' : 'Bubble dismissed · recording kept in Unsent messages') : 'Could not save dismissal · original kept', 2400);
       }); return true;
+    }
+    const discard = e.target.closest('[data-obdiscard]'); if (discard) {
+      if (discard.disabled) return true;
+      const item = OUTBOX.get(discard.dataset.obdiscard);
+      if (!item?.lateHeld || item.state !== 'held') return true;
+      discard.disabled = true;
+      const sid = w.thread, nav = ch(id).readNav;
+      Promise.resolve(OUTBOX.remove(item.id)).then(ok => {
+        if (!ok) { discard.disabled = false; H.toast('!', 'Could not save discard · original kept', 2400); return; }
+        if (H.win(id) === w && w.thread === sid && ch(id).readNav === nav && sid) threadBack(w);
+      }).catch(() => { discard.disabled = false; H.toast('!', 'Could not save discard · original kept', 2400); });
+      return true;
     }
     const recovery = e.target.closest('[data-obrecover]'); if (recovery) { H.recoverUnsent?.(recovery.dataset.obrecover); return true; }
     const rb = e.target.closest('[data-obretry]'); if (rb) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retry(rb.dataset.obretry)), 2400); return true; }
