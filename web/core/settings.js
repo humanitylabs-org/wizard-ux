@@ -332,6 +332,8 @@
     PH.pc = window.WizPhoneConnect.create({
       layout: phoneShell(), qrScript: 'setup/vendor/qrcode.js',
       active: () => PH.wanted && document.visibilityState === 'visible',
+      // The connection pill's evidence: Wizard's live reads are failing from this device (not a missing permission).
+      offline: () => { const L = window.WizLive; return !!L && !!L.error && L.error !== 'access'; },
       // Settings redraws only when what it shows itself changes (the list entry, phones, Turn off); the component
       // redraws its own part.
       onChange: pc => {
@@ -339,6 +341,8 @@
         if (key !== PH.summary) { PH.summary = key; for (const m of mounts) m.render(); }
       },
     });
+    // When the connection drops or comes back, re-check at once instead of showing the last answer as current.
+    try { window.WizLive?.onChange?.(() => { const off = !!window.WizLive.error && window.WizLive.error !== 'access'; if (off !== PH.off) { PH.off = off; PH.pc?.refresh(); } }); } catch (e) {}
     return PH.pc;
   }
   function phonesAvailable() { const pc = phones(); if (!pc) return false; pc.refresh(15000); return pc.status !== 'denied'; }

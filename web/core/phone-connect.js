@@ -103,12 +103,14 @@
   }
 
   function create(options = {}) {
-    const o = { api: serviceApi(), open: openAnchor, layout: 'desktop', active: () => true, onChange() {}, ...options };
+    const o = { api: serviceApi(), open: openAnchor, layout: 'desktop', active: () => true, onChange() {}, offline: () => false, ...options };
     const S = { status: 'loading', view: null, banner: false, starting: false, startUntil: 0, opErr: '', opened: {}, openFailed: false, again: false, busy: false };
     let el = null, timer = 0, seq = 0, lastHtml = '', at = 0, inflight = false;
 
     const changed = () => { try { o.onChange(api); } catch (e) { console.error(e); } };
-    const lost = () => !!S.view && (S.fails || 0) >= LOST_AFTER;
+    // Lost: Wizard hasn't answered the last checks, or the host already knows this device can't reach it (the
+    // connection pill's evidence), then even one failed check is enough.
+    const lost = () => !!S.view && ((S.fails || 0) >= LOST_AFTER || (S.offline && (S.fails || 0) >= 1));
     function take(r) {
       if (r.kind === 'ok' && norm(r.data)) { S.status = 'ok'; S.view = norm(r.data); S.raw = r.data; S.banner = false; S.fails = 0; }
       else if (r.kind === 'denied' || r.kind === 'missing') { S.status = r.kind; S.view = null; S.starting = false; S.fails = 0; }
@@ -295,7 +297,11 @@
       },
       /** Ask now, unless the last answer is younger than `maxAge` ms. Works unattached (for a host's summary). */
       refresh(maxAge = 0) {
-        if (inflight || (maxAge && at && Date.now() - at < maxAge)) return;
+        // While the host knows this device can't reach Wizard, a cached answer is no evidence: always ask.
+        S.offline = !!o.offline();
+        if (S.offline && S.view && !S.fails) S.fails = 1;
+        if (S.offline) { lastHtml = ''; paint(); changed(); }
+        if (inflight || (!S.offline && maxAge && at && Date.now() - at < maxAge)) return;
         inflight = true; load().finally(() => { inflight = false; schedule(interval()); });
       },
       start, reset,

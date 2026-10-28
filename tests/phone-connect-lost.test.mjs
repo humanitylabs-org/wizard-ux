@@ -48,3 +48,15 @@ test('status requests carry an abort signal, so a Wizard that never answers time
   PC.create({ active: () => false }).refresh(); await tick();
   assert.ok(signal && typeof signal.aborted === 'boolean');
 });
+
+test('when the host already knows Wizard is unreachable, the cached answer is dropped at once', async () => {
+  const PC = load(async () => { throw new TypeError('unused'); });
+  let offline = false;
+  const pc = PC.create({ active: () => false, offline: () => offline, api: async () => ({ kind: 'ok', data: seen }) });
+  pc.refresh(); await tick(); await tick();
+  assert.equal(pc.on, true);
+  offline = true;
+  pc.refresh(15000);
+  assert.equal(pc.lost, true, 'no 15-second cache and no second failed check while the connection pill is up');
+  assert.equal(pc.on, false);
+});
