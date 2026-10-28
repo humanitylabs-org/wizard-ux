@@ -101,14 +101,6 @@ Visual: <side-by-side screenshot, or "none">
 | `web/core/voice-legacy.js` (`WosVoiceLegacy`) | Frozen Music grammar and legacy device schema until APK A; Food owns its grammar. |
 | `web/core/background-audio-legacy.js` (`WizBackgroundAudioLegacy`) | Pilot grant/token until APK A. |
 
-## Release plumbing (not UI)
-
-| Need | Single checked-in path | Regression |
-|---|---|---|
-| Private owner Android update feed | `tools/publish_owner_phone.py`: runtime private settings + exact APK DEX default and signed receipt; stage artifact then atomically replace feed | `tools/test_owner_phone_release.py`: app update never signs the owner out from a pre-preference build |
-| APK BuildConfig evidence | `tools/apk_build_config.py` (reader extracted from canonical release PR #513; share this module when reconciling) | Encoded DEX constants, duplicate/missing class refusal; not hostname string matching |
-| Exact signed pre-preference upgrade | EXTEND `tools/qa_android_connect.py`, private config `pre_pref_baseline: true` | Natural old launch, absent preferences, offline in-place owner upgrade, UID/grants/Back and silently persisted origin |
-
 ## Plumbing (single owner)
 
 `WizCompanionPane` (`web/core/companion-pane.js`), `WizardApp` (`web/core/app-client.js`), `WizAppCapture` (`web/core/app-capture.js`), `WizComposerInput` (`web/core/composer-input.js`), `WizAttachChip` (`web/core/attach-chip.js`), `WosSkinFrame` (`web/core/skin-frame.js`), `WosDevice` (`web/device.js`), `WizAppServices` (`web/core/app-services.js`), `WizCore` (`web/core/core.js`, `bridge.js`), `WizConfig` (`web/core/config.js`), `WizReach` (`web/core/reach.js`), `WizAndroidRelay` (`web/core/android-relay.js`), `WizBackgroundAudio` (`web/core/background-audio.js`), `WizHomeScreenApps` (`web/core/home-screen-apps.js`), `WizHomeScreenPolicy` (`web/core/home-screen-policy.js`), `WosOwnViews` (`web/core/own-views.js`), `WosOrbHandoff` (`web/core/orb-handoff.js`), `WosSetupLaunch` (`web/core/setup-launch.js`), `WosShareSheet` (`web/core/share-sheet.js`), `WosBell` (`web/core/notif-bell.js`, items), `WosResources` (`web/core/resources.js`), `WosUsage` (`web/core/usage.js`), `WizPhotosRelay` (`web/core/photos-relay.js`), `WosMusic`, `WizDeviceLegacy` (`web/core/voice-legacy.js`), openers `WizAppOpen`, `WizCanOpen`, `WizOpenApp`, `WizOpenAgentChats` (`web/app.js`), `WosBoundView` (`web/core/bound-view.js`), `WosWorkspaceSync` (`web/core/workspace-sync.js`).
