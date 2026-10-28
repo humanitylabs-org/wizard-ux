@@ -65,7 +65,7 @@ export default function setup(api) {
     const d = devOf(id);
     if (!d) return { id, name: id === MAIN ? pretty(reg().this?.name) || 'Main' : id, status: 'unknown' };
     const dg = diskGB(d), fg = freeGB(d);
-    return { id, name: pretty(d.name), status: d.status, error: d.error || '', cores: d.cpus || null, ramGB: d.memoryTotalGB || null,
+    return { id, name: pretty(d.name), status: d.status, error: d.error || '', use: d.use || '', access: d.access || null, cores: d.cpus || null, ramGB: d.memoryTotalGB || null,
       mem: d.memory, cpu: d.cpu, diskGB: dg, freeGB: fg, diskUsed: dg != null && fg != null ? dg - fg : null };
   }
   // Rough power, for size and order: cores, then memory, then disk.
@@ -223,9 +223,20 @@ export default function setup(api) {
     return h('span', { cls: 'mh-bars' }, h('span', { cls: 'mh-bars-in' },
       bar('Memory', m.ramGB, m.ramGB * (m.mem || 0) / 100, `${Math.round(m.mem || 0)}% of ${gbFmt(m.ramGB)} used`),
       bar('Disk', m.diskGB, m.diskUsed || 0, `${gbFmt(m.diskUsed)} of ${gbFmt(m.diskGB)} used`),
-      bar('CPU', m.cores, m.cores * (m.cpu || 0) / 100, `${Math.round(m.cpu || 0)}% of ${m.cores} cores busy`)));
+      bar('CPU', m.cores, m.cores * (m.cpu || 0) / 100, `${Math.round(m.cpu || 0)}% of ${m.cores} cores busy`),
+      h('span', { cls: 'mh-how', title: m.access?.how || '' }, m.access?.how ? h('code', { text: m.access.how }) : '–')));
   }
   const chev = (open, extra = {}) => h('span', { cls: 'mh-chev-btn', 'aria-hidden': 'true', ...extra }, h('i', { cls: 'mh-chev' + (open ? ' is-up' : '') }));
+  // Security: how open each machine is from outside, in plain words; only what was tested, never guessed.
+  const SHIELD = [['path', { d: 'M12 3l7 3v6c0 4.2-3 7.4-7 9-4-1.6-7-4.8-7-9V6z' }]];
+  const EXPO = { tailscale: ['Tailscale only', 'ok', 'Tailscale'], internet: ['Open to internet', 'bad', 'Open'], unchecked: ['Not checked yet', 'none', 'Not checked'] };
+  const shield = (a, id) => { const [text, s, short] = EXPO[a?.exposure] || EXPO.unchecked;
+    const b = h(id ? 'button' : 'span', { ...(id ? { type: 'button', data: { machine: id } } : {}), cls: 'mh-shield', 'data-x': s, 'aria-label': `${text}${id ? '. Show how to get in' : ''}` });
+    const v = sv('svg', { class: 'mh-i', viewBox: '0 0 24 24', 'aria-hidden': 'true' }, b); for (const [t, x] of SHIELD) sv(t, x, v); b.append(h('span', { cls: 'mh-sh-long', text }), h('span', { cls: 'mh-sh-short', text: short })); return b; };
+  const accessInfo = a => a ? h('span', { cls: 'mh-access' },
+    a.how ? h('code', { text: a.how }) : null,
+    (a.details || []).map(t => h('span', { text: t })),
+    a.checked ? h('small', { text: `Checked ${a.checked}` }) : h('small', { text: 'Not checked yet' })) : null;
   const label = (name, role, cls = '') => h('span', { cls: 'mh-label ' + cls }, h('span', { cls: 'mh-name', text: name }), role ? h('span', { cls: 'mh-role', text: role }) : null);
   function machineNode(m, role, maxOf, extra = {}) {
     const s = extra.size || sizeOf(m), off = m.status && m.status !== 'online' && role !== 'main';
@@ -244,11 +255,15 @@ export default function setup(api) {
     }
     return h('div', { cls: nw(`mh-node is-${role}`) + (S.open.has('m:' + m.id) ? ' is-open' : ''), data: { id: m.id, role }, style: { '--s': String(s) } },
       h('span', { cls: 'mh-hold' }, tap || disc), label(m.name, extra.roleText, extra.warn ? 'warn' : ''),
+      shield(m.access, extra.managed ? null : m.id),
       maxOf ? bars(m, maxOf) : null);
   }
   function actPanel(m) {
+    if (m.id === MAIN) return h('div', { cls: nw('mh-act'), data: { of: m.id } },
+      h('span', { cls: 'mh-act-head' }, h('b', { text: m.name }), h('span', { text: 'Main' })), accessInfo(m.access) || h('span', { text: 'Not checked yet' }));
     return h('div', { cls: nw('mh-act'), data: { of: m.id } },
       h('span', { cls: 'mh-act-head' }, h('b', { text: m.name }), h('span', { text: m.status === 'online' ? (qualifies(m.id) ? 'Standby device' : 'Helper') : offText(m) })),
+      accessInfo(m.access),
       h('span', { cls: 'mh-act-btns' }, actions(m).map(a => h('button', { type: 'button', cls: 'mh-act-btn' + (a.ok ? '' : ' is-no'), disabled: !a.ok, data: { ask: `${m.id}:${a.id}` } },
         h('b', { text: a.label }), h('small', { text: a.note })))),
       ...actions(m).filter(a => !a.ok && a.no?.length).map(a => h('span', { cls: 'mh-act-why' },
@@ -289,7 +304,7 @@ export default function setup(api) {
     if (g) {
       // Only what is known about a Wizard he manages: its Main and who uses it. Same design, less data.
       setRow(rowSt, []); setRow(rowMore, []); setRow(rowAct, []);
-      setRow(rowMn, [machineNode({ id: 'managed-' + g.id, name: g.name }, 'main', null, { size: 72, roleText: g.org || 'Main', managed: true }), plus('add-device', `Add a device to ${g.name}`)]);
+      setRow(rowMn, [machineNode({ id: 'managed-' + g.id, name: g.name, access: g.access || null }, 'main', null, { size: 72, roleText: g.org || 'Main', managed: true }), plus('add-device', `Add a device to ${g.name}`)]);
     } else {
       const st = storage();
       setRow(rowSt, st ? [storageNode(st)] : []);
@@ -299,9 +314,9 @@ export default function setup(api) {
       const node = m => m.id === MAIN ? machineNode(main, 'main', maxOf, { roleText: 'Main', sessions: sessions() })
         : machineNode(m, qualifies(m.id) ? 'standby' : 'helper', maxOf, { roleText: qualifies(m.id) ? 'Standby device' : m.status === 'online' ? 'Helper' : offText(m), warn: m.status !== 'online' });
       // The bar names sit left of the row; an invisible twin on the right keeps Main exactly in the middle.
-      const legend = twin => h('div', { cls: 'mh-legend' + (twin ? ' is-twin' : ''), 'aria-hidden': 'true' }, h('span', { cls: 'mh-bars-in' }, h('span', { text: 'RAM' }), h('span', { text: 'Disk' }), h('span', { text: 'CPU' })));
+      const legend = twin => h('div', { cls: 'mh-legend' + (twin ? ' is-twin' : ''), 'aria-hidden': 'true' }, h('span', { cls: 'mh-bars-in' }, h('span', { text: 'RAM' }), h('span', { text: 'Disk' }), h('span', { text: 'CPU' }), h('span', { cls: 'mh-how-l', text: 'SSH' })));
       setRow(rowMn, [legend(false), ...around(main, others).map(node), legend(true), plus('add-device', 'Add a device to this network')]);
-      const open = others.find(m => S.open.has('m:' + m.id));
+      const open = [main, ...others].find(m => S.open.has('m:' + m.id));
       setRow(rowAct, open ? [actPanel(open)] : []);
       setRow(rowMore, all.length ? [h('button', { type: 'button', cls: 'mh-details', data: { toggle: 'bars' }, 'aria-expanded': String(S.bars), 'aria-label': 'Show or hide machine details' },
         h('i', { cls: 'mh-chev' + (S.bars ? ' is-up' : ''), 'aria-hidden': 'true' }))] : []);
@@ -341,7 +356,9 @@ export default function setup(api) {
     const ms = [...rowMn.children].filter(n => n.dataset?.role);
     for (let i = 1; i < ms.length; i++) {
       const a = box(discOf(ms[i - 1])), b = box(discOf(ms[i])), off = discOf(ms[i - 1]).classList.contains('is-off') || discOf(ms[i]).classList.contains('is-off');
-      if (b.l - 3 > a.r + 3) specs.push([`M${f(a.r + 3)} ${f(a.cy)} L${f(b.l - 3)} ${f(b.cy)}`, off ? 'var(--mh-wire-off)' : 'var(--mh-accent)', '', 1]);
+      // The Main ↔ standby link: the hourly sync, over Tailscale.
+      const pair = [ms[i - 1].dataset.id, ms[i].dataset.id], sync = pair.includes(MAIN) && pair.some(id => devOf(id)?.use === 'standby');
+      if (b.l - 3 > a.r + 3) specs.push([`M${f(a.r + 3)} ${f(a.cy)} L${f(b.l - 3)} ${f(b.cy)}`, off ? 'var(--mh-wire-off)' : 'var(--mh-accent)', sync && b.l - a.r > 64 ? 'sync' : '', 1]);
     }
     // People → the bottom of Main, from below (faster while sessions work; it runs behind Show details); devices → their person.
     const busy = S.ws === 'mine' && sessions().working > 0;
@@ -355,8 +372,21 @@ export default function setup(api) {
     // The helper's panel sits right under the helper it belongs to (kept inside the map).
     const ap = rowAct.firstElementChild;
     if (ap) { const n = ms.find(x => x.dataset.id === ap.dataset.of); if (n) { ap.style.transform = ''; const nb = box(n), pb = box(ap), dx = clamp(nb.cx - pb.cx, -pb.l + 4, M.width - pb.r - 4); ap.style.transform = `translateX(${dx.toFixed(0)}px)`; const ab = box(ap); specs.push([curveV(ab.cx, ab.t - 2, nb.cx, nb.b + 2), 'var(--mh-wire-off)', '', 1]); } }
-    const key = JSON.stringify(specs); if (key === wired && lines.firstChild) return; wired = key;
+    // Tailscale is the only way in: one quiet boundary around the machines and people, labelled once.
+    const inside = [rowMn, rowAct, rowMore, rowPp, rowDv].filter(r => !r.hidden && r.firstElementChild).map(box);
+    const frame = S.ws === 'mine' && inside.length ? [Math.min(...inside.map(x => x.t)) - 22, Math.max(...inside.map(x => x.b)) + 10] : null;
+    const key = JSON.stringify([specs, frame]); if (key === wired && lines.firstChild) return; wired = key;
     lines.replaceChildren();
+    if (frame) {
+      sv('rect', { x: 4, y: f(frame[0]), width: f(M.width - 8), height: f(frame[1] - frame[0]), rx: 22, class: 'mh-ts' }, lines);
+      // Honest: only claim "the only way in" once every machine checked is Tailscale-only.
+      const open = devices().filter(d => d.access?.exposure === 'internet').length;
+      const g = sv('g', {}, lines), t = sv('text', { x: 22, y: f(frame[0] + 4), class: 'mh-ts-t' + (open ? ' is-bad' : '') }, g);
+      const narrow = M.width < 520;
+      t.textContent = open ? (narrow ? `Tailscale · ${open} open` : `Tailscale · ${open} ${open === 1 ? 'machine is' : 'machines are'} still open to the internet`) : narrow ? 'Tailscale only' : 'Tailscale · the only way in';
+      if (narrow) t.setAttribute('x', '14');
+      const bb = t.getBBox(); g.insertBefore(sv('rect', { x: bb.x - 8, y: bb.y - 4, width: bb.width + 16, height: bb.height + 8, rx: (bb.height + 8) / 2, class: 'mh-age-bg' }), t);
+    }
     const defs = sv('defs', {}, lines); let gi = 0;
     for (const [d, col, text, speed] of specs) {
       const base = sv('path', { d, class: 'base' }, lines); base.style.stroke = col;
