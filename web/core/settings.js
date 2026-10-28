@@ -22,7 +22,7 @@
     { id: 'schedules', title: 'Schedules', available: () => !!window.WosSchedules?.available },
     { id: 'about', title: 'About & updates' },
   ];
-  const featurePages = { look: 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
+  const featurePages = { look: 'appearance', 'window-glass': 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
   const pageOf = f => f?.page != null ? PAGES.some(p => p.id === f.page) ? f.page : 'about' : featurePages[f?.id] || 'about';
   const chatsHost = () => window.WizChatsHost;
   const chatsName = id => id === 'wizard-chats' ? 'Wizard Chats' : chatsHost()?.installed().find(a => a.id === id)?.name || id;
@@ -353,6 +353,23 @@
       void window.WosExperience?.chooseSkin?.();
       for (const m of mounts) m.render(); ctx.haptic?.(8);
     }, e => ctx.toast?.('!', e.message, 3000)); return true;
+  } });
+  // Window opacity: one slider for the glass behind every window (Chats and every app). Per device, like the skin.
+  const glassPct = S => Math.round((S.glass ?? S.skinGlass) * 100);
+  const glassNote = S => S.glass == null ? 'Skin default · every window and app' : 'Every window and app';
+  register({ id: 'window-glass', aliases: ['window-opacity', 'opacity'], available: () => typeof window.WosSkin?.setGlass === 'function', html() {
+    const S = window.WosSkin, r = S.glassRange, pct = glassPct(S);
+    return `<div class="st-group wg-section"><h4>Windows</h4><div class="st-row static wg-row"><span class="st-tx"><b id="wg-label">Window opacity</b><small data-wg-note>${glassNote(S)}</small></span><output data-wg-val for="wg-range">${pct}%</output></div><input id="wg-range" class="wg-range" type="range" min="${Math.round(r.min * 100)}" max="${Math.round(r.max * 100)}" step="1" value="${pct}" data-wg-range aria-labelledby="wg-label" aria-valuetext="${pct}%">${S.glass == null ? '' : '<button type="button" class="wg-reset" data-wg-reset>Use skin default</button>'}</div>`;
+  }, input(ctx, el) {
+    if (!el.matches('[data-wg-range]')) return;
+    const S = window.WosSkin, n = S.setGlass(Number(el.value) / 100), g = el.closest('.wg-section');
+    el.setAttribute('aria-valuetext', `${Math.round(n * 100)}%`);
+    const out = g?.querySelector('[data-wg-val]'); if (out) out.textContent = `${Math.round(n * 100)}%`;
+    const note = g?.querySelector('[data-wg-note]'); if (note) note.textContent = glassNote(S);
+    if (g && !g.querySelector('[data-wg-reset]')) el.insertAdjacentHTML('afterend', '<button type="button" class="wg-reset" data-wg-reset>Use skin default</button>');
+  }, act(ctx, el) {
+    if (!el.closest('[data-wg-reset]')) return false;
+    window.WosSkin.setGlass(null); ctx.render(); ctx.root.querySelector('[data-wg-range]')?.focus(); return true;
   } });
   register({ id: 'skin-frame', available: () => !!window.WosSkin, html() {
     return '<div class="st-group sf-section"><details class="st-advanced"><summary>Advanced</summary><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><p data-skinimport-status role="status"></p></details></div>';
