@@ -1,0 +1,15 @@
+{
+  "id": "wizard/machines-home",
+  "name": "Network map on Home",
+  "version": "1.3.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout",
+    "nav",
+    "data.read",
+    "models",
+    "inbox"
+  ],
+  "description": "Home shows your network: AI fuel, storage, machines and people; tap anything to see more and act on it"
+}

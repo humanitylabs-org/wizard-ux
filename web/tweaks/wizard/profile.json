@@ -1,6 +1,6 @@
 {
   "id": "wizard",
   "version": 1,
-  "tweaks": ["wizard/two-orbs", "wizard/app-borders"],
+  "tweaks": ["wizard/two-orbs", "wizard/app-borders", "wizard/machines-home"],
   "off": ["wizard/two-orbs", "wizard/app-borders"]
 }
