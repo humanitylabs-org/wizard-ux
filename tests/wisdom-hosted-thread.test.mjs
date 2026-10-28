@@ -30,7 +30,7 @@ test('openThread forwards an app-keyed reply item; foreign keys are refused', ()
 
 test('the item pins to the thread draft once and shows as the reply bubble', () => {
   assert.match(chats, /if \(rp && sid !== '__new__' && !KIT\.drafts\.get\('direct:' \+ sid\)\.reply\) KIT\.drafts\.setReply\('direct:' \+ sid, rp\);/);
-  assert.match(chats, /const r = w\.thread && \(w\.thread !== '__new__' \|\| !winAgent\(w\)\) \? KIT\.drafts\.get\(draftKey\(w\)\)\.reply : null;/);
+  assert.match(chats, /const r = KIT\.drafts\.get\(draftKey\(w\)\)\.reply;/);
 });
 
 test('agent-aware hosted navigation pins a known running non-main agent before opening', () => {

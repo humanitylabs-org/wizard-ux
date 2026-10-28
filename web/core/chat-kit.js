@@ -159,7 +159,7 @@
         // A mid-run steer the agent has taken in: shown inside the turn it steered, marked as received.
         if (isSteer) {
           const st = note ? note.text : steerText(raw);
-          if (st && cur && !cur.steers.some(x => x.text === st)) cur.steers.push(note ? { text: st, at, files: [], note: true, from: note.from } : { text: st, at, files: chipFiles(raw) });
+          if (st && cur && !cur.steers.some(x => x.text === st)) cur.steers.push(note ? { text: st, at, files: [], note: true, from: note.from } : { text: st, at, files: chipFiles(raw), ...(reply.split(raw).reply ? { reply: reply.split(raw).reply } : {}) });
           if (cur) cur.steps++;
           continue;
         }
@@ -406,7 +406,7 @@
       const rp = reply.clean(r); text = String(text || '').trim();
       if (!rp) return text;
       const q = s => String(s).replace(/\r\n?/g, '\n').split('\n').map(l => ('> ' + l).trimEnd()).join('\n');
-      const block = `${REPLY_OPEN}\n${REPLY_NOTE}\n${q('Title: ' + rp.title.replace(/\s+/g, ' ').trim())}\n>\n${q(rp.message)}\n${REPLY_CLOSE}`;
+      const block = `${REPLY_OPEN}\n${rp.key.startsWith('message:') ? REPLY_NOTE.replace('notification or app item', 'message') : REPLY_NOTE}\n${q('Title: ' + rp.title.replace(/\s+/g, ' ').trim())}\n>\n${q(rp.message)}\n${REPLY_CLOSE}`;
       return text ? `${text}\n\n${block}` : block;
     },
     // A message read back: { text: his words, reply: { title, message } | null }.
