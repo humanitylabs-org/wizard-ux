@@ -388,17 +388,20 @@
   function winHtml(w) { return `${barHtml(w)}
       <div class="wbody">${bodyHtml(w)}</div>${hud?.id === w.id ? '<div class="hud-grip" data-hudgrip title="Drag to resize" aria-hidden="true"></div>' : ''}`; }
   const HUD_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="15.5" cy="14.5" r="2.6" fill="currentColor"/></svg>';
+  const FOLD_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.6" fill="currentColor"/></svg>';
+  const DESK1_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M10.6 9.6 12.6 8v8"/></svg>';
   const DOCK_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M12 8v7m-3-3 3 3 3-3"/></svg>';
   function barHtml(w) {
     const a = appOf(w);
     if (hud?.id === w.id) return `<div class="wbar" data-drag title="Drag to move">${window.WosAgents.titlebar(w.agent || '', 'ic', 't')}
-      <button data-wact="hud-min" title="Fold into the orb (Esc)" aria-label="Fold into the orb">–</button>
-      <button data-wact="hud-dock" title="Put back on this desk" aria-label="Put back on this desk">${DOCK_ICON}</button>
+      <button data-wact="hud-min" title="Fold into the orb (Esc · ${MOD}P)" aria-label="Fold into the orb" aria-keyshortcuts="Alt+P">${FOLD_ICON}</button>
+      <button data-wact="hud-home" title="Back to desktop 1 (${MOD}B)" aria-label="Back to desktop 1" aria-keyshortcuts="Alt+B">${DESK1_ICON}</button>
+      <button data-wact="hud-dock" title="Put back on this desktop" aria-label="Put back on this desktop">${DOCK_ICON}</button>
       <button data-wact="close" title="Close" aria-label="Close window">✕</button></div>`;
     return `<div class="wbar" data-drag>${w.app === 'chats' ? window.WosAgents.titlebar(w.agent || '', 'ic', 't') : `${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>`}
       ${window.WosBoundView.badge(w)}${w.app === 'frame' ? window.WosOwnViews?.marker(a) || '' : ''}${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
       ${reloadable(w) ? `<button data-wact="reload" title="Refresh (${MOD}R)" aria-label="Refresh window">↻</button>` : ''}
-      ${w.app === 'chats' ? `<button data-wact="hud" title="Float over every desk" aria-label="Float over every desk">${HUD_ICON}</button>` : ''}
+      ${w.app === 'chats' ? `<button data-wact="hud" title="Float over every desk (${MOD}P)" aria-label="Float over every desk" aria-keyshortcuts="Alt+P">${HUD_ICON}</button>` : ''}
       <button data-wact="mono" title="Full screen (${MOD}F)" aria-label="Full screen">⤢</button>
       <button data-wact="close" title="Close app (${MOD}W)" aria-label="Close window">✕</button></div>`;
   }
@@ -652,6 +655,7 @@
     const hudLayer = hudLayerEl(), hudOrb = $('#hudOrb');
     hudLayer.hidden = !hud;
     if (hudOrb) hudOrb.hidden = !hud || hud.open;
+    window.Orb?.sleep?.(!hud || hud.open); // the orb draws only while it is the folded heads-up chat
     if (!hud) return;
     const SW = stage.clientWidth, SH = stage.clientHeight, el = winEl(hud.id);
     const w = Math.round(clampN(hud.w, HUD_MIN[0], Math.max(HUD_MIN[0], SW - 2 * HUD_GAP))), h = Math.round(clampN(hud.h, HUD_MIN[1], Math.max(HUD_MIN[1], SH - 2 * HUD_GAP)));
@@ -697,18 +701,34 @@
   }
   function hudKeepPlace() { if (hud) store.set('hudPlace', { r: hud.r, b: hud.b, w: hud.w, h: hud.h }); }
   // Put the HUD window back as a normal window on the desk in front (Home: the last desk).
-  function hudDock({ focus = true } = {}) {
+  // Put the HUD window back as a normal window: on the desk in front (Home: the last desk), or on desk `to`
+  // (⌥B and the 1 button: desktop 1, Chats' usual place), which then comes to the front.
+  function hudDock({ focus = true, to = null } = {}) {
     if (!hud) return false;
     const id = hud.id; hudKeepPlace(); hud = null;
     if (!W[id]) { save(); render(); return false; }
-    if (homeOpen) { homeOpen = false; store.set('homeOpen', false); }
-    const d = ws[cur], at = d.focus ? d.wins.indexOf(d.focus) + 1 : d.wins.length;
+    const t = Number.isInteger(to) && ws[to] ? to : cur;
+    const d = ws[t], at = d.focus ? d.wins.indexOf(d.focus) + 1 : d.wins.length;
     d.wins.splice(at, 0, id); d.focus = id; d.mono = false;
     const el = winEl(id); if (el) el.hidden = false;
+    if (t !== cur) { save(); render(); goWs(t); } else if (homeOpen) { homeOpen = false; store.set('homeOpen', false); }
     save(); render(); hudBar(id);
     if (focus) { paintFocus(); paintBar(); setTimeout(() => focusInside(id), 30); }
-    log('hud:dock');
+    log('hud:dock' + (to != null ? ':' + (t + 1) : ''));
     return true;
+  }
+  // ⌥P: float the Chats window in front (or this desk's, or a new one); with a HUD: open it, step into it, or fold it.
+  function hudKey() {
+    if (hud) {
+      if (!hud.open) return hudFold(false);
+      if (hudHasFocus()) return hudFold(true);
+      hudFocus(); return true;
+    }
+    const f = focused();
+    // Any Chats window on this desk (main or an agent's) floats as it is; elsewhere only the main Chats is borrowed.
+    let w = f?.app === 'chats' ? f : !homeOpen ? ws[cur].wins.map(x => W[x]).find(x => x?.app === 'chats') : null;
+    if (!w) w = findWin(mainChats) || newWin({ app: 'chats', thread: null });
+    return hudOn(w.id);
   }
   function hudClose() {
     if (!hud) return false;
@@ -1028,6 +1048,7 @@
     if (act === 'hud') return hudOn(id);
     if (act === 'hud-min') return hudFold(true);
     if (act === 'hud-dock') return hudDock();
+    if (act === 'hud-home') return hudDock({ to: 0 });
     if (act === 'close' && hud?.id === id) return hudClose();
     if (act === 'close') return closeWin(id);
     if (act === 'reload') return reloadWin(id);
@@ -1117,6 +1138,8 @@
       ...(window.WosFiles ? [{ kind: 'cmd', name: 'Files', icon: '▤', run: () => openFiles() }] : []),
       ...(window.WosUsage ? [{ kind: 'cmd', name: 'AI usage', icon: '◔', run: () => openUsage() }] : []),
       { kind: 'cmd', name: 'Close app / empty desktop', icon: '✕', keys: `${MOD}W`, run: () => closeCurrent() },
+      { kind: 'cmd', name: 'Float chat over every desk', icon: '◉', keys: `${MOD}P`, run: () => hudKey() },
+      ...(hud ? [{ kind: 'cmd', name: 'Chat back to desktop 1', icon: '1', keys: `${MOD}B`, run: () => hudDock({ to: 0 }) }] : []),
       { kind: 'cmd', name: 'Full screen', icon: '⤢', keys: `${MOD}F`, run: () => toggleMono() },
       { kind: 'cmd', name: 'Refresh window', icon: '↻', keys: `${MOD}R`, run: () => reloadCurrent() },
       { kind: 'cmd', name: 'Keys guide', icon: '⌨', keys: `${MOD}/`, run: () => toggleKeys(true) },
@@ -1834,7 +1857,7 @@
     const TYPE = [['N', 'New chat', 'Type a new message'], ['␣', 'Search', 'Apps, chats and commands'], ['I', 'Inbox', 'All your chats']];
     const READY = [['↓', 'Next ready chat', 'From anywhere. Opens it ready to reply'], ['→  ←', 'Done / Snooze', 'The open chat'], ['X', 'Resolve this', 'An open notification: stop these or fix the cause']];
     const GO = [['G', 'Pick anything', 'Letters appear on every button, app and chat; type them to click'], ['`', 'Home', 'Again to go back'], ['1–9', 'Desktop 1 to 9', 'Jump straight to it'], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
-    const WIN = [['F', 'Full screen', ''], ['W', 'Close', ''], ['R', 'Refresh window', ''], ['H J K L', 'Window to the left, below, above, right', ''], [']', 'Next window', 'Past the last one: the next desktop'], ['[', 'Previous window', 'Past the first one: the previous desktop'], ['⇧ ← →', 'Swap places', ''], ['⇧ 1–9', 'Send to a desktop', '']];
+    const WIN = [['P', 'Float chat', 'Over every desk; again folds it into the orb'], ['B', 'Chat back to desktop 1', ''], ['F', 'Full screen', ''], ['W', 'Close', ''], ['R', 'Refresh window', ''], ['H J K L', 'Window to the left, below, above, right', ''], [']', 'Next window', 'Past the last one: the next desktop'], ['[', 'Previous window', 'Past the first one: the previous desktop'], ['⇧ ← →', 'Swap places', ''], ['⇧ 1–9', 'Send to a desktop', '']];
     const vis = n => n && !n.hidden && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
     // Every key is a small chip on the thing it acts on (Miguel, 27 Oct 2026: no boxes to read). Only the four
     // Speak keys carry a word, since their buttons don't say what they do. The lists above name each chip for
@@ -1912,6 +1935,15 @@
           const srch = wel.querySelector('[data-chsearch]'); if (vis(srch) && document.activeElement !== srch) chip(srch, 'I', 'inside');
           const fab = wel.querySelector('.pane-list [data-chfab]'); if (vis(fab)) chip(fab, 'N', 'corner');
         }
+      }
+      // Heads-up chat: P on the float button (open: its fold button; folded: the orb), B on Back to desktop 1.
+      if (hud && W[hud.id]) {
+        const hel = winEl(hud.id);
+        if (hud.open) { for (const [q, l] of [['[data-wact="hud-min"]', 'P'], ['[data-wact="hud-home"]', 'B']]) { const n = hel?.querySelector(`.wbar ${q}`); if (vis(n)) chip(n, l); } }
+        else { const o = $('#hudOrb'); if (vis(o)) chip(o, 'P', 'above'); }
+      } else {
+        const fw = f?.app === 'chats' ? f : !homeOpen && d.wins.map(x => W[x]).find(mainChats);
+        const n = fw && winEl(fw.id)?.querySelector('.wbar [data-wact="hud"]'); if (vis(n)) chip(n, 'P');
       }
       // The window in front: F W R on its own buttons; H J K L on the windows they jump to.
       if (f) {
@@ -2103,6 +2135,9 @@
     // ⌥Space search everything, ⌥O open an app: from anywhere, even while typing.
     if (alt && !shift && code === 'Space') return hit(() => palToggle('all'));
     if (alt && !shift && code === 'KeyO') return hit(() => { if (!e.repeat) palToggle('apps'); });
+    // ⌥P float the chat over every desk / fold it into the orb / open it; ⌥B put it back on desktop 1. Even while typing.
+    if (alt && !shift && code === 'KeyP') return hit(() => { if (!e.repeat) { closePalette({ restore: false }); hudKey(); } });
+    if (alt && !shift && code === 'KeyB') return hit(() => { if (!e.repeat && hud) { closePalette({ restore: false }); hudDock({ to: 0 }); } });
     // Link pane: ⌘Enter keeps it as a window, ⌘⇧Enter opens it in the browser.
     if (LINKS && LINKS.isOpen() && (e.metaKey || e.ctrlKey) && k === 'Enter') return hit(() => LINKS.el.querySelector(shift ? '[data-ls="out"]' : '[data-ls="keep"]')?.click());
     // Escape while recording cancels the take first (James, 19 Oct); the next Escape navigates. Only the
@@ -2113,7 +2148,7 @@
     if (!pal.hidden) {
       // ⌘K's palette owns the keyboard while open. The app selector lets the window manager's ⌥ chords
       // through (⌥Enter, ⌥1…9, ⌥[ ], ⌥W…), stepping aside first, so a fresh desktop never traps them.
-      if (palMode !== 'apps' || !alt || !/^(Digit[1-9]|Key[GIWFHJKLNTV]|Slash|Comma|Bracket(Left|Right))$/.test(code)) return;
+      if (palMode !== 'apps' || !alt || !/^(Digit[1-9]|Key[GIWFHJKLNTVPB]|Slash|Comma|Bracket(Left|Right))$/.test(code)) return;
       closePalette({ restore: false });
       queueMicrotask(() => { const a = document.activeElement; if (!a || a === document.body || !a.getClientRects().length) restFocus(); });
     }
@@ -2353,7 +2388,7 @@
     openFiles, openUsage, recordReply, openSearch, localCommand, commandVoice, dictate, toast,
     pauseVoice: () => VOICE.state === 'paused' ? VOICE.resume() : VOICE.pause(),
     openSettings, closeSettings, stepThread, setListW, get listW() { return listW(); },
-    get hud() { return hud ? { ...hud } : null; }, hudOn, hudDock, hudFold, hudClose,
+    get hud() { return hud ? { ...hud } : null; }, hudOn, hudDock, hudFold, hudClose, hudKey,
     get voice() { return VOICE.state; }, get log() { return window.__wuxLog || []; },
   };
   /* Skin packages (core/skin-host.js) on desktop: the same narrow adapter the phone shell hands over, so a skin
