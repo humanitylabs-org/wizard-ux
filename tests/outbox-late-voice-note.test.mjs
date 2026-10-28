@@ -143,6 +143,33 @@ test('native web handoff preserves the original recording time', async t => {
   assert.match(device, /createdAt: Number\(t.startedAt\)/);
 });
 
+for (const route of [
+  { kind: 'main', agent: '' }, { kind: 'host-profile', agent: 'profile-fixture' },
+  { kind: 'container', agent: 'container-fixture' }, { kind: 'restricted', agent: 'restricted-fixture' },
+]) test(`late hold, scoped Chats list, Send and Discard retain the ${route.kind} route`, async t => {
+  const f = await fixture(t, row({ agent: route.agent }));
+  await until(() => f.api.get('late-voice')?.state === 'held');
+  // Execute the production list selection, with the original thread already in LIVE.
+  const selection = chats.match(/const outNew = (.+);\n/)[1];
+  const pillSelection = chats.match(/const pill = sendPill\((.+), w\);/)[1];
+  const select = agent => vm.runInNewContext(selection, { OUTBOX: f.api, AGID: agent });
+  const selected = select(route.agent);
+  assert.equal(selected.length, 1); assert.equal(select('other-agent').length, 0);
+  assert.equal(vm.runInNewContext(pillSelection, { outNew: selected, OUTBOX: f.api, LIVE: { session: () => ({ id: 'original-thread' }) } }).length, 1);
+  assert.equal(f.api.retry('late-voice'), true);
+  await until(() => f.api.get('late-voice')?.state === 'sent');
+  assert.equal(f.runs().length, 1);
+  const send = JSON.parse(f.runs()[0].body);
+  assert.equal(send.agent || '', route.agent); assert.equal(send.session_id, 'original-thread');
+  assert.equal(send.model, 'original-model'); assert.equal(send.provider, 'original-provider');
+  const other = await fixture(t, row({ agent: route.agent }));
+  await until(() => other.api.get('late-voice')?.state === 'held');
+  const h = uiHarness(other.api), button = { dataset: { obdiscard: 'late-voice' } };
+  h.click({ target: { closest: s => s === '[data-obdiscard]' ? button : null } }, 'test');
+  await until(() => h.w.thread === 'parent-thread');
+  assert.equal(other.api.unsent().length, 0); assert.equal(other.runs().length, 0);
+});
+
 function uiHarness(api) {
   const w = { id: 'test', thread: 'original-thread' }, c = { readNav: 1, trail: ['parent-thread'] }, opened = [], notices = [];
   const H = { win: () => w, toast: (...args) => notices.push(args) };
