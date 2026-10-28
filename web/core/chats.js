@@ -1002,7 +1002,7 @@ window.WizCore.chats = function createChats(H) {
     const outNew = OUTBOX ? OUTBOX.unsent().filter(it => OUTBOX.isMessage(it) && (it.agent || '') === AGID && (it.kind === 'new' || it.kind === 'reply')) : [];
     // A message still leaving the phone already shows as its thread's "Sending…" row in Working; the pill is only
     // for trouble (offline / not sent) or a thread that isn't in the list.
-    const pill = sendPill(outNew.filter(it => ['failed', 'waiting', 'unconfirmed'].includes(it.state) || OUTBOX?.quarantined(it.id) || !LIVE.session(it.sessionId)), w);
+    const pill = sendPill(outNew.filter(it => ['failed', 'waiting', 'unconfirmed'].includes(it.state) || (it.state === 'held' && it.lateHeld) || OUTBOX?.quarantined(it.id) || !LIVE.session(it.sessionId)), w);
     // Everything else still on the phone (orb commands and dictation, held takes, side-button takes): one row at the
     // top, the only Chats-side sign of something that could be lost. It replaces the old notifications panel's Unsent.
     const others = !AGID && H.openUnsent && window.WosSettings?.unsentAll ? window.WosSettings.unsentAll({ outbox: OUTBOX }).filter(it => !(it.origin === 'app' && (it.kind === 'new' || it.kind === 'reply'))) : [];
