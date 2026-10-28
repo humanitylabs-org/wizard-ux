@@ -725,7 +725,8 @@
       hudFocus(); return true;
     }
     const f = focused();
-    let w = f?.app === 'chats' ? f : !homeOpen ? ws[cur].wins.map(x => W[x]).find(mainChats) : null;
+    // Any Chats window on this desk (main or an agent's) floats as it is; elsewhere only the main Chats is borrowed.
+    let w = f?.app === 'chats' ? f : !homeOpen ? ws[cur].wins.map(x => W[x]).find(x => x?.app === 'chats') : null;
     if (!w) w = findWin(mainChats) || newWin({ app: 'chats', thread: null });
     return hudOn(w.id);
   }

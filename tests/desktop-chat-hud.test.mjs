@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const js = read('web/desktop/desktop.js'), html = read('web/desktop.html'), css = read('web/desktop/desktop.css');
@@ -74,4 +75,20 @@ test('⌥P floats / folds / opens the heads-up chat and ⌥B puts it back on des
   assert.match(js, /\['P', 'Float chat', /);
   assert.match(js, /\['\[data-wact="hud-min"\]', 'P'\], \['\[data-wact="hud-home"\]', 'B'\]/);
   assert.match(css, /html\[data-skin-frame="borderless"\] \.wbar > \[data-wact="hud-home"\]/);
+});
+
+test('⌥P floats the Chats window on this desk whichever agent it belongs to; it never borrows another desk\'s agent window', () => {
+  const src = js.slice(js.indexOf('function hudKey('), js.indexOf('function hudClose('));
+  for (const kind of ['main', 'host-profile', 'container', 'restricted']) {
+    const here = { id: 'h', app: 'chats', thread: 't-' + kind, ...(kind === 'main' ? {} : { agent: kind }) };
+    const app = { id: 'a', app: 'frame', appId: 'files' }, away = { id: 'm', app: 'chats', thread: 'main-away' };
+    const W = { h: here, a: app, m: away }, calls = [];
+    const ctx = { W, ws: [{ wins: ['a', 'h'], focus: 'a' }, { wins: ['m'] }], cur: 0, homeOpen: false, hud: null,
+      focused: () => W.a, mainChats: w => !!(w && w.app === 'chats' && !w.agent), findWin: fn => Object.values(W).find(fn) || null,
+      newWin: () => { calls.push('new'); return { id: 'n' }; }, hudOn: id => { calls.push('on:' + id); return true; },
+      hudFold: () => calls.push('fold'), hudFocus: () => calls.push('focus'), hudHasFocus: () => false };
+    vm.runInNewContext(src + '\nhudKey();', ctx);
+    assert.deepEqual(calls, ['on:h'], kind + ': floats the window on this desk, touching only its own thread');
+    assert.equal(W.m.thread, 'main-away'); assert.equal(W.h.thread, 't-' + kind);
+  }
 });
