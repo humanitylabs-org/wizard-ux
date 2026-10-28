@@ -48,3 +48,8 @@ test('Landscapes Light: the Latest pill and the small in-thread notes read as in
   assert.match(css, /landscapes-light"\]:is\(\[data-shell="desktop"\], :not\(\[data-shell="desktop"\]\)\) \.ch-latest \{ background: rgba\(250, 250, 252/);
   assert.match(css, /landscapes-light[^\n]*:is\(\.msg\.agentnote > summary, \.laterrun, [^\n]*\{ color: var\(--ink-2\); \}/);
 });
+
+test('desktop Latest pill sits centred above the Snooze/Done row, never on Done', () => {
+  for (const [d, pre] of [['landscapes', 'html\\[data-skin\\^="landscapes"\\]'], ['obsidian', 'html\\[data-skin\\^="obsidian"\\]']])
+    assert.match(read(`web/skins/${d}/skin.css`), new RegExp(pre + '\\[data-shell="desktop"\\] \\.ch-thread > \\.ch-latest \\{ position: relative;[^}]*align-self: center; margin: -44px auto 12px;'));
+});

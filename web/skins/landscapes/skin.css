@@ -953,3 +953,6 @@ html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .ch-row .pv em.att.fyi { color: #7a6200; }
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .ch-row .pv em.att.failed { color: #b3261e; }
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .ch-row .pv em.att.deferred { color: rgba(0, 0, 0, .7); }
+/* Desktop Latest pill (Miguel, 28 Oct 2026): it sat on the Done button, so a double click could close the thread. It now
+ * rides in the thread's column just above the Snooze/Done row, centred, taking no space (32px tall, -44px top, 12px gap). */
+html[data-skin^="landscapes"][data-shell="desktop"] .ch-thread > .ch-latest { position: relative; inset: auto; transform: none; flex: none; align-self: center; margin: -44px auto 12px; z-index: 6; }
