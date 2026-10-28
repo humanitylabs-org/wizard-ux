@@ -13,7 +13,8 @@ jobs:
           node-version: '22'
       - run: npm test
   tap-outside-closes:
-    runs-on: ubuntu-latest
+    # Keep the runner compatible with the Playwright version exercised locally.
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
