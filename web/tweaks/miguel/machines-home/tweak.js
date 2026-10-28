@@ -533,20 +533,25 @@ export default function setup(api) {
   function renderGlance() {
     const g = managedOf(S.ws), x = sessions(), fuel = g ? null : gauge(), st = g ? null : storage(), bad = g ? 0 : openOnes().length;
     const name = g ? g.name : thisName(), many = managedList().length > 0;
-    const sig = JSON.stringify([S.ws, name, many, S.open.has('wsm'), managedList().map(m => m.id), x.working, Math.min(x.ready, 6), S.unread, fuel && Math.round(fuel.left / 10), st && [st.state, st.age == null ? null : agoS(st.age)], bad, backupRunning(), devices().map(d => d.access?.exposure)]);
+    const sig = JSON.stringify([fuel && fuel.left, st && st.used, devices().length, people().length, S.ws, name, many, S.open.has('wsm'), managedList().map(m => m.id), x.working, Math.min(x.ready, 6), S.unread, fuel && Math.round(fuel.left / 10), st && [st.state, st.age == null ? null : agoS(st.age)], bad, backupRunning(), devices().map(d => d.access?.exposure)]);
     if (sig === drawn.glance) return; drawn.glance = sig;
-    const b = (go, cls, label, ...kids) => h('button', { type: 'button', cls: 'mh-gl-item ' + cls, data: { go }, 'aria-label': label }, ...kids);
+    // A small labelled panel: one row per area (what it is, how it is), each opening its full page in Settings.
     const dots = (n, cls) => Array.from({ length: n }, () => h('i', { cls }));
     const checked = devices().length && devices().every(d => d.access?.exposure === 'tailscale');
+    const rowB = (go, title, label, x, ...val) => h('button', { type: 'button', cls: 'mh-gl-row', data: { go }, 'aria-label': label, ...(x ? { 'data-x': x } : {}) },
+      h('span', { cls: 'mh-gl-t', text: title }), h('span', { cls: 'mh-gl-v' }, ...val), h('i', { cls: 'mh-go', 'aria-hidden': 'true', text: '›' }));
+    const cells = n => h('span', { cls: 'mh-gl-cells', 'data-s': level(fuel.left) }, Array.from({ length: 10 }, (_, i) => h('i', { cls: i < n ? 'on' : '' })));
+    const nM = devices().length || 1, nP = people().length;
     glance.replaceChildren(...[
-      h('button', { type: 'button', cls: 'mh-gl-item is-name', data: { toggle: 'wsm' }, 'aria-expanded': String(S.open.has('wsm')), 'aria-label': `${name}. Switch Wizard` }, h('b', { text: name }), chev(S.open.has('wsm'))),
-      fuel ? gaugeEl(fuel) : null,
-      g ? null : b('chats', 'is-chats', `${x.working} working, ${x.ready} ready${S.unread ? `, ${S.unread} unread` : ''}. Open your chats`,
-        h('span', { cls: 'mh-dots' }, dots(Math.min(x.working, 6), 'work'), dots(Math.min(x.ready, 6 - Math.min(x.working, 6)), 'ready')), S.unread ? h('span', { cls: 'mh-bell' }, bell(), h('b', { text: String(Math.min(S.unread, 99)) })) : null),
-      st ? b('storage', 'is-backup', `${backupRunning() ? 'Backing up now' : st.age == null ? 'No backup yet' : `Backed up ${agoS(st.age)} ago`}. Open Storage in Settings`,
-        h('span', { 'data-x': st.state }, h('span', { cls: 'mh-sh-long', text: backupRunning() ? 'Backing up' : st.age == null ? 'No backup' : 'Backed up ' }), backupRunning() || st.age == null ? null : h('span', { text: `${agoS(st.age)} ago` }))) : null,
-      bad || checked ? b('network', 'is-net', bad ? `${bad} machines open to the internet. Open Network in Settings` : 'Network private. Open Network in Settings', h('span', { 'data-x': bad ? 'no' : 'ok', text: bad ? `${bad} open` : 'Private' })) : null,
-      b('overview', 'is-more', 'Open your network in Settings', h('span', { cls: 'mh-sh-long', text: 'Details' }), h('i', { cls: 'mh-go', 'aria-hidden': 'true', text: '›' })),
+      h('button', { type: 'button', cls: 'mh-gl-head', data: { toggle: 'wsm' }, 'aria-expanded': String(S.open.has('wsm')), 'aria-label': `${name}. Switch Wizard` }, h('b', { text: name }), chev(S.open.has('wsm'))),
+      g ? null : rowB('chats', 'Chats', `${x.working} working, ${x.ready} ready${S.unread ? `, ${S.unread} unread` : ''}. Open your chats`, '',
+        h('span', { cls: 'mh-dots' }, dots(Math.min(x.working, 8), 'work'), dots(Math.min(x.ready, 8 - Math.min(x.working, 8)), 'ready')),
+        h('span', { text: `${x.working} working · ${x.ready} ready` }), S.unread ? h('span', { cls: 'mh-bell' }, bell(), h('b', { text: String(Math.min(S.unread, 99)) })) : null),
+      fuel ? rowB('ai', 'AI usage', `AI ${fuel.left}% left. Open AI in Settings`, level(fuel.left), cells(Math.round(fuel.left / 10)), h('span', { text: `${fuel.left}% left · ${fuel.name}` })) : null,
+      st ? rowB('storage', 'Storage & backups', 'Open Storage in Settings', st.state, h('span', { text: backupRunning() ? 'Backing up now' : st.age == null ? 'No backup yet' : `Backed up ${agoS(st.age)} ago` }), st.used != null ? h('small', { text: gbFmt(st.used) }) : null) : null,
+      g ? null : rowB('network', 'Network & security', 'Open Network in Settings', bad ? 'no' : checked ? 'ok' : '',
+        h('span', { text: bad ? `${bad} ${bad === 1 ? 'machine' : 'machines'} open to the internet` : checked ? 'Tailscale only' : 'Not checked yet' })),
+      g ? null : rowB('overview', 'Machines & people', 'Open your network in Settings', '', h('span', { text: `${nM} ${nM === 1 ? 'machine' : 'machines'}${nP ? ` · ${nP} ${nP === 1 ? 'person' : 'people'}` : ''}` })),
     ].filter(Boolean));
     wsMenu.hidden = !S.open.has('wsm');
     wsMenu.replaceChildren(...(S.open.has('wsm') ? [...[['mine', thisName()], ...managedList().map(m => [m.id, m.name])].map(([id, n]) =>
