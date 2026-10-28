@@ -59,6 +59,29 @@ const PAYLOAD = 'wizard://connect?origin=' + encodeURIComponent(new URL(WIZ).ori
           await f.waitForFunction(() => !__setup.state.linkDevice && __setup.state.screen === 'list');
           assert.equal(await f.locator('#list [data-act="list-link-device"]').isVisible(), true);
         });
+        // James: space and a subtle tint, never flush with the row above in the same colour.
+        await check(`${mode}: link another device button is spaced and tinted apart from the phone row`, async () => {
+          const m = await f.evaluate(() => {
+            const row = document.querySelector('#list .row'), b = document.querySelector('#list [data-act="list-link-device"]');
+            return { gap: b.getBoundingClientRect().top - row.getBoundingClientRect().bottom, rowBg: getComputedStyle(row).backgroundColor, bBg: getComputedStyle(b).backgroundColor };
+          });
+          assert.ok(m.gap >= 12, 'gap ' + m.gap); assert.notEqual(m.bBg, m.rowBg); assert.notEqual(m.bBg, 'rgba(0, 0, 0, 0)');
+        });
+        // James: Done after step 2 folds it to a green check; Done at the bottom closes the window.
+        await check(`${mode}: step 2 Done folds to a check, bottom Done closes link another device`, async () => {
+          await f.locator('#list [data-act="list-link-device"]').click();
+          await f.locator('#linkDevice [data-act="link-step2-done"]').click();
+          assert.equal(await f.locator('#linkDevice [data-step="2"] .gl').getAttribute('data-g'), 'done');
+          assert.equal(await f.locator('#linkDevice [data-step="2"] canvas').count(), 0);
+          assert.equal(await decode(f.locator('#linkDevice [data-step="3"] canvas')), PAYLOAD);
+          await f.locator('#linkDevice [data-act="link-step2-again"]').click();
+          assert.equal(await f.locator('#linkDevice [data-step="2"] canvas').count(), 1);
+          const done = f.locator('#linkDevice .sheetdone [data-act="link-device-done"]');
+          await done.scrollIntoViewIfNeeded(); assert.equal(await done.innerText(), 'Done');
+          await page.screenshot({ path: path.join(SHOTS, `${mode}-bottom-done.png`) });
+          await done.click();
+          await f.waitForFunction(() => !__setup.state.linkDevice && __setup.state.screen === 'list');
+        });
         await f.locator('[data-act="open-phone"]').click();
         await f.waitForFunction(() => __setup.state.phone.data?.step === 'phone_seen');
         await check(`${mode}: button visible after linking, below the normal steps`, async () => {

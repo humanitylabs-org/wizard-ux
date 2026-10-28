@@ -186,7 +186,7 @@
   function openLinkDevice() {
     if (S.linkDevice || S.phone.status !== 'ok' || !canLinkDevice(S.phone.data)) return;
     closeSheet(); closeMenu();
-    S.linkDevice = true; renderLinkDevice();
+    S.linkDevice = true; S.linkStep2Done = false; renderLinkDevice();
     $('linkDevice').hidden = false; $('scrim').hidden = false; $('app').inert = true;
     linkDeviceHold = WA?.back.push(() => { closeLinkDevice(true); return true; });
     $('linkDevice').scrollTop = 0; fitUrls($('linkDevice'));
@@ -207,7 +207,8 @@
     if (S.phone.status !== 'ok' || !canLinkDevice(d)) { closeLinkDevice(); return; }
     const h = '<div class="bar"><button class="backb" data-act="close-link-device">Back</button></div>'
       + '<h2 id="linkDeviceTitle">Link another device</h2>'
-      + '<div class="steps">' + step1(d) + step2(d, true) + step3(d, true) + '</div>';
+      + '<div class="steps">' + step1(d) + step2(d, true) + step3(d, true) + '</div>'
+      + '<div class="sheetdone"><button class="btn primary" data-act="link-device-done">Done</button></div>';
     const el = $('linkDevice');
     if (h !== lastLinkDeviceHtml) { lastLinkDeviceHtml = h; el.innerHTML = h; drawQrs(el); }
     fitUrls(el);
@@ -238,7 +239,7 @@
     const end = st === 'done' ? `<svg class="okmark" viewBox="0 0 24 24" aria-label="Done"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>` : st === 'in_progress' ? `<span class="dot" aria-label="In progress"></span>${CHEV}` : CHEV;
     h += `<div class="rows"><button class="row" data-act="open-phone" data-state="${esc(st)}"><span class="ic" aria-hidden="true">📱</span><span class="bd"><b>${esc(str(item.title) || 'Use Wizard on your phone')}</b><small>${line}</small></span><span class="end">${end}</span></button></div>`;
     // Once a phone is linked, the next phone starts from the checklist itself, one tap below the done row.
-    if (st === 'done') h += '<button class="btn secondary" data-act="list-link-device">Link another device</button>';
+    if (st === 'done') h += '<button class="btn add-device" data-act="list-link-device">Link another device</button>';
     if (L.status === 'neterr') h += '<button class="link" data-act="retry-list">Try again</button>';
     if (L.status === 'ok') h += window.WosRecommended?.html() || '';
     h += '<p class="foot custom" data-customize>Everything you see is customizable. Try asking your Wizard for one change.</p>';
@@ -284,7 +285,10 @@
     const found = phones.length ? `<p>${phones[0].name ? `Found ${esc(phones[0].name)}.` : 'Found your phone.'}</p>` : '';
     const lead = '<p>Install it and sign in with the same Tailscale account.</p>';
     if (phoneLayout && !another) return step(2, phones.length ? 'done' : 'todo', T, found + lead, `<div class="act">${out('secondary', inst, 'Get Tailscale')}</div>${urlRow(inst)}`);
-    return step(2, phones.length ? 'done' : 'todo', T, '', `<div class="split"><div>${found}${lead}<p class="muted">Scan with your phone’s camera.</p></div>${qr(inst)}</div>${urlRow(inst)}`);
+    // Link another device: Done folds this step to a green check so the Wizard QR is next; Show again reopens it.
+    if (another && S.linkStep2Done) return step(2, 'done', T, '<p>Tailscale is on your other phone.</p>', '<button class="link small" data-act="link-step2-again">Show again</button>', 'folded');
+    const fold = another ? '<div class="stepdone"><button class="btn quiet small" data-act="link-step2-done">Done</button></div>' : '';
+    return step(2, phones.length ? 'done' : 'todo', T, '', `<div class="split"><div>${found}${lead}<p class="muted">Scan with your phone’s camera.</p></div>${qr(inst)}</div>${urlRow(inst)}${fold}`);
   }
   function step3(d, another = false) {
     const T = another ? 'Connect your other phone to Wizard' : 'Open Wizard on your phone', payload = connectPayload(d.wizard_url), wiz = payload ? httpUrl(d.wizard_url) : '';
@@ -314,7 +318,7 @@
       else if (P.status === 'neterr') h += step(1, 'attn', 'Sign in to Tailscale on this Wizard', '<p>Can’t check right now.</p>', '<div class="act"><button class="btn primary" data-act="retry-phone">Try again</button></div>') + step(2, 'locked', 'Get Tailscale on your phone', '', '', 'locked') + step(3, 'locked', 'Open Wizard on your phone', '', '', 'locked');
       else h += step1(d) + step2(d) + step3(d);
       h += '</div>';
-      if (P.status === 'ok' && canLinkDevice(d)) h += '<button class="btn secondary" data-act="link-device">Link another device</button>';
+      if (P.status === 'ok' && canLinkDevice(d)) h += '<button class="btn add-device" data-act="link-device">Link another device</button>';
     }
     renderLinkDevice();
     if (h === lastPhoneHtml) return;
@@ -382,7 +386,13 @@
     else if (act === 'list-link-device') { S.pendingLink = true; S.linkFromList = true; openPhone(); if (S.phone.status === 'ok') { S.pendingLink = false; if (canLinkDevice(S.phone.data)) openLinkDevice(); } }
     else if (act === 'back') closeLinkDevice() || closePhone();
     else if (act === 'link-device') openLinkDevice();
-    else if (act === 'close-link-device') closeLinkDevice();
+    else if (act === 'close-link-device' || act === 'link-device-done') closeLinkDevice();
+    else if (act === 'link-step2-done' || act === 'link-step2-again') {
+      S.linkStep2Done = act === 'link-step2-done'; renderLinkDevice();
+      const s = $('linkDevice').querySelector(`[data-step="${S.linkStep2Done ? 3 : 2}"]`);
+      s?.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      $('linkDevice').querySelector(S.linkStep2Done ? '[data-act="link-step2-again"]' : '[data-act="link-step2-done"]')?.focus({ preventScroll: true });
+    }
     else if (act === 'retry-list') { S.list.status = 'loading'; renderList(); loadList(); }
     else if (act === 'retry-phone') { S.phone.status = 'loading'; renderPhone(); loadPhone().then(() => schedule(2000)); }
     else if (act === 'start') start();
