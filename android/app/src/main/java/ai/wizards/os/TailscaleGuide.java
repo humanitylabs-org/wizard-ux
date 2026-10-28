@@ -28,8 +28,8 @@ final class TailscaleGuide {
     static final String WAKE = "Check your Wizard is on";
     static final String WAKE_BODY = "Make sure the computer running your Wizard is on and awake, with Wizard open. This phone connects by itself.";
     static final String LEAD = "Your Wizard is private. Only your own devices can reach it, through <b>Tailscale</b>, a free app that links them securely.";
-    static final String GET = "Get Tailscale", SIGN_IN = "Sign in with your Wizard’s account", TURN_ON = "Turn it on", BACK = "Come back here";
-    static final String FREE = "Free, from Tailscale Inc.", INSTALLED_ON = "Installed and on.", INSTALLED = "Installed.", IS_ON = "Tailscale is on.";
+    static final String GET = "Get Tailscale", SIGN_IN = "Sign in with your Wizard’s account", BACK = "Come back here";
+    static final String FREE = "Free, from Tailscale Inc.", INSTALLED = "Installed.";
     static final String SAME = "Use the same Tailscale account as on your computer.", NETWORK = "Your Wizard is on this network:";
     static final String REMOVED = "This phone is on a different Tailscale network, or it was removed from yours. In Tailscale, switch account or sign in again.";
     static final String VPN = "The first time, Android asks to set up a VPN connection. Tap <b>OK</b>.";
@@ -58,17 +58,18 @@ final class TailscaleGuide {
     }
 
     /**
-     * Steps 1–4. The first one that isn't done is the one the owner needs now. `missing` (with Tailscale on): true when
-     * the Wizard's name doesn't exist from this phone (another Tailscale account, or removed from the network); false
-     * when it exists but nothing answers (the Wizard's computer is off or asleep: Tailscale still knows an offline
-     * Wizard's name); null when not known yet.
+     * Steps 1–3, completed in order: 1 Get Tailscale (done once it's running, or installed), 2 sign in with the Wizard's
+     * account (and allow the VPN), 3 come back / is the Wizard on. `missing` (with Tailscale on): true when the Wizard's
+     * name doesn't exist from this phone (another Tailscale account, or removed from the network); false when it exists
+     * but nothing answers (the Wizard's computer is off or asleep: Tailscale still knows an offline Wizard's name); null
+     * when not known yet.
      */
     static Step[] steps(boolean on, Boolean missing, boolean installed) {
-        if (on && Boolean.FALSE.equals(missing)) return new Step[]{ Step.DONE, Step.DONE, Step.DONE, Step.CHECKING };
-        if (on && Boolean.TRUE.equals(missing)) return new Step[]{ Step.DONE, Step.NOW, Step.TODO, Step.TODO };
-        if (on) return new Step[]{ Step.DONE, Step.CHECKING, Step.TODO, Step.TODO };
-        if (installed) return new Step[]{ Step.DONE, Step.NOW, Step.TODO, Step.TODO };
-        return new Step[]{ Step.NOW, Step.TODO, Step.TODO, Step.TODO };
+        if (on && Boolean.FALSE.equals(missing)) return new Step[]{ Step.DONE, Step.DONE, Step.CHECKING };
+        if (on && Boolean.TRUE.equals(missing)) return new Step[]{ Step.DONE, Step.NOW, Step.TODO };
+        if (on) return new Step[]{ Step.DONE, Step.CHECKING, Step.TODO };
+        if (installed) return new Step[]{ Step.DONE, Step.NOW, Step.TODO };
+        return new Step[]{ Step.NOW, Step.TODO, Step.TODO };
     }
 
     /** The headline: "isn't on your network" only once that's confirmed; a Wizard that's off is said as such. */
@@ -82,7 +83,7 @@ final class TailscaleGuide {
         return Boolean.TRUE.equals(missing) ? WRONG : Boolean.FALSE.equals(missing) ? QUIET : UNSURE;
     }
 
-    /** The phone is fine; the Wizard isn't answering. Step 4 then asks to check the Wizard's computer. */
+    /** The phone is fine; the Wizard isn't answering. Step 3 then asks to check the Wizard's computer. */
     static boolean away(boolean on, Boolean missing) { return on && Boolean.FALSE.equals(missing); }
 
     /** From the WebView's error text: the name didn't resolve (true), anything else, including a hang (false). */
@@ -92,31 +93,32 @@ final class TailscaleGuide {
     static String button(boolean on, boolean installed) { return on || installed ? OPEN : GET; }
     static String hint(boolean on, boolean installed) { return on || installed ? "" : PLAY_HINT; }
 
-    /** The step titles, 1–4. */
+    /** The step titles, 1–3. */
     static String title(int step, boolean on, Boolean missing) {
         switch (step) {
             case 1: return GET;
             case 2: return SIGN_IN;
-            case 3: return TURN_ON;
             default: return away(on, missing) ? WAKE : BACK;
         }
     }
 
-    /** The text under a step's title. */
+    /** The text under a step's title. Step 2's network chip, VPN tip and warning follow it (TailscaleGuideView). */
     static String body(int step, boolean on, Boolean missing, boolean installed, String tailnet) {
         switch (step) {
-            case 1: return on ? INSTALLED_ON : installed ? INSTALLED : FREE;
+            case 1: return steps(on, missing, installed)[0] == Step.DONE ? INSTALLED : FREE;
             case 2: return tailnet.isEmpty() ? SAME : SAME + " " + NETWORK;
-            case 3: return steps(on, missing, installed)[2] == Step.DONE ? IS_ON : VPN;
             default: return away(on, missing) ? WAKE_BODY : AUTO;
         }
     }
 
+    /** Step 2's first-time VPN tip, until step 2 is done. */
+    static boolean vpnTip(boolean on, Boolean missing, boolean installed) { return steps(on, missing, installed)[1] != Step.DONE; }
+
     /** The warning under step 2: only when this phone isn't on the Wizard's network. */
     static boolean removed(boolean on, Boolean missing) { return on && Boolean.TRUE.equals(missing); }
 
-    /** Which step carries the Get/Open Tailscale button: the one the owner needs now (step 4 never does). */
+    /** Which step carries the Get/Open Tailscale button: the one the owner needs now (step 3 never does). */
     static boolean hasButton(int step, boolean on, Boolean missing, boolean installed) {
-        return step < 4 && steps(on, missing, installed)[step - 1] == Step.NOW;
+        return step < 3 && steps(on, missing, installed)[step - 1] == Step.NOW;
     }
 }

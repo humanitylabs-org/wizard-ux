@@ -116,7 +116,7 @@ final class TailscaleGuideView {
         body.addView(pill, lp(dp(14)));
         body.addView(html(TailscaleGuide.LEAD, 15, p.text2), lp(dp(14)));
 
-        for (int n = 1; n <= 4; n++) {
+        for (int n = 1; n <= steps.length; n++) {
             TailscaleGuide.Step s = steps[n - 1];
             if (n > 1) body.addView(line(), lp(dp(12)));
             LinearLayout row = new LinearLayout(a);
@@ -147,6 +147,7 @@ final class TailscaleGuideView {
                 cl.topMargin = dp(8);
                 col.addView(chip, cl);
             }
+            if (n == 2 && TailscaleGuide.vpnTip(on, missing, installed)) col.addView(html(TailscaleGuide.VPN, 14.5f, p.text2), lp(dp(8)));
             if (n == 2 && TailscaleGuide.removed(on, missing)) {
                 TextView warn = text(TailscaleGuide.REMOVED, 14.5f, p.text, false);
                 warn.setPadding(dp(10), 0, 0, 0);

@@ -27,8 +27,8 @@
     unsure: 'Tailscale is on. Checking that this phone is on your Wizard’s network…',
     wake: 'Check your Wizard is on', wakeBody: 'Make sure the computer running your Wizard is on and awake, with Wizard open. This phone connects by itself.',
     lead: 'Your Wizard is private. Only your own devices can reach it, through <b>Tailscale</b>, a free app that links them securely.',
-    get: 'Get Tailscale', signin: 'Sign in with your Wizard’s account', turnOn: 'Turn it on', back: 'Come back here',
-    free: 'Free, from Tailscale Inc.', installed: 'Installed and on.', isOn: 'Tailscale is on.',
+    get: 'Get Tailscale', signin: 'Sign in with your Wizard’s account', back: 'Come back here',
+    free: 'Free, from Tailscale Inc.', installed: 'Installed.',
     same: 'Use the same Tailscale account as on your computer.', network: 'Your Wizard is on this network:',
     removed: 'This phone is on a different Tailscale network, or it was removed from yours. In Tailscale, switch account or sign in again.',
     vpnIos: 'The first time, iPhone asks to <b>Add VPN Configurations</b>. Tap <b>Allow</b>.',
@@ -42,14 +42,15 @@
   };
   const ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" class="tsmark"><circle cx="5" cy="5" r="2.2"/><circle cx="12" cy="5" r="2.2" opacity=".4"/><circle cx="19" cy="5" r="2.2" opacity=".4"/><circle cx="5" cy="12" r="2.2"/><circle cx="12" cy="12" r="2.2"/><circle cx="19" cy="12" r="2.2"/><circle cx="5" cy="19" r="2.2" opacity=".4"/><circle cx="12" cy="19" r="2.2"/><circle cx="19" cy="19" r="2.2" opacity=".4"/></svg>';
 
-  /** Steps 1–4 complete in order: a step is done only when every step before it is. 'done' | 'checking' (the app is
-   * verifying it now: its own spinner) | 'now' (the owner's turn) | 'todo'. */
+  /** Steps 1–3 complete in order: a step is done only when every step before it is. 'done' | 'checking' (the app is
+   * verifying it now: its own spinner) | 'now' (the owner's turn) | 'todo'. 1 Get Tailscale (done once it's running,
+   * or installed on Android), 2 sign in with the Wizard's account (and allow the VPN), 3 come back / is the Wizard on. */
   function steps({ on, missing = null, installed }) {
-    if (on && missing === false) return ['done', 'done', 'done', 'checking']; // the phone is fine; is the Wizard on?
-    if (on && missing === true) return ['done', 'now', 'todo', 'todo'];       // signed in to another network
-    if (on) return ['done', 'checking', 'todo', 'todo'];                      // checking the phone's network
-    if (installed === true) return ['done', 'now', 'todo', 'todo'];           // installed (Android knows): open it
-    return ['now', 'todo', 'todo', 'todo'];
+    if (on && missing === false) return ['done', 'done', 'checking']; // the phone is fine; is the Wizard on?
+    if (on && missing === true) return ['done', 'now', 'todo'];       // signed in to another network
+    if (on) return ['done', 'checking', 'todo'];                      // checking the phone's network
+    if (installed === true) return ['done', 'now', 'todo'];           // installed (Android knows): open it
+    return ['now', 'todo', 'todo'];
   }
 
   function html({ host = '', on = false, missing = null, installed = null, platform = 'ios' } = {}) {
@@ -70,10 +71,10 @@
       <div class="pill" role="status"><span class="dot" aria-hidden="true"></span><span data-guide-status>${esc(!on ? T.off : missing === true ? T.wrong : missing === false ? T.quiet : T.unsure)}</span></div>
       <p class="lead">${T.lead}</p>
       <div class="steps">
-        ${step(1, T.get, st[0] === 'done' ? `<p>${on ? T.installed : 'Installed.'}</p>` : `<p>${T.free}</p>${button}`)}
-        ${step(2, T.signin, chip + (on && missing === true ? `<p class="warn">${T.removed}</p>` : '') + (st[1] === 'now' ? button : ''))}
-        ${step(3, T.turnOn, st[2] === 'done' ? `<p>${T.isOn}</p>` : `<p>${android ? T.vpnAndroid : T.vpnIos}</p>`)}
-        ${away ? step(4, T.wake, `<p>${T.wakeBody}</p>`) : step(4, T.back, `<p>${T.auto}</p>`)}
+        ${step(1, T.get, st[0] === 'done' ? `<p>${T.installed}</p>` : `<p>${T.free}</p>${button}`)}
+        ${step(2, T.signin, chip + (st[1] !== 'done' ? `<p>${android ? T.vpnAndroid : T.vpnIos}</p>` : '')
+          + (on && missing === true ? `<p class="warn">${T.removed}</p>` : '') + (st[1] === 'now' ? button : ''))}
+        ${away ? step(3, T.wake, `<p>${T.wakeBody}</p>`) : step(3, T.back, `<p>${T.auto}</p>`)}
       </div>
       <details><summary>${esc(T.about)}</summary><p>${T.about1}</p><p>${T.about2}</p><p>${T.about3}</p></details>
       <div class="foot"><button type="button" class="link" data-guide="other">${esc(T.other)}</button><span class="addr">${esc(host)}</span></div>`;
