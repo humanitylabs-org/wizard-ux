@@ -956,3 +956,11 @@ html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="
 /* Desktop Latest pill (Miguel, 28 Oct 2026): it sat on the Done button, so a double click could close the thread. It now
  * rides in the thread's column just above the Snooze/Done row, centred, taking no space (32px tall, -44px top, 12px gap). */
 html[data-skin^="landscapes"][data-shell="desktop"] .ch-thread > .ch-latest { position: relative; inset: auto; transform: none; flex: none; align-self: center; margin: -44px auto 12px; z-index: 6; }
+/* Resources sheet on Light: dark ink inside the light sheet (Home's white ink stops at the sheet), capacity bars in ink. */
+html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .rs-sheet { --ink: #111216; --ink-2: rgba(17,18,22,.76); --ink-3: rgba(17,18,22,.54); --line: rgba(0,0,0,.12); --line-2: rgba(0,0,0,.26); --wz-text: #111216; --wz-text-secondary: rgba(17,18,22,.76); }
+html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .rs-sheet .rs-cap-seg { background: rgba(0, 0, 0, .08); }
+html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .rs-sheet .rs-cap-seg i { background: rgba(17, 18, 22, .72); }
+html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .rs-sheet .rs-cap-seg small { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .45); }
+html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .rs-sheet .rs-cap-seg.rs-empty i { background: #c98a1a; }
+html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .rs-sheet .rs-cap-seg.rs-crit i { background: #d64545; }
+
