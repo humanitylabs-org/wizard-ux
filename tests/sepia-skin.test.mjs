@@ -44,7 +44,7 @@ function runtime(saved = {}) {
 test('Sepia is a selectable, persisted warm-light skin without changing the existing skin order', () => {
   const { context, store, props, documentElement } = runtime();
   assert.deepEqual([...context.WosSkin.list.map(s => s.id)],
-    ['nebula', 'grove', 'tide', 'ember', 'signal', 'novairecito', 'sepia', 'obsidian', 'obsidian-light', 'landscapes']);
+    ['nebula', 'grove', 'tide', 'ember', 'signal', 'novairecito', 'sepia', 'obsidian', 'obsidian-light', 'landscapes', 'landscapes-light']);
   assert.equal(context.WosSkin.familyOf('sepia'), 'novairecito', 'Sepia is a colour of Novaire’s skin');
 
   assert.equal(context.WosSkin.set('sepia'), 'sepia');

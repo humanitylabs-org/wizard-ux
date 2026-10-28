@@ -202,3 +202,64 @@ test('app.js tells the host when the bound view beside a thread changes, and rep
   assert.ok(JSON.parse(read('web/core/slots.json')).slots['device-edge']);
   assert.match(app, /beside: device\.classList\.contains\('bound-peeking'\) \? 1 : device\.classList\.contains\('bound-view-peeking'\) \? -1 : 0/);
 });
+
+test('inbox capability is trusted-only, and its handles die with the package', async () => {
+  const f = fixture(); let api;
+  f.host._test.setImporter(async () => ({ default: value => { api = value; return () => {}; } }));
+  await f.host.loadTweaks(['miguel/unified-inbox'], f.slots);
+  assert.equal(api.inbox, undefined, 'an untrusted package gets no inbox');
+  await f.host.loadTweaks(['miguel/unified-inbox'], f.slots, { teamAuthors: ['miguel'] });
+  const seen = []; api.inbox.watch(items => seen.push(items.length));
+  f.inbox.push([{ id: 'a', title: 't', message: 'm', time: 1 }]); assert.deepEqual(seen, [1]);
+  assert.equal(api.inbox.reply('a', 'go'), true); assert.deepEqual(f.inbox.replies, [['a', 'go']]);
+  assert.equal(api.inbox.reply('missing'), false, 'only a listed notification can be answered');
+  await api.inbox.done('a'); assert.deepEqual(f.inbox.done, ['a']);
+  const stale = api.inbox; await f.clear();
+  assert.equal(f.inbox.watchers(), 0, 'teardown stops watching');
+  assert.equal(stale.reply('a'), false); assert.equal(await stale.done('a'), false); f.inbox.push([]); assert.deepEqual(seen, [1], 'stale handles are inert');
+});
+
+test('notification threads: the flag lives only while a trusted package holds it, and acts route to it', async () => {
+  const f = fixture(); let api;
+  f.host._test.setImporter(async () => ({ default: value => { api = value; return () => {}; } }));
+  await f.host.loadTweaks(['miguel/unified-inbox'], f.slots, { teamAuthors: ['miguel'] });
+  assert.equal(f.host.inboxThreads, false); assert.equal(f.host.inboxAct('done', 'x'), false);
+  const got = []; api.inbox.threads({ act: (a, id) => got.push(a + ':' + id) });
+  assert.equal(f.host.inboxThreads, true); assert.equal(f.host.inboxAct('snooze', 'n1'), true); assert.deepEqual(got, ['snooze:n1']);
+  assert.equal(await api.inbox.set('n1', { read: true, flag: true }), true); assert.equal(JSON.stringify(f.inbox.sets), JSON.stringify([['n1', { read: true }]]), 'only read / archived pass');
+  await f.clear(); assert.equal(f.host.inboxThreads, false, 'released on teardown');
+});
+
+test('notification rows in the list: only a holder that asks for list mode turns it on', async () => {
+  const f = fixture(); let api;
+  f.host._test.setImporter(async () => ({ default: value => { api = value; return () => {}; } }));
+  await f.host.loadTweaks(['miguel/unified-inbox'], f.slots, { teamAuthors: ['miguel'] });
+  const off = api.inbox.threads({ act: () => {} });
+  assert.equal(f.host.inboxThreads, true); assert.equal(f.host.inboxList, false, 'threads alone keep the list unchanged');
+  off(); api.inbox.threads({ act: () => {}, list: 'yes' }); assert.equal(f.host.inboxList, false, 'only list: true');
+  api.inbox.threads({ act: () => {}, list: true }); assert.equal(f.host.inboxList, true);
+  await f.clear(); assert.equal(f.host.inboxList, false, 'released on teardown');
+});
+
+test('chats.js lists notifications among Ready chats only in list mode, in every Ready order', () => {
+  const src = read('web/core/chats.js');
+  assert.match(src, /const on = !!window\.WosSkinHost\?\.inboxList;/, 'gated on the host list flag');
+  assert.match(src, /const nt = k === 'ready' && !n && !filtered && !AGID \? notes\(\) : null/, 'main unfiltered Ready only');
+  assert.match(src, /return bar \+ withNotes\(list, awake, rowFn\) \+ later;/, 'Newest, Oldest and Priority interleave');
+  assert.match(src, /if \(awake\.length && !groups\.has\(NOTES_SUBJECT\)\) groups\.set\(NOTES_SUBJECT, \[\]\);/, 'By subject: their own subject');
+  assert.match(src, /\.ch-list \.ch-notif-row\[data-chnotif\]'\); if \(nr\) \{ window\.WosSkinHost\?\.inboxAct\?\.\('open'/, 'a tap goes to the package');
+});
+test('chats.js shows a notification draft as its thread only while notification threads are on', () => {
+  const src = read('web/core/chats.js');
+  assert.match(src, /function notifOf\(w\) \{\n    if \(!w \|\| w\.thread !== '__new__' \|\| winAgent\(w\) \|\| !window\.WosSkinHost\?\.inboxThreads\) return null;/);
+  assert.match(src, /const NV = isNew && !pend\.length \? notifOf\(w\) : null;/);
+  assert.match(src, /if \(sid === '__new__'\) \{ notifAct\(wid, a\); return; \}/);
+  assert.match(read('web/desktop/desktop.js'), /f\.thread !== '__new__' \|\| !!CHATS\.notifOpen\?\.\(f\.id\)/, 'Done / Snooze keys reach an open notification');
+});
+
+test('desktop keys: ⌥↓ walks notification rows with Ready, ⌥X resolves an open notification', () => {
+  const d = read('web/desktop/desktop.js');
+  assert.match(d, /\.ch-sec\[data-sec="ready"\] \[data-chnotif\]', document\)/, 'Ready walk includes [data-chnotif] rows');
+  assert.match(d, /code === 'KeyX'\) return hit\(\(\) => \{ if \(!e\.repeat\) chatAct\('resolve', 'X'\)/);
+  assert.match(read('web/tweaks/miguel/unified-inbox/tweak.js'), /b\.dataset\.chnotif = it\.id/, 'the package marks its rows');
+});

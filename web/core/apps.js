@@ -47,6 +47,7 @@
   });
   const PALETTE = [['#6b46ff', '#c04dff'], ['#3fe0ff', '#3f6bff'], ['#ff5ccf', '#5c3bff'], ['#4ff0b0', '#2f8cff'], ['#ffbe55', '#ff6b86'], ['#ff8a5c', '#ff5ccf']];
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
+  const APP_TYPES = new Set(['view', 'service', 'agent', 'external']), APP_CATEGORIES = new Set(['agent', 'interface', 'app', 'system']);
   const toTile = (a, trusted = false) => ({
     id: String(a.id), kind: 'wizard', name: String(a.name || a.id), icon: a.icon || String(a.name || a.id).trim().charAt(0).toUpperCase(),
     g: Array.isArray(a.colors) && a.colors.length === 2 ? a.colors : hue(a.id),
@@ -60,6 +61,10 @@
     receives_voice_input: trusted === true && a.receives_voice_input === true,
     voice_names: Array.isArray(a.voice_names) ? a.voice_names.filter(n => typeof n === 'string') : [],
     provides: trusted && Array.isArray(a.provides) ? a.provides.filter(n => typeof n === 'string') : [],
+    // Declared kind (wizard.md type) and store shelf, as the Agent Service projects them from apps.json. Not sensitive,
+    // so backend-only tiles carry them too; app-kinds.js sorts Connectors by type === 'external'.
+    ...(APP_TYPES.has(a.type) ? { type: a.type } : {}),
+    ...(APP_CATEGORIES.has(a.category) ? { category: a.category } : {}),
     sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [] },
   });
   let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).map(toTile); } catch (e) { return []; } })();

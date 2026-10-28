@@ -8,8 +8,11 @@
  * The phone launcher / New desk (app.js) and the desktop app selector (desktop/desktop.js) both read this. */
 (function () {
   'use strict';
+  // The app's declared type (wizard.md `type: external`, projected by the Agent Service) decides. The id list and the
+  // summary wording are only a fallback for tiles without a type (cached lists from older Agent Services).
   const CONNECTOR_IDS = new Set(['wizard-chatgpt', 'wizard-claude', 'wizard-tinfoil', 'wizard-cloudflare', 'wizard-monarch', 'wizard-simplefin', 'wizard-teller']);
-  const isConnector = a => !!a && (CONNECTOR_IDS.has(a.id) || a.type === 'external' || /^(connect|sign in to)\b/i.test(a.desc || ''));
+  const isConnector = a => !!a && (typeof a.type === 'string' && a.type ? a.type === 'external'
+    : CONNECTOR_IDS.has(a.id) || /^(connect|sign in to)\b/i.test(a.desc || ''));
   const SYSTEM_IDS = new Set(['wizard', 'setup', 'files', 'notifications', 'transcriber', 'browser', 'secret-drop', 'wizard-chatgpt', 'wizard-claude']);
   const isSystem = a => !!a && (SYSTEM_IDS.has(a.id) || a.system === true);
   const inDev = a => !isSystem(a) && (window.WizCore?.isInDevelopment?.(a) || a.source === 'launcher.json' || /-next$/.test(a.id) || /\(test\)\s*$/i.test(a.name || ''));

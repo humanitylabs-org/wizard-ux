@@ -15,10 +15,11 @@
     "miguel/hidden-pin",
     "miguel/snooze-someday",
     "miguel/home-bars",
+    "miguel/machines-home",
     "wizard/two-orbs",
     "miguel/arrange-download",
-    "miguel/edge-peek",
     "wizard/app-borders",
-    "miguel/refresh-button"
+    "miguel/refresh-button",
+    "miguel/unified-inbox"
   ]
 }
