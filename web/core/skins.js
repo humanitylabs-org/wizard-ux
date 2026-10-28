@@ -74,7 +74,7 @@
     { id: 'landscapes-light', pkg: { css: true, dir: 'landscapes' }, name: 'Landscapes Light', who: 'Miguel’s photo skin by day: bright views under light glass.', orb: [0, 1.1, .95],
       t: T({ bg: '#EEF1F4', ink: '#111216', 'ink-2': 'rgba(17,18,22,.76)', 'ink-3': 'rgba(17,18,22,.54)', line: 'rgba(0,0,0,.12)', 'line-2': 'rgba(0,0,0,.26)', glass: 'rgba(250,250,252,.58)', 'glass-2': 'rgba(250,250,252,.80)',
         violet: '#5B3FE6', 'violet-2': '#4A30CC', pink: '#c42a83', cyan: '#0a7fae', amber: '#9a6400', green: '#0f7a4a', red: '#c8304c',
-        'sk-time-a': '#ffffff', 'sk-time-b': '#ffffff', 'sk-dock': 'rgba(250,250,252,.66)', 'sk-dock-line': 'rgba(0,0,0,.08)', 'sk-ddot': 'rgba(0,0,0,.5)', 'sk-tour': 'rgba(250,250,252,.88)', 'sk-dim': 'rgba(240,242,246,.66)', 'sk-win': 'rgba(250,250,252,.65)' }) },
+        'sk-time-a': '#ffffff', 'sk-time-b': '#ffffff', 'sk-dock': 'rgba(250,250,252,.66)', 'sk-dock-line': 'rgba(0,0,0,.08)', 'sk-ddot': 'rgba(0,0,0,.5)', 'sk-tour': 'rgba(250,250,252,.88)', 'sk-dim': 'rgba(240,242,246,.66)', 'sk-win': 'rgba(250,250,252,.85)' }) },
   ];
   // Each skin's own display face (the one its Home clock wears; fonts self-hosted in skins.css), for the preview cards
   // in the skin picker. Kept outside the entries so each skin definition stays as its author made it.
