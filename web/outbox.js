@@ -16,7 +16,7 @@
   // custody is not a queue. Empty speech requires a per-recording choice, never bulk.
   function eligible(it, states) {
     return !!it && !localCompletions.has(it.id) && !it.localCompleted && !quarantine.has(it.id) && ['new', 'reply'].includes(it.kind) &&
-      (it.intent !== 'command' || it.deliveryRequested === true) && it.steerDispatch !== 'started' && states.includes(it.state);
+      (it.intent !== 'command' || it.deliveryRequested === true) && it.steerDispatch !== 'started' && !it.cancelled && !it.cancelRequested && states.includes(it.state);
   }
   // A recording this device can no longer read, with no copy on Wizard, has nothing left to send: Delete only.
   const lostAudio = it => !!it?.audioUnreadable && !it.audioFile?.id;
@@ -205,6 +205,9 @@
     if (it.kind === 'dictation' && it.state === 'transcribing') it.state = 'held';
     if (it.state === 'capturing') { it.state = 'held'; it.error = 'Interrupted recording · original bytes kept'; }
     if (it.steerDispatch === 'started' && it.state !== 'sent') { it.state = 'unconfirmed'; it.error = unconfirmed; }
+    // Stop pressed before this page could finish the send. A request still in flight at reload may have reached
+    // Wizard; it is never replayed, and its thread shows the truth from Wizard's own list.
+    if (it.cancelRequested && !['sent', 'held'].includes(it.state)) Object.assign(it, { state: 'held', cancelled: true, threadHidden: true, nextAt: 0, error: STOPPED });
     if (it.state === 'sending') it.state = 'waiting';
     // A timed-out transcription is not an admitted message. Replaying the same recovered audio forever makes its
     // thread look permanently Working; keep the recording and require an explicit retry instead.
@@ -378,7 +381,27 @@
       await put(it);
     }
   }
+  /* Stop before the agent's run exists (Miguel, 28 Oct 2026: "when I send there is no way to stop it for a while").
+   * Upload, transcription and attachment receipts are the phone's own work; the run starts only at POST /runs. A Stop
+   * tapped before that point withdraws the send at the next step boundary, so Wizard never admits it. One tapped after
+   * the run POST has left the phone cannot be withdrawn: the caller gets that run's id from the receipt and stops it. */
+  const STOPPED = 'Stopped before sending · nothing reached the agent';
+  class StopRequested extends Error { constructor() { super(STOPPED); this.stopRequested = true; this.status = 0; } }
+  const halt = it => { if (it.cancelRequested || it.cancelled) throw new StopRequested(); };
+  const cancelWaits = new Map(); // id -> [resolve] for callers awaiting the outcome of a Stop
+  const admitting = new Set(); // ids whose run POST (or steer) has left this page: past the point of withdrawal
+  function settleCancel(it, outcome) {
+    const waits = cancelWaits.get(it.id) || []; cancelWaits.delete(it.id);
+    for (const fn of waits) try { fn(outcome); } catch (e) { console.error(e); }
+  }
+  async function finishCancel(it) {
+    Object.assign(it, { state: 'held', cancelled: true, threadHidden: true, nextAt: 0, error: STOPPED });
+    delete it.cancelRequested;
+    await put(it); schedule();
+    settleCancel(it, { outcome: 'cancelled', item: it });
+  }
   async function deliver(it) {
+    halt(it);
     if (it.kind === 'conversation') throw new HttpError(409, 'App voice input messages use explicit conversation delivery only');
     if (!it.model || !it.provider) throw new HttpError(409, 'No confirmed model route · choose a model before retrying');
     if (it.body) {
@@ -388,13 +411,17 @@
     }
     // When local writes fail, server audio custody comes before slower transcription.
     await keepAudio(it); // protect the original bytes before any STT, even on a healthy device
+    halt(it);
     if (!it.text && it.audio) {
       const text = String(await transcribe(it) || '').trim(), typed = String(it.typed || '').trim();
+      halt(it);
       if (!text && !typed) { it.state = 'empty'; it.error = 'No speech in that recording · original recording kept'; await put(it); return; }
       it.text = [typed, text].filter(Boolean).join('\n\n').slice(0, 64000); await put(it);
     }
+    halt(it);
     await keepAudio(it);
     await settlePending(it); // attachments sent while still uploading: their receipts, before the run is admitted
+    halt(it);
     // An agent without file access still hears the voice note: its transcript is the message, and the recording
     // stays in the owner's custody instead of riding along as a file the agent may not open.
     const noFiles = !!it.agent && window.WosAgents?.get?.(it.agent)?.permissions?.files === 'none';
@@ -419,7 +446,8 @@
           (frozen.agent || '') !== (it.agent || '') || frozen.require_model_lock !== true)
         throw new HttpError(409, 'Stored steer route changed · original kept');
       // Refuse to mutate without a durable dispatch journal, even if audio was uploaded.
-      it.steerDispatch = 'started'; await put(it);
+      halt(it);
+      it.steerDispatch = 'started'; admitting.add(it.id); await put(it);
       if (!it.durable) { delete it.steerDispatch; throw new HttpError(409, 'Device save failed · steering not dispatched; original kept'); }
       let receipt;
       try {
@@ -445,6 +473,8 @@
               ['completed', 'failed', 'cancelled', 'interrupted', 'expired'].includes(run.status);
           } catch (_) { /* unknown status: keep the rejected message for explicit Retry */ }
         }
+        // Stop pressed while this steer was in flight: a rejected steer never becomes a new turn.
+        if (it.cancelRequested) { await finishCancel(it); return; }
         if (terminal) {
           // Freeze from the dispatched envelope, not the current composer/route.
           // Persist the handoff BEFORE admission; a lost receipt now replays only
@@ -475,6 +505,8 @@
       if (it.agent) body.agent = it.agent;
       it.body = JSON.stringify(body); await put(it);
     }
+    halt(it); // the last point where a Stop withdraws the send: after this the run may exist on Wizard
+    admitting.add(it.id);
     const r = await call('/wizard/hermes/v1/runs' + aq, { method: 'POST', headers: { ...J, 'Idempotency-Key': it.id }, body: it.body });
     let run; try { run = await r.json(); } catch (_) { throw new HttpError(502, 'Wizard’s send receipt was lost'); }
     const runId = run.run_id || run.id;
@@ -487,7 +519,10 @@
     Object.assign(it, { state: 'sent', sentAt: now(), runId: res.runId, userMessageId: res.userMessageId || null, steered: !!res.steered, steerQueued: !!res.steerQueued, error: '' });
     delete it.audio; delete it.pendingBlobs;
     await put(it);
+    admitting.delete(it.id);
     for (const fn of sentHooks) try { fn(it, res); } catch (e) { console.error(e); }
+    // Stop arrived while the run POST was already on its way: hand the caller the real run to stop.
+    if (it.cancelRequested) { delete it.cancelRequested; await put(it); settleCancel(it, { outcome: 'started', runId: res.runId, steered: !!res.steered, item: it }); }
   }
   async function attempt(it) {
     // A new attempt drops the previous attempt's timeout evidence: recovery must never read a stale 408 as this
@@ -496,7 +531,12 @@
     it.state = 'sending'; it.errorStatus = 0; await put(it);
     try { await deliver(it); }
     catch (e) {
-      delete it.useServerCopy; // one explicit Retry authorizes one attempt
+      admitting.delete(it.id);
+      delete it.useServerCopy;
+      if (e.stopRequested || it.cancelled) { if (it.cancelled) { delete it.cancelRequested; await put(it); } else await finishCancel(it); return; }
+      // A Stop tapped while this attempt failed: never retried. A failed run POST can still have been admitted;
+      // the item is held (not deleted) and the thread follows Wizard's own list.
+      if (it.cancelRequested) { await finishCancel(it); return; } // one explicit Retry authorizes one attempt
       it.attempts = (it.attempts || 0) + 1; it.error = reason(e); it.errorStatus = e.status || 0; it.lastAttemptAt = now();
       // A finite STT deadline keeps the recording but releases the thread; automatic replay of the same body can
       // otherwise spend almost all its time in Sending. Other transport failures still retry from durable custody.
@@ -644,7 +684,7 @@
       if (prior?.captureWrite) await prior.captureWrite;
       const existing = o.nativeId && api.nativeItem(o.nativeId);
       if (existing && existing !== prior) return existing;
-      if (prior && (localCompletions.has(prior.id) || prior.localCompleted || quarantine.has(prior.id) || prior.state === 'sent' || prior.body || prior.steerBody)) return prior;
+      if (prior && (localCompletions.has(prior.id) || prior.localCompleted || quarantine.has(prior.id) || prior.state === 'sent' || prior.body || prior.steerBody || prior.cancelled || prior.cancelRequested)) return prior;
       const it = make(o); if (prior) { it.id = prior.id; it.createdAt = prior.createdAt; it.nativeId ||= prior.nativeId; it.nativeIds = [...new Set([...(prior.nativeIds || []), prior.nativeId, ...it.nativeIds].filter(Boolean))]; }
       // Parking is held at its first durable boundary, even before transition.
       it.state = it.parkedDraft ? 'held' : 'processing'; await put(it); schedule(); return it;
@@ -697,6 +737,8 @@
       const it = held || make({ ...o, agent, ...(snapshot || {}) });
       if (held) {
         if (localCompletions.has(held.id) || held.localCompleted || held.state === 'sent' || held.body || held.steerBody || quarantine.has(held.id)) return held;
+        // Stopped while the phone was still transcribing/routing this take: it stays a kept recording, never a send.
+        if (held.cancelled || held.cancelRequested) { if (held.cancelRequested) await finishCancel(held); return held; }
         // The delivery caller names the agent (an orb pick); a staged take that lost it must not fall back to the main agent.
         if (agent && !it.agent) { it.agent = agent; if (snapshot) Object.assign(it, snapshot); }
         // Preserve the original route/destination/id. Routing is allowed to choose a local command;
@@ -715,11 +757,36 @@
         if (!M) throw new Error('Model selector unavailable · reload Wizard before sending');
         const route = await bounded(() => M.resolveRoute(held && it.model ? { model: it.model, provider: it.provider, ...(it.agent ? { agent: it.agent } : {}) } : snapshot), 15000);
         if (it.model && (route.model !== it.model || (it.provider && route.provider !== it.provider))) throw new Error('Selected route changed · original message kept');
+        if (it.cancelled || it.cancelRequested) throw new StopRequested(); // Stop tapped while the route was resolving
         Object.assign(it, route, { state: 'queued' });
         if (it.agent) window.WizLive?.pinAgent?.(it.sessionId, it.agent);
-      } catch (e) { it.state = 'failed'; it.error = String(e.message || e); }
+      } catch (e) {
+        if (it.cancelled || it.cancelRequested || e.stopRequested) { if (!it.cancelled) await finishCancel(it); return it; }
+        it.state = 'failed'; it.error = String(e.message || e);
+      }
       await put(it); pump(); return it;
     },
+    /* Stop a send whose run doesn't exist yet. Resolves { outcome: 'cancelled', item } (nothing reached the agent;
+     * the item is kept as a held, thread-hidden record so a recording is never lost), { outcome: 'started', runId }
+     * (the run POST had already left: stop that run), or { outcome: 'none' } (nothing pending under this id). */
+    cancel(id) {
+      const it = items.get(id);
+      if (!it || it.compact || quarantine.has(id) || !['new', 'reply'].includes(it.kind)) return Promise.resolve({ outcome: 'none' });
+      if (it.state === 'sent') return Promise.resolve(it.runId ? { outcome: 'started', runId: it.runId, steered: !!it.steered, item: it } : { outcome: 'none' });
+      if (it.cancelled) return Promise.resolve({ outcome: 'cancelled', item: it });
+      // A steer whose dispatch outcome this page no longer knows (reload, unconfirmed) is past withdrawal.
+      if ((it.steerDispatch === 'started' && !admitting.has(id)) || it.state === 'unconfirmed') return Promise.resolve({ outcome: 'none' });
+      const wait = new Promise(resolve => { const list = cancelWaits.get(id) || []; list.push(resolve); cancelWaits.set(id, list); });
+      if (!it.cancelRequested) {
+        it.cancelRequested = true; // synchronous: an attempt already running sees it at its next step
+        // Withdraw now unless the run POST already left: queued, offline-waiting, still being transcribed on the
+        // phone, or mid-upload/transcription on Wizard (that work stops at its next step and never admits a run).
+        if (!admitting.has(id)) finishCancel(it).catch(e => settleCancel(it, { outcome: 'error', error: e }));
+        else put(it).catch(() => {});
+      }
+      return wait;
+    },
+    stopped: it => !!it?.cancelled,
     canRetry(it) { const x = typeof it === 'string' ? items.get(it) : it; return eligible(x, ['failed', 'waiting', 'empty']) && !lostAudio(x); },
     retry(id) { return queueRetry(items.get(id), ['failed', 'waiting', 'empty']); },
     retryAll(agent) { let n = 0; for (const it of items.values()) if ((agent === undefined || (it.agent || '') === agent) && queueRetry(it, ['failed', 'waiting'])) n++; return n; },
