@@ -5,7 +5,7 @@
  * the notification attached and finishes it. Snoozed = read and kept: quiet rows with the snoozed chats. Done =
  * archived: "Completed notifications" under Archive, where one can be opened and restored.
  * Data and writes go through the host's inbox capability; text is only ever set with textContent. */
-const RESOLVE = 'Resolve this notification: either stop sending notifications like this one, or fix whatever keeps causing it. Your call which. Tell me briefly what you did.';
+const RESOLVE = 'Resolve this notification: do whatever it calls for. If it asks for something, act on it; if it points at a problem, fix the problem; if it only needs a look, check and tell me what matters. If it is noise or keeps repeating needlessly, also fix what sends it. Use your judgment. Tell me briefly what you did.';
 const BELL = 'M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0';
 const DONE_SHOWN = 30;
 
