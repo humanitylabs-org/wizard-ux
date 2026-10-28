@@ -168,6 +168,13 @@
       ],
       "note": "Pinned chats, synced per owner through ui-preferences pinnedChats"
     },
+    "core/parts.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Replaceable front-end parts a tweak may swap whole (pins today); docs/TWEAKS.md"
+    },
     "core/chat-power.js": {
       "loadedBy": [
         "phone",
@@ -783,6 +790,7 @@
     "core/os-updates.js",
     "core/own-views.css",
     "core/own-views.js",
+    "core/parts.js",
     "core/photos-relay.js",
     "core/polish.css",
     "core/reach.js",

@@ -112,6 +112,8 @@
     _migrate: migrate,
   });
   window.WosChatPins = api;
+  // A tweak may replace pins whole (core/parts.js, docs/TWEAKS.md); core code calls the part, never this object.
+  window.WosParts?.define('pins', { version: 1, methods: ['ids', 'has', 'toggle', 'partition'], event: 'wos:chat-pins' }, api);
   // Another tab on this device, or a pull of the shared list (live.js writes the cache, then fires wos:prefs).
   window.addEventListener('storage', e => { if (e?.key === KEY || e?.key === OPS) emit(); });
   let last = JSON.stringify(read());
