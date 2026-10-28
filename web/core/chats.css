@@ -721,6 +721,7 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 .ch-row .tp b .ch-plock .ag-lock { width: 12px; height: 12px; stroke-width: 2.2; }
 .ch-head .ti { min-width: 0; }
 .ch-privtag { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; height: 20px; margin-left: 6px; padding: 0 7px 0 6px; border-radius: 10px; font-size: 11px; font-weight: 700; letter-spacing: .02em; color: var(--ch-priv); background: color-mix(in oklab, var(--ch-priv) 16%, transparent); vertical-align: 2px; }
+.ch-background { color: var(--wz-text-secondary, var(--ink-2)); background: var(--wz-surface, var(--glass)); font-weight: 400; letter-spacing: normal; }
 .ch-privtag .ag-lock { width: 11px; height: 11px; stroke-width: 2.3; }
 .ch-carry { margin: 14px auto 0; max-width: 520px; display: grid; gap: 6px; padding: 12px 14px; border-radius: 14px; border: 1px solid color-mix(in oklab, var(--ch-priv) 35%, transparent); background: color-mix(in oklab, var(--ch-priv) 8%, transparent); text-align: left; font-size: 13px; line-height: 1.4; }
 .ch-carry b { display: inline-flex; align-items: center; gap: 6px; color: var(--ch-priv); }
