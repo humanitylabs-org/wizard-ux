@@ -638,6 +638,7 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 @media (prefers-reduced-motion: reduce) { .ch-newchat { animation: none; } }
 
 /* Reply to a notification: a slim quote above the composer (× drops it) and the same quote above the sent words. */
+.mmeta button[data-mreply] { min-width: 44px; min-height: 44px; }
 .ch-reply { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 0 0 10px; border-left: 2px solid var(--line-2); }
 .ch-reply-t, .ch-rq { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .ch-reply-t { flex: 1; }
