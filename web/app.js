@@ -2286,6 +2286,7 @@
     voiceEl.classList.toggle('on', s === 'listen' || s === 'paused' || s === 'command');
     voiceEl.classList.toggle('cmd', V.kind === 'command' && s !== 'idle' && s !== 'listen' && s !== 'paused' && s !== 'command');
     voiceEl.setAttribute('aria-hidden', String(s === 'idle'));
+    if (s !== 'listen' && s !== 'command') orbLevel(0);
     if (s === 'idle') FIELDS.refresh(); else paintFieldOrb();
     paintVoiceDestination();
   }
@@ -2402,7 +2403,7 @@
       if (performance.now() - (V.lvlAt || 0) > 90) { V.lvlAt = performance.now(); try { V.lvl = DEV().recLevel() / 100; } catch (e) {} }
       orbLevel(V.state === 'paused' ? 0 : Math.min(1, (V.lvl || 0) * 1.6));
     } else if (V.sim) orbLevel(V.state === 'paused' ? 0 : .25 + .25 * Math.sin(performance.now() / 160) * Math.sin(performance.now() / 410));
-    tx.style.setProperty('--lvl', (V.an || V.sim || V.native) ? 0.4 : 0);
+    else orbLevel(0);
     if (V.state !== 'idle' && V.state !== 'think') V.raf = requestAnimationFrame(tick);
   }
   /* The composer mic (#13): start a take that belongs to one thread; tap again (mic or orb) to send it there.
@@ -3394,7 +3395,14 @@
     return !focused || !!(capture?.recording && capture?.meetingId);
   }
   // The dock orb's level, also handed to a layout drawing its own orb (Two orbs' agent orb).
-  function orbLevel(v) { Orb.setLevel(v); window.WosSkinHost?.level?.(v); }
+  function orbLevel(v) {
+    const level = Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0;
+    Orb.setLevel(level); window.WosSkinHost?.level?.(level);
+    // Reuse the actual capture sample. Simulated/no-mic takes must never pretend we can hear speech.
+    const heard = (V.state === 'listen' || V.state === 'command') && (V.an || V.native) ? level : 0;
+    $('#voiceMeter').style.setProperty('--voice-meter-level', heard);
+    tx.style.setProperty('--lvl', heard);
+  }
   function shock() { const s = $('.orb-shock'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go'); }
   orbWrap.addEventListener('contextmenu', e => e.preventDefault());
   orbWrap.addEventListener('pointerdown', e => {
