@@ -122,3 +122,4 @@ html[data-skin="signal"] :is(.item, .btn, .url, .menu, .sheet, .qr) { border-rad
 .sheet p { margin: 0 0 6px; color: var(--t2); font-size: 15px; }
 .sheet .link { text-align: center; }
 .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); transform: translateX(-50%); z-index: 12; max-width: calc(100vw - 40px); padding: 10px 14px; border-radius: 12px; background: linear-gradient(var(--ov), var(--ov)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid var(--bd); color: var(--t); font-size: 14px;   }
+.pc-host { margin-top: 14px; }
