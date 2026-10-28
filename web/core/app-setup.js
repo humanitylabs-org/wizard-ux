@@ -176,17 +176,31 @@
   // can create a window; cancelling or a newer launch invalidates an in-flight read.
   // settled: called once the check is over (the app opens, its setup sheet shows, or another open replaced it),
   // so the shell's "Opening …" feedback ends exactly then.
+  // Opening never waits on the Router (James, 28 Oct 2026: "3 to 5 seconds staring at the screen"). An app whose
+  // last check was ready opens at once; any other app waits at most OPEN_WAIT for the check, then opens anyway with
+  // its window's loading spinner. A check that lands later with a real gap puts the setup sheet over the open app.
+  const OPEN_WAIT = 250, OK_KEY = 'wos.appSetup.ready';
+  const okRead = () => { try { return JSON.parse(localStorage.getItem(OK_KEY) || '{}') || {}; } catch (_) { return {}; } };
+  const okWrite = (id, ok) => { try { const m = okRead(); if (ok) m[id] = 1; else delete m[id]; localStorage.setItem(OK_KEY, JSON.stringify(m)); } catch (_) {} };
   function gate(app, resume, { settled } = {}) {
     let once = false; const settle = () => { if (once) return; once = true; try { settled?.(); } catch (_) {} };
     const ticket = ++serial;
     if (current || overlay || pending) { close(); serial = ticket; }
     pending = true;
+    let opened = false;
+    const openNow = () => { if (opened || ticket !== serial) return; opened = true; pending = false; resume(); settle(); };
+    if (okRead()[app.id]) openNow();
+    const wait = opened ? 0 : setTimeout(openNow, OPEN_WAIT);
     (async () => {
       let result;
       try { await ready; result = await R.routerNeeds(app.id); } catch (_) { result = {}; }
+      clearTimeout(wait);
       if (ticket !== serial) { settle(); return; }
+      if (result.data) okWrite(app.id, !needsSetup(result.data));
+      if (!result.data || !needsSetup(result.data)) { openNow(); return; }
+      // Opened already and the owner has since moved to another app: a late sheet would land on the wrong screen.
+      if (opened && hooks.isFront && !hooks.isFront(app.id)) return;
       pending = false;
-      if (!result.data || !needsSetup(result.data)) { resume(); settle(); return; }
       current = { app: app.id, record: app, name: app.name || app.id, resume, data: result.data, apps: [], installed: [], note: '', focus: document.activeElement };
       const c = current;
       overlay = document.createElement('section'); overlay.className = 'was-overlay'; overlay.setAttribute('aria-label', 'App setup');
