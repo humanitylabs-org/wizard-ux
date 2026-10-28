@@ -257,6 +257,7 @@
     return {
       id: a.id, label: String(a.label || a.id).slice(0, 60), harness: String(a.harness || 'hermes'),
       privacy: a.privacy === 'private' ? 'private' : 'standard',
+      incognito_available: a.incognito_available === true,
       appearance: { glyph: String(a.appearance?.glyph || ''), hue: Number.isFinite(Number(a.appearance?.hue)) ? Number(a.appearance.hue) : null },
       model: { provider: String(model.provider || ''), model: String(model.model || ''), allowed_models: Array.isArray(model.allowed_models) ? model.allowed_models.map(String) : [], fallback: model.fallback !== false },
       permissions: a.permissions && typeof a.permissions === 'object' ? a.permissions : {},
