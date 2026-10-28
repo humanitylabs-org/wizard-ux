@@ -58,7 +58,7 @@
       if (e.target.dataset?.installLink !== undefined) return;
       if (!freshPress && e.detail !== 0) { e.preventDefault(); e.stopImmediatePropagation(); return; }
       freshPress = false;
-      if (e.target === overlay && !pending) close();
+      if (e.target === overlay) window.WizHomeScreenApps.back();
     }, true);
     if (!port()) {
       // offer/attach validate the registered frontend with the shared same-origin policy.
@@ -190,5 +190,5 @@
     if (r.status === 'pinned') { paint('confirmed'); setTimeout(() => { if (active === a) close(); },1200); }
     else close(); // OS cancellation is silent; dispatch isn't success.
   });
-  window.WizHomeScreenApps = Object.freeze({ attach, offer, canOffer: a => pinnable(a), back() { if (!overlay) return false; if (!pending) close(); return true; }, get state() { return { open:!!overlay, appId:active?.id || '', pending }; } });
+  window.WizHomeScreenApps = Object.freeze({ attach, offer, canOffer: a => pinnable(a), back() { if (!overlay) return false; close(); return true; }, get state() { return { open:!!overlay, appId:active?.id || '', pending }; } });
 })();

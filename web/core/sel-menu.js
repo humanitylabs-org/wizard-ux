@@ -169,14 +169,28 @@
 
   function bind() {
     if (bind.done) return; bind.done = true;
+    let selectionPress = null;
     document.addEventListener('pointerdown', e => {
       if (e.target.closest?.('.selmenu')) return;
       down = true;
       if (!own()) return;
       tell(e.target.closest?.(EDIT) ? 2 : 1);
-      if (el && !el.hidden) hide(); // dragging a handle or pressing elsewhere: back once it settles
+      // Include the temporary hidden state while selectionchange settles. Otherwise
+      // the menu can return after an outside tap. Keep handle drags on the block.
+      selectionPress = cur ? { x: e.clientX, y: e.clientY } : null;
+      if (cur) {
+        if (!cur.block?.contains(e.target)) { clear(); selectionPress = null; }
+        else hide();
+      }
     }, true);
-    const up = () => { if (!down) return; down = false; settle(180); };
+    const up = e => {
+      if (!down) return;
+      down = false;
+      // A tap on the selected block is outside the menu too; an actual handle
+      // drag keeps the selection and brings its menu back once it settles.
+      if (selectionPress && e.type === 'pointerup' && Math.hypot(e.clientX - selectionPress.x, e.clientY - selectionPress.y) < DRAG_PX) clear();
+      selectionPress = null; settle(180);
+    };
     document.addEventListener('pointerup', up, true); document.addEventListener('pointercancel', up, true);
     // Android's long-press ends in pointercancel only; touchend still arrives.
     document.addEventListener('touchend', up, true);
