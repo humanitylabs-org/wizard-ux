@@ -96,6 +96,8 @@
         <div id="moons" class="moons"></div>
         <canvas id="orb" class="orb" width="220" height="220" aria-label="Wizard orb. Tap to talk, hold for a command, swipe up for apps, down to hide the bars, sideways for desks." role="button" tabindex="0"></canvas>
         <img id="orbFallback" class="orb-fallback" src="robert-thread-orb.png" alt="" hidden>
+        <!-- Independent of the hidden Listening transcript; actual microphone level, never a canned animation. -->
+        <span id="voiceMeter" class="voice-meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
         <span id="timer" class="timer">0:00</span>
         <span id="dictationStatus" class="dictation-status" role="status" aria-live="polite"></span>
         <span id="holdHint" class="hold-hint">Command</span>
