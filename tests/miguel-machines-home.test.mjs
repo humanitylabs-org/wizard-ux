@@ -81,7 +81,8 @@ test('machines-home: one inline map, the same on every workspace', () => {
   assert.match(src, /\[main, \.\.\.others\]/); assert.match(src, /sort\(\(a, b\) => power\(b\) - power\(a\)\)/, 'Main first, then by power');
   assert.match(src, /qualifies\(m\.id\) \? 'standby' : 'helper'/);
   assert.match(src, /S\.open\.has\('p:' \+ p\.id\)/, 'a person expands to their devices in place');
-  assert.match(src, /data: \{ nick: r\.id \}/, 'every subscription has its nickname field in the AI list');
+  assert.match(src, /data: \{ nick: r\.id, auto: r\.auto \}/, 'every account has its nickname field in the AI list');
+  assert.match(src, /value: r\.nick \|\| r\.auto/, 'the current nickname is the field value, not a faint placeholder');
   assert.doesNotMatch(src, /r\.left \+ '%' \}\), h\('b'/, 'no percentage at rest');
   assert.match(src, /api\.data\.read\.sessions\?\.counts\(\)/); assert.match(src, /api\.data\.read\.sessions\?\.open\(d\.open\)/);
   assert.match(src, /agoS\(st\.age\) \+ ' ago'/);
@@ -95,14 +96,23 @@ test('machines-home: one inline map, the same on every workspace', () => {
 
 test('machines-home: simple at rest, more on tap (one AI gauge, storage size, one details toggle)', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), css = read('web/tweaks/miguel/machines-home/tweak.css');
-  assert.match(src, /cls: nw\('mh-gauge'\)/, 'one AI fuel gauge, not a battery per subscription');
+  assert.match(src, /cls: nw\('mh-gauge'\)/, 'one AI fuel tag, not a battery per subscription');
+  assert.match(src, /cls: 'mh-g-cells'/, 'the tag fills cells from E to F');
   assert.doesNotMatch(src, /mh-batt/, 'batteries are gone');
-  assert.match(src, /textContent = 'E'/); assert.match(src, /text: 'AI'/);
+  assert.match(src, /text: 'E'/); assert.match(src, /text: 'AI'/);
   assert.match(src, /api\.models\?\.default\?\.\(\)/, 'the gauge follows the default model');
-  assert.match(src, /data: \{ resSignin: APP_OF\[g\.kind\] \}/, 'sign in or out opens that app through the shell');
+  assert.match(src, /data: \{ resSignin: app \}/, 'Sign out / Sign in open that app through the shell');
+  assert.match(src, /btn\('Sign out', appOf\(r\.kind\), 'is-out'\)/, 'Sign out next to each account');
+  assert.match(src, /'\+ Sign in to another account'/); assert.match(src, /signable\(\)\.map\(p => btn\(p\.name, p\.app\)\)/, 'one Sign in, then pick the service');
+  assert.doesNotMatch(src, /Sign in or out/);
   assert.match(src, /TOP_UP\[r\.kind\]/, 'prepaid services link to add credit');
   assert.match(src, /repository_bytes/, 'storage shows how much is stored');
   assert.match(src, /cls: 'mh-details', data: \{ toggle: 'bars' \}/, 'one Show details toggle under all machines');
+  assert.match(src, /map\.classList\.toggle\('is-details', S\.bars\)/, 'details fold with a class, no rebuild');
+  assert.match(css, /grid-template-rows: 0fr/); assert.match(css, /transition: grid-template-rows 480ms/, 'details ease open');
+  assert.match(src, /const around = \(main, others\)/, 'Main in the middle, helpers alternate right and left');
+  assert.match(src, /data: \{ machine: m\.id \}/); assert.match(src, /api\.nav\?\.ask\?\./, 'helper actions ask the agent');
+  assert.match(src, /'Disconnected'/); assert.match(src, /cls: 'mh-bub work'/, 'working / ready as bubbles inside Main');
   assert.doesNotMatch(src, /data: \{ toggle: 'bars' \}, 'aria-label': `\$\{m\.name\}/, 'tapping a machine no longer folds the bars');
   assert.doesNotMatch(css, /violet|#7A5CFF/i, 'no violet nodes');
 });
@@ -148,5 +158,17 @@ test('paintHome with unchanged markup leaves a mounted view in place (no detach,
   assert.equal(writes, 1, 'same markup with a mounted view: no rewrite'); assert.equal(node.parentNode, slot); assert.equal(homes, 2);
   f.host.paintHome(el, '<div data-slot="home-main"></div><p></p>');
   assert.equal(writes, 2, 'new markup is written'); assert.equal(node.parentNode, slot, 'and the view moves along');
+  await f.clear();
+});
+
+test('api.nav.ask: trusted only, namespaced home: key, sends through the shell contextDraft', async () => {
+  const f = fixture(); let api;
+  f.host._test.setImporter(async () => ({ default: a => { api = a; return () => {}; } }));
+  await f.host.loadTweaks(['miguel/machines-home'], f.slots, { teamAuthors: ['miguel'] });
+  assert.equal(api.nav.ask('oscarvps-standby', { title: 'HostingerVPS · Make standby', message: 'checks' }, 'Make HostingerVPS my standby device.'), true);
+  assert.deepEqual(f.inbox.replies.at(-1), ['home:oscarvps-standby', 'Make HostingerVPS my standby device.']);
+  assert.equal(api.nav.ask('../x', {}, ''), true); assert.equal(f.inbox.replies.at(-1)[0], 'home:x', 'unsafe characters are dropped');
+  await f.loadTweaks?.(); await f.host.loadTweaks(['miguel/machines-home'], f.slots);
+  assert.throws(() => api.nav.ask('a', {}, ''), /Trusted navigation required|Cannot read/);
   await f.clear();
 });
