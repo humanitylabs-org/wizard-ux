@@ -280,7 +280,8 @@ test('Notifications sits with the agent apps while its inbox lives in Chats', ()
   const K = () => window.WosAppKinds.kinds([app], { notifications: app });
   assert.deepEqual([K().apps.length, K().wiz.length], [1, 0], 'stock: still an app');
   window.WosSkinHost.inboxThreads = true;
-  assert.deepEqual([K().apps.length, K().wiz.map(a => a.id)], [0, ['notifications']], 'inbox in Chats: an agent app');
+  // Normalize the VM-created array into this test's realm before comparing prototypes.
+  assert.deepEqual([K().apps.length, Array.from(K().wiz, a => a.id)], [0, ['notifications']], 'inbox in Chats: an agent app');
   assert.equal(window.WosAppKinds.isSystem(app), true, 'and a system app');
 });
 
