@@ -25,11 +25,12 @@
     wrong: 'Tailscale is on, but this phone isn’t on your Wizard’s network.',
     quiet: 'Tailscale is on, but your Wizard isn’t answering this phone.',
     unsure: 'Tailscale is on. Checking that this phone is on your Wizard’s network…',
-    wake: 'Check your Wizard is on', wakeBody: 'Make sure the computer running your Wizard is on and awake, with Wizard open. If it is, open Tailscale on this phone and turn it off and on again; if it asks you to log in, use your Wizard’s account. This phone connects by itself.',
+    wake: 'Check your Wizard is on', wakeBody: 'Make sure the computer running your Wizard is on and awake, with Wizard open. This phone connects by itself.',
     lead: 'Your Wizard is private. Only your own devices can reach it, through <b>Tailscale</b>, a free app that links them securely.',
     get: 'Get Tailscale', signin: 'Sign in with your Wizard’s account', back: 'Come back here',
     free: 'Free, from Tailscale Inc.', installed: 'Installed.',
     same: 'Use the same Tailscale account as on your computer.', network: 'Your Wizard is on this network:',
+    stuck: 'Open Tailscale and check it’s connected with that account. If this phone was removed from Tailscale, or it looks stuck, turn Tailscale off and on again and log in if it asks.',
     removed: 'This phone is on a different Tailscale network, or it was removed from yours. In Tailscale, switch account or sign in again.',
     vpnIos: 'The first time, iPhone asks to <b>Add VPN Configurations</b>. Tap <b>Allow</b>.',
     vpnAndroid: 'The first time, Android asks to set up a VPN connection. Tap <b>OK</b>.',
@@ -46,7 +47,10 @@
    * verifying it now: its own spinner) | 'now' (the owner's turn) | 'todo'. 1 Get Tailscale (done once it's running,
    * or installed on Android), 2 sign in with the Wizard's account (and allow the VPN), 3 come back / is the Wizard on. */
   function steps({ on, missing = null, installed }) {
-    if (on && missing === false) return ['done', 'done', 'checking']; // the phone is fine; is the Wizard on?
+    // The name resolves but nothing answers: the Wizard's computer is off, or Tailscale on this phone is stale (a phone
+    // removed from Tailscale keeps its old network list until Tailscale reconnects). The phone can't tell which, so
+    // step 2 isn't ticked: it asks to check Tailscale, while step 3 keeps checking for the Wizard.
+    if (on && missing === false) return ['done', 'now', 'checking'];
     if (on && missing === true) return ['done', 'now', 'todo'];       // signed in to another network
     if (on) return ['done', 'checking', 'todo'];                      // checking the phone's network
     if (installed === true) return ['done', 'now', 'todo'];           // installed (Android knows): open it
@@ -72,7 +76,7 @@
       <p class="lead">${T.lead}</p>
       <div class="steps">
         ${step(1, T.get, st[0] === 'done' ? `<p>${T.installed}</p>` : `<p>${T.free}</p>${button}`)}
-        ${step(2, T.signin, chip + (st[1] !== 'done' ? `<p>${android ? T.vpnAndroid : T.vpnIos}</p>` : '')
+        ${step(2, T.signin, chip + (away ? `<p>${T.stuck}</p>` : st[1] !== 'done' ? `<p>${android ? T.vpnAndroid : T.vpnIos}</p>` : '')
           + (on && missing === true ? `<p class="warn">${T.removed}</p>` : '') + (st[1] === 'now' ? button : ''))}
         ${away ? step(3, T.wake, `<p>${T.wakeBody}</p>`) : step(3, T.back, `<p>${T.auto}</p>`)}
       </div>

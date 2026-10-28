@@ -31,8 +31,9 @@ public class TailscaleGuideTest {
         assertArrayEquals(new Step[]{ Step.DONE, Step.CHECKING, Step.TODO }, TailscaleGuide.steps(true, null, true));
         // On, and the Wizard's name doesn't exist from here: another account, or this phone was removed.
         assertArrayEquals(new Step[]{ Step.DONE, Step.NOW, Step.TODO }, TailscaleGuide.steps(true, true, true));
-        // On, the name exists, nothing answers: the Wizard's computer is off or asleep. Step 3 spins.
-        assertArrayEquals(new Step[]{ Step.DONE, Step.DONE, Step.CHECKING }, TailscaleGuide.steps(true, false, true));
+        // On, the name exists, nothing answers: the Wizard's computer is off, or Tailscale on this phone is stale.
+        // Step 2 asks to check Tailscale (not ticked), step 3 keeps checking for the Wizard.
+        assertArrayEquals(new Step[]{ Step.DONE, Step.NOW, Step.CHECKING }, TailscaleGuide.steps(true, false, true));
         for (boolean on : new boolean[]{ false, true }) for (Boolean missing : new Boolean[]{ null, true, false }) for (boolean inst : new boolean[]{ false, true }) {
             Step[] s = TailscaleGuide.steps(on, missing, inst);
             assertEquals(3, s.length);
@@ -62,7 +63,8 @@ public class TailscaleGuideTest {
         assertTrue(TailscaleGuide.hasButton(2, false, null, true));
         assertTrue(TailscaleGuide.hasButton(2, true, true, true));
         assertFalse(TailscaleGuide.hasButton(1, true, true, true));
-        for (int n = 1; n <= 3; n++) assertFalse("Wizard off: nothing to open on the phone", TailscaleGuide.hasButton(n, true, false, true));
+        assertTrue("Wizard not answering: Open Tailscale on step 2", TailscaleGuide.hasButton(2, true, false, true));
+        assertFalse(TailscaleGuide.hasButton(3, true, false, true));
         for (int n = 1; n <= 3; n++) assertFalse("checking: no button", TailscaleGuide.hasButton(n, true, null, true));
     }
 
@@ -76,6 +78,8 @@ public class TailscaleGuideTest {
         assertTrue(TailscaleGuide.vpnTip(false, null, true));
         assertTrue(TailscaleGuide.vpnTip(true, null, true));
         assertFalse(TailscaleGuide.vpnTip(true, false, true));
+        assertTrue(TailscaleGuide.stuckTip(true, false));
+        assertFalse(TailscaleGuide.stuckTip(true, true));
     }
 
     @Test

@@ -148,6 +148,7 @@ final class TailscaleGuideView {
                 col.addView(chip, cl);
             }
             if (n == 2 && TailscaleGuide.vpnTip(on, missing, installed)) col.addView(html(TailscaleGuide.VPN, 14.5f, p.text2), lp(dp(8)));
+            if (n == 2 && TailscaleGuide.stuckTip(on, missing)) col.addView(html(TailscaleGuide.STUCK, 14.5f, p.text2), lp(dp(8)));
             if (n == 2 && TailscaleGuide.removed(on, missing)) {
                 TextView warn = text(TailscaleGuide.REMOVED, 14.5f, p.text, false);
                 warn.setPadding(dp(10), 0, 0, 0);

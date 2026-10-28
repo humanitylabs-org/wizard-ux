@@ -32,15 +32,14 @@ test('the step needed now follows what the phone shows; the button sits on that 
   assert.match(wrong, /Open Tailscale<\/button>/);
   // Tailscale on, the name exists, nothing answers: the Wizard's computer is off or asleep. The phone is fine.
   const quiet = G.html({ host: 'wizard.tail1234.ts.net', on: true, missing: false });
-  assert.equal(steps(quiet), 'done,done,checking');
-  assert.doesNotMatch(quiet, /Add VPN Configurations/, 'the VPN tip goes once step 2 is done');
+  assert.equal(steps(quiet), 'done,now,checking', 'can’t tell a Wizard that is off from stale Tailscale on the phone: no tick on step 2');
+  assert.match(quiet, /data-gstep="2"[^]*turn Tailscale off and on again and log in if it asks[^]*Open Tailscale<\/button>/);
+  assert.doesNotMatch(quiet, /Add VPN Configurations/, 'no first-time VPN tip: Tailscale is already on');
   assert.match(quiet, /Tailscale is on, but your Wizard isn’t answering this phone\./);
-  // A phone just removed from Tailscale can keep its old network list and still find the Wizard's name: the step
-  // that waits for the Wizard also says how to make Tailscale on the phone reconnect.
-  assert.match(quiet, /turn it off and on again; if it asks you to log in, use your Wizard’s account/);
+
   assert.match(quiet, /Check your Wizard is on/);
   assert.match(quiet, /<h1>Your Wizard isn’t answering<\/h1>/);
-  assert.doesNotMatch(quiet, /removed from yours|data-guide="tailscale"/, 'nothing to fix on the phone');
+  assert.doesNotMatch(quiet, /removed from yours/, 'doesn’t claim the phone is on another network');
   const unsure = G.html({ host: 'wizard.tail1234.ts.net', on: true });
   assert.equal(steps(unsure), 'done,checking,todo', 'step 2 spins; step 3 waits');
   assert.match(unsure, /Checking that this phone is on your Wizard’s network/);
@@ -75,7 +74,7 @@ test('iPhone and Android say the same words', () => {
   const java = read('android/app/src/main/java/ai/wizards/os/TailscaleGuide.java');
   const constant = name => { const m = java.match(new RegExp(`\\b${name} = "([^"]*)"`)); assert.ok(m, name); return m[1]; };
   const pairs = { eyebrow: 'EYEBROW', title: 'TITLE', titleAway: 'TITLE_AWAY', titleChecking: 'TITLE_CHECKING', off: 'OFF', wrong: 'WRONG', lead: 'LEAD', get: 'GET', signin: 'SIGN_IN',
-    back: 'BACK', quiet: 'QUIET', unsure: 'UNSURE', wake: 'WAKE', wakeBody: 'WAKE_BODY', free: 'FREE', installed: 'INSTALLED', same: 'SAME', network: 'NETWORK', removed: 'REMOVED',
+    back: 'BACK', quiet: 'QUIET', unsure: 'UNSURE', wake: 'WAKE', wakeBody: 'WAKE_BODY', stuck: 'STUCK', free: 'FREE', installed: 'INSTALLED', same: 'SAME', network: 'NETWORK', removed: 'REMOVED',
     vpnAndroid: 'VPN', auto: 'AUTO', checking: 'CHECKING', about: 'ABOUT', about1: 'ABOUT1', about2: 'ABOUT2', about3: 'ABOUT3', other: 'OTHER' };
   for (const [js, name] of Object.entries(pairs)) assert.equal(constant(name), G.text[js], name);
 });

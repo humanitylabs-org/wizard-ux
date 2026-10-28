@@ -26,7 +26,8 @@ final class TailscaleGuide {
     static final String QUIET = "Tailscale is on, but your Wizard isn’t answering this phone.";
     static final String UNSURE = "Tailscale is on. Checking that this phone is on your Wizard’s network…";
     static final String WAKE = "Check your Wizard is on";
-    static final String WAKE_BODY = "Make sure the computer running your Wizard is on and awake, with Wizard open. If it is, open Tailscale on this phone and turn it off and on again; if it asks you to log in, use your Wizard’s account. This phone connects by itself.";
+    static final String STUCK = "Open Tailscale and check it’s connected with that account. If this phone was removed from Tailscale, or it looks stuck, turn Tailscale off and on again and log in if it asks.";
+    static final String WAKE_BODY = "Make sure the computer running your Wizard is on and awake, with Wizard open. This phone connects by itself.";
     static final String LEAD = "Your Wizard is private. Only your own devices can reach it, through <b>Tailscale</b>, a free app that links them securely.";
     static final String GET = "Get Tailscale", SIGN_IN = "Sign in with your Wizard’s account", BACK = "Come back here";
     static final String FREE = "Free, from Tailscale Inc.", INSTALLED = "Installed.";
@@ -65,7 +66,9 @@ final class TailscaleGuide {
      * when not known yet.
      */
     static Step[] steps(boolean on, Boolean missing, boolean installed) {
-        if (on && Boolean.FALSE.equals(missing)) return new Step[]{ Step.DONE, Step.DONE, Step.CHECKING };
+        // Name resolves, nothing answers: the Wizard's computer is off, or Tailscale on this phone is stale (removed phones
+        // keep their old network list until Tailscale reconnects). The phone can't tell which: check both.
+        if (on && Boolean.FALSE.equals(missing)) return new Step[]{ Step.DONE, Step.NOW, Step.CHECKING };
         if (on && Boolean.TRUE.equals(missing)) return new Step[]{ Step.DONE, Step.NOW, Step.TODO };
         if (on) return new Step[]{ Step.DONE, Step.CHECKING, Step.TODO };
         if (installed) return new Step[]{ Step.DONE, Step.NOW, Step.TODO };
@@ -112,7 +115,10 @@ final class TailscaleGuide {
     }
 
     /** Step 2's first-time VPN tip, until step 2 is done. */
-    static boolean vpnTip(boolean on, Boolean missing, boolean installed) { return steps(on, missing, installed)[1] != Step.DONE; }
+    static boolean vpnTip(boolean on, Boolean missing, boolean installed) { return steps(on, missing, installed)[1] != Step.DONE && !away(on, missing); }
+
+    /** Step 2's "check Tailscale is really connected" line, while the Wizard isn't answering. */
+    static boolean stuckTip(boolean on, Boolean missing) { return away(on, missing); }
 
     /** The warning under step 2: only when this phone isn't on the Wizard's network. */
     static boolean removed(boolean on, Boolean missing) { return on && Boolean.TRUE.equals(missing); }
