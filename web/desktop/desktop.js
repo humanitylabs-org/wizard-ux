@@ -47,6 +47,15 @@
   }
   window.WosFeatures.pruneWindows(W);
   for (const [id, w] of Object.entries(W)) if (w?.app === 'settings') delete W[id]; // Settings is a window, never restored
+  /* Heads-up chat (HUD): one Chats window can float above every desk and Home, and fold into the orb. It lives
+   * outside the desks (never tiled, never synced to other devices). r/b anchor its bottom-right corner in the stage. */
+  const HUD_DEF = { r: 24, b: 24, w: 420, h: 600 };
+  const HUD_ORB = 64, HUD_GAP = 8, HUD_MIN = [300, 260], HUD_BUSY = new Set(['submitting', 'queued', 'running', 'stopping']);
+  let hudMode = '';
+  const hudLayerEl = () => document.getElementById('hudLayer') || document.getElementById('stage').appendChild(Object.assign(document.createElement('div'), { id: 'hudLayer', className: 'hud-layer' }));
+  let hud = store.get('hud', null);
+  if (!hud || typeof hud !== 'object' || typeof hud.id !== 'string' || W[hud.id]?.app !== 'chats' || ws.some(d => Array.isArray(d?.wins) && d.wins.includes(hud.id))) hud = null;
+  else hud = { ...HUD_DEF, ...hud, open: hud.open !== false };
   const oldActive = ws[cur];
   ws = C.migrateChatsFocus(W, ws); cur = Math.max(0, ws.indexOf(oldActive));
   const placed = new Set(), deskIds = new Set();
@@ -65,10 +74,10 @@
     const active = ws[cur]; ws = ws.filter(d => d.wins.length || d === active); cur = ws.indexOf(active);
   }
   store.set('layoutVersion', 2);
-  Object.keys(W).forEach(id => { if (!ws.some(d => d.wins.includes(id))) delete W[id]; });
+  Object.keys(W).forEach(id => { if (id !== hud?.id && !ws.some(d => d.wins.includes(id))) delete W[id]; });
   if (!(cur >= 0 && cur < ws.length)) cur = 0;
   function uid() { return 'w' + Math.random().toString(36).slice(2, 9); }
-  const save = () => { store.set('wins', W); store.set('ws', ws); store.set('cur', cur); window.WosWorkspaceSync?.current?.changed(); };
+  const save = () => { store.set('wins', W); store.set('ws', ws); store.set('cur', cur); store.set('hud', hud); window.WosWorkspaceSync?.current?.changed(); };
   const wsOf = id => ws.findIndex(d => d.wins.includes(id));
   let homeOpen = store.get('homeOpen', false) === true;
   const focused = () => homeOpen ? null : W[ws[cur].focus] || null;
@@ -84,7 +93,7 @@
     toast: (...a) => toast(...a),
     title: w => winTitle(w),
     viewContext: (id, how) => viewContext(id, how),
-    visible: () => homeOpen ? [] : ws[cur].wins,
+    visible: () => [...(homeOpen ? [] : ws[cur].wins), ...(hud?.open ? [hud.id] : [])],
     front: () => homeOpen ? null : ws[cur].focus,
     editUnsent: it => editUnsent(it),
     recoverUnsent: id => { openSettings('unsent'); window.WosSettings.focusUnsent(id); },
@@ -372,14 +381,22 @@
     if (!el) { el = document.createElement('div'); el.className = 'wsp'; el.dataset.desk = d.id; stage.appendChild(el); }
     el.dataset.ws = i; return el;
   }
-  function winHtml(w) {
+  function winHtml(w) { return `${barHtml(w)}
+      <div class="wbody">${bodyHtml(w)}</div>${hud?.id === w.id ? '<div class="hud-grip" data-hudgrip title="Drag to resize" aria-hidden="true"></div>' : ''}`; }
+  const HUD_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="15.5" cy="14.5" r="2.6" fill="currentColor"/></svg>';
+  const DOCK_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M12 8v7m-3-3 3 3 3-3"/></svg>';
+  function barHtml(w) {
     const a = appOf(w);
+    if (hud?.id === w.id) return `<div class="wbar" data-drag title="Drag to move">${window.WosAgents.titlebar(w.agent || '', 'ic', 't')}
+      <button data-wact="hud-min" title="Fold into the orb (Esc)" aria-label="Fold into the orb">–</button>
+      <button data-wact="hud-dock" title="Put back on this desk" aria-label="Put back on this desk">${DOCK_ICON}</button>
+      <button data-wact="close" title="Close" aria-label="Close window">✕</button></div>`;
     return `<div class="wbar" data-drag>${w.app === 'chats' ? window.WosAgents.titlebar(w.agent || '', 'ic', 't') : `${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>`}
       ${window.WosBoundView.badge(w)}${w.app === 'frame' ? window.WosOwnViews?.marker(a) || '' : ''}${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
       ${reloadable(w) ? `<button data-wact="reload" title="Refresh (${MOD}R)" aria-label="Refresh window">↻</button>` : ''}
+      ${w.app === 'chats' ? `<button data-wact="hud" title="Float over every desk" aria-label="Float over every desk">${HUD_ICON}</button>` : ''}
       <button data-wact="mono" title="Full screen (${MOD}F)" aria-label="Full screen">⤢</button>
-      <button data-wact="close" title="Close app (${MOD}W)" aria-label="Close window">✕</button></div>
-      <div class="wbody">${bodyHtml(w)}</div>`;
+      <button data-wact="close" title="Close app (${MOD}W)" aria-label="Close window">✕</button></div>`;
   }
   function bodyHtml(w) {
     if (w.app === 'feature') return '<div class="shared-feature"></div>';
@@ -546,6 +563,7 @@
       else if (home) home.remove();
     }
     $$('.wsp', stage).forEach(el => { if (!ws.some(d => d.id === el.dataset.desk)) el.remove(); });
+    hudMount();
     const home = $('#desktopHome');
     home.hidden = !homeOpen;
     if (homeOpen) paintHome(home, homeHtml(null));
@@ -606,6 +624,139 @@
       if (r) Object.assign(el.style, { left: r[0] + 'px', top: r[1] + 'px', width: r[2] + 'px', height: r[3] + 'px' });
     }
   }
+  /* ---- heads-up chat (HUD): a Chats window floating over every desk and Home; folds into the orb ---- */
+  function clampN(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function hudMount() {
+    const hudLayer = hudLayerEl();
+    $$('.win.hud', stage).forEach(el => { if (el.dataset.win !== hud?.id) el.classList.remove('hud'); });
+    if (hudLayer.nextSibling) stage.appendChild(hudLayer); // above every desk and Home
+    if (!hud || !W[hud.id]) { if (hud) hud = null; hudPaint(); return; }
+    let el = winEl(hud.id);
+    if (!el) el = mountWin(W[hud.id], hudLayer); else if (el.parentNode !== hudLayer) hudLayer.appendChild(el);
+    el.classList.add('hud'); el.classList.remove('gone', 'full', 'focus', 'drag');
+    hudPaint();
+  }
+  // Re-draw a window's title bar for its place (desk or HUD); the body, thread and draft stay mounted.
+  function hudBar(id) {
+    const el = winEl(id), w = W[id]; if (!el || !w) return;
+    el.querySelector(':scope > .wbar')?.remove(); el.insertAdjacentHTML('afterbegin', barHtml(w));
+    el.querySelector(':scope > .hud-grip')?.remove();
+    if (hud?.id === id) el.insertAdjacentHTML('beforeend', '<div class="hud-grip" data-hudgrip title="Drag to resize" aria-hidden="true"></div>');
+    window.WosAgents.refreshTitlebars(); syncChatsPane(id);
+  }
+  function hudPaint() {
+    const hudLayer = hudLayerEl(), hudOrb = $('#hudOrb');
+    hudLayer.hidden = !hud;
+    if (hudOrb) hudOrb.hidden = !hud || hud.open;
+    if (!hud) return;
+    const SW = stage.clientWidth, SH = stage.clientHeight, el = winEl(hud.id);
+    const w = Math.round(clampN(hud.w, HUD_MIN[0], Math.max(HUD_MIN[0], SW - 2 * HUD_GAP))), h = Math.round(clampN(hud.h, HUD_MIN[1], Math.max(HUD_MIN[1], SH - 2 * HUD_GAP)));
+    if (el) {
+      el.hidden = !hud.open;
+      const r = clampN(hud.r, HUD_GAP, Math.max(HUD_GAP, SW - w - HUD_GAP)), b = clampN(hud.b, HUD_GAP, Math.max(HUD_GAP, SH - h - HUD_GAP));
+      Object.assign(el.style, { left: (SW - r - w) + 'px', top: (SH - b - h) + 'px', width: w + 'px', height: h + 'px' });
+    }
+    if (hudOrb) {
+      const r = clampN(hud.r, HUD_GAP, Math.max(HUD_GAP, SW - HUD_ORB - HUD_GAP)), b = clampN(hud.b, HUD_GAP, Math.max(HUD_GAP, SH - HUD_ORB - HUD_GAP));
+      Object.assign(hudOrb.style, { left: (SW - r - HUD_ORB) + 'px', top: (SH - b - HUD_ORB) + 'px' });
+      const t = W[hud.id]?.thread, s = t && t !== '__new__' ? LIVE?.session(t) : null;
+      const busy = !!s && HUD_BUSY.has(s.status), fresh = !!s && !busy && !!LIVE?.isNew?.(s);
+      const mode = busy ? 'think' : fresh ? 'done' : 'idle';
+      if (mode !== hudMode) { hudMode = mode; window.Orb?.setMode?.(mode); }
+      hudOrb.dataset.state = mode;
+      const label = s?.title ? `Open the floating chat: ${s.title}${busy ? ' (working)' : fresh ? ' (new reply)' : ''}` : 'Open the floating chat';
+      hudOrb.title = label + ' · drag to move'; hudOrb.setAttribute('aria-label', label);
+    }
+  }
+  function hudFocus() {
+    if (!hud?.open) return;
+    const el = winEl(hud.id); if (!el) return;
+    const ta = W[hud.id].thread && el.querySelector('.pane-main textarea');
+    (ta && ta.getClientRects().length ? ta : el).focus({ preventScroll: true });
+  }
+  function hudOn(id) {
+    const w = W[id]; if (w?.app !== 'chats') return false;
+    if (hud?.id === id) return true;
+    if (hud) hudDock({ focus: false });
+    const t = wsOf(id); if (t < 0) return false;
+    const d = ws[t], i = d.wins.indexOf(id);
+    d.wins.splice(i, 1);
+    if (d.focus === id) d.focus = d.wins[Math.min(i, d.wins.length - 1)] || null;
+    if (d.wins.length < 2) d.mono = false;
+    hud = { ...HUD_DEF, ...(store.get('hudPlace', null) || {}), id, open: true };
+    save(); render(); hudBar(id);
+    CHATS.markVisibleThreadsSeen();
+    setTimeout(hudFocus, 30);
+    if (!store.get('hudHint', false)) { store.set('hudHint', true); toast('◉', 'Floats over every desk · – folds it into the orb', 2600); }
+    log('hud:on');
+    return true;
+  }
+  function hudKeepPlace() { if (hud) store.set('hudPlace', { r: hud.r, b: hud.b, w: hud.w, h: hud.h }); }
+  // Put the HUD window back as a normal window on the desk in front (Home: the last desk).
+  function hudDock({ focus = true } = {}) {
+    if (!hud) return false;
+    const id = hud.id; hudKeepPlace(); hud = null;
+    if (!W[id]) { save(); render(); return false; }
+    if (homeOpen) { homeOpen = false; store.set('homeOpen', false); }
+    const d = ws[cur], at = d.focus ? d.wins.indexOf(d.focus) + 1 : d.wins.length;
+    d.wins.splice(at, 0, id); d.focus = id; d.mono = false;
+    const el = winEl(id); if (el) el.hidden = false;
+    save(); render(); hudBar(id);
+    if (focus) { paintFocus(); paintBar(); setTimeout(() => focusInside(id), 30); }
+    log('hud:dock');
+    return true;
+  }
+  function hudClose() {
+    if (!hud) return false;
+    const id = hud.id; hudKeepPlace(); hud = null;
+    if (W[id]) { threadShown(id, null); CHATS.saveDraft(id); delete W[id]; CHATS.forget(id); }
+    save(); render(); log('hud:close');
+    return true;
+  }
+  function hudFold(fold) {
+    if (!hud) return false;
+    const inside = winEl(hud.id)?.contains(document.activeElement);
+    if (fold) CHATS.saveDraft(hud.id);
+    hud.open = !fold; save(); hudPaint();
+    if (fold) { if (inside) { const f = focused(); if (f) focusInside(f.id); else document.activeElement?.blur?.(); } }
+    else { CHATS.markVisibleThreadsSeen(); if (W[hud.id]?.thread) CHATS.loadThread(W[hud.id]); setTimeout(hudFocus, 30); }
+    log(fold ? 'hud:fold' : 'hud:open');
+    return true;
+  }
+  const hudHasFocus = () => !!hud?.open && !!winEl(hud.id)?.contains(document.activeElement);
+  // Move by the title bar or the orb; resize by the top-left grip (the bottom-right corner stays put).
+  let hudDrag = null;
+  stage.addEventListener('pointerdown', e => {
+    if (!hud || e.button !== 0) return;
+    const grip = e.target.closest('[data-hudgrip]'), orb = e.target.closest('#hudOrb');
+    const bar = !grip && !orb && e.target.closest('.win.hud > .wbar');
+    if (!grip && !orb && (!bar || e.target.closest('[data-wact]'))) return;
+    e.preventDefault(); e.stopPropagation();
+    hudDrag = { size: !!grip, orb: !!orb, x: e.clientX, y: e.clientY, r: hud.r, b: hud.b, w: hud.w, h: hud.h, on: false };
+  }, true);
+  addEventListener('pointermove', e => {
+    if (!hudDrag || !hud) return;
+    const dx = e.clientX - hudDrag.x, dy = e.clientY - hudDrag.y;
+    if (!hudDrag.on && Math.hypot(dx, dy) < 5) return;
+    if (!hudDrag.on) { hudDrag.on = true; hudLayerEl().classList.add('moving'); }
+    if (hudDrag.size) { hud.w = Math.max(HUD_MIN[0], hudDrag.w - dx); hud.h = Math.max(HUD_MIN[1], hudDrag.h - dy); }
+    else { hud.r = hudDrag.r - dx; hud.b = hudDrag.b - dy; }
+    hudPaint();
+  });
+  addEventListener('pointerup', () => {
+    if (!hudDrag) return; const d = hudDrag; hudDrag = null; hudLayerEl().classList.remove('moving');
+    if (!hud) return;
+    if (d.on) {
+      const SW = stage.clientWidth, SH = stage.clientHeight, sz = hud.open ? [Math.min(hud.w, SW - 2 * HUD_GAP), Math.min(hud.h, SH - 2 * HUD_GAP)] : [HUD_ORB, HUD_ORB];
+      hud.w = Math.round(clampN(hud.w, HUD_MIN[0], Math.max(HUD_MIN[0], SW - 2 * HUD_GAP))); hud.h = Math.round(clampN(hud.h, HUD_MIN[1], Math.max(HUD_MIN[1], SH - 2 * HUD_GAP)));
+      hud.r = Math.round(clampN(hud.r, HUD_GAP, Math.max(HUD_GAP, SW - sz[0] - HUD_GAP))); hud.b = Math.round(clampN(hud.b, HUD_GAP, Math.max(HUD_GAP, SH - sz[1] - HUD_GAP)));
+      save(); hudPaint(); return;
+    }
+    if (d.orb) hudFold(false);
+  });
+  // Keyboard on the orb (Enter / Space) opens it too; a mouse click already did on pointerup.
+  $('#hudOrb')?.addEventListener('click', e => { if (e.detail === 0) hudFold(false); });
+  addEventListener('resize', () => hudPaint());
   function paintFocus() {
     const d = ws[cur];
     $$('.win', stage).forEach(el => el.classList.toggle('focus', el.dataset.win === d.focus));
@@ -871,6 +1022,10 @@
     const el = e.target.closest('.win'); if (!el) return;
     const id = el.dataset.win, w = W[id];
     const act = e.target.closest('[data-wact]')?.dataset.wact;
+    if (act === 'hud') return hudOn(id);
+    if (act === 'hud-min') return hudFold(true);
+    if (act === 'hud-dock') return hudDock();
+    if (act === 'close' && hud?.id === id) return hudClose();
     if (act === 'close') return closeWin(id);
     if (act === 'reload') return reloadWin(id);
     if (act === 'mono') return toggleMono();
@@ -887,7 +1042,7 @@
       const cid = e.target.closest('[data-chats]')?.dataset.chats; if (cid && CHATS.click(e, cid)) { syncChatsPane(id); return; }
     }
   });
-  stage.addEventListener('dblclick', e => { if (e.target.closest('.wbar') && !e.target.closest('[data-wact]')) toggleMono(); });
+  stage.addEventListener('dblclick', e => { if (e.target.closest('.wbar') && !e.target.closest('[data-wact]') && !e.target.closest('.win.hud')) toggleMono(); });
   CHATS.bind(stage);
   // List pane search lives on the ::list window; keep thread selection painted after it re-renders.
   stage.addEventListener('input', e => { if (e.target.matches('[data-chsearch]')) { const id = e.target.closest('.win')?.dataset.win; if (id) syncChatsPane(id); } });
@@ -1634,6 +1789,8 @@
     if (window.WosSkinFrame?.back()) return 'skin-controls';
     // The first-message guide: once nothing sits above it, Esc/Back dismisses it (= Skip tour) before any navigation.
     if (window.WosTour?.desk?.active) { window.WosTour.desk.finish('skip'); return 'tour'; }
+    // The heads-up chat folds into its orb first when the keyboard is in it.
+    if (hudHasFocus()) { hudFold(true); return 'hud'; }
     // Leave fullscreen before navigating the app underneath; preserve its thread and draft.
     if (homeOpen) return '';
     if (focused() && CHATS.isHosted(focused().id)) return CHATS.threadBack(focused());
@@ -2037,8 +2194,9 @@
     }
     const d = ws[cur]; if (!d.wins.length) { const h = wsEl(cur).querySelector('.home'); if (h) paintHome(h, homeHtml(cur)); }
     if (homeOpen) paintHome($('#desktopHome'), homeHtml(null));
+    hudPaint();
   });
-  OUTBOX?.onChange(() => { if (homeOpen) paintHome($('#desktopHome'), homeHtml(null)); else if (!ws[cur].wins.length) { const h = wsEl(cur).querySelector('.home'); if (h) paintHome(h, homeHtml(cur)); } for (const id of ws[cur].wins) { const w = W[id]; if ((w?.app === 'chats' || CHATS.isHosted(id)) && w.thread) { const el = stage.querySelector(`[data-chats="${id}"]`); if (el) CHATS.renderThread(w, el); } } });
+  OUTBOX?.onChange(() => { if (homeOpen) paintHome($('#desktopHome'), homeHtml(null)); else if (!ws[cur].wins.length) { const h = wsEl(cur).querySelector('.home'); if (h) paintHome(h, homeHtml(cur)); } for (const id of [...ws[cur].wins, ...(hud?.open ? [hud.id] : [])]) { const w = W[id]; if ((w?.app === 'chats' || CHATS.isHosted(id)) && w.thread) { const el = stage.querySelector(`[data-chats="${id}"]`); if (el) CHATS.renderThread(w, el); } } });
   OUTBOX?.onSent((it, res) => {
     if (it.kind === 'new' && LIVE && !LIVE.session(it.sessionId)) {
       LIVE.sessions.unshift({ id: it.sessionId, runtime: 'direct', title: (it.text || 'Voice note').slice(0, 60), status: 'running', runId: res.runId, updatedAt: new Date().toISOString(), lastUserAt: new Date().toISOString(), preview: it.text, source: 'wizard-mobile' });
@@ -2050,7 +2208,7 @@
     for (const id of Object.keys(W)) if ((W[id].app === 'chats' || CHATS.isHosted(id)) && W[id].thread === it.sessionId) setTimeout(() => W[id] && CHATS.loadThread(W[id], true), 1500);
   });
   // Open threads poll a little faster while Archimedes works.
-  setInterval(() => { if (document.hidden) return; for (const id of ws[cur].wins) { const w = W[id]; if ((w?.app === 'chats' || CHATS.isHosted(id)) && w.thread && w.thread !== '__new__') CHATS.loadThread(w); } }, 4000);
+  setInterval(() => { if (document.hidden) return; for (const id of [...ws[cur].wins, ...(hud?.open ? [hud.id] : [])]) { const w = W[id]; if ((w?.app === 'chats' || CHATS.isHosted(id)) && w.thread && w.thread !== '__new__') CHATS.loadThread(w); } }, 4000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { LIVE?.refresh(); CHATS.markVisibleThreadsSeen(); } });
 
   /* ---------------- toast ---------------- */
@@ -2192,6 +2350,7 @@
     openFiles, openUsage, recordReply, openSearch, localCommand, commandVoice, dictate, toast,
     pauseVoice: () => VOICE.state === 'paused' ? VOICE.resume() : VOICE.pause(),
     openSettings, closeSettings, stepThread, setListW, get listW() { return listW(); },
+    get hud() { return hud ? { ...hud } : null; }, hudOn, hudDock, hudFold, hudClose,
     get voice() { return VOICE.state; }, get log() { return window.__wuxLog || []; },
   };
   /* Skin packages (core/skin-host.js) on desktop: the same narrow adapter the phone shell hands over, so a skin
