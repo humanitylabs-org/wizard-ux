@@ -371,7 +371,12 @@
     } catch (e) { /* Older/offline service: retain this device's cached choice, never reset it. */ }
   };
   pullPrefs(); setInterval(pullPrefs, 30000);
-  try { addEventListener('focus', pullPrefs); } catch (e) {}
+  // A phone coming back to the foreground fires visibilitychange/pageshow, rarely focus: pull then too, so pins and
+  // other shared choices made on another device show at once instead of up to 30s later.
+  try {
+    addEventListener('focus', pullPrefs); addEventListener('pageshow', pullPrefs); addEventListener('online', pullPrefs);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pullPrefs(); });
+  } catch (e) {}
   const sectionTime = s => Math.max(...[s.restoredAt, s.assignedAt, s.previewAt, s.requestAt, s.activityAt, s.lastUserAt, s.updatedAt].map(v => Date.parse(v ?? '')).filter(isFinite));
   // Ready has two orders (James, 10 Oct 2026: "Newest … the newest appears at the top … another option, priority"):
   //   Newest   = approvals pinned, then pure recency, status labels ignored (groupWork's default).
