@@ -78,6 +78,8 @@ test('Stop during server transcription withdraws the voice send: no run is creat
   assert.equal(runs(f), 0, 'no run was admitted');
   assert.equal(page.api.canRetry(kept), false, 'never retried automatically');
   assert.equal(page.api.forThread('wizard_t').length, 0, 'the withdrawn send leaves the thread');
+  assert.equal(page.api.recordings().length, 0, 'no recovery card pops over the composer after a deliberate Stop');
+  assert.equal(page.api.unsent().length, 1, 'the recording stays listed under Unsent');
 });
 
 test('Stop answers at once while a long voice upload is still running, and the upload never becomes a run', async t => {

@@ -675,7 +675,8 @@
       } catch (e) { it.error = String(e.message || e); }
       it.state = 'held'; await put(it); return it;
     },
-    recordings() { return [...items.values()].filter(it => it.audio && it.state !== 'capturing' && (it.kind === 'dictation' || it.kind === 'capture' || it.storageError || ['empty', 'held', 'failed', 'unconfirmed'].includes(it.state))); },
+    // A voice send the owner stopped on purpose stays under Unsent, but never pops a recovery card over the composer.
+    recordings() { return [...items.values()].filter(it => it.audio && it.state !== 'capturing' && !it.cancelled && (it.kind === 'dictation' || it.kind === 'capture' || it.storageError || ['empty', 'held', 'failed', 'unconfirmed'].includes(it.state))); },
 
     // Stage original audio before the phone's pre-send transcription/router, with its sealed route.
     async stage(o) {
