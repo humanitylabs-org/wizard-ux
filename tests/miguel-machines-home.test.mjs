@@ -112,7 +112,14 @@ test('machines-home: simple at rest, more on tap (one AI gauge, storage size, on
   assert.match(css, /grid-template-rows: 0fr/); assert.match(css, /transition: grid-template-rows 480ms/, 'details ease open');
   assert.match(src, /const around = \(main, others\)/, 'Main in the middle, helpers alternate right and left');
   assert.match(src, /data: \{ machine: m\.id \}/); assert.match(src, /api\.nav\?\.ask\?\./, 'helper actions ask the agent');
-  assert.match(src, /'Disconnected'/); assert.match(src, /cls: 'mh-bub work'/, 'working / ready as bubbles inside Main');
+  assert.match(src, /'Disconnected'/); assert.match(src, /dots\(x\.working, 'work'\)/, 'a dot per chat inside Main, no numbers');
+  assert.match(src, /cls: 'mh-act-why'/, 'each blocked action says why');
+  assert.match(src, /api\.inbox\?\.watch/, 'a bell with the unread count');
+  assert.match(src, /bars: api\.storage\.get\('details'\) !== 'off'/, 'details shown by default');
+  assert.doesNotMatch(src, /'Hide details'|'Show details'/, 'chevron only, no words');
+  assert.match(src, /flip\('signin'\); renderAIList\(\)/, 'Sign in opens the service picker even while the button has focus');
+  assert.doesNotMatch(src, /Cloudflare app connected/);
+  assert.doesNotMatch(css, /mh-breathe/, 'Main stays still so the working dots read');
   assert.doesNotMatch(src, /data: \{ toggle: 'bars' \}, 'aria-label': `\$\{m\.name\}/, 'tapping a machine no longer folds the bars');
   assert.doesNotMatch(css, /violet|#7A5CFF/i, 'no violet nodes');
 });
