@@ -62,7 +62,9 @@ test('the iPhone connect screen loads the guide and connects by itself once the 
   assert.match(page, /<section class="card" id="guide"[^>]*hidden><\/section>/);
   assert.match(page, /call\('check', \{ address: g\.address \}\)/);
   assert.match(page, /e\.code === 'offline' && G\.applies/, 'only a Wizard that never answered gets the guide');
-  assert.match(page, /if \(r && r\.offline\) paintGuide\(on, !!r\.missing\)/, 'a no-such-name answer tells another network from a Wizard that is off');
+  assert.match(page, /if \(r && r\.offline && on && \(await tailscaleOn\(\)\)\)/, 'only answers found with Tailscale on count');
+  assert.match(page, /if \(g\.on !== undefined && on !== g\.on\) \{ g\.missing = null; g\.notFound = 0; \}/, 'a reason found while Tailscale was off does not carry over');
+  assert.match(page, /else if \(g\.notFound >= 2\) paintGuide\(on, true\)/, '"not on your network" needs two in a row');
   const swift = read('ios/native/App/App/WizardViewController.swift');
   for (const method of ['tailscale', 'check', 'openTailscale']) assert.match(swift, new RegExp(`CAPPluginMethod\\(name: "${method}"`));
   assert.match(swift, /apps\.apple\.com\/app\/tailscale\/id1470499037/);
