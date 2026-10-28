@@ -76,7 +76,7 @@
     const working = WORKING.has(status) || status === 'waiting_for_approval';
     const latestText = clean(text(latest?.content ?? latest?.text));
     const userText = clean(text(lastUser?.content ?? lastUser?.text) || text(item.wizard_request_preview));
-    const preview = working ? (userText || latestText) : (latestText || userText || clean(text(item.preview)));
+    const preview = working ? (item.wizard_helper_status ? (latestText || clean(text(item.preview)) || userText) : (userText || latestText)) : (latestText || userText || clean(text(item.preview)));
     const latestAt = optIso(latest?.timestamp ?? latest?.created_at);
     const userAt = optIso(lastUser?.timestamp ?? lastUser?.created_at);
     return {
@@ -1119,7 +1119,12 @@
       const list = agent ? (this.agentSessions[agent] = this.agentSessions[agent] || []) : this.sessions;
       const i = list.findIndex(x => x.id === id);
       if (s.id !== id || (s.agent && otherAgent(s.agent) && s.agent !== agent)) throw new Error('Thread scope changed');
+      // Detail hydrates content, not list lifecycle: Hermes normally omits status here.
+      // Erasing the projected helper wait makes a finished parent turn flash into Ready
+      // on every open/preload, then back to Working on the next list poll. Explicit
+      // retry failures still carry a status and must remain actionable.
       if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, renames: s.renames, detailNeeded: false,
+        ...(s.status ? { status: s.status } : {}),
         ...(s.model ? { model: s.model, provider: s.provider, modelLockAt: s.modelLockAt } : {}) };
       else if (this.windows[agent || 'hermes']) DETAIL.set(id, { ...s, detailNeeded: false });
       else list.push({ ...s, detailNeeded: false });
