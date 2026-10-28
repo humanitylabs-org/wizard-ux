@@ -33,7 +33,7 @@
     const people = mine.filter(a => a.kind !== 'chats' && !conns.includes(a) && !inChats(a)).sort(byName);
     // In development (James, 23 Oct 2026): launcher links and test copies fold under their own row.
     const apps = people.filter(a => !inDev(a)), dev = people.filter(inDev);
-    const back = (C.backendApps?.() || []).filter(a => !APP[a.id] || inChats(a));
+    const back = [...mine.filter(inChats), ...(C.backendApps?.() || []).filter(a => !APP[a.id])];
     return { apps, dev, agents, builder: APP.agents || null, wiz: back.filter(a => !isConnector(a)).sort(byName), conns: [...conns, ...back.filter(isConnector)].sort(byName) };
   }
   const sysFirst = list => [...list.filter(isSystem), ...list.filter(a => !isSystem(a))];

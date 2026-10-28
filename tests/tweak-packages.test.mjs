@@ -272,7 +272,8 @@ test('Notifications in Chats is on by default for the Wizard family and for Mize
 });
 
 test('Notifications sits with the agent apps while its inbox lives in Chats', () => {
-  const window = { WizCore: { backendApps: () => [{ id: 'notifications', name: 'Notifications', kind: 'wizard' }] }, WosSkinHost: { inboxThreads: false } };
+  // Production registry splits URL-backed apps and backendApps into disjoint lists.
+  const window = { WizCore: { backendApps: () => [] }, WosSkinHost: { inboxThreads: false } };
   vm.runInNewContext(read('web/core/app-kinds.js'), { window });
   const app = { id: 'notifications', name: 'Notifications', kind: 'wizard', url: '/notifications/' };
   const K = () => window.WosAppKinds.kinds([app], { notifications: app });
