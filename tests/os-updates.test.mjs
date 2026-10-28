@@ -141,3 +141,34 @@ test('on latest with Automatic it says Automatic installs stable only; choosing 
   U.act(btn('ch-latest'), ctx()); await tick();
   assert.equal(calls.length, n);   // re-tapping the current channel sends nothing
 });
+
+test('a release that only swaps the interface image says it takes about 2 minutes (App Manager quick: true)', async () => {
+  const { U } = await load((m, b) => m === 'POST' ? [200, { ...STATUS, started: true, quick: true }] : [200, { ...STATUS, mode: 'ask', chosen: true, quick: true }]);
+  assert.match(U.cardHtml(), /<b data-osu-title>Wizard OS update<\/b><span>Takes about 2 minutes<\/span>[^]*>Install<\/button>/);
+  const c = ctx();
+  U.act(btn('apply'), c);
+  await tick(); await tick();
+  assert.deepEqual(c.t[0].slice(0, 2), ['↻', 'Updating Wizard OS · takes about 2 minutes']);
+  assert.equal(U.card().state, 'building');
+  assert.equal(U.card().line, 'Takes about 2 minutes', 'no reconnect promise: only the interface restarts, then it offers Reload');
+});
+
+test('without quick (older App Managers, or the full installer) the 10–20 minute words stay', async () => {
+  for (const quick of [undefined, false]) {
+    const { U } = await load((m) => m === 'POST' ? [200, { ...STATUS, started: true, quick }] : [200, { ...STATUS, mode: 'ask', chosen: true, quick }]);
+    assert.match(U.cardHtml(), /<span>Takes 10–20 minutes<\/span>/);
+    const c = ctx();
+    U.act(btn('apply'), c);
+    await tick(); await tick();
+    assert.deepEqual(c.t[0].slice(0, 2), ['↻', 'Updating Wizard OS · takes 10–20 minutes']);
+    assert.equal(U.card().line, 'Takes 10–20 minutes · Wizard reconnects by itself');
+  }
+});
+
+test('the App Manager decides at Install time: a quick:false reply keeps the long words even if the check said quick', async () => {
+  const { U } = await load((m) => m === 'POST' ? [200, { ...STATUS, started: true, quick: false }] : [200, { ...STATUS, mode: 'ask', chosen: true, quick: true }]);
+  const c = ctx();
+  U.act(btn('apply'), c);
+  await tick(); await tick();
+  assert.deepEqual(c.t[0].slice(0, 2), ['↻', 'Updating Wizard OS · takes 10–20 minutes']);
+});
