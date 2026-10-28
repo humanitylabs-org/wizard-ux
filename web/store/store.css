@@ -23,7 +23,7 @@ a { color: var(--violet-2); }
 
 /* header */
 .top { position: sticky; top: 0; z-index: 5; padding: calc(env(safe-area-inset-top, 0px) + 14px) 20px 12px;
-  background: linear-gradient(#07040fee 70%, #07040f00); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  background: linear-gradient(#07040fee 70%, #07040f00), var(--wz-panel, var(--wz-base, var(--bg, #05030c)));   }
 .top-row { display: flex; align-items: baseline; gap: 10px; }
 h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
 .pv { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #1a1000; background: var(--amber); padding: 2px 7px; border-radius: 6px; }
@@ -130,8 +130,8 @@ h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
 
 /* toast */
 .toast { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 12px); transform: translate(-50%, -20px); opacity: 0; z-index: 9;
-  width: min(92vw, 420px); padding: 14px 16px; border-radius: 16px; background: rgba(28, 19, 58, .94); border: 1px solid var(--line-2); box-shadow: 0 20px 40px rgba(0, 0, 0, .5);
-  backdrop-filter: blur(16px); transition: transform .25s var(--ease), opacity .25s; display: grid; gap: 3px; font-size: 14px; }
+  width: min(92vw, 420px); padding: 14px 16px; border-radius: 16px; background: linear-gradient(rgba(28, 19, 58, .94), rgba(28, 19, 58, .94)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid var(--line-2); box-shadow: 0 20px 40px rgba(0, 0, 0, .5);
+   transition: transform .25s var(--ease), opacity .25s; display: grid; gap: 3px; font-size: 14px; }
 .toast.on { transform: translate(-50%, 0); opacity: 1; }
 .toast span { color: var(--ink-2); font-size: 13px; }
 .toast a { color: var(--ink); font-weight: 700; text-underline-offset: 2px; }
@@ -150,8 +150,8 @@ h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
 
 /* Appearance v1: hosted, the shell's window material is the canvas. */
 html.wz-hosted, html.wz-hosted body { background: transparent; }
-html.wz-hosted .top { background: var(--wz-chrome, transparent); }
-html.wz-hosted .toast { background: var(--wz-overlay, rgba(28, 19, 58, .94)); color: var(--ink); }
+html.wz-hosted .top { background: linear-gradient(var(--wz-chrome, transparent), var(--wz-chrome, transparent)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); }
+html.wz-hosted .toast { background: linear-gradient(var(--wz-overlay, rgba(28, 19, 58, .94)), var(--wz-overlay, rgba(28, 19, 58, .94))), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink); }
 html.wz-hosted .release-label select { background: var(--wz-surface-raised, #211831); }
 .get.big:not(.open):not(.have):not(.upd):not(.warn):not(.wait) { color: var(--s-on-accent); }
 

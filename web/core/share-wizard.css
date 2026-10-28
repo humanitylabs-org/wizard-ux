@@ -12,7 +12,7 @@
 .wz-share.dv-wrap { position:absolute; inset:0; z-index:80; pointer-events:auto; color:var(--wz-text); font:inherit; }
 body > .wz-share.dv-wrap { position:fixed; }
 .wz-share .dv-scrim { position:absolute; inset:0; background:var(--wz-scrim, #0009); opacity:1; }
-.wz-share .dv-sheet { position:absolute; left:8px; right:8px; bottom:calc(var(--safe-b, 0px) + 8px); margin:auto; max-width:560px; max-height:78%; overflow:auto; padding:16px 14px 14px; border-radius:26px; border:1px solid var(--wz-border); background:var(--wz-surface); color:var(--wz-text); transform:none; }
+.wz-share .dv-sheet { position:absolute; left:8px; right:8px; bottom:calc(var(--safe-b, 0px) + 8px); margin:auto; max-width:560px; max-height:78%; overflow:auto; padding:16px 14px 14px; border-radius:26px; border:1px solid var(--wz-border); background: linear-gradient(var(--wz-surface), var(--wz-surface)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color:var(--wz-text); transform:none; }
 .device.dv-share-open .wz-share .dv-sheet { bottom:calc(var(--safe-b, 0px) + var(--dock-h, 0px) + 4px); max-height:calc(100% - var(--safe-b, 0px) - var(--dock-h, 0px) - 40px); }
 .device.dv-share-open .dock, .device.dv-share-open .voice { z-index:82; }
 .device.dv-share-open .desk-dots { visibility:hidden; }
