@@ -413,7 +413,7 @@ html.key-hints-on #clock { visibility: hidden; }
 .hud-layer { position: absolute; inset: 0; z-index: 150; pointer-events: none; } /* above Home sheets (Resources is 120); the bar, palette and toasts sit outside the stage, above it */
 .hud-layer[hidden] { display: none; }
 .hud-layer > * { pointer-events: auto; }
-.win.hud { z-index: 2; border-color: rgba(185, 155, 255, .45); box-shadow: 0 0 0 1px rgba(143, 99, 255, .3), 0 22px 70px rgba(0, 0, 0, .55); backdrop-filter: blur(18px) saturate(1.2); }
+.win.hud { z-index: 2; border-color: rgba(185, 155, 255, .45); box-shadow: 0 0 0 1px rgba(143, 99, 255, .3), 0 22px 70px rgba(0, 0, 0, .55); } /* opaque, no backdrop blur: text floats over text */
 .win.hud[hidden] { display: none; }
 /* It floats over anything (Home scenery, other apps): a solid sheet of the skin's own background, never see-through glass. */
 #hudLayer > .win.hud { background: var(--bg, #0e091e); border: 1px solid rgba(185, 155, 255, .45); }
