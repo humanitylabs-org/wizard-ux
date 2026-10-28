@@ -286,10 +286,9 @@ window.WizCore.chats = function createChats(H) {
     const list = spaces().map(s => ({ ...s, threads: s.threads.slice() })), space = list.find(s => s.id === key); if (!space) return false;
     const ids = new Set(space.threads); if (add) ids.add(sid); else ids.delete(sid);
     if (ids.size > 500) { toast('!', `${SPACE.one} is full`, 2400); return false; }
-    space.threads = [...ids];
-    try { localStorage.setItem(SPACES_KEY, JSON.stringify(list)); } catch (_) {}
-    LIVE.putPrefs({ spaces: list });
-    window.dispatchEvent(new Event('wos:prefs')); return true;
+    // One member, never this device's whole list: a device that hadn't pulled would erase other edits (live.js prefOps).
+    LIVE.prefOps([{ op: add ? 'add' : 'remove', key: `spaces/${key}/threads`, item: sid }]);
+    return true;
   }
   /* A Space open in front is where James is working: every new thread started there (composer, orb, voice,
    * launcher) joins it (James, 25 Oct 2026). A Chats composer files its own (Space fixed at send, below) and opts
@@ -599,9 +598,9 @@ window.WizCore.chats = function createChats(H) {
     const keys = shown.slice(), i = keys.indexOf(key); if (i < 0) return false;
     const j = dir === 'top' ? 0 : dir === 'up' ? i - 1 : i + 1; if (j < 0 || j >= keys.length || j === i) return false;
     keys.splice(i, 1); keys.splice(j, 0, key);
-    // The shown order becomes the remembered order; subjects not in today's Ready keep their old relative place after it.
-    const next = keys.concat(subjOrder().filter(k => !keys.includes(k)));
-    try { localStorage.setItem(SUBJ_ORDER_KEY, JSON.stringify(next.slice(0, 60))); } catch (e) {} LIVE.putPrefs?.({ subjectOrder: next.slice(0, 60) });
+    // The shown order becomes the remembered order; subjects not in today's Ready keep their old relative place after
+    // it. Sent as "these first", so the box also keeps subjects only another device has placed (live.js prefOps).
+    LIVE.prefOps([{ op: 'front', key: 'subjectOrder', items: keys }]);
     return true;
   }
   // A thread James just wrote to sits in Working from the tap on; its status follows the message (live.js PEND).
@@ -898,10 +897,8 @@ window.WizCore.chats = function createChats(H) {
     if (spaces().length >= 50) { p.error = 'Maximum 50 Spaces'; renderSpacePicker(); return; }
     p.busy = true; p.error = ''; renderSpacePicker();
     const space = { id: crypto.randomUUID(), name, agent: p.agent, threads: p.sid ? [p.sid] : [], createdAt: new Date().toISOString() };
-    const list = [...spaces(), space];
-    const saved = await LIVE.putPrefs({ spaces: list }, { requireShared: true });
+    const saved = await LIVE.prefOps([{ op: 'add', key: 'spaces', item: space }], { requireShared: true });
     if (!saved) { p.busy = false; p.error = 'Couldn’t create space. Try again.'; if (spacePicker === p) renderSpacePicker(); return; }
-    localStorage.setItem(SPACES_KEY, JSON.stringify(list)); window.dispatchEvent(new Event('wos:prefs'));
     if (spacePicker === p) closeSpacePicker();
     if (p.sid) return; // Row discovery creates a collection with this thread, never an agent run.
     const w = W[p.wid]; if (!w) return;
