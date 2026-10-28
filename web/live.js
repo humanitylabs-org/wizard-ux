@@ -412,6 +412,7 @@
     }
     const fields = [...new Set(ops.map(opField))], get = async () => { const g = await ask(PREFS_URL, { cache: 'no-store' }); if (g.status === 404) prefsOff = true; if (!g.ok) throw new Error('Preferences unavailable'); return g.json(); };
     // Two devices can both read before either writes: read back, and replay onto the newer list if ours didn't stick.
+    // This narrows the loss window to one read-to-write round trip; only the service's PATCH makes it atomic.
     for (let pass = 0; pass < 6; pass++) {
       const fresh = await get(), next = applyPrefOps(fresh, ops), patch = {};
       for (const f of fields) if (!same(next[f], fresh[f])) patch[f] = next[f];
@@ -428,10 +429,10 @@
   const syncOps = (direct = null) => {
     prefsPending++; prefsRevision++;
     prefsWrites = prefsWrites.then(async () => {
-      const ops = direct || queuedOps();
-      if (!ops.length) return true;
-      if (prefsOff) return !direct;
       try {
+        const ops = direct || queuedOps();
+        if (!ops.length) return true; // an earlier pass already delivered this edit
+        if (prefsOff) return !direct;
         const j = await sendOps(ops);
         if (j === null) return !direct; // no shared preferences on this service: the edit stays on this device
         // Drop only what this pass delivered; an edit made meanwhile stays queued.

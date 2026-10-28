@@ -87,6 +87,14 @@ test('an edit made offline is shown at once, kept across a reload and delivered 
   assert.deepEqual(chatsOn(later).spaces()[0].threads, ['wizard_elsewhere', 'wizard_offline'])
 })
 
+test('two edits in the same tick: the page keeps pulling other devices\' changes afterwards', async () => {
+  const box = sharedBox({ spaces: [space('work')] }), d = liveDevice(box, cache([space('work')])); await tick()
+  await Promise.all([d.prefOps([{ op: 'add', key: 'spaces/work/threads', item: 'wizard_1' }]), d.prefOps([{ op: 'add', key: 'spaces/work/threads', item: 'wizard_2' }])])
+  box.state = { ...box.state, spaces: [space('work', ['wizard_1', 'wizard_2', 'wizard_elsewhere'])] } // another device
+  await d.pullPrefs()
+  assert.deepEqual(JSON.parse(d.store.get(SPACES))[0].threads, ['wizard_1', 'wizard_2', 'wizard_elsewhere'])
+})
+
 test('a pull while an edit is queued shows the box list plus the edit, not the box list alone', async () => {
   const box = sharedBox({ spaces: [space('work', ['wizard_a'])] }), d = liveDevice(box, cache([space('work')])); await tick()
   d.store.set('wos.prefs.ops.v1', JSON.stringify([{ op: 'add', key: 'spaces/work/threads', item: 'wizard_mine' }]))
