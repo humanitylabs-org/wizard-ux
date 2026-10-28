@@ -44,7 +44,8 @@ Visual: <side-by-side screenshot, or "none">
 
 | Need | Use | Never hand-roll |
 |---|---|---|
-| Chats: agent/Space Focus, Filter, sections, search, composer, files, read state, Copy/Share; Novairecito Recall/Done | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); `setFocus` persists `w.focus`; `migrateChatsFocus` migrates; `WizLive` owns data, stream + tool steps; diagnosis: Sign in; revision invalidates cache | second Chats/Focus parser; per-agent/shell routing |
+| Menu | `WosContextMenu.open`, `.back` (`core/context-menu.js`, `.css`): opaque, outside/blur/scroll closes; Back first | local menus |
+| Chats/Focus/Filter/search/composer/files/read state/Copy/Share/Recall/Done | `WizCore` (`web/core/chats.js`, `.css`): `setFocus` saves `w.focus`; `migrateChatsFocus` migrates. `WizLive` data/stream/tools; Sign in; revision invalidates cache | duplicate Chats/Focus parser/routing |
 | Alternative Chats list | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`web/core/edge-peek.js`), host storage | skin-local duplicate |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
