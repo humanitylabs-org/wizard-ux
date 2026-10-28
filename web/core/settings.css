@@ -230,3 +230,9 @@
 .st-res .rs-lg { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 5px; font-size: 12px; color: var(--wz-text-secondary); }
 .st-res .rs-lg span { display: inline-flex; align-items: center; gap: 5px; }
 .st-res .rs-lg i { width: 8px; height: 8px; border-radius: 2px; background: var(--dc); }
+
+/* Settings › Look › Window opacity */
+.wg-section .wg-row { min-height: 44px; border-bottom: 0; }
+.wg-section [data-wg-val] { flex: none; font-variant-numeric: tabular-nums; font-weight: 650; color: var(--wz-text, var(--ink)); }
+.wg-section .wg-range { display: block; width: 100%; min-height: 44px; margin: 0; accent-color: var(--wz-accent, var(--violet-2, #8f63ff)); cursor: pointer; }
+.wg-section .wg-reset { min-height: 44px; padding: 6px 14px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--ink-2); font: inherit; font-size: 13px; cursor: pointer; }
