@@ -14,7 +14,7 @@
   const ORIGIN = location.origin, VERSION = 1, overlays = [], handlers = [], themes = new Set(), updates = new Set();
   let service = null, transportReady = false, currentTheme = null, updateAvailable = null, rootWatcher = null, guarded = false, exitUntil = 0, requestId = 0;
   const requests = new Map(), companionMessages = new Set();
-  let toolHandler = null;
+  let toolHandler = null, orbHandler = null;
   const guardPush = history.pushState.bind(history);
   let guardBase = null, standaloneIsRoot = null;
   let conversation = null, commandHandler = null;
@@ -61,6 +61,44 @@
       if (can) { const did = h.back(); if (typeof did !== 'boolean') throw new TypeError('back must return a synchronous boolean'); return did; }
     }
     return false;
+  }
+  // Tapping outside a modal is Back (James, 28 Oct 2026). Capture before app/kit
+  // click handlers: a drag out, or the lifting finger that opened a menu, is not a tap.
+  // cancel is the native Escape path, including apps that preventDefault and close themselves.
+  if (typeof MutationObserver !== 'undefined') {
+    const presses = new WeakMap();
+    const changed = records => {
+      for (const r of records) {
+        if (r.type === 'attributes' && r.target.tagName === 'DIALOG') presses.delete(r.target);
+        for (const n of r.addedNodes || []) {
+          if (n.tagName === 'DIALOG') presses.delete(n);
+          n.querySelectorAll?.('dialog').forEach(d => presses.delete(d));
+        }
+      }
+    };
+    const observer = new MutationObserver(changed);
+    observer.observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['open'] });
+    const modal = e => {
+      changed(observer.takeRecords()); // showModal + pointerdown may happen in one task
+      const d = e.target.closest?.('dialog');
+      return d?.open && d.matches(':modal') && !d.hasAttribute('data-wz-no-outside-close') ? d : null;
+    };
+    const outside = (d, e) => {
+      const r = d.getBoundingClientRect();
+      return e.target === d && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom);
+    };
+    addEventListener('pointerdown', e => {
+      const d = modal(e); if (d) presses.set(d, { outside: outside(d, e) });
+    }, true);
+    addEventListener('pointercancel', e => { const d = modal(e); if (d) presses.delete(d); }, true);
+    addEventListener('click', e => {
+      const d = modal(e); if (!d || e.detail === 0) return; // keyboard/AT activation is never swallowed
+      const press = presses.get(d); presses.delete(d);
+      if (!press || outside(d, e)) {
+        e.preventDefault(); e.stopImmediatePropagation();
+        if (press?.outside && outside(d, e) && d.dispatchEvent(new Event('cancel', { cancelable: true }))) d.close();
+      }
+    }, true);
   }
   // Composer input (paste files/text, drop, Enter policy): the shell's one implementation, core/composer-input.js,
   // the same code Chats uses. Loaded on first use; a bind made before it lands is queued, unbind is synchronous.
@@ -254,6 +292,7 @@
       if (d.error) pending.reject(new Error(String(d.error))); else pending.resolve(d.value);
     }
     if (d.type === 'wizard:appearance' && applyTheme(d.appearance)) parent.postMessage({ type: 'wizard:appearance:ack', version: VERSION, revision: currentTheme.revision }, ORIGIN);
+    if (d.type === 'wizard:app:orb' && d.version === VERSION && orbHandler) { try { orbHandler(); } catch (err) { console.warn('WizardApp orb', err); } }
     if (d.type === 'wizard:app:tool' && d.version === VERSION && toolHandler && typeof d.id === 'string') { try { toolHandler({ id: d.id, value: typeof d.value === 'string' ? d.value : undefined }); } catch (err) { console.warn('WizardApp tool', err); } }
     if (d.type === 'wizard:app:update' && d.version === VERSION) { updateAvailable = d.available; notify(updates, updateAvailable); }
     if (d.type === 'wizard:app:share' && d.version === VERSION) pullShares();
@@ -405,6 +444,17 @@
       receive: receiveShares, targets: shareTargets, check: () => pullShares() }),
     titlebar: Object.freeze({ set: (tools, onTool) => { toolHandler = typeof onTool === 'function' ? onTool : null; return service ? Promise.resolve(service.titlebar.set(tools)) : transportReady ? request('titlebar.set', { tools }).then(v => v === true, () => false) : Promise.resolve(false); },
       shown: () => { try { return !!service?.titlebar.shown(); } catch (_) { return false; } } }),
+    /* The agent orb as this app's main button (two-orb layout): claim({ icon, label }, onTap) puts the icon on the orb
+     * in this app's colour while the app is in front; tap runs onTap, hold still picks an agent. Resolves true when
+     * the host shows it (the app then hides its own button), false when there is no orb to claim. */
+    orb: Object.freeze({
+      claim: (spec, onTap) => { orbHandler = typeof onTap === 'function' ? onTap : null; return service?.orb ? Promise.resolve(service.orb.set(spec)) : transportReady ? request('orb.set', { spec }).then(v => v === true, () => false) : Promise.resolve(false); },
+      release: () => { orbHandler = null; return service?.orb ? Promise.resolve(service.orb.set(null)) : transportReady ? request('orb.set', { spec: null }).then(() => true, () => false) : Promise.resolve(false); },
+      shown: () => { try { return !!service?.orb?.shown(); } catch (_) { return false; } },
+    }),
+    /* Lower Wizard Music while this app plays something short (a voice note); duck(false) restores it. */
+    audio: Object.freeze({ duck: on => service?.audio ? Promise.resolve(service.audio.duck(!!on)).then(v => v === true, () => false) : transportReady ? request('audio.duck', { on: !!on }).then(v => v === true, () => false) : Promise.resolve(false) }),
+
     /* Fingerprint vault (Wizard OS Android app): keep one small secret for this app on the phone, behind the
      * fingerprint. has() -> {available, saved}; seal(secret, title) and open(title) show the fingerprint prompt;
      * errors carry .code (cancelled, unavailable, not_saved, invalidated, busy, failed). */
@@ -426,6 +476,7 @@
     capture: Object.freeze({ start: async opts => { if (['auto', 'command'].includes(opts?.kind)) throw new Error('Capture kind is reserved for Wizard voice; use audio/meeting and task metadata'); if (service) return service.capture.start(opts); if (framed) throw new Error('Shared capture needs the verified synchronous host connection'); const resource=captureModule(); return opts?.resumeId && resource.resume ? resource.resume(standaloneId(),opts.resumeId,opts) : resource.start(standaloneId(), opts); },
       prepare: opts => { if(service) return service.capture.prepare(opts); if(framed) throw new Error('Capture preparation needs the verified host connection'); return captureModule().prepare(standaloneId(),opts); },
       capabilities: opts => { if(service) return service.capture.capabilities(opts); if(framed) return {}; return captureModule().capabilities(opts); },
+      attach: () => { if(service) return service.capture.attach(); if(framed) throw new Error('Capture recovery needs the verified host connection'); return captureModule().attach(standaloneId()); },
       current: () => { if(service) return service.capture.current(); if(framed) return null; return captureModule().current(standaloneId()); },
       pending: async () => service ? service.capture.pending() : transportReady ? request('capture.pending') : captureModule().pending(standaloneId()), ack: async id => service ? service.capture.ack(id) : transportReady ? request('capture.ack', { id }) : captureModule().ack(standaloneId(), id) }),
   });

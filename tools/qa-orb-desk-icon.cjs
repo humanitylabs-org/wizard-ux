@@ -30,7 +30,7 @@ for(const skin of ['nebula','grove','tide','ember','signal']){
     await p.evaluate(()=>window.__wos?.openApp?.('wisdom')||window.__wos?.goDesk?.(1));await p.waitForTimeout(1500);
     const after=await probe(p);check('nebula: icon follows the desk in view',after.html!==before&&after.display!=='none',{before,after:after.html});
     await shotOrb(p,'nebula-app');
-    await p.evaluate(()=>document.getElementById('device').dataset.voice='listen');await p.waitForTimeout(400);
+    await p.evaluate(()=>document.getElementById('device').dataset.voice='listen');await p.waitForFunction(()=>+getComputedStyle(document.getElementById('orbApp')).opacity===0,null,{timeout:3000}).catch(()=>{});
     const rec=await probe(p);check('nebula: icon steps aside while recording',rec.opacity===0,rec);
   }
   await p.context().close();}

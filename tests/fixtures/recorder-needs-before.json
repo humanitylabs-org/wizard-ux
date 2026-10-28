@@ -1,0 +1,67 @@
+{
+  "app": "wizard-recorder",
+  "agent_binding": null,
+  "models": [
+    {
+      "feature": "live-summary",
+      "tier": "fast",
+      "tested_on": "deepseek-v4-1-flash",
+      "swap": "ask",
+      "private_data": true,
+      "abilities": [
+        "text",
+        "streaming"
+      ],
+      "purpose": "Live outline while you record",
+      "required": true,
+      "route": null,
+      "fix_url": "/wizard-os-home/?open=wizard-connection-router",
+      "status": "needs_owner"
+    },
+    {
+      "feature": "recap",
+      "tier": "standard",
+      "tested_on": "deepseek-v4-1-flash",
+      "swap": "ask",
+      "private_data": true,
+      "abilities": [
+        "text",
+        "streaming"
+      ],
+      "purpose": "Summary when a recording ends",
+      "required": true,
+      "route": null,
+      "fix_url": "/wizard-os-home/?open=wizard-connection-router",
+      "status": "needs_owner"
+    }
+  ],
+  "services": [
+    {
+      "slot": "live-transcription",
+      "recommend": "wizard-tinfoil",
+      "private_data": true,
+      "purpose": "Words appear as you speak",
+      "required": true,
+      "provider": "wizard-tinfoil",
+      "status": "needs_owner",
+      "fix_url": "/wizard-os-home/?open=wizard-tinfoil",
+      "error": {
+        "type": "error",
+        "code": "needs_owner",
+        "message": "Connect this provider to use the service.",
+        "fix_url": "/wizard-os-home/?open=wizard-tinfoil"
+      }
+    }
+  ],
+  "ready_to_open": false,
+  "providers": [
+    {
+      "id": "wizard-tinfoil",
+      "name": "Tinfoil",
+      "status": "not_connected",
+      "error": "provider_error",
+      "fix_url": "/wizard-os-home/?open=wizard-tinfoil",
+      "models": []
+    }
+  ]
+}

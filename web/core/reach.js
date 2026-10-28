@@ -54,7 +54,7 @@
       }
       if (body.overall === 'down') return result('wizard', body.summary || 'Wizard reports a problem. Open Troubleshooter to check it.', RECONNECTING);
     } catch (_) { return result('diagnosis', 'Wizard’s gateway is reachable, but its health report isn’t available. Open Troubleshooter to check it. Messages are kept while we retry.', RECONNECTING); }
-    return result('send', 'Wizard is online, but this message hasn’t gone through yet. It’s kept on this device while we retry.', 'Not sent yet · retrying');
+    return result('send', 'Wizard is reachable but didn’t take the message. Retrying.', 'Wizard reachable · retrying');
   }
   function diagnose(maxAge = 10000) {
     if (work) return work;

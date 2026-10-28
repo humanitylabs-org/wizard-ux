@@ -6,7 +6,7 @@
   'use strict';
   if (window.WosShareSheet) return;
   const RECV = 'wos.share.receivers.v1', RECENT = 'wos.share.recent.v1';
-  const KINDS = new Set(['text', 'url']), TTL = 30 * 60 * 1000, MAX_PEOPLE = 8;
+  const KINDS = new Set(['text', 'url', 'image', 'file']), TTL = 30 * 60 * 1000, MAX_PEOPLE = 8;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const read = (store, key, dflt) => { try { const v = JSON.parse(store.getItem(key) || 'null'); return v ?? dflt; } catch (_) { return dflt; } };
   const write = (store, key, v) => { try { store.setItem(key, JSON.stringify(v)); } catch (_) {} };
@@ -48,11 +48,18 @@
     receivers[appId].targets = cleanTargets(targets); receivers[appId].at = Date.now();
     write(localStorage, RECV, receivers); return true;
   }
-  const kindOf = p => (p.text ? 'text' : 'url');
+  const isBlob = f => f && ['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(f));
+  const kindOf = p => isBlob(p.file) ? (p.file.type.startsWith('image/') ? 'image' : 'file') : (p.text ? 'text' : 'url');
+  function itemPayload(p) {
+    if (!p || typeof p !== 'object') return null;
+    if (p.file != null && (!isBlob(p.file) || p.file.size > 32 * 1024 * 1024)) return null;
+    const kind = kindOf(p);
+    return { ...p, kind, ...(isBlob(p.file) ? { name: clean(p.file.name || 'wizard-file', 255), mime: p.file.type || 'application/octet-stream', size: p.file.size } : {}) };
+  }
   // Reviewed receivers offered before the app has ever been opened on this device (fresh install, new phone,
   // cleared storage). Until the catalog carries a manifest share declaration, this list is the only default; the
   // app's own WizardApp.share.receive registration replaces it (and adds its people) the first time it runs.
-  const DEFAULTS = Object.freeze({ messenger: Object.freeze({ accepts: Object.freeze(['text', 'url']), targets: Object.freeze([]) }) });
+  const DEFAULTS = Object.freeze({ messenger: Object.freeze({ accepts: Object.freeze(['text', 'url', 'image']), targets: Object.freeze([]) }) });
   const live = kind => Object.entries({ ...DEFAULTS, ...receivers }).filter(([id, r]) => r?.accepts?.includes(kind) && installed(id));
   const rank = key => { const i = recent.indexOf(key); return i < 0 ? 1e6 : i; };
   function people(kind) {
@@ -74,11 +81,12 @@
   }
   function ack(appId, id) { const n = pendingItems.length; pendingItems = pendingItems.filter(x => !(x.appId === appId && x.id === id)); return pendingItems.length < n; }
   function deliver(appId, payload, target) {
-    if (!window.WizOpenApp) return false;
+    payload = itemPayload(payload);
+    if (!payload || !window.WizOpenApp) return false;
     prune();
     const id = 'sh-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
     pendingItems.push({ id, appId, payload, target: target || null, at: Date.now() });
-   
+
     if (window.WizOpenApp(appId) === false) { ack(appId, id); return false; }
     // An app already open pulls now; a fresh frame pulls when it registers.
     window.dispatchEvent(new CustomEvent('wizard:share-pending', { detail: { appId } }));
@@ -92,20 +100,20 @@
     const icon = window.WizSigil ? window.WizSigil.box('span', 'shs-ic', a) : `<span class="shs-ic">${esc(initials(a.name))}</span>`;
     return { name: a.name || appId, icon };
   }
-  function dismiss(o) { o.el.classList.remove('on'); o.el.style.pointerEvents = 'none'; setTimeout(() => o.el.remove(), 160); }
+  function dismiss(o) { if (o.thumbnail) { URL.revokeObjectURL(o.thumbnail); o.el.querySelector('.shs-thumb')?.removeAttribute('src'); } o.el.classList.remove('on'); o.el.style.pointerEvents = 'none'; setTimeout(() => o.el.remove(), 160); }
   function close(outcome) {
     if (!open) return false;
     const o = open; open = null; dismiss(o);
     o.resolve(outcome); return true;
   }
-  function render(payload, kind) {
+  function render(payload, kind, thumbnail) {
     const ppl = people(kind), list = apps(kind);
-    const preview = clean([payload.title, payload.text, payload.url].filter(Boolean).join(' · '), 160);
+    const preview = clean([payload.name, payload.title, payload.text, payload.url].filter(Boolean).join(' · '), 160);
     const el = document.createElement('div');
     el.className = 'wos-share'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Share');
     el.innerHTML = `<div class="shs-b">
       <div class="shs-t">Share</div>
-      ${preview ? `<div class="shs-prev">${esc(preview)}</div>` : ''}
+      ${preview ? `<div class="shs-preview">${thumbnail ? `<img class="shs-thumb" src="${esc(thumbnail)}" alt="Image to share">` : ''}<div class="shs-prev">${esc(preview)}</div></div>` : ''}
       ${ppl.length ? `<div class="shs-sub">People</div><div class="shs-row" data-shs-people>${ppl.map(p => { const t = appTile(p.appId); return `<button type="button" class="shs-person" data-shs-app="${esc(p.appId)}" data-shs-target="${esc(p.id)}" aria-label="${esc(p.name)} in ${esc(t.name)}"><span class="shs-av" style="--h:${hue(p.name)}">${esc(initials(p.name))}<span class="shs-badge">${t.icon}</span></span><span class="shs-nm">${esc(p.name)}</span></button>`; }).join('')}</div>` : ''}
       <div class="shs-sub">Wizard apps</div><div class="shs-row" data-shs-apps>${list.map(id => { const t = appTile(id); return `<button type="button" class="shs-app" data-shs-app="${esc(id)}">${t.icon}<span class="shs-nm">${esc(t.name)}</span></button>`; }).join('')}</div>
       <button type="button" class="shs-other" data-shs-other><span class="shs-oi" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></span>Other apps…</button>
@@ -114,16 +122,23 @@
   }
   // Resolves with the receipt contract: shared | copied | cancelled | unsupported.
   function show(payload, native) {
-    const kind = kindOf(payload);
+    payload = itemPayload(payload);
+    if (!payload) return Promise.resolve('unsupported');
+    const kind = payload.kind;
     if (!wants(kind)) return native();
     if (open) close('cancelled');
     return new Promise(resolve => {
-      const el = render(payload, kind);
-      const me = open = { el, resolve, native };
-      // Tap handling on pointerup/click with a short arm so the tap that opened the sheet cannot also pick a row.
-      const armedAt = Date.now();
+      const thumbnail = kind === 'image' ? URL.createObjectURL(payload.file) : null;
+      const el = render(payload, kind, thumbnail);
+      const me = open = { el, resolve, native, thumbnail };
+      // Only a fresh gesture may act on a just-opened sheet. A timeout both let
+      // slow long-press releases through and discarded quick intentional taps.
+      let armed = false;
+      el.addEventListener('pointerdown', () => { armed = true; });
+      el.addEventListener('pointercancel', () => { armed = false; });
       el.addEventListener('click', e => {
-        if (open !== me || Date.now() - armedAt < 250) return; // a fading sheet never acts on a newer one
+        if (open !== me || (!armed && e.detail !== 0)) return; // a fading sheet never acts on a newer one
+        armed = false;
         if (!e.target.closest('.shs-b')) return close('cancelled');
         if (e.target.closest('[data-shs-other]')) { open = null; dismiss(me); Promise.resolve().then(() => me.native()).then(me.resolve, () => me.resolve('unsupported')); return; }
         const b = e.target.closest('[data-shs-app]'); if (!b) return;

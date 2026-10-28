@@ -60,6 +60,15 @@ test('the thread header no longer carries the model; the label lives inside the 
   assert.match(css, /\.ch-field > \.ch-mlabel \{ position: absolute; right: 4px; bottom: 1px;/);
 });
 
+test('agent chats show the short family name, never the raw model id', () => {
+  const M = models();
+  assert.equal(M.short('claude-fable-5-1', 'anthropic'), 'Fable');
+  assert.equal(M.short('claude-fable-5-1', 'claude-cli'), 'Fable');
+  assert.equal(M.short('claude-opus-5-5', ''), 'Opus');
+  const power = read('web/core/chat-power.js');
+  assert.match(power, /const label = cur\?\.model \? \(M\.short\(cur\.model, cur\.provider \|\| ag\?\.model\?\.provider\) \|\| full\)/);
+});
+
 test('the composer scripts parse', () => {
   for (const f of ['web/core/chats.js', 'web/core/chat-power.js', 'web/core/chat-models.js']) assert.doesNotThrow(() => new vm.Script(read(f), { filename: f }));
 });

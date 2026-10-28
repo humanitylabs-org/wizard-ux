@@ -25,22 +25,22 @@ Visual: <side-by-side screenshot, or "none">
 | File chip before send | `WizardApp.attachChip.node` (Chats' tray, `core/attach-chip.js`) | own chip | `qa-attach-chip.cjs` |
 | Open a photo/video full screen (pinch zoom, swipe) | `WizardApp.media.view(items, i)` = Chats' `WosChat.viewer` | own lightbox | Messenger `photo_viewer_browser.cjs` |
 | Bound same-app companion | `WizardApp.shell.openCompanion` → `WizCompanionPane` (`web/core/companion-pane.js`); [API](shared-app-services-host.md) | app-specific desks/relays | `qa-companion-pane.cjs`: nested Back |
-| Back in app; leave on dismiss | `WizardApp.back.register/push`, `nav.back()`; `WizOpenApp(id,path)` validates repair app URL + origin | guards, 2nd tap | nested Back stays; repair → originating chat |
+| Back in app; leave on dismiss or modal outside tap | `WizardApp.back.register/push`, `nav.back()`; `WizOpenApp(id,path)` validates repair app URL + origin | guards, 2nd tap | nested Back stays; repair → originating chat |
 | Skin, tokens, light/dark | `WizardApp.theme.get / onChange`, `--wz-*` roles | theme storage, own dark mode, literal colours | two skins + a live skin change keep app state |
 | Native Android screens in the worn skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`): saved shell roles, Nebula fallback | literal colours in native screens |
 | Native offline/connect | `ReachScreen` / `ReachPolicy`, `ConnectActivity` / `ServerSettings` (same native package as `WizardLook`) | duplicate offline/address UI |
 | Transcribe audio | `WizardApp.voice.transcribe(blob, {language})` → `{text}` / `{unavailable:true}`; verified frame, 25 MB; `WizConfig.transcribe` | app transcriber | stale/foreign denied; unavailable explicit |
 | Share out (people → apps → Other apps) | `WizardApp.share.text / file` | own picker | cancel ≠ shared |
 | Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound route | pending until accepted, ack once |
-| Mic, camera, screen capture | `WizardApp.capture.start / pending / ack`, `WizardApp.voiceInput.register` | `getUserMedia`, `MediaRecorder`, mic AudioContext | pending survives Back; ack once |
+| Mic, camera, screen capture | `WizardApp.capture.start / attach / current / pending / ack`, `WizardApp.voiceInput.register` | `getUserMedia`, `MediaRecorder`, mic AudioContext | pending survives Back; ack once |
 | Title-bar tools | `WizardApp.titlebar.set(tools)` | an app header repeating the title | tools appear in the shell title bar |
 | Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, 2-slot `VaultSlots`) | own ports | cancel keeps old |
 | Protect unsaved work from updates | `WizardApp.update.hold` | app service worker, forced reload | released only after save+readback |
 | Reading place in an app document | shell-owned `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic for registered apps | app-local scroll store | reopen lands at the saved place |
 | Motion, haptics, press feel | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own spring/haptic helpers | — |
-| App look: rows, sections, empty state, single-line add field | `WizardApp`: live `web/kit/wizard-ui.css` + `--wz-*`, then active skin (core/package/My skin) | forked kit; `.wz-field-row` chat composer; literal colours | two skins + My skin restyle `.wz-*` rows |
+| App kit | `WizardApp`: `web/kit/wizard-ui.css` + `--wz-*`, then active core/package/My skin | forked kit; chat composer as `.wz-field-row`; literal colours | two skins + My skin |
 
-## Shell (`web/core/`): both shells and all agents; per-kind variants must EXTEND.
+## Shell (`web/core/`): shared; per-kind variants EXTEND.
 
 | Need | Use | Never hand-roll |
 |---|---|---|
@@ -48,11 +48,12 @@ Visual: <side-by-side screenshot, or "none">
 | Alternative Chats list | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`web/core/edge-peek.js`), host storage | skin-local duplicate |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
-| Models, retry, composer mic, receipts, reading place | `WosChatPower` (`web/core/chat-power.js`: per-thread anchor/offset/atBottom; repair workflow) + `WosModels` (`web/core/chat-models.js`; pooled Claude first, fresh on open; diagnosed variant: model-aware Sign in, no Retry), `WosErrors` (`web/core/chat-errors.js`), `WosWork` (`web/core/chat-work.js`: one expandable activity group: timed history + live tool previews) | model/error/reading-place forks; duplicate diagnosis notice or parallel live steps list |
+| Models, retry, mic, receipts, reading place | `WosChatPower` (`core/chat-power.js`: thread anchor/offset/atBottom; repair) + `WosModels` (`core/chat-models.js`: pooled Claude; model-aware Sign in, no Retry), `WosErrors` (`core/chat-errors.js`), `WosWork` (`core/chat-work.js`: one activity group, history + live steps) | model/error/reading-place forks; duplicate diagnosis/steps |
 | Markdown, drafts, inline/bottom media | `WosChat` (`chat-kit.js`: `helm`, `md`, `copyRich`, `viewer`); Chats `mediaBlock` | own parser/viewer |
-| Spaces / Focus | `WizCore` Chats (`web/core/chats.js`), `WizLive.prefOps` (`spaces`); one Space naming form; `WizLive.spaceSessions(ids)` hydrates focused members; `winAgent` / `modelRoute` drive every new-chat adapter; new threads join the Space in front (`WosOutbox.onNew`); restored Focus awaits a full agent census; hidden agents stay explicit-route targets; New Space fills use the scoped Spaces tool; `WosAgents.colour` / `distinctHues` drive tab identity and `--ch-agent-hue` | automatic subject tabs, separate collection store, per-shell Focus routing or section implementations |
+| Spaces / Focus | `WizCore` Chats (`core/chats.js`), `WizLive.prefOps` (`spaces`), `spaceSessions(ids)`; shared naming; `winAgent` / `modelRoute` new-chat routes; `WosOutbox.onNew` joins front Space; Focus awaits agent census; hidden agents routable; scoped Spaces tools; `WosAgents.colour` / `distinctHues`, `--ch-agent-hue` | auto-subject tabs; separate stores/routers |
+| Incognito (Settings `.sw`) | `WizCore.incognitoChats` (`web/core/incognito-chat.js`); `WizLive.openRunStream`, RAM Retry | durable state or forks |
 | Pinned threads (synced across devices) | `WosChatPins` (`web/core/chat-pins.js`) | device-local pin lists |
-| Snooze thread/message: Later today · Tomorrow · In 2/3/5 days · Next week · Someday; Other date… last; success returns via threadBack like Done | `WosBoomerang` (`web/core/scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`web/core/schedules.js`) | own timers or reminder stores |
+| Snooze thread/message | `WosBoomerang` (`core/scheduled-reminders.js`), one scheduler; preset/Other dates; success uses `threadBack` like Done. Settings: `WosSchedules` (`core/schedules.js`) | own timers/stores |
 | Thread topic emoji | `WosTopicEmoji` (`web/core/chat-topic-emojis.js`, data `WosTopicEmojiData`) | — |
 | Durable send; >6h held in thread/list for Send/Discard | `WosOutbox`, `WosCarry` (`web/outbox.js`) | own queue |
 | Cancelled-recording keep | `WosCancelled` (`web/core/cancelled.js`) | — |
@@ -63,13 +64,14 @@ Visual: <side-by-side screenshot, or "none">
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`web/core/agents.js`) | hard-coded agent names or colours |
 | App source labels, `wizard://install` | `sourceLabel`, `parseInstallLink` (`web/store/`) | own badges |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`web/core/app-route.js`) | — |
+| Per-app setup/open gate | `WosAppSetup` (`core/app-setup.js`, `.css`), Store `routerNeeds` / `routerApprove` / `serviceRow` / `installRelease`, `WosAppRoute`, `WizLinks` | duplicate gates |
 | App glyph tiles | `WizSigil` (`web/core/sigils.js`, `web/core/sigils.css`) | PNG/emoji icons |
 | Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs + old-service defaults | lists |
 | App groups | `WosAppKinds` (`web/core/app-kinds.js`) | forks |
 | Brand hat | `WizBrand` (`web/core/brand.js`) | redrawn logos |
-| Links: phone sheet, desktop window (`asWindow`), images, long-press browser / Download / Copy | `WizLinks` (`web/core/links.js`; Android: `WizardOSNative.openInBrowser` / `download`) | `window.open`, own iframe sheet, own link menu |
+| Long-press file/link | `WizLinks` (`core/links.js`): phone sheet, desktop `asWindow`, images, browser/Download/Copy, `back()` / `backMenu()`; Android `WizardOSNative.openInBrowser` / `download` | own iframe, menu or `window.open` |
 | Text-selection actions | `WosSelMenu` (`web/core/sel-menu.js`) | own context menu |
-| Share sheet, receivers, pending handoffs | `WosShareSheet` (`web/core/share-sheet.js`), entered only via `WosChat.sharePayload` | a second share picker, sending for an app |
+| Share sheet, receivers, pending handoffs | `WosShareSheet` (`web/core/share-sheet.js`), entered only via `WosChat.sharePayload / shareFile`; fresh-press guard, `WosChat.bindSharePress` | a second share picker, sending for an app |
 | Screen context for the agent | `WizScreen` (`web/core/screen-text.js`) | own DOM scrape |
 | Dictation into a focused field | `WizCore` focused field (`web/core/focused-field.js`); voice `WizCore` (`web/core/voice.js`); mic choice `WosMic` (`web/core/mic.js`) | own recorder/transcriber |
 | Local commands | `WosCommands` (`web/core/commands.js`) | a second command parser |
@@ -87,6 +89,7 @@ Visual: <side-by-side screenshot, or "none">
 |---|---|---|
 | The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`, icon/core); Android `android/app/src/main/assets/assist/everywhere.html` | PNG + CSS spin, Lottie, SVG |
 | Skins, backgrounds, scenery, skin switches (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`), `WosSkinHost` (`web/core/skin-host.js`; tweaks: `core/slots.json` incl. `home-main`+`paintHome`, `windowRefresh`, beside, inbox+list, `data.read` resources/app, `back.push`), `WosExperience` (`web/core/experience.js`), `WosMySkin` (`web/core/my-skin.js`), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own gradients, canvases or colour constants |
+| Overlay panel material | `--wz-panel`, `--wz-panel-raised` | `docs/OPAQUE_OVERLAYS.md` |
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) | own keyframe sets |
 | Tour/help ("Step N of 3": Talk, Reply in Chats, Done), responsive Done, skip/exit; desktop guide `WosTour.desk` ("Step N of 2") | `WosTour` (`web/core/tour.js`) | — |
 | Install prompt (banner, held while the tour runs) | `WizardPwaInstall` (`web/pwa-install.js`) | a second `beforeinstallprompt` listener |

@@ -1,37 +1,37 @@
 {
   "apiVersion": 1,
   "slots": {
-    "thread-switch-row-end": {
-      "since": 1
-    },
-    "thread-header-actions": {
-      "since": 1
-    },
-    "list-top": {
+    "archive-top": {
       "since": 1
     },
     "composer-end": {
       "since": 1
     },
-    "home-top": {
+    "device-edge": {
       "since": 1
     },
     "dock-end": {
       "since": 1
     },
-    "device-edge": {
+    "home-main": {
       "since": 1
     },
-    "ready-top": {
+    "home-top": {
+      "since": 1
+    },
+    "list-top": {
       "since": 1
     },
     "ready-end": {
       "since": 1
     },
-    "archive-top": {
+    "ready-top": {
       "since": 1
     },
-    "home-main": {
+    "thread-header-actions": {
+      "since": 1
+    },
+    "thread-switch-row-end": {
       "since": 1
     }
   }

@@ -1,4 +1,15 @@
 /* Wizard UX core: Chats (list, thread, composer, attachments, voice notes, unsent bubbles). Shared by every shell. */
+.ch-incognito { border: 2px dashed var(--wz-accent, #a59bff); border-radius: 12px; overflow: hidden; }
+.ch-incog-note { display: flex; flex-direction: column; gap: 4px; padding: 10px 14px; background: var(--wz-surface, var(--glass, #242432)); color: var(--wz-text, #ededf2); font-size: 12px; line-height: 1.5; border-bottom: 1px solid var(--wz-border, #414151); }
+.ch-incog-note b { font-size: 13px; }
+.ch-incog-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 4px 8px; color: var(--wz-text); background: var(--wz-surface); border-radius: 12px; flex: 0 0 auto; }
+.ch-incog-toggle:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
+.ch-incognito .ch-head .pbtn { flex: 0 0 auto; }
+.ch-incognito .ch-head .ti { flex-direction: column; align-items: flex-start; gap: 2px; }
+.ch-incognito .ch-incog-toggle > span:first-child { display: none; }
+.ch-incognito .ch-compose { flex: 0 0 auto; }
+.ch-incognito .ch-msgs { min-height: 0; overflow-y: auto; }
+
 /* Native app only: a real root-scrolling WebView for Android's built-in capture.
  * No clones, capture callbacks, scroll proxies or alternate chat renderer. */
 html.wos-doc-scroll { height: auto !important; overflow-y: auto !important; overflow-x: clip !important; }
@@ -226,8 +237,8 @@ a.fchip { color: inherit; text-decoration: none; }
    list (absolute), so the threads never shift; it holds one line and only the buttons a stuck send needs. */
 .ch-pill { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 4; max-width: calc(100% - 28px);
   display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 5px 0 13px; border-radius: 99px; white-space: nowrap;
-  font-size: 13px; font-weight: 600; color: var(--ink-2); background: rgba(28, 20, 52, .92); border: 1px solid rgba(160, 120, 255, .35);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, .45); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); animation: ch-pill-in .18s ease-out; }
+  font-size: 13px; font-weight: 600; color: var(--ink-2); background: linear-gradient(rgba(28, 20, 52, .92), rgba(28, 20, 52, .92)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid rgba(160, 120, 255, .35);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .45);   animation: ch-pill-in .18s ease-out; }
 .ch-pill:not(:has(.pbtn)) { padding-right: 14px; }
 .ch-pill .pl { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }
 .ch-pill .pl > span { overflow: hidden; text-overflow: ellipsis; }
@@ -336,7 +347,7 @@ a.fchip { color: inherit; text-decoration: none; }
 .ch-row { transition: transform 160ms var(--ease); touch-action: pan-y; -webkit-touch-callout: none; }
 /* Long-press / swipe actions sheet */
 .ch-sheet { position: absolute; inset: 0; z-index: 8; display: flex; align-items: flex-end; background: rgba(3, 1, 10, .5); animation: ch-fade 160ms both; }
-.ch-sheet-b { width: 100%; padding: 8px 8px calc(10px + var(--safe-b, 0px)); border-radius: 18px 18px 0 0; background: rgba(20, 13, 44, .98); border-top: 1px solid var(--line-2); }
+.ch-sheet-b { width: 100%; padding: 8px 8px calc(10px + var(--safe-b, 0px)); border-radius: 18px 18px 0 0; background: linear-gradient(rgba(20, 13, 44, .98), rgba(20, 13, 44, .98)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border-top: 1px solid var(--line-2); }
 .ch-sheet-t { padding: 8px 10px 10px; font-size: 13px; font-weight: 750; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ch-sheet-b button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px; border-radius: 12px; font-size: 15px; font-weight: 650; color: var(--ink); text-align: left; }
 .ch-sheet-b button:active { background: rgba(205, 190, 255, .1); }
@@ -370,6 +381,9 @@ a.fchip { color: inherit; text-decoration: none; }
 .mv-stage { flex: 1; min-height: 0; position: relative; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; overflow: hidden; }
 .mv-stage img { width: 100%; height: 100%; object-fit: contain; transform-origin: center; transition: transform 200ms var(--ease); user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
 .mv-stage video { max-width: 100%; max-height: 100%; background: #000; }
+/* Long screenshots fit the width and scroll (chat-kit.js fit/clampPan): top-anchored, scaled from the top edge. */
+.mviewer.long .mv-stage { place-items: start center; }
+.mviewer.long .mv-stage img { height: auto; transform-origin: top center; }
 .mviewer[data-kind="file"] .mv-stage, .mviewer[data-kind="audio"] .mv-stage { touch-action: pan-y; }
 .mv-file { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px; text-align: center; max-width: 340px; }
 .mv-file .mv-ic { font-size: 40px; }
@@ -721,6 +735,7 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 .ch-row .tp b .ch-plock .ag-lock { width: 12px; height: 12px; stroke-width: 2.2; }
 .ch-head .ti { min-width: 0; }
 .ch-privtag { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; height: 20px; margin-left: 6px; padding: 0 7px 0 6px; border-radius: 10px; font-size: 11px; font-weight: 700; letter-spacing: .02em; color: var(--ch-priv); background: color-mix(in oklab, var(--ch-priv) 16%, transparent); vertical-align: 2px; }
+.ch-background { margin-left: 0; align-self: center; white-space: nowrap; color: var(--wz-text-secondary, var(--ink-2)); background: var(--wz-surface, var(--glass)); font-weight: 400; letter-spacing: normal; }
 .ch-privtag .ag-lock { width: 11px; height: 11px; stroke-width: 2.3; }
 .ch-carry { margin: 14px auto 0; max-width: 520px; display: grid; gap: 6px; padding: 12px 14px; border-radius: 14px; border: 1px solid color-mix(in oklab, var(--ch-priv) 35%, transparent); background: color-mix(in oklab, var(--ch-priv) 8%, transparent); text-align: left; font-size: 13px; line-height: 1.4; }
 .ch-carry b { display: inline-flex; align-items: center; gap: 6px; color: var(--ch-priv); }

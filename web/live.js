@@ -76,7 +76,7 @@
     const working = WORKING.has(status) || status === 'waiting_for_approval';
     const latestText = clean(text(latest?.content ?? latest?.text));
     const userText = clean(text(lastUser?.content ?? lastUser?.text) || text(item.wizard_request_preview));
-    const preview = working ? (userText || latestText) : (latestText || userText || clean(text(item.preview)));
+    const preview = working ? (item.wizard_helper_status ? (latestText || clean(text(item.preview)) || userText) : (userText || latestText)) : (latestText || userText || clean(text(item.preview)));
     const latestAt = optIso(latest?.timestamp ?? latest?.created_at);
     const userAt = optIso(lastUser?.timestamp ?? lastUser?.created_at);
     return {
@@ -84,6 +84,7 @@
       title: String(item.title || item.name || 'Untitled chat'),
       source: item.source || '',
       status,
+      queueReason: item.queue_reason === 'provider_access' ? 'provider_access' : '',
       safeError: typeof item.wizard_safe_error === 'string' ? item.wizard_safe_error : '',
       // The AI provider's sign-in expired (Agent Service provider-reconnect.mjs): the connection app that fixes it.
       reconnect: reconnectOf(item.wizard_reconnect),
@@ -103,6 +104,7 @@
       critical: (item.wizard_attention_level || item.attention_level) === 'critical',
       waitingOn: item.wizard_waiting_on === 'helper' ? 'helper' : '',
       helperStatus: item.wizard_helper_status && typeof item.wizard_helper_status === 'object' ? item.wizard_helper_status : null,
+      background: ['helper', 'heavy'].includes(item.wizard_background) ? item.wizard_background : '',
       // What the finished thread asks of James (the agent's hidden status line): needs_you / check / done / fyi.
       attention: attentionOf(item.wizard_attention),
       // A durable quiet one-shot checker bound to this thread. The prompt never reaches the list.
@@ -114,6 +116,7 @@
       model: typeof item.model === 'string' ? item.model : '', provider: typeof item.provider === 'string' ? item.provider : '',
       modelLockAt: Number(item.wizard_model_lock_updated_at) || 0,
       // The last thing asked (Retry on a failed thread sends it again: controller.ts retryServerFailedSession).
+      retryRunId: typeof item.wizard_retry_run_id === 'string' ? item.wizard_retry_run_id : '',
       request: typeof item.wizard_retry_input === 'string' ? item.wizard_retry_input : userText,
       // Agents MVP: the agent this thread is pinned to (server metadata). '' = the main agent.
       agent: typeof item.agent === 'string' ? item.agent : item.agent && typeof item.agent === 'object' && typeof item.agent.id === 'string' ? item.agent.id : '',
@@ -479,7 +482,8 @@
   //   Newest   = approvals pinned, then pure recency, status labels ignored (groupWork's default).
   //   Priority = approvals, then needs you, then things to test, then everything else (newest first within each).
   // Status labels never move a thread between days (James, 11 Oct 2026: Ready, Yesterday and Past week stay
-  // filtered by day in Newest and Priority); Priority only reorders within Ready.
+  // filtered by day in Newest and Priority); Priority reorders within each day: Ready, Yesterday and Past week
+  // (James, 23 Oct 2026).
   // Snoozed (deferred) threads leave the list (James, 23 Oct 2026: "It doesn't remove the thread from my list,
   // which is the purpose of snoozing it"; supersedes 10 Oct "bottom of today"). They wait in the collapsed Snoozed
   // section until their return time, Restore or Done. A message James sends after snoozing brings the thread back.
@@ -487,7 +491,7 @@
   const readyRank = s => snoozeLast() && isDeferred(s) ? 9 : needsApproval(s) ? 0 : isDeferred(s) ? 9 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
   const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
   // Oldest (James, 23 Oct 2026: "oldest messages at the top … the newest one at the bottom"): Newest's pins kept
-  // (approvals first, deferred last), only time reversed in between. Yesterday and Past week stay newest first.
+  // (approvals first, deferred last), only time reversed in between. The same order applies to Yesterday and Past week.
   // snoozeOrder('last'): Snooze is a lower place in Ready, ahead of no unsnoozed row (even approvals).
   const snoozeOrder = (l, r) => snoozeLast() ? Number(isDeferred(l)) - Number(isDeferred(r)) : 0;
   const byOldest = list => list.slice().sort((l, r) => snoozeOrder(l, r) || Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(r, l));
@@ -851,8 +855,11 @@
           window.WosModels?.reconcile(list);
           this.agentSessions[id] = list; this.agentStatus[id] = { ok: true, error: '', at: Date.now() };
         } catch (e) {
+          // Same contract as the main list: a failed refresh keeps the threads already shown and marks them
+          // Not up to date (with the real last-read time); only an agent never read yet shows the connection card.
+          const prev = this.agentStatus[id], error = e.status === 403 ? 'access' : 'offline';
           this.agentSessions[id] = this.agentSessions[id] || [];
-          this.agentStatus[id] = { ok: false, error: e.status === 403 ? 'access' : 'offline', at: Date.now() };
+          this.agentStatus[id] = prev?.ok && error !== 'access' ? { ok: true, error, at: prev.at } : { ok: false, error, at: Date.now() };
         }
       }));
       let migrated = false, state = merge(readLocal(),this.seen) || {initializedAt:Date.now(),threads:{}};
@@ -1119,7 +1126,12 @@
       const list = agent ? (this.agentSessions[agent] = this.agentSessions[agent] || []) : this.sessions;
       const i = list.findIndex(x => x.id === id);
       if (s.id !== id || (s.agent && otherAgent(s.agent) && s.agent !== agent)) throw new Error('Thread scope changed');
-      if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, renames: s.renames, detailNeeded: false,
+      // Detail hydrates content, not list lifecycle: Hermes normally omits status here.
+      // Erasing the projected helper wait makes a finished parent turn flash into Ready
+      // on every open/preload, then back to Working on the next list poll. Explicit
+      // retry failures still carry a status and must remain actionable.
+      if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, retryRunId: s.retryRunId, queueReason: s.queueReason, safeError: s.safeError, reconnect: s.reconnect, renames: s.renames, detailNeeded: false,
+        ...(s.status ? { status: s.status } : {}),
         ...(s.model ? { model: s.model, provider: s.provider, modelLockAt: s.modelLockAt } : {}) };
       else if (this.windows[agent || 'hermes']) DETAIL.set(id, { ...s, detailNeeded: false });
       else list.push({ ...s, detailNeeded: false });
@@ -1244,22 +1256,30 @@
   /* Open-thread delta subscriptions. Read-only: a failed stream never replays a send.
    * Hermes uses unnamed SSE data frames with data.event; other runtimes name events. */
   const RUN_STREAMS = new Map();
-  L.openRunStream = function (sid, agent, runId, paint) {
+  L.openRunStream = function (sid, agent, runId, paint, target = null) {
+    // Explicit ephemeral target: reuse SSE/progress/Stop, never ordinary catalogs/outbox.
+    const base = target?.base;
+    if (target && !/^\/wizard\/v1\/agents\/[a-z][a-z0-9-]*\/incognito\/incog_[a-f0-9]{32}$/.test(base || '')) return null;
+    const read = target?.read || req;
     const registry = window.WosAgents;
     const rec = registry?.get(agent || registry.defaultId());
-    if ((agent && !rec) || rec?.privacy === 'private' || !window.EventSource || !runId) return null;
-    const key = JSON.stringify([agent, sid, runId]);
+    if ((!target && ((agent && !rec) || rec?.privacy === 'private')) || !window.EventSource || !runId) return null;
+    const key = JSON.stringify([agent, sid, runId, base]);
     let r = RUN_STREAMS.get(key);
     if (!r) {
       r = { text: '', steps: [], live: false, terminal: false, listeners: new Set(), frame: null, stopped: false };
       RUN_STREAMS.set(key, r);
-      const url = `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${agent ? '?agent=' + encodeURIComponent(agent) : ''}`;
+      const url = base ? `${base}/v1/runs/${encodeURIComponent(runId)}` : `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${agent ? '?agent=' + encodeURIComponent(agent) : ''}`;
       const notify = () => {
         if (r.frame != null || r.stopped) return;
         r.frame = requestAnimationFrame(() => { r.frame = null; for (const fn of r.listeners) fn(r); });
       };
       const close = () => { r.source?.close(); r.source = null; };
-      const terminal = () => { if (!r.terminal) { r.terminal = true; close(); notify(); } };
+      const terminal = async status => { if (r.terminal) return; r.terminal = true; r.status = status; close();
+        // One final read releases the ephemeral service busy latch and recovers non-delta output.
+        if (target) { try { r.result = await (await read(url)).json(); r.status = r.result.status || status; } catch (_) { r.status = 'failed'; } }
+        notify();
+      };
       let retries = 0;
       const event = e => {
         if (r.stopped || r.terminal) return;
@@ -1275,13 +1295,13 @@
           if (i >= 0) { r.steps = r.steps.map((s, n) => n === i ? { ...s, done: true, error: !!d.error } : s); notify(); }
         }
         // reasoning.available is deliberately not answer text.
-        if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) terminal();
+        if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) void terminal(type.slice(4));
       };
       const connect = () => {
         if (r.stopped || r.terminal) return;
         r.steps = []; // a reconnect replays the run from its first event
         try {
-          r.source = new window.EventSource(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
+          r.source = new window.EventSource(base ? `${url}/events` : `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
           r.source.onmessage = event;
           for (const name of ['message.delta', 'tool.started', 'tool.completed', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted']) r.source.addEventListener(name, event);
           r.source.onopen = () => { r.live = true; };
@@ -1299,9 +1319,9 @@
       const poll = async () => {
         if (r.stopped || r.terminal) return;
         try {
-          const d = await (await req(url)).json();
+          const d = await (await read(url)).json();
           if (r.stopped) return;
-          if ((d.run_id || d.id) === runId && d.session_id === sid && ['completed', 'failed', 'cancelled', 'interrupted'].includes(d.status)) terminal();
+          if ((d.run_id || d.id) === runId && d.session_id === sid && ['completed', 'failed', 'cancelled', 'interrupted'].includes(d.status)) void terminal(d.status);
         } catch (_) { /* connectivity recovery is the ordinary read poll, never another send */ }
         // The status read is only the safety net while the live stream is open.
         if (!r.stopped && !r.terminal) r.timer = setTimeout(poll, r.live ? 10000 : 1500);

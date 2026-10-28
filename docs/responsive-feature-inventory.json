@@ -100,10 +100,9 @@
     },
     "core/background-audio.js": {
       "loadedBy": [
-        "phone",
-        "desktop"
+        "phone"
       ],
-      "note": "Generic registry-granted background audio; native port optional."
+      "note": "Android-only background playback transport; no separate common Music renderer."
     },
     "core/bound-view.js": {
       "loadedBy": [
@@ -300,7 +299,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Skin host built-in: tap or swipe the edge beside a chat thread; no-op on desktop"
+      "note": "Skin host built-in: tap or swipe beside a thread; no-op on desktop"
     },
     "core/experience.js": {
       "loadedBy": [
@@ -370,7 +369,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import; Settings → Microphone shows only where WizardOSDevice.micPolicy exists"
+      "note": "Direct entrypoint import; Settings \u2192 Microphone shows only where WizardOSDevice.micPolicy exists"
     },
     "core/my-skin.js": {
       "loadedBy": [
@@ -397,7 +396,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import; Settings → Updates shows only where the App Manager answers store-install/_updates"
+      "note": "Direct entrypoint import; Settings \u2192 Updates shows only where the App Manager answers store-install/_updates"
     },
     "core/own-views.js": {
       "loadedBy": [
@@ -446,7 +445,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Shared Settings → Schedules; hidden when Agent Service schedules returns 404"
+      "note": "Shared Settings \u2192 Schedules; hidden when Agent Service schedules returns 404"
     },
     "core/screen-capture.js": {
       "loadedBy": [
@@ -620,103 +619,117 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/app-setup.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared per-app needs checklist and app-open admission"
+    },
+    "core/incognito-chat.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared RAM-only Incognito lifecycle composed by Chats"
     }
   },
   "exceptions": {
-    "core/device-port.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Optional exact-origin Android shell capability transport."
-    },
-    "core/device-recording.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Android shell foreground-service recorder; browsers retain their recorder."
-    },
-    "core/device-orb.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Android shell overlay capability; not a desktop overlay."
-    },
-    "core/orb-handoff.js": {
-      "shell": "phone",
-      "classification": "open-gap",
-      "reason": "Meeting-loan coordinator is currently wired only to the phone orb; desktop admission remains a separate acceptance gap, not claimed parity."
-    },
     "app.js": {
-      "shell": "phone",
       "classification": "adapter",
-      "reason": "Phone layout, orb/gesture input, shell navigation; shared feature rendering forbidden here."
-    },
-    "desktop/desktop.js": {
-      "shell": "desktop",
-      "classification": "adapter",
-      "reason": "Desktop window manager and keyboard/input adapter."
-    },
-    "styles.css": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone shell geometry; common Settings controls extracted."
-    },
-    "desktop/desktop.css": {
-      "shell": "desktop",
-      "classification": "adapter",
-      "reason": "Desktop shell geometry."
+      "reason": "Phone layout, orb/gesture input, shell navigation; shared feature rendering forbidden here.",
+      "shell": "phone"
     },
     "core/desks.css": {
-      "shell": "phone",
       "classification": "adapter",
-      "reason": "Phone desk indicators and dock layout."
+      "reason": "Phone desk indicators and dock layout.",
+      "shell": "phone"
     },
-    "core/home-surfaces.css": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone Home geometry; desktop Home retained from PR22."
-    },
-    "device.js": {
-      "shell": "phone",
+    "core/device-orb.js": {
       "classification": "native",
-      "reason": "Android update, notification, foreground recorder bridge; web updater already shared."
+      "reason": "Android shell overlay capability; not a desktop overlay.",
+      "shell": "phone"
     },
-    "core/voice.js": {
-      "shell": "desktop",
-      "classification": "adapter",
-      "reason": "Desktop browser recorder input; cancellation now uses the common recording store."
-    },
-    "motion/wizard-motion.js": {
-      "shell": "phone",
-      "classification": "preview",
-      "reason": "Opt-in Live Mode motion primitives."
-    },
-    "motion/wizard-motion.css": {
-      "shell": "phone",
-      "classification": "preview",
-      "reason": "Opt-in Live Mode motion styles."
-    },
-    "core/home-screen-policy.js": {
-      "shell": "phone",
+    "core/device-port.js": {
       "classification": "native",
-      "reason": "Android launcher-shortcut task policy; desktop has no home-screen pinning."
+      "reason": "Optional exact-origin Android shell capability transport.",
+      "shell": "phone"
+    },
+    "core/device-recording.js": {
+      "classification": "native",
+      "reason": "Android shell foreground-service recorder; browsers retain their recorder.",
+      "shell": "phone"
     },
     "core/home-screen-apps.css": {
-      "shell": "phone",
       "classification": "native",
-      "reason": "Android Add to home screen sheet styling; native ShortcutManager only."
+      "reason": "Android Add to home screen sheet styling; native ShortcutManager only.",
+      "shell": "phone"
     },
     "core/home-screen-apps.js": {
-      "shell": "phone",
       "classification": "native",
-      "reason": "Android Add to home screen via ShortcutManager pin request; no desktop equivalent."
+      "reason": "Android Add to home screen via ShortcutManager pin request; no desktop equivalent.",
+      "shell": "phone"
+    },
+    "core/home-screen-policy.js": {
+      "classification": "native",
+      "reason": "Android launcher-shortcut task policy; desktop has no home-screen pinning.",
+      "shell": "phone"
+    },
+    "core/home-surfaces.css": {
+      "classification": "adapter",
+      "reason": "Phone Home geometry; desktop Home retained from PR22.",
+      "shell": "phone"
+    },
+    "core/orb-handoff.js": {
+      "classification": "open-gap",
+      "reason": "Meeting-loan coordinator is currently wired only to the phone orb; desktop admission remains a separate acceptance gap, not claimed parity.",
+      "shell": "phone"
     },
     "core/single-app-session.js": {
-      "shell": "phone",
       "classification": "native",
-      "reason": "Android pinned-shortcut app-only task (AppSessionActivity); desktop windows already isolate apps."
+      "reason": "Android pinned-shortcut app-only task (AppSessionActivity); desktop windows already isolate apps.",
+      "shell": "phone"
+    },
+    "core/voice.js": {
+      "classification": "adapter",
+      "reason": "Desktop browser recorder input; cancellation now uses the common recording store.",
+      "shell": "desktop"
+    },
+    "desktop/desktop.css": {
+      "classification": "adapter",
+      "reason": "Desktop shell geometry.",
+      "shell": "desktop"
+    },
+    "desktop/desktop.js": {
+      "classification": "adapter",
+      "reason": "Desktop window manager and keyboard/input adapter.",
+      "shell": "desktop"
+    },
+    "device.js": {
+      "classification": "native",
+      "reason": "Android update, notification, foreground recorder bridge; web updater already shared.",
+      "shell": "phone"
+    },
+    "motion/wizard-motion.css": {
+      "classification": "preview",
+      "reason": "Opt-in Live Mode motion styles.",
+      "shell": "phone"
+    },
+    "motion/wizard-motion.js": {
+      "classification": "preview",
+      "reason": "Opt-in Live Mode motion primitives.",
+      "shell": "phone"
     },
     "orb.js": {
-      "shell": "phone",
       "classification": "adapter",
-      "reason": "Phone orb renderer; desktop microphone/chords remain the input adapter."
+      "reason": "Phone orb renderer; desktop microphone/chords remain the input adapter.",
+      "shell": "phone"
+    },
+    "styles.css": {
+      "classification": "adapter",
+      "reason": "Phone shell geometry; common Settings controls extracted.",
+      "shell": "phone"
     }
   },
   "purpose": "Every entrypoint-exclusive asset must be explicit; new common features must be shared by default, not added to these exceptions.",
@@ -730,6 +743,8 @@
     "core/app-route.css",
     "core/app-route.js",
     "core/app-services.js",
+    "core/app-setup.css",
+    "core/app-setup.js",
     "core/app-versions.js",
     "core/app-voice.js",
     "core/appearance-host.css",
@@ -773,6 +788,7 @@
     "core/features.js",
     "core/files.js",
     "core/focused-field.js",
+    "core/incognito-chat.js",
     "core/launcher-defaults.js",
     "core/launcher.js",
     "core/links.css",

@@ -9,7 +9,7 @@ const DELAY = 2500;
 (async () => {
   const b = await chromium.launch(); let fails = 0;
   for (const skin of SKINS) {
-    const ctx = await b.newContext({ viewport: { width: 412, height: 900 }, hasTouch: true, isMobile: true,
+    const ctx = await b.newContext({ viewport: { width: 412, height: 900 }, hasTouch: true, isMobile: true, serviceWorkers: 'block',
       userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36 WizardOS-Android/0.10.9' });
     await ctx.addInitScript(s => { try { if (s !== 'nebula') localStorage.setItem('wos.skin', s); localStorage.setItem('wos.tour.v1', 'true'); localStorage.setItem('wos.coached', 'true'); } catch (_) {} }, skin);
     const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));

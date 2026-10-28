@@ -154,6 +154,7 @@
     // The composer's mic (#13): the orb's own recorder, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
     dictationField: () => FIELDS && V.kind === 'dictation' && V.state !== 'idle' ? V.field?.el : null,
+    captureBusy: () => V.state !== 'idle' || !!V.admitting || !!window.WizAppCapture?.getState?.()?.active,
     recordingFor: () => (V.replyTo && (V.state === 'listen' || V.state === 'paused') ? V.replyTo.sid : ''),
     // The thread a recording take will go into (its composer rides along); Send in that composer finishes the take.
     voiceInto: () => (V.state === 'listen' || V.state === 'paused' ? sealTarget()?.sid || '' : ''),
@@ -365,6 +366,7 @@
     n = Math.max(0, Math.min(desks.length - 1, n));
     // An empty desk (one the ＋ made, left without picking an app) goes away as soon as you leave it.
     const from = desks[idx], to = desks[n];
+    if (from !== to && !CHATS.beforeNavigate(to?.wins || [])) { placeTrack(0, true); return; }
     if (from && to && from !== to && !from.home && !from.wins.length) { desks = desks.filter(d => d !== from); syncDesks(); n = desks.indexOf(to); }
     const moved = from !== to;
     if (moved && sheet === 'settings') liftSettings(from && from.id); // Settings stays open on the desk you leave
@@ -770,8 +772,9 @@
   function closeWin(id, quiet, preservePlayback = false) {
     const i = deskOf(id); if (i < 0) return;
     const w = W[id], d = desks[i], name = winTitle(w);
+    if (!CHATS.beforeLeave(id)) return;
     if (!preservePlayback) closeAppPlayback(w);
-    CHATS.closeHosted(id);
+    CHATS.closeHosted(id); CHATS.forget(id);
     if (quiet) { d.wins = d.wins.filter(x => x !== id); delete W[id]; delete CH[id]; if (d.focus === id) d.focus = d.wins[d.wins.length - 1] || null; if (!d.wins.length) d.full = false; renderDesk(i); pruneDesks(); return; }
     // ✕ on a bound view: it stays closed for this reply (opening the thread again, or a new reply, binds again).
     if (w.bound) { boundOff[w.bound] = w.bsid + '|' + w.bkey; boundManager?.dismiss(w); }
@@ -905,15 +908,34 @@
    * Done (end of a reply) and ↓ Latest (scrolled up) sit directly below it. It follows the composer's real height
    * (attachments, multi-line text, keyboard). On the thread list there is no composer: it stays in the corner. */
   let liftRO = null, liftMO = null, liftEl = null;
+  /* Orb in the composer (James, 23 Oct 2026: "the orb keeps overlapping UX features"): in a full-screen thread the
+   * orb sits in the composer row's last seat (.ch-orbslot), where the mic used to be, so nothing floats over the
+   * conversation. Typed words swap it for Send in that same seat, exactly like the old mic; a live take keeps it. */
   function paintCornerLift() {
     const c = device.querySelector('.win.full .ch-thread .ch-compose');
     if (c !== liftEl) { try { liftRO?.disconnect(); } catch (e) {} liftEl = c; if (c && liftRO) liftRO.observe(c); }
     const h = c && c.offsetParent ? Math.round(c.getBoundingClientRect().height) : 0;
     device.style.setProperty('--comp-h', h + 'px');
     device.classList.toggle('orb-lift', h > 0);
+    const slot = h > 0 ? c.querySelector('.ch-orbslot') : null;
+    device.classList.toggle('orb-typed', !!slot && c.classList.contains('has-text') && V.state === 'idle');
+    device.classList.toggle('orb-slotted', !!slot);
+    if (!slot) return;
+    // Measure the row, not the slot: the slot is hidden while Send holds the seat and on the first paint.
+    // Skins differ in dock size and insets, so centre the orb itself on the row by its measured offset.
+    const dock = device.querySelector('.dock'), row = slot.parentElement.getBoundingClientRect();
+    if (!row.height || !dock) return;
+    // Centres, so a mid-transition scale (Send swap) cannot skew the measurement.
+    const cs = getComputedStyle(dock), orbEl = $('#orbWrap'), d = orbEl.getBoundingClientRect(), half = orbEl.offsetWidth / 2;
+    const b = parseFloat(cs.bottom) + ((d.top + d.bottom) / 2 - (row.top + row.bottom) / 2), r = parseFloat(cs.right) + ((d.left + d.right) / 2 - (row.right - half));
+    device.style.setProperty('--slot-b', Math.round(b) + 'px');
+    device.style.setProperty('--slot-r', Math.round(r) + 'px');
   }
+  window.addEventListener('wos:composer', () => { if (liftRO) paintCornerLift(); });
+  window.addEventListener('resize', () => { if (liftRO) paintCornerLift(); });
+  window.visualViewport?.addEventListener('resize', () => { if (liftRO) paintCornerLift(); });
   function trackCornerLift(on) {
-    if (!on) { try { liftRO?.disconnect(); liftMO?.disconnect(); } catch (e) {} liftRO = liftMO = liftEl = null; device.classList.remove('orb-lift'); device.style.removeProperty('--comp-h'); return; }
+    if (!on) { try { liftRO?.disconnect(); liftMO?.disconnect(); } catch (e) {} liftRO = liftMO = liftEl = null; device.classList.remove('orb-lift', 'orb-slotted', 'orb-typed'); device.style.removeProperty('--comp-h'); return; }
     if (!liftRO && window.ResizeObserver) { liftRO = new ResizeObserver(paintCornerLift); liftMO = new MutationObserver(paintCornerLift); liftMO.observe(track, { childList: true, subtree: true }); }
     paintCornerLift();
   }
@@ -1188,8 +1210,11 @@
     return true;
   }
   window.WizOpenAgentChats = openAgentChats;
+  window.WosAppSetup?.init({ getApp: id => APP[id] });
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
+    if (a.kind === 'wizard' && a.url && !opts.setupChecked && window.WosAppSetup)
+      return window.WosAppSetup.gate(a, () => openApp(a, extra, { ...opts, setupChecked: true }), { settled: () => openingEnd(a.id) });
     if (a.id === 'side-button') { closeSheets(true); if (idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
     if (a.kind === 'chats') {
       if (a.agent) return openAgentChats(a.agent);
@@ -1565,7 +1590,7 @@
       if (f._watched) return; f._watched = true;
       // servicesAs: a companion view gets its owning installed app's Back/services.
       const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
-      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), back: () => { if (desks[idx].focus !== w.id) return false; const did = backStep(w.id); if (did) { exitUntil = 0; window.__backLog = (window.__backLog || []).concat('app-done:' + did).slice(-30); } return !!did; }, openContextDraft: (key, text) => { closeSheets(true); const cw = placeApp(mainChats, { app: 'chats', thread: null }, {}); if (!cw) throw new Error('Chats unavailable'); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); return receipt; }, isVisible: () => desks[idx].wins.includes(w.id) && (!desks[idx].full || desks[idx].focus === w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) });
+      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), isFront: () => desks[idx].focus === w.id && desks[idx].wins.includes(w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) && !device.classList.contains('st-parked'), back: () => { if (desks[idx].focus !== w.id) return false; const did = backStep(w.id); if (did) { window.__backLog = (window.__backLog || []).concat('app-done:' + did).slice(-30); } return !!did; }, openContextDraft: (key, text) => { closeSheets(true); const cw = placeApp(mainChats, { app: 'chats', thread: null }, {}); if (!cw) throw new Error('Chats unavailable'); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); return receipt; }, isVisible: () => desks[idx].wins.includes(w.id) && (!desks[idx].full || desks[idx].focus === w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) });
       watchEarly(f);
       const wrap = f.closest('.frame-wrap');
       if (f.dataset.probe) { wrap.classList.remove('loading'); wrap.classList.add('coming'); f.removeAttribute('src'); probeFrame(f, f.dataset.probe); }
@@ -1579,7 +1604,7 @@
         if (why === 'about:blank') {
           // A frame that had a real page and is back on blank was traversed by the Back key (cross-document, so no
           // popstate fires). That press belongs to the shell: take the step and restore the app in place.
-          if (f._lastUrl) { const u = f._lastUrl; f._lastUrl = ''; onBack(); if (Date.now() >= exitUntil) ensureGuard(true); try { f.contentWindow.location.replace(u); } catch (e) {} }
+          if (f._lastUrl) { const u = f._lastUrl; f._lastUrl = ''; onBack(); ensureGuard(true); try { f.contentWindow.location.replace(u); } catch (e) {} }
           return;
         }
         if (ok) { try { f._lastUrl = f.contentWindow.location.href; } catch (e) {} }
@@ -1600,8 +1625,7 @@
       const home = (want.split(/[?#]/)[0] || '').replace(/[^/]*$/, '');
       if (home && home !== '/' && here.startsWith(home)) { W[id].url = here; save(); } } } catch (e) {}
     try { win.document.addEventListener('pointerdown', () => { focusWin(id); armBack(); }, true); } catch (e) {}
-    // A hosted app may keep its own history guard. During the exit window the shell owns Back:
-    // any Back that lands on a frame entry keeps unwinding until Wizard OS really leaves.
+    // Hosted-app history is tamed; Back never becomes permission to leave Wizard.
     tameHistory(win);
     // A hosted app may push its own Back guard at boot (same URL) before the shell can tame it. Popping such an
     // entry is the user pressing Back: the shell takes that step and the app never sees it. Popping a real in-app
@@ -1611,7 +1635,6 @@
       if (!f.isConnected || !W[id] || f.contentWindow !== win) return; // a removed preview owns no shell navigation
       if (win.WizardApp?.hosted && e.state?.__wizardApp?.version === 1) { takeSelfPop(win); return; }
       if (Date.now() < dropUntil) { e.stopImmediatePropagation(); ignorePop = 0; dropUntil = 0; return; } // the shell's guard drop landed here
-      if (Date.now() < exitUntil) { e.stopImmediatePropagation(); history.back(); return; }
       // The app (or the shell on its behalf) stepped back through the app's own entry: the app's step.
       if (takeSelfPop(win)) { try { win.__wosHref = win.location.href; } catch (x) {} return; }
       let same = false; try { same = win.location.href === win.__wosHref; win.__wosHref = win.location.href; } catch (x) {}
@@ -1624,7 +1647,7 @@
       e.stopImmediatePropagation();
       guardOn = history.state?.wos === 'guard'; // the shell's own guard is still under the popped app entry
       onBack();
-      if (Date.now() >= exitUntil) ensureGuard(true);
+      ensureGuard(true);
     }, true); } catch (e) {}
     try { FIELDS?.bind(win.document); } catch (e) {}
     try { bindWinPinch(win.document, id); } catch (e) {}
@@ -1865,7 +1888,7 @@
   }
   settingsEl.setAttribute('role', 'dialog'); settingsEl.setAttribute('aria-modal', 'true');
   settingsEl.addEventListener('keydown', e => window.WosSettings.trap(e, settingsEl));
-  $('#scrim').addEventListener('click', () => closeSheets());
+  $('#scrim').addEventListener('click', () => backStep());
   /* Swipe the grip down to close Settings, like every sheet (wizard-os#265 rule 7). Only the grip drags; the body scrolls. */
   { const grip = settingsEl.querySelector('.sheet-grip'); let y0 = null, dy = 0, t0 = 0;
     grip?.addEventListener('pointerdown', e => { if (sheet !== 'settings') return; y0 = e.clientY; dy = 0; t0 = performance.now(); settingsEl.style.transition = 'none'; try { grip.setPointerCapture(e.pointerId); } catch (_) {} });
@@ -1970,7 +1993,7 @@
     { g: 'needs', name: 'Needs you', c: 'var(--amber)' },
   ];
   function noteHtml(n, g) {
-    const sub = g === 'working' ? (n.status === 'queued' ? 'Queued' : `${window.WizConfig.agent()} is on it`) : g === 'needs' ? (n.status === 'waiting_for_approval' ? 'Waiting for your approval' : n.status === 'failed' || n.status === 'interrupted' ? 'Stopped · needs a look' : 'Needs you') : (n.preview || '');
+    const sub = n.queueReason === 'provider_access' ? 'Waiting for the AI sign-in to come back; will send automatically' : g === 'working' ? (n.status === 'queued' ? 'Queued' : `${window.WizConfig.agent()} is on it`) : g === 'needs' ? (n.status === 'waiting_for_approval' ? 'Waiting for your approval' : n.status === 'failed' || n.status === 'interrupted' ? 'Stopped · needs a look' : 'Needs you') : (n.preview || '');
     return `<button class="note ${g === 'working' ? 'working' : ''}" data-note="${esc(n.id)}" data-g="${g}">${isRec(n) ? '<span class="ic rec">◉</span>' : `<span class="ic emo">${emoOf(n.id)}</span>`}
       <span class="bd"><span class="tp"><span class="src${isRec(n) ? ' mizel' : ''}">${isRec(n) ? 'Mizel.ai' : 'Chats'}</span><span class="tm">${esc(ago(g === 'working' ? (n.lastUserAt || n.updatedAt) : (n.lastAssistantAt || n.activityAt || n.updatedAt)))}</span></span><span class="ti">${esc(n.title)}</span><span class="sb">${esc(clip(sub, 120))}</span></span></button>`;
   }
@@ -2276,7 +2299,7 @@
   };
   let NOMIC = false;
   function setVoice(s) {
-    V.state = s; device.dataset.voice = s; tourEv('voice', { state: s }); queueMicrotask(() => window.WosSkinHost?.voice?.(s)); if (s === 'listen' || s === 'idle') V.resumeBlocked = false;
+    V.state = s; device.dataset.voice = s; if (liftRO) queueMicrotask(paintCornerLift); tourEv('voice', { state: s }); queueMicrotask(() => window.WosSkinHost?.voice?.(s)); if (s === 'listen' || s === 'idle') V.resumeBlocked = false;
     $('#arcPause small').textContent=s==='paused'?'Resume':'Pause';$('#arcPause').setAttribute('aria-label',s==='paused'?'Resume recording':'Pause recording');
     CHATS.PW?.paintMic((s === 'listen' || s === 'paused') && !!V.replyTo, V.replyTo?.sid || '');
     reportVoice(s);
@@ -2318,11 +2341,22 @@
   }
   voicePicker.addEventListener('change', async () => {
     const list = [...voicePicker.files], files = V.files; voicePicker.value = '';
-    for (const file of list) {
-      if (!sameTake(files)) break;
-      if (files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); break; }
-      const f = { name: file.name, mime: file.type, bytes: file.size, uploading: true };
-      files.push(f); renderVoiceFiles();
+    if (!sameTake(files)) return;
+    // Every picked file joins the take at once, each tracked with its bytes, so a send before the uploads finish
+    // takes them all (James, 27 Oct 2026: picked two images, sent while the second was uploading, only the first
+    // arrived). Adding one row per finished upload left later files out of a send that happened in between.
+    const room = Math.max(0, 8 - files.length);
+    if (list.length > room) toast('!', 'Up to 8 files per message', 2400);
+    const rows = list.slice(0, room).map(file => {
+      const f = { name: file.name, mime: file.type, bytes: file.size, uploading: true, local: file };
+      window.WizUploads?.pending?.track(f, file);
+      files.push(f); return [file, f];
+    });
+    if (!rows.length) return;
+    renderVoiceFiles();
+    // One at a time; a row a send already took (handedOff) still uploads, because its message waits on it.
+    for (const [file, f] of rows) {
+      if (!f.handedOff && (!sameTake(files) || !files.includes(f))) { f.upSettle?.fail(new Error('Attachment removed')); continue; }
       await uploadVoiceFile(file, files, f);
     }
   });
@@ -2481,6 +2515,7 @@
     return 'recording';
   }
   async function startVoice(kind, opt = {}) {
+    if (CHATS.incognitoActive(opt.replyTo?.wid || focusedWin()?.id) || document.activeElement?.closest?.('[data-incog-thread]')) { toast('!', 'Incognito is text only · finish it before recording', 2600); return 'busy'; }
     V.onAt = performance.now();
     if(V.admitting||parking)return 'busy';
     if(V.state==='paused' && V.replyTo && ['dictation','command'].includes(kind)) {
@@ -3583,13 +3618,11 @@
    * Android Back is an in-app back gesture, one step at a time:
    *   recording → menu → sheet → the focused window's own back (thread → list,
    *   framed app history, review dive) → full screen → Home desk.
-   * On Home with nothing left to undo, the first Back only warns; a second Back
-   * within 2 s exits. Two mechanisms, so it holds on every Chrome:
+   * At Home every Back is consumed, including repeated presses. Two mechanisms:
    *   1. CloseWatcher (Chrome 120+) consumes Back, re-armed after every press,
    *      in this document and in every same-origin framed app;
    *   2. a history guard entry pushed during a user gesture; popstate → one step. */
-  const EXIT_MS = 2000;
-  let exitUntil = 0, exitT = 0, guardOn = history.state?.wos === 'guard', ignorePop = 0;
+  let guardOn = history.state?.wos === 'guard', ignorePop = 0;
   const watchers = new Set();
   function hostedBack(f) {
     const frame = winEl(f.id)?.querySelector('iframe');
@@ -3603,11 +3636,13 @@
     { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above everything, incl. the selection menu that opened it
     { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
     if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet sits above the windows
+    if (window.WosAppSetup?.back()) return 'app-setup';
     if (window.WosBoomerang?.back()) return 'boomerang'; // the Boomerang picker sits above the thread it was opened from
     // Explicit bypass capture follows the retain-on-Back contract; ordinary recordings keep navigating.
     if (V.snap?.general && ['listen', 'command'].includes(V.state)) { V.stopAsked = true; pauseCommandCapture(); return 'recording'; }
     if (document.querySelector('#txChips [data-handoff], #txChips [data-hold]')) { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(0); return 'draft'; }
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
+    if (window.WizLinks?.backMenu()) return 'link-menu';
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
     const ov = CHATS.closeOverlay(); if (ov) { if (settingsReturn === 'files') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="files"]')?.focus(); } return ov; } // media viewer, then the thread actions sheet
     const dv = window.WosDevice?.back?.(); if (dv) return dv; // share picker, recovered-recording card
@@ -3649,24 +3684,20 @@
   }
   function onBack() {
     const did = backStep();
-    window.__backLog = (window.__backLog || []).concat(did || 'exit-warn').slice(-30);
-    if (did) { exitUntil = 0; return; }
-    // Nothing left to undo: warn, then let the very next Back leave.
-    exitUntil = Date.now() + EXIT_MS; toast('↩', 'Press back again to exit Wizard OS', EXIT_MS);
-    disarmAll(); dropGuard();
-    clearTimeout(exitT); exitT = setTimeout(() => { exitUntil = 0; armBack(); }, EXIT_MS);
+    window.__backLog = (window.__backLog || []).concat(did || 'root').slice(-30);
+    if (!did) toast('⌂', "You're home", 1200);
+    return did || 'root';
   }
   function makeWatcher(win, rearm) {
-    if (!win || !('CloseWatcher' in win) || Date.now() < exitUntil) return null;
+    if (!win || !('CloseWatcher' in win)) return null;
     try {
       const w = new win.CloseWatcher();
-      w.onclose = () => { watchers.delete(w); onBack(); if (Date.now() >= exitUntil) setTimeout(rearm, 0); };
+      w.onclose = () => { watchers.delete(w); onBack(); setTimeout(rearm, 0); };
       watchers.add(w); return w;
     } catch (e) { return null; }
   }
   let topWatcher = null;
   function armBack() {
-    if (Date.now() < exitUntil) return;
     if (!topWatcher || !watchers.has(topWatcher)) topWatcher = makeWatcher(window, () => { topWatcher = null; armBack(); });
     ensureGuard();
   }
@@ -3679,32 +3710,25 @@
   function rearmFrames() { $$('iframe.appframe').forEach(f => { try { const w = f.contentWindow; if (w && w.document.readyState !== 'loading') armFrameBack(f, w); } catch (e) {} }); }
   // History guard: only pushed during a user gesture, so Chrome never skips it.
   function ensureGuard(force) {
-    if (guardOn || Date.now() < exitUntil || (!force && !navigator.userActivation?.isActive)) return;
+    if (guardOn || (!force && !navigator.userActivation?.isActive)) return;
     history.pushState({ wos: 'guard' }, ''); guardOn = true;
   }
-  // Only step back over our own guard entry. If the current entry is not the guard (it was already consumed, or
-  // Chrome treats it as skippable), going back would leave the page, so the warning just stays put instead.
-  // The pop this causes can land in the top page OR in a hosted frame (Topics, Meetings), and may fire in several
-  // frames at once. Every pop inside the next half second is ours, never the user's second Back: worst case a very
-  // fast double Back stays in the app, which is the safe direction.
-  var dropUntil = 0; // var: frame listeners defined earlier may read it during boot
-  function dropGuard() { const g = guardOn && history.state?.wos === 'guard'; guardOn = false; if (g) { ignorePop++; dropUntil = Date.now() + 500; history.back(); } }
+  var dropUntil = 0; // retained for hosted-frame programmatic-pop accounting
   addEventListener('popstate', e => {
     // Landing on a guard entry means the Back key popped something stacked above it (a hosted app's entry or a
     // second guard). We never navigate forward, so every pop is a user Back: never swallow one.
     guardOn = e.state?.wos === 'guard';
     if (ignorePop) { ignorePop--; dropUntil = 0; return; }
     if (Date.now() < dropUntil) { dropUntil = 0; return; } // our own guard drop surfacing late (counts once)
-    if (Date.now() < exitUntil) { history.back(); return; } // second Back: leave
     onBack();
     // A consumed step re-arms at once, so the next Back (even with no tap in
-    // between) is caught too. After the exit warning nothing is re-armed.
-    if (Date.now() >= exitUntil) ensureGuard(true);
+    // between) is caught too, including at Home.
+    ensureGuard(true);
   });
   // Every touch is a user activation: refresh the watchers and the guard then.
   // (Touch only grants activation on pointerup/click, so listen to all three.)
-  for (const ev of ['pointerdown', 'pointerup', 'click']) addEventListener(ev, () => { if (Date.now() >= exitUntil) { armBack(); rearmFrames(); } }, true);
-  addEventListener('keydown', () => { if (Date.now() >= exitUntil) armBack(); }, true);
+  for (const ev of ['pointerdown', 'pointerup', 'click']) addEventListener(ev, () => { { armBack(); rearmFrames(); } }, true);
+  addEventListener('keydown', () => { armBack(); }, true);
   if (history.state?.wos !== 'root' && history.state?.wos !== 'guard') history.replaceState({ wos: 'root' }, '');
   if (history.state?.wos === 'guard') guardOn = true;
 
@@ -3738,7 +3762,7 @@
       if (!state) { const i = posOf(o.focus); if (i > 0) { closeSheets(true); goDesk(i); } return; }
       const here = desks[idx]?.id, at = idx;
       const r = window.WosWorkspaceSync.reconcile(desks.slice(1), W, state, { fresh: id => blank({ id }), max: MAXW });
-      r.removed.forEach(id => { closeAppPlayback(W[id]); CHATS.closeHosted(id); delete W[id]; delete CH[id]; });
+      r.removed.forEach(id => { closeAppPlayback(W[id]); CHATS.closeHosted(id); CHATS.forget(id); delete W[id]; delete CH[id]; });
       desks = [desks[0], ...r.desks].map(d => { if (!d.wins.length) d.full = false; return d; });
       syncDesks(); desks.forEach((_, i) => renderDesk(i));
       idx = posOf(here); if (idx < 0) idx = Math.max(0, Math.min(at, desks.length - 1));
@@ -3772,7 +3796,7 @@
   else if (firstRun) setTimeout(() => { if (!(window.__deeplinkLog || []).length) window.WosTour?.start('first-run'); else window.WosTour?.mark(); }, 600);
   // Native shell (Wizard OS Android app): the app hands every hardware/gesture Back to the shell. A step that
   // undoes something returns its name; at the true root the shell stays put and says so. The app never exits
-  // on Back (James's rule), so there is no "press again to exit" in native mode.
+  // on Back (James's rule), just like the browser guard above.
   window.__wosNativeBack = () => {
     const did = backStep();
     window.__backLog = (window.__backLog || []).concat(did ? 'native:' + did : 'native:root').slice(-30);
@@ -3878,7 +3902,7 @@
     openAgentChats,
     live: LIVE, openPeek, closePeek, openOverview, closeOverview, mergeDesks, splitDesk, reorderDesks, closeDesk, openLinkDesk, pinWin, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
     HOME, get idx() { return idx; }, get desks() { return desks; }, get ovLog() { return window.__ovLog || []; }, get wins() { return W; }, get voice() { return V.state; }, get voiceHandedOff() { return !!V.handedOff && OUTBOX.handedOff?.(V.handedOff); }, get sheet() { return sheet; },
-    get back() { return { watchers: watchers.size, guardOn, exitArmed: Date.now() < exitUntil, log: window.__backLog || [] }; },
+    get back() { return { watchers: watchers.size, guardOn, exitArmed: false, log: window.__backLog || [] }; },
     openSearch,
     startVoice, finishVoice, cancelVoice, recoverDictation, recoverParkedReply, outbox: OUTBOX, openSettings, unsentAll, renderSettings,
     canSearch: () => !!APP['wizard-search'], chats: CHATS, chat: CHATS.KIT, get viewer() { return CHATS.KIT.viewer.state; }, threadAct: CHATS.threadAct, openRowSheet: CHATS.openRowSheet,
@@ -4007,5 +4031,15 @@
     dictate: () => { if (V.state !== 'idle' || !FIELDS?.refresh()) return false; startVoice('dictation'); return true; },
     voiceCancel: () => cancelVoice(),
     relayout: () => { try { syncImmersive(); } catch (_) {} },
+    appOrb: () => { const f = frontAppFrame(); return f ? window.WizAppServices?.orb?.of(f) || null : null; },
+    appOrbTap: () => { const f = frontAppFrame(); return !!f && !!window.WizAppServices?.orb?.tap(f); },
   });
+  // The app window in front (no sheet over it): the only app that may wear the agent orb.
+  function frontAppFrame() {
+    const f = desks[idx]?.focus, w = f && W[f];
+    if (!w?.appId || sheet || menuFor || CHATS.isHosted(f)) return null;
+    return track.querySelector(`.win[data-win="${f}"] iframe.appframe`);
+  }
+  // An app's claim shows whenever the active layout draws an agent orb (it wears it while that app is in front).
+  window.WizAppServices?.orb?.presenter(() => document.documentElement.dataset.layout === 'two-orb');
 })();

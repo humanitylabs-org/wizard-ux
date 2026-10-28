@@ -8,9 +8,10 @@ function load({ apps = { messenger: { kind: 'wizard', name: 'Messenger' } }, ope
   const events = [];
   let ops = null;
   const window = { WizCore: { apps: () => ({ APP: apps }) }, WizOpenApp: open, dispatchEvent: e => events.push(e), WizAppServices: { claimShare: o => (ops ? false : (ops = o, true)) } };
-  const ctx = { window, localStorage: store(), sessionStorage: store(), CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o?.detail; } }, document: {}, requestAnimationFrame: f => f(), setTimeout };
+  const storage = store();
+  const ctx = { window, localStorage: storage, sessionStorage: store(), CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o?.detail; } }, document: {}, requestAnimationFrame: f => f(), setTimeout };
   vm.runInNewContext(src, ctx);
-  return { S: Object.assign({}, window.WosShareSheet, ops), G: window.WosShareSheet, events, claim: window.WizAppServices.claimShare };
+  return { S: Object.assign({}, window.WosShareSheet, ops), G: window.WosShareSheet, events, storage, claim: window.WizAppServices.claimShare };
 }
 
 test('Messenger is offered before it was ever opened; with no receiver installed Share goes straight out', async () => {
@@ -25,7 +26,7 @@ test('registry: only declared kinds, only installed Wizard apps, targets cleaned
   const { S } = load();
   assert.equal(S.register('messenger', { accepts: ['text', 'file', 'evil'], targets: [{ id: 'p1', name: 'Miguel\u0007', detail: 'Telegram' }, { id: 'p1', name: 'dup' }, { id: '', name: 'x' }, { id: 'p2', name: '' }] }), true);
   const r = S._state().receivers.messenger;
-  assert.deepEqual([...r.accepts], ['text']);
+  assert.deepEqual([...r.accepts], ['text', 'file']);
   assert.deepEqual([...r.targets.map(t => t.id + ':' + t.name)], ['p1:Miguel']);
   assert.equal(S.wants('text'), true);
   assert.equal(S.wants('url'), false);
@@ -69,4 +70,42 @@ test('a pending share goes to one frame: the first live puller claims it until i
   assert.equal(got.length, 1, 'a closed claimant releases it');
   assert.equal(S.ack('messenger', got[0].id), true);
   assert.equal(S.pending('messenger', b).length, 0);
+});
+
+test('reviewed Messenger defaults offer images, never generic files', () => {
+  const { S } = load();
+  assert.equal(S.wants('image'), true);
+  assert.equal(S.wants('file'), false);
+  S.register('messenger', { accepts: ['text', 'url'] });
+  assert.equal(S.wants('image'), false, 'older app registration replaces defaults');
+});
+
+test('Blob handoffs preserve bytes and metadata; claim, isolate, clone and ack once', async () => {
+  const { S, G, storage } = load();
+  S.register('messenger', { accepts: ['image', 'file'] });
+  for (const [type, kind] of [['image/png', 'image'], ['application/pdf', 'file'], ['', 'file']]) {
+    const file = new File(['private file bytes'], 'example.bin', { type });
+    assert.equal(S.deliver('messenger', { file, text: 'caption' }, 'p1'), true);
+    const a = { owner: 'A', alive: () => true }, b = { owner: 'B', alive: () => true };
+    const [item] = S.pending('messenger', a);
+    assert.equal(item.file, file); assert.equal(item.kind, kind); assert.equal(item.name, 'example.bin');
+    assert.equal(item.mime, type || 'application/octet-stream'); assert.equal(item.size, file.size);
+    assert.equal(item.target, 'p1'); assert.equal(item.text, 'caption');
+    assert.equal(S.pending('messenger', b).length, 0); assert.equal(S.pending('other').length, 0);
+    const clone = structuredClone(item);
+    assert.ok(clone.file instanceof Blob); assert.equal(await clone.file.text(), 'private file bytes');
+    assert.equal(S.ack('other', item.id), false);
+    assert.equal(S.ack('messenger', item.id), true); assert.equal(S.ack('messenger', item.id), false);
+  }
+  assert.equal(S.deliver('messenger', {file: new Blob([new Uint8Array(32 * 1024 * 1024 + 1)])}), false);
+  assert.equal(S.deliver('messenger', {file: {type: 'image/png', size: 1}}), false);
+  assert.doesNotMatch(storage.getItem('wos.share.receivers.v1'), /private file bytes|example.bin|caption/);
+  assert.doesNotMatch(JSON.stringify(G._state()), /private file bytes|example.bin|caption/);
+});
+
+test('generic files without receivers keep the old path; oversized files never reach it', async () => {
+  const { S } = load(); let calls = 0;
+  assert.equal(await S.show({file: new Blob(['pdf'], {type: 'application/pdf'})}, () => { calls++; return 'shared'; }), 'shared');
+  assert.equal(await S.show({file: new Blob([new Uint8Array(32 * 1024 * 1024 + 1)])}, () => { calls++; }), 'unsupported');
+  assert.equal(calls, 1);
 });
