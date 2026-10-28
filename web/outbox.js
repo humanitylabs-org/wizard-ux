@@ -9,6 +9,22 @@
   const BACKOFF = [2000, 5000, 15000, 30000, 60000, 120000], AUTO_TRIES = BACKOFF.length;
   // Agent Service allows 180 seconds of STT; leave time for upload/response transit.
   const TRANSCRIBE_TIMEOUT_MS = 195000;
+  const LATE_MESSAGE_MS = 6 * 60 * 60 * 1000;
+  // Consent belongs to this saved message, not the current screen or a bulk retry.
+  const lateMessage = it => ['new', 'reply'].includes(it.kind) && it.intent !== 'command' &&
+    !it.runId && !it.sentAt && !it.lateSendApproved && Number.isFinite(it.createdAt) && now() - it.createdAt > LATE_MESSAGE_MS;
+  function lateLabel(it) {
+    const at = new Date(it.createdAt);
+    const day = at.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    const time = at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    return `${it.audio || it.audioFile || it.audioType ? 'Recorded' : 'Written'} ${day}, ${time} · not sent yet`;
+  }
+  async function holdLate(it) {
+    if (!lateMessage(it)) return false;
+    it.lateHeld = true; it.threadHidden = false;
+    await api.transition(it.id, 'held', lateLabel(it) + ' · Send when ready.');
+    return true;
+  }
   const J = { 'Content-Type': 'application/json' }, listeners = new Set(), sentHooks = new Set(), newHooks = new Set();
   const items = new Map(), writes = new Map(), encodings = new WeakMap();
   const conversationWork = new Map(), transcriptWork = new Map(), removeErrors = new Map();
@@ -26,8 +42,9 @@
     const r = AG.route(a, ''); if (!r?.model) return false;
     Object.assign(it, { model: r.model, provider: r.provider }); return true;
   }
-  function queueRetry(it, states) {
-    if (!eligible(it, states)) return false;
+  function queueRetry(it, states, ownerSend = false) {
+    if (!eligible(it, states) || (it.state === 'held' && !it.lateHeld)) return false;
+    if (ownerSend && (it.lateHeld || lateMessage(it))) it.lateSendApproved = true;
     // Claim synchronously before the first persistence await: a double tap cannot
     // reset an in-flight attempt back to waiting and cause a second dispatch.
     Object.assign(it, { state: 'queued', threadHidden: false, nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) });
@@ -391,6 +408,7 @@
           (frozen.agent || '') !== (it.agent || '') || frozen.require_model_lock !== true)
         throw new HttpError(409, 'Stored steer route changed · original kept');
       // Refuse to mutate without a durable dispatch journal, even if audio was uploaded.
+      if (await holdLate(it)) return;
       it.steerDispatch = 'started'; await put(it);
       if (!it.durable) { delete it.steerDispatch; throw new HttpError(409, 'Device save failed · steering not dispatched; original kept'); }
       let receipt;
@@ -447,6 +465,7 @@
       if (it.agent) body.agent = it.agent;
       it.body = JSON.stringify(body); await put(it);
     }
+    if (await holdLate(it)) return;
     const r = await call('/wizard/hermes/v1/runs' + aq, { method: 'POST', headers: { ...J, 'Idempotency-Key': it.id }, body: it.body });
     let run; try { run = await r.json(); } catch (_) { throw new HttpError(502, 'Wizard’s send receipt was lost'); }
     const runId = run.run_id || run.id;
@@ -481,6 +500,7 @@
       for (;;) {
         const due = [...items.values()].filter(it => eligible(it, ['queued', 'waiting']) && (it.nextAt || 0) <= now()).sort((a, b) => a.createdAt - b.createdAt)[0];
         if (!due) break;
+        if (await holdLate(due)) continue;
         await attempt(due);
       }
       for (const it of [...items.values()]) if (it.state === 'sent' && !it.compact && it.durable && now() - it.sentAt > 10 * 60e3) await del(it.id);
@@ -500,7 +520,7 @@
   const replyOf = o => window.WosChat?.reply?.clean(o?.reply) || null;
   const newSessionId = () => `wizard_${now()}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
   function make(o) {
-    return { id: o.nativeId ? 'wos-native-' + o.nativeId : 'wos-' + crypto.randomUUID(), createdAt: now(), attempts: 0, state: 'preparing',
+    return { id: o.nativeId ? 'wos-native-' + o.nativeId : 'wos-' + crypto.randomUUID(), createdAt: Number.isFinite(o.createdAt) && o.createdAt > 0 && o.createdAt <= now() ? o.createdAt : now(), attempts: 0, state: 'preparing',
       meetingEventId: o.meetingEventId || '', parkedDraft: o.parkedDraft || null, nativeIds: [...new Set([...(o.nativeIds || []), o.nativeId].filter(Boolean))],
       kind: o.kind === 'conversation' ? 'conversation' : o.kind === 'reply' ? 'reply' : 'new', conversation: o.conversation || null, sessionId: o.kind === 'conversation' ? '' : o.sessionId || newSessionId(), steerRunId: o.meetingEventId ? '' : o.steerRunId || '',
       text: String(o.text || '').trim(), typed: o.audio && !String(o.text || '').trim() ? String(o.typed || '').trim() : '', instructions: o.instructions || '', files: (o.files || []).map(f => ({ ...f })),
@@ -687,8 +707,9 @@
       } catch (e) { it.state = 'failed'; it.error = String(e.message || e); }
       await put(it); pump(); return it;
     },
-    canRetry(it) { return eligible(typeof it === 'string' ? items.get(it) : it, ['failed', 'waiting', 'empty']); },
-    retry(id) { return queueRetry(items.get(id), ['failed', 'waiting', 'empty']); },
+    canRetry(it) { const x = typeof it === 'string' ? items.get(it) : it; return eligible(x, ['failed', 'waiting', 'empty', 'held']) && (x.state !== 'held' || x.lateHeld === true); },
+    retry(id) { return queueRetry(items.get(id), ['failed', 'waiting', 'empty', 'held'], true); },
+    lateLabel,
     retryAll(agent) { let n = 0; for (const it of items.values()) if ((agent === undefined || (it.agent || '') === agent) && queueRetry(it, ['failed', 'waiting'])) n++; return n; },
     retryFeedback(n) { return n ? `Queued ${n === true || n === 1 ? 'retry' : n + ' retries'} · originals kept until confirmed` : 'Nothing eligible to retry · originals kept'; },
     unsent() { return [...items.values()].filter(it => !['dictation', 'capture'].includes(it.kind) && it.state !== 'sent').sort((a, b) => a.createdAt - b.createdAt); },
