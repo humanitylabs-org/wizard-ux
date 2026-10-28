@@ -25,6 +25,9 @@ test('response style is an owner setting', async () => {
   deny = false; stale = true;
   await assert.rejects(box.WizConfig.responseStyle('summary'), /not confirmed/);
   await assert.rejects(box.WizConfig.responseStyle('bad'), /Choose/);
+  stale = false;
+  assert.equal(await box.WizConfig.responseStyle('own'), 'own');
+  assert.equal(box.WizConfig.raw.settings.response_style, 'own');
 });
 test('both shells show Summary and Concise on Chats & app screens and Back stays in Settings', async () => {
   const box = { console, Map, Set, Date, String, navigator: { userAgent: 'Fixture' }, CSS: { escape: String }, document: { activeElement: null }, WizCore: {}, WizConfig: { responseStyle: async () => 'summary' } };
@@ -38,6 +41,8 @@ test('both shells show Summary and Concise on Chats & app screens and Back stays
     assert.match(root.innerHTML, /Response style/);
     assert.match(root.innerHTML, /Summary: context and labelled results/);
     assert.match(root.innerHTML, /Concise: short, plain replies/);
+    assert.match(root.innerHTML, /Own: your agent's usual style, nothing added/);
+    assert.match(root.innerHTML, /<option value="own" >Own<\/option>/);
     assert.match(root.innerHTML, /value="summary" selected/);
     assert.equal(view.back(), true);
     assert.equal(view.page, '');
