@@ -796,45 +796,8 @@
       else if (result === 'unsupported') K.notify('!', 'Sharing unavailable or not confirmed');
     } catch (_) { K.notify('!', 'Couldn’t share this file'); }
   }); };
-  // Zooming out keeps your place in a long screenshot; a normal photo recentres.
-  function reset() { const s = V.s; V.s = 1; V.x = 0; V.y = V.long ? V.y / s : 0; clampPan(); paint(); }
-  function zoomAt(px, py, s) {
-    const st = V.el?.querySelector('.mv-stage'); if (!st) return;
-    if (!V.long) { V.s = s; V.x = 0; V.y = 0; paint(); return; }
-    const r = st.getBoundingClientRect(), ox = px - r.left - r.width / 2, oy = py - r.top;
-    V.x = ox - (ox - V.x) * s / V.s; V.y = oy - (oy - V.y) * s / V.s; V.s = s; clampPan(); paint();
-  }
-  // Long screenshots (much taller than the screen) fit the width and scroll; the image's top sits at the stage top.
-  function dims() {
-    const st = V.el?.querySelector('.mv-stage'), img = st?.querySelector('img');
-    if (!img || !img.naturalWidth || !st.clientWidth) return null;
-    return { W: st.clientWidth, H: st.clientHeight, r: img.naturalHeight / img.naturalWidth };
-  }
-  function clampPan() {
-    if (!V.long) return; const d = dims(); if (!d) return;
-    const h = d.W * d.r * V.s, mx = (d.W * V.s - d.W) / 2;
-    V.y = Math.max(Math.min(0, d.H - h), Math.min(0, V.y)); V.x = Math.max(-mx, Math.min(mx, V.x));
-  }
-  function fit() {
-    const d = dims(); if (!d || !V.el) return;
-    const was = V.long; V.long = d.r > (d.H / d.W) * 1.15;
-    V.el.classList.toggle('long', V.long);
-    if (V.long !== was) { V.s = 1; V.x = 0; V.y = 0; }
-    clampPan(); paint(true);
-  }
-  function stopFling() { if (V.fl) cancelAnimationFrame(V.fl); V.fl = 0; }
-  function fling(v) {
-    stopFling(); if (!(Math.abs(v) > .05)) return;
-    let last = performance.now();
-    const step = now => {
-      const dt = Math.min(40, now - last); last = now;
-      const y = V.y + v * dt; V.y = y; clampPan(); if (V.y !== y) v = 0;
-      v *= Math.pow(.996, dt); paint(true);
-      V.fl = Math.abs(v) > .02 && viewer.isOpen() ? requestAnimationFrame(step) : 0;
-    };
-    V.fl = requestAnimationFrame(step);
-  }
-  function paint(instant) {
+  function reset() { V.s = 1; V.x = 0; V.y = 0; paint(); }
+  function paint() {
     const img = V.el?.querySelector('.mv-stage img'); if (!img) return;
     img.style.transition = V.g ? 'none' : ''; img.style.transform = `translate(${V.x}px, ${V.y}px) scale(${V.s})`;
     V.el.classList.toggle('zoomed', V.s > 1.02);
