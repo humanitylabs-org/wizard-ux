@@ -12,16 +12,17 @@
   };
   const copy = value => JSON.parse(JSON.stringify(value));
   let state = Store.read() || { version: 1, off: {} };
+  let retried = false;  // one quiet retry when a slow network made the whole set fail to load
   let catalog = null, slots = null, set = null, owner = null, manifests = new Map(), generation = 0, error = '', busy = false;
   // Tweak files are static per release: read each once per page (a failure is forgotten so the next call retries).
   const files = new Map();
-  const fetchOnce = async url => {
-    const r = await fetch(new URL(url, document.baseURI), { cache: 'no-cache', signal: AbortSignal.timeout(6000) });
+  const fetchOnce = async (url, ms = 6000) => {
+    const r = await fetch(new URL(url, document.baseURI), { cache: 'no-cache', signal: AbortSignal.timeout(ms) });
     if (!r.ok) throw new Error(`Could not read ${url} (${r.status})`); return r.json();
   };
   const read = url => {
     if (/profile\.json$/.test(url)) return fetchOnce(url); // a published profile can change; manifests cannot
-    if (!files.has(url)) files.set(url, fetchOnce(url).catch(() => fetchOnce(url)).catch(e => { files.delete(url); throw e; }));
+    if (!files.has(url)) files.set(url, fetchOnce(url).catch(() => fetchOnce(url, 30000)).catch(e => { files.delete(url); throw e; }));
     return files.get(url).then(v => JSON.parse(JSON.stringify(v)));
   };
   const changed = () => window.dispatchEvent(new Event('wos:experience'));
@@ -91,7 +92,7 @@
       manifests = new Map(await Promise.all(all.map(async id => [id, await read(`tweaks/${id}/manifest.json`)])));
       if (seq !== generation) return;
       await window.WosSkinHost.loadTweaks(all.filter(id => own ? (Object.hasOwn(own.tweaks, id) ? own.tweaks[id] : next?.tweaks.includes(id) && !offFor(who).includes(id)) : !offFor(who).includes(id)), slots, { teamAuthors: catalog.teamAuthors });
-    } catch (e) { if (seq === generation) error = e.message; } finally { if (seq === generation) { busy = false; changed(); } }
+    } catch (e) { if (seq === generation) { error = e.message; if (!retried) { retried = true; setTimeout(() => { if (seq === generation) apply(); }, 5000); } } } finally { if (seq === generation) { busy = false; changed(); } }
   }
   const experience = {
     get state() {
