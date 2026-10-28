@@ -289,20 +289,60 @@ button.mh-shield { cursor: pointer; }
 .mh-access { display: flex; flex-direction: column; gap: 3px; max-width: 360px; font-size: 12px; line-height: 1.35; color: var(--mh-ink-2); text-align: left; }
 .mh-access code { align-self: flex-start; padding: 2px 7px; border-radius: 7px; background: var(--mh-chip); box-shadow: inset 0 0 0 1px var(--mh-chip-line); }
 .mh-access small { font-size: 10.5px; color: var(--mh-ink-3); }
-/* Tailscale: one quiet dashed boundary around everything that is reachable only through it. */
-.mh-ts { fill: none; stroke: var(--mh-accent); stroke-opacity: .45; stroke-width: 1.2; stroke-dasharray: 5 6; }
-.mh-ts-t { font-size: 11px; font-weight: 700; fill: var(--mh-ink-2); }
-html[data-skin="landscapes"] .mh-ts { stroke-opacity: .7; }
-html[data-skin="landscapes"] .mh-ts-t, html[data-skin="landscapes"] .mh-shield { color: #fff; fill: #fff; }
 html[data-skin="landscapes"] .mh-shield { background: rgba(12, 16, 24, .62); }
 html[data-skin="landscapes"] .mh-shield[data-x="bad"] { color: #FF95A8; }
 @container (max-width: 520px) { .mh-root .mh-shield { font-size: 9.5px; padding: 1px 6px 1px 5px !important; } }
-.mh-ts-t.is-bad { fill: var(--mh-bad); }
-html[data-skin="landscapes"] .mh-ts-t.is-bad { fill: #FF95A8; }
 .mh-sh-short { display: none; }
-@container (max-width: 520px) { .mh-sh-long { display: none; } .mh-sh-short { display: inline; } .mh-ts-t { font-size: 10px; } }
-.mh-root .mh-ts-fix { position: absolute; z-index: 3; transform: translateY(-50%); height: 24px; padding: 0 11px !important; border-radius: 99px; font-size: 11.5px; font-weight: 750; color: #fff; background: var(--mh-bad); box-shadow: 0 2px 8px rgba(0,0,0,.18); cursor: pointer; white-space: nowrap; }
-.mh-root .mh-ts-fix:hover { filter: brightness(1.08); }
-.mh-root .mh-ts-fix[hidden] { display: none; }
-html[data-skin="obsidian-light"] .mh-root .mh-ts-fix { box-shadow: 0 1px 4px rgba(0,0,0,.14); }
-@container (max-width: 520px) { .mh-root .mh-ts-fix { height: 22px; font-size: 10.5px; padding: 0 9px !important; } }
+
+/* ---------- device pictures (instead of plain discs) ---------- */
+.mh-root { --a-top: #ffffff; --a-front: #e7edf4; --a-side: #b3c1d1; --a-line: rgba(20, 33, 49, .34); --a-dot: #c4d0dd; --a-screen: color-mix(in srgb, var(--mh-accent) 50%, #17304d); --a-shadow: rgba(0, 0, 0, .5); }
+html[data-skin="obsidian-light"] .mh-root { --a-front: #eef2f6; --a-side: #c3cedb; --a-line: rgba(20, 33, 49, .3); --a-shadow: rgba(20, 33, 49, .32); }
+.mh-root .mh-node .mh-disc.is-art { border: 0; border-radius: 0; background: none; box-shadow: none; overflow: visible; }
+.mh-disc.is-art::before { content: ""; position: absolute; left: 10%; right: 6%; bottom: -7%; height: 16%; border-radius: 50%; background: radial-gradient(closest-side, var(--a-shadow), transparent); z-index: 0; transition: background 260ms; }
+.mh-node.is-main .mh-disc.is-art::before { left: -4%; right: -8%; height: 24%; bottom: -12%; background: radial-gradient(closest-side, color-mix(in srgb, var(--mh-accent) 75%, transparent), transparent); }
+.mh-node.is-standby .mh-disc.is-art::before { background: radial-gradient(closest-side, color-mix(in srgb, var(--mh-good) 75%, transparent), transparent); }
+.mh-node.is-open .mh-disc.is-art::before, .mh-tap[aria-expanded="true"] .mh-disc.is-art::before { background: radial-gradient(closest-side, var(--mh-accent), transparent); }
+.mh-art { position: relative; z-index: 1; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 6px 8px rgba(0, 0, 0, .22)); }
+.mh-art :is(polygon, rect, path, ellipse, circle) { stroke: var(--a-line); stroke-width: 1.1; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.mh-art .a-top { fill: var(--a-top); }
+.mh-art .a-front { fill: var(--a-front); }
+.mh-art .a-side { fill: var(--a-side); }
+.mh-art .a-line { fill: none; stroke: var(--a-line); stroke-width: 1.4; stroke-linecap: round; }
+.mh-art .a-dot { fill: var(--a-dot); stroke: none; }
+.mh-art .a-led { fill: var(--mh-accent); stroke: none; }
+.mh-art .a-screen { fill: var(--a-screen); stroke: none; }
+.mh-art.is-rack .a-led { fill: var(--mh-good); }
+.mh-art.is-store .a-top { fill: color-mix(in srgb, var(--mh-accent) 22%, #fff); }
+.mh-art.is-store .a-front { fill: color-mix(in srgb, var(--mh-accent) 34%, #dfe8f2); }
+.mh-node.is-storage[data-fit="tight"] .mh-art.is-store .a-led { fill: var(--mh-warn); }
+.mh-node.is-storage[data-fit="no"]:not(.is-ts) .mh-art.is-store .a-led { fill: var(--mh-bad); }
+.mh-node.is-ts .mh-art .a-front { fill: var(--a-front); }
+.mh-node.is-ts[data-fit="no"] .mh-art .a-led { fill: var(--mh-bad); }
+.mh-node.is-ts[data-fit="ok"] .mh-art .a-led { fill: var(--mh-good); }
+.mh-ts-n { position: absolute; z-index: 2; top: -2px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px; display: grid; place-items: center; font-size: 11px; font-weight: 850; color: #fff; background: var(--mh-bad); box-shadow: 0 0 0 2px rgba(255, 255, 255, .9); }
+.mh-disc.is-off .mh-art { filter: none; opacity: .55; }
+.mh-disc.is-off .mh-art :is(polygon, rect, path, ellipse, circle) { fill: none; stroke: var(--mh-wire-off); stroke-dasharray: 4 3; }
+.mh-disc.is-off.is-art { border: 0 !important; }
+/* Main: the working / ready dots sit on the mini PC's front like status lights. */
+.mh-disc.is-art > .mh-sess { position: absolute; z-index: 2; left: 10%; top: 40%; width: 64%; height: 46%; max-width: none; justify-content: center; gap: 4px; }
+.mh-disc.is-art > .mh-sess .mh-dots i { width: 8px; height: 8px; box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .95); }
+.mh-node.is-main .mh-art .a-led { display: none; }
+/* Outlines trace in once, on first paint only (no replay on refresh). */
+.mh-new .mh-art :is(polygon, rect, path, ellipse) { stroke-dasharray: 1; animation: mh-trace 900ms var(--mh-ease) both; }
+@keyframes mh-trace { from { stroke-dashoffset: 1; fill-opacity: 0; } 60% { fill-opacity: 0; } to { stroke-dashoffset: 0; fill-opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .mh-new .mh-art * { animation: none; } }
+/* Tailscale panel */
+.mh-ts-info .is-bad { color: var(--mh-bad); font-weight: 650; }
+html[data-skin="landscapes"] .mh-ts-info .is-bad { color: #FF95A8; }
+.mh-ts-list { display: flex; flex-direction: column; gap: 3px; margin: 2px 0; }
+.mh-ts-row { display: grid; grid-template-columns: 9px auto 1fr; align-items: center; gap: 7px; font-size: 12px; }
+.mh-ts-row i { width: 8px; height: 8px; border-radius: 50%; background: var(--mh-ink-3); }
+.mh-ts-row[data-x="ok"] i { background: var(--mh-good); }
+.mh-ts-row[data-x="bad"] i { background: var(--mh-bad); }
+.mh-ts-row b { font-weight: 700; color: var(--mh-ink); }
+.mh-ts-row span { color: var(--mh-ink-2); }
+.mh-root .mh-act-btn.is-fix b { color: var(--mh-bad); }
+@container (max-width: 520px) { .mh-sh-long { display: none; } .mh-sh-short { display: inline; } }
+html[data-skin="obsidian-light"] .mh-node.is-main .mh-disc.is-art::before { background: radial-gradient(closest-side, color-mix(in srgb, var(--mh-accent) 45%, transparent), transparent); }
+.mh-disc.is-art > .mh-sess .mh-dots { gap: 3px; }
+.mh-disc.is-art > .mh-sess .mh-dots i { width: 7px; height: 7px; }

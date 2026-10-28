@@ -42,6 +42,25 @@ export default function setup(api) {
   const sv = (tag, attrs = {}, parent) => { const e = document.createElementNS(SVG, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.append(e); return e; };
   const bell = () => { const s = sv('svg', { class: 'mh-i', viewBox: '0 0 24 24', 'aria-hidden': 'true' }); for (const [t, a] of BELL) sv(t, a, s); return s; };
   const nw = cls => fresh ? cls + ' mh-new' : cls;
+  // Little device pictures instead of plain discs (oblique 3D, drawn once, outlines trace in on first paint).
+  // box = a mini PC (Main), rack = a server in a data centre, laptop, store = storage, shield = the private network.
+  const P = pts => pts.map(p => p.join(',')).join(' ');
+  const ART = {
+    box: [['polygon', { class: 'a-top', points: P([[10, 40], [28, 24], [92, 24], [74, 40]]) }], ['polygon', { class: 'a-side', points: P([[74, 40], [92, 24], [92, 70], [74, 86]]) }],
+      ['rect', { class: 'a-front', x: 10, y: 40, width: 64, height: 46, rx: 3 }], ['rect', { class: 'a-led', x: 16, y: 79, width: 10, height: 2.6, rx: 1.3 }]],
+    rack: [['polygon', { class: 'a-top', points: P([[16, 30], [32, 16], [88, 16], [72, 30]]) }], ['polygon', { class: 'a-side', points: P([[72, 30], [88, 16], [88, 74], [72, 88]]) }],
+      ...[30, 50, 70].flatMap(y => [['rect', { class: 'a-front', x: 16, y, width: 56, height: 18, rx: 2.5 }], ['circle', { class: 'a-led', cx: 23, cy: y + 9, r: 2.4 }],
+        ['path', { class: 'a-line', d: `M36 ${y + 6.5}h28M36 ${y + 11.5}h28` }]])],
+    laptop: [['rect', { class: 'a-front', x: 20, y: 18, width: 60, height: 44, rx: 4 }], ['rect', { class: 'a-screen', x: 25, y: 23, width: 50, height: 34, rx: 2 }],
+      ['polygon', { class: 'a-top', points: P([[20, 64], [80, 64], [94, 80], [6, 80]]) }], ['rect', { class: 'a-side', x: 6, y: 80, width: 88, height: 5, rx: 2 }],
+      ['path', { class: 'a-line', d: 'M42 74h16' }]],
+    store: [['path', { class: 'a-front', d: 'M16 26v48a34 11 0 0 0 68 0V26' }], ['ellipse', { class: 'a-top', cx: 50, cy: 26, rx: 34, ry: 11 }],
+      ['path', { class: 'a-line', d: 'M16 42a34 11 0 0 0 68 0M16 58a34 11 0 0 0 68 0' }], ['circle', { class: 'a-led', cx: 74, cy: 70, r: 2.6 }]],
+    shield: [['path', { class: 'a-front', d: 'M50 10l34 13v24c0 22-14 37-34 45C30 84 16 69 16 47V23z' }], ['path', { class: 'a-side', d: 'M50 10l34 13v24c0 22-14 37-34 45z' }],
+      ...[[38, 38], [50, 38], [62, 38], [38, 50], [50, 50], [62, 50], [38, 62], [50, 62], [62, 62]].map(([cx, cy], i) => ['circle', { class: i >= 3 && i <= 5 ? 'a-led' : 'a-dot', cx, cy, r: 4.2 }])],
+  };
+  const art = kind => { const s = sv('svg', { class: 'mh-art is-' + kind, viewBox: '0 0 100 100', 'aria-hidden': 'true' }); for (const [t, a] of ART[kind]) sv(t, { ...a, pathLength: 1 }, s); return s; };
+  const artOf = m => m.id === MAIN || m.managed ? 'box' : /windows|mac/i.test(m.platform || '') || /laptop|book/i.test(m.name || '') ? 'laptop' : 'rack';
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const gbFmt = v => v == null ? '?' : v >= 1000 ? `${(v / 1000).toFixed(1).replace(/\.0$/, '')} TB` : v >= 100 ? `${Math.round(v)} GB` : `${v.toFixed(1).replace(/\.0$/, '')} GB`;
   const agoS = sec => sec < 3600 ? `${Math.max(1, Math.round(sec / 60))}m` : sec < 86400 ? `${Math.round(sec / 3600)}h` : `${Math.round(sec / 86400)}d`;
@@ -65,7 +84,7 @@ export default function setup(api) {
     const d = devOf(id);
     if (!d) return { id, name: id === MAIN ? pretty(reg().this?.name) || 'Main' : id, status: 'unknown' };
     const dg = diskGB(d), fg = freeGB(d);
-    return { id, name: pretty(d.name), status: d.status, error: d.error || '', use: d.use || '', access: d.access || null, cores: d.cpus || null, ramGB: d.memoryTotalGB || null,
+    return { id, name: pretty(d.name), status: d.status, error: d.error || '', use: d.use || '', platform: d.platform || '', access: d.access || null, cores: d.cpus || null, ramGB: d.memoryTotalGB || null,
       mem: d.memory, cpu: d.cpu, diskGB: dg, freeGB: fg, diskUsed: dg != null && fg != null ? dg - fg : null };
   }
   // Rough power, for size and order: cores, then memory, then disk.
@@ -163,8 +182,7 @@ export default function setup(api) {
   const row = cls => h('div', { cls: 'mh-row ' + cls });
   const rowSt = row('is-storage'), rowMn = row('is-machines'), rowAct = row('is-act'), rowMore = row('is-more'), rowPp = row('is-people'), rowDv = row('is-devices'), rowChev = row('is-more is-devchev');
   // One button beside the Tailscale label when something is open: it drafts the fix in a new chat, never sends it.
-  const fixBtn = h('button', { type: 'button', cls: 'mh-ts-fix', data: { fixOpen: '1' }, hidden: true }, 'Fix this');
-  const map = h('div', { cls: 'mh-map' + (S.bars ? ' is-details' : '') }, lines, fixBtn, rowSt, rowMn, rowAct, rowMore, rowPp, rowDv, rowChev);
+  const map = h('div', { cls: 'mh-map' + (S.bars ? ' is-details' : '') }, lines, rowSt, rowMn, rowAct, rowMore, rowPp, rowDv, rowChev);
   root.append(h('header', { cls: 'mh-top' }, wsBar), h('div', { cls: 'mh-body' }, aiRow, aiList, map));
 
   /* ---------- top ---------- */
@@ -232,7 +250,8 @@ export default function setup(api) {
   // Security: how open each machine is from outside, in plain words; only what was tested, never guessed.
   const SHIELD = [['path', { d: 'M12 3l7 3v6c0 4.2-3 7.4-7 9-4-1.6-7-4.8-7-9V6z' }]];
   const EXPO = { tailscale: ['Tailscale only', 'ok', 'Tailscale'], internet: ['Open to internet', 'bad', 'Open'], unchecked: ['Not checked yet', 'none', 'Not checked'] };
-  const shield = (a, id) => { const [text, s, short] = EXPO[a?.exposure] || EXPO.unchecked;
+  const shield = (a, id) => { if (a?.exposure !== 'internet') return null;  // only the warning shows on the map; the rest is in Tailscale's panel
+    const [text, s, short] = EXPO.internet;
     const b = h(id ? 'button' : 'span', { ...(id ? { type: 'button', data: { machine: id } } : {}), cls: 'mh-shield', 'data-x': s, 'aria-label': `${text}${id ? '. Show how to get in' : ''}` });
     const v = sv('svg', { class: 'mh-i', viewBox: '0 0 24 24', 'aria-hidden': 'true' }, b); for (const [t, x] of SHIELD) sv(t, x, v); b.append(h('span', { cls: 'mh-sh-long', text }), h('span', { cls: 'mh-sh-short', text: short })); return b; };
   const accessInfo = a => a ? h('span', { cls: 'mh-access' },
@@ -242,7 +261,7 @@ export default function setup(api) {
   const label = (name, role, cls = '') => h('span', { cls: 'mh-label ' + cls }, h('span', { cls: 'mh-name', text: name }), role ? h('span', { cls: 'mh-role', text: role }) : null);
   function machineNode(m, role, maxOf, extra = {}) {
     const s = extra.size || sizeOf(m), off = m.status && m.status !== 'online' && role !== 'main';
-    const disc = h('span', { cls: 'mh-disc' + (off ? ' is-off' : '') });
+    const disc = h('span', { cls: 'mh-disc is-art' + (off ? ' is-off' : '') }, art(artOf({ ...m, managed: extra.managed })));
     let tap;
     if (role === 'main' && extra.sessions) {
       // One tap for both: a working bubble (pulses while something runs) and a ready bubble, no words.
@@ -275,7 +294,7 @@ export default function setup(api) {
     const open = S.open.has('storage');
     return h('div', { cls: nw('mh-node is-storage'), data: { id: 'storage', role: 'storage', fit: st.state }, style: { '--s': '50' } },
       h('button', { type: 'button', cls: 'mh-tap', data: { toggle: 'storage' }, 'aria-expanded': String(open), 'aria-label': `Storage, ${st.used == null ? 'size unknown' : gbFmt(st.used) + ' stored'}. Show where` },
-        h('span', { cls: 'mh-hold' }, h('span', { cls: 'mh-disc' })), label('Storage', st.used == null ? st.where : gbFmt(st.used) + ' stored'), chev(open)),
+        h('span', { cls: 'mh-hold' }, h('span', { cls: 'mh-disc is-art' }, art('store'))), label('Storage', st.used == null ? st.where : gbFmt(st.used) + ' stored'), chev(open)),
       open ? h('span', { cls: 'mh-more-info' },
         h('span', { text: st.where + (st.bucket ? ` · bucket “${st.bucket}”` : '') }),
         h('span', { text: `Backs up ${st.every}${st.snaps ? ` · ${st.snaps} backups so far` : ''}${st.used != null && st.snaps ? `, ${gbFmt(st.used)} in all` : ''}` }),
@@ -284,6 +303,33 @@ export default function setup(api) {
           [['now', 'Back up now', '~20 min, apps pause briefly', 'Run a backup of this Wizard now.'], ['schedule', 'Change schedule', 'how often it runs', 'I want to change how often my Wizard backs up to '],
             ['more', 'Add storage', 'a second encrypted copy', 'Add another place to keep encrypted copies of my backups: ']]
             .map(([id, text, note, words]) => h('button', { type: 'button', cls: 'mh-act-btn', data: { stAsk: id, words } }, h('b', { text }), h('small', { text: note }))))) : null);
+  }
+  // Tailscale: one node beside Storage. Simple on the map (is anything open?), the whole story when tapped.
+  const openOnes = () => devices().filter(d => d.access?.exposure === 'internet').map(d => machine(d.id));
+  const TS_ASK = {
+    fix: () => { const open = openOnes(), names = open.map(m => m.name).join(' and ');
+      return [`Close ${names} to the internet so ${open.length === 1 ? 'it is' : 'they are'} reachable only over Tailscale, like Main.`, '',
+        ...open.map(m => `${m.name}: ${(m.access.details || []).join('; ')}`), '',
+        'For each one: test its ports from another machine first, apply the fix with a safety net that undoes itself if access is lost, test again from outside, then update the map. Ask me before anything that needs my password, and tell me if a fix would cut off something I use (like AnyDesk).'].join('\n'); },
+    oneway: () => 'Make my Tailscale one-way: my phone and Mac can reach my machines, my machines can reach each other (sync and work), but my machines cannot reach my phone or Mac. Show me the exact rule change first, keep a way back, and don\u2019t apply it until I say so.',
+    check: () => 'Check again how open each of my machines is from the internet: test their ports from another machine over IPv4 and IPv6, then update the shields on my map. Don\u2019t change anything.',
+  };
+  function tsNode() {
+    const open = S.open.has('ts'), bad = openOnes(), all = [machine(MAIN), ...devices().filter(d => d.id !== MAIN).map(d => machine(d.id))];
+    const word = m => m.access?.exposure === 'internet' ? ['Open to internet', 'bad'] : m.access?.exposure === 'tailscale' ? ['Tailscale only', 'ok'] : ['Not checked yet', 'none'];
+    return h('div', { cls: nw('mh-node is-storage is-ts'), data: { id: 'ts', role: 'ts', fit: bad.length ? 'no' : 'ok' }, style: { '--s': '50' } },
+      h('button', { type: 'button', cls: 'mh-tap', data: { toggle: 'ts' }, 'aria-expanded': String(open), 'aria-label': `Tailscale, ${bad.length ? bad.length + ' open to the internet' : 'the only way in'}. Show details` },
+        h('span', { cls: 'mh-hold' }, h('span', { cls: 'mh-disc is-art' }, art('shield'), bad.length ? h('b', { cls: 'mh-ts-n', text: String(bad.length) }) : null)),
+        label('Tailscale', bad.length ? `${bad.length} open to internet` : 'the only way in', bad.length ? 'warn' : ''), chev(open)),
+      open ? h('span', { cls: 'mh-more-info mh-ts-info' },
+        h('span', { text: 'Your private network. Your machines, phone and Mac talk over it, encrypted.' }),
+        bad.length ? h('span', { cls: 'is-bad', text: `${bad.map(m => m.name).join(' and ')} ${bad.length === 1 ? 'is' : 'are'} on Tailscale too, but strangers on the internet can also knock on ${bad.length === 1 ? 'it' : 'them'}.` })
+          : h('span', { text: 'Nothing answers from the internet. Tailscale is the only way in.' }),
+        h('span', { cls: 'mh-ts-list' }, all.map(m => { const [w, x] = word(m); return h('span', { cls: 'mh-ts-row', 'data-x': x }, h('i'), h('b', { text: m.name }), h('span', { text: w })); })),
+        h('span', { text: 'Who can reach whom: right now any device on your Tailscale can reach any other, both ways (Tailscale’s starting rule).' }),
+        h('span', { cls: 'mh-act-btns' },
+          [bad.length ? ['fix', `Close ${bad.length === 1 ? 'it' : 'them'}`, 'Tailscale becomes the only way in'] : null, ['oneway', 'Make it one-way', 'phone and Mac reach machines, not back'], ['check', 'Check again', 'tests every machine from outside']]
+            .filter(Boolean).map(([id, text, note]) => h('button', { type: 'button', cls: 'mh-act-btn' + (id === 'fix' ? ' is-fix' : ''), data: { tsAsk: id } }, h('b', { text }), h('small', { text: note }))))) : null);
   }
   const devOpen = p => p.devices ? S.open.has('devs') : S.open.has('p:' + p.id);
   function personNode(p) {
@@ -309,7 +355,7 @@ export default function setup(api) {
       setRow(rowMn, [machineNode({ id: 'managed-' + g.id, name: g.name, access: g.access || null }, 'main', null, { size: 72, roleText: g.org || 'Main', managed: true }), plus('add-device', `Add a device to ${g.name}`)]);
     } else {
       const st = storage();
-      setRow(rowSt, st ? [storageNode(st)] : []);
+      setRow(rowSt, [tsNode(), ...(st ? [storageNode(st)] : [])]);
       const main = machine(MAIN), others = devices().filter(d => d.id !== MAIN).map(d => machine(d.id)).sort((a, b) => power(b) - power(a));
       const all = [main, ...others].filter(m => m.status === 'online');
       const maxOf = { Memory: Math.max(1, ...all.map(m => m.ramGB || 0)), Disk: Math.max(1, ...all.map(m => m.diskGB || 0)), CPU: Math.max(1, ...all.map(m => m.cores || 0)) };
@@ -348,7 +394,7 @@ export default function setup(api) {
     const mainEl = [...rowMn.children].find(n => n.dataset?.role === 'main'); if (!mainEl) return;
     const md = box(discOf(mainEl)), mb = box(mainEl), specs = [];  // mb: Main with its label (and bars, when shown)
     // Main → storage, above. Fast while a backup uploads; otherwise it carries the last good copy's age.
-    const stEl = rowSt.firstElementChild;
+    const stEl = rowSt.querySelector('[data-id="storage"]');
     if (stEl) {
       const sd = box(stEl), st = storage();  // from the bottom of its label (and its details, when open)
       const col = st?.state === 'ok' ? 'var(--mh-accent)' : st?.state === 'no' ? 'var(--mh-bad)' : 'var(--mh-warn)';
@@ -372,26 +418,12 @@ export default function setup(api) {
     }
     map.style.setProperty('--cx', md.cx + 'px'); map.style.setProperty('--cy', md.cy + 'px');
     // The helper's panel sits right under the helper it belongs to (kept inside the map).
+    // Tailscale / Storage details open under their node but never past the map's edges.
+    for (const mi of rowSt.querySelectorAll('.mh-more-info')) { mi.style.transform = ''; const pb = box(mi), dx = clamp(0, -pb.l + 4, M.width - pb.r - 4); if (dx) mi.style.transform = `translateX(${dx.toFixed(0)}px)`; }
     const ap = rowAct.firstElementChild;
     if (ap) { const n = ms.find(x => x.dataset.id === ap.dataset.of); if (n) { ap.style.transform = ''; const nb = box(n), pb = box(ap), dx = clamp(nb.cx - pb.cx, -pb.l + 4, M.width - pb.r - 4); ap.style.transform = `translateX(${dx.toFixed(0)}px)`; const ab = box(ap); specs.push([curveV(ab.cx, ab.t - 2, nb.cx, nb.b + 2), 'var(--mh-wire-off)', '', 1]); } }
-    // Tailscale is the only way in: one quiet boundary around the machines and people, labelled once.
-    const inside = [rowMn, rowAct, rowMore, rowPp, rowDv].filter(r => !r.hidden && r.firstElementChild).map(box);
-    const frame = S.ws === 'mine' && inside.length ? [Math.min(...inside.map(x => x.t)) - 22, Math.max(...inside.map(x => x.b)) + 10] : null;
-    const key = JSON.stringify([specs, frame]); if (key === wired && lines.firstChild) return; wired = key;
+    const key = JSON.stringify(specs); if (key === wired && lines.firstChild) return; wired = key;
     lines.replaceChildren();
-    if (!frame) fixBtn.hidden = true;
-    if (frame) {
-      sv('rect', { x: 4, y: f(frame[0]), width: f(M.width - 8), height: f(frame[1] - frame[0]), rx: 22, class: 'mh-ts' }, lines);
-      // Honest: only claim "the only way in" once every machine checked is Tailscale-only.
-      const open = devices().filter(d => d.access?.exposure === 'internet').length;
-      const g = sv('g', {}, lines), t = sv('text', { x: 22, y: f(frame[0] + 4), class: 'mh-ts-t' + (open ? ' is-bad' : '') }, g);
-      const narrow = M.width < 520;
-      t.textContent = open ? (narrow ? `Tailscale · ${open} open` : `Tailscale · ${open} ${open === 1 ? 'machine is' : 'machines are'} still open to the internet`) : narrow ? 'Tailscale only' : 'Tailscale · the only way in';
-      if (narrow) t.setAttribute('x', '14');
-      fixBtn.hidden = !open;
-      if (open) { const tb = t.getBBox(); fixBtn.style.left = f(tb.x + tb.width + 14) + 'px'; fixBtn.style.top = f(tb.y + tb.height / 2) + 'px'; fixBtn.setAttribute('aria-label', `Fix: close ${open === 1 ? 'the machine' : `the ${open} machines`} that are open to the internet. Drafts a request for you to send`); }
-      const bb = t.getBBox(); g.insertBefore(sv('rect', { x: bb.x - 8, y: bb.y - 4, width: bb.width + 16, height: bb.height + 8, rx: (bb.height + 8) / 2, class: 'mh-age-bg' }), t);
-    }
     const defs = sv('defs', {}, lines); let gi = 0;
     for (const [d, col, text, speed] of specs) {
       const base = sv('path', { d, class: 'base' }, lines); base.style.stroke = col;
@@ -413,7 +445,7 @@ export default function setup(api) {
   /* ---------- taps: everything expands in place ---------- */
   const flip = k => { if (S.open.has(k)) S.open.delete(k); else S.open.add(k); };
   api.listen(root, 'click', e => {
-    let b = e.target; while (b && b !== root && !(b.dataset && (b.dataset.ws || b.dataset.act || b.dataset.open || b.dataset.person || b.dataset.toggle || b.dataset.machine || b.dataset.ask || b.dataset.stAsk || b.dataset.fixOpen))) b = b.parentNode;
+    let b = e.target; while (b && b !== root && !(b.dataset && (b.dataset.ws || b.dataset.act || b.dataset.open || b.dataset.person || b.dataset.toggle || b.dataset.machine || b.dataset.ask || b.dataset.stAsk || b.dataset.tsAsk))) b = b.parentNode;
     if (!b || b === root) return;  // Sign in / Sign out carry the shell's own data-res-signin, which opens that app
     const d = b.dataset;
     if (d.open) return api.data.read.sessions?.open(d.open);
@@ -428,14 +460,10 @@ export default function setup(api) {
     if (d.person) { const p = people().find(x => x.id === d.person); if (p?.devices) { flip('devs'); api.storage.set('devs', S.open.has('devs') ? 'on' : 'off'); } else flip('p:' + d.person); paint(); return; }
     if (d.toggle === 'devs') { flip('devs'); api.storage.set('devs', S.open.has('devs') ? 'on' : 'off'); paint(); return; }
     if (d.stAsk) { const st = storage(); if (!api.nav?.ask?.('storage-' + d.stAsk, { title: 'Storage', message: st ? [st.where + ' · ' + st.bucket, st.every, st.keep].join('\n') : '' }, d.words)) api.toast('Open Chats, then try again'); return; }
-    if (d.fixOpen) {
-      const open = devices().filter(x => x.access?.exposure === 'internet').map(x => machine(x.id));
-      if (!open.length) return;
-      const names = open.map(m => m.name).join(' and ');
-      const words = [`Close ${names} to the internet so ${open.length === 1 ? 'it is' : 'they are'} reachable only over Tailscale, like Main.`, '',
-        ...open.map(m => `${m.name}: ${(m.access.details || []).join('; ')}`), '',
-        'For each one: test its ports from another machine first, apply the fix with a safety net that undoes itself if access is lost, test again from outside, then update the map. Ask me before anything that needs my password, and tell me if a fix would cut off something I use (like AnyDesk).'].join('\n');
-      if (!api.nav?.ask?.('fix-open', { title: 'Network · Close open machines', message: names + ' open to the internet' }, words)) api.toast('Open Chats, then try again');
+    if (d.tsAsk) {
+      const words = TS_ASK[d.tsAsk]?.(); if (!words) return;
+      const title = { fix: 'Network · Close open machines', oneway: 'Network · One-way Tailscale', check: 'Network · Check exposure' }[d.tsAsk];
+      if (!api.nav?.ask?.('ts-' + d.tsAsk, { title, message: 'Tailscale' }, words)) api.toast('Open Chats, then try again');  // a draft; he sends it
       return;
     }
     if (d.machine) { const k = 'm:' + d.machine, was = S.open.has(k); for (const x of [...S.open]) if (x.startsWith('m:')) S.open.delete(x); if (!was) S.open.add(k); fresh = !was; paint(); return; }
@@ -449,6 +477,7 @@ export default function setup(api) {
     if (d.toggle === 'ai') { flip('ai'); paint(); return; }
     if (d.toggle === 'signin') { flip('signin'); renderAIList(); drawn.list = ''; return; }
     if (d.toggle === 'storage') { flip('storage'); paint(); return; }
+    if (d.toggle === 'ts') { flip('ts'); paint(); return; }
     if (d.toggle === 'bars') {
       // Fold the bars open or shut with one class: the CSS eases the height, nothing is rebuilt.
       S.bars = !S.bars; api.storage.set('details', S.bars ? 'on' : 'off');
