@@ -20,11 +20,11 @@
 
   const T = {
     eyebrow: 'Can’t reach your Wizard',
-    title: 'Your phone isn’t on your Wizard’s private network', titleAway: 'Your Wizard isn’t answering',
+    title: 'Your phone isn’t on your Wizard’s private network', titleAway: 'Your Wizard isn’t answering', titleChecking: 'Connecting to your Wizard',
     off: 'Tailscale isn’t running on this phone yet.',
     wrong: 'Tailscale is on, but this phone isn’t on your Wizard’s network.',
     quiet: 'Your phone is on your Wizard’s network, but your Wizard isn’t answering.',
-    unsure: 'Tailscale is on, but your Wizard isn’t answering this phone.',
+    unsure: 'Tailscale is on. Checking that this phone is on your Wizard’s network…',
     wake: 'Check your Wizard is on', wakeBody: 'Make sure the computer running your Wizard is on and awake, with Wizard open. This phone connects by itself.',
     lead: 'Your Wizard is private. Only your own devices can reach it, through <b>Tailscale</b>, a free app that links them securely.',
     get: 'Get Tailscale', signin: 'Sign in with your Wizard’s account', turnOn: 'Turn it on', back: 'Come back here',
@@ -42,36 +42,38 @@
   };
   const ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" class="tsmark"><circle cx="5" cy="5" r="2.2"/><circle cx="12" cy="5" r="2.2" opacity=".4"/><circle cx="19" cy="5" r="2.2" opacity=".4"/><circle cx="5" cy="12" r="2.2"/><circle cx="12" cy="12" r="2.2"/><circle cx="19" cy="12" r="2.2"/><circle cx="5" cy="19" r="2.2" opacity=".4"/><circle cx="12" cy="19" r="2.2"/><circle cx="19" cy="19" r="2.2" opacity=".4"/></svg>';
 
-  /** Which step needs the owner now: the first that isn't done. 'done' | 'now' | 'todo' for steps 1–4. */
+  /** Steps 1–4 complete in order: a step is done only when every step before it is. 'done' | 'checking' (the app is
+   * verifying it now: its own spinner) | 'now' (the owner's turn) | 'todo'. */
   function steps({ on, missing = null, installed }) {
-    if (on && missing === true) return ['done', 'now', 'done', 'todo'];
-    if (on) return ['done', missing === false ? 'done' : 'todo', 'done', 'now'];
-    if (installed === true) return ['done', 'todo', 'now', 'todo'];
+    if (on && missing === false) return ['done', 'done', 'done', 'checking']; // the phone is fine; is the Wizard on?
+    if (on && missing === true) return ['done', 'now', 'todo', 'todo'];       // signed in to another network
+    if (on) return ['done', 'checking', 'todo', 'todo'];                      // checking the phone's network
+    if (installed === true) return ['done', 'now', 'todo', 'todo'];           // installed (Android knows): open it
     return ['now', 'todo', 'todo', 'todo'];
   }
 
   function html({ host = '', on = false, missing = null, installed = null, platform = 'ios' } = {}) {
     const android = platform === 'android', net = tailnet(host), st = steps({ on, missing, installed });
-    const away = on && missing !== true; // the phone is fine; the Wizard isn't answering
+    const away = on && missing === false; // the phone is fine; the Wizard isn't answering
     const open = on || installed === true;
     const hint = android ? (open ? '' : 'Opens Google Play.')
       : open ? 'Opens its App Store page; tap <b>Open</b> there.' : 'Opens the App Store. Already have it? The page shows <b>Open</b>.';
     const button = `<button type="button" class="btn primary" data-guide="tailscale">${ICON}${open ? 'Open Tailscale' : esc(T.get)}</button>${hint ? `<p class="hint">${hint}</p>` : ''}`;
     const step = (n, title, body) => {
       const s = st[n - 1];
-      return `<div class="step ${s}" data-gstep="${n}" data-state="${s}"><span class="gl">${s === 'done' ? '✓' : n}</span><div><h2>${esc(title)}</h2>${body}</div></div>`;
+      const glyph = s === 'done' ? '✓' : s === 'checking' ? `<i aria-label="${esc(T.checking)}"></i>` : n;
+      return `<div class="step ${s}" data-gstep="${n}" data-state="${s}"><span class="gl">${glyph}</span><div><h2>${esc(title)}</h2>${body}</div></div>`;
     };
     const chip = net ? `<p>${T.same} ${T.network}</p><div class="chip">${esc(net)}</div>` : `<p>${T.same}</p>`;
     return `<p class="eyebrow">${esc(T.eyebrow)}</p>
-      <h1>${esc(on && missing === false ? T.titleAway : T.title)}</h1>
+      <h1>${esc(on && missing === false ? T.titleAway : on && missing !== true ? T.titleChecking : T.title)}</h1>
       <div class="pill" role="status"><span class="dot" aria-hidden="true"></span><span data-guide-status>${esc(!on ? T.off : missing === true ? T.wrong : missing === false ? T.quiet : T.unsure)}</span></div>
       <p class="lead">${T.lead}</p>
       <div class="steps">
         ${step(1, T.get, st[0] === 'done' ? `<p>${on ? T.installed : 'Installed.'}</p>` : `<p>${T.free}</p>${button}`)}
-        ${step(2, T.signin, chip + (on && missing === true ? `<p class="warn">${T.removed}</p>${button}` : ''))}
-        ${step(3, T.turnOn, on ? `<p>${T.isOn}</p>` : `<p>${android ? T.vpnAndroid : T.vpnIos}</p>${st[2] === 'now' ? button : ''}`)}
-        ${away ? step(4, T.wake, `<p>${T.wakeBody}</p><div class="wait"><i aria-hidden="true"></i>${T.checking}</div>`)
-               : step(4, T.back, `<p>${T.auto}</p><div class="wait"><i aria-hidden="true"></i>${T.checking}</div>`)}
+        ${step(2, T.signin, chip + (on && missing === true ? `<p class="warn">${T.removed}</p>` : '') + (st[1] === 'now' ? button : ''))}
+        ${step(3, T.turnOn, st[2] === 'done' ? `<p>${T.isOn}</p>` : `<p>${android ? T.vpnAndroid : T.vpnIos}</p>`)}
+        ${away ? step(4, T.wake, `<p>${T.wakeBody}</p>`) : step(4, T.back, `<p>${T.auto}</p>`)}
       </div>
       <details><summary>${esc(T.about)}</summary><p>${T.about1}</p><p>${T.about2}</p><p>${T.about3}</p></details>
       <div class="foot"><button type="button" class="link" data-guide="other">${esc(T.other)}</button><span class="addr">${esc(host)}</span></div>`;

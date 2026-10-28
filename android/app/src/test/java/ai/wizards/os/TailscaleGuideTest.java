@@ -25,19 +25,26 @@ public class TailscaleGuideTest {
     public void theStepNeededNowFollowsWhatThePhoneShows() {
         // Not installed: get it.
         assertArrayEquals(new Step[]{ Step.NOW, Step.TODO, Step.TODO, Step.TODO }, TailscaleGuide.steps(false, null, false));
-        // Installed but off: turn it on.
-        assertArrayEquals(new Step[]{ Step.DONE, Step.TODO, Step.NOW, Step.TODO }, TailscaleGuide.steps(false, null, true));
+        // Installed but off: open it (sign in, turn on). Steps complete in order; none is skipped.
+        assertArrayEquals(new Step[]{ Step.DONE, Step.NOW, Step.TODO, Step.TODO }, TailscaleGuide.steps(false, null, true));
+        // On, still checking the phone's network: step 2 spins, later steps wait.
+        assertArrayEquals(new Step[]{ Step.DONE, Step.CHECKING, Step.TODO, Step.TODO }, TailscaleGuide.steps(true, null, true));
         // On, and the Wizard's name doesn't exist from here: another account, or this phone was removed.
-        assertArrayEquals(new Step[]{ Step.DONE, Step.NOW, Step.DONE, Step.TODO }, TailscaleGuide.steps(true, true, true));
-        // On, the name exists, nothing answers: the Wizard's computer is off or asleep. Nothing to fix on the phone.
-        assertArrayEquals(new Step[]{ Step.DONE, Step.DONE, Step.DONE, Step.NOW }, TailscaleGuide.steps(true, false, true));
-        assertArrayEquals(new Step[]{ Step.DONE, Step.TODO, Step.DONE, Step.NOW }, TailscaleGuide.steps(true, null, true));
+        assertArrayEquals(new Step[]{ Step.DONE, Step.NOW, Step.TODO, Step.TODO }, TailscaleGuide.steps(true, true, true));
+        // On, the name exists, nothing answers: the Wizard's computer is off or asleep. Step 4 spins.
+        assertArrayEquals(new Step[]{ Step.DONE, Step.DONE, Step.DONE, Step.CHECKING }, TailscaleGuide.steps(true, false, true));
+        for (boolean on : new boolean[]{ false, true }) for (Boolean missing : new Boolean[]{ null, true, false }) for (boolean inst : new boolean[]{ false, true }) {
+            Step[] s = TailscaleGuide.steps(on, missing, inst);
+            for (int i = 1; i < 4; i++) if (s[i] == Step.DONE) assertEquals("done in order", Step.DONE, s[i - 1]);
+        }
         assertEquals(TailscaleGuide.OFF, TailscaleGuide.status(false, true));
         assertEquals(TailscaleGuide.WRONG, TailscaleGuide.status(true, true));
         assertEquals(TailscaleGuide.QUIET, TailscaleGuide.status(true, false));
         assertEquals(TailscaleGuide.UNSURE, TailscaleGuide.status(true, null));
         assertEquals(TailscaleGuide.TITLE_AWAY, TailscaleGuide.headline(true, false));
         assertEquals(TailscaleGuide.TITLE, TailscaleGuide.headline(true, true));
+        assertEquals(TailscaleGuide.TITLE_CHECKING, TailscaleGuide.headline(true, null));
+        assertEquals(TailscaleGuide.TITLE, TailscaleGuide.headline(false, null));
         assertEquals(TailscaleGuide.WAKE, TailscaleGuide.title(4, true, false));
         assertEquals(TailscaleGuide.BACK, TailscaleGuide.title(4, true, true));
         assertTrue(TailscaleGuide.removed(true, true));
@@ -51,7 +58,7 @@ public class TailscaleGuideTest {
         assertEquals("Open Tailscale", TailscaleGuide.button(false, true));
         assertEquals("Open Tailscale", TailscaleGuide.button(true, true));
         assertTrue(TailscaleGuide.hasButton(1, false, null, false));
-        assertTrue(TailscaleGuide.hasButton(3, false, null, true));
+        assertTrue(TailscaleGuide.hasButton(2, false, null, true));
         assertTrue(TailscaleGuide.hasButton(2, true, true, true));
         assertFalse(TailscaleGuide.hasButton(1, true, true, true));
         for (int n = 1; n <= 4; n++) assertFalse("Wizard off: nothing to open on the phone", TailscaleGuide.hasButton(n, true, false, true));
@@ -64,6 +71,8 @@ public class TailscaleGuideTest {
         assertEquals(TailscaleGuide.SAME, TailscaleGuide.body(2, false, null, false, ""));
         assertEquals(TailscaleGuide.INSTALLED_ON, TailscaleGuide.body(1, true, true, true, ""));
         assertEquals(TailscaleGuide.VPN, TailscaleGuide.body(3, false, null, true, ""));
+        assertEquals(TailscaleGuide.VPN, TailscaleGuide.body(3, true, null, true, "")); // not ticked before step 2
+        assertEquals(TailscaleGuide.IS_ON, TailscaleGuide.body(3, true, false, true, ""));
         assertEquals(TailscaleGuide.WAKE_BODY, TailscaleGuide.body(4, true, false, true, ""));
     }
 

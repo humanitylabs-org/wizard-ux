@@ -122,10 +122,19 @@ final class TailscaleGuideView {
             LinearLayout row = new LinearLayout(a);
             row.setPadding(0, dp(n == 1 ? 10 : 12), 0, 0);
             if (s == TailscaleGuide.Step.TODO) row.setAlpha(0.62f);
-            TextView glyph = text(s == TailscaleGuide.Step.DONE ? "✓" : String.valueOf(n), 14, s == TailscaleGuide.Step.NOW ? p.onButton : s == TailscaleGuide.Step.DONE ? GREEN : p.text2, true);
-            glyph.setGravity(Gravity.CENTER);
-            glyph.setBackground(round(s == TailscaleGuide.Step.NOW ? p.accent : s == TailscaleGuide.Step.DONE ? withAlpha(GREEN, 0.2f) : p.surface, 11));
-            row.addView(glyph, new LinearLayout.LayoutParams(dp(32), dp(32)));
+            if (s == TailscaleGuide.Step.CHECKING) {
+                FrameLayout box = new FrameLayout(a); box.setBackground(round(p.surface, 11));
+                ProgressBar spin = new ProgressBar(a, null, android.R.attr.progressBarStyleSmall);
+                spin.setIndeterminateTintList(ColorStateList.valueOf(p.accent));
+                spin.setContentDescription(TailscaleGuide.CHECKING);
+                box.addView(spin, new FrameLayout.LayoutParams(dp(16), dp(16), Gravity.CENTER));
+                row.addView(box, new LinearLayout.LayoutParams(dp(32), dp(32)));
+            } else {
+                TextView glyph = text(s == TailscaleGuide.Step.DONE ? "✓" : String.valueOf(n), 14, s == TailscaleGuide.Step.NOW ? p.onButton : s == TailscaleGuide.Step.DONE ? GREEN : p.text2, true);
+                glyph.setGravity(Gravity.CENTER);
+                glyph.setBackground(round(s == TailscaleGuide.Step.NOW ? p.accent : s == TailscaleGuide.Step.DONE ? withAlpha(GREEN, 0.2f) : p.surface, 11));
+                row.addView(glyph, new LinearLayout.LayoutParams(dp(32), dp(32)));
+            }
             LinearLayout col = new LinearLayout(a); col.setOrientation(LinearLayout.VERTICAL);
             col.addView(text(TailscaleGuide.title(n, on, missing), 16, p.text, true), lp(dp(4)));
             col.addView(html(TailscaleGuide.body(n, on, missing, installed, net), 14.5f, p.text2), lp(dp(3)));
@@ -156,16 +165,6 @@ final class TailscaleGuideView {
                 col.addView(b, bl);
                 String hint = TailscaleGuide.hint(on, installed);
                 if (!hint.isEmpty()) col.addView(text(hint, 13, p.muted, false), lp(dp(8)));
-            }
-            if (n == 4) {
-                LinearLayout wait = new LinearLayout(a); wait.setGravity(Gravity.CENTER_VERTICAL);
-                ProgressBar spin = new ProgressBar(a, null, android.R.attr.progressBarStyleSmall);
-                spin.setIndeterminateTintList(ColorStateList.valueOf(p.accent));
-                wait.addView(spin, new LinearLayout.LayoutParams(dp(16), dp(16)));
-                TextView w = text(TailscaleGuide.CHECKING, 14, p.muted, false);
-                LinearLayout.LayoutParams wl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT); wl.leftMargin = dp(9);
-                wait.addView(w, wl);
-                col.addView(wait, lp(dp(6)));
             }
             LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1); cl.leftMargin = dp(12);
             row.addView(col, cl);

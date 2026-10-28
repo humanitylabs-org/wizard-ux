@@ -19,11 +19,12 @@ final class TailscaleGuide {
     static final String PLAY_WEB = "https://play.google.com/store/apps/details?id=" + PACKAGE;
 
     static final String EYEBROW = "Can’t reach your Wizard";
-    static final String TITLE = "Your phone isn’t on your Wizard’s private network", TITLE_AWAY = "Your Wizard isn’t answering";
+    static final String TITLE = "Your phone isn’t on your Wizard’s private network", TITLE_AWAY = "Your Wizard isn’t answering",
+            TITLE_CHECKING = "Connecting to your Wizard";
     static final String OFF = "Tailscale isn’t running on this phone yet.";
     static final String WRONG = "Tailscale is on, but this phone isn’t on your Wizard’s network.";
     static final String QUIET = "Your phone is on your Wizard’s network, but your Wizard isn’t answering.";
-    static final String UNSURE = "Tailscale is on, but your Wizard isn’t answering this phone.";
+    static final String UNSURE = "Tailscale is on. Checking that this phone is on your Wizard’s network…";
     static final String WAKE = "Check your Wizard is on";
     static final String WAKE_BODY = "Make sure the computer running your Wizard is on and awake, with Wizard open. This phone connects by itself.";
     static final String LEAD = "Your Wizard is private. Only your own devices can reach it, through <b>Tailscale</b>, a free app that links them securely.";
@@ -40,7 +41,8 @@ final class TailscaleGuide {
     static final String OTHER = "Use a different Wizard";
     static final String OPEN = "Open Tailscale", PLAY_HINT = "Opens Google Play.";
 
-    enum Step { DONE, NOW, TODO }
+    /** CHECKING: the app is verifying this step now (its own spinner). Steps complete in order. */
+    enum Step { DONE, CHECKING, NOW, TODO }
 
     /** Only Wizards on a Tailscale address get the guide. */
     static boolean applies(String origin) { return !tailnet(origin).isEmpty(); }
@@ -62,14 +64,18 @@ final class TailscaleGuide {
      * Wizard's name); null when not known yet.
      */
     static Step[] steps(boolean on, Boolean missing, boolean installed) {
-        if (on && Boolean.TRUE.equals(missing)) return new Step[]{ Step.DONE, Step.NOW, Step.DONE, Step.TODO };
-        if (on) return new Step[]{ Step.DONE, Boolean.FALSE.equals(missing) ? Step.DONE : Step.TODO, Step.DONE, Step.NOW };
-        if (installed) return new Step[]{ Step.DONE, Step.TODO, Step.NOW, Step.TODO };
+        if (on && Boolean.FALSE.equals(missing)) return new Step[]{ Step.DONE, Step.DONE, Step.DONE, Step.CHECKING };
+        if (on && Boolean.TRUE.equals(missing)) return new Step[]{ Step.DONE, Step.NOW, Step.TODO, Step.TODO };
+        if (on) return new Step[]{ Step.DONE, Step.CHECKING, Step.TODO, Step.TODO };
+        if (installed) return new Step[]{ Step.DONE, Step.NOW, Step.TODO, Step.TODO };
         return new Step[]{ Step.NOW, Step.TODO, Step.TODO, Step.TODO };
     }
 
-    /** The headline: when the phone is fine and the Wizard is off, say that, not that the phone is off the network. */
-    static String headline(boolean on, Boolean missing) { return on && Boolean.FALSE.equals(missing) ? TITLE_AWAY : TITLE; }
+    /** The headline: "isn't on your network" only once that's confirmed; a Wizard that's off is said as such. */
+    static String headline(boolean on, Boolean missing) {
+        if (on && Boolean.FALSE.equals(missing)) return TITLE_AWAY;
+        return on && missing == null ? TITLE_CHECKING : TITLE;
+    }
 
     static String status(boolean on, Boolean missing) {
         if (!on) return OFF;
@@ -77,7 +83,7 @@ final class TailscaleGuide {
     }
 
     /** The phone is fine; the Wizard isn't answering. Step 4 then asks to check the Wizard's computer. */
-    static boolean away(boolean on, Boolean missing) { return on && !Boolean.TRUE.equals(missing); }
+    static boolean away(boolean on, Boolean missing) { return on && Boolean.FALSE.equals(missing); }
 
     /** From the WebView's error text: the name didn't resolve (true), anything else, including a hang (false). */
     static boolean missingFrom(String webError) { return webError != null && webError.contains("NAME_NOT_RESOLVED"); }
@@ -101,7 +107,7 @@ final class TailscaleGuide {
         switch (step) {
             case 1: return on ? INSTALLED_ON : installed ? INSTALLED : FREE;
             case 2: return tailnet.isEmpty() ? SAME : SAME + " " + NETWORK;
-            case 3: return on ? IS_ON : VPN;
+            case 3: return steps(on, missing, installed)[2] == Step.DONE ? IS_ON : VPN;
             default: return away(on, missing) ? WAKE_BODY : AUTO;
         }
     }
