@@ -111,5 +111,10 @@ html.wz-hosted #wiz-staging-tag { display: none !important; }
 .wz-button { min-height: 44px; padding: 8px 16px; border-radius: var(--r-tile); background: var(--accent); color: var(--on-accent); font-weight: 600; }
 .wz-button.secondary { background: var(--fill); color: var(--ink); border: 1px solid var(--line-2); }
 .wz-button:disabled { opacity: .45; cursor: default; }
-.wz-sheet { color: var(--ink); background: var(--wz-overlay); border: 1px solid var(--line-2); border-radius: var(--r); padding: var(--wz-space-4); max-width: min(420px, calc(100% - 24px)); max-height: 85%; overflow: auto; backdrop-filter: blur(20px); }
+.wz-sheet { color: var(--ink); background: linear-gradient(var(--wz-overlay, #1c133a), var(--wz-overlay, #1c133a)), var(--wz-panel, var(--wz-base, #05030c)); border: 1px solid var(--line-2); border-radius: var(--r); padding: var(--wz-space-4); max-width: min(420px, calc(100% - 24px)); max-height: 85%; overflow: auto; }
 .wz-sheet::backdrop { background: color-mix(in srgb, var(--wz-base) 74%, transparent); }
+
+.wz-sheet-x { position: sticky; top: 0; float: right; width: 36px; height: 36px; margin: -6px -6px 0 8px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-2); background: linear-gradient(var(--fill), var(--fill)), var(--wz-panel, var(--wz-base, #05030c)); font-size: 18px; line-height: 1; z-index: 1; }
+/* Text-bearing floating panels use the opaque material, not a canvas/glass fill. */
+.wz-menu, .wz-toast { color: var(--ink); background: linear-gradient(var(--wz-overlay, #1c133a), var(--wz-overlay, #1c133a)), var(--wz-panel, var(--wz-base, #05030c)); border: 1px solid var(--line-2); border-radius: var(--r); padding: var(--wz-space-4, 16px); }
+.wz-bar:is([data-sticky], [data-floating]) { background: linear-gradient(var(--wz-chrome, #0c081a), var(--wz-chrome, #0c081a)), var(--wz-panel, var(--wz-base, #05030c)); }

@@ -32,6 +32,8 @@
   --wz-accent-soft: color-mix(in srgb, #b99bff 16%, transparent);
   --wz-on-accent: #05030c;
   --wz-reader-surface: transparent;
+  --wz-panel: var(--wz-base);
+  --wz-panel-raised: color-mix(in srgb, var(--wz-text) 7%, var(--wz-base));
 }
 :root { color-scheme: dark; }
 html[data-skin="nebula"] {
@@ -67,6 +69,8 @@ html[data-skin="nebula"] {
   --wz-accent-soft: color-mix(in srgb, #b99bff 16%, transparent);
   --wz-on-accent: #05030c;
   --wz-reader-surface: transparent;
+  --wz-panel: var(--wz-base);
+  --wz-panel-raised: color-mix(in srgb, var(--wz-text) 7%, var(--wz-base));
 }
 html[data-skin="grove"] {
   --wz-font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
@@ -101,6 +105,8 @@ html[data-skin="grove"] {
   --wz-accent-soft: color-mix(in srgb, #e6c66b 16%, transparent);
   --wz-on-accent: #050b07;
   --wz-reader-surface: transparent;
+  --wz-panel: var(--wz-base);
+  --wz-panel-raised: color-mix(in srgb, var(--wz-text) 7%, var(--wz-base));
 }
 html[data-skin="tide"] {
   --wz-font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
@@ -135,6 +141,8 @@ html[data-skin="tide"] {
   --wz-accent-soft: color-mix(in srgb, #7fd8ff 16%, transparent);
   --wz-on-accent: #052a36;
   --wz-reader-surface: transparent;
+  --wz-panel: var(--wz-base);
+  --wz-panel-raised: color-mix(in srgb, var(--wz-text) 7%, var(--wz-base));
 }
 html[data-skin="ember"] {
   --wz-font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
@@ -169,6 +177,8 @@ html[data-skin="ember"] {
   --wz-accent-soft: color-mix(in srgb, #ffb470 16%, transparent);
   --wz-on-accent: #090504;
   --wz-reader-surface: transparent;
+  --wz-panel: var(--wz-base);
+  --wz-panel-raised: color-mix(in srgb, var(--wz-text) 7%, var(--wz-base));
 }
 html[data-skin="signal"] {
   --wz-font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
@@ -203,5 +213,7 @@ html[data-skin="signal"] {
   --wz-accent-soft: color-mix(in srgb, #ffbe55 16%, transparent);
   --wz-on-accent: #000000;
   --wz-reader-surface: transparent;
+  --wz-panel: var(--wz-base);
+  --wz-panel-raised: color-mix(in srgb, var(--wz-text) 7%, var(--wz-base));
 }
 html.wz-hosted, html[data-wz-hosted] { --wz-canvas: transparent; }

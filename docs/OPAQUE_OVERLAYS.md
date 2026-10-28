@@ -1,0 +1,7 @@
+# Overlay panel material
+
+| Capability | Entry point | Contract |
+|---|---|---|
+| Overlay panel material | `web/core/base.css`, `--wz-panel`, `--wz-panel-raised`, `web/kit/wizard-tokens.css`, `web/kit/wizard-ui.css` | Every text-bearing floating panel has an opaque backing. Canonical source: wizard-os `style/tokens.json`, `style/generate_tokens.py`, `style/ui.css`; copy generated token CSS and canonical UI bytes into `web/kit/`. Preserve the existing tint as an image over `var(--wz-panel, var(--wz-base, var(--bg, #05030c)))`. Never use hosted canvas, faint surface/glass tokens alone, blur, or persistent element opacity as panel material. Scrims may dim; ordinary in-flow rows/cards remain translucent. Guard: `npm run test:opaque-overlays` with Playwright installed. |
+
+The guard opens Settings, overview and the real link context menu, and renders the shell/desktop/setup/store/agent/motion/kit panel classes in their production cascade. Each interior is compared byte-for-byte over loud text versus nothing in Nebula, Grove, Tide, Ember and Signal, hosted and standalone. Test fixture visibility/layout is normalized; no tested fill is replaced. `will-change` keeps gradient dithering stable between captures without concealing any alpha leak. Screenshots optionally use `QA_SHOTS` and `QA_PHASE=before|after`; full results use `QA_RESULT`. Run on the browser worker, never on the control host.
