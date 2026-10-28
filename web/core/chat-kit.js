@@ -406,7 +406,7 @@
       const rp = reply.clean(r); text = String(text || '').trim();
       if (!rp) return text;
       const q = s => String(s).replace(/\r\n?/g, '\n').split('\n').map(l => ('> ' + l).trimEnd()).join('\n');
-      const block = `${REPLY_OPEN}\n${REPLY_NOTE}\n${q('Title: ' + rp.title.replace(/\s+/g, ' ').trim())}\n>\n${q(rp.message)}\n${REPLY_CLOSE}`;
+      const block = `${REPLY_OPEN}\n${rp.key.startsWith('message:') ? REPLY_NOTE.replace('notification', 'message') : REPLY_NOTE}\n${q('Title: ' + rp.title.replace(/\s+/g, ' ').trim())}\n>\n${q(rp.message)}\n${REPLY_CLOSE}`;
       return text ? `${text}\n\n${block}` : block;
     },
     // A message read back: { text: his words, reply: { title, message } | null }.
