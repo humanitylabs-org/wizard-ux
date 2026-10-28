@@ -330,17 +330,34 @@
   }
 
   /* Tweaks extend the existing package host: same guards, listeners, frames and disposal. */
+  const homeHtml = new WeakMap();   // Home element -> the markup paintHome last wrote
   const tweaks = new Map(), interceptors = new Map(), snoozeLast = new Set(), inboxThreads = new Map(), overlays = []; // inboxThreads: package -> {act} // snoozeLast: packages holding snoozeOrder('last')
   let tweakSeq = 0, slotContract = null;
   const safeTweakId = id => /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/.test(id);
   const tweakUrl = (id, file) => stamp(new URL(`tweaks/${id}/${file}`, document.baseURI).href);
+  /* Tweaks paint once, not twice: the ids this device last wore are listed on <html> and their stylesheets are in <head>
+   * (render-blocking) from the first frame, so stock Home never flashes before a package's own view. A package that
+   * does not come back drops out of the list. Reapplying adds the new <link> before the old one goes (no unstyled gap). */
+  const EXPECT_KEY = 'wos.tweaks.expect';
+  const expected = new Set(), preCss = new Map();   // ids still loading; id -> <link> added ahead of the package
+  function tweakCss(id) {
+    if (!isDoc) return null;
+    let l = preCss.get(id); if (l) return l;
+    l = document.createElement('link'); l.rel = 'stylesheet'; l.href = tweakUrl(id, 'tweak.css'); l.setAttribute('blocking', 'render');
+    document.head.append(l); preCss.set(id, l); return l;
+  }
+  // Wait (briefly) for a package's stylesheet before its setup runs, so its view never shows unstyled.
+  const cssReady = l => !l || l.sheet !== null || typeof l.addEventListener !== 'function' ? Promise.resolve() : new Promise(done => {
+    const t = setTimeout(done, 1500), end = () => { clearTimeout(t); done(); };
+    l.addEventListener('load', end, { once: true }); l.addEventListener('error', end, { once: true });
+  });
   const bounded = async promise => {
     let timer;
     try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Package timed out')), 8000); })]); }
     finally { clearTimeout(timer); }
   };
   function paintTweaks() {
-    if (isDoc) document.documentElement.dataset.tweaks = [...tweaks].filter(([, a]) => !a.dead).map(([id]) => id).join(' ');
+    if (isDoc) document.documentElement.dataset.tweaks = [...new Set([...[...tweaks].filter(([, a]) => !a.dead).map(([id]) => id), ...expected])].join(' ');
     window.WosResources?.sync();
   }
   function tweakApi(a, manifest, trusted) {
@@ -442,7 +459,9 @@
       api.models = Object.freeze({ list: async () => {
         const options = await shell?.models?.() || [];
         return a.dead ? [] : options.map(m => Object.freeze({ id: m.value, provider: m.provider, agent: m.agent || '', label: m.name, disabled: !!m.disabled }));
-      } });
+      },
+      // The Wizard's default model (what a new chat starts on), or null while it is still loading.
+      default: () => { if (a.dead) return null; const o = window.WosModels?.defaultOption?.(); return o ? Object.freeze({ id: String(o.value || ''), provider: String(o.provider || '') }) : null; } });
       api.thread = Object.freeze({ model: choice => a.dead ? null : shell?.model?.(choice, () => !a.dead) });
     }
     if (caps.has('data.read')) api.data = Object.freeze({ read: Object.freeze({ resources: Object.freeze({
@@ -508,6 +527,10 @@
   }
   async function loadTweaks(entries, contract, { teamAuthors = [], trustedAuthors = [] } = {}) {
     const seq = ++tweakSeq; slotContract = contract;
+    const want = entries.filter(safeTweakId);
+    for (const [id, l] of preCss) if (!want.includes(id)) { l.remove(); preCss.delete(id); }
+    for (const id of want) tweakCss(id);
+    expected.clear(); for (const id of want) expected.add(id);
     for (const a of [...tweaks.values()]) dispose(a, 'replace');
     tweaks.clear(); paintTweaks();
     if (!shell) return false;
@@ -523,16 +546,20 @@
         const mod = await bounded(importer(tweakUrl(id, 'tweak.js')));
         if (seq !== tweakSeq) return false;
         if (typeof mod.default !== 'function') throw new Error('Missing setup');
-        const a = record(id, m.name || id); tweaks.set(id, a);
         // CSS is optional; missing CSS is harmless. All package assets are same-origin build artifacts.
-        const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = tweakUrl(id, 'tweak.css'); document.head.append(link); a.offs.add(() => link.remove());
+        const link = tweakCss(id); await cssReady(link);
+        if (seq !== tweakSeq) return false;
+        const a = record(id, m.name || id); tweaks.set(id, a);
+        preCss.delete(id); if (link) a.offs.add(() => link.remove());
         paintTweaks();
         try {
           a.teardown = mod.default(tweakApi(a, m, teamAuthors.includes(m.author) || trustedAuthors.includes(m.author)));
           if (a.teardown && typeof a.teardown !== 'function') throw new Error('Setup must return teardown');
         } catch (e) { dispose(a, 'error'); throw e; }
-      } catch (e) { shell?.toast?.(`${id} turned off · ${e.message}`); }
+      } catch (e) { expected.delete(id); const l = preCss.get(id); if (l) { l.remove(); preCss.delete(id); } paintTweaks(); shell?.toast?.(`${id} turned off · ${e.message}`); }
     }
+    expected.clear();
+    try { localStorage.setItem(EXPECT_KEY, JSON.stringify([...tweaks].filter(([, a]) => !a.dead).map(([id]) => id))); } catch (_) {}
     paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true;
   }
 
@@ -573,7 +600,25 @@
      * (no remount, no flash) and layout tweaks hear api.on('home'). Without a mount this is plain innerHTML. */
     paintHome(el, html) {
       if (!el) return;
-      const sel = '[data-slot="home-main"]', kept = [...(el.querySelector?.(sel)?.childNodes || [])];
+      const sel = '[data-slot="home-main"]';
+      // A package view is mounted and the markup is the same as last time: leave the DOM alone, so the view is not
+      // detached and re-attached (which restarts its motion and looks like a reload). When only the live resource
+      // readings changed, update just that block in place.
+      if (el.querySelector?.(sel)?.childNodes?.length && homeHtml.has(el)) {
+        const prev = homeHtml.get(el);
+        if (prev === html) { if (layers().some(l => l.on.home.size)) emit('home', Object.freeze({})); return; }
+        const LIVE = ['[data-home-resources]', '.home-time', '.home-date'];
+        const parts = h => { const t = document.createElement('template'); if (typeof t.content?.querySelector !== 'function') return null;
+          t.innerHTML = h; const inner = LIVE.map(q => { const r = t.content.querySelector(q), v = r ? r.innerHTML : null; if (r) r.innerHTML = ''; return v; }); return [t.innerHTML, inner]; };
+        const a = parts(prev), b = parts(html), live = LIVE.map(q => el.querySelector(q));
+        if (a && b && a[0] === b[0] && b[1].every((v, i) => (v == null) === !live[i])) {
+          b[1].forEach((v, i) => { if (live[i] && live[i].innerHTML !== v) live[i].innerHTML = v; }); homeHtml.set(el, html);
+          if (layers().some(l => l.on.home.size)) emit('home', Object.freeze({}));
+          return;
+        }
+      }
+      homeHtml.set(el, html);
+      const kept = [...(el.querySelector?.(sel)?.childNodes || [])];
       el.innerHTML = html;
       const slot = kept.length ? el.querySelector?.(sel) : null;
       if (slot) slot.append(...kept);
@@ -596,6 +641,8 @@
     // The stored skin's stylesheet now, in <head>, so it paints with the first frame (no flash).
     const id = window.WosSkin && window.WosSkin.current;
     if (id) { ensureCss(id); committedId = id; }
+    // The tweaks this device wore last time: listed and styled from the first frame (loadTweaks settles the real list).
+    try { const last = JSON.parse(localStorage.getItem(EXPECT_KEY) || '[]'); if (isDoc && Array.isArray(last)) { for (const t of last.filter(x => typeof x === 'string' && safeTweakId(x)).slice(0, 40)) { expected.add(t); tweakCss(t); } if (expected.size) paintTweaks(); } } catch (_) {}
     // ?layout=<id> in a link turns that layout on (and remembers it); ?layout=classic turns it off. Lets people share a try-it link.
     try {
       const q = new URLSearchParams(location.search).get('layout');

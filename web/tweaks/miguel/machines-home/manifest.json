@@ -1,12 +1,13 @@
 {
   "id": "miguel/machines-home",
   "name": "Machines on Home",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "miguel",
   "apiVersion": 1,
   "capabilities": [
     "layout",
-    "data.read"
+    "data.read",
+    "models"
   ],
-  "description": "Home shows your machines by role: storage, main, standby, helpers"
+  "description": "Home shows your network: AI fuel, storage, machines and people, everything opening in place"
 }
