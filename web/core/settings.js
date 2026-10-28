@@ -239,12 +239,12 @@
   function tweakRows(S) {
     const E = window.WosExperience; if (!E) return '';
     const s = E.state, own = window.WosMySkin?.active;
-    if ((!s.owner && !own) || (!s.tweaks.length && !s.error)) return '';
+    if (!s.tweaks.length && !s.error) return '';
     const fam = (S.families || []).find(f => f.id === S.familyOf?.(S.current)), who = esc(fam?.name || 'This skin');
     const rows = tweakSwitches(s.tweaks, 'data-tweak-toggle', s.busy);
     if (own) return `<div class="tw-set"><h4>Tweaks</h4>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</div>`;
     const on = s.tweaks.filter(t => t.on).length;
-    return `<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row"><span class="st-tx"><b>${who} also changes how things work</b><small>${on} of ${s.tweaks.length} changes on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</details>`;
+    return `<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row"><span class="st-tx"><b>${s.owner ? who + ' also changes how things work' : 'How things work'}</b><small>${on} of ${s.tweaks.length} changes on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</details>`;
   }
   let tweaksOpen = false;
   window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });

@@ -281,3 +281,30 @@ test('Notifications sits with the agent apps while its inbox lives in Chats', ()
   assert.deepEqual([K().apps.length, K().wiz.map(a => a.id)], [0, ['notifications']], 'inbox in Chats: an agent app');
   assert.equal(window.WosAppKinds.isSystem(app), true, 'and a system app');
 });
+
+test('James: notifications are on for every skin, with one persistent owner off-switch', async () => {
+  let f = wizardExperience();
+  for (const skin of ['nebula', 'novairecito']) {
+    f.skin(skin); await f.E.chooseSkin();
+    assert.ok(f.all().includes('wizard/unified-inbox'), skin);
+    assert.equal(f.E.state.tweaks.find(t => t.id === 'wizard/unified-inbox').on, true);
+  }
+  await f.E.toggle('wizard/unified-inbox');
+  assert.ok(!f.all().includes('wizard/unified-inbox'));
+  f = wizardExperience(f.storage); await f.E.refresh();
+  assert.ok(!f.all().includes('wizard/unified-inbox'), 'reload keeps owner off');
+  f.skin('novairecito'); await f.E.chooseSkin();
+  assert.ok(!f.all().includes('wizard/unified-inbox'), 'changing skin keeps owner off');
+  await f.E.toggle('wizard/unified-inbox'); assert.ok(f.all().includes('wizard/unified-inbox'));
+});
+test('notifications preserve existing Miguel off choices and old custom-skin ids after promotion', async () => {
+  const saved = new Map([['wos.skin-tweaks.v1', JSON.stringify({version:1, off:{miguel:['miguel/unified-inbox']}})]]);
+  let f = wizardExperience(saved); await f.E.refresh();
+  assert.ok(!f.all().includes('wizard/unified-inbox'), 'deliberate legacy off is not overwritten');
+  f = wizardExperience();
+  const skin = {tweaks:{'miguel/unified-inbox':false}};
+  f.window.WosMySkin={active:skin, update(v){Object.assign(skin.tweaks,v.tweaks);}};
+  await f.E.refresh(); assert.ok(!f.all().includes('wizard/unified-inbox'), 'old recipe off survives alias');
+  await f.E.toggle('wizard/unified-inbox'); assert.ok(f.all().includes('wizard/unified-inbox'));
+});
+
