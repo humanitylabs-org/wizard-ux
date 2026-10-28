@@ -19,25 +19,25 @@ Visual: <side-by-side screenshot, or "none">
 | Need | Use | Never hand-roll | Test the shared path by |
 |---|---|---|---|
 | Talk to an agent about app content: thread, composer, Stop, retry, outbox, model picker, dictation, attachments | `WizardApp.nav.openThread(sessionId, {reply})`, the real Chats thread over the app (wizard-builder `references/chat.md`) | composer, transcript, streaming client or retry loop in the app; `wizard-ui.css` is look only | the shell shows the `[data-chats]` thread for that session; the app frame has no textarea; a forced 503 leaves exactly one outbox item and one delivered message |
-| Top-level home-screen name, icon and app root | `WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK | per-app manifest injectors | app-owned manifest wins; frames untouched |
+| Home-screen name, icon, app root | `WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK | per-app manifest injectors | app-owned manifest wins; frames untouched |
 | Own human-messaging composer input: paste a screenshot/file, dictation-safe text paste (Wispr Flow), empty-paste hint, file drag highlight + drop, Enter / Shift+Enter / Ctrl·Cmd+Enter / IME | `WizardApp.composer.bind(root, {field, zone, onFiles, onSubmit, notice})` → unbind, `WizardApp.composer.insertText`; the same `WizComposerInput` (`web/core/composer-input.js`) Chats uses. App decides what a file becomes in `onFiles`; styles `.is-file-drag` with its tokens | paste/drop/Enter listeners, clipboard reads, own Enter rule | `qa-composer-input.cjs`; app test pastes text + image, drops a file, Ctrl+Enter |
 | Bound same-app companion | `WizardApp.shell.openCompanion` → `WizCompanionPane` (`web/core/companion-pane.js`); [API](shared-app-services-host.md) | app-specific desks/relays | `qa-companion-pane.cjs`: nested Back, both shells |
 | Back in app; leave on dismiss or modal outside tap | `WizardApp.back.register/push`, `nav.back()`; validated `WizOpenApp(id,path)` repair returns to its chat | SDK `cancel` ([contract](shared-app-services-host.md#modal-backdrop--back)); guards, 2nd tap | nested Back stays; dismiss → prior screen |
 | Skin, tokens, light/dark | `WizardApp.theme.get / onChange`, `--wz-*` roles | theme storage, own dark mode, literal colours | two skins + a live skin change keep app state |
 | Transcribe an existing audio file (EXTEND) | `WizardApp.voice.transcribe(blob, {language})` → `{text}` or `{unavailable:true}`; verified installed frame, 25 MB cap, shell `WizConfig.transcribe` | app/provider transcriber, container-to-Voice-Core request | stale/foreign frame denied; unavailable endpoint is explicit |
 | Share text or a file out | `WizardApp.share.text / file` | `navigator.share` | cancelled is not reported as shared |
-| Native Android screens in the worn skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`: shell `--wz-*` roles saved natively, Nebula fallback) | literal colours in native screens |
+| Native Android skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`: shell `--wz-*` roles saved natively, Nebula fallback) | literal colours in native screens |
 | Native "can't reach your Wizard" screen and the Connect / edit-address screen | `ReachScreen` (`android/app/src/main/java/ai/wizards/os/ReachScreen.java`, rules in `ReachPolicy`; Try again is the only primary, the address is a quiet Edit address line), `ConnectActivity` (`android/app/src/main/java/ai/wizards/os/ConnectActivity.java`, address in `ServerSettings`) | a second offline overlay, a WebView error page, another address editor |
 | Share text or a file out (Wizard's share sheet first: people → Wizard apps → Other apps…) | `WizardApp.share.text / file` | `navigator.share`, an own share picker | cancelled is not reported as shared |
 | Receive shares from other Wizard apps and the chats (people as direct targets) | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound share route, URL-fragment payloads | the item stays pending until `receive` returns true, then is acked once |
 | Mic, camera, screen capture | `WizardApp.capture.start / attach / current / pending / ack` | `getUserMedia`, `MediaRecorder` | pending capture survives Back and is acked once |
 | Title-bar tools | `WizardApp.titlebar.set(tools)` | an app header repeating the title | tools appear in the shell title bar |
-| Protect unsaved work from updates | `WizardApp.update.hold` | app service worker, forced reload | hold released only after save + readback |
-| Reading place in an app document | shell-owned `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic for registered apps | app-local scroll store | reopen lands at the saved place |
+| Unsaved work/update hold | `WizardApp.update.hold` | app service worker, forced reload | hold released only after save + readback |
+| App reading place | shell-owned `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic for registered apps | app-local scroll store | reopen lands at the saved place |
 | Motion, haptics, press feel | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own spring/haptic helpers | — |
 | App look: rows, sections, empty state | the template's `wizard-ui.css` + `--wz-*` | its composer styling as a chat; literal colours | — |
 
-## Shell (`web/core/`): both shells and all agents; per-kind variants must EXTEND.
+## Shell (`web/core/`): shared; per-kind variants EXTEND.
 
 | Need | Use | Never hand-roll |
 |---|---|---|
@@ -86,6 +86,7 @@ Visual: <side-by-side screenshot, or "none">
 |---|---|---|
 | The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`, icon/core); Android `android/app/src/main/assets/assist/everywhere.html` | PNG + CSS spin, Lottie, SVG |
 | Skins, backgrounds, scenery, skin feature switches (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`), `WosSkinHost` (`web/core/skin-host.js`; tweaks on `core/slots.json`; `.builtin` gestures, `api.gesture.intent`), `WosExperience` (`web/core/experience.js`: a family's tweaks), `WosMySkin` (`web/core/my-skin.js`), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own gradients, canvases or colour constants |
+| Overlay panel material | `--wz-panel`, `--wz-panel-raised` | `docs/OPAQUE_OVERLAYS.md` |
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) | own keyframe sets |
 | Tour and help sheet | `WosTour` (`web/core/tour.js`) | — |
 
