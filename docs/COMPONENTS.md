@@ -19,6 +19,7 @@ Visual: <side-by-side screenshot, or "none">
 
 | Need | Use | Never hand-roll | Test the shared path by |
 |---|---|---|---|
+| Shared desks and open apps | `WosWorkspaceSync.create` (`web/core/workspace-sync.js`) | per-shell/native sync loops; revision-only checkpoint validation | `workspace-sync.test.mjs`; `two-phone-workspace-sync.browser.mjs` + `tools/qa-workspaces-origin.mjs` import the real disposable Service store; hidden/frozen resume, reset revisions, one-reader and GET/PUT races |
 | Owner signatures | `WizardApp.identity.*` → `wizardDevicePort` | app keys | `wizard-id-bridge.test.mjs` |
 | Agent chat | `WizardApp.nav.openThread(sessionId, {reply})`, `nav.openContextDraft` | own composer/transcript/retries | shell `[data-chats]`; 503: one outbox item/message |
 | Top-level home-screen name, icon and app root | `WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK | per-app manifest injectors | app-owned manifest wins; frames untouched |
