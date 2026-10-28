@@ -162,7 +162,9 @@ export default function setup(api) {
   const lines = sv('svg', { class: 'mh-lines', 'aria-hidden': 'true' });
   const row = cls => h('div', { cls: 'mh-row ' + cls });
   const rowSt = row('is-storage'), rowMn = row('is-machines'), rowAct = row('is-act'), rowMore = row('is-more'), rowPp = row('is-people'), rowDv = row('is-devices'), rowChev = row('is-more is-devchev');
-  const map = h('div', { cls: 'mh-map' + (S.bars ? ' is-details' : '') }, lines, rowSt, rowMn, rowAct, rowMore, rowPp, rowDv, rowChev);
+  // One button beside the Tailscale label when something is open: it drafts the fix in a new chat, never sends it.
+  const fixBtn = h('button', { type: 'button', cls: 'mh-ts-fix', data: { fixOpen: '1' }, hidden: true }, 'Fix this');
+  const map = h('div', { cls: 'mh-map' + (S.bars ? ' is-details' : '') }, lines, fixBtn, rowSt, rowMn, rowAct, rowMore, rowPp, rowDv, rowChev);
   root.append(h('header', { cls: 'mh-top' }, wsBar), h('div', { cls: 'mh-body' }, aiRow, aiList, map));
 
   /* ---------- top ---------- */
@@ -377,6 +379,7 @@ export default function setup(api) {
     const frame = S.ws === 'mine' && inside.length ? [Math.min(...inside.map(x => x.t)) - 22, Math.max(...inside.map(x => x.b)) + 10] : null;
     const key = JSON.stringify([specs, frame]); if (key === wired && lines.firstChild) return; wired = key;
     lines.replaceChildren();
+    if (!frame) fixBtn.hidden = true;
     if (frame) {
       sv('rect', { x: 4, y: f(frame[0]), width: f(M.width - 8), height: f(frame[1] - frame[0]), rx: 22, class: 'mh-ts' }, lines);
       // Honest: only claim "the only way in" once every machine checked is Tailscale-only.
@@ -385,6 +388,8 @@ export default function setup(api) {
       const narrow = M.width < 520;
       t.textContent = open ? (narrow ? `Tailscale · ${open} open` : `Tailscale · ${open} ${open === 1 ? 'machine is' : 'machines are'} still open to the internet`) : narrow ? 'Tailscale only' : 'Tailscale · the only way in';
       if (narrow) t.setAttribute('x', '14');
+      fixBtn.hidden = !open;
+      if (open) { const tb = t.getBBox(); fixBtn.style.left = f(tb.x + tb.width + 14) + 'px'; fixBtn.style.top = f(tb.y + tb.height / 2) + 'px'; fixBtn.setAttribute('aria-label', `Fix: close ${open === 1 ? 'the machine' : `the ${open} machines`} that are open to the internet. Drafts a request for you to send`); }
       const bb = t.getBBox(); g.insertBefore(sv('rect', { x: bb.x - 8, y: bb.y - 4, width: bb.width + 16, height: bb.height + 8, rx: (bb.height + 8) / 2, class: 'mh-age-bg' }), t);
     }
     const defs = sv('defs', {}, lines); let gi = 0;
@@ -408,7 +413,7 @@ export default function setup(api) {
   /* ---------- taps: everything expands in place ---------- */
   const flip = k => { if (S.open.has(k)) S.open.delete(k); else S.open.add(k); };
   api.listen(root, 'click', e => {
-    let b = e.target; while (b && b !== root && !(b.dataset && (b.dataset.ws || b.dataset.act || b.dataset.open || b.dataset.person || b.dataset.toggle || b.dataset.machine || b.dataset.ask || b.dataset.stAsk))) b = b.parentNode;
+    let b = e.target; while (b && b !== root && !(b.dataset && (b.dataset.ws || b.dataset.act || b.dataset.open || b.dataset.person || b.dataset.toggle || b.dataset.machine || b.dataset.ask || b.dataset.stAsk || b.dataset.fixOpen))) b = b.parentNode;
     if (!b || b === root) return;  // Sign in / Sign out carry the shell's own data-res-signin, which opens that app
     const d = b.dataset;
     if (d.open) return api.data.read.sessions?.open(d.open);
@@ -423,6 +428,16 @@ export default function setup(api) {
     if (d.person) { const p = people().find(x => x.id === d.person); if (p?.devices) { flip('devs'); api.storage.set('devs', S.open.has('devs') ? 'on' : 'off'); } else flip('p:' + d.person); paint(); return; }
     if (d.toggle === 'devs') { flip('devs'); api.storage.set('devs', S.open.has('devs') ? 'on' : 'off'); paint(); return; }
     if (d.stAsk) { const st = storage(); if (!api.nav?.ask?.('storage-' + d.stAsk, { title: 'Storage', message: st ? [st.where + ' · ' + st.bucket, st.every, st.keep].join('\n') : '' }, d.words)) api.toast('Open Chats, then try again'); return; }
+    if (d.fixOpen) {
+      const open = devices().filter(x => x.access?.exposure === 'internet').map(x => machine(x.id));
+      if (!open.length) return;
+      const names = open.map(m => m.name).join(' and ');
+      const words = [`Close ${names} to the internet so ${open.length === 1 ? 'it is' : 'they are'} reachable only over Tailscale, like Main.`, '',
+        ...open.map(m => `${m.name}: ${(m.access.details || []).join('; ')}`), '',
+        'For each one: test its ports from another machine first, apply the fix with a safety net that undoes itself if access is lost, test again from outside, then update the map. Ask me before anything that needs my password, and tell me if a fix would cut off something I use (like AnyDesk).'].join('\n');
+      if (!api.nav?.ask?.('fix-open', { title: 'Network · Close open machines', message: names + ' open to the internet' }, words)) api.toast('Open Chats, then try again');
+      return;
+    }
     if (d.machine) { const k = 'm:' + d.machine, was = S.open.has(k); for (const x of [...S.open]) if (x.startsWith('m:')) S.open.delete(x); if (!was) S.open.add(k); fresh = !was; paint(); return; }
     if (d.ask) {
       const [id, what] = d.ask.split(':'), m = machine(id), a = actions(m).find(x => x.id === what);
