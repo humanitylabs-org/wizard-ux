@@ -363,30 +363,71 @@ html[data-skin="obsidian-light"] .mh-map { box-shadow: inset 0 0 0 1px var(--mh-
 @container (max-width: 599px) { .mh-map { padding: 20px 6px 10px; border-radius: 20px; } .mh-root .mh-ts-tab { left: 16px; height: 24px; font-size: 11px; } }
 .mh-root:not(.is-managed) .mh-row.is-storage:not(:empty) { margin-bottom: 30px; }
 
-/* ---------- glance strip: the calm default; tap to unfold the map ---------- */
-.mh-root .mh-glance { flex: none; margin: 10px auto 0; max-width: 100%; height: 40px; padding: 0 8px 0 14px !important; border-radius: 99px; display: inline-flex; align-items: center; gap: 14px; color: var(--mh-ink); background: var(--mh-card); box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 10px 30px -18px rgba(0, 0, 0, .55); -webkit-backdrop-filter: blur(22px) saturate(1.2); backdrop-filter: blur(22px) saturate(1.2); cursor: pointer; white-space: nowrap; overflow: hidden; }
-.mh-gl-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; }
-.mh-gl-item + .mh-gl-item { padding-left: 14px; box-shadow: inset 1px 0 0 var(--mh-card-line); }
-.mh-gl-item small { font-size: 10.5px; font-weight: 800; letter-spacing: .08em; color: var(--mh-ink-3); }
-.mh-glance .mh-dots { flex-wrap: nowrap; gap: 4px; }
-.mh-glance .mh-dots i { width: 8px; height: 8px; box-shadow: none; }
+/* ---------- Home: one strip. Which Wizard ▾ | AI fuel | chats | last backup | network | Details › ---------- */
+.mh-root.is-home { align-items: center; }
+.mh-root .mh-glance { flex: none; margin: calc(var(--sb, 0px) + var(--safe-t, 0px) + 12px) auto 0; max-width: calc(100% - 8px); min-height: 46px; padding: 4px !important; border-radius: 99px; display: inline-flex; align-items: center; gap: 2px; color: var(--mh-ink); background: var(--mh-card); box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 10px 30px -18px rgba(0, 0, 0, .55); -webkit-backdrop-filter: blur(22px) saturate(1.2); backdrop-filter: blur(22px) saturate(1.2); white-space: nowrap; }
+.mh-root .mh-glance > button { height: 38px; padding: 0 12px !important; border-radius: 99px; display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--mh-ink); background: transparent !important; box-shadow: none; cursor: pointer; transition: background 160ms; }
+.mh-root .mh-glance > button:hover { background: color-mix(in srgb, var(--mh-ink) 9%, transparent) !important; }
+.mh-root .mh-glance > button + button { position: relative; }
+.mh-root .mh-glance > button + button::before { content: ""; position: absolute; left: -1px; top: 11px; bottom: 11px; width: 1px; background: var(--mh-card-line); }
+.mh-root .mh-glance .is-name { padding-left: 16px !important; background: var(--mh-pearl) !important; color: var(--mh-pearl-ink); }
+.mh-root .mh-glance .is-name + button::before { display: none; }
+.mh-glance .is-name .mh-chev-btn { transform: scale(.8); color: var(--mh-pearl-ink); }
+.mh-root .mh-glance .mh-gauge { height: 38px; gap: 6px; padding: 0 12px !important; border-radius: 99px; background: transparent !important; box-shadow: none; transform: none; }
+.mh-glance .mh-gauge .mh-g-cells i { height: 14px; }
+.mh-glance .mh-dots { display: inline-flex; flex-wrap: nowrap; gap: 4px; }
+.mh-glance .mh-dots i { width: 9px; height: 9px; box-shadow: none; }
 .mh-glance .mh-bell { color: var(--mh-ink); }
-.mh-gl-cells { display: inline-flex; gap: 2px; }
-.mh-gl-cells i { width: 5px; height: 12px; border-radius: 2px; background: var(--mh-card-line); box-shadow: inset 0 0 0 1px var(--mh-card-line); }
-.mh-gl-cells i.on { background: var(--mh-good); box-shadow: none; }
-.mh-gl-cells[data-s="tight"] i.on { background: var(--mh-warn); }
-.mh-gl-cells[data-s="no"] i.on { background: var(--mh-bad); }
 .mh-glance [data-x="ok"] { color: var(--mh-ink); }
 .mh-glance .is-backup [data-x="tight"] { color: var(--mh-warn); }
 .mh-glance [data-x="no"] { color: var(--mh-bad); }
 html[data-skin="landscapes"] .mh-glance [data-x="no"] { color: #FF95A8; }
-.mh-glance .mh-chev-btn { transform: scale(.85); }
-.mh-root.is-folded :is(.mh-ai, .mh-ai-list, .mh-map) { display: none !important; }
-/* Unfolded: the card fits its content instead of filling the screen, a little more see-through. */
-.mh-root:not(.is-folded) .mh-map { flex: none; min-height: 0; margin-top: 12px; }
-html[data-skin="landscapes"] .mh-root { --mh-card: rgba(16, 24, 36, .52); }
-.mh-root { --mh-card: rgba(22, 30, 42, .66); }
-html[data-skin="obsidian-light"] .mh-root { --mh-card: rgba(255, 255, 255, .86); }
-@container (max-width: 599px) { .mh-root .mh-glance { gap: 10px; padding: 0 6px 0 11px !important; } .mh-gl-item + .mh-gl-item { padding-left: 10px; } .mh-gl-item { font-size: 11.5px; } .mh-glance .is-backup span { max-width: 104px; overflow: hidden; text-overflow: ellipsis; } }
-@container (max-width: 380px) { .mh-glance .is-fuel small { display: none; } }
-@container (max-width: 599px) { .mh-glance .is-backup span { max-width: none; } .mh-glance .mh-dots i:nth-child(n+5) { display: none; } .mh-root .mh-glance { gap: 9px; } }
+.mh-glance .is-more { color: var(--mh-ink-2) !important; }
+.mh-go { font-style: normal; font-size: 18px; line-height: 1; }
+/* Which Wizard: a small list under the strip. */
+.mh-ws-menu { margin: 6px auto 0; padding: 5px; border-radius: 18px; display: flex; flex-direction: column; gap: 2px; min-width: 200px; background: var(--mh-card-solid); box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 16px 40px -18px rgba(0, 0, 0, .6); animation: mh-in 180ms var(--mh-ease) both; }
+.mh-ws-menu[hidden] { display: none; }
+.mh-root .mh-ws-menu button { height: 36px; padding: 0 14px !important; border-radius: 12px; text-align: left; font-size: 13.5px; font-weight: 650; color: var(--mh-ink); background: transparent !important; }
+.mh-root .mh-ws-menu button:hover { background: color-mix(in srgb, var(--mh-ink) 8%, transparent) !important; }
+.mh-root .mh-ws-menu button[aria-checked="true"] { background: color-mix(in srgb, var(--mh-accent) 22%, transparent) !important; }
+.mh-root .mh-ws-menu .is-add { color: var(--mh-ink-2); font-weight: 600; }
+.mh-root { --mh-card: rgba(22, 30, 42, .66); --mh-card-solid: #1b2533; --mh-card-line: rgba(255, 255, 255, .12); }
+html[data-skin="obsidian-light"] .mh-root { --mh-card: rgba(255, 255, 255, .86); --mh-card-solid: #ffffff; --mh-card-line: rgba(20, 33, 49, .1); }
+html[data-skin="landscapes"] .mh-root { --mh-card: rgba(16, 24, 36, .52); --mh-card-solid: #1a2636; }
+@container (max-width: 599px) {
+  .mh-root .mh-glance > button, .mh-root .mh-glance .mh-gauge { padding: 0 8px !important; gap: 5px; font-size: 12px; }
+  .mh-root .mh-glance .is-name { padding-left: 11px !important; }
+  .mh-glance .mh-gauge .mh-g-ef, .mh-glance .mh-sh-long { display: none; }
+  .mh-glance .mh-gauge .mh-g-cells i { width: 4px; }
+  .mh-glance .mh-dots i:nth-child(n+4) { display: none; }
+}
+@container (max-width: 400px) { .mh-glance .mh-gauge .mh-g-label { display: none; } }
+
+/* ---------- Settings › System: the same views on the Settings surface (no second card) ---------- */
+.mh-root.is-settings { flex: none; width: 100%; align-items: stretch; padding: 4px 0 16px; }
+.mh-root.is-settings .mh-map { background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; min-height: 0; max-width: none; padding: 24px 4px 8px; }
+.mh-root.is-overview .mh-ws { align-self: center; margin-bottom: 4px; }
+.mh-root.is-settings .mh-ai-list { width: 100%; margin: 10px 0 0; }
+.mh-root.is-ai .mh-ai { justify-content: flex-start; margin: 0; }
+.mh-root .mh-gauge.is-still { cursor: default; }
+.mh-root.is-settings :is(.mh-net, .mh-store) > .mh-more-info { width: 100%; align-items: flex-start; text-align: left; padding: 12px 14px 14px; gap: 6px; font-size: 13px; }
+.mh-root.is-settings .mh-act-btns { justify-content: flex-start; }
+.mh-store-head { display: flex; align-items: center; gap: 14px; margin: 0 0 12px; }
+.mh-store-head .mh-disc { --d: 54px; }
+.mh-store-head b { display: block; font-size: 17px; font-weight: 750; color: var(--mh-ink); }
+.mh-store-head small { font-size: 12.5px; color: var(--mh-ink-2); }
+html[data-skin="obsidian-light"] .mh-root.is-settings { --mh-ink: #111418; --mh-ink-2: rgba(17, 20, 24, .78); --mh-ink-3: rgba(17, 20, 24, .58); }
+
+@container (max-width: 599px) { .mh-root.is-settings .mh-legend { display: none; } .mh-root.is-settings .mh-ts-tab { left: 12px; } }
+.mh-root.is-settings .mh-row.is-storage:not(:empty) { margin-bottom: 40px; }
+/* Settings' own button rules must not reshape the map's controls. */
+.mh-root.is-settings :is(.mh-ai-btn, .mh-act-btn, .mh-tap, .mh-ts-tab, .mh-details, .mh-shield, .mh-ws button) { min-height: 0 !important; min-width: 0; width: auto; }
+.mh-root.is-settings .mh-ai-btn { height: 26px !important; }
+.mh-root.is-settings .mh-ai-row { min-height: 40px; }
+.mh-store-head .mh-disc.is-art { width: 54px; height: 54px; background: none !important; box-shadow: none !important; border-radius: 0; }
+@container (max-width: 599px) {
+  .mh-root .mh-glance { margin-top: calc(var(--sb, 0px) + var(--safe-t, 0px) + 56px); max-width: calc(100% - 16px); }
+  .mh-root .mh-glance .is-more { display: none; }
+  .mh-glance .mh-gauge .mh-g-cells i:nth-child(n+7) { display: none; }
+  .mh-root .mh-glance .is-name .mh-chev-btn { display: none; }
+}
