@@ -11,27 +11,27 @@ const G = box.WizardTailscaleGuide;
 const steps = h => [...h.matchAll(/data-gstep="(\d)" data-state="(\w+)"/g)].map(m => m[2]).join(',');
 
 test('only Wizards on a Tailscale address get the guide; the network name comes from the address', () => {
-  assert.equal(G.tailnet('wizard.tail1234.ts.net'), 'tail1234.ts.net');
-  assert.equal(G.tailnet('Wizard.Tail1234.ts.net:8443'), 'tail1234.ts.net');
+  assert.equal(G.tailnet('wizard.example-tailnet.ts.net'), 'example-tailnet.ts.net');
+  assert.equal(G.tailnet('Wizard.Example-Tailnet.ts.net:8443'), 'example-tailnet.ts.net');
   for (const host of ['ts.net', 'wizard.example.com', 'wizard.ts.net.evil.example', '']) { assert.equal(G.applies(host), false, host); assert.equal(G.tailnet(host), ''); }
 });
 
 test('the step needed now follows what the phone shows; the button sits on that step', () => {
-  const off = G.html({ host: 'wizard.tail1234.ts.net', on: false });
+  const off = G.html({ host: 'wizard.example-tailnet.ts.net', on: false });
   assert.equal(steps(off), 'now,todo,todo');
   assert.match(off, /Tailscale isn’t running on this phone yet\./);
   assert.match(off, /data-guide="tailscale">[^]*Get Tailscale<\/button>/);
-  assert.match(off, /<div class="chip">tail1234\.ts\.net<\/div>/);
+  assert.match(off, /<div class="chip">example-tailnet\.ts\.net<\/div>/);
   assert.match(off, /Add VPN Configurations/);
   assert.equal((off.match(/data-guide="tailscale"/g) || []).length, 1);
   // Tailscale on, the Wizard's name doesn't exist from this phone: another account, or removed from the network.
-  const wrong = G.html({ host: 'wizard.tail1234.ts.net', on: true, missing: true });
+  const wrong = G.html({ host: 'wizard.example-tailnet.ts.net', on: true, missing: true });
   assert.equal(steps(wrong), 'done,now,todo');
   assert.match(wrong, /Tailscale is on, but this phone isn’t on your Wizard’s network\./);
   assert.match(wrong, /removed from yours/);
   assert.match(wrong, /Open Tailscale<\/button>/);
   // Tailscale on, the name exists, nothing answers: the Wizard's computer is off or asleep. The phone is fine.
-  const quiet = G.html({ host: 'wizard.tail1234.ts.net', on: true, missing: false });
+  const quiet = G.html({ host: 'wizard.example-tailnet.ts.net', on: true, missing: false });
   assert.equal(steps(quiet), 'done,now,todo', 'can’t tell a Wizard that is off from stale Tailscale on the phone: no tick on step 2, and only step 2 is active');
   assert.match(quiet, /data-gstep="2"[^]*turn Tailscale off and on again and log in if it asks[^]*Open Tailscale<\/button>/);
   assert.doesNotMatch(quiet, /Add VPN Configurations/, 'no first-time VPN tip: Tailscale is already on');
@@ -40,7 +40,7 @@ test('the step needed now follows what the phone shows; the button sits on that 
   assert.match(quiet, /Check your Wizard is on/);
   assert.match(quiet, /<h1>Your Wizard isn’t answering<\/h1>/);
   assert.doesNotMatch(quiet, /removed from yours/, 'doesn’t claim the phone is on another network');
-  const unsure = G.html({ host: 'wizard.tail1234.ts.net', on: true });
+  const unsure = G.html({ host: 'wizard.example-tailnet.ts.net', on: true });
   assert.equal(steps(unsure), 'done,checking,todo', 'step 2 spins; step 3 waits');
   assert.match(unsure, /Checking that this phone is on your Wizard’s network/);
   assert.match(unsure, /<h1>Connecting to your Wizard<\/h1>/, 'not "isn’t on your network" before that is confirmed');
@@ -52,7 +52,7 @@ test('the step needed now follows what the phone shows; the button sits on that 
     for (let i = 1; i < 3; i++) if (s[i] === 'done') assert.equal(s[i - 1], 'done', JSON.stringify({ on, missing, installed }));
     assert.ok(s.filter(x => x === 'now' || x === 'checking').length <= 1, 'one active step at most: ' + s);
   }
-  const android = G.html({ host: 'wizard.tail1234.ts.net', on: false, installed: true, platform: 'android' });
+  const android = G.html({ host: 'wizard.example-tailnet.ts.net', on: false, installed: true, platform: 'android' });
   assert.equal(steps(android), 'done,now,todo');
   assert.match(android, /data-gstep="2"[^]*Open Tailscale<\/button>/);
   assert.match(android, /Android asks to set up a VPN connection/);
@@ -101,4 +101,11 @@ test('the iPhone connect screen loads the guide and connects by itself once the 
   assert.match(page, /get\('loading'\);\n\s+if \(loading !== null\)/);
   assert.match(swift, /if !connectMode \{ watchUnreachable\(web\) \}/);
   assert.match(swift, /"changing": connectMode && WizardAddress\.current != nil && !unreachableMode/, 'the guide, not Change Wizard');
+});
+
+test('a check still running for a guide the owner left doesn’t stop the next guide’s checks', () => {
+  const page = read('ios/www/index.html');
+  assert.doesNotMatch(page, /guideBusy/, 'no page-wide busy flag');
+  assert.match(page, /if \(!guide \|\| guide\.busy\) return;/);
+  assert.match(page, /g\.busy = true;[^]*finally \{ g\.busy = false; \}/);
 });

@@ -184,12 +184,12 @@ final class WizardProbe: NSObject, URLSessionDataDelegate {
 }
 
 /// Is Tailscale running on this phone? Read from the phone's own network interfaces: Tailscale's VPN gives the device
-/// an address in 100.64.0.0/10 (the CGNAT range Tailscale uses) on a `utun` tunnel. No permission or network request.
+/// an address in 100.64/10 (the CGNAT range Tailscale uses) on a `utun` tunnel. No permission or network request.
 /// Used only to choose what the "can't reach your Wizard" guide says first; connecting never depends on it.
 enum TailscaleNet {
-    /// One interface address, as `getifaddrs` reports it: a `utun` tunnel holding a Tailscale (100.64.0.0/10) IPv4.
+    /// One interface address, as `getifaddrs` reports it: a `utun` tunnel holding a Tailscale (100.64/10) IPv4.
     static func isTailscale(interface name: String, ipv4 address: UInt32) -> Bool {
-        name.hasPrefix("utun") && (address >> 22) == (100 << 2 | 1) // 100.64.0.0/10: first octet 100, 01 in the next 2 bits
+        name.hasPrefix("utun") && (address >> 22) == (100 << 2 | 1) // 100.64/10: first octet 100, 01 in the next 2 bits
     }
 
     /// True when any interface on this device looks like Tailscale's.

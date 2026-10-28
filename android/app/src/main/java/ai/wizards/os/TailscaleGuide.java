@@ -48,7 +48,7 @@ final class TailscaleGuide {
     /** Only Wizards on a Tailscale address get the guide. */
     static boolean applies(String origin) { return !tailnet(origin).isEmpty(); }
 
-    /** "tail1234.ts.net" from "https://wizard.tail1234.ts.net[:port]", else "". */
+    /** "example-tailnet.ts.net" from "https://wizard.example-tailnet.ts.net[:port]", else "". */
     static String tailnet(String origin) {
         String host;
         try { host = new URI(origin == null ? "" : origin.trim()).getHost(); } catch (Exception e) { return ""; }

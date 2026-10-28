@@ -225,7 +225,7 @@
        * Tailscale or the App Store), then opens the Wizard by itself. Nothing is saved until the Wizard answers. */
       const G = window.WizardTailscaleGuide;
       const tailscaleOn = () => call('tailscale').then(r => !!(r && r.on), () => false);
-      let guide = null, guideTimer = 0, guideBusy = false;
+      let guide = null, guideTimer = 0;
       // missing: the last check found no such name from this phone (another Tailscale network) rather than no answer.
       const paintGuide = (on, missing = guide && guide.missing) => {
         if (!guide) return;
@@ -249,10 +249,11 @@
       };
       async function guideTick() {
         clearTimeout(guideTimer);
-        if (!guide || guideBusy) return;
+        // Busy is per guide: a check still running for a guide the owner left must not stop the new one's ticks.
+        if (!guide || guide.busy) return;
         if (document.visibilityState !== 'visible') return; // resumes on visibilitychange
-        guideBusy = true;
         const g = guide;
+        g.busy = true;
         try {
           const on = await tailscaleOn();
           // A reason found while Tailscale was off (no ts.net name resolves then) says nothing once it's on.
@@ -273,7 +274,7 @@
             else await call('connect', { address: g.address }).catch(() => { setBusy(false); });
             return;
           }
-        } finally { guideBusy = false; }
+        } finally { g.busy = false; }
         if (guide === g) guideTimer = setTimeout(guideTick, 4000);
       }
       document.addEventListener('visibilitychange', () => { if (guide && document.visibilityState === 'visible') guideTick(); });

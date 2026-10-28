@@ -3,14 +3,14 @@
  * runs it). The Android app shows the same steps and words (android/.../TailscaleGuide.java); keep them in step.
  *
  *   WizardTailscaleGuide.html({ host, on, missing, installed, platform })
- *     host       the Wizard's host, e.g. wizard.tail1234.ts.net (its tailnet name is shown when it has one)
+ *     host       the Wizard's host, e.g. wizard.example-tailnet.ts.net (its tailnet name is shown when it has one)
  *     on         Tailscale is running on this phone (true/false); false when unknown
  *     missing    with Tailscale on: true when the Wizard's name doesn't exist from this phone (another Tailscale
  *                account, or removed from the network); false when it exists but nothing answers (the Wizard's
  *                computer is off or asleep: Tailscale still knows an offline Wizard's name); null before the first check
  *     installed  true/false on Android; null on iPhone, which can't tell (the App Store page shows Get or Open)
  *   WizardTailscaleGuide.applies(host)   only Tailscale addresses (*.ts.net) get the guide
- *   WizardTailscaleGuide.tailnet(host)   'tail1234.ts.net' from 'wizard.tail1234.ts.net', else '' */
+ *   WizardTailscaleGuide.tailnet(host)   'example-tailnet.ts.net' from 'wizard.example-tailnet.ts.net', else '' */
 (() => {
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

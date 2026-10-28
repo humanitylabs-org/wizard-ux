@@ -69,7 +69,7 @@ if !WizardOrigin.needsTailscale("https://box.example.ts.net") || WizardOrigin.ne
 expect(WizardOrigin.host("https://box.example:8443"), "box.example:8443", "host label")
 
 // Failures: a name that doesn't exist (not on the Wizard's network) vs nothing answering (Wizard off or asleep)
-let ts = "https://wizard.tail1234.ts.net"
+let ts = "https://wizard.example-tailnet.ts.net"
 for code in [NSURLErrorCannotFindHost, NSURLErrorDNSLookupFailed] {
     let m = WizardProbe.failure(code: code, origin: ts)
     if !WizardProbe.notFound(m) || !WizardProbe.noAnswer(m) { failures += 1; print("FAIL: not-found \(code): \(m)") }
@@ -80,7 +80,7 @@ for code in [NSURLErrorTimedOut, NSURLErrorCannotConnectToHost, NSURLErrorNetwor
 }
 if WizardProbe.noAnswer("box answered, but it isn't a Wizard.") { failures += 1; print("FAIL: a non-Wizard counted as no answer") }
 
-// Tailscale detection: a utun with a 100.64.0.0/10 address (TailscaleNet)
+// Tailscale detection: a utun with a 100.64/10 address (TailscaleNet)
 func v4(_ a: UInt32, _ b: UInt32, _ c: UInt32, _ d: UInt32) -> UInt32 { a << 24 | b << 16 | c << 8 | d }
 if !TailscaleNet.isTailscale(interface: "utun4", ipv4: v4(100, 101, 2, 3)) { failures += 1; print("FAIL: tailscale utun refused") }
 if !TailscaleNet.isTailscale(interface: "utun0", ipv4: v4(100, 64, 0, 1)) || !TailscaleNet.isTailscale(interface: "utun0", ipv4: v4(100, 127, 255, 254)) { failures += 1; print("FAIL: CGNAT edges") }

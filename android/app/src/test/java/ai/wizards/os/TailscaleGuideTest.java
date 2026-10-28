@@ -11,13 +11,13 @@ import org.junit.Test;
 public class TailscaleGuideTest {
     @Test
     public void onlyTailscaleAddressesGetTheGuide() {
-        assertEquals("tail1234.ts.net", TailscaleGuide.tailnet("https://wizard.tail1234.ts.net"));
-        assertEquals("tail1234.ts.net", TailscaleGuide.tailnet("https://Wizard.Tail1234.ts.net:8443/"));
+        assertEquals("example-tailnet.ts.net", TailscaleGuide.tailnet("https://wizard.example-tailnet.ts.net"));
+        assertEquals("example-tailnet.ts.net", TailscaleGuide.tailnet("https://Wizard.Example-Tailnet.ts.net:8443/"));
         assertEquals("", TailscaleGuide.tailnet("https://ts.net"));
         assertEquals("", TailscaleGuide.tailnet("https://wizard.example.com"));
         assertEquals("", TailscaleGuide.tailnet("https://wizard.ts.net.evil.example"));
         assertEquals("", TailscaleGuide.tailnet(null));
-        assertTrue(TailscaleGuide.applies("https://wizard.tail1234.ts.net"));
+        assertTrue(TailscaleGuide.applies("https://wizard.example-tailnet.ts.net"));
         assertFalse(TailscaleGuide.applies("https://wizard.example.com"));
     }
 
@@ -72,7 +72,7 @@ public class TailscaleGuideTest {
 
     @Test
     public void stepTwoNamesTheNetworkAndTheVpnTipUntilItIsDone() {
-        assertEquals(TailscaleGuide.SAME + " " + TailscaleGuide.NETWORK, TailscaleGuide.body(2, false, null, false, "tail1234.ts.net"));
+        assertEquals(TailscaleGuide.SAME + " " + TailscaleGuide.NETWORK, TailscaleGuide.body(2, false, null, false, "example-tailnet.ts.net"));
         assertEquals(TailscaleGuide.SAME, TailscaleGuide.body(2, false, null, false, ""));
         assertEquals(TailscaleGuide.INSTALLED, TailscaleGuide.body(1, true, true, true, ""));
         assertEquals(TailscaleGuide.FREE, TailscaleGuide.body(1, false, null, false, ""));
