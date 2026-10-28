@@ -268,13 +268,6 @@ a.fchip { color: inherit; text-decoration: none; }
 /* Message text is selectable and copyable (the shell itself stays non-selectable). */
 .msg .bub, .msg .bub *, .msg .an-body, .msg .an-body *, .msg .rc-body, .msg .rc-body *, .note-line, .appr pre, .mviewer .mv-doc, .wk-steps li > span, .wk-plan li > span { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; }
 .msg .bub button, .msg .bub button * { user-select: none; -webkit-user-select: none; }
-.ch-steps { list-style: none; margin: 0 0 4px; padding: 0; display: grid; gap: 2px; font-size: 12px; color: var(--ink-3); }
-.ch-steps li { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
-.ch-steps li::before { content: '…'; width: 12px; flex: none; text-align: center; }
-.ch-steps li.done::before { content: '✓'; }
-.ch-steps li.err::before { content: '!'; }
-.ch-steps b { font-weight: 600; color: var(--ink-2, var(--ink)); flex: none; }
-.ch-steps span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-size: 11px; }
 .mmeta { display: flex; align-items: center; gap: 2px; margin-top: 3px; min-height: 0; font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .msg.u .mmeta { padding-right: 4px; }
 .mmeta time { padding: 0 4px; }
@@ -794,6 +787,9 @@ html[data-shell="phone"] .ch-msgs .bub table { font-size: 15px; }
 /* Pinned chats (synced per owner; design: Novaire, wizard-ux PR 250) and Boomerang markers. */
 .ch-row-wrap { position: relative; }
 .ch-row-wrap > .ch-row { padding-right: 42px; }
+.ch-fail.diagnosed .lb { text-transform: none; letter-spacing: 0; font-size: 17px; }
+.ch-row-wrap.diagnosed .ch-row { padding-right: 122px; }
+.ch-row-signin { position: absolute; z-index: 2; right: 44px; top: 50%; transform: translateY(-50%); padding: 8px 10px; border: 1px solid var(--wz-border, var(--line)); border-radius: 10px; background: var(--wz-surface, var(--surface)); color: var(--wz-text, var(--ink)); font: inherit; font-size: 13px; cursor: pointer; }
 .ch-pin-toggle { position: absolute; z-index: 1; right: 7px; top: 50%; width: 32px; height: 32px; margin-top: -16px; display: grid; place-items: center; border-radius: 10px; color: var(--ink-3); opacity: .38; transition: opacity .14s ease, color .14s ease, background .14s ease; }
 .ch-pin-toggle::after { content: ''; position: absolute; inset: -6px; }
 .ch-pin-toggle svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }

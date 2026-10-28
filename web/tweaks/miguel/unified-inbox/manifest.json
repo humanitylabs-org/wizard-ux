@@ -1,7 +1,7 @@
 {
   "id": "miguel/unified-inbox",
   "name": "Notifications in Chats",
-  "version": "1.0.0",
+  "version": "3.0.0",
   "author": "miguel",
   "apiVersion": 1,
   "capabilities": [
@@ -9,5 +9,5 @@
     "nav",
     "inbox"
   ],
-  "description": "Unread notifications arrive in Ready as yellow one-message threads: Done, Reply, or Resolve this. The Chats bell goes away."
+  "description": "Notifications are yellow threads in Chats: listed in Ready like any chat (by time, priority or as their own subject), open in the chat window with Done, Snooze and Resolve this; done ones under Archive. No Chats bell."
 }

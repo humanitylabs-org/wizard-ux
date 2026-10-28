@@ -215,7 +215,7 @@ window.WosChatPower = function chatPower(A) {
   function workHtml(c, tn, live, helperStatus) {
     if (!WK) return null;
     const key = turnKey(tn);
-    return WK.html(tn, { live, helperStatus, open: !!c.wkOpen?.has(key), md: A.md, esc, clip, key });
+    return WK.html(tn, { live, helperStatus, streamSteps: live && !c.stream?.landed && !c.stream?.terminal ? c.stream?.steps : [], open: !!c.wkOpen?.has(key), md: A.md, esc, clip, key });
   }
 
   /* ================= #11 models ================= */
@@ -409,12 +409,12 @@ window.WosChatPower = function chatPower(A) {
     finally { c.regenerating = false; rerenderAll(); }
   }
   const RECONNECT_APPS = new Set(['wizard-claude', 'wizard-chatgpt']);
-  function openReconnect(appId, installed) {
+  function openReconnect(appId, installed, runId = '') {
     if (!RECONNECT_APPS.has(appId)) return false;
-    if (installed && window.WizOpenApp?.(appId)) return true;
-    if (H.openLink?.(`/wizard-os-home/store/index.html?app=${encodeURIComponent(appId)}`, 'App Store')) return true;
-    toast('!', 'Open the App Store to reconnect', 2400);
-    return false;
+    const provider = appId === 'wizard-claude' ? 'claude' : 'chatgpt';
+    if (window.WizOpenApp?.('troubleshooter', `/troubleshoot/?provider=${provider}&run_id=${encodeURIComponent(runId)}`)) return true;
+    return !!H.openLink?.(`/troubleshoot/?provider=${provider}&run_id=${encodeURIComponent(runId)}`, 'Fix Wizard');
+
   }
   async function dismissThread(sid) {
     const ok = await E?.dismissFailure(sid);
@@ -430,7 +430,8 @@ window.WosChatPower = function chatPower(A) {
   function errorRow(s, rowHtml) {
     if (!E) return rowHtml;
     const busy = E.busy.get(s.id);
-    const rc = s.reconnect ? `<button type="button" data-chreconnect="${esc(s.reconnect.appId)}" data-installed="${s.reconnect.installed ? '1' : '0'}">${s.reconnect.installed ? 'Open' : 'Get'} ${esc(s.reconnect.name)}</button>` : '';
+    const rc = s.reconnect ? `<button type="button" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : '';
+    if (rc) return `<div class="ch-err diagnosed" data-errsid="${esc(s.id)}">${rowHtml}</div>`;
     return `<div class="ch-err" data-errsid="${esc(s.id)}">${rowHtml}<div class="ch-err-b">${rc}<button type="button"${rc ? ' class="ghost"' : ''} data-errretry="${esc(s.id)}" ${busy ? 'disabled' : ''}>Retry</button><button type="button" class="ghost" data-errdismiss="${esc(s.id)}" ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></div>`;
   }
   function errorsExtra() {
@@ -596,7 +597,7 @@ window.WosChatPower = function chatPower(A) {
       return true;
     }
     // Failed thread panel. Signed out: open the provider's connection app in this shell, or the Store on it.
-    const rc = t.closest('[data-chreconnect]'); if (rc) { openReconnect(rc.dataset.chreconnect, rc.dataset.installed !== '0'); return true; }
+    const rc = t.closest('[data-chreconnect]'); if (rc) { openReconnect(rc.dataset.chreconnect, rc.dataset.installed !== '0', rc.dataset.recoveryRun || ''); return true; }
     // Failed thread panel
     if (t.closest('[data-mregen]') && w?.thread) { regenerateThread(id, w.thread); return true; }
     if (t.closest('[data-chretry]') && w?.thread) { retryThread(id, w.thread); return true; }

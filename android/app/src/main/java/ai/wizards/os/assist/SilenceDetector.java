@@ -17,8 +17,8 @@ package ai.wizards.os.assist;
 public final class SilenceDetector {
     public enum Result { CONTINUE, SEND, NOTHING_HEARD }
 
-    /** How long you can stop talking before the side button sends by itself. 2400 ms before 0.6.3. */
-    public static final long SIDE_PAUSE_MS = 3600;
+    /** James 25 Oct 2026: wait ~5 s, it sent mid-thought; 3600 before. */
+    public static final long SIDE_PAUSE_MS = 5000;
 
     private final long silenceMs;
     private final long noSpeechMs;
@@ -41,7 +41,7 @@ public final class SilenceDetector {
 
     /** Typing with your voice: people pause mid-sentence while writing, so wait longer before finishing. */
     public static SilenceDetector dictation() {
-        return new SilenceDetector(3800, 12000, 300_000);
+        return new SilenceDetector(5500, 12000, 300_000);
     }
 
     /** Amplitude threshold that counts as the start of speech, given the tracked noise floor. */
