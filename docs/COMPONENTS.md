@@ -26,7 +26,7 @@ Visual: <side-by-side screenshot, or "none">
 | File chip before send | `WizardApp.attachChip.node` (Chats' tray, `core/attach-chip.js`) | own chip | `qa-attach-chip.cjs` |
 | Open a photo/video full screen (pinch zoom, swipe) | `WizardApp.media.view(items, i)` = Chats' `WosChat.viewer` | own lightbox | Messenger `photo_viewer_browser.cjs` |
 | Bound same-app companion | `WizardApp.shell.openCompanion` → `WizCompanionPane` (`web/core/companion-pane.js`); [API](shared-app-services-host.md) | app-specific desks/relays | `qa-companion-pane.cjs`: nested Back |
-| Back in app; leave on dismiss | `WizardApp.back.register/push`, `nav.back()`; `WizOpenApp(id,path)` validates repair app URL + origin | guards, 2nd tap | nested Back stays; repair → originating chat |
+| Back/dismiss/outside | `WizardApp.back.register/push`, `nav.back()`; SDK `cancel` ([contract](shared-app-services-host.md#modal-backdrop--back)); `WizOpenApp(id,path)` validates URL/origin | own guards/backdrops | `tools/qa-tap-outside-closes.cjs` |
 | Skin, tokens, light/dark | `WizardApp.theme.get / onChange`, `--wz-*` roles | theme storage, own dark mode, literal colours | two skins + a live skin change keep app state |
 | Native Android screens in the worn skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`): saved shell roles, Nebula fallback | literal colours in native screens |
 | Native offline/connect | `ReachScreen` / `ReachPolicy`, `ConnectActivity` / `ServerSettings` (same native package as `WizardLook`) | duplicate offline/address UI |
@@ -68,9 +68,9 @@ Visual: <side-by-side screenshot, or "none">
 | Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs + old-service defaults | lists |
 | App groups | `WosAppKinds` (`web/core/app-kinds.js`) | forks |
 | Brand hat | `WizBrand` (`web/core/brand.js`) | redrawn logos |
-| Links: phone sheet, desktop window (`asWindow`), images, long-press browser / Download / Copy | `WizLinks` (`web/core/links.js`; Android: `WizardOSNative.openInBrowser` / `download`) | `window.open`, own iframe sheet, own link menu |
-| Text-selection actions | `WosSelMenu` (`web/core/sel-menu.js`) | own context menu |
-| Share sheet, receivers, pending handoffs | `WosShareSheet` (`web/core/share-sheet.js`), entered only via `WosChat.sharePayload` | a second share picker, sending for an app |
+| Links: sheet/window (`asWindow`), images, browser/Download/Copy | `WizLinks` (`web/core/links.js`); backdrop `back()`, context `backMenu()`; Android `WizardOSNative.openInBrowser`/`download` | own link sheet/menu |
+| Selection; outside clears | `WosSelMenu` (`web/core/sel-menu.js`) | own context menu |
+| Share picker/receivers/handoffs; fresh-press guard | `WosShareSheet` (`web/core/share-sheet.js`) via `WosChat.sharePayload` | own picker/send |
 | Screen context for the agent | `WizScreen` (`web/core/screen-text.js`) | own DOM scrape |
 | Dictation into a focused field | `WizCore` focused field (`web/core/focused-field.js`); voice `WizCore` (`web/core/voice.js`); mic choice `WosMic` (`web/core/mic.js`) | own recorder/transcriber |
 | Local commands | `WosCommands` (`web/core/commands.js`) | a second command parser |

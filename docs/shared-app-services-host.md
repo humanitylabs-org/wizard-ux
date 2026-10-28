@@ -56,6 +56,16 @@ time updates the binding, and open-video focuses/replies to the bound owner. Del
 
 Hosted apps have no independent root guard. Phone retains its host guard; desktop now guards browser/native Back as well. Shared standalone fallback uses CloseWatcher/history, stays at installed root, and offers the browser-tab two-press exit floor. Desktop Back no longer cancels a recording: its voice pill has an explicit Cancel button.
 
+## Modal backdrop = Back
+
+Every hosted app loading `core/app-client.js` gets native modal-dialog dismissal automatically. For an open `dialog.showModal()`, both `pointerdown` and `click` must target the dialog outside its bounding rectangle. The SDK dispatches a cancelable `cancel` event (the Escape path), then calls `close()` only if it was not prevented. A domain-specific `oncancel` may prevent the default and close/clean up itself; a genuine veto leaves it open. Release Back tokens on the dialog's `close` event. Do not add another backdrop handler in an app.
+
+The opening long-press's release click is swallowed until the dialog receives a new pointerdown; keyboard/assistive clicks (`detail === 0`) pass. Inside-to-outside drags do not dismiss. `data-wz-no-outside-close` opts a dialog out of SDK/kit backdrop handling; it is an exceptional domain escape hatch, not a reason to require a small X. Nonmodal `dialog.show()` is untouched. `WzSheet` delegates to the SDK when present.
+
+Pinned app safe areas: `single-app-session.js` counts `meta[name="wizard-os-edge"][content="cover"]` or app-owned stylesheet rules mentioning `--wos-cutout` as an explicit inset owner. Shared/vendored `wizard-ui.css` alone does not opt an app in. Nonowners get the native top inset on their frame and `--wos-cutout: 0px`; owners get an unpadded frame and the inset in `--wos-cutout`. Notes' own `styles.css` uses the variable in sidebar/canvas/search padding, so Notes remains an owner and gets exactly one inset. Cross-origin unreadable CSS must use the meta opt-in.
+
+Regression entrypoints: `tools/qa-tap-outside-closes.cjs` (390×844 touch, production modules with fixture APIs only) and `tests/tap-outside-safe-insets.test.mjs`.
+
 ## Context drafts (Reply)
 
 `WizardApp.nav.openContextDraft({id, title, message})` lets any installed, registered Wizard app (`kind:'wizard'`) attach bounded reference data (id ≤128 `[A-Za-z0-9_-]`, title ≤1000, message ≤32000 chars) to a fresh, unsent main Chats draft. It never sends or runs. The draft key is `<appId>:<id>`, where `appId` comes from the attached, visible, live frame — never from the payload — so an app cannot write another app's namespace. Hidden, detached, reloaded, foreign-origin, sibling-path and `srcdoc` frames are refused. Tests: `tests/app-context-draft.test.mjs`; browser QA: `qa-app-context-draft.cjs`.
