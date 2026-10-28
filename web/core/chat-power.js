@@ -239,7 +239,8 @@ window.WosChatPower = function chatPower(A) {
     const ag = agentOfWin(w, s) || (w.thread === '__new__' && cur?.agent && AG?.isOther(cur.agent) ? AG.get(cur.agent) || null : null);
     const priv = !!ag && AG?.isPrivate(ag);
     const full = cur?.model ? (ag ? AG.modelName(ag, cur.model) : M.name(cur.model, cur.provider)) : 'default';
-    const label = cur?.model ? (ag ? full : M.short(cur.model, cur.provider)) : M.ready ? 'Default model' : 'Model';
+    // Agents get the same short family name as the main chat (Fable, Opus, GLM 5.3), never a raw id like claude-fable-5-1.
+    const label = cur?.model ? (M.short(cur.model, cur.provider || ag?.model?.provider) || full) : M.ready ? 'Default model' : 'Model';
     const secure = !ag && !!cur?.provider && !!M.ours?.() && !!M.isPrivateRoute?.(cur.provider);
     return `<button type="button" class="ch-model${ag ? ' agent' : ''}${priv || secure ? ' private' : ''}" data-chmodel aria-label="Model: ${esc(full)}${priv ? ', private' : ''}. Change model" title="${esc(cur?.model || '')}">${priv || secure ? (AG?.lock?.() || '') : ''}${esc(label)}<i aria-hidden="true">▾</i></button>`;
   }
