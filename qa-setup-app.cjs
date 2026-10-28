@@ -86,11 +86,7 @@ async function decode(browser,el) {
   await f.evaluate(()=>{window.__qaIdentity='setup-kept';});
   if(mode==='phone') {
    for(const skin of ['nebula','obsidian-light']) {
-    await p.evaluate(()=>__wos.goDesk(0)); await p.locator('[data-act="settings"]').click();
-    await p.evaluate(()=>{ const v=window.__wos; });
-    // Settings may remember a category. Home Skin focus always lands at Appearance.
-    await p.evaluate(()=>window.WosSettings && 0);
-    const appearance=p.locator('[data-st-page="appearance"]');if(await appearance.count()) await appearance.click();
+    await p.evaluate(()=>__wos.openSettings('look'));
     await pick(p,skin); await p.evaluate(()=>window.__wosNativeBack());
     await open(p,mode);
     await f.waitForFunction(s=>document.documentElement.dataset.skin===s,skin);
