@@ -9,6 +9,13 @@ public final class EverywherePolicy {
     static final long[] BACKOFF_MS = {2000, 5000, 15000, 30000, 60000, 120000};
     static final int AUTO_TRIES = BACKOFF_MS.length;
 
+    static final long LATE_MESSAGE_MS = 6 * 60 * 60 * 1000L;
+
+    static boolean lateMessage(boolean dictation, long createdAt, long now, boolean approved, String runId, long sentAt) {
+        return !dictation && !approved && (runId == null || runId.isEmpty()) && sentAt == 0
+                && createdAt > 0 && now - createdAt > LATE_MESSAGE_MS;
+    }
+
     private EverywherePolicy() {}
 
     /** Network trouble, gateway restarts and overload are retried; anything else needs a human. */

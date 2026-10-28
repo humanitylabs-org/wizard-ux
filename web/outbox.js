@@ -13,6 +13,25 @@
   // Consent belongs to this saved message, not the current screen or a bulk retry.
   const lateMessage = it => ['new', 'reply'].includes(it.kind) && it.intent !== 'command' &&
     !it.runId && !it.sentAt && !it.lateSendApproved && Number.isFinite(it.createdAt) && now() - it.createdAt > LATE_MESSAGE_MS;
+  // Read-only projection, not a second queue: native owns audio, approval, idempotency and delivery.
+  // Never put these rows into IndexedDB or the web pump (including after a shell reload).
+  function nativeMessages() {
+    try {
+      const rows = JSON.parse(window.WizardOSNative?.unsent?.() || '[]');
+      return rows.filter(it => it.lateHeld === true && it.state !== 'sent').map(it => ({ ...it,
+        id: 'native-outbox:' + it.id, nativeOutboxId: it.id, kind: 'new', intent: 'message',
+        durable: true, agent: '', audioType: it.hasAudio ? 'audio/aac' : '',
+      }));
+    } catch (_) { return []; }
+  }
+  const nativeItem = id => String(id).startsWith('native-outbox:') ? nativeMessages().find(it => it.id === id) : null;
+  function retryNative(it) {
+    const N = window.WizardOSNative;
+    if (!it || !api.canRetry(it)) return false;
+    let queued = false;
+    try { queued = N?.retryUnsent?.(it.nativeOutboxId) === true; } catch (_) {}
+    emit(); return queued;
+  }
   function lateLabel(it) {
     const at = new Date(it.createdAt);
     const day = at.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
@@ -808,16 +827,16 @@
       return wait;
     },
     stopped: it => !!it?.cancelled,
-    canRetry(it) { const x = typeof it === 'string' ? items.get(it) : it; return eligible(x, ['failed', 'waiting', 'empty', 'held']) && (x.state !== 'held' || x.lateHeld === true) && !lostAudio(x); },
-    retry(id) { return queueRetry(items.get(id), ['failed', 'waiting', 'empty', 'held'], true); },
+    canRetry(it) { const x = typeof it === 'string' ? api.get(it) : it; if (x?.nativeOutboxId) return x.state === 'failed' || (x.state === 'waiting' && (!x.lateSendApproved || x.attempts > 0)) || (x.state === 'held' && !x.lateSendApproved); return eligible(x, ['failed', 'waiting', 'empty', 'held']) && (x.state !== 'held' || x.lateHeld === true) && !lostAudio(x); },
+    retry(id) { const nat = nativeItem(id); return nat ? retryNative(nat) : queueRetry(items.get(id), ['failed', 'waiting', 'empty', 'held'], true); },
     lateLabel,
     retryAll(agent) { let n = 0; for (const it of items.values()) if ((agent === undefined || (it.agent || '') === agent) && queueRetry(it, ['failed', 'waiting'])) n++; return n; },
     retryFeedback(n) { return n ? `Queued ${n === true || n === 1 ? 'retry' : n + ' retries'} · originals kept until confirmed` : 'Nothing eligible to retry · originals kept'; },
-    unsent() { return [...items.values()].filter(it => !['dictation', 'capture'].includes(it.kind) && it.state !== 'sent').sort((a, b) => a.createdAt - b.createdAt); },
+    unsent() { return [...items.values(), ...nativeMessages()].filter(it => !['dictation', 'capture'].includes(it.kind) && it.state !== 'sent').sort((a, b) => a.createdAt - b.createdAt); },
     // A held-orb take is a system command, never a chat message (James, 23 Oct 2026): it shows in no thread and in
     // no send pill until he explicitly picks "Send to …" (deliveryRequested). Its recording stays recoverable.
     isMessage: it => !!it && (it.intent !== 'command' || it.deliveryRequested === true),
-    forThread(sessionId, wid) { return [...items.values()].filter(it => api.isMessage(it) && !it.compact && !(['empty', 'held', 'sent'].includes(it.state) && it.threadHidden) && !['dictation', 'conversation'].includes(it.kind) && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
+    forThread(sessionId, wid) { return [...items.values(), ...nativeMessages()].filter(it => api.isMessage(it) && !it.compact && !(['empty', 'held', 'sent'].includes(it.state) && it.threadHidden) && !['dictation', 'conversation'].includes(it.kind) && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
     dismissEmpty(id) { return this.get(id)?.state === 'sent' ? Promise.resolve(false) : this.dismissBubble(id); },
     async dismissBubble(id) {
       // Hide only the local presentation; accepted work and original recovery custody stay untouched.
@@ -826,9 +845,16 @@
       if (!it.durable) { delete it.threadHidden; emit(); return false; }
       return true; // Presentation only: original audio and upload receipt remain recoverable.
     },
-    get(id) { return items.get(id) || null; },
+    get(id) { return items.get(id) || nativeItem(id) || null; },
     landed(id) { const it = items.get(id); if (it?.state === 'sent') del(id); },
     async remove(id) {
+      if (String(id).startsWith('native-outbox:')) {
+        removeErrors.delete(id);
+        const it = nativeItem(id); let removed = false;
+        try { if (it && it.state === 'held') removed = window.WizardOSNative?.deleteUnsent?.(it.nativeOutboxId) === true; } catch (_) {}
+        if (!removed) removeErrors.set(id, 'Native recording was not discarded · original kept');
+        emit(); return removed;
+      }
       // Re-check device storage first: a recovery that clears quarantine makes this an ordinary delete.
       if (quarantine.has(id) && !recovered) await load().catch(() => {});
       const it = items.get(id); removeErrors.delete(id);
