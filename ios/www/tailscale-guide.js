@@ -49,8 +49,9 @@
   function steps({ on, missing = null, installed }) {
     // The name resolves but nothing answers: the Wizard's computer is off, or Tailscale on this phone is stale (a phone
     // removed from Tailscale keeps its old network list until Tailscale reconnects). The phone can't tell which, so
-    // step 2 isn't ticked: it asks to check Tailscale, while step 3 keeps checking for the Wizard.
-    if (on && missing === false) return ['done', 'now', 'checking'];
+    // step 2 isn't ticked: it asks to check Tailscale. Only the current step is active; step 3 waits (the app keeps
+    // checking in the background and opens Wizard by itself either way).
+    if (on && missing === false) return ['done', 'now', 'todo'];
     if (on && missing === true) return ['done', 'now', 'todo'];       // signed in to another network
     if (on) return ['done', 'checking', 'todo'];                      // checking the phone's network
     if (installed === true) return ['done', 'now', 'todo'];           // installed (Android knows): open it

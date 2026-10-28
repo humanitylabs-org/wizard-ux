@@ -68,7 +68,7 @@ final class TailscaleGuide {
     static Step[] steps(boolean on, Boolean missing, boolean installed) {
         // Name resolves, nothing answers: the Wizard's computer is off, or Tailscale on this phone is stale (removed phones
         // keep their old network list until Tailscale reconnects). The phone can't tell which: check both.
-        if (on && Boolean.FALSE.equals(missing)) return new Step[]{ Step.DONE, Step.NOW, Step.CHECKING };
+        if (on && Boolean.FALSE.equals(missing)) return new Step[]{ Step.DONE, Step.NOW, Step.TODO }; // only the current step is active
         if (on && Boolean.TRUE.equals(missing)) return new Step[]{ Step.DONE, Step.NOW, Step.TODO };
         if (on) return new Step[]{ Step.DONE, Step.CHECKING, Step.TODO };
         if (installed) return new Step[]{ Step.DONE, Step.NOW, Step.TODO };

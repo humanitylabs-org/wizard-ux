@@ -32,7 +32,7 @@ test('the step needed now follows what the phone shows; the button sits on that 
   assert.match(wrong, /Open Tailscale<\/button>/);
   // Tailscale on, the name exists, nothing answers: the Wizard's computer is off or asleep. The phone is fine.
   const quiet = G.html({ host: 'wizard.tail1234.ts.net', on: true, missing: false });
-  assert.equal(steps(quiet), 'done,now,checking', 'can’t tell a Wizard that is off from stale Tailscale on the phone: no tick on step 2');
+  assert.equal(steps(quiet), 'done,now,todo', 'can’t tell a Wizard that is off from stale Tailscale on the phone: no tick on step 2, and only step 2 is active');
   assert.match(quiet, /data-gstep="2"[^]*turn Tailscale off and on again and log in if it asks[^]*Open Tailscale<\/button>/);
   assert.doesNotMatch(quiet, /Add VPN Configurations/, 'no first-time VPN tip: Tailscale is already on');
   assert.match(quiet, /Tailscale is on, but your Wizard isn’t answering this phone\./);
@@ -50,6 +50,7 @@ test('the step needed now follows what the phone shows; the button sits on that 
     const s = G.steps({ on, missing, installed });
     assert.equal(s.length, 3);
     for (let i = 1; i < 3; i++) if (s[i] === 'done') assert.equal(s[i - 1], 'done', JSON.stringify({ on, missing, installed }));
+    assert.ok(s.filter(x => x === 'now' || x === 'checking').length <= 1, 'one active step at most: ' + s);
   }
   const android = G.html({ host: 'wizard.tail1234.ts.net', on: false, installed: true, platform: 'android' });
   assert.equal(steps(android), 'done,now,todo');
