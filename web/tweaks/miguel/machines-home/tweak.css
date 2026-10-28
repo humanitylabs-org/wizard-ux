@@ -301,3 +301,8 @@ html[data-skin="landscapes"] .mh-shield[data-x="bad"] { color: #FF95A8; }
 html[data-skin="landscapes"] .mh-ts-t.is-bad { fill: #FF95A8; }
 .mh-sh-short { display: none; }
 @container (max-width: 520px) { .mh-sh-long { display: none; } .mh-sh-short { display: inline; } .mh-ts-t { font-size: 10px; } }
+.mh-root .mh-ts-fix { position: absolute; z-index: 3; transform: translateY(-50%); height: 24px; padding: 0 11px !important; border-radius: 99px; font-size: 11.5px; font-weight: 750; color: #fff; background: var(--mh-bad); box-shadow: 0 2px 8px rgba(0,0,0,.18); cursor: pointer; white-space: nowrap; }
+.mh-root .mh-ts-fix:hover { filter: brightness(1.08); }
+.mh-root .mh-ts-fix[hidden] { display: none; }
+html[data-skin="obsidian-light"] .mh-root .mh-ts-fix { box-shadow: 0 1px 4px rgba(0,0,0,.14); }
+@container (max-width: 520px) { .mh-root .mh-ts-fix { height: 22px; font-size: 10.5px; padding: 0 9px !important; } }
