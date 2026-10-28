@@ -126,3 +126,13 @@ test('native time picker accepts exact minutes',()=>{
 test('editing a reminder saves the edited note with its date and timezone',()=>{
  assert.match(read('web/core/scheduled-reminders.js'),/const body=\{due_at,timezone,note:form\.note\.value\}/)
 })
+test('pinned chat with a scheduled Recall parks in Done, then returns to Pinned unread and Needs you',()=>{
+ const chats=read('web/core/chats.js'),rem=read('web/core/scheduled-reminders.js')
+ assert.match(chats,/const recallParked = s => !s\.archived && PIN\.has\(s\.id\) && !BOOM\?\.dueFor\(s\.id\)\.length && !!BOOM\?\.nextFor\(s\.id\)/)
+ assert.match(chats,/hit\.filter\(s => !dueIds\.has\(s\.id\) && !parkedIds\.has\(s\.id\)\)/,'parked rows leave Pinned and the day sections')
+ assert.match(chats,/data-sec="recallDone"/,'parked rows show in a Done section')
+ assert.match(chats,/boomDue \? '<em class="att needs">Needs you:<\/em>/,'a returned Recall reads Needs you')
+ assert.match(chats,/isNew = LIVE\.isNew\(s\) \|\| boomDue/,'a returned Recall is unread')
+ assert.match(chats,/!!BOOM\?\.dueFor\(s\.id\)\.length \|\| \(!deferredOf/,'Needs you filter includes returned Recalls')
+ assert.match(rem,/nextFor,returnLabel,/)
+})

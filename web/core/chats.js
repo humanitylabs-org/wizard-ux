@@ -99,7 +99,7 @@ window.WizCore.chats = function createChats(H) {
    * pre-fill one chip. Sections stay; empty ones hide. ✕ on a chip, or Back, takes it off. */
   const STATUS = {
     unread: { label: 'Unread', syn: ['new', 'unseen', 'unread messages', 'unread chats', 'unread threads'], empty: 'All caught up. Nothing unread.', ids: ag => { const g = LIVE.groups(ag || ''); return new Set(g.needs.concat(g.ready).map(x => x.id)); } },
-    needs: { label: 'Needs you', syn: ['needs me', 'need me', 'waiting on me', 'waiting', 'approval', 'approvals', 'approval needed', 'blocked'], empty: 'Nothing is waiting on you.', test: s => ['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && attOf(s)?.state === 'needs_you') },
+    needs: { label: 'Needs you', syn: ['needs me', 'need me', 'waiting on me', 'waiting', 'approval', 'approvals', 'approval needed', 'blocked'], empty: 'Nothing is waiting on you.', test: s => ['waiting_for_approval', 'unknown'].includes(s.status) || !!BOOM?.dueFor(s.id).length || (!deferredOf(s) && attOf(s)?.state === 'needs_you') },
     check: { label: 'Check', syn: ['qa', 'q a', 'test', 'to test', 'review', 'to review', 'your call', 'judge'], empty: 'Nothing to check right now.', test: s => !deferredOf(s) && attOf(s)?.state === 'check' },
     working: { label: 'Working', syn: ['running', 'in progress', 'busy', 'active'], empty: 'Nothing is working right now.', ids: ag => new Set((LIVE.workGroups(ag ? LIVE.sessionsFor(ag) : undefined).working || []).map(x => x.id)) },
     yesterday: { label: 'Yesterday', syn: ['from yesterday'], empty: 'Nothing from yesterday.', ids: ag => new Set((LIVE.workGroups(ag ? LIVE.sessionsFor(ag) : undefined).yesterday || []).map(x => x.id)) },
@@ -223,18 +223,23 @@ window.WizCore.chats = function createChats(H) {
   // of the screen text sent as context with a message to another agent (core/screen-text.js).
   let rowListAgent = '';
   const privRow = s => !rowListAgent && !!LIVE.isPrivate?.(s.id);
+  // A pinned chat with a scheduled Recall is parked in Done until it returns; the saved pin choice is kept, so the
+  // due Recall brings it back to the top of Pinned, unread and Needs you (Novaire, 28 Oct 2026).
+  const recallParked = s => !s.archived && PIN.has(s.id) && !BOOM?.dueFor(s.id).length && !!BOOM?.nextFor(s.id);
   function chatRow(s, snip) {
+    const parked = recallParked(s), parkedAt = parked ? BOOM.nextFor(s.id) : null;
     const boomDue = !!BOOM?.dueFor(s.id).length, isNew = LIVE.isNew(s) || boomDue, working = WORKING_ST.has(s.status), needs = boomDue || ['waiting_for_approval', 'unknown'].includes(s.status) || s.status === 'failed' || s.status === 'interrupted';
     // Deferred (bottom of Ready): the status reads Deferred in place of Needs you / Your call, then its one line.
     const def = deferredOf(s) && !working && !needs;
     const at = def ? null : attOf(s), A = at && ATT[at.state], quiet = !!at && (at.state === 'done' || at.state === 'fyi');
     // The row icon says what the thread wants from James (replaced the per-thread ✦ star, 10 Oct 2026).
     // Emphasis is read state only (bold = unread, like an inbox); the status never changes weight or fades a row.
-    const kind = working ? (s.pend === 'waiting' ? 'offline' : 'working') : boomDue ? 'needs' : s.status === 'failed' || s.status === 'interrupted' ? 'failed' : ['waiting_for_approval', 'unknown'].includes(s.status) ? 'approval' : def ? 'deferred' : at ? (at.state === 'needs_you' ? 'needs' : at.state) : 'none';
+    const kind = working ? (s.pend === 'waiting' ? 'offline' : 'working') : boomDue ? 'needs' : parked ? 'done' : s.status === 'failed' || s.status === 'interrupted' ? 'failed' : ['waiting_for_approval', 'unknown'].includes(s.status) ? 'approval' : def ? 'deferred' : at ? (at.state === 'needs_you' ? 'needs' : at.state) : 'none';
     // The icon's meaning in words, in the icon's colour, at the preview's own weight (James, 10 Oct 2026:
     // "most people won't know what those icons mean … same color as the icon … don't make it any brighter or bolder").
-    const lab = boomDue ? '<em class="att needs">Reminder:</em> ' : s.status === 'unknown' ? '<em class="att approval">Needs recovery:</em> ' : STI_LAB[kind] ? `<em class="att ${kind}">${STI_LAB[kind]}:</em> ` : '';
-    const pv = working ? workLabel(s) + ' · ' + esc(clip((working && s.pendText) || s.preview || '', 110))
+    const lab = boomDue ? '<em class="att needs">Needs you:</em> 🪄 ' : parked ? '<em class="att done">Done:</em> 🪄 ' : s.status === 'unknown' ? '<em class="att approval">Needs recovery:</em> ' : STI_LAB[kind] ? `<em class="att ${kind}">${STI_LAB[kind]}:</em> ` : '';
+    const pv = parked && !working ? lab + esc(BOOM.returnLabel ? BOOM.returnLabel(parkedAt) : 'Recall scheduled') + (parkedAt.note ? ' · ' + esc(clip(parkedAt.note, 90)) : '')
+      : working ? workLabel(s) + ' · ' + esc(clip((working && s.pendText) || s.preview || '', 110))
       : needs ? lab + esc(clip(boomDue ? BOOM.dueFor(s.id)[0]?.note || BOOM.dueFor(s.id)[0]?.context : s.preview || '', 110))
       : def ? lab + esc(clip(attOf(s)?.ask || s.preview || '', 140))
       : at ? lab + esc(clip(at.ask, 140))
@@ -516,7 +521,9 @@ window.WizCore.chats = function createChats(H) {
     // Due reminders temporarily join Pinned and stay bold until opened without changing saved pin choices.
     const duePinned = hit.filter(s => !s.archived && BOOM?.dueFor(s.id).length);
     const dueIds = new Set(duePinned.map(s => s.id));
-    const split = PIN.partition(hit.filter(s => !dueIds.has(s.id)), s => !s.archived);
+    const recallDone = hit.filter(recallParked).sort((a, b) => Date.parse(BOOM.nextFor(a.id).due_at) - Date.parse(BOOM.nextFor(b.id).due_at));
+    const parkedIds = new Set(recallDone.map(s => s.id));
+    const split = PIN.partition(hit.filter(s => !dueIds.has(s.id) && !parkedIds.has(s.id)), s => !s.archived);
     const pinned = duePinned.concat(split.pinned), groups = LIVE.workGroups(split.rest);
     const hitCount = () => hit.length;
     const coachLine = () => c.coach ? '<span class="ch-coach">Filtered. Tap ✕ to see all chats.</span>' : '';
@@ -552,6 +559,7 @@ window.WizCore.chats = function createChats(H) {
     else if (!hit.length && !drafts.length) body = `<div class="ch-empty">${bs && (bs.busy || bs.scanned < Math.min(bs.want, bs.total || 0)) ? `No titles match “${esc(c.q)}” · searching messages…` : `No threads match “${esc(c.q)}”.`}</div>`;
     else body = (filtered ? '' : draftSec)
       + (pinned.length ? `<section class="ch-sec ch-pinned open" data-sec="pinned"><div class="ch-sec-h static"><span>Pinned</span><small>${pinned.length}</small></div><div class="ch-sec-b">${pinned.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')}</div></section>` : '')
+      + (recallDone.length ? `<section class="ch-sec ch-recall-done open" data-sec="recallDone"><div class="ch-sec-h static"><span>Done · Recall scheduled</span><small>${recallDone.length}</small></div><div class="ch-sec-b">${recallDone.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')}</div></section>` : '')
       + (byStatus() ? SECTIONS_STATUS : SECTIONS_DAY).map(([k, label]) => {
       const list0 = PW && k === 'errors' ? PW.errorsFilter(groups[k]) : groups[k];
       // Ready's order is chosen before paging, so Priority never pages a needs-you row out of the first page.
