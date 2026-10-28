@@ -81,6 +81,8 @@ Visual: <side-by-side screenshot, or "none">
 | Add an app to the home screen | `WizHomeScreenApps.attach / offer / canOffer` (`web/core/home-screen-apps.js`): native pin or direct-link guide; pins dedup echoes; resume retries; `WosExperience` arrange tweak; docs/pwa-app-install.md | a second long-press menu or pin sheet per surface |
 | Long screenshot, text selection | WebView document scroll, `SelectionWebView`, `ScrollCaptureCrashGuard` (`docs/android-document-scroll.md`) | second capture path | long Chats capture |
 
+| App connection checklist shared by Store and both shells | `WosAppSetup` (`web/core/app-setup.js`, `web/core/app-setup.css`), reusing Connection Router readiness and Store install transaction | another setup gate or inferred connection approval |
+
 ## Visual (drawn/animated: side-by-side screenshot under `Visual:`)
 
 | Need | Use | Never hand-roll |
