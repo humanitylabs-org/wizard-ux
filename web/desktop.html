@@ -67,7 +67,9 @@
     </div>
   </header>
 
-  <main id="stage" class="stage" aria-live="polite"><section id="desktopHome" class="home desktop-home" aria-label="Home" tabindex="-1" hidden></section></main>
+  <main id="stage" class="stage" aria-live="polite"><section id="desktopHome" class="home desktop-home" aria-label="Home" tabindex="-1" hidden></section>
+    <!-- Heads-up chat: a Chats window floating over every desk; folded, it is the orb (orb.js draws #orb). -->
+    <div id="hudLayer" class="hud-layer" hidden><button id="hudOrb" class="hud-orb" type="button" aria-label="Open the floating chat" hidden><canvas id="orb" class="orb" width="128" height="128"></canvas><img id="orbFallback" class="orb-fallback" src="robert-thread-orb.png" alt="" hidden></button></div></main>
 
   <div id="palette" class="palette" hidden>
     <div class="pal-card" role="dialog" aria-modal="true" aria-label="Search and launch">
@@ -162,6 +164,7 @@
   <script src="core/bound-view.js"></script>
   <script src="core/tour.js"></script>
   <script src="core/setup-launch.js"></script>
+  <script src="orb.js"></script>
   <script src="desktop/desktop.js"></script>
 </body>
 </html>
