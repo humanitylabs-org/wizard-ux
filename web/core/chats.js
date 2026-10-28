@@ -448,13 +448,13 @@ window.WizCore.chats = function createChats(H) {
   function replyBubble(r) {
     if (!r) return '';
     const pv = KIT.reply.preview(r, 180);
-    return `<div class="ch-reply" data-chreply role="group" aria-label="Replying to a notification"><span class="ch-reply-t"><b>${esc(clip(r.title || pv || 'Notification', 120))}</b>${r.title && pv ? `<span>${esc(pv)}</span>` : ''}</span><button type="button" class="ch-reply-x" data-chreplyx aria-label="Remove notification from this reply" title="Remove">×</button></div>`;
+    return `<div class="ch-reply" data-chreply role="group" aria-label="Replying to a message"><span class="ch-reply-t"><b>${esc(clip(r.title || pv || 'Notification', 120))}</b>${r.title && pv ? `<span>${esc(pv)}</span>` : ''}</span><button type="button" class="ch-reply-x" data-chreplyx aria-label="Cancel reply" title="Remove">×</button></div>`;
   }
   // The same item, read back from a sent message: a quiet card above his own words.
   function replyCard(r) {
     if (!r) return '';
     const pv = KIT.reply.preview(r, 180);
-    return `<div class="ch-rq" role="note" aria-label="Reply to a notification"><b>${esc(clip(r.title || pv || 'Notification', 120))}</b>${r.title && pv ? `<span>${esc(pv)}</span>` : ''}</div>`;
+    return `<div class="ch-rq" role="note" aria-label="Reply to a message"><b>${esc(clip(r.title || pv || 'Notification', 120))}</b>${r.title && pv ? `<span>${esc(pv)}</span>` : ''}</div>`;
   }
   function discardDraft(key) { KIT.drafts.clear(key); toast('✕', 'Draft discarded', 1400); }
 
@@ -698,7 +698,7 @@ window.WizCore.chats = function createChats(H) {
   // Repaint only the reply bubble (the textarea, its words and focus stay put).
   function refreshReply(wid) {
     const w = W[wid], form = elOf(wid)?.querySelector('[data-chform]'); if (!w || !form) return;
-    const r = w.thread === '__new__' && !winAgent(w) ? KIT.drafts.get(draftKey(w)).reply : null;
+    const r = KIT.drafts.get(draftKey(w)).reply;
     form.querySelector('[data-chreply]')?.remove(); form.classList.toggle('has-reply', !!r);
     if (r) form.insertAdjacentHTML('afterbegin', replyBubble(r));
   }
@@ -797,15 +797,21 @@ window.WizCore.chats = function createChats(H) {
       : '<p class="rc-unavailable">The message that started this run isn’t available in this history.</p>';
     return `<section class="msg runcontext" data-run-context><div class="laterrun" data-later><span class="lr-ic">\u21aa</span><span>Started without a new message from you</span>${timeTag(later.at)}</div><div class="rc-body">${body}</div></section>`;
   }
+  // Store source text, not DOM/Markdown text: copy/share and Reply stay independent.
+  function messageReplyAction(c, message, role, at) {
+    const replies = c.replyMessages || (c.replyMessages = []);
+    const k = replies.push({ message: String(message || '[Attachment]'), title: `${role} · ${Number.isFinite(Number(at)) ? new Date(Number(at)).toISOString() : 'time unavailable'}` }) - 1;
+    return `<button type="button" data-mreply="${k}" aria-label="Reply to ${role === 'You' ? 'your message' : 'assistant message'}">↩ Reply</button>`;
+  }
   function turnHtml(c, tn, last, working, helperStatus, reconnect) {
     let h = '';
     // A provider sign-out has its own panel (Open Claude / Open ChatGPT) in place of Hermes' generic failed-turn notice.
     if (last && reconnect && tn.a?.failed) tn = { ...tn, a: null };
-    if (tn.u) h += `<div class="msg u${tn.u.reply ? ' has-rq' : ''}" data-turn-at="${tn.u.at}"><div class="bub">${replyCard(tn.u.reply)}${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta"><button type="button" data-boom-remind="${tn.u.at}" title="Recall this message" aria-label="Recall this message">🪄 Recall</button>${timeTag(tn.u.at)}</div></div>`;
+    if (tn.u) h += `<div class="msg u${tn.u.reply ? ' has-rq' : ''}" data-turn-at="${tn.u.at}"><div class="bub">${replyCard(tn.u.reply)}${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${messageReplyAction(c, tn.u.text, 'You', tn.u.at)}<button type="button" data-boom-remind="${tn.u.at}" title="Recall this message" aria-label="Recall this message">🪄 Recall</button>${timeTag(tn.u.at)}</div></div>`;
     else if (tn.note) h += noteHtml(tn.note);
     else if (tn.later) h += runContextHtml(tn.later);
     const live = last && working;
-    const steersHtml = (tn.steers || []).map(st => st.note ? noteHtml(st) : `<div class="msg u steer" data-steer><div class="bub">${userMedia(c, st.files || [], [])}${md(st.text)}</div><div class="mmeta"><span class="srcpt">${CHECK_SVG}Read by ${esc(window.WizConfig.agent())}</span>${timeTag(st.at)}</div></div>`).join('');
+    const steersHtml = (tn.steers || []).map(st => st.note ? noteHtml(st) : `<div class="msg u steer" data-steer><div class="bub">${userMedia(c, st.files || [], [])}${md(st.text)}</div><div class="mmeta">${messageReplyAction(c, st.text, 'You', st.at)}<span class="srcpt">${CHECK_SVG}Read by ${esc(window.WizConfig.agent())}</span>${timeTag(st.at)}</div></div>`).join('');
     const wk = PW ? PW.workHtml(c, tn, live, helperStatus) : null; // the work receipt (chat-work.js #17)
     if (wk != null) h += wk;
     else if (tn.steps || tn.notes.length || live) {
@@ -816,7 +822,7 @@ window.WizCore.chats = function createChats(H) {
     if (tn.a || tn.media.length) {
       const k = tn.a ? c.texts.push(tn.a.text) - 1 : -1;
       h += `<div class="msg a"><div class="bub">${tn.a ? md(tn.a.text) : ''}${mediaBlock(c, tn.media)}</div>`
-        + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>` : ''}</div></div>`;
+        + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${messageReplyAction(c, tn.a?.text, 'Assistant', tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>` : ''}</div></div>`;
     }
     return h;
   }
@@ -1135,7 +1141,7 @@ window.WizCore.chats = function createChats(H) {
     const turns = c.loadedFor === w.thread || c.cachedFor === w.thread ? c.turns || [] : null;
     const pendingBoom = s && BOOM?.pendingFor(s.id);
     const focusBoom = pendingBoom || (s && BOOM?.openedFor(s.id));
-    c.media = []; c.texts = [];
+    c.media = []; c.texts = []; c.replyMessages = [];
     let msgs;
     const pend = pendingFor(w);
     const carry = isNew && c.carry && TAG ? `<div class="ch-carry" role="note"><b>${AGS()?.lock?.() || ''}Continues “${esc(clip(c.carry.title, 60))}” privately</b><span>Your first message takes the last ${c.carry.n === 1 ? 'message' : `${c.carry.n} messages`} with it as quoted context. That thread stays as it is.</span><button type="button" data-chcarryx>Don’t include</button></div>` : '';
@@ -1184,7 +1190,7 @@ window.WizCore.chats = function createChats(H) {
     const keepRange = keepTa && [keepTa.selectionStart, keepTa.selectionEnd, keepTa.selectionDirection];
     const keepScroll = keepTa ? keepTa.scrollTop : 0;
     const canStop = working && !!s?.runId && s.status !== 'stopping';
-    const rpl = isNew && !TAG ? KIT.drafts.get(dkey).reply : null; // a Notifications Reply waiting in this New chat
+    const rpl = KIT.drafts.get(dkey).reply; // reply context belongs to this draft, including existing and routed threads
     PW?.ensureModels();
     // The model lives in the message box, bottom-right (James 18 Oct 2026); the header keeps the whole width for the title.
     // Miguel's skins (Dark, Light, Landscapes): a slide switch row above the composer replaces the in-box label.
@@ -1881,6 +1887,18 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chback]')) { threadBack(w); return true; }
     if (e.target.closest('[data-chretry]')) { const c = ch(id); clearTimeout(c.retryT); c.failN = 1; renderThreadLive(w); loadThread(w, true); return true; }
     if (e.target.closest('[data-chcarryx]')) { ch(id).carry = null; renderThreadNow(w); return true; }
+    const replyTarget = e.target.closest('[data-mreply]');
+    if (replyTarget) {
+      const source = ch(id).replyMessages?.[Number(replyTarget.dataset.mreply)];
+      if (!source) return true;
+      saveDraft(id);
+      if (!KIT.drafts.setReply(draftKey(w), { ...source, key: 'message:' + crypto.randomUUID() })) {
+        toast('!', 'Couldn’t save the reply · please try again', 2200); return true;
+      }
+      refreshReply(id);
+      elOf(id)?.querySelector('.ch-compose textarea')?.focus({ preventScroll: true });
+      return true;
+    }
     if (e.target.closest('[data-chreplyx]')) { saveDraft(id); KIT.drafts.setReply(draftKey(w), null); refreshReply(id); elOf(id)?.querySelector('.ch-compose textarea')?.focus({ preventScroll: true }); return true; }
     if (e.target.closest('[data-chnew]')) { const c = ch(id), text = (c.q || '').trim(); c.q = ''; c.focus = false; window.WizCore.chatSearch?.cancel(id); const o = owner(id); openNewDraft(o, '');
       if (text) { setDraft(o, text, []); setTimeout(() => { const ta = elOf(o)?.querySelector('.ch-compose textarea'); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }, 60); } return true; }
