@@ -117,6 +117,8 @@ final class ReachScreen {
     }
 
     void offline(ReachPolicy.Why why, String raw, boolean tailscaleInstalled) {
+        // A reason found under another state (e.g. no ts.net name resolves while Tailscale is off) no longer applies.
+        if (shown != why) lastError = null;
         offline = true;
         shown = why;
         String origin = ai.wizards.os.device.AppState.origin(a);

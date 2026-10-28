@@ -253,10 +253,18 @@
         const g = guide;
         try {
           const on = await tailscaleOn();
+          // A reason found while Tailscale was off (no ts.net name resolves then) says nothing once it's on.
+          if (g.on !== undefined && on !== g.on) { g.missing = null; g.notFound = 0; }
           paintGuide(on);
           const r = await call('check', { address: g.address }).catch(() => ({}));
           if (guide !== g) return;
-          if (r && r.offline) paintGuide(on, !!r.missing);
+          // Only an answer found with Tailscale on the whole time counts. "Not on your network" needs two in a row:
+          // right after Tailscale connects the name can briefly fail to resolve.
+          if (r && r.offline && on && (await tailscaleOn())) {
+            g.notFound = r.missing ? (g.notFound || 0) + 1 : 0;
+            if (!r.missing) paintGuide(on, false);
+            else if (g.notFound >= 2) paintGuide(on, true);
+          }
           if (r && r.ok) {
             setBusy(true, ['Connected. Opening Wizard…', g.host]);
             if (g.saved) await call('retry');

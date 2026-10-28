@@ -44,6 +44,7 @@ public final class ConnectActivity extends Activity {
     private TailscaleGuideView guide;
     private String guideOrigin;
     private Boolean guideMissing;
+    private boolean guideOn;
     private boolean resumed, guideChecking;
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable guideTick = this::checkGuide;
@@ -295,6 +296,8 @@ public final class ConnectActivity extends Activity {
             root.requestApplyInsets(); // the root's listener pads the guide too
         }
         boolean[] net = ReachScreen.net(this);
+        guideOn = net[1];
+        if (!net[1]) guideMissing = null;
         guide.show(origin, net[1], guideMissing, ReachScreen.tailscaleInstalled(this));
         main.removeCallbacks(guideTick);
         main.postDelayed(guideTick, 4000);
@@ -308,7 +311,10 @@ public final class ConnectActivity extends Activity {
         main.removeCallbacks(guideTick);
         final String origin = guideOrigin;
         if (origin == null || !resumed || guideChecking) return;
-        guide.show(origin, ReachScreen.net(this)[1], guideMissing, ReachScreen.tailscaleInstalled(this));
+        final boolean on = ReachScreen.net(this)[1];
+        // A reason found while Tailscale was off (no ts.net name resolves then) says nothing once it's on.
+        if (on != guideOn) { guideOn = on; guideMissing = null; }
+        guide.show(origin, on, guideMissing, ReachScreen.tailscaleInstalled(this));
         final int attempt = ++generation;
         guideChecking = true;
         new Thread(() -> {
@@ -320,7 +326,8 @@ public final class ConnectActivity extends Activity {
                 if (isFinishing() || isDestroyed() || generation != attempt || !origin.equals(guideOrigin)) return;
                 guideChecking = false;
                 if (reached && ServerSettings.save(this, origin)) { returnToWizard(); return; }
-                if (notFound != null) { guideMissing = notFound; guide.show(origin, ReachScreen.net(this)[1], guideMissing, ReachScreen.tailscaleInstalled(this)); }
+                // Only an answer found with Tailscale on the whole time counts.
+                if (notFound != null && on && ReachScreen.net(this)[1]) { guideMissing = notFound; guide.show(origin, true, guideMissing, ReachScreen.tailscaleInstalled(this)); }
                 main.postDelayed(guideTick, 4000);
             });
         }, "WizardGuideCheck").start();
