@@ -53,3 +53,9 @@ test('desktop Latest pill sits centred above the Snooze/Done row, never on Done'
   for (const [d, pre] of [['landscapes', 'html\\[data-skin\\^="landscapes"\\]'], ['obsidian', 'html\\[data-skin\\^="obsidian"\\]']])
     assert.match(read(`web/skins/${d}/skin.css`), new RegExp(pre + '\\[data-shell="desktop"\\] \\.ch-thread > \\.ch-latest \\{ position: relative;[^}]*align-self: center; margin: -44px auto 12px;'));
 });
+
+test('Landscapes Light resource sheet draws capacity bars in ink, not white', () => {
+  const css = read('web/skins/landscapes/skin.css');
+  assert.match(css, /landscapes-light[^\n]*\.rs-sheet \.rs-cap-seg \{ background: rgba\(0, 0, 0, \.08\); \}/);
+  assert.match(css, /landscapes-light[^\n]*\.rs-sheet \.rs-cap-seg i \{ background: rgba\(17, 18, 22, \.72\); \}/);
+});
