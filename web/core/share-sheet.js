@@ -131,10 +131,14 @@
       const thumbnail = kind === 'image' ? URL.createObjectURL(payload.file) : null;
       const el = render(payload, kind, thumbnail);
       const me = open = { el, resolve, native, thumbnail };
-      // Tap handling on pointerup/click with a short arm so the tap that opened the sheet cannot also pick a row.
-      const armedAt = Date.now();
+      // Only a fresh gesture may act on a just-opened sheet. A timeout both let
+      // slow long-press releases through and discarded quick intentional taps.
+      let armed = false;
+      el.addEventListener('pointerdown', () => { armed = true; });
+      el.addEventListener('pointercancel', () => { armed = false; });
       el.addEventListener('click', e => {
-        if (open !== me || Date.now() - armedAt < 250) return; // a fading sheet never acts on a newer one
+        if (open !== me || (!armed && e.detail !== 0)) return; // a fading sheet never acts on a newer one
+        armed = false;
         if (!e.target.closest('.shs-b')) return close('cancelled');
         if (e.target.closest('[data-shs-other]')) { open = null; dismiss(me); Promise.resolve().then(() => me.native()).then(me.resolve, () => me.resolve('unsupported')); return; }
         const b = e.target.closest('[data-shs-app]'); if (!b) return;

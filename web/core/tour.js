@@ -47,6 +47,7 @@
       <div class="tr-stage"></div>
       <div class="tr-copy" aria-live="polite"><small></small><b></b><span class="tr-alt"></span><span class="tr-nx"></span></div>`;
     el.addEventListener('click', e => {
+      if (e.target === el || e.target.classList?.contains('tr-spot') || e.target.classList?.contains('tr-stage')) return back();
       if (e.target.closest('[data-tskip]')) return finish('skip');
       if (e.target.closest('[data-tnext]')) return skipStep();
       if (e.target.closest('[data-ttype]')) { typed = true; return go(step); }
@@ -151,7 +152,7 @@
   // While the tour runs, only the orb, the voice controls and the tour itself take taps.
   const allowed = t => !!(t.closest && t.closest('.tour, #orbWrap, #voice, .arc, #txChips, .help-sheet, #dock, #inbox, #zenEdge'));
   window.addEventListener('pointerdown', e => { if (active() && !allowed(e.target)) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
-  window.addEventListener('click', e => { if (active() && !allowed(e.target)) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+  window.addEventListener('click', e => { if (active() && !allowed(e.target)) { e.stopImmediatePropagation(); e.preventDefault(); back(); } }, true);
 
   function start(why) {
     if (!H) return false;
@@ -250,6 +251,9 @@
          <span class="dtr-acts"><button type="button" class="dtr-go" data-ddone>Done</button></span>`;
     dPlace(); log('desk:beat:' + n);
   }
+  // Desktop's nonblocking tour card has no scrim. Its surroundings still mean
+  // Back, while the underlying composer/navigation click remains usable.
+  window.addEventListener('click', e => { if (dActive() && !D.el.contains(e.target)) dFinish('back'); }, true);
   function dStart(why) {
     if (!D.H) return false;
     if (dActive()) return true;

@@ -22,7 +22,7 @@ Visual: <side-by-side screenshot, or "none">
 | Top-level home-screen name, icon and app root | `WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK | per-app manifest injectors | app-owned manifest wins; frames untouched |
 | Own human-messaging composer input: paste a screenshot/file, dictation-safe text paste (Wispr Flow), empty-paste hint, file drag highlight + drop, Enter / Shift+Enter / Ctrl·Cmd+Enter / IME | `WizardApp.composer.bind(root, {field, zone, onFiles, onSubmit, notice})` → unbind, `WizardApp.composer.insertText`; the same `WizComposerInput` (`web/core/composer-input.js`) Chats uses. App decides what a file becomes in `onFiles`; styles `.is-file-drag` with its tokens | paste/drop/Enter listeners, clipboard reads, own Enter rule | `qa-composer-input.cjs`; app test pastes text + image, drops a file, Ctrl+Enter |
 | Bound same-app companion | `WizardApp.shell.openCompanion` → `WizCompanionPane` (`web/core/companion-pane.js`); [API](shared-app-services-host.md) | app-specific desks/relays | `qa-companion-pane.cjs`: nested Back, both shells |
-| Back in app; leave on dismiss | `WizardApp.back.register/push`, `nav.back()`; validated `WizOpenApp(id,path)` repair returns to its chat | guards, 2nd tap | nested Back stays; dismiss → prior screen |
+| Back in app; leave on dismiss or modal outside tap | `WizardApp.back.register/push`, `nav.back()`; validated `WizOpenApp(id,path)` repair returns to its chat | SDK `cancel` ([contract](shared-app-services-host.md#modal-backdrop--back)); guards, 2nd tap | nested Back stays; dismiss → prior screen |
 | Skin, tokens, light/dark | `WizardApp.theme.get / onChange`, `--wz-*` roles | theme storage, own dark mode, literal colours | two skins + a live skin change keep app state |
 | Transcribe an existing audio file (EXTEND) | `WizardApp.voice.transcribe(blob, {language})` → `{text}` or `{unavailable:true}`; verified installed frame, 25 MB cap, shell `WizConfig.transcribe` | app/provider transcriber, container-to-Voice-Core request | stale/foreign frame denied; unavailable endpoint is explicit |
 | Share text or a file out | `WizardApp.share.text / file` | `navigator.share` | cancelled is not reported as shared |
@@ -66,9 +66,9 @@ Visual: <side-by-side screenshot, or "none">
 | Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs + temporary defaults | app lists |
 | App groups | `WosAppKinds` (`web/core/app-kinds.js`) | forks |
 | Brand hat | `WizBrand` (`web/core/brand.js`) | redrawn logos |
-| Links: in-app sheet, image links | `WizLinks` (`web/core/links.js`) | `window.open`, own iframe sheet |
+| Links: in-app sheet, image links | `WizLinks` (`web/core/links.js`); backdrop `back()`, context `backMenu()` | `window.open`, own iframe sheet |
 | Text-selection actions | `WosSelMenu` (`web/core/sel-menu.js`) | own context menu |
-| Share sheet, receivers, pending handoffs | `WosShareSheet` (`web/core/share-sheet.js`), via `WosChat.sharePayload / shareFile`; hold bypass: `WosChat.bindSharePress` | a second share picker, sending for an app |
+| Share sheet, receivers, pending handoffs | `WosShareSheet` (`web/core/share-sheet.js`), via `WosChat.sharePayload / shareFile`; fresh-press guard; hold bypass: `WosChat.bindSharePress` | a second share picker, sending for an app |
 | Screen context for the agent | `WizScreen` (`web/core/screen-text.js`) | own DOM scrape |
 | Dictation into a focused field | `WizCore` focused field (`web/core/focused-field.js`); voice `WizCore` (`web/core/voice.js`); mic choice `WosMic` (`web/core/mic.js`) | own recorder/transcriber |
 | Local commands | `WosCommands` (`web/core/commands.js`) | a second command parser |

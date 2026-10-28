@@ -1453,6 +1453,7 @@
     if (window.WosAppSetup?.back()) return 'app-setup';
     if (window.WizWebUpdate?.back()) return 'update-list'; // the update card's thread list folds first
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
+    if (window.WizLinks?.backMenu()) return 'link-menu';
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
     if (!keysEl.hidden) { toggleKeys(false); returnToSettings(); return 'keys'; }
     if (window.WosResources?.back()) return 'resources';
