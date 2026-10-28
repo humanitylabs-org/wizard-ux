@@ -182,7 +182,9 @@ export default function setup(api) {
   const row = cls => h('div', { cls: 'mh-row ' + cls });
   const rowSt = row('is-storage'), rowMn = row('is-machines'), rowAct = row('is-act'), rowMore = row('is-more'), rowPp = row('is-people'), rowDv = row('is-devices'), rowChev = row('is-more is-devchev');
   // One button beside the Tailscale label when something is open: it drafts the fix in a new chat, never sends it.
-  const map = h('div', { cls: 'mh-map' + (S.bars ? ' is-details' : '') }, lines, rowSt, rowMn, rowAct, rowMore, rowPp, rowDv, rowChev);
+  const rowTs = row('is-ts');
+  const tsTab = h('button', { type: 'button', cls: 'mh-ts-tab', data: { toggle: 'ts' }, hidden: true });
+  const map = h('div', { cls: 'mh-map' + (S.bars ? ' is-details' : '') }, lines, tsTab, rowSt, rowTs, rowMn, rowAct, rowMore, rowPp, rowDv, rowChev);
   root.append(h('header', { cls: 'mh-top' }, wsBar), h('div', { cls: 'mh-body' }, aiRow, aiList, map));
 
   /* ---------- top ---------- */
@@ -314,22 +316,26 @@ export default function setup(api) {
     oneway: () => 'Make my Tailscale one-way: my phone and Mac can reach my machines, my machines can reach each other (sync and work), but my machines cannot reach my phone or Mac. Show me the exact rule change first, keep a way back, and don\u2019t apply it until I say so.',
     check: () => 'Check again how open each of my machines is from the internet: test their ports from another machine over IPv4 and IPv6, then update the shields on my map. Don\u2019t change anything.',
   };
-  function tsNode() {
-    const open = S.open.has('ts'), bad = openOnes(), all = [machine(MAIN), ...devices().filter(d => d.id !== MAIN).map(d => machine(d.id))];
+  // Tailscale is the network, not a device: a dashed outline around everything on it, with one small tab on its edge.
+  // The tab opens the details here, inside the outline.
+  function tsPanel() {
+    const bad = openOnes(), all = [machine(MAIN), ...devices().filter(d => d.id !== MAIN).map(d => machine(d.id))];
     const word = m => m.access?.exposure === 'internet' ? ['Open to internet', 'bad'] : m.access?.exposure === 'tailscale' ? ['Tailscale only', 'ok'] : ['Not checked yet', 'none'];
-    return h('div', { cls: nw('mh-node is-storage is-ts'), data: { id: 'ts', role: 'ts', fit: bad.length ? 'no' : 'ok' }, style: { '--s': '50' } },
-      h('button', { type: 'button', cls: 'mh-tap', data: { toggle: 'ts' }, 'aria-expanded': String(open), 'aria-label': `Tailscale, ${bad.length ? bad.length + ' open to the internet' : 'the only way in'}. Show details` },
-        h('span', { cls: 'mh-hold' }, h('span', { cls: 'mh-disc is-art' }, art('shield'), bad.length ? h('b', { cls: 'mh-ts-n', text: String(bad.length) }) : null)),
-        label('Tailscale', bad.length ? `${bad.length} open to internet` : 'the only way in', bad.length ? 'warn' : ''), chev(open)),
-      open ? h('span', { cls: 'mh-more-info mh-ts-info' },
-        h('span', { text: 'Your private network. Your machines, phone and Mac talk over it, encrypted.' }),
-        bad.length ? h('span', { cls: 'is-bad', text: `${bad.map(m => m.name).join(' and ')} ${bad.length === 1 ? 'is' : 'are'} on Tailscale too, but strangers on the internet can also knock on ${bad.length === 1 ? 'it' : 'them'}.` })
-          : h('span', { text: 'Nothing answers from the internet. Tailscale is the only way in.' }),
-        h('span', { cls: 'mh-ts-list' }, all.map(m => { const [w, x] = word(m); return h('span', { cls: 'mh-ts-row', 'data-x': x }, h('i'), h('b', { text: m.name }), h('span', { text: w })); })),
-        h('span', { text: 'Who can reach whom: right now any device on your Tailscale can reach any other, both ways (Tailscale’s starting rule).' }),
-        h('span', { cls: 'mh-act-btns' },
-          [bad.length ? ['fix', `Close ${bad.length === 1 ? 'it' : 'them'}`, 'Tailscale becomes the only way in'] : null, ['oneway', 'Make it one-way', 'phone and Mac reach machines, not back'], ['check', 'Check again', 'tests every machine from outside']]
-            .filter(Boolean).map(([id, text, note]) => h('button', { type: 'button', cls: 'mh-act-btn' + (id === 'fix' ? ' is-fix' : ''), data: { tsAsk: id } }, h('b', { text }), h('small', { text: note }))))) : null);
+    return h('span', { cls: 'mh-more-info mh-ts-info' },
+      h('span', { text: 'Your private network. Everything inside the dashed line talks over it, encrypted.' }),
+      bad.length ? h('span', { cls: 'is-bad', text: `${bad.map(m => m.name).join(' and ')} ${bad.length === 1 ? 'is' : 'are'} on Tailscale too, but strangers on the internet can also knock on ${bad.length === 1 ? 'it' : 'them'}.` })
+        : h('span', { text: 'Nothing answers from the internet. Tailscale is the only way in.' }),
+      h('span', { cls: 'mh-ts-list' }, all.map(m => { const [w, x] = word(m); return h('span', { cls: 'mh-ts-row', 'data-x': x }, h('i'), h('b', { text: m.name }), h('span', { text: w })); })),
+      h('span', { text: 'Who can reach whom: right now any device on your Tailscale can reach any other, both ways (Tailscale’s starting rule).' }),
+      h('span', { cls: 'mh-act-btns' },
+        [bad.length ? ['fix', `Close ${bad.length === 1 ? 'it' : 'them'}`, 'Tailscale becomes the only way in'] : null, ['oneway', 'Make it one-way', 'phone and Mac reach machines, not back'], ['check', 'Check again', 'tests every machine from outside']]
+          .filter(Boolean).map(([id, text, note]) => h('button', { type: 'button', cls: 'mh-act-btn' + (id === 'fix' ? ' is-fix' : ''), data: { tsAsk: id } }, h('b', { text }), h('small', { text: note })))));
+  }
+  function paintTsTab() {
+    const bad = openOnes().length, open = S.open.has('ts');
+    tsTab.hidden = S.ws !== 'mine'; tsTab.setAttribute('aria-expanded', String(open));
+    tsTab.setAttribute('aria-label', `Tailscale, ${bad ? bad + ' open to the internet' : 'the only way in'}. ${open ? 'Hide' : 'Show'} details`);
+    tsTab.replaceChildren(h('span', { text: 'Tailscale' }), bad ? h('b', { cls: 'mh-ts-n', text: `${bad} open` }) : null, chev(open));
   }
   const devOpen = p => p.devices ? S.open.has('devs') : S.open.has('p:' + p.id);
   function personNode(p) {
@@ -351,11 +357,12 @@ export default function setup(api) {
     root.classList.toggle('is-managed', !!g);
     if (g) {
       // Only what is known about a Wizard he manages: its Main and who uses it. Same design, less data.
-      setRow(rowSt, []); setRow(rowMore, []); setRow(rowAct, []);
+      setRow(rowSt, []); setRow(rowTs, []); setRow(rowMore, []); setRow(rowAct, []);
       setRow(rowMn, [machineNode({ id: 'managed-' + g.id, name: g.name, access: g.access || null }, 'main', null, { size: 72, roleText: g.org || 'Main', managed: true }), plus('add-device', `Add a device to ${g.name}`)]);
     } else {
       const st = storage();
-      setRow(rowSt, [tsNode(), ...(st ? [storageNode(st)] : [])]);
+      setRow(rowSt, st ? [storageNode(st)] : []);
+      setRow(rowTs, S.open.has('ts') ? [tsPanel()] : []);
       const main = machine(MAIN), others = devices().filter(d => d.id !== MAIN).map(d => machine(d.id)).sort((a, b) => power(b) - power(a));
       const all = [main, ...others].filter(m => m.status === 'online');
       const maxOf = { Memory: Math.max(1, ...all.map(m => m.ramGB || 0)), Disk: Math.max(1, ...all.map(m => m.diskGB || 0)), CPU: Math.max(1, ...all.map(m => m.cores || 0)) };
@@ -419,11 +426,17 @@ export default function setup(api) {
     map.style.setProperty('--cx', md.cx + 'px'); map.style.setProperty('--cy', md.cy + 'px');
     // The helper's panel sits right under the helper it belongs to (kept inside the map).
     // Tailscale / Storage details open under their node but never past the map's edges.
-    for (const mi of [...rowSt.children].map(n => n.lastElementChild).filter(x => x?.classList.contains('mh-more-info'))) { mi.style.transform = ''; const pb = box(mi), dx = clamp(0, -pb.l + 4, M.width - pb.r - 4); if (dx) mi.style.transform = `translateX(${dx.toFixed(0)}px)`; }
+    for (const mi of [...rowSt.children].map(n => n.lastElementChild).filter(x => x?.classList.contains('mh-more-info') && !x.classList.contains('mh-ts-info'))) { mi.style.transform = ''; const pb = box(mi), dx = clamp(0, -pb.l + 4, M.width - pb.r - 4); if (dx) mi.style.transform = `translateX(${dx.toFixed(0)}px)`; }
     const ap = rowAct.firstElementChild;
     if (ap) { const n = ms.find(x => x.dataset.id === ap.dataset.of); if (n) { ap.style.transform = ''; const nb = box(n), pb = box(ap), dx = clamp(nb.cx - pb.cx, -pb.l + 4, M.width - pb.r - 4); ap.style.transform = `translateX(${dx.toFixed(0)}px)`; const ab = box(ap); specs.push([curveV(ab.cx, ab.t - 2, nb.cx, nb.b + 2), 'var(--mh-wire-off)', '', 1]); } }
-    const key = JSON.stringify(specs); if (key === wired && lines.firstChild) return; wired = key;
+    // The Tailscale outline: around the machines, people and their devices (Storage sits outside, in Cloudflare).
+    paintTsTab();
+    const inside = S.ws === 'mine' ? [rowTs, rowMn, rowAct, rowMore, rowPp, rowDv].filter(r => !r.hidden && r.firstElementChild).map(box) : [];
+    const frame = inside.length ? [Math.min(...inside.map(x => x.t)) - 26, Math.max(...inside.map(x => x.b)) + 12] : null;
+    if (frame) { tsTab.style.top = f(frame[0]) + 'px'; }
+    const key = JSON.stringify([specs, frame, M.width]); if (key === wired && lines.firstChild) return; wired = key;
     lines.replaceChildren();
+    if (frame) sv('rect', { x: 6, y: f(frame[0]), width: f(M.width - 12), height: f(frame[1] - frame[0]), rx: 24, class: 'mh-ts' }, lines);
     const defs = sv('defs', {}, lines); let gi = 0;
     for (const [d, col, text, speed] of specs) {
       const base = sv('path', { d, class: 'base' }, lines); base.style.stroke = col;
@@ -435,7 +448,7 @@ export default function setup(api) {
       const seg = Math.min(46, L * .4), c = sv('path', { d, class: 'comet', stroke: `url(#mhg${i})`, 'stroke-dasharray': `${f(seg)} ${f(L + seg)}` }, lines);
       c.style.setProperty('--from', f(seg)); c.style.setProperty('--to', f(-L)); c.style.setProperty('--dur', ((1.6 + L / 120) / speed).toFixed(2) + 's');
       if (text) {
-        const pt = base.getPointAtLength(L * .5), grp = sv('g', {}, lines), txt = sv('text', { x: pt.x, y: pt.y + 4, 'text-anchor': 'middle', class: 'mh-age' }, grp);
+        const pt = base.getPointAtLength(L * (frame && /back/.test(text) ? .3 : .5)), grp = sv('g', {}, lines), txt = sv('text', { x: pt.x, y: pt.y + 4, 'text-anchor': 'middle', class: 'mh-age' }, grp);
         txt.textContent = text; const bb = txt.getBBox();
         grp.insertBefore(sv('rect', { x: bb.x - 7, y: bb.y - 4, width: bb.width + 14, height: bb.height + 8, rx: (bb.height + 8) / 2, class: 'mh-age-bg' }), txt);
       }
