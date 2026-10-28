@@ -351,9 +351,9 @@
     const t = setTimeout(done, 1500), end = () => { clearTimeout(t); done(); };
     l.addEventListener('load', end, { once: true }); l.addEventListener('error', end, { once: true });
   });
-  const bounded = async promise => {
+  const bounded = async (promise, ms = 8000) => {
     let timer;
-    try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Package timed out')), 8000); })]); }
+    try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Package timed out')), ms); })]); }
     finally { clearTimeout(timer); }
   };
   function paintTweaks() {
@@ -542,18 +542,26 @@
     for (const a of [...tweaks.values()]) dispose(a, 'replace');
     tweaks.clear(); paintTweaks();
     if (!shell) return false;
-    for (const id of entries) {
+    // Fetch every package at once (a slow network pays one wait, not one per package), and give a package that timed
+    // out a second, longer try before turning it off: a slow wifi must not silently drop half of an owner's tweaks.
+    const fetchPkg = async (id, ms) => {
+      const response = await bounded(fetch(tweakUrl(id, 'manifest.json'), { cache: 'no-store' }), ms);
+      if (!response.ok) throw new Error('Manifest unavailable');
+      const m = await response.json();
+      if (m.id !== id || m.author !== id.split('/')[0] || typeof m.version !== 'string' || !Array.isArray(m.capabilities) || m.capabilities.some(c => !['layout','nav','models','data.read','inbox'].includes(c))) throw new Error('Invalid manifest');
+      if (m.apiVersion !== contract.apiVersion) throw new Error('Incompatible API version');
+      const mod = await bounded(importer(tweakUrl(id, 'tweak.js')), ms);
+      if (typeof mod.default !== 'function') throw new Error('Missing setup');
+      return { m, mod };
+    };
+    const pkgs = new Map(want.map(id => [id, fetchPkg(id, 8000).catch(e => /timed out/i.test(e.message) ? fetchPkg(id, 30000) : Promise.reject(e))]));
+    for (const p of pkgs.values()) p.catch(() => {});
+    let slow = false;
+    for (const id of want) {
       if (seq !== tweakSeq) return false;
-      if (!safeTweakId(id)) continue;
       try {
-        const response = await bounded(fetch(tweakUrl(id, 'manifest.json'), { cache: 'no-store' }));
-        if (!response.ok) throw new Error('Manifest unavailable');
-        const m = await response.json();
-        if (m.id !== id || m.author !== id.split('/')[0] || typeof m.version !== 'string' || !Array.isArray(m.capabilities) || m.capabilities.some(c => !['layout','nav','models','data.read','inbox'].includes(c))) throw new Error('Invalid manifest');
-        if (m.apiVersion !== contract.apiVersion) throw new Error('Incompatible API version');
-        const mod = await bounded(importer(tweakUrl(id, 'tweak.js')));
+        const { m, mod } = await pkgs.get(id);
         if (seq !== tweakSeq) return false;
-        if (typeof mod.default !== 'function') throw new Error('Missing setup');
         // CSS is optional; missing CSS is harmless. All package assets are same-origin build artifacts.
         const link = tweakCss(id); await cssReady(link);
         if (seq !== tweakSeq) return false;
@@ -564,8 +572,14 @@
           a.teardown = mod.default(tweakApi(a, m, teamAuthors.includes(m.author) || trustedAuthors.includes(m.author)));
           if (a.teardown && typeof a.teardown !== 'function') throw new Error('Setup must return teardown');
         } catch (e) { dispose(a, 'error'); throw e; }
-      } catch (e) { expected.delete(id); const l = preCss.get(id); if (l) { l.remove(); preCss.delete(id); } paintTweaks(); shell?.toast?.(`${id} turned off · ${e.message}`); }
+      } catch (e) {
+        if (seq !== tweakSeq) return false;
+        if (/timed out/i.test(e.message)) slow = true;
+        expected.delete(id); const l = preCss.get(id); if (l) { l.remove(); preCss.delete(id); } paintTweaks(); shell?.toast?.(`${id} turned off · ${e.message}`);
+      }
     }
+    // A run cut short by the network keeps the full list for next time, so the next load still paints them at once.
+    if (slow) { expected.clear(); try { localStorage.setItem(EXPECT_KEY, JSON.stringify(want)); } catch (_) {} paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true; }
     expected.clear();
     try { localStorage.setItem(EXPECT_KEY, JSON.stringify([...tweaks].filter(([, a]) => !a.dead).map(([id]) => id))); } catch (_) {}
     paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true;
