@@ -1,11 +1,11 @@
 {
-  "note": "James's skins (Nebula, Grove, Tide, Ember, Signal) and the base shell look. Update only with James's explicit approval; name it in the commit.",
+  "note": "James's skins (Nebula, Grove, Tide, Ember, Signal) and the base shell look. Update only with James's explicit approval; name it in the commit. James approved the white app icon in the orb and removal of the centre dot, 27 Oct 2026.",
   "hashes": {
     "base": "6b08a59778a37980",
-    "nebula": "3bd6f1bb5473f77f",
-    "grove": "7a28f6d0e952b2d9",
-    "tide": "9e70f67f23e47f15",
-    "ember": "47178b9243aa389a",
-    "signal": "e71f86e31185108c"
+    "nebula": "20f4b94785436b85",
+    "grove": "990a69d4c9e76209",
+    "tide": "9e6e8d2250894936",
+    "ember": "d920000c3ec5f776",
+    "signal": "31096f4c1686c72e"
   }
 }

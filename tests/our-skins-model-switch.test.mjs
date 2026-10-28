@@ -56,3 +56,15 @@ test("Miguel's skins default the chat list to compact; an explicit Filter choice
   assert.match(cj, /const OUR_SKINS = \['obsidian', 'obsidian-light', 'landscapes'\];/);
   assert.match(cj, /return v == null \? OUR_SKINS\.includes\(document\.documentElement\.dataset\.skin \|\| ''\) : v === '1';/);
 });
+
+test('the model switch folds into one chip (current model + ⋯ opening the menu) when squeezed, in every Miguel skin', () => {
+  for (const d of ['obsidian', 'landscapes']) {
+    const css = read(`web/skins/${d}/skin.css`);
+    assert.match(css, /\.ms \{ container: ms \/ inline-size;/);
+    const q = css.match(/@container ms \(max-width: (\d+)px\) \{([\s\S]*?)\n\}/);
+    assert.ok(q, `${d}: compact container query`);
+    assert.match(q[2], /\.ms-o:not\(\.on\) \{ display: none; \}|\.ms-o:not\(\.on\)/);
+    assert.match(q[2], /\.ms-track \{[^}]*pointer-events: none/, 'a tap on the chip must not pick a slot by position');
+    assert.match(q[2], /\.ms-more::after \{ content: ""; position: absolute; inset: 0;/, 'the whole chip opens the model menu');
+  }
+});

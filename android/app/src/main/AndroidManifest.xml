@@ -9,9 +9,12 @@
     <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!-- Mizel recorder: retry uploads the moment the network returns; network-constrained upload job. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" />
     <!-- Mizel recorder: a partial wake lock keeps capture going with the screen off. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -55,7 +58,9 @@
     </queries>
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Wizard ID backup saves an app-only password entry; no website credential sharing, so no asset links. -->
     <application
+        tools:ignore="CredManMissingDal"
         android:networkSecurityConfig="@xml/wos_network"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
