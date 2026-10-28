@@ -11,14 +11,20 @@
   const shellOrb = () => shell() && window.WosDeviceOrb?.ready ? window.WosDeviceOrb : null;
   // Rows are plain lines split by hairlines: no boxes, no icon tiles; a second line only when it says something.
   const row = (id, title, sub) => `<button class="st-row" data-st="${esc(id)}"><span class="st-tx"><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="st-go">›</span></button>`;
+  // System pages are filled by packages (WosSettings.register with page = one of these); a page with nothing on it hides.
+  const filled = id => () => [...features.values()].some(f => f.page === id && (!f.available || f.available()));
   const PAGES = [
-    { id: 'appearance', title: 'Appearance' },
+    { id: 'overview', title: 'Your network', group: 'System', available: filled('overview') },
+    { id: 'ai', title: 'AI', group: 'System', available: filled('ai') },
+    { id: 'network', title: 'Network & security', group: 'System', available: filled('network') },
+    { id: 'storage', title: 'Storage & backups', group: 'System', available: filled('storage') },
+    { id: 'appearance', title: 'Appearance', group: 'Preferences' },
     { id: 'chats', title: 'Chats & app screens' },
     { id: 'voice', title: 'Voice & typing' },
     { id: 'phone', title: 'Phone', available: () => shell() ? !!shellOrb() : android() },
     { id: 'recovery', title: 'Unsent & recovered' },
     // Resources: the Home resource bars (AI + Compute) from the shared renderer, when it is there; else AI usage.
-    { id: 'usage', get title() { return window.WosResources?.bars ? 'Resources' : 'AI usage'; } },
+    { id: 'usage', get title() { return window.WosResources?.bars ? 'Resources' : 'AI usage'; }, available: () => !filled('ai')() },
     { id: 'schedules', title: 'Schedules', available: () => !!window.WosSchedules?.available },
     { id: 'about', title: 'About & updates' },
   ];
@@ -42,6 +48,8 @@
     if (id === 'phone') { if (shell()) return shellOrb()?.state.on ? 'Everywhere on' : ''; try { return JSON.parse(native()?.everywhere?.() || '{}').enabled ? 'Everywhere on' : ''; } catch (_) { return ''; } }
     if (id === 'recovery') { const n = new Set([...unsentAll(ctx), ...recovered()].map(x => x.id)).size; return n ? String(n) : ''; }
     // Resources: quiet unless something is running low (under a quarter left), then the lowest one.
+    const own = [...features.values()].find(f => f.page === id && typeof f.subtitle === 'function');
+    if (own) { try { return String(own.subtitle() || '').slice(0, 40); } catch (_) { return ''; } }
     if (id === 'usage') { const low = window.WosResources?.lowest?.(); return low && low.left < 25 ? `${low.label} ${low.value || (100 - low.left) + '% used'}` : ''; }
     return '';
   }
@@ -449,7 +457,7 @@
     const ctx = { ...adapter, root }, api = { render, focus, back, destroy, dispatch, context: ctx, get page() { return page; } };
     let skinImportMessage = '', page = '', confirm = null;
     const desktop = adapter.shell === 'desktop';
-    const effectivePage = () => page || (desktop ? 'appearance' : '');
+    const effectivePage = () => page || (desktop ? (filled('overview')() ? 'overview' : 'appearance') : '');
     ctx.render = () => render(true);
     ctx.paintUsage = () => { const g = root.querySelector('[data-usage]'); if (g) g.outerHTML = window.WosUsage.html(); paintSubtitles(); };
     function paintSubtitles() {
@@ -472,7 +480,7 @@
       const attentionHtml = items.length ? `<div class="st-attention" aria-label="Needs attention">${items.map(i => `<button data-st-attention="${esc(i.feature)}">${esc(i.title)}<span aria-hidden="true">›</span></button>`).join('')}</div>` : '';
       // Desktop shows About & updates beside the list with the card on it, so the list does not repeat it.
       const card = desktop && selected === 'about' ? '' : cardHtml();
-      const nav = pages.map(p => `<button class="st-category" data-st-page="${p.id}" aria-current="${p.id === selected ? 'page' : 'false'}"><span class="st-tx"><b>${p.title}</b></span><span class="st-val" data-st-subtitle="${p.id}">${esc(subtitle(p.id, ctx))}</span><span class="st-go" aria-hidden="true">›</span></button>`).join('');
+      const nav = pages.map((p, i) => (p.group && p.group !== pages[i - 1]?.group && pages.some(q => q.group && q.group !== p.group) ? `<h4 class="st-navgroup">${esc(p.group)}</h4>` : '') + `<button class="st-category" data-st-page="${p.id}" aria-current="${p.id === selected ? 'page' : 'false'}"><span class="st-tx"><b>${p.title}</b></span><span class="st-val" data-st-subtitle="${p.id}">${esc(subtitle(p.id, ctx))}</span><span class="st-go" aria-hidden="true">›</span></button>`).join('');
       const fs = [...features.values()].filter(f => pageOf(f) === selected && (!ctx.skinDraft || f.id === 'look') && (!f.available || f.available(ctx)));
       // About & updates leads with the update card and its choices; the connection rows follow.
       if (selected === 'about') fs.sort((x, y) => (y.id === 'updates') - (x.id === 'updates'));

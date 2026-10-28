@@ -236,3 +236,7 @@
 .wg-section [data-wg-val] { flex: none; font-variant-numeric: tabular-nums; font-weight: 650; color: var(--wz-text, var(--ink)); }
 .wg-section .wg-range { display: block; width: 100%; min-height: 44px; margin: 0; accent-color: var(--wz-accent, var(--violet-2, #8f63ff)); cursor: pointer; }
 .wg-section .wg-reset { min-height: 44px; padding: 6px 14px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--ink-2); font: inherit; font-size: 13px; cursor: pointer; }
+/* System / Preferences: two quiet group labels in the Settings list. */
+.st-navgroup { margin: 18px 4px 2px; font-size: 11.5px; font-weight: 750; letter-spacing: .08em; text-transform: none; color: var(--wz-text-2, var(--wz-text)); opacity: .7; }
+.st-index nav > .st-navgroup:first-child { margin-top: 4px; }
+.st-tweak { display: block; }
