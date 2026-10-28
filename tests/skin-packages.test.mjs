@@ -141,6 +141,22 @@ function page({ stored = 'nebula', touch = true } = {}) {
 }
 const settle = () => new Promise(r => setTimeout(r, 20));
 
+test('James: the live edge handle receives beside events through the real skin host', () => {
+  const P = page(), sides = []; let api;
+  P.host.builtin('edge-host-probe', a => { api = a; a.on('beside', b => sides.push(b.side)); return () => {}; }, { when: 'always' });
+  P.host.attach(P.adapter);
+  assert.equal(typeof P.host.beside, 'function', 'backport the additive host hook, not just the handle');
+  assert.equal(api.route().beside, 0);
+  P.setRoute({ view: 'thread', thread: 's1', desk: 1, beside: 1 }); P.host.beside(); P.host.beside();
+  P.setRoute({ view: 'desk', thread: null, desk: 2, beside: -1 }); P.host.beside();
+  assert.equal(api.route().beside, -1);
+  P.setRoute({ view: 'desk', thread: null, desk: 2, beside: 0 }); P.host.beside();
+  assert.deepEqual(sides, [1, -1, 0], 'one side event per appearance/change');
+  const app = read('web/app.js');
+  assert.match(app, /WosSkinHost\?\.beside\?\.\(\)/, 'syncPeek notifies the host');
+  assert.match(app, /beside: device\.classList\.contains\('bound-peeking'\)/, 'the adapter projects the real peek state');
+});
+
 test('Nebula (stored) loads no skin files at all', async () => {
   const P = page({ stored: 'nebula' });
   P.host.attach(P.adapter); await settle();
@@ -240,7 +256,12 @@ test('the API hands a skin no shell internals', async () => {
   P.host._test.setImporter(async () => ({ default: api => { seen = api; } }));
   P.host.attach(P.adapter); P.host.commit('fixture'); await settle();
   // Layout hooks (22 Oct 2026): timers, own controls, agents, the orb's recorder and its idle tap. Still no internals.
-  assert.deepEqual(Object.keys(seen).sort(), ['after', 'agents', 'asset', 'env', 'frame', 'gesture', 'listen', 'mount', 'nav', 'on', 'orb', 'part', 'route', 'storage', 'toast', 'voice']);
+  // App-orb capability shipped in 52462d5f: a frozen facade, not shell internals.
+  assert.deepEqual(Object.keys(seen).sort(), ['after', 'agents', 'app', 'asset', 'env', 'frame', 'gesture', 'listen', 'mount', 'nav', 'on', 'orb', 'part', 'route', 'storage', 'toast', 'voice']);
+  assert.ok(Object.isFrozen(seen.app));
+  assert.deepEqual(Object.keys(seen.app).sort(), ['orb', 'tap']);
+  assert.equal(seen.app.orb(), null, 'no front app exposes no claim');
+  assert.equal(seen.app.tap(), false, 'no front app cannot dispatch a tap');
   assert.ok(Object.isFrozen(seen.agents) && Object.isFrozen(seen.voice) && Object.isFrozen(seen.orb));
   assert.deepEqual(Object.keys(seen.voice).sort(), ['cancel', 'dictate', 'state', 'talk', 'tap']);
   assert.ok(Object.isFrozen(seen) && Object.isFrozen(seen.nav));
