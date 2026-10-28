@@ -1,9 +1,6 @@
 # Shared components
 
-**One implementation per capability.** NEW: `web/core/` + row, never an app.
-
-CI: [reuse gate](app-reuse-gate.md).
-
+CI: [reuse gate](app-reuse-gate.md). NEW: `web/core/` + row only.
 
 ```
 Reuse:
@@ -45,7 +42,7 @@ Visual: <side-by-side screenshot, or "none">
 
 | Need | Use | Never hand-roll |
 |---|---|---|
-| Chats: agent/Space Focus, Filter, sections, search, composer, files, read state, Copy/Share; Novairecito Recall/Done | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); `setFocus` persists `w.focus`; `migrateChatsFocus` migrates; `WizLive` owns data, stream + tool steps, including full/slim list background hints; Ready asks retain a muted Helper still working chip without moving progress-only helpers out of Working; diagnosis: Sign in; revision invalidates cache | second Chats/Focus parser; per-agent/shell routing |
+| Chats: agent/Space Focus, Filter, sections, search, composer, files, read state, Copy/Share; Novairecito Recall/Done | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); `setFocus`/`migrateChatsFocus`: `w.focus`; `WizLive`: streams/tools/full+slim background hints. Ready: Helper still working chip; progress-only: Working; Sign in diagnosis; revision invalidates cache | second Chats/Focus parser; per-agent/shell routing |
 | Alternative Chats list | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`web/core/edge-peek.js`), host storage | skin-local duplicate |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
