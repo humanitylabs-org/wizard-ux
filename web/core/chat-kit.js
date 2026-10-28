@@ -159,7 +159,7 @@
         // A mid-run steer the agent has taken in: shown inside the turn it steered, marked as received.
         if (isSteer) {
           const st = note ? note.text : steerText(raw);
-          if (st && cur && !cur.steers.some(x => x.text === st)) cur.steers.push(note ? { text: st, at, files: [], note: true, from: note.from } : { text: st, at, files: chipFiles(raw) });
+          if (st && cur && !cur.steers.some(x => x.text === st)) cur.steers.push(note ? { text: st, at, files: [], note: true, from: note.from } : { text: st, at, files: chipFiles(raw), ...(reply.split(raw).reply ? { reply: reply.split(raw).reply } : {}) });
           if (cur) cur.steps++;
           continue;
         }
