@@ -71,7 +71,13 @@
 
   window.addEventListener('pageshow', render);
   // A service worker scoped to this app only: Chrome needs it to offer install, and the narrow scope keeps
-  // Wizard OS a separate app from every sibling on the same origin.
-  if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register(new URL('sw.js', base).href, { scope: base.pathname }).catch(() => {}));
+  // Wizard OS a separate app from every sibling on the same origin. It also keeps the shell's own files so Wizard
+  // opens offline; once it is running, hand it the files this page already loaded, so the very first visit is enough.
+  const warm = reg => {
+    const urls = [location.href, ...performance.getEntriesByType('resource').map(e => e.name)];
+    reg.active?.postMessage({ type: 'wos-shell-warm', urls });
+  };
+  if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register(new URL('sw.js', base).href, { scope: base.pathname })
+    .then(() => navigator.serviceWorker.ready).then(warm).catch(() => {}));
   window.addEventListener('storage', event => { if (event.key === key) render(); });
 })();

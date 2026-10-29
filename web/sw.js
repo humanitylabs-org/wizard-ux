@@ -1,14 +1,96 @@
 // Wizard OS service worker: scoped to /wizard-os-home/ only, so every app on this origin installs separately.
-// Network-first passthrough (Chrome needs a fetch handler to treat the page as installable); nothing is cached.
-self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
+// Network first, always: online, every request goes to Wizard exactly as before (Chrome also needs a fetch handler to
+// treat the page as installable). The shell's own files (pages, scripts, styles, icons under this scope) are copied
+// into one cache as they arrive, so Wizard still opens with no connection or on spotty wifi (a plane, a tunnel); the
+// shell then shows its saved chat list and threads. Nothing outside the scope is cached here: chats, files, apps and
+// every /wizard/* API stay network-only.
+const CACHE = 'wos-shell-v1', PREFIX = 'wos-shell-', MAX_ENTRIES = 800;
+const SCOPE = new URL(self.registration.scope).pathname;
 // Private media and byte-range requests stay with the browser's own network stack: routing a 15 MB video through
 // respondWith(fetch()) made Share/Save wait ~30 s on Android (18 Oct 2026).
 const PRIVATE_MEDIA = /^\/wizard\/(?:attachments\/|files\/)/;
+const RELEASE = /<meta name="wos-release" content="([^"]+)"/;
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', event => event.waitUntil((async () => {
+  // Own prefix only: never touch another app's caches on this origin.
+  for (const name of await caches.keys()) if (name.startsWith(PREFIX) && name !== CACHE) await caches.delete(name);
+  await self.clients.claim();
+})()));
+
+// Pages are cached without their query (?thread=…), so a deep link still opens offline.
+const pageKey = url => { const u = new URL(url); u.search = ''; u.hash = ''; return u.href; };
+const cacheable = res => !!res && res.ok && res.status === 200 && res.type === 'basic' && !res.redirected &&
+  !/no-store/i.test(res.headers.get('cache-control') || '');
+
+// One copy per release: once a page from a newer release (stamped ?v=<token>, tools/stamp-assets.sh) arrives,
+// files stamped with any other token go, so an offline start can never mix two releases' modules.
+async function prune(release) {
+  const cache = await caches.open(CACHE), keys = await cache.keys();
+  let left = keys.length;
+  for (const key of keys) {
+    const v = new URL(key.url).searchParams.get('v');
+    if (release && v && v !== release) { await cache.delete(key); left--; }
+  }
+  if (left <= MAX_ENTRIES) return;
+  for (const key of (await cache.keys()).slice(0, left - MAX_ENTRIES)) await cache.delete(key);
+}
+
+async function shell(event) {
+  const req = event.request, page = req.mode === 'navigate';
+  try {
+    const res = await fetch(req);
+    // An explicit no-store read (update checks) is never answered from a saved copy, so it is never saved either.
+    if (req.cache !== 'no-store' && cacheable(res)) {
+      const copy = res.clone();
+      event.waitUntil((async () => {
+        const cache = await caches.open(CACHE);
+        if (!page) return cache.put(req, copy);
+        const html = await copy.clone().text();
+        await cache.put(pageKey(req.url), copy);
+        await prune(html.match(RELEASE)?.[1] || '');
+      })().catch(() => {}));
+    }
+    return res;
+  } catch (error) {
+    if (req.cache === 'no-store') throw error;
+    const cache = await caches.open(CACHE);
+    const hit = page
+      ? await cache.match(pageKey(req.url)) || await cache.match(new URL('index.html', self.registration.scope).href) || await cache.match(self.registration.scope)
+      : await cache.match(req);
+    if (hit) return hit;
+    throw error;
+  }
+}
+
+// First visit: the page loaded before this worker ran, so it hands over what it loaded (pwa-install.js). The copies
+// come from the browser's HTTP cache (a revalidation at most). Only this scope's files; never sw.js, never no-store.
+const inScope = url => { try { const u = new URL(url); return u.origin === self.location.origin && u.pathname.startsWith(SCOPE) && u.pathname !== SCOPE + 'sw.js'; } catch (_) { return false; } };
+self.addEventListener('message', event => {
+  const d = event.data;
+  if (!d || d.type !== 'wos-shell-warm' || !Array.isArray(d.urls)) return;
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE), urls = [...new Set(d.urls.filter(u => typeof u === 'string' && inScope(u)))].slice(0, 400);
+    let release = '';
+    for (const url of urls) {
+      try {
+        const page = !/\.[a-z0-9]+$/i.test(new URL(url).pathname) || /\.html$/i.test(new URL(url).pathname);
+        const key = page ? pageKey(url) : url;
+        if (!page && await cache.match(key)) continue;
+        const res = await fetch(url, { credentials: 'same-origin' });
+        if (!cacheable(res)) continue;
+        if (page) release = (await res.clone().text()).match(RELEASE)?.[1] || release;
+        await cache.put(key, res);
+      } catch (_) { /* best effort: the next visit fills the gaps */ }
+    }
+    if (release) await prune(release);
+  })());
+});
+
 self.addEventListener('fetch', event => {
   const req = event.request;
   if (req.method !== 'GET' || req.headers.has('range')) return;
   const u = new URL(req.url);
   if (u.origin !== self.location.origin || PRIVATE_MEDIA.test(u.pathname)) return;
-  event.respondWith(fetch(req));
+  if (!u.pathname.startsWith(SCOPE) || u.pathname === SCOPE + 'sw.js') { event.respondWith(fetch(req)); return; }
+  event.respondWith(shell(event));
 });
