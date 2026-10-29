@@ -148,12 +148,13 @@
   function poll() {
     clearTimeout(pollT);
     if (!el || step !== 'ai' || !provider) return; // only while signing in to a chosen provider
+    const mine = el, chosen = provider; // a reply for an earlier choice (Back, then another provider) is ignored
     pollT = setTimeout(async () => {
-      const ok = await aiReady(PROVIDERS.find(x => x.app === provider)?.slug);
-      if (!el || step !== 'ai' || !provider) return;
+      const ok = await aiReady(PROVIDERS.find(x => x.app === chosen)?.slug);
+      if (!el || el !== mine || step !== 'ai' || provider !== chosen) return;
       if (ok === true) {
         connected = true; write('ai'); log('connected'); paint(false);
-        const chosen = provider;
+
         setTimeout(() => { if (el && step === 'ai' && provider === chosen) { step = 'look'; provider = null; paint(); } }, 1200); // Back cancels it
         return;
       }
