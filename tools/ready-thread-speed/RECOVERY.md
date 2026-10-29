@@ -236,6 +236,74 @@ not a new run. Preserve r2/r4/r5/r6 evidence and hashes unchanged.
 
 This is a static audit and sealed next-run specification, not a browser pass.
 
+## r12: final full integrated A/B, batched stale precondition
+
+REUSE the real Service fixture, shell navigation, history/cache APIs, exact
+revision/full-content assessor and two-frame viewport paint probe. EXTEND only
+the acceptance fixture preparation and counted evidence. NEW product code: none.
+
+The r11 diagnostic passed on both A/B sides: canonical SQLite, constructor row
+reader, actual compact HTTP and client converged after the normal 30 s source
+cache expired (24.8–28.2 s observed). It was not final acceptance. Its sealed
+receipt is `heavy_a36d652f4116432289fa50269c963a8c`, log SHA-256
+`43ea87490da13320fc90f78c727254b6d9b756d0b7fce472e7041fcc6783b6c3`.
+No old eight-group partial benchmark becomes a complete final result.
+
+The final candidate combines unchanged UX product bytes with Service
+`6acaa498408426f4650f418d2bd3eb6e09dd399d` (global 48-preview cap preserved;
+ambiguous cross-reader evidence reuse removed, ownJobs gate retained).
+Baseline remains Service `88aa5f7e` / UX `9e4cadfb`. Neither Service worktree
+nor production TTL is edited by this test-only change. The current pair gets
+fresh focused Service correctness and fresh 24-cell scoped browser checks;
+older Service/scope results are provenance, not integrated-pair passes.
+
+For EACH real shell and skin, outside measured opens:
+
+1. Use real Back on phone and a real unaffected control-row open on wide desktop,
+   preventing the previously open target from starting an old-key history read.
+   Obtain all 30 exact canonical revisions in one bounded batch barrier. The
+   constructor cache is untouched. The client, real raw HTTP count and both
+   role timestamps must agree; a merely changed/intermediate key never passes.
+2. Drain old target requests, read all 30 old histories through `WizLive.messages`,
+   then verify all 30 accepted and persisted copies coexist, including full
+   projected content digests. Read the actual exported `TC_MAX`/`TC_BYTES` and
+   preload cap/order (40, 2.5 MB per thread, 16 here); never inflate test caps.
+3. Fence all 30 affected history URLs. Commit 30 isolated canonical transactions,
+   each adding one user/assistant turn. Wait ONCE up to 45 s for the ENTIRE batch
+   to match count + both role timestamps in raw HTTP/client and committed DB.
+   Require every stored old copy still intact but rejected by the accepted-cache
+   API. Preserve raw/DB/reader/cache evidence per ID. No serialized 30 s wait per
+   tap, no clock rounding, TTL override, cache injection or lowered target count.
+4. Tap 30 real actionable owned rows sequentially. Immediately before every tap,
+   prove intact old persisted content, null accepted cache, exact new canonical
+   key and an unreleased target gate. Owned-row pointerdown releases ONLY that
+   target; every other untapped target remains held. No request captured under
+   an old key may leak across the fence. After current answer paint, require
+   complete projected role/content/timestamp digest equality and retained gate
+   request/release evidence. Exact old-token non-paint and visible current-token
+   two-frame paint criteria are unchanged. All current/empty samples also retain
+   exact pre-tap state and full-content post-paint checks.
+
+Run both sides independently, fresh: three API groups × 50 and twelve unique
+shell/skin/cache timing groups × 30 per side (360 taps per side). Current p95
+<150 ms, empty/stale <1000 ms, health <100 ms, detail/history <200 ms; no budget
+changed. Four ancillary cases per shell/skin are now separately counted:
+long history with offsets `[0,500,1000]`, durable pending-voice/hang/deadline/Retry,
+actual capped/order-correct one-page preload, and no JavaScript exceptions.
+Baseline's missing skeleton/retry is an explicit recorded limitation, never a
+candidate pass; baseline completeness and all unaffected correctness remain
+required. The inherited r11 exact-revision diagnostic supplies the lifecycle
+explanation only. No additional unheld diagnostic consumes another TTL per tap.
+
+`batch-preparation.test.mjs` adds direct harness regressions for intact stale
+counterproof, whole-batch exactness, HTTP/client disagreement, implementation
+caps, and unique matrix completeness. They must run in the parent-queued job,
+not at staging. The immutable rs12 runner verifies all source/archive/tool/deps
+and prior evidence hashes, runs fresh correctness + both full benchmark sides
+and the 24 scope cells, and independently recounts all traces/evidence tuples.
+Only a full fresh matrix may set final acceptance true. Syntax/hash/import
+preflight is explicitly not a browser/test pass. No deployment or activation.
+
 ## r11: diagnose mixed-source revisions before changing the oracle
 
 REUSE the existing synthetic fixture, actual shell helpers, `historyRevision`,

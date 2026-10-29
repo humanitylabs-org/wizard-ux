@@ -12,7 +12,7 @@ REUSE WosMorph, WosChatPower, canonical session truth and the current history ca
 
 ## Entry point
 
-`python3 run.py /srv/work/<staged-root>` runs only through the durable forum queue. The parent handoff includes the exact cwd/argv/key. It verifies the immutable archive, source-file, runner and dependency manifests before any tests. A preflight may check syntax/import resolution/hashes without starting the fixture, running tests or launching Chromium.
+`python3 run.py /srv/work/<staged-root> <manifest-sha256>` runs only through the durable forum queue. The parent handoff includes the exact cwd/argv/key. It verifies the immutable archive, source-file, runner and dependency manifests before any tests. A preflight may check syntax/import resolution/hashes without starting the fixture, running tests or launching Chromium.
 
 ### Queued phases
 
@@ -22,7 +22,7 @@ REUSE WosMorph, WosChatPower, canonical session truth and the current history ca
 4. Baseline and candidate each get an isolated real Service process with 600 synthetic threads and a multi-page long history. Canonical background progress runs every 300 ms, concurrent list polls every 30 ms after each completed list request, and cache self-check every 2 seconds. No live paths or real messages are read. All outgoing upstream writes are refused and counted.
    - 50 local samples EACH for health, detail, history while background work overlaps. Gates: health p95 <100 ms; detail/history p95 <200 ms.
    - Phone-sized touch shell (412×892) and desktop shell (1280×900), both Nebula and Signal through actual Look controls. 30 actual row taps EACH for current/empty/stale cache per shell/skin: 12 timing groups per revision. Current answer paint p95 <150 ms; empty/stale p95 <1000 ms. Cache state is asserted before each tap; text must match the current synthetic answer, not a skeleton or previous reply. Tap/request/response/two-animation-frame visible-answer traces are retained, with p50/p95/max/count.
-   - Multi-page history, pending synthetic voice bubble + stalled transcript + deadline + Retry, and existing-cache Ready preloading in every shell/skin. The seeded pending item is already `sending`; the rig never invokes send/pump/admission.
+   - Multi-page history, pending synthetic voice bubble + stalled transcript + deadline + Retry, existing-cache Ready preloading, and no shell JavaScript errors: four separately counted ancillary cases in every shell/skin. Pending custody is created with the real durable outbox API; its actual browser admission is held and aborted before Service, never allowed to reach an upstream writer.
 5. Real Service + real UX + existing synthetic gateways: main, host-profile, container, restricted, and a synthetic private-policy agent; both shells and skins. Delay optional detail 1 second and assert correctly scoped history starts before it is released, real current answer appears, and routed/private history is excluded from the main persistent cache. These are disposable gateway fixtures, not real restricted containers/confidential-model proof.
 
 ## Evidence / gates
