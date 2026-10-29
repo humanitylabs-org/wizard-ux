@@ -534,3 +534,38 @@ bridge/error/custody diagnostics unchanged. Parent submission retains the scoped
 `sg kvm -c 'exec ...'` wrapper and inherited lease FD; no service changes or
 independent child admission. Recheck **200 GiB reserve plus a full-build budget
 and emulator budget**, not the earlier QA-only 3 GiB budget, before admission.
+
+## Focused notification gate: remove obsolete Debugger dependency
+
+The retained `bfdcff111ba4` focused run (`heavy_3b1d38f434bb468da36cb32e66f37d5d`)
+completed the first delivery and exact focused/visible `genuine.pdf` notification
+snapshot, then failed at `send_once('new') -> Debugger.enable -> ws closed` **before
+any second Send input**. The first non-pausing logpoints were bound; no new
+logpoint receipt was produced for the replacement page. `connect_page` already
+closes its previous Page before constructing a replacement, so source inspection
+does not support an overlapping-owner fix. Retained crash output is empty; the
+record does not prove whether Chromium, the socket/protocol lifecycle, or repeated
+Debugger setup closed the connection. Do not label this a product crash or a
+second delivery failure, or claim the transport root cause is established.
+
+The native hardlink diagnosis is complete and the exact reused APK has 384 JVM
+passes. Remove its old per-session Debugger/logpoint setup from acceptance rather
+than adding reconnects, retries or timeouts. Keep read-only before/after bridge
+and native queue/inode receipts, one trusted Send, exact backend/body/file hashes,
+focused visibility/hit tests, stable before/after snapshots and native/compositor/
+settled images unchanged. Input/transport errors still fail closed without retry.
+`qa_aa_lib.py`, the focused runner, Android and web bytes are unchanged.
+
+`python3 -m unittest tools.test_qa_unified_share_android tools.test_notification_focused tools.test_share_notification_lifecycle -v`
+is controller-only. The new lifecycle seam injects the observed second-setup
+`ws closed` after notification reconnection: old code fails at the retained
+boundary; repaired code performs one Send per scenario without any Debugger
+command. It also enforces close-before-create and no Send on failed pre-read/no
+retry on failed input. This is not a Chromium/native reproduction or visual PASS.
+
+Prepare a fresh immutable sibling QA-only packet and keep the failed key retired.
+Reuse APK `27f094868cee32c1015b3f41f8ada1464f3786691b203c696580851dc58f30d6`
+and the inherited JVM/browser proofs; no build/sign/deploy/publish. Recheck the
+200 GiB reserve plus 3 GiB peak. Parent alone may admit the sealed command and
+must review both scenarios' native, compositor and settled images against the
+exact-body snapshots before calling visual acceptance.

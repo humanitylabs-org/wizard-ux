@@ -75,42 +75,9 @@ class ControllerTest(unittest.TestCase):
                     runner.kvm_preflight()
             closed.assert_called_once_with(77)
 
-    def test_send_logpoints_are_source_bound_nonpausing_and_do_not_replace_bridge(self):
-        rig = runner.Rig.__new__(runner.Rig)
-        rig.source = HERE.parent; rig.page = Mock()
-        with tempfile.TemporaryDirectory() as td:
-            rig.out = Path(td)
-            rig.page.call.return_value = {'result': {'locations': [{'lineNumber': 1}]}}
-            rig.install_send_observation()
-            calls = rig.page.call.call_args_list
-            self.assertEqual([x.args[0] for x in calls], ['Debugger.enable'] + ['Debugger.setBreakpointByUrl'] * 3)
-            for call in calls[1:]:
-                self.assertTrue(call.kwargs['condition'].endswith(',false)'))
-                for forbidden in ('postMessage(', 'shareRequest(', 'WosDevicePort.call(', 'reject(', 'resolve(', '.click(', 'preventDefault('):
-                    self.assertNotIn(forbidden, call.kwargs['condition'])
-            receipt = json.loads((rig.out / 'send-observation-logpoints.json').read_text())
-            self.assertEqual(len(receipt), 3)
-            for row in receipt:
-                self.assertEqual(row['source_sha256'], runner.sha(rig.source / row['source']))
-            # A second send resets observations, never duplicates breakpoint IDs.
-            rig.install_send_observation()
-            self.assertEqual(rig.page.call.call_count, 4)
-            self.assertEqual(rig.page.ev.call_count, 2)
-
-    def test_unbound_send_logpoint_fails_before_any_send(self):
-        rig = runner.Rig.__new__(runner.Rig)
-        rig.source = HERE.parent; rig.page = Mock(); rig.tap = Mock()
-        with tempfile.TemporaryDirectory() as td:
-            rig.out = Path(td)
-            rig.page.call.return_value = {'result': {}}
-            with self.assertRaisesRegex(RuntimeError, 'logpoint did not bind'):
-                rig.send_once('existing-delivery')
-            rig.tap.assert_not_called()
-            self.assertTrue((rig.out / 'send-observation-logpoints.json').exists())
-
     def test_send_failure_observes_custody_without_retry_or_extended_timeout(self):
         rig = runner.Rig.__new__(runner.Rig)
-        rig.install_send_observation = Mock(); rig.observe_send_boundary = Mock()
+        rig.observe_send_boundary = Mock()
         rig.tap = Mock(); rig.sheet = Mock(return_value=True)
         def fail(predicate, seconds):
             self.assertEqual(seconds, 5)

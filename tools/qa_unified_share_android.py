@@ -769,42 +769,10 @@ class Rig:
         snapshot = self.sx('run-as ' + PKG + ' sh -c \'for f in files/share/*/meta.json files/share-out/*/item.json; do if [ -f "$f" ]; then printf "\\n%s\\n" "$f"; cat "$f"; fi; done; for f in files/share/*/*.bin files/share-out/*/*.bin; do if [ -f "$f" ]; then stat -c "%n %s %i %h" "$f"; fi; done\'')
         (self.out / (name + '-native-custody.txt')).write_text(snapshot)
 
-    def install_send_observation(self):
-        """CDP logpoints read real locals. No port/handler replacement, sends or paused execution."""
-        self.page.ev('window.__shareBoundaryObservation={requests:[],replies:[],errors:[]};true')
-        if getattr(self, 'send_observer_page', None) is self.page:
-            return
-        enabled = self.page.call('Debugger.enable')
-        if 'result' not in enabled or 'error' in enabled:
-            raise RuntimeError('cannot enable passive Send diagnostics')
-        points = [
-            ('web/core/device-port.js', '      try { p.postMessage(',
-             "requests.push({id,method,params})"),
-            ('web/core/device-port.js', '    if (m.ok)',
-             "replies.push({id:m.id,ok:m.ok,error:m.error,result:m.result})"),
-            ('web/core/share-wizard.js', "      w.toast?.('!', 'Couldn’t send",
-             "errors.push({name:_.name,message:_.message,stack:_.stack})"),
-        ]
-        receipts = []
-        for relative, marker, record in points:
-            lines = (self.source / relative).read_text().splitlines()
-            matches = [n for n, line in enumerate(lines) if line.startswith(marker)]
-            if len(matches) != 1:
-                raise RuntimeError('ambiguous Send observation point: ' + relative)
-            # A false conditional breakpoint is a non-pausing logpoint. Only QA-owned
-            # arrays change: request/reply values, handlers and Promise outcomes do not.
-            response = self.page.call('Debugger.setBreakpointByUrl',
-                urlRegex='/' + relative.removeprefix('web/').replace('.', '[.]') + r'(?:[?].*)?$',
-                lineNumber=matches[0], condition='(window.__shareBoundaryObservation.' + record + ',false)')
-            receipts.append({'source':relative, 'source_sha256':sha(self.source / relative),
-                             'line':matches[0], 'response':response})
-            (self.out / 'send-observation-logpoints.json').write_text(json.dumps(receipts, indent=2) + '\n')
-            if 'error' in response or not response.get('result', {}).get('locations'):
-                raise RuntimeError('Send logpoint did not bind: ' + relative)
-        self.send_observer_page = self.page
-
     def send_once(self, name):
-        self.install_send_observation()
+        # The native hardlink diagnosis is complete. Acceptance must not enable
+        # Debugger/logpoints on each replacement CDP session before real input.
+        # Keep read-only queue/bridge receipts and the single trusted tap below.
         self.observe_send_boundary(name + '-before')
         failure = None
         try:
