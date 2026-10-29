@@ -37,9 +37,10 @@ for (const agent of ['synthetic-profile','synthetic-container','synthetic-restri
   assert.equal(h.L.cachedMessages(row.id),null);
   assert.equal(h.reads.filter(u=>u.includes('view=detail')).length,0);
 });
-test('same-thread requests join; content revision rejects a newer owner send but metadata does not invalidate',async()=>{
+test('one open joins a warm read; separate opens keep independent generations and content invalidation',async()=>{
   const h=setup(); await h.poll();
-  await Promise.all([h.L.messages(row.id),h.L.messages(row.id),h.L.messages(row.id)]);
+  h.L.warm(row.id);
+  await h.L.messages(row.id);
   assert.equal(h.reads.filter(u=>u.includes('/messages?')).length,1);
   assert.equal(h.L.cachedMessages(row.id).at(-1).content,'SYNTHETIC_CURRENT_ANSWER');
   h.L.sessions[0].activityAt='metadata-only';
