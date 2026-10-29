@@ -6,6 +6,7 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.Log;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -19,6 +20,7 @@ public class SenderActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         renderCase();
+        recordIntent("onCreate");
     }
 
     @Override protected void onNewIntent(Intent intent) {
@@ -27,6 +29,17 @@ public class SenderActivity extends Activity {
         // and the button's captured payload must belong to the newest Intent.
         setIntent(intent);
         renderCase();
+        recordIntent("onNewIntent");
+    }
+
+    private void recordIntent(String event) {
+        // Only allowlisted synthetic metadata, never arbitrary Intent contents.
+        String mode = getIntent().getStringExtra("fixture_case");
+        String launch = getIntent().getStringExtra("fixture_launch");
+        if (("boilerplate".equals(mode) || "genuine".equals(mode)) &&
+                launch != null && launch.matches("[0-9a-f]{32}")) {
+            Log.i("UnifiedShareSender", "event=" + event + " case=" + mode + " launch=" + launch);
+        }
     }
 
     private void renderCase() {

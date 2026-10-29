@@ -198,7 +198,7 @@ Controller replay proves the bounds/refusals and passive code contract, not nati
 acceptance. Parent alone submits the frozen full-acceptance spec; it stops early
 on missing delivery. Preserve every earlier log, screenshot, APK and JUnit XML.
 
-## Warm sender-case regression (prepared; native rerun pending)
+## Warm sender-case regression (historical; subsequent native runs failed)
 
 The `6d830a01a92d` run passed external boilerplate, private agent/chat scope,
 outside cancellation with no backend write, and native Back/Cancel. Its
@@ -250,7 +250,7 @@ alone admits the frozen forum/heavy spec once. Record the executed failed
 `6d830a01a92d` job in the durable latest pointer so a schedule cannot replay it.
 Recheck free space minus the 3 GiB job budget exceeds the 200 GiB reserve.
 
-## UIAutomator freshness repair after executed `3026d7a33268`
+## UIAutomator freshness repair after executed `3026d7a33268` (also failed at `bed4183ad145`)
 
 The failed run `heavy_017efda3e6794a9d8b6fb3f1ad3a5a0b` reached the
 `existing-delivery` pre-tap check and requested genuine but observed boilerplate.
@@ -292,6 +292,63 @@ sibling `--reuse-build` stage reruns the existing native phases under parent
 forum/heavy admission only. Mark `3026d7a33268` executed-failed/do-not-resubmit in
 the local and remote latest pointers; preserve its exact failure proof. Check
 free space minus 3 GiB still exceeds 200 GiB. No rebuild/sign/deploy/merge.
+
+## Explicit sender Intent delivery after executed `bed4183ad145`
+
+`heavy_a490e9385d9144ef9cda980dc025e291` executed and failed before the
+genuine source tap: requested `genuine`, actual native title `x.pdf`, including
+fresh valid dumps throughout the existing 30-second bound. Its worker log SHA256
+is `424e5c45eac64268c288968f80d71ac05b3aadfb288cde171bbcad75e01b9e7c`.
+Passed file/comment display, private agent/chat scope, outside cancel and native
+Back remain preserved. Delivery/recovery/notification acceptance is still open.
+
+**Constant correction:** Android 15 AOSP
+[ActivityManager.java](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android15-release/core/java/android/app/ActivityManager.java)
+defines `START_TASK_TO_FRONT = 2` and `START_DELIVERED_TO_TOP = 3` (base success
+code is zero). The recorded `result code=3` and shell "delivered" warning are
+consistent with framework delivery, **not** proof of task-front-only behavior.
+The manifest has no `launchMode` override (default standard), and the staged
+Activity and compiled DEX already contain `onNewIntent` and `setIntent`.
+Consequently "the callback was never invoked" is unconfirmed; prior evidence
+proves stale rendered fixture state, not the precise native mechanism.
+
+The minimal fixture command now explicitly uses
+`am start -W --activity-clear-top --activity-single-top -n
+qa.unifiedshare.sender/.SenderActivity --es fixture_case <case> --es
+fixture_launch <32-lowercase-hex-id>`.
+[Intent.java](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android15-release/core/java/android/content/Intent.java)
+documents that CLEAR_TOP alone can recreate a standard Activity, while combining
+it with SINGLE_TOP delivers to its current instance; its shell parser maps both
+literal options to those flags. This defines the fixture's launch semantics; it
+does not retroactively establish the old failure's cause. It neither clears the
+task nor force-stops Wizard to repair the sender (the existing deliberate
+process-death upload recovery test is unchanged).
+
+After rendering, `onCreate`/`onNewIntent` log only an allowlisted synthetic case,
+event and launch ID read from the **stored** `getIntent()`. The pre-tap gate
+requires one exact receipt for the current launch (`onCreate` cold,
+`onNewIntent` warm) plus the requested visible case and scoped native button.
+Old/missing/duplicate receipts, wrong lifecycle events and wrong cases
+cannot authorize a tap, even when the shell ACK or old UI looks right. The
+existing deadline, fresh XML files, screenshots, activity dumps, trusted touch,
+staged payload and independent sender hash checks remain intact. No extra sleep,
+relaunch, repeated tap, product/manifest change or wider acceptance bypass.
+
+Controller transport regressions exercise cold boilerplate → warm genuine →
+warm boilerplate through the real command builder, receipt parser and share
+controller, plus missing flags, stale same-case receipts and wrong-case refusal.
+These are **controller seam evidence**, not Android proof. The admitted worker
+also replays the actual Java Activity with log stubs, explicitly labelled
+`PASS_HOST_JVM_SEAM_ONLY`; it remains distinct from fresh real native receipts
+and receiver metadata/hash proof in all the original emulator cases.
+
+Stage a fresh immutable sibling with the same `--reuse-build` protocol and APK
+`0dc7751eaff2393b6939c1b1ee58feab8df670cb95a926ec9fd9a7abd51e15fd` plus
+381 unchanged JUnit passes. Preserve all previous attempts and mark `bed4183ad145`
+executed-failed/do-not-resubmit in the latest pointer. Recheck the 200 GiB reserve
+after the 3 GiB budget. Only the parent admits this stage; no child execution,
+signing, release or merge. Native success and the old failure's exact mechanism
+remain unproven until those new receipts execute.
 
 ## Real device phases and evidence
 

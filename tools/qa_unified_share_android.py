@@ -280,6 +280,26 @@ def sender_case(xml):
     return cases[0] if len(cases) == 1 else None
 
 
+def sender_launch_command(mode, launch_id):
+    if mode not in ('boilerplate', 'genuine') or not re.fullmatch('[0-9a-f]{32}', launch_id):
+        raise ValueError('invalid synthetic sender launch')
+    # AOSP Intent.java: CLEAR_TOP + SINGLE_TOP delivers to the existing instance
+    # even for the fixture manifest's default standard launchMode. Not CLEAR_TASK.
+    return ('am start -W --activity-clear-top --activity-single-top -n ' + SENDER +
+            '/.SenderActivity --es fixture_case ' + mode + ' --es fixture_launch ' + launch_id)
+
+
+def sender_intent_receipt(log, launch_id):
+    if not re.fullmatch('[0-9a-f]{32}', launch_id):
+        raise ValueError('invalid synthetic launch ID')
+    rows = []
+    for line in log.splitlines():
+        m = re.fullmatch(r'event=(onCreate|onNewIntent) case=(boilerplate|genuine) launch=([0-9a-f]{32})', line)
+        if m and m[3] == launch_id:
+            rows.append({'event': m[1], 'case': m[2], 'launch_id': m[3]})
+    return rows[0] if len(rows) == 1 else None
+
+
 def sender_lifecycle_sources():
     """Host-JVM seam replay of the REAL fixture Activity, not Android proof.
 
@@ -288,6 +308,9 @@ def sender_lifecycle_sources():
     """
     return {
         'android/os/Bundle.java': 'package android.os; public class Bundle {}',
+        'android/util/Log.java': '''package android.util; public class Log {
+          public static String last; public static int i(String tag,String text){
+          if(!"UnifiedShareSender".equals(tag))throw new AssertionError("log tag");last=text;return 0;} }''',
         'android/net/Uri.java': '''package android.net; public class Uri {
           final String value; private Uri(String v){value=v;}
           public static Uri parse(String v){return new Uri(v);}
@@ -335,10 +358,14 @@ def sender_lifecycle_sources():
           import android.content.*; import android.widget.*;
           public class LifecycleReplay {
           static void check(boolean ok,String why){if(!ok)throw new AssertionError(why);}
-          static Intent intent(String mode){return new Intent().putExtra("fixture_case",mode);}
+          static int launches=0;
+          static Intent intent(String mode){return new Intent().putExtra("fixture_case",mode)
+            .putExtra("fixture_launch",String.format("%032x",++launches));}
           static void verify(SenderActivity a,Intent current,String mode){
             boolean g="genuine".equals(mode); String name=g?"genuine.pdf":"x.pdf";
             check(a.getIntent()==current,"getIntent not replaced: "+mode);
+            check(android.util.Log.last.equals("event="+(launches==1?"onCreate":"onNewIntent")+
+              " case="+mode+" launch="+current.getStringExtra("fixture_launch")),"lifecycle receipt");
             TextView title=(TextView)a.content.children.get(0);
             check(title.text.equals("Synthetic external PDF sender\n"+name+"\nNo owner files or accounts"),"stale rendered title: "+mode);
             ((Button)a.content.children.get(1)).performClick();
@@ -598,6 +625,10 @@ class Rig:
                 time.sleep(min(.4, remaining))
         raise RuntimeError('fresh UIAutomator snapshot unavailable: ' + str(last))
 
+    def read_sender_intent(self, launch_id, seconds):
+        log = self.sx("logcat -d -v raw -s UnifiedShareSender:I '*:S'", timeout=min(5, seconds))
+        return sender_intent_receipt(log, launch_id)
+
     def wait_sender_case(self, mode, attempt, label, seconds=30):
         # A present button is not domain acknowledgment. Observe only; never relaunch/tap.
         deadline = time.monotonic() + seconds
@@ -612,7 +643,12 @@ class Rig:
                     attempt['actual_case'] = actual
                     observation = {'actual_case': actual, 'snapshot': getattr(self, 'last_ui_snapshot', None)}
                     attempt['case_observations'].append(observation)
-                    if actual == mode and native_sender_bounds(current):
+                    remaining = deadline - time.monotonic()
+                    receipt = self.read_sender_intent(attempt['launch_id'], remaining) if remaining > 0 else None
+                    attempt['native_intent'] = observation['native_intent'] = receipt
+                    expected_event = 'onCreate' if not self.report['external_intents'] else 'onNewIntent'
+                    if (actual == mode and receipt and receipt['case'] == mode and
+                            receipt['event'] == expected_event and native_sender_bounds(current)):
                         attempt['status'] = 'PRE_TAP'
                         return current
                 except (OSError, ValueError, RuntimeError) as exc:
@@ -849,14 +885,17 @@ class Rig:
             raise ValueError('unknown sender case: ' + mode)
         index = len(self.report['external_intents'])
         label = 'sender-%d-%s' % (index, mode)
-        attempt: dict[str, Any] = {'requested_case': mode, 'status': 'LAUNCHING'}
+        attempt: dict[str, Any] = {'requested_case': mode, 'launch_id': uuid.uuid4().hex, 'status': 'LAUNCHING'}
         self.report.setdefault('sender_attempts', []).append(attempt)
         self.save()
-        attempt['launch_output'] = self.sx('am start -W -n ' + SENDER + '/.SenderActivity --es fixture_case ' + mode)
+        command = sender_launch_command(mode, attempt['launch_id'])
+        attempt['launch_command'] = command
+        attempt['launch_output'] = self.sx(command)
         # Wait for requested rendered case AND the native button, not merely a
         # launch ACK or a button belonging to the previous case.
         xml = self.wait_sender_case(mode, attempt, label)
         assert attempt['actual_case'] == mode, 'sender case mismatch: ' + json.dumps(attempt)
+        assert attempt['native_intent']['case'] == mode and attempt['native_intent']['launch_id'] == attempt['launch_id']
         xy = native_sender_bounds(xml)
         assert xy is not None
         self.sx('input tap %d %d' % tuple(xy))

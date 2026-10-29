@@ -24,6 +24,13 @@ SPEC.loader.exec_module(runner)
 
 
 class ControllerTest(unittest.TestCase):
+    def mock_sender_receipt(self, rig):
+        # UI/hash regressions isolate the independently tested native receipt seam.
+        rig.read_sender_intent = Mock(side_effect=lambda launch_id, seconds: {
+            'event': 'onCreate' if not rig.report['external_intents'] else 'onNewIntent',
+            'case': rig.report['sender_attempts'][-1]['requested_case'],
+            'launch_id': launch_id})
+
     def test_post_tap_domain_wait_accepts_delayed_change_without_repeating_input(self):
         rig = runner.Rig.__new__(runner.Rig)
         rig.page = Mock(); rig.page.ev.side_effect = [False, False, True]
@@ -424,7 +431,7 @@ class ControllerTest(unittest.TestCase):
     def test_sender_waits_for_delayed_requested_case_without_relaunch_or_repeat_tap(self):
         with tempfile.TemporaryDirectory(prefix='sender-delayed-', dir=os.environ['TMPDIR']) as d:
             rig = runner.Rig.__new__(runner.Rig)
-            rig.out = Path(d); rig.save = Mock(); rig.report = {'external_intents': []}
+            rig.out = Path(d); rig.save = Mock(); rig.report = {'external_intents': []}; self.mock_sender_receipt(rig)
             rig.sx = Mock(return_value='reused activity'); rig.screenshot = Mock()
             rig.ui = Mock(side_effect=[self.SENDER_XML, self.SENDER_XML,
                                       self.SENDER_XML.replace('x.pdf', 'genuine.pdf')])
@@ -444,10 +451,11 @@ class ControllerTest(unittest.TestCase):
             with self.subTest(outcome=type(outcome).__name__), \
                     tempfile.TemporaryDirectory(prefix='sender-refuse-', dir=os.environ['TMPDIR']) as d:
                 rig = runner.Rig.__new__(runner.Rig)
-                rig.out = Path(d); rig.save = Mock(); rig.report = {'external_intents': []}
+                rig.out = Path(d); rig.save = Mock(); rig.report = {'external_intents': []}; self.mock_sender_receipt(rig)
                 rig.sx = Mock(return_value='reused activity'); rig.screenshot = Mock(); rig.connect_page = Mock()
                 rig.ui = Mock(side_effect=outcome) if isinstance(outcome, Exception) else Mock(return_value=outcome)
-                with patch.object(runner.time, 'monotonic', side_effect=[0, 0, .4, .4, 30, 30]), \
+                times = [0, 0, .1, .4, .4, .5, 30, 30] if isinstance(outcome, str) else [0, 0, .4, .4, 30, 30]
+                with patch.object(runner.time, 'monotonic', side_effect=times), \
                         patch.object(runner.time, 'sleep'), \
                         self.assertRaisesRegex(RuntimeError, 'sender case deadline'):
                     rig.share('genuine')
@@ -463,6 +471,7 @@ class ControllerTest(unittest.TestCase):
             rig = runner.Rig.__new__(runner.Rig)
             rig.out = Path(d); rig.save = Mock()
             rig.report = {'external_intents': []}
+            self.mock_sender_receipt(rig)
             rig.sx = Mock(return_value='delivered to existing top-most instance')
             rig.screenshot = Mock(); rig.ui = Mock(return_value=self.SENDER_XML)
             rig.connect_page = Mock(side_effect=RuntimeError('stop after native sender tap'))
@@ -470,7 +479,7 @@ class ControllerTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'stop after native sender tap'):
                 rig.share('boilerplate')
             self.assertEqual(rig.sx.call_args_list[0].args,
-                             ('am start -W -n qa.unifiedshare.sender/.SenderActivity --es fixture_case boilerplate',))
+                             (runner.sender_launch_command('boilerplate', rig.report['sender_attempts'][0]['launch_id']),))
             self.assertEqual(rig.sx.call_args_list[1].args, ('input tap 540 350',))
             self.assertEqual(json.loads((rig.out / 'sender-0-boilerplate-case.json').read_text())['actual_case'], 'boilerplate')
             rig.tap_text.assert_not_called()
@@ -489,7 +498,7 @@ class ControllerTest(unittest.TestCase):
     def test_sender_case_transition_uses_actual_ui_and_refuses_stale_before_tap(self):
         with tempfile.TemporaryDirectory(prefix='sender-transition-', dir=os.environ['TMPDIR']) as d:
             rig = runner.Rig.__new__(runner.Rig)
-            rig.out = Path(d); rig.save = Mock(); rig.report = {'external_intents': []}
+            rig.out = Path(d); rig.save = Mock(); rig.report = {'external_intents': []}; self.mock_sender_receipt(rig)
             rig.screenshot = Mock(); rig.ui = Mock()
             rig.connect_page = Mock(side_effect=RuntimeError('after real tap seam'))
             # Pure controller replay, no native evidence: initial case, forward,
@@ -504,7 +513,7 @@ class ControllerTest(unittest.TestCase):
                     self.assertEqual(rig.sx.call_count, 2)
                     rig.report['external_intents'].append({'case':requested})
                 else:
-                    with patch.object(runner.time, 'monotonic', side_effect=[0, 0, 30, 30]), \
+                    with patch.object(runner.time, 'monotonic', side_effect=[0, 0, .1, 30, 30]), \
                             patch.object(runner.time, 'sleep'), \
                             self.assertRaisesRegex(RuntimeError, 'sender case deadline'):
                         rig.share(requested)
@@ -519,7 +528,7 @@ class ControllerTest(unittest.TestCase):
     def test_staged_payload_is_saved_before_wrong_subject_refusal(self):
         with tempfile.TemporaryDirectory(prefix='sender-staged-', dir=os.environ['TMPDIR']) as d:
             rig = runner.Rig.__new__(runner.Rig)
-            rig.out = Path(d); rig.save = Mock(); rig.report = {'external_intents': []}
+            rig.out = Path(d); rig.save = Mock(); rig.report = {'external_intents': []}; self.mock_sender_receipt(rig)
             rig.ui = Mock(return_value=self.SENDER_XML.replace('x.pdf','genuine.pdf'))
             rig.screenshot = Mock(); rig.connect_page = Mock(); rig.sheet = Mock(return_value=True)
             rig.page = Mock(); rig.page.ev.return_value = True
@@ -531,6 +540,76 @@ class ControllerTest(unittest.TestCase):
             self.assertEqual(rig.report['external_intents'], [])
             self.assertEqual(rig.report['sender_attempts'][0]['staged_subject'], 'x.pdf')
             self.assertEqual(rig.sx.call_count, 3)  # no hash or send after failure
+
+    def test_sender_launch_flags_and_receipt_parser_contract(self):
+        token = 'a' * 32
+        command = runner.sender_launch_command('genuine', token)
+        self.assertEqual(command, 'am start -W --activity-clear-top --activity-single-top -n '
+                         'qa.unifiedshare.sender/.SenderActivity --es fixture_case genuine --es fixture_launch ' + token)
+        for mode, launch in [('wrong', token), ('genuine', 'x'), ('genuine', token + ';id')]:
+            with self.assertRaises(ValueError): runner.sender_launch_command(mode, launch)
+        line = 'event=onNewIntent case=genuine launch=' + token
+        self.assertEqual(runner.sender_intent_receipt(line, token),
+                         {'event':'onNewIntent','case':'genuine','launch_id':token})
+        for log in ('', line.replace(token, 'b'*32), line+'\n'+line,
+                    line.replace('onNewIntent','onResume'), line+' extra=owner-data'):
+            self.assertIsNone(runner.sender_intent_receipt(log, token))
+
+    def test_explicit_sender_launch_transitions_through_real_controller_and_receipt_parser(self):
+        # Controller transport replay, NOT Android execution. Models standard
+        # root task bring-forward without claiming that was the prior native cause.
+        with tempfile.TemporaryDirectory(prefix='sender-flags-', dir=os.environ['TMPDIR']) as d:
+            rig = runner.Rig.__new__(runner.Rig); rig.out = Path(d)
+            rig.save = Mock(); rig.screenshot = Mock(); rig.report = {'external_intents': []}
+            rig.connect_page = Mock(side_effect=RuntimeError('after verified native tap'))
+            state = {'case': None, 'log': '', 'recreate': False}; commands = []
+            def transport(command, **kwargs):
+                commands.append(command)
+                if command.startswith('am start '):
+                    parts = command.split(); mode = parts[parts.index('fixture_case')+1]
+                    launch = parts[parts.index('fixture_launch')+1]
+                    if state['case'] is None or ('--activity-clear-top' in parts and '--activity-single-top' in parts):
+                        event = 'onCreate' if state['case'] is None or state['recreate'] else 'onNewIntent'
+                        state.update(case=mode, log=f'event={event} case={mode} launch={launch}')
+                    return 'Warning: intent has been delivered to currently running top-most instance.'
+                if command.startswith('logcat '): return state['log']
+                self.assertEqual(command, 'input tap 540 350')
+                return ''
+            rig.sx = Mock(side_effect=transport)
+            rig.ui = Mock(side_effect=lambda **k: self.SENDER_XML.replace('x.pdf','genuine.pdf')
+                          if state['case'] == 'genuine' else self.SENDER_XML)
+            for mode, event in [('boilerplate','onCreate'), ('genuine','onNewIntent'), ('boilerplate','onNewIntent')]:
+                with self.assertRaisesRegex(RuntimeError, 'after verified native tap'): rig.share(mode)
+                attempt = rig.report['sender_attempts'][-1]
+                self.assertEqual(attempt['native_intent'], {'event':event,'case':mode,'launch_id':attempt['launch_id']})
+                self.assertEqual(attempt['actual_case'], mode)
+                rig.report['external_intents'].append({'case': mode})
+            # A matching UI and misleading shell ACK are insufficient: an old
+            # receipt (even the same case) cannot authorize a new launch's tap.
+            before = commands.count('input tap 540 350')
+            real_command = runner.sender_launch_command
+            for broken in ('missing_flags', 'wrong_event', 'wrong_case'):
+                state['recreate'] = broken == 'wrong_event'
+                def broken_launch(mode, token):
+                    if broken == 'missing_flags':
+                        return real_command(mode, token).replace('--activity-clear-top --activity-single-top ', '')
+                    return real_command('genuine' if broken == 'wrong_case' else mode, token)
+                with patch.object(runner, 'sender_launch_command', side_effect=broken_launch), \
+                        patch.object(runner.time, 'monotonic', side_effect=[0,0,.1,30,30]), \
+                        patch.object(runner.time, 'sleep'), self.assertRaisesRegex(RuntimeError, 'sender case deadline'):
+                    rig.share('boilerplate')
+                self.assertEqual(commands.count('input tap 540 350'), before)
+            self.assertEqual(rig.connect_page.call_count, 3)
+
+    def test_lifecycle_receipt_reads_stored_intent_and_logs_only_synthetic_allowlist(self):
+        source = (HERE/'unified-share-sender/SenderActivity.java').read_text()
+        body = source.split('private void recordIntent(String event)',1)[1].split('private void renderCase()',1)[0]
+        self.assertIn('getIntent().getStringExtra("fixture_case")', body)
+        self.assertIn('getIntent().getStringExtra("fixture_launch")', body)
+        self.assertIn('launch.matches("[0-9a-f]{32}")', body)
+        self.assertIn('"boilerplate".equals(mode) || "genuine".equals(mode)', body)
+        self.assertNotIn('toString()', body)
+        self.assertIn('android/util/Log.java', runner.sender_lifecycle_sources())
 
     def test_lifecycle_replay_stages_real_activity_and_bounded_java_commands_only(self):
         # Mock command transport only: never compile on the VPS. The parent's
@@ -565,6 +644,7 @@ class ControllerTest(unittest.TestCase):
             for source_hash in ('a' * 64, 'b' * 64):
                 rig = runner.Rig.__new__(runner.Rig)
                 rig.report = {'external_intents': []}; rig.out = Path(d)
+                self.mock_sender_receipt(rig)
                 rig.screenshot = Mock(); rig.ui = Mock(return_value=self.SENDER_XML)
                 rig.connect_page = Mock(); rig.sheet = Mock(return_value=True); rig.save = Mock()
                 rig.page = Mock(); rig.page.ev.return_value = True
