@@ -49,7 +49,8 @@ try {
      const id=`wizard_speed_${n}`;
      const history=JSON.parse(await get(`/wizard/hermes/api/sessions/${id}/messages?order=oldest&limit=500&include_compacted=true&view=wizard`));
      const marker=(history.data||history.messages).at(-1).content.split('\n')[0];
-     if(n>1||state!=='current')await backToList(page,wid,shell);
+     const navigation=n>1||state!=='current'?await backToList(page,wid,shell):{contract:'initial-owned-list'};
+     await expandList(page,wid,shell);
      await page.evaluate(async({id,state})=>{if(state==='empty')await WizLive.forgetMessages(id)}, {id,state});
      if(state!=='empty')await page.evaluate(async id=>{await WizLive.sessionInfo(id);await WizLive.messages(id)},id);
      let expected=marker;
@@ -68,6 +69,7 @@ try {
      // make a cold sample pass as warm.
      if(state==='empty')assert.equal(await page.evaluate(id=>!!WizLive.cachedMessages(id),id),false);
      if(state==='current')assert.equal(await page.evaluate(id=>!!WizLive.cachedMessages(id),id),true);
+     await expandList(page,wid,shell); // canonical refresh may have re-rendered the list
      const row=rowFor(page,wid,id),geometry=await actionable(row);
      await armPaint(page,wid,expected,state==='stale'?marker:'');
      await page.evaluate(()=>{window.__speedRequests=[]});
@@ -76,7 +78,14 @@ try {
      const trace=await page.evaluate(()=>({tap:window.__speed.start,ms:window.__speed.first,expected:window.__speed.expected,stale:window.__speed.stale,requests:window.__speedRequests}));
      assert.ok(trace.tap>0,'the measured row received actual pointer input');
      assert.equal(trace.stale,false,'a stale cached answer never paints in this open');
-     trace.geometry=geometry;samples.push(trace.ms);
+     const header=await page.locator(`[data-win="${wid}"] .ch-thread .ch-head:visible`).evaluate(e=>{
+      const b=e.getBoundingClientRect(),x=b.x+b.width/2,y=b.y+b.height/2;
+      return {text:e.innerText,x,y,width:b.width,height:b.height,hit:e.contains(document.elementFromPoint(x,y)),backVisible:[...e.querySelectorAll('[data-chback]')].some(b=>b.getClientRects().length>0)};
+     });
+     assert.ok(header.width>0&&header.height>0&&header.hit,'owned current thread header remains on screen');
+     assert.equal(header.backVisible,shell==='phone','phone Back / wide desktop persistent-list contract');
+     assert.equal(await page.evaluate(wid=>(window.__wos||window.__wux).wins[wid]?.thread,wid),id,'current header belongs to opened thread');
+     trace.geometry=geometry;trace.navigation=navigation;trace.header=header;samples.push(trace.ms);
      appendFileSync(join(out,'tap-traces.jsonl'),JSON.stringify({shell,skin,state,n,id,...trace})+'\n');
      if(n===1){await page.screenshot({path:join(out,`${shell}-${skin}-${state}.png`)});}
     }

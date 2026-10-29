@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { installPaintProbe } from './paint-probe.mjs';
 
 export async function verifyServingBytes(origin,ux,headers={}) {
   const receipts=[];
@@ -38,6 +39,10 @@ export async function openList(page, origin, shell, agent='hermes') {
   await page.goto(`${origin}/wizard-os-home/${shell==='desktop'?'desktop.html':''}?shell=${shell}`);
   await page.waitForFunction(shell => window.WizLive?.ok && document.documentElement.dataset.shell===shell &&
     (shell==='phone' ? !!window.__wos : !!window.__wux), shell);
+  // A fresh context joins the disposable box's workspaces after 300 ms. Wait
+  // for that real join BEFORE opening focus/retaining a window id; it may replace
+  // the starter window with a previous cell's synced Chats. Never disable sync.
+  await page.waitForFunction(()=>window.WosWorkspaceSync?.current?.ok===true);
   const actual=await page.evaluate(()=>({shell:document.documentElement.dataset.shell,selected:window.WIZ_SHELL}));
   assert.deepEqual(actual,{shell,selected:shell},'the requested shell must actually serve this cell');
   const ok=await page.evaluate(async id=>{
@@ -78,6 +83,12 @@ export async function input(row,shell) {
 export async function expandList(page,wid,shell) {
   // Real section paging, before timing. A 600-row fixture is not fully rendered
   // until Show all is used; row 30/400 must not depend on the initial page size.
+  // A sync/focus re-render can replace this pane and reset its per-pane paging.
+  // Open only fixture-relevant sections using their real buttons, then Show all.
+  for(const key of ['ready','working','errors']){
+    const toggle=page.locator(`[data-win="${wid}"] [data-sectoggle="${key}"][aria-expanded="false"]:visible`);
+    if(await toggle.count()){await actionable(toggle);await input(toggle,shell);}
+  }
   for(let n=0;n<10;n++){
     const more=page.locator(`[data-win="${wid}"] [data-secmore]:visible`).first();
     if(!await more.count())return;
@@ -86,8 +97,19 @@ export async function expandList(page,wid,shell) {
   assert.equal(await page.locator(`[data-win="${wid}"] [data-secmore]:visible`).count(),0,'bounded real Show all preparation');
 }
 export async function backToList(page,wid,shell) {
-  const back=page.locator(`[data-win="${wid}"] [data-chback]:visible`).last();
-  await actionable(back);await input(back,shell);
+  const pane=page.locator(`[data-win="${wid}"]`);
+  const splitList=pane.locator('.dchats .pane-list:visible');
+  if(shell==='desktop'&&await splitList.count()){
+    // Wide desktop has no Back: its same owned list remains beside the thread.
+    // The CSS switches back to the normal Back contract below 620px.
+    const geometry=await actionable(splitList.locator('[data-chsearch]'));
+    assert.equal(await pane.locator('.pane-main [data-chback]:visible').count(),0,'split desktop Back is intentionally hidden');
+    return {contract:'persistent-split-list',geometry};
+  }
+  const back=pane.locator('[data-chback]:visible').last();
+  const geometry=await actionable(back);await input(back,shell);
+  await pane.locator('.ch-list:visible').waitFor();
+  return {contract:'visible-back',geometry};
 }
 export async function diagnostics(page) {
   return page.evaluate(()=>{
@@ -103,35 +125,5 @@ export async function diagnostics(page) {
 }
 
 export async function armPaint(page,wid,expected,staleMarker='') {
-  // Observe a real rendered sentinel in the owned window, not a cache, title,
-  // hidden/off-desk transcript or arbitrary textContent. A frame gives layout and
-  // the browser's paint opportunity before accepting a visible Range.
-  await page.evaluate(({wid,expected,staleMarker})=>{
-    window.__speed={start:0,expected,wid,first:null,stale:false,staleMarker};
-    window.__speedObserver?.disconnect();cancelAnimationFrame(window.__speedFrame||0);
-    const check=()=>{
-      const s=window.__speed;if(!s.start||s.first!==null)return;
-      const root=document.querySelector(`[data-win="${s.wid}"] .ch-msgs`);if(!root)return;
-      const answer=[...root.querySelectorAll('.msg.a')].at(-1);if(!answer)return;
-      const clip=root.getBoundingClientRect(),walker=document.createTreeWalker(answer,NodeFilter.SHOW_TEXT);
-      let node;
-      while(node=walker.nextNode()){
-        const text=node.textContent||'',at=text.indexOf(s.expected);
-        if(s.staleMarker&&text.includes(s.staleMarker))s.stale=true;
-        if(at<0)continue;
-        const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+s.expected.length);
-        for(const r of range.getClientRects()){
-          const x=Math.max(0,clip.left,r.left)+1,y=Math.max(0,clip.top,r.top)+1;
-          if(x>=Math.min(innerWidth,clip.right,r.right)||y>=Math.min(innerHeight,clip.bottom,r.bottom))continue;
-          const style=getComputedStyle(node.parentElement);
-          if(style.visibility!=='hidden'&&style.display!=='none'&&root.contains(document.elementFromPoint(x,y))){
-            if(s.visibleFrame){s.first=performance.now()-s.start;return;}
-            s.visibleFrame=true;return;
-          }
-        }
-      }
-    };
-    const loop=()=>{check();if(window.__speed.first===null)window.__speedFrame=requestAnimationFrame(loop);};
-    window.__speedFrame=requestAnimationFrame(loop);
-  },{wid,expected,staleMarker});
+  await page.evaluate(installPaintProbe,{wid,expected,staleMarker});
 }

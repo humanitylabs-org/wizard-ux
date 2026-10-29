@@ -85,6 +85,59 @@ Only static/syntax/staging checks are authorized in the repair worker. Browser
 and unit acceptance remain unverified until the parent submits the sealed forum
 run. No merge, deployment, restart, live agent or owner-private-data access.
 
+## r8: exact visible sentinel and desktop-list recovery
+
+r7 passed 24/24 scope cases. Its A/B comparison was incomplete: phone current and
+empty passed in both skins, but old `_v1` falsely matched new `_v179…`; desktop
+preparation required an intentionally hidden Back, or retained a replaced owner.
+Preserve the original r7 receipt/log/results/screenshots, including these failures.
+
+- `paint-probe.mjs` matches complete synthetic tokens. Old and current both require
+  a Range clipped to the owned transcript and viewport, shown ancestors and an
+  unoccluded text-parent hit. Hidden old DOM is not paint; exact visible old text
+  in the last assistant answer still fails. Current requires consecutive frames.
+  Five queued DOM-model regressions cover prefix collision, hidden old DOM, visible
+  stale positive control, clipping/occlusion/opacity and visibility interruption.
+- The r7 desktop screenshot shows list left, thread right. `desktop.css:122-129`
+  hides Back above the 620px container cutoff. Verify the same owned split-list
+  search is actionable; don't invent phone navigation. Narrow/phone still inputs
+  the real visible Back. Every timed sample retains row geometry, header/owner,
+  Back visibility and the actual navigation contract, in both skins/all states.
+- Signal diagnostics requested an absent new owner, while showing the preceding
+  synced Chats owner. `workspace-sync.js` joins after 300ms; desktop `apply`
+  reconciles ids. Wait for public `WosWorkspaceSync.current.ok === true` BEFORE
+  `WizOpenAgentChats` and retaining the resulting owner. Keep sync enabled; failed
+  joins fail preparation. Reopen real Ready/Working/Errors toggles and Show all
+  after navigation or canonical re-render. Never patch renderer/store or force input.
+- Runner collects candidate independently after baseline execution/count/diagnostic
+  failure. Aggregate still fails incomplete comparison: both sides need 12 groups
+  x 30 = 360 unique actual traces, valid headers/paint, 3 x 50 API samples and zero
+  upstream writes. Candidate additionally needs all ancillary cases and unchanged
+  latency budgets. Baseline old ancillary/budget failures remain diagnostic, as
+  before; never inherit them as candidate passes.
+
+### Static branch audit — assumptions, not fresh execution evidence
+
+- Long history uses shipped `WizLive.messages` (500-row pages, `include_compacted`,
+  `view=wizard`), synthetic 1200-row thread 0, real row input/current answer, three
+  actual responses, real hover/wheel upward and 1s list polls. Compare scroller top
+  and text-anchor geometry; no direct renderer call or scroll-position write.
+- Pending uses shipped `outbox.enqueue({kind:'reply',sessionId,model,provider})`,
+  its returned durable item and `LIVE.pendingIds()`, not nonexistent `markPending`.
+  Hold local `/wizard/hermes/v1/runs`, hold thread-400 history beyond shipped 12s
+  timeout, click visible retry, require pending bubble on skeleton AND error.
+  Abort/context-close/release order fences admission through teardown. Fixture
+  forbids upstream writes. Missing controls/timeouts fail, never get mocked away.
+- Preload uses actual `workGroups` ready/errors/working, first 16, excluding hidden,
+  archived, optimistic, synthetic and non-main-cache rows. Save-data fences earlier
+  state samples. Pick a real first-16 non-long row, forget cache, release save-data,
+  refresh, require a real background response and pointerover/click join without a
+  duplicate. Do not replace this one-page assertion with long history.
+- Changed shared helper requires fresh 24 scope cells (20 positive delayed-detail,
+  four negative legacy). Only unchanged UX34 and Service52/141 remain inherited by
+  exact hashes and complete production/test inventory equality. No local tests,
+  browsers, fixture services or activation; the parent queues forum execution.
+
 ## r6 main-scope diagnosis and r7 static audit
 
 The retained r6 receipt is `heavy_d5a2fa29edcd43b4aa69d7cc91773e05`, at
