@@ -35,31 +35,46 @@ async function prune(release) {
   for (const key of (await cache.keys()).slice(0, left - MAX_ENTRIES)) await cache.delete(key);
 }
 
+// A link that is up but crawling (hotel wifi, one bar) would keep Wizard on a blank screen until the network gave
+// up. Past SLOW_MS a saved copy answers instead, and the network read still lands in the background for next time.
+const SLOW_MS = 3000;
+async function savedCopy(req) {
+  const cache = await caches.open(CACHE);
+  if (req.mode !== 'navigate') return cache.match(req);
+  return await cache.match(pageKey(req.url)) || await cache.match(new URL('index.html', self.registration.scope).href) || await cache.match(self.registration.scope);
+}
 async function shell(event) {
   const req = event.request, page = req.mode === 'navigate';
-  try {
-    const res = await fetch(req);
-    // An explicit no-store read (update checks) is never answered from a saved copy, so it is never saved either.
-    if (req.cache !== 'no-store' && cacheable(res)) {
+  // An explicit no-store read (update checks) is never answered from a saved copy, so it is never saved either.
+  if (req.cache === 'no-store') return fetch(req);
+  // A stamped file (?v=<release token>, tools/stamp-assets.sh) never changes under its URL: its saved copy is exact.
+  if (!page && new URL(req.url).searchParams.has('v')) { const hit = await (await caches.open(CACHE)).match(req); if (hit) return hit; }
+  let fellBack = false, timer = 0;
+  const network = fetch(req).then(res => {
+    if (cacheable(res)) {
       const copy = res.clone();
       event.waitUntil((async () => {
         const cache = await caches.open(CACHE);
         if (!page) return cache.put(req, copy);
         const html = await copy.clone().text();
         await cache.put(pageKey(req.url), copy);
-        await prune(html.match(RELEASE)?.[1] || '');
+        // The page on screen came from the saved copy: its release's files must stay until the next fresh start.
+        if (!fellBack) await prune(html.match(RELEASE)?.[1] || '');
       })().catch(() => {}));
     }
     return res;
+  });
+  try {
+    const first = await Promise.race([network, new Promise(r => { timer = setTimeout(() => r(null), SLOW_MS); })]);
+    if (first) return first;
+    const hit = await savedCopy(req);
+    if (hit) { fellBack = true; event.waitUntil(network.catch(() => {})); return hit; }
+    return await network;
   } catch (error) {
-    if (req.cache === 'no-store') throw error;
-    const cache = await caches.open(CACHE);
-    const hit = page
-      ? await cache.match(pageKey(req.url)) || await cache.match(new URL('index.html', self.registration.scope).href) || await cache.match(self.registration.scope)
-      : await cache.match(req);
+    const hit = await savedCopy(req);
     if (hit) return hit;
     throw error;
-  }
+  } finally { clearTimeout(timer); }
 }
 
 // First visit: the page loaded before this worker ran, so it hands over what it loaded (pwa-install.js). The copies
