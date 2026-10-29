@@ -208,17 +208,6 @@ body {
 .device[data-voice="idle"] .timer::before { animation: none; }
 .moons i { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); }
 
-/* James: visible hearing feedback must survive hiding the old Listening card.
- * Inside the orb's existing hit target, clear of the timer/destination and all four controls. */
-.voice-meter { position: absolute; z-index: 4; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  display: none; align-items: center; justify-content: center; gap: 2px; width: 32px; height: 20px;
-  border-radius: 7px; background: var(--wz-panel, var(--bg, #05030c)); color: var(--ink); pointer-events: none; }
-.device:is([data-voice="listen"], [data-voice="command"]) .voice-meter { display: flex; }
-.voice-meter i { display: block; width: 2px; height: 8px; border-radius: 2px; background: currentColor;
-  transform: scaleY(calc(.2 + var(--voice-meter-level, 0) * .8)); transition: transform 80ms linear; }
-.voice-meter i:nth-child(2), .voice-meter i:nth-child(6) { height: 12px; }
-.voice-meter i:nth-child(3), .voice-meter i:nth-child(5) { height: 16px; }
-.voice-meter i:nth-child(4) { height: 18px; }
 .timer { position: absolute; left: 50%; bottom: -24px; transform: translateX(-50%) translateY(6px); opacity: 0; transition: opacity 220ms, transform 260ms var(--ease);
   min-width: 52px; padding: 3px 9px; border-radius: 99px; text-align: center; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .04em;
   white-space: nowrap; width: max-content; /* one line: the orb is narrower than dot + time, so it used to wrap */
