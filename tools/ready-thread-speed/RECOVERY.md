@@ -235,3 +235,75 @@ not a new run. Preserve r2/r4/r5/r6 evidence and hashes unchanged.
   34/34 UX and 52/52 + 141/141 Service may be inherited only by exact file hashes.
 
 This is a static audit and sealed next-run specification, not a browser pass.
+
+## r11: diagnose mixed-source revisions before changing the oracle
+
+REUSE the existing synthetic fixture, actual shell helpers, `historyRevision`,
+`assessCache`, exact `waitForRevision`, and the clipped two-frame paint probe.
+EXTEND only read-only fixture IPC and add a bounded diagnostic entrypoint. NEW
+product capabilities: none. The full acceptance entrypoint and its 15 s barrier
+remain unchanged; this is not a silent acceptance timeout increase.
+
+The r10 candidate desktop/Signal failure is count-only: expected 42, client 40,
+with both timestamps already exactly equal to the committed turn. Final fixture
+SQLite has `sessions.message_count=42` and 42 actual rows. Earlier count-only
+mixed revisions also occur in the other candidate cells and in baseline.
+
+Source trace (Service revision 3560aa8; unchanged baseline follows the same seam):
+
+- `service.mjs::canonicalSessions` uses a 30,000 ms canonical-row cache. Its early
+  refresh signal is `readWizardAssistantRevision(inboxDbPath)`, not the message
+  revision used by the projected-list gate. This fixture has no Inbox DB and
+  writes messages/sessions directly in one transaction; its early signal stays
+  empty. Background heartbeats invalidate projected-list snapshots but do not
+  invalidate these cached canonical rows.
+- `filterSessionList` copies `message_count` from that cached row, then overlays
+  `wizard_last_user_at`/`wizard_last_assistant_at` from current SQLite session
+  truth. Thus a real server list can legitimately contain an older count and
+  newer timestamps during the configured row-cache window. A fresh projection
+  or a completed `WizLive.refresh()` does not mean every source cache refreshed.
+- `session-list-view.mjs::normalizeFull` maps that count and those timestamps.
+  Client compact `normalize` preserves the returned fields; `refresh` replaces
+  returned rows wholesale, and `sessionInfo` deliberately does not change list
+  count/timestamps. There is no source-level evidence of a client partial-merge
+  count bug. `contentKey` correctly includes all three fields.
+- Timestamp conversion is identical in server, client and history oracle:
+  `new Date(seconds*1000).toISOString()`. Binary floating-point plus Date TimeClip
+  can collapse an intended 1 ms difference: r10 baseline's actual DB assistant
+  value `1793274543.0839999` and user `1793274543.083` both produce `.083Z`.
+  Candidate's `1793274932.656`/`1793274932.655` remain `.656Z`/`.655Z`.
+  Do not decimal-round these or waive a timestamp. The diagnostic runs three
+  recorded-value controls through the actual staged Service `listRow` and the
+  existing history oracle before opening either shell.
+
+`revision-diagnostic.mjs` uses one skin, two real shells, distinct main-scope IDs,
+one committed user/assistant turn and one actual stale open per shell per A/B
+side: four mutations and four taps total, not 720. Preserve the original
+background progress and list self-check load. Observe for at most 45 s only to
+classify the 15 s-vs-30 s lifecycle mismatch; do not change production TTLs or
+accept intermediate keys. Every observation records committed DB count/times,
+actual count, last real canonical-reader count/time, actual compact HTTP row
+before client normalization, client key/list, and reduced accepted/persisted
+cache evidence. The real history request stays fenced until owned-row
+pointerdown. Require exact count + both timestamps + complete projected content,
+null stale cache before input, real history crossing/release, two-frame current
+answer paint, and zero visible old answer. No forced clicks or new UI mocks.
+
+Expected discrimination: the constructor reader initially retains its old count
+while SQLite and projected timestamps advance; after its normal TTL refresh the
+actual HTTP row and client both converge to the exact committed revision. If
+raw HTTP is correct but client differs, return that as a product finding before
+patching. If canonical count is fresh but raw HTTP is wrong, inspect the Service
+projection/snapshot rather than client code. If no convergence by 45 s, preserve
+the observations and fail; do not extend the deadline again. Record whether the
+original 15 s was crossed, but do not require that on every cell (cache age at
+mutation differs). An exact current-key accepted cache must also pass the full
+existing digest, count, marker and timestamp assessor.
+
+The r11 stage preserves r10 failure history and all validated current/empty,
+34 UX, 24 scope and five paint-observer results by exact hashes. These are
+inherited, not rerun. The diagnostic cannot establish the missing 120 stale
+receipts per side, final full benchmark budgets, other scopes, or two-skin stale
+proof. Parent submits the sealed stage through the forum worker; no execution
+via SSH and no product change, merge, image build or live deployment is implied.
+

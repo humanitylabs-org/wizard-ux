@@ -28,6 +28,14 @@ db.exec('COMMIT');
 let upstreamWrites=0, ticks=0;
 const histories=id=>db.prepare('SELECT * FROM messages WHERE session_id=? ORDER BY timestamp,id').all(id);
 const sessions=()=>db.prepare('SELECT * FROM sessions ORDER BY last_activity_at DESC,id').all().map(s=>({...s,created_at:s.started_at,status:'completed',last_active:s.last_activity_at}));
+// Read-only IPC diagnosis of the constructor's real canonical-row cache seam.
+// Never alters Service TTLs, invalidates its stores or changes the DB writer.
+let canonicalReads=0,canonicalReadAt=null,canonicalReadRows=new Map();
+const canonicalSessionReader=async()=>{
+ const rows=sessions();canonicalReads++;canonicalReadAt=Date.now();
+ canonicalReadRows=new Map(rows.map(s=>[s.id,{message_count:s.message_count,last_activity_at:s.last_activity_at}]));
+ return rows;
+};
 const send=value=>new Response(JSON.stringify(value),{headers:{'content-type':'application/json'}});
 const fetchImpl=async(url,init={})=>{
  if(init.method&&!['GET','HEAD'].includes(init.method)){upstreamWrites++;throw Error('SYNTHETIC_UPSTREAM_WRITE_REFUSED');}
@@ -48,7 +56,7 @@ const server=createWizardServer({requireAccess:false,hermesKey:'synthetic-only',
  uxDir:join(ux,'web'),wizardOsHome:join(root,'os'),hermesHome:join(root,'home'),appsJsonPath:join(root,'apps.json'),
  userFilesRoot:join(root,'files'),skinsStateDir:join(root,'skins'),settingsPath:join(root,'settings.json'),
  hermesStatePath:path,sessionDbPath:path,runQueueStatePath:join(root,'queue.db'),
- canonicalSessionReader:async()=>sessions(),archivedSessionReader:()=>[],followThrough:false,ownedOpenWork:false,
+ canonicalSessionReader,archivedSessionReader:()=>[],followThrough:false,ownedOpenWork:false,
  listCacheCheckMs:2000,skins:{relays:[],blossom:'https://127.0.0.1/fixture-offline'}});
 await listen(server,'127.0.0.1',0);
 const origin=`http://127.0.0.1:${server.address().port}`;
@@ -61,6 +69,13 @@ const metrics=setInterval(()=>{
 // Background progress changes canonical revision during every list/check sample.
 const writer=setInterval(()=>{ticks++;put.run('wizard_speed_599','tool',`Synthetic background heartbeat ${ticks}`,Date.now()/1000,null);db.prepare('UPDATE sessions SET message_count=message_count+1,last_activity_at=? WHERE id=?').run(Date.now()/1000,'wizard_speed_599')},300);
 process.on('message',m=>{
+ if(m.op==='inspect'&&/^wizard_speed_\d+$/.test(m.id)){
+  const rows=histories(m.id),s=db.prepare('SELECT message_count,last_activity_at FROM sessions WHERE id=?').get(m.id);
+  process.send?.({op:'inspect',id:m.id,at:Date.now(),session:s,actualCount:rows.length,revision:historyRevision(rows),
+   latest:rows.filter(r=>r.role==='user'||r.role==='assistant').slice(-2).map(r=>({role:r.role,timestamp:r.timestamp,scaledMs:r.timestamp*1000,iso:new Date(r.timestamp*1000).toISOString()})),
+   canonicalReader:{reads:canonicalReads,at:canonicalReadAt,row:canonicalReadRows.get(m.id)},
+   options:{inboxDbPath:null,canonicalSessionCacheMs:'Service default (30000)'}});return;
+ }
  if(m.op!=='answer'||!/^wizard_speed_\d+$/.test(m.id))return;
  db.exec('BEGIN');put.run(m.id,'user','Synthetic newer owner request',m.stamp,null);put.run(m.id,'assistant',m.text+status(m.id),m.stamp+.001,'final');
  db.prepare('UPDATE sessions SET message_count=message_count+2,last_activity_at=? WHERE id=?').run(m.stamp+.001,m.id);db.exec('COMMIT');
