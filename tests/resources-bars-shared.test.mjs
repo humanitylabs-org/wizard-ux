@@ -9,7 +9,7 @@ const src = read('web/core/resources.js');
 test('one group list feeds every bar host; Settings hosts count as viewers so readings stay fresh', () => {
   assert.match(src, /const GROUPS=\[\s*\{id:'ai',cls:'rs-bg-ai',title:'AI resources'[^]*\{id:'hw',cls:'rs-bg-hw',title:'Compute resources'/);
   assert.match(src, /function bars\(host\)\{if\(!host\)return;S\.extra\.add\(host\);paintBars\(host,true\)/);
-  assert.match(src, /const viewing=\(\)=>active\(\)\|\|\(!document\.hidden&&\(\[\.\.\.S\.extra\]\.some\(h=>h\.isConnected\)\|\|\[\.\.\.S\.watch\]\.some\(h=>h\.isConnected&&h\.getClientRects\(\)\.length>0\)\)\)/);
+  assert.match(src, /const viewing=\(\)=>active\(\)\|\|\(!document\.hidden&&\(\[\.\.\.S\.extra\]\.some\(h=>h\.isConnected\)\|\|\[\.\.\.S\.watch\]\.some\(h=>h\.isConnected&&h\.getClientRects\(\)\.length>0&&getComputedStyle\(h\)\.visibility!=='hidden'\)\)\)/);
   assert.match(src, /for\(const h of \[\.\.\.S\.extra\]\)\{if\(h\.isConnected\)paintBars\(h\);else S\.extra\.delete\(h\);\}/, 'detached hosts are dropped');
   assert.match(src, /window\.WosResources=\{bars,barsHtml:[^}]*lowest,groups:/);
 });
