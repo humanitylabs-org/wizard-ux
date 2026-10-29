@@ -3,11 +3,11 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8')
-for (const [file, pre] of [['web/skins/obsidian/skin.css', 'html[data-skin^="obsidian"]'], ['web/skins/landscapes/skin.css', 'html[data-skin="landscapes"]']]) {
+for (const [file, pre] of [['web/skins/obsidian/skin.css', 'html[data-skin^="obsidian"]'], ['web/skins/landscapes/skin.css', 'html[data-skin^="landscapes"]']]) {
   const css = read(file)
   test(`${file}: pin button and Pin action hidden`, () => {
-    assert.ok(css.includes(`${pre} .ch-pin-toggle, ${pre} .ch-sheet [data-rspin] { display: none; }`))
-    assert.ok(css.includes(`${pre} .ch-row-wrap > .ch-row { padding-right: 8px; }`))
+    assert.doesNotMatch(css, /ch-pin-toggle[^}]*display: none/)
+    assert.match(read('web/tweaks/miguel/hidden-pin/tweak.css'), /data-part="pin-button".*display:none/)
   })
   test(`${file}: list bottom room is a flex spacer, not scroll padding`, () => {
     assert.match(css, /\.win\.solo\.app-chats \.ch-list \.ch-scroll::after \{ content: ""; display: block; order: 99; flex: 0 0 calc\(var\(--pill-top\) \+ 66px\); \}/)

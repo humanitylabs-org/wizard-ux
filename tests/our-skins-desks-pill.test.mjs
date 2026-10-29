@@ -5,7 +5,7 @@ const web = new URL('../web/', import.meta.url);
 const read = f => readFileSync(new URL(f, web), 'utf8');
 
 test('Desks overview restyle (smaller cards, badges, grown pill) lives only in Miguel\'s skin packages', () => {
-  for (const [dir, pre] of [['obsidian', 'html[data-skin^="obsidian"]'], ['landscapes', 'html[data-skin="landscapes"]']]) {
+  for (const [dir, pre] of [['obsidian', 'html[data-skin^="obsidian"]'], ['landscapes', 'html[data-skin^="landscapes"]']]) {
     const css = read(`skins/${dir}/skin.css`);
     for (const sel of ['.ov.ov-pill .ov-sheet', '.ov.ov-pill .ov-close', '.ov .ov-badge', '.ov .ov-grid { grid-template-columns: repeat(3']) assert.ok(css.includes(sel), `${dir} styles ${sel}`);
     for (const line of css.split('\n').filter(l => /\.ov[-.\s]/.test(l) && /ov-(pill|badge|cell|close|ic|nm|sheet|scroll)/.test(l))) {

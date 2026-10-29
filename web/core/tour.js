@@ -163,7 +163,8 @@
     if (!active()) return;
     log('ev:' + type + (d.which ? ':' + d.which : ''));
     if (type === 'voice') { el.classList.toggle('tr-live', d.state !== 'idle'); return; }
-    // An explicit Settings action wins over the tour; release its tap guard.
+    // Settings opened mid-tour (a deeplink, a notification, a voice command): the owner went somewhere on purpose.
+    // Step aside; the tour's tap guard would otherwise swallow every tap in Settings under its scrim.
     if (type === 'sheet' && d.which === 'settings') return finish('handoff');
     // The shell could not start or finish a take (the microphone never opened, ...): say so in the tour's own copy,
     // because toasts are hidden while the tour runs. Never leave the orb looking frozen.

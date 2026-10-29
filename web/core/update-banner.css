@@ -63,7 +63,7 @@
 .app-upd button.app-upd-x { width: 26px; height: 26px; border-radius: 99px; background: transparent; color: var(--ink-3, #a79fc4); font-size: 16px; line-height: 1; }
 @keyframes app-upd-in { from { opacity: 0; transform: translate(-50%, -6px); } }
 
-/* Every skin: the "Update" tap explodes over the screen, then holds "Updating Wizard OS..." until the new build
+/* Every skin: the "Update" tap explodes over the screen, then holds "Reloading..." until the new build
  * paints (core/web-update.js adds .wos-burst). Without it the tapped banner sits frozen until reload and looks broken. */
 .wos-burst { position: fixed; inset: 0; z-index: 2147483000; display: grid; place-items: center; overflow: hidden; pointer-events: all;
   background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--ink, #fff) 18%, transparent) 0, color-mix(in srgb, var(--bg, #000) 88%, transparent) 55%);
@@ -90,3 +90,26 @@
 @keyframes wb-in { from { opacity: 0; scale: .6; } to { opacity: 1; scale: 1; } }
 @keyframes wb-spin { to { rotate: 360deg; } }
 @keyframes wb-dot { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
+/* Reduce Motion: on the phone shell, styles.css's kill switch stops the flash, rings and sparks, and froze this ring too.
+ * The ring is the only sign the reload is still on its way, so it keeps turning, slower (Robert, 25 Oct 2026). */
+@media (prefers-reduced-motion: reduce) { .wos-burst .wb-core { animation: wb-spin 2.4s linear infinite !important; } }
+
+/* Home update pop-up (core/os-updates.js, wizard-os#186): the Settings update card's words and button, small, on Home only.
+ * Phone: just above the dock (bottom set in JS from the dock's own top). Desktop: top right, under the bar. Never modal. */
+.osu-pop { --wz-text: var(--ink, #f4f0ff); --wz-text-secondary: var(--ink-2, #d9d2f0); --wz-accent: var(--violet-2, #a58bff); --wz-base: var(--bg, #0e0822); --wz-border: var(--line-2, rgba(255,255,255,.16));
+  position: fixed; z-index: 70; left: 14px; right: 14px; bottom: calc(var(--dock-h, 90px) + var(--safe-b, 0px) + 14px); margin: 0 auto; max-width: 420px;
+  display: flex; align-items: center; gap: 10px; padding: 10px 6px 10px 16px; border-radius: 18px; color: var(--wz-text);
+  background: var(--wz-base); border: 1px solid var(--wz-border); box-shadow: 0 10px 30px rgba(0, 0, 0, .32);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3); animation: osu-pop-in .24s ease-out; }
+/* Desktop has no dock: bottom right, away from the bar and Home's own buttons. */
+.osu-pop[data-shell="desktop"] { left: auto; right: 20px; bottom: 20px; width: 380px; }
+.osu-pop-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.osu-pop-tx b { font-size: 14.5px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; text-wrap: balance; }
+.osu-pop-tx span { font-size: 12.5px; line-height: 1.3; color: var(--wz-text-secondary); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.osu-pop button { flex: none; border: 0; font: inherit; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.osu-pop .osu-pop-go { min-height: 38px; padding: 0 16px; border-radius: 99px; background: var(--wz-accent); color: var(--wz-base); font-size: 14px; font-weight: 700; }
+.osu-pop .osu-pop-go:disabled { opacity: .5; cursor: default; }
+.osu-pop .osu-pop-x { width: 38px; height: 38px; border-radius: 50%; background: transparent; color: var(--wz-text-secondary); font-size: 22px; line-height: 1; }
+.osu-pop button:focus:not(:focus-visible) { outline: none; }
+.osu-pop button:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
+@keyframes osu-pop-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }

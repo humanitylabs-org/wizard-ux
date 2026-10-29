@@ -42,35 +42,26 @@
   }
 
   async function act() {
-    if (busy || !deferred) return 'unavailable';
+    if (busy || !deferred) return;
     const event = deferred;
     busy = true;
-    let outcome = 'unavailable';
     try {
       // Keep the real native prompt inside this click's user activation.
       const pending = event.prompt();
       render();
       await pending;
       const choice = await event.userChoice;
-      outcome = choice?.outcome === 'accepted' ? 'accepted' : 'dismissed';
-      if (outcome === 'accepted') installed = true;
+      if (choice?.outcome === 'accepted') installed = true;
       else { dismissedHere = true; dismiss(); }
     } catch (error) {
       // A rejected/consumed capability is not a reason to advertise installation.
       console.warn('Wizard OS installation prompt unavailable', error?.name || 'Error');
     } finally { deferred = null; busy = false; render(); }
-    return outcome;
   }
 
-  // One install prompt per page: the phone tour's Install beat (core/tour.js) uses this same deferred event, and
-  // holds the banner while the tour runs so the two never show at once.
-  window.WizardPwaInstall = {
-    // A dismissal (the banner's ×, a dismissed prompt or a skipped Install beat) holds for both surfaces.
-    get available() { return !!deferred && !installed && !busy && !dismissedHere && read() <= Date.now(); },
-    prompt: act,
-    hold(on) { held = !!on; render(); },
-    dismiss() { dismissedHere = true; dismiss(); clear(); },
-  };
+  // The phone tour (core/tour.js) holds the banner while it runs, so the banner (z-index 200) never covers the tour's
+  // own controls (Codex P2 on #569; same hold as Stable 0.3.61).
+  window.WizardPwaInstall = { ...(window.WizardPwaInstall || {}), hold(on) { held = !!on; render(); } };
 
   window.addEventListener('beforeinstallprompt', event => {
     event.preventDefault();

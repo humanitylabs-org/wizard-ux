@@ -5,7 +5,7 @@ import vm from 'node:vm';
 
 const src = fs.readFileSync(new URL('../web/core/resources.js', import.meta.url), 'utf8');
 function render(skin) {
-  const ctx = { window: {}, document: { documentElement: { dataset: { skin } }, addEventListener() {}, querySelectorAll: () => [], hidden: false },
+  const ctx = { window: {}, document: { documentElement: { dataset: { skin, tweaks: ['obsidian','obsidian-light','landscapes'].includes(skin) ? 'miguel/home-bars' : '' } }, addEventListener() {}, querySelectorAll: () => [], hidden: false },
     localStorage: { getItem: () => null, setItem() {} }, queueMicrotask() {}, setTimeout, clearTimeout, fetch: async () => ({ ok: false }), AbortController };
   ctx.window = ctx; ctx.window.addEventListener = () => {};
   vm.runInNewContext(src, ctx);
@@ -18,7 +18,7 @@ test('home dial styles live only in our skin packages', () => {
 });
 
 test('Miguel skins: bare gear, round Ready/Working, see-through dock', () => {
-  for (const [f, P] of [['obsidian', 'html[data-skin^="obsidian"]'], ['landscapes', 'html[data-skin="landscapes"]']]) {
+  for (const [f, P] of [['obsidian', 'html[data-skin^="obsidian"]'], ['landscapes', 'html[data-skin^="landscapes"]']]) {
     const css = fs.readFileSync(new URL(`../web/skins/${f}/skin.css`, import.meta.url), 'utf8');
     assert.ok(css.includes(`${P} .home-tools .gear, ${P} .gear { background: none; border: 0;`), `${f}: gear has no chip`);
     assert.match(css, /\.now-card\.wz-home-widget \{[^}]*border-radius: 50%/, `${f}: round tiles`);
@@ -28,7 +28,7 @@ test('Miguel skins: bare gear, round Ready/Working, see-through dock', () => {
 test('Ready / Working show glyph + one dot per chat only on Miguel skins', () => {
   const app = fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
   const body = app.slice(app.indexOf('function homeDots('), app.indexOf('function renderHome('));
-  const run = skin => new Function('document', `${body}; return homeDots;`)({ documentElement: { dataset: { skin } } });
+  const run = skin => new Function('document', `${body}; return homeDots;`)({ documentElement: { dataset: { skin, tweaks: ['obsidian','obsidian-light','landscapes'].includes(skin) ? 'miguel/home-bars' : '' } } });
   for (const s of ['obsidian', 'obsidian-light', 'landscapes']) {
     const h = run(s)('working', 3); assert.equal((h.match(/<i /g) || []).length, 3, s);
     assert.match(run(s)('ready', 20), /<em>\+<\/em>/, `${s}: capped with +`);
@@ -52,7 +52,7 @@ test('devices sheet draws capacity bars sized by real capacity', () => {
 function homeWith(skin, state) {
   let s = src;
   for (const [a, b] of state) { assert.ok(s.includes(a), a); s = s.replace(a, b); }
-  const ctx = { window: {}, document: { documentElement: { dataset: { skin } }, addEventListener() {}, querySelectorAll: () => [], hidden: false },
+  const ctx = { window: {}, document: { documentElement: { dataset: { skin, tweaks: ['obsidian','obsidian-light','landscapes'].includes(skin) ? 'miguel/home-bars' : '' } }, addEventListener() {}, querySelectorAll: () => [], hidden: false },
     localStorage: { getItem: () => null, setItem() {} }, queueMicrotask() {}, setTimeout, clearTimeout, fetch: async () => ({ ok: false }), AbortController };
   ctx.window = ctx; ctx.window.addEventListener = () => {};
   vm.runInNewContext(s, ctx); return ctx.WosResources.home();

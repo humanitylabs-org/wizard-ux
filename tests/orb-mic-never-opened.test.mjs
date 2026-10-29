@@ -40,6 +40,22 @@ test('a second tap while the microphone has not opened ends the take visibly (ne
   assert.ok(!calls.includes('leaveOnSend'), 'nothing was recorded, so nothing navigates as if it was sent');
 });
 
+test('a dictation take whose microphone never opened also ends on the second tap (Codex P2 on #569)', () => {
+  const V = { state: 'listen', kind: 'dictation', rec: null, native: null, parts: [], chunks: [], snap: null, files: [] };
+  const { ctx, calls } = shell(V);
+  ctx.finishVoice();
+  assert.ok(calls.includes('cancel:true') && !calls.includes('dictation'), 'not left to the dictation latch: ' + JSON.stringify(calls));
+  assert.equal(V.state, 'idle');
+  assert.ok(calls.some(c => /^toast:The microphone didn’t start/.test(c)));
+});
+
+test('a recording dictation take still finishes through finishDictation (unchanged)', () => {
+  const V = { state: 'listen', kind: 'dictation', rec: { state: 'recording' }, native: null, parts: [], chunks: [], snap: null, files: [] };
+  const { ctx, calls } = shell(V);
+  ctx.finishVoice();
+  assert.deepEqual(calls, ['dictation']);
+});
+
 test('a borrowed meeting microphone goes straight back, with no empty recording kept (Codex P2 on #567)', async () => {
   const loan = { id: 'event-1' };
   const V = { state: 'listen', kind: 'auto', rec: null, native: null, parts: [], chunks: [], snap: null, files: [], meetingLoan: loan, captureEpoch: 5 };

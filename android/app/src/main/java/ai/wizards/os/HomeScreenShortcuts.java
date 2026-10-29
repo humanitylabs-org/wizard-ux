@@ -39,11 +39,16 @@ public final class HomeScreenShortcuts {
         } catch (RuntimeException malformed) { return null; }
     }
     public static boolean pinned(Context c, String appId) {
+        if (!HomeScreenPolicy.validId(appId)) return false;
         ShortcutManager manager = c.getSystemService(ShortcutManager.class);
         if (manager == null) return false;
         String id = HomeScreenPolicy.identity(origin(c),appId);
-        for (ShortcutInfo shortcut : manager.getPinnedShortcuts()) if (id.equals(shortcut.getId()) && shortcut.isPinned()) return true;
+        for (ShortcutInfo shortcut : manager.getPinnedShortcuts())
+            if (ownsPinned(c,shortcut,id)) return true;
         return false;
+    }
+    private static boolean ownsPinned(Context c, ShortcutInfo shortcut, String id) {
+        return c.getPackageName().equals(shortcut.getPackage()) && id.equals(shortcut.getId()) && shortcut.isPinned();
     }
     private static boolean trusted(WebView web, String origin) {
         Uri u = Uri.parse(web.getUrl() == null ? "" : web.getUrl());
@@ -51,6 +56,7 @@ public final class HomeScreenShortcuts {
             && ("/wizard-os-home/".equals(u.getPath()) || "/wizard-os-home/index.html".equals(u.getPath()))
             && u.getQueryParameter("app-session") == null;
     }
+    private static final java.util.concurrent.ExecutorService WORKER = java.util.concurrent.Executors.newSingleThreadExecutor();
     public static void attach(Activity activity, WebView web) {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) return;
         final HomeScreenPolicy.TapGate touch = new HomeScreenPolicy.TapGate(android.view.ViewConfiguration.get(activity).getScaledTouchSlop());
@@ -72,13 +78,46 @@ public final class HomeScreenShortcuts {
                 try {
                     JSONObject data = new JSONObject(body);
                     String app = data.optString("appId"), request = data.optString("requestId");
-                    if (!HomeScreenPolicy.validId(app) || !request.matches("[0-9]{1,12}")) return;
+                    if (!request.matches("[0-9]{1,12}")) return;
                     java.util.function.Consumer<String> send = status -> {
                         try { if (trusted(view,origin)) reply.postMessage(new JSONObject().put("requestId",request).put("status",status).toString()); } catch (Exception ignored) { /* navigation closed port */ }
                     };
+                    // ShortcutManager queries/updates are @WorkerThread; replies go back on the UI thread.
+                    java.util.function.Consumer<String> sendLater = status -> activity.runOnUiThread(() -> send.accept(status));
                     ShortcutManager manager = activity.getSystemService(ShortcutManager.class);
-                    if (manager == null || !manager.isRequestPinShortcutSupported()) { send.accept("unsupported"); return; }
+                    if (manager == null) { send.accept("unsupported"); return; }
                     String op = data.optString("op");
+                    if ("pinned".equals(op)) {
+                        // One bounded candidate query; never enumerate another package or create a shortcut.
+                        org.json.JSONArray candidates = data.optJSONArray("candidates"), found = new org.json.JSONArray();
+                        if (candidates == null || candidates.length() > 128) return;
+                        java.util.List<String> ids = new java.util.ArrayList<>();
+                        for (int i = 0; i < candidates.length(); i++) {
+                            String candidate = candidates.getString(i);
+                            if (!HomeScreenPolicy.validId(candidate)) return;
+                            ids.add(candidate);
+                        }
+                        WORKER.execute(() -> {
+                            try {
+                                java.util.List<ShortcutInfo> shortcuts = manager.getPinnedShortcuts();
+                                java.util.Set<String> seen = new java.util.HashSet<>();
+                                for (String candidate : ids) {
+                                    String id = HomeScreenPolicy.identity(origin,candidate);
+                                    for (ShortcutInfo shortcut : shortcuts)
+                                        if (ownsPinned(activity,shortcut,id) && seen.add(candidate)) found.put(candidate);
+                                }
+                                String out = new JSONObject().put("requestId",request).put("status","pinned-list").put("appIds",found).toString();
+                                activity.runOnUiThread(() -> { try { if (trusted(view,origin)) reply.postMessage(out); } catch (Exception ignored) { /* port closed */ } });
+                            } catch (Exception ignored) { /* fail closed */ }
+                        });
+                        return;
+                    }
+                    if (!HomeScreenPolicy.validId(app)) return;
+                    if ("refresh".equals(op)) {
+                        WORKER.execute(() -> { String r; try { r = refresh(activity,data); } catch (Exception error) { r = "error"; } sendLater.accept(r); });
+                        return;
+                    }
+                    if (!manager.isRequestPinShortcutSupported()) { send.accept("unsupported"); return; }
                     if ("status".equals(op)) { send.accept(pinned(activity,app) ? "pinned" : "ready"); return; }
                     if (!"pin".equals(op)) return;
                     final long gesture = touch.claim(SystemClock.elapsedRealtime());
@@ -102,16 +141,45 @@ public final class HomeScreenShortcuts {
                 } catch (Exception ignored) { /* malformed/untrusted messages fail closed */ }
             });
     }
-    private static String pin(Context c, JSONObject data) {
-        String app = data.optString("appId"), name = data.optString("name"), png = data.optString("icon");
-        name = HomeScreenPolicy.displayName(app,name);
-        if (name.trim().isEmpty() || name.length() > 80 || !png.startsWith("data:image/png;base64,") || png.length() > 90000) return "error";
-        if (pinned(c,app)) return "pinned";
+    /** Both paths enforce the same PNG format and decoded size bounds. */
+    private static Bitmap icon(String png) {
+        if (!png.startsWith("data:image/png;base64,") || png.length() > 90000) return null;
         byte[] bytes = Base64.decode(png.substring(22),Base64.DEFAULT);
         BitmapFactory.Options size = new BitmapFactory.Options(); size.inJustDecodeBounds = true;
         BitmapFactory.decodeByteArray(bytes,0,bytes.length,size);
-        if (size.outWidth < 48 || size.outWidth > 256 || size.outHeight < 48 || size.outHeight > 256) return "error";
-        Bitmap bitmap = BitmapFactory.decodeByteArray(bytes,0,bytes.length);
+        if (!"image/png".equals(size.outMimeType) || size.outWidth < 48 || size.outWidth > 256 || size.outHeight < 48 || size.outHeight > 256) return null;
+        return BitmapFactory.decodeByteArray(bytes,0,bytes.length);
+    }
+    /** No tap needed: can only change this package's existing pinned identity, never request a pin. */
+    private static String refresh(Context c, JSONObject data) {
+        String app = data.optString("appId"), png = data.optString("icon");
+        String name = HomeScreenPolicy.displayName(app,data.optString("name"));
+        if (!HomeScreenPolicy.validId(app) || name.trim().isEmpty() || name.length() > 80) return "error";
+        boolean ownPinned = pinned(c,app);
+        if (!ownPinned) return "ready";
+        Bitmap bitmap = icon(png);
+        if (bitmap == null) return "error";
+        String id = HomeScreenPolicy.identity(origin(c),app);
+        android.content.SharedPreferences prefs = c.getSharedPreferences("home-screen-pins",Context.MODE_PRIVATE);
+        if (!HomeScreenPolicy.needsUpdate(ownPinned,prefs.getString(id + ":name",null),
+                prefs.getString(id + ":icon",null),name,png)) return "unchanged";
+        ShortcutInfo shortcut = new ShortcutInfo.Builder(c,id).setShortLabel(name).setLongLabel(name)
+            .setIcon(Icon.createWithBitmap(bitmap)).build();
+        // Recheck ownership immediately before the update; updateShortcuts itself cannot create a pin.
+        if (!pinned(c,app) || !c.getSystemService(ShortcutManager.class).updateShortcuts(Collections.singletonList(shortcut))) return "error";
+        prefs.edit().putString(id + ":name",name).putString(id + ":icon",png).apply();
+        if (BuildConfig.DEBUG) android.util.Log.i("WizardHomeShortcuts","updated " + id);
+        return "updated";
+    }
+    private static String pin(Context c, JSONObject data) {
+        String app = data.optString("appId"), name = data.optString("name"), png = data.optString("icon");
+        name = HomeScreenPolicy.displayName(app,name);
+        if (!HomeScreenPolicy.validId(app) || name.trim().isEmpty() || name.length() > 80) return "error";
+        if (pinned(c,app)) {
+            String result = refresh(c,data);
+            return "updated".equals(result) || "unchanged".equals(result) ? "pinned" : result;
+        }
+        Bitmap bitmap = icon(png);
         if (bitmap == null) return "error";
         String shortcutId = HomeScreenPolicy.identity(origin(c),app), token = UUID.randomUUID().toString();
         c.getSharedPreferences("home-screen-pins",Context.MODE_PRIVATE).edit().putString(shortcutId,token)

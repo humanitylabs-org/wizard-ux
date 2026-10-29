@@ -54,7 +54,7 @@
 
   function accessHtml(app) {
     if (!access) return AG.appKnown(cur.appId) ? '<p class="ar-note" data-access-loading>Loading agents…</p>' : '';
-    const rows = AG.list.map(a => {
+    const rows = (AG.visible?.() || AG.list).map(a => {
       const v = access.agents.find(x => x.id === a.id); if (!v) return '';
       const sub = [a.privacy === 'private' ? 'Private' : a.is_default ? 'Main agent' : 'Standard', statusWord(a)].join(' · ');
       return `<button type="button" class="ar-agent ar-tick${v.enabled ? ' on' : ''}" role="checkbox" aria-checked="${v.enabled}" data-access-pick="${esc(a.id)}" style="--ag:${AG.colour(a)}" ${accessBusy ? 'disabled' : ''}>`
@@ -70,7 +70,7 @@
     let body;
     if (!b) body = AG.appKnown(cur.appId) || access ? '' : `<p class="ar-note">${esc(app)} doesn’t send work to an agent.</p>`;
     else {
-      const rows = AG.list.map(a => {
+      const rows = (AG.visible?.() || AG.list).map(a => {
         const on = a.id === b.agent;
         const sub = [a.privacy === 'private' ? 'Private' : a.is_default ? 'Main agent' : 'Agent', statusWord(a)].join(' · ');
         return `<button type="button" class="ar-agent${on ? ' on' : ''}" role="radio" aria-checked="${on}" data-route-pick="${esc(a.id)}" style="--ag:${AG.colour(a)}" ${busy ? 'disabled' : ''}>`
