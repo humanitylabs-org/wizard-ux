@@ -213,6 +213,19 @@ test('review fixes: one Home map at a time, boot guess expires, unreadable usage
   }
 });
 
+test('second review: no unverified all-clear, stock loading state, Settings dialog keeps focus, Back closes the mic menu', () => {
+  for (const who of ['miguel', 'wizard']) {
+    const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
+    assert.match(src, /all\.every\(m => m\.access\?\.exposure === 'tailscale'\) \? h\('span', \{ text: 'Nothing answers from the internet/, who + ': all-clear only when every machine was checked');
+    assert.match(src, /Not every machine has been checked from the internet yet/, who);
+    assert.match(src, /if \(!netBox\.firstChild\) netBox\.replaceChildren\(h\('span', \{ cls: 'mh-wait'/, who + ': loading mark on the Security page');
+  }
+  const desk = read('web/desktop/desktop.js');
+  assert.match(desk, /if \(!settingsModal \|\| e\.key !== 'Tab'\) return;/, 'Tab stays inside the Home Settings dialog');
+  assert.match(desk, /if \(voiceMenuBack\(\)\) return 'voice-menu';/, 'Back closes the one-mic menu first');
+  assert.ok(desk.indexOf("if (voiceMenuBack()) return 'voice-menu'") < desk.indexOf("if (!pal.hidden) { closePalette(); return 'palette'; }"));
+});
+
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));

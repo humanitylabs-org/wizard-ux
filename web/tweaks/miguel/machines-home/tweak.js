@@ -389,7 +389,8 @@ export default function setup(api) {
     return h('span', { cls: 'mh-more-info mh-ts-info' },
       h('span', { text: 'Your private network. Everything inside the dashed line talks over it, encrypted.' }),
       bad.length ? h('span', { cls: 'is-bad', text: `${bad.map(m => m.name).join(' and ')} ${bad.length === 1 ? 'is' : 'are'} on Tailscale too, but strangers on the internet can also knock on ${bad.length === 1 ? 'it' : 'them'}.` })
-        : h('span', { text: 'Nothing answers from the internet. Tailscale is the only way in.' }),
+        : all.every(m => m.access?.exposure === 'tailscale') ? h('span', { text: 'Nothing answers from the internet. Tailscale is the only way in.' })
+        : h('span', { text: 'Not every machine has been checked from the internet yet. Check again to find out.' }),
       h('span', { cls: 'mh-ts-list' }, all.map(m => { const [w, x] = word(m); return h('span', { cls: 'mh-ts-row', 'data-x': x }, h('i'), h('b', { text: m.name }), h('span', { text: w })); })),
       h('span', { text: 'Who can reach whom: right now any device on your Tailscale can reach any other, both ways (Tailscale’s starting rule).' }),
       h('span', { cls: 'mh-act-btns' },

@@ -1467,6 +1467,7 @@
     window.WosScenery?.update();
   }
   afterRender = hostSettings;
+  let voiceMenuBack = () => false;  // set once the one-mic menu exists
   function openSettings(focus) {
     window.WosResources?.back(); closePalette(); toggleKeys(false);
     const w = settingsWin();
@@ -1479,6 +1480,15 @@
     setEl.hidden = false; settingsReturn = '';
     renderSettings(); settingsView.focus(focus); window.WosScenery?.update();
   }
+  // The Home Settings dialog keeps Tab inside itself while it is open (closeSettings restores the opener).
+  document.addEventListener('keydown', e => {
+    if (!settingsModal || e.key !== 'Tab') return;
+    const f = [...setEl.querySelectorAll('a[href], button, input, select, textarea, iframe, [tabindex]:not([tabindex="-1"])')].filter(n => !n.disabled && !n.closest('[hidden],[inert]') && n.getClientRects().length);
+    const at = document.activeElement, inside = setEl.contains(at);
+    if (!f.length) { e.preventDefault(); return; }
+    if (e.shiftKey && (!inside || at === f[0])) { e.preventDefault(); f[f.length - 1].focus(); }
+    else if (!e.shiftKey && (!inside || at === f[f.length - 1])) { e.preventDefault(); f[0].focus(); }
+  }, true);
   function closeSettings() {
     if (settingsModal) {
       settingsModal = false; setEl.classList.remove('is-modal'); setEl.removeAttribute('aria-modal'); setEl.setAttribute('role', 'region');
@@ -1597,6 +1607,7 @@
   document.body.appendChild(voiceMenu);
   document.documentElement.classList.add('one-mic');
   const closeVoiceMenu = () => { if (!voiceMenu.hidden) { voiceMenu.hidden = true; mic.setAttribute('aria-expanded', 'false'); } };
+  voiceMenuBack = () => { if (voiceMenu.hidden) return false; closeVoiceMenu(); mic.focus(); return true; };
   const openVoiceMenu = () => { const r = mic.getBoundingClientRect(); voiceMenu.style.top = (r.bottom + 6) + 'px'; voiceMenu.style.right = Math.max(8, innerWidth - r.right - 60) + 'px'; voiceMenu.hidden = false; mic.setAttribute('aria-expanded', 'true'); voiceMenu.querySelector('button')?.focus({ preventScroll: true }); };
   mic.setAttribute('aria-haspopup', 'menu');
   mic.title = 'Talk about this (⌥S) · right-click or hold for more';
@@ -1874,6 +1885,7 @@
   function escStep() {
     { const w = window.WosWelcome?.back(); if (w) return w; } // the first-run Welcome sits above everything
     if (window.WosContextMenu?.back()) return 'context-menu';
+    if (voiceMenuBack()) return 'voice-menu'; // the one-mic menu sits above the bar
     if (window.WizShareWizard?.back()) return 'share-wizard';
     { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above everything, incl. the selection menu
     if (window.WosSelMenu?.back()) return 'selection';
