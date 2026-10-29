@@ -44,8 +44,18 @@ async function settledCapture(page, deskIndex, state, file) {
       return [[r.left + dx, r.top + dy], [r.right - dx, r.top + dy], [r.left + dx, r.bottom - dy], [r.right - dx, r.bottom - dy], [r.left + r.width / 2, r.top + r.height / 2]]
         .every(([x, y]) => el.contains(document.elementFromPoint(x, y)));
     };
-    const until = performance.now() + 15000;
-    let previous = '', stableAt = 0, lastReason = '';
+    const until = performance.now() + 8000;
+    let previous = '', stableAt = 0, lastReason = null;
+    const trail = [];
+    const describe = n => n && `${n.tagName}${n.id ? '#' + n.id : ''}${n.className ? '.' + String(n.className).trim().replace(/\s+/g, '.') : ''}`;
+    const blockers = el => {
+      const out = [];
+      for (let n = el; n; n = n.parentElement) {
+        const s = getComputedStyle(n);
+        if (s.display === 'none' || s.visibility !== 'visible' || Number(s.opacity) < .999 || s.filter !== 'none') out.push({ node: describe(n), display: s.display, visibility: s.visibility, opacity: s.opacity, filter: s.filter });
+      }
+      return out;
+    };
     while (performance.now() < until) {
       const desk = document.querySelectorAll('.track > .desk')[deskIndex];
       const card = desk?.querySelector('[data-sendpill]');
@@ -56,11 +66,15 @@ async function settledCapture(page, deskIndex, state, file) {
       const transient = ['#toast', '#deskLabel'].some(sel => {
         const el = document.querySelector(sel); return el && Number(getComputedStyle(el).opacity) > .001;
       });
-      const running = document.getAnimations().some(a => {
+      // Desk ancestors can move the whole shell. Unrelated descendants (row
+      // fades, activity badges) cannot: waiting for all of them never settles.
+      // Keep the card/banner and their descendants guarded, including controls.
+      const animations = document.getAnimations().filter(a => {
         const t = a.effect?.target, timing = a.effect?.getComputedTiming();
-        return t instanceof Element && timing?.iterations !== Infinity && ['running', 'pending'].includes(a.playState)
-          && targets.some(n => n && (t.contains(n) || n.contains(t)));
+        return t instanceof Element && timing?.iterations !== Infinity && (a.pending || ['running', 'pending'].includes(a.playState))
+          && ((desk && t.contains(desk)) || targets.slice(1).some(n => n && (t.contains(n) || n.contains(t))));
       });
+      const running = animations.length > 0;
       const d = desk && rect(desk);
       const ready = document.documentElement.dataset.shell === 'phone' && __wos.idx === deskIndex
         && d && Math.abs(d.x) <= .5 && Math.abs(d.width - innerWidth) <= .5
@@ -69,12 +83,22 @@ async function settledCapture(page, deskIndex, state, file) {
       const sample = ready ? JSON.stringify(targets.map(n => [n.tagName, ...Object.values(rect(n)).map(v => Math.round(v * 10) / 10)])) : '';
       if (!ready || sample !== previous) { stableAt = performance.now(); previous = sample; }
       if (ready && performance.now() - stableAt >= 600) return { state, desk: d, card: rect(card), retry: rect(retry), troubleshoot: rect(troubleshoot), banner: banner ? rect(banner) : null, stableForMs: performance.now() - stableAt, fullOpacity: true, allControlsExposed: true };
-      lastReason = JSON.stringify({ state, desk: d, transient, running, targets: targets.map(n => n && { tag: n.tagName, box: rect(n), visible: visible(n), exposed: exposed(n) }) });
+      lastReason = { state, desk: d, transient, running,
+        live: { ok: window.WizLive?.ok, error: window.WizLive?.error, loading: !!window.WizLive?.loading },
+        net: window.__statusLog?.slice(-6),
+        animations: animations.map(a => ({ target: describe(a.effect.target), name: a.animationName || a.transitionProperty, time: a.currentTime, state: a.playState })),
+        targets: targets.filter(Boolean).map(n => ({ tag: describe(n), ...rect(n), visible: visible(n), exposed: exposed(n), blockers: blockers(n) })), banner: banner?.dataset.wxnet || null };
+      if (!trail.length || performance.now() - trail[trail.length - 1].at >= 500) trail.push({ at: performance.now(), ...lastReason });
       await new Promise(resolve => setTimeout(resolve, 50));
     }
-    throw new Error('Shell/card did not settle: ' + lastReason);
+    return { captureRefused: true, reason: lastReason, trail };
   }, { deskIndex, state });
-  await page.screenshot({ path: file, fullPage: true });
+  if (geometry.captureRefused) {
+    fs.writeFileSync(file.replace(/\.png$/, '.failure.json'), JSON.stringify(geometry, null, 2));
+    await page.screenshot({ path: file.replace(/\.png$/, '.not-accepted.png') });
+    throw new Error('Shell/card did not settle: ' + JSON.stringify(geometry.reason));
+  }
+  await page.screenshot({ path: file });
   return geometry;
 }
 (async () => {
@@ -85,8 +109,9 @@ async function settledCapture(page, deskIndex, state, file) {
   try {
     for (const skin of ['nebula', 'signal']) {
       const context = await browser.newContext({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
-      const page = await context.newPage(), posts = [];
-      let broken = false;
+      const page = await context.newPage(), posts = [], healthPolls = [];
+      page.setDefaultTimeout(12000);
+      let broken = false, unhealthy = false;
       await page.route('**/*', async route => {
         const req = route.request(), u = new URL(req.url()), p = u.pathname;
         if (p.startsWith('/wizard-os-home/')) return route.continue();
@@ -96,7 +121,10 @@ async function settledCapture(page, deskIndex, state, file) {
           return json({ ok: true }); // all writes are intercepted; nothing leaves this local browser.
         }
         if (p === '/troubleshoot/api/ping') return json({ ok: true });
-        if (p === '/troubleshoot/api/status') return json({ checks: [], overall: 'ok' });
+        if (p === '/troubleshoot/api/status') {
+          if (u.searchParams.get('source') === 'connection-banner') healthPolls.push({ unhealthy, at: Date.now() });
+          return json(unhealthy ? { checks: [{ id: 'agent-service', ok: false }], overall: 'down' } : { checks: [], overall: 'ok' });
+        }
         if ((p.endsWith('/sessions') || p.endsWith('/agents')) && broken) return json({ error: 'Synthetic connection outage' }, 503);
         if (p.endsWith('/sessions') || p.includes('/sessions/search')) return json({ sessions: [fixture], has_more: false });
         if (p.endsWith('/agents')) return json({ agents: [] });
@@ -144,16 +172,28 @@ async function settledCapture(page, deskIndex, state, file) {
       const custody = await page.evaluate(id => { const x = WosOutbox.get(id); return { state: x.state, durable: x.durable, text: x.text, id: x.id }; }, id);
       assert.equal(custody.state, 'waiting'); assert.equal(custody.durable, true);
       assert.equal(custody.text, 'Synthetic unsent message');
+      // A failed read with healthy connection evidence is deliberately quiet.
+      // Exercise that override explicitly, not as an accidental transient "outage".
       broken = true;
       await page.evaluate(async () => { await WizLive.refresh(); });
-      await page.waitForSelector('[data-wxnet="reconnecting"]');
+      await page.evaluate(() => WizReach.diagnose(0));
+      await page.waitForFunction(() => !document.querySelector('[data-wxnet]'), null, { timeout: 10000 });
+      assert.equal(await page.evaluate(() => WizLive.error), 'offline', 'fresh healthy connection evidence quiets a failed read without claiming the read succeeded');
+      // A real diagnosed service outage must remain visible after the 5s health
+      // poll, not vanish because our fixture kept reporting every check healthy.
+      unhealthy = true;
+      const outageStarted = Date.now();
+      await page.evaluate(async () => { await WizReach.diagnose(0); await WizLive.refresh(); });
+      await page.waitForSelector('[data-wxnet="reconnecting"]', { timeout: 10000 });
+      await page.waitForTimeout(6500);
+      assert.ok(healthPolls.some(p => p.unhealthy && p.at >= outageStarted), 'the connection-banner health poll actually observed the service outage');
       captures.push(await settledCapture(page, chatsDesk, 'outage', path.join(out, `phone-${skin}-outage.png`)));
-      broken = false;
-      await page.evaluate(async () => { await WizLive.refresh(); });
+      broken = unhealthy = false;
+      await page.evaluate(async () => { await WizReach.diagnose(0); await WizLive.refresh(); });
       await page.waitForFunction(() => !document.querySelector('[data-wxnet]'));
       assert.equal(await page.locator('[data-sendpill]').count(), 1, 'recovery never hides the unsent-message card');
       captures.push(await settledCapture(page, chatsDesk, 'recovered', path.join(out, `phone-${skin}-recovered.png`)));
-      results.push({ skin, visibleRetry: true, custodyPreserved: true, retryEnvelopePreserved: true, connectionRecovery: true, settledCaptures: captures, postCount: posts.length });
+      results.push({ skin, visibleRetry: true, custodyPreserved: true, retryEnvelopePreserved: true, connectionRecovery: true, healthyProbeOverride: true, outageAfterHealthPoll: true, settledCaptures: captures, postCount: posts.length });
       await context.close();
     }
     fs.writeFileSync(path.join(out, 'result.json'), JSON.stringify({ ok: true, results }, null, 2));
