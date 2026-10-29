@@ -359,6 +359,8 @@
    * (render-blocking) from the first frame, so stock Home never flashes before a package's own view. A package that
    * does not come back drops out of the list. Reapplying adds the new <link> before the old one goes (no unstyled gap). */
   const EXPECT_KEY = 'wos.tweaks.expect';
+  const BOOT_GUESS_MS = 20000;
+  let tweaksAsked = false;  // set once the experience asks for the real list; until then the boot preload is a guess
   const expected = new Set(), preCss = new Map();   // ids still loading; id -> <link> added ahead of the package
   function tweakCss(id) {
     if (!isDoc) return null;
@@ -426,6 +428,22 @@
       if (type === 'home' && !caps.has('layout')) throw new Error('home requires layout');
       return base.on(type, payload => fn(type === 'render' ? Object.freeze({ part: payload.part }) : payload));
     }, toast: base.toast, storage: base.storage };
+    // Trusted packages that replace each other (catalog oneOf) can share one store, so a look-only skin change keeps
+    // the owner's choices: manifest `storage: "<name>"` keys it as `wos.skin.shared:<name>.*` instead of by package id.
+    if (trusted && typeof manifest.storage === 'string' && /^[a-z0-9-]{1,40}$/.test(manifest.storage)) {
+      const ns = 'wos.skin.shared:' + manifest.storage + '.';
+      api.storage = Object.freeze({
+        get(key) { try {
+          let v = localStorage.getItem(ns + key);
+          // Before the shared store existed each package kept its own copy: take this package's, else any package of the
+          // same name ("<author>/<storage>"), so switching skins after an upgrade keeps the owner's choices.
+          if (v == null) v = localStorage.getItem(`wos.skin.${a.id}.${key}`);
+          if (v == null) for (let i = 0; i < localStorage.length && v == null; i++) { const k = localStorage.key(i); if (k && /^wos\.skin\.[a-z0-9-]+\//.test(k) && k.endsWith(`/${manifest.storage}.${key}`)) v = localStorage.getItem(k); }
+          return v == null ? null : JSON.parse(v);
+        } catch (_) { return null; } },
+        set(key, value) { try { localStorage.setItem(ns + key, JSON.stringify(value)); } catch (_) {} },
+      });
+    }
     if (caps.has('layout')) {
       Object.assign(api, { listen: base.listen, frame: base.frame, gesture: base.gesture });
       // Borrow a built-in layout through the same host; disposal invalidates the handle.
@@ -534,6 +552,8 @@
       snapshot: () => structuredClone(window.WosResources?.state || {}), refresh: () => window.WosResources?.sync(),
       // Re-test how open each machine is from outside (changes nothing; resolves true/false once the feed is re-read).
       checkExposure: () => a.dead ? Promise.resolve(false) : Promise.resolve(window.WosResources?.checkExposure?.()).then(r => r === true, () => false),
+      // A reading kept on screen outside Home or Settings (the desktop top bar) keeps the feed polling while it shows.
+      live: el => { if (!a.dead && el?.nodeType === 1) window.WosResources?.watch?.(el); },
       // resources.js announces each finished poll ('wos:resources'); the handle dies with the package.
       watch(fn) {
         if (a.dead || typeof fn !== 'function' || typeof window.addEventListener !== 'function') return () => {};
@@ -614,7 +634,7 @@
     return Object.freeze(api);
   }
   async function loadTweaks(entries, contract, { teamAuthors = [], trustedAuthors = [] } = {}) {
-    const seq = ++tweakSeq; slotContract = contract;
+    const seq = ++tweakSeq; slotContract = contract; tweaksAsked = true;
     const want = entries.filter(safeTweakId);
     for (const [id, l] of preCss) if (!want.includes(id)) { l.remove(); preCss.delete(id); }
     for (const id of want) tweakCss(id);
@@ -747,6 +767,8 @@
     if (id) { ensureCss(id); committedId = id; }
     // The tweaks this device wore last time: listed and styled from the first frame (loadTweaks settles the real list).
     try { const last = JSON.parse(localStorage.getItem(EXPECT_KEY) || '[]'); if (isDoc && Array.isArray(last)) { for (const t of last.filter(x => typeof x === 'string' && safeTweakId(x)).slice(0, 40)) { expected.add(t); tweakCss(t); } if (expected.size) paintTweaks(); } } catch (_) {}
+    // If the catalog or profile never loads, drop the guessed packages (and their styles) instead of hiding Home for good.
+    if (expected.size) setTimeout(() => { if (tweaksAsked) return; for (const t of [...expected]) { expected.delete(t); const l = preCss.get(t); if (l) { l.remove(); preCss.delete(t); } } paintTweaks(); }, BOOT_GUESS_MS);
     // ?layout=<id> in a link turns that layout on (and remembers it); ?layout=classic turns it off. Lets people share a try-it link.
     try {
       const q = new URLSearchParams(location.search).get('layout');

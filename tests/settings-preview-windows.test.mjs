@@ -16,14 +16,14 @@ test('desktop Settings opens as a window and every way of closing the window hid
   assert.match(open, /if \(w\) focusWin\(w\.id\); else \{ settingsFocus = document\.activeElement; newWin\(\{ app: 'settings' \}\); \}/);
   assert.match(desk, /    const w = settingsWin\(\); if \(w\) closeWin\(w\.id\); else hostSettings\(\);\n  \}/, 'on a desk Settings is a window');
   // From Home (not a desk) it is a centred panel over Home; Esc, ✕ or a click outside closes it.
-  assert.match(open, /if \(homeOpen && !w\) \{/);
+  assert.match(open, /if \(homeOpen\) \{/);
   assert.match(desk, /scrim\.addEventListener\('click', \(\) => closeSettings\(\)\);/);
   assert.match(desk, /if \(settingsModal\) closeSettings\(\);\n    homeOpen = false;/, 'leaving Home closes the panel');
   // ✕ in the title bar, ⌥W and a synced desk all go through closeWin → render → hostSettings.
   assert.match(desk, /queueMicrotask\(\(\) => window\.WosResources\?\.sync\(\)\);\n    afterRender\?\.\(\);/);
   assert.match(desk, /afterRender = hostSettings;/);
   const host = slice(desk, '  function hostSettings() {', '  afterRender = hostSettings;');
-  assert.match(host, /if \(host\) \{ if \(setEl\.parentNode !== host\) host\.appendChild\(setEl\); return; \}/);
+  assert.match(host, /if \(host\) \{ if \(setEl\.parentNode !== host\) host\.appendChild\(setEl\); setEl\.hidden = false; return; \}/);
   assert.match(host, /setEl\.hidden = true;/);
   assert.match(desk, /if \(w\.app === 'settings'\) return '<div class="settings-host"><\/div>';/);
   assert.match(desk, /if \(w\.app === 'settings'\) return \{ id: 'settings', name: 'Settings'/, 'title bar names it Settings');

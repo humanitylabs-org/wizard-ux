@@ -410,6 +410,15 @@ html:is([data-skin^="obsidian"], [data-skin^="landscapes"]) .mine-home .home-uns
 .kh-legend kbd { min-width: 15px; height: 15px; padding: 0 3px; border-radius: 4px; display: grid; place-items: center; font: inherit; font-weight: 700; background: var(--bg); color: var(--ink); }
 html.key-hints-on #clock { visibility: hidden; }
 .kh-foot.pinned { top: auto; bottom: 18px; }
+.bar-start { display: contents; }
+
+/* One mic: the other voice buttons fold into its menu (keys unchanged). */
+.one-mic #generalVoice, .one-mic #commandBtn, .one-mic #dictateBtn { display: none !important; }
+.voice-menu { position: fixed; z-index: 70; min-width: 220px; padding: 5px; border-radius: 12px; display: flex; flex-direction: column; gap: 1px; background: color-mix(in srgb, var(--wz-base) 95%, transparent); color: var(--wz-text); box-shadow: inset 0 0 0 1px var(--wz-border), 0 18px 44px -16px color-mix(in srgb, var(--wz-base) 65%, transparent); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); }
+.voice-menu[hidden] { display: none; }
+.voice-menu button { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 34px; padding: 0 10px; border-radius: 8px; font-size: var(--wz-text-sm); font-weight: 600; color: inherit; background: transparent; text-align: left; }
+.voice-menu button:hover, .voice-menu button:focus-visible { background: color-mix(in srgb, var(--wz-text) 10%, transparent); outline: none; }
+.voice-menu kbd { font-family: var(--wz-font-mono); font-weight: 600; font-size: calc(var(--wz-text-sm) * .85); opacity: .6; }
 
 /* ---------- heads-up chat (HUD): one Chats window over every desk and Home; folded, the orb ---------- */
 .hud-layer { position: absolute; inset: 0; z-index: 150; pointer-events: none; } /* above Home sheets (Resources is 120); the bar, palette and toasts sit outside the stage, above it */

@@ -74,6 +74,9 @@ export default function setup(api) {
   const devices = () => Array.isArray(reg().devices) ? reg().devices : [];
   const peers = () => reg().network?.available && Array.isArray(reg().network.peers) ? reg().network.peers : [];
   const devOf = id => devices().find(d => d.id === id) || null;
+  // Only Wizard machines (group agent) sit in the helper row; a registered phone or laptop belongs with its person.
+  const isAgent = d => d.id === MAIN || !d.group || d.group === 'agent';
+  const helpers = () => devices().filter(d => d.id !== MAIN && isAgent(d));
   const managedList = () => Array.isArray(reg().managed) ? reg().managed : [];
   const managedOf = id => managedList().find(m => m.id === id) || null;
   const diskGB = d => (d?.disks || []).reduce((n, x) => n + (+x.sizeGB || 0), 0) || null;
@@ -83,8 +86,9 @@ export default function setup(api) {
   function machine(id) {
     const d = devOf(id);
     if (!d) return { id, name: id === MAIN ? pretty(reg().this?.name) || 'Main' : id, status: 'unknown' };
-    const dg = diskGB(d), fg = freeGB(d);
-    return { id, name: pretty(d.name), status: d.status, error: d.error || '', use: d.use || '', platform: d.platform || '', access: d.access || null, cores: d.cpus || null, ramGB: d.memoryTotalGB || null,
+    // A copy saved on this device (or kept through a failed read) is a last reading, never "online now".
+    const dg = diskGB(d), fg = freeGB(d), status = !S.devFresh ? 'stale' : d.status;
+    return { id, name: pretty(d.name), status, was: d.status, stale: status === 'stale', readAt: d.readAt || null, error: d.error || '', use: d.use || '', platform: d.platform || '', access: d.access || null, cores: d.cpus || null, ramGB: d.memoryTotalGB || null,
       mem: d.memory, cpu: d.cpu, diskGB: dg, freeGB: fg, diskUsed: dg != null && fg != null ? dg - fg : null };
   }
   // Rough power, for size and order: cores, then memory, then disk.
@@ -93,25 +97,38 @@ export default function setup(api) {
   const qualOf = id => (S.backup?.standby?.machines || []).find(x => x.id === id) || null;
   const qualifies = id => /^(ok|yes|ready|fits)$/i.test(qualOf(id)?.verdict || '');
   // Wizard reaches the machine's network but can't log in = Disconnected; not on the network at all = Offline.
-  const offText = m => m.status === 'unreachable' || /denied|refused|timed out|auth/i.test(m.error) ? 'Disconnected' : 'Offline';
+  // Stale = read before, not just now: its last numbers still show, marked as such; never called offline.
+  const hasReading = m => m.status === 'online' || m.status === 'stale';
+  const lastRead = m => m.readAt && Date.parse(m.readAt) ? ` ${agoS(Math.max(0, Date.now() - Date.parse(m.readAt)) / 1000)} ago` : '';
+  // What the label says: a last reading keeps what it last showed (Offline stays Offline), marked as a last reading.
+  const roleOf = m => (qualifies(m.id) ? 'Standby device' : m.stale && /^(offline|unreachable)$/.test(m.was || '') ? offText({ ...m, status: m.was }) : hasReading(m) ? 'Helper' : offText(m)) + (m.stale ? ' · last reading' : '');
+  const offText = m => m.status === 'connecting' ? 'Checking' : m.status === 'unreachable' || /denied|refused|timed out|auth/i.test(m.error) ? 'Disconnected' : 'Offline';
   function storage() {
     const b = S.backup?.backup;
     if (!b || !b.configured || !b.target) return null;
     const t = b.target, last = b.last || {}, okAt = last.ok ? (last.finished_at || last.last_success_at) : last.last_success_at;
     const every = b.every === 'hourly' ? 3600 : 86400, age = okAt ? Math.max(0, Date.now() / 1000 - okAt) : null;
     const used = +last.repository_bytes > 0 ? last.repository_bytes / 1e9 : null, r = b.retention || {};
-    const span = [+r.daily > 0 && `any of the last ${r.daily} days`, +r.weekly > 0 && `one a week for ${r.weekly} weeks`, +r.monthly > 0 && `one a month for ${r.monthly} months`].filter(Boolean);
+    const n = (v, one, many) => `${v} ${+v === 1 ? one : many}`;
+    const span = [+r.daily > 0 && `daily for ${n(r.daily, 'day', 'days')}`, +r.weekly > 0 && `weekly for ${n(r.weekly, 'week', 'weeks')}`, +r.monthly > 0 && `monthly for ${n(r.monthly, 'month', 'months')}`].filter(Boolean);
     const cf = (S.backup?.connector || []).find(c => c && /cloudflare/i.test(c.id || c.name || '') && c.connected);
     return { id: 'storage', where: t.kind === 'r2' ? 'Cloudflare R2' : t.kind === 's3' ? 'S3 storage' : 'Backup storage', bucket: t.bucket || '',
       used, snaps: +last.snapshots || null, every: b.every === 'hourly' ? 'every hour' : b.at ? `daily at ${b.at}` : 'daily', age,
-      keep: span.length ? 'Older backups thin out: daily for a week, weekly for a month, monthly for 6 months' : '', cf: !!cf,
+      keep: span.length ? `Older backups thin out: ${span.length > 1 ? span.slice(0, -1).join(', ') + ' and ' + span.at(-1) : span[0]}` : '', cf: !!cf,
       state: !okAt ? 'no' : b.state === 'failing' || age > 2 * every ? 'tight' : 'ok' };
   }
-  const backupRunning = () => Array.isArray(S.backup?.active) && S.backup.active.length > 0;
-  const sessions = () => api.data.read.sessions?.counts() || { working: 0, ready: 0 };
-  const myDevices = () => peers().filter(p => p.group === 'human').map(p => ({ name: p.name === 'localhost' && /ios/i.test(p.os || '') ? 'iPhone' : p.name, online: !!p.online }));
+  // Running only on a reading from this visit: a saved copy may be from a backup that has long finished.
+  const backupRunning = () => S.backupRead === 'ok' && Array.isArray(S.backup?.active) && S.backup.active.length > 0;
+  // Unknown until the chat list has been read once: show that, never a confident empty inbox.
+  const sessions = () => api.data.read.sessions?.counts() || { working: 0, ready: 0, unknown: true };
+  const chatWords = x => x.unknown ? 'chats not loaded yet' : `${x.working} working, ${x.ready} ready${S.unread ? `, ${S.unread} unread` : ''}`;
+  // Presence from a saved or failed reading is not current: no green dot until a fresh read says online.
+  const myDevices = () => [...devices().filter(d => d.id !== MAIN && d.group === 'human').map(d => ({ name: pretty(d.name), online: S.devFresh ? d.status === 'online' : null })),
+    ...peers().filter(p => p.group === 'human').map(p => ({ name: p.name === 'localhost' && /ios/i.test(p.os || '') ? 'iPhone' : p.name, online: S.devFresh ? !!p.online : null }))];
+  // The connected Wizard's people (the glance always describes this one, whatever Your network has selected).
+  const myPeople = () => [{ id: 'me', name: ownerName(), devices: myDevices() }];
   function people() {
-    if (S.ws === 'mine') return [{ id: 'me', name: ownerName(), devices: myDevices() }];
+    if (S.ws === 'mine') return myPeople();
     const g = managedOf(S.ws); if (!g) return [];
     const names = (Array.isArray(g.people) ? g.people : []).filter(n => typeof n === 'string' && n);
     const rest = Math.max(0, (Number.isInteger(g.peopleCount) ? g.peopleCount : 0) - names.length);
@@ -123,6 +140,9 @@ export default function setup(api) {
   const reason = c => c.what === 'system' ? `runs ${String(c.say || '').split(':')[0]}; Wizard needs Linux or a Mac`
     : String(c.say || '').replace(/^(\d+) (cores|GB memory|GB free) \(needs (\d+)\)$/, (_, h, k, n) => `has ${h} ${k === 'cores' ? 'cores' : k === 'GB memory' ? 'GB memory' : 'GB free'}, needs ${n}`);
   function actions(m) {
+    // Not read just now (last reading) or not read yet (still checking): nothing to fix, nothing to offer from old numbers.
+    if (m.stale || m.status === 'connecting') { const note = m.stale ? 'Last reading' : 'Checking';
+      return [{ id: 'storage', label: 'Use for storage', ok: false, note, no: [] }, { id: 'standby', label: qualifies(m.id) ? 'Standby device' : 'Make standby', ok: false, note, no: [] }]; }
     if (m.status !== 'online') return [{ id: 'reconnect', label: 'Reconnect', ok: true, note: m.error ? 'Wizard can’t log in' : 'Not on the network',
       words: `Reconnect ${m.name} to this Wizard so it shows as a helper again.`, why: m.error || `${m.name} is ${offText(m).toLowerCase()}.` },
       { id: 'storage', label: 'Use for storage', ok: false, note: 'Not eligible', no: ['reconnect it first'] },
@@ -139,21 +159,25 @@ export default function setup(api) {
         words: `Make ${m.name} my standby device.`, why: (q?.checks || []).map(c => c.say).join('; ') }];
   }
   // AI: every account. Level = the tightest weekly allowance left; prepaid credit = balance of top-up.
+  const fmtMoney = (n, cur) => { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: cur || 'USD' }).format(n); } catch (_) { return `${cur || 'USD'} ${n.toFixed(2)}`; } };
   const kindOf = p => String(p.provider || p.id || '').split(':')[0];
+  // A copy saved on this device, or a reading over five minutes old, is a last reading until a live one arrives.
+  const aiOld = p => { const at = Date.parse(p.fetchedAt || S.res.ai?.fetchedAt || ''); return !S.aiLive || !at || Date.now() - at > 300000; };
   function subs() {
     const out = [];
     for (const p of S.res.ai?.providers || []) {
       const kind = kindOf(p), ls = Array.isArray(p.limits) ? p.limits : [], wk = ls.filter(l => /week/i.test(l.label));
       const pick = (wk.length ? wk : ls).reduce((a, l) => !a || l.remainingPercent < a.remainingPercent ? l : a, null);
-      let left = pick ? pick.remainingPercent : null, money = '';
+      let left = pick ? pick.remainingPercent : null, money = '', cur = '', amt = 0;
       const paid = p.paid, ex = paid?.exponent ?? 2;
       if (left == null && paid?.type === 'credits' && paid.limitMinor > 0 && paid.balanceMinor != null) {
-        left = 100 * paid.balanceMinor / paid.limitMinor; money = `$${(paid.balanceMinor / 10 ** ex).toFixed(2)}`;
+        left = 100 * paid.balanceMinor / paid.limitMinor; cur = /^[A-Z]{3}$/.test(paid.currency || '') ? paid.currency : 'USD'; amt = paid.balanceMinor / 10 ** ex; money = fmtMoney(amt, cur);
       }
-      const signedOut = p.status === 'unavailable' || p.status === 'signed_out' || p.status === 'auth' || (left == null && !money);
+      // Signed out only when the feed says so; a failed usage read is "usage unavailable", still signed in.
+      const signedOut = p.signedOut === true || p.status === 'signed_out' || p.status === 'auth', na = !signedOut && (p.status === 'unavailable' || (left == null && !money));
       const who = String(p.name || '').split('@')[0];
       out.push({ id: p.id, kind, group: p.providerName || kind, nick: S.nick[p.id] || '', auto: who && who !== p.providerName ? who : '',
-        email: p.email || '', left: left == null ? null : Math.round(left), money, unit: money ? 'credit' : 'plan', out: signedOut, resets: pick?.resetsAt || null });
+        email: p.email || '', left: left == null ? null : Math.round(left), money, unit: money ? 'credit' : 'plan', cur, amt, out: signedOut, na, stale: p.status === 'stale' || aiOld(p), resets: pick?.resetsAt || null });
     }
     return out;
   }
@@ -164,8 +188,11 @@ export default function setup(api) {
   const appOf = kind => (signable().find(x => x.kind === kind) || {}).app || null;
   // The gauge: the default model's service, all its accounts together (average left).
   const defKind = () => { const d = api.models?.default?.(); const p = String(d?.provider || '').toLowerCase();
-    const k = /claude|anthropic/.test(p) ? 'claude' : /openai|codex|chatgpt/.test(p) ? 'chatgpt' : /tinfoil/.test(p) ? 'tinfoil' : '';
-    if (k && k !== S.def) { S.def = k; api.storage.set('def', k); } return S.def; };
+    // A usage service with exactly this id or name wins; the built-in aliases match whole names only.
+    const exact = p ? subs().find(s => s.kind === p || String(s.group || '').toLowerCase() === p || p.startsWith(s.kind + ':'))?.kind || '' : '';
+    const k = exact || (/^(claude|claude-code|anthropic)$/.test(p) ? 'claude' : /^(openai|openai-codex|codex|chatgpt)$/.test(p) ? 'chatgpt' : /^tinfoil$/.test(p) ? 'tinfoil' : '');
+    // A default whose provider reports no usage clears the old one rather than keep pointing at another service.
+    if (k !== S.def && (k || p)) { S.def = k; api.storage.set('def', k); } return S.def; };
   // What the E-to-F meter shows: the owner's pick (one kind only: plan limits or prepaid credit, never a mix), else
   // the default model's service. Every account gets a plain name for the "combines …" line.
   // Nickname first; when the same nickname is used on two services, the service name goes in front so they stay apart.
@@ -175,18 +202,24 @@ export default function setup(api) {
     return `${s.group} ${n}`;  // the meter mixes services, so the service always leads: "Claude mig", "ChatGPT oscar"
   };
   function meterPool() {
-    const all = subs(), live = all.filter(s => s.left != null && !s.out);
-    const picked = Array.isArray(S.meter) ? live.filter(s => S.meter.includes(s.id)) : [];
-    if (picked.length) return { use: picked, custom: true };
+    const all = subs(), live = all.filter(s => s.left != null && !s.out && !s.na);
+    // The owner's own pick holds while any picked account still exists; if none can be read right now the meter waits
+    // (empty) rather than quietly showing an account he didn't pick.
+    const chosen = Array.isArray(S.meter) ? all.filter(s => S.meter.includes(s.id)) : [];
+    if (chosen.length) return { use: live.filter(s => S.meter.includes(s.id)), custom: true };
     const want = defKind();
-    const plans = live.filter(s => s.unit === 'plan'), pool = plans.filter(s => !want || s.kind === want);
-    return { use: pool.length ? pool : plans.length ? plans : live, custom: false, def: !!want && !!pool.length };
+    // The default model's own accounts first, whatever they are paid in (plan limits over credit, never a mix);
+    // only when it has none live: every plan, else every credit balance.
+    const mine = want ? live.filter(s => s.kind === want) : [], unit = mine.some(s => s.unit === 'plan') ? 'plan' : 'credit';
+    const pool = mine.filter(s => s.unit === unit), plans = live.filter(s => s.unit === 'plan');
+    return { use: pool.length ? pool : plans.length ? plans : live, custom: false, def: !!pool.length };
   }
   function gauge() {
     const { use, custom, def } = meterPool(); if (!use.length) return null;
     const all = subs();
     return { left: Math.round(use.reduce((n, s) => n + s.left, 0) / use.length), name: use[0].group, n: use.length, custom, def, unit: use[0].unit, names: use.map(s => subName(s, all)),
-      money: use[0].unit === 'credit' ? '$' + use.reduce((n, s) => n + (parseFloat(String(s.money).replace(/[^0-9.]/g, '')) || 0), 0).toFixed(2) : '' };
+      // Credit in one currency adds up; mixed currencies are never summed (the meter then shows percent left only).
+      money: use[0].unit === 'credit' && use.every(s => s.cur === use[0].cur) ? fmtMoney(use.reduce((n, s) => n + (s.amt || 0), 0), use[0].cur) : '' };
   }
 
   /* ---------- skeleton ---------- */
@@ -224,7 +257,13 @@ export default function setup(api) {
   function renderTabs() { fillTabs(wsBar); fillTabs(homeWs); renderWiz(); }
   // The top-left shows the workspace this screen is connected to. Others he manages aren't connected yet: greyed,
   // and a tap explains what switching will mean instead of pretending to switch.
+  // While the workspace menu is open it is the top layer for Back (phone Back, browser Back, desktop Esc).
+  let wsmBack = null;
+  const syncWsmBack = () => { const open = S.open.has('wsm');
+    if (open && !wsmBack) wsmBack = api.back?.push?.(() => { wsmBack = null; S.open.delete('wsm'); S.open.delete('wsm-why'); renderWiz(); wizBtn.focus?.(); }) || null;
+    else if (!open && wsmBack) { const off = wsmBack; wsmBack = null; off(); } };
   function renderWiz() {
+    syncWsmBack();
     const own = thisName(), open = S.open.has('wsm'), why = S.open.has('wsm-why') ? S.whyWs : '';
     wizBtn.setAttribute('aria-expanded', String(open)); wizBtn.setAttribute('aria-label', `Workspace: ${own}. Switch workspace`);
     wizBtn.replaceChildren(h('b', { text: own }), (() => { const v = sv('svg', { class: 'mh-wiz-car' + (open ? ' is-up' : ''), viewBox: '0 0 24 24', 'aria-hidden': 'true' }); sv('path', { d: 'm7 10 5 5 5-5' }, v); return v; })());
@@ -248,9 +287,9 @@ export default function setup(api) {
   }
   // A fuel tag: E, ten cells that fill, F. No label, no percentage at rest; a tap explains it.
   function gaugeEl(g, still) {
-    const on = Math.round(g.left / 10);
-    return h(still ? 'div' : 'button', { ...(still ? {} : { type: 'button', data: { go: 'ai' } }), cls: 'mh-gauge' + (still ? ' is-still' : ''), 'data-s': level(g.left),
-      'aria-label': `AI fuel: ${g.left}% left, ${g.names.join(' and ')}${still ? '' : '. Open AI in Settings'}`, title: `AI fuel · ${g.names.join(' + ')} · ${g.left}% left` },
+    const on = Math.round(g.left / 10), old = aiStale() ? (S.aiLive || S.res.aiError ? ' (last reading; couldn’t refresh)' : ' (last reading; refreshing)') : '';
+    return h(still ? 'div' : 'button', { ...(still ? {} : { type: 'button', data: { go: 'ai' } }), cls: 'mh-gauge' + (still ? ' is-still' : '') + (old ? ' is-stale' : ''), 'data-s': level(g.left),
+      'aria-label': `AI fuel: ${g.left}% left${old}, ${g.names.join(' and ')}${still ? '' : '. Open AI in Settings'}`, title: `AI fuel · ${g.names.join(' + ')} · ${g.left}% left${old}` },
       h('span', { cls: 'mh-g-ef', text: 'E' }),
       h('span', { cls: 'mh-g-cells', 'aria-hidden': 'true' }, Array.from({ length: 10 }, (_, i) => h('i', { cls: i < on ? 'on' : '', style: { '--i': String(i) } }))),
       h('span', { cls: 'mh-g-ef', text: 'F' }));
@@ -259,7 +298,7 @@ export default function setup(api) {
     const g = S.ws === 'mine' ? gauge() : null;
     aiRow.hidden = !g;
     if (!g) return aiRow.replaceChildren();
-    const all = subs(), live = all.filter(s => !s.out), pick = S.open.has('mp'), on = new Set(meterPool().use.map(s => s.id));
+    const all = subs(), live = all.filter(s => !s.out && !s.na), pick = S.open.has('mp'), on = new Set(meterPool().use.map(s => s.id));
     const units = [['plan', 'Plan limits'], ['credit', 'Prepaid credit']].filter(([u]) => live.some(s => s.unit === u));
     aiRow.replaceChildren(h('div', { cls: 'mh-meter-head' }, gaugeEl(g, true),
         h('span', { cls: 'mh-meter-what' }, h('b', { text: g.money ? `${g.money} left` : `${g.left}% left` }), h('small', { text: `(${g.n > 1 ? 'combines ' : ''}${g.names.length > 2 ? g.names.slice(0, -1).join(', ') + ' and ' + g.names.at(-1) : g.names.join(' and ')}${g.custom ? '' : g.def ? ', your default AI' : ''})` }))),
@@ -267,27 +306,31 @@ export default function setup(api) {
   }
   // Every account, grouped by service (the gauge's own first): nickname, what is left, Sign out; one Sign in at the end.
   function renderAIList() {
-    const show = !!subs().length;
-    aiList.hidden = !show;
-    if (!show) return aiList.replaceChildren();
+    const btn = (text, app, cls = '') => app ? h('button', { type: 'button', cls: 'mh-ai-btn ' + cls, data: { resSignin: app } }, text) : null;
+    aiList.hidden = false;
+    const mg = managedOf(S.ws);  // a managed Wizard's accounts live on that Wizard; never show this one's under its name
+    if (mg) return aiList.replaceChildren(h('span', { cls: 'mh-more-info', text: `AI accounts for ${mg.name}’s Wizard show on that Wizard. Switch back to yours to see your own.` }));
+    // No account yet: say so and offer every service to sign in to, never a blank page.
+    if (!subs().length && S.res.aiError) return aiList.replaceChildren(h('span', { cls: 'mh-more-info', text: 'Couldn’t read your AI accounts just now. It will try again.' }));
+    if (!subs().length) return aiList.replaceChildren(h('div', { cls: 'mh-ai-foot' }, h('span', { cls: 'mh-more-info', text: 'No AI account signed in yet.' }),
+      h('div', { cls: 'mh-ai-pick' }, signable().map(p => btn(p.name, p.app)))));
     const want = defKind(), groups = [];
     for (const s of subs()) { let g = groups.find(x => x.kind === s.kind); if (!g) groups.push(g = { kind: s.kind, name: s.group, rows: [] }); g.rows.push(s); }
     groups.sort((a, b) => (b.kind === want) - (a.kind === want));
-    const btn = (text, app, cls = '') => app ? h('button', { type: 'button', cls: 'mh-ai-btn ' + cls, data: { resSignin: app } }, text) : null;
-    aiList.replaceChildren(...groups.map(g => h('div', { cls: nw('mh-ai-group') },
+    aiList.replaceChildren(...(aiStale() ? [h('span', { cls: 'mh-more-info', text: S.aiLive || S.res.aiError ? 'Couldn’t refresh AI usage just now. These are the last readings.' : 'These are the last readings; AI usage is refreshing.' })] : []), ...groups.map(g => h('div', { cls: nw('mh-ai-group') },
       h('div', { cls: 'mh-ai-head' }, h('b', { text: g.name }), g.kind === want ? h('span', { cls: 'mh-ai-def', text: 'Default' }) : null),
       g.rows.map(r => {
         const reset = r.resets && Date.parse(r.resets) > Date.now() ? ` · resets in ${agoS((Date.parse(r.resets) - Date.now()) / 1000)}` : '';
         const inMeter = meterPool().use.some(x => x.id === r.id);
-        return h('div', { cls: 'mh-ai-row', data: { s: r.out ? 'out' : level(r.left ?? 0) } },
-          r.out ? h('span', { cls: 'mh-meter-cb' }) : h('input', { type: 'checkbox', cls: 'mh-meter-cb', checked: inMeter, data: { meterId: r.id },
+        return h('div', { cls: 'mh-ai-row', data: { s: r.out || r.na ? 'out' : level(r.left ?? 0) } },
+          r.out || r.na ? h('span', { cls: 'mh-meter-cb' }) : h('input', { type: 'checkbox', cls: 'mh-meter-cb', checked: inMeter, data: { meterId: r.id },
             title: 'Count on the fuel meter', 'aria-label': `Count ${r.nick || r.auto || g.name} on the fuel meter` }),
           h('input', { cls: 'mh-nick', type: 'text', value: r.nick || r.auto, placeholder: 'Nickname', maxlength: '24',
             'aria-label': `Nickname for ${g.name}${r.email ? ' ' + r.email : ''}`, data: { nick: r.id, auto: r.auto } }),
-          h('span', { cls: 'mh-ai-use' }, h('span', { cls: 'mh-meter' }, h('i', { style: { '--f': (r.out ? 0 : r.left ?? 0) + '%' } })),
-            h('span', { cls: 'mh-ai-txt', text: r.out ? 'Signed out' : r.money ? `${r.money} credit left` : `${r.left}% left${reset}` })),
+          h('span', { cls: 'mh-ai-use' }, h('span', { cls: 'mh-meter' }, h('i', { style: { '--f': (r.out || r.na ? 0 : r.left ?? 0) + '%' } })),
+            h('span', { cls: 'mh-ai-txt', text: r.out ? 'Signed out' : r.na ? 'Usage unavailable' : (r.money ? `${r.money} credit left` : `${r.left}% left${reset}`) + (r.stale ? ' · last reading' : '') })),
           h('span', { cls: 'mh-ai-acts' },
-            TOP_UP[r.kind] && !r.out ? h('a', { cls: 'mh-ai-btn is-link', href: TOP_UP[r.kind], target: '_blank', rel: 'noopener noreferrer' }, 'Add credit ↗') : null,
+            TOP_UP[r.kind] && !r.out && !r.na ? h('a', { cls: 'mh-ai-btn is-link', href: TOP_UP[r.kind], target: '_blank', rel: 'noopener noreferrer' }, 'Add credit ↗') : null,
             r.out ? btn('Sign in', appOf(r.kind), 'is-in') : btn('Sign out', appOf(r.kind), 'is-out')));
       }))),
       h('div', { cls: 'mh-ai-foot' },
@@ -298,7 +341,7 @@ export default function setup(api) {
   /* ---------- the map ---------- */
   // Bars are always there for online machines and fold open or shut with one class (smooth, no rebuild).
   function bars(m, maxOf) {
-    if (m.status !== 'online') return null;
+    if (!hasReading(m)) return null;
     const bar = (k, cap, used, text) => cap ? h('span', { cls: 'mh-bar', title: `${k}: ${text}` },
       h('i', { style: { '--w': (100 * clamp(cap / maxOf[k], .3, 1)).toFixed(0) + '%', '--f': (100 * clamp(used / cap, 0, 1)).toFixed(0) + '%' } }), h('small', { text: k === 'CPU' ? `${cap} cores` : gbFmt(cap) })) : h('span', { cls: 'mh-bar is-none' });
     return h('span', { cls: 'mh-bars' }, h('span', { cls: 'mh-bars-in' },
@@ -323,7 +366,7 @@ export default function setup(api) {
   const checkedWords = a => !a ? 'Not checked yet' : a.checkedAt ? `${a.stale ? 'Last checked' : 'Checked automatically'} ${agoS(Math.max(60, (Date.now() - Date.parse(a.checkedAt)) / 1000))} ago${a.stale ? ' · couldn’t reach it since' : ''}` : a.checked ? `Checked ${a.checked}` : 'Not checked yet';
   const label = (name, role, cls = '') => h('span', { cls: 'mh-label ' + cls }, h('span', { cls: 'mh-name', text: name }), role ? h('span', { cls: 'mh-role', text: role }) : null);
   function machineNode(m, role, maxOf, extra = {}) {
-    const s = extra.size || sizeOf(m), off = m.status && m.status !== 'online' && role !== 'main';
+    const s = extra.size || sizeOf(m), off = m.status && !hasReading(m) && role !== 'main';
     const disc = h('span', { cls: 'mh-disc is-art' + (off ? ' is-off' : '') }, art(artOf({ ...m, managed: extra.managed })));
     let tap;
     if (role === 'main' && extra.sessions) {
@@ -333,7 +376,7 @@ export default function setup(api) {
       disc.append(h('span', { cls: 'mh-sess', 'aria-hidden': 'true' },
         h('span', { cls: 'mh-dots' }, dots(x.working, 'work'), dots(Math.min(x.ready, cap - Math.min(x.working, cap)), 'ready')),
         S.unread ? h('span', { cls: 'mh-bell' }, bell(), h('b', { text: String(Math.min(S.unread, 99)) })) : null));
-      tap = h('button', { type: 'button', cls: 'mh-tap', data: { open: 'ready' }, 'aria-label': `${m.name}: ${x.working} working, ${x.ready} ready${S.unread ? `, ${S.unread} unread` : ''}. Open your chats` }, disc);
+      tap = h('button', { type: 'button', cls: 'mh-tap', data: { open: 'ready' }, 'aria-label': `${m.name}: ${chatWords(x)}. Open your chats` }, disc);
     } else if (role !== 'main' && !extra.managed) {
       tap = h('button', { type: 'button', cls: 'mh-tap', data: { machine: m.id }, 'aria-expanded': String(S.open.has('m:' + m.id)), 'aria-label': `${m.name}, ${extra.roleText}. Show what it can do` }, disc);
     }
@@ -346,8 +389,9 @@ export default function setup(api) {
     if (m.id === MAIN) return h('div', { cls: nw('mh-act'), data: { of: m.id } },
       h('span', { cls: 'mh-act-head' }, h('b', { text: m.name }), h('span', { text: 'Main' })), accessInfo(m.access) || h('span', { text: 'Not checked yet' }));
     return h('div', { cls: nw('mh-act'), data: { of: m.id } },
-      h('span', { cls: 'mh-act-head' }, h('b', { text: m.name }), h('span', { text: m.status === 'online' ? (qualifies(m.id) ? 'Standby device' : 'Helper') : offText(m) })),
+      h('span', { cls: 'mh-act-head' }, h('b', { text: m.name }), h('span', { text: roleOf(m) })),
       accessInfo(m.access),
+      m.stale ? h('span', { cls: 'mh-act-why' }, h('b', { text: 'Last reading:' }), h('span', { text: !S.devFresh && !S.res.devicesError ? `This is ${m.name}’s last reading${lastRead(m)}; your network is being read now.` : `Wizard couldn’t read ${m.name} just now; this is its last reading${lastRead(m)}. It will try again.` })) : null,
       h('span', { cls: 'mh-act-btns' }, actions(m).map(a => h('button', { type: 'button', cls: 'mh-act-btn' + (a.ok ? '' : ' is-no'), disabled: !a.ok, data: { ask: `${m.id}:${a.id}` } },
         h('b', { text: a.label }), h('small', { text: a.note })))),
       ...actions(m).filter(a => !a.ok && a.no?.length).map(a => h('span', { cls: 'mh-act-why' },
@@ -373,6 +417,12 @@ export default function setup(api) {
             .map(([id, text, note, words]) => h('button', { type: 'button', cls: 'mh-act-btn', data: { stAsk: id, words } }, h('b', { text }), h('small', { text: note })))));
   }
   // Tailscale: one node beside Storage. Simple on the map (is anything open?), the whole story when tapped.
+  // "Tailscale is the only way in" only from a fresh reading where every machine was checked and found Tailscale-only.
+  // Tailscale only = a completed check (dated) found it so; a registry entry that only says so is not checked yet.
+  const cleared = a => a?.exposure === 'tailscale' && /^\d{4}-\d{2}-\d{2}$/.test(String(a.checked || ''));
+  const allClear = () => !!S.devFresh && devices().length > 0 && devices().every(d => cleared(d.access));
+  // The feed failed after an earlier reading, or a service sent its last known numbers: what shows is not current.
+  const aiStale = () => !!S.res.aiError || subs().some(s => s.stale && !s.out && !s.na);
   const openOnes = () => devices().filter(d => d.access?.exposure === 'internet').map(d => machine(d.id));
   const TS_ASK = {
     fix: () => { const open = openOnes(), names = open.map(m => m.name).join(' and ');
@@ -387,24 +437,25 @@ export default function setup(api) {
   // The tab opens the details here, inside the outline.
   function tsPanel() {
     const bad = openOnes(), all = [machine(MAIN), ...devices().filter(d => d.id !== MAIN).map(d => machine(d.id))];
-    const word = m => m.access?.exposure === 'internet' ? ['Open to internet', 'bad'] : m.access?.exposure === 'tailscale' ? ['Tailscale only', 'ok'] : ['Not checked yet', 'none'];
+    const word = m => m.access?.exposure === 'internet' ? ['Open to internet', 'bad'] : cleared(m.access) ? ['Tailscale only', 'ok'] : ['Not checked yet', 'none'];
     return h('span', { cls: 'mh-more-info mh-ts-info' },
       h('span', { text: 'Your private network. Everything inside the dashed line talks over it, encrypted.' }),
-      bad.length ? h('span', { cls: 'is-bad', text: `${bad.map(m => m.name).join(' and ')} ${bad.length === 1 ? 'is' : 'are'} on Tailscale too, but strangers on the internet can also knock on ${bad.length === 1 ? 'it' : 'them'}.` })
-        : all.every(m => m.access?.exposure === 'tailscale') ? h('span', { text: 'Nothing answers from the internet. Tailscale is the only way in.' })
-        : h('span', { text: 'Not every machine could be tested from outside yet.' }),
+      bad.length ? h('span', { cls: 'is-bad', text: `${bad.map(m => m.name).join(' and ')} ${bad.length === 1 ? 'is' : 'are'} on Tailscale too, but strangers on the internet can also knock on ${bad.length === 1 ? 'it' : 'them'}.${S.devFresh ? '' : ' (Last reading; check again to see if it still is.)'}` })
+        : allClear() ? h('span', { text: 'Nothing answers from the internet. Tailscale is the only way in.' })
+        : h('span', { text: S.devFresh ? 'Not every machine has been checked from the internet yet. Check again to find out.' : 'This is the last reading; your network couldn’t be read just now.' }),
       h('span', { cls: 'mh-ts-list' }, all.map(m => { const [w, x] = word(m); return h('span', { cls: 'mh-ts-row', 'data-x': x }, h('i'), h('b', { text: m.name }), h('span', { text: w })); })),
       h('span', { cls: 'mh-ts-when', text: S.checking ? 'Testing every machine from outside now…' : `Tested from outside automatically every 15 minutes${lastAuto() ? ` · last ${agoS(Math.max(60, (Date.now() - lastAuto()) / 1000))} ago` : ''}. You get a notification if one opens up.` }),
-      h('span', { text: 'Who can reach whom: right now any device on your Tailscale can connect to any other, both ways (Tailscale’s starting rule). Connecting isn’t controlling: each device still needs its own sign-in.' }),
+      h('span', { text: 'Who can reach whom isn’t checked here. Unless your Tailscale rules were changed, every device can reach every other, both ways (Tailscale’s starting rule).' }),
       h('span', { cls: 'mh-act-btns' },
-        [bad.length ? ['fix', `Close ${bad.length === 1 ? 'it' : 'them'}`, 'Tailscale becomes the only way in'] : null, ['oneway', 'Make it one-way', 'your devices reach machines, not back'], ['check', S.checking ? 'Checking…' : 'Check again', 'tests every machine from outside now']]
+        [bad.length && S.devFresh ? ['fix', `Close ${bad.length === 1 ? 'it' : 'them'}`, 'Tailscale becomes the only way in'] : null, ['oneway', 'Make it one-way', 'your devices reach machines, not back'], ['check', S.checking ? 'Checking…' : 'Check again', 'tests every machine from outside now']]
           .filter(Boolean).map(([id, text, note]) => h('button', { type: 'button', cls: 'mh-act-btn' + (id === 'fix' ? ' is-fix' : ''), data: { tsAsk: id } }, h('b', { text }), h('small', { text: note })))));
   }
   function paintTsTab() {
     const bad = openOnes().length, open = S.open.has('ts');
     tsTab.hidden = S.ws !== 'mine'; tsTab.setAttribute('aria-expanded', String(open));
-    tsTab.setAttribute('aria-label', `Tailscale, ${bad ? bad + ' open to the internet' : 'the only way in'}. ${open ? 'Hide' : 'Show'} details`);
-    tsTab.replaceChildren(h('span', { text: 'Tailscale' }), bad ? h('b', { cls: 'mh-ts-n', text: `${bad} open` }) : null, chev(open));
+    const checked = allClear();
+    tsTab.setAttribute('aria-label', `Tailscale, ${bad ? bad + ' open to the internet' + (S.devFresh ? '' : ' at the last reading') : checked ? 'the only way in' : 'not every machine checked yet'}. ${open ? 'Hide' : 'Show'} details`);
+    tsTab.replaceChildren(h('span', { text: 'Tailscale' }), bad ? h('b', { cls: 'mh-ts-n' + (S.devFresh ? '' : ' is-stale'), text: `${bad} open` }) : null, chev(open));
   }
   const devOpen = p => p.devices ? S.open.has('devs') : S.open.has('p:' + p.id);
   function personNode(p) {
@@ -420,25 +471,31 @@ export default function setup(api) {
   function renderMap() {
     if (!S.res.devices && S.ws === 'mine') { root.classList.add('is-loading'); setRow(rowSt, []); setRow(rowAct, []); setRow(rowMore, []); setRow(rowPp, []); setRow(rowDv, []); setRow(rowChev, []);
       setRow(rowMn, [h('span', { cls: 'mh-wait', role: 'status', 'aria-label': 'Loading your network' })]);
-      if (!netBox.firstChild) netBox.replaceChildren(h('span', { cls: 'mh-wait', role: 'status', 'aria-label': 'Loading your network' })); return; }
+      const why = S.res.devicesError ? 'Couldn’t read your network just now. It will try again.' : '';
+      netBox.replaceChildren(why ? h('span', { cls: 'mh-more-info', text: why }) : h('span', { cls: 'mh-wait', role: 'status', 'aria-label': 'Loading your network' }));
+      if (why) setRow(rowMn, [h('span', { cls: 'mh-more-info', text: why })]); return; }
     root.classList.remove('is-loading');
-    if (S.ws !== 'mine' && !managedOf(S.ws) && S.res.devices) S.ws = 'mine';
     const g = managedOf(S.ws);
     root.classList.toggle('is-managed', !!g);
     if (g) {
       // Only what is known about a Wizard he manages: its Main and who uses it. Same design, less data.
       setRow(rowSt, []); setRow(rowTs, []); setRow(rowMore, []); setRow(rowAct, []);
+      // Security and storage are only read for this Wizard; say so rather than show this Wizard's facts under another's name.
+      netBox.replaceChildren(h('span', { cls: 'mh-more-info', text: `Security for ${g.name}’s Wizard shows on that Wizard. Switch back to yours to see your own.` }));
+      storeBox.replaceChildren(h('span', { cls: 'mh-more-info', text: `Backups for ${g.name}’s Wizard show on that Wizard. Switch back to yours to see your own.` }));
       setRow(rowMn, [machineNode({ id: 'managed-' + g.id, name: g.name, access: g.access || null }, 'main', null, { size: 72, roleText: g.org || 'Main', managed: true }), plus('add-device', `Add a device to ${g.name}`)]);
     } else {
       const st = storage();
       setRow(rowSt, st ? [storageNode(st)] : []);
-      netBox.replaceChildren(tsPanel()); storeBox.replaceChildren(...(st ? [storeHead(st), storeInfo(st)] : [h('span', { cls: 'mh-more-info', text: 'No backup set up yet.' })]));
+      netBox.replaceChildren(tsPanel()); storeBox.replaceChildren(...(st ? [storeHead(st), storeInfo(st), ...(S.backupRead === 'error' ? [h('span', { cls: 'mh-more-info', text: 'Couldn’t reach Backup just now. This is the last reading.' })] : [])] : [S.backupRead === 'none' ? h('span', { cls: 'mh-more-info', text: 'No backup set up yet.' })
+        : S.backupRead === 'error' ? h('span', { cls: 'mh-more-info', text: 'Couldn’t reach Backup right now. It will try again.' })
+        : h('span', { cls: 'mh-wait', role: 'status', 'aria-label': 'Reading your backup' })]));
       setRow(rowTs, S.open.has('ts') ? [tsPanel()] : []);
-      const main = machine(MAIN), others = devices().filter(d => d.id !== MAIN).map(d => machine(d.id)).sort((a, b) => power(b) - power(a));
-      const all = [main, ...others].filter(m => m.status === 'online');
+      const main = machine(MAIN), others = helpers().map(d => machine(d.id)).sort((a, b) => power(b) - power(a));
+      const all = [main, ...others].filter(hasReading);
       const maxOf = { Memory: Math.max(1, ...all.map(m => m.ramGB || 0)), Disk: Math.max(1, ...all.map(m => m.diskGB || 0)), CPU: Math.max(1, ...all.map(m => m.cores || 0)) };
-      const node = m => m.id === MAIN ? machineNode(main, 'main', maxOf, { roleText: 'Main', sessions: sessions() })
-        : machineNode(m, qualifies(m.id) ? 'standby' : 'helper', maxOf, { roleText: qualifies(m.id) ? 'Standby device' : m.status === 'online' ? 'Helper' : offText(m), warn: m.status !== 'online' });
+      const node = m => m.id === MAIN ? machineNode(main, 'main', maxOf, { roleText: 'Main' + (main.stale ? ' · last reading' : ''), sessions: sessions() })
+        : machineNode(m, qualifies(m.id) ? 'standby' : 'helper', maxOf, { roleText: roleOf(m), warn: m.status !== 'online' });
       // The bar names sit left of the row; an invisible twin on the right keeps Main exactly in the middle.
       const legend = twin => h('div', { cls: 'mh-legend' + (twin ? ' is-twin' : ''), 'aria-hidden': 'true' }, h('span', { cls: 'mh-bars-in' }, h('span', { text: 'RAM' }), h('span', { text: 'Disk' }), h('span', { text: 'CPU' }), h('span', { cls: 'mh-how-l', text: 'SSH' })));
       setRow(rowMn, [legend(false), ...around(main, others).map(node), legend(true), plus('add-device', 'Add a device to this network')]);
@@ -450,7 +507,7 @@ export default function setup(api) {
     const ps = people();
     setRow(rowPp, [...ps.map(personNode), plus('add-person', 'Give someone access')]);
     const devs = ps.filter(devOpen).flatMap(p => p.devices ? p.devices.map(d => h('span', { cls: nw('mh-dev'), data: { of: p.id } },
-      h('i', { cls: 'mh-dot' + (d.online ? '' : ' off') }), d.name)) : [h('span', { cls: nw('mh-dev is-none'), data: { of: p.id }, text: `${p.name}’s devices aren’t visible yet` })]);
+      h('i', { cls: 'mh-dot' + (d.online === null ? ' unk' : d.online ? '' : ' off'), title: d.online === null ? 'Last reading; not checked just now' : d.online ? 'Online' : 'Offline' }), d.name)) : [h('span', { cls: nw('mh-dev is-none'), data: { of: p.id }, text: `${p.name}’s devices aren’t visible yet` })]);
     setRow(rowDv, devs);
     // The same chevron as everywhere else, so it is plain the devices fold away.
     const hasDevs = ps.some(p => p.devices && p.devices.length);
@@ -533,7 +590,7 @@ export default function setup(api) {
     let b = e.target; while (b && b !== top && !(b.dataset && (b.dataset.ws || b.dataset.act || b.dataset.open || b.dataset.go || b.dataset.wsWhy || b.dataset.meterAll || b.dataset.person || b.dataset.toggle || b.dataset.machine || b.dataset.ask || b.dataset.stAsk || b.dataset.tsAsk))) b = b.parentNode;
     if (!b || b === top) return;  // Sign in / Sign out carry the shell's own data-res-signin, which opens that app
     const d = b.dataset;
-    if (d.meterAll) { const live = subs().filter(s => !s.out); S.meter = d.meterAll === 'default' ? null : live.filter(s => s.unit === d.meterAll).map(s => s.id);
+    if (d.meterAll) { const live = subs().filter(s => !s.out && !s.na); S.meter = d.meterAll === 'default' ? null : live.filter(s => s.unit === d.meterAll).map(s => s.id);
       api.storage.set('meter', S.meter); drawn.ai = ''; drawn.glance = ''; paint(); api.settings?.refresh?.(); return; }
     if (d.toggle === 'mp') { flip('mp'); drawn.ai = ''; paint(); return; }
     if (d.wsWhy) { S.whyWs = S.whyWs === d.wsWhy && S.open.has('wsm-why') ? '' : d.wsWhy; if (S.whyWs) S.open.add('wsm-why'); else S.open.delete('wsm-why'); renderWiz(); return; }
@@ -587,8 +644,10 @@ export default function setup(api) {
   api.listen(secAI, 'change', e => {
     const id = e.target?.dataset?.meterId; if (!id) return;
     const all = subs(), me = all.find(s => s.id === id); if (!me) return;
-    let cur = new Set(meterPool().use.map(s => s.id));
-    if (e.target.checked) { for (const s of all) if (cur.has(s.id) && s.unit !== me.unit) cur.delete(s.id); cur.add(id); } else cur.delete(id);  // never mix kinds
+    // Start from the saved pick (keeps an account that is unreadable right now), else from what the meter shows.
+    let cur = new Set(Array.isArray(S.meter) && S.meter.length ? S.meter.filter(x => all.some(s => s.id === x)) : meterPool().use.map(s => s.id));
+    // Never mix kinds; an account unreadable right now has no known kind, so it stays picked.
+    if (e.target.checked) { for (const s of all) if (cur.has(s.id) && !s.out && !s.na && s.unit !== me.unit) cur.delete(s.id); cur.add(id); } else cur.delete(id);
     S.meter = cur.size ? [...cur] : null; api.storage.set('meter', S.meter); drawn.ai = ''; drawn.glance = ''; drawn.list = ''; renderAIList(); paint();
   });
   api.listen(secAI, 'input', e => {
@@ -602,16 +661,15 @@ export default function setup(api) {
   // Repaint only the part whose drawing changed; a nickname being typed is never rebuilt under the finger.
   const drawn = { top: '', ai: '', list: '', map: '', glance: '' };
   const mapSig = () => { const st = storage();
-    return JSON.stringify([S.ws, [...S.open].filter(k => k !== 'ai' && k !== 'signin' && k !== 'wsm'), reg().this || null, managedList(),
-      S.checking, devices().map(d => [d.access?.exposure, d.access?.stale, d.access?.checkedAt && agoS((Date.now() - Date.parse(d.access.checkedAt)) / 1000), (d.access?.details || []).join('|')]),
-      devices().map(d => [d.id, d.name, d.status, d.error, d.cpus, d.memoryTotalGB, diskGB(d), Math.round((d.memory || 0) / 5), Math.round((d.cpu || 0) / 5), Math.round((freeGB(d) || 0) / 5)]),
-      myDevices(), sessions(), S.unread, backupRunning(), st && { ...st, age: st.age == null ? null : agoS(st.age), used: st.used == null ? null : gbFmt(st.used) },
+    return JSON.stringify([S.ws, S.backupRead || '', [...S.open].filter(k => k !== 'ai' && k !== 'signin' && k !== 'wsm'), reg().this || null, managedList(),
+      S.devFresh, !!S.res.devicesError, devices().map(d => [d.id, d.name, d.status, d.error, JSON.stringify(d.access || null), d.cpus, d.memoryTotalGB, diskGB(d), Math.round((d.memory || 0) / 5), Math.round((d.cpu || 0) / 5), Math.round((freeGB(d) || 0) / 5), d.group, d.status === 'stale' ? d.readAt : null]),
+      S.checking, devices().map(d => d.access?.checkedAt && agoS((Date.now() - Date.parse(d.access.checkedAt)) / 1000)), myDevices(), sessions(), S.unread, backupRunning(), st && { ...st, age: st.age == null ? null : agoS(st.age), used: st.used == null ? null : gbFmt(st.used) },
       (S.backup?.standby?.machines || []).map(x => [x.id, x.verdict, (x.checks || []).map(c => c.ok)])]); };
   // Pictures and one short value per part; the words live in the tooltip / screen-reader label and in Settings.
   function renderGlance() {
     const g = null, x = sessions(), fuel = g ? null : gauge(), st = g ? null : storage(), bad = g ? 0 : openOnes().length;  // the bar always shows the connected workspace
-    const checked = devices().length && devices().every(d => d.access?.exposure === 'tailscale'), nM = g ? 1 : devices().length || 1;
-    const sig = JSON.stringify([S.ws, fuel && Math.round(fuel.left / 10), x.working, Math.min(x.ready, 8), S.unread, st && [st.state, st.age == null ? null : agoS(st.age)], bad, checked, nM, backupRunning(), people().length]);
+    const checked = allClear(), nM = g ? 1 : devices().filter(isAgent).length || 1;
+    const sig = JSON.stringify([S.ws, !!S.devFresh, S.backupRead || '', aiStale(), fuel && Math.round(fuel.left / 10), !!x.unknown, x.working, Math.min(x.ready, 8), S.unread, st && [st.state, st.age == null ? null : agoS(st.age)], bad, checked, nM, backupRunning(), myPeople().length]);
     if (sig === drawn.glance) return; drawn.glance = sig;
     const dots = (n, cls) => Array.from({ length: n }, () => h('i', { cls }));
     const tile = (go, cls, label, title, viz, val, badge) => h('button', { type: 'button', cls: 'mh-tile ' + cls, data: { go }, title, 'aria-label': `${label}: ${title}` },
@@ -619,14 +677,14 @@ export default function setup(api) {
     const pic = k => h('span', { cls: 'mh-pic' }, art(k));
     const parts = [
       fuel ? h('div', { cls: 'mh-tile is-ai' }, gaugeEl(fuel)) : null,
-      g || desk ? null : tile('chats', 'is-chats', 'Chats', `${x.working} working, ${x.ready} ready${S.unread ? `, ${S.unread} unread` : ''}`,
+      g || desk ? null : tile('chats', 'is-chats', 'Chats', chatWords(x),
         h('span', { cls: 'mh-dots' }, dots(Math.min(x.working, 8), 'work'), dots(Math.min(x.ready, 8 - Math.min(x.working, 8)), 'ready')), null,
         S.unread ? h('span', { cls: 'mh-badge', text: String(Math.min(S.unread, 99)) }) : null),
-      st ? tile('storage', 'is-backup', 'Backup', backupRunning() ? 'Backing up now' : st.age == null ? 'No backup yet' : `Backed up ${agoS(st.age)} ago${st.used != null ? ' · ' + gbFmt(st.used) : ''}`,
+      st ? tile('storage', 'is-backup', 'Backup', backupRunning() ? 'Backing up now' : st.age == null ? 'No backup yet' : `Backed up ${agoS(st.age)} ago${st.used != null ? ' · ' + gbFmt(st.used) : ''}${S.backupRead === 'ok' ? '' : ' (last reading)'}`,
         pic('store'), backupRunning() ? '…' : st.age == null ? '–' : agoS(st.age), st.state !== 'ok' ? h('span', { cls: 'mh-badge is-warn', text: '!' }) : null) : null,
-      g ? null : tile('network', 'is-net' + (bad ? ' is-bad' : checked ? ' is-ok' : ''), 'Security', bad ? `${bad} ${bad === 1 ? 'machine' : 'machines'} open to the internet` : checked ? 'Tailscale only' : 'Not checked yet',
+      g ? null : tile('network', 'is-net' + (bad ? ' is-bad' : checked ? ' is-ok' : ''), 'Security', bad ? `${bad} ${bad === 1 ? 'machine' : 'machines'} open to the internet${S.devFresh ? '' : ' (last reading)'}` : checked ? 'Tailscale only' : 'Not checked yet',
         pic('shield'), null, bad ? h('span', { cls: 'mh-badge', text: String(bad) }) : checked ? h('span', { cls: 'mh-badge is-ok', text: '✓' }) : null),
-      g ? null : tile('overview', 'is-mach', 'Machines', `${nM} ${nM === 1 ? 'machine' : 'machines'}${people().length ? ` · ${people().length} ${people().length === 1 ? 'person' : 'people'}` : ''}`,
+      g ? null : tile('overview', 'is-mach', 'Machines', `${nM} ${nM === 1 ? 'machine' : 'machines'}${myPeople().length ? ` · ${myPeople().length} ${myPeople().length === 1 ? 'person' : 'people'}` : ''}`,
         pic('box'), String(nM)),
     ].filter(Boolean);
     if (desk) {
@@ -637,8 +695,8 @@ export default function setup(api) {
       const icon = (go, cls, label, paths, badge) => h('button', { type: 'button', cls: 'mh-bi ' + cls, data: { go }, title: label, 'aria-label': label }, ic(paths), badge || null);
       glance.replaceChildren(...[
         fuel ? gaugeEl(fuel) : null,
-        st ? icon('storage', 'is-backup' + (st.state !== 'ok' ? ' is-warn' : ''), backupRunning() ? 'Backing up now' : st.age == null ? 'No backup yet' : `Backed up ${agoS(st.age)} ago${st.used != null ? ' · ' + gbFmt(st.used) : ''}`, I.store, st.state !== 'ok' ? h('span', { cls: 'mh-badge is-warn', text: '!' }) : null) : null,
-        g ? null : icon('network', 'is-net' + (bad ? ' is-bad' : ''), bad ? `${bad} ${bad === 1 ? 'machine' : 'machines'} open to the internet` : checked ? 'Tailscale only' : 'Security not checked yet', I.shield, bad ? h('span', { cls: 'mh-badge', text: String(bad) }) : null),
+        st ? icon('storage', 'is-backup' + (st.state !== 'ok' ? ' is-warn' : ''), backupRunning() ? 'Backing up now' : st.age == null ? 'No backup yet' : `Backed up ${agoS(st.age)} ago${st.used != null ? ' · ' + gbFmt(st.used) : ''}${S.backupRead === 'ok' ? '' : ' (last reading)'}`, I.store, st.state !== 'ok' ? h('span', { cls: 'mh-badge is-warn', text: '!' }) : null) : null,
+        g ? null : icon('network', 'is-net' + (bad ? ' is-bad' : ''), bad ? `${bad} ${bad === 1 ? 'machine' : 'machines'} open to the internet${S.devFresh ? '' : ' (last reading)'}` : checked ? 'Tailscale only' : 'Security not checked yet', I.shield, bad ? h('span', { cls: 'mh-badge', text: String(bad) }) : null),
         g ? null : icon('overview', 'is-mach', `${nM} ${nM === 1 ? 'machine' : 'machines'} · your network`, I.server),
       ].filter(Boolean));
       if (glance.firstChild) glance.append(h('span', { cls: 'mh-bar-sep', 'aria-hidden': 'true' }));
@@ -647,12 +705,16 @@ export default function setup(api) {
     glance.replaceChildren(...parts);
   }
   function paint(force) {
+    // A managed Wizard that is gone from a fresh reading: back to this one, remembered, before anything draws.
+    if (S.ws !== 'mine' && S.res.devices && !managedOf(S.ws)) { S.ws = 'mine'; api.storage.set('ws', 'mine'); }
     renderGlance();
+    // The Settings index shows a one-line summary per System page; redraw it only when one of those lines changes.
+    { const st = storage(), sub = JSON.stringify([S.ws, !!S.devFresh, S.backupRead || '', openOnes().length, gauge()?.left ?? null, aiStale(), st?.age == null ? null : agoS(st.age)]); if (sub !== drawn.sub) { const first = drawn.sub == null; drawn.sub = sub; if (!first) api.settings?.refresh?.(); } }
     const top = JSON.stringify([thisName(), managedList().map(g => [g.id, g.name]), S.ws]);
     if (force || top !== drawn.top) { drawn.top = top; renderTabs(); }
-    const gs = JSON.stringify([S.ws, gauge(), S.open.has('ai'), S.open.has('mp'), S.meter, subs().map(s => [s.id, s.left, s.money, s.out, s.nick])]);
+    const gs = JSON.stringify([S.ws, aiStale(), gauge(), S.open.has('ai'), S.open.has('mp'), S.meter, subs().map(s => [s.id, s.left, s.money, s.out, s.na, s.stale, s.nick])]);
     if (force || gs !== drawn.ai) { drawn.ai = gs; renderAI(); }
-    const ls = JSON.stringify([S.ws, S.meter, S.open.has('ai'), S.open.has('signin'), subs().map(s => [s.id, s.left, s.money, s.out, s.resets && agoS((Date.parse(s.resets) - Date.now()) / 1000)])]);
+    const ls = JSON.stringify([S.ws, aiStale(), S.meter, S.open.has('ai'), S.open.has('signin'), subs().map(s => [s.id, s.left, s.money, s.out, s.na, s.stale, s.resets && agoS((Date.parse(s.resets) - Date.now()) / 1000)])]);
     if ((force || ls !== drawn.list) && !aiList.contains?.(document.activeElement)) { drawn.list = ls; renderAIList(); }
     const ms = mapSig();
     if (force || ms !== drawn.map || !rowMn.firstChild) { drawn.map = ms; renderMap(); }
@@ -666,29 +728,37 @@ export default function setup(api) {
     const j = await api.data.read.app('backup', 'overview');
     if (j && j.backup && typeof j.backup === 'object') {  // otherwise keep the last good answer
       S.backup = { backup: j.backup, standby: j.standby || null, connector: j.connector || null, active: j.active || null };
-      api.storage.set('backup', S.backup);
-    }
+      api.storage.set('backup', { ...S.backup, active: null }); S.backupRead = 'ok';
+    } else if (j && typeof j === 'object') { S.backupRead = 'none'; S.backup = null; api.storage.set('backup', null); }  // Backup answered: none set up (any more)
+    else S.backupRead = 'error';  // null = timeout / not 2xx / not JSON: keep the last good answer  // null = timeout / not 2xx / not JSON, not "no backup"
+
     paint();
   }
+  // Fresh = read without error in the last two minutes; a copy the shell kept while nothing was polling is a last reading.
+  const devNew = st => !!st?.devices && !st.devicesError && Date.now() - (+st.devicesAt || 0) < 120000;
   const merge = state => { const got = Object.fromEntries(Object.entries(state || {}).filter(([, v]) => v != null)); S.res = { ...S.res, ...got }; return got; };
   api.inbox?.watch?.(items => { const n = (items || []).filter(i => !i.read && !i.archived).length; if (n !== S.unread) { S.unread = n; paint(); } });
-  api.data.read.resources.watch(state => { const got = merge(state); if (got.devices || got.ai) keep(); paint(); readBackup(); });
+  api.data.read.resources.watch(state => { if (state?.devicesError) S.devFresh = false; else if (state?.devices) S.devFresh = devNew(state); if (state?.ai && !state.aiError) S.aiLive = true; const got = merge(state); if (got.devices || got.ai) keep(); paint(); readBackup(); });
 
   /* ---------- mount at Home; keep it there across Home repaints ---------- */
-  const mount = () => { if (desk) { api.slot.mount('dock-end', barBox, -1); api.slot.mount('bar-start', wizBox); } if (api.slot.mount('home-main', root)) { api.data.read.resources.refresh(); api.frame(drawLines); } };
+  // The desktop bar stays up over open windows: it counts as a viewer, so its readings keep refreshing there too
+  // (registered each time it is put back, not on every route change).
+  const mount = () => { if (desk) { const back = !barBox.isConnected; if (api.slot.mount('dock-end', barBox, -1) && back) api.data.read.resources.live?.(barBox); api.slot.mount('bar-start', wizBox); } if (api.slot.mount('home-main', root)) { api.data.read.resources.refresh(); api.frame(drawLines); } };
   api.on('home', () => { mount(); paint(); });
   api.on('route', () => { mount(); readBackup(); });
   let ro = null;
   if (typeof ResizeObserver === 'function') { ro = new ResizeObserver(() => api.frame(drawLines)); ro.observe(map); ro.observe(rowMn); }
   // Settings › System pages, filled with the same live views (each released on teardown by the host).
-  const fuelText = () => { const g = gauge(); return g ? `${g.left}% left` : ''; };
-  api.settings?.section('map', 'overview', secMap, { subtitle: () => { const n = openOnes().length; return n ? `${n} open` : ''; } });
-  api.settings?.section('ai', 'ai', secAI, { subtitle: fuelText });
-  api.settings?.section('net', 'network', secNet, { subtitle: () => { const n = openOnes().length; return n ? `${n} open to internet` : ''; } });
-  api.settings?.section('store', 'storage', secStore, { subtitle: () => { const st = storage(); return st?.age != null ? `${agoS(st.age)} ago` : ''; } });
+  const fuelText = () => { const g = gauge(); return g ? `${g.left}% left${aiStale() ? ' (last reading)' : ''}` : ''; };
+  // Subtitles describe this Wizard only; on a managed workspace they stay quiet (its facts live on that Wizard).
+  const mine = fn => () => managedOf(S.ws) ? '' : fn();
+  api.settings?.section('map', 'overview', secMap, { subtitle: mine(() => { const n = openOnes().length; return n ? `${n} open${S.devFresh ? '' : ' (last reading)'}` : ''; }) });
+  api.settings?.section('ai', 'ai', secAI, { subtitle: mine(fuelText) });
+  api.settings?.section('net', 'network', secNet, { subtitle: mine(() => { const n = openOnes().length; return n ? `${n} open to internet${S.devFresh ? '' : ' (last reading)'}` : ''; }) });
+  api.settings?.section('store', 'storage', secStore, { subtitle: mine(() => { const st = storage(); return st?.age != null ? `${agoS(st.age)} ago${S.backupRead === 'ok' ? '' : ' (last reading)'}` : ''; }) });
   api.listen(document, 'click', e => { if (S.open.has('wsm') && e.target.isConnected && !wizBox.contains(e.target)) { S.open.delete('wsm'); S.open.delete('wsm-why'); renderWiz(); } });
-  api.listen(document, 'keydown', e => { if (e.key === 'Escape' && S.open.has('wsm')) { S.open.delete('wsm'); renderWiz(); wizBtn.focus(); } });
-  S.res = api.storage.get('res') || {}; merge(api.data.read.resources.snapshot());
+  // Esc reaches the menu through the shell's Back order (api.back above), before anything underneath.
+  S.res = api.storage.get('res') || {}; { const now = api.data.read.resources.snapshot(); S.devFresh = devNew(now); S.aiLive = !!now?.ai && !now.aiError; merge(now); }
   paint(true); mount(); readBackup(true);
   return () => { ro?.disconnect(); };
 }
