@@ -87,7 +87,7 @@ def main():
         avd = 'phone_origin_' + uuid.uuid4().hex[:10]
         run([sdk / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', avd, '-k', 'system-images;android-35;google_apis;arm64-v8a', '-p', out / 'device'], input='no\n', text=True, capture_output=True)
         with (out / 'emulator.log').open('w') as log:
-            emulator = subprocess.Popen([str(sdk / 'emulator/emulator'), '-avd', avd, '-port', '5684', '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect', '-dns-server', '100.100.100.100'], env=env, stdout=log, stderr=subprocess.STDOUT)
+            emulator = subprocess.Popen([str(sdk / 'emulator/emulator'), '-avd', avd, '-port', '5684', '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect', '-dns-server', os.environ.get('QA_DNS', '100.100.100.100')], env=env, stdout=log, stderr=subprocess.STDOUT)
         await_value(lambda: adb_text('shell', 'getprop', 'sys.boot_completed'), lambda v: v.strip() == '1', 300)
         await_value(lambda: adb_text('root'), lambda v: 'restarting adbd as root' in v or 'already running as root' in v, 60)
         adb_text('wait-for-device')

@@ -13,15 +13,19 @@ from pathlib import Path
 import re
 import shlex
 import socket
-import struct
 import subprocess
 import sys
-import zipfile
+
+from apk_build_config import apk_build_config, dex_build_config, uleb  # noqa: F401  shared DEX reader (also publish_owner_phone)
 
 SIGNER = '3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd'
 REPO = 'humanitylabs-org/wizard-ux'
 APP = 'ai.wizards.os'
 OWNER_KEYS = ('wizardOrigin', 'wizardHomeUrl', 'wizardLegacyHosts', 'wizardQaHomeUrl', 'photosServer', 'wizardDeepLinkHost')
+# Build-worker toolchain defaults (Homebrew on the signing Mac); override per worker with the env vars named below.
+DEFAULT_ANDROID_HOME = '/opt/homebrew/share/android-commandlinetools'  # ANDROID_HOME
+DEFAULT_JAVA17_HOME = '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'  # WIZARD_BUILD_JAVA17_HOME
+DEFAULT_WORKER_PYTHON = '/opt/homebrew/bin/python3'  # WIZARD_BUILD_PYTHON
 ORIGIN_ENV = ('WIZARD_ORIGIN', 'WIZARD_DEFAULT_ORIGIN', 'ORG_GRADLE_PROJECT_wizardOrigin', 'WIZARD_PHOTOS_SERVER')
 
 
@@ -66,79 +70,6 @@ def reject_source_properties(source):
             require(not re.search(r'^\s*(?:(?:' + names + r')|systemProp\.org\.gradle\.project\.wizardOrigin)\s*[:=]\s*\S+', p.read_text(), re.M), 'Refusing origin/server in source properties')
 
 
-def uleb(data, offset):
-    value = shift = 0
-    for _ in range(5):
-        b = data[offset]
-        offset += 1
-        value |= (b & 127) << shift
-        if not b & 128:
-            return value, offset
-        shift += 7
-    raise ValueError('Invalid DEX ULEB128')
-
-
-def dex_build_config(data):
-    """Read encoded static String fields, not a substring guess over DEX bytes."""
-    require(data[:4] == b'dex\n', 'Unsupported DEX')
-    u32 = lambda offset: struct.unpack_from('<I', data, offset)[0]
-    nstrings, strings_off = u32(56), u32(60)
-    strings = []
-    for i in range(nstrings):
-        _, start = uleb(data, u32(strings_off + 4 * i))
-        strings.append(data[start:data.index(b'\0', start)].decode('utf-8', errors='replace'))
-    types_off, fields_off = u32(68), u32(84)
-    def typename(idx):
-        return strings[u32(types_off + 4 * idx)]
-    found = None
-    for i in range(u32(96)):
-        off = u32(100) + 32 * i
-        if typename(u32(off)) != 'Lai/wizards/os/BuildConfig;':
-            continue
-        require(found is None, 'Duplicate BuildConfig')
-        class_data, values_off = u32(off + 24), u32(off + 28)
-        require(class_data != 0 and values_off != 0, 'Missing BuildConfig static values')
-        counts = []
-        for _ in range(4):
-            count, class_data = uleb(data, class_data)
-            counts.append(count)
-        static_fields = []
-        field_idx = 0
-        for _ in range(counts[0]):
-            delta, class_data = uleb(data, class_data)
-            _, class_data = uleb(data, class_data)
-            field_idx += delta
-            static_fields.append(strings[u32(fields_off + 8 * field_idx + 4)])
-        size, pos = uleb(data, values_off)
-        require(size <= len(static_fields), 'Invalid static value count')
-        found = {}
-        for name in static_fields[:size]:
-            header = data[pos]
-            pos += 1
-            kind, width = header & 31, (header >> 5) + 1
-            if kind in (0x1e, 0x1f):
-                value = None if kind == 0x1e else bool(header >> 5)
-            else:
-                require(kind not in (0x1c, 0x1d), 'Unexpected compound BuildConfig constant')
-                raw = int.from_bytes(data[pos:pos + width], 'little')
-                pos += width
-                value = strings[raw] if kind == 0x17 else raw
-            found[name] = value
-    return found
-
-
-def apk_build_config(apk):
-    found = []
-    with zipfile.ZipFile(apk) as z:
-        for name in z.namelist():
-            if re.fullmatch(r'classes\d*\.dex', name):
-                fields = dex_build_config(z.read(name))
-                if fields is not None:
-                    found.append(fields)
-    require(len(found) == 1, 'Expected exactly one artifact BuildConfig')
-    return found[0]
-
-
 def metadata(apk, badging, certificates, fields, commit, notes, minimum):
     match = re.search(r"^package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'", badging, re.M)
     require(match is not None, 'Missing aapt2 package metadata')
@@ -174,12 +105,19 @@ def prepare(args):
     write_json(args.output / 'release-inputs.json', inputs)
     remote = build_host() + ':' + job + '/'
     here = Path(__file__).resolve().parent
-    run(['scp', '-q', here / 'phone_release.py', here / 'qa_phone_origin_upgrade.py', args.output / 'release-inputs.json', remote])
+    run(['scp', '-q', here / 'phone_release.py', here / 'apk_build_config.py', here / 'qa_phone_origin_upgrade.py', args.output / 'release-inputs.json', remote])
     run(['scp', '-q', args.previous_apk, remote + 'previous.apk'])
-    argv = ['/opt/homebrew/bin/python3', job + '/phone_release.py', 'worker', '--job', job]
+    argv = [os.environ.get('WIZARD_BUILD_PYTHON') or DEFAULT_WORKER_PYTHON, job + '/phone_release.py', 'worker', '--job', job]
     result = dict(cwd=job, argv=argv, source_commit=revision, status='prepared', next='Submit once through wizard_heavy_submit; never execute Gradle on the controller.')
     write_json(args.output / 'canonical-prepared.json', result)
     print(json.dumps(result, indent=2))
+
+
+def isolated_command(signing_env, home, checks, argv):
+    """Shell that sources the signing env, then pins the isolated Gradle home last so the env can't undo it."""
+    pin = 'export GRADLE_OPTS="${GRADLE_OPTS-} "' + shlex.quote('-Dgradle.user.home=' + str(home))
+    return ('set -eu; set -a; . ' + shlex.quote(str(signing_env)) + '; set +a; if ' + checks + '; then exit 65; fi; '
+            + pin + '; exec ' + shlex.join(argv))
 
 
 def worker(args):
@@ -203,12 +141,11 @@ def worker(args):
         cached = job.parents[1] / 'gradle-cache' / name
         if cached.is_dir():
             (home / name).symlink_to(cached, target_is_directory=True)
-    env['GRADLE_OPTS'] = env.get('GRADLE_OPTS', '') + ' -Dgradle.user.home=' + str(home)
     fd = int(env['WIZARD_HEAVY_LOCK_FD'])
     # Source signing config privately and reject origin variables there too, before Gradle.
     checks = ' || '.join('[ -n "${' + key + '-}" ]' for key in ORIGIN_ENV)
     checks += ' || ' + ' || '.join('[ -n "${ORG_GRADLE_PROJECT_' + key + '-}" ]' for key in OWNER_KEYS)
-    command = 'set -eu; set -a; . ' + shlex.quote(cfg['signing_env']) + '; set +a; if ' + checks + '; then exit 65; fi; exec ' + shlex.join([sys.executable, str(job / 'worker.py'), '--worker', str(job / 'job.json')])
+    command = isolated_command(cfg['signing_env'], home, checks, [sys.executable, str(job / 'worker.py'), '--worker', str(job / 'job.json')])
     with (out / 'build.log').open('w') as log:
         run(['/bin/bash', '-c', command], env=env, stdout=log, stderr=subprocess.STDOUT, pass_fds=(fd,))
     receipt = json.loads((job / 'receipt.json').read_text())
@@ -219,9 +156,9 @@ def worker(args):
     require(not rel.is_absolute() and '..' not in rel.parts, 'Unsafe artifact path')
     apk = job / 'source' / rel
     require(digest(apk) == artifact['sha256'] and apk.stat().st_size == artifact['bytes'] and artifact['signer_sha256'] == SIGNER, 'Artifact receipt mismatch')
-    sdk = Path(env.get('ANDROID_HOME', '/opt/homebrew/share/android-commandlinetools'))
+    sdk = Path(env.get('ANDROID_HOME') or DEFAULT_ANDROID_HOME)
     tools = sdk / 'build-tools/35.0.0'
-    env['JAVA_HOME'] = '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'
+    env['JAVA_HOME'] = env.get('WIZARD_BUILD_JAVA17_HOME') or DEFAULT_JAVA17_HOME
     env['PATH'] = env['JAVA_HOME'] + '/bin:' + env['PATH']
     badging = text([tools / 'aapt2', 'dump', 'badging', apk], env=env)
     certs = text([tools / 'apksigner', 'verify', '--verbose', '--print-certs', apk], env=env)

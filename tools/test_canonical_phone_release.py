@@ -151,5 +151,21 @@ class PhoneReleaseTests(unittest.TestCase):
             self.assertEqual(run.call_count, 1)
 
 
+    def test_signing_env_cannot_undo_isolated_gradle_home(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as tmp:
+            signing = Path(tmp) / 'signing.env'
+            signing.write_text('GRADLE_OPTS="-Xmx2g -Dgradle.user.home=/shared/owner-gradle"\n')
+            home = Path(tmp) / 'iso home'
+            cmd = release.isolated_command(signing, home, 'false', ['/bin/sh', '-c', 'printf %s "$GRADLE_OPTS"'])
+            opts = subprocess.run(['/bin/bash', '-c', cmd], env={'PATH': os.environ['PATH']}, capture_output=True, text=True, check=True).stdout
+            self.assertIn('-Xmx2g', opts)
+            self.assertTrue(opts.endswith('-Dgradle.user.home=' + str(home)), opts)  # the JVM keeps the last -D
+
+    def test_toolchain_paths_come_from_env(self):
+        self.assertTrue(release.DEFAULT_JAVA17_HOME and release.DEFAULT_ANDROID_HOME and release.DEFAULT_WORKER_PYTHON)
+        src = Path(release.__file__).read_text()
+        self.assertEqual(src.count('/opt/homebrew/'), 3, 'Homebrew paths live only in the overridable defaults')
+
 if __name__ == '__main__':
     unittest.main()
