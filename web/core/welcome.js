@@ -105,8 +105,7 @@
   // The same preview cards as Settings › Look (core/settings.js skinCard + core/skins.css .skp), Wizard colours only.
   const pvars = k => { const t = k.t || {}; return [['bg', t.bg || k.bg], ['ink', t.ink], ['ac', t.violet || k.accent], ['ac2', t['violet-2']], ['pk', t.pink], ['cy', t.cyan], ['dock', t['sk-dock']], ['dl', t['sk-dock-line']]]
     .filter(([, v]) => v).map(([n, v]) => `--p-${n}:${esc(v)}`).join(';'); };
-  const faceCss = f => f ? `font-family:${f.family};font-weight:${f.weight || 400};font-style:${f.style || 'normal'}` : '';
-  const card = (k, cur) => `<button type="button" class="skp-card" data-wl="palette" data-id="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}"><span class="skp-mini" data-skp="${esc(k.id)}" style="${pvars(k)}" aria-hidden="true"><i class="skp-a"></i><i class="skp-a skp-a2"></i><i class="skp-u"></i><i class="skp-dock"><i class="skp-orb"></i></i></span><span class="skp-nm" style="${esc(faceCss(k.face))}">${esc(k.name)}</span></button>`;
+  const card = (k, cur) => `<button type="button" class="skp-card" data-wl="palette" data-id="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}"><span class="skp-mini" data-skp="${esc(k.id)}" style="${pvars(k)}" aria-hidden="true"><i class="skp-a"></i><i class="skp-a skp-a2"></i><i class="skp-u"></i><i class="skp-dock"><i class="skp-orb"></i></i></span><span class="skp-nm">${esc(k.name)}</span></button>`;
   function paintLook() {
     const S = window.WosSkin;
     const fam = S?.families?.find(f => f.id === FAMILY);
