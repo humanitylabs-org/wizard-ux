@@ -252,7 +252,7 @@ test('third review: AI page offers sign-in with no accounts, backup read failure
 test('fourth review: sign-in state survives normalisation, managed workspaces get honest System pages, Dictate keeps its field through the mic menu', () => {
   const usage = read('web/core/usage.js'), desk = read('web/desktop/desktop.js');
   assert.match(usage, /signedOut: \['signed_out', 'auth', 'reauth'\]\.includes\(p\.status\)/);
-  assert.match(usage, /status:\['stale', 'signed_out', 'auth', 'reauth'\]\.includes\(p\.status\) \? p\.status : a\.status, signedOut:a\.signedOut === true \|\| p\.signedOut === true/, 'a group sign-out reaches its accounts');
+  assert.match(usage, /\['stale', 'signed_out', 'auth', 'reauth'\]\.includes\(p\.status\) \? p\.status : a\.status, signedOut:childOut \|\| a\.signedOut === true \|\| p\.signedOut === true/, 'a group sign-out reaches its accounts');
   for (const who of ['miguel', 'wizard']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /const signedOut = p\.signedOut === true \|\|/, who);
@@ -292,6 +292,13 @@ test('seventh review: one switch per Home map group; desktop Ready leaves the op
   assert.match(exp, /on: groupOf\(id\) \? groupOn\(id\) : enabled\(id\)/, 'and it shows what actually loads');
   assert.match(exp, /if \(item\.on\) await setOne\(id, false\);\n      else for \(const m of groupOf\(id\) \|\| \[id\]\) if \(m === id \|\| explicitOff\(m\)\) await setOne\(m, true\);/, 'one tap back on clears every member');
   assert.match(desk, /if \(w\.thread\) \{ CHATS\.chatsBack\(w\); syncChatsPane\(w\.id\); \} CHATS\.setFilter\(w, ''\);/);
+});
+
+test('eighth review: only stamped assets are immutable; a child sign-out survives a stale group', () => {
+  const ng = read('packaging/nginx.conf.template'), usage = read('web/core/usage.js');
+  assert.match(ng, /map "\$arg_v:\$uri" \$wizard_cache \{\n    default "no-cache";\n    "~\^\[0-9a-f\]\{12\}:\.\*\/sw\\\.js\$" "no-cache";/, 'pages and sw.js stay no-cache even with ?v=');
+  assert.doesNotMatch(ng, /map \$arg_v \$wizard_cache/, 'no blanket ?v= rule');
+  assert.match(usage, /const childOut = \['signed_out', 'auth', 'reauth'\]\.includes\(a\.status\); return \{\.\.\.a, providerId:p\.id, providerName:p\.name, status:childOut \? a\.status :/);
 });
 
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {

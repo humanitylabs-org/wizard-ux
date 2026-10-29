@@ -21,7 +21,12 @@ http {
   map $http_upgrade $connection_upgrade { default upgrade; '' ''; }
   # Release-stamped files (?v=<hash of every shell file>) never change under that URL: the browser keeps them for a
   # year and stops asking. Plain URLs (pages, data, the service worker) still check every time.
-  map $arg_v $wizard_cache { "" "no-cache"; default "public, max-age=31536000, immutable"; }
+  # Only stamped assets (12-hex release token, asset types) are immutable; pages, sw.js and any other ?v= stay no-cache.
+  map "$arg_v:$uri" $wizard_cache {
+    default "no-cache";
+    "~^[0-9a-f]{12}:.*/sw\.js$" "no-cache";
+    "~^[0-9a-f]{12}:.*\.(js|mjs|css|svg|webp|png|jpe?g|gif|ico|woff2?|json)$" "public, max-age=31536000, immutable";
+  }
   # Compress the shell's text files (scripts and styles are ~4x smaller); event streams and JSON APIs are left as is.
   gzip on; gzip_vary on; gzip_proxied any; gzip_comp_level 5; gzip_min_length 1024;
   gzip_types application/javascript text/javascript text/css image/svg+xml text/markdown application/manifest+json;
