@@ -606,7 +606,7 @@
     for (const k of ['text', 'title', 'url']) if (data[k] != null && String(data[k])) payload[k] = String(data[k]);
     if ((!payload.text && !payload.url) || (payload.text || '').length > 90000 || (payload.title || '').length > 1024 || (payload.url || '').length > 8192) return 'unsupported';
     if (payload.url) { try { const parsed = new URL(payload.url, location.href); if (!/^https?:$/.test(parsed.protocol)) return 'unsupported'; if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(payload.url)) payload.url = parsed.href; } catch (_) { return 'unsupported'; } }
-    // Wizard's own sheet first (people → Wizard apps → Other apps…); no receiver for this kind = straight out.
+    // Wizard's own sheet first (people → Apps → Other apps…); no receiver for this kind = straight out.
     if (!data.direct && !directShareDepth && window.WosShareSheet) return window.WosShareSheet.show(payload, () => shareOut(payload));
     return shareOut(payload);
   }

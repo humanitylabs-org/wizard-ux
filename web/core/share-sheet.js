@@ -1,4 +1,4 @@
-/* Wizard share sheet v1 (docs/SHARE-SHEET.md). Share opens Wizard's own sheet first: people → Wizard apps →
+/* Wizard share sheet v1 (docs/SHARE-SHEET.md). Share opens Wizard's own sheet first: people → Apps →
  * Other apps… (the Android tray / browser share). Entered only from WosChat.sharePayload. Apps receive through
  * WizardApp.share.receive (app-client.js → app-services.js → here). The sheet never sends for an app: it opens the
  * app with the item pending, and the app places it in its own composer for the owner's final tap. */
@@ -117,7 +117,7 @@
       <div class="shs-t">Share</div>
       ${preview ? `<div class="shs-preview">${thumbnail ? `<img class="shs-thumb" src="${esc(thumbnail)}" alt="Image to share">` : ''}<div class="shs-prev">${esc(preview)}</div></div>` : ''}
       ${ppl.length ? `<div class="shs-sub">People</div><div class="shs-row" data-shs-people>${ppl.map(p => { const t = appTile(p.appId); return `<button type="button" class="shs-person" data-shs-app="${esc(p.appId)}" data-shs-target="${esc(p.id)}" aria-label="${esc(p.name)} in ${esc(t.name)}"><span class="shs-av" style="--h:${hue(p.name)}">${esc(initials(p.name))}<span class="shs-badge">${t.icon}</span></span><span class="shs-nm">${esc(p.name)}</span></button>`; }).join('')}</div>` : ''}
-      <div class="shs-sub">Wizard apps</div><div class="shs-row" data-shs-apps>${list.map(id => { const t = appTile(id); return `<button type="button" class="shs-app" data-shs-app="${esc(id)}">${t.icon}<span class="shs-nm">${esc(t.name)}</span></button>`; }).join('')}</div>
+      <div class="shs-sub">Apps</div><div class="shs-row" data-shs-apps>${list.map(id => { const t = appTile(id); return `<button type="button" class="shs-app" data-shs-app="${esc(id)}">${t.icon}<span class="shs-nm">${esc(t.name)}</span></button>`; }).join('')}</div>
       <button type="button" class="shs-other" data-shs-other><span class="shs-oi" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></span>Other apps…</button>
     </div>`;
     return el;

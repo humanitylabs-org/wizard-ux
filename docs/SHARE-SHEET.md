@@ -1,12 +1,12 @@
 # Wizard share sheet
 
-Share opens **People → Wizard apps → Other apps…**. A normal tap stays inside Wizard; holding a Share control for 500 ms goes straight to the Android/system tray. Nothing sends without a final tap in the receiving app.
+Share opens **People → Apps → Other apps…**. A normal tap stays inside Wizard; holding a Share control for 500 ms goes straight to the Android/system tray. Nothing sends without a final tap in the receiving app.
 
 ## Owner experience
 
 - Tap Share in a reply, quote, code block, selection menu, media viewer, or an app's `WizardApp.share.text / file`.
 - **People**: up to 8 recent targets. Tap one to open that chat with text or a photo staged in its composer.
-- **Wizard apps**: apps accepting this kind. Messenger asks who when no target is selected.
+- **Apps**: apps accepting this kind. Messenger asks who when no target is selected.
 - **Other apps…**: the existing Android tray, browser share or text-copy fallback.
 - Back, Escape or tapping outside closes the sheet and reports `cancelled`; Back never exits.
 - With no installed receiver for this kind, sharing goes straight to the existing native/browser path.
