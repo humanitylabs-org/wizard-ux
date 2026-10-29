@@ -499,7 +499,7 @@ def main():
         rig.fixture_start(); rig.boot(); rig.compile_sender()
         rig.adb_cmd('install', '-r', '-g', apk)
         # Configure only the debug loopback hook; never access real server settings/accounts.
-        rig.sx('run-as ' + PKG + ' sh -c "mkdir -p files; printf ' + rig.origin + ' > files/qa_home.txt"')
+        rig.sx('run-as ' + PKG + ' sh -c "mkdir -p files; printf ' + rig.origin + ' > files/qa_home.txt; printf ' + rig.origin + ' > files/qa_origin.txt"')
         rig.sx('am start -W -n ' + PKG + '/ai.wizards.os.MainActivity')
         rig.connect_page()
         # Seed only local onboarding preferences, then reload the real shell. No bridge/app mocks.
@@ -514,6 +514,7 @@ def main():
         state = rig.page.ev("({comment:document.querySelector('.dv-text').value,placeholder:document.querySelector('.dv-text').placeholder,quote:document.querySelector('.dv-quote')?.textContent||'',files:document.querySelector('.dv-items').innerText,agent:document.querySelector('.dv-agent strong').textContent,chat:document.querySelector('.dv-chat strong').textContent})")
         assert state['comment'] == '' and state['placeholder'] == 'Add a comment (optional)' and state['quote'] == ''
         assert 'x.pdf' in state['files'] and state['agent'] == 'Wizard' and state['chat'] == 'New chat'
+        assert rig.page.ev("!document.querySelector('.dv-items').isContentEditable && !document.querySelector('.dv-items input,.dv-items textarea,[contenteditable=true]')")
         rig.screenshot(phase); report['phases'][phase] = {'status': 'PASS', 'state': state}; save()
 
         phase = 'agent-and-chat'
@@ -521,6 +522,8 @@ def main():
         assert rig.page.ev("document.querySelector('.dv-picker [role=option]')?.textContent.includes('+ New chat')")
         rig.sx('input keyevent KEYCODE_BACK')
         wait(lambda: rig.sheet() and not rig.page.ev("!!document.querySelector('.dv-picker-wrap')"))
+        rig.tap('.dv-chat'); rig.tap('[data-dvpick=qa_existing_thread]')
+        assert rig.page.ev("document.querySelector('.dv-chat strong').textContent==='Trip planning'")
         rig.pick_private()
         assert rig.page.ev("document.querySelector('.dv-chat strong').textContent==='New chat'")
         rig.tap('.dv-chat')

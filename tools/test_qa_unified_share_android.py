@@ -105,6 +105,14 @@ class ControllerTest(unittest.TestCase):
         manifest = (HERE / 'unified-share-sender/AndroidManifest.xml').read_text()
         self.assertIn('android:exported="false" android:grantUriPermissions="true"', manifest)
 
+    def test_both_native_origin_hooks_before_first_launch(self):
+        text = (HERE / 'qa_unified_share_android.py').read_text()
+        install = text.index("rig.adb_cmd('install', '-r', '-g', apk)")
+        launch = text.index("rig.sx('am start -W -n ' + PKG", install)
+        configure = text[install:launch]
+        self.assertIn('files/qa_home.txt', configure)
+        self.assertIn('files/qa_origin.txt', configure)
+
     def test_host_guard_refuses_vps(self):
         import subprocess
         result = subprocess.run(['python3', str(HERE / 'qa_unified_share_android.py'), '--seal', '/unused', '--seal-sha256', '0' * 64], capture_output=True, text=True)

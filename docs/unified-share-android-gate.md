@@ -41,7 +41,7 @@ no build, browser or emulator and is not Android acceptance.
 
 ## Real device phases and evidence
 
-The separate synthetic source app generates a 24 MiB PDF-shaped fixture byte
+The separate synthetic source app generates a 24 MiB blank-page PDF fixture byte
 payload, opens a content provider and grants a **real ACTION_SEND** read URI grant
 to the actual debug ShareActivity. This is an explicit receiver test, **not** a
 claim about Gmail, the OS chooser or third-party account integration. The sender
@@ -76,7 +76,8 @@ Required phases:
 FAIL/NOT_COVERED, never synthetic success. Logs include Gradle/JUnit counts, APK
 hash, sender APK hash, network share requests, persistent queue, final fixture
 state, screenshots, logcat and cleanup state. All fixture APIs bind loopback;
-qa_home.txt is the debug-only emulator origin. No private agent data, recordings,
+qa_home.txt and qa_origin.txt both point to the debug-only emulator fixture before
+the first launch (including the updater/Everywhere clients). No private agent data, recordings,
 Messenger unlock, owner origin, owner signing material or live endpoints.
 
 Every owned emulator is stopped in `finally`, with PID exit and serial absence
