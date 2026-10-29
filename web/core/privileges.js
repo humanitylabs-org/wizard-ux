@@ -42,7 +42,7 @@
     const a = approval(value); if (!a) return '';
     const sentences = [...new Set(a.risks.map(riskSentence))];
     if (!sentences.length) sentences.push('Use extra server permissions. Review the request in the App Manager.');
-    return `<section class="wz-owner-approval" role="group" aria-label="App needs your approval"><b>${esc(name || a.app)} needs your approval</b><p>This app wants to:</p><ul>${sentences.map(s => `<li>${esc(s)}</li>`).join('')}</ul><p>Approve in the App Manager, then retry the install, update or restore. Nothing has been approved here.</p>${ownerLink(a.approve_url, 'Approve')}</section>`;
+    return `<section class="wz-owner-approval" role="group" aria-label="App needs your approval"><b>${esc(name || a.app)} needs your approval</b><p>This app wants to:</p><ul>${sentences.map(s => `<li>${esc(s)}</li>`).join('')}</ul><p>Approve on the separate owner approval page that opens, then retry the install, update or restore. Nothing has been approved here.</p>${ownerLink(a.approve_url, 'Approve')}</section>`;
   }
   function bannerHtml(doc = state) {
     if (doc?.enabled !== true) return '';
