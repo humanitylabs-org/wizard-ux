@@ -173,7 +173,7 @@ for (const route of [
 function uiHarness(api) {
   const w = { id: 'test', thread: 'original-thread' }, c = { readNav: 1, trail: ['parent-thread'] }, opened = [], notices = [];
   const H = { win: () => w, toast: (...args) => notices.push(args) };
-  const ctx = { OUTBOX: api, H, ch: () => c, LIVE: { session: sid => sid === 'parent-thread' },
+  const ctx = { INC: null, OUTBOX: api, H, ch: () => c, LIVE: { session: sid => sid === 'parent-thread' },
     openChat: (_, sid) => { w.thread = sid; opened.push(sid); }, chatsBack: () => { w.thread = null; opened.push('list'); },
     Promise, window: {}, esc: s => s, reach: () => ({}), troubleshoot: '' };
   const back = chats.slice(chats.indexOf('  function threadBack(w) {'), chats.indexOf('  /* Send steps back'));

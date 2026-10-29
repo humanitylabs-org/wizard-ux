@@ -346,6 +346,10 @@
       ],
       "note": "Android pinned app-only task policy (home-screen shortcut sessions)"
     },
+    "core/incognito-chat.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Shared RAM-only Incognito lifecycle composed by Chats"
+    },
     "core/launcher-defaults.js": {
       "loadedBy": [
         "phone",
@@ -640,6 +644,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/incognito-chat.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared RAM-only Incognito lifecycle composed by Chats"
+    },
     "core/app-setup.js": {
       "loadedBy": [
         "phone",
@@ -803,6 +814,7 @@
     "core/features.js",
     "core/files.js",
     "core/focused-field.js",
+    "core/incognito-chat.js",
     "core/launcher-defaults.js",
     "core/launcher.js",
     "core/links.css",

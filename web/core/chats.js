@@ -208,6 +208,7 @@ window.WizCore.chats = function createChats(H) {
   }
   // Parsing, Markdown, Bangkok time, drafts, copy/share and the media viewer live in chat-kit.js.
   const KIT = window.WosChat;
+  const INC = window.WizCore.incognitoChats?.({ win: id => W[id], elOf: id => elOf(id), paint: id => { const w = W[id]; if (w) renderChats(w); }, grow: growTa, toast, kit: KIT });
   // Pins (core/chat-pins.js, synced per owner) and Boomerang (core/scheduled-reminders.js, loads after this file).
   const PIN = window.WosChatPins || { has: () => false, toggle: () => false, partition: rows => ({ pinned: [], rest: rows }) };
   const BOOM = () => window.WosBoomerang || null;
@@ -1230,6 +1231,7 @@ window.WizCore.chats = function createChats(H) {
   }
 
   async function addFiles(wid, list) {
+    if (INC?.active(wid)) { toast('!', 'Attachments aren’t available in Incognito', 2200); return; }
     const c = ch(wid); c.files = c.files || [];
     const picked = [...list], room = Math.max(0, MAX_FILES - c.files.length);
     if (picked.length > room) toast('!', `Up to ${MAX_FILES} files per message`, 2400);
@@ -1277,6 +1279,7 @@ window.WizCore.chats = function createChats(H) {
     if (r) form.insertAdjacentHTML('afterbegin', replyBubble(r));
   }
   function refreshCompose(wid) {
+    if (INC?.active(wid)) return;
     const el = track.querySelector(`[data-chats="${wid}"]`); const form = el?.querySelector('[data-chform]'); if (!form) return;
     const c = ch(wid), old = form.querySelector('.ch-tray');
     const html = attachTray(c);
@@ -1306,6 +1309,7 @@ window.WizCore.chats = function createChats(H) {
   }
   let player = null; // { id, audio }
   function toggleVoice(id) {
+    if (INC?.active(id)) { toast('!', 'Incognito is text only', 2200); return; }
     if (player && player.id === id) { if (player.audio.paused) player.audio.play().catch(() => {}); else player.audio.pause(); return; }
     if (player) { player.audio.pause(); paintVoice(player.id, false, 0); }
     const audio = new Audio(fileUrl(id)); player = { id, audio };
@@ -1865,12 +1869,14 @@ window.WizCore.chats = function createChats(H) {
     return { working, sub };
   }
   function renderThread(w, el, keep) {
+    if (INC?.render(w.id, el)) return;
     if (H.renderView?.(w, el, () => renderThread(w, el, keep), 'thread')) return;
     ch(w.id).held = false; // explicit actions/navigation may repaint immediately
     const c = ch(w.id), isNew = w.thread === '__new__', s = isNew ? null : rowOf(w.id, w.thread);
     // The thread's own agent (pinned at creation); a new chat belongs to the window's agent.
     const TAG = isNew ? (winAgent(w) || (AGS()?.isOther(c.newModel?.agent) ? c.newModel.agent : '')) : (LIVE.agentOf ? LIVE.agentOf(w.thread) : '');
     // Unified Chats: a private agent's thread opened from the owner's main list says so in its header.
+    const incognitoAction = isNew && INC && agentRec(TAG)?.incognito_available && AGS()?.isPrivate(agentRec(TAG)) ? '<button type="button" class="pbtn ch-incog-toggle" role="switch" aria-checked="false" data-incog-start aria-label="Incognito"><span>Incognito</span><span class="sw" aria-hidden="true"><i></i></span></button>' : '';
     const privTag = TAG && AGS()?.isPrivate(agentRec(TAG)) ? `<span class="ch-privtag" data-wiz-private="" title="Private agent: ${esc(agentName(TAG))}">${AGS().lock()}<span>Private</span></span>` : '';
     const state = threadState(s, TAG), working = state.working;
     const sub = isNew ? `Starts a new thread with ${agentName(TAG)}` : state.sub;
@@ -1951,7 +1957,7 @@ window.WizCore.chats = function createChats(H) {
     const keepSheet = keptSheet(el);
     const openContexts = el.dataset.draftFor === dkey ? new Set([...el.querySelectorAll('[data-run-original][open]')].map(e => e.dataset.runOriginal)) : new Set();
     const threadHTML = `<div data-part="thread" class="ch-thread${TAG ? ' agent' : ''}${NV ? ' ch-notif-thread' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
-      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(NV ? NV.reply.title || NV.item?.title || 'Notification' : winTitle(w))}</b>`}${privTag}</div>${chip}<span data-slot="thread-header-actions"></span></div>
+      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(NV ? NV.reply.title || NV.item?.title || 'Notification' : winTitle(w))}</b>`}${privTag}</div>${chip}${incognitoAction}<span data-slot="thread-header-actions"></span></div>
       ${s && BOOM() ? BOOM().banner(s.id) : ''}<div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
       ${msw ? `<div class="ch-swrow">${msw}<span data-slot="thread-switch-row-end"></span></div>` : '<div data-slot="thread-switch-row-end"></div>'}<form data-slot="composer-end" data-part="composer" class="ch-compose${hasContent(draft, c.files || []) ? ' has-text' : ''}${rpl ? ' has-reply' : ''}" data-chform>${replyBubble(rpl)}${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${mlabel}</div>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
@@ -2003,7 +2009,7 @@ window.WizCore.chats = function createChats(H) {
     c.files = d.files.map(f => ({ ...f, key: Math.random().toString(36).slice(2), preview: /^image\//.test(f.mime || '') ? (PREVIEW[f.id] || fileUrl(f.id)) : '' }));
     return d.text;
   }
-  function saveDraft(wid) { const w = W[wid], c = ch(wid); if (!w || !w.thread) return; KIT.drafts.set(draftKey(w), c.draft || '', c.files || []); }
+  function saveDraft(wid) { if (INC?.active(wid)) return; const w = W[wid], c = ch(wid); if (!w || !w.thread) return; KIT.drafts.set(draftKey(w), c.draft || '', c.files || []); }
   function openMedia(wid, k) {
     const c = ch(wid), list = c.media || [], m = list[k]; if (!m) return;
     // Photos swipe as one gallery (this thread, oldest first); a file or video opens on its own.
@@ -2275,6 +2281,7 @@ window.WizCore.chats = function createChats(H) {
     return `<div class="ch-empty ch-readerr" role="status"><b>Couldn’t load this thread</b><br>${esc(why)} Retrying automatically.<br><button type="button" class="pbtn" data-chretry>Retry now</button>${r && !['checking', 'send'].includes(r.layer) ? ' ' + troubleshoot : ''}</div>`;
   }
   function renderChats(w) {
+    if (INC?.render(w.id, elOf(w.id))) return;
     syncListTitle(w);
     const el = track.querySelector(`[data-chats="${w.id}"]`); if (!el) return;
 
@@ -2288,6 +2295,7 @@ window.WizCore.chats = function createChats(H) {
     return !!LIVE.listTrusted?.() && c.readCk === LIVE.contentKey(s);
   }
   async function loadThread(w, force) {
+    if (INC?.active(w.id)) return;
     const c = ch(w.id), sid = w.thread, nav = c.readNav;
     if (!sid || sid === '__new__' || (c.loading && c.loading.sid === sid && c.loading.nav === nav)) return;
     if (c.goneFor === sid && c.goneNav === nav) return; // answered 404 in this open: gone, not worth polling
@@ -2383,6 +2391,7 @@ window.WizCore.chats = function createChats(H) {
   function openChat(wid, sid, opts = {}) {
     window.WizCore.chatSearch?.park(wid); // Back returns to these results, not a fresh search
     const w = W[wid]; if (!w) return;
+    if (INC?.active(wid) && !INC.close(wid)) return;
     if (!w.thread) { const c0 = ch(wid), place = c0.listPending || listPlace(elOf(wid)); c0.listPending = null; if (place) c0.listPlace = place; }
     if (w.thread) saveDraft(wid);
     closeRowSheet();
@@ -2426,7 +2435,7 @@ window.WizCore.chats = function createChats(H) {
     if (W[wid]) renderThreadNow(W[wid]);
     toast('◇', `New private chat on ${o.name}`, 1600);
   }
-  function chatsBack(w) { if (closeHosted(w.id)) return; if (w.thread) saveDraft(w.id); const c = ch(w.id); if (c.carry) { c.carry = null; c.newModel = null; } c.readNav = (c.readNav || 0) + 1; c.files = []; c.draft = ''; c.draftFor = ''; c.trail = []; w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); }
+  function chatsBack(w) { if (INC?.active(w.id)) { if (INC.close(w.id)) { const c = ch(w.id); c.readNav = (c.readNav || 0) + 1; c.trail = []; c.files = []; c.draft = ''; c.draftFor = ''; w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); } return; } if (closeHosted(w.id)) return; if (w.thread) saveDraft(w.id); const c = ch(w.id); if (c.carry) { c.carry = null; c.newModel = null; } c.readNav = (c.readNav || 0) + 1; c.files = []; c.draft = ''; c.draftFor = ''; c.trail = []; w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); }
   /* One step back from a thread: to the thread it was opened from (trail), else to the list. */
   function threadBack(w) {
     const c = ch(w.id), prev = (c.trail || []).pop();
@@ -2490,6 +2499,7 @@ window.WizCore.chats = function createChats(H) {
   const fileRef = f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes });
   // What a thread's composer holds right now (the window's textarea while it shows that thread, else the draft).
   function peekComposer(wid, sid) {
+    if (INC?.active(wid)) return { text: '', files: [] };
     const w = W[wid], here = !!w && !!sid && w.thread === sid, c = w ? ch(wid) : null;
     const ta = here ? elOf(wid)?.querySelector('.ch-compose textarea') : null;
     const saved = sid ? KIT.drafts.get(composerKey(sid)) : { text: '', files: [] };
@@ -2515,6 +2525,7 @@ window.WizCore.chats = function createChats(H) {
   }
   const NO_SEAL = { text: '', files: [], done() {}, putBack() {} };
   function takeComposer(wid, sid) {
+    if (INC?.active(wid)) return NO_SEAL;
     if (!sid) return NO_SEAL;
     const P = peekComposer(wid, sid), dkey = composerKey(sid);
     // A file still uploading is taken too (a pending placeholder): the message never waits for it.
@@ -2556,6 +2567,7 @@ window.WizCore.chats = function createChats(H) {
    * opts.seal (voice sends): the thread's composer taken at the send tap (takeComposer), sent with it; true
    * takes it now; false sends nothing from the composer (the later parts of an interrupted take). */
   async function sendChat(wid, text, how = 'typing in the Chats window', audio = null, opts = {}) {
+    if (INC?.active(wid)) { if (audio || opts.files?.length || opts.seal) { toast('!', 'Incognito is text only', 2200); return null; } return INC.send(wid, text); }
     const w = W[wid]; text = String(text || '').trim();
     if (!w) { if (opts.seal && opts.seal !== true) opts.seal.putBack(); return; }
     const c = ch(wid);
@@ -2695,6 +2707,11 @@ window.WizCore.chats = function createChats(H) {
   const idOf = t => t.closest('[data-chats]')?.dataset.chats || '';
   /* Clicks inside a Chats window. Returns true when it handled the click. */
   function click(e, id) {
+    if (INC?.click(id, e)) return true;
+    if (e.target.closest('.ch-back[data-incog-close]')) { chatsBack(W[id]); return true; }
+    if (e.target.closest('[data-incog-close]')) { if (INC?.close(id)) renderChats(W[id]); return true; }
+    if (e.target.closest('[data-incog-off]')) { INC?.close(id); renderChats(W[id]); return true; }
+    if (e.target.closest('[data-incog-start]')) { const w = W[id]; if (!w || w.thread !== '__new__') return true; if (H.captureBusy?.()) { renderChats(w); toast('!', 'Finish recording before starting Incognito', 2600); return true; } const c = ch(id), agentId = winAgent(w) || c.newModel?.agent; const a = AGS()?.get(agentId); if (a?.privacy === 'private' && a.incognito_available) { saveDraft(id); void INC?.start(id, a); } return true; }
     if (e.target.closest('[data-chtroubleshoot]')) { window.WizReach?.open(); return true; }
     const w = H.win(id); if (!w) return false;
     const hc = e.target.closest('[data-helper-continue]');
@@ -2853,6 +2870,7 @@ window.WizCore.chats = function createChats(H) {
   /* Submit, search-as-you-type, drafts and ⌘/Ctrl+Enter, delegated from the shell's root. */
   function bind(root) {
     root.addEventListener('submit', e => {
+      if (e.target.matches('[data-incog-form]')) { e.preventDefault(); const id = idOf(e.target), field = e.target.querySelector('textarea'), text = field.value; field.value = ''; void INC?.send(id, text); return; }
       const rn = e.target.closest('[data-rnform]'); if (rn) { e.preventDefault(); submitRename(rn); return; }
       const f = e.target.closest('[data-chform]'); if (!f) return;
       e.preventDefault(); const id = idOf(f); const ta = f.querySelector('textarea');
@@ -2874,6 +2892,7 @@ window.WizCore.chats = function createChats(H) {
       setTimeout(() => { const el = elOf(id), inp = el?.querySelector('[data-chsearch]'); if (!c.focus || (inp && document.activeElement === inp)) return; c.focus = false; if (!c.q && el?.querySelector('.ch-sug')) renderChatList(H.win(id), el); }, 260);
     });
     root.addEventListener('input', e => {
+      if (e.target.matches('[data-incog-field]')) { INC?.input(idOf(e.target), e.target); return; }
       if (e.target.matches('[data-chemosearch]')) renderEmojiSearch(e.target.closest('.ch-emoji-sheet'), e.target.value);
       if (e.target.matches('[data-chsearch]')) {
         const id = idOf(e.target); ch(id).q = e.target.value; ch(id).coach = false; const el = elOf(id);
@@ -2900,12 +2919,13 @@ window.WizCore.chats = function createChats(H) {
   /* Words from outside (dictation, a native shell) go in at the composer's cursor. */
   function insertText(id, text) {
     const ta = elOf(id)?.querySelector('.ch-compose textarea'); if (!ta || !text) return false;
+    if (INC?.active(id)) { window.WizComposerInput.insertText(ta, text); INC.input(id, ta); return true; }
     const a = ta.selectionStart ?? ta.value.length, b = ta.selectionEnd ?? a;
     ta.value = ta.value.slice(0, a) + text + ta.value.slice(b); ta.focus();
     ta.setSelectionRange(a + text.length, a + text.length); ch(id).draft = ta.value; saveDraft(id); growTa(ta); syncSend(ta.form, ch(id));
     return true;
   }
-  const forget = id => { if (CH[id]) closeStream(CH[id]); closeHosted(id); clearReading(id); delete CH[id]; };
+  const forget = id => { INC?.close(id, true); if (CH[id]) closeStream(CH[id]); closeHosted(id); clearReading(id); delete CH[id]; };
   function justPressed() { return Date.now() < lpUntil; }
   // A list must not re-render under an open actions sheet or a finger mid-press.
   const holdList = id => {
@@ -2918,6 +2938,7 @@ window.WizCore.chats = function createChats(H) {
   const closeOverlay = () => (closeSwipe() ? 'row-swipe' : null) || (closeSpacePicker() ? 'space-picker' : null) || (closeFilterSheet() ? 'filter-sheet' : null) || (window.WizCore.status?.back() || (KIT.viewer.close() ? 'viewer' : closeRowSheet() ? 'thread-actions' : PW?.closeSheet() ? 'chat-sheet' : ''));
   // Put words (and already-uploaded files) back into a composer, e.g. editing an unsent message.
   function setDraft(wid, text, files) {
+    if (INC?.active(wid)) { toast('!', 'Close Incognito before opening a saved draft', 2200); return; }
     const w = W[wid], c = ch(wid); if (!w) return;
     c.draft = text || ''; c.files = (files || []).map(f => ({ ...f, key: Math.random().toString(36).slice(2), preview: /^image\//.test(f.mime || '') && f.id ? (PREVIEW[f.id] || fileUrl(f.id)) : '' }));
     c.draftFor = draftKey(w); saveDraft(wid);
@@ -2939,7 +2960,7 @@ window.WizCore.chats = function createChats(H) {
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
   const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
-  return { tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: id => !INC?.active(id) || INC.close(id), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
     KIT, threadAct, notifOpen: wid => notifOf(W[owner(wid)])?.id || '', openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };
