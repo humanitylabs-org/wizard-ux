@@ -371,6 +371,14 @@ test('fourteenth review: only Wizard machines are helpers; a stale probe is a la
   }
 });
 
+test('fifteenth review: the desktop bar keeps its readings live over open windows', () => {
+  assert.match(read('web/core/skin-host.js'), /live: el => \{ if \(!a\.dead && el\?\.nodeType === 1\) window\.WosResources\?\.watch\?\.\(el\); \},/);
+  for (const who of ['miguel', 'wizard']) {
+    const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
+    assert.match(src, /const back = !barBox\.isConnected; if \(api\.slot\.mount\('dock-end', barBox, -1\) && back\) api\.data\.read\.resources\.live\?\.\(barBox\);/, who);
+  }
+});
+
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));

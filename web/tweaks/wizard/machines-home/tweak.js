@@ -702,7 +702,9 @@ export default function setup(api) {
   api.data.read.resources.watch(state => { if (state?.devicesError) S.devFresh = false; else if (state?.devices) S.devFresh = true; const got = merge(state); if (got.devices || got.ai) keep(); paint(); readBackup(); });
 
   /* ---------- mount at Home; keep it there across Home repaints ---------- */
-  const mount = () => { if (desk) { api.slot.mount('dock-end', barBox, -1); api.slot.mount('bar-start', wizBox); } if (api.slot.mount('home-main', root)) { api.data.read.resources.refresh(); api.frame(drawLines); } };
+  // The desktop bar stays up over open windows: it counts as a viewer, so its readings keep refreshing there too
+  // (registered each time it is put back, not on every route change).
+  const mount = () => { if (desk) { const back = !barBox.isConnected; if (api.slot.mount('dock-end', barBox, -1) && back) api.data.read.resources.live?.(barBox); api.slot.mount('bar-start', wizBox); } if (api.slot.mount('home-main', root)) { api.data.read.resources.refresh(); api.frame(drawLines); } };
   api.on('home', () => { mount(); paint(); });
   api.on('route', () => { mount(); readBackup(); });
   let ro = null;

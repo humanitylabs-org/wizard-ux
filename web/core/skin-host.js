@@ -513,6 +513,8 @@
     }
     if (caps.has('data.read')) api.data = Object.freeze({ read: Object.freeze({ resources: Object.freeze({
       snapshot: () => structuredClone(window.WosResources?.state || {}), refresh: () => window.WosResources?.sync(),
+      // A reading kept on screen outside Home or Settings (the desktop top bar) keeps the feed polling while it shows.
+      live: el => { if (!a.dead && el?.nodeType === 1) window.WosResources?.watch?.(el); },
       // resources.js announces each finished poll ('wos:resources'); the handle dies with the package.
       watch(fn) {
         if (a.dead || typeof fn !== 'function' || typeof window.addEventListener !== 'function') return () => {};
