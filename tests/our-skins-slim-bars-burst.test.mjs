@@ -14,3 +14,9 @@ for (const [f,p] of [['skins/obsidian/skin.css','html[data-skin^="obsidian"]'],[
  assert.ok(!c.includes('wos-burst'));
 });
 test('the burst lives only in the shared banner CSS',()=>{ for (const f of ['styles.css','core/skin-frame.css']) { assert.ok(!read(f).includes('wos-burst')); } });
+test('the update overlay stays calm: quick, no flash, rings or sparks',()=>{
+ const s=read('core/web-update.js'), c=read('core/update-banner.css');
+ assert.ok(!/wb-(sparks|flash|ring)/.test(s+c));
+ assert.match(s,/burst\(\); await new Promise\(r => setTimeout\(r, 450\)\)/);
+ assert.match(c,/\.wos-burst \.wb-bar \{/);
+});
