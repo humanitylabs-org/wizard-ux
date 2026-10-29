@@ -19,11 +19,15 @@ function harness({ status = 200, shell = 'phone' } = {}) {
   s.fetch = async url => { reads.push(String(url)); return { ok: String(url) === URL_ ? status === 200 : true, status: String(url) === URL_ ? status : 200, json: async () => ({}) }; };
   vm.runInNewContext(source, s);
   let iframe = false;
+  const frameWin = { location: { origin: 'https://box.test' }, overlays: 0, map: false, clicks: 0,
+    __wizardCloseOverlay() { if (frameWin.overlays > 0) { frameWin.overlays--; return true; } return false; },
+    document: { querySelector: sel => (sel === '[data-cm-seelist]' && frameWin.map ? { getClientRects: () => [1], click() { frameWin.map = false; frameWin.clicks++; } } : null) } };
+  s.location.origin = 'https://box.test';
   const root = { innerHTML: '', scrollTop: 0, dataset: {}, classList: { add() {} }, contains: () => false,
-    querySelector: sel => (sel === '[data-st-connections] iframe' && iframe ? {} : null), querySelectorAll: () => [], addEventListener() {}, removeEventListener() {} };
+    querySelector: sel => (sel === '[data-st-connections] iframe' && iframe ? { contentWindow: frameWin } : null), querySelectorAll: () => [], addEventListener() {}, removeEventListener() {} };
   let onLive = null;
   const view = s.WosSettings.mount(root, { shell, live: { ok: true, onChange: f => { onLive = f; return () => {}; } }, helpSub: 'Help' });
-  return { s, root, view, reads, mountFrame: () => { iframe = /data-st-connections><iframe/.test(root.innerHTML); }, liveChange: () => onLive?.() };
+  return { s, root, view, reads, frameWin, mountFrame: () => { iframe = /data-st-connections><iframe/.test(root.innerHTML); }, liveChange: () => onLive?.() };
 }
 const tabs = html => [...html.matchAll(/data-st-page="([a-z-]+)"/g)].map(m => m[1]);
 
@@ -80,4 +84,13 @@ test('Connections deep link on a cold start waits for the listener, then opens t
   const moved = harness();
   moved.s.WosSettings.route('connections', moved.view.focus); moved.view.focus('chats-default'); await tick();
   assert.equal(moved.view.page, 'chats', 'choosing another page first cancels the pending link');
+});
+
+test('Back inside Connections closes its pop-up, then leaves the map, then leaves the page', async () => {
+  const h = harness(); await tick();
+  h.view.focus('connections'); h.mountFrame();
+  h.frameWin.overlays = 1; h.frameWin.map = true;
+  assert.equal(h.view.back(), true); assert.equal(h.frameWin.overlays, 0); assert.equal(h.view.page, 'connections', 'pop-up first');
+  assert.equal(h.view.back(), true); assert.equal(h.frameWin.clicks, 1); assert.equal(h.view.page, 'connections', 'then map to list');
+  assert.equal(h.view.back(), true); assert.equal(h.view.page, '', 'then out of the page, never out of Settings in one go');
 });

@@ -512,6 +512,18 @@
   // The frame is kept while the page is open: background refreshes never reload it under the owner's hand.
   register({ id: 'connections', page: 'connections', aliases: ['connections', 'app-connections'], available: () => connectionsAvailable(),
     deferRefresh: ctx => !!ctx.root?.querySelector?.('[data-st-connections] iframe'),
+    // Back steps inside the view first, the way an app window does: its open pop-up (the kit's canonical
+    // __wizardCloseOverlay hook), then the map back to the list; only then does Settings leave the page.
+    back(ctx) {
+      const f = ctx.root?.querySelector?.('[data-st-connections] iframe');
+      try {
+        const w = f?.contentWindow; if (!w || w.location.origin !== location.origin) return false;
+        if (typeof w.__wizardCloseOverlay === 'function' && w.__wizardCloseOverlay() === true) return true;
+        const list = w.document.querySelector('[data-cm-seelist]');
+        if (list && list.getClientRects().length) { list.click(); return true; }
+      } catch (_) {}
+      return false;
+    },
     html: () => `<div class="st-embed" data-st-connections><iframe src="${esc(CONNECTIONS)}" title="Connections"></iframe></div>` });
   register({ id: 'chats-default', page: 'chats', aliases: ['chats-default'], html(ctx) {
     const host = chatsHost(), apps = host?.installed() || [{ id: 'wizard-chats' }], current = host?.defaultId() || 'wizard-chats';
