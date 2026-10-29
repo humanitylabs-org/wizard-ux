@@ -67,13 +67,19 @@ async function geometry(p) {
     const r = card.getBoundingClientRect(), composer = document.querySelector('.ch-compose').getBoundingClientRect();
     const head = document.querySelector('.ch-head').getBoundingClientRect(), vv = visualViewport;
     return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, height: r.height,
-      composerTop: composer.top, headBottom: head.bottom, viewportBottom: vv.offsetTop + vv.height,
+      composerTop: composer.top, composerBottom: composer.bottom, headBottom: head.bottom, viewportBottom: vv.offsetTop + vv.height,
+      inputHeight: document.querySelector('.ch-compose textarea').getBoundingClientRect().height,
+      inputMax: getComputedStyle(document.querySelector('.ch-compose textarea')).maxHeight,
+      safeBottom: getComputedStyle(document.documentElement).getPropertyValue('--vv-b'),
+      coveredBottom: getComputedStyle(document.documentElement).getPropertyValue('--wos-doc-bottom'),
+      dockTop: document.getElementById('dock')?.getBoundingClientRect().top,
       viewportTop: vv.offsetTop, viewportRight: vv.offsetLeft + vv.width,
       background: getComputedStyle(card).backgroundColor, image: getComputedStyle(card).backgroundImage };
   });
 }
 async function bounds(p, label) {
   const g = await geometry(p);
+  fs.appendFileSync(path.join(OUT, 'geometry.jsonl'), JSON.stringify({ label, ...g }) + '\n');
   ok(!g.missing && g.height > 40 && g.top >= Math.max(g.headBottom, g.viewportTop) - 1 && g.bottom <= Math.min(g.composerTop, g.viewportBottom) - 3 && g.left >= 0 && g.right <= g.viewportRight + 1,
     `${label}: popup wholly visible above composer`, g);
 }
@@ -131,6 +137,10 @@ async function exercise(browser, c) {
       await p.setViewportSize({ width: c.width, height: 440 });
       await p.waitForTimeout(250);
       await bounds(p, `${label} keyboard-height`);
+      if (c.mode === 'native') {
+        const g = await geometry(p);
+        ok(Math.abs(g.composerBottom - Math.min(g.viewportBottom, g.dockTop)) <= 1, `${label}: keyboard/dock strip counted once`, g);
+      }
       for (let i = 0; i < count; i++) {
         await rows.nth(i).scrollIntoViewIfNeeded();
         ok(await rows.nth(i).evaluate(el => { const r = el.getBoundingClientRect(); const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return !!hit && el.contains(hit); }), `${label}: keyboard model ${i + 1}/${count} hit-tested`);
