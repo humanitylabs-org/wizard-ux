@@ -97,8 +97,8 @@ test('chooser confirms before POST, reads the exact slot, refreshes registry and
   h.act('data-chats-confirm'); await tick();
   assert.equal(h.posts.length, 1); assert.equal(h.posts[0].url, '/wizard-os-home/store-install/_slots/chats');
   assert.equal(h.posts[0].body, '{"default":"mizel-chats"}'); assert.equal(h.posts[0].credentials, 'same-origin');
-  // Phones & devices asks for its status on its own.
-  assert.deepEqual(h.reads.filter(url => url !== '/wizard/v1/setup/phone'), ['/wizard-os-home/store-install/_slots/chats']);
+  // Phones & devices and Connections ask whether they are available on their own.
+  assert.deepEqual(h.reads.filter(url => url !== '/wizard/v1/setup/phone' && url !== '/wizard-os-home/store-install/_connections/'), ['/wizard-os-home/store-install/_slots/chats']);
   assert.deepEqual(h.changed, ['mizel-chats']);
   assert.match(h.root.innerHTML, /aria-checked="true" data-chats-choice="mizel-chats"/);
 });

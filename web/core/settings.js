@@ -19,6 +19,10 @@
     // Hidden only for a non-owner; a Wizard without phone access shows the shared "not available yet" note.
     { id: 'phones', title: 'Phones & devices', available: phonesAvailable },
     { id: 'phone', title: 'Phone', available: () => shell() ? !!shellOrb() : android() },
+    // Connections: the App Manager's own view (agents, what each may use, app-to-app links), only where its owner
+    // listener answers. System pieces that come with every box live in Settings, not the launcher (wizard-os issue 324).
+    // pending: availability not known yet; a deep link to it waits for the answer instead of falling back to the root.
+    { id: 'connections', title: 'Connections', available: () => connectionsAvailable(), pending: () => conn.ok === null },
     { id: 'recovery', title: 'Unsent & recovered' },
     // Resources: the Home resource bars (AI + Compute) from the shared renderer, when it is there; else AI usage.
     { id: 'usage', get title() { return window.WosResources?.bars ? 'Resources' : 'AI usage'; } },
@@ -27,6 +31,22 @@
   ];
   const featurePages = { look: 'appearance', 'window-glass': 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
   const pageOf = f => f?.page != null ? PAGES.some(p => p.id === f.page) ? f.page : 'about' : featurePages[f?.id] || 'about';
+  /* Connections is served by the App Manager behind its owner channel, on this origin; the page hosts it as is, so
+   * its owner-only actions (Disconnect, Reconnect, agent access, Restore defaults) stay the App Manager's own. The tab
+   * shows only once that listener answers this device (a non-owner, or a box without it, never sees an empty tab). */
+  // Beside the shell's own pages (/wizard-os-home/), like the Store's install routes.
+  const CONNECTIONS = (() => { try { return new URL('store-install/_connections/', document.baseURI || location.href).pathname; } catch (_) { return '/wizard-os-home/store-install/_connections/'; } })();
+  const conn = { ok: null, at: 0, busy: false };
+  function connectionsAvailable() {
+    if (!conn.busy && Date.now() - conn.at > (conn.ok ? 300000 : 60000) && typeof fetch === 'function') {
+      conn.busy = true;
+      fetch(CONNECTIONS, { credentials: 'same-origin', cache: 'no-store' }).then(r => r.ok, () => conn.ok).then(ok => {
+        const was = conn.ok; conn.ok = ok === true; conn.at = Date.now(); conn.busy = false;
+        if (was !== conn.ok) for (const m of mounts) m.render();
+      });
+    }
+    return conn.ok === true;
+  }
   const chatsHost = () => window.WizChatsHost;
   const chatsName = id => id === 'wizard-chats' ? 'Wizard Chats' : chatsHost()?.installed().find(a => a.id === id)?.name || id;
   const recovered = () => window.WosCancelled?.list?.() || [];
@@ -489,6 +509,22 @@
     }
     outbox.remove(item.id); return true;
   }
+  // The frame is kept while the page is open: background refreshes never reload it under the owner's hand.
+  register({ id: 'connections', page: 'connections', aliases: ['connections', 'app-connections'], available: () => connectionsAvailable(),
+    deferRefresh: ctx => !!ctx.root?.querySelector?.('[data-st-connections] iframe'),
+    // Back steps inside the view first, the way an app window does: its open pop-up (the kit's canonical
+    // __wizardCloseOverlay hook), then the map back to the list; only then does Settings leave the page.
+    back(ctx) {
+      const f = ctx.root?.querySelector?.('[data-st-connections] iframe');
+      try {
+        const w = f?.contentWindow; if (!w || w.location.origin !== location.origin) return false;
+        if (typeof w.__wizardCloseOverlay === 'function' && w.__wizardCloseOverlay() === true) return true;
+        const list = w.document.querySelector('[data-cm-seelist]');
+        if (list && list.getClientRects().length) { list.click(); return true; }
+      } catch (_) {}
+      return false;
+    },
+    html: () => `<div class="st-embed" data-st-connections><iframe src="${esc(CONNECTIONS)}" title="Connections"></iframe></div>` });
   register({ id: 'chats-default', page: 'chats', aliases: ['chats-default'], html(ctx) {
     const host = chatsHost(), apps = host?.installed() || [{ id: 'wizard-chats' }], current = host?.defaultId() || 'wizard-chats';
     apps.sort((a, b) => (b.id === 'wizard-chats') - (a.id === 'wizard-chats'));
@@ -497,7 +533,7 @@
   function mount(root, adapter) {
     root.classList.add('st-root'); root.dataset.settingsRoot = '';
     const ctx = { ...adapter, root }, api = { render, focus, back, destroy, dispatch, context: ctx, get page() { return page; } };
-    let skinImportMessage = '', page = '', confirm = null;
+    let skinImportMessage = '', page = '', confirm = null, wanted = '';
     const desktop = adapter.shell === 'desktop';
     const effectivePage = () => page || (desktop ? 'appearance' : '');
     ctx.render = () => render(true);
@@ -515,7 +551,10 @@
       const record = active?.closest('[data-ubid]')?.dataset.ubid;
       const selection = active && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
       const pages = PAGES.filter(p => !p.available || p.available(ctx));
-      if (page && !pages.some(p => p.id === page)) page = '';
+      // A page whose availability is still being checked (a cold deep link) opens once it turns out available.
+      if (wanted && !page && pages.some(p => p.id === wanted)) page = wanted;
+      if (wanted && (page === wanted || !PAGES.find(p => p.id === wanted)?.pending?.())) wanted = '';
+      if (page && !pages.some(p => p.id === page)) { if (PAGES.find(p => p.id === page)?.pending?.()) wanted = page; page = ''; }
       const selected = effectivePage();
       const heading = PAGES.find(p => p.id === selected)?.title || '';
       const items = attention(ctx);
@@ -541,6 +580,7 @@
     function focus(id) {
       for (const f of features.values()) if (pageOf(f) === effectivePage()) f.leave?.(ctx);
       const f = features.get(id) || [...features.values()].find(f => f.aliases?.includes(id));
+      wanted = '';
       page = f ? pageOf(f) : featurePages[id] || (id === 'updates' ? 'about' : PAGES.some(p => p.id === id) ? id : '');
       for (const f of features.values()) if (pageOf(f) === effectivePage()) f.enter?.(ctx);
       confirm = null; render(); root.scrollTop = 0;
