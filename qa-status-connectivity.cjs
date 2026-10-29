@@ -10,7 +10,7 @@ const origin = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/
   try {
     for (const phone of [true, false]) {
       const ctx = await browser.newContext({ viewport: phone ? { width: 412, height: 892 } : { width: 1440, height: 1000 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36' } : {}) });
-      let failed = false, successfulReads = 0, diagnosisReads = 0;
+      let failed = false, statusBlocked = false, successfulReads = 0, diagnosisReads = 0, statusReads = 0, verificationReads = 0, holdVerification = null;
       await ctx.addInitScript(() => {
         window.__qaOnline = false;
         Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => window.__qaOnline });
@@ -19,7 +19,15 @@ const origin = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/
       await ctx.route('**/*', async route => {
         const req = route.request(), u = new URL(req.url());
         if (u.pathname === '/troubleshoot/api/ping') { diagnosisReads++; return route.fulfill({ json: { ok: true } }); }
-        if (u.pathname === '/troubleshoot/api/status') return route.fulfill({ json: { overall: failed ? 'degraded' : 'ok', checks: failed ? [{ id: 'agent-service', label: 'Agent Service', ok: false, detail: 'Restarting' }] : [] } });
+        if (u.pathname === '/troubleshoot/api/status') {
+          statusReads++;
+          const verification = u.searchParams.get('source') === 'connection-banner';
+          if (verification) verificationReads++;
+          const body = { overall: failed || statusBlocked ? 'degraded' : 'ok', checks: failed ? [{ id: 'agent-service', label: 'Agent Service', ok: false, detail: 'Restarting' }] : [] };
+          const gate = verification ? holdVerification : null;
+          if (gate) { holdVerification = null; await gate; }
+          return route.fulfill({ json: body });
+        }
         if (u.pathname === '/troubleshoot/') return route.fulfill({ contentType: 'text/html', body: '<title>Troubleshooter QA fixture</title><a href="/wizard-os-home/">Back to Wizard</a>' });
         if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method())) return route.fulfill({ status: 403, contentType: 'application/json', body: '{"error":"qa_write_blocked"}' });
         if (process.env.QA_WEB_DIR && u.pathname.startsWith('/wizard-os-home/')) {
@@ -41,6 +49,32 @@ const origin = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/
       assert.ok(successfulReads > 0);
       const shell = await page.evaluate(() => document.documentElement.dataset.shell);
       assert.equal(shell, phone ? 'phone' : 'desktop');
+      // If the browser keeps reporting offline and the live-list refresh stalls,
+      // Retry must queue a fresh healthy probe even while the stale degraded probe is still in flight.
+      const verificationBeforeStickyRetry = verificationReads;
+      statusBlocked = true;
+      let releaseVerification;
+      holdVerification = new Promise(resolve => { releaseVerification = resolve; });
+      await page.evaluate(() => {
+        window.__qaSavedLiveRefresh = WizLive.refresh;
+        WizLive.refresh = async () => {};
+        dispatchEvent(new Event('offline'));
+      });
+      await page.waitForFunction(() => WizCore.status.state.net === 'offline');
+      const verificationDeadline = Date.now() + 3000;
+      while (verificationReads === verificationBeforeStickyRetry && Date.now() < verificationDeadline) await page.waitForTimeout(20);
+      assert.ok(verificationReads > verificationBeforeStickyRetry, 'offline state starts a Wizard verification probe');
+      const verificationAtRetry = verificationReads;
+      statusBlocked = false;
+      await page.locator('[data-wxretry]').click();
+      releaseVerification();
+      await page.waitForFunction(() => ['online','restored'].includes(WizCore.status.state.net), null, { timeout: 2500 });
+      await page.waitForFunction(() => !document.querySelector('[data-wxnet]'));
+      assert.ok(verificationReads > verificationAtRetry, 'Retry issues a fresh probe after the stale one settles');
+      await page.evaluate(() => {
+        WizLive.refresh = window.__qaSavedLiveRefresh;
+        delete window.__qaSavedLiveRefresh;
+      });
       assert.equal(await page.evaluate(() => WizCanOpen('troubleshooter')), true);
       await page.evaluate(() => WizOpenApp('troubleshooter'));
       await page.waitForFunction(() => [...document.querySelectorAll('iframe')].some(f => f.src.endsWith('/troubleshoot/') && f.contentDocument?.title === 'Troubleshooter QA fixture'));
@@ -124,7 +158,7 @@ const origin = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/
       await page.locator('[data-wxtroubleshoot]').click();
       await page.waitForFunction(() => [...document.querySelectorAll('iframe')].some(f => f.src.endsWith('/troubleshoot/') && f.contentDocument?.title === 'Troubleshooter QA fixture'));
       assert.deepEqual(errors, []);
-      console.log(JSON.stringify({ shell, successfulReads, diagnosisReads, checks: ['stale-offline-at-boot','launchable-troubleshooter-app','offline-event-with-working-http','actual-outage','diagnosed-service-layer','retry-and-troubleshooter-controls','nebula-fit','signal-fit','phone-pill-geometry','phone-unfold-overlays','recovery-without-online-event','server-outage-and-recovery','troubleshooter-navigation','no-page-errors'], overlay: !!process.env.QA_STATUS_FILE || !!process.env.QA_WEB_DIR }));
+      console.log(JSON.stringify({ shell, successfulReads, diagnosisReads, statusReads, verificationReads, checks: ['stale-offline-at-boot','stale-offline-retry-with-stalled-live-read','launchable-troubleshooter-app','offline-event-with-working-http','actual-outage','diagnosed-service-layer','retry-and-troubleshooter-controls','nebula-fit','signal-fit','phone-pill-geometry','phone-unfold-overlays','recovery-without-online-event','server-outage-and-recovery','troubleshooter-navigation','no-page-errors'], overlay: !!process.env.QA_STATUS_FILE || !!process.env.QA_WEB_DIR }));
       await ctx.close();
     }
   } finally { await browser.close(); }

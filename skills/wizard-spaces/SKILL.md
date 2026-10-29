@@ -39,7 +39,7 @@ Rename/delete or adjust membership only when requested. Do not create a real Spa
    or leak private titles. Use only real canonical thread IDs returned by search/list, not run IDs,
    fabricated ids or internal session ids that have not been mapped to the shell thread id.
 3. Create the Space with the related thread ids, or add ids to the existing requested Space. The
-   helper deduplicates ids and verifies the exact saved collection by GET after PUT. Up to 50 Spaces,
+   helper deduplicates ids and sends item operations (PATCH), then checks they hold. Up to 50 Spaces,
    500 threads per Space. Leave uncertain threads out and explain any retrieval limitation.
 4. Report the Space name, how many existing threads you actually added and a few thread titles.
    Don't claim exhaustive back-fill if search was incomplete. New chats started while focused on this
@@ -75,8 +75,9 @@ Default transport: `http://127.0.0.1:8923/wizard/v1/ui-preferences`, the existin
 loopback route. Set `WIZARD_UI_PREFERENCES_URL` to this installation's existing owner-authorized route
 if different. Never invent a credential, weaken auth or write the preferences file directly. If the
 service lacks `spaces` or returns 403, stop and report the deployment/authorization blocker. The
-helper sends only the `spaces` key, preserving pins and all other preferences. Run one collection edit
-at a time: this whole-array read/merge/write contract does not provide same-array compare-and-swap.
+helper changes only the named Space or members (PATCH item operations), so edits made meanwhile on a
+device or by an agent survive. An older service without PATCH gets the whole-array GET → PUT → GET
+fallback, which has no compare-and-swap: there, run one collection edit at a time.
 
 Routed agents: use the always-on wizard MCP gateway built-ins (with the MCP prefix shown by your tools):
 `spaces_list`, `spaces_create(name)`, `spaces_search_threads(query, offset, limit)`,

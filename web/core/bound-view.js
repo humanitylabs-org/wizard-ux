@@ -22,7 +22,6 @@
       if (DL && DL.isOwn(u)) {
         const d = DL.parse(u.href), app = d && d.open && !d.video ? (APP[d.open] || findApp(d.open)) : null;
         if (app && app.kind === 'wizard' && app.url) return { key: 'app:' + app.id, win: { app: 'frame', appId: app.id }, rk };
-        if (app && app.id === 'usuals') return { key: 'app:usuals', win: { app: 'usuals' }, rk };
         continue; // ?session= / ?view= links are this shell's own screens, not a view to review
       }
       const rel = u.pathname + u.search + u.hash;

@@ -1,11 +1,11 @@
 {
   "id": "miguel/snooze-someday",
-  "name": "One-tap Snooze \u00b7 Someday",
-  "version": "1.0.0",
+  "name": "One-tap Snooze \u00b7 bottom of Ready",
+  "version": "1.1.0",
   "author": "miguel",
   "apiVersion": 1,
   "capabilities": [
     "nav"
   ],
-  "description": "Snooze is one tap and always means Someday"
+  "description": "Snooze is one tap and the lowest priority: the thread waits at the bottom of Ready, below approvals, until you restore or reply"
 }

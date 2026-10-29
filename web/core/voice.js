@@ -23,12 +23,17 @@
       if (/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)) return null; // phones route mics themselves
       const ins = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput' && d.deviceId && !/^(default|communications)$/.test(d.deviceId));
       if (!ins.some(d => d.label)) return null; // no permission yet: labels hidden
-      if (ins.some(d => WIRED.test(d.label) && !BLUETOOTH.test(d.label))) return null;
+      const wired = ins.find(d => WIRED.test(d.label) && !BLUETOOTH.test(d.label));
+      if (wired) return wired.deviceId; // pick it explicitly: the system default may be a Bluetooth headset
       const builtIn = ins.find(d => BUILT_IN.test(d.label) && !BLUETOOTH.test(d.label));
       return builtIn ? builtIn.deviceId : null;
     } catch (e) { return null; }
   }
-  const BASE = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+  // Desktop: no echo cancellation. On macOS it switches the input to the system voice-processing path, which ducks
+  // or briefly pauses whatever is playing (music in headphones dips each time a take starts). Speech is only
+  // transcribed, and with headphones there is no echo to cancel. Phones keep it (speaker playback can echo).
+  const PHONE = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+  const BASE = { echoCancellation: PHONE, noiseSuppression: true, autoGainControl: true };
   async function openMic() {
     const id = await pickMic();
     if (id) {
