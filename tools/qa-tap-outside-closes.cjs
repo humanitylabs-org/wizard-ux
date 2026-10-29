@@ -35,6 +35,31 @@ window.openSheet=()=>{sheet.showModal();window.releaseBack=WizardApp.back.push((
 sheet.onclose=()=>releaseBack?.release();
 hold.onpointerdown=()=>{window.holdTimer=setTimeout(openSheet,450);};hold.onpointerup=()=>clearTimeout(holdTimer);
 </script>`;
+const standaloneIds=['notes','wisdom','kit','cover','imported','disabled','late'];
+// Synthetic reading documents only: no app API, owner storage or private note bodies.
+// QA_NOTES_CSS optionally exercises the exact current Notes layout stylesheet.
+const standaloneApp=id=>`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
+${['wisdom','cover'].includes(id)?'<meta name="wizard-os-edge" content="cover">':''}
+<link rel="stylesheet" href="/kit/wizard-ui.css"><script src="/core/app-client.js"></script>
+${id==='notes'?'<link rel="stylesheet" href="/standalone-notes.css">':''}
+${id==='imported'?'<link rel="stylesheet" href="/standalone-import.css">':''}
+${id==='disabled'?'<style media="not all">header{padding-top:var(--wos-cutout)}</style>':''}
+<style>html,body{margin:0;height:100%;overflow:hidden}body{background:var(--wz-base,var(--bg,#111));color:var(--ink,#eee)}#main{height:100%;overflow:auto;position:relative;box-sizing:border-box}#canvas-tools{position:sticky;top:0;background:var(--wz-base,var(--bg,#111));z-index:2}p{line-height:28px;margin:12px 24px}#editor{margin:12px 24px;font:inherit}#formatting{position:fixed;bottom:8px;left:12px}body{--keyboard-inset:0px}
+${['wisdom','cover','late'].includes(id)?'#canvas-tools{padding-top:calc(var(--wos-cutout,0px) + 12px)}':''}
+</style><main id="main"><header id="canvas-tools" class="wz-head"><button id="back">Synthetic controls</button></header><h1 style="margin:16px 24px">Synthetic ${id} reading fixture</h1>
+<input id="editor" aria-label="Fixture editor" value="Synthetic editable text">
+${Array.from({length:100},(_,i)=>`<p data-line="${i}">Fixture paragraph ${i}: scroll to test the protected status area.</p>`).join('')}</main><button id="formatting">Aa</button>
+<script>window.fixtureReady=true;WizardApp.ready({title:'Fixture',back:()=>false});</script>`;
+const standaloneHost=`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/core/skins.css"><link rel="stylesheet" href="/skins/obsidian/skin.css"><link rel="stylesheet" href="/core/links.css"><link rel="stylesheet" href="/core/update-banner.css"><link rel="stylesheet" href="/core/home-screen-apps.css">
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden}#nativeStatus{position:fixed;inset:0 0 auto;height:var(--single-cut,0px);z-index:2147483647;pointer-events:none;box-sizing:border-box;padding:2px 18px;font:12px system-ui;color:var(--ink);background:var(--bg)}#singleApp{transition:none}</style>
+<div id="device" class="device"><div id="toast" class="toast"></div></div><div id="nativeStatus">09:41 · synthetic Android status bar</div>
+<script>
+const q=new URLSearchParams(location.search),id=q.get('app-session'),list=${JSON.stringify(standaloneIds)}.map(id=>({id,name:id,kind:'wizard',url:'/standalone-app/'+id+'/'}));
+document.documentElement.dataset.appSession=id;document.documentElement.dataset.skin=q.get('skin')||'nebula';document.documentElement.dataset.shell='phone';
+window.nativeCalls=[];window.WizardOSNative={immersive:v=>nativeCalls.push(v),insetTop:()=>Number(q.get('top')||0),cutoutTop:()=>Number(q.get('cut')||0)};
+window.WizCore={apps:()=>({APPS:list,APP:Object.fromEntries(list.map(a=>[a.id,a]))}),appsLoaded:()=>q.has('delayed')?new Promise(r=>window.releaseApps=r):Promise.resolve(),esc:s=>String(s)};
+</script><script src="/core/home-screen-policy.js"></script><script src="/core/appearance-host.js"></script><script src="/core/app-services.js"></script><script src="/core/links.js"></script><script src="/core/single-app-session.js"></script>`;
 let passed = 0;
 async function check(name, fn) { await fn(); passed++; console.log('PASS', name); }
 (async () => {
@@ -44,6 +69,13 @@ async function check(name, fn) { await fn(); passed++; console.log('PASS', name)
     await context.route('**/*', async route => {
       const u = new URL(route.request().url());
       assert.equal(u.origin, origin, 'test must not contact another origin');
+      if (u.pathname === '/core/single-app-session.js' && process.env.QA_SINGLE_APP_SOURCE) return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(process.env.QA_SINGLE_APP_SOURCE)});
+      if (u.pathname === '/standalone-host') return route.fulfill({contentType:'text/html',body:standaloneHost});
+      if (u.pathname.startsWith('/standalone-app/')) return route.fulfill({contentType:'text/html',body:standaloneApp(u.pathname.split('/')[2])});
+      if (u.pathname === '/standalone-notes.css') return route.fulfill({contentType:'text/css',body:process.env.QA_NOTES_CSS?fs.readFileSync(process.env.QA_NOTES_CSS,'utf8'):'#canvas-tools{padding-top:calc(var(--wos-cutout,0px) + 12px)}'});
+      if (u.pathname === '/standalone-import.css') return route.fulfill({contentType:'text/css',body:'@import "/standalone-inner.css";'});
+      if (u.pathname === '/standalone-inner.css') return route.fulfill({contentType:'text/css',body:'@import "/standalone-leaf.css";'});
+      if (u.pathname === '/standalone-leaf.css') return route.fulfill({contentType:'text/css',body:'#canvas-tools{padding-top:calc(var(--wos-cutout,0px) + 12px)}'});
       if(u.pathname==='/store-install/fixture'){storeInstalled=true;return route.fulfill({json:{state:'installed',selection:route.request().postDataJSON()}});}
       if(u.pathname.startsWith('/store-data/')) {
         const j=u.pathname.includes('/index/search')?{apps:[storeApp]}:u.pathname.includes('/installed-apps')?{complete:true,wam:storeInstalled?[storeApp]:[],shell:[]}:u.pathname.endsWith('/installed')?{installed:[]}:u.pathname.includes('/needs/')?{models:[{feature:'fixture-model',tier:'simple',status:'missing'}],services:[]}:{};
@@ -185,6 +217,76 @@ async function check(name, fn) { await fn(); passed++; console.log('PASS', name)
       await store.locator('#sheet').tap({position:{x:2,y:2}});
       assert.deepEqual(await store.evaluate(()=>__store.state().layers),['detail']);assert.equal(await page.locator('#store-frame').count(),1);await mounted();
     });
+    // Universal standalone status-bar rule: execute the real container, services,
+    // SDK and CSS against synthetic long reading documents (no owner app APIs).
+    const pinned=await context.newPage(),metrics=[];
+    pinned.on('pageerror',e=>errors.push(e.message));
+    const waitPinned=async()=>{
+      await pinned.waitForFunction(()=>document.querySelector('#singleApp iframe')?.contentWindow?.fixtureReady);
+      return (await pinned.locator('#singleApp iframe').elementHandle()).contentFrame();
+    };
+    const protectedFrame=async(edge,label)=>{
+      const state=await pinned.evaluate(()=>{
+        const f=document.querySelector('#singleApp iframe'),d=f.contentDocument,r=f.getBoundingClientRect(),t=d.querySelector('#canvas-tools').getBoundingClientRect();
+        return {y:r.top,h:r.height,hostH:innerHeight,cut:getComputedStyle(d.documentElement).getPropertyValue('--wos-cutout').trim(),toolbar:r.top+t.top,scroll:d.querySelector('#main').scrollTop,hostScroll:scrollY,covering:document.elementFromPoint(180,Math.max(0,r.top/2))===f,nativeCalls};
+      });
+      assert.equal(state.y,edge,label+' frame top = max(native,cutout), exactly once');
+      assert.equal(state.h,state.hostH-edge,label+' full remaining viewport');
+      assert.equal(state.cut,'0px',label+' child does not add another gap');
+      assert.ok(state.toolbar>=edge,label+' sticky controls stay protected');
+      assert.equal(state.hostScroll,0,label+' only app scrolls');
+      if(edge)assert.equal(state.covering,false,label+' iframe is clipped out of status region');
+      assert.deepEqual(state.nativeCalls,[false]);metrics.push({label,edge,...state});
+    };
+    for(const id of standaloneIds)for(const [top,cut] of [[0,0],[36,0],[36,48]]) {
+      await check(`James universal standalone rule: ${id}, status ${top}/cutout ${cut}, scroll 0 + deep`,async()=>{
+        await pinned.goto(origin+`/standalone-host?app-session=${id}&top=${top}&cut=${cut}`);
+        const f=await waitPinned(),edge=Math.max(top,cut);await protectedFrame(edge,id+' top');
+        await f.evaluate(()=>main.scrollTop=1500);await protectedFrame(edge,id+' deep');assert.ok(await f.evaluate(()=>main.scrollTop)>1000);
+        if(id==='late') {
+          await f.addStyleTag({content:':root{--wos-cutout:96px!important} #canvas-tools{padding-top:calc(var(--wos-cutout) + 12px)}'});
+          await protectedFrame(edge,'late stylesheet');
+        }
+      });
+    }
+    for(const skin of ['nebula','obsidian-light'])for(const id of ['notes','wisdom']) {
+      await check(`James universal standalone rule: ${id} ${skin} top/deep screenshots and shell overlays`,async()=>{
+        await pinned.goto(origin+`/standalone-host?app-session=${id}&top=36&cut=48&skin=${skin}`);const f=await waitPinned();
+        await f.waitForFunction(()=>WizardApp.theme.get()?.skin===new URL(parent.location.href).searchParams.get('skin'));
+        for(const scroll of [0,1500]) {
+          await f.evaluate(y=>main.scrollTop=y,scroll);await protectedFrame(48,`${skin} ${id} scroll ${scroll}`);
+          if(process.env.QA_OUTPUT) {fs.mkdirSync(process.env.QA_OUTPUT,{recursive:true});await pinned.screenshot({path:path.join(process.env.QA_OUTPUT,`standalone-${skin}-${id}-${scroll}.png`)});}
+        }
+        await pinned.evaluate(()=>{const p=document.createElement('div');p.className='app-upd';p.textContent='Fixture app updated · Reload';singleApp.append(p);__wos.toast('Fixture toast');});
+        const update=await pinned.locator('#singleApp .app-upd').boundingBox(),toast=await pinned.locator('#toast').boundingBox();
+        assert.equal(update.y,56,'update uses host union once');assert.equal(toast.y,60,'toast uses union once');
+        await pinned.evaluate(()=>__wos.links.open('/fixture-page'));
+        await pinned.locator('.linksheet.open .ls-panel').waitFor({state:'visible'});
+        await pinned.waitForFunction(()=>{const r=document.querySelector('.linksheet .ls-panel').getBoundingClientRect();return Math.abs(r.top-50)<1;});
+        assert.equal(await pinned.evaluate(()=>document.querySelector('.linksheet .ls-panel').getBoundingClientRect().top),50,'sheet clears status plus its existing 2px lip, not a second inset');
+        await pinned.evaluate(()=>__wos.links.close());
+        await pinned.evaluate(()=>{window.fixturePane=WizLinks.mount({parent:document.getElementById('device'),mode:'pane'});fixturePane.open('/fixture-page');});
+        await pinned.waitForFunction(()=>Math.abs(document.querySelector('.linksheet.pane .ls-panel').getBoundingClientRect().top-48)<1);
+        await pinned.evaluate(()=>fixturePane.close());
+        if(process.env.QA_OUTPUT)await pinned.screenshot({path:path.join(process.env.QA_OUTPUT,`standalone-${skin}-${id}-notices.png`)});
+      });
+    }
+    await check('James universal standalone rule: callbacks before mount, reload and focused editor keep one inset',async()=>{
+      await pinned.goto(origin+'/standalone-host?app-session=notes&top=0&cut=0&delayed=1');
+      await pinned.waitForFunction(()=>!!window.__wosTop&&!!window.releaseApps);
+      await pinned.evaluate(()=>{__wosTop(36);__wosCutout(48);releaseApps();});let f=await waitPinned();await protectedFrame(48,'callback before mount');
+      await f.locator('#editor').focus();await pinned.keyboard.type(' edited');
+      await pinned.evaluate(()=>__wosTop(48));assert.equal(await f.evaluate(()=>document.activeElement.id),'editor','no remount/focus loss');
+      await pinned.setViewportSize({width:390,height:520});await protectedFrame(48,'keyboard-size viewport');
+      await pinned.setViewportSize({width:390,height:844});
+      await pinned.evaluate(()=>{__wosTop(0);__wosCutout(0);});await protectedFrame(0,'bars reported zero');
+      await pinned.goto(origin+'/standalone-host?app-session=notes&top=36&cut=48');f=await waitPinned();await pinned.reload();f=await waitPinned();await protectedFrame(48,'reload');
+      await f.evaluate(()=>main.scrollTop=1500);await pinned.evaluate(()=>__wosCutout(36));await protectedFrame(36,'callback after deep scroll');
+      assert.ok(await f.evaluate(()=>main.scrollTop)>1000,'callback preserves scroll');
+      assert.equal(await pinned.evaluate(()=>__wosNativeBack()),'root','root Back stays inside pinned app');
+    });
+    if(process.env.QA_OUTPUT)fs.writeFileSync(path.join(process.env.QA_OUTPUT,'standalone-metrics.json'),JSON.stringify(metrics,null,2));
+    await pinned.close();
     assert.deepEqual(errors,[],'no browser exceptions');
     console.log(`tap outside closes: ${passed} PASS (390x844 touch; fixture-only, no live shell)`);
     await context.close();
