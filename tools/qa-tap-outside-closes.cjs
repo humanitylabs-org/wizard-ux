@@ -26,7 +26,7 @@ window.WosUsage={normalize:()=>({providers:[]}),html:()=>'<p>No fixture usage</p
 const app = `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="/kit/wizard-ui.css"><script src="/core/app-client.js"></script><script src="/kit/wizard-sheet.js"></script>
 <style>dialog{box-sizing:border-box;position:fixed;inset:auto 10px 10px;width:300px;height:150px;margin:0;padding:20px}#hold{position:fixed;top:10px;left:10px}</style>
-<button id="hold">Hold</button><dialog id="sheet"><button id="action">Action</button></dialog>
+<button id="hold">Hold</button><dialog id="sheet"><button id="action">Action</button><label for="opt">Option</label><input type="checkbox" id="opt"><label id="wrap"><input type="checkbox" id="opt2"> Wrapped</label></dialog>
 <script>
 window.activated=0;window.cancelled=0;
 action.onclick=()=>activated++;
@@ -76,6 +76,12 @@ async function check(name, fn) { await fn(); passed++; console.log('PASS', name)
     await check('hosted dialog: inside tap is not Back; keyboard activation passes without pointerdown',async()=>{
       await open();await frame.locator('#action').tap();assert.equal(await frame.evaluate(()=>activated),1);assert.equal(await isOpen(),true);
       await frame.locator('#action').focus();await page.keyboard.press('Enter');assert.equal(await frame.evaluate(()=>activated),2);await frame.evaluate(()=>sheet.close());
+    });
+    await check('hosted dialog: <label for> and wrapping labels still toggle their controls',async()=>{
+      await open();await frame.locator('label[for=opt]').tap();assert.equal(await frame.evaluate(()=>opt.checked),true,'label for= toggles');
+      await frame.locator('#wrap').tap();assert.equal(await frame.evaluate(()=>opt2.checked),true,'wrapping label toggles');
+      await frame.locator('label[for=opt]').click();assert.equal(await frame.evaluate(()=>opt.checked),false,'mouse click on label toggles back');
+      assert.equal(await isOpen(),true);await frame.evaluate(()=>sheet.close());
     });
     await check('hosted dialog: long-press opening release cannot dismiss or activate a menu item',async()=>{
       await frame.locator('#hold').dispatchEvent('pointerdown',{pointerId:1,pointerType:'touch',bubbles:true});

@@ -91,9 +91,14 @@
       const d = modal(e); if (d) presses.set(d, { outside: outside(d, e) });
     }, true);
     addEventListener('pointercancel', e => { const d = modal(e); if (d) presses.delete(d); }, true);
+    // A real tap on a <label> makes the browser forward a second click (no pointerdown) to its control.
+    const forwarded = new WeakMap();
     addEventListener('click', e => {
       const d = modal(e); if (!d || e.detail === 0) return; // keyboard/AT activation is never swallowed
+      if (forwarded.get(d) === e.target) { forwarded.delete(d); return; }
       const press = presses.get(d); presses.delete(d);
+      const control = press && !outside(d, e) ? e.target.closest?.('label')?.control : null;
+      if (control && d.contains(control)) forwarded.set(d, control); else forwarded.delete(d);
       if (!press || outside(d, e)) {
         e.preventDefault(); e.stopImmediatePropagation();
         if (press?.outside && outside(d, e) && d.dispatchEvent(new Event('cancel', { cancelable: true }))) d.close();
