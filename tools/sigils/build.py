@@ -98,6 +98,17 @@ HOUSE = {
     # Agents (the app): two layered hats drawn from brand masks in style.css; its tile glass is a quiet periwinkle,
     # neither the main agent's purple nor the private agent's green, so both hats read on it.
     'agents':        ('agents',   270, 0.10),
+    # Launch set (Robert, 29 Oct 2026): every app on a stock Wizard gets a sigil.
+    'messages':      ('chats',    191, None),   # speech bubble with the newest hat inside, same as Messenger
+    'recorder':      ('recorder', 30,  None),
+    'sasquatch':     ('foot',     172, None),   # Sasquatch's own teal footprint
+    'tasks':         ('tasks',    128, None),
+    'knowledge':     ('shelf',    268, None),
+    'setup':         ('setup',    300, 0.07),
+    'wizard-connection-router': ('router', 210, 0.08),
+    'wizard-simplefin': ('bank',  112, None),
+    'wizard-google': ('search',   250, None),
+    'wizard-youtube-music': ('music', 352, None),
 }
 # Brand-mask sigils: drawn from web/brand/*.png in style.css, not from glyphs.py.
 #   hat          supplied company hat (Chats, main agent)
@@ -114,6 +125,8 @@ BRAND = {
     'wizard-tinfoil':    'tinfoil',
     'hermes-agent':      'hermes',
     'hermes-frontend-3': 'hermes',
+    'wizard-google':     'google',
+    'wizard-youtube-music': 'youtube-music',
 }
 # Apps with no sigil yet get their initial on a hue picked from their id.
 FALLBACK_HUES = [20, 66, 112, 158, 196, 230, 268, 300, 334]

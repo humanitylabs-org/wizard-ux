@@ -51,8 +51,12 @@ def R(p, deg, cx, cy):
 
 def bounds(p): return p.bounds  # (xmin, ymin, xmax, ymax)
 
-HAT_D = "M128 408 L232 150 C244 120 246 100 230 80 C228 77 232 74 236 76 C270 92 284 120 296 150 L384 408 Z"
-def hat(): return P(HAT_D)
+HAT_SRC = "M154.8 364.7C177.3 300.0 220.4 174.9 222.3 168.8C228.1 150.2 231.2 127.4 229.6 114.3C228.0 101.3 224.9 94.3 217.8 87.6C212.3 82.4 211.4 80.9 212.5 78.2C214.2 74.3 222.5 74.5 232.2 78.7C245.6 84.5 258.3 99.2 271.1 123.7C284.9 150.1 297.7 185.7 354.4 354.7L372.3 408.0L328.3 408.0L284.4 408.0L284.2 381.7C284.0 351.7 283.8 350.7 276.6 343.6C273.7 340.7 258.7 329.9 257.6 329.9C256.7 329.9 244.7 338.2 241.2 341.3C231.1 350.2 230.8 351.2 230.8 382.5L230.8 408.0L185.3 408.0L139.7 408.0L154.8 364.7Z"  # newest WizardOS hat (Oct 16 slides, Oct 21 lockup), traced; door is a notch at the base
+HAT_DOOR_BOX = (226.8, 325.9, 288.3)  # x0, y0 (above the arch apex), x1; the bottom is the base line y=408
+def hat_door():
+    x0, y0, x1 = HAT_DOOR_BOX
+    return D(P(f"M{x0} {y0} H{x1} V408 H{x0} Z"), P(HAT_SRC))
+def hat(): return U(P(HAT_SRC), hat_door())
 def hat_at(cx, base_y, height):
     """Hat scaled to `height`, centred on cx, base sitting on base_y."""
     s = height / (408 - 75)
@@ -75,12 +79,14 @@ def g_pages():
 
 @glyph('wizard', 'The mother mark: the hat, with its door joined to the ground line.')
 def g_wizard():
-    return D(hat(), P("M226 412 V346 A30 30 0 0 1 286 346 V412 Z"))
+    return P(HAT_SRC)
 
 @glyph('chats', 'A speech bubble with the hat cut out of it: you talking to your Wizard.')
 def g_chats():
-    bubble = U(rrect(88, 104, 336, 248, 84), P("M138 316 C136 360 122 392 102 414 C160 408 214 384 246 344 Z"))
-    return D(bubble, hat_at(258, 314, 176))
+    bubble = U(rrect(84, 80, 344, 284, 96), P("M140 328 C138 370 124 400 104 422 C162 416 214 392 246 356 Z"))
+    s = 216 / 333   # big enough that the hat and its door still read in a 22 px dock icon
+    place = lambda p: T(p, s, 256 - 256 * s, 336 - 408 * s)
+    return U(D(bubble, place(hat())), place(hat_door()))
 
 @glyph('signal', 'A disc with signal radiating from one point: your feed, not noise.')
 def g_signal():
@@ -159,7 +165,7 @@ def g_cine():
 
 @glyph('social', 'Two wizards, the smaller one cut free of the larger: a network of people.')
 def g_social():
-    door = lambda: P("M226 416 V340 A30 30 0 0 1 286 340 V416 Z")
+    door = hat_door
     big = T(D(hat(), door()), 0.8, 9.2, 81.6)
     small_shape = T(hat(), 0.58, 181.52, 171.36)
     small = T(D(hat(), door()), 0.58, 181.52, 171.36)
@@ -403,6 +409,60 @@ def g_profile():
     bust = U(circle(256, 284, 46), P("M118 480 C124 372 188 326 256 326 C324 326 388 372 394 480 Z"))
     bust = D(bust, rrect(140, 150, 232, 92, 0))      # flat-topped head: the hat sits on it across a clear gap
     return D(disc, U(hat_, bust))
+
+# Launch set (Robert, 29 Oct 2026): apps on a stock Wizard that still showed a letter.
+@glyph('recorder', 'A microphone with a live dot cut in, its words already landing beside it: record and transcribe live.')
+def g_recorder():
+    cap = rrect(112, 92, 128, 216, 64)
+    yoke = stroke("M92 236 A84 84 0 0 0 260 236", 26)
+    stem = rrect(163, 318, 26, 50, 0)
+    base = rrect(120, 362, 112, 30, 15)
+    lines = U(rrect(290, 142, 132, 34, 17), rrect(290, 210, 104, 34, 17), rrect(290, 278, 64, 34, 17))
+    return U(D(U(cap, yoke, stem, base), circle(176, 164, 24)), lines)
+
+@glyph('foot', 'A big footprint with a check cut into the sole: Sasquatch keeps track of what you pay for.', scale=1.12)
+def g_foot():
+    # Sasquatch's own app icon: a tall sole, wider at the ball, four toes in an arc, and its chevron cut in.
+    sole = P("M170 236 C170 196 206 176 256 176 C306 176 342 196 342 236 C342 296 324 336 316 380 "
+             "C310 414 288 436 256 436 C224 436 202 414 196 380 C188 336 170 296 170 236 Z")
+    toes = U(circle(178, 140, 25), circle(232, 112, 33), circle(292, 114, 27), circle(342, 140, 20))
+    chevron = stroke("M212 300 L256 344 L300 300", 34)
+    return U(D(sole, chevron), toes)
+
+@glyph('tasks', 'A box with its tick breaking out of the corner: the list of what is next, and what got done.', scale=0.88)
+def g_tasks():
+    box = stroke(rrect(112, 132, 268, 268, 64), 38)
+    tick = stroke("M180 252 L240 312 L400 128", 44)
+    gap = stroke("M180 252 L240 312 L400 128", 108)
+    return U(D(box, gap), tick)
+
+@glyph('shelf', 'Three books on a shelf, the last one leaning: your saved knowledge, ready to pull down.')
+def g_shelf():
+    b1, b2 = rrect(104, 150, 76, 262, 18), rrect(194, 110, 76, 302, 18)
+    b3 = R(rrect(290, 156, 76, 256, 18), 15, 290, 412)
+    bands = U(rrect(118, 190, 48, 18, 9), rrect(208, 150, 48, 18, 9), R(rrect(304, 196, 48, 18, 9), 15, 290, 412))
+    shelf = rrect(84, 406, 344, 30, 15)
+    return U(D(U(b1, b2, b3), bands), shelf)
+
+@glyph('setup', 'A gear with the Wizard door at its centre: setting up your Wizard.')
+def g_setup():
+    teeth = U(*[R(rrect(230, 70, 52, 70, 14), i * 45, 256, 256) for i in range(8)])
+    gear = U(circle(256, 256, 138), teeth)
+    return D(gear, P("M218 318 V246 A38 38 0 0 1 294 246 V318 Z"))
+
+@glyph('router', 'One line branching to three ends: which model or service each job goes to.')
+def g_router():
+    paths = U(stroke("M128 256 C230 256 262 140 384 140", 34), stroke("M128 256 H384", 34), stroke("M128 256 C230 256 262 372 384 372", 34))
+    nodes = U(circle(128, 256, 52), circle(388, 140, 40), circle(388, 256, 40), circle(388, 372, 40))
+    return D(U(paths, nodes), circle(128, 256, 20))
+
+@glyph('bank', 'A bank front with a coin in its pediment: your accounts, read safely.')
+def g_bank():
+    roof = poly((256, 80), (430, 176), (82, 176))
+    beam = rrect(96, 182, 320, 30, 8)
+    cols = U(*[rrect(x, 226, 46, 138, 10) for x in (116, 192, 274, 350)])
+    base = rrect(82, 376, 348, 40, 12)
+    return D(U(roof, beam, cols, base), circle(256, 142, 22))
 
 # ---------- normalise + emit ----------
 def fmt(p):

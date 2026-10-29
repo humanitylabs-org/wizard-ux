@@ -57,4 +57,6 @@ Each file is the company's own vector, only scaled and centred onto the 512 grid
 | `claude` | wizard-claude | Claude spark from Simple Icons 16.35.0 (`icons/claude.svg`, source https://claude.ai), Claude terracotta #D97757 |
 | `chatgpt` | wizard-chatgpt | OpenAI blossom from Simple Icons 16.35.0 (`icons/openai.svg`, source https://openai.com/brand) |
 | `tinfoil` | wizard-tinfoil | Tinfoil mark, `https://tinfoil.sh/brand-assets/logo-green.svg` (the triangle path, without the wordmark) |
+| `google` | wizard-google | Google "G" from Simple Icons 16.35.0 (`icons/google.svg`, source https://partnermarketinghub.withgoogle.com/), one colour in the skin's ink |
+| `youtube-music` | wizard-youtube-music | YouTube Music from Simple Icons 16.35.0 (`icons/youtubemusic.svg`, source https://www.youtube.com/howyoutubeworks/resources/brand-resources/), one colour in the skin's ink |
 | `hermes` | hermes-agent, hermes-frontend-3 | Nous Research's Hermes Agent icon, `https://github.com/NousResearch/hermes-agent/blob/main/website/static/img/favicon.svg` (the portrait path, without its white tile) |

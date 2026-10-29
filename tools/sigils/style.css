@@ -8,21 +8,23 @@
   display: grid; place-items: center;
   color: var(--c);
   background: #110d1b;
+  /* Quiet glass (Robert, 29 Oct 2026): the glyph carries the colour; the tile only takes a hint of it, so the
+   * mark reads the same with the tile or without it (bare dock and title-bar marks). */
   background:
-    radial-gradient(130% 95% at 50% -8%, color-mix(in oklab, var(--c) 40%, transparent) 0%, transparent 60%),
-    radial-gradient(90% 60% at 50% 120%, color-mix(in oklab, var(--c) 26%, transparent) 0%, transparent 72%),
+    radial-gradient(130% 95% at 50% -8%, color-mix(in oklab, var(--c) 16%, transparent) 0%, transparent 60%),
+    radial-gradient(90% 60% at 50% 120%, color-mix(in oklab, var(--c) 8%, transparent) 0%, transparent 72%),
     linear-gradient(180deg, #17121f 0%, #0c0a12 100%);
-  border: 1px solid color-mix(in oklab, var(--c) 38%, rgba(255, 255, 255, .06));
+  border: 1px solid color-mix(in oklab, var(--c) 18%, rgba(255, 255, 255, .07));
   box-shadow:
-    0 10px 24px -10px color-mix(in oklab, var(--c) 55%, transparent),
+    0 10px 24px -12px color-mix(in oklab, var(--c) 22%, transparent),
     0 2px 6px rgba(0, 0, 0, .45),
-    inset 0 1px 0 color-mix(in oklab, var(--c) 30%, rgba(255, 255, 255, .14)),
+    inset 0 1px 0 color-mix(in oklab, var(--c) 12%, rgba(255, 255, 255, .12)),
     inset 0 -10px 18px -12px rgba(0, 0, 0, .7);
 }
 /* Soft bloom behind the glyph: the glyph seems to light the glass it sits in. */
 .sgt::before {
   content: ""; position: absolute; inset: 18%; z-index: -1; border-radius: 50%;
-  background: radial-gradient(closest-side, color-mix(in oklab, var(--c) 42%, transparent), transparent);
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--c) 18%, transparent), transparent);
   filter: blur(7px); opacity: 1; pointer-events: none;
 }
 /* Glass sheen across the top third. */
@@ -124,4 +126,6 @@
 .sgi.sgb-chatgpt { --sgb: url("/wizard-os-home/brand/apps/chatgpt.svg"); }
 .sgi.sgb-tinfoil { --sgb: url("/wizard-os-home/brand/apps/tinfoil.svg"); }
 .sgi.sgb-hermes { --sgb: url("/wizard-os-home/brand/apps/hermes.svg"); }
+.sgi.sgb-google { --sgb: url("/wizard-os-home/brand/apps/google.svg"); }
+.sgi.sgb-youtube-music { --sgb: url("/wizard-os-home/brand/apps/youtube-music.svg"); }
 .sgi:is(.sgb-cloudflare, .sgb-claude) { background: var(--sgb) center / contain no-repeat; }
