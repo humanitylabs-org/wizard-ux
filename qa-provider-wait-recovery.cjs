@@ -110,7 +110,9 @@ const server=http.createServer((req,res)=>{
    assert.equal(writes.filter(x=>x.path.endsWith('/model')).length,before);assert.equal(sends.length,0);
    status='queued';retryId=source;runId=source;revision++;await page.evaluate(()=>WizLive.refresh());await open();
    await(await pick()).click();
-   await page.waitForFunction(()=>[...WosOutbox._items.values()].some(x=>x.runId==='wizardq_synthetic_child'),null,{timeout:20000});
+   // The acknowledged item may already be retired from the outbox. Assert
+   // the durable session receipt, not a transient implementation map entry.
+   await page.waitForFunction(id=>{const s=WizLive.session(id);return s?.runId==='wizardq_synthetic_child'&&s.status==='running';},sid,{timeout:20000});
    assert.equal(sends.length,1);assert.deepEqual(route,chosen);
    assert.equal(sends[0].input,text.trim(),'real outbox passes full preview; backend retention separately tested with files');
    await page.screenshot({path:path.join(OUT,`${shell}-${skin}-retried.png`)});
