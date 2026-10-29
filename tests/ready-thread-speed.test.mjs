@@ -39,7 +39,7 @@ test('legacy detail without retry metadata explicitly reads user input before th
   done();await pending;
   const history=h.reads.filter(u=>u.includes('/messages?'));
   assert.equal(history.length,2,'one legacy retry-input fallback plus the requested transcript, not duplicate open reads');
-  assert.equal(new URL(history[0],'https://fixture.invalid').searchParams.get('limit'),'200');
+  assert.equal(new URL(history[0],'https://fixture.invalid').searchParams.get('limit'),'100');
   assert.equal(new URL(history[1],'https://fixture.invalid').searchParams.get('limit'),'500');
   assert.equal(h.L.session(row.id).retryInput,'Synthetic request');
 });

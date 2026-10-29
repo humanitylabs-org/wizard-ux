@@ -18,7 +18,7 @@ Original API measurements remain provisional synthetic contributor evidence.
 ## Diagnosed causes
 
 - The cold unknown unit fixture omitted `wizard_retry_input`. Real `sessionInfo`
-  deliberately reads `messages?limit=200` to recover legacy retry input before
+  deliberately reads `messages?limit=100` to recover legacy retry input before
   the requested `limit=500` transcript. This was not a duplicate open or a timer.
   The modern fixture now supplies metadata and retains the exact one-read
   assertion; a separate legacy regression asserts the two distinct reads.
