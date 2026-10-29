@@ -19,6 +19,7 @@ test('runner selection preserves trusted, read-only gate execution', () => {
   assert.match(workflow, /permissions:\n  contents: read/);
   assert.match(workflow, /repository: humanitylabs-org\/wizard-ux\n\s+ref: main/);
   assert.equal((workflow.match(/persist-credentials: false/g) || []).length, 2);
+  assert.match(workflow, /run: python3 wizard-shared\/tools\/style\/check_style.py app/);
   assert.match(workflow, /run: node wizard-shared\/tools\/reuse-check-app.mjs/);
   assert.doesNotMatch(workflow, /secrets:|npm (?:ci|install)|pull_request_target/);
 });
