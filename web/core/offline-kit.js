@@ -22,6 +22,9 @@
     const all=()=>store('outbox','readonly',s=>s.getAll());
     const meta=()=>store('meta','readonly',s=>s.get('state'));
     const save=s=>store('meta','readwrite',o=>o.put(s,'state'));
+    // Every reconciled write bumps the generation; a snapshot fetched across one is stale and is dropped.
+    const generation=()=>store('meta','readonly',s=>s.get('gen')).then(g=>g||0);
+    const reconciled=s=>store('meta','readwrite',o=>{o.put(s,'state');const g=o.get('gen');g.onsuccess=()=>o.put((g.result||0)+1,'gen')});
     const write=i=>store('outbox','readwrite',s=>s.put(i));
     const remove=i=>store('outbox','readwrite',s=>s.delete(i.seq));
     const lock=fn=>navigator.locks?navigator.locks.request(c.prefix+'outbox',fn):serial(fn);
@@ -38,17 +41,21 @@
     channel?.addEventListener('message',()=>notify(false).catch(()=>{}));
     const onlineOnly=p=>(c.onlineOnly||[]).some(x=>absolute(p).startsWith(absolute(x)));
     const queueable=p=>(c.writes||[]).some(x=>absolute(p)===absolute(x));
+    // Only an explicit JSON 4xx rejection is permanent. A redirect, 401/403 or a non-JSON answer (a login page
+    // after the session expired) means "sign in again": the row stays pending and replays after sign-in.
     async function response(p,body,id,timeout=c.timeout||20000) {
       const r=await fetch(absolute(p),{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json',...(id?{'X-Wizard-Offline-Id':id}:{})}:{},
         body:body?JSON.stringify(body):undefined,cache:'no-store',signal:AbortSignal.timeout(timeout)});
-      let d;try{d=await r.json()}catch{throw Object.assign(Error('Invalid server response'),{status:r.status})}
-      if(!r.ok)throw Object.assign(Error(d.error||'Unable to connect'),{status:r.status});return d;
+      if(r.redirected||r.status===401||r.status===403)throw Object.assign(Error('Sign in to sync'),{status:r.status,auth:true});
+      let d;try{d=await r.json()}catch{throw Object.assign(Error('Invalid server response'),{status:r.status,transient:true})}
+      if(!r.ok)throw Object.assign(Error(d?.error||'Unable to connect'),{status:r.status});return d;
     }
+    const permanent=e=>!!e.status&&!e.auth&&!e.transient&&e.status>=400&&e.status<500&&![408,429].includes(e.status);
     const projected=async()=>{let state=await meta();for(const i of await all())state=c.project(state,i);return state};
     async function flushLocked(target) {
       if(!navigator.onLine)return;
       syncing=true;
-      let targetResult;
+      let target_;
       try {
         for(const queued of await all()) {
           const item=await store('outbox','readonly',s=>s.get(queued.seq));if(!item)continue;
@@ -58,19 +65,23 @@
           try {
             const result=await response(item.path,item.body,item.id);
             const alias=c.alias?.(item,result);if(alias)await store('meta','readwrite',s=>s.put(alias.to,'alias:'+alias.from));
-            let state=await meta();state=c.reconcile(state,result,item);await save(state);
+            let state=await meta();state=c.reconcile(state,result,item);await reconciled(state);
             if(c.resolve)for(const later of await all())if(later.seq>item.seq){const changed=c.resolve(later,item,result);if(changed)await write(changed)}
-            await remove(item);if(item.id===target)targetResult=result;
+            await remove(item);lastError='';if(item.id===target)target_={result};
             channel?.postMessage('changed');
           } catch(e) {
-            if(!e.status||e.status>=500||[408,429].includes(e.status)){lastError=navigator.onLine?'Waiting to sync — your changes are saved on this device.':'';break}
+            if(!permanent(e)){lastError=e.auth||e.transient?'Sign in to sync — your changes are saved on this device.':navigator.onLine?'Waiting to sync — your changes are saved on this device.':'';break}
             item.error=e.message||'Couldn’t save';await write(item);c.onFailure?.(item);if(item.id===target)throw e;
           }
         }
       } finally {syncing=false;await notify()}
-      return targetResult;
+      // {result} even when the server's JSON answer is falsy (null, false, 0).
+      return target_;
     }
     async function flush(){return lock(async()=>{const before=await all();await flushLocked();if(before.some(i=>!i.error))c.onSynced?.(await projected())}).catch(e=>{lastError=e.message;return notify()})}
+    // Recover a permanently failed row: retry it as is (after fixing its cause), or drop it.
+    async function retry(seq){return lock(async()=>{const item=await store('outbox','readonly',s=>s.get(seq));if(!item)return false;delete item.error;await write(item);await flushLocked();return true})}
+    async function discard(seq){return lock(async()=>{const item=await store('outbox','readonly',s=>s.get(seq));if(!item)return false;await remove(item);await notify();c.onSynced?.(await projected());return true})}
     async function request(path,body,timeout) {
       if(onlineOnly(path)&&!navigator.onLine)throw Error('Needs a connection');
       if(body&&queueable(path))return lock(async()=>{
@@ -78,15 +89,17 @@
         const id=crypto.randomUUID();let item={id,path,body:structuredClone(body),created:new Date().toISOString(),tempId:-(Date.now()*1000+Math.floor(Math.random()*1000))};
         if(c.prepare)item=await c.prepare(item,old=>store('meta','readonly',s=>s.get('alias:'+old)));
         item.seq=await store('outbox','readwrite',s=>s.add(item));await notify();
-        const result=await flushLocked(id);
-        if(result)return result;
+        const done=await flushLocked(id);
+        if(done)return done.result;
         const state=await projected();return c.queuedResult(state,item);
       });
+      const snapshot=!body&&(c.data||[]).includes(path), gen=snapshot?await generation():0;
       const result=await response(path,body,undefined,timeout);
-      if(!body&&(c.data||[]).includes(path)) {
-        await lock(async()=>{await save(result)});
+      if(snapshot) {
+        // A write reconciled while this GET was in flight is newer than the snapshot: keep the reconciled state.
+        const fresh=await lock(async()=>{if(await generation()!==gen)return false;await save(result);return true});
         // The worker caches the canonical snapshot; pending local edits remain a separate overlay.
-        const state=await projected();void warm(state);return state;
+        const state=await projected();if(fresh)void warm(state);return state;
       }
       return result;
     }
@@ -110,7 +123,8 @@
         const assets=[...new Set(c.assetURLs(state).map(absolute))].filter(u=>u.startsWith(base.origin+'/'));
         total=assets.length;done=0;ready=false;warmingError='';await notify();
         const dataCache=await caches.open(c.prefix+'data-v1');
-        for(const path of c.data||[]){const u=absolute(path);if(navigator.onLine){const r=await fetch(u,{cache:'no-store'});if(!r.ok||r.redirected)throw Error('Library could not be saved');await dataCache.put(u,r)}}
+        for(const path of c.data||[]){const u=absolute(path);if(navigator.onLine){const r=await fetch(u,{cache:'no-store'});if(!r.ok||r.redirected)throw Error('Library could not be saved');await dataCache.put(u,r)}
+          else if(!await dataCache.match(u))throw Error('Library is not saved on this device yet')}
         const cache=await caches.open(c.prefix+'assets-v1');let cursor=0;
         await Promise.all(Array.from({length:Math.min(c.concurrency||4,assets.length||1)},async()=>{
           while(cursor<assets.length){const u=assets[cursor++];if(!await cache.match(u)){
@@ -128,8 +142,17 @@
     // Bounded low-frequency retries only while visible; never a reload.
     const timer=setInterval(()=>{if(!document.hidden&&navigator.onLine)void flush()},30000);
     void notify();void flush();
-    return Object.freeze({request,flush,status,started,warm,projected,
-      dispose(){clearInterval(timer);channel?.close()}});
+    function dispose(){clearInterval(timer);channel?.close()}
+    // Wipe this app's replica on this device (sign-out, a different owner, handing the device over):
+    // the outbox and snapshot database and every <prefix> cache. Pending edits are lost; check status() first.
+    async function clear(){
+      dispose();
+      try{(await dbp).close()}catch{}
+      await new Promise((resolve,reject)=>{const r=indexedDB.deleteDatabase(c.prefix+'offline-v1');r.onsuccess=()=>resolve();r.onerror=()=>reject(r.error);r.onblocked=()=>resolve()});
+      for(const key of await caches.keys())if(key.startsWith(c.prefix))await caches.delete(key);
+      ready=false;done=total=0;
+    }
+    return Object.freeze({request,flush,retry,discard,status,started,warm,projected,clear,dispose});
   }
   globalThis.WizOffline=Object.freeze({version:1,create});
 })();
