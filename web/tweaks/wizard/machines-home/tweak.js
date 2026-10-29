@@ -156,7 +156,7 @@ export default function setup(api) {
       const signedOut = p.signedOut === true || p.status === 'signed_out' || p.status === 'auth', na = !signedOut && left == null && !money;
       const who = String(p.name || '').split('@')[0];
       out.push({ id: p.id, kind, group: p.providerName || kind, nick: S.nick[p.id] || '', auto: who && who !== p.providerName ? who : '',
-        email: p.email || '', left: left == null ? null : Math.round(left), money, unit: money ? 'credit' : 'plan', out: signedOut, na, resets: pick?.resetsAt || null });
+        email: p.email || '', left: left == null ? null : Math.round(left), money, unit: money ? 'credit' : 'plan', out: signedOut, na, stale: p.status === 'stale', resets: pick?.resetsAt || null });
     }
     return out;
   }
@@ -291,7 +291,7 @@ export default function setup(api) {
           h('input', { cls: 'mh-nick', type: 'text', value: r.nick || r.auto, placeholder: 'Nickname', maxlength: '24',
             'aria-label': `Nickname for ${g.name}${r.email ? ' ' + r.email : ''}`, data: { nick: r.id, auto: r.auto } }),
           h('span', { cls: 'mh-ai-use' }, h('span', { cls: 'mh-meter' }, h('i', { style: { '--f': (r.out || r.na ? 0 : r.left ?? 0) + '%' } })),
-            h('span', { cls: 'mh-ai-txt', text: r.out ? 'Signed out' : r.na ? 'Usage unavailable' : r.money ? `${r.money} credit left` : `${r.left}% left${reset}` })),
+            h('span', { cls: 'mh-ai-txt', text: r.out ? 'Signed out' : r.na ? 'Usage unavailable' : (r.money ? `${r.money} credit left` : `${r.left}% left${reset}`) + (r.stale ? ' · last reading' : '') })),
           h('span', { cls: 'mh-ai-acts' },
             TOP_UP[r.kind] && !r.out && !r.na ? h('a', { cls: 'mh-ai-btn is-link', href: TOP_UP[r.kind], target: '_blank', rel: 'noopener noreferrer' }, 'Add credit ↗') : null,
             r.out ? btn('Sign in', appOf(r.kind), 'is-in') : btn('Sign out', appOf(r.kind), 'is-out')));
@@ -379,7 +379,8 @@ export default function setup(api) {
   // Tailscale: one node beside Storage. Simple on the map (is anything open?), the whole story when tapped.
   // "Tailscale is the only way in" only from a fresh reading where every machine was checked and found Tailscale-only.
   const allClear = () => !!S.devFresh && devices().length > 0 && devices().every(d => d.access?.exposure === 'tailscale');
-  const aiStale = () => !!S.res.aiError;  // the feed failed after an earlier reading: what shows is last known
+  // The feed failed after an earlier reading, or a service sent its last known numbers: what shows is not current.
+  const aiStale = () => !!S.res.aiError || subs().some(s => s.stale && !s.out && !s.na);
   const openOnes = () => devices().filter(d => d.access?.exposure === 'internet').map(d => machine(d.id));
   const TS_ASK = {
     fix: () => { const open = openOnes(), names = open.map(m => m.name).join(' and ');
