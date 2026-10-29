@@ -36,7 +36,10 @@
     const p = loc.pathname;
     return appPrefixes().some(pre => pre.endsWith('/') ? p.startsWith(pre) : (p === pre || p.startsWith(pre + '/')));
   }
-  const winFrames = () => [...document.querySelectorAll('.win iframe')];
+  // Registered apps opened in the shared link sheet (including provider setup)
+  // receive the same Appearance contract as normal app windows. allowed() still
+  // excludes cross-origin and unregistered pages.
+  const winFrames = () => [...document.querySelectorAll('.win iframe, .linksheet iframe')];
   const frameOf = src => src ? winFrames().find(f => f.contentWindow === src) || null : null;
 
   function tokens() {
