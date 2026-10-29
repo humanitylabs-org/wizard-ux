@@ -73,17 +73,23 @@ function harness() {
   async function drain() { let all = false; Promise.all(pending.splice(0)).finally(() => { all = true; }); await pump(() => all); }
   return { on, stores, files, get, drain, clock: () => now, setDelay: ms => { delay = ms; }, setOnline: v => { online = v; }, fetched: () => fetched, cached: () => [...(stores.get('wos-shell-v1') || new Map()).keys()],
     page: (release) => ({ body: `<meta charset="utf-8"><meta name="wos-release" content="${release}"><script src="live.js?v=${release}"></script>`, headers: { 'cache-control': 'no-cache' } }),
-    flush: () => Promise.all(pending.splice(0)), message: async data => { on.message({ data, waitUntil: p => pending.push(p) }); await Promise.all(pending.splice(0)); } };
+    flush: () => Promise.all(pending.splice(0)),
+    async message(data) { let done = false; on.message({ data, waitUntil: p => pending.push(p) }); Promise.all(pending.splice(0)).finally(() => { done = true; }); await pump(() => done); },
+    // A page load as the browser does it: the page, its files, then the page's after-load hand-over (pwa-install.js).
+    async visit(path, files = []) {
+      const page = await get(path, { mode: 'navigate' });
+      for (const f of files) await get(f);
+      await this.message({ type: 'wos-shell-warm', urls: [ORIGIN + path, ...files.map(f => ORIGIN + f)] });
+      return page;
+    } };
 }
 
 test('online reads always go to Wizard; the shell files are kept for later', async () => {
   const h = harness();
   h.files.set(ORIGIN + '/wizard-os-home/', h.page('aaa'));
   h.files.set(ORIGIN + '/wizard-os-home/live.js', { body: 'live A', headers: {} });
-  const page = await h.get('/wizard-os-home/?thread=x', { mode: 'navigate' });
+  const page = await h.visit('/wizard-os-home/?thread=x', ['/wizard-os-home/live.js?v=aaa']);
   assert.match(page.body, /aaa/);
-  const js = await h.get('/wizard-os-home/live.js?v=aaa');
-  assert.equal(js.body, 'live A');
   assert.deepEqual(h.cached().sort(), [ORIGIN + '/wizard-os-home/', ORIGIN + '/wizard-os-home/live.js?v=aaa']);
   h.files.set(ORIGIN + '/wizard-os-home/live.js', { body: 'live A2', headers: {} });
   assert.equal((await h.get('/wizard-os-home/live.js?v=aaa')).body, 'live A', 'a stamped file is exact for its release: the copy answers at once');
@@ -94,8 +100,7 @@ test('offline: the page (any deep link) and its files open from the saved copy',
   const h = harness();
   h.files.set(ORIGIN + '/wizard-os-home/desktop.html', h.page('aaa'));
   h.files.set(ORIGIN + '/wizard-os-home/live.js', { body: 'live A', headers: {} });
-  await h.get('/wizard-os-home/desktop.html', { mode: 'navigate' });
-  await h.get('/wizard-os-home/live.js?v=aaa');
+  await h.visit('/wizard-os-home/desktop.html', ['/wizard-os-home/live.js?v=aaa']);
   h.setOnline(false);
   assert.match((await h.get('/wizard-os-home/desktop.html?thread=abc', { mode: 'navigate' })).body, /aaa/);
   assert.equal((await h.get('/wizard-os-home/live.js?v=aaa')).body, 'live A');
@@ -122,10 +127,32 @@ test('a newer release replaces the older one: two releases never mix offline', a
   const h = harness();
   h.files.set(ORIGIN + '/wizard-os-home/', h.page('aaa'));
   h.files.set(ORIGIN + '/wizard-os-home/live.js', { body: 'live', headers: {} });
-  await h.get('/wizard-os-home/', { mode: 'navigate' }); await h.get('/wizard-os-home/live.js?v=aaa');
+  await h.visit('/wizard-os-home/', ['/wizard-os-home/live.js?v=aaa']);
   h.files.set(ORIGIN + '/wizard-os-home/', h.page('bbb'));
-  await h.get('/wizard-os-home/', { mode: 'navigate' }); await h.get('/wizard-os-home/live.js?v=bbb');
+  await h.visit('/wizard-os-home/', ['/wizard-os-home/live.js?v=bbb']);
   assert.deepEqual(h.cached().sort(), [ORIGIN + '/wizard-os-home/', ORIGIN + '/wizard-os-home/live.js?v=bbb']);
+});
+
+test('an update that drops mid-way keeps the complete older release; the next good load completes the new one', async () => {
+  const h = harness();
+  h.files.set(ORIGIN + '/wizard-os-home/', h.page('aaa'));
+  h.files.set(ORIGIN + '/wizard-os-home/live.js', { body: 'live A', headers: {} });
+  await h.visit('/wizard-os-home/', ['/wizard-os-home/live.js?v=aaa']);
+  // Release bbb: the page arrives, then the link drops before its script does.
+  h.files.set(ORIGIN + '/wizard-os-home/', h.page('bbb'));
+  await h.get('/wizard-os-home/', { mode: 'navigate' });
+  h.setOnline(false);
+  await h.get('/wizard-os-home/live.js?v=bbb');
+  await h.message({ type: 'wos-shell-warm', urls: [ORIGIN + '/wizard-os-home/', ORIGIN + '/wizard-os-home/live.js?v=bbb'] });
+  assert.match((await h.get('/wizard-os-home/', { mode: 'navigate' })).body, /aaa/, 'offline start: the complete old page');
+  assert.equal((await h.get('/wizard-os-home/live.js?v=aaa')).body, 'live A', 'with its files');
+  h.setOnline(true);
+  h.files.set(ORIGIN + '/wizard-os-home/live.js', { body: 'live B', headers: {} });
+  await h.visit('/wizard-os-home/', ['/wizard-os-home/live.js?v=bbb']);
+  h.setOnline(false);
+  assert.match((await h.get('/wizard-os-home/', { mode: 'navigate' })).body, /bbb/);
+  assert.equal((await h.get('/wizard-os-home/live.js?v=bbb')).body, 'live B');
+  assert.ok((await h.get('/wizard-os-home/live.js?v=aaa')).error, 'old release pruned only once the new one is whole');
 });
 
 test('first visit: the page hands over what it loaded, only this scope\'s own files', async () => {
@@ -142,22 +169,24 @@ test('first visit: the page hands over what it loaded, only this scope\'s own fi
 
 test('activate clears only this worker\'s older caches', async () => {
   const h = harness();
-  for (const n of ['wos-shell-v0', 'wos-shell-v1', 'trackhunt-v1-20260711d']) h.stores.set(n, new Map());
+  for (const n of ['wos-shell-v0', 'wos-shell-v1', 'wos-shell-v1-next', 'trackhunt-v1-20260711d']) h.stores.set(n, new Map());
   const pending = [];
   h.on.activate({ waitUntil: p => pending.push(p) }); await Promise.all(pending);
-  assert.deepEqual([...h.stores.keys()].sort(), ['trackhunt-v1-20260711d', 'wos-shell-v1']);
+  assert.deepEqual([...h.stores.keys()].sort(), ['trackhunt-v1-20260711d', 'wos-shell-v1', 'wos-shell-v1-next']);
 });
 
 test('a crawling link opens from the saved copy after 3 s, and the fresh copy still lands for next time', async () => {
   const h = harness();
   h.files.set(ORIGIN + '/wizard-os-home/', h.page('aaa'));
-  await h.get('/wizard-os-home/', { mode: 'navigate' });
+  await h.visit('/wizard-os-home/');
   h.files.set(ORIGIN + '/wizard-os-home/', h.page('bbb'));
   h.setDelay(4000);
   const t0 = h.clock(); const res = await h.get('/wizard-os-home/', { mode: 'navigate' });
   assert.match(res.body, /aaa/, 'the saved page answered');
   assert.ok(h.clock() - t0 >= 3000 && h.clock() - t0 < 4000);
   await h.drain();
+  h.setDelay(0);
+  await h.message({ type: 'wos-shell-warm', urls: [ORIGIN + '/wizard-os-home/'] }); // that page's after-load hand-over
   h.setOnline(false);
   assert.match((await h.get('/wizard-os-home/', { mode: 'navigate' })).body, /bbb/, 'the slow read still refreshed the copy');
 });
