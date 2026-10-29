@@ -2556,15 +2556,15 @@ window.WizCore.chats = function createChats(H) {
     if (carryText) { if (later) typed = joinWords(typed, carryText); else if (text || files.length) text = `${text}\n\n${carryText}`.trim(); }
     if (!text && !files.length && !audio) { sealed?.putBack(); return; }
     const isNew = sid === '__new__';
-    const spaceKey = isNew && focusOf(w)?.kind === 'space' ? focusOf(w).key : '';
+    const spaceKey = isNew && !opts.away && focusOf(w)?.kind === 'space' ? focusOf(w).key : '';
     // A Notifications Reply: the item rides with the message (framed at delivery), never in his words.
     const rdkey = isNew ? (winAgent(w) ? 'agentnew:' + winAgent(w) : 'new') : 'direct:' + sid;
     const reply = voice ? (sealed?.reply || null) : here ? KIT.drafts.get(rdkey).reply : null;
     const s = isNew ? null : LIVE.session(sid);
     const steerRunId = isWorking(s) && s.runId ? s.runId : '';
-    const nm = opts.route || (isNew && PW ? PW.newModel(c) : null); // a model picked for this new chat (#11)
+    const nm = opts.route || (isNew && !opts.away && PW ? PW.newModel(c) : null); // a model picked for this new chat (#11)
     // A new chat goes to the agent its model belongs to: the window's agent, or a Private pick in the main Chats.
-    const AGID = isNew ? (opts.route?.agent || winAgent(w) || (nm?.agent && AGS()?.isOther(nm.agent) ? nm.agent : '')) : '';
+    const AGID = Object.hasOwn(opts, 'agent') ? opts.agent : isNew ? (opts.route?.agent || winAgent(w) || (nm?.agent && AGS()?.isOther(nm.agent) ? nm.agent : '')) : '';
     const winAG = isNew ? winAgent(w) : '';
     const dkey = isNew ? (winAG ? 'agentnew:' + winAG : 'new') : 'direct:' + sid;
     if (here && !voice) { KIT.drafts.clear(dkey); c.draft = ''; c.files = []; }

@@ -58,6 +58,55 @@ public final class ShareStore {
         d.delete();
     }
 
+    /** Promote staged bytes to the existing resumable queue without copying a large file on Send.
+     * Hard links share phone-private storage, not the source app's URI grant. The queue manifest is fsynced before
+     * the staging links can be removed. A crash/retry uses the same id; never queues a second message. */
+    public synchronized String enqueue(Context context, org.json.JSONObject request) throws IOException, org.json.JSONException {
+        String queueId = enqueue(ShareQueue.get(context), request);
+        ShareService.send(context, queueId, java.util.Collections.emptyList());
+        return queueId;
+    }
+
+    synchronized String enqueue(ShareQueue queue, org.json.JSONObject request) throws IOException, org.json.JSONException {
+        String id = request.optString("shareId"), agent = request.optString("agent"), thread = request.optString("thread");
+        if (!id.matches("share-[A-Za-z0-9._-]{1,100}") || (!agent.isEmpty() && !agent.matches("[a-z0-9][a-z0-9-]{0,40}"))
+                || (!thread.isEmpty() && !thread.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,200}"))) throw new IOException("Invalid share destination");
+        String queueId = "and-" + id;
+        if (queue.load(queueId) != null) return queueId;
+        String metadata = meta(id);
+        if (metadata == null) throw new IOException("Share expired");
+        org.json.JSONArray all = new org.json.JSONObject(metadata).getJSONArray("items"), kept = request.getJSONArray("keptItemIndexes"), files = new org.json.JSONArray();
+        if (kept.length() < 1 || kept.length() > all.length()) throw new IOException("Nothing to share");
+        java.util.HashSet<Integer> seen = new java.util.HashSet<>();
+        try {
+        for (int i = 0; i < kept.length(); i++) {
+            int n = kept.getInt(i);
+            if (!seen.add(n)) throw new IOException("Duplicate item");
+            org.json.JSONObject found = null;
+            for (int j = 0; j < all.length(); j++) if (all.getJSONObject(j).getInt("n") == n) found = all.getJSONObject(j);
+            if (found == null || !found.optString("sha256").matches("[a-f0-9]{64}")) throw new IOException("Invalid item");
+            File source = item(id, n), target = queue.file(queueId, i);
+            if (!source.isFile() || source.length() != found.getLong("bytes")) throw new IOException("Missing item");
+            // An interrupted pre-manifest promotion may already have created this exact link.
+            if (target.exists()) {
+                if (!Files.isSameFile(source.toPath(), target.toPath())) throw new IOException("Conflicting item");
+            } else Files.createLink(target.toPath(), source.toPath());
+            files.put(new org.json.JSONObject().put("name", found.getString("name")).put("mime", found.getString("mime"))
+                    .put("bytes", source.length()).put("sha256", found.getString("sha256")).put("copied", true));
+        }
+        String note = request.optString("note");
+        if (note.length() > 250000) throw new IOException("Note too long");
+        org.json.JSONObject it = new org.json.JSONObject().put("id", queueId).put("v", 2).put("created", System.currentTimeMillis()).put("state", ShareQueue.READY)
+                .put("agent", agent).put("agentLabel", request.optString("agentLabel", "Wizard")).put("thread", thread).put("note", note)
+                .put("files", files).put("uploads", new org.json.JSONArray());
+        queue.save(it);
+        return queueId;
+        } catch (IOException | org.json.JSONException e) {
+            if (queue.load(queueId) == null) queue.delete(queueId); // release only orphan links; staged originals survive
+            throw e;
+        }
+    }
+
     /** Shares older than a day that were never picked up. */
     public void prune() {
         File[] ds = root.listFiles();
