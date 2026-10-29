@@ -414,7 +414,8 @@ export default function setup(api) {
     const s = sv('svg', { class: 'mh-i', viewBox: '0 0 24 24', 'aria-hidden': 'true' }, b); for (const [t, a] of PLUS) sv(t, a, s); return b; };
   function renderMap() {
     if (!S.res.devices && S.ws === 'mine') { root.classList.add('is-loading'); setRow(rowSt, []); setRow(rowAct, []); setRow(rowMore, []); setRow(rowPp, []); setRow(rowDv, []); setRow(rowChev, []);
-      setRow(rowMn, [h('span', { cls: 'mh-wait', role: 'status', 'aria-label': 'Loading your network' })]); return; }
+      setRow(rowMn, [h('span', { cls: 'mh-wait', role: 'status', 'aria-label': 'Loading your network' })]);
+      if (!netBox.firstChild) netBox.replaceChildren(h('span', { cls: 'mh-wait', role: 'status', 'aria-label': 'Loading your network' })); return; }
     root.classList.remove('is-loading');
     if (S.ws !== 'mine' && !managedOf(S.ws) && S.res.devices) S.ws = 'mine';
     const g = managedOf(S.ws);
