@@ -321,7 +321,7 @@ async function soloAcceptance(b) {
    await row.scrollIntoViewIfNeeded();
    if(desktop)await row.click({button:'right'});
    else {const r=await row.boundingBox(),cdp=await ctx.newCDPSession(p);await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:r.x+r.width/2,y:r.y+r.height/2}]});await p.waitForTimeout(600);await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();}
-   ok(await p.locator('[data-rsspacepicker]').count()===1,mode+' long-press offers Add to a Space with zero Spaces');
+   ok(await p.locator('[data-rsspacepicker]').innerText().then(t=>t.includes('Add to a Space')),mode+' long-press offers Add to a Space with zero Spaces');
    await activate(p,'[data-rsspacepicker]');
    ok(await p.locator('[data-spnew]').count()===1,mode+' empty Add picker offers New Space');
    await activate(p,'[data-spnew]');await p.locator('.ch-space-form input').fill('First space');
@@ -538,6 +538,7 @@ async function soloAcceptance(b) {
   await choose(p,'space:reading');
   await p.locator('[data-chopen="main_phil"]:visible').dispatchEvent('contextmenu');
   ok(await p.locator('[data-rsspace="reading"]').innerText().then(t=>t.includes('Remove from Space')),mode+' existing context menu offers Remove from Space');
+  ok(await p.locator('[data-rsspacepicker]').innerText().then(t=>t.includes('Move to Space')&&!t.includes('Add to a Space')),mode+' filed chat reads Move to Space, never Add to a Space');
   await p.locator('[data-rsspace="reading"]').click();await p.waitForTimeout(80);
   ok(JSON.stringify(await ids(p))===JSON.stringify([])&&!sharedSpaces.find(s=>s.id==='reading').threads.includes('main_phil'),mode+' remove membership PUT and visible filter');
   await choose(p,'all:');await p.locator('[data-chopen="main_phil"]:visible').dispatchEvent('contextmenu');
