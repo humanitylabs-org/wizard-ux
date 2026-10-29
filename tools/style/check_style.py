@@ -22,6 +22,11 @@ RULES = {
     'px-type': re.compile(r'(?i)font-size\s*:\s*[^;}\n]*?\b\d*\.?\d+px|\bfont\s*:\s*[^;}\n]*?\b\d*\.?\d+px'),
 }
 KIT_NAMES = {'wizard-ui.css': 'ui.css', 'wizard-tokens.css': 'tokens.css', 'wizard-sheet.js': 'sheet.js'}
+# Skin packages and owner tweaks *are* skin definitions (raw colours, fonts, px type by
+# nature). Their literal values stay visible as warnings but never fail CI; structural
+# rules (cyclic tokens, kit drift, symlinks) still fail there. Prefixes come from the
+# canonical policy's "skin_layers" list so the scope is reviewed, never a per-app glob.
+SKIN_LITERAL_RULES = {'literal-colour', 'literal-font', 'px-type'}
 GUIDE = 'https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md'
 
 
@@ -55,6 +60,9 @@ def scan(root, policy, *, base=None, strict=False):
     exceptions = policy.get('exceptions', [])
     if any(not e.get('reason', '').strip() or not e.get('sha256') or not e.get('path') for e in exceptions):
         raise ValueError('Every exception needs an exact path, SHA256 and reason')
+    skin_layers = tuple(policy.get('skin_layers', []))
+    if any(not isinstance(x, str) or not x.endswith('/') or x.startswith(('/', '.')) or '*' in x for x in skin_layers):
+        raise ValueError('skin_layers entries must be relative directory prefixes ending in /')
     findings = []
     for p in sorted(root.rglob('*')):
         rel = p.relative_to(root).as_posix()
@@ -83,6 +91,8 @@ def scan(root, policy, *, base=None, strict=False):
                             or re.match(r'\s*(?:\{|::?[\w-]|\[)', after)):
                         continue
                 line = text.count('\n', 0, m.start()) + 1
+                if rule in SKIN_LITERAL_RULES and rel.startswith(skin_layers):
+                    findings.append(dict(path=rel, line=line, rule=rule, error=False, skin_layer=True)); continue
                 findings.append(dict(path=rel, line=line, rule=rule, error=strict or line in changed.get(rel, set())))
     return findings
 
