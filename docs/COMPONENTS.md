@@ -45,7 +45,7 @@ Visual: <side-by-side screenshot, or "none">
 | Need | Use | Never hand-roll |
 |---|---|---|
 | Menu | `WosContextMenu.open`, `.back` (`core/context-menu.js`, `.css`): opaque, outside/blur/scroll closes; Back first | local menus |
-| Chats/Focus/Filter/search/composer/files/read state/Copy/Share/Recall/Done | `WizCore` (`web/core/chats.js`, `.css`): Ready/inbox + full original alert; `setFocus` saves `w.focus`; `migrateChatsFocus` migrates. `WizLive` data/stream/tools; provider-access waits in Errors, source-bound optimistic-send release; revision invalidates cache | duplicate Chats/Focus parser/routing |
+| Chats/Focus/Filter/search/composer/files/read state/Copy/Share/Recall/Done | `WizCore` (`web/core/chats.js`, `.css`): Ready/inbox + original alert; `setFocus`/`migrateChatsFocus`; `WizLive` stream/tools, scoped history-first, current-cache warming, transcript retry beside sends; provider waits in Errors; source-bound send release; revision cache | duplicate Chats/Focus parser/routing |
 | Alternative Chats list | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`web/core/edge-peek.js`), host storage | skin-local duplicate |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` per tick |
