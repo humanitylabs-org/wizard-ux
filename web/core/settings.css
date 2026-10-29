@@ -80,7 +80,19 @@ a.st-row { color: inherit; text-decoration: none; }
 
 /* Skin aliases are generated once in kit/shell-tokens.css. Do not remap a
  * --wz-* role to itself here: that invalidates every descendant value. */
-.st-root, .dsettings { color: var(--wz-text); }
+/* Settings is where the kit colour roles apply in the shell. They are derived here, on the Settings root, from the
+ * skin palette in scope, so a skin's palette (and any rescoped subtree) still decides the colours; base.css keeps
+ * them unset elsewhere. Each role maps to a skin variable, never to itself. */
+.st-root, .dsettings {
+  --wz-base: var(--bg); --wz-canvas: var(--bg); --wz-overlay: var(--glass-2); --wz-chrome: var(--sk-win);
+  --wz-text: var(--ink); --wz-text-secondary: var(--ink-2); --wz-text-muted: var(--ink-3);
+  --wz-on-accent: var(--bg); --wz-border: var(--line-2); --wz-accent: var(--violet-2);
+  --wz-danger: var(--red); --wz-success: var(--green); --wz-warning: var(--amber);
+  --wz-surface: color-mix(in srgb, var(--ink) 6%, transparent);
+  --wz-surface-raised: color-mix(in srgb, var(--ink) 10%, transparent);
+  --wz-accent-soft: color-mix(in srgb, var(--violet-2) 16%, transparent);
+  color: var(--wz-text);
+}
 .st-root { background: transparent; }
 .st-root[data-settings-root] button:not(.st-close), .st-root summary { min-height: 48px; min-width: 48px; }
 .st-root [hidden] { display: none !important; }

@@ -18,6 +18,9 @@
   <link rel="icon" href="favicon.ico" sizes="any">
   <link rel="icon" href="icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="/wizard-os-home/apple-touch-icon.png">
+  <!-- Kit defaults first: shell, component and skin rules (core, package, My skin) all load after and win. -->
+  <link rel="stylesheet" href="kit/shell-tokens.css">
+  <link rel="stylesheet" href="kit/controls.css">
   <link rel="stylesheet" href="core/base.css">
   <link rel="stylesheet" href="core/brand.css">
   <script src="core/brand.js"></script>
@@ -51,8 +54,6 @@
   <script type="module" src="core/thread-swipe-back.js"></script>
   <script src="core/edge-peek.js"></script>
   <link rel="stylesheet" href="core/skin-frame.css">
-  <link rel="stylesheet" href="kit/shell-tokens.css">
-  <link rel="stylesheet" href="kit/controls.css">
   <script src="core/my-skin.js"></script>
   <script defer src="core/experience.js"></script>
 </head>

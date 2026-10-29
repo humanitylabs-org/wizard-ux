@@ -109,19 +109,19 @@ html[data-skin="signal"] { --setup-r: 2px; }
   .recommended .bd { min-width: 160px; }
   .recommended-action { max-width: none; }
 }
-html[data-skin="signal"] :is(h1, h2, .eyebrow, .btn, .url, .menu) { font-family:var(--wz-font-mono); }
-html[data-skin="signal"] :is(.item, .btn, .url, .menu, .sheet, .qr) { border-radius: 2px; }
+html[data-skin="signal"] :is(h1, h2, .eyebrow, .btn, .url, .menu, .wz-sheet) { font-family:var(--wz-font-mono); }
+html[data-skin="signal"] :is(.item, .btn, .url, .menu, .sheet, .wz-sheet, .qr) { border-radius: 2px; }
 
 /* Overflow menu, disconnect sheet, toast: the shell's sheet material */
-.scrim { position: fixed; inset: 0; background: color-mix(in srgb, var(--wz-base, #05030c) 45%, transparent); z-index: 10; }
-.menu { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 52px); right: max(12px, calc((100vw - 480px) / 2)); z-index: 11; min-width: 230px; padding: 6px; border-radius: 14px; background: linear-gradient(var(--ov), var(--ov)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid var(--bd);   box-shadow: 0 12px 30px color-mix(in srgb, var(--wz-base, #05030c) 35%, transparent); }
+.scrim { position: fixed; inset: 0; background: color-mix(in srgb, var(--wz-base) 45%, transparent); z-index: 10; }
+.menu { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 52px); right: max(12px, calc((100vw - 480px) / 2)); z-index: 11; min-width: 230px; padding: 6px; border-radius: 14px; background: linear-gradient(var(--ov), var(--ov)), var(--wz-panel, var(--wz-base)); border: 1px solid var(--bd);   box-shadow: 0 12px 30px color-mix(in srgb, var(--wz-base) 35%, transparent); }
 .menu button { display: block; width: 100%; min-height: 44px; padding: 0 12px; border-radius: 10px; text-align: left; font-size: var(--wz-font-size); color: var(--t); }
 .menu button:active { background: var(--sf2); }
-.sheet { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); z-index: 11; width: min(480px, 100vw); box-sizing: border-box; padding: 22px 20px calc(env(safe-area-inset-bottom, 0px) + 18px); border-radius: 18px 18px 0 0; background: linear-gradient(var(--ov), var(--ov)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid var(--bd); border-bottom: 0;   display: flex; flex-direction: column; gap: 10px; }
+.sheet { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); z-index: 11; width: min(480px, 100vw); box-sizing: border-box; padding: 22px 20px calc(env(safe-area-inset-bottom, 0px) + 18px); border-radius: 18px 18px 0 0; background: linear-gradient(var(--ov), var(--ov)), var(--wz-panel, var(--wz-base)); border: 1px solid var(--bd); border-bottom: 0;   display: flex; flex-direction: column; gap: 10px; }
 .sheet h2 { margin: 0; font-size: var(--wz-text-heading); font-weight: 700; }
 .sheet p { margin: 0 0 6px; color: var(--t2); font-size: var(--wz-font-size); }
 .sheet .link { text-align: center; }
-.toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); transform: translateX(-50%); z-index: 12; max-width: calc(100vw - 40px); padding: 10px 14px; border-radius: 12px; background: linear-gradient(var(--ov), var(--ov)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid var(--bd); color: var(--t); font-size: var(--wz-text-md);   }
+.toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); transform: translateX(-50%); z-index: 12; max-width: calc(100vw - 40px); padding: 10px 14px; border-radius: 12px; background: linear-gradient(var(--ov), var(--ov)), var(--wz-panel, var(--wz-base)); border: 1px solid var(--bd); color: var(--t); font-size: var(--wz-text-md);   }
 
 .pc-host { margin-top: 14px; }
 /* Domain placement on the shared control, retaining the approved 16px air and skin tint. */
