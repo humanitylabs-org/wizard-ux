@@ -50,6 +50,8 @@ window.WizCore.chats = function createChats(H) {
   const LIVE = window.WizLive;
   const OUTBOX = window.WosOutbox || null;
   const reach = () => window.WizReach?.failure() || { short: 'Reconnecting…' };
+  // Short line for a failing request; operation 'send' | 'read' (WizReach.label owns the wording).
+  const reachLabel = (operation, count) => window.WizReach?.label ? window.WizReach.label(operation, { count }) : reach().short;
   const troubleshoot = '<button type="button" class="pbtn" data-chtroubleshoot>Open Troubleshooter</button>';
   /* ---- shims: the original body's names, backed by the host ---- */
   const W = new Proxy({}, { get: (_, id) => (typeof id === 'string' ? H.win(id) : undefined) });
@@ -669,7 +671,9 @@ window.WizCore.chats = function createChats(H) {
         : `<button type="button" class="pbtn" data-obretryall>Retry all</button>`;
     } else if (waiting.length) {
       cls = ' wait';
-      label = esc(reach().short);
+      // A healthy probe says nothing about this saved message's failed step. Keep
+      // its delivery status here, without describing the whole Wizard as offline.
+      label = esc(reachLabel('send', waiting.length));
       btns = one ? `<button type="button" class="pbtn" data-obretry="${esc(one.id)}">Retry now</button>` : `<button type="button" class="pbtn" data-obretryall>Retry now</button>`;
       btns += troubleshoot;
     } else {
@@ -1135,7 +1139,7 @@ window.WizCore.chats = function createChats(H) {
     const spin = '<i class="ch-spin" aria-hidden="true"></i>';
     const syncBar = (cls, inner, extra = '') => `<div class="ch-sync${cls ? ' ' + cls : ''}" role="status">${inner}${extra}</div>`;
     const sync = c.ptrState === 'busy' ? syncBar('', `${spin}<span>Refreshing…${LST.error || age > STALE_LIST ? ` · ${esc(since)}` : ''}</span>`)
-      : LST.error ? syncBar('off', `<span><b>Not up to date</b>${since ? ` · ${esc(since)}` : ''} · ${esc(reach().short)}</span>`, troubleshoot)
+      : LST.error ? syncBar('off', `<span><b>Not up to date</b>${since ? ` · ${esc(since)}` : ''} · ${esc(reachLabel('read'))}</span>`, troubleshoot)
       : LST.cached ? syncBar('', `${spin}<span>Updating…${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}</span>`)
       : LST.ok && age > STALE_LIST ? syncBar('stale', `${LST.loading ? spin : ''}<span><b>Not up to date</b> · ${esc(since)}${LST.loading ? ' · updating…' : ''}</span>`)
       : c.ptrState === 'done' ? syncBar('ok', '<span>Up to date</span>') : '';
@@ -2220,7 +2224,7 @@ window.WizCore.chats = function createChats(H) {
     if (p.state === 'held' && p.lateHeld) return `<span class="pst">${esc(OUTBOX.lateLabel(p))}</span>${OUTBOX.canRetry(p) ? `<button type="button" class="pbtn" data-obretry="${esc(p.id)}">Send</button>` : recover}<button type="button" class="pbtn ghost" data-obdiscard="${esc(p.id)}">Discard</button>`;
     if (p.state === 'held') return `<span class="pst">Kept on this device · not queued</span>${recover}<button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
     if (p.state === 'failed') return `<span class="pst fail">Not sent · ${esc(p.error || 'Wizard didn’t take it')}</span>${OUTBOX.canRetry(p) ? `<button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry</button>` : ''}${p.audio || p.audioFile || p.body ? recover : `<button type="button" class="pbtn ghost" data-obedit="${esc(p.id)}">Edit</button>`}`;
-    if (p.state === 'waiting') return `<span class="pst wait">${esc(reach().short)}</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry now</button>${troubleshoot}`;
+    if (p.state === 'waiting') return `<span class="pst wait">${esc(reachLabel('send'))}</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry now</button>${troubleshoot}`;
     const agent = esc(window.WizConfig.agent());
     if (p.state === 'sent') {
       // Admission is not delivery: keep the saved request held through its automatic resend.
