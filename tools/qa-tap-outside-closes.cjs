@@ -50,7 +50,7 @@ ${['wisdom','cover','late'].includes(id)?'#canvas-tools{padding-top:calc(var(--w
 <input id="editor" aria-label="Fixture editor" value="Synthetic editable text">
 ${Array.from({length:100},(_,i)=>`<p data-line="${i}">Fixture paragraph ${i}: scroll to test the protected status area.</p>`).join('')}</main><button id="formatting">Aa</button>
 <script>if(document.getElementById('unused'))document.getElementById('unused').sheet.disabled=true;window.fixtureReady=true;WizardApp.ready({title:'Fixture',back:()=>false});</script>`;
-const standaloneHost=`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
+const standaloneHost=`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="/core/base.css"><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/core/skins.css"><link rel="stylesheet" data-skin-pkg="obsidian" href="/skins/obsidian/skin.css"><link rel="stylesheet" href="/core/links.css"><link rel="stylesheet" href="/core/update-banner.css"><link rel="stylesheet" href="/core/home-screen-apps.css">
 <style>html,body{margin:0;width:100%;height:100%;overflow:hidden}#nativeStatus{position:fixed;inset:0 0 auto;height:var(--single-cut,0px);z-index:2147483647;pointer-events:none;box-sizing:border-box;padding:2px 18px;font:12px system-ui;color:var(--ink);background:var(--bg)}#singleApp{transition:none}</style>
 <div id="device" class="device"><div id="toast" class="toast"></div></div><div id="nativeStatus">09:41 · synthetic Android status bar</div>
@@ -279,10 +279,14 @@ async function check(name, fn) { await fn(); passed++; console.log('PASS', name)
         metrics.push({label:`${skin} ${id} link sheet`,...sheet});
         if(process.env.QA_OUTPUT)await pinned.screenshot({path:path.join(process.env.QA_OUTPUT,`standalone-${skin}-${id}-link-sheet.png`)});
         await pinned.evaluate(()=>__wos.links.close());
+        await pinned.locator('.linksheet.sheet').waitFor({state:'hidden'});
         await pinned.evaluate(()=>{window.fixturePane=WizLinks.mount({parent:document.body,mode:'pane'});fixturePane.open('/fixture-page');});
-        await pinned.waitForFunction(()=>Math.abs(document.querySelector('.linksheet.pane .ls-panel').getBoundingClientRect().top-48)<1);
+        // Pane top is already inset while it is still sliding in horizontally;
+        // wait for both axes so screenshots do not certify a mid-transition pane.
+        await pinned.waitForFunction(()=>{const p=document.querySelector('.linksheet.pane .ls-panel');return Math.abs(p.getBoundingClientRect().top-48)<.01&&Math.abs(new DOMMatrixReadOnly(getComputedStyle(p).transform).m41)<.01;});
         if(process.env.QA_OUTPUT)await pinned.screenshot({path:path.join(process.env.QA_OUTPUT,`standalone-${skin}-${id}-link-pane.png`)});
         await pinned.evaluate(()=>fixturePane.close());
+        await pinned.locator('.linksheet.pane').waitFor({state:'hidden'});
       });
     }
     await check('James universal standalone rule: callbacks before mount, reload and focused editor keep one inset',async()=>{
