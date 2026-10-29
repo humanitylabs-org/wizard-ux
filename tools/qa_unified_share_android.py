@@ -47,18 +47,51 @@ def sha(path):
         return hashlib.file_digest(f, 'sha256').hexdigest()
 
 
-def focused_thread_expression(thread, filename):
-    return """(() => {
+def focused_thread_snapshot_expression(thread, filename):
+    # Passive synthetic-only readback. A window-model ID + innerText anywhere in
+    # .ch-thread does not establish that its delivered message is on screen.
+    comment = 'Synthetic comment one' if filename == 'genuine.pdf' else 'Synthetic comment two'
+    return r"""(() => {
+      const expected = EXPECTED, filename = FILENAME, comment = COMMENT;
       const w = window.__wos, desk = w?.desks?.[w.idx], id = desk?.focus;
+      const e = id && document.querySelector('[data-chats="' + CSS.escape(id) + '"] .ch-thread');
+      const result = {ready:false,id,thread:w?.wins?.[id]?.thread,expected,
+        focused:document.hasFocus(),visibility:document.visibilityState,
+        text:e?.innerText || '',owner:e?.closest('.wos-doc-thread')?.dataset.chats || null};
       if (!id || !desk.wins.includes(id) || w.wins[id]?.app !== 'chats' ||
-          w.wins[id]?.thread !== %s) return false;
-      const e = document.querySelector('[data-chats="' + CSS.escape(id) + '"] .ch-thread');
-      if (!e) return false;
-      const b = e.getBoundingClientRect(), s = getComputedStyle(e);
-      return b.width > 0 && b.height > 0 && b.right > 0 && b.bottom > 0 &&
-        b.left < innerWidth && b.top < innerHeight && s.display !== 'none' &&
-        s.visibility === 'visible' && e.innerText.includes(%s);
-    })()""" % (json.dumps(thread), json.dumps(filename))
+          result.thread !== expected || !e || !result.focused || result.visibility !== 'visible') return result;
+      if (document.documentElement.classList.contains('wos-doc-scroll') && result.owner !== id) return result;
+      const visible = n => {
+        if (!n) return false;
+        for (let a=n;a;a=a.parentElement) {
+          const s=getComputedStyle(a);
+          if(s.display==='none'||s.visibility!=='visible'||Number(s.opacity)===0) return false;
+        }
+        const b=n.getBoundingClientRect();
+        const left=Math.max(0,b.left),right=Math.min(innerWidth,b.right),
+          top=Math.max(0,b.top),bottom=Math.min(innerHeight,b.bottom);
+        if(right<=left||bottom<=top) return false;
+        const hit=document.elementFromPoint((left+right)/2,(top+bottom)/2);
+        return !!hit && n.contains(hit);
+      };
+      const rows=[...e.querySelectorAll('.ch-msgs .msg.u .bub')];
+      for(const row of rows) {
+        const file=[...row.querySelectorAll('.mcard .mn b')].find(n=>n.textContent.trim()===filename);
+        const note=[...row.querySelectorAll('p')].find(n=>n.innerText.trim()===comment);
+        if(file && note && visible(file) && visible(note)) {
+          result.ready=true;
+          result.message=row.innerText;
+          result.file=file.textContent.trim();result.comment=note.innerText.trim();
+          result.rects=[file,note].map(n=>{const b=n.getBoundingClientRect();return [b.left,b.top,b.right,b.bottom]});
+          break;
+        }
+      }
+      return result;
+    })()""".replace('EXPECTED', json.dumps(thread)).replace('FILENAME', json.dumps(filename)).replace('COMMENT', json.dumps(comment))
+
+
+def focused_thread_expression(thread, filename):
+    return '(' + focused_thread_snapshot_expression(thread, filename) + ').ready'
 
 
 def verify_seal(root, seal, expected, runner_path=None):
@@ -490,6 +523,11 @@ class Proxy(http.server.BaseHTTPRequestHandler):
             headers = {k: v for k, v in self.headers.items() if k.lower() not in ('host', 'connection')}
             conn.request(self.command, self.path, body, headers)
             answer = conn.getresponse(); payload = answer.read(); event['status'] = answer.status
+            # Exact-ID synthetic fixture replies, not the catch-all /wizard/ 200 {}.
+            if re.match(r'^/wizard/hermes/api/sessions/(?:qa_[a-z_]+|wizard_[0-9]+_[a-f0-9]+)(?:/messages)?(?:[?]|$)', self.path):
+                event['response_json'] = json.loads(payload)
+            if self.command == 'POST' and self.path == '/wizard-os-home/api/diagnostics/scroll-capture':
+                event['synthetic_diagnostic'] = json.loads(body)
             self.send_response(answer.status)
             for k, v in answer.getheaders():
                 if k.lower() not in ('connection', 'transfer-encoding', 'content-length'):

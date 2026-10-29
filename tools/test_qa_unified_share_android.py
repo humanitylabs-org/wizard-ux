@@ -342,28 +342,14 @@ class ControllerTest(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which('node'), 'Node needed for focused DOM contract replay')
     def test_notification_dom_readback_rejects_background_wrong_thread_and_missing_file(self):
-        expression = runner.focused_thread_expression('qa_private_thread', 'genuine.pdf')
-        # A small DOM-contract replay, NOT browser/emulator/end-to-end evidence.
-        script = """
-        const assert = require('node:assert/strict');
-        global.window = {__wos:{idx:0,desks:[{focus:'c1',wins:['c1']}],wins:{c1:{app:'chats',thread:'qa_private_thread'}}}};
-        global.CSS = {escape:x=>x}; global.innerWidth=400; global.innerHeight=800;
-        let box={width:300,height:600,left:0,top:0,right:300,bottom:600};
-        let e={innerText:'Synthetic comment one genuine.pdf',getBoundingClientRect:()=>box};
-        global.getComputedStyle=()=>({display:'block',visibility:'visible'});
-        global.document={querySelector:s=>{assert.equal(s,'[data-chats="c1"] .ch-thread');return e}};
-        const check = () => eval(EXPRESSION);
-        assert.equal(check(),true);
-        window.__wos.wins.c1.thread='wrong';assert.equal(check(),false);
-        window.__wos.wins.c1.thread='qa_private_thread';
-        window.__wos.desks[0].wins=[];assert.equal(check(),false);
-        window.__wos.desks[0].wins=['c1'];
-        box={...box,left:500,right:800};assert.equal(check(),false);
-        box={...box,left:0,right:300}; e.innerText='different.pdf';assert.equal(check(),false);
-        e=null;assert.equal(check(),false);
-        """.replace('EXPRESSION', json.dumps(expression))
-        result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=15)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        spec = importlib.util.spec_from_file_location('focused_contract', HERE / 'test_notification_focused.py')
+        assert spec is not None and spec.loader is not None
+        contract = importlib.util.module_from_spec(spec); spec.loader.exec_module(contract)
+        replay = contract.NotificationPredicateTest().replay
+        replay('', True)
+        replay("window.__wos.wins.c1.thread='old';", False)
+        replay('bodyOnly=true;', False)
+        replay('rect.left=500;rect.right=800;', False)
 
     def test_notification_readback_requires_foreground_native_log_and_focused_dom(self):
         for component in ('ai.wizards.os.MainActivity', '.MainActivity'):
