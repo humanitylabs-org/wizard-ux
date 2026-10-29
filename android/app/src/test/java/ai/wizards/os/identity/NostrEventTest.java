@@ -38,6 +38,20 @@ public class NostrEventTest {
         assertEquals("Encrypt a private message to " + npub, NostrEvent.encryptionSentence("not an event", PUB, PUB));
         assertEquals("Encrypt a private message to " + npub, NostrEvent.encryptionSentence("{\"kind\":13,\"tags\":[],\"content\":5}", PUB, PUB));
     }
+    @Test public void partialMatchesShowTheRawRequest() throws Exception {
+        String d = "[\"d\",\"wizard-devices\"]", p = "[\"p\",\"" + PUB + "\"]", t = "[\"t\",\"wizard-profile\"]";
+        // A friendly sentence hides the event JSON, so any tag the sentence does not describe must fall back to Unfamiliar.
+        assertEquals("Unfamiliar request", NostrEvent.sentence(event(30078, "[" + d + "," + p + ",[\"revoked\",\"not-a-key\"]]")));
+        assertEquals("Unfamiliar request", NostrEvent.sentence(event(30078, "[" + d + "," + p + ",[\"e\",\"" + PUB + "\"]]")));
+        assertEquals("Unfamiliar request", NostrEvent.sentence(event(30078, "[" + d + "," + d + "," + p + "]")));
+        assertEquals("Unfamiliar request", NostrEvent.sentence(event(30078, "[" + d + ",[\"p\",\"short\"]]")));
+        assertEquals("Unfamiliar request", NostrEvent.sentence(event(30078, "[" + d + "]")));
+        assertEquals("Unfamiliar request", NostrEvent.sentence(event(1078, "[" + t + "," + p + "," + p + "]")));
+        assertEquals("Unfamiliar request", NostrEvent.sentence(event(1078, "[" + t + "," + p + ",[\"e\",\"x\"]]")));
+        assertEquals("Unfamiliar request", NostrEvent.sentence(event(1078, "[" + t + ",[\"p\",\"" + PUB + "\",\"wss://other\"]]")));
+        assertEquals("Let this Wizard receive for you", NostrEvent.sentence(event(30078, "[" + d + "," + p + "]")));
+        assertEquals("Remove a Wizard from your Wizard ID", NostrEvent.sentence(event(30078, "[" + d + ",[\"revoked\",\"" + PUB + "\",\"123\"]]")));
+    }
     @Test public void normalizationBindsSignerDropsUntrustedFields() throws Exception {
         JSONObject e = NostrEvent.normalize(event(1,"[]").put("description","Safe").put("sig","fake").put("id","fake"),PUB,42);
         assertEquals(PUB,e.getString("pubkey")); assertEquals(42,e.getLong("created_at"));
