@@ -577,6 +577,7 @@
       finally { ctx.chatsBusy = false; confirm = null; render(); root.querySelector('[data-chats-choice][aria-checked="true"]')?.focus({ preventScroll: true }); }
     }
     function dispatch(el, event) {
+      if (el.classList?.contains('st-confirm-scrim')) return back();
       if (el.closest('[data-chats-confirm]')) { useChats(); return true; }
       if (el.closest('[data-chats-cancel]')) { back(); return true; }
       if (confirm) return false;

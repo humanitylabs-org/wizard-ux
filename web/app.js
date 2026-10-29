@@ -970,15 +970,18 @@
     const src = W[srcId], sid = src?.app === 'chats' && src.thread && src.thread !== '__new__' ? src.thread : '';
     return { desk: desks[deskOf(srcId)]?.id || desks[idx].id, win: srcId || '', sid, title: sid ? (LIVE?.session(sid)?.title || winTitle(src)) : (src ? winTitle(src) : '') };
   }
-  function openLinkDesk(href, fromEl) {
+  function openLinkDesk(href, fromEl, setupChecked = false) {
     let u; try { u = new URL(href, location.href); } catch (e) { return false; }
     if (u.origin !== location.origin) return false;
     const srcId = (fromEl && fromEl.closest ? fromEl.closest('.win')?.dataset.win : '') || desks[idx].focus;
     const src = W[srcId], rel = u.pathname + u.search + u.hash;
-    const pageSlug = window.WosPages.match(href);
+    const pageSlug = window.WosPages?.match(href);
     if (pageSlug) return !!openWin({app:'pages', appId:'pages', pageSlug, from:fromOf(srcId)});
     // Without the Pages API preserve the ordinary link sheet, not a privileged frame.
     if (/^\/pages\//.test(u.pathname)) return false;
+    const targetApp = appAt(rel);
+    if (targetApp && !setupChecked && window.WosAppSetup)
+      return window.WosAppSetup.gate(targetApp, () => openLinkDesk(href, fromEl, true));
     if (src && src.from && src.app === 'frame') { const f = winEl(srcId)?.querySelector('iframe'); if (f) { try { f.contentWindow.location.href = u.href; } catch (e) { f.src = u.href; } return true; } }
     const open = Object.values(W).find(w => w.from && w.url === rel); if (open) { goDesk(deskOf(open.id)); return true; }
     const from = fromOf(srcId);
@@ -1195,9 +1198,12 @@
     return true;
   }
   window.WizOpenAgentChats = openAgentChats;
+  window.WosAppSetup?.init({ getApp: id => APP[id], isFront: id => focusedWin()?.appId === id });
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
     if (a.id === 'pages') { closeSheets(true); placeApp(w => w.app === 'pages' && !w.from, {app:'pages', appId:'pages'}, opts); return true; }
+    if (a.kind === 'wizard' && a.url && !opts.setupChecked && window.WosAppSetup)
+      return window.WosAppSetup.gate(a, () => openApp(a, extra, { ...opts, setupChecked: true }), { settled: () => openingEnd(a.id) });
     if (a.id === 'side-button') { closeSheets(true); if (idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
     if (a.kind === 'chats') {
       if (a.agent) return openAgentChats(a.agent);
@@ -1872,7 +1878,7 @@
   }
   settingsEl.setAttribute('role', 'dialog'); settingsEl.setAttribute('aria-modal', 'true');
   settingsEl.addEventListener('keydown', e => window.WosSettings.trap(e, settingsEl));
-  $('#scrim').addEventListener('click', () => closeSheets());
+  $('#scrim').addEventListener('click', () => backStep());
   /* Swipe the grip down to close Settings, like every sheet (wizard-os#265 rule 7). Only the grip drags; the body scrolls. */
   { const grip = settingsEl.querySelector('.sheet-grip'); let y0 = null, dy = 0, t0 = 0;
     grip?.addEventListener('pointerdown', e => { if (sheet !== 'settings') return; y0 = e.clientY; dy = 0; t0 = performance.now(); settingsEl.style.transition = 'none'; try { grip.setPointerCapture(e.pointerId); } catch (_) {} });
@@ -1977,7 +1983,7 @@
     { g: 'needs', name: 'Needs you', c: 'var(--amber)' },
   ];
   function noteHtml(n, g) {
-    const sub = n.queueReason === 'provider_access' ? 'Waiting for the AI sign-in to come back; will send automatically' : g === 'working' ? (n.status === 'queued' ? 'Queued' : `${window.WizConfig.agent()} is on it`) : g === 'needs' ? (n.status === 'waiting_for_approval' ? 'Waiting for your approval' : n.status === 'failed' || n.status === 'interrupted' ? 'Stopped · needs a look' : 'Needs you') : (n.preview || '');
+    const sub = n.status === 'queued' && n.queueReason === 'provider_access' ? 'AI could not start · message saved · choose another model or retry' : g === 'working' ? (n.status === 'queued' ? 'Queued' : `${window.WizConfig.agent()} is on it`) : g === 'needs' ? (n.status === 'waiting_for_approval' ? 'Waiting for your approval' : n.status === 'failed' || n.status === 'interrupted' ? 'Stopped · needs a look' : 'Needs you') : (n.preview || '');
     return `<button class="note ${g === 'working' ? 'working' : ''}" data-note="${esc(n.id)}" data-g="${g}">${isRec(n) ? '<span class="ic rec">◉</span>' : `<span class="ic emo">${emoOf(n.id)}</span>`}
       <span class="bd"><span class="tp"><span class="src${isRec(n) ? ' mizel' : ''}">${isRec(n) ? 'Mizel.ai' : 'Chats'}</span><span class="tm">${esc(ago(g === 'working' ? (n.lastUserAt || n.updatedAt) : (n.lastAssistantAt || n.activityAt || n.updatedAt)))}</span></span><span class="ti">${esc(n.title)}</span><span class="sb">${esc(clip(sub, 120))}</span></span></button>`;
   }
@@ -3619,11 +3625,13 @@
     { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above everything, incl. the selection menu that opened it
     { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
     if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet sits above the windows
+    if (window.WosAppSetup?.back()) return 'app-setup';
     if (window.WosBoomerang?.back()) return 'boomerang'; // the Boomerang picker sits above the thread it was opened from
     // Explicit bypass capture follows the retain-on-Back contract; ordinary recordings keep navigating.
     if (V.snap?.general && ['listen', 'command'].includes(V.state)) { V.stopAsked = true; pauseCommandCapture(); return 'recording'; }
     if (document.querySelector('#txChips [data-handoff], #txChips [data-hold]')) { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(0); return 'draft'; }
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
+    if (window.WizLinks?.backMenu()) return 'link-menu';
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
     const ov = CHATS.closeOverlay(); if (ov) { if (settingsReturn === 'files') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="files"]')?.focus(); } return ov; } // media viewer, then the thread actions sheet
     const dv = window.WosDevice?.back?.(); if (dv) return dv; // share picker, recovered-recording card
@@ -3923,7 +3931,9 @@
       if (v === 'home') { window.WosResources?.back(); return goDesk(0, true); }
       if (v === 'apps') return openSheet('launcher');
       if (v === 'install') {
-        openApp(APP['app-store']);
+        // The Store window must exist now to receive the link; the Store needs no setup check of its own.
+        window.WosAppSetup?.close(); // an earlier app's pending check or sheet must not reopen it over the Store
+        openApp(APP['app-store'], {}, { setupChecked: true });
         const w=Object.values(W).find(w=>w.appId==='app-store');
         return window.WizCore.deeplink.installInFrame(w && document.querySelector(`[data-win="${w.id}"] iframe`),installQuery);
       }
@@ -4014,5 +4024,15 @@
     dictate: () => { if (V.state !== 'idle' || !FIELDS?.refresh()) return false; startVoice('dictation'); return true; },
     voiceCancel: () => cancelVoice(),
     relayout: () => { try { syncImmersive(); } catch (_) {} },
+    appOrb: () => { const f = frontAppFrame(); return f ? window.WizAppServices?.orb?.of(f) || null : null; },
+    appOrbTap: () => { const f = frontAppFrame(); return !!f && !!window.WizAppServices?.orb?.tap(f); },
   });
+  // The app window in front (no sheet over it): the only app that may wear the agent orb.
+  function frontAppFrame() {
+    const f = desks[idx]?.focus, w = f && W[f];
+    if (!w?.appId || sheet || menuFor || CHATS.isHosted(f)) return null;
+    return track.querySelector(`.win[data-win="${f}"] iframe.appframe`);
+  }
+  // An app's claim shows whenever the active layout draws an agent orb (it wears it while that app is in front).
+  window.WizAppServices?.orb?.presenter(() => document.documentElement.dataset.layout === 'two-orb');
 })();
