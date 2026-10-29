@@ -692,14 +692,21 @@
     function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wizard:apps', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
     root.addEventListener('input', featureInput); root.addEventListener('click', click); root.addEventListener('keydown', key); root.addEventListener('change', change); mounts.add(api); render(); return api;
   }
+  // One deferred System link at a time: a newer link, Back, or anything the user does first cancels the wait.
+  let waiting = null;
+  const STOPS = ['popstate', 'hashchange', 'pointerdown', 'keydown'];
+  function cancelWait() { if (!waiting) return; clearInterval(waiting); waiting = null; for (const t of STOPS) window.removeEventListener?.(t, cancelWait, true); }
   function route(view, open) {
+    cancelWait();
     if (view === 'settings') { open(); return true; }
     const f = [...features.values()].find(f => f.aliases?.includes(view));
     // System pages filled by a package (?view=network etc.) open once something is on them.
     if (!f && !features.has(view)) {
       const sys = PAGES.find(p => p.group === 'System' && p.id === view); if (!sys) return false;
       // A link can arrive before the package fills the page: wait for it (up to 10 s), then open.
-      if (sys.available()) open(view); else { let n = 0; const t = setInterval(() => { if (sys.available()) { clearInterval(t); open(view); } else if (++n >= 40) clearInterval(t); }, 250); }
+      if (sys.available()) open(view);
+      else { let n = 0; waiting = setInterval(() => { if (sys.available()) { cancelWait(); open(view); } else if (++n >= 40) cancelWait(); }, 250);
+        for (const t of STOPS) window.addEventListener?.(t, cancelWait, true); }
       return true;
     }
     open(f?.id || view); return true;

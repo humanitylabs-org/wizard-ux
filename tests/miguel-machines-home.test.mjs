@@ -265,7 +265,7 @@ test('fourth review: sign-in state survives normalisation, managed workspaces ge
 test('fifth review: System pages open by deep link; phone Ready opens the unfiltered list', () => {
   const set = read('web/core/settings.js'), phone = read('web/app.js');
   assert.match(set, /const sys = PAGES\.find\(p => p\.group === 'System' && p\.id === view\); if \(!sys\) return false;/);
-  assert.match(set, /if \(sys\.available\(\)\) open\(view\); else \{ let n = 0; const t = setInterval/, 'a link that arrives before the package waits for it');
+  assert.match(set, /if \(sys\.available\(\)\) open\(view\);\n      else \{ let n = 0; waiting = setInterval/, 'a link that arrives before the package waits for it');
   assert.match(read('web/core/deeplink.js'), /window\.WosSettings\?\.systemPages\?\.includes\(view\)/, '?view=network is a link the shell accepts');
   assert.match(phone, /openSessions: kind => \(kind === 'working' \? openChatsFiltered\('working', \{ card: true \}\) : openChatsList\(\)\)/);
 });
@@ -415,6 +415,15 @@ test('nineteenth review: a signed-out account is never a live usage reading; a v
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /function paint\(force\) \{\n    \/\/ [^\n]*\n    if \(S\.ws !== 'mine' && S\.res\.devices && !managedOf\(S\.ws\)\) \{ S\.ws = 'mine'; api\.storage\.set\('ws', 'mine'\); \}\n    renderGlance\(\);/, who);
   }
+});
+
+test('twentieth review: a deferred System link is cancelled by a newer link, Back or the user moving on', () => {
+  const src = read('web/core/settings.js');
+  assert.match(src, /const STOPS = \['popstate', 'hashchange', 'pointerdown', 'keydown'\];/);
+  assert.match(src, /function route\(view, open\) \{\n    cancelWait\(\);/);
+  assert.match(src, /waiting = setInterval\(\(\) => \{ if \(sys\.available\(\)\) \{ cancelWait\(\); open\(view\); \} else if \(\+\+n >= 40\) cancelWait\(\); \}, 250\);/);
+  assert.match(src, /for \(const t of STOPS\) window\.addEventListener\?\.\(t, cancelWait, true\);/);
+  assert.doesNotMatch(src, /const t = setInterval\(\(\) => \{ if \(sys\.available\(\)\)/);
 });
 
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
