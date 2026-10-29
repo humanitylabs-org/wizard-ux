@@ -1480,6 +1480,9 @@
     const c = keepable(id) && TC.get(id), s = L.session(id); if (!c || !s || !L.listTrusted()) return null;
     return String(c.rev || '').split('|').slice(0, 3).join('|') === ckOf(s) ? c.rows : null;
   };
+  // No answer from Wizard at all (offline, plane wifi): the last copy this device kept, whatever its age. chats.js
+  // shows it only after a read has failed, labelled as a saved copy, and the next good read replaces it.
+  L.savedMessages = id => { const c = keepable(id) && TC.get(id); return c && Array.isArray(c.rows) ? { rows: c.rows, at: c.at || 0 } : null; };
   // A thread the server answered 404 for is gone: drop its memory and IndexedDB copy so a reopen can't repaint it.
   L.forgetMessages = async id => {
     if (!id) return; TC.delete(id);

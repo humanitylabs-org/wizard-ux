@@ -51,6 +51,6 @@
     try { await navigator.clipboard.writeText(canonical); instructions.textContent = 'Link copied. Paste it into Safari or Chrome, then add to your home screen.'; }
     catch (_) { address.focus(); address.select(); instructions.textContent = 'Copy the selected link, then paste it into Safari or Chrome.'; }
   });
-  // The shared worker is network-only. It does not cache registry responses or private documents.
+  // The shared worker is network-first and keeps only the shell's own files. It does not cache registry responses or private documents.
   navigator.serviceWorker?.register('/wizard-os-home/sw.js', { scope:'/wizard-os-home/' }).catch(() => {});
 })();

@@ -1900,6 +1900,9 @@ window.WizCore.chats = function createChats(H) {
         + (pend.some(p => ['queued', 'sending', 'waiting'].includes(p.state)) && !working ? `<details class="steps live"><summary><i class="dots"><b></b><b></b><b></b></i> ${pend.some(p => p.state === 'waiting') ? 'Waiting for Wizard · will retry' : 'Sending'}</summary></details>` : '');
     }
     msgs += syncStream(w, c, turns, TAG);
+    // A saved copy painted after a failed read says so, so it never passes for a fresh one.
+    if (!isNew && turns && c.savedFor === w.thread && c.cachedFor === w.thread && c.loadedFor !== w.thread)
+      msgs += `<div class="ch-renamed ch-saved" role="status"><span>Saved copy${c.savedAt ? ' from ' + esc(new Date(c.savedAt).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })) : ''} · can’t reach Wizard right now</span></div>`;
     const acts = isNew ? [] : threadActions(s, turns);
     const box = el.querySelector('.ch-msgs');
     PW?.capture(box); // save the shared eye-line record before rows above it change
@@ -2352,6 +2355,11 @@ window.WizCore.chats = function createChats(H) {
         // A gone thread drops any cached or earlier-loaded transcript, so the "no longer here" message renders
         // instead of a stale, still-editable copy of a deleted thread.
         if (gone) { Object.assign(c, { goneFor: sid, goneNav: nav, turns: null, loadedFor: '', cachedFor: '' }); LIVE.forgetMessages?.(sid); }
+        // No answer at all (offline): paint this device's saved copy, labelled, instead of an empty error. Retries go on.
+        else if (!e.status && !((c.loadedFor === sid || c.cachedFor === sid) && c.turns)) {
+          const saved = LIVE.savedMessages?.(sid);
+          if (saved?.rows?.length) try { Object.assign(c, { turns: toTurns(saved.rows), cachedFor: sid, cachedNav: nav, loadedFor: '', savedFor: sid, savedAt: saved.at }); } catch (_) {}
+        }
         c.err = e.status === 403 ? 'Wizard sign-in needed' : gone ? 'This thread is no longer here. It may have been deleted, or it came from an earlier install. Go back to Chats to start a new one.' : pendingFor(w).length ? '' : 'Couldn’t load this thread'; c.at = Date.now();
         if (e.status !== 403 && !gone) { if (!e.status) window.WizReach?.failure(); retryRead(w, sid, nav, c.failN); }
         renderThreadLive(w);
