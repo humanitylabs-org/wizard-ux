@@ -387,6 +387,49 @@ yet. After the captured error establishes a cause, fix that cause with a regress
 a native product correction requires a **new full sealed build**, never a QA-only
 allowlist change. Until then, delivery, recovery and notification gates are unmet.
 
+## KVM prerequisite failure: preserve attempted diagnostic, refresh only its group
+
+The `ad7256a14620` diagnostic was attempted as
+`heavy_05a635a235d64fc886be711506c4bc34` and failed **before Android boot**.
+Its worker log SHA256 is
+`b9a4ea7c455ffaaa47ff554f5e58cc4ff97e9d6640efb262289296fd874855bf`.
+`actual_android=false`, all native cases are NOT_COVERED, and the Send logpoints
+never ran. Preserve the failed directory/receipt; never resubmit that spec.
+
+Read-only diagnosis establishes an identity inheritance failure, not a missing
+host entitlement: `/dev/kvm` is root:kvm (gid 993), mode 0660; `james` (uid 1000)
+is already a member. Fresh SSH opens KVM and gets API 12. The long-lived user
+manager PID 1490 and worker PID 69436 instead retain supplemental groups
+`24 27 29 44 46 100 101 1000` without 993. The worker has no private devices,
+device-deny policy, seccomp or no-new-privileges restriction. A tiny transient
+unit through that same user manager reproduces errno 13; its `sg kvm` child
+stays uid 1000, changes its effective group to existing kvm, opens KVM/API 12
+and preserves an inherited pipe FD. No emulator/VM or heavy work ran in that probe.
+This does not establish when/why the manager's group set became stale, or mean
+fresh SSH access proves the unspecialized daemon now has KVM access.
+
+Use the existing forum runbook's **per-job** route, not a shared service restart:
+parent submits the fresh sealed stage as `/usr/bin/sg kvm -c 'exec
+/usr/bin/python3 <new-root>/qa_unified_share_android.py --reuse-build --seal
+<new-root>/reuse-seal.json --seal-sha256 <digest>'` on forum/heavy. The queue and
+inherited lease remain required. No global ACL/mode change, new group membership,
+user-manager restart or shared-worker restart is authorized by this repair.
+The shared daemon's original group set remains unchanged; any permanent service
+launch correction belongs to its release owner at a separately managed boundary.
+
+The runner now opens KVM and reads only its API before creating an AVD, retaining
+the effective identity in the receipt. A terminal emulator exit escapes transient
+boot polling immediately with its real return code, rather than consuming 360 s.
+Cleanup skips `adb emu kill` only when the owned process already exited, still
+reaps it and requires exact serial absence; live-process kill failures and stale
+serials remain failures. Controller negatives cover those distinctions.
+
+Keep the original APK/381 JUnit passes and **all original native cases**, trusted
+single Send tap, unchanged five-second deadline and source-bound false logpoints.
+Prepare a new immutable sibling and recheck free minus 3 GiB exceeds 200 GiB.
+This scoped KVM route repair is not fresh Android/Send acceptance, a product fix,
+or authority to rebuild/sign/publish/merge. The parent alone admits it once.
+
 ## Real device phases and evidence
 
 The separate synthetic source app generates a 24 MiB blank-page PDF fixture byte

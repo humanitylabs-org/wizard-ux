@@ -8,6 +8,7 @@ APIs only. The separate sender uses an explicit ACTION_SEND receiver (not an OS
 chooser/Gmail claim). Every owned emulator is stopped in finally.
 """
 import argparse
+import fcntl
 import hashlib
 import http.client
 import http.server
@@ -174,6 +175,32 @@ def verify_reuse_build(root, seal_path, expected):
                           seal['build_files'].get(str(p.relative_to(old))) != sha(p) for p in configs):
         raise RuntimeError('reused debug owner defaults mismatch')
     return seal, cfg, build, junit, hashes, apk
+
+
+class EmulatorExited(Exception):
+    """Terminal launch failure, deliberately outside wait's transient exceptions."""
+
+
+def wait_for_emulator_boot(emulator, read_boot, seconds=360):
+    def booted():
+        code = emulator.poll()
+        if code is not None:
+            raise EmulatorExited('emulator exited before boot: returncode=' + str(code))
+        return read_boot().strip() == '1'
+    return wait(booted, seconds)
+
+
+def kvm_preflight():
+    """Open only; never create a VM or change host permissions/groups."""
+    fd = os.open('/dev/kvm', os.O_RDWR | os.O_CLOEXEC)
+    try:
+        api = fcntl.ioctl(fd, 0xAE00, 0)  # KVM_GET_API_VERSION, no VM creation
+        if api != 12:
+            raise RuntimeError('unexpected KVM API: ' + str(api))
+        return {'uid': os.getuid(), 'gid': os.getgid(), 'groups': os.getgroups(),
+                'open': True, 'api': api}
+    finally:
+        os.close(fd)
 
 
 def wait(fn, seconds=30):
@@ -752,6 +779,8 @@ class Rig:
             (self.out / (name + '-capture-error.txt')).write_text(str(exc))
 
     def boot(self):
+        self.report['kvm_preflight'] = kvm_preflight()
+        self.save()
         for key in ('ANDROID_USER_HOME', 'ANDROID_EMULATOR_HOME', 'ANDROID_AVD_HOME'):
             self.env[key] = str(self.out / key.lower()); Path(self.env[key]).mkdir()
         name = 'unified_share'
@@ -778,11 +807,7 @@ class Rig:
             stderr=subprocess.STDOUT, start_new_session=True)
         self.report['emulator'] = {'serial': self.serial, 'pid': self.emulator.pid, 'started': True, 'stopped': False}
         self.save()
-        def booted():
-            if self.emulator.poll() is not None:
-                raise RuntimeError('emulator exited before boot')
-            return self.sx('getprop sys.boot_completed', timeout=10).strip() == '1'
-        wait(booted, 360)
+        wait_for_emulator_boot(self.emulator, lambda: self.sx('getprop sys.boot_completed', timeout=10))
         self.sx('input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; settings put system screen_off_timeout 1800000')
         users = wait(lambda: (u if 'RUNNING_UNLOCKED' in (u := self.sx('dumpsys user')) else None), 60)
         record_android_boot(self.report, self.sx('getprop ro.build.version.sdk'), users)
@@ -1029,10 +1054,15 @@ class Rig:
         if self.page:
             self.page.close()
         if self.emulator:
-            try:
-                self.adb_cmd('emu', 'kill', timeout=20)
-            except Exception as exc:
-                failures.append(str(exc))
+            # A dead owned launcher cannot accept adb emu kill. Do not manufacture a
+            # cleanup failure or target a serial that another process could reclaim.
+            if self.emulator.poll() is None:
+                try:
+                    self.adb_cmd('emu', 'kill', timeout=20)
+                except Exception as exc:
+                    failures.append(str(exc))
+            else:
+                self.report['emulator']['kill_skipped_already_exited'] = True
             try:
                 self.emulator.wait(30)
             except subprocess.TimeoutExpired:

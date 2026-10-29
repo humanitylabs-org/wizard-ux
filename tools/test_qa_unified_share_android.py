@@ -24,6 +24,55 @@ SPEC.loader.exec_module(runner)
 
 
 class ControllerTest(unittest.TestCase):
+    def test_boot_exit_is_terminal_before_adb_or_sleep(self):
+        for code in (0, 1, -9):
+            emulator = Mock(); emulator.poll.return_value = code
+            read = Mock()
+            with patch.object(runner.time, 'sleep') as pause:
+                with self.assertRaisesRegex(runner.EmulatorExited, 'returncode=' + str(code)):
+                    runner.wait_for_emulator_boot(emulator, read)
+            read.assert_not_called(); pause.assert_not_called()
+
+    def test_boot_transient_adb_error_still_retries(self):
+        emulator = Mock(); emulator.poll.return_value = None
+        read = Mock(side_effect=[RuntimeError('adb not ready'), '0', '1\n'])
+        with patch.object(runner.time, 'sleep') as pause:
+            self.assertTrue(runner.wait_for_emulator_boot(emulator, read, 2))
+        self.assertEqual(read.call_count, 3); self.assertEqual(pause.call_count, 2)
+
+    def test_boot_exit_after_pending_read_is_terminal(self):
+        emulator = Mock(); emulator.poll.side_effect = [None, 1]
+        read = Mock(return_value='0')
+        with patch.object(runner.time, 'sleep') as pause:
+            with self.assertRaises(runner.EmulatorExited):
+                runner.wait_for_emulator_boot(emulator, read)
+        read.assert_called_once(); pause.assert_called_once()
+
+    def test_kvm_probe_only_opens_and_reads_api_then_closes(self):
+        with patch.object(runner.os, 'open', return_value=77) as opened, \
+                patch.object(runner.fcntl, 'ioctl', return_value=12) as ioctl, \
+                patch.object(runner.os, 'close') as closed:
+            result = runner.kvm_preflight()
+        opened.assert_called_once_with('/dev/kvm', os.O_RDWR | os.O_CLOEXEC)
+        ioctl.assert_called_once_with(77, 0xAE00, 0); closed.assert_called_once_with(77)
+        self.assertEqual(result['api'], 12); self.assertTrue(result['open'])
+
+    def test_kvm_permission_denial_stops_before_avd_creation(self):
+        rig = runner.Rig.__new__(runner.Rig); rig.run = Mock(); rig.save = Mock(); rig.report = {}
+        with patch.object(runner.os, 'open', side_effect=PermissionError(13, 'denied')):
+            with self.assertRaises(PermissionError):
+                rig.boot()
+        rig.run.assert_not_called()
+
+    def test_kvm_wrong_api_or_ioctl_failure_still_closes(self):
+        for result in (11, OSError('ioctl refused')):
+            with patch.object(runner.os, 'open', return_value=77), \
+                    patch.object(runner.fcntl, 'ioctl', side_effect=result if isinstance(result, Exception) else None,
+                                 return_value=result), patch.object(runner.os, 'close') as closed:
+                with self.assertRaises((RuntimeError, OSError)):
+                    runner.kvm_preflight()
+            closed.assert_called_once_with(77)
+
     def test_send_logpoints_are_source_bound_nonpausing_and_do_not_replace_bridge(self):
         rig = runner.Rig.__new__(runner.Rig)
         rig.source = HERE.parent; rig.page = Mock()
@@ -935,8 +984,22 @@ class ControllerTest(unittest.TestCase):
             rig.close()
         self.assertTrue(rig.report['emulator']['serial_absent'])
         self.assertEqual(rig.report['cleanup_errors'], [])
-        rig.adb_cmd.assert_called_once_with('emu', 'kill', timeout=20)
+        rig.adb_cmd.assert_not_called()
+        self.assertTrue(rig.report['emulator']['kill_skipped_already_exited'])
+        rig.emulator.wait.assert_called_once_with(30)
         self.assertEqual(rig.run.call_count, 3)
+
+    def test_cleanup_running_owned_emulator_still_kills_and_keeps_errors(self):
+        rig = runner.Rig.__new__(runner.Rig)
+        rig.page = rig.fixture = rig.proxy = None
+        rig.emulator = Mock(); rig.emulator.poll.side_effect = [None, 0]
+        rig.serial = 'emulator-5580'; rig.adb = 'unit-only-adb'; rig.devtools = 12345
+        rig.report = {'emulator': {}}; rig.save = Mock(); rig.run = Mock(return_value='emulator-5582 device')
+        rig.adb_cmd = Mock(side_effect=RuntimeError('owned kill refused'))
+        rig.close()
+        rig.adb_cmd.assert_called_once_with('emu', 'kill', timeout=20)
+        self.assertEqual(rig.report['cleanup_errors'], ['owned kill refused'])
+        self.assertTrue(rig.report['emulator']['serial_absent'])
 
     def test_cleanup_serial_timeout_is_failure(self):
         rig = runner.Rig.__new__(runner.Rig)
