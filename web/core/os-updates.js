@@ -1,5 +1,9 @@
 /* Wizard OS · Settings → About & updates: one update card, Automatic / Ask me, release channel; the Home pop-up.
  *
+ * Two kinds of update, two names (Miguel, 27 Oct 2026). "Wizard OS" is only the box (App Manager, Agent Service,
+ * apps): a 10–20 minute install that waits for a quiet moment, like a macOS update. The screens you use are the
+ * "Interface": a new one is already on the box and only needs a Reload, so its notice never says "Wizard OS".
+ *
  * The box updates the one documented way: the App Manager reruns the installer (`os.sh | bash -s start`) onto the
  * release `releases/stable` names. Automatic (the default) does that overnight, skipping while a chat run is
  * active; Ask me waits for a tap on Update.
@@ -7,7 +11,9 @@
  * Same path as the Store's Get: `../store-install/_updates` is the App Manager's owner-only listener behind
  * Tailscale Serve (owner login, the shell's own Origin, JSON + X-Wizard-Store). No token reaches the browser.
  *   GET                       {mode, chosen, installed, latest, update_available, unpinned, checked, installing,
- *                              interrupted (the last update was cut short, e.g. by a reboot; it is retried)}
+ *                              interrupted (the last update was cut short, e.g. by a reboot; it is retried),
+ *                              quick (the release only swaps the interface image in place: about 2 minutes, not
+ *                              the 10–20 minute installer; App Managers without it never send it)}
  *   POST {"mode":"auto"|"ask"} the owner's choice (kept across installer reruns)
  *   POST {"channel":"stable"|"latest"} release channel (DECISIONS #75): stable = promoted releases (default),
  *                              latest = every release, for testers. GET then also returns {channel, stable};
@@ -17,10 +23,12 @@
  * A box whose App Manager has no such route (older, or no Serve mount) shows nothing.
  *
  * One card, same look in every state; only the words change. Nothing to do = no card:
- *   behind    "Update available" · "Wizard OS 0.3.32 → 0.3.33" · Update
- *   building  "Updating…" · "Takes 10–20 minutes · Wizard reconnects by itself" · Update (disabled)
- *   failed    "Update interrupted" · "Wizard OS 0.3.32 → 0.3.33" · Try again
- *   reload    the web shell changed under this page (core/web-update.js) → "Wizard OS was updated" · Reload
+ *   behind    "Wizard OS update" · Automatic: "Installs tonight when it’s quiet" · Install now
+ *                                         Ask me:    "Takes 10–20 minutes" · Install
+ *   building  "Updating Wizard OS…" · "Takes 10–20 minutes · Wizard reconnects by itself" · Install (disabled)
+ *             (quick: "Takes about 2 minutes" in both; the new interface then offers its own Reload)
+ *   failed    "Wizard OS update didn’t finish" · "Tries again tonight" (Ask me: "Takes 10–20 minutes") · Try again
+ *   reload    the interface changed under this page (core/web-update.js) → "Interface updated" · Reload
  *
  *   WosUpdates.card()       → {state, title, line, action, label, disabled} or null
  *   WosUpdates.cardHtml()   → the card's markup ('' when there is nothing to do); Settings puts it on top
@@ -31,7 +39,7 @@
  *
  * Home pop-up: when the card says Update, Try again or Reload, Home shows the same words and the same button in a
  * small card clear of the dock, with a ×. × hides it for that exact state (keyed by the release or the web build)
- * until something new arrives. It replaces the old "Wizard OS was updated · Reload" banner (core/web-update.js asks
+ * until something new arrives. It replaces the old "Interface updated · Reload" banner (core/web-update.js asks
  * ownsReload() and stays away while the pop-up has the reload, or after its ×), so only one notice shows.
  */
 (() => {
@@ -68,13 +76,17 @@
 
   // The one card. Same shape for every state; null when there is nothing to do.
   function card() {
-    if (window.WizWebUpdate?.pending) return { state: 'reload', title: 'Wizard OS was updated', line: 'Reload to see it', action: 'reload', label: 'Reload' };
+    // The interface: already on the box, a Reload away. Never called Wizard OS.
+    if (window.WizWebUpdate?.pending) return { state: 'reload', title: 'Interface updated', line: 'Reload to see the changes', action: 'reload', label: 'Reload' };
     if (!st) return null;
-    const have = st.installed ? `Wizard OS ${st.installed}` : 'Wizard OS';
-    if (st.installing) return { state: 'building', title: 'Updating…', line: 'Takes 10–20 minutes · Wizard reconnects by itself', action: 'apply', label: 'Update', disabled: true };
+    const auto = st.mode === 'auto';
+    const takes = st.quick === true ? 'Takes about 2 minutes' : 'Takes 10–20 minutes';
+    if (st.installing) return { state: 'building', title: 'Updating Wizard OS…', line: st.quick === true ? takes : `${takes} · Wizard reconnects by itself`, action: 'apply', label: auto ? 'Install now' : 'Install', disabled: true };
     if (st.unpinned || !st.update_available) return null;
-    const go = busy === 'apply' ? 'Starting…' : st.interrupted ? 'Try again' : 'Update';
-    return { state: st.interrupted ? 'failed' : 'behind', title: st.interrupted ? 'Update interrupted' : 'Update available', line: `${have} → ${st.latest}`, action: 'apply', label: go, disabled: !!busy };
+    // Wizard OS: the box itself. Automatic waits for a quiet night; the button is the "now" escape, like macOS.
+    const start = busy === 'apply' ? 'Starting…' : '';
+    if (st.interrupted) return { state: 'failed', title: 'Wizard OS update didn’t finish', line: auto ? 'Tries again tonight' : takes, action: 'apply', label: start || 'Try again', disabled: !!busy };
+    return { state: 'behind', title: 'Wizard OS update', line: auto ? 'Installs tonight when it’s quiet' : takes, action: 'apply', label: start || (auto ? 'Install now' : 'Install'), disabled: !!busy };
   }
   function cardHtml() {
     const c = card(); if (!c) return '';
@@ -94,7 +106,7 @@
     const auto = st.mode === 'auto';
     const ch = ['stable', 'latest'].includes(st.channel) ? st.channel : '';
     const channel = ch ? `<div class="osu-sec"><span class="osu-lbl">Channel</span>${seg('Release channel', [['ch-stable', 'Stable', ch === 'stable'], ['ch-latest', 'Latest', ch === 'latest']])}<p class="st-hint">${ch === 'stable' ? 'Tested releases only.' : `Every release, for testers.${auto ? ' Automatic installs Stable only.' : ''}`}</p></div>` : '';
-    const install = `<div class="osu-sec"><span class="osu-lbl">Updates</span>${seg('Updates', [['auto', 'Automatic', auto], ['ask', 'Ask me', !auto]])}<p class="st-hint">${auto ? 'Overnight, never during a chat.' : 'Nothing installs until you tap Update.'}</p></div>`;
+    const install = `<div class="osu-sec"><span class="osu-lbl">Updates</span>${seg('Updates', [['auto', 'Automatic', auto], ['ask', 'Ask me', !auto]])}<p class="st-hint">${auto ? 'Overnight, never during a chat.' : 'Nothing installs until you tap Install.'}</p></div>`;
     return `<div class="st-group" data-osu-group>${cardHtml()}${quietHead()}${install}${channel}</div>`;
   }
   function pick(chan, ctx) {
@@ -126,7 +138,7 @@
     const body = what === 'apply' ? { action: 'apply' } : { mode: what };
     post(body).then(d => {
       if (what === 'apply') {
-        if (d.started) { st = { ...st, installing: true }; ctx?.toast?.('↻', 'Updating Wizard OS · takes 10–20 minutes', 3200); }
+        if (d.started) { const quick = d.quick === true || (d.quick !== false && st.quick === true); st = { ...st, installing: true, quick }; ctx?.toast?.('↻', `Updating Wizard OS · takes ${quick ? 'about 2 minutes' : '10–20 minutes'}`, 3200); }
         else ctx?.toast?.('!', d.note || d.error || 'Already up to date', 2600);
       } else {
         st = valid(d) ? d : { ...st, mode: what, chosen: true };
@@ -187,7 +199,7 @@
       if (popEl.dataset.key !== k || popEl.dataset.html !== html) { popEl.innerHTML = html; popEl.dataset.key = k; popEl.dataset.html = html; popEl.dataset.state = c.state; }
       place();
     }
-    // The old "Wizard OS was updated" banner steps aside while the pop-up has the reload (and after its ×).
+    // The old "Interface updated" banner steps aside while the pop-up has the reload (and after its ×).
     if (was !== popShown) { try { window.WizWebUpdate?.render?.(); } catch (_) {} }
     // Home comes and goes without telling this module; while there is something to say, look again every second.
     clearInterval(popTimer); popTimer = 0;

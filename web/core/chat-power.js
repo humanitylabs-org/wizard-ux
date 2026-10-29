@@ -215,7 +215,7 @@ window.WosChatPower = function chatPower(A) {
   function workHtml(c, tn, live, helperStatus) {
     if (!WK) return null;
     const key = turnKey(tn);
-    return WK.html(tn, { live, helperStatus, open: !!c.wkOpen?.has(key), md: A.md, esc, clip, key });
+    return WK.html(tn, { live, helperStatus, streamSteps: live && !c.stream?.landed && !c.stream?.terminal ? c.stream?.steps : [], open: !!c.wkOpen?.has(key), md: A.md, esc, clip, key });
   }
 
   /* ================= #11 models ================= */
@@ -361,12 +361,12 @@ window.WosChatPower = function chatPower(A) {
     // Only the freshly hydrated input, never cached turns. A failed note-started turn (the server's request skips
     // follow-through notes, so it is empty or an older request) goes again as a plain "Retry".
     const note = noteTurn(w && w.thread === sid ? w : null, s);
-    const text = note ? RETRY_WORD : s?.request || (FAILED.has(s?.status) ? RETRY_WORD : '');
+    const text = s?.retryRunId ? s.request || RETRY_WORD : note ? RETRY_WORD : s?.request || (FAILED.has(s?.status) ? RETRY_WORD : '');
     if (!text) { toast('!', 'This thread has no request to send again · open it to reply', 2600); return false; }
     const cur = o ? { model: o.value, provider: o.provider } : threadModel(s);
     const c = w ? ch(wid) : null; if (c) c.retrying = sid;
     try {
-      await OUTBOX.enqueue({ kind: 'reply', sessionId: sid, text, wid: w && w.thread === sid ? wid : '', how: 'retry', source: 'chat',
+      await OUTBOX.enqueue({ kind: 'reply', sessionId: sid, agent: s.agent || A.winAgent?.(w) || '', text, retryRunId: s.retryRunId || '', wid: w && w.thread === sid ? wid : '', how: 'retry', source: 'chat',
         instructions: `${window.WizConfig.owner() || 'The owner'} pressed Retry on this thread after the last request failed${o ? `, choosing ${o.name}` : ''}. ${text === RETRY_WORD ? 'Carry out the last request in this thread again (it may be a follow-through note rather than a typed message).' : 'This is the same request again.'}`,
         ...(cur.model ? { model: cur.model, provider: cur.provider } : {}) });
       E?.cleared.set(sid, Date.now());
@@ -409,12 +409,12 @@ window.WosChatPower = function chatPower(A) {
     finally { c.regenerating = false; rerenderAll(); }
   }
   const RECONNECT_APPS = new Set(['wizard-claude', 'wizard-chatgpt']);
-  function openReconnect(appId, installed) {
+  function openReconnect(appId, installed, runId = '') {
     if (!RECONNECT_APPS.has(appId)) return false;
-    if (installed && window.WizOpenApp?.(appId)) return true;
-    if (H.openLink?.(`/wizard-os-home/store/index.html?app=${encodeURIComponent(appId)}`, 'App Store')) return true;
-    toast('!', 'Open the App Store to reconnect', 2400);
-    return false;
+    const provider = appId === 'wizard-claude' ? 'claude' : 'chatgpt';
+    if (window.WizOpenApp?.('troubleshooter', `/troubleshoot/?provider=${provider}&run_id=${encodeURIComponent(runId)}`)) return true;
+    return !!H.openLink?.(`/troubleshoot/?provider=${provider}&run_id=${encodeURIComponent(runId)}`, 'Fix Wizard');
+
   }
   async function dismissThread(sid) {
     const ok = await E?.dismissFailure(sid);
@@ -430,7 +430,8 @@ window.WosChatPower = function chatPower(A) {
   function errorRow(s, rowHtml) {
     if (!E) return rowHtml;
     const busy = E.busy.get(s.id);
-    const rc = s.reconnect ? `<button type="button" data-chreconnect="${esc(s.reconnect.appId)}" data-installed="${s.reconnect.installed ? '1' : '0'}">${s.reconnect.installed ? 'Open' : 'Get'} ${esc(s.reconnect.name)}</button>` : '';
+    const rc = s.reconnect ? `<button type="button" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : '';
+    if (rc) return `<div class="ch-err diagnosed" data-errsid="${esc(s.id)}">${rowHtml}</div>`;
     return `<div class="ch-err" data-errsid="${esc(s.id)}">${rowHtml}<div class="ch-err-b">${rc}<button type="button"${rc ? ' class="ghost"' : ''} data-errretry="${esc(s.id)}" ${busy ? 'disabled' : ''}>Retry</button><button type="button" class="ghost" data-errdismiss="${esc(s.id)}" ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></div>`;
   }
   function errorsExtra() {
@@ -501,13 +502,16 @@ window.WosChatPower = function chatPower(A) {
 
   /* ================= sheets: model picker, Files ================= */
   let sheet = null; // { type: 'model'|'files', pane, wid, sid, mode, all, list, q, kind }
+  let popOff = null;
   function closeSheet() {
+    popOff?.(); popOff = null;
     if (!sheet) return false;
     H.root().querySelectorAll('.ch-psheet').forEach(n => n.remove());
     sheet = null; return true;
   }
   function paint(paneId, el) {
     if (!sheet || sheet.pane !== paneId || !el) return;
+    popOff?.(); popOff = null;
     el.querySelectorAll('.ch-psheet').forEach(n => n.remove());
     let html = '';
     if (sheet.type === 'model') {
@@ -519,15 +523,47 @@ window.WosChatPower = function chatPower(A) {
       html = F.panelHtml({ q: sheet.q, kind: sheet.kind, attach: !!tw?.thread, picked: (c.files || []).map(f => f.id).filter(Boolean), when: ms => `${A.KIT.time.day(ms)} ${A.KIT.time.clock(ms)}` });
     }
     el.insertAdjacentHTML('beforeend', html.replace('class="ch-sheet ', 'class="ch-sheet ch-psheet '));
-    if (sheet.pop) placePop(el);
+    if (sheet.pop) {
+      el.classList.add('ch-model-picking');
+      placePop(el);
+      const list = el.querySelector('.ch-mpop .msheet-list');
+      if (list) list.scrollTop = list.scrollHeight; // current models nearest the thumb on open, not on resize
+      const events = new AbortController();
+      let frame = 0;
+      const queue = () => { if (!frame) frame = requestAnimationFrame(() => { frame = 0; placePop(el); }); };
+      const resize = new ResizeObserver(queue);
+      [el, el.querySelector('.ch-compose'), el.querySelector('.ch-swrow'), el.querySelector('.ch-head')].filter(Boolean).forEach(n => resize.observe(n));
+      window.addEventListener('resize', queue, { signal: events.signal });
+      window.addEventListener('scroll', queue, { capture: true, passive: true, signal: events.signal });
+      window.visualViewport?.addEventListener('resize', queue, { signal: events.signal });
+      window.visualViewport?.addEventListener('scroll', queue, { signal: events.signal });
+      popOff = () => {
+        events.abort(); resize.disconnect(); cancelAnimationFrame(frame);
+        el.classList.remove('ch-model-picking'); el.style.removeProperty('--mpop-input-max');
+      };
+    }
   }
-  // The compact menu sits on the right, its bottom edge just above the model label (whatever the composer's height).
+  // Bound the card to the visible pane ABOVE the entire composer, not its bottom-right label.
+  // The native document-scroller's composer is fixed; its overlay must share viewport coordinates.
   function placePop(el) {
     const pop = el.querySelector('.ch-psheet.ch-mpop'), lab = el.querySelector('.ch-mlabel'); if (!pop || !lab) return;
     const pr = pop.getBoundingClientRect(), lr = lab.getBoundingClientRect(); if (!pr.height) return;
-    pop.style.setProperty('--mpop-b', `${Math.max(8, Math.round(pr.bottom - lr.top + 6))}px`);
-    pop.style.setProperty('--mpop-r', `${Math.max(8, Math.round(pr.right - lr.right - 6))}px`);
-    const list = pop.querySelector('.msheet-list'); if (list) list.scrollTop = list.scrollHeight; // the thumb end (current models) in view
+    const vv = window.visualViewport;
+    const top = Math.max(pr.top, vv?.offsetTop || 0, el.querySelector('.ch-head')?.getBoundingClientRect().bottom || 0) + 8;
+    const occlusion = () => ['.ch-compose', '.ch-swrow'].map(s => el.querySelector(s)?.getBoundingClientRect()).filter(r => r?.height);
+    const bottomEdge = () => Math.min(pr.bottom, (vv?.offsetTop || 0) + (vv?.height || innerHeight), lab.getBoundingClientRect().top, ...occlusion().map(r => r.top)) - 6;
+    // A keyboard plus native dock can leave less than one row above a tall draft. Temporarily
+    // scroll the input in a shorter box; keep its value/selection and restore its height on close.
+    const ta = el.querySelector('.ch-compose textarea');
+    if (ta) {
+      const cap = Math.min(140, Math.max(42, Math.floor(ta.getBoundingClientRect().height + bottomEdge() - top - 112)));
+      el.style.setProperty('--mpop-input-max', cap + 'px');
+    }
+    const bottom = bottomEdge();
+    const right = Math.min(pr.right, (vv?.offsetLeft || 0) + (vv?.width || innerWidth), lr.right + 6) - 8;
+    pop.style.setProperty('--mpop-b', `${Math.max(0, pr.bottom - bottom)}px`);
+    pop.style.setProperty('--mpop-r', `${Math.max(8, pr.right - right)}px`);
+    pop.style.setProperty('--mpop-h', `${Math.max(0, bottom - top)}px`);
   }
   function openSheet(o) {
     A.closeRowSheet(); closeSheet();
@@ -542,7 +578,14 @@ window.WosChatPower = function chatPower(A) {
     // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
     const priv = !agent && !A.winAgent(w) && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
     openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false, agent, priv, pop: !!pop && mode !== 'retry' });
-    if (!M.ready) M.load().then(() => { if (sheet?.type === 'model') paint(sheet.pane, A.elOf(sheet.pane)); });
+    // A list older than ~15 s is refetched on open (a sign-in added a moment ago shows without waiting out the 5 min cache).
+    const opened = sheet;
+    if (M.stale ? M.stale() : !M.ready) M.load(M.ready).then(() => {
+      if (sheet !== opened || sheet?.type !== 'model' || H.win(wid)?.thread !== opened.sid) return;
+      // A fresh default must agree with what Send will use. An explicit draft choice stays pinned.
+      sheet.cur = mode === 'new' ? newModel(ch(wid), w) : threadModel(LIVE.session(opened.sid));
+      paint(sheet.pane, A.elOf(sheet.pane));
+    });
   }
   function openFiles(pane) {
     if (!F) return;
@@ -589,7 +632,7 @@ window.WosChatPower = function chatPower(A) {
       return true;
     }
     // Failed thread panel. Signed out: open the provider's connection app in this shell, or the Store on it.
-    const rc = t.closest('[data-chreconnect]'); if (rc) { openReconnect(rc.dataset.chreconnect, rc.dataset.installed !== '0'); return true; }
+    const rc = t.closest('[data-chreconnect]'); if (rc) { openReconnect(rc.dataset.chreconnect, rc.dataset.installed !== '0', rc.dataset.recoveryRun || ''); return true; }
     // Failed thread panel
     if (t.closest('[data-mregen]') && w?.thread) { regenerateThread(id, w.thread); return true; }
     if (t.closest('[data-chretry]') && w?.thread) { retryThread(id, w.thread); return true; }

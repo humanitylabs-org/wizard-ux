@@ -20,3 +20,17 @@ test('hosted apps swap the vendored kit and layer the active skin after their ow
   assert.match(client, /getElementById\('wosMySkin'\)/, 'My skin is mirrored last');
   assert.match(client, /if \(framed\) \{ try \{ syncSkinLayer\(\);/, 'every appearance push re-syncs the layer');
 });
+
+// App design rules v0 (wizard-os#265, style/APP-DESIGN-RULES.md): the window is the page, one sheet that closes five ways.
+test('kit follows the app design rules: no frame cap, container columns, the one sheet', () => {
+  const frame = kit.match(/^\.wz-app \{[^}]*\}/m)[0];
+  assert.doesNotMatch(frame, /max-width/, 'rule 1: no max-width on the app frame');
+  assert.match(frame, /container: wz-app \/ inline-size/, 'rule 2: layout follows the window, not the device');
+  assert.match(kit, /@container wz-app \(min-width: 600px\) \{ \.wz-grid/);
+  assert.match(kit, /\.wz-sheet-x \{/);
+  assert.match(kit, /@media \(max-width: 599px\) \{\n  \.wz-sheet \{ width: 100%/, 'narrow windows get a bottom sheet');
+  const sheet = readFileSync(new URL('../web/kit/wizard-sheet.js', import.meta.url), 'utf8');
+  assert.match(sheet, /window\.WzSheet = \{ open: show, close, wire \}/);
+  assert.match(sheet, /window\.__wizardCloseOverlay = \(\) =>/, 'Back closes the top sheet first');
+  assert.match(sheet, /if \(dy > 70\) close\(d\)/, 'swipe down on the grip closes');
+});

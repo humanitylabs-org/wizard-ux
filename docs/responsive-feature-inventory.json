@@ -295,6 +295,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/edge-peek.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin host built-in: tap or swipe the edge beside a chat thread; no-op on desktop"
+    },
     "core/experience.js": {
       "loadedBy": [
         "phone",
@@ -398,6 +405,13 @@
         "desktop"
       ],
       "note": "Shared own-screen fallback and shell-only Settings confirmation; same App Manager owner listener as Updates"
+    },
+    "core/phone-connect.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
     },
     "core/photos-relay.js": {
       "loadedBy": [
@@ -666,11 +680,6 @@
       "classification": "adapter",
       "reason": "Phone Home geometry; desktop Home retained from PR22."
     },
-    "orb.js": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone orb renderer; desktop microphone/chords remain the input adapter."
-    },
     "device.js": {
       "shell": "phone",
       "classification": "native",
@@ -710,6 +719,11 @@
       "shell": "phone",
       "classification": "native",
       "reason": "Android pinned-shortcut app-only task (AppSessionActivity); desktop windows already isolate apps."
+    },
+    "orb.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone orb renderer; desktop microphone/chords remain the input adapter."
     }
   },
   "purpose": "Every entrypoint-exclusive asset must be explicit; new common features must be shared by default, not added to these exceptions.",
@@ -761,6 +775,7 @@
     "core/core.js",
     "core/deeplink.js",
     "core/dom-morph.js",
+    "core/edge-peek.js",
     "core/experience.js",
     "core/features.js",
     "core/files.js",
@@ -775,6 +790,8 @@
     "core/os-updates.js",
     "core/own-views.css",
     "core/own-views.js",
+    "core/phone-connect.css",
+    "core/phone-connect.js",
     "core/photos-relay.js",
     "core/polish.css",
     "core/reach.js",
@@ -818,10 +835,11 @@
     "core/workspace-sync.js",
     "favicon.ico",
     "icon-192.png",
+    "kit/controls.css",
+    "kit/shell-tokens.css",
     "live.js",
     "manifest.webmanifest",
     "outbox.js",
     "pwa-install.js"
   ]
 }
-
