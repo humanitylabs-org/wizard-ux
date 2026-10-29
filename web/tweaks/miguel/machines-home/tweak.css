@@ -516,3 +516,18 @@ html[data-skin="obsidian-light"] .mh-glance.is-bar .mh-g-label { color: #111418;
 html[data-skin="obsidian-light"] .mh-glance.is-bar .mh-g-cells i { background: rgba(17, 20, 24, .16); box-shadow: none; }
 html[data-skin="obsidian-light"] .mh-glance.is-bar .mh-g-cells i.on { background: #12A867; }
 html[data-skin="obsidian-light"] .mh-glance.is-bar[data-s="tight"] .mh-g-cells i.on, html[data-skin="obsidian-light"] .mh-glance.is-bar .mh-gauge[data-s="tight"] .mh-g-cells i.on { background: #C98200; }
+
+/* Workspaces not connected yet: greyed, with a short explanation. */
+.mh-root .mh-wiz-menu button.is-off b { opacity: .55; }
+.mh-root .mh-wiz-menu button.is-off small { opacity: .8; }
+.mh-root .mh-wiz-menu button.is-why { background: rgba(127, 127, 127, .12); }
+.mh-wiz-why { display: flex; flex-direction: column; gap: 6px; max-width: 280px; padding: 6px 10px 4px; font-size: 12px; line-height: 1.4; color: var(--mh-ink-2); }
+.mh-root .mh-wiz-why .is-add { box-shadow: none; min-height: 28px; padding: 0 !important; color: var(--mh-ink); font-weight: 700; }
+/* Light skins (Light, Landscapes Light): the bar's AI meter in dark ink. */
+html[data-skin$="light"] .mh-root.is-topbar .mh-g-label, html[data-skin$="light"] .mh-root.is-topbar .mh-g-ef { color: #111418 !important; opacity: 1; }
+html[data-skin$="light"] .mh-root.is-topbar .mh-g-cells i { background: rgba(17, 20, 24, .18) !important; box-shadow: none !important; }
+html[data-skin$="light"] .mh-root.is-topbar .mh-gauge[data-s="ok"] .mh-g-cells i.on { background: #12A867 !important; }
+html[data-skin$="light"] .mh-root.is-topbar .mh-gauge[data-s="tight"] .mh-g-cells i.on { background: #C98200 !important; }
+html[data-skin$="light"] .mh-root.is-topbar .mh-gauge[data-s="no"] .mh-g-cells i.on { background: #D93A58 !important; }
+html[data-skin$="light"] .mh-root .mh-wiz { color: #111418; }
+html[data-skin="landscapes-light"] .mh-wiz-menu { --mh-ink: #111418; --mh-ink-2: rgba(17, 20, 24, .7); --mh-ink-3: rgba(17, 20, 24, .5); background: rgba(255, 255, 255, .96); }
