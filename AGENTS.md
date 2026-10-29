@@ -26,7 +26,7 @@ are covered. See `android/README.md` and `ios/README.md` for local configuration
   - Native changes need a version bump above the published update feed.
   - Signed APKs are built and signed on the Mac build host, which holds the signing key.
   - Web-only changes need no APK.
-- **Back never exits.** Android and browser Back always take one step back inside the app: close the top overlay, then leave the nested view, then return to Home. At Home, Back stays put. In a plain browser tab, the first Back at Home shows "Press back again to exit", and only a second Back within about 2 seconds may leave. Every Back change ships with a test that opens a nested view, presses Back, and asserts the app is still open.
+- **Back never exits.** Android and browser Back always take one step back inside the app: close the top overlay, then leave the nested view, then return to Home. At Home, Back stays put, in the Android app and in a plain browser tab alike: repeated Back at Home never leaves Wizard (James: Back never exits, including the browser shell). Every Back change ships with a test that opens a nested view, presses Back, and asserts the app is still open.
 
 ### Agent chat parity
 
