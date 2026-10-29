@@ -171,6 +171,18 @@ public final class AppsBridge implements AppsInstaller.Listener {
             catch (JSONException e) { deviceAnswer(reply, request.id, null, "Something went wrong"); }
             return;
         }
+        if ("device.shares.queue".equals(request.method) || "device.shares.present".equals(request.method) || "device.shares.finish".equals(request.method)) {
+            bg.execute(() -> {
+                Object result = null; String error = null;
+                try {
+                    if (!want.equals(AppState.origin(activity))) throw new java.io.IOException("Shell changed");
+                    result = device.shareRequest(request.method, request.params);
+                } catch (java.io.IOException | JSONException | RuntimeException e) { error = "Couldn’t save that share on the phone"; }
+                final Object value = result; final String failure = error;
+                main.post(() -> deviceAnswer(reply, request.id, value, failure));
+            });
+            return;
+        }
         final String trustedOrigin = want;
         if (device.dispatchIdentity(request.method, request.params, result -> deviceAnswer(reply, request.id, result, null),
                 () -> trustedOrigin.equals(AppState.origin(activity)) && shellOnTop())) return;

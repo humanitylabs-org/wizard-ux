@@ -58,7 +58,7 @@ Visual: <side-by-side screenshot, or "none">
 | Thread topic emoji | `WosTopicEmoji` (`web/core/chat-topic-emojis.js`, data `WosTopicEmojiData`) | — |
 | Durable send; >6h held for Send/Discard; failed sends Dismiss to retained custody without stopping a run | `WosOutbox`, `WosCarry` (`web/outbox.js`) | own queue |
 | Cancelled-recording keep | `WosCancelled` (`web/core/cancelled.js`) | — |
-| Share to Wizard | `WizShareWizard` (`web/core/share-wizard.js`) | one sheet; `share.wizard` |
+| Share to Wizard | `WizShareWizard` (`web/core/share-wizard.js`), native `ShareActivity` + `ShareQueue`: Agent/Chat/comment and resumable custody | one sheet; `share.wizard`; no second native composer |
 | Uploads of any size | `WizUploads` (`web/core/uploads.js`) | single-fetch uploads |
 | Files browse, preview, attach | `WosFiles` (`web/core/files.js`) | own picker |
 | Settings in both shells | `WosSettings.register` (`web/core/settings.js`), `focus(id)`, `WosFeatures`; Reply style note; `WizConfig.responseStyle` | shell-only pages |
