@@ -1428,7 +1428,7 @@
     foldOpen.agents = foldOpen.dev = false; desks.push(blank({})); syncDesks(); renderDots(); goDesk(desks.length - 1, true); // the empty desk titles itself; a label flash would cover its search pill
   }
   /* Miguel's skins (Dark, Light, Landscapes): the launcher and New desk sort apps by what they are, with no Recent row.
-   * Same order as the App Store: Apps = anything with a screen you use; Wizard apps = backend-only apps your agent uses
+   * Same order as the App Store: Apps = anything with a screen you use; Agent apps = backend-only apps your agent uses
    * (tap = its settings sheet); Agents = agent chats + the Agents app; Connectors = sign-ins to another service. James's skins keep his layout. */
   const oursSkin = () => ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'].includes(document.documentElement.dataset.skin || '');
   /* Swipe up on the orb opens Desks instead of Apps: Miguel's skins always; any other skin when its CSS (or the owner's
@@ -1894,7 +1894,7 @@
     if (!q) {
       const recentIds = store.get('recent', window.WizLauncher?.get('recents') || []).filter(id => APP[id] && APP[id].kind !== 'native' && !window.WizCore.isMaintenanceApp(APP[id])).slice(0, 4);
       paint(`<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
-        <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).length}</span></h4><div class="lgrid">${APPS.filter(a => !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).map(appTile).join('')}<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button></div></div>`); // preserve current tiles/order; Get apps opens a normal app frame
+        <div class="lgroup"><h4>Apps <span>${APPS.filter(a => !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).length}</span></h4><div class="lgrid">${APPS.filter(a => !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).map(appTile).join('')}<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button></div></div>`); // preserve current tiles/order; Get apps opens a normal app frame
       return;
     }
     const n = norm(q);
@@ -2319,11 +2319,22 @@
   }
   voicePicker.addEventListener('change', async () => {
     const list = [...voicePicker.files], files = V.files; voicePicker.value = '';
-    for (const file of list) {
-      if (!sameTake(files)) break;
-      if (files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); break; }
-      const f = { name: file.name, mime: file.type, bytes: file.size, uploading: true };
-      files.push(f); renderVoiceFiles();
+    if (!sameTake(files)) return;
+    // Every picked file joins the take at once, each tracked with its bytes, so a send before the uploads finish
+    // takes them all (James, 27 Oct 2026: picked two images, sent while the second was uploading, only the first
+    // arrived). Adding one row per finished upload left later files out of a send that happened in between.
+    const room = Math.max(0, 8 - files.length);
+    if (list.length > room) toast('!', 'Up to 8 files per message', 2400);
+    const rows = list.slice(0, room).map(file => {
+      const f = { name: file.name, mime: file.type, bytes: file.size, uploading: true, local: file };
+      window.WizUploads?.pending?.track(f, file);
+      files.push(f); return [file, f];
+    });
+    if (!rows.length) return;
+    renderVoiceFiles();
+    // One at a time; a row a send already took (handedOff) still uploads, because its message waits on it.
+    for (const [file, f] of rows) {
+      if (!f.handedOff && (!sameTake(files) || !files.includes(f))) { f.upSettle?.fail(new Error('Attachment removed')); continue; }
       await uploadVoiceFile(file, files, f);
     }
   });

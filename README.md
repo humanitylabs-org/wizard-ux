@@ -48,7 +48,7 @@ The normal `npm test` command includes a tracked-file portability guard. Only ex
 │        ▼                                                              │
 │  Hermes Agent  (the agent: sessions, tools, memory, models)           │
 │                                                                       │
-│  Wizard apps  (CineQueue, Signal, Reader, Mizel, …) open as desks     │
+│  Apps  (CineQueue, Signal, Reader, Mizel, …) open as desks            │
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
