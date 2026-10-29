@@ -77,6 +77,7 @@ async function decode(browser,el) {
   await f.locator('[data-pc="copy"]').first().click();
   ok(await f.evaluate(()=>navigator.clipboard.readText())===new URL(URLS.wiz).origin,`${mode}: Copy uses plain HTTPS origin`);
   await change(f,{phone:{step:'phone_seen'}},'phone_seen');
+  if (await f.locator('[data-pc-flow]').count()) await f.locator('[data-pc="flow-close"]').click();
   ok((await text(f,'.pc-ok')).includes('connected'),`${mode}: connected state`);
   await f.locator('[data-pc="again"]').click();
   ok(await f.locator('[data-pc-flow]').isVisible(),`${mode}: Connect another device opens the shared flow`);
