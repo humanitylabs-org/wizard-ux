@@ -11,11 +11,12 @@ const sessions=[{id:sid,source:'wizard-mobile',title:'Custody original',status:'
 function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v?'PASS':'FAIL'} ${name}`,!v?JSON.stringify(detail):'');}
 (async()=>{
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM||undefined,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
- async function boot(desktop=false,allFail=false,legacyOutbox=null){
+ async function boot(desktop=false,allFail=false,legacyOutbox=null,fixture=null){
   const ctx=await browser.newContext({viewport:desktop?{width:1440,height:960}:{width:390,height:844},isMobile:!desktop,hasTouch:!desktop,permissions:['microphone'],serviceWorkers:'block'});
-  const state={down:true,sttDelay:0,text:words,cmd:{route:'agent'},uploads:[],posts:[],runs:new Map(),seq:0,errors:[]};
+  const state={down:true,sttDelay:0,text:words,cmd:{route:'agent'},uploads:[],posts:[],runs:new Map(),seq:0,errors:[],requests:[],scopeErrors:[]};
   await ctx.route('**/*',async r=>{
    const q=r.request(),u=new URL(q.url()),p=u.pathname,json=(o,status=200)=>r.fulfill({status,contentType:'application/json',body:JSON.stringify(o)});
+   state.requests.push({method:q.method(),path:p,query:u.search,body:q.postData()});
    if(q.method()==='GET'&&p.startsWith('/wizard-os-home/')){if(process.env.QA_LIVE_ORIGIN)return r.continue();let f=p.slice('/wizard-os-home/'.length)||'index.html';if(f==='outbox.js'&&legacyOutbox?.source)return r.fulfill({body:legacyOutbox.source,contentType:'application/javascript'});f=path.join(root,'web',f);if(fs.existsSync(f)&&fs.statSync(f).isFile())return r.fulfill({body:fs.readFileSync(f),contentType:f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':'image/svg+xml'});}
    if(p==='/fixture-capture')return r.fulfill({contentType:'text/html',body:'<meta name="wizard-os-voice" content="capture"><p>Local capture fixture</p>'});
    if(p.endsWith('/bootstrap'))return json({bootstrap:1,display:{agent_name:'Wizard',owner_name:'Tester'},endpoints:{transcribe:'/wizard/v1/transcribe',route:'/wizard/v1/route',apps:'/wizard/v1/apps'},files:{upload_url:'/wizard/files/upload'},capabilities:{voice:true,router:true,files:true,steer:true}});
@@ -33,12 +34,17 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
     const key=q.headers()['idempotency-key'];if(!state.runs.has(key))state.runs.set(key,{run_id:'run-fixture-'+state.runs.size,status:'queued'});if(state.dropReceipt){state.dropReceipt=false;return r.abort('connectionreset');}return json(state.runs.get(key),202);
    }
    if(p.endsWith('/api/sessions')&&q.method()==='POST')return json({session:{id:JSON.parse(q.postData()).id}});
-   if(p.includes('/api/sessions/')&&q.method()==='GET')return json({session:sessions[0],messages:sessions[0].messages});
-   if(p.endsWith('/api/sessions'))return state.listDown?json({error:'offline'},503):json({sessions:state.emptyList?[]:sessions});
+   if(p.includes('/api/sessions/')&&q.method()==='GET'){
+    if(!fixture)return json({session:sessions[0],messages:sessions[0].messages});
+    const id=decodeURIComponent(p.split('/api/sessions/')[1].split('/')[0]),s=fixture.sessions.find(s=>s.id===id),agent=u.searchParams.get('agent')||'';
+    if(!s||(s.agent||'')!==agent){state.scopeErrors.push({path:p,agent});return json({error:'wrong synthetic route'},404);}
+    return json(p.endsWith('/messages')?{data:s.messages,has_more:false}:{session:s});
+   }
+   if(p.endsWith('/api/sessions'))return state.listDown?json({error:'offline'},503):json({sessions:state.emptyList?[]:(fixture?fixture.sessions.filter(s=>(s.agent||'')===(u.searchParams.get('agent')||'')):sessions),has_more:false});
    if(p.endsWith('/api/jobs'))return json({jobs:[]});
    if(p.endsWith('/v1/runs'))return json({runs:[]});
    if(p.endsWith('/api/model/options'))return json({model,provider,providers:[{slug:provider,name:'QA provider',authenticated:true,is_current:true,models:[model]}]});
-   if(p.endsWith('/agents'))return json({agents:[{id:'hermes',label:'Wizard',is_default:true,status:'running',model:{model,provider}},{id:'research',label:'Research',status:'running',model:{model,provider}}]});
+   if(p.endsWith('/agents'))return json({agents:fixture?.agents||[{id:'hermes',label:'Wizard',is_default:true,status:'running',model:{model,provider}},{id:'research',label:'Research',status:'running',model:{model,provider}}]});
    if(p.includes('/thread-seen'))return json({seen:{}});
    if(p.endsWith('/resources'))return json({resources:[]});
    if(p.endsWith('/files')||p.endsWith('/files/list'))return json({files:[]});
@@ -46,25 +52,26 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
    if(q.method()!=='GET')return json({accepted:true});
    return json({});
   });
-  await ctx.addInitScript(({allFail,model,provider})=>{
+  await ctx.addInitScript(({allFail,model,provider,fixture})=>{
    localStorage.setItem('wos.coached','true');localStorage.setItem('wos.voiceTipSeen','true');localStorage.setItem('wos.model.pref.v1',JSON.stringify({model,provider}));
+   if(fixture&&!sessionStorage.getItem('dismissFixture')){sessionStorage.setItem('dismissFixture','1');localStorage.setItem('wos.skin',fixture.skin);}
    window.__fault={all:allFail};const put=IDBObjectStore.prototype.put,open=indexedDB.open.bind(indexedDB),set=Storage.prototype.setItem;
    IDBObjectStore.prototype.put=function(...args){if(__fault.all||__fault.idb)throw new DOMException('Injected device save failure','QuotaExceededError');return put.apply(this,args);};
    indexedDB.open=function(...args){return open(...args);};
    Storage.prototype.setItem=function(k,v){if(__fault.all&&(k.startsWith('wos.outbox.fallback')))throw new DOMException('Injected full storage','QuotaExceededError');return set.call(this,k,v);};
-  },{allFail,model,provider});
-  const p=await ctx.newPage();p.on('pageerror',e=>state.errors.push(String(e)));
+  },{allFail,model,provider,fixture});
+  const p=await ctx.newPage();if(fixture)p.setDefaultTimeout(12000);p.on('pageerror',e=>state.errors.push(String(e)));
   await p.goto((process.env.QA_LIVE_ORIGIN||'http://localhost:9481')+'/wizard-os-home/'+(desktop?'desktop.html':''));
   await p.waitForFunction(()=>!!(window.__wos||window.__wux)?.chats&&window.WosOutbox?.recoveryComplete);
   await p.evaluate(()=>WosModels.load());await p.waitForFunction(()=>window.WosModels?.snapshot()?.model);await sleep(250);
-  const wid=await p.evaluate(sid=>{const A=window.__wos||window.__wux;const w=A.openWin?A.openWin({app:'chats'}):null;const id=w?.id||Object.keys(A.wins).find(k=>A.wins[k].app==='chats');if(!id)throw Error('No chat window');A.chats.openChat(id,sid);A.focusWin?.(id);return id;},sid);
-  await p.waitForSelector(`[data-chats="${wid}"] textarea`);
+  const wid=await p.evaluate(({sid,fixture})=>{const A=window.__wos||window.__wux;const existing=fixture&&Object.values(A.wins).find(w=>w.app==='chats');const w=existing||(A.openWin?A.openWin({app:'chats'}):null);const id=w?.id||Object.keys(A.wins).find(k=>A.wins[k].app==='chats');if(!id)throw Error('No chat window');if(!fixture)A.chats.openChat(id,sid);if(window.__wos)A.goDesk(A.desks.findIndex(d=>d.wins.includes(id)));A.focusWin?.(id);return id;},{sid,fixture:!!fixture});
+  await p.waitForSelector(`[data-chats="${wid}"] ${fixture?'.ch-focus-strip':'textarea'}`);
   const take=async()=>{await p.evaluate(()=>document.activeElement?.blur());await p.evaluate(()=>__wos.startVoice('auto'));await p.waitForFunction(()=>__wos.voice==='listen');await sleep(1100);await p.evaluate(()=>__wos.finishVoice());};
   const rows=()=>p.evaluate(()=>[...WosOutbox._items.values()].map(x=>({id:x.id,state:x.state,kind:x.kind,text:x.text,typed:x.typed,sealKey:x.sealKey,blob:x.audio?.size,files:x.files,sessionId:x.sessionId,model:x.model,provider:x.provider,durable:x.durable,steered:x.steered,runId:x.runId,steerRunId:x.steerRunId,storageError:x.storageError,nativeId:x.nativeId})));
   const done=async name=>{ok(!state.errors.length,`${name}: no browser errors`,state.errors);await ctx.close();};
   return {ctx,p,state,wid,take,rows,done};
  }
- if(process.env.QA_DISMISS_ONLY==='1'){await require('./qa-failed-send-dismiss.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
+ if(process.env.QA_DISMISS_ONLY==='1'){await require('./qa-failed-send-dismiss.cjs')({boot,ok,sleep,sid,model,provider,out,browser});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,smoke:process.env.QA_DISMISS_SMOKE==='1',results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
  if(process.env.QA_PARITY_ONLY==='1'){await require('./qa-responsive-remainder.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));console.log(`${results.filter(x=>x.pass).length} passed, ${results.filter(x=>!x.pass).length} failed`);if(results.some(x=>!x.pass))process.exitCode=1;return;}
  if(process.env.QA_LOCAL_ONLY==='1'){await require('./qa-local-command-completion.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));console.log(`${results.filter(x=>x.pass).length} passed, ${results.filter(x=>!x.pass).length} failed`);if(results.some(x=>!x.pass))process.exitCode=1;return;}
  if(process.env.QA_HELD_ONLY==='1'){await require('./qa-held-command-custody.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));console.log(`${results.filter(x=>x.pass).length} passed, ${results.filter(x=>!x.pass).length} failed`);if(results.some(x=>!x.pass))process.exitCode=1;return;}
