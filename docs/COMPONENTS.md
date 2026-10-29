@@ -83,8 +83,7 @@ Visual: <side-by-side screenshot, or "none">
 | Android shell capabilities | `WosDevicePort` (`web/core/device-port.js`), `WosDeviceRecording` (`web/core/device-recording.js`), `WosDeviceOrb` (`web/core/device-orb.js`); `wizardDevicePort` v1 (`device/DeviceMessageProtocol.java`) | another envelope, recorder/store or feature `@JavascriptInterface`; ack before durable custody |
 | Add an app to the home screen | `WizHomeScreenApps.attach / offer / canOffer` (`web/core/home-screen-apps.js`): native pin/guide, dedup echoes, resume retry; `WosExperience` arrange; docs/pwa-app-install.md | second pin menu/sheet |
 | Long screenshot, text selection | WebView document scroll, `SelectionWebView`, `ScrollCaptureCrashGuard` (`docs/android-document-scroll.md`) | second capture path | long Chats capture |
-
-|Temporary private-agent chat|`WizCore.incognitoChats` (`web/core/incognito-chat.js`); reuse Chats Markdown and WizLive.openRunStream, with memory-only state and an explicit ephemeral route|saved drafts, outbox, transcript catalog or normal-history adapters|
+| Incognito chat | `WizCore.incognitoChats` (RAM-only, `WizLive.openRunStream`) | outbox, history |
 
 ## Visual (drawn/animated: side-by-side screenshot under `Visual:`)
 

@@ -71,7 +71,9 @@
         s.stream = window.WizLive?.openRunStream(s.sid, s.agent.id, s.run, snapshot => {
           if (!alive(wid, s)) return;
           s.steps = snapshot.steps || [];
-          s.output = snapshot.text || (typeof snapshot.result?.output === 'string' ? snapshot.result.output : snapshot.result?.output_text || '');
+          const final = typeof snapshot.result?.output === 'string' ? snapshot.result.output : snapshot.result?.output_text || '';
+          // At terminal the final run read is authoritative; a partial stream may lack non-delta output.
+          s.output = (snapshot.terminal && final) || snapshot.text || final;
           if (snapshot.terminal) {
             if (s.output) s.messages.push({ role: 'assistant', text: s.output });
             s.output = ''; s.working = false; s.retry = snapshot.status !== 'completed' && snapshot.status !== 'cancelled';

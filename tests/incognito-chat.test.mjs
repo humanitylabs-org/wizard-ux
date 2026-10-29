@@ -120,3 +120,21 @@ test('every persistent Chats adapter has an Incognito early return; both shells 
   for (const file of ['index.html', 'desktop.html']) assert.match(readFileSync(new URL('../web/' + file, import.meta.url), 'utf8'), /core\/incognito-chat.js/)
   for (const file of ['app.js', 'desktop/desktop.js']) assert.match(readFileSync(new URL('../web/' + file, import.meta.url), 'utf8'), /CHATS.beforeLeave\(id\)/)
 })
+test('terminal reply uses the final run output, not a partial stream', async () => {
+  const s = rig({ manualStream: true, fetchImpl: async path => path.endsWith('/incognito') ? { ok: true, json: async () => ({ session_id: 'incog_' + 'c'.repeat(32) }) } : { ok: true, json: async () => ({ run_id: 'synthetic-run' }) } })
+  await s.component.start('one', s.agent); await s.component.send('one', 'synthetic-final-canary')
+  s.streams.at(-1).notify({ terminal: true, status: 'completed', text: 'Partial', result: { output: 'Partial and the rest' }, steps: [] })
+  assert.match(s.el.innerHTML, /Partial and the rest/)
+  s.component.close('one', true)
+})
+test('Incognito stream target accepts every registry agent id, including a leading digit', () => {
+  const live = readFileSync(new URL('../web/live.js', import.meta.url), 'utf8')
+  const re = new RegExp(live.match(/target && !(\/\^\\\/wizard.*?\$\/)\.test/)[1].slice(1, -1))
+  assert.ok(re.test('/wizard/v1/agents/1-private/incognito/incog_' + 'a'.repeat(32)))
+  assert.ok(!re.test('/wizard/v1/agents/-x/incognito/incog_' + 'a'.repeat(32)))
+})
+test('desktop HUD title-bar close asks before ending an Incognito chat', () => {
+  const desktop = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8')
+  assert.match(desktop, /act === 'close' && hud\?\.id === id\) return CHATS\.beforeLeave\(id\) && hudClose\(\)/)
+  assert.equal(desktop.match(/if \(!internal && !CHATS\.beforeLeave\(id\)\) return;/g).length, 1)
+})

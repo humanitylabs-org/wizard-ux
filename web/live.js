@@ -1249,7 +1249,7 @@
   L.openRunStream = function (sid, agent, runId, paint, target = null) {
     // Explicit ephemeral target: reuse SSE/progress/Stop, never ordinary catalogs/outbox.
     const base = target?.base;
-    if (target && !/^\/wizard\/v1\/agents\/[a-z][a-z0-9-]*\/incognito\/incog_[a-f0-9]{32}$/.test(base || '')) return null;
+    if (target && !/^\/wizard\/v1\/agents\/[a-z0-9][a-z0-9-]{0,40}\/incognito\/incog_[a-f0-9]{32}$/.test(base || '')) return null;
     const read = target?.read || req;
     const registry = window.WosAgents;
     const rec = registry?.get(agent || registry.defaultId());

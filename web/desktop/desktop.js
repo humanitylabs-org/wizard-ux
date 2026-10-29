@@ -207,7 +207,6 @@
   function closeWin(id, internal = false) {
     if (!internal && !CHATS.beforeLeave(id)) return;
     if (hud?.id === id) { hudClose(); return; }
-    if (!internal && !CHATS.beforeLeave(id)) return;
     const t = wsOf(id); if (t < 0) return;
     if (!internal) {
       boundManager?.dismiss(W[id]);
@@ -1028,7 +1027,7 @@
     const act = e.target.closest('[data-wact]')?.dataset.wact;
     if (act === 'hud') return hudOn(id);
     if (act === 'hud-home') return hudDock({ to: 0 });
-    if (act === 'close' && hud?.id === id) return hudClose();
+    if (act === 'close' && hud?.id === id) return CHATS.beforeLeave(id) && hudClose();
     if (act === 'close') return closeWin(id);
     if (act === 'reload') return reloadWin(id);
     if (act === 'mono') return toggleMono();
