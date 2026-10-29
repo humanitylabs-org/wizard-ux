@@ -83,6 +83,17 @@ test('a lasting failure covers the screen with the three checks; X tucks it into
   h.success(); h.settle();
   assert.equal(h.pop().hidden, true, 'recovery closes it by itself');
 });
+test('opening moves focus to an enabled control inside the dialog; hiding returns it', async () => {
+  const h = setup(); h.success();
+  const before = { focused: 0, focus() { this.focused++; } };
+  h.ctx.document.activeElement = before;
+  const x = { focused: 0, focus() { this.focused++; } };
+  h.ctx.document.querySelector = sel => sel === '#wxOffline [data-wxoffx]' ? x : null;
+  h.L.error = 'offline'; h.L.emit(); h.grace(); h.settle();
+  assert.equal(x.focused, 1, 'the always-enabled close button, not the busy Check again');
+  h.ctx.WizCore.status.back();
+  assert.equal(before.focused, 1, 'focus goes back where it was');
+});
 test('any Troubleshoot button while Wizard can’t be reached opens the same pop-up', () => {
   const h = setup(); h.success();
   h.ctx.dispatch = null; h.event('wizreachexplain');

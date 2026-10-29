@@ -22,7 +22,7 @@
    * (the old pill appeared on every dropped read). X tucks it into a small pill that says what still works; the
    * pill or any Troubleshoot button brings it back. Recovery turns the checks green and closes it. */
   const GRACE_MS = 3000;
-  let downSince = 0, graceT = 0, offDismissed = false, offOpen = false, offChecks = null, offBusy = false, offT = 0, offN = 0, offHappy = 0;
+  let offReturn = null, downSince = 0, graceT = 0, offDismissed = false, offOpen = false, offChecks = null, offBusy = false, offT = 0, offN = 0, offHappy = 0;
   let H = {}, net = navigator.onLine === false ? 'offline' : 'online', restoredT = 0, critHidden = '', fatalMsg = '', fatalOpen = false;
   if (net === 'offline') downSince = Date.now(); // the device said offline at boot: the grace runs from now (render re-checks)
   const log = s => { window.__statusLog = (window.__statusLog || []).concat(s).slice(-40); };
@@ -218,6 +218,7 @@
     const title = happy ? 'Back online' : offlineDevice ? 'You’re offline' : 'Can’t reach your Wizard';
     const fix = happy ? '' : fixFor(c);
     const canHelp = !happy && c && c.tailscale?.state !== 'bad' && c.internet?.state !== 'bad' && c.tailscale?.state !== 'wait';
+    const had = el.contains?.(document.activeElement) ? [...(document.activeElement?.attributes || [])].map(a => a.name).find(n => n.startsWith('data-wxoff')) : '';
     el.innerHTML = `<div class="wz-card wx-off-card"><button type="button" class="wz-icon-button ghost wx-off-x" data-wxoffx aria-label="Hide. Keep using saved chats">×</button>`
       + `<h2 id="wxOffT">${esc(title)}</h2>`
       + `<p class="wx-off-sub">${happy ? 'Everything is connected again.' : 'Chats saved on this device still open. New messages wait here and send by themselves when you’re back.'}</p>`
@@ -226,6 +227,8 @@
       + (happy ? '' : `<div class="wz-actions"><button type="button" class="wz-button" data-wxoffcheck${offBusy ? ' disabled' : ''}>${offBusy ? 'Checking…' : 'Check again'}</button>${canHelp ? '<button type="button" class="wz-button secondary" data-wxoffhelp>More help</button>' : ''}</div>`)
       + `</div>`;
     el.hidden = false;
+    // A re-check re-renders the card: keep keyboard focus on the same control (or the close button if it went).
+    if (had) (el.querySelector?.(`[${had}]:not([disabled])`) || el.querySelector?.('[data-wxoffx]'))?.focus?.();
   }
   async function runChecks() {
     if (offBusy || !offOpen || !window.WizReach?.checks) return;
@@ -244,12 +247,16 @@
     if (offOpen) return;
     offOpen = true; offN = 0; offHappy = 0; log('off:open');
     renderOffline(); runChecks(); render();
-    setTimeout(() => document.querySelector?.('#wxOffline [data-wxoffcheck]')?.focus?.(), 0);
+    // Focus moves into the dialog on a control that is always enabled ("Check again" is busy while checks run).
+    offReturn = document.activeElement || null;
+    setTimeout(() => document.querySelector?.('#wxOffline [data-wxoffx]')?.focus?.(), 0);
   }
   function dismissOffline() {
     if (!offOpen) return false;
     offOpen = false; offDismissed = !!downSince; clearTimeout(offT); log('off:hide');
-    renderOffline(); render(); return true;
+    renderOffline(); render();
+    try { offReturn?.focus?.(); } catch (_) {} offReturn = null; // back to where the owner was
+    return true;
   }
   // Recovery: every row turns green for a moment, then the pop-up goes by itself.
   function recovered() {
