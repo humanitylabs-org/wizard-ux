@@ -66,6 +66,26 @@ const server=http.createServer(async(req,res)=>{
  await app.evaluate(()=>{window.result=WizardApp.share.wizard({files:[],text:'Cancel me'});});await page.locator('.wz-share').waitFor();
  await page.evaluate(()=>WizShareWizard.back());assert.equal(await app.evaluate(()=>window.result),'cancelled');
  assert.equal(posts.slice(start).filter(p=>p.kind==='send').length,3);
+ // Native shares (durable): the sheet still closes at once, but 'sent' waits for the receipt so device.js keeps the
+ // staged copy (shareDone) until the message is saved; a failed send stays pending until the retry sheet settles.
+ await page.evaluate(()=>{window.dres='pending';WizShareWizard.open({durable:true,text:'Native words',items:[{name:'n.txt',mime:'text/plain',bytes:1,blob:new Blob(['n'],{type:'text/plain'})}]}).then(r=>window.dres=r);});
+ await page.getByRole('button',{name:'Send',exact:true}).click();await page.locator('.wz-share').waitFor({state:'hidden',timeout:1000});
+ assert.equal(await page.evaluate(()=>window.dres),'pending','native share is not released while uploading');
+ await page.waitForFunction(()=>!WizShareWizard.busy);assert.equal(await page.evaluate(()=>window.dres),'sent');
+ await page.evaluate(()=>{const h=window.__wos||window.__wux;h.chats.uploadFile=async()=>{throw new Error('offline');};window.dres='pending';WizShareWizard.open({durable:true,text:'Native fail',items:[{name:'n.txt',mime:'text/plain',bytes:1,blob:new Blob(['n'],{type:'text/plain'})}]}).then(r=>window.dres=r);});
+ await page.getByRole('button',{name:'Send',exact:true}).click();await page.locator('.dv-status',{hasText:'check the connection'}).waitFor({timeout:5000});
+ assert.equal(await page.evaluate(()=>window.dres),'pending','failed native send keeps the staged copy');
+ await page.evaluate(()=>{const h=window.__wos||window.__wux;h.chats.uploadFile=h.__up;WizShareWizard.back();});await page.waitForFunction(()=>window.dres==='cancelled');
+ // Two overlapping deliveries never share one temporary Chats window (the first must not close it under the second).
+ await page.evaluate(()=>{const h=window.__wos||window.__wux;h.__send=h.chats.sendChat;h.chats.sendChat=async(wid,...r)=>{await new Promise(x=>setTimeout(x,800));if(!h.wins[wid])throw new Error('window closed under send');return h.__send(wid,...r);};});
+ const before2=posts.filter(p=>p.kind==='send').length;
+ await page.evaluate(()=>{window.r1=WizShareWizard.open({text:'Overlap A',items:[{name:'a.txt',mime:'text/plain',bytes:1,blob:new Blob(['a'],{type:'text/plain'})}]});});
+ await page.getByRole('button',{name:'Send',exact:true}).click();await page.locator('.wz-share').waitFor({state:'hidden'});
+ await page.evaluate(()=>{window.r2=WizShareWizard.open({text:'Overlap B'});});await page.getByRole('button',{name:'Send',exact:true}).click();await page.locator('.wz-share').waitFor({state:'hidden'});
+ await page.waitForFunction(()=>!WizShareWizard.busy||document.querySelector('.wz-share'),null,{timeout:10000});
+ assert.equal(await page.locator('.wz-share').count(),0,'no retry sheet: both overlapping sends landed');
+ assert.deepEqual(posts.filter(p=>p.kind==='send').slice(before2).map(p=>p.text).sort(),['Overlap A','Overlap B']);
+ await page.evaluate(()=>{const h=window.__wos||window.__wux;h.chats.sendChat=h.__send;});
  await page.close();}
  fs.writeFileSync(ev+'/receipt.json',JSON.stringify({shells:['phone','desktop'],posts},null,2));console.log('pass: 2 shells; real installed-frame share.wizard → shared sheet; 10 uploads → 1 message; no DEV; two skins; Cancel/Back');
  }finally{await browser.close();server.close();}
