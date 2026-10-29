@@ -60,19 +60,28 @@ test('healthy state never diagnoses; failed reads show the full diagnosis and ac
   banner.handlers.click({ target: { closest: sel => sel === '[data-wxretry]' } });
   assert.equal(h.ctx.WosOutbox.retries, 1); assert.equal(h.L.refreshes, 1);
 });
-test('send failure diagnoses even when live reads are healthy, then clears after receipt', () => {
+test('a retryable saved message never turns healthy chat reads into a connection warning', () => {
   const h = setup(); h.success(); const O = h.ctx.WosOutbox;
-  O.waiting = true; O.listeners.forEach(fn => fn());
-  assert.match(h.ctx.document.getElementById('wxBanners').innerHTML, /Agent Service isn’t responding/);
+  O.canRetry = () => true; O.waiting = true; O.listeners.forEach(fn => fn());
+  assert.equal(h.state(), 'online');
+  assert.equal(h.ctx.document.getElementById('wxBanners').hidden, true);
+  assert.equal(h.ctx.WizReach.calls, 0, 'a healthy connection does not start failure probes');
+  assert.equal(O.waiting, true, 'the saved message is not dismissed, sent or otherwise changed');
+  assert.equal(O.retries, 0, 'rendering never replays a saved message');
   O.waiting = false; O.listeners.forEach(fn => fn());
   assert.equal(h.ctx.document.getElementById('wxBanners').hidden, true);
 });
-test('a waiting item the outbox can no longer retry never holds the retrying banner up', () => {
+test('connection failure still warns with a saved message, until fresh recovery evidence', () => {
   const h = setup(); h.success(); const O = h.ctx.WosOutbox;
-  O.canRetry = () => false; O.waiting = true; O.listeners.forEach(fn => fn());
+  O.waiting = true; O.canRetry = () => false; O.listeners.forEach(fn => fn());
   assert.equal(h.ctx.document.getElementById('wxBanners').hidden, true);
+  h.L.error = 'offline'; h.L.emit();
+  assert.match(h.ctx.document.getElementById('wxBanners').innerHTML, /data-wxnet="reconnecting"/);
   O.canRetry = () => true; O.listeners.forEach(fn => fn());
   assert.match(h.ctx.document.getElementById('wxBanners').innerHTML, /data-wxnet="reconnecting"/);
+  h.success(); h.settle();
+  assert.equal(h.ctx.document.getElementById('wxBanners').hidden, true);
+  assert.equal(O.waiting, true, 'connection recovery does not discard the saved message');
 });
 test('Retry queues a fresh verification when a stale degraded probe is still in flight', async () => {
   let calls = 0, resolveFirst;
