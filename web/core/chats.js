@@ -542,6 +542,7 @@ window.WizCore.chats = function createChats(H) {
     // Yesterday and Past week follow Ready's order but carry no controls: the order bar and subject moves live on Ready
     // only, so a move never rewrites the saved subject order from a partial list.
     const top = sec === 'ready' ? bar : '', mk = k => sec === 'ready' ? `subj:${k}` : `subj:${sec}:${k}`;
+    if (readyOrder === 'priority') return top + priorityGroups(list, awake, rowFn, sec) + later;
     if (readyOrder !== 'subject') return top + withNotes(list, awake, rowFn) + later;
     const groups = new Map();
     for (const s of list) { const k = attOf(s)?.subject || 'Other'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); }
@@ -570,7 +571,19 @@ window.WizCore.chats = function createChats(H) {
   }
   const noteAt = it => (Number(it.time) || 0) * 1000, sesAt = s => Date.parse(LIVE.cardAt(s)) || 0;
   const noteRank = it => it.priority >= 4 ? 1 : it.priority === 3 ? 2 : 3;
-  const sesRank = s => ['waiting_for_approval', 'unknown'].includes(s.status) ? 0 : deferredOf(s) ? 9 : attOf(s)?.state === 'needs_you' ? 1 : attOf(s)?.state === 'check' ? 2 : 3;
+  const SES_RANK = { needs_you: 1, check: 2, fyi: 3, done: 4 };
+  const sesRank = s => LIVE.readyRank ? LIVE.readyRank(s) : ['waiting_for_approval', 'unknown'].includes(s.status) ? 0 : deferredOf(s) ? 9 : SES_RANK[attOf(s)?.state] || 5;
+  /* Priority shows its groups (Miguel, 29 Oct 2026: "they're not grouped properly … it doesn't really change from
+   * newest"): a small header per status, most urgent first, newest first inside each. Notifications join the group of
+   * their own priority (4–5 Needs you, 3 Your call, the rest FYI). */
+  const PRI_LABEL = { 0: 'Needs approval', 1: 'Needs you', 2: 'Your call', 3: 'FYI', 4: 'Done', 5: 'No status', 9: 'Snoozed' };
+  function priorityGroups(list, awake, rowFn, sec) {
+    const groups = new Map();
+    for (const s of list) { const r = sesRank(s); if (!groups.has(r)) groups.set(r, { rows: [], notes: [] }); groups.get(r).rows.push(s); }
+    for (const it of awake) { const r = noteRank(it); if (!groups.has(r)) groups.set(r, { rows: [], notes: [] }); groups.get(r).notes.push(it); }
+    return [...groups.keys()].sort((a, b) => a - b).map(r => { const g = groups.get(r), n = g.rows.length + g.notes.length;
+      return `<div class="ch-subj ch-pri" data-pri="${r}" data-morph-key="${esc(sec === 'ready' ? `pri:${r}` : `pri:${sec}:${r}`)}"><span>${PRI_LABEL[r] || 'Other'}</span><small>${n}</small></div>` + withNotes(g.rows, g.notes, rowFn); }).join('');
+  }
   // The notes' own order, and whether a note goes above a given chat row, for the current Ready order.
   const noteOrder = (a, b) => readyOrder === 'oldest' ? noteAt(a) - noteAt(b) : readyOrder === 'newest' ? noteAt(b) - noteAt(a) : noteRank(a) - noteRank(b) || noteAt(b) - noteAt(a);
   function noteBefore(it, s) {
