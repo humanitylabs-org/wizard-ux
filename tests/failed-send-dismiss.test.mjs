@@ -30,10 +30,11 @@ function client(rows = new Map(), broken = false) {
 }
 const item = (id, extra = {}) => ({ id, kind: 'reply', state: 'failed', sessionId: 'test-thread', text: 'Switch', error: 'No confirmed model route', createdAt: Date.now(), ...extra });
 const tick = () => new Promise(r => setTimeout(r, 25));
-for (const kind of ['main', 'host-profile', 'container', 'restricted']) {
-  test(`${kind}: Dismiss persists only the selected failure; no admission/stop and original retained`, async t => {
+// This is an outbox custody unit, not routed UI parity. Actual Focus/list/thread coverage:
+// QA_DISMISS_ONLY=1 node qa-voice-custody-callers.cjs (qa-failed-send-dismiss.cjs).
+  test('outbox custody: selected failure persisted; no admission/stop and original retained', async t => {
     const rows = new Map(), p = client(rows); t.after(p.close); await tick();
-    const failed = item('failed', { agent: kind === 'main' ? '' : 'test-' + kind, audio: new Blob(['original']) });
+    const failed = item('failed', { audio: new Blob(['original']) });
     const accepted = item('accepted', { state: 'sent', runId: 'active-run' });
     const other = item('other');
     for (const it of [failed, accepted, other]) p.api._items.set(it.id, it);
@@ -51,7 +52,6 @@ for (const kind of ['main', 'host-profile', 'container', 'restricted']) {
     assert.equal(reloaded.api.retryAll(), 0);
     assert.equal(p.calls.length + reloaded.calls.length, 0);
   });
-}
 test('stale button cannot dismiss accepted, queued, unconfirmed or active work', async t => {
   const p = client(); t.after(p.close); await tick();
   for (const state of ['sent', 'queued', 'sending', 'waiting', 'unconfirmed', 'processing']) {
