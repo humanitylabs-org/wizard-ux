@@ -156,6 +156,8 @@ export default function setup(api) {
   }
   // AI: every account. Level = the tightest weekly allowance left; prepaid credit = balance of top-up.
   const kindOf = p => String(p.provider || p.id || '').split(':')[0];
+  // A copy saved on this device, or a reading over five minutes old, is a last reading until a live one arrives.
+  const aiOld = p => { const at = Date.parse(p.fetchedAt || S.res.ai?.fetchedAt || ''); return !S.aiLive || !at || Date.now() - at > 300000; };
   function subs() {
     const out = [];
     for (const p of S.res.ai?.providers || []) {
@@ -170,7 +172,7 @@ export default function setup(api) {
       const signedOut = p.signedOut === true || p.status === 'signed_out' || p.status === 'auth', na = !signedOut && (p.status === 'unavailable' || (left == null && !money));
       const who = String(p.name || '').split('@')[0];
       out.push({ id: p.id, kind, group: p.providerName || kind, nick: S.nick[p.id] || '', auto: who && who !== p.providerName ? who : '',
-        email: p.email || '', left: left == null ? null : Math.round(left), money, unit: money ? 'credit' : 'plan', out: signedOut, na, stale: p.status === 'stale', resets: pick?.resetsAt || null });
+        email: p.email || '', left: left == null ? null : Math.round(left), money, unit: money ? 'credit' : 'plan', out: signedOut, na, stale: p.status === 'stale' || aiOld(p), resets: pick?.resetsAt || null });
     }
     return out;
   }
@@ -267,7 +269,7 @@ export default function setup(api) {
   }
   // A fuel tag: E, ten cells that fill, F. No label, no percentage at rest; a tap explains it.
   function gaugeEl(g, still) {
-    const on = Math.round(g.left / 10), old = aiStale() ? ' (last reading; couldn’t refresh)' : '';
+    const on = Math.round(g.left / 10), old = aiStale() ? (S.aiLive || S.res.aiError ? ' (last reading; couldn’t refresh)' : ' (last reading; refreshing)') : '';
     return h(still ? 'div' : 'button', { ...(still ? {} : { type: 'button', data: { go: 'ai' } }), cls: 'mh-gauge' + (still ? ' is-still' : '') + (old ? ' is-stale' : ''), 'data-s': level(g.left),
       'aria-label': `AI fuel: ${g.left}% left${old}, ${g.names.join(' and ')}${still ? '' : '. Open AI in Settings'}`, title: `AI fuel · ${g.names.join(' + ')} · ${g.left}% left${old}` },
       h('span', { cls: 'mh-g-ef', text: 'E' }),
@@ -297,7 +299,7 @@ export default function setup(api) {
     const want = defKind(), groups = [];
     for (const s of subs()) { let g = groups.find(x => x.kind === s.kind); if (!g) groups.push(g = { kind: s.kind, name: s.group, rows: [] }); g.rows.push(s); }
     groups.sort((a, b) => (b.kind === want) - (a.kind === want));
-    aiList.replaceChildren(...(aiStale() ? [h('span', { cls: 'mh-more-info', text: 'Couldn’t refresh AI usage just now. These are the last readings.' })] : []), ...groups.map(g => h('div', { cls: nw('mh-ai-group') },
+    aiList.replaceChildren(...(aiStale() ? [h('span', { cls: 'mh-more-info', text: S.aiLive || S.res.aiError ? 'Couldn’t refresh AI usage just now. These are the last readings.' : 'These are the last readings; AI usage is refreshing.' })] : []), ...groups.map(g => h('div', { cls: nw('mh-ai-group') },
       h('div', { cls: 'mh-ai-head' }, h('b', { text: g.name }), g.kind === want ? h('span', { cls: 'mh-ai-def', text: 'Default' }) : null),
       g.rows.map(r => {
         const reset = r.resets && Date.parse(r.resets) > Date.now() ? ` · resets in ${agoS((Date.parse(r.resets) - Date.now()) / 1000)}` : '';
@@ -699,7 +701,7 @@ export default function setup(api) {
   }
   const merge = state => { const got = Object.fromEntries(Object.entries(state || {}).filter(([, v]) => v != null)); S.res = { ...S.res, ...got }; return got; };
   api.inbox?.watch?.(items => { const n = (items || []).filter(i => !i.read && !i.archived).length; if (n !== S.unread) { S.unread = n; paint(); } });
-  api.data.read.resources.watch(state => { if (state?.devicesError) S.devFresh = false; else if (state?.devices) S.devFresh = true; const got = merge(state); if (got.devices || got.ai) keep(); paint(); readBackup(); });
+  api.data.read.resources.watch(state => { if (state?.devicesError) S.devFresh = false; else if (state?.devices) S.devFresh = true; if (state?.ai && !state.aiError) S.aiLive = true; const got = merge(state); if (got.devices || got.ai) keep(); paint(); readBackup(); });
 
   /* ---------- mount at Home; keep it there across Home repaints ---------- */
   // The desktop bar stays up over open windows: it counts as a viewer, so its readings keep refreshing there too
@@ -719,7 +721,7 @@ export default function setup(api) {
   api.settings?.section('store', 'storage', secStore, { subtitle: mine(() => { const st = storage(); return st?.age != null ? `${agoS(st.age)} ago` : ''; }) });
   api.listen(document, 'click', e => { if (S.open.has('wsm') && e.target.isConnected && !wizBox.contains(e.target)) { S.open.delete('wsm'); S.open.delete('wsm-why'); renderWiz(); } });
   api.listen(document, 'keydown', e => { if (e.key === 'Escape' && S.open.has('wsm')) { S.open.delete('wsm'); renderWiz(); wizBtn.focus(); } });
-  S.res = api.storage.get('res') || {}; { const now = api.data.read.resources.snapshot(); S.devFresh = !!now?.devices && !now.devicesError; merge(now); }
+  S.res = api.storage.get('res') || {}; { const now = api.data.read.resources.snapshot(); S.devFresh = !!now?.devices && !now.devicesError; S.aiLive = !!now?.ai && !now.aiError; merge(now); }
   paint(true); mount(); readBackup(true);
   return () => { ro?.disconnect(); };
 }

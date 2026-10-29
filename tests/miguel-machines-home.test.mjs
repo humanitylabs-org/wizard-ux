@@ -252,7 +252,7 @@ test('third review: AI page offers sign-in with no accounts, backup read failure
 test('fourth review: sign-in state survives normalisation, managed workspaces get honest System pages, Dictate keeps its field through the mic menu', () => {
   const usage = read('web/core/usage.js'), desk = read('web/desktop/desktop.js');
   assert.match(usage, /signedOut: \['signed_out', 'auth', 'reauth'\]\.includes\(p\.status\)/);
-  assert.match(usage, /\['stale', 'signed_out', 'auth', 'reauth'\]\.includes\(p\.status\) \? p\.status : a\.status, signedOut:childOut \|\| a\.signedOut === true \|\| p\.signedOut === true/, 'a group sign-out reaches its accounts');
+  assert.match(usage, /\['stale', 'unavailable', 'signed_out', 'auth', 'reauth'\]\.includes\(p\.status\) \? p\.status : a\.status, signedOut:childOut \|\| a\.signedOut === true \|\| p\.signedOut === true/, 'a group sign-out reaches its accounts');
   for (const who of ['miguel', 'wizard']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /const signedOut = p\.signedOut === true \|\|/, who);
@@ -275,7 +275,7 @@ test('sixth review: stale AI and backup readings say so; the AI page is scoped o
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`), css = read(`web/tweaks/${who}/machines-home/tweak.css`);
     assert.match(src, /const aiStale = \(\) => !!S\.res\.aiError \|\| subs\(\)\.some\(s => s\.stale && !s\.out && !s\.na\);/, who + ': a stale service counts too');
     assert.match(src, /\(r\.stale \? ' · last reading' : ''\)/, who);
-    assert.match(src, /old = aiStale\(\) \? ' \(last reading; couldn’t refresh\)' : ''/, who + ': the gauge says it is a last reading');
+    assert.match(src, /old = aiStale\(\) \? \(S\.aiLive \|\| S\.res\.aiError \? ' \(last reading; couldn’t refresh\)' : ' \(last reading; refreshing\)'\) : ''/, who + ': the gauge says it is a last reading');
     assert.match(src, /Couldn’t refresh AI usage just now\. These are the last readings\./, who);
     assert.match(src, /AI accounts for \$\{mg\.name\}’s Wizard show on that Wizard/, who);
     assert.match(src, /S\.backupRead === 'error' \? \[h\('span', \{ cls: 'mh-more-info', text: 'Couldn’t reach Backup just now\. This is the last reading\.' \}\)\]/, who);
@@ -376,6 +376,17 @@ test('fifteenth review: the desktop bar keeps its readings live over open window
   for (const who of ['miguel', 'wizard']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /const back = !barBox\.isConnected; if \(api\.slot\.mount\('dock-end', barBox, -1\) && back\) api\.data\.read\.resources\.live\?\.\(barBox\);/, who);
+  }
+});
+
+test('sixteenth review: an unavailable group reaches its accounts; a saved or aged AI reading is a last reading', () => {
+  assert.match(read('web/core/usage.js'), /\['stale', 'unavailable', 'signed_out', 'auth', 'reauth'\]\.includes\(p\.status\) \? p\.status : a\.status/);
+  for (const who of ['miguel', 'wizard']) {
+    const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
+    assert.match(src, /const aiOld = p => \{ const at = Date\.parse\(p\.fetchedAt \|\| S\.res\.ai\?\.fetchedAt \|\| ''\); return !S\.aiLive \|\| !at \|\| Date\.now\(\) - at > 300000; \};/, who);
+    assert.match(src, /stale: p\.status === 'stale' \|\| aiOld\(p\), resets:/, who);
+    assert.match(src, /if \(state\?\.ai && !state\.aiError\) S\.aiLive = true;/, who);
+    assert.match(src, /S\.aiLive = !!now\?\.ai && !now\.aiError; merge\(now\);/, who);
   }
 });
 
