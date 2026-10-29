@@ -234,7 +234,6 @@
         <div class="pc-act">${btn('flow-done', 'Done')}</div></div>`;
     }
     function html() {
-      if (S.flow) return flowHtml();
       const v = S.view;
       if (S.status === 'denied') return note('Only Wizard’s owner can connect a device.');
       if (S.status === 'missing' || v?.step === 'unavailable') {
@@ -245,6 +244,7 @@
       if (lost()) return `<div class="pc-banner" role="status">Can’t reach your Wizard from this device right now.</div>`
         + note('So this can’t show whether a device is connected. On a device, check that Tailscale is on and signed in to the same account as your Wizard, and that the computer running your Wizard is on.')
         + `<div class="pc-act">${btn('retry', 'Try again', 'secondary')}</div>`;
+      if (S.flow && v.step === 'phone_seen') return flowHtml();
       let h = S.banner ? '<div class="pc-banner" role="status">Wizard can’t check on this right now. Trying again.</div>' : '';
       const err = S.opErr || (v.error ? errText(v.error) : '');
       const errLine = err ? `<p class="pc-note err" role="alert">${esc(err)}</p>` : '';

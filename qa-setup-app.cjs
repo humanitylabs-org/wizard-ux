@@ -14,7 +14,7 @@ const fake = async body => (await fetch(ORIGIN + '/__fake/state', { method:'POST
 const reset = async () => (await fetch(ORIGIN + '/__fake/reset', { method:'POST' })).json();
 const log = async () => (await fetch(ORIGIN + '/__fake/log')).json();
 const count = (items, method, p, since = 0) => items.filter(e => e.method === method && e.path === p && e.t >= since).length;
-const URLS = { wiz:'https://wizard.tail1234.ts.net/', auth:'https://login.tailscale.com/a/example-sign-in' };
+const URLS = { wiz:'https://wizard.example.test/', auth:'https://login.tailscale.com/a/example-sign-in' };
 async function context(browser, mode) {
   const ctx = await browser.newContext(mode === 'phone' ? {viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36'} : {viewport:{width:1440,height:900},deviceScaleFactor:1});
   await ctx.grantPermissions(['clipboard-read','clipboard-write'],{origin:ORIGIN});
