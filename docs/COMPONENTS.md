@@ -35,6 +35,7 @@ Visual: <side-by-side screenshot, or "none">
 | Share out (people → apps → Other apps) | `WizardApp.share.text / file` | own picker | cancel ≠ shared |
 | Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound route | pending until accepted, ack once |
 | Mic, camera, screen capture | `WizardApp.capture.start / pending / ack`, `WizardApp.voiceInput.register` | `getUserMedia`, `MediaRecorder`, mic AudioContext | pending survives Back; ack once |
+| Duck Music | `WizardApp.audio.duck(on)` | own volume | restored on close |
 | Title-bar tools | `WizardApp.titlebar.set(tools)` | an app header repeating the title | tools appear in the shell title bar |
 | Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, 2-slot `VaultSlots`) | own ports | cancel keeps old |
 | Protect unsaved work from updates | `WizardApp.update.hold` | app service worker, forced reload | released only after save+readback |

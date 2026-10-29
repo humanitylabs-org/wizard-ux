@@ -405,6 +405,8 @@
       receive: receiveShares, targets: shareTargets, check: () => pullShares() }),
     titlebar: Object.freeze({ set: (tools, onTool) => { toolHandler = typeof onTool === 'function' ? onTool : null; return service ? Promise.resolve(service.titlebar.set(tools)) : transportReady ? request('titlebar.set', { tools }).then(v => v === true, () => false) : Promise.resolve(false); },
       shown: () => { try { return !!service?.titlebar.shown(); } catch (_) { return false; } } }),
+    /* Lower Wizard Music while this app plays something short (a voice note); duck(false) restores it. */
+    audio: Object.freeze({ duck: on => service?.audio ? Promise.resolve(service.audio.duck(!!on)).then(v => v === true, () => false) : transportReady ? request('audio.duck', { on: !!on }).then(v => v === true, () => false) : Promise.resolve(false) }),
     /* Fingerprint vault (Wizard OS Android app): keep one small secret for this app on the phone, behind the
      * fingerprint. has() -> {available, saved}; seal(secret, title) and open(title) show the fingerprint prompt;
      * errors carry .code (cancelled, unavailable, not_saved, invalidated, busy, failed). */
