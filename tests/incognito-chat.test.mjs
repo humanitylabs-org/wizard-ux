@@ -136,5 +136,5 @@ test('Incognito stream target accepts every registry agent id, including a leadi
 test('desktop HUD title-bar close asks before ending an Incognito chat', () => {
   const desktop = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8')
   assert.match(desktop, /act === 'close' && hud\?\.id === id\) return CHATS\.beforeLeave\(id\) && hudClose\(\)/)
-  assert.equal(desktop.match(/if \(!internal && !CHATS\.beforeLeave\(id\)\) return;/g).length, 1)
+  assert.equal(desktop.match(/if \(!internal && !canLeave\(id\)\) return;/g).length, 1)
 })
