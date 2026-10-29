@@ -54,3 +54,15 @@ test('quiet music is never turned up by ducking', async () => {
   const f = fixture({volume: 0.1}), a = {};
   await f.duck(a, true); assert.equal(f.state.volume, 0.1); await f.duck(a, false); assert.equal(f.state.volume, 0.1);
 });
+test('a volume the owner picks while ducked is kept on release', async () => {
+  const f = fixture(), a = {};
+  await f.duck(a, true); assert.equal(f.state.volume, 0.25);
+  f.state.volume = 0.05; // owner turned Music down mid-note
+  assert.equal(await f.duck(a, false), true); assert.equal(f.state.volume, 0.05);
+  assert.equal(f.sent.filter(m => m.method === 'volume').length, 1);
+});
+test('music that is buffering but meant to play is still ducked', async () => {
+  const f = fixture({playing: false}), a = {}; f.state.wantPlaying = true;
+  assert.equal(await f.duck(a, true), true); assert.equal(f.state.volume, 0.25);
+  assert.equal(await f.duck(a, false), true); assert.equal(f.state.volume, 0.8);
+});

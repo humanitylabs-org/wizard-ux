@@ -152,7 +152,7 @@ const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else {
   // Back at the root never exits on the first press
   await p.evaluate(() => __wos.goDesk(0, true)); await p.waitForTimeout(300);
   await p.evaluate(() => window.__wosNativeBack()); await p.waitForTimeout(300);
-  const bk = await p.evaluate(() => __wos.back); ok(bk.exitArmed || bk.log.slice(-1)[0] === 'native:root', 'Back at Home stays in the app (native: consumed at root)', JSON.stringify(bk));
+  const bk = await p.evaluate(() => __wos.back); ok(['root', 'native:root'].includes(bk.log.slice(-1)[0]), 'Back at Home stays in the app (native: consumed at root)', JSON.stringify(bk));
   ok(!errs.length, 'no page errors', errs.join(' | ').slice(0, 400));
   ok(!writes.some(x => !/runs|sessions|steer|thread-seen|outbox/.test(x)) || true, 'writes intercepted: ' + writes.length);
   console.log(`\n${pass}/${pass + fail} passed`);

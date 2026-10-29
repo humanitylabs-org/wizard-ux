@@ -16,7 +16,9 @@ public final class BackupScheduler {
         // The watcher only notices new media; the backup run it enqueues carries the network/charging rules.
         // Keeping network off the watcher means a photo taken offline still wakes the app once seen.
         Constraints.Builder b=new Constraints.Builder();
-        if(!watch) b.setRequiredNetworkType(s.wifi()?NetworkType.UNMETERED:NetworkType.CONNECTED).setRequiresCharging(s.initialCharging());
+        // CONNECTED, not UNMETERED: with the tailnet VPN on, Android judges the VPN (often metered), so an UNMETERED job
+        // never starts even on Wi-Fi. guard() enforces Wi-Fi-only per item, looking through the VPN to its Wi-Fi underlay.
+        if(!watch) b.setRequiredNetworkType(NetworkType.CONNECTED).setRequiresCharging(s.initialCharging());
         if(watch) b.addContentUriTrigger(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,true)
                 .addContentUriTrigger(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,true)
                 .setTriggerContentUpdateDelay(15,TimeUnit.SECONDS).setTriggerContentMaxDelay(60,TimeUnit.SECONDS);
@@ -42,17 +44,14 @@ public final class BackupScheduler {
     public static void cancel(Context c) { WorkManager.getInstance(c).cancelAllWorkByTag(TAG); }
     public static boolean networkAllowed(Context c,boolean wifi) {
         ConnectivityManager cm=c.getSystemService(ConnectivityManager.class);
-        NetworkCapabilities active=cm.getNetworkCapabilities(cm.getActiveNetwork());
-        if(active==null || !active.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return false;
-        if(!wifi) return true;
-        if(!active.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) return false;
-        if(active.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return true;
-        // A tailnet VPN can be the active transport; require an actual unmetered Wi-Fi underlay.
-        if(active.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) for(Network n:cm.getAllNetworks()) {
-            NetworkCapabilities nc=cm.getNetworkCapabilities(n);
-            if(nc!=null && nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) && nc.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && nc.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) return true;
-        }
-        return false;
+        java.util.List<BackupPolicy.Net> all=new java.util.ArrayList<>();
+        for(Network n:cm.getAllNetworks()) all.add(net(cm.getNetworkCapabilities(n)));
+        return BackupPolicy.networkAllowed(net(cm.getNetworkCapabilities(cm.getActiveNetwork())),all,wifi);
+    }
+    private static BackupPolicy.Net net(NetworkCapabilities nc) {
+        if(nc==null) return null;
+        return new BackupPolicy.Net(nc.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),nc.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
+                nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI),nc.hasTransport(NetworkCapabilities.TRANSPORT_VPN));
     }
     /** Plugged in counts: phones at 100% or in battery-protection mode report "not charging" while on power. */
     public static boolean charging(Context c) {

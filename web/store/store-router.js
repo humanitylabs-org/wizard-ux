@@ -1,14 +1,12 @@
-/* Connection Router owner view for the Store: the install sheet and each app's "Models and connections".
- * wizard-os DECISIONS #65 / spec/CONNECTION_ROUTER.md. The Router decides; this only shows its answer and proposes.
- * A model swap happens only when the owner taps the button that names the replacement (POST approve, install scope). */
-const API = '../store-data/router/v1/';
+/* Shared Connection Router rows: Store install, Models and connections, and app setup.
+ * The Router decides readiness. A model swap still requires an explicit, named approval. */
+const API = new URL('../store-data/router/v1/', import.meta.url).href;
 const strip = s => String(s || '').replace(/^Wizard\s+/i, '');
 export const nice = s => { const t = String(s || '').replace(/[-_]+/g, ' ').trim(); return t ? t.charAt(0).toUpperCase() + t.slice(1).replace(/\bai\b/gi, 'AI') : ''; };
-const TIER = { frontier: 'Frontier', standard: 'Standard', fast: 'Fast' };
 
 export async function routerNeeds(app) {
   try {
-    const r = await fetch(API + 'needs/' + encodeURIComponent(app), { credentials: 'same-origin', cache: 'no-store' });
+    const r = await fetch(API + 'needs/' + encodeURIComponent(app), { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(5000) });
     const j = await r.json().catch(() => ({}));
     if (r.ok && Array.isArray(j.models)) return { data: j };
     return { error: r.status === 501 ? 'outdated' : r.status === 403 ? 'unknown' : 'unavailable', status: r.status };
@@ -19,82 +17,90 @@ export async function routerApprove({ app, feature, provider, model }) {
   const r = await fetch(API + 'approve', { method: 'POST', credentials: 'same-origin', cache: 'no-store',
     headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: JSON.stringify({ app, feature, provider, model }) });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.message || (r.status === 501 ? 'This Wizard’s Connection Router needs updating.' : `Approval failed (${r.status}).`));
+  if (!r.ok) throw new Error(j.message || (r.status === 501 ? 'Connection Router needs updating.' : `Approval failed (${r.status}).`));
   return j;
 }
 
-// Which provider to connect for a feature: the installed provider that lists the tested model, else the provider app
-// (installed, then in the Store) whose name carries the model family ("claude-…" → Claude, "gpt-…" → ChatGPT).
-export function connectTarget(feature, data, storeApps = []) {
+export function providerName(data, id, storeApps = []) {
+  return strip(storeApps.find(p => p.id === id)?.name || (data.providers || []).find(p => p.id === id)?.name || nice(String(id || '').replace(/^wizard-/, '')));
+}
+function targetFor(id, data, storeApps, isInstalled) {
+  if (!id) return null;
+  const p = (data.providers || []).find(p => p.id === id), a = storeApps.find(a => a.id === id);
+  return { id, name: providerName(data, id, storeApps), installed: !!p || !!(a && isInstalled?.(a)), status: p?.status };
+}
+// Prefer declared routes/recommendations, then tested-model providers and the existing Store family lookup.
+export function connectTarget(feature, data, storeApps = [], isInstalled) {
   const providers = data.providers || [];
+  const declared = feature.route?.provider || feature.recommend || feature.provider;
+  if (declared) return targetFor(declared, data, storeApps, isInstalled);
   const lists = providers.find(p => (p.models || []).some(m => m.id === feature.tested_on));
-  if (lists) return { id: lists.id, name: strip(lists.name), installed: true, status: lists.status };
+  if (lists) return targetFor(lists.id, data, storeApps, isInstalled);
   const fam = String(feature.tested_on || '').toLowerCase().split(/[^a-z0-9]+/)[0];
-  if (!fam || fam.length < 3) return null;
-  const has = x => `${x.id} ${x.name || ''}`.toLowerCase().includes(fam);
-  const mine = providers.find(has);
-  if (mine) return { id: mine.id, name: strip(mine.name), installed: true, status: mine.status };
-  const store = storeApps.find(a => (a.provides || []).includes('ai-connection') && has(a));
-  return store ? { id: store.id, name: strip(store.name), installed: false } : null;
-}
-
-const providerName = (data, id) => strip((data.providers || []).find(p => p.id === id)?.name || id);
-
-// One feature row: what it was tested on, how it runs now, and at most two owner actions.
-function featureRow(app, f, data, ctx) {
-  const esc = ctx.esc, target = connectTarget(f, data, ctx.storeApps);
-  const strict = f.swap === 'never', route = f.route;
-  const acts = [];
-  const connect = (label) => target
-    ? `<button type="button" class="mc-btn" data-mc-connect="${esc(target.id)}" data-mc-installed="${target.installed ? 1 : 0}">${esc(label || 'Connect ' + target.name)}</button>`
-    : `<button type="button" class="mc-btn" data-mc-connect="" data-mc-installed="0">Connect a provider</button>`;
-  let state, now = '', warn = '';
-  if (f.status === 'ready') {
-    state = ['ready', route?.chosen === 'owner-swap' ? 'Ready · approved swap' : 'Ready'];
-    now = `Using <b>${esc(route.model)}</b> via ${esc(providerName(data, route.provider))}`;
-    if (route.chosen === 'owner-swap') {
-      warn = 'Results may differ from what the developer tested.';
-      const tested = (data.providers || []).find(p => p.status === 'connected' && (p.models || []).some(m => m.id === f.tested_on));
-      if (tested) acts.push(`<button type="button" class="mc-btn" data-mc-approve="${esc(f.feature)}" data-mc-provider="${esc(tested.id)}" data-mc-model="${esc(f.tested_on)}">Use tested ${esc(f.tested_on)}</button>`);
-      else acts.push(connect());
-    }
-  } else if (route) {
-    // A chosen route broke (signed out, expired, model gone). The Router never switches on its own.
-    state = ['off', 'Needs attention'];
-    now = `Routed to <b>${esc(route.model)}</b> via ${esc(providerName(data, route.provider))}: ${esc(f.error?.message || 'unavailable')}`;
-    acts.push(`<button type="button" class="mc-btn" data-mc-connect="${esc(route.provider)}" data-mc-installed="1">Reconnect ${esc(providerName(data, route.provider))}</button>`);
-  } else if (strict) {
-    state = ['off', 'Off until connected'];
-    now = `Only runs on ${esc(f.tested_on)}. The rest of the app works.`;
-    acts.push(connect());
-  } else {
-    state = ['needs', f.offered ? 'Your choice' : 'Needs a provider'];
-    now = f.offered ? `No provider here serves ${esc(f.tested_on)}.` : 'No connected provider can run this yet.';
-    acts.push(connect());
-    if (f.offered) {
-      acts.push(`<button type="button" class="mc-btn alt" data-mc-approve="${esc(f.feature)}" data-mc-provider="${esc(f.offered.provider)}" data-mc-model="${esc(f.offered.model)}">Approve swap to ${esc(f.offered.model)}</button>`);
-      warn = `${esc(f.offered.model)} via ${esc(providerName(data, f.offered.provider))}${f.offered.standing_in ? ` · ${esc(TIER[f.offered.tier] || f.offered.tier)} stand-in` : ''}. Results may differ from what the developer tested.`;
-    }
+  if (fam.length >= 3) {
+    const has = x => `${x.id} ${x.name || ''}`.toLowerCase().includes(fam);
+    const match = providers.find(has) || storeApps.find(a => (a.provides || []).includes('ai-connection') && has(a));
+    if (match) return targetFor(match.id, data, storeApps, isInstalled);
   }
-  const busy = ctx.busy?.has(app + '/' + f.feature);
-  return `<div class="mc-row" data-mc-feature="${esc(f.feature)}">
-    <div class="mc-head"><b>${esc(nice(f.feature))}</b><span class="mc-state ${state[0]}">${esc(state[1])}</span></div>
-    <p class="mc-line">Tested on <b>${esc(f.tested_on)}</b>${f.tier ? ` · ${esc(TIER[f.tier] || f.tier)}` : ''}${strict ? ' · tested model only' : ''}</p>
-    ${now ? `<p class="mc-line">${now}</p>` : ''}${warn ? `<p class="mc-warn">${warn}</p>` : ''}
-    ${acts.length ? `<div class="mc-acts"${busy ? ' aria-busy="true"' : ''}>${busy ? '<span class="mc-wait">Saving…</span>' : acts.join('')}</div>` : ''}
-  </div>`;
+  // A signed-out provider may have no model inventory yet. Reuse an app's service
+  // recommendation only when the registry declares the required model/privacy capability.
+  const shared = (data.services || []).map(s => s.recommend).filter(Boolean).find(id => {
+    const a = storeApps.find(a => a.id === id);
+    return a?.provides?.includes('ai-connection') && (!feature.private_data || a.private === true);
+  });
+  return targetFor(shared, data, storeApps, isInstalled);
 }
-
-function serviceRow(s, ctx) {
-  const esc = ctx.esc, ok = s.status === 'ready';
-  return `<div class="mc-row"><div class="mc-head"><b>${esc(nice(s.slot))}</b><span class="mc-state ${ok ? 'ready' : 'off'}">${ok ? 'Ready' : 'Missing'}</span></div>
-    <p class="mc-line">${ok ? `Served by ${esc(strip(s.provider))}` : `Needs an app that provides ${esc(nice(s.slot).toLowerCase())}${s.recommend ? ` (recommended: ${esc(strip(s.recommend))})` : ''}.`}</p></div>`;
+export function setupTarget(data, ctx = {}) {
+  const needs = [...(data.services || []), ...(data.models || [])].filter(n => n.status !== 'ready' && n.required !== false);
+  for (const need of needs) {
+    const target = connectTarget(need, data, ctx.storeApps, ctx.isInstalled);
+    if (target) return { need, target };
+  }
+  return { need: needs[0], target: null };
 }
-
-// The rows shared by the install sheet and the per-app section.
+const another = (n, esc) => `<button type="button" class="mc-btn alt" data-mc-another="${esc(n.slot || n.feature)}">Use another for this</button>`;
+const connect = (n, target, esc) => `<button type="button" class="mc-btn alt" data-mc-connect="${esc(target?.id || '')}" data-mc-installed="${target?.installed ? 1 : 0}">${target ? (target.installed ? 'Connect ' : 'Set up ') + esc(target.name) : 'Choose a provider'}</button>`;
+const svg = path => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
+function icon(n) {
+  const key = n.slot || n.feature;
+  return key.includes('transcri') ? svg('<path d="M4 9v6m4-10v14m4-11v8m4-10v12m4-8v4"/>')
+    : key.includes('live') ? svg('<path d="M5 6h14M5 12h10M5 18h7"/><circle cx="19" cy="18" r="2"/>')
+    : svg('<rect x="5" y="3" width="14" height="18" rx="3"/><path d="M9 8h6m-6 4h6m-6 4h3"/>');
+}
+function row(n, body, acts, ctx) {
+  const esc = ctx.esc, ok = n.status === 'ready', key = n.slot || n.feature;
+  return `<details class="mc-row" data-mc-${n.slot ? 'slot' : 'feature'}="${esc(key)}">
+    <summary class="mc-head"><span class="mc-icon">${icon(n)}</span><span class="mc-name">${esc(nice(key))}</span>${n.required === false ? '<small class="mc-optional">Optional</small>' : ''}<span class="mc-state ${ok ? 'ready' : 'off'}" aria-label="${ok ? 'Ready' : 'Not ready'}">${ok ? svg('<path d="m6 12 4 4 8-8"/>') : '<span class="mc-dot"></span>'}</span></summary>
+    <div class="mc-detail">${n.purpose ? `<p class="mc-line">${esc(n.purpose)}</p>` : ''}${body}${acts.length ? `<div class="mc-acts">${acts.join('')}</div>` : ''}</div></details>`;
+}
+function featureRow(app, f, data, ctx) {
+  const esc = ctx.esc, target = connectTarget(f, data, ctx.storeApps, ctx.isInstalled), acts = [];
+  const model = f.route?.model || f.tested_on;
+  const provider = f.route?.provider;
+  const label = (data.providers || []).flatMap(p => p.models || []).find(m => m.id === model)?.label || model;
+  let body = model ? `<p class="mc-line">${f.status === 'ready' ? 'Using' : 'Model:'} ${esc(label)}${provider ? ' · ' + esc(providerName(data, provider, ctx.storeApps)) : ''}${f.swap === 'never' ? ' · tested model only' : ''}</p>` : '';
+  if (f.route?.chosen === 'owner-swap') body += '<p class="mc-line">Approved replacement model.</p>';
+  if (f.status === 'ready' && f.route?.chosen === 'owner-swap') {
+    const tested = (data.providers || []).find(p => p.status === 'connected' && (p.models || []).some(m => m.id === f.tested_on));
+    if (tested) acts.push(`<button type="button" class="mc-btn alt" data-mc-approve="${esc(f.feature)}" data-mc-provider="${esc(tested.id)}" data-mc-model="${esc(f.tested_on)}">Use tested ${esc(f.tested_on)}</button>`);
+    else acts.push(connect(f, connectTarget({ ...f, route: null }, data, ctx.storeApps, ctx.isInstalled), esc));
+  }
+  if (f.status !== 'ready') {
+    if (!f.route && f.offered && f.swap !== 'never') {
+      acts.push(`<button type="button" class="mc-btn alt" data-mc-approve="${esc(f.feature)}" data-mc-provider="${esc(f.offered.provider)}" data-mc-model="${esc(f.offered.model)}">Approve swap to ${esc(f.offered.model)}</button>`);
+      body += `<p class="mc-line">${esc(providerName(data, f.offered.provider, ctx.storeApps))} offers this replacement. Results may differ.</p>`;
+    } else acts.push(connect(f, target, esc));
+  }
+  if (f.status !== 'ready' || f.swap !== 'never') acts.push(another(f, esc));
+  return row(f, body, acts, ctx);
+}
+export function serviceRow(s, ctx, data = {}) {
+  const esc = ctx.esc, ok = s.status === 'ready', target = connectTarget(s, data, ctx.storeApps, ctx.isInstalled);
+  const body = ok ? `<p class="mc-line">${esc(providerName(data, s.provider, ctx.storeApps))}</p>` : s.status === 'blocked' ? '<p class="mc-line">A private provider is required.</p>' : '';
+  return row(s, body, [...(!ok ? [connect(s, target, esc)] : []), another(s, esc)], ctx);
+}
 export function routerRows(app, data, ctx) {
-  return [...(data.models || []).map(f => featureRow(app, f, data, ctx)), ...(data.services || []).map(s => serviceRow(s, ctx))].join('');
+  return [...(data.services || []).map(s => serviceRow(s, ctx, data)), ...(data.models || []).map(f => featureRow(app, f, data, ctx))].join('');
 }
-
 export const hasNeeds = data => !!data && ((data.models || []).length + (data.services || []).length) > 0;
-export const pending = data => (data?.models || []).filter(f => f.status !== 'ready').length;
+export const pending = data => [...(data?.models || []), ...(data?.services || [])].filter(f => f.status !== 'ready').length;

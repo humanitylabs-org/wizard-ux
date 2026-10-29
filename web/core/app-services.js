@@ -4,7 +4,7 @@
   'use strict';
   if (window.WizAppServices) return;
   const VERSION = 1, ORIGIN = location.origin, frames = new Map();
-  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'share.receive', 'share.targets', 'share.pending', 'share.ack', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set', 'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt', 'shell.openCompanion', 'shell.closeCompanion', 'shell.postCompanion', 'shell.focusApp']);
+  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'share.receive', 'share.targets', 'share.pending', 'share.ack', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set', 'orb.set', 'audio.duck', 'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt', 'shell.openCompanion', 'shell.closeCompanion', 'shell.postCompanion', 'shell.focusApp']);
   let registry, available = null, serial = 0, rootArm = null;
   // Share receiving (docs/SHARE-SHEET.md): the share sheet hands its per-app ops here once, at shell load, before
   // any app frame exists; they are never on a global, so a frame reaches only its own app id's items.
@@ -54,7 +54,7 @@
   }
   function from(source) { return [...frames.values()].find(st => st.frame.contentWindow === source); }
   const changed = () => window.dispatchEvent(new CustomEvent('wizard:app-holds'));
-  function reset(st) { window.WizCompanionPane?.detach(st.frame); if (st.tools) setTools(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
+  function reset(st) { window.WizBackgroundAudio?.duck?.(st, false); window.WizCompanionPane?.detach(st.frame); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
   function reconcile() {
     for (const st of frames.values()) {
       if (st.tools && st.frame.isConnected && !barOf(st)?.querySelector(':scope > .wtools')) paintTools(st);
@@ -144,6 +144,25 @@
     bar.classList.add('has-tools');
     return true;
   }
+  /* App orb claims: one fixed icon set, a short label, the app's own registry colour. The shell decides when it shows. */
+  const ORB_ICONS = new Set(['plus', 'mic', 'record', 'stop', 'send', 'search', 'edit']);
+  let orbShown = () => false;
+  function setOrb(st, spec) {
+    const icon = spec && ORB_ICONS.has(spec.icon) ? spec.icon : null;
+    const next = icon ? { icon, label: String(spec.label || '').replace(/[\x00-\x1f]/g, '').slice(0, 40) } : null;
+    if (JSON.stringify(next) === JSON.stringify(st.orb || null)) return orbShown(st.frame);
+    st.orb = next; window.dispatchEvent(new CustomEvent('wizard:app-orb', { detail: { appId: st.appId } }));
+    return orbShown(st.frame);
+  }
+  function orbOf(frame) {
+    const st = frames.get(frame); if (!st?.orb || !valid(st, st.doc)) return null;
+    const a = apps().find(x => x.id === st.appId);
+    return Object.freeze({ appId: st.appId, name: a?.name || st.appId, icon: st.orb.icon, label: st.orb.label || a?.name || st.appId, colors: Array.isArray(a?.colors) ? a.colors.slice(0, 2) : (a?.g || []) });
+  }
+  function orbTap(frame) {
+    const st = frames.get(frame); if (!st?.orb || !valid(st, st.doc)) return false;
+    try { st.frame.contentWindow.postMessage({ type: 'wizard:app:orb', version: VERSION }, ORIGIN); return true; } catch (_) { return false; }
+  }
   function setTools(st, list) { st.tools = cleanTools(st, list); return paintTools(st); }
   // Owner-key access is narrower than ordinary app services: installed apps.json entries only,
   // never owner links, arbitrary same-origin frames or off-origin apps. Label comes from the catalog.
@@ -181,7 +200,7 @@
       return { release() { if (released) return; released = true; st.holds.delete(id); changed(); } };
     };
     // Capture holds start before permission, end only after stop/cancel settles. Lifecycle never cancels capture.
-    const start = async opts => {
+    const start = async (opts, attaching = false) => {
       check(); if (!window.WizAppCapture) throw fault('Shared capture unavailable');
       if (['auto', 'command'].includes(opts?.kind)) throw fault('Capture kind is reserved for Wizard voice; use audio/meeting and task metadata');
       const shell = window.__wos || window.__wux;
@@ -191,9 +210,11 @@
       const release = () => { h.release(); removeEventListener('wizard-app-capture-state', onCaptureState); };
       const onCaptureState = () => { if (resource.getState?.().active === false) release(); }; // actual recorder state, never elapsed time
       addEventListener('wizard-app-capture-state', onCaptureState);
+      let session;
       try {
         const safe = {}; for (const key of ['kind','mime','audio','pcm','chunkMs','maxMs','maxBytes','systemAudio','meta','seqBase','offsetMs','preparedId','resumeId']) if(opts?.[key] !== undefined) safe[key]=opts[key];
-        const session = await (safe.resumeId && resource.resume ? resource.resume(st.appId, safe.resumeId, safe) : resource.start(st.appId, safe));
+        session = await (attaching ? resource.attach(st.appId) : safe.resumeId && resource.resume ? resource.resume(st.appId, safe.resumeId, safe) : resource.start(st.appId, safe));
+        if (!session) { release(); check(); return null; }
         let finished;
         const finish = method => {
           check();
@@ -213,7 +234,17 @@
           stop: () => finish('stop'), cancel: () => finish('cancel'),
           pause() { check(); if (!session.pause) return Promise.reject(fault('Capture pause unavailable')); return session.pause(); },
           resume() { check(); if (!session.resume) return Promise.reject(fault('Capture resume unavailable')); return session.resume(); } });
-      } catch (e) { release(); throw e; }
+      } catch (e) {
+        // The permission/native await can outlive this document. Stop and retain the take before rejecting.
+        // A same-app replacement document that already attached owns the take now: leave it recording.
+        if (session && !session.reattached?.()) { try { await session.stop(); } catch (_) { /* capture service retains retryable custody */ } }
+        release();
+        if (e.code === 'busy' && e.appId) {
+          const owner = apps().find(a => a.id === e.appId);
+          e.message = 'The microphone is recording in ' + (owner?.name || String(e.appId).replace(/[-_]/g, ' ')) + '. Stop that recording first.';
+        }
+        throw e;
+      }
     };
     // Recheck the exact requesting document after the biometric prompt as well as before it.
     const vault = async (method, extra) => { check(); const result = await vaultCall(st.appId, method, extra); check(); return result; };
@@ -241,6 +272,9 @@
         toast(icon, message) { check(); if (typeof icon !== 'string' || typeof message !== 'string') return false; const shell = window.__wos || window.__wux; shell?.toast?.(icon.slice(0, 20), message.slice(0, 2000), 2600); return !!shell?.toast; },
       }),
       badge: Object.freeze({ set(n) { check(); setBadge(st.appId, n); st.badged = true; return true; } }),
+      orb: Object.freeze({ set(spec) { check(); return setOrb(st, spec); }, shown() { check(); return orbShown(st.frame); } }),
+      // Lower Wizard Music while this app plays a short sound; duck(false) restores it. Resolves true when ducked.
+      audio: Object.freeze({ duck(on) { check(); return window.WizBackgroundAudio?.duck ? window.WizBackgroundAudio.duck(st, !!on) : Promise.resolve(false); } }),
       titlebar: Object.freeze({ set(list) { check(); return setTools(st, list); },
         shown() { check(); const b = barOf(st)?.querySelector(':scope > .wtools'); return !!b && b.getClientRects().length > 0 && b.offsetHeight > 0; } }),
       view: Object.freeze({ isVisible() { check(); return !document.hidden && st.isVisible?.() === true; } }),
@@ -329,7 +363,8 @@
       voice: Object.freeze({ stripAddress(text) { check(); return window.WizConfig.stripAddress(String(text || '')); }, async transcribe(file, opts) { check(); const result = await transcribeFile(file, opts); check(); return result; } }),
       theme: Object.freeze({ get() { check(); return window.WizAppearance?.get(frameOf(st)) || null; } }),
       update: Object.freeze({ hold, available() { check(); return available; } }),
-      capture: Object.freeze({ start: opts => { if (st.frame.dataset?.voiceService) throw fault('Voice service has no capture authority'); return start(opts); },
+      capture: Object.freeze({ attach: () => { check(); if (st.frame.dataset?.voiceService) throw fault('Voice service has no capture authority'); return start({}, true); },
+        start: opts => { if (st.frame.dataset?.voiceService) throw fault('Voice service has no capture authority'); return start(opts); },
         prepare(opts) {
           check(); const shell=window.__wos||window.__wux;
           if(shell?.voice && shell.voice!=='idle') throw Object.assign(fault('Microphone held by Wizard voice'),{code:'busy',appId:'wizard-voice'});
@@ -431,8 +466,10 @@
       if (d.op === 'capture.ack') value = await svc.capture.ack(d.args?.id);
       if (d.op === 'update.hold') { const h = svc.update.hold(d.args?.reason), id = uid(); st.messageHolds ||= new Map(); st.messageHolds.set(id, h); value = id; }
       if (d.op === 'badge.set') value = svc.badge.set(d.args?.n);
+      if (d.op === 'audio.duck') value = await svc.audio.duck(d.args?.on === true);
       if (d.op.startsWith('vault.')) { try { value = await svc.vault[d.op.slice(6)](d.op === 'vault.seal' ? d.args?.secret : d.args?.title, d.args?.title); } catch (err) { reply(null, 'vault:' + (err.code || 'failed')); return; } }
       if (d.op === 'titlebar.set') value = svc.titlebar.set(d.args?.tools);
+      if (d.op === 'orb.set') value = svc.orb.set(d.args?.spec);
       if (d.op === 'identity.info') value = await svc.identity.info();
       if (d.op === 'identity.sign') value = await svc.identity.sign(d.args?.event);
       if (d.op === 'identity.nip44_encrypt') value = await svc.identity.nip44_encrypt(d.args);
@@ -453,28 +490,22 @@
     }
   }, 15000);
   function guardBack(step, toast) {
-    let watcher = null, armed = false, exitUntil = 0;
-    const installed = () => matchMedia('(display-mode: standalone)').matches || !!window.WizardOSNative || !!window.WizardNative || !!window.webkit?.messageHandlers?.wizardNative;
+    let watcher = null, armed = false;
+    // James: every shell stays home at root, including an ordinary browser tab.
+    // Keep this in the shared guard too: adapters must not need to fake a handled
+    // step to prevent the old double-Back exit path.
     function consume() {
-      if (step()) return true;
-      if (installed()) { toast?.('⌂', "You're home", 1400); return true; }
-      if (Date.now() < exitUntil) return false;
-      exitUntil = Date.now() + 2000; toast?.('⌂', 'Press back again to exit', 2000);
-      try { watcher?.destroy(); } catch (_) {} watcher = null;
-      setTimeout(() => { if (Date.now() >= exitUntil) { exitUntil = 0; arm(); } }, 2100);
-      return true;
+      if (!step()) toast?.('⌂', "You're home · Back never leaves Wizard", 1400);
     }
     function arm() {
-      if (Date.now() < exitUntil) return;
       if (!armed && navigator.userActivation?.isActive) { history.pushState({ ...history.state, __wizardShellGuard: true }, ''); armed = true; }
-      if (!watcher && 'CloseWatcher' in window) { watcher = new CloseWatcher(); watcher.onclose = () => { watcher = null; if (!consume()) history.back(); else setTimeout(arm, 0); }; }
+      if (!watcher && 'CloseWatcher' in window) { watcher = new CloseWatcher(); watcher.onclose = () => { watcher = null; consume(); setTimeout(arm, 0); }; }
     }
     rootArm = arm; document.addEventListener('pointerdown', arm, true);
     addEventListener('popstate', e => {
       if (e.state?.__wizardApp?.version === VERSION) return;
       armed = false;
-      if (consume()) { history.pushState({ ...history.state, __wizardShellGuard: true }, ''); armed = true; }
-      else history.back();
+      consume(); history.pushState({ ...history.state, __wizardShellGuard: true }, ''); armed = true;
     });
   }
   // Only a trusted installed catalog capability admits app voice input.
@@ -687,6 +718,7 @@
     } catch (_) { done?.(false); return false; }
   }
   window.WizAppServices = Object.freeze({ voiceCommand, runVoiceCommand, authorized: frame => { const st = frames.get(frame); return valid(st, st?.doc); }, version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
+    orb: Object.freeze({ of: orbOf, tap: orbTap, presenter(fn) { orbShown = typeof fn === 'function' ? fn : () => false; } }),
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     update: Object.freeze({ busy, announce, available: () => available, reloadPlan, prepareReload, frames: updateFrames }),
