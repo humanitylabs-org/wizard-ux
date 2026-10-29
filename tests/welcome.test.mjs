@@ -53,3 +53,15 @@ test('Welcome: branded, offers Claude (recommended), ChatGPT and Tinfoil, and op
   assert.match(js, /searchParams.set\('connect', '1'\)/);
   assert.match(js, /store\/store-install.js/, 'a missing provider app installs through the Store install path');
 });
+
+test('Welcome: Back peels the sign-in, then steps back, and both shells ask it first', () => {
+  const js = read('web/core/welcome.js');
+  assert.match(js, /function back\(\)[^]*?provider = null[^]*?step === 'hello'\) \{ step = 'look'/);
+  assert.match(read('web/app.js'), /function backStep\(skipHosted\) \{\s*\{ const w = window\.WosWelcome\?\.back\(\)/);
+  assert.match(read('web/desktop/desktop.js'), /function escStep\(\) \{\s*\{ const w = window\.WosWelcome\?\.back\(\)/);
+});
+
+test('Welcome: finishes only after the first message is queued', () => {
+  const js = read('web/core/welcome.js');
+  assert.match(js, /item = await H\.send\(text\)[^]*?if \(!item\) \{[^]*?return; \}\s*write\('done'\); markSeen\(\); close\(\)/);
+});

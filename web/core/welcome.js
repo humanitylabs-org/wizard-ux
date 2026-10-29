@@ -26,7 +26,7 @@
   const log = s => { window.__welcomeLog = (window.__welcomeLog || []).concat(s).slice(-40); };
   const read = () => { try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } };
   const write = v => { try { localStorage.setItem(KEY, v); } catch (e) {} };
-  let H = null, el = null, step = 'ai', provider = null, pollT = 0, connected = false, sending = false, booted = false, installing = '', installError = '';
+  let H = null, el = null, step = 'ai', provider = null, pollT = 0, connected = false, sending = false, booted = false, installing = '', installError = '', sendError = '';
 
   // slug: only that provider counts (the one being signed in to); none: any signed-in provider.
   async function aiReady(slug) {
@@ -119,7 +119,7 @@
   function paintHello() {
     return `${BRAND}${dots()}<header class="wl-head"><h2 tabindex="-1">Say hello</h2><p>Send your first message to ${esc(agent())}.</p></header>
       <form class="wl-hello" data-wl-form><textarea rows="3" placeholder="Hi! What can you help me with?" aria-label="First message"></textarea>
-      <button type="submit" class="wl-primary"${sending ? ' disabled' : ''}>${sending ? 'Sending…' : 'Send'}</button></form>`;
+      ${sendError ? `<p class="wl-status err" role="alert">${esc(sendError)}</p>` : ''}<button type="submit" class="wl-primary"${sending ? ' disabled' : ''}>${sending ? 'Sending…' : 'Send'}</button></form>`;
   }
 
   function paint(focus = true) {
@@ -148,7 +148,7 @@
 
   function open(at = 'ai') {
     if (el) return;
-    step = at; provider = null; connected = false; sending = false; installing = ''; installError = '';
+    step = at; provider = null; connected = false; sending = false; installing = ''; installError = ''; sendError = '';
     el = document.createElement('div');
     el.className = 'wl-overlay'; el.id = 'wosWelcome';
     el.innerHTML = '<div class="wl-card" role="dialog" aria-modal="true" aria-label="Welcome"></div>';
@@ -194,12 +194,22 @@
     if (sending) return;
     const text = el.querySelector('textarea')?.value.trim();
     if (!text) { el.querySelector('textarea')?.focus(); return; }
-    sending = true; paint(false);
-    try {
-      write('done'); markSeen(); close(); log('sent');
-      await H.send(text);
-    } catch (err) { console.error(err); }
+    sending = true; sendError = ''; paint(false);
+    let item = null;
+    try { item = await H.send(text); } catch (err) { console.error(err); }
     sending = false;
+    // Finish only once the message is safely queued: a failed save keeps the words here and the Welcome on screen.
+    if (!item) { sendError = 'That didn\u2019t send. Try again.'; paint(false); const t = el?.querySelector('textarea'); if (t) t.value = text; return; }
+    write('done'); markSeen(); close(); log('sent');
+  }
+
+  // Back (phone back gesture / desktop Esc): leave the provider's sign-in, then step back; at the start, close.
+  function back() {
+    if (!el) return '';
+    if (installing || sending) return 'welcome';
+    if (step === 'ai' && provider) { clearTimeout(pollT); provider = null; paint(); return 'welcome'; }
+    if (step === 'hello') { step = 'look'; paint(); return 'welcome'; }
+    close(); log('back:close'); return 'welcome';
   }
 
   function boot(h) {
@@ -229,5 +239,5 @@
     log('thread:timeout');
   }
 
-  window.WosWelcome = { whenThreadExists, boot, open: (at) => open(at || 'ai'), close, get active() { return !!el; }, get log() { return window.__welcomeLog || []; } };
+  window.WosWelcome = { whenThreadExists, boot, back, open: (at) => open(at || 'ai'), close, get active() { return !!el; }, get log() { return window.__welcomeLog || []; } };
 })();
