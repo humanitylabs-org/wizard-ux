@@ -6,7 +6,7 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const number = v => v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null;
   const pct = v => { const n=number(v); return n == null || n<0 || n>100 ? null : Math.round(n); };
-  const S={server:null,serverAt:0,serverError:'',devices:null,devicesAt:0,devicesError:'',health:null,healthAt:0,healthError:'',ai:null,aiAt:0,aiError:'',timer:null,busy:null,controller:null,panel:null,tab:'server',opener:'server',openerEl:null,pressing:false,pick:null,shown:{},anim:{},dialWait:null,extra:new Set()};
+  const S={server:null,serverAt:0,serverError:'',devices:null,devicesAt:0,devicesError:'',health:null,healthAt:0,healthError:'',ai:null,aiAt:0,aiError:'',timer:null,busy:null,controller:null,panel:null,tab:'server',opener:'server',openerEl:null,pressing:false,pick:null,shown:{},anim:{},dialWait:null,extra:new Set(),watch:new Set()};
   function normalize(j) {return {cpu:pct(j?.cpuLoad),memory:pct(j?.percentUsedMemory),disk:pct(j?.percentUsed),memoryTotal:number(j?.memoryTotal),diskUsed:number(j?.diskUsed),diskSize:number(j?.diskSize)};}
   const desktopHome = () => !!window.__wux && (window.__wux.homeOpen || !window.__wux.ws[window.__wux.cur]?.wins.length);
   const active = () => !document.hidden && (!!S.panel || desktopHome() || (window.__wos?.idx===0 && !window.__wos?.sheet && !window.__wos?.desks?.[0]?.wins.length));
@@ -213,7 +213,7 @@
   function paint() {if(S.pressing)return;for(const h of [...S.extra]){if(h.isConnected)paintBars(h);else S.extra.delete(h);}const hosts=document.querySelectorAll('[data-home-resources]'); for(const host of hosts) {if(ours()){paintBars(host);continue;}const h=html();if(host.innerHTML!==h){const next=document.createElement('div');next.innerHTML=h;const oldZones=host.querySelectorAll('.rs-zone'),newZones=next.querySelectorAll('.rs-zone'),oldA=host.querySelector('.rs-health-alert'),newA=next.querySelector('.rs-health-alert');if(oldZones.length===2&&newZones.length===2&&!!oldA===!!newA){if(oldA){oldA.className=newA.className;oldA.innerHTML=newA.innerHTML;oldA.setAttribute('aria-label',newA.getAttribute('aria-label'));}oldZones.forEach((zone,i)=>{zone.className=newZones[i].className;zone.innerHTML=newZones[i].innerHTML;});}else host.innerHTML=h;}} if(S.panel) {const body=S.panel.querySelector('[data-res-body]'),scroll=body.scrollTop,hadRefreshFocus=body.contains(document.activeElement)&&document.activeElement.hasAttribute('data-usage-refresh');const h=S.tab==='server'?devicesHtml():S.tab==='health'?healthHtml():window.WosUsage?.html()||'<p>AI usage unavailable</p>';if(body.innerHTML!==h){body.innerHTML=h;body.scrollTop=scroll;if(ours())requestAnimationFrame(()=>requestAnimationFrame(()=>settle(body)));if(hadRefreshFocus)body.querySelector('[data-usage-refresh]')?.focus({preventScroll:true});}}}
   async function read(path,signal) {const r=await fetch(path,{cache:'no-store',credentials:'same-origin',signal});if(!r.ok)throw new Error('Unavailable');return r.json();}
   // A Settings › Resources page counts as a viewer too (S.extra), so its bars read fresh while it is open.
-  const viewing=()=>active()||(!document.hidden&&[...S.extra].some(h=>h.isConnected));
+  const viewing=()=>active()||(!document.hidden&&[...S.extra,...S.watch].some(h=>h.isConnected));
   async function update(force=false) {
     if(S.busy)return S.busy;if(!viewing())return;
     const controller=S.controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),10000);
@@ -249,5 +249,7 @@
   // Settings › Resources (and any later host): the Home bars, same groups and layout, drawn into a given element and kept
   // live while it stays in the page. Readings older than Home's own cadence are refreshed once.
   function bars(host){if(!host)return;S.extra.add(host);paintBars(host,true);if(!S.busy&&(Date.now()-S.serverAt>14000||Date.now()-S.aiAt>60000||Date.now()-S.devicesAt>60000))update();}
-  window.WosResources={bars,barsHtml:()=>homeBarsHtml(),lowest,groups:()=>GROUPS.map(g=>g.id),healthProblems,home(){queueMicrotask(sync);return `<div data-slot="home-top" data-home-resources>${html()}</div>`;},sync,back:close,normalize,weekly,update,extraOf,extraFor,get state(){return {server:S.server,serverAt:S.serverAt,serverError:S.serverError,devices:S.devices,devicesError:S.devicesError,health:S.health,healthAt:S.healthAt,healthError:S.healthError,ai:S.ai,aiAt:S.aiAt,aiError:S.aiError,timer:!!S.timer,busy:!!S.busy,panel:!!S.panel};}};
+  // A page that shows readings without the bars (Settings › System pages filled by a package) keeps them fresh while shown.
+  function watch(el){if(!el)return;for(const h of [...S.watch])if(!h.isConnected)S.watch.delete(h);S.watch.add(el);sync();}
+  window.WosResources={bars,barsHtml:()=>homeBarsHtml(),lowest,groups:()=>GROUPS.map(g=>g.id),healthProblems,watch,home(){queueMicrotask(sync);return `<div data-slot="home-top" data-home-resources>${html()}</div>`;},sync,back:close,normalize,weekly,update,extraOf,extraFor,get state(){return {server:S.server,serverAt:S.serverAt,serverError:S.serverError,devices:S.devices,devicesError:S.devicesError,health:S.health,healthAt:S.healthAt,healthError:S.healthError,ai:S.ai,aiAt:S.aiAt,aiError:S.aiError,timer:!!S.timer,busy:!!S.busy,panel:!!S.panel};}};
 })();

@@ -188,6 +188,14 @@ test('Home buttons that ask the agent open Chats with the draft even when no Cha
   assert.match(desk, /contextDraft: \(key, item, words, draft\) => \{ let w = homeOpen \? null : skinChatsWin\(\); if \(!w\) \{ openChatsList\(\); w = skinChatsWin\(\); \}/, 'desktop: Home and the Settings panel open Chats first');
 });
 
+test('Settings › Network & security fills even before Home has been shown', () => {
+  const src = read('web/tweaks/miguel/machines-home/tweak.js');
+  const host = read('web/core/skin-host.js'), res = read('web/core/resources.js');
+  assert.match(host, /slot\.append\(node\); window\.WosResources\?\.watch\?\.\(node\);/, 'a shown System page keeps readings fresh');
+  assert.match(res, /\[\.\.\.S\.extra,\.\.\.S\.watch\]\.some\(h=>h\.isConnected\)/, 'watched pages count as viewing');
+  assert.match(src, /if \(!netBox\.firstChild\) netBox\.replaceChildren\(h\('span', \{ cls: 'mh-wait'/, 'a loading placeholder instead of a blank page');
+});
+
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));

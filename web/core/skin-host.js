@@ -533,7 +533,7 @@
         const fid = ('tweak-' + a.id + '-' + id).replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 80);
         const subtitle = typeof opts.subtitle === 'function' ? guard(a, 'settings.subtitle', opts.subtitle) : null;
         const off = W.register({ id: fid, page, ...(subtitle ? { subtitle } : {}), html: () => '<div class="st-tweak" data-st-tweak></div>',
-          painted: (ctx, el) => { const slot = el?.firstElementChild; if (slot && node.parentNode !== slot) slot.append(node); },
+          painted: (ctx, el) => { const slot = el?.firstElementChild; if (slot && node.parentNode !== slot) slot.append(node); window.WosResources?.watch?.(node); },
           deferRefresh: () => node.contains?.(document.activeElement) });
         let done = false; const release = () => { if (!done) { done = true; off(); node.remove?.(); } };
         a.offs.add(release); return release;
