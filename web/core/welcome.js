@@ -1,6 +1,8 @@
 /* Welcome: the whole first run, in one centred modal over the shell (Miguel, 29 Oct 2026).
  * It replaces the automatic Setup window, the gesture tour and the install banner on first run:
- *   1. Connect your AI   pick a provider (Claude first, recommended) and sign in inside its own app page
+ *   1. Connect your AI   pick a provider (Claude first, recommended; ChatGPT; Tinfoil) and sign in inside its own app
+ *                        page, opened with ?connect=1 so the app goes straight to its sign-in steps. A provider app
+ *                        that is not installed yet is installed through the Store's own install path first.
  *   2. Pick a look       a skin and one of its colours, applied live
  *   3. Say hello         the first message; the Chats window opens with it once it is sent
  * Every install method gets the same first run: it opens whenever no AI provider is signed in, and on a brand-new
@@ -15,21 +17,24 @@
   const KEY = 'wos.welcome.v1', OPTIONS = '/wizard/hermes/api/model/options', SETUP = '/wizard/v1/setup', POLL_MS = 3000;
   const FAMILY = 'wizard'; // first run keeps the Wizard skin and offers its colours; other skins live in Settings
   const PROVIDERS = [
-    { app: 'wizard-claude', name: 'Claude', note: 'Recommended', mark: 'claude' },
-    { app: 'wizard-chatgpt', name: 'ChatGPT', note: '', mark: 'chatgpt' },
+    { app: 'wizard-claude', name: 'Claude', note: 'Recommended', mark: 'claude', slug: 'anthropic' },
+    { app: 'wizard-chatgpt', name: 'ChatGPT', note: '', mark: 'chatgpt', slug: 'openai-codex' },
+    { app: 'wizard-tinfoil', name: 'Tinfoil', note: 'Private', mark: 'tinfoil', slug: 'wizard-tinfoil' },
   ];
+  const BRAND = `<div class="wl-brand"><img src="brand/wizard-mark-white.png" alt=""><span>Wizard OS</span></div>`;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const log = s => { window.__welcomeLog = (window.__welcomeLog || []).concat(s).slice(-40); };
   const read = () => { try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } };
   const write = v => { try { localStorage.setItem(KEY, v); } catch (e) {} };
-  let H = null, el = null, step = 'ai', provider = null, pollT = 0, connected = false, sending = false, booted = false;
+  let H = null, el = null, step = 'ai', provider = null, pollT = 0, connected = false, sending = false, booted = false, installing = '', installError = '';
 
-  async function aiReady() {
+  // slug: only that provider counts (the one being signed in to); none: any signed-in provider.
+  async function aiReady(slug) {
     try {
       const r = await fetch(OPTIONS, { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(5000) });
       if (!r.ok) return null;
       const j = await r.json();
-      return (j?.providers || []).some(p => p && p.authenticated === true);
+      return (j?.providers || []).some(p => p && p.authenticated === true && (!slug || p.slug === slug));
     } catch (e) { return null; }
   }
 
@@ -41,7 +46,37 @@
   }
   function markSeen() { fetch(SETUP + '/seen', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: '{}' }).catch(() => {}); }
 
-  function installed() { return PROVIDERS.filter(p => H.app(p.app)?.url); }
+  const isInstalled = id => !!H.app(id)?.url;
+  // Not installed yet: install it the way the Store does (same endpoint, same release check), then sign in.
+  async function install(id) {
+    const base = new URL('./', document.baseURI);
+    const [installRelease, apps] = await Promise.all([
+      import(new URL('store/store-install.js', base).href).then(m => m.installRelease, () => async (r) => { // shells before store-install.js
+        const res = await fetch(new URL('store-install/' + encodeURIComponent(r.id), base), { method: 'POST', credentials: 'same-origin', cache: 'no-store',
+          headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: JSON.stringify({ source: r.source, repo: r.repo, commit: r.commit, operation: 'install' }) });
+        if (!res.ok) throw Error((await res.json().catch(() => ({}))).error || 'Install failed.');
+      }),
+      (async () => {
+        const out = [];
+        for (let offset = 0, i = 0; offset != null && i < 10; i++) {
+          const r = await fetch(new URL(`store-data/wizard/v1/index/search?limit=100&offset=${offset}`, base), { credentials: 'same-origin', cache: 'no-store' });
+          if (!r.ok) throw Error('The App Store is unavailable.');
+          const j = await r.json(); out.push(...(j.apps || [])); offset = j.next_offset;
+        }
+        return out;
+      })(),
+    ]);
+    // Two listings can share an id (one app, two repos): take the newest version, as the Store's listing shows first.
+    const ver = v => String(v || '0').split(/[.-]/).map(n => parseInt(n, 10) || 0);
+    const newer = (x, y) => { const a = ver(x.version), b = ver(y.version); for (let i = 0; i < Math.max(a.length, b.length); i++) if ((a[i] || 0) !== (b[i] || 0)) return (b[i] || 0) - (a[i] || 0); return 0; };
+    const all = apps.filter(x => x.id === id), a = all.filter(x => !x.conflict).sort(newer)[0];
+    // The Store asks the owner to choose when two sources list the same app; the first run never guesses for them.
+    if (!a) throw Error(all.length ? 'This app has two App Store listings right now. Install it from the Store, or pick another for now.' : 'This AI app is not in the App Store yet.');
+    await installRelease({ ...a, operation: 'install' }, { base });
+    for (let i = 0; i < 30 && !isInstalled(id); i++) { await window.WizCore?.refreshApps?.(); if (!isInstalled(id)) await new Promise(r => setTimeout(r, 2000)); }
+    if (!isInstalled(id)) throw Error('Installed. It is still starting; try again in a moment.');
+  }
+  const signinUrl = u => { try { const x = new URL(u, location.href); x.searchParams.set('connect', '1'); return x.href; } catch (e) { return u; } };
   const agent = () => { try { return window.WizConfig?.agent?.() || 'Wizard'; } catch (e) { return 'Wizard'; } };
 
   function dots() {
@@ -50,16 +85,15 @@
   }
 
   function paintAI() {
-    const list = installed();
     if (provider) {
       const p = PROVIDERS.find(x => x.app === provider), a = H.app(provider);
-      return `${dots()}<header class="wl-head wl-row"><button type="button" class="wl-back" data-wl="back" aria-label="Back">‹</button><h2 tabindex="-1">Sign in to ${esc(p.name)}</h2></header>
-        <div class="wl-frame"><iframe src="${esc(a.url)}" title="${esc(p.name)} sign-in"></iframe></div>
-        <p class="wl-status${connected ? ' ok' : ''}" role="status">${connected ? `${esc(p.name)} is connected.` : 'Follow the steps above. This continues by itself once you are signed in.'}</p>`;
+      return `${BRAND}${dots()}<header class="wl-head wl-row"><button type="button" class="wl-back" data-wl="back" aria-label="Back">‹</button><h2 tabindex="-1">Sign in to ${esc(p.name)}</h2></header>
+        <div class="wl-frame"><iframe src="${esc(signinUrl(a.url))}" title="${esc(p.name)} sign-in"></iframe></div>
+        <p class="wl-status${connected ? ' ok' : ''}" role="status">${connected ? `${esc(p.name)} is connected.` : 'This continues by itself once you are signed in.'}</p>`;
     }
-    return `${dots()}<header class="wl-head"><h2 tabindex="-1">Connect your AI</h2><p>${esc(agent())} thinks with your own AI subscription. Sign in once.</p></header>
-      ${list.length ? `<div class="wl-choices">${list.map(p => `<button type="button" class="wl-choice" data-wl="provider" data-app="${esc(p.app)}"><span class="wl-mark"><img src="brand/apps/${esc(p.mark)}.svg" alt=""></span><span class="wl-name">${esc(p.name)}</span>${p.note ? `<span class="wl-tag">${esc(p.note)}</span>` : ''}</button>`).join('')}</div>`
-        : `<p class="wl-status">No AI app is installed yet.</p><button type="button" class="wl-primary" data-wl="store">Find one in the Store</button>`}`;
+    return `${BRAND}${dots()}<header class="wl-head"><h2 tabindex="-1">Connect your AI</h2><p>${esc(agent())} thinks with your own AI subscription. Sign in once.</p></header>
+      <div class="wl-choices">${PROVIDERS.map(p => `<button type="button" class="wl-choice" data-wl="provider" data-app="${esc(p.app)}"${installing ? ' disabled' : ''}><span class="wl-mark"><img src="brand/apps/${esc(p.mark)}.svg" alt=""></span><span class="wl-name">${esc(p.name)}</span>${installing === p.app ? '<span class="wl-sub">Installing…</span>' : p.note ? `<span class="wl-tag${p.note === 'Recommended' ? '' : ' soft'}">${esc(p.note)}</span>` : ''}</button>`).join('')}</div>
+      ${installError ? `<p class="wl-status err" role="alert">${esc(installError)}</p>` : ''}`;
   }
 
   // The same preview cards as Settings › Look (core/settings.js skinCard + core/skins.css .skp), Wizard colours only.
@@ -72,13 +106,13 @@
     const fam = S?.families?.find(f => f.id === FAMILY);
     if (!fam) return paintHello();
     const cur = S.current, list = fam.palettes.map(id => S.list.find(k => k.id === id)).filter(Boolean);
-    return `${dots()}<header class="wl-head"><h2 tabindex="-1">Pick a colour</h2><p>You can change it, or try other skins, any time in Settings.</p></header>
+    return `${BRAND}${dots()}<header class="wl-head"><h2 tabindex="-1">Pick a colour</h2><p>You can change it, or try other skins, any time in Settings.</p></header>
       <div class="st-root wl-skp"><div class="skp" role="group" aria-label="Colours">${list.map(k => card(k, cur)).join('')}</div></div>
       <button type="button" class="wl-primary" data-wl="next">Continue</button>`;
   }
 
   function paintHello() {
-    return `${dots()}<header class="wl-head"><h2 tabindex="-1">Say hello</h2><p>Send your first message to ${esc(agent())}.</p></header>
+    return `${BRAND}${dots()}<header class="wl-head"><h2 tabindex="-1">Say hello</h2><p>Send your first message to ${esc(agent())}.</p></header>
       <form class="wl-hello" data-wl-form><textarea rows="3" placeholder="Hi! What can you help me with?" aria-label="First message"></textarea>
       <button type="submit" class="wl-primary"${sending ? ' disabled' : ''}>${sending ? 'Sending…' : 'Send'}</button></form>`;
   }
@@ -94,10 +128,10 @@
 
   function poll() {
     clearTimeout(pollT);
-    if (!el || step !== 'ai') return;
+    if (!el || step !== 'ai' || !provider) return; // only while signing in to a chosen provider
     pollT = setTimeout(async () => {
-      const ok = await aiReady();
-      if (!el || step !== 'ai') return;
+      const ok = await aiReady(PROVIDERS.find(x => x.app === provider)?.slug);
+      if (!el || step !== 'ai' || !provider) return;
       if (ok === true) {
         connected = true; write('ai'); log('connected'); paint(false);
         setTimeout(() => { if (el && step === 'ai') { step = 'look'; provider = null; paint(); } }, 1200);
@@ -109,7 +143,7 @@
 
   function open(at = 'ai') {
     if (el) return;
-    step = at; provider = null; connected = false; sending = false;
+    step = at; provider = null; connected = false; sending = false; installing = ''; installError = '';
     el = document.createElement('div');
     el.className = 'wl-overlay'; el.id = 'wosWelcome';
     el.innerHTML = '<div class="wl-card" role="dialog" aria-modal="true" aria-label="Welcome"></div>';
@@ -137,8 +171,14 @@
   function onClick(e) {
     const t = e.target.closest('[data-wl]'); if (!t) return;
     const act = t.dataset.wl;
-    if (act === 'provider') { provider = t.dataset.app; connected = false; paint(); poll(); }
-    else if (act === 'back') { provider = null; paint(); }
+    if (act === 'provider') {
+      const id = t.dataset.app; installError = '';
+      if (isInstalled(id)) { provider = id; connected = false; paint(); poll(); return; }
+      installing = id; paint(false);
+      install(id).then(() => { installing = ''; if (el && step === 'ai') { provider = id; connected = false; paint(); poll(); } },
+        err => { installing = ''; installError = err?.message || 'Install failed.'; paint(false); });
+    }
+    else if (act === 'back') { clearTimeout(pollT); provider = null; paint(); }
     else if (act === 'store') { close(); H.openStore?.(); }
     else if (act === 'palette') { window.WosSkin?.set(t.dataset.id); paint(false); }
     else if (act === 'next') { step = 'hello'; paint(); }

@@ -45,3 +45,11 @@ test('first message reuses one main Chats window and opens its thread', () => {
   assert.match(read('web/desktop/desktop.js'), /findWin\(mainChats\) \|\| newWin\([^]*?away: true[^]*?whenThreadExists\(it\.sessionId, sid => openThread\(sid\)\)/);
   assert.match(read('web/app.js'), /placeApp\(mainChats[^]*?away: true[^]*?whenThreadExists\(it\.sessionId, sid => openWizardThread\(sid\)\)/);
 });
+
+test('Welcome: branded, offers Claude (recommended), ChatGPT and Tinfoil, and opens the app straight into sign-in', () => {
+  const js = read('web/core/welcome.js');
+  assert.match(js, /class="wl-brand"><img src="brand\/wizard-mark-white.png"[^`]*Wizard OS/);
+  assert.match(js, /app: 'wizard-claude', name: 'Claude', note: 'Recommended'[^]*app: 'wizard-chatgpt'[^]*app: 'wizard-tinfoil', name: 'Tinfoil'/);
+  assert.match(js, /searchParams.set\('connect', '1'\)/);
+  assert.match(js, /store\/store-install.js/, 'a missing provider app installs through the Store install path');
+});
