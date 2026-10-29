@@ -3922,6 +3922,7 @@
       if (v === 'apps') return openSheet('launcher');
       if (v === 'install') {
         // The Store window must exist now to receive the link; the Store needs no setup check of its own.
+        window.WosAppSetup?.close(); // an earlier app's pending check or sheet must not reopen it over the Store
         openApp(APP['app-store'], {}, { setupChecked: true });
         const w=Object.values(W).find(w=>w.appId==='app-store');
         return window.WizCore.deeplink.installInFrame(w && document.querySelector(`[data-win="${w.id}"] iframe`),installQuery);

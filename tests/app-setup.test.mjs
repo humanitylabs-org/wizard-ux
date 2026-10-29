@@ -149,5 +149,6 @@ test('install links open the Store window synchronously so the link reaches its 
   for (const [file, call] of [['web/app.js', "openApp(APP['app-store'], {}, { setupChecked: true })"], ['web/desktop/desktop.js', "openApp(APP['app-store'], { setupChecked: true })"]]) {
     const src = read(file), at = src.indexOf("if (v === 'install') {");
     assert.ok(at > 0, file); assert.ok(src.slice(at, at + 400).includes(call), `${file} skips the async setup gate for the install link`);
+    assert.ok(src.slice(at, src.indexOf(call, at)).includes('WosAppSetup?.close()'), `${file} cancels an earlier pending setup gate first`);
   }
 });
