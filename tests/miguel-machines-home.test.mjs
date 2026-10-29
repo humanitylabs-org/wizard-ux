@@ -479,6 +479,8 @@ test('final review 2: exposure dates must be real; an open warning from a last r
     assert.match(src, /online: !!S\.devFresh && d\.status === 'online'/, who);
     assert.match(src, /roleText: 'Main' \+ \(main\.stale \? ' · last reading' : ''\)/, who);
     assert.match(src, /if \(k !== S\.def && \(k \|\| p\)\) \{ S\.def = k;/, who + ': an unmetered default clears the old one');
+    assert.match(src, /if \(open && !wsmBack\) wsmBack = api\.back\?\.push\?\.\(/, who + ': the workspace menu is the top Back layer');
+    assert.match(src, /function renderWiz\(\) \{\n    syncWsmBack\(\);/, who);
     assert.match(src, /money = fmtMoney\(amt, cur\);/, who + ': credit keeps its currency');
     assert.match(src, /use\.every\(s => s\.cur === use\[0\]\.cur\) \? fmtMoney\(/, who + ': never sums mixed currencies');
     assert.equal((src.match(/open(?: to internet)?\$\{S\.devFresh \? '' : ' \(last reading\)'\}` : ''/g) || []).length, 2, who + ': Settings subtitles too');

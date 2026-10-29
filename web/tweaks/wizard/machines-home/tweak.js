@@ -257,7 +257,13 @@ export default function setup(api) {
   function renderTabs() { fillTabs(wsBar); fillTabs(homeWs); renderWiz(); }
   // The top-left shows the workspace this screen is connected to. Others he manages aren't connected yet: greyed,
   // and a tap explains what switching will mean instead of pretending to switch.
+  // While the workspace menu is open it is the top layer for Back (phone Back, browser Back, desktop Esc).
+  let wsmBack = null;
+  const syncWsmBack = () => { const open = S.open.has('wsm');
+    if (open && !wsmBack) wsmBack = api.back?.push?.(() => { wsmBack = null; S.open.delete('wsm'); S.open.delete('wsm-why'); renderWiz(); wizBtn.focus?.(); }) || null;
+    else if (!open && wsmBack) { const off = wsmBack; wsmBack = null; off(); } };
   function renderWiz() {
+    syncWsmBack();
     const own = thisName(), open = S.open.has('wsm'), why = S.open.has('wsm-why') ? S.whyWs : '';
     wizBtn.setAttribute('aria-expanded', String(open)); wizBtn.setAttribute('aria-label', `Workspace: ${own}. Switch workspace`);
     wizBtn.replaceChildren(h('b', { text: own }), (() => { const v = sv('svg', { class: 'mh-wiz-car' + (open ? ' is-up' : ''), viewBox: '0 0 24 24', 'aria-hidden': 'true' }); sv('path', { d: 'm7 10 5 5 5-5' }, v); return v; })());
@@ -741,7 +747,7 @@ export default function setup(api) {
   api.settings?.section('net', 'network', secNet, { subtitle: mine(() => { const n = openOnes().length; return n ? `${n} open to internet${S.devFresh ? '' : ' (last reading)'}` : ''; }) });
   api.settings?.section('store', 'storage', secStore, { subtitle: mine(() => { const st = storage(); return st?.age != null ? `${agoS(st.age)} ago` : ''; }) });
   api.listen(document, 'click', e => { if (S.open.has('wsm') && e.target.isConnected && !wizBox.contains(e.target)) { S.open.delete('wsm'); S.open.delete('wsm-why'); renderWiz(); } });
-  api.listen(document, 'keydown', e => { if (e.key === 'Escape' && S.open.has('wsm')) { S.open.delete('wsm'); renderWiz(); wizBtn.focus(); } });
+  // Esc reaches the menu through the shell's Back order (api.back above), before anything underneath.
   S.res = api.storage.get('res') || {}; { const now = api.data.read.resources.snapshot(); S.devFresh = devNew(now); S.aiLive = !!now?.ai && !now.aiError; merge(now); }
   paint(true); mount(); readBackup(true);
   return () => { ro?.disconnect(); };
