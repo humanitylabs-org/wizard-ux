@@ -251,9 +251,9 @@ export default function setup(api) {
   }
   // A fuel tag: E, ten cells that fill, F. No label, no percentage at rest; a tap explains it.
   function gaugeEl(g, still) {
-    const on = Math.round(g.left / 10);
-    return h(still ? 'div' : 'button', { ...(still ? {} : { type: 'button', data: { go: 'ai' } }), cls: 'mh-gauge' + (still ? ' is-still' : ''), 'data-s': level(g.left),
-      'aria-label': `AI fuel: ${g.left}% left, ${g.names.join(' and ')}${still ? '' : '. Open AI in Settings'}`, title: `AI fuel · ${g.names.join(' + ')} · ${g.left}% left` },
+    const on = Math.round(g.left / 10), old = aiStale() ? ' (last reading; couldn’t refresh)' : '';
+    return h(still ? 'div' : 'button', { ...(still ? {} : { type: 'button', data: { go: 'ai' } }), cls: 'mh-gauge' + (still ? ' is-still' : '') + (old ? ' is-stale' : ''), 'data-s': level(g.left),
+      'aria-label': `AI fuel: ${g.left}% left${old}, ${g.names.join(' and ')}${still ? '' : '. Open AI in Settings'}`, title: `AI fuel · ${g.names.join(' + ')} · ${g.left}% left${old}` },
       h('span', { cls: 'mh-g-ef', text: 'E' }),
       h('span', { cls: 'mh-g-cells', 'aria-hidden': 'true' }, Array.from({ length: 10 }, (_, i) => h('i', { cls: i < on ? 'on' : '', style: { '--i': String(i) } }))),
       h('span', { cls: 'mh-g-ef', text: 'F' }));
@@ -272,13 +272,15 @@ export default function setup(api) {
   function renderAIList() {
     const btn = (text, app, cls = '') => app ? h('button', { type: 'button', cls: 'mh-ai-btn ' + cls, data: { resSignin: app } }, text) : null;
     aiList.hidden = false;
+    const mg = managedOf(S.ws);  // a managed Wizard's accounts live on that Wizard; never show this one's under its name
+    if (mg) return aiList.replaceChildren(h('span', { cls: 'mh-more-info', text: `AI accounts for ${mg.name}’s Wizard show on that Wizard. Switch back to yours to see your own.` }));
     // No account yet: say so and offer every service to sign in to, never a blank page.
     if (!subs().length) return aiList.replaceChildren(h('div', { cls: 'mh-ai-foot' }, h('span', { cls: 'mh-more-info', text: 'No AI account signed in yet.' }),
       h('div', { cls: 'mh-ai-pick' }, signable().map(p => btn(p.name, p.app)))));
     const want = defKind(), groups = [];
     for (const s of subs()) { let g = groups.find(x => x.kind === s.kind); if (!g) groups.push(g = { kind: s.kind, name: s.group, rows: [] }); g.rows.push(s); }
     groups.sort((a, b) => (b.kind === want) - (a.kind === want));
-    aiList.replaceChildren(...groups.map(g => h('div', { cls: nw('mh-ai-group') },
+    aiList.replaceChildren(...(aiStale() ? [h('span', { cls: 'mh-more-info', text: 'Couldn’t refresh AI usage just now. These are the last readings.' })] : []), ...groups.map(g => h('div', { cls: nw('mh-ai-group') },
       h('div', { cls: 'mh-ai-head' }, h('b', { text: g.name }), g.kind === want ? h('span', { cls: 'mh-ai-def', text: 'Default' }) : null),
       g.rows.map(r => {
         const reset = r.resets && Date.parse(r.resets) > Date.now() ? ` · resets in ${agoS((Date.parse(r.resets) - Date.now()) / 1000)}` : '';
@@ -377,6 +379,7 @@ export default function setup(api) {
   // Tailscale: one node beside Storage. Simple on the map (is anything open?), the whole story when tapped.
   // "Tailscale is the only way in" only from a fresh reading where every machine was checked and found Tailscale-only.
   const allClear = () => !!S.devFresh && devices().length > 0 && devices().every(d => d.access?.exposure === 'tailscale');
+  const aiStale = () => !!S.res.aiError;  // the feed failed after an earlier reading: what shows is last known
   const openOnes = () => devices().filter(d => d.access?.exposure === 'internet').map(d => machine(d.id));
   const TS_ASK = {
     fix: () => { const open = openOnes(), names = open.map(m => m.name).join(' and ');
@@ -438,7 +441,7 @@ export default function setup(api) {
     } else {
       const st = storage();
       setRow(rowSt, st ? [storageNode(st)] : []);
-      netBox.replaceChildren(tsPanel()); storeBox.replaceChildren(...(st ? [storeHead(st), storeInfo(st)] : [S.backupRead === 'none' ? h('span', { cls: 'mh-more-info', text: 'No backup set up yet.' })
+      netBox.replaceChildren(tsPanel()); storeBox.replaceChildren(...(st ? [storeHead(st), storeInfo(st), ...(S.backupRead === 'error' ? [h('span', { cls: 'mh-more-info', text: 'Couldn’t reach Backup just now. This is the last reading.' })] : [])] : [S.backupRead === 'none' ? h('span', { cls: 'mh-more-info', text: 'No backup set up yet.' })
         : S.backupRead === 'error' ? h('span', { cls: 'mh-more-info', text: 'Couldn’t reach Backup right now. It will try again.' })
         : h('span', { cls: 'mh-wait', role: 'status', 'aria-label': 'Reading your backup' })]));
       setRow(rowTs, S.open.has('ts') ? [tsPanel()] : []);
@@ -612,7 +615,7 @@ export default function setup(api) {
   function renderGlance() {
     const g = null, x = sessions(), fuel = g ? null : gauge(), st = g ? null : storage(), bad = g ? 0 : openOnes().length;  // the bar always shows the connected workspace
     const checked = allClear(), nM = g ? 1 : devices().length || 1;
-    const sig = JSON.stringify([S.ws, fuel && Math.round(fuel.left / 10), x.working, Math.min(x.ready, 8), S.unread, st && [st.state, st.age == null ? null : agoS(st.age)], bad, checked, nM, backupRunning(), people().length]);
+    const sig = JSON.stringify([S.ws, aiStale(), fuel && Math.round(fuel.left / 10), x.working, Math.min(x.ready, 8), S.unread, st && [st.state, st.age == null ? null : agoS(st.age)], bad, checked, nM, backupRunning(), people().length]);
     if (sig === drawn.glance) return; drawn.glance = sig;
     const dots = (n, cls) => Array.from({ length: n }, () => h('i', { cls }));
     const tile = (go, cls, label, title, viz, val, badge) => h('button', { type: 'button', cls: 'mh-tile ' + cls, data: { go }, title, 'aria-label': `${label}: ${title}` },
@@ -651,9 +654,9 @@ export default function setup(api) {
     renderGlance();
     const top = JSON.stringify([thisName(), managedList().map(g => [g.id, g.name]), S.ws]);
     if (force || top !== drawn.top) { drawn.top = top; renderTabs(); }
-    const gs = JSON.stringify([S.ws, gauge(), S.open.has('ai'), S.open.has('mp'), S.meter, subs().map(s => [s.id, s.left, s.money, s.out, s.nick])]);
+    const gs = JSON.stringify([S.ws, aiStale(), gauge(), S.open.has('ai'), S.open.has('mp'), S.meter, subs().map(s => [s.id, s.left, s.money, s.out, s.nick])]);
     if (force || gs !== drawn.ai) { drawn.ai = gs; renderAI(); }
-    const ls = JSON.stringify([S.ws, S.meter, S.open.has('ai'), S.open.has('signin'), subs().map(s => [s.id, s.left, s.money, s.out, s.resets && agoS((Date.parse(s.resets) - Date.now()) / 1000)])]);
+    const ls = JSON.stringify([S.ws, aiStale(), S.meter, S.open.has('ai'), S.open.has('signin'), subs().map(s => [s.id, s.left, s.money, s.out, s.resets && agoS((Date.parse(s.resets) - Date.now()) / 1000)])]);
     if ((force || ls !== drawn.list) && !aiList.contains?.(document.activeElement)) { drawn.list = ls; renderAIList(); }
     const ms = mapSig();
     if (force || ms !== drawn.map || !rowMn.firstChild) { drawn.map = ms; renderMap(); }

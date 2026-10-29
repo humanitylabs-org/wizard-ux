@@ -264,6 +264,18 @@ test('fifth review: System pages open by deep link; phone Ready opens the unfilt
   assert.match(phone, /openSessions: kind => \(kind === 'working' \? openChatsFiltered\('working', \{ card: true \}\) : openChatsList\(\)\)/);
 });
 
+test('sixth review: stale AI and backup readings say so; the AI page is scoped on managed workspaces', () => {
+  for (const who of ['miguel', 'wizard']) {
+    const src = read(`web/tweaks/${who}/machines-home/tweak.js`), css = read(`web/tweaks/${who}/machines-home/tweak.css`);
+    assert.match(src, /const aiStale = \(\) => !!S\.res\.aiError;/, who);
+    assert.match(src, /old = aiStale\(\) \? ' \(last reading; couldn’t refresh\)' : ''/, who + ': the gauge says it is a last reading');
+    assert.match(src, /Couldn’t refresh AI usage just now\. These are the last readings\./, who);
+    assert.match(src, /AI accounts for \$\{mg\.name\}’s Wizard show on that Wizard/, who);
+    assert.match(src, /S\.backupRead === 'error' \? \[h\('span', \{ cls: 'mh-more-info', text: 'Couldn’t reach Backup just now\. This is the last reading\.' \}\)\]/, who);
+    assert.match(css, /\.mh-gauge\.is-stale \.mh-g-cells \{ opacity: \.55; \}/, who);
+  }
+});
+
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));
