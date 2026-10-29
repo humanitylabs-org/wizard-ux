@@ -96,7 +96,9 @@ export function client({ base = process.env.WIZARD_URL || 'http://127.0.0.1:8923
   function confinedFile(rel) {
     if (!filesRoot) return null
     const root = realpathSync(resolve(filesRoot)), file = resolve(root, rel)
-    if (!file.startsWith(root + sep) || !/^Skins\/[^/]+\/skin\.(?:css|js)$|^Skins\/My skin\.css$/.test(rel)) throw new Error(`Refusing a path outside Skins/: ${rel}`)
+    if (!file.startsWith(root + sep) || String(rel).split('/').some(p => p === '.' || p === '..') || !/^Skins\/[^/]+\/skin\.(?:css|js)$|^Skins\/My skin\.css$/.test(rel)) throw new Error(`Refusing a path outside Skins/: ${rel}`)
+    const skins = resolve(root, 'Skins')
+    if (!file.startsWith(skins + sep)) throw new Error(`Refusing a path outside Skins/: ${rel}`)
     let parent = dirname(file)
     while (true) { try { const real = realpathSync(parent); if (real !== root && !real.startsWith(root + sep)) throw new Error('Skins folder escapes the Files root'); break } catch (e) { if (e.code !== 'ENOENT') throw e; parent = dirname(parent) } }
     try { if (!lstatSync(file).isFile()) throw new Error(`${rel} is not a regular file`) } catch (e) { if (e.code !== 'ENOENT') throw e }
@@ -111,9 +113,9 @@ export function client({ base = process.env.WIZARD_URL || 'http://127.0.0.1:8923
   async function readCss(info) {
     const file = confinedFile(info.path)
     if (file) return readFile(file) ?? ''
-    const r = await call('/wizard/v1/my-skin', { cache: 'no-store' })
-    if (!r.ok) throw new Error(`GET /wizard/v1/my-skin: HTTP ${r.status}`)
-    return r.text()
+    // The API serves the sanitised copy (comments, so also this helper's block markers, @import and foreign
+    // url() dropped). Writing that back would lose owner text, so look changes read the raw file only.
+    throw new Error(`Look changes read the raw ${info.path}, which the API does not serve. Set WIZARD_FILES_ROOT to the owner's Files root, or edit ${info.path} with the Files app tools`)
   }
   async function writeCss(info, css) {
     if (Buffer.byteLength(css, 'utf8') > MAX_CSS) throw new Error('skin.css would exceed 64 KiB')
@@ -150,50 +152,55 @@ export function client({ base = process.env.WIZARD_URL || 'http://127.0.0.1:8923
     try { return await fn() } finally { closeSync(fd); rmSync(lock, { force: true }) }
   }
 
-  async function snapshot(info, keys) {
-    const s = { path: info.path, css: await readCss(info) }
+  // Only the surfaces a change touches are read, restored and compared: a preference-only change never
+  // needs an own skin and its undo never rewrites skin.css.
+  async function snapshot(info, keys, touchCss, touchScript) {
+    const s = { path: info?.path || null }
+    if (touchCss) s.css = await readCss(info)
     if (keys.length) s.prefs = pick(await prefsGet(), keys)
-    const js = readScript(info); if (js !== undefined) s.script = js
+    if (touchScript) { const js = readScript(info); if (js !== undefined) s.script = js }
     return s
   }
-  async function restore(info, snap, keys, touchScript) {
-    if (snap.css !== undefined) await writeCss(info, snap.css)
+  async function restore(info, snap, keys, touchCss, touchScript) {
+    if (touchCss && snap.css !== undefined) await writeCss(info, snap.css)
     if (keys.length) await prefsPut(pick(snap.prefs, keys))
     if (touchScript) writeScript(info, snap.script ?? null)
   }
-  function same(a, b, keys, touchScript) {
-    return a.css === b.css && keys.every(k => JSON.stringify(a.prefs?.[k]) === JSON.stringify(b.prefs?.[k])) && (!touchScript || (a.script ?? null) === (b.script ?? null))
+  function same(a, b, keys, touchCss, touchScript) {
+    return (!touchCss || a.css === b.css) && keys.every(k => JSON.stringify(a.prefs?.[k]) === JSON.stringify(b.prefs?.[k])) && (!touchScript || (a.script ?? null) === (b.script ?? null))
   }
 
   async function change(opts) {
     const keys = Object.keys(opts.prefs), touchScript = opts.script !== undefined
-    if (!opts.accent && !opts.blocks.length && !opts.removes.length && !keys.length && !touchScript) throw new Error('Nothing to change: give --accent, --css-block, --remove-block, --pref or --script')
+    const touchCss = !!(opts.accent || opts.blocks.length || opts.removes.length)
+    if (!touchCss && !keys.length && !touchScript) throw new Error('Nothing to change: give --accent, --css-block, --remove-block, --pref or --script')
     return locked(async () => {
-      const info = await skinInfo()
-      const before = await snapshot(info, keys)
+      const info = touchCss || touchScript ? await skinInfo() : null
+      const before = await snapshot(info, keys, touchCss, touchScript)
       let css = before.css
       if (opts.accent) css = setBlock(css, 'accent', accentCss(opts.accent))
       for (const [name, file] of opts.blocks) css = setBlock(css, name, file === '-' ? readStdin() : readText(file))
       for (const name of opts.removes) css = setBlock(css, name, null)
+      const cssChanged = touchCss && css !== before.css
       const script = touchScript ? (opts.script === null ? null : readText(opts.script)) : undefined
       const j = load(), id = `c${Date.now().toString(36)}${randomBytes(2).toString('hex')}`
-      const entry = { id, at: new Date().toISOString(), label: opts.label || describe(opts), path: info.path, keys, touchScript, before }
+      const entry = { id, at: new Date().toISOString(), label: opts.label || describe(opts), path: info?.path || null, keys, touchCss: cssChanged, touchScript, before }
       // Journal the before-state first: an interrupted change can still be undone.
       j.entries.push(entry); save(j)
       let via
       try {
-        if (css !== before.css) via = await writeCss(info, css)
+        if (cssChanged) via = await writeCss(info, css)
         if (keys.length) await prefsPut(opts.prefs)
         if (touchScript) writeScript(info, script)
-        const after = await snapshot(info, keys)
-        const look = await served()
-        const missing = blocks(css).filter(n => opts.accent && n === 'accent' || opts.blocks.some(b => b[0] === n)).filter(n => !squash(look).includes(squash(blockBody(css, n))))
+        const after = await snapshot(info, keys, cssChanged, touchScript)
+        const look = cssChanged ? await served() : ''
+        const missing = cssChanged ? blocks(css).filter(n => opts.accent && n === 'accent' || opts.blocks.some(b => b[0] === n)).filter(n => !squash(look).includes(squash(blockBody(css, n)))) : []
         const prefsOk = keys.every(k => JSON.stringify(after.prefs[k]) === JSON.stringify(opts.prefs[k]))
         if (missing.length || !prefsOk) throw new Error(`Read-back failed (${missing.length ? `the shell is not served block ${missing.join(', ')}; it was probably removed by sanitising` : 'preferences did not save'})`)
         entry.after = after; entry.via = via || 'unchanged'; save(j)
-        return { ok: true, id, label: entry.label, path: info.path, via: entry.via, preferences: after.prefs || {}, blocks: blocks(after.css), script: touchScript ? (script == null ? 'removed' : 'written, off until the owner taps Turn on in Settings › Look') : 'unchanged', undo: 'node scripts/wizard-customize.mjs undo' }
+        return { ok: true, id, label: entry.label, path: entry.path, via: entry.via, preferences: after.prefs || {}, blocks: cssChanged ? blocks(after.css) : undefined, script: touchScript ? (script == null ? 'removed' : 'written, off until the owner taps Turn on in Settings › Look') : 'unchanged', undo: 'node scripts/wizard-customize.mjs undo' }
       } catch (e) {
-        try { await restore(info, before, keys, touchScript) } catch (r) { e.message += `; rollback also failed: ${r.message}` }
+        try { await restore(info, before, keys, cssChanged, touchScript) } catch (r) { e.message += `; rollback also failed: ${r.message}` }
         const k = load(); k.entries = k.entries.filter(x => x.id !== id); save(k)
         throw new Error(`${e.message}. Nothing was changed (rolled back).`)
       }
@@ -203,21 +210,25 @@ export function client({ base = process.env.WIZARD_URL || 'http://127.0.0.1:8923
     return locked(async () => {
       const j = load(), entry = [...j.entries].reverse().find(e => !e.undoneAt && e.after)
       if (!entry) throw new Error('Nothing to undo')
-      const info = await skinInfo()
-      if (info.path !== entry.path && !opts.force) throw new Error(`The worn skin changed since "${entry.label}" (${entry.path} → ${info.path}); undo would edit the wrong skin. Ask the owner, or pass --force`)
-      const now = await snapshot(info, entry.keys)
-      if (!same(now, entry.after, entry.keys, entry.touchScript) && !opts.force) throw new Error(`"${entry.label}" was edited since (by the owner or another change). Show the owner the difference before undoing, or pass --force`)
-      await restore({ ...info, path: entry.path }, entry.before, entry.keys, entry.touchScript)
-      const back = await snapshot(info, entry.keys)
-      if (!same(back, entry.before, entry.keys, entry.touchScript)) throw new Error('Undo did not read back as the previous state; check the skin file and preferences')
+      // Journals from before per-surface tracking restored skin.css whenever a snapshot held it.
+      const touchCss = entry.touchCss ?? entry.before?.css !== undefined
+      const info = touchCss || entry.touchScript ? await skinInfo() : null
+      // --force never crosses skins: restoring would write the old skin's text into whichever skin is worn now.
+      if (info && info.path !== entry.path) throw new Error(`The worn skin changed since "${entry.label}" (${entry.path} → ${info.path}); undo would edit the wrong skin. Ask the owner to wear ${entry.path} again, then undo`)
+      const now = await snapshot(info, entry.keys, touchCss, entry.touchScript)
+      if (!same(now, entry.after, entry.keys, touchCss, entry.touchScript) && !opts.force) throw new Error(`"${entry.label}" was edited since (by the owner or another change). Show the owner the difference before undoing, or pass --force`)
+      await restore(info, entry.before, entry.keys, touchCss, entry.touchScript)
+      const back = await snapshot(info, entry.keys, touchCss, entry.touchScript)
+      if (!same(back, entry.before, entry.keys, touchCss, entry.touchScript)) throw new Error('Undo did not read back as the previous state; check the skin file and preferences')
       entry.undoneAt = new Date().toISOString(); save(j)
-      return { ok: true, undone: entry.id, label: entry.label, preferences: back.prefs || {}, blocks: blocks(back.css) }
+      return { ok: true, undone: entry.id, label: entry.label, preferences: back.prefs || {}, blocks: touchCss ? blocks(back.css) : undefined }
     })
   }
   async function status() {
-    const info = await skinInfo(), css = await readCss(info), prefs = await prefsGet()
-    const last = [...load().entries].reverse().find(e => !e.undoneAt && e.after)
-    return { skin: { path: info.path, empty: info.empty, script: info.script }, blocks: blocks(css), css, preferences: pick(prefs, Object.keys(PREFS).filter(k => k in prefs)), lastChange: last ? { id: last.id, at: last.at, label: last.label } : null }
+    const prefs = await prefsGet(), last = [...load().entries].reverse().find(e => !e.undoneAt && e.after)
+    let skin = null, css = null, note
+    try { const info = await skinInfo(); skin = { path: info.path, empty: info.empty, script: info.script }; css = await readCss(info) } catch (e) { note = e.message }
+    return { skin, blocks: css == null ? [] : blocks(css), css, ...(note ? { note } : {}), preferences: pick(prefs, Object.keys(PREFS).filter(k => k in prefs)), lastChange: last ? { id: last.id, at: last.at, label: last.label } : null }
   }
   const history = () => load().entries.map(e => ({ id: e.id, at: e.at, label: e.label, path: e.path, undone: !!e.undoneAt }))
   return { change, undo, status, history }

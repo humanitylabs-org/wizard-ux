@@ -26,9 +26,10 @@ the shell. Everything here survives a shell update, because none of it lives in 
    change, reads it back from the shell's own routes, and rolls back if the read-back fails.
 3. "Undo that" = one `undo` call. It restores exactly the previous look and layout. It refuses when
    the owner (or another change) edited the same thing since; show the owner what changed and ask
-   before `--force`.
-4. Look changes apply to the owner's **own skin** (Settings › Look › My skin). If none is worn, the
-   helper stops with that message; ask the owner to wear their own skin (any base is fine) and retry.
+   before `--force`. It always refuses when the owner wears a different skin than the change was made
+   on, even with `--force`: ask them to wear that skin again first.
+4. Look changes apply to the owner's **own skin** (Settings › Look › My skin). Layout preferences do
+   not need one. If a look change finds none worn, the helper stops with that message; ask the owner to wear their own skin (any base is fine) and retry.
    Do not switch skins for them.
 5. Never approve a script. `skin.js` always starts off; only the owner's tap on **Turn on** in
    Settings › Look runs it.
@@ -72,10 +73,12 @@ node scripts/wizard-customize.mjs history
 
 - Edits only its own marked blocks in `skin.css` (`/* wizard-customize:NAME */ … /* /wizard-customize:NAME */`).
   Everything the owner wrote outside them is kept byte for byte.
-- Environment: `WIZARD_URL` (default `http://127.0.0.1:8923`, the Agent Service on the box) and, when the
-  agent is not the owner principal, `WIZARD_FILES_ROOT` (the owner's Files root) so the stylesheet is
-  written in the owner's `Skins/<skin>/` folder like any Files edit. Without it, use the Files app tools on
-  the path `status` prints.
+- Environment: `WIZARD_URL` (default `http://127.0.0.1:8923`, the Agent Service on the box) and
+  `WIZARD_FILES_ROOT` (the owner's Files root). Look changes need `WIZARD_FILES_ROOT`: the helper reads the
+  raw `Skins/<skin>/skin.css`, because the API serves a sanitised copy without comments, and writing that
+  back would lose the owner's text. Writes go through the owner API, or into `Skins/` when the agent is not
+  the owner principal. Layout preferences need only `WIZARD_URL`. Without the Files root, use the Files
+  app tools on the path `status` prints.
 - History lives in `$HERMES_HOME/wizard-customize/history.json` (last 50 changes, previous state included).
 
 ## Workflow

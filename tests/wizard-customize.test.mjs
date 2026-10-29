@@ -95,3 +95,47 @@ test('skin.js is written off; script removal is undoable; unsupported preference
   await assert.rejects(cli('change', '--pref', 'spaces=[]'), /Unsupported preference/)
   await assert.rejects(cli('change', '--pref', 'chatLayout="grid"'), /Invalid value/)
 })
+
+test('without the Files root, look changes refuse instead of writing back the sanitised copy', async t => {
+  const { b, root } = await box(t)
+  const env = { base: b.url, home: join(root, '.agent') }
+  await assert.rejects(run(['change', '--accent', '#f80'], env), /WIZARD_FILES_ROOT/)
+  assert.equal(b.css(), OWNER); assert.deepEqual(b.state.writes, [])
+  assert.equal((await run(['change', '--pref', 'compact=true'], env)).ok, true, 'layout needs only the API')
+})
+
+test('undo --force never writes one skin\'s text into another worn skin', async t => {
+  const { b, root, cli } = await box(t)
+  await cli('change', '--accent', 'orange')
+  mkdirSync(join(root, 'Skins/Work'), { recursive: true }); writeFileSync(join(root, 'Skins/Work/skin.css'), '/* B */ .b{color:blue}\n')
+  b.state.skin = 'Work'
+  await assert.rejects(cli('undo'), /worn skin changed/)
+  await assert.rejects(cli('undo', '--force'), /worn skin changed/)
+  assert.equal(readFileSync(join(root, 'Skins/Work/skin.css'), 'utf8'), '/* B */ .b{color:blue}\n')
+  b.state.skin = 'My skin'; await cli('undo'); assert.equal(b.css(), OWNER)
+})
+
+test('a preference-only change needs no own skin, and its undo never touches skin.css', async t => {
+  const { b, root, cli } = await box(t)
+  const r = await cli('change', '--pref', 'compact=true'); assert.equal(r.ok, true); assert.equal(b.state.prefs.compact, true)
+  writeFileSync(join(root, 'Skins/My skin/skin.css'), OWNER + '.owner-new{gap:2px}\n')
+  await cli('undo')
+  assert.equal(b.state.prefs.compact, false); assert.match(b.css(), /owner-new/)
+  b.state.skin = ''
+  assert.equal((await cli('change', '--pref', 'chatLayout="status"')).ok, true); assert.equal(b.state.prefs.chatLayout, 'status')
+  assert.equal((await cli('status')).skin, null)
+  await cli('undo'); assert.equal(b.state.prefs.chatLayout, 'day')
+})
+
+test('the Files fallback refuses "." and ".." as the skin folder', async t => {
+  const { b, root, cli } = await box(t, { ownerWrites: false })
+  writeFileSync(join(root, 'skin.css'), 'root file\n')
+  b.state.skin = '..'
+  await assert.rejects(cli('change', '--accent', 'orange'), /outside Skins/)
+  assert.equal(readFileSync(join(root, 'skin.css'), 'utf8'), 'root file\n')
+})
+
+test('phone skin toasts escape script text (file names, error messages), like the desktop', () => {
+  const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8')
+  assert.match(app, /toast: text => toast\('◇', esc\(String\(text \?\? ''\)\), 2400\)/)
+})
