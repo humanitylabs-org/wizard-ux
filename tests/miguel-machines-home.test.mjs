@@ -193,7 +193,7 @@ test('Settings › Network & security fills even before Home has been shown', ()
   const host = read('web/core/skin-host.js'), res = read('web/core/resources.js');
   assert.match(host, /slot\.append\(node\); window\.WosResources\?\.watch\?\.\(node\);/, 'a shown System page keeps readings fresh');
   assert.match(res, /\[\.\.\.S\.watch\]\.some\(h=>h\.isConnected&&h\.getClientRects\(\)\.length>0\)/, 'watched pages count as viewing only while on screen');
-  assert.match(src, /if \(!netBox\.firstChild\) netBox\.replaceChildren\(h\('span', \{ cls: 'mh-wait'/, 'a loading placeholder instead of a blank page');
+  assert.match(src, /netBox\.replaceChildren\(why \? h\('span', \{ cls: 'mh-more-info', text: why \}\) : h\('span', \{ cls: 'mh-wait'/, 'a loading placeholder instead of a blank page');
 });
 
 test('review fixes: one Home map at a time, boot guess expires, unreadable usage is not "signed out"', () => {
@@ -214,7 +214,7 @@ test('review fixes: one Home map at a time, boot guess expires, unreadable usage
   for (const who of ['miguel', 'wizard']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /p\.status === 'signed_out' \|\| p\.status === 'auth', na = !signedOut && \(p\.status === 'unavailable' \|\| \(left == null && !money\)\);/, who + ': an unavailable service never counts as current');
-    assert.match(src, /S\.devFresh, devices\(\)\.map\(d => \[d\.id, d\.name, d\.status, d\.error, JSON\.stringify\(d\.access \|\| null\),/, who + ': new security facts repaint the page');
+    assert.match(src, /S\.devFresh, !!S\.res\.devicesError, devices\(\)\.map\(d => \[d\.id, d\.name, d\.status, d\.error, JSON\.stringify\(d\.access \|\| null\),/, who + ': new security facts repaint the page');
     assert.match(src, /r\.na \? 'Usage unavailable'/, who);
   }
 });
@@ -228,7 +228,7 @@ test('second review: no unverified all-clear, stock loading state, Settings dial
     assert.match(src, /const backupRunning = \(\) => S\.backupRead === 'ok' &&/, who + ': running only from a reading this visit');
     assert.match(src, /api\.storage\.set\('backup', \{ \.\.\.S\.backup, active: null \}\)/, who);
     assert.match(src, /Not every machine has been checked from the internet yet/, who);
-    assert.match(src, /if \(!netBox\.firstChild\) netBox\.replaceChildren\(h\('span', \{ cls: 'mh-wait'/, who + ': loading mark on the Security page');
+    assert.match(src, /netBox\.replaceChildren\(why \? h\('span', \{ cls: 'mh-more-info', text: why \}\) : h\('span', \{ cls: 'mh-wait'/, who + ': loading mark on the Security page');
   }
   const desk = read('web/desktop/desktop.js');
   assert.match(desk, /if \(!settingsModal \|\| e\.key !== 'Tab'\) return;/, 'Tab stays inside the Home Settings dialog');
@@ -299,6 +299,16 @@ test('eighth review: only stamped assets are immutable; a child sign-out survive
   assert.match(ng, /map "\$arg_v:\$uri" \$wizard_cache \{\n    default "no-cache";\n    "~\^\[0-9a-f\]\{12\}:\.\*\/sw\\\.js\$" "no-cache";/, 'pages and sw.js stay no-cache even with ?v=');
   assert.doesNotMatch(ng, /map \$arg_v \$wizard_cache/, 'no blanket ?v= rule');
   assert.match(usage, /const childOut = \['signed_out', 'auth', 'reauth'\]\.includes\(a\.status\); return \{\.\.\.a, providerId:p\.id, providerName:p\.name, status:childOut \? a\.status :/);
+});
+
+test('ninth review: failed first reads say so (AI accounts, network); availability changes repaint', () => {
+  for (const who of ['miguel', 'wizard']) {
+    const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
+    assert.match(src, /if \(!subs\(\)\.length && S\.res\.aiError\) return aiList\.replaceChildren\(h\('span', \{ cls: 'mh-more-info', text: 'Couldn’t read your AI accounts just now\. It will try again\.' \}\)\);/, who);
+    assert.match(src, /const why = S\.res\.devicesError \? 'Couldn’t read your network just now\. It will try again\.' : '';/, who);
+    assert.match(src, /S\.devFresh, !!S\.res\.devicesError, devices\(\)/, who);
+    assert.equal((src.match(/s\.out, s\.na, s\.stale,/g) || []).length, 2, who + ': both AI signatures carry availability');
+  }
 });
 
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {

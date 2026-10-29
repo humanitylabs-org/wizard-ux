@@ -275,6 +275,7 @@ export default function setup(api) {
     const mg = managedOf(S.ws);  // a managed Wizard's accounts live on that Wizard; never show this one's under its name
     if (mg) return aiList.replaceChildren(h('span', { cls: 'mh-more-info', text: `AI accounts for ${mg.name}’s Wizard show on that Wizard. Switch back to yours to see your own.` }));
     // No account yet: say so and offer every service to sign in to, never a blank page.
+    if (!subs().length && S.res.aiError) return aiList.replaceChildren(h('span', { cls: 'mh-more-info', text: 'Couldn’t read your AI accounts just now. It will try again.' }));
     if (!subs().length) return aiList.replaceChildren(h('div', { cls: 'mh-ai-foot' }, h('span', { cls: 'mh-more-info', text: 'No AI account signed in yet.' }),
       h('div', { cls: 'mh-ai-pick' }, signable().map(p => btn(p.name, p.app)))));
     const want = defKind(), groups = [];
@@ -427,7 +428,9 @@ export default function setup(api) {
   function renderMap() {
     if (!S.res.devices && S.ws === 'mine') { root.classList.add('is-loading'); setRow(rowSt, []); setRow(rowAct, []); setRow(rowMore, []); setRow(rowPp, []); setRow(rowDv, []); setRow(rowChev, []);
       setRow(rowMn, [h('span', { cls: 'mh-wait', role: 'status', 'aria-label': 'Loading your network' })]);
-      if (!netBox.firstChild) netBox.replaceChildren(h('span', { cls: 'mh-wait', role: 'status', 'aria-label': 'Loading your network' })); return; }
+      const why = S.res.devicesError ? 'Couldn’t read your network just now. It will try again.' : '';
+      netBox.replaceChildren(why ? h('span', { cls: 'mh-more-info', text: why }) : h('span', { cls: 'mh-wait', role: 'status', 'aria-label': 'Loading your network' }));
+      if (why) setRow(rowMn, [h('span', { cls: 'mh-more-info', text: why })]); return; }
     root.classList.remove('is-loading');
     if (S.ws !== 'mine' && !managedOf(S.ws) && S.res.devices) S.ws = 'mine';
     const g = managedOf(S.ws);
@@ -609,7 +612,7 @@ export default function setup(api) {
   const drawn = { top: '', ai: '', list: '', map: '', glance: '' };
   const mapSig = () => { const st = storage();
     return JSON.stringify([S.ws, S.backupRead || '', [...S.open].filter(k => k !== 'ai' && k !== 'signin' && k !== 'wsm'), reg().this || null, managedList(),
-      S.devFresh, devices().map(d => [d.id, d.name, d.status, d.error, JSON.stringify(d.access || null), d.cpus, d.memoryTotalGB, diskGB(d), Math.round((d.memory || 0) / 5), Math.round((d.cpu || 0) / 5), Math.round((freeGB(d) || 0) / 5)]),
+      S.devFresh, !!S.res.devicesError, devices().map(d => [d.id, d.name, d.status, d.error, JSON.stringify(d.access || null), d.cpus, d.memoryTotalGB, diskGB(d), Math.round((d.memory || 0) / 5), Math.round((d.cpu || 0) / 5), Math.round((freeGB(d) || 0) / 5)]),
       myDevices(), sessions(), S.unread, backupRunning(), st && { ...st, age: st.age == null ? null : agoS(st.age), used: st.used == null ? null : gbFmt(st.used) },
       (S.backup?.standby?.machines || []).map(x => [x.id, x.verdict, (x.checks || []).map(c => c.ok)])]); };
   // Pictures and one short value per part; the words live in the tooltip / screen-reader label and in Settings.
@@ -655,9 +658,9 @@ export default function setup(api) {
     renderGlance();
     const top = JSON.stringify([thisName(), managedList().map(g => [g.id, g.name]), S.ws]);
     if (force || top !== drawn.top) { drawn.top = top; renderTabs(); }
-    const gs = JSON.stringify([S.ws, aiStale(), gauge(), S.open.has('ai'), S.open.has('mp'), S.meter, subs().map(s => [s.id, s.left, s.money, s.out, s.nick])]);
+    const gs = JSON.stringify([S.ws, aiStale(), gauge(), S.open.has('ai'), S.open.has('mp'), S.meter, subs().map(s => [s.id, s.left, s.money, s.out, s.na, s.stale, s.nick])]);
     if (force || gs !== drawn.ai) { drawn.ai = gs; renderAI(); }
-    const ls = JSON.stringify([S.ws, aiStale(), S.meter, S.open.has('ai'), S.open.has('signin'), subs().map(s => [s.id, s.left, s.money, s.out, s.resets && agoS((Date.parse(s.resets) - Date.now()) / 1000)])]);
+    const ls = JSON.stringify([S.ws, aiStale(), S.meter, S.open.has('ai'), S.open.has('signin'), subs().map(s => [s.id, s.left, s.money, s.out, s.na, s.stale, s.resets && agoS((Date.parse(s.resets) - Date.now()) / 1000)])]);
     if ((force || ls !== drawn.list) && !aiList.contains?.(document.activeElement)) { drawn.list = ls; renderAIList(); }
     const ms = mapSig();
     if (force || ms !== drawn.map || !rowMn.firstChild) { drawn.map = ms; renderMap(); }
