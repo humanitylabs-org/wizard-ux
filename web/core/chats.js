@@ -74,15 +74,19 @@ window.WizCore.chats = function createChats(H) {
   function openHosted(wid, frame, sid, opts = {}) {
     const w = W[wid];
     if (!w || !window.WizLauncher?.hasHostedThread(w.appId) || !frame?.isConnected || frame.closest('[data-win]')?.dataset.win !== wid) return false;
+    // Refuse replacement while any hosted thread is open; the app is not front.
+    if (opts.draft && hosted.has(wid)) return false;
+    const rp = opts?.reply ? KIT.reply.clean(opts.reply) : null;
     // A newly-created agent thread may not be in the next session-list refresh yet.
     if (opts?.agent != null) {
       const a = typeof opts.agent === 'string' ? window.WosAgents?.get(opts.agent) : null;
       if (!a || a.status !== 'running' || !window.WosAgents.isOther(opts.agent) || typeof LIVE.pinAgent !== 'function') return false;
+      if (opts.draft && !KIT.drafts.admit('direct:' + sid, opts.draft.text, rp)) return false;
       LIVE.pinAgent(sid, opts.agent);
     }
+    else if (opts.draft && !KIT.drafts.admit('direct:' + sid, opts.draft.text, rp)) return false;
     // An app item (Wisdom passage) rides beside this thread's draft as its reply, framed only into the next message.
     // It never replaces one already waiting there, and the composer stays the owner's own words.
-    const rp = opts?.reply ? KIT.reply.clean(opts.reply) : null;
     if (rp && sid !== '__new__' && !KIT.drafts.get('direct:' + sid).reply) KIT.drafts.setReply('direct:' + sid, rp);
     if (hosted.has(wid)) closeHosted(wid);
     const layer = document.createElement('div'); layer.className = 'chats hosted-thread'; layer.dataset.chats = wid;
@@ -95,7 +99,9 @@ window.WizCore.chats = function createChats(H) {
     const entry = { frame, layer, container, oldPosition, previous, w };
     hosted.set(wid, entry);
     frame.inert = true; frame.style.visibility = 'hidden'; container.append(layer);
-    openChat(wid, sid); return true;
+    openChat(wid, sid);
+    if (opts.draft) requestAnimationFrame(() => { if (hosted.get(wid) === entry) layer.querySelector('.ch-compose textarea')?.focus({preventScroll:true}); });
+    return true;
   }
   function closeHosted(wid) {
     const entry = hosted.get(wid); if (!entry) return false;

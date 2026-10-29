@@ -350,7 +350,7 @@
         }
         return clean.length ? window.WosChat.viewer.open(clean, Math.max(0, Math.min(clean.length - 1, i))) === true : false;
       } }),
-      nav: Object.freeze({ threadAgents: true,
+      nav: Object.freeze({ threadAgents: true, threadDrafts: true,
       /* The app finished what the owner came for (dismissed, archived, saved, deleted): take one Back past the app's
        * own views, landing on the previous screen exactly as the shell's Back would (James, 25 Oct 2026). */
       back() { check(); if (st.isVisible?.() !== true || typeof st.back !== 'function') return false; return st.back() === true; },
@@ -381,7 +381,14 @@
           const a = typeof agent === 'string' ? window.WosAgents?.get(agent) : null;
           if (!a || a.status !== 'running' || !window.WosAgents.isOther(agent)) throw fault('Thread agent unavailable');
         }
-        return st.openThread?.(id, { ...(reply ? { reply } : {}), ...(agent ? { agent } : {}) }) === true;
+        // Optional trusted owner text stays a draft, separate from the untrusted
+        // reply item. No send/run authority is added by this admission.
+        let draft;
+        if (opts?.draft != null) {
+          if (typeof opts.draft !== 'object' || typeof opts.draft.text !== 'string' || opts.draft.text.length > 8000) throw fault('Invalid thread draft');
+          draft = {text:opts.draft.text};
+        }
+        return st.openThread?.(id, { ...(reply ? { reply } : {}), ...(agent ? { agent } : {}), ...(draft ? {draft} : {}) }) === true;
       } }),
       share: Object.freeze({ text(data) {
         check();

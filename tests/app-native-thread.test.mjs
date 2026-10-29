@@ -6,16 +6,16 @@ import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 const source=readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8');
 function fixture({id='wizard-manager',installed=true,path='/wizard-manager/'}={}){
- const calls=[],doc={},location=new URL('https://wizard.example/wizard-os-home/');
+ const calls=[],options=[],doc={},location=new URL('https://wizard.example/wizard-os-home/');
  const child={location:new URL(path,location),document:doc,addEventListener(){},postMessage(){}};
  const frame={tagName:'IFRAME',src:child.location.href,isConnected:true,contentWindow:child,contentDocument:doc,hasAttribute:()=>false,addEventListener(){},removeEventListener(){}};
  const app={id,kind:'wizard',url:'/'+id+'/'};
  const window={WizCore:{apps:()=>({APPS:installed?[app]:[]})},dispatchEvent(){}};
  const context={window,location,URL,crypto:{randomUUID},addEventListener(){},setInterval(){},setTimeout,clearTimeout,document:{hidden:false,readyState:'loading',addEventListener(){}},CustomEvent:class{},navigator:{}};
  launcherFixture(context); vm.runInNewContext(source,context); const host=window.WizAppServices,state={visible:true};
- const detach=host.attach(frame,{appId:id,path,openThread:sid=>{calls.push(sid);return true;},isVisible:()=>state.visible});
+ const detach=host.attach(frame,{appId:id,path,openThread:(sid,opts)=>{calls.push(sid);options.push(opts);return true;},isVisible:()=>state.visible});
  const service=host.connect(child,{back:()=>false});
- return {calls,doc,child,frame,app,host,state,service,detach,context};
+ return {calls,options,doc,child,frame,app,host,state,service,detach,context};
 }
 test('verified current Manager opens exact ID without normalizing it',()=>{const f=fixture();assert.equal(f.service.nav.openThread('thread/one'),true);assert.deepEqual(f.calls,['thread/one']);});
 test('Manager owns only marked canonical links, preserving ordinary link handling',()=>{const f=fixture(),a={href:'https://wizard.example/wizard-os-home/?session=thread%2Fone',dataset:{wizardNativeThread:'thread/one'}};assert(f.host.ownsThreadLink(f.child,a));a.dataset.wizardNativeThread='thread/two';assert.equal(f.host.ownsThreadLink(f.child,a),false);a.dataset={};assert.equal(f.host.ownsThreadLink(f.child,a),false);});
@@ -25,3 +25,6 @@ for(const [name,alter] of [
 for(const options of [{installed:false},{id:'other-app',path:'/other-app/'},{path:'/other-app/'}])test(JSON.stringify(options)+' cannot grant native Manager navigation',()=>{const f=fixture(options);assert.throws(()=>f.service.nav.openThread('thread/one'));assert.deepEqual(f.calls,[]);});
 for(const id of ['', '__new__', 'thread one', 'x\n', 123, 'x'.repeat(513)])test('reject malformed/non-canonical ID '+JSON.stringify(id).slice(0,40),()=>{const f=fixture();assert.throws(()=>f.service.nav.openThread(id));assert.deepEqual(f.calls,[]);});
 test('visibility is live and fails closed when the document changes',()=>{const f=fixture();assert(f.service.view.isVisible());f.state.visible=false;assert.equal(f.service.view.isVisible(),false);f.state.visible=true;f.context.document.hidden=true;assert.equal(f.service.view.isVisible(),false);f.child.document={};assert.throws(()=>f.service.view.isVisible());});
+test('admitted native draft is exact trusted text, not a reply or send request',()=>{const f=fixture();assert.equal(f.service.nav.threadDrafts,true);assert.equal(f.service.nav.openThread('sid',{draft:{text:'  My question\nwith spacing  ',send:true}}),true);assert.equal(f.options[0].draft.text,'  My question\nwith spacing  ');assert.equal('send' in f.options[0].draft,false);assert.equal('reply' in f.options[0],false);});
+for(const draft of [{text:123},{text:'x'.repeat(8001)},'wrong',{}])test('reject malformed draft '+typeof draft+JSON.stringify(draft).slice(0,25),()=>{const f=fixture();assert.throws(()=>f.service.nav.openThread('sid',{draft}));assert.equal(f.calls.length,0);});
+for(const alter of [f=>f.state.visible=false,f=>f.detach(),f=>f.child.document={}])test('draft has no extra authority across frame lifecycle',()=>{const f=fixture();alter(f);assert.throws(()=>f.service.nav.openThread('sid',{draft:{text:'kept'}}));assert.equal(f.calls.length,0);});

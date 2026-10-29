@@ -56,6 +56,20 @@ time updates the binding, and open-video focuses/replies to the bound owner. Del
 
 Hosted apps have no independent root guard. Phone retains its host guard; desktop now guards browser/native Back as well. Shared standalone fallback uses CloseWatcher/history, stays at installed root, and offers the browser-tab two-press exit floor. Desktop Back no longer cancels a recording: its voice pill has an explicit Cancel button.
 
+## Hosted thread owner drafts
+
+REUSE `WizardApp.nav.openThread` and native Chats; EXTEND only its optional payload.
+When `WizardApp.nav.threadDrafts === true`, an already-admitted hosted app may pass
+`{reply, agent, draft:{text}}` (text ≤8000 characters). The existing live-document,
+visible-frame, installed-path, app-keyed reply and running non-main-agent checks all
+apply unchanged. Text is trusted owner input, not quoted context, and is never sent.
+A true return confirms exact durable draft readback before opening native Chats.
+A nonempty incoming draft conflicts with different native text, attachments or reply
+context: return false without changing those bytes. Empty incoming text opens the
+existing native draft intact. Storage failure returns false. Callers keep their own
+question until true; old clients advertise no draft capability. No generic RPC,
+serialized remote admission, new session route or model/privacy bypass is added.
+
 ## Context drafts (Reply)
 
 `WizardApp.nav.openContextDraft({id, title, message})` lets any installed, registered Wizard app (`kind:'wizard'`) attach bounded reference data (id ≤128 `[A-Za-z0-9_-]`, title ≤1000, message ≤32000 chars) to a fresh, unsent main Chats draft. It never sends or runs. The draft key is `<appId>:<id>`, where `appId` comes from the attached, visible, live frame — never from the payload — so an app cannot write another app's namespace. Hidden, detached, reloaded, foreign-origin, sibling-path and `srcdoc` frames are refused. Tests: `tests/app-context-draft.test.mjs`; browser QA: `qa-app-context-draft.cjs`.

@@ -418,7 +418,7 @@
     voiceInput, conversation: voiceInput, // backwards-compatible name, identical receiver/authority
     back: Object.freeze({ register, push, useHistory }),
     view: Object.freeze({ isVisible: () => !document.hidden && (!framed || service?.view?.isVisible() === true) }),
-    nav: Object.freeze({ get threadAgents() { return service?.nav?.threadAgents === true; }, openThread: (id, opts) => service?.nav?.openThread(id, opts) === true,
+    nav: Object.freeze({ get threadAgents() { return service?.nav?.threadAgents === true; }, get threadDrafts() { return service?.nav?.threadDrafts === true; }, openThread: (id, opts) => service?.nav?.openThread(id, opts) === true,
       // Call after a finishing action (dismiss, archive, delete, save-and-close): returns the owner to the screen before the app.
       back: () => { try { return service?.nav?.back?.() === true; } catch (_) { return false; } }, openContextDraft: data => { if (!service?.nav?.openContextDraft) throw new Error('Context drafts need the verified Wizard host'); return service.nav.openContextDraft(data); } }),
     theme: Object.freeze({ get: () => currentTheme || window.WizardTheme?.current || null, onChange: fn => listen(themes, fn, currentTheme || window.WizardTheme?.current) }),

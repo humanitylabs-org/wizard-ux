@@ -448,6 +448,19 @@
       else if (all[k]) { delete cur.reply; if (!String(cur.text || '').trim() && !(cur.files || []).length) delete all[k]; }
       return write(all) && (!rp || this.all()[k]?.reply?.key === rp.key);
     },
+    // Atomic app → native handoff. Existing owner text/files/context win. A true
+    // result means exact text + reply read back from this device's durable store.
+    admit(k, text, r) {
+      if (!k || typeof text !== 'string' || text.length > 8000) return false;
+      const all = this.all(), cur = this.get(k), rp = reply.clean(r);
+      if (text && ((cur.text && cur.text !== text) || cur.files.length || (cur.reply && rp && JSON.stringify(cur.reply) !== JSON.stringify(rp)))) return false;
+      const keptText = text || cur.text, keptFiles = text ? [] : cur.files;
+      const target = { ...(all[k] || {}), text:keptText, files:keptFiles, ...(cur.reply || rp ? {reply:cur.reply || rp} : {}), at:Date.now() };
+      all[k] = target;
+      if (!write(all)) return false;
+      const kept = this.get(k);
+      return kept.text === keptText && JSON.stringify(kept.files) === JSON.stringify(keptFiles) && JSON.stringify(kept.reply) === JSON.stringify(cur.reply || rp);
+    },
     clear(k) { if (!k) return; const all = this.all(); if (k in all) { delete all[k]; write(all); } },
   };
   function write(all) {

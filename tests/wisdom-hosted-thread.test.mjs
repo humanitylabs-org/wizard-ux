@@ -51,6 +51,20 @@ test('agent-aware hosted navigation pins a known running non-main agent before o
   assert.match(client, /get threadAgents\(\) \{ return service\?\.nav\?\.threadAgents === true; \}/);
 });
 
+test('native draft admission precedes agent pin/navigation and conflicts do not open a layer',()=>{
+ const effects=[],hosted=new Map(),w={appId:'wisdom'};
+ const frame={isConnected:true,closest:()=>({dataset:{win:'w'}}),style:{},parentElement:{style:{position:'relative'},append(){}}};
+ let accepts=false;
+ const A={get:id=>id==='philosopher'?{status:'running'}:null,isOther:id=>id==='philosopher'};
+ const sandbox={W:{w},window:{WosAgents:A},LIVE:{pinAgent:(...a)=>effects.push(['pin',...a])},KIT:{reply:{clean:r=>r},drafts:{admit:(k,text,r)=>{effects.push(['admit',k,text,r?.key]);return accepts},get:()=>({reply:{key:'wisdom:one'}})}},hosted,closeHosted(){},document:{createElement:()=>({style:{},dataset:{}})},getComputedStyle:()=>({position:'relative'}),requestAnimationFrame(){},openChat:(...a)=>effects.push(['open',...a])};
+ launcherFixture(sandbox);const fn=chats.slice(chats.indexOf('  function openHosted('),chats.indexOf('  function closeHosted('));vm.runInNewContext(fn+';this.openHosted=openHosted;',sandbox);
+ const opts={agent:'philosopher',reply:{key:'wisdom:one'},draft:{text:'My exact question'}};
+ assert.equal(sandbox.openHosted('w',frame,'sid',opts),false);assert.equal(hosted.size,0);assert.deepEqual(effects,[['admit','direct:sid','My exact question','wisdom:one']]);
+ effects.length=0;accepts=true;assert.equal(sandbox.openHosted('w',frame,'sid',opts),true);assert.deepEqual(effects,[['admit','direct:sid','My exact question','wisdom:one'],['pin','sid','philosopher'],['open','w','sid']]);
+ effects.length=0;assert.equal(sandbox.openHosted('w',frame,'sid',opts),false);assert.deepEqual(effects,[]);
+ hosted.clear();assert.equal(sandbox.openHosted('w',frame,'sid',{...opts,agent:'missing'}),false);assert.deepEqual(effects,[]);
+});
+
 test('Manager-only link ownership is unchanged', () => {
   assert.match(services, /function managerAuthorized\(st\) \{\n    if \(!st \|\| st\.appId !== 'wizard-manager'/);
 });

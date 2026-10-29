@@ -50,7 +50,7 @@ Visual: <side-by-side screenshot, or "none">
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`web/core/edge-peek.js`), host storage | skin-local duplicate |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` per tick |
 | Models, retry, mic, receipts, reading place | `WosChatPower` (`core/chat-power.js`: anchors; repair; viewport-bound picker, keyboard cleanup) + `WosModels` (`core/chat-models.js`: pooled Claude; provider-access Error + Retry/Choose another model; acknowledged source-bound saved retry), `WosErrors` (`core/chat-errors.js`), `WosWork` (`core/chat-work.js`: one activity group, history + tools) | model/error/reading-place forks; duplicate diagnosis/steps |
-| Markdown, drafts, inline/bottom media | `WosChat` (`chat-kit.js`: `helm`, `md`, `copyRich`, `viewer`); Chats `mediaBlock` | own parser/viewer |
+| Markdown, drafts, inline/bottom media | `WosChat` (`chat-kit.js`: `helm`, `md`, `copyRich`, `viewer`, conflict-safe `drafts.admit` via admitted `nav.openThread`); Chats `mediaBlock` | own parser/viewer |
 | Spaces / Focus | `WizCore` Chats (`core/chats.js`), `WizLive.prefOps` (`spaces`; add = move), `spaceSessions(ids)`; shared naming; `winAgent` / `modelRoute` new-chat routes; `WosOutbox.onNew` joins front Space; Focus waits agent census; hidden agents routable; scoped Space tools; `WosAgents.colour` / `distinctHues`, `--ch-agent-hue` | auto-subject tabs; own stores/routers |
 | Incognito (Settings `.sw`) | `WizCore.incognitoChats` (`web/core/incognito-chat.js`); `WizLive.openRunStream`, RAM Retry | durable state or forks |
 | Pinned threads (synced across devices) | `WosChatPins` (`web/core/chat-pins.js`) | device-local pin lists |
