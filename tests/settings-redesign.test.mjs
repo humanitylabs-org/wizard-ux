@@ -227,3 +227,28 @@ test('Resources falls back to AI usage where the shared bars are not there', () 
   h.view.focus('usage');
   assert.match(h.root.innerHTML, /<h3 tabindex="-1">AI usage<\/h3>[^]*<p>usage<\/p>/);
 });
+test('Wizard ID row shows backup status from the first render, without opening the sheet', async () => {
+  const calls = [];
+  const h = harness({ android: true });
+  h.s.wizardDevicePort = {};
+  h.s.WizCore.bridge = { call: async m => { calls.push(m); return { npub: 'npub1x', name: 'James', backed_up: false }; } };
+  h.view.focus('wizard-id'); await tick(); await tick();
+  assert.deepEqual(calls, ['identity.info'], 'one status read, never identity.setup');
+  assert.match(h.root.innerHTML, /James · Not backed up/);
+  h.view.render(true); await tick();
+  assert.deepEqual(calls, ['identity.info'], 'fetched once, not on every render');
+});
+test('Wizard ID row retries the status read after a failed one', async () => {
+  const calls = [];
+  const h = harness({ android: true });
+  h.s.wizardDevicePort = {};
+  let fail = true;
+  h.s.WizCore.bridge = { call: async m => { calls.push(m); if (fail) throw new Error('bridge not ready'); return { npub: 'npub1x', name: 'James', backed_up: true }; } };
+  h.view.focus('wizard-id'); await tick(); await tick();
+  assert.deepEqual(calls, ['identity.info']);
+  fail = false;
+  h.view.render(true); await tick(); await tick();
+  assert.deepEqual(calls, ['identity.info', 'identity.info'], 'a failed read is retried on the next render');
+  h.view.render(true); await tick(); await tick();
+  assert.match(h.root.innerHTML, /James · Backed up/);
+});

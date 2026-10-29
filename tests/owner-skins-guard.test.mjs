@@ -1,3 +1,4 @@
+// James approved the white app icon in the orb and removal of the centre dot, 27 Oct 2026.
 // James, 18 Oct 2026: Nebula, Grove, Tide, Ember and Signal are James's skins.
 // Collaborators (Miguel/Oscar) build their own skins (as with Obsidian and Landscapes) for the look they want,
 // and ship UX features and fixes freely; they never change these five skins or the shell-wide base look.

@@ -34,7 +34,7 @@ test('⌥↓/⌥↑ walk Ready chats from anywhere into the message box; no ⌥�
   assert.match(js, /\.ch-sec\[data-sec="ready"\] \.ch-row\[data-chopen\]/);
   assert.match(js, /chatsUpDown\(code === 'ArrowDown' \? 1 : -1\)/);
   assert.match(js, /function chatsUpDown\(dir\) \{ return stepReady\(dir\); \}/);
-  assert.doesNotMatch(js, /chatsSide|chatsZone/);
+  assert.doesNotMatch(js, /code === 'ArrowRight'\)[^\n]*chatsSide/); // the arrows never hop sides; ⌥[ ⌥] do
   assert.match(js, /focusInside\(f\.id\); \}, 30\); \/\/ straight into the message box/);
   assert.ok(js.includes("'Next ready chat'"));
 });
@@ -108,11 +108,70 @@ test('⌥[ ⌥] never wrap: left of desktop 1 is Home, nothing left of Home or r
   assert.match(js, /if \(dir < 0 && cur === 0\) \{ lastWs = cur; goHome\(\); return; \}/);
   assert.match(js, /const t = cur \+ dir; if \(t < 0 \|\| t >= ws\.length\) return;/);
   assert.doesNotMatch(js, /\(cur - 1 \+ ws\.length\) % ws\.length|\(cur \+ 1\) % ws\.length/);
-  assert.match(js, /stepDesk\(-1\); \}\);/);
+  assert.match(js, /stepWin\(-1\); \}\);/);
+  assert.match(js, /function stepWin\(dir\) \{[\s\S]*?stepDesk\(dir\);/);
   assert.match(js, /leg\.classList\.add\('in-bar'\)/);
 });
 
 test('[ ] chips are their own second-row chips, never merged into the neighbour key', () => {
   assert.doesNotMatch(js, /withStep/);
   assert.match(js, /if \(vis\(stepL\)\) chip\(stepL, '\['\); if \(vis\(stepR\)\) chip\(stepR, '\]'\);/);
+});
+
+test('⌥] / ⌥[ walk this desk\'s windows left to right (Chats: list, then message box), then step to the next desk', async () => {
+  const vm = await import('node:vm');
+  const start = js.indexOf('  function chatsZone(f) {'), end = js.indexOf('  function goWs(i');
+  assert.ok(start > 0 && end > start);
+  const src = js.slice(start, end);
+  // Three desks: [Files | Chats with a chat open], [Notes], [Music | Mail].
+  const mk = (id, left, extra = {}) => ({ id, left, ...extra });
+  const W = { a: { id: 'a', app: 'frame' }, c: { id: 'c', app: 'chats', thread: 't1' }, n: { id: 'n', app: 'frame' }, m: { id: 'm', app: 'frame' }, x: { id: 'x', app: 'frame' } };
+  const pos = { a: 0, c: 600, n: 0, m: 0, x: 600 };
+  const ws = [{ wins: ['c', 'a'], focus: 'a' }, { wins: ['n'], focus: 'n' }, { wins: ['x', 'm'], focus: 'x' }];
+  const st = { cur: 0, home: false, active: null, log: [] };
+  const node = (kind, win) => ({ kind, win, getClientRects: () => [1], closest: q => (q === '.pane-list' && kind === 'list') || (q === '.pane-main' && kind === 'thread') ? {} : null, focus() { st.active = this; }, scrollIntoView() {}, classList: { add() {}, remove() {} } });
+  const els = {};
+  for (const id of Object.keys(W)) {
+    const list = node('list', id), ta = node('thread', id), row = node('list', id);
+    els[id] = { id, list, ta, row, classList: { contains: () => false }, getBoundingClientRect: () => ({ left: pos[id], width: 500, top: 0, height: 400 }),
+      contains: n => !!n && n.win === id, focus() { st.active = { win: id, kind: 'win', closest: () => null }; },
+      querySelector: q => W[id].app !== 'chats' ? null : q === '.pane-list' ? list : q === '.pane-main textarea' ? ta : q.startsWith('.pane-list .ch-row') ? row : null };
+  }
+  const ctx = {
+    W, ws, CSS: { escape: s => s }, getComputedStyle: () => ({ visibility: 'visible' }),
+    winEl: id => els[id], $$: () => [], listRows: id => [els[id].row], log: s => st.log.push(s),
+    get document() { return { get activeElement() { return st.active; } }; },
+    focused: () => W[ws[st.cur].focus], focusWin: id => { ws[st.cur].focus = id; },
+    focusInside: id => { const w = W[id]; st.active = w.app === 'chats' && w.thread ? els[id].ta : { win: id, kind: 'win', closest: () => null }; },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(`var cur = 0, homeOpen = false, lastWs = 0;
+    function goHome() { homeOpen = true; } function leaveHome() { homeOpen = false; }
+    function goWs(i) { homeOpen = false; cur = i; }
+    function stepDesk(dir) {
+      if (homeOpen) { if (dir > 0 && ws.length) { lastWs = cur; goWs(0); if (cur === 0 && homeOpen) leaveHome(); } return; }
+      if (dir < 0 && cur === 0) { lastWs = cur; goHome(); return; }
+      const t = cur + dir; if (t < 0 || t >= ws.length) return;
+      lastWs = cur; goWs(t);
+    }
+    ${src}
+    this.api = { stepWin, nextStop, get cur() { return cur; }, get home() { return homeOpen; } };`, ctx);
+  const api = ctx.api;
+  const where = () => { const a = st.active; return `${api.cur}:${ws[api.cur].focus}:${a?.kind || ''}`; };
+  // Make the reads of cur in focused() follow the shell's.
+  Object.defineProperty(st, 'cur', { get: () => api.cur });
+  ctx.focusInside('a');
+  assert.equal(where(), '0:a:win');
+  api.stepWin(1); assert.equal(where(), '0:c:list', '] from the left window lands on the Chats list side');
+  api.stepWin(1); assert.equal(where(), '0:c:thread', '] again: the message box');
+  api.stepWin(1); assert.equal(where(), '1:n:win', '] past the last stop: the next desk');
+  api.stepWin(1); assert.equal(where(), '2:m:win', 'single-window desk: ] changes desk; lands on the leftmost window');
+  api.stepWin(1); assert.equal(where(), '2:x:win');
+  api.stepWin(1); assert.equal(where(), '2:x:win', 'nothing right of the last window on the last desk');
+  api.stepWin(-1); assert.equal(where(), '2:m:win');
+  api.stepWin(-1); assert.equal(where(), '1:n:win');
+  api.stepWin(-1); assert.equal(where(), '0:c:thread', '[ onto a desk lands on its rightmost stop');
+  api.stepWin(-1); assert.equal(where(), '0:c:list');
+  api.stepWin(-1); assert.equal(where(), '0:a:win');
+  api.stepWin(-1); assert.ok(api.home, '[ past the first window of desktop 1 goes Home');
 });

@@ -15,7 +15,7 @@ const rule = (css, sel) => {
 };
 const VIOLET = /var\(--violet|143,\s*99,\s*255|122,\s*77,\s*255|185,\s*155,\s*255|#7a4dff|#c04dff/;
 const O = 'html[data-skin^="obsidian"][data-shell="desktop"]';
-const L = 'html[data-skin="landscapes"][data-shell="desktop"]';
+const L = 'html[data-skin^="landscapes"][data-shell="desktop"]';
 
 test('the desktop voice button is a flat disc in skin colours with the mic visible', () => {
   for (const [css, p, fill] of [[obsidian, O, /var\(--ob-tint\)/], [landscapes, L, /rgba\(255, 255, 255/]]) {
@@ -50,5 +50,5 @@ test('Landscapes desktop accents are frosted white, not core violet', () => {
 });
 
 test('the private Kimi K3 slot keeps its purple', () => {
-  assert.match(landscapes, /html\[data-skin="landscapes"\] \.ms-o\.secure \{ color: var\(--secure\); \}/);
+  assert.match(landscapes, /html\[data-skin\^="landscapes"\] \.ms-o\.secure \{ color: var\(--secure\); \}/);
 });
