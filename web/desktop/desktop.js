@@ -205,6 +205,7 @@
     return W[id];
   }
   function closeWin(id, internal = false) {
+    if (!internal && !CHATS.beforeLeave(id)) return;
     if (hud?.id === id) { hudClose(); return; }
     if (!internal && !CHATS.beforeLeave(id)) return;
     const t = wsOf(id); if (t < 0) return;
@@ -878,10 +879,11 @@
 
   /* ---------------- top bar ---------------- */
   addEventListener('wizard:app-counts', () => paintBar());
+  addEventListener('wizard:notifications', () => render());
   function paintBar() {
     window.WosBell?.paint?.();
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
-    C.workspaceNav.setCount(APP.wizard?.id || 'wizard', LIVE?.ok ? (LIVE.workGroups().ready || []).length : 0);
+    C.workspaceNav.setCount(APP.wizard?.id || 'wizard', (LIVE?.ok ? (LIVE.workGroups().ready || []).length : 0) + (window.WosBell?.readyCount?.() || 0));
     $('#logo').setAttribute('aria-current', homeOpen ? 'page' : 'false');
     $('#logo').innerHTML = C.workspaceNav.icon({ home: true }, W, appOf);
     if (!$('#wsList').classList.contains('arranging')) $('#wsList').innerHTML = ws.map((d, i) => {
@@ -975,7 +977,7 @@
     return `<span class="nc-vis${n ? '' : ' nc-zero'}" aria-hidden="true"><svg class="nc-ic" viewBox="0 0 24 24">${icon}</svg>${dots}${n > shown ? '<em>+</em>' : ''}</span>`;
   }
   function mineHomeHtml() {
-    const G = LIVE?.ok ? LIVE.workGroups() : {}, ready = (G.ready || []).length, working = (G.working || []).length;
+    const G = LIVE?.ok ? LIVE.workGroups() : {}, ready = (G.ready || []).length + (window.WosBell?.readyCount?.() || 0), working = (G.working || []).length;
     const pending = OUTBOX?.unsent() || [];
     return `<div class="home-in mine-home"><div data-slot="home-main" hidden></div>
       <div class="mh-res">${window.WosResources?.home() || ''}</div>
@@ -1171,7 +1173,7 @@
   /* Miguel's skins (Dark, Light, Landscapes): the selector is the phone launcher at desktop size (core/app-kinds.js): Apps with
    * system apps first and ringed, "+ Get apps", then one folded "For agents" row holding Agent apps, Agents (with
    * "+ Build agents") and Connectors, each ending in its own "+ Get ..." tile. Search stays one flat list. */
-  const mine = () => ['obsidian', 'obsidian-light', 'landscapes'].includes(document.documentElement.dataset.skin || ''); // Miguel's skins
+  const mine = () => ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'].includes(document.documentElement.dataset.skin || ''); // Miguel's skins
   let palFold = false;
   function openStoreKind(kind) {
     const url = window.WosAppKinds.storeUrl(kind);

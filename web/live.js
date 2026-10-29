@@ -318,7 +318,7 @@
   // Chat-list layout: 'day' (Ready = today, then Yesterday, Past week; the default) or 'status' (Working / Ready / Archive).
   const LAYOUT_KEY = 'wos.chats.layout.v1';
   // Miguel's skins (Dark, Light, Landscapes) always list by status: Working, Ready, Archive. No Yesterday or Past week.
-  const OUR_SKINS = new Set(['obsidian', 'obsidian-light', 'landscapes']);
+  const OUR_SKINS = new Set(['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light']);
   const oursSkin = () => { try { return OUR_SKINS.has(document.documentElement.dataset.skin || ''); } catch (e) { return false; } };
   // A tweak asked the skin host for Snooze = lowest priority, bottom of Ready (api.nav.snoozeOrder('last'); docs/snooze-last.md).
   const snoozeLast = () => { try { return window.WosSkinHost?.snoozeOrder === 'last'; } catch (e) { return false; } };
@@ -352,6 +352,17 @@
     });
     return prefsWrites;
   };
+  // The shared preferences as this device shows them: the service's values plus this device's queued list edits.
+  const acceptPrefs = (j, only = null) => {
+    if (!only) window.WizLauncher?.accept(j);
+    const v = applyPrefOps(j, queuedOps());
+    let changed = false;
+    for (const [name, [key, valid, encode]] of Object.entries(prefsFields)) if ((!only || only.has(name)) && valid(v[name])) {
+      const value = encode(v[name]);
+      if (localStorage.getItem(key) !== value) { localStorage.setItem(key, value); changed = true; }
+    }
+    if (changed) window.dispatchEvent(new Event('wos:prefs'));
+  };
   const pullPrefs = async () => {
     if (prefsPending || prefsOff) return;
     const rev = prefsRevision;
@@ -361,20 +372,106 @@
       if (!r.ok) return;
       const j = await r.json();
       if (!j || prefsPending || rev !== prefsRevision) return;
-      window.WizLauncher?.accept(j);
-      let changed = false;
-      for (const [name, [key, valid, encode]] of Object.entries(prefsFields)) if (valid(j[name])) {
-        const value = encode(j[name]);
-        if (localStorage.getItem(key) !== value) { localStorage.setItem(key, value); changed = true; }
-      }
-      if (changed) window.dispatchEvent(new Event('wos:prefs'));
+      acceptPrefs(j);
     } catch (e) { /* Older/offline service: retain this device's cached choice, never reset it. */ }
   };
+  /* Shared lists (Spaces and their members, subject order) change by item operation, never by saving this device's
+   * whole cached list: a device that hadn't pulled yet used to erase another device's or an agent's edit (same bug
+   * as pins, wizard-ux #670). Each edit is queued here (kept across reloads and offline spells), shown at once, and
+   * sent as Agent Service PATCH operations, applied atomically to the stored lists. An older service (405) gets the
+   * same operations replayed onto a fresh read, written and read back. Pins keep their own queue (core/chat-pins.js). */
+  const OPS_KEY = 'wos.prefs.ops.v1', SPACE_OP = /^spaces\/([a-z0-9-]{1,48})\/(threads|name)$/;
+  const opField = o => SPACE_OP.test(o.key) ? 'spaces' : o.key;
+  // The same operations as Agent Service applies (server/ui-preferences.mjs applyUiPreferenceOps); each is idempotent.
+  function applyPrefOps(prefs, ops) {
+    const next = { ...prefs };
+    for (const { op, key, item, items } of ops) {
+      const sub = SPACE_OP.exec(key), list = Array.isArray(next[opField({ key })]) ? next[opField({ key })] : [];
+      if (key === 'pinnedChats' || key === 'subjectOrder') next[key] = op === 'front' ? [...new Set(items)].concat(list.filter(x => !items.includes(x))).slice(0, 60)
+        : op === 'add' ? (list.includes(item) ? list : list.concat(item)) : list.filter(x => x !== item);
+      else if (key === 'spaces') next.spaces = op === 'add' ? (list.some(s => s.id === item.id) ? list : list.concat(item)) : list.filter(s => s.id !== item);
+      else if (sub) next.spaces = list.map(s => s.id !== sub[1] ? s : sub[2] === 'name' ? { ...s, name: item }
+        : { ...s, threads: op === 'add' ? (s.threads.includes(item) ? s.threads : s.threads.concat(item)) : s.threads.filter(t => t !== item) });
+    }
+    return next;
+  }
+  const queuedOps = () => { try { const v = JSON.parse(localStorage.getItem(OPS_KEY) || '[]'); return Array.isArray(v) ? v.filter(o => o && typeof o.op === 'string' && typeof o.key === 'string') : []; } catch (e) { return []; } };
+  const setQueue = ops => { try { localStorage.setItem(OPS_KEY, JSON.stringify(ops.slice(-200))); } catch (e) {} };
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  let patchOff = false, opsRetry = 0, opsTimer = 0;
+  // req() throws on any HTTP error; these answers decide what happens next, so read their status.
+  const ask = (url, init) => req(url, init).catch(e => { if (e?.status) return { ok: false, status: e.status }; throw e; });
+  async function sendOps(ops) {
+    if (!patchOff) {
+      const r = await ask(PREFS_URL, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ops }) });
+      if (r.status === 404) { prefsOff = true; return null; }
+      if (r.ok) return await r.json();
+      if (r.status === 400) return 'invalid';
+      if (r.status !== 405 && r.status !== 501) throw new Error('Preferences unavailable');
+      patchOff = true;
+    }
+    const fields = [...new Set(ops.map(opField))], get = async () => { const g = await ask(PREFS_URL, { cache: 'no-store' }); if (g.status === 404) prefsOff = true; if (!g.ok) throw new Error('Preferences unavailable'); return g.json(); };
+    // Two devices can both read before either writes: read back, and replay onto the newer list if ours didn't stick.
+    // This narrows the loss window to one read-to-write round trip; only the service's PATCH makes it atomic.
+    for (let pass = 0; pass < 6; pass++) {
+      const fresh = await get(), next = applyPrefOps(fresh, ops), patch = {};
+      for (const f of fields) if (!same(next[f], fresh[f])) patch[f] = next[f];
+      if (!Object.keys(patch).length) return fresh;
+      const w = await ask(PREFS_URL, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+      if (w.status === 400) return 'invalid';
+      if (!w.ok) throw new Error('Preferences unavailable');
+      const back = await get(), again = applyPrefOps(back, ops);
+      if (fields.every(f => same(again[f], back[f]))) return back;
+    }
+    throw new Error('Preferences busy');
+  }
+  // direct: send these now without queueing (a new Space appears only once the box has it); else send the queue.
+  const syncOps = (direct = null) => {
+    prefsPending++; prefsRevision++;
+    prefsWrites = prefsWrites.then(async () => {
+      try {
+        const ops = direct || queuedOps();
+        if (!ops.length) return true; // an earlier pass already delivered this edit
+        if (prefsOff) return !direct;
+        const j = await sendOps(ops);
+        if (j === null) return !direct; // no shared preferences on this service: the edit stays on this device
+        // Drop only what this pass delivered; an edit made meanwhile stays queued.
+        if (!direct) { const now = queuedOps(); setQueue(same(now.slice(0, ops.length), ops) ? now.slice(ops.length) : now); }
+        opsRetry = 0;
+        const lists = new Set(ops.concat(queuedOps()).map(opField)); // only the lists: a newer scalar choice may still be on its way
+        if (j === 'invalid') { // the box can never take these: show its lists again
+          window.dispatchEvent(new Event('wos:prefs-error'));
+          try { const g = await req(PREFS_URL, { cache: 'no-store' }); if (g.ok) acceptPrefs(await g.json(), lists); } catch (e) {}
+          return false;
+        }
+        acceptPrefs(j, lists);
+        return true;
+      } catch (e) {
+        if (direct) { window.dispatchEvent(new Event('wos:prefs-error')); return false; }
+        opsRetry = Math.min(opsRetry + 1, 6); // offline or busy: the edit stays queued and shown; try again later
+        if (typeof setTimeout === 'function') { clearTimeout(opsTimer); opsTimer = setTimeout(() => syncOps(), 2000 * 2 ** opsRetry); }
+        return false;
+      } finally { prefsPending--; }
+    });
+    return prefsWrites;
+  };
+  const prefOps = (ops, { requireShared = false } = {}) => {
+    if (requireShared) return syncOps(ops);
+    if (!prefsOff) setQueue(queuedOps().concat(ops));
+    // Shown at once: this device's cached lists with the edit applied.
+    const fields = [...new Set(ops.map(opField))], local = {};
+    for (const f of fields) try { local[f] = JSON.parse(localStorage.getItem(prefsFields[f][0]) || '[]'); } catch (e) { local[f] = []; }
+    const next = applyPrefOps(local, ops);
+    for (const f of fields) try { localStorage.setItem(prefsFields[f][0], prefsFields[f][2](next[f])); } catch (e) {}
+    window.dispatchEvent(new Event('wos:prefs'));
+    return prefsOff ? Promise.resolve(true) : syncOps();
+  };
   pullPrefs(); setInterval(pullPrefs, 30000);
+  if (queuedOps().length) syncOps();
   // A phone coming back to the foreground fires visibilitychange/pageshow, rarely focus: pull then too, so pins and
   // other shared choices made on another device show at once instead of up to 30s later.
   try {
-    addEventListener('focus', pullPrefs); addEventListener('pageshow', pullPrefs); addEventListener('online', pullPrefs);
+    addEventListener('focus', pullPrefs); addEventListener('pageshow', pullPrefs); addEventListener('online', () => { if (queuedOps().length) syncOps(); pullPrefs(); });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pullPrefs(); });
   } catch (e) {}
   const sectionTime = s => Math.max(...[s.restoredAt, s.assignedAt, s.previewAt, s.requestAt, s.activityAt, s.lastUserAt, s.updatedAt].map(v => Date.parse(v ?? '')).filter(isFinite));
@@ -654,6 +751,7 @@
     set chatLayout(v) { const x = v === 'status' ? 'status' : 'day'; try { localStorage.setItem(LAYOUT_KEY, x); } catch (e) {} putPrefs({ chatLayout: x }); },
     set archiveAfterDays(d) { try { localStorage.setItem(ARCH_KEY, String(d)); } catch (e) {} putPrefs({ archiveAfterDays: d }); },
     putPrefs,
+    prefOps,
     cardAt,
     groups(agent = '') {
       const now = Date.now(), needs = [], ready = [], working = [];

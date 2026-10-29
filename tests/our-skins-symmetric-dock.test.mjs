@@ -9,7 +9,7 @@ const read = p => readFileSync(new URL(p, web), 'utf8');
 
 test('renderDots builds three fixed slots a side only for our skins', () => {
   const app = read('app.js');
-  assert.match(app, /if \(\['obsidian', 'obsidian-light', 'landscapes'\]\.includes\(document\.documentElement\.dataset\.skin \|\| ''\)\) \{\n\s+const NEWD/);
+  assert.match(app, /if \(\['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'\]\.includes\(document\.documentElement\.dataset\.skin \|\| ''\)\) \{\n\s+const NEWD/);
   assert.match(app, /\[idx - 3, idx - 2, idx - 1\]/);
   assert.match(app, /\[idx \+ 1, idx \+ 2, idx \+ 3\]/);
   assert.match(app, /class="ddot sig dplus dnew"/);

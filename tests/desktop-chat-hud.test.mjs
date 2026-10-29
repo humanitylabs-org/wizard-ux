@@ -44,7 +44,7 @@ test('two controls only: float over every desk, and back to desktop 1 (Miguel: n
 
 test('keys, voice and chat actions follow the keyboard into the HUD; desk routes never reuse it (Codex P1/P2)', () => {
   assert.match(js, /const focused = \(\) => hudHasFocus\(\) \? W\[hud\.id\] : homeOpen \? null : W\[ws\[cur\]\.focus\] \|\| null;/);
-  assert.match(js, /function closeWin\(id, internal = false\) \{\n\s*if \(hud\?\.id === id\) \{ hudClose\(\); return; \}/);
+  assert.match(js, /function closeWin\(id, internal = false\) \{\n\s*if \(!internal && !CHATS\.beforeLeave\(id\)\) return;\n\s*if \(hud\?\.id === id\) \{ hudClose\(\); return; \}/);
   assert.match(js, /function focusWin\(id, \{ scroll = true \} = \{\}\) \{\n\s*if \(hud\?\.id === id\) \{ hudFocus\(\); return; \}/);
   assert.match(js, /return Object\.values\(W\)\.find\(w => w\.id !== hud\?\.id && fn\(w\)\) \|\| null;/);
   assert.match(js, /function toNewChat\(wid, why\) \{\n\s*const w = W\[wid\]; if \(hud\?\.id === wid \|\|/);
