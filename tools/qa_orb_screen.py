@@ -218,8 +218,14 @@ def open_menu():
     return b, wait_window('WizOrbMenu', True, 5)
 
 em = None
-with (BASE / 'worker.lock').open('a') as lock:
-    fcntl.flock(lock, fcntl.LOCK_EX)
+# Reuse the durable worker lease instead of blocking on our own ancestor's lock.
+_inherited = os.environ.get('WIZARD_HEAVY_LOCK_FD')
+_lockfile = os.fdopen(int(_inherited), 'a', closefd=False) if _inherited else (BASE / 'worker.lock').open('a')
+with _lockfile as lock:
+    if _inherited:
+        _want, _have = (BASE / 'worker.lock').stat(), os.fstat(lock.fileno())
+        if (_want.st_dev, _want.st_ino) != (_have.st_dev, _have.st_ino): raise SystemExit('inherited lock identity mismatch')
+    fcntl.flock(lock, fcntl.LOCK_EX | (fcntl.LOCK_NB if _inherited else 0))
     try:
         sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'q', '-k', 'system-images;android-35;google_apis;arm64-v8a', '-d', 'pixel_7', '-p', job / 'dev', stdin='no\n')
         em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'q', '-port', str(PORT), '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect'], env=env, stdout=open(job / 'em.log', 'w'), stderr=subprocess.STDOUT)
@@ -240,6 +246,8 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity'); time.sleep(9)
         pg = Page('wizard-os-home')
         pg.ev("new Promise(r => { const t0 = Date.now(), t = () => window.__wos || Date.now() - t0 > 20000 ? r() : setTimeout(t, 200); t(); })")
+        # Fresh-install coaching captures outside taps, so finish it before exercising the real orb.
+        pg.ev("(() => { localStorage.setItem('wos.tour.v1', 'true'); window.WosTour?.finish('qa'); return true; })()")
         pg.ev("window.WizardOSNative.setEverywhere(true)"); time.sleep(2)
         st = json.loads(pg.ev("window.WizardOSNative.everywhere()"))
         check('Everywhere on (overlay + accessibility), status says hold is available', st.get('enabled') and st.get('overlay') and st.get('keyboard') and st.get('hold'), st)

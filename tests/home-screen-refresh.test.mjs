@@ -64,3 +64,47 @@ test('a registry update during a refresh reruns it with the new apps instead of 
   assert.equal(f.messages.filter(x=>x.op==='pinned').length,2,'dirty pass reran once');
   assert.equal(r.at(-1).name,'Wisdom renamed');assert.equal(r.at(-1).icon,'data:image/png;base64,#123456');
 });
+
+// James: native shortcut refresh must not loop just because it re-announces the app registry.
+test('James: repeated unchanged registry announcements never redraw pinned icons', async () => {
+  const f = fixture(); await drain();
+  const n = f.messages.length, draws = f.renders;
+  for (let i = 0; i < 100; i++) { f.events['wizard:apps'](); await drain(); }
+  assert.equal(f.messages.length, n); assert.equal(f.renders, draws);
+  f.app.name = 'A real rename'; f.events['wizard:apps'](); await drain();
+  assert.equal(f.messages.filter(m => m.op === 'refresh').at(-1).name, 'A real rename');
+});
+test('unchanged registry announcements never redraw pinned icons, but changed sigils refresh immediately',async()=>{
+  const f=fixture();await drain();
+  for(let n=0;n<100;n++){f.events['wizard:apps']();await drain();}
+  assert.equal(f.messages.length,2);assert.equal(f.renders,1);
+  f.app.color='#00ff00';f.events['wizard:apps']();await drain();
+  assert.equal(f.messages.filter(m=>m.op==='refresh').at(-1).icon,'data:image/png;base64,#00ff00');
+  assert.equal(f.renders,2);
+});
+test('a registry read that announces itself cannot perpetuate refresh reruns',async()=>{
+  const f=fixture();await drain();let reads=0;
+  const apps=f.window.WizCore.apps;
+  f.window.WizCore.apps=()=>{assert.ok(++reads<=3,'recursive registry echo');f.events['wizard:apps']();return apps();};
+  f.events['wizard:apps']();await drain();
+  assert.equal(reads,1);assert.equal(f.renders,1);assert.equal(f.messages.length,2);
+});
+test('removing and restoring the same apps invalidates the registry signature',async()=>{
+  const f=fixture();await drain();const saved={...f.registry};
+  for(const key of Object.keys(f.registry))delete f.registry[key];
+  f.events['wizard:apps']();await drain();assert.equal(f.renders,1);
+  Object.assign(f.registry,saved);f.events['wizard:apps']();await drain();
+  assert.equal(f.renders,2);assert.equal(f.messages.filter(m=>m.op==='pinned').length,2);
+});
+test('resume refreshes unchanged metadata because the native pinned set may have changed',async()=>{
+  const ids=[],f=fixture({ids});await drain();assert.equal(f.renders,0);
+  ids.push('wisdom');await f.events['wos-native-resume']();await drain();
+  assert.equal(f.renders,1);assert.equal(f.messages.filter(m=>m.op==='pinned').length,2);
+});
+test('a resume during an in-flight refresh survives single-flight coalescing',async()=>{
+  const f=fixture({reply:'timeout'});await drain();
+  await f.events['wos-native-resume']();await drain();assert.equal(f.messages.length,1);
+  const answer=m=>f.window.wizardHomeScreenPort.onmessage({data:JSON.stringify({requestId:m.requestId,status:m.op==='pinned'?'pinned-list':'updated',appIds:['wisdom']})});
+  for(let n=0;n<12;n++){for(const m of f.messages.filter(m=>!m.done)){m.done=true;answer(m);}await drain();}
+  assert.equal(f.messages.filter(m=>m.op==='pinned').length,2);assert.equal(f.renders,2);
+});

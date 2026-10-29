@@ -126,16 +126,18 @@
   let lastHtml = '';
   function render() {
     const parts = [];
-    // Only a message the outbox will actually retry may hold the retrying banner up; anything else is a stated failure.
-    const O = window.WosOutbox, waiting = O?.unsent().some(it => it.state === 'waiting' && (!O.canRetry || O.canRetry(it)));
-    if (!(net === 'offline' || net === 'reconnecting' || waiting)) netOpen = false;
-    if (net === 'offline' || net === 'reconnecting' || waiting) {
+    // This is connection feedback, not a second outbox. A saved message may wait on
+    // upload, device storage or admission while chat reads work. Chats keeps its
+    // delivery card and Retry; only failed connection evidence raises this banner.
+    if (!(net === 'offline' || net === 'reconnecting')) netOpen = false;
+    if (net === 'offline' || net === 'reconnecting') {
       const diagnosis = window.WizReach?.failure();
       const full = diagnosis?.message || 'Checking the connection to Wizard. Messages are kept on this device while we retry.';
       // One quiet pill in both shells (James, 22 Oct): short line + two small taps; tapping the line unfolds the full
       // diagnosis under it. It never grows into a card that pushes the screen down.
       const kind = net === 'offline' ? 'offline' : 'reconnecting';
-      const short = String(diagnosis?.short || 'Reconnecting to Wizard').replace(/ · retrying$/, ''); // the spinner already says it
+      // A failed chat read raised this banner, so it is worded as a read, never as an unsent message.
+      const short = String((diagnosis && window.WizReach.label?.('read', { diagnosis })) || diagnosis?.short || 'Reconnecting to Wizard').replace(/ · retrying$/, ''); // the spinner already says it
       parts.push(`<div class="wx-banner net ${kind}" role="status" title="${esc(full)}" data-wxnet="${kind}"><span class="wx-row"><span class="wx-spin" aria-hidden="true"></span><button type="button" class="wx-s" data-wxmore aria-expanded="false" aria-label="${esc(full)}">${esc(short)}</button><span class="wx-actions"><button type="button" data-wxretry aria-label="Retry now">Retry</button><button type="button" data-wxtroubleshoot aria-label="Open Troubleshooter">Troubleshoot</button></span></span><span class="wx-m">${esc(full)}</span></div>`);
     }
     else if (net === 'restored') parts.push(`<div class="wx-banner net restored" role="status" data-wxnet="restored"><span class="wx-i">✓</span><span class="wx-m">Back online</span></div>`);
@@ -180,6 +182,8 @@
   };
   // Cheap catch-all for things with no event (the thread in front changed, the inbox opened or closed).
   addEventListener('wizreachchange', render);
+  // Troubleshoot from any button while nothing of the Wizard answers (outside the phone app): unfold what to check.
+  addEventListener('wizreachexplain', () => { netOpen = true; log('net:open'); render(); unfold(); });
   addEventListener('resize', () => { lastHtml = ''; render(); });
   setInterval(() => {
     if (document.hidden || !document.getElementById('wxBanners')) return;

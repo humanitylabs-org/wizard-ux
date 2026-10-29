@@ -40,7 +40,7 @@
   const isTinfoil = provider => provider === 'wizard-tinfoil' || provider === 'custom:wizard-tinfoil';
   /* Miguel's skins (Dark, Light, Landscapes) carry his model UX: the private Tinfoil slot, its setup row and the bottom
    * switch. James's skins keep the stock three-model menu, so none of this shows there (team rule: taste lives in your skin). */
-  const OURS = new Set(['obsidian', 'obsidian-light', 'landscapes']);
+  const OURS = new Set(['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light']);
   const ours = () => typeof document !== 'undefined' && (document.documentElement.dataset.tweaks || '').split(' ').includes('miguel/model-pills');
   const primaryFamilies = () => ours() ? PRIMARY : PRIMARY.filter(p => p.family !== 'tinfoil');
   const shown = list => ours() ? list : list.filter(o => !isTinfoil(o.provider));
@@ -387,11 +387,10 @@
       // The provider's sign-in expired: Retry can't fix that, the provider's connection app can.
       const rc = s.reconnect;
       if (rc) {
-        const open = rc.installed ? `Open ${rc.name}` : `Get ${rc.name}`;
-        const what = s.safeError || `${rc.name} is signed out. ${open} to reconnect, then tap Retry.`;
-        return `<section class="ch-fail" role="alert" data-chfail="${esc(s.id)}"><span class="lb">Signed out · ${esc(rc.name)}</span>
-        <p>${esc(what)}</p>
-        <div class="ch-fail-b"><button type="button" data-chreconnect="${esc(rc.appId)}" data-installed="${rc.installed ? '1' : '0'}">${esc(open)}</button><button type="button" class="ghost" data-chretry ${busy || !canRetry ? 'disabled' : ''}>${busy === 'retry' ? 'Retrying…' : 'Retry'}</button><button type="button" data-chretrymodel ${busy || !canRetry ? 'disabled' : ''}>Choose another model</button><button type="button" class="ghost" data-chdismiss ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></section>`;
+        const target = M.short(s.model, s.provider) || model || rc.name;
+        return `<section class="ch-fail diagnosed" role="alert" data-chfail="${esc(s.id)}"><span class="lb">${esc(rc.name)} sign-in expired</span>
+        <p>This message is saved. Sign in to ${esc(rc.name)} and it will send to ${esc(target)} on its own.</p>
+        <div class="ch-fail-b"><button type="button" data-chreconnect="${esc(rc.appId)}" data-recovery-run="${esc(rc.runId || '')}">Sign in to ${esc(rc.name)}</button></div></section>`;
       }
       const what = s.status === 'interrupted' ? 'The last request was interrupted before it finished.' : 'The last request didn’t finish.';
       return `<section class="ch-fail" role="alert" data-chfail="${esc(s.id)}"><span class="lb">${s.status === 'interrupted' ? 'Interrupted' : 'Needs retry'}${model ? ` · ${esc(model)}` : ''}</span>

@@ -47,6 +47,7 @@
   });
   const PALETTE = [['#6b46ff', '#c04dff'], ['#3fe0ff', '#3f6bff'], ['#ff5ccf', '#5c3bff'], ['#4ff0b0', '#2f8cff'], ['#ffbe55', '#ff6b86'], ['#ff8a5c', '#ff5ccf']];
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
+  const APP_TYPES = new Set(['view', 'service', 'agent', 'external']), APP_CATEGORIES = new Set(['agent', 'interface', 'app', 'system']);
   const toTile = (a, trusted = false) => ({
     id: String(a.id), kind: 'wizard', name: String(a.name || a.id), icon: a.icon || String(a.name || a.id).trim().charAt(0).toUpperCase(),
     g: Array.isArray(a.colors) && a.colors.length === 2 ? a.colors : hue(a.id),
@@ -60,6 +61,10 @@
     receives_voice_input: trusted === true && a.receives_voice_input === true,
     voice_names: Array.isArray(a.voice_names) ? a.voice_names.filter(n => typeof n === 'string') : [],
     provides: trusted && Array.isArray(a.provides) ? a.provides.filter(n => typeof n === 'string') : [],
+    // Declared kind (wizard.md type) and store shelf, as the Agent Service projects them from apps.json. Not sensitive,
+    // so backend-only tiles carry them too; app-kinds.js sorts Connectors by type === 'external'.
+    ...(APP_TYPES.has(a.type) ? { type: a.type } : {}),
+    ...(APP_CATEGORIES.has(a.category) ? { category: a.category } : {}),
     sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [] },
   });
   let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).map(toTile); } catch (e) { return []; } })();
@@ -122,6 +127,9 @@
   function registry(shell) {
     // One live array per shell, updated in place, so existing references stay valid.
     const APPS = [], APP = {};
+    // Publish before rebuild emits wizard:apps; listeners may look it up synchronously.
+    const result = { APPS, APP, findApp, appAt, appByName, searchApps, searchApp, searchUrl, quickSearch: text => searchApp() ? parseQuickSearch(text) : null };
+    REGISTRIES.set(shell, result);
     const rebuild = () => {
       const chats = ALL.findIndex(a => a.kind === 'chats');
       const AG = window.WosAgents;
@@ -154,9 +162,7 @@
       for (const a of APPS) APP[a.id] = a;
       window.dispatchEvent(new CustomEvent('wizard:apps', { detail: { shell, count: APPS.length } }));
     };
-    rebuild(); listeners.add(rebuild);
-    window.WizLauncher?.onChange(rebuild);
-    window.WosAgents?.onChange(rebuild);
+
   const tight = s => s.replace(/ /g, '');
   function findApp(q, exact) {
       q = norm(q).replace(/^(the|my) /, '').replace(/ (app|application|view)$/, '');
@@ -200,7 +206,7 @@
     }
     // Quick search (the "image search …" / "search …" spell). The search app is whichever installed or
     // linked app has the id `wizard-search`; with none, the spell is off and the phrase routes as before.
-    const searchApp = () => APP['wizard-search'] || null;
+    function searchApp() { return APP['wizard-search'] || null; }
     function searchUrl(query, tab) {
       const a = searchApp(); if (!a || !a.url || !query) return '';
       const u = new URL(a.url, location.origin);
@@ -222,7 +228,10 @@
       }
       return best;
     }
-    return { APPS, APP, findApp, appAt, appByName, searchApps, searchApp, searchUrl, quickSearch: text => searchApp() ? parseQuickSearch(text) : null };
+    rebuild(); listeners.add(rebuild);
+    window.WizLauncher?.onChange(rebuild);
+    window.WosAgents?.onChange(rebuild);
+    return result;
   }
   /* "ask AI is milk bad for gout", "image search capybaras", "find images of eames chairs", "search why is the sky blue", "quick search …".
    * Returns { query, tab: 'images' | 'all' } or null. Thread/app searches ("search my chats for …") stay with the shell. */
@@ -253,5 +262,9 @@
   // Maintenance stays addressable by deep link/voice, but is not an ordinary Apps entry.
   window.WizCore.isMaintenanceApp = a => a?.id === 'wizard-supervisor';
   window.WizCore.isInDevelopment = a => !!a && DEV.has(String(a.id));
-  window.WizCore.apps = registry;
+  // One registry per shell, built once and shared. Building one dispatches 'wizard:apps' and subscribes it
+  // forever, so a fresh registry per call looped (home-screen icon refresh → registry → event → refresh)
+  // and leaked listeners until Android killed the app (26 Oct 2026).
+  const REGISTRIES = new Map();
+  window.WizCore.apps = shell => { if (!REGISTRIES.has(shell)) REGISTRIES.set(shell, registry(shell)); return REGISTRIES.get(shell); };
 })();

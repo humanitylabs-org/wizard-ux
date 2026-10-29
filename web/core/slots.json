@@ -21,6 +21,18 @@
     },
     "device-edge": {
       "since": 1
+    },
+    "ready-top": {
+      "since": 1
+    },
+    "ready-end": {
+      "since": 1
+    },
+    "archive-top": {
+      "since": 1
+    },
+    "home-main": {
+      "since": 1
     }
   }
 }
