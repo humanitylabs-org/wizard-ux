@@ -47,6 +47,9 @@ let offline = false, pagesServed = 0, writes = 0;
     }
     return r.fulfill({ status: 404, body: '' });
   });
+  // Every whole-list repaint (a new .ch-list root) after the snapshot is gone: James saw a reload flicker through
+  // page 1, the full walk and other agents' threads in turn (23 Oct 2026). From a snapshot the list changes once.
+  await ctx.addInitScript(() => { window.__qaLive = []; addEventListener('DOMContentLoaded', () => new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n.classList?.contains('ch-list') && !n.classList.contains('agent') && window.WizLive && !WizLive.cached) __qaLive.push({ t: Math.round(performance.now()), full: !!WizLive.fullAt, n: WizLive.unified().length }); }).observe(document.body, { childList: true, subtree: true })); });
   await ctx.addInitScript(() => { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour.v1', 'true'); localStorage.setItem('wos.tour.done', '1'); });
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(String(e)));
   const openChats = async () => {
@@ -85,6 +88,9 @@ let offline = false, pagesServed = 0, writes = 0;
   ok(/renamed live/.test(fresh.txt), 'fresh read lands: live titles replace stored ones');
   await p.waitForFunction(() => !!WizLive.fullAt, null, { timeout: 30000 });
   ok(await p.evaluate(n => WizLive.sessions.filter(s => /^s\d+$/.test(s.id)).length === n, N), 'full walk still lists every thread');
+  await p.waitForTimeout(1500);
+  const swaps = await p.evaluate(() => __qaLive);
+  ok(swaps.length === 1 && swaps[0].full && swaps[0].n === N + 1, 'reload: the snapshot is replaced once, by the full list with every agent (no flicker through partial lists)', swaps);
   // ---- 3. Offline reload: stored rows stay, with Can't reach Wizard.
   await p.evaluate(() => { const k = 'wos.chats.snapshot.v1:wizard-account-local'; const v = JSON.parse(localStorage.getItem(k)); return !!v; });
   offline = true;
@@ -93,7 +99,7 @@ let offline = false, pagesServed = 0, writes = 0;
   await p.waitForFunction(() => WizLive.error, null, { timeout: 15000 }).catch(() => {});
   await p.waitForTimeout(400);
   const off = await p.evaluate(s => ({ rows: document.querySelectorAll(`${s} .ch-row[data-chopen]`).length, sync: document.querySelector(`${s} .ch-sync`)?.innerText || '', spin: !!document.querySelector(`${s} .ch-sync .ch-spin`) }), sel2);
-  ok(off.rows > 0 && /Can.t reach Wizard/.test(off.sync) && !off.spin, "offline: stored rows stay with \"Can't reach Wizard\", no spinner", off);
+  ok(off.rows > 0 && /Can.t reach Wizard|Not up to date/.test(off.sync) && !off.spin, "offline: stored rows stay with \"Can't reach Wizard\", no spinner", off);
   await shotOf(p, 'chats-snapshot-offline');
   offline = false;
   ok(writes === 0, 'no writes', writes);

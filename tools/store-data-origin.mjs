@@ -11,6 +11,7 @@ import { createIndexProxy, readCapped, readWizardApps } from './store-index-view
 import { buildOverview, gatherSources } from './system-overview.mjs';
 import { withPrivateCatalog } from './store-private-catalog.mjs';
 import { createRouterOwnerRoutes } from './store-router-owner.mjs';
+import { linkPreview } from './store-link-preview.mjs';
 export const PREFIX = '/wizard-os-home/store-data/';
 const APPS = process.env.WIZARD_STORE_APPS_JSON || join(homedir(), '.wizard-os/apps.json');
 const ENV = process.env.WIZARD_STORE_RUNTIPI_ENV || join(homedir(), 'runtipi/.env');
@@ -46,9 +47,11 @@ export function wamMetadata(doc) {
   if (!Array.isArray(doc?.apps)) throw Error('registry_unavailable');
   return doc.apps.filter(a => /^[a-z0-9][a-z0-9-]{0,63}$/.test(a?.id || '')).slice(0,500).map(a => clean({
     id:a.id, app_id:str(a.app_id,64,/^[a-z0-9][a-z0-9-]{0,63}$/),
+    name:str(a.name,80,/^[^<>\x00-\x1f\x7f]*$/), summary:str(a.summary,300,/^[^<>\x00-\x1f\x7f]*$/),
+    type:['view','service','agent','external'].includes(a.type)?a.type:undefined,
     repo:str(a.repo,201,/^[\w.-]+\/[\w.-]+$/), commit:str(a.commit,40,/^[a-f0-9]{40}$/),
     version:str(a.version,40), status:str(a.status,24,/^[a-z_-]+$/),
-    source:str(a.source,64,/^[a-z0-9][a-z0-9-]{0,63}$/), channel:['alpha','standard'].includes(a.channel)?a.channel:undefined,
+    source:typeof a.source?.local==='string'?'local':str(a.source,64,/^[a-z0-9][a-z0-9-]{0,63}$/), channel:['alpha','standard'].includes(a.channel)?a.channel:undefined,
   }));
 }
 export function shellMetadata(doc) {
@@ -95,6 +98,7 @@ export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCa
           complete:wam.status==='fulfilled' && shell.status==='fulfilled',
           unavailable:[...(wam.status==='rejected'?['wam']:[]),...(shell.status==='rejected'?['shell']:[])]}); return;
       }
+      if (path === 'wizard/v1/link') { const r=await linkPreview(u.searchParams,{fetchImpl,index}); send(r.status,r.body); return; }
       if (path === 'wizard/v1/wizard-apps') { send(200,readApps()); return; }
       if (path.startsWith('wizard/v1/index/')) { const r=await index('/'+path.slice('wizard/v1/index/'.length),u.searchParams); send(r.status,r.body); return; }
       if (path === 'system/v1/overview') {

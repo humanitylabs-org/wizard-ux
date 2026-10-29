@@ -182,7 +182,7 @@
     const snap = window.WosOrbHandoff?.takeSnap(t.id), target = snap?.view;
     const route = snap?.route || window.WosModels.voiceRoute(t.id);
     const sid = target?.thread || pin?.sid || '';
-    const it = await OUTBOX.enqueue({ nativeId: t.id, ...(route || {}), meetingEventId:snap?.meetingEventId||'', agent:target?.agent||'', kind: sid && sid!=='__new__' ? 'reply' : 'new', sessionId: sid==='__new__'?'':sid, steerRunId: snap?.meetingEventId ? '' : pin?.steerRunId || '', text: '', audio: blob, source: pin ? 'chat' : 'orb', how,
+    const it = await OUTBOX.enqueue({ nativeId: t.id, ...(how === 'recovered' ? { space: false } : {}), ...(route || {}), meetingEventId:snap?.meetingEventId||'', agent:target?.agent||'', kind: sid && sid!=='__new__' ? 'reply' : 'new', sessionId: sid==='__new__'?'':sid, steerRunId: snap?.meetingEventId ? '' : pin?.steerRunId || '', text: '', audio: blob, source: pin ? 'chat' : 'orb', how,
       instructions: (window.WizConfig.owner() ? window.WizConfig.owner() + ' recorded' : 'The owner recorded') + ' this with the Wizard OS orb on their Android phone' + (pin ? ' as a voice reply in this thread' : '') + (how === 'recovered' ? '; the recording was interrupted and recovered' : '') + '. The original recording is attached as a voice note.' });
     releaseNativeCustody();
     log('rec:sent', t.id, it.id, how);
@@ -221,50 +221,15 @@
 
   /* ================= #20 share to Wizard ================= */
   async function onShare(id) {
-    const d = DEV(), w = W$(); const m = J(d.shareMeta(id));
+    const d = DEV(), m = J(d?.shareMeta(id));
     if (!m) { toast('!', 'That share expired · share it again', 2400); return; }
-    const items = m.items || [], text = [m.subject, m.text].filter(Boolean).join('\n').trim();
-    const threads = (w.live?.sessions || []).filter(s => !s.archived && !s.hidden).slice(0, 6);
-    log('share:open', id, items.length, text.length);
-    const el = openSheet('share', `
-      <div class="dv-head"><span class="dv-ic">↗</span><div><b>Share to Wizard</b><small>${items.length ? `${items.length} ${items.length === 1 ? 'item' : 'items'}` : 'Text'}${m.skipped ? ` · ${m.skipped} skipped (too large or unreadable)` : ''}</small></div></div>
-      <div class="dv-items">${items.map(f => `<span class="dv-item" data-n="${f.n}">${/^image\//.test(f.mime) ? '<img alt="">' : '<span class="dv-fi">▤</span>'}<span class="dv-nm">${esc(f.name)}<small>${esc(fsize(f.bytes))}</small></span></span>`).join('')}</div>
-      <textarea class="dv-text" rows="3" placeholder="Add a message (optional)">${esc(text)}</textarea>
-      <button class="dv-btn primary wide" data-shareto="__new__">Send to a new chat</button>
-      ${threads.length ? `<div class="dv-sub">Or add to a chat</div>${threads.map(s => `<button class="dv-thread" data-shareto="${esc(s.id)}">${esc(s.title || 'Untitled chat')}</button>`).join('')}` : ''}
-      <div class="dv-status" aria-live="polite"></div>`, () => { try { d.shareDone(id); } catch (e) {} toast('✕', 'Share cancelled', 1400); });
-    // Image previews from the native copy (small ones only; the upload reads the bytes again).
-    items.forEach(f => { if (/^image\//.test(f.mime) && f.bytes < 6e6) { const img = el.querySelector(`[data-n="${f.n}"] img`); if (img) img.src = URL.createObjectURL(readBlob(off => d.shareRead(id, f.n, off), f.mime)); } });
-    let busy = false;
-    el.addEventListener('click', async e => {
-      if (e.target.closest('[data-dvclose]')) return back();
-      const b = e.target.closest('[data-shareto]'); if (!b || busy) return;
-      busy = true; el.querySelectorAll('button').forEach(x => x.disabled = true);
-      const status = el.querySelector('.dv-status');
-      const note = el.querySelector('.dv-text').value.trim();
-      try {
-        const files = [];
-        for (const f of items) {
-          status.textContent = `Uploading ${files.length + 1} of ${items.length}…`;
-          const blob = readBlob(off => d.shareRead(id, f.n, off), f.mime);
-          files.push(await w.uploadFile(new File([blob], f.name, { type: f.mime })));
-        }
-        status.textContent = 'Sending…';
-        const target = b.dataset.shareto;
-        w.openWizardThread(target);
-        const wid = Object.keys(w.wins).find(k => w.wins[k].app === 'chats' && w.wins[k].thread === target);
-        if (!wid) throw new Error('no chat window');
-        const c = w.chatState(wid); c.files = files.map(f => ({ ...f, key: Math.random().toString(36).slice(2) }));
-        await w.sendChat(wid, note, 'shared from another Android app');
-        try { d.shareDone(id); } catch (x) {}
-        log('share:sent', id, target, files.map(f => f.id).join(','));
-        closeSheet(); toast('✦', 'Shared to Wizard', 1800);
-      } catch (err) {
-        busy = false; el.querySelectorAll('button').forEach(x => x.disabled = false);
-        status.textContent = err?.user ? err.message : 'Couldn’t upload · check the connection and try again';
-        log('share:error', String(err?.message || err));
-      }
+    closeSheet();
+    const result = await window.WizShareWizard.open({
+      text: [m.subject, m.text].filter(Boolean).join('\n').trim(), skipped: m.skipped || 0,
+      items: (m.items || []).map(f => ({...f, read: () => readBlob(off => d.shareRead(id, f.n, off), f.mime)}))
     });
+    if (result === 'sent' || result === 'cancelled') { try { d.shareDone(id); } catch (_) {} }
+    log('share:result', id, result);
   }
 
   /* ================= #21 reply notifications for chats sent from Wizard OS ================= */
@@ -364,7 +329,7 @@
     try { if (J(DEV()?.recActive?.())?.id) return true; } catch (_) { return true; }
     const w = W$(); if (!w) return true;
     // Sending (think) a take the outbox already owns survives a reload: the new page finishes that send.
-    if ((w.voice !== 'idle' && !(w.voice === 'think' && w.voiceHandedOff)) || sheet || w.voiceBorrowing) return true; // incl. an orb take parked on a meeting loan
+    if ((w.voice !== 'idle' && !(w.voice === 'think' && w.voiceHandedOff)) || sheet || window.WizShareWizard?.busy || w.voiceBorrowing) return true; // incl. an orb take parked on a meeting loan
     return Object.keys(w.wins).some(k => (w.chatState(k).files || []).some(f => f.uploading));
   }
   function saveDrafts() {
@@ -428,9 +393,9 @@
       const u = upd || J(d.updateState()) || {};
       const ver = u.installed || (J(d.updateState()) || {}).installed || '';
       const sub = u.state === 'ready' ? `${u.version} is ready · tap to restart` : u.state === 'available' ? `${u.version} is available · tap to update` : u.state === 'error' ? `${u.message || 'Update failed'} · tap to retry` : u.state === 'deferred' ? `${UPD_TEXT.deferred(u)[0]} · Install now` : u.state === 'current' ? 'Up to date' : u.state === 'offline' ? 'Couldn’t check · tap to try again' : 'Tap to check for updates';
-      return `<div class="st-row static"><span class="st-ic">◉</span><span class="st-tx"><b>Recording</b><small>Keeps going with the screen off or in another app · Stop and Send in the notification</small></span></div>
-        <div class="st-row static"><span class="st-ic">✉</span><span class="st-tx"><b>Reply notifications</b><small>${n.allowed ? `On · when ${window.WizConfig.agent()} answers a chat you sent from here · clear once you read the thread` : 'Off · allow notifications for Wizard OS in Android settings'}</small></span></div>
-        <button class="st-row" data-dvupd><span class="st-ic">↻</span><span class="st-tx"><b>Wizard OS ${esc(ver)}</b><small>${esc(sub)}</small></span><span class="st-go">›</span></button>`;
+      return `<div class="st-row static"><span class="st-tx"><b>Recording</b><small>Keeps going with the screen off or in another app · Stop and Send in the notification</small></span></div>
+        <div class="st-row static"><span class="st-tx"><b>Reply notifications</b><small>${n.allowed ? `On · when ${window.WizConfig.agent()} answers a chat you sent from here · clear once you read the thread` : 'Off · allow notifications for Wizard OS in Android settings'}</small></span></div>
+        <button class="st-row" data-dvupd><span class="st-tx"><b>Wizard OS ${esc(ver)}</b><small>${esc(sub)}</small></span><span class="st-go">›</span></button>`;
     },
     readRecording,
     recoverRecorder: () => syncRecorder('control'),

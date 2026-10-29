@@ -231,7 +231,7 @@ export async function install({source,id,commit,update=false},home=stateDir(),{r
     // update is explicit: never silently turn install into a channel switch.
     await runner([...policy.wam,...(update?['app','update',id]:['install',id])],{env,timeout:900000});
     const receiptFile=join(dir,'activation.json'); rmSync(receiptFile,{force:true});
-    await runner([...policy.activate,'--catalog',catalog,'--app',id,'--commit',commit,'--receipt',receiptFile],{env,timeout:120000});
+    await runner([...policy.activate,'--catalog',catalog,'--app',id,'--commit',commit,'--receipt',receiptFile],{env,timeout:900000}); // containerd re-verifies and reloads the archive: same budget as install
     const r=readJSON(receiptFile);
     if(r.id!==id || r.commit!==commit || r.status!=='running' || r.open_verified!==true || !/^\/[a-z0-9][a-z0-9-]*\/$/.test(r.view || '')) fail('activation_not_verified');
     const installed=existsSync(join(home,'installed.json'))?readJSON(join(home,'installed.json')):{};

@@ -64,13 +64,13 @@ public class ConnectE2eTest {
             start(ConnectActivity.class); visible("Keep current Wizard");
             device.findObject(By.desc("Wizard address")).setText("http://evil.example");
             device.findObject(By.text("Connect")).click();
-            visible("Enter an HTTPS box address without credentials, query or fragment.");
+            visible("Enter your Wizard's https:// address, like https://wizard.your-tailnet.ts.net");
             assertEquals(fake.origin(), ServerSettings.origin(c));
             // A generic HTTP 200 must not replace the configured box; a second real fixture can.
             other.wizard = false;
             device.findObject(By.desc("Wizard address")).setText(other.origin());
             device.findObject(By.text("Connect")).click();
-            visible("Could not verify this Wizard. Check the address, Tailscale, HTTPS certificate and owner access, then retry.");
+            visible("Couldn't reach that Wizard. Check the address and that Tailscale is on, then try again.");
             assertEquals(fake.origin(), ServerSettings.origin(c));
             other.wizard = true;
             device.findObject(By.text("Connect")).click(); visible("Fixture home"); foreground();
@@ -82,8 +82,22 @@ public class ConnectE2eTest {
             start(ConnectActivity.class); visible("Keep current Wizard");
             // A legitimate HTTPS pairing intent only prefills; it cannot replace the saved server.
             c.startActivity(new Intent(c, ConnectActivity.class).setData(Uri.parse("wizard://connect?origin=https%3A%2F%2Fother.example")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP));
-            visible("Check this Wizard address, then tap Connect.");
+            visible("Check the address, then tap Connect.");
             assertEquals(other.origin(), ServerSettings.origin(c)); shot("connect-pairing-confirmation");
+            device.pressBack(); visible("Fixture home"); foreground();
+            // Connect wears the worn skin (WizardLook): shots in a light skin and in Signal, then the dark fallback.
+            String[][] looks = {
+                {"sepia-light", "{\"skin\":\"sepia\",\"base\":\"#f6f3ecff\",\"text\":\"#1d1b17ff\",\"text2\":\"#5b5345ff\",\"muted\":\"#8a8172ff\",\"border\":\"#1d1b173d\",\"accent\":\"#8a5a2bff\"}"},
+                {"signal", "{\"skin\":\"signal\",\"base\":\"#030807ff\",\"text\":\"#e8fff4ff\",\"text2\":\"#9fc9b6ff\",\"muted\":\"#5f8f7aff\",\"border\":\"#3dff9a3d\",\"accent\":\"#3dff9aff\"}"},
+                {"grove", "{\"skin\":\"grove\",\"base\":\"#08130cff\",\"text\":\"#eef6e8ff\",\"text2\":\"#b7c9b0ff\",\"muted\":\"#7f9478ff\",\"border\":\"#eef6e83d\",\"accent\":\"#9fd27aff\"}"},
+            };
+            for (String[] look : looks) {
+                c.getSharedPreferences("wizard_look", Context.MODE_PRIVATE).edit().putString("look", look[1]).commit();
+                start(ConnectActivity.class); visible("Keep current Wizard"); Thread.sleep(600); shot("connect-look-" + look[0]);
+                device.pressBack(); visible("Fixture home");
+            }
+            c.getSharedPreferences("wizard_look", Context.MODE_PRIVATE).edit().clear().commit();
+            start(ConnectActivity.class); visible("Keep current Wizard"); Thread.sleep(600); shot("connect-look-nebula-fallback");
             device.pressBack(); visible("Fixture home"); foreground();
         }
     }

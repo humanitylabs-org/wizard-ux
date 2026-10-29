@@ -64,5 +64,32 @@
     try { pt.postMessage(JSON.stringify({ id: nid, method: d.method, params })); }
     catch (e) { pending.delete(nid); reply(ev.source, id, false, 'no-bridge'); }
   });
-  window.WizAndroidRelay = { METHODS, frameOk, available: () => !!port() };
+  // The installed APK still names its legacy methods. The frozen adapter holds
+  // that schema; this relay admits only the app host's registered owner/document.
+  function legacySpec(source, appId) {
+    const frame = [...document.querySelectorAll('iframe.appframe, iframe[data-own-app]')].find(f => f.contentWindow === source);
+    if (!frame || !window.WizAppServices?.authorized(frame) || source.location.origin !== location.origin) throw new Error('Legacy device call refused');
+    const path = new URL(frame.src, location.href).pathname;
+    const spec = window.WizDeviceLegacy?.find(s => s.appId === appId && s.path === path && source.location.pathname === path);
+    if (!spec) throw new Error('Legacy device call refused');
+    return spec;
+  }
+  function resume() {
+    for (const f of document.querySelectorAll('iframe.appframe, iframe[data-own-app]')) if (window.WizAppServices?.authorized(f)) {
+      f.contentWindow.postMessage({type:'wizard-os:device-resume'}, location.origin);
+    }
+  }
+  window.WizAndroidRelay = { METHODS, frameOk, available: () => !!port(), resume,
+    legacy(source, appId, method, args = []) {
+      const spec = legacySpec(source, appId);
+      if (!spec.methods.includes(method) || !Array.isArray(args) || args.length > 3 || args.some(x => x !== null && !['string', 'number', 'boolean'].includes(typeof x))) throw new Error('Unknown legacy device method');
+      const native = window.WizardOSNative;
+      if (typeof native?.[method] !== 'function') throw new Error('no-bridge');
+      return native[method](...args);
+    },
+    legacyAvailable(source, appId, method) {
+      try { const spec = legacySpec(source, appId); return method === spec.probe && typeof window.WizardOSNative?.[method] === 'function'; }
+      catch (_) { return false; }
+    }
+  };
 })();

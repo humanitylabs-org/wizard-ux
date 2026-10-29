@@ -14,7 +14,7 @@ const SAID = 'Google released a new model, Argon. I want you to do a deep dive o
 async function boot(b, desktop = false) {
   const ctx = await b.newContext(desktop ? { viewport: { width: 1440, height: 900 }, serviceWorkers:'block', ignoreHTTPSErrors: true, permissions: ['microphone'] }
     : { viewport: { width: 412, height: 892 }, serviceWorkers:'block', deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true, permissions: ['microphone'] });
-  const writes = []; const R = { sttDelay: 0, words: SAID, up: 0 };
+  const writes = []; const R = { sttDelay: Number(process.env.QA_STT_DELAY || 0), sttCalls: 0, words: SAID, up: 0 };
   await ctx.route('**/*', async r => {
     const q = r.request(), u = q.url();
     if(new URL(u).pathname==='/wizard/v1/apps' && q.method()==='GET'){
@@ -28,7 +28,7 @@ async function boot(b, desktop = false) {
       const f = m[1] || 'index.html', p = require('path').join(W, 'web', f);
       if (require('fs').existsSync(p)) return r.fulfill({ status: 200, contentType: f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/html' : 'application/javascript', body: require('fs').readFileSync(p) });
     }
-    if (/\/transcribe$/.test(u) && q.method() === 'POST') { await sleep(R.sttDelay); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: R.words, ms: 5 }) }).catch(() => {}); }
+    if (/\/transcribe$/.test(u) && q.method() === 'POST') { R.sttCalls++; await sleep(R.sttDelay); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: R.words, ms: 5 }) }).catch(() => {}); }
     if (/\/api\/route$|\/wizard\/v1\/route$/.test(u)) { writes.push({ u: '/route', body: q.postData() || '' }); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ cmd: { route: 'agent' }, ms: 5 }) }); }
     if (q.method() !== 'GET' && /\/wizard\/(hermes|thread-seen|files)/.test(u)) {
       writes.push({ u: u.replace(/^https?:\/\/[^/]+/, ''), body: q.postData() || '', h: q.headers() });
@@ -50,6 +50,10 @@ async function boot(b, desktop = false) {
   p.on('pageerror', e => { const st = String(e.stack || ''); if (/wizard-os-home\//.test(st) || !/https?:\/\//.test(st)) errs.push(String(e)); });
   await p.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); } catch (e) {} });
   await p.goto(URL_ + (desktop ? 'desktop.html?shell=desktop' : '?shell=phone'), { waitUntil: 'commit' });
+  if (process.env.QA_SHORT_FOREGROUND_DEADLINE) await p.evaluate(() => {
+    const nativeTimeout = AbortSignal.timeout.bind(AbortSignal);
+    AbortSignal.timeout = ms => nativeTimeout(ms === 45000 ? 100 : ms);
+  });
   if (desktop) { await p.waitForFunction(() => window.__wux && window.__wux.live?.sessions?.length > 2, null, { timeout: 30000 }); await p.waitForTimeout(800); return { ctx, p, writes, errs, R }; }
   await p.waitForFunction(() => window.__wos && window.__wos.live && window.__wos.live.ok && window.__wos.live.sessions.length > 2, null, { timeout: 30000 });
   await p.waitForTimeout(800);
@@ -70,7 +74,7 @@ const until = async (fn, ms = 15000) => { const end = Date.now() + ms; while (Da
 
 const phrases = [SAID, 'Search for flights to Bangkok and book the cheapest', 'Music', 'play Home Tides', 'open calendar', 'Ask AI why is the sky blue', 'food', 'navigate to Bangkok', 'next desk', 'help'];
 (async () => {
- const b = await chromium.launch({args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
+ const b = await chromium.launch({executablePath:process.env.QA_CHROME||undefined,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
  for (const desktop of (process.env.QA_SHELL ? [process.env.QA_SHELL==='desktop'] : [false,true])) {
   const {ctx,p,writes,errs,R}=await boot(b,desktop);
   await p.evaluate(() => {
@@ -92,6 +96,7 @@ const phrases = [SAID, 'Search for flights to Bangkok and book the cheapest', 'M
     document.activeElement?.blur();window.__qaActions=[];
    },{desktop,where});
    await sleep(450);writes.length=0;
+   const sttBefore=R.sttCalls;
    ok(await p.evaluate(({desktop,where})=>{const x=desktop?__wux:__wos;if(where==='home')return desktop?x.homeOpen:x.idx===x.HOME;const d=(desktop?x.ws:x.desks)[desktop?x.cur:x.idx],w=x.wins[d.focus];return (!desktop||!x.homeOpen)&&w?.app==='chats'&&!w.thread;},{desktop,where}),`${desktop?'desktop':'phone'} capture starts on ${where}`);
    if(desktop)await p.keyboard.press('MetaRight');else await tapOrb(p);
    await p.waitForFunction(d=>(d?__wux.voice:__wos.voice)==='listen',desktop,{timeout:20000});
@@ -103,9 +108,11 @@ const phrases = [SAID, 'Search for flights to Bangkok and book the cheapest', 'M
    ok(actions.length===0,label+' zero local actions',actions);
    ok(routes(writes).length===0,label+' zero router calls',routes(writes));
    const all=sends(writes);ok(all.length===1&&(all[0].input||'').includes(phrase),label+' exactly one agent write with transcript',all.length?all:await p.evaluate(d=>({voice:(d?__wux:__wos).voice,tx:document.querySelector('#txText')?.textContent,unsent:(d?__wux:__wos).outbox.unsent().map(x=>({state:x.state,error:x.error,text:x.text}))}),desktop));
+   ok(R.sttCalls-sttBefore===1,label+' exactly one transcription request',R.sttCalls-sttBefore);
    if(!desktop)ok(await p.locator('#txChips [data-hold]').count()===0,label+' no hold card');
    await p.evaluate(async desktop=>{const x=desktop?__wux:__wos;for(const it of x.outbox.unsent())await x.outbox.remove(it.id);},desktop);
   }
+  if(process.env.QA_AGENT_ONLY){ok(errs.length===0,`${desktop?'desktop':'phone'} no page errors`,errs);await ctx.close();continue;}
   // Same transcripts on explicit command surfaces still execute the grammar.
   for(const phrase of (process.env.QA_RECEIVER_ONLY?[]:phrases.filter(t=>!['food','help'].includes(t)))){
    writes.length=0;await p.evaluate(()=>window.__qaActions=[]);

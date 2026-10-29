@@ -2,7 +2,9 @@
  * (App → agent binding, wizard-os spec/AGENTS.md sections 5 and 7). Shared by both shells; the Agents app has the
  * same pickers on its agent pages.
  *
- * Which agents can use the app: one tick box per agent (standard agents start ticked, private agents unticked).
+ * Which agents can use the app: one tick box per agent. A new app starts on the main agent only; an app tagged
+ * `privacy: private` starts on private agents only (James, 23 Oct 2026: "the user should have to enable things
+ * manually"). Everything else the owner ticks here.
  * The Agent Service writes the choice into each agent's app lists; the agent's page shows the same lists.
  * Sends its work to: only apps that declare agent_binding. Their window bar carries a small route button (the
  * agent's sigil; a red dot when that agent is stopped and the work is waiting). Default = the main agent. A
@@ -12,7 +14,10 @@
  *   WosAppRoute.slot(appId)            window-bar markup (empty until the binding is known; repainted on change)
  *   WosAppRoute.open(appId, { name })  the settings sheet
  *   WosAppRoute.isOpen() / back()      Back closes the sheet first (true when it did)
- *   WosAppRoute.init({ openAgents })   shell hook: open the Agents app (optionally at an agent)
+ *   WosAppRoute.init({ openAgents })   shell hook: openAgents(id, { newPreset }) opens the Agents app at an agent
+ *                                      or its New agent flow
+ *   WosAppRoute.request(msg)           a trusted frame's 'wizard:app-route' message: { id } opens the sheet,
+ *                                      { id, action: 'new-private-agent' } starts the private agent setup
  */
 (() => {
   'use strict';
@@ -49,14 +54,15 @@
 
   function accessHtml(app) {
     if (!access) return AG.appKnown(cur.appId) ? '<p class="ar-note" data-access-loading>Loading agents…</p>' : '';
-    const rows = AG.list.map(a => {
+    const rows = (AG.visible?.() || AG.list).map(a => {
       const v = access.agents.find(x => x.id === a.id); if (!v) return '';
       const sub = [a.privacy === 'private' ? 'Private' : a.is_default ? 'Main agent' : 'Standard', statusWord(a)].join(' · ');
       return `<button type="button" class="ar-agent ar-tick${v.enabled ? ' on' : ''}" role="checkbox" aria-checked="${v.enabled}" data-access-pick="${esc(a.id)}" style="--ag:${AG.colour(a)}" ${accessBusy ? 'disabled' : ''}>`
         + `${AG.sigil(a, 'ar-sig')}<span class="tx"><b>${esc(a.label)}${a.privacy === 'private' ? `<span class="ar-lock">${AG.lock()}</span>` : ''}</b><small>${esc(sub)}</small></span><span class="cb"></span></button>`;
     }).join('');
     return `<div class="ar-sec" data-access-sec>Which agents can use ${esc(app)}?</div><div class="ar-list" role="group" aria-label="Which agents can use ${esc(app)}?" data-access>${rows || '<p class="ar-note">No agents yet.</p>'}</div>
-      <p class="ar-note">A ticked agent can open and use ${esc(app)} for you. New apps start ticked for standard agents and unticked for private ones.</p>`;
+      ${access.privacy === 'private' ? `<p class="ar-note warn" data-access-private>${esc(app)} is meant to be private.${access.needs_private_agent ? ' Set up a private agent, or tick a non-private one if you choose.' : ' Ticking a non-private agent lets it read what this app holds.'}</p>${access.needs_private_agent && HOOK.openAgents ? '<button type="button" class="ar-btn" data-access-new-private>Set up private agent</button>' : ''}` : ''}
+      <p class="ar-note">A ticked agent can open and use ${esc(app)} for you. New apps start on your main agent only${access.privacy === 'private' ? '; private apps on private agents only' : ''}.</p>`;
   }
   function render() {
     const b = AG.binding(cur.appId);
@@ -64,7 +70,7 @@
     let body;
     if (!b) body = AG.appKnown(cur.appId) || access ? '' : `<p class="ar-note">${esc(app)} doesn’t send work to an agent.</p>`;
     else {
-      const rows = AG.list.map(a => {
+      const rows = (AG.visible?.() || AG.list).map(a => {
         const on = a.id === b.agent;
         const sub = [a.privacy === 'private' ? 'Private' : a.is_default ? 'Main agent' : 'Agent', statusWord(a)].join(' · ');
         return `<button type="button" class="ar-agent${on ? ' on' : ''}" role="radio" aria-checked="${on}" data-route-pick="${esc(a.id)}" style="--ag:${AG.colour(a)}" ${busy ? 'disabled' : ''}>`
@@ -100,7 +106,7 @@
     const want = access.agents.filter(x => x.id === agentId ? !x.enabled : x.enabled).map(x => x.id);
     accessBusy = agentId; v.enabled = !v.enabled; note = ''; render();
     const a = AG.get(agentId);
-    try { const next = await AG.setAppAgents(appId, want); if (cur?.appId === appId) access = next.agents.length ? next : access; note = `${a ? a.label : agentId} ${v.enabled ? 'can' : 'can’t'} use ${app} now.`; }
+    try { const next = await AG.setAppAgents(appId, want); if (cur?.appId === appId) access = next.agents.length ? { ...access, ...next } : access; /* PUT may omit privacy: keep the sheet's private note */ note = `${a ? a.label : agentId} ${v.enabled ? 'can' : 'can’t'} use ${app} now.`; }
     catch (e) { v.enabled = !v.enabled; note = `!Not changed · ${e.message}`; }
     accessBusy = ''; if (el) render(); paint(); tellFrames();
   }
@@ -115,16 +121,22 @@
   }
   // Capture: the window bar's own handlers (double-tap to fill, drag) never see a route tap.
   document.addEventListener('click', e => {
-    const t = e.target.closest && e.target.closest('[data-route-open], [data-route-pick], [data-access-pick], [data-route-close], [data-route-agents], .aroute');
+    const t = e.target.closest && e.target.closest('[data-route-open], [data-route-pick], [data-access-pick], [data-route-close], [data-route-agents], [data-access-new-private], .aroute');
     if (!t) return;
     if (t.dataset.routeOpen != null) { e.stopPropagation(); e.preventDefault(); open(t.dataset.routeOpen); return; }
     if (t.dataset.routePick != null) { e.stopPropagation(); pick(t.dataset.routePick); return; }
     if (t.dataset.accessPick != null) { e.stopPropagation(); toggleAccess(t.dataset.accessPick); return; }
     if (t.dataset.routeClose != null) { e.stopPropagation(); close(); return; }
+    if (t.dataset.accessNewPrivate != null) { e.stopPropagation(); close(); HOOK.openAgents?.(null, { newPreset: 'private' }); return; }
     if (t.dataset.routeAgents != null) { e.stopPropagation(); const id = AG.binding(cur?.appId)?.agent; close(); HOOK.openAgents?.(id); return; }
     if (t.classList.contains('aroute') && e.target === t) { e.stopPropagation(); close(); }
   }, true);
   document.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('[data-route-open]')) e.stopPropagation(); }, true);
   AG.onChange(paint);
-  window.WosAppRoute = { slot, paint, open, close, isOpen: () => !!el, back: close, init(o = {}) { if (typeof o.openAgents === 'function') HOOK.openAgents = o.openAgents; }, get current() { return cur && { ...cur }; } };
+  function request(d) {
+    if (!d || typeof d.id !== 'string') return;
+    if (d.action === 'new-private-agent') { HOOK.openAgents?.(null, { newPreset: 'private' }); return; }
+    open(d.id);
+  }
+  window.WosAppRoute = { slot, paint, open, close, request, isOpen: () => !!el, back: close, init(o = {}) { if (typeof o.openAgents === 'function') HOOK.openAgents = o.openAgents; }, get current() { return cur && { ...cur }; } };
 })();

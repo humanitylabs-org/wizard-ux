@@ -31,6 +31,7 @@ async function boot(b, { noCloseWatcher = false } = {}) {
   await p.goto('about:blank');
   await p.goto(URL_, { waitUntil: 'load' });
   await p.waitForFunction(() => window.__wos && window.__wos.live && window.__wos.live.ok, null, { timeout: 30000 });
+  await p.getByText('Skip tour', { exact: true }).click({ timeout: 2000 }).catch(() => {});
   await p.waitForTimeout(800);
   return { ctx, p, writes, errs };
 }
@@ -38,7 +39,7 @@ const state = p => p.evaluate(() => ({ home: __wos.HOME, idx: __wos.idx, url: lo
 const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.waitForTimeout(500); };
 
 (async () => {
-  const b = await chromium.launch({ args: ['--host-resolver-rules=' + RESOLVE] });
+  const b = await chromium.launch({ executablePath: process.env.QA_CHROME || undefined, args: ['--host-resolver-rules=' + RESOLVE] });
 
   /* ---------- 1. The repro: open a thread, press Back (CloseWatcher path = Android Back in Chrome 120+) ---------- */
   {
@@ -120,12 +121,12 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
   {
     const { ctx, p, writes, errs } = await boot(b);
     await p.evaluate(() => __wos.goDesk(1)); await p.waitForTimeout(500);
-    await p.evaluate(() => __wos.execute({ action: 'open_view', view: 'week' }, 'open week')); await p.waitForTimeout(900);
+    await p.evaluate(() => __wos.execute({ action: 'open_app', app: 'Agents' }, 'open agents')); await p.waitForTimeout(900);
     let s = await state(p);
-    ok(s.idx === 2 && s.desks[2].wins.length === 1 && s.desks[2].wins[0].app === 'review', 'opening an app puts it on its own desk right beside this one', JSON.stringify(s.desks.map(d => d.wins.map(w => w.app))));
+    ok(s.idx === 2 && s.desks[2].wins.length === 1 && s.desks[2].wins[0].app === 'frame', 'opening an app puts it on its own desk right beside this one', JSON.stringify(s.desks.map(d => d.wins.map(w => w.app))));
     await p.evaluate(() => __wos.mergeDesks(__wos.desks[1].id, __wos.desks[2].id)); await p.waitForTimeout(700);
     s = await state(p);
-    ok(s.desks[1].wins.length === 2 && s.desks[1].wins.map(w => w.app).join() === 'chats,review', 'merging two desks tiles the review beside Chats');
+    ok(s.desks[1].wins.length === 2 && s.desks[1].wins.map(w => w.app).join() === 'chats,frame', 'merging two desks tiles Agents beside Chats');
     ok(await p.locator(`.desk[data-desk="${1}"]`).locator('.tiles').getAttribute('data-n') === '2', 'two tiles laid out');
     await p.screenshot({ path: OUT + '/41-tiled-2.png' });
     await p.evaluate(() => __wos.execute({ action: 'open_app', app: 'CineQueue' }, 'open cinequeue')); await p.waitForTimeout(1500);
@@ -243,10 +244,10 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     ok(!created, 'with a thread open, a new-sounding request stays in that thread', JSON.stringify(writes.map(w => w.u)));
     // Hold + slide right: the command lands on the next desk.
     const before = await state(p);
-    await p.evaluate(() => __wos.handleText('open week in review', 'command', false, 0, 2));
+    await p.evaluate(() => __wos.handleText('open agents', 'command', false, 0, 2));
     await p.waitForTimeout(900);
     const after = await state(p);
-    ok(after.desks[2].wins.some(w => w.app === 'review') && after.idx === 2, 'hold + slide right opens the command on the next desk', JSON.stringify(after.desks.map(d => d.wins.map(w => w.app))));
+    ok(after.desks[2].wins.some(w => w.app === 'frame') && after.idx === 2, 'hold + slide right opens the command on the next desk', JSON.stringify(after.desks.map(d => d.wins.map(w => w.app))));
     ok(errs.length === 0, 'no page errors (voice run)', errs.join(' | '));
     await p.screenshot({ path: OUT + '/44-aimed.png' });
     await ctx.close();

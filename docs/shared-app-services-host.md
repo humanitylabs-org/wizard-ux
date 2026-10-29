@@ -9,11 +9,56 @@ Implementation is isolated on `fix/shared-app-services-20261012`, from daily `95
 - Apps load `core/app-client.js` and use `window.WizardApp`. They retain domain routes/state/callbacks, not browser/native platform implementations. `ready()` negotiates the actual attached host. The same client works standalone without accessing parent globals or registering an app worker.
 - The direct facade contains only Back, theme, share, capture and update methods. Serialized transport has an operation allowlist, exact source/origin checks, a 32-request bound and client timeouts. No arbitrary parent/global/native operation is proxied. Privileged off-origin resources intentionally fail closed because the host cannot verify their current path. Off-origin Back returns pending/stay and never performs a delayed shell step.
 
+## Companion panes (workspace host, v1)
+
+Any installed same-origin app can open **one** companion using the shared client. Await `WizardApp.ready()` first:
+
+```js
+const off = WizardApp.shell.onCompanionMessage(({from, data}) => {
+  // from is 'app' in the companion, 'companion' in its owning app.
+  showItem(data);
+});
+await WizardApp.shell.openCompanion({
+  path: '?pane=notes', title: 'Notes', share: 0.36,
+  focus: false, data: { item: 'selected-item' }
+});
+await WizardApp.shell.postCompanion({ item: 'next-item' });
+// From the companion, the same method replies only to its owner.
+await WizardApp.shell.focusApp(); // Back at companion root does this automatically
+await WizardApp.shell.closeCompanion();
+off();
+```
+
+Open resolves to `{id}` (or `null` if a window cannot be placed); close/post/focus resolve to booleans.
+Outside the workspace (standalone or the single-app host), open rejects explicitly. There is no separate root guard.
+`path` resolves against the caller's document and must stay within its installed registry URL's directory,
+on the same origin. Encoded traversal, credentials and other apps' paths are rejected.
+`share` is a desktop fraction, default .36, range .15–.60; optional `ownerShare` (.15–.80) preserves
+existing three-column arrangements. Phone places Chats → app → companion; desktop tiles it on the
+owner's desktop. `focus:true` brings it forward; otherwise the current surface remains active.
+Opening the same path updates the retained initial `data`; opening another path replaces the companion.
+The latest owner payload replays after companion readiness/reload. Messages must be JSON ≤32 KB;
+there are no caller-selected target IDs. Multiple apps/windows have independent pairs, never nested companions.
+Back consumes the companion's own nested views first, then focuses the owner without closing either view.
+Owner unload, removal or loss of registration closes its companion and restores the prior owner width.
+
+`companion-legacy.js` is a **one-release wire adapter**, not another pane implementation. It accepts the
+installed Video Editor's unchanged `{type:'video-editor:desk', action:'context'|'time'|'open-video', hash,...}`
+from verified app frames and maps it to these same scoped operations. Context with a clip opens
+`?pane=feedback` (`share:.26`, `ownerShare:.46`, title Feedback), context without one closes it,
+time updates the binding, and open-video focuses/replies to the bound owner. Delivery is translated to
+`{type:'video-editor:bound', hash, time, focusComposer}`. App IDs/routes live only in that adapter;
+`companion-pane.js` has none. The installed app needs no update.
+
 ## Back
 
 `back.register({canGoBack, back})` requires synchronous booleans. `back.push(fn)` supplies LIFO overlay release tokens. `back.useHistory({isRoot})` stamps real app entries and preserves object router state. The phone's history taming/pop bridge recognizes those entries instead of replacing them or taking another shell step. Host Back trusts the callback; the legacy DOM-signature and 180 ms double-step are deleted. Honest `__wizardCloseOverlay` is a temporary compatibility adapter.
 
 Hosted apps have no independent root guard. Phone retains its host guard; desktop now guards browser/native Back as well. Shared standalone fallback uses CloseWatcher/history, stays at installed root, and offers the browser-tab two-press exit floor. Desktop Back no longer cancels a recording: its voice pill has an explicit Cancel button.
+
+## Context drafts (Reply)
+
+`WizardApp.nav.openContextDraft({id, title, message})` lets any installed, registered Wizard app (`kind:'wizard'`) attach bounded reference data (id ≤128 `[A-Za-z0-9_-]`, title ≤1000, message ≤32000 chars) to a fresh, unsent main Chats draft. It never sends or runs. The draft key is `<appId>:<id>`, where `appId` comes from the attached, visible, live frame — never from the payload — so an app cannot write another app's namespace. Hidden, detached, reloaded, foreign-origin, sibling-path and `srcdoc` frames are refused. Tests: `tests/app-context-draft.test.mjs`; browser QA: `qa-app-context-draft.cjs`.
 
 ## Sharing and native limitations
 

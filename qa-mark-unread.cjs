@@ -45,6 +45,9 @@ let seenState = {
   initializedAt: NOW - 3600_000,
   threads: Object.fromEntries(THREADS.map(thread => [`direct:${thread.id}`, seenRecord(thread)])),
 };
+// Read state and run state are independent. Even if a working thread has unread activity,
+// Working stays visually quiet until the run moves to Ready.
+seenState.threads[`direct:${IDS.working}`].unreadAt = NOW + 1;
 let writeMode = 'ok';
 const writes = [];
 const CT = { '.css': 'text/css', '.html': 'text/html', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.js': 'application/javascript' };
@@ -159,6 +162,17 @@ const ok = (condition, name, extra = '') => {
   await page.evaluate(() => window.__wos.goDesk(1));
   await page.waitForSelector(selector(SID), { timeout: 15000 });
   ok(!await unread(), 'fixture starts read');
+  const workingVisual = await page.locator(selector(IDS.working)).evaluate((row, id) => {
+    const session = window.__wos.live.session(id);
+    return {
+      inWorking: window.__wos.live.workGroups().working.some(thread => thread.id === id),
+      unreadState: window.__wos.live.isNew(session),
+      unreadClass: row.classList.contains('unread'),
+      titleWeight: Number(getComputedStyle(row.querySelector('.tp b')).fontWeight),
+    };
+  }, IDS.working);
+  ok(workingVisual.inWorking && workingVisual.unreadState && !workingVisual.unreadClass && workingVisual.titleWeight <= 600,
+    'Working stays unbolded even when its read state is unread', workingVisual);
 
   const readyRow = page.locator(selector(SID));
   ok(await readyRow.getAttribute('aria-haspopup') === 'dialog' && await readyRow.getAttribute('aria-keyshortcuts') === 'Shift+F10', 'row announces its keyboard-accessible actions menu');
@@ -237,9 +251,44 @@ const ok = (condition, name, extra = '') => {
   await desktopPage.waitForSelector('.ch-sheet');
   const desktopActions = await desktopPage.locator('.ch-sheet [data-rsact]').evaluateAll(buttons => buttons.map(button => button.dataset.rsact));
   ok(desktopActions.includes('unread'), 'desktop keyboard context menu offers Mark unread on a read Ready item', desktopActions);
+  await desktopPage.keyboard.press('Escape'); await desktopPage.waitForSelector('.ch-sheet', { state: 'detached' });
+  // The thread is open beside the list, then marked unread from its own row: the open pane must not read it straight back.
+  const threadOpen = () => desktopPage.evaluate(id => Object.values(window.__wux?.wins || {}).some(w => w.app === 'chats' && w.thread === id), SID);
+  await desktopRow.click(); await desktopPage.waitForFunction(id => Object.values(window.__wux?.wins || {}).some(w => w.app === 'chats' && w.thread === id), SID, { timeout: 10000 }).catch(() => {}); await sleep(800);
+  const openedDesktop = await threadOpen();
+  ok(openedDesktop, 'desktop: the thread opens beside the list');
+  await desktopRow.dispatchEvent('contextmenu', { button: 2 });
+  await desktopPage.waitForSelector('.ch-sheet');
+  const openActions = await desktopPage.locator('.ch-sheet [data-rsact]').evaluateAll(buttons => buttons.map(button => button.dataset.rsact));
+  ok(openActions.includes('unread'), 'desktop: the open thread\'s row offers Mark unread', { openActions, openedDesktop });
+  await desktopPage.locator('.ch-sheet [data-rsact="unread"]').evaluate(button => button.click());
+  await sleep(1500); // longer than the attended-thread auto-read pass
+  const openRows = await desktopPage.locator(selector(SID)).evaluateAll(rows => rows.map(row => ({ unreadClass: row.classList.contains('unread'), weight: Number(getComputedStyle(row.querySelector('.tp b')).fontWeight) })));
+  ok(openRows.length > 0 && openRows.every(row => row.unreadClass && row.weight >= 700), 'desktop: marking the open thread unread keeps it bold (the open pane does not re-read it)', { openRows, openedDesktop });
+  ok(!await threadOpen(), 'desktop: marking the open thread unread steps back out of it');
+  const openStored = seenState.threads[`direct:${SID}`];
+  ok(openStored.unreadAt > openStored.seenAt, 'desktop: the saved unread marker is not overwritten by a read', openStored);
   await screenshot(desktopPage, 'desktop');
   ok(desktopErrors.length === 0, 'desktop has no page errors', desktopErrors);
   await desktop.close();
+
+  const formerlyWorking = THREADS.find(thread => thread.id === IDS.working);
+  formerlyWorking.status = 'completed';
+  const workingRecord = seenState.threads[`direct:${IDS.working}`];
+  workingRecord.unreadAt = workingRecord.seenAt + 1;
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForFunction(id => document.querySelector(`.ch-list [data-chopen="${id}"]`), IDS.working, { timeout: 15000 });
+  const readyVisual = await page.locator(selector(IDS.working)).evaluate((row, id) => {
+    const session = window.__wos.live.session(id);
+    return {
+      inReady: window.__wos.live.workGroups().ready.some(thread => thread.id === id),
+      unreadState: window.__wos.live.isNew(session),
+      unreadClass: row.classList.contains('unread'),
+      titleWeight: Number(getComputedStyle(row.querySelector('.tp b')).fontWeight),
+    };
+  }, IDS.working);
+  ok(readyVisual.inReady && readyVisual.unreadState && readyVisual.unreadClass && readyVisual.titleWeight >= 700,
+    'The same unread thread becomes bold when it moves to Ready', readyVisual);
 
   await browser.close();
   console.log(`\n${pass} passed, ${fail} failed`);

@@ -23,7 +23,7 @@
   const FRAG = `
 precision highp float;
 uniform vec2 res; uniform float t; uniform float lvl; uniform float energy; uniform float spin;
-uniform float ring; uniform float core; uniform float press; uniform float R;
+uniform float ring; uniform float core; uniform float press; uniform float R; uniform float gloss;
 uniform vec3 cA; uniform vec3 cB; uniform vec3 cC;
 float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
@@ -61,7 +61,7 @@ void main(){
     float spec = pow(max(dot(nrm, normalize(L+vec3(0,0,1))),0.), 70.)*1.35;
     float spec2 = pow(max(dot(nrm, normalize(vec3(.6,-.55,.6)+vec3(0,0,1))),0.), 26.)*.18;
     float arc = smoothstep(.035, 0., abs(length(p-vec2(-.18,.24)) - .62)) * smoothstep(-.1,.5,p.y-p.x*.3) * .22;
-    inner += spec + spec2*cC + arc;
+    inner += (spec + arc)*gloss + spec2*cC; // gloss 0: no white top-left shine behind the app icon
     inner += cC * pow(max(-p.y,0.), 3.) * .45 * z;
     float edge = smoothstep(Rr, Rr-.018, r);
     float rim = smoothstep(.04,0.,abs(r-Rr+.012))*.55;
@@ -107,7 +107,7 @@ void main(){
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
     const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    ['res','t','lvl','energy','spin','ring','core','press','R','cA','cB','cC'].forEach(k => U[k] = gl.getUniformLocation(prog, k));
+    ['res','t','lvl','energy','spin','ring','core','press','R','cA','cB','cC','gloss'].forEach(k => U[k] = gl.getUniformLocation(prog, k));
     gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   }
   function size() {
@@ -117,6 +117,17 @@ void main(){
     if (canvas.width !== w || canvas.height !== hh) { canvas.width = w; canvas.height = hh; }
   }
   const lerp = (a, b, k) => a + (b - a) * k;
+  // James approved the white app icon in the orb and removal of the centre dot, 27 Oct 2026,
+  // and of the white top-left shine (specular highlight) behind it, 29 Oct 2026.
+  // Only the phone's main orb in James's five skins opts in; other skins/native orbs stay unchanged.
+  function coreTarget() {
+    if (canvas.id !== 'orb' || !['nebula', 'grove', 'tide', 'ember', 'signal'].includes(document.documentElement.dataset.skin)) return 1;
+    const icon = canvas.parentElement.querySelector('.orb-app');
+    if (!icon || !icon.hasChildNodes()) return 1;
+    const style = getComputedStyle(icon); // One style read; no geometry/layout query.
+    return style.display !== 'none' && style.visibility !== 'hidden' && style.visibility !== 'collapse' && +style.opacity > .5 ? 0 : 1;
+  }
+  let coreMultiplier = 1;
   const t0 = performance.now();
   let last = t0, phase = 0;
   /* Battery (0.8.5): the orb used to redraw its shader at the screen's full refresh rate (up to 120 fps)
@@ -150,6 +161,7 @@ void main(){
     for (const key of ['a','b','c']) for (let i = 0; i < 3; i++) cur[key][i] = lerp(cur[key][i], target[key][i], k);
     levelS = lerp(levelS, level, 1 - Math.pow(.00002, dt));
     press = lerp(press, pressT, 1 - Math.pow(.0000001, dt));
+    coreMultiplier = lerp(coreMultiplier, coreTarget(), k);
     phase += dt * (0.6 + cur.spin);
     // Not laid out (display:none, immersive full screen): skip the GPU work and check again at the resting rate.
     if (gl && prog && canvas.clientWidth > 0) {
@@ -160,7 +172,7 @@ void main(){
       gl.uniform1f(U.t, (now - t0) / 1000);
       gl.uniform1f(U.lvl, levelS); gl.uniform1f(U.energy, cur.energy);
       gl.uniform1f(U.spin, cur.spin); gl.uniform1f(U.ring, cur.ring);
-      gl.uniform1f(U.core, cur.core); gl.uniform1f(U.press, press); gl.uniform1f(U.R, opts.R || window.ORB_R || .5);
+      gl.uniform1f(U.core, cur.core * coreMultiplier); gl.uniform1f(U.gloss, coreMultiplier); gl.uniform1f(U.press, press); gl.uniform1f(U.R, opts.R || window.ORB_R || .5);
       gl.uniform3fv(U.cA, cur.a); gl.uniform3fv(U.cB, cur.b); gl.uniform3fv(U.cC, cur.c);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       frames++;
@@ -172,6 +184,20 @@ void main(){
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { last = performance.now(); wake(); } });
   window.addEventListener('resize', wake);
+
+  // Wake even when the host has frozen idle animation: desk paint, CSS transitions, skin,
+  // launcher and recording changes can all change whether the icon is actually visible.
+  if (canvas.id === 'orb' && typeof MutationObserver !== 'undefined') {
+    const host = canvas.parentElement;
+    const iconChanges = new MutationObserver(records => {
+      if (records.some(r => r.type === 'childList' || r.attributeName !== 'style' || r.target !== host)) wake();
+    });
+    iconChanges.observe(host, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'hidden', 'style'] });
+    const appearanceChanges = new MutationObserver(wake);
+    appearanceChanges.observe(document.documentElement, { attributes: true, attributeFilter: ['data-skin', 'data-layout', 'data-shell', 'class', 'style'] });
+    const device = canvas.closest?.('.device');
+    if (device) appearanceChanges.observe(device, { attributes: true, attributeFilter: ['data-voice', 'data-sheet', 'class'] });
+  }
 
   let ok = false;
   if (gl) { try { init(); ok = true; } catch (e) { console.warn('orb shader', e); } }

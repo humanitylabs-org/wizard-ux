@@ -1,0 +1,38 @@
+/* Extracted Share to Wizard sheet. Both shells wear the same role tokens. */
+/* Appearance v1 bridge: --wz-* roles alias the live skin tokens (same as core/share-sheet.css), so the sheet is
+ * opaque and readable on every skin and in the phone shell, where no ancestor defines the roles. */
+.wz-share {
+  --wz-text: var(--ink, #f3efff); --wz-text-secondary: var(--ink-2, #b9b0d8); --wz-text-muted: var(--ink-3, #7d74a3);
+  --wz-border: var(--line-2, rgba(205, 190, 255, .24)); --wz-accent: var(--violet-2, #b99bff); --wz-on-accent: var(--bg, #05030c);
+  --wz-surface: color-mix(in srgb, var(--bg, #05030c) 92%, var(--ink, #f3efff) 8%);
+  --wz-surface-raised: color-mix(in srgb, var(--ink, #f3efff) 10%, transparent);
+  --wz-accent-soft: color-mix(in srgb, var(--violet-2, #b99bff) 18%, transparent);
+  --wz-canvas: var(--bg, #05030c);
+}
+.wz-share.dv-wrap { position:absolute; inset:0; z-index:80; pointer-events:auto; color:var(--wz-text); font:inherit; }
+body > .wz-share.dv-wrap { position:fixed; }
+.wz-share .dv-scrim { position:absolute; inset:0; background:var(--wz-scrim, #0009); opacity:1; }
+.wz-share .dv-sheet { position:absolute; left:8px; right:8px; bottom:calc(var(--safe-b, 0px) + 8px); margin:auto; max-width:560px; max-height:78%; overflow:auto; padding:16px 14px 14px; border-radius:26px; border:1px solid var(--wz-border); background:var(--wz-surface); color:var(--wz-text); transform:none; }
+.device.dv-share-open .wz-share .dv-sheet { bottom:calc(var(--safe-b, 0px) + var(--dock-h, 0px) + 4px); max-height:calc(100% - var(--safe-b, 0px) - var(--dock-h, 0px) - 40px); }
+.device.dv-share-open .dock, .device.dv-share-open .voice { z-index:82; }
+.device.dv-share-open .desk-dots { visibility:hidden; }
+.wz-share .dv-head { display:flex; gap:12px; align-items:center; margin-bottom:12px; }
+.wz-share .dv-head b { display:block; font-size:17px; font-weight:650; }
+.wz-share small, .wz-share .dv-source { display:block; font-size:12px; color:var(--wz-text-secondary); margin-top:2px; }
+.wz-share .dv-source { overflow-wrap:anywhere; }
+.wz-share .dv-ic { flex:0 0 38px; height:38px; border-radius:13px; display:grid; place-items:center; background:var(--wz-accent-soft); color:var(--wz-accent); }
+.wz-share .dv-cancel { margin-left:auto; min-width:44px; min-height:44px; border:0; border-radius:50%; background:transparent; color:var(--wz-text-secondary); font-size:24px; }
+.wz-share .dv-items { display:flex; gap:8px; overflow-x:auto; margin-bottom:10px; }
+.wz-share .dv-items:empty { display:none; }
+.wz-share .dv-item { flex:0 0 auto; display:flex; align-items:center; gap:8px; max-width:220px; padding:5px 8px 5px 5px; border-radius:14px; background:var(--wz-surface-raised); border:1px solid var(--wz-border); }
+.wz-share .dv-item img, .wz-share .dv-fi { flex:0 0 auto; width:42px; height:42px; border-radius:10px; object-fit:cover; display:grid; place-items:center; color:var(--wz-text-secondary); }
+.wz-share .dv-nm { min-width:0; display:flex; flex-direction:column; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.wz-share .dv-text { width:100%; box-sizing:border-box; resize:vertical; margin-bottom:10px; padding:10px 12px; border-radius:16px; background:var(--wz-canvas); border:1px solid var(--wz-border); color:var(--wz-text); font:inherit; font-size:14px; }
+.wz-share .dv-btn, .wz-share .dv-thread { min-height:44px; padding:10px 12px; border-radius:14px; background:var(--wz-surface-raised); border:1px solid var(--wz-border); color:var(--wz-text); font:inherit; }
+.wz-share .dv-btn.primary { background:var(--wz-accent); color:var(--wz-on-accent); border-color:transparent; }
+.wz-share .dv-btn.wide, .wz-share .dv-thread { width:100%; }
+.wz-share button:disabled { opacity:.5; }
+.wz-share .dv-sub { margin:14px 4px 6px; font-size:11px; color:var(--wz-text-muted); }
+.wz-share .dv-thread { display:block; text-align:left; margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.wz-share .dv-status { min-height:18px; margin-top:8px; font-size:12px; color:var(--wz-text-secondary); text-align:center; }
+.wz-share .dv-status:empty { display:none; }

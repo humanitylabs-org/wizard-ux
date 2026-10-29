@@ -97,7 +97,15 @@
       if (B.bootstrap) {
         const type = (blob.type || 'audio/webm').split(';')[0];
         const ext = type.includes('mp4') ? 'm4a' : type.includes('ogg') ? 'ogg' : type.includes('wav') ? 'wav' : 'webm';
-        r = await fetch(url, { method: 'POST', signal, credentials: 'same-origin', headers: { 'Content-Type': type, 'X-Wizard-Filename': `voice.${ext}` }, body: blob });
+        // A browser can keep an IndexedDB-restored Blob's request stream open without sending its bytes. Materialize
+        // the recording first so a recovered voice send either uploads a finite body or fails locally and keeps it.
+        let body = blob;
+        if (typeof blob?.arrayBuffer === 'function') {
+          try { body = await blob.arrayBuffer(); }
+          catch { throw new Error('Recording could not be read from device storage'); }
+          if (!body.byteLength && blob.size) throw new Error('Recording could not be read from device storage');
+        }
+        r = await fetch(url, { method: 'POST', signal, credentials: 'same-origin', headers: { 'Content-Type': type, 'X-Wizard-Filename': `voice.${ext}` }, body });
       } else {
         const fd = new FormData();
         const ext = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm';
@@ -113,6 +121,23 @@
     voicePrompt(extra = []) {
       const names = [C.agent(), C.owner(), ...C.vocabulary(), ...extra].filter(Boolean);
       return names.length ? `Names: ${[...new Set(names)].join(', ')}.` : '';
+    },
+    // The Service owns this preference across devices; the cache is display-only.
+    async responseStyle(value) {
+      if (value !== undefined) {
+        if (!['summary', 'concise', 'own'].includes(value)) throw Error('Choose Summary, Concise or Own');
+        const saved = await fetch('/wizard/v1/settings', { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ response_style: value }) });
+        if (!saved.ok) throw Error('Could not save response style');
+      }
+      const read = await fetch('/wizard/v1/settings', { credentials: 'same-origin', cache: 'no-store' });
+      if (!read.ok) throw Error('Could not read response style');
+      const style = (await read.json()).settings?.response_style;
+      if (!['summary', 'concise', 'own'].includes(style)) throw Error('Update your Wizard to choose a response style');
+      if (value !== undefined && style !== value) throw Error('Your Wizard has not confirmed this response style. Try again.');
+      B = { ...B, settings: { ...B.settings, response_style: style } };
+      try { localStorage.setItem(KEY, JSON.stringify(B)); } catch (_) {}
+      window.dispatchEvent(new CustomEvent('wizard:config', { detail: B }));
+      return style;
     },
     ready: null,
   };

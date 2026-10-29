@@ -21,6 +21,7 @@ const shot = async (p, name) => { const f = path.join(OUT, name + '.png'); await
 const api = (p, url, init) => p.evaluate(async ([u, i]) => { const r = await fetch(u, i || {}); return { status: r.status, body: await r.json().catch(() => null) }; }, [url, init || null]);
 const fixtureLog = async p => (await api(p, '/__fixture/log')).body.log;
 const MIZEL = 'wizard_app_mizel_fixture1', MIZEL_TITLE = 'Mizel recap · Fixture standup';
+const ARCH_MAIN = 'wizard_fixture_archived_main', ARCH_PRIVATE = 'wizard_fixture_archived_private';
 
 async function ctx(b, mobile) {
   const c = await b.newContext(mobile
@@ -59,6 +60,16 @@ async function phone(b) {
   ok(await p.evaluate(id => !__wos.live.sessions.some(s => s.id === id), MIZEL), 'phone: the main agent’s own list data (search, links, status) still holds no private thread');
   const groups = await p.evaluate(() => { const g = __wos.live.groups(''); return [...g.needs, ...g.ready, ...g.working].map(s => s.id); });
   ok(groups.includes(MIZEL) || !(await p.evaluate(id => __wos.live.isNew(__wos.live.session(id)), MIZEL)), 'phone: the recap counts in Ready/unread like other threads when unread', JSON.stringify(groups));
+  const archivedPlacement = await p.evaluate(([mainId, privateId]) => {
+    const unified = __wos.live.workGroups();
+    const routed = __wos.live.workGroups(__wos.live.sessionsFor('private'));
+    return { unifiedWorking: unified.working.map(s => s.id), unifiedArchive: unified.archive.map(s => s.id),
+      routedWorking: routed.working.map(s => s.id), routedArchive: routed.archive.map(s => s.id), mainId, privateId };
+  }, [ARCH_MAIN, ARCH_PRIVATE]);
+  ok(!archivedPlacement.unifiedWorking.includes(ARCH_MAIN) && !archivedPlacement.unifiedWorking.includes(ARCH_PRIVATE)
+    && archivedPlacement.unifiedArchive.includes(ARCH_MAIN) && archivedPlacement.unifiedArchive.includes(ARCH_PRIVATE)
+    && !archivedPlacement.routedWorking.includes(ARCH_PRIVATE) && archivedPlacement.routedArchive.includes(ARCH_PRIVATE),
+  'phone: archived stale-running threads stay in Archive for main and routed Chats', JSON.stringify(archivedPlacement));
   // Private words never go out as screen context with a message to another agent.
   const screen = await p.evaluate(w => window.WizScreen.read(document.querySelector(`[data-chats="${w}"]`)), wid);
   ok(!screen.includes('Mizel recap') && !screen.includes('Fixture recap') && screen.includes('Groceries'), 'phone: screen text read for context skips private rows', screen.slice(0, 300));
