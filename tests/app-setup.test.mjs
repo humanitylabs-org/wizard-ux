@@ -144,3 +144,10 @@ test('compact disclosures escape need copy and never use purpose as the row name
   assert.match(rows, /&lt;img onerror=alert\(1\)&gt;/);
   assert.doesNotMatch(rows, /<img/);
 });
+
+test('install links open the Store window synchronously so the link reaches its frame (both shells)', () => {
+  for (const [file, call] of [['web/app.js', "openApp(APP['app-store'], {}, { setupChecked: true })"], ['web/desktop/desktop.js', "openApp(APP['app-store'], { setupChecked: true })"]]) {
+    const src = read(file), at = src.indexOf("if (v === 'install') {");
+    assert.ok(at > 0, file); assert.ok(src.slice(at, at + 400).includes(call), `${file} skips the async setup gate for the install link`);
+  }
+});
