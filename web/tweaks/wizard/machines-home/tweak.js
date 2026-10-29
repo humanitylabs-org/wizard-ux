@@ -268,13 +268,14 @@ export default function setup(api) {
   }
   // Every account, grouped by service (the gauge's own first): nickname, what is left, Sign out; one Sign in at the end.
   function renderAIList() {
-    const show = !!subs().length;
-    aiList.hidden = !show;
-    if (!show) return aiList.replaceChildren();
+    const btn = (text, app, cls = '') => app ? h('button', { type: 'button', cls: 'mh-ai-btn ' + cls, data: { resSignin: app } }, text) : null;
+    aiList.hidden = false;
+    // No account yet: say so and offer every service to sign in to, never a blank page.
+    if (!subs().length) return aiList.replaceChildren(h('div', { cls: 'mh-ai-foot' }, h('span', { cls: 'mh-more-info', text: 'No AI account signed in yet.' }),
+      h('div', { cls: 'mh-ai-pick' }, signable().map(p => btn(p.name, p.app)))));
     const want = defKind(), groups = [];
     for (const s of subs()) { let g = groups.find(x => x.kind === s.kind); if (!g) groups.push(g = { kind: s.kind, name: s.group, rows: [] }); g.rows.push(s); }
     groups.sort((a, b) => (b.kind === want) - (a.kind === want));
-    const btn = (text, app, cls = '') => app ? h('button', { type: 'button', cls: 'mh-ai-btn ' + cls, data: { resSignin: app } }, text) : null;
     aiList.replaceChildren(...groups.map(g => h('div', { cls: nw('mh-ai-group') },
       h('div', { cls: 'mh-ai-head' }, h('b', { text: g.name }), g.kind === want ? h('span', { cls: 'mh-ai-def', text: 'Default' }) : null),
       g.rows.map(r => {
@@ -400,7 +401,8 @@ export default function setup(api) {
   function paintTsTab() {
     const bad = openOnes().length, open = S.open.has('ts');
     tsTab.hidden = S.ws !== 'mine'; tsTab.setAttribute('aria-expanded', String(open));
-    tsTab.setAttribute('aria-label', `Tailscale, ${bad ? bad + ' open to the internet' : 'the only way in'}. ${open ? 'Hide' : 'Show'} details`);
+    const checked = devices().length && devices().every(d => d.access?.exposure === 'tailscale');
+    tsTab.setAttribute('aria-label', `Tailscale, ${bad ? bad + ' open to the internet' : checked ? 'the only way in' : 'not every machine checked yet'}. ${open ? 'Hide' : 'Show'} details`);
     tsTab.replaceChildren(h('span', { text: 'Tailscale' }), bad ? h('b', { cls: 'mh-ts-n', text: `${bad} open` }) : null, chev(open));
   }
   const devOpen = p => p.devices ? S.open.has('devs') : S.open.has('p:' + p.id);
@@ -429,7 +431,9 @@ export default function setup(api) {
     } else {
       const st = storage();
       setRow(rowSt, st ? [storageNode(st)] : []);
-      netBox.replaceChildren(tsPanel()); storeBox.replaceChildren(...(st ? [storeHead(st), storeInfo(st)] : [h('span', { cls: 'mh-more-info', text: 'No backup set up yet.' })]));
+      netBox.replaceChildren(tsPanel()); storeBox.replaceChildren(...(st ? [storeHead(st), storeInfo(st)] : [S.backupRead === 'none' ? h('span', { cls: 'mh-more-info', text: 'No backup set up yet.' })
+        : S.backupRead === 'error' ? h('span', { cls: 'mh-more-info', text: 'Couldn’t reach Backup right now. It will try again.' })
+        : h('span', { cls: 'mh-wait', role: 'status', 'aria-label': 'Reading your backup' })]));
       setRow(rowTs, S.open.has('ts') ? [tsPanel()] : []);
       const main = machine(MAIN), others = devices().filter(d => d.id !== MAIN).map(d => machine(d.id)).sort((a, b) => power(b) - power(a));
       const all = [main, ...others].filter(m => m.status === 'online');
@@ -593,7 +597,7 @@ export default function setup(api) {
   // Repaint only the part whose drawing changed; a nickname being typed is never rebuilt under the finger.
   const drawn = { top: '', ai: '', list: '', map: '', glance: '' };
   const mapSig = () => { const st = storage();
-    return JSON.stringify([S.ws, [...S.open].filter(k => k !== 'ai' && k !== 'signin' && k !== 'wsm'), reg().this || null, managedList(),
+    return JSON.stringify([S.ws, S.backupRead || '', [...S.open].filter(k => k !== 'ai' && k !== 'signin' && k !== 'wsm'), reg().this || null, managedList(),
       devices().map(d => [d.id, d.name, d.status, d.error, d.cpus, d.memoryTotalGB, diskGB(d), Math.round((d.memory || 0) / 5), Math.round((d.cpu || 0) / 5), Math.round((freeGB(d) || 0) / 5)]),
       myDevices(), sessions(), S.unread, backupRunning(), st && { ...st, age: st.age == null ? null : agoS(st.age), used: st.used == null ? null : gbFmt(st.used) },
       (S.backup?.standby?.machines || []).map(x => [x.id, x.verdict, (x.checks || []).map(c => c.ok)])]); };
@@ -656,8 +660,9 @@ export default function setup(api) {
     const j = await api.data.read.app('backup', 'overview');
     if (j && j.backup && typeof j.backup === 'object') {  // otherwise keep the last good answer
       S.backup = { backup: j.backup, standby: j.standby || null, connector: j.connector || null, active: j.active || null };
-      api.storage.set('backup', S.backup);
-    }
+      api.storage.set('backup', S.backup); S.backupRead = 'ok';
+    } else S.backupRead = j && typeof j === 'object' ? 'none' : 'error';  // null = timeout / not 2xx / not JSON, not "no backup"
+
     paint();
   }
   const merge = state => { const got = Object.fromEntries(Object.entries(state || {}).filter(([, v]) => v != null)); S.res = { ...S.res, ...got }; return got; };

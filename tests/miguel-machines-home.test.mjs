@@ -226,6 +226,16 @@ test('second review: no unverified all-clear, stock loading state, Settings dial
   assert.ok(desk.indexOf("if (voiceMenuBack()) return 'voice-menu'") < desk.indexOf("if (!pal.hidden) { closePalette(); return 'palette'; }"));
 });
 
+test('third review: AI page offers sign-in with no accounts, backup read failure is not "no backup", tab label never claims an unchecked all-clear', () => {
+  for (const who of ['miguel', 'wizard']) {
+    const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
+    assert.match(src, /if \(!subs\(\)\.length\) return aiList\.replaceChildren\(h\('div', \{ cls: 'mh-ai-foot' \}, h\('span', \{ cls: 'mh-more-info', text: 'No AI account signed in yet\.' \}\),/, who);
+    assert.match(src, /else S\.backupRead = j && typeof j === 'object' \? 'none' : 'error';/, who);
+    assert.match(src, /S\.backupRead === 'none' \? h\('span', \{ cls: 'mh-more-info', text: 'No backup set up yet\.' \}\)/, who + ': "no backup" only after a real answer');
+    assert.match(src, /checked \? 'the only way in' : 'not every machine checked yet'/, who);
+  }
+});
+
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));
