@@ -36,8 +36,10 @@
       if (!r.ok) return;
       const d = await r.json();
       if (seq !== IN.seq || !Array.isArray(d.items)) return;
+      const before = JSON.stringify(IN.items);
       IN.items = Object.freeze(d.items.filter(i => i && i.id).map(cleanItem).sort((a, b) => b.time - a.time));
       for (const fn of [...IN.subs]) { try { fn(IN.items); } catch (e) {} }
+      if (before !== JSON.stringify(IN.items)) inboxChanged();
     } catch (e) {}
   }
   function watch(fn) {
@@ -46,11 +48,15 @@
     loadItems();
     return () => { IN.subs.delete(fn); };
   }
+  function inboxChanged() { window.dispatchEvent(new CustomEvent('wizard:notifications')); }
+  // Same rows as Chats Ready, including quiet/snoozed ones, never completed ones.
+  const readyCount = () => window.WosSkinHost?.inboxList ? IN.items.filter(i => !i.archived).length : 0;
   async function mark(ids, marks) {
     ids = (ids || []).map(String).filter(Boolean); if (!ids.length || !installed()) return false;
     // Moves at once; a failed write puts it back on the reload below. Archiving also marks read (the server does too).
     const next = { ...marks, ...(marks.archived ? { read: true } : {}) };
     IN.items = Object.freeze(IN.items.map(i => ids.includes(i.id) ? Object.freeze({ ...i, ...next }) : i)); for (const fn of [...IN.subs]) { try { fn(IN.items); } catch (e) {} }
+    inboxChanged();
     let ok = false;
     try {
       const r = await fetch('/notifications/api/mark', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, ...marks }) });
@@ -85,5 +91,5 @@
   addEventListener('wizard:apps', () => { refresh(); paint(); });
   setInterval(() => { if (!document.hidden) refresh(); }, 60000);
   setTimeout(refresh, 800);
-  window.WosBell = { html, refresh, paint, watch, mark, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
+  window.WosBell = { html, refresh, paint, watch, mark, readyCount, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
 })();
