@@ -1114,7 +1114,7 @@
       { kind: 'cmd', name: hud ? 'Chat back to desktop 1' : 'Float chat over every desk', icon: hud ? '1' : '◉', keys: `${MOD}P`, run: () => hudKey() },
       { kind: 'cmd', name: 'Full screen', icon: '⤢', keys: `${MOD}F`, run: () => toggleMono() },
       { kind: 'cmd', name: 'Refresh window', icon: '↻', keys: `${MOD}R`, run: () => reloadCurrent() },
-      { kind: 'cmd', name: 'Keys guide', icon: '⌨', keys: `${MOD}/`, run: () => toggleKeys(true) },
+      { kind: 'cmd', name: 'Keyboard shortcuts', icon: '⌨', keys: `${MOD}/`, run: () => toggleKeys(true) },
       { kind: 'cmd', name: 'Settings', icon: '⚙', keys: `${MOD},`, run: () => openSettings() },
       { kind: 'cmd', name: 'Use the phone layout here', icon: '📱', run: () => { location.href = './?shell=phone'; } },
       { kind: 'cmd', name: 'Reset desktop layout', icon: '↺', run: () => { Object.keys(localStorage).filter(k => k.startsWith('wux.desk.')).forEach(k => localStorage.removeItem(k)); location.reload(); } },
