@@ -5,6 +5,12 @@ import {join} from 'node:path';
 import {historyRevision} from './cache-evidence.mjs';
 
 export const SAMPLE_IDS=Array.from({length:30},(_,i)=>`wizard_speed_${i+1}`);
+// A one-tap focus must not reopen the preceding state's just-loaded transcript.
+// The full 30-tap matrix already finishes on a different thread before n1.
+export function sampleId(profile,state,n) {
+  const focused=['live-integration','rs17-phone-continuation'].includes(profile);
+  return SAMPLE_IDS[focused?['current','empty','stale'].indexOf(state):n-1];
+}
 export function implementationCaps(ux) {
   const text=readFileSync(join(ux,'web/live.js'),'utf8');
   const max=Number(text.match(/TC_MAX\s*=\s*(\d+)/)?.[1]);

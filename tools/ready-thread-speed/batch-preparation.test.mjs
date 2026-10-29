@@ -1,10 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {SAMPLE_IDS,implementationCaps,assertOldCopy,waitForRevisions,exactMatrix} from './batch-preparation.mjs';
+import {SAMPLE_IDS,sampleId,implementationCaps,assertOldCopy,waitForRevisions,exactMatrix} from './batch-preparation.mjs';
 import {historyRevision} from './cache-evidence.mjs';
 const oldRows=[{role:'user',content:'old request',timestamp:100},{role:'assistant',content:'SYNTHETIC_CURRENT_ANSWER_1_v1',timestamp:101}];
 const old=historyRevision(oldRows),rows=[...oldRows,{role:'user',content:'new request',timestamp:102},{role:'assistant',content:'SYNTHETIC_CURRENT_ANSWER_1_v2',timestamp:103}],current=historyRevision(rows);
 const stale=()=>({key:current.key,trusted:true,accepted:null,persisted:{rev:old.key,rows:structuredClone(oldRows)}});
+test('focused samples use distinct real threads per state without changing full matrix targets',()=>{
+ for(const profile of ['live-integration','rs17-phone-continuation']){
+  assert.deepEqual(['current','empty','stale'].map(state=>sampleId(profile,state,1)),SAMPLE_IDS.slice(0,3));
+ }
+ for(const profile of ['','baseline-missing-cell'])for(const state of ['current','empty','stale']){
+  assert.deepEqual(SAMPLE_IDS.map((_,i)=>sampleId(profile,state,i+1)),SAMPLE_IDS);
+ }
+});
 test('batch uses thirty unique targets within actual exported cache/preload caps',()=>{
  assert.equal(SAMPLE_IDS.length,30);assert.equal(new Set(SAMPLE_IDS).size,30);
  assert.deepEqual(implementationCaps(new URL('../../',import.meta.url).pathname),{max:40,bytes:2500000,preload:16,preloadOrder:['ready','errors','working']});

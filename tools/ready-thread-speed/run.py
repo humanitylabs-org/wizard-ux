@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Final full A/B entrypoint; execute only through the parent's Forum queue."""
-import hashlib,json,math,os,re,shutil,signal,subprocess,sys,time
+import ast,hashlib,json,math,os,re,shutil,signal,subprocess,sys,time
 from collections import Counter
 from datetime import datetime,timezone
 from pathlib import Path
+from typing import Any
 root=Path(sys.argv[1]).resolve();expected=sys.argv[2]
 sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
 assert sha(root/'manifest.json')==expected,'manifest identity'
@@ -24,6 +25,7 @@ def verify():
  for name,tool in m['tool_inventories'].items():assert inventory(Path(tool['root']))==tool['inventory'],name
  for item in m['inherited']['files']:assert sha(Path(item['path']))==item['sha256'],item['path']
  prior=Path(m['recovery_provenance']['prior_stage']);assert inventory(prior/'evidence')==m['recovery_provenance']['prior_evidence_inventory'],'prior evidence changed'
+ for base,expected_inventory in m['recovery_provenance'].get('earlier_evidence_inventories',{}).items():assert inventory(Path(base))==expected_inventory,base
 verify()
 evidence=root/'evidence';evidence.mkdir();node=m['tools']['node']
 env={'PATH':str(Path(node).parent)+':/usr/bin:/bin','TMPDIR':str(root/'tmp'),'HOME':str(root/'runtime-home'),'QA_PLAYWRIGHT':m['tools']['playwright'],'QA_CHROME':m['tools']['chrome'],'WIZARD_LIST_CACHE':'on','CI':'1','PYTHONDONTWRITEBYTECODE':'1'}
@@ -33,8 +35,8 @@ env.update(HERMES_HOME=str(root/'runtime-home/.hermes'),WIZARD_OS_HOME=str(root/
 # an older stage's shared node_modules. No install/network dependency acquisition.
 shutil.copytree(root/'deps',root/'runtime-deps',symlinks=True)
 assert inventory(root/'runtime-deps')==m['dependencies']['inventory']
-for name in ['baseline-service','candidate-service']:
- link=root/'sources'/name/'node_modules';assert link.is_symlink() and link.resolve()==root/'runtime-deps/node_modules'
+for rel in m['dependency_links']:
+ link=root/rel;assert link.is_symlink() and link.resolve()==root/'runtime-deps/node_modules'
 r={'schema':2,'manifest_sha256':expected,'source_verified':True,'full_acceptance':True,'pass':False,'phases':[],'failures':[],'sources':{k:v['commit'] for k,v in m['trees'].items()},'production_equivalence':m['production_equivalence'],'inherited_provenance':{k:v for k,v in m['inherited'].items() if k!='files'},'inherited_passes_used':False,'private_owner_data_read':False,'live_verified':False,'handset_verified':False,'deployment_performed':False}
 def save():(evidence/'report.json').write_text(json.dumps(r,indent=2)+'\n')
 def run(name,args,cwd,timeout=300,extra=None):
@@ -64,13 +66,21 @@ def digest(rows):
   return datetime.fromisoformat(v.replace('Z','+00:00')).astimezone(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00','Z')
  payload=[[row['role'],row['content'],iso(row['timestamp'])] for row in rows]
  return hashlib.sha256(json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
-def validate_side(label):
+def validate_side(label,inherited_partial=False):
  focus=m.get('focused_recovery',False);baseline=focus and label=='baseline';n=30 if not focus or baseline else 1
- base=evidence/label;d=json.loads((base/'results.json').read_text())
- assert (d['focused_complete'] if focus else d['complete']) and not d['failures'] and d['custody']['upstreamWrites']==0,label
- if focus:assert not d['complete'] and not d['full_matrix_claimed'] and d['focus_profile']==('baseline-missing-cell' if baseline else 'live-integration')
+ continuation=m.get('phone_continuation',False)
+ base=Path(m['recovery_provenance']['prior_stage'])/'evidence/candidate' if inherited_partial else evidence/label;d=json.loads((base/'results.json').read_text())
+ assert d['custody']['upstreamWrites']==0,label
+ if inherited_partial:
+  assert continuation and label=='candidate' and not d['focused_complete'] and not d['budgets_pass']
+  assert len(d['failures'])==2 and all(any(f.startswith('phone/'+skin+': AssertionError') and "'rejected-old-copy'" in f and "'current-copy-refilled'" in f and 'acceptance.mjs:212:56' in f for f in d['failures']) for skin in ['nebula','signal'])
+ else:assert (d['focused_complete'] if focus else d['complete']) and not d['failures'],label
+ if focus:assert not d['complete'] and not d['full_matrix_claimed'] and d['focus_profile']==('baseline-missing-cell' if baseline else 'rs17-phone-continuation' if continuation and not inherited_partial else 'live-integration')
  cells=[('phone','nebula')] if baseline else [(shell,skin) for shell in ['phone','desktop'] for skin in ['nebula','signal']]
  groups=[(*c,state) for c in cells for state in (['stale'] if baseline else ['current','empty','stale'])]
+ if continuation:
+  if inherited_partial:groups=[g for g in groups if g[0]=='desktop' or g[2]=='current'];cells=[('desktop',skin) for skin in ['nebula','signal']]
+  else:cells=[('phone',skin) for skin in ['nebula','signal']];groups=[(*c,state) for c in cells for state in ['empty','stale']]
  records=d['browser'];timing=[x for x in records if 'state' in x];ancillary=[x for x in records if 'case' in x]
  assert len(timing)==len(groups) and Counter((x['shell'],x['skin'],x['state']) for x in timing)==Counter(groups)
  cases=['long-history','no-js-errors','pending-voice-hang-deadline-retry','ready-prefetch-uses-existing-current-cache']
@@ -85,7 +95,11 @@ def validate_side(label):
  by_tuple={}
  for trace in traces:
   key=(trace['shell'],trace['skin'],trace['state'],trace['n']);assert key not in by_tuple;by_tuple[key]=trace
-  assert trace['id']=='wizard_speed_'+str(trace['n']) and trace['tap']>0 and trace['stale'] is False
+  target=['current','empty','stale'].index(trace['state'])+1 if focus and not baseline and not inherited_partial else trace['n']
+  assert trace['id']=='wizard_speed_'+str(target) and trace['tap']>0 and trace['stale'] is False
+  if continuation and not inherited_partial and trace['state']=='empty':
+   read=trace['cold_read'];assert read['request']>=trace['tap'] and read['response']>=read['request'] and read['status']==200 and read['pending'] is False
+   assert read['capturedKey']==trace['canonical']['key'] and '/'+trace['id']+'/messages?' in read['url'] and 'limit=500' in read['url']
   assert trace['geometry']['inViewport'] and trace['geometry']['hit'] and trace['header']['hit']
   assert trace['header']['backVisible']==(trace['shell']=='phone')
   if trace['state']=='stale':
@@ -108,27 +122,57 @@ def validate_side(label):
    for k in ['lastAssistantAt','lastUserAt']:assert s['raw'][k]==s['list'][k]==e[k]
    assert digest(s['persisted']['rows'])==s['old']['contentSha256']
   if phase in ['all-states-immediately-before-tap','all-states-after-current-paint','immediately-before-tap']:
-   key=(*cell,item['state'],item['n']);assert key in by_tuple;e=by_tuple[key]['canonical']
+   key=(*cell,item['state'],item['n'])
+   if inherited_partial and key not in by_tuple:
+    assert key in [('phone',skin,'empty',1) for skin in ['nebula','signal']] and phase=='all-states-immediately-before-tap'
+    continue # failed setup remains failed; this pre-tap-only record is never inherited as a pass
+   assert key in by_tuple;e=by_tuple[key]['canonical']
    assert s['canonical']==e and s['key']==e['key'] and s['trusted']
    if phase=='all-states-immediately-before-tap':
     pre_seen[key]+=1
     if item['state']=='current':assert digest(s['accepted'])==e['contentSha256']
     else:assert s['accepted'] is None
-   elif phase=='all-states-after-current-paint':post_seen[key]+=1;assert digest(s['accepted'])==e['contentSha256']
+   elif phase=='all-states-after-current-paint':
+    post_seen[key]+=1;assert digest(s['accepted'])==e['contentSha256']
+    if continuation and not inherited_partial and item['state']=='empty':
+     t=by_tuple[key];reads=[v for v in s['traffic'] if v['request']>=t['tap'] and v['response'] is not None and v['response']<=s['at'] and v.get('status')==200 and not v['pending']]
+     assert len(reads)==1 and reads[0]==t['cold_read'] and reads[0]['capturedKey']==e['key']
    else:
     seen[key]+=1;assert item['state']=='stale' and s['accepted'] is None and s['gate']['releasedAt'] is None and not s['gate']['requests']
     assert digest(s['persisted']['rows'])==by_tuple[key]['cache']['old']['contentSha256']
  assert pre_seen==post_seen==Counter({key:1 for key in by_tuple})
  assert seen==Counter({key:1 for key in by_tuple if key[2]=='stale'})
- assert batch_seen==Counter({(*cell,'wizard_speed_'+str(n)):1 for cell in cells for n in range(1,31)})
+ stale_cells={g[:2] for g in groups if g[2]=='stale'}
+ assert batch_seen==Counter({(*cell,'wizard_speed_'+str(n)):1 for cell in stale_cells for n in range(1,31)})
  for item in ancillary:
   if label=='baseline' and item['case']=='pending-voice-hang-deadline-retry':assert item['durable'] and item['held_send_attempts']>0 and item.get('known_limitation')
   else:assert item['pass'],item
- if label=='candidate':assert d['budgets_pass'] and all(x['pass'] for x in d['api']+records)
- return {'complete':not focus,'focused_complete':focus,'fresh':True,'api_groups':len(d['api']),'api_samples':len(api),'tap_groups':len(groups),'taps':len(traces),'stale_counterproofs':sum(seen.values()),'batch_ready_old_copies':sum(batch_seen.values()),'ancillary_cases':len(ancillary),'budgets_pass':d['budgets_pass']}
+ if label=='candidate':assert (d['budgets_pass'] or inherited_partial) and all(x['pass'] for x in d['api']+records)
+ return {'complete':not focus,'focused_complete':focus and not inherited_partial,'fresh':not inherited_partial,'api_groups':len(d['api']),'api_samples':len(api),'tap_groups':len(groups),'taps':len(traces),'stale_counterproofs':sum(seen.values()),'batch_ready_old_copies':sum(batch_seen.values()),'ancillary_cases':len(ancillary),'budgets_pass':all(x['pass'] for x in d['api']+records),'timing_tuples':groups,'ancillary_cells':cells}
 try:
  service=root/'sources/candidate-service';ux=root/'sources/candidate-ux';tools=ux/'tools/ready-thread-speed'
- if m.get('focused_recovery'):
+ if m.get('phone_continuation'):
+  r.update(full_acceptance=False,inherited_passes_used=True)
+  prior=Path(m['recovery_provenance']['prior_stage'])
+  oldns:dict[str,Any]=dict(json=json,hashlib=hashlib,math=math,Counter=Counter,datetime=datetime,timezone=timezone,evidence=prior/'evidence',m=json.loads((prior/'manifest.json').read_text()))
+  oldfunctions:list[ast.stmt]=[s for s in ast.parse((prior/'run.py').read_text()).body if isinstance(s,ast.FunctionDef) and s.name in ['jsonlines','stats','digest','validate_side']]
+  exec(compile(ast.Module(body=oldfunctions,type_ignores=[]),'read-only-rs17-validator','exec'),oldns)
+  r['inherited_rs17_baseline']=oldns['validate_side']('baseline');r['inherited_rs17_baseline']['fresh']=False
+  r['inherited_rs17_candidate']=validate_side('candidate',inherited_partial=True)
+  assert r['inherited_rs17_candidate']['taps']==8 and r['inherited_rs17_candidate']['ancillary_cases']==8
+  assert run('focused-setup-regressions',[node,'--test','--test-name-pattern=focused cold setup|focused samples','tests/ready-thread-loading.test.mjs',tools/'batch-preparation.test.mjs'],ux,180)
+  regression_log=(evidence/'focused-setup-regressions.log').read_text();assert re.search(r'^# pass 2$',regression_log,re.M) and re.search(r'^# fail 0$',regression_log,re.M),'exactly two focused setup regressions must execute'
+  assert run('candidate-phone-continuation',[node,tools/'acceptance.mjs',service,ux,evidence/'candidate','candidate'],root,400,{'READY_SPEED_FOCUS':'rs17-phone-continuation'})
+  r['candidate_phone']=validate_side('candidate')
+  assert r['candidate_phone']['taps']==4 and r['candidate_phone']['ancillary_cases']==8 and r['candidate_phone']['stale_counterproofs']==2
+  previous=r['inherited_rs17_candidate'];fresh=r['candidate_phone']
+  all_groups=[tuple(g) for g in previous['timing_tuples']+fresh['timing_tuples']]
+  assert Counter(all_groups)==Counter((shell,skin,state) for shell in ['phone','desktop'] for skin in ['nebula','signal'] for state in ['current','empty','stale'])
+  all_cells=[tuple(c) for c in previous['ancillary_cells']+fresh['ancillary_cells']]
+  assert Counter(all_cells)==Counter((shell,skin) for shell in ['phone','desktop'] for skin in ['nebula','signal'])
+  r['composite']={'focused_integration_complete':True,'fresh_full_matrix':False,'taps':12,'fresh_taps':4,'inherited_taps':8,'ancillary_cases':16,'fresh_ancillary':8,'inherited_ancillary':8,'budgets_pass':True,'original_failed_aggregate_preserved':True}
+  r['pass']=len(r['phases'])==2 and not r['failures']
+ elif m.get('focused_recovery'):
   r.update(full_acceptance=False,inherited_passes_used=True)
   run('changed-source-ux',[node,'--test','tests/ready-thread-speed.test.mjs','tests/ready-thread-loading.test.mjs','tests/app-native-thread.test.mjs','tests/thread-draft-admission.test.mjs','tests/wisdom-hosted-thread.test.mjs'],ux,180)
   # Observer/content modules are unchanged; count selection is independently recounted below.

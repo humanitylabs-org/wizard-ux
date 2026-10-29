@@ -1,5 +1,53 @@
 # Ready speed acceptance recovery (test-only)
 
+## rs17 focused-phone continuation (static repair; execution pending)
+
+The failed `heavy_6782a26e55df473d846b6d5b1900de39` and `/srv/work/rs17`
+remain unchanged. Saved traffic for both failed phone empty/n1 samples names
+`wizard_speed_1`, also used immediately beforehand for current/n1. Nebula's last
+history response was at 6582.1 ms, before the cold pre-tap snapshot at 10743.9 ms;
+Signal's was at 6629.9 ms, before 10415.4 ms. Both failure snapshots have null
+accepted AND persisted cache, and no new history request. The failure is not
+evidence of a stale answer: the unchanged current answer is already on screen.
+
+Source explains this setup mismatch: `chats.js::loadThread` retains `loadedFor`,
+`turns`, `readRevision` and `at` through phone Back. Its unchanged quiet-history
+fast path skips the read for 60 seconds when the revision is unchanged.
+`live.js::forgetMessages` clears TC and IndexedDB only, not those Chats fields.
+Reducing 30 taps to one made consecutive states reuse the same retained thread;
+the full matrix ends the preceding state on thread 30 instead. Desktop already
+parks on unaffected thread 31. No product change or cache/paint waiver follows.
+
+REUSE the exact cache/content and two-frame no-stale paint observers, real
+history APIs, all 30 old-copy batch preconditions and actual owned-row input.
+EXTEND only focused target selection: current uses thread 1, empty thread 2,
+stale thread 3. Full and baseline targets are unchanged. The new explicit
+`rs17-phone-continuation` profile runs ONLY phone empty/stale in both skins
+(four one-tap groups) plus their eight previously unfinished ancillary cases.
+Its first state starts from the normal owned list; no fabricated Back or private
+CH/TC/INFLIGHT mutation, forced refresh, TTL override or extra measured wait.
+Cold proof additionally requires exactly one real post-pointer history response
+capturing the exact current key, as well as the unchanged full accepted digest.
+
+The existing loading-test harness adds one source-executed regression with the
+whole shipped Live client and actual `loadThread`/`turnsCurrent`: same-thread
+forget/reopen leaves real accepted cache null without a read while retaining
+current turns; distinct-thread open must read limit=500 with exact captured
+key and full accepted content. The existing batch test adds focused/full target
+selection coverage. Only these two named tests are admitted, not whole suites.
+They are staged, not yet executed; static source diagnosis is not a browser pass.
+
+The existing runner's continuation branch recounts saved rs17 baseline through
+its original AST-extracted validator (30 stale taps/four ancillary). It separately
+recounts the eight passed candidate taps (two phone-current plus six desktop)
+and eight desktop ancillary, excluding only the two exact failed phone-empty
+pre-tap-only records. Failures remain failures in the original aggregate.
+Fresh four-tap/eight-case results must close the exact unique 12/16 focused
+integration union. Rs12 candidate 360 taps/150 API/24 scopes and old server/UX CI
+stay SHA-bound inherited evidence. No baseline/server/full/desktop/current rerun.
+All production Git bytes, membership and modes remain identical to 8df948fd;
+normal generated web version is the same tree. Parent alone submits or promotes.
+
 ## rs12 baseline header recovery and live-source integration
 
 REUSE WosMorph, WosChatPower, cache and renderers. EXTEND this existing acceptance

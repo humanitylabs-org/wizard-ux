@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { initialize,openList,rowFor,actionable,input,expandList,backToList,diagnostics,armPaint,verifyServingBytes } from './browser-preparation.mjs';
 import { historyRevision,assessCache,cacheEvidence,waitForRevision } from './cache-evidence.mjs';
-import {SAMPLE_IDS,implementationCaps,assertOldCopy,waitForRevisions,exactMatrix} from './batch-preparation.mjs';
+import {SAMPLE_IDS,sampleId,implementationCaps,assertOldCopy,waitForRevisions,exactMatrix} from './batch-preparation.mjs';
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, openSync, closeSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,12 +11,13 @@ const [service, ux, out, label]=process.argv.slice(2).map((s,i)=>i<3?resolve(s):
 const own=resolve(fileURLToPath(new URL('.',import.meta.url)));
 // Explicit recovery profiles only; default full acceptance remains unchanged.
 const profile=process.env.READY_SPEED_FOCUS||'';
-assert.ok(['','baseline-missing-cell','live-integration'].includes(profile));
+assert.ok(['','baseline-missing-cell','live-integration','rs17-phone-continuation'].includes(profile));
 assert.ok(!profile||(profile==='baseline-missing-cell'?label==='baseline':label==='candidate'));
-const shells=profile==='baseline-missing-cell'?['phone']:['phone','desktop'];
+const continuation=profile==='rs17-phone-continuation';
+const shells=profile==='baseline-missing-cell'||continuation?['phone']:['phone','desktop'];
 const skins=profile==='baseline-missing-cell'?['nebula']:['nebula','signal'];
-const states=profile==='baseline-missing-cell'?['stale']:['current','empty','stale'];
-const sampleCount=profile==='live-integration'?1:30;
+const states=profile==='baseline-missing-cell'?['stale']:continuation?['empty','stale']:['current','empty','stale'];
+const sampleCount=profile==='live-integration'||continuation?1:30;
 const version=readFileSync(join(ux,'web/ux-version.txt'),'utf8').trim();
 assert.match(version,/^[0-9a-f]{40}$/,'stage provides the normal generated web tree version');
 mkdirSync(out,{recursive:true});const fixtureRoot=join(out,'fixture');mkdirSync(fixtureRoot);
@@ -107,7 +108,7 @@ try {
     activeSample={state,phase:'batch-preparation'};
     // Park wide desktop on an UNAFFECTED real row; phone returns via its real
     // Back control. No active target may launch an old-revision read on refresh.
-    if(state!=='current'&&!(profile==='baseline-missing-cell'&&state===states[0]))await backToList(page,wid,shell);
+    if(state!==states[0])await backToList(page,wid,shell);
     await expandList(page,wid,shell);
     if(shell==='desktop'){
      const control=rowFor(page,wid,'wizard_speed_31');await actionable(control);await input(control,shell);
@@ -155,7 +156,7 @@ try {
      }
     }
     for(let n=1;n<=sampleCount;n++){
-     const id=SAMPLE_IDS[n-1],canonical=canonicalById.get(id),marker=oldById.get(id)?.marker||canonical.marker,expected=canonical.marker;
+     const id=sampleId(profile,state,n),canonical=canonicalById.get(id),marker=oldById.get(id)?.marker||canonical.marker,expected=canonical.marker;
      const historyGate=historyGates.get(id);
      activeSample={state,n,id};
      const navigation=n>1?await backToList(page,wid,shell):{contract:shell==='desktop'?'prepared-persistent-split-list':'prepared-owned-list'};
@@ -210,6 +211,12 @@ try {
      assert.equal(await page.evaluate(wid=>(window.__wos||window.__wux).wins[wid]?.thread,wid),id,'current header belongs to opened thread');
      trace.geometry=geometry;trace.navigation=navigation;trace.header=header;trace.canonical=canonical;samples.push(trace.ms);
      const painted=await cacheEvidence(page,id);assert.equal(assessCache(painted,canonical),'current-copy-refilled');evidence('all-states-after-current-paint',{canonical,...painted});
+     if(state==='empty'&&sampleCount===1){
+      const reads=painted.traffic.filter(r=>r.request>=trace.tap&&r.response<=painted.at&&r.status===200&&!r.pending);
+      assert.equal(reads.length,1,'focused cold open requires one actual post-pointer history response, not retained Chats turns');
+      assert.equal(reads[0].capturedKey,canonical.key,'cold response captured the exact current revision');
+      trace.cold_read=reads[0];
+     }
      appendFileSync(join(out,'tap-traces.jsonl'),JSON.stringify({shell,skin,state,n,id,...trace})+'\n');
      if(n===1){await page.screenshot({path:join(out,`${shell}-${skin}-${state}.png`)});}
     }
@@ -295,7 +302,7 @@ finally{
  results.focused_complete=!!profile&&!results.failures.length&&timing.length===shells.length*skins.length*states.length&&
   shells.every(shell=>skins.every(skin=>states.every(state=>timing.filter(r=>r.shell===shell&&r.skin===skin&&r.state===state&&r.n===sampleCount).length===1)))&&
   ancillary.length===shells.length*skins.length*4&&results.custody?.upstreamWrites===0;
- results.full_matrix_claimed=!profile;results.statistical_latency_claim=profile==='live-integration'?'none; individual samples use unchanged thresholds':'30 samples per selected group';
+ results.full_matrix_claimed=!profile;results.statistical_latency_claim=sampleCount===1?'none; individual samples use unchanged thresholds':'30 samples per selected group';
  results.expected={api_groups:profile?0:3,api_samples_each:50,tap_groups:shells.length*skins.length*states.length,tap_samples_each:sampleCount,browser_cases:shells.length*skins.length*4,batch_turns_per_cell:30,maximum_batch_revision_wait_ms:45000};
  results.budgets_pass=(results.complete||results.focused_complete)&&!results.failures.length&&[...results.api,...results.browser].every(r=>r.pass);
  save();console.log(JSON.stringify({label,complete:results.complete,budgets_pass:results.budgets_pass,failures:results.failures}));
