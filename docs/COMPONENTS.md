@@ -49,7 +49,7 @@ Visual: <side-by-side screenshot, or "none">
 
 | Need | Use | Never hand-roll |
 |---|---|---|
-| App setup sheet before launch | `WosAppSetup` (`web/core/app-setup.js`) | app-local setup |
+| App setup | `WosAppSetup` (`web/core/app-setup.js`) | app-local setup |
 | Chats: Focus, Filter, search, composer, files, read state, Copy/Share; Novairecito Recall/Done | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); All/main Ready inbox + Home count; `setFocus`/`migrateChatsFocus`; `WizLive` data/stream/tools; Sign in diagnosis; revision cache | second Chats/Focus parser; per-agent/shell routing |
 | Chats list variant | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`web/core/edge-peek.js`), host storage | skin-local duplicate |
@@ -60,7 +60,7 @@ Visual: <side-by-side screenshot, or "none">
 | Pinned threads (synced) | `WosChatPins` (`web/core/chat-pins.js`) | device-local pin lists |
 | Snooze thread/message: Later today · Tomorrow · In 2/3/5 days · Next week · Someday; Other date… last; success returns via threadBack like Done | `WosBoomerang` (`web/core/scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`web/core/schedules.js`) | own timers or reminder stores |
 | Thread topic emoji | `WosTopicEmoji` (`web/core/chat-topic-emojis.js`, data `WosTopicEmojiData`) | — |
-| Durable send, saved Retry; >6h hold | `WosOutbox`, `WosCarry` (`web/outbox.js`) | own queue |
+| Durable send, saved Retry, failed Dismiss; >6h hold | `WosOutbox`, `WosCarry` (`web/outbox.js`) | own queue |
 | Cancelled-recording keep | `WosCancelled` (`web/core/cancelled.js`) | — |
 | Share to Wizard | `WizShareWizard` (`web/core/share-wizard.js`) | one sheet; `share.wizard`; native `durable` |
 | Uploads of any size | `WizUploads` (`web/core/uploads.js`) | single-fetch uploads |
