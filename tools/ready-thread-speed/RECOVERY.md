@@ -306,4 +306,3 @@ inherited, not rerun. The diagnostic cannot establish the missing 120 stale
 receipts per side, final full benchmark budgets, other scopes, or two-skin stale
 proof. Parent submits the sealed stage through the forum worker; no execution
 via SSH and no product change, merge, image build or live deployment is implied.
-
