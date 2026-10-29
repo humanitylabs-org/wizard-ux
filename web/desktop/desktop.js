@@ -47,6 +47,14 @@
   }
   window.WosFeatures.pruneWindows(W);
   for (const [id, w] of Object.entries(W)) if (w?.app === 'settings') delete W[id]; // Settings is a window, never restored
+  /* Heads-up chat (HUD): one Chats window can float above every desk and Home, and fold into the orb. It lives
+   * outside the desks (never tiled, never synced to other devices). r/b anchor its bottom-right corner in the stage. */
+  const HUD_DEF = { r: 24, b: 24, w: 420, h: 600 };
+  const HUD_GAP = 8, HUD_MIN = [300, 260];
+  const hudLayerEl = () => document.getElementById('hudLayer') || document.getElementById('stage').appendChild(Object.assign(document.createElement('div'), { id: 'hudLayer', className: 'hud-layer' }));
+  let hud = store.get('hud', null);
+  if (!hud || typeof hud !== 'object' || typeof hud.id !== 'string' || W[hud.id]?.app !== 'chats' || ws.some(d => Array.isArray(d?.wins) && d.wins.includes(hud.id))) hud = null;
+  else hud = { ...HUD_DEF, ...hud, open: true };
   const oldActive = ws[cur];
   ws = C.migrateChatsFocus(W, ws); cur = Math.max(0, ws.indexOf(oldActive));
   const placed = new Set(), deskIds = new Set();
@@ -65,13 +73,15 @@
     const active = ws[cur]; ws = ws.filter(d => d.wins.length || d === active); cur = ws.indexOf(active);
   }
   store.set('layoutVersion', 2);
-  Object.keys(W).forEach(id => { if (!ws.some(d => d.wins.includes(id))) delete W[id]; });
+  Object.keys(W).forEach(id => { if (id !== hud?.id && !ws.some(d => d.wins.includes(id))) delete W[id]; });
   if (!(cur >= 0 && cur < ws.length)) cur = 0;
   function uid() { return 'w' + Math.random().toString(36).slice(2, 9); }
-  const save = () => { store.set('wins', W); store.set('ws', ws); store.set('cur', cur); window.WosWorkspaceSync?.current?.changed(); };
+  const save = () => { store.set('wins', W); store.set('ws', ws); store.set('cur', cur); store.set('hud', hud); window.WosWorkspaceSync?.current?.changed(); };
   const wsOf = id => ws.findIndex(d => d.wins.includes(id));
   let homeOpen = store.get('homeOpen', false) === true;
-  const focused = () => homeOpen ? null : W[ws[cur].focus] || null;
+  // The keyboard in the heads-up chat makes it the window in front for keys, voice and chat actions.
+  function hudHasFocus() { return !!hud?.open && !!W[hud.id] && !!document.getElementById('hudLayer')?.contains(document.activeElement); }
+  const focused = () => hudHasFocus() ? W[hud.id] : homeOpen ? null : W[ws[cur].focus] || null;
   save(); // Persist normalization before the layout-version marker can affect another boot.
 
   /* ---------------- chats (shared core) ---------------- */
@@ -84,7 +94,7 @@
     toast: (...a) => toast(...a),
     title: w => winTitle(w),
     viewContext: (id, how) => viewContext(id, how),
-    visible: () => homeOpen ? [] : ws[cur].wins,
+    visible: () => [...(homeOpen ? [] : ws[cur].wins), ...(hud?.open ? [hud.id] : [])],
     front: () => homeOpen ? null : ws[cur].focus,
     editUnsent: it => editUnsent(it),
     recoverUnsent: id => { openSettings('unsent'); window.WosSettings.focusUnsent(id); },
@@ -194,6 +204,7 @@
     return W[id];
   }
   function closeWin(id, internal = false) {
+    if (hud?.id === id) { hudClose(); return; }
     const t = wsOf(id); if (t < 0) return;
     if (!internal) {
       boundManager?.dismiss(W[id]);
@@ -208,6 +219,7 @@
     save(); render();
   }
   function focusWin(id, { scroll = true } = {}) {
+    if (hud?.id === id) { hudFocus(); return; }
     const t = wsOf(id); if (t < 0) return;
     const fromHome = homeOpen;
     leaveHome();
@@ -242,7 +254,7 @@
     [d.wins[i], d.wins[j]] = [d.wins[j], d.wins[i]]; save(); layout();
   }
   function toggleMono() {
-    if (homeOpen) return; // Home must not alter a parked desktop's fullscreen preference.
+    if (homeOpen || hudHasFocus()) return; // Home must not alter a parked desktop's fullscreen preference; nor the HUD.
     const d = ws[cur]; if (!d.wins.length) return;
     d.mono = !d.mono; save(); layout();
     if (d.mono && !store.get('fullHint', false)) {
@@ -327,7 +339,7 @@
   // Prefer this workspace, then any.
   function findWin(fn) {
     const here = ws[cur].wins.map(id => W[id]).find(fn); if (here) return here;
-    return Object.values(W).find(fn) || null;
+    return Object.values(W).find(w => w.id !== hud?.id && fn(w)) || null; // the heads-up chat is never reused as a desk window
   }
   function openThread(sid, opts = {}) {
     if (!sid) return;
@@ -372,14 +384,21 @@
     if (!el) { el = document.createElement('div'); el.className = 'wsp'; el.dataset.desk = d.id; stage.appendChild(el); }
     el.dataset.ws = i; return el;
   }
-  function winHtml(w) {
+  function winHtml(w) { return `${barHtml(w)}
+      <div class="wbody">${bodyHtml(w)}</div>${hud?.id === w.id ? '<div class="hud-grip" data-hudgrip title="Drag to resize" aria-hidden="true"></div>' : ''}`; }
+  const HUD_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="15.5" cy="14.5" r="2.6" fill="currentColor"/></svg>';
+  const DESK1_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M10.6 9.6 12.6 8v8"/></svg>';
+  function barHtml(w) {
     const a = appOf(w);
+    if (hud?.id === w.id) return `<div class="wbar" data-drag title="Drag to move">${window.WosAgents.titlebar(w.agent || '', 'ic', 't')}
+      <button data-wact="hud-home" title="Back to desktop 1 (${MOD}P)" aria-label="Back to desktop 1" aria-keyshortcuts="Alt+P">${DESK1_ICON}</button>
+      <button data-wact="close" title="Close" aria-label="Close window">✕</button></div>`;
     return `<div class="wbar" data-drag>${w.app === 'chats' ? window.WosAgents.titlebar(w.agent || '', 'ic', 't') : `${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>`}
       ${window.WosBoundView.badge(w)}${w.app === 'frame' ? window.WosOwnViews?.marker(a) || '' : ''}${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
       ${reloadable(w) ? `<button data-wact="reload" title="Refresh (${MOD}R)" aria-label="Refresh window">↻</button>` : ''}
+      ${w.app === 'chats' ? `<button data-wact="hud" title="Float over every desk (${MOD}P)" aria-label="Float over every desk" aria-keyshortcuts="Alt+P">${HUD_ICON}</button>` : ''}
       <button data-wact="mono" title="Full screen (${MOD}F)" aria-label="Full screen">⤢</button>
-      <button data-wact="close" title="Close app (${MOD}W)" aria-label="Close window">✕</button></div>
-      <div class="wbody">${bodyHtml(w)}</div>`;
+      <button data-wact="close" title="Close app (${MOD}W)" aria-label="Close window">✕</button></div>`;
   }
   function bodyHtml(w) {
     if (w.app === 'feature') return '<div class="shared-feature"></div>';
@@ -475,7 +494,7 @@
   // After a send (Enter, or a Right ⌘ / mic voice reply) the window goes back to a focused New chat:
   // type a new one straight away, or ⌥↓ to the next Ready chat.
   function toNewChat(wid, why) {
-    const w = W[wid]; if (!mainChats(w) || homeOpen || focused()?.id !== wid) return;
+    const w = W[wid]; if (hud?.id === wid || !mainChats(w) || homeOpen || focused()?.id !== wid) return; // the HUD stays on its chat
     CHATS.openNewDraft(wid, ''); syncChatsPane(wid); setTimeout(() => focusInside(wid), 30); log('send:new-chat:' + why);
   }
   stage.addEventListener('submit', e => {
@@ -546,6 +565,7 @@
       else if (home) home.remove();
     }
     $$('.wsp', stage).forEach(el => { if (!ws.some(d => d.id === el.dataset.desk)) el.remove(); });
+    hudMount();
     const home = $('#desktopHome');
     home.hidden = !homeOpen;
     if (homeOpen) paintHome(home, homeHtml(null));
@@ -606,6 +626,135 @@
       if (r) Object.assign(el.style, { left: r[0] + 'px', top: r[1] + 'px', width: r[2] + 'px', height: r[3] + 'px' });
     }
   }
+  /* ---- heads-up chat (HUD): a Chats window floating over every desk and Home; folds into the orb ---- */
+  function clampN(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function hudMount() {
+    const hudLayer = hudLayerEl();
+    $$('.win.hud', stage).forEach(el => { if (el.dataset.win !== hud?.id) el.classList.remove('hud'); });
+    if (hudLayer.nextSibling) stage.appendChild(hudLayer); // above every desk and Home
+    if (!hud || !W[hud.id]) { if (hud) hud = null; hudPaint(); return; }
+    let el = winEl(hud.id);
+    if (!el) el = mountWin(W[hud.id], hudLayer); else if (el.parentNode !== hudLayer) hudLayer.appendChild(el);
+    el.classList.add('hud'); el.classList.remove('gone', 'full', 'focus', 'drag');
+    hudPaint();
+  }
+  // Re-draw a window's title bar for its place (desk or HUD); the body, thread and draft stay mounted.
+  function hudBar(id) {
+    const el = winEl(id), w = W[id]; if (!el || !w) return;
+    el.querySelector(':scope > .wbar')?.remove(); el.insertAdjacentHTML('afterbegin', barHtml(w));
+    el.querySelector(':scope > .hud-grip')?.remove();
+    if (hud?.id === id) el.insertAdjacentHTML('beforeend', '<div class="hud-grip" data-hudgrip title="Drag to resize" aria-hidden="true"></div>');
+    window.WosAgents.refreshTitlebars(); syncChatsPane(id);
+  }
+  function hudPaint() {
+    const hudLayer = hudLayerEl();
+    hudLayer.hidden = !hud;
+    if (!hud) return;
+    const SW = stage.clientWidth, SH = stage.clientHeight, el = winEl(hud.id);
+    const w = Math.round(clampN(hud.w, HUD_MIN[0], Math.max(HUD_MIN[0], SW - 2 * HUD_GAP))), h = Math.round(clampN(hud.h, HUD_MIN[1], Math.max(HUD_MIN[1], SH - 2 * HUD_GAP)));
+    if (el) {
+      el.hidden = false;
+      const r = clampN(hud.r, HUD_GAP, Math.max(HUD_GAP, SW - w - HUD_GAP)), b = clampN(hud.b, HUD_GAP, Math.max(HUD_GAP, SH - h - HUD_GAP));
+      Object.assign(el.style, { left: (SW - r - w) + 'px', top: (SH - b - h) + 'px', width: w + 'px', height: h + 'px' });
+    }
+  }
+  function hudFocus() {
+    if (!hud?.open) return;
+    const el = winEl(hud.id); if (!el) return;
+    const ta = W[hud.id].thread && el.querySelector('.pane-main textarea');
+    (ta && ta.getClientRects().length ? ta : el).focus({ preventScroll: true });
+  }
+  function hudOn(id) {
+    const w = W[id]; if (w?.app !== 'chats') return false;
+    if (hud?.id === id) return true;
+    if (hud) hudDock({ focus: false });
+    const t = wsOf(id); if (t < 0) return false;
+    const d = ws[t], i = d.wins.indexOf(id);
+    d.wins.splice(i, 1);
+    if (d.focus === id) d.focus = d.wins[Math.min(i, d.wins.length - 1)] || null;
+    if (d.wins.length < 2) d.mono = false;
+    hud = { ...HUD_DEF, ...(store.get('hudPlace', null) || {}), id, open: true };
+    save(); render(); hudBar(id);
+    CHATS.markVisibleThreadsSeen();
+    setTimeout(hudFocus, 30);
+    if (!store.get('hudHint', false)) { store.set('hudHint', true); toast('◉', `Floats over every desk · ${MOD}P puts it back on desktop 1`, 2600); }
+    log('hud:on');
+    return true;
+  }
+  function hudKeepPlace() { if (hud) store.set('hudPlace', { r: hud.r, b: hud.b, w: hud.w, h: hud.h }); }
+  // Put the HUD window back as a normal window on the desk in front (Home: the last desk).
+  // Put the HUD window back as a normal window: on the desk in front (Home: the last desk), or on desk `to`
+  // (⌥B and the 1 button: desktop 1, Chats' usual place), which then comes to the front.
+  function hudDock({ focus = true, to = null } = {}) {
+    if (!hud) return false;
+    const id = hud.id; hudKeepPlace(); hud = null;
+    if (!W[id]) { save(); render(); return false; }
+    // Back to desktop 1: Chats gets desktop 1 to itself. Anything already there moves one desk to the right,
+    // with every other desk (Miguel, 28 Oct 2026).
+    if (to === 0 && ws[0]?.wins.length) { ws.unshift(freshDesk()); cur += 1; lastWs += 1; }
+    const t = Number.isInteger(to) && ws[to] ? to : cur;
+    const d = ws[t], at = d.focus ? d.wins.indexOf(d.focus) + 1 : d.wins.length;
+    d.wins.splice(at, 0, id); d.focus = id; d.mono = false;
+    const el = winEl(id); if (el) el.hidden = false;
+    if (t !== cur) { save(); render(); goWs(t); } else if (homeOpen) { homeOpen = false; store.set('homeOpen', false); }
+    save(); render(); hudBar(id);
+    if (focus) { paintFocus(); paintBar(); setTimeout(() => focusInside(id), 30); }
+    log('hud:dock' + (to != null ? ':' + (t + 1) : ''));
+    return true;
+  }
+  // ⌥P: float the Chats window in front (or this desk's, or the main one, or a new one); floating, put it back on desktop 1.
+  function hudKey() {
+    if (hud) return hudDock({ to: 0 });
+    const f = focused();
+    // Any Chats window on this desk (main or an agent's) floats as it is; elsewhere only the main Chats is borrowed.
+    let w = f?.app === 'chats' ? f : !homeOpen ? ws[cur].wins.map(x => W[x]).find(x => x?.app === 'chats') : null;
+    if (!w) w = findWin(mainChats) || newWin({ app: 'chats', thread: null });
+    return hudOn(w.id);
+  }
+  // Back / Esc inside the floating chat: thread → its list. On the list it stays floating (⌥P or 1 put it away).
+  function hudBack() {
+    if (!hudHasFocus()) return '';
+    const f = W[hud.id]; if (!f?.thread) return '';
+    const r = CHATS.threadBack(f); syncChatsPane(f.id); hudFocus();
+    return r || 'hud';
+  }
+  function hudClose() {
+    if (!hud) return false;
+    const id = hud.id; hudKeepPlace(); hud = null;
+    if (W[id]) { threadShown(id, null); CHATS.saveDraft(id); delete W[id]; CHATS.forget(id); }
+    save(); render(); log('hud:close');
+    return true;
+  }
+  // Move by the title bar; resize by the top-left grip (the bottom-right corner stays put).
+  let hudDrag = null;
+  stage.addEventListener('pointerdown', e => {
+    if (!hud || e.button !== 0) return;
+    const grip = e.target.closest('[data-hudgrip]');
+    const bar = !grip && e.target.closest('.win.hud > .wbar');
+    if (!grip && (!bar || e.target.closest('[data-wact]'))) return;
+    e.preventDefault(); e.stopPropagation();
+    hudDrag = { size: !!grip, x: e.clientX, y: e.clientY, r: hud.r, b: hud.b, w: hud.w, h: hud.h, on: false };
+  }, true);
+  addEventListener('pointermove', e => {
+    if (!hudDrag || !hud) return;
+    const dx = e.clientX - hudDrag.x, dy = e.clientY - hudDrag.y;
+    if (!hudDrag.on && Math.hypot(dx, dy) < 5) return;
+    if (!hudDrag.on) { hudDrag.on = true; hudLayerEl().classList.add('moving'); }
+    if (hudDrag.size) { hud.w = Math.max(HUD_MIN[0], hudDrag.w - dx); hud.h = Math.max(HUD_MIN[1], hudDrag.h - dy); }
+    else { hud.r = hudDrag.r - dx; hud.b = hudDrag.b - dy; }
+    hudPaint();
+  });
+  addEventListener('pointerup', () => {
+    if (!hudDrag) return; const d = hudDrag; hudDrag = null; hudLayerEl().classList.remove('moving');
+    if (!hud) return;
+    if (d.on) {
+      const SW = stage.clientWidth, SH = stage.clientHeight, sz = [Math.min(hud.w, SW - 2 * HUD_GAP), Math.min(hud.h, SH - 2 * HUD_GAP)];
+      hud.w = Math.round(clampN(hud.w, HUD_MIN[0], Math.max(HUD_MIN[0], SW - 2 * HUD_GAP))); hud.h = Math.round(clampN(hud.h, HUD_MIN[1], Math.max(HUD_MIN[1], SH - 2 * HUD_GAP)));
+      hud.r = Math.round(clampN(hud.r, HUD_GAP, Math.max(HUD_GAP, SW - sz[0] - HUD_GAP))); hud.b = Math.round(clampN(hud.b, HUD_GAP, Math.max(HUD_GAP, SH - sz[1] - HUD_GAP)));
+      save(); hudPaint();
+    }
+  });
+  addEventListener('resize', () => hudPaint());
   function paintFocus() {
     const d = ws[cur];
     $$('.win', stage).forEach(el => el.classList.toggle('focus', el.dataset.win === d.focus));
@@ -726,10 +875,11 @@
 
   /* ---------------- top bar ---------------- */
   addEventListener('wizard:app-counts', () => paintBar());
+  addEventListener('wizard:notifications', () => render());
   function paintBar() {
     window.WosBell?.paint?.();
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
-    C.workspaceNav.setCount(APP.wizard?.id || 'wizard', LIVE?.ok ? (LIVE.workGroups().ready || []).length : 0);
+    C.workspaceNav.setCount(APP.wizard?.id || 'wizard', (LIVE?.ok ? (LIVE.workGroups().ready || []).length : 0) + (window.WosBell?.readyCount?.() || 0));
     $('#logo').setAttribute('aria-current', homeOpen ? 'page' : 'false');
     $('#logo').innerHTML = C.workspaceNav.icon({ home: true }, W, appOf);
     if (!$('#wsList').classList.contains('arranging')) $('#wsList').innerHTML = ws.map((d, i) => {
@@ -822,7 +972,7 @@
     return `<span class="nc-vis${n ? '' : ' nc-zero'}" aria-hidden="true"><svg class="nc-ic" viewBox="0 0 24 24">${icon}</svg>${dots}${n > shown ? '<em>+</em>' : ''}</span>`;
   }
   function mineHomeHtml() {
-    const G = LIVE?.ok ? LIVE.workGroups() : {}, ready = (G.ready || []).length, working = (G.working || []).length;
+    const G = LIVE?.ok ? LIVE.workGroups() : {}, ready = (G.ready || []).length + (window.WosBell?.readyCount?.() || 0), working = (G.working || []).length;
     const pending = OUTBOX?.unsent() || [];
     return `<div class="home-in mine-home"><div data-slot="home-main" hidden></div>
       <div class="mh-res">${window.WosResources?.home() || ''}</div>
@@ -871,6 +1021,9 @@
     const el = e.target.closest('.win'); if (!el) return;
     const id = el.dataset.win, w = W[id];
     const act = e.target.closest('[data-wact]')?.dataset.wact;
+    if (act === 'hud') return hudOn(id);
+    if (act === 'hud-home') return hudDock({ to: 0 });
+    if (act === 'close' && hud?.id === id) return hudClose();
     if (act === 'close') return closeWin(id);
     if (act === 'reload') return reloadWin(id);
     if (act === 'mono') return toggleMono();
@@ -887,7 +1040,7 @@
       const cid = e.target.closest('[data-chats]')?.dataset.chats; if (cid && CHATS.click(e, cid)) { syncChatsPane(id); return; }
     }
   });
-  stage.addEventListener('dblclick', e => { if (e.target.closest('.wbar') && !e.target.closest('[data-wact]')) toggleMono(); });
+  stage.addEventListener('dblclick', e => { if (e.target.closest('.wbar') && !e.target.closest('[data-wact]') && !e.target.closest('.win.hud')) toggleMono(); });
   CHATS.bind(stage);
   // List pane search lives on the ::list window; keep thread selection painted after it re-renders.
   stage.addEventListener('input', e => { if (e.target.matches('[data-chsearch]')) { const id = e.target.closest('.win')?.dataset.win; if (id) syncChatsPane(id); } });
@@ -959,6 +1112,7 @@
       ...(window.WosFiles ? [{ kind: 'cmd', name: 'Files', icon: '▤', run: () => openFiles() }] : []),
       ...(window.WosUsage ? [{ kind: 'cmd', name: 'AI usage', icon: '◔', run: () => openUsage() }] : []),
       { kind: 'cmd', name: 'Close app / empty desktop', icon: '✕', keys: `${MOD}W`, run: () => closeCurrent() },
+      { kind: 'cmd', name: hud ? 'Chat back to desktop 1' : 'Float chat over every desk', icon: hud ? '1' : '◉', keys: `${MOD}P`, run: () => hudKey() },
       { kind: 'cmd', name: 'Full screen', icon: '⤢', keys: `${MOD}F`, run: () => toggleMono() },
       { kind: 'cmd', name: 'Refresh window', icon: '↻', keys: `${MOD}R`, run: () => reloadCurrent() },
       { kind: 'cmd', name: 'Keys guide', icon: '⌨', keys: `${MOD}/`, run: () => toggleKeys(true) },
@@ -1014,7 +1168,7 @@
   /* Miguel's skins (Dark, Light, Landscapes): the selector is the phone launcher at desktop size (core/app-kinds.js): Apps with
    * system apps first and ringed, "+ Get apps", then one folded "For agents" row holding Agent apps, Agents (with
    * "+ Build agents") and Connectors, each ending in its own "+ Get ..." tile. Search stays one flat list. */
-  const mine = () => ['obsidian', 'obsidian-light', 'landscapes'].includes(document.documentElement.dataset.skin || ''); // Miguel's skins
+  const mine = () => ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'].includes(document.documentElement.dataset.skin || ''); // Miguel's skins
   let palFold = false;
   function openStoreKind(kind) {
     const url = window.WosAppKinds.storeUrl(kind);
@@ -1634,6 +1788,8 @@
     if (window.WosSkinFrame?.back()) return 'skin-controls';
     // The first-message guide: once nothing sits above it, Esc/Back dismisses it (= Skip tour) before any navigation.
     if (window.WosTour?.desk?.active) { window.WosTour.desk.finish('skip'); return 'tour'; }
+    // The floating chat, when the keyboard is in it, walks back from its open thread before anything behind it.
+    { const hb = hudBack(); if (hb) return hb; }
     // Leave fullscreen before navigating the app underneath; preserve its thread and draft.
     if (homeOpen) return '';
     if (focused() && CHATS.isHosted(focused().id)) return CHATS.threadBack(focused());
@@ -1674,7 +1830,7 @@
     const TYPE = [['N', 'New chat', 'Type a new message'], ['␣', 'Search', 'Apps, chats and commands'], ['I', 'Inbox', 'All your chats']];
     const READY = [['↓', 'Next ready chat', 'From anywhere. Opens it ready to reply'], ['→  ←', 'Done / Snooze', 'The open chat'], ['X', 'Resolve this', 'An open notification: stop these or fix the cause']];
     const GO = [['G', 'Pick anything', 'Letters appear on every button, app and chat; type them to click'], ['`', 'Home', 'Again to go back'], ['1–9', 'Desktop 1 to 9', 'Jump straight to it'], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
-    const WIN = [['F', 'Full screen', ''], ['W', 'Close', ''], ['R', 'Refresh window', ''], ['H J K L', 'Window to the left, below, above, right', ''], [']', 'Next window', 'Past the last one: the next desktop'], ['[', 'Previous window', 'Past the first one: the previous desktop'], ['⇧ ← →', 'Swap places', ''], ['⇧ 1–9', 'Send to a desktop', '']];
+    const WIN = [['P', 'Float chat', 'Over every desk; again puts it back on desktop 1'], ['F', 'Full screen', ''], ['W', 'Close', ''], ['R', 'Refresh window', ''], ['H J K L', 'Window to the left, below, above, right', ''], [']', 'Next window', 'Past the last one: the next desktop'], ['[', 'Previous window', 'Past the first one: the previous desktop'], ['⇧ ← →', 'Swap places', ''], ['⇧ 1–9', 'Send to a desktop', '']];
     const vis = n => n && !n.hidden && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
     // Every key is a small chip on the thing it acts on (Miguel, 27 Oct 2026: no boxes to read). Only the four
     // Speak keys carry a word, since their buttons don't say what they do. The lists above name each chip for
@@ -1752,6 +1908,12 @@
           const srch = wel.querySelector('[data-chsearch]'); if (vis(srch) && document.activeElement !== srch) chip(srch, 'I', 'inside');
           const fab = wel.querySelector('.pane-list [data-chfab]'); if (vis(fab)) chip(fab, 'N', 'corner');
         }
+      }
+      // Heads-up chat: P on the float button, or (floating) on Back to desktop 1.
+      if (hud && W[hud.id]) { const n = winEl(hud.id)?.querySelector('.wbar [data-wact="hud-home"]'); if (vis(n)) chip(n, 'P'); }
+      else {
+        const fw = f?.app === 'chats' ? f : !homeOpen && d.wins.map(x => W[x]).find(mainChats);
+        const n = fw && winEl(fw.id)?.querySelector('.wbar [data-wact="hud"]'); if (vis(n)) chip(n, 'P');
       }
       // The window in front: F W R on its own buttons; H J K L on the windows they jump to.
       if (f) {
@@ -1943,6 +2105,8 @@
     // ⌥Space search everything, ⌥O open an app: from anywhere, even while typing.
     if (alt && !shift && code === 'Space') return hit(() => palToggle('all'));
     if (alt && !shift && code === 'KeyO') return hit(() => { if (!e.repeat) palToggle('apps'); });
+    // ⌥P float the chat over every desk; again, put it back on desktop 1. Even while typing.
+    if (alt && !shift && code === 'KeyP') return hit(() => { if (!e.repeat) { closePalette({ restore: false }); hudKey(); } });
     // Link pane: ⌘Enter keeps it as a window, ⌘⇧Enter opens it in the browser.
     if (LINKS && LINKS.isOpen() && (e.metaKey || e.ctrlKey) && k === 'Enter') return hit(() => LINKS.el.querySelector(shift ? '[data-ls="out"]' : '[data-ls="keep"]')?.click());
     // Escape while recording cancels the take first (James, 19 Oct); the next Escape navigates. Only the
@@ -1953,7 +2117,7 @@
     if (!pal.hidden) {
       // ⌘K's palette owns the keyboard while open. The app selector lets the window manager's ⌥ chords
       // through (⌥Enter, ⌥1…9, ⌥[ ], ⌥W…), stepping aside first, so a fresh desktop never traps them.
-      if (palMode !== 'apps' || !alt || !/^(Digit[1-9]|Key[GIWFHJKLNTV]|Slash|Comma|Bracket(Left|Right))$/.test(code)) return;
+      if (palMode !== 'apps' || !alt || !/^(Digit[1-9]|Key[GIWFHJKLNTVP]|Slash|Comma|Bracket(Left|Right))$/.test(code)) return;
       closePalette({ restore: false });
       queueMicrotask(() => { const a = document.activeElement; if (!a || a === document.body || !a.getClientRects().length) restFocus(); });
     }
@@ -2037,8 +2201,9 @@
     }
     const d = ws[cur]; if (!d.wins.length) { const h = wsEl(cur).querySelector('.home'); if (h) paintHome(h, homeHtml(cur)); }
     if (homeOpen) paintHome($('#desktopHome'), homeHtml(null));
+    hudPaint();
   });
-  OUTBOX?.onChange(() => { if (homeOpen) paintHome($('#desktopHome'), homeHtml(null)); else if (!ws[cur].wins.length) { const h = wsEl(cur).querySelector('.home'); if (h) paintHome(h, homeHtml(cur)); } for (const id of ws[cur].wins) { const w = W[id]; if ((w?.app === 'chats' || CHATS.isHosted(id)) && w.thread) { const el = stage.querySelector(`[data-chats="${id}"]`); if (el) CHATS.renderThread(w, el); } } });
+  OUTBOX?.onChange(() => { if (homeOpen) paintHome($('#desktopHome'), homeHtml(null)); else if (!ws[cur].wins.length) { const h = wsEl(cur).querySelector('.home'); if (h) paintHome(h, homeHtml(cur)); } for (const id of [...ws[cur].wins, ...(hud?.open ? [hud.id] : [])]) { const w = W[id]; if ((w?.app === 'chats' || CHATS.isHosted(id)) && w.thread) { const el = stage.querySelector(`[data-chats="${id}"]`); if (el) CHATS.renderThread(w, el); } } });
   OUTBOX?.onSent((it, res) => {
     if (it.kind === 'new' && LIVE && !LIVE.session(it.sessionId)) {
       LIVE.sessions.unshift({ id: it.sessionId, runtime: 'direct', title: (it.text || 'Voice note').slice(0, 60), status: 'running', runId: res.runId, updatedAt: new Date().toISOString(), lastUserAt: new Date().toISOString(), preview: it.text, source: 'wizard-mobile' });
@@ -2050,7 +2215,7 @@
     for (const id of Object.keys(W)) if ((W[id].app === 'chats' || CHATS.isHosted(id)) && W[id].thread === it.sessionId) setTimeout(() => W[id] && CHATS.loadThread(W[id], true), 1500);
   });
   // Open threads poll a little faster while Archimedes works.
-  setInterval(() => { if (document.hidden) return; for (const id of ws[cur].wins) { const w = W[id]; if ((w?.app === 'chats' || CHATS.isHosted(id)) && w.thread && w.thread !== '__new__') CHATS.loadThread(w); } }, 4000);
+  setInterval(() => { if (document.hidden) return; for (const id of [...ws[cur].wins, ...(hud?.open ? [hud.id] : [])]) { const w = W[id]; if ((w?.app === 'chats' || CHATS.isHosted(id)) && w.thread && w.thread !== '__new__') CHATS.loadThread(w); } }, 4000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { LIVE?.refresh(); CHATS.markVisibleThreadsSeen(); } });
 
   /* ---------------- toast ---------------- */
@@ -2192,6 +2357,7 @@
     openFiles, openUsage, recordReply, openSearch, localCommand, commandVoice, dictate, toast,
     pauseVoice: () => VOICE.state === 'paused' ? VOICE.resume() : VOICE.pause(),
     openSettings, closeSettings, stepThread, setListW, get listW() { return listW(); },
+    get hud() { return hud ? { ...hud } : null; }, hudOn, hudDock, hudClose, hudKey,
     get voice() { return VOICE.state; }, get log() { return window.__wuxLog || []; },
   };
   /* Skin packages (core/skin-host.js) on desktop: the same narrow adapter the phone shell hands over, so a skin

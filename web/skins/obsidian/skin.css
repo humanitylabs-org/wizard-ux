@@ -829,6 +829,9 @@ html[data-skin^="obsidian"][data-shell="desktop"] .dchats .ch-fab { width: 52px;
 html[data-skin^="obsidian"][data-shell="desktop"] .dchats .ch-fab svg { stroke: var(--ob-on); }
 html[data-skin^="obsidian"][data-shell="desktop"] .ch-compose textarea { background: color-mix(in srgb, var(--ink) 5%, transparent); }
 
+/* Desktop Latest pill (Miguel, 28 Oct 2026): it sat on the Done button, so a double click could close the thread. It now
+ * rides in the thread's column just above the Snooze/Done row, centred, taking no space (32px tall, -44px top, 12px gap). */
+html[data-skin^="obsidian"][data-shell="desktop"] .ch-thread > .ch-latest { position: relative; inset: auto; transform: none; flex: none; align-self: center; margin: -44px auto 12px; z-index: 6; }
 /* Phone polish (Miguel 27 Oct, same pass as the desktop one): sheets, the long-press menu and the count badge follow
  * the skin. The long-press menu used to run under the pill dock (its lower actions were hidden behind it). */
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-sheet-b { padding-bottom: calc(var(--pill-top) + 10px); }
