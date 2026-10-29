@@ -256,6 +256,10 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/context-menu.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Shared pointer/keyboard action menu; desktop tiles supply actions"
+    },
     "core/core.js": {
       "loadedBy": [
         "phone",
@@ -789,6 +793,8 @@
     "core/companion-pane.js",
     "core/composer-input.js",
     "core/config.js",
+    "core/context-menu.css",
+    "core/context-menu.js",
     "core/core.js",
     "core/deeplink.js",
     "core/dom-morph.js",
