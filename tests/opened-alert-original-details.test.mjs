@@ -29,6 +29,21 @@ test('opened alert renders original details directly as escaped text, never mark
  vm.runInNewContext(line,ctx);assert.ok(ctx.msgs.includes(esc(details)));assert.doesNotMatch(ctx.msgs,/<img|<script/);
  assert.ok(ctx.msgs.indexOf('summary')<ctx.msgs.indexOf('Original alert'));
 });
+test('legacy short alerts render once but long original bodies remain complete',async()=>{
+ const line=read('web/core/chats.js').split('\n').find(l=>l.trim().startsWith('if (NV) msgs ='));
+ for(const message of ['Legacy original message','long source\n'.repeat(1500)+'LEGACY END']){
+  const item=await project({id:'legacy-render',message});
+  const ctx={NV:{id:'legacy-render',item,reply:{}},esc:String,md:String,timeTag:()=>'',msgs:''};
+  vm.runInNewContext(line,ctx);
+  if(item.message===item.details){
+   assert.doesNotMatch(ctx.msgs,/ch-notif-original/);
+   assert.equal(ctx.msgs.split(message).length-1,1);
+  }else{
+   assert.match(ctx.msgs,/ch-notif-original/);
+   assert.ok(ctx.msgs.includes(message));
+  }
+ }
+});
 test('opened alert original uses the shared scroller without bottom sticking or losing its place',()=>{
  const power=read('web/core/chat-power.js'),chats=read('web/core/chats.js'),css=read('web/core/chats.css');
  assert.ok(power.indexOf('if (o.notification)')<power.indexOf("if (sid === '__new__' || !o.turns)"));
