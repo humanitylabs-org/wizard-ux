@@ -540,3 +540,35 @@ html[data-skin="landscapes-light"] .mh-wiz-menu { --mh-ink: #111418; --mh-ink-2:
 .mh-phone-top .mh-wiz-menu { min-width: min(300px, calc(100vw - 28px)); }
 .mh-phone-top .mh-wiz-menu button { min-height: 44px; }
 .mh-root:not(.is-topbar) .mh-phone-top + .mh-glance.is-widget { margin-top: 18px; }
+
+/* ================= Phone v5: no boxes. Plain ink on the wallpaper, like the gear and the desktop bar ================= */
+.mh-phone-top { margin-top: -8px; padding: calc(var(--sb, 0px) + var(--safe-t, 0px)) 14px 0 6px; }
+.mh-phone-top .mh-wiz { height: 40px; padding: 0 8px !important; gap: 4px; border-radius: 12px; font-size: 18px; font-weight: 750; letter-spacing: -.01em; background: transparent !important; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.mh-phone-top .mh-wiz:active { transform: scale(.96); }
+.mh-glance.is-widget[data-look] { width: min(340px, calc(100% - 40px)); margin-top: 26px !important; padding: 0; gap: 0; background: none !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; border-radius: 0; }
+.mh-glance.is-widget[data-look] .mh-tile.is-ai { height: auto; margin: 0 0 22px; border: 0; }
+.mh-glance.is-widget .mh-gauge { padding: 0 !important; gap: 10px; justify-content: center; }
+.mh-glance.is-widget .mh-g-cells i { width: 15px; height: 26px; border-radius: 5px; background: rgba(255, 255, 255, .22); box-shadow: 0 1px 6px rgba(0, 0, 0, .18); }
+.mh-glance.is-widget[data-look] .mh-tile { padding: 4px 0 !important; }
+.mh-glance.is-widget[data-look] .mh-tile-viz { width: auto; height: 40px; background: none; border-radius: 0; }
+.mh-glance.is-widget .mh-pic { --pic: 38px; }
+.mh-glance.is-widget .mh-tile.is-chats .mh-dots { max-width: 44px; }
+.mh-glance.is-widget .mh-tile-lab { font-size: 11.5px; font-weight: 700; color: var(--mh-ink-2); }
+.mh-glance.is-widget .mh-tile-val { font-size: 14px; }
+.mh-glance.is-widget .mh-badge { top: -4px; right: -8px; }
+/* On photo skins the words carry a soft shadow instead of a box, so they read on any picture. */
+html[data-skin^="landscapes"] .mh-phone-top .mh-wiz, html[data-skin^="landscapes"] .mh-glance.is-widget { text-shadow: 0 1px 3px rgba(0, 0, 0, .55), 0 0 12px rgba(0, 0, 0, .25); }
+html[data-skin^="landscapes"] .mh-glance.is-widget .mh-tile-lab { color: rgba(255, 255, 255, .92); }
+html[data-skin^="landscapes"] .mh-phone-top .mh-wiz-car { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5)); }
+html[data-skin^="landscapes"] .mh-glance.is-widget .mh-dots i { box-shadow: 0 1px 4px rgba(0, 0, 0, .35); }
+html[data-skin="landscapes-light"] .mh-phone-top .mh-wiz, html[data-skin="landscapes-light"] .mh-glance.is-widget { text-shadow: 0 1px 3px rgba(255, 255, 255, .7); }
+html[data-skin$="light"] .mh-glance.is-widget .mh-g-cells i { background: rgba(17, 20, 24, .14); box-shadow: none; }
+html[data-skin$="light"] .mh-glance.is-widget .mh-g-cells i.on { background: #12A867; }
+html[data-skin$="light"] .mh-glance.is-widget .mh-tile-lab, html[data-skin$="light"] .mh-glance.is-widget .mh-g-label, html[data-skin$="light"] .mh-glance.is-widget .mh-g-ef { color: rgba(17, 20, 24, .75); }
+html[data-skin="obsidian-light"] .mh-glance.is-widget .mh-tile { background: none !important; }
+.mh-root .mh-glance.is-widget .mh-gauge { background: none !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.mh-glance.is-widget .mh-gauge .mh-g-cells i.on { background: var(--mh-good); }
+.mh-glance.is-widget .mh-gauge[data-s="tight"] .mh-g-cells i.on { background: var(--mh-warn); }
+.mh-glance.is-widget .mh-gauge[data-s="no"] .mh-g-cells i.on { background: var(--mh-bad); }
+.mh-glance.is-widget .mh-g-label, .mh-glance.is-widget .mh-g-ef { color: var(--mh-ink); opacity: .9; }
+html[data-skin$="light"] .mh-glance.is-widget .mh-gauge[data-s="ok"] .mh-g-cells i.on { background: #12A867; }
