@@ -192,7 +192,7 @@ test('Settings › Network & security fills even before Home has been shown', ()
   const src = read('web/tweaks/miguel/machines-home/tweak.js');
   const host = read('web/core/skin-host.js'), res = read('web/core/resources.js');
   assert.match(host, /slot\.append\(node\); window\.WosResources\?\.watch\?\.\(node\);/, 'a shown System page keeps readings fresh');
-  assert.match(res, /\[\.\.\.S\.extra,\.\.\.S\.watch\]\.some\(h=>h\.isConnected\)/, 'watched pages count as viewing');
+  assert.match(res, /\[\.\.\.S\.watch\]\.some\(h=>h\.isConnected&&h\.getClientRects\(\)\.length>0\)/, 'watched pages count as viewing only while on screen');
   assert.match(src, /if \(!netBox\.firstChild\) netBox\.replaceChildren\(h\('span', \{ cls: 'mh-wait'/, 'a loading placeholder instead of a blank page');
 });
 
