@@ -1,4 +1,4 @@
-// Settings › Connections (wizard-os #324): the App Manager's Connections view is a Settings tab, not a launcher tile.
+// Settings › Connections (wizard-os issue 324): the App Manager's Connections view is a Settings tab, not a launcher tile.
 // Runs the real web/core/settings.js: the tab shows only once the owner listener answers, hosts the view's own page
 // (so its owner-only actions stay the App Manager's), routes the old app id, and never reloads the frame on a
 // background refresh.

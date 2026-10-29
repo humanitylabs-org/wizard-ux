@@ -20,7 +20,7 @@
     { id: 'phones', title: 'Phones & devices', available: phonesAvailable },
     { id: 'phone', title: 'Phone', available: () => shell() ? !!shellOrb() : android() },
     // Connections: the App Manager's own view (agents, what each may use, app-to-app links), only where its owner
-    // listener answers. System pieces that come with every box live in Settings, not the launcher (wizard-os #324).
+    // listener answers. System pieces that come with every box live in Settings, not the launcher (wizard-os issue 324).
     { id: 'connections', title: 'Connections', available: () => connectionsAvailable() },
     { id: 'recovery', title: 'Unsent & recovered' },
     // Resources: the Home resource bars (AI + Compute) from the shared renderer, when it is there; else AI usage.
