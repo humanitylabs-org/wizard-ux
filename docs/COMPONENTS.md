@@ -52,7 +52,7 @@ Visual: <side-by-side screenshot, or "none">
 | Pages: list, viewer, editor, history, bridge | `WosPages` (`pages.js`) | app powers |
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) | local menus |
 | App setup | `WosAppSetup` (`app-setup.js`) | app-local setup |
-| Chats: Focus/Filter/search, composer/files/read, Copy/Share, Recall/Done | `WizCore` (`chats.js`, `.css`); Ready/Home/original alerts; Ready Priority groups (`WizLive.readyRank`); `setFocus`/`migrateChatsFocus`; `WizLive`; provider-access Errors; source-bound send release; cache | duplicate Chats/Focus |
+| Chats: Focus/Filter/search, composer/files/read, Copy/Share, Recall/Done | `WizCore` (`chats.js`, `.css`); Ready/Home/original alerts; Ready Priority groups (`WizLive.readyRank`); `setFocus`/`migrateChatsFocus`; `WizLive` (seq resume); provider-access Errors; source-bound send release; cache | duplicate Chats/Focus |
 | Chats list variant | `WizChatsHost` view slot (`chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`edge-peek.js`), host storage | skin-local duplicate |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`dom-morph.js`) | whole-view `innerHTML` on every live tick |
