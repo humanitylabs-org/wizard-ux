@@ -12,7 +12,7 @@ test('app picker tiles mark long one-word names', () => {
 });
 test('long labels fit the tile and never split a word bare', () => {
   assert.match(css, /\.pal-app \.nm\.long \{[^}]*font-size: calc\(var\(--wz-text-sm\) \* \.85\);[^}]*max-width: calc\(100% \+ 8px\);[^}]*margin-inline: -4px;/);
-  const nm = css.match(/\.pal-app \.nm \{[^}]*\}/)[0];
-  assert.doesNotMatch(nm, /overflow-wrap: anywhere/);
-  assert.match(nm, /hyphens: auto/);
+  // The last rule that sets overflow-wrap on the label wins: it must break whole words with a hyphen.
+  const wraps = [...css.matchAll(/\.pal-app \.nm \{[^}]*overflow-wrap:[^}]*\}/g)].map(m => m[0]);
+  assert.match(wraps.at(-1), /overflow-wrap: break-word;[^}]*hyphens: auto/);
 });
