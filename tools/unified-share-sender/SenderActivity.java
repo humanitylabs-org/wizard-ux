@@ -18,6 +18,18 @@ import java.nio.charset.StandardCharsets;
 public class SenderActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        renderCase();
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        // am start may deliver to this already-resumed Activity. Both the title
+        // and the button's captured payload must belong to the newest Intent.
+        setIntent(intent);
+        renderCase();
+    }
+
+    private void renderCase() {
         String mode = getIntent().getStringExtra("fixture_case");
         boolean genuine = "genuine".equals(mode);
         String name = genuine ? "genuine.pdf" : "x.pdf";

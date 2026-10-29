@@ -198,6 +198,58 @@ Controller replay proves the bounds/refusals and passive code contract, not nati
 acceptance. Parent alone submits the frozen full-acceptance spec; it stops early
 on missing delivery. Preserve every earlier log, screenshot, APK and JUnit XML.
 
+## Warm sender-case regression (prepared; native rerun pending)
+
+The `6d830a01a92d` run passed external boilerplate, private agent/chat scope,
+outside cancellation with no backend write, and native Back/Cancel. Its
+`existing-delivery` failed **before Send**, at `Rig.share('genuine')`'s staged
+subject assertion. Saved `sender-3-genuine.png` visibly still says `x.pdf`;
+`sender-3-genuine-activity.txt` shows the same resumed sender ActivityRecord.
+Logcat records the sender restart attempt with `result code=3` (delivered to top).
+The failure DOM also shows `x.pdf` and no genuine quote. The fixture previously
+read `fixture_case` only in `onCreate`, capturing that name/text in its listener.
+This is evidenced stale source-fixture state, not proof of a product defect.
+
+Only the fixture now handles `onNewIntent`: call super, `setIntent(intent)`, then
+rerender both title and button listener through the same `renderCase()` as cold
+creation. No force-stop/new-task workaround, no product Android/web edit, no
+assertion removal or input fallback. Both forward (`boilerplate → genuine`) and
+reverse (`genuine → boilerplate`, needed for the resumed new-chat case) matter.
+
+- Before each native source tap, retain the launch output, native XML, screenshot,
+  activity and requested/actually rendered case. An exact package-scoped visible
+  title must match the request; a stale title refuses **before tapping**.
+- Save staged native metadata **before** subject/text/item/hash assertions, so a
+  later stale payload remains diagnosable rather than disappearing at failure.
+- Controller tests replay forward/reverse and stale native-XML transitions,
+  refusal before tap, pre-assert payload persistence and original hash refusal.
+  These tests use mocks/saved XML, not an emulator.
+- Before compiling the sender APK, the parent's admitted forum run also compiles
+  the **actual SenderActivity.java** against small host-JVM Android seam stubs.
+  One Activity receives cold boilerplate → warm genuine → warm boilerplate; real
+  generated button listeners must emit matching subjects/text, URI/ClipData,
+  explicit receiver, MIME/read grant and source files. This executable regression
+  is staged, **not run by the child**; `sender-lifecycle-replay.log` and the
+  `PASS_HOST_JVM_SEAM_ONLY` checkpoint remain distinct from actual Android proof.
+
+The remaining source-contract audit found no additional evidenced mismatch in
+comment insertion/keyboard Back, native durable queue interruption/restart,
+background resume or notification PendingIntent handling. The final notification
+selector may still encounter grouping/order; only an actual System UI tap plus
+exact foreground-thread DOM/log readback can pass, never a constructed intent.
+The previous crash buffer contains a `UiAutomation` process `Bad file descriptor`
+after failure diagnostics, not an identified product-process crash. Retain that
+buffer and the existing fail-on-crash guard; do not convert the failed run to pass.
+
+Stage a fresh sibling `--reuse-build` directory. Bind and preserve the original
+381 JUnit tests, APK `0dc7751eaff2393b6939c1b1ee58feab8df670cb95a926ec9fd9a7abd51e15fd`,
+all prior receipts and passed/failing proof bytes. Rerun every existing native
+phase (including passed cases) without weakening their assertions or trusted tap
+journals. The child does not compile, start an emulator or submit; the parent
+alone admits the frozen forum/heavy spec once. Record the executed failed
+`6d830a01a92d` job in the durable latest pointer so a schedule cannot replay it.
+Recheck free space minus the 3 GiB job budget exceeds the 200 GiB reserve.
+
 ## Real device phases and evidence
 
 The separate synthetic source app generates a 24 MiB blank-page PDF fixture byte

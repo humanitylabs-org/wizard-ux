@@ -338,17 +338,104 @@ class ControllerTest(unittest.TestCase):
         self.assertIsNone(runner.native_bounds(self.SENDER_XML, 'share synthetic pdf'))
 
     def test_share_taps_saved_sender_button_before_connecting_receiver(self):
-        rig = runner.Rig.__new__(runner.Rig)
-        rig.report = {'external_intents': []}
-        rig.sx = Mock(); rig.screenshot = Mock(); rig.ui = Mock(return_value=self.SENDER_XML)
-        rig.connect_page = Mock(side_effect=RuntimeError('stop after native sender tap'))
-        rig.tap_text = Mock(side_effect=AssertionError('generic text selector must not select sender'))
-        with self.assertRaisesRegex(RuntimeError, 'stop after native sender tap'):
-            rig.share('boilerplate')
-        self.assertEqual(rig.sx.call_args_list[0].args,
-                         ('am start -W -n qa.unifiedshare.sender/.SenderActivity --es fixture_case boilerplate',))
-        self.assertEqual(rig.sx.call_args_list[1].args, ('input tap 540 350',))
-        rig.tap_text.assert_not_called()
+        with tempfile.TemporaryDirectory(prefix='sender-tap-', dir=os.environ['TMPDIR']) as d:
+            rig = runner.Rig.__new__(runner.Rig)
+            rig.out = Path(d); rig.save = Mock()
+            rig.report = {'external_intents': []}
+            rig.sx = Mock(return_value='delivered to existing top-most instance')
+            rig.screenshot = Mock(); rig.ui = Mock(return_value=self.SENDER_XML)
+            rig.connect_page = Mock(side_effect=RuntimeError('stop after native sender tap'))
+            rig.tap_text = Mock(side_effect=AssertionError('generic text selector must not select sender'))
+            with self.assertRaisesRegex(RuntimeError, 'stop after native sender tap'):
+                rig.share('boilerplate')
+            self.assertEqual(rig.sx.call_args_list[0].args,
+                             ('am start -W -n qa.unifiedshare.sender/.SenderActivity --es fixture_case boilerplate',))
+            self.assertEqual(rig.sx.call_args_list[1].args, ('input tap 540 350',))
+            self.assertEqual(json.loads((rig.out / 'sender-0-boilerplate-case.json').read_text())['actual_case'], 'boilerplate')
+            rig.tap_text.assert_not_called()
+
+    def test_sender_rendered_case_scopes_exact_title_and_visibility(self):
+        self.assertEqual(runner.sender_case(self.SENDER_XML), 'boilerplate')
+        self.assertEqual(runner.sender_case(self.SENDER_XML.replace('x.pdf', 'genuine.pdf')), 'genuine')
+        for before, after in (
+                ('package="qa.unifiedshare.sender"', 'package="wrong.package"'),
+                ('text="Synthetic external PDF sender', 'visible-to-user="false" text="Synthetic external PDF sender'),
+                ('text="Synthetic external PDF sender', 'displayed="false" text="Synthetic external PDF sender'),
+                ('x.pdf', 'other.pdf'),
+                ('bounds="[30,150][1050,287]"', 'bounds="[0,0][0,0]"')):
+            self.assertIsNone(runner.sender_case(self.SENDER_XML.replace(before, after)))
+
+    def test_sender_case_transition_uses_actual_ui_and_refuses_stale_before_tap(self):
+        with tempfile.TemporaryDirectory(prefix='sender-transition-', dir=os.environ['TMPDIR']) as d:
+            rig = runner.Rig.__new__(runner.Rig)
+            rig.out = Path(d); rig.save = Mock(); rig.report = {'external_intents': []}
+            rig.screenshot = Mock(); rig.ui = Mock()
+            rig.connect_page = Mock(side_effect=RuntimeError('after real tap seam'))
+            # Pure controller replay, no native evidence: initial case, forward,
+            # reverse, then a genuine request with the old boilerplate UI.
+            for requested, actual in (('boilerplate','boilerplate'), ('genuine','genuine'),
+                                      ('boilerplate','boilerplate'), ('genuine','boilerplate')):
+                rig.sx = Mock(return_value='Warning: delivered to currently running top-most instance.')
+                rig.ui.return_value = self.SENDER_XML.replace('x.pdf', 'genuine.pdf') if actual == 'genuine' else self.SENDER_XML
+                if requested == actual:
+                    with self.assertRaisesRegex(RuntimeError, 'after real tap seam'):
+                        rig.share(requested)
+                    self.assertEqual(rig.sx.call_count, 2)
+                    rig.report['external_intents'].append({'case':requested})
+                else:
+                    with self.assertRaisesRegex(AssertionError, 'sender case mismatch'):
+                        rig.share(requested)
+                    rig.sx.assert_called_once()  # launch only, never a wrong-case tap
+                    case = json.loads((rig.out / 'sender-3-genuine-case.json').read_text())
+                    self.assertEqual((case['requested_case'],case['actual_case']), ('genuine','boilerplate'))
+                    self.assertTrue((rig.out / 'sender-3-genuine.xml').is_file())
+                attempt = rig.report['sender_attempts'][-1]
+                self.assertEqual((attempt['requested_case'],attempt['actual_case']), (requested,actual))
+            self.assertEqual(rig.connect_page.call_count, 3)
+
+    def test_staged_payload_is_saved_before_wrong_subject_refusal(self):
+        with tempfile.TemporaryDirectory(prefix='sender-staged-', dir=os.environ['TMPDIR']) as d:
+            rig = runner.Rig.__new__(runner.Rig)
+            rig.out = Path(d); rig.save = Mock(); rig.report = {'external_intents': []}
+            rig.ui = Mock(return_value=self.SENDER_XML.replace('x.pdf','genuine.pdf'))
+            rig.screenshot = Mock(); rig.connect_page = Mock(); rig.sheet = Mock(return_value=True)
+            rig.page = Mock(); rig.page.ev.return_value = True
+            stale = {'subject':'x.pdf','text':'Emailing x.pdf','items':[{'name':'x.pdf','sha256':'a'*64}]}
+            rig.sx = Mock(side_effect=['reused activity','',json.dumps(stale)])
+            with self.assertRaises(AssertionError):
+                rig.share('genuine')
+            self.assertEqual(json.loads((rig.out / 'staged-0-genuine.json').read_text()), stale)
+            self.assertEqual(rig.report['external_intents'], [])
+            self.assertEqual(rig.report['sender_attempts'][0]['staged_subject'], 'x.pdf')
+            self.assertEqual(rig.sx.call_count, 3)  # no hash or send after failure
+
+    def test_lifecycle_replay_stages_real_activity_and_bounded_java_commands_only(self):
+        # Mock command transport only: never compile on the VPS. The parent's
+        # forum run executes these exact sources and the real fixture Activity.
+        with tempfile.TemporaryDirectory(prefix='sender-jvm-stage-', dir=os.environ['TMPDIR']) as d:
+            rig = runner.Rig.__new__(runner.Rig)
+            rig.out = Path(d); work = rig.out / 'sender'; work.mkdir()
+            rig.report = {}; rig.save = Mock()
+            rig.run = Mock(side_effect=['', 'PASS sender lifecycle boilerplate -> genuine -> boilerplate; title/listener/Intent/URI/grant\n'])
+            inputs = HERE / 'unified-share-sender'
+            rig.replay_sender_lifecycle(inputs, work)
+            self.assertIn(inputs / 'SenderActivity.java', rig.run.call_args_list[0].args[0])
+            self.assertEqual(rig.run.call_args_list[0].kwargs['timeout'], 60)
+            self.assertEqual(rig.run.call_args_list[1].kwargs['timeout'], 30)
+            self.assertEqual(rig.report['sender_lifecycle_replay']['status'], 'PASS_HOST_JVM_SEAM_ONLY')
+            self.assertEqual(rig.report['sender_lifecycle_replay']['source_sha256'], runner.sha(inputs/'SenderActivity.java'))
+            self.assertEqual(len(list((work/'lifecycle-replay').rglob('*.java'))), len(runner.sender_lifecycle_sources()))
+
+    def test_lifecycle_replay_refuses_compile_and_runtime_failures_with_log(self):
+        for outputs in ([RuntimeError('javac failure')], ['', RuntimeError('stale title')], ['', 'wrong success marker']):
+            with tempfile.TemporaryDirectory(prefix='sender-jvm-fail-', dir=os.environ['TMPDIR']) as d:
+                rig = runner.Rig.__new__(runner.Rig); rig.out = Path(d)
+                work = rig.out/'sender'; work.mkdir(); rig.report = {}; rig.save = Mock()
+                rig.run = Mock(side_effect=outputs)
+                with self.assertRaises((RuntimeError,AssertionError)):
+                    rig.replay_sender_lifecycle(HERE/'unified-share-sender',work)
+                self.assertNotIn('sender_lifecycle_replay',rig.report)
+                self.assertTrue((rig.out/'sender-lifecycle-replay.log').read_text())
 
     def test_share_keeps_independent_sender_hash_assertion(self):
         with tempfile.TemporaryDirectory(prefix='unified-hash-', dir=os.environ['TMPDIR']) as d:

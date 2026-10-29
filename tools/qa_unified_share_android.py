@@ -266,6 +266,101 @@ def native_sender_bounds(xml):
     return None
 
 
+def sender_case(xml):
+    """Read the rendered source case, never infer it from the requested extra."""
+    cases = []
+    for node in ET.fromstring(xml).iter('node'):
+        if (node.get('package') == SENDER and node.get('class') == 'android.widget.TextView' and
+                node.get('visible-to-user') != 'false' and node.get('displayed') != 'false'):
+            for mode, name in (('boilerplate', 'x.pdf'), ('genuine', 'genuine.pdf')):
+                title = 'Synthetic external PDF sender\n' + name + '\nNo owner files or accounts'
+                if node.get('text') == title and native_bounds(ET.tostring(node, encoding='unicode'), title):
+                    cases.append(mode)
+    return cases[0] if len(cases) == 1 else None
+
+
+def sender_lifecycle_sources():
+    """Host-JVM seam replay of the REAL fixture Activity, not Android proof.
+
+    Compiled/run only by compile_sender inside the parent's forum heavy lease.
+    Stub Activity deliberately does NOT update getIntent() in onNewIntent.
+    """
+    return {
+        'android/os/Bundle.java': 'package android.os; public class Bundle {}',
+        'android/net/Uri.java': '''package android.net; public class Uri {
+          final String value; private Uri(String v){value=v;}
+          public static Uri parse(String v){return new Uri(v);}
+          public String toString(){return value;} }''',
+        'android/content/ComponentName.java': '''package android.content; public class ComponentName {
+          public final String pkg, cls; public ComponentName(String p,String c){pkg=p;cls=c;} }''',
+        'android/content/ClipData.java': '''package android.content; import android.net.Uri;
+          public class ClipData { public Uri uri;
+          public static ClipData newRawUri(String l,Uri u){ClipData c=new ClipData();c.uri=u;return c;} }''',
+        'android/content/Intent.java': '''package android.content; import java.util.*;
+          public class Intent {
+          public static final String ACTION_SEND="android.intent.action.SEND", EXTRA_STREAM="stream", EXTRA_SUBJECT="subject", EXTRA_TEXT="text";
+          public static final int FLAG_GRANT_READ_URI_PERMISSION=1;
+          public String action,type; public ComponentName component; public ClipData clip; public int flags;
+          public Map<String,Object> extras=new HashMap<>();
+          public Intent(){} public Intent(String a){action=a;}
+          public Intent setType(String t){type=t;return this;}
+          public Intent setComponent(ComponentName c){component=c;return this;}
+          public Intent putExtra(String k,Object v){extras.put(k,v);return this;}
+          public String getStringExtra(String k){return (String)extras.get(k);}
+          public void setClipData(ClipData c){clip=c;}
+          public Intent addFlags(int f){flags|=f;return this;} }''',
+        'android/view/View.java': '''package android.view; public class View {
+          public interface OnClickListener {void onClick(View v);}
+          public OnClickListener listener; public void setOnClickListener(OnClickListener l){listener=l;}
+          public void performClick(){listener.onClick(this);} }''',
+        'android/widget/TextView.java': '''package android.widget; public class TextView extends android.view.View {
+          public String text; public TextView(Object c){} public void setText(String t){text=t;} }''',
+        'android/widget/Button.java': '''package android.widget; public class Button extends TextView {
+          public Button(Object c){super(c);} }''',
+        'android/widget/LinearLayout.java': '''package android.widget; import java.util.*;
+          public class LinearLayout extends android.view.View {
+          public static final int VERTICAL=1; public List<android.view.View> children=new ArrayList<>();
+          public LinearLayout(Object c){} public void setOrientation(int o){}
+          public void setPadding(int a,int b,int c,int d){} public void addView(android.view.View v){children.add(v);} }''',
+        'android/app/Activity.java': '''package android.app; import android.content.*;
+          public class Activity {
+          private Intent intent; public android.widget.LinearLayout content; public Intent sent;
+          public void onCreate(android.os.Bundle s){} protected void onNewIntent(Intent i){}
+          public Intent getIntent(){return intent;} public void setIntent(Intent i){intent=i;}
+          public void setContentView(android.widget.LinearLayout v){content=v;}
+          public java.io.File getFilesDir(){return new java.io.File(System.getProperty("fixture.files"));}
+          public void startActivity(Intent i){sent=i;} }''',
+        'qa/unifiedshare/sender/LifecycleReplay.java': r'''package qa.unifiedshare.sender;
+          import android.content.*; import android.widget.*;
+          public class LifecycleReplay {
+          static void check(boolean ok,String why){if(!ok)throw new AssertionError(why);}
+          static Intent intent(String mode){return new Intent().putExtra("fixture_case",mode);}
+          static void verify(SenderActivity a,Intent current,String mode){
+            boolean g="genuine".equals(mode); String name=g?"genuine.pdf":"x.pdf";
+            check(a.getIntent()==current,"getIntent not replaced: "+mode);
+            TextView title=(TextView)a.content.children.get(0);
+            check(title.text.equals("Synthetic external PDF sender\n"+name+"\nNo owner files or accounts"),"stale rendered title: "+mode);
+            ((Button)a.content.children.get(1)).performClick();
+            Intent s=a.sent; check(s!=null,"listener did not send");
+            check(name.equals(s.getStringExtra(Intent.EXTRA_SUBJECT)),"stale listener subject: "+mode);
+            check((g?"A genuine shared note mentioning genuine.pdf":"Emailing x.pdf").equals(s.getStringExtra(Intent.EXTRA_TEXT)),"stale listener text: "+mode);
+            String uri="content://qa.unifiedshare.sender.files/"+name;
+            check(uri.equals(s.extras.get(Intent.EXTRA_STREAM).toString()),"stream name");
+            check(s.clip!=null && uri.equals(s.clip.uri.toString()),"ClipData name");
+            check(Intent.ACTION_SEND.equals(s.action)&&"application/pdf".equals(s.type),"ACTION_SEND/type");
+            check("ai.wizards.os.qa".equals(s.component.pkg)&&"ai.wizards.os.share.ShareActivity".equals(s.component.cls),"receiver");
+            check((s.flags&Intent.FLAG_GRANT_READ_URI_PERMISSION)!=0,"grant");
+            check(new java.io.File(a.getFilesDir(),name).length()>24L*1024*1024,"source file");
+          }
+          public static void main(String[] args){
+            SenderActivity a=new SenderActivity(); Intent b=intent("boilerplate");a.setIntent(b);a.onCreate(null);verify(a,b,"boilerplate");
+            Intent g=intent("genuine");a.onNewIntent(g);verify(a,g,"genuine");
+            b=intent("boilerplate");a.onNewIntent(b);verify(a,b,"boilerplate");
+            System.out.println("PASS sender lifecycle boilerplate -> genuine -> boilerplate; title/listener/Intent/URI/grant");
+          } }'''
+    }
+
+
 def serial_present(devices, serial):
     return serial in {line.split()[0] for line in devices.splitlines() if line.split()}
 
@@ -529,9 +624,36 @@ class Rig:
     def state(self):
         return json.load(urllib.request.urlopen('http://127.0.0.1:%d/__fixture/state' % self.backend, timeout=5))
 
+    def replay_sender_lifecycle(self, inputs, work):
+        replay = work / 'lifecycle-replay'; replay.mkdir()
+        classes = replay / 'classes'; classes.mkdir()
+        files = replay / 'files'; files.mkdir()
+        sources = []
+        for name, text in sender_lifecycle_sources().items():
+            p = replay / name; p.parent.mkdir(parents=True, exist_ok=True); p.write_text(text)
+            sources.append(p)
+        log = self.out / 'sender-lifecycle-replay.log'
+        try:
+            compiled = self.run(['javac', '--release', '8', '-d', classes,
+                                 inputs / 'SenderActivity.java', *sources], timeout=60)
+            log.write_text(compiled)
+            result = self.run(['java', '-Dfixture.files=' + str(files), '-cp', classes,
+                               'qa.unifiedshare.sender.LifecycleReplay'], timeout=30)
+            log.write_text(compiled + result)
+            assert result.startswith('PASS sender lifecycle boilerplate -> genuine -> boilerplate;'), result
+        except BaseException as exc:
+            with log.open('a') as f:
+                f.write(exception_detail(exc) + '\n')
+            raise
+        self.report['sender_lifecycle_replay'] = {'status': 'PASS_HOST_JVM_SEAM_ONLY',
+            'source_sha256': sha(inputs / 'SenderActivity.java'), 'log_sha256': sha(log),
+            'cases': ['boilerplate', 'genuine', 'boilerplate']}
+        self.save()
+
     def compile_sender(self):
         inputs = self.source / 'tools/unified-share-sender'
         work = self.out / 'sender'; work.mkdir()
+        self.replay_sender_lifecycle(inputs, work)
         bt = self.sdk / 'build-tools/35.0.0'; jar = self.sdk / 'platforms/android-35/android.jar'
         classes, dex = work / 'classes', work / 'dex'; classes.mkdir(); dex.mkdir()
         self.run(['javac', '--release', '8', '-cp', jar, '-d', classes, inputs / 'SenderActivity.java', inputs / 'PdfProvider.java'])
@@ -643,24 +765,44 @@ class Rig:
         return wait(lambda: self.page.ev(focused_thread_expression(thread, filename)), 30)
 
     def share(self, mode):
-        self.sx('am start -W -n ' + SENDER + '/.SenderActivity --es fixture_case ' + mode)
-        self.screenshot('sender-%d-%s' % (len(self.report['external_intents']), mode))
-        xy = wait(lambda: native_sender_bounds(self.ui()), 30)
+        if mode not in ('boilerplate', 'genuine'):
+            raise ValueError('unknown sender case: ' + mode)
+        index = len(self.report['external_intents'])
+        label = 'sender-%d-%s' % (index, mode)
+        attempt: dict[str, Any] = {'requested_case': mode, 'status': 'LAUNCHING'}
+        self.report.setdefault('sender_attempts', []).append(attempt)
+        self.save()
+        attempt['launch_output'] = self.sx('am start -W -n ' + SENDER + '/.SenderActivity --es fixture_case ' + mode)
+        # Capture this same native XML before any tap. Do not infer actual case
+        # from am start extras, nor retry a wrong-case tap or force a fresh process.
+        xml = wait(lambda: (u if native_sender_bounds(u := self.ui()) else None), 30)
+        (self.out / (label + '.xml')).write_text(xml)
+        attempt.update(actual_case=sender_case(xml), status='PRE_TAP')
+        (self.out / (label + '-case.json')).write_text(json.dumps(attempt, indent=2) + '\n')
+        self.screenshot(label)
+        self.save()
+        assert attempt['actual_case'] == mode, 'sender case mismatch: ' + json.dumps(attempt)
+        xy = native_sender_bounds(xml)
+        assert xy is not None
         self.sx('input tap %d %d' % tuple(xy))
         self.connect_page()
         wait(self.sheet, 40)
         wait(lambda: self.page.ev("!!document.querySelector('[data-sharesend]:not(:disabled)')"), 40)
         assert self.page.ev('window.WosDevicePort.present'), 'missing real native port'
         staged = json.loads(self.sx('run-as ' + PKG + ' sh -c "cat files/share/*/meta.json"'))
+        # Preserve malformed/stale payloads too, not only successful assertions.
+        (self.out / ('staged-%d-%s.json' % (index, mode))).write_text(json.dumps(staged, indent=2) + '\n')
+        attempt.update(staged_subject=staged.get('subject'), staged_text=staged.get('text'), status='STAGED')
+        self.save()
         name = 'genuine.pdf' if mode == 'genuine' else 'x.pdf'
         assert staged['subject'] == name and len(staged['items']) == 1
         expected_text = 'A genuine shared note mentioning genuine.pdf' if mode == 'genuine' else 'Emailing x.pdf'
         assert staged['text'] == expected_text and staged['items'][0]['name'] == name
         assert staged['items'][0]['sha256'] == self.sx('run-as ' + SENDER + ' sha256sum files/' + name).split()[0]
-        (self.out / ('staged-%d-%s.json' % (len(self.report['external_intents']), mode))).write_text(json.dumps(staged, indent=2))
+        attempt['status'] = 'VERIFIED'
         self.report['external_intents'].append({'case': mode, 'action': 'android.intent.action.SEND',
             'sender_package': SENDER, 'receiver': 'ai.wizards.os.share.ShareActivity',
-            'uri': 'content://qa.unifiedshare.sender.files/' + ('genuine.pdf' if mode == 'genuine' else 'x.pdf')})
+            'uri': 'content://qa.unifiedshare.sender.files/' + name})
         self.save()
 
     def pick_private(self):
