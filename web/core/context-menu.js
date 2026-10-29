@@ -1,5 +1,5 @@
 /* Shared pointer/keyboard action menu. Shells call back() first in their Back stack.
- * open({ anchor, x?, y?, label?, items: [{ label, action }] })
+ * open({ anchor, x?, y?, label?, items: [{ label, icon?, action }] })
  * The selection/link menus own specialized selection/download gestures and are not
  * general action menus. Keep this primitive independent of desktop state. */
 (() => {
@@ -21,7 +21,9 @@
     panel.setAttribute('role', 'menu'); panel.setAttribute('aria-label', label);
     for (const item of items) {
       const button = doc.createElement('button'); button.type = 'button';
-      button.setAttribute('role', 'menuitem'); button.textContent = item.label;
+      button.setAttribute('role', 'menuitem');
+      if (item.icon) { const icon = doc.createElement('span'); icon.className = 'wos-context-menu-icon'; icon.setAttribute('aria-hidden', 'true'); icon.textContent = item.icon; button.appendChild(icon); }
+      button.appendChild(doc.createTextNode(item.label));
       button.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); close(false); item.action(); });
       panel.appendChild(button);
     }

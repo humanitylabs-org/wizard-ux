@@ -930,7 +930,7 @@
     if (!$('#wsList').classList.contains('arranging')) $('#wsList').innerHTML = ws.map((d, i) => {
       const hot = d.wins.some(id => { const w = W[id]; if (w?.app !== 'chats' || !w.thread) return false; const s = LIVE?.session(w.thread); return s && LIVE.isNew(s); });
       const names = d.wins.map(id => winTitle(W[id])).join(', ');
-      return `<button class="ws${!homeOpen && i === cur ? ' cur' : ''}${d.wins.length ? ' used' : ''}${hot ? ' hot' : ''}" data-ws="${i}" aria-label="${esc(names || 'Empty desktop')} · Desktop ${C.workspaceNav.slot(i)}" aria-current="${!homeOpen && i === cur ? 'page' : 'false'}"${C.workspaceNav.slot(i) <= 9 ? ` aria-keyshortcuts="Alt+${C.workspaceNav.slot(i)}"` : ''} title="${esc(names || 'Empty desktop')}${C.workspaceNav.slot(i) <= 9 ? ` (${MOD}${C.workspaceNav.slot(i)})` : ''}">${C.workspaceNav.icon(d, W, appOf)}${d.wins.length || ws.length > 1 ? `<span class="ws-close" role="button" data-wsclose="${i}" tabindex="-1" aria-label="Close desktop ${C.workspaceNav.slot(i)}" title="Close desktop">✕</span>` : ''}</button>`;
+      return `<button class="ws${!homeOpen && i === cur ? ' cur' : ''}${d.wins.length ? ' used' : ''}${hot ? ' hot' : ''}" data-ws="${i}" aria-label="${esc(names || 'Empty desktop')} · Desktop ${C.workspaceNav.slot(i)}" aria-current="${!homeOpen && i === cur ? 'page' : 'false'}"${C.workspaceNav.slot(i) <= 9 ? ` aria-keyshortcuts="Alt+${C.workspaceNav.slot(i)}"` : ''} title="${esc(names || 'Empty desktop')}${C.workspaceNav.slot(i) <= 9 ? ` (${MOD}${C.workspaceNav.slot(i)})` : ''}">${C.workspaceNav.icon(d, W, appOf)}</button>`;
     }).join('') + `<button class="ws ws-add" data-newdesk aria-label="New desktop" title="New desktop (${MOD}T${C.workspaceNav.slot(ws.length) <= 9 ? ` / ${MOD}${C.workspaceNav.slot(ws.length)}` : ''})">+</button>`;
     const st = $('#status');
     if (!LIVE?.ok) st.innerHTML = `<span class="off">${LIVE?.error === 'access' ? 'Sign in to Wizard' : 'Connecting…'}</span>`;
@@ -939,8 +939,6 @@
   function tickClock() { const C = window.WizConfig; $('#clock').textContent = C.dateLabel() + '  ' + C.hm(); }
   setInterval(tickClock, 15000); tickClock(); window.addEventListener('wizard:config', tickClock);
   $('#wsList').addEventListener('click', e => {
-    const close = e.target.closest('[data-wsclose]');
-    if (close) { e.preventDefault(); e.stopPropagation(); return closeDesktop(+close.dataset.wsclose); }
     if (e.target.closest('[data-newdesk]')) return newDesktop();
     const b = e.target.closest('[data-ws]'); if (b) goWs(+b.dataset.ws);
   });
@@ -948,7 +946,7 @@
     const d = ws[+b.dataset.ws]; if (!d) return;
     window.WosContextMenu.open({ anchor: b, x, y, label: 'Desktop actions',
       // Keep the stable desktop, not its index: a reorder must not close another desk.
-      items: [{ label: 'Close desktop', action: () => closeDesktop(ws.indexOf(d)) }] });
+      items: [{ label: 'Close desktop', icon: '✕', action: () => closeDesktop(ws.indexOf(d)) }] });
   }
   $('#wsList').addEventListener('contextmenu', e => {
     const b = e.target.closest('.ws[data-ws]'); if (!b) return;
@@ -957,7 +955,6 @@
   $('#wsList').addEventListener('keydown', e => {
     const b = e.target.closest('.ws[data-ws]'); if (!b) return;
     if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) { e.preventDefault(); desktopMenu(b); }
-    else if (e.target.matches('[data-wsclose]') && ['Enter', ' '].includes(e.key)) { e.preventDefault(); e.stopPropagation(); closeDesktop(+e.target.dataset.wsclose); }
   });
   /* Arrange desktops: drag one along the top bar (touch: press and hold, then drag), or ⌥⇧[ / ⌥⇧] for the one in
    * front. Desks keep their stable IDs, so open apps never remount; the new order syncs like any desk change. */
@@ -972,7 +969,7 @@
     let dd = null, swallow = 0;
     const start = () => { dd.on = true; dd.b.classList.add('ws-moving'); list.classList.add('arranging'); try { list.setPointerCapture(dd.id); } catch (e) { /* already released */ } navigator.vibrate?.(8); };
     list.addEventListener('pointerdown', e => {
-      const b = e.target.closest('.ws[data-ws]'); if (!b || e.target.closest('[data-wsclose]') || e.button !== 0 || ws.length < 2) return;
+      const b = e.target.closest('.ws[data-ws]'); if (!b || e.button !== 0 || ws.length < 2) return;
       dd = { from: +b.dataset.ws, b, x: e.clientX, y: e.clientY, on: false, id: e.pointerId, touch: e.pointerType !== 'mouse' };
       if (dd.touch) dd.hold = setTimeout(() => { if (dd && !dd.on) start(); }, 400);
     });

@@ -24,20 +24,21 @@ function rig({ cur = 1, lastWs = 2, count = 3, homeOpen = false, refuse = '' } =
   vm.runInContext(['canLeave', 'removeWin', 'closeWin', 'removeDesktop', 'closeDesktop', 'closeCurrent'].map(fn).join('\n'), ctx);
   return ctx;
 }
-test('hover ✕ closes a desktop', () => {
-  assert.match(source, /data-wsclose="\$\{i\}" tabindex="-1" aria-label="Close desktop/);
-  assert.match(css, /\.ws:hover \.ws-close, \.ws:focus-visible \.ws-close, \.ws:focus-within \.ws-close/);
-  assert.match(css, /\.ws-close \{[^}]*top: -3px; left: -3px;[^}]*visibility: hidden/s);
-  assert.ok(source.indexOf("const close = e.target.closest('[data-wsclose]')") < source.indexOf("const b = e.target.closest('[data-ws]'); if (b) goWs"));
+test('desk tiles carry no close ✕: a stray click on a tile can only switch desks', () => {
+  assert.doesNotMatch(source, /wsclose|ws-close/);
+  assert.doesNotMatch(css, /ws-close/);
   const r = rig(); r.closeDesktop(1); assert.equal(r.ws.length, 2); assert.equal(r.W.w1, undefined);
 });
 test('right-click offers Close desktop', () => {
   assert.match(source, /addEventListener\('contextmenu',[\s\S]*desktopMenu\(b, e.clientX, e.clientY\)/);
-  assert.match(fn('desktopMenu'), /label: 'Close desktop'.*closeDesktop\(ws.indexOf\(d\)\)/);
+  assert.match(fn('desktopMenu'), /label: 'Close desktop', icon: '✕'.*closeDesktop\(ws.indexOf\(d\)\)/);
   assert.match(fn('escStep'), /WosContextMenu\?\.back\(\)/);
   const menu = fs.readFileSync(new URL('../web/core/context-menu.js', import.meta.url), 'utf8');
   for (const event of ['pointerdown', 'blur', 'scroll', 'resize']) assert.ok(menu.includes(`addEventListener('${event}'`));
   assert.match(menu, /abort.abort\(\)/);
+  const menuCss = fs.readFileSync(new URL('../web/core/context-menu.css', import.meta.url), 'utf8');
+  assert.match(menuCss, /\.wos-context-menu \{[^}]*background: var\(--wz-panel\)/, 'menu stays on the opaque panel surface');
+  assert.doesNotMatch(menuCss, /button:hover[^{]*\{[^}]*outline: 2px/, 'hover is a soft fill, not a thick ring');
 });
 test('closing a desktop lands on the one to its left', () => {
   const r = rig(); r.closeDesktop(); assert.equal(r.cur, 0); assert.equal(r.ws[r.cur].id, 'd0');

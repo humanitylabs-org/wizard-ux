@@ -32,10 +32,6 @@ kbd { display: inline-block; min-width: 18px; padding: 1px 5px; border-radius: 5
 .ws.cur::after { background: #fff; }
 .ws.drop { outline: 2px dashed var(--violet-2); }
 .ws[data-ws] { touch-action: none; }
-/* Top-left leaves unread (top-right) and window count (bottom-right) clear. */
-.ws-close { position: absolute; z-index: 2; top: -3px; left: -3px; width: 14px; height: 14px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--wz-border); background: var(--wz-panel); color: var(--wz-text); font-family: var(--wz-font-ui); font-size: calc(var(--wz-text-sm) * .77); line-height: 1; opacity: 0; visibility: hidden; cursor: pointer; }
-.ws:hover .ws-close, .ws:focus-visible .ws-close, .ws:focus-within .ws-close { opacity: 1; visibility: visible; }
-.ws-close:hover { background: var(--wz-text); color: var(--wz-panel); }
 .ws-list.arranging, .ws-list.arranging .ws { cursor: grabbing; }
 .ws.ws-moving { outline: 2px solid var(--violet-2); outline-offset: 1px; transform: translateY(1px) scale(1.06); z-index: 1; }
 .ws.hot::before { content: ''; position: absolute; top: 2px; right: 2px; width: 5px; height: 5px; border-radius: 50%; background: var(--violet-2); }
