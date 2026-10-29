@@ -40,36 +40,22 @@
     view.append(title, body, retry); win.append(view);
   }
   function safeInsets() {
-    if (!frame) return;
+    // Pinned apps keep Android's status/navigation bars visible. The HOST owns
+    // their top clearance, even before mount (also used by notices/link sheets).
+    // CSS takes the union with env(safe-area-inset-top), never sums the heights.
+    document.documentElement.style.setProperty('--nat-t', top + 'px');
+    document.documentElement.style.setProperty('--cut-t', cut + 'px');
     try {
-      const d = frame.contentDocument;
-      if (!d?.documentElement) return;
-      // Android keeps its status bar and navigation buttons (James, 18 Oct): the app starts below the taller of
-      // the status bar and the camera cutout; the native view already pads the navigation bar at the bottom.
-      const edge = Math.max(cut, top);
-      d.documentElement.style.setProperty('--wos-cutout', edge + 'px');
-      let own = !!d.querySelector('meta[name="wizard-os-edge"][content="cover"]');
-      // The shared/vendored kit offers .wz-head cutout padding to every app; that
-      // is not an app-wide promise to cover the status bar. Only app-owned rules
-      // (e.g. Notes' sidebar/canvas/search padding) or the explicit meta opt in.
-      const visited = new Set();
-      const ownsInset = sh => {
-        if (!sh || sh.disabled || visited.has(sh)) return false;
-        visited.add(sh);
-        if (sh.ownerNode?.dataset?.wzShared === 'kit' || /(?:^|\/)wizard-ui\.css(?:[?#]|$)/.test(sh.href || '')) return false;
-        try { return [...sh.cssRules].some(r => r.styleSheet ? ownsInset(r.styleSheet) : r.cssText.includes('--wos-cutout')); }
-        catch (_) { return false; } // cross-origin CSS needs the explicit meta opt in
-      };
-      if (!own) own = [...d.styleSheets].some(ownsInset);
-      // The app and its frame must not both apply the same inset. Kit-only apps
-      // get it at the frame; explicit owners (Notes included) get it in their CSS.
-      d.documentElement.style.setProperty('--wos-cutout', (own ? edge : 0) + 'px');
-      win.style.setProperty('--single-cut', (own ? 0 : edge) + 'px');
+      // James' universal standalone rule: a padded sticky toolbar, cover meta or
+      // late/imported CSS cannot protect scrolling content behind the status bar.
+      // Clip the whole frame below it and consume the child inset exactly once.
+      frame?.contentDocument?.documentElement?.style.setProperty('--wos-cutout', '0px', 'important');
     } catch (_) {}
   }
   window.__wosCutout = px => { cut = Math.max(0, px | 0); safeInsets(); };
   window.__wosTop = px => { top = Math.max(0, px | 0); safeInsets(); };
   try { window.WizardOSNative?.immersive?.(false); cut = +window.WizardOSNative?.cutoutTop?.() || 0; top = +window.WizardOSNative?.insetTop?.() || 0; } catch (_) {}
+  safeInsets();
   window.__wosSessionCheckpoint = checkpoint;
   window.__wos = { toast, links, get singleApp() { return id; }, get voice() { return 'idle'; } };
   window.__wosNativeBack = () => {
