@@ -465,10 +465,14 @@ test('final review 2: exposure dates must be real; an open warning from a last r
   const { cleanAccess } = await import('../tools/system-devices.mjs');
   assert.equal(cleanAccess({ exposure: 'tailscale', checked: '2026-13-40' }).checked, undefined);
   assert.equal(cleanAccess({ exposure: 'tailscale', checked: '2999-01-01' }).checked, undefined);
+  const tomorrow = new Date(Date.now() + 36 * 3600e3).toISOString().slice(0, 10);
+  assert.equal(cleanAccess({ exposure: 'tailscale', checked: tomorrow }).checked, undefined, 'tomorrow is not a completed check');
   assert.equal(cleanAccess({ exposure: 'tailscale', checked: '2026-10-28' }).checked, '2026-10-28');
   for (const who of ['miguel', 'wizard']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /\[bad\.length && S\.devFresh \? \['fix'/, who);
+    assert.equal((src.match(/open to the internet\$\{S\.devFresh \? '' : ' \(last reading\)'\}/g) || []).length, 2, who + ': Home tile and desktop icon qualify a last reading');
+    assert.match(src, /online: !!S\.devFresh && d\.status === 'online'/, who);
     assert.match(src, /' \(Last reading; check again to see if it still is\.\)'/, who);
   }
 });
