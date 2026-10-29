@@ -54,31 +54,31 @@ public class UnifiedShareStoreTest {
         ShareStore store = new ShareStore(tmp.newFolder("staged")); File queueRoot = tmp.newFolder("queue"); ShareQueue queue = new ShareQueue(queueRoot); stage(store);
         String id = store.enqueue(queue,request(1,0));
         ShareQueue reloaded = new ShareQueue(queueRoot);
-        for (int i=0;i<2;i++) assertEquals("synthetic-pdf-"+(1-i),Files.readString(reloaded.file(id,i).toPath()));
+        for (int i=0;i<2;i++) assertEquals("synthetic-pdf-"+(1-i),new String(Files.readAllBytes(reloaded.file(id,i).toPath()),StandardCharsets.UTF_8));
         JSONObject legacy = new JSONObject().put("id","legacy").put("files",new JSONArray().put(new JSONObject()));
-        queue.save(legacy); Files.writeString(queue.file("legacy",0).toPath(),"legacy-bytes");
-        assertEquals("0.bin",queue.file("legacy",0).getName()); assertEquals("legacy-bytes",Files.readString(reloaded.file("legacy",0).toPath()));
+        queue.save(legacy); Files.write(queue.file("legacy",0).toPath(),"legacy-bytes".getBytes(StandardCharsets.UTF_8));
+        assertEquals("0.bin",queue.file("legacy",0).getName()); assertEquals("legacy-bytes",new String(Files.readAllBytes(reloaded.file("legacy",0).toPath()),StandardCharsets.UTF_8));
         queue.dropCopies(id); assertFalse(queue.file(id,0).exists()); assertFalse(queue.file(id,1).exists());
     }
     @Test public void failedAtomicPromotionPreservesEveryOriginalAndRetriesWithoutDuplicate() throws Exception {
         ShareStore store = new ShareStore(tmp.newFolder("staged")); File queueRoot = tmp.newFolder("queue"); ShareQueue queue = new ShareQueue(queueRoot); stage(store);
         File conflict = new File(queueRoot,"and-share-synthetic"); assertTrue(conflict.mkdir());
-        File sentinel = new File(conflict,"sentinel"); Files.writeString(sentinel.toPath(),"untouched");
+        File sentinel = new File(conflict,"sentinel"); Files.write(sentinel.toPath(),"untouched".getBytes(StandardCharsets.UTF_8));
         try {store.enqueue(queue,request(1));fail("Conflicting destination accepted");} catch(java.io.IOException expected) { }
         assertNotNull(store.meta("share-synthetic")); assertEquals(0,queue.ids().size());
-        for(int n=0;n<2;n++) assertEquals("synthetic-pdf-"+n,Files.readString(store.item("share-synthetic",n).toPath()));
-        assertEquals("untouched",Files.readString(sentinel.toPath())); assertTrue(sentinel.delete()); assertTrue(conflict.delete());
+        for(int n=0;n<2;n++) assertEquals("synthetic-pdf-"+n,new String(Files.readAllBytes(store.item("share-synthetic",n).toPath()),StandardCharsets.UTF_8));
+        assertEquals("untouched",new String(Files.readAllBytes(sentinel.toPath()),StandardCharsets.UTF_8)); assertTrue(sentinel.delete()); assertTrue(conflict.delete());
         // A real rename failure (moving a directory into itself) must also retain the complete source.
         ShareQueue impossible = new ShareQueue(new File(store.item("share-synthetic",0).getParentFile(),"nested"));
         try {store.enqueue(impossible,request(1));fail("Impossible atomic move accepted");} catch(java.io.IOException expected) { }
         assertEquals(0,impossible.ids().size()); assertNotNull(store.meta("share-synthetic"));
-        for(int n=0;n<2;n++) assertEquals("synthetic-pdf-"+n,Files.readString(store.item("share-synthetic",n).toPath()));
+        for(int n=0;n<2;n++) assertEquals("synthetic-pdf-"+n,new String(Files.readAllBytes(store.item("share-synthetic",n).toPath()),StandardCharsets.UTF_8));
         // Crash checkpoint: manifest was fsynced in staging, but directory rename had not happened.
-        Files.writeString(new File(store.item("share-synthetic",0).getParentFile(),"item.json").toPath(),"{\"id\":\"and-share-synthetic\",\"state\":\"ready\"}");
+        Files.write(new File(store.item("share-synthetic",0).getParentFile(),"item.json").toPath(),"{\"id\":\"and-share-synthetic\",\"state\":\"ready\"}".getBytes(StandardCharsets.UTF_8));
         assertNull(queue.next());
         String id=store.enqueue(queue,request(1));
         assertEquals(id,store.enqueue(new ShareQueue(queueRoot),request(1))); assertEquals(1,queue.ids().size());
-        assertEquals("synthetic-pdf-1",Files.readString(queue.file(id,0).toPath()));
+        assertEquals("synthetic-pdf-1",new String(Files.readAllBytes(queue.file(id,0).toPath()),StandardCharsets.UTF_8));
         queue.dropCopies(id); assertFalse(new File(queueRoot,id+"/0.bin").exists()); assertFalse(new File(queueRoot,id+"/1.bin").exists());
     }
     @Test public void failedManifestSaveDoesNotLoseStagedBytesOrPublishAnItem() throws Exception {
@@ -86,7 +86,7 @@ public class UnifiedShareStoreTest {
         File blocked = new File(store.item("share-synthetic",0).getParentFile(),"item.json.tmp"); assertTrue(blocked.mkdir());
         try {store.enqueue(queue,request(0));fail("Unwritable manifest accepted");} catch(java.io.IOException expected) { }
         assertEquals(0,queue.ids().size()); assertNotNull(store.meta("share-synthetic"));
-        assertEquals("synthetic-pdf-0",Files.readString(store.item("share-synthetic",0).toPath()));
+        assertEquals("synthetic-pdf-0",new String(Files.readAllBytes(store.item("share-synthetic",0).toPath()),StandardCharsets.UTF_8));
         assertTrue(blocked.delete()); assertNotNull(store.enqueue(queue,request(0)));
     }
     @Test public void removedAllAndUnknownOrDuplicateIndexesAreRefusedWithoutLosingOriginals() throws Exception {
