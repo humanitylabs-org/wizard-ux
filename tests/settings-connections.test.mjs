@@ -66,3 +66,18 @@ test('Connections page: background refreshes never reload the frame; leaving the
   assert.notEqual(h.root.innerHTML, 'FRAME KEPT'); assert.equal(h.view.page, '');
   assert.ok(before.includes('data-st-connections'));
 });
+
+test('Connections deep link on a cold start waits for the listener, then opens the page', async () => {
+  const h = harness();
+  assert.equal(h.s.WosSettings.route('connections', h.view.focus), true); // before the availability answer
+  assert.doesNotMatch(h.root.innerHTML, /data-st-connections/);
+  await tick();
+  assert.equal(h.view.page, 'connections');
+  assert.match(h.root.innerHTML, /data-st-connections><iframe/);
+  const no = harness({ status: 403 });
+  no.s.WosSettings.route('app-connections', no.view.focus); await tick();
+  assert.equal(no.view.page, ''); assert.doesNotMatch(no.root.innerHTML, /data-st-connections/);
+  const moved = harness();
+  moved.s.WosSettings.route('connections', moved.view.focus); moved.view.focus('chats-default'); await tick();
+  assert.equal(moved.view.page, 'chats', 'choosing another page first cancels the pending link');
+});

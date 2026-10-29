@@ -21,7 +21,8 @@
     { id: 'phone', title: 'Phone', available: () => shell() ? !!shellOrb() : android() },
     // Connections: the App Manager's own view (agents, what each may use, app-to-app links), only where its owner
     // listener answers. System pieces that come with every box live in Settings, not the launcher (wizard-os issue 324).
-    { id: 'connections', title: 'Connections', available: () => connectionsAvailable() },
+    // pending: availability not known yet; a deep link to it waits for the answer instead of falling back to the root.
+    { id: 'connections', title: 'Connections', available: () => connectionsAvailable(), pending: () => conn.ok === null },
     { id: 'recovery', title: 'Unsent & recovered' },
     // Resources: the Home resource bars (AI + Compute) from the shared renderer, when it is there; else AI usage.
     { id: 'usage', get title() { return window.WosResources?.bars ? 'Resources' : 'AI usage'; } },
@@ -520,7 +521,7 @@
   function mount(root, adapter) {
     root.classList.add('st-root'); root.dataset.settingsRoot = '';
     const ctx = { ...adapter, root }, api = { render, focus, back, destroy, dispatch, context: ctx, get page() { return page; } };
-    let skinImportMessage = '', page = '', confirm = null;
+    let skinImportMessage = '', page = '', confirm = null, wanted = '';
     const desktop = adapter.shell === 'desktop';
     const effectivePage = () => page || (desktop ? 'appearance' : '');
     ctx.render = () => render(true);
@@ -538,7 +539,10 @@
       const record = active?.closest('[data-ubid]')?.dataset.ubid;
       const selection = active && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
       const pages = PAGES.filter(p => !p.available || p.available(ctx));
-      if (page && !pages.some(p => p.id === page)) page = '';
+      // A page whose availability is still being checked (a cold deep link) opens once it turns out available.
+      if (wanted && !page && pages.some(p => p.id === wanted)) page = wanted;
+      if (wanted && (page === wanted || !PAGES.find(p => p.id === wanted)?.pending?.())) wanted = '';
+      if (page && !pages.some(p => p.id === page)) { if (PAGES.find(p => p.id === page)?.pending?.()) wanted = page; page = ''; }
       const selected = effectivePage();
       const heading = PAGES.find(p => p.id === selected)?.title || '';
       const items = attention(ctx);
@@ -564,6 +568,7 @@
     function focus(id) {
       for (const f of features.values()) if (pageOf(f) === effectivePage()) f.leave?.(ctx);
       const f = features.get(id) || [...features.values()].find(f => f.aliases?.includes(id));
+      wanted = '';
       page = f ? pageOf(f) : featurePages[id] || (id === 'updates' ? 'about' : PAGES.some(p => p.id === id) ? id : '');
       for (const f of features.values()) if (pageOf(f) === effectivePage()) f.enter?.(ctx);
       confirm = null; render(); root.scrollTop = 0;
