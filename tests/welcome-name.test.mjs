@@ -143,3 +143,47 @@ test('Name your Wizard: a failed save stays on the step with the typed name; Bac
   assert.equal(d.W.back(), 'welcome')
   assert.match(d.html(), /Name your Wizard/)
 })
+
+// Two devices on one box (AGENTS.md "Synced across devices"): the name is Agent Service state.
+test('two devices: a stale device never writes "Wizard" back over a rename made on the other one', async () => {
+  const box = fakeBox(), a = device(box), b = device(box)
+  await a.boot(); await b.boot()
+  a.input.value = 'Merlin'; a.submit(); await wait()
+  assert.equal(box.settings.agent.name, 'Merlin')
+  // b still shows the step it opened with "Wizard"; an untouched Continue writes nothing.
+  b.submit(); await wait()
+  assert.equal(box.puts.length, 1)
+  assert.equal(box.settings.agent.name, 'Merlin')
+})
+
+test('two devices: an edit on a stale device is refused as a conflict and shows the other name', async () => {
+  const box = fakeBox(), a = device(box), b = device(box)
+  await a.boot(); await b.boot()
+  a.input.value = 'Merlin'; a.submit(); await wait()
+  b.input.value = 'Gandalf'; b.submit(); await wait()
+  assert.equal(box.puts.length, 1, 'the stale edit is not written')
+  assert.equal(box.settings.agent.name, 'Merlin')
+  assert.match(b.html(), /Another device just named your agent Merlin\. Continue keeps it\./)
+  assert.equal(b.input.value, 'Merlin')
+  assert.equal(b.ctx.WizConfig.agent(), 'Merlin', 'the stale device adopts the current name')
+  b.submit(); await wait()
+  assert.equal(box.puts.length, 1); assert.match(b.html(), /Merlin thinks/)
+  // A deliberate edit after seeing the new name still saves.
+  const c = device(box); await c.boot(); assert.doesNotMatch(c.html(), /Name your Wizard/, 'a named box never asks again')
+})
+
+test('two devices: simultaneous saves settle on one name that both devices read back', async () => {
+  const box = fakeBox(), a = device(box), b = device(box)
+  await a.boot(); await b.boot()
+  a.input.value = 'Merlin'; b.input.value = 'Gandalf'
+  a.submit(); b.submit(); await wait(20)
+  assert.ok(['Merlin', 'Gandalf'].includes(box.settings.agent.name))
+  assert.equal(box.settings.agent.adapter, 'hermes-plugin', 'the rest of the agent block survives both writes')
+  for (const d of [a, b]) { await d.ctx.WizConfig.ready; }
+  const fresh = device(box); await fresh.boot()
+  assert.equal(fresh.ctx.WizConfig.agent(), box.settings.agent.name)
+})
+
+test('Name your Wizard: the name field is in the keyboard focus trap', () => {
+  assert.match(welcome, /querySelectorAll\('button:not\(\[disabled\]\),input:not\(\[disabled\]\),textarea/)
+})

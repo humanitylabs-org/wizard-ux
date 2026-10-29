@@ -34,7 +34,7 @@
   const write = v => { try { localStorage.setItem(KEY, v); } catch (e) {} };
   let H = null, el = null, step = 'ai', provider = null, pollT = 0, connected = false, sending = false, booted = false, installing = '', installError = '', sendError = '';
   // The name step: asked = this Welcome starts with it; after = the step it hands over to.
-  let asked = false, after = 'ai', saving = false, nameError = '';
+  let asked = false, after = 'ai', saving = false, nameError = '', prefill = '';
   const DEFAULT_NAME = 'Wizard', NAME_MAX = 40;
   // Plain text, one line, at most 40 characters (the Agent Service trims the same way).
   const cleanName = v => String(v ?? '').replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX).trim();
@@ -114,7 +114,7 @@
 
   function paintName() {
     return `${BRAND}${dots()}<header class="wl-head"><h2 tabindex="-1">Name your Wizard</h2><p>What do you want to call your agent?</p></header>
-      <form class="wl-naming" data-wl-name><input type="text" maxlength="${NAME_MAX}" value="${esc(agent())}" aria-label="Your agent's name" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="done"${saving ? ' disabled' : ''}>
+      <form class="wl-naming" data-wl-name><input type="text" maxlength="${NAME_MAX}" value="${esc(prefill)}" aria-label="Your agent's name" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="done"${saving ? ' disabled' : ''}>
       ${nameError ? `<p class="wl-status err" role="alert">${esc(nameError)}</p>` : ''}<button type="submit" class="wl-primary"${saving ? ' disabled' : ''}>${saving ? 'Saving\u2026' : 'Continue'}</button></form>
       <button type="button" class="wl-skip" data-wl="skip-name"${saving ? ' disabled' : ''}>Skip this step</button>`;
   }
@@ -122,12 +122,17 @@
   function fromName() { step = after; saving = false; nameError = ''; paint(); poll(); }
   async function saveName(value) {
     const name = cleanName(value);
-    if (!name || name === agent()) { log('name:kept'); return fromName(); } // untouched (or emptied): keep the current name
+    // Untouched (or emptied): keep the name. Compared with what the field was filled with, never with the live name,
+    // so a rename made meanwhile on another device is not written back over.
+    if (!name || name === cleanName(prefill)) { log('name:kept'); return fromName(); }
     const mine = el; saving = true; nameError = ''; paint(false);
-    try { await window.WizConfig.agentName(name); }
+    try { await window.WizConfig.agentName(name, { from: prefill }); }
     catch (err) {
       if (el !== mine || step !== 'name') return;
-      saving = false; nameError = 'That name didn\u2019t save. Try again, or skip this step.'; paint(false);
+      saving = false;
+      // Named on another device since this step opened: show that name; Continue keeps it, an edit still saves.
+      if (err?.code === 'conflict' && err.current) { prefill = err.current; nameError = `Another device just named your agent ${err.current}. Continue keeps it.`; paint(false); return; }
+      nameError = 'That name didn\u2019t save. Try again, or skip this step.'; paint(false);
       const i = el.querySelector('.wl-naming input'); if (i) i.value = name;
       return;
     }
@@ -202,7 +207,7 @@
 
   function open(at = 'ai') {
     if (el) return;
-    asked = unnamed(); after = at; saving = false; nameError = '';
+    asked = unnamed(); after = at; saving = false; nameError = ''; prefill = agent();
     step = asked ? 'name' : at; provider = null; connected = false; sending = false; installing = ''; installError = ''; sendError = '';
     el = document.createElement('div');
     el.className = 'wl-overlay'; el.id = 'wosWelcome';
@@ -215,7 +220,7 @@
     el.addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey && e.target.matches('textarea')) { e.preventDefault(); el.querySelector('form')?.requestSubmit(); }
       if (e.key === 'Tab') { // keep focus inside the card
-        const f = [...el.querySelectorAll('button:not([disabled]),textarea,iframe,[tabindex]:not([tabindex="-1"])')];
+        const f = [...el.querySelectorAll('button:not([disabled]),input:not([disabled]),textarea,iframe,[tabindex]:not([tabindex="-1"])')];
         if (f.length) { const i = f.indexOf(document.activeElement); const n = e.shiftKey ? (i <= 0 ? f.length - 1 : i - 1) : (i + 1) % f.length; e.preventDefault(); f[n].focus(); }
       }
       e.stopPropagation(); // the shell's own shortcuts wait until the welcome is done (desktop onKey also stands down)
