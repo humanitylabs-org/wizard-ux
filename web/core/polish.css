@@ -125,5 +125,5 @@ html:not([data-shell="desktop"]) .wx-off { place-items: end center; padding-bott
 @media (prefers-reduced-motion: reduce) { .wx-off { animation: none; } }
 /* Tucked-away pill: one tap brings the checks back. */
 .wx-banner.net:has([data-wxoffopen]) { padding: 0 4px; height: 30px; }
-.wx-banner [data-wxoffopen] { height: 100%; display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 12.5px; font-weight: 650; color: var(--ink); }
+.wx-banner.net button[data-wxoffopen] { height: 100%; display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 12.5px; font-weight: 650; color: var(--ink); }
 .wx-banner .wx-dot { flex: 0 0 auto; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--amber, #ffbe55); }
