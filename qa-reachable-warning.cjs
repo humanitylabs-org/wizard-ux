@@ -35,7 +35,7 @@ const server = http.createServer((req, res) => {
         }
         if (p === '/troubleshoot/api/ping') return json({ ok: true });
         if (p === '/troubleshoot/api/status') return json({ checks: [], overall: 'ok' });
-        if (/\/ux-api\/(sessions|agents)(\/|$)/.test(p) && broken) return json({ error: 'Synthetic connection outage' }, 503);
+        if ((p.endsWith('/sessions') || p.endsWith('/agents')) && broken) return json({ error: 'Synthetic connection outage' }, 503);
         if (p.endsWith('/sessions') || p.includes('/sessions/search')) return json({ sessions: [fixture], has_more: false });
         if (p.endsWith('/agents')) return json({ agents: [] });
         if (p.endsWith('/models')) return json({ default_model: 'synthetic-model', default_provider: 'synthetic', models: [{ id: 'synthetic-model', provider: 'synthetic', label: 'Synthetic model' }], providers: [] });
