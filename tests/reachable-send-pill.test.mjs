@@ -5,13 +5,16 @@ import vm from 'node:vm';
 
 // Exercise the production renderer, not a second implementation of its branches.
 const source = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
+const reachSource = readFileSync(new URL('../web/core/reach.js', import.meta.url), 'utf8');
+const reachCtx = { navigator: { onLine: true }, location: { hostname: 'synthetic.test' }, AbortController, Event, setTimeout, clearTimeout, dispatchEvent() {}, fetch: async () => { throw new Error('not used'); } };
+reachCtx.window = reachCtx; vm.runInNewContext(reachSource, reachCtx);
 const start = source.indexOf('  function sendPill(items, w) {');
 const end = source.indexOf('\n  // Rotate one storage write:', start);
 assert.ok(start >= 0 && end > start);
 function render(items, diagnosis = { layer: 'send', short: 'Reconnecting…' }) {
   const ctx = { ch: () => ({}), LIVE: { ok: true, session: () => ({ title: 'Synthetic chat' }) },
     OUTBOX: { canRetry: () => true, quarantined: () => false }, H: {},
-    reach: () => diagnosis, troubleshoot: '<button data-chtroubleshoot>Open Troubleshooter</button>',
+    reach: () => diagnosis, reachLabel: (operation, count) => reachCtx.WizReach.label(operation, { count, diagnosis }), troubleshoot: '<button data-chtroubleshoot>Open Troubleshooter</button>',
     esc: s => String(s), clip: s => s, CHECK_SVG: '', setTimeout, clearTimeout };
   vm.runInNewContext(source.slice(start, end) + '\nthis.render = sendPill;', ctx);
   const before = JSON.stringify(items);

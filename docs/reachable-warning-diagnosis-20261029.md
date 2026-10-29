@@ -22,7 +22,7 @@ Read-only main Hermes session metadata/limited prior assistant results found the
 
 ## Change and non-change
 
-The global banner now follows actual connection evidence only. Chats retains the unsent card, item/count, Retry now, Troubleshooter and recovery controls. Healthy probes produce neutral request-retry copy; Chats supplies the precise saved-message label “Message not sent · retrying”. No `outbox.js`, persistence, retry/backoff, cancellation, authority, idempotency or receipt code changes.
+The global banner now follows actual connection evidence only. Chats retains the unsent card, item/count, Retry now, Troubleshooter and recovery controls. Healthy probes produce request-neutral copy (“Wizard reachable · retrying”). One shared formatter, `WizReach.label(operation)`, words every failing request: `send` (Chats pill, in-thread pending row, Settings Unsent) says “Message not sent · retrying” only when probes are healthy; `read` (global banner, chat-list and thread read failures) never mentions a message. Real outages keep their connection wording for both. No `outbox.js`, persistence, retry/backoff, cancellation, authority, idempotency or receipt code changes.
 
 ## Failed forum run triage
 
