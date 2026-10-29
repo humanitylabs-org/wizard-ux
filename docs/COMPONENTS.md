@@ -50,7 +50,7 @@ Visual: <side-by-side screenshot, or "none">
 | Need | Use | Never hand-roll |
 |---|---|---|
 | App setup | `WosAppSetup` (`web/core/app-setup.js`) | app-local setup |
-| Chats: Focus, Filter, search, composer/files, read state, Copy/Share, Recall/Done | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); All/main Ready + Home count; `setFocus`/`migrateChatsFocus`; `WizLive` stream/tools, provider-access Errors, source-bound send release; revision cache | duplicate Chats/Focus parsing or per-agent/shell routing |
+| Chats: Focus/Filter/search, composer/files/read, Copy/Share, Recall/Done | `WizCore` (`web/core/chats.js`, `.css`); Ready/Home/original alerts; `setFocus`/`migrateChatsFocus`; `WizLive`; provider-access Errors; source-bound send release; cache | duplicate Chats/Focus |
 | Chats list variant | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`web/core/edge-peek.js`), host storage | skin-local duplicate |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
