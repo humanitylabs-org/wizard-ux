@@ -875,10 +875,11 @@
 
   /* ---------------- top bar ---------------- */
   addEventListener('wizard:app-counts', () => paintBar());
+  addEventListener('wizard:notifications', () => render());
   function paintBar() {
     window.WosBell?.paint?.();
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
-    C.workspaceNav.setCount(APP.wizard?.id || 'wizard', LIVE?.ok ? (LIVE.workGroups().ready || []).length : 0);
+    C.workspaceNav.setCount(APP.wizard?.id || 'wizard', (LIVE?.ok ? (LIVE.workGroups().ready || []).length : 0) + (window.WosBell?.readyCount?.() || 0));
     $('#logo').setAttribute('aria-current', homeOpen ? 'page' : 'false');
     $('#logo').innerHTML = C.workspaceNav.icon({ home: true }, W, appOf);
     if (!$('#wsList').classList.contains('arranging')) $('#wsList').innerHTML = ws.map((d, i) => {
@@ -971,7 +972,7 @@
     return `<span class="nc-vis${n ? '' : ' nc-zero'}" aria-hidden="true"><svg class="nc-ic" viewBox="0 0 24 24">${icon}</svg>${dots}${n > shown ? '<em>+</em>' : ''}</span>`;
   }
   function mineHomeHtml() {
-    const G = LIVE?.ok ? LIVE.workGroups() : {}, ready = (G.ready || []).length, working = (G.working || []).length;
+    const G = LIVE?.ok ? LIVE.workGroups() : {}, ready = (G.ready || []).length + (window.WosBell?.readyCount?.() || 0), working = (G.working || []).length;
     const pending = OUTBOX?.unsent() || [];
     return `<div class="home-in mine-home"><div data-slot="home-main" hidden></div>
       <div class="mh-res">${window.WosResources?.home() || ''}</div>
