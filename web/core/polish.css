@@ -92,7 +92,7 @@ html[data-shell="desktop"] .wx-banners { left: 50%; right: auto; transform: tran
  * floating panel uses (--wz-panel, docs/OPAQUE_OVERLAYS.md) and the kit sheet's backdrop. These rules only place it. */
 .wx-off { position: fixed; inset: 0; z-index: 190; display: grid; place-items: center; padding: var(--wz-space-4, 16px); background: color-mix(in srgb, var(--wz-base) 74%, transparent); }
 .wx-off[hidden] { display: none; }
-.wx-off-card { position: relative; width: min(400px, 100%); background: var(--wz-panel, var(--wz-surface)); color: var(--wz-text); }
+.wz-card.wx-off-card { position: relative; width: min(400px, 100%); background: var(--wz-panel, var(--wz-surface)); color: var(--wz-text); }
 .wx-off-card > h2 { margin: 0 0 var(--wz-space-2, 8px); padding-right: var(--wz-target, 44px); font-size: var(--wz-text-heading); }
 .wx-off-x { position: absolute; top: var(--wz-space-2, 8px); right: var(--wz-space-2, 8px); font-size: var(--wz-text-heading); }
 .wx-off-sub { margin: 0 0 var(--wz-space-3, 12px); color: var(--wz-text-secondary); font-size: var(--wz-text-sm); line-height: 1.45; }
