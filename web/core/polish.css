@@ -86,3 +86,17 @@ html[data-shell="desktop"] .wx-banners { left: 50%; right: auto; transform: tran
 .vx-dot.ready { background: var(--green); box-shadow: 0 0 10px rgba(79, 240, 176, .6); }
 .vx-dot.down { background: var(--amber); }
 /* Settings controls live in core/settings.css for both layouts. */
+
+/* ---------- offline pop-up (core/status.js) ----------
+ * No look of its own: it is the kit's card, rows, pills and buttons (kit/controls.css), on the panel material every
+ * floating panel uses (--wz-panel, docs/OPAQUE_OVERLAYS.md) and the kit sheet's backdrop. These rules only place it. */
+.wx-off { position: fixed; inset: 0; z-index: 190; display: grid; place-items: center; padding: var(--wz-space-4, 16px); background: color-mix(in srgb, var(--wz-base) 74%, transparent); }
+.wx-off[hidden] { display: none; }
+.wz-card.wx-off-card { position: relative; width: min(400px, 100%); background: var(--wz-panel, var(--wz-surface)); color: var(--wz-text); }
+.wx-off-card > h2 { margin: 0 0 var(--wz-space-2, 8px); padding-right: var(--wz-target, 44px); font-size: var(--wz-text-heading); }
+.wx-off-x { position: absolute; top: var(--wz-space-2, 8px); right: var(--wz-space-2, 8px); font-size: var(--wz-text-heading); }
+.wx-off-sub { margin: 0 0 var(--wz-space-3, 12px); color: var(--wz-text-secondary); font-size: var(--wz-text-sm); line-height: 1.45; }
+.wx-off-card .wz-list + .wx-off-sub { margin-top: var(--wz-space-3, 12px); color: var(--wz-text); }
+.wx-off-card .wz-actions > .wz-button { flex: 1; }
+/* Phone: where the thumb is, like the kit sheet. */
+html:not([data-shell="desktop"]) .wx-off { place-items: end center; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--wz-space-4, 16px)); }

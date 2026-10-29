@@ -106,17 +106,43 @@ test('repair-chat engine probes (Tinfoil, Claude, ChatGPT) never become the conn
   const both = setup({ fetch: async () => response({ checks: [...checks, { id: 'hermes', label: 'Hermes', ok: false }], overall: 'down' }) });
   assert.equal((await both.api.diagnose()).layer, 'hermes');
 });
-test('Troubleshoot on an unreachable Wizard: the phone app shows its Tailscale guide; elsewhere the pill explains', async () => {
+test('Troubleshoot on an unreachable Wizard opens the offline pop-up everywhere, the phone app included', async () => {
   const h = setup({ hostname: 'wizard.example-tailnet.ts.net', fetch: async () => { throw new TypeError('Load failed'); } });
   const before = h.events();
   assert.equal(await h.api.open(), false, 'Troubleshooter is served by the Wizard it can’t reach');
   assert.deepEqual(h.opened, []);
-  assert.ok(h.events() > before, 'asks the connection pill to unfold what to check (any caller)');
+  assert.ok(h.events() > before, 'asks the offline pop-up to open (any caller)');
   let restarted = 0;
   h.ctx.Capacitor = { Plugins: { WizardShell: { retry: async () => { restarted++; } } } };
-  assert.equal(await h.api.open(), true);
-  assert.equal(restarted, 1, 'the app restarts into its connect screen and Tailscale guide');
+  assert.equal(await h.api.open(), false);
+  assert.equal(restarted, 0, 'no second, native troubleshoot screen');
   assert.deepEqual(h.opened, []);
+});
+test('checks: no internet, then Tailscale, then Wizard; each names its state and only the first failure is red', async () => {
+  const run = async (opts) => { const h = setup(opts); return { c: await h.api.checks(), urls: h.calls.map(c => c[0]), h }; };
+  // The device itself is offline: nothing crosses the network for the internet row.
+  let r = await run({ online: false, fetch: async () => { throw Error('network'); } });
+  assert.equal(r.c.internet.state, 'bad'); assert.equal(r.c.tailscale.state, 'wait'); assert.equal(r.c.wizard.state, 'wait');
+  assert.deepEqual(r.urls, ['/troubleshoot/api/ping']);
+  // Internet works, Wizard's address doesn't answer: Tailscale (or the Wizard computer).
+  r = await run({ fetch: async url => { if (url.startsWith('https://derp1.tailscale.com/')) return { ok: false, status: 0, type: 'opaque' }; throw Error('network'); } });
+  assert.equal(r.c.internet.state, 'ok'); assert.equal(r.c.tailscale.state, 'bad'); assert.equal(r.c.wizard.state, 'wait'); assert.equal(r.c.tailnet, true);
+  const net = r.h.calls.find(c => c[0].startsWith('https://'));
+  assert.equal(net[0], 'https://derp1.tailscale.com/generate_204', 'the one cross-site request: Tailscale’s own connectivity check');
+  assert.equal(net[1].mode, 'no-cors'); assert.equal(net[1].credentials, 'omit');
+  // Reached but unhealthy: Wizard is red with the existing diagnosis.
+  r = await run({ fetch: async url => url.startsWith('https://') ? { ok: false, type: 'opaque' } : response({ checks: [{ id: 'hermes', ok: false }], overall: 'down' }) });
+  assert.equal(r.c.tailscale.state, 'ok'); assert.equal(r.c.wizard.state, 'bad'); assert.match(r.c.wizard.detail, /Hermes/);
+  // Reached and healthy, even with the public check blocked: internet is skipped, never blamed.
+  r = await run({ fetch: async url => { if (url.startsWith('https://')) throw Error('blocked'); return response(); } });
+  assert.equal(r.c.internet.state, 'skip'); assert.equal(r.c.tailscale.state, 'ok'); assert.equal(r.c.wizard.state, 'ok');
+});
+test('checks: a slow link is timed and called slow, without a speed test', async () => {
+  const h = setup({ fetch: async () => response() });
+  h.ctx.navigator.connection = { effectiveType: '2g' };
+  const c = await h.api.checks();
+  assert.equal(c.tailscale.state, 'slow'); assert.match(c.tailscale.detail, /^Slow · /);
+  assert.ok(h.calls.length <= 4, 'a handful of tiny requests (internet, ping, the existing diagnosis), no download');
 });
 test('Troubleshoot decides on a current diagnosis, not one from before the disconnect', async () => {
   let up = true;

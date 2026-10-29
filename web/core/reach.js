@@ -78,8 +78,47 @@
     }).finally(() => { work = null; });
     return work;
   }
+  /* The three checks the offline pop-up shows (core/status.js), run only while something is already failing:
+   *   internet   one tiny request to Tailscale's own connectivity check (a 204 with no body; this device already
+   *              talks to Tailscale). The only cross-site request the shell makes; CSP allows exactly this URL.
+   *   tailscale  does Wizard's address answer at all (any HTTP answer counts)?
+   *   wizard     is Wizard healthy once reached (its own status report, the same diagnosis as above)?
+   * Each is { state: 'ok'|'slow'|'bad'|'wait'|'skip', ms, detail }. A slow answer is timed, never a speed test:
+   * no megabytes on the connections this exists for. */
+  const INTERNET = 'https://derp1.tailscale.com/generate_204', SLOW_MS = 1500;
+  const now = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+  async function timed(run) {
+    const t = now();
+    try { const r = await run(); return { ok: true, ms: Math.round(now() - t), r }; }
+    catch (_) { return { ok: false, ms: Math.round(now() - t) }; }
+  }
+  const secs = ms => ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${ms} ms`;
+  const slowLink = () => ['slow-2g', '2g'].includes(navigator.connection?.effectiveType);
+  async function checks() {
+    const offline = navigator.onLine === false;
+    const [net, ping] = await Promise.all([
+      offline ? Promise.resolve({ ok: false, ms: 0 }) : timed(() => request(INTERNET, { mode: 'no-cors', credentials: 'omit' })),
+      timed(() => request('/troubleshoot/api/ping')),
+    ]);
+    const ts = /\.ts\.net$/i.test(String(location.hostname || ''));
+    const out = { tailnet: ts };
+    const speed = r => (r.ms > SLOW_MS || slowLink()) ? { state: 'slow', ms: r.ms, detail: `Slow · ${secs(r.ms)}` } : { state: 'ok', ms: r.ms, detail: `Working · ${secs(r.ms)}` };
+    if (ping.ok) {
+      out.internet = net.ok ? speed(net) : { state: 'skip', ms: 0, detail: 'Not checked · your Wizard answers' };
+      out.tailscale = speed(ping);
+      let d; try { d = await diagnose(0); } catch (_) { d = null; }
+      const healthy = d && ['send'].includes(d.layer);
+      out.wizard = healthy ? { state: 'ok', ms: 0, detail: 'Healthy' } : { state: 'bad', ms: 0, detail: d?.message || 'Wizard isn’t answering properly.', layer: d?.layer || '' };
+    } else {
+      out.internet = net.ok ? speed(net) : { state: 'bad', ms: 0, detail: offline ? 'This device is offline' : 'No connection' };
+      out.tailscale = net.ok ? { state: 'bad', ms: 0, detail: ts ? 'Can’t reach your Wizard' : 'Can’t reach your Wizard’s address' } : { state: 'wait', ms: 0, detail: 'Needs internet first' };
+      out.wizard = { state: 'wait', ms: 0, detail: 'Waiting for the connection' };
+    }
+    return out;
+  }
   window.WizReach = {
     diagnose,
+    checks,
     label,
     failure() {
       if (Date.now() - failureAt >= 15000) { failureAt = Date.now(); diagnose(); }
@@ -88,18 +127,15 @@
     // Troubleshooter is an ordinary built-in app: open it in a shell window like any other app. Leaving the shell
     // for the bare page is only the last resort, when the shell can't open windows at all.
     // When the Wizard can't be reached at all, Troubleshooter can't either (the same Wizard serves it). Decide on a
-    // current diagnosis (one from before the disconnect, or none yet, would open the page that never loads): the Wizard
-    // phone app then restarts into its own connect screen with the Tailscale guide; anywhere else the connection pill
-    // unfolds what to check ('wizreachexplain'), whichever button was tapped. Resolves false when nothing opened.
+    // current diagnosis (one from before the disconnect, or none yet, would open the page that never loads): the
+    // offline pop-up opens with its three checks ('wizreachexplain'), whichever button was tapped. Resolves false
+    // when nothing opened.
     async open() {
       let d = cached;
       if (!d || Date.now() - cachedAt > 3000) { try { d = await diagnose(3000); } catch (e) { d = cached; } }
-      if (d && UNREACHABLE.has(d.layer)) {
-        const shell = window.Capacitor?.Plugins?.WizardShell;
-        if (typeof shell?.retry === 'function') { shell.retry().catch?.(() => {}); return true; }
-        window.dispatchEvent(new Event('wizreachexplain'));
-        return false;
-      }
+      // One place explains it on every device, the phone app included: the offline pop-up (core/status.js) with its
+      // three checks. The app's own connect screen stays for a cold start that can't load the shell at all.
+      if (d && UNREACHABLE.has(d.layer)) { window.dispatchEvent(new Event('wizreachexplain')); return false; }
       try { if (window.WizOpenApp?.('troubleshooter')) return true; } catch (e) {}
       if (document.documentElement.dataset.shell === 'desktop') window.open('/troubleshoot/', '_blank', 'noopener');
       else location.assign('/troubleshoot/');

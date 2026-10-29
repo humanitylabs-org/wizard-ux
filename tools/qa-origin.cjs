@@ -19,7 +19,7 @@ if (APP_UPSTREAM && !/^\/[a-z0-9-]+$/.test(APP_UPSTREAM)) throw Error('QA upstre
 if (APP_PORT && (!/^\/[a-z0-9-]+\/$/.test(APP_PREFIX) || !Number.isInteger(APP_PORT) || APP_PORT < 1 || APP_PORT > 65535)) throw Error('QA app reads need an app prefix and valid loopback port');
 const STATIC = { '127.0.0.1:9271': '/api/' }; // voice/router endpoints of the prototype server
 const TYPES = { '.js': 'application/javascript', '.css': 'text/css', '.html': 'text/html', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.md': 'text/markdown' };
-const CSP = "default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; media-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+const CSP = "default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://derp1.tailscale.com/generate_204; media-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 let refused = 0;
 http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
