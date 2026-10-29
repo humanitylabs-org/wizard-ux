@@ -442,3 +442,13 @@ html[data-skin-frame="borderless"] .win.hud > .wbar { padding-right: calc(96px +
 @keyframes hud-in { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .win.hud:not([hidden]) { animation: none; } }
 .bar-start { display: contents; }
+
+/* One mic: the other voice buttons fold into its menu (keys unchanged). */
+.one-mic #generalVoice, .one-mic #commandBtn, .one-mic #dictateBtn { display: none !important; }
+.voice-menu { position: fixed; z-index: 70; min-width: 220px; padding: 5px; border-radius: 12px; display: flex; flex-direction: column; gap: 1px; background: rgba(24, 24, 28, .95); color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), 0 18px 44px -16px rgba(0, 0, 0, .65); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); }
+.voice-menu[hidden] { display: none; }
+.voice-menu button { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 34px; padding: 0 10px; border-radius: 8px; font-size: 13px; font-weight: 600; color: inherit; background: transparent; text-align: left; }
+.voice-menu button:hover, .voice-menu button:focus-visible { background: rgba(255, 255, 255, .1); outline: none; }
+.voice-menu kbd { font: 600 11px ui-monospace, monospace; opacity: .6; }
+html[data-skin="obsidian-light"] .voice-menu, html[data-skin="landscapes-light"] .voice-menu { background: rgba(255, 255, 255, .97); color: #111418; box-shadow: inset 0 0 0 1px rgba(17, 20, 24, .1), 0 18px 44px -18px rgba(17, 20, 24, .35); }
+html[data-skin="obsidian-light"] .voice-menu button:hover, html[data-skin="landscapes-light"] .voice-menu button:hover { background: rgba(17, 20, 24, .06); }
