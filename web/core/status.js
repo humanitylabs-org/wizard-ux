@@ -17,7 +17,14 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const agent = () => { try { return window.WizConfig?.agent() || 'Wizard'; } catch (e) { return 'Wizard'; } };
   let netOpen = false;
+  /* Offline pop-up. A connection failure that lasts GRACE_MS covers the screen with three checks (Internet ·
+   * Tailscale · Wizard), so nobody keeps tapping through a Wizard that can't answer. A shorter blip shows nothing
+   * (the old pill appeared on every dropped read). X tucks it into a small pill that says what still works; the
+   * pill or any Troubleshoot button brings it back. Recovery turns the checks green and closes it. */
+  const GRACE_MS = 3000;
+  let offReturn = null, downSince = 0, graceT = 0, offDismissed = false, offOpen = false, offChecks = null, offBusy = false, offT = 0, offN = 0, offHappy = 0;
   let H = {}, net = navigator.onLine === false ? 'offline' : 'online', restoredT = 0, critHidden = '', fatalMsg = '', fatalOpen = false;
+  if (net === 'offline') downSince = Date.now(); // the device said offline at boot: the grace runs from now (render re-checks)
   const log = s => { window.__statusLog = (window.__statusLog || []).concat(s).slice(-40); };
 
   /* ---------- boot errors → fatal card ---------- */
@@ -44,6 +51,7 @@
     return el;
   }
   function onClick(e) {
+    if (e.target.closest('[data-wxoffopen]')) { openOffline(); return; }
     if (e.target.closest('[data-wxtroubleshoot]')) { window.WizReach?.open(); return; }
     if (e.target.closest('[data-wxmore]')) { netOpen = !netOpen; log('net:' + (netOpen ? 'open' : 'fold')); unfold(); return; }
     if (e.target.closest('[data-wxretry]')) { window.WosOutbox?.retryAll(); verifyWizard(true); LIVE()?.refresh(); return; }
@@ -60,14 +68,19 @@
   function setNet(n) {
     if (n === net || (n === 'online' && net === 'restored')) return;
     const was = net; clearTimeout(restoredT);
-    // Coming back from offline/reconnecting says so for 2 s, then the banner goes.
-    if (n === 'online' && (was === 'offline' || was === 'reconnecting')) {
+    // Coming back from offline/reconnecting says so for 2 s, then the banner goes; a blip nobody was told about
+    // (shorter than the grace) comes back silently.
+    if (n === 'online' && (was === 'offline' || was === 'reconnecting') && alerted()) {
       n = 'restored';
       restoredT = setTimeout(() => { if (net === 'restored') { net = 'online'; log('net:online'); render(); } }, 2000);
     }
     net = n; log('net:' + n);
+    const down = n === 'offline' || n === 'reconnecting';
+    if (down && !downSince) { downSince = Date.now(); clearTimeout(graceT); graceT = setTimeout(() => { graceT = 0; render(); }, GRACE_MS + 50); }
+    if (!down) { downSince = 0; clearTimeout(graceT); graceT = 0; offDismissed = false; if (offOpen) recovered(); }
     render();
   }
+  const alerted = () => !!downSince && Date.now() - downSince >= GRACE_MS;
   // Browser connectivity is a hint: Android/VPN networks can report offline while
   // Wizard is reachable. Only fresh evidence may overrule an offline event:
   // a new successful live read, or a healthy same-origin Wizard status probe.
@@ -126,19 +139,25 @@
   let lastHtml = '';
   function render() {
     const parts = [];
-    // Only a message the outbox will actually retry may hold the retrying banner up; anything else is a stated failure.
-    const O = window.WosOutbox, waiting = O?.unsent().some(it => it.state === 'waiting' && (!O.canRetry || O.canRetry(it)));
-    if (!(net === 'offline' || net === 'reconnecting' || waiting)) netOpen = false;
-    if (net === 'offline' || net === 'reconnecting' || waiting) {
-      const diagnosis = window.WizReach?.failure();
-      const full = diagnosis?.message || 'Checking the connection to Wizard. Messages are kept on this device while we retry.';
-      // One quiet pill in both shells (James, 22 Oct): short line + two small taps; tapping the line unfolds the full
-      // diagnosis under it. It never grows into a card that pushes the screen down.
-      const kind = net === 'offline' ? 'offline' : 'reconnecting';
-      const short = String(diagnosis?.short || 'Reconnecting to Wizard').replace(/ · retrying$/, ''); // the spinner already says it
-      parts.push(`<div class="wx-banner net ${kind}" role="status" title="${esc(full)}" data-wxnet="${kind}"><span class="wx-row"><span class="wx-spin" aria-hidden="true"></span><button type="button" class="wx-s" data-wxmore aria-expanded="false" aria-label="${esc(full)}">${esc(short)}</button><span class="wx-actions"><button type="button" data-wxretry aria-label="Retry now">Retry</button><button type="button" data-wxtroubleshoot aria-label="Open Troubleshooter">Troubleshoot</button></span></span><span class="wx-m">${esc(full)}</span></div>`);
+    // This is connection feedback, not a second outbox. A saved message may wait on
+    // upload, device storage or admission while chat reads work. Chats keeps its
+    // delivery card and Retry; only failed connection evidence raises this banner.
+    if (!(net === 'offline' || net === 'reconnecting')) netOpen = false;
+    if ((net === 'offline' || net === 'reconnecting') && alerted()) {
+      if (!offDismissed && !offOpen) openOffline();
+      // Tucked away: one small pill that says what still works. Tapping it brings the checks back.
+      if (offDismissed) {
+        const kind = net === 'offline' ? 'offline' : 'reconnecting';
+        const diagnosis = window.WizReach?.failure();
+        const full = diagnosis?.message || 'Checking the connection to Wizard. Messages are kept on this device while we retry.';
+        // The same request-neutral words every read surface uses (WizReach.label); a device that is simply offline
+        // also says what still happens to what you write.
+        const short = net === 'offline' || diagnosis?.layer === 'device-offline' ? 'Offline · messages send when you’re back'
+          : String(window.WizReach?.label?.('read', { diagnosis }) || diagnosis?.short || 'Reconnecting…').replace(/ · retrying$/, '');
+        parts.push(`<div class="wx-banner net ${kind}" role="status" title="${esc(full)}" data-wxnet="${kind}"><span class="wx-row"><span class="wx-spin" aria-hidden="true"></span><button type="button" class="wx-s" data-wxoffopen aria-label="${esc(short)}. Show connection checks">${esc(short)}</button></span></div>`);
+      }
     }
-    else if (net === 'restored') parts.push(`<div class="wx-banner net restored" role="status" data-wxnet="restored"><span class="wx-i">✓</span><span class="wx-m">Back online</span></div>`);
+    else if (net === 'restored' && !offHappy) parts.push(`<div class="wx-banner net restored" role="status" data-wxnet="restored"><span class="wx-i">✓</span><span class="wx-m">Back online</span></div>`);
     const crit = criticals(), sig = crit.map(s => s.id).sort().join(',');
     if (crit.length && sig !== critHidden && !H.inboxOpen?.()) {
       const n = crit.length;
@@ -153,6 +172,97 @@
     document.documentElement.style?.setProperty('--wx-banner-height', `${Math.ceil((el.getBoundingClientRect?.().height || 28) - (el.querySelector?.('.wx-banner.net.open .wx-m')?.getBoundingClientRect?.().height || 0)) + 10}px`);
     document.getElementById('device')?.classList.toggle('wx-on', !!html);
     document.documentElement.classList.toggle('wx-banner-on', !!html);
+  }
+
+  /* ---------- offline pop-up ---------- */
+  const ROWS = [['internet', 'Internet'], ['tailscale', 'Tailscale'], ['wizard', 'Wizard']];
+  const STATE_WORD = { ok: 'OK', slow: 'Slow', bad: 'Problem', wait: 'Waiting', skip: 'Skipped', run: 'Checking' };
+  function offEl() {
+    let el = document.getElementById('wxOffline');
+    if (!el) {
+      el = document.createElement('div'); el.id = 'wxOffline'; el.className = 'wx-off'; el.hidden = true;
+      el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-labelledby', 'wxOffT');
+      (document.body || document.documentElement).appendChild(el);
+      el.addEventListener('click', e => {
+        if (e.target.closest?.('[data-wxoffx]')) { dismissOffline(); return; }
+        if (e.target.closest?.('[data-wxoffcheck]')) { offN = 0; window.WosOutbox?.retryAll?.(); verifyWizard(true); LIVE()?.refresh(); runChecks(); return; }
+        if (e.target.closest?.('[data-wxoffhelp]')) { dismissOffline(); window.WizReach?.open(); }
+      });
+      el.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation?.(); dismissOffline(); } });
+    }
+    return el;
+  }
+  // The first check that failed decides the one next step; the rest wait behind it.
+  function fixFor(c) {
+    if (!c) return '';
+    if (c.internet?.state === 'bad') return 'Turn off airplane mode, or join Wi‑Fi or mobile data.';
+    if (c.tailscale?.state === 'bad') return c.tailnet
+      ? 'Open the Tailscale app and turn it on, signed in to the same account as your Wizard. If it’s already on, the computer running your Wizard may be off or asleep.'
+      : 'Check this device can reach your Wizard’s address, and that the computer running it is on.';
+    if (c.wizard?.state === 'bad') return 'Your Wizard is reachable but not answering properly. It usually recovers on its own within a minute.';
+    if (c.internet?.state === 'slow' || c.tailscale?.state === 'slow') return 'The connection is working, just slow. Things will take longer to load.';
+    return '';
+  }
+  // Built only from the shared kit (kit/controls.css): .wz-card panel, .wz-list/.wz-row rows, .wz-pill states,
+  // .wz-actions/.wz-button, .wz-icon-button. The skin colours and shapes all of it; polish.css only positions it.
+  const PILL = { ok: 'ok', slow: 'warn', bad: 'error', wait: 'off', skip: 'off', run: 'off' };
+  function renderOffline() {
+    const el = offEl(); if (!offOpen) { el.hidden = true; return; }
+    const c = offChecks, happy = !!offHappy;
+    const row = (key, label) => {
+      const r = happy ? { state: 'ok', detail: 'Working' } : c?.[key] || { state: 'run', detail: 'Checking…' };
+      const name = key === 'tailscale' && c && !c.tailnet ? 'Your Wizard’s network' : label;
+      return `<li class="wz-row wx-ck ${r.state}" data-wxck="${key}"><span class="wz-main"><b>${esc(name)}</b><small>${esc(r.detail)}</small></span><span class="wz-pill ${PILL[r.state] || 'off'}">${STATE_WORD[r.state] || ''}</span></li>`;
+    };
+    const offlineDevice = navigator.onLine === false || c?.internet?.state === 'bad';
+    const title = happy ? 'Back online' : offlineDevice ? 'You’re offline' : 'Can’t reach your Wizard';
+    const fix = happy ? '' : fixFor(c);
+    const canHelp = !happy && c && c.tailscale?.state !== 'bad' && c.internet?.state !== 'bad' && c.tailscale?.state !== 'wait';
+    const had = el.contains?.(document.activeElement) ? [...(document.activeElement?.attributes || [])].map(a => a.name).find(n => n.startsWith('data-wxoff')) : '';
+    el.innerHTML = `<div class="wz-card wx-off-card"><button type="button" class="wz-icon-button ghost wx-off-x" data-wxoffx aria-label="Hide. Keep using saved chats">×</button>`
+      + `<h2 id="wxOffT">${esc(title)}</h2>`
+      + `<p class="wx-off-sub">${happy ? 'Everything is connected again.' : 'Chats saved on this device still open. New messages wait here and send by themselves when you’re back.'}</p>`
+      + `<ul class="wz-list">${ROWS.map(([k, l]) => row(k, l)).join('')}</ul>`
+      + (fix ? `<p class="wx-off-sub" role="status">${esc(fix)}</p>` : '')
+      + (happy ? '' : `<div class="wz-actions"><button type="button" class="wz-button" data-wxoffcheck${offBusy ? ' disabled' : ''}>${offBusy ? 'Checking…' : 'Check again'}</button>${canHelp ? '<button type="button" class="wz-button secondary" data-wxoffhelp>More help</button>' : ''}</div>`)
+      + `</div>`;
+    el.hidden = false;
+    // A re-check re-renders the card: keep keyboard focus on the same control (or the close button if it went).
+    if (had) (el.querySelector?.(`[${had}]:not([disabled])`) || el.querySelector?.('[data-wxoffx]'))?.focus?.();
+  }
+  async function runChecks() {
+    if (offBusy || !offOpen || !window.WizReach?.checks) return;
+    offBusy = true; clearTimeout(offT); renderOffline();
+    try { offChecks = await window.WizReach.checks(); log('off:checked'); } catch (_) {}
+    offBusy = false;
+    if (!offOpen) return;
+    const ok = offChecks && ['internet', 'tailscale', 'wizard'].every(k => ['ok', 'slow', 'skip'].includes(offChecks[k]?.state));
+    if (ok) { verifyWizard(true); LIVE()?.refresh(); }
+    renderOffline();
+    // Re-check while it stays open and in front, backing off: 5 s, 8 s, 13 s … up to 30 s.
+    offT = setTimeout(() => { if (!document.hidden) runChecks(); else offT = setTimeout(runChecks, 5000); }, Math.min(30000, 5000 * 1.6 ** offN++));
+  }
+  function openOffline() {
+    offDismissed = false;
+    if (offOpen) return;
+    offOpen = true; offN = 0; offHappy = 0; log('off:open');
+    renderOffline(); runChecks(); render();
+    // Focus moves into the dialog on a control that is always enabled ("Check again" is busy while checks run).
+    offReturn = document.activeElement || null;
+    setTimeout(() => document.querySelector?.('#wxOffline [data-wxoffx]')?.focus?.(), 0);
+  }
+  function dismissOffline() {
+    if (!offOpen) return false;
+    offOpen = false; offDismissed = !!downSince; clearTimeout(offT); log('off:hide');
+    renderOffline(); render();
+    try { offReturn?.focus?.(); } catch (_) {} offReturn = null; // back to where the owner was
+    return true;
+  }
+  // Recovery: every row turns green for a moment, then the pop-up goes by itself.
+  function recovered() {
+    if (!offOpen || offHappy) return;
+    offHappy = setTimeout(() => { offHappy = 0; offOpen = false; offChecks = null; clearTimeout(offT); renderOffline(); }, 1200);
+    clearTimeout(offT); renderOffline();
   }
 
   /* ---------- fatal card ---------- */
@@ -175,11 +285,13 @@
   C.status = {
     attach(h) { H = Object.assign({}, H, h || {}); fromLive(); render(); if (net === 'offline' || net === 'reconnecting') verifyWizard(); const L = LIVE(); if (L && !L.__wxStatus) { L.__wxStatus = true; L.onChange(() => { fromLive(); render(); }); } const O = window.WosOutbox; if (O && !O.__wxStatus) { O.__wxStatus = true; O.onChange(render); } },
     refresh() { fromLive(); render(); },
-    fatal, back: () => (closeFatal() ? 'fatal' : ''),
-    get state() { return { net, critical: criticals().map(s => s.id), fatal: fatalOpen ? fatalMsg : '' }; },
+    fatal, back: () => (closeFatal() ? 'fatal' : dismissOffline() ? 'offline' : ''),
+    get state() { return { net, offline: offOpen ? 'open' : offDismissed ? 'pill' : '', critical: criticals().map(s => s.id), fatal: fatalOpen ? fatalMsg : '' }; },
   };
   // Cheap catch-all for things with no event (the thread in front changed, the inbox opened or closed).
   addEventListener('wizreachchange', render);
+  // Troubleshoot from any button while nothing of the Wizard answers (outside the phone app): unfold what to check.
+  addEventListener('wizreachexplain', () => openOffline());
   addEventListener('resize', () => { lastHtml = ''; render(); });
   setInterval(() => {
     if (document.hidden || !document.getElementById('wxBanners')) return;

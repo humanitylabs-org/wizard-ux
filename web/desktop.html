@@ -24,12 +24,15 @@
   <link rel="stylesheet" href="core/chat-power.css">
   <link rel="stylesheet" href="core/resources.css">
   <link rel="stylesheet" href="core/polish.css">
+  <link rel="stylesheet" href="core/context-menu.css">
+  <script src="core/context-menu.js"></script>
   <link rel="stylesheet" href="desktop/desktop.css">
   <link rel="stylesheet" href="core/tour.css">
   <link rel="stylesheet" href="core/views.css">
   <link rel="stylesheet" href="core/sel-menu.css">
   <link rel="stylesheet" href="core/share-sheet.css">
   <link rel="stylesheet" href="core/settings.css">
+  <link rel="stylesheet" href="core/phone-connect.css">
   <link rel="stylesheet" href="core/own-views.css">
   <link rel="stylesheet" href="core/update-banner.css">
   <link rel="stylesheet" href="core/links.css">
@@ -41,6 +44,8 @@
   <script type="module" src="core/thread-swipe-back.js"></script>
   <script src="core/edge-peek.js"></script>
   <link rel="stylesheet" href="core/skin-frame.css">
+  <link rel="stylesheet" href="kit/shell-tokens.css">
+  <link rel="stylesheet" href="kit/controls.css">
   <script src="core/my-skin.js"></script>
   <script defer src="core/experience.js"></script>
 </head>
@@ -68,7 +73,9 @@
     </div>
   </header>
 
-  <main id="stage" class="stage" aria-live="polite"><section id="desktopHome" class="home desktop-home" aria-label="Home" tabindex="-1" hidden></section></main>
+  <main id="stage" class="stage" aria-live="polite"><section id="desktopHome" class="home desktop-home" aria-label="Home" tabindex="-1" hidden></section>
+    <!-- Heads-up chat: one Chats window floating over every desk and Home. -->
+    <div id="hudLayer" class="hud-layer" hidden></div></main>
 
   <div id="palette" class="palette" hidden>
     <div class="pal-card" role="dialog" aria-modal="true" aria-label="Search and launch">
@@ -98,6 +105,8 @@
   <script src="core/chats-view.js"></script>
   <script src="core/launcher-defaults.js"></script>
   <script src="core/launcher.js"></script>
+  <script src="core/pages.js"></script>
+  <link rel="stylesheet" href="core/pages.css">
   <script src="core/apps.js"></script>
   <script src="core/app-kinds.js"></script>
   <script src="core/appearance-host.js"></script>
@@ -109,6 +118,8 @@
   <script src="core/app-versions.js"></script>
   <script src="core/agents.js"></script>
   <script src="core/app-route.js"></script>
+  <script src="core/app-setup.js"></script>
+  <link rel="stylesheet" href="core/app-setup.css">
   <script src="core/web-update.js"></script>
   <script src="live.js"></script>
   <script src="outbox.js"></script>
@@ -136,6 +147,7 @@
   <script src="core/companion-pane.js"></script>
   <script src="core/companion-legacy.js"></script>
   <script src="core/voice-status.js"></script>
+  <script src="core/phone-connect.js"></script>
   <script src="core/settings.js"></script>
   <script src="core/workspace-sync.js"></script>
   <script src="core/photos-relay.js"></script>

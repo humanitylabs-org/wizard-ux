@@ -4,8 +4,11 @@
 (() => {
   'use strict';
   const order = ['gateway', 'signin', 'shell', 'agent-service', 'hermes'];
+  /** Diagnoses where nothing of the Wizard answers, so Troubleshooter (served by it) can't open either. */
+  const UNREACHABLE = new Set(['tailscale', 'unreachable', 'device-offline']);
   const result = (layer, message, short) => ({ layer, message, short, action: 'troubleshoot' });
-  const pending = result('checking', 'Checking the connection to Wizard. Messages are kept on this device while we retry.', 'Checking connection · retrying');
+  const RECONNECTING = 'Reconnecting…';
+  const pending = result('checking', 'Checking the connection to Wizard. Messages are kept on this device while we retry.', RECONNECTING);
   let cached = null, cachedAt = 0, work = null, failureAt = -Infinity;
   async function request(url, options = {}, json = false) {
     const controller = new AbortController(); let timer;
@@ -21,31 +24,52 @@
     try { ping = await request('/troubleshoot/api/ping'); }
     catch (_) {
       if (navigator.onLine === false) return result('device-offline', 'Your device is offline. Messages are saved and will send when you reconnect.', 'Device offline · retrying');
-      try { await request('https://www.gstatic.com/generate_204', { mode: 'no-cors', credentials: 'omit' }); }
-      catch (_) { return result('internet', 'No internet connection. Messages are saved and will send when you’re back online.', 'No internet · retrying'); }
-      return result('tailscale', 'Can’t reach your Wizard server. Open the Tailscale app on this device and make sure it’s connected. Messages are saved and will send when it’s back.', 'Check Tailscale · retrying');
+      // No request to another site: Wizard's content security policy (connect-src 'self') blocks it, so it would
+      // always look like "no internet". On a Tailscale address the page can't tell Tailscale being off (or this
+      // device removed from the network) from the Wizard's computer being off, so it names both.
+      if (/\.ts\.net$/i.test(String(location.hostname || ''))) {
+        return result('tailscale', 'Can’t reach your Wizard. Check that Tailscale is on on this device and signed in to the same account as your Wizard, and that the computer running your Wizard is on. Messages are saved and will send when it’s back.', 'Can’t reach Wizard · retrying');
+      }
+      return result('unreachable', 'Can’t reach your Wizard server. Check this device’s connection. Messages are saved and will send when it’s back.', 'Can’t reach Wizard · retrying');
     }
     // An HTTP error proves the server is reachable; never blame the device/VPN.
-    if (!ping.ok) return result('gateway', `Wizard’s gateway answered (${ping.status}), but Troubleshooter isn’t available. Messages are kept while we retry.`, 'Gateway needs attention · retrying');
+    if (!ping.ok) return result('gateway', `Wizard’s gateway answered (${ping.status}), but Troubleshooter isn’t available. Messages are kept while we retry.`, RECONNECTING);
     try {
       const { response, body } = await request('/troubleshoot/api/status', {}, true);
       if (!response.ok || !Array.isArray(body.checks)) throw new Error('Invalid status');
-      const failed = body.checks.filter(check => !check.ok).sort((a, b) => {
+      // Repair-chat engine probes (reply-claude/chatgpt/tinfoil) say whether Troubleshooter's own AI can answer;
+      // they never explain why Wizard is unreachable, so the connection pill must not blame them (James, 27 Oct).
+      const relevant = check => !check.ok && !check.skipped && !String(check.id || '').startsWith('reply-');
+      const failed = body.checks.filter(relevant).sort((a, b) => {
         const rank = id => order.includes(id) ? order.indexOf(id) : order.length;
         return rank(a.id) - rank(b.id);
       })[0];
       if (failed) {
-        const labels = { gateway: 'Wizard’s gateway isn’t responding.', signin: 'Wizard sign-in needs attention.', shell: 'Wizard’s shell isn’t responding.', 'agent-service': 'Wizard’s Agent Service isn’t responding.', hermes: 'Your agent (Hermes) isn’t responding.' };
-        const message = labels[failed.id];
-        return result(failed.id, message ? message + (['agent-service', 'hermes'].includes(failed.id) ? ' It restarts itself automatically; open Troubleshooter if it doesn’t come back.' : ' Open Troubleshooter to check it.') : `${failed.label || failed.id}: ${failed.detail || 'Needs attention'}`, `${failed.label || failed.id} needs attention · retrying`);
+        const labels = { gateway: 'Wizard’s gateway isn’t responding.', signin: 'Wizard sign-in needs attention.', shell: 'Wizard’s shell isn’t responding.', 'agent-service': 'Wizard’s Agent Service isn’t answering right now.', hermes: 'Your agent (Hermes) isn’t answering right now.' };
+        const message = labels[failed.id], selfHeals = ['agent-service', 'hermes'].includes(failed.id);
+        // While we are retrying, the one-line pill says what is happening (reconnecting), not an alarm; the
+        // unfolded line names the layer. Only sign-in asks the owner to act (James, 27 Oct).
+        const short = failed.id === 'signin' ? 'Sign-in needs attention · retrying' : RECONNECTING;
+        return result(failed.id, message ? message + (selfHeals ? ' It usually comes back on its own within a minute; messages wait and send afterwards. Open Troubleshooter if it doesn’t.' : ' Open Troubleshooter to check it.') : `${failed.label || failed.id}: ${failed.detail || 'Needs attention'}`, short);
       }
-      if (body.overall && body.overall !== 'ok') return result('wizard', body.summary || 'Wizard reports a problem. Open Troubleshooter to check it.', 'Wizard needs attention · retrying');
-    } catch (_) { return result('diagnosis', 'Wizard’s gateway is reachable, but its health report isn’t available. Open Troubleshooter to check it. Messages are kept while we retry.', 'Health report unavailable · retrying'); }
-    return result('send', 'Wizard is online, but this message hasn’t gone through yet. It’s kept on this device while we retry.', 'Not sent yet · retrying');
+      if (body.overall === 'down') return result('wizard', body.summary || 'Wizard reports a problem. Open Troubleshooter to check it.', RECONNECTING);
+    } catch (_) { return result('diagnosis', 'Wizard’s gateway is reachable, but its health report isn’t available. Open Troubleshooter to check it. Messages are kept while we retry.', RECONNECTING); }
+    // Healthy probes prove reachability, not why a separate read/send failed or
+    // whether anything was admitted. The shared result stays request-neutral;
+    // label('send') alone words it as a saved message (PR689 review).
+    return result('send', 'Wizard’s connection checks passed. Retrying automatically; these checks don’t show whether the request went through.', 'Wizard reachable · retrying');
   }
-  function diagnose() {
+  /** The one short line for a failing request. operation is 'send' (a saved outbound message, count of them) or
+   *  'read'. Only a confirmed-healthy diagnosis differs: a send names the unsent message instead of the connection,
+   *  a read stays neutral. Any real outage, or no diagnosis yet, keeps its connection wording for both. */
+  function label(operation, { count = 1, diagnosis } = {}) {
+    const d = diagnosis || window.WizReach.failure();
+    if (operation === 'send' && d.layer === 'send') return count > 1 ? `${count} messages not sent · retrying` : 'Message not sent · retrying';
+    return d.short;
+  }
+  function diagnose(maxAge = 10000) {
     if (work) return work;
-    if (cached && Date.now() - cachedAt < 10000) return Promise.resolve(cached);
+    if (cached && Date.now() - cachedAt < maxAge) return Promise.resolve(cached);
     work = probe().then(value => {
       const changed = JSON.stringify(value) !== JSON.stringify(cached);
       cached = value; cachedAt = Date.now();
@@ -54,18 +78,68 @@
     }).finally(() => { work = null; });
     return work;
   }
+  /* The three checks the offline pop-up shows (core/status.js), run only while something is already failing:
+   *   internet   one tiny request to Tailscale's own connectivity check (a 204 with no body; this device already
+   *              talks to Tailscale). The only cross-site request the shell makes; CSP allows exactly this URL.
+   *   tailscale  does Wizard's address answer at all (any HTTP answer counts)?
+   *   wizard     is Wizard healthy once reached (its own status report, the same diagnosis as above)?
+   * Each is { state: 'ok'|'slow'|'bad'|'wait'|'skip', ms, detail }. A slow answer is timed, never a speed test:
+   * no megabytes on the connections this exists for. */
+  const INTERNET = 'https://derp1.tailscale.com/generate_204', SLOW_MS = 1500;
+  const now = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+  async function timed(run) {
+    const t = now();
+    try { const r = await run(); return { ok: true, ms: Math.round(now() - t), r }; }
+    catch (_) { return { ok: false, ms: Math.round(now() - t) }; }
+  }
+  const secs = ms => ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${ms} ms`;
+  const slowLink = () => ['slow-2g', '2g'].includes(navigator.connection?.effectiveType);
+  async function checks() {
+    const offline = navigator.onLine === false;
+    const [net, ping] = await Promise.all([
+      offline ? Promise.resolve({ ok: false, ms: 0 }) : timed(() => request(INTERNET, { mode: 'no-cors', credentials: 'omit' })),
+      timed(() => request('/troubleshoot/api/ping')),
+    ]);
+    const ts = /\.ts\.net$/i.test(String(location.hostname || ''));
+    const out = { tailnet: ts };
+    const speed = r => (r.ms > SLOW_MS || slowLink()) ? { state: 'slow', ms: r.ms, detail: `Slow · ${secs(r.ms)}` } : { state: 'ok', ms: r.ms, detail: `Working · ${secs(r.ms)}` };
+    if (ping.ok) {
+      out.internet = net.ok ? speed(net) : { state: 'skip', ms: 0, detail: 'Not checked · your Wizard answers' };
+      out.tailscale = speed(ping);
+      let d; try { d = await diagnose(0); } catch (_) { d = null; }
+      const healthy = d && ['send'].includes(d.layer);
+      out.wizard = healthy ? { state: 'ok', ms: 0, detail: 'Healthy' } : { state: 'bad', ms: 0, detail: d?.message || 'Wizard isn’t answering properly.', layer: d?.layer || '' };
+    } else {
+      out.internet = net.ok ? speed(net) : { state: 'bad', ms: 0, detail: offline ? 'This device is offline' : 'No connection' };
+      out.tailscale = net.ok ? { state: 'bad', ms: 0, detail: ts ? 'Can’t reach your Wizard' : 'Can’t reach your Wizard’s address' } : { state: 'wait', ms: 0, detail: 'Needs internet first' };
+      out.wizard = { state: 'wait', ms: 0, detail: 'Waiting for the connection' };
+    }
+    return out;
+  }
   window.WizReach = {
     diagnose,
+    checks,
+    label,
     failure() {
       if (Date.now() - failureAt >= 15000) { failureAt = Date.now(); diagnose(); }
       return cached || pending;
     },
     // Troubleshooter is an ordinary built-in app: open it in a shell window like any other app. Leaving the shell
     // for the bare page is only the last resort, when the shell can't open windows at all.
-    open() {
-      try { if (window.WizOpenApp?.('troubleshooter')) return; } catch (e) {}
+    // When the Wizard can't be reached at all, Troubleshooter can't either (the same Wizard serves it). Decide on a
+    // current diagnosis (one from before the disconnect, or none yet, would open the page that never loads): the
+    // offline pop-up opens with its three checks ('wizreachexplain'), whichever button was tapped. Resolves false
+    // when nothing opened.
+    async open() {
+      let d = cached;
+      if (!d || Date.now() - cachedAt > 3000) { try { d = await diagnose(3000); } catch (e) { d = cached; } }
+      // One place explains it on every device, the phone app included: the offline pop-up (core/status.js) with its
+      // three checks. The app's own connect screen stays for a cold start that can't load the shell at all.
+      if (d && UNREACHABLE.has(d.layer)) { window.dispatchEvent(new Event('wizreachexplain')); return false; }
+      try { if (window.WizOpenApp?.('troubleshooter')) return true; } catch (e) {}
       if (document.documentElement.dataset.shell === 'desktop') window.open('/troubleshoot/', '_blank', 'noopener');
       else location.assign('/troubleshoot/');
+      return true;
     },
   };
 })();

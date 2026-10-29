@@ -329,8 +329,14 @@ def sweep():
 
 
 em = None
-with (BASE / 'worker.lock').open('a') as lock:
-    fcntl.flock(lock, fcntl.LOCK_EX)
+# Reuse the durable worker lease instead of blocking on our own ancestor's lock.
+_inherited = os.environ.get('WIZARD_HEAVY_LOCK_FD')
+_lockfile = os.fdopen(int(_inherited), 'a', closefd=False) if _inherited else (BASE / 'worker.lock').open('a')
+with _lockfile as lock:
+    if _inherited:
+        _want, _have = (BASE / 'worker.lock').stat(), os.fstat(lock.fileno())
+        if (_want.st_dev, _want.st_ino) != (_have.st_dev, _have.st_ino): raise SystemExit('inherited lock identity mismatch')
+    fcntl.flock(lock, fcntl.LOCK_EX | (fcntl.LOCK_NB if _inherited else 0))
     try:
         sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'np', '-k', 'system-images;android-35;google_apis;arm64-v8a', '-d', 'pixel_7', '-p', job / 'dev', stdin='no\n')
         # Dead DNS: nothing on the emulator can resolve the real Wizard's name (QA must never reach it).
@@ -572,7 +578,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         connect()
         sheet2 = wait(lambda: pg.ev("(() => { const e = document.querySelector('[data-dv=share]'); return e ? e.innerText.replace(/\\s+/g, ' ') : ''; })()"), 15)
         check('#20 sharing again opens a fresh Share sheet with the image', sheet2 and 'qa-share' in sheet2, (sheet2, logs('WizardShare', '.')))
-        pg.tap('[data-dv=share] [data-shareto=__new__]')
+        pg.tap('[data-dv=share] [data-sharesend]')
         wait(lambda: runs_n() > n0, 40); time.sleep(3)
         up = ST['uploads'][u0:]
         b = ST['runs'][n0]['body'] if runs_n() > n0 else {}

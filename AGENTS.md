@@ -26,11 +26,15 @@ are covered. See `android/README.md` and `ios/README.md` for local configuration
   - Native changes need a version bump above the published update feed.
   - Signed APKs are built and signed on the Mac build host, which holds the signing key.
   - Web-only changes need no APK.
-- **Back never exits.** Android and browser Back always take one step back inside the app: close the top overlay, then leave the nested view, then return to Home. At Home, Back stays put. In a plain browser tab, the first Back at Home shows "Press back again to exit", and only a second Back within about 2 seconds may leave. Every Back change ships with a test that opens a nested view, presses Back, and asserts the app is still open.
+- **Back never exits.** Android and browser Back always take one step back inside the app: close the top overlay, then leave the nested view, then return to Home. At Home, Back stays put, in the Android app and in a plain browser tab alike: repeated Back at Home never leaves Wizard (James: Back never exits, including the browser shell). Every Back change ships with a test that opens a nested view, presses Back, and asserts the app is still open.
 
 ### Agent chat parity
 
 Every new or changed chat feature must add/update the canonical `wizard-agent-service/qa/agent-parity/features.json` entry and a main-versus-routed-thread behavioral test. Exercise a host-profile, container and restricted route as appropriate; shared renderer code alone is not parity proof. Keep browser and live evidence separate from fixture/unit passes. Never open existing private-agent sessions for QA; use disposable synthetic threads and block production mutations independently at browser and origin. Preserve the Back and Appearance contracts below.
+
+### Synced across devices
+
+Any feature that syncs state across devices ships with a stale-device and simultaneous-edit test (two clients on one fake service, `tests/two-devices.mjs`). Edit a shared list by item operation (`WizLive.prefOps`), never by saving one device's whole cached list.
 
 ### Reuse before build
 

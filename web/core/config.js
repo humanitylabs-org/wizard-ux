@@ -6,7 +6,8 @@
  *
  *   WizConfig.agent()          the agent's display name ("Wizard" until the owner names it)
  *   WizConfig.owner()          the owner's name, or '' (UI then says "you")
- *   WizConfig.timeZone()       settings timezone, else the device's own zone
+ *   WizConfig.timeZone()       the device's own zone (follows the owner when they travel), else settings timezone
+ *   WizConfig.homeZone()       the settings timezone the server schedules in, else the device's zone
  *   WizConfig.dayStart(t)      start (ms) of the owner's day containing t (settings day_starts_at)
  *   WizConfig.dayParts(t)      {y, m, d, dow} of t in the owner's zone
  *   WizConfig.endpoint(name)   'transcribe' | 'route' | 'apps' | 'upload' URL, or '' when absent
@@ -28,7 +29,9 @@
   let B = (() => { try { return JSON.parse(localStorage.getItem(KEY) || 'null') || DEFAULTS; } catch (e) { return DEFAULTS; } })();
   let live = false;
 
-  const deviceZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) { return 'UTC'; } };
+  // The zone the phone reports, or '' when it reports none (some WebViews), so the settings zone can take over.
+  const phoneZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; } };
+  const deviceZone = () => phoneZone() || 'UTC';
   const zoneOk = z => { if (!z) return false; try { new Intl.DateTimeFormat('en-US', { timeZone: z }); return true; } catch (e) { return false; } };
   const fmtCache = new Map();
   const fmt = z => {
@@ -66,7 +69,10 @@
     owner() { return (B.settings?.owner?.name || '').trim(); },
     place() { return (B.settings?.owner?.place || '').trim(); },
     vocabulary() { return Array.isArray(B.settings?.voice?.vocabulary) ? B.settings.voice.vocabulary : []; },
-    timeZone() { const z = B.settings?.clock?.timezone; return zoneOk(z) ? z : deviceZone(); },
+    // Times on screen follow the phone's clock, so a trip abroad needs no settings change.
+    // The settings zone stays the fallback (and the server's home zone) when the device reports none.
+    timeZone() { const d = phoneZone(); if (zoneOk(d)) return d; const z = B.settings?.clock?.timezone; return zoneOk(z) ? z : 'UTC'; },
+    homeZone() { const z = B.settings?.clock?.timezone; return zoneOk(z) ? z : deviceZone(); },
     /* Wall-clock parts of instant t in the owner's zone. */
     dayParts(t = Date.now()) {
       const p = {}; for (const x of fmt(C.timeZone()).formatToParts(new Date(t))) p[x.type] = x.value;
@@ -125,14 +131,14 @@
     // The Service owns this preference across devices; the cache is display-only.
     async responseStyle(value) {
       if (value !== undefined) {
-        if (!['summary', 'concise'].includes(value)) throw Error('Choose Summary or Concise');
+        if (!['summary', 'concise', 'own'].includes(value)) throw Error('Choose Summary, Concise or Own');
         const saved = await fetch('/wizard/v1/settings', { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ response_style: value }) });
         if (!saved.ok) throw Error('Could not save response style');
       }
       const read = await fetch('/wizard/v1/settings', { credentials: 'same-origin', cache: 'no-store' });
       if (!read.ok) throw Error('Could not read response style');
       const style = (await read.json()).settings?.response_style;
-      if (!['summary', 'concise'].includes(style)) throw Error('Update your Wizard to choose a response style');
+      if (!['summary', 'concise', 'own'].includes(style)) throw Error('Update your Wizard to choose a response style');
       if (value !== undefined && style !== value) throw Error('Your Wizard has not confirmed this response style. Try again.');
       B = { ...B, settings: { ...B.settings, response_style: style } };
       try { localStorage.setItem(KEY, JSON.stringify(B)); } catch (_) {}

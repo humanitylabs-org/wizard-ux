@@ -15,7 +15,7 @@
 .aroute { position: fixed; inset: 0; z-index: 9000; display: flex; align-items: flex-end; justify-content: center; background: rgba(3, 2, 8, .55); opacity: 0; transition: opacity 140ms ease; }
 .aroute.open { opacity: 1; }
 .ar-card { width: 100%; max-width: 480px; max-height: 84vh; overflow: auto; padding: 16px 14px calc(env(safe-area-inset-bottom, 0px) + 14px); border-radius: 22px 22px 0 0;
-  background: var(--wz-overlay, #120c26); color: var(--ink, #f3efff); border: 1px solid var(--line, rgba(205, 190, 255, .14)); border-bottom: 0; box-shadow: 0 -20px 50px -20px rgba(0, 0, 0, .8); }
+  background: linear-gradient(var(--wz-overlay, #120c26), var(--wz-overlay, #120c26)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink, #f3efff); border: 1px solid var(--line, rgba(205, 190, 255, .14)); border-bottom: 0; box-shadow: 0 -20px 50px -20px rgba(0, 0, 0, .8); }
 @media (min-width: 720px) { .aroute { align-items: center; } .ar-card { border-radius: 20px; border-bottom: 1px solid var(--line, rgba(205, 190, 255, .14)); } }
 .ar-head { display: flex; flex-direction: column; gap: 3px; margin: 0 2px 6px; }
 .ar-head b { font-size: 18px; font-weight: 800; }

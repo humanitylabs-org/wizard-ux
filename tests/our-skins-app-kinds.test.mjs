@@ -1,4 +1,4 @@
-// Miguel's skins (Dark, Light, Landscapes) sort the Apps sheet and New desk into Apps / Wizard apps / Agents /
+// Miguel's skins (Dark, Light, Landscapes) sort the Apps sheet and New desk into Apps / Agent apps / Agents /
 // Connectors with system apps first and no Recent row; James's skins keep the stock layout.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,7 +8,7 @@ const css = f => readFileSync(new URL(`../web/skins/${f}/skin.css`, import.meta.
 const kinds = readFileSync(new URL('../web/core/app-kinds.js', import.meta.url), 'utf8');
 
 test('app kinds are gated on our three skins only', () => {
-  assert.match(app, /const oursSkin = \(\) => \['obsidian', 'obsidian-light', 'landscapes'\]\.includes\(document\.documentElement\.dataset\.skin/);
+  assert.match(app, /const oursSkin = \(\) => \['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'\]\.includes\(document\.documentElement\.dataset\.skin/);
   assert.match(app, /if \(!q && oursSkin\(\)\) \{ paint\(kindGroups\(\['apps', 'wiz', 'agents', 'conns'\]\)\)/);
   // New desk wears the kinds on every skin (James, 23 Oct 2026); the Apps sheet keeps its Recent row off Miguel's skins.
   assert.match(app, /tileN = 0; return `<div class="desk-scroll new-desk kinds">/);

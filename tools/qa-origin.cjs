@@ -1,5 +1,5 @@
 // Local QA origin for when the Thales tunnel (127.0.0.1:18443) is down.
-// Serves <web dir> at /wizard-os-home/ and proxies READS of /wizard/* to the Wizard Agent
+// Serves <web dir> at /wizard-os-home/ and proxies READS of /wizard/* and /pages/* to the Wizard Agent
 // Service (127.0.0.1:8923), the same backend the live origin fronts. Any non-GET/HEAD to
 // /wizard/* is refused here (403) as a second fence: suites must intercept writes themselves.
 // Usage: node tools/qa-origin.cjs [port=9371] [webDir=<repo>/web]
@@ -19,7 +19,7 @@ if (APP_UPSTREAM && !/^\/[a-z0-9-]+$/.test(APP_UPSTREAM)) throw Error('QA upstre
 if (APP_PORT && (!/^\/[a-z0-9-]+\/$/.test(APP_PREFIX) || !Number.isInteger(APP_PORT) || APP_PORT < 1 || APP_PORT > 65535)) throw Error('QA app reads need an app prefix and valid loopback port');
 const STATIC = { '127.0.0.1:9271': '/api/' }; // voice/router endpoints of the prototype server
 const TYPES = { '.js': 'application/javascript', '.css': 'text/css', '.html': 'text/html', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.md': 'text/markdown' };
-const CSP = "default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; media-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+const CSP = "default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://derp1.tailscale.com/generate_204; media-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 let refused = 0;
 http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
@@ -32,9 +32,9 @@ http.createServer((req, res) => {
     p.on('error', () => { res.writeHead(502); res.end(); }); return p.end();
   }
   if (u.pathname === '/__qa/refused') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ refused })); }
-  if (u.pathname.startsWith('/wizard/')) {
+  if (u.pathname.startsWith('/wizard/') || u.pathname.startsWith('/pages/')) {
     if (req.method !== 'GET' && req.method !== 'HEAD' && !seed) { refused++; res.writeHead(403, { 'content-type': 'application/json' }); return res.end('{"error":"qa-origin refuses writes"}'); }
-    const headers = { ...req.headers }; delete headers.host; delete headers.origin; delete headers.referer;
+    const headers = { ...req.headers }; delete headers.host; if (headers.origin !== 'null') delete headers.origin; delete headers.referer;
     const p = http.request({ ...BACKEND, method: req.method, path: req.url, headers }, r => { res.writeHead(r.statusCode, r.headers); r.pipe(res); });
     p.on('error', e => { res.writeHead(502); res.end(String(e)); });
     if (seed) return req.pipe(p);

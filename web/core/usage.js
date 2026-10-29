@@ -62,12 +62,13 @@
     const m = Math.max(0, Math.floor((now - Math.min(...ts)) / 60000));
     return m < 1 ? 'Updated just now' : m < 60 ? `Updated ${m} min ago` : `Updated ${clock(Math.min(...ts))}`;
   }
-  const money = (minor, exp, cur) => minor == null ? '' : (cur === 'USD' ? '$' : '') + (minor / 10 ** Math.max(0, exp || 0)).toFixed(Math.max(0, Math.min(4, exp || 0))) + (cur && cur !== 'USD' ? ' ' + cur : '');
+  const money = (minor, exp, cur) => minor == null ? '' : (cur === 'USD' ? '$' : '') + (minor / 10 ** Math.max(0, exp || 0)).toLocaleString('en-US', {minimumFractionDigits:Math.max(0, Math.min(4, exp || 0)),maximumFractionDigits:Math.max(0, Math.min(4, exp || 0))}) + (cur && cur !== 'USD' ? ' ' + cur : '');
   function paidLine(p) {
     if (!p || p.enabled === false) return '';
     if (p.type === 'credits') return p.unlimited ? 'Credits: unlimited' : p.balanceMinor != null ? `Credits: ${money(p.balanceMinor, p.exponent, p.currency)}` : '';
     const u = money(p.usedMinor, p.exponent, p.currency), l = money(p.limitMinor, p.exponent, p.currency);
-    return u && l ? `Extra usage: ${u} of ${l}` : u ? `Extra usage: ${u}` : '';
+    if (p.type === 'spend' && p.enabled === true && !l) return `Extra usage: Enabled · ${u ? u + ' spent' : 'Spend unavailable'} · Balance and cap unavailable`;
+    return u && l ? `Extra usage: ${u} of ${l}` : l ? `Extra usage: Enabled · Spend unavailable · ${l} cap` : u ? `Extra usage: ${u} spent` : '';
   }
   // compactRows: 'Claude · Session', 'ChatGPT 2 · Weekly'; a model-scoped window names the model ('Fable · weekly').
   function rowLabel(p, l) {
@@ -105,7 +106,7 @@
       }
       return `<div class="st-group st-usage" data-usage>${head}${rows.join('') || '<div class="st-empty">No quota windows reported.</div>'}`
         + (notes.length ? `<p class="st-note us-notes">${notes.map(esc).join('<br>')}</p>` : '')
-        + `<p class="st-note">${esc(freshness(s.providers, now))}${U.error ? ' · ' + esc(U.error) : ''} · times in ${esc(zone() || 'local time')}</p></div>`;
+        + `<p class="st-note">${U.error ? 'Last known reading · ' : ''}${esc(freshness(s.providers, now))}${U.error ? ' · ' + esc(U.error) : ''} · times in ${esc(zone() || 'local time')}</p></div>`;
     },
   };
   window.WosUsage = U;

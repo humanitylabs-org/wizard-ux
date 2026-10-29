@@ -21,12 +21,13 @@ try {for(const shell of ['phone','desktop']){
    const file=path.join(__dirname,'../web',u.pathname.slice('/wizard-os-home/'.length)||'index.html');
    if(fs.existsSync(file)&&fs.statSync(file).isFile())return r.fulfill({contentType:file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.html')?'text/html':'application/octet-stream',body:fs.readFileSync(file)});
   }
+  if(u.pathname==='/wizard/v1/ui-preferences')return r.fulfill({json:{launcher:{},migrations:{'launcher-seed-v1':true}}});
   if(u.pathname.endsWith('/v1/apps'))return r.fulfill({json:{apps:[]}});
   return r.fulfill({json:{sessions:[],agents:[],apps:[],connected:false}});
  });
  const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));
  await p.goto('https://shell.test/wizard-os-home/'+(shell==='desktop'?'desktop.html':'')+'?view=install&repo=o/r&from=Jane');
- await p.waitForFunction(()=>Array.from(document.querySelectorAll('iframe')).some(f=>f.src.includes('/store/index.html'))).catch(e=>{console.error(shell,errors);throw e;});
+ await p.waitForFunction(()=>Array.from(document.querySelectorAll('iframe')).some(f=>{try{return f.src.includes('/store/index.html')&&!!f.contentWindow.__store;}catch{return false;}})).catch(e=>{console.error(shell,errors);throw e;});
  let f=p.frames().find(f=>f.url().includes('/store/index.html'));await f.locator('[data-link-install]').waitFor();
  assert.match(await f.locator('#sheet').innerText(),/Shared with you by Jane/);await f.locator('#sheet [data-back]').click();assert.ok(await f.locator('#discover').isVisible());
  // A second link reuses the same Store frame, preserves its prior screen, and invalid input never blanks.
@@ -42,6 +43,24 @@ try {for(const shell of ['phone','desktop']){
  assert.deepEqual(posts,[{source:'link',repo:'o/r',commit:'a'.repeat(40),operation:'switch'}]);
  await f.locator('#sheet [data-back]').click();assert.ok(await f.locator('#discover').isVisible());
  assert.ok(writes.every(w=>w==='PUT /wizard/thread-seen'),JSON.stringify(writes));assert.deepEqual(runs,[]);assert.deepEqual(errors,[]);
- results.push({shell,deepLink:true,reused:true,badLink:true,backStays:true,rootBackToShell:true,pinnedSwitch:true,writes:writes.length,runs:runs.length});await ctx.close();
+ if(shell==='phone'){
+  for(const kind of ['launcher','settings']){
+   await p.evaluate(k=>__wos.openSheet(k),kind);await p.waitForFunction(k=>__wos.sheet===k,kind);
+   await p.locator('#scrim').tap({position:{x:5,y:5}});assert.equal(await p.evaluate(()=>__wos.sheet),null,`${kind} outside is Back`);
+  }
+  await p.evaluate(()=>__wos.openSettings());await p.locator('#settings [data-st-page]').first().tap();
+  assert.notEqual(await p.locator('#settings [data-settings-root]').getAttribute('data-settings-page'),'');
+  await p.locator('#scrim').tap({position:{x:5,y:5}});assert.equal(await p.evaluate(()=>__wos.sheet),'settings','nested outside uses Settings Back first');
+  assert.equal(await p.locator('#settings [data-settings-root]').getAttribute('data-settings-page'),'');
+  await p.locator('#scrim').tap({position:{x:5,y:5}});assert.equal(await p.evaluate(()=>__wos.sheet),null);
+  assert.equal(p.frames().filter(f=>f.url().includes('/store/index.html')).length,1,'app remains mounted');
+ }else{
+  for(const [button,layer] of [['#searchBtn','#palette'],['#keysBtn','#keyHints']]){
+   await p.locator(button).click();assert.ok(await p.locator(layer).isVisible());
+   await p.mouse.click(5,840);assert.equal(await p.locator(layer).isVisible(),false);
+  }
+ }
+ assert.deepEqual(errors,[]);
+ results.push({shell,deepLink:true,reused:true,badLink:true,backStays:true,rootBackToShell:true,pinnedSwitch:true,outsideBack:shell==='phone'?['launcher','settings','nested-settings-back']:['palette','key-hints'],writes:writes.length,runs:runs.length});await ctx.close();
  }}finally{await browser.close();}console.log(JSON.stringify({passed:results.length,results},null,2));
 })().catch(e=>{console.error(e);process.exitCode=1;});

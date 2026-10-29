@@ -97,18 +97,84 @@ test('protocol trailers and every partial status-marker prefix stay out of strea
   assert.equal(ctx.cleanStream('Answer\n\n'+marker+'{"ask":"not answer"}[/WIZARD_STATUS_V1]'), 'Answer');
   assert.equal(ctx.cleanStream('**Answer** with [a link](https://example.org)'), '**Answer** with [a link](https://example.org)');
 });
-test('an early empty stream disconnect retries the same read, bounded to three retries', () => {
+test('an early empty stream disconnect retries the same read with backoff, bounded', () => {
   const h = harness();
   h.L.openRunStream('sid', '', 'rid', () => {});
   h.timers.shift(); // leave the independent completion poll out of this test
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 21; i++) {
     h.sources.at(-1).onerror();
     const retry = h.timers.shift();
-    if (i < 3) { assert.ok(retry); retry(); } else assert.equal(retry, undefined);
+    if (i < 20) { assert.ok(retry); retry(); } else assert.equal(retry, undefined);
   }
-  assert.equal(h.sources.length, 4);
+  assert.equal(h.sources.length, 21);
   assert.ok(h.sources.every(s => s.url === '/wizard/hermes/v1/runs/rid/events'));
   assert.equal(h.calls.length, 0, 'no admission or send was made');
+});
+for (const agent of ['', 'philosopher']) test(`a numbered stream resumes after a drop mid-answer: replayed frames are skipped, words never doubled (${agent || 'main'})`, () => {
+  const h = harness(); let snap;
+  h.L.openRunStream('sid', agent, 'rid', r => snap = r);
+  h.timers.shift(); // the completion poll
+  const frames = [{ event: 'message.delta', delta: 'Hello', seq: 0 }, { event: 'tool.started', tool: 'terminal', seq: 1 }, { event: 'message.delta', delta: ' there', seq: 2 }];
+  for (const f of frames) h.sources[0].emit(f);
+  h.sources[0].onerror(); assert.equal(h.sources[0].closed, true);
+  h.timers.shift()(); assert.equal(h.sources.length, 2, 'a numbered stream reconnects even after answer text');
+  for (const f of frames) h.sources[1].emit(f); // the new read replays the run from its first frame
+  h.sources[1].emit({ event: 'message.delta', delta: '!', seq: 3 });
+  h.paint();
+  assert.equal(snap.text, 'Hello there!');
+  assert.equal(JSON.stringify(snap.steps.map(s => s.tool)), JSON.stringify(['terminal']), 'steps survive a numbered reconnect');
+  assert.equal(h.sources[1].url, `/wizard/hermes/v1/runs/rid/events${agent ? '?agent=' + agent : ''}`, 'the same read of the same run');
+  assert.equal(h.calls.length, 0, 'no admission or send was made');
+});
+test('a replay that lost frames drops the partial words instead of showing a hole; the run end still lands', () => {
+  const h = harness(); let snap;
+  h.L.openRunStream('sid', '', 'rid', r => snap = r);
+  h.timers.shift();
+  h.sources[0].emit({ event: 'message.delta', delta: 'Part one', seq: 0 });
+  h.sources[0].onerror(); h.timers.shift()();
+  h.sources[1].emit({ event: 'replay.truncated', oldest_retained_seq: 5 }, 'replay.truncated');
+  h.sources[1].emit({ event: 'message.delta', delta: 'part six', seq: 5 });
+  h.paint(); assert.equal(snap.text, ''); assert.equal(snap.gap, true);
+  h.sources[1].emit({ event: 'run.completed', seq: 6 }); h.paint();
+  assert.equal(snap.terminal, true);
+});
+test('offline waits for the network instead of burning retries, then reads again at once', async () => {
+  const h = harness(), on = {};
+  h.c.window.navigator = { onLine: false };
+  h.c.window.addEventListener = (n, fn) => { on[n] = fn; };
+  h.c.window.removeEventListener = (n, fn) => { if (on[n] === fn) delete on[n]; };
+  const handle = h.L.openRunStream('sid', '', 'rid', () => {});
+  h.timers.shift();
+  h.sources[0].emit({ event: 'message.delta', delta: 'Hi', seq: 0 });
+  h.sources[0].onerror();
+  assert.equal(h.timers.length, 0, 'no retry timer while offline');
+  h.c.window.navigator.onLine = true; on.online();
+  assert.equal(h.sources.length, 2, 'back online reads again immediately');
+  handle.close(); assert.equal(on.online, undefined, 'listeners leave with the stream');
+});
+test('a silent half-open stream is replaced once the status read proves Wizard reachable', async () => {
+  const h = harness(); let t = 1000;
+  h.c.Date = { now: () => t };
+  h.L.openRunStream('sid', '', 'rid', () => {});
+  const poll = h.timers.shift();
+  h.sources[0].onopen(); h.sources[0].emit({ event: 'message.delta', delta: 'Hi', seq: 0 });
+  h.c.receipt = { run_id: 'rid', session_id: 'sid', status: 'running' };
+  t += 30000; await poll(); assert.equal(h.sources.length, 1, 'quiet for 30 s is normal (a long tool)');
+  t += 100000; await h.timers.shift()(); assert.equal(h.sources.length, 2, 'silent past the stall window: read again');
+  assert.equal(h.sources[0].closed, true);
+});
+test('a replacement stream on a slow link gets the whole stall window to open', async () => {
+  const h = harness(); let t = 1000;
+  h.c.Date = { now: () => t };
+  h.L.openRunStream('sid', '', 'rid', () => {});
+  let poll = h.timers.shift();
+  h.sources[0].onopen(); h.sources[0].emit({ event: 'message.delta', delta: 'Hi', seq: 0 });
+  h.c.receipt = { run_id: 'rid', session_id: 'sid', status: 'running' };
+  t += 100000; await poll(); assert.equal(h.sources.length, 2, 'stalled: replaced');
+  // The replacement has not opened yet; the next polls (1.5 s apart while not live) must leave it alone.
+  for (let i = 0; i < 5; i++) { t += 1500; await h.timers.shift()(); }
+  assert.equal(h.sources.length, 2, 'never closed before it could open');
+  assert.equal(h.sources[1].closed, undefined);
 });
 test('live tool steps stream like the CLI; reconnect replays without duplicates', () => {
   const h = harness(); let snap;
@@ -234,5 +300,32 @@ test('a new run that only ends like the previous short answer keeps streaming (m
     ctx.syncStream(w, c2, landed, agent);
     callback({ text: 'I checked the request. Yes.', steps: [], terminal: true });
     assert.equal(ctx.syncStream(w, c2, landed, agent), '', `agent=${agent || 'main'}`);
+  }
+});
+test('interim words the transcript already shows mid-run are not drawn again under Replying (main and routed)', () => {
+  for (const agent of ['', 'host-profile', 'container', 'restricted']) {
+    const w = { id: 'w', thread: 'sid' }, c = {}, row = { status: 'running' };
+    let callback;
+    const ctx = { LIVE: { pendingRun: () => 'rid', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close() {} }) },
+      WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }), clip: (s, n) => s.slice(0, n),
+      esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => {}, loadThread: async () => {}, setTimeout: () => 1, clearTimeout: () => {} };
+    vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+    const interim = "You're right, I should have read the code first. Doing that now.";
+    const turns = [{ u: { text: 'read the code' }, notes: [], a: { at: 5, text: interim, final: false } }];
+    ctx.syncStream(w, c, turns, agent);
+    callback({ text: interim, steps: [], terminal: false });
+    assert.equal(ctx.syncStream(w, c, turns, agent), '', `agent=${agent || 'main'}: interim line shown once`);
+    assert.equal(c.stream.landed, false, 'the run keeps streaming');
+    callback({ text: interim + '\n\nThe onboarding code lives in setup.js.', steps: [], terminal: false });
+    const html = ctx.syncStream(w, c, turns, agent);
+    assert.match(html, /The onboarding code lives in setup\.js\./);
+    assert.doesNotMatch(html, /Doing that now/);
+    // Earlier interim lines moved into notes still count as shown.
+    const later = [{ u: { text: 'read the code' }, notes: [interim], a: { at: 7, text: 'Reading setup.js next.', final: false } }];
+    callback({ text: interim + 'Reading setup.js next.' + 'Found it.', steps: [], terminal: false });
+    assert.match(ctx.syncStream(w, c, later, agent), /<p>Found it\.<\/p>/);
+    // Words that do not continue the transcript are never trimmed.
+    callback({ text: 'Different words entirely.', steps: [], terminal: false });
+    assert.match(ctx.syncStream(w, c, turns, agent), /Different words entirely\./);
   }
 });

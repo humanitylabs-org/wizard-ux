@@ -256,6 +256,10 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/context-menu.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Shared pointer/keyboard action menu; desktop tiles supply actions"
+    },
     "core/core.js": {
       "loadedBy": [
         "phone",
@@ -296,7 +300,10 @@
       "note": "Direct entrypoint import"
     },
     "core/edge-peek.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Skin host built-in: tap or swipe the edge beside a chat thread; no-op on desktop"
     },
     "core/experience.js": {
@@ -383,6 +390,14 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/offline-kit.js": {
+      "loadedBy": [],
+      "note": "Opt-in app offline replica and durable outbox (WizOffline.create); loaded by an app, not either shell"
+    },
+    "core/offline-sw.js": {
+      "loadedBy": [],
+      "note": "Opt-in app service worker for WizOffline; importScripts from an app worker, not either shell"
+    },
     "core/orb-handoff.js": {
       "loadedBy": [
         "phone"
@@ -402,6 +417,20 @@
         "desktop"
       ],
       "note": "Shared own-screen fallback and shell-only Settings confirmation; same App Manager owner listener as Updates"
+    },
+    "core/pages.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared Pages list, opaque viewer, versioned editor and bridge"
+    },
+    "core/phone-connect.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
     },
     "core/photos-relay.js": {
       "loadedBy": [
@@ -617,6 +646,13 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/app-setup.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared connection checklist and required-needs admission"
     }
   },
   "exceptions": {
@@ -670,11 +706,6 @@
       "classification": "adapter",
       "reason": "Phone Home geometry; desktop Home retained from PR22."
     },
-    "orb.js": {
-      "shell": "phone",
-      "classification": "adapter",
-      "reason": "Phone orb renderer; desktop microphone/chords remain the input adapter."
-    },
     "device.js": {
       "shell": "phone",
       "classification": "native",
@@ -714,6 +745,11 @@
       "shell": "phone",
       "classification": "native",
       "reason": "Android pinned-shortcut app-only task (AppSessionActivity); desktop windows already isolate apps."
+    },
+    "orb.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone orb renderer; desktop microphone/chords remain the input adapter."
     }
   },
   "purpose": "Every entrypoint-exclusive asset must be explicit; new common features must be shared by default, not added to these exceptions.",
@@ -727,6 +763,8 @@
     "core/app-route.css",
     "core/app-route.js",
     "core/app-services.js",
+    "core/app-setup.css",
+    "core/app-setup.js",
     "core/app-versions.js",
     "core/app-voice.js",
     "core/appearance-host.css",
@@ -762,6 +800,8 @@
     "core/companion-pane.js",
     "core/composer-input.js",
     "core/config.js",
+    "core/context-menu.css",
+    "core/context-menu.js",
     "core/core.js",
     "core/deeplink.js",
     "core/dom-morph.js",
@@ -780,6 +820,10 @@
     "core/os-updates.js",
     "core/own-views.css",
     "core/own-views.js",
+    "core/pages.css",
+    "core/pages.js",
+    "core/phone-connect.css",
+    "core/phone-connect.js",
     "core/photos-relay.js",
     "core/polish.css",
     "core/reach.js",
@@ -823,10 +867,11 @@
     "core/workspace-sync.js",
     "favicon.ico",
     "icon-192.png",
+    "kit/controls.css",
+    "kit/shell-tokens.css",
     "live.js",
     "manifest.webmanifest",
     "outbox.js",
     "pwa-install.js"
   ]
 }
-

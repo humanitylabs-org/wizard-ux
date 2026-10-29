@@ -72,6 +72,24 @@ test('page Back returns to root, then leaves closing to the shell; confirm Back 
   assert.match(h.root.innerHTML, /role="alertdialog"/); assert.equal(h.view.back(), true); assert.equal(h.view.page, 'chats');
   assert.equal(h.view.back(), true); assert.equal(h.view.page, ''); assert.equal(h.view.back(), false); assert.equal(h.posts.length, 0);
 });
+test('tap outside closes Settings confirmations like Back without leaving the owning page', () => {
+  for (const shell of ['phone','desktop']) {
+    const h = harness({shell});
+    const outside = {classList:{contains: c => c === 'st-confirm-scrim'},closest:()=>null};
+    h.view.focus('chats-default'); h.act('data-chats-choice','mizel-chats');
+    assert.match(h.root.innerHTML,/role="alertdialog"/);
+    assert.equal(h.view.dispatch(outside),true);
+    assert.doesNotMatch(h.root.innerHTML,/role="alertdialog"/);
+    assert.equal(h.view.page,'chats'); assert.equal(h.posts.length,0);
+    const own={id:'mine',name:'Quiet',base:'nebula',tweaks:{}};
+    h.s.WosMySkin={recipes:[own],active:own,state:{script:{}}};
+    h.view.focus('look'); h.act('data-ownskin-remove','mine');
+    assert.match(h.root.innerHTML,/role="alertdialog"/);
+    assert.equal(h.view.dispatch(outside),true);
+    assert.doesNotMatch(h.root.innerHTML,/role="alertdialog"/);
+    assert.equal(h.view.page,'appearance'); assert.equal(h.posts.length,0);
+  }
+});
 test('chooser confirms before POST, reads the exact slot, refreshes registry and rerenders only after confirmation', async () => {
   const h = harness(); h.view.focus('chats-default');
   assert.match(h.root.innerHTML, /Wizard Chats \(built in\)/); assert.match(h.root.innerHTML, /Mizel Chats/);
@@ -79,7 +97,9 @@ test('chooser confirms before POST, reads the exact slot, refreshes registry and
   h.act('data-chats-confirm'); await tick();
   assert.equal(h.posts.length, 1); assert.equal(h.posts[0].url, '/wizard-os-home/store-install/_slots/chats');
   assert.equal(h.posts[0].body, '{"default":"mizel-chats"}'); assert.equal(h.posts[0].credentials, 'same-origin');
-  assert.deepEqual(h.reads, ['/wizard-os-home/store-install/_slots/chats']); assert.deepEqual(h.changed, ['mizel-chats']);
+  // Phones & devices asks for its status on its own.
+  assert.deepEqual(h.reads.filter(url => url !== '/wizard/v1/setup/phone'), ['/wizard-os-home/store-install/_slots/chats']);
+  assert.deepEqual(h.changed, ['mizel-chats']);
   assert.match(h.root.innerHTML, /aria-checked="true" data-chats-choice="mizel-chats"/);
 });
 test('chooser failure keeps old selected provider and toasts the server error', async () => {
@@ -226,4 +246,29 @@ test('Resources falls back to AI usage where the shared bars are not there', () 
   h.s.WosUsage = { html: () => '<p>usage</p>', loading: true, snap: {}, at: Date.now(), load: async () => {} };
   h.view.focus('usage');
   assert.match(h.root.innerHTML, /<h3 tabindex="-1">AI usage<\/h3>[^]*<p>usage<\/p>/);
+});
+test('Wizard ID row shows backup status from the first render, without opening the sheet', async () => {
+  const calls = [];
+  const h = harness({ android: true });
+  h.s.wizardDevicePort = {};
+  h.s.WizCore.bridge = { call: async m => { calls.push(m); return { npub: 'npub1x', name: 'James', backed_up: false }; } };
+  h.view.focus('wizard-id'); await tick(); await tick();
+  assert.deepEqual(calls, ['identity.info'], 'one status read, never identity.setup');
+  assert.match(h.root.innerHTML, /James · Not backed up/);
+  h.view.render(true); await tick();
+  assert.deepEqual(calls, ['identity.info'], 'fetched once, not on every render');
+});
+test('Wizard ID row retries the status read after a failed one', async () => {
+  const calls = [];
+  const h = harness({ android: true });
+  h.s.wizardDevicePort = {};
+  let fail = true;
+  h.s.WizCore.bridge = { call: async m => { calls.push(m); if (fail) throw new Error('bridge not ready'); return { npub: 'npub1x', name: 'James', backed_up: true }; } };
+  h.view.focus('wizard-id'); await tick(); await tick();
+  assert.deepEqual(calls, ['identity.info']);
+  fail = false;
+  h.view.render(true); await tick(); await tick();
+  assert.deepEqual(calls, ['identity.info', 'identity.info'], 'a failed read is retried on the next render');
+  h.view.render(true); await tick(); await tick();
+  assert.match(h.root.innerHTML, /James · Backed up/);
 });

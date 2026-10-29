@@ -141,9 +141,10 @@ async function cases(browser) {
   for (const id of ['pw', 'num', 'ro', 'sel']) { await frame.locator('#' + id).click(); await sleep(80); ok((await state(p)).mode === 'idle', 'excluded control stays normal: ' + id); }
   await frame.evaluate(() => { a.setAttribute('data-no-dictation', ''); a.focus(); }); await sleep(80); ok((await state(p)).mode === 'idle', 'explicit no-dictation opt-out');
   // New app document for each race; held STT proves later edits/navigation do not retarget insertion.
-  for (const mutation of ['edit', 'switch', 'remove', 'reload', 'navigate', 'ABA', 'leave-app', 'close-app']) {
+  for (const mutation of ['ime', 'edit', 'switch', 'remove', 'reload', 'navigate', 'ABA', 'leave-app', 'close-app']) {
     await frame.goto(ORIGIN + '/qa-iching/'); await sleep(150); await select(frame); f.R.delay = 650; f.writes.length = 0;
     await take(f, async () => {
+      if (mutation === 'ime') await frame.evaluate(() => a.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertCompositionText' })));
       if (mutation === 'edit') await frame.locator('#a').fill('new edits');
       if (mutation === 'switch') await frame.locator('#b').click();
       if (mutation === 'remove') await frame.evaluate(() => a.remove());
@@ -154,12 +155,22 @@ async function cases(browser) {
       if (mutation === 'close-app') await p.evaluate(() => __wos.closeWin(__wos.desks[__wos.idx].focus));
     });
     const s = await state(p), a = mutation === 'close-app' ? null : await frame.locator('#a').count() ? await frame.locator('#a').inputValue() : null;
-    if (mutation === 'switch') ok(a === 'one spoken words three' && await frame.locator('#b').inputValue() === 'second', 'field switch inserts only original exact node, not newly focused input', { a, s });
-    else ok(a === (mutation === 'edit' ? 'new edits' : ['remove', 'close-app'].includes(mutation) ? null : 'one OLD three') && s.copies === 1, mutation + ': keeps user edits / no insertion into replaced or navigated document; explicit copy offered', { a, s });
+    if (mutation === 'ime') ok(a === 'one spoken words three' && s.copies === 0, 'keyboard input event without a text change (Android composing word on blur) still inserts at the sealed cursor, no copy card', { a, s });
+    else if (mutation === 'edit') ok(a === 'new edits spoken words' && s.copies === 0, 'text edited during the take: words land at the current caret of the same field, no copy card', { a, s });
+    else if (mutation === 'switch') ok(a === 'one spoken words three' && await frame.locator('#b').inputValue() === 'second', 'field switch inserts only original exact node, not newly focused input', { a, s });
+    else ok(a === (['remove', 'close-app'].includes(mutation) ? null : 'one OLD three') && s.copies === 1, mutation + ': keeps user edits / no insertion into replaced or navigated document; explicit copy offered', { a, s });
     ok(noAgent(f).length === 0, mutation + ': ZERO agent fallback', noAgent(f));
     f.R.delay = 0; await p.evaluate(() => __wos.txHide(0));
     if (['leave-app', 'close-app'].includes(mutation)) frame = await app(f);
   }
+  // A long take that can only be copied keeps its card on screen: header ×, words scroll, Copy reachable.
+  await frame.goto(ORIGIN + '/qa-iching/'); await sleep(150); await select(frame); f.R.delay = 650; f.R.words = 'long spoken paragraph '.repeat(90);
+  await take(f, () => frame.evaluate(() => a.remove()));
+  const card = await p.evaluate(() => { const r = e => e.getBoundingClientRect(), t = document.querySelector('#transcript'), x = document.querySelector('#txClose'), c = document.querySelector('[data-dictation-copy]'), w = document.querySelector('#txText');
+    const vis = e => { const b = r(e); return b.top >= 0 && b.bottom <= innerHeight && b.height > 0; }; return { top: r(t).top, bottom: r(t).bottom, h: innerHeight, close: !!x && vis(x), copy: !!c && vis(c), scrolls: w.scrollHeight > w.clientHeight }; });
+  ok(card.top >= 0 && card.bottom <= card.h && card.close && card.copy && card.scrolls, 'long copy card stays inside the screen with × and Copy reachable; words scroll', card);
+  if (process.env.QA_SHOTS) await p.screenshot({ path: path.join(process.env.QA_SHOTS, 'dictation-long-copy-card.png') });
+  f.R.delay = 0; f.R.words = TEXT; await p.evaluate(() => __wos.txHide(0));
   // Empty/outage, cancellation of a delayed STT, and operation-fenced newer take.
   await frame.goto(ORIGIN + '/qa-iching/'); await sleep(150); await select(frame); f.R.words = ''; await take(f);
   ok(await frame.locator('#a').inputValue() === 'one OLD three', 'empty speech changes nothing'); f.R.words = TEXT;

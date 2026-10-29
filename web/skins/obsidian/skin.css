@@ -97,6 +97,23 @@ html[data-skin^="obsidian"] .mrow.secure .mn b { display: inline-flex; align-ite
 html[data-skin^="obsidian"] .mrow.secure .ag-lock { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 html[data-skin^="obsidian"][data-shell="desktop"] .ch-swrow .ms { flex: 0 1 340px; }
 html[data-skin="obsidian-light"] .ms { --secure: hsl(282 70% 44%); --secure-on: #ffffff; }
+/* Model switch: when other controls leave it too little room, the four slots fold into one chip (current model + ⋯) that opens the full model menu, so it always fits. */
+html[data-skin^="obsidian"] .ms { container: ms / inline-size; position: relative; }
+@container ms (max-width: 250px) {
+  html[data-skin^="obsidian"] .ms-track { flex: 0 1 auto; display: flex; background: none; pointer-events: none; }
+  html[data-skin^="obsidian"] .ms-track.off, html[data-skin^="obsidian"] .ms-thumb, html[data-skin^="obsidian"] .ms-o:not(.on) { display: none; }
+  html[data-skin^="obsidian"] .ms-o.on { flex-direction: row; gap: 5px; padding: 0 14px; min-width: 0; max-width: 100%; border-radius: 19px; background: var(--ink); overflow: hidden; }
+  html[data-skin^="obsidian"] .ms.secure-on .ms-o.on { background: var(--secure); }
+  html[data-skin^="obsidian"] .ms-o.on .ms-name { flex: 0 0 auto; }
+  html[data-skin^="obsidian"] .ms-o.on .ms-version { font-size: 12px; min-width: 0; overflow: hidden; }
+  html[data-skin^="obsidian"] .ms-more { position: static; }
+  html[data-skin^="obsidian"] .ms-more::after { content: ""; position: absolute; inset: 0; z-index: 2; }
+}
+@container ms (max-width: 140px) {
+  html[data-skin^="obsidian"] .ms-o.on { padding: 0 12px; }
+  html[data-skin^="obsidian"] .ms-o.on .ms-version { display: none; }
+  html[data-skin^="obsidian"] .ms-more { min-width: 28px; padding: 0 4px; }
+}
 html[data-skin="obsidian-light"] .ch-model.private { color: hsl(282 70% 44%); }
 
 /* Miguel's layout (ported from his test port, 20 Oct 2026): phone list order, edge-to-edge apps, quiet composer,
@@ -326,7 +343,7 @@ html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner)
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsL:has(> .ddot[data-goto]:not(.dhome):nth-last-child(3))::before,
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsR:has(> .ddot[data-goto]:nth-child(3))::after { content: ""; flex: 0 0 auto; width: 3px; height: 3px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 40%, transparent); }
 
-/* App kinds on New desk (Apps · Wizard apps · Connectors): the last group scrolls clear of the floating pill dock. */
+/* App kinds on New desk (Apps · Agent apps · Connectors): the last group scrolls clear of the floating pill dock. */
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .new-desk.kinds { padding-bottom: calc(var(--pill-top, 90px) + 24px); }
 
 /* App kinds: the Apps sheet uses the whole screen between the status bar and the pill dock, same as New desk. */
@@ -402,7 +419,7 @@ html[data-skin^="obsidian"] .home-time { font-variant-numeric: normal; }
 /* System apps: one purple border (it replaces the tile's own colour border, never adds a second) and a purple tint. */
 html[data-skin^="obsidian"] :is(.launcher, .new-desk) .lapp.lapp-sys .ic { border: 2.5px solid #8f63ff; background: linear-gradient(160deg, rgba(143, 99, 255, .34), rgba(143, 99, 255, .14)), #0f0c17; box-shadow: 0 4px 14px rgba(143, 99, 255, .28); outline: none; }
 
-/* "For agents" (Wizard apps, Agents, Connectors): one quiet folded row under Apps. */
+/* "For agents" (Agent apps, Agents, Connectors): one quiet folded row under Apps. */
 html[data-skin^="obsidian"] :is(.launcher, .new-desk) .forag { margin: 14px 0 4px; }
 html[data-skin^="obsidian"] :is(.launcher, .new-desk) .fa-row { width: 100%; display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-radius: 16px; background: color-mix(in srgb, var(--ink) 6%, transparent); border: 1px solid var(--line-2); color: var(--ink-2); font-size: 13.5px; font-weight: 600; }
 html[data-skin^="obsidian"] :is(.launcher, .new-desk) .fa-row small { color: var(--ink-3); font-size: 12.5px; font-weight: 500; }
@@ -812,6 +829,9 @@ html[data-skin^="obsidian"][data-shell="desktop"] .dchats .ch-fab { width: 52px;
 html[data-skin^="obsidian"][data-shell="desktop"] .dchats .ch-fab svg { stroke: var(--ob-on); }
 html[data-skin^="obsidian"][data-shell="desktop"] .ch-compose textarea { background: color-mix(in srgb, var(--ink) 5%, transparent); }
 
+/* Desktop Latest pill (Miguel, 28 Oct 2026): it sat on the Done button, so a double click could close the thread. It now
+ * rides in the thread's column just above the Snooze/Done row, centred, taking no space (32px tall, -44px top, 12px gap). */
+html[data-skin^="obsidian"][data-shell="desktop"] .ch-thread > .ch-latest { position: relative; inset: auto; transform: none; flex: none; align-self: center; margin: -44px auto 12px; z-index: 6; }
 /* Phone polish (Miguel 27 Oct, same pass as the desktop one): sheets, the long-press menu and the count badge follow
  * the skin. The long-press menu used to run under the pill dock (its lower actions were hidden behind it). */
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-sheet-b { padding-bottom: calc(var(--pill-top) + 10px); }

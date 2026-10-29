@@ -76,7 +76,7 @@
     const working = WORKING.has(status) || status === 'waiting_for_approval';
     const latestText = clean(text(latest?.content ?? latest?.text));
     const userText = clean(text(lastUser?.content ?? lastUser?.text) || text(item.wizard_request_preview));
-    const preview = working ? (userText || latestText) : (latestText || userText || clean(text(item.preview)));
+    const preview = working ? (item.wizard_helper_status ? (latestText || clean(text(item.preview)) || userText) : (userText || latestText)) : (latestText || userText || clean(text(item.preview)));
     const latestAt = optIso(latest?.timestamp ?? latest?.created_at);
     const userAt = optIso(lastUser?.timestamp ?? lastUser?.created_at);
     return {
@@ -84,6 +84,7 @@
       title: String(item.title || item.name || 'Untitled chat'),
       source: item.source || '',
       status,
+      queueReason: item.queue_reason === 'provider_access' ? 'provider_access' : '',
       safeError: typeof item.wizard_safe_error === 'string' ? item.wizard_safe_error : '',
       // The AI provider's sign-in expired (Agent Service provider-reconnect.mjs): the connection app that fixes it.
       reconnect: reconnectOf(item.wizard_reconnect),
@@ -103,6 +104,7 @@
       critical: (item.wizard_attention_level || item.attention_level) === 'critical',
       waitingOn: item.wizard_waiting_on === 'helper' ? 'helper' : '',
       helperStatus: item.wizard_helper_status && typeof item.wizard_helper_status === 'object' ? item.wizard_helper_status : null,
+      background: ['helper', 'heavy'].includes(item.wizard_background) ? item.wizard_background : '',
       // What the finished thread asks of James (the agent's hidden status line): needs_you / check / done / fyi.
       attention: attentionOf(item.wizard_attention),
       // A durable quiet one-shot checker bound to this thread. The prompt never reaches the list.
@@ -114,6 +116,7 @@
       model: typeof item.model === 'string' ? item.model : '', provider: typeof item.provider === 'string' ? item.provider : '',
       modelLockAt: Number(item.wizard_model_lock_updated_at) || 0,
       // The last thing asked (Retry on a failed thread sends it again: controller.ts retryServerFailedSession).
+      retryRunId: typeof item.wizard_retry_run_id === 'string' ? item.wizard_retry_run_id : '',
       request: typeof item.wizard_retry_input === 'string' ? item.wizard_retry_input : userText,
       // Agents MVP: the agent this thread is pinned to (server metadata). '' = the main agent.
       agent: typeof item.agent === 'string' ? item.agent : item.agent && typeof item.agent === 'object' && typeof item.agent.id === 'string' ? item.agent.id : '',
@@ -301,7 +304,7 @@
   // The owner's day: their time zone and day_starts_at from Wizard OS settings (WizConfig).
   const workDayStart = (now = Date.now()) => window.WizConfig.dayStart(now);
   const WORKING_SECTION = new Set(['submitting', 'queued', 'running', 'waiting_for_approval', 'stopping']);
-  const isErr = s => s.status === 'failed' || s.status === 'interrupted';
+  const isErr = s => s.status === 'failed' || s.status === 'interrupted' || (s.status === 'queued' && s.queueReason === 'provider_access');
   const needsApproval = s => ['waiting_for_approval', 'unknown'].includes(s.status);
   const inWorking = s => WORKING_SECTION.has(s.status) && !needsApproval(s) && !isErr(s);
   const firstValid = (...v) => v.find(x => isFinite(Date.parse(x ?? ''))) ?? '';
@@ -318,7 +321,7 @@
   // Chat-list layout: 'day' (Ready = today, then Yesterday, Past week; the default) or 'status' (Working / Ready / Archive).
   const LAYOUT_KEY = 'wos.chats.layout.v1';
   // Miguel's skins (Dark, Light, Landscapes) always list by status: Working, Ready, Archive. No Yesterday or Past week.
-  const OUR_SKINS = new Set(['obsidian', 'obsidian-light', 'landscapes']);
+  const OUR_SKINS = new Set(['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light']);
   const oursSkin = () => { try { return OUR_SKINS.has(document.documentElement.dataset.skin || ''); } catch (e) { return false; } };
   // A tweak asked the skin host for Snooze = lowest priority, bottom of Ready (api.nav.snoozeOrder('last'); docs/snooze-last.md).
   const snoozeLast = () => { try { return window.WosSkinHost?.snoozeOrder === 'last'; } catch (e) { return false; } };
@@ -352,6 +355,17 @@
     });
     return prefsWrites;
   };
+  // The shared preferences as this device shows them: the service's values plus this device's queued list edits.
+  const acceptPrefs = (j, only = null) => {
+    if (!only) window.WizLauncher?.accept(j);
+    const v = applyPrefOps(j, queuedOps());
+    let changed = false;
+    for (const [name, [key, valid, encode]] of Object.entries(prefsFields)) if ((!only || only.has(name)) && valid(v[name])) {
+      const value = encode(v[name]);
+      if (localStorage.getItem(key) !== value) { localStorage.setItem(key, value); changed = true; }
+    }
+    if (changed) window.dispatchEvent(new Event('wos:prefs'));
+  };
   const pullPrefs = async () => {
     if (prefsPending || prefsOff) return;
     const rev = prefsRevision;
@@ -361,31 +375,130 @@
       if (!r.ok) return;
       const j = await r.json();
       if (!j || prefsPending || rev !== prefsRevision) return;
-      window.WizLauncher?.accept(j);
-      let changed = false;
-      for (const [name, [key, valid, encode]] of Object.entries(prefsFields)) if (valid(j[name])) {
-        const value = encode(j[name]);
-        if (localStorage.getItem(key) !== value) { localStorage.setItem(key, value); changed = true; }
-      }
-      if (changed) window.dispatchEvent(new Event('wos:prefs'));
+      acceptPrefs(j);
     } catch (e) { /* Older/offline service: retain this device's cached choice, never reset it. */ }
   };
+  /* Shared lists (Spaces and their members, subject order) change by item operation, never by saving this device's
+   * whole cached list: a device that hadn't pulled yet used to erase another device's or an agent's edit (same bug
+   * as pins, wizard-ux #670). Each edit is queued here (kept across reloads and offline spells), shown at once, and
+   * sent as Agent Service PATCH operations, applied atomically to the stored lists. An older service (405) gets the
+   * same operations replayed onto a fresh read, written and read back. Pins keep their own queue (core/chat-pins.js). */
+  const OPS_KEY = 'wos.prefs.ops.v1', SPACE_OP = /^spaces\/([a-z0-9-]{1,48})\/(threads|name)$/;
+  const opField = o => SPACE_OP.test(o.key) ? 'spaces' : o.key;
+  // The same operations as Agent Service applies (server/ui-preferences.mjs applyUiPreferenceOps); each is idempotent.
+  function applyPrefOps(prefs, ops) {
+    const next = { ...prefs };
+    for (const { op, key, item, items } of ops) {
+      const sub = SPACE_OP.exec(key), list = Array.isArray(next[opField({ key })]) ? next[opField({ key })] : [];
+      if (key === 'pinnedChats' || key === 'subjectOrder') next[key] = op === 'front' ? [...new Set(items)].concat(list.filter(x => !items.includes(x))).slice(0, 60)
+        : op === 'add' ? (list.includes(item) ? list : list.concat(item)) : list.filter(x => x !== item);
+      else if (key === 'spaces') next.spaces = op === 'add' ? (list.some(s => s.id === item.id) ? list : list.map(s => (s.agent || 'hermes') === (item.agent || 'hermes') && s.threads.some(t => item.threads.includes(t)) ? { ...s, threads: s.threads.filter(t => !item.threads.includes(t)) } : s).concat(item)) : list.filter(s => s.id !== item);
+      // One Space per chat (James, 29 Oct 2026), as the Agent Service applies it: adding moves the chat out of that
+      // agent's other Spaces in the same edit.
+      else if (sub) { const to = list.find(s => s.id === sub[1]), mine = s => (s.agent || 'hermes') === (to?.agent || 'hermes');
+        next.spaces = list.map(s => s.id !== sub[1] ? (to && sub[2] === 'threads' && op === 'add' && mine(s) && s.threads.includes(item) ? { ...s, threads: s.threads.filter(t => t !== item) } : s)
+          : sub[2] === 'name' ? { ...s, name: item }
+          : { ...s, threads: op === 'add' ? (s.threads.includes(item) ? s.threads : s.threads.concat(item)) : s.threads.filter(t => t !== item) }); }
+    }
+    return next;
+  }
+  const queuedOps = () => { try { const v = JSON.parse(localStorage.getItem(OPS_KEY) || '[]'); return Array.isArray(v) ? v.filter(o => o && typeof o.op === 'string' && typeof o.key === 'string') : []; } catch (e) { return []; } };
+  const setQueue = ops => { try { localStorage.setItem(OPS_KEY, JSON.stringify(ops.slice(-200))); } catch (e) {} };
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  let patchOff = false, opsRetry = 0, opsTimer = 0;
+  // req() throws on any HTTP error; these answers decide what happens next, so read their status.
+  const ask = (url, init) => req(url, init).catch(e => { if (e?.status) return { ok: false, status: e.status }; throw e; });
+  async function sendOps(ops) {
+    if (!patchOff) {
+      const r = await ask(PREFS_URL, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ops }) });
+      if (r.status === 404) { prefsOff = true; return null; }
+      if (r.ok) return await r.json();
+      if (r.status === 400) return 'invalid';
+      if (r.status !== 405 && r.status !== 501) throw new Error('Preferences unavailable');
+      patchOff = true;
+    }
+    const fields = [...new Set(ops.map(opField))], get = async () => { const g = await ask(PREFS_URL, { cache: 'no-store' }); if (g.status === 404) prefsOff = true; if (!g.ok) throw new Error('Preferences unavailable'); return g.json(); };
+    // Two devices can both read before either writes: read back, and replay onto the newer list if ours didn't stick.
+    // This narrows the loss window to one read-to-write round trip; only the service's PATCH makes it atomic.
+    for (let pass = 0; pass < 6; pass++) {
+      const fresh = await get(), next = applyPrefOps(fresh, ops), patch = {};
+      for (const f of fields) if (!same(next[f], fresh[f])) patch[f] = next[f];
+      if (!Object.keys(patch).length) return fresh;
+      const w = await ask(PREFS_URL, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+      if (w.status === 400) return 'invalid';
+      if (!w.ok) throw new Error('Preferences unavailable');
+      const back = await get(), again = applyPrefOps(back, ops);
+      if (fields.every(f => same(again[f], back[f]))) return back;
+    }
+    throw new Error('Preferences busy');
+  }
+  // direct: send these now without queueing (a new Space appears only once the box has it); else send the queue.
+  const syncOps = (direct = null) => {
+    prefsPending++; prefsRevision++;
+    prefsWrites = prefsWrites.then(async () => {
+      try {
+        const ops = direct || queuedOps();
+        if (!ops.length) return true; // an earlier pass already delivered this edit
+        if (prefsOff) return !direct;
+        const j = await sendOps(ops);
+        if (j === null) return !direct; // no shared preferences on this service: the edit stays on this device
+        // Drop only what this pass delivered; an edit made meanwhile stays queued.
+        if (!direct) { const now = queuedOps(); setQueue(same(now.slice(0, ops.length), ops) ? now.slice(ops.length) : now); }
+        opsRetry = 0;
+        const lists = new Set(ops.concat(queuedOps()).map(opField)); // only the lists: a newer scalar choice may still be on its way
+        if (j === 'invalid') { // the box can never take these: show its lists again
+          window.dispatchEvent(new Event('wos:prefs-error'));
+          try { const g = await req(PREFS_URL, { cache: 'no-store' }); if (g.ok) acceptPrefs(await g.json(), lists); } catch (e) {}
+          return false;
+        }
+        acceptPrefs(j, lists);
+        return true;
+      } catch (e) {
+        if (direct) { window.dispatchEvent(new Event('wos:prefs-error')); return false; }
+        opsRetry = Math.min(opsRetry + 1, 6); // offline or busy: the edit stays queued and shown; try again later
+        if (typeof setTimeout === 'function') { clearTimeout(opsTimer); opsTimer = setTimeout(() => syncOps(), 2000 * 2 ** opsRetry); }
+        return false;
+      } finally { prefsPending--; }
+    });
+    return prefsWrites;
+  };
+  const prefOps = (ops, { requireShared = false } = {}) => {
+    if (requireShared) return syncOps(ops);
+    if (!prefsOff) setQueue(queuedOps().concat(ops));
+    // Shown at once: this device's cached lists with the edit applied.
+    const fields = [...new Set(ops.map(opField))], local = {};
+    for (const f of fields) try { local[f] = JSON.parse(localStorage.getItem(prefsFields[f][0]) || '[]'); } catch (e) { local[f] = []; }
+    const next = applyPrefOps(local, ops);
+    for (const f of fields) try { localStorage.setItem(prefsFields[f][0], prefsFields[f][2](next[f])); } catch (e) {}
+    window.dispatchEvent(new Event('wos:prefs'));
+    return prefsOff ? Promise.resolve(true) : syncOps();
+  };
   pullPrefs(); setInterval(pullPrefs, 30000);
-  try { addEventListener('focus', pullPrefs); } catch (e) {}
+  if (queuedOps().length) syncOps();
+  // A phone coming back to the foreground fires visibilitychange/pageshow, rarely focus: pull then too, so pins and
+  // other shared choices made on another device show at once instead of up to 30s later.
+  try {
+    addEventListener('focus', pullPrefs); addEventListener('pageshow', pullPrefs); addEventListener('online', () => { if (queuedOps().length) syncOps(); pullPrefs(); });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pullPrefs(); });
+  } catch (e) {}
   const sectionTime = s => Math.max(...[s.restoredAt, s.assignedAt, s.previewAt, s.requestAt, s.activityAt, s.lastUserAt, s.updatedAt].map(v => Date.parse(v ?? '')).filter(isFinite));
   // Ready has two orders (James, 10 Oct 2026: "Newest … the newest appears at the top … another option, priority"):
   //   Newest   = approvals pinned, then pure recency, status labels ignored (groupWork's default).
   //   Priority = approvals, then needs you, then things to test, then everything else (newest first within each).
   // Status labels never move a thread between days (James, 11 Oct 2026: Ready, Yesterday and Past week stay
-  // filtered by day in Newest and Priority); Priority only reorders within Ready.
+  // filtered by day in Newest and Priority); Priority reorders within each day: Ready, Yesterday and Past week
+  // (James, 23 Oct 2026).
   // Snoozed (deferred) threads leave the list (James, 23 Oct 2026: "It doesn't remove the thread from my list,
   // which is the purpose of snoozing it"; supersedes 10 Oct "bottom of today"). They wait in the collapsed Snoozed
   // section until their return time, Restore or Done. A message James sends after snoozing brings the thread back.
   const isDeferred = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt));
-  const readyRank = s => snoozeLast() && isDeferred(s) ? 9 : needsApproval(s) ? 0 : isDeferred(s) ? 9 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
+  // Priority ranks every status line, so Done threads (nothing left to do) sink below FYI answers and unlabelled
+  // threads come last: with only needs you / check ranked, most of Ready tied and Priority read like Newest.
+  const ATT_RANK = { needs_you: 1, check: 2, fyi: 3, done: 4 };
+  const readyRank = s => snoozeLast() && isDeferred(s) ? 9 : needsApproval(s) ? 0 : isDeferred(s) ? 9 : ATT_RANK[s.attention?.state] || 5;
   const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
   // Oldest (James, 23 Oct 2026: "oldest messages at the top … the newest one at the bottom"): Newest's pins kept
-  // (approvals first, deferred last), only time reversed in between. Yesterday and Past week stay newest first.
+  // (approvals first, deferred last), only time reversed in between. The same order applies to Yesterday and Past week.
   // snoozeOrder('last'): Snooze is a lower place in Ready, ahead of no unsnoozed row (even approvals).
   const snoozeOrder = (l, r) => snoozeLast() ? Number(isDeferred(l)) - Number(isDeferred(r)) : 0;
   const byOldest = list => list.slice().sort((l, r) => snoozeOrder(l, r) || Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(r, l));
@@ -441,7 +554,6 @@
     const st = s.runId && STOPPING.get(s.runId);
     if (st) { if (!WORKING.has(s.status) || Date.now() - st > 120000) STOPPING.delete(s.runId); else s.status = 'stopping'; }
   }
-  const STOPPING = new Map();
 
   /* ---- a send puts its thread in Working at once (James, 10 Oct 2026: "move it out of the ready list immediately
    * and into working… I don't want to see the thread I just replied to in my feed and then have a UX update") ----
@@ -451,12 +563,17 @@
    * this run settles (its idempotency key = the outbox item id); 2 min after acceptance it releases anyway.
    * A message that truly can't be sent puts the thread back where it was (the pill keeps Retry/Edit). */
   const PEND = new Map(); // sessionId -> { key, kind, text, at, state: 'sending'|'waiting'|'sent', sentAt, runId }
+  const STOPPING = new Map(); // runId -> when Stop was asked (applyLocal)
   const PEND_MAX = 2 * 60e3;
   // Admission is not completion: the newest receipt can arrive with an older thread status.
   // Keep the bounded hold through active acknowledgement, so a late stale poll cannot undo it.
   const confirmed = (s, p) => {
     const st = s.orig ? s.orig.status : s.status, run = s.orig ? s.orig.runId : s.runId;
     const sameKey = !!p.key && s.lastRunKey === p.key;
+    // A queued sign-in wait is an acknowledged failed start, not active work.
+    // Release that send's optimistic spinner immediately, but keep a newer
+    // explicit retry's hold until its own receipt arrives.
+    if (s.queueReason === 'provider_access' && (sameKey || (!!p.runId && run === p.runId))) return true;
     if ((sameKey || (!!p.runId && run === p.runId)) && WORKING.has(st)) p.acknowledged = true;
     return sameKey && !WORKING.has(st) && !WORKING.has(s.lastRunStatus);
   };
@@ -465,6 +582,8 @@
    * longer on a bad line), so the thread is held in Working from the tap: replaced by the outbox item the moment it
    * exists, released if the take turns out empty or becomes a phone command, and never longer than TAP_MAX. */
   const TAPS = new Map(); // sessionId -> { at, until }
+  const CANCELLING = new Set(); // sessionIds whose pending send the owner stopped before its run existed
+  let stopMarks = null; // set by L.cancelSend's block below
   const TAP_MAX = 60e3;
   const RELEASED = new Set(); // outbox item ids whose hold is over (so a later outbox change doesn't re-hold them)
   function applyPend(s) {
@@ -474,13 +593,16 @@
     if (!s.orig) s.orig = { status: s.status, runId: s.runId, assignedAt: s.assignedAt, requestAt: s.requestAt };
     const at = new Date(p.at).toISOString();
     // Already working (a message into a live run) keeps Wizard's status; anything else is held in Working.
-    if (!WORKING.has(s.orig.status) && !['waiting_for_approval', 'unknown'].includes(s.orig.status)) {
+    if ((!WORKING.has(s.orig.status) || s.queueReason === 'provider_access') && !['waiting_for_approval', 'unknown'].includes(s.orig.status)) {
       s.status = p.state === 'sent' ? 'running' : 'submitting';
       s.runId = p.runId || ''; // never an older finished run (a quick second reply must not try to steer it)
       s.assignedAt = at; s.requestAt = at;
-    }
+    } else if (s.status === 'stopping' && !CANCELLING.has(s.id) && !(s.runId && STOPPING.has(s.runId))) s.status = s.orig.status;
     // What the row says: Sending… → (Offline · will retry) → Starting… → (Wizard reports the run) Working.
     s.pend = p.acknowledged ? '' : p.state === 'sent' ? 'starting' : p.state;
+    // Stop tapped before the run existed: Stopping… until the send is withdrawn (or its run is stopped). A run Stop
+    // (STOPPING) keeps its Stopping… through outbox repaints too, not only through list reads (applyLocal).
+    if ((CANCELLING.has(s.id) || (s.runId && STOPPING.has(s.runId))) && WORKING.has(s.status)) s.status = 'stopping';
     s.pendText = p.text; // shown in the row; s.preview stays Wizard's so read-state fingerprints are untouched
   }
   function unPend(s) {
@@ -489,6 +611,7 @@
   }
   // Re-read the outbox: which threads are held, and in what state. Returns true when anything changed.
   function syncPending(OB) {
+    stopMarks?.(OB); // takes stopped before they reached the outbox (L.cancelSend) are withdrawn on arrival
     const before = [...PEND].map(([k, p]) => k + p.key + p.state).join();
     const latest = new Map();
     for (const it of OB._items.values()) {
@@ -637,12 +760,14 @@
     seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
     workGroups(sessions, now) { return groupWork(sessions || this.unified(), now); },
     readyByPriority: byPriority,
+    readyRank,
     readyByOldest: byOldest,
     get archiveAfterDays() { return archiveAfterDays(); },
     get chatLayout() { return chatLayout(); },
     set chatLayout(v) { const x = v === 'status' ? 'status' : 'day'; try { localStorage.setItem(LAYOUT_KEY, x); } catch (e) {} putPrefs({ chatLayout: x }); },
     set archiveAfterDays(d) { try { localStorage.setItem(ARCH_KEY, String(d)); } catch (e) {} putPrefs({ archiveAfterDays: d }); },
     putPrefs,
+    prefOps,
     cardAt,
     groups(agent = '') {
       const now = Date.now(), needs = [], ready = [], working = [];
@@ -651,6 +776,7 @@
         const def = this.deferred[seenKeyOf(s)]?.deferred;
         if (snoozeLast() && isDeferred(s) && !WORKING.has(s.status)) continue; // snoozeOrder('last'): not Needs you until restored/replied
         if (['waiting_for_approval', 'unknown'].includes(s.status)) { needs.push(s); continue; }
+        if (s.status === 'queued' && s.queueReason === 'provider_access') { needs.push(s); continue; }
         if (WORKING.has(s.status)) { working.push(s); continue; }
         if (def) continue;
         const at = Date.parse(assistantAt(s) || s.activityAt || s.updatedAt);
@@ -742,8 +868,11 @@
           window.WosModels?.reconcile(list);
           this.agentSessions[id] = list; this.agentStatus[id] = { ok: true, error: '', at: Date.now() };
         } catch (e) {
+          // Same contract as the main list: a failed refresh keeps the threads already shown and marks them
+          // Not up to date (with the real last-read time); only an agent never read yet shows the connection card.
+          const prev = this.agentStatus[id], error = e.status === 403 ? 'access' : 'offline';
           this.agentSessions[id] = this.agentSessions[id] || [];
-          this.agentStatus[id] = { ok: false, error: e.status === 403 ? 'access' : 'offline', at: Date.now() };
+          this.agentStatus[id] = prev?.ok && error !== 'access' ? { ok: true, error, at: prev.at } : { ok: false, error, at: Date.now() };
         }
       }));
       let migrated = false, state = merge(readLocal(),this.seen) || {initializedAt:Date.now(),threads:{}};
@@ -1010,7 +1139,11 @@
       const list = agent ? (this.agentSessions[agent] = this.agentSessions[agent] || []) : this.sessions;
       const i = list.findIndex(x => x.id === id);
       if (s.id !== id || (s.agent && otherAgent(s.agent) && s.agent !== agent)) throw new Error('Thread scope changed');
-      if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, renames: s.renames, detailNeeded: false,
+      // The detail read carries no run state for a live thread (only the list projects runs and helpers), so an
+      // empty status there must not settle the row: a Working thread used to flash into Ready whenever its history
+      // was preloaded or opened, until the next list read put it back. A status the detail does report still wins.
+      const run = s.status ? { queueReason: s.queueReason, status: s.status } : {};
+      if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, retryRunId: s.retryRunId, ...run, safeError: s.safeError, reconnect: s.reconnect, renames: s.renames, detailNeeded: false,
         ...(s.model ? { model: s.model, provider: s.provider, modelLockAt: s.modelLockAt } : {}) };
       else if (this.windows[agent || 'hermes']) DETAIL.set(id, { ...s, detailNeeded: false });
       else list.push({ ...s, detailNeeded: false });
@@ -1151,13 +1284,26 @@
       };
       const close = () => { r.source?.close(); r.source = null; };
       const terminal = () => { if (!r.terminal) { r.terminal = true; close(); notify(); } };
-      let retries = 0;
+      // Resume across drops (spotty wifi, a phone waking up): Hermes and the Agent Service number every frame (SSE id
+      // and data.seq) and replay the run on each new read, so a reconnect skips every frame this stream already showed.
+      // Unnumbered streams keep the old rule: reconnect only before any answer bytes, never duplicate text.
+      let retries = 0, lastSeq = -1, numbered = false;
+      const BACKOFF = [500, 1000, 2000, 4000, 8000, 15000, 30000], MAX_RETRIES = 20, STALL_MS = 90000;
       const event = e => {
         if (r.stopped || r.terminal) return;
         let d; try { d = JSON.parse(e.data); } catch (_) { return; }
         if ((d.session_id && d.session_id !== sid) || (d.run_id && d.run_id !== runId)) return;
         const type = d.event || e.type;
-        if (type === 'message.delta' && typeof d.delta === 'string') { r.text += d.delta; notify(); }
+        r.seenAt = Date.now();
+        // The replay lost frames this stream never showed: the text would have a hole, so drop it and let the
+        // transcript read bring the answer (still reading steps and the end of the run).
+        if (type === 'replay.truncated') {
+          if (lastSeq >= 0 && Number(d.oldest_retained_seq) > lastSeq + 1 && !r.gap) { r.gap = true; r.text = ''; notify(); }
+          return;
+        }
+        const seq = Number.isInteger(d.seq) ? d.seq : /^\d+$/.test(e.lastEventId || '') ? Number(e.lastEventId) : null;
+        if (seq != null) { if (seq <= lastSeq) return; lastSeq = seq; numbered = true; retries = 0; }
+        if (type === 'message.delta' && typeof d.delta === 'string') { if (!r.gap) { r.text += d.delta; notify(); } }
         // Live steps, like the CLI: the tool that is running and the ones just finished.
         if (type === 'tool.started' && d.tool) { const id = d.tool_call_id || d.step_id || d.id; r.steps = [...r.steps, { ...(typeof id === 'string' && id ? { id } : {}), tool: String(d.tool), preview: typeof d.preview === 'string' ? d.preview : '', done: false }].slice(-4); notify(); }
         if (type === 'tool.completed' && d.tool) {
@@ -1168,24 +1314,34 @@
         // reasoning.available is deliberately not answer text.
         if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) terminal();
       };
+      const canResume = () => !r.stopped && !r.terminal && (numbered || !r.text);
       const connect = () => {
-        if (r.stopped || r.terminal) return;
-        r.steps = []; // a reconnect replays the run from its first event
+        clearTimeout(r.reconnect); r.reconnect = null;
+        if (r.stopped || r.terminal || r.source) return;
+        if (!numbered) r.steps = []; // an unnumbered reconnect replays the run from its first event
         try {
+          r.seenAt = Date.now(); // a new read gets the full stall window to open, however slow the link
           r.source = new window.EventSource(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
           r.source.onmessage = event;
-          for (const name of ['message.delta', 'tool.started', 'tool.completed', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted']) r.source.addEventListener(name, event);
-          r.source.onopen = () => { r.live = true; };
+          for (const name of ['message.delta', 'tool.started', 'tool.completed', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted', 'replay.truncated']) r.source.addEventListener(name, event);
+          r.source.onopen = () => { r.live = true; r.seenAt = Date.now(); };
           r.source.onerror = () => {
             r.live = false;
             close();
-            // Some queued main sends close before yielding any answer bytes.
-            // Retry only before ANY answer bytes: no duplicated/replayed text. This is
-            // another read of the same run, never another admission/send.
-            if (!r.stopped && !r.terminal && !r.text && retries++ < 3) r.reconnect = setTimeout(connect, 500);
+            // Another read of the same run, never another admission/send. Offline waits for the network to return.
+            if (!canResume() || retries >= MAX_RETRIES) return;
+            if (window.navigator?.onLine === false) { r.waitingOnline = true; return; }
+            r.reconnect = setTimeout(connect, BACKOFF[Math.min(retries++, BACKOFF.length - 1)]);
           };
         } catch (_) { close(); }
       };
+      // Back online or back in front: read again now instead of waiting out the backoff (a few more tries at most).
+      const resumeNow = () => {
+        if (window.document?.hidden || window.navigator?.onLine === false || r.source || !canResume()) return;
+        r.waitingOnline = false; retries = Math.min(retries, MAX_RETRIES - 3); connect();
+      };
+      window.addEventListener?.('online', resumeNow);
+      window.document?.addEventListener('visibilitychange', resumeNow);
       connect();
       const poll = async () => {
         if (r.stopped || r.terminal) return;
@@ -1193,11 +1349,18 @@
           const d = await (await req(url)).json();
           if (r.stopped) return;
           if ((d.run_id || d.id) === runId && d.session_id === sid && ['completed', 'failed', 'cancelled', 'interrupted'].includes(d.status)) terminal();
+          // Wizard answers but the stream has been silent past several keepalives: a half-open connection (plane wifi).
+          else if (r.source && r.live && numbered && Date.now() - (r.seenAt || 0) > STALL_MS) { r.live = false; close(); connect(); }
+          // Some systems never fire 'online': a status read that worked is proof enough.
+          else if (!r.source && r.waitingOnline) resumeNow();
         } catch (_) { /* connectivity recovery is the ordinary read poll, never another send */ }
         // The status read is only the safety net while the live stream is open.
         if (!r.stopped && !r.terminal) r.timer = setTimeout(poll, r.live ? 10000 : 1500);
       };
-      r.dispose = () => { r.stopped = true; close(); clearTimeout(r.timer); clearTimeout(r.reconnect); if (r.frame != null) cancelAnimationFrame(r.frame); RUN_STREAMS.delete(key); };
+      r.dispose = () => {
+        r.stopped = true; close(); clearTimeout(r.timer); clearTimeout(r.reconnect); if (r.frame != null) cancelAnimationFrame(r.frame);
+        window.removeEventListener?.('online', resumeNow); window.document?.removeEventListener('visibilitychange', resumeNow); RUN_STREAMS.delete(key);
+      };
       r.timer = setTimeout(poll, 500);
     }
     r.listeners.add(paint);
@@ -1247,7 +1410,10 @@
       };
       tick();
     };
-    OB.onSent(follow);
+    // The receipt already carries the run id (PEND → s.runId, so Stop works at once); read Wizard's list soon after
+    // admission too, instead of waiting for the 15 s poll, so the thread's own status follows the real run.
+    const readSoon = it => { if (!it.steered && !otherAgent(it.agent) && ['new', 'reply'].includes(it.kind)) setTimeout(() => { if (!document.hidden) L.refresh(); }, 800); };
+    OB.onSent(it => { follow(it); readSoon(it); });
     OB.load().then(() => { for (const it of OB._items.values()) if (it.state === 'sent' && Date.now() - it.sentAt < PEND_MAX) follow(it); }).catch(() => {});
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attachOutbox); else setTimeout(attachOutbox, 0);
@@ -1255,6 +1421,44 @@
   const attachAgents = () => { const A = AG(); if (!A || L._agents) return; L._agents = true; A.onChange(() => { if (L.ok) L.refreshAgents().then(() => L.emit()); else L.emit(); }); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attachAgents); else setTimeout(attachAgents, 0);
   L.pending = id => PEND.get(id) || null;
+  /* Stop on a thread with a pending send (Miguel, 28 Oct 2026: the Stop button came only after upload, transcription
+   * and the next list read). Everything sent to the thread and not yet admitted is withdrawn from the outbox (also a
+   * reply queued to steer the live run, so a rejected steer never turns into a new turn); the live run and any run
+   * whose POST had already left (its receipt's id) are stopped. An orb take still being transcribed on the phone (only
+   * the send tap's hold so far) is withdrawn whenever it reaches the outbox: a stop mark outlasts phone transcription.
+   * Resolves { outcome: 'stopped' | 'cancelled' | 'none' | 'busy', runIds, items }. */
+  const STOPPABLE = ['preparing', 'processing', 'queued', 'waiting', 'sending'];
+  const STOP_MARKS = new Map(); // sessionId -> { at, until }: takes begun before this Stop are withdrawn on arrival
+  const STOP_MARK_MS = 5 * 60e3; // the outbox allows 195 s of transcription; phone-side routing comes on top
+  const pendingFor = (OB, sid, before = Infinity) => OB ? [...OB._items.values()].filter(it => it.sessionId === sid && ['new', 'reply'].includes(it.kind) &&
+    !it.compact && !it.cancelled && STOPPABLE.includes(it.state) && (it.createdAt || 0) <= before) : [];
+  async function withdrawSends(OB, list) {
+    const res = await Promise.all(list.map(it => OB.cancel(it.id)));
+    const items = res.filter(r => r?.outcome === 'cancelled').map(r => r.item);
+    for (const it of items) RELEASED.add(it.id);
+    return { items, started: res.filter(r => r?.outcome === 'started' && r.runId).map(r => r.runId) };
+  }
+  function applyStopMarks(OB) {
+    for (const [sid, m] of STOP_MARKS) {
+      if (Date.now() > m.until) { STOP_MARKS.delete(sid); continue; }
+      const late = pendingFor(OB, sid, m.at);
+      if (late.length) withdrawSends(OB, late).then(r => { for (const id of r.started) L.stop(id).catch(() => {}); L.emit(); }).catch(() => {});
+    }
+  }
+  stopMarks = applyStopMarks;
+  L.cancelSend = async (sid, runId = '') => {
+    const OB = window.WosOutbox;
+    if (!sid || CANCELLING.has(sid)) return { outcome: 'busy', runIds: [], items: [] };
+    CANCELLING.add(sid); resync(); L.emit();
+    try {
+      const at = Date.now(), p = PEND.get(sid), tapped = TAPS.has(sid);
+      const w = OB ? await withdrawSends(OB, pendingFor(OB, sid)) : { items: [], started: [] };
+      if (tapped) { STOP_MARKS.set(sid, { at, until: at + STOP_MARK_MS }); TAPS.delete(sid); }
+      const runIds = [...new Set([runId, p?.runId, ...w.started].filter(Boolean))];
+      await Promise.all(runIds.map(id => L.stop(id)));
+      return { outcome: runIds.length ? 'stopped' : w.items.length || tapped ? 'cancelled' : 'none', runIds, items: w.items };
+    } finally { CANCELLING.delete(sid); resync(); L.emit(); }
+  };
   const resync = () => { const OB = window.WosOutbox; if (OB && syncPending(OB)) L.emit(); };
   // Returns a token for releaseSend. '__new__' has no row to move (a new chat is listed once it is in the outbox).
   L.holdSend = sid => {
@@ -1328,6 +1532,9 @@
     const c = keepable(id) && TC.get(id), s = L.session(id); if (!c || !s || !L.listTrusted()) return null;
     return String(c.rev || '').split('|').slice(0, 3).join('|') === ckOf(s) ? c.rows : null;
   };
+  // No answer from Wizard at all (offline, plane wifi): the last copy this device kept, whatever its age. chats.js
+  // shows it only after a read has failed, labelled as a saved copy, and the next good read replaces it.
+  L.savedMessages = id => { const c = keepable(id) && TC.get(id); return c && Array.isArray(c.rows) ? { rows: c.rows, at: c.at || 0 } : null; };
   // A thread the server answered 404 for is gone: drop its memory and IndexedDB copy so a reopen can't repaint it.
   L.forgetMessages = async id => {
     if (!id) return; TC.delete(id);

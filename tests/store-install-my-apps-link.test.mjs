@@ -27,7 +27,8 @@ test('the Store binds that renderer to success and reserves top navigation for p
   assert.match(store, /renderInstallResult\(\{ name: a\.name, message: m, ok \}\)/);
   assert.match(store, /say\(successMessage\(access\), true\)/);
   assert.match(store, /if \(!mine \|\| !framed \|\| e\.button !== 0 \|\| e\.metaKey \|\| e\.ctrlKey \|\| e\.shiftKey \|\| e\.altKey\) return/);
-  assert.match(store, /window\.top\.location\.assign\(mine\.href\)/);
+  assert.match(store, /parent\.WizCore\?\.deeplink\?\.route\(mine\.href, mine\)/);
+  assert.match(store, /if \(!routed\) window\.top\.location\.assign\(mine\.href\)/);
   assert.match(css, /\.toast\s+a/);
   assert.doesNotMatch(store, /wizard:open-apps/);
 });

@@ -21,6 +21,12 @@
     "miguel/arrange-download",
     "wizard/app-borders",
     "miguel/refresh-button",
-    "miguel/unified-inbox"
-  ]
+    "wizard/unified-inbox"
+  ],
+  "defaults": [
+    "wizard/unified-inbox"
+  ],
+  "aliases": {
+    "miguel/unified-inbox": "wizard/unified-inbox"
+  }
 }

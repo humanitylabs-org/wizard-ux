@@ -11,11 +11,11 @@ import org.json.JSONObject;
  * shell. MainActivity reads the shell's resolved --wz-* tokens and saves them here; with nothing saved yet (first run)
  * the Nebula dark fallback applies. Colours only: no server URLs, scripts or credentials pass through.
  */
-final class WizardLook {
+public final class WizardLook {
     private static final String PREFS = "wizard_look";
 
     /** Run in the shell page: every role resolved to #rrggbbaa (canvas parses any CSS colour, incl. color-mix). */
-    static final String READ_JS = "(()=>{try{const r=document.documentElement,s=getComputedStyle(r),c=document.createElement('canvas');c.width=c.height=1;"
+    public static final String READ_JS = "(()=>{try{const r=document.documentElement,s=getComputedStyle(r),c=document.createElement('canvas');c.width=c.height=1;"
             + "const x=c.getContext('2d',{willReadFrequently:true});"
             + "const px=v=>{v=(v||'').trim();if(!v||v.length>160||/[;{}]|url\\(/i.test(v))return '';x.fillStyle='#010203';x.fillStyle=v;"
             + "if(x.fillStyle==='#010203'&&!/^#010203/i.test(v))return '';x.clearRect(0,0,1,1);x.fillRect(0,0,1,1);const d=x.getImageData(0,0,1,1).data;"
@@ -23,7 +23,7 @@ final class WizardLook {
             + "const g=(...k)=>{for(const n of k){const v=px(s.getPropertyValue('--'+n));if(v)return v}return ''};"
             + "return JSON.stringify({skin:/^[a-z0-9-]{1,40}$/.test(r.dataset.skin||'')?r.dataset.skin:'',"
             + "base:g('wz-base','bg'),text:g('wz-text','ink'),text2:g('wz-text-secondary','ink-2'),muted:g('wz-text-muted','ink-3'),"
-            + "border:g('wz-border','line-2'),accent:g('wz-accent','violet-2')})}catch(e){return ''}})()";
+            + "border:g('wz-border','line-2'),accent:g('wz-accent','violet-2'),overlay:g('wz-overlay','glass-2'),warning:g('wz-warning','amber')})}catch(e){return ''}})()";
 
     final String skin;
     final int base, text, text2, muted, border, accent;
@@ -46,7 +46,7 @@ final class WizardLook {
     }
 
     /** Saves the result of READ_JS (as handed back by evaluateJavascript). Ignores anything malformed. */
-    static void save(Context c, String evaluated) {
+    public static void save(Context c, String evaluated) {
         try {
             String json = new org.json.JSONArray("[" + evaluated + "]").getString(0);
             JSONObject o = new JSONObject(json);
@@ -64,6 +64,24 @@ final class WizardLook {
                 or(colour(o.optString("text")), d.text), or(colour(o.optString("text2")), d.text2),
                 or(colour(o.optString("muted")), d.muted), or(colour(o.optString("border")), d.border),
                 or(colour(o.optString("accent")), d.accent));
+    }
+
+    /** Native ID uses this same validated, resolved skin; no second CSS-colour parser in its bridge. */
+    public static JSONObject identityColors(Context c) {
+        WizardLook l = load(c);
+        JSONObject saved;
+        try { saved = new JSONObject(c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("look", "{}")); }
+        catch (Exception ignored) { saved = new JSONObject(); }
+        // Nebula's glass-2 fallback is shared with appearance-host.js, not an Android dialog grey.
+        int overlay = or(colour(saved.optString("overlay")), l.skin.equals("nebula") ? Color.argb(184,28,19,58) : withAlpha(l.text, .06f));
+        int warning = or(colour(saved.optString("warning")), l.accent);
+        JSONObject result = new JSONObject();
+        try {
+            String[] names = {"base", "ink", "secondary", "muted", "border", "accent", "warning", "sheet"};
+            int[] colors = {l.base, l.text, l.text2, l.muted, over(l.border, over(overlay, l.base)), l.accent, warning, over(overlay, l.base)};
+            for (int i = 0; i < names.length; i++) result.put(names[i], String.format(java.util.Locale.ROOT, "#%08x", colors[i]));
+        } catch (Exception ignored) { }
+        return result;
     }
 
     /** #rgb, #rrggbb or #rrggbbaa → ARGB; null when malformed. */

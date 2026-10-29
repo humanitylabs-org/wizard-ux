@@ -60,6 +60,65 @@ test('the thread header no longer carries the model; the label lives inside the 
   assert.match(css, /\.ch-field > \.ch-mlabel \{ position: absolute; right: 4px; bottom: 1px;/);
 });
 
+test('agent chats show the short family name, never the raw model id', () => {
+  const M = models();
+  assert.equal(M.short('claude-fable-5-1', 'anthropic'), 'Fable');
+  assert.equal(M.short('claude-fable-5-1', 'claude-cli'), 'Fable');
+  assert.equal(M.short('claude-opus-5-5', ''), 'Opus');
+  const power = read('web/core/chat-power.js');
+  assert.match(power, /const label = cur\?\.model \? \(M\.short\(cur\.model, cur\.provider \|\| ag\?\.model\?\.provider\) \|\| full\)/);
+});
+
+test('tall-draft model menu stays above composer and respects visible keyboard height (James correction)', () => {
+  const src = read('web/core/chat-power.js');
+  const place = src.slice(src.indexOf('  function placePop(el) {'), src.indexOf('  function openSheet(o) {'));
+  for (const composerTop of [600, 260]) {
+    for (const viewportHeight of [780, 440]) {
+      const styles = new Map(), rect = { top: 0, bottom: 892, right: 412, height: 892 };
+      const pop = { getBoundingClientRect: () => rect, style: { setProperty: (k, v) => styles.set(k, parseFloat(v)) } };
+      const boxes = {
+        '.ch-psheet.ch-mpop': pop,
+        '.ch-mlabel': { getBoundingClientRect: () => ({ top: 740, right: 392 }) },
+        '.ch-head': { getBoundingClientRect: () => ({ bottom: 80 }) },
+        '.ch-compose': { getBoundingClientRect: () => ({ top: composerTop, height: 180 }) },
+      };
+      const ctx = vm.createContext({ window: { visualViewport: { offsetTop: 0, offsetLeft: 0, height: viewportHeight, width: 412 } }, el: { querySelector: s => boxes[s] || null } });
+      vm.runInContext(`${place}; placePop(el);`, ctx);
+      const bottom = rect.bottom - styles.get('--mpop-b'), height = styles.get('--mpop-h');
+      assert.ok(bottom < composerTop, 'composer must never obscure model rows');
+      assert.ok(bottom < viewportHeight, 'keyboard must never obscure model rows');
+      assert.ok(height > 40 && bottom - height >= 80, 'bounded scroll area stays below thread header');
+    }
+  }
+  const css = read('web/core/chat-power.css');
+  assert.match(css, /max-height:\s*min\(var\(--mpop-h, 64%\), 440px\)/);
+  assert.match(css, /\.ch-sheet\.ch-mpop \.ch-sheet-b \{[^}]*background: linear-gradient\([^;]+var\(--wz-panel, var\(--bg,/);
+  assert.match(css, /html\.wos-doc-scroll \.wos-doc-thread \.ch-sheet\.ch-mpop \{ position: fixed; inset: 0; z-index: 52;/);
+  assert.match(src, /window\.visualViewport\?\.addEventListener\('resize', queue/);
+});
+
+test('native keyboard leaves a usable picker above the temporarily shorter input', () => {
+  const src = read('web/core/chat-power.js');
+  const place = src.slice(src.indexOf('  function placePop(el) {'), src.indexOf('  function openSheet(o) {'));
+  const styles = new Map();
+  let inputHeight = 140;
+  const rect = { top: 0, bottom: 440, right: 412, height: 440 };
+  const boxes = {
+    '.ch-psheet.ch-mpop': { getBoundingClientRect: () => rect, style: { setProperty: (k, v) => styles.set(k, parseFloat(v)) } },
+    '.ch-mlabel': { getBoundingClientRect: () => ({ top: 260, right: 392 }) },
+    '.ch-head': { getBoundingClientRect: () => ({ bottom: 53 }) },
+    '.ch-compose': { getBoundingClientRect: () => ({ top: 205 - inputHeight, height: inputHeight + 45 }) },
+    '.ch-compose textarea': { getBoundingClientRect: () => ({ height: inputHeight }) },
+  };
+  const el = { querySelector: s => boxes[s] || null, style: { setProperty: (k, v) => { inputHeight = Math.min(140, parseFloat(v)); } } };
+  const ctx = vm.createContext({ window: { visualViewport: { offsetTop: 0, offsetLeft: 0, height: 440, width: 412 } }, el });
+  vm.runInContext(`${place}; placePop(el); placePop(el);`, ctx);
+  assert.equal(inputHeight, 42, 'only the input viewport shrinks; its value is untouched');
+  assert.ok(styles.get('--mpop-h') >= 90, 'at least one complete model row remains reachable');
+  assert.ok(rect.bottom - styles.get('--mpop-b') < boxes['.ch-compose'].getBoundingClientRect().top);
+  assert.match(src, /el\.classList\.remove\('ch-model-picking'\); el\.style\.removeProperty\('--mpop-input-max'\)/);
+});
+
 test('the composer scripts parse', () => {
   for (const f of ['web/core/chats.js', 'web/core/chat-power.js', 'web/core/chat-models.js']) assert.doesNotThrow(() => new vm.Script(read(f), { filename: f }));
 });
