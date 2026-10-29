@@ -95,6 +95,7 @@ class Page:
         # Opt-in observation only: do not reconnect, retry commands or change framing.
         self._emu, self._devtools = emu, devtools
         self._events = collections.deque(maxlen=96)
+        self._identities = {}
         self._seq = 0
         self._pending = None
         self._diag_path = None
@@ -130,12 +131,15 @@ class Page:
         if self._diag_path is None:
             return
         self._seq += 1
+        if event in ('native-identity', 'identity-unavailable'):
+            self._identities[fields['boundary']] = dict(event=event, at=time.monotonic(), **fields)
         self._events.append(dict(seq=self._seq, at=time.monotonic(), event=event,
                                  pending=self._pending, **fields))
         try:
             # No request params, expressions, result bodies, URLs or raw errors.
             self._diag_path.write_text(json.dumps({'diagnostic_only': True,
-                'full_acceptance': False, 'events': list(self._events)}, indent=2) + '\n')
+                'full_acceptance': False, 'identities': self._identities,
+                'events': list(self._events)}, indent=2) + '\n')
         except OSError:
             pass  # An observer cannot replace the original transport failure.
 
@@ -196,8 +200,10 @@ class Page:
             while True:
                 d = self._recv()
                 if d.get('method') == 'Inspector.detached':
-                    # CDP payloads remain out of the bounded metadata log.
-                    self._record('inspector-detached')
+                    # Fixed diagnostic enums, never arbitrary CDP payload text.
+                    reason = d.get('params', {}).get('reason')
+                    self._record('inspector-detached', reason=reason if reason in
+                        ('replaced_with_devtools', 'target_closed', 'Render process gone.') else 'other')
                 if d.get('id') == my:
                     self._record('call-result')
                     self._pending = None

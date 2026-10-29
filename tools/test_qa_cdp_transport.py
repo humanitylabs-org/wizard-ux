@@ -208,12 +208,13 @@ class TransportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             def handler(conn, seen):
                 request(conn)
-                conn.sendall(frame(b'{"method":"Inspector.detached"}') + frame((1001).to_bytes(2, 'big'), opcode=8))
+                conn.sendall(frame(b'{"method":"Inspector.detached","params":{"reason":"replaced_with_devtools"}}') + frame((1001).to_bytes(2, 'big'), opcode=8))
             with peer(handler, out=Path(td)) as (p, _, __):
                 with self.assertRaises(UnicodeDecodeError):
                     p.call('Synthetic.method')
                 rows = json.loads(p._diag_path.read_text())['events']
                 self.assertIn('inspector-detached', [r['event'] for r in rows])
+                self.assertEqual(next(r for r in rows if r['event'] == 'inspector-detached')['reason'], 'replaced_with_devtools')
                 self.assertEqual(next(r for r in rows if r['event'] == 'peer-close')['code'], 1001)
                 retain(p, 'synthetic-detach-and-close.json')
                 for _ in range(200):
@@ -222,6 +223,7 @@ class TransportTest(unittest.TestCase):
                 rows = json.loads(p._diag_path.read_text())['events']
                 self.assertEqual(len(rows), 96)
                 self.assertEqual(rows[-1]['event'], 'local-close')
+                self.assertEqual(len(json.loads(p._diag_path.read_text())['identities']), 3)
                 self.assertLess(p._diag_path.stat().st_size, 50000)
 
 

@@ -69,8 +69,9 @@ It retains the existing exact-serial teardown and hash/inventory/APK reuse gates
 Opt-in `WIZARD_QA_CDP_DIAGNOSTIC=1` records at most 96 recent metadata events per
 Page: monotonically numbered call method/id, send/result/error class/errno,
 frame opcode/FIN/mask/length, EOF buffered/needed, peer close code,
-Inspector.detached presence, local close, socket ports and bounded identity
-snapshots before connect/after handshake/on error. Identity includes pid plus
+Inspector.detached with a fixed reason enum (unknown text becomes `other`), local
+close, socket ports and bounded identity snapshots before connect/after handshake/
+on error. The three identity snapshots survive event-ring rollover. Identity includes pid plus
 /proc start ticks and only the exact serial/host-port forwarding row. Each adb
 identity command has a 3s cap; read timeouts and input policy are unchanged.
 Params, expressions, result bodies, close reason and raw errors are excluded.
