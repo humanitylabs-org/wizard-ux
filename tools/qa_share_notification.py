@@ -66,25 +66,11 @@ def verify(root, digest):
 
 
 def snapshot_identity(value):
-    return {k: v for k, v in value.items() if k != 'text'}
+    return {k: v for k, v in value.items() if k not in ('text', 'focused')}
 
 
 def stable_snapshot(rig, thread, filename, label):
-    import qa_unified_share_android as q
-    previous = None
-    since = None
-    samples = []
-    def sample():
-        nonlocal previous, since
-        value = rig.page.ev(q.focused_thread_snapshot_expression(thread, filename))
-        samples.append({'at': time.time(), 'snapshot': value})
-        (rig.out / (label + '-samples.json')).write_text(json.dumps(samples, indent=2) + '\n')
-        key = json.dumps(snapshot_identity(value), sort_keys=True)
-        if not value.get('ready') or previous != key:
-            since = time.monotonic()
-        previous = key
-        return value if value.get('ready') and since is not None and time.monotonic() - since >= .8 else None
-    return q.wait(sample, 30)
+    return rig.notification_thread(thread, filename, label, stable_seconds=.8)
 
 
 def capture_notification(rig, thread, filename, label):
@@ -98,7 +84,6 @@ def capture_notification(rig, thread, filename, label):
     rig.sx('logcat -c')
     rig.tap_text('Sent · tap to open the chat')
     rig.connect_page()
-    rig.notification_thread(thread, filename)
     before = stable_snapshot(rig, thread, filename, label + '-before')
     rig.page.ev('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))))')
     (rig.out / (label + '-target.json')).write_text(json.dumps(rig.page.call('Target.getTargetInfo'), indent=2))

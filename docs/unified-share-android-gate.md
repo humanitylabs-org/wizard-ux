@@ -1,5 +1,29 @@
 # Unified share Android gate (prepared, not executed)
 
+## Notification keyboard-focus correction (QA-only)
+
+The retained `6b3cd14fc065` run completed both synthetic deliveries, but its new
+notification's blind `.ready` wait timed out before any predicate object was
+saved. The parent's native screenshot shows the expected new chat; the exact
+rejected field in that historical run remains unproven. Do not relabel it PASS.
+
+`document.hasFocus()` now remains in every snapshot as a diagnostic, not a
+mandatory visibility or stability condition. Native foreground MainActivity,
+exact native thread handoff, actual focused Chats window/document owner, visible
+document, exact same-body delivered filename/comment and hit tests remain gates.
+The focused runner uses one persisted native+DOM stable wait before capture,
+not a blind boolean pre-wait. Every evaluated object is written before readiness
+is inspected, with a named rejection reason; the same wait binds after capture.
+The existing 30-second bound and 0.8-second stability requirement are unchanged.
+No input occurs between the notification tap and decisive screenshot.
+
+Controller regressions accept visible foreground content without keyboard focus,
+refuse hidden/other-window/occluded/wrong-owner/content cases, verify every failed
+native/DOM sample survives a deadline, and prevent a blind preliminary wait.
+These are seam/Node-object replays, not fresh Android acceptance. Stage one new
+immutable focused packet using the exact retained product/sender APK and 384 JVM
+results; do not rebuild, sign, publish, deploy or submit from the delegated child.
+
 REUSE `android-build-forum --prepare-only`, its hash-manifested `worker.py`, the
 synthetic `tools/share-fixture.mjs` backend and the CDP reader in `qa_aa_lib.py`.
 EXTEND coverage with `qa_unified_share_android.py`. NEW only a tiny separate

@@ -318,16 +318,62 @@ class ControllerTest(unittest.TestCase):
         replay('bodyOnly=true;', False)
         replay('rect.left=500;rect.right=800;', False)
 
-    def test_notification_readback_requires_foreground_native_log_and_focused_dom(self):
+    def test_notification_readback_requires_foreground_native_log_and_visible_dom(self):
         for component in ('ai.wizards.os.MainActivity', '.MainActivity'):
             rig = runner.Rig.__new__(runner.Rig)
             rig.sx = Mock(side_effect=[f'topResumedActivity=ActivityRecord{{123 u0 ai.wizards.os.qa/{component} t3}}',
                                       'WizardHandoff: open thread qa_private_thread'])
-            rig.page = Mock(); rig.page.ev.return_value = True
+            rig.page = Mock(); rig.page.ev.return_value = {'ready': True, 'focused': False}
             rig.ui = Mock(side_effect=AssertionError('WebView file text is not native XML'))
-            self.assertTrue(rig.notification_thread('qa_private_thread', 'genuine.pdf'))
-            rig.page.ev.assert_called_once_with(runner.focused_thread_expression('qa_private_thread', 'genuine.pdf'))
+            with tempfile.TemporaryDirectory() as td:
+                rig.out = Path(td)
+                self.assertTrue(rig.notification_thread('qa_private_thread', 'genuine.pdf')['ready'])
+                samples = json.loads((rig.out / 'notification-qa_private_thread-samples.json').read_text())
+                self.assertEqual(len(samples), 1)
+                self.assertFalse(samples[0]['snapshot']['focused'])
+            rig.page.ev.assert_called_once_with(runner.focused_thread_snapshot_expression('qa_private_thread', 'genuine.pdf'))
             rig.ui.assert_not_called()
+
+    def test_notification_persists_every_rejected_snapshot_before_wait_checks(self):
+        for failure in ('dom', 'native-foreground', 'native-handoff'):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as td:
+                rig = runner.Rig.__new__(runner.Rig); rig.out = Path(td)
+                rig.sx = Mock(side_effect=lambda cmd: (
+                    'topResumedActivity=ActivityRecord{123 u0 ai.wizards.os.qa/.MainActivity t3}'
+                    if cmd.startswith('dumpsys') and failure != 'native-foreground' else
+                    'open thread new_thread' if cmd.startswith('logcat') and failure != 'native-handoff' else ''))
+                rig.page = Mock(); rig.page.ev.return_value = {
+                    'ready': failure != 'dom', 'focused': False,
+                    'rejected_reason': 'document-hidden' if failure == 'dom' else None}
+                def bounded_wait(sample, seconds):
+                    self.assertEqual(seconds, 30)
+                    for count in (1, 2):
+                        self.assertIsNone(sample())
+                        saved = json.loads((rig.out / 'new-before-samples.json').read_text())
+                        self.assertEqual(len(saved), count)
+                        self.assertFalse(saved[-1]['snapshot']['ready'])
+                        self.assertEqual(saved[-1]['snapshot']['rejected_reason'],
+                                         'document-hidden' if failure == 'dom' else failure)
+                    raise TimeoutError('bounded readiness refusal')
+                with patch.object(runner, 'wait', side_effect=bounded_wait):
+                    with self.assertRaisesRegex(TimeoutError, 'bounded readiness refusal'):
+                        rig.notification_thread('new_thread', 'x.pdf', 'new-before', stable_seconds=.8)
+                self.assertEqual(rig.page.ev.call_count, 2)
+
+    def test_notification_stability_does_not_require_keyboard_focus(self):
+        with tempfile.TemporaryDirectory() as td:
+            rig = runner.Rig.__new__(runner.Rig); rig.out = Path(td)
+            rig.sx = Mock(side_effect=lambda cmd:
+                'topResumedActivity=ActivityRecord{123 u0 ai.wizards.os.qa/.MainActivity t3}'
+                if cmd.startswith('dumpsys') else 'open thread new_thread')
+            rig.page = Mock(); rig.page.ev.side_effect = [
+                {'ready': True, 'focused': True}, {'ready': True, 'focused': False}]
+            def bounded_wait(sample, seconds):
+                self.assertIsNone(sample())
+                result = sample(); self.assertTrue(result['ready']); return result
+            with patch.object(runner, 'wait', side_effect=bounded_wait), \
+                    patch.object(runner.time, 'monotonic', side_effect=[0, .9]):
+                self.assertFalse(rig.notification_thread('new_thread', 'x.pdf', 'new-before', stable_seconds=.8)['focused'])
 
     def test_shared_orb_assets_match_canonical_web_bytes(self):
         for name in ('orb.js', 'robert-thread-orb.png', 'robert-listening-galaxy.png'):

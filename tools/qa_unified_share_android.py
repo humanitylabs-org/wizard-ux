@@ -58,9 +58,13 @@ def focused_thread_snapshot_expression(thread, filename):
       const result = {ready:false,id,thread:w?.wins?.[id]?.thread,expected,
         focused:document.hasFocus(),visibility:document.visibilityState,
         text:e?.innerText || '',owner:e?.closest('.wos-doc-thread')?.dataset.chats || null};
-      if (!id || !desk.wins.includes(id) || w.wins[id]?.app !== 'chats' ||
-          result.thread !== expected || !e || !result.focused || result.visibility !== 'visible') return result;
-      if (document.documentElement.classList.contains('wos-doc-scroll') && result.owner !== id) return result;
+      const reject = reason => {result.rejected_reason=reason;return result;};
+      // Keyboard focus is diagnostic, not proof of foreground visibility.
+      if (!id || !desk.wins.includes(id) || w.wins[id]?.app !== 'chats') return reject('focused-chats-window-missing');
+      if (result.thread !== expected) return reject('wrong-thread');
+      if (!e) return reject('thread-element-missing');
+      if (result.visibility !== 'visible') return reject('document-hidden');
+      if (document.documentElement.classList.contains('wos-doc-scroll') && result.owner !== id) return reject('wrong-document-owner');
       const visible = n => {
         if (!n) return false;
         for (let a=n;a;a=a.parentElement) {
@@ -75,16 +79,20 @@ def focused_thread_snapshot_expression(thread, filename):
         return !!hit && n.contains(hit);
       };
       const rows=[...e.querySelectorAll('.ch-msgs .msg.u .bub')];
+      result.rejected_reason='delivered-user-message-missing';
       for(const row of rows) {
         const file=[...row.querySelectorAll('.mcard .mn b')].find(n=>n.textContent.trim()===filename);
         const note=[...row.querySelectorAll('p')].find(n=>n.innerText.trim()===comment);
-        if(file && note && visible(file) && visible(note)) {
-          result.ready=true;
-          result.message=row.innerText;
-          result.file=file.textContent.trim();result.comment=note.innerText.trim();
-          result.rects=[file,note].map(n=>{const b=n.getBoundingClientRect();return [b.left,b.top,b.right,b.bottom]});
-          break;
-        }
+        if(!file) {result.rejected_reason='exact-body-file-missing';continue;}
+        if(!note) {result.rejected_reason='exact-body-comment-missing';continue;}
+        if(!visible(file)) {result.rejected_reason='file-not-visible-or-hit-testable';continue;}
+        if(!visible(note)) {result.rejected_reason='comment-not-visible-or-hit-testable';continue;}
+        result.ready=true;
+        result.rejected_reason=null;
+        result.message=row.innerText;
+        result.file=file.textContent.trim();result.comment=note.innerText.trim();
+        result.rects=[file,note].map(n=>{const b=n.getBoundingClientRect();return [b.left,b.top,b.right,b.bottom]});
+        break;
       }
       return result;
     })()""".replace('EXPECTED', json.dumps(thread)).replace('FILENAME', json.dumps(filename)).replace('COMMENT', json.dumps(comment))
@@ -986,14 +994,33 @@ class Rig:
     def sheet(self):
         return self.page.ev("!!document.querySelector('.wz-share')")
 
-    def notification_thread(self, thread, filename):
+    def notification_thread(self, thread, filename, label=None, stable_seconds=0):
         # UIAutomator does not expose this WebView's rendered file text. Bind
-        # the actual notification tap to foreground native + focused web state.
-        wait(lambda: any(re.search(re.escape(PKG) + r'/(?:ai\.wizards\.os\.|\.)MainActivity(?:\s|})', line)
-                         for line in self.sx('dumpsys activity activities').splitlines()
-                         if 'topResumedActivity' in line), 30)
-        wait(lambda: 'open thread ' + thread in self.sx('logcat -d -s WizardHandoff:V'), 30)
-        return wait(lambda: self.page.ev(focused_thread_expression(thread, filename)), 30)
+        # one bounded passive poll to native foreground + exact visible message.
+        # Persist EVERY evaluated object before inspecting readiness, including
+        # native refusals; never hide a boolean pre-wait before stable capture.
+        samples = []; previous = None; since = None
+        path = self.out / ((label or ('notification-' + thread)) + '-samples.json')
+        def sample():
+            nonlocal previous, since
+            resumed = [line for line in self.sx('dumpsys activity activities').splitlines()
+                       if 'topResumedActivity' in line]
+            foreground = any(re.search(re.escape(PKG) + r'/(?:ai\.wizards\.os\.|\.)MainActivity(?:\s|})', line)
+                             for line in resumed)
+            handoff = 'open thread ' + thread in self.sx('logcat -d -s WizardHandoff:V')
+            value = self.page.ev(focused_thread_snapshot_expression(thread, filename))
+            value.update(native_foreground=foreground, native_handoff=handoff, top_resumed=resumed)
+            if not foreground or not handoff:
+                value.update(ready=False, rejected_reason='native-foreground' if not foreground else 'native-handoff')
+            samples.append({'at': time.time(), 'snapshot': value})
+            path.write_text(json.dumps(samples, indent=2) + '\n')
+            key = json.dumps({k: v for k, v in value.items() if k not in ('text', 'focused')}, sort_keys=True)
+            now = time.monotonic()
+            if not value.get('ready') or previous != key:
+                since = now
+            previous = key
+            return value if value.get('ready') and since is not None and now - since >= stable_seconds else None
+        return wait(sample, 30)
 
     def share(self, mode):
         if mode not in ('boilerplate', 'genuine'):

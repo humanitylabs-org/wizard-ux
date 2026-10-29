@@ -15,7 +15,7 @@ spec.loader.exec_module(r)
 
 class NotificationPredicateTest(unittest.TestCase):
     def replay(self, mutation, expected):
-        expr = r.focused_thread_expression('new_thread', 'x.pdf')
+        expr = r.focused_thread_snapshot_expression('new_thread', 'x.pdf')
         script = r'''
 const assert=require('node:assert/strict');
 global.window={__wos:{idx:0,desks:[{focus:'c1',wins:['c1']}],wins:{c1:{app:'chats',thread:'new_thread'}}}};
@@ -41,15 +41,20 @@ file.getBoundingClientRect=()=>({...rect,top:10,bottom:30,height:20});
 p.getBoundingClientRect=()=>({...rect,top:40,bottom:60,height:20});
 document.elementFromPoint=(x,y)=>occluded?{}:(y<35?file:p);
 MUTATION
-assert.equal(eval(EXPRESSION),EXPECTED);
+const snapshot=eval(EXPRESSION);
+assert.equal(snapshot.focused,focused); // diagnostic only, not visibility
+assert.equal(snapshot.ready,EXPECTED);
+if (!snapshot.ready) assert.ok(snapshot.rejected_reason);
 '''.replace('MUTATION', mutation).replace('EXPRESSION', json.dumps(expr)).replace('EXPECTED', str(expected).lower())
         got = subprocess.run(['node', '-e', script], text=True, capture_output=True, timeout=10)
         self.assertEqual(got.returncode, 0, got.stderr)
 
     def test_exact_body_file_and_comment_pass(self): self.replay('', True)
     def test_occluding_old_thread_cannot_pass(self): self.replay('occluded=true;', False)
-    def test_unfocused_webview_cannot_pass(self): self.replay('focused=false;', False)
+    def test_visible_webview_without_keyboard_focus_passes(self): self.replay('focused=false;', True)
     def test_hidden_document_cannot_pass(self): self.replay("visible='hidden';", False)
+    def test_hidden_document_without_keyboard_focus_cannot_pass(self): self.replay("focused=false;visible='hidden';", False)
+    def test_other_window_without_keyboard_focus_cannot_pass(self): self.replay("focused=false;window.__wos.desks[0].focus='old';", False)
     def test_filename_only_in_composer_cannot_pass(self): self.replay('bodyOnly=true;', False)
     def test_wrong_comment_cannot_pass(self): self.replay("p.innerText=p.textContent='Synthetic comment one';", False)
     def test_wrong_file_cannot_pass(self): self.replay("file.textContent='genuine.pdf';", False)
@@ -106,6 +111,33 @@ class PacketSealTest(unittest.TestCase):
     def test_seal_drift_refused(self):
         (self.root / 'seal.json').write_text('{}')
         with self.assertRaisesRegex(ValueError, 'seal hash'): self.packet.verify(self.root, self.digest)
+
+    def test_capture_has_no_blind_preliminary_wait_or_input_after_open(self):
+        from unittest.mock import Mock, patch
+        events = []
+        rig = Mock(); rig.out = self.root
+        rig.ui.return_value = 'Sent · tap to open the chat'
+        rig.page.call.return_value = {'result': {'data': ''}}
+        rig.adb_cmd.return_value = ''
+        rig.notification_thread.side_effect = AssertionError('blind boolean pre-wait')
+        rig.tap_text.side_effect = lambda text: events.append('tap-notification')
+        rig.screenshot.side_effect = lambda label: events.append(label)
+        def saved_snapshot(rig, thread, filename, label):
+            events.append(label)
+            return {'ready': True, 'focused': label.endswith('before')}
+        with patch.object(self.packet, 'stable_snapshot', side_effect=saved_snapshot):
+            result = self.packet.capture_notification(rig, 'new_thread', 'x.pdf', 'new')
+        self.assertTrue(result['snapshot']['ready'])
+        self.assertEqual(events, ['new-before-tap', 'tap-notification', 'new-before', 'new-opened', 'new-after', 'new-settled'])
+        rig.tap_text.assert_called_once_with('Sent · tap to open the chat')
+        rig.tap.assert_not_called()
+
+    def test_stable_capture_delegates_to_persisted_native_and_dom_wait(self):
+        from unittest.mock import Mock
+        rig = Mock()
+        result = self.packet.stable_snapshot(rig, 'new_thread', 'x.pdf', 'new-before')
+        rig.notification_thread.assert_called_once_with('new_thread', 'x.pdf', 'new-before', stable_seconds=.8)
+        self.assertIs(result, rig.notification_thread.return_value)
 
 
 if __name__ == '__main__': unittest.main()
