@@ -24,15 +24,19 @@ body > .wz-share.dv-wrap { position:fixed; }
 .wz-share .dv-cancel { margin-left:auto; min-width:44px; min-height:44px; border:0; border-radius:50%; background:transparent; color:var(--wz-text-secondary); font-size:24px; }
 .wz-share .dv-items { display:flex; gap:8px; overflow-x:auto; margin-bottom:10px; }
 .wz-share .dv-items:empty { display:none; }
-.wz-share .dv-item { flex:0 0 auto; display:flex; align-items:center; gap:8px; max-width:220px; padding:5px 8px 5px 5px; border-radius:14px; background:var(--wz-surface-raised); border:1px solid var(--wz-border); }
-.wz-share .dv-item img, .wz-share .dv-fi { flex:0 0 auto; width:42px; height:42px; border-radius:10px; object-fit:cover; display:grid; place-items:center; color:var(--wz-text-secondary); }
-.wz-share .dv-nm { min-width:0; display:flex; flex-direction:column; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.wz-share .dv-items { scrollbar-width:none; padding:2px 0; }
 .wz-share .dv-text { width:100%; box-sizing:border-box; resize:vertical; margin-bottom:10px; padding:10px 12px; border-radius:16px; background:var(--wz-canvas); border:1px solid var(--wz-border); color:var(--wz-text); font:inherit; font-size:14px; }
-.wz-share .dv-btn, .wz-share .dv-thread { min-height:44px; padding:10px 12px; border-radius:14px; background:var(--wz-surface-raised); border:1px solid var(--wz-border); color:var(--wz-text); font:inherit; }
+.wz-share .dv-btn { min-height:44px; padding:10px 12px; border-radius:14px; background:var(--wz-surface-raised); border:1px solid var(--wz-border); color:var(--wz-text); font:inherit; }
 .wz-share .dv-btn.primary { background:var(--wz-accent); color:var(--wz-on-accent); border-color:transparent; }
-.wz-share .dv-btn.wide, .wz-share .dv-thread { width:100%; }
+.wz-share .dv-btn.wide { width:100%; }
 .wz-share button:disabled { opacity:.5; }
-.wz-share .dv-sub { margin:14px 4px 6px; font-size:11px; color:var(--wz-text-muted); }
-.wz-share .dv-thread { display:block; text-align:left; margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .wz-share .dv-status { min-height:18px; margin-top:8px; font-size:12px; color:var(--wz-text-secondary); text-align:center; }
 .wz-share .dv-status:empty { display:none; }
+/* Forwarded content: read-only quote under the owner's own comment; two destination choices (James, 27 Oct 2026). */
+.wz-share .dv-quote { margin:0 0 12px; padding:8px 12px; max-height:9.5em; overflow:auto; border-left:3px solid var(--wz-border); border-radius:4px 12px 12px 4px; background:var(--wz-surface-raised); color:var(--wz-text-secondary); font-size:var(--wz-text-sm); line-height:1.45; white-space:pre-wrap; overflow-wrap:anywhere; }
+.wz-share .dv-dest { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
+.wz-share .dv-opt { display:flex; align-items:center; gap:10px; min-height:44px; padding:0 12px; border-radius:14px; border:1px solid var(--wz-border); background:var(--wz-surface-raised); cursor:pointer; }
+.wz-share .dv-opt:has(input:checked) { border-color:var(--wz-accent); background:var(--wz-accent-soft); }
+.wz-share .dv-opt input { flex:0 0 auto; width:18px; height:18px; margin:0; accent-color:var(--wz-accent); }
+.wz-share .dv-chat { flex:1; min-width:0; min-height:42px; padding:0; border:0; background:transparent; color:var(--wz-text); font:inherit; text-overflow:ellipsis; }
+.wz-share .dv-chat option { background:var(--wz-surface); color:var(--wz-text); }
