@@ -100,6 +100,7 @@ window.WosChatPower = function chatPower(A) {
   function capture(nb) {
     if (!onScreen(nb)) return;
     const el = nb.closest('[data-chats]'), w = H.win(el.dataset.chats), c = w && ch(w.id);
+    if (c?.placeOptions?.notification) { c.placeOptions.notificationScroll = scrollBox(nb).scrollTop; return; }
     if (!w?.thread || w.thread === '__new__' || !c.lid || c.posFor !== w.thread || settling(c)) return;
     RP.save({ sessionId: w.thread, messageId: c.lid, anchor: anchorOf(nb), shown: c.show,
       scrollTop: scrollBox(nb).scrollTop, savedAt: Date.now(), atBottom: bottomGap(nb) < 80,
@@ -129,6 +130,9 @@ window.WosChatPower = function chatPower(A) {
       }
       return true; // never adopt the scroll of a hidden / parked thread
     }
+    // A notification is a document to read, not an empty chat to bottom-stick. Reuse the same scroll-box path
+    // for browser and native document scrolling, keeping its reading place through repaints and layout changes.
+    if (o.notification) { restore(nb, { scrollTop: o.notificationScroll || 0 }); return true; }
     if (sid === '__new__' || !o.turns) { restore(nb, { atBottom: true }); return true; }
     c.lid = latestId(o.turns);
     if (c.posFor !== sid) {
