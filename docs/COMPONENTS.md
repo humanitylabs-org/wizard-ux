@@ -38,6 +38,7 @@ Visual: <side-by-side screenshot, or "none">
 | Title-bar tools | `WizardApp.titlebar.set(tools)` | an app header repeating the title | tools appear in the shell title bar |
 | Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, 2-slot `VaultSlots`) | own ports | cancel keeps old |
 | Protect unsaved work from updates | `WizardApp.update.hold` | app service worker, forced reload | released only after save+readback |
+| App setup sheet | `WosAppSetup` (`web/core/app-setup.js`) | app-local setup | — |
 | App reading place | `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic | app-local scroll store | reopen lands at the saved place |
 | Motion, haptics, press feel | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own spring/haptic helpers | — |
 | Canonical style admission | `check_style.py` (`wizard-os/style/`); trusted main policy, mirrored WAM scanner | per-app lint forks, blanket legacy failure | legacy warns; changed lines and new-app templates fail |
@@ -102,8 +103,6 @@ Visual: <side-by-side screenshot, or "none">
 | `web/core/app-voice.js` (`WosAppVoice`) | Registry names/claims. |
 | `web/core/voice-legacy.js` (`WosVoiceLegacy`) | Frozen Music grammar and legacy device schema until APK A; Food owns its grammar. |
 | `web/core/background-audio-legacy.js` (`WizBackgroundAudioLegacy`) | Pilot grant/token until APK A. |
-
-| App setup | `WosAppSetup` (`web/core/app-setup.js`, `web/core/app-setup.css`); Store router/install | app-local setup |
 
 ## Plumbing (single owner)
 

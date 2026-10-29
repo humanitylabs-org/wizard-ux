@@ -98,6 +98,8 @@ test('both launchers put admission before window creation; Back peels setup befo
     const src = read(file), start = src.indexOf('  function openApp('), gate = src.indexOf('WosAppSetup.gate', start), next = src.indexOf('\n  function ', start + 5);
     assert.ok(gate > start && gate < next); assert.match(src.slice(start, gate + 140), /setupChecked: true/);
     const back = src.indexOf("return 'app-setup'"); assert.ok(back > 0);
+    // A late setup sheet only lands on the app still in front, on the phone and on desktop.
+    assert.match(src, /WosAppSetup\?\.init\(\{[^}]*isFront: id =>/, `${file} passes isFront`);
   }
   const store = read('web/store/store.js'); assert.match(store, /Setup\.html\(routerId\(a\)/); assert.match(store, /Setup\.html\(id/); assert.match(store, /await installRelease\(/);
 });

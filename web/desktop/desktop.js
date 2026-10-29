@@ -326,7 +326,7 @@
       return window.WosAppSetup.gate(a, () => openAppLink(url, title, true));
     return !!newWin({ app: 'frame', appId: a ? a.id : 'link', url, title: a ? a.name : title });
   }
-  window.WosAppSetup?.init({ getApp: id => APP[id] });
+  window.WosAppSetup?.init({ getApp: id => APP[id], isFront: id => focused()?.appId === id });
   function openApp(a, opts = {}) {
     if (!a) return false;
     if (a.url && !opts.setupChecked && window.WosAppSetup)
