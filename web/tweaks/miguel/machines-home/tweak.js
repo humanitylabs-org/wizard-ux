@@ -153,7 +153,7 @@ export default function setup(api) {
         left = 100 * paid.balanceMinor / paid.limitMinor; money = `$${(paid.balanceMinor / 10 ** ex).toFixed(2)}`;
       }
       // Signed out only when the feed says so; a failed usage read is "usage unavailable", still signed in.
-      const signedOut = p.signedOut === true || p.status === 'signed_out' || p.status === 'auth', na = !signedOut && left == null && !money;
+      const signedOut = p.signedOut === true || p.status === 'signed_out' || p.status === 'auth', na = !signedOut && (p.status === 'unavailable' || (left == null && !money));
       const who = String(p.name || '').split('@')[0];
       out.push({ id: p.id, kind, group: p.providerName || kind, nick: S.nick[p.id] || '', auto: who && who !== p.providerName ? who : '',
         email: p.email || '', left: left == null ? null : Math.round(left), money, unit: money ? 'credit' : 'plan', out: signedOut, na, stale: p.status === 'stale', resets: pick?.resetsAt || null });
@@ -609,7 +609,7 @@ export default function setup(api) {
   const drawn = { top: '', ai: '', list: '', map: '', glance: '' };
   const mapSig = () => { const st = storage();
     return JSON.stringify([S.ws, S.backupRead || '', [...S.open].filter(k => k !== 'ai' && k !== 'signin' && k !== 'wsm'), reg().this || null, managedList(),
-      devices().map(d => [d.id, d.name, d.status, d.error, d.cpus, d.memoryTotalGB, diskGB(d), Math.round((d.memory || 0) / 5), Math.round((d.cpu || 0) / 5), Math.round((freeGB(d) || 0) / 5)]),
+      S.devFresh, devices().map(d => [d.id, d.name, d.status, d.error, JSON.stringify(d.access || null), d.cpus, d.memoryTotalGB, diskGB(d), Math.round((d.memory || 0) / 5), Math.round((d.cpu || 0) / 5), Math.round((freeGB(d) || 0) / 5)]),
       myDevices(), sessions(), S.unread, backupRunning(), st && { ...st, age: st.age == null ? null : agoS(st.age), used: st.used == null ? null : gbFmt(st.used) },
       (S.backup?.standby?.machines || []).map(x => [x.id, x.verdict, (x.checks || []).map(c => c.ok)])]); };
   // Pictures and one short value per part; the words live in the tooltip / screen-reader label and in Settings.

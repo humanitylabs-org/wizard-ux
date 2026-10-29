@@ -2498,7 +2498,7 @@
     openThread: id => openThread(id),
     goDesk: i => goWs(i),
     sessions: () => { const G = LIVE?.ok ? LIVE.workGroups() : null; return G ? { working: (G.working || []).length, ready: (G.ready || []).length } : null; },
-    openSessions: kind => { openApp(APP.wizard); const w = ws[cur].wins.map(id => W[id]).find(x => x?.app === 'chats' && !x.agent); if (w) { if (kind === 'working') CHATS.setFilter(w, 'working'); else CHATS.clearFilter?.(w); } },
+    openSessions: kind => { openApp(APP.wizard); const w = ws[cur].wins.map(id => W[id]).find(x => x?.app === 'chats' && !x.agent); if (w) { if (kind === 'working') CHATS.setFilter(w, 'working'); else { if (w.thread) { CHATS.chatsBack(w); syncChatsPane(w.id); } CHATS.setFilter(w, ''); } } },  // Ready = the whole list, out of any open thread
     newThread: () => { const w = skinChatsWin(); if (w) CHATS.openChat(w.id, '__new__'); },
     openSettings: page => openSettings(page),
     // Inbox tweak: answer a notification in this Chats window (the Notifications Reply path); words send it at once.

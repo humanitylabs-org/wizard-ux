@@ -152,7 +152,7 @@ test('own recipes expose all installed tweaks, use published defaults and isolat
   const mizel = await f.E.defaults('obsidian-light'); assert.equal(mizel['miguel/model-pills'],true);
   const skin = {id:'quiet',tweaks:{...defaults,'miguel/model-pills':true}};
   f.window.WosMySkin = {active:skin,update(v){ Object.assign(skin.tweaks,v.tweaks); }};
-  await f.E.refresh(); assert.equal(f.E.state.tweaks.length, JSON.parse(read('web/tweaks/catalog.json')).tweaks.length);
+  await f.E.refresh(); const cat = JSON.parse(read('web/tweaks/catalog.json')); assert.equal(f.E.state.tweaks.length, cat.tweaks.length - (cat.oneOf || []).reduce((n, g) => n + g.length - 1, 0), 'one switch per oneOf group');
   assert.deepEqual(f.active(),['miguel/model-pills']);
   await f.E.toggle('wizard/app-borders'); assert.ok(f.active().includes('wizard/app-borders'));
   f.window.WosMySkin.active=null; await f.E.refresh(); assert.deepEqual(f.active(),[]);

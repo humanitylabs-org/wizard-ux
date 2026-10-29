@@ -213,7 +213,8 @@ test('review fixes: one Home map at a time, boot guess expires, unreadable usage
   assert.match(host, /if \(expected\.size\) setTimeout\(\(\) => \{ if \(tweaksAsked\) return; for \(const t of \[\.\.\.expected\]\)/, 'a boot that never loads drops the guessed styles');
   for (const who of ['miguel', 'wizard']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
-    assert.match(src, /p\.status === 'signed_out' \|\| p\.status === 'auth', na = !signedOut && left == null && !money;/, who);
+    assert.match(src, /p\.status === 'signed_out' \|\| p\.status === 'auth', na = !signedOut && \(p\.status === 'unavailable' \|\| \(left == null && !money\)\);/, who + ': an unavailable service never counts as current');
+    assert.match(src, /S\.devFresh, devices\(\)\.map\(d => \[d\.id, d\.name, d\.status, d\.error, JSON\.stringify\(d\.access \|\| null\),/, who + ': new security facts repaint the page');
     assert.match(src, /r\.na \? 'Usage unavailable'/, who);
   }
 });
@@ -280,6 +281,14 @@ test('sixth review: stale AI and backup readings say so; the AI page is scoped o
     assert.match(src, /S\.backupRead === 'error' \? \[h\('span', \{ cls: 'mh-more-info', text: 'Couldn’t reach Backup just now\. This is the last reading\.' \}\)\]/, who);
     assert.match(css, /\.mh-gauge\.is-stale \.mh-g-cells \{ opacity: \.55; \}/, who);
   }
+});
+
+test('seventh review: one switch per Home map group; desktop Ready leaves the open thread', () => {
+  const exp = read('web/core/experience.js'), desk = read('web/desktop/desktop.js');
+  assert.match(exp, /\.filter\(\(\[id\]\) => shownInGroup\(id\)\)/, 'Settings lists one switch per group');
+  assert.match(exp, /on: groupOf\(id\) \? groupOn\(id\) : enabled\(id\)/, 'and it shows what actually loads');
+  assert.match(exp, /if \(item\.on\) await setOne\(id, false\);\n      else for \(const m of groupOf\(id\) \|\| \[id\]\) if \(m === id \|\| explicitOff\(m\)\) await setOne\(m, true\);/, 'one tap back on clears every member');
+  assert.match(desk, /if \(w\.thread\) \{ CHATS\.chatsBack\(w\); syncChatsPane\(w\.id\); \} CHATS\.setFilter\(w, ''\);/);
 });
 
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
