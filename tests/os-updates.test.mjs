@@ -24,6 +24,53 @@ async function load(reply) {
 const btn = osu => ({ closest: sel => (sel === '[data-osu]' ? { dataset: { osu } } : null) });
 const ctx = () => { const t = []; return { t, toast: (...a) => t.push(a), render() {}, haptic() {} }; };
 const STATUS = { mode: 'auto', chosen: false, installed: '0.3.15', latest: '0.3.16', update_available: true, unpinned: false, checked: true, installing: false };
+const APPS = { app_mode: 'auto', chosen: false, due: [{ id: 'notes' }], skipped: [{ id: 'my-app', skip: 'owner-source' }] };
+
+test('app policy is visible, separately scoped, default is not called consent, and legacy boxes invent nothing', async () => {
+  const { U } = await load(() => [200, { ...STATUS, mode: 'ask', apps: APPS }]);
+  assert.match(U.html(), /Wizard OS updates/);
+  assert.match(U.html(), /App updates/);
+  assert.match(U.html(), /Default: Automatic/);
+  assert.match(U.html(), /my-app \(your code needs review\)/);
+  assert.match(U.html(), /data-osu="apps-auto" role="radio" aria-checked="true"/);
+  const old = await load(() => [200, STATUS]);
+  assert.doesNotMatch(old.U.html(), /apps-auto|apps-ask/);
+});
+
+test('manual app choice is read back and does not change system policy; Update apps now stays Manual', async () => {
+  let state = { ...STATUS, apps: { ...APPS } };
+  const { U, calls } = await load((method, body) => {
+    if (method === 'GET') return [200, state];
+    if (body.app_mode) { state = { ...state, apps: { ...state.apps, app_mode: body.app_mode, chosen: true } }; return [200, state]; }
+    return [200, { started: true }];
+  });
+  const c = ctx();
+  U.act(btn('apps-ask'), c);
+  await tick(); await tick();
+  assert.equal(U.state.apps.app_mode, 'ask');
+  assert.equal(U.state.mode, 'auto');
+  assert.deepEqual(c.t.at(-1), ['✓', 'Automatic app updates off', 1800]);
+  assert.deepEqual(calls.filter(r => r.method === 'POST').at(-1).body, { app_mode: 'ask' });
+  assert.equal(calls.at(-1).method, undefined, 'GET readback follows write');
+  U.act(btn('apps-apply'), c);
+  await tick(); await tick();
+  assert.deepEqual(calls.filter(r => r.method === 'POST').at(-1).body, { action: 'apply-apps' });
+  assert.equal(U.state.apps.app_mode, 'ask');
+});
+
+test('failed app policy readback never fabricates success or a chosen setting', async () => {
+  for (const readback of [[503, {}], [200, { ...STATUS, apps: APPS }]]) {
+    let reads = 0;
+    const { U } = await load(method => method === 'GET' ? (++reads === 1 ? [200, { ...STATUS, apps: APPS }] : readback) : [200, {}]);
+    const c = ctx();
+    U.act(btn('apps-ask'), c);
+    await tick(); await tick();
+    assert.equal(U.state.apps.app_mode, 'auto');
+    assert.equal(U.state.apps.chosen, false);
+    assert.equal(c.t.at(-1)[0], '!');
+    assert.match(c.t.at(-1)[1], /confirm the saved/);
+  }
+});
 
 test('reads the App Manager through the Store listener and registers one Settings group', async () => {
   const { U, calls, registered } = await load(() => [200, STATUS]);
