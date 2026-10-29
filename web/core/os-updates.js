@@ -51,6 +51,10 @@
   let st = null, at = 0, inflight = null, busy = '', off = false, epoch = 0, appsPending = false;
 
   const valid = d => d && typeof d === 'object' && ['auto', 'ask'].includes(d.mode) && 'update_available' in d;
+  // OS validity says nothing about app status. Unknown/error app reads cannot release a pending one-shot.
+  const validApps = a => a && typeof a === 'object' && ['auto', 'ask'].includes(a.app_mode) &&
+    typeof a.chosen === 'boolean' && !a.error && Array.isArray(a.due) && Array.isArray(a.skipped) &&
+    [...a.due, ...a.skipped].every(r => r && typeof r === 'object' && typeof r.id === 'string' && r.id.length);
   function changed() { try { window.WosSettings?.refresh(); } catch (_) {} try { popup(); } catch (_) {} }
   function load(force) {
     if (off && !force) return Promise.resolve(st);
@@ -62,7 +66,12 @@
         const r = await fetch(API, { credentials: 'same-origin', cache: 'no-store' });
         const d = r.ok ? await r.json().catch(() => null) : null;
         if (generation !== epoch) return st;
-        if (valid(d)) { st = d; off = false; appsPending = false; } else if (!st) off = true;
+        if (valid(d)) {
+          const appsConfirmed = validApps(d.apps);
+          st = appsPending && !appsConfirmed ? { ...d, apps: st?.apps } : d;
+          off = false;
+          if (appsConfirmed) appsPending = false;
+        } else if (!st) off = true;
       } catch (_) { if (generation === epoch && !st) off = true; }
       if (generation === epoch) { at = Date.now(); changed(); }
       return st;
@@ -166,7 +175,7 @@
         // Never invent saved consent on a partial response or failed readback.
         const r = await fetch(API, { credentials: 'same-origin', cache: 'no-store' });
         const read = r.ok ? await r.json().catch(() => null) : null;
-        if (!valid(read) || read.apps?.app_mode !== mode || read.apps?.chosen !== true)
+        if (!valid(read) || !validApps(read.apps) || read.apps.app_mode !== mode || read.apps.chosen !== true)
           throw new Error('Couldn’t confirm the saved app-update setting. Try again.');
         epoch++; inflight = null; // the confirmed readback outranks any independent pending GET
         st = read; at = Date.now();

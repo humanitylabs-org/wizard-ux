@@ -53,6 +53,31 @@ test('Update apps now remains busy across slow or failed status refresh', async 
   }
 });
 
+test('missing or malformed app readback cannot release one-shot admission; valid refresh recovers', async () => {
+  const malformed = [undefined, null, {}, { ...APPS, app_mode: null }, { ...APPS, due: null },
+    { ...APPS, due: {} }, { ...APPS, skipped: null }, { ...APPS, due: [null] },
+    { ...APPS, due: ['notes'] }, { ...APPS, error: 'offline' }];
+  for (const apps of malformed) {
+    let response = { ...STATUS, apps: APPS };
+    const { U, calls } = await load(method => [200, method === 'POST' ? { started: true } : response]);
+    response = { ...STATUS, apps };
+    U.act(btn('apps-apply'), ctx()); await tick(); await tick();
+    // OS status is independently usable, but an unknown app refresh must retain the previous app state.
+    assert.equal(U.state.mode, STATUS.mode);
+    assert.deepEqual(U.state.apps, APPS);
+    assert.match(U.html(), /data-osu="apps-apply" disabled/);
+    assert.match(U.html(), /data-osu="apps-refresh"/);
+    U.act(btn('apps-apply'), ctx()); await tick();
+    assert.equal(calls.filter(c => c.method === 'POST').length, 1, 'partial GET must not permit duplicate start');
+    response = { ...STATUS, apps: { ...APPS, app_mode: 'ask', chosen: true } };
+    await U.load(true); await tick();
+    assert.doesNotMatch(U.html(), /data-osu="apps-apply" disabled/);
+    U.act(btn('apps-apply'), ctx()); await tick(); await tick();
+    assert.equal(calls.filter(c => c.method === 'POST').length, 2, 'valid independent app readback recovers');
+    assert.equal(U.state.apps.app_mode, 'ask', 'one-shot never enables Automatic');
+  }
+});
+
 test('unknown source is not described as owner-modified', async () => {
   const { U } = await load(() => [200, { ...STATUS, apps: { ...APPS, skipped: [{ id: 'legacy', skip: 'source-unverified' }] } }]);
   assert.match(U.html(), /legacy \(can’t confirm it is unchanged yet\)/);

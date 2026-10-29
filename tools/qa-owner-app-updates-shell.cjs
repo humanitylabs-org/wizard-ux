@@ -30,7 +30,7 @@ const webDigest = () => {
     const ctx = await browser.newContext(shell === 'phone'
       ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
       : { viewport: { width: 1440, height: 900 } });
-    const state = { saved: initial(), calls: [], failReadback: false, outside: [] };
+    const state = { saved: initial(), calls: [], failReadback: false, appsReadback: 'valid', outside: [] };
     let page;
     const errors = [];
     const deadline = setTimeout(() => ctx.close().catch(() => {}), Number(process.env.QA_CASE_TIMEOUT_MS || 45000));
@@ -47,6 +47,12 @@ const webDigest = () => {
           return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(state.saved) });
         }
         if (state.failReadback) return r.fulfill({ status: 502, contentType: 'application/json', body: '{"error":"fixture readback failure"}' });
+        if (state.appsReadback !== 'valid') {
+          const partial = { ...state.saved };
+          if (state.appsReadback === 'missing') delete partial.apps;
+          else partial.apps = { ...partial.apps, due: null };
+          return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(partial) });
+        }
         return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(state.saved) });
       }
       const rel = decodeURIComponent(u.pathname.replace(/^\/wizard-os-home\//, '')) || 'index.html';
@@ -100,10 +106,25 @@ const webDigest = () => {
     await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(out, `${shell}-${skin}-2-manual-saved.png`) });
 
-    await section.getByRole('button', { name: 'Update apps now', exact: true }).click();
-    await page.waitForTimeout(600);
+    for (const partial of ['missing', 'malformed']) {
+      state.appsReadback = partial;
+      const posts = () => state.calls.filter(c => c.body?.action === 'apply-apps').length;
+      const previous = posts();
+      await section.getByRole('button', { name: 'Update apps now', exact: true }).click();
+      await section.getByRole('button', { name: 'Refresh status', exact: true }).waitFor({ state: 'visible' });
+      const action = section.getByRole('button', { name: 'Update apps now', exact: true });
+      if (!await action.isDisabled()) throw Error(`${shell}/${skin}: ${partial} app readback released admission`);
+      // Exercise the real handler too: disabled presentation alone is not duplicate-start protection.
+      await action.evaluate(el => window.WosUpdates.act(el, {}));
+      await page.waitForTimeout(100);
+      if (posts() !== previous + 1) throw Error(`${shell}/${skin}: partial readback admitted duplicate POST`);
+      if (partial === 'malformed') await page.screenshot({ path: path.join(out, `${shell}-${skin}-4-pending-app-readback.png`) });
+      state.appsReadback = 'valid';
+      await section.getByRole('button', { name: 'Refresh status', exact: true }).click();
+      await page.waitForFunction(() => !document.querySelector('[data-osu="apps-apply"]')?.disabled);
+      if (state.saved.apps.app_mode !== 'ask' || state.saved.mode !== 'ask') throw Error(`${shell}/${skin}: one-shot changed policy`);
+    }
     if (!state.calls.some(c => c.body?.action === 'apply-apps')) throw Error(`${shell}/${skin}: Update apps now sent nothing`);
-    if (state.saved.apps.app_mode !== 'ask' || state.saved.mode !== 'ask') throw Error(`${shell}/${skin}: one-shot changed policy`);
 
     // Failed readback: Automatic is not shown as saved and the owner sees why.
     state.failReadback = true;
