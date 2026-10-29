@@ -15,6 +15,68 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': mime[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store' });
   fs.createReadStream(file).pipe(res);
 });
+// __wos.idx changes at the START of the 520ms desk slide. A mounted card and
+// even an uncovered Retry centre do not prove that the whole card has arrived.
+// Keep real motion enabled; require stable geometry, full opacity and every
+// control's full clipping/hit-test area before retaining visual evidence.
+async function settledCapture(page, deskIndex, state, file) {
+  await page.mouse.move(4, 450); // don't retain a dock hover/tooltip from navigation
+  const geometry = await page.evaluate(async ({ deskIndex, state }) => {
+    const rect = el => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; };
+    const visible = el => {
+      for (let n = el; n; n = n.parentElement) {
+        const s = getComputedStyle(n);
+        if (s.display === 'none' || s.visibility !== 'visible' || Number(s.opacity) < .999 || s.filter !== 'none') return false;
+      }
+      return true;
+    };
+    const exposed = el => {
+      const r = el.getBoundingClientRect(), eps = .5;
+      if (r.width <= 0 || r.height <= 0 || r.left < -eps || r.top < -eps || r.right > innerWidth + eps || r.bottom > innerHeight + eps || !visible(el)) return false;
+      for (let n = el.parentElement; n; n = n.parentElement) {
+        const s = getComputedStyle(n), a = n.getBoundingClientRect();
+        if (/(hidden|clip|auto|scroll)/.test(s.overflowX) && (r.left < a.left - eps || r.right > a.right + eps)) return false;
+        if (/(hidden|clip|auto|scroll)/.test(s.overflowY) && (r.top < a.top - eps || r.bottom > a.bottom + eps)) return false;
+      }
+      // Inset points avoid rounded-corner antialiasing, but cover both ends of
+      // every control: a centre-only check missed the clipped Troubleshooter.
+      const dx = Math.min(8, r.width / 4), dy = Math.min(8, r.height / 4);
+      return [[r.left + dx, r.top + dy], [r.right - dx, r.top + dy], [r.left + dx, r.bottom - dy], [r.right - dx, r.bottom - dy], [r.left + r.width / 2, r.top + r.height / 2]]
+        .every(([x, y]) => el.contains(document.elementFromPoint(x, y)));
+    };
+    const until = performance.now() + 15000;
+    let previous = '', stableAt = 0, lastReason = '';
+    while (performance.now() < until) {
+      const desk = document.querySelectorAll('.track > .desk')[deskIndex];
+      const card = desk?.querySelector('[data-sendpill]');
+      const retry = card?.querySelector('[data-obretry]'), troubleshoot = card?.querySelector('[data-chtroubleshoot]');
+      const banner = document.querySelector('[data-wxnet]');
+      const targets = [desk, card, card?.querySelector('.pl'), retry, troubleshoot];
+      if (state === 'outage') targets.push(banner, ...Array.from(banner?.querySelectorAll('button') || []));
+      const transient = ['#toast', '#deskLabel'].some(sel => {
+        const el = document.querySelector(sel); return el && Number(getComputedStyle(el).opacity) > .001;
+      });
+      const running = document.getAnimations().some(a => {
+        const t = a.effect?.target, timing = a.effect?.getComputedTiming();
+        return t instanceof Element && timing?.iterations !== Infinity && ['running', 'pending'].includes(a.playState)
+          && targets.some(n => n && (t.contains(n) || n.contains(t)));
+      });
+      const d = desk && rect(desk);
+      const ready = document.documentElement.dataset.shell === 'phone' && __wos.idx === deskIndex
+        && d && Math.abs(d.x) <= .5 && Math.abs(d.width - innerWidth) <= .5
+        && visible(desk) && !transient && !running && targets.slice(1).every(n => n && exposed(n))
+        && (state === 'outage' ? banner?.dataset.wxnet === 'reconnecting' : !banner);
+      const sample = ready ? JSON.stringify(targets.map(n => [n.tagName, ...Object.values(rect(n)).map(v => Math.round(v * 10) / 10)])) : '';
+      if (!ready || sample !== previous) { stableAt = performance.now(); previous = sample; }
+      if (ready && performance.now() - stableAt >= 600) return { state, desk: d, card: rect(card), retry: rect(retry), troubleshoot: rect(troubleshoot), banner: banner ? rect(banner) : null, stableForMs: performance.now() - stableAt, fullOpacity: true, allControlsExposed: true };
+      lastReason = JSON.stringify({ state, desk: d, transient, running, targets: targets.map(n => n && { tag: n.tagName, box: rect(n), visible: visible(n), exposed: exposed(n) }) });
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    throw new Error('Shell/card did not settle: ' + lastReason);
+  }, { deskIndex, state });
+  await page.screenshot({ path: file, fullPage: true });
+  return geometry;
+}
 (async () => {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}/wizard-os-home/`;
@@ -68,7 +130,7 @@ const server = http.createServer((req, res) => {
       await page.waitForFunction(() => document.querySelector('[data-sendpill]')?.textContent.includes('Message not sent'));
       assert.equal(await page.locator('[data-wxnet]').count(), 0, 'healthy reads + saved message must not create a connection banner');
       assert.equal(await page.locator('[data-sendpill]').count(), 1);
-      await page.screenshot({ path: path.join(out, `phone-${skin}-waiting.png`), fullPage: true });
+      const captures = [await settledCapture(page, chatsDesk, 'waiting', path.join(out, `phone-${skin}-waiting.png`))];
       const before = posts.length;
       const priorAttempts = await page.evaluate(id => WosOutbox.get(id).attempts, id);
       const retry = page.locator('[data-sendpill] [data-obretry]');
@@ -85,13 +147,13 @@ const server = http.createServer((req, res) => {
       broken = true;
       await page.evaluate(async () => { await WizLive.refresh(); });
       await page.waitForSelector('[data-wxnet="reconnecting"]');
-      await page.screenshot({ path: path.join(out, `phone-${skin}-outage.png`), fullPage: true });
+      captures.push(await settledCapture(page, chatsDesk, 'outage', path.join(out, `phone-${skin}-outage.png`)));
       broken = false;
       await page.evaluate(async () => { await WizLive.refresh(); });
       await page.waitForFunction(() => !document.querySelector('[data-wxnet]'));
       assert.equal(await page.locator('[data-sendpill]').count(), 1, 'recovery never hides the unsent-message card');
-      await page.screenshot({ path: path.join(out, `phone-${skin}-recovered.png`), fullPage: true });
-      results.push({ skin, visibleRetry: true, custodyPreserved: true, retryEnvelopePreserved: true, connectionRecovery: true, postCount: posts.length });
+      captures.push(await settledCapture(page, chatsDesk, 'recovered', path.join(out, `phone-${skin}-recovered.png`)));
+      results.push({ skin, visibleRetry: true, custodyPreserved: true, retryEnvelopePreserved: true, connectionRecovery: true, settledCaptures: captures, postCount: posts.length });
       await context.close();
     }
     fs.writeFileSync(path.join(out, 'result.json'), JSON.stringify({ ok: true, results }, null, 2));
