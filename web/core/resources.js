@@ -108,7 +108,7 @@
   /* Miguel's skins (Dark, Light, Landscapes): Home shows one quiet row of ring dials per zone, every dial in the same
      column grid so Server and AI line up. No warning notes, alert marks, health line or freshness text; the detail sheet
      keeps all of that. An AI account that can't be read is a dial that opens its connection app to sign back in. */
-  const OURS=new Set(['obsidian','obsidian-light','landscapes']);
+  const OURS=new Set(['obsidian','obsidian-light','landscapes','landscapes-light']);
   const ours=()=>typeof document!=='undefined'&&(document.documentElement.dataset.tweaks||'').split(' ').includes('miguel/home-bars');
   const APP_OF={chatgpt:'wizard-chatgpt',claude:'wizard-claude',tinfoil:'wizard-tinfoil'};
   /* Speedometer dials (Miguel's skins, 22 Oct): a 240° car gauge per reading. Each dial remembers what it last showed
@@ -219,7 +219,7 @@
       if(force||Date.now()-S.healthAt>=(S.panel&&S.tab==='health'?14000:60000))jobs.push(read('/api/system/health',controller.signal).then(j=>{if(typeof j?.available!=='boolean')throw new Error('Unavailable');S.health=j;S.healthAt=Date.now();S.healthError='';}).catch(e=>{if(viewing())S.healthError='Unavailable';}));
       if(force||Date.now()-S.aiAt>=60000)jobs.push(read('/wizard/ai-usage',controller.signal).then(j=>{S.ai=window.WosUsage.normalize(j);S.aiAt=Date.now();S.aiError='';window.WosUsage.snap=S.ai;window.WosUsage.at=S.aiAt;window.WosUsage.error='';}).catch(e=>{if(viewing()){S.aiError='Unavailable';window.WosUsage.error='Latest AI usage unavailable';}}));
       await Promise.all(jobs.map(j=>j.then(()=>{if(viewing())paint();})));/* paint as each reading lands: a slow AI read must not hold back a failing health check */
-    })().finally(()=>{clearTimeout(timeout);S.busy=null;S.controller=null;schedule();});return S.busy;
+    })().finally(()=>{clearTimeout(timeout);S.busy=null;S.controller=null;schedule();window.dispatchEvent?.(new Event('wos:resources'));});return S.busy;
   }
   function schedule(){clearTimeout(S.timer);S.timer=null;if(viewing())S.timer=setTimeout(()=>{S.timer=null;update();},15000);}
   function sync(){if(!viewing()){clearTimeout(S.timer);S.timer=null;S.controller?.abort();return;}paint();if(!S.busy)update();}
