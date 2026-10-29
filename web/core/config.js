@@ -29,7 +29,9 @@
   let B = (() => { try { return JSON.parse(localStorage.getItem(KEY) || 'null') || DEFAULTS; } catch (e) { return DEFAULTS; } })();
   let live = false;
 
-  const deviceZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) { return 'UTC'; } };
+  // The zone the phone reports, or '' when it reports none (some WebViews), so the settings zone can take over.
+  const phoneZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; } };
+  const deviceZone = () => phoneZone() || 'UTC';
   const zoneOk = z => { if (!z) return false; try { new Intl.DateTimeFormat('en-US', { timeZone: z }); return true; } catch (e) { return false; } };
   const fmtCache = new Map();
   const fmt = z => {
@@ -69,7 +71,7 @@
     vocabulary() { return Array.isArray(B.settings?.voice?.vocabulary) ? B.settings.voice.vocabulary : []; },
     // Times on screen follow the phone's clock, so a trip abroad needs no settings change.
     // The settings zone stays the fallback (and the server's home zone) when the device reports none.
-    timeZone() { const d = deviceZone(); if (zoneOk(d)) return d; const z = B.settings?.clock?.timezone; return zoneOk(z) ? z : 'UTC'; },
+    timeZone() { const d = phoneZone(); if (zoneOk(d)) return d; const z = B.settings?.clock?.timezone; return zoneOk(z) ? z : 'UTC'; },
     homeZone() { const z = B.settings?.clock?.timezone; return zoneOk(z) ? z : deviceZone(); },
     /* Wall-clock parts of instant t in the owner's zone. */
     dayParts(t = Date.now()) {
