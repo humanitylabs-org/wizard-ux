@@ -428,21 +428,21 @@ export default function setup(api) {
     const word = m => m.access?.exposure === 'internet' ? ['Open to internet', 'bad'] : cleared(m.access) ? ['Tailscale only', 'ok'] : ['Not checked yet', 'none'];
     return h('span', { cls: 'mh-more-info mh-ts-info' },
       h('span', { text: 'Your private network. Everything inside the dashed line talks over it, encrypted.' }),
-      bad.length ? h('span', { cls: 'is-bad', text: `${bad.map(m => m.name).join(' and ')} ${bad.length === 1 ? 'is' : 'are'} on Tailscale too, but strangers on the internet can also knock on ${bad.length === 1 ? 'it' : 'them'}.` })
+      bad.length ? h('span', { cls: 'is-bad', text: `${bad.map(m => m.name).join(' and ')} ${bad.length === 1 ? 'is' : 'are'} on Tailscale too, but strangers on the internet can also knock on ${bad.length === 1 ? 'it' : 'them'}.${S.devFresh ? '' : ' (Last reading; check again to see if it still is.)'}` })
         : allClear() ? h('span', { text: 'Nothing answers from the internet. Tailscale is the only way in.' })
         : h('span', { text: S.devFresh ? 'Not every machine has been checked from the internet yet. Check again to find out.' : 'This is the last reading; your network couldn’t be read just now.' }),
       h('span', { cls: 'mh-ts-list' }, all.map(m => { const [w, x] = word(m); return h('span', { cls: 'mh-ts-row', 'data-x': x }, h('i'), h('b', { text: m.name }), h('span', { text: w })); })),
       h('span', { text: 'Who can reach whom isn’t checked here. Unless your Tailscale rules were changed, every device can reach every other, both ways (Tailscale’s starting rule).' }),
       h('span', { cls: 'mh-act-btns' },
-        [bad.length ? ['fix', `Close ${bad.length === 1 ? 'it' : 'them'}`, 'Tailscale becomes the only way in'] : null, ['oneway', 'Make it one-way', 'your devices reach machines, not back'], ['check', 'Check again', 'tests every machine from outside']]
+        [bad.length && S.devFresh ? ['fix', `Close ${bad.length === 1 ? 'it' : 'them'}`, 'Tailscale becomes the only way in'] : null, ['oneway', 'Make it one-way', 'your devices reach machines, not back'], ['check', 'Check again', 'tests every machine from outside']]
           .filter(Boolean).map(([id, text, note]) => h('button', { type: 'button', cls: 'mh-act-btn' + (id === 'fix' ? ' is-fix' : ''), data: { tsAsk: id } }, h('b', { text }), h('small', { text: note })))));
   }
   function paintTsTab() {
     const bad = openOnes().length, open = S.open.has('ts');
     tsTab.hidden = S.ws !== 'mine'; tsTab.setAttribute('aria-expanded', String(open));
     const checked = allClear();
-    tsTab.setAttribute('aria-label', `Tailscale, ${bad ? bad + ' open to the internet' : checked ? 'the only way in' : 'not every machine checked yet'}. ${open ? 'Hide' : 'Show'} details`);
-    tsTab.replaceChildren(h('span', { text: 'Tailscale' }), bad ? h('b', { cls: 'mh-ts-n', text: `${bad} open` }) : null, chev(open));
+    tsTab.setAttribute('aria-label', `Tailscale, ${bad ? bad + ' open to the internet' + (S.devFresh ? '' : ' at the last reading') : checked ? 'the only way in' : 'not every machine checked yet'}. ${open ? 'Hide' : 'Show'} details`);
+    tsTab.replaceChildren(h('span', { text: 'Tailscale' }), bad ? h('b', { cls: 'mh-ts-n' + (S.devFresh ? '' : ' is-stale'), text: `${bad} open` }) : null, chev(open));
   }
   const devOpen = p => p.devices ? S.open.has('devs') : S.open.has('p:' + p.id);
   function personNode(p) {

@@ -628,3 +628,6 @@ html:is([data-skin$="light"], [data-skin="sepia"]) .mh-root .mh-act-btn.is-fix {
 
 /* A last-known AI reading (the feed could not refresh) is shown dimmed. */
 .mh-gauge.is-stale .mh-g-cells { opacity: .55; }
+
+/* An 'open' count from a last reading (the network couldn't be read just now) is shown dimmed. */
+.mh-ts-n.is-stale { opacity: .6; }

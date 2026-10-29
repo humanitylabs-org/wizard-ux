@@ -461,6 +461,18 @@ test('final review: personal-device presence needs a fresh reading; meter edits 
   }
 });
 
+test('final review 2: exposure dates must be real; an open warning from a last reading says so and offers no fix', async () => {
+  const { cleanAccess } = await import('../tools/system-devices.mjs');
+  assert.equal(cleanAccess({ exposure: 'tailscale', checked: '2026-13-40' }).checked, undefined);
+  assert.equal(cleanAccess({ exposure: 'tailscale', checked: '2999-01-01' }).checked, undefined);
+  assert.equal(cleanAccess({ exposure: 'tailscale', checked: '2026-10-28' }).checked, '2026-10-28');
+  for (const who of ['miguel', 'wizard']) {
+    const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
+    assert.match(src, /\[bad\.length && S\.devFresh \? \['fix'/, who);
+    assert.match(src, /' \(Last reading; check again to see if it still is\.\)'/, who);
+  }
+});
+
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));

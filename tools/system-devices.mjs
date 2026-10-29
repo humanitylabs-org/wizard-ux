@@ -32,7 +32,10 @@ const EXPOSURE = new Set(['tailscale', 'internet', 'unchecked']);
 export function cleanAccess(a) {
   if (!a || typeof a !== 'object') return null;
   const exposure = EXPOSURE.has(a.exposure) ? a.exposure : 'unchecked';
-  const checked = /^\d{4}-\d{2}-\d{2}$/.test(String(a.checked || '')) ? a.checked : null;
+  // A real calendar date, not in the future (a typo must never count as a completed exposure check).
+  const realDay = v => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v || '')); if (!m) return false; const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    return d.getUTCFullYear() === +m[1] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3] && d.getTime() <= Date.now() + 86400000; };
+  const checked = realDay(a.checked) ? a.checked : null;
   const details = (Array.isArray(a.details) ? a.details : []).map(x => clip(x, 140)).filter(Boolean).slice(0, 8);
   return {exposure, ...(checked ? {checked} : {}), ...(clip(a.how, 80) ? {how: clip(a.how, 80)} : {}), ...(details.length ? {details} : {})};
 }
