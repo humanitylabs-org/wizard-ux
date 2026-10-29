@@ -159,6 +159,10 @@ html[data-shell="phone"] .ch-fsheet:has([data-chfocusopt]) { bottom: calc(var(--
 .ch-head .ti b { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ch-msgs { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none; padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 10px; }
 .ch-msgs::-webkit-scrollbar { display: none; }
+/* Opened alert: source text is visible without resolving/sending, in the existing thread scroller. */
+.ch-notif-details { min-width: 0; margin: 16px 2px 4px; color: var(--ink); }
+.ch-notif-details h2 { margin: 0 0 8px; color: var(--ink-2); font-size: 0.8125rem; font-weight: 700; }
+.ch-notif-original { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 1.0625rem; line-height: 1.5; }
 .msg { display: flex; }
 .msg.u { justify-content: flex-end; }
 .msg .bub { max-width: 88%; padding: 10px 13px; border-radius: 18px; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
@@ -736,6 +740,7 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 .ch-row .tp b .ch-plock .ag-lock { width: 12px; height: 12px; stroke-width: 2.2; }
 .ch-head .ti { min-width: 0; }
 .ch-privtag { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; height: 20px; margin-left: 6px; padding: 0 7px 0 6px; border-radius: 10px; font-size: 11px; font-weight: 700; letter-spacing: .02em; color: var(--ch-priv); background: color-mix(in oklab, var(--ch-priv) 16%, transparent); vertical-align: 2px; }
+.ch-background { margin-left: 0; align-self: center; white-space: nowrap; color: var(--wz-text-secondary, var(--ink-2)); background: var(--wz-surface, var(--glass)); font-weight: 400; letter-spacing: normal; }
 .ch-privtag .ag-lock { width: 11px; height: 11px; stroke-width: 2.3; }
 .ch-carry { margin: 14px auto 0; max-width: 520px; display: grid; gap: 6px; padding: 12px 14px; border-radius: 14px; border: 1px solid color-mix(in oklab, var(--ch-priv) 35%, transparent); background: color-mix(in oklab, var(--ch-priv) 8%, transparent); text-align: left; font-size: 13px; line-height: 1.4; }
 .ch-carry b { display: inline-flex; align-items: center; gap: 6px; color: var(--ch-priv); }
