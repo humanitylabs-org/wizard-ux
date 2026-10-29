@@ -208,12 +208,12 @@ export default function setup(api) {
   function renderWiz() {
     const all = [['mine', thisName(), reg().this?.owner ? 'Your Wizard' : ''], ...managedList().map(g => [g.id, g.name, g.org || ''])];
     const cur = all.find(x => x[0] === S.ws) || all[0], open = S.open.has('wsm');
-    wizBtn.setAttribute('aria-expanded', String(open)); wizBtn.setAttribute('aria-label', `Wizard: ${cur[1]}. Switch Wizard`);
-    wizBtn.replaceChildren(h('span', { cls: 'mh-wiz-dot', 'aria-hidden': 'true' }), h('b', { text: cur[1] }), (() => { const v = sv('svg', { class: 'mh-wiz-car' + (open ? ' is-up' : ''), viewBox: '0 0 24 24', 'aria-hidden': 'true' }); sv('path', { d: 'm7 10 5 5 5-5' }, v); return v; })());
+    wizBtn.setAttribute('aria-expanded', String(open)); wizBtn.setAttribute('aria-label', `Workspace: ${cur[1]}. Switch workspace`);
+    wizBtn.replaceChildren(h('b', { text: cur[1] }), (() => { const v = sv('svg', { class: 'mh-wiz-car' + (open ? ' is-up' : ''), viewBox: '0 0 24 24', 'aria-hidden': 'true' }); sv('path', { d: 'm7 10 5 5 5-5' }, v); return v; })());
     wizMenu.hidden = !open;
-    wizMenu.replaceChildren(...(open ? [h('small', { cls: 'mh-wiz-h', text: 'Wizards' }),
+    wizMenu.replaceChildren(...(open ? [h('small', { cls: 'mh-wiz-h', text: 'Workspaces' }),
       ...all.map(([id, n, sub]) => h('button', { type: 'button', role: 'menuitemradio', 'aria-checked': String(S.ws === id), data: { ws: id } }, h('b', { text: n }), sub ? h('small', { text: sub }) : null)),
-      h('button', { type: 'button', cls: 'is-add', role: 'menuitem', data: { act: 'add-managed' } }, '+ Add a Wizard')] : []));
+      h('button', { type: 'button', cls: 'is-add', role: 'menuitem', data: { act: 'add-managed' } }, '+ Add a workspace')] : []));
   }
   function fillTabs(bar) {
     const tab = (id, name) => h('button', { type: 'button', role: 'tab', data: { ws: id }, 'aria-selected': String(S.ws === id) }, name);
