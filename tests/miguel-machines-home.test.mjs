@@ -172,8 +172,8 @@ test('api.nav.ask: trusted only, namespaced home: key, sends through the shell c
   const f = fixture(); let api;
   f.host._test.setImporter(async () => ({ default: a => { api = a; return () => {}; } }));
   await f.host.loadTweaks(['miguel/machines-home'], f.slots, { teamAuthors: ['miguel'] });
-  assert.equal(api.nav.ask('oscarvps-standby', { title: 'HostingerVPS · Make standby', message: 'checks' }, 'Make HostingerVPS my standby device.'), true);
-  assert.deepEqual(f.inbox.replies.at(-1), ['home:oscarvps-standby', '', 'Make HostingerVPS my standby device.'], 'lands as an unsent draft');
+  assert.equal(api.nav.ask('helper-standby', { title: 'Cloud server · Make standby', message: 'checks' }, 'Make Cloud server my standby device.'), true);
+  assert.deepEqual(f.inbox.replies.at(-1), ['home:helper-standby', '', 'Make Cloud server my standby device.'], 'lands as an unsent draft');
   api.nav.ask('now', {}, 'Back up now.', { send: true }); assert.deepEqual(f.inbox.replies.at(-1), ['home:now', 'Back up now.'], 'send: true sends');
   assert.equal(api.nav.ask('../x', {}, ''), true); assert.equal(f.inbox.replies.at(-1)[0], 'home:x', 'unsafe characters are dropped');
   await f.loadTweaks?.(); await f.host.loadTweaks(['miguel/machines-home'], f.slots);
