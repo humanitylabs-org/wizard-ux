@@ -258,6 +258,12 @@ test('interim words the transcript already shows mid-run are not drawn again und
     const later = [{ u: { text: 'read the code' }, notes: [interim], a: { at: 7, text: 'Reading setup.js next.', final: false } }];
     callback({ text: interim + 'Reading setup.js next.' + 'Found it.', steps: [], terminal: false });
     assert.match(ctx.syncStream(w, c, later, agent), /<p>Found it\.<\/p>/);
+    // A commentary row after a non-final message sits in notes but streamed after it: trim by row order (said).
+    const mixed = [{ u: { text: 'read the code' }, notes: ['Checking tests too.'], said: [interim, 'Checking tests too.'], a: { at: 9, text: interim, final: false } }];
+    callback({ text: interim + '\n\nChecking tests too.\n\nAll green.', steps: [], terminal: false });
+    const mixedHtml = ctx.syncStream(w, c, mixed, agent);
+    assert.match(mixedHtml, /<p>All green\.<\/p>/);
+    assert.doesNotMatch(mixedHtml, /Doing that now|Checking tests too/);
     // Words that do not continue the transcript are never trimmed.
     callback({ text: 'Different words entirely.', steps: [], terminal: false });
     assert.match(ctx.syncStream(w, c, turns, agent), /Different words entirely\./);

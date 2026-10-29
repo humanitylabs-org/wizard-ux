@@ -1794,7 +1794,8 @@ window.WizCore.chats = function createChats(H) {
   const streamUnshown = (text, turns) => {
     const t = (turns || []).at(-1);
     if (!t || (t.a && t.a.final !== false)) return text;
-    const shown = [...(t.notes || []), t.a?.text || ''].map(bare).join('');
+    // Chronological rows (said) when known: a commentary row after a non-final message lands in notes but streamed later.
+    const shown = (Array.isArray(t.said) ? t.said : [...(t.notes || []), t.a?.text || '']).map(bare).join('');
     if (!shown) return text;
     let i = 0, j = 0;
     for (; i < text.length && j < shown.length; i++) { if (/\s/.test(text[i])) continue; if (text[i] !== shown[j]) return text; j++; }

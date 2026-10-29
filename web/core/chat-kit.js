@@ -135,7 +135,7 @@
   function parseRows(rows) {
     const out = []; let cur = null;
     const contextIds = new Set();
-    const newTurn = u => { cur = { u, a: null, notes: [], steps: 0, media: [], at: u?.at, work: [], steers: [] }; out.push(cur); return cur; };
+    const newTurn = u => { cur = { u, a: null, notes: [], said: [], steps: 0, media: [], at: u?.at, work: [], steers: [] }; out.push(cur); return cur; };
     for (const m of rows || []) {
       const kind = m.display_kind || '';
       const content = m.display_content ?? m.content;
@@ -182,6 +182,8 @@
         for (const u of imagesOf(m, content)) if (!cur.media.some(x => x.url === u)) cur.media.push({ id: u.slice(-24), name: 'Image', mime: 'image/*', kind: 'image', url: u });
         if (h.attachments.length && !cur.mediaAt) cur.mediaAt = at;
         if (!t) { if (!h.attachments.length) cur.steps++; continue; }
+        // said: every shown assistant line in arrival order (notes regroup them; the live stream trims by this).
+        cur.said.push(t);
         if (kind === 'commentary') { cur.notes.push(t); cur.steps++; continue; }
         if (cur.a) cur.notes.push(cur.a.text);
         cur.a = { text: t, plainText: h.plainText, inlineMedia: h.inlineMedia, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length) };
