@@ -347,6 +347,7 @@
   window.WosAppSetup?.init({ getApp: id => APP[id], isFront: id => focused()?.appId === id });
   function openApp(a, opts = {}) {
     if (!a) return false;
+    if (a.id === 'setup' && window.WosWelcome) { window.WosWelcome.open(); return true; } // Setup is the Welcome modal now
     if (a.id === 'pages') { const ex = !opts.fresh && findWin(w => w.app === 'pages'); if (ex) focusWin(ex.id); else newWin({app:'pages',appId:'pages'}, opts); return true; }
     if (a.url && !opts.setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openApp(a, { ...opts, setupChecked: true }));
@@ -1832,6 +1833,7 @@
   }
   // Esc peels one layer: palette → keys → voice → thread → (nothing: stays put, never leaves).
   function escStep() {
+    { const w = window.WosWelcome?.back(); if (w) return w; } // the first-run Welcome sits above everything
     if (window.WosContextMenu?.back()) return 'context-menu';
     if (window.WizShareWizard?.back()) return 'share-wizard';
     { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above everything, incl. the selection menu
@@ -2122,6 +2124,7 @@
   const vis0 = n => !!n && !!n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
   function onKey(e, fromFrame = false) {
     if (pick.active()) return pick.key(e);
+    if (window.WosWelcome?.active) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); window.WosWelcome.back(); } return; } // first run: no shell shortcuts behind it
     if (e.key === 'Escape' && keyHints.pinned()) { e.preventDefault(); e.stopPropagation(); toggleKeys(false); returnToSettings(); return; }
     keyHints.down(e);
     const k = e.key, code = e.code, alt = e.altKey && !e.metaKey && !e.ctrlKey, shift = e.shiftKey;
@@ -2402,9 +2405,12 @@
   C.deeplink.consume();
   window.WosScenery?.attach({ device: document.body, homeInView: () => (homeOpen || !ws[cur].wins.length) && setEl.hidden && pal.hidden && !keyHints.pinned() && usageEl.hidden && !window.WosResources?.state?.panel });
   new MutationObserver(() => window.WosScenery?.update()).observe(stage, { attributes: true, subtree: true, attributeFilter: ['class', 'hidden'] });
-  window.WosSetupLaunch?.boot({ open: id => { const a = APP[id]; if (a) openApp(a); }, alongsideOnly: true,
-    firstRunTour: !!DESK_TOUR && !window.WosTour.done(), tour: why => DESK_TOUR?.start(why), markTour: () => window.WosTour?.mark(),
-    busy: () => VOICE.state !== 'idle' || !setEl.hidden || !pal.hidden || [...document.querySelectorAll('.ch-compose textarea')].some(t => t.value.trim()) }); // Setup opens itself on first run
+  // First run is the Welcome modal (core/welcome.js): connect an AI, pick a look, send a first message. It replaces
+  // the automatic Setup window and the composer guide (Miguel, 29 Oct 2026); ?view=tour still opens the guide.
+  window.WosWelcome?.boot({ app: id => APP[id] || findApp(id, true) || null, openStore: () => openApp(APP['app-store']),
+    deeplinked: () => (window.__deeplinkLog || []).length > 0, busy: () => VOICE.state !== 'idle',
+    // One main Chats window (reused wherever it is), and the new thread opens in it as soon as it is saved.
+    send: async text => { const w = findWin(mainChats) || newWin({ app: 'chats', thread: null }); const it = await CHATS.sendChat(w.id, text, 'the first message, from the Welcome screen', null, { sid: '__new__', away: true }); if (!it) return null; focusWin(w.id); if (it.sessionId) window.WosWelcome.whenThreadExists(it.sessionId, sid => openThread(sid)); return it; } });
   C.status?.attach({ openChats: openChatsList, current: () => { const f = focused(); return f?.app === 'chats' && f.thread !== '__new__' ? f.thread || '' : ''; } });
   const f0 = focused(); if (f0) setTimeout(() => focusInside(f0.id), 50);
 
