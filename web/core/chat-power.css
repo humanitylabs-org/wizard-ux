@@ -145,8 +145,10 @@
 
 /* Compact model menu: a small card over the right side, just above the label, read bottom-up from the thumb. */
 .ch-sheet.ch-mpop { background: rgba(3, 1, 10, .28); align-items: stretch; justify-content: flex-end; }
-.ch-mpop .ch-sheet-b { position: absolute; right: var(--mpop-r, 10px); bottom: var(--mpop-b, 72px); width: min(236px, calc(100% - 24px)); max-height: min(64%, 440px);
-  display: flex; flex-direction: column; padding: 6px; border-radius: 16px; border: 1px solid var(--line-2); background: linear-gradient(rgba(22, 14, 46, .98), rgba(22, 14, 46, .98)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); box-shadow: 0 14px 40px rgba(0, 0, 0, .55); animation: mpop-in 140ms ease-out both; transform-origin: bottom right; }
+.ch-mpop .ch-sheet-b { position: absolute; right: var(--mpop-r, 10px); bottom: var(--mpop-b, 72px); width: min(236px, calc(100% - 24px)); max-height: min(var(--mpop-h, 64%), 440px); box-sizing: border-box;
+  display: flex; flex-direction: column; padding: 6px; border-radius: 16px; border: 1px solid var(--line-2); background: var(--wz-panel, var(--bg, #160e2e)); box-shadow: 0 14px 40px rgba(0, 0, 0, .55); animation: mpop-in 140ms ease-out both; transform-origin: bottom right; }
+/* Native document-scroll chrome sits at z=50; keep the bounded picker above it, not underneath it. */
+html.wos-doc-scroll .wos-doc-thread .ch-sheet.ch-mpop { position: fixed; inset: 0; z-index: 52; }
 @keyframes mpop-in { from { opacity: 0; transform: translateY(6px) scale(.97); } }
 .ch-mpop .msheet-list { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
 .ch-mpop .mpop-sec + .mpop-sec, .ch-mpop .mrow.more + .mpop-sec { margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(255, 255, 255, .08); }

@@ -69,6 +69,33 @@ test('agent chats show the short family name, never the raw model id', () => {
   assert.match(power, /const label = cur\?\.model \? \(M\.short\(cur\.model, cur\.provider \|\| ag\?\.model\?\.provider\) \|\| full\)/);
 });
 
+test('tall-draft model menu stays above composer and respects visible keyboard height (James correction)', () => {
+  const src = read('web/core/chat-power.js');
+  const place = src.slice(src.indexOf('  function placePop(el) {'), src.indexOf('  function openSheet(o) {'));
+  for (const composerTop of [600, 260]) {
+    for (const viewportHeight of [780, 440]) {
+      const styles = new Map(), rect = { top: 0, bottom: 892, right: 412, height: 892 };
+      const pop = { getBoundingClientRect: () => rect, style: { setProperty: (k, v) => styles.set(k, parseFloat(v)) } };
+      const boxes = {
+        '.ch-psheet.ch-mpop': pop,
+        '.ch-mlabel': { getBoundingClientRect: () => ({ top: 740, right: 392 }) },
+        '.ch-head': { getBoundingClientRect: () => ({ bottom: 80 }) },
+        '.ch-compose': { getBoundingClientRect: () => ({ top: composerTop, height: 180 }) },
+      };
+      const ctx = vm.createContext({ window: { visualViewport: { offsetTop: 0, offsetLeft: 0, height: viewportHeight, width: 412 } }, el: { querySelector: s => boxes[s] || null } });
+      vm.runInContext(`${place}; placePop(el);`, ctx);
+      const bottom = rect.bottom - styles.get('--mpop-b'), height = styles.get('--mpop-h');
+      assert.ok(bottom < composerTop, 'composer must never obscure model rows');
+      assert.ok(bottom < viewportHeight, 'keyboard must never obscure model rows');
+      assert.ok(height > 40 && bottom - height >= 80, 'bounded scroll area stays below thread header');
+    }
+  }
+  const css = read('web/core/chat-power.css');
+  assert.match(css, /max-height:\s*min\(var\(--mpop-h, 64%\), 440px\)/);
+  assert.match(css, /html\.wos-doc-scroll \.wos-doc-thread \.ch-sheet\.ch-mpop \{ position: fixed; inset: 0; z-index: 52;/);
+  assert.match(src, /window\.visualViewport\?\.addEventListener\('resize', queue/);
+});
+
 test('the composer scripts parse', () => {
   for (const f of ['web/core/chats.js', 'web/core/chat-power.js', 'web/core/chat-models.js']) assert.doesNotThrow(() => new vm.Script(read(f), { filename: f }));
 });
