@@ -25,7 +25,7 @@
 html[data-shell="desktop"] body { isolation: isolate; }
 html[data-shell="desktop"] .skin-bg { position: fixed; }
 html[data-shell="desktop"]:not([data-skin="nebula"]) body { background: var(--bg); }
-html[data-shell="desktop"]:not([data-skin="nebula"]) :is(.bar, .keys-card, .pal-card, .inbox) { background: linear-gradient(var(--glass-2), var(--glass-2)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink); }
+:where(html[data-shell="desktop"]:not([data-skin="nebula"])) :is(.bar, .keys-card, .pal-card, .inbox) { background: linear-gradient(var(--glass-2), var(--glass-2)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink); }
 .skin-bg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; opacity: 0; }
 
 /* token-driven pieces of the real shell that were hard-coded to the space look */
@@ -61,7 +61,9 @@ html[data-skin="signal"] .now-card .pip { border-radius: 1px; }
 
 .tr-skip { background: linear-gradient(var(--sk-tour), var(--sk-tour)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink); }
 
-/* Panels the space look paints with literal violet-blacks: every other skin paints them from its own tokens.
+/* Solid is the inherited default, not a skin policy: :where() keeps fallback specificity
+   low so explicit package skin and My skin rules win normally. Never rewrite their CSS.
+   Panels the space look paints with literal violet-blacks: every other skin paints them from its own tokens.
    Same boxes, same blur; only the fill and text colour change. */
 /* Windows (Chats and every hosted app) sit on the skin's window material: near-black tinted with the skin's hue,
    like Nebula's. Sheets and cards keep the richer --glass-2. (James, 12 Oct: app backgrounds closer to black.) */
@@ -69,9 +71,9 @@ html:not([data-skin="nebula"]) .win { background: var(--sk-win); color: var(--in
 /* Settings › Look › Window opacity: once the owner picks a value, every window (framed or borderless, every skin) uses
    the shared glass token, so one number sets them all. Untouched = each skin exactly as shipped. */
 html[data-win-glass] .win { background: var(--sk-win); }
-html:not([data-skin="nebula"]) :is(.sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .ch-fcard, .wx-fcard, .ls-panel) { background: linear-gradient(var(--glass-2), var(--glass-2)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink); }
-html:not([data-skin="nebula"]) .ov-card.ov-home { background: linear-gradient(var(--glass-2), var(--glass-2)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); }
-html:not([data-skin="nebula"]) :is(.desk-label, .timer, .arc, .transcript, .toast, .scrub .sc-label, .dv-update, .ch-pill, .wx-banner) { background: linear-gradient(var(--sk-tour), var(--sk-tour)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink); }
+:where(html:not([data-skin="nebula"])) :is(.sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .ch-fcard, .wx-fcard, .ls-panel) { background: linear-gradient(var(--glass-2), var(--glass-2)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink); }
+:where(html:not([data-skin="nebula"])) .ov-card.ov-home { background: linear-gradient(var(--glass-2), var(--glass-2)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); }
+:where(html:not([data-skin="nebula"])) :is(.desk-label, .timer, .arc, .transcript, .toast, .scrub .sc-label, .dv-update, .ch-pill, .wx-banner) { background: linear-gradient(var(--sk-tour), var(--sk-tour)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink); }
 html:not([data-skin="nebula"]) .device { background: var(--bg); }
 
 /* ---------- Settings → Look → Skin (picker: five swatches, tap applies at once) ---------- */
