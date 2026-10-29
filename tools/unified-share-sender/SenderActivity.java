@@ -57,9 +57,10 @@ public class SenderActivity extends Activity {
                     .setComponent(new ComponentName("ai.wizards.os.qa", "ai.wizards.os.share.ShareActivity"))
                     .putExtra(Intent.EXTRA_STREAM, uri)
                     .putExtra(Intent.EXTRA_SUBJECT, name)
-                    .putExtra(Intent.EXTRA_TEXT, genuine ? "A genuine shared note mentioning genuine.pdf" : "Emailing x.pdf")
-                    .setClipData(ClipData.newRawUri("Synthetic PDF", uri))
-                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    .putExtra(Intent.EXTRA_TEXT, genuine ? "A genuine shared note mentioning genuine.pdf" : "Emailing x.pdf");
+                // Intent.setClipData returns void, unlike the fluent setters above.
+                send.setClipData(ClipData.newRawUri("Synthetic PDF", uri));
+                send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 startActivity(send);
             } catch (Exception e) { title.setText("Fixture error: " + e.getClass().getSimpleName()); }
         });

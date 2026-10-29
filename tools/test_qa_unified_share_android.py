@@ -9,6 +9,8 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
+from typing import Any
 
 HERE = Path(__file__).resolve().parent
 SPEC = importlib.util.spec_from_file_location('unified_android_runner', HERE / 'qa_unified_share_android.py')
@@ -159,6 +161,144 @@ class ControllerTest(unittest.TestCase):
             self.assertIn(token, text)
         manifest = (HERE / 'unified-share-sender/AndroidManifest.xml').read_text()
         self.assertIn('android:exported="false" android:grantUriPermissions="true"', manifest)
+        self.assertIn('send.setClipData(ClipData.newRawUri("Synthetic PDF", uri));', text)
+        self.assertIn('send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);', text)
+        self.assertNotRegex(text, r'\.setClipData\([^;]+\)\s*\.')
+
+    def reuse_fixture(self, base):
+        # Synthetic controller inputs only, never an APK or Android acceptance claim.
+        old, root = base / 'old', base / 'qa'
+        old.mkdir(); root.mkdir()
+        cfg = self.prepared(old)
+        payloads = {'tools/qa_unified_share_android.py': (HERE / 'qa_unified_share_android.py').read_bytes() + b'\n# old fixture\n',
+                    'android/source-marker': b'unit-only native source'}
+        cfg['files'] = {n: {'sha256': hashlib.sha256(v).hexdigest(), 'mode': 420} for n, v in payloads.items()}
+        cfg['manifest_sha256'] = hashlib.sha256(json.dumps(cfg['files'], sort_keys=True).encode()).hexdigest()
+        with tarfile.open(old / 'source.tar.gz', 'w:gz') as tf:
+            for n, v in payloads.items():
+                entry = tarfile.TarInfo(n); entry.size = len(v); tf.addfile(entry, io.BytesIO(v))
+                p = old / 'source' / n; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(v)
+        (old / 'qa_unified_share_android.py').write_bytes(payloads['tools/qa_unified_share_android.py'])
+        (old / 'job.json').write_text(json.dumps(cfg))
+        old_seal, digest = self.seal(old, cfg); old_seal.rename(old / 'android-seal.json')
+        for n, v in payloads.items():
+            p = root / 'source' / n; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(v)
+        (root / 'source/tools/qa_unified_share_android.py').write_bytes((HERE / 'qa_unified_share_android.py').read_bytes())
+        (root / 'qa_unified_share_android.py').write_bytes((HERE / 'qa_unified_share_android.py').read_bytes())
+        candidate: dict[str, Any] = dict(cfg, revision='unit-only-qa-repair', files={n: dict(v) for n, v in cfg['files'].items()})
+        candidate['files']['tools/qa_unified_share_android.py']['sha256'] = runner.sha(HERE / 'qa_unified_share_android.py')
+        candidate['manifest_sha256'] = hashlib.sha256(json.dumps(candidate['files'], sort_keys=True).encode()).hexdigest()
+        (root / 'reuse-job.json').write_text(json.dumps(candidate))
+        apk = old / 'source' / runner.APK_PATH; apk.parent.mkdir(parents=True); apk.write_bytes(b'NOT-AN-APK-unit-only')
+        junit = old / 'source/android/app/build/test-results/testDebugUnitTest/TEST-fixture.xml'
+        junit.parent.mkdir(parents=True); junit.write_text('<testsuite tests="381" failures="0" errors="0" skipped="0"/>')
+        config = old / 'source/android/app/build/generated/source/buildConfig/debug/BuildConfig.java'
+        config.parent.mkdir(parents=True); config.write_text('ORIGIN = ""')
+        build = dict(status='ok', source_revision=cfg['revision'], source_manifest_sha256=cfg['manifest_sha256'],
+                     artifacts=[dict(path=runner.APK_PATH, sha256=runner.sha(apk), aapt2=dict(package=runner.PKG))])
+        (old / 'receipt.json').write_text(json.dumps(build))
+        evidence = old / 'android-evidence'; evidence.mkdir(); (evidence / 'build.log').write_text('unit only')
+        counts, _, hashes = runner.collect_junit(old)
+        prior = dict(build=build, junit=counts, junit_xml_sha256=hashes, apk_sha256=runner.sha(apk),
+                     failure_phase='fixture-and-boot', error='void cannot be dereferenced',
+                     phases=dict(build=dict(status='PASS', log_sha256=runner.sha(evidence / 'build.log'))))
+        (evidence / 'acceptance.json').write_text(json.dumps(prior))
+        seal = dict(mode='reuse-build', revision=candidate['revision'], build_revision=cfg['revision'],
+                    build_root=str(old), build_seal_sha256=digest, apk_sha256=runner.sha(apk),
+                    files={n: runner.sha(root / n) for n in ('reuse-job.json', 'qa_unified_share_android.py')},
+                    build_files={n: runner.sha(old / n) for n in ['receipt.json', 'android-evidence/acceptance.json',
+                                 'android-evidence/build.log', str(config.relative_to(old)), *hashes]})
+        return old, root, seal
+
+    def reuse_case(self, mutate=None):
+        with tempfile.TemporaryDirectory(prefix='unified-reuse-', dir=os.environ['TMPDIR']) as d:
+            old, root, seal = self.reuse_fixture(Path(d))
+            if mutate:
+                mutate(old, root, seal)
+            p = root / 'reuse-seal.json'; p.write_text(json.dumps(seal))
+            # Reuse validation must remain read-only with no Gradle, SDK or subprocess work.
+            with patch.object(runner.subprocess, 'run', side_effect=AssertionError('unexpected execution')):
+                return runner.verify_reuse_build(root, p, runner.sha(p))
+
+    def test_reuse_good_preserves_381_and_apk(self):
+        _, _, build, junit, hashes, _ = self.reuse_case()
+        self.assertEqual(build['status'], 'ok')
+        self.assertEqual(junit, dict(tests=381, failures=0, errors=0, skipped=0))
+        self.assertEqual(len(hashes), 1)
+
+    def test_reuse_missing_receipt_fails_closed(self):
+        with self.assertRaises(FileNotFoundError):
+            self.reuse_case(lambda o, r, s: (o / 'receipt.json').unlink())
+
+    def test_reuse_changed_receipt_fails_closed(self):
+        with self.assertRaisesRegex(RuntimeError, 'reused evidence drift: receipt.json'):
+            self.reuse_case(lambda o, r, s: (o / 'receipt.json').write_text('{}'))
+
+    def test_reuse_wrong_receipt_identity_fails_even_when_bound(self):
+        def mutate(o, r, s):
+            p = o / 'receipt.json'; b = json.loads(p.read_text()); b['source_revision'] = 'wrong'
+            p.write_text(json.dumps(b)); s['build_files']['receipt.json'] = runner.sha(p)
+        with self.assertRaisesRegex(RuntimeError, 'source identity mismatch'):
+            self.reuse_case(mutate)
+
+    def test_reuse_missing_receipt_binding_fails_closed(self):
+        with self.assertRaisesRegex(RuntimeError, 'missing reused evidence binding'):
+            self.reuse_case(lambda o, r, s: s['build_files'].pop('receipt.json'))
+
+    def test_reuse_changed_apk_fails_closed(self):
+        with self.assertRaisesRegex(RuntimeError, 'APK identity mismatch'):
+            self.reuse_case(lambda o, r, s: (o / 'source' / runner.APK_PATH).write_bytes(b'changed'))
+
+    def test_reuse_changed_junit_fails_closed(self):
+        with self.assertRaisesRegex(RuntimeError, 'reused evidence drift'):
+            self.reuse_case(lambda o, r, s: (o / next(n for n in s['build_files'] if n.endswith('.xml'))).write_text('<testsuite tests="381" skipped="1"/>'))
+
+    def test_reuse_changed_old_android_source_fails_closed(self):
+        with self.assertRaisesRegex(RuntimeError, 'source drift: android'):
+            self.reuse_case(lambda o, r, s: (o / 'source/android/source-marker').write_bytes(b'changed'))
+
+    def test_reuse_candidate_android_change_refused_even_when_bound(self):
+        def mutate(o, r, s):
+            p = r / 'source/android/source-marker'; p.write_bytes(b'changed')
+            c = json.loads((r / 'reuse-job.json').read_text()); c['files']['android/source-marker']['sha256'] = runner.sha(p)
+            c['manifest_sha256'] = hashlib.sha256(json.dumps(c['files'], sort_keys=True).encode()).hexdigest()
+            (r / 'reuse-job.json').write_text(json.dumps(c)); s['files']['reuse-job.json'] = runner.sha(r / 'reuse-job.json')
+        with self.assertRaisesRegex(RuntimeError, 'non-QA source delta'):
+            self.reuse_case(mutate)
+
+    def test_reuse_candidate_source_drift_refused(self):
+        with self.assertRaisesRegex(RuntimeError, 'source drift'):
+            self.reuse_case(lambda o, r, s: (r / 'source/tools/qa_unified_share_android.py').write_bytes(b'changed'))
+
+    def test_reuse_unmanifested_candidate_file_refused(self):
+        with self.assertRaisesRegex(RuntimeError, 'unmanifested'):
+            self.reuse_case(lambda o, r, s: (r / 'source/extra').write_bytes(b'changed'))
+
+    def test_cleanup_waits_for_owned_serial_but_preserves_foreign(self):
+        rig = runner.Rig.__new__(runner.Rig)
+        rig.page = rig.fixture = rig.proxy = None
+        rig.emulator = Mock(); rig.emulator.poll.return_value = 0
+        rig.serial = 'emulator-5580'; rig.adb = 'unit-only-adb'; rig.devtools = 12345
+        rig.report = {'emulator': {}}; rig.save = Mock(); rig.adb_cmd = Mock()
+        rig.run = Mock(side_effect=['emulator-5580 offline\nemulator-5582 device', 'emulator-5582 device', ''])
+        with patch.object(runner.time, 'sleep'):
+            rig.close()
+        self.assertTrue(rig.report['emulator']['serial_absent'])
+        self.assertEqual(rig.report['cleanup_errors'], [])
+        rig.adb_cmd.assert_called_once_with('emu', 'kill', timeout=20)
+        self.assertEqual(rig.run.call_count, 3)
+
+    def test_cleanup_serial_timeout_is_failure(self):
+        rig = runner.Rig.__new__(runner.Rig)
+        rig.page = rig.fixture = rig.proxy = None
+        rig.emulator = Mock(); rig.emulator.poll.return_value = 0
+        rig.serial = 'emulator-5580'; rig.adb = 'unit-only-adb'; rig.devtools = 12345
+        rig.report = {'emulator': {}}; rig.save = Mock(); rig.adb_cmd = Mock(); rig.run = Mock()
+        with patch.object(runner, 'wait', side_effect=RuntimeError('deadline')) as bounded:
+            rig.close()
+        self.assertFalse(rig.report['emulator']['serial_absent'])
+        self.assertIn('bounded wait', rig.report['cleanup_errors'][0])
+        self.assertEqual(bounded.call_args.args[1], 30)
 
     def test_both_native_origin_hooks_before_first_launch(self):
         text = (HERE / 'qa_unified_share_android.py').read_text()

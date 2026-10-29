@@ -40,6 +40,40 @@ no build, browser or emulator and is not Android acceptance.
    follow-through does not spawn an equivalent job. Recheck the actual heavy
    registry before admission, not transcript mentions. The child never submits.
 
+## QA-only rerun after the sender compile failure
+
+Use `--reuse-build` with a **new sibling QA directory**, never mutate or rerun the
+old product job. The sender calls `send.setClipData(...)` as a separate statement:
+Android returns `void`, so it must not be chained into `addFlags`.
+
+The new directory contains a separate `source/` copied from the original prepared
+manifest (no generated build tree), with only the four paths in `QA_ONLY_DELTA`
+overlaid from the pushed repair commit. Its `reuse-job.json` carries that exact
+file inventory, candidate revision and SHA256 of sorted JSON `files`. The
+`reuse-seal.json` carries `mode=reuse-build`, candidate `revision`, original
+`build_root`, `build_revision`, `build_seal_sha256`, the exact `apk_sha256`, Node22
+path, SHA256 `files` for the new runner and reuse-job, and `build_files` hashes for
+the original receipt, acceptance, build log, every JUnit XML and generated debug
+BuildConfig. Also retain prior browser evidence and old failure evidence unchanged.
+
+Invoke `/usr/bin/python3 <qa>/qa_unified_share_android.py --reuse-build --seal
+<qa>/reuse-seal.json --seal-sha256 <digest>` from `<qa>`, through the parent's
+`host=forum`, `lane=heavy` queue only. The same host/lease guards apply. No
+`worker.py`, Gradle, Wizard rebuild or unit-test rerun occurs in this mode. It
+revalidates the original sealed archive/inputs, successful build/source identity,
+381 tests with zero failures/errors/skips, exact APK package/hash, debug-empty
+owner defaults, original source and unchanged Android/product tree. Missing or
+mismatched evidence fails closed **before** starting the fixture/emulator. It then
+runs the repaired sender compilation plus every original emulator phase below.
+It rechecks custody after cleanup, records the reused product revision separately
+from QA revision, and writes only the new directory's `android-evidence/`.
+
+Cleanup waits up to 30 seconds for the exact owned ADB serial to disappear after
+the owned emulator PID exits; an offline serial is still present. It never kills
+another emulator or the shared ADB server. Controller-only tests cover delayed
+serial disappearance and timeout, receipt omission/drift/wrong identity, APK/JUnit
+and source drift, and a resealed Android-source change. These are not native proof.
+
 ## Real device phases and evidence
 
 The separate synthetic source app generates a 24 MiB blank-page PDF fixture byte

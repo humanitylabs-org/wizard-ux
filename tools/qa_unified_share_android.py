@@ -34,6 +34,9 @@ SENDER = 'qa.unifiedshare.sender'
 OWNER_KEYS = ('wizardOrigin', 'wizardHomeUrl', 'wizardLegacyHosts', 'wizardQaHomeUrl', 'photosServer', 'wizardDeepLinkHost')
 REQUIRED_CASES = ('external-boilerplate', 'agent-and-chat', 'outside-cancel', 'native-back',
                   'existing-delivery', 'new-chat-resume', 'notification-tap')
+QA_ONLY_DELTA = {'tools/qa_unified_share_android.py', 'tools/test_qa_unified_share_android.py',
+                 'tools/unified-share-sender/SenderActivity.java', 'docs/unified-share-android-gate.md'}
+APK_PATH = 'android/app/build/outputs/apk/debug/app-debug.apk'
 
 
 def sha(path):
@@ -41,7 +44,7 @@ def sha(path):
         return hashlib.file_digest(f, 'sha256').hexdigest()
 
 
-def verify_seal(root, seal, expected):
+def verify_seal(root, seal, expected, runner_path=None):
     if sha(seal) != expected:
         raise RuntimeError('seal digest mismatch')
     data = json.loads(Path(seal).read_text())
@@ -70,9 +73,91 @@ def verify_seal(root, seal, expected):
     expected_files = {n: row['sha256'] for n, row in cfg['files'].items() if 'sha256' in row}
     if members != expected_files:
         raise RuntimeError('archive/member manifest mismatch')
-    if members['tools/qa_unified_share_android.py'] != sha(__file__):
+    if members['tools/qa_unified_share_android.py'] != sha(runner_path or __file__):
         raise RuntimeError('wrapper differs from committed source')
     return data, cfg
+
+
+def verify_source(source, files):
+    for name, row in files.items():
+        p = source / name
+        if source not in p.absolute().parents or '..' in Path(name).parts:
+            raise RuntimeError('unsafe source path: ' + name)
+        if 'sha256' in row:
+            if p.is_symlink() or sha(p) != row['sha256']:
+                raise RuntimeError('source drift: ' + name)
+        elif not p.is_symlink() or os.readlink(p) != row['link']:
+            raise RuntimeError('source link drift: ' + name)
+
+
+def verify_reuse_build(root, seal_path, expected):
+    """Read-only, fail-closed custody check. Never invokes the product worker."""
+    if sha(seal_path) != expected:
+        raise RuntimeError('reuse seal digest mismatch')
+    seal = json.loads(Path(seal_path).read_text())
+    if seal['mode'] != 'reuse-build':
+        raise RuntimeError('reuse seal mode mismatch')
+    if not {'reuse-job.json', 'qa_unified_share_android.py'} <= set(seal['files']):
+        raise RuntimeError('missing reuse staged input binding')
+    for name, digest in seal['files'].items():
+        p = root / name
+        if p.is_symlink() or root not in p.resolve().parents or sha(p) != digest:
+            raise RuntimeError('reuse staged input drift: ' + name)
+    cfg = json.loads((root / 'reuse-job.json').read_text())
+    if (cfg['revision'] != seal['revision'] or
+            cfg['manifest_sha256'] != hashlib.sha256(json.dumps(cfg['files'], sort_keys=True).encode()).hexdigest()):
+        raise RuntimeError('reuse source identity mismatch')
+    old = Path(seal['build_root']).resolve()
+    if old == root or old in root.parents or root in old.parents:
+        raise RuntimeError('reuse requires a separate sibling QA directory')
+    _, original = verify_seal(old, old / 'android-seal.json', seal['build_seal_sha256'],
+                              runner_path=old / 'qa_unified_share_android.py')
+    if original['revision'] != seal['build_revision']:
+        raise RuntimeError('reuse build revision mismatch')
+    # Preserve the entire original prepared source, and allow only this bounded QA repair.
+    if set(cfg['files']) != set(original['files']):
+        raise RuntimeError('reuse source membership changed')
+    changed = {n for n in cfg['files'] if cfg['files'][n] != original['files'][n]}
+    if not changed or not changed <= QA_ONLY_DELTA:
+        raise RuntimeError('reuse non-QA source delta: ' + repr(sorted(changed)))
+    verify_source(old / 'source', original['files'])
+    verify_source(root / 'source', cfg['files'])
+    actual_files = {str(p.relative_to(root / 'source')) for p in (root / 'source').rglob('*')
+                    if p.is_file() or p.is_symlink()}
+    if actual_files != set(cfg['files']):
+        raise RuntimeError('reuse source has unmanifested or missing files')
+    if sha(root / 'source/tools/qa_unified_share_android.py') != sha(__file__):
+        raise RuntimeError('reuse wrapper differs from source')
+    for name, digest in seal['build_files'].items():
+        p = old / name
+        if p.is_symlink() or old not in p.resolve().parents or sha(p) != digest:
+            raise RuntimeError('reused evidence drift: ' + name)
+    for name in ('receipt.json', 'android-evidence/acceptance.json', 'android-evidence/build.log'):
+        if name not in seal['build_files']:
+            raise RuntimeError('missing reused evidence binding: ' + name)
+    build = json.loads((old / 'receipt.json').read_text())
+    prior = json.loads((old / 'android-evidence/acceptance.json').read_text())
+    junit, failures, hashes = collect_junit(old)
+    require_build(0, build, original, junit, failures)
+    if (junit != dict(tests=381, failures=0, errors=0, skipped=0) or
+            prior['junit'] != junit or prior['junit_xml_sha256'] != hashes or
+            not all(seal['build_files'].get(n) == h for n, h in hashes.items())):
+        raise RuntimeError('reused 381-test JUnit evidence mismatch')
+    if (prior['build'] != build or prior['phases']['build']['status'] != 'PASS' or
+            prior['phases']['build']['log_sha256'] != sha(old / 'android-evidence/build.log') or
+            prior['failure_phase'] != 'fixture-and-boot' or 'void cannot be dereferenced' not in prior['error']):
+        raise RuntimeError('reused build checkpoint mismatch')
+    apk = old / 'source' / APK_PATH
+    artifacts = [x for x in build['artifacts'] if x['path'] == APK_PATH]
+    if (len(artifacts) != 1 or artifacts[0]['aapt2']['package'] != PKG or
+            sha(apk) != seal['apk_sha256'] or artifacts[0]['sha256'] != seal['apk_sha256'] or
+            prior['apk_sha256'] != seal['apk_sha256']):
+        raise RuntimeError('reused APK identity mismatch')
+    configs = list((old / 'source/android/app/build/generated/source/buildConfig/debug').rglob('BuildConfig.java'))
+    if not configs or any('ORIGIN = ""' not in p.read_text() or
+                          seal['build_files'].get(str(p.relative_to(old))) != sha(p) for p in configs):
+        raise RuntimeError('reused debug owner defaults mismatch')
+    return seal, cfg, build, junit, hashes, apk
 
 
 def wait(fn, seconds=30):
@@ -151,6 +236,10 @@ def native_bounds(xml, text):
             if len(nums) == 4 and nums[2] > nums[0] and nums[3] > nums[1]:
                 return [(nums[0] + nums[2]) // 2, (nums[1] + nums[3]) // 2]
     return None
+
+
+def serial_present(devices, serial):
+    return serial in {line.split()[0] for line in devices.splitlines() if line.split()}
 
 
 class Proxy(http.server.BaseHTTPRequestHandler):
@@ -459,10 +548,12 @@ class Rig:
                     os.killpg(self.emulator.pid, signal.SIGKILL); self.emulator.wait(10)
             self.report['emulator']['stopped'] = self.emulator.poll() is not None
             # Explicitly ensure this serial is absent, not merely a stopped parent launcher.
-            devices = self.run([self.adb, 'devices'])
-            self.report['emulator']['serial_absent'] = self.serial not in devices
-            if self.serial in devices:
-                failures.append('owned serial still present')
+            try:
+                wait(lambda: not serial_present(self.run([self.adb, 'devices'], timeout=5), self.serial), 30)
+                self.report['emulator']['serial_absent'] = True
+            except Exception as exc:
+                self.report['emulator']['serial_absent'] = False
+                failures.append('owned serial still present after bounded wait: ' + str(exc))
         if self.fixture:
             self.fixture.terminate()
             try:
@@ -480,9 +571,11 @@ class Rig:
 
 
 def main():
+    sys.dont_write_bytecode = True  # Imported CDP helpers must not mutate the sealed source tree.
     p = argparse.ArgumentParser()
     p.add_argument('--seal', required=True)
     p.add_argument('--seal-sha256', required=True)
+    p.add_argument('--reuse-build', action='store_true', help='Verify and reuse the sealed prior APK/JUnit; never run Gradle')
     a = p.parse_args()
     root = Path(__file__).resolve().parent
     if os.uname().nodename != 'forum' or not str(root).startswith('/srv/work/'):
@@ -490,7 +583,8 @@ def main():
     fd = int(os.environ['WIZARD_HEAVY_LOCK_FD'])
     if os.fstat(fd).st_ino != Path('/srv/work/heavy/production/worker.lock').stat().st_ino:
         raise SystemExit('wrong inherited heavy lease')
-    seal, cfg = verify_seal(root, Path(a.seal), a.seal_sha256)
+    reused = verify_reuse_build(root, Path(a.seal), a.seal_sha256) if a.reuse_build else None
+    seal, cfg = reused[:2] if reused else verify_seal(root, Path(a.seal), a.seal_sha256)
     out = root / 'android-evidence'; out.mkdir(mode=0o700, exist_ok=False)
     report = initial_report(cfg, a.seal_sha256)
 
@@ -517,27 +611,31 @@ def main():
         os.environ.update(ANDROID_HOME='/srv/work/android-sdk', ANDROID_SDK_ROOT='/srv/work/android-sdk',
             JAVA_HOME='/usr/lib/jvm/java-21-openjdk-amd64', WIZARD_WORK_ROOT=str(out), WIZARD_QA_NODE=seal['node'])
         os.environ['PATH'] = os.environ['JAVA_HOME'] + '/bin:' + os.environ['PATH']
-        with (out / 'build.log').open('w') as log:
-            result = subprocess.run([sys.executable, str(root / 'worker.py'), '--worker', str(root / 'job.json')],
-                                    stdout=log, stderr=subprocess.STDOUT, pass_fds=(fd,), timeout=1800)
-        build = json.loads((root / 'receipt.json').read_text())
-        report['build'] = build
-        report['junit'], report['junit_failures'], report['junit_xml_sha256'] = collect_junit(root)
-        save()  # Preserve the actual failed test before refusing the build.
-        require_build(result.returncode, build, cfg, report['junit'], report['junit_failures'])
-        for name, row in cfg['files'].items():
-            if 'sha256' in row:
-                assert sha(root / 'source' / name) == row['sha256'], 'post-extraction drift: ' + name
-            else:
-                assert os.readlink(root / 'source' / name) == row['link'], 'post-extraction link drift: ' + name
-        apk = root / 'source/android/app/build/outputs/apk/debug/app-debug.apk'
-        artifact = next(x for x in build['artifacts'] if x['path'] == str(apk.relative_to(root / 'source')))
-        assert sha(apk) == artifact['sha256']
-        report['apk_sha256'] = sha(apk)
-
-        generated = list((root / 'source/android/app/build/generated/source/buildConfig/debug').rglob('BuildConfig.java'))
-        assert generated and 'ORIGIN = ""' in generated[0].read_text(), 'debug owner defaults not empty'
-        report['phases'][phase] = {'status': 'PASS', 'log_sha256': sha(out / 'build.log')}; save()
+        if reused:
+            _, _, build, junit, hashes, apk = reused
+            report.update(build=build, junit=junit, junit_failures=[], junit_xml_sha256=hashes,
+                          apk_sha256=sha(apk), build_reused=True, product_source_revision=build['source_revision'],
+                          reused_build_root=seal['build_root'])
+            report['phases'][phase] = {'status': 'PASS', 'reused': True,
+                                      'log_sha256': seal['build_files']['android-evidence/build.log']}
+        else:
+            with (out / 'build.log').open('w') as log:
+                result = subprocess.run([sys.executable, str(root / 'worker.py'), '--worker', str(root / 'job.json')],
+                                        stdout=log, stderr=subprocess.STDOUT, pass_fds=(fd,), timeout=1800)
+            build = json.loads((root / 'receipt.json').read_text())
+            report['build'] = build
+            report['junit'], report['junit_failures'], report['junit_xml_sha256'] = collect_junit(root)
+            save()  # Preserve the actual failed test before refusing the build.
+            require_build(result.returncode, build, cfg, report['junit'], report['junit_failures'])
+            verify_source(root / 'source', cfg['files'])
+            apk = root / 'source' / APK_PATH
+            artifact = next(x for x in build['artifacts'] if x['path'] == APK_PATH)
+            assert sha(apk) == artifact['sha256']
+            report['apk_sha256'] = sha(apk)
+            generated = list((root / 'source/android/app/build/generated/source/buildConfig/debug').rglob('BuildConfig.java'))
+            assert generated and 'ORIGIN = ""' in generated[0].read_text(), 'debug owner defaults not empty'
+            report['phases'][phase] = {'status': 'PASS', 'log_sha256': sha(out / 'build.log')}
+        save()
         rig = Rig(root, cfg, report, save)
         phase = 'fixture-and-boot'
         rig.fixture_start(); rig.boot(); rig.compile_sender()
@@ -676,6 +774,12 @@ def main():
             report['phases'].setdefault(name, {'status': 'NOT_COVERED'})
         if report.get('cleanup_errors'):
             report['status'] = 'FAIL'
+        if reused:
+            try:
+                verify_reuse_build(root, Path(a.seal), a.seal_sha256)
+                report['reused_inputs_unchanged_after_qa'] = True
+            except Exception as exc:
+                report['status'] = 'FAIL'; report['reuse_drift_error'] = exception_detail(exc)
         report['screenshots'] = {p.name: sha(p) for p in sorted(out.glob('*.png'))}
         report['evidence_hashes'] = {p.name: sha(p) for p in sorted(out.iterdir()) if p.is_file() and p.name != 'acceptance.json'}
         save()
