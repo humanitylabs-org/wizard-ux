@@ -35,7 +35,7 @@ function device(box, { pointer = 'fine' } = {}) {
   const handlers = {}, store = new Map()
   const input = { value: '', disabled: false, focus() {}, select() {} }
   const card = { _html: '', classList: { toggle() {} }, focus() {},
-    set innerHTML(h) { card._html = h; const m = /<input[^>]*value="([^"]*)"/.exec(h); if (m) input.value = m[1].replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>') },
+    set innerHTML(h) { card._html = h; const m = /<input[^>]*value="([^"]*)"/.exec(h); if (m) input.value = m[1].replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&') },
     get innerHTML() { return card._html },
     querySelector: s => (/input/.test(s) && /<input/.test(card._html) ? input : /h2/.test(s) ? { focus() {} } : null) }
   const overlay = { className: '', id: '', classList: { add() {}, remove() {}, toggle() {} }, set innerHTML(h) {}, get innerHTML() { return '' },
