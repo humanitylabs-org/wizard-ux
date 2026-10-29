@@ -88,42 +88,15 @@ html[data-shell="desktop"] .wx-banners { left: 50%; right: auto; transform: tran
 /* Settings controls live in core/settings.css for both layouts. */
 
 /* ---------- offline pop-up (core/status.js) ----------
- * Covers the screen once a connection failure lasts a few seconds, so taps don't fall through to a Wizard that
- * can't answer. A flat dim, no backdrop blur: blur is what makes low-end phones stutter. Three rows, green/amber/red.
- * Kit tokens only (wizard-os style rules), so every skin colours it. */
-.wx-off { position: fixed; inset: 0; z-index: 190; display: grid; place-items: center; padding: 20px; background: color-mix(in srgb, var(--wz-base, black) 78%, transparent); animation: wx-fade .18s ease-out; }
+ * No look of its own: it is the kit's card, rows, pills and buttons (kit/controls.css), on the panel material every
+ * floating panel uses (--wz-panel, docs/OPAQUE_OVERLAYS.md) and the kit sheet's backdrop. These rules only place it. */
+.wx-off { position: fixed; inset: 0; z-index: 190; display: grid; place-items: center; padding: var(--wz-space-4, 16px); background: color-mix(in srgb, var(--wz-base) 74%, transparent); }
 .wx-off[hidden] { display: none; }
-@keyframes wx-fade { from { opacity: 0; } }
-.wx-off-card { position: relative; width: min(360px, 100%); padding: 22px 20px 18px; border-radius: var(--wz-radius-tile, 20px); color: var(--wz-text);
-  background: var(--wz-panel, var(--wz-base)); border: 1px solid var(--wz-border); box-shadow: 0 18px 48px color-mix(in srgb, black 55%, transparent); }
-.wx-off-card > b { display: block; padding-right: 32px; font-size: var(--wz-text-heading); font-weight: 750; }
-.wx-off-sub { margin: 6px 0 14px; color: var(--wz-text-muted); font-size: var(--wz-text-sm); line-height: 1.45; }
-.wx-off-x { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; border-radius: 50%; color: var(--wz-text-muted); font-size: var(--wz-text-heading); line-height: 1; }
-.wx-off-x:hover, .wx-off-x:focus-visible { background: var(--wz-accent-soft); color: var(--wz-text); }
-.wx-cks { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.wx-ck { display: flex; align-items: center; gap: 12px; padding: 9px 4px; }
-.wx-ck + .wx-ck { border-top: 1px solid var(--wz-border); }
-.wx-ck > i { flex: 0 0 auto; width: 12px; height: 12px; border-radius: 50%; background: var(--wz-text-muted); opacity: .5; }
-.wx-ck > span { display: grid; min-width: 0; }
-.wx-ck b { font-size: var(--wz-text-md); font-weight: 700; }
-.wx-ck small { color: var(--wz-text-muted); font-size: var(--wz-text-sm); overflow-wrap: anywhere; }
-.wx-ck.ok > i { opacity: 1; background: var(--wz-success); box-shadow: 0 0 0 4px color-mix(in srgb, var(--wz-success) 16%, transparent); }
-.wx-ck.slow > i { opacity: 1; background: var(--wz-warning); box-shadow: 0 0 0 4px color-mix(in srgb, var(--wz-warning) 16%, transparent); }
-.wx-ck.bad > i { opacity: 1; background: var(--wz-danger); box-shadow: 0 0 0 4px color-mix(in srgb, var(--wz-danger) 18%, transparent); }
-.wx-ck.bad small { color: var(--wz-text); }
-.wx-ck.run > i { opacity: 1; background: transparent; border: 2px solid var(--wz-accent-soft); border-top-color: var(--wz-accent); animation: wx-spin .8s linear infinite; }
-.wx-ck.wait, .wx-ck.skip { opacity: .6; }
-.wx-vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.wx-off-fix { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; font-size: var(--wz-text-sm); line-height: 1.45; background: var(--wz-surface, var(--wz-accent-soft)); }
-.wx-off-acts { display: flex; gap: 8px; margin-top: 16px; }
-.wx-off-acts button { flex: 1; height: 44px; border-radius: var(--wz-radius-pill, 99px); font-size: var(--wz-text-md); font-weight: 700; }
-.wx-off-go { background: var(--wz-accent); color: var(--wz-on-accent); }
-.wx-off-go[disabled] { opacity: .65; }
-.wx-off-help { border: 1px solid var(--wz-border); color: var(--wz-text-secondary); }
-/* Phone: the card sits low, where the thumb is. */
-html:not([data-shell="desktop"]) .wx-off { place-items: end center; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); }
-@media (prefers-reduced-motion: reduce) { .wx-off { animation: none; } }
-/* Tucked-away pill: one tap brings the checks back. */
-.wx-banner.net:has([data-wxoffopen]) { padding: 0 4px; height: 30px; }
-.wx-banner.net button[data-wxoffopen] { height: 100%; display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: var(--wz-text-sm); font-weight: 650; color: var(--wz-text); }
-.wx-banner .wx-dot { flex: 0 0 auto; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--wz-warning); }
+.wx-off-card { position: relative; width: min(400px, 100%); background: var(--wz-panel, var(--wz-surface)); color: var(--wz-text); }
+.wx-off-card > h2 { margin: 0 0 var(--wz-space-2, 8px); padding-right: var(--wz-target, 44px); font-size: var(--wz-text-heading); }
+.wx-off-x { position: absolute; top: var(--wz-space-2, 8px); right: var(--wz-space-2, 8px); font-size: var(--wz-text-heading); }
+.wx-off-sub { margin: 0 0 var(--wz-space-3, 12px); color: var(--wz-text-secondary); font-size: var(--wz-text-sm); line-height: 1.45; }
+.wx-off-card .wz-list + .wx-off-sub { margin-top: var(--wz-space-3, 12px); color: var(--wz-text); }
+.wx-off-card .wz-actions > .wz-button { flex: 1; }
+/* Phone: where the thumb is, like the kit sheet. */
+html:not([data-shell="desktop"]) .wx-off { place-items: end center; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--wz-space-4, 16px)); }

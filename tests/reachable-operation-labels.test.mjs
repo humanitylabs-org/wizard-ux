@@ -78,7 +78,7 @@ async function statusBanner(api) {
   ctx.WizCore.status.back(); // tucked away: the pill
   const html = ctx.document.getElementById('wxBanners')?.innerHTML || '';
   assert.match(html, /data-wxnet="reconnecting"/, 'a failed read raises the connection banner');
-  return html.match(/data-wxoffopen[^>]*><span[^>]*><\/span>([^<]*)</)?.[1] ?? html;
+  return html.match(/data-wxoffopen[^>]*>([^<]*)</)?.[1] ?? html;
 }
 async function readSurfaces(api) {
   return {
