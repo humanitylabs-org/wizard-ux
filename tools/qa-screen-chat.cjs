@@ -13,7 +13,7 @@ const DPR = 2.625, W = 411, H = 891;
 const MSGS = [
   { out: true, y: 120, text: "Maybe hold on a second. I'm in the process of refactoring the way Nostr IDs are handled. It might affect the public IDs we use on Messenger.", time: '00:08' },
   { out: false, y: 0, text: 'cool!', time: '00:09' },
-  { out: true, y: 0, text: "From Archimedes:\n\nYes, Miguel's right, and our setup already works that way. YouTube streaming and search run on the Mac mini hub on Thales because YouTube blocks datacenter IPs. The VPS only hosts the app and reaches the hub through an SSH tunnel.\n\nHis design fits our setup. When the YouTube connector exists, it has to be installed on a home server like Thales. Music on the VPS would call it the same way it calls the hub now, through a tunnel or the Connection Router. One thing to settle with him: the catalog lookup moves to calling YouTube directly, and the old scraper retires once that lands.", time: '00:15' },
+  { out: true, y: 0, text: "From the garden helper:\n\nYes, Rosa's right, and our plan already works that way. Tomato seedlings and basil start on the sunny porch shelf because the kitchen window gets too little light. The greenhouse only holds the big pots and gets water through a drip hose.\n\nHer layout fits our plan. When the new raised bed exists, it has to sit somewhere warm like the porch. Herbs in the greenhouse would get water the same way the pots do now, through a hose or the rain barrel. One thing to settle with her: the weekly watering moves to a timer, and the old watering can retires once that lands.\n\nUntil then, the spare hose stays on the porch hook and the seed trays get turned every morning so the stems grow straight toward the light.", time: '00:15' },
 ];
 
 (async () => {
@@ -93,12 +93,12 @@ const MSGS = [
   const visible = scr.truth.filter(L => L.y <= H - 10).length;
   check('every visible line of a chat message holds exactly its own words', good === visible, { good, visible, bad: bad.slice(0, 3) });
   // word edges sit on the real ink
-  const line = scr.truth.find(L => L.t.startsWith('His design'));
-  const first = k.words.find(w => w.t === 'His'), lastW = k.words.find(w => w.t === 'the' && Math.abs(css(w.y) - line.y) < 7 && css(w.r) > line.x1 - 30);
+  const line = scr.truth.find(L => L.t.startsWith('Her layout'));
+  const first = k.words.find(w => w.t === 'Her'), lastW = k.words.find(w => w.t === 'new' && Math.abs(css(w.y) - line.y) < 7 && css(w.r) > line.x1 - 30);
   check('the first and last word of a line start and end on the real text', first && lastW && Math.abs(css(first.l) - line.x0) < 4 && Math.abs(css(lastW.r) - line.x1) < 5,
     first && lastW && [css(first.l) - line.x0, css(lastW.r) - line.x1]);
-  // drag from "Mac" to "IPs." across two lines
-  const wa = k.words.find(w => w.t === 'Mac'), wb = k.words.find(w => w.t === 'IPs.');
+  // drag from "sunny" to "window" across two lines
+  const wa = k.words.find(w => w.t === 'sunny'), wb = k.words.find(w => w.t === 'window');
   const cdp = await ctx.newCDPSession(p);
   const drag = async (a, z) => {
     const pt = (x, y) => [{ x, y, id: 1 }];
@@ -109,7 +109,7 @@ const MSGS = [
   };
   await drag([css(wa.l) + 2, css(wa.y)], [css(wb.r) - 2, css(wb.y)]);
   k = await p.evaluate(() => window.S.peek());
-  check('a drag across two lines of a chat bubble selects exactly what it crossed', k.selText === 'Mac mini hub on Thales because YouTube blocks datacenter IPs.', k.selText);
+  check('a drag across two lines of a chat bubble selects exactly what it crossed', k.selText === 'sunny porch shelf because the kitchen window', k.selText);
   await p.screenshot({ path: OUT + '/01-chat-drag.png' });
   // drag inside the first message only
   const wc = k.words.find(w => w.t === 'refactoring'), wd = k.words.find(w => w.t === 'handled.');
