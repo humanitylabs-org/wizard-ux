@@ -17,7 +17,7 @@ function setup(agent = '') {
   return {...h,reads};
 }
 test('known main history does not wait for optional detail; cold unknown still discovers scope first', async () => {
-  const h=setup(); await h.poll(); const release=h.deferDetail();
+  const h=setup(); await h.poll(); h.L.sessions[0].detailNeeded=true; const release=h.deferDetail();
   await h.L.messages(row.id);
   assert.equal(h.reads.filter(u=>u.includes('/messages?')).length,1);
   assert.equal(h.reads.filter(u=>u.includes('view=detail')).length,0);
