@@ -11,8 +11,14 @@
   const shellOrb = () => shell() && window.WosDeviceOrb?.ready ? window.WosDeviceOrb : null;
   // Rows are plain lines split by hairlines: no boxes, no icon tiles; a second line only when it says something.
   const row = (id, title, sub) => `<button class="st-row wz-row" data-st="${esc(id)}"><span class="st-tx"><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="st-go">›</span></button>`;
+  // System pages are filled by packages (WosSettings.register with page = one of these); a page with nothing on it hides.
+  const filled = id => () => [...features.values()].some(f => f.page === id && (!f.available || f.available()));
   const PAGES = [
-    { id: 'appearance', title: 'Appearance' },
+    { id: 'overview', title: 'Your network', group: 'System', available: filled('overview') },
+    { id: 'ai', title: 'AI', group: 'System', available: filled('ai') },
+    { id: 'network', title: 'Network & security', group: 'System', available: filled('network') },
+    { id: 'storage', title: 'Storage & backups', group: 'System', available: filled('storage') },
+    { id: 'appearance', title: 'Appearance', group: 'Preferences' },
     { id: 'chats', title: 'Chats & app screens' },
     { id: 'voice', title: 'Voice & typing' },
     // Phones over Tailscale (Phone Setup). Hidden on a Wizard without Phone Setup or for a non-owner.
@@ -25,6 +31,7 @@
     { id: 'connections', title: 'Connections', available: () => connectionsAvailable(), pending: () => conn.ok === null },
     { id: 'recovery', title: 'Unsent & recovered' },
     // Resources: the Home resource bars (AI + Compute) from the shared renderer, when it is there; else AI usage.
+    // Kept beside the System pages: it is the only place with service health and the manual refresh.
     { id: 'usage', get title() { return window.WosResources?.bars ? 'Resources' : 'AI usage'; } },
     { id: 'schedules', title: 'Schedules', available: () => !!window.WosSchedules?.available },
     { id: 'about', title: 'About & updates' },
@@ -66,6 +73,8 @@
     if (id === 'phone') { if (shell()) return shellOrb()?.state.on ? 'Everywhere on' : ''; try { return JSON.parse(native()?.everywhere?.() || '{}').enabled ? 'Everywhere on' : ''; } catch (_) { return ''; } }
     if (id === 'recovery') { const n = new Set([...unsentAll(ctx), ...recovered()].map(x => x.id)).size; return n ? String(n) : ''; }
     // Resources: quiet unless something is running low (under a quarter left), then the lowest one.
+    const own = [...features.values()].find(f => f.page === id && typeof f.subtitle === 'function');
+    if (own) { try { return String(own.subtitle() || '').slice(0, 40); } catch (_) { return ''; } }
     if (id === 'usage') { const low = window.WosResources?.lowest?.(); return low && low.left < 25 ? `${low.label} ${low.value || (100 - low.left) + '% used'}` : ''; }
     return '';
   }
@@ -270,8 +279,16 @@
     // The list is warmed when Look opens, so Loading only shows on a cold first read.
     draft.loading = !window.WosExperience.installedReady; ctx.render?.();
     try {
-      const [items, map] = await Promise.all([window.WosExperience.installed(), window.WosExperience.defaults(draft.base)]);
+      let [items, map] = await Promise.all([window.WosExperience.installed(), window.WosExperience.defaults(draft.base)]);
       if (ctx.skinDraft !== draft || draft.seq !== seq) return;
+      // A replacement group (two Home maps) is one switch: keep only the member that would load, so the draft never
+      // shows two and never saves the hidden one as off (any member saved off turns the whole group off).
+      for (const g of window.WosExperience.groups?.() || []) {
+        const present = g.filter(id => items.some(t => t.id === id)); if (present.length < 2) continue;
+        const pick = present.find(id => map[id]) || present[0];
+        map = Object.fromEntries(Object.entries(map).filter(([id]) => id === pick || !present.includes(id)));
+        items = items.filter(t => t.id === pick || !present.includes(t.id));
+      }
       draft.items = items; draft.tweaks = map;
     } catch (e) { if (ctx.skinDraft === draft && draft.seq === seq) draft.error = 'Could not load installed tweaks. Try again.'; }
     finally { if (ctx.skinDraft === draft && draft.seq === seq) { draft.loading = false; ctx.render?.(); } }
@@ -537,7 +554,7 @@
     const ctx = { ...adapter, root }, api = { render, focus, back, destroy, dispatch, context: ctx, get page() { return page; } };
     let skinImportMessage = '', page = '', confirm = null, wanted = '';
     const desktop = adapter.shell === 'desktop';
-    const effectivePage = () => page || (desktop ? 'appearance' : '');
+    const effectivePage = () => page || (desktop ? (filled('overview')() ? 'overview' : 'appearance') : '');
     ctx.render = () => render(true);
     ctx.paintUsage = () => { const g = root.querySelector('[data-usage]'); if (g) g.outerHTML = window.WosUsage.html(); paintSubtitles(); };
     function paintSubtitles() {
@@ -563,7 +580,7 @@
       const attentionHtml = items.length ? `<div class="st-attention" aria-label="Needs attention">${items.map(i => `<button data-st-attention="${esc(i.feature)}">${esc(i.title)}<span aria-hidden="true">›</span></button>`).join('')}</div>` : '';
       // Desktop shows About & updates beside the list with the card on it, so the list does not repeat it.
       const card = desktop && selected === 'about' ? '' : cardHtml();
-      const nav = pages.map(p => `<button class="st-category" data-st-page="${p.id}" aria-current="${p.id === selected ? 'page' : 'false'}"><span class="st-tx"><b>${p.title}</b></span><span class="st-val" data-st-subtitle="${p.id}">${esc(subtitle(p.id, ctx))}</span><span class="st-go" aria-hidden="true">›</span></button>`).join('');
+      const nav = pages.map((p, i) => (p.group && p.group !== pages[i - 1]?.group && pages.some(q => q.group && q.group !== p.group) ? `<h4 class="st-navgroup">${esc(p.group)}</h4>` : '') + `<button class="st-category" data-st-page="${p.id}" aria-current="${p.id === selected ? 'page' : 'false'}"><span class="st-tx"><b>${p.title}</b></span><span class="st-val" data-st-subtitle="${p.id}">${esc(subtitle(p.id, ctx))}</span><span class="st-go" aria-hidden="true">›</span></button>`).join('');
       const fs = [...features.values()].filter(f => pageOf(f) === selected && (!ctx.skinDraft || f.id === 'look') && (!f.available || f.available(ctx)));
       // About & updates leads with the update card and its choices; the connection rows follow.
       if (selected === 'about') fs.sort((x, y) => (y.id === 'updates') - (x.id === 'updates'));
@@ -675,10 +692,24 @@
     function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wizard:apps', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
     root.addEventListener('input', featureInput); root.addEventListener('click', click); root.addEventListener('keydown', key); root.addEventListener('change', change); mounts.add(api); render(); return api;
   }
+  // One deferred System link at a time: a newer link, Back, or anything the user does first cancels the wait.
+  let waiting = null;
+  const STOPS = ['popstate', 'hashchange', 'pointerdown', 'keydown'];
+  function cancelWait() { if (!waiting) return; clearInterval(waiting); waiting = null; for (const t of STOPS) window.removeEventListener?.(t, cancelWait, true); }
   function route(view, open) {
+    cancelWait();
     if (view === 'settings') { open(); return true; }
     const f = [...features.values()].find(f => f.aliases?.includes(view));
-    if (!f && !features.has(view)) return false; open(f?.id || view); return true;
+    // System pages filled by a package (?view=network etc.) open once something is on them.
+    if (!f && !features.has(view)) {
+      const sys = PAGES.find(p => p.group === 'System' && p.id === view); if (!sys) return false;
+      // A link can arrive before the package fills the page: wait for it (up to 10 s), then open.
+      if (sys.available()) open(view);
+      else { let n = 0; waiting = setInterval(() => { if (sys.available()) { cancelWait(); open(view); } else if (++n >= 40) cancelWait(); }, 250);
+        for (const t of STOPS) window.addEventListener?.(t, cancelWait, true); }
+      return true;
+    }
+    open(f?.id || view); return true;
   }
   // Shared focus containment. Existing shell Back guards own history; never add a second guard here.
   function trap(event, panel) {
@@ -689,5 +720,5 @@
     if (at < 0 || (!event.shiftKey && at === controls.length - 1) || (event.shiftKey && at === 0)) { event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0].focus(); }
   }
   window.WosMySkin?.on(() => { for (const m of mounts) m.render(); });
-  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
+  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, cancelWait, systemPages: Object.freeze(PAGES.filter(p => p.group === 'System').map(p => p.id)), trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
 })();
