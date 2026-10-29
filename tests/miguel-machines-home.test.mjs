@@ -223,7 +223,7 @@ test('second review: no unverified all-clear, stock loading state, Settings dial
   for (const who of ['miguel', 'wizard']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /: allClear\(\) \? h\('span', \{ text: 'Nothing answers from the internet/, who + ': all-clear only when every machine was checked');
-    assert.match(src, /const allClear = \(\) => !!S\.devFresh && devices\(\)\.length > 0 && devices\(\)\.every\(d => d\.access\?\.exposure === 'tailscale'\);/, who + ': and only from a fresh reading');
+    assert.match(src, /const allClear = \(\) => !!S\.devFresh && devices\(\)\.length > 0 && devices\(\)\.every\(d => cleared\(d\.access\)\);/, who + ': and only from a fresh reading');
     assert.match(src, /if \(state\?\.devicesError\) S\.devFresh = false; else if \(state\?\.devices\) S\.devFresh = devNew\(state\);/, who);
     assert.match(src, /const backupRunning = \(\) => S\.backupRead === 'ok' &&/, who + ': running only from a reading this visit');
     assert.match(src, /api\.storage\.set\('backup', \{ \.\.\.S\.backup, active: null \}\)/, who);
@@ -402,7 +402,7 @@ test('seventeenth review: a new My skin shows one switch per replacement group a
 test('eighteenth review: machines from a saved or failed-read snapshot are last readings, not online', () => {
   for (const who of ['miguel', 'wizard']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
-    assert.match(src, /status = !S\.devFresh && d\.status === 'online' \? 'stale' : d\.status;\n    return \{ id, name: pretty\(d\.name\), status, stale: status === 'stale',/, who);
+    assert.match(src, /status = !S\.devFresh \? 'stale' : d\.status;\n    return \{ id, name: pretty\(d\.name\), status, was: d\.status, stale: status === 'stale',/, who);
   }
 });
 
@@ -435,6 +435,18 @@ test('twenty-first review: the default model\'s credit accounts lead the meter; 
     assert.match(src, /const devNew = st => !!st\?\.devices && !st\.devicesError && Date\.now\(\) - \(\+st\.devicesAt \|\| 0\) < 120000;/, who);
     assert.match(src, /else if \(state\?\.devices\) S\.devFresh = devNew\(state\);/, who);
     assert.match(src, /S\.devFresh = devNew\(now\);/, who);
+  }
+});
+
+test('twenty-second review: the all-clear needs a dated check; any cached machine state is a last reading', () => {
+  for (const who of ['miguel', 'wizard']) {
+    const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
+    assert.match(src, /const cleared = a => a\?\.exposure === 'tailscale' && \/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/\.test\(String\(a\.checked \|\| ''\)\);/, who);
+    assert.match(src, /const allClear = \(\) => !!S\.devFresh && devices\(\)\.length > 0 && devices\(\)\.every\(d => cleared\(d\.access\)\);/, who);
+    assert.match(src, /cleared\(m\.access\) \? \['Tailscale only', 'ok'\]/, who);
+    assert.doesNotMatch(src, /exposure === 'tailscale' \? \['Tailscale only'/, who);
+    assert.match(src, /const roleOf = m => /, who);
+    assert.equal((src.match(/roleOf\(m\)/g) || []).length, 2, who);
   }
 });
 

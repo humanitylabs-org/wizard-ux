@@ -87,8 +87,8 @@ export default function setup(api) {
     const d = devOf(id);
     if (!d) return { id, name: id === MAIN ? pretty(reg().this?.name) || 'Main' : id, status: 'unknown' };
     // A copy saved on this device (or kept through a failed read) is a last reading, never "online now".
-    const dg = diskGB(d), fg = freeGB(d), status = !S.devFresh && d.status === 'online' ? 'stale' : d.status;
-    return { id, name: pretty(d.name), status, stale: status === 'stale', readAt: d.readAt || null, error: d.error || '', use: d.use || '', platform: d.platform || '', access: d.access || null, cores: d.cpus || null, ramGB: d.memoryTotalGB || null,
+    const dg = diskGB(d), fg = freeGB(d), status = !S.devFresh ? 'stale' : d.status;
+    return { id, name: pretty(d.name), status, was: d.status, stale: status === 'stale', readAt: d.readAt || null, error: d.error || '', use: d.use || '', platform: d.platform || '', access: d.access || null, cores: d.cpus || null, ramGB: d.memoryTotalGB || null,
       mem: d.memory, cpu: d.cpu, diskGB: dg, freeGB: fg, diskUsed: dg != null && fg != null ? dg - fg : null };
   }
   // Rough power, for size and order: cores, then memory, then disk.
@@ -100,6 +100,8 @@ export default function setup(api) {
   // Stale = read before, not just now: its last numbers still show, marked as such; never called offline.
   const hasReading = m => m.status === 'online' || m.status === 'stale';
   const lastRead = m => m.readAt && Date.parse(m.readAt) ? ` ${agoS(Math.max(0, Date.now() - Date.parse(m.readAt)) / 1000)} ago` : '';
+  // What the label says: a last reading keeps what it last showed (Offline stays Offline), marked as a last reading.
+  const roleOf = m => (qualifies(m.id) ? 'Standby device' : m.stale && /^(offline|unreachable)$/.test(m.was || '') ? offText({ ...m, status: m.was }) : hasReading(m) ? 'Helper' : offText(m)) + (m.stale ? ' · last reading' : '');
   const offText = m => m.status === 'connecting' ? 'Checking' : m.status === 'unreachable' || /denied|refused|timed out|auth/i.test(m.error) ? 'Disconnected' : 'Offline';
   function storage() {
     const b = S.backup?.backup;
@@ -373,9 +375,9 @@ export default function setup(api) {
     if (m.id === MAIN) return h('div', { cls: nw('mh-act'), data: { of: m.id } },
       h('span', { cls: 'mh-act-head' }, h('b', { text: m.name }), h('span', { text: 'Main' })), accessInfo(m.access) || h('span', { text: 'Not checked yet' }));
     return h('div', { cls: nw('mh-act'), data: { of: m.id } },
-      h('span', { cls: 'mh-act-head' }, h('b', { text: m.name }), h('span', { text: hasReading(m) ? (qualifies(m.id) ? 'Standby device' : 'Helper') + (m.stale ? ' · last reading' : '') : offText(m) })),
+      h('span', { cls: 'mh-act-head' }, h('b', { text: m.name }), h('span', { text: roleOf(m) })),
       accessInfo(m.access),
-      m.stale ? h('span', { cls: 'mh-act-why' }, h('b', { text: 'Last reading:' }), h('span', { text: !S.devFresh && !S.res.devicesError ? `These numbers are from ${m.name}’s last reading${lastRead(m)}; your network is being read now.` : `Wizard couldn’t read ${m.name} just now; these numbers are from its last reading${lastRead(m)}. It will try again.` })) : null,
+      m.stale ? h('span', { cls: 'mh-act-why' }, h('b', { text: 'Last reading:' }), h('span', { text: !S.devFresh && !S.res.devicesError ? `This is ${m.name}’s last reading${lastRead(m)}; your network is being read now.` : `Wizard couldn’t read ${m.name} just now; this is its last reading${lastRead(m)}. It will try again.` })) : null,
       h('span', { cls: 'mh-act-btns' }, actions(m).map(a => h('button', { type: 'button', cls: 'mh-act-btn' + (a.ok ? '' : ' is-no'), disabled: !a.ok, data: { ask: `${m.id}:${a.id}` } },
         h('b', { text: a.label }), h('small', { text: a.note })))),
       ...actions(m).filter(a => !a.ok && a.no?.length).map(a => h('span', { cls: 'mh-act-why' },
@@ -402,7 +404,9 @@ export default function setup(api) {
   }
   // Tailscale: one node beside Storage. Simple on the map (is anything open?), the whole story when tapped.
   // "Tailscale is the only way in" only from a fresh reading where every machine was checked and found Tailscale-only.
-  const allClear = () => !!S.devFresh && devices().length > 0 && devices().every(d => d.access?.exposure === 'tailscale');
+  // Tailscale only = a completed check (dated) found it so; a registry entry that only says so is not checked yet.
+  const cleared = a => a?.exposure === 'tailscale' && /^\d{4}-\d{2}-\d{2}$/.test(String(a.checked || ''));
+  const allClear = () => !!S.devFresh && devices().length > 0 && devices().every(d => cleared(d.access));
   // The feed failed after an earlier reading, or a service sent its last known numbers: what shows is not current.
   const aiStale = () => !!S.res.aiError || subs().some(s => s.stale && !s.out && !s.na);
   const openOnes = () => devices().filter(d => d.access?.exposure === 'internet').map(d => machine(d.id));
@@ -418,7 +422,7 @@ export default function setup(api) {
   // The tab opens the details here, inside the outline.
   function tsPanel() {
     const bad = openOnes(), all = [machine(MAIN), ...devices().filter(d => d.id !== MAIN).map(d => machine(d.id))];
-    const word = m => m.access?.exposure === 'internet' ? ['Open to internet', 'bad'] : m.access?.exposure === 'tailscale' ? ['Tailscale only', 'ok'] : ['Not checked yet', 'none'];
+    const word = m => m.access?.exposure === 'internet' ? ['Open to internet', 'bad'] : cleared(m.access) ? ['Tailscale only', 'ok'] : ['Not checked yet', 'none'];
     return h('span', { cls: 'mh-more-info mh-ts-info' },
       h('span', { text: 'Your private network. Everything inside the dashed line talks over it, encrypted.' }),
       bad.length ? h('span', { cls: 'is-bad', text: `${bad.map(m => m.name).join(' and ')} ${bad.length === 1 ? 'is' : 'are'} on Tailscale too, but strangers on the internet can also knock on ${bad.length === 1 ? 'it' : 'them'}.` })
@@ -475,7 +479,7 @@ export default function setup(api) {
       const all = [main, ...others].filter(hasReading);
       const maxOf = { Memory: Math.max(1, ...all.map(m => m.ramGB || 0)), Disk: Math.max(1, ...all.map(m => m.diskGB || 0)), CPU: Math.max(1, ...all.map(m => m.cores || 0)) };
       const node = m => m.id === MAIN ? machineNode(main, 'main', maxOf, { roleText: 'Main', sessions: sessions() })
-        : machineNode(m, qualifies(m.id) ? 'standby' : 'helper', maxOf, { roleText: (qualifies(m.id) ? 'Standby device' : hasReading(m) ? 'Helper' : offText(m)) + (m.stale ? ' · last reading' : ''), warn: m.status !== 'online' });
+        : machineNode(m, qualifies(m.id) ? 'standby' : 'helper', maxOf, { roleText: roleOf(m), warn: m.status !== 'online' });
       // The bar names sit left of the row; an invisible twin on the right keeps Main exactly in the middle.
       const legend = twin => h('div', { cls: 'mh-legend' + (twin ? ' is-twin' : ''), 'aria-hidden': 'true' }, h('span', { cls: 'mh-bars-in' }, h('span', { text: 'RAM' }), h('span', { text: 'Disk' }), h('span', { text: 'CPU' }), h('span', { cls: 'mh-how-l', text: 'SSH' })));
       setRow(rowMn, [legend(false), ...around(main, others).map(node), legend(true), plus('add-device', 'Add a device to this network')]);
