@@ -3788,7 +3788,7 @@
   // the automatic Setup window and gesture tour (Miguel, 29 Oct 2026); "help" and ?view=tour still open the tour.
   void firstRun;
   window.WosWelcome?.boot({ app: id => APP[id] || null, openStore: () => { const a = APP['app-store']; if (a) openApp(a); },
-    deeplinked: () => (window.__deeplinkLog || []).length > 0,
+    deeplinked: () => (window.__deeplinkLog || []).length > 0, busy: () => V.state !== 'idle',
     // One main Chats window, and the new thread opens in it as soon as it is saved.
     send: async text => { closeSheets(true); const w = placeApp(mainChats, { app: 'chats', thread: null }); if (!w) throw new Error('Chats unavailable'); const it = await sendChat(w.id, text, 'the first message, from the Welcome screen', null, { sid: '__new__', away: true }); if (it?.sessionId) window.WosWelcome.whenThreadExists(it.sessionId, sid => openWizardThread(sid)); return it || null; } });
   // Native shell (Wizard OS Android app): the app hands every hardware/gesture Back to the shell. A step that

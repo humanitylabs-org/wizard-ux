@@ -139,7 +139,8 @@
       if (!el || step !== 'ai' || !provider) return;
       if (ok === true) {
         connected = true; write('ai'); log('connected'); paint(false);
-        setTimeout(() => { if (el && step === 'ai') { step = 'look'; provider = null; paint(); } }, 1200);
+        const chosen = provider;
+        setTimeout(() => { if (el && step === 'ai' && provider === chosen) { step = 'look'; provider = null; paint(); } }, 1200); // Back cancels it
         return;
       }
       poll();
@@ -159,7 +160,11 @@
     el.addEventListener('submit', onSubmit);
     el.addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey && e.target.matches('textarea')) { e.preventDefault(); el.querySelector('form')?.requestSubmit(); }
-      e.stopPropagation(); // the shell's own shortcuts wait until the welcome is done
+      if (e.key === 'Tab') { // keep focus inside the card
+        const f = [...el.querySelectorAll('button:not([disabled]),textarea,iframe,[tabindex]:not([tabindex="-1"])')];
+        if (f.length) { const i = f.indexOf(document.activeElement); const n = e.shiftKey ? (i <= 0 ? f.length - 1 : i - 1) : (i + 1) % f.length; e.preventDefault(); f[n].focus(); }
+      }
+      e.stopPropagation(); // the shell's own shortcuts wait until the welcome is done (desktop onKey also stands down)
     });
     if (at === 'look' || at === 'ai') { const S = window.WosSkin; if (S && S.familyOf(S.current) !== FAMILY && !S.chosen) S.setFamily(FAMILY); }
     paint(); poll(); log('open:' + at);
@@ -212,13 +217,20 @@
     close(); log('back:close'); return 'welcome';
   }
 
+  // The owner already started something (a tap, a key, a recording) before the reads came back: never cover it.
+  // The Welcome then waits for the next launch, like the Setup launcher it replaces.
+  let acted = false;
+  const act = () => { acted = true; };
   function boot(h) {
     if (booted || !h) return; booted = true; H = h;
+    try { addEventListener('pointerdown', act, true); addEventListener('keydown', act, true); } catch (e) {}
     setTimeout(async () => {
       if (h.deeplinked?.()) { log('deeplink'); return; }
       const [ok, setup] = await Promise.all([aiReady(), setupState(), Promise.resolve(window.WizCore?.appsLoaded?.()).catch(() => {})]);
       const state = read();
       log('boot:' + ok + ':' + state + ':' + (setup?.first_run === true));
+      try { removeEventListener('pointerdown', act, true); removeEventListener('keydown', act, true); } catch (e) {}
+      if ((ok === false || ok === true) && (acted || h.busy?.() || h.deeplinked?.())) { log('boot:busy'); return; }
       if (ok === false) return open('ai');
       if (ok === true && state !== 'done' && (state === 'ai' || setup?.first_run === true)) return open('look');
     }, 0);

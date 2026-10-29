@@ -65,3 +65,13 @@ test('Welcome: finishes only after the first message is queued', () => {
   const js = read('web/core/welcome.js');
   assert.match(js, /item = await H\.send\(text\)[^]*?if \(!item\) \{[^]*?return; \}\s*write\('done'\); markSeen\(\); close\(\)/);
 });
+
+test('Welcome: never covers work already started, keeps keys and focus, Back cancels the auto-advance', () => {
+  const js = read('web/core/welcome.js');
+  assert.match(js, /acted \|\| h\.busy\?\.\(\) \|\| h\.deeplinked\?\.\(\)\)\) \{ log\('boot:busy'\); return; \}/);
+  assert.match(js, /e\.key === 'Tab'/);
+  assert.match(js, /provider === chosen/);
+  assert.match(read('web/desktop/desktop.js'), /function onKey\(e, fromFrame = false\) \{\s*if \(pick\.active\(\)\) return pick\.key\(e\);\s*if \(window\.WosWelcome\?\.active\)/);
+  assert.match(read('web/desktop/desktop.js'), /WosWelcome\?\.boot\([^]*?busy: \(\) => VOICE\.state !== 'idle'/);
+  assert.match(read('web/app.js'), /WosWelcome\?\.boot\([^]*?busy: \(\) => V\.state !== 'idle'/);
+});
