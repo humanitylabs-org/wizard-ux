@@ -86,8 +86,9 @@ export default function setup(api) {
   function machine(id) {
     const d = devOf(id);
     if (!d) return { id, name: id === MAIN ? pretty(reg().this?.name) || 'Main' : id, status: 'unknown' };
-    const dg = diskGB(d), fg = freeGB(d);
-    return { id, name: pretty(d.name), status: d.status, stale: d.status === 'stale', readAt: d.readAt || null, error: d.error || '', use: d.use || '', platform: d.platform || '', access: d.access || null, cores: d.cpus || null, ramGB: d.memoryTotalGB || null,
+    // A copy saved on this device (or kept through a failed read) is a last reading, never "online now".
+    const dg = diskGB(d), fg = freeGB(d), status = !S.devFresh && d.status === 'online' ? 'stale' : d.status;
+    return { id, name: pretty(d.name), status, stale: status === 'stale', readAt: d.readAt || null, error: d.error || '', use: d.use || '', platform: d.platform || '', access: d.access || null, cores: d.cpus || null, ramGB: d.memoryTotalGB || null,
       mem: d.memory, cpu: d.cpu, diskGB: dg, freeGB: fg, diskUsed: dg != null && fg != null ? dg - fg : null };
   }
   // Rough power, for size and order: cores, then memory, then disk.
@@ -371,7 +372,7 @@ export default function setup(api) {
     return h('div', { cls: nw('mh-act'), data: { of: m.id } },
       h('span', { cls: 'mh-act-head' }, h('b', { text: m.name }), h('span', { text: hasReading(m) ? (qualifies(m.id) ? 'Standby device' : 'Helper') + (m.stale ? ' · last reading' : '') : offText(m) })),
       accessInfo(m.access),
-      m.stale ? h('span', { cls: 'mh-act-why' }, h('b', { text: 'Last reading:' }), h('span', { text: `Wizard couldn’t read ${m.name} just now; these numbers are from its last reading${lastRead(m)}. It will try again.` })) : null,
+      m.stale ? h('span', { cls: 'mh-act-why' }, h('b', { text: 'Last reading:' }), h('span', { text: !S.devFresh && !S.res.devicesError ? `These numbers are from ${m.name}’s last reading${lastRead(m)}; your network is being read now.` : `Wizard couldn’t read ${m.name} just now; these numbers are from its last reading${lastRead(m)}. It will try again.` })) : null,
       h('span', { cls: 'mh-act-btns' }, actions(m).map(a => h('button', { type: 'button', cls: 'mh-act-btn' + (a.ok ? '' : ' is-no'), disabled: !a.ok, data: { ask: `${m.id}:${a.id}` } },
         h('b', { text: a.label }), h('small', { text: a.note })))),
       ...actions(m).filter(a => !a.ok && a.no?.length).map(a => h('span', { cls: 'mh-act-why' },

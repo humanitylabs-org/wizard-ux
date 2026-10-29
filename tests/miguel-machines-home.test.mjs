@@ -399,6 +399,13 @@ test('seventeenth review: a new My skin shows one switch per replacement group a
   assert.match(src, /items = items\.filter\(t => t\.id === pick \|\| !present\.includes\(t\.id\)\);/);
 });
 
+test('eighteenth review: machines from a saved or failed-read snapshot are last readings, not online', () => {
+  for (const who of ['miguel', 'wizard']) {
+    const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
+    assert.match(src, /status = !S\.devFresh && d\.status === 'online' \? 'stale' : d\.status;\n    return \{ id, name: pretty\(d\.name\), status, stale: status === 'stale',/, who);
+  }
+});
+
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));
