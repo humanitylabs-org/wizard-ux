@@ -1,0 +1,54 @@
+# Agent review on every PR (team rule, 23 Oct 2026): an agent other than the author reviews each PR
+# before an admin approves and merges it. This file is the one reviewer for every Wizard OS repo:
+# wizard-ux runs it on its own PRs, and other repos call it with a three-line workflow:
+#
+#   on: { pull_request_target: { types: [opened, synchronize, reopened, ready_for_review] } }
+#   permissions: { contents: read, pull-requests: write }
+#   jobs: { review: { uses: humanitylabs-org/wizard-ux/.github/workflows/pr-agent-review.yml@main } }
+#
+# Private repos have no hosted-runner minutes on the org's plan; they pass their own self-hosted runner:
+#   with: { runs-on: '["self-hosted","macOS","ARM64","wizard-os"]' }
+#
+# Safety: pull_request_target gives a write token even on fork PRs, so this job never checks out or
+# runs PR code. It checks out the reviewer from wizard-ux main and reads the PR through the API only.
+name: Agent review
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_call:
+    inputs:
+      runs-on:
+        description: JSON runner label or list, for example '"ubuntu-latest"' or '["self-hosted","macOS"]'.
+        type: string
+        default: '"ubuntu-latest"'
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    runs-on: ${{ fromJSON(inputs.runs-on || '"ubuntu-latest"') }}
+    concurrency:
+      group: agent-review-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: humanitylabs-org/wizard-ux
+          ref: main
+          persist-credentials: false
+          sparse-checkout: |
+            tools/pr-agent-review.mjs
+            tools/reuse-check.mjs
+            docs/COMPONENTS.md
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Review this PR
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node tools/pr-agent-review.mjs

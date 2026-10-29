@@ -1,0 +1,12 @@
+{
+  "id": "miguel/home-bars",
+  "name": "Home resource bars",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout",
+    "data.read"
+  ],
+  "description": "CPU, memory, disk and AI used, on Home"
+}

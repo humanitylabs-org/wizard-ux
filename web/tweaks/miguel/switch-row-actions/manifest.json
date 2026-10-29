@@ -1,0 +1,11 @@
+{
+  "id": "miguel/switch-row-actions",
+  "name": "Switch-row Defer and Done",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "Defer and Done sit beside the model switch"
+}

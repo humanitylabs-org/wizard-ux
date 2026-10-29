@@ -1,0 +1,12 @@
+{
+  "id": "miguel/refresh-button",
+  "name": "↻ in the title bar",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout",
+    "nav"
+  ],
+  "description": "↻ just left of ✕ in every phone window title bar refreshes that window in place; Chats has no pull to refresh"
+}

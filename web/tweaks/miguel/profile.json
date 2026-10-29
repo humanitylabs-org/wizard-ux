@@ -1,0 +1,19 @@
+{
+  "id": "miguel",
+  "version": 1,
+  "skin": "obsidian",
+  "tweaks": [
+    "miguel/switch-row-actions",
+    "miguel/swipe-strip",
+    "miguel/send-and-go",
+    "miguel/model-pills",
+    "miguel/hidden-pin",
+    "miguel/snooze-someday",
+    "miguel/home-bars",
+    "miguel/machines-home",
+    "miguel/arrange-download",
+    "miguel/refresh-button",
+    "wizard/unified-inbox"
+  ],
+  "flags": {}
+}

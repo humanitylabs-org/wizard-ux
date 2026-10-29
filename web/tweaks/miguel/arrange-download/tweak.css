@@ -1,0 +1,12 @@
+/* Hold = arrange (drag to reorder, ✕ to close). A one-app desk also shows a download button beside its ✕ that opens
+   Add to home screen. Same size and colour as ✕; the visible dot is small, the hit area is 44px. */
+html[data-tweaks~="miguel/arrange-download"]:not([data-shell="desktop"]) .ov .ov-dl { position: relative; flex: 0 0 auto; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--ink-3); display: none; place-items: center; }
+html[data-tweaks~="miguel/arrange-download"]:not([data-shell="desktop"]) .ov .ov-dl::before { content: ""; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); border-radius: 50%; }
+html[data-tweaks~="miguel/arrange-download"]:not([data-shell="desktop"]) .ov .ov-dl svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+html[data-tweaks~="miguel/arrange-download"]:not([data-shell="desktop"]) .ov .ov-dl:active { background: rgba(255, 255, 255, .09); color: var(--ink); }
+html[data-tweaks~="miguel/arrange-download"]:not([data-shell="desktop"]) .ov .ov-dl:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+html[data-tweaks~="miguel/arrange-download"]:not([data-shell="desktop"]) .ov.editing .ov-dl { display: grid; }
+html[data-tweaks~="miguel/arrange-download"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell .ov-dl { position: absolute; left: auto; right: calc(50% - 35px); top: -6px; width: 22px; height: 22px; border-radius: 50%; color: var(--ink); background: color-mix(in srgb, var(--bg) 70%, var(--ink) 30%); z-index: 3; }
+html[data-tweaks~="miguel/arrange-download"]:not([data-shell="desktop"]) .ov.ov-pill .ov-cell .ov-dl svg { width: 12px; height: 12px; stroke-width: 2.6; }
+html[data-tweaks~="miguel/arrange-download"]:not([data-shell="desktop"]) .ov.ov-pill .ov-card.ghost .ov-dl { display: none; }
+html[data-tweaks~="miguel/arrange-download"]:not([data-shell="desktop"]) .ov.ov-pill.editing .ov-cell .ov-ic .dbg { display: none; } /* the download button owns that corner while arranging */

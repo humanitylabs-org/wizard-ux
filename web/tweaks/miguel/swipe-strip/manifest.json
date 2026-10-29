@@ -1,0 +1,12 @@
+{
+  "id": "miguel/swipe-strip",
+  "name": "Swipe strip",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout",
+    "nav"
+  ],
+  "description": "Swipe left to reopen the last chat"
+}

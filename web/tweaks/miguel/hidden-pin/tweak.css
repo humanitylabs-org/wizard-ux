@@ -1,0 +1,2 @@
+html[data-tweaks~="miguel/hidden-pin"] [data-part="pin-button"] { display:none; }
+html[data-tweaks~="miguel/hidden-pin"] [data-part="thread-row"] { padding-right:8px; }

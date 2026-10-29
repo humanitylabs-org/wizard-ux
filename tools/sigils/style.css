@@ -1,0 +1,127 @@
+/* Wizard OS sigils: one silhouette, one bite, one colour.
+ * An icon box gets class `sgt` and `--c:<app colour>`; inside it, `<i class="sgi sg-<glyph>">` draws the
+ * glyph as a mask over a lit gradient of that colour. The tile itself stays dark glass, tinted by the
+ * app's hue, so the glyph carries the colour and a full grid reads calm, not loud. */
+.sgt {
+  --c: #9d8cff;
+  position: relative; isolation: isolate; overflow: hidden;
+  display: grid; place-items: center;
+  color: var(--c);
+  background: #110d1b;
+  background:
+    radial-gradient(130% 95% at 50% -8%, color-mix(in oklab, var(--c) 40%, transparent) 0%, transparent 60%),
+    radial-gradient(90% 60% at 50% 120%, color-mix(in oklab, var(--c) 26%, transparent) 0%, transparent 72%),
+    linear-gradient(180deg, #17121f 0%, #0c0a12 100%);
+  border: 1px solid color-mix(in oklab, var(--c) 38%, rgba(255, 255, 255, .06));
+  box-shadow:
+    0 10px 24px -10px color-mix(in oklab, var(--c) 55%, transparent),
+    0 2px 6px rgba(0, 0, 0, .45),
+    inset 0 1px 0 color-mix(in oklab, var(--c) 30%, rgba(255, 255, 255, .14)),
+    inset 0 -10px 18px -12px rgba(0, 0, 0, .7);
+}
+/* Soft bloom behind the glyph: the glyph seems to light the glass it sits in. */
+.sgt::before {
+  content: ""; position: absolute; inset: 18%; z-index: -1; border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--c) 42%, transparent), transparent);
+  filter: blur(7px); opacity: 1; pointer-events: none;
+}
+/* Glass sheen across the top third. */
+.sgt::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .07) 0%, rgba(255, 255, 255, 0) 38%);
+}
+.sgi {
+  display: block; width: 70%; height: 70%; font-style: normal;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .35));
+  background: var(--c);
+  background: linear-gradient(168deg,
+    color-mix(in oklab, var(--c) 42%, #fff) 0%,
+    var(--c) 46%,
+    color-mix(in oklab, var(--c) 80%, #1a0f2e) 100%);
+  -webkit-mask: var(--sg) center / contain no-repeat; mask: var(--sg) center / contain no-repeat;
+}
+/* Agent identity uses the supplied silhouette. Private replaces its door with a large keyhole
+ * (tools/sigils/private_hat.py); its outer silhouette is the main hat's, pixel for pixel.
+ * 62% ink height matches neighbouring sigils, on tiles and bare dock/overview marks. */
+.sgi.sg-hat, .sgi.sg-hat-private { -webkit-mask-size: auto 62%; mask-size: auto 62%; }
+.sg-hat { --sg: url("/wizard-os-home/brand/wizard-mark-white.png"); }
+.sg-hat-private { --sg: url("/wizard-os-home/brand/wizard-mark-private.png"); }
+/* Agents (the app): two hats layered (tools/sigils/agent_hats.py). The private agent's green hat stands
+ * behind, the main agent's purple hat in front at the main hat's exact ink height; never a keyhole.
+ * Both masks share one canvas, so one mask size keeps them registered; each layer is lit like any glyph. */
+.sg-agents { --sg: url("/wizard-os-home/brand/wizard-mark-agents-front.png"); }
+.sgi.sg-agents { position: relative; background: none; -webkit-mask: none; mask: none; }
+.sgi.sg-agents::before, .sgi.sg-agents::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(168deg, color-mix(in oklab, var(--hc) 42%, #fff) 0%, var(--hc) 46%, color-mix(in oklab, var(--hc) 80%, #1a0f2e) 100%);
+  -webkit-mask: var(--hm) center / auto 62% no-repeat; mask: var(--hm) center / auto 62% no-repeat;
+}
+.sgi.sg-agents::before { --hc: hsl(160 72% 62%); --hm: url("/wizard-os-home/brand/wizard-mark-agents-back.png"); }
+.sgi.sg-agents::after { --hc: hsl(265 72% 62%); --hm: url("/wizard-os-home/brand/wizard-mark-agents-front.png"); }
+/* Optical size for tiny tiles (24 px and under: window bars, phone window icons, Home chips, ⌘K rows, xs agent
+ * chips, thread badges). At 62% the hat is ~7–8 px tall there and the keyhole's walls fall under a pixel.
+ * The whole hat family steps up to 80% together, so main, private and Agents stay the same size as one
+ * another; the supplied geometry only scales. Bare dock/bar marks (.dsg) already draw the hat ≥ 13 px tall. */
+:is(.wbar .ic, .wic, .app-chip i, .pal-it .ic, .ag-sig.xs, .ch-agent.thread .ag-sig).sgt > :is(.sg-hat, .sg-hat-private),
+:is(.wbar .ic, .wic, .app-chip i, .pal-it .ic, .ag-sig.xs, .ch-agent.thread .ag-sig).sgt > .sg-agents::before,
+:is(.wbar .ic, .wic, .app-chip i, .pal-it .ic, .ag-sig.xs, .ch-agent.thread .ag-sig).sgt > .sg-agents::after { -webkit-mask-size: auto 80%; mask-size: auto 80%; }
+.dsg { --c: #C9BEFF; position: relative; width: 21px; height: 21px; display: grid; place-items: center; opacity: .78; transition: opacity 160ms; }
+.dsg .sgi { width: 100%; height: 100%; filter: drop-shadow(0 0 5px color-mix(in oklab, var(--c) 45%, transparent)); }
+.dsg.empty { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid rgba(205, 190, 255, .4); opacity: 1; }
+.dsg .dn { position: absolute; right: -7px; bottom: -5px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 7px;
+  font: 700 9px/13px system-ui, sans-serif; text-align: center; color: #0c0814; background: var(--c); }
+/* App count badge, pinned to the app's mark (top right); the orb mirrors the desk in view. */
+.dsg .dbg { position: absolute; right: -9px; top: -7px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 99px;
+  font: 800 9.5px/15px system-ui, sans-serif; text-align: center; color: #160b05; background: var(--amber); box-shadow: 0 0 0 1.5px rgba(5, 3, 12, .9); pointer-events: none; }
+/* App with no sigil yet: a disc with its initial cut out (or its own icon file), drawn as a mask exactly like a
+ * designed sigil: same box, same lit gradient, same skin overrides. The letter text stays in the DOM for search
+ * and tests but is never painted, so no skin rule can turn it into an opaque square. */
+.sgi.sgl { font-size: 0 !important; color: transparent; overflow: hidden; }
+/* An app's own icon file is its silhouette, at 78% of the box with rounded corners, so even an opaque square icon
+ * lands as a soft lit shape no bigger than a sigil. */
+.sgi.sgimg { -webkit-mask-size: 78%; mask-size: 78%; border-radius: 30%; }
+
+/* ---------- where icons show ---------- */
+/* Launcher tiles: a squircle, a little larger than before, and a pressed state that dims the glow. */
+.lapp .ic.sgt { width: 58px; height: 58px; border-radius: 19px; font-size: 25px; transition: transform 180ms var(--spring, ease), box-shadow 180ms; }
+.lapp:active .ic.sgt { transform: scale(.88); box-shadow: 0 4px 12px -6px color-mix(in oklab, var(--c) 60%, transparent), inset 0 1px 0 rgba(255, 255, 255, .1); }
+.lapp .ic.sgt .badge { z-index: 2; }
+.lrow .ic.sgt { width: 40px; height: 40px; border-radius: 13px; font-size: 17px; }
+.lrow .ic.sgt .sgi { width: 64%; height: 64%; }
+.wic.sgt { width: 22px; height: 22px; border-radius: 7px; font-size: 11px; box-shadow: none; }
+.wic.sgt::before, .pk-win i.sgt::before, .wbar .ic.sgt::before, .app-chip i.sgt::before, .pal-it .ic.sgt::before { display: none; }
+.wic.sgt .sgi, .wbar .ic.sgt .sgi, .app-chip i.sgt .sgi { width: 72%; height: 72%; }
+.pk-win i.sgt { width: 30px; height: 30px; border-radius: 10px; font-size: 14px; box-shadow: none; }
+.dwin .ic.sgt { box-shadow: none; }
+.frame-coming .glyph.sgt, .frame-fallback .glyph.sgt { font-size: 26px; }
+.frame-coming .glyph.sgt { box-shadow: 0 14px 36px -12px color-mix(in oklab, var(--c) 60%, transparent), inset 0 1px 0 rgba(255, 255, 255, .12); }
+.appcard .hero.sgt { border: 0; border-radius: 0; box-shadow: none; overflow: hidden; }
+.appcard .hero.sgt .big { width: 112px; height: 112px; border-radius: 34px; display: grid; place-items: center; background: rgba(8, 6, 14, .55); border: 1px solid color-mix(in oklab, var(--c) 34%, transparent); box-shadow: 0 24px 60px -18px color-mix(in oklab, var(--c) 70%, transparent); filter: none; }
+.appcard .hero.sgt .big .sgi { width: 64%; height: 64%; }
+/* Desktop shell */
+.wbar .ic.sgt { width: 18px; height: 18px; border-radius: 5px; box-shadow: none; }
+/* Title bars carry bare logos, never launcher tiles or the desktop's purple fallback gradient. */
+.wbar .ic.sgt, .wbar .wic.sgt { background: transparent; border: 0; box-shadow: none; color: var(--c); }
+.wbar .ic.sgt::before, .wbar .ic.sgt::after, .wbar .wic.sgt::before, .wbar .wic.sgt::after { display: none; }
+.agent-titlebar { display: contents; }
+.app-chip i.sgt { width: 22px; height: 22px; border-radius: 7px; box-shadow: none; }
+.pal-it .ic.sgt { box-shadow: none; }
+.pal-it .ic.sgt .sgi { width: 70%; height: 70%; }
+
+/* ---------- the launcher as a home screen ---------- */
+/* Tiles rise in when the sheet opens, a few ms apart, left to right and top to bottom. */
+@keyframes sgRise { from { opacity: 0; transform: translateY(10px) scale(.92); } to { opacity: 1; transform: none; } }
+.launcher.open .lgrid .lapp { animation: sgRise 420ms var(--spring, cubic-bezier(.2, .9, .2, 1.1)) both; animation-delay: calc(var(--i, 0) * 22ms + 60ms); }
+.lapp .nm { color: rgba(236, 230, 255, .78); font-weight: 560; letter-spacing: .005em; }
+@media (prefers-reduced-motion: reduce) {
+  .launcher.open .lgrid .lapp { animation: none; }
+}
+/* Brand marks for every skin (proposal): real products wear their own logo in the same mask and box.
+ * Sources and rules: tools/sigils/README.md, "Brand marks". */
+.sgi.sgb { -webkit-mask: var(--sgb) center / contain no-repeat; mask: var(--sgb) center / contain no-repeat; }
+.sgi.sgb-cloudflare { --sgb: url("/wizard-os-home/brand/apps/cloudflare.svg"); }
+.sgi.sgb-claude { --sgb: url("/wizard-os-home/brand/apps/claude.svg"); }
+.sgi.sgb-chatgpt { --sgb: url("/wizard-os-home/brand/apps/chatgpt.svg"); }
+.sgi.sgb-tinfoil { --sgb: url("/wizard-os-home/brand/apps/tinfoil.svg"); }
+.sgi.sgb-hermes { --sgb: url("/wizard-os-home/brand/apps/hermes.svg"); }
+.sgi:is(.sgb-cloudflare, .sgb-claude) { background: var(--sgb) center / contain no-repeat; }

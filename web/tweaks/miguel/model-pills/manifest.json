@@ -1,0 +1,12 @@
+{
+  "id": "miguel/model-pills",
+  "name": "Model switch",
+  "version": "1.1.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout",
+    "models"
+  ],
+  "description": "Opus, Astra, Sol and your private model as one switch above the message box"
+}

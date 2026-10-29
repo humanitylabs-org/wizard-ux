@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "owner": { "name": "", "place": "" },
+  "agent": { "name": "Wizard" },
+  "clock": { "timezone": "", "day_starts_at": "00:00" },
+  "voice": { "language": "", "vocabulary": [] }
+}
