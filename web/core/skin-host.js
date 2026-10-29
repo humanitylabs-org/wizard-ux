@@ -396,7 +396,14 @@
     if (trusted && typeof manifest.storage === 'string' && /^[a-z0-9-]{1,40}$/.test(manifest.storage)) {
       const ns = 'wos.skin.shared:' + manifest.storage + '.';
       api.storage = Object.freeze({
-        get(key) { try { let v = localStorage.getItem(ns + key); if (v == null) v = localStorage.getItem(`wos.skin.${a.id}.${key}`); return v == null ? null : JSON.parse(v); } catch (_) { return null; } },
+        get(key) { try {
+          let v = localStorage.getItem(ns + key);
+          // Before the shared store existed each package kept its own copy: take this package's, else any package of the
+          // same name ("<author>/<storage>"), so switching skins after an upgrade keeps the owner's choices.
+          if (v == null) v = localStorage.getItem(`wos.skin.${a.id}.${key}`);
+          if (v == null) for (let i = 0; i < localStorage.length && v == null; i++) { const k = localStorage.key(i); if (k && /^wos\.skin\.[a-z0-9-]+\//.test(k) && k.endsWith(`/${manifest.storage}.${key}`)) v = localStorage.getItem(k); }
+          return v == null ? null : JSON.parse(v);
+        } catch (_) { return null; } },
         set(key, value) { try { localStorage.setItem(ns + key, JSON.stringify(value)); } catch (_) {} },
       });
     }

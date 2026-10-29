@@ -1615,8 +1615,9 @@
   let holdT = 0, held = false;
   mic.addEventListener('contextmenu', e => { e.preventDefault(); voiceMenu.hidden ? openVoiceMenu() : closeVoiceMenu(); });
   mic.addEventListener('pointerdown', e => { if (e.button) return; held = false; clearTimeout(holdT); holdT = setTimeout(() => { held = true; openVoiceMenu(); }, 480); });
-  for (const ev of ['pointerup', 'pointerleave']) mic.addEventListener(ev, () => clearTimeout(holdT));
-  mic.addEventListener('pointercancel', () => { clearTimeout(holdT); held = false; });  // no click follows a cancelled hold, so nothing to swallow
+  mic.addEventListener('pointerup', () => clearTimeout(holdT));
+  // Leaving or cancelling ends the press away from the mic: no mic click follows, so nothing is left to swallow.
+  for (const ev of ['pointerleave', 'pointercancel']) mic.addEventListener(ev, () => { clearTimeout(holdT); held = false; });
   mic.addEventListener('click', e => { if (held) { held = false; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
   voiceMenu.addEventListener('pointerdown', e => { if (e.target.closest('[data-voice-go="dictateBtn"]')) { fields().refresh(); e.preventDefault(); } });
   voiceMenu.addEventListener('click', e => { const b = e.target.closest('[data-voice-go]'); if (!b) return; closeVoiceMenu(); document.getElementById(b.dataset.voiceGo)?.click(); });

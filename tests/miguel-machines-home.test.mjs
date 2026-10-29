@@ -330,9 +330,11 @@ test('eleventh review: both Home map packages share one store; a cancelled hold 
   apis.m.storage.set('ws', 'mine-x');
   await f.host.loadTweaks(['wizard/machines-home'], f.slots, { teamAuthors: ['miguel', 'wizard'] });
   assert.equal(apis.w.storage.get('ws'), 'mine-x', 'switching skins keeps the choice');
+  f.lsMap.set('wos.skin.miguel/machines-home.nick', JSON.stringify({ a: 'old' }));
+  assert.deepEqual(apis.w.storage.get('nick'), { a: 'old' }, 'a pre-upgrade copy kept by the other package is found');
   await f.clear?.();
   const desk = read('web/desktop/desktop.js');
-  assert.match(desk, /mic\.addEventListener\('pointercancel', \(\) => \{ clearTimeout\(holdT\); held = false; \}\);/);
+  assert.match(desk, /for \(const ev of \['pointerleave', 'pointercancel'\]\) mic\.addEventListener\(ev, \(\) => \{ clearTimeout\(holdT\); held = false; \}\);/);
 });
 
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
