@@ -12,7 +12,7 @@ test('Welcome: Claude is listed first and recommended, then ChatGPT', () => {
 
 test('Welcome: opens only without a signed-in provider, resumes after sign-in, never on a deep link', () => {
   const js = read('web/core/welcome.js');
-  assert.match(js, /p\.authenticated === true/);
+  assert.match(js, /return aiConnected\(j, slug\);/); // what counts: tests/welcome-ai-ready.test.mjs
   assert.match(js, /if \(ok === false\) return open\('ai'\)/);
   assert.match(js, /if \(ok === true && state !== 'done' && \(state === 'ai' \|\|/);
   assert.match(js, /if \(h\.deeplinked\?\.\(\)\) \{ log\('deeplink'\); return; \}/);
