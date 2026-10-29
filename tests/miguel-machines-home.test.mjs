@@ -331,7 +331,7 @@ test('eleventh review: both Home map packages share one store; a cancelled hold 
   await f.host.loadTweaks(['wizard/machines-home'], f.slots, { teamAuthors: ['miguel', 'wizard'] });
   assert.equal(apis.w.storage.get('ws'), 'mine-x', 'switching skins keeps the choice');
   f.lsMap.set('wos.skin.miguel/machines-home.nick', JSON.stringify({ a: 'old' }));
-  assert.deepEqual(apis.w.storage.get('nick'), { a: 'old' }, 'a pre-upgrade copy kept by the other package is found');
+  assert.equal(JSON.stringify(apis.w.storage.get('nick')), '{"a":"old"}', 'a pre-upgrade copy kept by the other package is found');
   await f.clear?.();
   const desk = read('web/desktop/desktop.js');
   assert.match(desk, /for \(const ev of \['pointerleave', 'pointercancel'\]\) mic\.addEventListener\(ev, \(\) => \{ clearTimeout\(holdT\); held = false; \}\);/);
