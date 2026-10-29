@@ -11,3 +11,5 @@ after the app's own styles, so skins and My skin can restyle `.wz-*`. `wizard-sh
 `.wz-sheet` loads it itself. Neither file is shell CSS/JS and the shell never loads them. Settings uses the generated reset-free `controls.css` and `shell-tokens.css` bridge instead; this reuses the same rules without introducing global resets or `--ink`/`--wz-text` alias cycles.
 
 The [canonical app style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md) owns all visual decisions. Size/type/panel roles are CSS defaults, not an Appearance message extension. CI runs its changed-line style ratchet; existing app debt warns, new/changed violations fail.
+
+CI consumes the byte-identical canonical scanner/policy distribution in `tools/style/` (pin/hashes in `source.json`). The app gate reads it from trusted public wizard-ux main: a caller-scoped GitHub token cannot read private wizard-os. Refresh with the canonical source sync, never edit policy rules here.
