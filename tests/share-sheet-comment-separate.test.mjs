@@ -66,6 +66,7 @@ test('James: Android adapter contains no second sheet UI and port authority stay
   const java = read('android/app/src/main/java/ai/wizards/os/share/ShareActivity.java');
   assert.doesNotMatch(java,/new EditText|showThreads|showAgents|setContentView|SheetBack|Send to Archimedes/);
   assert.match(java,/EXTRA_TEXT/); assert.match(java,/ACTION_SHARE/);
+  assert.match(java,/authority.equals\(getPackageName\(\)\) \|\| authority.startsWith\(getPackageName\(\) \+ "\."\)/);
   const bridge = read('android/app/src/main/java/ai/wizards/os/device/DeviceBridge.java');
   assert.match(bridge,/ownsIncomingShare\(id\)/); assert.match(bridge,/ShareStore.get\(activity\).enqueue/);
   const main=read('android/app/src/main/java/ai/wizards/os/MainActivity.java');assert.match(main,/web.setAlpha\(0\)/); assert.match(main,/moveTaskToBack\(true\)/);

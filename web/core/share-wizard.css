@@ -1,5 +1,5 @@
 /* Shared, opaque, skin-dressed Send to <agent> sheet. No shell-specific implementation. */
-.wz-share { --dv-base: var(--wz-base, #171420); --dv-panel: var(--wz-panel, color-mix(in srgb, var(--dv-ink) 4%, var(--dv-base))); --dv-raised: var(--wz-panel-raised, color-mix(in srgb, var(--dv-ink) 8%, var(--dv-base))); --dv-ink: var(--wz-text, #f5f1ff); --dv-muted: var(--wz-text-secondary, #b4abc9); --dv-line: var(--wz-border, #3b334e); --dv-accent: var(--wz-accent, #b28aff); position:absolute; inset:0; z-index:950; color:var(--dv-ink); font-family:inherit; }
+.wz-share { --dv-base: var(--wz-base, #171420); --dv-panel: var(--wz-panel, color-mix(in srgb, var(--dv-ink) 4%, var(--dv-base))); --dv-raised: var(--wz-panel-raised, color-mix(in srgb, var(--dv-ink) 8%, var(--dv-base))); --dv-ink: var(--wz-text, #f5f1ff); --dv-muted: var(--wz-text-secondary, #b4abc9); --dv-line: var(--wz-border, #3b334e); --dv-accent: var(--wz-accent, #b28aff); position:absolute; inset:0; z-index:80; color:var(--dv-ink); font-family:inherit; }
 html[data-shell] .wz-share { --wz-base:var(--bg, #171420); --wz-text:var(--ink, #f5f1ff); --wz-text-secondary:var(--ink-2, #b4abc9); --wz-border:var(--line-2, #3b334e); --wz-accent:var(--violet-2, #b28aff); --wz-on-accent:var(--bg, #140e20); }
 body > .wz-share { position:fixed; }
 .wz-share *, .wz-share *::before, .wz-share *::after { box-sizing:border-box; }
@@ -8,7 +8,7 @@ body > .wz-share { position:fixed; }
 .wz-share button:disabled { opacity:.45; cursor:default; }
 .wz-share .dv-scrim { position:absolute; inset:0; background:rgb(0 0 0 / .52); }
 /* Tint is layered over a literal solid fallback even when a skin supplies translucent tokens. */
-.wz-share .dv-sheet { position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:min(100%, 540px); max-height:calc(100% - var(--safe-t, 18px) - 12px); overflow:auto; padding:10px 20px calc(20px + var(--safe-b, 0px)); border-radius:28px 28px 0 0; background:linear-gradient(var(--dv-base),var(--dv-base)) #171420; box-shadow:0 -12px 60px #0004; outline:0; }
+.wz-share.dv-wrap .dv-sheet { position:absolute; bottom:0; left:0; right:0; margin-inline:auto; transform:none; width:min(100%, 540px); max-height:calc(100% - var(--safe-t, 18px) - 12px); overflow:auto; padding:10px 20px calc(20px + var(--safe-b, 0px)); border-radius:28px 28px 0 0; background:linear-gradient(var(--dv-base),var(--dv-base)) #171420; box-shadow:0 -12px 60px #0004; outline:0; }
 .wz-share .dv-grab { width:42px; height:4px; margin:0 auto 16px; border-radius:4px; background:var(--dv-line); }
 .wz-share .dv-head { display:flex; gap:12px; align-items:center; margin:0 0 18px; }
 .wz-share .dv-head > div { flex:1; min-width:0; }
@@ -50,4 +50,6 @@ body > .wz-share { position:fixed; }
 .wz-share button:focus-visible, .wz-share textarea:focus-visible { outline:2px solid var(--dv-accent); outline-offset:-2px; }
 html[data-skin=signal] .wz-share :is(.dv-sheet,.dv-compose,.dv-dest,.dv-picker,.dv-send,.ch-att,.dv-quote) { border-radius:2px; }
 html[data-skin=signal] .wz-share :is(h4,.dv-row) { font-family:var(--wz-font-mono,monospace); }
+/* Keep the existing focused-field/orb dictation affordance on the phone, above the shared sheet. */
+.device.dv-share-open .wz-share .dv-sheet { bottom:calc(var(--safe-b, 0px) + var(--dock-h, 0px) + 4px); max-height:calc(100% - var(--safe-b, 0px) - var(--dock-h, 0px) - 40px); }
 @media (min-width:700px) { body > .wz-share .dv-sheet { bottom:24px; border-radius:28px; } }

@@ -35,7 +35,7 @@
   }
   function open(options = {}, authorize = () => true) {
     const {items = [], title = '', from = '', skipped = 0, stay = false, comment = '', error = '', dest = '__new__', agent = '', nativeQueue, onPresented, onCancelled} = options;
-    const text = sharedText(options), w = host(), chats = w?.chats;
+    const text = options.android ? sharedText(options) : String(options.text || '').trim(), w = host(), chats = w?.chats;
     if (!w || !chats?.uploadFile || !chats?.sendChat || !(w.openWizardThread || w.openThread) || active) return Promise.resolve('unsupported');
     const mount = document.querySelector('#device') || document.body;
     const el = document.createElement('div'); el.className = 'wz-share dv-wrap open'; el.dataset.dv = 'share';
@@ -45,7 +45,7 @@
     const preview = items.map(f => { if (kind(f) !== 'image' || !f.blob || f.bytes >= 6e6) return ''; const u = URL.createObjectURL(f.blob); urls.push(u); return u; });
     const chip = (f, n) => window.WizAttachChip ? window.WizAttachChip.html({key: String(n), name: f.name, bytes: f.bytes, kind: kind(f), preview: preview[n] || ''})
       : `<span class="ch-att" data-attkey="${n}"><span class="nm">${esc(f.name)}</span><button type="button" class="ch-attrm" data-attrm="${n}" aria-label="Remove ${esc(f.name)}">×</button></span>`;
-    const origin = from ? `From ${from}` : title ? `Forwarded from ${title}` : '';
+    const origin = from ? `From ${from}` : title ? (/^forwarded from /i.test(title) ? title : `Forwarded from ${title}`) : '';
     el.innerHTML = `<div class="dv-scrim" data-dvclose></div><section class="dv-sheet" role="dialog" aria-modal="true" aria-label="Send to agent" tabindex="-1">
       <div class="dv-grab" aria-hidden="true"></div>
       <div class="dv-head"><div><b class="dv-title">Send to ${esc(window.WizConfig?.agent?.() || 'Wizard')}</b><small>${esc(origin)}${skipped ? ` · ${skipped} unreadable items skipped` : ''}</small></div><button class="dv-cancel" data-dvclose aria-label="Cancel share"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
@@ -63,7 +63,7 @@
       let agents = [], chosenAgent = null, target = '__new__', threads = [], loadSeq = 0, loading = true;
       const route = () => chosenAgent && !chosenAgent.is_default ? chosenAgent.id : '';
       const label = () => chosenAgent?.label || window.WizConfig?.agent?.() || 'Wizard';
-      a.closePicker = () => { a.picker = ''; $('.dv-picker-wrap')?.remove(); el.querySelectorAll('[aria-expanded]').forEach(b => b.setAttribute('aria-expanded', 'false')); };
+      a.closePicker = () => { const was = a.picker; a.picker = ''; if (was) $(`.dv-${was}`)?.focus({preventScroll:true}); $('.dv-picker-wrap')?.remove(); el.querySelectorAll('[aria-expanded]').forEach(b => b.setAttribute('aria-expanded', 'false')); };
       const paint = () => {
         $('.dv-title').textContent = `Send to ${label()}`; $('[role=dialog]').setAttribute('aria-label', `Send to ${label()}`);
         $('.dv-agent strong').textContent = chosenAgent ? label() : 'Unavailable';
@@ -82,10 +82,11 @@
       const loadThreads = async (initial = false) => {
         const seq = ++loadSeq, agentId = route(); target = '__new__'; threads = []; loading = true; a.closePicker(); paint();
         try {
-          const r = await fetch(`/wizard/hermes/api/sessions?limit=40${agentId ? `&agent=${encodeURIComponent(agentId)}` : ''}`, {credentials:'same-origin', cache:'no-store', signal:a.abort.signal});
+          const r = await fetch(`/wizard/hermes/api/sessions?limit=40&offset=0&include_children=false${agentId ? `&agent=${encodeURIComponent(agentId)}` : ''}`, {credentials:'same-origin', cache:'no-store', signal:a.abort.signal});
           if (!r.ok) throw new Error('Chats unavailable');
           const j = await r.json(); if (active !== a || seq !== loadSeq) return;
-          threads = (Array.isArray(j.data) ? j.data : Array.isArray(j.sessions) ? j.sessions : []).filter(s => !s.archived && !s.hidden).slice(0,40);
+          threads = (Array.isArray(j.data) ? j.data : Array.isArray(j.sessions) ? j.sessions : Array.isArray(j.items) ? j.items : [])
+            .map(s => ({...s,id:s.id || s.session_id})).filter(s => s.id && !s.archived && !s.hidden).slice(0,40);
           if (initial && dest !== '__new__' && threads.some(s => s.id === dest)) target = dest;
         } catch (e) {
           if (active !== a || seq !== loadSeq) return;
@@ -172,7 +173,13 @@
   }
   document.addEventListener('keydown', e => {
     if (!active) return;
-    if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); back(); }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); back(); return; }
+    if (active.picker && ['ArrowDown','ArrowUp','Home','End'].includes(e.key)) {
+      const opts = [...active.el.querySelectorAll('.dv-picker button:not(:disabled)')];
+      const at = opts.indexOf(document.activeElement), next = e.key === 'Home' ? 0 : e.key === 'End' ? opts.length - 1 : (at + (e.key === 'ArrowDown' ? 1 : -1) + opts.length) % opts.length;
+      e.preventDefault(); opts[next]?.focus({preventScroll:true}); opts[next]?.scrollIntoView({block:'nearest'}); return;
+    }
+    if (active.picker && e.key === 'Tab') active.closePicker();
     if (e.key === 'Tab') {
       const xs = [...active.el.querySelectorAll('button:not(:disabled),textarea,[tabindex="0"]')], first = xs[0], last = xs.at(-1);
       if (e.shiftKey && (document.activeElement === first || !xs.includes(document.activeElement))) {e.preventDefault();last?.focus();}

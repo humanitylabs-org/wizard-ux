@@ -52,7 +52,7 @@ public class ShareActivity extends Activity {
     }
 
     @SuppressWarnings("deprecation")
-    private static List<Uri> streams(Intent i) {
+    private List<Uri> streams(Intent i) {
         List<Uri> out = new ArrayList<>();
         if (Intent.ACTION_SEND_MULTIPLE.equals(i.getAction())) {
             ArrayList<Uri> list = i.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
@@ -61,9 +61,12 @@ public class ShareActivity extends Activity {
         if (i.getClipData() != null) for (int n = 0; n < i.getClipData().getItemCount(); n++) add(out, i.getClipData().getItemAt(n).getUri());
         return out;
     }
-    private static void add(List<Uri> list, Uri uri) {
+    private void add(List<Uri> list, Uri uri) {
         // Never accept file:// paths or arbitrary schemes from another app.
-        if (uri != null && "content".equals(uri.getScheme()) && !list.contains(uri)) list.add(uri);
+        if (uri == null || !"content".equals(uri.getScheme())) return;
+        String authority = String.valueOf(uri.getAuthority());
+        if (authority.equals(getPackageName()) || authority.startsWith(getPackageName() + ".")) return;
+        if (!list.contains(uri)) list.add(uri);
     }
 
     private void stage(Intent in, String from) {

@@ -229,7 +229,9 @@
     const d = DEV(), m = J(d?.shareMeta(id));
     if (!m) { toast('!', 'That share expired · share it again', 2400); return; }
     closeSheet();
-    const port = window.WosDevicePort, cap = await port?.capability('device.shares');
+    const port = window.WosDevicePort;
+    const [cap] = await Promise.all([port?.capability('device.shares'), window.WizConfig?.ready]);
+    if (!J(d?.shareMeta(id))) return; // Back during cold-start discovery already cancelled this import
     let queued = false;
     const finishNative = async () => {
       if (cap) await port.call('device.shares.finish', {shareId:id});
@@ -237,7 +239,7 @@
     };
     const resumable = cap && window.WizConfig?.has('resumable_uploads') && m.items?.length && m.items.every(f => /^[a-f0-9]{64}$/.test(f.sha256 || ''));
     const result = await window.WizShareWizard.open({
-      text:m.text || '', subject:m.subject || '', from:m.from || '', skipped:m.skipped || 0,
+      android:true, text:m.text || '', subject:m.subject || '', from:m.from || '', skipped:m.skipped || 0,
       onPresented:cap ? () => port.call('device.shares.present', {shareId:id}).catch(() => {}) : null,
       onCancelled:cap ? () => finishNative().catch(() => {}) : null,
       nativeQueue:resumable ? async job => {
@@ -245,7 +247,7 @@
         const receipt = await port.call('device.shares.queue', {shareId:id, agent:job.agent, agentLabel:job.agentLabel,
           thread:job.target === '__new__' ? '' : job.target, note:job.note, keptItemIndexes:job.keptItemIndexes});
         if (!receipt?.queued) throw new Error('Share was not queued');
-        await finishNative();
+        await finishNative().catch(() => {}); // durable queue custody must not become a duplicate retry if closing loses its reply
       } : null,
       items:(m.items || []).map(f => ({...f, read:() => readBlob(off => d.shareRead(id, f.n, off), f.mime)}))
     });
@@ -400,7 +402,10 @@
     /* Native → page: queued intents (share, recovery notification). Returns true when taken. */
     handle(h) {
       if (!h || !W$()) return false;
-      if (h.action === 'share' && h.id) { onShare(String(h.id)); return true; }
+      if (h.action === 'share' && h.id) {
+        if (!window.WizShareWizard?.open || !W$().chats?.sendChat) return false; // native retries until the unified UI is ready
+        onShare(String(h.id)); return true;
+      }
       if (h.action === 'recover') { W$().closeSheets?.(); syncRecorder('notification'); return true; }
       return false;
     },

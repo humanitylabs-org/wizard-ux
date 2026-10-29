@@ -73,6 +73,7 @@ Visual: <side-by-side screenshot, or "none">
 | Long-press file/link | `WizLinks` (`core/links.js`): phone sheet, desktop `asWindow`, images, browser/Download/Copy, `back()` / `backMenu()`; Android `WizardOSNative.openInBrowser` / `download` | own iframe, menu or `window.open` |
 | Text-selection actions | `WosSelMenu` (`web/core/sel-menu.js`) | own context menu |
 | Share sheet, receivers, pending handoffs | `WosShareSheet` (`web/core/share-sheet.js`), entered only via `WosChat.sharePayload / shareFile`; fresh-press guard, `WosChat.bindSharePress` | a second share picker, sending for an app |
+| Send to an agent (Android incoming shares + installed-app forwards) | `WizShareWizard.open / wizard` (`web/core/share-wizard.js`); `WosAgents`, `WizAttachChip`, Chats outbox; Android `device.shares` on `WosDevicePort` promotes `ShareStore` bytes into existing `ShareQueue` / `ShareService` | a native compose/agent/chat sheet, comment prefilled from shared content, a second upload service |
 | Screen context for the agent | `WizScreen` (`web/core/screen-text.js`) | own DOM scrape |
 | Dictation into a focused field | `WizCore` focused field (`web/core/focused-field.js`); voice `WizCore` (`web/core/voice.js`); mic choice `WosMic` (`web/core/mic.js`) | own recorder/transcriber |
 | Local commands | `WosCommands` (`web/core/commands.js`) | a second command parser |
