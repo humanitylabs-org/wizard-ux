@@ -20,7 +20,9 @@
   const KEY = 'wos.welcome.v1', OPTIONS = '/wizard/hermes/api/model/options', SETUP = '/wizard/v1/setup', POLL_MS = 3000;
   const FAMILY = 'wizard'; // first run keeps the Wizard skin and offers its colours; other skins live in Settings
   const PROVIDERS = [
-    { app: 'wizard-claude', name: 'Claude', note: 'Recommended', mark: 'claude', slug: 'anthropic' },
+    // Alongside the Claude app adds to Hermes' own Anthropic pool; on a fresh Wizard its sign-in is the Claude Code
+    // login, which Hermes reaches as the subscription provider (the app makes it the agent's model).
+    { app: 'wizard-claude', name: 'Claude', note: 'Recommended', mark: 'claude', slug: ['anthropic', 'claude-subscription-directsdk-experimental'] },
     { app: 'wizard-chatgpt', name: 'ChatGPT', note: '', mark: 'chatgpt', slug: 'openai-codex' },
     { app: 'wizard-tinfoil', name: 'Tinfoil', note: 'Private', mark: 'tinfoil', slug: 'wizard-tinfoil' },
   ];
@@ -42,13 +44,26 @@
   const unnamed = () => { const C = window.WizConfig; if (!C?.live || typeof C.agentName !== 'function') return false;
     const n = cleanName(C.raw?.settings?.agent?.name); return !n || n.toLowerCase() === DEFAULT_NAME.toLowerCase(); };
 
+  /* Is there an AI the agent will really use? Not "any provider says authenticated": the virtual Mixture of Agents
+   * always does, and the Claude subscription provider does as soon as the Claude Code program exists, signed in or
+   * not (a fresh Wizard skipped "Connect your AI" and its first message failed). Those two count only when the owner
+   * (or the Claude app after a sign-in) made them the agent's model. slug: that provider (or list) only. */
+  const SUB = 'claude-subscription-directsdk-experimental';
+  function aiConnected(j, slug) {
+    const want = slug ? [].concat(slug) : null, current = String(j?.provider || '');
+    return (j?.providers || []).some(p => {
+      if (!p || p.authenticated !== true || (want && !want.includes(p.slug))) return false;
+      if (p.auth_type === 'virtual' || p.source === 'virtual') return false;
+      return p.slug !== SUB || current === SUB;
+    });
+  }
   // slug: only that provider counts (the one being signed in to); none: any signed-in provider.
   async function aiReady(slug) {
     try {
       const r = await fetch(OPTIONS, { credentials: 'same-origin', cache: 'no-store', signal: tsig(5000) });
       if (!r.ok) return null;
       const j = await r.json();
-      return (j?.providers || []).some(p => p && p.authenticated === true && (!slug || p.slug === slug));
+      return aiConnected(j, slug);
     } catch (e) { return null; }
   }
 
@@ -325,5 +340,5 @@
     log('thread:timeout');
   }
 
-  window.WosWelcome = { whenThreadExists, boot, back, open: (at) => open(at || 'ai'), close, get active() { return !!el; }, get log() { return window.__welcomeLog || []; } };
+  window.WosWelcome = { whenThreadExists, aiConnected, boot, back, open: (at) => open(at || 'ai'), close, get active() { return !!el; }, get log() { return window.__welcomeLog || []; } };
 })();
