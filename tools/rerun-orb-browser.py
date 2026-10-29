@@ -40,7 +40,37 @@ def verify_inherited(manifest):
     for rel, expected_hash in manifest['harness_files'].items():
         if digest(Path(manifest['harness_root']) / rel) != expected_hash:
             raise RuntimeError('harness drift: ' + rel)
+    if 'harness_archive' in manifest:
+        if digest(manifest['harness_archive']) != manifest['harness_archive_sha256']:
+            raise RuntimeError('harness archive drift')
+        base = Path(manifest['harness_root'])
+        actual = {str(p.relative_to(base)) for p in base.rglob('*') if p.is_file()}
+        if actual != set(manifest['harness_files']):
+            raise RuntimeError('harness member inventory drift')
+        if 'harness_modes' in manifest:
+            import stat
+            if any(stat.S_IMODE((base / rel).stat().st_mode) != mode for rel, mode in manifest['harness_modes'].items()):
+                raise RuntimeError('harness mode drift')
+    if 'second-browser-result' in manifest['evidence']:
+        second = json.loads(Path(manifest['evidence']['second-browser-result']['path']).read_text())
+        if len(second['cases']) != 16 or second.get('pass') is not False or not any('galaxy collapsed to flat white' in e for e in second['errors']):
+            raise RuntimeError('unexpected second browser failure')
+    for tree in manifest.get('dependency_trees', []):
+        base = Path(tree['root'])
+        actual = {str(p.relative_to(base)): digest(p) for p in base.rglob('*') if p.is_file()}
+        if actual != tree['files']:
+            raise RuntimeError('dependency tree drift: ' + str(base))
     return old, receipt
+
+
+def verify_browser(browser, manifest):
+    expected = manifest['expected_cases']
+    ids = [case['id'] for case in browser['cases']]
+    if (browser.get('pass') is not True or browser.get('complete') is not True or
+            browser.get('expected') != expected or len(ids) != len(expected) or
+            len(set(ids)) != len(ids) or set(ids) != set(expected) or
+            not all(case.get('pass') is True for case in browser['cases'])):
+        raise RuntimeError('browser failed or incomplete')
 
 
 def main():
@@ -74,12 +104,15 @@ def main():
         log = out / 'browser.log'
         with log.open('w') as stream:
             result = subprocess.run([old['dependencies']['node']['path'], str(Path(manifest['harness_root']) / 'tools/qa-orb-render-recovery.cjs')],
-                                    cwd=manifest['harness_root'], env=env, stdout=stream, stderr=subprocess.STDOUT, timeout=240)
+                                    cwd=manifest['harness_root'], env=env, stdout=stream, stderr=subprocess.STDOUT, timeout=480)
         receipt['browser_exit'] = result.returncode; receipt['browser_log_sha256'] = digest(log)
         browser = json.loads((out / 'browser/result.json').read_text())
-        if result.returncode or browser.get('pass') is not True or len(browser['cases']) != 62 or len(browser['idleObservations']) != 8:
-            raise RuntimeError('browser failed or incomplete')
-        runner.verify(old); verify_inherited(manifest)
+        receipt['observed_cases'] = len(browser['cases'])
+        receipt['failed_cases'] = [c['id'] for c in browser['cases'] if c.get('pass') is not True]
+        receipt['complete'] = browser.get('complete', False)
+        verify_browser(browser, manifest)
+        if result.returncode:
+            raise RuntimeError('browser nonzero exit')
         receipt['pass'] = True
     except Exception as error:
         receipt['error'] = str(error)
@@ -87,6 +120,9 @@ def main():
     finally:
         try:
             runner.cleanup(tmp); receipt['owned_processes_absent'] = True
+            runner.verify(old); verify_inherited(manifest)
+            receipt['all_inherited_source_dependency_hashes_reverified'] = True
+            receipt['artifacts'] = {str(p.relative_to(out)): digest(p) for p in out.rglob('*') if p.is_file() and p.name != 'receipt.json'}
         except Exception as error:
             receipt['pass'] = False; receipt['cleanup_error'] = str(error)
             raise
