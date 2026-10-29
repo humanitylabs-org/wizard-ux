@@ -201,8 +201,11 @@ export default function setup(api) {
     const chosen = Array.isArray(S.meter) ? all.filter(s => S.meter.includes(s.id)) : [];
     if (chosen.length) return { use: live.filter(s => S.meter.includes(s.id)), custom: true };
     const want = defKind();
-    const plans = live.filter(s => s.unit === 'plan'), pool = plans.filter(s => !want || s.kind === want);
-    return { use: pool.length ? pool : plans.length ? plans : live, custom: false, def: !!want && !!pool.length };
+    // The default model's own accounts first, whatever they are paid in (plan limits over credit, never a mix);
+    // only when it has none live: every plan, else every credit balance.
+    const mine = want ? live.filter(s => s.kind === want) : [], unit = mine.some(s => s.unit === 'plan') ? 'plan' : 'credit';
+    const pool = mine.filter(s => s.unit === unit), plans = live.filter(s => s.unit === 'plan');
+    return { use: pool.length ? pool : plans.length ? plans : live, custom: false, def: !!pool.length };
   }
   function gauge() {
     const { use, custom, def } = meterPool(); if (!use.length) return null;
@@ -701,9 +704,11 @@ export default function setup(api) {
 
     paint();
   }
+  // Fresh = read without error in the last two minutes; a copy the shell kept while nothing was polling is a last reading.
+  const devNew = st => !!st?.devices && !st.devicesError && Date.now() - (+st.devicesAt || 0) < 120000;
   const merge = state => { const got = Object.fromEntries(Object.entries(state || {}).filter(([, v]) => v != null)); S.res = { ...S.res, ...got }; return got; };
   api.inbox?.watch?.(items => { const n = (items || []).filter(i => !i.read && !i.archived).length; if (n !== S.unread) { S.unread = n; paint(); } });
-  api.data.read.resources.watch(state => { if (state?.devicesError) S.devFresh = false; else if (state?.devices) S.devFresh = true; if (state?.ai && !state.aiError) S.aiLive = true; const got = merge(state); if (got.devices || got.ai) keep(); paint(); readBackup(); });
+  api.data.read.resources.watch(state => { if (state?.devicesError) S.devFresh = false; else if (state?.devices) S.devFresh = devNew(state); if (state?.ai && !state.aiError) S.aiLive = true; const got = merge(state); if (got.devices || got.ai) keep(); paint(); readBackup(); });
 
   /* ---------- mount at Home; keep it there across Home repaints ---------- */
   // The desktop bar stays up over open windows: it counts as a viewer, so its readings keep refreshing there too
@@ -723,7 +728,7 @@ export default function setup(api) {
   api.settings?.section('store', 'storage', secStore, { subtitle: mine(() => { const st = storage(); return st?.age != null ? `${agoS(st.age)} ago` : ''; }) });
   api.listen(document, 'click', e => { if (S.open.has('wsm') && e.target.isConnected && !wizBox.contains(e.target)) { S.open.delete('wsm'); S.open.delete('wsm-why'); renderWiz(); } });
   api.listen(document, 'keydown', e => { if (e.key === 'Escape' && S.open.has('wsm')) { S.open.delete('wsm'); renderWiz(); wizBtn.focus(); } });
-  S.res = api.storage.get('res') || {}; { const now = api.data.read.resources.snapshot(); S.devFresh = !!now?.devices && !now.devicesError; S.aiLive = !!now?.ai && !now.aiError; merge(now); }
+  S.res = api.storage.get('res') || {}; { const now = api.data.read.resources.snapshot(); S.devFresh = devNew(now); S.aiLive = !!now?.ai && !now.aiError; merge(now); }
   paint(true); mount(); readBackup(true);
   return () => { ro?.disconnect(); };
 }

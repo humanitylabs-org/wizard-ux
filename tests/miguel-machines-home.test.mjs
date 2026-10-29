@@ -224,7 +224,7 @@ test('second review: no unverified all-clear, stock loading state, Settings dial
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /: allClear\(\) \? h\('span', \{ text: 'Nothing answers from the internet/, who + ': all-clear only when every machine was checked');
     assert.match(src, /const allClear = \(\) => !!S\.devFresh && devices\(\)\.length > 0 && devices\(\)\.every\(d => d\.access\?\.exposure === 'tailscale'\);/, who + ': and only from a fresh reading');
-    assert.match(src, /if \(state\?\.devicesError\) S\.devFresh = false; else if \(state\?\.devices\) S\.devFresh = true;/, who);
+    assert.match(src, /if \(state\?\.devicesError\) S\.devFresh = false; else if \(state\?\.devices\) S\.devFresh = devNew\(state\);/, who);
     assert.match(src, /const backupRunning = \(\) => S\.backupRead === 'ok' &&/, who + ': running only from a reading this visit');
     assert.match(src, /api\.storage\.set\('backup', \{ \.\.\.S\.backup, active: null \}\)/, who);
     assert.match(src, /Not every machine has been checked from the internet yet/, who);
@@ -424,6 +424,18 @@ test('twentieth review: a deferred System link is cancelled by a newer link, Bac
   assert.match(src, /waiting = setInterval\(\(\) => \{ if \(sys\.available\(\)\) \{ cancelWait\(\); open\(view\); \} else if \(\+\+n >= 40\) cancelWait\(\); \}, 250\);/);
   assert.match(src, /for \(const t of STOPS\) window\.addEventListener\?\.\(t, cancelWait, true\);/);
   assert.doesNotMatch(src, /const t = setInterval\(\(\) => \{ if \(sys\.available\(\)\)/);
+});
+
+test('twenty-first review: the default model\'s credit accounts lead the meter; an aged in-memory device reading is not fresh', () => {
+  assert.match(read('web/core/resources.js'), /devices:S\.devices,devicesAt:S\.devicesAt,devicesError:S\.devicesError,/);
+  for (const who of ['miguel', 'wizard']) {
+    const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
+    assert.match(src, /const mine = want \? live\.filter\(s => s\.kind === want\) : \[\], unit = mine\.some\(s => s\.unit === 'plan'\) \? 'plan' : 'credit';/, who);
+    assert.match(src, /const pool = mine\.filter\(s => s\.unit === unit\), plans = live\.filter\(s => s\.unit === 'plan'\);/, who);
+    assert.match(src, /const devNew = st => !!st\?\.devices && !st\.devicesError && Date\.now\(\) - \(\+st\.devicesAt \|\| 0\) < 120000;/, who);
+    assert.match(src, /else if \(state\?\.devices\) S\.devFresh = devNew\(state\);/, who);
+    assert.match(src, /S\.devFresh = devNew\(now\);/, who);
+  }
 });
 
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
