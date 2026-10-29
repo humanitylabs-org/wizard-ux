@@ -12,7 +12,7 @@ html[data-app-session] .linksheet.pane .ls-panel { top:var(--single-cut); }
 html[data-app-session] .linksheet.sheet:not(.peek) .ls-panel { height:calc(100% - var(--single-cut) - 6px); }
 html[data-app-session] #singleApp .app-upd { top:calc(var(--single-cut) + 8px); }
 html[data-app-session] #toast { top:calc(var(--single-cut) + 12px); margin-top:0; }
-.single-unavailable { padding:calc(32px + var(--single-cut, 0px)) 24px; color:var(--ink,#f3efff); }
+.single-unavailable { padding:calc(32px + var(--single-cut, 0px)) 24px; color:var(--ink); }
 .home-pin-backdrop { position:fixed; inset:0; z-index:1500; background:rgba(0,0,0,.3); display:flex; align-items:flex-end; justify-content:center; padding:16px 12px calc(16px + env(safe-area-inset-bottom)); }
 .home-pin-sheet { width:min(100%,380px); padding:12px; border:1px solid var(--line-2,rgba(205,190,255,.24)); border-radius:18px; background: linear-gradient(var(--glass-2,#1c133a), var(--glass-2,#1c133a)), var(--wz-panel, var(--wz-base, var(--bg, #05030c)));  color:var(--ink,#f3efff); box-shadow:0 12px 36px #0007; }
 .home-pin-sheet header { display:flex; align-items:center; gap:10px; padding:4px 8px 12px; font-size:14px; }

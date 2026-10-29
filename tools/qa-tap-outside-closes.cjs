@@ -43,13 +43,13 @@ ${['wisdom','cover'].includes(id)?'<meta name="wizard-os-edge" content="cover">'
 <link rel="stylesheet" href="/kit/wizard-ui.css"><script src="/core/app-client.js"></script>
 ${id==='notes'?'<link rel="stylesheet" href="/standalone-notes.css">':''}
 ${id==='imported'?'<link rel="stylesheet" href="/standalone-import.css">':''}
-${id==='disabled'?'<style media="not all">header{padding-top:var(--wos-cutout)}</style>':''}
+${id==='disabled'?'<style id="unused" media="not all">header{padding-top:var(--wos-cutout)}</style>':''}
 <style>html,body{margin:0;height:100%;overflow:hidden}body{background:var(--wz-base,var(--bg,#111));color:var(--ink,#eee)}#main{height:100%;overflow:auto;position:relative;box-sizing:border-box}#canvas-tools{position:sticky;top:0;background:var(--wz-base,var(--bg,#111));z-index:2}p{line-height:28px;margin:12px 24px}#editor{margin:12px 24px;font:inherit}#formatting{position:fixed;bottom:8px;left:12px}body{--keyboard-inset:0px}
 ${['wisdom','cover','late'].includes(id)?'#canvas-tools{padding-top:calc(var(--wos-cutout,0px) + 12px)}':''}
 </style><main id="main"><header id="canvas-tools" class="wz-head"><button id="back">Synthetic controls</button></header><h1 style="margin:16px 24px">Synthetic ${id} reading fixture</h1>
 <input id="editor" aria-label="Fixture editor" value="Synthetic editable text">
 ${Array.from({length:100},(_,i)=>`<p data-line="${i}">Fixture paragraph ${i}: scroll to test the protected status area.</p>`).join('')}</main><button id="formatting">Aa</button>
-<script>window.fixtureReady=true;WizardApp.ready({title:'Fixture',back:()=>false});</script>`;
+<script>if(document.getElementById('unused'))document.getElementById('unused').sheet.disabled=true;window.fixtureReady=true;WizardApp.ready({title:'Fixture',back:()=>false});</script>`;
 const standaloneHost=`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="/core/base.css"><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/core/skins.css"><link rel="stylesheet" data-skin-pkg="obsidian" href="/skins/obsidian/skin.css"><link rel="stylesheet" href="/core/links.css"><link rel="stylesheet" href="/core/update-banner.css"><link rel="stylesheet" href="/core/home-screen-apps.css">
 <style>html,body{margin:0;width:100%;height:100%;overflow:hidden}#nativeStatus{position:fixed;inset:0 0 auto;height:var(--single-cut,0px);z-index:2147483647;pointer-events:none;box-sizing:border-box;padding:2px 18px;font:12px system-ui;color:var(--ink);background:var(--bg)}#singleApp{transition:none}</style>
@@ -240,7 +240,7 @@ async function check(name, fn) { await fn(); passed++; console.log('PASS', name)
       if(edge)assert.equal(state.covering,false,label+' iframe is clipped out of status region');
       assert.deepEqual(state.nativeCalls,[false]);metrics.push({label,edge,...state});
     };
-    for(const id of standaloneIds)for(const [top,cut] of [[0,0],[36,0],[36,48]]) {
+    for(const id of standaloneIds)for(const [top,cut] of [0,36,48].flatMap(top=>[0,36,48].map(cut=>[top,cut]))) {
       await check(`James universal standalone rule: ${id}, status ${top}/cutout ${cut}, scroll 0 + deep`,async()=>{
         await pinned.goto(origin+`/standalone-host?app-session=${id}&top=${top}&cut=${cut}`);
         const f=await waitPinned(),edge=Math.max(top,cut);await protectedFrame(edge,id+' top');
@@ -262,11 +262,11 @@ async function check(name, fn) { await fn(); passed++; console.log('PASS', name)
         await pinned.evaluate(()=>{const p=document.createElement('div');p.className='app-upd';p.textContent='Fixture app updated · Reload';singleApp.append(p);__wos.toast('Fixture toast');});
         await pinned.waitForFunction(()=>Math.abs(document.querySelector('#singleApp .app-upd').getBoundingClientRect().top-56)<.01&&Math.abs(document.getElementById('toast').getBoundingClientRect().top-60)<.01);
         const update=await pinned.locator('#singleApp .app-upd').boundingBox(),toast=await pinned.locator('#toast').boundingBox();
-        assert.equal(update.y,56,'update uses host union once');assert.equal(toast.y,60,'toast uses union once');
+        assert.ok(Math.abs(update.y-56)<.1,'update uses host union once');assert.ok(Math.abs(toast.y-60)<.1,'toast uses union once');
         await pinned.evaluate(()=>__wos.links.open('/fixture-page'));
         await pinned.locator('.linksheet.open .ls-panel').waitFor({state:'visible'});
-        await pinned.waitForFunction(()=>{const r=document.querySelector('.linksheet .ls-panel').getBoundingClientRect();return Math.abs(r.top-50)<1;});
-        assert.equal(await pinned.evaluate(()=>document.querySelector('.linksheet .ls-panel').getBoundingClientRect().top),50,'sheet clears status plus its existing 2px lip, not a second inset');
+        await pinned.waitForFunction(()=>{const r=document.querySelector('.linksheet .ls-panel').getBoundingClientRect();return Math.abs(r.top-50)<.01;});
+        assert.ok(Math.abs(await pinned.evaluate(()=>document.querySelector('.linksheet .ls-panel').getBoundingClientRect().top)-50)<.1,'sheet clears status plus its existing 2px lip, not a second inset');
         await pinned.evaluate(()=>__wos.links.close());
         await pinned.evaluate(()=>{window.fixturePane=WizLinks.mount({parent:document.getElementById('device'),mode:'pane'});fixturePane.open('/fixture-page');});
         await pinned.waitForFunction(()=>Math.abs(document.querySelector('.linksheet.pane .ls-panel').getBoundingClientRect().top-48)<1);
