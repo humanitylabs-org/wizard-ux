@@ -67,6 +67,24 @@ package is not public.
 A new GHCR package starts private. An administrator must make it **Public** and
 retain repository Actions write access. No personal package token is needed.
 
+## Temporary Stable onboarding maintenance dispatch (review gated)
+
+The narrow exception proposed in wizard-os PR #236 permits only
+`release/stable-onboarding` in this UX repository, not arbitrary release branches
+or the Agent Service. It is based on the exact 0.3.39 UX source and contains only
+reviewed onboarding repairs and official publication tooling. Normal main behavior
+is unchanged. Do not create/dispatch this lane until the canonical exception and
+exact backport have independent non-author review.
+
+Maintenance pushes do not publish. Dispatch must select the real branch and set
+`expected_sha` to that branch's full selected `GITHUB_SHA`, even without a version
+tag. Every privileged job and the Python publisher/finalizer enforce this;
+forks, PRs, tag refs, branch/SHA mismatches and other maintenance refs are refused.
+Signatures and reuse verification name the actual maintenance ref and exact SHA,
+never main. Digest-only prepare, attestation, immutable aliases, serialization and
+anonymous two-architecture pulls stay unchanged. Remove this exception after the
+fix-only Stable release; it is not a third owner channel.
+
 ## Checks
 
 ```sh

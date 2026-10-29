@@ -50,7 +50,7 @@
   function reconnectOf(v) {
     const app = v && typeof v === 'object' && v.kind === 'provider_signed_out' ? RECONNECT[v.provider] : null;
     if (!app || v.app_id !== app[0]) return null;
-    return { provider: v.provider, appId: app[0], name: app[1], installed: v.installed !== false };
+    return { provider: v.provider, appId: app[0], name: app[1], runId: String(v.run_id || ''), installed: v.installed !== false };
   }
   const ATTN = new Set(['needs_you', 'check', 'done', 'fyi']);
   function attentionOf(v) {
@@ -84,6 +84,7 @@
       title: String(item.title || item.name || 'Untitled chat'),
       source: item.source || '',
       status,
+      queueReason: item.queue_reason === 'provider_access' ? 'provider_access' : '',
       safeError: typeof item.wizard_safe_error === 'string' ? item.wizard_safe_error : '',
       // The AI provider's sign-in expired (Agent Service provider-reconnect.mjs): the connection app that fixes it.
       reconnect: reconnectOf(item.wizard_reconnect),
@@ -114,6 +115,7 @@
       model: typeof item.model === 'string' ? item.model : '', provider: typeof item.provider === 'string' ? item.provider : '',
       modelLockAt: Number(item.wizard_model_lock_updated_at) || 0,
       // The last thing asked (Retry on a failed thread sends it again: controller.ts retryServerFailedSession).
+      retryRunId: typeof item.wizard_retry_run_id === 'string' ? item.wizard_retry_run_id : '',
       request: typeof item.wizard_retry_input === 'string' ? item.wizard_retry_input : userText,
       // Agents MVP: the agent this thread is pinned to (server metadata). '' = the main agent.
       agent: typeof item.agent === 'string' ? item.agent : item.agent && typeof item.agent === 'object' && typeof item.agent.id === 'string' ? item.agent.id : '',
@@ -318,8 +320,10 @@
   // Chat-list layout: 'day' (Ready = today, then Yesterday, Past week; the default) or 'status' (Working / Ready / Archive).
   const LAYOUT_KEY = 'wos.chats.layout.v1';
   // Miguel's skins (Dark, Light, Landscapes) always list by status: Working, Ready, Archive. No Yesterday or Past week.
-  const OUR_SKINS = new Set(['obsidian', 'obsidian-light', 'landscapes']);
+  const OUR_SKINS = new Set(['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light']);
   const oursSkin = () => { try { return OUR_SKINS.has(document.documentElement.dataset.skin || ''); } catch (e) { return false; } };
+  // A tweak asked the skin host for Snooze = lowest priority, bottom of Ready (api.nav.snoozeOrder('last'); docs/snooze-last.md).
+  const snoozeLast = () => { try { return window.WosSkinHost?.snoozeOrder === 'last'; } catch (e) { return false; } };
   const chatLayout = () => { if (oursSkin()) return 'status'; try { return localStorage.getItem(LAYOUT_KEY) === 'status' ? 'status' : 'day'; } catch (e) { return 'day'; } };
   const archiveAfterDays = () => { try { const v = localStorage.getItem(ARCH_KEY); if (v != null && isFinite(+v)) return +v; } catch (e) {} return 7; };
   // Agent Service owns box-wide preferences. localStorage is only an offline cache.
@@ -350,6 +354,17 @@
     });
     return prefsWrites;
   };
+  // The shared preferences as this device shows them: the service's values plus this device's queued list edits.
+  const acceptPrefs = (j, only = null) => {
+    if (!only) window.WizLauncher?.accept(j);
+    const v = applyPrefOps(j, queuedOps());
+    let changed = false;
+    for (const [name, [key, valid, encode]] of Object.entries(prefsFields)) if ((!only || only.has(name)) && valid(v[name])) {
+      const value = encode(v[name]);
+      if (localStorage.getItem(key) !== value) { localStorage.setItem(key, value); changed = true; }
+    }
+    if (changed) window.dispatchEvent(new Event('wos:prefs'));
+  };
   const pullPrefs = async () => {
     if (prefsPending || prefsOff) return;
     const rev = prefsRevision;
@@ -359,16 +374,108 @@
       if (!r.ok) return;
       const j = await r.json();
       if (!j || prefsPending || rev !== prefsRevision) return;
-      let changed = false;
-      for (const [name, [key, valid, encode]] of Object.entries(prefsFields)) if (valid(j[name])) {
-        const value = encode(j[name]);
-        if (localStorage.getItem(key) !== value) { localStorage.setItem(key, value); changed = true; }
-      }
-      if (changed) window.dispatchEvent(new Event('wos:prefs'));
+      acceptPrefs(j);
     } catch (e) { /* Older/offline service: retain this device's cached choice, never reset it. */ }
   };
+  /* Shared lists (Spaces and their members, subject order) change by item operation, never by saving this device's
+   * whole cached list: a device that hadn't pulled yet used to erase another device's or an agent's edit (same bug
+   * as pins, wizard-ux #670). Each edit is queued here (kept across reloads and offline spells), shown at once, and
+   * sent as Agent Service PATCH operations, applied atomically to the stored lists. An older service (405) gets the
+   * same operations replayed onto a fresh read, written and read back. Pins keep their own queue (core/chat-pins.js). */
+  const OPS_KEY = 'wos.prefs.ops.v1', SPACE_OP = /^spaces\/([a-z0-9-]{1,48})\/(threads|name)$/;
+  const opField = o => SPACE_OP.test(o.key) ? 'spaces' : o.key;
+  // The same operations as Agent Service applies (server/ui-preferences.mjs applyUiPreferenceOps); each is idempotent.
+  function applyPrefOps(prefs, ops) {
+    const next = { ...prefs };
+    for (const { op, key, item, items } of ops) {
+      const sub = SPACE_OP.exec(key), list = Array.isArray(next[opField({ key })]) ? next[opField({ key })] : [];
+      if (key === 'pinnedChats' || key === 'subjectOrder') next[key] = op === 'front' ? [...new Set(items)].concat(list.filter(x => !items.includes(x))).slice(0, 60)
+        : op === 'add' ? (list.includes(item) ? list : list.concat(item)) : list.filter(x => x !== item);
+      else if (key === 'spaces') next.spaces = op === 'add' ? (list.some(s => s.id === item.id) ? list : list.concat(item)) : list.filter(s => s.id !== item);
+      else if (sub) next.spaces = list.map(s => s.id !== sub[1] ? s : sub[2] === 'name' ? { ...s, name: item }
+        : { ...s, threads: op === 'add' ? (s.threads.includes(item) ? s.threads : s.threads.concat(item)) : s.threads.filter(t => t !== item) });
+    }
+    return next;
+  }
+  const queuedOps = () => { try { const v = JSON.parse(localStorage.getItem(OPS_KEY) || '[]'); return Array.isArray(v) ? v.filter(o => o && typeof o.op === 'string' && typeof o.key === 'string') : []; } catch (e) { return []; } };
+  const setQueue = ops => { try { localStorage.setItem(OPS_KEY, JSON.stringify(ops.slice(-200))); } catch (e) {} };
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  let patchOff = false, opsRetry = 0, opsTimer = 0;
+  // req() throws on any HTTP error; these answers decide what happens next, so read their status.
+  const ask = (url, init) => req(url, init).catch(e => { if (e?.status) return { ok: false, status: e.status }; throw e; });
+  async function sendOps(ops) {
+    if (!patchOff) {
+      const r = await ask(PREFS_URL, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ops }) });
+      if (r.status === 404) { prefsOff = true; return null; }
+      if (r.ok) return await r.json();
+      if (r.status === 400) return 'invalid';
+      if (r.status !== 405 && r.status !== 501) throw new Error('Preferences unavailable');
+      patchOff = true;
+    }
+    const fields = [...new Set(ops.map(opField))], get = async () => { const g = await ask(PREFS_URL, { cache: 'no-store' }); if (g.status === 404) prefsOff = true; if (!g.ok) throw new Error('Preferences unavailable'); return g.json(); };
+    // Two devices can both read before either writes: read back, and replay onto the newer list if ours didn't stick.
+    // This narrows the loss window to one read-to-write round trip; only the service's PATCH makes it atomic.
+    for (let pass = 0; pass < 6; pass++) {
+      const fresh = await get(), next = applyPrefOps(fresh, ops), patch = {};
+      for (const f of fields) if (!same(next[f], fresh[f])) patch[f] = next[f];
+      if (!Object.keys(patch).length) return fresh;
+      const w = await ask(PREFS_URL, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+      if (w.status === 400) return 'invalid';
+      if (!w.ok) throw new Error('Preferences unavailable');
+      const back = await get(), again = applyPrefOps(back, ops);
+      if (fields.every(f => same(again[f], back[f]))) return back;
+    }
+    throw new Error('Preferences busy');
+  }
+  // direct: send these now without queueing (a new Space appears only once the box has it); else send the queue.
+  const syncOps = (direct = null) => {
+    prefsPending++; prefsRevision++;
+    prefsWrites = prefsWrites.then(async () => {
+      try {
+        const ops = direct || queuedOps();
+        if (!ops.length) return true; // an earlier pass already delivered this edit
+        if (prefsOff) return !direct;
+        const j = await sendOps(ops);
+        if (j === null) return !direct; // no shared preferences on this service: the edit stays on this device
+        // Drop only what this pass delivered; an edit made meanwhile stays queued.
+        if (!direct) { const now = queuedOps(); setQueue(same(now.slice(0, ops.length), ops) ? now.slice(ops.length) : now); }
+        opsRetry = 0;
+        const lists = new Set(ops.concat(queuedOps()).map(opField)); // only the lists: a newer scalar choice may still be on its way
+        if (j === 'invalid') { // the box can never take these: show its lists again
+          window.dispatchEvent(new Event('wos:prefs-error'));
+          try { const g = await req(PREFS_URL, { cache: 'no-store' }); if (g.ok) acceptPrefs(await g.json(), lists); } catch (e) {}
+          return false;
+        }
+        acceptPrefs(j, lists);
+        return true;
+      } catch (e) {
+        if (direct) { window.dispatchEvent(new Event('wos:prefs-error')); return false; }
+        opsRetry = Math.min(opsRetry + 1, 6); // offline or busy: the edit stays queued and shown; try again later
+        if (typeof setTimeout === 'function') { clearTimeout(opsTimer); opsTimer = setTimeout(() => syncOps(), 2000 * 2 ** opsRetry); }
+        return false;
+      } finally { prefsPending--; }
+    });
+    return prefsWrites;
+  };
+  const prefOps = (ops, { requireShared = false } = {}) => {
+    if (requireShared) return syncOps(ops);
+    if (!prefsOff) setQueue(queuedOps().concat(ops));
+    // Shown at once: this device's cached lists with the edit applied.
+    const fields = [...new Set(ops.map(opField))], local = {};
+    for (const f of fields) try { local[f] = JSON.parse(localStorage.getItem(prefsFields[f][0]) || '[]'); } catch (e) { local[f] = []; }
+    const next = applyPrefOps(local, ops);
+    for (const f of fields) try { localStorage.setItem(prefsFields[f][0], prefsFields[f][2](next[f])); } catch (e) {}
+    window.dispatchEvent(new Event('wos:prefs'));
+    return prefsOff ? Promise.resolve(true) : syncOps();
+  };
   pullPrefs(); setInterval(pullPrefs, 30000);
-  try { addEventListener('focus', pullPrefs); } catch (e) {}
+  if (queuedOps().length) syncOps();
+  // A phone coming back to the foreground fires visibilitychange/pageshow, rarely focus: pull then too, so pins and
+  // other shared choices made on another device show at once instead of up to 30s later.
+  try {
+    addEventListener('focus', pullPrefs); addEventListener('pageshow', pullPrefs); addEventListener('online', () => { if (queuedOps().length) syncOps(); pullPrefs(); });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pullPrefs(); });
+  } catch (e) {}
   const sectionTime = s => Math.max(...[s.restoredAt, s.assignedAt, s.previewAt, s.requestAt, s.activityAt, s.lastUserAt, s.updatedAt].map(v => Date.parse(v ?? '')).filter(isFinite));
   // Ready has two orders (James, 10 Oct 2026: "Newest … the newest appears at the top … another option, priority"):
   //   Newest   = approvals pinned, then pure recency, status labels ignored (groupWork's default).
@@ -379,11 +486,13 @@
   // which is the purpose of snoozing it"; supersedes 10 Oct "bottom of today"). They wait in the collapsed Snoozed
   // section until their return time, Restore or Done. A message James sends after snoozing brings the thread back.
   const isDeferred = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt));
-  const readyRank = s => needsApproval(s) ? 0 : isDeferred(s) ? 9 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
+  const readyRank = s => snoozeLast() && isDeferred(s) ? 9 : needsApproval(s) ? 0 : isDeferred(s) ? 9 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
   const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
   // Oldest (James, 23 Oct 2026: "oldest messages at the top … the newest one at the bottom"): Newest's pins kept
   // (approvals first, deferred last), only time reversed in between. Yesterday and Past week stay newest first.
-  const byOldest = list => list.slice().sort((l, r) => Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(r, l));
+  // snoozeOrder('last'): Snooze is a lower place in Ready, ahead of no unsnoozed row (even approvals).
+  const snoozeOrder = (l, r) => snoozeLast() ? Number(isDeferred(l)) - Number(isDeferred(r)) : 0;
+  const byOldest = list => list.slice().sort((l, r) => snoozeOrder(l, r) || Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(r, l));
   function groupWork(sessions, now = Date.now()) {
     const g = { errors: [], working: [], ready: [], yesterday: [], pastWeek: [], deferred: [], archive: [] };
     const readyB = workDayStart(now), yB = readyB - DAY, archDays = archiveAfterDays(), archB = archDays ? now - archDays * DAY : -Infinity;
@@ -391,6 +500,7 @@
       if (s.hidden) continue;
       const t = sectionTime(s);
       if (s.archived) g.archive.push(s);
+      else if (snoozeLast() && isDeferred(s) && !inWorking(s)) g.ready.push(s);
       else if (needsApproval(s)) g.ready.push(s);
       else if (inWorking(s)) g.working.push(s);
       else if (isDeferred(s)) g.deferred.push(s);
@@ -403,7 +513,7 @@
     }
     for (const list of Object.values(g)) list.sort(newestFirst);
     // Newest: approvals pinned, then recency; deferred threads always last (Priority re-sorts with readyRank).
-    g.ready.sort((l, r) => Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(l, r));
+    g.ready.sort((l, r) => snoozeOrder(l, r) || Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(l, r));
     return g;
   }
   async function fetchDispositions() {
@@ -435,7 +545,6 @@
     const st = s.runId && STOPPING.get(s.runId);
     if (st) { if (!WORKING.has(s.status) || Date.now() - st > 120000) STOPPING.delete(s.runId); else s.status = 'stopping'; }
   }
-  const STOPPING = new Map();
 
   /* ---- a send puts its thread in Working at once (James, 10 Oct 2026: "move it out of the ready list immediately
    * and into working… I don't want to see the thread I just replied to in my feed and then have a UX update") ----
@@ -445,6 +554,7 @@
    * this run settles (its idempotency key = the outbox item id); 2 min after acceptance it releases anyway.
    * A message that truly can't be sent puts the thread back where it was (the pill keeps Retry/Edit). */
   const PEND = new Map(); // sessionId -> { key, kind, text, at, state: 'sending'|'waiting'|'sent', sentAt, runId }
+  const STOPPING = new Map(); // runId -> when Stop was asked (applyLocal)
   const PEND_MAX = 2 * 60e3;
   // Admission is not completion: the newest receipt can arrive with an older thread status.
   // Keep the bounded hold through active acknowledgement, so a late stale poll cannot undo it.
@@ -459,6 +569,8 @@
    * longer on a bad line), so the thread is held in Working from the tap: replaced by the outbox item the moment it
    * exists, released if the take turns out empty or becomes a phone command, and never longer than TAP_MAX. */
   const TAPS = new Map(); // sessionId -> { at, until }
+  const CANCELLING = new Set(); // sessionIds whose pending send the owner stopped before its run existed
+  let stopMarks = null; // set by L.cancelSend's block below
   const TAP_MAX = 60e3;
   const RELEASED = new Set(); // outbox item ids whose hold is over (so a later outbox change doesn't re-hold them)
   function applyPend(s) {
@@ -472,9 +584,12 @@
       s.status = p.state === 'sent' ? 'running' : 'submitting';
       s.runId = p.runId || ''; // never an older finished run (a quick second reply must not try to steer it)
       s.assignedAt = at; s.requestAt = at;
-    }
+    } else if (s.status === 'stopping' && !CANCELLING.has(s.id) && !(s.runId && STOPPING.has(s.runId))) s.status = s.orig.status;
     // What the row says: Sending… → (Offline · will retry) → Starting… → (Wizard reports the run) Working.
     s.pend = p.acknowledged ? '' : p.state === 'sent' ? 'starting' : p.state;
+    // Stop tapped before the run existed: Stopping… until the send is withdrawn (or its run is stopped). A run Stop
+    // (STOPPING) keeps its Stopping… through outbox repaints too, not only through list reads (applyLocal).
+    if ((CANCELLING.has(s.id) || (s.runId && STOPPING.has(s.runId))) && WORKING.has(s.status)) s.status = 'stopping';
     s.pendText = p.text; // shown in the row; s.preview stays Wizard's so read-state fingerprints are untouched
   }
   function unPend(s) {
@@ -483,6 +598,7 @@
   }
   // Re-read the outbox: which threads are held, and in what state. Returns true when anything changed.
   function syncPending(OB) {
+    stopMarks?.(OB); // takes stopped before they reached the outbox (L.cancelSend) are withdrawn on arrival
     const before = [...PEND].map(([k, p]) => k + p.key + p.state).join();
     const latest = new Map();
     for (const it of OB._items.values()) {
@@ -637,12 +753,14 @@
     set chatLayout(v) { const x = v === 'status' ? 'status' : 'day'; try { localStorage.setItem(LAYOUT_KEY, x); } catch (e) {} putPrefs({ chatLayout: x }); },
     set archiveAfterDays(d) { try { localStorage.setItem(ARCH_KEY, String(d)); } catch (e) {} putPrefs({ archiveAfterDays: d }); },
     putPrefs,
+    prefOps,
     cardAt,
     groups(agent = '') {
       const now = Date.now(), needs = [], ready = [], working = [];
       for (const s of this.sessionsFor(agent)) {
         if (s.archived || s.hidden) continue;
         const def = this.deferred[seenKeyOf(s)]?.deferred;
+        if (snoozeLast() && isDeferred(s) && !WORKING.has(s.status)) continue; // snoozeOrder('last'): not Needs you until restored/replied
         if (['waiting_for_approval', 'unknown'].includes(s.status)) { needs.push(s); continue; }
         if (WORKING.has(s.status)) { working.push(s); continue; }
         if (def) continue;
@@ -709,7 +827,7 @@
           if (fromSnap) await Promise.race([agents, new Promise(r => setTimeout(r, AGENT_WAIT))]);
           this.emit();
           await agents;
-        } catch (e) { this.error = e.status === 403 ? 'access' : 'offline'; }
+        } catch (e) { this.error = e.status === 403 ? 'access' : 'offline'; this.errorAt = Date.now(); }
         finally { this.loading = null; this.emit(); }
       })();
       return this.loading;
@@ -1003,7 +1121,7 @@
       const list = agent ? (this.agentSessions[agent] = this.agentSessions[agent] || []) : this.sessions;
       const i = list.findIndex(x => x.id === id);
       if (s.id !== id || (s.agent && otherAgent(s.agent) && s.agent !== agent)) throw new Error('Thread scope changed');
-      if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, renames: s.renames, detailNeeded: false,
+      if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, retryRunId: s.retryRunId, queueReason: s.queueReason, status: s.status, safeError: s.safeError, reconnect: s.reconnect, renames: s.renames, detailNeeded: false,
         ...(s.model ? { model: s.model, provider: s.provider, modelLockAt: s.modelLockAt } : {}) };
       else if (this.windows[agent || 'hermes']) DETAIL.set(id, { ...s, detailNeeded: false });
       else list.push({ ...s, detailNeeded: false });
@@ -1135,7 +1253,7 @@
     const key = JSON.stringify([agent, sid, runId]);
     let r = RUN_STREAMS.get(key);
     if (!r) {
-      r = { text: '', terminal: false, listeners: new Set(), frame: null, stopped: false };
+      r = { text: '', steps: [], live: false, terminal: false, listeners: new Set(), frame: null, stopped: false };
       RUN_STREAMS.set(key, r);
       const url = `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${agent ? '?agent=' + encodeURIComponent(agent) : ''}`;
       const notify = () => {
@@ -1151,16 +1269,26 @@
         if ((d.session_id && d.session_id !== sid) || (d.run_id && d.run_id !== runId)) return;
         const type = d.event || e.type;
         if (type === 'message.delta' && typeof d.delta === 'string') { r.text += d.delta; notify(); }
+        // Live steps, like the CLI: the tool that is running and the ones just finished.
+        if (type === 'tool.started' && d.tool) { const id = d.tool_call_id || d.step_id || d.id; r.steps = [...r.steps, { ...(typeof id === 'string' && id ? { id } : {}), tool: String(d.tool), preview: typeof d.preview === 'string' ? d.preview : '', done: false }].slice(-4); notify(); }
+        if (type === 'tool.completed' && d.tool) {
+          const id = d.tool_call_id || d.step_id || d.id;
+          const i = r.steps.findLastIndex(s => !s.done && (typeof id === 'string' && id ? s.id === id : s.tool === String(d.tool)));
+          if (i >= 0) { r.steps = r.steps.map((s, n) => n === i ? { ...s, done: true, error: !!d.error } : s); notify(); }
+        }
         // reasoning.available is deliberately not answer text.
         if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) terminal();
       };
       const connect = () => {
         if (r.stopped || r.terminal) return;
+        r.steps = []; // a reconnect replays the run from its first event
         try {
           r.source = new window.EventSource(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
           r.source.onmessage = event;
-          for (const name of ['message.delta', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted']) r.source.addEventListener(name, event);
+          for (const name of ['message.delta', 'tool.started', 'tool.completed', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted']) r.source.addEventListener(name, event);
+          r.source.onopen = () => { r.live = true; };
           r.source.onerror = () => {
+            r.live = false;
             close();
             // Some queued main sends close before yielding any answer bytes.
             // Retry only before ANY answer bytes: no duplicated/replayed text. This is
@@ -1177,7 +1305,8 @@
           if (r.stopped) return;
           if ((d.run_id || d.id) === runId && d.session_id === sid && ['completed', 'failed', 'cancelled', 'interrupted'].includes(d.status)) terminal();
         } catch (_) { /* connectivity recovery is the ordinary read poll, never another send */ }
-        if (!r.stopped && !r.terminal) r.timer = setTimeout(poll, 500);
+        // The status read is only the safety net while the live stream is open.
+        if (!r.stopped && !r.terminal) r.timer = setTimeout(poll, r.live ? 10000 : 1500);
       };
       r.dispose = () => { r.stopped = true; close(); clearTimeout(r.timer); clearTimeout(r.reconnect); if (r.frame != null) cancelAnimationFrame(r.frame); RUN_STREAMS.delete(key); };
       r.timer = setTimeout(poll, 500);
@@ -1229,7 +1358,10 @@
       };
       tick();
     };
-    OB.onSent(follow);
+    // The receipt already carries the run id (PEND → s.runId, so Stop works at once); read Wizard's list soon after
+    // admission too, instead of waiting for the 15 s poll, so the thread's own status follows the real run.
+    const readSoon = it => { if (!it.steered && !otherAgent(it.agent) && ['new', 'reply'].includes(it.kind)) setTimeout(() => { if (!document.hidden) L.refresh(); }, 800); };
+    OB.onSent(it => { follow(it); readSoon(it); });
     OB.load().then(() => { for (const it of OB._items.values()) if (it.state === 'sent' && Date.now() - it.sentAt < PEND_MAX) follow(it); }).catch(() => {});
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attachOutbox); else setTimeout(attachOutbox, 0);
@@ -1237,6 +1369,44 @@
   const attachAgents = () => { const A = AG(); if (!A || L._agents) return; L._agents = true; A.onChange(() => { if (L.ok) L.refreshAgents().then(() => L.emit()); else L.emit(); }); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attachAgents); else setTimeout(attachAgents, 0);
   L.pending = id => PEND.get(id) || null;
+  /* Stop on a thread with a pending send (Miguel, 28 Oct 2026: the Stop button came only after upload, transcription
+   * and the next list read). Everything sent to the thread and not yet admitted is withdrawn from the outbox (also a
+   * reply queued to steer the live run, so a rejected steer never turns into a new turn); the live run and any run
+   * whose POST had already left (its receipt's id) are stopped. An orb take still being transcribed on the phone (only
+   * the send tap's hold so far) is withdrawn whenever it reaches the outbox: a stop mark outlasts phone transcription.
+   * Resolves { outcome: 'stopped' | 'cancelled' | 'none' | 'busy', runIds, items }. */
+  const STOPPABLE = ['preparing', 'processing', 'queued', 'waiting', 'sending'];
+  const STOP_MARKS = new Map(); // sessionId -> { at, until }: takes begun before this Stop are withdrawn on arrival
+  const STOP_MARK_MS = 5 * 60e3; // the outbox allows 195 s of transcription; phone-side routing comes on top
+  const pendingFor = (OB, sid, before = Infinity) => OB ? [...OB._items.values()].filter(it => it.sessionId === sid && ['new', 'reply'].includes(it.kind) &&
+    !it.compact && !it.cancelled && STOPPABLE.includes(it.state) && (it.createdAt || 0) <= before) : [];
+  async function withdrawSends(OB, list) {
+    const res = await Promise.all(list.map(it => OB.cancel(it.id)));
+    const items = res.filter(r => r?.outcome === 'cancelled').map(r => r.item);
+    for (const it of items) RELEASED.add(it.id);
+    return { items, started: res.filter(r => r?.outcome === 'started' && r.runId).map(r => r.runId) };
+  }
+  function applyStopMarks(OB) {
+    for (const [sid, m] of STOP_MARKS) {
+      if (Date.now() > m.until) { STOP_MARKS.delete(sid); continue; }
+      const late = pendingFor(OB, sid, m.at);
+      if (late.length) withdrawSends(OB, late).then(r => { for (const id of r.started) L.stop(id).catch(() => {}); L.emit(); }).catch(() => {});
+    }
+  }
+  stopMarks = applyStopMarks;
+  L.cancelSend = async (sid, runId = '') => {
+    const OB = window.WosOutbox;
+    if (!sid || CANCELLING.has(sid)) return { outcome: 'busy', runIds: [], items: [] };
+    CANCELLING.add(sid); resync(); L.emit();
+    try {
+      const at = Date.now(), p = PEND.get(sid), tapped = TAPS.has(sid);
+      const w = OB ? await withdrawSends(OB, pendingFor(OB, sid)) : { items: [], started: [] };
+      if (tapped) { STOP_MARKS.set(sid, { at, until: at + STOP_MARK_MS }); TAPS.delete(sid); }
+      const runIds = [...new Set([runId, p?.runId, ...w.started].filter(Boolean))];
+      await Promise.all(runIds.map(id => L.stop(id)));
+      return { outcome: runIds.length ? 'stopped' : w.items.length || tapped ? 'cancelled' : 'none', runIds, items: w.items };
+    } finally { CANCELLING.delete(sid); resync(); L.emit(); }
+  };
   const resync = () => { const OB = window.WosOutbox; if (OB && syncPending(OB)) L.emit(); };
   // Returns a token for releaseSend. '__new__' has no row to move (a new chat is listed once it is in the outbox).
   L.holdSend = sid => {
