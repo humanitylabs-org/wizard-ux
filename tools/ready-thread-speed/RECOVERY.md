@@ -22,6 +22,21 @@ Original API measurements remain provisional synthetic contributor evidence.
   the requested `limit=500` transcript. This was not a duplicate open or a timer.
   The modern fixture now supplies metadata and retains the exact one-read
   assertion; a separate legacy regression asserts the two distinct reads.
+- The r5 legacy fixture had two additional test-only defects: its VM never loaded
+  `web/core/chat-kit.js`, so the optional `WosChat.parseRows` call could not recover
+  user text, and the assertion used nonexistent `retryInput` instead of normalized
+  `request`. The fixture now loads the actual shipped kit into the same VM, checks
+  recovered `request`, and parses the returned transcript to require the actual
+  user text and current assistant answer. Exact modern one-read (`limit=500`) and
+  legacy two-read (`limit=100` then `limit=500`) assertions remain, with no new or
+  removed test cases (the runner still requires 34/34). Failed r4/r5 evidence is
+  retained alongside r2; no browser phase passed in either fast-failed recovery.
+  Static audit covered every speed-test assertion and its imports, VM globals,
+  detail gate, scope pinning, fetch response shape, in-flight join and cache-key
+  invalidation against the serving source. The kit's startup only binds document
+  listeners already supplied by this VM; parser dependencies ship in that same
+  file. The other four files in the 34-test gate and their source dependencies
+  remain unchanged. Syntax checks are not test execution or an acceptance pass.
 - Every browser context advertised touch, so the supposed desktop entrypoint
   redirected into the phone shell. Both the receipt errors and desktop failure
   screenshot show the phone body/overview, not a desktop window. Contexts now
