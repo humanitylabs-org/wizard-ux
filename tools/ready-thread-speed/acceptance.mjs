@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { initialize,openList,rowFor,actionable,input,backToList,diagnostics,armPaint } from './browser-preparation.mjs';
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, openSync, closeSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,40 +30,25 @@ try {
  const browser=await chromium.launch({executablePath:process.env.QA_CHROME});
  try {
  for(const shell of ['phone','desktop'])for(const skin of ['nebula','signal']){
-  const ctx=await browser.newContext({viewport:shell==='phone'?{width:412,height:892}:{width:1280,height:900},hasTouch:true,isMobile:shell==='phone',deviceScaleFactor:1});
+  const ctx=await browser.newContext({viewport:shell==='phone'?{width:412,height:892}:{width:1280,height:900},isMobile:shell==='phone',hasTouch:shell==='phone',serviceWorkers:'block'});
   const page=await ctx.newPage();page.setDefaultTimeout(15000);const errors=[];page.on('pageerror',e=>errors.push(String(e)));
   await ctx.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.fulfill({status:403,body:'Synthetic fixture blocks external requests'}));
+  await initialize(ctx,skin);
   await ctx.addInitScript(()=>{
-   localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.v1','true');localStorage.setItem('wos.voiceTipSeen','true');
-   // Controlled cache-state timings disable speculative preload only. Reads and
-   // production cache validation/rendering remain untouched.
-   Object.defineProperty(navigator,'connection',{value:{saveData:true},configurable:true});
    const base=window.fetch;window.__speedRequests=[];
    window.fetch=async(...args)=>{const url=String(args[0]),at=performance.now();const r=await base(...args);if(url.includes('/messages?')||url.includes('view=detail'))window.__speedRequests.push({url,request:at,response:performance.now()});return r};
-   window.__speedResult=null;
-   document.addEventListener('pointerdown',e=>{if(!e.target.closest('[data-chopen]')||!window.__speedExpected)return;const at=performance.now(),expected=window.__speedExpected;window.__speedResult=null;
-    const find=()=>[...document.querySelectorAll('.ch-msgs .msg.a')].find(el=>el.textContent.includes(expected));
-    const check=()=>{const el=find();if(!el)return;requestAnimationFrame(()=>requestAnimationFrame(()=>{const r=el.getBoundingClientRect();if(el.isConnected&&r.width&&r.height&&r.bottom>0&&r.top<innerHeight&&el.textContent.includes(expected)){window.__speedResult={tap:at,paint:performance.now(),ms:performance.now()-at,expected};observer.disconnect()}}))};
-    const observer=new MutationObserver(check);observer.observe(document.body,{subtree:true,childList:true,attributes:true});check();
-    setTimeout(()=>observer.disconnect(),15000);
-   },true);
   });
   try {
-   await page.goto(origin+'/wizard-os-home/'+(shell==='desktop'?'desktop.html':''),{waitUntil:'domcontentloaded'});
-   await page.waitForFunction(()=>WizLive?.ok && (window.__wos||window.__wux));
-   await page.evaluate(()=>{(window.__wux||window.__wos).openSettings('look')});
-   await page.locator('[data-skinfamily="wizard"]').first().click();await page.locator(`[data-skinpick="${skin}"]`).first().click();
+   const wid=await openList(page,origin,shell);
    await page.waitForFunction(s=>document.documentElement.dataset.skin===s,skin);
-   await page.evaluate(()=>{if(window.__wux)__wux.closeSettings();else __wos.closeSheets(true)});
-   await page.evaluate(()=>{if(window.__wux)__wux.openChatsList();else {__wos.goDesk(1);if(!Object.values(__wos.wins).some(w=>w.app==='chats'))__wos.openWin({app:'chats'})}});
-   const wid=await page.evaluate(()=>Object.values((window.__wux||window.__wos).wins).find(w=>w.app==='chats')?.id);assert.ok(wid);
    for(const state of ['current','empty','stale']){
     const samples=[];
     for(let n=1;n<=30;n++){
      const id=`wizard_speed_${n}`;
      const history=JSON.parse(await get(`/wizard/hermes/api/sessions/${id}/messages?order=oldest&limit=500&include_compacted=true&view=wizard`));
      const marker=(history.data||history.messages).at(-1).content.split('\n')[0];
-     await page.evaluate(({wid,id,state})=>{const H=window.__wux||window.__wos;H.chats.openChat(wid,null);if(state==='empty')WizLive.forgetMessages(id)}, {wid,id,state});
+     if(n>1||state!=='current')await backToList(page,wid,shell);
+     await page.evaluate(async({id,state})=>{if(state==='empty')await WizLive.forgetMessages(id)}, {id,state});
      if(state!=='empty')await page.evaluate(async id=>{await WizLive.sessionInfo(id);await WizLive.messages(id)},id);
      let expected=marker;
      if(state==='stale'){
@@ -70,17 +56,24 @@ try {
       // Mutate only this process's disposable canonical fixture via IPC.
       expected=`SYNTHETIC_CURRENT_ANSWER_${n}_v${Math.trunc(stamp*1e6)}`;
       await new Promise((res,rej)=>{const t=setTimeout(()=>rej(Error('fixture revision ack timeout')),10000);const fn=m=>{if(m.id===id){clearTimeout(t);child.off('message',fn);res()}};child.on('message',fn);child.send({op:'answer',id,text:expected,stamp})});
-      await page.evaluate(id=>WizLive.sessionInfo(id),id);
+      // Only a live list update can vouch for content revision. Detail hydrates
+      // optional rename/retry metadata and intentionally does not replace counts.
+      await page.evaluate(()=>WizLive.refresh());
       assert.equal(await page.evaluate(id=>!!WizLive.cachedMessages(id),id),false,'old answer must not be accepted as current');
      }
      // Empty is asserted immediately before tapping; accidental prefetch cannot
      // make a cold sample pass as warm.
      if(state==='empty')assert.equal(await page.evaluate(id=>!!WizLive.cachedMessages(id),id),false);
      if(state==='current')assert.equal(await page.evaluate(id=>!!WizLive.cachedMessages(id),id),true);
-     await page.evaluate(expected=>{window.__speedExpected=expected;window.__speedResult=null;window.__speedRequests=[]},expected);
-     const row=page.locator(`[data-chopen="${id}"]:visible`).first();await row.scrollIntoViewIfNeeded();await row.tap();
-     await page.waitForFunction(()=>!!window.__speedResult,null,{timeout:15000});
-     const trace=await page.evaluate(()=>({...window.__speedResult,requests:window.__speedRequests}));samples.push(trace.ms);
+     const row=rowFor(page,wid,id),geometry=await actionable(row);
+     await armPaint(page,wid,expected,state==='stale'?marker:'');
+     await page.evaluate(()=>{window.__speedRequests=[]});
+     await input(row,shell);
+     await page.waitForFunction(()=>window.__speed?.first!==null,null,{timeout:15000});
+     const trace=await page.evaluate(()=>({tap:window.__speed.start,ms:window.__speed.first,expected:window.__speed.expected,stale:window.__speed.stale,requests:window.__speedRequests}));
+     assert.ok(trace.tap>0,'the measured row received actual pointer input');
+     assert.equal(trace.stale,false,'a stale cached answer never paints in this open');
+     trace.geometry=geometry;samples.push(trace.ms);
      appendFileSync(join(out,'tap-traces.jsonl'),JSON.stringify({shell,skin,state,n,id,...trace})+'\n');
      if(n===1){await page.screenshot({path:join(out,`${shell}-${skin}-${state}.png`)});}
     }
@@ -105,10 +98,19 @@ try {
    await page.getByText('SYNTHETIC_CURRENT_ANSWER_400_v1',{exact:false}).last().waitFor({state:'visible'});
    await page.evaluate(()=>{(window.__wux||window.__wos).outbox._items.delete('speed-voice')});
    results.browser.push({shell,skin,case:'pending-voice-hang-deadline-retry',pass:true});
-   await page.evaluate(async()=>{Object.defineProperty(navigator,'connection',{value:{saveData:false},configurable:true});await WizLive.forgetMessages('wizard_speed_30');await WizLive.refresh()});
-   await page.waitForFunction(()=>!!WizLive.cachedMessages('wizard_speed_30'),null,{timeout:15000});
-   results.browser.push({shell,skin,case:'ready-prefetch-uses-existing-current-cache',pass:true});
-  }catch(e){results.failures.push(`${shell}/${skin}: ${e.stack}`);await page.screenshot({path:join(out,`${shell}-${skin}-failure.png`)}).catch(()=>{});save();}
+   // Preload is bounded to the first 16 Ready/error/working rows. Pick its actual
+   // first Ready candidate, not a hard-coded row outside the production window.
+   const prefetchId=await page.evaluate(async()=>{
+    const s=WizLive.workGroups().ready.find(s=>!s.archived&&!s.hidden&&!s.optimistic&&!s.synthetic&&!WizLive.agentOf(s.id));
+    if(!s)throw Error('No eligible Ready prefetch candidate');
+    await WizLive.forgetMessages(s.id);navigator.connection.saveData=false;return s.id;
+   });
+   let prefetchReads=0;const count=r=>{if(new URL(r.url()).pathname.endsWith('/'+prefetchId+'/messages'))prefetchReads++};page.on('request',count);
+   await page.evaluate(()=>WizLive.refresh());
+   await page.waitForFunction(id=>!!WizLive.cachedMessages(id),prefetchId,{timeout:15000});
+   assert.equal(prefetchReads,1,'exactly one actual background prefetch');page.off('request',count);
+   results.browser.push({shell,skin,case:'ready-prefetch-uses-existing-current-cache',id:prefetchId,history_reads:prefetchReads,pass:true});
+  }catch(e){results.failures.push(`${shell}/${skin}: ${e.stack}`);writeFileSync(join(out,`${shell}-${skin}-diagnostic.json`),JSON.stringify(await diagnostics(page).catch(e=>({error:String(e)})),null,2));await page.screenshot({path:join(out,`${shell}-${skin}-failure.png`)}).catch(()=>{});save();}
   finally{await ctx.close()}
  }
  } finally {await browser.close()}
@@ -120,6 +122,8 @@ finally{
  if(existsSync(join(fixtureRoot,'custody.json'))){results.custody=JSON.parse(readFileSync(join(fixtureRoot,'custody.json')));if(results.custody.upstreamWrites)results.failures.push('upstream write attempted')}
  else results.failures.push('missing fixture custody receipt');
  results.complete=results.api.length===3&&results.browser.filter(r=>r.state).length===12&&results.browser.filter(r=>r.case).length===12;
+ results.expected={api_groups:3,api_samples_each:50,tap_groups:12,tap_samples_each:30,browser_cases:12};
+ results.complete=results.complete&&results.api.every(r=>r.n===50)&&results.browser.filter(r=>r.state).every(r=>r.n===30);
  results.budgets_pass=results.complete&&!results.failures.length&&[...results.api,...results.browser].every(r=>r.pass);
  save();console.log(JSON.stringify({label,complete:results.complete,budgets_pass:results.budgets_pass,failures:results.failures}));
 }

@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import { helperWorkingHarness, liveSource } from './helpers/helper-working-harness.mjs';
 
 const row = { id: 'wizard_speed', title: 'Synthetic Ready', source: 'wizard-mobile', status: 'completed', message_count: 2,
+  wizard_retry_input: 'Synthetic request',
   wizard_last_user_at: 100, wizard_last_assistant_at: 200, wizard_activity_at: 200,
   wizard_attention: {state:'done',ask:'Synthetic answer saved'} };
 const messages = [{id:1,role:'user',content:'Synthetic request',timestamp:100},{id:2,role:'assistant',content:'SYNTHETIC_CURRENT_ANSWER',timestamp:200}];
-function setup(agent = '') {
-  const h = helperWorkingHarness({source:liveSource(),row,detail:{session:row},agent});
+function setup(agent = '', detailRow = row) {
+  const h = helperWorkingHarness({source:liveSource(),row,detail:{session:detailRow},agent});
   const original = h.context.fetch, reads = [];
   h.context.fetch = async (url, init) => {
     reads.push(String(url));
@@ -29,6 +30,18 @@ test('known main history does not wait for optional detail; cold unknown still d
   done(); await pending;
   assert.equal(cold.reads.filter(u=>u.includes('view=detail')).length,1);
   assert.equal(cold.reads.filter(u=>u.includes('/messages?')).length,1);
+});
+test('legacy detail without retry metadata explicitly reads user input before the requested history', async () => {
+  const {wizard_retry_input, ...legacy}=row;
+  const h=setup('',legacy),done=h.deferDetail(),pending=h.L.messages(row.id);
+  await new Promise(r=>setImmediate(r));
+  assert.equal(h.reads.filter(u=>u.includes('/messages?')).length,0);
+  done();await pending;
+  const history=h.reads.filter(u=>u.includes('/messages?'));
+  assert.equal(history.length,2,'one legacy retry-input fallback plus the requested transcript, not duplicate open reads');
+  assert.equal(new URL(history[0],'https://fixture.invalid').searchParams.get('limit'),'200');
+  assert.equal(new URL(history[1],'https://fixture.invalid').searchParams.get('limit'),'500');
+  assert.equal(h.L.session(row.id).retryInput,'Synthetic request');
 });
 for (const agent of ['synthetic-profile','synthetic-container','synthetic-restricted','synthetic-private']) test(`known ${agent} reads stay scoped and out of persistent history cache`,async()=>{
   const h=setup(agent); await h.poll();

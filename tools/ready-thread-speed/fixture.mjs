@@ -41,6 +41,8 @@ const fetchImpl=async(url,init={})=>{
 };
 for(const name of ['os','files','skins','home'])mkdirSync(join(root,name),{recursive:true});
 writeFileSync(join(root,'apps.json'),JSON.stringify({apps:[]}));
+// Start after onboarding, using real persisted Setup state rather than hiding UI.
+writeFileSync(join(root,'settings.json'),JSON.stringify({schema:1,setup:{seen_at:new Date().toISOString()}}));
 const server=createWizardServer({requireAccess:false,hermesKey:'synthetic-only',fetchImpl,
  uxDir:join(ux,'web'),wizardOsHome:join(root,'os'),hermesHome:join(root,'home'),appsJsonPath:join(root,'apps.json'),
  userFilesRoot:join(root,'files'),skinsStateDir:join(root,'skins'),settingsPath:join(root,'settings.json'),
