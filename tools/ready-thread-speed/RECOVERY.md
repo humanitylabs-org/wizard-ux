@@ -119,20 +119,24 @@ Preserve the original r7 receipt/log/results/screenshots, including these failur
 ### Static branch audit — assumptions, not fresh execution evidence
 
 - Long history uses shipped `WizLive.messages` (500-row pages, `include_compacted`,
-  `view=wizard`), synthetic 1200-row thread 0, real row input/current answer, three
-  actual responses, real hover/wheel upward and 1s list polls. Compare scroller top
-  and text-anchor geometry; no direct renderer call or scroll-position write.
+  `view=wizard`), synthetic 1200-row thread 0, real row input/current answer and
+  three actual responses. Fresh long-history browser proof does not scroll upward;
+  read-position regression remains inherited in the unchanged nine-case
+  `thread-reading-spot` suite. Do not call inherited scroll evidence fresh browser QA.
 - Pending uses shipped `outbox.enqueue({kind:'reply',sessionId,model,provider})`,
-  its returned durable item and `LIVE.pendingIds()`, not nonexistent `markPending`.
-  Hold local `/wizard/hermes/v1/runs`, hold thread-400 history beyond shipped 12s
-  timeout, click visible retry, require pending bubble on skeleton AND error.
-  Abort/context-close/release order fences admission through teardown. Fixture
+  its returned durable item and rendered `.msg.pending`, not nonexistent
+  `markPending`. Hold local `/wizard/hermes/v1/runs`, hold thread-400 history beyond shipped 12s
+  timeout, click visible `[data-chretry]` (not outbox Retry), require pending bubble
+  on skeleton AND error. Release only into abort-only route handlers before closing
+  context; admission never reaches Service. Fixture
   forbids upstream writes. Missing controls/timeouts fail, never get mocked away.
 - Preload uses actual `workGroups` ready/errors/working, first 16, excluding hidden,
   archived, optimistic, synthetic and non-main-cache rows. Save-data fences earlier
   state samples. Pick a real first-16 non-long row, forget cache, release save-data,
-  refresh, require a real background response and pointerover/click join without a
-  duplicate. Do not replace this one-page assertion with long history.
+  refresh and require exactly one real background response/current cache. This is
+  a completed preload, not a fresh pointerover/inflight-join test; that invariant
+  remains in inherited UX regressions. Never substitute long history for this
+  one-page assertion.
 - Changed shared helper requires fresh 24 scope cells (20 positive delayed-detail,
   four negative legacy). Only unchanged UX34 and Service52/141 remain inherited by
   exact hashes and complete production/test inventory equality. No local tests,
