@@ -22,7 +22,7 @@
     { id: 'schedules', title: 'Schedules', available: () => !!window.WosSchedules?.available },
     { id: 'about', title: 'About & updates' },
   ];
-  const featurePages = { look: 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
+  const featurePages = { look: 'appearance', 'window-glass': 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
   const pageOf = f => f?.page != null ? PAGES.some(p => p.id === f.page) ? f.page : 'about' : featurePages[f?.id] || 'about';
   const chatsHost = () => window.WizChatsHost;
   const chatsName = id => id === 'wizard-chats' ? 'Wizard Chats' : chatsHost()?.installed().find(a => a.id === id)?.name || id;
@@ -64,7 +64,7 @@
     const when = ctx.ago?.(new Date(it.createdAt).toISOString()) || '';
     const blocked = it.state === 'unconfirmed' || ctx.outbox?.quarantined?.(it.id);
     const held = it.state === 'held', audio = !!(it.audio || it.audioFile || it.hasAudio);
-    const st = blocked ? esc(ctx.outbox?.quarantined?.(it.id) ? 'Waiting for device storage verification' : it.error || 'Could not confirm delivery · original kept') : it.state === 'empty' ? 'No speech detected · recording kept' : held ? esc(it.error || 'Kept on this device · no delivery intent confirmed; not queued') : it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : ['sending', 'queued'].includes(it.state) ? 'Queued / sending · awaiting receipt' : esc(window.WizReach?.failure().short || 'Checking connection · retrying');
+    const st = blocked ? esc(ctx.outbox?.quarantined?.(it.id) ? 'Waiting for device storage verification' : it.error || 'Could not confirm delivery · original kept') : it.state === 'empty' ? 'No speech detected · recording kept' : held ? esc(it.error || 'Kept on this device · no delivery intent confirmed; not queued') : it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : ['sending', 'queued'].includes(it.state) ? 'Queued / sending · awaiting receipt' : esc(window.WizReach?.failure().short || 'Reconnecting…');
     const src = it.origin === 'everywhere' ? 'Everywhere button' : it.source === 'orb' ? 'Orb' : 'Chat';
     const canRetry = it.origin === 'app' ? ctx.outbox?.canRetry(it) : !blocked && ['failed', 'waiting'].includes(it.state);
     const transcript = it.recoveryText || it.text || '';
@@ -128,35 +128,47 @@
     if (!el.closest('[data-ub-all]')) return false;
     retryAll(ctx); return true;
   } });
-  const responseStyleState = ctx => ctx.responseStyle || (ctx.responseStyle = { value: '', busy: false, error: '' });
-  async function responseStyle(ctx, value) {
-    const state = responseStyleState(ctx);
-    if (state.busy) return;
-    const restoreFocus = document.activeElement?.matches?.('[data-response-style]') && ctx.root?.contains(document.activeElement);
-    state.busy = true; state.error = ''; ctx.render?.();
-    try {
-      if (!window.WizConfig?.responseStyle) throw Error('Response style is unavailable until your Wizard is updated');
-      state.value = await window.WizConfig.responseStyle(value);
-    } catch (error) { state.error = error.message || 'Could not change response style'; }
-    finally {
-      const focusWasLost = !document.activeElement || document.activeElement === document.body;
-      state.busy = false; ctx.render?.();
-      if (restoreFocus && focusWasLost) ctx.root?.querySelector('[data-response-style]')?.focus({ preventScroll: true });
-    }
+  // Public kind-0 only. The signed event comes from native; no secret is handled by the page.
+  const identityRelays = ['wss://relay.aiwizards.com', 'wss://nos.lol', 'wss://relay.damus.io'];
+  function publishIdentityProfile(event) {
+    return Promise.any(identityRelays.map(url => new Promise((resolve, reject) => {
+      let socket; const timer = setTimeout(() => { socket?.close(); reject(new Error('relay timeout')); }, 8000);
+      const finish = (ok, message) => { clearTimeout(timer); socket?.close(); ok ? resolve(url) : reject(new Error(message || 'relay refused')); };
+      try {
+        socket = new WebSocket(url);
+        socket.onopen = () => socket.send(JSON.stringify(['EVENT', event]));
+        socket.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (_) { return; } if (m[0] === 'OK' && m[1] === event.id) finish(m[2] === true, m[3]); };
+        socket.onerror = () => finish(false, 'relay unavailable');
+        socket.onclose = () => { clearTimeout(timer); reject(new Error('relay closed')); };
+      } catch (e) { clearTimeout(timer); reject(e); }
+    })));
   }
-  register({ id: 'response-style', page: 'chats', aliases: ['response-style'],
-    enter(ctx) { responseStyle(ctx); },
+  let identityInfo = null, identityAsked = false;
+  register({ id: 'wizard-id', page: 'phone', aliases: ['wizard-id'], available: () => !!window.wizardDevicePort,
     html(ctx) {
-      const state = responseStyleState(ctx);
-      return `<div class="st-group"><label class="st-row static"><span class="st-tx"><b>Response style</b><small>Summary: context and labelled results.</small><small>Concise: short, plain replies.</small></span><select class="st-choice" aria-label="Response style" data-response-style ${state.busy || !state.value ? 'disabled' : ''}><option value="" ${!state.value ? 'selected' : ''} disabled>${state.busy ? 'Loading…' : 'Choose…'}</option><option value="summary" ${state.value === 'summary' ? 'selected' : ''}>Summary</option><option value="concise" ${state.value === 'concise' ? 'selected' : ''}>Concise</option></select></label>${state.error ? `<p class="st-note" role="alert">${esc(state.error)}</p><button class="st-wide" data-response-style-retry>Try again</button>` : ''}</div>`;
+      if (!identityAsked) { identityAsked = true; window.WizCore?.bridge?.call('identity.info').then(info => { identityInfo = info?.npub ? info : null; (ctx?.render || ctx?.changed)?.(); }).catch(() => { identityAsked = false; }); }
+      const sub = identityInfo?.npub ? `${identityInfo.name || 'Your ID'} · ${identityInfo.backed_up ? 'Backed up' : 'Not backed up'}` : 'Not set up · your signing key stays on this phone';
+      return `<div class="st-group"><h4>Identity</h4>${row('wizard-id', 'Wizard ID', sub)}</div>`;
     },
-    input(ctx, el) {
-      if (!el.matches?.('[data-response-style]')) return;
-      const state = responseStyleState(ctx), value = el.value;
-      el.value = state.value; // Never display an unverified save as the selected owner setting.
-      if (value !== state.value) responseStyle(ctx, value);
+    act(ctx, el) {
+      if (!el.closest('[data-st="wizard-id"]')) return false;
+      window.WizCore.bridge.call('identity.setup').then(async result => {
+        if (result.cancelled || result.denied) return;
+        identityInfo = await window.WizCore.bridge.call('identity.info');
+        ctx.changed?.();
+        if (result.profile_event) {
+          try { await publishIdentityProfile(result.profile_event); ctx.toast?.('✓', 'Wizard ID profile published', 2200); }
+          catch (_) { ctx.toast?.('!', 'ID saved on this phone · profile not published. Open Wizard ID to retry.', 4500); }
+        }
+      }).catch(() => ctx.toast?.('!', 'Wizard ID unavailable · update the Wizard Android app', 3000));
+      return true;
+    }
+  });
+  // Reply style belongs to each agent's own persona (SOUL.md), not to Wizard: one source, survives detach.
+  register({ id: 'response-style', page: 'chats', aliases: ['response-style'],
+    html() {
+      return `<div class="st-group"><div class="st-row static"><span class="st-tx"><b>Reply style</b><small>Each agent keeps its own. Tell an agent how you like replies and it remembers.</small></span></div></div>`;
     },
-    act(ctx, el) { if (!el.closest('[data-response-style-retry]')) return false; responseStyle(ctx); return true; },
   });
   const mySkinWorn = () => !!window.WosMySkin?.active;
   function mySkinRow(skin) {
@@ -203,12 +215,12 @@
   function tweakRows(S) {
     const E = window.WosExperience; if (!E) return '';
     const s = E.state, own = window.WosMySkin?.active;
-    if ((!s.owner && !own) || (!s.tweaks.length && !s.error)) return '';
+    if (!s.tweaks.length && !s.error) return '';
     const fam = (S.families || []).find(f => f.id === S.familyOf?.(S.current)), who = esc(fam?.name || 'This skin');
     const rows = tweakSwitches(s.tweaks, 'data-tweak-toggle', s.busy);
     if (own) return `<div class="tw-set"><h4>Tweaks</h4>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</div>`;
     const on = s.tweaks.filter(t => t.on).length;
-    return `<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row"><span class="st-tx"><b>${who} also changes how things work</b><small>${on} of ${s.tweaks.length} changes on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</details>`;
+    return `<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row"><span class="st-tx"><b>${s.owner ? who + ' also changes how things work' : 'How things work'}</b><small>${on} of ${s.tweaks.length} changes on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</details>`;
   }
   let tweaksOpen = false;
   window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
@@ -317,6 +329,23 @@
       void window.WosExperience?.chooseSkin?.();
       for (const m of mounts) m.render(); ctx.haptic?.(8);
     }, e => ctx.toast?.('!', e.message, 3000)); return true;
+  } });
+  // Window opacity: one slider for the glass behind every window (Chats and every app). Per device, like the skin.
+  const glassPct = S => Math.round((S.glass ?? S.skinGlass) * 100);
+  const glassNote = S => S.glass == null ? 'Skin default · every window and app' : 'Every window and app';
+  register({ id: 'window-glass', aliases: ['window-opacity', 'opacity'], available: () => typeof window.WosSkin?.setGlass === 'function', html() {
+    const S = window.WosSkin, r = S.glassRange, pct = glassPct(S);
+    return `<div class="st-group wg-section"><h4>Windows</h4><div class="st-row static wg-row"><span class="st-tx"><b id="wg-label">Window opacity</b><small data-wg-note>${glassNote(S)}</small></span><output data-wg-val for="wg-range">${pct}%</output></div><input id="wg-range" class="wg-range" type="range" min="${Math.round(r.min * 100)}" max="${Math.round(r.max * 100)}" step="1" value="${pct}" data-wg-range aria-labelledby="wg-label" aria-valuetext="${pct}%">${S.glass == null ? '' : '<button type="button" class="wg-reset" data-wg-reset>Use skin default</button>'}</div>`;
+  }, input(ctx, el) {
+    if (!el.matches('[data-wg-range]')) return;
+    const S = window.WosSkin, n = S.setGlass(Number(el.value) / 100), g = el.closest('.wg-section');
+    el.setAttribute('aria-valuetext', `${Math.round(n * 100)}%`);
+    const out = g?.querySelector('[data-wg-val]'); if (out) out.textContent = `${Math.round(n * 100)}%`;
+    const note = g?.querySelector('[data-wg-note]'); if (note) note.textContent = glassNote(S);
+    if (g && !g.querySelector('[data-wg-reset]')) el.insertAdjacentHTML('afterend', '<button type="button" class="wg-reset" data-wg-reset>Use skin default</button>');
+  }, act(ctx, el) {
+    if (!el.closest('[data-wg-reset]')) return false;
+    window.WosSkin.setGlass(null); ctx.render(); ctx.root.querySelector('[data-wg-range]')?.focus(); return true;
   } });
   register({ id: 'skin-frame', available: () => !!window.WosSkin, html() {
     return '<div class="st-group sf-section"><details class="st-advanced"><summary>Advanced</summary><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><p data-skinimport-status role="status"></p></details></div>';

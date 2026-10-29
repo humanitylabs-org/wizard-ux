@@ -23,7 +23,7 @@
   // A skin entry not listed here is a skin of its own with one palette (so a new collaborator skin needs no edit here).
   const FAMILIES = [
     { id: 'wizard', name: 'Wizard', tweaks: 'wizard', who: 'The original Wizard look, in five moods.', palettes: ['nebula', 'grove', 'tide', 'ember', 'signal'] },
-    { id: 'mizel', name: 'Mizel', tweaks: 'miguel', recommends: { chats: 'mizel-chats' }, who: 'Miguel’s skin: black and white, or a new landscape every minute.', palettes: ['obsidian', 'obsidian-light', 'landscapes'] },
+    { id: 'mizel', name: 'Mizel', tweaks: 'miguel', recommends: { chats: 'mizel-chats' }, who: 'Miguel’s skin: black and white, or a new landscape every minute.', palettes: ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'] },
     { id: 'novairecito', name: 'Novairecito', who: 'Novaire’s skin: a noir violet command deck, or warm paper for long reads.', palettes: ['novairecito', 'sepia'] },
   ];
   const LAST = 'wos.skin.last.';
@@ -56,19 +56,25 @@
       t: T({ bg: '#f3ead2', ink: '#332b22', 'ink-2': '#5f5243', 'ink-3': '#786651', line: 'rgba(86,65,40,.16)', 'line-2': 'rgba(86,65,40,.30)', glass: 'rgba(236,222,190,.76)', 'glass-2': 'rgba(247,239,219,.92)',
         violet: '#76533d', 'violet-2': '#684733', pink: '#9a5c56', cyan: '#557878', amber: '#94691d', green: '#57704d', red: '#a34236',
         'sk-time-a': '#3a3026', 'sk-time-b': '#735b43', 'sk-dock': 'rgba(238,225,197,.96)', 'sk-dock-line': 'rgba(86,65,40,.16)', 'sk-ddot': 'rgba(86,65,40,.52)', 'sk-tour': 'rgba(247,239,219,.94)', 'sk-dim': 'rgba(75,55,32,.24)', 'sk-win': 'rgba(247,239,219,.94)' }) },
-    { id: 'obsidian', pkg: { css: true, dir: 'obsidian' }, name: 'Dark', who: 'Miguel’s dark skin. Black, white and nothing else.', orb: [0, 0, 1.15],
+    { id: 'obsidian', pkg: { css: true, dir: 'obsidian' }, name: 'Dark', who: 'Miguel’s dark skin. Black and white, with the violet orb.', orb: [0, 1, 1.05],
       t: T({ bg: '#000000', ink: '#f7f7f7', 'ink-2': '#c4c4c4', 'ink-3': '#8a8a8a', line: 'rgba(255,255,255,.12)', 'line-2': 'rgba(255,255,255,.26)', glass: 'rgba(20,20,20,.62)', 'glass-2': 'rgba(24,24,24,.86)',
         violet: '#ffffff', 'violet-2': '#e8e8e8', pink: '#bdbdbd', cyan: '#d6d6d6', amber: '#e6b15c', green: '#9fd8a8', red: '#ff6b6b',
         'sk-time-a': '#ffffff', 'sk-time-b': '#9a9a9a', 'sk-dock': 'rgba(0,0,0,.96)', 'sk-dock-line': 'rgba(255,255,255,.12)', 'sk-ddot': 'rgba(255,255,255,.5)', 'sk-tour': 'rgba(10,10,10,.9)', 'sk-dim': 'rgba(0,0,0,.78)', 'sk-win': 'rgba(10,10,10,.9)' }) },
-    { id: 'obsidian-light', pkg: { css: true, dir: 'obsidian' }, name: 'Light', who: 'Miguel’s light skin. Ink on white paper.', orb: [0, 0, .55],
+    { id: 'obsidian-light', pkg: { css: true, dir: 'obsidian' }, name: 'Light', who: 'Miguel’s light skin. Ink on white paper, with the violet orb.', orb: [0, 1.1, .95],
       t: T({ bg: '#ffffff', ink: '#000000', 'ink-2': '#2e2e2e', 'ink-3': '#6b6b6b', line: 'rgba(0,0,0,.14)', 'line-2': 'rgba(0,0,0,.32)', glass: 'rgba(244,244,244,.78)', 'glass-2': 'rgba(240,240,240,.94)',
         violet: '#000000', 'violet-2': '#1a1a1a', pink: '#555555', cyan: '#3a3a3a', amber: '#9a6400', green: '#0f7a3e', red: '#c62828',
         'sk-time-a': '#000000', 'sk-time-b': '#5a5a5a', 'sk-dock': 'rgba(255,255,255,.96)', 'sk-dock-line': 'rgba(0,0,0,.12)', 'sk-ddot': 'rgba(0,0,0,.5)', 'sk-tour': 'rgba(250,250,250,.94)', 'sk-dim': 'rgba(255,255,255,.72)', 'sk-win': 'rgba(255,255,255,.94)' }) },
     // Opinionated: Landscapes rotates the classic macOS landscape wallpapers (Mavericks → Golden Gate) behind frosted glass.
-    { id: 'landscapes', pkg: { css: true, dir: 'landscapes' }, name: 'Landscapes', who: 'Miguel’s photo skin. A new view of the world every minute.', orb: [0, 1, 1.05],
+    // Split by Miguel (28 Oct 2026): Landscapes Dark rotates the night and dusk photos under dark glass; Landscapes Light the
+    // day photos under light glass. The dark one keeps the 'landscapes' id so a saved choice carries over.
+    { id: 'landscapes', pkg: { css: true, dir: 'landscapes' }, name: 'Landscapes Dark', who: 'Miguel’s photo skin after dark: night and dusk views under dark glass.', orb: [0, 1, 1.05],
       t: T({ bg: '#0B0A10', ink: '#ffffff', 'ink-2': 'rgba(255,255,255,.80)', 'ink-3': 'rgba(255,255,255,.58)', line: 'rgba(255,255,255,.16)', 'line-2': 'rgba(255,255,255,.28)', glass: 'rgba(16,14,22,.52)', 'glass-2': 'rgba(20,18,26,.74)',
         violet: '#7A5CFF', 'violet-2': '#A08CFF', pink: '#ff7ac8', cyan: '#6fd8ff', amber: '#ffbe55', green: '#62e6a8', red: '#ff6b86',
         'sk-time-a': '#ffffff', 'sk-time-b': '#ffffff', 'sk-dock': 'rgba(11,10,16,.62)', 'sk-dock-line': 'rgba(255,255,255,.10)', 'sk-ddot': 'rgba(255,255,255,.6)', 'sk-tour': 'rgba(11,10,16,.80)', 'sk-dim': 'rgba(11,10,16,.70)', 'sk-win': 'rgba(16,14,22,.85)' }) },
+    { id: 'landscapes-light', pkg: { css: true, dir: 'landscapes' }, name: 'Landscapes Light', who: 'Miguel’s photo skin by day: bright views under light glass.', orb: [0, 1.1, .95],
+      t: T({ bg: '#EEF1F4', ink: '#111216', 'ink-2': 'rgba(17,18,22,.76)', 'ink-3': 'rgba(17,18,22,.54)', line: 'rgba(0,0,0,.12)', 'line-2': 'rgba(0,0,0,.26)', glass: 'rgba(250,250,252,.58)', 'glass-2': 'rgba(250,250,252,.80)',
+        violet: '#5B3FE6', 'violet-2': '#4A30CC', pink: '#c42a83', cyan: '#0a7fae', amber: '#9a6400', green: '#0f7a4a', red: '#c8304c',
+        'sk-time-a': '#ffffff', 'sk-time-b': '#ffffff', 'sk-dock': 'rgba(250,250,252,.66)', 'sk-dock-line': 'rgba(0,0,0,.08)', 'sk-ddot': 'rgba(0,0,0,.5)', 'sk-tour': 'rgba(250,250,252,.88)', 'sk-dim': 'rgba(240,242,246,.66)', 'sk-win': 'rgba(250,250,252,.85)' }) },
   ];
   // Each skin's own display face (the one its Home clock wears; fonts self-hosted in skins.css), for the preview cards
   // in the skin picker. Kept outside the entries so each skin definition stays as its author made it.
@@ -111,6 +117,12 @@
   const PARSED = SKINS.map(s => Object.fromEntries(Object.entries(s.t).map(([k, v]) => [k, parse(v)])));
   const mixc = (A, B, f) => { const r = A.map((v, i) => v + (B[i] - v) * f); return `rgba(${r[0] | 0},${r[1] | 0},${r[2] | 0},${+r[3].toFixed(3)})`; };
   const root = document.documentElement;
+  /* Window opacity (Settings › Look): one per-device number for the glass behind every window, Chats and every app
+     alike. Unset = the skin's own --sk-win. Only the alpha changes; the skin keeps its tint. */
+  const GLASS_KEY = 'wos.window.opacity', GLASS_MIN = .6, GLASS_MAX = 1;
+  const glassOk = v => typeof v === 'number' && Number.isFinite(v) && v >= GLASS_MIN && v <= GLASS_MAX;
+  let glass = null;
+  try { const v = parseFloat(localStorage.getItem(GLASS_KEY)); if (glassOk(v)) glass = v; } catch (_) {}
   let pos = idxOf(stored()), shown = -1;
   function paint(p) {
     p = Math.max(0, Math.min(N - 1, p)); pos = p;
@@ -121,6 +133,11 @@
       for (const k of Object.keys(SKINS[0].t)) st.setProperty('--' + k, mixc(PARSED[a][k], PARSED[b][k], f));
       const o = SKINS[a].orb.map((v, i) => v + (SKINS[b].orb[i] - v) * f);
       st.setProperty('--sk-orb', `hue-rotate(${o[0].toFixed(1)}deg) saturate(${o[1].toFixed(3)}) brightness(${o[2].toFixed(3)})`);
+    }
+    if (glass == null) delete root.dataset.winGlass;
+    else {
+      const A = PARSED[a]['sk-win'], B = PARSED[b]['sk-win'], w = A.map((v, i) => v + (B[i] - v) * f);
+      st.setProperty('--sk-win', `rgba(${w[0] | 0},${w[1] | 0},${w[2] | 0},${glass})`); root.dataset.winGlass = '';
     }
     // space layers belong to Nebula only
     const space = a === 0 ? 1 - f : 0; st.setProperty('--sk-space', space.toFixed(3));
@@ -134,6 +151,55 @@
   const BGL = { a: 0, b: 0, f: 0, cv: [], cx: [], st: {}, W: 0, H: 0, dpr: 1, t: 0 };
   const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, w | 0); c.height = Math.max(1, h | 0); return c; };
   const sprite = (r, rgb, mid = .4) => { const c = mk(r * 2, r * 2), x = c.getContext('2d'), g = x.createRadialGradient(r, r, 0, r, r, r); g.addColorStop(0, `rgba(${rgb},1)`); g.addColorStop(.3, `rgba(${rgb},${mid})`); g.addColorStop(1, `rgba(${rgb},0)`); x.fillStyle = g; x.fillRect(0, 0, r * 2, r * 2); return c; };
+  // Landscapes: one wallpaper at a time, cover-fitted once into an offscreen canvas (a frame is one or two drawImage
+  // calls). Each app load starts on the next one, and every minute on Home moves on with a 2.5 s crossfade; only the current and next
+  // files are fetched. Frozen with the scenery gate like every other skin. Landscapes Dark and Landscapes Light each rotate their own
+  // half of the set, split by how bright the photo is overall (Miguel, 28 Oct 2026).
+  const LANDSCAPES = (() => {
+    const ALL = ['00-10-9', '01-10-10', '02-10-11', '03-10-12', '04-10-13', '05-10-14-day', '06-10-14-night', '07-10-15-day', '08-10-15-night',
+      '09-11-big-sur-day', '10-11-big-sur-night', '11-26-tahoe-beach-dawn', '12-26-tahoe-beach-day', '13-26-tahoe-beach-dusk', '14-26-tahoe-beach-night', '15-27-golden-gate-bridge'];
+    const AVG = ['#347883', '#937b75', '#71747c', '#715c63', '#9b8773', '#6d5d5a', '#232d43', '#4f4d60', '#18253e', '#40576a', '#0d1b2e', '#8a818c', '#4d8da3', '#405877', '#0d1011', '#87736a'];
+    const make = (files, key, scrim) => ({
+      FILES: files.map(i => ALL[i]), AVG: files.map(i => AVG[i]),
+      HOLD: 60, FADE: 2.5, KEY: key,
+      load(s, i, W, H) {
+        if (s.img[i]) return s.img[i];
+        const slot = s.img[i] = { ready: false, c: null }, im = new Image();
+        im.decoding = 'async';
+        im.onload = () => { const o = mk(W * BGL.dpr, H * BGL.dpr), x = o.getContext('2d'), k = Math.max(o.width / im.naturalWidth, o.height / im.naturalHeight),
+          w = im.naturalWidth * k, h = im.naturalHeight * k; x.drawImage(im, (o.width - w) / 2, (o.height - h) / 2, w, h);
+          // a soft top and bottom scrim so the clock and the bottom bar stay legible on bright skies
+          const g = x.createLinearGradient(0, 0, 0, o.height); g.addColorStop(0, `rgba(11,10,16,${scrim[0]})`); g.addColorStop(.28, 'rgba(11,10,16,0)'); g.addColorStop(.7, 'rgba(11,10,16,0)'); g.addColorStop(1, `rgba(11,10,16,${scrim[1]})`);
+          x.fillStyle = g; x.fillRect(0, 0, o.width, o.height); slot.c = o; slot.ready = true; wake(); };
+        im.src = `/wizard-os-home/core/skins/macos/${this.FILES[i]}.webp`;
+        return slot;
+      },
+      init(s, W, H) {
+        const n = this.FILES.length; let at = 0;
+        try { at = (parseInt(localStorage.getItem(this.KEY), 10) + 1) % n; if (!isFinite(at)) at = 0; localStorage.setItem(this.KEY, String(at)); } catch (e) {}
+        s.img = {}; s.cur = at; s.from = null; s.fadeAt = 0; s.shownAt = BGL.t; s.n = n;
+        this.load(s, at, W, H); this.load(s, (at + 1) % n, W, H);
+      },
+      draw(c, s, t, dt, W, H) {
+        const cur = s.img[s.cur];
+        if (cur?.ready && t - s.shownAt > this.HOLD) {
+          const nx = (s.cur + 1) % s.n, nxt = this.load(s, nx, W, H);
+          if (nxt.ready) { s.from = s.cur; s.cur = nx; s.fadeAt = t; s.shownAt = t; try { localStorage.setItem(this.KEY, String(nx)); } catch (e) {} this.load(s, (nx + 1) % s.n, W, H);
+            for (const k of Object.keys(s.img)) if (+k !== s.cur && +k !== s.from && +k !== (nx + 1) % s.n) delete s.img[k]; }
+        }
+        const f = s.from == null ? 1 : Math.min(1, (t - s.fadeAt) / this.FADE);
+        const prev = s.from != null ? s.img[s.from] : null;
+        if (prev?.ready && f < 1) c.drawImage(prev.c, 0, 0, W, H);
+        else if (!s.img[s.cur]?.ready) { c.fillStyle = this.AVG[s.cur]; c.fillRect(0, 0, W, H); }
+        if (s.img[s.cur]?.ready) { c.globalAlpha = f; c.drawImage(s.img[s.cur].c, 0, 0, W, H); c.globalAlpha = 1; }
+        if (f >= 1) s.from = null;
+      },
+    });
+    return {
+      dark: make([6, 7, 8, 10, 13, 14], 'wos.skin.landscapes.at', ['.42', '.55']),
+      light: make([0, 1, 2, 3, 4, 5, 9, 11, 12, 15], 'wos.skin.landscapes-light.at', ['.30', '.40']),
+    };
+  })();
   const BG = {
     grove: {
       init(s, W, H) {
@@ -285,47 +351,8 @@
         c.fillStyle = c.createPattern(s.paper, 'repeat'); c.fillRect(0, 0, W, H);
       },
     },
-    // Landscapes: one wallpaper at a time, cover-fitted once into an offscreen canvas (a frame is one or two drawImage
-    // calls). Each app load starts on the next one, and every minute on Home moves on with a 2.5 s crossfade; only the current and next
-    // files are fetched. Frozen with the scenery gate like every other skin.
-    landscapes: {
-      FILES: ['00-10-9', '01-10-10', '02-10-11', '03-10-12', '04-10-13', '05-10-14-day', '06-10-14-night', '07-10-15-day', '08-10-15-night',
-        '09-11-big-sur-day', '10-11-big-sur-night', '11-26-tahoe-beach-dawn', '12-26-tahoe-beach-day', '13-26-tahoe-beach-dusk', '14-26-tahoe-beach-night', '15-27-golden-gate-bridge'],
-      AVG: ['#347883', '#937b75', '#71747c', '#715c63', '#9b8773', '#6d5d5a', '#232d43', '#4f4d60', '#18253e', '#40576a', '#0d1b2e', '#8a818c', '#4d8da3', '#405877', '#0d1011', '#87736a'],
-      HOLD: 60, FADE: 2.5, KEY: 'wos.skin.landscapes.at',
-      load(s, i, W, H) {
-        if (s.img[i]) return s.img[i];
-        const slot = s.img[i] = { ready: false, c: null }, im = new Image();
-        im.decoding = 'async';
-        im.onload = () => { const o = mk(W * BGL.dpr, H * BGL.dpr), x = o.getContext('2d'), k = Math.max(o.width / im.naturalWidth, o.height / im.naturalHeight),
-          w = im.naturalWidth * k, h = im.naturalHeight * k; x.drawImage(im, (o.width - w) / 2, (o.height - h) / 2, w, h);
-          // a soft top and bottom scrim so the clock and the bottom bar stay legible on bright skies
-          const g = x.createLinearGradient(0, 0, 0, o.height); g.addColorStop(0, 'rgba(11,10,16,.42)'); g.addColorStop(.28, 'rgba(11,10,16,0)'); g.addColorStop(.7, 'rgba(11,10,16,0)'); g.addColorStop(1, 'rgba(11,10,16,.55)');
-          x.fillStyle = g; x.fillRect(0, 0, o.width, o.height); slot.c = o; slot.ready = true; wake(); };
-        im.src = `/wizard-os-home/core/skins/macos/${this.FILES[i]}.webp`;
-        return slot;
-      },
-      init(s, W, H) {
-        const n = this.FILES.length; let at = 0;
-        try { at = (parseInt(localStorage.getItem(this.KEY), 10) + 1) % n; if (!isFinite(at)) at = 0; localStorage.setItem(this.KEY, String(at)); } catch (e) {}
-        s.img = {}; s.cur = at; s.from = null; s.fadeAt = 0; s.shownAt = BGL.t; s.n = n;
-        this.load(s, at, W, H); this.load(s, (at + 1) % n, W, H);
-      },
-      draw(c, s, t, dt, W, H) {
-        const cur = s.img[s.cur];
-        if (cur?.ready && t - s.shownAt > this.HOLD) {
-          const nx = (s.cur + 1) % s.n, nxt = this.load(s, nx, W, H);
-          if (nxt.ready) { s.from = s.cur; s.cur = nx; s.fadeAt = t; s.shownAt = t; try { localStorage.setItem(this.KEY, String(nx)); } catch (e) {} this.load(s, (nx + 1) % s.n, W, H);
-            for (const k of Object.keys(s.img)) if (+k !== s.cur && +k !== s.from && +k !== (nx + 1) % s.n) delete s.img[k]; }
-        }
-        const f = s.from == null ? 1 : Math.min(1, (t - s.fadeAt) / this.FADE);
-        const prev = s.from != null ? s.img[s.from] : null;
-        if (prev?.ready && f < 1) c.drawImage(prev.c, 0, 0, W, H);
-        else if (!s.img[s.cur]?.ready) { c.fillStyle = this.AVG[s.cur]; c.fillRect(0, 0, W, H); }
-        if (s.img[s.cur]?.ready) { c.globalAlpha = f; c.drawImage(s.img[s.cur].c, 0, 0, W, H); c.globalAlpha = 1; }
-        if (f >= 1) s.from = null;
-      },
-    },
+    landscapes: LANDSCAPES.dark,
+    'landscapes-light': LANDSCAPES.light,
   };
   function size() {
     const d = BGL.cv[0] && BGL.cv[0].parentElement; if (!d) return;
@@ -387,6 +414,17 @@
       if (!['framed', 'borderless'].includes(foundation)) throw new Error('Unknown foundation');
       const token = {}; borrowedFoundation = foundation; this._foundationToken = token; applyFrame(SKINS[Math.round(pos)]);
       return () => { if (this._foundationToken === token) { borrowedFoundation = null; this._foundationToken = null; applyFrame(SKINS[Math.round(pos)]); } };
+    },
+    // Window opacity: null = the skin's own glass. setGlass(null) returns to it.
+    get glass() { return glass; },
+    get skinGlass() { return PARSED[Math.round(pos)]['sk-win'][3]; },
+    glassRange: Object.freeze({ min: GLASS_MIN, max: GLASS_MAX }),
+    setGlass(v) {
+      const n = v == null ? null : Math.round(Math.max(GLASS_MIN, Math.min(GLASS_MAX, Number(v))) * 100) / 100;
+      if (n != null && !glassOk(n)) throw new Error('Window opacity must be a number');
+      glass = n; try { n == null ? localStorage.removeItem(GLASS_KEY) : localStorage.setItem(GLASS_KEY, String(n)); } catch (_) {}
+      paint(pos); try { dispatchEvent(new CustomEvent('wos:window-glass', { detail: { glass: n } })); } catch (_) {}
+      return n;
     },
     get composition() { return { version: 1, extends: this.current, frame: this.frame }; },
     compose(value) {
