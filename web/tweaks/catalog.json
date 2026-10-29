@@ -24,7 +24,8 @@
     "wizard/unified-inbox"
   ],
   "defaults": [
-    "wizard/unified-inbox"
+    "wizard/unified-inbox",
+    "wizard/machines-home"
   ],
   "aliases": {
     "miguel/unified-inbox": "wizard/unified-inbox"
