@@ -33,7 +33,7 @@ body > .wz-share.dv-wrap { position:fixed; }
 .wz-share .dv-status { min-height:18px; margin-top:8px; font-size:12px; color:var(--wz-text-secondary); text-align:center; }
 .wz-share .dv-status:empty { display:none; }
 /* Forwarded content: read-only quote under the owner's own comment; two destination choices (James, 27 Oct 2026). */
-.wz-share .dv-quote { margin:0 0 12px; padding:8px 12px; max-height:9.5em; overflow:auto; border-left:3px solid var(--wz-border); border-radius:4px 12px 12px 4px; background:var(--wz-surface-raised); color:var(--wz-text-secondary); font-size:13px; line-height:1.45; white-space:pre-wrap; overflow-wrap:anywhere; }
+.wz-share .dv-quote { margin:0 0 12px; padding:8px 12px; max-height:9.5em; overflow:auto; border-left:3px solid var(--wz-border); border-radius:4px 12px 12px 4px; background:var(--wz-surface-raised); color:var(--wz-text-secondary); font-size:var(--wz-text-sm); line-height:1.45; white-space:pre-wrap; overflow-wrap:anywhere; }
 .wz-share .dv-dest { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
 .wz-share .dv-opt { display:flex; align-items:center; gap:10px; min-height:44px; padding:0 12px; border-radius:14px; border:1px solid var(--wz-border); background:var(--wz-surface-raised); cursor:pointer; }
 .wz-share .dv-opt:has(input:checked) { border-color:var(--wz-accent); background:var(--wz-accent-soft); }
