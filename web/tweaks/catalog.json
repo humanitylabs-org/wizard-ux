@@ -28,5 +28,11 @@
   ],
   "aliases": {
     "miguel/unified-inbox": "wizard/unified-inbox"
-  }
+  },
+  "oneOf": [
+    [
+      "miguel/machines-home",
+      "wizard/machines-home"
+    ]
+  ]
 }

@@ -74,6 +74,8 @@
   };
   const enabled = (id, own = recipe()) => globalIds().includes(id) ? !globalOff(id) && recipeChoice(own, id) !== false
     : own ? (recipeChoice(own, id) ?? (!!set?.tweaks.includes(id) && !offFor(owner).includes(id))) : !offFor(owner).includes(id);
+  // Packages that fill the same place (two Home maps): the first one listed in a catalog `oneOf` group wins.
+  const oneOf = ids => { const out = [...ids]; for (const g of catalog?.oneOf || []) for (const id of g.filter(x => out.includes(x)).slice(1)) out.splice(out.indexOf(id), 1); return out; };
   const profileReads = new Map();
   function profile(who) {
     if (!profileReads.has(who)) {
@@ -112,7 +114,7 @@
       const all = [...new Set([...(own ? catalog.tweaks : next ? next.tweaks : []), ...globalIds()])];
       manifests = new Map(await Promise.all(all.map(async id => [id, await read(`tweaks/${id}/manifest.json`)])));
       if (seq !== generation) return;
-      await window.WosSkinHost.loadTweaks(all.filter(id => enabled(id, own)), slots, { teamAuthors: catalog.teamAuthors });
+      await window.WosSkinHost.loadTweaks(oneOf(all.filter(id => enabled(id, own))), slots, { teamAuthors: catalog.teamAuthors });
     } catch (e) { if (seq === generation) { error = e.message; if (!retried) { retried = true; setTimeout(() => { if (seq === generation) apply(); }, 5000); } } } finally { if (seq === generation) { busy = false; changed(); } }
   }
   const experience = {

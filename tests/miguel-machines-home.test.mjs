@@ -196,6 +196,23 @@ test('Settings › Network & security fills even before Home has been shown', ()
   assert.match(src, /if \(!netBox\.firstChild\) netBox\.replaceChildren\(h\('span', \{ cls: 'mh-wait'/, 'a loading placeholder instead of a blank page');
 });
 
+test('review fixes: one Home map at a time, boot guess expires, unreadable usage is not "signed out"', () => {
+  const exp = read('web/core/experience.js'), host = read('web/core/skin-host.js');
+  const cat = JSON.parse(read('web/tweaks/catalog.json'));
+  assert.deepEqual(cat.oneOf, [['miguel/machines-home', 'wizard/machines-home']], 'the owner\'s package wins over the stock one');
+  assert.match(exp, /loadTweaks\(oneOf\(all\.filter\(id => enabled\(id, own\)\)\)/);
+  const pick = new Function('catalog', 'return ' + exp.match(/const oneOf = (ids => .*);\n/)[1])(cat);  // the shipped function
+  assert.deepEqual(pick(['wizard/machines-home', 'miguel/machines-home', 'x/y']), ['miguel/machines-home', 'x/y']);
+  assert.deepEqual(pick(['wizard/machines-home']), ['wizard/machines-home']);
+  assert.match(host, /tweaksAsked = true;/, 'the real list marks the boot guess settled');
+  assert.match(host, /if \(expected\.size\) setTimeout\(\(\) => \{ if \(tweaksAsked\) return; for \(const t of \[\.\.\.expected\]\)/, 'a boot that never loads drops the guessed styles');
+  for (const who of ['miguel', 'wizard']) {
+    const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
+    assert.match(src, /const signedOut = p\.status === 'signed_out' \|\| p\.status === 'auth', na = !signedOut && left == null && !money;/, who);
+    assert.match(src, /r\.na \? 'Usage unavailable'/, who);
+  }
+});
+
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));

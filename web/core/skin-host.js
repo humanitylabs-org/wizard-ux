@@ -358,6 +358,8 @@
    * (render-blocking) from the first frame, so stock Home never flashes before a package's own view. A package that
    * does not come back drops out of the list. Reapplying adds the new <link> before the old one goes (no unstyled gap). */
   const EXPECT_KEY = 'wos.tweaks.expect';
+  const BOOT_GUESS_MS = 20000;
+  let tweaksAsked = false;  // set once the experience asks for the real list; until then the boot preload is a guess
   const expected = new Set(), preCss = new Map();   // ids still loading; id -> <link> added ahead of the package
   function tweakCss(id) {
     if (!isDoc) return null;
@@ -573,7 +575,7 @@
     return Object.freeze(api);
   }
   async function loadTweaks(entries, contract, { teamAuthors = [], trustedAuthors = [] } = {}) {
-    const seq = ++tweakSeq; slotContract = contract;
+    const seq = ++tweakSeq; slotContract = contract; tweaksAsked = true;
     const want = entries.filter(safeTweakId);
     for (const [id, l] of preCss) if (!want.includes(id)) { l.remove(); preCss.delete(id); }
     for (const id of want) tweakCss(id);
@@ -704,6 +706,8 @@
     if (id) { ensureCss(id); committedId = id; }
     // The tweaks this device wore last time: listed and styled from the first frame (loadTweaks settles the real list).
     try { const last = JSON.parse(localStorage.getItem(EXPECT_KEY) || '[]'); if (isDoc && Array.isArray(last)) { for (const t of last.filter(x => typeof x === 'string' && safeTweakId(x)).slice(0, 40)) { expected.add(t); tweakCss(t); } if (expected.size) paintTweaks(); } } catch (_) {}
+    // If the catalog or profile never loads, drop the guessed packages (and their styles) instead of hiding Home for good.
+    if (expected.size) setTimeout(() => { if (tweaksAsked) return; for (const t of [...expected]) { expected.delete(t); const l = preCss.get(t); if (l) { l.remove(); preCss.delete(t); } } paintTweaks(); }, BOOT_GUESS_MS);
     // ?layout=<id> in a link turns that layout on (and remembers it); ?layout=classic turns it off. Lets people share a try-it link.
     try {
       const q = new URLSearchParams(location.search).get('layout');

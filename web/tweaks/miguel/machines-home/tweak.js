@@ -150,10 +150,11 @@ export default function setup(api) {
       if (left == null && paid?.type === 'credits' && paid.limitMinor > 0 && paid.balanceMinor != null) {
         left = 100 * paid.balanceMinor / paid.limitMinor; money = `$${(paid.balanceMinor / 10 ** ex).toFixed(2)}`;
       }
-      const signedOut = p.status === 'unavailable' || p.status === 'signed_out' || p.status === 'auth' || (left == null && !money);
+      // Signed out only when the feed says so; a failed usage read is "usage unavailable", still signed in.
+      const signedOut = p.status === 'signed_out' || p.status === 'auth', na = !signedOut && left == null && !money;
       const who = String(p.name || '').split('@')[0];
       out.push({ id: p.id, kind, group: p.providerName || kind, nick: S.nick[p.id] || '', auto: who && who !== p.providerName ? who : '',
-        email: p.email || '', left: left == null ? null : Math.round(left), money, unit: money ? 'credit' : 'plan', out: signedOut, resets: pick?.resetsAt || null });
+        email: p.email || '', left: left == null ? null : Math.round(left), money, unit: money ? 'credit' : 'plan', out: signedOut, na, resets: pick?.resetsAt || null });
     }
     return out;
   }
@@ -259,7 +260,7 @@ export default function setup(api) {
     const g = S.ws === 'mine' ? gauge() : null;
     aiRow.hidden = !g;
     if (!g) return aiRow.replaceChildren();
-    const all = subs(), live = all.filter(s => !s.out), pick = S.open.has('mp'), on = new Set(meterPool().use.map(s => s.id));
+    const all = subs(), live = all.filter(s => !s.out && !s.na), pick = S.open.has('mp'), on = new Set(meterPool().use.map(s => s.id));
     const units = [['plan', 'Plan limits'], ['credit', 'Prepaid credit']].filter(([u]) => live.some(s => s.unit === u));
     aiRow.replaceChildren(h('div', { cls: 'mh-meter-head' }, gaugeEl(g, true),
         h('span', { cls: 'mh-meter-what' }, h('b', { text: g.money ? `${g.money} left` : `${g.left}% left` }), h('small', { text: `(${g.n > 1 ? 'combines ' : ''}${g.names.length > 2 ? g.names.slice(0, -1).join(', ') + ' and ' + g.names.at(-1) : g.names.join(' and ')}${g.custom ? '' : g.def ? ', your default AI' : ''})` }))),
@@ -279,15 +280,15 @@ export default function setup(api) {
       g.rows.map(r => {
         const reset = r.resets && Date.parse(r.resets) > Date.now() ? ` · resets in ${agoS((Date.parse(r.resets) - Date.now()) / 1000)}` : '';
         const inMeter = meterPool().use.some(x => x.id === r.id);
-        return h('div', { cls: 'mh-ai-row', data: { s: r.out ? 'out' : level(r.left ?? 0) } },
-          r.out ? h('span', { cls: 'mh-meter-cb' }) : h('input', { type: 'checkbox', cls: 'mh-meter-cb', checked: inMeter, data: { meterId: r.id },
+        return h('div', { cls: 'mh-ai-row', data: { s: r.out || r.na ? 'out' : level(r.left ?? 0) } },
+          r.out || r.na ? h('span', { cls: 'mh-meter-cb' }) : h('input', { type: 'checkbox', cls: 'mh-meter-cb', checked: inMeter, data: { meterId: r.id },
             title: 'Count on the fuel meter', 'aria-label': `Count ${r.nick || r.auto || g.name} on the fuel meter` }),
           h('input', { cls: 'mh-nick', type: 'text', value: r.nick || r.auto, placeholder: 'Nickname', maxlength: '24',
             'aria-label': `Nickname for ${g.name}${r.email ? ' ' + r.email : ''}`, data: { nick: r.id, auto: r.auto } }),
-          h('span', { cls: 'mh-ai-use' }, h('span', { cls: 'mh-meter' }, h('i', { style: { '--f': (r.out ? 0 : r.left ?? 0) + '%' } })),
-            h('span', { cls: 'mh-ai-txt', text: r.out ? 'Signed out' : r.money ? `${r.money} credit left` : `${r.left}% left${reset}` })),
+          h('span', { cls: 'mh-ai-use' }, h('span', { cls: 'mh-meter' }, h('i', { style: { '--f': (r.out || r.na ? 0 : r.left ?? 0) + '%' } })),
+            h('span', { cls: 'mh-ai-txt', text: r.out ? 'Signed out' : r.na ? 'Usage unavailable' : r.money ? `${r.money} credit left` : `${r.left}% left${reset}` })),
           h('span', { cls: 'mh-ai-acts' },
-            TOP_UP[r.kind] && !r.out ? h('a', { cls: 'mh-ai-btn is-link', href: TOP_UP[r.kind], target: '_blank', rel: 'noopener noreferrer' }, 'Add credit ↗') : null,
+            TOP_UP[r.kind] && !r.out && !r.na ? h('a', { cls: 'mh-ai-btn is-link', href: TOP_UP[r.kind], target: '_blank', rel: 'noopener noreferrer' }, 'Add credit ↗') : null,
             r.out ? btn('Sign in', appOf(r.kind), 'is-in') : btn('Sign out', appOf(r.kind), 'is-out')));
       }))),
       h('div', { cls: 'mh-ai-foot' },
@@ -528,7 +529,7 @@ export default function setup(api) {
     let b = e.target; while (b && b !== top && !(b.dataset && (b.dataset.ws || b.dataset.act || b.dataset.open || b.dataset.go || b.dataset.wsWhy || b.dataset.meterAll || b.dataset.person || b.dataset.toggle || b.dataset.machine || b.dataset.ask || b.dataset.stAsk || b.dataset.tsAsk))) b = b.parentNode;
     if (!b || b === top) return;  // Sign in / Sign out carry the shell's own data-res-signin, which opens that app
     const d = b.dataset;
-    if (d.meterAll) { const live = subs().filter(s => !s.out); S.meter = d.meterAll === 'default' ? null : live.filter(s => s.unit === d.meterAll).map(s => s.id);
+    if (d.meterAll) { const live = subs().filter(s => !s.out && !s.na); S.meter = d.meterAll === 'default' ? null : live.filter(s => s.unit === d.meterAll).map(s => s.id);
       api.storage.set('meter', S.meter); drawn.ai = ''; drawn.glance = ''; paint(); api.settings?.refresh?.(); return; }
     if (d.toggle === 'mp') { flip('mp'); drawn.ai = ''; paint(); return; }
     if (d.wsWhy) { S.whyWs = S.whyWs === d.wsWhy && S.open.has('wsm-why') ? '' : d.wsWhy; if (S.whyWs) S.open.add('wsm-why'); else S.open.delete('wsm-why'); renderWiz(); return; }
