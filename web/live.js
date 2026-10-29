@@ -84,6 +84,7 @@
       title: String(item.title || item.name || 'Untitled chat'),
       source: item.source || '',
       status,
+      queueReason: item.queue_reason === 'provider_access' ? 'provider_access' : '',
       safeError: typeof item.wizard_safe_error === 'string' ? item.wizard_safe_error : '',
       // The AI provider's sign-in expired (Agent Service provider-reconnect.mjs): the connection app that fixes it.
       reconnect: reconnectOf(item.wizard_reconnect),
@@ -114,6 +115,7 @@
       model: typeof item.model === 'string' ? item.model : '', provider: typeof item.provider === 'string' ? item.provider : '',
       modelLockAt: Number(item.wizard_model_lock_updated_at) || 0,
       // The last thing asked (Retry on a failed thread sends it again: controller.ts retryServerFailedSession).
+      retryRunId: typeof item.wizard_retry_run_id === 'string' ? item.wizard_retry_run_id : '',
       request: typeof item.wizard_retry_input === 'string' ? item.wizard_retry_input : userText,
       // Agents MVP: the agent this thread is pinned to (server metadata). '' = the main agent.
       agent: typeof item.agent === 'string' ? item.agent : item.agent && typeof item.agent === 'object' && typeof item.agent.id === 'string' ? item.agent.id : '',
@@ -1123,7 +1125,7 @@
       // Erasing the projected helper wait makes a finished parent turn flash into Ready
       // on every open/preload, then back to Working on the next list poll. Explicit
       // retry failures still carry a status and must remain actionable.
-      if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, renames: s.renames, detailNeeded: false,
+      if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, retryRunId: s.retryRunId, queueReason: s.queueReason, safeError: s.safeError, reconnect: s.reconnect, renames: s.renames, detailNeeded: false,
         ...(s.status ? { status: s.status } : {}),
         ...(s.model ? { model: s.model, provider: s.provider, modelLockAt: s.modelLockAt } : {}) };
       else if (this.windows[agent || 'hermes']) DETAIL.set(id, { ...s, detailNeeded: false });
