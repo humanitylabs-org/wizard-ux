@@ -1788,6 +1788,18 @@ window.WizCore.chats = function createChats(H) {
     if (!ans || !got.endsWith(ans)) return false;
     return got.length <= [...(t.notes || []), t.a.text].map(bare).join('').length;
   };
+  // Mid-run the transcript already shows the run's interim words (a message the agent wrote before a tool call, and
+  // earlier notes), while the stream replays them from its first event. Draw only what the transcript lacks, or the
+  // same line shows twice: once as a message, once under "Replying…" (Miguel, 29 Oct 2026).
+  const streamUnshown = (text, turns) => {
+    const t = (turns || []).at(-1);
+    if (!t || (t.a && t.a.final !== false)) return text;
+    const shown = [...(t.notes || []), t.a?.text || ''].map(bare).join('');
+    if (!shown) return text;
+    let i = 0, j = 0;
+    for (; i < text.length && j < shown.length; i++) { if (/\s/.test(text[i])) continue; if (text[i] !== shown[j]) return text; j++; }
+    return j === shown.length ? text.slice(i).trimStart() : text;
+  };
   function closeStream(c) { c.stream?.handle?.close(); clearTimeout(c.stream?.retry); c.stream = null; }
   function syncStream(w, c, turns, agent) {
     const sid = w.thread, s = LIVE.session(sid), pendingRun = LIVE.pendingRun?.(sid), rid = pendingRun || s?.runId;
@@ -1823,7 +1835,7 @@ window.WizCore.chats = function createChats(H) {
     if (st && !st.landed && turns && (assistantStamp(turns) !== st.baseline || streamShown(st, turns))) {
       st.landed = true; st.handle?.close(); clearTimeout(st.retry);
     }
-    const visible = st && !st.landed ? streamAnswer(st.text) : '';
+    const visible = st && !st.landed ? streamUnshown(streamAnswer(st.text), turns) : '';
     // James: one activity surface. Timed tool rows belong to the existing WosWork disclosure;
     // the stream adds only answer text, never a second steps list or a steps-only bubble.
     return visible ? `<div class="msg a" data-streaming="${esc(st.rid)}"><div class="bub">${md(visible)}</div><div class="mmeta">${st.terminal ? 'Finishing…' : 'Replying…'}</div></div>` : '';

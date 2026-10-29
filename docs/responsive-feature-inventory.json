@@ -370,7 +370,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import; Settings → Microphone shows only where WizardOSDevice.micPolicy exists"
+      "note": "Direct entrypoint import; Settings \u2192 Microphone shows only where WizardOSDevice.micPolicy exists"
     },
     "core/my-skin.js": {
       "loadedBy": [
@@ -397,7 +397,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import; Settings → Updates shows only where the App Manager answers store-install/_updates"
+      "note": "Direct entrypoint import; Settings \u2192 Updates shows only where the App Manager answers store-install/_updates"
     },
     "core/own-views.js": {
       "loadedBy": [
@@ -405,6 +405,13 @@
         "desktop"
       ],
       "note": "Shared own-screen fallback and shell-only Settings confirmation; same App Manager owner listener as Updates"
+    },
+    "core/phone-connect.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
     },
     "core/photos-relay.js": {
       "loadedBy": [
@@ -446,7 +453,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Shared Settings → Schedules; hidden when Agent Service schedules returns 404"
+      "note": "Shared Settings \u2192 Schedules; hidden when Agent Service schedules returns 404"
     },
     "core/screen-capture.js": {
       "loadedBy": [
@@ -783,6 +790,8 @@
     "core/os-updates.js",
     "core/own-views.css",
     "core/own-views.js",
+    "core/phone-connect.css",
+    "core/phone-connect.js",
     "core/photos-relay.js",
     "core/polish.css",
     "core/reach.js",
@@ -826,6 +835,8 @@
     "core/workspace-sync.js",
     "favicon.ico",
     "icon-192.png",
+    "kit/controls.css",
+    "kit/shell-tokens.css",
     "live.js",
     "manifest.webmanifest",
     "outbox.js",
