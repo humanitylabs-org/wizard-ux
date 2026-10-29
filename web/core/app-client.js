@@ -62,6 +62,49 @@
     }
     return false;
   }
+  // Tapping outside a modal is Back (James, 28 Oct 2026). Capture before app/kit
+  // click handlers: a drag out, or the lifting finger that opened a menu, is not a tap.
+  // cancel is the native Escape path, including apps that preventDefault and close themselves.
+  if (typeof MutationObserver !== 'undefined') {
+    const presses = new WeakMap();
+    const changed = records => {
+      for (const r of records) {
+        if (r.type === 'attributes' && r.target.tagName === 'DIALOG') presses.delete(r.target);
+        for (const n of r.addedNodes || []) {
+          if (n.tagName === 'DIALOG') presses.delete(n);
+          n.querySelectorAll?.('dialog').forEach(d => presses.delete(d));
+        }
+      }
+    };
+    const observer = new MutationObserver(changed);
+    observer.observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['open'] });
+    const modal = e => {
+      changed(observer.takeRecords()); // showModal + pointerdown may happen in one task
+      const d = e.target.closest?.('dialog');
+      return d?.open && d.matches(':modal') && !d.hasAttribute('data-wz-no-outside-close') ? d : null;
+    };
+    const outside = (d, e) => {
+      const r = d.getBoundingClientRect();
+      return e.target === d && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom);
+    };
+    addEventListener('pointerdown', e => {
+      const d = modal(e); if (d) presses.set(d, { outside: outside(d, e) });
+    }, true);
+    addEventListener('pointercancel', e => { const d = modal(e); if (d) presses.delete(d); }, true);
+    // A real tap on a <label> makes the browser forward a second click (no pointerdown) to its control.
+    const forwarded = new WeakMap();
+    addEventListener('click', e => {
+      const d = modal(e); if (!d || e.detail === 0) return; // keyboard/AT activation is never swallowed
+      if (forwarded.get(d) === e.target) { forwarded.delete(d); return; }
+      const press = presses.get(d); presses.delete(d);
+      const control = press && !outside(d, e) ? e.target.closest?.('label')?.control : null;
+      if (control && d.contains(control)) forwarded.set(d, control); else forwarded.delete(d);
+      if (!press || outside(d, e)) {
+        e.preventDefault(); e.stopImmediatePropagation();
+        if (press?.outside && outside(d, e) && d.dispatchEvent(new Event('cancel', { cancelable: true }))) d.close();
+      }
+    }, true);
+  }
   // Composer input (paste files/text, drop, Enter policy): the shell's one implementation, core/composer-input.js,
   // the same code Chats uses. Loaded on first use; a bind made before it lands is queued, unbind is synchronous.
   let composerLoad = null;

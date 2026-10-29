@@ -2,9 +2,9 @@
 ::selection { background: rgba(143, 99, 255, .42); color: #fff; }
 .selmenu {
   position: fixed; left: 0; top: 0; z-index: 260; display: flex; align-items: stretch; gap: 2px; padding: 4px;
-  border-radius: 16px; background: rgba(24, 16, 48, .94); border: 1px solid rgba(185, 155, 255, .28);
+  border-radius: 16px; background: linear-gradient(rgba(24, 16, 48, .94), rgba(24, 16, 48, .94)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid rgba(185, 155, 255, .28);
   box-shadow: 0 10px 30px rgba(0, 0, 0, .5), 0 0 0 1px rgba(0, 0, 0, .3), 0 0 22px rgba(143, 99, 255, .18);
-  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+
   user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none; /* drag to move */
   opacity: 0; scale: .94; transition: opacity 120ms ease, scale 140ms var(--ease, ease);
 }
