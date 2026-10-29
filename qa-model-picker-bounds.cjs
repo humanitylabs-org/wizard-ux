@@ -147,7 +147,8 @@ async function exercise(browser, c) {
     await p.locator('[data-chmodel]').first().click();
     await p.locator('.ch-mpop').waitFor(); await p.waitForTimeout(200);
     const overlay = await p.locator('.ch-mpop').boundingBox();
-    await p.mouse.click(overlay.x + 5, overlay.y + 30);
+    if (c.mode === 'desktop') await p.mouse.click(overlay.x + 5, overlay.y + 30);
+    else await p.touchscreen.tap(overlay.x + 5, overlay.y + 30);
     ok(await p.locator('.ch-mpop').count() === 0, `${label}: outside tap dismisses`);
     await p.locator('[data-chmodel]').first().click();
     await p.locator('.ch-mpop').waitFor();
@@ -170,6 +171,6 @@ async function exercise(browser, c) {
     ok(completed === cases.length, 'all matrix cases completed', { completed, expected: cases.length });
   } finally { await browser.close(); }
   ok(foreignRequests === 0, 'no request to any real origin', foreignRequests);
-  console.log(JSON.stringify({ pass, fail, blockedWrites, realAgentWrites: 0, foreignRequests, tree: TREE, out: OUT }));
+  console.log(JSON.stringify({ pass, fail, completed, blockedWrites, realAgentWrites: 0, foreignRequests, tree: TREE, out: OUT }));
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(2); });
