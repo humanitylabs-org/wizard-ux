@@ -92,6 +92,7 @@ test('tall-draft model menu stays above composer and respects visible keyboard h
   }
   const css = read('web/core/chat-power.css');
   assert.match(css, /max-height:\s*min\(var\(--mpop-h, 64%\), 440px\)/);
+  assert.match(css, /\.ch-sheet\.ch-mpop \.ch-sheet-b \{[^}]*background: linear-gradient\([^;]+var\(--wz-panel, var\(--bg,/);
   assert.match(css, /html\.wos-doc-scroll \.wos-doc-thread \.ch-sheet\.ch-mpop \{ position: fixed; inset: 0; z-index: 52;/);
   assert.match(src, /window\.visualViewport\?\.addEventListener\('resize', queue/);
 });
