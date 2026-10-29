@@ -60,7 +60,7 @@ test('normal app-services storage stays sessionStorage unless caller selects dur
 test('unavailable session consumes repeated root Back; selection closes first',async()=>{
   const {p}=policy('?app-session=wisdom'); let mounted;
   const attrs={}; const element=()=>({classList:{add(){},remove(){}},dataset:{},style:{setProperty(){}},appendChild(e){mounted=e},replaceChildren(){},append(){},setAttribute(){},addEventListener(){}});
-  const host=element(); const document={getElementById:()=>host,createElement:()=>element(),addEventListener(){},title:''};
+  const host=element(); const document={documentElement:element(),getElementById:()=>host,createElement:()=>element(),addEventListener(){},title:''};
   const window={WizHomeScreenPolicy:p,WizCore:{apps:()=>({APP:{}}),appsLoaded:()=>Promise.resolve()},WosSelMenu:{back:()=>false},WizAppServices:{guardBack(){}},WizardOSNative:{immersive(){}}};
   const ctx=vm.createContext({window,document,location:{origin:'https://box.example'},URL,localStorage:storage(),addEventListener(){},setInterval(){},setTimeout(){}});
   vm.runInContext(read('core/single-app-session.js'),ctx);
@@ -169,7 +169,7 @@ test('mounted session Back consumes app overlay, safe in-app history and forever
   const {p}=policy('?app-session=wisdom');const store=storage();let frame,serviceStep='handled',traversals=0,flushes=0;
   const rootDoc={documentElement:{style:{setProperty(){}}},querySelector:()=>null,styleSheets:[]};
   function el(tag){return {tag,dataset:{},style:{setProperty(){}},classList:{add(){},remove(){}},children:[],events:{},setAttribute(){},appendChild(child){this.children.push(child);if(child.tag==='iframe')frame=child;},replaceChildren(){this.children=[];},addEventListener(type,fn){this.events[type]=fn;}};}
-  const host=el('host'),document={getElementById:()=>host,addEventListener(){},createElement:el};
+  const host=el('host'),document={documentElement:el('html'),getElementById:()=>host,addEventListener(){},createElement:el};
   const app={id:'wisdom',name:'Wisdom',kind:'wizard',url:'/wisdom/'};
   const w={location:{href:'https://box.example/wisdom/#/read/chapter'},history:{state:{wisdom:true},back(){traversals++;w.location.href='https://box.example/wisdom/';}},navigation:{currentEntry:{index:1},entries:()=>[{url:'https://box.example/wisdom/'}]},document:rootDoc,WizardApp:{ready(){}},addEventListener(){}};
   const window={WizHomeScreenPolicy:p,WizCore:{apps:()=>({APP:{wisdom:app}}),appsLoaded:()=>Promise.resolve()},WosSelMenu:{back:()=>false},WizAppReadingPosition:{flush(){flushes++;}},WizAppServices:{attach:()=>()=>{},guardBack(){},back:()=>serviceStep}};
@@ -185,7 +185,7 @@ test('mounted session Back consumes app overlay, safe in-app history and forever
 test('pinned app keeps Android status bar and navigation buttons; content starts below the status bar',async()=>{
   const {p}=policy('?app-session=wisdom'); const calls=[]; const winStyle={};
   const element=()=>({classList:{add(){},remove(){}},dataset:{},style:{setProperty(k,v){winStyle[k]=v}},appendChild(){},replaceChildren(){},append(){},setAttribute(){},addEventListener(){}});
-  const host=element(); const document={getElementById:()=>host,createElement:()=>element(),addEventListener(){},title:''};
+  const host=element(); const document={documentElement:element(),getElementById:()=>host,createElement:()=>element(),addEventListener(){},title:''};
   const window={WizHomeScreenPolicy:p,WizCore:{apps:()=>({APP:{}}),appsLoaded:()=>Promise.resolve()},WosSelMenu:{back:()=>false},WizAppServices:{guardBack(){}},
     WizardOSNative:{immersive(on){calls.push(on)},cutoutTop:()=>24,insetTop:()=>36}};
   const ctx=vm.createContext({window,document,location:{origin:'https://box.example'},URL,localStorage:storage(),addEventListener(){},setInterval(){},setTimeout(){}});
