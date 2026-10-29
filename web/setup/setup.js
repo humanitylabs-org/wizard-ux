@@ -110,12 +110,13 @@
   /* ---------------- layers + Back ---------------- */
   const WA = window.WizardApp;
   let menuHold = null, sheetHold = null;
-  function openPhone() {
+  function openPhone(another = false) {
     if (S.screen === 'phone') return;
     S.screen = 'phone';
     $('list').hidden = true; $('phone').hidden = false; scrollTo(0, 0);
     renderPhone(); log('screen:phone');
-    if (PC.on || S.list.data?.items?.some(i => i.id === 'phone' && i.state === 'done')) PC.connectAnother();
+    if (another) PC.connectAnother();
+    else if (PC.connecting) PC.back();
     PC.refresh();
   }
   function closePhone() {
@@ -146,7 +147,9 @@
     const line = st === 'done' && item.phone_ready === true ? 'Ready to open on your device.'
       : { loading: 'Checking…', neterr: 'Can’t check right now.', todo: 'From anywhere, not just at home.', in_progress: 'Not finished. Pick up where you left off.', done: 'Your device is connected.' }[st] || 'From anywhere, not just at home.';
     const end = st === 'done' ? `<svg class="okmark" viewBox="0 0 24 24" aria-label="Done"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>` : st === 'in_progress' ? `<span class="dot" aria-label="In progress"></span>${CHEV}` : CHEV;
-    h += `<div class="rows"><button class="row" data-act="open-phone" data-state="${esc(st)}"><span class="ic" aria-hidden="true">📱</span><span class="bd"><b>Connect another device</b><small>${line}</small></span><span class="end">${end}</span></button></div>`;
+    h += `<div class="rows"><button class="row" data-act="open-phone" data-state="${esc(st)}"><span class="ic" aria-hidden="true">📱</span><span class="bd"><b>${st === 'done' ? 'Device connected' : 'Connect another device'}</b><small>${line}</small></span><span class="end">${end}</span></button></div>`;
+    // Preserve the approved #648 entry: a separate tinted action directly below the completed checklist row.
+    if (st === 'done') h += '<button class="wz-button add-device" data-act="list-connect-device">Connect another device</button>';
     if (L.status === 'neterr') h += '<button class="link" data-act="retry-list">Try again</button>';
     if (L.status === 'ok') h += window.WosRecommended?.html() || '';
     h += '<p class="foot custom" data-customize>Everything you see is customizable. Try asking your Wizard for one change.</p>';
@@ -183,6 +186,7 @@
     if (!t) return;
     const act = t.dataset.act;
     if (act === 'open-phone') openPhone();
+    else if (act === 'list-connect-device') openPhone(true);
     else if (act === 'back') closePhone();
     else if (act === 'retry-list') { S.list.status = 'loading'; renderList(); loadList(); }
     else if (act === 'menu') openMenu();
