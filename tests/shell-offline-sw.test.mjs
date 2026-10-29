@@ -27,8 +27,24 @@ function harness() {
   const response = (url, body, headers = {}) => ({ ok: true, status: 200, type: 'basic', redirected: false, url, body,
     headers: { get: n => headers[n.toLowerCase()] ?? null }, clone() { return response(url, body, headers); }, async text() { return body; } });
   const files = new Map();
+  // Virtual time: the worker's timers and slow fetches run on this clock, pumped by get()/drain().
+  let now = 0, delay = 0, tid = 0; const timers = new Map();
+  const setTimeout = (fn, ms) => { timers.set(++tid, { at: now + ms, fn }); return tid; };
+  const clearTimeout = id => timers.delete(id);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const tick = () => new Promise(r => setImmediate(r));
+  async function pump(done) {
+    for (let i = 0; i < 1000; i++) {
+      for (let k = 0; k < 5; k++) await tick();
+      if (done()) return;
+      const next = [...timers.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+      if (!next) { if (done()) return; continue; }
+      timers.delete(next[0]); now = Math.max(now, next[1].at); next[1].fn();
+    }
+  }
   const fetch = async (req) => {
     const url = key(req); fetched.push(url);
+    if (delay) await sleep(delay);
     if (!online) throw new TypeError('Failed to fetch');
     const f = files.get(url.replace(/[?#].*$/, '')) || files.get(url);
     if (!f) return { ok: false, status: 404, type: 'basic', headers: { get: () => null }, clone() { return this; } };
@@ -37,7 +53,7 @@ function harness() {
   const ctx = {
     self: { registration: { scope: ORIGIN + '/wizard-os-home/' }, location: { origin: ORIGIN }, skipWaiting() {}, clients: { claim: async () => {} },
       addEventListener: (n, fn) => { on[n] = fn; } },
-    caches, fetch, URL, Set, Promise, TypeError,
+    caches, fetch, URL, Set, Promise, TypeError, setTimeout, clearTimeout,
   };
   vm.runInNewContext(src, ctx);
   const request = (path, init = {}) => {
@@ -49,9 +65,13 @@ function harness() {
     const event = { request: request(path, init), respondWith(p) { answer = p; }, waitUntil(p) { pending.push(p); } };
     on.fetch(event);
     if (!answer) return { passthrough: true };
-    try { return await answer; } catch (error) { return { error }; } finally { await Promise.all(pending.splice(0)); }
+    let settled = false, out;
+    Promise.resolve(answer).then(v => { out = v; }, error => { out = { error }; }).finally(() => { settled = true; });
+    await pump(() => settled);
+    return out;
   }
-  return { on, stores, files, get, setOnline: v => { online = v; }, fetched: () => fetched, cached: () => [...(stores.get('wos-shell-v1') || new Map()).keys()],
+  async function drain() { let all = false; Promise.all(pending.splice(0)).finally(() => { all = true; }); await pump(() => all); }
+  return { on, stores, files, get, drain, clock: () => now, setDelay: ms => { delay = ms; }, setOnline: v => { online = v; }, fetched: () => fetched, cached: () => [...(stores.get('wos-shell-v1') || new Map()).keys()],
     page: (release) => ({ body: `<meta charset="utf-8"><meta name="wos-release" content="${release}"><script src="live.js?v=${release}"></script>`, headers: { 'cache-control': 'no-cache' } }),
     flush: () => Promise.all(pending.splice(0)), message: async data => { on.message({ data, waitUntil: p => pending.push(p) }); await Promise.all(pending.splice(0)); } };
 }
@@ -66,7 +86,8 @@ test('online reads always go to Wizard; the shell files are kept for later', asy
   assert.equal(js.body, 'live A');
   assert.deepEqual(h.cached().sort(), [ORIGIN + '/wizard-os-home/', ORIGIN + '/wizard-os-home/live.js?v=aaa']);
   h.files.set(ORIGIN + '/wizard-os-home/live.js', { body: 'live A2', headers: {} });
-  assert.equal((await h.get('/wizard-os-home/live.js?v=aaa')).body, 'live A2', 'network first: never a stale copy while online');
+  assert.equal((await h.get('/wizard-os-home/live.js?v=aaa')).body, 'live A', 'a stamped file is exact for its release: the copy answers at once');
+  assert.equal((await h.get('/wizard-os-home/live.js')).body, 'live A2', 'unstamped files and pages: network first, never a stale copy while online');
 });
 
 test('offline: the page (any deep link) and its files open from the saved copy', async () => {
@@ -125,4 +146,18 @@ test('activate clears only this worker\'s older caches', async () => {
   const pending = [];
   h.on.activate({ waitUntil: p => pending.push(p) }); await Promise.all(pending);
   assert.deepEqual([...h.stores.keys()].sort(), ['trackhunt-v1-20260711d', 'wos-shell-v1']);
+});
+
+test('a crawling link opens from the saved copy after 3 s, and the fresh copy still lands for next time', async () => {
+  const h = harness();
+  h.files.set(ORIGIN + '/wizard-os-home/', h.page('aaa'));
+  await h.get('/wizard-os-home/', { mode: 'navigate' });
+  h.files.set(ORIGIN + '/wizard-os-home/', h.page('bbb'));
+  h.setDelay(4000);
+  const t0 = h.clock(); const res = await h.get('/wizard-os-home/', { mode: 'navigate' });
+  assert.match(res.body, /aaa/, 'the saved page answered');
+  assert.ok(h.clock() - t0 >= 3000 && h.clock() - t0 < 4000);
+  await h.drain();
+  h.setOnline(false);
+  assert.match((await h.get('/wizard-os-home/', { mode: 'navigate' })).body, /bbb/, 'the slow read still refreshed the copy');
 });
