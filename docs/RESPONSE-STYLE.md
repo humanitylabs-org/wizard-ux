@@ -15,3 +15,6 @@ Reuse:
 Acceptance: both shells render the same owner choice; no device-local authority; failed saves retain the verified selection and offer retry; Back returns to Settings, never exits; Summary explains what we are doing and retains short/conversational exceptions; both styles reach main/profile/container/restricted run admission; synthetic phone Nebula and Signal evidence; service and UX live branches prepared but never deployed.
 
 Own (agent-service #230): Wizard sends only Wizard OS facts and protocol, so the agent keeps the style its owner already set up.
+## Retired (agent-service #231)
+
+Wizard no longer chooses a reply style. Each agent's own persona (SOUL.md for Hermes) is the one source, so alongside agents keep their voice and detach cleanly, and different agents can answer differently. Settings shows a one-line Reply style note instead of the Summary/Concise picker.
