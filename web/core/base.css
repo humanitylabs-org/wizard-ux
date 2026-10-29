@@ -37,3 +37,14 @@ body { font: 15px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Robot
   --wz-panel: var(--wz-base, var(--bg, #05030c));
   --wz-panel-raised: color-mix(in srgb, var(--ink) 7%, var(--wz-panel));
 }
+/* Skin precedence (James, 29 Oct 2026: never overwrite Miguel's or any skin; kit values are defaults only).
+ * kit/shell-tokens.css loads first and defines colour roles at :root. A root value would beat every component's
+ * own fallback (var(--wz-surface, var(--glass)) on Home widgets, etc.) and ignore palettes a skin rescopes on a
+ * subtree (Landscapes Light .home). So outside Settings the colour roles stay unset, exactly as before; Settings
+ * re-derives them on its own root below (core/settings.css). Sizes, type scale and spacing keep the kit values. */
+:root {
+  --wz-base: initial; --wz-canvas: initial; --wz-text: initial; --wz-text-secondary: initial; --wz-text-muted: initial;
+  --wz-accent: initial; --wz-on-accent: initial; --wz-accent-soft: initial; --wz-border: initial;
+  --wz-surface: initial; --wz-surface-raised: initial; --wz-chrome: initial; --wz-overlay: initial;
+  --wz-danger: initial; --wz-success: initial; --wz-warning: initial;
+}
