@@ -369,7 +369,10 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   document.addEventListener('click', e => {
     const mine = e.target.closest('[data-my-apps]');
     if (!mine || !framed || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-    e.preventDefault(); e.stopImmediatePropagation(); window.top.location.assign(mine.href);
+    e.preventDefault(); e.stopImmediatePropagation();
+    // Open My apps inside the running shell (desks and open threads stay); reload only if the shell can't route it.
+    let routed = false; try { routed = !!parent.WizCore?.deeplink?.route(mine.href, mine); } catch (_) {}
+    if (!routed) window.top.location.assign(mine.href);
   }, true);
 
   document.addEventListener('click', e => {
