@@ -86,3 +86,44 @@ html[data-shell="desktop"] .wx-banners { left: 50%; right: auto; transform: tran
 .vx-dot.ready { background: var(--green); box-shadow: 0 0 10px rgba(79, 240, 176, .6); }
 .vx-dot.down { background: var(--amber); }
 /* Settings controls live in core/settings.css for both layouts. */
+
+/* ---------- offline pop-up (core/status.js) ----------
+ * Covers the screen once a connection failure lasts a few seconds, so taps don't fall through to a Wizard that
+ * can't answer. A flat dim, no backdrop blur: blur is what makes low-end phones stutter. Three rows, green/amber/red. */
+.wx-off { position: fixed; inset: 0; z-index: 190; display: grid; place-items: center; padding: 20px; background: rgba(3, 2, 8, .72); animation: wx-fade .18s ease-out; }
+.wx-off[hidden] { display: none; }
+@keyframes wx-fade { from { opacity: 0; } }
+.wx-off-card { position: relative; width: min(360px, 100%); padding: 22px 20px 18px; border-radius: 20px; color: var(--ink);
+  background: linear-gradient(rgba(14, 8, 34, .98), rgba(14, 8, 34, .98)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid var(--line-2); box-shadow: 0 18px 48px rgba(0, 0, 0, .55); }
+.wx-off-card > b { display: block; padding-right: 32px; font-size: 18px; font-weight: 750; }
+.wx-off-sub { margin: 6px 0 14px; color: var(--ink-3); font-size: 13.5px; line-height: 1.45; }
+.wx-off-x { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; border-radius: 50%; color: var(--ink-3); font-size: 22px; line-height: 1; }
+.wx-off-x:hover, .wx-off-x:focus-visible { background: rgba(205, 190, 255, .1); color: var(--ink); }
+.wx-cks { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.wx-ck { display: flex; align-items: center; gap: 12px; padding: 9px 4px; }
+.wx-ck + .wx-ck { border-top: 1px solid var(--line); }
+.wx-ck > i { flex: 0 0 auto; width: 12px; height: 12px; border-radius: 50%; background: rgba(205, 190, 255, .22); }
+.wx-ck > span { display: grid; min-width: 0; }
+.wx-ck b { font-size: 14.5px; font-weight: 700; }
+.wx-ck small { color: var(--ink-3); font-size: 12.5px; overflow-wrap: anywhere; }
+.wx-ck.ok > i { background: var(--green, #4ff0b0); box-shadow: 0 0 0 4px rgba(79, 240, 176, .14); }
+.wx-ck.slow > i { background: var(--amber, #ffbe55); box-shadow: 0 0 0 4px rgba(255, 190, 85, .14); }
+.wx-ck.bad > i { background: var(--red, #ff6b86); box-shadow: 0 0 0 4px rgba(255, 107, 134, .16); }
+.wx-ck.bad small { color: var(--ink); }
+.wx-ck.run > i { background: transparent; border: 2px solid rgba(205, 190, 255, .25); border-top-color: var(--violet-2); animation: wx-spin .8s linear infinite; }
+.wx-ck.wait, .wx-ck.skip { opacity: .6; }
+.wx-vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.wx-off-fix { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; font-size: 13.5px; line-height: 1.45; background: rgba(205, 190, 255, .07); }
+.wx-off-acts { display: flex; gap: 8px; margin-top: 16px; }
+.wx-off-acts button { flex: 1; height: 44px; border-radius: 99px; font-size: 14px; font-weight: 700; }
+.wx-off-go { background: rgba(143, 99, 255, .45); color: var(--ink); }
+.wx-off-go[disabled] { opacity: .65; }
+.wx-off-help { border: 1px solid var(--line-2); color: var(--ink-2, var(--ink)); }
+.wx-off-card.happy .wx-ck small { color: var(--ink-3); }
+/* Phone: the card sits low, where the thumb is. */
+html:not([data-shell="desktop"]) .wx-off { place-items: end center; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); }
+@media (prefers-reduced-motion: reduce) { .wx-off { animation: none; } }
+/* Tucked-away pill: one tap brings the checks back. */
+.wx-banner.net:has([data-wxoffopen]) { padding: 0; }
+.wx-banner [data-wxoffopen] { height: 100%; display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 12.5px; font-weight: 650; color: var(--ink); }
+.wx-banner .wx-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--amber, #ffbe55); }
