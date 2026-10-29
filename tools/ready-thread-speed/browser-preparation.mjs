@@ -75,6 +75,16 @@ export async function input(row,shell) {
   // Desktop hover warming remains real; phone touchstart warming remains real.
   if(shell==='phone')await row.tap();else await row.click();
 }
+export async function expandList(page,wid,shell) {
+  // Real section paging, before timing. A 600-row fixture is not fully rendered
+  // until Show all is used; row 30/400 must not depend on the initial page size.
+  for(let n=0;n<10;n++){
+    const more=page.locator(`[data-win="${wid}"] [data-secmore]:visible`).first();
+    if(!await more.count())return;
+    await actionable(more);await input(more,shell);
+  }
+  assert.equal(await page.locator(`[data-win="${wid}"] [data-secmore]:visible`).count(),0,'bounded real Show all preparation');
+}
 export async function backToList(page,wid,shell) {
   const back=page.locator(`[data-win="${wid}"] [data-chback]:visible`).last();
   await actionable(back);await input(back,shell);

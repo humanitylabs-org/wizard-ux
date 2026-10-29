@@ -72,7 +72,8 @@ Original API measurements remain provisional synthetic contributor evidence.
 
 The repaired run still requires 12 tap groups x 30 samples for each A/B side,
 exact served model/renderer/both-shell script hashes against the staged export,
-three API groups x 50 samples, all 20 scope cells, both real shells/two skins,
+three API groups x 50 samples, all 20 positive delayed-detail scope cells plus
+four explicitly additional legacy full-row cells (24 total), both real shells/two skins,
 and the existing ancillary cases. Timing begins on the owned row's actual
 pointerdown and ends only when the latest assistant sentinel is in an on-screen,
 unoccluded text Range across two animation frames. Scope cells require actual
@@ -83,3 +84,59 @@ preload case enables and counts the production path.
 Only static/syntax/staging checks are authorized in the repair worker. Browser
 and unit acceptance remain unverified until the parent submits the sealed forum
 run. No merge, deployment, restart, live agent or owner-private-data access.
+
+## r6 main-scope diagnosis and r7 static audit
+
+The retained r6 receipt is `heavy_d5a2fa29edcd43b4aa69d7cc91773e05`, at
+`forum:/srv/work/ready-speed-20261029-d546ab6-r6/evidence`. UX correctness passed
+34/34; scopes passed 16/20. Only main failed in every shell/skin because optional
+detail was never requested. No A/B phase was launched. These are inherited results,
+not a new run. Preserve r2/r4/r5/r6 evidence and hashes unchanged.
+
+- `qa/agent-parity/fixture.mjs:179-189` leaves main canonical listing disabled.
+  `server/service.mjs:2972-2975,3741-3742` therefore returns no canonical window;
+  `live.js:224` recognizes a list-version response without `window=archive-50` and
+  retries the legacy full list. Its rows have no `listVersion`; `normalize` does
+  not set `detailNeeded`. `chats.js:2360` correctly omits the unnecessary detail.
+  Requiring delayed detail from that full-row branch was a fixture mismatch.
+- The original four main positives now provide a synthetic raw canonical reader
+  (same constructor seam as the A/B fixture). The real Service projects its list
+  and window metadata. Before tapping, assertions pin actual HTTP list version,
+  archive window, normalized row version and hydration need. All original 20
+  positives still require an actual detail request held for 1 s and answer/history
+  before release. Four extra main-legacy-full cells preserve the original no-reader
+  setup, assert the actual fallback row is hydrated, and require no detail for
+  1.1 s after answer paint. These do not replace or skip any positive cell.
+- A/B controlled samples retain real `sessionInfo/messages/forgetMessages` cache
+  APIs, save-data fencing and immediate current/empty/stale eligibility checks.
+  Stale preparation now waits for a genuinely changed canonical content key via
+  bounded live refresh, not one potentially stale-while-refresh response. The old
+  cached answer remains forbidden; timing starts only after preparation.
+- `chats.js:1132-1134` initially renders only `SEC_PAGE` rows. Preparation now uses
+  the real owned Show all buttons before samples; later row 30/400 cannot silently
+  depend on that page size. Real actionable input/viewport/hit-test and the
+  two-frame, clipped, unoccluded answer Range remain unchanged, on both real
+  shells and both skins. No forced click, direct window mutation or renderer patch.
+- Long history now uses actual row input/viewport answer proof, clears its cache
+  through the public API and requires exactly the three 500-row page offsets
+  `[0,500,1000]` for 1200 messages. No direct `openChat` bypass remains.
+- Pending-voice hang preparation now uses the shipped durable outbox `enqueue`
+  API with an explicit synthetic model/provider, rather than `_items` injection.
+  A browser network gate holds run admission before Service through context
+  teardown, so it cannot execute or retry an upstream write. The receipt requires
+  actual durable custody and a real held admission attempt, alongside a held
+  history request, visible pending bubble, visible retry within 14 s of the real
+  12 s history deadline, and actual retry input/new answer. Public route resolution
+  accepts this explicit route even with an empty synthetic model catalogue;
+  recording/model inference and real provider credentials are not involved.
+- Preload selection now reproduces the real combined Ready/error/working filter
+  and first-16 cap before choosing a positive, <500-message Ready row. Record its
+  index and count; a long heartbeat row cannot invalidate the required one-request
+  page proof. The request listener is armed before enabling preload and refreshing.
+- The runner must require 24 unique scope tuples, with 20 positive detail receipts
+  and four no-detail legacy receipts, then all existing A/B groups and traces.
+  Production source and all five correctness suites are unchanged from r6;
+  34/34 UX and 52/52 + 141/141 Service may be inherited only by exact file hashes.
+
+This is a static audit and sealed next-run specification, not a browser pass.
+

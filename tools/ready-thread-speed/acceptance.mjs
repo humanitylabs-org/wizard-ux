@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { initialize,openList,rowFor,actionable,input,backToList,diagnostics,armPaint,verifyServingBytes } from './browser-preparation.mjs';
+import { initialize,openList,rowFor,actionable,input,expandList,backToList,diagnostics,armPaint,verifyServingBytes } from './browser-preparation.mjs';
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, openSync, closeSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,7 +32,7 @@ try {
  try {
  for(const shell of ['phone','desktop'])for(const skin of ['nebula','signal']){
   const ctx=await browser.newContext({viewport:shell==='phone'?{width:412,height:892}:{width:1280,height:900},isMobile:shell==='phone',hasTouch:shell==='phone',serviceWorkers:'block'});
-  const page=await ctx.newPage();page.setDefaultTimeout(15000);const errors=[];page.on('pageerror',e=>errors.push(String(e)));
+  const page=await ctx.newPage();page.setDefaultTimeout(15000);const errors=[];let releasePendingSend;page.on('pageerror',e=>errors.push(String(e)));
   await ctx.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.fulfill({status:403,body:'Synthetic fixture blocks external requests'}));
   await initialize(ctx,skin);
   await ctx.addInitScript(()=>{
@@ -42,6 +42,7 @@ try {
   try {
    const wid=await openList(page,origin,shell);
    await page.waitForFunction(s=>document.documentElement.dataset.skin===s,skin);
+   await expandList(page,wid,shell);
    for(const state of ['current','empty','stale']){
     const samples=[];
     for(let n=1;n<=30;n++){
@@ -53,13 +54,14 @@ try {
      if(state!=='empty')await page.evaluate(async id=>{await WizLive.sessionInfo(id);await WizLive.messages(id)},id);
      let expected=marker;
      if(state==='stale'){
+      const oldKey=await page.evaluate(id=>WizLive.contentKey(WizLive.session(id)),id);
       const stamp=Date.now()/1000;
       // Mutate only this process's disposable canonical fixture via IPC.
       expected=`SYNTHETIC_CURRENT_ANSWER_${n}_v${Math.trunc(stamp*1e6)}`;
       await new Promise((res,rej)=>{const t=setTimeout(()=>rej(Error('fixture revision ack timeout')),10000);const fn=m=>{if(m.id===id){clearTimeout(t);child.off('message',fn);res()}};child.on('message',fn);child.send({op:'answer',id,text:expected,stamp})});
       // Only a live list update can vouch for content revision. Detail hydrates
       // optional rename/retry metadata and intentionally does not replace counts.
-      await page.evaluate(()=>WizLive.refresh());
+      await page.waitForFunction(async({id,oldKey})=>{await WizLive.refresh();return WizLive.contentKey(WizLive.session(id))!==oldKey},{id,oldKey},{timeout:15000,polling:250});
       assert.equal(await page.evaluate(id=>!!WizLive.cachedMessages(id),id),false,'old answer must not be accepted as current');
      }
      // Empty is asserted immediately before tapping; accidental prefetch cannot
@@ -80,40 +82,55 @@ try {
     }
     const record={shell,skin,state,...stats(samples),budget_ms:state==='current'?150:1000};record.pass=record.p95<record.budget_ms;results.browser.push(record);save();
    }
-   // Long history traverses several real pages without dropping the newest answer.
-   await page.evaluate(wid=>{(window.__wux||window.__wos).chats.openChat(wid,'wizard_speed_0')},wid);
-   await page.getByText('SYNTHETIC_CURRENT_ANSWER_0_v1',{exact:false}).last().waitFor({state:'visible'});
-   assert.deepEqual(errors,[]);results.browser.push({shell,skin,case:'long-history-and-no-js-errors',pass:true});
-   // A pending synthetic voice send must not hide a stalled saved transcript.
-   // Seed sending custody only; no send/pump/admission is invoked by this test.
-   const hangId='wizard_speed_400',pattern='**/sessions/wizard_speed_400/messages?**';
-   let release;const held=new Promise(r=>{release=r});
+   // Long history uses the same actual owned-row input and viewport paint proof.
+   await backToList(page,wid,shell);await expandList(page,wid,shell);
+   await page.evaluate(async()=>{await WizLive.forgetMessages('wizard_speed_0');window.__speedRequests=[]});
+   const longRow=rowFor(page,wid,'wizard_speed_0');await actionable(longRow);
+   await armPaint(page,wid,'SYNTHETIC_CURRENT_ANSWER_0_v1');await input(longRow,shell);
+   await page.waitForFunction(()=>window.__speed?.first!==null);
+   const longPages=await page.evaluate(()=>window.__speedRequests.filter(r=>{const u=new URL(r.url,location.origin);return u.pathname.endsWith('/wizard_speed_0/messages')&&u.searchParams.get('limit')==='500'}).map(r=>Number(new URL(r.url,location.origin).searchParams.get('offset'))));
+   assert.deepEqual(longPages,[0,500,1000],'1200 messages traverse three real pages before newest answer paints');
+   assert.deepEqual(errors,[]);results.browser.push({shell,skin,case:'long-history-and-no-js-errors',offsets:longPages,pass:true});
+   // Use the shipped durable enqueue API, not an injected _items entry. Hold its
+   // browser admission before Service so no fixture upstream write can execute.
+   const hangId='wizard_speed_400',pattern='**/sessions/wizard_speed_400/messages?**',sendPattern='**/wizard/hermes/v1/runs*';
+   let release,releaseSend,sendAttempts=0;const held=new Promise(r=>{release=r}),heldSend=new Promise(r=>{releaseSend=r});
+   releasePendingSend=releaseSend; // remain fenced through prefetch and context teardown
    await page.route(pattern,async route=>{await held;await route.abort().catch(()=>{})});
-   await page.evaluate(({wid,id})=>{const H=window.__wux||window.__wos;WizLive.forgetMessages(id);H.outbox._items.set('speed-voice',{id:'speed-voice',kind:'reply',source:'voice',sessionId:id,text:'SYNTHETIC_PENDING_VOICE',state:'sending',createdAt:Date.now(),attempts:1,agent:''});H.chats.openChat(wid,id)}, {wid,id:hangId});
-   await page.locator('.ch-skel.thread:visible').waitFor();
-   await page.getByText('SYNTHETIC_PENDING_VOICE',{exact:false}).last().waitFor({state:'visible'});
-   await page.locator('[data-chretry]:visible').waitFor({timeout:14000});
-   assert.ok(await page.getByText('SYNTHETIC_PENDING_VOICE',{exact:false}).last().isVisible());
-   release();await page.unroute(pattern);
-   await page.locator('[data-chretry]:visible').click();
-   await page.getByText('SYNTHETIC_CURRENT_ANSWER_400_v1',{exact:false}).last().waitFor({state:'visible'});
-   await page.evaluate(()=>{(window.__wux||window.__wos).outbox._items.delete('speed-voice')});
-   results.browser.push({shell,skin,case:'pending-voice-hang-deadline-retry',pass:true});
-   // Preload is bounded to the first 16 Ready/error/working rows. Pick its actual
-   // first Ready candidate, not a hard-coded row outside the production window.
-   const prefetchId=await page.evaluate(async()=>{
-    const s=WizLive.workGroups().ready.find(s=>!s.archived&&!s.hidden&&!s.optimistic&&!s.synthetic&&!WizLive.agentOf(s.id));
-    if(!s)throw Error('No eligible Ready prefetch candidate');
-    await WizLive.forgetMessages(s.id);navigator.connection.saveData=false;return s.id;
+   await page.route(sendPattern,async route=>{sendAttempts++;await heldSend;await route.abort().catch(()=>{})});
+   try{
+    await backToList(page,wid,shell);await expandList(page,wid,shell);
+    const custody=await page.evaluate(async({wid,id})=>{const H=window.__wux||window.__wos;await WizLive.forgetMessages(id);const it=await H.outbox.enqueue({kind:'reply',source:'voice',sessionId:id,text:'SYNTHETIC_PENDING_VOICE',wid,model:'fixture',provider:'synthetic'});return {id:it.id,durable:it.durable,state:it.state}}, {wid,id:hangId});
+    assert.ok(custody.durable,'pending voice preparation owns real durable device custody');
+    const hangRow=rowFor(page,wid,hangId);await actionable(hangRow);await input(hangRow,shell);
+    const pane=`[data-win="${wid}"]`;
+    await page.locator(`${pane} .ch-skel.thread:visible`).waitFor();
+    await page.locator(`${pane} .msg.pending`).filter({hasText:'SYNTHETIC_PENDING_VOICE'}).waitFor({state:'visible'});
+    // The shipped history read deadline is 12 s; 14 s bounds visible retry proof.
+    const retry=page.locator(`${pane} [data-chretry]:visible`).last();await retry.waitFor({timeout:14000});
+    assert.ok(sendAttempts>0,'the real outbox attempted the held synthetic admission');
+    assert.ok(await page.locator(`${pane} .msg.pending`).filter({hasText:'SYNTHETIC_PENDING_VOICE'}).isVisible());
+    release();await page.unroute(pattern);await actionable(retry);await input(retry,shell);
+    await page.locator(`${pane} .msg.a`).filter({hasText:'SYNTHETIC_CURRENT_ANSWER_400_v1'}).last().waitFor({state:'visible'});
+    results.browser.push({shell,skin,case:'pending-voice-hang-deadline-retry',custody_id:custody.id,durable:custody.durable,held_send_attempts:sendAttempts,pass:true});
+   }finally{release();await page.unroute(pattern)}
+   // The production preload cap is applied before selecting a short (one-page)
+   // Ready row. A long background-heartbeat row cannot turn one read into many.
+   const prefetch=await page.evaluate(async()=>{
+    const g=WizLive.workGroups(),want=[...(g.ready||[]),...(g.errors||[]),...(g.working||[])].filter(s=>!s.archived&&!s.hidden&&!s.optimistic&&!s.synthetic&&!WizLive.agentOf(s.id)).slice(0,16);
+    const index=want.findIndex(s=>g.ready.includes(s)&&s.messageCount>0&&s.messageCount<500);
+    if(index<0)throw Error('No one-page Ready row in the real first-16 preload window');
+    const s=want[index];await WizLive.forgetMessages(s.id);return {id:s.id,index,messageCount:s.messageCount};
    });
+   const prefetchId=prefetch.id;
    let prefetchReads=0;const count=r=>{if(new URL(r.url()).pathname.endsWith('/'+prefetchId+'/messages'))prefetchReads++};page.on('request',count);
-   await page.evaluate(()=>WizLive.refresh());
+   await page.evaluate(()=>{navigator.connection.saveData=false;return WizLive.refresh()});
    await page.waitForFunction(id=>!!WizLive.cachedMessages(id),prefetchId,{timeout:15000});
    assert.equal(prefetchReads,1,'exactly one actual background prefetch');page.off('request',count);
-   results.browser.push({shell,skin,case:'ready-prefetch-uses-existing-current-cache',id:prefetchId,history_reads:prefetchReads,pass:true});
+   results.browser.push({shell,skin,case:'ready-prefetch-uses-existing-current-cache',...prefetch,history_reads:prefetchReads,pass:true});
    assert.deepEqual(errors,[],'no shell exceptions through the entire cell');
   }catch(e){results.failures.push(`${shell}/${skin}: ${e.stack}`);writeFileSync(join(out,`${shell}-${skin}-diagnostic.json`),JSON.stringify(await diagnostics(page).catch(e=>({error:String(e)})),null,2));await page.screenshot({path:join(out,`${shell}-${skin}-failure.png`)}).catch(()=>{});save();}
-  finally{await ctx.close()}
+  finally{releasePendingSend?.();await ctx.close()}
  }
  } finally {await browser.close()}
 } catch(e){results.failures.push(e.stack)}
