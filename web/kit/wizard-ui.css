@@ -1,4 +1,3 @@
-@import url("controls.css");
 /* Wizard UI kit for generated apps (style/ canonical source, v1).
  *
  * Rule 1: a hosted app paints NO canvas. In a window or fullscreen the shell's window glass is the
@@ -61,7 +60,12 @@ html[data-presentation="window"] .wz-head { display: none; }
 
 /* ---------- rows: .ch-row ---------- */
 .wz-list { list-style: none; margin: 0; padding: 0; }
+.wz-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px; border-radius: var(--r); text-align: left; transition: background 140ms; }
+.wz-row:active { background: var(--fill); }
 @media (hover: hover) { .wz-row:hover { background: var(--fill); } }
+.wz-row .wz-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.wz-row .wz-main b { font-size: 15px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.wz-row .wz-main small { font-size: 13px; color: var(--ink-3); }
 .wz-tile { flex: none; width: 36px; height: 36px; border-radius: var(--r-tile); display: grid; place-items: center; font-size: 18px; background: var(--fill); }
 
 /* round check, 26px inside a 36px tile-sized slot (the whole row is the 44px+ target) */
@@ -72,6 +76,7 @@ html[data-skin="signal"] .wz-check i { border-radius: 2px; }
 [aria-pressed="true"] .wz-check i { background: var(--accent); border-color: var(--accent); transform: scale(1.04); }
 [aria-pressed="true"] .wz-check svg { opacity: 1; }
 [aria-pressed="true"] .wz-main b { color: var(--ink-2); }
+.wz-row:disabled { opacity: .6; cursor: progress; }
 
 /* ---------- empty state ---------- */
 .wz-empty { padding: 44px 24px 24px; text-align: center; color: var(--ink-3); }
@@ -102,8 +107,13 @@ html.wz-hosted #wiz-staging-tag { display: none !important; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
 
 /* Shared semantic primitives: tinted surfaces, never a second full-page canvas. */
+.wz-card { padding: var(--wz-space-4); border: 1px solid var(--line); border-radius: var(--r); background: var(--fill); }
+.wz-card > :first-child { margin-top: 0; } .wz-card > :last-child { margin-bottom: 0; }
 .wz-chip { display: inline-flex; align-items: center; gap: var(--wz-space-2); padding: 4px 10px; border-radius: var(--r-pill); background: var(--fill); color: var(--ink-2); font-size: 13px; }
 .wz-bar { display: flex; align-items: center; gap: var(--wz-space-2); padding: 8px 10px; background: var(--wz-chrome); border-bottom: 1px solid var(--line); backdrop-filter: blur(16px); }
+.wz-button { display: inline-flex; align-items: center; justify-content: center; border: 0; font: inherit; text-decoration: none; cursor: pointer; box-sizing: border-box; min-height: 44px; padding: 8px 16px; border-radius: var(--r-tile); background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.wz-button.secondary, .wz-button.quiet { background: var(--fill); color: var(--ink); border: 1px solid var(--line-2); }
+.wz-button:disabled { opacity: .45; cursor: default; }
 /* ---------- layout helpers (rules 1, 2, 5) ---------- */
 .wz-grid { display: grid; gap: var(--wz-space-3); grid-template-columns: 1fr; }
 @container wz-app (min-width: 600px) { .wz-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -125,6 +135,7 @@ html[data-color-scheme="light"] .wz-pill.warn { color: var(--wz-warning-light, v
 .wz-conn .wz-main { flex: 1; min-width: 0; display: grid; gap: 3px; }
 .wz-conn .wz-main b { font-size: 17px; font-weight: 700; }
 .wz-conn .wz-main small { font-size: 13px; color: var(--ink-3); }
+.wz-actions { display: flex; flex-wrap: wrap; gap: var(--wz-space-2); padding: var(--wz-space-3) 0; }
 .wz-more { margin-top: var(--wz-space-4); color: var(--ink-3); font-size: 13px; }
 .wz-more > summary { cursor: pointer; padding: 8px; list-style: none; font-weight: 650; color: var(--ink-2); }
 .wz-more > summary::-webkit-details-marker { display: none; }

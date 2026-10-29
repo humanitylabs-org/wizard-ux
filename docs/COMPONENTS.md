@@ -40,6 +40,7 @@ Visual: <side-by-side screenshot, or "none">
 | Protect unsaved work from updates | `WizardApp.update.hold` | app service worker, forced reload | released only after save+readback |
 | App reading place | `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic | app-local scroll store | reopen lands at the saved place |
 | Motion, haptics, press feel | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own spring/haptic helpers | — |
+| Canonical style admission | `check_style.py` (`wizard-os/style/`); trusted main policy, mirrored WAM scanner | per-app lint forks, blanket legacy failure | legacy warns; changed lines and new-app templates fail |
 | App kit: rows, sections, empty/add field | `WizardApp`: live `web/kit/wizard-ui.css` + `--wz-*`, then active skin (core/package/My skin) | kit forks; `.wz-field-row` chat; literal colours | two skins + My skin restyle `.wz-*` rows |
 
 ## Shell (`web/core/`): both shells and all agents; per-kind variants must EXTEND.

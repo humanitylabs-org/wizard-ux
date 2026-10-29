@@ -1,4 +1,4 @@
-/* Shared controls from wizard-ui.css: no root aliases or global reset, safe inside the shell. */
+/* Shared controls from ui.css: no root aliases or global reset, safe inside the shell. */
 .wz-list { list-style: none; margin: 0; padding: 0; }
 .wz-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px; border-radius: var(--wz-radius, 16px); text-align: left; transition: background 140ms; }
 .wz-row:active { background: var(--wz-surface); }
@@ -11,8 +11,8 @@
 .wz-field:focus, .wz-input:focus { border-color: color-mix(in srgb, var(--wz-accent) 60%, transparent); }
 .wz-card { padding: var(--wz-space-4, 16px); border: 1px solid color-mix(in srgb, var(--wz-border) 55%, transparent); border-radius: var(--wz-radius, 16px); background: var(--wz-surface); }
 .wz-card > :first-child { margin-top: 0; } .wz-card > :last-child { margin-bottom: 0; }
-.wz-button { min-height: 44px; padding: 8px 16px; border-radius: var(--wz-radius-tile, 13px); background: var(--wz-accent); color: var(--wz-on-accent); font-weight: 600; }
-.wz-button.secondary { background: var(--wz-surface); color: var(--wz-text); border: 1px solid var(--wz-border); }
+.wz-button { display: inline-flex; align-items: center; justify-content: center; border: 0; font: inherit; text-decoration: none; cursor: pointer; box-sizing: border-box; min-height: 44px; padding: 8px 16px; border-radius: var(--wz-radius-tile, 13px); background: var(--wz-accent); color: var(--wz-on-accent); font-weight: 600; }
+.wz-button.secondary, .wz-button.quiet { background: var(--wz-surface); color: var(--wz-text); border: 1px solid var(--wz-border); }
 .wz-button:disabled { opacity: .45; cursor: default; }
 .wz-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--r-pill); font-size: 13px; font-weight: 650; color: var(--wz-text-secondary); background: var(--wz-surface); white-space: nowrap; }
 .wz-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
@@ -28,6 +28,3 @@
 .wz-icon-button.caption { display: inline-flex; flex-direction: column; justify-content: center; gap: var(--wz-space-1); white-space: nowrap; font-size: var(--wz-text-sm); }
 .wz-icon-button.caption :is(span, small) { font-size: var(--wz-text-sm); white-space: nowrap; }
 .wz-button[hidden], .wz-row[hidden], .wz-icon-button[hidden], .wz-input[hidden] { display: none !important; }
-
-.wz-button { display:inline-flex; align-items:center; justify-content:center; border:0; font:inherit; font-weight:600; text-decoration:none; cursor:pointer; box-sizing:border-box; }
-.wz-button.quiet { background:var(--wz-surface); color:var(--wz-text); }

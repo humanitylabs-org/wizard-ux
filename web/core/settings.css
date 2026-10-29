@@ -78,17 +78,9 @@ a.st-row { color: inherit; text-decoration: none; }
 .dsettings > .st-close { position: relative; z-index: 3; align-self: end; flex: none; width: 48px; height: 48px; color: var(--wz-text-secondary); }
 @media (max-width: 899px) { .dsettings { inset: 0; width: 100%; } }
 
-/* Appearance v1 bridge: the shell still publishes its original live skin tokens.
- * No palette is defined here; hosted Settings paints a transparent canvas. */
-.st-root, .dsettings {
-  --wz-base: var(--wz-base); --wz-overlay: var(--wz-panel);
-  --wz-text: var(--wz-text); --wz-text-secondary: var(--wz-text-secondary); --wz-text-muted: var(--wz-text-muted);
-  --wz-on-accent: var(--wz-base); --wz-border: var(--wz-border); --wz-accent: var(--wz-accent); --wz-warning: var(--wz-warning);
-  --wz-surface: color-mix(in srgb, var(--wz-text) 6%, transparent);
-  --wz-surface-raised: color-mix(in srgb, var(--wz-text) 10%, transparent);
-  --wz-accent-soft: color-mix(in srgb, var(--wz-accent) 16%, transparent);
-  color: var(--wz-text);
-}
+/* Skin aliases are generated once in kit/shell-tokens.css. Do not remap a
+ * --wz-* role to itself here: that invalidates every descendant value. */
+.st-root, .dsettings { color: var(--wz-text); }
 .st-root { background: transparent; }
 .st-root[data-settings-root] button:not(.st-close), .st-root summary { min-height: 48px; min-width: 48px; }
 .st-root [hidden] { display: none !important; }
