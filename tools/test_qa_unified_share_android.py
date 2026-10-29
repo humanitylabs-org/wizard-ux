@@ -24,6 +24,55 @@ SPEC.loader.exec_module(runner)
 
 
 class ControllerTest(unittest.TestCase):
+    def test_post_tap_domain_wait_accepts_delayed_change_without_repeating_input(self):
+        rig = runner.Rig.__new__(runner.Rig)
+        rig.page = Mock(); rig.page.ev.side_effect = [False, False, True]
+        expression = "document.querySelector('.dv-chat strong')?.textContent==='Trip planning' && !document.querySelector('.dv-picker-wrap')"
+        with patch.object(runner.time, 'monotonic', side_effect=[0, 0, .4, .8]), patch.object(runner.time, 'sleep') as pause:
+            self.assertTrue(rig.wait_dom(expression, 1))
+        self.assertEqual(rig.page.ev.call_count, 3)
+        self.assertTrue(all(c.args == (expression,) for c in rig.page.ev.call_args_list))
+        self.assertEqual(pause.call_count, 2)
+        rig.page.call.assert_not_called()
+        self.assertIn('assert rig.wait_dom(' + json.dumps(expression) + ')',
+                      (HERE / 'qa_unified_share_android.py').read_text())
+
+    def test_post_tap_domain_wait_rejects_permanently_wrong_state_at_deadline(self):
+        rig = runner.Rig.__new__(runner.Rig)
+        rig.page = Mock(); rig.page.ev.return_value = False
+        with patch.object(runner.time, 'monotonic', side_effect=[0, 0, .4, .8, 1.2]), patch.object(runner.time, 'sleep'):
+            with self.assertRaisesRegex(RuntimeError, 'bounded wait failed: False'):
+                rig.wait_dom("document.querySelector('.dv-chat strong')?.textContent==='Trip planning'", 1)
+        self.assertEqual(rig.page.ev.call_count, 3)
+        rig.page.call.assert_not_called()
+
+    def test_web_tap_uses_compositor_touch_and_records_input_not_dom_click(self):
+        rig = runner.Rig.__new__(runner.Rig)
+        rig.page = Mock(); rig.page.ev.return_value = [123.5, 245.5, 400, 800]
+        rig.page.call.return_value = {'id': 1, 'result': {}}
+        rig.report = {}; rig.save = Mock(); rig.sx = Mock()
+        rig.tap('.dv-chat')
+        rig.page.call.assert_called_once_with('Input.synthesizeTapGesture', x=123.5, y=245.5,
+            duration=50, tapCount=1, gestureSourceType='touch')
+        self.assertEqual(rig.report['web_taps'][0]['selector'], '.dv-chat')
+        self.assertEqual(rig.report['web_taps'][0]['method'], 'Input.synthesizeTapGesture')
+        self.assertIn('elementFromPoint', rig.page.ev.call_args.args[0])
+        self.assertNotIn('.click(', rig.page.ev.call_args.args[0])
+        self.assertNotIn('dispatchEvent', rig.page.ev.call_args.args[0])
+        rig.sx.assert_not_called(); rig.save.assert_called_once_with()
+
+    def test_web_tap_refuses_cdp_errors_and_out_of_viewport_without_bypass(self):
+        for position, response, message in (([10, 20, 400, 800], {'error': {'message': 'unsupported'}}, 'compositor tap failed'),
+                ([10, 20, 400, 800], {}, 'compositor tap failed'),
+                ([10, 900, 400, 800], {'result': {}}, 'out of viewport')):
+            rig = runner.Rig.__new__(runner.Rig)
+            rig.page = Mock(); rig.page.ev.return_value = position; rig.page.call.return_value = response
+            rig.report = {}; rig.save = Mock(); rig.sx = Mock()
+            with self.subTest(position=position, response=response), self.assertRaisesRegex(RuntimeError, message):
+                rig.tap('.dv-chat')
+            self.assertEqual(rig.report, {})
+            rig.sx.assert_not_called(); rig.save.assert_not_called()
+
     def test_sender_manifest_explicitly_allows_independent_source_hash(self):
         manifest = ET.parse(HERE / 'unified-share-sender/AndroidManifest.xml').getroot()
         android = '{http://schemas.android.com/apk/res/android}'

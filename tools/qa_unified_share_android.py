@@ -2,7 +2,7 @@
 """Prepared-only coordinator: pinned debug build + real external-app Android share.
 
 No submission/publication. Execute ONLY inside forum's heavy lease. Device input is
-adb native taps/keys; CDP reads the DOM and locates controls, never opens the sheet,
+adb native taps/keys and CDP compositor taps; DOM evaluation never opens the sheet,
 substitutes a bridge, creates a File or calls app send functions. Synthetic fixture
 APIs only. The separate sender uses an explicit ACTION_SEND receiver (not an OS
 chooser/Gmail claim). Every owned emulator is stopped in finally.
@@ -490,18 +490,22 @@ class Rig:
         wait(lambda: self.page.ev('!!(window.__wos?.chats && window.WizShareWizard && window.WosDevicePort)'), 40)
 
     def tap(self, selector):
-        # CDP only locates the real DOM control. Android InputDispatcher supplies the event.
+        # Locate a hit-tested CSS point; the compositor supplies a real short touch.
         def pos():
             return self.page.ev("(() => {const e=document.querySelector(%s);if(!e)return null;e.scrollIntoView({block:'center'});const b=e.getBoundingClientRect();for(const [u,v] of [[.5,.5],[.5,.05],[.5,.95],[.05,.05],[.95,.05]]){const x=b.x+b.width*u,y=b.y+b.height*v;if(x>0&&y>0&&x<innerWidth&&y<innerHeight&&e.contains(document.elementFromPoint(x,y)))return [x,y,innerWidth,innerHeight]}return null})()" % json.dumps(selector))
         x, y, w, h = wait(pos)
-        # WebView visual viewport excludes navigation/status insets in some builds: bind to actual native bounds.
-        dims = self.sx('wm size')
-        width, height = map(int, re.findall(r'(\d+)x(\d+)', dims)[-1])
-        # DOM viewport width gives CSS->physical density; WebView is edge-to-edge at y=0 in MainActivity.
-        scale = width / w
-        if not (0 < x < w and 0 < y < h and y * scale < height):
+        if not (0 < x < w and 0 < y < h):
             raise RuntimeError('tap out of viewport')
-        self.sx('input tap %d %d' % (round(x * scale), round(y * scale)))
+        result = self.page.call('Input.synthesizeTapGesture', x=x, y=y, duration=50, tapCount=1, gestureSourceType='touch')
+        if 'error' in result or 'result' not in result:
+            raise RuntimeError('compositor tap failed: ' + json.dumps(result))
+        self.report.setdefault('web_taps', []).append({'selector': selector, 'x': x, 'y': y,
+            'method': 'Input.synthesizeTapGesture', 'duration_ms': 50, 'gesture_source': 'touch'})
+        self.save()
+
+    def wait_dom(self, expression, seconds=30):
+        # Input acknowledgment is not app-state acknowledgment. Never retry the tap.
+        return wait(lambda: self.page.ev(expression), seconds)
 
     def sheet(self):
         return self.page.ev("!!document.querySelector('.wz-share')")
@@ -541,11 +545,13 @@ class Rig:
         wait(lambda: self.page.ev("!!document.querySelector('[data-dvpick=private]')"))
         assert self.page.ev("document.querySelector('[data-dvpick=stopped]').disabled"), 'stopped selectable'
         self.tap('[data-dvpick=private]')
-        wait(lambda: self.page.ev("document.querySelector('.dv-agent strong')?.textContent==='Private' && !document.querySelector('[data-sharesend]').disabled"))
+        self.wait_dom("document.querySelector('.dv-agent strong')?.textContent==='Private' && document.querySelector('.dv-chat strong')?.textContent==='New chat' && !document.querySelector('.dv-picker-wrap') && document.querySelector('[data-sharesend]')?.disabled===false")
 
     def set_comment(self, text):
         self.tap('.dv-text')
+        self.wait_dom("document.activeElement===document.querySelector('.dv-text')")
         self.page.call('Input.insertText', text=text)  # IME text insertion, not value/send/bridge replacement
+        self.wait_dom("document.querySelector('.dv-text')?.value===" + json.dumps(text))
         assert self.page.ev("document.querySelector('.dv-text').value") == text
         self.sx('input keyevent KEYCODE_BACK')  # dismiss keyboard only
         wait(self.sheet)
@@ -706,19 +712,21 @@ def main():
 
         phase = 'agent-and-chat'
         rig.tap('.dv-chat')
-        assert rig.page.ev("document.querySelector('.dv-picker [role=option]')?.textContent.includes('+ New chat')")
+        assert rig.wait_dom("document.querySelector('.dv-picker [role=option]')?.textContent.includes('+ New chat')")
         rig.sx('input keyevent KEYCODE_BACK')
         wait(lambda: rig.sheet() and not rig.page.ev("!!document.querySelector('.dv-picker-wrap')"))
         rig.tap('.dv-chat'); rig.tap('[data-dvpick=qa_existing_thread]')
-        assert rig.page.ev("document.querySelector('.dv-chat strong').textContent==='Trip planning'")
+        assert rig.wait_dom("document.querySelector('.dv-chat strong')?.textContent==='Trip planning' && !document.querySelector('.dv-picker-wrap')")
         rig.pick_private()
         assert rig.page.ev("document.querySelector('.dv-chat strong').textContent==='New chat'")
         rig.tap('.dv-chat')
+        rig.wait_dom("!!document.querySelector('.dv-picker [data-dvpick=qa_private_thread]')")
         private_rows = rig.page.ev("[...document.querySelectorAll('[data-dvpick]')].map(e=>({id:e.dataset.dvpick,text:e.innerText}))")
         assert private_rows[0]['id'] == '__new__' and any(x['id'] == 'qa_private_thread' for x in private_rows)
         assert not any(x['id'] in ('qa_existing_thread', 'qa_second_thread') for x in private_rows)
         assert any(e['path'].startswith('/wizard/hermes/api/sessions?') and 'agent=private' in e['path'] for e in Proxy.events)
         rig.screenshot(phase); rig.sx('input keyevent KEYCODE_BACK')
+        wait(lambda: rig.sheet() and not rig.page.ev("!!document.querySelector('.dv-picker-wrap')"))
         report['phases'][phase] = {'status': 'PASS', 'private_rows': private_rows}; save()
 
         phase = 'outside-cancel'
@@ -741,6 +749,7 @@ def main():
         rig.share('genuine'); rig.pick_private()
         assert rig.page.ev("document.querySelector('.dv-text').value==='' && document.querySelector('.dv-quote').textContent==='A genuine shared note mentioning genuine.pdf' && !document.querySelector('.dv-quote').isContentEditable")
         rig.tap('.dv-chat'); rig.tap('[data-dvpick=qa_private_thread]')
+        rig.wait_dom("document.querySelector('.dv-chat strong')?.textContent==='Private notes' && !document.querySelector('.dv-picker-wrap')")
         rig.set_comment('Synthetic comment one')
         rig.screenshot('existing-before-send')
         rig.tap('[data-sharesend]'); wait(lambda: not rig.sheet(), 5)

@@ -118,7 +118,7 @@ The rest of the audit matched these concrete contracts without edits:
 | Harness operation | Source contract checked |
 | --- | --- |
 | Explicit receiver, URI authority/read grant, PDF names/size | sender manifest/Java/provider; product manifest, ShareActivity/ShareStore |
-| Debug-only origin files, component identity, CSS-to-device taps | AppState, MainActivity, qa_aa_lib.Page; edge-to-edge WebView top is unpadded |
+| Debug-only origin files, component identity, compositor touch taps | AppState, MainActivity, qa_aa_lib.Page; CDP hit-tested CSS viewport coordinates |
 | Notification runtime permission | product declares POST_NOTIFICATIONS; fresh debug APK install uses `adb install -r -g` on verified SDK 35 |
 | Fixture startup readiness | existing bounded `wait(self.state, 20)` already retries `URLError`/connection refusal through `OSError`; regression-replayed, no source change needed |
 | Agent/session query and picker selectors | share-wizard.js and Proxy private/default session responses |
@@ -130,6 +130,29 @@ The rest of the audit matched these concrete contracts without edits:
 These are source/controller findings only. Preserve every failed receipt and all
 screenshots/logs; only the parent's new heavy run can establish the real phases.
 
+## Asynchronous input regression (controller-only)
+
+The `0446ac24290b` run passed external-boilerplate, then asserted the chat label
+immediately after input. Its saved `failure-agent-and-chat-dom.json` already shows
+`Trip planning` and a closed picker: input completion raced app event handling.
+The QA runner now waits on that exact label **and** picker closure, with the
+existing bounded predicate poll, not an added fixed delay or repeated tap.
+The other post-input reads were audited: opening a picker, private-agent loading
+and target reset, private chat selection, comment focus/value, and Back picker
+closure now await their domain state before subsequent input/assertions. Existing
+content, disabled-agent, scope, byte/hash, delivery and notification assertions
+remain mandatory. Cancel/Send already wait for sheet closure; notifications
+already wait for native foreground, handoff log and focused DOM.
+
+WebView controls use `Input.synthesizeTapGesture` (50 ms, one touch tap) at a
+hit-tested visible CSS point, recording selector/coordinate/method in `web_taps`.
+No DOM `.click()`, event dispatch or application function substitutes input; CDP
+errors fail closed, without a programmatic fallback. External sender and System
+UI notification controls still use real adb taps. Controller tests prove delayed
+state acceptance, bounded permanently-wrong refusal and the compositor command
+contract; these are not native acceptance. Preserve the failed run; only the
+parent's fresh immutable `--reuse-build` stage may run all emulator phases again.
+
 ## Real device phases and evidence
 
 The separate synthetic source app generates a 24 MiB blank-page PDF fixture byte
@@ -138,7 +161,8 @@ to the actual debug ShareActivity. This is an explicit receiver test, **not** a
 claim about Gmail, the OS chooser or third-party account integration. The sender
 source screenshot, native activity state, native private staging metadata/hash,
 network receipts and byte equality distinguish this path from JS share mocks.
-CDP reads rendered state/locates controls; adb performs taps/Back/Home. CDP
+CDP reads rendered state/locates controls and supplies compositor touch taps;
+adb performs native sender/notification taps and Back/Home. CDP
 `Input.insertText` supplies only the owner's synthetic comment, not bridge/send
 calls. No fixture creates a JS File or calls open/send/queue on the app's behalf.
 
