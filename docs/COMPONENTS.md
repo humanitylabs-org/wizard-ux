@@ -56,7 +56,7 @@ Visual: <side-by-side screenshot, or "none">
 | Pinned threads (synced across devices) | `WosChatPins` (`web/core/chat-pins.js`) | device-local pin lists |
 | Snooze thread/message | `WosBoomerang` (`core/scheduled-reminders.js`), one scheduler; preset/Other dates; success uses `threadBack` like Done. Settings: `WosSchedules` (`core/schedules.js`) | own timers/stores |
 | Thread topic emoji | `WosTopicEmoji` (`web/core/chat-topic-emojis.js`, data `WosTopicEmojiData`) | — |
-| Durable send; >6h held in thread/list for Send/Discard | `WosOutbox`, `WosCarry` (`web/outbox.js`) | own queue |
+| Durable send; >6h held for Send/Discard; failed sends Dismiss to retained custody without stopping a run | `WosOutbox`, `WosCarry` (`web/outbox.js`) | own queue |
 | Cancelled-recording keep | `WosCancelled` (`web/core/cancelled.js`) | — |
 | Share to Wizard | `WizShareWizard` (`web/core/share-wizard.js`) | Native/app input → one phone/desktop sheet; `share.wizard` |
 | Uploads of any size | `WizUploads` (`web/core/uploads.js`) | file input + single fetch |
