@@ -109,7 +109,7 @@
     const why = { held: 'kept on this version', 'owner-source': 'your code needs review', 'source-unverified': 'your code needs review', pinned: 'your selected version' };
     const kept = skipped.length ? `<p class="st-hint">Kept unchanged: ${skipped.map(r => `${esc(r.id)} (${why[r.skip]})`).join(', ')}.</p>` : '';
     const warning = a.error ? `<p class="st-hint">${esc(a.error)}. Your saved setting is still shown.</p>` : '';
-    const last = a.last?.updated?.length ? `<p class="st-hint">Last updated: ${a.last.updated.map(esc).join(', ')}.</p>` : '';
+    const last = a.last?.updated?.length ? `<p class="st-hint">Last updated: ${a.last.updated.map(r => esc(typeof r === 'string' ? r : r.id)).join(', ')}.</p>` : '';
     return `<div class="osu-sec" data-app-updates><span class="osu-lbl">App updates</span>${seg('App updates', [['apps-auto', 'Automatic', auto], ['apps-ask', 'Manual', !auto]])}<p class="st-hint">${auto ? `${a.chosen ? '' : 'Default: Automatic. '}New app versions install overnight. You can turn this off here.` : 'No automatic app updates. Update only when you choose.'} An update already running finishes safely. Your changed code is kept for review.</p>${warning}${kept}${last}<button type="button" class="osu-go" data-osu="apps-apply" ${busy || !due.length ? 'disabled' : ''}>${busy === 'apps-apply' ? 'Starting…' : 'Update apps now'}</button><p class="st-hint">Updates ${due.length} eligible app${due.length === 1 ? '' : 's'} once; doesn’t turn Automatic on. Wizard OS updates are separate.</p></div>`;
   }
   function html() {

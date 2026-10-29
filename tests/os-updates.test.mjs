@@ -24,13 +24,15 @@ async function load(reply) {
 const btn = osu => ({ closest: sel => (sel === '[data-osu]' ? { dataset: { osu } } : null) });
 const ctx = () => { const t = []; return { t, toast: (...a) => t.push(a), render() {}, haptic() {} }; };
 const STATUS = { mode: 'auto', chosen: false, installed: '0.3.15', latest: '0.3.16', update_available: true, unpinned: false, checked: true, installing: false };
-const APPS = { app_mode: 'auto', chosen: false, due: [{ id: 'notes' }], skipped: [{ id: 'my-app', skip: 'owner-source' }] };
+const APPS = { app_mode: 'auto', chosen: false, due: [{ id: 'notes' }], skipped: [{ id: 'my-app', skip: 'owner-source' }], last: { updated: [{ id: 'news' }] } };
 
 test('app policy is visible, separately scoped, default is not called consent, and legacy boxes invent nothing', async () => {
   const { U } = await load(() => [200, { ...STATUS, mode: 'ask', apps: APPS }]);
   assert.match(U.html(), /Wizard OS updates/);
   assert.match(U.html(), /App updates/);
   assert.match(U.html(), /Default: Automatic/);
+  assert.match(U.html(), /Last updated: news/);
+  assert.doesNotMatch(U.html(), /\[object Object\]/);
   assert.match(U.html(), /my-app \(your code needs review\)/);
   assert.match(U.html(), /data-osu="apps-auto" role="radio" aria-checked="true"/);
   const old = await load(() => [200, STATUS]);
