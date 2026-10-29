@@ -1,6 +1,6 @@
 # Shared components
 
-**Appearance:** [Wizard app style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md). Implementation inventory only.
+**Appearance:** [Wizard app style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md). Inventory.
 
 **One implementation per capability.** NEW: `web/core/` + row, never an app.
 
@@ -50,11 +50,11 @@ Visual: <side-by-side screenshot, or "none">
 | Need | Use | Never hand-roll |
 |---|---|---|
 | App setup | `WosAppSetup` (`web/core/app-setup.js`) | app-local setup |
-| Chats: Focus, Filter, search, composer, files, read state, Copy/Share; Novairecito Recall/Done | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); All/main Ready inbox + Home count; `setFocus`/`migrateChatsFocus`; `WizLive` data/stream/tools; provider-access waits in Errors, source-bound optimistic-send release; revision cache | second Chats/Focus parser; per-agent/shell routing |
+| Chats: Focus, Filter, search, composer/files, read state, Copy/Share, Recall/Done | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); All/main Ready + Home count; `setFocus`/`migrateChatsFocus`; `WizLive` stream/tools, provider-access Errors, source-bound send release; revision cache | duplicate Chats/Focus parsing or per-agent/shell routing |
 | Chats list variant | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`web/core/edge-peek.js`), host storage | skin-local duplicate |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
-| Models, retry, composer mic, receipts, reading place | `WosChatPower` (`web/core/chat-power.js`: anchor/offset/atBottom; repair; viewport-bound picker, keyboard room/cleanup) + `WosModels` (`web/core/chat-models.js`; pooled Claude first; fresh; provider-access Error + Retry/Choose another model; acknowledged source-bound saved retry), `WosErrors` (`web/core/chat-errors.js`), `WosWork` (`web/core/chat-work.js`: expandable history + live tools) | model/error/reading-place forks; duplicate diagnosis notice or parallel live steps list |
+| Models, retry, composer mic, receipts, reading place | `WosChatPower` (`web/core/chat-power.js`: reading anchor, repair, viewport/keyboard cleanup); `WosModels` (`web/core/chat-models.js`: pooled Claude first, provider-access Error + Retry/Choose another model, acknowledged source-bound retry); `WosErrors` (`web/core/chat-errors.js`); `WosWork` (`web/core/chat-work.js`: history/live tools) | model/error/reading-place forks; duplicate diagnosis/live steps |
 | Markdown, drafts, inline/bottom media | `WosChat` (`chat-kit.js`: `helm`, `md`, `copyRich`, `viewer`); Chats `mediaBlock` | own parser/viewer |
 | Spaces / Focus | `WizCore` Chats (`web/core/chats.js`), `WizLive.prefOps` (`spaces`; add = move, one Space per chat); one naming form; `WizLive.spaceSessions(ids)` hydrates; `winAgent`/`modelRoute` route new chats; `WosOutbox.onNew` joins front Space; restored Focus awaits census; hidden agents accept explicit routes; scoped Spaces tool; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` | automatic subject tabs, separate collection store, per-shell Focus routing or section implementations |
 | Pinned threads (synced) | `WosChatPins` (`web/core/chat-pins.js`) | device-local pin lists |
