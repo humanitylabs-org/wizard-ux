@@ -57,7 +57,9 @@ public final class DeviceMessageProtocol {
                 .put("device.packages", new JSONObject().put("v", VERSION).put("methods", methods))
                 .put("identity", new JSONObject().put("v", VERSION).put("methods", new org.json.JSONArray()
                     .put("identity.info").put("identity.setup").put("identity.sign").put("identity.nip44_encrypt").put("identity.nip44_decrypt")))
-                .put("view.capture", new JSONObject().put("v", VERSION)));
+                .put("view.capture", new JSONObject().put("v", VERSION))
+                .put("device.shares", new JSONObject().put("v", VERSION).put("methods", new org.json.JSONArray()
+                    .put("device.shares.queue").put("device.shares.present").put("device.shares.finish"))));
     }
 
     public static JSONObject answer(String id, Object result, String error) throws JSONException {
