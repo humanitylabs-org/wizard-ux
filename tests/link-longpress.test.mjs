@@ -6,7 +6,8 @@ test('long-press link menu: your browser or copy, dark card, never writes into t
   assert.match(links, /data-wl="mine">Open in your browser</);
   assert.match(links, /data-wl="copy">Copy link</);
   assert.doesNotMatch(links, /agent's browser|take a look:/);
-  assert.match(links, /background:rgba\(22,14,46,\.98\)/);
+  // The original dark tint stays, but it must sit above the shared opaque panel material.
+  assert.match(links, /background:linear-gradient\(rgba\(22,14,46,\.98\),rgba\(22,14,46,\.98\)\),var\(--wz-panel/);
   assert.match(links, /clipboard\?\.writeText\(u\.href\)/);
 });
 

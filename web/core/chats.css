@@ -226,8 +226,8 @@ a.fchip { color: inherit; text-decoration: none; }
    list (absolute), so the threads never shift; it holds one line and only the buttons a stuck send needs. */
 .ch-pill { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 4; max-width: calc(100% - 28px);
   display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 5px 0 13px; border-radius: 99px; white-space: nowrap;
-  font-size: 13px; font-weight: 600; color: var(--ink-2); background: rgba(28, 20, 52, .92); border: 1px solid rgba(160, 120, 255, .35);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, .45); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); animation: ch-pill-in .18s ease-out; }
+  font-size: 13px; font-weight: 600; color: var(--ink-2); background: linear-gradient(rgba(28, 20, 52, .92), rgba(28, 20, 52, .92)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid rgba(160, 120, 255, .35);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .45);   animation: ch-pill-in .18s ease-out; }
 .ch-pill:not(:has(.pbtn)) { padding-right: 14px; }
 .ch-pill .pl { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }
 .ch-pill .pl > span { overflow: hidden; text-overflow: ellipsis; }
@@ -336,7 +336,7 @@ a.fchip { color: inherit; text-decoration: none; }
 .ch-row { transition: transform 160ms var(--ease); touch-action: pan-y; -webkit-touch-callout: none; }
 /* Long-press / swipe actions sheet */
 .ch-sheet { position: absolute; inset: 0; z-index: 8; display: flex; align-items: flex-end; background: rgba(3, 1, 10, .5); animation: ch-fade 160ms both; }
-.ch-sheet-b { width: 100%; padding: 8px 8px calc(10px + var(--safe-b, 0px)); border-radius: 18px 18px 0 0; background: rgba(20, 13, 44, .98); border-top: 1px solid var(--line-2); }
+.ch-sheet-b { width: 100%; padding: 8px 8px calc(10px + var(--safe-b, 0px)); border-radius: 18px 18px 0 0; background: linear-gradient(rgba(20, 13, 44, .98), rgba(20, 13, 44, .98)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border-top: 1px solid var(--line-2); }
 .ch-sheet-t { padding: 8px 10px 10px; font-size: 13px; font-weight: 750; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ch-sheet-b button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px; border-radius: 12px; font-size: 15px; font-weight: 650; color: var(--ink); text-align: left; }
 .ch-sheet-b button:active { background: rgba(205, 190, 255, .1); }
