@@ -316,3 +316,40 @@ test('interim words the transcript already shows mid-run are not drawn again und
     assert.match(ctx.syncStream(w, c, turns, agent), /Different words entirely\./);
   }
 });
+test('a reply with a mid-reply MEDIA line shows once: no raw path while streaming, retired once its thumbnail lands (main and routed)', () => {
+  for (const agent of ['', 'host-profile', 'container', 'restricted']) {
+    const w = { id: 'w', thread: 'sid' }, c = {}, row = { status: 'running' };
+    let callback, closed = 0;
+    const ctx = { LIVE: { pendingRun: () => 'rid', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close: () => closed++ }) },
+      WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }), clip: (s, n) => s.slice(0, n),
+      esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => {}, loadThread: async () => {}, setTimeout: () => 1, clearTimeout: () => {} };
+    vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+    const intro = 'I redid the mockup in a cleaner style. It now has five screens.';
+    const outro = 'The proposal for James now has the new image.';
+    const streamed = `${intro}\n\nMEDIA:/home/oscar/.hermes/cache/images/friendly-sharing-v2.png\n\n${outro}`;
+    const before = [{ u: { text: 'redo it' }, notes: [], a: { at: 5, text: 'Older answer.', final: true } }];
+    ctx.syncStream(w, c, before, agent);
+    // Half-typed and complete MEDIA lines never show as text while streaming.
+    for (const part of [`${intro}\n\nME`, `${intro}\n\nMEDIA:/home/oscar/.her`, streamed]) {
+      callback({ text: part, steps: [], terminal: false });
+      const html = ctx.syncStream(w, c, before, agent);
+      assert.doesNotMatch(html, /MEDIA|\.hermes|<p>ME/, `agent=${agent || 'main'}: ${part.slice(-12)}`);
+      assert.match(html, /five screens/);
+    }
+    assert.match(ctx.syncStream(w, c, before, agent), /new image/);
+    // A subscriber opened after the reply landed (baseline already includes it) replays the whole run with the raw
+    // line, while the transcript shows the thumbnail in its place (chat-kit helm() markdown). Same reply: one copy.
+    const thumb = '![Image](/wizard/attachments/3a22b57edb70bd0c03514042ac7bfa13 "wizard-inline-0")';
+    const landed = [...before, { u: { text: 'again' }, notes: [], a: { at: 9, text: `${intro}\n\n${thumb}\n\n${outro}`, final: true } }];
+    const c2 = {};
+    assert.equal(ctx.syncStream(w, c2, landed, agent), '');
+    callback({ text: streamed, steps: [], terminal: true });
+    assert.equal(ctx.syncStream(w, c2, landed, agent), '', `agent=${agent || 'main'}: no Finishing copy under the landed reply`);
+    assert.equal(c2.stream.landed, true);
+    // A picture the service could not show lands as its unavailable line; still the same reply.
+    const c3 = {}, gone = [...before, { u: { text: 'again' }, notes: [], a: { at: 9, text: `${intro}\n\n[file: friendly-sharing-v2.png unavailable]\n\n${outro}`, final: true } }];
+    ctx.syncStream(w, c3, gone, agent);
+    callback({ text: streamed, steps: [], terminal: true });
+    assert.equal(ctx.syncStream(w, c3, gone, agent), '');
+  }
+});
