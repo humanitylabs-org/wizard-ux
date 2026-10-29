@@ -386,6 +386,14 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/offline-kit.js": {
+      "loadedBy": [],
+      "note": "Opt-in app offline replica and durable outbox (WizOffline.create); loaded by an app, not either shell"
+    },
+    "core/offline-sw.js": {
+      "loadedBy": [],
+      "note": "Opt-in app service worker for WizOffline; importScripts from an app worker, not either shell"
+    },
     "core/orb-handoff.js": {
       "loadedBy": [
         "phone"

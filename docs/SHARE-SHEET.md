@@ -1,12 +1,12 @@
 # Wizard share sheet
 
-Share in Wizard opens Wizard's own sheet first: **people → Wizard apps → Other apps…**. Sharing inside Wizard (send to Miguel in Messenger, later Email, Projects, Reference) takes one tap, and the Android/system tray is one extra tap away.
+Share in Wizard opens Wizard's own sheet first: **people → Apps → Other apps…**. Sharing inside Wizard (send to Miguel in Messenger, later Email, Projects, Reference) takes one tap, and the Android/system tray is one extra tap away.
 
 ## Owner experience
 
 - Tap Share (reply row, selection menu, code block, or any app's `WizardApp.share.text`).
 - **People**: up to 8 recent people from apps that receive shares (Messenger first). Tap one: the app opens on that person with the text in the composer, ready to send or add a line. Nothing is sent without a final tap in the receiving app.
-- **Wizard apps**: each app that receives shares. Tap one: the app opens and asks where it goes (Messenger opens its New chat picker).
+- **Apps**: each app that receives shares. Tap one: the app opens and asks where it goes (Messenger opens its New chat picker).
 - **Other apps…**: the old path (Android share tray on the phone, the browser share or copy elsewhere).
 - Back, Escape or tapping outside closes the sheet and reports `cancelled`.
 - If no installed app receives the kind being shared, Share goes straight to the old path, with no sheet.
