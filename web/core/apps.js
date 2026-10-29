@@ -127,6 +127,9 @@
   function registry(shell) {
     // One live array per shell, updated in place, so existing references stay valid.
     const APPS = [], APP = {};
+    // Publish before rebuild emits wizard:apps; listeners may look it up synchronously.
+    const result = { APPS, APP, findApp, appAt, appByName, searchApps, searchApp, searchUrl, quickSearch: text => searchApp() ? parseQuickSearch(text) : null };
+    REGISTRIES.set(shell, result);
     const rebuild = () => {
       const chats = ALL.findIndex(a => a.kind === 'chats');
       const AG = window.WosAgents;
@@ -159,9 +162,7 @@
       for (const a of APPS) APP[a.id] = a;
       window.dispatchEvent(new CustomEvent('wizard:apps', { detail: { shell, count: APPS.length } }));
     };
-    rebuild(); listeners.add(rebuild);
-    window.WizLauncher?.onChange(rebuild);
-    window.WosAgents?.onChange(rebuild);
+
   const tight = s => s.replace(/ /g, '');
   function findApp(q, exact) {
       q = norm(q).replace(/^(the|my) /, '').replace(/ (app|application|view)$/, '');
@@ -205,7 +206,7 @@
     }
     // Quick search (the "image search …" / "search …" spell). The search app is whichever installed or
     // linked app has the id `wizard-search`; with none, the spell is off and the phrase routes as before.
-    const searchApp = () => APP['wizard-search'] || null;
+    function searchApp() { return APP['wizard-search'] || null; }
     function searchUrl(query, tab) {
       const a = searchApp(); if (!a || !a.url || !query) return '';
       const u = new URL(a.url, location.origin);
@@ -227,7 +228,10 @@
       }
       return best;
     }
-    return { APPS, APP, findApp, appAt, appByName, searchApps, searchApp, searchUrl, quickSearch: text => searchApp() ? parseQuickSearch(text) : null };
+    rebuild(); listeners.add(rebuild);
+    window.WizLauncher?.onChange(rebuild);
+    window.WosAgents?.onChange(rebuild);
+    return result;
   }
   /* "ask AI is milk bad for gout", "image search capybaras", "find images of eames chairs", "search why is the sky blue", "quick search …".
    * Returns { query, tab: 'images' | 'all' } or null. Thread/app searches ("search my chats for …") stay with the shell. */
@@ -258,5 +262,9 @@
   // Maintenance stays addressable by deep link/voice, but is not an ordinary Apps entry.
   window.WizCore.isMaintenanceApp = a => a?.id === 'wizard-supervisor';
   window.WizCore.isInDevelopment = a => !!a && DEV.has(String(a.id));
-  window.WizCore.apps = registry;
+  // One registry per shell, built once and shared. Building one dispatches 'wizard:apps' and subscribes it
+  // forever, so a fresh registry per call looped (home-screen icon refresh → registry → event → refresh)
+  // and leaked listeners until Android killed the app (26 Oct 2026).
+  const REGISTRIES = new Map();
+  window.WizCore.apps = shell => { if (!REGISTRIES.has(shell)) REGISTRIES.set(shell, registry(shell)); return REGISTRIES.get(shell); };
 })();

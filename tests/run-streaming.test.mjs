@@ -250,3 +250,30 @@ test('a new run that only ends like the previous short answer keeps streaming (m
     assert.equal(ctx.syncStream(w, c2, landed, agent), '', `agent=${agent || 'main'}`);
   }
 });
+test('interim words the transcript already shows mid-run are not drawn again under Replying (main and routed)', () => {
+  for (const agent of ['', 'host-profile', 'container', 'restricted']) {
+    const w = { id: 'w', thread: 'sid' }, c = {}, row = { status: 'running' };
+    let callback;
+    const ctx = { LIVE: { pendingRun: () => 'rid', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close() {} }) },
+      WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }), clip: (s, n) => s.slice(0, n),
+      esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => {}, loadThread: async () => {}, setTimeout: () => 1, clearTimeout: () => {} };
+    vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+    const interim = "You're right, I should have read the code first. Doing that now.";
+    const turns = [{ u: { text: 'read the code' }, notes: [], a: { at: 5, text: interim, final: false } }];
+    ctx.syncStream(w, c, turns, agent);
+    callback({ text: interim, steps: [], terminal: false });
+    assert.equal(ctx.syncStream(w, c, turns, agent), '', `agent=${agent || 'main'}: interim line shown once`);
+    assert.equal(c.stream.landed, false, 'the run keeps streaming');
+    callback({ text: interim + '\n\nThe onboarding code lives in setup.js.', steps: [], terminal: false });
+    const html = ctx.syncStream(w, c, turns, agent);
+    assert.match(html, /The onboarding code lives in setup\.js\./);
+    assert.doesNotMatch(html, /Doing that now/);
+    // Earlier interim lines moved into notes still count as shown.
+    const later = [{ u: { text: 'read the code' }, notes: [interim], a: { at: 7, text: 'Reading setup.js next.', final: false } }];
+    callback({ text: interim + 'Reading setup.js next.' + 'Found it.', steps: [], terminal: false });
+    assert.match(ctx.syncStream(w, c, later, agent), /<p>Found it\.<\/p>/);
+    // Words that do not continue the transcript are never trimmed.
+    callback({ text: 'Different words entirely.', steps: [], terminal: false });
+    assert.match(ctx.syncStream(w, c, turns, agent), /Different words entirely\./);
+  }
+});
