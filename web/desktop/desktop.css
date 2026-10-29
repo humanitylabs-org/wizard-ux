@@ -435,3 +435,4 @@ html[data-skin-frame="borderless"] .win.hud > .wbar { padding-right: calc(96px +
 .win.hud:not([hidden]) { animation: hud-in 200ms var(--ease, ease-out) both; }
 @keyframes hud-in { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .win.hud:not([hidden]) { animation: none; } }
+.bar-start { display: contents; }
