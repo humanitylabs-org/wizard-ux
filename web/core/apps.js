@@ -4,6 +4,7 @@
   'use strict';
   const { norm } = window.WizCore;
   const ALL = [
+    {id:'pages', kind:'wizard', name:'Pages', system:true, icon:'pages', desc:'Reports, documents and dashboards your agent makes', sigil:{id:'pages',name:'Pages',icon:'pages'}},
     { id: 'app-store', kind: 'wizard', name: 'App Store', icon: '+', g: ['#8f63ff', '#ff5ccf'], url: '/wizard-os-home/store/index.html', desc: 'Get apps · Browse the Wizard App Index' },
     // Agents: a system app of its own, reached from Home; never in Apps or the Store.
     // Its sigil is the house `agents` mark (two layered hats), never a single hat that could pass for one agent.
@@ -20,6 +21,7 @@
   function appsFor(shell, list = ALL) {
     const nativeSide = !!(window.WizardOSNative && typeof window.WizardOSNative.sideButton === 'function');
     return list.filter(a => {
+      if (a.id === 'pages' && !window.WosPages?.available) return false;
       if (a.id === 'side-button' && !nativeSide) return false;
       const device = window.WizDeviceLegacy?.find(d => d.appId === a.id);
       if (device && typeof window.WizardOSNative?.[device.probe] !== 'function') return false;
@@ -115,7 +117,7 @@
   const firstLoad = loadRemote();
   window.WizCore.refreshApps = loadRemote;
   // ?open=<id> before the box's app list arrived (first run, no cache): wait for it once, then retry.
-  window.WizCore.appsLoaded = () => Promise.all([firstLoad, window.WosAgents?.load()]);
+  window.WizCore.appsLoaded = () => Promise.all([firstLoad, window.WosAgents?.load(), window.WosPages?.ready]);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadRemote(); });
   addEventListener('focus', () => { if (!document.hidden) loadRemote(); });
   // A Store Get (or another same-origin Wizard window) says the box's apps changed: read the list again now, so
