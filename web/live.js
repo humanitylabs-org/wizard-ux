@@ -76,7 +76,7 @@
     const working = WORKING.has(status) || status === 'waiting_for_approval';
     const latestText = clean(text(latest?.content ?? latest?.text));
     const userText = clean(text(lastUser?.content ?? lastUser?.text) || text(item.wizard_request_preview));
-    const preview = working ? (userText || latestText) : (latestText || userText || clean(text(item.preview)));
+    const preview = working ? (item.wizard_helper_status ? (latestText || clean(text(item.preview)) || userText) : (userText || latestText)) : (latestText || userText || clean(text(item.preview)));
     const latestAt = optIso(latest?.timestamp ?? latest?.created_at);
     const userAt = optIso(lastUser?.timestamp ?? lastUser?.created_at);
     return {
@@ -104,6 +104,7 @@
       critical: (item.wizard_attention_level || item.attention_level) === 'critical',
       waitingOn: item.wizard_waiting_on === 'helper' ? 'helper' : '',
       helperStatus: item.wizard_helper_status && typeof item.wizard_helper_status === 'object' ? item.wizard_helper_status : null,
+      background: ['helper', 'heavy'].includes(item.wizard_background) ? item.wizard_background : '',
       // What the finished thread asks of James (the agent's hidden status line): needs_you / check / done / fyi.
       attention: attentionOf(item.wizard_attention),
       // A durable quiet one-shot checker bound to this thread. The prompt never reaches the list.

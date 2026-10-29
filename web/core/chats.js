@@ -407,6 +407,7 @@ window.WizCore.chats = function createChats(H) {
   // The agent's status line for a finished thread (live.js attention): what it asks of James.
   const ATT = { needs_you: { cls: 'needs', label: 'Needs you' }, check: { cls: 'check', label: 'Your call' }, done: { cls: 'done', label: 'Done' }, fyi: { cls: 'fyi', label: '' } };
   const deferredOf = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt));
+  const backgroundBadge = s => attOf(s) && s.background ? '<span class="ch-privtag ch-background">Helper still working</span>' : '';
   const attOf = s => (s.attention && !isWorking(s) && s.status !== 'waiting_for_approval' && s.status !== 'failed' && s.status !== 'interrupted') ? s.attention : null;
   const svg = b => `<svg viewBox="0 0 24 24" aria-hidden="true">${b}</svg>`;
   const STI = {
@@ -480,7 +481,7 @@ window.WizCore.chats = function createChats(H) {
     const mark = !topic ? stock : `<span class="ch-topic-mark" data-chpick="thread:${esc(s.id)}" title="Choose topic emoji"><span class="ch-topic-emoji" aria-hidden="true">${topic}</span><span class="emo sti ${kind} ch-topic-status" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span></span>`;
     const pinned = PIN.has(s.id), boom = BOOM()?.dueFor(s.id).length ? ' due' : BOOM()?.nextFor(s.id) ? ' set' : '';
     return `<div class="ch-row-wrap${s.reconnect && needs ? ' diagnosed' : ''}${pinned ? ' pinned' : ''}" data-morph-key="row:${esc(s.id)}"><button data-part="thread-row" class="ch-row${unread ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}${priv ? ' private' : ''}" data-chopen="${esc(s.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open thread · hold or open the context menu for actions"${quiet ? ' data-quiet="1"' : ''}${priv ? ' data-wiz-private=""' : ''}>${mark}
-      <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b><time>${esc(ago(LIVE.cardAt(s)))}</time></span>
+      <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b>${backgroundBadge(s)}<time>${esc(ago(LIVE.cardAt(s)))}</time></span>
       ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}</span>${boom ? `<i class="ch-boom${boom}" title="${boom === ' due' ? 'Back for you' : 'Snoozed'}" aria-label="${boom === ' due' ? 'Back for you' : 'Snoozed'}">◷</i>` : ''}</button>${s.reconnect && needs ? `<button type="button" class="ch-row-signin" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : ''}<button type="button" data-part="pin-button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinned ? 'Unpin' : 'Pin'} chat: ${esc(s.title)}" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}">${PIN_SVG}</button></div>`;
   }
   /* Ready has three orders (James, 10 Oct 2026): Newest (pure recency, labels don't move rows), Priority
@@ -1883,7 +1884,9 @@ window.WizCore.chats = function createChats(H) {
     const pend = pendingFor(w).filter(p => !(turns && echoed(turns, p)));
     const carry = isNew && c.carry && TAG ? `<div class="ch-carry" role="note"><b>${AGS()?.lock?.() || ''}Continues “${esc(clip(c.carry.title, 60))}” privately</b><span>Your first message takes the last ${c.carry.n === 1 ? 'message' : `${c.carry.n} messages`} with it as quoted context. That thread stays as it is.</span><button type="button" data-chcarryx>Don’t include</button></div>` : '';
     const NV = isNew && !pend.length ? notifOf(w) : null;
-    if (NV) msgs = `<div class="msg a ch-notif" data-morph-key="notif:${esc(NV.id)}"><div class="bub">${md(NV.item?.message ?? NV.reply.message)}</div><div class="mmeta">${NV.item?.time ? timeTag(NV.item.time * 1000) : ''}<span class="ch-notif-src">${NV.item?.source === 'cron' ? 'Scheduled job' : 'Notification'}</span></div></div>`;
+    const noteBox = NV && el.dataset.notificationId === NV.id ? el.querySelector('.ch-msgs') : null;
+    const notificationScroll = noteBox ? scrollBox(noteBox).scrollTop : 0;
+    if (NV) msgs = `<div class="msg a ch-notif" data-morph-key="notif:${esc(NV.id)}"><div class="bub">${md(NV.item?.message ?? NV.reply.message)}</div>${NV.item?.details && NV.item.details !== NV.item.message ? `<section class="ch-notif-details" aria-label="Original alert"><h2>Original alert</h2><div class="ch-notif-original">${esc(NV.item.details)}</div></section>` : ''}<div class="mmeta">${NV.item?.time ? timeTag(NV.item.time * 1000) : ''}<span class="ch-notif-src">${NV.item?.source === 'cron' ? 'Scheduled job' : 'Notification'}</span></div></div>`;
     else if (isNew && !pend.length) msgs = newChatHtml(TAG) + `<div class="ch-empty nc-classic"><b>${TAG && AGS()?.isPrivate(agentRec(TAG)) ? `New private chat` : 'New chat'}</b><br>${esc(H.newChatHint || 'Type below.')}</div>${carry}`;
     // A thread answered 404 in this open is gone: that verdict wins over cached turns and queued sends.
     else if (!isNew && c.goneFor === w.thread && c.goneNav === c.readNav) msgs = threadErrHtml(c);
@@ -1974,9 +1977,10 @@ window.WizCore.chats = function createChats(H) {
     for (const detail of el.querySelectorAll('[data-run-original]')) if (detail.open !== openContexts.has(detail.dataset.runOriginal)) detail.open = openContexts.has(detail.dataset.runOriginal);
     if (!morphed) keepImgs(el);
     el.dataset.draftFor = dkey; c.draft = draft; c.draftFor = dkey;
+    el.dataset.notificationId = NV?.id || '';
     syncDocumentThread();
     const nb = el.querySelector('.ch-msgs');
-    PW?.position(w, el, nb, { turns, working });
+    PW?.position(w, el, nb, { turns, working, notification: NV?.id, notificationScroll });
     if (hadFocus) { const ta = el.querySelector('textarea'); ta.focus({ preventScroll: true }); ta.setSelectionRange(...(keepRange || [ta.value.length, ta.value.length])); }
     growTa(el.querySelector('textarea'));
     // Re-attaching a field resets its scroll to the top; put the owner's view back where it was.
