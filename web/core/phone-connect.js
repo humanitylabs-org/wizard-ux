@@ -224,7 +224,7 @@
       const v = S.view, url = v?.origin || '', install = v?.install || 'https://tailscale.com/download';
       return `<div data-pc-flow><div class="pc-flow-head">${btn('flow-close', '‹', 'quiet', 'aria-label="Back to devices"')}<h4>Connect another device</h4></div>
         <div class="wz-card pc-flow-step"><h5>✓ 1 · Wizard is on your network</h5><p class="pc-note">Use the same Tailscale account on the device you’re adding.</p></div>
-        <div class="wz-card pc-flow-step" data-pc-step="2"><h5>${S.step2Done ? '✓' : '2 ·'} Get Tailscale on your other device</h5>
+        <div class="wz-card pc-flow-step" data-pc-step="2"><h5${S.step2Done ? ' class="pc-step-complete"' : ''}>${S.step2Done ? '<span class="pc-check" aria-hidden="true">✓</span>' : '2 ·'} Get Tailscale on your other device</h5>
           ${S.step2Done ? note('Tailscale is on your other device.') + btn('step2-again', 'Show again', 'quiet') :
           note('Install it and sign in with the same Tailscale account. Scan with your device’s camera.') + qr(install, 'QR code to get Tailscale') + copyRow(install, 'Copy the Tailscale download address') + `<div class="pc-act">${btn('step2-done', 'Done', 'secondary')}</div>`}</div>
         <div class="wz-card pc-flow-step" data-pc-step="3"><h5>3 · Connect your other device to Wizard</h5>
