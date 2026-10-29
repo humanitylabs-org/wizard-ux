@@ -51,7 +51,7 @@ ${['wisdom','cover','late'].includes(id)?'#canvas-tools{padding-top:calc(var(--w
 ${Array.from({length:100},(_,i)=>`<p data-line="${i}">Fixture paragraph ${i}: scroll to test the protected status area.</p>`).join('')}</main><button id="formatting">Aa</button>
 <script>window.fixtureReady=true;WizardApp.ready({title:'Fixture',back:()=>false});</script>`;
 const standaloneHost=`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/core/skins.css"><link rel="stylesheet" href="/skins/obsidian/skin.css"><link rel="stylesheet" href="/core/links.css"><link rel="stylesheet" href="/core/update-banner.css"><link rel="stylesheet" href="/core/home-screen-apps.css">
+<link rel="stylesheet" href="/core/base.css"><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/core/skins.css"><link rel="stylesheet" data-skin-pkg="obsidian" href="/skins/obsidian/skin.css"><link rel="stylesheet" href="/core/links.css"><link rel="stylesheet" href="/core/update-banner.css"><link rel="stylesheet" href="/core/home-screen-apps.css">
 <style>html,body{margin:0;width:100%;height:100%;overflow:hidden}#nativeStatus{position:fixed;inset:0 0 auto;height:var(--single-cut,0px);z-index:2147483647;pointer-events:none;box-sizing:border-box;padding:2px 18px;font:12px system-ui;color:var(--ink);background:var(--bg)}#singleApp{transition:none}</style>
 <div id="device" class="device"><div id="toast" class="toast"></div></div><div id="nativeStatus">09:41 · synthetic Android status bar</div>
 <script>
@@ -59,7 +59,7 @@ const q=new URLSearchParams(location.search),id=q.get('app-session'),list=${JSON
 document.documentElement.dataset.appSession=id;document.documentElement.dataset.skin=q.get('skin')||'nebula';document.documentElement.dataset.shell='phone';
 window.nativeCalls=[];window.WizardOSNative={immersive:v=>nativeCalls.push(v),insetTop:()=>Number(q.get('top')||0),cutoutTop:()=>Number(q.get('cut')||0)};
 window.WizCore={apps:()=>({APPS:list,APP:Object.fromEntries(list.map(a=>[a.id,a]))}),appsLoaded:()=>q.has('delayed')?new Promise(r=>window.releaseApps=r):Promise.resolve(),esc:s=>String(s)};
-</script><script src="/core/home-screen-policy.js"></script><script src="/core/appearance-host.js"></script><script src="/core/app-services.js"></script><script src="/core/links.js"></script><script src="/core/single-app-session.js"></script>`;
+</script><script src="/core/skins.js"></script><script>WosSkin.set(q.get('skin')||'nebula');</script><script src="/core/home-screen-policy.js"></script><script src="/core/appearance-host.js"></script><script src="/core/app-services.js"></script><script src="/core/links.js"></script><script src="/core/single-app-session.js"></script>`;
 let passed = 0;
 async function check(name, fn) { await fn(); passed++; console.log('PASS', name); }
 (async () => {
@@ -84,7 +84,7 @@ async function check(name, fn) { await fn(); passed++; console.log('PASS', name)
       if (u.pathname === '/fixture') return route.fulfill({contentType:'text/html',body:shell});
       if (u.pathname === '/fixture-app') return route.fulfill({contentType:'text/html',body:app});
       if (u.pathname.startsWith('/fixture-page')) return route.fulfill({contentType:'text/html',body:'<!doctype html><title>Fixture page</title><p>Page</p>'});
-      const file = path.resolve(web, '.' + u.pathname);
+      const file = path.resolve(web, '.' + u.pathname.replace(/^\/wizard-os-home\//,'/'));
       if (file.startsWith(web + '/') && fs.existsSync(file) && fs.statSync(file).isFile()) return route.fulfill({body:fs.readFileSync(file),contentType:file.endsWith('.css')?'text/css':file.endsWith('.js')?'application/javascript':file.endsWith('.html')?'text/html':'image/png'});
       return route.fulfill({contentType:'application/json',body:'{}'});
     });
