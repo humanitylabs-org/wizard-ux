@@ -391,6 +391,15 @@
       if (type === 'home' && !caps.has('layout')) throw new Error('home requires layout');
       return base.on(type, payload => fn(type === 'render' ? Object.freeze({ part: payload.part }) : payload));
     }, toast: base.toast, storage: base.storage };
+    // Trusted packages that replace each other (catalog oneOf) can share one store, so a look-only skin change keeps
+    // the owner's choices: manifest `storage: "<name>"` keys it as `wos.skin.shared:<name>.*` instead of by package id.
+    if (trusted && typeof manifest.storage === 'string' && /^[a-z0-9-]{1,40}$/.test(manifest.storage)) {
+      const ns = 'wos.skin.shared:' + manifest.storage + '.';
+      api.storage = Object.freeze({
+        get(key) { try { let v = localStorage.getItem(ns + key); if (v == null) v = localStorage.getItem(`wos.skin.${a.id}.${key}`); return v == null ? null : JSON.parse(v); } catch (_) { return null; } },
+        set(key, value) { try { localStorage.setItem(ns + key, JSON.stringify(value)); } catch (_) {} },
+      });
+    }
     if (caps.has('layout')) {
       Object.assign(api, { listen: base.listen, frame: base.frame, gesture: base.gesture });
       // Borrow a built-in layout through the same host; disposal invalidates the handle.

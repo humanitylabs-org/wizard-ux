@@ -322,6 +322,19 @@ test('tenth review: Home Settings is always the panel; the glance counts only th
   }
 });
 
+test('eleventh review: both Home map packages share one store; a cancelled hold never swallows the next mic click', async () => {
+  for (const who of ['miguel', 'wizard']) assert.equal(JSON.parse(read(`web/tweaks/${who}/machines-home/manifest.json`)).storage, 'machines-home', who);
+  const f = fixture(); const apis = {};
+  f.host._test.setImporter(async url => ({ default: a => { apis[String(url).includes('/wizard/') ? 'w' : 'm'] = a; return () => {}; } }));
+  await f.host.loadTweaks(['miguel/machines-home'], f.slots, { teamAuthors: ['miguel', 'wizard'] });
+  apis.m.storage.set('ws', 'mine-x');
+  await f.host.loadTweaks(['wizard/machines-home'], f.slots, { teamAuthors: ['miguel', 'wizard'] });
+  assert.equal(apis.w.storage.get('ws'), 'mine-x', 'switching skins keeps the choice');
+  await f.clear?.();
+  const desk = read('web/desktop/desktop.js');
+  assert.match(desk, /mic\.addEventListener\('pointercancel', \(\) => \{ clearTimeout\(holdT\); held = false; \}\);/);
+});
+
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));

@@ -12,5 +12,6 @@
     "inbox",
     "settings"
   ],
-  "description": "Home shows a slim strip (Wizard, AI fuel, chats, backup, network); Settings \u203a System holds your network, AI, security and storage"
+  "description": "Home shows a slim strip (Wizard, AI fuel, chats, backup, network); Settings \u203a System holds your network, AI, security and storage",
+  "storage": "machines-home"
 }
