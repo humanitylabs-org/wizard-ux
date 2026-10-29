@@ -149,7 +149,7 @@
       : { loading: 'Checking…', neterr: 'Can’t check right now.', todo: 'From anywhere, not just at home.', in_progress: 'Not finished. Pick up where you left off.', done: 'Your device is connected.' }[st] || 'From anywhere, not just at home.';
     const end = st === 'done' ? `<svg class="okmark" viewBox="0 0 24 24" aria-label="Done"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>` : st === 'in_progress' ? `<span class="dot" aria-label="In progress"></span>${CHEV}` : CHEV;
     h += `<div class="rows"><button class="row wz-row" data-act="open-phone" data-state="${esc(st)}"><span class="ic" aria-hidden="true">📱</span><span class="bd"><b>${st === 'done' ? 'Device connected' : 'Connect another device'}</b><small>${line}</small></span><span class="end">${end}</span></button></div>`;
-    // Preserve the approved #648 entry: a separate tinted action directly below the completed checklist row.
+    // Preserve the approved Setup entry: a separate tinted action below the completed checklist row.
     if (st === 'done') h += '<button class="wz-button add-device" data-act="list-connect-device">Connect another device</button>';
     if (L.status === 'neterr') h += '<button class="link wz-button secondary" data-act="retry-list">Try again</button>';
     if (L.status === 'ok') h += window.WosRecommended?.html() || '';
