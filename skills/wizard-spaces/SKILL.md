@@ -39,7 +39,7 @@ Rename/delete or adjust membership only when requested. Do not create a real Spa
    or leak private titles. Use only real canonical thread IDs returned by search/list, not run IDs,
    fabricated ids or internal session ids that have not been mapped to the shell thread id.
 3. Create the Space with the related thread ids, or add ids to the existing requested Space. The
-   helper deduplicates ids and verifies the exact saved collection by GET after PUT. Up to 50 Spaces,
+   helper deduplicates ids and sends item operations (PATCH), then checks they hold. Up to 50 Spaces,
    500 threads per Space. Leave uncertain threads out and explain any retrieval limitation.
 4. Report the Space name, how many existing threads you actually added and a few thread titles.
    Don't claim exhaustive back-fill if search was incomplete. New chats started while focused on this
@@ -75,13 +75,20 @@ Default transport: `http://127.0.0.1:8923/wizard/v1/ui-preferences`, the existin
 loopback route. Set `WIZARD_UI_PREFERENCES_URL` to this installation's existing owner-authorized route
 if different. Never invent a credential, weaken auth or write the preferences file directly. If the
 service lacks `spaces` or returns 403, stop and report the deployment/authorization blocker. The
-helper sends only the `spaces` key, preserving pins and all other preferences. Run one collection edit
-at a time: this whole-array read/merge/write contract does not provide same-array compare-and-swap.
+helper changes only the named Space or members (PATCH item operations), so edits made meanwhile on a
+device or by an agent survive. An older service without PATCH gets the whole-array GET → PUT → GET
+fallback, which has no compare-and-swap: there, run one collection edit at a time.
 
-Restricted/routed agents: this helper is an owner-authorized preferences client, not a grant. A container
-without the installed skill or access to this route cannot perform historical back-fill. Report that gap;
-never use host credentials, cross-agent history, a new network bridge or direct file writes as a workaround.
-Status-based filing still works server-side for these agents.
+Routed agents: use the always-on wizard MCP gateway built-ins (with the MCP prefix shown by your tools):
+`spaces_list`, `spaces_create(name)`, `spaces_search_threads(query, offset, limit)`,
+`spaces_add(space_id, thread_ids)`, `spaces_remove(space_id, thread_ids)`, `spaces_delete(space_id)`.
+Identity comes from your own gateway token, not arguments. Only your own Spaces and canonical threads
+are accessible, including archived thread metadata. Page search while `has_more`; search returns IDs,
+titles and subjects, never message content. For a fill request, reuse the exact requested Space ID.
+Never seek host credentials, owner preferences access or another agent’s history. Status filing works
+server-side for every agent. Main may keep this CLI: its default scope is `hermes`, including list/search.
+The owner shell can still read Space names and membership IDs in box-wide preferences; Spaces do not
+change that storage/privacy boundary.
 
 Installation: Wizard UX ships this directory under `skills/wizard-spaces`. Copy the whole directory,
 including `scripts/`, to the active agent's native skills directory (`$HERMES_HOME/skills`, normally

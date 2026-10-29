@@ -59,14 +59,16 @@ test('start opens a New chat and shows the Talk card on the composer; nothing is
 test('a real message moves it to "Sent"; Done closes it and remembers', () => {
   const t = boot(); t.D.start('first-run');
   t.send({ intent: 'command' }); assert.equal(t.D.step, 1, 'a local command is not a message');
-  t.send(); assert.equal(t.D.step, 2); assert.match(t.card().innerHTML, /Your Wizard is working on it/);
+  assert.match(t.card().innerHTML, /<small>Step 1 of 2<\/small>/);
+  t.send(); assert.equal(t.D.step, 2);
+  assert.match(t.card().innerHTML, /<small>Step 2 of 2<\/small><b>You’re set\. This is your own server, and your Wizard can do a lot on it\. Apps add new skills, like Files, a web Browser, Calendar, Music or video editing\. Ask your Wizard what apps you have, or what’s in the App Store\.<\/b>/);
   t.click('[data-ddone]');
   assert.equal(t.D.active, false); assert.equal(t.card(), undefined);
   assert.equal(t.store.get('wos.tour.v1'), 'true'); assert.equal(t.T.done(), true);
 });
 test('Skip this step shows the end card; Skip tour ends it, remembers and says where help lives', () => {
   const t = boot(); t.D.start('first-run');
-  t.click('[data-dnext]'); assert.equal(t.D.step, 2); assert.match(t.card().innerHTML, /You’re set/);
+  t.click('[data-dnext]'); assert.equal(t.D.step, 2); assert.match(t.card().innerHTML, /Step 2 of 2<\/small><b>You’re set\. This is your own server/);
   t.click('[data-ddone]'); assert.equal(t.T.done(), true);
   const u = boot(); u.D.start('first-run'); u.click('[data-dskip]');
   assert.equal(u.D.active, false); assert.equal(u.T.done(), true); assert.ok(u.calls.some(c => /Keys and help/.test(c)));

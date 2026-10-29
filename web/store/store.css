@@ -1,3 +1,13 @@
+/* Source provenance is independent of the selected release and uses Appearance v1 only. */
+.source-chip { display:inline-flex; align-items:center; width:max-content; max-width:100%; padding:3px 8px; margin:4px 0; border:1px solid var(--wz-border,currentColor); border-radius:99px; color:var(--wz-text-secondary,inherit); background:var(--wz-surface,transparent); font-size:12px; font-weight:600; line-height:1.3; }
+.sheet-source { display:flex; align-items:center; gap:8px; flex-wrap:wrap; color:var(--wz-text-secondary,inherit); }
+.share-action { display:inline-flex; align-items:center; justify-content:center; min-height:44px; margin:4px 0 0 12px; padding:0 12px; border:0; background:transparent; color:var(--wz-accent,currentColor); font:inherit; cursor:pointer; }
+.link-error { margin:20px 0; padding:16px; border:1px solid var(--wz-border,currentColor); border-left:3px solid var(--wz-accent,currentColor); border-radius:12px; background:var(--wz-surface,transparent); color:var(--wz-text,inherit); line-height:1.6; overflow-wrap:anywhere; }
+.sheet-layer .info dd { overflow-wrap:anywhere; }
+.sheet-layer .info + .d-note { margin-top:14px; }
+.sheet-layer .d-note { color:var(--wz-text-secondary,inherit); }
+.sheet-layer [data-link-install] { min-height:44px; padding:10px 22px; }
+.wz-hosted .get.have { color:var(--wz-accent); background:var(--wz-accent-soft); }
 /* Wizard App Store — dark, glassy, discovery-first. Tokens from core/base.css; a hosting skin overrides them through
  * Appearance v1 --wz-* tokens (store-appearance.js). Standalone keeps the dark fallbacks below. */
 :root { --ink: var(--wz-text, #f3efff); --ink-2: var(--wz-text-secondary, #b9b0d8); --ink-3: var(--wz-text-muted, #7d74a3);

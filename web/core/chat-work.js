@@ -62,6 +62,16 @@
   function html(tn, o) {
     const { live, open, md, esc, clip } = o;
     const r = analyse(tn, live, o.now);
+    // Bind previews by call ID only. ID-less events are explicitly transient live rows,
+    // never guessed onto a historical row by tool name or position; completed replays stay out.
+    if (live) for (const s of (Array.isArray(o.streamSteps) ? o.streamSteps : []).slice(-4)) {
+      const matched = s.id && r.steps.find(st => st.id === s.id);
+      if (matched) { matched.preview = s.preview; if (!fin(matched.end)) { matched.running = !s.done; matched.streamDone = s.done; matched.error = s.error; } }
+      else if (!s.done && s.tool) {
+        const name = String(s.tool).replace(/^mcp__(wizard__)?/, '').replace(/__/g, ' · ').replace(/_/g, ' ').trim();
+        r.steps.push({ label: name ? name[0].toUpperCase() + name.slice(1) : 'Working', preview: s.preview, running: true, transient: true });
+      }
+    }
     const notes = tn.notes || [];
     if (!r.count && !notes.length && !live) return '';
     const cur = r.plan?.find(p => p.status === 'in_progress');
@@ -93,7 +103,7 @@
     }
     if (r.steps.length) {
       const MAX = 40, shown = r.steps.slice(-MAX);
-      body += `<ul class="wk-steps">${r.steps.length > MAX ? `<li class="wk-more">${r.steps.length - MAX} earlier steps</li>` : ''}${shown.map(st => `<li${st.running ? ' class="run"' : ''}><span>${esc(st.label)}</span><time>${st.running ? '…' : esc(dur(st.end - st.start))}</time></li>`).join('')}</ul>`;
+      body += `<ul class="wk-steps">${r.steps.length > MAX ? `<li class="wk-more">${r.steps.length - MAX} earlier steps</li>` : ''}${shown.map(st => `<li${st.running ? ' class="run"' : ''}><span>${esc(st.label)}${st.preview ? `<small class="wk-preview">${esc(clip(String(st.preview).replace(/\s+/g, ' ').trim(), 90))}</small>` : ''}</span><time>${st.running ? '…' : st.streamDone ? (st.error ? '!' : '✓') : esc(dur(st.end - st.start))}</time></li>`).join('')}</ul>`;
     }
     if (notes.length) body += notes.map(x => `<div class="note-line">${md(x)}</div>`).join('');
     return `<details class="steps wk${live ? ' live' : ''}${waiting ? ' asks' : ''}" data-wk="${esc(o.key)}"${open ? ' open' : ''}><summary>${icon} <span class="wk-l">${esc(label)}</span>${waiting ? '<em class="wk-dot" aria-hidden="true"></em>' : ''}</summary>${body}</details>`;

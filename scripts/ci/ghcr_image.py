@@ -155,14 +155,23 @@ def verify_existing_provenance(args, digest, config):
         "gh", "attestation", "verify", "oci://" + args.image + "@" + digest,
         "--repo", CANONICAL[args.image], "--bundle-from-oci",
         "--signer-workflow", CANONICAL[args.image] + "/.github/workflows/publish-image.yml",
-        "--source-ref", "refs/heads/main", "--source-digest", args.sha,
+        "--source-ref", "refs/heads/" + args.branch, "--source-digest", args.sha,
     ], env=env, check=True)
 
 
 def validate_publication(args):
     canonical_guard(args, {"push", "workflow_dispatch"})
-    if os.environ.get("GITHUB_REF") != "refs/heads/main" or args.branch != "main":
-        raise RuntimeError("publication is only allowed on the canonical main branch")
+    ref = os.environ.get("GITHUB_REF")
+    main = ref == "refs/heads/main" and args.branch == "main"
+    maintenance = (
+        args.image == "ghcr.io/humanitylabs-org/wizard-ux" and
+        ref == "refs/heads/release/stable-onboarding" and
+        args.branch == "release/stable-onboarding" and
+        os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch" and
+        args.expected_sha == args.sha == os.environ.get("GITHUB_SHA")
+    )
+    if not (main or maintenance):
+        raise RuntimeError("publication requires canonical main or exact-SHA onboarding maintenance dispatch")
     if args.release:
         if (os.environ["GITHUB_EVENT_NAME"] != "workflow_dispatch" or
                 args.confirm != args.release or args.expected_sha != args.sha):

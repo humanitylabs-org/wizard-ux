@@ -55,7 +55,7 @@ async function boot(b,desktop=false,legacy='') {
  },{desktop,legacy});
  const p=await ctx.newPage();p.setDefaultTimeout(12000);p.on('pageerror',e=>errors.push(String(e)));
  await p.goto(desktop?new URL('desktop.html',origin).href:origin,{waitUntil:'domcontentloaded'});
- await p.waitForFunction(solo=>{const l=(window.__wos||window.__wux)?.live;return solo?!!l?.agentStatus:!!l?.agentStatus.philosopher?.ok;},soloAgent);
+ await p.waitForFunction(solo=>{const l=(window.__wos||window.__wux)?.live;return solo?!!l?.agentStatus:!!l?.agentStatus.philosopher?.ok;},soloAgent,{timeout:30000});
  await p.evaluate(()=>{if(window.__wos){const a=__wos,w=Object.values(a.wins).find(w=>w.app==='chats');a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);}else{const a=__wux,w=Object.values(a.wins).find(w=>w.app==='chats');a.focusWin(w.id);}});
  await p.waitForTimeout(600);return {ctx,p};
 }
@@ -136,7 +136,7 @@ async function routingMatrix(b) {
    const scoped=agent.startsWith('space:')?(sharedSpaces.find(s=>s.id===agent.slice(6))?.agent||'hermes'):agent;const target=scoped==='hermes'?'':scoped;
    ok(actual.length===2&&actual.every(w=>(new URLSearchParams(w.query).get('agent')||'')===target&&(JSON.parse(w.body).agent||'')===target),mode+' ROUTING '+name+' → '+agent,actual);return actual;
   };
-  for(const agent of ['philosopher','hermes','private']) {
+  for(const agent of ['philosopher','hermes','private','archimedes-new']) {
    await check('list +',async()=>{await activate(p,'[data-chfab]:visible');await send();},agent);
    await check('__new__ composer',async()=>{await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');a.chats.openChat(w.id,'__new__');});await send();},agent);
   }
@@ -162,14 +162,24 @@ async function routingMatrix(b) {
   sharedSpaces=[{id:'route-space',name:'Route space',agent:spaceAgent,threads:[]}];
   await p.evaluate(()=>window.dispatchEvent(new Event('focus')));
   await p.waitForTimeout(250);
-  for(const voice of [false,true]) {
-   const req=await check(voice?'Space new voice':'Space list +',async()=>{
-    if(!voice){await activate(p,'[data-chfab]:visible');await send();}
+  // Every way of starting a new thread while the Space is open joins it (James, 25 Oct 2026), including a plain
+  // orb tap on the list, which goes through the shell's toAgent path rather than the Chats composer.
+  for(const how of ['typed','voice','orb'].filter(h=>h!=='orb'||spaceAgent==='hermes')) {
+   const req=await check({typed:'Space list +',voice:'Space new voice',orb:'Space orb tap'}[how],async()=>{
+    if(how==='typed'){await activate(p,'[data-chfab]:visible');await send();}
+    else if(how==='orb'&&desktop){await p.locator('#micBtn').click();await p.waitForTimeout(900);await p.locator('#micBtn').click();}
+    else if(how==='orb'){await p.locator('#orbWrap').tap();await p.waitForTimeout(900);await p.locator('#orbWrap').tap();}
     else if(desktop){await p.locator('#generalVoice').click();await p.waitForTimeout(900);await p.locator('#generalVoice').click();}
     else{await p.evaluate(()=>__wos.startVoice('general'));await p.waitForTimeout(900);await p.evaluate(()=>__wos.finishVoice());}
    },'space:route-space');
    const sid=JSON.parse(req?.find(r=>r.path.endsWith('/v1/runs'))?.body||'{}').session_id;
-   ok(!!sid&&sharedSpaces[0]?.threads.includes(sid),mode+' Space '+(voice?'voice':'typed')+' joins durable thread id',sharedSpaces);
+   ok(!!sid&&sharedSpaces[0]?.threads.includes(sid),mode+' Space '+how+' joins durable thread id',sharedSpaces);
+  }
+  // Out of the Space (All in front), a new thread stays out of it.
+  if(spaceAgent==='hermes'){
+   const before=sharedSpaces[0].threads.length;
+   const req=await check('All orb tap',async()=>{if(desktop){await p.locator('#micBtn').click();await p.waitForTimeout(900);await p.locator('#micBtn').click();}else{await p.locator('#orbWrap').tap();await p.waitForTimeout(900);await p.locator('#orbWrap').tap();}},'hermes');
+   ok(!!req&&sharedSpaces[0].threads.length===before,mode+' new thread outside the Space stays out',sharedSpaces);
   }
   }
   if(desktop)await check('Alt+N fresh window',async()=>{await p.keyboard.press('Alt+N');await send();});
@@ -231,11 +241,10 @@ async function visualPicker(b) {
  const g=await p.locator('.ch-space-picker').boundingBox();ok(g.x>=0&&g.x+g.width<=412&&g.y>=0,'phone picker inside viewport',g);
  await activate(p,'[data-spspace="launch"]');await capture(p,'phone-nebula-space-active');
  await activate(p,'.ch-focus-tab.on:visible');await activate(p,'[data-spnew]');await p.locator('.ch-space-form input').fill('Research projects');
- await p.evaluate(()=>WosSkin.set('obsidian'));await p.waitForTimeout(500);await p.locator('.mz-intro').waitFor({state:'detached'});
+ await p.evaluate(()=>WosSkin.set('obsidian'));await p.waitForFunction(()=>document.documentElement.dataset.skin==='obsidian');await p.locator('.mz-intro').waitFor({state:'detached'});
  // Dark's existing first-switch intro navigates Home. Reopen the same Chats window after it finishes.
  await p.evaluate(()=>{const a=__wos,w=Object.values(a.wins).find(w=>w.app==='chats');a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);});
- if (!await p.locator('[data-chspacepicker]').count()) { await activate(p,'.ch-focus-tab.on:visible');await activate(p,'[data-spnew]'); }
- await p.locator('.ch-space-form input').fill('Research projects');await capture(p,'phone-dark-new-space');
+ if(!await p.locator('[data-chspacepicker]').count())await activate(p,'.ch-focus-tab.on:visible');if(!await p.locator('.ch-space-form input').count())await activate(p,'[data-spnew]');await p.locator('.ch-space-form input').fill('Research projects');await capture(p,'phone-dark-new-space');
  ok(await p.locator('.ch-space-form input').inputValue()==='Research projects','Dark skin new Space input remains legible and editable');
  await p.evaluate(()=>__wos.onBack());await ctx.close();
  const wide=await boot(b,true);await wide.p.evaluate(()=>WosSkin.set('nebula'));await choose(wide.p,'agent:hermes');await activate(wide.p,'.ch-focus-tab.on:visible');await capture(wide.p,'desktop-nebula-picker');await wide.ctx.close();
@@ -243,17 +252,19 @@ async function visualPicker(b) {
 }
 
 async function pickerAcceptance(browser, mode) {
- sharedSpaces = [{id:'main-only',name:'Main plans',threads:['main_wos'],createdAt:new Date().toISOString()}, {id:'phil-only',name:'Reading',agent:'philosopher',threads:['phil_one'],createdAt:new Date().toISOString()}];
+ sharedSpaces = [{id:'main-only',name:'Main plans',threads:['main_wos','not-loaded-yet'],createdAt:new Date().toISOString()}, {id:'phil-only',name:'Reading',agent:'philosopher',threads:['phil_one'],createdAt:new Date().toISOString()}];
  const at=writes.length;const {ctx,p}=await boot(browser,mode==='desktop');await choose(p,'agent:hermes');
  ok(!await p.locator('.ch-focus-strip [data-chfocusopt^="space:"]').count(),mode+' strip has no Space pills');
  ok(!await p.locator('[data-chfocusopt="agent:archimedes-new"]').count(),mode+' hidden agent excluded from strip');
  await activate(p,'.ch-focus-strip:visible [data-chfocusopt="agent:hermes"]');
  ok(await p.locator('[data-chspacepicker]').count()===1,mode+' tapping active agent opens picker');
  ok(await p.locator('[data-spspace="main-only"]').count()===1&&!await p.locator('[data-spspace="phil-only"]').count(),mode+' picker only owner agent Spaces');
- ok((await p.locator('[data-spspace="main-only"]').innerText()).includes('1'),mode+' picker has member count');
+ ok((await p.locator('[data-spspace="main-only"]').innerText()).includes('1'),mode+' picker counts exclude archived and unloaded members');
  await activate(p,'[data-spspace="main-only"]');
  ok((await p.locator('.ch-focus-tab.on:visible').innerText()).includes('Main plans'),mode+' Space replaces agent label');
  ok((await p.locator('.ch-focus-tab.on:visible').getAttribute('data-chfocusopt'))==='agent:hermes',mode+' Space retains agent tab identity');
+ await activate(p,'.ch-focus-strip:visible [data-chfocusopt="all:"]');await activate(p,'.ch-focus-strip:visible [data-chfocusopt="agent:hermes"]');
+ ok((await p.locator('.ch-focus-tab.on:visible').innerText()).includes('Main plans')&&!await p.locator('[data-chspacepicker]').count(),mode+' All then agent tab returns to its last Space');
  await activate(p,'.ch-focus-tab.on:visible');await activate(p,'[data-spall]');
  ok((await p.locator('.ch-focus-tab.on:visible').innerText()).includes('Archimedes'),mode+' All restores agent label');
  const phi=p.locator('.ch-focus-strip:visible [data-chfocusopt="agent:philosopher"]');
@@ -282,8 +293,19 @@ async function pickerAcceptance(browser, mode) {
  ok([...creates,...runs].every(x=>new URLSearchParams(x.query).get('agent')==='philosopher'&&JSON.parse(x.body||'{}').agent==='philosopher'),mode+' fill uses normal outbox and agent query+body on both writes',{creates,runs});
  const run=JSON.parse(runs[0]?.body||'{}');
  ok(JSON.stringify(run.input).includes('Fill my new Space')&&JSON.stringify(run.input).includes(newSpace?.id||'NEVER'),mode+' fill command contains existing Space id');
+ ok(JSON.stringify(run.input).includes('with your Spaces tool')&&!JSON.stringify(run.input).includes('wizard-spaces'),mode+' routed fill instructs scoped Spaces tool, never main-only CLI');
  ok(sharedSpaces.find(s=>s.id===newSpace?.id)?.threads.length===1,mode+' fill thread joins its Space');
  ok(sharedSpaces.find(s=>s.id==='main-only')?.threads.includes('main_wos'),mode+' New Space preserves existing collections');
+ await choose(p,'agent:hermes');await activate(p,'.ch-focus-tab.on:visible');await activate(p,'[data-spnew]');
+ const mainAt=writes.length;await p.locator('.ch-space-form input').fill('Main QA');await p.locator('.ch-space-form').evaluate(f=>f.requestSubmit());
+ await p.waitForFunction(()=>[...document.querySelectorAll('.ch-focus-tab.on')].some(e=>e.textContent.includes('Main QA')));
+ await p.waitForTimeout(900);
+ const mainWrites=writes.slice(mainAt),mainRuns=mainWrites.filter(x=>x.method==='POST'&&x.path==='/wizard/hermes/v1/runs'),mainCreates=mainWrites.filter(x=>x.method==='POST'&&x.path==='/wizard/hermes/api/sessions');
+ ok(mainRuns.length===1&&mainCreates.length===1,mode+' main Space fill sends exactly one thread/run');
+ ok([...mainCreates,...mainRuns].every(x=>(new URLSearchParams(x.query).get('agent')||'hermes')==='hermes'&&(!JSON.parse(x.body||'{}').agent||JSON.parse(x.body||'{}').agent==='hermes')),mode+' main fill retains canonical main route (no routed-agent override)',{mainCreates,mainRuns});
+ const mainInput=JSON.stringify(JSON.parse(mainRuns[0]?.body||'{}').input||'');
+ const mainSpace=sharedSpaces.find(s=>s.name==='Main QA');
+ ok(mainInput.includes('with your Spaces tool')&&!mainInput.includes('wizard-spaces')&&mainInput.includes(mainSpace?.id||'NEVER'),mode+' main fill instructs same scoped Spaces tool and exact Space id');
  await ctx.close();
 }
 
@@ -310,6 +332,11 @@ async function soloAcceptance(b) {
    const at=writes.length;await p.locator('.ch-space-form input').fill('First space');await p.locator('.ch-space-form').evaluate(f=>f.requestSubmit());await p.waitForTimeout(400);
    ok(sharedSpaces.length===1&&sharedSpaces[0].threads.includes('main_wos'),mode+' first Space contains the held thread');
    ok(!writes.slice(at).some(w=>w.path.endsWith('/v1/runs')),mode+' row-created Space starts no fill run');
+   const row2=p.locator('[data-chopen]:visible:not([data-chopen="main_wos"])').first(),sid2=await row2.getAttribute('data-chopen');
+   await row2.click({button:'right'});await activate(p,'[data-rsspacepicker]');
+   ok(!await p.locator('[data-spspace].on').count(),mode+' Add picker ticks only Spaces holding this thread');
+   await activate(p,`[data-spspace="${sharedSpaces[0].id}"]`);await p.waitForTimeout(400);
+   ok(sharedSpaces[0].threads.includes(sid2)&&(await p.locator('#toast').innerText()).includes('Added to First space'),mode+' Add to a Space saves and confirms with a toast');
   } finally {await ctx.close();}
   sharedSpaces=[{id:'solo',name:'Solo space',threads:['main_wos']},{id:'reading',name:'Reading',threads:['main_phil']}];
   const r=await boot(b,desktop);
@@ -450,7 +477,7 @@ async function soloAcceptance(b) {
   ok(await p.locator('.ch-search:visible').evaluate(e=>e.scrollWidth<=e.clientWidth+1),mode+' Focus plus status fit search field');
   await capture(p,mode+'-focus-status');
   await p.locator('[data-chchipx="status"]:visible').click();
-  await p.reload({waitUntil:'domcontentloaded'});await p.waitForFunction(solo=>{const l=(window.__wos||window.__wux)?.live;return solo?!!l?.agentStatus:!!l?.agentStatus.philosopher?.ok;},soloAgent);
+  await p.reload({waitUntil:'domcontentloaded'});await p.waitForFunction(solo=>{const l=(window.__wos||window.__wux)?.live;return solo?!!l?.agentStatus:!!l?.agentStatus.philosopher?.ok;},soloAgent,{timeout:30000});
   ok((await p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText()).includes('Wizard OS launch'),mode+' Space focus survives reload');
   await p.locator('[data-chopen="main_wos"]:visible').click();await p.waitForTimeout(250);
   ok(await p.locator('.ch-thread .ch-focus-strip').count()===0&&(desktop||await p.locator('.ch-focus-strip:visible').count()===0),mode+' thread view has no strip');
@@ -465,7 +492,14 @@ async function soloAcceptance(b) {
   await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');a.chats.openContextDraft(w.id,'qa-focus:item',{title:'Fixture app item',message:'Fixture public app context'});});
   ok(await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');return !a.chats.winAgent(w)&&w.thread==='__new__';}),mode+' app-item reply keeps its explicit main-agent route');
   await p.evaluate(()=>{const a=window.__wos||window.__wux;if(window.__wos)a.onBack();else a.escStep();});
-  await choose(p,'agent:hermes');ok(JSON.stringify(await ids(p))===JSON.stringify(['main_phil','main_plain','main_wos']),mode+' main excludes other agents');
+  const hermesTab=()=>p.locator('.ch-focus-strip:visible [data-chfocusopt="agent:hermes"]').innerText();
+  // With All in front, the agent tab still names the Space it remembers (James, 25 Oct 2026).
+  await choose(p,'all:');for(const sk of ['obsidian','nebula']){await p.evaluate(sk=>{document.documentElement.dataset.skin=sk;},sk);await capture(p,mode+'-all-remembered-'+sk);}await p.evaluate(()=>{document.documentElement.dataset.skin='obsidian';});ok((await hermesTab()).includes('Wizard OS launch'),mode+' agent tab keeps its remembered Space name under All');
+  await choose(p,'agent:hermes');ok((await p.locator('.ch-focus-strip:visible [aria-pressed="true"]').innerText()).includes('Wizard OS launch'),mode+' agent tab returns to its remembered Space');
+  await activate(p,'.ch-focus-strip:visible [data-chfocusopt="agent:hermes"]');await activate(p,'[data-spall]');
+  await choose(p,'all:');ok(!(await hermesTab()).includes('Wizard OS launch'),mode+' All Archimedes in the picker clears the remembered Space name');
+  await choose(p,'agent:hermes');
+  ok(JSON.stringify(await ids(p))===JSON.stringify(['main_phil','main_plain','main_wos']),mode+' main excludes other agents');
   // Both typed and held commands go through the same existing grammar and executor.
   for(const typed of [false,true]){
    await p.evaluate(async({typed})=>{const a=window.__wos||window.__wux;if(window.__wos)await a.handleText('focus Wizard OS launch',typed?'auto':'command',typed,300,null);else a.localCommand('focus Wizard OS launch');},{typed});

@@ -444,14 +444,11 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     realFiles = ((await (await fetch(origin + '/wizard/files')).json()).files || []).filter(f => !f.status || f.status === 'ready');
     await openThread('qa_pw_ready');
     ok(!(await p.evaluate(sel => !!document.querySelector(sel), await S('.ch-compose [data-chfiles]'))), '#23 phone: the composer has no Files button (paperclip only)');
-    // Files from Settings
+    // Files lives in the Wizard Files app, not Settings (James, 25 Oct 2026)
     await back();
     await p.evaluate(() => __wos.openSettings()); await sleep(400);
-    await p.click('#settingsBody [data-st="files"]');
-    await p.waitForFunction(() => document.querySelectorAll('.ch-psheet [data-fiid]').length > 0, null, { timeout: 10000 }).catch(() => {});
-    ok(await p.evaluate(() => __wos.sheet === null && document.querySelectorAll('.ch-psheet [data-fiid]').length > 0), '#23 phone: Settings › Files opens the Files screen');
+    ok(await p.evaluate(() => !document.querySelector('#settingsBody [data-st="files"], #settingsBody .st-shortcuts')), '#23 phone: Settings has no Files or launcher shortcuts');
     await back();
-    ok(!(await sheetOpen()) && await p.evaluate(() => !!window.__wos) && p.url().startsWith(URL_.replace(/\/$/, '')), '#23 phone: Back closes it; app still open');
   } catch (e) { ok(false, '#23 Files section crashed', String(e).split('\n')[0]); }
 
   /* ===== #24 AI usage ===== */
