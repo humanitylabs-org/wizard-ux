@@ -265,10 +265,10 @@ async function check(name, fn) { await fn(); passed++; console.log('PASS', name)
         assert.ok(Math.abs(update.y-56)<.1,'update uses host union once');assert.ok(Math.abs(toast.y-60)<.1,'toast uses union once');
         await pinned.evaluate(()=>__wos.links.open('/fixture-page'));
         await pinned.locator('.linksheet.open .ls-panel').waitFor({state:'visible'});
-        await pinned.waitForFunction(()=>{const r=document.querySelector('.linksheet .ls-panel').getBoundingClientRect();return Math.abs(r.top-50)<.01;});
-        assert.ok(Math.abs(await pinned.evaluate(()=>document.querySelector('.linksheet .ls-panel').getBoundingClientRect().top)-50)<.1,'sheet clears status plus its existing 2px lip, not a second inset');
+        await pinned.waitForFunction(()=>{const r=document.querySelector('.linksheet .ls-panel').getBoundingClientRect();return Math.abs(r.top-54)<.01;});
+        assert.ok(Math.abs(await pinned.evaluate(()=>document.querySelector('.linksheet .ls-panel').getBoundingClientRect().top)-54)<.1,'body-mounted sheet clears status plus its 6px lip, not a second inset');
         await pinned.evaluate(()=>__wos.links.close());
-        await pinned.evaluate(()=>{window.fixturePane=WizLinks.mount({parent:document.getElementById('device'),mode:'pane'});fixturePane.open('/fixture-page');});
+        await pinned.evaluate(()=>{window.fixturePane=WizLinks.mount({parent:document.body,mode:'pane'});fixturePane.open('/fixture-page');});
         await pinned.waitForFunction(()=>Math.abs(document.querySelector('.linksheet.pane .ls-panel').getBoundingClientRect().top-48)<1);
         await pinned.evaluate(()=>fixturePane.close());
         if(process.env.QA_OUTPUT)await pinned.screenshot({path:path.join(process.env.QA_OUTPUT,`standalone-${skin}-${id}-notices.png`)});
