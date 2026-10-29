@@ -43,9 +43,15 @@
   #pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; height: 38px; padding: 0 16px; font-size: 14px; }
   #pill b { font-weight: 700; color: var(--acc); }
   /* bottom sheet */
-  .sheet { position: fixed; left: 8px; right: 8px; bottom: calc(var(--bot) + 8px); background: var(--card); border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 10px 34px rgba(0, 0, 0, .6); padding: 12px 12px 10px; transform: translateY(140%); transition: transform .2s cubic-bezier(.2, .8, .2, 1); z-index: 7; }
-  .sheet.show { transform: none; }
-  #sel { max-height: 30vh; overflow: auto; white-space: pre-wrap; word-break: break-word; font-size: 15px; color: var(--ink); user-select: text; -webkit-user-select: text; padding: 2px 2px 10px; }
+  /* Hidden sheets sit fully past the screen edge (behind the nav bar is not hidden) and take no touches. A flick on a
+     sheet docks every sheet at the top or the bottom, so it never has to cover the line being read. */
+  .sheet { position: fixed; left: 8px; right: 8px; bottom: calc(var(--bot) + 8px); background: var(--card); border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 10px 34px rgba(0, 0, 0, .6); padding: 6px 12px 10px; transform: translateY(calc(100% + var(--bot) + 40px)); visibility: hidden; pointer-events: none; transition: transform .2s cubic-bezier(.2, .8, .2, 1), visibility 0s linear .2s; z-index: 7; touch-action: none; }
+  .sheet.show { transform: none; visibility: visible; pointer-events: auto; transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
+  body.dtop .sheet { bottom: auto; top: calc(var(--top) + 98px); transform: translateY(calc(-100% - var(--top) - 140px)); z-index: 5; } /* slides in under the top chips */
+  body.dtop .sheet.show { transform: none; }
+  .sheet.drag { transition: none; }
+  .grip { display: block; width: 40px; height: 4px; margin: 0 auto 8px; border-radius: 2px; background: rgba(205, 190, 255, .35); }
+  #sel { max-height: 30vh; overflow: auto; touch-action: pan-y; white-space: pre-wrap; word-break: break-word; font-size: 15px; color: var(--ink); user-select: text; -webkit-user-select: text; padding: 2px 2px 10px; }
   #sel .lab { display: block; font: 600 11.5px system-ui, sans-serif; letter-spacing: .04em; text-transform: uppercase; color: var(--acc); margin-bottom: 4px; user-select: none; }
   #sel .err { color: #ff9db3; }
   #sel .pl { display: block; padding: 7px 8px; margin: 2px -4px; border-radius: 10px; border: 1px solid transparent; }
@@ -55,10 +61,10 @@
   .acts button i { font-style: normal; font-size: 17px; line-height: 1; color: var(--acc); }
   .acts button:active { background: rgba(185, 155, 255, .18); }
   .acts button[disabled] { opacity: .45; }
-  #tbar { padding: 8px; }
+  #tbar { padding: 6px 8px 8px; }
   #langs { max-height: 60vh; display: flex; flex-direction: column; }
   #langs h4 { margin: 2px 4px 8px; font: 600 12px system-ui, sans-serif; letter-spacing: .04em; text-transform: uppercase; color: var(--acc); }
-  #langs .ll { overflow: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  #langs .ll { overflow: auto; touch-action: pan-y; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   #langs button { height: 42px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, .04); color: var(--ink); font: 600 14px system-ui, sans-serif; }
   #langs button.on { background: #3a2870; border-color: var(--acc); }
   /* search strip above the native search sheet */
@@ -87,6 +93,7 @@
 </div>
 <div id="sub"><div id="hint"></div><button class="chip" id="pill" hidden></button></div>
 <div class="sheet" id="sheet">
+  <i class="grip"></i>
   <div id="sel"></div>
   <div class="acts">
     <button id="aCopy"><i>⧉</i>Copy</button>
@@ -96,13 +103,14 @@
   </div>
 </div>
 <div class="sheet" id="tbar">
+  <i class="grip"></i>
   <div class="acts">
     <button id="tCopy"><i>⧉</i>Copy translation</button>
     <button id="tSel"><i>⌶</i>Select text</button>
     <button id="tAsk"><i>✦</i>Ask Wizard</button>
   </div>
 </div>
-<div class="sheet" id="langs"><h4>Translate into</h4><div class="ll"></div></div>
+<div class="sheet" id="langs"><i class="grip"></i><h4>Translate into</h4><div class="ll"></div></div>
 <div id="sstrip"><b id="sq"></b><button class="chip" id="sBig">Bigger</button><button class="chip x" id="sClose" aria-label="Close search">×</button></div>
 <div id="toast"></div>
 <script>
@@ -118,6 +126,8 @@
     pic: null, picSel: new Set(), panel: 'sel', trans: null, searching: false, big: false, seq: 0, pending: {},
   };
   if (!LANGS.includes(st.to)) st.to = 'English';
+  st.dock = (() => { try { return localStorage.getItem('wizScreenDock') === 'top' ? 'top' : 'bottom'; } catch (e) { return 'bottom'; } })();
+  document.body.classList.toggle('dtop', st.dock === 'top');
   let toastT = 0, px = null, wantPaint = false;
   function toast(t) { const e = $('#toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('show'), 1600); }
   function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -185,8 +195,224 @@
     }
     return out.length ? out : null;
   }
-  /** Lay unplaced words out, then pull each line onto its row of ink when the counts agree. */
+  /**
+   * Pieces of text on the frozen screenshot inside a box: [{x0, x1, y0, y1}] in page px, top to bottom, left to right.
+   * Text is found by its strokes (many sharp light/dark changes along a row), not by differing from one background
+   * colour, so chat bubbles, gradients, wallpapers and a box much wider than its text (a whole chat row) don't fool it.
+   * A row of text splits into separate pieces at wide gaps (a message and its timestamp).
+   */
+  function textPieces(b) {
+    if (!px) return null;
+    const d = st.o.dpr || 1, ox = st.o.ox || 0, oy = st.o.oy || 0, k = px.k;
+    const X0 = Math.max(0, Math.floor((b.x * d + ox) * k)), Y0 = Math.max(0, Math.floor((b.y * d + oy) * k));
+    const X1 = Math.min(px.w, Math.ceil(((b.x + b.w) * d + ox) * k)), Y1 = Math.min(px.h, Math.ceil(((b.y + b.h) * d + oy) * k));
+    const W = X1 - X0, H = Y1 - Y0; if (W < 8 || H < 6) return null;
+    let data; try { data = px.x.getImageData(X0, Y0, W, H).data; } catch (e) { return null; }
+    const lum = new Int16Array(W * H);
+    for (let q = 0, p = 0; q < W * H; q++, p += 4) lum[q] = data[p] + data[p + 1] * 2 + data[p + 2];
+    // E: a stroke edge along the row (finds rows of text); V: any edge (finds the blank columns between words)
+    const E = new Uint8Array(W * H), V = new Uint8Array(W * H), rows = new Int32Array(H);
+    for (let j = 0; j < H; j++) {
+      let prev = 0, n = 0; const o = j * W;
+      for (let i = 0; i + 2 < W; i++) {
+        const e = Math.abs(lum[o + i + 2] - lum[o + i]) > 200 ? 1 : 0;
+        E[o + i] = e; if (e && !prev) n++; prev = e;
+        if (e || (j + 2 < H && Math.abs(lum[o + W * 2 + i] - lum[o + i]) > 200)) { V[o + i] = 1; V[o + i + 1] = 1; V[o + i + 2] = 1; }
+      }
+      rows[j] = n;
+    }
+    const sorted = Array.from(rows).filter(v => v > 0).sort((p, q) => p - q);
+    if (!sorted.length) return null;
+    const peak = sorted[Math.floor(sorted.length * .95)] || sorted[sorted.length - 1];
+    const allRows = Array.from(rows).sort((p, q) => p - q), base = allRows[Math.floor(H * .25)]; // walls, edges
+    const on = Math.max(4 + base, peak * .12);
+    const bands = []; let cur = null, gap = 0;
+    for (let j = 0; j < H; j++) {
+      if (rows[j] >= on) { if (!cur) cur = { y0: j, y1: j, pk: 0 }; cur.y1 = j; cur.pk = Math.max(cur.pk, rows[j]); gap = 0; }
+      else if (cur && ++gap > Math.max(2, (cur.y1 - cur.y0) * .3)) { bands.push(cur); cur = null; gap = 0; }
+    }
+    if (cur) bands.push(cur);
+    const out = [];
+    const toX = v => ((X0 + v) / k - ox) / d, toY = v => ((Y0 + v) / k - oy) / d;
+    for (const bd of bands) {
+      if (bd.y1 - bd.y0 + 1 < 5 * k * d / 2.6 || bd.pk < Math.max(6, peak * .25)) continue;
+      // the core rows are the x-height; reach out to ascenders and descenders
+      const core = bd.y1 - bd.y0 + 1;
+      let y0 = bd.y0, y1 = bd.y1;
+      while (y0 > 0 && bd.y0 - y0 < core * .6 && rows[y0 - 1] >= base + 2) y0--;
+      while (y1 < H - 1 && y1 - bd.y1 < core * .6 && rows[y1 + 1] >= base + 2) y1++;
+      const h = y1 - y0 + 1;
+      const col = new Int32Array(W), vc = new Int32Array(W);
+      for (let j = y0; j <= y1; j++) { const o = j * W; for (let i = 0; i < W; i++) { col[i] += E[o + i]; vc[i] += V[o + i]; } }
+      // clusters of ink separated by blank columns; a wide blank splits the row into pieces
+      const cl = []; let c0 = -1, last = -1;
+      for (let i = 0; i < W; i++) {
+        if (!vc[i]) continue;
+        if (c0 < 0) c0 = i; else if (i - last > 1) { cl.push([c0, last]); c0 = i; }
+        last = i;
+      }
+      if (c0 >= 0) cl.push([c0, last]);
+      // a bubble's or card's edge is a thin line that carries on above or below the row of text; letters stop
+      const thinWall = ([p0, p1]) => {
+        if (p1 - p0 + 1 > h * .3) return false;
+        let hit = 0, seen = 0;
+        for (const j of [y0 - 3, y0 - 2, y0 - 1, y1 + 1, y1 + 2, y1 + 3]) {
+          if (j < 0 || j >= H) continue; seen++;
+          const o = j * W; for (let i = Math.max(0, p0 - 1); i <= Math.min(W - 1, p1 + 1); i++) if (V[o + i]) { hit++; break; }
+        }
+        return seen > 0 && hit >= Math.min(3, seen);
+      };
+      let piece = [];
+      const flush = () => {
+        // a bubble's or card's edge at either end is a straight wall, not a letter
+        while (piece.length > 1 && thinWall(piece[0]) && piece[1][0] - piece[0][1] > h * .2) piece.shift();
+        while (piece.length > 1 && thinWall(piece[piece.length - 1]) && piece[piece.length - 1][0] - piece[piece.length - 2][1] > h * .2) piece.pop();
+        if (!piece.length) return;
+        const p0 = piece[0][0], p1 = piece[piece.length - 1][1];
+        let ink = 0; for (let i = p0; i <= p1; i++) ink += col[i];
+        if (p1 - p0 + 1 >= h * .4 && ink >= h && !(piece.length === 1 && thinWall(piece[0]))) {
+          const cuts = [toX(p0)], wide = [];
+          for (let q = 1; q < piece.length; q++) {
+            const g = piece[q][0] - piece[q - 1][1] - 1;
+            if (g >= h * .16) { cuts.push(toX(piece[q - 1][1] + 1)); cuts.push(toX(piece[q][0])); wide.push(g >= h * .45); }
+          }
+          cuts.push(toX(p1 + 1));
+          out.push({ x0: toX(p0), x1: toX(p1 + 1), y0: toY(y0), y1: toY(y1 + 1), gaps: (cuts.length - 2) / 2, cuts, wide });
+        }
+        piece = [];
+      };
+      const before = out.length;
+      for (const c of cl) { if (piece.length && c[0] - piece[piece.length - 1][1] > h * 1.4) flush(); piece.push(c); }
+      flush();
+      for (let q = before + 1; q < out.length; q++) out[q].side = true; // further along the same row: a timestamp, a tick
+    }
+    return out.length ? out : null;
+  }
+  /**
+   * Put each word on the piece of text it really sits on: the words, in order, are cut into runs, one run per piece,
+   * so each run's measured width fits its piece (pieces that aren't these words, like a timestamp, are skipped; words
+   * scrolled out of sight are dropped). Returns false when nothing fits well.
+   */
+  function alignWords(b, ws) {
+    const t0 = performance.now(), ps = textPieces(b), t1 = performance.now();
+    if (!ps || !ws.length || ws.length > 1500 || ps.length > 300) return false;
+    const n = ws.length, K = ps.length, sw = textW(' ', 100);
+    const tw = ws.map(w => textW(w.t, 100));
+    const cum = [0]; // width of words 0..i-1 laid in one line, with their spaces
+    for (let i = 0; i < n; i++) cum.push(cum[i] + tw[i] + (i < n - 1 && ws[i].sp === ' ' ? sw : 0));
+    const runW = (i, j) => cum[j] - cum[i] - (j - 1 < n - 1 && ws[j - 1].sp === ' ' ? sw : 0);
+    const hard = ws.map(w => w.sp === '\n'); // the app ends a line after this word
+    const sp = [0, 0]; // sp[j] - sp[i + 1]: spaces between the words of run i..j-1
+    for (let i = 0; i < n; i++) sp.push(sp[i + 1] + (ws[i].sp === ' ' ? 1 : 0));
+    const hs = ps.map(p => p.y1 - p.y0).sort((p, q) => p - q), hMed = hs[hs.length >> 1] || 1;
+    const MAXR = 60, SKIP_P = 1.2, SKIP_W = .3;
+    function solve(s) {
+      const INF = 1e18, f = Array.from({ length: K + 1 }, () => new Float64Array(n + 1).fill(INF));
+      const from = Array.from({ length: K + 1 }, () => new Int32Array(n + 1).fill(-1));
+      const pre = Array.from({ length: K + 1 }, () => new Uint8Array(n + 1)); // the run fills only the piece's first words
+      for (let i = 0; i <= n; i++) f[0][i] = i * SKIP_W; // words above the visible part
+      for (let k = 0; k < K; k++) {
+        const pc = ps[k], P = pc.x1 - pc.x0, sk = s * (pc.y1 - pc.y0) / hMed;
+        for (let i = 0; i <= n; i++) {
+          const base = f[k][i]; if (base >= INF) continue;
+          const skip = pc.side ? .05 : SKIP_P, side = pc.side ? 1.2 : 0;
+          if (base + skip < f[k + 1][i]) { f[k + 1][i] = base + skip; from[k + 1][i] = -2 - i; } // skip the piece
+          for (let j = i + 1; j <= Math.min(n, i + MAXR); j++) {
+            if (j - 1 > i && hard[j - 2]) break; // a run never crosses the app's own line break
+            const m = sp[j] - sp[i + 1], rw = sk * runW(i, j), r = rw / P, plain = m === j - i - 1;
+            // each word against its own stretch of ink: shifted words disagree loudly. A few extra blank columns inside a
+            // word (a wide 'r.' or 'm') are merged back: words take one or more stretches each, in order.
+            let c = Infinity, cpre = Infinity;
+            const extraGaps = pc.gaps - m;
+            if (plain && extraGaps >= 0 && extraGaps <= 3) {
+              const g1 = pc.gaps + 1, segL = e => pc.cuts[e * 2], segR = e => pc.cuts[e * 2 + 1];
+              // h[e]: best cost with the first words covering segments 0..e-1; one row per word
+              let prev = new Float64Array(g1 + 1).fill(Infinity); prev[0] = 0;
+              for (let q = i; q < j; q++) {
+                const cur = new Float64Array(g1 + 1).fill(Infinity), want = Math.max(.5, sk * tw[q]);
+                for (let e0 = 0; e0 < g1; e0++) {
+                  if (prev[e0] === Infinity) continue;
+                  for (let e1 = e0 + 1; e1 <= Math.min(g1, e0 + 1 + extraGaps); e1++) {
+                    let v = prev[e0] + Math.min(1.5, Math.abs(Math.log((segR(e1 - 1) - segL(e0)) / want))) * .8 + (e1 - e0 - 1) * .15;
+                    for (let e = e0; e < e1 - 1; e++) if (pc.wide[e]) v += 1.5; // a wide gap is never inside a word
+                    if (v < cur[e1]) cur[e1] = v;
+                  }
+                }
+                prev = cur;
+              }
+              c = base + prev[g1];
+              for (let e = 1; e < g1; e++) if (prev[e] < Infinity) cpre = Math.min(cpre, base + prev[e] + (pc.wide[e - 1] ? .4 : .8));
+            }
+            c = Math.min(c, base + Math.abs(Math.log(r)) * 2.2 + Math.min(Math.abs(extraGaps), 4) * .5 + (j - i) * .12);
+            c += side; cpre += side;
+            if (c < f[k + 1][j]) { f[k + 1][j] = c; from[k + 1][j] = i; pre[k + 1][j] = 0; }
+            if (cpre < f[k + 1][j]) { f[k + 1][j] = cpre; from[k + 1][j] = i; pre[k + 1][j] = 1; }
+            if (r > 1.6) break;
+          }
+        }
+      }
+      let best = Infinity, bj = 0;
+      for (let j = 0; j <= n; j++) { const c = f[K][j] + (n - j) * SKIP_W; if (c < best) { best = c; bj = j; } }
+      const runs = []; let j = bj;
+      for (let k = K; k > 0; k--) { const fr = from[k][j]; if (fr <= -2) continue; if (fr < 0) break; runs.push({ k: k - 1, i: fr, j, pre: pre[k][j] }); j = fr; }
+      runs.reverse();
+      return { cost: best, runs };
+    }
+    // one font scale for the block, refined from what fits
+    // a line of text is about one font size tall, ascenders to descenders; words were measured at 100 px
+    let bestSol = null;
+    const refine = sol => sol.runs.filter(r => r.j - r.i >= 2 && !r.pre).map(r => (ps[r.k].x1 - ps[r.k].x0) / runW(r.i, r.j) * hMed / (ps[r.k].y1 - ps[r.k].y0)).sort((p, q) => p - q);
+    for (const m of [1, .85, 1.15, 1.3, .72]) { const sc = m * hMed / 100, sol = solve(sc); sol.s = sc; if (!bestSol || sol.cost < bestSol.cost) bestSol = sol; }
+    for (let it = 0; it < 3; it++) {
+      const rs = refine(bestSol); if (!rs.length) break;
+      const ns = rs[rs.length >> 1]; if (Math.abs(ns - bestSol.s) / bestSol.s < .01) break;
+      const sol = solve(ns); sol.s = ns; if (sol.cost <= bestSol.cost) bestSol = sol; else break;
+    }
+    if (!bestSol || !bestSol.runs.length) return false;
+    const placed = bestSol.runs.reduce((a, r) => a + r.j - r.i, 0);
+    const extra = bestSol.runs.filter(r => r.pre).length * .8;
+    if (placed < n * .5 && placed < 3 || (bestSol.cost - extra) / Math.max(1, placed) > .6) return false;
+    for (const w of ws) w.w = 0;
+    bestSol.runs.forEach((r, ln) => {
+      const p = ps[r.k], cnt = r.j - r.i, pad = (p.y1 - p.y0) * .22, g1 = p.gaps + 1;
+      // words onto stretches of ink (the same grouping the fit scored); else spread by measured width
+      let groups = null;
+      if (ws.slice(r.i, r.j - 1).every(w => w.sp === ' ') && g1 >= cnt && g1 - cnt <= 3) {
+        const sc = bestSol.s * (p.y1 - p.y0) / hMed, lim = r.pre ? g1 : g1;
+        const cost = [new Float64Array(g1 + 1).fill(Infinity)], back = [null]; cost[0][0] = 0;
+        for (let q = 0; q < cnt; q++) {
+          const cur = new Float64Array(g1 + 1).fill(Infinity), bk = new Int32Array(g1 + 1).fill(-1), want = Math.max(.5, sc * tw[r.i + q]);
+          for (let e0 = 0; e0 < g1; e0++) {
+            if (cost[q][e0] === Infinity) continue;
+            for (let e1 = e0 + 1; e1 <= Math.min(lim, e0 + 1 + g1 - cnt); e1++) {
+              let v = cost[q][e0] + Math.min(1.5, Math.abs(Math.log((p.cuts[e1 * 2 - 1] - p.cuts[e0 * 2]) / want))) * .8 + (e1 - e0 - 1) * .15;
+              for (let e = e0; e < e1 - 1; e++) if (p.wide[e]) v += 1.5;
+              if (v < cur[e1]) { cur[e1] = v; bk[e1] = e0; }
+            }
+          }
+          cost.push(cur); back.push(bk);
+        }
+        let end = g1; if (r.pre) { let bv = Infinity; for (let e = 1; e < g1; e++) { const v = cost[cnt][e] + (p.wide[e - 1] ? 0 : .4); if (v < bv) { bv = v; end = e; } } }
+        if (cost[cnt][end] < Infinity) {
+          groups = []; let e1 = end;
+          for (let q = cnt; q > 0; q--) { const e0 = back[q][e1]; groups.unshift([e0, e1]); e1 = e0; }
+        }
+      }
+      const x1 = groups ? p.cuts[groups[cnt - 1][1] * 2 - 1] : p.x1, W = Math.max(1, runW(r.i, r.j)), sc = (x1 - p.x0) / W;
+      for (let q = r.i; q < r.j; q++) {
+        const wd = ws[q], gq = groups && groups[q - r.i];
+        if (gq) { wd.x = p.cuts[gq[0] * 2]; wd.w = p.cuts[gq[1] * 2 - 1] - wd.x; }
+        else { wd.x = p.x0 + (cum[q] - cum[r.i]) * sc; wd.w = tw[q] * sc; }
+        wd.y = p.y0 - pad; wd.h = p.y1 - p.y0 + pad * 2; wd.ln = ln;
+      }
+    });
+    N.log('screen fit ' + ws.length + ' words to ' + bestSol.runs.length + '/' + K + ' pieces, cost ' + bestSol.cost.toFixed(2)
+      + ', ' + Math.round(t1 - t0) + '+' + Math.round(performance.now() - t1) + ' ms');
+    return true;
+  }
+  /** Words the app didn't place: fit them to the text on the screenshot; else lay them out and use the rows of ink. */
   function placeWords(b, ws) {
+    if (alignWords(b, ws)) return;
     const bands = inkBands(b);
     let box = b;
     if (bands) {
@@ -215,7 +441,7 @@
         ws = ws.filter(w => w.w > 0 && w.h > 0);
         let ln = 0;
         ws.forEach((w, k) => { if (k && Math.abs((w.y + w.h / 2) - (ws[k - 1].y + ws[k - 1].h / 2)) > Math.max(w.h, ws[k - 1].h) / 2) ln++; w.ln = ln; });
-      } else placeWords(b, ws);
+      } else { placeWords(b, ws); ws = ws.filter(w => w.w > 0 && w.h > 0); }
       for (const w of ws) { w.b = i; w.i = st.words.length; w.line = i * 1000 + w.ln; b.wi.push(w.i); st.words.push(w); }
     });
   }
@@ -605,15 +831,67 @@
     picture(false);
   });
 
+
+  /* ================= flick the sheets to the top or the bottom ================= */
+  /** Dock every sheet at 'top' or 'bottom'; the shown one glides from where the finger left it. */
+  function setDock(d, el) {
+    const from = el ? el.getBoundingClientRect().top : 0;
+    st.dock = d; document.body.classList.toggle('dtop', d === 'top');
+    try { localStorage.setItem('wizScreenDock', d); } catch (e) { }
+    if (!el) return;
+    el.style.transform = '';
+    const to = el.getBoundingClientRect().top;
+    el.style.transform = 'translateY(' + (from - to) + 'px)';
+    void el.offsetHeight;
+    el.classList.remove('drag');
+    el.style.transform = '';
+  }
+  let sd = null, ate = 0;
+  for (const el of document.querySelectorAll('.sheet')) {
+    el.addEventListener('pointerdown', e => {
+      const sc = e.target.closest('#sel, #langs .ll');
+      if (sc && sc.scrollHeight > sc.clientHeight + 1) return; // that part scrolls; the grip and buttons still flick
+      sd = { el, pid: e.pointerId, x: e.clientX, y: e.clientY, moved: false, pts: [[e.timeStamp, e.clientY]] };
+    });
+    el.addEventListener('pointermove', e => {
+      if (!sd || sd.el !== el || e.pointerId !== sd.pid) return;
+      const dx = e.clientX - sd.x, dy = e.clientY - sd.y;
+      if (!sd.moved) {
+        if (Math.abs(dy) < 12 || Math.abs(dy) < Math.abs(dx) * 1.2) return;
+        sd.moved = true; el.classList.add('drag');
+        try { el.setPointerCapture(e.pointerId); } catch (x) { }
+      }
+      sd.pts.push([e.timeStamp, e.clientY]); if (sd.pts.length > 8) sd.pts.shift();
+      el.style.transform = 'translateY(' + dy + 'px)';
+    });
+    const up = e => {
+      if (!sd || sd.el !== el) return;
+      const d = sd; sd = null;
+      if (!d.moved) return;
+      ate = Date.now(); // the lift after a flick is not a button tap
+      const now = e.timeStamp, back = d.pts.filter(p => now - p[0] <= 120), p0 = back[0] || d.pts[0];
+      const v = (e.clientY - p0[1]) / Math.max(16, now - p0[0]); // px per ms, + is down
+      const r = el.getBoundingClientRect(), mid = r.top + r.height / 2;
+      const want = v < -0.35 ? 'top' : v > 0.35 ? 'bottom' : mid < innerHeight / 2 ? 'top' : 'bottom';
+      setDock(want, el);
+      N.log('screen sheet docked ' + want);
+    };
+    el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  }
+  document.addEventListener('click', e => { if (Date.now() - ate < 400) { e.stopPropagation(); e.preventDefault(); } }, true);
+
   /* ================= native callbacks ================= */
   window.S = {
     open,
+    /** QA: the pieces of text found on the screenshot inside a box given in screen pixels. */
+    pieces(x, y, w, h) { const o = st.o || {}, d = o.dpr || 1; return textPieces({ x: (x - (o.ox || 0)) / d, y: (y - (o.oy || 0)) / d, w: w / d, h: h / d }); },
     /** QA: what the page holds, in screen pixels (for real touches). */
     peek() {
       const o = st.o || {}, d = o.dpr || 1, sx = x => Math.round(x * d + (o.ox || 0)), sy = y => Math.round(y * d + (o.oy || 0));
       const ctr = el => { const r = el.getBoundingClientRect(); return r.width ? [sx(r.left + r.width / 2), sy(r.top + r.height / 2)] : null; };
       const r = range();
-      return { mode: st.mode, shot: !!o.shot, panel: st.panel, searching: st.searching, langsOpen: st.langsOpen,
+      const box = el => { const r = el.getBoundingClientRect(), v = getComputedStyle(el).visibility !== 'hidden'; return { top: sy(r.top), bottom: sy(r.bottom), visible: v && r.bottom > 0 && r.top < innerHeight }; };
+      return { dock: st.dock, sheets: { sheet: box($('#sheet')), tbar: box($('#tbar')), langs: box($('#langs')) }, vh: sy(innerHeight), mode: st.mode, shot: !!o.shot, panel: st.panel, searching: st.searching, langsOpen: st.langsOpen,
         words: st.words.map(w => ({ t: w.t, b: w.b, x: sx(w.x + w.w / 2), y: sy(w.y + w.h / 2), l: sx(w.x), r: sx(w.x + w.w) })),
         exact: st.blocks.filter(b => b.ex).length, blocks: st.blocks.length, boxes: document.querySelectorAll('.b').length,
         sel: r, selText: r ? selText() : '', hl: document.querySelectorAll('.hl').length,

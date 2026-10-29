@@ -4,8 +4,11 @@
 (() => {
   'use strict';
   const order = ['gateway', 'signin', 'shell', 'agent-service', 'hermes'];
+  /** Diagnoses where nothing of the Wizard answers, so Troubleshooter (served by it) can't open either. */
+  const UNREACHABLE = new Set(['tailscale', 'unreachable', 'device-offline']);
   const result = (layer, message, short) => ({ layer, message, short, action: 'troubleshoot' });
-  const pending = result('checking', 'Checking the connection to Wizard. Messages are kept on this device while we retry.', 'Checking connection · retrying');
+  const RECONNECTING = 'Reconnecting…';
+  const pending = result('checking', 'Checking the connection to Wizard. Messages are kept on this device while we retry.', RECONNECTING);
   let cached = null, cachedAt = 0, work = null, failureAt = -Infinity;
   async function request(url, options = {}, json = false) {
     const controller = new AbortController(); let timer;
@@ -21,31 +24,41 @@
     try { ping = await request('/troubleshoot/api/ping'); }
     catch (_) {
       if (navigator.onLine === false) return result('device-offline', 'Your device is offline. Messages are saved and will send when you reconnect.', 'Device offline · retrying');
-      try { await request('https://www.gstatic.com/generate_204', { mode: 'no-cors', credentials: 'omit' }); }
-      catch (_) { return result('internet', 'No internet connection. Messages are saved and will send when you’re back online.', 'No internet · retrying'); }
-      return result('tailscale', 'Can’t reach your Wizard server. Open the Tailscale app on this device and make sure it’s connected. Messages are saved and will send when it’s back.', 'Check Tailscale · retrying');
+      // No request to another site: Wizard's content security policy (connect-src 'self') blocks it, so it would
+      // always look like "no internet". On a Tailscale address the page can't tell Tailscale being off (or this
+      // device removed from the network) from the Wizard's computer being off, so it names both.
+      if (/\.ts\.net$/i.test(String(location.hostname || ''))) {
+        return result('tailscale', 'Can’t reach your Wizard. Check that Tailscale is on on this device and signed in to the same account as your Wizard, and that the computer running your Wizard is on. Messages are saved and will send when it’s back.', 'Can’t reach Wizard · retrying');
+      }
+      return result('unreachable', 'Can’t reach your Wizard server. Check this device’s connection. Messages are saved and will send when it’s back.', 'Can’t reach Wizard · retrying');
     }
     // An HTTP error proves the server is reachable; never blame the device/VPN.
-    if (!ping.ok) return result('gateway', `Wizard’s gateway answered (${ping.status}), but Troubleshooter isn’t available. Messages are kept while we retry.`, 'Gateway needs attention · retrying');
+    if (!ping.ok) return result('gateway', `Wizard’s gateway answered (${ping.status}), but Troubleshooter isn’t available. Messages are kept while we retry.`, RECONNECTING);
     try {
       const { response, body } = await request('/troubleshoot/api/status', {}, true);
       if (!response.ok || !Array.isArray(body.checks)) throw new Error('Invalid status');
-      const failed = body.checks.filter(check => !check.ok).sort((a, b) => {
+      // Repair-chat engine probes (reply-claude/chatgpt/tinfoil) say whether Troubleshooter's own AI can answer;
+      // they never explain why Wizard is unreachable, so the connection pill must not blame them (James, 27 Oct).
+      const relevant = check => !check.ok && !check.skipped && !String(check.id || '').startsWith('reply-');
+      const failed = body.checks.filter(relevant).sort((a, b) => {
         const rank = id => order.includes(id) ? order.indexOf(id) : order.length;
         return rank(a.id) - rank(b.id);
       })[0];
       if (failed) {
-        const labels = { gateway: 'Wizard’s gateway isn’t responding.', signin: 'Wizard sign-in needs attention.', shell: 'Wizard’s shell isn’t responding.', 'agent-service': 'Wizard’s Agent Service isn’t responding.', hermes: 'Your agent (Hermes) isn’t responding.' };
-        const message = labels[failed.id];
-        return result(failed.id, message ? message + (['agent-service', 'hermes'].includes(failed.id) ? ' It restarts itself automatically; open Troubleshooter if it doesn’t come back.' : ' Open Troubleshooter to check it.') : `${failed.label || failed.id}: ${failed.detail || 'Needs attention'}`, `${failed.label || failed.id} needs attention · retrying`);
+        const labels = { gateway: 'Wizard’s gateway isn’t responding.', signin: 'Wizard sign-in needs attention.', shell: 'Wizard’s shell isn’t responding.', 'agent-service': 'Wizard’s Agent Service isn’t answering right now.', hermes: 'Your agent (Hermes) isn’t answering right now.' };
+        const message = labels[failed.id], selfHeals = ['agent-service', 'hermes'].includes(failed.id);
+        // While we are retrying, the one-line pill says what is happening (reconnecting), not an alarm; the
+        // unfolded line names the layer. Only sign-in asks the owner to act (James, 27 Oct).
+        const short = failed.id === 'signin' ? 'Sign-in needs attention · retrying' : RECONNECTING;
+        return result(failed.id, message ? message + (selfHeals ? ' It usually comes back on its own within a minute; messages wait and send afterwards. Open Troubleshooter if it doesn’t.' : ' Open Troubleshooter to check it.') : `${failed.label || failed.id}: ${failed.detail || 'Needs attention'}`, short);
       }
-      if (body.overall && body.overall !== 'ok') return result('wizard', body.summary || 'Wizard reports a problem. Open Troubleshooter to check it.', 'Wizard needs attention · retrying');
-    } catch (_) { return result('diagnosis', 'Wizard’s gateway is reachable, but its health report isn’t available. Open Troubleshooter to check it. Messages are kept while we retry.', 'Health report unavailable · retrying'); }
+      if (body.overall === 'down') return result('wizard', body.summary || 'Wizard reports a problem. Open Troubleshooter to check it.', RECONNECTING);
+    } catch (_) { return result('diagnosis', 'Wizard’s gateway is reachable, but its health report isn’t available. Open Troubleshooter to check it. Messages are kept while we retry.', RECONNECTING); }
     return result('send', 'Wizard is online, but this message hasn’t gone through yet. It’s kept on this device while we retry.', 'Not sent yet · retrying');
   }
-  function diagnose() {
+  function diagnose(maxAge = 10000) {
     if (work) return work;
-    if (cached && Date.now() - cachedAt < 10000) return Promise.resolve(cached);
+    if (cached && Date.now() - cachedAt < maxAge) return Promise.resolve(cached);
     work = probe().then(value => {
       const changed = JSON.stringify(value) !== JSON.stringify(cached);
       cached = value; cachedAt = Date.now();
@@ -62,10 +75,23 @@
     },
     // Troubleshooter is an ordinary built-in app: open it in a shell window like any other app. Leaving the shell
     // for the bare page is only the last resort, when the shell can't open windows at all.
-    open() {
-      try { if (window.WizOpenApp?.('troubleshooter')) return; } catch (e) {}
+    // When the Wizard can't be reached at all, Troubleshooter can't either (the same Wizard serves it). Decide on a
+    // current diagnosis (one from before the disconnect, or none yet, would open the page that never loads): the Wizard
+    // phone app then restarts into its own connect screen with the Tailscale guide; anywhere else the connection pill
+    // unfolds what to check ('wizreachexplain'), whichever button was tapped. Resolves false when nothing opened.
+    async open() {
+      let d = cached;
+      if (!d || Date.now() - cachedAt > 3000) { try { d = await diagnose(3000); } catch (e) { d = cached; } }
+      if (d && UNREACHABLE.has(d.layer)) {
+        const shell = window.Capacitor?.Plugins?.WizardShell;
+        if (typeof shell?.retry === 'function') { shell.retry().catch?.(() => {}); return true; }
+        window.dispatchEvent(new Event('wizreachexplain'));
+        return false;
+      }
+      try { if (window.WizOpenApp?.('troubleshooter')) return true; } catch (e) {}
       if (document.documentElement.dataset.shell === 'desktop') window.open('/troubleshoot/', '_blank', 'noopener');
       else location.assign('/troubleshoot/');
+      return true;
     },
   };
 })();
