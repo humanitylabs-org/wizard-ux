@@ -114,6 +114,7 @@ test('words: the interface never says Wizard OS; Wizard OS says overnight (Autom
   assert.match(web, /class="wb-text">Reloading<em>/);
   const osu = fs.readFileSync(new URL('../web/core/os-updates.js', import.meta.url), 'utf8');
   assert.match(osu, /title: 'Interface updated', line: 'Reload to see the changes', action: 'reload', label: 'Reload'/);
-  assert.match(osu, /line: auto \? 'Installs tonight when it’s quiet' : 'Takes 10–20 minutes'/);
+  assert.match(osu, /line: auto \? 'Installs tonight when it’s quiet' : takes/);
+  assert.match(osu, /const takes = st\.quick === true \? 'Takes about 2 minutes' : 'Takes 10–20 minutes';/, 'Ask me says how long: about 2 minutes only when the App Manager says quick');
   assert.match(osu, /auto \? 'Install now' : 'Install'/);
 });

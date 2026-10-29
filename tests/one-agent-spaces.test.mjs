@@ -29,14 +29,15 @@ test('multiple agents retain agent tabs, no flat Spaces or add chip',()=>{
   assert.doesNotMatch(html,/data-chspacenew/);
 });
 test('row-created Space persists its thread and never starts the fill run',async()=>{
-  let saved,ran=false,stored;const p={name:' First ',agent:'hermes',sid:'thread-1',wid:'w'};
+  let saved,ran=false;const p={name:' First ',agent:'hermes',sid:'thread-1',wid:'w'};
   const env={spacePicker:p,spaces:()=>[],spaceAgent:s=>s.agent,norm:s=>s.toLowerCase(),renderSpacePicker(){},crypto:{randomUUID:()=> 'new-space'},Date,
-    LIVE:{putPrefs:async v=>(saved=v,true)},localStorage:{setItem:(k,v)=>stored=JSON.parse(v)},SPACES_KEY:'spaces',window:{dispatchEvent(){}},Event,
+    LIVE:{prefOps:async (ops,o)=>(saved={ops,o},true)},window:{dispatchEvent(){}},Event,
     closeSpacePicker(){},W:{w:{}},setFocus(){},sendChat:async()=>{ran=true;}};
   vm.createContext(env);vm.runInContext(cut('  async function createPickerSpace(', '  function bindFocusStrip('),env);
   await env.createPickerSpace(p);
-  assert.deepEqual(JSON.parse(JSON.stringify(saved.spaces[0].threads)),['thread-1']);
-  assert.equal(stored[0].name,'First');assert.equal(ran,false);
+  // One add operation (never this device's whole list), and only once the box has it.
+  assert.deepEqual(JSON.parse(JSON.stringify(saved.ops)).map(o=>[o.op,o.key,o.item.threads,o.item.name]),[['add','spaces',['thread-1'],'First']]);
+  assert.equal(saved.o.requireShared,true);assert.equal(ran,false);
 });
 test('under All an agent tab still names the Space it remembers',()=>{
   const html=fixture(['hermes','private'],[{id:'ss',name:'SS'}],null,{hermes:{kind:'space',key:'ss'}});

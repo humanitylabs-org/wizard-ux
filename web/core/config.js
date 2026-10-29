@@ -125,14 +125,14 @@
     // The Service owns this preference across devices; the cache is display-only.
     async responseStyle(value) {
       if (value !== undefined) {
-        if (!['summary', 'concise'].includes(value)) throw Error('Choose Summary or Concise');
+        if (!['summary', 'concise', 'own'].includes(value)) throw Error('Choose Summary, Concise or Own');
         const saved = await fetch('/wizard/v1/settings', { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ response_style: value }) });
         if (!saved.ok) throw Error('Could not save response style');
       }
       const read = await fetch('/wizard/v1/settings', { credentials: 'same-origin', cache: 'no-store' });
       if (!read.ok) throw Error('Could not read response style');
       const style = (await read.json()).settings?.response_style;
-      if (!['summary', 'concise'].includes(style)) throw Error('Update your Wizard to choose a response style');
+      if (!['summary', 'concise', 'own'].includes(style)) throw Error('Update your Wizard to choose a response style');
       if (value !== undefined && style !== value) throw Error('Your Wizard has not confirmed this response style. Try again.');
       B = { ...B, settings: { ...B.settings, response_style: style } };
       try { localStorage.setItem(KEY, JSON.stringify(B)); } catch (_) {}

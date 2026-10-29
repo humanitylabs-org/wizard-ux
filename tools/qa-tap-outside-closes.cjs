@@ -44,6 +44,11 @@ async function check(name, fn) { await fn(); passed++; console.log('PASS', name)
     await context.route('**/*', async route => {
       const u = new URL(route.request().url());
       assert.equal(u.origin, origin, 'test must not contact another origin');
+      if(u.pathname==='/store-install/fixture'){storeInstalled=true;return route.fulfill({json:{state:'installed',selection:route.request().postDataJSON()}});}
+      if(u.pathname.startsWith('/store-data/')) {
+        const j=u.pathname.includes('/index/search')?{apps:[storeApp]}:u.pathname.includes('/installed-apps')?{complete:true,wam:storeInstalled?[storeApp]:[],shell:[]}:u.pathname.endsWith('/installed')?{installed:[]}:u.pathname.includes('/needs/')?{models:[{feature:'fixture-model',tier:'simple',status:'missing'}],services:[]}:{};
+        return route.fulfill({json:j});
+      }
       if (u.pathname === '/fixture') return route.fulfill({contentType:'text/html',body:shell});
       if (u.pathname === '/fixture-app') return route.fulfill({contentType:'text/html',body:app});
       if (u.pathname.startsWith('/fixture-page')) return route.fulfill({contentType:'text/html',body:'<!doctype html><title>Fixture page</title><p>Page</p>'});
@@ -51,7 +56,8 @@ async function check(name, fn) { await fn(); passed++; console.log('PASS', name)
       if (file.startsWith(web + '/') && fs.existsSync(file) && fs.statSync(file).isFile()) return route.fulfill({body:fs.readFileSync(file),contentType:file.endsWith('.css')?'text/css':file.endsWith('.js')?'application/javascript':file.endsWith('.html')?'text/html':'image/png'});
       return route.fulfill({contentType:'application/json',body:'{}'});
     });
-    const page = await context.newPage();
+    const storeApp={id:'fixture',name:'Fixture',type:'view',repo:'example/fixture',source:'standard',channel:'standard',commit:'a'.repeat(40)};let storeInstalled=false;
+    const page=await context.newPage();
     const errors=[];page.on('pageerror', e=>errors.push(e.message));
     await page.goto(origin+'/fixture');
     const frame=page.frames().find(f=>f.url()===origin+'/fixture-app');
@@ -95,8 +101,8 @@ async function check(name, fn) { await fn(); passed++; console.log('PASS', name)
     await script('sigils');await script('links');await script('home-screen-apps');await script('share-sheet');await script('app-route');await script('tour');await script('sel-menu');await script('resources');await script('chat-kit');
     await check('shell link sheet: outside is one Back step, nested page unwinds before closing',async()=>{
       await page.evaluate(()=>{window.links=WizLinks.mount({parent:document.querySelector('#device')});links.open('/fixture-page/one');links.open('/fixture-page/two');links.el.classList.add('peek');});
-      await page.locator('.ls-scrim').tap({position:{x:5,y:5}});assert.equal(await page.evaluate(()=>links.state().depth),1);
-      await page.locator('.ls-scrim').tap({position:{x:5,y:5}});assert.equal(await page.evaluate(()=>links.isOpen()),false);await mounted();
+      await page.locator('.ls-scrim').tap({position:{x:190,y:20}});assert.equal(await page.evaluate(()=>links.state().depth),1);
+      await page.locator('.ls-scrim').tap({position:{x:190,y:20}});assert.equal(await page.evaluate(()=>links.isOpen()),false);await mounted();
     });
     await check('shell link context menu: opening release ignored, outside and Back both close only the menu',async()=>{
       await page.evaluate(()=>{const p=document.createElement('p');p.className='bub';p.innerHTML='<a href="/fixture-page/menu">Fixture link</a>';p.style.cssText='position:absolute;top:100px;left:20px';document.querySelector('#device').append(p);WizLinks.intercept(p,links);});
@@ -167,10 +173,11 @@ async function check(name, fn) { await fn(); passed++; console.log('PASS', name)
       await page.locator('.dv-scrim').tap({position:{x:5,y:5}});assert.equal(await page.evaluate(()=>WosDevice._state().sheet),null);await mounted();
     });
     await check('hosted Store install layer: outside padding pops one layer and keeps frame mounted',async()=>{
-      const [store]=await Promise.all([page.waitForEvent('framenavigated',{predicate:f=>f.url().includes('/store/index.html')}),page.evaluate(()=>{const f=document.createElement('iframe');f.id='store-frame';f.src='/store/index.html?view=install&repo=bad';f.style.cssText='position:fixed;inset:0;width:390px;height:844px';document.body.append(f);})]);
-      await store.locator('.link-error').waitFor();
+      const [store]=await Promise.all([page.waitForEvent('framenavigated',{predicate:f=>f.url().includes('/store/index.html')}),page.evaluate(()=>{const f=document.createElement('iframe');f.id='store-frame';f.src='/store/index.html?app=fixture';f.style.cssText='position:fixed;inset:0;width:390px;height:844px';document.body.append(f);})]);
+      await store.locator('[data-get]').tap();
+      await store.waitForFunction(()=>window.__store?.state().layers.at(-1)==='sheet');
       await store.locator('#sheet').tap({position:{x:2,y:2}});
-      assert.equal(await store.locator('#discover').isVisible(),true);assert.equal(await page.locator('#store-frame').count(),1);await mounted();
+      assert.deepEqual(await store.evaluate(()=>__store.state().layers),['detail']);assert.equal(await page.locator('#store-frame').count(),1);await mounted();
     });
     assert.deepEqual(errors,[],'no browser exceptions');
     console.log(`tap outside closes: ${passed} PASS (390x844 touch; fixture-only, no live shell)`);
