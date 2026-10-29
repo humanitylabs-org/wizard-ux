@@ -413,9 +413,14 @@ parent submits the fresh sealed stage as `/usr/bin/sg kvm -c 'exec
 /usr/bin/python3 <new-root>/qa_unified_share_android.py --reuse-build --seal
 <new-root>/reuse-seal.json --seal-sha256 <digest>'` on forum/heavy. The queue and
 inherited lease remain required. No global ACL/mode change, new group membership,
-user-manager restart or shared-worker restart is authorized by this repair.
-The shared daemon's original group set remains unchanged; any permanent service
-launch correction belongs to its release owner at a separately managed boundary.
+user-manager restart or shared-worker restart is performed by this diagnostic
+preparation. A concurrent service configuration repair was subsequently observed: the
+unit gained `20-kvm-group.conf`, wrapping its unchanged worker executable in
+`sg kvm`, and restarted at 09:59:25 UTC. Its replacement PID 2350024 has uid 1000
+and real/effective gid 993; the user manager is still PID 1490. Preserve that
+separate observation rather than claiming this child performed the restart or
+that the original worker PID stayed unchanged. The per-job route remains safe
+and explicit; permanent service lifecycle changes belong to its release owner.
 
 The runner now opens KVM and reads only its API before creating an AVD, retaining
 the effective identity in the receipt. A terminal emulator exit escapes transient
