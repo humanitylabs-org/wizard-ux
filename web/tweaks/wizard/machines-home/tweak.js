@@ -151,7 +151,7 @@ export default function setup(api) {
         left = 100 * paid.balanceMinor / paid.limitMinor; money = `$${(paid.balanceMinor / 10 ** ex).toFixed(2)}`;
       }
       // Signed out only when the feed says so; a failed usage read is "usage unavailable", still signed in.
-      const signedOut = p.status === 'signed_out' || p.status === 'auth', na = !signedOut && left == null && !money;
+      const signedOut = p.signedOut === true || p.status === 'signed_out' || p.status === 'auth', na = !signedOut && left == null && !money;
       const who = String(p.name || '').split('@')[0];
       out.push({ id: p.id, kind, group: p.providerName || kind, nick: S.nick[p.id] || '', auto: who && who !== p.providerName ? who : '',
         email: p.email || '', left: left == null ? null : Math.round(left), money, unit: money ? 'credit' : 'plan', out: signedOut, na, resets: pick?.resetsAt || null });
@@ -427,6 +427,9 @@ export default function setup(api) {
     if (g) {
       // Only what is known about a Wizard he manages: its Main and who uses it. Same design, less data.
       setRow(rowSt, []); setRow(rowTs, []); setRow(rowMore, []); setRow(rowAct, []);
+      // Security and storage are only read for this Wizard; say so rather than show this Wizard's facts under another's name.
+      netBox.replaceChildren(h('span', { cls: 'mh-more-info', text: `Security for ${g.name}’s Wizard shows on that Wizard. Switch back to yours to see your own.` }));
+      storeBox.replaceChildren(h('span', { cls: 'mh-more-info', text: `Backups for ${g.name}’s Wizard show on that Wizard. Switch back to yours to see your own.` }));
       setRow(rowMn, [machineNode({ id: 'managed-' + g.id, name: g.name, access: g.access || null }, 'main', null, { size: 72, roleText: g.org || 'Main', managed: true }), plus('add-device', `Add a device to ${g.name}`)]);
     } else {
       const st = storage();

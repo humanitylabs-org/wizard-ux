@@ -208,7 +208,7 @@ test('review fixes: one Home map at a time, boot guess expires, unreadable usage
   assert.match(host, /if \(expected\.size\) setTimeout\(\(\) => \{ if \(tweaksAsked\) return; for \(const t of \[\.\.\.expected\]\)/, 'a boot that never loads drops the guessed styles');
   for (const who of ['miguel', 'wizard']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
-    assert.match(src, /const signedOut = p\.status === 'signed_out' \|\| p\.status === 'auth', na = !signedOut && left == null && !money;/, who);
+    assert.match(src, /p\.status === 'signed_out' \|\| p\.status === 'auth', na = !signedOut && left == null && !money;/, who);
     assert.match(src, /r\.na \? 'Usage unavailable'/, who);
   }
 });
@@ -234,6 +234,18 @@ test('third review: AI page offers sign-in with no accounts, backup read failure
     assert.match(src, /S\.backupRead === 'none' \? h\('span', \{ cls: 'mh-more-info', text: 'No backup set up yet\.' \}\)/, who + ': "no backup" only after a real answer');
     assert.match(src, /checked \? 'the only way in' : 'not every machine checked yet'/, who);
   }
+});
+
+test('fourth review: sign-in state survives normalisation, managed workspaces get honest System pages, Dictate keeps its field through the mic menu', () => {
+  const usage = read('web/core/usage.js'), desk = read('web/desktop/desktop.js');
+  assert.match(usage, /signedOut: \['signed_out', 'auth', 'reauth'\]\.includes\(p\.status\)/);
+  for (const who of ['miguel', 'wizard']) {
+    const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
+    assert.match(src, /const signedOut = p\.signedOut === true \|\|/, who);
+    assert.match(src, /Security for \$\{g\.name\}’s Wizard shows on that Wizard/, who);
+    assert.match(src, /Backups for \$\{g\.name\}’s Wizard show on that Wizard/, who);
+  }
+  assert.match(desk, /controls: el => !!el\?\.closest\('#voicePill,#micBtn,#dictateBtn,\.voice-menu'\)/);
 });
 
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {

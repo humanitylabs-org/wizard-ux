@@ -37,6 +37,7 @@
       }).filter(Boolean);
       const paid = p.paid && typeof p.paid === 'object' ? p.paid : null;
       return { id: String(p.id), provider: family(p), providerName: family(p) === 'chatgpt' ? 'ChatGPT' : String(p.providerName || p.name || p.id), name: String(p.name || p.id), email: typeof p.email === 'string' && p.email.includes('@') && !p.email.includes('*') ? p.email : '', plan: p.plan ? String(p.plan) : '', status: ['ok', 'stale', 'unavailable'].includes(p.status) ? p.status : (limits.length ? 'ok' : 'unavailable'),
+        signedOut: ['signed_out', 'auth', 'reauth'].includes(p.status) || p.signedOut === true || /sign.?in|signed.?out|reauth|401|unauthori[sz]ed/i.test(String(p.error?.code || p.error?.kind || '')),
         fetchedAt: iso(p.fetchedAt), limits, paid, error: p.error ? String(p.error.message || p.error) : '' };
     }).filter(Boolean);
     return { fetchedAt: iso(j?.fetchedAt), providers, accountCounts };
