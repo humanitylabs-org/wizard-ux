@@ -48,7 +48,7 @@ The normal `npm test` command includes a tracked-file portability guard. Only ex
 │        ▼                                                              │
 │  Hermes Agent  (the agent: sessions, tools, memory, models)           │
 │                                                                       │
-│  Wizard apps  (CineQueue, Signal, Reader, Mizel, …) open as desks     │
+│  Apps  (CineQueue, Signal, Reader, Mizel, …) open as desks            │
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -143,7 +143,7 @@ Package `ai.wizards.os`, currently 0.4.0. Builds run on Thales (the Mac mini bui
 
 ## Rules
 
-- **Back never exits.** Back closes the top overlay, then leaves the nested view, then returns to Home. At Home it shows "Press back again to exit", and only a second Back may leave. Every Back change ships with a test.
+- **Back never exits.** Back closes the top overlay, then leaves the nested view, then returns to Home. At Home it stays ("You're home"), however often Back is pressed, in the app and in a browser tab. Every Back change ships with a test.
 - **QA never writes to the live Wizard.** The suites intercept writes to Hermes and the Wizard Agent Service, and check for zero `/v1/runs`.
 - **Nothing is sent on the user's behalf.** Words handed in from the side button or another app land as a draft, and the user sends them with one tap.
 - **No secrets or private data in git.** Keys stay in the environment. Generated review data stays local.

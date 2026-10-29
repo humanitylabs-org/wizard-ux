@@ -224,7 +224,8 @@
     const d = DEV(), m = J(d?.shareMeta(id));
     if (!m) { toast('!', 'That share expired · share it again', 2400); return; }
     closeSheet();
-    const result = await window.WizShareWizard.open({
+    // durable: resolves 'sent' only after the message has a receipt, so the staged copy survives a mid-upload kill.
+    const result = await window.WizShareWizard.open({durable: true,
       text: [m.subject, m.text].filter(Boolean).join('\n').trim(), skipped: m.skipped || 0,
       items: (m.items || []).map(f => ({...f, read: () => readBlob(off => d.shareRead(id, f.n, off), f.mime)}))
     });
