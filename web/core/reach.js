@@ -56,7 +56,7 @@
     } catch (_) { return result('diagnosis', 'Wizard’s gateway is reachable, but its health report isn’t available. Open Troubleshooter to check it. Messages are kept while we retry.', RECONNECTING); }
     // Healthy probes prove reachability, not why a separate read/send failed or
     // whether its message was admitted. Never turn them into a delivery claim.
-    return result('send', 'Wizard’s connection checks passed. Retrying the request; these checks do not confirm message delivery.', RECONNECTING);
+    return result('send', 'Wizard’s connection checks passed. Retrying the request; these checks do not confirm message delivery.', 'Message not sent · retrying');
   }
   function diagnose(maxAge = 10000) {
     if (work) return work;

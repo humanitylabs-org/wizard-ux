@@ -54,7 +54,7 @@ test('status failure, malformed JSON, missing checks and degraded overall stay a
 test('healthy infrastructure with failed send reports retry; results cache 10s and coalesce', async () => {
   const h = setup(); const [a, b] = await Promise.all([h.api.diagnose(), h.api.diagnose()]);
   assert.equal(a, b); assert.equal(a.layer, 'send'); assert.equal(h.calls.length, 2);
-  assert.equal(a.short, 'Reconnecting…');
+  assert.equal(a.short, 'Message not sent · retrying');
   assert.match(a.message, /do not confirm message delivery/);
   assert.doesNotMatch(a.message, /didn’t take the message/);
   await h.api.diagnose(); assert.equal(h.calls.length, 2);
