@@ -8,7 +8,7 @@ function boot(fetcher = () => ({pages:[]})) {
   const calls=[], events={}, replies=[], root={isConnected:true,innerHTML:'',classList:{add(){}},setAttribute(){},addEventListener(k,f){events[k]=f;},querySelector(s){return s === '.pg-frame' && this.innerHTML.includes('<iframe') ? frame : null;}};
   const frame={contentWindow:{postMessage:(...m)=>replies.push(m)}};
   const window={WosChat:{time:{stamp:()=> 'Bangkok time'},md:s=>`<p>${s}</p>`},confirm:()=>true,addEventListener(){},removeEventListener(){}};
-  const context=vm.createContext({window,location:{origin:'http://box',href:'http://box/wizard-os-home/'},AbortSignal,URL,console,MutationObserver:class {observe(){} disconnect(){}},document:{body:{}},fetch:async (url,options)=>{calls.push([url,options]); const d=await fetcher(url,options); return {ok:!d.status,status:d.status || 200,json:async()=>d.data || d};}});
+  const context=vm.createContext({window,location:{origin:'http://box',href:'http://box/wizard-os-home/'},AbortSignal,URL,console,TextEncoder,crypto:globalThis.crypto,document:{body:{}},fetch:async (url,options)=>{calls.push([url,options]); const d=await fetcher(url,options); return {ok:!d.status,status:d.status || 200,json:async()=>d.data || d};}});
   vm.runInContext(source,context);
   const click = attrs => events.click({target:{closest:s => s === '[data-pg]' && attrs.pg ? {dataset:{pg:attrs.pg}} : s === '[data-pg-open]' && attrs.open ? {dataset:{pgOpen:attrs.open}} : s === '[data-pg-version]' && attrs.version !== undefined ? {dataset:{pgVersion:attrs.version}} : null}});
   return {api:window.WosPages,window,root,frame,calls,replies,click,events};
@@ -59,9 +59,10 @@ test('Back peels edit → page → list and guards unsaved edits',async()=>{
  b.window.confirm=()=>false;assert.equal(c.back(),true);assert.match(b.root.innerHTML,/pg-editor/);
  b.window.confirm=()=>true;c.back();assert.match(b.root.innerHTML,/pg-frame/);c.back();assert.match(b.root.innerHTML,/data-pg-open/);assert.equal(c.back(),false);
 });
+const bridgeOf = root => /[?&]wizard-bridge=([0-9a-f]{32})"/.exec(root.innerHTML)?.[1];
 test('bridge ignores wrong origin/source, binds slug to host, rejects paths and replies only to page',async()=>{
  const b=boot((url,o)=>url==='/wizard/v1/pages'?{pages:[page]}:o.method==='PUT'?{version:'new-version'}:{text:'v1',version:'1'});
- await b.api.ready;const c=b.api.mount(b.root,{slug:'report'});await settle();const m={type:'wizard-page:save',id:'1',slug:'evil',file:'doc.md',text:'bridge',version:'1'};
+ await b.api.ready;const c=b.api.mount(b.root,{slug:'report'});await settle();const m={type:'wizard-page:save',id:'1',slug:'evil',file:'doc.md',text:'bridge',version:'1',bridge:bridgeOf(b.root)};
  c.receive({origin:'http://box',source:b.frame.contentWindow,data:m});c.receive({origin:'null',source:{},data:m});await settle();assert.equal(b.replies.length,0);
  c.receive({origin:'null',source:b.frame.contentWindow,data:{...m,file:'../secret'}});assert.equal(b.replies[0][0].ok,false);
  c.receive({origin:'null',source:b.frame.contentWindow,data:m});await settle();assert.equal(b.replies[1][0].ok,true);assert.equal(b.replies[1][0].version,'new-version');assert.equal(b.replies[1][1],'*');
@@ -82,4 +83,29 @@ test('nginx /pages/ pass-through preserves upstream sandbox CSP; QA forwards pag
  assert.match(nginx,/location \/ \{ proxy_pass \$wizard_api\$request_uri; include \/tmp\/wizard-proxy.conf;/);
  assert.doesNotMatch(nginx+proxy,/(?:proxy_hide_header|add_header)\s+(?:Content-Security-Policy|content-security-policy)/);
  assert.match(readFileSync(new URL('../tools/qa-origin.cjs',import.meta.url),'utf8'),/u.pathname.startsWith\('\/pages\/'\)/);
+});
+
+test('a document the frame navigated to (no nonce, or an old one) gets no bridge',async()=>{
+ const b=boot((url,o)=>url==='/wizard/v1/pages'?{pages:[page]}:o.method==='PUT'?{version:'v2'}:{text:'v1',version:'1'});
+ await b.api.ready;const c=b.api.mount(b.root,{slug:'report'});await settle();
+ const first=bridgeOf(b.root);assert.ok(first,'viewer src carries a per-open nonce');
+ const m={type:'wizard-page:save',id:'x',file:'doc.md',text:'from a foreign site',version:'1'};
+ for(const bridge of [undefined,'',first.replace(/./,'0')==first?'1'+first.slice(1):'0'+first.slice(1)]) c.receive({origin:'null',source:b.frame.contentWindow,data:{...m,bridge}});
+ await settle();assert.equal(b.replies.length,0);assert.ok(!b.calls.some(([,o])=>o?.method==='PUT'));
+ c.back();await settle();c.open('report');await settle();const second=bridgeOf(b.root);assert.ok(second&&second!==first,'reopening mints a new nonce');
+ c.receive({origin:'null',source:b.frame.contentWindow,data:{...m,bridge:first}});await settle();assert.equal(b.replies.length,0);
+ c.receive({origin:'null',source:b.frame.contentWindow,data:{...m,bridge:second}});await settle();assert.equal(b.replies[0][0].ok,true);
+});
+test('bridge save cap counts UTF-8 bytes, not UTF-16 units',async()=>{
+ const b=boot((url,o)=>url==='/wizard/v1/pages'?{pages:[page]}:o.method==='PUT'?{version:'v2'}:{text:'v1',version:'1'});
+ await b.api.ready;const c=b.api.mount(b.root,{slug:'report'});await settle();
+ const text='\u4e2d'.repeat(800*1024); assert.ok(text.length<2*1024*1024);
+ c.receive({origin:'null',source:b.frame.contentWindow,data:{type:'wizard-page:save',id:'big',file:'doc.md',text,version:'1',bridge:bridgeOf(b.root)}});await settle();
+ assert.equal(b.replies[0][0].error,'invalid_text');assert.ok(!b.calls.some(([,o])=>o?.method==='PUT'));
+});
+test('no document-wide MutationObserver; a detached viewer releases itself',async()=>{
+ assert.doesNotMatch(source,/MutationObserver/);
+ const b=boot(()=>({pages:[page]}));let removed=0;b.window.removeEventListener=()=>removed++;await b.api.ready;
+ const c=b.api.mount(b.root,{slug:'report'});await settle();b.root.isConnected=false;
+ c.receive({origin:'null',source:{},data:{}});assert.equal(removed,1);
 });

@@ -42,7 +42,7 @@ const outer=http.createServer(async(req,res)=>{
   writeFileSync(join(dir,'doc.md'),'# Version one\n\nThe original report.\n');
   if(!u.searchParams.has('docOnly'))writeFileSync(join(dir,'index.html'),`<!doctype html><meta charset="utf-8"><style>body{font:18px system-ui;padding:24px;background:#202039;color:#fff}button{font:inherit;padding:12px}</style><h1>Pages QA report</h1><p>Isolated, sandboxed page.</p><button id="feedback">Ask the owner to send feedback</button><script>
   window.results=[];addEventListener('message',e=>results.push(e.data));
-  document.querySelector('#feedback').onclick=()=>parent.postMessage({type:'wizard-page:feedback',id:'feedback-1',text:'Please improve the QA report.'},'*');
+  document.querySelector('#feedback').onclick=()=>parent.postMessage({type:'wizard-page:feedback',id:'feedback-1',bridge:new URLSearchParams(location.search).get('wizard-bridge'),text:'Please improve the QA report.'},'*');
   window.security={};try{localStorage.setItem('probe','x');security.storage='allowed'}catch(e){security.storage=e.name}
   fetch('/wizard/v1/sessions').then(async r=>{security.status=r.status;security.body=await r.text()}).catch(e=>security.fetchError=e.message);
   </script>`);

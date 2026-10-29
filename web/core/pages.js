@@ -36,9 +36,12 @@
       restore: (commit, file = 'doc.md') => request(base + '/restore', 'POST', {commit, file}),
     };
   }
-  const mounts = new WeakMap();
+  const mounts = new WeakMap(), live = new Set();
+  const BRIDGE_PARAM = 'wizard-bridge';
+  const bytes = s => new TextEncoder().encode(s).length;
+  const nonce = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
   function mount(root, {slug = '', close = () => {}, changed = () => {}} = {}) {
-    let page = null, view = 'list', doc = null, draft = '', conflict = null, history = [], selected = null, busy = false, notice = '', error = '', frame = null;
+    let page = null, view = 'list', doc = null, draft = '', conflict = null, history = [], selected = null, busy = false, notice = '', error = '', frame = null, bridge = '';
     const alive = () => root.isConnected;
     const dirty = () => view === 'edit' && draft !== doc?.text;
     const safeLeave = () => !dirty() || window.confirm('Discard unsaved changes?');
@@ -49,7 +52,7 @@
       const status = `<div class="pg-status" role="status">${esc(busy ? 'Working…' : error || notice)}</div>`;
       let body = '';
       if (view === 'list') body = `<div class="pg-list">${listHtml(pages)}</div>`;
-      else if (view === 'page') body = `<nav class="pg-actions">${page.has_doc ? '<button data-pg="edit">Edit</button>' : ''}<button data-pg="history">History</button><button data-pg="feedback">Feedback</button></nav>${page.has_index ? `<iframe class="pg-frame" title="${esc(page.title)}" sandbox="${SANDBOX}" src="/pages/${encodeURIComponent(page.slug)}/"></iframe>` : `<article class="pg-doc">${window.WosChat.md(doc?.text || '')}</article>`}`;
+      else if (view === 'page') body = `<nav class="pg-actions">${page.has_doc ? '<button data-pg="edit">Edit</button>' : ''}<button data-pg="history">History</button><button data-pg="feedback">Feedback</button></nav>${page.has_index ? `<iframe class="pg-frame" title="${esc(page.title)}" sandbox="${SANDBOX}" src="/pages/${encodeURIComponent(page.slug)}/?${BRIDGE_PARAM}=${bridge}"></iframe>` : `<article class="pg-doc">${window.WosChat.md(doc?.text || '')}</article>`}`;
       else if (view === 'edit') body = `<label class="pg-label" for="pg-edit-${esc(page.slug)}">doc.md</label><textarea id="pg-edit-${esc(page.slug)}" class="pg-editor" aria-label="Edit doc.md" spellcheck="false">${esc(draft)}</textarea><nav class="pg-actions"><button data-pg="save" ${busy ? 'disabled' : ''}>Save</button></nav>${conflict ? `<section class="pg-conflict"><h3>A newer version is on file</h3><p>Both edits are kept. Choose which text to save.</p><h4>Yours</h4><pre>${esc(draft)}</pre><h4>Theirs</h4><pre>${esc(conflict.text)}</pre><button data-pg="mine">Keep mine</button><button data-pg="theirs">Use theirs</button></section>` : ''}`;
       else if (view === 'history') body = `<div class="pg-list">${history.map((h,i) => `<button class="pg-row" data-pg-version="${i}"><b>${esc(h.message)}</b><small>${esc(h.author)} · ${esc(stamp(h.date))}${h.refused ? ' · conflicting edit kept' : ''}</small></button>`).join('') || '<p>No history yet.</p>'}</div>${selected ? `<div class="pg-restore"><p>Restore ${esc(selected.message)} as a new version?</p><button data-pg="restore">Restore</button></div>` : ''}`;
       root.innerHTML = head + status + body;
@@ -67,7 +70,7 @@
       if (!safeLeave()) return;
       if (!available && !await discover()) { error = 'Pages are unavailable'; paint(); return; }
       const p = pages.find(p => p.slug === s); if (!p) { error = 'Page not found'; paint(); return; }
-      page = p; doc = p.has_doc ? await client(s).read('doc.md') : null; draft = doc?.text || ''; conflict = null; view = 'page';
+      page = p; bridge = nonce(); doc = p.has_doc ? await client(s).read('doc.md') : null; draft = doc?.text || ''; conflict = null; view = 'page';
     }
     async function save(version = doc?.version) {
       const saving = draft;
@@ -85,7 +88,7 @@
       if (view === 'edit') { if (!safeLeave()) return true; view = 'page'; conflict = null; draft = doc?.text || ''; }
       else if (view === 'history' && selected) selected = null;
       else if (view === 'history') view = 'page';
-      else if (view === 'page') { view = 'list'; page = null; }
+      else if (view === 'page') { view = 'list'; page = null; bridge = ''; }
       else return false;
       error = ''; notice = ''; paint(); return true;
     }
@@ -130,12 +133,15 @@
     });
     // A single source-bound listener; no app-client services or shell storage are exposed.
     function receive(e) {
-      if (!alive() || !page || !frame || e.source !== frame.contentWindow || e.origin !== 'null') return;
+      if (!alive()) { controller.dispose(); return; }
+      if (!page || !frame || e.source !== frame.contentWindow || e.origin !== 'null') return;
       const m = e.data;
-      if (!m || typeof m !== 'object' || !['wizard-page:feedback','wizard-page:save'].includes(m.type) || !['string','number'].includes(typeof m.id) || String(m.id).length > 200) return;
+      // The frame can navigate itself anywhere; only the document we loaded knows this open's nonce.
+      if (!m || typeof m !== 'object' || !bridge || m.bridge !== bridge) return;
+      if (!['wizard-page:feedback','wizard-page:save'].includes(m.type) || !['string','number'].includes(typeof m.id) || String(m.id).length > 200) return;
       const source = e.source;
       const reply = (ok, error, version) => source.postMessage({type:'wizard-page:result', id:m.id, ok, ...(version ? {version} : {}), ...(error ? {error} : {})}, '*');
-      if (typeof m.text !== 'string' || m.text.length > 2 * 1024 * 1024) { reply(false,'invalid_text'); return; }
+      if (typeof m.text !== 'string' || bytes(m.text) > 2 * 1024 * 1024) { reply(false,'invalid_text'); return; }
       if (m.type === 'wizard-page:feedback') { if (m.text.length > 16000) reply(false,'invalid_text'); else feedback(m.text, reply); return; }
       if (!fileValid(m.file) || !(m.version === null || typeof m.version === 'string')) { reply(false,'invalid_file_or_version'); return; }
       if (busy || dirty()) { reply(false,'editor_busy'); return; }
@@ -146,16 +152,16 @@
         reply(true, null, d.version);
       }, e => reply(false,e.status === 409 ? 'stale_version' : 'save_failed')).finally(() => { busy = false; });
     }
-    const controller = {back, open:s => task(() => open(s)), dirty, receive, dispose:() => { window.removeEventListener('message', receive); if (pending?.root === root) pending.cancel(); }};
-    mounts.set(root, controller); window.addEventListener('message', receive);
-    // Closing a shell window removes its root; release listeners and pending consent.
-    const observer = new MutationObserver(() => { if (!alive()) { controller.dispose(); observer.disconnect(); } });
-    observer.observe(document.body,{childList:true,subtree:true});
+    const controller = {back, open:s => task(() => open(s)), dirty, receive, alive, dispose:() => { window.removeEventListener('message', receive); live.delete(controller); if (pending?.root === root) pending.cancel(); }};
+    // Closing a shell window removes its root. Detached viewers are released on their next message and on
+    // every new mount, so no document-wide observer runs while Pages is open.
+    for (const c of [...live]) if (!c.alive()) c.dispose();
+    live.add(controller); mounts.set(root, controller); window.addEventListener('message', receive);
     paint(); if (slug) controller.open(slug); else void task(discover);
     return controller;
   }
   const ready = discover();
-  window.WosPages = {SANDBOX, slugValid, fileValid, sorted, listHtml, client, request, mount, ready, discover,
+  window.WosPages = {SANDBOX, BRIDGE_PARAM, slugValid, fileValid, sorted, listHtml, client, request, mount, ready, discover,
     get available() {return available;}, onChange:fn => listeners.add(fn),
     back:root => mounts.get(root)?.back() || false,
     open:(root,slug) => mounts.get(root)?.open(slug),

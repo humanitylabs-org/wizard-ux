@@ -60,7 +60,7 @@ let passed=0;const ok=(v,s)=>{assert.ok(v,s);console.log('PASS '+s);passed++;};
   await p.locator('#spoof').evaluate(e=>e.remove());
   await frame().locator('#feedback').click();await root.locator('.pg-confirm').waitFor();
   await p.screenshot({path:path.join(out,shell+'-confirm.png')});
-  await frame().evaluate(()=>parent.postMessage({type:'wizard-page:feedback',id:'second',text:'Second request'},'*'));
+  await frame().evaluate(()=>parent.postMessage({type:'wizard-page:feedback',id:'second',bridge:new URLSearchParams(location.search).get('wizard-bridge'),text:'Second request'},'*'));
   await p.waitForTimeout(80);ok(await root.locator('.pg-confirm').count()===1,'['+shell+'] one pending feedback consent at a time');
   ok((await root.locator('.pg-confirm').innerText()).includes('wizard_1_pagesqa'),'['+shell+'] feedback names destination thread before sending');
   ok((await p.request.get(origin+'/__qa/records').then(r=>r.json())).filter(r=>r.path==='/wizard/hermes/v1/runs').length===runsBefore,'['+shell+'] unconfirmed feedback never sends');
@@ -74,7 +74,7 @@ let passed=0;const ok=(v,s)=>{assert.ok(v,s);console.log('PASS '+s);passed++;};
   fs.writeFileSync(path.join(out,shell+'-feedback.json'),JSON.stringify({ingress:run,upstream:delivered},null,2));
   // Bridge save: opaque child asks shell to save only a relative page file.
   const current=await p.request.get(origin+'/wizard/v1/pages/'+slug+'/doc.md').then(r=>r.json());
-  await frame().evaluate(({version})=>parent.postMessage({type:'wizard-page:save',id:'bridge-save',slug:'not-the-host-slug',file:'doc.md',text:'# Bridge saved',version},'*'),current);
+  await frame().evaluate(({version})=>parent.postMessage({type:'wizard-page:save',id:'bridge-save',bridge:new URLSearchParams(location.search).get('wizard-bridge'),slug:'not-the-host-slug',file:'doc.md',text:'# Bridge saved',version},'*'),current);
   await frame().waitForFunction(()=>results.some(r=>r.id==='bridge-save'));
   ok(await frame().evaluate(()=>results.find(r=>r.id==='bridge-save').ok),'['+shell+'] source-bound bridge save acknowledged');
   ok((await p.request.get(origin+'/wizard/v1/pages/'+slug+'/doc.md').then(r=>r.json())).text==='# Bridge saved','['+shell+'] bridge save read back at host slug');

@@ -16,16 +16,19 @@ The owner API is `/wizard/v1/pages`. A page cannot fetch it directly: Agent Serv
 
 ## Messages
 
-A page sends to its parent (the target origin is the shell's known origin, or `*`):
+The viewer loads `/pages/<slug>/?wizard-bridge=<nonce>`, with a fresh random nonce every time a page is opened. Every message must carry it as `bridge`. A page sends to its parent (the target origin is the shell's known origin, or `*`):
 
 ```js
-parent.postMessage({type: 'wizard-page:feedback', id: 'feedback-1', text: 'Please update the chart.'}, '*');
-parent.postMessage({type: 'wizard-page:save', id: 'save-1', file: 'doc.md', text: '# Revised', version: 'sha256-from-editor'}, '*');
+const bridge = new URLSearchParams(location.search).get('wizard-bridge');
+parent.postMessage({type: 'wizard-page:feedback', id: 'feedback-1', bridge, text: 'Please update the chart.'}, '*');
+parent.postMessage({type: 'wizard-page:save', id: 'save-1', bridge, file: 'doc.md', text: '# Revised', version: 'version-from-read'}, '*');
 ```
 
-The listener requires **both** `event.source === thisViewerIframe.contentWindow` and `event.origin === 'null'`. Wrong windows, other opaque frames, same-origin windows and detached viewers are ignored. The shell obtains the slug from its own viewer state; a message cannot choose a slug, thread, agent or API URL. IDs are bounded strings/numbers. Feedback is capped at 16,000 characters, saves at 2 MiB; API byte limits still apply.
+The frame can navigate itself (a link, `location = ...`), and the new document is still an opaque-origin child of the same iframe. The nonce is what tells them apart: only the document the shell loaded sees it, page responses send `Referrer-Policy: no-referrer`, and a message without the current nonce is ignored without a reply. A page that navigates to another file in its folder loses the bridge unless it carries the query along.
 
-Save paths must be relative plain segments, at most eight levels. Reject empty segments, leading `/`, any `..`, backslash, NUL, dotfiles, encoded path syntax and any `page.json` segment. `version` is the SHA-256 version the page started editing, or `null` for a new file. Saves use the same optimistic PUT as the owner editor. An open dirty editor or in-flight write returns `editor_busy`; a stale write returns `stale_version`, never a silent overwrite.
+The listener requires `event.source === thisViewerIframe.contentWindow`, `event.origin === 'null'` **and** the current nonce. Wrong windows, other opaque frames, same-origin windows and detached viewers are ignored. The shell obtains the slug from its own viewer state; a message cannot choose a slug, thread, agent or API URL. IDs are bounded strings/numbers. Feedback is capped at 16,000 characters, saves at 2 MiB of UTF-8; API byte limits still apply.
+
+Save paths must be relative plain segments, at most eight levels. Reject empty segments, leading `/`, any `..`, backslash, NUL, dotfiles, encoded path syntax and any `page.json` segment. `version` is the version the page read (the Agent Service's blob id), or `null` for a new file. Saves use the same optimistic PUT as the owner editor. An open dirty editor or in-flight write returns `editor_busy`; a stale write returns `stale_version`, never a silent overwrite.
 
 Replies go **only to the sending frame**:
 
