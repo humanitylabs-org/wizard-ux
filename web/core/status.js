@@ -154,7 +154,7 @@
         // also says what still happens to what you write.
         const short = net === 'offline' || diagnosis?.layer === 'device-offline' ? 'Offline · messages send when you’re back'
           : String(window.WizReach?.label?.('read', { diagnosis }) || diagnosis?.short || 'Reconnecting…').replace(/ · retrying$/, '');
-        parts.push(`<div class="wx-banner net ${kind}" role="status" title="${esc(full)}" data-wxnet="${kind}"><button type="button" class="wx-s" data-wxoffopen aria-label="${esc(short)}. Show connection checks"><span class="wx-dot" aria-hidden="true"></span>${esc(short)}</button></div>`);
+        parts.push(`<div class="wx-banner net ${kind}" role="status" title="${esc(full)}" data-wxnet="${kind}"><span class="wx-row"><span class="wx-spin" aria-hidden="true"></span><button type="button" class="wx-s" data-wxoffopen aria-label="${esc(short)}. Show connection checks">${esc(short)}</button></span></div>`);
       }
     }
     else if (net === 'restored' && !offHappy) parts.push(`<div class="wx-banner net restored" role="status" data-wxnet="restored"><span class="wx-i">✓</span><span class="wx-m">Back online</span></div>`);
@@ -203,24 +203,27 @@
     if (c.internet?.state === 'slow' || c.tailscale?.state === 'slow') return 'The connection is working, just slow. Things will take longer to load.';
     return '';
   }
+  // Built only from the shared kit (kit/controls.css): .wz-card panel, .wz-list/.wz-row rows, .wz-pill states,
+  // .wz-actions/.wz-button, .wz-icon-button. The skin colours and shapes all of it; polish.css only positions it.
+  const PILL = { ok: 'ok', slow: 'warn', bad: 'error', wait: 'off', skip: 'off', run: 'off' };
   function renderOffline() {
     const el = offEl(); if (!offOpen) { el.hidden = true; return; }
     const c = offChecks, happy = !!offHappy;
     const row = (key, label) => {
-      const r = happy ? { state: 'ok', detail: 'Working' } : offBusy && !c ? { state: 'run', detail: 'Checking…' } : c?.[key] || { state: 'run', detail: 'Checking…' };
+      const r = happy ? { state: 'ok', detail: 'Working' } : c?.[key] || { state: 'run', detail: 'Checking…' };
       const name = key === 'tailscale' && c && !c.tailnet ? 'Your Wizard’s network' : label;
-      return `<li class="wx-ck ${r.state}" data-wxck="${key}"><i aria-hidden="true"></i><span><b>${esc(name)}</b><small>${esc(r.detail)}</small></span><em class="wx-vh">${STATE_WORD[r.state] || ''}</em></li>`;
+      return `<li class="wz-row wx-ck ${r.state}" data-wxck="${key}"><span class="wz-main"><b>${esc(name)}</b><small>${esc(r.detail)}</small></span><span class="wz-pill ${PILL[r.state] || 'off'}">${STATE_WORD[r.state] || ''}</span></li>`;
     };
     const offlineDevice = navigator.onLine === false || c?.internet?.state === 'bad';
     const title = happy ? 'Back online' : offlineDevice ? 'You’re offline' : 'Can’t reach your Wizard';
     const fix = happy ? '' : fixFor(c);
     const canHelp = !happy && c && c.tailscale?.state !== 'bad' && c.internet?.state !== 'bad' && c.tailscale?.state !== 'wait';
-    el.innerHTML = `<div class="wx-off-card${happy ? ' happy' : ''}"><button type="button" class="wx-off-x" data-wxoffx aria-label="Hide. Keep using saved chats">×</button>`
-      + `<b id="wxOffT">${esc(title)}</b>`
+    el.innerHTML = `<div class="wz-card wx-off-card"><button type="button" class="wz-icon-button ghost wx-off-x" data-wxoffx aria-label="Hide. Keep using saved chats">×</button>`
+      + `<h2 id="wxOffT">${esc(title)}</h2>`
       + `<p class="wx-off-sub">${happy ? 'Everything is connected again.' : 'Chats saved on this device still open. New messages wait here and send by themselves when you’re back.'}</p>`
-      + `<ol class="wx-cks">${ROWS.map(([k, l]) => row(k, l)).join('')}</ol>`
-      + (fix ? `<p class="wx-off-fix" role="status">${esc(fix)}</p>` : '')
-      + (happy ? '' : `<div class="wx-off-acts"><button type="button" class="wx-off-go" data-wxoffcheck${offBusy ? ' disabled' : ''}>${offBusy ? 'Checking…' : 'Check again'}</button>${canHelp ? '<button type="button" class="wx-off-help" data-wxoffhelp>More help</button>' : ''}</div>`)
+      + `<ul class="wz-list">${ROWS.map(([k, l]) => row(k, l)).join('')}</ul>`
+      + (fix ? `<p class="wx-off-sub" role="status">${esc(fix)}</p>` : '')
+      + (happy ? '' : `<div class="wz-actions"><button type="button" class="wz-button" data-wxoffcheck${offBusy ? ' disabled' : ''}>${offBusy ? 'Checking…' : 'Check again'}</button>${canHelp ? '<button type="button" class="wz-button secondary" data-wxoffhelp>More help</button>' : ''}</div>`)
       + `</div>`;
     el.hidden = false;
   }
