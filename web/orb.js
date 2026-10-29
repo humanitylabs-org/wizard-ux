@@ -47,7 +47,8 @@ void main(){
     float f = fbm(s*2.2 + warp*1.6 - vec2(t*.05));
     float arms = pow(.5+.5*sin(qa*2. - log(qr+.04)*4.2 + t*spin*1.6 + warp*2.), 2.5);
     float dust = smoothstep(.55, .95, fbm(s*7. + t*.2)) * .8;
-    float stars = step(.985, h(floor(s*60.)))*smoothstep(.9,.2,qr);
+    // GLSL leaves reversed smoothstep edges undefined. Invert ordered ramps instead.
+    float stars = step(.985, h(floor(s*60.)))*(1.-smoothstep(.2,.9,qr));
     float c0 = exp(-qr*qr*(9.0 - 3.0*energy))*core;
     vec3 inner = cA;
     inner += cB * pow(f, 1.6) * (1.1 + .6*energy);
@@ -60,11 +61,11 @@ void main(){
     vec3 L = normalize(vec3(-.55,.65,.75));
     float spec = pow(max(dot(nrm, normalize(L+vec3(0,0,1))),0.), 70.)*1.35;
     float spec2 = pow(max(dot(nrm, normalize(vec3(.6,-.55,.6)+vec3(0,0,1))),0.), 26.)*.18;
-    float arc = smoothstep(.035, 0., abs(length(p-vec2(-.18,.24)) - .62)) * smoothstep(-.1,.5,p.y-p.x*.3) * .22;
+    float arc = (1.-smoothstep(0., .035, abs(length(p-vec2(-.18,.24)) - .62))) * smoothstep(-.1,.5,p.y-p.x*.3) * .22;
     inner += spec + spec2*cC + arc;
     inner += cC * pow(max(-p.y,0.), 3.) * .45 * z;
-    float edge = smoothstep(Rr, Rr-.018, r);
-    float rim = smoothstep(.04,0.,abs(r-Rr+.012))*.55;
+    float edge = 1.-smoothstep(Rr-.018, Rr, r);
+    float rim = (1.-smoothstep(0.,.04,abs(r-Rr+.012)))*.55;
     col = (inner + mix(cB,cC,.5)*rim) * edge; a = edge;
   }
   // audio ring
@@ -83,10 +84,7 @@ void main(){
   gl_FragColor = vec4(col, alpha);
 }`;
 
-  let gl = null, prog = null, U = {};
-  try {
-    gl = canvas.getContext('webgl', { premultipliedAlpha: true, alpha: true, antialias: true });
-  } catch (e) { gl = null; }
+  let gl = null, prog = null, U = {}, ok = false;
 
   const cur = JSON.parse(JSON.stringify(MODES.idle));
   let target = MODES.idle, level = 0, levelS = 0, press = 0, pressT = 0, mode = 'idle';
@@ -134,7 +132,7 @@ void main(){
     return LIVE[mode] || now < settleUntil || Math.abs(levelS - level) > .002 || Math.abs(press - pressT) > .002;
   }
   function schedule(now) {
-    if (raf || timer || hidden()) return;
+    if (raf || timer || hidden() || !ok) return;
     if (busy(now)) raf = requestAnimationFrame(frame);
     // The next rAF lands up to one vsync after the timer, so aim a little early to keep ~IDLE_FPS.
     else if (restingMotion) timer = setTimeout(() => { timer = 0; if (!hidden()) raf = requestAnimationFrame(frame); },
@@ -173,15 +171,28 @@ void main(){
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { last = performance.now(); wake(); } });
   window.addEventListener('resize', wake);
 
-  let ok = false;
-  if (gl) { try { init(); ok = true; } catch (e) { console.warn('orb shader', e); } }
-  if (!ok) { canvas.hidden = true; fallback.hidden = false; }
-  // A lost WebGL context leaves a blank (sometimes white) canvas on Android: show the PNG orb instead.
-  canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); gl = null; canvas.hidden = true; fallback.hidden = false; });
-  wake();
+  function showFallback() {
+    ok = false; gl = null; prog = null; U = {};
+    cancelAnimationFrame(raf); raf = 0; clearTimeout(timer); timer = 0;
+    canvas.hidden = true; fallback.hidden = false;
+  }
+  function startRenderer() {
+    try {
+      gl = canvas.getContext('webgl', { premultipliedAlpha: true, alpha: true, antialias: true });
+      if (!gl) { showFallback(); return; }
+      init(); ok = true;
+      canvas.hidden = false; fallback.hidden = true;
+      last = performance.now(); wake();
+    } catch (e) { console.warn('orb shader', e); showFallback(); }
+  }
+  // Rebuild the existing renderer after a GPU reset, retaining voice state and host sleep policy.
+  // Merely allowing restoration leaves all old programs/buffers/uniform locations invalid.
+  canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); showFallback(); });
+  canvas.addEventListener('webglcontextrestored', startRenderer);
+  startRenderer();
 
   const api = {
-    webgl: ok,
+    get webgl() { return ok; },
     setMode(m) {
       mode = m; target = MODES[m] || MODES.idle;
       fallback.src = (m === 'idle' || m === 'type') ? 'robert-thread-orb.png' : 'robert-listening-galaxy.png';
