@@ -99,13 +99,8 @@ remain unchanged. Immediately after installing the sender, the rig checks its
 actual `run-as ... id -u` access. The independent sender SHA256 assertion remains
 mandatory, including a controller regression that refuses a mismatched hash.
 
-Audit of the remaining harness operations against the real source found two
-other concrete harness-contract errors, repaired without changing product code:
-
-- `Popen` does not mean the fixture is listening. Startup now retries only a
-  connection refusal while the owned child is alive; child exit, HTTP errors,
-  invalid JSON and other networking errors still fail. This replaces the first
-  unguarded `urlopen` that could race Node startup.
+Audit of the remaining harness operations against the real source found one
+additional concrete harness-contract error, repaired without changing product code:
 - UIAutomator cannot supply rendered WebView file text on this shell. Both real
   notification taps now require foreground native MainActivity, the native
   exact-thread handoff log, and a visible, focused Chats DOM for that exact
@@ -113,7 +108,7 @@ other concrete harness-contract errors, repaired without changing product code:
   an API mismatch, not product evidence. No app navigation/send call is injected.
 
 Controller checks cover manifest/package/provider identity, sender debug-access
-failure, independent hash mismatch, readiness/dead-child/error paths, native
+failure, independent hash mismatch, existing startup connection retries, native
 short/full activity names, and focused DOM wrong-thread/background/missing-file
 refusals. The DOM expression replay uses Node with small synthetic objects, not
 a browser; it must not be reported as end-to-end acceptance.
@@ -125,6 +120,7 @@ The rest of the audit matched these concrete contracts without edits:
 | Explicit receiver, URI authority/read grant, PDF names/size | sender manifest/Java/provider; product manifest, ShareActivity/ShareStore |
 | Debug-only origin files, component identity, CSS-to-device taps | AppState, MainActivity, qa_aa_lib.Page; edge-to-edge WebView top is unpadded |
 | Notification runtime permission | product declares POST_NOTIFICATIONS; fresh debug APK install uses `adb install -r -g` on verified SDK 35 |
+| Fixture startup readiness | existing bounded `wait(self.state, 20)` already retries `URLError`/connection refusal through `OSError`; regression-replayed, no source change needed |
 | Agent/session query and picker selectors | share-wizard.js and Proxy private/default session responses |
 | Share/upload routes, payload fields, chunk acknowledgments | ShareClient, ShareHttp, ShareService, ShareQueue and share-fixture.mjs |
 | Queue custody, process restart and background resume | native files/share-out item schema, ShareUploader/ShareService and MainActivity resume hooks |

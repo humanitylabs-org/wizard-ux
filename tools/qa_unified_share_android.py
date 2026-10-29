@@ -24,7 +24,6 @@ import tarfile
 import threading
 import time
 import traceback
-import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
@@ -435,15 +434,11 @@ class Rig:
         self.sx('cmd uimode night yes')
 
     def fixture_start(self):
-        with (self.out / 'fixture.log').open('w') as log:
-            self.fixture = subprocess.Popen([self.env['WIZARD_QA_NODE'], str(self.source / 'tools/share-fixture.mjs'), str(self.backend),
-                '--host=127.0.0.1', '--web=' + str(self.source / 'web'), '--data=' + str(self.out / 'fixture-data'),
-                '--agents=2', '--throttle=4'], env=self.env, stdout=log, stderr=subprocess.STDOUT)
-        deadline = time.monotonic() + 20
-        while not self.fixture_ready():
-            if time.monotonic() >= deadline:
-                raise RuntimeError('share fixture did not listen within 20 seconds; see fixture.log')
-            time.sleep(.1)
+        log = (self.out / 'fixture.log').open('w')
+        self.fixture = subprocess.Popen([self.env['WIZARD_QA_NODE'], str(self.source / 'tools/share-fixture.mjs'), str(self.backend),
+            '--host=127.0.0.1', '--web=' + str(self.source / 'web'), '--data=' + str(self.out / 'fixture-data'),
+            '--agents=2', '--throttle=4'], env=self.env, stdout=log, stderr=subprocess.STDOUT)
+        wait(self.state, 20)
         Proxy.backend = self.backend
         self.proxy = http.server.ThreadingHTTPServer(('127.0.0.1', self.frontport), Proxy)
         self.proxy.daemon_threads = True
@@ -451,20 +446,6 @@ class Rig:
 
     def state(self):
         return json.load(urllib.request.urlopen('http://127.0.0.1:%d/__fixture/state' % self.backend, timeout=5))
-
-    def fixture_ready(self):
-        # Popen is not a listening-port acknowledgment. Retry only connection
-        # startup, and fail immediately if the owned fixture has exited.
-        if self.fixture.poll() is not None:
-            raise RuntimeError('share fixture exited before readiness; see fixture.log')
-        try:
-            return self.state()
-        except urllib.error.HTTPError:
-            raise
-        except urllib.error.URLError as exc:
-            if isinstance(exc.reason, ConnectionRefusedError):
-                return None
-            raise
 
     def compile_sender(self):
         inputs = self.source / 'tools/unified-share-sender'

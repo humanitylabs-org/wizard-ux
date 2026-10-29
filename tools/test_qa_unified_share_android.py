@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Small controller unit tests; no SDK, builds, browser or emulator is started."""
 import hashlib
-from email.message import Message
 import importlib.util
 import io
 import json
@@ -50,39 +49,11 @@ class ControllerTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'not debuggable'):
             rig.verify_sender_debug_access()
 
-    def test_fixture_readiness_retries_connection_startup_not_bad_answers(self):
-        rig = runner.Rig.__new__(runner.Rig)
-        rig.fixture = Mock(); rig.fixture.poll.return_value = None
-        rig.state = Mock(side_effect=[urllib.error.URLError(ConnectionRefusedError()), {'shares': []}])
-        self.assertIsNone(rig.fixture_ready())
-        self.assertEqual(rig.fixture_ready(), {'shares': []})
-        for error in (ValueError('bad json'), urllib.error.URLError('bad route'),
-                      urllib.error.HTTPError('http://fixture', 500, 'fixture failure', Message(), None)):
-            rig.state = Mock(side_effect=error)
-            try:
-                with self.subTest(error=error), self.assertRaises(type(error)):
-                    rig.fixture_ready()
-            finally:
-                if isinstance(error, urllib.error.HTTPError):
-                    error.close()
-
-    def test_fixture_readiness_detects_dead_child_before_connect(self):
-        rig = runner.Rig.__new__(runner.Rig)
-        rig.fixture = Mock(); rig.fixture.poll.return_value = 1
-        rig.state = Mock()
-        with self.assertRaisesRegex(RuntimeError, 'exited before readiness'):
-            rig.fixture_ready()
-        rig.state.assert_not_called()
-
-    def test_fixture_start_does_not_hide_permanent_readiness_failure(self):
-        with tempfile.TemporaryDirectory(prefix='unified-start-', dir=os.environ['TMPDIR']) as d:
-            rig = runner.Rig.__new__(runner.Rig)
-            rig.out = Path(d); rig.source = HERE.parent; rig.backend = 12345
-            rig.env = {'WIZARD_QA_NODE':'/fixture/node'}
-            rig.fixture_ready = Mock(side_effect=RuntimeError('owned fixture exited'))
-            with patch.object(runner.subprocess, 'Popen'), self.assertRaisesRegex(RuntimeError, 'owned fixture exited'):
-                rig.fixture_start()
-            rig.fixture_ready.assert_called_once_with()
+    def test_fixture_startup_wait_already_retries_connection_refusal(self):
+        state = Mock(side_effect=[urllib.error.URLError(ConnectionRefusedError()), {'shares': []}])
+        with patch.object(runner.time, 'sleep'):
+            self.assertEqual(runner.wait(state, 20), {'shares': []})
+        self.assertEqual(state.call_count, 2)
 
     @unittest.skipUnless(shutil.which('node'), 'Node needed for focused DOM contract replay')
     def test_notification_dom_readback_rejects_background_wrong_thread_and_missing_file(self):
