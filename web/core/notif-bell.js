@@ -62,20 +62,27 @@
       const r = await fetch('/notifications/api/mark', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, ...marks }) });
       ok = r.ok;
     } catch (e) {}
-    await refresh(); await loadItems();
+    await refresh(true); await loadItems();
     return ok;
   }
-  async function refresh() {
-    loadItems();
+  // At most one count read every 10 s (60 s after a failure): a burst of registry events must
+  // never become a request storm against the Notifications app (26 Oct 2026: ~50 req/s).
+  // An owner action (mark) forces a read; one landing during an in-flight read reruns once right after it.
+  let inflight = false, nextAt = 0, again = false;
+  async function refresh(force) {
     if (!installed()) return;
+    if (inflight) { if (force === true) again = true; return; }
+    if (force !== true && Date.now() < nextAt) return;
+    inflight = true; nextAt = Date.now() + 10000;
+    loadItems();
     try {
       const r = await fetch('/notifications/api/count', { cache: 'no-store', credentials: 'same-origin' });
-      if (!r.ok) return;
+      if (!r.ok) { nextAt = Date.now() + 60000; return; }
       const d = await r.json();
       const ch = d.unread !== S.unread || d.needs !== S.needs;
       Object.assign(S, { unread: d.unread | 0, needs: d.needs | 0, ok: true, at: Date.now() });
       if (ch) { paint(); window.dispatchEvent(new CustomEvent('wizard:notifications', { detail: { ...S } })); }
-    } catch (e) {}
+    } catch (e) { nextAt = Date.now() + 60000; } finally { inflight = false; if (again) { again = false; refresh(true); } }
   }
   // The Notifications window tells us its count as soon as something is marked read.
   addEventListener('message', e => {
