@@ -44,17 +44,14 @@ public final class BackupScheduler {
     public static void cancel(Context c) { WorkManager.getInstance(c).cancelAllWorkByTag(TAG); }
     public static boolean networkAllowed(Context c,boolean wifi) {
         ConnectivityManager cm=c.getSystemService(ConnectivityManager.class);
-        NetworkCapabilities active=cm.getNetworkCapabilities(cm.getActiveNetwork());
-        if(active==null || !active.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return false;
-        if(!wifi) return true;
-        if(!active.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) return false;
-        if(active.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return true;
-        // A tailnet VPN can be the active transport; require an actual unmetered Wi-Fi underlay.
-        if(active.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) for(Network n:cm.getAllNetworks()) {
-            NetworkCapabilities nc=cm.getNetworkCapabilities(n);
-            if(nc!=null && nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) && nc.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && nc.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) return true;
-        }
-        return false;
+        java.util.List<BackupPolicy.Net> all=new java.util.ArrayList<>();
+        for(Network n:cm.getAllNetworks()) all.add(net(cm.getNetworkCapabilities(n)));
+        return BackupPolicy.networkAllowed(net(cm.getNetworkCapabilities(cm.getActiveNetwork())),all,wifi);
+    }
+    private static BackupPolicy.Net net(NetworkCapabilities nc) {
+        if(nc==null) return null;
+        return new BackupPolicy.Net(nc.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),nc.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
+                nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI),nc.hasTransport(NetworkCapabilities.TRANSPORT_VPN));
     }
     /** Plugged in counts: phones at 100% or in battery-protection mode report "not charging" while on power. */
     public static boolean charging(Context c) {
