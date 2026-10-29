@@ -263,14 +263,7 @@ export default function setup(api) {
     const units = [['plan', 'Plan limits'], ['credit', 'Prepaid credit']].filter(([u]) => live.some(s => s.unit === u));
     aiRow.replaceChildren(h('div', { cls: 'mh-meter-head' }, gaugeEl(g, true),
         h('span', { cls: 'mh-meter-what' }, h('b', { text: g.money ? `${g.money} left` : `${g.left}% left` }), h('small', { text: `(${g.n > 1 ? 'combines ' : ''}${g.names.length > 2 ? g.names.slice(0, -1).join(', ') + ' and ' + g.names.at(-1) : g.names.join(' and ')}${g.custom ? '' : g.def ? ', your default AI' : ''})` }))),
-      h('button', { type: 'button', cls: 'mh-meter-pick', data: { toggle: 'mp' }, 'aria-expanded': String(pick) }, 'Choose what the meter shows'),
-      pick ? h('div', { cls: 'mh-meter-list' },
-        ...units.map(([u, label]) => h('div', { cls: 'mh-meter-grp' },
-          h('div', { cls: 'mh-meter-gh' }, h('b', { text: label }), h('button', { type: 'button', data: { meterAll: u } }, 'All')),
-          live.filter(s => s.unit === u).map(s => h('label', { cls: 'mh-meter-opt' },
-            h('input', { type: 'checkbox', checked: on.has(s.id), data: { meterId: s.id } }), h('span', { text: subName(s, all) }), h('small', { text: s.money ? `${s.money} left` : `${s.left ?? 0}% left` }))))),
-        units.length > 1 ? h('small', { cls: 'mh-meter-note', text: 'Plan limits and prepaid credit are measured differently, so the meter shows one kind at a time.' }) : null,
-        S.meter ? h('button', { type: 'button', cls: 'mh-meter-reset', data: { meterAll: 'default' } }, 'Back to your default') : null) : '');
+      S.meter ? h('button', { type: 'button', cls: 'mh-meter-reset', data: { meterAll: 'default' } }, 'Back to your default') : '');
   }
   // Every account, grouped by service (the gauge's own first): nickname, what is left, Sign out; one Sign in at the end.
   function renderAIList() {
@@ -285,7 +278,10 @@ export default function setup(api) {
       h('div', { cls: 'mh-ai-head' }, h('b', { text: g.name }), g.kind === want ? h('span', { cls: 'mh-ai-def', text: 'Default' }) : null),
       g.rows.map(r => {
         const reset = r.resets && Date.parse(r.resets) > Date.now() ? ` · resets in ${agoS((Date.parse(r.resets) - Date.now()) / 1000)}` : '';
+        const inMeter = meterPool().use.some(x => x.id === r.id);
         return h('div', { cls: 'mh-ai-row', data: { s: r.out ? 'out' : level(r.left ?? 0) } },
+          r.out ? h('span', { cls: 'mh-meter-cb' }) : h('input', { type: 'checkbox', cls: 'mh-meter-cb', checked: inMeter, data: { meterId: r.id },
+            title: 'Count on the fuel meter', 'aria-label': `Count ${r.nick || r.auto || g.name} on the fuel meter` }),
           h('input', { cls: 'mh-nick', type: 'text', value: r.nick || r.auto, placeholder: 'Nickname', maxlength: '24',
             'aria-label': `Nickname for ${g.name}${r.email ? ' ' + r.email : ''}`, data: { nick: r.id, auto: r.auto } }),
           h('span', { cls: 'mh-ai-use' }, h('span', { cls: 'mh-meter' }, h('i', { style: { '--f': (r.out ? 0 : r.left ?? 0) + '%' } })),
@@ -581,7 +577,7 @@ export default function setup(api) {
     const all = subs(), me = all.find(s => s.id === id); if (!me) return;
     let cur = new Set(meterPool().use.map(s => s.id));
     if (e.target.checked) { for (const s of all) if (cur.has(s.id) && s.unit !== me.unit) cur.delete(s.id); cur.add(id); } else cur.delete(id);  // never mix kinds
-    S.meter = cur.size ? [...cur] : null; api.storage.set('meter', S.meter); drawn.ai = ''; drawn.glance = ''; paint(); api.settings?.refresh?.();
+    S.meter = cur.size ? [...cur] : null; api.storage.set('meter', S.meter); drawn.ai = ''; drawn.glance = ''; drawn.list = ''; renderAIList(); paint();
   });
   api.listen(secAI, 'input', e => {
     const id = e.target?.dataset?.nick; if (!id) return;
@@ -643,7 +639,7 @@ export default function setup(api) {
     if (force || top !== drawn.top) { drawn.top = top; renderTabs(); }
     const gs = JSON.stringify([S.ws, gauge(), S.open.has('ai'), S.open.has('mp'), S.meter, subs().map(s => [s.id, s.left, s.money, s.out, s.nick])]);
     if (force || gs !== drawn.ai) { drawn.ai = gs; renderAI(); }
-    const ls = JSON.stringify([S.ws, S.open.has('ai'), S.open.has('signin'), subs().map(s => [s.id, s.left, s.money, s.out, s.resets && agoS((Date.parse(s.resets) - Date.now()) / 1000)])]);
+    const ls = JSON.stringify([S.ws, S.meter, S.open.has('ai'), S.open.has('signin'), subs().map(s => [s.id, s.left, s.money, s.out, s.resets && agoS((Date.parse(s.resets) - Date.now()) / 1000)])]);
     if ((force || ls !== drawn.list) && !aiList.contains?.(document.activeElement)) { drawn.list = ls; renderAIList(); }
     const ms = mapSig();
     if (force || ms !== drawn.map || !rowMn.firstChild) { drawn.map = ms; renderMap(); }
