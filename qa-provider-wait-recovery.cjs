@@ -25,7 +25,9 @@ const server=http.createServer((req,res)=>{
  for(const shell of ['phone','desktop'])for(const skin of ['obsidian','landscapes']){
   const ctx=await browser.newContext({viewport:shell==='phone'?{width:412,height:892}:{width:1440,height:960},isMobile:shell==='phone',hasTouch:shell==='phone',serviceWorkers:'block'});
   let route={...original},status='queued',retryId=source,runId=source,modelFailure=false;
-  const at=1700000000; let revision=1;
+  // One captured clock and monotone revision per state change, not a new
+  // request identity on every list/detail/message hydration.
+  const at=Math.floor(Date.now()/1000); let revision=1;
   const writes=[],sends=[],errors=[],blocked=[];
   const row=()=>({id:sid,title:'Synthetic · provider could not start',source:'wizard-mobile',status,queue_reason:status==='queued'?'provider_access':'',model:route.model,provider:route.provider,archived:false,hidden:false,message_count:1,started_at:at-200,last_active:at-100,wizard_last_run_status:status,wizard_run_id:runId,wizard_retry_run_id:retryId,wizard_retry_input:text,wizard_safe_error:status==='queued'?'The selected provider could not start. Your request is saved.':'',wizard_last_request_at:at-100,preview:text.slice(0,100),preview_role:'user'});
   await ctx.addInitScript(s=>{localStorage.setItem('wos.skin',s);localStorage.setItem('wos.skin.composition.v1',JSON.stringify({version:1,extends:s}));for(const k of ['wos.coached','wos.tour.v1','wos.tour.done','wos.voiceTipSeen'])localStorage.setItem(k,'true');},skin);
