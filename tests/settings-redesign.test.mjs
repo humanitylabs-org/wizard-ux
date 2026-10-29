@@ -20,7 +20,7 @@ function harness({ android = false, shell = 'phone', installed = true, failure =
   vm.runInNewContext(source, s);
   const root = { innerHTML: '', scrollTop: 0, dataset: {}, classList: { add() {} }, contains: () => false, querySelector: () => null, querySelectorAll: () => [], addEventListener() {}, removeEventListener() {} };
   const view = s.WosSettings.mount(root, { shell, live: { ok: true }, helpSub: 'Help', toast: (...a) => notices.push(a), chatsChanged: id => changed.push(id), openStore: id => stores.push(id) });
-  const act = (attribute, value = '') => view.dispatch({ closest: sel => sel === `[${attribute}]` ? { dataset: { [attribute.replace(/^data-/, '').replace(/-([a-z])/g, (_, c) => c.toUpperCase())]: value } } : null });
+  const act = (attribute, value = '') => view.dispatch({ closest: sel => sel === '[data-settings-feature]' ? {dataset:{settingsFeature:'look'}} : sel === `[${attribute}]` ? { dataset: { [attribute.replace(/^data-/, '').replace(/-([a-z])/g, (_, c) => c.toUpperCase())]: value } } : null });
   return { s, root, view, act, storage, posts, reads, notices, changed, stores };
 }
 test('root is only an index: seven Android categories and no feature bodies; desktop has two panes', () => {
@@ -79,7 +79,9 @@ test('chooser confirms before POST, reads the exact slot, refreshes registry and
   h.act('data-chats-confirm'); await tick();
   assert.equal(h.posts.length, 1); assert.equal(h.posts[0].url, '/wizard-os-home/store-install/_slots/chats');
   assert.equal(h.posts[0].body, '{"default":"mizel-chats"}'); assert.equal(h.posts[0].credentials, 'same-origin');
-  assert.deepEqual(h.reads, ['/wizard-os-home/store-install/_slots/chats']); assert.deepEqual(h.changed, ['mizel-chats']);
+  // Phones & devices asks for its status on its own.
+  assert.deepEqual(h.reads.filter(url => url !== '/wizard/v1/setup/phone'), ['/wizard-os-home/store-install/_slots/chats']);
+  assert.deepEqual(h.changed, ['mizel-chats']);
   assert.match(h.root.innerHTML, /aria-checked="true" data-chats-choice="mizel-chats"/);
 });
 test('chooser failure keeps old selected provider and toasts the server error', async () => {
@@ -149,32 +151,61 @@ test('settings.css: rows are hairline lines, not boxes', () => {
   }
   assert.doesNotMatch(css, /\.st-ic \{|\.st-hero \{|\.st-suggestion \{/);
 });
-test('My skin is the dashed last tile of the one skin grid; tapping it opens Edit (and Reset only when non-empty) under the grid', () => {
-  const h = harness();
-  h.s.WosMySkin = { state: { empty: true, off: false, info: {}, script: { exists: false } }, on() {} };
-  h.view.focus('look');
-  let html = h.root.innerHTML;
-  assert.equal((html.match(/<div class="skp" role="group"/g) || []).length, 1, 'still one grid');
-  assert.match(html, /data-skinfamily="mizel"[^]*?<\/button><button type="button" class="skp-card skp-my" data-myskin-tile aria-expanded="false" aria-label="My skin">[^]*?<\/button><\/div>/, 'My skin is the last tile');
-  assert.doesNotMatch(html, /data-myskin-panel|data-myskin="edit"/, 'controls closed');
-  assert.match(html, /class="st-hint ms-invite" data-myskinsub>Everything you see is customizable/, 'the launch invite stays visible while empty');
-  h.view.dispatch({ closest: sel => sel === '[data-myskin-tile]' ? {} : sel === '[data-settings-feature]' ? { dataset: { settingsFeature: 'look' } } : null });
-  html = h.root.innerHTML;
-  assert.match(html, /aria-expanded="true"/);
-  assert.match(html, /<div class="ms-panel" data-myskin-panel><div class="st-row static my-skin-row"[^]*data-myskin="edit">Edit<\/button><\/span>/);
-  assert.doesNotMatch(html, /data-myskin="reset"/, 'Reset only when non-empty');
-  h.s.WosMySkin.state.empty = false; h.view.render();
-  html = h.root.innerHTML;
-  assert.match(html, /skp-card skp-my worn/, 'worn: the tile is ringed');
-  assert.match(html, /data-myskin="reset">Reset/);
-  assert.doesNotMatch(html, /ms-invite/, 'no invite once worn');
+test('New skin is last; nested Back returns to Look on both shells, never leaves the app', async () => {
+  for (const shell of ['phone', 'desktop']) {
+    const h = harness({shell});
+    h.s.WosMySkin = { recipes: [], state: { empty: true, script: {} } };
+    h.s.WosExperience = { installed: async()=>[], defaults: async()=>({}), state: {tweaks:[]} };
+    h.view.focus('look');
+    assert.match(h.root.innerHTML, /data-skinfamily="mizel"[^]*data-newskin[^]*\+ New skin/);
+    h.act('data-newskin'); await tick();
+    assert.match(h.root.innerHTML, /data-newskin-sheet/);
+    assert.match(h.root.innerHTML, /aria-label="Back to Look"/);
+    assert.equal(h.view.back(), true); assert.equal(h.view.page, 'appearance');
+    assert.doesNotMatch(h.root.innerHTML, /data-newskin-sheet/);
+    assert.match(h.root.innerHTML, /data-newskin/);
+    h.act('data-newskin'); h.view.focus('chats'); await tick();
+    assert.equal(h.view.context.skinDraft, null, 'leave invalidates pending form defaults');
+  }
 });
-test('the skin grid keyboard arrows reach the My skin tile (focus only), and its styles live in settings.css', () => {
-  const src = fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8');
-  assert.match(src, /const sel = attr === 'data-skinfamily' \? '\[data-skinfamily\], \[data-myskin-tile\]'/);
-  assert.match(src, /if \(buttons\[n\]\.hasAttribute\('data-myskin-tile'\)\) \{ buttons\[n\]\.focus\(\); return; \}/);
-  assert.match(fs.readFileSync(new URL('../web/core/settings.css', import.meta.url), 'utf8'), /\.st-root \.skp-my \.skp-mini-my \{/);
-  assert.doesNotMatch(fs.readFileSync(new URL('../web/core/skins.css', import.meta.url), 'utf8'), /skp-my|ms-panel|ms-invite/);
+test('desktop implicit Appearance uses its feature lifecycle for New skin Back, refresh and leave', async () => {
+  const h = harness({shell:'desktop'});
+  h.s.WosMySkin = {recipes:[],state:{script:{}}};
+  h.s.WosExperience = {installed:async()=>[],defaults:async()=>({}),state:{tweaks:[]}};
+  h.view.render(); assert.equal(h.view.page, '');
+  h.act('data-newskin'); await tick();
+  assert.equal(h.root.dataset.settingsNested,'true');
+  const html = h.root.innerHTML; h.view.render(); assert.equal(h.root.innerHTML,html);
+  assert.equal(h.view.back(),true); assert.equal(h.view.context.skinDraft,null);
+  assert.equal(h.root.dataset.settingsNested,'false');
+  h.act('data-newskin'); h.view.focus('chats'); await tick();
+  assert.equal(h.view.context.skinDraft,null);
+});
+test('own tiles use base preview; own panel shows colours, edit hint and a nested remove confirmation', () => {
+  const h = harness();
+  const own = {id:'mine',name:'Quiet',base:'nebula',tweaks:{}};
+  h.s.WosMySkin = { recipes:[own],active:own,state:{script:{}} };
+  h.view.focus('look');
+  assert.match(h.root.innerHTML,/data-ownskin="mine" aria-pressed="true"/);
+  assert.match(h.root.innerHTML,/aria-label="Quiet colours"/);
+  assert.match(h.root.innerHTML,/change my Quiet skin so…/);
+  h.act('data-ownskin-remove','mine'); assert.match(h.root.innerHTML,/role="alertdialog"/);
+  assert.equal(h.view.back(),true); assert.equal(h.view.page,'appearance');
+  assert.doesNotMatch(h.root.innerHTML,/role="alertdialog"/);
+});
+test('own skin Edit opens only registered Files IDs or shows the Wizard hint', () => {
+  const h = harness(); const opened=[];
+  h.s.WosMySkin = {recipes:[],active:{name:'Quiet'},state:{script:{}}};
+  h.s.WizCanOpen = id => id === 'wizard-files'; h.s.WizOpenApp = id => {opened.push(id); return true;};
+  h.act('data-myskin','edit'); assert.deepEqual(opened,['wizard-files']);
+  h.s.WizCanOpen = id => id === 'files'; h.act('data-myskin','edit'); assert.deepEqual(opened,['wizard-files','files']);
+  h.s.WizCanOpen = () => false; h.act('data-myskin','edit');
+  assert.equal(opened.length,2); assert.match(h.notices.at(-1)[1],/change my Quiet skin so/);
+});
+test('arrows reach every tile without silently wearing or opening it', () => {
+  assert.match(source,/\[data-ownskin\], \[data-newskin\]/);
+  assert.match(source,/buttons\[n\]\.focus\(\);/);
+  assert.doesNotMatch(source,/buttons\[n\]\.click/);
 });
 test('Resources: the page shows the Home resource bars from the shared renderer; the index row stays quiet unless something is low', () => {
   const h = harness();
@@ -197,4 +228,29 @@ test('Resources falls back to AI usage where the shared bars are not there', () 
   h.s.WosUsage = { html: () => '<p>usage</p>', loading: true, snap: {}, at: Date.now(), load: async () => {} };
   h.view.focus('usage');
   assert.match(h.root.innerHTML, /<h3 tabindex="-1">AI usage<\/h3>[^]*<p>usage<\/p>/);
+});
+test('Wizard ID row shows backup status from the first render, without opening the sheet', async () => {
+  const calls = [];
+  const h = harness({ android: true });
+  h.s.wizardDevicePort = {};
+  h.s.WizCore.bridge = { call: async m => { calls.push(m); return { npub: 'npub1x', name: 'James', backed_up: false }; } };
+  h.view.focus('wizard-id'); await tick(); await tick();
+  assert.deepEqual(calls, ['identity.info'], 'one status read, never identity.setup');
+  assert.match(h.root.innerHTML, /James · Not backed up/);
+  h.view.render(true); await tick();
+  assert.deepEqual(calls, ['identity.info'], 'fetched once, not on every render');
+});
+test('Wizard ID row retries the status read after a failed one', async () => {
+  const calls = [];
+  const h = harness({ android: true });
+  h.s.wizardDevicePort = {};
+  let fail = true;
+  h.s.WizCore.bridge = { call: async m => { calls.push(m); if (fail) throw new Error('bridge not ready'); return { npub: 'npub1x', name: 'James', backed_up: true }; } };
+  h.view.focus('wizard-id'); await tick(); await tick();
+  assert.deepEqual(calls, ['identity.info']);
+  fail = false;
+  h.view.render(true); await tick(); await tick();
+  assert.deepEqual(calls, ['identity.info', 'identity.info'], 'a failed read is retried on the next render');
+  h.view.render(true); await tick(); await tick();
+  assert.match(h.root.innerHTML, /James · Backed up/);
 });

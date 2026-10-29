@@ -13,9 +13,16 @@
   const copy = value => JSON.parse(JSON.stringify(value));
   let state = Store.read() || { version: 1, off: {} };
   let catalog = null, slots = null, set = null, owner = null, manifests = new Map(), generation = 0, error = '', busy = false;
-  const read = async url => {
-    const r = await fetch(new URL(url, document.baseURI), { cache: 'no-store', signal: AbortSignal.timeout(8000) });
+  // Tweak files are static per release: read each once per page (a failure is forgotten so the next call retries).
+  const files = new Map();
+  const fetchOnce = async url => {
+    const r = await fetch(new URL(url, document.baseURI), { cache: 'no-cache', signal: AbortSignal.timeout(6000) });
     if (!r.ok) throw new Error(`Could not read ${url} (${r.status})`); return r.json();
+  };
+  const read = url => {
+    if (/profile\.json$/.test(url)) return fetchOnce(url); // a published profile can change; manifests cannot
+    if (!files.has(url)) files.set(url, fetchOnce(url).catch(() => fetchOnce(url)).catch(e => { files.delete(url); throw e; }));
+    return files.get(url).then(v => JSON.parse(JSON.stringify(v)));
   };
   const changed = () => window.dispatchEvent(new Event('wos:experience'));
   // The tweak set the worn skin carries: its family's `tweaks` owner id, or none.
@@ -29,36 +36,103 @@
   // Move the legacy Layout choice into the Wizard tweak once, even if another skin is worn now.
   try {
     if (localStorage.getItem('wos.layout') === 'two-orb' && !localStorage.getItem('wos.two-orbs.migrated.v1')) {
-      if (!Object.hasOwn(state.off, 'wizard')) { state.off.wizard = []; Store.write(state); }
+      if (!Object.hasOwn(state.off, 'wizard')) { state.off.wizard = ['wizard/app-borders']; Store.write(state); }
       localStorage.setItem('wos.two-orbs.migrated.v1', 'true');
     }
   } catch (_) {}
+  // Preserve a deliberate old framed choice once; explicit offs after this migration always win.
+  try {
+    if (!localStorage.getItem('wos.app-borders.migrated.v1')) {
+      const saved = JSON.parse(localStorage.getItem('wos.skin.composition.v1') || 'null');
+      const off = new Set(state.off.wizard || ['wizard/two-orbs']);
+      if (saved?.frame?.foundation !== 'framed') off.add('wizard/app-borders');
+      else off.delete('wizard/app-borders');
+      state.off.wizard = [...off]; Store.write(state);
+      localStorage.setItem('wos.app-borders.migrated.v1', 'true');
+    }
+  } catch (_) {}
+  const recipe = () => window.WosMySkin?.active;
+  // Release-wide defaults are independent of skin. Saved offs and recipe choices keep their meaning across renames.
+  const canonical = id => catalog?.aliases?.[id] || id;
+  const globalIds = () => catalog?.defaults || [];
+  const globalOff = id => (state.defaultsOff || []).includes(id);
+  function migrateDefaults() {
+    if (state.defaultsMigrated) return;
+    const off = new Set(state.defaultsOff || []);
+    for (const ids of Object.values(state.off)) for (const id of ids) if (globalIds().includes(canonical(id))) off.add(canonical(id));
+    state.defaultsOff = [...off]; state.defaultsMigrated = true; Store.write(state);
+  }
+  const recipeChoice = (own, id) => {
+    if (!own) return undefined;
+    if (Object.hasOwn(own.tweaks, id)) return own.tweaks[id];
+    for (const [old, current] of Object.entries(catalog?.aliases || {})) if (current === id && Object.hasOwn(own.tweaks, old)) return own.tweaks[old];
+    return undefined;
+  };
+  const enabled = (id, own = recipe()) => globalIds().includes(id) ? !globalOff(id) && recipeChoice(own, id) !== false
+    : own ? (recipeChoice(own, id) ?? (!!set?.tweaks.includes(id) && !offFor(owner).includes(id))) : !offFor(owner).includes(id);
+  const profileReads = new Map();
+  function profile(who) {
+    if (!profileReads.has(who)) {
+      const pending = read(`tweaks/${who}/profile.json`).catch(e => { profileReads.delete(who); throw e; });
+      profileReads.set(who, pending);
+    }
+    return profileReads.get(who);
+  }
+  let installedP = null;
+  function installed() {
+    installedP ||= (async () => {
+      catalog ||= await read('tweaks/catalog.json');
+      for (const who of catalog.profiles || []) void profile(who).catch(() => {});
+      return Promise.all(catalog.tweaks.map(async id => ({ id, ...await read(`tweaks/${id}/manifest.json`) })));
+    })().then(v => { installedP.settled = true; return v; }, e => { installedP = null; throw e; });
+    return installedP.then(list => list.map(m => ({ ...m })));
+  }
+  async function defaults(palette) {
+    const fid = window.WosSkin.familyOf(palette), fam = window.WosSkin.families.find(f => f.id === fid);
+    const published = fam?.tweaks ? await profile(fam.tweaks) : null;
+    return Object.fromEntries((await installed()).map(m => [m.id, globalIds().includes(m.id) || (!!published?.tweaks.includes(m.id) && !(published.off || []).includes(m.id))]));
+  }
   async function apply() {
     const seq = ++generation; busy = true; error = ''; changed();
     try {
       const who = wornOwner();
       // A legacy layout can boot before this deferred module; the worn family now owns it.
       if (window.WosSkinHost.layout === 'two-orb' && !window.WosSkinHost.tweakState.includes('wizard/two-orbs')) window.WosSkinHost.setLayout('classic');
-      catalog ||= await read('tweaks/catalog.json'); slots ||= await read('core/slots.json');
+      catalog ||= await read('tweaks/catalog.json'); slots ||= await read('core/slots.json'); migrateDefaults();
       const next = who ? await read(`tweaks/${who}/profile.json`) : null;
       if (seq !== generation) return;
       if (next && (next.id !== who || !Array.isArray(next.tweaks) || next.tweaks.some(id => !ID.test(id) || !catalog.tweaks.includes(id)) || (next.off !== undefined && (!Array.isArray(next.off) || next.off.some(id => !next.tweaks.includes(id)))))) throw new Error('This skin’s tweaks could not be read');
       owner = who; set = next;
-      const all = next ? next.tweaks : [];
+      if (who) profileReads.set(who, Promise.resolve(next));
+      const own = recipe();
+      const all = [...new Set([...(own ? catalog.tweaks : next ? next.tweaks : []), ...globalIds()])];
       manifests = new Map(await Promise.all(all.map(async id => [id, await read(`tweaks/${id}/manifest.json`)])));
       if (seq !== generation) return;
-      await window.WosSkinHost.loadTweaks(all.filter(id => !offFor(who).includes(id)), slots, { teamAuthors: catalog.teamAuthors });
+      await window.WosSkinHost.loadTweaks(all.filter(id => enabled(id, own)), slots, { teamAuthors: catalog.teamAuthors });
     } catch (e) { if (seq === generation) error = e.message; } finally { if (seq === generation) { busy = false; changed(); } }
   }
   const experience = {
     get state() {
       return copy({ owner, busy, error, active: window.WosSkinHost?.tweakState || [],
-        tweaks: [...manifests].map(([id, m]) => ({ id, name: m.name, description: m.description || '', on: !offFor(owner).includes(id) })) });
+        tweaks: [...manifests].map(([id, m]) => ({ id, name: m.name, description: m.description || '', on: enabled(id) })) });
     },
+    installed, defaults,
+    get installedReady() { return !!installedP?.settled; },
     refresh: apply,
     // Settings calls this after a skin pick; other skin changes arrive as `wos:skin`.
     chooseSkin() { if (wornOwner() !== owner || (!set && owner)) return apply(); return Promise.resolve(); },
     async toggle(id) {
+      if (globalIds().includes(id)) {
+        const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
+        const off = new Set(state.defaultsOff || []); item.on ? off.add(id) : off.delete(id);
+        state.defaultsOff = [...off]; Store.write(state);
+        if (recipe()) await window.WosMySkin.update({ tweaks: { [id]: !item.on } });
+        return apply();
+      }
+      if (recipe()) {
+        const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
+        await window.WosMySkin.update({ tweaks: { [id]: !item.on } }); return apply();
+      }
       if (!owner || !set?.tweaks.includes(id)) return;
       const off = new Set(offFor(owner)); off.has(id) ? off.delete(id) : off.add(id);
       state.off[owner] = [...off]; Store.write(state); await apply();
@@ -66,6 +140,7 @@
   };
   window.WosExperience = experience;
   window.addEventListener('wos:skin-host-ready', apply);
+  window.addEventListener('wos:own-skin', apply);
   window.addEventListener('wos:skin', () => { void experience.chooseSkin(); });
   if (window.WosSkinHost?.personalState.ready) void apply();
   // Pick up the author's newly published tweaks on reopen, keeping the owner's offs by id.

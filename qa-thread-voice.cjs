@@ -34,6 +34,7 @@ async function boot(b) {
   await p.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); } catch (e) {} });
   await p.goto(URL_, { waitUntil: 'load' });
   await p.waitForFunction(() => window.__wos && window.__wos.live && window.__wos.live.ok, null, { timeout: 30000 });
+  await p.getByText('Skip tour', { exact: true }).click({ timeout: 2000 }).catch(() => {});
   await p.waitForTimeout(800);
   return { ctx, p, writes, errs, R };
 }
@@ -53,7 +54,7 @@ const steers = ws => ws.filter(w => /\/v1\/runs\/run_qa_live\/steer$/.test(w.u))
 const runs = ws => ws.filter(w => /\/v1\/runs$/.test(w.u));
 
 (async () => {
-  const b = await chromium.launch({ args: ['--host-resolver-rules=' + RESOLVE] });
+  const b = await chromium.launch({ executablePath: process.env.QA_CHROME || undefined, args: ['--host-resolver-rules=' + RESOLVE] });
 
   // 1. The repro: a thread is open and working, the router says "agent" (a new-sounding request).
   {
@@ -98,10 +99,10 @@ const runs = ws => ws.filter(w => /\/v1\/runs$/.test(w.u));
   {
     const { ctx, p, writes, errs, R } = await boot(b);
     await openWorkingThread(p);
-    writes.length = 0; R.answer = { cmd: { route: 'command', action: 'open_view', view: 'week' }, ms: 5 };
-    await say(p, 'show me the week in review');
+    writes.length = 0; R.answer = { cmd: { route: 'command', action: 'open_view', view: 'settings' }, ms: 5 };
+    await say(p, 'open settings', 'command');
     const s = await p.evaluate(() => __wos.desks[__wos.idx].wins.map(id => __wos.wins[id].app));
-    ok(s.includes('review'), 'a phone command from inside a thread still runs', JSON.stringify(s));
+    ok(await p.locator('.settings.open .st-index').count() > 0, 'a phone command from inside a thread still runs', JSON.stringify(s));
     ok(created(writes).length === 0 && steers(writes).length === 0 && runs(writes).length === 0, 'the command posts nothing to Archimedes', JSON.stringify(writes.map(w => w.u)));
     ok(errs.length === 0, 'no page errors (command)', errs.join(' | '));
     await ctx.close();

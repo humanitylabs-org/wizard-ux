@@ -1,3 +1,4 @@
+// Default behavior (arrange/download tweak off): hold-and-release offers the sheet. Tweak-on QA: tools/qa-hold-arrange.cjs.
 // Desks overview: hold a one-app desk and let go in place → Add to home screen sheet; hold and drag → reorder, no sheet.
 // Native port is stubbed. Usage: node tools/qa-pin-desks.cjs http://127.0.0.1:PORT/wizard-os-home/ [skins]
 const { chromium } = require('./qa-playwright.cjs');
@@ -7,8 +8,9 @@ const URL = process.argv[2]; const SKINS = (process.argv[3] || 'obsidian,landsca
   for (const skin of SKINS) {
     const ctx = await b.newContext({ viewport: { width: 412, height: 900 }, hasTouch: true, isMobile: true,
       userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36 WizardOS-Android/0.10.9' });
+    await ctx.route('**/*', r => ['GET','HEAD','OPTIONS'].includes(r.request().method()) ? r.continue() : r.fulfill({status:405,body:'Read-only QA'}));
     await ctx.addInitScript(s => {
-      try { localStorage.setItem('wos.skin', s); } catch (_) {}
+      try { localStorage.setItem('wos.skin', s); localStorage.setItem('wos.tour.v1','true'); localStorage.setItem('wos.coached','true'); localStorage.setItem('wos.skin-tweaks.v1', JSON.stringify({version:1,off:{miguel:['miguel/arrange-download']}})); } catch (_) {}
       window.wizardHomeScreenPort = { postMessage(raw) { const d = JSON.parse(raw); setTimeout(() => this.onmessage && this.onmessage({ data: JSON.stringify({ requestId: d.requestId, status: 'ready' }) }), 10); } };
     }, skin);
     const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => { if (/OVHOLD|OVEND/.test(m.text())) console.log(m.text()); });

@@ -3,7 +3,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8')
-for (const [file, pre] of [['web/skins/obsidian/skin.css', 'html[data-skin^="obsidian"]'], ['web/skins/landscapes/skin.css', 'html[data-skin="landscapes"]']]) {
+for (const [file, pre] of [['web/skins/obsidian/skin.css', 'html[data-skin^="obsidian"]'], ['web/skins/landscapes/skin.css', 'html[data-skin^="landscapes"]']]) {
   const css = read(file)
   test(`${file}: pin button and Pin action hidden`, () => {
     assert.doesNotMatch(css, /ch-pin-toggle[^}]*display: none/)

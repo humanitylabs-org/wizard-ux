@@ -28,133 +28,167 @@ window.WosChatPower = function chatPower(A) {
   /* ================= #18 reading position ================= */
   // wizard-mobile ff86db8c readingPosition.ts: same key, one hour, newest 32 threads.
   const RP_KEY = 'wizard.mobile.reading-positions.v1', RP_TTL = 60 * 60 * 1000, RP_MAX = 32;
+  let places = null, saveT = 0;
   const RP = {
     all(now = Date.now()) {
-      try {
-        const raw = JSON.parse(localStorage.getItem(RP_KEY) || '{}'), out = {};
-        for (const [k, v] of Object.entries(raw && typeof raw === 'object' ? raw : {})) {
-          if (!v || v.sessionId !== k || typeof v.messageId !== 'string' || !isFinite(v.savedAt) || !isFinite(v.scrollTop)) continue;
-          if (now - v.savedAt >= RP_TTL || v.savedAt > now + RP_TTL) continue;
-          out[k] = v;
-        }
-        return out;
-      } catch (e) { return {}; }
+      if (!places) {
+        try { places = JSON.parse(localStorage.getItem(RP_KEY) || '{}'); } catch (_) {}
+        if (!places || typeof places !== 'object' || Array.isArray(places)) places = {};
+      }
+      for (const [k, v] of Object.entries(places)) {
+        if (!v || v.sessionId !== k || typeof v.messageId !== 'string' || !isFinite(v.savedAt)
+          || !isFinite(v.scrollTop) || now - v.savedAt >= RP_TTL || v.savedAt > now + RP_TTL) delete places[k];
+      }
+      return places;
     },
     read(sid) { return sid ? RP.all()[sid] || null : null; },
     save(p) {
       const all = RP.all(p.savedAt); all[p.sessionId] = p;
-      const keep = Object.fromEntries(Object.entries(all).sort((a, b) => b[1].savedAt - a[1].savedAt).slice(0, RP_MAX));
-      try { localStorage.setItem(RP_KEY, JSON.stringify(keep)); } catch (e) {}
+      places = Object.fromEntries(Object.entries(all).sort((a, b) => b[1].savedAt - a[1].savedAt).slice(0, RP_MAX));
+      clearTimeout(saveT); saveT = setTimeout(flushPlace, 200);
     },
   };
+  function mergePlaces(text) {
+    try {
+      const other = JSON.parse(text || '{}'); if (!other || typeof other !== 'object' || Array.isArray(other)) return;
+      const all = RP.all();
+      for (const [sid, p] of Object.entries(other)) if (p?.savedAt > (all[sid]?.savedAt || 0)) all[sid] = p;
+      places = Object.fromEntries(Object.entries(RP.all()).sort((a, b) => b[1].savedAt - a[1].savedAt).slice(0, RP_MAX));
+    } catch (_) {}
+  }
+  const flushPlace = () => { clearTimeout(saveT); if (places) try { mergePlaces(localStorage.getItem(RP_KEY)); localStorage.setItem(RP_KEY, JSON.stringify(RP.all())); } catch (_) {} };
+  addEventListener('storage', e => { if (e.key === RP_KEY) mergePlaces(e.newValue); });
+  addEventListener('pagehide', flushPlace);
+  addEventListener('beforeunload', flushPlace);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) flushPlace(); });
   const latestId = turns => { for (let i = turns.length - 1; i >= 0; i--) if (turns[i].a) return `${i}:${turns[i].a.at ?? ''}`; return ''; };
   const lastReply = nb => { const a = nb.querySelectorAll('.msg.a'); return a.length ? a[a.length - 1] : null; };
+  const onScreen = A.threadOnScreen;
   const relTop = (nb, el) => el.getBoundingClientRect().top - (scrollBox(nb) === nb ? nb.getBoundingClientRect().top : nb.closest('.ch-thread').querySelector('.ch-head').getBoundingClientRect().bottom);
   const bottomGap = nb => { const s = scrollBox(nb); return s.scrollHeight - s.scrollTop - s.clientHeight; };
-  /* The words under the reader's eyes: the first message showing at the top of the list, and where it sits.
-   * A live re-read can change what sits ABOVE the reader (a turn re-grouped, a note becoming your message, a reply
-   * landing in an earlier turn), so holding the raw scrollTop moved the page under James while he read (23 Oct 2026:
-   * "I'm scrolling down reading a message and it jumps to a previous place"). Hold the message instead. */
   function anchorOf(nb) {
-    if (!nb || !nb.isConnected) return null;
-    const top = scrollBox(nb) === nb ? nb.getBoundingClientRect().top : nb.closest('.ch-thread').querySelector('.ch-head').getBoundingClientRect().bottom, seen = {};
+    if (!onScreen(nb)) return null;
+    const seen = {};
     for (const m of nb.querySelectorAll('[data-morph-key]')) {
       const k = m.dataset.morphKey; seen[k] = (seen[k] || 0) + 1;
-      const r = m.getBoundingClientRect(); if (!r.height) continue;
-      if (r.bottom > top + 1) return { key: k, nth: seen[k] - 1, off: r.top - top };
+      if (m.getBoundingClientRect().height && relTop(nb, m) + m.getBoundingClientRect().height > 1)
+        return { key: k, nth: seen[k] - 1, off: relTop(nb, m) };
     }
     return null;
   }
-  function toAnchor(nb, a) {
-    if (!a || !nb) return false;
-    let n = -1, m = null; for (const e of nb.querySelectorAll('[data-morph-key]')) if (e.dataset.morphKey === a.key && ++n === a.nth) { m = e; break; }
-    if (!m) return false;
-    const d = relTop(nb, m) - a.off; if (Math.abs(d) >= 1) scrollBox(nb).scrollTop += d;
+  const placed = new WeakMap(); // pending browser scroll acknowledgements, never a saved reading spot
+  function moveTo(nb, top) {
+    const s = scrollBox(nb), to = Math.max(0, Math.min(s.scrollHeight - s.clientHeight, top));
+    // Even an unchanged assignment kills a handset's momentum fling.
+    if (Math.abs(s.scrollTop - to) >= 1) { placed.set(s, to); s.scrollTop = to; }
+  }
+  // The only restore / stick-to-bottom rule, for open, repaint, app/desk return and layout changes.
+  function restore(nb, place) {
+    if (!onScreen(nb) || !place) return false;
+    if (place.atBottom) moveTo(nb, scrollBox(nb).scrollHeight);
+    else {
+      let n = -1, m = null;
+      if (place.anchor) for (const e of nb.querySelectorAll('[data-morph-key]'))
+        if (e.dataset.morphKey === place.anchor.key && ++n === place.anchor.nth) { m = e; break; }
+      if (m) moveTo(nb, scrollBox(nb).scrollTop + relTop(nb, m) - place.anchor.off);
+      // Migrate the previous hour's latest-reply-relative records without losing them.
+      else { const r = lastReply(nb); moveTo(nb, !place.anchor && r && isFinite(place.anchorOffset)
+        ? scrollBox(nb).scrollTop + relTop(nb, r) - place.anchorOffset : place.scrollTop); }
+    }
     return true;
   }
-  // Write scrollTop only when it moves: a same-value write still stops a phone's momentum scroll mid-fling.
-  const toBottom = nb => { const s = scrollBox(nb); if (bottomGap(nb) >= 1) s.scrollTop = s.scrollHeight; };
-  function paintLatest(el, nb) {
-    const b = el.querySelector('[data-chlatest]'); if (!b || !nb) return;
-    b.hidden = bottomGap(nb) < 160;
+  function capture(nb) {
+    if (!onScreen(nb)) return;
+    const el = nb.closest('[data-chats]'), w = H.win(el.dataset.chats), c = w && ch(w.id);
+    if (!w?.thread || w.thread === '__new__' || !c.lid || c.posFor !== w.thread || settling(c)) return;
+    RP.save({ sessionId: w.thread, messageId: c.lid, anchor: anchorOf(nb), shown: c.show,
+      scrollTop: scrollBox(nb).scrollTop, savedAt: Date.now(), atBottom: bottomGap(nb) < 80,
+      working: !!A.isWorking?.(LIVE.session?.(w.thread)) });
   }
-  /* Called by renderThread after the new DOM is in. Returns true when it placed the scroll itself. */
+  function follow(wid) {
+    const w = H.win(wid); if (!w?.thread || w.thread === '__new__') return;
+    RP.save({ ...RP.read(w.thread), sessionId: w.thread, messageId: ch(wid).lid || '',
+      scrollTop: 0, atBottom: true, savedAt: Date.now(), working: !!A.isWorking?.(LIVE.session?.(w.thread)) });
+    const nb = A.elOf?.(wid)?.querySelector('.ch-msgs'); if (nb) { endSettle(ch(wid)); restore(nb, RP.read(w.thread)); }
+  }
+  function paintLatest(el, nb) {
+    const b = el.querySelector('[data-chlatest]'), hidden = bottomGap(nb) < 160;
+    if (b && onScreen(nb) && b.hidden !== hidden) b.hidden = hidden;
+  }
   function position(w, el, nb, o) {
     const c = ch(w.id), sid = w.thread;
-    if (o.keep || !nb) return false;
+    c.placeOptions = o;
+    if (!nb) return false;
     if (c.placeWait) { c.placeWait.disconnect(); c.placeWait = null; }
-    if (sid === '__new__' || !o.turns) { toBottom(nb); return true; }
+    if (!onScreen(nb)) {
+      if (typeof ResizeObserver === 'function') {
+        const ro = c.placeWait = new ResizeObserver(() => {
+          if (onScreen(nb) && nb.isConnected && w.thread === sid) position(w, el, nb, c.placeOptions);
+        });
+        ro.observe(nb);
+      }
+      return true; // never adopt the scroll of a hidden / parked thread
+    }
+    if (sid === '__new__' || !o.turns) { restore(nb, { atBottom: true }); return true; }
     c.lid = latestId(o.turns);
     if (c.posFor !== sid) {
-      // No layout yet (the shell boots after a reload with the thread already open; desktop renders before it
-      // reveals its pane): every scrollTop clamps to 0, and marking the thread placed kept it at the top for good
-      // (James, 20 Oct: "an update reloads me to the very top of the chat"). Place it once the list has a size.
-      if (!scrollBox(nb).clientHeight) {
-        if (typeof ResizeObserver === 'function') {
-          const ro = c.placeWait = new ResizeObserver(() => {
-            if (!scrollBox(nb).clientHeight) return;
-            ro.disconnect(); if (c.placeWait === ro) c.placeWait = null;
-            if (nb.isConnected && el.querySelector('.ch-msgs') === nb && w.thread === sid && c.posFor !== sid) position(w, el, nb, o);
-          });
-          ro.observe(nb);
-        }
-        return true;
-      }
       c.posFor = sid; c.posLid = c.lid; c.readerMoved = false;
-      // A cached paint comes first and may predate a reply that landed while you were away (James, 22 Oct:
-      // tapping a fresh Ready reply opened at his old place in the previous one). Remember it, so the server read decides.
       c.posCached = !(c.loadedFor === sid && c.loadedNav === c.readNav);
-      // The Chats list's own read state decides (James, 22 Oct): a thread opened while it has an unread reply (bold, in
-      // Ready) opens at that reply's first line; a thread you have already read returns you to your place.
-      const unread = c.unreadOpen === sid;
-      // A place saved at the bottom of a Working thread was the live reply being followed, not a place you read to:
-      // coming back opens at the start of that reply like any other (James, 23 Oct: a Philosopher reply that finished
-      // while he was away opened at its end).
-      const kept = unread ? null : RP.read(sid), saved = kept && !(kept.atBottom && kept.working) ? kept : null, reply = lastReply(nb);
-      const last = o.turns[o.turns.length - 1], replied = !!(last && last.a);
-      let apply = null;
-      // One rule for every thread, Working or not (the list's Working status lags a finished reply by up to a poll):
-      // your place if you left one for this reply; otherwise the first line of the latest reply. Only a thread still
-      // waiting for its first words follows the bottom.
-      if (o.working && !replied && !(saved && !saved.atBottom && c.lid && saved.messageId === c.lid)) { c.follow = true; toBottom(nb); }
-      else if (saved && c.lid && saved.messageId === c.lid) {
-        // Back where you were: anchored to the latest reply, so layout changes don't shift it.
-        apply = saved.atBottom ? toBottom : box => { const r = lastReply(box); scrollBox(box).scrollTop = r && isFinite(saved.anchorOffset) ? scrollBox(box).scrollTop + relTop(box, r) - saved.anchorOffset : saved.scrollTop; };
-        c.follow = !!saved.atBottom;
-      } else if (reply) {
-        // A fresh reply: open at its first line, not the end of it.
-        apply = box => { const r = lastReply(box); if (r) scrollBox(box).scrollTop = Math.max(0, scrollBox(box).scrollTop + relTop(box, r) - 8); };
-        c.atStart = sid;
-      } else { c.follow = true; toBottom(nb); }
-      if (apply) { apply(nb); if (!saved || saved.messageId !== c.lid) c.follow = bottomGap(nb) < 80; settle(c, nb, apply); }
+      const kept = c.unreadOpen === sid ? null : RP.read(sid);
+      const saved = kept && !(kept.atBottom && kept.working) && kept.messageId === c.lid ? kept : null;
+      const reply = lastReply(nb), last = o.turns[o.turns.length - 1];
+      let place = saved;
+      if (!place) {
+        const waiting = o.working && !last?.a;
+        const key = reply?.dataset.morphKey;
+        const nth = reply ? [...nb.querySelectorAll('[data-morph-key]')].filter(e => e.dataset.morphKey === key).indexOf(reply) : 0;
+        place = { sessionId: sid, messageId: c.lid, shown: c.show, scrollTop: 0, savedAt: Date.now(),
+          atBottom: waiting || !reply, working: o.working,
+          anchor: reply ? { key, nth, off: 8 } : null };
+        if (saved == null && !place.atBottom) c.atStart = sid;
+        RP.save(place);
+      }
+      restore(nb, place);
+      settle(c, nb, () => restore(nb, RP.read(sid)));
       if (!c.posCached) c.unreadOpen = '';
-      paintLatest(el, nb);
-      return true;
+    } else {
+      if (c.posCached && c.loadedFor === sid && c.loadedNav === c.readNav) {
+        c.posCached = false;
+        if (c.lid === c.posLid || c.readerMoved) c.unreadOpen = '';
+        if (c.lid !== c.posLid && !c.readerMoved) { endSettle(c); c.posFor = null; return position(w, el, nb, o); }
+      }
+      if (settling(c)) { const s = c.settle; settle(c, nb, () => restore(nb, RP.read(sid)), s.until); }
+      restore(nb, RP.read(sid));
     }
-    // The server read after a cached paint: a newer latest reply means a fresh open (its first line), unless you already scrolled.
-    if (c.posCached && c.loadedFor === sid && c.loadedNav === c.readNav) {
-      c.posCached = false;
-      if (c.lid === c.posLid || c.readerMoved) c.unreadOpen = '';
-      if (c.lid !== c.posLid && !c.readerMoved) { endSettle(c); c.posFor = null; return position(w, el, nb, o); }
+    // Content or chrome can grow without a repaint. Both modes use the same restore rule.
+    const nodes = [nb, ...nb.children, nb.closest('.ch-thread')?.querySelector('.ch-compose')].filter(Boolean);
+    if (typeof ResizeObserver === 'function' && (!c.placeNodes || nodes.length !== c.placeNodes.length || nodes.some((n, i) => c.placeNodes[i] !== n))) {
+      c.placeResize?.disconnect(); c.placeNodes = nodes;
+      c.placeResize = new ResizeObserver(() => reflow(nb)); nodes.forEach(n => c.placeResize.observe(n));
     }
-    // Later renders: a place still settling is placed again; a thread that follows stays on the bottom; otherwise the reading place holds.
-    if (settling(c)) { const s = c.settle; s.apply(nb); settle(c, nb, s.apply, s.until); }
-    else if (c.follow || (o.working && o.atBottom)) toBottom(nb);
-    else if (toAnchor(nb, o.anchor)) {} // the message you were reading stays exactly where it was
-    else if (o.boxTop != null && Math.abs(scrollBox(nb).scrollTop - o.boxTop) >= 1) scrollBox(nb).scrollTop = o.boxTop; // read before the old list was replaced (a detached box reads 0)
+    nb.querySelectorAll('img').forEach(im => { if (!im.complete && !im.__placeLoad) {
+      im.__placeLoad = true; im.addEventListener('load', () => reflow(nb), { once: true });
+    } });
     paintLatest(el, nb);
     return true;
   }
-  /* A place lands while the layout is still moving: after a reload the desktop pane slides in narrow and short
-   * (James, 20 Oct: the reload put him back at the wrong place), photos land, live repaints replace the list.
-   * Until the reader touches the list or SETTLE_MS pass, place it again on every size change, photo load and
-   * repaint, and hold the save so a mid-slide clamp never overwrites the good place. */
+  function resume(nb) {
+    const el = nb?.closest('[data-chats]'), w = el && H.win(el.dataset.chats), c = w && ch(w.id);
+    if (c?.placeOptions) position(w, el, nb, c.placeOptions);
+  }
+  function reflow(nb) {
+    const el = nb?.closest('[data-chats]'), w = el && H.win(el.dataset.chats), c = w && ch(w.id);
+    if (!c || c.placeTouching) return;
+    clearTimeout(c.reflowT);
+    const wait = 600 - (Date.now() - (c.placeUserAt || 0));
+    if (wait > 0) { c.reflowT = setTimeout(() => reflow(nb), wait + 1); return; }
+    restore(nb, RP.read(w.thread));
+  }
   const SETTLE_MS = 3000;
   function settle(c, nb, apply, until) {
     endSettle(c);
     const s = c.settle = { nb, apply, until: until || Date.now() + SETTLE_MS };
-    const stop = () => endSettle(c, s), again = () => { if (settling(c) && c.settle === s) apply(nb); else stop(); };
-    // Any touch in the thread (the list, ↓ Latest, the composer) hands the place back to the reader.
+    const stop = () => endSettle(c, s), again = () => { if (settling(c) && c.settle === s) apply(); else stop(); };
     const evs = ['wheel', 'touchstart', 'pointerdown', 'keydown'], host = nb.closest('[data-chats]') || nb;
     evs.forEach(e => host.addEventListener(e, stop, { passive: true }));
     nb.addEventListener('load', again, true);
@@ -164,31 +198,14 @@ window.WosChatPower = function chatPower(A) {
   }
   function endSettle(c, s) { const cur = c.settle; if (!cur || (s && cur !== s)) return; c.settle = null; cur.off?.(); clearTimeout(cur.t); }
   const settling = c => !!(c.settle && Date.now() < c.settle.until);
-  let saveT = 0, savePending = null;
   function onScroll(nb) {
-    const el = nb.closest('[data-chats]'); if (!el) return;
-    const id = el.dataset.chats, w = H.win(id); if (!w || !w.thread || w.thread === '__new__') return;
-    const c = ch(id);
-    // Document-scrolled phones: a thread off screen (another app or desk in front) is not being read. Its box can
-    // scroll or measure zero while parked; saving that overwrote your place and flipped it to 'following the bottom'.
-    if (A.docAside?.(nb)) return;
-    if (settling(c) && c.settle.nb === nb) { paintLatest(el, nb); return; } // our own placement, not the reader
-    c.follow = bottomGap(nb) < 80; c.readerMoved = true;
-    paintLatest(el, nb);
-    clearTimeout(saveT);
-    savePending = () => {
-      savePending = null;
-      if (!c.lid || c.posFor !== w.thread || !nb.isConnected) return;
-      const reply = lastReply(nb);
-      RP.save({ sessionId: w.thread, shown: scrollBox(nb) !== nb ? c.show : undefined, messageId: c.lid, anchorOffset: reply ? relTop(nb, reply) : 0, scrollTop: Math.max(0, Math.round(scrollBox(nb).scrollTop)), savedAt: Date.now(), atBottom: bottomGap(nb) < 80, following: !!c.follow, working: !!LIVE.session(w.thread) && ['submitting', 'queued', 'running', 'stopping'].includes(LIVE.session(w.thread).status) });
-    };
-    saveT = setTimeout(savePending, 200);
+    if (!onScreen(nb)) return;
+    const el = nb.closest('[data-chats]'), w = H.win(el.dataset.chats); if (!w?.thread) return;
+    const c = ch(w.id), sc = scrollBox(nb), own = placed.has(sc) && Math.abs(sc.scrollTop - placed.get(sc)) < 1;
+    placed.delete(sc);
+    if (!own && !settling(c)) { c.readerMoved = true; c.placeUserAt = Date.now(); }
+    capture(nb); paintLatest(el, nb);
   }
-  // A reload (Update ready · Reload) or the app going away inside the 200 ms debounce must still keep the place.
-  const flushPlace = () => { clearTimeout(saveT); savePending?.(); };
-  addEventListener('pagehide', flushPlace);
-  addEventListener('beforeunload', flushPlace);
-  document.addEventListener('visibilitychange', () => { if (document.hidden) flushPlace(); });
   // Pick from what's already in Wizard Files (#23), next to the paperclip.
   const filesBtn = () => (F ? `<button type="button" class="ch-fromfiles" data-chfiles aria-label="Attach from Wizard Files" title="From Wizard Files">${FOLDER_SVG}</button>` : '');
   const latestBtn = () => '<button type="button" class="ch-latest" data-chlatest hidden aria-label="Jump to the latest message">↓ Latest</button>';
@@ -198,7 +215,7 @@ window.WosChatPower = function chatPower(A) {
   function workHtml(c, tn, live, helperStatus) {
     if (!WK) return null;
     const key = turnKey(tn);
-    return WK.html(tn, { live, helperStatus, open: !!c.wkOpen?.has(key), md: A.md, esc, clip, key });
+    return WK.html(tn, { live, helperStatus, streamSteps: live && !c.stream?.landed && !c.stream?.terminal ? c.stream?.steps : [], open: !!c.wkOpen?.has(key), md: A.md, esc, clip, key });
   }
 
   /* ================= #11 models ================= */
@@ -344,17 +361,17 @@ window.WosChatPower = function chatPower(A) {
     // Only the freshly hydrated input, never cached turns. A failed note-started turn (the server's request skips
     // follow-through notes, so it is empty or an older request) goes again as a plain "Retry".
     const note = noteTurn(w && w.thread === sid ? w : null, s);
-    const text = note ? RETRY_WORD : s?.request || (FAILED.has(s?.status) ? RETRY_WORD : '');
+    const text = s?.retryRunId ? s.request || RETRY_WORD : note ? RETRY_WORD : s?.request || (FAILED.has(s?.status) ? RETRY_WORD : '');
     if (!text) { toast('!', 'This thread has no request to send again · open it to reply', 2600); return false; }
     const cur = o ? { model: o.value, provider: o.provider } : threadModel(s);
     const c = w ? ch(wid) : null; if (c) c.retrying = sid;
     try {
-      await OUTBOX.enqueue({ kind: 'reply', sessionId: sid, text, wid: w && w.thread === sid ? wid : '', how: 'retry', source: 'chat',
+      await OUTBOX.enqueue({ kind: 'reply', sessionId: sid, agent: s.agent || A.winAgent?.(w) || '', text, retryRunId: s.retryRunId || '', wid: w && w.thread === sid ? wid : '', how: 'retry', source: 'chat',
         instructions: `${window.WizConfig.owner() || 'The owner'} pressed Retry on this thread after the last request failed${o ? `, choosing ${o.name}` : ''}. ${text === RETRY_WORD ? 'Carry out the last request in this thread again (it may be a follow-through note rather than a typed message).' : 'This is the same request again.'}`,
         ...(cur.model ? { model: cur.model, provider: cur.provider } : {}) });
       E?.cleared.set(sid, Date.now());
       toast('↻', o ? `Retrying on ${o.name}` : 'Retrying', 1600);
-      if (c) c.follow = true;
+      if (c) follow(wid);
       return true;
     } catch (e) { toast('!', 'Couldn’t queue the retry', 2400); return false; }
     finally { if (c) c.retrying = ''; rerenderAll(); }
@@ -387,17 +404,17 @@ window.WosChatPower = function chatPower(A) {
       await OUTBOX.enqueue({ kind:'reply', sessionId:sid, wid, text:u.text || '', files, ...(u.reply ? { reply:u.reply } : {}),
         how:'regenerate', source:'chat', instructions:'The owner pressed Regenerate on the last response. Answer the same owner request again, using its attached files. Preserve this thread’s selected model.',
         ...(cur.model ? { model:cur.model, provider:cur.provider } : {}) });
-      c.follow = true; toast('↻','Regenerating',1600); return true;
+      follow(wid); toast('↻','Regenerating',1600); return true;
     } catch (_) { toast('!', 'Couldn’t regenerate · original request kept',2600); return false; }
     finally { c.regenerating = false; rerenderAll(); }
   }
   const RECONNECT_APPS = new Set(['wizard-claude', 'wizard-chatgpt']);
-  function openReconnect(appId, installed) {
+  function openReconnect(appId, installed, runId = '') {
     if (!RECONNECT_APPS.has(appId)) return false;
-    if (installed && window.WizOpenApp?.(appId)) return true;
-    if (H.openLink?.(`/wizard-os-home/store/index.html?app=${encodeURIComponent(appId)}`, 'App Store')) return true;
-    toast('!', 'Open the App Store to reconnect', 2400);
-    return false;
+    const provider = appId === 'wizard-claude' ? 'claude' : 'chatgpt';
+    if (window.WizOpenApp?.('troubleshooter', `/troubleshoot/?provider=${provider}&run_id=${encodeURIComponent(runId)}`)) return true;
+    return !!H.openLink?.(`/troubleshoot/?provider=${provider}&run_id=${encodeURIComponent(runId)}`, 'Fix Wizard');
+
   }
   async function dismissThread(sid) {
     const ok = await E?.dismissFailure(sid);
@@ -413,7 +430,8 @@ window.WosChatPower = function chatPower(A) {
   function errorRow(s, rowHtml) {
     if (!E) return rowHtml;
     const busy = E.busy.get(s.id);
-    const rc = s.reconnect ? `<button type="button" data-chreconnect="${esc(s.reconnect.appId)}" data-installed="${s.reconnect.installed ? '1' : '0'}">${s.reconnect.installed ? 'Open' : 'Get'} ${esc(s.reconnect.name)}</button>` : '';
+    const rc = s.reconnect ? `<button type="button" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : '';
+    if (rc) return `<div class="ch-err diagnosed" data-errsid="${esc(s.id)}">${rowHtml}</div>`;
     return `<div class="ch-err" data-errsid="${esc(s.id)}">${rowHtml}<div class="ch-err-b">${rc}<button type="button"${rc ? ' class="ghost"' : ''} data-errretry="${esc(s.id)}" ${busy ? 'disabled' : ''}>Retry</button><button type="button" class="ghost" data-errdismiss="${esc(s.id)}" ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></div>`;
   }
   function errorsExtra() {
@@ -456,7 +474,7 @@ window.WosChatPower = function chatPower(A) {
     const all = [...(files || []), ...sealed.files].filter((f, i, a) => f && f.id && a.findIndex(x => x.id === f.id) === i).slice(0, 8);
     const wasHere = !!w && w.thread === sid;
     if (isNew) c.newModel = null;
-    c.follow = true;
+    follow(wid);
     const instructions = H.viewContext(wid, 'a voice reply recorded in this thread');
     // Send and go: a voice reply steps back one level like a typed send (chats.js), on
     // the tap, not after the recording has been written to the phone's storage (a blob commit can take seconds).
@@ -484,13 +502,16 @@ window.WosChatPower = function chatPower(A) {
 
   /* ================= sheets: model picker, Files ================= */
   let sheet = null; // { type: 'model'|'files', pane, wid, sid, mode, all, list, q, kind }
+  let popOff = null;
   function closeSheet() {
+    popOff?.(); popOff = null;
     if (!sheet) return false;
     H.root().querySelectorAll('.ch-psheet').forEach(n => n.remove());
     sheet = null; return true;
   }
   function paint(paneId, el) {
     if (!sheet || sheet.pane !== paneId || !el) return;
+    popOff?.(); popOff = null;
     el.querySelectorAll('.ch-psheet').forEach(n => n.remove());
     let html = '';
     if (sheet.type === 'model') {
@@ -502,15 +523,47 @@ window.WosChatPower = function chatPower(A) {
       html = F.panelHtml({ q: sheet.q, kind: sheet.kind, attach: !!tw?.thread, picked: (c.files || []).map(f => f.id).filter(Boolean), when: ms => `${A.KIT.time.day(ms)} ${A.KIT.time.clock(ms)}` });
     }
     el.insertAdjacentHTML('beforeend', html.replace('class="ch-sheet ', 'class="ch-sheet ch-psheet '));
-    if (sheet.pop) placePop(el);
+    if (sheet.pop) {
+      el.classList.add('ch-model-picking');
+      placePop(el);
+      const list = el.querySelector('.ch-mpop .msheet-list');
+      if (list) list.scrollTop = list.scrollHeight; // current models nearest the thumb on open, not on resize
+      const events = new AbortController();
+      let frame = 0;
+      const queue = () => { if (!frame) frame = requestAnimationFrame(() => { frame = 0; placePop(el); }); };
+      const resize = new ResizeObserver(queue);
+      [el, el.querySelector('.ch-compose'), el.querySelector('.ch-swrow'), el.querySelector('.ch-head')].filter(Boolean).forEach(n => resize.observe(n));
+      window.addEventListener('resize', queue, { signal: events.signal });
+      window.addEventListener('scroll', queue, { capture: true, passive: true, signal: events.signal });
+      window.visualViewport?.addEventListener('resize', queue, { signal: events.signal });
+      window.visualViewport?.addEventListener('scroll', queue, { signal: events.signal });
+      popOff = () => {
+        events.abort(); resize.disconnect(); cancelAnimationFrame(frame);
+        el.classList.remove('ch-model-picking'); el.style.removeProperty('--mpop-input-max');
+      };
+    }
   }
-  // The compact menu sits on the right, its bottom edge just above the model label (whatever the composer's height).
+  // Bound the card to the visible pane ABOVE the entire composer, not its bottom-right label.
+  // The native document-scroller's composer is fixed; its overlay must share viewport coordinates.
   function placePop(el) {
     const pop = el.querySelector('.ch-psheet.ch-mpop'), lab = el.querySelector('.ch-mlabel'); if (!pop || !lab) return;
     const pr = pop.getBoundingClientRect(), lr = lab.getBoundingClientRect(); if (!pr.height) return;
-    pop.style.setProperty('--mpop-b', `${Math.max(8, Math.round(pr.bottom - lr.top + 6))}px`);
-    pop.style.setProperty('--mpop-r', `${Math.max(8, Math.round(pr.right - lr.right - 6))}px`);
-    const list = pop.querySelector('.msheet-list'); if (list) list.scrollTop = list.scrollHeight; // the thumb end (current models) in view
+    const vv = window.visualViewport;
+    const top = Math.max(pr.top, vv?.offsetTop || 0, el.querySelector('.ch-head')?.getBoundingClientRect().bottom || 0) + 8;
+    const occlusion = () => ['.ch-compose', '.ch-swrow'].map(s => el.querySelector(s)?.getBoundingClientRect()).filter(r => r?.height);
+    const bottomEdge = () => Math.min(pr.bottom, (vv?.offsetTop || 0) + (vv?.height || innerHeight), lab.getBoundingClientRect().top, ...occlusion().map(r => r.top)) - 6;
+    // A keyboard plus native dock can leave less than one row above a tall draft. Temporarily
+    // scroll the input in a shorter box; keep its value/selection and restore its height on close.
+    const ta = el.querySelector('.ch-compose textarea');
+    if (ta) {
+      const cap = Math.min(140, Math.max(42, Math.floor(ta.getBoundingClientRect().height + bottomEdge() - top - 112)));
+      el.style.setProperty('--mpop-input-max', cap + 'px');
+    }
+    const bottom = bottomEdge();
+    const right = Math.min(pr.right, (vv?.offsetLeft || 0) + (vv?.width || innerWidth), lr.right + 6) - 8;
+    pop.style.setProperty('--mpop-b', `${Math.max(0, pr.bottom - bottom)}px`);
+    pop.style.setProperty('--mpop-r', `${Math.max(8, pr.right - right)}px`);
+    pop.style.setProperty('--mpop-h', `${Math.max(0, bottom - top)}px`);
   }
   function openSheet(o) {
     A.closeRowSheet(); closeSheet();
@@ -525,7 +578,14 @@ window.WosChatPower = function chatPower(A) {
     // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
     const priv = !agent && !A.winAgent(w) && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
     openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false, agent, priv, pop: !!pop && mode !== 'retry' });
-    if (!M.ready) M.load().then(() => { if (sheet?.type === 'model') paint(sheet.pane, A.elOf(sheet.pane)); });
+    // A list older than ~15 s is refetched on open (a sign-in added a moment ago shows without waiting out the 5 min cache).
+    const opened = sheet;
+    if (M.stale ? M.stale() : !M.ready) M.load(M.ready).then(() => {
+      if (sheet !== opened || sheet?.type !== 'model' || H.win(wid)?.thread !== opened.sid) return;
+      // A fresh default must agree with what Send will use. An explicit draft choice stays pinned.
+      sheet.cur = mode === 'new' ? newModel(ch(wid), w) : threadModel(LIVE.session(opened.sid));
+      paint(sheet.pane, A.elOf(sheet.pane));
+    });
   }
   function openFiles(pane) {
     if (!F) return;
@@ -564,7 +624,7 @@ window.WosChatPower = function chatPower(A) {
     const w = H.win(id);
     if (t.closest('[data-chfiles]')) { openFiles(id); return true; }
     if (t.closest('[data-chmodel]')) { const ww = H.win(A.owner(id)); openModels(id, ww?.thread === '__new__' ? 'new' : 'thread', !!t.closest('.ch-mlabel')); return true; }
-    if (t.closest('[data-chlatest]')) { const nb = A.elOf(id)?.querySelector('.ch-msgs'); if (nb) { ch(id).follow = true; scrollBox(nb).scrollTo({ top: scrollBox(nb).scrollHeight, behavior: 'smooth' }); } return true; }
+    if (t.closest('[data-chlatest]')) { const nb = A.elOf(id)?.querySelector('.ch-msgs'); if (nb) { follow(id); } return true; }
     if (t.closest('[data-chmic]')) {
       if (!w?.thread || !H.recordReply) return true;
       const r = H.recordReply(id, w.thread);
@@ -572,7 +632,7 @@ window.WosChatPower = function chatPower(A) {
       return true;
     }
     // Failed thread panel. Signed out: open the provider's connection app in this shell, or the Store on it.
-    const rc = t.closest('[data-chreconnect]'); if (rc) { openReconnect(rc.dataset.chreconnect, rc.dataset.installed !== '0'); return true; }
+    const rc = t.closest('[data-chreconnect]'); if (rc) { openReconnect(rc.dataset.chreconnect, rc.dataset.installed !== '0', rc.dataset.recoveryRun || ''); return true; }
     // Failed thread panel
     if (t.closest('[data-mregen]') && w?.thread) { regenerateThread(id, w.thread); return true; }
     if (t.closest('[data-chretry]') && w?.thread) { retryThread(id, w.thread); return true; }
@@ -592,6 +652,13 @@ window.WosChatPower = function chatPower(A) {
     return false;
   }
   function bind(root) {
+    const contact = e => {
+      const nb = e.target.closest?.('[data-chats]')?.querySelector('.ch-msgs');
+      if (!onScreen(nb)) return;
+      const c = ch(nb.closest('[data-chats]').dataset.chats); placed.delete(scrollBox(nb));
+      c.placeTouching = e.type === 'touchstart' || e.type === 'touchmove'; c.placeUserAt = Date.now();
+    };
+    ['touchstart', 'touchmove', 'touchend', 'touchcancel', 'wheel'].forEach(e => root.addEventListener(e, contact, { capture: true, passive: true }));
     root.addEventListener('scroll', e => { const t = e.target; if (t && t.classList && t.classList.contains('ch-msgs')) onScroll(t); }, true);
     root.addEventListener('toggle', e => {
       const d = e.target; if (!d || !d.matches || !d.matches('details[data-wk]')) return;
@@ -605,7 +672,7 @@ window.WosChatPower = function chatPower(A) {
       const inp = el?.querySelector('[data-fiq]'); if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
     });
   }
-  const opened = (wid, sid) => { const c = ch(wid), s = sid && sid !== '__new__' ? LIVE.session(sid) : null; c.unreadOpen = s && LIVE.isNew(s) ? sid : ''; c.posFor = ''; c.follow = false; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
+  const opened = (wid, sid) => { const c = ch(wid), s = sid && sid !== '__new__' ? LIVE.session(sid) : null; c.unreadOpen = s && LIVE.isNew(s) ? sid : ''; c.posFor = ''; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
   const holds = id => !!sheet && sheet.pane === id;
   async function tweakModels(wid) {
     const w = H.win(wid); if (!w) return [];
@@ -627,6 +694,6 @@ window.WosChatPower = function chatPower(A) {
     await pickModel(m, { wid, sid, alive: sameTarget, mode: sid ? 'thread' : 'new' });
     return sameTarget() ? tweakModel(wid) : null;
   }
-  return { tweakModels, tweakModel, position, anchorOf, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
+  return { tweakModels, tweakModel, position, capture, resume, reflow, follow, restore, anchorOf, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
     paint, closeSheet, click, bind, opened, holds, openFiles, openModels, retryThread, FOLDER_SVG, RP, newModel: c => c.newModel || null };
 };

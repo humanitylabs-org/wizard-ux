@@ -1,6 +1,6 @@
 /* Workspace identity shared by phone dock and desktop bar.
  * Shells own layout/window state; this module owns the focused-app glyph, colour,
- * count badge and Home-first keyboard slots. Keep those rules identical. */
+ * count badge and desktop keyboard slots (Home on ⌥`, desktops 1–9). Keep those rules identical. */
 (() => {
   'use strict';
   const C = window.WizCore = window.WizCore || {};
@@ -27,11 +27,11 @@
     const a = appOf(focused) || {}, sigil = a.sigil || a, s = S.of(sigil);
     return `<span class="dsg" style="--c:${a.sgc || s.color}">${a.sgh || S.html(sigil)}${ids.length > 1 ? `<b class="dn">${ids.length}</b>` : ''}${(() => { const n = deskCount(desk, wins, appOf); return n ? `<b class="dbg">${fmt(n)}</b>` : ''; })()}</span>`;
   }
-  const slot = (index, homeIncluded = false) => index + (homeIncluded ? 1 : 2);
+  // Desktop keys (Miguel, 27 Oct 2026): Home lives on ⌥` (left of 1), so desktops are numbered from 1.
+  const slot = (index, homeIncluded = false) => index + (homeIncluded ? 0 : 1);
   function digitTarget(digit, count) {
     if (!Number.isInteger(digit) || digit < 1 || digit > 9) return null;
-    if (digit === 1) return { kind: 'home' };
-    const index = digit - 2;
+    const index = digit - 1;
     return index < count ? { kind: 'desktop', index } : index === count ? { kind: 'new', index } : null;
   }
   C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, deskCount, fmt, counts });

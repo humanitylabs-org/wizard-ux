@@ -15,6 +15,17 @@
     "miguel/hidden-pin",
     "miguel/snooze-someday",
     "miguel/home-bars",
-    "wizard/two-orbs"
-  ]
+    "miguel/machines-home",
+    "wizard/two-orbs",
+    "miguel/arrange-download",
+    "wizard/app-borders",
+    "miguel/refresh-button",
+    "wizard/unified-inbox"
+  ],
+  "defaults": [
+    "wizard/unified-inbox"
+  ],
+  "aliases": {
+    "miguel/unified-inbox": "wizard/unified-inbox"
+  }
 }

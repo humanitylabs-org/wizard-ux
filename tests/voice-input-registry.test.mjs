@@ -17,6 +17,9 @@ test('cache cannot self-grant; network catalog projects strict voice declaration
 test('Troubleshooter stays a normal launchable app offline in both shells with all open-app aliases',async()=>{
  const window={WizCore:{norm:s=>String(s).toLowerCase()},dispatchEvent(){},localStorage:{getItem:()=>null,setItem(){}}};
  const ctx={window,CustomEvent:class{},URL,location:new URL('https://wizard.example/'),fetch:async()=>{throw Error('catalog unavailable');},AbortSignal,setTimeout,clearTimeout,setInterval(){},addEventListener(){},document:{addEventListener(){},visibilityState:'visible'},localStorage:window.localStorage};
+ window.addEventListener=()=>{};
+ vm.runInNewContext(readFileSync(new URL('../web/core/voice-legacy.js',import.meta.url),'utf8'),ctx);
+ vm.runInNewContext(readFileSync(new URL('../web/core/app-voice.js',import.meta.url),'utf8'),ctx);
  vm.runInNewContext(source,ctx);await window.WizCore.appsLoaded();
  for(const shell of ['mobile','desktop']){
   const R=window.WizCore.apps(shell),app=R.APP.troubleshooter;
