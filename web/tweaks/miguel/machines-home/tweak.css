@@ -500,3 +500,19 @@ html[data-skin="obsidian-light"] .mh-root .mh-wiz, html[data-skin="obsidian-ligh
 .mh-wiz-car { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: .7; transition: transform 160ms; }
 .mh-wiz-car.is-up { transform: rotate(180deg); }
 .mh-root.is-topbar .mh-glance.is-bar .mh-gauge { background: transparent !important; box-shadow: none !important; }
+
+/* Top bar v5: the workspace dropdown matches the bar (neutral, no blue); light mode fuel gauge readable. */
+.mh-root.is-topbar.is-wiz { margin: 0 2px 0 0; }
+.mh-root .mh-wiz { padding: 0 6px 0 10px !important; font-weight: 650; color: var(--ink, #fff); }
+.mh-root .mh-wiz:hover, .mh-root .mh-wiz[aria-expanded="true"] { background: rgba(205, 190, 255, .12); }
+.mh-wiz-menu { --mh-ink: #fff; --mh-ink-2: rgba(255, 255, 255, .7); --mh-ink-3: rgba(255, 255, 255, .5); background: rgba(24, 24, 28, .94); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), 0 18px 44px -16px rgba(0, 0, 0, .65); }
+.mh-root .mh-wiz-menu button[aria-checked="true"] { background: rgba(255, 255, 255, .1); }
+.mh-root .mh-wiz-menu button[aria-checked="true"] b::after { content: "  ✓"; font-weight: 700; opacity: .8; }
+html[data-skin="obsidian-light"] .mh-wiz-menu, html[data-skin="landscapes-light"] .mh-wiz-menu { --mh-ink: #111418; --mh-ink-2: rgba(17, 20, 24, .7); --mh-ink-3: rgba(17, 20, 24, .5); background: rgba(255, 255, 255, .96); box-shadow: inset 0 0 0 1px rgba(17, 20, 24, .1), 0 18px 44px -18px rgba(17, 20, 24, .35); }
+html[data-skin="obsidian-light"] .mh-root .mh-wiz-menu button[aria-checked="true"], html[data-skin="landscapes-light"] .mh-root .mh-wiz-menu button[aria-checked="true"] { background: rgba(17, 20, 24, .07); }
+html[data-skin="obsidian-light"] .mh-root .mh-wiz-menu button:hover { background: rgba(17, 20, 24, .05); }
+html[data-skin="obsidian-light"] .mh-root .mh-wiz:hover, html[data-skin="obsidian-light"] .mh-root .mh-wiz[aria-expanded="true"] { background: rgba(17, 20, 24, .07); }
+html[data-skin="obsidian-light"] .mh-glance.is-bar .mh-g-label { color: #111418; }
+html[data-skin="obsidian-light"] .mh-glance.is-bar .mh-g-cells i { background: rgba(17, 20, 24, .16); box-shadow: none; }
+html[data-skin="obsidian-light"] .mh-glance.is-bar .mh-g-cells i.on { background: #12A867; }
+html[data-skin="obsidian-light"] .mh-glance.is-bar[data-s="tight"] .mh-g-cells i.on, html[data-skin="obsidian-light"] .mh-glance.is-bar .mh-gauge[data-s="tight"] .mh-g-cells i.on { background: #C98200; }
