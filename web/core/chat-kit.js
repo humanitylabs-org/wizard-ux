@@ -579,7 +579,7 @@
     for (const k of ['text', 'title', 'url']) if (data[k] != null && String(data[k])) payload[k] = String(data[k]);
     if ((!payload.text && !payload.url) || (payload.text || '').length > 90000 || (payload.title || '').length > 1024 || (payload.url || '').length > 8192) return 'unsupported';
     if (payload.url) { try { const parsed = new URL(payload.url, location.href); if (!/^https?:$/.test(parsed.protocol)) return 'unsupported'; if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(payload.url)) payload.url = parsed.href; } catch (_) { return 'unsupported'; } }
-    // Wizard's own sheet first (people → Wizard apps → Other apps…); no receiver for this kind = straight out.
+    // Wizard's own sheet first (people → Apps → Other apps…); no receiver for this kind = straight out.
     if (window.WosShareSheet) return window.WosShareSheet.show(payload, () => shareOut(payload));
     return shareOut(payload);
   }
@@ -659,7 +659,7 @@
   /* ================= media viewer: images (pinch, pan, swipe), video, audio, files ================= */
   const TEXTY = /^(text\/|application\/(json|xml|x-yaml|yaml|javascript|x-sh))/;
   const TEXT_EXT = /\.(md|markdown|txt|log|json|csv|tsv|ya?ml|xml|py|js|ts|tsx|jsx|sh|css|html?|toml|ini|cfg)$/i;
-  const V = { el: null, items: [], i: 0, s: 1, x: 0, y: 0, ptr: new Map(), g: null, lastTap: 0 };
+  const V = { el: null, items: [], i: 0, s: 1, x: 0, y: 0, ptr: new Map(), g: null, lastTap: 0, long: false, fl: 0 };
   function build() {
     if (V.el) return V.el;
     const el = document.createElement('div');
@@ -694,10 +694,11 @@
     const stage = el.querySelector('.mv-stage');
     stage.addEventListener('pointerdown', e => {
       if (!V.items[V.i] || V.items[V.i].kind !== 'image') return;
+      stopFling();
       stage.setPointerCapture?.(e.pointerId);
       V.ptr.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (V.ptr.size === 2) { const [a, b] = [...V.ptr.values()]; V.g = { pinch: true, d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, s0: V.s, x0: V.x, y0: V.y }; }
-      else if (V.ptr.size === 1) V.g = { pinch: false, sx: e.clientX, sy: e.clientY, x0: V.x, y0: V.y, t: Date.now(), moved: false };
+      else if (V.ptr.size === 1) V.g = { pinch: false, sx: e.clientX, sy: e.clientY, x0: V.x, y0: V.y, t: Date.now(), moved: false, ly: e.clientY, lt: performance.now(), vy: 0 };
       clearTimeout(V.lp); V.lp = 0;
       if (V.ptr.size === 1) V.lp = setTimeout(() => { V.lp = 0; const g = V.g; if (g && !g.pinch && !g.moved && V.ptr.size === 1) { g.held = true; menu(true); } }, 500);
     });
@@ -706,14 +707,19 @@
       V.ptr.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (V.g.pinch && V.ptr.size >= 2) {
         const [a, b] = [...V.ptr.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y);
-        V.s = Math.max(1, Math.min(6, V.g.s0 * d / V.g.d0)); V.x = V.g.x0 * V.s / V.g.s0; V.y = V.g.y0 * V.s / V.g.s0; paint(); return;
+        V.s = Math.max(1, Math.min(6, V.g.s0 * d / V.g.d0)); V.x = V.g.x0 * V.s / V.g.s0; V.y = V.g.y0 * V.s / V.g.s0; clampPan(); paint(); return;
       }
       if (V.g.pinch) return;
-      const dx = e.clientX - V.g.sx, dy = e.clientY - V.g.sy;
-      if (Math.abs(dx) + Math.abs(dy) > 8) { V.g.moved = true; clearTimeout(V.lp); V.lp = 0; }
-      if (V.g.held) return;
-      if (V.s > 1.02) { V.x = V.g.x0 + dx; V.y = V.g.y0 + dy; paint(); }
-      else { V.g.dx = dx; V.g.dy = dy; const img = stage.querySelector('img'); if (img) { img.style.transition = 'none'; img.style.transform = Math.abs(dx) > Math.abs(dy) ? `translateX(${dx}px)` : `translateY(${Math.max(0, dy)}px)`; el.style.setProperty('--fade', String(Math.max(.35, 1 - Math.max(0, dy) / 400))); } }
+      const dx = e.clientX - V.g.sx, dy = e.clientY - V.g.sy, g = V.g;
+      const now = performance.now(); g.vy = .7 * ((e.clientY - g.ly) / Math.max(1, now - g.lt)) + .3 * g.vy; g.ly = e.clientY; g.lt = now;
+      if (Math.abs(dx) + Math.abs(dy) > 8 && !g.moved) {
+        g.moved = true; clearTimeout(V.lp); V.lp = 0;
+        // A long screenshot scrolls: vertical drags pan through it. Pulling down from the very top still closes.
+        if (V.long && V.s <= 1.02 && Math.abs(dy) > Math.abs(dx) && !(g.y0 >= -1 && dy > 0)) g.pan = true;
+      }
+      if (g.held) return;
+      if (V.s > 1.02 || g.pan) { V.x = g.pan ? g.x0 : g.x0 + dx; V.y = g.y0 + dy; clampPan(); paint(); }
+      else { V.g.dx = dx; V.g.dy = dy; const img = stage.querySelector('img'); if (img) { img.style.transition = 'none'; img.style.transform = Math.abs(dx) > Math.abs(dy) ? `translate(${dx}px, ${V.y}px)` : `translateY(${V.y + Math.max(0, dy)}px)`; el.style.setProperty('--fade', String(Math.max(.35, 1 - Math.max(0, dy) / 400))); } }
     });
     const up = e => {
       if (!V.ptr.has(e.pointerId)) return;
@@ -723,17 +729,30 @@
       if (g.pinch) { if (V.ptr.size === 0) { V.g = null; if (V.s < 1.05) reset(); } else { const p = [...V.ptr.values()][0]; V.g = { pinch: false, sx: p.x, sy: p.y, x0: V.x, y0: V.y, t: Date.now(), moved: true }; } return; }
       V.g = null; el.style.removeProperty('--fade');
       if (!g.moved && Date.now() - g.t < 300) {
-        if (g.t - V.lastTap < 350) { V.lastTap = 0; if (V.s > 1.02) reset(); else { V.s = 2.5; V.x = 0; V.y = 0; paint(); } return; }
+        if (g.t - V.lastTap < 350) { V.lastTap = 0; if (V.s > 1.02) reset(); else zoomAt(g.sx, g.sy, 2.5); return; }
         V.lastTap = Date.now(); return;
       }
-      if (V.s > 1.02) return;
+      if (g.pan || V.s > 1.02) { if (V.long) fling(g.vy); return; }
       const dx = g.dx || 0, dy = g.dy || 0;
       if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) && V.items.length > 1) { go(dx < 0 ? 1 : -1); return; }
       if (dy > 110 && dy > Math.abs(dx)) { viewer.close(); return; }
       paint();
     };
     stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
-    document.addEventListener('keydown', e => { if (!viewer.isOpen()) return; if (e.key === 'ArrowLeft') go(-1); else if (e.key === 'ArrowRight') go(1); });
+    // Wheel / trackpad scrolls a long screenshot (or pans a zoomed photo); arrows and Page keys too.
+    stage.addEventListener('wheel', e => {
+      if (V.items[V.i]?.kind !== 'image' || (!V.long && V.s <= 1.02)) return;
+      e.preventDefault(); stopFling(); V.y -= e.deltaY; if (V.s > 1.02) V.x -= e.deltaX; clampPan(); paint(true);
+    }, { passive: false });
+    document.addEventListener('keydown', e => {
+      if (!viewer.isOpen()) return;
+      if (e.key === 'ArrowLeft') go(-1); else if (e.key === 'ArrowRight') go(1);
+      else if (V.long && /^(ArrowDown|ArrowUp|PageDown|PageUp| )$/.test(e.key)) {
+        const h = stage.clientHeight, d = /Page| /.test(e.key) ? h * .85 : h * .15;
+        e.preventDefault(); V.y += /Up/.test(e.key) ? d : -d; clampPan(); paint();
+      }
+    });
+    addEventListener('resize', () => { if (viewer.isOpen() && V.items[V.i]?.kind === 'image') fit(); });
     V.el = el; return el;
   }
   function menu(on) {
@@ -765,17 +784,54 @@
       else if (result === 'unsupported') K.notify('!', 'Sharing unavailable or not confirmed');
     } catch (_) { K.notify('!', 'Couldn’t share this file'); }
   });
-  function reset() { V.s = 1; V.x = 0; V.y = 0; paint(); }
-  function paint() {
+  // Zooming out keeps your place in a long screenshot; a normal photo recentres.
+  function reset() { const s = V.s; V.s = 1; V.x = 0; V.y = V.long ? V.y / s : 0; clampPan(); paint(); }
+  function zoomAt(px, py, s) {
+    const st = V.el?.querySelector('.mv-stage'); if (!st) return;
+    if (!V.long) { V.s = s; V.x = 0; V.y = 0; paint(); return; }
+    const r = st.getBoundingClientRect(), ox = px - r.left - r.width / 2, oy = py - r.top;
+    V.x = ox - (ox - V.x) * s / V.s; V.y = oy - (oy - V.y) * s / V.s; V.s = s; clampPan(); paint();
+  }
+  // Long screenshots (much taller than the screen) fit the width and scroll; the image's top sits at the stage top.
+  function dims() {
+    const st = V.el?.querySelector('.mv-stage'), img = st?.querySelector('img');
+    if (!img || !img.naturalWidth || !st.clientWidth) return null;
+    return { W: st.clientWidth, H: st.clientHeight, r: img.naturalHeight / img.naturalWidth };
+  }
+  function clampPan() {
+    if (!V.long) return; const d = dims(); if (!d) return;
+    const h = d.W * d.r * V.s, mx = (d.W * V.s - d.W) / 2;
+    V.y = Math.max(Math.min(0, d.H - h), Math.min(0, V.y)); V.x = Math.max(-mx, Math.min(mx, V.x));
+  }
+  function fit() {
+    const d = dims(); if (!d || !V.el) return;
+    const was = V.long; V.long = d.r > (d.H / d.W) * 1.15;
+    V.el.classList.toggle('long', V.long);
+    if (V.long !== was) { V.s = 1; V.x = 0; V.y = 0; }
+    clampPan(); paint(true);
+  }
+  function stopFling() { if (V.fl) cancelAnimationFrame(V.fl); V.fl = 0; }
+  function fling(v) {
+    stopFling(); if (!(Math.abs(v) > .05)) return;
+    let last = performance.now();
+    const step = now => {
+      const dt = Math.min(40, now - last); last = now;
+      const y = V.y + v * dt; V.y = y; clampPan(); if (V.y !== y) v = 0;
+      v *= Math.pow(.996, dt); paint(true);
+      V.fl = Math.abs(v) > .02 && viewer.isOpen() ? requestAnimationFrame(step) : 0;
+    };
+    V.fl = requestAnimationFrame(step);
+  }
+  function paint(instant) {
     const img = V.el?.querySelector('.mv-stage img'); if (!img) return;
-    img.style.transition = V.g ? 'none' : ''; img.style.transform = `translate(${V.x}px, ${V.y}px) scale(${V.s})`;
+    img.style.transition = V.g || instant || V.fl ? 'none' : ''; img.style.transform = `translate(${V.x}px, ${V.y}px) scale(${V.s})`;
     V.el.classList.toggle('zoomed', V.s > 1.02);
   }
   function go(d) { if (V.items.length < 2) return; V.i = (V.i + d + V.items.length) % V.items.length; show(); }
   const sizeLabel = b => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : b >= 1024 ? Math.round(b / 1024) + ' KB' : b ? b + ' B' : '';
   function show() {
     const el = build(), it = V.items[V.i]; if (!it) return;
-    V.s = 1; V.x = 0; V.y = 0; V.text = ''; menu(false);
+    V.s = 1; V.x = 0; V.y = 0; V.text = ''; V.long = false; stopFling(); el.classList.remove('long'); menu(false);
     const stage = el.querySelector('.mv-stage');
     for (const m of stage.querySelectorAll('video,audio')) { try { m.pause(); } catch (e) {} }
     el.dataset.kind = it.kind;
@@ -783,7 +839,7 @@
     el.querySelector('.mv-ti small').textContent = V.items.length > 1 ? `${V.i + 1} of ${V.items.length}` : sizeLabel(it.bytes);
     el.querySelector('[data-mv="prev"]').hidden = el.querySelector('[data-mv="next"]').hidden = V.items.length < 2;
     el.querySelector('[data-mv="copy"]').hidden = true;
-    if (it.kind === 'image') stage.innerHTML = `<img src="${esc(it.url)}" alt="${esc(it.name || 'Photo')}" draggable="false">`;
+    if (it.kind === 'image') { stage.innerHTML = `<img src="${esc(it.url)}" alt="${esc(it.name || 'Photo')}" draggable="false">`; const im = stage.querySelector('img'); im.onload = fit; if (im.complete) fit(); }
     else if (it.kind === 'video') stage.innerHTML = `<video src="${esc(it.url)}" controls playsinline autoplay preload="metadata"></video>`;
     else if (it.kind === 'audio') stage.innerHTML = `<div class="mv-file"><span class="mv-ic">♪</span><b>${esc(it.name || 'Audio')}</b><audio src="${esc(it.url)}" controls autoplay preload="metadata"></audio>${it.transcript ? `<p class="mv-tx">${esc(it.transcript)}</p>` : ''}</div>`;
     else if (TEXTY.test(it.mime || '') || TEXT_EXT.test(it.name || '')) {
@@ -810,12 +866,12 @@
       if (!V.el || V.el.hidden) return false;
       if (menu(false)) return true; // Back/Esc: the Save/Share menu first, the photo stays open
       for (const m of V.el.querySelectorAll('video,audio')) { try { m.pause(); } catch (e) {} }
-      V.el.classList.remove('open', 'zoomed'); V.el.hidden = true; V.el.querySelector('.mv-stage').innerHTML = ''; V.items = []; V.ptr.clear(); V.g = null;
+      stopFling(); V.long = false; V.el.classList.remove('open', 'zoomed', 'long'); V.el.hidden = true; V.el.querySelector('.mv-stage').innerHTML = ''; V.items = []; V.ptr.clear(); V.g = null;
       K.onChange(false); return true;
     },
     isOpen: () => !!V.el && !V.el.hidden,
     menu: () => viewer.isOpen() && menu(true),
-    get state() { return { open: viewer.isOpen(), i: V.i, n: V.items.length, scale: V.s, kind: V.items[V.i]?.kind || '', name: V.items[V.i]?.name || '', menu: !!V.el && !V.el.querySelector('.mv-menu').hidden }; },
+    get state() { return { open: viewer.isOpen(), i: V.i, n: V.items.length, scale: V.s, long: V.long, x: V.x, y: V.y, kind: V.items[V.i]?.kind || '', name: V.items[V.i]?.name || '', menu: !!V.el && !V.el.querySelector('.mv-menu').hidden }; },
   };
 
   /* ================= approvals (normalizers.ts) ================= */

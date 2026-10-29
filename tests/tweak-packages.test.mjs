@@ -246,7 +246,8 @@ test('chats.js lists notifications among Ready chats only in list mode, in every
   const src = read('web/core/chats.js');
   assert.match(src, /const on = !!window\.WosSkinHost\?\.inboxList;/, 'gated on the host list flag');
   assert.match(src, /const nt = k === 'ready' \? listNotes : null/, 'eligible notifications join Ready');
-  assert.match(src, /return bar \+ withNotes\(list, awake, rowFn\) \+ later;/, 'Newest, Oldest and Priority interleave');
+  assert.match(src, /const top = sec === 'ready' \? bar : ''/, 'only Ready owns the order controls');
+  assert.match(src, /return top \+ withNotes\(list, awake, rowFn\) \+ later;/, 'Newest, Oldest and Priority interleave in every dated section');
   assert.match(src, /if \(awake\.length && !groups\.has\(NOTES_SUBJECT\)\) groups\.set\(NOTES_SUBJECT, \[\]\);/, 'By subject: their own subject');
   assert.match(src, /\.ch-list \.ch-notif-row\[data-chnotif\]'\); if \(nr\) \{ window\.WosSkinHost\?\.inboxAct\?\.\('open'/, 'a tap goes to the package');
 });

@@ -54,6 +54,10 @@ test('status failure, malformed JSON, missing checks and degraded overall stay a
 test('healthy infrastructure with failed send reports retry; results cache 10s and coalesce', async () => {
   const h = setup(); const [a, b] = await Promise.all([h.api.diagnose(), h.api.diagnose()]);
   assert.equal(a, b); assert.equal(a.layer, 'send'); assert.equal(h.calls.length, 2);
+  // Request-neutral: a read-only failure shares this result, so it never claims an outbound message.
+  assert.equal(a.short, 'Wizard reachable · retrying');
+  assert.match(a.message, /don’t show whether the request went through/);
+  assert.doesNotMatch(a.message, /message|didn’t take/);
   await h.api.diagnose(); assert.equal(h.calls.length, 2);
   h.advance(10001); await h.api.diagnose(); assert.equal(h.calls.length, 4);
   assert.equal(h.events(), 1); assert.equal(h.timers.size, 0);

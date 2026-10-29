@@ -70,7 +70,7 @@ async function phone(b) {
   await shot(p, 'phone-04-new-permissions');
   // Adjust before create: add a Wizard app.
   await f.locator('[data-add="wizard"]').click(); await f.locator('[data-addpick="meeting-recorder"]').click(); await wait(200);
-  ok(/Meeting Recorder/.test(await f.locator('.ag').innerText()), 'phone: Add Wizard app in the flow (Meeting Recorder)');
+  ok(/Meeting Recorder/.test(await f.locator('.ag').innerText()), 'phone: Add app in the flow (Meeting Recorder)');
   await f.locator('[data-create]').click();
   await f.waitForSelector('.ag-hero', { timeout: 8000 });
   const created = (await api(p, '/wizard/v1/agents')).body.agents.find(a => a.label === 'Private');
@@ -236,8 +236,8 @@ async function bindingPhone(p, created) {
   const bound = f.locator('[data-bound-apps]');
   ok(await bound.count() === 1 && /Meeting Recorder/.test(await bound.innerText()) && await bound.locator(`[data-held="${BIND}"]`).count() === 1, 'phone: agent page: Apps that send work here lists the app and the held warning', await bound.innerText().catch(() => ''));
   ok(/Apps that send work here/i.test(await f.locator('.ag').innerText()), 'phone: agent page names the section “Apps that send work here”');
-  // #58 in sync: the app ticked in the app's sheet is in the agent's Wizard apps; removing it here unticks it there.
-  ok(await f.locator(`[data-wizard-apps] [data-app-item="${BIND}"]`).count() === 1, 'phone: agent page: Wizard apps lists the app ticked in its settings sheet');
+  // #58 in sync: the app ticked in the app's sheet is in the agent's Apps; removing it here unticks it there.
+  ok(await f.locator(`[data-wizard-apps] [data-app-item="${BIND}"]`).count() === 1, 'phone: agent page: Apps lists the app ticked in its settings sheet');
   const prov = (await f.locator('[data-provider-line]').innerText().catch(() => '')).trim();
   ok(prov === 'Tinfoil · Confidential', 'phone: provider line says Confidential once', prov);
   await f.locator(`[data-wizard-apps] [data-remove="wizard"][data-v="${BIND}"]`).click(); await wait(1000);

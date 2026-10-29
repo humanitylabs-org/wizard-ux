@@ -123,3 +123,5 @@ html[data-skin="signal"] :is(.item, .btn, .url, .menu, .sheet, .qr) { border-rad
 .sheet .link { text-align: center; }
 .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); transform: translateX(-50%); z-index: 12; max-width: calc(100vw - 40px); padding: 10px 14px; border-radius: 12px; background: var(--ov); border: 1px solid var(--bd); color: var(--t); font-size:var(--wz-text-md); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
 .pc-host { margin-top: 14px; }
+/* Domain placement on the shared control, retaining the approved 16px air and skin tint. */
+.wz-button.add-device { width: 100%; margin-top: 16px; background: var(--acs); color: var(--ac); border: 1px solid color-mix(in srgb, var(--ac) 28%, transparent); }

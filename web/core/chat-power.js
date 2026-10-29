@@ -239,7 +239,8 @@ window.WosChatPower = function chatPower(A) {
     const ag = agentOfWin(w, s) || (w.thread === '__new__' && cur?.agent && AG?.isOther(cur.agent) ? AG.get(cur.agent) || null : null);
     const priv = !!ag && AG?.isPrivate(ag);
     const full = cur?.model ? (ag ? AG.modelName(ag, cur.model) : M.name(cur.model, cur.provider)) : 'default';
-    const label = cur?.model ? (ag ? full : M.short(cur.model, cur.provider)) : M.ready ? 'Default model' : 'Model';
+    // Agents get the same short family name as the main chat (Fable, Opus, GLM 5.3), never a raw id like claude-fable-5-1.
+    const label = cur?.model ? (M.short(cur.model, cur.provider || ag?.model?.provider) || full) : M.ready ? 'Default model' : 'Model';
     const secure = !ag && !!cur?.provider && !!M.ours?.() && !!M.isPrivateRoute?.(cur.provider);
     return `<button type="button" class="ch-model${ag ? ' agent' : ''}${priv || secure ? ' private' : ''}" data-chmodel aria-label="Model: ${esc(full)}${priv ? ', private' : ''}. Change model" title="${esc(cur?.model || '')}">${priv || secure ? (AG?.lock?.() || '') : ''}${esc(label)}<i aria-hidden="true">▾</i></button>`;
   }
@@ -361,12 +362,12 @@ window.WosChatPower = function chatPower(A) {
     // Only the freshly hydrated input, never cached turns. A failed note-started turn (the server's request skips
     // follow-through notes, so it is empty or an older request) goes again as a plain "Retry".
     const note = noteTurn(w && w.thread === sid ? w : null, s);
-    const text = note ? RETRY_WORD : s?.request || (FAILED.has(s?.status) ? RETRY_WORD : '');
+    const text = s?.retryRunId ? s.request || RETRY_WORD : note ? RETRY_WORD : s?.request || (FAILED.has(s?.status) ? RETRY_WORD : '');
     if (!text) { toast('!', 'This thread has no request to send again · open it to reply', 2600); return false; }
     const cur = o ? { model: o.value, provider: o.provider } : threadModel(s);
     const c = w ? ch(wid) : null; if (c) c.retrying = sid;
     try {
-      await OUTBOX.enqueue({ kind: 'reply', sessionId: sid, text, wid: w && w.thread === sid ? wid : '', how: 'retry', source: 'chat',
+      await OUTBOX.enqueue({ kind: 'reply', sessionId: sid, agent: s.agent || A.winAgent?.(w) || '', text, retryRunId: s.retryRunId || '', wid: w && w.thread === sid ? wid : '', how: 'retry', source: 'chat',
         instructions: `${window.WizConfig.owner() || 'The owner'} pressed Retry on this thread after the last request failed${o ? `, choosing ${o.name}` : ''}. ${text === RETRY_WORD ? 'Carry out the last request in this thread again (it may be a follow-through note rather than a typed message).' : 'This is the same request again.'}`,
         ...(cur.model ? { model: cur.model, provider: cur.provider } : {}) });
       E?.cleared.set(sid, Date.now());
@@ -578,13 +579,16 @@ window.WosChatPower = function chatPower(A) {
     // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
     const priv = !agent && !A.winAgent(w) && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
     openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false, agent, priv, pop: !!pop && mode !== 'retry' });
-    // A list older than ~15 s is refetched on open (a sign-in added a moment ago shows without waiting out the 5 min cache).
-    const opened = sheet;
-    if (M.stale ? M.stale() : !M.ready) M.load(M.ready).then(() => {
+    // Revalidate every open; repaint only if the catalogue/default actually changed.
+    // WosModels.options is the catalogue array (never a function): compare the fields the sheet shows.
+    const rows = list => (Array.isArray(list) ? list : []).map(o => [o.agent, o.provider, o.value, o.name, o.description, !!o.isGlobalDefault]);
+    const key = () => JSON.stringify([rows(M.options), rows(M.privateOptions?.())]);
+    const opened = sheet, before = key();
+    M.load(M.ready).then(() => {
       if (sheet !== opened || sheet?.type !== 'model' || H.win(wid)?.thread !== opened.sid) return;
       // A fresh default must agree with what Send will use. An explicit draft choice stays pinned.
-      sheet.cur = mode === 'new' ? newModel(ch(wid), w) : threadModel(LIVE.session(opened.sid));
-      paint(sheet.pane, A.elOf(sheet.pane));
+      const cur = mode === 'new' ? newModel(ch(wid), w) : threadModel(LIVE.session(opened.sid));
+      if (key() !== before || JSON.stringify(sheet.cur) !== JSON.stringify(cur)) { sheet.cur = cur; paint(sheet.pane, A.elOf(sheet.pane)); }
     });
   }
   function openFiles(pane) {
