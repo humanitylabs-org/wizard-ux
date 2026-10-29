@@ -356,6 +356,21 @@ test('thirteenth review: Resources stays in Settings; the owner\'s meter pick ho
   }
 });
 
+test('fourteenth review: only Wizard machines are helpers; a stale probe is a last reading, not offline', () => {
+  for (const who of ['miguel', 'wizard']) {
+    const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
+    assert.match(src, /const isAgent = d => d\.id === MAIN \|\| !d\.group \|\| d\.group === 'agent';/, who);
+    assert.match(src, /others = helpers\(\)\.map\(d => machine\(d\.id\)\)/, who);
+    assert.doesNotMatch(src, /others = devices\(\)\.filter\(d => d\.id !== MAIN\)/, who);
+    assert.match(src, /const myDevices = \(\) => \[\.\.\.devices\(\)\.filter\(d => d\.id !== MAIN && d\.group === 'human'\)/, who);
+    assert.match(src, /nM = g \? 1 : devices\(\)\.filter\(isAgent\)\.length/, who);
+    assert.match(src, /const hasReading = m => m\.status === 'online' \|\| m\.status === 'stale';/, who);
+    assert.match(src, /if \(m\.stale \|\| m\.status === 'connecting'\)/, who);
+    assert.match(src, /function bars\(m, maxOf\) \{\n    if \(!hasReading\(m\)\) return null;/, who);
+    assert.match(src, /off = m\.status && !hasReading\(m\) && role !== 'main'/, who);
+  }
+});
+
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));

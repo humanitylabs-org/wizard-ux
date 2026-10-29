@@ -74,6 +74,9 @@ export default function setup(api) {
   const devices = () => Array.isArray(reg().devices) ? reg().devices : [];
   const peers = () => reg().network?.available && Array.isArray(reg().network.peers) ? reg().network.peers : [];
   const devOf = id => devices().find(d => d.id === id) || null;
+  // Only Wizard machines (group agent) sit in the helper row; a registered phone or laptop belongs with its person.
+  const isAgent = d => d.id === MAIN || !d.group || d.group === 'agent';
+  const helpers = () => devices().filter(d => d.id !== MAIN && isAgent(d));
   const managedList = () => Array.isArray(reg().managed) ? reg().managed : [];
   const managedOf = id => managedList().find(m => m.id === id) || null;
   const diskGB = d => (d?.disks || []).reduce((n, x) => n + (+x.sizeGB || 0), 0) || null;
@@ -84,7 +87,7 @@ export default function setup(api) {
     const d = devOf(id);
     if (!d) return { id, name: id === MAIN ? pretty(reg().this?.name) || 'Main' : id, status: 'unknown' };
     const dg = diskGB(d), fg = freeGB(d);
-    return { id, name: pretty(d.name), status: d.status, error: d.error || '', use: d.use || '', platform: d.platform || '', access: d.access || null, cores: d.cpus || null, ramGB: d.memoryTotalGB || null,
+    return { id, name: pretty(d.name), status: d.status, stale: d.status === 'stale', readAt: d.readAt || null, error: d.error || '', use: d.use || '', platform: d.platform || '', access: d.access || null, cores: d.cpus || null, ramGB: d.memoryTotalGB || null,
       mem: d.memory, cpu: d.cpu, diskGB: dg, freeGB: fg, diskUsed: dg != null && fg != null ? dg - fg : null };
   }
   // Rough power, for size and order: cores, then memory, then disk.
@@ -93,7 +96,10 @@ export default function setup(api) {
   const qualOf = id => (S.backup?.standby?.machines || []).find(x => x.id === id) || null;
   const qualifies = id => /^(ok|yes|ready|fits)$/i.test(qualOf(id)?.verdict || '');
   // Wizard reaches the machine's network but can't log in = Disconnected; not on the network at all = Offline.
-  const offText = m => m.status === 'unreachable' || /denied|refused|timed out|auth/i.test(m.error) ? 'Disconnected' : 'Offline';
+  // Stale = read before, not just now: its last numbers still show, marked as such; never called offline.
+  const hasReading = m => m.status === 'online' || m.status === 'stale';
+  const lastRead = m => m.readAt && Date.parse(m.readAt) ? ` ${agoS(Math.max(0, Date.now() - Date.parse(m.readAt)) / 1000)} ago` : '';
+  const offText = m => m.status === 'connecting' ? 'Checking' : m.status === 'unreachable' || /denied|refused|timed out|auth/i.test(m.error) ? 'Disconnected' : 'Offline';
   function storage() {
     const b = S.backup?.backup;
     if (!b || !b.configured || !b.target) return null;
@@ -113,7 +119,8 @@ export default function setup(api) {
   // Unknown until the chat list has been read once: show that, never a confident empty inbox.
   const sessions = () => api.data.read.sessions?.counts() || { working: 0, ready: 0, unknown: true };
   const chatWords = x => x.unknown ? 'chats not loaded yet' : `${x.working} working, ${x.ready} ready${S.unread ? `, ${S.unread} unread` : ''}`;
-  const myDevices = () => peers().filter(p => p.group === 'human').map(p => ({ name: p.name === 'localhost' && /ios/i.test(p.os || '') ? 'iPhone' : p.name, online: !!p.online }));
+  const myDevices = () => [...devices().filter(d => d.id !== MAIN && d.group === 'human').map(d => ({ name: pretty(d.name), online: /^(online|stale|unreachable)$/.test(d.status || '') })),
+    ...peers().filter(p => p.group === 'human').map(p => ({ name: p.name === 'localhost' && /ios/i.test(p.os || '') ? 'iPhone' : p.name, online: !!p.online }))];
   // The connected Wizard's people (the glance always describes this one, whatever Your network has selected).
   const myPeople = () => [{ id: 'me', name: ownerName(), devices: myDevices() }];
   function people() {
@@ -129,6 +136,9 @@ export default function setup(api) {
   const reason = c => c.what === 'system' ? `runs ${String(c.say || '').split(':')[0]}; Wizard needs Linux or a Mac`
     : String(c.say || '').replace(/^(\d+) (cores|GB memory|GB free) \(needs (\d+)\)$/, (_, h, k, n) => `has ${h} ${k === 'cores' ? 'cores' : k === 'GB memory' ? 'GB memory' : 'GB free'}, needs ${n}`);
   function actions(m) {
+    // Not read just now (last reading) or not read yet (still checking): nothing to fix, nothing to offer from old numbers.
+    if (m.stale || m.status === 'connecting') { const note = m.stale ? 'Last reading' : 'Checking';
+      return [{ id: 'storage', label: 'Use for storage', ok: false, note, no: [] }, { id: 'standby', label: qualifies(m.id) ? 'Standby device' : 'Make standby', ok: false, note, no: [] }]; }
     if (m.status !== 'online') return [{ id: 'reconnect', label: 'Reconnect', ok: true, note: m.error ? 'Wizard can’t log in' : 'Not on the network',
       words: `Reconnect ${m.name} to this Wizard so it shows as a helper again.`, why: m.error || `${m.name} is ${offText(m).toLowerCase()}.` },
       { id: 'storage', label: 'Use for storage', ok: false, note: 'Not eligible', no: ['reconnect it first'] },
@@ -311,7 +321,7 @@ export default function setup(api) {
   /* ---------- the map ---------- */
   // Bars are always there for online machines and fold open or shut with one class (smooth, no rebuild).
   function bars(m, maxOf) {
-    if (m.status !== 'online') return null;
+    if (!hasReading(m)) return null;
     const bar = (k, cap, used, text) => cap ? h('span', { cls: 'mh-bar', title: `${k}: ${text}` },
       h('i', { style: { '--w': (100 * clamp(cap / maxOf[k], .3, 1)).toFixed(0) + '%', '--f': (100 * clamp(used / cap, 0, 1)).toFixed(0) + '%' } }), h('small', { text: k === 'CPU' ? `${cap} cores` : gbFmt(cap) })) : h('span', { cls: 'mh-bar is-none' });
     return h('span', { cls: 'mh-bars' }, h('span', { cls: 'mh-bars-in' },
@@ -334,7 +344,7 @@ export default function setup(api) {
     a.checked ? h('small', { text: `Checked ${a.checked}` }) : h('small', { text: 'Not checked yet' })) : null;
   const label = (name, role, cls = '') => h('span', { cls: 'mh-label ' + cls }, h('span', { cls: 'mh-name', text: name }), role ? h('span', { cls: 'mh-role', text: role }) : null);
   function machineNode(m, role, maxOf, extra = {}) {
-    const s = extra.size || sizeOf(m), off = m.status && m.status !== 'online' && role !== 'main';
+    const s = extra.size || sizeOf(m), off = m.status && !hasReading(m) && role !== 'main';
     const disc = h('span', { cls: 'mh-disc is-art' + (off ? ' is-off' : '') }, art(artOf({ ...m, managed: extra.managed })));
     let tap;
     if (role === 'main' && extra.sessions) {
@@ -357,8 +367,9 @@ export default function setup(api) {
     if (m.id === MAIN) return h('div', { cls: nw('mh-act'), data: { of: m.id } },
       h('span', { cls: 'mh-act-head' }, h('b', { text: m.name }), h('span', { text: 'Main' })), accessInfo(m.access) || h('span', { text: 'Not checked yet' }));
     return h('div', { cls: nw('mh-act'), data: { of: m.id } },
-      h('span', { cls: 'mh-act-head' }, h('b', { text: m.name }), h('span', { text: m.status === 'online' ? (qualifies(m.id) ? 'Standby device' : 'Helper') : offText(m) })),
+      h('span', { cls: 'mh-act-head' }, h('b', { text: m.name }), h('span', { text: hasReading(m) ? (qualifies(m.id) ? 'Standby device' : 'Helper') + (m.stale ? ' · last reading' : '') : offText(m) })),
       accessInfo(m.access),
+      m.stale ? h('span', { cls: 'mh-act-why' }, h('b', { text: 'Last reading:' }), h('span', { text: `Wizard couldn’t read ${m.name} just now; these numbers are from its last reading${lastRead(m)}. It will try again.` })) : null,
       h('span', { cls: 'mh-act-btns' }, actions(m).map(a => h('button', { type: 'button', cls: 'mh-act-btn' + (a.ok ? '' : ' is-no'), disabled: !a.ok, data: { ask: `${m.id}:${a.id}` } },
         h('b', { text: a.label }), h('small', { text: a.note })))),
       ...actions(m).filter(a => !a.ok && a.no?.length).map(a => h('span', { cls: 'mh-act-why' },
@@ -455,11 +466,11 @@ export default function setup(api) {
         : S.backupRead === 'error' ? h('span', { cls: 'mh-more-info', text: 'Couldn’t reach Backup right now. It will try again.' })
         : h('span', { cls: 'mh-wait', role: 'status', 'aria-label': 'Reading your backup' })]));
       setRow(rowTs, S.open.has('ts') ? [tsPanel()] : []);
-      const main = machine(MAIN), others = devices().filter(d => d.id !== MAIN).map(d => machine(d.id)).sort((a, b) => power(b) - power(a));
-      const all = [main, ...others].filter(m => m.status === 'online');
+      const main = machine(MAIN), others = helpers().map(d => machine(d.id)).sort((a, b) => power(b) - power(a));
+      const all = [main, ...others].filter(hasReading);
       const maxOf = { Memory: Math.max(1, ...all.map(m => m.ramGB || 0)), Disk: Math.max(1, ...all.map(m => m.diskGB || 0)), CPU: Math.max(1, ...all.map(m => m.cores || 0)) };
       const node = m => m.id === MAIN ? machineNode(main, 'main', maxOf, { roleText: 'Main', sessions: sessions() })
-        : machineNode(m, qualifies(m.id) ? 'standby' : 'helper', maxOf, { roleText: qualifies(m.id) ? 'Standby device' : m.status === 'online' ? 'Helper' : offText(m), warn: m.status !== 'online' });
+        : machineNode(m, qualifies(m.id) ? 'standby' : 'helper', maxOf, { roleText: (qualifies(m.id) ? 'Standby device' : hasReading(m) ? 'Helper' : offText(m)) + (m.stale ? ' · last reading' : ''), warn: m.status !== 'online' });
       // The bar names sit left of the row; an invisible twin on the right keeps Main exactly in the middle.
       const legend = twin => h('div', { cls: 'mh-legend' + (twin ? ' is-twin' : ''), 'aria-hidden': 'true' }, h('span', { cls: 'mh-bars-in' }, h('span', { text: 'RAM' }), h('span', { text: 'Disk' }), h('span', { text: 'CPU' }), h('span', { cls: 'mh-how-l', text: 'SSH' })));
       setRow(rowMn, [legend(false), ...around(main, others).map(node), legend(true), plus('add-device', 'Add a device to this network')]);
@@ -618,13 +629,13 @@ export default function setup(api) {
   const drawn = { top: '', ai: '', list: '', map: '', glance: '' };
   const mapSig = () => { const st = storage();
     return JSON.stringify([S.ws, S.backupRead || '', [...S.open].filter(k => k !== 'ai' && k !== 'signin' && k !== 'wsm'), reg().this || null, managedList(),
-      S.devFresh, !!S.res.devicesError, devices().map(d => [d.id, d.name, d.status, d.error, JSON.stringify(d.access || null), d.cpus, d.memoryTotalGB, diskGB(d), Math.round((d.memory || 0) / 5), Math.round((d.cpu || 0) / 5), Math.round((freeGB(d) || 0) / 5)]),
+      S.devFresh, !!S.res.devicesError, devices().map(d => [d.id, d.name, d.status, d.error, JSON.stringify(d.access || null), d.cpus, d.memoryTotalGB, diskGB(d), Math.round((d.memory || 0) / 5), Math.round((d.cpu || 0) / 5), Math.round((freeGB(d) || 0) / 5), d.group, d.status === 'stale' ? d.readAt : null]),
       myDevices(), sessions(), S.unread, backupRunning(), st && { ...st, age: st.age == null ? null : agoS(st.age), used: st.used == null ? null : gbFmt(st.used) },
       (S.backup?.standby?.machines || []).map(x => [x.id, x.verdict, (x.checks || []).map(c => c.ok)])]); };
   // Pictures and one short value per part; the words live in the tooltip / screen-reader label and in Settings.
   function renderGlance() {
     const g = null, x = sessions(), fuel = g ? null : gauge(), st = g ? null : storage(), bad = g ? 0 : openOnes().length;  // the bar always shows the connected workspace
-    const checked = allClear(), nM = g ? 1 : devices().length || 1;
+    const checked = allClear(), nM = g ? 1 : devices().filter(isAgent).length || 1;
     const sig = JSON.stringify([S.ws, aiStale(), fuel && Math.round(fuel.left / 10), !!x.unknown, x.working, Math.min(x.ready, 8), S.unread, st && [st.state, st.age == null ? null : agoS(st.age)], bad, checked, nM, backupRunning(), myPeople().length]);
     if (sig === drawn.glance) return; drawn.glance = sig;
     const dots = (n, cls) => Array.from({ length: n }, () => h('i', { cls }));
