@@ -2319,11 +2319,22 @@
   }
   voicePicker.addEventListener('change', async () => {
     const list = [...voicePicker.files], files = V.files; voicePicker.value = '';
-    for (const file of list) {
-      if (!sameTake(files)) break;
-      if (files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); break; }
-      const f = { name: file.name, mime: file.type, bytes: file.size, uploading: true };
-      files.push(f); renderVoiceFiles();
+    if (!sameTake(files)) return;
+    // Every picked file joins the take at once, each tracked with its bytes, so a send before the uploads finish
+    // takes them all (James, 27 Oct 2026: picked two images, sent while the second was uploading, only the first
+    // arrived). Adding one row per finished upload left later files out of a send that happened in between.
+    const room = Math.max(0, 8 - files.length);
+    if (list.length > room) toast('!', 'Up to 8 files per message', 2400);
+    const rows = list.slice(0, room).map(file => {
+      const f = { name: file.name, mime: file.type, bytes: file.size, uploading: true, local: file };
+      window.WizUploads?.pending?.track(f, file);
+      files.push(f); return [file, f];
+    });
+    if (!rows.length) return;
+    renderVoiceFiles();
+    // One at a time; a row a send already took (handedOff) still uploads, because its message waits on it.
+    for (const [file, f] of rows) {
+      if (!f.handedOff && (!sameTake(files) || !files.includes(f))) { f.upSettle?.fail(new Error('Attachment removed')); continue; }
       await uploadVoiceFile(file, files, f);
     }
   });
@@ -3996,7 +4007,8 @@
     root() { const w = skinChatsWin(); return w ? track.querySelector(`[data-chats="${w.id}"]`) : null; },
     dock: () => $('#dock'),
     locked: pointerId => !!(DS && DS.id === pointerId && DS.h),
-    toast: text => toast('◇', text, 2400),
+    // Skin scripts pass plain text (file names, error messages): escaped, like the desktop toast.
+    toast: text => toast('◇', esc(String(text ?? '')), 2400),
     // Layouts (two-orb): who the screen routes to, and the orb's recorder.
     agents: () => (window.WosAgents?.visible?.() || window.WosAgents?.list || []).map(agentInfo),
     agentHere: () => agentHere(),
