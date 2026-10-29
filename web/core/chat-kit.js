@@ -710,6 +710,16 @@
         if (it && k === 'save') save(it); else if (it && k === 'share') share(it);
         return;
       }
+      // object-fit:contain keeps an <img> hit box across the entire stage, even
+      // in its letterbox bars. Those bars are outside the actual photo too.
+      const photo = e.target.closest('.mv-stage img');
+      if (photo?.naturalWidth && V.s <= 1.02) {
+        const r = photo.getBoundingClientRect(), fit = Math.min(r.width / photo.naturalWidth, r.height / photo.naturalHeight);
+        const w = photo.naturalWidth * fit, h = photo.naturalHeight * fit;
+        if (e.clientX < r.left + (r.width - w) / 2 || e.clientX > r.right - (r.width - w) / 2 || e.clientY < r.top + (r.height - h) / 2 || e.clientY > r.bottom - (r.height - h) / 2) return viewer.close();
+      }
+      // Bare canvas around the media is the viewer's backdrop, not a dead end.
+      if (e.target === el || e.target.classList.contains('mv-stage')) return viewer.close();
       const a = e.target.closest('[data-mv]')?.dataset.mv; if (!a) return;
       if (a === 'close') return viewer.close();
       if (a === 'prev') return go(-1);

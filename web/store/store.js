@@ -358,6 +358,9 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   }, true);
 
   document.addEventListener('click', e => {
+    // This is a navigation layer, not a native dialog: its exposed padding and
+    // surrounding Store canvas still dismiss the install layer through Back.
+    if (top() === 'sheet' && (e.target === $('sheet') || e.target === $('app') || e.target === document.body)) { pop(); return; }
     if (e.target.closest('[data-back]')) { pop(); return; }
     const sh = e.target.closest('[data-share]'); if(sh) { shareApp(find(sh.dataset.share)); return; }
     const li = e.target.closest('[data-link-install]'); if(li) { install(S.link?.app); return; }

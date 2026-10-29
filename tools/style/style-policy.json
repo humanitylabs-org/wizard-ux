@@ -19,11 +19,11 @@
     },
     "sheet.js": {
       "source": "style/sheet.js",
-      "sha256": "fbec58efa89921d2aed824b75c617c38c67e8f767e06ed8dd3b65b2e1f06178a"
+      "sha256": "6062134676fda28ec09419bc14e962b77dce905a0d57b0882d9ec960f67ea167"
     },
     "wizard-sheet.js": {
       "source": "style/sheet.js",
-      "sha256": "fbec58efa89921d2aed824b75c617c38c67e8f767e06ed8dd3b65b2e1f06178a"
+      "sha256": "6062134676fda28ec09419bc14e962b77dce905a0d57b0882d9ec960f67ea167"
     },
     "standalone-tokens.css": {
       "source": "style/standalone-tokens.css",

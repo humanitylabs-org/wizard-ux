@@ -14,6 +14,19 @@ jobs:
         with:
           node-version: '22'
       - run: npm test
+  tap-outside-closes:
+    # Keep the runner compatible with the Playwright version exercised locally.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --package-lock=false playwright@1.55.1
+      - run: npx playwright install --with-deps chromium
+      - run: node tools/qa-tap-outside-closes.cjs
+      - run: node tests/qa-store-install-deeplink.cjs
   opaque-overlays:
     runs-on: ubuntu-latest
     timeout-minutes: 10
