@@ -103,11 +103,11 @@
     try { route = window.WosModels?.snapshot?.('', null, '') || null; } catch (_) { route = null; }
     if (!route?.model || typeof OUTBOX?.enqueue !== 'function') return false;
     const owner = window.WizConfig?.owner?.();
-    const it = await OUTBOX.enqueue({ nativeId: t.id, ...route, kind: 'new', sessionId: '', text: '', audio: blob, source: 'orb', how: 'floating-orb',
+    const it = await OUTBOX.enqueue({ nativeId: t.id, createdAt: Number(t.startedAt) || undefined, ...route, kind: 'new', sessionId: '', text: '', audio: blob, source: 'orb', how: 'floating-orb',
       instructions: (owner ? owner + ' recorded' : 'The owner recorded') + ' this with the floating Wizard orb on their Android phone. The original recording is attached as a voice note.' });
     if (!it?.durable) return true; // the outbox keeps it in memory and retries; native keeps its copy until durable
     await call(CAP + '.ack', { id: t.id });
-    toast('✦', 'Orb recording sent', 2400);
+    toast('✦', 'Orb recording saved · check Chats for delivery', 2400);
     return true;
   }
 
