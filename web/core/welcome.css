@@ -1,0 +1,39 @@
+/* Welcome modal (core/welcome.js). Minimal: one card, centred, over a dimmed shell. */
+.wl-overlay{position:fixed;inset:0;z-index:400;display:grid;place-items:center;padding:20px;background:var(--sk-dim,rgba(3,1,10,.74));-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);animation:wl-in .2s ease-out}
+@keyframes wl-in{from{opacity:0}to{opacity:1}}
+.wl-card{width:min(440px,100%);max-height:calc(100dvh - 40px);overflow:auto;padding:28px;border-radius:22px;background:var(--sk-win,rgba(12,8,26,.92));border:1px solid var(--line,rgba(255,255,255,.12));color:var(--ink,#fff);box-shadow:0 30px 80px rgba(0,0,0,.45);font:inherit}
+.wl-card.wide{width:min(720px,100%)}
+.wl-dots{display:flex;gap:6px;margin-bottom:22px}
+.wl-dots i{width:22px;height:4px;border-radius:2px;background:var(--line-2,rgba(255,255,255,.24))}
+.wl-dots i.on{background:var(--violet,#8f63ff)}
+.wl-dots i.done{background:var(--ink-3,rgba(255,255,255,.5))}
+.wl-head h2{margin:0;font-size:24px;font-weight:650;letter-spacing:-.01em;outline:none}
+.wl-head p{margin:6px 0 0;color:var(--ink-2,rgba(255,255,255,.75));font-size:15px;line-height:1.45}
+.wl-row{display:flex;align-items:center;gap:10px}
+.wl-back{width:34px;height:34px;border-radius:50%;border:1px solid var(--line,rgba(255,255,255,.14));background:transparent;color:inherit;font-size:22px;line-height:1;cursor:pointer}
+.wl-choices{display:grid;gap:10px;margin-top:22px}
+.wl-choice{display:flex;align-items:center;gap:14px;width:100%;padding:16px;border-radius:16px;border:1px solid var(--line,rgba(255,255,255,.14));background:var(--glass,rgba(255,255,255,.04));color:inherit;font:inherit;font-size:16px;text-align:left;cursor:pointer}
+.wl-choice:hover,.wl-choice:focus-visible{border-color:var(--violet,#8f63ff);outline:none}
+.wl-mark{display:grid;place-items:center;width:40px;height:40px;border-radius:11px;background:#fff;overflow:hidden}
+.wl-mark img{width:26px;height:26px;display:block}
+.wl-name{flex:1;font-weight:600}
+.wl-tag{font-size:12px;padding:4px 9px;border-radius:999px;background:var(--violet,#8f63ff);color:#fff}
+.wl-frame{margin-top:18px;height:min(520px,calc(100dvh - 260px));border-radius:14px;overflow:hidden;border:1px solid var(--line,rgba(255,255,255,.14));background:var(--bg,#000)}
+.wl-frame iframe{width:100%;height:100%;border:0;display:block}
+.wl-status{margin:14px 0 0;color:var(--ink-3,rgba(255,255,255,.6));font-size:14px}
+.wl-status.ok{color:var(--green,#4ff0b0)}
+.wl-skins{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-top:22px}
+.wl-skin{display:grid;gap:8px;padding:10px;border-radius:14px;border:1px solid var(--line,rgba(255,255,255,.14));background:transparent;color:inherit;font:inherit;font-size:14px;cursor:pointer;text-align:left}
+.wl-skin.on{border-color:var(--violet,#8f63ff);box-shadow:0 0 0 1px var(--violet,#8f63ff)}
+.wl-swatch{display:block;height:46px;border-radius:9px;background:linear-gradient(135deg,var(--sw-bg) 55%,var(--sw-ac) 55%)}
+.wl-colours{display:flex;gap:10px;margin-top:16px}
+.wl-colour{width:34px;height:34px;padding:3px;border-radius:50%;border:2px solid transparent;background:transparent;cursor:pointer}
+.wl-colour span{display:block;width:100%;height:100%;border-radius:50%;background:linear-gradient(135deg,var(--sw-bg) 50%,var(--sw-ac) 50%);border:1px solid var(--line,rgba(255,255,255,.2))}
+.wl-colour.on{border-color:var(--violet,#8f63ff)}
+.wl-primary{display:block;width:100%;margin-top:22px;min-height:48px;border:0;border-radius:14px;background:var(--violet,#8f63ff);color:#fff;font:inherit;font-size:16px;font-weight:600;cursor:pointer}
+.wl-primary:disabled{opacity:.6;cursor:default}
+html[data-skin="obsidian"] .wl-primary,html[data-skin="obsidian"] .wl-tag{color:#000}
+html[data-skin="obsidian-light"] .wl-primary,html[data-skin="obsidian-light"] .wl-tag{color:#fff}
+.wl-hello textarea{display:block;width:100%;box-sizing:border-box;margin-top:22px;padding:14px;border-radius:14px;border:1px solid var(--line-2,rgba(255,255,255,.24));background:var(--glass,rgba(255,255,255,.04));color:inherit;font:inherit;font-size:16px;resize:none;outline:none}
+.wl-hello textarea:focus{border-color:var(--violet,#8f63ff)}
+@media (max-width:600px){.wl-overlay{padding:0;align-items:end}.wl-card{width:100%;max-height:92dvh;border-radius:22px 22px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom))}.wl-frame{height:calc(92dvh - 230px)}}
