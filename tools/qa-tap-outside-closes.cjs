@@ -259,19 +259,30 @@ async function check(name, fn) { await fn(); passed++; console.log('PASS', name)
           await f.evaluate(y=>main.scrollTop=y,scroll);await protectedFrame(48,`${skin} ${id} scroll ${scroll}`);
           if(process.env.QA_OUTPUT) {fs.mkdirSync(process.env.QA_OUTPUT,{recursive:true});await pinned.screenshot({path:path.join(process.env.QA_OUTPUT,`standalone-${skin}-${id}-${scroll}.png`)});}
         }
-        await pinned.evaluate(()=>{const p=document.createElement('div');p.className='app-upd';p.textContent='Fixture app updated · Reload';singleApp.append(p);__wos.toast('Fixture toast');});
+        await pinned.evaluate(()=>{const p=document.createElement('div');p.className='app-upd';p.textContent='Fixture app updated · Reload';singleApp.append(p);__wos.toast('✓','Fixture toast');});
         await pinned.waitForFunction(()=>Math.abs(document.querySelector('#singleApp .app-upd').getBoundingClientRect().top-56)<.01&&Math.abs(document.getElementById('toast').getBoundingClientRect().top-60)<.01);
         const update=await pinned.locator('#singleApp .app-upd').boundingBox(),toast=await pinned.locator('#toast').boundingBox();
         assert.ok(Math.abs(update.y-56)<.1,'update uses host union once');assert.ok(Math.abs(toast.y-60)<.1,'toast uses union once');
+        if(process.env.QA_OUTPUT)await pinned.screenshot({path:path.join(process.env.QA_OUTPUT,`standalone-${skin}-${id}-notices.png`)});
         await pinned.evaluate(()=>__wos.links.open('/fixture-page'));
         await pinned.locator('.linksheet.open .ls-panel').waitFor({state:'visible'});
-        await pinned.waitForFunction(()=>{const r=document.querySelector('.linksheet .ls-panel').getBoundingClientRect();return Math.abs(r.top-54)<.01;});
-        assert.ok(Math.abs(await pinned.evaluate(()=>document.querySelector('.linksheet .ls-panel').getBoundingClientRect().top)-54)<.1,'body-mounted sheet clears status plus its 6px lip, not a second inset');
+        // .linksheet.sheet also inherits the shell's .sheet border. Its content
+        // box is 2px shorter than the viewport: a bottom-anchored panel whose
+        // height removes (48 + 6) starts at 54 + border-bottom, i.e. 55px, not
+        // 54px. This is border geometry, not a second safe inset or animation.
+        const sheetGeometry=()=>{const sheet=document.querySelector('.linksheet.sheet'),panel=sheet.querySelector('.ls-panel'),s=getComputedStyle(sheet);return {y:panel.getBoundingClientRect().top,expected:48+6+parseFloat(s.borderBottomWidth),hostY:sheet.getBoundingClientRect().top,hostH:sheet.getBoundingClientRect().height,bodyMounted:sheet.parentElement===document.body};};
+        await pinned.waitForFunction(expected=>Math.abs(document.querySelector('.linksheet.sheet .ls-panel').getBoundingClientRect().top-expected)<.01,(await pinned.evaluate(sheetGeometry)).expected);
+        const sheet=await pinned.evaluate(sheetGeometry);
+        assert.equal(sheet.bodyMounted,true,'exercise the production body mount, not device-nested sheet CSS');
+        assert.equal(sheet.hostY,0);assert.equal(sheet.hostH,844,'body-mounted sheet covers viewport');
+        assert.ok(Math.abs(sheet.y-sheet.expected)<.1,'body-mounted sheet clears one status inset plus 6px lip and shell border');
+        metrics.push({label:`${skin} ${id} link sheet`,...sheet});
+        if(process.env.QA_OUTPUT)await pinned.screenshot({path:path.join(process.env.QA_OUTPUT,`standalone-${skin}-${id}-link-sheet.png`)});
         await pinned.evaluate(()=>__wos.links.close());
         await pinned.evaluate(()=>{window.fixturePane=WizLinks.mount({parent:document.body,mode:'pane'});fixturePane.open('/fixture-page');});
         await pinned.waitForFunction(()=>Math.abs(document.querySelector('.linksheet.pane .ls-panel').getBoundingClientRect().top-48)<1);
+        if(process.env.QA_OUTPUT)await pinned.screenshot({path:path.join(process.env.QA_OUTPUT,`standalone-${skin}-${id}-link-pane.png`)});
         await pinned.evaluate(()=>fixturePane.close());
-        if(process.env.QA_OUTPUT)await pinned.screenshot({path:path.join(process.env.QA_OUTPUT,`standalone-${skin}-${id}-notices.png`)});
       });
     }
     await check('James universal standalone rule: callbacks before mount, reload and focused editor keep one inset',async()=>{
