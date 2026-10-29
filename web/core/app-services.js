@@ -227,6 +227,7 @@
       }
     };
     // Recheck the exact requesting document after the biometric prompt as well as before it.
+    const vault = async (method, extra) => { check(); const result = await vaultCall(st.appId, method, extra); check(); return result; };
     source.addEventListener('pagehide', () => { if (st.doc === doc) reset(st); }, { once: true });
     return Object.freeze({ version: VERSION, appId: st.appId,
       ready() { check(); window.WizCompanionPane?.ready(st.frame); return { version: VERSION, hosted: true, appId: st.appId }; },
