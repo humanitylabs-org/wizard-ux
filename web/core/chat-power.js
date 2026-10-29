@@ -579,13 +579,15 @@ window.WosChatPower = function chatPower(A) {
     const priv = !agent && !A.winAgent(w) && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
     openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false, agent, priv, pop: !!pop && mode !== 'retry' });
     // Revalidate every open; repaint only if the catalogue/default actually changed.
-    const key = () => JSON.stringify([(M.options?.(agent) || []).map(o => [o.key, o.label]), M.privateOptions?.(), M.defaults]);
+    // WosModels.options is the catalogue array (never a function): compare the fields the sheet shows.
+    const rows = list => (Array.isArray(list) ? list : []).map(o => [o.agent, o.provider, o.value, o.name, o.description, !!o.isGlobalDefault]);
+    const key = () => JSON.stringify([rows(M.options), rows(M.privateOptions?.())]);
     const opened = sheet, before = key();
     M.load(M.ready).then(() => {
       if (sheet !== opened || sheet?.type !== 'model' || H.win(wid)?.thread !== opened.sid) return;
       // A fresh default must agree with what Send will use. An explicit draft choice stays pinned.
       const cur = mode === 'new' ? newModel(ch(wid), w) : threadModel(LIVE.session(opened.sid));
-      if (!M.options || key() !== before || JSON.stringify(sheet.cur) !== JSON.stringify(cur)) { sheet.cur = cur; paint(sheet.pane, A.elOf(sheet.pane)); }
+      if (key() !== before || JSON.stringify(sheet.cur) !== JSON.stringify(cur)) { sheet.cur = cur; paint(sheet.pane, A.elOf(sheet.pane)); }
     });
   }
   function openFiles(pane) {
