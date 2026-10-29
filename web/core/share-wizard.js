@@ -44,16 +44,17 @@
     const chip = (f, n) => window.WizAttachChip ? WizAttachChip.html({key: String(n), name: f.name, bytes: f.bytes, kind: kind(f) === 'voice' && !/voice|ptt/i.test(f.name) ? 'file' : kind(f), preview: preview[n] || ''})
       : `<span class="ch-att" data-attkey="${n}"><span class="nm">${esc(f.name)}<small>${esc(fsize(f.bytes))}</small></span><button type="button" class="ch-attrm" data-attrm="${n}" aria-label="Remove">×</button></span>`;
     el.innerHTML = `<div class="dv-scrim" data-dvclose></div><section class="dv-sheet" role="dialog" aria-modal="true" aria-label="Share to Wizard" tabindex="-1">
-      <div class="dv-head"><span class="dv-ic">↗</span><div><b>Share to Wizard</b><small>${items.length ? `${items.length} ${items.length === 1 ? 'item' : 'items'}` : 'Text'}${skipped ? ` · ${skipped} skipped (too large or unreadable)` : ''}</small></div><button class="dv-cancel" data-dvclose aria-label="Cancel share">×</button></div>
-      ${title ? `<p class="dv-source">${esc(title)}</p>` : ''}
+      <div class="dv-grab" aria-hidden="true"></div>
+      <div class="dv-head"><div><b>Share to Wizard</b><small><span class="dv-count">${items.length ? `${items.length} ${items.length === 1 ? 'item' : 'items'}` : 'Text'}</span>${title ? ` · ${esc(title)}` : ''}${skipped ? ` · ${skipped} skipped (too large or unreadable)` : ''}</small></div><button class="dv-cancel" data-dvclose aria-label="Cancel share"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
       <div class="dv-items">${items.map(chip).join('')}</div>
-      <textarea class="dv-text" rows="2" aria-label="Your comment" placeholder="Add a comment or context (optional)">${esc(comment)}</textarea>
-      ${text ? `<blockquote class="dv-quote" aria-label="Shared content (not editable)" tabindex="0">${esc(text)}</blockquote>` : ''}
+      <div class="dv-msg"><textarea class="dv-text" rows="2" aria-label="Your comment" placeholder="Add a comment or context (optional)">${esc(comment)}</textarea>
+      ${text ? `<blockquote class="dv-quote" aria-label="Shared content (not editable)" tabindex="0">${esc(text)}</blockquote>` : ''}</div>
+      <h4 class="dv-label" aria-hidden="true">Send to</h4>
       <div class="dv-dest" role="radiogroup" aria-label="Send to">
-        <label class="dv-opt"><input type="radio" name="dv-dest" value="new"${dest && threads.some(t => t.id === dest) ? '' : ' checked'}><span>New chat</span></label>
-        ${threads.length ? `<label class="dv-opt dv-pick"><input type="radio" name="dv-dest" value="pick" aria-label="Existing chat"${dest && threads.some(t => t.id === dest) ? ' checked' : ''}><select class="dv-chat" aria-label="Existing chat"><option value="">Add to a chat…</option>${threads.map(s => `<option value="${esc(s.id)}"${s.id === dest ? ' selected' : ''}>${esc(s.title || 'Untitled chat')}</option>`).join('')}</select></label>` : ''}
+        <label class="dv-opt"><input type="radio" name="dv-dest" value="new"${dest && threads.some(t => t.id === dest) ? '' : ' checked'}><span class="dv-dot" aria-hidden="true"></span><span class="dv-optx">New chat</span></label>
+        ${threads.length ? `<label class="dv-opt dv-pick"><input type="radio" name="dv-dest" value="pick" aria-label="Existing chat"${dest && threads.some(t => t.id === dest) ? ' checked' : ''}><span class="dv-dot" aria-hidden="true"></span><select class="dv-chat" aria-label="Existing chat"><option value="">Existing chat…</option>${threads.map(s => `<option value="${esc(s.id)}"${s.id === dest ? ' selected' : ''}>${esc(s.title || 'Untitled chat')}</option>`).join('')}</select><svg class="dv-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></label>` : ''}
       </div>
-      <button class="dv-btn primary wide dv-send" data-sharesend>Send</button>
+      <button class="dv-btn primary wide dv-send" data-sharesend><span>Send</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
       <div class="dv-status" aria-live="polite">${esc(error)}</div></section>`;
     return new Promise(resolve => {
       const a = active = {el, mount, resolve, urls, focus: document.activeElement};
@@ -65,7 +66,7 @@
       el.addEventListener('click', e => {
         if (e.target.closest('[data-dvclose]')) return back();
         const rm = e.target.closest('[data-attrm]');
-        if (rm) { const n = Number(rm.dataset.attrm); kept[n] = false; rm.closest('[data-attkey]')?.remove(); const left = kept.filter(Boolean).length; $('.dv-head small').firstChild.textContent = left ? `${left} ${left === 1 ? 'item' : 'items'}` : 'Text'; return; }
+        if (rm) { const n = Number(rm.dataset.attrm); kept[n] = false; rm.closest('[data-attkey]')?.remove(); const left = kept.filter(Boolean).length; $('.dv-count').textContent = left ? `${left} ${left === 1 ? 'item' : 'items'}` : 'Text'; return; }
         if (!e.target.closest('[data-sharesend]')) return;
         if (!authorize()) return finish('unsupported');
         const target = radio('pick')?.checked ? pick.value : '__new__';
