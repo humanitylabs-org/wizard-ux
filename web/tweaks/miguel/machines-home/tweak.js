@@ -187,9 +187,9 @@ export default function setup(api) {
   const appOf = kind => (signable().find(x => x.kind === kind) || {}).app || null;
   // The gauge: the default model's service, all its accounts together (average left).
   const defKind = () => { const d = api.models?.default?.(); const p = String(d?.provider || '').toLowerCase();
-    // Built-in names first; any other provider matches a usage service by its own id or name.
-    const k = /claude|anthropic/.test(p) ? 'claude' : /openai|codex|chatgpt/.test(p) ? 'chatgpt' : /tinfoil/.test(p) ? 'tinfoil'
-      : p ? (subs().find(s => s.kind === p || String(s.group || '').toLowerCase() === p || p.startsWith(s.kind + ':'))?.kind || '') : '';
+    // A usage service with exactly this id or name wins; the built-in aliases match whole names only.
+    const exact = p ? subs().find(s => s.kind === p || String(s.group || '').toLowerCase() === p || p.startsWith(s.kind + ':'))?.kind || '' : '';
+    const k = exact || (/^(claude|claude-code|anthropic)$/.test(p) ? 'claude' : /^(openai|openai-codex|codex|chatgpt)$/.test(p) ? 'chatgpt' : /^tinfoil$/.test(p) ? 'tinfoil' : '');
     if (k && k !== S.def) { S.def = k; api.storage.set('def', k); } return S.def; };
   // What the E-to-F meter shows: the owner's pick (one kind only: plan limits or prepaid credit, never a mix), else
   // the default model's service. Every account gets a plain name for the "combines …" line.
@@ -627,7 +627,8 @@ export default function setup(api) {
     const all = subs(), me = all.find(s => s.id === id); if (!me) return;
     // Start from the saved pick (keeps an account that is unreadable right now), else from what the meter shows.
     let cur = new Set(Array.isArray(S.meter) && S.meter.length ? S.meter.filter(x => all.some(s => s.id === x)) : meterPool().use.map(s => s.id));
-    if (e.target.checked) { for (const s of all) if (cur.has(s.id) && s.unit !== me.unit) cur.delete(s.id); cur.add(id); } else cur.delete(id);  // never mix kinds
+    // Never mix kinds; an account unreadable right now has no known kind, so it stays picked.
+    if (e.target.checked) { for (const s of all) if (cur.has(s.id) && !s.out && !s.na && s.unit !== me.unit) cur.delete(s.id); cur.add(id); } else cur.delete(id);
     S.meter = cur.size ? [...cur] : null; api.storage.set('meter', S.meter); drawn.ai = ''; drawn.glance = ''; drawn.list = ''; renderAIList(); paint();
   });
   api.listen(secAI, 'input', e => {

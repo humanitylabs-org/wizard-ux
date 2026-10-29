@@ -100,7 +100,7 @@ test('machines-home: simple at rest, more on tap (one AI gauge, storage size, on
   assert.match(src, /cls: 'mh-g-cells'/, 'the tag fills cells from E to F');
   assert.doesNotMatch(src, /mh-batt/, 'batteries are gone');
   assert.match(src, /text: 'E'/); assert.doesNotMatch(src, /cls: 'mh-g-label', text: 'AI'/, 'just E to F, no AI label');
-  assert.match(src, /never mix kinds/, 'the meter picker keeps plan limits and credit apart');
+  assert.match(src, /never mix kinds/i, 'the meter picker keeps plan limits and credit apart');
   assert.match(src, /api\.models\?\.default\?\.\(\)/, 'the gauge follows the default model');
   assert.match(src, /data: \{ resSignin: app \}/, 'Sign out / Sign in open that app through the shell');
   assert.match(src, /btn\('Sign out', appOf\(r\.kind\), 'is-out'\)/, 'Sign out next to each account');
@@ -456,6 +456,8 @@ test('final review: personal-device presence needs a fresh reading; meter edits 
     assert.equal((src.match(/online: !!S\.devFresh && /g) || []).length, 2, who);
     assert.match(src, /let cur = new Set\(Array\.isArray\(S\.meter\) && S\.meter\.length \? S\.meter\.filter/, who);
     assert.match(src, /subs\(\)\.find\(s => s\.kind === p \|\| String\(s\.group \|\| ''\)\.toLowerCase\(\) === p/, who);
+    assert.match(src, /const k = exact \|\| \(\/\^\(claude\|claude-code\|anthropic\)\$\//, who + ': exact identity before whole-name aliases');
+    assert.match(src, /if \(cur\.has\(s\.id\) && !s\.out && !s\.na && s\.unit !== me\.unit\) cur\.delete/, who);
   }
 });
 
