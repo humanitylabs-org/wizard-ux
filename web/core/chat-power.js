@@ -525,6 +525,7 @@ window.WosChatPower = function chatPower(A) {
     }
     el.insertAdjacentHTML('beforeend', html.replace('class="ch-sheet ', 'class="ch-sheet ch-psheet '));
     if (sheet.pop) {
+      el.classList.add('ch-model-picking');
       placePop(el);
       const list = el.querySelector('.ch-mpop .msheet-list');
       if (list) list.scrollTop = list.scrollHeight; // current models nearest the thumb on open, not on resize
@@ -537,7 +538,10 @@ window.WosChatPower = function chatPower(A) {
       window.addEventListener('scroll', queue, { capture: true, passive: true, signal: events.signal });
       window.visualViewport?.addEventListener('resize', queue, { signal: events.signal });
       window.visualViewport?.addEventListener('scroll', queue, { signal: events.signal });
-      popOff = () => { events.abort(); resize.disconnect(); cancelAnimationFrame(frame); };
+      popOff = () => {
+        events.abort(); resize.disconnect(); cancelAnimationFrame(frame);
+        el.classList.remove('ch-model-picking'); el.style.removeProperty('--mpop-input-max');
+      };
     }
   }
   // Bound the card to the visible pane ABOVE the entire composer, not its bottom-right label.
@@ -547,8 +551,16 @@ window.WosChatPower = function chatPower(A) {
     const pr = pop.getBoundingClientRect(), lr = lab.getBoundingClientRect(); if (!pr.height) return;
     const vv = window.visualViewport;
     const top = Math.max(pr.top, vv?.offsetTop || 0, el.querySelector('.ch-head')?.getBoundingClientRect().bottom || 0) + 8;
-    const occlusion = ['.ch-compose', '.ch-swrow'].map(s => el.querySelector(s)?.getBoundingClientRect()).filter(r => r?.height);
-    const bottom = Math.min(pr.bottom, (vv?.offsetTop || 0) + (vv?.height || innerHeight), lr.top, ...occlusion.map(r => r.top)) - 6;
+    const occlusion = () => ['.ch-compose', '.ch-swrow'].map(s => el.querySelector(s)?.getBoundingClientRect()).filter(r => r?.height);
+    const bottomEdge = () => Math.min(pr.bottom, (vv?.offsetTop || 0) + (vv?.height || innerHeight), lab.getBoundingClientRect().top, ...occlusion().map(r => r.top)) - 6;
+    // A keyboard plus native dock can leave less than one row above a tall draft. Temporarily
+    // scroll the input in a shorter box; keep its value/selection and restore its height on close.
+    const ta = el.querySelector('.ch-compose textarea');
+    if (ta) {
+      const cap = Math.min(140, Math.max(42, Math.floor(ta.getBoundingClientRect().height + bottomEdge() - top - 112)));
+      el.style.setProperty('--mpop-input-max', cap + 'px');
+    }
+    const bottom = bottomEdge();
     const right = Math.min(pr.right, (vv?.offsetLeft || 0) + (vv?.width || innerWidth), lr.right + 6) - 8;
     pop.style.setProperty('--mpop-b', `${Math.max(0, pr.bottom - bottom)}px`);
     pop.style.setProperty('--mpop-r', `${Math.max(8, pr.right - right)}px`);
@@ -568,7 +580,7 @@ window.WosChatPower = function chatPower(A) {
     const priv = !agent && !A.winAgent(w) && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
     openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false, agent, priv, pop: !!pop && mode !== 'retry' });
     // Revalidate every open; repaint only if the catalogue/default actually changed.
-    const key = () => JSON.stringify([(M.options?.(agent) || []).map(o => [o.key, o.label]), M.privateOptions?.(), M.defaults]);
+    const key = () => JSON.stringify([M.options || [], M.privateOptions?.()]);
     const opened = sheet, before = key();
     M.load(M.ready).then(() => {
       if (sheet !== opened || sheet?.type !== 'model' || H.win(wid)?.thread !== opened.sid) return;

@@ -10,4 +10,10 @@ test('model sheet revalidates the catalogue on every open', () => {
   assert.match(open, /M\.load\(M\.ready\)/, 'forces a refresh once the cache is warm');
   assert.doesNotMatch(open, /if \(!M\.ready\) M\.load\(\)/, 'no longer loads only on a cold cache');
   assert.match(open, /key\(\) !== before/, 'repaints only on change');
+  const key = new Function('M', `return (${open.match(/const key = (.*);/)[1]})();`);
+  const M = { options: [{ value: 'first', provider: 'fixture', isGlobalDefault: true }], privateOptions: () => [] };
+  const before = key(M); // options is the documented array, never a function
+  assert.equal(key(M), before);
+  M.options.push({ value: 'second', provider: 'fixture' });
+  assert.notEqual(key(M), before, 'new catalogue rows trigger repaint');
 });
