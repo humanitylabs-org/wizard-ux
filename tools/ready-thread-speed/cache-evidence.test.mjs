@@ -7,7 +7,8 @@ const revision=historyRevision(rows);
 const snapshot=(accepted=rows)=>({key:revision.key,trusted:true,accepted});
 
 test('canonical revision uses exact row count, assistant/user timestamps and full answer token',()=>{
- assert.deepEqual(revision,{messageCount:2,lastAssistantAt:'1970-01-01T00:01:41.000Z',lastUserAt:'1970-01-01T00:01:40.000Z',key:'2|1970-01-01T00:01:41.000Z|1970-01-01T00:01:40.000Z',marker:'SYNTHETIC_CURRENT_ANSWER_1_v2'});
+ assert.deepEqual({...revision,contentSha256:undefined},{messageCount:2,lastAssistantAt:'1970-01-01T00:01:41.000Z',lastUserAt:'1970-01-01T00:01:40.000Z',key:'2|1970-01-01T00:01:41.000Z|1970-01-01T00:01:40.000Z',marker:'SYNTHETIC_CURRENT_ANSWER_1_v2',contentSha256:undefined});
+ assert.match(revision.contentSha256,/^[0-9a-f]{64}$/);
 });
 test('null cache under exact trusted revision rejects the old copy',()=>{
  assert.equal(assessCache(snapshot(null),revision),'rejected-old-copy');
@@ -31,6 +32,10 @@ test('right count and answer with stale timestamps is not a current cache',()=>{
 });
 test('untrusted restored list cannot authorize a current cache',()=>{
  assert.throws(()=>assessCache({...snapshot(),trusted:false},revision),/live canonical list authority/);
+});
+test('unchanged last answer and timestamps cannot hide corrupted earlier content',()=>{
+ const corrupt=structuredClone(rows);corrupt[0].content='synthetic wrong request';
+ assert.throws(()=>assessCache(snapshot(corrupt),revision),/every accepted role\/content\/timestamp/);
 });
 test('refresh barrier records intermediate and untrusted observations then waits for exact revision',async()=>{
  const states=[{...snapshot(null),key:'old'},{...snapshot(null),key:'intermediate'}, {...snapshot(null),trusted:false},snapshot(null)],seen=[];

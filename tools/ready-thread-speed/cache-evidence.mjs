@@ -1,12 +1,14 @@
 // Acceptance-only content/revision evidence. Never modifies production stores.
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 
 export function historyRevision(rows) {
   assert.ok(Array.isArray(rows)&&rows.length,'nonempty canonical history');
   const latest=role=>rows.filter(r=>r.role===role).at(-1);
   const iso=r=>r?new Date(typeof r.timestamp==='number'?r.timestamp*1000:r.timestamp).toISOString():undefined;
   const revision={messageCount:rows.length,lastAssistantAt:iso(latest('assistant')),lastUserAt:iso(latest('user'))};
-  return {...revision,key:[revision.messageCount,revision.lastAssistantAt,revision.lastUserAt].join('|'),
+  const contentSha256=createHash('sha256').update(JSON.stringify(rows.map(r=>[r.role,r.content,iso(r)]))).digest('hex');
+  return {...revision,contentSha256,key:[revision.messageCount,revision.lastAssistantAt,revision.lastUserAt].join('|'),
     marker:latest('assistant').content.split('\n')[0]};
 }
 
@@ -18,6 +20,7 @@ export function assessCache(snapshot,revision) {
   const last=snapshot.accepted.filter(r=>r.role==='assistant').at(-1);
   assert.equal(last?.content.split('\n')[0],revision.marker,'accepted cache contains the exact newest canonical answer');
   assert.equal(historyRevision(snapshot.accepted).key,revision.key,'accepted content timestamps match canonical revision');
+  assert.equal(historyRevision(snapshot.accepted).contentSha256,revision.contentSha256,'every accepted role/content/timestamp matches canonical history');
   return 'current-copy-refilled';
 }
 

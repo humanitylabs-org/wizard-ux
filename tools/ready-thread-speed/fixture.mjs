@@ -4,6 +4,7 @@ import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
+import {historyRevision} from './cache-evidence.mjs';
 const [service, ux, root] = process.argv.slice(2).map(p=>resolve(p));
 mkdirSync(root,{recursive:true});
 const { createWizardServer, listen } = await import(pathToFileURL(join(service,'server/service.mjs')));
@@ -63,10 +64,7 @@ process.on('message',m=>{
  if(m.op!=='answer'||!/^wizard_speed_\d+$/.test(m.id))return;
  db.exec('BEGIN');put.run(m.id,'user','Synthetic newer owner request',m.stamp,null);put.run(m.id,'assistant',m.text+status(m.id),m.stamp+.001,'final');
  db.prepare('UPDATE sessions SET message_count=message_count+2,last_activity_at=? WHERE id=?').run(m.stamp+.001,m.id);db.exec('COMMIT');
- const rows=histories(m.id),last=role=>rows.filter(r=>r.role===role).at(-1);
- const revision={messageCount:rows.length,lastAssistantAt:new Date(last('assistant').timestamp*1000).toISOString(),lastUserAt:new Date(last('user').timestamp*1000).toISOString(),marker:m.text};
- revision.key=[revision.messageCount,revision.lastAssistantAt,revision.lastUserAt].join('|');
- process.send?.({id:m.id,revision});
+ process.send?.({id:m.id,revision:historyRevision(histories(m.id))});
 });
 async function stop(){clearInterval(writer);clearInterval(metrics);delay.disable();server.closeAllConnections?.();await new Promise(r=>server.close(r));writeFileSync(join(root,'custody.json'),JSON.stringify({upstreamWrites,ticks}));db.close();process.exit(upstreamWrites?2:0)}
 process.once('SIGTERM',()=>void stop());process.once('SIGINT',()=>void stop());

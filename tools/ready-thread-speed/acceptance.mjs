@@ -16,7 +16,14 @@ const results={label,source:{service,ux},network:'loopback, no network throttle;
 const save=()=>writeFileSync(join(out,'results.json'),JSON.stringify(results,null,2));
 const mutateAnswer=async(id,n)=>{
  const stamp=Date.now()/1000,text=`SYNTHETIC_CURRENT_ANSWER_${n}_v${Math.trunc(stamp*1e6)}`;
- return new Promise((res,rej)=>{const t=setTimeout(()=>{child.off('message',fn);rej(Error('fixture revision ack timeout'))},10000);const fn=m=>{if(m.id===id){clearTimeout(t);child.off('message',fn);res(m.revision)}};child.on('message',fn);child.send({op:'answer',id,text,stamp})});
+ const source=await new Promise((res,rej)=>{const t=setTimeout(()=>{child.off('message',fn);rej(Error('fixture revision ack timeout'))},10000);const fn=m=>{if(m.id===id){clearTimeout(t);child.off('message',fn);res(m.revision)}};child.on('message',fn);child.send({op:'answer',id,text,stamp})});
+ // The Service projects internal status markers out of history. Compare accepted
+ // content to THAT real public projection, and bind it back to canonical IPC truth.
+ const response=await fetch(origin+`/wizard/hermes/api/sessions/${id}/messages?order=oldest&limit=500&include_compacted=true&view=wizard`);
+ assert.equal(response.status,200);const data=await response.json(),projected=historyRevision(data.data||data.messages);
+ assert.equal(projected.key,source.key,'Service history contains the exact committed canonical revision');
+ assert.equal(projected.marker,source.marker,'Service projected the exact newly committed answer');
+ return {...projected,sourceContentSha256:source.contentSha256};
 };
 const stats=values=>{const s=[...values].sort((a,b)=>a-b);return {n:s.length,p50:s[Math.ceil(s.length*.5)-1],p95:s[Math.ceil(s.length*.95)-1],max:s.at(-1)}};
 let origin, pumping=false,pump;

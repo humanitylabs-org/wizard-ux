@@ -142,6 +142,45 @@ Preserve the original r7 receipt/log/results/screenshots, including these failur
   exact hashes and complete production/test inventory equality. No local tests,
   browsers, fixture services or activation; the parent queues forum execution.
 
+## r10 exact-revision/content recovery (static; execution pending)
+
+- REUSE real Service/canonical SQLite fixture, owned row input and unchanged
+  two-frame no-stale-paint observer. EXTEND only acceptance instrumentation;
+  production runtime bytes and all established correctness test sources stay equal.
+- r9 (`heavy_5fbcdfdcbdb84ad48ce199935a1462f9`) retained all 24 scope and five
+  paint-observer passes. Its cache failure logged only `true !== false`, not cache
+  content. That is insufficient to decide stale acceptance versus current refill.
+  The prior `key !== oldKey` barrier could also accept an intermediate list revision
+  left by an earlier shell/skin cell. No production bug or current-refill outcome
+  is claimed from those old logs.
+- New mutation ACK returns the exact committed canonical count/timestamps/token.
+  Read the real Service history projection and bind its exact key/token to that
+  ACK; internal status-marker stripping means raw SQLite content is not the public
+  history digest. Every accepted cached role/content/normalized timestamp must
+  hash identically to the real current Service projection, not just match a token.
+- Require exact live canonical revision before preparing each sample. Retain
+  read-only accepted/cache rows, IndexedDB revision/content, live list keys and
+  fetch pending/completion/content observations in `cache-evidence.jsonl`; include
+  the active sample and held-request diagnostics on every browser failure.
+- Once per cell, observe an unheld mutation and classify non-null only after full
+  current-content validation. This diagnostic does NOT replace stale-at-tap proof:
+  each of the 30 stale samples then seeds an actual old cache through public reads,
+  holds browser history fetches before a distinct canonical mutation, requires
+  rejection under the exact new revision immediately before input, and releases
+  solely on real owned-row pointerdown. Require the new visible answer, no visible
+  old latest-answer token, full current cache content, and actual gated history.
+  No TC/INFLIGHT/CH/window injection or renderer patch is used.
+- Baseline pending-voice absence of skeleton/deadline Retry is an explicit observed
+  known limitation (`pass:false`), never candidate evidence. It must not skip later
+  preload cases or group accounting. Candidate retains every skeleton/pending/error/
+  deadline/real Retry assertion. Both A/B sides must still have all 12x30 unique
+  taps, 150 API samples and every ancillary receipt; candidate budgets unchanged.
+- New content/barrier controls are a separate 10-test gate. Scope fixture/helper,
+  observer and runtime bytes are unchanged, so r9 24/24 + 5/5 are inherited by exact
+  inventories/log hashes rather than rerun. Original UX34 and Service52/141 remain
+  inherited with their original receipts. Parent submits the sealed short-root
+  forum job; staging never launches tests, fixtures or browsers.
+
 ## r6 main-scope diagnosis and r7 static audit
 
 The retained r6 receipt is `heavy_d5a2fa29edcd43b4aa69d7cc91773e05`, at
