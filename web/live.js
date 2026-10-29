@@ -389,9 +389,13 @@
       const sub = SPACE_OP.exec(key), list = Array.isArray(next[opField({ key })]) ? next[opField({ key })] : [];
       if (key === 'pinnedChats' || key === 'subjectOrder') next[key] = op === 'front' ? [...new Set(items)].concat(list.filter(x => !items.includes(x))).slice(0, 60)
         : op === 'add' ? (list.includes(item) ? list : list.concat(item)) : list.filter(x => x !== item);
-      else if (key === 'spaces') next.spaces = op === 'add' ? (list.some(s => s.id === item.id) ? list : list.concat(item)) : list.filter(s => s.id !== item);
-      else if (sub) next.spaces = list.map(s => s.id !== sub[1] ? s : sub[2] === 'name' ? { ...s, name: item }
-        : { ...s, threads: op === 'add' ? (s.threads.includes(item) ? s.threads : s.threads.concat(item)) : s.threads.filter(t => t !== item) });
+      else if (key === 'spaces') next.spaces = op === 'add' ? (list.some(s => s.id === item.id) ? list : list.map(s => (s.agent || 'hermes') === (item.agent || 'hermes') && s.threads.some(t => item.threads.includes(t)) ? { ...s, threads: s.threads.filter(t => !item.threads.includes(t)) } : s).concat(item)) : list.filter(s => s.id !== item);
+      // One Space per chat (James, 29 Oct 2026), as the Agent Service applies it: adding moves the chat out of that
+      // agent's other Spaces in the same edit.
+      else if (sub) { const to = list.find(s => s.id === sub[1]), mine = s => (s.agent || 'hermes') === (to?.agent || 'hermes');
+        next.spaces = list.map(s => s.id !== sub[1] ? (to && sub[2] === 'threads' && op === 'add' && mine(s) && s.threads.includes(item) ? { ...s, threads: s.threads.filter(t => t !== item) } : s)
+          : sub[2] === 'name' ? { ...s, name: item }
+          : { ...s, threads: op === 'add' ? (s.threads.includes(item) ? s.threads : s.threads.concat(item)) : s.threads.filter(t => t !== item) }); }
     }
     return next;
   }
