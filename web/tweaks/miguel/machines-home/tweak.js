@@ -174,6 +174,7 @@ export default function setup(api) {
     if (!n) { const same = list.filter(x => x.group === s.group); return same.length > 1 ? `${s.group} ${same.findIndex(x => x.id === s.id) + 1}` : s.group; }
     return list.some(x => x.id !== s.id && own(x).toLowerCase() === n.toLowerCase()) ? `${s.group} ${n}` : n;
   };
+  function meterPool() {
     const all = subs(), live = all.filter(s => s.left != null && !s.out);
     const picked = Array.isArray(S.meter) ? live.filter(s => S.meter.includes(s.id)) : [];
     if (picked.length) return { use: picked, custom: true };
