@@ -5,6 +5,7 @@
  * answer on the device, so a reload paints instantly and offline still works.
  *
  *   WizConfig.agent()          the agent's display name ("Wizard" until the owner names it)
+ *   WizConfig.agentName(name)  save a new agent name (PUT /wizard/v1/settings), resolves to the confirmed name
  *   WizConfig.owner()          the owner's name, or '' (UI then says "you")
  *   WizConfig.timeZone()       the device's own zone (follows the owner when they travel), else settings timezone
  *   WizConfig.homeZone()       the settings timezone the server schedules in, else the device's zone
@@ -144,6 +145,23 @@
       try { localStorage.setItem(KEY, JSON.stringify(B)); } catch (_) {}
       window.dispatchEvent(new CustomEvent('wizard:config', { detail: B }));
       return style;
+    },
+    // The agent's name (Name your Wizard, Settings): saved in the Agent Service settings, then read back. One line of
+    // plain text, at most 40 characters; the rest of the agent block (adapter) is kept as it is.
+    async agentName(value) {
+      const name = String(value ?? '').replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40).trim();
+      if (!name) throw Error('Type a name');
+      const cur = await fetch('/wizard/v1/settings', { credentials: 'same-origin', cache: 'no-store' });
+      if (!cur.ok) throw Error('Could not read your Wizard settings');
+      const agent = (await cur.json()).settings?.agent || {};
+      const saved = await fetch('/wizard/v1/settings', { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: { ...agent, name } }) });
+      if (!saved.ok) throw Error('Could not save the name');
+      const now = (await saved.json().catch(() => ({}))).settings?.agent?.name;
+      if (now !== name) throw Error('Your Wizard has not confirmed the new name. Try again.');
+      B = { ...B, settings: { ...B.settings, agent: { ...B.settings?.agent, name: now } } };
+      try { localStorage.setItem(KEY, JSON.stringify(B)); } catch (_) {}
+      window.dispatchEvent(new CustomEvent('wizard:config', { detail: B }));
+      return now;
     },
     ready: null,
   };
