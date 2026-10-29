@@ -94,3 +94,7 @@ test('Welcome: works without AbortSignal.timeout; a late thread open never pulls
   assert.doesNotMatch(js, /signal: AbortSignal\.timeout/);
   assert.match(js, /if \(moved\(\)\) \{ log\('thread:moved'\); return; \}/);
 });
+
+test('Welcome: a stale install completion never takes over a reopened Welcome', () => {
+  assert.match(read('web/core/welcome.js'), /if \(el !== mine \|\| installing !== id\) return; installing = ''; if \(step === 'ai'\)/);
+});

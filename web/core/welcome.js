@@ -196,8 +196,9 @@
       const id = t.dataset.app; installError = '';
       if (isInstalled(id)) { provider = id; connected = false; paint(); poll(); return; }
       installing = id; paint(false);
-      install(id).then(() => { installing = ''; if (el && step === 'ai') { provider = id; connected = false; paint(); poll(); } },
-        err => { installing = ''; installError = err?.message || 'Install failed.'; paint(false); });
+      const mine = el; // a Welcome closed and reopened meanwhile (or another install) must not be taken over
+      install(id).then(() => { if (el !== mine || installing !== id) return; installing = ''; if (step === 'ai') { provider = id; connected = false; paint(); poll(); } },
+        err => { if (el !== mine || installing !== id) return; installing = ''; installError = err?.message || 'Install failed.'; paint(false); });
     }
     else if (act === 'back') { clearTimeout(pollT); provider = null; paint(); }
     else if (act === 'store') { close(); H.openStore?.(); }
