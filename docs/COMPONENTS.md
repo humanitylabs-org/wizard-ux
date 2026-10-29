@@ -19,15 +19,15 @@ Visual: <side-by-side screenshot, or "none">
 | Need | Use | Never hand-roll | Test the shared path by |
 |---|---|---|---|
 | Owner signatures | `WizardApp.identity.*` → `wizardDevicePort` | app keys | `wizard-id-bridge.test.mjs` |
-| Agent chat | `WizardApp.nav.openThread(sessionId, {reply})`, `nav.openContextDraft` | own composer/transcript/retries | shell `[data-chats]`; 503: one outbox item/message |
-| Top-level home-screen name, icon and app root | `WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK | per-app manifest injectors | app-owned manifest wins; frames untouched |
+| Agent chat | `WizardApp.nav.openThread(sessionId, {reply})`, `nav.openContextDraft` | own chat UI/retries | shell `[data-chats]`; 503: one outbox item/message |
+| Home-screen identity + app root | `WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK | per-app manifest injectors | manifest wins; frames untouched |
 | Own chat-box input: paste, drop, Enter | `WizardApp.composer.bind` (Chats' `web/core/composer-input.js`) | own paste/drop/Enter | `qa-composer-input.cjs` |
 | File chip before send | `WizardApp.attachChip.node` (Chats' tray, `core/attach-chip.js`) | own chip | `qa-attach-chip.cjs` |
 | Open a photo/video full screen (pinch zoom, swipe) | `WizardApp.media.view(items, i)` = Chats' `WosChat.viewer` | own lightbox | Messenger `photo_viewer_browser.cjs` |
 | Bound same-app companion | `WizardApp.shell.openCompanion` → `WizCompanionPane` (`web/core/companion-pane.js`); [API](shared-app-services-host.md) | app-specific desks/relays | `qa-companion-pane.cjs`: nested Back |
 | Back in app; leave on dismiss or modal outside tap | `WizardApp.back.register/push`, `nav.back()`; `WizOpenApp(id,path)` validates repair app URL + origin | guards, 2nd tap | nested Back stays; repair → originating chat |
 | Skin, tokens, light/dark | `WizardApp.theme.get / onChange`, `--wz-*` roles | theme storage, own dark mode, literal colours | two skins + a live skin change keep app state |
-| Native Android screens in the worn skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`): saved shell roles, Nebula fallback | literal colours in native screens |
+| Native Android skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`): saved roles, Nebula fallback | literal colours in native screens |
 | Native offline/connect | `ReachScreen` / `ReachPolicy`, `ConnectActivity` / `ServerSettings` (same native package as `WizardLook`) | duplicate offline/address UI |
 | Transcribe audio | `WizardApp.voice.transcribe(blob, {language})` → `{text}` / `{unavailable:true}`; verified frame, 25 MB; `WizConfig.transcribe` | app transcriber | stale/foreign denied; unavailable explicit |
 | Share out (people → apps → Other apps) | `WizardApp.share.text / file` | own picker | cancel ≠ shared |
@@ -36,7 +36,7 @@ Visual: <side-by-side screenshot, or "none">
 | Title-bar tools | `WizardApp.titlebar.set(tools)` | an app header repeating the title | tools appear in the shell title bar |
 | Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, 2-slot `VaultSlots`) | own ports | cancel keeps old |
 | Protect unsaved work from updates | `WizardApp.update.hold` | app service worker, forced reload | released only after save+readback |
-| Reading place in an app document | shell-owned `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic for registered apps | app-local scroll store | reopen lands at the saved place |
+| App reading place | `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic | app-local scroll store | reopen lands at the saved place |
 | Motion, haptics, press feel | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own spring/haptic helpers | — |
 | App kit | `WizardApp`: `web/kit/wizard-ui.css` + `--wz-*`, then active core/package/My skin | forked kit; chat composer as `.wz-field-row`; literal colours | two skins + My skin |
 
@@ -58,8 +58,8 @@ Visual: <side-by-side screenshot, or "none">
 | Thread topic emoji | `WosTopicEmoji` (`web/core/chat-topic-emojis.js`, data `WosTopicEmojiData`) | — |
 | Durable send; >6h held in thread/list for Send/Discard | `WosOutbox`, `WosCarry` (`web/outbox.js`) | own queue |
 | Cancelled-recording keep | `WosCancelled` (`web/core/cancelled.js`) | — |
-| Share to Wizard | `WizShareWizard` (`web/core/share-wizard.js`) | Native/app input → one phone/desktop sheet; `share.wizard` |
-| Uploads of any size | `WizUploads` (`web/core/uploads.js`) | file input + single fetch |
+| Share to Wizard | `WizShareWizard` (`web/core/share-wizard.js`) | one sheet; `share.wizard` |
+| Uploads of any size | `WizUploads` (`web/core/uploads.js`) | single-fetch uploads |
 | Files browse, preview, attach | `WosFiles` (`web/core/files.js`) | own picker |
 | Settings in both shells | `WosSettings.register` (`web/core/settings.js`), `focus(id)`, `WosFeatures`; Reply style note; `WizConfig.responseStyle` | shell-only pages |
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`web/core/agents.js`) | hard-coded agent names or colours |
@@ -67,7 +67,7 @@ Visual: <side-by-side screenshot, or "none">
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`web/core/app-route.js`) | — |
 | Per-app setup/open gate | `WosAppSetup` (`core/app-setup.js`, `.css`), Store `routerNeeds` / `routerApprove` / `serviceRow` / `installRelease`, `WosAppRoute`, `WizLinks` | duplicate gates |
 | App glyph tiles | `WizSigil` (`web/core/sigils.js`, `web/core/sigils.css`) | PNG/emoji icons |
-| Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs + old-service defaults | lists |
+| Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs + legacy defaults | lists |
 | App groups | `WosAppKinds` (`web/core/app-kinds.js`) | forks |
 | Brand hat | `WizBrand` (`web/core/brand.js`) | redrawn logos |
 | Long-press file/link | `WizLinks` (`core/links.js`): phone sheet, desktop `asWindow`, images, browser/Download/Copy, `back()` / `backMenu()`; Android `WizardOSNative.openInBrowser` / `download` | own iframe, menu or `window.open` |
@@ -82,7 +82,7 @@ Visual: <side-by-side screenshot, or "none">
 | Mic bars | `orbLevel` (`web/app.js`), `#voiceMeter`; shared RMS/native sample | fake animation |
 | Native phone mic recording (voice notes, orb takes, dictation) | `NoteRecorder` (`audio/NoteRecorder.java`) over `MicRoute` (`audio/MicRoute.java`: `MicRoute.start` with `MicRoute.NOTE_SOURCES` for listened notes, `MicRoute.SOURCES` for STT) | `new MediaRecorder`, `AudioRecord` or `setAudioSource` outside `audio/` | `MicRouteTest`, `NoteRecorderTest` |
 | Android shell capabilities | `WosDevicePort` (`web/core/device-port.js`), `WosDeviceRecording` (`web/core/device-recording.js`), `WosDeviceOrb` (`web/core/device-orb.js`); `wizardDevicePort` v1 (`device/DeviceMessageProtocol.java`) | another envelope, recorder/store or feature `@JavascriptInterface`; ack before durable custody |
-| Add an app to the home screen | `WizHomeScreenApps.attach / offer / canOffer` (`web/core/home-screen-apps.js`): native pin or direct-link guide; pins dedup echoes; resume retries; `WosExperience` arrange tweak; docs/pwa-app-install.md | a second long-press menu or pin sheet per surface |
+| Add an app to the home screen | `WizHomeScreenApps.attach / offer / canOffer` (`web/core/home-screen-apps.js`): native pin/guide, dedup echoes, resume retry; `WosExperience` arrange; docs/pwa-app-install.md | second pin menu/sheet |
 | Long screenshot, text selection | WebView document scroll, `SelectionWebView`, `ScrollCaptureCrashGuard` (`docs/android-document-scroll.md`) | second capture path | long Chats capture |
 
 ## Visual (drawn/animated: side-by-side screenshot under `Visual:`)
@@ -95,7 +95,7 @@ Visual: <side-by-side screenshot, or "none">
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) | own keyframe sets |
 | Tour/help ("Step N of 3": Talk, Reply in Chats, Done), responsive Done, skip/exit; desktop guide `WosTour.desk` ("Step N of 2") | `WosTour` (`web/core/tour.js`) | — |
 | Install prompt (banner, held while the tour runs) | `WizardPwaInstall` (`web/pwa-install.js`) | a second `beforeinstallprompt` listener |
-| First launch and explicit Setup/tour; VM auto-onboarding; alongside launch starts only the orientation | `WosSetupLaunch` (`web/core/setup-launch.js`); built-in checklist `web/setup/setup.js` distinguishes ready-to-open from phone-connected | shell-specific first-run checks, a second tour launcher |
+| First launch and explicit Setup/tour; VM auto-onboarding; alongside launch starts only the orientation | `WosSetupLaunch` (`web/core/setup-launch.js`); built-in checklist `web/setup/setup.js`; phone: `WizPhoneConnect` (`web/core/phone-connect.js`, Settings + onboarding) | shell-specific first-run checks, a second tour launcher |
 
 ## App voice/audio
 
@@ -107,4 +107,6 @@ Visual: <side-by-side screenshot, or "none">
 
 ## Plumbing (single owner)
 
-`WizCompanionPane` (`web/core/companion-pane.js`), `WizardApp` (`web/core/app-client.js`), `WizAppCapture` (`web/core/app-capture.js`), `WizComposerInput`, `WizAttachChip`, `WosSkinFrame` (`web/core/skin-frame.js`), `WosDevice` (`web/device.js`), `WizAppServices` (`web/core/app-services.js`), `WizCore` (`web/core/core.js`, `bridge.js`), `WizConfig` (`web/core/config.js`), `WizReach` (`web/core/reach.js`), `WizAndroidRelay` (`web/core/android-relay.js`), `WizBackgroundAudio` (`web/core/background-audio.js`), `WizHomeScreenApps` (`web/core/home-screen-apps.js`), `WizHomeScreenPolicy` (`web/core/home-screen-policy.js`), `WosOwnViews` (`web/core/own-views.js`), `WosOrbHandoff` (`web/core/orb-handoff.js`), `WosSetupLaunch` (`web/core/setup-launch.js`), `WosShareSheet` (`web/core/share-sheet.js`), `WosBell` (`web/core/notif-bell.js`, items), `WosResources` (`web/core/resources.js`), `WosUsage` (`web/core/usage.js`), `WizPhotosRelay` (`web/core/photos-relay.js`), `WosMusic`, `WizDeviceLegacy` (`web/core/voice-legacy.js`), openers `WizAppOpen`, `WizCanOpen`, `WizOpenApp`, `WizOpenAgentChats` (`web/app.js`), `WosBoundView` (`web/core/bound-view.js`), `WosWorkspaceSync` (`web/core/workspace-sync.js`, rig).
+`WizCompanionPane` (`web/core/companion-pane.js`), `WizardApp` (`web/core/app-client.js`), `WizAppCapture` (`web/core/app-capture.js`), `WizComposerInput` (`web/core/composer-input.js`), `WizAttachChip` (`web/core/attach-chip.js`), `WosSkinFrame` (`web/core/skin-frame.js`), `WosDevice` (`web/device.js`), `WizAppServices` (`web/core/app-services.js`), `WizCore` (`web/core/core.js`, `bridge.js`), `WizConfig` (`web/core/config.js`), `WizReach` (`web/core/reach.js`), `WizAndroidRelay` (`web/core/android-relay.js`), `WizBackgroundAudio` (`web/core/background-audio.js`), `WizHomeScreenPolicy` (`web/core/home-screen-policy.js`), `WosOwnViews` (`web/core/own-views.js`), `WosOrbHandoff` (`web/core/orb-handoff.js`), `WosShareSheet` (`web/core/share-sheet.js`), `WosBell` (`web/core/notif-bell.js`, items), `WosResources` (`web/core/resources.js`), `WosUsage` (`web/core/usage.js`), `WizPhotosRelay` (`web/core/photos-relay.js`), `WosMusic`, `WizDeviceLegacy` (`web/core/voice-legacy.js`), openers `WizAppOpen`, `WizCanOpen`, `WizOpenApp`, `WizOpenAgentChats` (`web/app.js`), `WosBoundView` (`web/core/bound-view.js`), `WosWorkspaceSync` (`web/core/workspace-sync.js`, rig).
+
+Devices (James approved 29 Oct): EXTEND `WizPhoneConnect` with #648’s QR/checklist/Done flow; Jan’s #677 owns Settings management. REUSE `web/kit/controls.css` from the Wizard kit. Setup + Mac onboarding share it.
