@@ -7,9 +7,9 @@ function harness(kind, explicit = false) {
   const paints = [], state = explicit ? { newModel: { model: 'chosen', provider: 'p' } } : {};
   const w = { id: 'win', thread: '__new__', ...(kind === 'main' ? {} : { agent: kind }) };
   let defaultModel = 'old', release;
-  const ready = new Promise(r => { release = () => { defaultModel = 'fresh'; r(); }; });
+  const ready = new Promise(r => { release = (fresh = 'fresh') => { defaultModel = fresh; if (fresh !== 'old') M.options = [{ value: fresh, provider: 'p', name: fresh, isGlobalDefault: true }]; r(); }; });
   const el = { querySelectorAll: () => [], insertAdjacentHTML() {}, querySelector: () => null };
-  const M = { ready: true, stale: () => true, load: () => ready,
+  const M = { ready: true, stale: () => true, load: () => ready, options: [{ value: 'old', provider: 'p', name: 'Old', isGlobalDefault: true }],
     defaultOption: () => ({ value: defaultModel, provider: 'p' }),
     sheetHtml: opt => { paints.push(JSON.parse(JSON.stringify(opt))); return { list: [], html: '<div></div>' }; } };
   const ctx = { setTimeout, clearTimeout, console, localStorage: { getItem: () => null },
@@ -43,4 +43,14 @@ test('a closed picker is not resurrected when sign-in refresh finishes', async (
 test('a refresh finishing after navigation never repaints a different thread', async () => {
   const h = harness('main'); h.open(); h.w.thread = 'another-thread'; h.release(); await new Promise(r => setImmediate(r));
   assert.equal(h.paints.length, 1);
+});
+// WosModels.options is an array in production: every open must revalidate without throwing, and an
+// unchanged catalogue must not repaint the open sheet.
+test('an unchanged catalogue after the open-time refetch does not repaint', async () => {
+  const h = harness('main'); assert.doesNotThrow(h.open); h.release('old'); await new Promise(r => setImmediate(r));
+  assert.equal(h.paints.length, 1);
+});
+test('a catalogue that gained a model repaints once', async () => {
+  const h = harness('main'); h.open(); h.release('astra'); await new Promise(r => setImmediate(r));
+  assert.equal(h.paints.length, 2); assert.equal(h.paints[1].cur.model, 'astra');
 });

@@ -3,11 +3,11 @@
   "assets": {
     "ui.css": {
       "source": "style/ui.css",
-      "sha256": "5551214c889918e90f7939b695b9434d71407221505d3dce7dacd7b07ebe445f"
+      "sha256": "ba3ad8c73da43b0a2a25517168f9a021429e1087f5338d54fd8c8bc0425dc24d"
     },
     "wizard-ui.css": {
       "source": "style/ui.css",
-      "sha256": "5551214c889918e90f7939b695b9434d71407221505d3dce7dacd7b07ebe445f"
+      "sha256": "ba3ad8c73da43b0a2a25517168f9a021429e1087f5338d54fd8c8bc0425dc24d"
     },
     "tokens.css": {
       "source": "style/tokens.css",
@@ -42,6 +42,10 @@
       "sha256": "dd3f01c7c9f02f19a5d9f342c7a33b11ada5e029c8c54f9d7d34f81eada2caa9"
     }
   },
+  "skin_layers": [
+    "web/skins/",
+    "web/tweaks/"
+  ],
   "exceptions": [
     {
       "path": "web/core/skins.css",

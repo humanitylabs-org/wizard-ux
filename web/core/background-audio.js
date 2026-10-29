@@ -76,7 +76,8 @@
   }
   // Shell-owned short-sound ducking (voice notes), independent of the provider app.
   // Serialize callers and restore the owner volume only after the last release.
-  const DUCK = 0.25, duckers = new Set(); let restoreTo = null, duckChain = Promise.resolve(false);
+  // Release restores only while the volume is still the one we set: a volume the owner chose meanwhile wins.
+  const DUCK = 0.25, duckers = new Set(); let restoreTo = null, duckedTo = null, duckChain = Promise.resolve(false);
   function shellSend(method, params = {}) {
     const apps = registry(), appId = owner || Object.keys(apps).find(id => granted(id, apps[id]));
     return appId && granted(appId, apps[appId]) ? send(appId, method, params) : Promise.reject(new Error('Background audio unavailable'));
@@ -87,13 +88,16 @@
       if (!port()) return false;
       if (duckers.size && restoreTo == null) {
         const state = await shellSend('state');
-        if (!state.playing || !state.sessionId) return false;
-        restoreTo = typeof state.volume === 'number' ? state.volume : 1;
-        await shellSend('volume', {sessionId: state.sessionId, value: Math.min(restoreTo, DUCK)}); return true;
+        // Buffering music the owner wants playing counts as playing (it would resume at full volume mid-note).
+        if (!(state.playing || state.wantPlaying) || !state.sessionId) return false;
+        restoreTo = typeof state.volume === 'number' ? state.volume : 1; duckedTo = Math.min(restoreTo, DUCK);
+        await shellSend('volume', {sessionId: state.sessionId, value: duckedTo}); return true;
       }
       if (!duckers.size && restoreTo != null) {
-        const value = restoreTo; restoreTo = null;
-        const state = await shellSend('state'); if (state.sessionId) await shellSend('volume', {sessionId: state.sessionId, value}); return true;
+        const value = restoreTo, ours = duckedTo; restoreTo = duckedTo = null;
+        const state = await shellSend('state');
+        const untouched = typeof state.volume !== 'number' || Math.abs(state.volume - ours) < 0.005;
+        if (state.sessionId && untouched) await shellSend('volume', {sessionId: state.sessionId, value}); return true;
       }
       return restoreTo != null;
     });
