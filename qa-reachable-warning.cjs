@@ -45,14 +45,20 @@ const server = http.createServer((req, res) => {
         return json({ ok: true, sessions: [], agents: [], messages: [], providers: [], files: [], models: [] });
       });
       await page.addInitScript(skin => {
-        localStorage.setItem('wos.shell.v1', 'phone');
+        localStorage.setItem('wux.shell', 'phone');
+        localStorage.setItem('wos.coached', 'true');
         localStorage.setItem('wos.tour.v1', 'true');
-        localStorage.setItem('wos.skins.v1', JSON.stringify({ id: skin, vars: {}, nativeOn: false }));
-        localStorage.setItem('wos.state.v2', JSON.stringify({ v: 2, active: 'Chats', wins: [{ id: 'Chats', type: 'chats', name: 'Chats', thread: null, focus: 'all', rail: false, m: false, z: 2, sz: [400, 800] }] }));
+        localStorage.setItem('wos.skin', skin);
       }, skin);
       await page.goto(base, { waitUntil: 'domcontentloaded' });
       await page.waitForSelector('.ch-list', { timeout: 45000 });
       await page.waitForFunction(() => window.WizLive?.ok && window.WosOutbox?.recoveryComplete);
+      assert.equal(await page.evaluate(() => WosSkin.current), skin, 'exercise the requested real skin, not an ignored fixture key');
+      // Chats is mounted offscreen on Home. DOM presence alone never proves a tappable card.
+      const chatsDesk = await page.evaluate(() => __wos.desks.findIndex(d => d.wins.some(id => __wos.wins[id]?.app === 'chats')));
+      assert.ok(chatsDesk > 0, 'the initial Chats desk exists beside Home');
+      await page.locator(`#dock [data-goto="${chatsDesk}"]`).click();
+      await page.waitForFunction(i => __wos.idx === i, chatsDesk);
       const id = await page.evaluate(async sid => {
         const item = await WosOutbox.enqueue({ kind: 'reply', sessionId: sid, text: 'Synthetic unsent message', model: 'synthetic-model', provider: 'synthetic' });
         return item.id;
@@ -64,8 +70,13 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.locator('[data-sendpill]').count(), 1);
       await page.screenshot({ path: path.join(out, `phone-${skin}-waiting.png`), fullPage: true });
       const before = posts.length;
-      await page.locator('[data-sendpill] [data-obretry]').click();
-      await page.waitForFunction(id => WosOutbox.get(id)?.state === 'waiting' && WosOutbox.get(id)?.attempts >= 2, id);
+      const priorAttempts = await page.evaluate(id => WosOutbox.get(id).attempts, id);
+      const retry = page.locator('[data-sendpill] [data-obretry]');
+      const box = await retry.boundingBox();
+      assert.ok(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= 412 && box.y + box.height <= 915, 'Retry is inside the phone viewport');
+      assert.equal(await retry.evaluate(el => { const r = el.getBoundingClientRect(); return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); }), true, 'Retry is not covered by Home or another desk');
+      await retry.click(); // ordinary Playwright actionability, never force or DOM dispatch
+      await page.waitForFunction(({ id, priorAttempts }) => WosOutbox.get(id)?.state === 'waiting' && WosOutbox.get(id)?.attempts > priorAttempts, { id, priorAttempts });
       assert.ok(posts.length > before, 'Retry now still submits the saved envelope');
       assert.deepEqual(posts.at(-1), posts[0], 'retry preserves the sealed envelope and idempotency key');
       const custody = await page.evaluate(id => { const x = WosOutbox.get(id); return { state: x.state, durable: x.durable, text: x.text, id: x.id }; }, id);
@@ -79,7 +90,8 @@ const server = http.createServer((req, res) => {
       await page.evaluate(async () => { await WizLive.refresh(); });
       await page.waitForFunction(() => !document.querySelector('[data-wxnet]'));
       assert.equal(await page.locator('[data-sendpill]').count(), 1, 'recovery never hides the unsent-message card');
-      results.push({ skin, custodyPreserved: true, retryEnvelopePreserved: true, connectionRecovery: true, postCount: posts.length });
+      await page.screenshot({ path: path.join(out, `phone-${skin}-recovered.png`), fullPage: true });
+      results.push({ skin, visibleRetry: true, custodyPreserved: true, retryEnvelopePreserved: true, connectionRecovery: true, postCount: posts.length });
       await context.close();
     }
     fs.writeFileSync(path.join(out, 'result.json'), JSON.stringify({ ok: true, results }, null, 2));
