@@ -31,7 +31,8 @@
     { id: 'connections', title: 'Connections', available: () => connectionsAvailable(), pending: () => conn.ok === null },
     { id: 'recovery', title: 'Unsent & recovered' },
     // Resources: the Home resource bars (AI + Compute) from the shared renderer, when it is there; else AI usage.
-    { id: 'usage', get title() { return window.WosResources?.bars ? 'Resources' : 'AI usage'; }, available: () => !filled('ai')() },
+    // Kept beside the System pages: it is the only place with service health and the manual refresh.
+    { id: 'usage', get title() { return window.WosResources?.bars ? 'Resources' : 'AI usage'; } },
     { id: 'schedules', title: 'Schedules', available: () => !!window.WosSchedules?.available },
     { id: 'about', title: 'About & updates' },
   ];

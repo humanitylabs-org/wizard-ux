@@ -346,6 +346,16 @@ test('twelfth review: unread chat counts are unknown, not zero', () => {
   }
 });
 
+test('thirteenth review: Resources stays in Settings; the owner\'s meter pick holds through an outage; reachability is not claimed', () => {
+  assert.match(read('web/core/settings.js'), /\{ id: 'usage', get title\(\) \{ return window\.WosResources\?\.bars \? 'Resources' : 'AI usage'; \} \},/);
+  for (const who of ['miguel', 'wizard']) {
+    const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
+    assert.match(src, /if \(chosen\.length\) return \{ use: live\.filter\(s => S\.meter\.includes\(s\.id\)\), custom: true \};/, who);
+    assert.match(src, /Who can reach whom isn’t checked here\./, who);
+    assert.doesNotMatch(src, /right now any device on your Tailscale can reach any other/, who);
+  }
+});
+
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));

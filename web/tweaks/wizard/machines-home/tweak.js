@@ -183,8 +183,10 @@ export default function setup(api) {
   };
   function meterPool() {
     const all = subs(), live = all.filter(s => s.left != null && !s.out && !s.na);
-    const picked = Array.isArray(S.meter) ? live.filter(s => S.meter.includes(s.id)) : [];
-    if (picked.length) return { use: picked, custom: true };
+    // The owner's own pick holds while any picked account still exists; if none can be read right now the meter waits
+    // (empty) rather than quietly showing an account he didn't pick.
+    const chosen = Array.isArray(S.meter) ? all.filter(s => S.meter.includes(s.id)) : [];
+    if (chosen.length) return { use: live.filter(s => S.meter.includes(s.id)), custom: true };
     const want = defKind();
     const plans = live.filter(s => s.unit === 'plan'), pool = plans.filter(s => !want || s.kind === want);
     return { use: pool.length ? pool : plans.length ? plans : live, custom: false, def: !!want && !!pool.length };
@@ -406,7 +408,7 @@ export default function setup(api) {
         : allClear() ? h('span', { text: 'Nothing answers from the internet. Tailscale is the only way in.' })
         : h('span', { text: S.devFresh ? 'Not every machine has been checked from the internet yet. Check again to find out.' : 'This is the last reading; your network couldn’t be read just now.' }),
       h('span', { cls: 'mh-ts-list' }, all.map(m => { const [w, x] = word(m); return h('span', { cls: 'mh-ts-row', 'data-x': x }, h('i'), h('b', { text: m.name }), h('span', { text: w })); })),
-      h('span', { text: 'Who can reach whom: right now any device on your Tailscale can reach any other, both ways (Tailscale’s starting rule).' }),
+      h('span', { text: 'Who can reach whom isn’t checked here. Unless your Tailscale rules were changed, every device can reach every other, both ways (Tailscale’s starting rule).' }),
       h('span', { cls: 'mh-act-btns' },
         [bad.length ? ['fix', `Close ${bad.length === 1 ? 'it' : 'them'}`, 'Tailscale becomes the only way in'] : null, ['oneway', 'Make it one-way', 'your devices reach machines, not back'], ['check', 'Check again', 'tests every machine from outside']]
           .filter(Boolean).map(([id, text, note]) => h('button', { type: 'button', cls: 'mh-act-btn' + (id === 'fix' ? ' is-fix' : ''), data: { tsAsk: id } }, h('b', { text }), h('small', { text: note })))));
