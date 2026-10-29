@@ -1386,7 +1386,7 @@
   function renderHome() {
     const L = live(), needs = L.needs.length;
     // Opinionated: Ready = everything not working (read or not); unread is not a useful count.
-    const RD = LIVE && LIVE.ok ? (LIVE.workGroups().ready || []) : [], ready = RD.length;
+    const RD = LIVE && LIVE.ok ? (LIVE.workGroups().ready || []) : [], ready = RD.length + (window.WosBell?.readyCount?.() || 0);
     // Working counts what the Chats Working list (and the Working card's filter) shows, sending messages included.
     const W0 = LIVE && LIVE.ok ? (LIVE.workGroups().working || []) : [], working = W0.length;
     const now = new Date();
@@ -1414,6 +1414,7 @@
     const hm = window.WizConfig.hm();
     if (t) t.textContent = hm; if (c) c.textContent = hm;
   }, 5000);
+  window.addEventListener('wizard:notifications', () => { renderMoons(); refreshHome(); });
   const refreshHome = force => { if (!desks[HOME].wins.length) { const g = secOf(HOME)?.querySelector('.glance'); if (g) paintHome(g, renderHome()); } };
   // Home repaints go through the skin host so a tweak's home-main mount survives (plain innerHTML without one).
   function paintHome(el, html) { if (window.WosSkinHost?.paintHome) window.WosSkinHost.paintHome(el, html); else el.innerHTML = html; }
@@ -2014,7 +2015,7 @@
     $('#moons').innerHTML = m.map((c, k) => { const a = (k / Math.max(m.length, 1)) * Math.PI * 2 - Math.PI / 2, r = Math.round(($('#orbWrap').offsetWidth || 44) / 2 + 8);
       return `<i style="--c:${c};transform:translate(${(Math.cos(a) * r).toFixed(1)}px,${(Math.sin(a) * r).toFixed(1)}px)"></i>`; }).join('');
     // Opinionated: Ready count, not unread. It belongs to Chats; the orb shows the count of the desk in view.
-    window.WizCore.workspaceNav.setCount(CHATS_APP.id, LIVE && LIVE.ok ? (LIVE.workGroups().ready || []).length : 0);
+    window.WizCore.workspaceNav.setCount(CHATS_APP.id, (LIVE && LIVE.ok ? (LIVE.workGroups().ready || []).length : 0) + (window.WosBell?.readyCount?.() || 0));
     paintOrbBadge();
   }
   function paintOrbBadge() {
