@@ -150,8 +150,8 @@ html[data-shell="phone"] .ch-fsheet:has([data-chfocusopt]) { bottom: calc(var(--
 .ch-msgs::-webkit-scrollbar { display: none; }
 /* Opened alert: source text is visible without resolving/sending, in the existing thread scroller. */
 .ch-notif-details { min-width: 0; margin: 16px 2px 4px; color: var(--ink); }
-.ch-notif-details h2 { margin: 0 0 8px; color: var(--ink-2); font-size: 13px; font-weight: 700; }
-.ch-notif-original { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 17px; line-height: 1.5; }
+.ch-notif-details h2 { margin: 0 0 8px; color: var(--ink-2); font-size: 0.8125rem; font-weight: 700; }
+.ch-notif-original { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 1.0625rem; line-height: 1.5; }
 .msg { display: flex; }
 .msg.u { justify-content: flex-end; }
 .msg .bub { max-width: 88%; padding: 10px 13px; border-radius: 18px; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
