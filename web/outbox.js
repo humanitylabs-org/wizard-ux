@@ -830,6 +830,21 @@
     isMessage: it => !!it && (it.intent !== 'command' || it.deliveryRequested === true),
     forThread(sessionId, wid) { return [...items.values()].filter(it => api.isMessage(it) && !it.compact && !(['empty', 'held', 'sent'].includes(it.state) && it.threadHidden) && !['dictation', 'conversation'].includes(it.kind) && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
     dismissEmpty(id) { return this.get(id)?.state === 'sent' ? Promise.resolve(false) : this.dismissBubble(id); },
+    async dismissFailed(id) {
+      // Withdraw only this settled local failure. Never stop a run or erase recovery custody.
+      const it = items.get(id);
+      if (!it || it.state !== 'failed' || quarantine.has(id) || admitting.has(id) || transcriptWork.has(id) || conversationWork.has(id) || it.steerDispatch === 'started') return false;
+      const before = { ...it };
+      Object.assign(it, { state: 'held', cancelled: true, threadHidden: true, nextAt: 0 });
+      await put(it);
+      if (!it.durable) {
+        for (const key of ['state', 'cancelled', 'threadHidden', 'nextAt']) {
+          if (key in before) it[key] = before[key]; else delete it[key];
+        }
+        emit(); return false;
+      }
+      return true;
+    },
     async dismissBubble(id) {
       // Hide only the local presentation; accepted work and original recovery custody stay untouched.
       const it = items.get(id); if (!it || !['empty', 'held', 'sent'].includes(it.state) || quarantine.has(id) || conversationWork.has(id)) return false;
