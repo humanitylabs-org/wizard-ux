@@ -80,3 +80,15 @@ test('icon paint and appearance changes wake a frozen idle orb without self-waki
   o.root.dataset.skin = 'obsidian'; o.observers[1].fn([]); o.drain();
   assert.ok(o.uniforms.core > .5499, 'switching to another skin restores the original core');
 });
+
+test("James 29 Oct: the white top-left shine on the orb goes while the white app icon shows, and returns when listening", () => {
+  for (const skin of ['nebula', 'grove', 'tide', 'ember', 'signal']) {
+    const o = orb(skin); o.settle();
+    assert.ok(o.uniforms.gloss < .002, `${skin}: no white shine behind the icon`);
+    o.style.display = 'none'; o.api.setMode('listen'); o.settle();
+    assert.ok(o.uniforms.gloss > .999, `${skin}: shine back while listening`);
+  }
+  assert.match(source, /\(spec \+ arc\)\*gloss/, 'white specular highlight and arc are gated by gloss');
+  const o = orb('obsidian'); o.settle();
+  assert.ok(o.uniforms.gloss > .999, 'other skins keep their shine');
+});
