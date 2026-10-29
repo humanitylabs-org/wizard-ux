@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 """Small controller unit tests; no SDK, builds, browser or emulator is started."""
 import hashlib
+from email.message import Message
 import importlib.util
 import io
 import json
 import os
 from pathlib import Path
+import shutil
+import subprocess
 import tarfile
 import tempfile
 import unittest
+import urllib.error
+import xml.etree.ElementTree as ET
 from unittest.mock import Mock, patch
 from typing import Any
 
@@ -20,6 +25,91 @@ SPEC.loader.exec_module(runner)
 
 
 class ControllerTest(unittest.TestCase):
+    def test_sender_manifest_explicitly_allows_independent_source_hash(self):
+        manifest = ET.parse(HERE / 'unified-share-sender/AndroidManifest.xml').getroot()
+        android = '{http://schemas.android.com/apk/res/android}'
+        self.assertEqual(manifest.attrib['package'], runner.SENDER)
+        app = manifest.find('application')
+        self.assertIsNotNone(app)
+        assert app is not None
+        self.assertEqual(app.attrib.get(android + 'debuggable'), 'true')
+        provider = app.find('provider')
+        assert provider is not None
+        self.assertEqual(provider.attrib[android + 'authorities'], runner.SENDER + '.files')
+
+    def test_sender_run_as_preflight_is_sender_scoped_and_fails_closed(self):
+        rig = runner.Rig.__new__(runner.Rig)
+        rig.sx = Mock(return_value='10123\n')
+        rig.verify_sender_debug_access()
+        rig.sx.assert_called_once_with('run-as qa.unifiedshare.sender id -u')
+        for value in ('', '0', '2000', 'run-as: package not debuggable: qa.unifiedshare.sender'):
+            rig.sx = Mock(return_value=value)
+            with self.subTest(value=value), self.assertRaisesRegex(AssertionError, 'sender run-as'):
+                rig.verify_sender_debug_access()
+        rig.sx = Mock(side_effect=RuntimeError('package not debuggable'))
+        with self.assertRaisesRegex(RuntimeError, 'not debuggable'):
+            rig.verify_sender_debug_access()
+
+    def test_fixture_readiness_retries_connection_startup_not_bad_answers(self):
+        rig = runner.Rig.__new__(runner.Rig)
+        rig.fixture = Mock(); rig.fixture.poll.return_value = None
+        rig.state = Mock(side_effect=[urllib.error.URLError(ConnectionRefusedError()), {'shares': []}])
+        self.assertIsNone(rig.fixture_ready())
+        self.assertEqual(rig.fixture_ready(), {'shares': []})
+        for error in (ValueError('bad json'), urllib.error.URLError('bad route'),
+                      urllib.error.HTTPError('http://fixture', 500, 'fixture failure', Message(), None)):
+            rig.state = Mock(side_effect=error)
+            try:
+                with self.subTest(error=error), self.assertRaises(type(error)):
+                    rig.fixture_ready()
+            finally:
+                if isinstance(error, urllib.error.HTTPError):
+                    error.close()
+
+    def test_fixture_readiness_detects_dead_child_before_connect(self):
+        rig = runner.Rig.__new__(runner.Rig)
+        rig.fixture = Mock(); rig.fixture.poll.return_value = 1
+        rig.state = Mock()
+        with self.assertRaisesRegex(RuntimeError, 'exited before readiness'):
+            rig.fixture_ready()
+        rig.state.assert_not_called()
+
+    @unittest.skipUnless(shutil.which('node'), 'Node needed for focused DOM contract replay')
+    def test_notification_dom_readback_rejects_background_wrong_thread_and_missing_file(self):
+        expression = runner.focused_thread_expression('qa_private_thread', 'genuine.pdf')
+        # A small DOM-contract replay, NOT browser/emulator/end-to-end evidence.
+        script = """
+        const assert = require('node:assert/strict');
+        global.window = {__wos:{idx:0,desks:[{focus:'c1',wins:['c1']}],wins:{c1:{app:'chats',thread:'qa_private_thread'}}}};
+        global.CSS = {escape:x=>x}; global.innerWidth=400; global.innerHeight=800;
+        let box={width:300,height:600,left:0,top:0,right:300,bottom:600};
+        let e={innerText:'Synthetic comment one genuine.pdf',getBoundingClientRect:()=>box};
+        global.getComputedStyle=()=>({display:'block',visibility:'visible'});
+        global.document={querySelector:s=>{assert.equal(s,'[data-chats="c1"] .ch-thread');return e}};
+        const check = () => eval(EXPRESSION);
+        assert.equal(check(),true);
+        window.__wos.wins.c1.thread='wrong';assert.equal(check(),false);
+        window.__wos.wins.c1.thread='qa_private_thread';
+        window.__wos.desks[0].wins=[];assert.equal(check(),false);
+        window.__wos.desks[0].wins=['c1'];
+        box={...box,left:500,right:800};assert.equal(check(),false);
+        box={...box,left:0,right:300}; e.innerText='different.pdf';assert.equal(check(),false);
+        e=null;assert.equal(check(),false);
+        """.replace('EXPRESSION', json.dumps(expression))
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_notification_readback_requires_foreground_native_log_and_focused_dom(self):
+        for component in ('ai.wizards.os.MainActivity', '.MainActivity'):
+            rig = runner.Rig.__new__(runner.Rig)
+            rig.sx = Mock(side_effect=[f'topResumedActivity=ActivityRecord{{123 u0 ai.wizards.os.qa/{component} t3}}',
+                                      'WizardHandoff: open thread qa_private_thread'])
+            rig.page = Mock(); rig.page.ev.return_value = True
+            rig.ui = Mock(side_effect=AssertionError('WebView file text is not native XML'))
+            self.assertTrue(rig.notification_thread('qa_private_thread', 'genuine.pdf'))
+            rig.page.ev.assert_called_once_with(runner.focused_thread_expression('qa_private_thread', 'genuine.pdf'))
+            rig.ui.assert_not_called()
+
     def test_shared_orb_assets_match_canonical_web_bytes(self):
         for name in ('orb.js', 'robert-thread-orb.png', 'robert-listening-galaxy.png'):
             self.assertEqual((HERE.parent / 'web' / name).read_bytes(),
@@ -115,6 +205,27 @@ class ControllerTest(unittest.TestCase):
                          ('am start -W -n qa.unifiedshare.sender/.SenderActivity --es fixture_case boilerplate',))
         self.assertEqual(rig.sx.call_args_list[1].args, ('input tap 540 350',))
         rig.tap_text.assert_not_called()
+
+    def test_share_keeps_independent_sender_hash_assertion(self):
+        with tempfile.TemporaryDirectory(prefix='unified-hash-', dir=os.environ['TMPDIR']) as d:
+            for source_hash in ('a' * 64, 'b' * 64):
+                rig = runner.Rig.__new__(runner.Rig)
+                rig.report = {'external_intents': []}; rig.out = Path(d)
+                rig.screenshot = Mock(); rig.ui = Mock(return_value=self.SENDER_XML)
+                rig.connect_page = Mock(); rig.sheet = Mock(return_value=True); rig.save = Mock()
+                rig.page = Mock(); rig.page.ev.return_value = True
+                staged = {'subject':'x.pdf', 'text':'Emailing x.pdf',
+                          'items':[{'name':'x.pdf','sha256':'a' * 64}]}
+                rig.sx = Mock(side_effect=['', '', json.dumps(staged), source_hash + '  files/x.pdf'])
+                if source_hash == 'a' * 64:
+                    rig.share('boilerplate')
+                    self.assertEqual(len(rig.report['external_intents']), 1)
+                else:
+                    with self.assertRaises(AssertionError):
+                        rig.share('boilerplate')
+                    self.assertEqual(rig.report['external_intents'], [])
+                self.assertEqual(rig.sx.call_args_list[-1].args,
+                                 ('run-as qa.unifiedshare.sender sha256sum files/x.pdf',))
 
     def test_bounds(self):
         xml = '<hierarchy><node text="Share synthetic PDF" bounds="[10,20][110,80]"/></hierarchy>'

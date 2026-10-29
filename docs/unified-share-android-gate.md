@@ -47,7 +47,7 @@ old product job. The sender calls `send.setClipData(...)` as a separate statemen
 Android returns `void`, so it must not be chained into `addFlags`.
 
 The new directory contains a separate `source/` copied from the original prepared
-manifest (no generated build tree), with only the four paths in `QA_ONLY_DELTA`
+manifest (no generated build tree), with only the five paths in `QA_ONLY_DELTA`
 overlaid from the pushed repair commit. Its `reuse-job.json` carries that exact
 file inventory, candidate revision and SHA256 of sorted JSON `files`. The
 `reuse-seal.json` carries `mode=reuse-build`, candidate `revision`, original
@@ -89,6 +89,51 @@ wrong-package/hidden/disabled/non-button/nonexact-text refusals, and the actual
 proof, not evidence that a share completed. Restage a new sibling QA directory
 with the same `--reuse-build` protocol; preserve all earlier failure evidence.
 
+## Sender debug access and remaining native-contract audit
+
+The next failed reuse run reached the real Wizard share sheet, then refused
+`run-as qa.unifiedshare.sender sha256sum files/x.pdf`: signing a fixture with a
+debug key does **not** make its manifest debuggable. Only the **test sender's**
+manifest now declares `android:debuggable="true"`. The product manifest and APK
+remain unchanged. Immediately after installing the sender, the rig checks its
+actual `run-as ... id -u` access. The independent sender SHA256 assertion remains
+mandatory, including a controller regression that refuses a mismatched hash.
+
+Audit of the remaining harness operations against the real source found two
+other concrete harness-contract errors, repaired without changing product code:
+
+- `Popen` does not mean the fixture is listening. Startup now retries only a
+  connection refusal while the owned child is alive; child exit, HTTP errors,
+  invalid JSON and other networking errors still fail. This replaces the first
+  unguarded `urlopen` that could race Node startup.
+- UIAutomator cannot supply rendered WebView file text on this shell. Both real
+  notification taps now require foreground native MainActivity, the native
+  exact-thread handoff log, and a visible, focused Chats DOM for that exact
+  thread containing its expected file. The final native-XML `x.pdf` lookup was
+  an API mismatch, not product evidence. No app navigation/send call is injected.
+
+Controller checks cover manifest/package/provider identity, sender debug-access
+failure, independent hash mismatch, readiness/dead-child/error paths, native
+short/full activity names, and focused DOM wrong-thread/background/missing-file
+refusals. The DOM expression replay uses Node with small synthetic objects, not
+a browser; it must not be reported as end-to-end acceptance.
+
+The rest of the audit matched these concrete contracts without edits:
+
+| Harness operation | Source contract checked |
+| --- | --- |
+| Explicit receiver, URI authority/read grant, PDF names/size | sender manifest/Java/provider; product manifest, ShareActivity/ShareStore |
+| Debug-only origin files, component identity, CSS-to-device taps | AppState, MainActivity, qa_aa_lib.Page; edge-to-edge WebView top is unpadded |
+| Notification runtime permission | product declares POST_NOTIFICATIONS; fresh debug APK install uses `adb install -r -g` on verified SDK 35 |
+| Agent/session query and picker selectors | share-wizard.js and Proxy private/default session responses |
+| Share/upload routes, payload fields, chunk acknowledgments | ShareClient, ShareHttp, ShareService, ShareQueue and share-fixture.mjs |
+| Queue custody, process restart and background resume | native files/share-out item schema, ShareUploader/ShareService and MainActivity resume hooks |
+| Notification label, PendingIntent target and thread handoff | ShareNotifier and MainActivity ACTION_THREAD/queueHandoff |
+| Cancellation and cleanup | device.js native finish callback, ShareStore, bounded exact emulator PID/ADB-serial cleanup |
+
+These are source/controller findings only. Preserve every failed receipt and all
+screenshots/logs; only the parent's new heavy run can establish the real phases.
+
 ## Real device phases and evidence
 
 The separate synthetic source app generates a 24 MiB blank-page PDF fixture byte
@@ -120,7 +165,8 @@ Required phases:
   Home/background resume uses nonzero Upload-Offset, one delivery and matching
   SHA256; old web upload count must remain zero.
 - `notification-tap`: real System UI tap opens the newly returned thread id,
-  logcat and visible thread title agree; notification has no filename/comment.
+  native foreground/logcat and focused visible thread/file DOM agree;
+  notification has no filename/comment.
 
 `<job>/android-evidence/acceptance.json` checkpoints each phase. Failures remain
 FAIL/NOT_COVERED, never synthetic success. Logs include Gradle/JUnit counts, APK

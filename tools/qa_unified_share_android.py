@@ -24,6 +24,7 @@ import tarfile
 import threading
 import time
 import traceback
+import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
@@ -35,13 +36,28 @@ OWNER_KEYS = ('wizardOrigin', 'wizardHomeUrl', 'wizardLegacyHosts', 'wizardQaHom
 REQUIRED_CASES = ('external-boilerplate', 'agent-and-chat', 'outside-cancel', 'native-back',
                   'existing-delivery', 'new-chat-resume', 'notification-tap')
 QA_ONLY_DELTA = {'tools/qa_unified_share_android.py', 'tools/test_qa_unified_share_android.py',
-                 'tools/unified-share-sender/SenderActivity.java', 'docs/unified-share-android-gate.md'}
+                 'tools/unified-share-sender/SenderActivity.java', 'tools/unified-share-sender/AndroidManifest.xml',
+                 'docs/unified-share-android-gate.md'}
 APK_PATH = 'android/app/build/outputs/apk/debug/app-debug.apk'
 
 
 def sha(path):
     with Path(path).open('rb') as f:
         return hashlib.file_digest(f, 'sha256').hexdigest()
+
+
+def focused_thread_expression(thread, filename):
+    return """(() => {
+      const w = window.__wos, desk = w?.desks?.[w.idx], id = desk?.focus;
+      if (!id || !desk.wins.includes(id) || w.wins[id]?.app !== 'chats' ||
+          w.wins[id]?.thread !== %s) return false;
+      const e = document.querySelector('[data-chats="' + CSS.escape(id) + '"] .ch-thread');
+      if (!e) return false;
+      const b = e.getBoundingClientRect(), s = getComputedStyle(e);
+      return b.width > 0 && b.height > 0 && b.right > 0 && b.bottom > 0 &&
+        b.left < innerWidth && b.top < innerHeight && s.display !== 'none' &&
+        s.visibility === 'visible' && e.innerText.includes(%s);
+    })()""" % (json.dumps(thread), json.dumps(filename))
 
 
 def verify_seal(root, seal, expected, runner_path=None):
@@ -423,7 +439,7 @@ class Rig:
         self.fixture = subprocess.Popen([self.env['WIZARD_QA_NODE'], str(self.source / 'tools/share-fixture.mjs'), str(self.backend),
             '--host=127.0.0.1', '--web=' + str(self.source / 'web'), '--data=' + str(self.out / 'fixture-data'),
             '--agents=2', '--throttle=4'], env=self.env, stdout=log, stderr=subprocess.STDOUT)
-        wait(self.state, 20)
+        wait(self.fixture_ready, 20)
         Proxy.backend = self.backend
         self.proxy = http.server.ThreadingHTTPServer(('127.0.0.1', self.frontport), Proxy)
         self.proxy.daemon_threads = True
@@ -431,6 +447,20 @@ class Rig:
 
     def state(self):
         return json.load(urllib.request.urlopen('http://127.0.0.1:%d/__fixture/state' % self.backend, timeout=5))
+
+    def fixture_ready(self):
+        # Popen is not a listening-port acknowledgment. Retry only connection
+        # startup, and fail immediately if the owned fixture has exited.
+        if self.fixture.poll() is not None:
+            raise RuntimeError('share fixture exited before readiness; see fixture.log')
+        try:
+            return self.state()
+        except urllib.error.HTTPError:
+            raise
+        except urllib.error.URLError as exc:
+            if isinstance(exc.reason, ConnectionRefusedError):
+                return None
+            raise
 
     def compile_sender(self):
         inputs = self.source / 'tools/unified-share-sender'
@@ -454,6 +484,13 @@ class Rig:
         self.run([bt / 'apksigner', 'verify', apk])
         self.report['sender_apk_sha256'] = sha(apk)
         self.adb_cmd('install', '-r', '-g', apk)
+        self.verify_sender_debug_access()
+
+    def verify_sender_debug_access(self):
+        # aapt2 does not infer debuggability from the disposable debug signer.
+        # The independent source-byte hash below needs run-as on THIS sender.
+        uid = self.sx('run-as ' + SENDER + ' id -u').strip()
+        assert uid.isdecimal() and int(uid) >= 10000, 'sender run-as access unavailable'
 
     def connect_page(self):
         if self.page:
@@ -483,6 +520,15 @@ class Rig:
 
     def sheet(self):
         return self.page.ev("!!document.querySelector('.wz-share')")
+
+    def notification_thread(self, thread, filename):
+        # UIAutomator does not expose this WebView's rendered file text. Bind
+        # the actual notification tap to foreground native + focused web state.
+        wait(lambda: any(re.search(re.escape(PKG) + r'/(?:ai\.wizards\.os\.|\.)MainActivity(?:\s|})', line)
+                         for line in self.sx('dumpsys activity activities').splitlines()
+                         if 'topResumedActivity' in line), 30)
+        wait(lambda: 'open thread ' + thread in self.sx('logcat -d -s WizardHandoff:V'), 30)
+        return wait(lambda: self.page.ev(focused_thread_expression(thread, filename)), 30)
 
     def share(self, mode):
         self.sx('am start -W -n ' + SENDER + '/.SenderActivity --es fixture_case ' + mode)
@@ -719,7 +765,7 @@ def main():
         rig.sx('cmd statusbar expand-notifications')
         rig.tap_text('Sent · tap to open the chat')
         rig.connect_page()
-        wait(lambda: 'open thread qa_private_thread' in rig.sx('logcat -d -s WizardHandoff:V'), 30)
+        rig.notification_thread('qa_private_thread', 'genuine.pdf')
         report['phases'][phase] = {'status': 'PASS', 'share_id': sh['share_id']}; save()
 
         phase = 'new-chat-resume'
@@ -753,8 +799,7 @@ def main():
         rig.sx('logcat -c')
         rig.tap_text('Sent · tap to open the chat')
         rig.connect_page()
-        wait(lambda: 'open thread ' + sh['thread_id'] in rig.sx('logcat -d -s WizardHandoff:V'), 40)
-        wait(lambda: native_bounds(rig.ui(), 'x.pdf'), 40)
+        rig.notification_thread(sh['thread_id'], 'x.pdf')
         rig.screenshot('notification-opened-thread')
         report['phases'][phase] = {'status': 'PASS', 'thread_id': sh['thread_id']}; save()
         assert all(report['phases'].get(x, {}).get('status') == 'PASS' for x in REQUIRED_CASES)
