@@ -37,3 +37,32 @@ test('helper badge stays visible on a phone: it sits outside the truncated title
   assert.ok(chats.includes('${esc(s.title)}</b>${backgroundBadge(s)}<time>'));
   assert.ok(!chats.includes('${backgroundBadge(s)}</b>'));
 });
+
+// Parity (AGENTS.md): run the real list normalizer and row badge for a main thread and every routed runtime kind.
+function pipeline() {
+  const a = live.indexOf('  const READY_OR_ATTENTION'), b = live.indexOf('  /* ---- thread-seen');
+  const lines = chats.split('\n');
+  const pick = re => lines.find(l => re.test(l));
+  assert.ok(a > 0 && b > a, 'live.js normalizer block found');
+  const context = vm.createContext({});
+  vm.runInContext(`${live.slice(a, b)}\n${pick(/const WORKING_ST =/)}\n${pick(/const isWorking =/)}\n${pick(/const backgroundBadge =/)}\n${pick(/const attOf =/)}\nthis.normalize = normalize; this.badge = backgroundBadge;`, context);
+  return context;
+}
+test('main and routed rows (host-profile, container, restricted) show the badge from full and slim lists', () => {
+  const { normalize, badge: render } = pipeline();
+  const ask = { state: 'needs_you', ask: 'Your QR is ready. Scan it to connect your phone', subject: 'Phone' };
+  for (const kind of ['main', 'host-profile', 'container', 'restricted']) {
+    const agent = kind === 'main' ? '' : `qa-${kind}`;
+    const full = normalize({ id: `qr-${kind}`, status: 'completed', agent, runtimeKind: kind, wizard_attention: ask, wizard_background: 'helper' });
+    assert.equal(full.agent, agent);
+    assert.equal(full.background, 'helper', `${kind} full row keeps background`);
+    assert.match(render(full), /Helper still working/, `${kind} full row renders badge`);
+    const slim = normalize({ listVersion: 1, id: `qr-${kind}`, status: 'completed', agent, attention: ask, background: 'heavy' });
+    assert.match(render(slim), /Helper still working/, `${kind} slim row renders badge`);
+    const working = normalize({ id: `fyi-${kind}`, status: 'running', agent, wizard_attention: { state: 'fyi', ask: 'Still building' }, wizard_background: 'helper', wizard_waiting_on: 'helper' });
+    assert.equal(render(working), '', `${kind} Working row has no badge`);
+    assert.equal(working.waitingOn, 'helper');
+    const stray = normalize({ id: `x-${kind}`, status: 'completed', agent, wizard_attention: ask, wizard_background: 'root' });
+    assert.equal(stray.background, '', 'unknown background values are dropped');
+  }
+});
