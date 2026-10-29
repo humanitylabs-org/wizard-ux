@@ -2,9 +2,10 @@
 // In-shell skin-panel captures for the solid-panels proposal: the real phone/desktop shell from this checkout
 // on Miguel's Obsidian and Landscapes plus inherited Nebula/Grove, skin chosen before boot.
 // Records, per text-bearing panel, whether its interior changes over a loud sibling (see-through) instead of
-// failing: this is evidence for the skin-authority decision, not a new gate. APIs answer empty; no network.
+// failing: James already ordered preserving Miguel's explicit skin overrides. Base defaults only;
+// transparency is NOT a new owner decision. APIs answer empty; no network.
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
-const { chromium } = require('playwright');
+const { chromium } = require('./qa-playwright.cjs');
 const root = path.resolve(__dirname, '..'), web = path.join(root, 'web');
 const out = process.env.OUT || path.join(root, 'tmp', 'skin-panels-shell');
 fs.mkdirSync(out, { recursive: true });

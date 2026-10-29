@@ -2,7 +2,7 @@
 // Worker-only browser regression: inherited panels are solid, explicit package/My skin materials win.
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require('playwright');
+const { chromium } = require('./qa-playwright.cjs');
 const root = path.resolve(__dirname, '..');
 const out = process.env.OUT || path.join(root, 'tmp', 'skin-panel-authority');
 fs.mkdirSync(out, { recursive: true });
@@ -17,6 +17,7 @@ const panels = '<div class="device"><div class="sheet">Owner setting</div><div c
     const packageCss = skin.startsWith('landscapes') ? fs.readFileSync(path.join(root, 'web/skins/landscapes/skin.css'), 'utf8') : skin === 'obsidian' ? fs.readFileSync(path.join(root, 'web/skins/obsidian/skin.css'), 'utf8') : '';
     await page.setContent(`<html data-skin="${skin}" data-shell="${shell}"><style>${css}</style><style>${packageCss}</style>${panels}</html>`);
     const inherited = await page.locator('.sheet').evaluate(e => ({ bg: getComputedStyle(e).backgroundColor, image: getComputedStyle(e).backgroundImage }));
+    await page.screenshot({ path: path.join(out, `${shell}-${skin}-package.png`) });
     if (['nebula', 'grove'].includes(skin) && /rgba\([^)]*,\s*(?:0|0?\.\d+)\s*\)$/.test(inherited.bg)) throw Error(`Inherited backing is not solid: ${skin}/${shell}: ${inherited.bg}`);
     // A normal explicit skin selector, no !important and no extra policy switches.
     await page.addStyleTag({ content: `html[data-skin="${skin}"] .sheet { background: rgba(33, 66, 99, .31); backdrop-filter: blur(7px); }` });
