@@ -187,6 +187,12 @@
   /* ---- network ---- */
   const J = { 'Content-Type': 'application/json' };
   async function req(path, init = {}) {
+    // Transcript/detail reads must eventually release Chats' loading lock. The
+    // signal also bounds response-body reads; writes and long-lived streams are
+    // deliberately outside this policy.
+    if (!init.signal && (!init.method || init.method === 'GET') && /^\/wizard\/hermes\/api\/sessions\/[^/?]+(?:\/messages\?|\?view=detail)/.test(path)) {
+      if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) init = { ...init, signal: AbortSignal.timeout(12000) };
+    }
     const r = await fetch(path, { cache: 'no-store', credentials: 'same-origin', ...init });
     if (!r.ok) { let detail; try { detail = (await r.json()).error; } catch {} const e = new Error(detail?.message || 'HTTP ' + r.status); e.status = r.status; e.code = detail?.code; throw e; }
     return r;
@@ -820,6 +826,9 @@
           if (Object.entries(merged.threads).some(([key,r])=>r.seenAt>(remote?.threads?.[key]?.seenAt || 0)))
             putSeen(merged).then(r=>{this.seen=merge(this.seen,r);writeLocal(this.seen);this.emit();}).catch(()=>{});
           this.ok = true; this.error = ''; this.at = Date.now(); this.cached = false;
+          // Warm current Ready answers as soon as main-list truth lands, not
+          // after unrelated runtimes finish refreshing.
+          setTimeout(preload, 0);
           };
           // Only a cold list paints early; a later full walk replaces a list that is already on screen in one go.
           // A stored snapshot counts as on screen: painting page 1 over it, then the full walk, then other agents'
@@ -1043,10 +1052,14 @@
     },
     /* Full message history of one thread (oldest first), paged like Wizard. */
     async messages(id) {
-      if (!this.session(id) || this.session(id).detailNeeded) await this.sessionInfo(id);
-      const rows = [];
+      // A live scoped row (or an explicit agent pin) already establishes the
+      // destination. Detail supplies retry/rename metadata, not history authority.
+      // Unknown cold links still discover authoritative ownership before history.
+      const knownScope = this.agentOf(id) || (this.listTrusted?.() && this.sessions.some(s => s.id === id && !s.optimistic));
+      if (!knownScope && (!this.session(id) || this.session(id).detailNeeded)) await this.sessionInfo(id);
+      const rows = [], signal = globalThis.AbortSignal?.timeout?.(12000);
       for (let offset = 0; offset < 5000; offset += 500) {
-        const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}/messages?order=oldest&limit=500&offset=${offset}&include_compacted=true&view=wizard${aq(id, '&')}`)).json();
+        const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}/messages?order=oldest&limit=500&offset=${offset}&include_compacted=true&view=wizard${aq(id, '&')}`, { signal })).json();
         const page = p.data || p.messages || p.items || [];
         rows.push(...page);
         const n = Number(p.pagination?.returned ?? page.length);
@@ -1453,7 +1466,7 @@
    * 3. Warm: pointing at (desktop) or touching a row starts its read; the open joins that same request. */
   const TC_DB = 'wos-thread-cache', TC_MAX = 40, TC_BYTES = 2.5e6;
   const TC = new Map(), INFLIGHT = new Map();
-  const revOf = s => s ? [s.messageCount, s.lastAssistantAt, s.lastUserAt, s.activityAt, s.status].join('|') : '';
+  const revOf = s => s ? [s.messageCount, s.lastAssistantAt, s.lastUserAt].join('|') : '';
   const keepable = id => !!id && !L.agentOf(id) && !(L.isPrivate && L.isPrivate(id));
   let tcDb = null;
   const tcOpen = () => tcDb || (tcDb = new Promise(res => {
@@ -1515,7 +1528,7 @@
   };
   const saving = () => !!navigator.connection?.saveData;
   L.warm = id => {
-    const s = L.session(id); if (!s || s.archived || s.optimistic || saving() || INFLIGHT.has(id) || !keepable(id)) return;
+    const s = L.session(id); if (!s || s.archived || s.optimistic || document.hidden || saving() || INFLIGHT.size >= 2 || INFLIGHT.has(id) || !keepable(id)) return;
     const c = TC.get(id); if (c && c.rev === revOf(s) && !WORKING.has(s.status)) return;
     bgRead(id).catch(() => {});
   };
@@ -1526,9 +1539,10 @@
     try {
       await tcReady;
       const g = groupWork(L.sessions);
-      const want = [...(g.errors || []), ...(g.working || []), ...(g.ready || [])].filter(s => !s.archived && !s.hidden && !s.optimistic && !s.synthetic && keepable(s.id)).slice(0, 16);
+      const want = [...(g.ready || []), ...(g.errors || []), ...(g.working || [])].filter(s => !s.archived && !s.hidden && !s.optimistic && !s.synthetic && keepable(s.id)).slice(0, 16);
       for (const s of want) {
-        if (document.hidden || !L.session(s.id)) continue;
+        if (document.hidden || saving() || !L.session(s.id)) break;
+        if (INFLIGHT.size >= 2 && !INFLIGHT.has(s.id)) continue;
         const c = TC.get(s.id);
         if (c && c.rev === revOf(s)) continue;
         if (c && WORKING.has(s.status) && Date.now() - c.at < 60000) continue;
@@ -1537,8 +1551,7 @@
       }
     } finally { pfBusy = false; }
   }
-  const baseRefresh = L.refresh;
-  L.refresh = function (...a) { const p = baseRefresh.apply(this, a); Promise.resolve(p).then(() => setTimeout(preload, 400), () => {}); return p; };
+
   window.WizLive = L;
   window.__wizLiveInternals = { hasNew, recordFor, merge, fingerprint, normalize };
 })();
