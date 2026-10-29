@@ -178,7 +178,7 @@ export default function setup(api) {
     return `${s.group} ${n}`;  // the meter mixes services, so the service always leads: "Claude mig", "ChatGPT oscar"
   };
   function meterPool() {
-    const all = subs(), live = all.filter(s => s.left != null && !s.out);
+    const all = subs(), live = all.filter(s => s.left != null && !s.out && !s.na);
     const picked = Array.isArray(S.meter) ? live.filter(s => S.meter.includes(s.id)) : [];
     if (picked.length) return { use: picked, custom: true };
     const want = defKind();
@@ -689,10 +689,12 @@ export default function setup(api) {
   if (typeof ResizeObserver === 'function') { ro = new ResizeObserver(() => api.frame(drawLines)); ro.observe(map); ro.observe(rowMn); }
   // Settings › System pages, filled with the same live views (each released on teardown by the host).
   const fuelText = () => { const g = gauge(); return g ? `${g.left}% left` : ''; };
-  api.settings?.section('map', 'overview', secMap, { subtitle: () => { const n = openOnes().length; return n ? `${n} open` : ''; } });
-  api.settings?.section('ai', 'ai', secAI, { subtitle: fuelText });
-  api.settings?.section('net', 'network', secNet, { subtitle: () => { const n = openOnes().length; return n ? `${n} open to internet` : ''; } });
-  api.settings?.section('store', 'storage', secStore, { subtitle: () => { const st = storage(); return st?.age != null ? `${agoS(st.age)} ago` : ''; } });
+  // Subtitles describe this Wizard only; on a managed workspace they stay quiet (its facts live on that Wizard).
+  const mine = fn => () => managedOf(S.ws) ? '' : fn();
+  api.settings?.section('map', 'overview', secMap, { subtitle: mine(() => { const n = openOnes().length; return n ? `${n} open` : ''; }) });
+  api.settings?.section('ai', 'ai', secAI, { subtitle: mine(fuelText) });
+  api.settings?.section('net', 'network', secNet, { subtitle: mine(() => { const n = openOnes().length; return n ? `${n} open to internet` : ''; }) });
+  api.settings?.section('store', 'storage', secStore, { subtitle: mine(() => { const st = storage(); return st?.age != null ? `${agoS(st.age)} ago` : ''; }) });
   api.listen(document, 'click', e => { if (S.open.has('wsm') && e.target.isConnected && !wizBox.contains(e.target)) { S.open.delete('wsm'); S.open.delete('wsm-why'); renderWiz(); } });
   api.listen(document, 'keydown', e => { if (e.key === 'Escape' && S.open.has('wsm')) { S.open.delete('wsm'); renderWiz(); wizBtn.focus(); } });
   S.res = api.storage.get('res') || {}; { const now = api.data.read.resources.snapshot(); S.devFresh = !!now?.devices && !now.devicesError; merge(now); }

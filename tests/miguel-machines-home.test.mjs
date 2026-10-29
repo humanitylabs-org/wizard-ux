@@ -280,6 +280,9 @@ test('sixth review: stale AI and backup readings say so; the AI page is scoped o
     assert.match(src, /AI accounts for \$\{mg\.name\}’s Wizard show on that Wizard/, who);
     assert.match(src, /S\.backupRead === 'error' \? \[h\('span', \{ cls: 'mh-more-info', text: 'Couldn’t reach Backup just now\. This is the last reading\.' \}\)\]/, who);
     assert.match(css, /\.mh-gauge\.is-stale \.mh-g-cells \{ opacity: \.55; \}/, who);
+    assert.match(src, /live = all\.filter\(s => s\.left != null && !s\.out && !s\.na\);/, who + ': unavailable rows stay out of the meter');
+    assert.match(src, /const mine = fn => \(\) => managedOf\(S\.ws\) \? '' : fn\(\);/, who + ': subtitles quiet on a managed workspace');
+    assert.equal((src.match(/subtitle: mine\(/g) || []).length, 4, who);
   }
 });
 
