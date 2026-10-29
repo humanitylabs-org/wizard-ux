@@ -54,7 +54,18 @@
       }
       if (body.overall === 'down') return result('wizard', body.summary || 'Wizard reports a problem. Open Troubleshooter to check it.', RECONNECTING);
     } catch (_) { return result('diagnosis', 'Wizard’s gateway is reachable, but its health report isn’t available. Open Troubleshooter to check it. Messages are kept while we retry.', RECONNECTING); }
-    return result('send', 'Wizard is reachable but didn’t take the message. Retrying.', 'Wizard reachable · retrying');
+    // Healthy probes prove reachability, not why a separate read/send failed or
+    // whether anything was admitted. The shared result stays request-neutral;
+    // label('send') alone words it as a saved message (PR689 review).
+    return result('send', 'Wizard’s connection checks passed. Retrying automatically; these checks don’t show whether the request went through.', 'Wizard reachable · retrying');
+  }
+  /** The one short line for a failing request. operation is 'send' (a saved outbound message, count of them) or
+   *  'read'. Only a confirmed-healthy diagnosis differs: a send names the unsent message instead of the connection,
+   *  a read stays neutral. Any real outage, or no diagnosis yet, keeps its connection wording for both. */
+  function label(operation, { count = 1, diagnosis } = {}) {
+    const d = diagnosis || window.WizReach.failure();
+    if (operation === 'send' && d.layer === 'send') return count > 1 ? `${count} messages not sent · retrying` : 'Message not sent · retrying';
+    return d.short;
   }
   function diagnose(maxAge = 10000) {
     if (work) return work;
@@ -69,6 +80,7 @@
   }
   window.WizReach = {
     diagnose,
+    label,
     failure() {
       if (Date.now() - failureAt >= 15000) { failureAt = Date.now(); diagnose(); }
       return cached || pending;
