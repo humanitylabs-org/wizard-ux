@@ -71,7 +71,18 @@
 
   window.addEventListener('pageshow', render);
   // A service worker scoped to this app only: Chrome needs it to offer install, and the narrow scope keeps
-  // Wizard OS a separate app from every sibling on the same origin.
-  if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register(new URL('sw.js', base).href, { scope: base.pathname }).catch(() => {}));
+  // Wizard OS a separate app from every sibling on the same origin. It also keeps the shell's own files so Wizard
+  // opens offline; once it is running, hand it the files this page already loaded, so the very first visit is enough.
+  // The hand-over goes to whichever worker is running now AND to a newer one once it takes over: right after an update
+  // `ready` can still name the previous worker, which ignores the message, so the new one would never hear it.
+  const message = () => ({ type: 'wos-shell-warm', urls: [location.href, ...performance.getEntriesByType('resource').map(e => e.name)] });
+  const warm = reg => {
+    reg.active?.postMessage(message());
+    const fresh = reg.installing || reg.waiting;
+    fresh?.addEventListener('statechange', () => { if (fresh.state === 'activated') fresh.postMessage(message()); });
+    navigator.serviceWorker.addEventListener('controllerchange', () => navigator.serviceWorker.controller?.postMessage(message()), { once: true });
+  };
+  if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register(new URL('sw.js', base).href, { scope: base.pathname })
+    .then(() => navigator.serviceWorker.ready).then(warm).catch(() => {}));
   window.addEventListener('storage', event => { if (event.key === key) render(); });
 })();
