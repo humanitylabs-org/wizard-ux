@@ -219,7 +219,7 @@
   // Back (phone back gesture / desktop Esc): leave the provider's sign-in, then step back; at the start, close.
   function back() {
     if (!el) return '';
-    if (installing || sending) return 'welcome';
+    if (sending) return 'welcome'; // a send settles in a moment; an install keeps going in the background if Back closes
     if (step === 'ai' && provider) { clearTimeout(pollT); provider = null; paint(); return 'welcome'; }
     if (step === 'hello') { step = 'look'; paint(); return 'welcome'; }
     close(); log('back:close'); return 'welcome';
@@ -235,7 +235,7 @@
     setTimeout(async () => {
       if (seenPending()) markSeen();
       if (h.deeplinked?.()) { log('deeplink'); return; }
-      const [ok, setup] = await Promise.all([aiReady(), setupState(), Promise.resolve(window.WizCore?.appsLoaded?.()).catch(() => {})]);
+      const [ok, setup] = await Promise.all([aiReady(), setupState(), Promise.race([Promise.resolve(window.WizCore?.appsLoaded?.()).catch(() => {}), new Promise(r => setTimeout(r, 5000))])]); // never wait forever on the app list
       const state = read();
       log('boot:' + ok + ':' + state + ':' + (setup?.first_run === true));
       try { removeEventListener('pointerdown', act, true); removeEventListener('keydown', act, true); } catch (e) {}

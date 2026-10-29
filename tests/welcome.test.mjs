@@ -82,3 +82,9 @@ test('Welcome: the server seen mark is retried until acknowledged; phone Setup t
   assert.match(js, /if \(seenPending\(\)\) markSeen\(\);/);
   assert.match(read('web/app.js'), /a\.id === 'setup' && window\.WosWelcome\) \{ openingEnd\(a\.id\);/);
 });
+
+test('Welcome: Back can close during an install; the app-list wait is bounded', () => {
+  const js = read('web/core/welcome.js');
+  assert.doesNotMatch(js, /if \(installing \|\| sending\) return 'welcome'/);
+  assert.match(js, /Promise\.race\(\[Promise\.resolve\(window\.WizCore\?\.appsLoaded\?\.\(\)\)/);
+});
