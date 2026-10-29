@@ -4,7 +4,7 @@
 // Only the Store `_updates` listener is a fixture; every other API answers empty and nothing leaves the page.
 // Proves presentation and request flow only, never a live App Manager update.
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
-const { chromium } = require('playwright');
+const { chromium } = require('./qa-playwright.cjs');
 const root = path.resolve(__dirname, '..'), web = path.join(root, 'web');
 const out = process.env.OUT || path.join(root, 'tmp', 'owner-app-updates-shell');
 fs.mkdirSync(out, { recursive: true });
@@ -14,7 +14,7 @@ const initial = () => ({
   installed: '0.3.73', latest: '0.3.73', update_available: false, checked: true, mode: 'ask', chosen: true, channel: 'stable',
   apps: { app_mode: 'auto', chosen: false, holds: ['music'],
     due: [{ id: 'notes', from: 3, to: 4, status: 'running', skip: null }, { id: 'meditate', from: 7, to: 8, status: 'running', skip: null }],
-    skipped: [{ id: 'my-app', skip: 'owner-source' }, { id: 'music', skip: 'held' }], last: { updated: ['outline'] } },
+    skipped: [{ id: 'my-app', skip: 'owner-source' }, { id: 'legacy', skip: 'source-unverified' }, { id: 'music', skip: 'held' }], last: { updated: ['outline'] } },
 });
 const webDigest = () => {
   const h = crypto.createHash('sha256');
@@ -71,6 +71,7 @@ const webDigest = () => {
     const before = await hint();
     if (!before.includes('Default: Automatic.')) throw Error(`${shell}/${skin}: default not labelled as default: ${before}`);
     if (!before.includes('my-app (your code needs review)') || !before.includes('music (kept on this version)')) throw Error(`${shell}/${skin}: kept apps not shown`);
+    if (!before.includes('legacy (can’t confirm it is unchanged yet)')) throw Error(`${shell}/${skin}: missing evidence is not owner edits`);
     await page.screenshot({ path: path.join(out, `${shell}-${skin}-1-default.png`) });
 
     const manual = section.getByRole('radio', { name: 'Manual', exact: true });

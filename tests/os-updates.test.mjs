@@ -12,7 +12,7 @@ async function load(reply) {
   let refreshes = 0;
   const fetch = async (url, opts = {}) => {
     calls.push({ url, ...opts, body: opts.body && JSON.parse(opts.body) });
-    const [status, body] = reply(opts.method || 'GET', opts.body && JSON.parse(opts.body));
+    const [status, body] = await reply(opts.method || 'GET', opts.body && JSON.parse(opts.body));
     return { ok: status >= 200 && status < 300, status, json: async () => body };
   };
   const window = { WosSettings: { register: f => registered.push(f), refresh: () => refreshes++ } };
@@ -25,6 +25,39 @@ const btn = osu => ({ closest: sel => (sel === '[data-osu]' ? { dataset: { osu }
 const ctx = () => { const t = []; return { t, toast: (...a) => t.push(a), render() {}, haptic() {} }; };
 const STATUS = { mode: 'auto', chosen: false, installed: '0.3.15', latest: '0.3.16', update_available: true, unpinned: false, checked: true, installing: false };
 const APPS = { app_mode: 'auto', chosen: false, due: [{ id: 'notes' }], skipped: [{ id: 'my-app', skip: 'owner-source' }], last: { updated: [{ id: 'news' }] } };
+
+const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
+test('an older background refresh cannot overwrite a confirmed app setting', async () => {
+  const stale = deferred(); let reads = 0;
+  const manual = { ...STATUS, apps: { ...APPS, app_mode: 'ask', chosen: true } };
+  const { U } = await load(method => method === 'POST' ? [200, {}] : ++reads === 2 ? stale.promise : [200, reads > 2 ? manual : { ...STATUS, apps: APPS }]);
+  const old = U.load(true); await tick();
+  const c = ctx(); U.act(btn('apps-ask'), c);
+  await tick(); await tick();
+  stale.resolve([200, { ...STATUS, apps: APPS }]); await old; await tick(); await tick();
+  assert.equal(U.state.apps.app_mode, 'ask');
+  assert.equal(U.state.apps.chosen, true);
+  assert.equal(c.t.at(-1)[0], '✓');
+});
+
+test('Update apps now remains busy across slow or failed status refresh', async () => {
+  for (const response of [[200, { ...STATUS, apps: APPS }], [503, {}]]) {
+    const refresh = deferred(); let reads = 0;
+    const { U, calls } = await load(method => method === 'POST' ? [200, { started: true }] : ++reads === 1 ? [200, { ...STATUS, apps: APPS }] : refresh.promise);
+    U.act(btn('apps-apply'), ctx()); await tick(); await tick();
+    assert.match(U.html(), /data-osu="apps-apply" disabled/);
+    U.act(btn('apps-apply'), ctx()); await tick();
+    assert.equal(calls.filter(c => c.method === 'POST').length, 1);
+    refresh.resolve(response); await tick(); await tick();
+    if (response[0] !== 200) assert.match(U.html(), /data-osu="apps-apply" disabled/, 'unknown admission remains held until successful refresh');
+  }
+});
+
+test('unknown source is not described as owner-modified', async () => {
+  const { U } = await load(() => [200, { ...STATUS, apps: { ...APPS, skipped: [{ id: 'legacy', skip: 'source-unverified' }] } }]);
+  assert.match(U.html(), /legacy \(can’t confirm it is unchanged yet\)/);
+  assert.doesNotMatch(U.html(), /legacy \(your code needs review\)/);
+});
 
 test('app policy is visible, separately scoped, default is not called consent, and legacy boxes invent nothing', async () => {
   const { U } = await load(() => [200, { ...STATUS, mode: 'ask', apps: APPS }]);
