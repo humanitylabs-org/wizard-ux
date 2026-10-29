@@ -3788,7 +3788,8 @@
   void firstRun;
   window.WosWelcome?.boot({ app: id => APP[id] || null, openStore: () => { const a = APP['app-store']; if (a) openApp(a); },
     deeplinked: () => (window.__deeplinkLog || []).length > 0,
-    send: async text => { closeSheets(true); const w = placeApp(mainChats, { app: 'chats', thread: null }); if (!w) throw new Error('Chats unavailable'); CHATS.openNewDraft(w.id, ''); await sendChat(w.id, text, 'the first message, from the Welcome screen', null, { sid: '__new__' }); } });
+    // One main Chats window, and the new thread opens in it as soon as it is saved.
+    send: async text => { closeSheets(true); const w = placeApp(mainChats, { app: 'chats', thread: null }); if (!w) throw new Error('Chats unavailable'); const it = await sendChat(w.id, text, 'the first message, from the Welcome screen', null, { sid: '__new__', away: true }); if (it?.sessionId) window.WosWelcome.whenThreadExists(it.sessionId, sid => openWizardThread(sid)); } });
   // Native shell (Wizard OS Android app): the app hands every hardware/gesture Back to the shell. A step that
   // undoes something returns its name; at the true root the shell stays put and says so. The app never exits
   // on Back (James's rule), just like the browser guard above.

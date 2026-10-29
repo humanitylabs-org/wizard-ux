@@ -2407,7 +2407,8 @@
   // the automatic Setup window and the composer guide (Miguel, 29 Oct 2026); ?view=tour still opens the guide.
   window.WosWelcome?.boot({ app: id => APP[id] || findApp(id, true) || null, openStore: () => openApp(APP['app-store']),
     deeplinked: () => (window.__deeplinkLog || []).length > 0,
-    send: async text => { const w = newChat({ fresh: false }); await CHATS.sendChat(w.id, text, 'the first message, from the Welcome screen', null, { sid: '__new__' }); } });
+    // One main Chats window (reused wherever it is), and the new thread opens in it as soon as it is saved.
+    send: async text => { const w = findWin(mainChats) || newWin({ app: 'chats', thread: null }); const it = await CHATS.sendChat(w.id, text, 'the first message, from the Welcome screen', null, { sid: '__new__', away: true }); focusWin(w.id); if (it?.sessionId) window.WosWelcome.whenThreadExists(it.sessionId, sid => openThread(sid)); } });
   C.status?.attach({ openChats: openChatsList, current: () => { const f = focused(); return f?.app === 'chats' && f.thread !== '__new__' ? f.thread || '' : ''; } });
   const f0 = focused(); if (f0) setTimeout(() => focusInside(f0.id), 50);
 

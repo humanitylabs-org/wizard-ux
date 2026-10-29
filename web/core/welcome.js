@@ -3,13 +3,17 @@
  *   1. Connect your AI   pick a provider (Claude first, recommended) and sign in inside its own app page
  *   2. Pick a look       a skin and one of its colours, applied live
  *   3. Say hello         the first message; the Chats window opens with it once it is sent
- * It opens whenever no AI provider is signed in (fresh and alongside boxes alike), so an existing Hermes owner who
- * already has a provider never sees it. A provider signed in mid-way resumes at step 2 on the next launch until the
- * owner finishes or skips. Both shells call WosWelcome.boot({...}) once their deep link has been consumed.
+ * Every install method gets the same first run: it opens whenever no AI provider is signed in, and on a brand-new
+ * Wizard (Agent Service setup first_run) whose agent already has a provider it starts at step 2. Existing Wizards
+ * (first_run false, a provider signed in) never see it. Finishing posts /wizard/v1/setup/seen.
+ * Look offers only the Wizard skin's colours, drawn with the Settings preview cards, over a lighter dim so the real
+ * interface shows through. The first message opens in the one main Chats window, on its own thread.
+ * Both shells call WosWelcome.boot({...}) once their deep link has been consumed.
  * Hooks: app(id) -> installed app record, send(text) -> Promise, openStore(), deeplinked() -> boolean. */
 (() => {
   'use strict';
-  const KEY = 'wos.welcome.v1', OPTIONS = '/wizard/hermes/api/model/options', POLL_MS = 3000;
+  const KEY = 'wos.welcome.v1', OPTIONS = '/wizard/hermes/api/model/options', SETUP = '/wizard/v1/setup', POLL_MS = 3000;
+  const FAMILY = 'wizard'; // first run keeps the Wizard skin and offers its colours; other skins live in Settings
   const PROVIDERS = [
     { app: 'wizard-claude', name: 'Claude', note: 'Recommended', mark: 'claude' },
     { app: 'wizard-chatgpt', name: 'ChatGPT', note: '', mark: 'chatgpt' },
@@ -28,6 +32,14 @@
       return (j?.providers || []).some(p => p && p.authenticated === true);
     } catch (e) { return null; }
   }
+
+  async function setupState() {
+    try {
+      const r = await fetch(SETUP, { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(4000) });
+      return r.ok ? await r.json() : null;
+    } catch (e) { return null; }
+  }
+  function markSeen() { fetch(SETUP + '/seen', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: '{}' }).catch(() => {}); }
 
   function installed() { return PROVIDERS.filter(p => H.app(p.app)?.url); }
   const agent = () => { try { return window.WizConfig?.agent?.() || 'Wizard'; } catch (e) { return 'Wizard'; } };
@@ -50,18 +62,18 @@
         : `<p class="wl-status">No AI app is installed yet.</p><button type="button" class="wl-primary" data-wl="store">Find one in the Store</button>`}`;
   }
 
+  // The same preview cards as Settings › Look (core/settings.js skinCard + core/skins.css .skp), Wizard colours only.
+  const pvars = k => { const t = k.t || {}; return [['bg', t.bg || k.bg], ['ink', t.ink], ['ac', t.violet || k.accent], ['ac2', t['violet-2']], ['pk', t.pink], ['cy', t.cyan], ['dock', t['sk-dock']], ['dl', t['sk-dock-line']]]
+    .filter(([, v]) => v).map(([n, v]) => `--p-${n}:${esc(v)}`).join(';'); };
+  const faceCss = f => f ? `font-family:${f.family};font-weight:${f.weight || 400};font-style:${f.style || 'normal'}` : '';
+  const card = (k, cur) => `<button type="button" class="skp-card" data-wl="palette" data-id="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}"><span class="skp-mini" data-skp="${esc(k.id)}" style="${pvars(k)}" aria-hidden="true"><i class="skp-a"></i><i class="skp-a skp-a2"></i><i class="skp-u"></i><i class="skp-dock"><i class="skp-orb"></i></i></span><span class="skp-nm" style="${esc(faceCss(k.face))}">${esc(k.name)}</span></button>`;
   function paintLook() {
     const S = window.WosSkin;
-    if (!S) return paintHello();
-    const cur = S.current, fam = S.familyOf(cur), byId = Object.fromEntries(S.list.map(s => [s.id, s]));
-    const famList = S.families.map(f => {
-      const first = byId[S.lastIn(f.id)] || byId[f.palettes[0]];
-      return `<button type="button" class="wl-skin${f.id === fam ? ' on' : ''}" data-wl="family" data-id="${esc(f.id)}" style="--sw-bg:${esc(first?.bg || '#000')};--sw-ac:${esc(first?.accent || '#888')}"><span class="wl-swatch"></span><span>${esc(f.name)}</span></button>`;
-    }).join('');
-    const pal = (S.families.find(f => f.id === fam)?.palettes || []);
-    const colours = pal.length > 1 ? `<div class="wl-colours" role="radiogroup" aria-label="Colour">${pal.map(id => { const s = byId[id]; return `<button type="button" role="radio" aria-checked="${id === cur}" class="wl-colour${id === cur ? ' on' : ''}" data-wl="palette" data-id="${esc(id)}" title="${esc(s?.name || id)}" style="--sw-bg:${esc(s?.bg || '#000')};--sw-ac:${esc(s?.accent || '#888')}"><span></span></button>`; }).join('')}</div>` : '';
-    return `${dots()}<header class="wl-head"><h2 tabindex="-1">Pick a look</h2><p>You can change it any time in Settings.</p></header>
-      <div class="wl-skins">${famList}</div>${colours}
+    const fam = S?.families?.find(f => f.id === FAMILY);
+    if (!fam) return paintHello();
+    const cur = S.current, list = fam.palettes.map(id => S.list.find(k => k.id === id)).filter(Boolean);
+    return `${dots()}<header class="wl-head"><h2 tabindex="-1">Pick a colour</h2><p>You can change it, or try other skins, any time in Settings.</p></header>
+      <div class="st-root wl-skp"><div class="skp" role="group" aria-label="Colours">${list.map(k => card(k, cur)).join('')}</div></div>
       <button type="button" class="wl-primary" data-wl="next">Continue</button>`;
   }
 
@@ -75,6 +87,7 @@
     if (!el) return;
     const card = el.querySelector('.wl-card');
     card.classList.toggle('wide', step === 'ai' && !!provider);
+    el.classList.toggle('wl-peek', step === 'look');
     card.innerHTML = step === 'ai' ? paintAI() : step === 'look' ? paintLook() : paintHello();
     if (focus) requestAnimationFrame(() => (card.querySelector('textarea') || card.querySelector('h2'))?.focus({ preventScroll: true }));
   }
@@ -109,6 +122,7 @@
       if (e.key === 'Enter' && !e.shiftKey && e.target.matches('textarea')) { e.preventDefault(); el.querySelector('form')?.requestSubmit(); }
       e.stopPropagation(); // the shell's own shortcuts wait until the welcome is done
     });
+    if (at === 'look' || at === 'ai') { const S = window.WosSkin; if (S && S.familyOf(S.current) !== FAMILY && !S.chosen) S.setFamily(FAMILY); }
     paint(); poll(); log('open:' + at);
   }
 
@@ -126,7 +140,6 @@
     if (act === 'provider') { provider = t.dataset.app; connected = false; paint(); poll(); }
     else if (act === 'back') { provider = null; paint(); }
     else if (act === 'store') { close(); H.openStore?.(); }
-    else if (act === 'family') { window.WosSkin?.setFamily(t.dataset.id); paint(false); }
     else if (act === 'palette') { window.WosSkin?.set(t.dataset.id); paint(false); }
     else if (act === 'next') { step = 'hello'; paint(); }
   }
@@ -138,7 +151,7 @@
     if (!text) { el.querySelector('textarea')?.focus(); return; }
     sending = true; paint(false);
     try {
-      write('done'); close(); log('sent');
+      write('done'); markSeen(); close(); log('sent');
       await H.send(text);
     } catch (err) { console.error(err); }
     sending = false;
@@ -148,13 +161,28 @@
     if (booted || !h) return; booted = true; H = h;
     setTimeout(async () => {
       if (h.deeplinked?.()) { log('deeplink'); return; }
-      const [ok] = await Promise.all([aiReady(), Promise.resolve(window.WizCore?.appsLoaded?.()).catch(() => {})]);
+      const [ok, setup] = await Promise.all([aiReady(), setupState(), Promise.resolve(window.WizCore?.appsLoaded?.()).catch(() => {})]);
       const state = read();
-      log('boot:' + ok + ':' + state);
+      log('boot:' + ok + ':' + state + ':' + (setup?.first_run === true));
       if (ok === false) return open('ai');
-      if (ok === true && state === 'ai') return open('look');
+      if (ok === true && state !== 'done' && (state === 'ai' || setup?.first_run === true)) return open('look');
     }, 0);
   }
 
-  window.WosWelcome = { boot, open: (at) => open(at || 'ai'), close, get active() { return !!el; }, get log() { return window.__welcomeLog || []; } };
+  // The first thread exists on the agent a moment after the message is saved. Open it only once the agent knows it
+  // (or its first run has started), so the window never lands on a "thread is no longer here" placeholder.
+  async function whenThreadExists(sid, open, ms = 90000) {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      try {
+        const r = await fetch(`/wizard/hermes/api/sessions/${encodeURIComponent(sid)}/messages`, { credentials: 'same-origin', cache: 'no-store' });
+        const j = r.ok ? await r.json() : null;
+        if ((j?.data || []).length) { log('thread:open'); return open(sid); }
+      } catch (e) {}
+      await new Promise(r => setTimeout(r, 1000));
+    }
+    log('thread:timeout');
+  }
+
+  window.WosWelcome = { whenThreadExists, boot, open: (at) => open(at || 'ai'), close, get active() { return !!el; }, get log() { return window.__welcomeLog || []; } };
 })();
