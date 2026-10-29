@@ -450,6 +450,15 @@ test('twenty-second review: the all-clear needs a dated check; any cached machin
   }
 });
 
+test('final review: personal-device presence needs a fresh reading; meter edits keep unreadable picks; any provider can be the default', () => {
+  for (const who of ['miguel', 'wizard']) {
+    const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
+    assert.equal((src.match(/online: !!S\.devFresh && /g) || []).length, 2, who);
+    assert.match(src, /let cur = new Set\(Array\.isArray\(S\.meter\) && S\.meter\.length \? S\.meter\.filter/, who);
+    assert.match(src, /subs\(\)\.find\(s => s\.kind === p \|\| String\(s\.group \|\| ''\)\.toLowerCase\(\) === p/, who);
+  }
+});
+
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));

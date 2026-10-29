@@ -122,8 +122,9 @@ export default function setup(api) {
   // Unknown until the chat list has been read once: show that, never a confident empty inbox.
   const sessions = () => api.data.read.sessions?.counts() || { working: 0, ready: 0, unknown: true };
   const chatWords = x => x.unknown ? 'chats not loaded yet' : `${x.working} working, ${x.ready} ready${S.unread ? `, ${S.unread} unread` : ''}`;
-  const myDevices = () => [...devices().filter(d => d.id !== MAIN && d.group === 'human').map(d => ({ name: pretty(d.name), online: /^(online|stale|unreachable)$/.test(d.status || '') })),
-    ...peers().filter(p => p.group === 'human').map(p => ({ name: p.name === 'localhost' && /ios/i.test(p.os || '') ? 'iPhone' : p.name, online: !!p.online }))];
+  // Presence from a saved or failed reading is not current: no green dot until a fresh read says online.
+  const myDevices = () => [...devices().filter(d => d.id !== MAIN && d.group === 'human').map(d => ({ name: pretty(d.name), online: !!S.devFresh && /^(online|stale|unreachable)$/.test(d.status || '') })),
+    ...peers().filter(p => p.group === 'human').map(p => ({ name: p.name === 'localhost' && /ios/i.test(p.os || '') ? 'iPhone' : p.name, online: !!S.devFresh && !!p.online }))];
   // The connected Wizard's people (the glance always describes this one, whatever Your network has selected).
   const myPeople = () => [{ id: 'me', name: ownerName(), devices: myDevices() }];
   function people() {
@@ -186,7 +187,9 @@ export default function setup(api) {
   const appOf = kind => (signable().find(x => x.kind === kind) || {}).app || null;
   // The gauge: the default model's service, all its accounts together (average left).
   const defKind = () => { const d = api.models?.default?.(); const p = String(d?.provider || '').toLowerCase();
-    const k = /claude|anthropic/.test(p) ? 'claude' : /openai|codex|chatgpt/.test(p) ? 'chatgpt' : /tinfoil/.test(p) ? 'tinfoil' : '';
+    // Built-in names first; any other provider matches a usage service by its own id or name.
+    const k = /claude|anthropic/.test(p) ? 'claude' : /openai|codex|chatgpt/.test(p) ? 'chatgpt' : /tinfoil/.test(p) ? 'tinfoil'
+      : p ? (subs().find(s => s.kind === p || String(s.group || '').toLowerCase() === p || p.startsWith(s.kind + ':'))?.kind || '') : '';
     if (k && k !== S.def) { S.def = k; api.storage.set('def', k); } return S.def; };
   // What the E-to-F meter shows: the owner's pick (one kind only: plan limits or prepaid credit, never a mix), else
   // the default model's service. Every account gets a plain name for the "combines …" line.
@@ -622,7 +625,8 @@ export default function setup(api) {
   api.listen(secAI, 'change', e => {
     const id = e.target?.dataset?.meterId; if (!id) return;
     const all = subs(), me = all.find(s => s.id === id); if (!me) return;
-    let cur = new Set(meterPool().use.map(s => s.id));
+    // Start from the saved pick (keeps an account that is unreadable right now), else from what the meter shows.
+    let cur = new Set(Array.isArray(S.meter) && S.meter.length ? S.meter.filter(x => all.some(s => s.id === x)) : meterPool().use.map(s => s.id));
     if (e.target.checked) { for (const s of all) if (cur.has(s.id) && s.unit !== me.unit) cur.delete(s.id); cur.add(id); } else cur.delete(id);  // never mix kinds
     S.meter = cur.size ? [...cur] : null; api.storage.set('meter', S.meter); drawn.ai = ''; drawn.glance = ''; drawn.list = ''; renderAIList(); paint();
   });
