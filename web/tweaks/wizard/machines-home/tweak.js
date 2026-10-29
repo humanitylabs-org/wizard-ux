@@ -481,7 +481,7 @@ export default function setup(api) {
       const main = machine(MAIN), others = helpers().map(d => machine(d.id)).sort((a, b) => power(b) - power(a));
       const all = [main, ...others].filter(hasReading);
       const maxOf = { Memory: Math.max(1, ...all.map(m => m.ramGB || 0)), Disk: Math.max(1, ...all.map(m => m.diskGB || 0)), CPU: Math.max(1, ...all.map(m => m.cores || 0)) };
-      const node = m => m.id === MAIN ? machineNode(main, 'main', maxOf, { roleText: 'Main', sessions: sessions() })
+      const node = m => m.id === MAIN ? machineNode(main, 'main', maxOf, { roleText: 'Main' + (main.stale ? ' · last reading' : ''), sessions: sessions() })
         : machineNode(m, qualifies(m.id) ? 'standby' : 'helper', maxOf, { roleText: roleOf(m), warn: m.status !== 'online' });
       // The bar names sit left of the row; an invisible twin on the right keeps Main exactly in the middle.
       const legend = twin => h('div', { cls: 'mh-legend' + (twin ? ' is-twin' : ''), 'aria-hidden': 'true' }, h('span', { cls: 'mh-bars-in' }, h('span', { text: 'RAM' }), h('span', { text: 'Disk' }), h('span', { text: 'CPU' }), h('span', { cls: 'mh-how-l', text: 'SSH' })));
@@ -689,6 +689,8 @@ export default function setup(api) {
     // A managed Wizard that is gone from a fresh reading: back to this one, remembered, before anything draws.
     if (S.ws !== 'mine' && S.res.devices && !managedOf(S.ws)) { S.ws = 'mine'; api.storage.set('ws', 'mine'); }
     renderGlance();
+    // The Settings index shows a one-line summary per System page; redraw it only when one of those lines changes.
+    { const st = storage(), sub = JSON.stringify([S.ws, !!S.devFresh, openOnes().length, gauge()?.left ?? null, aiStale(), st?.age == null ? null : agoS(st.age)]); if (sub !== drawn.sub) { const first = drawn.sub == null; drawn.sub = sub; if (!first) api.settings?.refresh?.(); } }
     const top = JSON.stringify([thisName(), managedList().map(g => [g.id, g.name]), S.ws]);
     if (force || top !== drawn.top) { drawn.top = top; renderTabs(); }
     const gs = JSON.stringify([S.ws, aiStale(), gauge(), S.open.has('ai'), S.open.has('mp'), S.meter, subs().map(s => [s.id, s.left, s.money, s.out, s.na, s.stale, s.nick])]);
@@ -731,9 +733,9 @@ export default function setup(api) {
   const fuelText = () => { const g = gauge(); return g ? `${g.left}% left` : ''; };
   // Subtitles describe this Wizard only; on a managed workspace they stay quiet (its facts live on that Wizard).
   const mine = fn => () => managedOf(S.ws) ? '' : fn();
-  api.settings?.section('map', 'overview', secMap, { subtitle: mine(() => { const n = openOnes().length; return n ? `${n} open` : ''; }) });
+  api.settings?.section('map', 'overview', secMap, { subtitle: mine(() => { const n = openOnes().length; return n ? `${n} open${S.devFresh ? '' : ' (last reading)'}` : ''; }) });
   api.settings?.section('ai', 'ai', secAI, { subtitle: mine(fuelText) });
-  api.settings?.section('net', 'network', secNet, { subtitle: mine(() => { const n = openOnes().length; return n ? `${n} open to internet` : ''; }) });
+  api.settings?.section('net', 'network', secNet, { subtitle: mine(() => { const n = openOnes().length; return n ? `${n} open to internet${S.devFresh ? '' : ' (last reading)'}` : ''; }) });
   api.settings?.section('store', 'storage', secStore, { subtitle: mine(() => { const st = storage(); return st?.age != null ? `${agoS(st.age)} ago` : ''; }) });
   api.listen(document, 'click', e => { if (S.open.has('wsm') && e.target.isConnected && !wizBox.contains(e.target)) { S.open.delete('wsm'); S.open.delete('wsm-why'); renderWiz(); } });
   api.listen(document, 'keydown', e => { if (e.key === 'Escape' && S.open.has('wsm')) { S.open.delete('wsm'); renderWiz(); wizBtn.focus(); } });
