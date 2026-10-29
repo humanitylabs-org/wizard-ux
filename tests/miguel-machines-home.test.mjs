@@ -474,6 +474,9 @@ test('final review 2: exposure dates must be real; an open warning from a last r
     assert.equal((src.match(/open to the internet\$\{S\.devFresh \? '' : ' \(last reading\)'\}/g) || []).length, 2, who + ': Home tile and desktop icon qualify a last reading');
     assert.match(src, /online: !!S\.devFresh && d\.status === 'online'/, who);
     assert.match(src, /roleText: 'Main' \+ \(main\.stale \? ' · last reading' : ''\)/, who);
+    assert.match(src, /if \(k !== S\.def && \(k \|\| p\)\) \{ S\.def = k;/, who + ': an unmetered default clears the old one');
+    assert.match(src, /money = fmtMoney\(amt, cur\);/, who + ': credit keeps its currency');
+    assert.match(src, /use\.every\(s => s\.cur === use\[0\]\.cur\) \? fmtMoney\(/, who + ': never sums mixed currencies');
     assert.equal((src.match(/open(?: to internet)?\$\{S\.devFresh \? '' : ' \(last reading\)'\}` : ''/g) || []).length, 2, who + ': Settings subtitles too');
     assert.match(src, /if \(sub !== drawn\.sub\) \{ const first = drawn\.sub == null; drawn\.sub = sub; if \(!first\) api\.settings\?\.refresh\?\.\(\); \}/, who);
     assert.match(src, /' \(Last reading; check again to see if it still is\.\)'/, who);

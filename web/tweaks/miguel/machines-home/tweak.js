@@ -159,6 +159,7 @@ export default function setup(api) {
         words: `Make ${m.name} my standby device.`, why: (q?.checks || []).map(c => c.say).join('; ') }];
   }
   // AI: every account. Level = the tightest weekly allowance left; prepaid credit = balance of top-up.
+  const fmtMoney = (n, cur) => { try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: cur || 'USD' }).format(n); } catch (_) { return `${cur || 'USD'} ${n.toFixed(2)}`; } };
   const kindOf = p => String(p.provider || p.id || '').split(':')[0];
   // A copy saved on this device, or a reading over five minutes old, is a last reading until a live one arrives.
   const aiOld = p => { const at = Date.parse(p.fetchedAt || S.res.ai?.fetchedAt || ''); return !S.aiLive || !at || Date.now() - at > 300000; };
@@ -167,16 +168,16 @@ export default function setup(api) {
     for (const p of S.res.ai?.providers || []) {
       const kind = kindOf(p), ls = Array.isArray(p.limits) ? p.limits : [], wk = ls.filter(l => /week/i.test(l.label));
       const pick = (wk.length ? wk : ls).reduce((a, l) => !a || l.remainingPercent < a.remainingPercent ? l : a, null);
-      let left = pick ? pick.remainingPercent : null, money = '';
+      let left = pick ? pick.remainingPercent : null, money = '', cur = '', amt = 0;
       const paid = p.paid, ex = paid?.exponent ?? 2;
       if (left == null && paid?.type === 'credits' && paid.limitMinor > 0 && paid.balanceMinor != null) {
-        left = 100 * paid.balanceMinor / paid.limitMinor; money = `$${(paid.balanceMinor / 10 ** ex).toFixed(2)}`;
+        left = 100 * paid.balanceMinor / paid.limitMinor; cur = /^[A-Z]{3}$/.test(paid.currency || '') ? paid.currency : 'USD'; amt = paid.balanceMinor / 10 ** ex; money = fmtMoney(amt, cur);
       }
       // Signed out only when the feed says so; a failed usage read is "usage unavailable", still signed in.
       const signedOut = p.signedOut === true || p.status === 'signed_out' || p.status === 'auth', na = !signedOut && (p.status === 'unavailable' || (left == null && !money));
       const who = String(p.name || '').split('@')[0];
       out.push({ id: p.id, kind, group: p.providerName || kind, nick: S.nick[p.id] || '', auto: who && who !== p.providerName ? who : '',
-        email: p.email || '', left: left == null ? null : Math.round(left), money, unit: money ? 'credit' : 'plan', out: signedOut, na, stale: p.status === 'stale' || aiOld(p), resets: pick?.resetsAt || null });
+        email: p.email || '', left: left == null ? null : Math.round(left), money, unit: money ? 'credit' : 'plan', cur, amt, out: signedOut, na, stale: p.status === 'stale' || aiOld(p), resets: pick?.resetsAt || null });
     }
     return out;
   }
@@ -190,7 +191,8 @@ export default function setup(api) {
     // A usage service with exactly this id or name wins; the built-in aliases match whole names only.
     const exact = p ? subs().find(s => s.kind === p || String(s.group || '').toLowerCase() === p || p.startsWith(s.kind + ':'))?.kind || '' : '';
     const k = exact || (/^(claude|claude-code|anthropic)$/.test(p) ? 'claude' : /^(openai|openai-codex|codex|chatgpt)$/.test(p) ? 'chatgpt' : /^tinfoil$/.test(p) ? 'tinfoil' : '');
-    if (k && k !== S.def) { S.def = k; api.storage.set('def', k); } return S.def; };
+    // A default whose provider reports no usage clears the old one rather than keep pointing at another service.
+    if (k !== S.def && (k || p)) { S.def = k; api.storage.set('def', k); } return S.def; };
   // What the E-to-F meter shows: the owner's pick (one kind only: plan limits or prepaid credit, never a mix), else
   // the default model's service. Every account gets a plain name for the "combines …" line.
   // Nickname first; when the same nickname is used on two services, the service name goes in front so they stay apart.
@@ -216,7 +218,8 @@ export default function setup(api) {
     const { use, custom, def } = meterPool(); if (!use.length) return null;
     const all = subs();
     return { left: Math.round(use.reduce((n, s) => n + s.left, 0) / use.length), name: use[0].group, n: use.length, custom, def, unit: use[0].unit, names: use.map(s => subName(s, all)),
-      money: use[0].unit === 'credit' ? '$' + use.reduce((n, s) => n + (parseFloat(String(s.money).replace(/[^0-9.]/g, '')) || 0), 0).toFixed(2) : '' };
+      // Credit in one currency adds up; mixed currencies are never summed (the meter then shows percent left only).
+      money: use[0].unit === 'credit' && use.every(s => s.cur === use[0].cur) ? fmtMoney(use.reduce((n, s) => n + (s.amt || 0), 0), use[0].cur) : '' };
   }
 
   /* ---------- skeleton ---------- */
