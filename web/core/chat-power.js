@@ -239,7 +239,8 @@ window.WosChatPower = function chatPower(A) {
     const ag = agentOfWin(w, s) || (w.thread === '__new__' && cur?.agent && AG?.isOther(cur.agent) ? AG.get(cur.agent) || null : null);
     const priv = !!ag && AG?.isPrivate(ag);
     const full = cur?.model ? (ag ? AG.modelName(ag, cur.model) : M.name(cur.model, cur.provider)) : 'default';
-    const label = cur?.model ? (ag ? full : M.short(cur.model, cur.provider)) : M.ready ? 'Default model' : 'Model';
+    // Agents get the same short family name as the main chat (Fable, Opus, GLM 5.3), never a raw id like claude-fable-5-1.
+    const label = cur?.model ? (M.short(cur.model, cur.provider || ag?.model?.provider) || full) : M.ready ? 'Default model' : 'Model';
     const secure = !ag && !!cur?.provider && !!M.ours?.() && !!M.isPrivateRoute?.(cur.provider);
     return `<button type="button" class="ch-model${ag ? ' agent' : ''}${priv || secure ? ' private' : ''}" data-chmodel aria-label="Model: ${esc(full)}${priv ? ', private' : ''}. Change model" title="${esc(cur?.model || '')}">${priv || secure ? (AG?.lock?.() || '') : ''}${esc(label)}<i aria-hidden="true">▾</i></button>`;
   }
@@ -578,13 +579,16 @@ window.WosChatPower = function chatPower(A) {
     // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
     const priv = !agent && !A.winAgent(w) && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
     openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false, agent, priv, pop: !!pop && mode !== 'retry' });
-    // A list older than ~15 s is refetched on open (a sign-in added a moment ago shows without waiting out the 5 min cache).
-    const opened = sheet;
-    if (M.stale ? M.stale() : !M.ready) M.load(M.ready).then(() => {
+    // Revalidate every open; repaint only if the catalogue/default actually changed.
+    // WosModels.options is the catalogue array (never a function): compare the fields the sheet shows.
+    const rows = list => (Array.isArray(list) ? list : []).map(o => [o.agent, o.provider, o.value, o.name, o.description, !!o.isGlobalDefault]);
+    const key = () => JSON.stringify([rows(M.options), rows(M.privateOptions?.())]);
+    const opened = sheet, before = key();
+    M.load(M.ready).then(() => {
       if (sheet !== opened || sheet?.type !== 'model' || H.win(wid)?.thread !== opened.sid) return;
       // A fresh default must agree with what Send will use. An explicit draft choice stays pinned.
-      sheet.cur = mode === 'new' ? newModel(ch(wid), w) : threadModel(LIVE.session(opened.sid));
-      paint(sheet.pane, A.elOf(sheet.pane));
+      const cur = mode === 'new' ? newModel(ch(wid), w) : threadModel(LIVE.session(opened.sid));
+      if (key() !== before || JSON.stringify(sheet.cur) !== JSON.stringify(cur)) { sheet.cur = cur; paint(sheet.pane, A.elOf(sheet.pane)); }
     });
   }
   function openFiles(pane) {

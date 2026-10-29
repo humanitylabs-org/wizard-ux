@@ -390,6 +390,14 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/offline-kit.js": {
+      "loadedBy": [],
+      "note": "Opt-in app offline replica and durable outbox (WizOffline.create); loaded by an app, not either shell"
+    },
+    "core/offline-sw.js": {
+      "loadedBy": [],
+      "note": "Opt-in app service worker for WizOffline; importScripts from an app worker, not either shell"
+    },
     "core/orb-handoff.js": {
       "loadedBy": [
         "phone"
@@ -638,6 +646,13 @@
         "desktop"
       ],
       "note": "Shared RAM-only Incognito lifecycle composed by Chats"
+    },
+    "core/app-setup.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared connection checklist and required-needs admission"
     }
   },
   "exceptions": {
@@ -748,6 +763,8 @@
     "core/app-route.css",
     "core/app-route.js",
     "core/app-services.js",
+    "core/app-setup.css",
+    "core/app-setup.js",
     "core/app-versions.js",
     "core/app-voice.js",
     "core/appearance-host.css",

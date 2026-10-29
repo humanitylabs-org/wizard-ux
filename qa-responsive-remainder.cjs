@@ -100,7 +100,8 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
   ok(attempts===2&&(await f.rows()).some(x=>x.blob&&x.files?.some(file=>file.id==='retried-fixture')),`${label}: failed upload retry preserves original attachment/audio`,{attempts,rows:await f.rows()});
   await f.done(label+' upload failure');
  }
- // Desktop browser focused-field seals: cursor retained, changed/replaced field never receives late STT.
+ // Focused-field seals: cursor retained; a plain field edited during the take still gets the words, at its current caret
+ // (keyboard voice typing). A removed/replaced field never receives late STT (qa-in-app-dictation.cjs covers those).
  for(const desktop of [false,true])for(const stale of [false,true]){
   const f=await boot(desktop),p=f.p,label=desktop?'desktop':'phone';if(!desktop)await p.setViewportSize({width:360,height:800});f.state.sttDelay=300;
   await p.evaluate(()=>{const el=document.createElement('textarea');el.id='dictation-target';el.value='before AFTER';el.style.cssText='position:fixed;top:200px;left:20px;z-index:1000';document.body.append(el);el.focus();el.setSelectionRange(7,12);});
@@ -108,8 +109,8 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
   if(stale)await p.locator('#dictation-target').fill('Changed while recording');
   await p.evaluate(desktop=>desktop?__wux.dictate():__wos.finishVoice(),desktop);await p.waitForFunction(desktop=>(desktop?__wux:__wos).voice==='idle',desktop);await sleep(100);
   const val=await p.locator('#dictation-target').inputValue();
-  ok(stale?val==='Changed while recording':val==='before spoken original words',`${label}: ${stale?'stale focused field preserved':'dictation replaces captured cursor range'}`,val);
-  ok(!f.state.posts.length,`${label}: ${stale?'stale':'cursor'} dictation cannot send to agent`);await f.done(label+' focused dictation');
+  ok(stale?val==='Changed while recording spoken original words':val==='before spoken original words',`${label}: ${stale?'field edited during the take gets the words at its current caret':'dictation replaces captured cursor range'}`,val);
+  ok(!f.state.posts.length,`${label}: ${stale?'edited-field':'cursor'} dictation cannot send to agent`);await f.done(label+' focused dictation');
  }
  // Desktop held command recognizes an unambiguous local command; no backend message.
  {const f=await boot(true);f.state.text='open settings';await f.p.evaluate(()=>__wux.commandVoice());await sleep(1100);const result=await f.p.evaluate(()=>__wux.commandVoice());ok(!f.state.posts.length,'desktop: held command dispatches local commands instead of agent-send');ok(await f.p.locator('#dsettings:not([hidden])').count()>0,'desktop: held command opens shared Settings');await f.done('desktop automatic local command');}

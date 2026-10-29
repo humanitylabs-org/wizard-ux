@@ -573,14 +573,41 @@
     } catch (e) { return e?.name === 'AbortError' ? 'cancelled' : 'unsupported'; }
     finally { clearTimeout(timer); }
   }
+  // One delegated gesture implementation for every shell Share control, including dynamically rendered ones.
+  // Reuse the control's existing action synchronously under a direct-share scope; no per-button payload copies.
+  let directShareDepth = 0;
+  const SHARE_CONTROLS = '[data-mshare],[data-codeshare],[data-quoteshare],[data-sm="share"],[data-mv="share"],[data-mvm="share"]';
+  function bindSharePress(root, selector = SHARE_CONTROLS) {
+    let press = null, suppress = null, firing = false;
+    const listeners = [];
+    const on = (type, fn) => { root.addEventListener(type, fn, true); listeners.push([type, fn]); };
+    const cancel = () => { if (press) clearTimeout(press.timer); press = null; };
+    on('pointerdown', e => {
+      cancel(); suppress = null;
+      const button = e.target.closest?.(selector);
+      if (!button || button.disabled || (e.button != null && e.button !== 0) || e.isPrimary === false) return;
+      const at = press = { button, x: e.clientX, y: e.clientY, id: e.pointerId };
+      at.timer = setTimeout(() => {
+        if (press !== at || at.button.isConnected === false) return;
+        suppress = at.button; firing = true; directShareDepth++;
+        try { at.button.click(); } finally { directShareDepth--; firing = false; cancel(); }
+      }, 500);
+    });
+    on('pointermove', e => { if (press && e.pointerId === press.id && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) cancel(); });
+    on('pointerup', e => { if (suppress) e.wosShareHeld = true; cancel(); }); on('pointercancel', cancel);
+    on('click', e => { if (!firing && suppress) { suppress = null; e.preventDefault(); e.stopImmediatePropagation(); } });
+    on('contextmenu', e => { if (e.target.closest?.(selector)) e.preventDefault(); });
+    return () => { cancel(); for (const [type, fn] of listeners) root.removeEventListener(type, fn, true); };
+  }
+  if (document.addEventListener) bindSharePress(document);
   async function sharePayload(data = {}) {
     if (!data || typeof data !== 'object') return 'unsupported';
     const payload = {};
     for (const k of ['text', 'title', 'url']) if (data[k] != null && String(data[k])) payload[k] = String(data[k]);
     if ((!payload.text && !payload.url) || (payload.text || '').length > 90000 || (payload.title || '').length > 1024 || (payload.url || '').length > 8192) return 'unsupported';
     if (payload.url) { try { const parsed = new URL(payload.url, location.href); if (!/^https?:$/.test(parsed.protocol)) return 'unsupported'; if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(payload.url)) payload.url = parsed.href; } catch (_) { return 'unsupported'; } }
-    // Wizard's own sheet first (people → Wizard apps → Other apps…); no receiver for this kind = straight out.
-    if (window.WosShareSheet) return window.WosShareSheet.show(payload, () => shareOut(payload));
+    // Wizard's own sheet first (people → Apps → Other apps…); no receiver for this kind = straight out.
+    if (!data.direct && !directShareDepth && window.WosShareSheet) return window.WosShareSheet.show(payload, () => shareOut(payload));
     return shareOut(payload);
   }
   async function shareOut(payload) {
@@ -616,11 +643,15 @@
   }
   // Apps keep the receipt contract ('opened' is not a receipt); the media viewer uses shareFileOpen directly.
   async function shareFile(item, opts) { const r = await shareFileOpen(item, opts); return r === 'opened' ? 'unsupported' : r; }
-  async function shareFileOpen(item, { title } = {}) {
+  async function shareFileOpen(item, { title, direct = directShareDepth > 0 } = {}) {
     let file;
     const isBlob = value => value && ['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(value));
     try { file = isBlob(item) ? item : await asFile(item); } catch (_) { return 'unsupported'; }
     if (!isBlob(file) || file.size > 32 * 1024 * 1024) return 'unsupported';
+    if (!direct && window.WosShareSheet) return window.WosShareSheet.show({ file, title }, () => shareFileOut(file, title));
+    return shareFileOut(file, title);
+  }
+  async function shareFileOut(file, title) {
     const n = native(), name = file.name || 'wizard-file';
     if (n && typeof n.shareFile === 'function') {
       let bytes; try { bytes = await b64(file); } catch (_) { return 'unsupported'; }
@@ -650,7 +681,7 @@
     if (appDownloads() && !(n && typeof n.saveFile === 'function') && !/^(blob|data):/i.test(href)) { download(href, item.name); return 'downloading'; }
     const file = await asFile(item);
     if (n && typeof n.saveFile === 'function') { n.saveFile(await b64(file), file.name, file.type); return 'saved'; }
-    if (n) { const r = await shareFileOpen(item); return r === 'opened' ? 'shared' : r; } // old app: the share sheet saves
+    if (n) { const r = await shareFileOpen(item, { direct: true }); return r === 'opened' ? 'shared' : r; } // old app: the share sheet saves
     const u = URL.createObjectURL(file); const a = document.createElement('a'); a.href = u; a.download = file.name; a.rel = 'noopener';
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 60000);
     return 'saved';
@@ -769,21 +800,21 @@
   const heavy = it => it.kind === 'video' || it.kind === 'audio' || (it.bytes || 0) > 2 * 1048576;
   const once = (key, it, fn) => { if (busy.has(key + it.url)) return; busy.add(key + it.url); return Promise.resolve(fn()).finally(() => busy.delete(key + it.url)); };
   const save = it => once('save', it, () => saveFile(it).then(r => r === 'downloading' ? K.notify('⤓', 'Saving to Downloads') : K.notify(r === 'unsupported' ? '!' : '⤓', r === 'saved' ? 'Saved' : r === 'shared' ? 'Choose where to save' : r === 'cancelled' ? 'Not saved' : 'Saving isn’t available here')).catch(() => K.notify('!', 'Couldn’t save this file')));
-  const share = it => once('share', it, async () => {
+  const share = it => { const direct = directShareDepth > 0; return once('share', it, async () => {
     try {
       if (heavy(it) && native()) K.notify('↗', 'Preparing to share…');
-      let result = await shareFileOpen(it);
+      let result = await shareFileOpen(it, { direct });
       // An old native bridge may already have opened the file chooser without an
       // outcome receipt. Never open a second text chooser or claim Shared then.
       if (result === 'unsupported' && typeof native()?.shareFile !== 'function') {
-        result = await sharePayload({ url: new URL(it.url, location.href).href, title: it.name });
+        result = await sharePayload({ url: new URL(it.url, location.href).href, title: it.name, direct });
       }
       if (result === 'shared') K.notify('↗', 'Shared');
       else if (result === 'opened') K.notify('↗', 'Share sheet opened');
       else if (result === 'copied') K.notify('⧉', 'Link copied');
       else if (result === 'unsupported') K.notify('!', 'Sharing unavailable or not confirmed');
     } catch (_) { K.notify('!', 'Couldn’t share this file'); }
-  });
+  }); };
   // Zooming out keeps your place in a long screenshot; a normal photo recentres.
   function reset() { const s = V.s; V.s = 1; V.x = 0; V.y = V.long ? V.y / s : 0; clampPan(); paint(); }
   function zoomAt(px, py, s) {
@@ -898,5 +929,5 @@
     return action && (choices.length || it.kind === 'clarify') ? { kind: it.kind || 'approval', requestId: str(it.prompt_id, it.request_id, it.id) || undefined, generation: canonical ? it.execution_generation : undefined, action, choices } : null;
   }
 
-  window.WosChat = { K, reply, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, copyRich, richParts, sharePayload, shareText, shareAssistantText, shareFile, saveFile, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
+  window.WosChat = { K, reply, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, copyRich, richParts, bindSharePress, sharePayload, shareText, shareAssistantText, shareFile, saveFile, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
 })();
