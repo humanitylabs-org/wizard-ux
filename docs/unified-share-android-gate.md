@@ -250,6 +250,49 @@ alone admits the frozen forum/heavy spec once. Record the executed failed
 `6d830a01a92d` job in the durable latest pointer so a schedule cannot replay it.
 Recheck free space minus the 3 GiB job budget exceeds the 200 GiB reserve.
 
+## UIAutomator freshness repair after executed `3026d7a33268`
+
+The failed run `heavy_017efda3e6794a9d8b6fb3f1ad3a5a0b` reached the
+`existing-delivery` pre-tap check and requested genuine but observed boilerplate.
+Direct inspection of **both** `sender-3-genuine.png` and
+`failure-existing-delivery.png` shows the foreground source app rendering
+`x.pdf`, agreeing with the saved XML. This is not proof of an XML-only stale
+read or a product defect. `sender-lifecycle-replay.log` passed the actual Java
+source's host-JVM boilerplate → genuine → boilerplate seam; `am start -W`
+reported delivery to the top-most instance. That launch acknowledgment does not
+establish that Android rendered the new case. Why this native observation still
+shows the old case remains unproven.
+
+The confirmed harness defect is independent: `Rig.ui` dumped to a fixed path,
+suppressed every dump error with `|| true`, then consumed whatever XML remained.
+That could mislabel earlier observations even though these screenshots agree.
+The minimal QA-only repair now:
+
+- Generates a unique path **per dump attempt**, requires it absent before dumping,
+  successful command exit and an existing nonempty valid hierarchy afterward.
+  No read of the legacy path or any failed attempt is allowed.
+- Bounds a snapshot to three attempts and its caller's remaining deadline. Saves
+  separate dump stdout/stderr, exit/error, timestamps, UUID/path and accepted XML
+  SHA-256 in `native-ui-observations.jsonl`, with each accepted XML retained.
+- Waits at most 30 seconds for the requested package-scoped visible title **and**
+  actionable native button. Saves every case observation and freshness receipt,
+  final XML/screenshot/activity and launch output. Permanent wrong case or dump
+  failure refuses before the sole source tap; no relaunch, force-stop, repeated
+  tap, DOM activation or fallback input.
+- Adds controller negatives for stale legacy files plus failed dump, exit-zero
+  missing/malformed file, path collision and timeout, and positive fresh retry
+  hash binding. Delayed requested case waits; permanent wrong case and repeated
+  snapshot failures stop at the bounded deadline.
+
+Only the QA runner, controller regressions and this gate document change from
+`3026d7a33268`. Product Android/web and SenderActivity source remain unchanged.
+Keep the original APK hash and all 381 JUnit passes plus prior passed native
+phases as inherited proof, not a native pass at the new source. A fresh frozen
+sibling `--reuse-build` stage reruns the existing native phases under parent
+forum/heavy admission only. Mark `3026d7a33268` executed-failed/do-not-resubmit in
+the local and remote latest pointers; preserve its exact failure proof. Check
+free space minus 3 GiB still exceeds 200 GiB. No rebuild/sign/deploy/merge.
+
 ## Real device phases and evidence
 
 The separate synthetic source app generates a 24 MiB blank-page PDF fixture byte

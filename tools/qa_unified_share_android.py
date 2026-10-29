@@ -25,6 +25,7 @@ import threading
 import time
 import traceback
 import urllib.request
+import uuid
 import xml.etree.ElementTree as ET
 import zipfile
 from typing import Any
@@ -546,12 +547,91 @@ class Rig:
     def adb_cmd(self, *argv, **kwargs):
         return self.run([self.adb, '-s', self.serial, *argv], **kwargs)
 
-    def ui(self):
-        def get():
-            self.sx('uiautomator dump /sdcard/unified-share-ui.xml >/dev/null 2>&1 || true', timeout=20)
-            xml = self.sx('cat /sdcard/unified-share-ui.xml', timeout=10)
-            return xml if xml.startswith('<?xml') else None
-        return wait(get, 40)
+    def ui(self, seconds: float = 40):
+        """Fresh observation only: failed dumps can never read an earlier file."""
+        deadline = time.monotonic() + seconds
+        self.last_ui_snapshot = None
+        last = None
+        for retry in range(3):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            token = uuid.uuid4().hex
+            remote = '/sdcard/unified-share-ui-' + token + '.xml'
+            receipt = {'token': token, 'remote_path': remote, 'retry': retry,
+                       'started_at': time.time(), 'status': 'STARTED'}
+            try:
+                # Fail even on an improbable UUID collision, never consume it.
+                self.sx('test ! -e ' + remote, timeout=min(5, remaining))
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RuntimeError('snapshot deadline before dump')
+                result = subprocess.run([str(self.adb), '-s', self.serial, 'shell',
+                                         'uiautomator', 'dump', remote],
+                                        env=self.env, cwd=self.root, capture_output=True,
+                                        text=True, timeout=min(20, remaining))
+                receipt.update(returncode=result.returncode, stdout=result.stdout, stderr=result.stderr)
+                if result.returncode:
+                    raise RuntimeError('UIAutomator dump exit=' + str(result.returncode))
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RuntimeError('snapshot deadline before read')
+                xml = self.sx('test -s ' + remote + ' && cat ' + remote, timeout=min(10, remaining))
+                if not xml.startswith('<?xml') or ET.fromstring(xml).tag != 'hierarchy':
+                    raise ValueError('invalid UIAutomator hierarchy')
+                name = 'native-ui-' + token + '.xml'
+                (self.out / name).write_text(xml)
+                receipt.update(status='FRESH', xml_file=name,
+                               xml_sha256=hashlib.sha256(xml.encode()).hexdigest())
+                self.last_ui_snapshot = dict(receipt)
+                return xml
+            except (OSError, ValueError, RuntimeError, ET.ParseError, subprocess.TimeoutExpired) as exc:
+                last = exception_detail(exc)
+                receipt.update(status='FAILED', error=last)
+                if isinstance(exc, subprocess.TimeoutExpired):
+                    receipt.update(stdout=str(exc.stdout or ''), stderr=str(exc.stderr or ''))
+            finally:
+                receipt['finished_at'] = time.time()
+                with (self.out / 'native-ui-observations.jsonl').open('a') as log:
+                    log.write(json.dumps(receipt) + '\n')
+            if retry < 2 and (remaining := deadline - time.monotonic()) > 0:
+                time.sleep(min(.4, remaining))
+        raise RuntimeError('fresh UIAutomator snapshot unavailable: ' + str(last))
+
+    def wait_sender_case(self, mode, attempt, label, seconds=30):
+        # A present button is not domain acknowledgment. Observe only; never relaunch/tap.
+        deadline = time.monotonic() + seconds
+        xml = None
+        attempt['case_observations'] = []
+        try:
+            while (remaining := deadline - time.monotonic()) > 0:
+                try:
+                    current = self.ui(seconds=remaining)
+                    xml = current
+                    actual = sender_case(current)
+                    attempt['actual_case'] = actual
+                    observation = {'actual_case': actual, 'snapshot': getattr(self, 'last_ui_snapshot', None)}
+                    attempt['case_observations'].append(observation)
+                    if actual == mode and native_sender_bounds(current):
+                        attempt['status'] = 'PRE_TAP'
+                        return current
+                except (OSError, ValueError, RuntimeError) as exc:
+                    attempt['case_observations'].append({'error': exception_detail(exc)})
+                if (remaining := deadline - time.monotonic()) > 0:
+                    time.sleep(min(.4, remaining))
+            raise RuntimeError('sender case deadline: requested=' + mode +
+                               ', actual=' + str(attempt.get('actual_case')))
+        except BaseException as exc:
+            attempt.update(status='CASE_WAIT_FAILED', error=exception_detail(exc))
+            raise
+        finally:
+            if xml is not None:
+                (self.out / (label + '.xml')).write_text(xml)
+            try:
+                self.screenshot(label)
+            finally:
+                (self.out / (label + '-case.json')).write_text(json.dumps(attempt, indent=2) + '\n')
+                self.save()
 
     def tap_text(self, text):
         xy = wait(lambda: native_bounds(self.ui(), text), 30)
@@ -773,14 +853,9 @@ class Rig:
         self.report.setdefault('sender_attempts', []).append(attempt)
         self.save()
         attempt['launch_output'] = self.sx('am start -W -n ' + SENDER + '/.SenderActivity --es fixture_case ' + mode)
-        # Capture this same native XML before any tap. Do not infer actual case
-        # from am start extras, nor retry a wrong-case tap or force a fresh process.
-        xml = wait(lambda: (u if native_sender_bounds(u := self.ui()) else None), 30)
-        (self.out / (label + '.xml')).write_text(xml)
-        attempt.update(actual_case=sender_case(xml), status='PRE_TAP')
-        (self.out / (label + '-case.json')).write_text(json.dumps(attempt, indent=2) + '\n')
-        self.screenshot(label)
-        self.save()
+        # Wait for requested rendered case AND the native button, not merely a
+        # launch ACK or a button belonging to the previous case.
+        xml = self.wait_sender_case(mode, attempt, label)
         assert attempt['actual_case'] == mode, 'sender case mismatch: ' + json.dumps(attempt)
         xy = native_sender_bounds(xml)
         assert xy is not None

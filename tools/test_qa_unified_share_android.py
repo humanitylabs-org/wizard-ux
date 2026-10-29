@@ -337,6 +337,127 @@ class ControllerTest(unittest.TestCase):
         self.assertEqual(runner.native_sender_bounds(mixed), [540, 350])
         self.assertIsNone(runner.native_bounds(self.SENDER_XML, 'share synthetic pdf'))
 
+    def test_native_ui_failed_dump_never_reads_preexisting_stale_file(self):
+        with tempfile.TemporaryDirectory(prefix='ui-fresh-', dir=os.environ['TMPDIR']) as d:
+            rig = runner.Rig.__new__(runner.Rig)
+            rig.root = rig.out = Path(d); rig.adb = Path('/unused/adb')
+            rig.serial = 'emulator-test'; rig.env = {}
+            stale = {'/sdcard/unified-share-ui.xml': self.SENDER_XML}
+            reads = []
+            def shell(command, **kwargs):
+                if command.startswith('test ! -e '):
+                    self.assertNotIn(command.removeprefix('test ! -e '), stale)
+                    return ''
+                reads.append(command)
+                return self.SENDER_XML  # old implementation could pass on this
+            rig.sx = Mock(side_effect=shell)
+            failure = subprocess.CompletedProcess([], 1, 'dump failed', 'UiAutomation: Bad file descriptor')
+            with patch.object(runner.subprocess, 'run', return_value=failure) as dump, \
+                    patch.object(runner.time, 'sleep'):
+                with self.assertRaisesRegex(RuntimeError, 'fresh UIAutomator snapshot unavailable'):
+                    rig.ui()
+            self.assertEqual(dump.call_count, 3)
+            paths = [c.args[0][-1] for c in dump.call_args_list]
+            self.assertEqual(len(set(paths)), 3)
+            self.assertNotIn('/sdcard/unified-share-ui.xml', paths)
+            self.assertEqual(reads, [])
+            self.assertIsNone(rig.last_ui_snapshot)
+            receipts = [json.loads(x) for x in (rig.out / 'native-ui-observations.jsonl').read_text().splitlines()]
+            self.assertEqual(len(receipts), 3)
+            self.assertTrue(all(x['status'] == 'FAILED' and x['returncode'] == 1 and
+                                x['stderr'] == failure.stderr for x in receipts))
+
+    def test_native_ui_missing_or_malformed_new_file_refuses_despite_dump_exit_zero(self):
+        for bad in (RuntimeError('test -s failed'), 'not XML', '<?xml version="1.0"?><hierarchy>'):
+            with self.subTest(bad=bad), tempfile.TemporaryDirectory(prefix='ui-invalid-', dir=os.environ['TMPDIR']) as d:
+                rig = runner.Rig.__new__(runner.Rig)
+                rig.root = rig.out = Path(d); rig.adb = Path('/unused/adb'); rig.serial = 'unit'; rig.env = {}
+                def shell(command, **kwargs):
+                    if command.startswith('test ! -e '): return ''
+                    self.assertTrue(command.startswith('test -s ') and ' && cat ' in command)
+                    if isinstance(bad, Exception): raise bad
+                    return bad
+                rig.sx = Mock(side_effect=shell)
+                with patch.object(runner.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, 'ok', '')), \
+                        patch.object(runner.time, 'sleep'), \
+                        self.assertRaisesRegex(RuntimeError, 'fresh UIAutomator snapshot unavailable'):
+                    rig.ui()
+                self.assertIsNone(rig.last_ui_snapshot)
+                self.assertEqual(list(rig.out.glob('native-ui-*.xml')), [])
+
+    def test_native_ui_retry_reads_only_successful_unique_path_and_hashes_exact_xml(self):
+        with tempfile.TemporaryDirectory(prefix='ui-retry-', dir=os.environ['TMPDIR']) as d:
+            rig = runner.Rig.__new__(runner.Rig)
+            rig.root = rig.out = Path(d); rig.adb = Path('/unused/adb'); rig.serial = 'unit'; rig.env = {}
+            rig.sx = Mock(side_effect=['', '', self.SENDER_XML])
+            results = [subprocess.CompletedProcess([], 1, '', 'first failed'),
+                       subprocess.CompletedProcess([], 0, 'new dump saved', 'second stderr retained')]
+            with patch.object(runner.subprocess, 'run', side_effect=results) as dump, patch.object(runner.time, 'sleep'):
+                self.assertEqual(rig.ui(), self.SENDER_XML)
+            failed, fresh = [c.args[0][-1] for c in dump.call_args_list]
+            self.assertNotEqual(failed, fresh)
+            self.assertEqual(rig.sx.call_args_list[-1].args, ('test -s ' + fresh + ' && cat ' + fresh,))
+            receipts = [json.loads(x) for x in (rig.out / 'native-ui-observations.jsonl').read_text().splitlines()]
+            self.assertEqual([x['status'] for x in receipts], ['FAILED', 'FRESH'])
+            self.assertEqual(receipts[-1]['xml_sha256'], self.SENDER_XML_SHA256)
+            self.assertEqual(runner.sha(rig.out / receipts[-1]['xml_file']), self.SENDER_XML_SHA256)
+            self.assertEqual(rig.last_ui_snapshot['remote_path'], fresh)
+
+    def test_native_ui_collision_and_timeout_cannot_read_stale_xml(self):
+        for fail in (RuntimeError('existing path'), subprocess.TimeoutExpired('dump', 1, stderr=b'timeout stderr')):
+            with self.subTest(fail=fail), tempfile.TemporaryDirectory(prefix='ui-timeout-', dir=os.environ['TMPDIR']) as d:
+                rig = runner.Rig.__new__(runner.Rig)
+                rig.root = rig.out = Path(d); rig.adb = Path('/unused/adb'); rig.serial = 'unit'; rig.env = {}
+                rig.sx = Mock(side_effect=fail if isinstance(fail, RuntimeError) else None)
+                with patch.object(runner.subprocess, 'run', side_effect=fail) as dump, \
+                        patch.object(runner.time, 'sleep'), \
+                        self.assertRaisesRegex(RuntimeError, 'fresh UIAutomator snapshot unavailable'):
+                    rig.ui()
+                self.assertTrue(all(c.args[0].startswith('test ! -e ') for c in rig.sx.call_args_list))
+                if isinstance(fail, RuntimeError): dump.assert_not_called()
+                self.assertIsNone(rig.last_ui_snapshot)
+                rows = [json.loads(x) for x in (rig.out / 'native-ui-observations.jsonl').read_text().splitlines()]
+                self.assertEqual(len(rows), 3)
+                if isinstance(fail, subprocess.TimeoutExpired):
+                    self.assertTrue(all('timeout stderr' in row['stderr'] for row in rows))
+
+    def test_sender_waits_for_delayed_requested_case_without_relaunch_or_repeat_tap(self):
+        with tempfile.TemporaryDirectory(prefix='sender-delayed-', dir=os.environ['TMPDIR']) as d:
+            rig = runner.Rig.__new__(runner.Rig)
+            rig.out = Path(d); rig.save = Mock(); rig.report = {'external_intents': []}
+            rig.sx = Mock(return_value='reused activity'); rig.screenshot = Mock()
+            rig.ui = Mock(side_effect=[self.SENDER_XML, self.SENDER_XML,
+                                      self.SENDER_XML.replace('x.pdf', 'genuine.pdf')])
+            rig.connect_page = Mock(side_effect=RuntimeError('after single matching tap'))
+            with patch.object(runner.time, 'sleep'), self.assertRaisesRegex(RuntimeError, 'after single matching tap'):
+                rig.share('genuine')
+            self.assertEqual(rig.ui.call_count, 3)
+            self.assertEqual(rig.sx.call_count, 2)  # one launch, one tap
+            self.assertEqual(rig.sx.call_args_list[-1].args, ('input tap 540 350',))
+            case = json.loads((rig.out / 'sender-0-genuine-case.json').read_text())
+            self.assertEqual([x['actual_case'] for x in case['case_observations']],
+                             ['boilerplate', 'boilerplate', 'genuine'])
+            self.assertEqual(case['status'], 'PRE_TAP')
+
+    def test_sender_permanent_wrong_case_and_snapshot_failure_refuse_at_deadline(self):
+        for outcome in (self.SENDER_XML, RuntimeError('fresh UIAutomator snapshot unavailable')):
+            with self.subTest(outcome=type(outcome).__name__), \
+                    tempfile.TemporaryDirectory(prefix='sender-refuse-', dir=os.environ['TMPDIR']) as d:
+                rig = runner.Rig.__new__(runner.Rig)
+                rig.out = Path(d); rig.save = Mock(); rig.report = {'external_intents': []}
+                rig.sx = Mock(return_value='reused activity'); rig.screenshot = Mock(); rig.connect_page = Mock()
+                rig.ui = Mock(side_effect=outcome) if isinstance(outcome, Exception) else Mock(return_value=outcome)
+                with patch.object(runner.time, 'monotonic', side_effect=[0, 0, .4, .4, 30, 30]), \
+                        patch.object(runner.time, 'sleep'), \
+                        self.assertRaisesRegex(RuntimeError, 'sender case deadline'):
+                    rig.share('genuine')
+                self.assertEqual(rig.ui.call_count, 2)
+                rig.sx.assert_called_once(); rig.connect_page.assert_not_called()
+                case = json.loads((rig.out / 'sender-0-genuine-case.json').read_text())
+                self.assertEqual(case['status'], 'CASE_WAIT_FAILED')
+                self.assertEqual(len(case['case_observations']), 2)
+                rig.screenshot.assert_called_once()
+
     def test_share_taps_saved_sender_button_before_connecting_receiver(self):
         with tempfile.TemporaryDirectory(prefix='sender-tap-', dir=os.environ['TMPDIR']) as d:
             rig = runner.Rig.__new__(runner.Rig)
@@ -383,7 +504,9 @@ class ControllerTest(unittest.TestCase):
                     self.assertEqual(rig.sx.call_count, 2)
                     rig.report['external_intents'].append({'case':requested})
                 else:
-                    with self.assertRaisesRegex(AssertionError, 'sender case mismatch'):
+                    with patch.object(runner.time, 'monotonic', side_effect=[0, 0, 30, 30]), \
+                            patch.object(runner.time, 'sleep'), \
+                            self.assertRaisesRegex(RuntimeError, 'sender case deadline'):
                         rig.share(requested)
                     rig.sx.assert_called_once()  # launch only, never a wrong-case tap
                     case = json.loads((rig.out / 'sender-3-genuine-case.json').read_text())
