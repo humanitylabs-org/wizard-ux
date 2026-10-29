@@ -9,7 +9,7 @@ function section(s, a, b) { return s.slice(s.indexOf(a), s.indexOf(b, s.indexOf(
 const pin = {appId:'wizard-manager',token:'sealed',label:'Manager conversation'};
 function desktopFixture(front) {
  const calls=[], el={textContent:''};
- const ctx={APP:{'wizard-manager':{id:'wizard-manager',name:'Manager',receives_voice_input:true}},dictationFinishing:false,VOICE:{state:'idle',async start(){this.state='listen'},async finish(){this.state='idle';return {blob:new Blob(['audio'])}},cancel(){}},focused:()=>front,winEl:()=>({querySelector:()=>({})}),window:{WizAppServices:{voiceInput:{pin:(_,id)=>id==='wizard-manager'?pin:null}}},vMode:'talk',vTarget:null,vConversation:null,vReply:null,vNewChat:false,vNewKey:'',vContext:'',CMD:'Cmd',MOD:'Alt+',W:{},CHATS:{WORKING_ST:new Set(),modelRoute:()=>({model:'m',provider:'p'}),sendChat:(...x)=>calls.push(['chat',...x]),sendVoiceTo:(...x)=>calls.push(['reply',...x])},LIVE:{session:()=>null},viewContext:()=>'',toast(){},$:()=>el,OUTBOX:{sendConversation:async o=>{calls.push(['manager',o]);return {state:'sent'}},enqueue:async o=>calls.push(['new',o])},Blob,setTimeout,clearTimeout,Promise};
+ const ctx={APP:{'wizard-manager':{id:'wizard-manager',name:'Manager',receives_voice_input:true}},dictationFinishing:false,VOICE:{state:'idle',async start(){this.state='listen'},async finish(){this.state='idle';return {blob:new Blob(['audio'])}},cancel(){}},focused:()=>front,winEl:()=>({querySelector:()=>({})}),window:{WizAppServices:{voiceInput:{pin:(_,id)=>id==='wizard-manager'?pin:null}}},vMode:'talk',vTarget:null,vConversation:null,vReply:null,vNewChat:false,vNewKey:'',vContext:'',CMD:'Cmd',MOD:'Alt+',W:{},toNewChat(){},CHATS:{WORKING_ST:new Set(),modelRoute:()=>({model:'m',provider:'p'}),sendChat:(...x)=>calls.push(['chat',...x]),sendVoiceTo:(...x)=>calls.push(['reply',...x])},LIVE:{session:()=>null},viewContext:()=>'',toast(){},$:()=>el,OUTBOX:{sendConversation:async o=>{calls.push(['manager',o]);return {state:'sent'}},enqueue:async o=>calls.push(['new',o])},Blob,setTimeout,clearTimeout,Promise};
  ctx.commandSnapshot=()=>({id:front.id,thread:front.thread,view:{kind:front.thread?'chat thread':'thread list',appId:front.appId}});ctx.vSnapshot=null;ctx.vRoute=null;ctx.vFeedback=null;ctx.vFiles=null;ctx.commandTake=false;ctx.strictReply=false;ctx.AbortSignal=AbortSignal;ctx.LOCAL_COMMANDS={parse:()=>null};ctx.window.WizConfig={transcribe:async()=>({text:'ordinary voice reply'}),voicePrompt:()=>''};ctx.OUTBOX.stage=async()=>({id:'staged',durable:true});ctx.paintVoiceFiles=()=>{};ctx.window.WosCaptureTools={take:()=>({files:[],ready:()=>true})};
  ctx.CHATS.isHosted=id=>!!ctx.W[id]?.hosted;ctx.CHATS.isWorking=s=>!!s&&!s.archived&&ctx.CHATS.WORKING_ST.has(s.status);ctx.CHATS.composerBusy=()=>false;ctx.CHATS.takeComposer=()=>({text:'',files:[]});ctx.W[front.id]=front;
  vm.createContext(ctx);vm.runInContext(section(desktop,'  async function loadVoiceModels(','  // Composer mic:'),ctx);
@@ -29,7 +29,8 @@ test('cancelled command mode cannot consume the next thread or general take', as
   f.ctx.window.WosCaptureTools.take=()=>({files:[],ready:()=>true,close(){}});
   await f.ctx.talk('start');f.ctx.commandTake=true;await f.ctx.talk('cancel');
   assert.equal(f.ctx.commandTake,false);await f.ctx.talk('start',forceNew);await f.ctx.talk('send');
-  assert.equal(f.calls[0][0],forceNew?'new':'reply');
+  assert.equal(f.calls[0][0],forceNew?'chat':'reply');
+  if(forceNew)assert.equal(f.calls[0].at(-1).sid,'__new__');
  }
 });
 test('desktop pre-STT stage keeps the recording-start working run and busy lock',async()=>{

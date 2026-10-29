@@ -14,7 +14,7 @@ function fixture({native=true, known=true}={}) {
   const c={location:{origin,href:origin+'/wizard-os-home/'},document:{querySelectorAll:()=>[frame]},URL,console,
     setTimeout:fn=>{const id=++seq;timers.set(id,fn);return id;},clearTimeout:id=>timers.delete(id),addEventListener:(name,fn)=>listeners[name]=fn};
   if(native)c.wizardAudioPort={postMessage:raw=>sent.push(JSON.parse(raw))};
-  c.window=c; vm.createContext(c); vm.runInContext(source,c);
+  c.window=c; vm.createContext(c); vm.runInContext(readFileSync(new URL('../web/core/background-audio-legacy.js',import.meta.url),'utf8'),c); vm.runInContext(source,c);
   c.WizBackgroundAudio.init(()=>({'wizard-music':{url:'/wizard-music/'}}),()=>true);
   if(known)c.WizBackgroundAudio.lastState={...state};
   const answer=(command=sent.at(-1),ok=true)=>{
@@ -45,7 +45,7 @@ test('unrelated app close and browser-only Music do not issue native commands',a
 });
 test('reload detach preserves playback and closed frames cannot restart it',async()=>{
   const f=fixture();f.message('detach');assert.equal(f.sent.at(-1).method,'detach');f.answer();assert.equal(f.state.playing,true);
-  f.message('state');f.answer();assert.equal(f.replies.at(-1).result.wantPlaying,true);
+  f.message('state');f.answer();await Promise.resolve();await Promise.resolve();assert.equal(f.replies.at(-1).result.wantPlaying,true);
   const close=f.c.WizBackgroundAudio.closeApp('wizard-music');f.frame.isConnected=false;f.answer();await close;
   const count=f.sent.length;f.message('play');assert.equal(f.sent.length,count);assert.equal(f.state.wantPlaying,false);
 });

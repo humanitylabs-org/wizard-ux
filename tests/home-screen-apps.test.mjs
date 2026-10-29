@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { launcherFixture } from './launcher-fixture.mjs';
 
 const root = process.env.HOME_SCREEN_SOURCE || new URL('../',import.meta.url).pathname;
 const read = path => fs.readFileSync(root + '/web/' + path,'utf8');
 function policy(search='') {
   const attributes = {}, window = {};
   const ctx = vm.createContext({ window, document:{documentElement:{setAttribute:(k,v)=>attributes[k]=v}}, location:{origin:'https://box.example',search}, URL, URLSearchParams, Object, Proxy, Reflect });
-  vm.runInContext(read('core/home-screen-policy.js'),ctx);
+  launcherFixture(ctx); vm.runInContext(read('core/home-screen-policy.js'),ctx);
   return {p:window.WizHomeScreenPolicy,ctx,attributes};
 }
 function storage() {
@@ -67,30 +68,40 @@ test('unavailable session consumes repeated root Back; selection closes first',a
   await Promise.resolve(); assert.ok(mounted,'one app surface mounted');
 });
 
-function pinFixture(status='ready',withPort=true) {
+function pinFixture(status='ready',withPort=true,opts={}) {
   class Element {
-    constructor(){this.events=new Map();this.children=[];this.classList={contains:()=>true};this.dataset={};this.isConnected=true;this.style={};}
+    constructor(){this.events=new Map();this.children=[];this.classList={contains:()=>true,add(){}};this.dataset={};this.isConnected=true;this.style={};}
     addEventListener(t,fn){const list=this.events.get(t)||[];list.push(fn);this.events.set(t,list);}
     emit(t,event={}){for(const fn of this.events.get(t)||[])fn(event);return event;}
     append(...els){this.children.push(...els);} appendChild(el){this.append(el);} remove(){this.isConnected=false;}
-    setAttribute(){} querySelector(sel){if(sel==='.sgi')return null;return this.children.find(e=>e.tag===sel)||this.children.map(e=>e.querySelector(sel)).find(Boolean);}
+    setAttribute(){} querySelector(sel){if(sel==='.sgi')return null;return this.children.find(e=>e.isConnected && e.tag===sel)||this.children.map(e=>e.querySelector(sel)).find(Boolean);}
   }
   const document=new Element(), body=new Element(), menu=new Element(), row=new Element(); row.dataset.app='wisdom'; row.closest=()=>row; document.body=body;
   document.createElement=tag=>{const e=new Element();e.tag=tag;if(tag==='canvas'){e.getContext=()=>({fillRect(){},fillText(){}});e.toDataURL=()=> 'data:image/png;base64,fixture';}return e;};
   const timers=new Map();let serial=0,now=0,actualStatus=status;const messages=[];
   const window={WizHomeScreenPolicy:policy().p,WizSigil:{box:()=>'',of:()=>({color:'#FEC25D',letter:'W'})}};
   if(withPort)window.wizardHomeScreenPort={postMessage(raw){const d=JSON.parse(raw);messages.push(d);this.onmessage({data:JSON.stringify({requestId:d.requestId,status:d.op==='pin'?'pending':actualStatus})});}};
-  const ctx=vm.createContext({window,document,performance:{now:()=>now},navigator:{userActivation:{isActive:true},vibrate(){}},setTimeout:(fn,ms)=>{const id=++serial;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id),addEventListener:(t,fn)=>window[t]=fn});
+  const ctx=vm.createContext({window,document,URL,location:{origin:'https://box.example'},performance:{now:()=>now},navigator:{userActivation:{isActive:true},vibrate(){}},setTimeout:(fn,ms)=>{const id=++serial;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id),addEventListener:(t,fn)=>window[t]=fn});
   vm.runInContext(read('core/home-screen-apps.js'),ctx);
-  window.WizHomeScreenApps.attach(menu,()=>({id:'wisdom',name:'Wisdom',kind:'wizard',url:'/wisdom/'}));
+  window.WizHomeScreenApps.attach(menu,()=>({id:'wisdom',name:'Wisdom',kind:'wizard',url:'/wisdom/'}),opts);
   const event=(extra={})=>({target:row,isTrusted:true,isPrimary:true,button:0,pointerId:1,clientX:50,clientY:50,detail:1,preventDefault(){this.prevented=true;},stopPropagation(){},stopImmediatePropagation(){this.stopped=true;},...extra});
   const tick=ms=>{now+=ms;for(const [id,t] of [...timers])if(t.ms===ms){timers.delete(id);t.fn();}};
   return {window,document,body,menu,event,tick,messages,ctx,setStatus:s=>actualStatus=s};
 }
-test('without the native pin bridge (older APK, browser, desktop) long-press stays inert and ordinary tap survives',()=>{
-  const f=pinFixture('ready',false);const down=f.menu.emit('pointerdown',f.event());f.tick(450);
-  assert.equal(f.window.WizHomeScreenApps.state.open,false);assert.equal(f.body.children.length,0);
-  f.document.emit('pointerup',f.event());assert.equal(f.menu.emit('click',f.event()).stopped,undefined);
+test('tweak availability is live and rechecked when a pending hold fires',()=>{
+  let enabled=false; const f=pinFixture('ready',false,{available:()=>enabled});
+  f.menu.emit('pointerdown',f.event());f.tick(450);assert.equal(f.window.WizHomeScreenApps.state.open,false);
+  enabled=true;f.menu.emit('pointerdown',f.event());enabled=false;f.tick(450);assert.equal(f.window.WizHomeScreenApps.state.open,false);
+  enabled=true;f.menu.emit('pointerdown',f.event());f.tick(450);assert.equal(f.window.WizHomeScreenApps.state.open,true);
+});
+test('without native bridge long-press offers browser install without sending native requests',()=>{
+  const f=pinFixture('ready',false);f.menu.emit('pointerdown',f.event());f.tick(450);
+  assert.equal(f.window.WizHomeScreenApps.state.open,true);
+  assert.equal(f.body.children[0].querySelector('button').textContent,'Copy link');
+  assert.equal(f.body.children[0].querySelector('textarea').value,'https://box.example/wisdom/');
+  assert.equal(f.messages.length,0);
+  assert.equal(f.window.WizHomeScreenApps.back(),true);
+  assert.equal(f.window.WizHomeScreenApps.state.open,false);
 });
 test('long-press cancels on move, scroll, pointercancel and second pointer; ordinary tap survives',()=>{
   for (const action of ['move','scroll','cancel','second']) {
@@ -115,6 +126,16 @@ test('opening release cannot activate action; dispatch stays pending until confi
 test('already pinned/unsupported state disables action and canceled OS sheet has no success',async()=>{
   for(const status of ['pinned','unsupported']){const f=pinFixture(status);f.menu.emit('pointerdown',f.event());f.tick(450);await Promise.resolve();await Promise.resolve();await Promise.resolve();assert.equal(f.body.children[0].querySelector('button').disabled,true);assert.equal(f.messages.filter(d=>d.op==='pin').length,0);}
   const f=pinFixture();f.menu.emit('pointerdown',f.event());f.tick(450);await Promise.resolve();await Promise.resolve();await Promise.resolve();f.body.children[0].querySelector('button').onclick(f.event());await Promise.resolve();await f.window['wos-native-resume']();assert.equal(f.window.WizHomeScreenApps.state.open,false);
+});
+
+test('selection control bypasses canceled-pointer action guard, but actions still fail closed',async()=>{
+  const f=pinFixture(); f.menu.emit('pointerdown',f.event()); f.tick(450);
+  const overlay=f.body.children[0];
+  overlay.emit('pointercancel',f.event());
+  const selected=overlay.emit('click',f.event({target:{dataset:{installLink:''}}}));
+  assert.equal(selected.stopped,undefined);
+  const action=overlay.emit('click',f.event({target:{dataset:{}}}));
+  assert.equal(action.stopped,true);
 });
 
 test('action requires active intentional gesture; canceled action press and port failure fail closed',async()=>{
@@ -182,4 +203,63 @@ test('Apps sheet and New desk grid both carry the Add to home screen long-press'
   assert.match(app, /WizHomeScreenApps\?\.attach\(launcher,/);
   assert.match(app, /WizHomeScreenApps\?\.attach\(track,[^\n]*rows: '\.new-desk \[data-app\]'/);
   assert.match(read('core/home-screen-apps.js'), /function attach\(menu, appFor, opts = \{\}\)/);
+});
+
+// Desks overview: hold a one-app desk and let go in place → the same sheet; a drag still reorders (James, 24 Oct).
+test('Desks overview hold-and-release offers Add to home screen; drag keeps reordering', () => {
+  const app = read('app.js');
+  assert.match(app, /OV\.drag && !OV\.reordered[\s\S]{0,900}WizHomeScreenApps\?\.offer\(a\)/);
+  assert.match(app, /insertBefore\(OV\.card, before\); OV\.reordered = true;/);
+  assert.match(read('core/home-screen-apps.js'), /Object\.freeze\(\{ attach, offer,/);
+});
+
+// A home-screen app window is not "Wizard OS in front": the floating orb stays over it (James, 24 Oct).
+test('Pinned home-screen apps keep the floating orb', async () => {
+  const { readFileSync } = await import('node:fs');
+  const j = f => readFileSync(new URL('../android/app/src/main/java/ai/wizards/os/' + f, import.meta.url), 'utf8');
+  assert.match(j('device/AppState.java'), /static synchronized boolean shellFront\(\)[\s\S]{0,160}instanceof ai\.wizards\.os\.AppSessionActivity/);
+  assert.equal((j('MainActivity.java').match(/setAppInFront\(this, ai\.wizards\.os\.device\.AppState\.shellFront\(\)\)/g) || []).length, 2);
+});
+
+ test('browser offer rejects unsafe destinations and preserves exact registered route',()=>{
+  const f=pinFixture('ready',false);
+  for(const url of ['/', '/wizard-os-home/', '/wizard-os-home/install/wisdom/', 'https://evil.example/wisdom/', 'javascript:alert(1)', '/wisdom/%252e%252e/']) {
+    assert.equal(f.window.WizHomeScreenApps.offer({id:'wisdom',name:'Wisdom',kind:'wizard',url}),false,url);
+  }
+  for(const url of ['/actual-view/?tab=read#chapter','https://box.example/another-view/']) {
+    assert.equal(f.window.WizHomeScreenApps.offer({id:'wisdom',name:'Wisdom',kind:'wizard',url}),true);
+    assert.equal(f.body.children.at(-1).querySelector('textarea').value,new URL(url,'https://box.example').href);
+  }
+ });
+
+// Miguel's release (25 Oct 2026): hold = arrange (drag to reorder, ✕ to close), never the copy-link sheet. A small
+// download button beside ✕ (one-app desks only) opens the same Add to home screen flow.
+test('Arrange/download tweak: hold arranges desks; download button beside ✕ opens Add to home screen', () => {
+  const app = read('app.js');
+  assert.doesNotMatch(app, /miguel\/arrange-download/);
+  assert.match(app, /if \(arrangeDesks\(\) && OV\.drag && !OV\.reordered\) \{ endDrag\(false\); el\.classList\.add\('editing'\);[^\n]*return; \}/);
+  const releaseHold = app.indexOf("if (arrangeDesks() && OV.drag && !OV.reordered)"), stockOffer = app.lastIndexOf('if (a) window.WizHomeScreenApps?.offer(a);');
+  assert.ok(releaseHold > 0 && releaseHold < stockOffer, 'release hold returns before the stock hold-to-offer path');
+  assert.match(app, /attach\(launcher, id => APP\[id\], \{ available: \(\) => overviewMode\(\)\.appHold !== false/);
+  assert.match(app, /attach\(track, id => APP\[id\], \{ available: \(\) => overviewMode\(\)\.appHold !== false/);
+  // Download only for a one-app desk whose window is a registered frontend that passes the pin policy.
+  assert.match(app, /function ovDeskApp\(d\) \{\s*const w = d && !d\.home && d\.wins\.length === 1 \? W\[d\.wins\[0\]\] : null, a = w\?\.app === 'frame' \? APP\[w\.appId\] : null;\s*return a && !a\.system && window\.WizHomeScreenApps\?\.canOffer\?\.\(a\) \? a : null;/);
+  assert.match(app, /aria-label="\$\{label\}"/); assert.match(app, /const label = `Add \$\{esc\(/);
+  // Both desk renderings (cards and pill cells) carry it next to ✕; its tap never starts a drag or closes the desk.
+  assert.equal((app.match(/\$\{ovDl\(d\)\}/g) || []).length, 2);
+  assert.match(app, /!e\.target\.closest\('\.ov-x, \.ov-dl'\)\) OV\.hold/);
+  const click = app.slice(app.indexOf("const dl = e.target.closest('[data-ovdl]')"));
+  assert.ok(click.indexOf('offer(a); return; }') < click.indexOf("closest('[data-ovx]')"), 'download handled before ✕');
+  const css = fs.readFileSync(root + '/web/tweaks/miguel/arrange-download/tweak.css', 'utf8');
+  assert.match(css, /\.ov \.ov-dl \{[^}]*display: none;/); assert.match(css, /\.ov\.editing \.ov-dl \{ display: grid; \}/);
+  assert.match(css, /\.ov\.ov-pill\.editing \.ov-cell \.ov-ic \.dbg \{ display: none; \}/);
+  assert.match(css, /\.ov \.ov-dl::before \{[^}]*width: 44px; height: 44px;/);
+  assert.match(read('core/home-screen-apps.js'), /canOffer: a => pinnable\(a\)/);
+});
+test('canOffer accepts registered frontends only (multi-app/system/shell items get no download button)', () => {
+  const f = pinFixture('ready', false), can = f.window.WizHomeScreenApps.canOffer;
+  assert.equal(can({ id:'wisdom', name:'Wisdom', kind:'wizard', url:'/wisdom/' }), true);
+  for (const bad of [null, undefined, { id:'settings', kind:'system', url:'/wizard-os-home/' }, { id:'home', kind:'wizard', url:'/wizard-os-home/' }, { id:'x', kind:'wizard', url:'https://evil.example/x/' }, { id:'../x', kind:'wizard', url:'/x/' }, { id:'nourl', kind:'wizard' }])
+    assert.equal(can(bad), false, JSON.stringify(bad));
+  assert.equal(f.window.WizHomeScreenApps.state.open, false, 'canOffer never opens the sheet');
 });

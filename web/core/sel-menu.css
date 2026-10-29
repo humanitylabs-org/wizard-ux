@@ -22,4 +22,3 @@
 }
 .selmenu button:active { background: rgba(143, 99, 255, .26); }
 .selmenu svg { width: 19px; height: 19px; fill: none; stroke: var(--violet-2, #b99bff); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-[data-selmenu] .st-ic svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }

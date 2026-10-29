@@ -28,7 +28,7 @@ let cut = 0, forceRunning = false;
   });
   await p.goto(URL_, { waitUntil: 'domcontentloaded' });
   await p.waitForFunction(() => window.__wos?.live?.ok, null, { timeout: 90000 }); await sleep(2500);
-  const nb = `(()=>{const w=Object.values(__wos.wins).find(x=>x.app==='chats'&&x.thread===${JSON.stringify(ID)});return w&&document.querySelector('[data-chats="'+w.id+'"] .ch-msgs');})()`;
+  const nb = `(()=>{const w=Object.values(__wos.wins).sort((a,b)=>Number(__wos.desks[__wos.idx]?.wins.includes(b.id))-Number(__wos.desks[__wos.idx]?.wins.includes(a.id))).find(x=>x.app==='chats'&&x.thread===${JSON.stringify(ID)});return w&&document.querySelector('[data-chats="'+w.id+'"] .ch-msgs');})()`;
   // The scroller and the visible band of the list (document mode: below the fixed header, above the composer).
   const env = `(()=>{const n=${nb};const doc=document.documentElement.classList.contains('wos-doc-scroll')&&n.closest('.wos-doc-thread');const sc=doc?document.scrollingElement:n;const top=doc?n.closest('.ch-thread').querySelector('.ch-head').getBoundingClientRect().bottom:n.getBoundingClientRect().top;const bot=doc?n.closest('.ch-thread').querySelector('.ch-compose').getBoundingClientRect().top:n.getBoundingClientRect().bottom;return {n,doc,sc,top,bot,x:n.getBoundingClientRect().left+n.getBoundingClientRect().width/2}})()`;
   const words = `(()=>{const e=${env};const y=e.top+(e.bot-e.top)/3;const el=document.elementFromPoint(e.x,y);const m=el&&el.closest('.ch-msgs > *');if(!m)return {miss:true,st:Math.round(e.sc.scrollTop)};const snip=m.innerText.trim().slice(0,240);return {snip,nth:[...e.n.children].filter(x=>x.innerText.trim().slice(0,240)===snip).indexOf(m),off:Math.round(m.getBoundingClientRect().top-e.top),st:Math.round(e.sc.scrollTop),doc:!!e.doc}})()`;
@@ -79,5 +79,5 @@ let cut = 0, forceRunning = false;
   await check('photo-above-finishes-loading', w0, grew);
 
   console.log(JSON.stringify({ ID, doc: DOC, ok: results.every(Boolean) }));
-  await b.close();
+  await p.unrouteAll({ behavior: 'ignoreErrors' }); await b.close();
 })().catch(e => { console.error(e); process.exit(1); });

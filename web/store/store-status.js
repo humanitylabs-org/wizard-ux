@@ -1,12 +1,13 @@
 // Read-only identity/release decisions shared by Store rendering and contract tests.
 // A launcher is evidence of an installed app, NOT evidence of its release version.
 const HOST_ALIASES = {
+  'wizard-notes': {repo:'humanitylabs-org/wizard-notes', id:'notes', url:'/notes/'},
   'android-apps': {repo:'humanitylabs-org/android-apps', id:'android-apps', url:'/android-apps/'},
   'wizard-calendar': {repo:'humanitylabs-org/wizard-calendar', id:'calendar', url:'/wizard-calendar/'},
   'wizard-music': {repo:'humanitylabs-org/wizard-music', id:'wizard-music', url:'/wizard-music/'},
   'wizard-search': {repo:'humanitylabs-org/wizard-search', id:'wizard-search', url:'/wizard-search/'},
 };
-const repo = s => typeof s === 'string' ? s.toLowerCase() : '';
+const repo = s => typeof s === 'string' ? s.replace(/^(?:https:\/\/)?github\.com\//,'').toLowerCase() : '';
 const sameRepo = (a,b) => !!repo(a) && repo(a) === repo(b);
 const identity = (a,i) => (i.app_id || i.id) === a.id;
 export function architectureReason(a, architecture) {
@@ -27,7 +28,7 @@ export function resolveInstalled(a, snapshot, runtipi) {
     const r = (a.releases || [a]).find(r => r.commit && r.commit === i.commit);
     const sidecar = a.installed_commit === i.commit && a.installed_app_id === i.id;
     const track = sidecar ? (a.releases || [a]).find(r => r.source === a.installed_source) : null;
-    return {...i, source:sidecar ? a.installed_source : (i.source || r?.source || ''), channel:i.channel || r?.channel || track?.channel || ''};
+    return {...i, source:i.source || (sidecar ? a.installed_source : (r?.source || '')), channel:i.channel || r?.channel || track?.channel || ''};
   }
   if (matches.length) return {conflict:true}; // Never fall back to a same-ID launcher for another repo.
   const shell = (snapshot.shell || []).filter(i => i.url && !i.system);
