@@ -11,7 +11,9 @@
  * Same path as the Store's Get: `../store-install/_updates` is the App Manager's owner-only listener behind
  * Tailscale Serve (owner login, the shell's own Origin, JSON + X-Wizard-Store). No token reaches the browser.
  *   GET                       {mode, chosen, installed, latest, update_available, unpinned, checked, installing,
- *                              interrupted (the last update was cut short, e.g. by a reboot; it is retried)}
+ *                              interrupted (the last update was cut short, e.g. by a reboot; it is retried),
+ *                              quick (the release only swaps the interface image in place: about 2 minutes, not
+ *                              the 10–20 minute installer; App Managers without it never send it)}
  *   POST {"mode":"auto"|"ask"} the owner's choice (kept across installer reruns)
  *   POST {"channel":"stable"|"latest"} release channel (DECISIONS #75): stable = promoted releases (default),
  *                              latest = every release, for testers. GET then also returns {channel, stable};
@@ -24,6 +26,7 @@
  *   behind    "Wizard OS update" · Automatic: "Installs tonight when it’s quiet" · Install now
  *                                         Ask me:    "Takes 10–20 minutes" · Install
  *   building  "Updating Wizard OS…" · "Takes 10–20 minutes · Wizard reconnects by itself" · Install (disabled)
+ *             (quick: "Takes about 2 minutes" in both; the new interface then offers its own Reload)
  *   failed    "Wizard OS update didn’t finish" · "Tries again tonight" (Ask me: "Takes 10–20 minutes") · Try again
  *   reload    the interface changed under this page (core/web-update.js) → "Interface updated" · Reload
  *
@@ -77,12 +80,13 @@
     if (window.WizWebUpdate?.pending) return { state: 'reload', title: 'Interface updated', line: 'Reload to see the changes', action: 'reload', label: 'Reload' };
     if (!st) return null;
     const auto = st.mode === 'auto';
-    if (st.installing) return { state: 'building', title: 'Updating Wizard OS…', line: 'Takes 10–20 minutes · Wizard reconnects by itself', action: 'apply', label: auto ? 'Install now' : 'Install', disabled: true };
+    const takes = st.quick === true ? 'Takes about 2 minutes' : 'Takes 10–20 minutes';
+    if (st.installing) return { state: 'building', title: 'Updating Wizard OS…', line: st.quick === true ? takes : `${takes} · Wizard reconnects by itself`, action: 'apply', label: auto ? 'Install now' : 'Install', disabled: true };
     if (st.unpinned || !st.update_available) return null;
     // Wizard OS: the box itself. Automatic waits for a quiet night; the button is the "now" escape, like macOS.
     const start = busy === 'apply' ? 'Starting…' : '';
-    if (st.interrupted) return { state: 'failed', title: 'Wizard OS update didn’t finish', line: auto ? 'Tries again tonight' : 'Takes 10–20 minutes', action: 'apply', label: start || 'Try again', disabled: !!busy };
-    return { state: 'behind', title: 'Wizard OS update', line: auto ? 'Installs tonight when it’s quiet' : 'Takes 10–20 minutes', action: 'apply', label: start || (auto ? 'Install now' : 'Install'), disabled: !!busy };
+    if (st.interrupted) return { state: 'failed', title: 'Wizard OS update didn’t finish', line: auto ? 'Tries again tonight' : takes, action: 'apply', label: start || 'Try again', disabled: !!busy };
+    return { state: 'behind', title: 'Wizard OS update', line: auto ? 'Installs tonight when it’s quiet' : takes, action: 'apply', label: start || (auto ? 'Install now' : 'Install'), disabled: !!busy };
   }
   function cardHtml() {
     const c = card(); if (!c) return '';
@@ -134,7 +138,7 @@
     const body = what === 'apply' ? { action: 'apply' } : { mode: what };
     post(body).then(d => {
       if (what === 'apply') {
-        if (d.started) { st = { ...st, installing: true }; ctx?.toast?.('↻', 'Updating Wizard OS · takes 10–20 minutes', 3200); }
+        if (d.started) { const quick = d.quick === true || (d.quick !== false && st.quick === true); st = { ...st, installing: true, quick }; ctx?.toast?.('↻', `Updating Wizard OS · takes ${quick ? 'about 2 minutes' : '10–20 minutes'}`, 3200); }
         else ctx?.toast?.('!', d.note || d.error || 'Already up to date', 2600);
       } else {
         st = valid(d) ? d : { ...st, mode: what, chosen: true };

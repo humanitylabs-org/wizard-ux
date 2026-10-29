@@ -19,7 +19,7 @@ test('only Miguel\'s skin packages style the pill dock; approved owner skins may
     assert.match(css, /floating pill bottom bar/);
     assert.match(css, /\.orb-app:not\(:empty\) \{ display: grid/);
     for (const line of css.split('\n').filter(l => l.includes('.orb-app') || l.includes('--pill-'))) {
-      assert.match(line, /^html\[data-skin(\^="obsidian"|="obsidian-light"|="landscapes")\]|^\s|^\/\*| \*/, line.slice(0, 90));
+      assert.match(line, /^html\[data-skin(\^="obsidian"|="obsidian-light"|\^="landscapes"|="landscapes-light")\]|^\s|^\/\*| \*/, line.slice(0, 90));
     }
   }
   for (const f of readdirSync(new URL('core/', web)).filter(f => f.endsWith('.css')).concat(['styles.css'])) {

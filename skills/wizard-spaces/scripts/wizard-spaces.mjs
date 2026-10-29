@@ -39,6 +39,20 @@ export function editSpaces(current, argv) {
   }
   return spaces
 }
+// The same edit as item operations (Agent Service PATCH): only the named Space/member changes, so an edit made on
+// a device or by an agent between this helper's read and write is never erased.
+export function spaceOps(current, argv) {
+  const next = editSpaces(current, argv), { args: [command, id, ...args] } = argumentsFor(argv)
+  if (command === 'create') return [{ op: 'add', key: 'spaces', item: next.at(-1) }]
+  if (command === 'delete') return [{ op: 'remove', key: 'spaces', item: id }]
+  if (command === 'rename') return [{ op: 'set', key: `spaces/${id}/name`, item: args[0] }]
+  return [...new Set(args)].map(item => ({ op: command, key: `spaces/${id}/threads`, item }))
+}
+const holds = (spaces, { op, key, item }) => {
+  const [, id, field] = key.split('/'), space = spaces.find(s => s.id === (field ? id : item?.id ?? item))
+  if (!field) return op === 'add' ? !!space : !space
+  return field === 'name' ? space?.name === item : !!space && space.threads.includes(item) === (op === 'add')
+}
 export async function run(args, { url = process.env.WIZARD_UI_PREFERENCES_URL || 'http://127.0.0.1:8923/wizard/v1/ui-preferences', request = fetch } = {}) {
   const endpoint = new URL(url)
   if (!['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password) throw new Error('Use an existing owner-authorized HTTP endpoint without credentials in its URL')
@@ -67,6 +81,18 @@ export async function run(args, { url = process.env.WIZARD_UI_PREFERENCES_URL ||
   }
   const next = editSpaces(before.spaces, args)
   if (parsed.args[0] !== 'list') {
+    const ops = spaceOps(before.spaces, args)
+    let patched = null
+    for (let i = 0; i < ops.length; i += 100) {
+      const response = await request(endpoint, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ops: ops.slice(i, i + 100) }), signal: AbortSignal.timeout(15000) })
+      if (response.status === 405) { patched = null; break } // older Agent Service: whole-list write below
+      if (!response.ok) throw new Error(`ui-preferences PATCH: HTTP ${response.status}; use this install’s owner-authorized route, never bypass auth`)
+      patched = await response.json()
+    }
+    if (patched) {
+      if (!Array.isArray(patched.spaces) || !ops.every(op => holds(patched.spaces, op))) throw new Error('Spaces read-back differs; concurrent edit or failed persistence. Re-read before retrying.')
+      return { spaces: patched.spaces.filter(s => agentOf(s) === parsed.agent), ...(parsed.args[0] === 'create' ? { created: next.at(-1) } : {}) }
+    }
     await prefs('PUT', { spaces: next })
     const after = await prefs()
     if (JSON.stringify(after.spaces) !== JSON.stringify(next)) throw new Error('Spaces read-back differs; concurrent edit or failed persistence. Re-read before retrying.')

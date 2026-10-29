@@ -66,6 +66,9 @@ html[data-skin="signal"] .now-card .pip { border-radius: 1px; }
 /* Windows (Chats and every hosted app) sit on the skin's window material: near-black tinted with the skin's hue,
    like Nebula's. Sheets and cards keep the richer --glass-2. (James, 12 Oct: app backgrounds closer to black.) */
 html:not([data-skin="nebula"]) .win { background: var(--sk-win); color: var(--ink); }
+/* Settings › Look › Window opacity: once the owner picks a value, every window (framed or borderless, every skin) uses
+   the shared glass token, so one number sets them all. Untouched = each skin exactly as shipped. */
+html[data-win-glass] .win { background: var(--sk-win); }
 html:not([data-skin="nebula"]) :is(.sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .ch-fcard, .wx-fcard, .ls-panel) { background: var(--glass-2); color: var(--ink); }
 html:not([data-skin="nebula"]) .ov-card.ov-home { background: var(--glass-2); }
 html:not([data-skin="nebula"]) :is(.desk-label, .timer, .arc, .transcript, .toast, .scrub .sc-label, .dv-update, .ch-pill, .wx-banner) { background: var(--sk-tour); color: var(--ink); }
@@ -126,7 +129,7 @@ html[data-shell="desktop"] .st-root .skp { grid-template-columns: repeat(auto-fi
 .st-root .skp-dock { left: 0; right: 0; bottom: 0; height: 21%; background: var(--p-dock, var(--p-bg)); border-top: 1px solid var(--p-dl, transparent); }
 .st-root .skp-orb { left: 50%; top: 50%; width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px; border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--p-ac2, var(--p-ac)) 70%, #fff), var(--p-ac) 55%, var(--p-pk, var(--p-ac))); box-shadow: 0 0 10px color-mix(in srgb, var(--p-ac) 50%, transparent); }
-.st-root .skp-nm { display: block; padding: 0; font-size: min(14px, 15.2cqi); line-height: 18px; height: 18px; letter-spacing: -.005em; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); transition: color .18s ease; }
+.st-root .skp-nm { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; padding: 0; font-size: min(14px, 15.2cqi); line-height: 18px; min-height: 18px; letter-spacing: -.005em; text-align: center; text-wrap: balance; overflow-wrap: anywhere; overflow: hidden; color: var(--ink-2); transition: color .18s ease; }
 /* optical match: each face at the size where it reads like the others */
 .st-root .skp-card[data-skinpick="tide"] .skp-nm { font-size: min(14.5px, 16cqi); }
 .st-root .skp-card[data-skinpick="ember"] .skp-nm { font-size: min(17px, 19cqi); }
@@ -150,13 +153,15 @@ html[data-shell="desktop"] .st-root .skp { grid-template-columns: repeat(auto-fi
 .st-root .skp-mini[data-skp="obsidian-light"] { background: #fff; }
 .st-root .skp-mini[data-skp="obsidian-light"] .skp-u { background: #ececec; }
 .st-root .skp-mini[data-skp="obsidian"] .skp-u { background: #2f2f2f; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); }
-.st-root .skp-mini[data-skp="landscapes"] { background: linear-gradient(180deg, rgba(11,10,16,.42), transparent 34%, transparent 66%, rgba(11,10,16,.5)), url(../skins/landscapes/preview.webp) center / cover, #4d8da3; }
-.st-root .skp-mini[data-skp="landscapes"] .skp-a { background: rgba(255,255,255,.92); }
-.st-root .skp-mini[data-skp="landscapes"] .skp-a2 { background: rgba(255,255,255,.62); }
-.st-root .skp-mini[data-skp="landscapes"] .skp-u { background: rgba(255,255,255,.8); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); box-shadow: 0 1px 6px rgba(0,0,0,.18); }
-.st-root .skp-mini[data-skp="landscapes"] .skp-dock { border-radius: 0 0 14px 14px; background: rgba(11,10,16,.5); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.st-root .skp-mini[data-skp="landscapes"] { background: linear-gradient(180deg, rgba(11,10,16,.42), transparent 34%, transparent 66%, rgba(11,10,16,.5)), url(../skins/landscapes/preview-dark.webp) center / cover, #18253e; }
+.st-root .skp-mini[data-skp="landscapes-light"] { background: linear-gradient(180deg, rgba(11,10,16,.42), transparent 34%, transparent 66%, rgba(11,10,16,.5)), url(../skins/landscapes/preview.webp) center / cover, #4d8da3; }
+.st-root .skp-mini[data-skp^="landscapes"] .skp-a { background: rgba(255,255,255,.92); }
+.st-root .skp-mini[data-skp^="landscapes"] .skp-a2 { background: rgba(255,255,255,.62); }
+.st-root .skp-mini[data-skp^="landscapes"] .skp-u { background: rgba(255,255,255,.8); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); box-shadow: 0 1px 6px rgba(0,0,0,.18); }
+.st-root .skp-mini[data-skp="landscapes-light"] .skp-u { background: rgba(250,250,252,.88); }
+.st-root .skp-mini[data-skp^="landscapes"] .skp-dock { border-radius: 0 0 14px 14px; background: rgba(11,10,16,.5); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 .st-root .skp-mini[data-skp^="obsidian"] .skp-orb { background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--p-ink) 35%, var(--p-bg)), var(--p-ink) 80%); box-shadow: none; }
-.st-root .skp-mini[data-skp="landscapes"] .skp-orb { background: radial-gradient(circle at 35% 30%, #fff, #d8e9ee 55%, #6fb3c4); box-shadow: 0 0 8px rgba(255,255,255,.45); }
+.st-root .skp-mini[data-skp^="landscapes"] .skp-orb { background: radial-gradient(circle at 35% 30%, #fff, #d8e9ee 55%, #6fb3c4); box-shadow: 0 0 8px rgba(255,255,255,.45); }
 /* Settings › Look › Layout (core: the row exists for every skin; layouts themselves live in web/layouts/). */
 .layout-row { flex-wrap: wrap; }
 .layout-row .layout-acts { display: flex; gap: 6px; flex: none; }

@@ -29,7 +29,7 @@ test('Novairecito is selectable, persisted and leaves the established skin order
   const { context, store, props, documentElement } = runtime();
   assert.deepEqual([...context.WosSkin.list.slice(0, 5).map(s => s.id)], ['nebula', 'grove', 'tide', 'ember', 'signal']);
   assert.equal(context.WosSkin.list[5].id, 'novairecito');
-  assert.deepEqual([...context.WosSkin.list.slice(6).map(s => s.id)].filter(id => id !== 'sepia'), ['obsidian', 'obsidian-light', 'landscapes']);
+  assert.deepEqual([...context.WosSkin.list.slice(6).map(s => s.id)].filter(id => id !== 'sepia'), ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light']);
 
   assert.equal(context.WosSkin.set('novairecito'), 'novairecito');
   assert.equal(context.WosSkin.current, 'novairecito');
