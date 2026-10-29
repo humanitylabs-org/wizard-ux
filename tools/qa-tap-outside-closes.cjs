@@ -57,6 +57,7 @@ const standaloneHost=`<!doctype html><meta name="viewport" content="width=device
 <script>
 const q=new URLSearchParams(location.search),id=q.get('app-session'),list=${JSON.stringify(standaloneIds)}.map(id=>({id,name:id,kind:'wizard',url:'/standalone-app/'+id+'/'}));
 document.documentElement.dataset.appSession=id;document.documentElement.dataset.skin=q.get('skin')||'nebula';document.documentElement.dataset.shell='phone';
+document.getElementById('nativeStatus').style.height=Math.max(Number(q.get('top')||0),Number(q.get('cut')||0))+'px';
 window.nativeCalls=[];window.WizardOSNative={immersive:v=>nativeCalls.push(v),insetTop:()=>Number(q.get('top')||0),cutoutTop:()=>Number(q.get('cut')||0)};
 window.WizCore={apps:()=>({APPS:list,APP:Object.fromEntries(list.map(a=>[a.id,a]))}),appsLoaded:()=>q.has('delayed')?new Promise(r=>window.releaseApps=r):Promise.resolve(),esc:s=>String(s)};
 </script><script src="/core/skins.js"></script><script>WosSkin.set(q.get('skin')||'nebula');</script><script src="/core/home-screen-policy.js"></script><script src="/core/appearance-host.js"></script><script src="/core/app-services.js"></script><script src="/core/links.js"></script><script src="/core/single-app-session.js"></script>`;
@@ -222,7 +223,7 @@ async function check(name, fn) { await fn(); passed++; console.log('PASS', name)
     const pinned=await context.newPage(),metrics=[];
     pinned.on('pageerror',e=>errors.push(e.message));
     const waitPinned=async()=>{
-      await pinned.waitForFunction(()=>document.querySelector('#singleApp iframe')?.contentWindow?.fixtureReady);
+      await pinned.waitForFunction(()=>{const f=document.querySelector('#singleApp iframe');return f?.contentWindow?.fixtureReady&&f.contentDocument.readyState==='complete';});
       return (await pinned.locator('#singleApp iframe').elementHandle()).contentFrame();
     };
     const protectedFrame=async(edge,label)=>{
@@ -230,6 +231,7 @@ async function check(name, fn) { await fn(); passed++; console.log('PASS', name)
         const f=document.querySelector('#singleApp iframe'),d=f.contentDocument,r=f.getBoundingClientRect(),t=d.querySelector('#canvas-tools').getBoundingClientRect();
         return {y:r.top,h:r.height,hostH:innerHeight,cut:getComputedStyle(d.documentElement).getPropertyValue('--wos-cutout').trim(),toolbar:r.top+t.top,scroll:d.querySelector('#main').scrollTop,hostScroll:scrollY,covering:document.elementFromPoint(180,Math.max(0,r.top/2))===f,nativeCalls};
       });
+      if(state.y!==edge&&process.env.QA_OUTPUT) {fs.mkdirSync(process.env.QA_OUTPUT,{recursive:true});await pinned.screenshot({path:path.join(process.env.QA_OUTPUT,'standalone-regression-before.png')});}
       assert.equal(state.y,edge,label+' frame top = max(native,cutout), exactly once');
       assert.equal(state.h,state.hostH-edge,label+' full remaining viewport');
       assert.equal(state.cut,'0px',label+' child does not add another gap');
@@ -258,6 +260,7 @@ async function check(name, fn) { await fn(); passed++; console.log('PASS', name)
           if(process.env.QA_OUTPUT) {fs.mkdirSync(process.env.QA_OUTPUT,{recursive:true});await pinned.screenshot({path:path.join(process.env.QA_OUTPUT,`standalone-${skin}-${id}-${scroll}.png`)});}
         }
         await pinned.evaluate(()=>{const p=document.createElement('div');p.className='app-upd';p.textContent='Fixture app updated · Reload';singleApp.append(p);__wos.toast('Fixture toast');});
+        await pinned.waitForFunction(()=>Math.abs(document.querySelector('#singleApp .app-upd').getBoundingClientRect().top-56)<.01&&Math.abs(document.getElementById('toast').getBoundingClientRect().top-60)<.01);
         const update=await pinned.locator('#singleApp .app-upd').boundingBox(),toast=await pinned.locator('#toast').boundingBox();
         assert.equal(update.y,56,'update uses host union once');assert.equal(toast.y,60,'toast uses union once');
         await pinned.evaluate(()=>__wos.links.open('/fixture-page'));
