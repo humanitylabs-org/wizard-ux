@@ -1884,7 +1884,7 @@ window.WizCore.chats = function createChats(H) {
     else if (isNew && !pend.length) msgs = newChatHtml(TAG) + `<div class="ch-empty nc-classic"><b>${TAG && AGS()?.isPrivate(agentRec(TAG)) ? `New private chat` : 'New chat'}</b><br>${esc(H.newChatHint || 'Type below.')}</div>${carry}`;
     // A thread answered 404 in this open is gone: that verdict wins over cached turns and queued sends.
     else if (!isNew && c.goneFor === w.thread && c.goneNav === c.readNav) msgs = threadErrHtml(c);
-    else if (!turns && !isNew && !pend.length) msgs = c.err && (c.failN > 1 || c.err !== 'Couldn’t load this thread') ? threadErrHtml(c) : skelThread();
+    else if (!turns && !isNew && !pend.length) msgs = c.err ? threadErrHtml(c) : skelThread();
     else {
       const all = turns || [];
       if (c.showFor !== w.thread) {
@@ -1898,7 +1898,10 @@ window.WizCore.chats = function createChats(H) {
       const rns = (s?.renames || []).map(r => ({ ...r, ms: r.at * 1000 })).filter(r => from === 0 || !(r.ms < firstAt)).sort((a, b) => a.ms - b.ms);
       const rnHtml = r => `<div class="ch-renamed"><span>${r.by === 'you' ? 'You renamed this from' : 'Renamed from'} “${esc(r.from)}”</span></div>`;
       const rnBefore = at => { let out = ''; while (rns.length && isFinite(at) && rns[0].ms <= at) out += rnHtml(rns.shift()); return out; };
-      msgs = (from > 0 ? `<button type="button" class="ch-earlier" data-chearlier>Load earlier messages · ${from} more</button>` : '')
+      // The optimistic send is not the saved transcript. Keep its independent
+      // loading/error affordance visible above pending bubbles, including voice.
+      msgs = (!turns && !isNew ? (c.err ? threadErrHtml(c) : skelThread()) : '')
+        + (from > 0 ? `<button type="button" class="ch-earlier" data-chearlier>Load earlier messages · ${from} more</button>` : '')
         + shown.map((tn, k, arr) => {
           const at = turnAt(tn), dk = KIT.time.dayKey(at);
           const div = dk && dk !== day ? `<div class="ch-day"><span>${esc(KIT.time.day(at))}</span></div>` : '';
@@ -2346,11 +2349,19 @@ window.WizCore.chats = function createChats(H) {
       // A new open may be showing a skeleton because its old list revision was stale. Even identical
       // history must repaint that open so the one position restore can run on real rows.
       let changed = c.loadedFor !== w.thread || c.loadedNav !== nav || sig !== c.sig;
-      Object.assign(c, { turns, cachedFor: '', loadedFor: w.thread, loadedNav: nav, readCk, at: Date.now(), err: '', sig, readRevision: revision, detailNav: nav, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
+      Object.assign(c, { turns, cachedFor: '', loadedFor: w.thread, loadedNav: nav, readCk, at: Date.now(), err: '', sig, readRevision: revision, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
       // A sent message has landed once a recent user turn in the thread matches it.
       // Transcript absence is not a rejection receipt. Never replay accepted steering.
       if (retireLanded(w.thread, turns)) changed = true;
+      // Publish the current answer before optional metadata/approval reads. Both
+      // retain their existing scope and navigation guards; neither gates paint.
+      if (changed) { const el = elOf(w.id); if (el && current()) renderLive(w, el); }
+      changed = false;
+      const detail = LIVE.session(sid)?.detailNeeded ? LIVE.sessionInfo(sid).then(() => {
+        if (current()) { c.detailNav = nav; changed = true; }
+      }).catch(() => {}) : Promise.resolve();
       if (await loadApproval(w, LIVE.session(sid))) changed = true;
+      await detail;
       if (!current()) return;
       const s2 = LIVE.session(w.thread), hk2 = s2 ? [s2.status, !!s2.archived, !!s2.deferred, s2.runId].join('|') : '';
       if (hk2 !== c.hk) { c.hk = hk2; changed = true; }
@@ -2367,7 +2378,7 @@ window.WizCore.chats = function createChats(H) {
         // A gone thread drops any cached or earlier-loaded transcript, so the "no longer here" message renders
         // instead of a stale, still-editable copy of a deleted thread.
         if (gone) { Object.assign(c, { goneFor: sid, goneNav: nav, turns: null, loadedFor: '', cachedFor: '' }); LIVE.forgetMessages?.(sid); }
-        c.err = e.status === 403 ? 'Wizard sign-in needed' : gone ? 'This thread is no longer here. It may have been deleted, or it came from an earlier install. Go back to Chats to start a new one.' : pendingFor(w).length ? '' : 'Couldn’t load this thread'; c.at = Date.now();
+        c.err = e.status === 403 ? 'Wizard sign-in needed' : gone ? 'This thread is no longer here. It may have been deleted, or it came from an earlier install. Go back to Chats to start a new one.' : 'Couldn’t load this thread'; c.at = Date.now();
         if (e.status !== 403 && !gone) { if (!e.status) window.WizReach?.failure(); retryRead(w, sid, nav, c.failN); }
         renderThreadLive(w);
       }
