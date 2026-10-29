@@ -2,11 +2,12 @@
 // QA_ORB_PUBLISHED=.../assist QA_ORB_BASELINE=.../assist QA_ORB_CANDIDATE=.../assist QA_OUT=... node tools/qa-orb-render-recovery.cjs
 'use strict';
 const { chromium } = require('./qa-playwright.cjs');
+const { installRafProbe, frozenIdle } = require('./qa-orb-idle-probe.cjs');
 const fs = require('fs'), path = require('path'), assert = require('assert/strict');
 const out = path.resolve(process.env.QA_OUT || 'qa-orb-render-recovery');
 const variants = ['published', 'baseline', 'candidate'];
 const modes = ['idle', 'listen', 'paused', 'think', 'type', 'typing', 'command', 'done'];
-const receipt = { scope: 'synthetic actual bundled Everywhere page; not handset/driver or signed-APK proof', cases: [], errors: [] };
+const receipt = { scope: 'synthetic actual bundled Everywhere page; not handset/driver or signed-APK proof', cases: [], idleObservations: [], errors: [] };
 const pixels = new Map();
 const save = () => fs.writeFileSync(path.join(out, 'result.json'), JSON.stringify(receipt, null, 2));
 (async () => {
@@ -26,6 +27,7 @@ const save = () => fs.writeFileSync(path.join(out, 'result.json'), JSON.stringif
           if (!file.startsWith(root + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) return route.fulfill({ status: 404, body: '' });
           return route.fulfill({ body: fs.readFileSync(file), contentType: ({ '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/png' })[path.extname(file)] || 'application/octet-stream' });
         });
+        await context.addInitScript(installRafProbe);
         await context.addInitScript(() => {
           window.EverywhereNative = { log() {} };
           window.__draws = 0; window.__events = [];
@@ -73,9 +75,14 @@ const save = () => fs.writeFileSync(path.join(out, 'result.json'), JSON.stringif
           receipt.cases.push({ variant, size, mode, colors: colors.size, whiteFraction: white / inner, meanDelta }); save();
         }
         await page.evaluate(() => { E.state({ mode: 'idle' }); E.level(0); });
-        await page.waitForTimeout(1500);
-        let idleDraws = await page.evaluate(() => window.__draws); await page.waitForTimeout(300);
-        assert.equal(await page.evaluate(() => window.__draws), idleDraws, 'native idle must stay frozen');
+        async function checkIdle(phase) {
+          const observation = await page.evaluate(frozenIdle);
+          receipt.idleObservations.push({ variant, size, phase, ...observation }); save();
+          assert.equal(observation.pass, true, observation.error);
+        }
+        // Orb.wake() owns a 1600-ms settling interval. Observe its rAF queue
+        // draining, then demand zero further draws for the full 300-ms window.
+        await checkIdle('before-context-loss');
         for (const cycle of [1, 2]) {
           await page.evaluate(() => {
             const c = document.getElementById('orb'); window.__lose = c.getContext('webgl').getExtension('WEBGL_lose_context');
@@ -103,8 +110,7 @@ const save = () => fs.writeFileSync(path.join(out, 'result.json'), JSON.stringif
           await page.waitForFunction(() => Orb.webgl); await page.waitForTimeout(200);
           assert.equal(await page.evaluate(() => window.__draws), before, 'restoration must honor host sleep');
           await page.evaluate(() => { Orb.sleep(false); }); await page.waitForFunction(before => window.__draws > before, before);
-          await page.waitForTimeout(1500); idleDraws = await page.evaluate(() => window.__draws); await page.waitForTimeout(300);
-          assert.equal(await page.evaluate(() => window.__draws), idleDraws, 'restored native idle must freeze again');
+          await checkIdle('after-sleep-restore');
           await page.screenshot({ path: path.join(out, `candidate-${size}-restored.png`) });
           receipt.cases.push({ variant, size, sleepRestored: true, idleFrozen: true }); save();
         }
