@@ -304,7 +304,18 @@ window.WosChatPower = function chatPower(A) {
   }
   async function pickModel(o, direct) {
     const sh = direct || sheet; if (!sh || (!direct && sh.type !== 'model') || (direct?.alive && !direct.alive())) return;
+    if (M?.pending?.has(sh.sid) || retrying.has(sh.sid)) return;
     const c = ch(sh.wid), w = H.win(sh.wid); if (!direct) closeSheet();
+    if (sh.mode === 'retry' && sh.retryRunId) {
+      // The picker is a snapshot, not permission to change a request that has
+      // already recovered. Recheck before saving a model; admission checks again.
+      let latest;
+      try { latest = await LIVE.sessionInfo(sh.sid); }
+      catch (_) { toast('!', 'Couldn’t load the full request · retry when online', 2600); return; }
+      if (latest?.retryRunId !== sh.retryRunId) {
+        toast('!', 'This saved request has changed · check the latest reply before retrying', 3000); return;
+      }
+    }
     if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', o.private ? `New private chat on ${o.name}` : `New chat on ${o.name}`, 1400); if (w) A.renderThreadNow(w); return; }
     const s = LIVE.session(sh.sid); if (!s) return;
     // A Private model picked in a standard thread: a new private chat continues this conversation (quoted context);
@@ -319,13 +330,13 @@ window.WosChatPower = function chatPower(A) {
       if (direct?.alive && !direct.alive()) return;
       Object.assign(s, route);
     }
-    if (sh.mode === 'retry') return retryThread(sh.wid, sh.sid, o);
+    if (sh.mode === 'retry') return retryThread(sh.wid, sh.sid, o, sh.retryRunId);
     toast('◇', same ? `Already on ${o.name}` : `This thread now uses ${o.name}`, 1600);
     if (w) A.renderThreadNow(w);
   }
 
   /* ================= #11/#12 failure recovery ================= */
-  const failedShown = s => !!s && FAILED.has(s.status) && !(E && E.dismissed(s.id));
+  const failedShown = s => !!s && (FAILED.has(s.status) || (s.status === 'queued' && s.queueReason === 'provider_access')) && !(E && E.dismissed(s.id));
   function failureHtml(w, s) {
     if (!M || !failedShown(s)) return '';
     const c = ch(w.id), busy = E?.busy.get(s.id) || (c.retrying === s.id ? 'retry' : '');
@@ -349,24 +360,34 @@ window.WosChatPower = function chatPower(A) {
     return false;
   }
   function requestOf(w, s) {
+    if (s?.status === 'queued' && s.queueReason === 'provider_access') return !!s.retryRunId;
     if (s && FAILED.has(s.status)) return true;
     return !!(s?.request || (w && !noteTurn(w, s) && (ch(w.id)?.turns || []).some(tn => tn.u?.text)));
   }
   // Retry = send the thread's last request again, through the durable outbox, on the same thread
   // (and the same model, unless one was just picked). controller.ts retryServerFailedSession.
-  async function retryThread(wid, sid, o) {
+  const retrying = new Set();
+  async function retryThread(wid, sid, o, sourceId) {
     let s = LIVE.session(sid); if (!s || !OUTBOX) return false;
-    // A list/snapshot preview is never retry input, even after an earlier detail read.
-    try { s = await LIVE.sessionInfo(sid); } catch (_) { toast('!', 'Couldn’t load the full request · retry when online', 2600); return false; }
-    const w = H.win(wid);
-    // Only the freshly hydrated input, never cached turns. A failed note-started turn (the server's request skips
-    // follow-through notes, so it is empty or an older request) goes again as a plain "Retry".
-    const note = noteTurn(w && w.thread === sid ? w : null, s);
-    const text = s?.retryRunId ? s.request || RETRY_WORD : note ? RETRY_WORD : s?.request || (FAILED.has(s?.status) ? RETRY_WORD : '');
-    if (!text) { toast('!', 'This thread has no request to send again · open it to reply', 2600); return false; }
-    const cur = o ? { model: o.value, provider: o.provider } : threadModel(s);
-    const c = w ? ch(wid) : null; if (c) c.retrying = sid;
+    if (retrying.has(sid) || M?.pending?.has(sid) || OUTBOX.unsent?.().some(it => it.sessionId === sid && it.how === 'retry')) return false;
+    const savedId = sourceId || s.retryRunId;
+    const wasWaiting = s.status === 'queued' && s.queueReason === 'provider_access';
+    retrying.add(sid);
+    const w = H.win(wid), c = w ? ch(wid) : null; if (c) c.retrying = sid;
     try {
+      // A list/snapshot preview is never retry input, even after an earlier detail read.
+      try { s = await LIVE.sessionInfo(sid); } catch (_) { toast('!', 'Couldn’t load the full request · retry when online', 2600); return false; }
+      // Recovery may already have won while the picker was open. Never turn that
+      // stale card into an ordinary new send of preview text (or a second run).
+      if ((savedId && s?.retryRunId !== savedId) || (wasWaiting && !s?.retryRunId)) {
+        toast('!', 'This saved request has changed · check the latest reply before retrying', 3000); return false;
+      }
+      // Only the freshly hydrated input, never cached turns. A failed note-started turn (the server's request skips
+      // follow-through notes, so it is empty or an older request) goes again as a plain "Retry".
+      const note = noteTurn(w && w.thread === sid ? w : null, s);
+      const text = s?.retryRunId ? s.request || RETRY_WORD : note ? RETRY_WORD : s?.request || (FAILED.has(s?.status) ? RETRY_WORD : '');
+      if (!text) { toast('!', 'This thread has no request to send again · open it to reply', 2600); return false; }
+      const cur = o ? { model: o.value, provider: o.provider } : threadModel(s);
       await OUTBOX.enqueue({ kind: 'reply', sessionId: sid, agent: s.agent || A.winAgent?.(w) || '', text, retryRunId: s.retryRunId || '', wid: w && w.thread === sid ? wid : '', how: 'retry', source: 'chat',
         instructions: `${window.WizConfig.owner() || 'The owner'} pressed Retry on this thread after the last request failed${o ? `, choosing ${o.name}` : ''}. ${text === RETRY_WORD ? 'Carry out the last request in this thread again (it may be a follow-through note rather than a typed message).' : 'This is the same request again.'}`,
         ...(cur.model ? { model: cur.model, provider: cur.provider } : {}) });
@@ -375,7 +396,7 @@ window.WosChatPower = function chatPower(A) {
       if (c) follow(wid);
       return true;
     } catch (e) { toast('!', 'Couldn’t queue the retry', 2400); return false; }
-    finally { if (c) c.retrying = ''; rerenderAll(); }
+    finally { retrying.delete(sid); if (c) c.retrying = ''; rerenderAll(); }
   }
   // Regeneration is a new, idempotent turn, never a history rewrite. Hydrate the
   // authorized display history so native screenshots and file chips survive too.
@@ -578,7 +599,7 @@ window.WosChatPower = function chatPower(A) {
     const agent = agentOfWin(w, s);
     // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
     const priv = !agent && !A.winAgent(w) && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
-    openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false, agent, priv, pop: !!pop && mode !== 'retry' });
+    openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, retryRunId: s?.retryRunId || '', all: false, agent, priv, pop: !!pop && mode !== 'retry' });
     // Revalidate every open; repaint only if the catalogue/default actually changed.
     // WosModels.options is the catalogue array (never a function): compare the fields the sheet shows.
     const rows = list => (Array.isArray(list) ? list : []).map(o => [o.agent, o.provider, o.value, o.name, o.description, !!o.isGlobalDefault]);
