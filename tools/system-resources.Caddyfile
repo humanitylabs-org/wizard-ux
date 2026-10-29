@@ -1,6 +1,7 @@
 # Insert inside the existing private_routes snippet; exact-path, authenticated read adapter.
 # Existing app/voice/API routing remains untouched.
-handle /api/system/load {
+@system_reads path /api/system/load /api/system/devices /api/system/health /api/system/weather
+handle @system_reads {
     route {
         request_header -Tailscale-User-Login
         request_header -Tailscale-User-Name

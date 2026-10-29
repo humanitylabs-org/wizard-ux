@@ -1028,42 +1028,24 @@
   }
 
   /* ---------------- home (root / empty workspace) ---------------- */
-  /* Miguel's skins: the desktop Home is the phone Home at desktop size (Miguel, 24 Oct 2026): resource dials on top, Ready
-   * and Working as the same dot counters. Settings stays in the top bar (one gear). No clock, thread lists, app chips or key hints. */
-  function mineHomeDots(kind, n) {
-    const icon = kind === 'ready' ? '<path d="M5 12.5l4.5 4.5L19 7"/>' : '<path d="M12 3a9 9 0 1 0 9 9"/>';
-    const shown = Math.min(n, 12), dots = Array.from({ length: shown }, (_, k) => `<i style="--n:${k}"></i>`).join('');
-    return `<span class="nc-vis${n ? '' : ' nc-zero'}" aria-hidden="true"><svg class="nc-ic" viewBox="0 0 24 24">${icon}</svg>${dots}${n > shown ? '<em>+</em>' : ''}</span>`;
-  }
-  function mineHomeHtml() {
-    const G = LIVE?.ok ? LIVE.workGroups() : {}, ready = (G.ready || []).length + (window.WosBell?.readyCount?.() || 0), working = (G.working || []).length;
-    const pending = OUTBOX?.unsent() || [];
-    return `<div class="home-in mine-home"><div data-slot="home-main" hidden></div>
-      <div class="mh-res">${window.WosResources?.home() || ''}</div>
-      <div class="mh-gap"></div>
-      ${LIVE?.ok ? '' : '<div class="home-line">Connecting to Wizard…</div>'}
-      <div class="constellation">
-        <button class="now-card wz-home-widget" style="--c:var(--green)" data-home-act="ready" aria-label="Ready ${ready}"><span class="meta"><span class="k">Ready</span></span><span class="n">${ready}</span>${mineHomeDots('ready', ready)}</button>
-        <button class="now-card wz-home-widget" style="--c:var(--violet-2)" data-home-act="working" aria-label="Working ${working}"><span class="meta"><span class="k">Working</span></span><span class="n">${working}</span>${mineHomeDots('working', working)}</button>
-      </div>
-      ${pending.length ? `<button class="home-unsent" data-home-unsent>${pending.length} ${pending.some(u => u.state === 'failed') ? 'not sent' : 'waiting to send'} · View unsent messages</button>` : ''}
-    </div>`;
-  }
   // Home repaints go through the skin host so a tweak's home-main mount survives (plain innerHTML without one).
   function paintHome(el, html) { if (window.WosSkinHost?.paintHome) window.WosSkinHost.paintHome(el, html); else el.innerHTML = html; }
   function homeHtml(i) {
-    if (mine()) return mineHomeHtml();
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
     const pending = OUTBOX?.unsent() || [];
-    const working = LIVE?.ok ? LIVE.workGroups().working || [] : [];
+    const G = LIVE?.ok ? LIVE.workGroups() : { ready: [], working: [] };
+    const ready = G.ready || [], working = G.working || [];
+    const seen = new Set(), actionable = [...L.needs, ...ready].filter(s => s?.id && !seen.has(s.id) && seen.add(s.id));
+    const readyCount = ready.length + (window.WosBell?.readyCount?.() || 0);
     const rows = list => list.slice(0, 6).map(s => `<button class="home-row" data-thread="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span><span class="nm">${esc(s.title)}</span><time>${esc(ago(LIVE.cardAt(s)))}</time></button>`).join('') || '<div class="home-none">Nothing here.</div>';
     const quick = (window.WizLauncher?.get('desktopQuick') || []).flatMap(id => id === 'wizard' ? [id, ...APPS.filter(a => a.agent).map(a => a.id)] : [id]).map(id => APP[id]).filter(Boolean);
     return `<div class="home-in"><div data-slot="home-main" hidden></div>
       <nav class="home-tools" aria-label="System and settings"><button data-home-settings>Settings</button></nav>
       <div class="home-time">${window.WizConfig.hm()}</div>
       <div class="home-date">${window.WizConfig.dateLabel(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' })}${i == null ? '' : ` · Desktop ${C.workspaceNav.slot(i)}`}</div>
-      <div class="home-line">${LIVE?.ok ? `<b>${L.needs.length} need${L.needs.length === 1 ? 's' : ''} you</b>, ${L.ready.length} unread, ${working.length} working.` : 'Connecting to Wizard…'}</div>
-      <div class="home-cols"><div class="home-card"><h4>Needs you · Unread</h4>${rows(L.needs.concat(L.ready))}</div><div class="home-card"><h4>Working</h4>${rows(working)}</div></div>
+      ${window.WosWeather?.home() || ''}
+      <div class="home-line">${LIVE?.ok ? `<b>${L.needs.length} need${L.needs.length === 1 ? 's' : ''} you</b>, ${readyCount} ready, ${working.length} working.` : 'Connecting to Wizard…'}</div>
+      <div class="home-cols"><div class="home-card"><h4>Needs you · Ready</h4>${rows(actionable)}</div><div class="home-card"><h4>Working</h4>${rows(working)}</div></div>
       ${pending.length ? `<button class="home-unsent" data-home-unsent>${pending.length} ${pending.some(u => u.state === 'failed') ? 'not sent' : 'waiting to send'} · View unsent messages</button>` : ''}
       <h3 class="home-resources-title">Resources</h3>${window.WosResources?.home() || ''}
       <div class="home-apps">${quick.map(a => `<button class="app-chip" data-app="${a.id}">${ico('i', '', a)}${esc(a.name)}</button>`).join('')}</div>

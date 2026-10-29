@@ -1404,11 +1404,15 @@
     const RD = LIVE && LIVE.ok ? (LIVE.workGroups().ready || []) : [], ready = RD.length + (window.WosBell?.readyCount?.() || 0);
     // Working counts what the Chats Working list (and the Working card's filter) shows, sending messages included.
     const W0 = LIVE && LIVE.ok ? (LIVE.workGroups().working || []) : [], working = W0.length;
+    const seen = new Set();
+    const homeThreads = [...L.needs, ...RD].filter(s => s?.id && !seen.has(s.id) && seen.add(s.id)).slice(0, 3);
+    const threadRows = homeThreads.map(s => `<button class="home-thread" data-thread="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span><span class="nm">${esc(s.title)}</span><time>${esc(ago(LIVE.cardAt(s)))}</time></button>`).join('');
     const now = new Date();
     return `<div class="home"><div data-slot="home-main" hidden></div><nav class="home-tools" aria-label="System and settings"><button class="home-system home-agents" data-act="agents" aria-label="Agents" title="Agents"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.3 2.8-5.2 5.5-5.2s4.9 1.9 5.5 5.2"/><circle cx="17" cy="9.5" r="2.4"/><path d="M15.6 14.6c2.6-.3 4.4 1.4 4.9 4.4"/></svg></button>${gearBtn()}</nav>
       <div class="home-top">
         <div class="home-date" id="homeDate">${(() => { const p = window.WizConfig.dayParts(now.getTime()); return `${DOWL[p.dow]} · ${p.d} ${MON[p.m - 1]}`; })()}</div>
         <div class="home-time" id="homeTime">${window.WizConfig.hm()}</div>
+        ${window.WosWeather?.home() || ''}
         <div class="home-line">${LIVE.ok ? '' : LIVE.error === 'access' ? 'Sign in to Wizard to see your threads.' : 'Connecting to Wizard…'}</div>
       </div>
       <div class="home-gap home-gap-a"></div>
@@ -1417,6 +1421,7 @@
         <button class="now-card wz-home-widget" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="ready" aria-label="Ready ${ready}"><span class="pip"></span><span class="meta"><span class="k">Ready</span></span><span class="n">${ready}</span>${homeDots('ready', ready)}</button>
         <button class="now-card wz-home-widget" style="--c:var(--violet-2)" data-act="working" aria-label="Working ${working}"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span></span><span class="n">${working}</span>${homeDots('working', working)}</button>
       </div>
+      ${threadRows ? `<div class="home-thread-list">${threadRows}</div>` : ''}
       ${unsentCard()}
       ${sideCard()}
       </div>
@@ -1702,6 +1707,8 @@
     const info = e.target.closest('.new-desk [data-appinfo]'); if (info) return openAppInfo(info);
     const pick = e.target.closest('.new-desk [data-app]');
     if (pick) { tapOpen(APP[pick.dataset.app], pick); return; }
+    const thread = e.target.closest('.home [data-thread]');
+    if (thread) return openWizardThread(thread.dataset.thread);
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (act === 'inbox') return openSheet('inbox');
     if (act === 'settings') return openSettings(false);

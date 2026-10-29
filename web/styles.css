@@ -101,6 +101,14 @@ body {
 .home-date { font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
 .home-time { font-size: 84px; line-height: .95; font-weight: 200; letter-spacing: -.045em; margin-top: 6px;
   background: linear-gradient(180deg, #fff 30%, #b8a6ff 100%); -webkit-background-clip: text; background-clip: text; color: transparent; font-variant-numeric: tabular-nums; }
+.home-weather-host { margin-top: 10px; min-width: 0; }
+.home-weather-host[hidden] { display: none; }
+.home-weather { display: inline-flex; max-width: 100%; align-items: baseline; gap: 8px; color: var(--ink-2); font-size: .8125rem; line-height: 1.3; }
+.home-weather-place { color: var(--ink); font-weight: 650; }
+.home-weather-condition { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-weather b { color: var(--ink); font-size: 1rem; font-weight: 650; }
+.home-weather-wind { color: var(--ink-3); white-space: nowrap; }
+.home-weather-stale { opacity: .72; }
 .home-line { margin-top: 12px; font-size: 17px; color: var(--ink-2); max-width: 30ch; line-height: 1.38; }
 .home-line b { color: var(--ink); font-weight: 650; }
 .home-spacer { flex: 1; }
@@ -838,6 +846,13 @@ body {
 .home .constellation .now-card .pip.pulse::after { display: none; }
 .home .constellation .now-card .k { font-size: 14px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--ink-2); }
 .home .constellation .now-card .n { font-size: 16px; font-weight: 500; color: var(--ink); padding-left: 4px; }
+.home-thread-list { display: grid; width: 100%; gap: 2px; }
+.home-thread { display: flex; align-items: center; gap: 9px; width: 100%; min-width: 0; min-height: 42px; padding: 7px 10px; border-radius: 12px; text-align: left; color: var(--ink-2); }
+.home-thread:active { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.home-thread .emo { flex: 0 0 22px; text-align: center; }
+.home-thread .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .875rem; }
+.home-thread time { flex: none; color: var(--ink-3); font-size: .71875rem; }
+@media (max-width: 350px) { .home-weather-wind { display: none; } }
 
 /* ================= Distraction-free (James, 18 Oct 2026) =================
  * A short swipe down on the orb (or just above it) hides the bottom bar and every window's title bar. Same layout,

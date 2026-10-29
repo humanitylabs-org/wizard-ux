@@ -39,15 +39,16 @@ test("api.on('home') needs layout; data.read.app is trusted-only, GET-only and p
   assert.throws(() => nav.on('home', () => {}), /home requires layout/);
   await g.clear();
 });
-test('stock Home markup carries an empty home-main slot that takes no space; core never names the package', () => {
+test('Machines remains an optional package; stock phone and desktop Home share the dormant mount', () => {
   const app = read('web/app.js'), desk = read('web/desktop/desktop.js'), host = read('web/core/skin-host.js');
   assert.match(app, /<div class="home"><div data-slot="home-main" hidden><\/div><nav class="home-tools"/);
-  assert.match(desk, /<div class="home-in mine-home"><div data-slot="home-main" hidden><\/div>/);
   assert.match(desk, /<div class="home-in"><div data-slot="home-main" hidden><\/div>/);
+  assert.doesNotMatch(desk, /mineHomeHtml|mine-home/, 'appearance no longer selects another Home information architecture');
   assert.doesNotMatch(app + desk, /\.innerHTML = (renderHome|homeHtml)\(/, 'every Home paint goes through paintHome');
   assert.match(read('web/tweaks/miguel/machines-home/tweak.css'), /\[data-slot="home-main"\]:has\(> \.mh-root\) \{ flex: 1 1 auto; min-height: 0; display: flex;/, 'the package shows the hidden slot itself');
   assert.doesNotMatch(app + desk + host + read('web/core/resources.js'), /machines-home/);
-  assert.ok(JSON.parse(read('web/tweaks/miguel/profile.json')).tweaks.includes('miguel/machines-home'));
+  assert.ok(!JSON.parse(read('web/tweaks/miguel/profile.json')).tweaks.includes('miguel/machines-home'), 'default profile leaves Machines dormant');
+  assert.ok(JSON.parse(read('web/tweaks/catalog.json')).tweaks.includes('miguel/machines-home'), 'catalog keeps the optional capability available');
 });
 test('machines-home: read-only, no owner data in the bundle, every add says coming soon', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js');

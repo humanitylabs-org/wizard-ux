@@ -384,9 +384,6 @@ html[data-skin^="landscapes"] :is(.launcher, .new-desk) .forag.open .fa-row svg 
 html[data-skin^="landscapes"] :is(.launcher, .new-desk) .forag:not(.open) .fa-body { display: none; }
 html[data-skin^="landscapes"] :is(.launcher, .new-desk) .forag .fa-body { padding-top: 6px; }
 
-/* Home without date and clock (Miguel, 21 Oct): the device already shows the time. */
-html[data-skin^="landscapes"] :is(.home-date, .home-time) { display: none; }
-
 /* Home Ready/Working: colour the word and number instead of a dot (Miguel, 21 Oct). */
 html[data-skin^="landscapes"] .home .constellation .now-card .pip { display: none; }
 html[data-skin^="landscapes"] .home .constellation .now-card :is(.k, .n) { color: var(--c); }
