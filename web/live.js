@@ -481,7 +481,8 @@
   //   Newest   = approvals pinned, then pure recency, status labels ignored (groupWork's default).
   //   Priority = approvals, then needs you, then things to test, then everything else (newest first within each).
   // Status labels never move a thread between days (James, 11 Oct 2026: Ready, Yesterday and Past week stay
-  // filtered by day in Newest and Priority); Priority only reorders within Ready.
+  // filtered by day in Newest and Priority); Priority reorders within each day: Ready, Yesterday and Past week
+  // (James, 23 Oct 2026).
   // Snoozed (deferred) threads leave the list (James, 23 Oct 2026: "It doesn't remove the thread from my list,
   // which is the purpose of snoozing it"; supersedes 10 Oct "bottom of today"). They wait in the collapsed Snoozed
   // section until their return time, Restore or Done. A message James sends after snoozing brings the thread back.
@@ -489,7 +490,7 @@
   const readyRank = s => snoozeLast() && isDeferred(s) ? 9 : needsApproval(s) ? 0 : isDeferred(s) ? 9 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
   const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
   // Oldest (James, 23 Oct 2026: "oldest messages at the top … the newest one at the bottom"): Newest's pins kept
-  // (approvals first, deferred last), only time reversed in between. Yesterday and Past week stay newest first.
+  // (approvals first, deferred last), only time reversed in between. The same order applies to Yesterday and Past week.
   // snoozeOrder('last'): Snooze is a lower place in Ready, ahead of no unsnoozed row (even approvals).
   const snoozeOrder = (l, r) => snoozeLast() ? Number(isDeferred(l)) - Number(isDeferred(r)) : 0;
   const byOldest = list => list.slice().sort((l, r) => snoozeOrder(l, r) || Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(r, l));
@@ -853,8 +854,11 @@
           window.WosModels?.reconcile(list);
           this.agentSessions[id] = list; this.agentStatus[id] = { ok: true, error: '', at: Date.now() };
         } catch (e) {
+          // Same contract as the main list: a failed refresh keeps the threads already shown and marks them
+          // Not up to date (with the real last-read time); only an agent never read yet shows the connection card.
+          const prev = this.agentStatus[id], error = e.status === 403 ? 'access' : 'offline';
           this.agentSessions[id] = this.agentSessions[id] || [];
-          this.agentStatus[id] = { ok: false, error: e.status === 403 ? 'access' : 'offline', at: Date.now() };
+          this.agentStatus[id] = prev?.ok && error !== 'access' ? { ok: true, error, at: prev.at } : { ok: false, error, at: Date.now() };
         }
       }));
       let migrated = false, state = merge(readLocal(),this.seen) || {initializedAt:Date.now(),threads:{}};
