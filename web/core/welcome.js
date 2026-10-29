@@ -10,6 +10,9 @@
  * (first_run false, a provider signed in) never see it. Finishing posts /wizard/v1/setup/seen.
  * Look offers only the Wizard skin's colours, drawn with the Settings preview cards, over a lighter dim so the real
  * interface shows through. The first message opens in the one main Chats window, on its own thread.
+ * Name your Wizard (Miguel, 29 Oct 2026) comes first, only while the agent still has the default name: one field,
+ * prefilled, Continue keeps it as it is unless edited; the name is saved in the Agent Service settings
+ * (WizConfig.agentName) and every later step says it. Skipped or kept, the box stays "Wizard".
  * Both shells call WosWelcome.boot({...}) once their deep link has been consumed.
  * Hooks: app(id) -> installed app record, send(text) -> Promise, openStore(), deeplinked() -> boolean. */
 (() => {
@@ -30,6 +33,14 @@
   const read = () => { try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } };
   const write = v => { try { localStorage.setItem(KEY, v); } catch (e) {} };
   let H = null, el = null, step = 'ai', provider = null, pollT = 0, connected = false, sending = false, booted = false, installing = '', installError = '', sendError = '';
+  // The name step: asked = this Welcome starts with it; after = the step it hands over to.
+  let asked = false, after = 'ai', saving = false, nameError = '', prefill = '';
+  const DEFAULT_NAME = 'Wizard', NAME_MAX = 40;
+  // Plain text, one line, at most 40 characters (the Agent Service trims the same way).
+  const cleanName = v => String(v ?? '').replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX).trim();
+  // Only a live answer counts: an offline or cached reading never asks a box that may already have a name.
+  const unnamed = () => { const C = window.WizConfig; if (!C?.live || typeof C.agentName !== 'function') return false;
+    const n = cleanName(C.raw?.settings?.agent?.name); return !n || n.toLowerCase() === DEFAULT_NAME.toLowerCase(); };
 
   // slug: only that provider counts (the one being signed in to); none: any signed-in provider.
   async function aiReady(slug) {
@@ -97,8 +108,36 @@
   const agent = () => { try { return window.WizConfig?.agent?.() || 'Wizard'; } catch (e) { return 'Wizard'; } };
 
   function dots() {
-    const i = ['ai', 'look', 'hello'].indexOf(step);
-    return `<div class="wl-dots" aria-hidden="true">${[0, 1, 2].map(n => `<i class="${n === i ? 'on' : n < i ? 'done' : ''}"></i>`).join('')}</div>`;
+    const all = (asked ? ['name'] : []).concat(['ai', 'look', 'hello']), i = all.indexOf(step);
+    return `<div class="wl-dots" aria-hidden="true">${all.map((x, n) => `<i class="${n === i ? 'on' : n < i ? 'done' : ''}"></i>`).join('')}</div>`;
+  }
+
+  function paintName() {
+    return `${BRAND}${dots()}<header class="wl-head"><h2 tabindex="-1">Name your Wizard</h2><p>What do you want to call your agent?</p></header>
+      <form class="wl-naming" data-wl-name><input type="text" maxlength="${NAME_MAX}" value="${esc(prefill)}" aria-label="Your agent's name" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="done"${saving ? ' disabled' : ''}>
+      ${nameError ? `<p class="wl-status err" role="alert">${esc(nameError)}</p>` : ''}<button type="submit" class="wl-primary"${saving ? ' disabled' : ''}>${saving ? 'Saving\u2026' : 'Continue'}</button></form>
+      <button type="button" class="wl-skip" data-wl="skip-name"${saving ? ' disabled' : ''}>Skip this step</button>`;
+  }
+  // Leave the name step for the step this Welcome was opened for.
+  function fromName() { step = after; saving = false; nameError = ''; paint(); poll(); }
+  async function saveName(value) {
+    const name = cleanName(value);
+    // Untouched (or emptied): keep the name. Compared with what the field was filled with, never with the live name,
+    // so a rename made meanwhile on another device is not written back over.
+    if (!name || name === cleanName(prefill)) { log('name:kept'); return fromName(); }
+    const mine = el; saving = true; nameError = ''; paint(false);
+    try { await window.WizConfig.agentName(name, { from: prefill }); }
+    catch (err) {
+      if (el !== mine || step !== 'name') return;
+      saving = false;
+      // Named on another device since this step opened: show that name; Continue keeps it, an edit still saves.
+      if (err?.code === 'conflict' && err.current) { prefill = err.current; nameError = `Another device just named your agent ${err.current}. Continue keeps it.`; paint(false); return; }
+      nameError = 'That name didn\u2019t save. Try again, or skip this step.'; paint(false);
+      const i = el.querySelector('.wl-naming input'); if (i) i.value = name;
+      return;
+    }
+    if (el !== mine || step !== 'name') return;
+    log('name:saved'); fromName();
   }
 
   function paintAI() {
@@ -138,11 +177,15 @@
     const card = el.querySelector('.wl-card');
     card.classList.toggle('wide', step === 'ai' && !!provider);
     el.classList.toggle('wl-peek', step === 'look');
-    card.innerHTML = step === 'ai' ? paintAI() : step === 'look' ? paintLook() : paintHello();
+    card.innerHTML = step === 'name' ? paintName() : step === 'ai' ? paintAI() : step === 'look' ? paintLook() : paintHello();
     // Escape inside the provider's own page (same origin) still steps back; a cross-origin page keeps the Back button.
     const fr = card.querySelector('.wl-frame iframe');
     if (fr) fr.addEventListener('load', () => { try { fr.contentDocument.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); back(); } }, true); } catch (e) {} });
-    if (focus) requestAnimationFrame(() => (card.querySelector('textarea') || card.querySelector('h2'))?.focus({ preventScroll: true }));
+    // The name field takes focus with a mouse and keyboard; on a phone the keyboard waits for a tap on the field.
+    const fine = (() => { try { return matchMedia('(pointer: fine)').matches; } catch (e) { return false; } })();
+    if (focus) requestAnimationFrame(() => { const nm = fine && card.querySelector('.wl-naming input:not([disabled])');
+      if (nm) { nm.focus({ preventScroll: true }); nm.select?.(); return; }
+      (card.querySelector('textarea') || card.querySelector('h2'))?.focus({ preventScroll: true }); });
   }
 
   function poll() {
@@ -164,7 +207,8 @@
 
   function open(at = 'ai') {
     if (el) return;
-    step = at; provider = null; connected = false; sending = false; installing = ''; installError = ''; sendError = '';
+    asked = unnamed(); after = at; saving = false; nameError = ''; prefill = agent();
+    step = asked ? 'name' : at; provider = null; connected = false; sending = false; installing = ''; installError = ''; sendError = '';
     el = document.createElement('div');
     el.className = 'wl-overlay'; el.id = 'wosWelcome';
     el.innerHTML = '<div class="wl-card" role="dialog" aria-modal="true" aria-label="Welcome"></div>';
@@ -176,13 +220,13 @@
     el.addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey && e.target.matches('textarea')) { e.preventDefault(); el.querySelector('form')?.requestSubmit(); }
       if (e.key === 'Tab') { // keep focus inside the card
-        const f = [...el.querySelectorAll('button:not([disabled]),textarea,iframe,[tabindex]:not([tabindex="-1"])')];
+        const f = [...el.querySelectorAll('button:not([disabled]),input:not([disabled]),textarea,iframe,[tabindex]:not([tabindex="-1"])')];
         if (f.length) { const i = f.indexOf(document.activeElement); const n = e.shiftKey ? (i <= 0 ? f.length - 1 : i - 1) : (i + 1) % f.length; e.preventDefault(); f[n].focus(); }
       }
       e.stopPropagation(); // the shell's own shortcuts wait until the welcome is done (desktop onKey also stands down)
     });
     if (at === 'look' || at === 'ai') { const S = window.WosSkin; if (S && S.familyOf(S.current) !== FAMILY && !S.chosen) S.setFamily(FAMILY); }
-    paint(); poll(); log('open:' + at);
+    paint(); poll(); log('open:' + at + (asked ? ':name' : ''));
   }
 
   function close() {
@@ -208,10 +252,12 @@
     else if (act === 'store') { close(); H.openStore?.(); }
     else if (act === 'palette') { window.WosSkin?.set(t.dataset.id); paint(false); }
     else if (act === 'next') { step = 'hello'; paint(); }
+    else if (act === 'skip-name' && step === 'name' && !saving) { log('name:skipped'); fromName(); }
   }
 
   async function onSubmit(e) {
     e.preventDefault();
+    if (step === 'name') { if (!saving) saveName(el.querySelector('.wl-naming input')?.value); return; }
     if (sending) return;
     const text = el.querySelector('textarea')?.value.trim();
     if (!text) { el.querySelector('textarea')?.focus(); return; }
@@ -228,8 +274,10 @@
   function back() {
     if (!el) return '';
     if (sending) return 'welcome'; // a send settles in a moment; an install keeps going in the background if Back closes
+    if (saving) return 'welcome'; // the name is being saved; it settles in a moment
     if (step === 'ai' && provider) { clearTimeout(pollT); provider = null; paint(); return 'welcome'; }
     if (step === 'hello') { step = 'look'; paint(); return 'welcome'; }
+    if (asked && step === after && !saving) { clearTimeout(pollT); step = 'name'; paint(); return 'welcome'; } // back to the name
     close(); log('back:close'); return 'welcome';
   }
 
@@ -243,7 +291,8 @@
     setTimeout(async () => {
       if (seenPending()) markSeen();
       if (h.deeplinked?.()) { log('deeplink'); return; }
-      const [ok, setup] = await Promise.all([aiReady(), setupState(), Promise.race([Promise.resolve(window.WizCore?.appsLoaded?.()).catch(() => {}), new Promise(r => setTimeout(r, 5000))])]); // never wait forever on the app list
+      const [ok, setup] = await Promise.all([aiReady(), setupState(), Promise.race([Promise.resolve(window.WizCore?.appsLoaded?.()).catch(() => {}), new Promise(r => setTimeout(r, 5000))]),
+        Promise.race([Promise.resolve(window.WizConfig?.ready).catch(() => {}), new Promise(r => setTimeout(r, 5000))])]); // never wait forever on the app list or the settings
       const state = read();
       log('boot:' + ok + ':' + state + ':' + (setup?.first_run === true));
       try { removeEventListener('pointerdown', act, true); removeEventListener('keydown', act, true); } catch (e) {}
