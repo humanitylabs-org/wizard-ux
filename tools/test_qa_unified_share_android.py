@@ -18,6 +18,61 @@ SPEC.loader.exec_module(runner)
 
 
 class ControllerTest(unittest.TestCase):
+    def test_shared_orb_assets_match_canonical_web_bytes(self):
+        for name in ('orb.js', 'robert-thread-orb.png', 'robert-listening-galaxy.png'):
+            self.assertEqual((HERE.parent / 'web' / name).read_bytes(),
+                             (HERE.parent / 'android/app/src/main/assets/assist' / name).read_bytes(), name)
+
+    def test_actual_android_requires_verified_boot(self):
+        report = runner.initial_report(dict(revision='unit-only', manifest_sha256='unit-only'), 'unit-only')
+        self.assertFalse(report['actual_android'])
+        report['emulator'] = {'started': True}
+        self.assertFalse(report['actual_android'])
+        for sdk, users in [('35', 'RUNNING_LOCKED'), ('34', 'RUNNING_UNLOCKED')]:
+            with self.assertRaisesRegex(RuntimeError, 'runtime not ready'):
+                runner.record_android_boot(report, sdk, users)
+            self.assertFalse(report['actual_android'])
+        runner.record_android_boot(report, '35\n', 'User #0: state=RUNNING_UNLOCKED')
+        self.assertTrue(report['actual_android'])
+        self.assertEqual(report['emulator']['sdk'], '35')
+
+    def test_junit_failure_is_collected_before_build_refusal(self):
+        with tempfile.TemporaryDirectory(prefix='unified-junit-', dir=os.environ['TMPDIR']) as d:
+            root = Path(d)
+            junit = root / 'source/android/app/build/test-results/testDebugUnitTest'
+            junit.mkdir(parents=True)
+            xml = junit / 'TEST-fixture.xml'
+            xml.write_text('<testsuite name="unit.fixture" tests="2" failures="1" errors="0" skipped="0">'
+                           '<testcase name="pass"/><testcase name="androidOrbIsTheAppOrb">'
+                           '<failure type="ArrayComparisonFailure" message="orb.js differs">stack</failure>'
+                           '</testcase></testsuite>')
+            counts, failures, hashes = runner.collect_junit(root)
+            self.assertEqual(counts, dict(tests=2, failures=1, errors=0, skipped=0))
+            self.assertEqual(hashes[str(xml.relative_to(root))], runner.sha(xml))
+            self.assertEqual(failures[0]['type'], 'ArrayComparisonFailure')
+            with self.assertRaisesRegex(RuntimeError, 'androidOrbIsTheAppOrb: orb.js differs'):
+                runner.require_build(1, {'status': 'failed'}, {}, counts, failures)
+
+    def test_build_failure_without_junit_still_has_diagnostic(self):
+        with self.assertRaisesRegex(RuntimeError, 'worker exit=1, status=failed'):
+            runner.require_build(1, {'status': 'failed', 'error': 'route failed'}, {},
+                                 dict(tests=0, failures=0, errors=0, skipped=0), [])
+
+    def test_message_less_assertion_still_has_diagnostic(self):
+        self.assertEqual(runner.exception_detail(AssertionError()), 'AssertionError: AssertionError()')
+        self.assertEqual(runner.exception_detail(RuntimeError('detail')), 'RuntimeError: detail')
+
+    def test_successful_build_requires_source_identity_and_nonempty_passing_junit(self):
+        cfg = dict(revision='unit-only', manifest_sha256='unit-manifest')
+        build = dict(status='ok', source_revision=cfg['revision'], source_manifest_sha256=cfg['manifest_sha256'])
+        counts = dict(tests=2, failures=0, errors=0, skipped=0)
+        runner.require_build(0, build, cfg, counts, [])
+        for altered in (dict(tests=0, failures=0, errors=0, skipped=0), dict(counts, failures=1)):
+            with self.assertRaisesRegex(RuntimeError, 'JUnit did not pass'):
+                runner.require_build(0, build, cfg, altered, [])
+        with self.assertRaisesRegex(RuntimeError, 'source identity mismatch'):
+            runner.require_build(0, dict(build, source_revision='wrong'), cfg, counts, [])
+
     def test_bounds(self):
         xml = '<hierarchy><node text="Share synthetic PDF" bounds="[10,20][110,80]"/></hierarchy>'
         self.assertEqual(runner.native_bounds(xml, 'Share synthetic PDF'), [60, 50])

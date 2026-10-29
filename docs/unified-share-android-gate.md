@@ -15,7 +15,8 @@ uses its debug APK. Source version 0.10.20/84 is an old reserved candidate:
 ## Controller-only checks
 
 `python3 tools/test_qa_unified_share_android.py -v` exercises sealing refusals,
-input-locator parsing, the fixture contract and VPS execution refusal. It starts
+input-locator parsing, canonical web/Android orb byte parity, failed-build JUnit
+diagnostics, verified-boot reporting, the fixture contract and VPS execution refusal. It starts
 no build, browser or emulator and is not Android acceptance.
 
 ## Exact staging contract
@@ -75,7 +76,12 @@ Required phases:
 `<job>/android-evidence/acceptance.json` checkpoints each phase. Failures remain
 FAIL/NOT_COVERED, never synthetic success. Logs include Gradle/JUnit counts, APK
 hash, sender APK hash, network share requests, persistent queue, final fixture
-state, screenshots, logcat and cleanup state. All fixture APIs bind loopback;
+state, screenshots, logcat and cleanup state. Failed builds also retain JUnit
+counts, failed test names/messages and XML hashes before the build refusal; a
+private traceback gives even a message-less assertion a type and source line.
+`actual_android` starts false and becomes true only after an owned emulator boots
+with SDK 35 and an unlocked user, not merely because Gradle ran.
+All fixture APIs bind loopback;
 qa_home.txt and qa_origin.txt both point to the debug-only emulator fixture before
 the first launch (including the updater/Everywhere clients). No private agent data, recordings,
 Messenger unlock, owner origin, owner signing material or live endpoints.

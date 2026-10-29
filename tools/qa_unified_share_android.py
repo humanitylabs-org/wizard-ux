@@ -23,6 +23,7 @@ import sys
 import tarfile
 import threading
 import time
+import traceback
 import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
@@ -92,6 +93,54 @@ def free_port():
     with socket.socket() as s:
         s.bind(('127.0.0.1', 0))
         return s.getsockname()[1]
+
+
+def initial_report(cfg, seal_digest):
+    return {'status': 'RUNNING', 'source_revision': cfg['revision'],
+            'source_manifest_sha256': cfg['manifest_sha256'], 'runner_sha256': sha(__file__),
+            'seal_sha256': seal_digest, 'actual_android': False, 'synthetic_backend_only': True,
+            'publication': False, 'phases': {}, 'external_intents': [], 'deliveries': []}
+
+
+def exception_detail(exc):
+    return type(exc).__name__ + ': ' + (str(exc) or repr(exc))
+
+
+def record_android_boot(report, sdk, users):
+    if sdk.strip() != '35' or 'RUNNING_UNLOCKED' not in users:
+        raise RuntimeError('Android runtime not ready: require SDK 35 and RUNNING_UNLOCKED')
+    report['actual_android'] = True
+    report['emulator']['sdk'] = sdk.strip()
+    report['emulator']['user_unlocked'] = True
+
+
+def collect_junit(root):
+    counts = dict(tests=0, failures=0, errors=0, skipped=0)
+    failures, hashes = [], {}
+    for path in sorted((root / 'source/android/app/build/test-results/testDebugUnitTest').glob('TEST-*.xml')):
+        suite = ET.parse(path).getroot()
+        hashes[str(path.relative_to(root))] = sha(path)
+        for key in counts:
+            counts[key] += int(suite.get(key, '0'))
+        for case in suite.iter('testcase'):
+            for tag in ('failure', 'error'):
+                for failure in case.findall(tag):
+                    failures.append({'case': case.get('classname', suite.get('name', '')) + '.' + case.get('name', ''),
+                                     'type': failure.get('type', tag), 'message': failure.get('message', '')[:2000],
+                                     'xml': str(path.relative_to(root))})
+    return counts, failures, hashes
+
+
+def require_build(returncode, build, cfg, junit, failures):
+    if returncode != 0 or build.get('status') != 'ok':
+        detail = '; '.join(f["case"] + ': ' + f['message'] for f in failures)
+        raise RuntimeError('Android build failed: worker exit=%s, status=%s, JUnit=%s; %s; see android-evidence/build.log'
+                           % (returncode, build.get('status'), json.dumps(junit, sort_keys=True),
+                              detail or build.get('error', 'no JUnit failure reported')))
+    if build.get('source_revision') != cfg['revision'] or build.get('source_manifest_sha256') != cfg['manifest_sha256']:
+        raise RuntimeError('build receipt source identity mismatch')
+    if junit['tests'] <= 0 or junit['failures'] or junit['errors']:
+        raise RuntimeError('JUnit did not pass: ' + json.dumps(junit, sort_keys=True))
 
 
 def native_bounds(xml, text):
@@ -260,6 +309,9 @@ class Rig:
             return self.sx('getprop sys.boot_completed', timeout=10).strip() == '1'
         wait(booted, 360)
         self.sx('input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; settings put system screen_off_timeout 1800000')
+        users = wait(lambda: (u if 'RUNNING_UNLOCKED' in (u := self.sx('dumpsys user')) else None), 60)
+        record_android_boot(self.report, self.sx('getprop ro.build.version.sdk'), users)
+        self.save()
         for key in ('window_animation_scale', 'transition_animation_scale', 'animator_duration_scale'):
             self.sx('settings put global ' + key + ' 0')
         self.sx('cmd uimode night yes')
@@ -440,9 +492,7 @@ def main():
         raise SystemExit('wrong inherited heavy lease')
     seal, cfg = verify_seal(root, Path(a.seal), a.seal_sha256)
     out = root / 'android-evidence'; out.mkdir(mode=0o700, exist_ok=False)
-    report = {'status': 'RUNNING', 'source_revision': cfg['revision'], 'source_manifest_sha256': cfg['manifest_sha256'],
-              'runner_sha256': sha(__file__), 'seal_sha256': a.seal_sha256, 'actual_android': True,
-              'synthetic_backend_only': True, 'publication': False, 'phases': {}, 'external_intents': [], 'deliveries': []}
+    report = initial_report(cfg, a.seal_sha256)
 
     def save():
         tmp = out / 'acceptance.json.tmp'; tmp.write_text(json.dumps(report, indent=2) + '\n'); tmp.replace(out / 'acceptance.json')
@@ -472,8 +522,9 @@ def main():
                                     stdout=log, stderr=subprocess.STDOUT, pass_fds=(fd,), timeout=1800)
         build = json.loads((root / 'receipt.json').read_text())
         report['build'] = build
-        assert result.returncode == 0 and build['status'] == 'ok' and build['source_revision'] == cfg['revision']
-        assert build['source_manifest_sha256'] == cfg['manifest_sha256']
+        report['junit'], report['junit_failures'], report['junit_xml_sha256'] = collect_junit(root)
+        save()  # Preserve the actual failed test before refusing the build.
+        require_build(result.returncode, build, cfg, report['junit'], report['junit_failures'])
         for name, row in cfg['files'].items():
             if 'sha256' in row:
                 assert sha(root / 'source' / name) == row['sha256'], 'post-extraction drift: ' + name
@@ -483,14 +534,7 @@ def main():
         artifact = next(x for x in build['artifacts'] if x['path'] == str(apk.relative_to(root / 'source')))
         assert sha(apk) == artifact['sha256']
         report['apk_sha256'] = sha(apk)
-        counts = dict(tests=0, failures=0, errors=0, skipped=0)
-        junit = sorted((root / 'source/android/app/build/test-results/testDebugUnitTest').glob('TEST-*.xml'))
-        for path in junit:
-            suite = ET.parse(path).getroot()
-            for k in counts:
-                counts[k] += int(suite.get(k, '0'))
-        assert counts['tests'] > 0 and counts['failures'] == counts['errors'] == 0
-        report['junit'] = counts
+
         generated = list((root / 'source/android/app/build/generated/source/buildConfig/debug').rglob('BuildConfig.java'))
         assert generated and 'ORIGIN = ""' in generated[0].read_text(), 'debug owner defaults not empty'
         report['phases'][phase] = {'status': 'PASS', 'log_sha256': sha(out / 'build.log')}; save()
@@ -606,8 +650,10 @@ def main():
         assert rig.state()['oldUploads'] == 0, 'native queue silently fell back to web upload'
         report['status'] = 'PASS_SYNTHETIC_ANDROID_DEBUG_ONLY'
     except BaseException as exc:
-        report['status'] = 'FAIL'; report['failure_phase'] = phase; report['error'] = str(exc)[-6000:]
-        report['phases'][phase] = {'status': 'FAIL', 'error': str(exc)[-2000:]}
+        error = exception_detail(exc)
+        (out / 'failure-traceback.txt').write_text(traceback.format_exc())
+        report['status'] = 'FAIL'; report['failure_phase'] = phase; report['error'] = error[-6000:]
+        report['phases'][phase] = {'status': 'FAIL', 'error': error[-2000:]}
         if rig:
             rig.diagnostic('failure-' + phase)
     finally:
