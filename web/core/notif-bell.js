@@ -27,7 +27,9 @@
    * while something watches, on the bell's own cadence. Text stays data; the tweak renders it with textContent. */
   const IN = { items: [], subs: new Set(), seq: 0 };
   const str = (v, n) => String(v == null ? '' : v).slice(0, n);
-  const cleanItem = i => Object.freeze({ id: str(i.id, 80), title: str(i.title, 300), message: str(i.message, 8000), time: Number(i.time) || 0, source: str(i.source, 40), priority: Number(i.priority) || 3, link: str(i.link, 2000), read: !!i.read, archived: !!i.archived });
+  // The editor's short message is a preview, not the source. Keep the complete original separately, including
+  // paragraphs and long diagnostic output. Legacy items without editor details use their complete body.
+  const cleanItem = i => Object.freeze({ id: str(i.id, 80), title: str(i.title, 300), message: str(i.message, 8000), details: String(i.details || i.message || ''), time: Number(i.time) || 0, source: str(i.source, 40), priority: Number(i.priority) || 3, link: str(i.link, 2000), read: !!i.read, archived: !!i.archived });
   async function loadItems() {
     if (!IN.subs.size || !installed()) return;
     const seq = ++IN.seq;
