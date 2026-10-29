@@ -11,9 +11,12 @@ import { randomUUID } from 'node:crypto';
 // one of that agent's own models: its allowed pick, otherwise its default.
 const source = readFileSync(new URL('../web/outbox.js', import.meta.url), 'utf8');
 const PRIVATE = { id: 'private', label: 'Private', model: { provider: 'tinfoil', model: 'glm-5-3', allowed_models: ['glm-5-3', 'deepseek-v4-1-flash'], fallback: false }, permissions: { files: 'own' } };
+// One routed agent per runtime kind. Each lists Opus too, on its own provider, with Fable as its default.
+const KINDS = ['host-profile', 'container', 'restricted'];
+const ROUTED = Object.fromEntries(KINDS.map(kind => [kind, { id: kind, kind, label: kind, model: { provider: 'claude-cli', model: 'claude-fable-5-1', allowed_models: ['claude-fable-5-1', 'claude-opus-5-5'] } }]));
 const AG = {
   isOther: id => !!id && id !== 'hermes',
-  get: id => (id === 'private' ? PRIVATE : null),
+  get: id => (id === 'private' ? PRIVATE : ROUTED[id] || null),
   allows: (a, m) => a.model.allowed_models.includes(m),
   route(a, m) { return { model: m && AG.allows(a, m) ? m : a.model.model, provider: a.model.provider, agent: a.id }; },
 };
@@ -102,4 +105,39 @@ test('Retry repairs an already-failed Private message that kept the main agent r
   assert.ok(r, 'a run was posted after Retry');
   assert.equal(JSON.parse(r.body).model, 'glm-5-3');
   assert.equal(r.path, '/wizard/hermes/v1/runs?agent=private');
+});
+
+// Codex P1: allowed-model membership alone is not an agent pick. The main agent's Opus/anthropic route on a take
+// bound to an agent that also lists Opus (on claude-cli) must not be kept: it rides on the agent's default.
+for (const kind of KINDS) {
+  test(`${kind}: a main-agent route whose model the agent also lists, on another provider, sends on the agent's default`, async t => {
+    const { c, run } = await rig(t);
+    const staged = await c.api.stage({ kind: 'new', sessionId: '', model: 'claude-opus-5-5', provider: 'anthropic', audio: new Blob(['aaaa'], { type: 'audio/aac' }), intent: 'auto', source: 'orb', agent: kind });
+    const it = await c.api.enqueue({ kind: 'new', custodyId: staged.id, agent: kind, model: 'claude-opus-5-5', provider: 'anthropic', intent: 'auto', text: '' });
+    assert.equal(it.error, undefined, it.error);
+    assert.deepEqual([it.model, it.provider], ['claude-fable-5-1', 'claude-cli']);
+    const r = await run(); assert.ok(r, 'a run was posted');
+    assert.equal(r.path, `/wizard/hermes/v1/runs?agent=${kind}`);
+    assert.equal(JSON.parse(r.body).model, 'claude-fable-5-1');
+  });
+  test(`${kind}: an explicit pick of a listed model on the agent's own provider is kept`, async t => {
+    const { c, run } = await rig(t);
+    const staged = await c.api.stage({ kind: 'new', sessionId: '', model: 'claude-opus-5-5', provider: 'claude-cli', audio: new Blob(['aaaa'], { type: 'audio/aac' }), intent: 'auto', source: 'orb', agent: kind });
+    const it = await c.api.enqueue({ kind: 'new', custodyId: staged.id, agent: kind, model: 'claude-opus-5-5', provider: 'claude-cli', intent: 'auto', text: '' });
+    assert.equal(it.error, undefined, it.error);
+    assert.deepEqual([it.model, it.provider], ['claude-opus-5-5', 'claude-cli']);
+    assert.equal(JSON.parse((await run()).body).model, 'claude-opus-5-5');
+  });
+}
+
+// Main-versus-routed parity: a main-thread take (no agent) keeps the route it was staged on, untouched.
+test('main: a held take with no agent keeps its own route', async t => {
+  const { c, run } = await rig(t);
+  const staged = await c.api.stage({ kind: 'new', sessionId: '', model: 'claude-opus-5-5', provider: 'anthropic', audio: new Blob(['aaaa'], { type: 'audio/aac' }), intent: 'auto', source: 'orb' });
+  const it = await c.api.enqueue({ kind: 'new', custodyId: staged.id, model: 'claude-opus-5-5', provider: 'anthropic', intent: 'auto', text: '' });
+  assert.equal(it.error, undefined, it.error);
+  assert.deepEqual([it.model, it.provider], ['claude-opus-5-5', 'anthropic']);
+  const r = await run(); assert.ok(r);
+  assert.equal(r.path, '/wizard/hermes/v1/runs');
+  assert.equal(JSON.parse(r.body).model, 'claude-opus-5-5');
 });

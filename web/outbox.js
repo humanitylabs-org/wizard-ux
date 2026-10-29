@@ -36,9 +36,12 @@
   }
   // An agent-bound message rides on one of that agent's own models: its allowed pick, otherwise its default.
   // A main-agent route that rode along on a staged take (Opus on a Private note) is never sent or rejected as-is.
+  // An agent pick always carries the agent's own provider, so a listed model on another provider is the main
+  // agent's route, not a pick: it falls back to the agent's default too.
   function fitAgentRoute(it) {
     const AG = window.WosAgents, a = it?.agent && AG?.get?.(it.agent);
-    if (!a?.model || it.body || !AG.allows || !AG.route || (it.model && AG.allows(a, it.model))) return false;
+    if (!a?.model || it.body || !AG.allows || !AG.route) return false;
+    if (it.model && AG.allows(a, it.model) && (!it.provider || it.provider === a.model.provider)) return false;
     const r = AG.route(a, ''); if (!r?.model) return false;
     Object.assign(it, { model: r.model, provider: r.provider }); return true;
   }
