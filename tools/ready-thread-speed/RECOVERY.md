@@ -139,4 +139,3 @@ not a new run. Preserve r2/r4/r5/r6 evidence and hashes unchanged.
   34/34 UX and 52/52 + 141/141 Service may be inherited only by exact file hashes.
 
 This is a static audit and sealed next-run specification, not a browser pass.
-
