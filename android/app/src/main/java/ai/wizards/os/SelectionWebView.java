@@ -21,20 +21,12 @@ public class SelectionWebView extends WebView {
     private volatile long downAt;
     private volatile boolean downEditable, selOurs;
 
-    private ChatScrollCapture scrollCapture;
-
     public SelectionWebView(Context c) {
         super(c);
-        if (android.os.Build.VERSION.SDK_INT >= 31 && c instanceof android.app.Activity)
-            scrollCapture = new ChatScrollCapture((android.app.Activity)c, this);
+        // All scroll APIs, capture hints and callback discovery are inherited from
+        // WebView. Android's WebViewCaptureHelper owns acquisition and restoration.
+        ScrollCaptureDiagnostics.init(c);
     }
-
-    void cancelScrollCapture() {
-        if (android.os.Build.VERSION.SDK_INT >= 31 && scrollCapture != null) scrollCapture.abort();
-    }
-
-    @Override public void onPause() { cancelScrollCapture(); super.onPause(); }
-    @Override protected void onDetachedFromWindow() { cancelScrollCapture(); super.onDetachedFromWindow(); }
 
     /** 1 finger down on page text · 2 finger down in a text field · 3 selection is the page's own · 0 selection gone. */
     public void selectionState(int s) {

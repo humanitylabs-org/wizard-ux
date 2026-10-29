@@ -90,6 +90,7 @@ function session(i) { return { id: i === 0 ? SID : 'qa_paste_' + i, source: 'wiz
       return { overPrevented: over.defaultPrevented, dropPrevented: dropped.defaultPrevented };
     }, { sel, files, data });
     const read = () => p.evaluate(sel => { const t = document.querySelector(sel); return { v: t.value, s: t.selectionStart, focused: document.activeElement === t, hasText: !!t.form?.classList.contains('has-text'), reads: window.__clipReads }; }, TA);
+    const controls = sel => p.evaluate(sel => { const form = document.querySelector(sel)?.closest('.ch-compose'); const visible = el => !!el && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().width > 0; return { send: visible(form?.querySelector('.ch-send')), mic: visible(form?.querySelector('[data-chmic]')), textFocused: document.activeElement === form?.querySelector('textarea') }; }, sel);
 
     await p.click(TA); await p.keyboard.insertText('Before after');
     await p.evaluate(sel => { const t = document.querySelector(sel); t.setSelectionRange(7, 7); }, TA);
@@ -117,10 +118,24 @@ function session(i) { return { id: i === 0 ? SID : 'qa_paste_' + i, source: 'wiz
     ok((await read()).v === before4 + ' bold words', 'rich-text paste inserts plain text');
 
     const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    await p.fill(TA, ''); await p.evaluate(sel => document.querySelector(sel)?.blur(), TA); await sleep(100);
     const before5 = (await read()).v;
     const r5 = await paste({}, [{ name: 'image.png', type: 'image/png', b64: png }]); await sleep(500);
     const tray = await p.evaluate(() => document.querySelectorAll('.pane-main .ch-tray > *').length);
     ok(r5.prevented && tray >= 1 && (await read()).v === before5, 'a pasted photo goes to the attachment tray, text untouched', { r5, tray });
+    const attachmentOnly = await controls(TA);
+    ok(attachmentOnly.send && !attachmentOnly.mic && !attachmentOnly.textFocused, 'an attachment-only desktop draft shows Send without focusing the text field', attachmentOnly);
+    await p.fill(TA, 'Caption'); await sleep(100);
+    const combined = await controls(TA);
+    ok(combined.send && !combined.mic, 'a combined text-and-attachment draft keeps Send visible', combined);
+    await p.locator('.pane-main .ch-tray [data-attrm]').first().click(); await sleep(150);
+    const textOnly = await controls(TA);
+    ok(textOnly.send && !textOnly.mic, 'removing the attachment keeps Send while text remains', textOnly);
+    await p.fill(TA, ''); await sleep(100);
+    const emptyAgain = await controls(TA);
+    ok(!emptyAgain.send && emptyAgain.mic, 'clearing the remaining text returns the desktop composer to the mic', emptyAgain);
+    await paste({}, [{ name: 'image.png', type: 'image/png', b64: png }]); await sleep(500);
+    const tray2 = await p.evaluate(() => document.querySelectorAll('.pane-main .ch-tray > *').length);
 
     const beforeDrop = await read();
     const overDrop = await dragOver([{ name: 'desktop-screenshot.png', type: 'image/png', b64: png }]); await sleep(100);
@@ -131,8 +146,8 @@ function session(i) { return { id: i === 0 ? SID : 'qa_paste_' + i, source: 'wiz
       tray: document.querySelectorAll('.pane-main .ch-tray > *').length,
       names: [...document.querySelectorAll('.pane-main .ch-att')].map(el => el.textContent),
     }));
-    ok(overDrop.prevented && highlighted && rDrop.overPrevented && rDrop.dropPrevented && afterDrop.tray === tray + 1,
-      'a screenshot drag highlights the new-chat box and drops into the attachment tray', { overDrop, highlighted, rDrop, before: tray, afterDrop });
+    ok(overDrop.prevented && highlighted && rDrop.overPrevented && rDrop.dropPrevented && afterDrop.tray === tray2 + 1,
+      'a screenshot drag highlights the new-chat box and drops into the attachment tray', { overDrop, highlighted, rDrop, before: tray2, afterDrop });
     ok((await read()).v === beforeDrop.v, 'a dropped screenshot leaves composer text untouched');
     const textDrop = await drop([], { 'text/plain': 'dragged words' });
     ok(!textDrop.overPrevented && !textDrop.dropPrevented, 'a text drag keeps the browser default instead of becoming an attachment', textDrop);
@@ -147,8 +162,14 @@ function session(i) { return { id: i === 0 ? SID : 'qa_paste_' + i, source: 'wiz
     const privateAfter = await p.locator(`[data-chats="${privateWid}"] .ch-tray > *`).count();
     ok(privateDrop.overPrevented && privateDrop.dropPrevented && privateAfter === privateBefore + 1,
       'the routed-agent composer uses the same screenshot drop and upload path', { privateDrop, privateBefore, privateAfter });
+    const privateAttachment = await controls(privateTA);
+    ok(privateAttachment.send && !privateAttachment.mic && !privateAttachment.textFocused, 'a routed-agent attachment-only draft shows Send without focusing the text field', privateAttachment);
+    await p.locator(`[data-chats="${privateWid}"] [data-attrm]`).click(); await sleep(150);
+    const privateEmpty = await controls(privateTA);
+    ok(!privateEmpty.send && privateEmpty.mic, 'removing the routed-agent attachment returns to the mic', privateEmpty);
 
     // Empty paste (the dictation app restored its clipboard first): nothing invented, no clipboard read, a hint shows.
+    await p.click(TA);
     const before6 = (await read()).v;
     const r6 = await paste({}); await sleep(700);
     const a6 = await read();

@@ -26,14 +26,15 @@ function runtime(shell = 'desktop', saved = null) {
   for (const f of ['skin-frame.js','skins.js']) vm.runInContext(fs.readFileSync(new URL('../web/core/'+f,import.meta.url),'utf8'),ctx);
   return {ctx,store,props,root};
 }
-test('phone defaults to borderless, desktop always framed, saved phone choice wins and palette is preserved',()=>{
+test('both shells default borderless; a borrowed framed foundation disposes cleanly and preserves palette',()=>{
   const desk = runtime('desktop',{'wos.skin.composition.v1':JSON.stringify({version:1,extends:'nebula',frame:{foundation:'borderless'}})});
-  assert.equal(desk.ctx.WosSkin.frame.foundation,'framed'); assert.equal(desk.root.dataset.skinFrame,'framed'); assert.equal(desk.ctx.WosSkin.frameAdjustable,false);
+  assert.equal(desk.ctx.WosSkin.frame.foundation,'borderless'); assert.equal(desk.root.dataset.skinFrame,'borderless'); assert.equal(desk.ctx.WosSkin.frameAdjustable,true);
   const {ctx,store,root} = runtime('phone',{'wos.skin':'tide'}), S=ctx.WosSkin;
   assert.equal(S.frame.foundation,'borderless'); assert.equal(root.dataset.skinFrame,'borderless'); assert.equal(S.current,'tide'); assert.equal(S.frameAdjustable,true);
-  S.setFoundation('framed'); S.set('grove'); assert.equal(S.frame.foundation,'framed');
+  const release = S.useFoundation('framed'); S.set('grove'); assert.equal(S.frame.foundation,'framed');
+  release(); release(); assert.equal(S.frame.foundation,'borderless');
   const again = runtime('phone',Object.fromEntries(store));
-  assert.equal(again.ctx.WosSkin.frame.foundation,'framed'); assert.equal(again.root.dataset.skinFrame,'framed');
+  assert.equal(again.ctx.WosSkin.frame.foundation,'borderless'); assert.equal(again.root.dataset.skinFrame,'borderless');
   again.ctx.WosSkin.setFoundation('borderless'); assert.equal(runtime('phone',Object.fromEntries(again.store)).ctx.WosSkin.frame.foundation,'borderless');
 });
 test('invalid import is atomic; custom composition survives reload and reset',()=>{

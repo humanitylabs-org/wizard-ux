@@ -3,7 +3,10 @@
  *   phone   (app.js)     WosSetupLaunch.boot({...}) in place of the first-run tour timer, and .desk(home) in goDesk
  *   desktop (desktop.js) WosSetupLaunch.boot({...}) right after C.deeplink.consume()
  *
- * First run (design: Claude Fable, 14 Oct 2026, round 2 decision 1):
+ * Existing-Hermes installs (`launch_mode: alongside`) keep Setup explicit, never automatic; the first-message
+ *   orientation (phone tour / desktop composer guide) starts once per browser unless deep-linked or already done.
+ *   desktop (desktop.js) passes alongsideOnly so VM desktop launches stay exactly as before (Setup only).
+ * VM first run (design: Claude Fable, 14 Oct 2026, round 2 decision 1):
  *   - GET /wizard/v1/setup. When first_run is true the shell opens Setup; the app (not the shell) POSTs
  *     /wizard/v1/setup/seen when it renders, so a failed open simply tries again next launch.
  *   - Phone layout: the 30-second gesture tour waits (tourPending, this session only) and starts the first time the
@@ -28,21 +31,46 @@
       const r = await fetch(API, { credentials: 'same-origin', cache: 'no-store', signal: ctl?.signal });
       if (!r.ok) return null;
       const j = await r.json();
-      return j && typeof j === 'object' ? j.first_run === true : null;
+      return j && typeof j === 'object' ? j : null;
     } catch (e) { return null; } finally { clearTimeout(t); }
   }
 
+  // The owner already did something (a tap, a key) before the orientation's turn came: never yank them out of it
+  // (Codex, #482: a slow /setup answer let the delayed start cancel an orb take). It simply waits for a later launch.
+  let acted = false;
+  const act = () => { acted = true; };
   function boot(h) {
     if (booted || !h) return; booted = true; H = h;
-    const t0 = Date.now(), tour = !!h.firstRunTour;
+    acted = false;
+    try { addEventListener('pointerdown', act, true); addEventListener('keydown', act, true); } catch (e) {}
+    const t0 = Date.now();
+    let tour = !!h.firstRunTour;
     // Deep links are consumed synchronously at the end of shell boot; decide after that.
     setTimeout(async () => {
       if (deeplinked()) {
         log('deeplink');
-        if (tour) setTimeout(() => H.markTour?.(), Math.max(0, TOUR_DELAY - (Date.now() - t0)));
+        if (tour && !h.alongsideOnly) setTimeout(() => H.markTour?.(), Math.max(0, TOUR_DELAY - (Date.now() - t0)));
         return;
       }
-      const fr = await firstRun();
+      const setup = await firstRun();
+      const alongside = setup?.launch_mode === 'alongside';
+      // An existing-Hermes owner came here to chat (Miguel, 24 Oct 2026: get people chatting fast). Setup stays an
+      // explicit app and is never marked seen here, but the short first-message orientation runs once per browser:
+      // the phone's Talk -> Hide tour, or the desktop's one-step guide on its composer. Skipping it marks it done.
+      if (alongside) {
+        if (!tour) { log('alongside:quiet'); return; }
+        log('alongside:tour');
+        setTimeout(() => {
+          if (window.WosTour?.active || window.WosTour?.desk?.active || window.WosTour?.done?.()) return;
+          if (deeplinked()) return H.markTour?.();
+          if (acted || H.busy?.()) { log('alongside:busy'); return; } // not marked done: the next plain launch offers it
+          H.tour?.('first-run');
+        }, Math.max(0, TOUR_DELAY - (Date.now() - t0)));
+        return;
+      }
+      // The desktop guide is for alongside installs only: a VM desktop launch is exactly as before (Setup, no guide).
+      if (h.alongsideOnly) tour = false;
+      const fr = setup ? setup.first_run === true : null;
       log('first_run:' + fr);
       if (fr === true && !deeplinked() && !(window.WosTour && window.WosTour.active)) {
         if (tour) pending = true;
@@ -51,7 +79,9 @@
       }
       if (tour) setTimeout(() => {
         if (window.WosTour?.active || window.WosTour?.done?.()) return;
-        if (!deeplinked()) H.tour?.('first-run'); else H.markTour?.();
+        if (deeplinked()) return H.markTour?.();
+        if (acted || H.busy?.()) { log('tour:busy'); return; } // e.g. no /setup answer in time and the owner already tapped
+        H.tour?.('first-run');
       }, Math.max(0, TOUR_DELAY - (Date.now() - t0)));
     }, 0);
   }

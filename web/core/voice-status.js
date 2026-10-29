@@ -39,12 +39,12 @@
     if (!st || Date.now() - at > 60e3) load();
     const s = st;
     const head = '<h4>Voice transcription</h4>';
-    if (!s) return `<div class="st-group vx-card" data-voicecard="loading">${head}<div class="st-row static"><span class="st-ic">🎙</span><span class="st-tx"><b>Checking…</b><small>Reading this Wizard’s speech-to-text setup</small></span></div></div>`;
+    if (!s) return `<div class="st-group vx-card" data-voicecard="loading">${head}<div class="st-row static"><span class="st-tx"><b>Checking…</b><small>Reading this Wizard’s speech-to-text setup</small></span></div></div>`;
     const state = s.ready ? 'ready' : 'down';
     const sub = s.ready
       ? [s.model, s.attested ? 'Attested · audio is transcribed in a verified private enclave' : 'Ready'].filter(Boolean).join(' · ')
       : s.off ? 'Ask your Wizard to set up a transcription provider' : s.err ? 'Couldn’t read the voice status · it will retry' : 'Not ready · voice notes wait in Unsent until it is';
-    return `<div class="st-group vx-card" data-voicecard="${state}">${head}<div class="st-row static"><span class="st-ic">🎙</span><span class="st-tx"><b>${esc(s.name)}${s.attested ? ' <i class="vx-badge" data-voiceattested>Attested</i>' : ''}</b><small>${esc(sub)}</small></span><span class="vx-dot ${state}" aria-label="${s.ready ? 'Ready' : 'Not ready'}"></span></div></div>`;
+    return `<div class="st-group vx-card" data-voicecard="${state}">${head}<div class="st-row static"><span class="st-tx"><b>${esc(s.name)}${s.attested ? ' <i class="vx-badge" data-voiceattested>Attested</i>' : ''}</b><small>${esc(sub)}</small></span><span class="vx-dot ${state}" aria-label="${s.ready ? 'Ready' : 'Not ready'}"></span></div></div>`;
   }
   C.voiceStatus = { load, card, onChange: f => { subs.add(f); return () => subs.delete(f); }, get state() { return st; } };
 })();

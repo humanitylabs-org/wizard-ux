@@ -104,7 +104,7 @@ const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else {
   const inp = `[data-chats="${await p.evaluate(() => __wos.desks[__wos.idx].focus)}"] [data-chsearch]`;
   await p.locator(inp).tap(); await p.locator(inp).type('unr', { delay: 40 }); await p.waitForTimeout(500);
   const sug = await p.evaluate(() => [...document.querySelectorAll(`[data-chats="${__wos.desks[__wos.idx].focus}"] .ch-sugrow`)].map(b => b.lastElementChild.textContent.trim()));
-  ok(sug[0] === 'Filter: Unread' && sug.some(x => /^New chat/.test(x)), 'Typing "unr" suggests Filter: Unread first, New chat last', JSON.stringify(sug));
+  ok(sug[0] === 'Filter: Unread' && !sug.some(x => /New chat/.test(x)), 'Typing "unr" suggests Filter: Unread, and no second New chat (the + button owns it)', JSON.stringify(sug));
   await p.screenshot({ path: `${SHOTS}/06-suggest.png` });
   await p.evaluate(() => document.querySelector(`[data-chats="${__wos.desks[__wos.idx].focus}"] [data-chsug]`).click()); await p.waitForTimeout(400);
   f = await L(); ok(f.chips.join() === 'Unread' && (await p.locator(inp).inputValue()) === '', 'Tapping the suggestion makes the chip and clears the typed word', JSON.stringify(f));

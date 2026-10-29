@@ -23,7 +23,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const NOW = Date.now(), MIN = 6e4;
 const VIDEO_ID = '0123456789abcdef0123456789abcdef';
 const W = {
-  writes: [], foreign: [], msgFetch: [], down: false, offline: false, voice: 'ok', brokenApp: false,
+  writes: [], foreign: [], msgFetch: [], searchFetch: [], down: false, offline: false, voice: 'ok', brokenApp: false,
   threads: Array.from({ length: 45 }, (_, i) => ({ id: 'qa_t' + String(i).padStart(2, '0'), title: `Thread ${i}`, preview: `Preview line ${i}`, at: NOW - (i * 10 + 2) * MIN, status: 'completed', level: '' })),
 };
 W.threads[5].title = 'Quokka budget review';
@@ -71,6 +71,19 @@ async function context(b, { desktop = false } = {}) {
     if (u.pathname === '/wizard/voice/status') return W.voice === 'ok' ? json({ ready: true, provider: 'tinfoil', name: 'Tinfoil', model: 'voxtral-small-24b', attested: true }) : json({ error: 'down' }, 503);
     if (u.pathname === '/wizard/hermes/api/sessions') {
       if (W.down) return json({ error: 'unavailable' }, 503);
+      if (u.searchParams.get('q')) W.searchFetch.push(u.searchParams.get('q'));
+      if(W.fast && u.searchParams.get('fields')==='slim') {
+        const extra={id:'qa_archived',agent:'hermes',title:'Zirconium archived thread',preview:'Old preview',status:'completed',archived:true,cardTime:new Date(NOW-20*864e5).toISOString()};
+        const cursor=u.searchParams.get('cursor');
+        const data=cursor?[extra,{...extra,id:'qa_private',agent:'private',title:'private sentinel'}]:W.threads.map(t=>({id:t.id,agent:'hermes',title:t.title,preview:t.preview,status:t.status,archived:false,cardTime:new Date(t.at).toISOString()}));
+        return json({data,fields:'slim',view:'list',list_version:1,window:'archive-50',account_scope:'qa-owner',build:'qa-index-build',snapshot:'qa-index-snapshot',has_more:false,archive_cursor:cursor?null:'qa-index-snapshot:50'});
+      }
+      if(W.fast && u.searchParams.get('mode')==='body') {
+        if(W.fastFail) return json({error:'busy'},503);
+        const word=u.searchParams.get('q').toLowerCase(); await sleep(500);
+        const data=Object.entries(BODY).filter(([,body])=>body.toLowerCase().includes(word)).map(([id,snippet])=>({id,agent:'hermes',snippet}));
+        return json({data,view:'list',list_version:1,mode:'body',search_total:data.length,partial:false,timings:{list_ms:0,fts_ms:1,read_ms:1}}).catch(()=>{});
+      }
       const off = +(u.searchParams.get('offset') || 0), lim = +(u.searchParams.get('limit') || 100);
       const rows = W.threads.slice(off, off + lim).map(sessionRow);
       return json({ data: rows, has_more: off + lim < W.threads.length });
@@ -201,6 +214,10 @@ const ours = p => p.url().startsWith(BASE);
     await p.fill(sel, 'quokka'); await sleep(80);
     const instant = await p.evaluate(id => [...document.querySelectorAll(`.win[data-win="${id}"] .ch-row[data-chopen]`)].map(r => r.dataset.chopen), wid);
     ok(instant.length === 1 && instant[0] === 'qa_t05' && W.msgFetch.filter(f => f.order === 'latest').length === 0, '#26 titles match instantly, before any message is read', instant);
+    // Progress shows above the results, not under a long Archive.
+    await sleep(320);
+    ok(await p.evaluate(id => { const sc = document.querySelector(`.win[data-win="${id}"] .ch-scroll`), b = sc?.querySelector('[data-chbs="busy"]'), s = sc?.querySelector('.ch-sec'); return !!b && !!s && !!(b.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING); }, wid), 'Searching progress sits above the result sections');
+    W.msgFetch.length = 0;
     // cancel: start a body search, change the query mid-flight
     await p.fill(sel, 'zebrac'); await sleep(450);
     await p.fill(sel, 'zebracorn'); await sleep(60);
@@ -224,12 +241,46 @@ const ours = p => p.url().startsWith(BASE);
     await p.fill(sel, ''); await sleep(50); await p.fill(sel, 'zebracorn'); await sleep(900);
     const n2 = await p.evaluate(() => WizCore.chatSearch.stats.fetches);
     ok(n2 === n1, '#26 searching again reuses cached message bodies (no body-search refetch)', { before: n1, after: n2 });
+    const n3 = await p.evaluate(() => WizCore.chatSearch.stats.fetches), sf0 = W.searchFetch.length;
     await p.click(`.win[data-win="${wid}"] .ch-row[data-chopen="qa_t03"]`); await sleep(500);
     ok((await chatsWin()).thread === 'qa_t03', '#26 tapping a body hit opens that thread');
-    await back();
+    await back(); await sleep(60);
+    const backRows = await p.evaluate(id => [...document.querySelectorAll(`.win[data-win="${id}"] .ch-row[data-chopen]`)].map(r => r.dataset.chopen), wid);
+    ok(backRows.includes('qa_t03') && backRows.includes('qa_t40'), 'Back from a result shows the same results at once', backRows);
+    await sleep(700);
+    const n4 = await p.evaluate(() => WizCore.chatSearch.stats.fetches), busyBack = await p.evaluate(id => !!document.querySelector(`.win[data-win="${id}"] [data-chbs="busy"]`), wid);
+    ok(n4 - n3 <= 1 && W.searchFetch.length === sf0 && !busyBack, 'Back from a result does not search again', { msgReads: n4 - n3, serverSearches: W.searchFetch.length - sf0 });
+    await p.fill(sel, 'zebracor'); await sleep(400);
+    await p.waitForFunction(() => Object.values(WizCore.chatSearch.stats.runs).every(r => !r.busy));
+    await p.fill(sel, 'zebracorn'); await sleep(30);
+    ok(await p.evaluate(id => !!document.querySelector(`.win[data-win="${id}"] .ch-row[data-chopen="qa_t03"] mark`), wid), 'Typing one more letter keeps matching results on screen at once');
     await p.click(`.win[data-win="${wid}"] [data-chsclear]`).catch(() => {}); await sleep(200);
-    ok(await p.evaluate(id => document.querySelector(`.win[data-win="${id}"] [data-chsearch]`)?.value === '' && Object.keys(window.WizCore.chatSearch.stats.runs).length === 0, wid), '#26 clearing the search stops body search');
+    ok(await p.evaluate(id => document.querySelector(`.win[data-win="${id}"] [data-chsearch]`)?.value === '' && Object.keys(window.WizCore.chatSearch.stats.runs).length === 0, wid), '#26 clearing the search stops body search', await p.evaluate(id => ({ v: document.querySelector(`.win[data-win="${id}"] [data-chsearch]`)?.value, runs: window.WizCore.chatSearch.stats.runs }), wid));
   } catch (e) { ok(false, 'section crashed (continuing)', String(e).split('\n')[0]); }
+
+  /* ---- fast title index and body-only pass ---- */
+  try {
+    W.fast=true;
+    await p.evaluate(()=>WizLive.refresh());
+    await p.waitForFunction(()=>WizLive.searchRows?.().some(s=>s.id==='qa_archived'),null,{timeout:3000}).catch(()=>{});
+    const wid=(await chatsWin()).id, sel=`.win[data-win="${wid}"] [data-chsearch]`;
+    W.searchFetch.length=0; W.msgFetch.length=0;
+    await p.fill(sel,'Zirconium'); await sleep(60);
+    ok(await p.locator(`.win[data-win="${wid}"] [data-chopen="qa_archived"]`).count()===1 && W.searchFetch.length===0,'Fast search: an archive title outside the list payload matches synchronously, without a server query');
+    ok(await p.evaluate(()=>!WizLive.searchRows?.().some(s=>s.id==='qa_private')),'Fast search: a different agent never enters the main title index');
+    await p.fill(sel,'zi'); W.searchFetch.length=0; await sleep(700);
+    ok(W.searchFetch.length===0,'Fast search: two letters make no server body request',W.searchFetch);
+    await p.fill(sel,'zebracorn'); await sleep(1200);
+    ok(await p.locator(`.win[data-win="${wid}"] [data-chopen="qa_t03"] [data-chsnip] mark`).count()>0 && await p.locator(`.win[data-win="${wid}"] [data-chopen="qa_t40"]`).count()>0,'Fast search: body-only hits annotate indexed rows with highlights');
+    ok(W.msgFetch.filter(f=>f.order==='latest').length===0,'Fast search: successful body pass makes no per-thread message fetches',W.msgFetch);
+    W.fastFail=true; W.msgFetch.length=0;
+    await p.fill(sel,'timeoutword'); await sleep(800);
+    ok(W.msgFetch.filter(f=>f.order==='latest').length===0,'Fast search: 503 never triggers a per-thread fallback');
+    W.fastFail=false;
+    await p.evaluate(()=>window.dispatchEvent(new Event('wizard-account-change')));
+    ok(await p.evaluate(()=>!WizLive.searchRows?.().some(s=>s.id==='qa_archived') && !Object.keys(localStorage).some(k=>k.startsWith('wos.chats.titles.v1:'))),'Fast search: account change clears memory and persisted title index');
+    await p.fill(sel,''); await sleep(100);
+  } catch(e) { W.fastFail=false; ok(false,'Fast search section crashed',String(e).split('\n')[0]); }
 
   /* ---- #33 Drafts for unsent new chats ---- */
   try {

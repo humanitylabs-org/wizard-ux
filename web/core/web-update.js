@@ -1,6 +1,8 @@
-/* Wizard OS · "Update ready" banner, shared by both shells (James, 14 Oct: "if I ask for a change on mobile,
+/* Wizard OS · "Interface update" banner, shared by both shells (James, 14 Oct: "if I ask for a change on mobile,
  * the same change should reflect on desktop in a way that fits that form factor").
  *
+ * Words (Miguel, 27 Oct 2026): this is the Interface, never "Wizard OS" (that name means the box's own 10–20 minute
+ * update, core/os-updates.js). An interface update is already here; Reload is all it takes.
  * Owns everything about a web/ update: noticing it (ux-version.txt, the git tree id of web/), naming the
  * thread(s) that made it (ux-changes.json), the banner with Thread / Threads ▾ beside Reload, Back/Esc folding
  * the list, and the guarded reload. A shell supplies only the host: where the banner mounts, how to open a
@@ -17,7 +19,7 @@
     if (document.querySelector('.wos-burst')) return;
     const el = document.createElement('div'); el.className = 'wos-burst'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
     const sparks = Array.from({ length: 72 }, (_, i) => { const a = (i / 72) * 360 + (i * 7 % 5), d = 45 + (i * 37 % 40), w = 2 + (i % 4), h = 22 + (i * 13 % 40); return `<i style="--a:${a}deg;--d:${d}vmax;--t:${(i * 53 % 9) * 18}ms;--w:${w}px;--h:${h}px"></i>`; }).join('');
-    el.innerHTML = `<b class="wb-flash"></b><b class="wb-ring"></b><b class="wb-ring two"></b><b class="wb-ring three"></b><span class="wb-sparks">${sparks}</span><span class="wb-core"></span><span class="wb-text">Updating Wizard OS<em>.</em><em>.</em><em>.</em></span>`;
+    el.innerHTML = `<b class="wb-flash"></b><b class="wb-ring"></b><b class="wb-ring two"></b><b class="wb-ring three"></b><span class="wb-sparks">${sparks}</span><span class="wb-core"></span><span class="wb-text">Reloading<em>.</em><em>.</em><em>.</em></span>`;
     document.body.appendChild(el);
   }
   const log = (...a) => { try { H?.log?.(...a); } catch (_) {} };
@@ -64,6 +66,7 @@
     printNow = p;
     if (!pending) { pending = true; log('web:changed'); }
     await loadChanges(); window.WizAppServices?.update.announce({ version: p, changes }); render();
+    try { window.WosUpdates?.popup?.(); } catch (_) {}
   }
   /* Which threads made the update: ux-changes.json lists every web/ change newest first with the thread that
    * committed it. Take the ones since the version this page loaded; one row per thread. */
@@ -133,7 +136,7 @@
   }
   async function go(why, p) {
     if (going) return false; going = true;
-    // A tapped reload bursts across the screen and says "Updating Wizard OS..." until the new build paints, so the
+    // A tapped reload bursts across the screen and says "Reloading..." until the new build paints, so the
     // tap visibly worked instead of the banner looking frozen (every skin).
     if (why === 'tap') { burst(); await new Promise(r => setTimeout(r, 900)); }
     try { H?.beforeReload?.(); } catch (_) {}
@@ -154,9 +157,11 @@
   }
   /* The banner says which thread the update came from and links there, so you can see what a reload brings
    * (James, 12 Oct): "Update ready / Bound views  [Thread] [Reload]". Several threads: "[Threads ▾]" opens a
-   * short list; Back/Esc closes the list. Nothing known (no change list): "Wizard OS was updated". */
+   * short list; Back/Esc closes the list. Nothing known (no change list): "Interface updated". */
   function render() {
     if (!pending || !H) return;
+    // The Home update pop-up (core/os-updates.js) carries this reload while it shows, and after its ×: one, not two.
+    if (window.WosUpdates?.ownsReload?.()) { document.getElementById('dvWeb')?.remove(); listOpen = false; return; }
     let el = document.getElementById('dvWeb');
     if (!el) {
       el = document.createElement('div'); el.id = 'dvWeb'; el.className = 'dv-update web'; el.setAttribute('role', 'status');
@@ -170,12 +175,12 @@
     }
     const linked = changes.filter(c => c.thread), names = changes.map(rowName);
     // Desktop has no toast near the card: say it in place. Armed = Reload was tapped and waits for the end.
-    const wait = armed ? (armed.recording ? 'Update ready · reloads after the recording' : 'Update ready · reloads once saved')
-      : H.shell === 'desktop' && busy() ? 'Update ready · finish recording first' : '';
+    const wait = armed ? (armed.recording ? 'Interface update · reloads after the recording' : 'Interface update · reloads once saved')
+      : H.shell === 'desktop' && busy() ? 'Interface update · finish recording first' : '';
     const held = !!wait && (H.shell === 'desktop' || !!armed);
-    const head = held ? wait : 'Update ready';
-    // Two lines so the thread name gets the width: "Update ready" small, the thread it came from bold.
-    const msg = !changes.length ? (held ? wait : 'Wizard OS was updated')
+    const head = held ? wait : 'Interface update';
+    // Two lines so the thread name gets the width: "Interface update" small, the thread it came from bold.
+    const msg = !changes.length ? (held ? wait : 'Interface updated')
       : `<small>${esc(head)}</small><b>${esc(names[0])}</b>`;
     const sec = !linked.length ? '' : changes.length === 1
       ? `<button class="later dv-wt" data-web-thread="${esc(linked[0].thread)}" aria-label="Open the thread: ${esc(names[0])}" title="Open the thread that made this update">Thread</button>`
@@ -185,7 +190,7 @@
       : `<div class="dv-wr static" role="listitem"><b>${esc(rowName(c))}</b><small>No thread</small></div>`).join('')}</div>` : '';
     el.classList.toggle('open', !!list);
     const mark = changes.length ? '' : `<span class="dv-ui">${window.WizBrand?.html || '✦'}</span>`;
-    el.innerHTML = `<div class="dv-wtop">${mark}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}${armed ? `<button data-web="go" class="armed" aria-pressed="true" title="Tap to cancel the waiting reload">${armed.recording ? 'Reload when recording ends' : 'Reload when saved'}</button>` : '<button data-web="go" title="Reload Wizard OS into the new version">Reload</button>'}</div>${list}`;
+    el.innerHTML = `<div class="dv-wtop">${mark}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}${armed ? `<button data-web="go" class="armed" aria-pressed="true" title="Tap to cancel the waiting reload">${armed.recording ? 'Reload when recording ends' : 'Reload when saved'}</button>` : '<button data-web="go" title="Reload into the new interface">Reload</button>'}</div>${list}`;
   }
   // Back (phone) / Esc (desktop): fold an open thread list first. Returns true when it took the press.
   function back() { if (listOpen && pending) { listOpen = false; render(); return true; } return false; }
@@ -207,6 +212,7 @@
     init, check, back, reload, busy, render, plan,
     get armed() { return !!armed; },
     get pending() { return pending; },
+    get version() { return printNow; },
     _state: () => ({ pending, print0: !!print0, changes, listOpen }),
   });
   // Older name used by hosted-app QA and the app services layer.

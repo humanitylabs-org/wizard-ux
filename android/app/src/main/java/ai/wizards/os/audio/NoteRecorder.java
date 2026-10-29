@@ -206,9 +206,9 @@ public final class NoteRecorder {
                     m.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
                     m.setAudioChannels(1);
                     m.setAudioSamplingRate(44100);
-                    m.setAudioEncodingBitRate(64000);
+                    m.setAudioEncodingBitRate(96000);
                     m.setOutputFile(file.getAbsolutePath());
-                });
+                }, MicRoute.NOTE_SOURCES);
         return new Driver() {
             public void stop() { r.stop(); }
             public void release() { r.release(); }
