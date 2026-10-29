@@ -1,6 +1,21 @@
 // Fixture preparation only: use real shell navigation, never mutate its windows,
 // overlays, animations or event handlers. Measured opens use actionable row input.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+
+export async function verifyServingBytes(origin,ux,headers={}) {
+  const receipts=[];
+  for(const path of ['live.js','core/chats.js','app.js','desktop/desktop.js','core/shell.js']) {
+    const r=await fetch(`${origin}/wizard-os-home/${path}`,{headers});
+    assert.equal(r.status,200,'served source '+path);
+    const actual=Buffer.from(await r.arrayBuffer()),expected=readFileSync(join(ux,'web',path));
+    assert.ok(actual.equals(expected),'served source must equal its staged Git export: '+path);
+    receipts.push({path,sha256:createHash('sha256').update(actual).digest('hex'),bytes:actual.length});
+  }
+  return receipts;
+}
 
 export async function initialize(ctx, skin) {
   await ctx.addInitScript(skin => {

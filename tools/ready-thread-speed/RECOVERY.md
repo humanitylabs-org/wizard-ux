@@ -56,6 +56,7 @@ Original API measurements remain provisional synthetic contributor evidence.
 ## Acceptance boundary
 
 The repaired run still requires 12 tap groups x 30 samples for each A/B side,
+exact served model/renderer/both-shell script hashes against the staged export,
 three API groups x 50 samples, all 20 scope cells, both real shells/two skins,
 and the existing ancillary cases. Timing begins on the owned row's actual
 pointerdown and ends only when the latest assistant sentinel is in an on-screen,

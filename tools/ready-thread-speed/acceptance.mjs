@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { initialize,openList,rowFor,actionable,input,backToList,diagnostics,armPaint } from './browser-preparation.mjs';
+import { initialize,openList,rowFor,actionable,input,backToList,diagnostics,armPaint,verifyServingBytes } from './browser-preparation.mjs';
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, openSync, closeSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +18,7 @@ let origin, pumping=false,pump;
 try {
  for(let i=0;i<150&&!existsSync(join(fixtureRoot,'ready.json'));i++){if(child.exitCode!==null)throw Error(`fixture exited ${child.exitCode}`);await sleep(100)}
  const ready=JSON.parse(readFileSync(join(fixtureRoot,'ready.json')));origin=ready.origin;results.fixture=ready;
+ results.served_assets=await verifyServingBytes(origin,ux);
  const get=async p=>{const r=await fetch(origin+p,{signal:AbortSignal.timeout(30000)});const body=await r.text();assert.equal(r.status,200,`${p}: ${r.status} ${body.slice(0,120)}`);return body};
  await get('/wizard/hermes/api/sessions?limit=100&view=list');
  pumping=true;pump=(async()=>{while(pumping){const start=performance.now();try{await get('/wizard/hermes/api/sessions?limit=100&view=list');appendFileSync(join(out,'list-overlap.jsonl'),JSON.stringify({at:start,ms:performance.now()-start})+'\n')}catch(e){results.failures.push(String(e));}await sleep(30)}})();
@@ -110,6 +111,7 @@ try {
    await page.waitForFunction(id=>!!WizLive.cachedMessages(id),prefetchId,{timeout:15000});
    assert.equal(prefetchReads,1,'exactly one actual background prefetch');page.off('request',count);
    results.browser.push({shell,skin,case:'ready-prefetch-uses-existing-current-cache',id:prefetchId,history_reads:prefetchReads,pass:true});
+   assert.deepEqual(errors,[],'no shell exceptions through the entire cell');
   }catch(e){results.failures.push(`${shell}/${skin}: ${e.stack}`);writeFileSync(join(out,`${shell}-${skin}-diagnostic.json`),JSON.stringify(await diagnostics(page).catch(e=>({error:String(e)})),null,2));await page.screenshot({path:join(out,`${shell}-${skin}-failure.png`)}).catch(()=>{});save();}
   finally{await ctx.close()}
  }

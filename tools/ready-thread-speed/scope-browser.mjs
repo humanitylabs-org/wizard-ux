@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
-import { initialize,openList,rowFor,actionable,input,armPaint,diagnostics } from './browser-preparation.mjs';
+import { initialize,openList,rowFor,actionable,input,armPaint,diagnostics,verifyServingBytes } from './browser-preparation.mjs';
 const [service,ux,out]=process.argv.slice(2).map(p=>resolve(p)),require=createRequire(import.meta.url);
 const {scene,kinds}=await import(pathToFileURL(join(service,'qa/agent-parity/fixture.mjs')));
 const {chromium}=require(process.env.QA_PLAYWRIGHT),browser=await chromium.launch({executablePath:process.env.QA_CHROME});
@@ -18,6 +18,7 @@ try {
    // Real persisted onboarding state in this scene; do not race/close Setup.
    writeFileSync(join(s.root,'os/settings.json'),JSON.stringify({schema:1,setup:{seen_at:new Date().toISOString()}}));
    if(kind==='synthetic-private')s.setSupervisorSeal('private',false);
+   cell.served_assets=await verifyServingBytes(s.origin(),ux,s.ownerHeaders);
    const setup=await (await fetch(s.origin()+'/wizard/v1/setup',{headers:s.ownerHeaders})).json();
    assert.equal(setup.first_run,false,'fixture is explicitly past onboarding');
    const registry=await (await fetch(s.origin()+'/wizard/v1/agents',{headers:s.ownerHeaders})).json();
