@@ -7,7 +7,9 @@ const BASE = process.argv[2] || 'http://127.0.0.1:9473/wizard-os-home/';
 const ORIGIN = new URL(BASE).origin;
 const SHOTS = process.env.QA_SHOTS || path.join(process.env.TMPDIR || process.cwd(), 'setup-app-shots');
 fs.mkdirSync(SHOTS, { recursive: true });
-let pass = 0, fail = 0; const results = [];
+const FOCUS_BACK = process.env.QA_FOCUS_BACK === '1';
+let pass = 0, fail = 0; const results = [], backEvidence = [];
+const receipt = () => { if(process.env.QA_RECEIPT)fs.writeFileSync(process.env.QA_RECEIPT,JSON.stringify({suite:'qa-setup-app',focus:FOCUS_BACK?'native-back':null,base:BASE,pass,fail,results,backEvidence},null,2)); };
 const ok = (c, name, detail = '') => { results.push({ ok: !!c, name, detail }); c ? pass++ : fail++; console.log(c ? 'PASS' : 'FAIL', name, detail); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const fake = async body => (await fetch(ORIGIN + '/__fake/state', { method:'POST', body:JSON.stringify(body) })).json();
@@ -51,8 +53,9 @@ async function decode(browser,el) {
 }
 (async()=>{
  const b = await pw.chromium.launch();
- for(const mode of ['phone','desktop']) {
-  await reset(); await fake({owner:'Robin', phone:{wizard_url:URLS.wiz}});
+ try {
+ for(const mode of (FOCUS_BACK ? ['phone'] : ['phone','desktop'])) {
+  await reset(); await fake({owner:'Robin', phone:{wizard_url:URLS.wiz,...(FOCUS_BACK ? {step:'phone_seen'} : {})}});
   const {ctx,p,outside,errors} = await context(b,mode);
   await p.goto(BASE+(mode === 'desktop' ? 'desktop.html?shell=desktop' : '?shell=phone'));
   const f = await frame(p);
@@ -62,7 +65,8 @@ async function decode(browser,el) {
   await sleep(300);
   ok(count(await log(),'POST','/wizard/v1/setup/seen')===1,`${mode}: first-run seen posted exactly once`);
   if(mode==='phone') ok(await p.evaluate(()=>{ const w=Object.values(__wos.wins).find(w=>w.appId==='setup'); return __wos.desks[__wos.idx]?.wins.includes(w.id); }), 'phone: Setup is on the visible desk');
-  await phone(f); await step(f,'off');
+  await phone(f); await step(f,FOCUS_BACK?'phone_seen':'off');
+  if(!FOCUS_BACK) {
   ok(await f.locator('[data-pc="start"]').innerText()==='Connect a device',`${mode}: off renders shared Connect control, not removed step markup`);
   await f.locator('[data-pc="start"]').click(); await step(f,'signin');
   await f.waitForFunction(()=>document.querySelector('[data-pc="open"]')?.textContent==='Open again');
@@ -80,9 +84,23 @@ async function decode(browser,el) {
   await change(f,{phone:{step:'phone_seen'}},'phone_seen');
   if (await f.locator('[data-pc-flow]').count()) await f.locator('[data-pc="flow-close"]').click();
   ok((await text(f,'.pc-ok')).includes('connected'),`${mode}: connected state`);
+  await f.locator('[data-act="back"]').click();
+  const another = f.locator('[data-act="list-connect-device"]');
+  await another.waitFor();
+  ok(await another.innerText()==='Connect another device',`${mode}: completed checklist retains separate connect entry`);
+  ok(await another.evaluate(e=>{const row=document.querySelector('[data-state="done"]');return row && e.previousElementSibling.contains(row) && parseFloat(getComputedStyle(e).marginTop)===16;}),`${mode}: connect action immediately follows done row with 16px air`);
+  await another.click(); await f.locator('[data-pc-flow]').waitFor();
+  await f.locator('[data-pc="step2-done"]').click();
+  ok(await f.locator('[data-pc-step="2"] canvas').count()===0 && await f.locator('.pc-step-complete .pc-check').count()===1,`${mode}: step two folds to the shared green check`);
+  await f.locator('[data-pc="step2-again"]').click();
+  ok(await f.locator('[data-pc-step="2"] canvas').count()===1,`${mode}: Show again restores step-two QR`);
+  await f.locator('[data-pc="flow-done"]').click();
+  ok(await f.locator('#list').isVisible() && await f.locator('#phone').isHidden(),`${mode}: bottom Done returns to Setup in one tap`);
+  await phone(f); await step(f,'phone_seen');
   await f.locator('[data-pc="again"]').click();
   ok(await f.locator('[data-pc-flow]').isVisible(),`${mode}: Connect another device opens the shared flow`);
   await f.locator('[data-pc="flow-close"]').click();
+  }
   await f.locator('[data-act="menu"]').click();
   if(mode==='phone') { await p.evaluate(()=>window.__wosNativeBack()); ok(await f.locator('#menu').isHidden(),'phone: Back closes menu only'); await f.locator('[data-act="menu"]').click(); }
   await f.locator('[data-act="ask-reset"]').click();
@@ -99,12 +117,34 @@ async function decode(browser,el) {
     await p.waitForFunction(()=>!document.querySelector('#settings').classList.contains('open'));
     await open(p,mode);
     await f.waitForFunction(s=>document.documentElement.dataset.skin===s,skin);
-    ok(await f.evaluate(()=>window.__qaIdentity==='setup-kept'&&!document.getElementById('sheet').hidden),`${skin}: document and open disconnect sheet survive skin change`);
+    ok(await f.evaluate(()=>{const e=document.getElementById('sheet');return window.__qaIdentity==='setup-kept'&&__setup.state.sheet&&(e.matches('dialog')?e.open:!e.hidden);}) && await f.locator('#sheet').isVisible(),`${skin}: document and open disconnect sheet survive skin change`);
     await sleep(600);await p.screenshot({path:path.join(SHOTS,`${mode}-${skin}.jpg`),type:'jpeg',quality:85});
    }
   }
-  if(mode==='phone') { await p.evaluate(()=>window.__wosNativeBack()); await f.waitForFunction(()=>document.getElementById('sheet').hidden); } else await f.locator('[data-act="cancel-reset"]').click();
+  if(mode==='phone') {
+   // Native dialog closure changes .open, not HTMLElement.hidden. Inspect the
+   // actual visible layer and shell owner; never spend a second Back to pass.
+   const before=await f.locator('#sheet').evaluate(e=>({tag:e.tagName,hidden:e.hidden,open:e.open,visible:!!e.getClientRects().length}));
+   const owner=await p.evaluate(()=>window.__wosNativeBack());
+   await f.locator('#sheet').waitFor({state:'hidden'});
+   await f.waitForFunction(()=>!__setup.state.sheet);
+   const after=await f.evaluate(()=>({screen:__setup.state.screen,sheet:__setup.state.sheet,menu:__setup.state.menu,open:document.getElementById('sheet').open,hidden:document.getElementById('sheet').hidden,identity:window.__qaIdentity}));
+   backEvidence.push({before,owner,after});receipt();
+   ok(owner==='hosted'&&after.screen==='phone'&&!after.menu&&after.identity==='setup-kept','phone: one native Back belongs to Setup and closes only disconnect');
+  } else await f.locator('[data-act="cancel-reset"]').click();
   ok(await f.locator('#sheet').isHidden(),`${mode}: dismiss disconnect without leaving phone screen`);
+  if(FOCUS_BACK) {
+   await f.locator('[data-act="menu"]').click();await f.locator('[data-act="ask-reset"]').click();
+   await f.locator('#sheet').waitFor({state:'visible'});
+   await f.locator('[data-act="cancel-reset"]').click();await f.locator('#sheet').waitFor({state:'hidden'});
+   await f.waitForFunction(()=>!__setup.state.sheet);
+   const owner=await p.evaluate(()=>window.__wosNativeBack());
+   await f.locator('#list').waitFor({state:'visible'});
+   ok(owner==='hosted'&&await f.locator('#phone').isHidden(),'phone: reopened Cancel releases overlay so next Back returns to checklist');
+   ok(count(await log(),'POST','/wizard/v1/setup/phone/reset')===0,'phone: dismissal never disconnects');
+   ok(errors.length===0,'phone: no page errors',errors);
+   await ctx.close();continue;
+  }
   await f.locator('[data-act="menu"]').click();await f.locator('[data-act="ask-reset"]').click();await f.locator('[data-act="reset"]').click();await step(f,'off');
   ok(count(await log(),'POST','/wizard/v1/setup/phone/reset')===1,`${mode}: confirmed disconnect resets once`);
   for(const code of [401,403,404]) {
@@ -123,7 +163,7 @@ async function decode(browser,el) {
   ok(!p.frames().some(f=>/\/setup\/index.html/.test(f.url())),`${mode}: second launch does not auto-open Setup`);
   await ctx.close();
  }
- await b.close(); console.log(`${pass} passed, ${fail} failed`);
- if(process.env.QA_RECEIPT)fs.writeFileSync(process.env.QA_RECEIPT,JSON.stringify({suite:'qa-setup-app',base:BASE,pass,fail,results},null,2));
+ console.log(`${pass} passed, ${fail} failed`);
  process.exitCode=fail?1:0;
+ } finally { receipt(); await b.close(); }
 })().catch(e=>{console.error(e);process.exitCode=2;});
