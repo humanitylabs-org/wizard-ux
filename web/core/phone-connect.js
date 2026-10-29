@@ -53,7 +53,7 @@
     if (!origin && str(d.connect_url)) { try { origin = httpsOrigin(new URL(d.connect_url).searchParams.get('origin')); } catch (e) {} }
     if (!origin && str(d.address)) origin = httpsOrigin('https://' + d.address);
     const phones = (Array.isArray(d.phones) ? d.phones : []).filter(p => p && typeof p === 'object')
-      .map(p => ({ name: str(p.name) || 'Phone', os: str(p.os), online: p.online === true }));
+      .map(p => ({ name: str(p.name) || 'Device', os: str(p.os), online: p.online === true }));
     return {
       step: d.step,
       error: str(d.error) && d.error !== 'owner_not_recorded' ? d.error : '',
@@ -70,7 +70,7 @@
     tailscale_not_installed: 'This Wizard is missing Tailscale.',
     helper_error: 'Wizard couldn’t reach its private-network helper.',
     helper_forbidden: 'Wizard isn’t allowed to use its private-network helper.',
-  })[code] || `Phone setup: ${String(code).replace(/_/g, ' ')}`;
+  })[code] || `Device setup: ${String(code).replace(/_/g, ' ')}`;
 
   const REQUEST_MS = 8000;
   /** After this many failed checks in a row the last answer is no longer shown as current. */

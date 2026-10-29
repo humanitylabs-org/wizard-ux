@@ -70,7 +70,7 @@ async function decode(browser,el) {
   ok(!(await f.locator('.step').count()),`${mode}: Setup uses the shared component, no private step UI`);
   await change(f,{phone:{step:'https'}},'https');
   ok((await text(f,'[data-phone-connect]')).includes('HTTPS'),`${mode}: HTTPS guidance`);
-  await change(f,{phone:{step:'serving'}},'serving');
+  await change(f,{phone:{step:'serving',wizard_url:URLS.wiz}},'serving');
   if(mode==='desktop') {
    await f.waitForFunction(()=>document.querySelector('.pc-qr')?.dataset.drawn);
    ok(await decode(b,f.locator('.pc-qr'))==='wizard://connect?origin='+encodeURIComponent(new URL(URLS.wiz).origin),'desktop: rendered QR decodes to native Connect URI');
