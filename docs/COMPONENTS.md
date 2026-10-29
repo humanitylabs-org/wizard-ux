@@ -47,7 +47,7 @@ Visual: <side-by-side screenshot, or "none">
 
 | Need | Use | Never hand-roll |
 |---|---|---|
-| Chats: Focus/Filter/search, composer/files/read, Copy/Share, Novairecito Recall/Done | `WizCore` Chats (`web/core/chats.js`, `.css`); All/main Ready + Home count + full original alert; `setFocus`/`migrateChatsFocus`; `WizLive` stream/tools; Sign in; revision cache | duplicate Chats/Focus routing |
+| Chats: Focus/Filter/search, composer/files/read, Copy/Share, Novairecito Recall/Done | `WizCore` (`web/core/chats.js`, `.css`); Ready/Home/original alerts; `setFocus`/`migrateChatsFocus`; `WizLive`; Sign in; cache | duplicate Chats/Focus |
 | Chats list variant | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`web/core/edge-peek.js`), host storage | skin-local duplicate |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
