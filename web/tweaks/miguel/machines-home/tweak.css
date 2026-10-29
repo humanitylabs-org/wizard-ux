@@ -463,3 +463,40 @@ html[data-skin="obsidian-light"] .mh-glance.is-widget .mh-tile { background: rgb
 .mh-glance.is-widget .mh-tile.is-chats .mh-dots { max-width: 40px; }
 .mh-glance.is-widget .mh-tile-val { min-height: 13px; }
 .mh-glance.is-bar .mh-tile-val:empty { display: none; }
+
+/* ================= Desktop top bar v4 ================= */
+/* Left: which Wizard, a quiet dropdown beside Home. */
+.mh-root.is-topbar.is-wiz { position: relative; flex: none; display: flex; margin: 0 4px 0 2px; color: var(--ink, var(--mh-ink)); }
+.mh-root .mh-wiz { height: 26px; padding: 0 8px 0 9px !important; border-radius: 7px; display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--ink, #fff); background: transparent; }
+.mh-root .mh-wiz:hover, .mh-root .mh-wiz[aria-expanded="true"] { background: rgba(205, 190, 255, .1); }
+.mh-wiz-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mh-good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mh-good) 22%, transparent); }
+.mh-wiz .mh-chev { transform: scale(.75); opacity: .7; }
+.mh-wiz-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; min-width: 230px; padding: 6px; border-radius: 14px; display: flex; flex-direction: column; gap: 1px; background: var(--mh-card-solid); box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 18px 44px -16px rgba(0, 0, 0, .65); animation: mh-in 160ms var(--mh-ease) both; }
+.mh-wiz-menu[hidden] { display: none; }
+.mh-wiz-h { padding: 6px 10px 4px; font-size: 10.5px; font-weight: 800; letter-spacing: .08em; color: var(--mh-ink-3); }
+.mh-root .mh-wiz-menu button { min-height: 38px; padding: 5px 10px !important; border-radius: 9px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; text-align: left; color: var(--mh-ink); background: transparent; }
+.mh-wiz-menu button b { font-size: 13.5px; font-weight: 700; }
+.mh-wiz-menu button small { font-size: 11px; color: var(--mh-ink-2); }
+.mh-root .mh-wiz-menu button:hover { background: color-mix(in srgb, var(--mh-ink) 8%, transparent); }
+.mh-root .mh-wiz-menu button[aria-checked="true"] { background: color-mix(in srgb, var(--mh-accent) 20%, transparent); }
+.mh-root .mh-wiz-menu .is-add { min-height: 34px; color: var(--mh-ink-2); font-size: 12.5px; font-weight: 650; margin-top: 3px; box-shadow: inset 0 1px 0 var(--mh-card-line); border-radius: 0 0 9px 9px; }
+/* Right: status icons in the bar's own style (no pill), then a hairline before the bar's icons. */
+.mh-glance.is-bar { height: 26px; gap: 4px; padding: 0; background: none; box-shadow: none; }
+.mh-root .mh-bi { position: relative; width: 30px; height: 26px; border-radius: 7px; display: grid; place-items: center; color: var(--ink-2, var(--mh-ink-2)); background: transparent; }
+.mh-root .mh-bi:hover { background: rgba(205, 190, 255, .1); color: var(--ink, #fff); }
+.mh-bi svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.mh-bi.is-bad { color: var(--mh-bad); }
+html[data-skin^="landscapes"] .mh-bi.is-bad { color: #FF95A8; }
+.mh-bi .mh-badge { top: 0; right: 1px; min-width: 14px; height: 14px; font-size: 9px; box-shadow: 0 0 0 1.5px var(--mh-card-solid); }
+.mh-glance.is-bar .mh-gauge { height: 26px !important; padding: 0 8px !important; gap: 4px; border-radius: 7px; background: transparent !important; box-shadow: none; }
+.mh-glance.is-bar .mh-gauge:hover { background: rgba(205, 190, 255, .1) !important; transform: none; }
+.mh-glance.is-bar .mh-g-label { font-size: 10.5px; }
+.mh-glance.is-bar .mh-g-ef { display: none; }
+.mh-glance.is-bar .mh-g-cells { gap: 1.5px; }
+.mh-glance.is-bar .mh-g-cells i { width: 4px; height: 11px; border-radius: 1.5px; }
+.mh-bar-sep { width: 1px; height: 16px; margin: 0 4px 0 2px; background: var(--mh-chip-line); }
+.mh-root.is-topbar:not(.is-wiz) { margin-right: 0; }
+html[data-skin="obsidian-light"] .mh-root .mh-wiz, html[data-skin="obsidian-light"] .mh-root .mh-bi:hover { color: #111418; }
+.mh-wiz-car { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: .7; transition: transform 160ms; }
+.mh-wiz-car.is-up { transform: rotate(180deg); }
+.mh-root.is-topbar .mh-glance.is-bar .mh-gauge { background: transparent !important; box-shadow: none !important; }

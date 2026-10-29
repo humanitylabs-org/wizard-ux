@@ -408,3 +408,4 @@ html:is([data-skin^="obsidian"], [data-skin="landscapes"]) .mine-home .home-unse
 .kh-legend kbd { min-width: 15px; height: 15px; padding: 0 3px; border-radius: 4px; display: grid; place-items: center; font: inherit; font-weight: 700; background: var(--bg); color: var(--ink); }
 html.key-hints-on #clock { visibility: hidden; }
 .kh-foot.pinned { top: auto; bottom: 18px; }
+.bar-start { display: contents; }

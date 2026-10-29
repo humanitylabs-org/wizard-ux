@@ -191,7 +191,12 @@ export default function setup(api) {
   const desk = !!document.getElementById('bar');
   const homeWs = h('div', { cls: 'mh-ws is-home-ws', role: 'tablist', 'aria-label': 'Which Wizard' });
   const glance = h('div', { cls: 'mh-glance ' + (desk ? 'is-bar' : 'is-widget'), role: 'group', 'aria-label': 'Your Wizard at a glance', 'data-look': api.storage.get('look') || 'b' });
-  const barBox = h('div', { cls: 'mh-root is-topbar' }, homeWs, glance);
+  // Desktop: which Wizard is a dropdown at the top-left (above desks in the hierarchy); the status icons sit with the
+  // bar's own icons at the top-right, same size and hover, no extra pill.
+  const wizBtn = h('button', { type: 'button', cls: 'mh-wiz', data: { toggle: 'wsm' }, 'aria-haspopup': 'menu' });
+  const wizMenu = h('div', { cls: 'mh-wiz-menu', role: 'menu', hidden: true });
+  const wizBox = h('div', { cls: 'mh-root is-topbar is-wiz' }, wizBtn, wizMenu);
+  const barBox = h('div', { cls: 'mh-root is-topbar' }, glance);
   root.append(h('div', { cls: 'mh-body' }, ...(desk ? [] : [homeWs, glance])));
   // Settings sections: each its own .mh-root so the same styles and size rules apply there.
   const sec = (cls, ...kids) => h('div', { cls: 'mh-root is-settings ' + cls }, ...kids);
@@ -199,7 +204,17 @@ export default function setup(api) {
   const secMap = sec('is-overview', wsBar, map), secAI = sec('is-ai', aiRow, aiList), secNet = sec('is-net', netBox), secStore = sec('is-store', storeBox);
 
   /* ---------- top ---------- */
-  function renderTabs() { fillTabs(wsBar); fillTabs(homeWs); }
+  function renderTabs() { fillTabs(wsBar); fillTabs(homeWs); renderWiz(); }
+  function renderWiz() {
+    const all = [['mine', thisName(), reg().this?.owner ? 'Your Wizard' : ''], ...managedList().map(g => [g.id, g.name, g.org || ''])];
+    const cur = all.find(x => x[0] === S.ws) || all[0], open = S.open.has('wsm');
+    wizBtn.setAttribute('aria-expanded', String(open)); wizBtn.setAttribute('aria-label', `Wizard: ${cur[1]}. Switch Wizard`);
+    wizBtn.replaceChildren(h('span', { cls: 'mh-wiz-dot', 'aria-hidden': 'true' }), h('b', { text: cur[1] }), (() => { const v = sv('svg', { class: 'mh-wiz-car' + (open ? ' is-up' : ''), viewBox: '0 0 24 24', 'aria-hidden': 'true' }); sv('path', { d: 'm7 10 5 5 5-5' }, v); return v; })());
+    wizMenu.hidden = !open;
+    wizMenu.replaceChildren(...(open ? [h('small', { cls: 'mh-wiz-h', text: 'Wizards' }),
+      ...all.map(([id, n, sub]) => h('button', { type: 'button', role: 'menuitemradio', 'aria-checked': String(S.ws === id), data: { ws: id } }, h('b', { text: n }), sub ? h('small', { text: sub }) : null)),
+      h('button', { type: 'button', cls: 'is-add', role: 'menuitem', data: { act: 'add-managed' } }, '+ Add a Wizard')] : []));
+  }
   function fillTabs(bar) {
     const tab = (id, name) => h('button', { type: 'button', role: 'tab', data: { ws: id }, 'aria-selected': String(S.ws === id) }, name);
     const add = h('button', { type: 'button', cls: 'mh-ws-add', 'aria-label': 'Add a Wizard you manage', data: { act: 'add-managed' } });
@@ -480,9 +495,9 @@ export default function setup(api) {
     if (!b || b === top) return;  // Sign in / Sign out carry the shell's own data-res-signin, which opens that app
     const d = b.dataset;
     if (d.go) { if (d.go === 'chats') return api.data.read.sessions?.open('ready'); return api.settings?.open?.(d.go); }
-    if (d.toggle === 'wsm') { flip('wsm'); drawn.glance = ''; paint(); return; }
+    if (d.toggle === 'wsm') { flip('wsm'); renderWiz(); return; }
     if (d.open) return api.data.read.sessions?.open(d.open);
-    if (d.ws) { S.open.delete('wsm'); drawn.glance = ''; if (S.ws === d.ws) { paint(); return; } S.ws = d.ws; api.storage.set('ws', d.ws); fresh = true; paint(true); api.settings?.refresh?.(); return; }
+    if (d.ws) { S.open.delete('wsm'); drawn.glance = ''; renderWiz(); if (S.ws === d.ws) { paint(); return; } S.ws = d.ws; api.storage.set('ws', d.ws); fresh = true; paint(true); api.settings?.refresh?.(); return; }
     if (d.act) {
       const g = managedOf(S.ws), where = g ? `${g.name}'s Wizard` : 'my network';
       const ask = { 'add-managed': ['Add a Wizard I manage', 'Add a Wizard I manage to my map: '], 'add-device': ['Add a device', `Add a device to ${where} as a helper: `],
@@ -518,7 +533,7 @@ export default function setup(api) {
       b.firstElementChild?.classList.toggle('is-up', S.bars);
     }
   };
-  for (const el of [root, barBox, secMap, secAI, secNet, secStore]) api.listen(el, 'click', onTap);
+  for (const el of [root, barBox, wizBox, secMap, secAI, secNet, secStore]) api.listen(el, 'click', onTap);
   api.listen(secAI, 'input', e => {
     const id = e.target?.dataset?.nick; if (!id) return;
     const v = String(e.target.value || '').trim().slice(0, 24);
@@ -556,6 +571,21 @@ export default function setup(api) {
       g ? null : tile('overview', 'is-mach', 'Machines', `${nM} ${nM === 1 ? 'machine' : 'machines'}${people().length ? ` · ${people().length} ${people().length === 1 ? 'person' : 'people'}` : ''}`,
         pic('box'), String(nM)),
     ].filter(Boolean);
+    if (desk) {
+      // Bar icons: the fuel meter, then one line icon each; a badge only when something needs you.
+      const ic = paths => { const v = sv('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true' }); for (const d of paths) sv('path', { d }, v); return v; };
+      const I = { store: ['M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3Z', 'M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6', 'M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3'],
+        shield: ['M12 3l7 3v6c0 4.2-3 7.4-7 9-4-1.6-7-4.8-7-9V6z'], server: ['M4 4h16v6H4z', 'M4 14h16v6H4z', 'M8 7h.01M8 17h.01'] };
+      const icon = (go, cls, label, paths, badge) => h('button', { type: 'button', cls: 'mh-bi ' + cls, data: { go }, title: label, 'aria-label': label }, ic(paths), badge || null);
+      glance.replaceChildren(...[
+        fuel ? gaugeEl(fuel) : null,
+        st ? icon('storage', 'is-backup' + (st.state !== 'ok' ? ' is-warn' : ''), backupRunning() ? 'Backing up now' : st.age == null ? 'No backup yet' : `Backed up ${agoS(st.age)} ago${st.used != null ? ' · ' + gbFmt(st.used) : ''}`, I.store, st.state !== 'ok' ? h('span', { cls: 'mh-badge is-warn', text: '!' }) : null) : null,
+        g ? null : icon('network', 'is-net' + (bad ? ' is-bad' : ''), bad ? `${bad} ${bad === 1 ? 'machine' : 'machines'} open to the internet` : checked ? 'Tailscale only' : 'Security not checked yet', I.shield, bad ? h('span', { cls: 'mh-badge', text: String(bad) }) : null),
+        g ? null : icon('overview', 'is-mach', `${nM} ${nM === 1 ? 'machine' : 'machines'} · your network`, I.server),
+      ].filter(Boolean));
+      if (glance.firstChild) glance.append(h('span', { cls: 'mh-bar-sep', 'aria-hidden': 'true' }));
+      return;
+    }
     glance.replaceChildren(...parts);
   }
   function paint(force) {
@@ -587,7 +617,7 @@ export default function setup(api) {
   api.data.read.resources.watch(state => { const got = merge(state); if (got.devices || got.ai) keep(); paint(); readBackup(); });
 
   /* ---------- mount at Home; keep it there across Home repaints ---------- */
-  const mount = () => { if (desk) api.slot.mount('dock-end', barBox, -1); if (api.slot.mount('home-main', root)) { api.data.read.resources.refresh(); api.frame(drawLines); } };
+  const mount = () => { if (desk) { api.slot.mount('dock-end', barBox, -1); api.slot.mount('bar-start', wizBox); } if (api.slot.mount('home-main', root)) { api.data.read.resources.refresh(); api.frame(drawLines); } };
   api.on('home', () => { mount(); paint(); });
   api.on('route', () => { mount(); readBackup(); });
   let ro = null;
@@ -598,6 +628,8 @@ export default function setup(api) {
   api.settings?.section('ai', 'ai', secAI, { subtitle: fuelText });
   api.settings?.section('net', 'network', secNet, { subtitle: () => { const n = openOnes().length; return n ? `${n} open to internet` : ''; } });
   api.settings?.section('store', 'storage', secStore, { subtitle: () => { const st = storage(); return st?.age != null ? `${agoS(st.age)} ago` : ''; } });
+  api.listen(document, 'click', e => { if (S.open.has('wsm') && e.target.isConnected && !wizBox.contains(e.target)) { S.open.delete('wsm'); renderWiz(); } });
+  api.listen(document, 'keydown', e => { if (e.key === 'Escape' && S.open.has('wsm')) { S.open.delete('wsm'); renderWiz(); wizBtn.focus(); } });
   S.res = api.storage.get('res') || {}; merge(api.data.read.resources.snapshot());
   paint(true); mount(); readBackup(true);
   return () => { ro?.disconnect(); };
