@@ -4,7 +4,7 @@
   'use strict';
   const { norm } = window.WizCore;
   const ALL = [
-    {id:'pages', kind:'wizard', name:'Pages', system:true, icon:'P', desc:'Reports, documents and dashboards your agent makes', sigil:{id:'pages',name:'Pages'}},
+    {id:'pages', kind:'wizard', name:'Pages', system:true, icon:'pages', desc:'Reports, documents and dashboards your agent makes', sigil:{id:'pages',name:'Pages',icon:'pages'}},
     { id: 'app-store', kind: 'wizard', name: 'App Store', icon: '+', g: ['#8f63ff', '#ff5ccf'], url: '/wizard-os-home/store/index.html', desc: 'Get apps · Browse the Wizard App Index' },
     // Agents: a system app of its own, reached from Home; never in Apps or the Store.
     // Its sigil is the house `agents` mark (two layered hats), never a single hat that could pass for one agent.
