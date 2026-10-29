@@ -54,7 +54,13 @@
       import(new URL('store/store-install.js', base).href).then(m => m.installRelease, () => async (r) => { // shells before store-install.js
         const res = await fetch(new URL('store-install/' + encodeURIComponent(r.id), base), { method: 'POST', credentials: 'same-origin', cache: 'no-store',
           headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: JSON.stringify({ source: r.source, repo: r.repo, commit: r.commit, operation: 'install' }) });
-        if (!res.ok) throw Error((await res.json().catch(() => ({}))).error || 'Install failed.');
+        let j = await res.json().catch(() => ({}));
+        if (!res.ok && res.status !== 202) throw Error(j.error || 'Install failed.');
+        for (let i = 0; j.state === 'installing' && i < 360; i++) {
+          await new Promise(r => setTimeout(r, 1000));
+          j = await (await fetch(new URL('store-install/' + encodeURIComponent(r.id), base), { credentials: 'same-origin', cache: 'no-store' })).json().catch(() => ({ state: 'installing' }));
+        }
+        if (j.state !== 'installed') throw Error(j.error || 'The install did not finish. Try again.');
       }),
       (async () => {
         const out = [];
