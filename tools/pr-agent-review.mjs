@@ -8,7 +8,7 @@
 //   2. likely breaking changes (removed exports, routes, files, manifest fields, env vars, workflows);
 //   3. secrets, personal paths and private hostnames;
 //   4. docs/COMPONENTS.md REUSE / EXTEND / NEW problems and hand-rolled shared capabilities.
-// It is advisory: approval and merge stay with a human admin who is not the author.
+// It counts as the non-author review AGENTS.md (team rules v4, DECISIONS #96) requires, once every 🔴 is fixed.
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { checkReuse } from './reuse-check.mjs';
@@ -293,7 +293,7 @@ export function renderReview({ pr = {}, headSha = '', findings = [], filesCount 
     }
     lines.push('');
   }
-  lines.push(`<sub>Checked ${filesCount} file${filesCount === 1 ? '' : 's'} at ${headSha.slice(0, 7)}${truncated ? ' (patch too large for some files; those were checked by name only)' : ''}: skin scope, breaking changes, secrets and private paths, COMPONENTS.md reuse. This review is advisory. Merging needs an approving review from an admin other than @${pr.author || 'the author'}. Reviewer: \`humanitylabs-org/wizard-ux/tools/pr-agent-review.mjs\`.</sub>`);
+  lines.push(`<sub>Checked ${filesCount} file${filesCount === 1 ? '' : 's'} at ${headSha.slice(0, 7)}${truncated ? ' (patch too large for some files; those were checked by name only)' : ''}: skin scope, breaking changes, secrets and private paths, COMPONENTS.md reuse. Under the team rules (AGENTS.md), this counts as the non-author review for @${pr.author || 'the author'} once every 🔴 is fixed; a non-high-risk Recommended fix with a failing-first regression test needs no review. Reviewer: \`humanitylabs-org/wizard-ux/tools/pr-agent-review.mjs\`.</sub>`);
   return lines.join('\n');
 }
 

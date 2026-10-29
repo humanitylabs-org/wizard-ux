@@ -21,6 +21,8 @@ const clip = (s, n) => String(s ?? '').replace(/[\u0000-\u001f\u007f]/g, '').tri
 const GiB = 1024 ** 3;
 // agent = machines the Wizard reads and runs work on; human = the owner's own devices; client = Wizards run for clients.
 export const GROUPS = new Set(['agent', 'human', 'client', 'other']);
+// What an agent device does for the Wizard on the owner's Machines map (main is always "this").
+export const USES = new Set(['standby', 'helper']);
 export const peerGroup = (os, name, reg) => reg.groups[String(name).toLowerCase()] || (/^(ios|android|macos|ipados)$/i.test(os || '') ? 'human' : 'other');
 
 // ---------- registry ----------
@@ -35,13 +37,29 @@ export function cleanRegistry(raw) {
     const c = d.connect || {};
     if (c.type !== 'ssh' || !HOST_RE.test(String(c.host || ''))) continue;
     seen.add(id);
-    devices.push({id, name: clip(d.name, 40) || id, role: clip(d.role, 60) || null, group: GROUPS.has(d.group) ? d.group : 'agent', connect: {type: 'ssh', host: String(c.host), ...(c.shell === 'powershell' ? {shell: 'powershell'} : {})}, tailnet: names(d.tailnet)});
+    devices.push({id, name: clip(d.name, 40) || id, role: clip(d.role, 60) || null, group: GROUPS.has(d.group) ? d.group : 'agent', ...(USES.has(d.use) ? {use: d.use} : {}), connect: {type: 'ssh', host: String(c.host), ...(c.shell === 'powershell' ? {shell: 'powershell'} : {})}, tailnet: names(d.tailnet)});
     if (devices.length >= 24) break;
   }
   // Tailnet machines the Wizard does not read: which group the owner sees them under (human / client / other).
   const groups = {};
   for (const [k, v] of Object.entries(j.groups && typeof j.groups === 'object' ? j.groups : {}).slice(0, 100)) { const n = clip(k, 64).toLowerCase(); if (n && GROUPS.has(v)) groups[n] = v; }
-  return {version: 1, this: thisBox, devices, hide: names(j.hide), groups};
+  // Wizards the owner looks after on other boxes (the Machines workspace switcher): what is known, never probed.
+  // Who uses a managed Wizard: names the owner wrote down and/or a head count. Shown beside its Main, never probed.
+  const managedPeople = m => {
+    const people = (Array.isArray(m.people) ? m.people : []).map(n => clip(n, 40)).filter(Boolean).slice(0, 24);
+    const n = Number(m.peopleCount), count = Number.isInteger(n) && n > people.length && n <= 999 ? n : 0;
+    return {...(people.length ? {people} : {}), ...(count ? {peopleCount: count} : {})};
+  };
+  const managed = [], mseen = new Set();
+  for (const m of Array.isArray(j.managed) ? j.managed : []) {
+    const id = clip(m?.id, 32).toLowerCase(), name = clip(m?.name, 40);
+    if (!ID_RE.test(id) || !name || mseen.has(id)) continue;
+    mseen.add(id);
+    const where = clip(m.where, 120), peer = clip(m.peer, 64).toLowerCase();
+    managed.push({id, name, ...(clip(m.org, 60) ? {org: clip(m.org, 60)} : {}), ...(/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(where) ? {where} : {}), ...(peer ? {peer, peerName: clip(m.peerName, 40) || peer} : {}), ...managedPeople(m)});
+    if (managed.length >= 12) break;
+  }
+  return {version: 1, this: thisBox, devices, hide: names(j.hide), groups, ...(managed.length ? {managed} : {})};
 }
 export function readRegistry(path = REGISTRY_PATH()) {
   try { return cleanRegistry(JSON.parse(readFileSync(path, 'utf8'))); }
@@ -218,10 +236,11 @@ export function createDevicesReader({registryPath, probeLocalImpl = probeLocal, 
     const devices = [shape({id: 'this', kind: 'this', group: 'agent', name: reg.this.name || pretty(net?.self.name) || pretty(hostname().split('.')[0]), role: reg.this.role || 'Wizard runs here'}, local, null)];
     reg.devices.forEach((d, i) => {
       const peer = findPeer(matchKeys(d)); if (peer) used.add(peer.name.toLowerCase());
-      devices.push(shape({id: d.id, kind: 'ssh', group: d.group, name: d.name, role: d.role}, remote[i], peer));
+      devices.push(shape({id: d.id, kind: 'ssh', group: d.group, name: d.name, role: d.role, ...(d.use ? {use: d.use} : {})}, remote[i], peer));
     });
     const hide = new Set(reg.hide);
     const network = net ? {available: true, peers: net.peers.filter(p => !used.has(p.name.toLowerCase()) && !used.has(p.dns) && !hide.has(p.name.toLowerCase()) && !hide.has(p.dns)).map(({name, dns, os, online, lastSeen}) => ({name, os, online, lastSeen: online ? null : lastSeen, group: peerGroup(os, reg.groups[dns] ? dns : name, reg)})).sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name))} : {available: false, peers: []};
-    return {at: new Date(now()).toISOString(), devices, network};
+    const managed = (reg.managed || []).map(m => { const p = m.peer && net?.peers.find(x => x.name.toLowerCase() === m.peer || x.dns === m.peer); return {...m, ...(m.peer ? {peerOnline: p ? !!p.online : null} : {})}; });
+    return {at: new Date(now()).toISOString(), devices, network, ...(managed.length ? {managed} : {})};
   };
 }

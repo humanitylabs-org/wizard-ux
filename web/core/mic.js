@@ -44,19 +44,19 @@
     const others = inputs.filter(i => i.type !== 'builtin_mic');
     const remembered = mode === 'prefer' ? policy.prefer : [];
     const opt = (key, icon, title, sub, on) =>
-      `<button class="st-row" data-mic="${key}" role="radio" aria-checked="${on}"><span class="st-ic">${icon}</span><span class="st-tx"><b>${esc(title)}</b><small>${esc(sub)}</small></span><span class="st-go">${on ? '●' : '○'}</span></button>`;
+      `<button class="st-row" data-mic="${key}" role="radio" aria-checked="${on}"><span class="st-tx"><b>${esc(title)}</b><small>${esc(sub)}</small></span><span class="st-go">${on ? '●' : '○'}</span></button>`;
     let rows = opt('phone', '🎙', 'Phone mic only', 'Recommended · a Bluetooth speaker or headset never takes over your recordings', mode === 'phone')
       + opt('any', '🎧', 'Any connected mic', 'Android picks · a Bluetooth headset mic is used while it is connected', mode === 'any');
     // Mics this phone remembers (prefer list), connected or not, then connected ones not yet chosen.
     const seen = [];
     for (const [i, d] of remembered.entries()) {
       const live = inputs.some(x => same(d, x)); seen.push(d);
-      rows += `<button class="st-row" data-mic="forget" data-mici="${i}" role="radio" aria-checked="true"><span class="st-ic">★</span><span class="st-tx"><b>Use ${esc(label(d))}${i ? ' (backup)' : ''}</b><small>${live ? 'Connected · used for recordings · tap to stop using it' : 'Not connected · phone mic until it is · tap to forget'}</small></span><span class="st-go">●</span></button>`;
+      rows += `<button class="st-row" data-mic="forget" data-mici="${i}" role="radio" aria-checked="true"><span class="st-tx"><b>Use ${esc(label(d))}${i ? ' (backup)' : ''}</b><small>${live ? 'Connected · used for recordings · tap to stop using it' : 'Not connected · phone mic until it is · tap to forget'}</small></span><span class="st-go">●</span></button>`;
     }
     for (const d of others) {
       if (seen.some(x => same(x, d))) continue;
       const j = inputs.indexOf(d);
-      rows += `<button class="st-row" data-mic="prefer" data-mici="${j}" role="radio" aria-checked="false"><span class="st-ic">＋</span><span class="st-tx"><b>Use ${esc(label(d))} when connected</b><small>${esc(KIND[d.type] || 'External')} · remembered on this phone · otherwise the phone mic</small></span><span class="st-go">○</span></button>`;
+      rows += `<button class="st-row" data-mic="prefer" data-mici="${j}" role="radio" aria-checked="false"><span class="st-tx"><b>Use ${esc(label(d))} when connected</b><small>${esc(KIND[d.type] || 'External')} · remembered on this phone · otherwise the phone mic</small></span><span class="st-go">○</span></button>`;
     }
     return `<div class="st-group" data-mic-group><h4>Microphone</h4>${rows}</div>`;
   }

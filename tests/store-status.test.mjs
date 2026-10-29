@@ -18,6 +18,17 @@ test('host Calendar alias requires reviewed repo + canonical shell path; Music i
  assert.equal(resolveInstalled({id:'wizard-music',repo:'wrong/repo'},{wam:[],shell},[]).conflict,true);
  assert.equal(resolveInstalled({id:'wizard-calendar',repo:'humanitylabs-org/wizard-calendar'},{wam:[],shell:[{id:'calendar',url:'/another/'}]},[]).conflict,true);
 });
+test('Wizard Notes Alpha opens the existing Notes copy only for the reviewed repo and path',()=>{
+ const alpha={id:'wizard-notes',repo:'humanitylabs-org/wizard-notes',source:'wizard-alpha',channel:'alpha'};
+ const local={wam:[{id:'notes',repo:'local/notes',status:'running'}],shell:[{id:'notes',url:'/notes/',status:'running'}]};
+ const installed=resolveInstalled(alpha,local,[]);
+ assert.equal(installed.id,'notes');
+ assert.equal(releaseState(alpha,installed,false,true),'installed');
+ assert.equal(resolveInstalled({...alpha,repo:'foreign/repo'},local,[]).conflict,true);
+ assert.equal(resolveInstalled(alpha,{wam:[],shell:[{id:'notes',url:'/different/'}]},[]).conflict,true);
+ assert.equal(resolveInstalled(alpha,{wam:[],shell:[]},[]),null);
+ assert.equal(releaseState(alpha,null,false,true),'get');
+});
 test('repo mismatch never falls back to same-ID shell and never opens wrong app',()=>{
  const i=resolveInstalled({...app,repo:'other/repo'},snapshot,[]); assert.equal(i.conflict,true);
  assert.equal(releaseState(app,i,false,true),'conflict');

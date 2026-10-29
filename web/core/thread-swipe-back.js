@@ -29,10 +29,13 @@ import { engages, commits } from './swipe-intent.js';
         }
         sw.dx = dx;
         const s = sw;
-        api.frame(() => { if (!s.on) return; s.th.style.transform = `translateX(${Math.max(0, Math.min(s.dx, 140)) * .5}px)`; s.th.style.opacity = String(1 - Math.max(0, Math.min(s.dx, 160)) / 500); });
+        api.frame(() => { if (!s.on || s.done) return; s.th.style.transform = `translateX(${Math.max(0, Math.min(s.dx, 140)) * .5}px)`; s.th.style.opacity = String(1 - Math.max(0, Math.min(s.dx, 160)) / 500); });
       }, { passive: true });
       const end = e => {
-        if (!sw) return; const s = sw; sw = null; s.on && reset(s.th); s.on = s.on && e.type !== 'touchcancel';
+        if (!sw) return; const s = sw; sw = null; s.done = true;
+        // Snap back on every release: a drag frame queued by the last move must not re-indent the thread after it.
+        if (s.on) { reset(s.th); api.frame(() => reset(s.th)); }
+        s.on = s.on && e.type !== 'touchcancel';
         const t1 = e.changedTouches && e.changedTouches[0]; if (!t1 || !s.on) return;
         const dx = t1.clientX - s.x, dy = Math.abs(t1.clientY - s.y);
         if (commits(dx, dy, performance.now() - s.t)) api.nav.back();

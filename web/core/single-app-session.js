@@ -16,7 +16,7 @@
   // Wisdom's selection Search uses window.open; without this guard it is a dead tap in Android.
   const links = window.WizLinks?.mount({ parent:document.body, mode:'sheet', allowURL:u => {
     if (!u || (u.origin === location.origin && (policy.isShell(u.href) || /%(?:2f|5c|2e|25)/i.test(u.pathname)))) {
-      toast('!', 'Use Android Home to switch apps'); return false;
+      toast('!', 'Use your device Home to switch apps'); return false;
     }
     return true;
   } });
@@ -35,7 +35,7 @@
     checkpoint(); detach?.(); detach = null; frame?.remove(); frame = null; loaded = false;
     win.replaceChildren(); const view = document.createElement('div'); view.className = 'single-unavailable';
     const title = document.createElement('h2'); title.textContent = 'App unavailable';
-    const body = document.createElement('p'); body.textContent = text + ' Use Android Home to return to Wizard.';
+    const body = document.createElement('p'); body.textContent = text + ' Use your device Home to return to Wizard.';
     const retry = document.createElement('button'); retry.textContent = 'Try again'; retry.onclick = () => location.reload();
     view.append(title, body, retry); win.append(view);
   }

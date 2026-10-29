@@ -9,3 +9,12 @@ test('long-press link menu: your browser or copy, dark card, never writes into t
   assert.match(links, /background:rgba\(22,14,46,\.98\)/);
   assert.match(links, /clipboard\?\.writeText\(u\.href\)/);
 });
+
+test('own-page links: long-press offers your browser (native bridge) and Download for files; taps on files download', () => {
+  assert.match(links, /data-wl="dl">Download</);
+  assert.match(links, /openInBrowser/);
+  assert.match(links, /if \(isFile\(u\)\) return download\(u, doc\);/);
+  assert.match(links, /linkMenu\(doc, 'body', doc\.baseURI\)/);
+  assert.doesNotMatch(links, /\|\| inApp\(u\)\) return false;/);
+  assert.match(links, /if \(NATIVE && inApp\(u\)\) return;/); // never window.open our own page over the shell
+});
