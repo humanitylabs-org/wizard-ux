@@ -85,8 +85,8 @@ module.exports = async ({boot, ok, model, provider, out, browser}) => {
       // Focus filters the main Chats list, not its window's send-pill owner.
       // Routed bubble dismissal is covered above; only the main owner shows this pill here.
       if(route.kind==='main'){
-      await returnList();
       const pillId=await p.evaluate(async({sid,agent,model,provider})=>{const it=await WosOutbox.stage({kind:'reply',sessionId:sid,agent,text:'Dismiss from list',model,provider});await WosOutbox.transition(it.id,'failed','No confirmed model route');return it.id;},{sid:s.id,agent,model,provider});details.pillId=pillId;
+      await returnList();
       const pill=list.locator(`.ch-pill [data-obdismissfailed="${pillId}"]`);
       await pill.waitFor({state:'visible'});await pill.scrollIntoViewIfNeeded();await settled();
       await p.screenshot({path:path.join(out,label+'-pill-before.png'),animations:'disabled'});
