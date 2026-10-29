@@ -25,12 +25,9 @@ test('response style is an owner setting', async () => {
   deny = false; stale = true;
   await assert.rejects(box.WizConfig.responseStyle('summary'), /not confirmed/);
   await assert.rejects(box.WizConfig.responseStyle('bad'), /Choose/);
-  stale = false;
-  assert.equal(await box.WizConfig.responseStyle('own'), 'own');
-  assert.equal(box.WizConfig.raw.settings.response_style, 'own');
 });
-test('both shells show Summary and Concise on Chats & app screens and Back stays in Settings', async () => {
-  const box = { console, Map, Set, Date, String, navigator: { userAgent: 'Fixture' }, CSS: { escape: String }, document: { activeElement: null }, WizCore: {}, WizConfig: { responseStyle: async () => 'summary' } };
+test('both shells explain that reply style lives with each agent, with no Wizard-level picker', async () => {
+  const box = { console, Map, Set, Date, String, navigator: { userAgent: 'Fixture' }, CSS: { escape: String }, document: { activeElement: null }, WizCore: {}, WizConfig: { responseStyle: async () => { throw Error('retired picker must not load'); } } };
   box.window = box;
   vm.runInNewContext(read('settings.js'), box);
   for (const shell of ['phone', 'desktop']) {
@@ -38,12 +35,9 @@ test('both shells show Summary and Concise on Chats & app screens and Back stays
     const view = box.WosSettings.mount(root, { shell });
     view.focus('chats');
     await new Promise(resolve => setImmediate(resolve));
-    assert.match(root.innerHTML, /Response style/);
-    assert.match(root.innerHTML, /Summary: context and labelled results/);
-    assert.match(root.innerHTML, /Concise: short, plain replies/);
-    assert.match(root.innerHTML, /Own: your agent's usual style, nothing added/);
-    assert.match(root.innerHTML, /<option value="own" >Own<\/option>/);
-    assert.match(root.innerHTML, /value="summary" selected/);
+    assert.match(root.innerHTML, /Reply style/);
+    assert.match(root.innerHTML, /Each agent keeps its own/);
+    assert.doesNotMatch(root.innerHTML, /data-response-style|Summary: context/);
     assert.equal(view.back(), true);
     assert.equal(view.page, '');
     view.destroy();

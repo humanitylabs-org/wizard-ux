@@ -10,7 +10,7 @@
   const shell = () => !native() && /WizardShell\//.test(navigator.userAgent || '');
   const shellOrb = () => shell() && window.WosDeviceOrb?.ready ? window.WosDeviceOrb : null;
   // Rows are plain lines split by hairlines: no boxes, no icon tiles; a second line only when it says something.
-  const row = (id, title, sub) => `<button class="st-row" data-st="${esc(id)}"><span class="st-tx"><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="st-go">›</span></button>`;
+  const row = (id, title, sub) => `<button class="st-row wz-row" data-st="${esc(id)}"><span class="st-tx"><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="st-go">›</span></button>`;
   // System pages are filled by packages (WosSettings.register with page = one of these); a page with nothing on it hides.
   const filled = id => () => [...features.values()].some(f => f.page === id && (!f.available || f.available()));
   const PAGES = [
@@ -21,6 +21,9 @@
     { id: 'appearance', title: 'Appearance', group: 'Preferences' },
     { id: 'chats', title: 'Chats & app screens' },
     { id: 'voice', title: 'Voice & typing' },
+    // Phones over Tailscale (Phone Setup). Hidden on a Wizard without Phone Setup or for a non-owner.
+    // Hidden only for a non-owner; a Wizard without phone access shows the shared "not available yet" note.
+    { id: 'phones', title: 'Phones & devices', available: phonesAvailable },
     { id: 'phone', title: 'Phone', available: () => shell() ? !!shellOrb() : android() },
     { id: 'recovery', title: 'Unsent & recovered' },
     // Resources: the Home resource bars (AI + Compute) from the shared renderer, when it is there; else AI usage.
@@ -44,6 +47,7 @@
   }
   // A quiet value on the right of a row, only where it tells you something at a glance; '' otherwise.
   function subtitle(id, ctx) {
+    if (id === 'phones') { const pc = phones(), v = pc?.view; if (!v) return ''; if (pc.lost) return 'Can’t check'; const n = v.phones.length; return pc.on ? (n ? `${n} ${n === 1 ? 'device' : 'devices'}` : 'On') : pc.settingUp ? 'Setting up' : v.step === 'off' ? 'Off' : ''; }
     if (id === 'appearance') return window.WosSkin ? (mySkinWorn() ? window.WosMySkin.active.name + ' · ' : '') + lookName(window.WosSkin, window.WosSkin.current) : '';
     if (id === 'phone') { if (shell()) return shellOrb()?.state.on ? 'Everywhere on' : ''; try { return JSON.parse(native()?.everywhere?.() || '{}').enabled ? 'Everywhere on' : ''; } catch (_) { return ''; } }
     if (id === 'recovery') { const n = new Set([...unsentAll(ctx), ...recovered()].map(x => x.id)).size; return n ? String(n) : ''; }
@@ -129,7 +133,7 @@
   }
   register({ id: 'unsent', aliases: ['unsent'], html(ctx) {
     const all = unsentAll(ctx);
-    return `<div class="st-group"><h4>Unsent & retained <span>${all.length || ''}</span></h4>${all.length ? all.map(it => unsentRow(it, ctx)).join('') + (all.length > 1 ? '<button class="st-wide" data-ub-all="retry">Retry all</button>' : '') : '<div class="st-empty">No messages awaiting delivery on this device.</div>'}<details class="st-info"><summary aria-label="About retained messages">?</summary><p class="st-note">Held recordings are not queued. Retry all sends eligible failed/waiting messages only; held commands and unconfirmed delivery stay kept.</p></details></div>`;
+    return `<div class="st-group"><h4>Unsent & retained <span>${all.length || ''}</span></h4>${all.length ? all.map(it => unsentRow(it, ctx)).join('') + (all.length > 1 ? '<button class="st-wide wz-button secondary" data-ub-all="retry">Retry all</button>' : '') : '<div class="st-empty">No messages awaiting delivery on this device.</div>'}<details class="st-info"><summary aria-label="About retained messages">?</summary><p class="st-note">Held recordings are not queued. Retry all sends eligible failed/waiting messages only; held commands and unconfirmed delivery stay kept.</p></details></div>`;
   }, act(ctx, el) {
     const b = el.closest('[data-ub]');
     if (b) { const r = b.closest('[data-ubid]'); unsentAction(ctx, r.dataset.ubid, r.dataset.uborigin, b.dataset.ub); return true; }
@@ -172,41 +176,17 @@
       return true;
     }
   });
-  const responseStyleState = ctx => ctx.responseStyle || (ctx.responseStyle = { value: '', busy: false, error: '' });
-  async function responseStyle(ctx, value) {
-    const state = responseStyleState(ctx);
-    if (state.busy) return;
-    const restoreFocus = document.activeElement?.matches?.('[data-response-style]') && ctx.root?.contains(document.activeElement);
-    state.busy = true; state.error = ''; ctx.render?.();
-    try {
-      if (!window.WizConfig?.responseStyle) throw Error('Response style is unavailable until your Wizard is updated');
-      state.value = await window.WizConfig.responseStyle(value);
-    } catch (error) { state.error = error.message || 'Could not change response style'; }
-    finally {
-      const focusWasLost = !document.activeElement || document.activeElement === document.body;
-      state.busy = false; ctx.render?.();
-      if (restoreFocus && focusWasLost) ctx.root?.querySelector('[data-response-style]')?.focus({ preventScroll: true });
-    }
-  }
+  // Reply style belongs to each agent's own persona (SOUL.md), not to Wizard: one source, survives detach.
   register({ id: 'response-style', page: 'chats', aliases: ['response-style'],
-    enter(ctx) { responseStyle(ctx); },
-    html(ctx) {
-      const state = responseStyleState(ctx);
-      return `<div class="st-group"><label class="st-row static"><span class="st-tx"><b>Response style</b><small>Summary: context and labelled results.</small><small>Concise: short, plain replies.</small><small>Own: your agent's usual style, nothing added.</small></span><select class="st-choice" aria-label="Response style" data-response-style ${state.busy || !state.value ? 'disabled' : ''}><option value="" ${!state.value ? 'selected' : ''} disabled>${state.busy ? 'Loading…' : 'Choose…'}</option><option value="summary" ${state.value === 'summary' ? 'selected' : ''}>Summary</option><option value="concise" ${state.value === 'concise' ? 'selected' : ''}>Concise</option><option value="own" ${state.value === 'own' ? 'selected' : ''}>Own</option></select></label>${state.error ? `<p class="st-note" role="alert">${esc(state.error)}</p><button class="st-wide" data-response-style-retry>Try again</button>` : ''}</div>`;
+    html() {
+      return `<div class="st-group"><div class="st-row static"><span class="st-tx"><b>Reply style</b><small>Each agent keeps its own. Tell an agent how you like replies and it remembers.</small></span></div></div>`;
     },
-    input(ctx, el) {
-      if (!el.matches?.('[data-response-style]')) return;
-      const state = responseStyleState(ctx), value = el.value;
-      el.value = state.value; // Never display an unverified save as the selected owner setting.
-      if (value !== state.value) responseStyle(ctx, value);
-    },
-    act(ctx, el) { if (!el.closest('[data-response-style-retry]')) return false; responseStyle(ctx); return true; },
   });
   const mySkinWorn = () => !!window.WosMySkin?.active;
   function mySkinRow(skin) {
     const M = window.WosMySkin, st = M?.state, js = st?.script;
     const script = js?.exists && !st.off ? `<div class="st-row static my-skin-row" data-myskin-script><span class="st-tx"><b>${js.approved ? 'Skin script on' : 'Skin script changed'}</b><small>${esc(M.active ? 'Skins/' + M.active.id + '/skin.js' : 'skin.js')} · approval on this device</small></span><span class="ms-acts">${js.approved ? '<button type="button" class="ghost" data-myskin="off">Turn off</button>' : `<button type="button" data-myskin="on" data-myskin-hash="${esc(js.sha256 || '')}" ${js.valid ? '' : 'disabled'}>Turn on</button>`}</span></div>` : '';
-    return `<div class="ms-panel" data-ownskin-panel><button class="st-row" data-myskin="edit"><span class="st-tx"><b>Edit with your Wizard</b><small>Ask your Wizard ‘change my ${esc(skin.name)} skin so…’</small></span><span class="st-go">›</span></button><p class="st-hint">${M.storage === 'box' ? 'Saved on your Wizard.' : M.storage === 'local' ? 'Saved on this device until your Wizard is updated.' : 'Offline · showing a cached skin.'}</p>${script}<button class="st-row" data-ownskin-remove="${esc(skin.id)}"><span class="st-tx"><b>Remove skin</b></span><span class="st-go">›</span></button></div>`;
+    return `<div class="ms-panel" data-ownskin-panel><button class="st-row wz-row" data-myskin="edit"><span class="st-tx"><b>Edit with your Wizard</b><small>Ask your Wizard ‘change my ${esc(skin.name)} skin so…’</small></span><span class="st-go">›</span></button><p class="st-hint">${M.storage === 'box' ? 'Saved on your Wizard.' : M.storage === 'local' ? 'Saved on this device until your Wizard is updated.' : 'Offline · showing a cached skin.'}</p>${script}<button class="st-row wz-row" data-ownskin-remove="${esc(skin.id)}"><span class="st-tx"><b>Remove skin</b></span><span class="st-go">›</span></button></div>`;
   }
   function mySkinAction(ctx, what, event) {
     const M = window.WosMySkin; if (!M) return;
@@ -247,12 +227,12 @@
   function tweakRows(S) {
     const E = window.WosExperience; if (!E) return '';
     const s = E.state, own = window.WosMySkin?.active;
-    if ((!s.owner && !own) || (!s.tweaks.length && !s.error)) return '';
+    if (!s.tweaks.length && !s.error) return '';
     const fam = (S.families || []).find(f => f.id === S.familyOf?.(S.current)), who = esc(fam?.name || 'This skin');
     const rows = tweakSwitches(s.tweaks, 'data-tweak-toggle', s.busy);
     if (own) return `<div class="tw-set"><h4>Tweaks</h4>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</div>`;
     const on = s.tweaks.filter(t => t.on).length;
-    return `<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row"><span class="st-tx"><b>${who} also changes how things work</b><small>${on} of ${s.tweaks.length} changes on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</details>`;
+    return `<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row wz-row"><span class="st-tx"><b>${s.owner ? who + ' also changes how things work' : 'How things work'}</b><small>${on} of ${s.tweaks.length} changes on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</details>`;
   }
   let tweaksOpen = false;
   window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
@@ -390,7 +370,7 @@
     const O = shellOrb(); if (!O) return '';
     const s = O.state, on = !!s.on;
     const sub = on ? (s.permitted ? 'On · tap to talk, hold to pause recording · hides while Wizard is open' : 'Needs “Display over other apps”') : s.permitted ? 'A floating Wizard button over your other apps. Tap to talk, drag to move.' : 'A floating Wizard button over your other apps. Android asks to let Wizard display over other apps.';
-    return `<div class="st-group"><h4>Assistant</h4><button class="st-row" data-st="everywhere" role="switch" aria-checked="${on}"><span class="st-tx"><b>Wizard Everywhere</b><small>${esc(sub)}</small></span><span class="sw ${on ? 'on' : ''}"><i></i></span></button></div>`;
+    return `<div class="st-group"><h4>Assistant</h4><button class="st-row wz-row" data-st="everywhere" role="switch" aria-checked="${on}"><span class="st-tx"><b>Wizard Everywhere</b><small>${esc(sub)}</small></span><span class="sw ${on ? 'on' : ''}"><i></i></span></button></div>`;
   }
   register({ id: 'assistant', aliases: ['everywhere', 'orb', 'floating-orb'], available: android, html(ctx) {
     if (shell()) return shellAssistant();
@@ -398,13 +378,79 @@
     try { ev = evNative ? JSON.parse(N.everywhere()) : null; } catch (_) {}
     const evOn = !!ev?.enabled;
     const evSub = !N ? 'Works in the Wizard OS Android app' : !evNative ? 'Update the Wizard OS app (0.5.0) to turn this on' : evOn ? (ev.overlay ? (ev.hold ? 'On · tap to talk · hold for Select text, Translate and Hide' : 'On · floats over other apps, hides while Wizard OS is open') : 'Needs “Display over other apps”') : 'A floating Wizard button over your other apps. Tap to talk, drag to move.';
-    return `<div class="st-group"><h4>Assistant</h4><button class="st-row" data-st="everywhere" role="switch" aria-checked="${evOn}" ${evNative ? '' : 'disabled'}><span class="st-tx"><b>Wizard Everywhere</b><small>${esc(evSub)}</small></span><span class="sw ${evOn ? 'on' : ''}"><i></i></span></button>${evNative && evOn && typeof N.voiceTypingSettings === 'function' ? row('typing', 'Voice typing & screenshots', ev.keyboard ? 'On · with a keyboard open the orb types what you say' : 'Off · tap to set up: the orb types into any app and attaches screenshots') : ''}<button class="st-row" data-st="side" ${N ? '' : 'disabled'}><span class="st-tx"><b>Side button</b><small>${esc(!N ? 'Works in the Wizard OS Android app' : ctx.sideReady?.() ? 'On · hold the side button to talk' : 'Hold the side button to talk, even when locked')}</small></span><span class="st-go">›</span></button></div>`;
+    return `<div class="st-group"><h4>Assistant</h4><button class="st-row wz-row" data-st="everywhere" role="switch" aria-checked="${evOn}" ${evNative ? '' : 'disabled'}><span class="st-tx"><b>Wizard Everywhere</b><small>${esc(evSub)}</small></span><span class="sw ${evOn ? 'on' : ''}"><i></i></span></button>${evNative && evOn && typeof N.voiceTypingSettings === 'function' ? row('typing', 'Voice typing & screenshots', ev.keyboard ? 'On · with a keyboard open the orb types what you say' : 'Off · tap to set up: the orb types into any app and attaches screenshots') : ''}<button class="st-row wz-row" data-st="side" ${N ? '' : 'disabled'}><span class="st-tx"><b>Side button</b><small>${esc(!N ? 'Works in the Wizard OS Android app' : ctx.sideReady?.() ? 'On · hold the side button to talk' : 'Hold the side button to talk, even when locked')}</small></span><span class="st-go">›</span></button></div>`;
   }, act(ctx, el) {
     const st = el.closest('[data-st]')?.dataset.st, N = native();
     if (shell()) { const O = shellOrb(); if (st !== 'everywhere' || !O) return false; O.toggle().then(() => ctx.render()); ctx.haptic?.(8); return true; }
     if (st === 'typing' && N?.voiceTypingSettings) { N.voiceTypingSettings(); return true; }
     if (st === 'everywhere' && N?.setEverywhere) { let on = false; try { on = JSON.parse(N.everywhere()).enabled; } catch (_) {} N.setEverywhere(!on); setTimeout(ctx.render, 250); ctx.haptic?.(8); return true; }
     if (st === 'side' && N) { ctx.openSub('side'); return true; } return false;
+  } });
+  /* ---------------- Phones & devices ----------------
+   * The owner's phones over Tailscale. Connecting is the shared phone-connect component (web/core/phone-connect.js),
+   * the same one Setup's phone screen and Mac onboarding show, so every place says the same thing, including when
+   * this Wizard can't do device access yet. Below it: the phones on the owner's tailnet and turning device access off
+   * (the same reset as Setup's Disconnect, behind a confirmation sheet). A phone is a device on the owner's Tailscale
+   * account, so removing one happens in Tailscale's admin; the page links there. Hidden only for a non-owner. */
+  const PH = { pc: null, wanted: false, confirm: false, error: '', summary: '' };
+  const phoneShell = () => document.documentElement.dataset.shell === 'phone' ? 'phone' : 'desktop';
+  function phones() {
+    if (PH.pc || typeof window.WizPhoneConnect?.create !== 'function' || typeof fetch !== 'function') return PH.pc;
+    PH.pc = window.WizPhoneConnect.create({
+      layout: phoneShell(), qrScript: 'setup/vendor/qrcode.js',
+      active: () => PH.wanted && document.visibilityState === 'visible',
+      // The connection pill's evidence: Wizard's live reads are failing from this device (not a missing permission).
+      offline: () => { const L = window.WizLive; return !!L && !!L.error && L.error !== 'access'; },
+      // Settings redraws only when what it shows itself changes (the list entry, phones, Turn off); the component
+      // redraws its own part.
+      onChange: pc => {
+        const v = pc.view, key = JSON.stringify([pc.status, pc.lost, pc.connecting, v?.step, v?.phones]);
+        if (key !== PH.summary) { PH.summary = key; for (const m of mounts) m.render(); }
+      },
+    });
+    // When the connection drops or comes back, re-check at once instead of showing the last answer as current.
+    try { window.WizLive?.onChange?.(() => { const off = !!window.WizLive.error && window.WizLive.error !== 'access'; if (off !== PH.off) { PH.off = off; PH.pc?.refresh(); } }); } catch (e) {}
+    return PH.pc;
+  }
+  function phonesAvailable() { const pc = phones(); if (!pc) return false; pc.refresh(15000); return pc.status !== 'denied'; }
+  const osName = os => ({ ios: 'iPhone', android: 'Android', ipados: 'iPad' })[String(os || '').toLowerCase()] || 'Device';
+  function closePhonesSheet(ctx) { PH.confirm = false; PH.error = ''; ctx.render(); ctx.root.querySelector('[data-st="phones-off"]')?.focus(); }
+  register({ id: 'phones', page: 'phones', aliases: ['phones', 'devices', 'phone-access'], available: phonesAvailable, html() {
+    const pc = phones(); if (!pc) return '';
+    const v = pc.view, busy = pc.busy;
+    let h = '<div class="st-group"><h4>Device access</h4><div class="st-pc" data-phone-connect></div></div>';
+    if (pc.on && !pc.connecting) {
+      h += '<div class="st-group"><h4>Your devices</h4>';
+      h += v.phones.length ? v.phones.map(p => `<div class="st-row wz-row static"><span class="st-tx wz-main"><b>${esc(p.name)}</b><small>${esc(osName(p.os))} · ${p.online ? 'Online' : 'Offline'}</small></span></div>`).join('')
+        : '<div class="st-empty">No device on your Tailscale account yet.</div>';
+      h += '<a class="st-row" data-st="phones-manage" href="https://login.tailscale.com/admin/machines" target="_blank" rel="noopener noreferrer"><span class="st-tx"><b>Remove a device</b><small>Devices are listed on your Tailscale account. Remove one there and it can’t reach Wizard any more.</small></span><span class="st-go">↗</span></a>';
+      h += '</div>';
+    }
+    if (!pc.connecting && (pc.on || pc.settingUp)) h += '<div class="st-group"><h4>Turn off</h4>' + row('phones-off', 'Turn off device access', 'Disconnects this Wizard from Tailscale. Your chats stay here.') + '</div>';
+    if (PH.confirm) h += `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="phones-off-title" aria-describedby="phones-off-text"><h3 id="phones-off-title">Turn off device access?</h3><p id="phones-off-text">Every device loses access to this Wizard until you connect one again. Your chats stay here.</p>${PH.error ? `<p class="sc-error" role="alert">${esc(PH.error)}</p>` : ''}<div class="st-actions"><button data-st="phones-off-cancel" ${busy ? 'disabled' : ''}>Cancel</button><button data-st="phones-off-confirm" ${busy ? 'disabled' : ''}>${busy ? 'Turning off…' : 'Turn off'}</button></div></section></div>`;
+    return h;
+  }, painted(ctx, section) {
+    const host = section?.querySelector('[data-phone-connect]'); if (host) phones()?.attach(host);
+  }, deferRefresh: () => PH.confirm,
+  enter() { PH.wanted = true; },
+  leave() { PH.wanted = false; if (!PH.pc?.busy) { PH.confirm = false; PH.error = ''; } },
+  back(ctx) { if (PH.pc?.back()) return true; if (!PH.confirm) return false; if (!PH.pc?.busy) closePhonesSheet(ctx); return true; },
+  act(ctx, el) {
+    const st = el.closest('[data-st]')?.dataset.st;
+    if (st === 'phones-manage') return false; // the link leaves on its own
+    if (st === 'phones-off') { PH.confirm = true; PH.error = ''; ctx.render(); ctx.root.querySelector('[data-st="phones-off-cancel"]')?.focus(); return true; }
+    if (st === 'phones-off-cancel') { if (!PH.pc?.busy) closePhonesSheet(ctx); return true; }
+    if (st === 'phones-off-confirm' && PH.pc && !PH.pc.busy) {
+      const done = PH.pc.reset();
+      ctx.render(); // the sheet shows "Turning off…"
+      done.then(ok => {
+        if (ok) { PH.confirm = false; ctx.toast?.('✓', 'Device access is off', 2200); }
+        else PH.error = 'Couldn’t turn off device access. Try again.';
+        ctx.render();
+      });
+      return true;
+    }
+    return false;
   } });
   register({ id: 'server', available: () => typeof native()?.changeServer === 'function', html() {
     return `<div class="st-group"><h4>Connection</h4>${row('change-server', 'Change Wizard', 'Scan another box QR or enter its address')}</div>`;
@@ -450,7 +496,7 @@
   register({ id: 'chats-default', page: 'chats', aliases: ['chats-default'], html(ctx) {
     const host = chatsHost(), apps = host?.installed() || [{ id: 'wizard-chats' }], current = host?.defaultId() || 'wizard-chats';
     apps.sort((a, b) => (b.id === 'wizard-chats') - (a.id === 'wizard-chats'));
-    return `<div class="st-group"><h4>Default Chats</h4><div class="st-chats-options" role="radiogroup" aria-label="Default Chats">${apps.map(a => `<button class="st-row" role="radio" aria-checked="${a.id === current}" data-chats-choice="${esc(a.id)}" ${ctx.chatsBusy ? 'disabled' : ''}><span aria-hidden="true">${a.id === current ? '◉' : '○'}</span><span class="st-tx"><b>${esc(a.id === 'wizard-chats' ? 'Wizard Chats (built in)' : a.name)}</b></span></button>`).join('')}</div>${apps.length === 1 ? '<div class="st-store-hint">Install another Chats from the <button data-chats-store>Store</button> to switch</div>' : ''}</div>`;
+    return `<div class="st-group"><h4>Default Chats</h4><div class="st-chats-options" role="radiogroup" aria-label="Default Chats">${apps.map(a => `<button class="st-row wz-row" role="radio" aria-checked="${a.id === current}" data-chats-choice="${esc(a.id)}" ${ctx.chatsBusy ? 'disabled' : ''}><span aria-hidden="true">${a.id === current ? '◉' : '○'}</span><span class="st-tx"><b>${esc(a.id === 'wizard-chats' ? 'Wizard Chats (built in)' : a.name)}</b></span></button>`).join('')}</div>${apps.length === 1 ? '<div class="st-store-hint">Install another Chats from the <button data-chats-store>Store</button> to switch</div>' : ''}</div>`;
   } });
   function mount(root, adapter) {
     root.classList.add('st-root'); root.dataset.settingsRoot = '';
