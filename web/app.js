@@ -1428,7 +1428,7 @@
     foldOpen.agents = foldOpen.dev = false; desks.push(blank({})); syncDesks(); renderDots(); goDesk(desks.length - 1, true); // the empty desk titles itself; a label flash would cover its search pill
   }
   /* Miguel's skins (Dark, Light, Landscapes): the launcher and New desk sort apps by what they are, with no Recent row.
-   * Same order as the App Store: Apps = anything with a screen you use; Wizard apps = backend-only apps your agent uses
+   * Same order as the App Store: Apps = anything with a screen you use; Agent apps = backend-only apps your agent uses
    * (tap = its settings sheet); Agents = agent chats + the Agents app; Connectors = sign-ins to another service. James's skins keep his layout. */
   const oursSkin = () => ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'].includes(document.documentElement.dataset.skin || '');
   /* Swipe up on the orb opens Desks instead of Apps: Miguel's skins always; any other skin when its CSS (or the owner's
@@ -1894,7 +1894,7 @@
     if (!q) {
       const recentIds = store.get('recent', window.WizLauncher?.get('recents') || []).filter(id => APP[id] && APP[id].kind !== 'native' && !window.WizCore.isMaintenanceApp(APP[id])).slice(0, 4);
       paint(`<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
-        <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).length}</span></h4><div class="lgrid">${APPS.filter(a => !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).map(appTile).join('')}<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button></div></div>`); // preserve current tiles/order; Get apps opens a normal app frame
+        <div class="lgroup"><h4>Apps <span>${APPS.filter(a => !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).length}</span></h4><div class="lgrid">${APPS.filter(a => !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).map(appTile).join('')}<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button></div></div>`); // preserve current tiles/order; Get apps opens a normal app frame
       return;
     }
     const n = norm(q);

@@ -67,7 +67,7 @@ const step = (name, ok, extra = '') => { results.push({ name, ok }); console.log
     apps: [...document.querySelectorAll('.wos-share .shs-app .shs-nm')].map(n => n.textContent), other: !!document.querySelector('[data-shs-other]'),
     order: [...document.querySelectorAll('.wos-share .shs-sub')].map(n => n.textContent) }));
   await p.screenshot({ path: OUT + '/sheet-phone.png' });
-  step('sheet opens from ' + shareFrom + ': People → Wizard apps → Other apps…', sheet.people.join() === 'Miguel,Novaire,AI Wizards team' && sheet.apps.join() === 'Messenger' && sheet.other && sheet.order.join() === 'People,Wizard apps', JSON.stringify(sheet));
+  step('sheet opens from ' + shareFrom + ': People → Apps → Other apps…', sheet.people.join() === 'Miguel,Novaire,AI Wizards team' && sheet.apps.join() === 'Messenger' && sheet.other && sheet.order.join() === 'People,Apps', JSON.stringify(sheet));
 
   // 3. Back closes the sheet (cancelled), never exits.
   await p.evaluate(() => window.__wos.onBack());
