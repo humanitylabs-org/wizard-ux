@@ -659,7 +659,7 @@ export default function setup(api) {
   function renderGlance() {
     const g = null, x = sessions(), fuel = g ? null : gauge(), st = g ? null : storage(), bad = g ? 0 : openOnes().length;  // the bar always shows the connected workspace
     const checked = allClear(), nM = g ? 1 : devices().filter(isAgent).length || 1;
-    const sig = JSON.stringify([S.ws, !!S.devFresh, aiStale(), fuel && Math.round(fuel.left / 10), !!x.unknown, x.working, Math.min(x.ready, 8), S.unread, st && [st.state, st.age == null ? null : agoS(st.age)], bad, checked, nM, backupRunning(), myPeople().length]);
+    const sig = JSON.stringify([S.ws, !!S.devFresh, S.backupRead || '', aiStale(), fuel && Math.round(fuel.left / 10), !!x.unknown, x.working, Math.min(x.ready, 8), S.unread, st && [st.state, st.age == null ? null : agoS(st.age)], bad, checked, nM, backupRunning(), myPeople().length]);
     if (sig === drawn.glance) return; drawn.glance = sig;
     const dots = (n, cls) => Array.from({ length: n }, () => h('i', { cls }));
     const tile = (go, cls, label, title, viz, val, badge) => h('button', { type: 'button', cls: 'mh-tile ' + cls, data: { go }, title, 'aria-label': `${label}: ${title}` },
@@ -670,7 +670,7 @@ export default function setup(api) {
       g || desk ? null : tile('chats', 'is-chats', 'Chats', chatWords(x),
         h('span', { cls: 'mh-dots' }, dots(Math.min(x.working, 8), 'work'), dots(Math.min(x.ready, 8 - Math.min(x.working, 8)), 'ready')), null,
         S.unread ? h('span', { cls: 'mh-badge', text: String(Math.min(S.unread, 99)) }) : null),
-      st ? tile('storage', 'is-backup', 'Backup', backupRunning() ? 'Backing up now' : st.age == null ? 'No backup yet' : `Backed up ${agoS(st.age)} ago${st.used != null ? ' · ' + gbFmt(st.used) : ''}`,
+      st ? tile('storage', 'is-backup', 'Backup', backupRunning() ? 'Backing up now' : st.age == null ? 'No backup yet' : `Backed up ${agoS(st.age)} ago${st.used != null ? ' · ' + gbFmt(st.used) : ''}${S.backupRead === 'ok' ? '' : ' (last reading)'}`,
         pic('store'), backupRunning() ? '…' : st.age == null ? '–' : agoS(st.age), st.state !== 'ok' ? h('span', { cls: 'mh-badge is-warn', text: '!' }) : null) : null,
       g ? null : tile('network', 'is-net' + (bad ? ' is-bad' : checked ? ' is-ok' : ''), 'Security', bad ? `${bad} ${bad === 1 ? 'machine' : 'machines'} open to the internet${S.devFresh ? '' : ' (last reading)'}` : checked ? 'Tailscale only' : 'Not checked yet',
         pic('shield'), null, bad ? h('span', { cls: 'mh-badge', text: String(bad) }) : checked ? h('span', { cls: 'mh-badge is-ok', text: '✓' }) : null),
@@ -685,7 +685,7 @@ export default function setup(api) {
       const icon = (go, cls, label, paths, badge) => h('button', { type: 'button', cls: 'mh-bi ' + cls, data: { go }, title: label, 'aria-label': label }, ic(paths), badge || null);
       glance.replaceChildren(...[
         fuel ? gaugeEl(fuel) : null,
-        st ? icon('storage', 'is-backup' + (st.state !== 'ok' ? ' is-warn' : ''), backupRunning() ? 'Backing up now' : st.age == null ? 'No backup yet' : `Backed up ${agoS(st.age)} ago${st.used != null ? ' · ' + gbFmt(st.used) : ''}`, I.store, st.state !== 'ok' ? h('span', { cls: 'mh-badge is-warn', text: '!' }) : null) : null,
+        st ? icon('storage', 'is-backup' + (st.state !== 'ok' ? ' is-warn' : ''), backupRunning() ? 'Backing up now' : st.age == null ? 'No backup yet' : `Backed up ${agoS(st.age)} ago${st.used != null ? ' · ' + gbFmt(st.used) : ''}${S.backupRead === 'ok' ? '' : ' (last reading)'}`, I.store, st.state !== 'ok' ? h('span', { cls: 'mh-badge is-warn', text: '!' }) : null) : null,
         g ? null : icon('network', 'is-net' + (bad ? ' is-bad' : ''), bad ? `${bad} ${bad === 1 ? 'machine' : 'machines'} open to the internet${S.devFresh ? '' : ' (last reading)'}` : checked ? 'Tailscale only' : 'Security not checked yet', I.shield, bad ? h('span', { cls: 'mh-badge', text: String(bad) }) : null),
         g ? null : icon('overview', 'is-mach', `${nM} ${nM === 1 ? 'machine' : 'machines'} · your network`, I.server),
       ].filter(Boolean));

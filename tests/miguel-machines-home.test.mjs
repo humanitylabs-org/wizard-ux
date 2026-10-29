@@ -481,12 +481,19 @@ test('final review 2: exposure dates must be real; an open warning from a last r
     assert.match(src, /if \(k !== S\.def && \(k \|\| p\)\) \{ S\.def = k;/, who + ': an unmetered default clears the old one');
     assert.match(src, /if \(open && !wsmBack\) wsmBack = api\.back\?\.push\?\.\(/, who + ': the workspace menu is the top Back layer');
     assert.match(src, /function renderWiz\(\) \{\n    syncWsmBack\(\);/, who);
+    assert.equal((src.match(/\$\{S\.backupRead === 'ok' \? '' : ' \(last reading\)'\}`/g) || []).length, 2, who + ': Home backup age says when it is a saved copy');
     assert.match(src, /money = fmtMoney\(amt, cur\);/, who + ': credit keeps its currency');
     assert.match(src, /use\.every\(s => s\.cur === use\[0\]\.cur\) \? fmtMoney\(/, who + ': never sums mixed currencies');
     assert.equal((src.match(/open(?: to internet)?\$\{S\.devFresh \? '' : ' \(last reading\)'\}` : ''/g) || []).length, 2, who + ': Settings subtitles too');
     assert.match(src, /if \(sub !== drawn\.sub\) \{ const first = drawn\.sub == null; drawn\.sub = sub; if \(!first\) api\.settings\?\.refresh\?\.\(\); \}/, who);
     assert.match(src, /' \(Last reading; check again to see if it still is\.\)'/, who);
   }
+});
+
+test('every Back path cancels a waiting System link', () => {
+  assert.match(read('web/app.js'), /function backStep\(skipHosted\) \{\n[^\n]*WosWelcome[^\n]*\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
+  assert.match(read('web/desktop/desktop.js'), /function escStep\(\) \{\n[^\n]*WosWelcome[^\n]*\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
+  assert.match(read('web/core/settings.js'), /register, mount, route, cancelWait,/);
 });
 
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
