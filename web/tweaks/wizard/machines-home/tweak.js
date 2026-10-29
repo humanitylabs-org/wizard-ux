@@ -100,11 +100,12 @@ export default function setup(api) {
     const t = b.target, last = b.last || {}, okAt = last.ok ? (last.finished_at || last.last_success_at) : last.last_success_at;
     const every = b.every === 'hourly' ? 3600 : 86400, age = okAt ? Math.max(0, Date.now() / 1000 - okAt) : null;
     const used = +last.repository_bytes > 0 ? last.repository_bytes / 1e9 : null, r = b.retention || {};
-    const span = [+r.daily > 0 && `any of the last ${r.daily} days`, +r.weekly > 0 && `one a week for ${r.weekly} weeks`, +r.monthly > 0 && `one a month for ${r.monthly} months`].filter(Boolean);
+    const n = (v, one, many) => `${v} ${+v === 1 ? one : many}`;
+    const span = [+r.daily > 0 && `daily for ${n(r.daily, 'day', 'days')}`, +r.weekly > 0 && `weekly for ${n(r.weekly, 'week', 'weeks')}`, +r.monthly > 0 && `monthly for ${n(r.monthly, 'month', 'months')}`].filter(Boolean);
     const cf = (S.backup?.connector || []).find(c => c && /cloudflare/i.test(c.id || c.name || '') && c.connected);
     return { id: 'storage', where: t.kind === 'r2' ? 'Cloudflare R2' : t.kind === 's3' ? 'S3 storage' : 'Backup storage', bucket: t.bucket || '',
       used, snaps: +last.snapshots || null, every: b.every === 'hourly' ? 'every hour' : b.at ? `daily at ${b.at}` : 'daily', age,
-      keep: span.length ? 'Older backups thin out: daily for a week, weekly for a month, monthly for 6 months' : '', cf: !!cf,
+      keep: span.length ? `Older backups thin out: ${span.length > 1 ? span.slice(0, -1).join(', ') + ' and ' + span.at(-1) : span[0]}` : '', cf: !!cf,
       state: !okAt ? 'no' : b.state === 'failing' || age > 2 * every ? 'tight' : 'ok' };
   }
   const backupRunning = () => Array.isArray(S.backup?.active) && S.backup.active.length > 0;
@@ -664,7 +665,8 @@ export default function setup(api) {
     if (j && j.backup && typeof j.backup === 'object') {  // otherwise keep the last good answer
       S.backup = { backup: j.backup, standby: j.standby || null, connector: j.connector || null, active: j.active || null };
       api.storage.set('backup', S.backup); S.backupRead = 'ok';
-    } else S.backupRead = j && typeof j === 'object' ? 'none' : 'error';  // null = timeout / not 2xx / not JSON, not "no backup"
+    } else if (j && typeof j === 'object') { S.backupRead = 'none'; S.backup = null; api.storage.set('backup', null); }  // Backup answered: none set up (any more)
+    else S.backupRead = 'error';  // null = timeout / not 2xx / not JSON: keep the last good answer  // null = timeout / not 2xx / not JSON, not "no backup"
 
     paint();
   }

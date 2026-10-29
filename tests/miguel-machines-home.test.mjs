@@ -230,7 +230,9 @@ test('third review: AI page offers sign-in with no accounts, backup read failure
   for (const who of ['miguel', 'wizard']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /if \(!subs\(\)\.length\) return aiList\.replaceChildren\(h\('div', \{ cls: 'mh-ai-foot' \}, h\('span', \{ cls: 'mh-more-info', text: 'No AI account signed in yet\.' \}\),/, who);
-    assert.match(src, /else S\.backupRead = j && typeof j === 'object' \? 'none' : 'error';/, who);
+    assert.match(src, /else if \(j && typeof j === 'object'\) \{ S\.backupRead = 'none'; S\.backup = null; api\.storage\.set\('backup', null\); \}/, who + ': a real empty answer clears the old backup');
+    assert.match(src, /else S\.backupRead = 'error';/, who);
+    assert.match(src, /keep: span\.length \? `Older backups thin out: \$\{span/, who + ': retention from Backup, not a fixed sentence');
     assert.match(src, /S\.backupRead === 'none' \? h\('span', \{ cls: 'mh-more-info', text: 'No backup set up yet\.' \}\)/, who + ': "no backup" only after a real answer');
     assert.match(src, /checked \? 'the only way in' : 'not every machine checked yet'/, who);
   }
