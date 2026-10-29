@@ -24,6 +24,70 @@ SPEC.loader.exec_module(runner)
 
 
 class ControllerTest(unittest.TestCase):
+    def test_send_logpoints_are_source_bound_nonpausing_and_do_not_replace_bridge(self):
+        rig = runner.Rig.__new__(runner.Rig)
+        rig.source = HERE.parent; rig.page = Mock()
+        with tempfile.TemporaryDirectory() as td:
+            rig.out = Path(td)
+            rig.page.call.return_value = {'result': {'locations': [{'lineNumber': 1}]}}
+            rig.install_send_observation()
+            calls = rig.page.call.call_args_list
+            self.assertEqual([x.args[0] for x in calls], ['Debugger.enable'] + ['Debugger.setBreakpointByUrl'] * 3)
+            for call in calls[1:]:
+                self.assertTrue(call.kwargs['condition'].endswith(',false)'))
+                for forbidden in ('postMessage(', 'shareRequest(', 'WosDevicePort.call(', 'reject(', 'resolve(', '.click(', 'preventDefault('):
+                    self.assertNotIn(forbidden, call.kwargs['condition'])
+            receipt = json.loads((rig.out / 'send-observation-logpoints.json').read_text())
+            self.assertEqual(len(receipt), 3)
+            for row in receipt:
+                self.assertEqual(row['source_sha256'], runner.sha(rig.source / row['source']))
+            # A second send resets observations, never duplicates breakpoint IDs.
+            rig.install_send_observation()
+            self.assertEqual(rig.page.call.call_count, 4)
+            self.assertEqual(rig.page.ev.call_count, 2)
+
+    def test_unbound_send_logpoint_fails_before_any_send(self):
+        rig = runner.Rig.__new__(runner.Rig)
+        rig.source = HERE.parent; rig.page = Mock(); rig.tap = Mock()
+        with tempfile.TemporaryDirectory() as td:
+            rig.out = Path(td)
+            rig.page.call.return_value = {'result': {}}
+            with self.assertRaisesRegex(RuntimeError, 'logpoint did not bind'):
+                rig.send_once('existing-delivery')
+            rig.tap.assert_not_called()
+            self.assertTrue((rig.out / 'send-observation-logpoints.json').exists())
+
+    def test_send_failure_observes_custody_without_retry_or_extended_timeout(self):
+        rig = runner.Rig.__new__(runner.Rig)
+        rig.install_send_observation = Mock(); rig.observe_send_boundary = Mock()
+        rig.tap = Mock(); rig.sheet = Mock(return_value=True)
+        def fail(predicate, seconds):
+            self.assertEqual(seconds, 5)
+            self.assertFalse(predicate())
+            raise RuntimeError('same original bounded failure')
+        with patch.object(runner, 'wait', side_effect=fail):
+            with self.assertRaisesRegex(RuntimeError, 'same original bounded failure'):
+                rig.send_once('existing-delivery')
+        rig.tap.assert_called_once_with('[data-sharesend]')
+        self.assertEqual([x.args[0] for x in rig.observe_send_boundary.call_args_list],
+                         ['existing-delivery-before','existing-delivery-after'])
+
+    def test_send_observation_reads_only_synthetic_metadata_and_custody(self):
+        rig = runner.Rig.__new__(runner.Rig)
+        rig.page = Mock(); rig.page.ev.return_value = {'observations': {'errors': [{'message':'native refused'}]}}
+        rig.sx = Mock(return_value='files/share/synthetic/meta.json\n{}')
+        with tempfile.TemporaryDirectory() as td:
+            rig.out = Path(td); rig.observe_send_boundary('existing-delivery-after')
+            self.assertIn('native refused', (rig.out / 'existing-delivery-after-bridge.json').read_text())
+            self.assertIn('meta.json', (rig.out / 'existing-delivery-after-native-custody.txt').read_text())
+        expr = rig.page.ev.call_args.args[0]
+        for forbidden in ('.call(', 'postMessage', 'shareRead', 'shareMeta', 'shareDone'):
+            self.assertNotIn(forbidden, expr)
+        command = rig.sx.call_args.args[0]
+        self.assertIn('stat -c', command)
+        self.assertNotIn('cat "$f"; fi; done; rm', command)
+        self.assertNotIn('rm ', command)
+
     def mock_sender_receipt(self, rig):
         # UI/hash regressions isolate the independently tested native receipt seam.
         rig.read_sender_intent = Mock(side_effect=lambda launch_id, seconds: {

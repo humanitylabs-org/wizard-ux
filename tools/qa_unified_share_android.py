@@ -677,7 +677,72 @@ class Rig:
         (self.out / (name + '.png')).write_bytes(self.adb_cmd('exec-out', 'screencap', '-p', binary=True))
         (self.out / (name + '-activity.txt')).write_text(self.sx('dumpsys activity activities'))
 
+    def observe_send_boundary(self, name):
+        """Read synthetic bridge/queue state; never invoke a share method or retry input."""
+        data = self.page.ev("({url:location.href,resumable:!!window.WizConfig?.has('resumable_uploads'),port:!!window.wizardDevicePort,devicePort:!!window.WosDevicePort,observations:window.__shareBoundaryObservation||null})")
+        (self.out / (name + '-bridge.json')).write_text(json.dumps(data, indent=2) + '\n')
+        # This app was freshly installed on our isolated synthetic emulator, never an owner device.
+        snapshot = self.sx('run-as ' + PKG + ' sh -c \'for f in files/share/*/meta.json files/share-out/*/item.json; do if [ -f "$f" ]; then printf "\\n%s\\n" "$f"; cat "$f"; fi; done; for f in files/share/*/*.bin files/share-out/*/*.bin; do if [ -f "$f" ]; then stat -c "%n %s %i %h" "$f"; fi; done\'')
+        (self.out / (name + '-native-custody.txt')).write_text(snapshot)
+
+    def install_send_observation(self):
+        """CDP logpoints read real locals. No port/handler replacement, sends or paused execution."""
+        self.page.ev('window.__shareBoundaryObservation={requests:[],replies:[],errors:[]};true')
+        if getattr(self, 'send_observer_page', None) is self.page:
+            return
+        enabled = self.page.call('Debugger.enable')
+        if 'result' not in enabled or 'error' in enabled:
+            raise RuntimeError('cannot enable passive Send diagnostics')
+        points = [
+            ('web/core/device-port.js', '      try { p.postMessage(',
+             "requests.push({id,method,params})"),
+            ('web/core/device-port.js', '    if (m.ok)',
+             "replies.push({id:m.id,ok:m.ok,error:m.error,result:m.result})"),
+            ('web/core/share-wizard.js', "      w.toast?.('!', 'Couldn’t send",
+             "errors.push({name:_.name,message:_.message,stack:_.stack})"),
+        ]
+        receipts = []
+        for relative, marker, record in points:
+            lines = (self.source / relative).read_text().splitlines()
+            matches = [n for n, line in enumerate(lines) if line.startswith(marker)]
+            if len(matches) != 1:
+                raise RuntimeError('ambiguous Send observation point: ' + relative)
+            # A false conditional breakpoint is a non-pausing logpoint. Only QA-owned
+            # arrays change: request/reply values, handlers and Promise outcomes do not.
+            response = self.page.call('Debugger.setBreakpointByUrl',
+                urlRegex='/' + relative.removeprefix('web/').replace('.', '[.]') + r'(?:[?].*)?$',
+                lineNumber=matches[0], condition='(window.__shareBoundaryObservation.' + record + ',false)')
+            receipts.append({'source':relative, 'source_sha256':sha(self.source / relative),
+                             'line':matches[0], 'response':response})
+            (self.out / 'send-observation-logpoints.json').write_text(json.dumps(receipts, indent=2) + '\n')
+            if 'error' in response or not response.get('result', {}).get('locations'):
+                raise RuntimeError('Send logpoint did not bind: ' + relative)
+        self.send_observer_page = self.page
+
+    def send_once(self, name):
+        self.install_send_observation()
+        self.observe_send_boundary(name + '-before')
+        failure = None
+        try:
+            self.tap('[data-sharesend]')
+            wait(lambda: not self.sheet(), 5)  # unchanged acceptance deadline; one real tap only
+        except BaseException as exc:
+            failure = exc
+            raise
+        finally:
+            try:
+                self.observe_send_boundary(name + '-after')
+            except Exception as exc:
+                (self.out / (name + '-after-capture-error.txt')).write_text(exception_detail(exc))
+                if failure is None:
+                    raise
+
     def diagnostic(self, name):
+        if self.page:
+            try:
+                self.observe_send_boundary(name)
+            except Exception as exc:
+                (self.out / (name + '-boundary-capture-error.txt')).write_text(exception_detail(exc))
         try:
             self.screenshot(name)
             (self.out / (name + '.xml')).write_text(self.ui())
@@ -1131,7 +1196,7 @@ def main():
         rig.wait_dom("document.querySelector('.dv-chat strong')?.textContent==='Private notes' && !document.querySelector('.dv-picker-wrap')")
         rig.set_comment('Synthetic comment one')
         rig.screenshot('existing-before-send')
-        rig.tap('[data-sharesend]'); wait(lambda: not rig.sheet(), 5)
+        rig.send_once(phase)
         rig.sx('input keyevent KEYCODE_HOME')
         sh = rig.verify_delivery('genuine.pdf', 'private', 'Synthetic comment one\n\nA genuine shared note mentioning genuine.pdf', 'qa_private_thread')
         rig.screenshot('existing-delivered-background')
@@ -1146,7 +1211,7 @@ def main():
         rig.share('boilerplate'); rig.pick_private()
         assert rig.page.ev("document.querySelector('.dv-chat strong').textContent==='New chat'")
         rig.set_comment('Synthetic comment two'); rig.screenshot('new-before-send')
-        rig.tap('[data-sharesend]'); wait(lambda: not rig.sheet(), 5)
+        rig.send_once(phase)
         assert Proxy.blocked.wait(60), 'did not reach the second native upload chunk'
         rig.sx('am force-stop ' + PKG)
         queue = rig.sx('run-as ' + PKG + ' sh -c "cat files/share-out/*/item.json"')

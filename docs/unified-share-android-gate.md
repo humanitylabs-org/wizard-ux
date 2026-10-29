@@ -350,6 +350,43 @@ after the 3 GiB budget. Only the parent admits this stage; no child execution,
 signing, release or merge. Native success and the old failure's exact mechanism
 remain unproven until those new receipts execute.
 
+## Actual Send failure: preserve the error before choosing a product fix
+
+The executed `bb27f765e77e` run is **failed, never resubmit**. Its fresh native
+`onNewIntent` receipt and visible genuine case agree with staged `genuine.pdf`,
+source quote and independently checked SHA256. The real trusted Send tap selected
+Private / Private notes with `Synthetic comment one`. The sheet reopened with
+`Couldn’t send · check the connection and try again`. Retained network receipts
+contain **no POST /wizard/v1/shares and no upload write**. This is not the old
+sender lifecycle failure, and increasing the five-second deadline cannot fix it.
+
+The current retained diagnostics do **not** contain the exception swallowed by
+`deliver` or the native message-port error, nor the post-Send native queue files.
+A fixture capability error, WebView fallback error and native queue failure are
+not interchangeable diagnoses. Do not change product code on that evidence alone.
+
+The next QA-only sibling uses the unchanged sealed APK/JUnit and full original
+acceptance. Immediately before each sole real Send tap it installs source-hashed,
+line-bound CDP **false conditional logpoints** in the existing port request,
+port reply and share delivery catch. These only copy real locals into a QA-owned
+array; they do not replace a bridge/handler, change a request/result, pause JS,
+call a share method, synthesize success or retry ambiguous writes. An unbound
+logpoint refuses input. Repeated sends reuse the same debugger points while
+resetting their observation array. Controller checks are not native logpoint proof.
+
+`<phase>-before/after-bridge.json` records actual capability/port presence and
+request/reply/error observations. `<phase>-before/after-native-custody.txt`
+records only this isolated synthetic app's staged/queue metadata and file inode,
+link count and size, never raw payload bytes. Existing network, fixture, DOM and
+logcat evidence remains independent. `send-observation-logpoints.json` records
+exact source hashes and resolved debugger locations. The five-second sheet-close
+deadline and every delivery/resume/notification assertion remain unchanged.
+
+Only the parent may admit this bounded diagnostic. No native rebuild is justified
+yet. After the captured error establishes a cause, fix that cause with a regression;
+a native product correction requires a **new full sealed build**, never a QA-only
+allowlist change. Until then, delivery, recovery and notification gates are unmet.
+
 ## Real device phases and evidence
 
 The separate synthetic source app generates a 24 MiB blank-page PDF fixture byte
