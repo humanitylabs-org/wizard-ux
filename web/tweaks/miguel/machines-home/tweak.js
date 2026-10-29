@@ -24,7 +24,7 @@ const TOP_UP = { tinfoil: 'https://dash.tinfoil.sh/?tab=billing' };
 
 export default function setup(api) {
   const S = { ws: api.storage.get('ws') || 'mine', res: {}, backup: api.storage.get('backup') || null, backupTried: 0,
-    open: new Set(api.storage.get('devs') === 'off' ? [] : ['devs']), bars: api.storage.get('details') !== 'off', unread: 0, full: api.storage.get('full') === 'on', nick: api.storage.get('nick') || {}, def: api.storage.get('def') || '' };
+    open: new Set(api.storage.get('devs') === 'off' ? [] : ['devs']), bars: api.storage.get('details') !== 'off', unread: 0, full: api.storage.get('full') === 'on', nick: api.storage.get('nick') || {}, meter: api.storage.get('meter') || null, def: api.storage.get('def') || '' };
   let fresh = true;  // entry motion only on the first paint and on a workspace switch, never on a later reading
 
   /* ---------- tiny DOM helpers (no markup strings) ---------- */
@@ -153,7 +153,7 @@ export default function setup(api) {
       const signedOut = p.status === 'unavailable' || p.status === 'signed_out' || p.status === 'auth' || (left == null && !money);
       const who = String(p.name || '').split('@')[0];
       out.push({ id: p.id, kind, group: p.providerName || kind, nick: S.nick[p.id] || '', auto: who && who !== p.providerName ? who : '',
-        email: p.email || '', left: left == null ? null : Math.round(left), money, out: signedOut, resets: pick?.resetsAt || null });
+        email: p.email || '', left: left == null ? null : Math.round(left), money, unit: money ? 'credit' : 'plan', out: signedOut, resets: pick?.resetsAt || null });
     }
     return out;
   }
@@ -166,11 +166,23 @@ export default function setup(api) {
   const defKind = () => { const d = api.models?.default?.(); const p = String(d?.provider || '').toLowerCase();
     const k = /claude|anthropic/.test(p) ? 'claude' : /openai|codex|chatgpt/.test(p) ? 'chatgpt' : /tinfoil/.test(p) ? 'tinfoil' : '';
     if (k && k !== S.def) { S.def = k; api.storage.set('def', k); } return S.def; };
+  // What the E-to-F meter shows: the owner's pick (one kind only: plan limits or prepaid credit, never a mix), else
+  // the default model's service. Every account gets a plain name for the "combines …" line.
+  // Nickname first; when the same nickname is used on two services, the service name goes in front so they stay apart.
+  const subName = (s, list = subs()) => { if (s.nick) return list.some(x => x.id !== s.id && x.group !== s.group && x.nick && x.nick.toLowerCase() === s.nick.toLowerCase()) ? `${s.group} ${s.nick}` : s.nick; const same = list.filter(x => x.group === s.group); return same.length > 1 ? `${s.group} ${same.findIndex(x => x.id === s.id) + 1}` : s.group; };
+  function meterPool() {
+    const all = subs(), live = all.filter(s => s.left != null && !s.out);
+    const picked = Array.isArray(S.meter) ? live.filter(s => S.meter.includes(s.id)) : [];
+    if (picked.length) return { use: picked, custom: true };
+    const want = defKind();
+    const plans = live.filter(s => s.unit === 'plan'), pool = plans.filter(s => !want || s.kind === want);
+    return { use: pool.length ? pool : plans.length ? plans : live, custom: false, def: !!want && !!pool.length };
+  }
   function gauge() {
-    const all = subs().filter(s => s.left != null && !s.out), want = defKind();
-    const pool = all.filter(s => !want || s.kind === want), use = pool.length ? pool : all;
-    if (!use.length) return null;
-    return { left: Math.round(use.reduce((n, s) => n + s.left, 0) / use.length), name: use[0].group, n: use.length };
+    const { use, custom, def } = meterPool(); if (!use.length) return null;
+    const all = subs();
+    return { left: Math.round(use.reduce((n, s) => n + s.left, 0) / use.length), name: use[0].group, n: use.length, custom, def, unit: use[0].unit, names: use.map(s => subName(s, all)),
+      money: use[0].unit === 'credit' ? '$' + use.reduce((n, s) => n + (parseFloat(String(s.money).replace(/[^0-9.]/g, '')) || 0), 0).toFixed(2) : '' };
   }
 
   /* ---------- skeleton ---------- */
@@ -230,19 +242,31 @@ export default function setup(api) {
     const s = sv('svg', { class: 'mh-i', viewBox: '0 0 24 24', 'aria-hidden': 'true' }, add); for (const [t, a] of PLUS) sv(t, a, s);
     bar.replaceChildren(tab('mine', thisName()), ...managedList().map(g => tab(g.id, g.name)), add);
   }
-  // A fuel tag: "AI", then E, ten cells that fill, F. No percentage at rest.
+  // A fuel tag: E, ten cells that fill, F. No label, no percentage at rest; a tap explains it.
   function gaugeEl(g, still) {
     const on = Math.round(g.left / 10);
     return h(still ? 'div' : 'button', { ...(still ? {} : { type: 'button', data: { go: 'ai' } }), cls: 'mh-gauge' + (still ? ' is-still' : ''), 'data-s': level(g.left),
-      'aria-label': `AI: ${g.name}, ${g.left}% left${g.n > 1 ? ` across ${g.n} accounts` : ''}${still ? '' : '. Open AI in Settings'}` },
-      h('b', { cls: 'mh-g-label', text: 'AI' }), h('span', { cls: 'mh-g-ef', text: 'E' }),
+      'aria-label': `AI fuel: ${g.left}% left, ${g.names.join(' and ')}${still ? '' : '. Open AI in Settings'}`, title: `AI fuel · ${g.names.join(' + ')} · ${g.left}% left` },
+      h('span', { cls: 'mh-g-ef', text: 'E' }),
       h('span', { cls: 'mh-g-cells', 'aria-hidden': 'true' }, Array.from({ length: 10 }, (_, i) => h('i', { cls: i < on ? 'on' : '', style: { '--i': String(i) } }))),
       h('span', { cls: 'mh-g-ef', text: 'F' }));
   }
   function renderAI() {
     const g = S.ws === 'mine' ? gauge() : null;
     aiRow.hidden = !g;
-    aiRow.replaceChildren(...(g ? [gaugeEl(g, true)] : []));
+    if (!g) return aiRow.replaceChildren();
+    const all = subs(), live = all.filter(s => !s.out), pick = S.open.has('mp'), on = new Set(meterPool().use.map(s => s.id));
+    const units = [['plan', 'Plan limits'], ['credit', 'Prepaid credit']].filter(([u]) => live.some(s => s.unit === u));
+    aiRow.replaceChildren(h('div', { cls: 'mh-meter-head' }, gaugeEl(g, true),
+        h('span', { cls: 'mh-meter-what' }, h('b', { text: g.money ? `${g.money} left` : `${g.left}% left` }), h('small', { text: `(${g.n > 1 ? 'combines ' : ''}${g.names.length > 2 ? g.names.slice(0, -1).join(', ') + ' and ' + g.names.at(-1) : g.names.join(' and ')}${g.custom ? '' : g.def ? ', your default AI' : ''})` }))),
+      h('button', { type: 'button', cls: 'mh-meter-pick', data: { toggle: 'mp' }, 'aria-expanded': String(pick) }, 'Choose what the meter shows'),
+      pick ? h('div', { cls: 'mh-meter-list' },
+        ...units.map(([u, label]) => h('div', { cls: 'mh-meter-grp' },
+          h('div', { cls: 'mh-meter-gh' }, h('b', { text: label }), h('button', { type: 'button', data: { meterAll: u } }, 'All')),
+          live.filter(s => s.unit === u).map(s => h('label', { cls: 'mh-meter-opt' },
+            h('input', { type: 'checkbox', checked: on.has(s.id), data: { meterId: s.id } }), h('span', { text: subName(s, all) }), h('small', { text: s.money ? `${s.money} left` : `${s.left ?? 0}% left` }))))),
+        units.length > 1 ? h('small', { cls: 'mh-meter-note', text: 'Plan limits and prepaid credit are measured differently, so the meter shows one kind at a time.' }) : null,
+        S.meter ? h('button', { type: 'button', cls: 'mh-meter-reset', data: { meterAll: 'default' } }, 'Back to your default') : null) : null);
   }
   // Every account, grouped by service (the gauge's own first): nickname, what is left, Sign out; one Sign in at the end.
   function renderAIList() {
@@ -446,7 +470,7 @@ export default function setup(api) {
     if (stEl) {
       const sd = box(stEl), st = storage();  // from the bottom of its label (and its details, when open)
       const col = st?.state === 'ok' ? 'var(--mh-accent)' : st?.state === 'no' ? 'var(--mh-bad)' : 'var(--mh-warn)';
-      specs.push([curveV(md.cx, md.t - 4, sd.cx, sd.b + 4), col, M.width < 600 && S.ws === 'mine' ? '' : backupRunning() ? 'backing up now' : st?.age == null ? 'no backup yet' : 'backed up ' + agoS(st.age) + ' ago', backupRunning() ? 3 : 1]);
+      specs.push([curveV(md.cx, md.t - 4, sd.cx, sd.b + 4), col, (M.width < 600 && S.ws === 'mine') || S.open.has('ts') ? '' : backupRunning() ? 'backing up now' : st?.age == null ? 'no backup yet' : 'backed up ' + agoS(st.age) + ' ago', backupRunning() ? 3 : 1]);
     }
     // Machines: a chain outward from Main on each side, in row order.
     const ms = [...rowMn.children].filter(n => n.dataset?.role);
@@ -500,9 +524,12 @@ export default function setup(api) {
   const flip = k => { if (S.open.has(k)) S.open.delete(k); else S.open.add(k); };
   const onTap = e => {
     const top = e.currentTarget;
-    let b = e.target; while (b && b !== top && !(b.dataset && (b.dataset.ws || b.dataset.act || b.dataset.open || b.dataset.go || b.dataset.wsWhy || b.dataset.person || b.dataset.toggle || b.dataset.machine || b.dataset.ask || b.dataset.stAsk || b.dataset.tsAsk))) b = b.parentNode;
+    let b = e.target; while (b && b !== top && !(b.dataset && (b.dataset.ws || b.dataset.act || b.dataset.open || b.dataset.go || b.dataset.wsWhy || b.dataset.meterAll || b.dataset.person || b.dataset.toggle || b.dataset.machine || b.dataset.ask || b.dataset.stAsk || b.dataset.tsAsk))) b = b.parentNode;
     if (!b || b === top) return;  // Sign in / Sign out carry the shell's own data-res-signin, which opens that app
     const d = b.dataset;
+    if (d.meterAll) { const live = subs().filter(s => !s.out); S.meter = d.meterAll === 'default' ? null : live.filter(s => s.unit === d.meterAll).map(s => s.id);
+      api.storage.set('meter', S.meter); drawn.ai = ''; drawn.glance = ''; paint(); api.settings?.refresh?.(); return; }
+    if (d.toggle === 'mp') { flip('mp'); drawn.ai = ''; paint(); return; }
     if (d.wsWhy) { S.whyWs = S.whyWs === d.wsWhy && S.open.has('wsm-why') ? '' : d.wsWhy; if (S.whyWs) S.open.add('wsm-why'); else S.open.delete('wsm-why'); renderWiz(); return; }
     if (d.ws && d.go) { S.open.delete('wsm'); S.open.delete('wsm-why'); S.ws = d.ws; api.storage.set('ws', d.ws); fresh = true; paint(true); renderWiz(); api.settings?.open?.(d.go); return; }
     if (d.go) { if (d.go === 'chats') return api.data.read.sessions?.open('ready'); return api.settings?.open?.(d.go); }
@@ -545,6 +572,13 @@ export default function setup(api) {
     }
   };
   for (const el of [root, barBox, ...(desk ? [wizBox] : []), secMap, secAI, secNet, secStore]) api.listen(el, 'click', onTap);
+  api.listen(secAI, 'change', e => {
+    const id = e.target?.dataset?.meterId; if (!id) return;
+    const all = subs(), me = all.find(s => s.id === id); if (!me) return;
+    let cur = new Set(meterPool().use.map(s => s.id));
+    if (e.target.checked) { for (const s of all) if (cur.has(s.id) && s.unit !== me.unit) cur.delete(s.id); cur.add(id); } else cur.delete(id);  // never mix kinds
+    S.meter = cur.size ? [...cur] : null; api.storage.set('meter', S.meter); drawn.ai = ''; drawn.glance = ''; paint(); api.settings?.refresh?.();
+  });
   api.listen(secAI, 'input', e => {
     const id = e.target?.dataset?.nick; if (!id) return;
     const v = String(e.target.value || '').trim().slice(0, 24);
@@ -603,7 +637,7 @@ export default function setup(api) {
     renderGlance();
     const top = JSON.stringify([thisName(), managedList().map(g => [g.id, g.name]), S.ws]);
     if (force || top !== drawn.top) { drawn.top = top; renderTabs(); }
-    const gs = JSON.stringify([S.ws, gauge(), S.open.has('ai')]);
+    const gs = JSON.stringify([S.ws, gauge(), S.open.has('ai'), S.open.has('mp'), S.meter, subs().map(s => [s.id, s.left, s.money, s.out, s.nick])]);
     if (force || gs !== drawn.ai) { drawn.ai = gs; renderAI(); }
     const ls = JSON.stringify([S.ws, S.open.has('ai'), S.open.has('signin'), subs().map(s => [s.id, s.left, s.money, s.out, s.resets && agoS((Date.parse(s.resets) - Date.now()) / 1000)])]);
     if ((force || ls !== drawn.list) && !aiList.contains?.(document.activeElement)) { drawn.list = ls; renderAIList(); }

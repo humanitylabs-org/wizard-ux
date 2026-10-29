@@ -99,7 +99,8 @@ test('machines-home: simple at rest, more on tap (one AI gauge, storage size, on
   assert.match(src, /cls: 'mh-gauge'/, 'one AI fuel tag, not a battery per subscription');
   assert.match(src, /cls: 'mh-g-cells'/, 'the tag fills cells from E to F');
   assert.doesNotMatch(src, /mh-batt/, 'batteries are gone');
-  assert.match(src, /text: 'E'/); assert.match(src, /text: 'AI'/);
+  assert.match(src, /text: 'E'/); assert.doesNotMatch(src, /cls: 'mh-g-label', text: 'AI'/, 'just E to F, no AI label');
+  assert.match(src, /never mix kinds/, 'the meter picker keeps plan limits and credit apart');
   assert.match(src, /api\.models\?\.default\?\.\(\)/, 'the gauge follows the default model');
   assert.match(src, /data: \{ resSignin: app \}/, 'Sign out / Sign in open that app through the shell');
   assert.match(src, /btn\('Sign out', appOf\(r\.kind\), 'is-out'\)/, 'Sign out next to each account');
