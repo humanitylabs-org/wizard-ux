@@ -27,3 +27,33 @@ test('reader passes the shell to the probe and tags peers with their group', asy
   assert.equal(out.devices[1].group, 'agent'); assert.equal(out.devices[0].group, 'agent');
   assert.deepEqual(out.network.peers.map(p => [p.name, p.group]), [['carlos-demo', 'client'], ['Pixel', 'human']]);
 });
+
+test('registry keeps a device\'s Machines use and the managed Wizards list; the reader passes both through', async () => {
+  const reg = cleanRegistry({ devices: [{ id: 'vps', connect: { type: 'ssh', host: 'vps' }, use: 'standby' }, { id: 'pc', connect: { type: 'ssh', host: 'pc' }, use: 'main' }],
+    managed: [{ id: 'acme', name: 'Acme', org: 'Acme Inc', where: 'wizard.acme.example', peer: 'Acme-Demo', peerName: 'Acme demo box' }, { id: 'bad id', name: 'X' }, { id: 'nowhere', name: 'N', where: 'not a host; rm -rf' }] });
+  assert.equal(reg.devices[0].use, 'standby'); assert.equal(reg.devices[1].use, undefined);
+  assert.deepEqual(reg.managed, [{ id: 'acme', name: 'Acme', org: 'Acme Inc', where: 'wizard.acme.example', peer: 'acme-demo', peerName: 'Acme demo box' }, { id: 'nowhere', name: 'N' }]);
+  assert.equal(cleanRegistry({}).managed, undefined, 'stock registries stay as they were');
+  const fs = await import('node:fs'), os = await import('node:os'), path = await import('node:path');
+  const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dev-')), 'devices.json');
+  fs.writeFileSync(f, JSON.stringify({ devices: [{ id: 'vps', connect: { type: 'ssh', host: 'vps' }, use: 'standby' }], managed: [{ id: 'acme', name: 'Acme', peer: 'acme-demo' }, { id: 'solo', name: 'Solo' }] }));
+  const read = createDevicesReader({ registryPath: f, probeLocalImpl: async () => ({ platform: 'linux', disks: [] }), probeSshImpl: async () => ({ platform: 'linux', disks: [] }),
+    tailnetImpl: async () => ({ self: { name: 'box', dns: 'box' }, peers: [{ name: 'acme-demo', dns: 'acme-demo', os: 'linux', online: true }] }) });
+  const out = await read();
+  assert.equal(out.devices[1].use, 'standby');
+  assert.deepEqual(out.managed, [{ id: 'acme', name: 'Acme', peer: 'acme-demo', peerName: 'acme-demo', peerOnline: true }, { id: 'solo', name: 'Solo' }]);
+  fs.writeFileSync(f, JSON.stringify({ devices: [] }));
+  assert.equal((await createDevicesReader({ registryPath: f, probeLocalImpl: async () => ({ platform: 'linux', disks: [] }), tailnetImpl: async () => null })()).managed, undefined);
+});
+
+test('managed Wizards keep who uses them: named people and a head count, bounded', () => {
+  const reg = cleanRegistry({ managed: [
+    { id: 'a', name: 'A', people: ['Miguel', 'Buddy', '', 42, 'x'.repeat(80)] },
+    { id: 'b', name: 'B', peopleCount: 7 },
+    { id: 'c', name: 'C', people: ['One', 'Two'], peopleCount: 1 },
+    { id: 'd', name: 'D', peopleCount: 'lots' }] });
+  assert.deepEqual(reg.managed[0].people, ['Miguel', 'Buddy', '42', 'x'.repeat(40)]);
+  assert.equal(reg.managed[1].peopleCount, 7); assert.equal(reg.managed[1].people, undefined);
+  assert.equal(reg.managed[2].peopleCount, undefined, 'a count below the named people adds nothing');
+  assert.deepEqual(reg.managed[3], { id: 'd', name: 'D' });
+});

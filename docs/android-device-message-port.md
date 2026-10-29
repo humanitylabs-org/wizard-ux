@@ -52,6 +52,16 @@ is #320's responsibility; `scheduleUpdates` is **not** exposed by this prerequis
 exact allowlist, not reflection or arbitrary prefix forwarding. Future capability adapters must be
 explicitly registered and retain native authorization; discovery is not authorization.
 
+## Wizard ID adapter
+
+`WizCore.bridge.call` also routes `identity.info`, `identity.setup`, `identity.sign` and `view.capture`
+through this same v1 port. `DeviceBridge.dispatchIdentity` is the native adapter; it is not another
+JavascriptInterface. Discovery advertises identity v1 and visible capture v1. The existing main-frame,
+current-origin and shell-path checks apply unchanged. Public responses only; no secret ever enters
+the envelope. See `WIZARD_ID.md` for payloads, native approval/backup, per-use authentication and
+platform limits. The page bridge allows up to 185 seconds for user interaction; native expires at
+three minutes and cancels pending work on navigation. Package behavior remains unchanged.
+
 ## Compatibility and verification
 
 Old web + new APK keeps using `wizardAppsPort` unchanged. New web must feature-detect the generic

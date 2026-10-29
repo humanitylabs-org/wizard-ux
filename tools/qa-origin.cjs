@@ -9,7 +9,13 @@ const WEB = path.resolve(process.argv[3] || process.env.QA_ORIGIN_WEB || path.jo
 const FALLBACK = process.env.WIZARD_UX_FALLBACK_WEB || WEB; // optional untracked data.js / summaries.js build outputs
 // Remote browser workers can tunnel the same read-only backend onto a different loopback port.
 const BACKEND = { host: '127.0.0.1', port: Number(process.env.QA_BACKEND_PORT || 8923) };
+// Explicit isolated-service opt-in: only the migration POST, never the live backend.
+if (process.env.QA_ALLOW_PREFERENCES_SEED === '1' && BACKEND.port === 8923) throw Error('Never seed live preferences from QA');
+const SEED = process.env.QA_ALLOW_PREFERENCES_SEED === '1';
 const APP_PREFIX = process.env.QA_READ_APP_PREFIX || '', APP_PORT = Number(process.env.QA_READ_APP_PORT || 0);
+// Some installed servers own their gateway prefix; root-hosted apps keep the old default.
+const APP_UPSTREAM = process.env.QA_READ_APP_UPSTREAM_PREFIX || '';
+if (APP_UPSTREAM && !/^\/[a-z0-9-]+$/.test(APP_UPSTREAM)) throw Error('QA upstream prefix must be one literal app path');
 if (APP_PORT && (!/^\/[a-z0-9-]+\/$/.test(APP_PREFIX) || !Number.isInteger(APP_PORT) || APP_PORT < 1 || APP_PORT > 65535)) throw Error('QA app reads need an app prefix and valid loopback port');
 const STATIC = { '127.0.0.1:9271': '/api/' }; // voice/router endpoints of the prototype server
 const TYPES = { '.js': 'application/javascript', '.css': 'text/css', '.html': 'text/html', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.md': 'text/markdown' };
@@ -17,19 +23,21 @@ const CSP = "default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsa
 let refused = 0;
 http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
-  if (!['GET', 'HEAD'].includes(req.method)) { refused++; res.writeHead(403, { 'content-type': 'application/json' }); return res.end('{"error":"qa-origin refuses writes"}'); }
+  const seed = SEED && req.method === 'POST' && u.pathname === '/wizard/v1/ui-preferences/seed';
+  if (!['GET', 'HEAD'].includes(req.method) && !seed) { refused++; res.writeHead(403, { 'content-type': 'application/json' }); return res.end('{"error":"qa-origin refuses writes"}'); }
   // Explicit opt-in for in-shell appearance tests of an installed app. Strip its
   // gateway prefix, forward GET/HEAD only, never cookies or owner credentials.
   if (APP_PORT && u.pathname.startsWith(APP_PREFIX)) {
-    const p = http.request({ host: '127.0.0.1', port: APP_PORT, method: req.method, path: '/' + u.pathname.slice(APP_PREFIX.length) + u.search }, r => { res.writeHead(r.statusCode, r.headers); r.pipe(res); });
+    const p = http.request({ host: '127.0.0.1', port: APP_PORT, method: req.method, path: APP_UPSTREAM + '/' + u.pathname.slice(APP_PREFIX.length) + u.search }, r => { res.writeHead(r.statusCode, r.headers); r.pipe(res); });
     p.on('error', () => { res.writeHead(502); res.end(); }); return p.end();
   }
   if (u.pathname === '/__qa/refused') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ refused })); }
   if (u.pathname.startsWith('/wizard/') || u.pathname.startsWith('/pages/')) {
-    if (req.method !== 'GET' && req.method !== 'HEAD') { refused++; res.writeHead(403, { 'content-type': 'application/json' }); return res.end('{"error":"qa-origin refuses writes"}'); }
+    if (req.method !== 'GET' && req.method !== 'HEAD' && !seed) { refused++; res.writeHead(403, { 'content-type': 'application/json' }); return res.end('{"error":"qa-origin refuses writes"}'); }
     const headers = { ...req.headers }; delete headers.host; if (headers.origin !== 'null') delete headers.origin; delete headers.referer;
     const p = http.request({ ...BACKEND, method: req.method, path: req.url, headers }, r => { res.writeHead(r.statusCode, r.headers); r.pipe(res); });
     p.on('error', e => { res.writeHead(502); res.end(String(e)); });
+    if (seed) return req.pipe(p);
     return p.end();
   }
   if (u.pathname.startsWith('/api/')) {
@@ -47,4 +55,4 @@ http.createServer((req, res) => {
   if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end(); }
   res.writeHead(200, { 'content-type': TYPES[path.extname(f)] || 'application/octet-stream', 'cache-control': 'no-store', 'content-security-policy': CSP, 'permissions-policy': 'microphone=(self)' });
   fs.createReadStream(f).pipe(res);
-}).listen(PORT, '127.0.0.1', () => console.log(`qa-origin http://127.0.0.1:${PORT}/wizard-os-home/ → ${WEB} (reads proxied to :8923, writes refused)`));
+}).listen(PORT, '127.0.0.1', () => console.log(`qa-origin http://127.0.0.1:${PORT}/wizard-os-home/ → ${WEB} (reads proxied to :${BACKEND.port}, writes refused${SEED ? ' except isolated launcher seed' : ''})`));

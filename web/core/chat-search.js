@@ -147,7 +147,7 @@
     footer(r) {
       if (!r) return '';
       const total = Math.min(r.total ?? candidates().length, MAX_SCAN), upto = Math.min(r.want, total);
-      if (scanning(r) || (!r.paused && r.scanned < upto)) return `<div class="ch-bodysearch busy" data-chbs="busy"><span class="wx-spin" aria-hidden="true"></span>Searching messages · ${r.scanned} of ${upto} recent threads</div>`;
+      if (scanning(r) || (!r.paused && r.scanned < upto)) return `<div class="ch-bodysearch busy" data-chbs="busy"><span class="wx-spin" aria-hidden="true"></span>${r.serverDone ? `Searching messages · ${r.scanned} of ${upto} recent threads` : 'Searching messages…'}</div>`;
       const n = r.hits.size, more = upto < total;
       if (r.serverError) return '<div class="ch-bodysearch">Couldn’t search older threads · check your connection and try again</div>';
       if (r.partial) return `<div class="ch-bodysearch" data-chbs="done">Searched available agents · ${n} with matches · some agents could not be searched</div>`;

@@ -1,6 +1,1 @@
-{
-  "id": "wizard",
-  "version": 1,
-  "tweaks": ["wizard/two-orbs"],
-  "off": ["wizard/two-orbs"]
-}
+{"id": "wizard", "version": 1, "tweaks": ["wizard/two-orbs", "wizard/app-borders", "wizard/unified-inbox"], "off": ["wizard/two-orbs", "wizard/app-borders"]}
