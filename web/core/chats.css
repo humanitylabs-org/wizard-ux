@@ -148,6 +148,10 @@ html[data-shell="phone"] .ch-fsheet:has([data-chfocusopt]) { bottom: calc(var(--
 .ch-head .ti b { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ch-msgs { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none; padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 10px; }
 .ch-msgs::-webkit-scrollbar { display: none; }
+/* Opened alert: source text is visible without resolving/sending, in the existing thread scroller. */
+.ch-notif-details { min-width: 0; margin: 16px 2px 4px; color: var(--ink); }
+.ch-notif-details h2 { margin: 0 0 8px; color: var(--ink-2); font-size: 0.8125rem; font-weight: 700; }
+.ch-notif-original { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 1.0625rem; line-height: 1.5; }
 .msg { display: flex; }
 .msg.u { justify-content: flex-end; }
 .msg .bub { max-width: 88%; padding: 10px 13px; border-radius: 18px; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
@@ -227,8 +231,8 @@ a.fchip { color: inherit; text-decoration: none; }
    list (absolute), so the threads never shift; it holds one line and only the buttons a stuck send needs. */
 .ch-pill { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 4; max-width: calc(100% - 28px);
   display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 5px 0 13px; border-radius: 99px; white-space: nowrap;
-  font-size: 13px; font-weight: 600; color: var(--ink-2); background: rgba(28, 20, 52, .92); border: 1px solid rgba(160, 120, 255, .35);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, .45); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); animation: ch-pill-in .18s ease-out; }
+  font-size: 13px; font-weight: 600; color: var(--ink-2); background: linear-gradient(rgba(28, 20, 52, .92), rgba(28, 20, 52, .92)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid rgba(160, 120, 255, .35);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .45);   animation: ch-pill-in .18s ease-out; }
 .ch-pill:not(:has(.pbtn)) { padding-right: 14px; }
 .ch-pill .pl { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }
 .ch-pill .pl > span { overflow: hidden; text-overflow: ellipsis; }
@@ -339,7 +343,7 @@ html[data-mine] .wk-steps .wk-preview { font-family: ui-monospace, monospace; }
 .ch-row { transition: transform 160ms var(--ease); touch-action: pan-y; -webkit-touch-callout: none; }
 /* Long-press / swipe actions sheet */
 .ch-sheet { position: absolute; inset: 0; z-index: 8; display: flex; align-items: flex-end; background: rgba(3, 1, 10, .5); animation: ch-fade 160ms both; }
-.ch-sheet-b { width: 100%; padding: 8px 8px calc(10px + var(--safe-b, 0px)); border-radius: 18px 18px 0 0; background: rgba(20, 13, 44, .98); border-top: 1px solid var(--line-2); }
+.ch-sheet-b { width: 100%; padding: 8px 8px calc(10px + var(--safe-b, 0px)); border-radius: 18px 18px 0 0; background: linear-gradient(rgba(20, 13, 44, .98), rgba(20, 13, 44, .98)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border-top: 1px solid var(--line-2); }
 .ch-sheet-t { padding: 8px 10px 10px; font-size: 13px; font-weight: 750; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ch-sheet-b button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px; border-radius: 12px; font-size: 15px; font-weight: 650; color: var(--ink); text-align: left; }
 .ch-sheet-b button:active { background: rgba(205, 190, 255, .1); }
@@ -727,6 +731,7 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 .ch-row .tp b .ch-plock .ag-lock { width: 12px; height: 12px; stroke-width: 2.2; }
 .ch-head .ti { min-width: 0; }
 .ch-privtag { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; height: 20px; margin-left: 6px; padding: 0 7px 0 6px; border-radius: 10px; font-size: 11px; font-weight: 700; letter-spacing: .02em; color: var(--ch-priv); background: color-mix(in oklab, var(--ch-priv) 16%, transparent); vertical-align: 2px; }
+.ch-background { margin-left: 0; align-self: center; white-space: nowrap; color: var(--wz-text-secondary, var(--ink-2)); background: var(--wz-surface, var(--glass)); font-weight: 400; letter-spacing: normal; }
 .ch-privtag .ag-lock { width: 11px; height: 11px; stroke-width: 2.3; }
 .ch-carry { margin: 14px auto 0; max-width: 520px; display: grid; gap: 6px; padding: 12px 14px; border-radius: 14px; border: 1px solid color-mix(in oklab, var(--ch-priv) 35%, transparent); background: color-mix(in oklab, var(--ch-priv) 8%, transparent); text-align: left; font-size: 13px; line-height: 1.4; }
 .ch-carry b { display: inline-flex; align-items: center; gap: 6px; color: var(--ch-priv); }

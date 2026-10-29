@@ -2,7 +2,7 @@
  * core/web-update.js). One look in both shells; each shell places it for its form factor:
  * phone = glass strip under the status bar, desktop = one-line pill in the top bar. */
 .dv-update { position: absolute; left: 10px; right: 10px; top: calc(40px + var(--safe-t)); z-index: 60; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; border-radius: 18px;
-  background: rgba(14, 8, 34, .92); border: 1px solid var(--line-2); box-shadow: 0 10px 30px rgba(0, 0, 0, .45); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); font-size: 13.5px; }
+  background: linear-gradient(rgba(14, 8, 34, .92), rgba(14, 8, 34, .92)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid var(--line-2); box-shadow: 0 10px 30px rgba(0, 0, 0, .45);   font-size: 13.5px; }
 .dv-update[hidden] { display: none; }
 .dv-ui { color: var(--violet-2); font-size: 15px; }
 .dv-um { flex: 1; min-width: 0; font-weight: 600; }
@@ -32,7 +32,7 @@
  * Threads ▾ drops a list under the bar. */
 #dvWeb[data-shell="desktop"] { position: relative; left: auto; right: auto; top: auto; z-index: auto; flex-direction: row; align-items: center; gap: 0;
   height: 26px; min-width: 0; flex-shrink: 1; max-width: min(calc(50vw - 150px), 520px); padding: 0 3px 0 10px; border-radius: 8px; font-size: 12px;
-  background: rgba(143, 99, 255, .16); border: 1px solid var(--line-2); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  background: linear-gradient(rgba(143, 99, 255, .16), rgba(143, 99, 255, .16)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid var(--line-2); box-shadow: none;   }
 #dvWeb[data-shell="desktop"] .dv-wtop { gap: 6px; min-width: 0; flex: 1; }
 #dvWeb[data-shell="desktop"] .dv-um.two { flex-direction: row; align-items: baseline; gap: 6px; white-space: nowrap; min-width: 0; }
 #dvWeb[data-shell="desktop"] .dv-um.two small { font-size: 11.5px; flex: none; }
@@ -41,7 +41,7 @@
 #dvWeb[data-shell="desktop"] .dv-ui { font-size: 12px; }
 #dvWeb[data-shell="desktop"] .dv-wtop > button { height: 20px; padding: 0 9px; font-size: 11.5px; line-height: 18px; cursor: pointer; }
 #dvWeb[data-shell="desktop"] .dv-wl { position: absolute; top: calc(100% + 8px); right: 0; width: 340px; max-height: 50vh; margin: 0; padding: 2px 12px;
-  border: 1px solid var(--line-2); border-radius: 12px; background: rgba(14, 8, 34, .96); box-shadow: 0 14px 34px rgba(0, 0, 0, .5); }
+  border: 1px solid var(--line-2); border-radius: 12px; background: linear-gradient(rgba(14, 8, 34, .96), rgba(14, 8, 34, .96)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); box-shadow: 0 14px 34px rgba(0, 0, 0, .5); }
 #dvWeb[data-shell="desktop"] button { cursor: pointer; }
 #dvWeb[data-shell="desktop"] button:hover { filter: brightness(1.15); }
 #dvWeb[data-shell="desktop"] .dv-wr:hover { background: rgba(205, 190, 255, .07); }
@@ -52,8 +52,8 @@
 .app-upd-host { position: relative; }
 .app-upd { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 8px;
   max-width: calc(100% - 20px); padding: 5px 5px 5px 13px; border-radius: 99px; font-size: 13px; color: var(--ink, #f4f0ff);
-  background: rgba(14, 8, 34, .92); border: 1px solid var(--line-2, rgba(255,255,255,.16)); box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
-  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); animation: app-upd-in .22s ease-out; }
+  background: linear-gradient(rgba(14, 8, 34, .92), rgba(14, 8, 34, .92)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid var(--line-2, rgba(255,255,255,.16)); box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+    animation: app-upd-in .22s ease-out; }
 .win.full .app-upd, #singleApp .app-upd { top: calc(var(--safe-t, 0px) + 8px); }
 .app-upd-m { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2, #d9d2f0); }
 .app-upd-m b { font-weight: 650; color: var(--ink, #fff); }
@@ -67,7 +67,10 @@
  * paints (core/web-update.js adds .wos-burst). Without it the tapped banner sits frozen until reload and looks broken.
  * Calm on purpose (Miguel, 28 Oct 2026): one quick fade, a hairline progress bar, a thin ring; no flash or sparks. */
 .wos-burst { position: fixed; inset: 0; z-index: 2147483000; display: grid; place-items: center; overflow: hidden; pointer-events: all;
-  background: color-mix(in srgb, var(--bg, #000) 58%, transparent);
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--ink, #fff) 18%, transparent) 0, color-mix(in srgb, var(--bg, #000) 88%, transparent) 55%), var(--wz-panel, var(--wz-base, var(--bg, #05030c)));
+    animation: wb-dim 380ms ease-out both; }
+/* Miguel's calm reload overlay (his release): soft dim + blur instead of the opaque stock panel. */
+html[data-mine] .wos-burst { background: color-mix(in srgb, var(--bg, #000) 58%, transparent);
   -webkit-backdrop-filter: blur(12px) saturate(1.05); backdrop-filter: blur(12px) saturate(1.05); animation: wb-dim 260ms cubic-bezier(.2,.7,.2,1) both; }
 .wos-burst > * { position: absolute; left: 50%; top: 50%; }
 .wos-burst .wb-bar { left: 0; top: 0; height: 2px; width: 100%; transform-origin: 0 50%; background: var(--violet-2, var(--ink, #fff));

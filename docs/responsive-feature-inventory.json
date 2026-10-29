@@ -263,6 +263,10 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/context-menu.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Shared pointer/keyboard action menu; desktop tiles supply actions"
+    },
     "core/core.js": {
       "loadedBy": [
         "phone",
@@ -420,6 +424,13 @@
         "desktop"
       ],
       "note": "Shared own-screen fallback and shell-only Settings confirmation; same App Manager owner listener as Updates"
+    },
+    "core/pages.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared Pages list, opaque viewer, versioned editor and bridge"
     },
     "core/phone-connect.js": {
       "loadedBy": [
@@ -642,6 +653,13 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/app-setup.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared connection checklist and required-needs admission"
     }
   },
   "exceptions": {
@@ -752,6 +770,8 @@
     "core/app-route.css",
     "core/app-route.js",
     "core/app-services.js",
+    "core/app-setup.css",
+    "core/app-setup.js",
     "core/app-versions.js",
     "core/app-voice.js",
     "core/appearance-host.css",
@@ -787,6 +807,8 @@
     "core/companion-pane.js",
     "core/composer-input.js",
     "core/config.js",
+    "core/context-menu.css",
+    "core/context-menu.js",
     "core/core.js",
     "core/deeplink.js",
     "core/dom-morph.js",
@@ -805,6 +827,8 @@
     "core/os-updates.js",
     "core/own-views.css",
     "core/own-views.js",
+    "core/pages.css",
+    "core/pages.js",
     "core/parts.js",
     "core/phone-connect.css",
     "core/phone-connect.js",

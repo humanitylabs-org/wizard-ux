@@ -76,7 +76,7 @@
     const working = WORKING.has(status) || status === 'waiting_for_approval';
     const latestText = clean(text(latest?.content ?? latest?.text));
     const userText = clean(text(lastUser?.content ?? lastUser?.text) || text(item.wizard_request_preview));
-    const preview = working ? (userText || latestText) : (latestText || userText || clean(text(item.preview)));
+    const preview = working ? (item.wizard_helper_status ? (latestText || clean(text(item.preview)) || userText) : (userText || latestText)) : (latestText || userText || clean(text(item.preview)));
     const latestAt = optIso(latest?.timestamp ?? latest?.created_at);
     const userAt = optIso(lastUser?.timestamp ?? lastUser?.created_at);
     return {
@@ -104,6 +104,7 @@
       critical: (item.wizard_attention_level || item.attention_level) === 'critical',
       waitingOn: item.wizard_waiting_on === 'helper' ? 'helper' : '',
       helperStatus: item.wizard_helper_status && typeof item.wizard_helper_status === 'object' ? item.wizard_helper_status : null,
+      background: ['helper', 'heavy'].includes(item.wizard_background) ? item.wizard_background : '',
       // What the finished thread asks of James (the agent's hidden status line): needs_you / check / done / fyi.
       attention: attentionOf(item.wizard_attention),
       // A durable quiet one-shot checker bound to this thread. The prompt never reaches the list.
@@ -303,7 +304,7 @@
   // The owner's day: their time zone and day_starts_at from Wizard OS settings (WizConfig).
   const workDayStart = (now = Date.now()) => window.WizConfig.dayStart(now);
   const WORKING_SECTION = new Set(['submitting', 'queued', 'running', 'waiting_for_approval', 'stopping']);
-  const isErr = s => s.status === 'failed' || s.status === 'interrupted';
+  const isErr = s => s.status === 'failed' || s.status === 'interrupted' || (s.status === 'queued' && s.queueReason === 'provider_access');
   const needsApproval = s => ['waiting_for_approval', 'unknown'].includes(s.status);
   const inWorking = s => WORKING_SECTION.has(s.status) && !needsApproval(s) && !isErr(s);
   const firstValid = (...v) => v.find(x => isFinite(Date.parse(x ?? ''))) ?? '';
@@ -566,6 +567,10 @@
   const confirmed = (s, p) => {
     const st = s.orig ? s.orig.status : s.status, run = s.orig ? s.orig.runId : s.runId;
     const sameKey = !!p.key && s.lastRunKey === p.key;
+    // A queued sign-in wait is an acknowledged failed start, not active work.
+    // Release that send's optimistic spinner immediately, but keep a newer
+    // explicit retry's hold until its own receipt arrives.
+    if (s.queueReason === 'provider_access' && (sameKey || (!!p.runId && run === p.runId))) return true;
     if ((sameKey || (!!p.runId && run === p.runId)) && WORKING.has(st)) p.acknowledged = true;
     return sameKey && !WORKING.has(st) && !WORKING.has(s.lastRunStatus);
   };
@@ -585,7 +590,7 @@
     if (!s.orig) s.orig = { status: s.status, runId: s.runId, assignedAt: s.assignedAt, requestAt: s.requestAt };
     const at = new Date(p.at).toISOString();
     // Already working (a message into a live run) keeps Wizard's status; anything else is held in Working.
-    if (!WORKING.has(s.orig.status) && !['waiting_for_approval', 'unknown'].includes(s.orig.status)) {
+    if ((!WORKING.has(s.orig.status) || s.queueReason === 'provider_access') && !['waiting_for_approval', 'unknown'].includes(s.orig.status)) {
       s.status = p.state === 'sent' ? 'running' : 'submitting';
       s.runId = p.runId || ''; // never an older finished run (a quick second reply must not try to steer it)
       s.assignedAt = at; s.requestAt = at;
@@ -767,6 +772,7 @@
         const def = this.deferred[seenKeyOf(s)]?.deferred;
         if (snoozeLast() && isDeferred(s) && !WORKING.has(s.status)) continue; // snoozeOrder('last'): not Needs you until restored/replied
         if (['waiting_for_approval', 'unknown'].includes(s.status)) { needs.push(s); continue; }
+        if (s.status === 'queued' && s.queueReason === 'provider_access') { needs.push(s); continue; }
         if (WORKING.has(s.status)) { working.push(s); continue; }
         if (def) continue;
         const at = Date.parse(assistantAt(s) || s.activityAt || s.updatedAt);

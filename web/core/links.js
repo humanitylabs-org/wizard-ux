@@ -59,7 +59,7 @@
     // "can't reach your Wizard" screen. Copy the link so it can be pasted into the phone's browser.
     if (NATIVE) {
       const say = t => { const n = document.createElement('div'); n.textContent = t; n.setAttribute('role', 'status');
-        n.style.cssText = 'position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:2147483001;max-width:86vw;background:rgba(22,14,46,.98);color:#f1ecff;border:1px solid rgba(205,190,255,.18);border-radius:12px;padding:10px 14px;font:14px/1.35 system-ui,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.5)';
+        n.style.cssText = 'position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:2147483001;max-width:86vw;background:linear-gradient(rgba(22,14,46,.98),rgba(22,14,46,.98)),var(--wz-panel,var(--wz-base,var(--bg,#05030c)));color:#f1ecff;border:1px solid rgba(205,190,255,.18);border-radius:12px;padding:10px 14px;font:14px/1.35 system-ui,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.5)';
         document.body.appendChild(n); setTimeout(() => n.remove(), 4200); };
       try { navigator.clipboard.writeText(u.href).then(() => say('Link copied · paste it into Chrome to download'), () => say('Open this link in Chrome to download: ' + u.href)); }
       catch (_) { say('Open this link in Chrome to download: ' + u.href); }
@@ -213,7 +213,7 @@
       const b = e.target.closest('[data-ls]'); if (!b) return;
       const k = b.dataset.ls, c = cur();
       if (k === 'full') { const peek = !el.classList.contains('peek'); el.classList.toggle('peek', peek); b.textContent = peek ? '⤢' : '⤡'; b.setAttribute('aria-label', peek ? 'Full screen' : 'Smaller'); b.title = b.getAttribute('aria-label'); return; }
-      if (k === 'close') close();
+      if (k === 'close') { if (b.classList.contains('ls-scrim')) back(); else close(); }
       else if (k === 'back') back();
       else if (k === 'out' && c) { let url = c.url; try { url = frame.contentWindow.location.href; } catch (e) {} browse(abs(url)); }
       else if (k === 'keep' && c) {
@@ -275,9 +275,14 @@
   /* Long-press (or right-click) a link in a chat or in a page in the link sheet: open it in your own browser,
    * download it (files), or copy it. This Wizard's own pages count too (James 23 Oct 2026).
    * (James 18 Oct 2026: links in chats mostly come from the agent, so asking the agent to open its own link added nothing.) */
+  const linkMenus = new Set();
+  function backMenu() {
+    const close = [...linkMenus].at(-1); if (!close) return false;
+    close(); return true;
+  }
   function linkMenu(root, scope = '.bub, .note-line, .steps', base) {
     let menu = null, timer = 0, at = null, swallow = 0;
-    const shut = () => { if (menu) { menu.remove(); menu = null; } };
+    const shut = () => { linkMenus.delete(shut); if (menu) { menu.remove(); menu = null; } };
     const show = (a, x, y) => {
       const u = abs(a.getAttribute('href'), base); if (!u || !/^https?:$/.test(u.protocol)) return false;
       const DLm = window.WizCore && window.WizCore.deeplink;
@@ -289,10 +294,18 @@
       const doc = a.ownerDocument;
       menu = doc.createElement('div'); menu.className = 'wiz-linkmenu'; menu.setAttribute('role', 'menu');
       menu.innerHTML = `<div class="wl-host">${esc(inApp(u) ? decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || u.hostname) : u.hostname)}</div>${items}`;
-      menu.style.cssText = 'position:fixed;z-index:2147483000;min-width:220px;max-width:min(300px,calc(100vw - 16px));background:rgba(22,14,46,.98);color:#f1ecff;border:1px solid rgba(205,190,255,.18);border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.55);padding:6px;font:15px/1.3 system-ui,sans-serif';
+      menu.style.cssText = 'position:fixed;z-index:2147483000;min-width:220px;max-width:min(300px,calc(100vw - 16px));background:linear-gradient(rgba(22,14,46,.98),rgba(22,14,46,.98)),var(--wz-panel,var(--wz-base,var(--bg,#05030c)));color:#f1ecff;border:1px solid rgba(205,190,255,.18);border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.55);padding:6px;font:15px/1.3 system-ui,sans-serif';
       for (const b of menu.querySelectorAll('button')) b.style.cssText = 'display:block;width:100%;text-align:left;border:0;background:none;padding:12px 10px;font:inherit;color:inherit;border-radius:8px;cursor:pointer';
       menu.querySelector('.wl-host').style.cssText = 'padding:6px 10px 4px;font-size:12px;color:#8a82a6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-      doc.body.appendChild(menu);
+      doc.body.appendChild(menu); linkMenus.add(shut);
+      doc.defaultView.addEventListener('pagehide', shut, { once: true });
+      let freshPress = false;
+      menu.addEventListener('pointerdown', () => { freshPress = true; });
+      menu.addEventListener('pointercancel', () => { freshPress = false; });
+      menu.addEventListener('click', e => {
+        if (!freshPress && e.detail !== 0) { e.preventDefault(); e.stopImmediatePropagation(); }
+        freshPress = false;
+      }, true);
       if (!isFinite(x) || !isFinite(y)) { const ar = a.getBoundingClientRect(); x = ar.left; y = ar.bottom + 6; } // no pointer position: sit under the link
       const r = menu.getBoundingClientRect(), vw = doc.documentElement.clientWidth, vh = doc.documentElement.clientHeight;
       menu.style.left = Math.max(8, Math.min(x, vw - r.width - 8)) + 'px';
@@ -366,5 +379,5 @@
     } catch (e) {}
   }
 
-  window.WizLinks = { mount, intercept, guardFrame, viewImage: href => viewImage(abs(href)), inApp: href => inApp(abs(href)) };
+  window.WizLinks = { mount, intercept, guardFrame, backMenu, viewImage: href => viewImage(abs(href)), inApp: href => inApp(abs(href)) };
 })();
