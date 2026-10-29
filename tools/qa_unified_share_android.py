@@ -435,11 +435,15 @@ class Rig:
         self.sx('cmd uimode night yes')
 
     def fixture_start(self):
-        log = (self.out / 'fixture.log').open('w')
-        self.fixture = subprocess.Popen([self.env['WIZARD_QA_NODE'], str(self.source / 'tools/share-fixture.mjs'), str(self.backend),
-            '--host=127.0.0.1', '--web=' + str(self.source / 'web'), '--data=' + str(self.out / 'fixture-data'),
-            '--agents=2', '--throttle=4'], env=self.env, stdout=log, stderr=subprocess.STDOUT)
-        wait(self.fixture_ready, 20)
+        with (self.out / 'fixture.log').open('w') as log:
+            self.fixture = subprocess.Popen([self.env['WIZARD_QA_NODE'], str(self.source / 'tools/share-fixture.mjs'), str(self.backend),
+                '--host=127.0.0.1', '--web=' + str(self.source / 'web'), '--data=' + str(self.out / 'fixture-data'),
+                '--agents=2', '--throttle=4'], env=self.env, stdout=log, stderr=subprocess.STDOUT)
+        deadline = time.monotonic() + 20
+        while not self.fixture_ready():
+            if time.monotonic() >= deadline:
+                raise RuntimeError('share fixture did not listen within 20 seconds; see fixture.log')
+            time.sleep(.1)
         Proxy.backend = self.backend
         self.proxy = http.server.ThreadingHTTPServer(('127.0.0.1', self.frontport), Proxy)
         self.proxy.daemon_threads = True

@@ -74,6 +74,16 @@ class ControllerTest(unittest.TestCase):
             rig.fixture_ready()
         rig.state.assert_not_called()
 
+    def test_fixture_start_does_not_hide_permanent_readiness_failure(self):
+        with tempfile.TemporaryDirectory(prefix='unified-start-', dir=os.environ['TMPDIR']) as d:
+            rig = runner.Rig.__new__(runner.Rig)
+            rig.out = Path(d); rig.source = HERE.parent; rig.backend = 12345
+            rig.env = {'WIZARD_QA_NODE':'/fixture/node'}
+            rig.fixture_ready = Mock(side_effect=RuntimeError('owned fixture exited'))
+            with patch.object(runner.subprocess, 'Popen'), self.assertRaisesRegex(RuntimeError, 'owned fixture exited'):
+                rig.fixture_start()
+            rig.fixture_ready.assert_called_once_with()
+
     @unittest.skipUnless(shutil.which('node'), 'Node needed for focused DOM contract replay')
     def test_notification_dom_readback_rejects_background_wrong_thread_and_missing_file(self):
         expression = runner.focused_thread_expression('qa_private_thread', 'genuine.pdf')
