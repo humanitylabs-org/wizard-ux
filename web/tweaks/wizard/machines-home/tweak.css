@@ -1,4 +1,4 @@
-/* Miguel's network map on Home. Pearl discs and sky wires (no purple, no black), every word on a frosted chip so it
+/* The owner's network on Home and in Settings. Pearl discs and sky wires, every word on a frosted chip so it
  * reads the same on Dark, Light and Landscapes. No icons, no cards; everything expands in place.
  * Motion plays once: entry animations hang off .mh-new, which only the first paint (and a workspace switch) carries. */
 html[data-tweaks~="wizard/machines-home"] {
@@ -209,7 +209,7 @@ html[data-shell="phone"] .mh-top { padding-right: 60px; justify-content: flex-st
 .mh-age { font: 700 10.5px/1 system-ui, sans-serif; font-variant-numeric: tabular-nums; fill: var(--mh-ink); }
 .mh-age-bg { fill: var(--mh-chip); stroke: var(--mh-chip-line); stroke-width: 1; }
 html[data-skin="obsidian-light"] .mh-age-bg { fill: #fff; }
-html[data-skin="landscapes"] .mh-age-bg { fill: rgba(12, 16, 24, .72); }
+html[data-skin^="landscapes"] .mh-age-bg { fill: rgba(12, 16, 24, .72); }
 
 /* ---------- entry motion: once ---------- */
 .mh-new:is(.mh-node, .mh-person, .mh-dev, .mh-ai-group) { animation: mh-in 380ms var(--mh-ease) both; }
@@ -250,9 +250,9 @@ html[data-skin="landscapes"] .mh-age-bg { fill: rgba(12, 16, 24, .72); }
 }
 
 /* Landscapes: pictures behind, so chips and bars get a darker, steadier backing. */
-html[data-skin="landscapes"][data-tweaks~="wizard/machines-home"] { --mh-chip: rgba(10, 14, 22, .74); --mh-track: rgba(255, 255, 255, .26); }
-html[data-skin="landscapes"] .mh-bar i { background: linear-gradient(90deg, var(--mh-accent) var(--f), var(--mh-track) var(--f)), rgba(10, 14, 22, .7); box-shadow: 0 0 0 2px rgba(10, 14, 22, .55); }
-html[data-skin="landscapes"] .mh-bar small { background: rgba(10, 14, 22, .78); color: var(--mh-ink); }
+html[data-skin^="landscapes"][data-tweaks~="wizard/machines-home"] { --mh-chip: rgba(10, 14, 22, .74); --mh-track: rgba(255, 255, 255, .26); }
+html[data-skin^="landscapes"] .mh-bar i { background: linear-gradient(90deg, var(--mh-accent) var(--f), var(--mh-track) var(--f)), rgba(10, 14, 22, .7); box-shadow: 0 0 0 2px rgba(10, 14, 22, .55); }
+html[data-skin^="landscapes"] .mh-bar small { background: rgba(10, 14, 22, .78); color: var(--mh-ink); }
 
 /* Badge for the gauge's own service; + to add a device or a person (quiet until hovered); first-load spinner. */
 .mh-ai-def { padding: 1px 7px; border-radius: 99px; font-size: 10.5px !important; font-weight: 750 !important; color: var(--mh-accent) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mh-accent) 60%, transparent); }
@@ -289,8 +289,8 @@ button.mh-shield { cursor: pointer; }
 .mh-access { display: flex; flex-direction: column; gap: 3px; max-width: 360px; font-size: 12px; line-height: 1.35; color: var(--mh-ink-2); text-align: left; }
 .mh-access code { align-self: flex-start; padding: 2px 7px; border-radius: 7px; background: var(--mh-chip); box-shadow: inset 0 0 0 1px var(--mh-chip-line); }
 .mh-access small { font-size: 10.5px; color: var(--mh-ink-3); }
-html[data-skin="landscapes"] .mh-shield { background: rgba(12, 16, 24, .62); }
-html[data-skin="landscapes"] .mh-shield[data-x="bad"] { color: #FF95A8; }
+html[data-skin^="landscapes"] .mh-shield { background: rgba(12, 16, 24, .62); }
+html[data-skin^="landscapes"] .mh-shield[data-x="bad"] { color: #FF95A8; }
 @container (max-width: 520px) { .mh-root .mh-shield { font-size: 9.5px; padding: 1px 6px 1px 5px !important; } }
 .mh-sh-short { display: none; }
 
@@ -332,7 +332,7 @@ html[data-skin="obsidian-light"] .mh-root { --a-front: #eef2f6; --a-side: #c3ced
 @media (prefers-reduced-motion: reduce) { .mh-new .mh-art * { animation: none; } }
 /* Tailscale panel */
 .mh-ts-info .is-bad { color: var(--mh-bad); font-weight: 650; }
-html[data-skin="landscapes"] .mh-ts-info .is-bad { color: #FF95A8; }
+html[data-skin^="landscapes"] .mh-ts-info .is-bad { color: #FF95A8; }
 .mh-ts-list { display: flex; flex-direction: column; gap: 3px; margin: 2px 0; }
 .mh-ts-row { display: grid; grid-template-columns: 9px auto 1fr; align-items: center; gap: 7px; font-size: 12px; }
 .mh-ts-row i { width: 8px; height: 8px; border-radius: 50%; background: var(--mh-ink-3); }
@@ -357,51 +357,19 @@ html[data-skin="obsidian-light"] .mh-node.is-main .mh-disc.is-art::before { back
 /* ---------- the map sits on its own card, so the wallpaper never fights the labels ---------- */
 .mh-root { --mh-card: rgba(22, 30, 42, .78); --mh-card-solid: #1b2533; --mh-card-line: rgba(255, 255, 255, .1); }
 html[data-skin="obsidian-light"] .mh-root { --mh-card: rgba(255, 255, 255, .94); --mh-card-solid: #ffffff; --mh-card-line: rgba(20, 33, 49, .1); }
-html[data-skin="landscapes"] .mh-root { --mh-card: rgba(16, 24, 36, .66); --mh-card-solid: #1a2636; }
+html[data-skin^="landscapes"] .mh-root { --mh-card: rgba(16, 24, 36, .66); --mh-card-solid: #1a2636; }
 .mh-map { padding: 22px 14px 14px; border-radius: 26px; background: var(--mh-card); box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 18px 50px -24px rgba(0, 0, 0, .55); -webkit-backdrop-filter: blur(22px) saturate(1.2); backdrop-filter: blur(22px) saturate(1.2); }
 html[data-skin="obsidian-light"] .mh-map { box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 14px 40px -22px rgba(20, 33, 49, .35); }
 @container (max-width: 599px) { .mh-map { padding: 20px 6px 10px; border-radius: 20px; } .mh-root .mh-ts-tab { left: 16px; height: 24px; font-size: 11px; } }
 .mh-root:not(.is-managed) .mh-row.is-storage:not(:empty) { margin-bottom: 30px; }
 
 /* ---------- Home: one strip. Which Wizard ▾ | AI fuel | chats | last backup | network | Details › ---------- */
-.mh-root.is-home { align-items: center; }
-.mh-root .mh-glance { flex: none; margin: calc(var(--sb, 0px) + var(--safe-t, 0px) + 12px) auto 0; max-width: calc(100% - 8px); min-height: 46px; padding: 4px !important; border-radius: 99px; display: inline-flex; align-items: center; gap: 2px; color: var(--mh-ink); background: var(--mh-card); box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 10px 30px -18px rgba(0, 0, 0, .55); -webkit-backdrop-filter: blur(22px) saturate(1.2); backdrop-filter: blur(22px) saturate(1.2); white-space: nowrap; }
-.mh-root .mh-glance > button { height: 38px; padding: 0 12px !important; border-radius: 99px; display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--mh-ink); background: transparent !important; box-shadow: none; cursor: pointer; transition: background 160ms; }
-.mh-root .mh-glance > button:hover { background: color-mix(in srgb, var(--mh-ink) 9%, transparent) !important; }
-.mh-root .mh-glance > button + button { position: relative; }
-.mh-root .mh-glance > button + button::before { content: ""; position: absolute; left: -1px; top: 11px; bottom: 11px; width: 1px; background: var(--mh-card-line); }
-.mh-root .mh-glance .is-name { padding-left: 16px !important; background: var(--mh-pearl) !important; color: var(--mh-pearl-ink); }
-.mh-root .mh-glance .is-name + button::before { display: none; }
-.mh-glance .is-name .mh-chev-btn { transform: scale(.8); color: var(--mh-pearl-ink); }
-.mh-root .mh-glance .mh-gauge { height: 38px; gap: 6px; padding: 0 12px !important; border-radius: 99px; background: transparent !important; box-shadow: none; transform: none; }
-.mh-glance .mh-gauge .mh-g-cells i { height: 14px; }
-.mh-glance .mh-dots { display: inline-flex; flex-wrap: nowrap; gap: 4px; }
-.mh-glance .mh-dots i { width: 9px; height: 9px; box-shadow: none; }
-.mh-glance .mh-bell { color: var(--mh-ink); }
-.mh-glance [data-x="ok"] { color: var(--mh-ink); }
-.mh-glance .is-backup [data-x="tight"] { color: var(--mh-warn); }
-.mh-glance [data-x="no"] { color: var(--mh-bad); }
-html[data-skin="landscapes"] .mh-glance [data-x="no"] { color: #FF95A8; }
-.mh-glance .is-more { color: var(--mh-ink-2) !important; }
-.mh-go { font-style: normal; font-size: 18px; line-height: 1; }
 /* Which Wizard: a small list under the strip. */
-.mh-ws-menu { margin: 6px auto 0; padding: 5px; border-radius: 18px; display: flex; flex-direction: column; gap: 2px; min-width: 200px; background: var(--mh-card-solid); box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 16px 40px -18px rgba(0, 0, 0, .6); animation: mh-in 180ms var(--mh-ease) both; }
-.mh-ws-menu[hidden] { display: none; }
-.mh-root .mh-ws-menu button { height: 36px; padding: 0 14px !important; border-radius: 12px; text-align: left; font-size: 13.5px; font-weight: 650; color: var(--mh-ink); background: transparent !important; }
-.mh-root .mh-ws-menu button:hover { background: color-mix(in srgb, var(--mh-ink) 8%, transparent) !important; }
-.mh-root .mh-ws-menu button[aria-checked="true"] { background: color-mix(in srgb, var(--mh-accent) 22%, transparent) !important; }
-.mh-root .mh-ws-menu .is-add { color: var(--mh-ink-2); font-weight: 600; }
 .mh-root { --mh-card: rgba(22, 30, 42, .66); --mh-card-solid: #1b2533; --mh-card-line: rgba(255, 255, 255, .12); }
 html[data-skin="obsidian-light"] .mh-root { --mh-card: rgba(255, 255, 255, .86); --mh-card-solid: #ffffff; --mh-card-line: rgba(20, 33, 49, .1); }
-html[data-skin="landscapes"] .mh-root { --mh-card: rgba(16, 24, 36, .52); --mh-card-solid: #1a2636; }
+html[data-skin^="landscapes"] .mh-root { --mh-card: rgba(16, 24, 36, .52); --mh-card-solid: #1a2636; }
 @container (max-width: 599px) {
-  .mh-root .mh-glance > button, .mh-root .mh-glance .mh-gauge { padding: 0 8px !important; gap: 5px; font-size: 12px; }
-  .mh-root .mh-glance .is-name { padding-left: 11px !important; }
-  .mh-glance .mh-gauge .mh-g-ef, .mh-glance .mh-sh-long { display: none; }
-  .mh-glance .mh-gauge .mh-g-cells i { width: 4px; }
-  .mh-glance .mh-dots i:nth-child(n+4) { display: none; }
 }
-@container (max-width: 400px) { .mh-glance .mh-gauge .mh-g-label { display: none; } }
 
 /* ---------- Settings › System: the same views on the Settings surface (no second card) ---------- */
 .mh-root.is-settings { flex: none; width: 100%; align-items: stretch; padding: 4px 0 16px; }
@@ -426,39 +394,149 @@ html[data-skin="obsidian-light"] .mh-root.is-settings { --mh-ink: #111418; --mh-
 .mh-root.is-settings .mh-ai-row { min-height: 40px; }
 .mh-store-head .mh-disc.is-art { width: 54px; height: 54px; background: none !important; box-shadow: none !important; border-radius: 0; }
 @container (max-width: 599px) {
-  .mh-root .mh-glance { margin-top: calc(var(--sb, 0px) + var(--safe-t, 0px) + 56px); max-width: calc(100% - 16px); }
-  .mh-root .mh-glance .is-more { display: none; }
-  .mh-glance .mh-gauge .mh-g-cells i:nth-child(n+7) { display: none; }
-  .mh-root .mh-glance .is-name .mh-chev-btn { display: none; }
 }
 
 /* ---------- Home panel v2: labelled rows, stacked (same on phone and desktop) ---------- */
-.mh-root .mh-glance { display: flex; flex-direction: column; align-items: stretch; gap: 0; width: min(440px, calc(100% - 24px)); max-width: none; min-height: 0; height: auto; padding: 6px !important; border-radius: 22px; white-space: normal; }
-.mh-root .mh-glance > button { height: auto; border-radius: 16px; }
-.mh-root .mh-glance > button + button::before { display: none; }
-.mh-root .mh-glance .mh-gl-head { justify-content: center; gap: 6px; height: 36px !important; padding: 0 12px !important; font-size: 14px; font-weight: 800; color: var(--mh-ink); }
-.mh-root .mh-glance .mh-gl-row { display: grid !important; grid-template-columns: 1fr auto; grid-template-rows: auto auto; column-gap: 10px; row-gap: 3px; padding: 10px 12px !important; text-align: left; }
-.mh-root .mh-glance .mh-gl-row + .mh-gl-row, .mh-gl-head + .mh-gl-row { box-shadow: inset 0 1px 0 var(--mh-card-line); border-radius: 0; }
-.mh-root .mh-glance .mh-gl-row:last-child { border-radius: 0 0 16px 16px; }
-.mh-gl-t { grid-column: 1; font-size: 11.5px; font-weight: 750; letter-spacing: .02em; color: var(--mh-ink-3); }
-.mh-gl-v { grid-column: 1; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13.5px; font-weight: 650; color: var(--mh-ink); }
-.mh-gl-v small { font-size: 12px; color: var(--mh-ink-2); font-weight: 600; }
-.mh-gl-row .mh-go { grid-column: 2; grid-row: 1 / 3; align-self: center; font-size: 20px; color: var(--mh-ink-3); }
-.mh-gl-row[data-x="no"] .mh-gl-v { color: var(--mh-bad); }
-html[data-skin="landscapes"] .mh-gl-row[data-x="no"] .mh-gl-v { color: #FF95A8; }
-.mh-gl-row[data-x="tight"] .mh-gl-v { color: var(--mh-warn); }
-.mh-gl-row[data-x="ok"] .mh-gl-t::after { content: " ✓"; color: var(--mh-good); }
-.mh-gl-cells { display: inline-flex; gap: 2px; }
-.mh-gl-cells i { width: 6px; height: 13px; border-radius: 2px; background: var(--mh-card-line); }
-.mh-gl-cells i.on { background: var(--mh-good); }
-.mh-gl-cells[data-s="tight"] i.on { background: var(--mh-warn); }
-.mh-gl-cells[data-s="no"] i.on { background: var(--mh-bad); }
-.mh-glance .mh-dots i { width: 8px; height: 8px; }
-.mh-root .mh-ws-menu { width: min(440px, calc(100% - 24px)); }
-@container (max-width: 599px) { .mh-root .mh-glance { margin-top: calc(var(--sb, 0px) + var(--safe-t, 0px) + 56px); } .mh-glance .mh-dots i:nth-child(n+4) { display: inline-block; } }
-.mh-root.is-home, .mh-root.is-home .mh-body { width: 100%; align-self: stretch; }
-.mh-root.is-home .mh-body { align-items: center; }
-.mh-root .mh-glance { width: min(460px, calc(100% - 24px)) !important; }
-.mh-gl-v { flex-wrap: nowrap; }
-.mh-gl-v > span:not(.mh-dots):not(.mh-gl-cells):not(.mh-bell) { min-width: 0; }
-.mh-gl-row[data-go="ai"] .mh-gl-t::after { content: none; }
+
+/* ================= Glance v3: pictures, one short value each ================= */
+/* Shared tiles */
+.mh-glance { display: flex; align-items: center; }
+.mh-root .mh-tile { position: relative; display: flex; align-items: center; gap: 6px; color: var(--mh-ink); background: transparent; cursor: pointer; }
+.mh-tile-viz { position: relative; display: grid; place-items: center; }
+.mh-pic { display: block; width: var(--pic, 22px); height: var(--pic, 22px); }
+.mh-pic .mh-art { filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .25)); }
+.mh-tile-val { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.mh-tile-lab { font-size: 10.5px; font-weight: 700; color: var(--mh-ink-3); }
+.mh-badge { position: absolute; top: -5px; right: -7px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 99px; display: grid; place-items: center; font: 800 9.5px/1 ui-sans-serif, system-ui, sans-serif; color: #fff; background: var(--mh-bad); box-shadow: 0 0 0 1.5px var(--mh-card-solid); }
+.mh-badge.is-ok { background: var(--mh-good); }
+.mh-badge.is-warn { background: var(--mh-warn); }
+.mh-tile.is-net.is-bad .mh-art .a-led { fill: var(--mh-bad); }
+.mh-tile.is-net.is-ok .mh-art .a-led { fill: var(--mh-good); }
+.mh-tile .mh-dots { display: inline-flex; flex-wrap: wrap; gap: 3px; }
+.mh-tile .mh-dots i { width: 7px; height: 7px; box-shadow: none; }
+
+/* ---- Desktop: menu-bar extras in the top bar ---- */
+.mh-root.is-topbar { flex: none; flex-direction: row; align-items: center; gap: 8px; margin-right: 6px; container-type: normal; }
+.mh-root.is-topbar .mh-ws { height: 26px; padding: 2px; }
+.mh-root.is-topbar .mh-ws button { height: 22px; padding: 0 10px !important; font-size: 12px; }
+.mh-root.is-topbar .mh-ws .mh-ws-add { width: 22px; }
+.mh-glance.is-bar { height: 26px; gap: 2px; padding: 0 4px; border-radius: 99px; background: var(--mh-chip); box-shadow: inset 0 0 0 1px var(--mh-chip-line); }
+.mh-glance.is-bar .mh-tile { height: 22px; padding: 0 8px !important; border-radius: 99px; }
+.mh-glance.is-bar .mh-tile:hover { background: color-mix(in srgb, var(--mh-ink) 10%, transparent) !important; }
+.mh-glance.is-bar .mh-tile-lab { display: none; }
+.mh-glance.is-bar .mh-tile-val { font-size: 12px; }
+.mh-glance.is-bar .mh-pic { --pic: 18px; }
+.mh-glance.is-bar .mh-gauge { height: 22px !important; padding: 0 8px 0 6px !important; gap: 5px; background: transparent !important; box-shadow: none; }
+.mh-glance.is-bar .mh-g-cells i { height: 10px; }
+.mh-glance.is-bar .mh-tile.is-ai { padding: 0 !important; }
+html[data-skin^="landscapes"] .mh-root.is-topbar { --mh-chip: rgba(12, 18, 28, .5); }
+/* Top bar: only the current Wizard shows; the others slide out on hover or keyboard focus. */
+.mh-root.is-topbar .mh-ws button:not([aria-selected="true"]) { max-width: 0; padding: 0 !important; opacity: 0; overflow: hidden; transition: max-width 220ms var(--mh-ease), opacity 180ms, padding 220ms; }
+.mh-root.is-topbar .mh-ws:is(:hover, :focus-within) button:not([aria-selected="true"]) { max-width: 120px; padding: 0 10px !important; opacity: 1; }
+.mh-root.is-topbar .mh-ws:is(:hover, :focus-within) .mh-ws-add { padding: 0 !important; width: 22px; }
+.mh-root.is-topbar .mh-ws { overflow: hidden; }
+
+/* ---- Phone: a widget on Home ---- */
+.mh-root:not(.is-topbar) .mh-ws.is-home-ws { align-self: center; margin: calc(var(--sb, 0px) + var(--safe-t, 0px) + 56px) auto 0; }
+.mh-glance.is-widget { width: min(360px, calc(100% - 32px)); margin: 14px auto 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.mh-glance.is-widget .mh-tile { flex-direction: column; justify-content: center; gap: 5px; aspect-ratio: 1; padding: 8px 4px !important; border-radius: 22px; background: var(--mh-card) !important; box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 10px 26px -16px rgba(0, 0, 0, .6); -webkit-backdrop-filter: blur(20px) saturate(1.2); backdrop-filter: blur(20px) saturate(1.2); transition: transform 160ms var(--mh-ease); }
+.mh-glance.is-widget .mh-tile:active { transform: scale(.95); }
+.mh-glance.is-widget .mh-tile.is-ai { grid-column: 1 / -1; aspect-ratio: auto; height: 64px; padding: 0 !important; }
+.mh-glance.is-widget .mh-gauge { height: 100% !important; width: 100%; justify-content: center; gap: 10px; padding: 0 16px !important; border-radius: 22px; background: transparent !important; box-shadow: none; }
+.mh-glance.is-widget .mh-g-label { font-size: 15px; }
+.mh-glance.is-widget .mh-g-ef { font-size: 13px; }
+.mh-glance.is-widget .mh-g-cells { gap: 4px; }
+.mh-glance.is-widget .mh-g-cells i { width: 13px; height: 24px; border-radius: 4px; }
+.mh-glance.is-widget .mh-pic { --pic: 32px; }
+.mh-glance.is-widget .mh-tile-viz { min-height: 32px; }
+.mh-glance.is-widget .mh-tile-val { font-size: 13px; line-height: 1; }
+.mh-glance.is-widget .mh-tile.is-chats .mh-dots { max-width: 46px; justify-content: center; }
+.mh-glance.is-widget .mh-tile.is-chats .mh-dots i { width: 9px; height: 9px; }
+.mh-glance.is-widget .mh-badge { top: -6px; right: -10px; min-width: 18px; height: 18px; font-size: 11px; }
+/* Look B: one wide widget, gauge on top, round icons below */
+.mh-glance.is-widget[data-look="b"] { gap: 0; padding: 8px; border-radius: 28px; background: var(--mh-card); box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 14px 34px -18px rgba(0, 0, 0, .6); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+.mh-glance.is-widget[data-look="b"] .mh-tile { background: transparent !important; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; aspect-ratio: auto; padding: 10px 2px !important; }
+.mh-glance.is-widget[data-look="b"] .mh-tile.is-ai { border-bottom: 1px solid var(--mh-card-line); border-radius: 0; margin-bottom: 4px; }
+.mh-glance.is-widget[data-look="b"] .mh-tile-viz { width: 50px; height: 50px; border-radius: 50%; background: color-mix(in srgb, var(--mh-ink) 8%, transparent); }
+html[data-skin="obsidian-light"] .mh-glance.is-widget .mh-tile { background: rgba(255, 255, 255, .9) !important; }
+.mh-glance.is-widget .mh-tile.is-chats .mh-dots i:nth-child(n+7) { display: none; }
+.mh-glance.is-widget .mh-tile.is-chats .mh-dots { max-width: 40px; }
+.mh-glance.is-widget .mh-tile-val { min-height: 13px; }
+.mh-glance.is-bar .mh-tile-val:empty { display: none; }
+
+/* ================= Desktop top bar v4 ================= */
+/* Left: which Wizard, a quiet dropdown beside Home. */
+.mh-root.is-topbar.is-wiz { position: relative; flex: none; display: flex; margin: 0 4px 0 2px; color: var(--ink, var(--mh-ink)); }
+.mh-root .mh-wiz { height: 26px; padding: 0 8px 0 9px !important; border-radius: 7px; display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--ink, #fff); background: transparent; }
+.mh-root .mh-wiz:hover, .mh-root .mh-wiz[aria-expanded="true"] { background: rgba(205, 190, 255, .1); }
+.mh-wiz-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mh-good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mh-good) 22%, transparent); }
+.mh-wiz .mh-chev { transform: scale(.75); opacity: .7; }
+.mh-wiz-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; min-width: 230px; padding: 6px; border-radius: 14px; display: flex; flex-direction: column; gap: 1px; background: var(--mh-card-solid); box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 18px 44px -16px rgba(0, 0, 0, .65); animation: mh-in 160ms var(--mh-ease) both; }
+.mh-wiz-menu[hidden] { display: none; }
+.mh-wiz-h { padding: 6px 10px 4px; font-size: 10.5px; font-weight: 800; letter-spacing: .08em; color: var(--mh-ink-3); }
+.mh-root .mh-wiz-menu button { min-height: 38px; padding: 5px 10px !important; border-radius: 9px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; text-align: left; color: var(--mh-ink); background: transparent; }
+.mh-wiz-menu button b { font-size: 13.5px; font-weight: 700; }
+.mh-wiz-menu button small { font-size: 11px; color: var(--mh-ink-2); }
+.mh-root .mh-wiz-menu button:hover { background: color-mix(in srgb, var(--mh-ink) 8%, transparent); }
+.mh-root .mh-wiz-menu button[aria-checked="true"] { background: color-mix(in srgb, var(--mh-accent) 20%, transparent); }
+.mh-root .mh-wiz-menu .is-add { min-height: 34px; color: var(--mh-ink-2); font-size: 12.5px; font-weight: 650; margin-top: 3px; box-shadow: inset 0 1px 0 var(--mh-card-line); border-radius: 0 0 9px 9px; }
+/* Right: status icons in the bar's own style (no pill), then a hairline before the bar's icons. */
+.mh-glance.is-bar { height: 26px; gap: 4px; padding: 0; background: none; box-shadow: none; }
+.mh-root .mh-bi { position: relative; width: 30px; height: 26px; border-radius: 7px; display: grid; place-items: center; color: var(--ink-2, var(--mh-ink-2)); background: transparent; }
+.mh-root .mh-bi:hover { background: rgba(205, 190, 255, .1); color: var(--ink, #fff); }
+.mh-bi svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.mh-bi.is-bad { color: var(--mh-bad); }
+html[data-skin^="landscapes"] .mh-bi.is-bad { color: #FF95A8; }
+.mh-bi .mh-badge { top: 0; right: 1px; min-width: 14px; height: 14px; font-size: 9px; box-shadow: 0 0 0 1.5px var(--mh-card-solid); }
+.mh-glance.is-bar .mh-gauge { height: 26px !important; padding: 0 8px !important; gap: 4px; border-radius: 7px; background: transparent !important; box-shadow: none; }
+.mh-glance.is-bar .mh-gauge:hover { background: rgba(205, 190, 255, .1) !important; transform: none; }
+.mh-glance.is-bar .mh-g-label { font-size: 10.5px; }
+.mh-glance.is-bar .mh-g-ef { display: none; }
+.mh-glance.is-bar .mh-g-cells { gap: 1.5px; }
+.mh-glance.is-bar .mh-g-cells i { width: 4px; height: 11px; border-radius: 1.5px; }
+.mh-bar-sep { width: 1px; height: 16px; margin: 0 4px 0 2px; background: var(--mh-chip-line); }
+.mh-root.is-topbar:not(.is-wiz) { margin-right: 0; }
+html[data-skin="obsidian-light"] .mh-root .mh-wiz, html[data-skin="obsidian-light"] .mh-root .mh-bi:hover { color: #111418; }
+.mh-wiz-car { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: .7; transition: transform 160ms; }
+.mh-wiz-car.is-up { transform: rotate(180deg); }
+.mh-root.is-topbar .mh-glance.is-bar .mh-gauge { background: transparent !important; box-shadow: none !important; }
+
+/* Top bar v5: the workspace dropdown matches the bar (neutral, no blue); light mode fuel gauge readable. */
+.mh-root.is-topbar.is-wiz { margin: 0 2px 0 0; }
+.mh-root .mh-wiz { padding: 0 6px 0 10px !important; font-weight: 650; color: var(--ink, #fff); }
+.mh-root .mh-wiz:hover, .mh-root .mh-wiz[aria-expanded="true"] { background: rgba(205, 190, 255, .12); }
+.mh-wiz-menu { --mh-ink: #fff; --mh-ink-2: rgba(255, 255, 255, .7); --mh-ink-3: rgba(255, 255, 255, .5); background: rgba(24, 24, 28, .94); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), 0 18px 44px -16px rgba(0, 0, 0, .65); }
+.mh-root .mh-wiz-menu button[aria-checked="true"] { background: rgba(255, 255, 255, .1); }
+.mh-root .mh-wiz-menu button[aria-checked="true"] b::after { content: "  ✓"; font-weight: 700; opacity: .8; }
+html[data-skin="obsidian-light"] .mh-wiz-menu, html[data-skin="landscapes-light"] .mh-wiz-menu { --mh-ink: #111418; --mh-ink-2: rgba(17, 20, 24, .7); --mh-ink-3: rgba(17, 20, 24, .5); background: rgba(255, 255, 255, .96); box-shadow: inset 0 0 0 1px rgba(17, 20, 24, .1), 0 18px 44px -18px rgba(17, 20, 24, .35); }
+html[data-skin="obsidian-light"] .mh-root .mh-wiz-menu button[aria-checked="true"], html[data-skin="landscapes-light"] .mh-root .mh-wiz-menu button[aria-checked="true"] { background: rgba(17, 20, 24, .07); }
+html[data-skin="obsidian-light"] .mh-root .mh-wiz-menu button:hover { background: rgba(17, 20, 24, .05); }
+html[data-skin="obsidian-light"] .mh-root .mh-wiz:hover, html[data-skin="obsidian-light"] .mh-root .mh-wiz[aria-expanded="true"] { background: rgba(17, 20, 24, .07); }
+html[data-skin="obsidian-light"] .mh-glance.is-bar .mh-g-label { color: #111418; }
+html[data-skin="obsidian-light"] .mh-glance.is-bar .mh-g-cells i { background: rgba(17, 20, 24, .16); box-shadow: none; }
+html[data-skin="obsidian-light"] .mh-glance.is-bar .mh-g-cells i.on { background: #12A867; }
+html[data-skin="obsidian-light"] .mh-glance.is-bar[data-s="tight"] .mh-g-cells i.on, html[data-skin="obsidian-light"] .mh-glance.is-bar .mh-gauge[data-s="tight"] .mh-g-cells i.on { background: #C98200; }
+
+/* Workspaces not connected yet: greyed, with a short explanation. */
+.mh-root .mh-wiz-menu button.is-off b { opacity: .55; }
+.mh-root .mh-wiz-menu button.is-off small { opacity: .8; }
+.mh-root .mh-wiz-menu button.is-why { background: rgba(127, 127, 127, .12); }
+.mh-wiz-why { display: flex; flex-direction: column; gap: 6px; max-width: 280px; padding: 6px 10px 4px; font-size: 12px; line-height: 1.4; color: var(--mh-ink-2); }
+.mh-root .mh-wiz-why .is-add { box-shadow: none; min-height: 28px; padding: 0 !important; color: var(--mh-ink); font-weight: 700; }
+/* Light skins (Light, Landscapes Light): the bar's AI meter in dark ink. */
+html[data-skin$="light"] .mh-root.is-topbar .mh-g-label, html[data-skin$="light"] .mh-root.is-topbar .mh-g-ef { color: #111418 !important; opacity: 1; }
+html[data-skin$="light"] .mh-root.is-topbar .mh-g-cells i { background: rgba(17, 20, 24, .18) !important; box-shadow: none !important; }
+html[data-skin$="light"] .mh-root.is-topbar .mh-gauge[data-s="ok"] .mh-g-cells i.on { background: #12A867 !important; }
+html[data-skin$="light"] .mh-root.is-topbar .mh-gauge[data-s="tight"] .mh-g-cells i.on { background: #C98200 !important; }
+html[data-skin$="light"] .mh-root.is-topbar .mh-gauge[data-s="no"] .mh-g-cells i.on { background: #D93A58 !important; }
+html[data-skin$="light"] .mh-root .mh-wiz { color: #111418; }
+html[data-skin="landscapes-light"] .mh-wiz-menu { --mh-ink: #111418; --mh-ink-2: rgba(17, 20, 24, .7); --mh-ink-3: rgba(17, 20, 24, .5); background: rgba(255, 255, 255, .96); }
+
+/* Phone: workspace dropdown at the top-left of Home (same as desktop's), widget below. */
+.mh-phone-top { align-self: stretch; display: flex; justify-content: flex-start; padding: calc(var(--sb, 0px) + var(--safe-t, 0px) + 10px) 14px 0; }
+.mh-phone-top .mh-root.is-topbar.is-wiz { margin: 0; }
+.mh-phone-top .mh-wiz { height: 36px; padding: 0 10px 0 14px !important; border-radius: 99px; font-size: 15px; font-weight: 750; color: var(--mh-ink); background: var(--mh-card) !important; box-shadow: inset 0 0 0 1px var(--mh-card-line); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+.mh-phone-top .mh-wiz-car { width: 16px; height: 16px; }
+.mh-phone-top .mh-wiz-menu { min-width: min(300px, calc(100vw - 28px)); }
+.mh-phone-top .mh-wiz-menu button { min-height: 44px; }
+.mh-root:not(.is-topbar) .mh-phone-top + .mh-glance.is-widget { margin-top: 18px; }
