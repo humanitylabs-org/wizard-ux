@@ -214,8 +214,6 @@ body {
   display: none; align-items: center; justify-content: center; gap: 2px; width: 32px; height: 20px;
   border-radius: 7px; background: var(--wz-panel, var(--bg, #05030c)); color: var(--ink); pointer-events: none; }
 .device:is([data-voice="listen"], [data-voice="command"]) .voice-meter { display: flex; }
-/* The corner destination chip occupies the orb's top 18px; keep the bars below it. */
-.device.orb-corner .voice-meter { top: calc(50% + 8px); }
 .voice-meter i { display: block; width: 2px; height: 8px; border-radius: 2px; background: currentColor;
   transform: scaleY(calc(.2 + var(--voice-meter-level, 0) * .8)); transition: transform 80ms linear; }
 .voice-meter i:nth-child(2), .voice-meter i:nth-child(6) { height: 12px; }
@@ -627,11 +625,6 @@ body {
   margin: 0 0 -22px -22px; backdrop-filter: none; -webkit-backdrop-filter: none;
   box-shadow: none; background: rgba(25, 15, 49, .9); transform: scale(.6);
 }
-/* Start each button in its own lane: sliding out from the orb obscures the live meter. */
-.device:not(.orb-corner) .voice .arc-left { transform: translate(-124px, 0) scale(.6); }
-.device:not(.orb-corner) .voice .arc-mid { transform: translate(-66px, 0) scale(.6); }
-.device:not(.orb-corner) .voice .arc-screen { transform: translate(66px, 0) scale(.6); }
-.device:not(.orb-corner) .voice .arc-right { transform: translate(124px, 0) scale(.6); }
 .device:not(.orb-corner) .voice.on .arc-left { transform: translate(-124px, 0) scale(1); }
 .device:not(.orb-corner) .voice.on .arc-mid { transform: translate(-66px, 0) scale(1); }
 .device:not(.orb-corner) .voice.on .arc-screen { transform: translate(66px, 0) scale(1); }
@@ -798,9 +791,6 @@ body {
 /* voice controls fan up and left from the corner, Cancel nearest the thumb */
 .device.orb-corner .arc { left: auto; right: calc(var(--corner-r) + var(--corner-orb) / 2); bottom: calc(var(--safe-b) + var(--corner-b) + var(--corner-orb) / 2); margin: 0 -25px -25px 0; }
 /* the fan sits wholly above the composer row so it never lands on Send or the text field */
-.device.orb-corner .voice .arc-left { transform: translate(-118px, -76px) scale(.3); }
-.device.orb-corner .voice .arc-mid { transform: translate(-68px, -118px) scale(.3); }
-.device.orb-corner .voice .arc-right { transform: translate(-4px, -146px) scale(.3); }
 .device.orb-corner .voice.on .arc-left  { transform: translate(-118px, -76px) scale(1); }
 .device.orb-corner .voice.on .arc-mid   { transform: translate(-68px, -118px) scale(1); }
 .device.orb-corner .voice.on .arc-right { transform: translate(-4px, -146px) scale(1); }

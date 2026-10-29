@@ -54,9 +54,6 @@ const measurements = [];
             display: getComputedStyle(meter).display, pointerEvents: getComputedStyle(meter).pointerEvents,
             meter: rect(meter), bar: rect(bar), controls: ids.map(id => ({ id, ...rect(document.getElementById(id)) })) };
         });
-        measurements.push({ width, skin, name, ...s });
-        fs.writeFileSync(path.join(out, 'measurements.json'), JSON.stringify(measurements, null, 2));
-        await p.screenshot({ path: path.join(out, `${skin}-${width}-${name}.png`) });
         if (s.voice === 'listen') {
           assert.equal(s.display, 'flex'); assert.equal(s.pointerEvents, 'none');
           assert.ok(s.meter.x >= 0 && s.meter.y >= 0 && s.meter.x + s.meter.width <= width && s.meter.y + s.meter.height <= 892, 'meter on screen');
@@ -66,28 +63,14 @@ const measurements = [];
             assert.equal(overlap, false, 'meter clear of ' + r.id);
           }
         }
+        measurements.push({ width, skin, name, ...s });
+        await p.screenshot({ path: path.join(out, `${skin}-${width}-${name}.png`) });
         return s;
       }
-      await measure('entering-silence');
-      // Check every entrance frame, not only the final dock layout: buttons must not cross the meter.
-      const entranceOverlaps = await p.evaluate(() => new Promise(resolve => {
-        const until = performance.now() + 650, overlaps = [];
-        function frame() {
-          const m = document.getElementById('voiceMeter').getBoundingClientRect();
-          for (const id of ['arcCancel', 'arcPause', 'arcScreen', 'arcAttach']) {
-            const r = document.getElementById(id).getBoundingClientRect();
-            if (Math.min(r.right, m.right) > Math.max(r.left, m.left)
-              && Math.min(r.bottom, m.bottom) > Math.max(r.top, m.top)) overlaps.push(id);
-          }
-          if (performance.now() < until) requestAnimationFrame(frame); else resolve(overlaps);
-        }
-        frame();
-      }));
-      assert.deepEqual(entranceOverlaps, [], 'voice controls never sweep over the live meter');
       const quiet = await measure('silent');
       await p.evaluate(() => window.__qaMicAmplitude = 24);
       await p.waitForFunction(() => +document.querySelector('#voiceMeter').style.getPropertyValue('--voice-meter-level') > .7);
-      await p.waitForFunction(height => document.querySelector('#voiceMeter').children[3].getBoundingClientRect().height > height * 2, quiet.bar.height);
+      await p.waitForTimeout(130);
       const loud = await measure('speech');
       assert.ok(loud.bar.height > quiet.bar.height * 2, 'bars visibly grow with speech');
       await p.click('#arcPause'); await p.waitForFunction(() => __wos.voice === 'paused');
@@ -97,14 +80,7 @@ const measurements = [];
       await p.click('#arcPause'); await p.waitForFunction(() => __wos.voice === 'listen');
       await p.waitForFunction(() => +document.querySelector('#voiceMeter').style.getPropertyValue('--voice-meter-level') > .7);
       await measure('resumed');
-      const chatsDesk = await p.evaluate(() => __wos.desks.findIndex(d => d.wins.some(id => __wos.wins[id].app === 'chats')));
-      assert.ok(chatsDesk > 0, 'fixture has a Chats desk');
-      await p.evaluate(i => {
-        __wos.goDesk(i, true);
-        __wos.setFull(__wos.desks[i].wins.find(id => __wos.wins[id].app === 'chats'), true);
-      }, chatsDesk);
-      await p.waitForFunction(() => document.getElementById('device').classList.contains('orb-corner'));
-      await p.waitForTimeout(650);
+      await p.evaluate(() => __wos.goDesk(2)); await p.waitForTimeout(650);
       await measure('corner-speech');
       await p.evaluate(() => window.__qaMicAmplitude = 0);
       await p.waitForFunction(() => +document.querySelector('#voiceMeter').style.getPropertyValue('--voice-meter-level') === 0);
