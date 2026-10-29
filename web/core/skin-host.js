@@ -86,6 +86,7 @@
     if (a.errs.length >= ERR_LIMIT) {
       const wasTweak = tweaks.has(a.id); disabled.add(a.id); dispose(a, 'error'); if (wasTweak) { paintTweaks(); window.dispatchEvent?.(new Event('wos:experience')); }
       try { shell && shell.toast(`${a.label || nameOf(a.id)} gestures turned off after an error`); } catch (_) {}
+      if (a.id === 'my-skin') personalFailed(a.label, e, false); // the toast above already named the file
     }
   }
   const nameOf = id => ((typeof window !== 'undefined' && window.WosSkin?.list?.find(s => s.id === id)) || {}).name || id;
@@ -301,19 +302,31 @@
 
   /* My skin supplies hashed bytes, never a service URL. Check consent again after waiting for the
    * package; generations cancel stale/revoked loads. Blob import executes only the verified bytes. */
-  async function loadPersonal(bytes, allowed) {
+  // A broken owner script switches itself off and names its file (spec SKINS_AND_VIEWS §2): the error is kept
+  // for Settings, the owner hears it once, and wos:personal-error lets My skin revoke the approval so the next
+  // load starts with the script off.
+  let personalError = null;
+  function personalFailed(file, e, notify = true) {
+    const message = String((e && (e.message || e)) || 'error').split('\n')[0].slice(0, 160);
+    personalError = { file, message };
+    try { console.warn('[%s] turned off:', file, e); } catch (_) {}
+    if (notify) try { shell && shell.toast(`${file} turned off · ${message}`); } catch (_) {}
+    try { window.dispatchEvent?.(new CustomEvent('wos:personal-error', { detail: { ...personalError } })); } catch (_) {}
+  }
+  async function loadPersonal(bytes, allowed, file = 'Skins/My skin/skin.js') {
     const seq = ++personalSeq;
-    dispose(personal, 'replace');
+    dispose(personal, 'replace'); personalError = null;
     let pending; do { pending = packageReady; await pending; } while (pending !== packageReady);
     if (seq !== personalSeq || !shell || disabled.has('my-skin') || !allowed()) return false;
     const href = URL.createObjectURL(new Blob([bytes], { type: 'application/javascript' }));
     let mod;
     try { mod = await importer(href); }
-    catch (e) { try { console.warn('[Skins/My skin/skin.js] import failed:', e); } catch (_) {} return false; }
+    catch (e) { if (seq === personalSeq) personalFailed(file, e); return false; }
     finally { URL.revokeObjectURL(href); }
-    if (seq !== personalSeq || !allowed() || typeof mod?.default !== 'function') return false;
-    const a = record('my-skin', 'Skins/My skin/skin.js'); personal = a;
-    try { a.teardown = mod.default(makeApi(a)); } catch (e) { fault(a, 'setup', e); }
+    if (seq !== personalSeq || !allowed()) return false;
+    if (typeof mod?.default !== 'function') { personalFailed(file, new Error('no export default function setup(api)')); return false; }
+    const a = record('my-skin', file); personal = a;
+    try { a.teardown = mod.default(makeApi(a)); } catch (e) { dispose(a, 'error'); personalFailed(file, e); return false; }
     lastRoute = ''; emitRoute();
     return personal === a;
   }
@@ -567,7 +580,7 @@
     builtin(name, setup, { when = 'touch', label = name } = {}) { if (typeof setup !== 'function' || builtinDefs.has(name)) return false; builtinDefs.set(name, { setup, when, label }); return startBuiltin(name) || !shell; },
     get builtinState() { return [...builtins.keys()]; },
     stopPersonal() { personalSeq++; dispose(personal, 'off'); },
-    get personalState() { return { ready: !!shell, active: !!personal, disabled: disabled.has('my-skin'), listeners: personal?.offs.size || 0, handlers: personal ? personal.on.route.size + personal.on.render.size : 0 }; },
+    get personalState() { return { ready: !!shell, active: !!personal, disabled: disabled.has('my-skin'), error: personalError ? { ...personalError } : null, listeners: personal?.offs.size || 0, handlers: personal ? personal.on.route.size + personal.on.render.size : 0 }; },
     /* app.js backStep / desktop.js escStep: close the newest package overlay. True when one closed. */
     back() { const e = overlays.pop(); if (!e) return false; e.close(); return true; },
     /* app.js / desktop.js: repaint a Home. Nodes a tweak mounted at the home-main slot move to the new markup

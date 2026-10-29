@@ -3996,7 +3996,8 @@
     root() { const w = skinChatsWin(); return w ? track.querySelector(`[data-chats="${w.id}"]`) : null; },
     dock: () => $('#dock'),
     locked: pointerId => !!(DS && DS.id === pointerId && DS.h),
-    toast: text => toast('◇', text, 2400),
+    // Skin scripts pass plain text (file names, error messages): escaped, like the desktop toast.
+    toast: text => toast('◇', esc(String(text ?? '')), 2400),
     // Layouts (two-orb): who the screen routes to, and the orb's recorder.
     agents: () => (window.WosAgents?.visible?.() || window.WosAgents?.list || []).map(agentInfo),
     agentHere: () => agentHere(),
