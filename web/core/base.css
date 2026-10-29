@@ -35,5 +35,4 @@ body { font: 15px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Robot
 :root {
   /* Opaque backing shared by every text-bearing floating panel. Never use canvas here. */
   --wz-panel: var(--wz-base, var(--bg, #05030c));
-  --wz-panel-raised: color-mix(in srgb, var(--ink) 7%, var(--wz-panel));
 }
