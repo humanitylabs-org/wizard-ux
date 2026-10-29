@@ -32,6 +32,10 @@
 .st-row { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 12px 4px; margin: 0; border: 0; border-bottom: 1px solid var(--wz-border); border-radius: 0; background: transparent; text-align: left; color: var(--wz-text); }
 .st-row[disabled] { opacity: .5; }
 .st-row.static { cursor: default; }
+a.st-row { color: inherit; text-decoration: none; }
+.st-pc { padding: 12px 4px 6px; border-bottom: 1px solid var(--wz-border); }
+.st-choice { flex: 0 0 auto; max-width: 112px; min-height: 44px; padding: 8px; border: 1px solid var(--wz-border); border-radius: var(--wz-radius, 12px); background: var(--wz-surface); color: var(--wz-text); font: inherit; }
+.st-choice:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
 .st-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .st-tx b { font-size: 17px; font-weight: 550; line-height: 1.3; }
 .st-tx small { font-size: 14px; line-height: 1.4; color: var(--wz-text-muted); margin-top: 2px; }
@@ -79,7 +83,7 @@
 .st-root, .dsettings {
   --wz-base: var(--bg); --wz-overlay: var(--glass-2);
   --wz-text: var(--ink); --wz-text-secondary: var(--ink-2); --wz-text-muted: var(--ink-3);
-  --wz-border: var(--line-2); --wz-accent: var(--violet-2); --wz-warning: var(--amber);
+  --wz-on-accent: var(--bg); --wz-border: var(--line-2); --wz-accent: var(--violet-2); --wz-warning: var(--amber);
   --wz-surface: color-mix(in srgb, var(--wz-text) 6%, transparent);
   --wz-surface-raised: color-mix(in srgb, var(--wz-text) 10%, transparent);
   --wz-accent-soft: color-mix(in srgb, var(--wz-accent) 16%, transparent);
@@ -228,3 +232,9 @@
 .st-res .rs-lg { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 5px; font-size: 12px; color: var(--wz-text-secondary); }
 .st-res .rs-lg span { display: inline-flex; align-items: center; gap: 5px; }
 .st-res .rs-lg i { width: 8px; height: 8px; border-radius: 2px; background: var(--dc); }
+
+/* Settings › Look › Window opacity */
+.wg-section .wg-row { min-height: 44px; border-bottom: 0; }
+.wg-section [data-wg-val] { flex: none; font-variant-numeric: tabular-nums; font-weight: 650; color: var(--wz-text, var(--ink)); }
+.wg-section .wg-range { display: block; width: 100%; min-height: 44px; margin: 0; accent-color: var(--wz-accent, var(--violet-2, #8f63ff)); cursor: pointer; }
+.wg-section .wg-reset { min-height: 44px; padding: 6px 14px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--ink-2); font: inherit; font-size: 13px; cursor: pointer; }

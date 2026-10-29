@@ -15,6 +15,9 @@
     { id: 'appearance', title: 'Appearance' },
     { id: 'chats', title: 'Chats & app screens' },
     { id: 'voice', title: 'Voice & typing' },
+    // Phones over Tailscale (Phone Setup). Hidden on a Wizard without Phone Setup or for a non-owner.
+    // Hidden only for a non-owner; a Wizard without phone access shows the shared "not available yet" note.
+    { id: 'phones', title: 'Phones & devices', available: phonesAvailable },
     { id: 'phone', title: 'Phone', available: () => shell() ? !!shellOrb() : android() },
     { id: 'recovery', title: 'Unsent & recovered' },
     // Resources: the Home resource bars (AI + Compute) from the shared renderer, when it is there; else AI usage.
@@ -22,7 +25,7 @@
     { id: 'schedules', title: 'Schedules', available: () => !!window.WosSchedules?.available },
     { id: 'about', title: 'About & updates' },
   ];
-  const featurePages = { look: 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
+  const featurePages = { look: 'appearance', 'window-glass': 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
   const pageOf = f => f?.page != null ? PAGES.some(p => p.id === f.page) ? f.page : 'about' : featurePages[f?.id] || 'about';
   const chatsHost = () => window.WizChatsHost;
   const chatsName = id => id === 'wizard-chats' ? 'Wizard Chats' : chatsHost()?.installed().find(a => a.id === id)?.name || id;
@@ -38,6 +41,7 @@
   }
   // A quiet value on the right of a row, only where it tells you something at a glance; '' otherwise.
   function subtitle(id, ctx) {
+    if (id === 'phones') { const pc = phones(), v = pc?.view; if (!v) return ''; if (pc.lost) return 'Can’t check'; const n = v.phones.length; return pc.on ? (n ? `${n} ${n === 1 ? 'device' : 'devices'}` : 'On') : pc.settingUp ? 'Setting up' : v.step === 'off' ? 'Off' : ''; }
     if (id === 'appearance') return window.WosSkin ? (mySkinWorn() ? window.WosMySkin.active.name + ' · ' : '') + lookName(window.WosSkin, window.WosSkin.current) : '';
     if (id === 'phone') { if (shell()) return shellOrb()?.state.on ? 'Everywhere on' : ''; try { return JSON.parse(native()?.everywhere?.() || '{}').enabled ? 'Everywhere on' : ''; } catch (_) { return ''; } }
     if (id === 'recovery') { const n = new Set([...unsentAll(ctx), ...recovered()].map(x => x.id)).size; return n ? String(n) : ''; }
@@ -64,7 +68,7 @@
     const when = ctx.ago?.(new Date(it.createdAt).toISOString()) || '';
     const blocked = it.state === 'unconfirmed' || ctx.outbox?.quarantined?.(it.id);
     const held = it.state === 'held', audio = !!(it.audio || it.audioFile || it.hasAudio);
-    const st = blocked ? esc(ctx.outbox?.quarantined?.(it.id) ? 'Waiting for device storage verification' : it.error || 'Could not confirm delivery · original kept') : it.state === 'empty' ? 'No speech detected · recording kept' : held ? esc(it.error || 'Kept on this device · no delivery intent confirmed; not queued') : it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : ['sending', 'queued'].includes(it.state) ? 'Queued / sending · awaiting receipt' : esc(window.WizReach?.failure().short || 'Checking connection · retrying');
+    const st = blocked ? esc(ctx.outbox?.quarantined?.(it.id) ? 'Waiting for device storage verification' : it.error || 'Could not confirm delivery · original kept') : it.state === 'empty' ? 'No speech detected · recording kept' : held ? esc(it.error || 'Kept on this device · no delivery intent confirmed; not queued') : it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : ['sending', 'queued'].includes(it.state) ? 'Queued / sending · awaiting receipt' : esc(window.WizReach?.failure().short || 'Reconnecting…');
     const src = it.origin === 'everywhere' ? 'Everywhere button' : it.source === 'orb' ? 'Orb' : 'Chat';
     const canRetry = it.origin === 'app' ? ctx.outbox?.canRetry(it) : !blocked && ['failed', 'waiting'].includes(it.state);
     const transcript = it.recoveryText || it.text || '';
@@ -128,6 +132,48 @@
     if (!el.closest('[data-ub-all]')) return false;
     retryAll(ctx); return true;
   } });
+  // Public kind-0 only. The signed event comes from native; no secret is handled by the page.
+  const identityRelays = ['wss://relay.aiwizards.com', 'wss://nos.lol', 'wss://relay.damus.io'];
+  function publishIdentityProfile(event) {
+    return Promise.any(identityRelays.map(url => new Promise((resolve, reject) => {
+      let socket; const timer = setTimeout(() => { socket?.close(); reject(new Error('relay timeout')); }, 8000);
+      const finish = (ok, message) => { clearTimeout(timer); socket?.close(); ok ? resolve(url) : reject(new Error(message || 'relay refused')); };
+      try {
+        socket = new WebSocket(url);
+        socket.onopen = () => socket.send(JSON.stringify(['EVENT', event]));
+        socket.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (_) { return; } if (m[0] === 'OK' && m[1] === event.id) finish(m[2] === true, m[3]); };
+        socket.onerror = () => finish(false, 'relay unavailable');
+        socket.onclose = () => { clearTimeout(timer); reject(new Error('relay closed')); };
+      } catch (e) { clearTimeout(timer); reject(e); }
+    })));
+  }
+  let identityInfo = null, identityAsked = false;
+  register({ id: 'wizard-id', page: 'phone', aliases: ['wizard-id'], available: () => !!window.wizardDevicePort,
+    html(ctx) {
+      if (!identityAsked) { identityAsked = true; window.WizCore?.bridge?.call('identity.info').then(info => { identityInfo = info?.npub ? info : null; (ctx?.render || ctx?.changed)?.(); }).catch(() => { identityAsked = false; }); }
+      const sub = identityInfo?.npub ? `${identityInfo.name || 'Your ID'} · ${identityInfo.backed_up ? 'Backed up' : 'Not backed up'}` : 'Not set up · your signing key stays on this phone';
+      return `<div class="st-group"><h4>Identity</h4>${row('wizard-id', 'Wizard ID', sub)}</div>`;
+    },
+    act(ctx, el) {
+      if (!el.closest('[data-st="wizard-id"]')) return false;
+      window.WizCore.bridge.call('identity.setup').then(async result => {
+        if (result.cancelled || result.denied) return;
+        identityInfo = await window.WizCore.bridge.call('identity.info');
+        ctx.changed?.();
+        if (result.profile_event) {
+          try { await publishIdentityProfile(result.profile_event); ctx.toast?.('✓', 'Wizard ID profile published', 2200); }
+          catch (_) { ctx.toast?.('!', 'ID saved on this phone · profile not published. Open Wizard ID to retry.', 4500); }
+        }
+      }).catch(() => ctx.toast?.('!', 'Wizard ID unavailable · update the Wizard Android app', 3000));
+      return true;
+    }
+  });
+  // Reply style belongs to each agent's own persona (SOUL.md), not to Wizard: one source, survives detach.
+  register({ id: 'response-style', page: 'chats', aliases: ['response-style'],
+    html() {
+      return `<div class="st-group"><div class="st-row static"><span class="st-tx"><b>Reply style</b><small>Each agent keeps its own. Tell an agent how you like replies and it remembers.</small></span></div></div>`;
+    },
+  });
   const mySkinWorn = () => !!window.WosMySkin?.active;
   function mySkinRow(skin) {
     const M = window.WosMySkin, st = M?.state, js = st?.script;
@@ -173,12 +219,12 @@
   function tweakRows(S) {
     const E = window.WosExperience; if (!E) return '';
     const s = E.state, own = window.WosMySkin?.active;
-    if ((!s.owner && !own) || (!s.tweaks.length && !s.error)) return '';
+    if (!s.tweaks.length && !s.error) return '';
     const fam = (S.families || []).find(f => f.id === S.familyOf?.(S.current)), who = esc(fam?.name || 'This skin');
     const rows = tweakSwitches(s.tweaks, 'data-tweak-toggle', s.busy);
     if (own) return `<div class="tw-set"><h4>Tweaks</h4>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</div>`;
     const on = s.tweaks.filter(t => t.on).length;
-    return `<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row"><span class="st-tx"><b>${who} also changes how things work</b><small>${on} of ${s.tweaks.length} changes on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</details>`;
+    return `<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row"><span class="st-tx"><b>${s.owner ? who + ' also changes how things work' : 'How things work'}</b><small>${on} of ${s.tweaks.length} changes on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</details>`;
   }
   let tweaksOpen = false;
   window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
@@ -288,6 +334,23 @@
       for (const m of mounts) m.render(); ctx.haptic?.(8);
     }, e => ctx.toast?.('!', e.message, 3000)); return true;
   } });
+  // Window opacity: one slider for the glass behind every window (Chats and every app). Per device, like the skin.
+  const glassPct = S => Math.round((S.glass ?? S.skinGlass) * 100);
+  const glassNote = S => S.glass == null ? 'Skin default · every window and app' : 'Every window and app';
+  register({ id: 'window-glass', aliases: ['window-opacity', 'opacity'], available: () => typeof window.WosSkin?.setGlass === 'function', html() {
+    const S = window.WosSkin, r = S.glassRange, pct = glassPct(S);
+    return `<div class="st-group wg-section"><h4>Windows</h4><div class="st-row static wg-row"><span class="st-tx"><b id="wg-label">Window opacity</b><small data-wg-note>${glassNote(S)}</small></span><output data-wg-val for="wg-range">${pct}%</output></div><input id="wg-range" class="wg-range" type="range" min="${Math.round(r.min * 100)}" max="${Math.round(r.max * 100)}" step="1" value="${pct}" data-wg-range aria-labelledby="wg-label" aria-valuetext="${pct}%">${S.glass == null ? '' : '<button type="button" class="wg-reset" data-wg-reset>Use skin default</button>'}</div>`;
+  }, input(ctx, el) {
+    if (!el.matches('[data-wg-range]')) return;
+    const S = window.WosSkin, n = S.setGlass(Number(el.value) / 100), g = el.closest('.wg-section');
+    el.setAttribute('aria-valuetext', `${Math.round(n * 100)}%`);
+    const out = g?.querySelector('[data-wg-val]'); if (out) out.textContent = `${Math.round(n * 100)}%`;
+    const note = g?.querySelector('[data-wg-note]'); if (note) note.textContent = glassNote(S);
+    if (g && !g.querySelector('[data-wg-reset]')) el.insertAdjacentHTML('afterend', '<button type="button" class="wg-reset" data-wg-reset>Use skin default</button>');
+  }, act(ctx, el) {
+    if (!el.closest('[data-wg-reset]')) return false;
+    window.WosSkin.setGlass(null); ctx.render(); ctx.root.querySelector('[data-wg-range]')?.focus(); return true;
+  } });
   register({ id: 'skin-frame', available: () => !!window.WosSkin, html() {
     return '<div class="st-group sf-section"><details class="st-advanced"><summary>Advanced</summary><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><p data-skinimport-status role="status"></p></details></div>';
   }, act(ctx, el) {
@@ -314,6 +377,72 @@
     if (st === 'typing' && N?.voiceTypingSettings) { N.voiceTypingSettings(); return true; }
     if (st === 'everywhere' && N?.setEverywhere) { let on = false; try { on = JSON.parse(N.everywhere()).enabled; } catch (_) {} N.setEverywhere(!on); setTimeout(ctx.render, 250); ctx.haptic?.(8); return true; }
     if (st === 'side' && N) { ctx.openSub('side'); return true; } return false;
+  } });
+  /* ---------------- Phones & devices ----------------
+   * The owner's phones over Tailscale. Connecting is the shared phone-connect component (web/core/phone-connect.js),
+   * the same one Setup's phone screen and Mac onboarding show, so every place says the same thing, including when
+   * this Wizard can't do device access yet. Below it: the phones on the owner's tailnet and turning device access off
+   * (the same reset as Setup's Disconnect, behind a confirmation sheet). A phone is a device on the owner's Tailscale
+   * account, so removing one happens in Tailscale's admin; the page links there. Hidden only for a non-owner. */
+  const PH = { pc: null, wanted: false, confirm: false, error: '', summary: '' };
+  const phoneShell = () => document.documentElement.dataset.shell === 'phone' ? 'phone' : 'desktop';
+  function phones() {
+    if (PH.pc || typeof window.WizPhoneConnect?.create !== 'function' || typeof fetch !== 'function') return PH.pc;
+    PH.pc = window.WizPhoneConnect.create({
+      layout: phoneShell(), qrScript: 'setup/vendor/qrcode.js',
+      active: () => PH.wanted && document.visibilityState === 'visible',
+      // The connection pill's evidence: Wizard's live reads are failing from this device (not a missing permission).
+      offline: () => { const L = window.WizLive; return !!L && !!L.error && L.error !== 'access'; },
+      // Settings redraws only when what it shows itself changes (the list entry, phones, Turn off); the component
+      // redraws its own part.
+      onChange: pc => {
+        const v = pc.view, key = JSON.stringify([pc.status, pc.lost, pc.connecting, v?.step, v?.phones]);
+        if (key !== PH.summary) { PH.summary = key; for (const m of mounts) m.render(); }
+      },
+    });
+    // When the connection drops or comes back, re-check at once instead of showing the last answer as current.
+    try { window.WizLive?.onChange?.(() => { const off = !!window.WizLive.error && window.WizLive.error !== 'access'; if (off !== PH.off) { PH.off = off; PH.pc?.refresh(); } }); } catch (e) {}
+    return PH.pc;
+  }
+  function phonesAvailable() { const pc = phones(); if (!pc) return false; pc.refresh(15000); return pc.status !== 'denied'; }
+  const osName = os => ({ ios: 'iPhone', android: 'Android', ipados: 'iPad' })[String(os || '').toLowerCase()] || 'Device';
+  function closePhonesSheet(ctx) { PH.confirm = false; PH.error = ''; ctx.render(); ctx.root.querySelector('[data-st="phones-off"]')?.focus(); }
+  register({ id: 'phones', page: 'phones', aliases: ['phones', 'devices', 'phone-access'], available: phonesAvailable, html() {
+    const pc = phones(); if (!pc) return '';
+    const v = pc.view, busy = pc.busy;
+    let h = '<div class="st-group"><h4>Device access</h4><div class="st-pc" data-phone-connect></div></div>';
+    if (pc.on && !pc.connecting) {
+      h += '<div class="st-group"><h4>Your devices</h4>';
+      h += v.phones.length ? v.phones.map(p => `<div class="st-row wz-row static"><span class="st-tx wz-main"><b>${esc(p.name)}</b><small>${esc(osName(p.os))} · ${p.online ? 'Online' : 'Offline'}</small></span></div>`).join('')
+        : '<div class="st-empty">No device on your Tailscale account yet.</div>';
+      h += '<a class="st-row" data-st="phones-manage" href="https://login.tailscale.com/admin/machines" target="_blank" rel="noopener noreferrer"><span class="st-tx"><b>Remove a device</b><small>Devices are listed on your Tailscale account. Remove one there and it can’t reach Wizard any more.</small></span><span class="st-go">↗</span></a>';
+      h += '</div>';
+    }
+    if (!pc.connecting && (pc.on || pc.settingUp)) h += '<div class="st-group"><h4>Turn off</h4>' + row('phones-off', 'Turn off device access', 'Disconnects this Wizard from Tailscale. Your chats stay here.') + '</div>';
+    if (PH.confirm) h += `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="phones-off-title" aria-describedby="phones-off-text"><h3 id="phones-off-title">Turn off device access?</h3><p id="phones-off-text">Every device loses access to this Wizard until you connect one again. Your chats stay here.</p>${PH.error ? `<p class="sc-error" role="alert">${esc(PH.error)}</p>` : ''}<div class="st-actions"><button data-st="phones-off-cancel" ${busy ? 'disabled' : ''}>Cancel</button><button data-st="phones-off-confirm" ${busy ? 'disabled' : ''}>${busy ? 'Turning off…' : 'Turn off'}</button></div></section></div>`;
+    return h;
+  }, painted(ctx, section) {
+    const host = section?.querySelector('[data-phone-connect]'); if (host) phones()?.attach(host);
+  }, deferRefresh: () => PH.confirm,
+  enter() { PH.wanted = true; },
+  leave() { PH.wanted = false; if (!PH.pc?.busy) { PH.confirm = false; PH.error = ''; } },
+  back(ctx) { if (PH.pc?.back()) return true; if (!PH.confirm) return false; if (!PH.pc?.busy) closePhonesSheet(ctx); return true; },
+  act(ctx, el) {
+    const st = el.closest('[data-st]')?.dataset.st;
+    if (st === 'phones-manage') return false; // the link leaves on its own
+    if (st === 'phones-off') { PH.confirm = true; PH.error = ''; ctx.render(); ctx.root.querySelector('[data-st="phones-off-cancel"]')?.focus(); return true; }
+    if (st === 'phones-off-cancel') { if (!PH.pc?.busy) closePhonesSheet(ctx); return true; }
+    if (st === 'phones-off-confirm' && PH.pc && !PH.pc.busy) {
+      const done = PH.pc.reset();
+      ctx.render(); // the sheet shows "Turning off…"
+      done.then(ok => {
+        if (ok) { PH.confirm = false; ctx.toast?.('✓', 'Device access is off', 2200); }
+        else PH.error = 'Couldn’t turn off device access. Try again.';
+        ctx.render();
+      });
+      return true;
+    }
+    return false;
   } });
   register({ id: 'server', available: () => typeof native()?.changeServer === 'function', html() {
     return `<div class="st-group"><h4>Connection</h4>${row('change-server', 'Change Wizard', 'Scan another box QR or enter its address')}</div>`;

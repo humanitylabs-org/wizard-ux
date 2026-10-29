@@ -14,6 +14,13 @@ public final class DeviceMessageProtocol {
 
     private DeviceMessageProtocol() { }
 
+    /** Independent capability group; keep the base adapter discovery composable with Wizard ID. */
+    public static JSONObject capabilities() throws JSONException {
+        JSONObject result = baseCapabilities();
+        result.getJSONObject("capabilities").put("vault", ai.wizards.os.vault.VaultPolicy.capability());
+        return result;
+    }
+
     public static final class Request {
         public final String id;
         public final String method;
@@ -43,11 +50,14 @@ public final class DeviceMessageProtocol {
         return null;
     }
 
-    public static JSONObject capabilities() throws JSONException {
+    private static JSONObject baseCapabilities() throws JSONException {
         org.json.JSONArray methods = new org.json.JSONArray();
         for (String name : PACKAGE_METHODS) methods.put(PREFIX + name);
         return new JSONObject().put("v", VERSION).put("capabilities", new JSONObject()
-                .put("device.packages", new JSONObject().put("v", VERSION).put("methods", methods)));
+                .put("device.packages", new JSONObject().put("v", VERSION).put("methods", methods))
+                .put("identity", new JSONObject().put("v", VERSION).put("methods", new org.json.JSONArray()
+                    .put("identity.info").put("identity.setup").put("identity.sign").put("identity.nip44_encrypt").put("identity.nip44_decrypt")))
+                .put("view.capture", new JSONObject().put("v", VERSION)));
     }
 
     public static JSONObject answer(String id, Object result, String error) throws JSONException {

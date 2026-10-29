@@ -8,7 +8,8 @@
 const LOOK = {
   obsidian: { name: 'Dark', fill: '#000000', ink: '#ffffff' },
   'obsidian-light': { name: 'Light', fill: '#ffffff', ink: '#0b0b0f' },
-  landscapes: { name: 'Landscapes', fill: 'linear-gradient(180deg,#1b2747 0%,#3c4670 40%,#7d6478 70%,#1e2a40 100%)', ink: '#ffffff' },
+  landscapes: { name: 'Landscapes Dark', fill: 'linear-gradient(180deg,#1b2747 0%,#3c4670 40%,#7d6478 70%,#1e2a40 100%)', ink: '#ffffff' },
+  'landscapes-light': { name: 'Landscapes Light', fill: 'linear-gradient(180deg,#9cc4dc 0%,#e2c6b8 45%,#b9a79c 70%,#5d7f8f 100%)', ink: '#ffffff' },
 };
 // Dark, Light and Landscapes import this one module (same URL), so it remembers which of them was worn last.
 let wearing = null;
@@ -49,7 +50,7 @@ export function playIntro({ id, listen } = {}) {
   if (!style) { style = el('style'); style.id = 'mz-intro-style'; style.textContent = CSS; document.head.appendChild(style); }
   document.querySelectorAll('.mz-intro').forEach(n => n.remove());
 
-  const land = to === 'landscapes';
+  const land = to === 'landscapes' || to === 'landscapes-light';
   const root = el('div', 'mz-intro'); root.setAttribute('role', 'img'); root.setAttribute('aria-label', `Switching to ${N.name}`);
   root.style.setProperty('--mz-ink', N.ink);
   // Landscapes: frosted bands over the real wallpaper, cleared from the sky down.
