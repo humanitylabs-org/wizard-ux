@@ -364,44 +364,12 @@ html[data-skin="obsidian-light"] .mh-map { box-shadow: inset 0 0 0 1px var(--mh-
 .mh-root:not(.is-managed) .mh-row.is-storage:not(:empty) { margin-bottom: 30px; }
 
 /* ---------- Home: one strip. Which Wizard ▾ | AI fuel | chats | last backup | network | Details › ---------- */
-.mh-root.is-home { align-items: center; }
-.mh-root .mh-glance { flex: none; margin: calc(var(--sb, 0px) + var(--safe-t, 0px) + 12px) auto 0; max-width: calc(100% - 8px); min-height: 46px; padding: 4px !important; border-radius: 99px; display: inline-flex; align-items: center; gap: 2px; color: var(--mh-ink); background: var(--mh-card); box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 10px 30px -18px rgba(0, 0, 0, .55); -webkit-backdrop-filter: blur(22px) saturate(1.2); backdrop-filter: blur(22px) saturate(1.2); white-space: nowrap; }
-.mh-root .mh-glance > button { height: 38px; padding: 0 12px !important; border-radius: 99px; display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--mh-ink); background: transparent !important; box-shadow: none; cursor: pointer; transition: background 160ms; }
-.mh-root .mh-glance > button:hover { background: color-mix(in srgb, var(--mh-ink) 9%, transparent) !important; }
-.mh-root .mh-glance > button + button { position: relative; }
-.mh-root .mh-glance > button + button::before { content: ""; position: absolute; left: -1px; top: 11px; bottom: 11px; width: 1px; background: var(--mh-card-line); }
-.mh-root .mh-glance .is-name { padding-left: 16px !important; background: var(--mh-pearl) !important; color: var(--mh-pearl-ink); }
-.mh-root .mh-glance .is-name + button::before { display: none; }
-.mh-glance .is-name .mh-chev-btn { transform: scale(.8); color: var(--mh-pearl-ink); }
-.mh-root .mh-glance .mh-gauge { height: 38px; gap: 6px; padding: 0 12px !important; border-radius: 99px; background: transparent !important; box-shadow: none; transform: none; }
-.mh-glance .mh-gauge .mh-g-cells i { height: 14px; }
-.mh-glance .mh-dots { display: inline-flex; flex-wrap: nowrap; gap: 4px; }
-.mh-glance .mh-dots i { width: 9px; height: 9px; box-shadow: none; }
-.mh-glance .mh-bell { color: var(--mh-ink); }
-.mh-glance [data-x="ok"] { color: var(--mh-ink); }
-.mh-glance .is-backup [data-x="tight"] { color: var(--mh-warn); }
-.mh-glance [data-x="no"] { color: var(--mh-bad); }
-html[data-skin^="landscapes"] .mh-glance [data-x="no"] { color: #FF95A8; }
-.mh-glance .is-more { color: var(--mh-ink-2) !important; }
-.mh-go { font-style: normal; font-size: 18px; line-height: 1; }
 /* Which Wizard: a small list under the strip. */
-.mh-ws-menu { margin: 6px auto 0; padding: 5px; border-radius: 18px; display: flex; flex-direction: column; gap: 2px; min-width: 200px; background: var(--mh-card-solid); box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 16px 40px -18px rgba(0, 0, 0, .6); animation: mh-in 180ms var(--mh-ease) both; }
-.mh-ws-menu[hidden] { display: none; }
-.mh-root .mh-ws-menu button { height: 36px; padding: 0 14px !important; border-radius: 12px; text-align: left; font-size: 13.5px; font-weight: 650; color: var(--mh-ink); background: transparent !important; }
-.mh-root .mh-ws-menu button:hover { background: color-mix(in srgb, var(--mh-ink) 8%, transparent) !important; }
-.mh-root .mh-ws-menu button[aria-checked="true"] { background: color-mix(in srgb, var(--mh-accent) 22%, transparent) !important; }
-.mh-root .mh-ws-menu .is-add { color: var(--mh-ink-2); font-weight: 600; }
 .mh-root { --mh-card: rgba(22, 30, 42, .66); --mh-card-solid: #1b2533; --mh-card-line: rgba(255, 255, 255, .12); }
 html[data-skin="obsidian-light"] .mh-root { --mh-card: rgba(255, 255, 255, .86); --mh-card-solid: #ffffff; --mh-card-line: rgba(20, 33, 49, .1); }
 html[data-skin^="landscapes"] .mh-root { --mh-card: rgba(16, 24, 36, .52); --mh-card-solid: #1a2636; }
 @container (max-width: 599px) {
-  .mh-root .mh-glance > button, .mh-root .mh-glance .mh-gauge { padding: 0 8px !important; gap: 5px; font-size: 12px; }
-  .mh-root .mh-glance .is-name { padding-left: 11px !important; }
-  .mh-glance .mh-gauge .mh-g-ef, .mh-glance .mh-sh-long { display: none; }
-  .mh-glance .mh-gauge .mh-g-cells i { width: 4px; }
-  .mh-glance .mh-dots i:nth-child(n+4) { display: none; }
 }
-@container (max-width: 400px) { .mh-glance .mh-gauge .mh-g-label { display: none; } }
 
 /* ---------- Settings › System: the same views on the Settings surface (no second card) ---------- */
 .mh-root.is-settings { flex: none; width: 100%; align-items: stretch; padding: 4px 0 16px; }
@@ -426,39 +394,72 @@ html[data-skin="obsidian-light"] .mh-root.is-settings { --mh-ink: #111418; --mh-
 .mh-root.is-settings .mh-ai-row { min-height: 40px; }
 .mh-store-head .mh-disc.is-art { width: 54px; height: 54px; background: none !important; box-shadow: none !important; border-radius: 0; }
 @container (max-width: 599px) {
-  .mh-root .mh-glance { margin-top: calc(var(--sb, 0px) + var(--safe-t, 0px) + 56px); max-width: calc(100% - 16px); }
-  .mh-root .mh-glance .is-more { display: none; }
-  .mh-glance .mh-gauge .mh-g-cells i:nth-child(n+7) { display: none; }
-  .mh-root .mh-glance .is-name .mh-chev-btn { display: none; }
 }
 
 /* ---------- Home panel v2: labelled rows, stacked (same on phone and desktop) ---------- */
-.mh-root .mh-glance { display: flex; flex-direction: column; align-items: stretch; gap: 0; width: min(440px, calc(100% - 24px)); max-width: none; min-height: 0; height: auto; padding: 6px !important; border-radius: 22px; white-space: normal; }
-.mh-root .mh-glance > button { height: auto; border-radius: 16px; }
-.mh-root .mh-glance > button + button::before { display: none; }
-.mh-root .mh-glance .mh-gl-head { justify-content: center; gap: 6px; height: 36px !important; padding: 0 12px !important; font-size: 14px; font-weight: 800; color: var(--mh-ink); }
-.mh-root .mh-glance .mh-gl-row { display: grid !important; grid-template-columns: 1fr auto; grid-template-rows: auto auto; column-gap: 10px; row-gap: 3px; padding: 10px 12px !important; text-align: left; }
-.mh-root .mh-glance .mh-gl-row + .mh-gl-row, .mh-gl-head + .mh-gl-row { box-shadow: inset 0 1px 0 var(--mh-card-line); border-radius: 0; }
-.mh-root .mh-glance .mh-gl-row:last-child { border-radius: 0 0 16px 16px; }
-.mh-gl-t { grid-column: 1; font-size: 11.5px; font-weight: 750; letter-spacing: .02em; color: var(--mh-ink-3); }
-.mh-gl-v { grid-column: 1; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13.5px; font-weight: 650; color: var(--mh-ink); }
-.mh-gl-v small { font-size: 12px; color: var(--mh-ink-2); font-weight: 600; }
-.mh-gl-row .mh-go { grid-column: 2; grid-row: 1 / 3; align-self: center; font-size: 20px; color: var(--mh-ink-3); }
-.mh-gl-row[data-x="no"] .mh-gl-v { color: var(--mh-bad); }
-html[data-skin^="landscapes"] .mh-gl-row[data-x="no"] .mh-gl-v { color: #FF95A8; }
-.mh-gl-row[data-x="tight"] .mh-gl-v { color: var(--mh-warn); }
-.mh-gl-row[data-x="ok"] .mh-gl-t::after { content: " ✓"; color: var(--mh-good); }
-.mh-gl-cells { display: inline-flex; gap: 2px; }
-.mh-gl-cells i { width: 6px; height: 13px; border-radius: 2px; background: var(--mh-card-line); }
-.mh-gl-cells i.on { background: var(--mh-good); }
-.mh-gl-cells[data-s="tight"] i.on { background: var(--mh-warn); }
-.mh-gl-cells[data-s="no"] i.on { background: var(--mh-bad); }
-.mh-glance .mh-dots i { width: 8px; height: 8px; }
-.mh-root .mh-ws-menu { width: min(440px, calc(100% - 24px)); }
-@container (max-width: 599px) { .mh-root .mh-glance { margin-top: calc(var(--sb, 0px) + var(--safe-t, 0px) + 56px); } .mh-glance .mh-dots i:nth-child(n+4) { display: inline-block; } }
-.mh-root.is-home, .mh-root.is-home .mh-body { width: 100%; align-self: stretch; }
-.mh-root.is-home .mh-body { align-items: center; }
-.mh-root .mh-glance { width: min(460px, calc(100% - 24px)) !important; }
-.mh-gl-v { flex-wrap: nowrap; }
-.mh-gl-v > span:not(.mh-dots):not(.mh-gl-cells):not(.mh-bell) { min-width: 0; }
-.mh-gl-row[data-go="ai"] .mh-gl-t::after { content: none; }
+
+/* ================= Glance v3: pictures, one short value each ================= */
+/* Shared tiles */
+.mh-glance { display: flex; align-items: center; }
+.mh-root .mh-tile { position: relative; display: flex; align-items: center; gap: 6px; color: var(--mh-ink); background: transparent; cursor: pointer; }
+.mh-tile-viz { position: relative; display: grid; place-items: center; }
+.mh-pic { display: block; width: var(--pic, 22px); height: var(--pic, 22px); }
+.mh-pic .mh-art { filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .25)); }
+.mh-tile-val { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.mh-tile-lab { font-size: 10.5px; font-weight: 700; color: var(--mh-ink-3); }
+.mh-badge { position: absolute; top: -5px; right: -7px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 99px; display: grid; place-items: center; font: 800 9.5px/1 ui-sans-serif, system-ui, sans-serif; color: #fff; background: var(--mh-bad); box-shadow: 0 0 0 1.5px var(--mh-card-solid); }
+.mh-badge.is-ok { background: var(--mh-good); }
+.mh-badge.is-warn { background: var(--mh-warn); }
+.mh-tile.is-net.is-bad .mh-art .a-led { fill: var(--mh-bad); }
+.mh-tile.is-net.is-ok .mh-art .a-led { fill: var(--mh-good); }
+.mh-tile .mh-dots { display: inline-flex; flex-wrap: wrap; gap: 3px; }
+.mh-tile .mh-dots i { width: 7px; height: 7px; box-shadow: none; }
+
+/* ---- Desktop: menu-bar extras in the top bar ---- */
+.mh-root.is-topbar { flex: none; flex-direction: row; align-items: center; gap: 8px; margin-right: 6px; container-type: normal; }
+.mh-root.is-topbar .mh-ws { height: 26px; padding: 2px; }
+.mh-root.is-topbar .mh-ws button { height: 22px; padding: 0 10px !important; font-size: 12px; }
+.mh-root.is-topbar .mh-ws .mh-ws-add { width: 22px; }
+.mh-glance.is-bar { height: 26px; gap: 2px; padding: 0 4px; border-radius: 99px; background: var(--mh-chip); box-shadow: inset 0 0 0 1px var(--mh-chip-line); }
+.mh-glance.is-bar .mh-tile { height: 22px; padding: 0 8px !important; border-radius: 99px; }
+.mh-glance.is-bar .mh-tile:hover { background: color-mix(in srgb, var(--mh-ink) 10%, transparent) !important; }
+.mh-glance.is-bar .mh-tile-lab { display: none; }
+.mh-glance.is-bar .mh-tile-val { font-size: 12px; }
+.mh-glance.is-bar .mh-pic { --pic: 18px; }
+.mh-glance.is-bar .mh-gauge { height: 22px !important; padding: 0 8px 0 6px !important; gap: 5px; background: transparent !important; box-shadow: none; }
+.mh-glance.is-bar .mh-g-cells i { height: 10px; }
+.mh-glance.is-bar .mh-tile.is-ai { padding: 0 !important; }
+html[data-skin^="landscapes"] .mh-root.is-topbar { --mh-chip: rgba(12, 18, 28, .5); }
+/* Top bar: only the current Wizard shows; the others slide out on hover or keyboard focus. */
+.mh-root.is-topbar .mh-ws button:not([aria-selected="true"]) { max-width: 0; padding: 0 !important; opacity: 0; overflow: hidden; transition: max-width 220ms var(--mh-ease), opacity 180ms, padding 220ms; }
+.mh-root.is-topbar .mh-ws:is(:hover, :focus-within) button:not([aria-selected="true"]) { max-width: 120px; padding: 0 10px !important; opacity: 1; }
+.mh-root.is-topbar .mh-ws:is(:hover, :focus-within) .mh-ws-add { padding: 0 !important; width: 22px; }
+.mh-root.is-topbar .mh-ws { overflow: hidden; }
+
+/* ---- Phone: a widget on Home ---- */
+.mh-root:not(.is-topbar) .mh-ws.is-home-ws { align-self: center; margin: calc(var(--sb, 0px) + var(--safe-t, 0px) + 56px) auto 0; }
+.mh-glance.is-widget { width: min(360px, calc(100% - 32px)); margin: 14px auto 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.mh-glance.is-widget .mh-tile { flex-direction: column; justify-content: center; gap: 5px; aspect-ratio: 1; padding: 8px 4px !important; border-radius: 22px; background: var(--mh-card) !important; box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 10px 26px -16px rgba(0, 0, 0, .6); -webkit-backdrop-filter: blur(20px) saturate(1.2); backdrop-filter: blur(20px) saturate(1.2); transition: transform 160ms var(--mh-ease); }
+.mh-glance.is-widget .mh-tile:active { transform: scale(.95); }
+.mh-glance.is-widget .mh-tile.is-ai { grid-column: 1 / -1; aspect-ratio: auto; height: 64px; padding: 0 !important; }
+.mh-glance.is-widget .mh-gauge { height: 100% !important; width: 100%; justify-content: center; gap: 10px; padding: 0 16px !important; border-radius: 22px; background: transparent !important; box-shadow: none; }
+.mh-glance.is-widget .mh-g-label { font-size: 15px; }
+.mh-glance.is-widget .mh-g-ef { font-size: 13px; }
+.mh-glance.is-widget .mh-g-cells { gap: 4px; }
+.mh-glance.is-widget .mh-g-cells i { width: 13px; height: 24px; border-radius: 4px; }
+.mh-glance.is-widget .mh-pic { --pic: 32px; }
+.mh-glance.is-widget .mh-tile-viz { min-height: 32px; }
+.mh-glance.is-widget .mh-tile-val { font-size: 13px; line-height: 1; }
+.mh-glance.is-widget .mh-tile.is-chats .mh-dots { max-width: 46px; justify-content: center; }
+.mh-glance.is-widget .mh-tile.is-chats .mh-dots i { width: 9px; height: 9px; }
+.mh-glance.is-widget .mh-badge { top: -6px; right: -10px; min-width: 18px; height: 18px; font-size: 11px; }
+/* Look B: one wide widget, gauge on top, round icons below */
+.mh-glance.is-widget[data-look="b"] { gap: 0; padding: 8px; border-radius: 28px; background: var(--mh-card); box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 14px 34px -18px rgba(0, 0, 0, .6); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+.mh-glance.is-widget[data-look="b"] .mh-tile { background: transparent !important; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; aspect-ratio: auto; padding: 10px 2px !important; }
+.mh-glance.is-widget[data-look="b"] .mh-tile.is-ai { border-bottom: 1px solid var(--mh-card-line); border-radius: 0; margin-bottom: 4px; }
+.mh-glance.is-widget[data-look="b"] .mh-tile-viz { width: 50px; height: 50px; border-radius: 50%; background: color-mix(in srgb, var(--mh-ink) 8%, transparent); }
+html[data-skin="obsidian-light"] .mh-glance.is-widget .mh-tile { background: rgba(255, 255, 255, .9) !important; }
+.mh-glance.is-widget .mh-tile.is-chats .mh-dots i:nth-child(n+7) { display: none; }
+.mh-glance.is-widget .mh-tile.is-chats .mh-dots { max-width: 40px; }
+.mh-glance.is-widget .mh-tile-val { min-height: 13px; }
+.mh-glance.is-bar .mh-tile-val:empty { display: none; }
