@@ -16,7 +16,7 @@ The exact underlying failure of James’s phone-local item is NOT established. N
 
 ## Live discovery / ownership
 
-At investigation, `wizard-mobile` served `/home/telos/.local/share/wizard-ux/current`, resolving to release `aa788b5100075b3a0e1510b8d2c3fa94a0f2daa3`, not the clean source checkout HEAD `9b2f551a`. `SOURCE_REPO` is the canonical wizard-ux remote. Source/served `reach.js` and `outbox.js` hashes matched. Candidate branches from the actual live release to preserve all serving features.
+At investigation, `wizard-mobile` served its installed atomic-release symlink, resolving to release `aa788b5100075b3a0e1510b8d2c3fa94a0f2daa3`, not the clean source checkout HEAD `9b2f551a`. `SOURCE_REPO` is the canonical wizard-ux remote. Source/served `reach.js` and `outbox.js` hashes matched. Candidate branches from the actual live release to preserve all serving features.
 
 Read-only main Hermes session metadata/limited prior assistant results found the 27 Oct Reconnecting pill task already complete; no other active warning repair. An active shell-reconstruction owner exists (`20261029_005423_6b44ba`, parent `wizard_1793185435149_48ac06184ee6`). Do not replace that owner’s shell build or deploy a stale whole-tree snapshot over it; coordinate the tiny delta. No private agent homes, containers, Messenger or recording contents inspected.
 
