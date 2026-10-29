@@ -18,9 +18,12 @@
   function weekly(p) {return p.limits?.find(l=>/weekly|week/i.test(l.label)&&!/scoped/i.test(l.id))||null;}
   function account(p) {const q=weekly(p),bad=p.status==='unavailable',stale=staleAI(p),v=bad?null:(q?.remainingPercent!=null?100-q.remainingPercent:null); /* Opinionated: show used, like server bars */const exhausted=p.limits?.some(l=>l.remainingPercent===0);return `<span class="rs-account ${stale&&!bad?'rs-stale':''}" data-res-account="${esc(p.id)}"><span class="rs-account-line"><span title="${esc(p.email||p.name)}">${esc(p.email?p.email.split('@')[0]:p.name)}${exhausted?'<i class="rs-account-alert" title="A quota window is exhausted">!</i>':''}</span><b class="${v!=null&&v>=85?'rs-warning':''}">${bad?'Unavailable':v!=null?v+'%':q?'Unavailable':'No weekly limit'}</b></span>${bar(v,'server')}${bad?'<small>Usage unavailable</small>':stale?'<small>Last known reading</small>':''}</span>`;}
   // Paid overage (Claude "extra usage"): money left of the monthly cap, shown beside the plan so it can be watched
-  // running down once the weekly window is spent. Only an enabled cap with real numbers gets a cell.
-  function extraOf(p) {const x=p?.paid;if(p?.status==='unavailable'||!x||x.type!=='spend'||x.enabled===false||number(x.limitMinor)==null||x.limitMinor<=0)return null;const used=Math.max(0,number(x.usedMinor)??0),left=Math.max(0,x.limitMinor-used);return {left,limit:x.limitMinor,exp:number(x.exponent)??2,cur:String(x.currency||'USD'),pct:Math.min(100,Math.ceil(used/x.limitMinor*100))};}
-  const cash=(minor,exp,cur)=>{const v=minor/10**Math.max(0,exp),s=Number.isInteger(v)?String(v):v.toFixed(Math.min(2,Math.max(0,exp)));return cur==='USD'?'$'+s:s+' '+cur;};
+  // running down once the weekly window is spent. An enabled unknown cap is a status, never a numeric meter.
+  function extraOf(p) {const x=p?.paid;if(p?.status==='unavailable'||!x||x.type!=='spend'||x.enabled===false)return null;const limit=number(x.limitMinor),n=number(x.usedMinor),used=n==null?null:Math.max(0,n);
+    if(limit!=null&&limit<=0||limit==null&&x.enabled!==true)return null;
+    return {enabled:true,used,left:limit==null||used==null?null:Math.max(0,limit-used),limit,exp:number(x.exponent)??2,cur:String(x.currency||'USD'),pct:limit==null||used==null?null:Math.min(100,Math.ceil(used/limit*100))};}
+  const cash=(minor,exp,cur)=>{const v=minor/10**Math.max(0,exp),s=v.toLocaleString('en-US',{minimumFractionDigits:Number.isInteger(v)?0:Math.min(2,Math.max(0,exp)),maximumFractionDigits:Math.min(2,Math.max(0,exp))});return cur==='USD'?'$'+s:s+' '+cur;};
+  function extraNote(x) {const used=number(x.used)??(number(x.limit)!=null&&number(x.left)!=null?x.limit-x.left:null);return `${used==null?'Spend unavailable':cash(used,x.exp,x.cur)+' spent'} · ${x.limit==null?'Balance and cap unavailable':cash(x.limit,x.exp,x.cur)+' cap'}`;}
   // A failed or rate-limited read (status unavailable/stale, paid missing) must never drop the extra cell: that freed its
   // slot for another ChatGPT account and looked like the feature had been reverted. Keep the last real reading per
   // account, clearly marked, until the provider reports again. Only an explicit "disabled" from a good read clears it.
@@ -29,8 +32,8 @@
   function extraFor(p) {const live=extraOf(p),m=memo.get(),id=String(p?.id||'');if(!id)return live;
     if(live){if(p.status==='ok'){m[id]={...live,at:Date.parse(p.fetchedAt)||Date.now()};memo.put(m);}return {...live,stale:p.status==='stale'};}
     if(p?.status==='ok'&&(p.paid?.enabled===false||!p.paid)){if(m[id]){delete m[id];memo.put(m);}return null;}
-    const k=m[id];return k&&number(k.limit)>0?{...k,stale:true}:null;}
-  function extraCell(p,x) {const label=`${p.name} extra`,old=x.stale||staleAI(p);return `<span class="rs-account rs-extra ${old?'rs-stale':''}" data-res-account="${esc(p.id)}:extra" title="Extra usage: ${esc(cash(x.left,x.exp,x.cur))} left of ${esc(cash(x.limit,x.exp,x.cur))}${old?' (last known reading)':''}"><span class="rs-account-line"><span>${esc(label)}</span><b class="${x.pct>=85?'rs-warning':''}">${x.pct}%</b></span>${bar(x.pct,'ai')}${old?'<small>Last known reading</small>':''}</span>`;}
+    const k=m[id];return k&&(number(k.limit)>0||k.enabled===true&&k.limit==null)?{...k,stale:true}:null;}
+  function extraCell(p,x) {const label=`${p.name} extra`,old=x.stale||staleAI(p),known=x.pct!=null,note=extraNote(x);return `<span class="rs-account rs-extra ${old?'rs-stale':''}" data-res-account="${esc(p.id)}:extra" title="Extra usage: ${esc(known?cash(x.left,x.exp,x.cur)+' left of '+cash(x.limit,x.exp,x.cur):'Enabled · '+note)}${old?' (last known reading)':''}"><span class="rs-account-line"><span>${esc(label)}</span><b class="${known&&x.pct>=85?'rs-warning':''}">${known?x.pct+'%':'Enabled'}</b></span>${known?bar(x.pct,'server'):`<small>${esc(note)}</small>`}${old?'<small>Last known reading</small>':''}</span>`;}
   // Every subscription remains visible; do not silently rank accounts out of Home.
   /* One column per provider: its heading, then each of its subscriptions underneath. */
   function homeCells(providers) {
@@ -130,10 +133,11 @@
     const left=v=>v==null?null:Math.max(0,Math.min(100,100-v));
     const out=[['CPU',j.cpu],['Memory',j.memory],['Disk',j.disk]].map(([k,v])=>({k,label:k,v:left(v),fuel:true,attrs:'data-res-open="server"',row:'s',off:!S.server&&!!S.serverError}));
     if(S.ai){const providers=S.ai.providers||[],per={},seen={};for(const p of providers)per[kind(p)]=(per[kind(p)]||0)+1;
-      const ai=providers.filter(p=>p.status==='unavailable'||weekly(p)).map(p=>{const id=kind(p),n=per[id]>1?(seen[id]=(seen[id]||0)+1):0;
+      const ai=providers.flatMap(p=>{const id=kind(p),n=per[id]>1?(seen[id]=(seen[id]||0)+1):0;
         const full=p.providerName||(p.name&&!p.email?p.name:'')||id.charAt(0).toUpperCase()+id.slice(1),label=(full==='ChatGPT'?'GPT':full)+(n?' '+n:'');
         const q=weekly(p),bad=p.status==='unavailable',v=bad||q?.remainingPercent==null?null:Math.max(0,Math.min(100,Math.round(q.remainingPercent)));
-        return bad&&APP_OF[id]?{k:'ai:'+p.id,label,v:null,signin:true,sub:'Sign in',attrs:`data-res-signin="${esc(APP_OF[id])}"`,title:p.email||label,row:'a'}:{k:'ai:'+p.id,label,v,fuel:true,attrs:'data-res-open="ai"',title:p.email||label,row:'a'};});
+        const rows=bad||q?[bad&&APP_OF[id]?{k:'ai:'+p.id,label,v:null,signin:true,sub:'Sign in',attrs:`data-res-signin="${esc(APP_OF[id])}"`,title:p.email||label,row:'a'}:{k:'ai:'+p.id,label,v,fuel:true,attrs:'data-res-open="ai"',title:p.email||label,row:'a'}]:[];
+        const x=extraFor(p);if(x){const old=x.stale||staleAI(p);rows.push({k:'extra:'+p.id,label:label+' extra',v:x.pct==null?null:100-x.pct,extra:true,note:extraNote(x)+(old?' · Last known reading':''),attrs:'data-res-open="ai"',row:'a'});}return rows;});
       /* Credit accounts (Tinfoil): a fuel gauge, E to F. Full = the last top-up; the readout is dollars left, not a percent. */
       for(const p of providers){const x=p.paid;if(p.status==='unavailable'||!x||x.type!=='credits'||number(x.balanceMinor)==null)continue;
         const id=kind(p),bal=number(x.balanceMinor),cap=number(x.limitMinor),ex=number(x.exponent)??2,v=cap>0?Math.max(0,Math.min(100,Math.round(bal/cap*100))):(bal>0?100:0);
@@ -151,7 +155,7 @@
      capacity). Every fill shows what is LEFT; amber under a quarter, red under a tenth. Fills grow from zero on first
      paint and glide afterwards. Tap AI to open AI accounts, compute to open devices. */
   function homeRows(){const kind=p=>String(p.provider||p.id||'').split(':')[0],rows={ai:[],hw:[]};
-    for(const sp of dialSpecs().filter(x=>x.row==='a'))rows.ai.push({k:sp.k,label:sp.label,segs:[{cap:1,left:sp.v,title:sp.title||sp.label}],value:sp.signin?'Sign in':sp.money?sp.money+' left':(sp.v==null?'':(100-sp.v)+'%'),signin:sp.signin,attrs:sp.attrs,left:sp.v});
+    for(const sp of dialSpecs().filter(x=>x.row==='a'))rows.ai.push({k:sp.k,label:sp.label,segs:sp.extra&&sp.v==null?[]:[{cap:1,left:sp.v,title:sp.title||sp.label}],value:sp.signin?'Sign in':sp.money?sp.money+' left':(sp.v==null?(sp.extra?'Enabled':''):(100-sp.v)+'%'),extra:sp.extra,note:sp.note,signin:sp.signin,attrs:sp.attrs,left:sp.v});
     const list=devList().length?devList():[{id:'this',kind:'this',group:'agent',name:'This server',status:'online',disks:[]}];
     const M=list.filter(d=>(d.group||'agent')==='agent'&&(d.status==='online'||d.status==='stale'||d.kind==='this')).map(d=>{const r=devReading(d),main=diskOf(d)[0]||null,me=d.kind==='this'&&S.server;
       return {d,mem:{cap:r.ram,used:r.mem},disk:{cap:me&&number(S.server.diskSize)!=null?number(S.server.diskSize):number(main?.sizeGB),used:r.disk},cpu:{cap:r.cores,used:r.cpu}};});
@@ -171,10 +175,10 @@
     {id:'ai',cls:'rs-bg-ai',title:'AI resources',sub:'used this week',label:'AI resources used this week',optional:true},
     {id:'hw',cls:'rs-bg-hw',title:'Compute resources',sub:'used',label:'Compute resources used',legend:true},
   ];
-  function homeBarsHtml(){const R=homeRows(),sig=GROUPS.flatMap(g=>R[g.id]||[]).map(r=>r.k+':'+r.segs.length+(r.signin?'s':'')).join(',');
-    const row=r=>`<button class="rs-br${r.signin?' rs-br-off':''}" data-k="${esc(r.k)}" ${r.attrs} aria-label="${esc(r.label)} ${esc(r.signin?'sign in':/left$/.test(r.value)?r.value:r.value+' used')}"><span class="rs-bl">${esc(r.label)}</span><span class="rs-bt">${r.segs.map(g=>`<i class="rs-bs${lvl(g.left)}${g.dv!=null?' rs-d'+(g.dv%4):''}" style="flex:${g.cap} 1 0" title="${esc(g.title)}"><i class="rs-bf" data-w="${g.left==null?0:100-g.left}" style="width:0%"></i></i>`).join('')}</span><span class="rs-bv${lvl(r.left)}">${esc(r.value)}</span></button>`;
+  function homeBarsHtml(){const R=homeRows(),sig=GROUPS.flatMap(g=>R[g.id]||[]).map(r=>r.k+':'+r.segs.length+(r.signin?'s':'')+(r.note?'|'+r.note:'')).join(',');
+    const row=r=>`<button class="rs-br${r.signin?' rs-br-off':''}${r.extra?' rs-br-extra':''}${!r.segs.length?' rs-br-indeterminate':''}" data-k="${esc(r.k)}" ${r.attrs} aria-label="${esc(r.label)} ${esc(r.signin?'sign in':r.value==='Enabled'||/left$/.test(r.value)?r.value:r.value+' used')}${r.note?' · '+esc(r.note):''}"><span class="rs-bl">${esc(r.label)}</span>${r.segs.length?`<span class="rs-bt">${r.segs.map(g=>`<i class="rs-bs${lvl(g.left)}${g.dv!=null?' rs-d'+(g.dv%4):''}" style="flex:${g.cap} 1 0" title="${esc(g.title)}"><i class="rs-bf" data-w="${g.left==null?0:100-g.left}" style="width:0%"></i></i>`).join('')}</span>`:''}<span class="rs-bv${lvl(r.left)}">${esc(r.value)}</span>${r.note?`<small class="rs-br-note">${esc(r.note)}</small>`:''}</button>`;
     const legend=()=>(R.machines||[]).length>1?`<p class="rs-lg">${R.machines.map((n,i)=>`<span class="rs-d${i%4}"><i></i>${esc(n.split(' ')[0])}</span>`).join('')}</p>`:'';
-    const group=g=>{const rows=R[g.id]||[];if(g.optional&&!rows.length)return '';return `<div class="rs-bg ${g.cls}" role="group" aria-label="${esc(g.label)}" data-rs-group="${esc(g.id)}"><p class="rs-gh"><b>${esc(g.title)}</b><span>${esc(g.sub)}</span></p>${g.legend?legend():''}${rows.map(row).join('')}</div>`;};
+    const group=g=>{const rows=R[g.id]||[];if(g.optional&&!rows.length)return '';const extra=rows.some(r=>r.extra);return `<div class="rs-bg ${g.cls}" role="group" aria-label="${esc(extra?'AI resources used · extra usage monthly':g.label)}" data-rs-group="${esc(g.id)}"><p class="rs-gh"><b>${esc(g.title)}</b><span>${esc(extra?'week used · extra usage monthly':g.sub)}</span></p>${g.legend?legend():''}${rows.map(row).join('')}</div>`;};
     return `<section class="rs-widget rs-barsw wz-home-widget" data-sig="${esc(sig)}" aria-label="AI and computer resources">${GROUPS.map(group).join('')}</section>`;}
   // The least left across every bar ({label, left} or null): Settings shows it as a quiet value only when it is low.
   function lowest(){const R=homeRows();let low=null;for(const r of GROUPS.flatMap(g=>R[g.id]||[]))if(r.left!=null&&!r.signin&&(!low||r.left<low.left))low={label:r.label,left:r.left,value:/left$/.test(r.value)?r.value:r.value?r.value+' used':''};return low;}
