@@ -11,8 +11,8 @@ html[data-tweaks~="wizard/machines-home"] {
   --mh-ease: cubic-bezier(.2, .8, .2, 1); --mh-k: 1;
 }
 html[data-skin="obsidian"][data-tweaks~="wizard/machines-home"] { --mh-chip: rgba(255, 255, 255, .07); --mh-chip-line: rgba(255, 255, 255, .10); }
-html[data-skin="obsidian-light"][data-tweaks~="wizard/machines-home"] {
-  --mh-accent: #1F86E0; --mh-good: #12A867; --mh-warn: #C98200; --mh-bad: #D93A58;
+html:is([data-skin$="light"], [data-skin="sepia"])[data-tweaks~="wizard/machines-home"] {
+  --mh-accent: #1670C4; --mh-good: #0F8F57; --mh-warn: #A86A00; --mh-bad: #C2304B;
   --mh-pearl: radial-gradient(circle at 34% 26%, #ffffff 0%, #ffffff 50%, #e6ebf1 100%);
   --mh-chip: rgba(255, 255, 255, .86); --mh-chip-line: rgba(0, 0, 0, .08);
   --mh-ink: #111418; --mh-ink-2: rgba(17, 20, 24, .78); --mh-ink-3: rgba(17, 20, 24, .58);
@@ -209,7 +209,7 @@ html[data-shell="phone"] .mh-top { padding-right: 60px; justify-content: flex-st
 .mh-age { font: 700 10.5px/1 system-ui, sans-serif; font-variant-numeric: tabular-nums; fill: var(--mh-ink); }
 .mh-age-bg { fill: var(--mh-chip); stroke: var(--mh-chip-line); stroke-width: 1; }
 html[data-skin="obsidian-light"] .mh-age-bg { fill: #fff; }
-html[data-skin^="landscapes"] .mh-age-bg { fill: rgba(12, 16, 24, .72); }
+html[data-skin="landscapes"] .mh-age-bg { fill: rgba(12, 16, 24, .72); }
 
 /* ---------- entry motion: once ---------- */
 .mh-new:is(.mh-node, .mh-person, .mh-dev, .mh-ai-group) { animation: mh-in 380ms var(--mh-ease) both; }
@@ -250,9 +250,9 @@ html[data-skin^="landscapes"] .mh-age-bg { fill: rgba(12, 16, 24, .72); }
 }
 
 /* Landscapes: pictures behind, so chips and bars get a darker, steadier backing. */
-html[data-skin^="landscapes"][data-tweaks~="wizard/machines-home"] { --mh-chip: rgba(10, 14, 22, .74); --mh-track: rgba(255, 255, 255, .26); }
-html[data-skin^="landscapes"] .mh-bar i { background: linear-gradient(90deg, var(--mh-accent) var(--f), var(--mh-track) var(--f)), rgba(10, 14, 22, .7); box-shadow: 0 0 0 2px rgba(10, 14, 22, .55); }
-html[data-skin^="landscapes"] .mh-bar small { background: rgba(10, 14, 22, .78); color: var(--mh-ink); }
+html[data-skin="landscapes"][data-tweaks~="wizard/machines-home"] { --mh-chip: rgba(10, 14, 22, .74); --mh-track: rgba(255, 255, 255, .26); }
+html[data-skin="landscapes"] .mh-bar i { background: linear-gradient(90deg, var(--mh-accent) var(--f), var(--mh-track) var(--f)), rgba(10, 14, 22, .7); box-shadow: 0 0 0 2px rgba(10, 14, 22, .55); }
+html[data-skin="landscapes"] .mh-bar small { background: rgba(10, 14, 22, .78); color: var(--mh-ink); }
 
 /* Badge for the gauge's own service; + to add a device or a person (quiet until hovered); first-load spinner. */
 .mh-ai-def { padding: 1px 7px; border-radius: 99px; font-size: 10.5px !important; font-weight: 750 !important; color: var(--mh-accent) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mh-accent) 60%, transparent); }
@@ -289,8 +289,8 @@ button.mh-shield { cursor: pointer; }
 .mh-access { display: flex; flex-direction: column; gap: 3px; max-width: 360px; font-size: 12px; line-height: 1.35; color: var(--mh-ink-2); text-align: left; }
 .mh-access code { align-self: flex-start; padding: 2px 7px; border-radius: 7px; background: var(--mh-chip); box-shadow: inset 0 0 0 1px var(--mh-chip-line); }
 .mh-access small { font-size: 10.5px; color: var(--mh-ink-3); }
-html[data-skin^="landscapes"] .mh-shield { background: rgba(12, 16, 24, .62); }
-html[data-skin^="landscapes"] .mh-shield[data-x="bad"] { color: #FF95A8; }
+html[data-skin="landscapes"] .mh-shield { background: rgba(12, 16, 24, .62); }
+html[data-skin="landscapes"] .mh-shield[data-x="bad"] { color: #FF95A8; }
 @container (max-width: 520px) { .mh-root .mh-shield { font-size: 9.5px; padding: 1px 6px 1px 5px !important; } }
 .mh-sh-short { display: none; }
 
@@ -332,7 +332,7 @@ html[data-skin="obsidian-light"] .mh-root { --a-front: #eef2f6; --a-side: #c3ced
 @media (prefers-reduced-motion: reduce) { .mh-new .mh-art * { animation: none; } }
 /* Tailscale panel */
 .mh-ts-info .is-bad { color: var(--mh-bad); font-weight: 650; }
-html[data-skin^="landscapes"] .mh-ts-info .is-bad { color: #FF95A8; }
+html[data-skin="landscapes"] .mh-ts-info .is-bad { color: #FF95A8; }
 .mh-ts-list { display: flex; flex-direction: column; gap: 3px; margin: 2px 0; }
 .mh-ts-row { display: grid; grid-template-columns: 9px auto 1fr; align-items: center; gap: 7px; font-size: 12px; }
 .mh-ts-row i { width: 8px; height: 8px; border-radius: 50%; background: var(--mh-ink-3); }
@@ -357,7 +357,7 @@ html[data-skin="obsidian-light"] .mh-node.is-main .mh-disc.is-art::before { back
 /* ---------- the map sits on its own card, so the wallpaper never fights the labels ---------- */
 .mh-root { --mh-card: rgba(22, 30, 42, .78); --mh-card-solid: #1b2533; --mh-card-line: rgba(255, 255, 255, .1); }
 html[data-skin="obsidian-light"] .mh-root { --mh-card: rgba(255, 255, 255, .94); --mh-card-solid: #ffffff; --mh-card-line: rgba(20, 33, 49, .1); }
-html[data-skin^="landscapes"] .mh-root { --mh-card: rgba(16, 24, 36, .66); --mh-card-solid: #1a2636; }
+html[data-skin="landscapes"] .mh-root { --mh-card: rgba(16, 24, 36, .66); --mh-card-solid: #1a2636; }
 .mh-map { padding: 22px 14px 14px; border-radius: 26px; background: var(--mh-card); box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 18px 50px -24px rgba(0, 0, 0, .55); -webkit-backdrop-filter: blur(22px) saturate(1.2); backdrop-filter: blur(22px) saturate(1.2); }
 html[data-skin="obsidian-light"] .mh-map { box-shadow: inset 0 0 0 1px var(--mh-card-line), 0 14px 40px -22px rgba(20, 33, 49, .35); }
 @container (max-width: 599px) { .mh-map { padding: 20px 6px 10px; border-radius: 20px; } .mh-root .mh-ts-tab { left: 16px; height: 24px; font-size: 11px; } }
@@ -367,7 +367,7 @@ html[data-skin="obsidian-light"] .mh-map { box-shadow: inset 0 0 0 1px var(--mh-
 /* Which Wizard: a small list under the strip. */
 .mh-root { --mh-card: rgba(22, 30, 42, .66); --mh-card-solid: #1b2533; --mh-card-line: rgba(255, 255, 255, .12); }
 html[data-skin="obsidian-light"] .mh-root { --mh-card: rgba(255, 255, 255, .86); --mh-card-solid: #ffffff; --mh-card-line: rgba(20, 33, 49, .1); }
-html[data-skin^="landscapes"] .mh-root { --mh-card: rgba(16, 24, 36, .52); --mh-card-solid: #1a2636; }
+html[data-skin="landscapes"] .mh-root { --mh-card: rgba(16, 24, 36, .52); --mh-card-solid: #1a2636; }
 @container (max-width: 599px) {
 }
 
@@ -429,7 +429,7 @@ html[data-skin="obsidian-light"] .mh-root.is-settings { --mh-ink: #111418; --mh-
 .mh-glance.is-bar .mh-gauge { height: 22px !important; padding: 0 8px 0 6px !important; gap: 5px; background: transparent !important; box-shadow: none; }
 .mh-glance.is-bar .mh-g-cells i { height: 10px; }
 .mh-glance.is-bar .mh-tile.is-ai { padding: 0 !important; }
-html[data-skin^="landscapes"] .mh-root.is-topbar { --mh-chip: rgba(12, 18, 28, .5); }
+html[data-skin="landscapes"] .mh-root.is-topbar { --mh-chip: rgba(12, 18, 28, .5); }
 /* Top bar: only the current Wizard shows; the others slide out on hover or keyboard focus. */
 .mh-root.is-topbar .mh-ws button:not([aria-selected="true"]) { max-width: 0; padding: 0 !important; opacity: 0; overflow: hidden; transition: max-width 220ms var(--mh-ease), opacity 180ms, padding 220ms; }
 .mh-root.is-topbar .mh-ws:is(:hover, :focus-within) button:not([aria-selected="true"]) { max-width: 120px; padding: 0 10px !important; opacity: 1; }
@@ -486,7 +486,7 @@ html[data-skin="obsidian-light"] .mh-glance.is-widget .mh-tile { background: rgb
 .mh-root .mh-bi:hover { background: rgba(205, 190, 255, .1); color: var(--ink, #fff); }
 .mh-bi svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .mh-bi.is-bad { color: var(--mh-bad); }
-html[data-skin^="landscapes"] .mh-bi.is-bad { color: #FF95A8; }
+html[data-skin="landscapes"] .mh-bi.is-bad { color: #FF95A8; }
 .mh-bi .mh-badge { top: 0; right: 1px; min-width: 14px; height: 14px; font-size: 9px; box-shadow: 0 0 0 1.5px var(--mh-card-solid); }
 .mh-glance.is-bar .mh-gauge { height: 26px !important; padding: 0 8px !important; gap: 4px; border-radius: 7px; background: transparent !important; box-shadow: none; }
 .mh-glance.is-bar .mh-gauge:hover { background: rgba(205, 190, 255, .1) !important; transform: none; }
@@ -540,3 +540,79 @@ html[data-skin="landscapes-light"] .mh-wiz-menu { --mh-ink: #111418; --mh-ink-2:
 .mh-phone-top .mh-wiz-menu { min-width: min(300px, calc(100vw - 28px)); }
 .mh-phone-top .mh-wiz-menu button { min-height: 44px; }
 .mh-root:not(.is-topbar) .mh-phone-top + .mh-glance.is-widget { margin-top: 18px; }
+
+/* ================= Phone v5: no boxes. Plain ink on the wallpaper, like the gear and the desktop bar ================= */
+.mh-phone-top { margin-top: -8px; padding: calc(var(--sb, 0px) + var(--safe-t, 0px)) 14px 0 6px; }
+.mh-phone-top .mh-wiz { height: 40px; padding: 0 8px !important; gap: 4px; border-radius: 12px; font-size: 18px; font-weight: 750; letter-spacing: -.01em; background: transparent !important; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.mh-phone-top .mh-wiz:active { transform: scale(.96); }
+.mh-glance.is-widget[data-look] { width: min(340px, calc(100% - 40px)); margin-top: 26px !important; padding: 0; gap: 0; background: none !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; border-radius: 0; }
+.mh-glance.is-widget[data-look] .mh-tile.is-ai { height: auto; margin: 0 0 22px; border: 0; }
+.mh-glance.is-widget .mh-gauge { padding: 0 !important; gap: 10px; justify-content: center; }
+.mh-glance.is-widget .mh-g-cells i { width: 15px; height: 26px; border-radius: 5px; background: rgba(255, 255, 255, .22); box-shadow: 0 1px 6px rgba(0, 0, 0, .18); }
+.mh-glance.is-widget[data-look] .mh-tile { padding: 4px 0 !important; }
+.mh-glance.is-widget[data-look] .mh-tile-viz { width: auto; height: 40px; background: none; border-radius: 0; }
+.mh-glance.is-widget .mh-pic { --pic: 38px; }
+.mh-glance.is-widget .mh-tile.is-chats .mh-dots { max-width: 44px; }
+.mh-glance.is-widget .mh-tile-lab { font-size: 11.5px; font-weight: 700; color: var(--mh-ink-2); }
+.mh-glance.is-widget .mh-tile-val { font-size: 14px; }
+.mh-glance.is-widget .mh-badge { top: -4px; right: -8px; }
+/* On photo skins the words carry a soft shadow instead of a box, so they read on any picture. */
+html[data-skin="landscapes"] .mh-phone-top .mh-wiz, html[data-skin="landscapes"] .mh-glance.is-widget { text-shadow: 0 1px 3px rgba(0, 0, 0, .55), 0 0 12px rgba(0, 0, 0, .25); }
+html[data-skin="landscapes"] .mh-glance.is-widget .mh-tile-lab { color: rgba(255, 255, 255, .92); }
+html[data-skin="landscapes"] .mh-phone-top .mh-wiz-car { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5)); }
+html[data-skin="landscapes"] .mh-glance.is-widget .mh-dots i { box-shadow: 0 1px 4px rgba(0, 0, 0, .35); }
+html[data-skin="landscapes-light"] .mh-phone-top .mh-wiz, html[data-skin="landscapes-light"] .mh-glance.is-widget { text-shadow: 0 1px 3px rgba(255, 255, 255, .7); }
+html[data-skin$="light"] .mh-glance.is-widget .mh-g-cells i { background: rgba(17, 20, 24, .14); box-shadow: none; }
+html[data-skin$="light"] .mh-glance.is-widget .mh-g-cells i.on { background: #12A867; }
+html[data-skin$="light"] .mh-glance.is-widget .mh-tile-lab, html[data-skin$="light"] .mh-glance.is-widget .mh-g-label, html[data-skin$="light"] .mh-glance.is-widget .mh-g-ef { color: rgba(17, 20, 24, .75); }
+html[data-skin="obsidian-light"] .mh-glance.is-widget .mh-tile { background: none !important; }
+.mh-root .mh-glance.is-widget .mh-gauge { background: none !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.mh-glance.is-widget .mh-gauge .mh-g-cells i.on { background: var(--mh-good); }
+.mh-glance.is-widget .mh-gauge[data-s="tight"] .mh-g-cells i.on { background: var(--mh-warn); }
+.mh-glance.is-widget .mh-gauge[data-s="no"] .mh-g-cells i.on { background: var(--mh-bad); }
+.mh-glance.is-widget .mh-g-label, .mh-glance.is-widget .mh-g-ef { color: var(--mh-ink); opacity: .9; }
+html[data-skin$="light"] .mh-glance.is-widget .mh-gauge[data-s="ok"] .mh-g-cells i.on { background: #12A867; }
+
+/* E-to-F meter: no label; Settings › AI says what it combines and lets the owner choose (one kind at a time). */
+.mh-glance.is-bar .mh-g-ef { display: inline; font-size: 10px; font-weight: 800; opacity: .75; }
+.mh-root.is-ai .mh-ai { flex-direction: column; align-items: flex-start; gap: 8px; }
+.mh-meter-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.mh-meter-what { display: flex; flex-direction: column; gap: 1px; }
+.mh-meter-what b { font-size: 15px; font-weight: 750; color: var(--mh-ink); }
+.mh-meter-what small { font-size: 12.5px; color: var(--mh-ink-2); }
+.mh-root .mh-meter-pick { min-height: 0 !important; height: 28px; padding: 0 12px !important; border-radius: 99px; font-size: 12.5px; font-weight: 650; color: var(--mh-ink); background: var(--mh-chip) !important; box-shadow: inset 0 0 0 1px var(--mh-chip-line); }
+.mh-meter-list { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--mh-chip); box-shadow: inset 0 0 0 1px var(--mh-chip-line); }
+.mh-meter-grp { display: flex; flex-direction: column; gap: 4px; }
+.mh-meter-gh { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--mh-ink-2); }
+.mh-root .mh-meter-gh button, .mh-root .mh-meter-reset { min-height: 0 !important; height: 24px; padding: 0 10px !important; border-radius: 99px; font-size: 12px; font-weight: 650; color: var(--mh-ink); background: transparent !important; box-shadow: inset 0 0 0 1px var(--mh-chip-line); align-self: flex-start; }
+.mh-meter-opt { display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 8px; min-height: 34px; font-size: 13.5px; font-weight: 600; color: var(--mh-ink); cursor: pointer; }
+.mh-meter-opt input { width: 17px; height: 17px; accent-color: var(--mh-good); }
+.mh-meter-opt small { font-size: 12px; color: var(--mh-ink-2); }
+.mh-meter-note { font-size: 11.5px; color: var(--mh-ink-3); }
+
+/* ================= Light skins everywhere: every light skin gets dark ink, and in Settings the views take
+   Settings' own text and surface colours, so nothing is ever white on white. ================= */
+html:is([data-skin$="light"], [data-skin="sepia"]) .mh-root { --mh-card: rgba(255, 255, 255, .86); --mh-card-solid: #ffffff; --mh-card-line: rgba(17, 20, 24, .1); --a-shadow: rgba(20, 33, 49, .3); }
+.mh-root.is-settings { --mh-ink: var(--wz-text, #111418); --mh-ink-2: color-mix(in srgb, var(--wz-text, #111418) 78%, transparent); --mh-ink-3: color-mix(in srgb, var(--wz-text, #111418) 58%, transparent);
+  --mh-chip: color-mix(in srgb, var(--wz-text, #111418) 6%, transparent); --mh-chip-line: color-mix(in srgb, var(--wz-text, #111418) 14%, transparent); --mh-chip-blur: none;
+  --mh-card: var(--wz-surface, transparent); --mh-card-solid: var(--wz-surface, #fff); --mh-card-line: color-mix(in srgb, var(--wz-text, #111418) 12%, transparent);
+  --mh-wire-off: color-mix(in srgb, var(--wz-text, #111418) 35%, transparent); --mh-track: color-mix(in srgb, var(--wz-text, #111418) 14%, transparent); color: var(--mh-ink); }
+.mh-root.is-settings :is(.mh-label, .mh-more-info, .mh-act, .mh-details, .mh-dev, .mh-ai-list) { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.mh-root.is-settings .mh-age-bg { fill: var(--wz-surface, #fff) !important; }
+.mh-root.is-settings .mh-age, .mh-root.is-settings .mh-ts-t { fill: var(--mh-ink) !important; }
+.mh-root.is-settings .mh-ts-tab { color: var(--mh-ink); background: var(--wz-surface, #fff); }
+html:is([data-skin$="light"], [data-skin="sepia"]) .mh-root.is-settings :is(.mh-shield, .mh-ts-info .is-bad, .mh-gl-row[data-x="no"] .mh-gl-v) { color: #C2304B; }
+html:is([data-skin$="light"], [data-skin="sepia"]) .mh-root.is-settings .mh-shield { background: rgba(194, 48, 75, .08); }
+html:is([data-skin$="light"], [data-skin="sepia"]) .mh-wiz-menu { --mh-ink: #111418; --mh-ink-2: rgba(17, 20, 24, .7); --mh-ink-3: rgba(17, 20, 24, .5); background: rgba(255, 255, 255, .97); }
+html:is([data-skin$="light"], [data-skin="sepia"]) .mh-root .mh-wiz { color: #111418; }
+html:is([data-skin$="light"], [data-skin="sepia"]) .mh-root .mh-bi { color: rgba(17, 20, 24, .72); }
+html:is([data-skin$="light"], [data-skin="sepia"]) .mh-root .mh-bi.is-bad { color: #C2304B; }
+.mh-root .mh-act-btn.is-fix { background: color-mix(in srgb, var(--mh-bad) 16%, transparent) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mh-bad) 45%, transparent); }
+html:is([data-skin$="light"], [data-skin="sepia"]) .mh-root .mh-act-btn.is-fix { background: color-mix(in srgb, var(--mh-bad) 9%, #fff) !important; }
+/* Count badges: white on a red deep enough to read on every skin. */
+.mh-root :is(.mh-badge, .mh-ts-n) { background: #D12E4B; color: #fff; }
+.mh-root .mh-badge.is-ok { background: #0F8F57; }
+.mh-root .mh-badge.is-warn { background: #A86A00; }
+/* The open Tailscale panel sits above the wires (no line running through its words). */
+.mh-row.is-ts { position: relative; z-index: 2; }
+.mh-row.is-ts .mh-ts-info { background: var(--mh-card-solid) !important; }
