@@ -4,7 +4,7 @@
   'use strict';
   if (window.WizAppServices) return;
   const VERSION = 1, ORIGIN = location.origin, frames = new Map();
-  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'share.receive', 'share.targets', 'share.pending', 'share.ack', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set', 'audio.duck', 'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt', 'shell.openCompanion', 'shell.closeCompanion', 'shell.postCompanion', 'shell.focusApp']);
+  const OPS = new Set(['ready', 'share.text', 'share.file', 'share.wizard', 'voice.transcribe', 'share.receive', 'share.targets', 'share.pending', 'share.ack', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set', 'orb.set', 'audio.duck', 'identity.info', 'identity.sign', 'identity.nip44_encrypt', 'identity.nip44_decrypt', 'shell.openCompanion', 'shell.closeCompanion', 'shell.postCompanion', 'shell.focusApp']);
   let registry, available = null, serial = 0, rootArm = null;
   // Share receiving (docs/SHARE-SHEET.md): the share sheet hands its per-app ops here once, at shell load, before
   // any app frame exists; they are never on a global, so a frame reaches only its own app id's items.
@@ -54,7 +54,7 @@
   }
   function from(source) { return [...frames.values()].find(st => st.frame.contentWindow === source); }
   const changed = () => window.dispatchEvent(new CustomEvent('wizard:app-holds'));
-  function reset(st) { window.WizBackgroundAudio?.duck?.(st, false); window.WizCompanionPane?.detach(st.frame); if (st.tools) setTools(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
+  function reset(st) { window.WizBackgroundAudio?.duck?.(st, false); window.WizCompanionPane?.detach(st.frame); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
   function reconcile() {
     for (const st of frames.values()) {
       if (st.tools && st.frame.isConnected && !barOf(st)?.querySelector(':scope > .wtools')) paintTools(st);
@@ -143,6 +143,25 @@
     }
     bar.classList.add('has-tools');
     return true;
+  }
+  /* App orb claims: one fixed icon set, a short label, the app's own registry colour. The shell decides when it shows. */
+  const ORB_ICONS = new Set(['plus', 'mic', 'record', 'stop', 'send', 'search', 'edit']);
+  let orbShown = () => false;
+  function setOrb(st, spec) {
+    const icon = spec && ORB_ICONS.has(spec.icon) ? spec.icon : null;
+    const next = icon ? { icon, label: String(spec.label || '').replace(/[\x00-\x1f]/g, '').slice(0, 40) } : null;
+    if (JSON.stringify(next) === JSON.stringify(st.orb || null)) return orbShown(st.frame);
+    st.orb = next; window.dispatchEvent(new CustomEvent('wizard:app-orb', { detail: { appId: st.appId } }));
+    return orbShown(st.frame);
+  }
+  function orbOf(frame) {
+    const st = frames.get(frame); if (!st?.orb || !valid(st, st.doc)) return null;
+    const a = apps().find(x => x.id === st.appId);
+    return Object.freeze({ appId: st.appId, name: a?.name || st.appId, icon: st.orb.icon, label: st.orb.label || a?.name || st.appId, colors: Array.isArray(a?.colors) ? a.colors.slice(0, 2) : (a?.g || []) });
+  }
+  function orbTap(frame) {
+    const st = frames.get(frame); if (!st?.orb || !valid(st, st.doc)) return false;
+    try { st.frame.contentWindow.postMessage({ type: 'wizard:app:orb', version: VERSION }, ORIGIN); return true; } catch (_) { return false; }
   }
   function setTools(st, list) { st.tools = cleanTools(st, list); return paintTools(st); }
   // Owner-key access is narrower than ordinary app services: installed apps.json entries only,
@@ -253,6 +272,7 @@
         toast(icon, message) { check(); if (typeof icon !== 'string' || typeof message !== 'string') return false; const shell = window.__wos || window.__wux; shell?.toast?.(icon.slice(0, 20), message.slice(0, 2000), 2600); return !!shell?.toast; },
       }),
       badge: Object.freeze({ set(n) { check(); setBadge(st.appId, n); st.badged = true; return true; } }),
+      orb: Object.freeze({ set(spec) { check(); return setOrb(st, spec); }, shown() { check(); return orbShown(st.frame); } }),
       // Lower Wizard Music while this app plays a short sound; duck(false) restores it. Resolves true when ducked.
       audio: Object.freeze({ duck(on) { check(); return window.WizBackgroundAudio?.duck ? window.WizBackgroundAudio.duck(st, !!on) : Promise.resolve(false); } }),
       titlebar: Object.freeze({ set(list) { check(); return setTools(st, list); },
@@ -449,6 +469,7 @@
       if (d.op === 'audio.duck') value = await svc.audio.duck(d.args?.on === true);
       if (d.op.startsWith('vault.')) { try { value = await svc.vault[d.op.slice(6)](d.op === 'vault.seal' ? d.args?.secret : d.args?.title, d.args?.title); } catch (err) { reply(null, 'vault:' + (err.code || 'failed')); return; } }
       if (d.op === 'titlebar.set') value = svc.titlebar.set(d.args?.tools);
+      if (d.op === 'orb.set') value = svc.orb.set(d.args?.spec);
       if (d.op === 'identity.info') value = await svc.identity.info();
       if (d.op === 'identity.sign') value = await svc.identity.sign(d.args?.event);
       if (d.op === 'identity.nip44_encrypt') value = await svc.identity.nip44_encrypt(d.args);
@@ -697,6 +718,7 @@
     } catch (_) { done?.(false); return false; }
   }
   window.WizAppServices = Object.freeze({ voiceCommand, runVoiceCommand, authorized: frame => { const st = frames.get(frame); return valid(st, st?.doc); }, version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
+    orb: Object.freeze({ of: orbOf, tap: orbTap, presenter(fn) { orbShown = typeof fn === 'function' ? fn : () => false; } }),
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     update: Object.freeze({ busy, announce, available: () => available, reloadPlan, prepareReload, frames: updateFrames }),

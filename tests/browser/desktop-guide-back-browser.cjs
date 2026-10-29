@@ -2,8 +2,9 @@
 // node tests/browser/desktop-guide-back-browser.cjs <base, e.g. http://127.0.0.1:8809/wizard-os-home/>
 // Real desktop.html (device detection, no ?shell override), all writes stubbed, alongside first launch mocked.
 // Checks, for both Back paths the shell has (Esc key, browser history Back -> popstate):
-//   1. Settings opened above the guide: Back closes Settings only; the guide stays.
-//   2. Next Back closes the guide (= Skip tour, remembered); the page never leaves Wizard.
+//   1. Tapping Settings while the guide shows is a tap outside it, so the guide closes like Back
+//      (= Skip tour, remembered) and Settings opens (James, 28 Oct 2026: tap outside closes, like Back).
+//   2. Back closes Settings; the page never leaves Wizard.
 //   3. Back at the root with nothing open stays in Wizard.
 const { chromium } = require('playwright');
 const BASE = process.argv[2];
@@ -25,11 +26,9 @@ const state = p => p.evaluate(() => ({ path: location.pathname, guide: !!documen
     s = await state(p); ok(s.guide, `${how}: guide showing on first launch`, JSON.stringify(s));
     await p.click('body', { position: { x: 720, y: 400 } }).catch(() => {}); // a real gesture arms the history guard
     await p.locator('#settingsBtn').click(); await p.waitForTimeout(400);
-    s = await state(p); ok(s.settings && s.guide, `${how}: Settings open above the guide`, JSON.stringify(s));
+    s = await state(p); ok(s.settings && !s.guide && s.done, `${how}: tapping Settings closes the guide like Back (remembered) and opens Settings`, JSON.stringify(s));
     await back(); s = await state(p);
-    ok(!s.settings && s.guide, `${how}: Back closes Settings only, guide stays`, JSON.stringify(s));
-    await back(); s = await state(p);
-    ok(!s.guide && s.done, `${how}: next Back closes the guide (remembered)`, JSON.stringify(s));
+    ok(!s.settings && !s.guide, `${how}: Back closes Settings; the guide does not return`, JSON.stringify(s));
     ok(/\/wizard-os-home\//.test(s.path), `${how}: still inside Wizard`, s.path);
     await back(); s = await state(p);
     ok(/\/wizard-os-home\//.test(s.path) && !s.guide, `${how}: Back at the root stays in Wizard`, JSON.stringify(s));
