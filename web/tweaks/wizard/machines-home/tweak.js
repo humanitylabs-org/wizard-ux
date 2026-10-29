@@ -169,7 +169,11 @@ export default function setup(api) {
   // What the E-to-F meter shows: the owner's pick (one kind only: plan limits or prepaid credit, never a mix), else
   // the default model's service. Every account gets a plain name for the "combines …" line.
   // Nickname first; when the same nickname is used on two services, the service name goes in front so they stay apart.
-  const subName = (s, list = subs()) => { if (s.nick) return list.some(x => x.id !== s.id && x.group !== s.group && x.nick && x.nick.toLowerCase() === s.nick.toLowerCase()) ? `${s.group} ${s.nick}` : s.nick; const same = list.filter(x => x.group === s.group); return same.length > 1 ? `${s.group} ${same.findIndex(x => x.id === s.id) + 1}` : s.group; };
+  const subName = (s, list = subs()) => {
+    const own = x => x.nick || x.auto || '', n = own(s);
+    if (!n) { const same = list.filter(x => x.group === s.group); return same.length > 1 ? `${s.group} ${same.findIndex(x => x.id === s.id) + 1}` : s.group; }
+    return `${s.group} ${n}`;  // the meter mixes services, so the service always leads: "Claude mig", "ChatGPT oscar"
+  };
   function meterPool() {
     const all = subs(), live = all.filter(s => s.left != null && !s.out);
     const picked = Array.isArray(S.meter) ? live.filter(s => S.meter.includes(s.id)) : [];
@@ -266,7 +270,7 @@ export default function setup(api) {
           live.filter(s => s.unit === u).map(s => h('label', { cls: 'mh-meter-opt' },
             h('input', { type: 'checkbox', checked: on.has(s.id), data: { meterId: s.id } }), h('span', { text: subName(s, all) }), h('small', { text: s.money ? `${s.money} left` : `${s.left ?? 0}% left` }))))),
         units.length > 1 ? h('small', { cls: 'mh-meter-note', text: 'Plan limits and prepaid credit are measured differently, so the meter shows one kind at a time.' }) : null,
-        S.meter ? h('button', { type: 'button', cls: 'mh-meter-reset', data: { meterAll: 'default' } }, 'Back to your default') : null) : null);
+        S.meter ? h('button', { type: 'button', cls: 'mh-meter-reset', data: { meterAll: 'default' } }, 'Back to your default') : null) : '');
   }
   // Every account, grouped by service (the gauge's own first): nickname, what is left, Sign out; one Sign in at the end.
   function renderAIList() {
