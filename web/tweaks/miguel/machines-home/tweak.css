@@ -616,3 +616,12 @@ html:is([data-skin$="light"], [data-skin="sepia"]) .mh-root .mh-act-btn.is-fix {
 /* The open Tailscale panel sits above the wires (no line running through its words). */
 .mh-row.is-ts { position: relative; z-index: 2; }
 .mh-row.is-ts .mh-ts-info { background: var(--mh-card-solid) !important; }
+/* Nickname fields: quiet until touched, so the list reads as names, not grey pills. */
+.mh-root.is-settings .mh-nick { background: transparent !important; box-shadow: inset 0 0 0 1px var(--mh-chip-line) !important; color: var(--mh-ink) !important; font-weight: 650; }
+.mh-root.is-settings .mh-nick:focus { box-shadow: inset 0 0 0 1.5px var(--mh-accent) !important; }
+.mh-root.is-settings .mh-ai-list { background: transparent; }
+/* Fuel-meter checkbox at the start of each account row (replaces the separate picker). */
+.mh-root .mh-ai-row { grid-template-columns: 20px 116px 1fr auto; }
+.mh-meter-cb { width: 17px; height: 17px; margin: 0; accent-color: var(--mh-good); cursor: pointer; }
+.mh-ai-head { padding-left: 30px; }
+@container (max-width: 599px) { .mh-root .mh-ai-row { grid-template-columns: 20px 96px 1fr; } .mh-ai-acts { grid-column: 3; } }
