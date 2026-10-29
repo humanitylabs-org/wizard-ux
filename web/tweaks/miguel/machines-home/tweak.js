@@ -172,7 +172,7 @@ export default function setup(api) {
   const subName = (s, list = subs()) => {
     const own = x => x.nick || x.auto || '', n = own(s);
     if (!n) { const same = list.filter(x => x.group === s.group); return same.length > 1 ? `${s.group} ${same.findIndex(x => x.id === s.id) + 1}` : s.group; }
-    return list.some(x => x.id !== s.id && own(x).toLowerCase() === n.toLowerCase()) ? `${s.group} ${n}` : n;
+    return `${s.group} ${n}`;  // the meter mixes services, so the service always leads: "Claude mig", "ChatGPT oscar"
   };
   function meterPool() {
     const all = subs(), live = all.filter(s => s.left != null && !s.out);
