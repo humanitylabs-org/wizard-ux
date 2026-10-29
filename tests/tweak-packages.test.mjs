@@ -245,7 +245,7 @@ test('notification rows in the list: only a holder that asks for list mode turns
 test('chats.js lists notifications among Ready chats only in list mode, in every Ready order', () => {
   const src = read('web/core/chats.js');
   assert.match(src, /const on = !!window\.WosSkinHost\?\.inboxList;/, 'gated on the host list flag');
-  assert.match(src, /const nt = k === 'ready' && !n && !filtered && !AGID \? notes\(\) : null/, 'main unfiltered Ready only');
+  assert.match(src, /const nt = k === 'ready' \? listNotes : null/, 'eligible notifications join Ready');
   assert.match(src, /const top = sec === 'ready' \? bar : ''/, 'only Ready shows the order bar; historical sections retain the same ordering');
   assert.match(src, /return top \+ withNotes\(list, awake, rowFn\) \+ later;/, 'Newest, Oldest and Priority interleave');
   assert.match(src, /if \(awake\.length && !groups\.has\(NOTES_SUBJECT\)\) groups\.set\(NOTES_SUBJECT, \[\]\);/, 'By subject: their own subject');
