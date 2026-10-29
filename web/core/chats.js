@@ -2706,6 +2706,10 @@ window.WizCore.chats = function createChats(H) {
       failedDismiss.disabled = true;
       Promise.resolve(OUTBOX.dismissFailed(failedDismiss.dataset.obdismissfailed)).then(ok => {
         if (!ok) failedDismiss.disabled = false;
+        // A pressed desktop list temporarily holds background paints. An explicit
+        // dismissal must update its own pill now, rather than wait for a later poll.
+        const current = H.win(id);
+        if (ok && current && !current.thread) renderChatList(current, elOf(id));
         H.toast(ok ? '✓' : '!', ok ? 'Dismissed · original kept in Unsent messages' : 'Could not save dismissal · original kept', 2400);
       }).catch(() => { failedDismiss.disabled = false; H.toast('!', 'Could not save dismissal · original kept', 2400); });
       return true;
