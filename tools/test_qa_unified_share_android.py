@@ -2,9 +2,11 @@
 """Small controller unit tests; no SDK, builds, browser or emulator is started."""
 import hashlib
 import importlib.util
+import inspect
 import io
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -428,6 +430,39 @@ class ControllerTest(unittest.TestCase):
                 runner.require_build(0, build, cfg, altered, [])
         with self.assertRaisesRegex(RuntimeError, 'source identity mismatch'):
             runner.require_build(0, dict(build, source_revision='wrong'), cfg, counts, [])
+
+    def test_full_native_fix_requires_all_tests_and_named_custody_regressions(self):
+        with tempfile.TemporaryDirectory(prefix='native-fix-junit-', dir=os.environ['TMPDIR']) as d:
+            root = Path(d)
+            path = root / 'source/android/app/build/test-results/testDebugUnitTest/TEST-ai.wizards.os.share.UnifiedShareStoreTest.xml'
+            path.parent.mkdir(parents=True)
+            source = (Path(__file__).resolve().parents[1] / 'android/app/src/test/java/ai/wizards/os/share/UnifiedShareStoreTest.java').read_text()
+            names = re.findall(r'@Test public void (\w+)\(', source)
+            self.assertEqual(len(names), 6)
+            xml = '<testsuite>' + ''.join('<testcase name="%s"/>' % n for n in names) + '</testsuite>'
+            path.write_text(xml)
+            good = dict(tests=384, failures=0, errors=0, skipped=0)
+            runner.require_full_native_fix_junit(root, good)
+            for counts in (dict(good, tests=381), dict(good, skipped=1), dict(good, failures=1), dict(good, errors=1)):
+                with self.assertRaisesRegex(RuntimeError, 'Full native-fix JUnit mismatch'):
+                    runner.require_full_native_fix_junit(root, counts)
+            path.write_text(xml.replace('<testcase name="%s"/>' % names[0], ''))
+            with self.assertRaisesRegex(RuntimeError, 'custody regression cases missing'):
+                runner.require_full_native_fix_junit(root, good)
+            path.write_text(xml.replace('</testsuite>', '<testcase name="%s"/></testsuite>' % names[0]))
+            with self.assertRaisesRegex(RuntimeError, 'custody regression cases missing'):
+                runner.require_full_native_fix_junit(root, good)
+
+    def test_native_promotion_uses_atomic_directory_custody_not_selinux_denied_links(self):
+        base = Path(__file__).resolve().parents[1] / 'android/app/src/main/java/ai/wizards/os/share'
+        store = (base / 'ShareStore.java').read_text()
+        queue = (base / 'ShareQueue.java').read_text()
+        self.assertNotIn('Files.createLink(', store + queue)
+        self.assertNotIn('Files.copy(', store + queue)
+        self.assertIn('queue.promote(new File(root, id), it)', store)
+        self.assertIn('Files.move(staged.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE)', queue)
+        self.assertLess(queue.index('saveIn(staged, item)'), queue.index('Files.move(staged.toPath()'))
+        self.assertIn('require_full_native_fix_junit(root, report[\'junit\'])', inspect.getsource(runner.main))
 
     # Exact UIAutomator capture from the failed external-boilerplate phase.
     # Embedded to preserve the sealed QA-only source membership; no SDK needed.

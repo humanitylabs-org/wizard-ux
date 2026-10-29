@@ -271,6 +271,25 @@ def require_build(returncode, build, cfg, junit, failures):
         raise RuntimeError('JUnit did not pass: ' + json.dumps(junit, sort_keys=True))
 
 
+def require_full_native_fix_junit(root, junit):
+    """A product storage change requires a fresh complete suite plus the added custody regressions."""
+    if junit != dict(tests=384, failures=0, errors=0, skipped=0):
+        raise RuntimeError('Full native-fix JUnit mismatch: ' + json.dumps(junit, sort_keys=True))
+    path = root / 'source/android/app/build/test-results/testDebugUnitTest/TEST-ai.wizards.os.share.UnifiedShareStoreTest.xml'
+    tree = ET.parse(path).getroot()
+    names = {node.get('name') for node in tree.findall('testcase')}
+    expected = {
+        'keptFileAgentExistingChatAndCommentSurviveStagingDeletionAndQueueReload',
+        'reorderedSelectionAndLegacyQueueFilesResolveToTheirActualBytes',
+        'failedAtomicPromotionPreservesEveryOriginalAndRetriesWithoutDuplicate',
+        'failedManifestSaveDoesNotLoseStagedBytesOrPublishAnItem',
+        'removedAllAndUnknownOrDuplicateIndexesAreRefusedWithoutLosingOriginals',
+        'malformedShareIdAndAgentAreNotNormalizedIntoAValidTarget',
+    }
+    if names != expected or len(tree.findall('testcase')) != len(expected):
+        raise RuntimeError('Native custody regression cases missing or duplicated')
+
+
 def native_bounds(xml, text):
     tree = ET.fromstring(xml)
     for node in tree.iter('node'):
@@ -1152,6 +1171,7 @@ def main():
             report['junit'], report['junit_failures'], report['junit_xml_sha256'] = collect_junit(root)
             save()  # Preserve the actual failed test before refusing the build.
             require_build(result.returncode, build, cfg, report['junit'], report['junit_failures'])
+            require_full_native_fix_junit(root, report['junit'])
             verify_source(root / 'source', cfg['files'])
             apk = root / 'source' / APK_PATH
             artifact = next(x for x in build['artifacts'] if x['path'] == APK_PATH)

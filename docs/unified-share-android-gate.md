@@ -491,3 +491,46 @@ unstarted/cancelled receipt may reuse identical inputs under coordinator policy.
 A green receipt is **PASS_SYNTHETIC_ANDROID_DEBUG_ONLY**, not owner-authenticated
 release proof, correct-key upgrade proof, physical-device QA or permission to
 publish. Preserve the prior 26-check `PASS_SYNTHETIC_WEB_ONLY` evidence separately.
+
+## Proven native queue failure: atomic phone-private ownership
+
+The executed `a7e4cd55f223` diagnostic (`heavy_4459ca18b6184b69995325d15c997982`)
+reached the real `device.shares.queue` request/reply and caught the native refusal.
+Its retained `android-evidence/logcat.txt` at **10-29 10:04:52.912** records
+`avc: denied { link }`, `name="0.bin"`, `scontext=u:r:untrusted_app`,
+`tcontext=u:object_r:app_data_file`, `app=ai.wizards.os.qa`. This is the actual
+SELinux denial for `ShareStore.enqueue`'s `Files.createLink`, not an origin,
+fixture, network or Send-touch hypothesis. Original staged metadata/bytes
+survived; no queue manifest or share/upload HTTP write existed.
+
+REUSE the existing ShareQueue/ShareService/ShareClient resumable pipeline.
+EXTEND queue ownership with `ShareQueue.promote`: fsync the ready manifest in
+staging, then publish the entire directory with `Files.move(..., ATOMIC_MOVE)`.
+No hard links, file-size-dependent copy, destructive fallback or second outbox.
+Before the rename a failure/crash leaves original bytes and metadata in staging;
+a retry can replace the unpublished manifest. After it the queue owns both
+manifest and bytes and the deterministic queue id deduplicates lost replies.
+The kept upload list records each original `storageIndex`, so selection/reordering
+cannot upload another file; old queue manifests keep their index-based layout.
+Excluded bytes are never in the upload list and leave with queue copy cleanup.
+Staging prune/delete serialize with enqueue, and queue reads serialize with the
+atomic promotion. The staging day-old prune cannot reach admitted bytes.
+
+Three added JVM tests plus stronger existing assertions cover atomic ownership,
+kept/reordered/legacy byte identity after reload, excluded-file cleanup, conflict
+and real directory-rename failure without data loss, pre-rename crash checkpoint,
+manifest-save failure, retry and duplicate refusal. **The fresh full-build gate
+requires 384 JUnit passes, zero failures/errors/skips, and all six named native
+custody cases.** Controller-only tests check those count/name refusal paths and
+forbid reintroducing `Files.createLink`/`Files.copy`; they are not JVM or native
+execution evidence.
+
+Because product Android source changed, prepare a new full source archive,
+worker/config/runner seal and debug compile with `:app:testDebugUnitTest
+:app:assembleDebug`. Do **not** use `--reuse-build` or the known-failing
+`0dc7751e...` APK. Keep every previous log/APK/JUnit/evidence file untouched and
+mark the executed a7e4 stage failed. Run all existing emulator phases and bounded
+bridge/error/custody diagnostics unchanged. Parent submission retains the scoped
+`sg kvm -c 'exec ...'` wrapper and inherited lease FD; no service changes or
+independent child admission. Recheck **200 GiB reserve plus a full-build budget
+and emulator budget**, not the earlier QA-only 3 GiB budget, before admission.
