@@ -139,6 +139,9 @@
     card.classList.toggle('wide', step === 'ai' && !!provider);
     el.classList.toggle('wl-peek', step === 'look');
     card.innerHTML = step === 'ai' ? paintAI() : step === 'look' ? paintLook() : paintHello();
+    // Escape inside the provider's own page (same origin) still steps back; a cross-origin page keeps the Back button.
+    const fr = card.querySelector('.wl-frame iframe');
+    if (fr) fr.addEventListener('load', () => { try { fr.contentDocument.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); back(); } }, true); } catch (e) {} });
     if (focus) requestAnimationFrame(() => (card.querySelector('textarea') || card.querySelector('h2'))?.focus({ preventScroll: true }));
   }
 

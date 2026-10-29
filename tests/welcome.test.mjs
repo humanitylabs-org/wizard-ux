@@ -98,3 +98,7 @@ test('Welcome: works without AbortSignal.timeout; a late thread open never pulls
 test('Welcome: a stale install completion never takes over a reopened Welcome', () => {
   assert.match(read('web/core/welcome.js'), /if \(el !== mine \|\| installing !== id\) return; installing = ''; if \(step === 'ai'\)/);
 });
+
+test('Welcome: Escape inside the embedded sign-in page steps back', () => {
+  assert.match(read('web/core/welcome.js'), /fr\.contentDocument\.addEventListener\('keydown', e => \{ if \(e\.key === 'Escape'\) \{ e\.preventDefault\(\); back\(\); \} \}, true\)/);
+});
