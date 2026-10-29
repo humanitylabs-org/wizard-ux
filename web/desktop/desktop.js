@@ -2364,7 +2364,9 @@
       if (v === 'home') return goHome();
       if (v === 'apps') return openPicker();
       if (v === 'install') {
-        openApp(APP['app-store']);
+        // The Store window must exist now to receive the link; the Store needs no setup check of its own.
+        window.WosAppSetup?.close(); // an earlier app's pending check or sheet must not reopen it over the Store
+        openApp(APP['app-store'], { setupChecked: true });
         const w=findWin(w=>w.appId==='app-store');
         return C.deeplink.installInFrame(w && winEl(w.id)?.querySelector('iframe'),installQuery);
       }

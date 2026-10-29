@@ -21,12 +21,13 @@ try {for(const shell of ['phone','desktop']){
    const file=path.join(__dirname,'../web',u.pathname.slice('/wizard-os-home/'.length)||'index.html');
    if(fs.existsSync(file)&&fs.statSync(file).isFile())return r.fulfill({contentType:file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.html')?'text/html':'application/octet-stream',body:fs.readFileSync(file)});
   }
+  if(u.pathname==='/wizard/v1/ui-preferences')return r.fulfill({json:{launcher:{},migrations:{'launcher-seed-v1':true}}});
   if(u.pathname.endsWith('/v1/apps'))return r.fulfill({json:{apps:[]}});
   return r.fulfill({json:{sessions:[],agents:[],apps:[],connected:false}});
  });
  const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));
  await p.goto('https://shell.test/wizard-os-home/'+(shell==='desktop'?'desktop.html':'')+'?view=install&repo=o/r&from=Jane');
- await p.waitForFunction(()=>Array.from(document.querySelectorAll('iframe')).some(f=>f.src.includes('/store/index.html'))).catch(e=>{console.error(shell,errors);throw e;});
+ await p.waitForFunction(()=>Array.from(document.querySelectorAll('iframe')).some(f=>{try{return f.src.includes('/store/index.html')&&!!f.contentWindow.__store;}catch{return false;}})).catch(e=>{console.error(shell,errors);throw e;});
  let f=p.frames().find(f=>f.url().includes('/store/index.html'));await f.locator('[data-link-install]').waitFor();
  assert.match(await f.locator('#sheet').innerText(),/Shared with you by Jane/);await f.locator('#sheet [data-back]').click();assert.ok(await f.locator('#discover').isVisible());
  // A second link reuses the same Store frame, preserves its prior screen, and invalid input never blanks.
