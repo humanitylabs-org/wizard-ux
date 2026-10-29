@@ -373,6 +373,7 @@
   }
   function openThread(sid, opts = {}) {
     if (!sid) return;
+    if (Object.prototype.hasOwnProperty.call(opts, 'agent')) LIVE?.pinAgent?.(sid, opts.agent || '');
     // Any agent's thread opens in the main Chats window, without changing its list Focus.
     const mine = mainChats;
     let w = !opts.fresh && (ws[cur].wins.map(id => W[id]).find(mine) || findWin(mine));
@@ -1037,7 +1038,7 @@
     const ready = G.ready || [], working = G.working || [];
     const seen = new Set(), actionable = [...L.needs, ...ready].filter(s => s?.id && !seen.has(s.id) && seen.add(s.id));
     const readyCount = ready.length + (window.WosBell?.readyCount?.() || 0);
-    const rows = list => list.slice(0, 6).map(s => `<button class="home-row" data-thread="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span><span class="nm">${esc(s.title)}</span><time>${esc(ago(LIVE.cardAt(s)))}</time></button>`).join('') || '<div class="home-none">Nothing here.</div>';
+    const rows = list => list.slice(0, 6).map(s => `<button class="home-row" data-thread="${esc(s.id)}" data-agent="${esc(LIVE.ownerOf?.(s) || '')}"><span class="emo">${emoOf(s.id)}</span><span class="nm">${esc(s.title)}</span><time>${esc(ago(LIVE.cardAt(s)))}</time></button>`).join('') || '<div class="home-none">Nothing here.</div>';
     const quick = (window.WizLauncher?.get('desktopQuick') || []).flatMap(id => id === 'wizard' ? [id, ...APPS.filter(a => a.agent).map(a => a.id)] : [id]).map(id => APP[id]).filter(Boolean);
     return `<div class="home-in"><div data-slot="home-main" hidden></div>
       <nav class="home-tools" aria-label="System and settings"><button data-home-settings>Settings</button></nav>
@@ -1057,7 +1058,7 @@
     if (e.target.closest('[data-home-unsent]')) return openSettings('unsent');
     const ha = e.target.closest('.home [data-home-act]')?.dataset.homeAct;
     if (ha) { openApp(APP.wizard); const w = ws[cur].wins.map(id => W[id]).find(x => x?.app === 'chats' && !x.agent); if (w) { if (ha === 'working') CHATS.setFilter(w, 'working'); else CHATS.clearFilter?.(w); } return; }
-    const hr = e.target.closest('.home [data-thread]'); if (hr) return openThread(hr.dataset.thread);
+    const hr = e.target.closest('.home [data-thread]'); if (hr) return openThread(hr.dataset.thread, { agent: hr.dataset.agent || '' });
     const ap = e.target.closest('.home [data-app]'); if (ap) return openApp(APP[ap.dataset.app]);
   });
 

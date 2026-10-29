@@ -929,7 +929,11 @@
     statusFor(agent = '') { return otherAgent(agent) ? (this.agentStatus[agent] || { ok: false, error: '' }) : { ok: this.ok, error: this.error, cached: this.cached, cachedAt: this.cachedAt, loading: !!this.loading, at: this.at || 0 }; },
     // The non-default agent a thread is pinned to, or '' for the main agent.
     agentOf(id) { if (!id || id === '__new__') return ''; const a = AGENT_OF.get(id); return a && otherAgent(a) ? a : ''; },
-    pinAgent(id, agent) { if (id && agent && otherAgent(agent)) AGENT_OF.set(id, agent); },
+    pinAgent(id, agent) {
+      if (!id) return;
+      if (agent && otherAgent(agent)) AGENT_OF.set(id, agent);
+      else AGENT_OF.delete(id);
+    },
     markSeen(ids) {
       const all = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
       const ts = Date.now();

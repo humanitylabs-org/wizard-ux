@@ -1406,7 +1406,7 @@
     const W0 = LIVE && LIVE.ok ? (LIVE.workGroups().working || []) : [], working = W0.length;
     const seen = new Set();
     const homeThreads = [...L.needs, ...RD].filter(s => s?.id && !seen.has(s.id) && seen.add(s.id)).slice(0, 3);
-    const threadRows = homeThreads.map(s => `<button class="home-thread" data-thread="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span><span class="nm">${esc(s.title)}</span><time>${esc(ago(LIVE.cardAt(s)))}</time></button>`).join('');
+    const threadRows = homeThreads.map(s => `<button class="home-thread" data-thread="${esc(s.id)}" data-agent="${esc(LIVE.ownerOf?.(s) || '')}"><span class="emo">${emoOf(s.id)}</span><span class="nm">${esc(s.title)}</span><time>${esc(ago(LIVE.cardAt(s)))}</time></button>`).join('');
     const now = new Date();
     return `<div class="home"><div data-slot="home-main" hidden></div><nav class="home-tools" aria-label="System and settings"><button class="home-system home-agents" data-act="agents" aria-label="Agents" title="Agents"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.3 2.8-5.2 5.5-5.2s4.9 1.9 5.5 5.2"/><circle cx="17" cy="9.5" r="2.4"/><path d="M15.6 14.6c2.6-.3 4.4 1.4 4.9 4.4"/></svg></button>${gearBtn()}</nav>
       <div class="home-top">
@@ -1664,6 +1664,7 @@
   /* Open a real thread: in a Chats window on this desk, else any Chats window, else a new one here. */
   function openWizardThread(id, opts = {}) {
     if (!id) return;
+    if (Object.prototype.hasOwnProperty.call(opts, 'agent')) LIVE?.pinAgent?.(id, opts.agent || '');
     // Any agent's thread opens in the main Chats window, without changing its list Focus.
     const mine = x => mainChats(W[x]);
     let wid = desks[idx].wins.find(mine);
@@ -1708,7 +1709,7 @@
     const pick = e.target.closest('.new-desk [data-app]');
     if (pick) { tapOpen(APP[pick.dataset.app], pick); return; }
     const thread = e.target.closest('.home [data-thread]');
-    if (thread) return openWizardThread(thread.dataset.thread);
+    if (thread) return openWizardThread(thread.dataset.thread, { agent: thread.dataset.agent || '' });
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (act === 'inbox') return openSheet('inbox');
     if (act === 'settings') return openSettings(false);

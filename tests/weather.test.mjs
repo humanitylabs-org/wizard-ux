@@ -37,14 +37,15 @@ test('weather reader bounds its provider read, caches success and returns stale 
   now += 21_600_001; await assert.rejects(read(), /unavailable/i, 'expired data is not presented indefinitely');
 });
 
-test('same-origin weather route is private, read-only and reports unconfigured quietly', async () => {
-  const server = http.createServer(createResourceHandler(async () => ({}), null, null, async () => ({ configured: false })));
+test('same-origin weather route is owner-only, read-only and reports unconfigured quietly', async () => {
+  const server = http.createServer(createResourceHandler(async () => ({}), null, null, async () => ({ configured: false }), 'qa-owner'));
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}/api/system/weather`;
   try {
     assert.equal((await fetch(base)).status, 403);
-    assert.equal((await fetch(base, { method: 'POST', headers: { 'tailscale-user-login': 'qa' } })).status, 405);
-    const result = await fetch(base, { headers: { 'tailscale-user-login': 'qa' } });
+    assert.equal((await fetch(base, { headers: { 'tailscale-user-login': 'qa-other' } })).status, 403, 'another Tailnet user is not the owner');
+    assert.equal((await fetch(base, { method: 'POST', headers: { 'tailscale-user-login': 'qa-owner' } })).status, 405);
+    const result = await fetch(base, { headers: { 'tailscale-user-login': 'qa-owner' } });
     assert.equal(result.status, 200); assert.deepEqual(await result.json(), { configured: false });
   } finally { await new Promise(resolve => server.close(resolve)); }
 });
@@ -57,20 +58,20 @@ test('private gateway admits the exact weather route through the existing authen
   assert.match(caddy, /reverse_proxy 127\.0\.0\.1:9582/);
 });
 
-function weatherFixture(responses) {
+function weatherFixture(responses, DateImpl = Date) {
   const hosts = [], events = [];
   const document = { hidden: false, querySelectorAll: q => q === '[data-home-weather]' ? hosts : [] };
   const window = { __wos: { idx: 0, desks: [{ wins: [] }] }, dispatchEvent: e => events.push(e.type) };
   let i = 0;
   const timeout = (fn, ms) => { const id = setTimeout(fn, ms); id.unref?.(); return id; };
-  const context = { window, document, Event, AbortController, setTimeout: timeout, clearTimeout, queueMicrotask, Date,
+  const context = { window, document, Event, AbortController, setTimeout: timeout, clearTimeout, queueMicrotask, Date: DateImpl,
     fetch: async () => responses[Math.min(i++, responses.length - 1)], console };
   vm.runInNewContext(source, context);
   return { weather: window.WosWeather, hosts, events };
 }
 
 test('shared weather UI is absent when unconfigured and escapes configured labels', async () => {
-  const f = weatherFixture([new Response(JSON.stringify({ configured: false })), new Response(JSON.stringify({ configured: true, label: configured.label, condition: 'Partly cloudy', temperatureC: 12, windKph: 8, fetchedAt: '2026-10-29T18:00:00Z', stale: false }))]);
+  const f = weatherFixture([new Response(JSON.stringify({ configured: false })), new Response(JSON.stringify({ configured: true, label: configured.label, condition: 'Partly cloudy', temperatureC: 12, windKph: 8, fetchedAt: new Date().toISOString(), stale: false }))]);
   await f.weather.update(true); assert.match(f.weather.home(), /data-home-weather hidden/);
   await f.weather.update(true); const html = f.weather.home();
   assert.match(html, /North &amp; &lt;Lake&gt;/); assert.doesNotMatch(html, /North & <Lake>/);
@@ -78,10 +79,23 @@ test('shared weather UI is absent when unconfigured and escapes configured label
 });
 
 test('client keeps the last weather quietly stale when a refresh fails', async () => {
-  const ok = new Response(JSON.stringify({ configured: true, label: 'Coast', condition: 'Clear', temperatureC: 18, windKph: 4, fetchedAt: '2026-10-29T18:00:00Z', stale: false }));
+  const ok = new Response(JSON.stringify({ configured: true, label: 'Coast', condition: 'Clear', temperatureC: 18, windKph: 4, fetchedAt: new Date().toISOString(), stale: false }));
   const bad = new Response('{}', { status: 503 });
   const f = weatherFixture([ok, bad]);
   await f.weather.update(true); assert.match(f.weather.home(), /Clear/);
   await f.weather.update(true); assert.match(f.weather.home(), /home-weather-stale/);
   assert.equal(f.weather.state.error, 'Unavailable');
+});
+
+test('client hides a last-known reading after the six-hour stale window', async () => {
+  let now = Date.parse('2026-10-29T18:00:00Z');
+  class FakeDate extends Date { static now() { return now; } }
+  const ok = new Response(JSON.stringify({ configured: true, label: 'Coast', condition: 'Clear', temperatureC: 18, windKph: 4, fetchedAt: new Date(now).toISOString(), stale: false }));
+  const bad = new Response('{}', { status: 503 });
+  const f = weatherFixture([ok, bad], FakeDate);
+  await f.weather.update(true); assert.match(f.weather.home(), /Clear/);
+  now += 6 * 60 * 60_000 + 1;
+  await f.weather.update(true);
+  assert.match(f.weather.home(), /data-home-weather hidden/);
+  assert.equal(f.weather.state.value, null);
 });

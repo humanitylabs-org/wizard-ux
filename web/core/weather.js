@@ -3,9 +3,15 @@
   'use strict';
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const finite = value => value !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
+  const STALE_MAX_MS = 6 * 60 * 60_000;
   const S = { value: null, configured: null, at: 0, error: '', busy: null, timer: null, controller: null };
   const desktopHome = () => !!window.__wux && (window.__wux.homeOpen || !window.__wux.ws?.[window.__wux.cur]?.wins?.length);
   const active = () => !document.hidden && (desktopHome() || (window.__wos?.idx === 0 && !window.__wos?.sheet && !window.__wos?.desks?.[0]?.wins?.length));
+  const expired = (value, now = Date.now()) => {
+    const fetchedAt = Date.parse(value?.fetchedAt || '');
+    const base = Number.isFinite(fetchedAt) ? fetchedAt : S.at;
+    return !base || now - base > STALE_MAX_MS;
+  };
   function normalize(json) {
     if (json?.configured === false) return { configured: false, value: null };
     const temperatureC = finite(json?.temperatureC), windKph = finite(json?.windKph);
@@ -18,7 +24,7 @@
   }
   function content() {
     const value = S.value;
-    if (!value) return '';
+    if (!value || expired(value)) return '';
     const wind = value.windKph == null ? '' : `<span class="home-weather-wind">Wind ${esc(value.windKph)} km/h</span>`;
     const stale = value.stale || !!S.error;
     const label = `Weather in ${value.label}: ${value.condition}, ${value.temperatureC} degrees Celsius${value.windKph == null ? '' : `, wind ${value.windKph} kilometres per hour`}${stale ? ', last known reading' : ''}`;
@@ -47,7 +53,12 @@
       .then(json => {
         const next = normalize(json); S.configured = next.configured; S.value = next.value; S.error = ''; S.at = Date.now(); paint();
       })
-      .catch(() => { S.error = 'Unavailable'; if (S.value) S.value = { ...S.value, stale: true }; paint(); })
+      .catch(() => {
+        S.error = 'Unavailable';
+        if (S.value && !expired(S.value)) S.value = { ...S.value, stale: true };
+        else S.value = null;
+        paint();
+      })
       .finally(() => { clearTimeout(timeout); S.busy = null; S.controller = null; schedule(); window.dispatchEvent?.(new Event('wos:weather')); });
     return S.busy;
   }
