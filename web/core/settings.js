@@ -532,7 +532,9 @@
       } catch (_) {}
       return false;
     },
-    html: () => `<div class="st-embed" data-st-connections><iframe src="${esc(CONNECTIONS)}" title="Connections"></iframe></div>` });
+    // ?embed=settings: the view drops its own title, sheet and canvas and takes the shell's skin (Appearance v1), so the
+    // page head is the one title and the content sits straight on the Settings page, with no box around it.
+    html: () => `<div class="st-embed" data-st-connections><iframe src="${esc(CONNECTIONS)}?embed=settings" title="Connections"></iframe></div>` });
   register({ id: 'chats-default', page: 'chats', aliases: ['chats-default'], html(ctx) {
     const host = chatsHost(), apps = host?.installed() || [{ id: 'wizard-chats' }], current = host?.defaultId() || 'wizard-chats';
     apps.sort((a, b) => (b.id === 'wizard-chats') - (a.id === 'wizard-chats'));

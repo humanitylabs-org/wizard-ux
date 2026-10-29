@@ -54,7 +54,7 @@ test('Connections page hosts the App Manager view itself, and the old app id and
   for (const alias of ['connections', 'app-connections']) {
     h.view.focus(); assert.equal(h.s.WosSettings.route(alias, h.view.focus), true); assert.equal(h.view.page, 'connections', alias);
   }
-  assert.match(h.root.innerHTML, /<section data-settings-feature="connections"><div class="st-embed" data-st-connections><iframe src="\/wizard-os-home\/store-install\/_connections\/" title="Connections"><\/iframe><\/div><\/section>/);
+  assert.match(h.root.innerHTML, /<section data-settings-feature="connections"><div class="st-embed" data-st-connections><iframe src="\/wizard-os-home\/store-install\/_connections\/\?embed=settings" title="Connections"><\/iframe><\/div><\/section>/);
   assert.match(h.root.innerHTML, /<h3 tabindex="-1">Connections<\/h3>/);
   const desktop = harness({ shell: 'desktop' }); await tick(); desktop.view.focus('connections');
   assert.match(desktop.root.innerHTML, /st-desktop[^]*data-st-connections><iframe/);
@@ -93,4 +93,21 @@ test('Back inside Connections closes its pop-up, then leaves the map, then leave
   assert.equal(h.view.back(), true); assert.equal(h.frameWin.overlays, 0); assert.equal(h.view.page, 'connections', 'pop-up first');
   assert.equal(h.view.back(), true); assert.equal(h.frameWin.clicks, 1); assert.equal(h.view.page, 'connections', 'then map to list');
   assert.equal(h.view.back(), true); assert.equal(h.view.page, '', 'then out of the page, never out of Settings in one go');
+});
+
+test('Connections sits flush in the Settings page: the view in its Settings embed mode, no box around it', () => {
+  const css = fs.readFileSync(new URL('../web/core/settings.css', import.meta.url), 'utf8');
+  const rule = css.match(/^\.st-embed \{([^}]*)\}/m)?.[1] || '';
+  assert.ok(rule.includes('position: relative'), 'keeps its own box for the desktop .wbody iframe rule');
+  assert.doesNotMatch(rule, /border-radius|background|border:|box-shadow/, 'no framed box around the view');
+  assert.match(source, /\$\{esc\(CONNECTIONS\)\}\?embed=settings/, 'asks the App Manager for its Settings embed mode');
+  assert.match(source, /fetch\(CONNECTIONS,/, 'availability still asks the plain page');
+  // A borderless skin frame paints an app window with the app's canvas; Settings is not an app window.
+  const frame = fs.readFileSync(new URL('../web/core/skin-frame.css', import.meta.url), 'utf8');
+  for (const shell of ['', '[data-shell="desktop"]']) {
+    const sel = `html${shell}[data-skin-frame="borderless"] .win:has(> .wbody .st-embed iframe):not(.wz-themed)`;
+    const app = frame.indexOf(`html${shell}[data-skin-frame="borderless"] .win:has(> .wbody iframe):not(.wz-themed)`), at = frame.indexOf(sel);
+    assert.ok(at > app && app >= 0, `Settings keeps the skin material after the app-canvas rule (${shell || 'phone'})`);
+    assert.match(frame.slice(at), /^[^{]*\{ background: var\(--sk-win\); \}/);
+  }
 });
