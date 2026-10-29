@@ -197,7 +197,8 @@ export default function setup(api) {
   const wizMenu = h('div', { cls: 'mh-wiz-menu', role: 'menu', hidden: true });
   const wizBox = h('div', { cls: 'mh-root is-topbar is-wiz' }, wizBtn, wizMenu);
   const barBox = h('div', { cls: 'mh-root is-topbar' }, glance);
-  root.append(h('div', { cls: 'mh-body' }, ...(desk ? [] : [homeWs, glance])));
+  // Phone: the same workspace dropdown, at the top-left of Home; the widget below it.
+  root.append(h('div', { cls: 'mh-body' }, ...(desk ? [] : [h('div', { cls: 'mh-phone-top' }, wizBox), glance])));
   // Settings sections: each its own .mh-root so the same styles and size rules apply there.
   const sec = (cls, ...kids) => h('div', { cls: 'mh-root is-settings ' + cls }, ...kids);
   const netBox = h('div', { cls: 'mh-net' }), storeBox = h('div', { cls: 'mh-store' });
@@ -220,7 +221,7 @@ export default function setup(api) {
         h('span', { text: `${g.name} isn’t running Wizard yet, so there’s nothing to switch to.` }),
         h('span', { text: 'Once it is, switching swaps everything (apps, chats, agents) for that workspace’s own. The apps will switch in place; a browser opens its address.' }),
         h('button', { type: 'button', cls: 'is-add', data: { ws: g.id, go: 'overview' } }, `See what’s known about ${g.name} in Settings ›`)) : null,
-      h('button', { type: 'button', cls: 'is-add', role: 'menuitem', data: { act: 'add-managed' } }, '+ Add a workspace')] : []));
+      h('button', { type: 'button', cls: 'is-add', role: 'menuitem', data: { act: 'add-managed' } }, '+ Add a workspace')].filter(Boolean) : []));
   }
 
   function fillTabs(bar) {
@@ -351,8 +352,8 @@ export default function setup(api) {
     fix: () => { const open = openOnes(), names = open.map(m => m.name).join(' and ');
       return [`Close ${names} to the internet so ${open.length === 1 ? 'it is' : 'they are'} reachable only over Tailscale, like Main.`, '',
         ...open.map(m => `${m.name}: ${(m.access.details || []).join('; ')}`), '',
-        'For each one: test its ports from another machine first, apply the fix with a safety net that undoes itself if access is lost, test again from outside, then update the map. Ask me before anything that needs my password, and tell me if a fix would cut off something I use (like AnyDesk).'].join('\n'); },
-    oneway: () => 'Make my Tailscale one-way: my phone and Mac can reach my machines, my machines can reach each other (sync and work), but my machines cannot reach my phone or Mac. Show me the exact rule change first, keep a way back, and don\u2019t apply it until I say so.',
+        'For each one: test its ports from another machine first, apply the fix with a safety net that undoes itself if access is lost, test again from outside, then update the map. Ask me before anything that needs my password, and tell me if a fix would cut off something I use (like a remote-desktop app).'].join('\n'); },
+    oneway: () => 'Make my Tailscale one-way: my own devices (phone, laptop) can reach my machines, my machines can reach each other (sync and work), but my machines cannot reach my own devices. Show me the exact rule change first, keep a way back, and don\u2019t apply it until I say so.',
     check: () => 'Check again how open each of my machines is from the internet: test their ports from another machine over IPv4 and IPv6, then update the shields on my map. Don\u2019t change anything.',
   };
   // Tailscale is the network, not a device: a dashed outline around everything on it, with one small tab on its edge.
@@ -367,7 +368,7 @@ export default function setup(api) {
       h('span', { cls: 'mh-ts-list' }, all.map(m => { const [w, x] = word(m); return h('span', { cls: 'mh-ts-row', 'data-x': x }, h('i'), h('b', { text: m.name }), h('span', { text: w })); })),
       h('span', { text: 'Who can reach whom: right now any device on your Tailscale can reach any other, both ways (Tailscale’s starting rule).' }),
       h('span', { cls: 'mh-act-btns' },
-        [bad.length ? ['fix', `Close ${bad.length === 1 ? 'it' : 'them'}`, 'Tailscale becomes the only way in'] : null, ['oneway', 'Make it one-way', 'phone and Mac reach machines, not back'], ['check', 'Check again', 'tests every machine from outside']]
+        [bad.length ? ['fix', `Close ${bad.length === 1 ? 'it' : 'them'}`, 'Tailscale becomes the only way in'] : null, ['oneway', 'Make it one-way', 'your devices reach machines, not back'], ['check', 'Check again', 'tests every machine from outside']]
           .filter(Boolean).map(([id, text, note]) => h('button', { type: 'button', cls: 'mh-act-btn' + (id === 'fix' ? ' is-fix' : ''), data: { tsAsk: id } }, h('b', { text }), h('small', { text: note })))));
   }
   function paintTsTab() {
@@ -543,7 +544,7 @@ export default function setup(api) {
       b.firstElementChild?.classList.toggle('is-up', S.bars);
     }
   };
-  for (const el of [root, barBox, wizBox, secMap, secAI, secNet, secStore]) api.listen(el, 'click', onTap);
+  for (const el of [root, barBox, ...(desk ? [wizBox] : []), secMap, secAI, secNet, secStore]) api.listen(el, 'click', onTap);
   api.listen(secAI, 'input', e => {
     const id = e.target?.dataset?.nick; if (!id) return;
     const v = String(e.target.value || '').trim().slice(0, 24);
@@ -561,7 +562,7 @@ export default function setup(api) {
       (S.backup?.standby?.machines || []).map(x => [x.id, x.verdict, (x.checks || []).map(c => c.ok)])]); };
   // Pictures and one short value per part; the words live in the tooltip / screen-reader label and in Settings.
   function renderGlance() {
-    const g = desk ? null : managedOf(S.ws), x = sessions(), fuel = g ? null : gauge(), st = g ? null : storage(), bad = g ? 0 : openOnes().length;  // the bar always shows the connected workspace
+    const g = null, x = sessions(), fuel = g ? null : gauge(), st = g ? null : storage(), bad = g ? 0 : openOnes().length;  // the bar always shows the connected workspace
     const checked = devices().length && devices().every(d => d.access?.exposure === 'tailscale'), nM = g ? 1 : devices().length || 1;
     const sig = JSON.stringify([S.ws, fuel && Math.round(fuel.left / 10), x.working, Math.min(x.ready, 8), S.unread, st && [st.state, st.age == null ? null : agoS(st.age)], bad, checked, nM, backupRunning(), people().length]);
     if (sig === drawn.glance) return; drawn.glance = sig;
