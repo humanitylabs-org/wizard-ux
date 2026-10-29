@@ -344,7 +344,9 @@ body {
 :is(.launcher, .new-desk) .forag:not(.open) .fa-body { display: none; }
 :is(.launcher, .new-desk) .forag .fa-body { padding-top: 6px; }
 .lapp .ic .badge { position: absolute; right: -4px; bottom: -4px; padding: 1px 5px; border-radius: 6px; font-size: 8.5px; font-weight: 900; letter-spacing: .05em; background: #0d0a18; border: 1px solid var(--line-2); color: var(--ink-2); }
-.lapp .nm { font-size: 11.5px; line-height: 1.2; color: var(--ink-2); max-width: 76px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: break-word; hyphens: auto; -webkit-hyphens: auto; }
+.lapp .nm { font-size: 11.5px; line-height: 1.2; color: var(--ink-2); max-width: 76px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+/* A long one-word name hyphenates instead of losing a bare letter to the next line. */
+.lapp .nm { overflow-wrap: break-word; hyphens: auto; -webkit-hyphens: auto; }
 .lrow { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 6px; border-radius: 14px; text-align: left; }
 .lrow:active, .lrow.sel { background: rgba(205, 190, 255, .1); }
 .lrow .ic { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; font-size: 18px; background: linear-gradient(145deg, var(--g1), var(--g2)); flex: 0 0 auto; }

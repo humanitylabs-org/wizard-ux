@@ -204,9 +204,10 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 .pal-app { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 4px 10px; border-radius: 14px; text-align: center; }
 .pal-app .ic { flex: 0 0 auto; width: 56px; height: 56px; border-radius: 18px; display: grid; place-items: center; font-size: 24px; transition: transform 160ms var(--ease), box-shadow 160ms; }
 .pal-app .ic:not(.sgt) { color: #fff; background: linear-gradient(140deg, var(--g1, #3a2a6a), var(--g2, #241a44)); } /* no sigil library: the old gradient chip */
-.pal-app .nm { max-width: 100%; font-size: 12px; line-height: 1.25; font-weight: 560; color: rgba(236, 230, 255, .78); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: break-word; hyphens: auto; -webkit-hyphens: auto; }
+.pal-app .nm { max-width: 100%; font-size: 12px; line-height: 1.25; font-weight: 560; color: rgba(236, 230, 255, .78); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
 /* A long one-word name (Troubleshooter) steps down a size so it fits whole instead of losing its last letter to a second line. */
-.pal-app .nm.long { font-size: 11px; letter-spacing: -.01em; max-width: calc(100% + 8px); margin-inline: -4px; }
+.pal-app .nm { overflow-wrap: break-word; hyphens: auto; -webkit-hyphens: auto; }
+.pal-app .nm.long { font-size: calc(var(--wz-text-sm) * .85); letter-spacing: -.01em; max-width: calc(100% + 8px); margin-inline: -4px; }
 .pal-app:hover { background: rgba(205, 190, 255, .06); }
 .pal-app.sel { background: linear-gradient(140deg, rgba(122, 77, 255, .3), rgba(192, 77, 255, .18)); }
 .pal-app.sel .nm { color: var(--ink); }
