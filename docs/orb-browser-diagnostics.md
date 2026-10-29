@@ -1,0 +1,32 @@
+# Orb browser diagnostics after the two aborted runs
+
+QA only; product revision remains `352b982b0e67cf732a8ccfd186b4ce89fbfb560b`. No renderer, native asset, voice, icon, colour or release change.
+
+## What the second failure does and does not prove
+
+The second result contains 16 records and aborts at baseline/64/command, before candidate. Its guard combines distinct colour count with `whiteFraction < .25`, but saves metrics only **after** the assertion. That failed frame cannot now be reconstructed from its result. Published command in the first result was already 0.2419454770755886: near that aggregate boundary, not proof of a full-white disc. Treat the second failure as unresolved, not as a demonstrated product regression or an accepted false positive.
+
+The old harness fixes only shader uniform `t=8` while letting mode colours, energy, spin, core and audio level interpolate on wall-clock frame histories. Baseline/candidate pixels therefore had unequal inputs. Increasing the `.25` bound would not fix that comparison.
+
+## The visible field pattern and the spatial guard
+
+Re-read the original 1080×2340 screenshot (SHA-256 `a0fd1fff0d77d403a6d144f398b2f142dcc358700241e22d2928fbaf200c4c46`): the orb is a broad white sphere with cyan halo and a tiny cyan central point. The white is not merely a central highlight. An approximate manually located centre (962,1390), white-disc radius 68px, has white fraction **1.0** in both 40–60% and 60–80% sphere-radius annuli; saturation fraction is 0.0 there. The central 0–20% has 0.910958904109589 white and 0.06164383561643835 saturated fraction. These measurements describe that screenshot, not its GPU state or historical cause.
+
+The new metric retains the exact old quarter-white diagnostic; it does **not** replace .25 with a larger convenience threshold. A broad white disc is a majority of >235 RGB pixels in **both** middle annuli (`r=.256–.384`, `.384–.512`, for sphere R=.64). Acceptance also retains >100 distinct inner colours. All five annuli retain colour count, white fraction, saturation and mean brightness; centre saturation is separately named. Synthetic regression fixtures reject a full white disc with tiny cyan centre but allow a modest core that crosses the old quarter-white diagnostic. This geometry is intentionally conservative, not an exhaustive colour-quality oracle. The unchanged matched-input mean-channel delta <3 provides the separate no-redesign gate; parent still visually inspects images.
+
+## One comprehensive, bounded browser run
+
+- **132 required, unique case IDs**, including **40 candidate cases first**. 48 controlled renders, 48 real-clock renders, 6 real-clock idle freezes, 12 restoration records, 2 asleep-restoration records, 16 baseline/candidate comparisons. The second restoration record includes a first reset and then another reset on the **same restored context**.
+- Every case catches its own checks/exceptions and persists progress, so control failures cannot starve candidate or later independent recovery tests. Any failed/missing/duplicate case makes final acceptance fail. Fatal browser launch/transport failures remain fatal and explicit; this is not a retry loop.
+- For every render, raw bottom-up RGBA, correctly flipped PNG, complete GPU inputs, shader hashes/sources, GL error, draw sequence, timestamp, metrics and page screenshot are persisted **before** checks. Failure adds its own last available image/state and stack. Context-loss snapshots explicitly retain the last drawn sample plus current visibility/event state; they do not pretend a lost context painted a new frame.
+- Controlled lane loads the actual unmodified bundled page, pauses product scheduling with its existing `Orb.sleep(true)`, then explicitly writes **all** shader uniforms on its actual linked GL program. Each mode starts from checked-in idle targets, computes a fixed 15×0.1s interpolation history using the product formulas (including level), and uses shader time 8, press 0, R .64, gloss 1. CPU history and GPU float32 values are retained. All actual baseline/candidate GPU inputs must match, mode presets must match, and the original mean-channel delta <3 must pass. No `t` interception or source rewrite.
+- Separate real-clock lane uses the actual `E.state`/`E.level`, actual requestAnimationFrame, untouched uniforms/timers and all eight modes at 64/76 CSS pixels and DPR2. The observed drain barrier still demands zero pending frames and **zero draws** throughout the full 300ms freeze window, with a bounded 6000ms drain deadline.
+- Recovery includes live typing with retained positive GPU audio level and ongoing draws, frozen idle, a second reset of an already-restored context, fallback visibility during loss, truthful candidate `Orb.webgl`, new program identity, recovered galaxy pixels, and asleep loss/restoration followed by wake/refreeze. Published/live controls must reproduce permanent fallback, not silently pass as repaired.
+- Each independent recovery record starts from a fresh actual page, avoiding contamination by an earlier assertion; the repeated-reset record itself deliberately performs both resets on one context.
+- Full inherited unit evidence, both failed-browser results/logs/receipts, source inventories, harness archive/files, Node/Chromium hashes and complete Playwright/core dependency trees are hashed in the new manifest and revalidated after cleanup even on failure. No unit negatives are rerun, rewritten, removed or reclassified.
+
+`tools/rerun-orb-browser.py --preflight` hashes and checks only; it never launches Playwright. The parent admits the staged exact forum/light job with `python3 -B`; the runner also sets `PYTHONDONTWRITEBYTECODE=1`. Browser subprocess budget is 480 seconds, enclosing job budget 600 seconds. Any budget exhaustion is an explicit incomplete failure, not permission to accept a subset. No VPS browser or native build is involved.
+
+## Decision after execution
+
+Inspect the failed command's real-clock PNG, annular metrics, all GPU inputs and unchanged legacy flag. Then inspect its controlled baseline/candidate pair. Identical-input image parity plus galaxy diversity distinguishes a modest bright core from the screenshot's broad white sphere; a broad-disc detection, GL error, mismatch, lost recovery, missing image/case or incomplete run remains a failed gate. This job can settle the harness evidence gap; it cannot establish the original Samsung field trigger or satisfy signed APK/physical-phone acceptance.
