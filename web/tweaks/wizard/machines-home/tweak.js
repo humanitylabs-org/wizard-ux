@@ -110,7 +110,9 @@ export default function setup(api) {
   }
   // Running only on a reading from this visit: a saved copy may be from a backup that has long finished.
   const backupRunning = () => S.backupRead === 'ok' && Array.isArray(S.backup?.active) && S.backup.active.length > 0;
-  const sessions = () => api.data.read.sessions?.counts() || { working: 0, ready: 0 };
+  // Unknown until the chat list has been read once: show that, never a confident empty inbox.
+  const sessions = () => api.data.read.sessions?.counts() || { working: 0, ready: 0, unknown: true };
+  const chatWords = x => x.unknown ? 'chats not loaded yet' : `${x.working} working, ${x.ready} ready${S.unread ? `, ${S.unread} unread` : ''}`;
   const myDevices = () => peers().filter(p => p.group === 'human').map(p => ({ name: p.name === 'localhost' && /ios/i.test(p.os || '') ? 'iPhone' : p.name, online: !!p.online }));
   // The connected Wizard's people (the glance always describes this one, whatever Your network has selected).
   const myPeople = () => [{ id: 'me', name: ownerName(), devices: myDevices() }];
@@ -340,7 +342,7 @@ export default function setup(api) {
       disc.append(h('span', { cls: 'mh-sess', 'aria-hidden': 'true' },
         h('span', { cls: 'mh-dots' }, dots(x.working, 'work'), dots(Math.min(x.ready, cap - Math.min(x.working, cap)), 'ready')),
         S.unread ? h('span', { cls: 'mh-bell' }, bell(), h('b', { text: String(Math.min(S.unread, 99)) })) : null));
-      tap = h('button', { type: 'button', cls: 'mh-tap', data: { open: 'ready' }, 'aria-label': `${m.name}: ${x.working} working, ${x.ready} ready${S.unread ? `, ${S.unread} unread` : ''}. Open your chats` }, disc);
+      tap = h('button', { type: 'button', cls: 'mh-tap', data: { open: 'ready' }, 'aria-label': `${m.name}: ${chatWords(x)}. Open your chats` }, disc);
     } else if (role !== 'main' && !extra.managed) {
       tap = h('button', { type: 'button', cls: 'mh-tap', data: { machine: m.id }, 'aria-expanded': String(S.open.has('m:' + m.id)), 'aria-label': `${m.name}, ${extra.roleText}. Show what it can do` }, disc);
     }
@@ -621,7 +623,7 @@ export default function setup(api) {
   function renderGlance() {
     const g = null, x = sessions(), fuel = g ? null : gauge(), st = g ? null : storage(), bad = g ? 0 : openOnes().length;  // the bar always shows the connected workspace
     const checked = allClear(), nM = g ? 1 : devices().length || 1;
-    const sig = JSON.stringify([S.ws, aiStale(), fuel && Math.round(fuel.left / 10), x.working, Math.min(x.ready, 8), S.unread, st && [st.state, st.age == null ? null : agoS(st.age)], bad, checked, nM, backupRunning(), myPeople().length]);
+    const sig = JSON.stringify([S.ws, aiStale(), fuel && Math.round(fuel.left / 10), !!x.unknown, x.working, Math.min(x.ready, 8), S.unread, st && [st.state, st.age == null ? null : agoS(st.age)], bad, checked, nM, backupRunning(), myPeople().length]);
     if (sig === drawn.glance) return; drawn.glance = sig;
     const dots = (n, cls) => Array.from({ length: n }, () => h('i', { cls }));
     const tile = (go, cls, label, title, viz, val, badge) => h('button', { type: 'button', cls: 'mh-tile ' + cls, data: { go }, title, 'aria-label': `${label}: ${title}` },
@@ -629,7 +631,7 @@ export default function setup(api) {
     const pic = k => h('span', { cls: 'mh-pic' }, art(k));
     const parts = [
       fuel ? h('div', { cls: 'mh-tile is-ai' }, gaugeEl(fuel)) : null,
-      g || desk ? null : tile('chats', 'is-chats', 'Chats', `${x.working} working, ${x.ready} ready${S.unread ? `, ${S.unread} unread` : ''}`,
+      g || desk ? null : tile('chats', 'is-chats', 'Chats', chatWords(x),
         h('span', { cls: 'mh-dots' }, dots(Math.min(x.working, 8), 'work'), dots(Math.min(x.ready, 8 - Math.min(x.working, 8)), 'ready')), null,
         S.unread ? h('span', { cls: 'mh-badge', text: String(Math.min(S.unread, 99)) }) : null),
       st ? tile('storage', 'is-backup', 'Backup', backupRunning() ? 'Backing up now' : st.age == null ? 'No backup yet' : `Backed up ${agoS(st.age)} ago${st.used != null ? ' · ' + gbFmt(st.used) : ''}`,

@@ -337,6 +337,15 @@ test('eleventh review: both Home map packages share one store; a cancelled hold 
   assert.match(desk, /for \(const ev of \['pointerleave', 'pointercancel'\]\) mic\.addEventListener\(ev, \(\) => \{ clearTimeout\(holdT\); held = false; \}\);/);
 });
 
+test('twelfth review: unread chat counts are unknown, not zero', () => {
+  for (const who of ['miguel', 'wizard']) {
+    const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
+    assert.match(src, /counts\(\) \|\| \{ working: 0, ready: 0, unknown: true \}/, who);
+    assert.match(src, /const chatWords = x => x\.unknown \? 'chats not loaded yet'/, who);
+    assert.equal((src.match(/chatWords\(x\)/g) || []).length, 2, who);
+  }
+});
+
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));
