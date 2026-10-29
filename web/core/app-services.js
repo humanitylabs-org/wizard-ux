@@ -217,7 +217,8 @@
           resume() { check(); if (!session.resume) return Promise.reject(fault('Capture resume unavailable')); return session.resume(); } });
       } catch (e) {
         // The permission/native await can outlive this document. Stop and retain the take before rejecting.
-        if (session) { try { await session.stop(); } catch (_) { /* capture service retains retryable custody */ } }
+        // A same-app replacement document that already attached owns the take now: leave it recording.
+        if (session && !session.reattached?.()) { try { await session.stop(); } catch (_) { /* capture service retains retryable custody */ } }
         release();
         if (e.code === 'busy' && e.appId) {
           const owner = apps().find(a => a.id === e.appId);

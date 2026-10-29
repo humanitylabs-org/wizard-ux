@@ -91,6 +91,23 @@ async function rejectStart(p) {
       assert.equal(actual,id);await frame().evaluate(()=>session.cancel());
       assert.equal(await p.evaluate(()=>WizAppCapture.getState().active),false);
     });
+    await test('James-Messenger-reload-during-start-reattached-take-keeps-recording', async ({p,frame}) => {
+      await p.evaluate(()=>{window.bridgeStopped=0;WizAppCapture.configureNative({name:'synthetic-delayed',start:()=>new Promise(resolve=>{window.resolveNative=()=>resolve({nativeId:'fixture-delayed',mime:'audio/aac',stop:async()=>{bridgeStopped++;return{blob:new Blob(['kept'])};},cancel:async()=>{bridgeStopped++;}});})});});
+      await frame().evaluate(()=>{window.startOutcome=WizardApp.capture.start({kind:'audio'}).then(()=> 'unexpected',e=>e.message);});
+      await p.waitForFunction(()=>!!window.resolveNative);
+      await p.evaluate(()=>{const f=document.querySelector('iframe');window.oldCaptureDoc=f.contentDocument;f.contentWindow.location.reload();});
+      await p.waitForFunction(()=>{const f=document.querySelector('iframe');return f.contentDocument!==oldCaptureDoc && f.contentWindow.WizardApp?.hosted;});
+      await frame().evaluate(()=>{window.attached=WizardApp.capture.attach().then(s=>(window.session=s)&&s.id);});
+      await new Promise(r=>setTimeout(r,100));
+      await p.evaluate(()=>resolveNative());
+      const id=await frame().evaluate(()=>attached);
+      assert.ok(id,'replacement document attached the take');
+      await new Promise(r=>setTimeout(r,300));
+      assert.equal(await p.evaluate(()=>bridgeStopped),0,'stale document did not stop the reattached take');
+      assert.equal(await p.evaluate(()=>WizAppCapture.getState().active),true,'take still recording');
+      await frame().evaluate(()=>session.stop());
+      assert.equal(await p.evaluate(()=>bridgeStopped),1);
+    });
     await test('James-Messenger-detached-bridge-after-native-start-stops-and-keeps-take', async ({p,frame}) => {
       await p.evaluate(()=>{window.bridgeStopped=0;WizAppCapture.configureNative({name:'synthetic-delayed',start:()=>new Promise(resolve=>{window.resolveNative=()=>resolve({nativeId:'fixture-delayed',mime:'audio/aac',stop:async()=>{bridgeStopped++;return{blob:new Blob(['kept'])};},cancel:async()=>{throw new Error('must retain');}});})});});
       await frame().evaluate(()=>{window.startOutcome=WizardApp.capture.start({kind:'audio'}).then(()=> 'unexpected',e=>e.message);});
