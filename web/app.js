@@ -967,11 +967,14 @@
     const src = W[srcId], sid = src?.app === 'chats' && src.thread && src.thread !== '__new__' ? src.thread : '';
     return { desk: desks[deskOf(srcId)]?.id || desks[idx].id, win: srcId || '', sid, title: sid ? (LIVE?.session(sid)?.title || winTitle(src)) : (src ? winTitle(src) : '') };
   }
-  function openLinkDesk(href, fromEl) {
+  function openLinkDesk(href, fromEl, setupChecked = false) {
     let u; try { u = new URL(href, location.href); } catch (e) { return false; }
     if (u.origin !== location.origin) return false;
     const srcId = (fromEl && fromEl.closest ? fromEl.closest('.win')?.dataset.win : '') || desks[idx].focus;
     const src = W[srcId], rel = u.pathname + u.search + u.hash;
+    const targetApp = appAt(rel);
+    if (targetApp && !setupChecked && window.WosAppSetup)
+      return window.WosAppSetup.gate(targetApp, () => openLinkDesk(href, fromEl, true));
     if (src && src.from && src.app === 'frame') { const f = winEl(srcId)?.querySelector('iframe'); if (f) { try { f.contentWindow.location.href = u.href; } catch (e) { f.src = u.href; } return true; } }
     const open = Object.values(W).find(w => w.from && w.url === rel); if (open) { goDesk(deskOf(open.id)); return true; }
     const from = fromOf(srcId);
@@ -1188,8 +1191,11 @@
     return true;
   }
   window.WizOpenAgentChats = openAgentChats;
+  window.WosAppSetup?.init({ getApp: id => APP[id], isFront: id => focusedWin()?.appId === id });
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
+    if (a.kind === 'wizard' && a.url && !opts.setupChecked && window.WosAppSetup)
+      return window.WosAppSetup.gate(a, () => openApp(a, extra, { ...opts, setupChecked: true }), { settled: () => openingEnd(a.id) });
     if (a.id === 'side-button') { closeSheets(true); if (idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
     if (a.kind === 'chats') {
       if (a.agent) return openAgentChats(a.agent);
@@ -3611,6 +3617,7 @@
     { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above everything, incl. the selection menu that opened it
     { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
     if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet sits above the windows
+    if (window.WosAppSetup?.back()) return 'app-setup';
     if (window.WosBoomerang?.back()) return 'boomerang'; // the Boomerang picker sits above the thread it was opened from
     // Explicit bypass capture follows the retain-on-Back contract; ordinary recordings keep navigating.
     if (V.snap?.general && ['listen', 'command'].includes(V.state)) { V.stopAsked = true; pauseCommandCapture(); return 'recording'; }
@@ -4006,5 +4013,15 @@
     dictate: () => { if (V.state !== 'idle' || !FIELDS?.refresh()) return false; startVoice('dictation'); return true; },
     voiceCancel: () => cancelVoice(),
     relayout: () => { try { syncImmersive(); } catch (_) {} },
+    appOrb: () => { const f = frontAppFrame(); return f ? window.WizAppServices?.orb?.of(f) || null : null; },
+    appOrbTap: () => { const f = frontAppFrame(); return !!f && !!window.WizAppServices?.orb?.tap(f); },
   });
+  // The app window in front (no sheet over it): the only app that may wear the agent orb.
+  function frontAppFrame() {
+    const f = desks[idx]?.focus, w = f && W[f];
+    if (!w?.appId || sheet || menuFor || CHATS.isHosted(f)) return null;
+    return track.querySelector(`.win[data-win="${f}"] iframe.appframe`);
+  }
+  // An app's claim shows whenever the active layout draws an agent orb (it wears it while that app is in front).
+  window.WizAppServices?.orb?.presenter(() => document.documentElement.dataset.layout === 'two-orb');
 })();
