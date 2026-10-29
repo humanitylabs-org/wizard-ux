@@ -49,17 +49,18 @@ Visual: <side-by-side screenshot, or "none">
 
 | Need | Use | Never hand-roll |
 |---|---|---|
+| App setup | `WosAppSetup` (`web/core/app-setup.js`) | app-local setup |
 | Chats: Focus, Filter, search, composer, files, read state, Copy/Share; Novairecito Recall/Done | `WizCore` Chats (`web/core/chats.js`, `web/core/chats.css`); All/main Ready inbox + Home count; `setFocus`/`migrateChatsFocus`; `WizLive` data/stream/tools; provider-access waits in Errors, source-bound optimistic-send release; revision cache | second Chats/Focus parser; per-agent/shell routing |
 | Chats list variant | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`web/core/edge-peek.js`), host storage | skin-local duplicate |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
 | Models, retry, composer mic, receipts, reading place | `WosChatPower` (`web/core/chat-power.js`: anchor/offset/atBottom; repair; viewport-bound picker, keyboard room/cleanup) + `WosModels` (`web/core/chat-models.js`; pooled Claude first; fresh; provider-access Error + Retry/Choose another model; acknowledged source-bound saved retry), `WosErrors` (`web/core/chat-errors.js`), `WosWork` (`web/core/chat-work.js`: expandable history + live tools) | model/error/reading-place forks; duplicate diagnosis notice or parallel live steps list |
 | Markdown, drafts, inline/bottom media | `WosChat` (`chat-kit.js`: `helm`, `md`, `copyRich`, `viewer`); Chats `mediaBlock` | own parser/viewer |
-| Spaces / Focus | `WizCore` Chats (`web/core/chats.js`), `WizLive.prefOps` (`spaces`); one naming form; `WizLive.spaceSessions(ids)` hydrates; `winAgent`/`modelRoute` route new chats; `WosOutbox.onNew` joins front Space; restored Focus awaits census; hidden agents accept explicit routes; scoped Spaces tool; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` | automatic subject tabs, separate collection store, per-shell Focus routing or section implementations |
+| Spaces / Focus | `WizCore` Chats (`web/core/chats.js`), `WizLive.prefOps` (`spaces`; add = move, one Space per chat); one naming form; `WizLive.spaceSessions(ids)` hydrates; `winAgent`/`modelRoute` route new chats; `WosOutbox.onNew` joins front Space; restored Focus awaits census; hidden agents accept explicit routes; scoped Spaces tool; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` | automatic subject tabs, separate collection store, per-shell Focus routing or section implementations |
 | Pinned threads (synced) | `WosChatPins` (`web/core/chat-pins.js`) | device-local pin lists |
 | Snooze thread/message: Later today · Tomorrow · In 2/3/5 days · Next week · Someday; Other date… last; success returns via threadBack like Done | `WosBoomerang` (`web/core/scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`web/core/schedules.js`) | own timers or reminder stores |
 | Thread topic emoji | `WosTopicEmoji` (`web/core/chat-topic-emojis.js`, data `WosTopicEmojiData`) | — |
-| Durable send, saved Retry; >6h hold | `WosOutbox`, `WosCarry` (`web/outbox.js`) | own queue |
+| Durable send, saved Retry, failed Dismiss; >6h hold | `WosOutbox`, `WosCarry` (`web/outbox.js`) | own queue |
 | Cancelled-recording keep | `WosCancelled` (`web/core/cancelled.js`) | — |
 | Share to Wizard | `WizShareWizard` (`web/core/share-wizard.js`) | one sheet; `share.wizard`; native `durable` |
 | Uploads of any size | `WizUploads` (`web/core/uploads.js`) | single-fetch uploads |
@@ -74,7 +75,7 @@ Visual: <side-by-side screenshot, or "none">
 | Brand hat | `WizBrand` (`web/core/brand.js`) | redrawn logos |
 | Links: sheet/window (`asWindow`), images, long-press browser/Download/Copy | `WizLinks` (`web/core/links.js`; Android: `WizardOSNative.openInBrowser` / `download`) | `window.open`, own iframe sheet, own link menu |
 | Text-selection actions | `WosSelMenu` (`web/core/sel-menu.js`) | own context menu |
-| Share sheet, receivers, pending handoffs | `WosShareSheet` (`web/core/share-sheet.js`), entered only via `WosChat.sharePayload` | a second share picker, sending for an app |
+| Share sheet (text/url/image/file), receivers, pending handoffs | `WosShareSheet` (`web/core/share-sheet.js`), entered via `WosChat.sharePayload`/`shareFile`; hold → tray: `bindSharePress` | a second share picker, sending for an app |
 | Agent screen context | `WizScreen` (`web/core/screen-text.js`) | own DOM scrape |
 | Dictation into a focused field | `WizCore` focused field (`web/core/focused-field.js`); voice `WizCore` (`web/core/voice.js`); mic choice `WosMic` (`web/core/mic.js`) | own recorder/transcriber |
 | Local commands | `WosCommands` (`web/core/commands.js`) | a second command parser |

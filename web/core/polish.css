@@ -14,7 +14,7 @@
 html[data-shell="desktop"] .wx-banners { top: 3px; left: 25%; right: 25%; z-index: 35; }
 .wx-banners[hidden] { display: none; }
 .wx-banner { pointer-events: auto; max-width: 100%; height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 99px; font-size: 12.5px; white-space: nowrap;
-  background: rgba(14, 8, 34, .96); border: 1px solid var(--line-2); box-shadow: 0 6px 20px rgba(0, 0, 0, .45); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); animation: wx-in .18s var(--ease, ease); }
+  background: linear-gradient(rgba(14, 8, 34, .96), rgba(14, 8, 34, .96)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid var(--line-2); box-shadow: 0 6px 20px rgba(0, 0, 0, .45);   animation: wx-in .18s var(--ease, ease); }
 @keyframes wx-in { from { opacity: 0; transform: translateY(-4px); } }
 .wx-banner .wx-m { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 650; }
 .wx-banner .wx-i { flex: 0 0 auto; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 11px; background: rgba(205, 190, 255, .12); color: var(--violet-2); }
@@ -53,7 +53,7 @@ html[data-shell="desktop"] .wx-banners { left: 50%; right: auto; transform: tran
 /* ---------- fatal card ---------- */
 .wx-fatal { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 24px; background: rgba(3, 2, 8, .78); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 .wx-fatal[hidden] { display: none; }
-.wx-fcard { width: min(400px, 100%); padding: 22px 20px 16px; border-radius: 22px; text-align: center; background: rgba(16, 10, 34, .98); border: 1px solid rgba(255, 107, 134, .45); color: var(--ink, #f3efff); font: 15px/1.45 system-ui, sans-serif; }
+.wx-fcard { width: min(400px, 100%); padding: 22px 20px 16px; border-radius: 22px; text-align: center; background: linear-gradient(rgba(16, 10, 34, .98), rgba(16, 10, 34, .98)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); border: 1px solid rgba(255, 107, 134, .45); color: var(--ink, #f3efff); font: 15px/1.45 system-ui, sans-serif; }
 .wx-fcard .wx-fi { width: 42px; height: 42px; margin: 0 auto 10px; border-radius: 50%; display: grid; place-items: center; font-weight: 900; font-size: 20px; color: #fff; background: var(--red, #ff6b86); }
 .wx-fcard b { display: block; font-size: 17px; margin-bottom: 6px; }
 .wx-fcard p { margin: 0 0 8px; color: var(--ink-2, #b9b0d8); word-break: break-word; }
