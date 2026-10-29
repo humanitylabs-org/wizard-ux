@@ -9,6 +9,7 @@ import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createDevicesReader} from './system-devices.mjs';
 import {createHealthReader} from './system-health.mjs';
+import {createExposureChecker, readExposure} from './system-exposure.mjs';
 export const RESOURCE_FIELDS=['cpuLoad','percentUsedMemory','percentUsed','memoryTotal','diskUsed','diskSize'];
 export function readConfig(path=process.env.WIZARD_RUNTIPI_ENV_FILE||join(homedir(),'runtipi/.env')) {
   const env=Object.fromEntries(readFileSync(path,'utf8').split('\n').filter(l=>l.includes('=')&&!l.startsWith('#')).map(l=>{const i=l.indexOf('=');return[l.slice(0,i).trim(),l.slice(i+1).trim().replace(/^["']|["']$/g,'')];}));
@@ -22,17 +23,22 @@ export function createResourceReader({origin,secret,fetchImpl=fetch,now=Date.now
 }
 // /api/system/devices: every machine this Wizard runs on or can reach (wizard-os spec/DEVICES.md).
 // /api/system/health: the install's latest health-check results (tools/system-health.mjs).
-export function createResourceHandler(read,readDevices=null,readHealth=null) {
+// /api/system/exposure: the automatic outside check (tools/system-exposure.mjs); POST …/exposure/check runs it now
+// (the only POST here: it changes nothing, it re-tests, and a check from the last 30 s is reused).
+export function createResourceHandler(read,readDevices=null,readHealth=null,exposure=null) {
   return async(req,res)=>{const send=(status,j)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff'});res.end(req.method==='HEAD'?'':JSON.stringify(j));};
     let u;try{u=new URL(req.url,'http://localhost');}catch{return send(400,{error:'invalid_request'});}
     const devices=u.pathname==='/api/system/devices'&&readDevices,health=u.pathname==='/api/system/health'&&readHealth;
-    if(u.pathname!=='/api/system/load'&&!devices&&!health)return send(404,{error:'not_found'});
-    if(!['GET','HEAD'].includes(req.method))return send(405,{error:'read_only'});
+    const expo=u.pathname==='/api/system/exposure'&&exposure,recheck=u.pathname==='/api/system/exposure/check'&&exposure;
+    if(u.pathname!=='/api/system/load'&&!devices&&!health&&!expo&&!recheck)return send(404,{error:'not_found'});
+    if(recheck?req.method!=='POST':!['GET','HEAD'].includes(req.method))return send(405,{error:recheck?'post_only':'read_only'});
     if(!req.headers['tailscale-user-login'])return send(403,{error:'private_access_required'});
     if(req.headers['sec-fetch-site']==='cross-site')return send(403,{error:'cross_site_refused'});
+    if(expo)return send(200,readExposure());
+    if(recheck){try{return send(200,await exposure.checkSoon());}catch{return send(503,{error:'exposure_check_failed'});}}
     if(devices){try{return send(200,await readDevices());}catch{return send(503,{error:'devices_unavailable'});}}
     if(health){try{return send(200,await readHealth());}catch{return send(503,{error:'health_unavailable'});}}
     try{return send(200,await read());}catch{return send(503,{error:'server_resources_unavailable'});}
   };
 }
-if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){const port=Number(process.argv[2]||9582);const read=createResourceReader(readConfig());http.createServer(createResourceHandler(read,createDevicesReader(),createHealthReader())).listen(port,'127.0.0.1',()=>console.log(`Private read-only server resources on loopback :${port}`));}
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){const port=Number(process.argv[2]||9582);const read=createResourceReader(readConfig());const exposure=createExposureChecker();if(process.env.WIZARD_EXPOSURE_CHECKS!=='off')exposure.start();http.createServer(createResourceHandler(read,createDevicesReader(),createHealthReader(),exposure)).listen(port,'127.0.0.1',()=>console.log(`Private read-only server resources on loopback :${port}`));}

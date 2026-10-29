@@ -13,6 +13,7 @@ import {spawn} from 'node:child_process';
 import {readFileSync, existsSync, writeFileSync, renameSync, copyFileSync, mkdirSync} from 'node:fs';
 import {homedir, hostname} from 'node:os';
 import {join, dirname, basename} from 'node:path';
+import {readExposure, mergeAccess} from './system-exposure.mjs';
 
 export const REGISTRY_PATH = () => process.env.WIZARD_DEVICES_FILE || join(homedir(), '.wizard-os', 'devices.json');
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
@@ -34,7 +35,10 @@ export function cleanAccess(a) {
   const exposure = EXPOSURE.has(a.exposure) ? a.exposure : 'unchecked';
   const checked = /^\d{4}-\d{2}-\d{2}$/.test(String(a.checked || '')) ? a.checked : null;
   const details = (Array.isArray(a.details) ? a.details : []).map(x => clip(x, 140)).filter(Boolean).slice(0, 8);
-  return {exposure, ...(checked ? {checked} : {}), ...(clip(a.how, 80) ? {how: clip(a.how, 80)} : {}), ...(details.length ? {details} : {})};
+  // Automatic checks (tools/system-exposure.mjs) add the exact time and say they were automatic; stale = the last one is old.
+  const checkedAt = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(String(a.checkedAt || '')) ? a.checkedAt : null;
+  return {exposure, ...(checked ? {checked} : {}), ...(checkedAt ? {checkedAt} : {}), ...(a.auto === true ? {auto: true} : {}), ...(a.stale === true ? {stale: true} : {}),
+    ...(clip(a.how, 80) ? {how: clip(a.how, 80)} : {}), ...(details.length ? {details} : {})};
 }
 const withAccess = a => { const c = cleanAccess(a); return c ? {access: c} : {}; };
 export function cleanRegistry(raw) {
@@ -217,7 +221,7 @@ export async function tailnetStatus() {
 
 // ---------- assembly ----------
 const pretty = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
-export function createDevicesReader({registryPath, probeLocalImpl = probeLocal, probeSshImpl = probeSsh, tailnetImpl = tailnetStatus, now = Date.now, ttlMs = 25000} = {}) {
+export function createDevicesReader({registryPath, exposurePath, probeLocalImpl = probeLocal, probeSshImpl = probeSsh, tailnetImpl = tailnetStatus, now = Date.now, ttlMs = 25000} = {}) {
   const cache = new Map(); // id -> {at, data, error, pending}
   async function reading(key, fn) {
     let c = cache.get(key); if (!c) cache.set(key, c = {at: 0, data: null, error: null, pending: null, okAt: 0});
@@ -228,6 +232,11 @@ export function createDevicesReader({registryPath, probeLocalImpl = probeLocal, 
   }
   return async () => {
     const reg = readRegistry(registryPath);
+    // The automatic outside check wins over hand-written notes about exposure; the owner's way in and other facts stay.
+    const auto = readExposure(exposurePath).machines || {};
+    const accessOf = (id, hand) => { const m = mergeAccess(hand, auto[id], now()); return m ? cleanAccess(m) : null; };
+    reg.this.access = accessOf('this', reg.this.access) || undefined;
+    for (const d of reg.devices) d.access = accessOf(d.id, d.access) || undefined;
     const [tn, local, ...remote] = await Promise.all([
       reading('_tailnet', async () => { const t = await tailnetImpl(); if (!t) throw new Error('no tailnet'); return t; }),
       reading('this', probeLocalImpl),

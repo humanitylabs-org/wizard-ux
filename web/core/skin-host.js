@@ -495,6 +495,8 @@
     }
     if (caps.has('data.read')) api.data = Object.freeze({ read: Object.freeze({ resources: Object.freeze({
       snapshot: () => structuredClone(window.WosResources?.state || {}), refresh: () => window.WosResources?.sync(),
+      // Re-test how open each machine is from outside (changes nothing; resolves true/false once the feed is re-read).
+      checkExposure: () => a.dead ? Promise.resolve(false) : Promise.resolve(window.WosResources?.checkExposure?.()).then(r => r === true, () => false),
       // resources.js announces each finished poll ('wos:resources'); the handle dies with the package.
       watch(fn) {
         if (a.dead || typeof fn !== 'function' || typeof window.addEventListener !== 'function') return () => {};
