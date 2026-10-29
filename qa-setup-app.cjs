@@ -26,7 +26,8 @@ async function context(browser, mode) {
 }
 async function frame(p) {
   await p.waitForFunction(() => !!document.querySelector('iframe[src*="setup/"]'));
-  const f = p.frames().find(f => /\/setup\/(?:index.html)?(?:[?#]|$)/.test(f.url()));
+  const iframe = await p.locator('iframe[src*="setup/"]').first().elementHandle();
+  const f = await iframe.contentFrame();
   await f.waitForFunction(() => !!window.__setup); return f;
 }
 const text = (f,s) => f.locator(s).innerText();
@@ -51,7 +52,7 @@ async function decode(browser,el) {
 (async()=>{
  const b = await pw.chromium.launch();
  for(const mode of ['phone','desktop']) {
-  await reset(); await fake({owner:'Robin'});
+  await reset(); await fake({owner:'Robin', phone:{wizard_url:URLS.wiz}});
   const {ctx,p,outside,errors} = await context(b,mode);
   await p.goto(BASE+(mode === 'desktop' ? 'desktop.html?shell=desktop' : '?shell=phone'));
   const f = await frame(p);
@@ -116,7 +117,9 @@ async function decode(browser,el) {
   await f.locator('[data-act="back"]').click();await sleep(300);const at=Date.now();await sleep(2300);
   ok(count(await log(),'GET','/wizard/v1/setup/phone',at)===0,`${mode}: no polling on checklist`);
   ok(errors.length===0,`${mode}: no page errors`,errors);
-  await p.reload();await sleep(2200);
+  // Close the existing app before testing first-run launch policy; restored windows are not auto-launches.
+  await p.evaluate(mode => { const shell=mode==='phone'?__wos:__wux; for(const w of Object.values(shell.wins)) if(w.appId==='setup') shell.closeWin(w.id); },mode);
+  await sleep(400); await p.reload();await sleep(2200);
   ok(!p.frames().some(f=>/\/setup\/index.html/.test(f.url())),`${mode}: second launch does not auto-open Setup`);
   await ctx.close();
  }
