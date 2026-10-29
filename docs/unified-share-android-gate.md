@@ -153,6 +153,51 @@ state acceptance, bounded permanently-wrong refusal and the compositor command
 contract; these are not native acceptance. Preserve the failed run; only the
 parent's fresh immutable `--reuse-build` stage may run all emulator phases again.
 
+## Real-touch regression: bounded diagnostic + acceptance
+
+The `3b1fa525ff2e` run is **not** the previous assertion race. Its sole recorded
+compositor tap was `.dv-chat` at CSS `(206.0952491760254, 698.2857055664062)`;
+the first picker-open predicate timed out and the saved DOM still said New chat
+with no picker. The earlier raw-touch run opened the picker and selected Trip
+planning. Both ran the same product APK; the latter regression followed a QA-only
+change. No crash was recorded. Do not label this a product bug from that evidence.
+
+Source audit: `HomeScreenShortcuts.attach` observes native touch but returns false;
+`qa_aa_lib.Page.call` returns the whole CDP response, not a delivery receipt;
+`.dv-sheet` has a 260 ms transform transition. The old locator scrolled on each
+poll and sampled a point just once, allowing a point to become stale while the
+sheet/scroll moved. Those facts establish a missing stability gate and missing
+delivery diagnostics, **not** proof that animation caused this particular miss.
+The prior log has no event target, viewport/scale, prevention or cancellation
+receipt. The exact compositor failure mechanism remains unproven.
+
+The next QA-only stage therefore keeps one real compositor touch (no raw-touch
+fallback, DOM click, repeated tap, JS application call or weakened assertion):
+
+- Scroll only when the target has no hit-tested visible point, at most once.
+  Require the same element, rectangle, viewport and hit point to settle within
+  0.25 CSS px for at least 120 ms/three frames, with no running ancestor animation.
+  Refuse replacement, disabled/hidden/occluded controls or instability at 3 s.
+- Passive capture/bubble listeners observe trusted pointer/touch/mouse/click,
+  cancellation/contextmenu, target/hit coordinates, default prevention, viewport,
+  visual scale, DPR, focus and WebView UA. No handler is replaced or canceled.
+  This adds observation, not activation; listeners themselves are a QA change.
+- Write `web-tap-NNN.json` before dispatch, then store raw CDP response and command
+  duration plus bounded frame/event journals (64/128 entries). An ACK alone is
+  insufficient: require the ordered trusted target touchstart/end/click chain
+  within 3 s or stop this run immediately with the same failure diagnostics.
+- On any subsequent domain-wait failure, refresh that exact tap's journal and
+  retain the failed predicate. All original picker/agent/comment/scope assertions
+  and real APK/bridge/backend/hash/delivery/notification checks remain intact.
+
+Interpret the next receipt without guessing: no events means dispatch/delivery;
+wrong target/coordinates means hit mapping or movement; cancellation/contextmenu
+means gesture semantics; correct trusted click with absent picker means investigate
+the product event path using the retained capture/bubble prevention and DOM state.
+Controller replay proves the bounds/refusals and passive code contract, not native
+acceptance. Parent alone submits the frozen full-acceptance spec; it stops early
+on missing delivery. Preserve every earlier log, screenshot, APK and JUnit XML.
+
 ## Real device phases and evidence
 
 The separate synthetic source app generates a 24 MiB blank-page PDF fixture byte

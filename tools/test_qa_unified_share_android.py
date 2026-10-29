@@ -40,38 +40,152 @@ class ControllerTest(unittest.TestCase):
     def test_post_tap_domain_wait_rejects_permanently_wrong_state_at_deadline(self):
         rig = runner.Rig.__new__(runner.Rig)
         rig.page = Mock(); rig.page.ev.return_value = False
+        rig.report = {}
         with patch.object(runner.time, 'monotonic', side_effect=[0, 0, .4, .8, 1.2]), patch.object(runner.time, 'sleep'):
             with self.assertRaisesRegex(RuntimeError, 'bounded wait failed: False'):
                 rig.wait_dom("document.querySelector('.dv-chat strong')?.textContent==='Trip planning'", 1)
         self.assertEqual(rig.page.ev.call_count, 3)
         rig.page.call.assert_not_called()
 
-    def test_web_tap_uses_compositor_touch_and_records_input_not_dom_click(self):
+    def tap_rig(self, response=None, prepared=None, snapshot=None):
         rig = runner.Rig.__new__(runner.Rig)
-        rig.page = Mock(); rig.page.ev.return_value = [123.5, 245.5, 400, 800]
-        rig.page.call.return_value = {'id': 1, 'result': {}}
-        rig.report = {}; rig.save = Mock(); rig.sx = Mock()
+        rig.page = Mock(); rig.report = {}; rig.save_tap = Mock(); rig.sx = Mock()
+        prepared = prepared if prepared is not None else {'ready': True, 'point': [123.5,245.5],
+            'evidence': {'viewport': {'width': 400, 'height': 800}}}
+        snapshot = snapshot if snapshot is not None else {'events': [
+            {'type': kind, 'trusted': True, 'intended': True} for kind in ('touchstart','touchend','click')]}
+        rig.page.ev.side_effect = lambda expr: (True if expr == runner.TAP_OBSERVER or expr.startswith('!!document.querySelector')
+            else prepared if expr == runner.stable_tap_expression('.dv-chat') else snapshot)
+        rig.page.call.return_value = response if response is not None else {'id': 1, 'result': {}}
+        return rig
+
+    def test_web_tap_uses_compositor_once_and_requires_observed_touch_click(self):
+        rig = self.tap_rig()
         rig.tap('.dv-chat')
         rig.page.call.assert_called_once_with('Input.synthesizeTapGesture', x=123.5, y=245.5,
             duration=50, tapCount=1, gestureSourceType='touch')
-        self.assertEqual(rig.report['web_taps'][0]['selector'], '.dv-chat')
-        self.assertEqual(rig.report['web_taps'][0]['method'], 'Input.synthesizeTapGesture')
-        self.assertIn('elementFromPoint', rig.page.ev.call_args.args[0])
-        self.assertNotIn('.click(', rig.page.ev.call_args.args[0])
-        self.assertNotIn('dispatchEvent', rig.page.ev.call_args.args[0])
-        rig.sx.assert_not_called(); rig.save.assert_called_once_with()
+        r = rig.report['web_taps'][0]
+        self.assertEqual(r['status'], 'TRUSTED_TOUCH_AND_CLICK_OBSERVED')
+        self.assertEqual(r['response'], {'id':1,'result':{}})
+        self.assertEqual(len(r['after']['events']), 3)
+        rig.sx.assert_not_called()
 
-    def test_web_tap_refuses_cdp_errors_and_out_of_viewport_without_bypass(self):
-        for position, response, message in (([10, 20, 400, 800], {'error': {'message': 'unsupported'}}, 'compositor tap failed'),
-                ([10, 20, 400, 800], {}, 'compositor tap failed'),
-                ([10, 900, 400, 800], {'result': {}}, 'out of viewport')):
-            rig = runner.Rig.__new__(runner.Rig)
-            rig.page = Mock(); rig.page.ev.return_value = position; rig.page.call.return_value = response
-            rig.report = {}; rig.save = Mock(); rig.sx = Mock()
-            with self.subTest(position=position, response=response), self.assertRaisesRegex(RuntimeError, message):
+    def test_web_tap_refuses_errors_unstable_or_offscreen_without_bypass(self):
+        good = {'ready':True,'point':[10,20],'evidence':{'viewport':{'width':400,'height':800}}}
+        for prepared, response, message in ((good, {'error': {'message': 'unsupported'}}, 'compositor tap failed'),
+                (good, {}, 'compositor tap failed'),
+                ({**good, 'point':[10,900]}, {'result':{}}, 'out of viewport'),
+                ({'ready':False,'reason':'moving'}, {'result':{}}, 'not stable')):
+            rig = self.tap_rig(response=response, prepared=prepared)
+            with self.subTest(prepared=prepared, response=response), self.assertRaisesRegex(RuntimeError, message):
                 rig.tap('.dv-chat')
-            self.assertEqual(rig.report, {})
-            rig.sx.assert_not_called(); rig.save.assert_not_called()
+            self.assertEqual(rig.report['web_taps'][0]['status'], 'FAIL')
+            self.assertIn('after',rig.report['web_taps'][0])
+            self.assertLessEqual(rig.page.call.call_count, 1)
+            if message in ('out of viewport','not stable'): rig.page.call.assert_not_called()
+            rig.sx.assert_not_called()
+
+    def test_ack_without_real_events_fails_early_and_preserves_evidence(self):
+        rig = self.tap_rig(snapshot={'events': [], 'viewport': {'dpr': 2.625}})
+        original_wait = runner.wait
+        def bounded(predicate, seconds=30):
+            if seconds == 3:
+                self.assertFalse(predicate())
+                raise RuntimeError('bounded wait failed: False')
+            return original_wait(predicate, seconds)
+        with patch.object(runner, 'wait', side_effect=bounded):
+            with self.assertRaisesRegex(RuntimeError, 'bounded wait failed'):
+                rig.tap('.dv-chat')
+        r = rig.report['web_taps'][0]
+        self.assertEqual(r['response']['result'], {})
+        self.assertEqual(r['after']['events'], [])
+        self.assertEqual(r['status'], 'FAIL')
+        rig.page.call.assert_called_once();rig.sx.assert_not_called()
+
+    def test_observed_input_refuses_untrusted_wrong_target_and_incomplete_chain(self):
+        good = [{'type':k,'trusted':True,'intended':True} for k in ('touchstart','touchend','click')]
+        self.assertTrue(runner.observed_tap({'events':good}))
+        for events in ([],good[:2],list(reversed(good)),good+[{'type':'touchcancel'}],
+                [{**e,'trusted':False} for e in good],[{**e,'intended':False} for e in good]):
+            self.assertFalse(runner.observed_tap({'events':events}))
+
+    def test_domain_failure_keeps_late_events_without_repeating_input(self):
+        rig = self.tap_rig();rig.report = {'web_taps':[{'index':1}]}
+        rig.page.ev.return_value = False;rig.page.ev.side_effect = None
+        with patch.object(runner, 'wait', side_effect=RuntimeError('deadline')):
+            with self.assertRaisesRegex(RuntimeError, 'deadline'):
+                rig.wait_dom('exact domain')
+        self.assertEqual(rig.report['web_taps'][0]['failed_domain_expression'], 'exact domain')
+        rig.page.call.assert_not_called();rig.save_tap.assert_called_once()
+
+    def test_tap_receipt_is_on_disk_before_input_can_block(self):
+        with tempfile.TemporaryDirectory(prefix='tap-receipt-', dir=os.environ['TMPDIR']) as d:
+            rig = self.tap_rig();rig.out = Path(d);rig.save = Mock()
+            rig.save_tap = runner.Rig.save_tap.__get__(rig)
+            def dispatch(*args, **kwargs):
+                r = json.loads((rig.out/'web-tap-001.json').read_text())
+                self.assertEqual(r['status'], 'DISPATCHING')
+                self.assertEqual(r['x'],123.5)
+                raise RuntimeError('transport stalled')
+            rig.page.call.side_effect = dispatch
+            with self.assertRaisesRegex(RuntimeError,'transport stalled'):rig.tap('.dv-chat')
+            self.assertEqual(json.loads((rig.out/'web-tap-001.json').read_text())['status'],'FAIL')
+
+    @unittest.skipUnless(shutil.which('node'), 'Node needed for bounded observer contract replay')
+    def test_passive_observer_and_stability_gate_replay(self):
+        # Pure JS replay, not browser evidence: deterministic frames move the target,
+        # then settle it; wrong-hit/disabled/replaced/active-animation cases time out.
+        script = r"""
+        const assert=require('node:assert/strict');
+        let t=0,mode='settle',scrolled=0,frames=[],timers=new Map(),next=1;
+        global.window=global;global.innerWidth=400;global.innerHeight=800;global.devicePixelRatio=2.625;
+        global.scrollX=0;global.scrollY=0;global.visualViewport={offsetLeft:0,offsetTop:0,scale:1,width:400,height:800};
+        global.performance={now:()=>t};global.getComputedStyle=()=>({visibility:'visible',display:'block'});
+        global.requestAnimationFrame=f=>frames.push(f);
+        global.setTimeout=(f,ms)=>{const id=next++;timers.set(id,{f,at:t+ms});return id};
+        global.clearTimeout=id=>timers.delete(id);
+        const listeners=[];global.addEventListener=(type,fn,opts)=>listeners.push({type,fn,opts});
+        const e={tagName:'BUTTON',id:'',className:'dv-chat',isConnected:true,
+          get disabled(){return mode==='disabled'},parentElement:null,
+          contains:target=>target===e,scrollIntoView:()=>scrolled++,
+          getAnimations:()=>mode==='animation'?[{playState:'running'}]:[],
+          getBoundingClientRect:()=>({x:10,y:mode==='moving'?t/2:mode==='settle'&&t<240?t/2:120,width:200,height:48})};
+        const other={};
+        global.document={hasFocus:()=>true,visibilityState:'visible',querySelector:s=>s==='.dv-chat'?(mode==='replaced'&&t>0?other:e):null,
+          elementFromPoint:()=>mode==='occluded'?other:e};
+        eval(OBSERVER);assert.equal(listeners.length,20);
+        assert.ok(listeners.every(l=>l.opts.passive===true));
+        async function check(m){
+          mode=m;t=0;frames=[];timers.clear();let answer;
+          eval(STABLE).then(r=>answer=r);
+          for(let i=0;i<200&&!answer;i++){
+            t+=20;const batch=frames.splice(0);batch.forEach(f=>f());
+            for(const [id,a] of [...timers])if(t>=a.at){timers.delete(id);a.f()}
+            await Promise.resolve();
+          }
+          assert.ok(answer,'bounded completion');return answer;
+        }
+        (async()=>{
+          let a=await check('settle');assert.equal(a.ready,true);assert.ok(t>=360);
+          assert.equal(scrolled,0);assert.deepEqual(a.point,[110,144]);
+          for(const m of ['moving','occluded','disabled','replaced','animation']){
+            a=await check(m);assert.equal(a.ready,false,m);assert.ok(t>=3000);assert.ok(a.evidence.samples.length<=64);
+          }
+          mode='settle';const probe=window.__shareTapProbe;probe.element=e;probe.point=[110,144];
+          const event={target:e,changedTouches:[{clientX:110,clientY:144}],isTrusted:true,
+            type:'touchstart',timeStamp:100,defaultPrevented:false};
+          let canceled=false;event.preventDefault=()=>{canceled=true};event.stopPropagation=()=>{throw Error('must not stop')};
+          listeners.filter(l=>l.type==='touchstart').forEach(l=>l.fn(event));
+          assert.equal(canceled,false);assert.ok(probe.events.every(r=>r.intended&&r.trusted));
+          assert.equal(probe.events.at(-1).x,110);assert.equal(probe.snapshot().viewport.dpr,2.625);
+          for(let i=0;i<200;i++)listeners[0].fn({...event,type:'pointerdown',clientX:110,clientY:144});
+          assert.equal(probe.events.length,128);
+        })().catch(e=>{console.error(e);process.exitCode=1});
+        """.replace('OBSERVER',json.dumps(runner.TAP_OBSERVER)).replace('STABLE',json.dumps(runner.stable_tap_expression('.dv-chat')))
+        for text in (runner.TAP_OBSERVER,runner.stable_tap_expression('.dv-chat')):
+            for bypass in ('.click(', 'dispatchEvent(', '.preventDefault(', '.stopPropagation('):self.assertNotIn(bypass,text)
+        result=subprocess.run(['node','-e',script],capture_output=True,text=True,timeout=15)
+        self.assertEqual(result.returncode,0,result.stderr)
 
     def test_sender_manifest_explicitly_allows_independent_source_hash(self):
         manifest = ET.parse(HERE / 'unified-share-sender/AndroidManifest.xml').getroot()

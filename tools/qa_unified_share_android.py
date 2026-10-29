@@ -334,6 +334,88 @@ class Proxy(http.server.BaseHTTPRequestHandler):
             conn.close()
 
 
+# Passive observation only: no patched handlers, DOM activation, or event cancellation.
+# A CDP gesture ACK proves dispatch, not that WebView delivered a click to the row.
+TAP_OBSERVER = r"""(() => {
+  if (window.__shareTapProbe) return true;
+  const describe = e => e ? {tag:e.tagName,id:e.id,cls:String(e.className || '').slice(0,180)} : null;
+  const viewport = () => ({width:innerWidth,height:innerHeight,dpr:devicePixelRatio,
+    scrollX,scrollY,visual:visualViewport ? {x:visualViewport.offsetLeft,y:visualViewport.offsetTop,
+      width:visualViewport.width,height:visualViewport.height,scale:visualViewport.scale} : null});
+  const probe = window.__shareTapProbe = {events:[],samples:[],element:null,point:null,describe,viewport};
+  probe.snapshot = () => {
+    const e=probe.element,b=e?.getBoundingClientRect(),p=probe.point;
+    return {events:probe.events,samples:probe.samples,viewport:viewport(),now:performance.now(),
+      target:describe(e),connected:!!e?.isConnected,rect:b ? [b.x,b.y,b.width,b.height] : null,
+      hit:p ? describe(document.elementFromPoint(p[0],p[1])) : null,
+      picker:document.querySelector('.dv-picker')?.innerText || null,
+      chat:document.querySelector('.dv-chat strong')?.textContent || null,
+      focus:document.hasFocus(),visibility:document.visibilityState,userAgent:navigator.userAgent};
+  };
+  for (const type of ['pointerdown','pointerup','pointercancel','touchstart','touchend','touchcancel',
+      'mousedown','mouseup','click','contextmenu']) for (const capture of [true,false]) {
+    window.addEventListener(type, event => {
+      if (!probe.element) return;
+      const p=event.changedTouches?.[0] || event, x=p.clientX,y=p.clientY;
+      probe.events.push({type,capture,at:performance.now(),stamp:event.timeStamp,
+        trusted:event.isTrusted,defaultPrevented:event.defaultPrevented,pointerType:event.pointerType || null,
+        x,y,target:describe(event.target),intended:probe.element.contains(event.target),
+        hit:describe(document.elementFromPoint(x,y)),viewport:viewport()});
+      if(probe.events.length>128) probe.events.shift();
+    },{capture,passive:true});
+  }
+  return true;
+})()"""
+
+
+def stable_tap_expression(selector):
+    # Scroll at most once, then observe frames; never keep moving a target while measuring it.
+    return r"""(() => new Promise(resolve => {
+      const probe=window.__shareTapProbe, e=document.querySelector(SELECTOR);
+      probe.element=e;probe.events=[];probe.samples=[];probe.point=null;
+      if(!e) { resolve({ready:false,reason:'missing target'});return; }
+      const point = () => {
+        const b=e.getBoundingClientRect();
+        for(const [u,v] of [[.5,.5],[.5,.05],[.5,.95],[.05,.05],[.95,.05]]) {
+          const x=b.x+b.width*u,y=b.y+b.height*v;
+          if(x>0&&y>0&&x<innerWidth&&y<innerHeight&&e.contains(document.elementFromPoint(x,y))) return [x,y];
+        }
+        return null;
+      };
+      if(!point()) e.scrollIntoView({block:'center',behavior:'instant'});
+      let last=null,since=null,frames=0,done=false;
+      const finish = result => {if(done)return;done=true;clearTimeout(timer);resolve({...result,evidence:probe.snapshot()});};
+      const timer=setTimeout(()=>finish({ready:false,reason:'target not stable/hit-testable within 3000ms'}),3000);
+      const frame = () => {
+        if(done)return;
+        const b=e.getBoundingClientRect(), p=point(), now=performance.now();
+        let moving=false;
+        for(let n=e;n;n=n.parentElement) if(n.getAnimations?.().some(a=>a.playState==='running'||a.playState==='pending')) moving=true;
+        const s=getComputedStyle(e), valid=e===document.querySelector(SELECTOR)&&e.isConnected&&!e.disabled&&
+          s.visibility==='visible'&&s.display!=='none'&&p&&!moving;
+        const key=valid ? [b.x,b.y,b.width,b.height,...p,innerWidth,innerHeight,
+          scrollX,scrollY,visualViewport?.offsetLeft || 0,visualViewport?.offsetTop || 0,visualViewport?.scale || 1] : null;
+        if(key&&last&&key.every((v,i)=>Math.abs(v-last[i])<.25)) frames++;
+        else {since=now;frames=1;last=key;}
+        probe.samples.push({at:now,rect:[b.x,b.y,b.width,b.height],point:p,moving,valid:!!valid});
+        if(probe.samples.length>64)probe.samples.shift();
+        if(valid&&frames>=3&&now-since>=120) {probe.point=p;finish({ready:true,point:p});return;}
+        requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+    }))()""".replace('SELECTOR', json.dumps(selector))
+
+
+def observed_tap(snapshot):
+    events = snapshot.get('events', [])
+    if any(e['type'] in ('touchcancel', 'pointercancel', 'contextmenu') for e in events):
+        return False
+    positions = [next((i for i, e in enumerate(events)
+                       if e['type'] == kind and e['trusted'] and e['intended']), -1)
+                 for kind in ('touchstart', 'touchend', 'click')]
+    return 0 <= positions[0] < positions[1] < positions[2]
+
+
 class Rig:
     def __init__(self, root, cfg, report, save):
         self.root, self.source, self.cfg = root, root / 'source', cfg
@@ -489,23 +571,64 @@ class Rig:
         self.page = module.Page(self, self.devtools)
         wait(lambda: self.page.ev('!!(window.__wos?.chats && window.WizShareWizard && window.WosDevicePort)'), 40)
 
-    def tap(self, selector):
-        # Locate a hit-tested CSS point; the compositor supplies a real short touch.
-        def pos():
-            return self.page.ev("(() => {const e=document.querySelector(%s);if(!e)return null;e.scrollIntoView({block:'center'});const b=e.getBoundingClientRect();for(const [u,v] of [[.5,.5],[.5,.05],[.5,.95],[.05,.05],[.95,.05]]){const x=b.x+b.width*u,y=b.y+b.height*v;if(x>0&&y>0&&x<innerWidth&&y<innerHeight&&e.contains(document.elementFromPoint(x,y)))return [x,y,innerWidth,innerHeight]}return null})()" % json.dumps(selector))
-        x, y, w, h = wait(pos)
-        if not (0 < x < w and 0 < y < h):
-            raise RuntimeError('tap out of viewport')
-        result = self.page.call('Input.synthesizeTapGesture', x=x, y=y, duration=50, tapCount=1, gestureSourceType='touch')
-        if 'error' in result or 'result' not in result:
-            raise RuntimeError('compositor tap failed: ' + json.dumps(result))
-        self.report.setdefault('web_taps', []).append({'selector': selector, 'x': x, 'y': y,
-            'method': 'Input.synthesizeTapGesture', 'duration_ms': 50, 'gesture_source': 'touch'})
+    def save_tap(self, receipt):
+        # Persist before dispatch too: a stuck transport must leave its exact target.
+        (self.out / ('web-tap-%03d.json' % receipt['index'])).write_text(json.dumps(receipt, indent=2) + '\n')
         self.save()
+
+    def capture_tap(self, receipt):
+        try:
+            receipt['after'] = self.page.ev('window.__shareTapProbe.snapshot()')
+        except Exception as exc:
+            receipt['capture_error'] = exception_detail(exc)
+        self.save_tap(receipt)
+
+    def tap(self, selector):
+        receipt = {'index': len(self.report.setdefault('web_taps', [])) + 1, 'selector': selector,
+            'method': 'Input.synthesizeTapGesture', 'duration_ms': 50, 'gesture_source': 'touch', 'status': 'PREPARING'}
+        self.report['web_taps'].append(receipt)
+        self.save_tap(receipt)
+        try:
+            assert self.page.ev(TAP_OBSERVER), 'passive tap observer unavailable'
+            wait(lambda: self.page.ev('!!document.querySelector(' + json.dumps(selector) + ')'), 10)
+            prepared = self.page.ev(stable_tap_expression(selector))
+            receipt['prepared'] = prepared
+            if not prepared or not prepared.get('ready'):
+                raise RuntimeError('tap target not stable: ' + json.dumps(prepared))
+            x, y = prepared['point']
+            w, h = prepared['evidence']['viewport']['width'], prepared['evidence']['viewport']['height']
+            if not (0 < x < w and 0 < y < h):
+                raise RuntimeError('tap out of viewport')
+            receipt.update(x=x, y=y, status='DISPATCHING')
+            self.save_tap(receipt)
+            started = time.monotonic()
+            result = self.page.call('Input.synthesizeTapGesture', x=x, y=y, duration=50, tapCount=1, gestureSourceType='touch')
+            receipt.update(response=result, dispatch_seconds=time.monotonic() - started)
+            if 'error' in result or 'result' not in result:
+                raise RuntimeError('compositor tap failed: ' + json.dumps(result))
+            def delivered():
+                receipt['after'] = self.page.ev('window.__shareTapProbe.snapshot()')
+                return observed_tap(receipt['after'])
+            # Stop before a 30s domain timeout if the supposedly successful gesture
+            # never delivered the real touch/click chain. No retry or alternate input.
+            wait(delivered, 3)
+            receipt['status'] = 'TRUSTED_TOUCH_AND_CLICK_OBSERVED'
+        except BaseException as exc:
+            receipt.update(status='FAIL', error=exception_detail(exc))
+            self.capture_tap(receipt)
+            raise
+        self.capture_tap(receipt)
 
     def wait_dom(self, expression, seconds=30):
         # Input acknowledgment is not app-state acknowledgment. Never retry the tap.
-        return wait(lambda: self.page.ev(expression), seconds)
+        try:
+            return wait(lambda: self.page.ev(expression), seconds)
+        except BaseException:
+            if self.report.get('web_taps'):
+                receipt = self.report['web_taps'][-1]
+                receipt['failed_domain_expression'] = expression
+                self.capture_tap(receipt)
+            raise
 
     def sheet(self):
         return self.page.ev("!!document.querySelector('.wz-share')")
