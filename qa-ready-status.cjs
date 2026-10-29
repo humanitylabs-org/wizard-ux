@@ -9,13 +9,15 @@
 // James, 10 Oct 2026: "differentiate tasks in ready by which ones are needs you / awaiting your action and which
 // ones are done … I don't want the UX to get too cluttered."
 //
-// Real Wizard reads; fixture threads merged into the session list; EVERY write is intercepted (zero reach Archimedes).
-// Usage: node tools/qa-origin.cjs 9481 <tree>/web &  then  QA_WEB_DIR=<tree> node qa-ready-status.cjs [url]
+// Self-contained: synthetic threads only (main and one routed host-profile agent); every request is answered in the
+// browser from <tree>/web or a fixture, so no real thread is listed or opened and EVERY write is intercepted.
+// Usage: QA_WEB_DIR=<tree> node qa-ready-status.cjs [url]
 const pw = require('./tools/qa-playwright.cjs');
 const { chromium } = pw;
 const fs = require('fs'), path = require('path');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9481/wizard-os-home/';
-const WEB = process.env.QA_WEB_DIR || '';
+const WEB = process.env.QA_WEB_DIR || __dirname;
+const ORIGIN = new URL(URL_).origin, AGENT = 'qa-host';
 const OUT = process.env.QA_OUT || require('./tools/qa-paths.cjs').workPath('wos-ready-status-shots');
 const EXEC = process.env.QA_CHROME || (process.env.QA_CHROME || undefined);
 fs.mkdirSync(OUT, { recursive: true });
@@ -32,16 +34,23 @@ const FIX = {
   qa_rs_check: { title: 'QA rs Check build', t: now - 40, att: { state: 'check', ask: 'Try the new orb timing from the side button', subject: 'Wizard OS' } },
   qa_rs_needs: { title: 'QA rs Needs decision', t: now - 50, att: { state: 'needs_you', ask: 'Say "ship desks" if the preview feels right', subject: 'Wizard OS' } },
   qa_rs_old: { title: 'QA rs Old needs', t: now - 3 * 86400, att: { state: 'needs_you', ask: 'Approve the UPS and Cat6 purchase', subject: 'Home' } },
+  // Newer than qa_rs_old on the same day: Priority must still put the needs-you row first in Past week.
+  qa_rs_old_fyi: { title: 'QA rs Old FYI', t: now - 3 * 86400 + 600, att: { state: 'fyi', ask: 'Summarised the router notes', subject: 'Research' } },
   qa_rs_plain: { title: 'QA rs Plain reply', t: now - 25, att: null },
+  // A routed host-profile agent's own threads (listed only with ?agent=qa-host): the same day ordering must apply there.
+  qa_rs_r_today: { title: 'QA rs Routed today', t: now - 15, att: { state: 'fyi', ask: 'Routed agent note', subject: 'Research' }, agent: 'qa-host' },
+  qa_rs_r_old: { title: 'QA rs Routed old needs', t: now - 3 * 86400, att: { state: 'needs_you', ask: 'Routed: approve the cable run', subject: 'Home' }, agent: 'qa-host' },
+  qa_rs_r_old_fyi: { title: 'QA rs Routed old FYI', t: now - 3 * 86400 + 600, att: { state: 'fyi', ask: 'Routed: summarised the notes', subject: 'Research' }, agent: 'qa-host' },
 };
 const ARCH = new Set();
+let ROUTED_ON = false; // the routed agent's threads appear only for section 6, so the main-list checks stay exact
 function fixSession(id) {
   const f = FIX[id];
   return { id, source: 'wizard-mobile', title: f.title, status: f.status || 'completed', archived: ARCH.has(id), hidden: false, message_count: 2,
     started_at: f.t - 600, last_active: f.t, wizard_last_user_at: f.t - 120, wizard_last_assistant_at: f.t, wizard_activity_at: f.t, wizard_run_id: '',
     latest_message: { role: 'assistant', content: `Long reply body for ${f.title} that should not be the preview when a status exists.`, timestamp: f.t },
     last_user_message: { role: 'user', content: `${f.title} ask`, timestamp: f.t - 120 },
-    ...(f.att ? { wizard_attention: f.att } : {}) };
+    ...(f.att ? { wizard_attention: f.att } : {}), ...(f.agent ? { agent: { id: f.agent, label: 'Synthetic routed', privacy: 'standard' } } : {}) };
 }
 const rowsFor = id => [{ id: 1, session_id: id, role: 'user', content: `${FIX[id].title} ask`, timestamp: FIX[id].t - 120 }, { id: 2, session_id: id, role: 'assistant', content: `Answer for ${FIX[id].title}.`, timestamp: FIX[id].t }];
 const writes = [];
@@ -49,12 +58,18 @@ const PREFS = { archiveAfterDays: 7, compact: false, readyOrder: 'newest', subje
 function routeFor() {
   return async r => {
     const q = r.request(), u = new URL(q.url()), m = q.method();
-    const wm = u.pathname.match(/\/wizard-os-home\/((?:core\/|desktop\/)?[a-z-]+\.(?:js|css)|index\.html|desktop\.html|)$/);
-    if (WEB && wm && m === 'GET' && !/^(data|summaries)\.js$/.test(wm[1])) { const f = wm[1] || 'index.html', fp = path.join(WEB, 'web', f); if (fs.existsSync(fp)) return r.fulfill({ status: 200, contentType: f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/html' : 'application/javascript', body: fs.readFileSync(fp) }); }
+    if (u.origin !== ORIGIN) return r.abort();
+    const wm = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
+    if (wm && (m === 'GET' || m === 'HEAD')) { const f = decodeURIComponent(wm[1]) || 'index.html', fp = path.join(WEB, 'web', f);
+      if (f.includes('..') || /^(data|summaries)\.js$/.test(f) || !fs.existsSync(fp) || !fs.statSync(fp).isFile()) return r.fulfill({ status: 200, contentType: 'application/javascript', body: '' });
+      return r.fulfill({ status: 200, contentType: f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/html' : f.endsWith('.svg') ? 'image/svg+xml' : /\.(json|webmanifest)$/.test(f) ? 'application/json' : 'application/javascript', body: fs.readFileSync(fp) }); }
     const json = (status, body) => r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     // Box preferences stay in the fixture: the live box's saved order must not reset the suite's choices on reload.
     if (u.pathname === '/wizard/v1/ui-preferences') {
       if (m === 'PUT') { try { Object.assign(PREFS, JSON.parse((q.postDataBuffer() || Buffer.alloc(0)).toString())); } catch (e) {} }
+      // PATCH {ops}: the list edits the shell sends (subject moves, pins), applied like Agent Service does.
+      if (m === 'PATCH') { try { for (const o of JSON.parse((q.postDataBuffer() || Buffer.alloc(0)).toString()).ops || []) { const l = Array.isArray(PREFS[o.key]) ? PREFS[o.key] : [];
+        PREFS[o.key] = o.op === 'front' ? [...new Set(o.items)].concat(l.filter(x => !o.items.includes(x))) : o.op === 'add' ? (l.includes(o.item) ? l : l.concat(o.item)) : l.filter(x => x !== o.item); } } catch (e) {} }
       return json(200, PREFS);
     }
     if (m !== 'GET' && m !== 'HEAD') {
@@ -65,16 +80,21 @@ function routeFor() {
       if (u.pathname === '/wizard/thread-seen') { let st; try { st = JSON.parse(body).state; } catch (e) {} return json(200, { state: st || { initializedAt: Date.now(), threads: {} } }); }
       return json(200, { ok: true });
     }
-    if (!u.pathname.startsWith('/wizard/')) return r.continue();
-    if (u.pathname === '/wizard/hermes/api/sessions' && (u.searchParams.get('offset') || '0') === '0') {
-      const res = await r.fetch(); const p = await res.json();
-      p.data = Object.keys(FIX).map(fixSession).concat(p.data || []);
-      return json(200, p);
+    if (u.pathname === '/wizard/v1/agents') return json(200, { agents: [
+      { id: 'hermes', is_default: true, label: 'Hermes', harness: 'hermes', privacy: 'standard', status: 'running' },
+      { id: AGENT, label: 'Synthetic routed', harness: 'hermes', privacy: 'standard', status: 'running', model: { model: 'fixture-model', provider: 'fixture' } }] });
+    if (u.pathname === '/wizard/hermes/api/sessions') {
+      const ag = u.searchParams.get('agent') || '', first = (u.searchParams.get('offset') || '0') === '0';
+      const data = !first ? [] : Object.keys(FIX).filter(id => (!FIX[id].agent || ROUTED_ON) && (FIX[id].agent || '') === (ag === AGENT ? AGENT : ag ? '-' : '')).map(fixSession);
+      return json(200, { object: 'list', data, has_more: false, pagination: { limit: 100, offset: 0, returned: data.length, has_more: false } });
     }
+    if (u.pathname === '/wizard/hermes/api/model/options') return json(200, { model: 'fixture-model', provider: 'fixture', providers: [{ slug: 'fixture', name: 'Synthetic fixture route', authenticated: true, is_current: true, models: ['fixture-model'] }] });
+    if (u.pathname === '/wizard/thread-seen' || u.pathname === '/wizard/thread-dispositions') return json(200, { state: { initializedAt: Date.now(), threads: {} } });
     const mm = u.pathname.match(/\/wizard\/hermes\/api\/sessions\/([^/]+)\/messages$/);
     if (mm && FIX[mm[1]]) { const rows = rowsFor(mm[1]); return json(200, { object: 'list', data: rows, pagination: { limit: 500, offset: 0, returned: rows.length } }); }
     const sm = u.pathname.match(/\/wizard\/hermes\/api\/sessions\/([^/]+)$/); if (sm && FIX[sm[1]]) return json(200, { session: fixSession(sm[1]) });
-    return r.continue();
+    if (/\/wizard\/hermes\/api\/sessions\//.test(u.pathname)) return json(404, { error: 'not a synthetic thread' });
+    return json(200, {});
   };
 }
 
@@ -98,6 +118,14 @@ function routeFor() {
   const readyIds = async () => { await expandReady(); await sleep(150); return p.$$eval(await R('[data-chopen]'), els => els.map(e => e.dataset.chopen).filter(id => id.startsWith('qa_rs_'))); };
   const rowInfo = async id => p.evaluate(({ sel }) => { const e = document.querySelector(sel); if (!e) return null; return { cls: e.className, pv: e.querySelector('.pv')?.textContent || '', quiet: e.dataset.quiet === '1', op: getComputedStyle(e).opacity }; }, { sel: await R(`[data-chopen="${id}"]`) });
 
+  // Rows of one day section, opened just for the read and closed again so Ready-only reads stay Ready-only.
+  const CW = async sel => `[data-chats="${await wid()}"] ${sel}`;
+  const secIds = async k => { const t = await CW(`[data-sectoggle="${k}"]`), was = await p.$eval(t, e => e.getAttribute('aria-expanded'));
+    if (was !== 'true') { await p.$eval(t, e => e.click()); await sleep(300); }
+    await p.evaluate(sel => document.querySelector(sel)?.click(), await CW(`[data-sec="${k}"] [data-secmore]`)); await sleep(150);
+    const got = await p.$$eval(await CW(`[data-sec="${k}"] [data-chopen]`), els => els.map(e => e.dataset.chopen).filter(id => id.startsWith('qa_rs_')));
+    if (was !== 'true') { await p.$eval(await CW(`[data-sectoggle="${k}"]`), e => e.click()); await sleep(300); }
+    return got; };
   try {
     const workingVisual = await p.evaluate(sel => {
       const row = document.querySelector(sel), session = window.__wos.live.session('qa_rs_working');
@@ -125,6 +153,10 @@ function routeFor() {
     ok(JSON.stringify(pids) === JSON.stringify(['qa_rs_needs', 'qa_rs_check', 'qa_rs_fyi', 'qa_rs_plain', 'qa_rs_done']), '1 Priority: needs you, then test this, then the rest (even when newer)', pids);
     ok(JSON.stringify(await onNow()) === JSON.stringify(['Newest', 'Priority*', 'By subject']), '1 Priority is highlighted', await onNow());
     ok((await p.$$(await R('.ch-subj'))).length === 0, '1 Priority adds no subsection headers');
+    // James, 23 Oct 2026: "it's not sorting yesterday and this week. It should sort those by the same standard of priority."
+    const pwP = await secIds('pastWeek');
+    ok(JSON.stringify(pwP) === JSON.stringify(['qa_rs_old', 'qa_rs_old_fyi']), '1e Priority also orders Past week: needs you above a newer FYI', pwP);
+    ok((await p.$$(await CW('[data-sec="pastWeek"] .ch-rdy-bar'))).length === 0, '1e the order bar stays on Ready only');
     await p.evaluate(sel => document.querySelector(sel)?.scrollIntoView({ block: 'start' }), await R('.ch-sec-h')); await sleep(300);
     await p.screenshot({ path: path.join(OUT, '1b-ready-priority.png') });
     // Priority survives a reload; Newest returns to recency.
@@ -142,6 +174,8 @@ function routeFor() {
     ok(paged === 0, '1 Priority puts a needs-you row from deep in the list on the first page', paged);
     await p.locator(await R('[data-rdyorder="newest"]')).tap(); await sleep(500);
     ok((await readyIds())[0] === 'qa_rs_fyi', '1 back to Newest: the newest thread is at the top again', await readyIds());
+    const pwN = await secIds('pastWeek');
+    ok(JSON.stringify(pwN) === JSON.stringify(['qa_rs_old_fyi', 'qa_rs_old']), '1e Newest: Past week by recency, labels ignored', pwN);
     // Oldest (James, 23 Oct 2026): tapping Newest again lists today's Ready oldest first, newest at the bottom.
     await p.locator(await R('[data-rdyorder="newest"]')).tap(); await sleep(500);
     const old1 = await readyIds();
@@ -152,10 +186,8 @@ function routeFor() {
       const list = Array.from({ length: 50 }, (_, i) => mk(i)).concat([mk(60, { status: 'waiting_for_approval' }), mk(1, { id: 'podef', deferred: true })]);
       const g = L.workGroups(list, now), r = L.readyByOldest(g.ready).map(s => s.id); return { first: r[0], second: r[1], last: r[r.length - 1], def: g.deferred.map(s => s.id).join() }; });
     ok(oldPaged.first === 'po60' && oldPaged.second === 'po49' && oldPaged.last === 'po0' && oldPaged.def === 'podef', '1d Oldest keeps approvals pinned on top; snoozed threads leave Ready', oldPaged);
-    const yOrder = await p.evaluate(w => ['yesterday', 'pastWeek'].every(k => { const want = window.__wos.live.workGroups()[k].map(s => s.id);
-      const got = [...document.querySelectorAll(`[data-chats="${w}"] [data-sec="${k}"] [data-chopen]`)].map(e => e.dataset.chopen);
-      return got.length === 0 || JSON.stringify(got) === JSON.stringify(want.slice(0, got.length)); }), await wid());
-    ok(yOrder, '1d Yesterday and Past week stay newest first', yOrder);
+    const pwO = await secIds('pastWeek');
+    ok(JSON.stringify(pwO) === JSON.stringify(['qa_rs_old', 'qa_rs_old_fyi']), '1e Oldest: Past week oldest first too', pwO);
     await p.locator(await R('[data-rdyorder="newest"]')).tap(); await sleep(500);
     ok((await readyIds())[0] === 'qa_rs_fyi', '1d tapping again returns to Newest', await readyIds());
 
@@ -216,6 +248,14 @@ function routeFor() {
     await p.evaluate(sel => document.querySelector(sel)?.scrollIntoView({ block: 'start' }), await R('.ch-sec-h')); await sleep(300);
     await p.screenshot({ path: path.join(OUT, '2-ready-by-subject.png') });
     ok(await p.evaluate(() => localStorage.getItem('wos.chats.readyOrder.v1')) === 'subject', '3 the choice is remembered');
+    // Past week follows By subject too, but without move controls: a move there would rewrite the saved order from a
+    // partial list (subjects not shown in that day would lose their place).
+    const pwSubj = await (async () => { const t = await CW('[data-sectoggle="pastWeek"]'), was = await p.$eval(t, e => e.getAttribute('aria-expanded'));
+      if (was !== 'true') { await p.$eval(t, e => e.click()); await sleep(300); }
+      const r = await p.$$eval(await CW('[data-sec="pastWeek"] .ch-subj'), els => ({ heads: els.length, moves: els.reduce((n, e) => n + e.querySelectorAll('[data-subjmove]').length, 0) }));
+      if (was !== 'true') { await p.$eval(t, e => e.click()); await sleep(300); }
+      return r; })();
+    ok(pwSubj.heads >= 2 && pwSubj.moves === 0, '3 By subject groups Past week too, with no subject move controls there', pwSubj);
     // 3b. James, 12 Oct 2026: "next to each subject on the right side … an up arrow and a down arrow … and move to
     // top, and you keep a memory of the order". Each header carries ⤒ ↑ ↓; the order survives a reload.
     const names = async () => p.$$eval(await R('.ch-subj'), els => els.map(e => e.querySelector('span')?.textContent));
@@ -301,6 +341,19 @@ function routeFor() {
     await p.keyboard.press('Escape'); await sleep(700);
     ok((await readyIds()).includes('qa_rs_needs'), '5 a needs-you thread stays in Ready after it is opened');
     ok(await p.evaluate(() => !!window.__wos && !!document.querySelector('.win')), '5 app still open after Back');
+
+    // 6. Main versus routed: a routed host-profile agent's list (synthetic threads, ?agent=qa-host) uses the same
+    // day ordering as the main list above.
+    ROUTED_ON = true;
+    await p.locator(await R('[data-rdyorder="priority"]')).tap(); await sleep(400);
+    await p.evaluate(ag => window.WizOpenAgentChats(ag), AGENT);
+    await p.waitForFunction(() => window.__wos.live.session('qa_rs_r_old'), null, { timeout: 10000 }).catch(() => {}); await sleep(900);
+    const rP = await secIds('pastWeek');
+    ok(JSON.stringify(rP) === JSON.stringify(['qa_rs_r_old', 'qa_rs_r_old_fyi']), '6 routed list: Priority orders Past week (needs you above a newer FYI)', rP);
+    ok((await p.$$(await CW('[data-sec="pastWeek"] .ch-rdy-bar'))).length === 0, '6 routed list: the order bar stays on Ready only');
+    await p.locator(await R('[data-rdyorder="newest"]')).tap(); await sleep(400);
+    const rN = await secIds('pastWeek');
+    ok(JSON.stringify(rN) === JSON.stringify(['qa_rs_r_old_fyi', 'qa_rs_r_old']), '6 routed list: Newest orders Past week by recency', rN);
   } catch (e) { ok(false, 'suite crashed', String(e).split('\n')[0]); }
 
   ok(!writes.some(w => /\/v1\/runs$/.test(w.p)), 'zero /v1/runs writes (nothing reached Archimedes)');
