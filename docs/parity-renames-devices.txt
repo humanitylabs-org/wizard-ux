@@ -4,14 +4,14 @@
 label:Couldn’t copy. Select the address instead. => Select it | test=tests/setup-phone-labels-moved.test.mjs | token=Select it
 label:Get Tailscale on your phone => Get Tailscale on your other device | test=tests/setup-phone-labels-moved.test.mjs | token=Get Tailscale on your other device
 label:Getting the sign-in page ready… => Starting Tailscale… | test=tests/setup-phone-labels-moved.test.mjs | token=Starting Tailscale…
-label:Only Wizard’s owner can do this. => Only Wizard’s owner can connect a device. | test=tests/setup-phone-labels-moved.test.mjs | token=Only Wizard’s owner can connect a device.
+label:Only Wizard’s owner can do this. => Only Wizard’s owner can connect a device. | test=tests/setup-phone-labels-moved.test.mjs | token=Only Wizard’s owner can connect a device
 label:Open Wizard on your phone => 3 · Connect your other device to Wizard | test=tests/setup-phone-labels-moved.test.mjs | token=3 · Connect your other device to Wizard
-label:Open this address in your phone’s browser. => On the device you want to connect, open the Wizard app and enter this address, or open it in the browser. | test=tests/setup-phone-labels-moved.test.mjs | token=On the device you want to connect, open the Wizard app and enter this address, or open it in the browser.
-label:Scan with your phone, then open the link. => and point it here. The iPhone Camera works too. | test=tests/setup-phone-labels-moved.test.mjs | token=and point it here. The iPhone Camera works too.
-label:Scan with your phone’s camera. => Scan with your device’s camera. | test=tests/setup-phone-labels-moved.test.mjs | token=Scan with your device’s camera.
+label:Open this address in your phone’s browser. => On the device you want to connect, open the Wizard app and enter this address, or open it in the browser. | test=tests/setup-phone-labels-moved.test.mjs | token=On the device you want to connect, open the Wizard app and enter this address, or open it in the browser
+label:Scan with your phone, then open the link. => and point it here. The iPhone Camera works too. | test=tests/setup-phone-labels-moved.test.mjs | token=The iPhone Camera works too
+label:Scan with your phone’s camera. => Scan with your device’s camera. | test=tests/setup-phone-labels-moved.test.mjs | token=Scan with your device’s camera
 label:Sign in to Tailscale on this Wizard => Sign in to Tailscale in your browser, then approve the new device | test=tests/setup-phone-labels-moved.test.mjs | token=Sign in to Tailscale in your browser, then approve the new device
 label:Sign in with Tailscale => Sign in to Tailscale | test=tests/setup-phone-labels-moved.test.mjs | token=Sign in to Tailscale
-label:Takes about a minute. Opens in your browser. => Nothing is opened to the internet. | test=tests/setup-phone-labels-moved.test.mjs | token=Nothing is opened to the internet.
+label:Takes about a minute. Opens in your browser. => Nothing is opened to the internet. | test=tests/setup-phone-labels-moved.test.mjs | token=Nothing is opened to the internet
 label:This turns green once your phone connects. => Waiting for your device… | test=tests/setup-phone-labels-moved.test.mjs | token=Waiting for your device…
 label:Turn on secure addresses => Turn on HTTPS | test=tests/setup-phone-labels-moved.test.mjs | token=Turn on HTTPS
 label:Use Wizard on your phone => Connect another device | test=tests/setup-phone-labels-moved.test.mjs | token=Connect another device
