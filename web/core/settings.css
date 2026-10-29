@@ -32,6 +32,8 @@
 .st-row { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 12px 4px; margin: 0; border: 0; border-bottom: 1px solid var(--wz-border); border-radius: 0; background: transparent; text-align: left; color: var(--wz-text); }
 .st-row[disabled] { opacity: .5; }
 .st-row.static { cursor: default; }
+a.st-row { color: inherit; text-decoration: none; }
+.st-pc { padding: 12px 4px 6px; border-bottom: 1px solid var(--wz-border); }
 .st-choice { flex: 0 0 auto; max-width: 112px; min-height: 44px; padding: 8px; border: 1px solid var(--wz-border); border-radius: var(--wz-radius, 12px); background: var(--wz-surface); color: var(--wz-text); font: inherit; }
 .st-choice:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
 .st-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -81,7 +83,7 @@
 .st-root, .dsettings {
   --wz-base: var(--bg); --wz-overlay: var(--glass-2);
   --wz-text: var(--ink); --wz-text-secondary: var(--ink-2); --wz-text-muted: var(--ink-3);
-  --wz-border: var(--line-2); --wz-accent: var(--violet-2); --wz-warning: var(--amber);
+  --wz-on-accent: var(--bg); --wz-border: var(--line-2); --wz-accent: var(--violet-2); --wz-warning: var(--amber);
   --wz-surface: color-mix(in srgb, var(--wz-text) 6%, transparent);
   --wz-surface-raised: color-mix(in srgb, var(--wz-text) 10%, transparent);
   --wz-accent-soft: color-mix(in srgb, var(--wz-accent) 16%, transparent);
