@@ -390,6 +390,15 @@ test('sixteenth review: an unavailable group reaches its accounts; a saved or ag
   }
 });
 
+test('seventeenth review: a new My skin shows one switch per replacement group and never saves the hidden member off', () => {
+  assert.match(read('web/core/experience.js'), /groups: \(\) => \(catalog\?\.oneOf \|\| \[\]\)\.map\(g => \[\.\.\.g\]\),/);
+  const src = read('web/core/settings.js');
+  assert.match(src, /for \(const g of window\.WosExperience\.groups\?\.\(\) \|\| \[\]\) \{/);
+  assert.match(src, /const pick = present\.find\(id => map\[id\]\) \|\| present\[0\];/);
+  assert.match(src, /map = Object\.fromEntries\(Object\.entries\(map\)\.filter\(\(\[id\]\) => id === pick \|\| !present\.includes\(id\)\)\);/);
+  assert.match(src, /items = items\.filter\(t => t\.id === pick \|\| !present\.includes\(t\.id\)\);/);
+});
+
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));
