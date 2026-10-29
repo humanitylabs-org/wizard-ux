@@ -123,8 +123,8 @@ export default function setup(api) {
   const sessions = () => api.data.read.sessions?.counts() || { working: 0, ready: 0, unknown: true };
   const chatWords = x => x.unknown ? 'chats not loaded yet' : `${x.working} working, ${x.ready} ready${S.unread ? `, ${S.unread} unread` : ''}`;
   // Presence from a saved or failed reading is not current: no green dot until a fresh read says online.
-  const myDevices = () => [...devices().filter(d => d.id !== MAIN && d.group === 'human').map(d => ({ name: pretty(d.name), online: !!S.devFresh && d.status === 'online' })),
-    ...peers().filter(p => p.group === 'human').map(p => ({ name: p.name === 'localhost' && /ios/i.test(p.os || '') ? 'iPhone' : p.name, online: !!S.devFresh && !!p.online }))];
+  const myDevices = () => [...devices().filter(d => d.id !== MAIN && d.group === 'human').map(d => ({ name: pretty(d.name), online: S.devFresh ? d.status === 'online' : null })),
+    ...peers().filter(p => p.group === 'human').map(p => ({ name: p.name === 'localhost' && /ios/i.test(p.os || '') ? 'iPhone' : p.name, online: S.devFresh ? !!p.online : null }))];
   // The connected Wizard's people (the glance always describes this one, whatever Your network has selected).
   const myPeople = () => [{ id: 'me', name: ownerName(), devices: myDevices() }];
   function people() {
@@ -503,7 +503,7 @@ export default function setup(api) {
     const ps = people();
     setRow(rowPp, [...ps.map(personNode), plus('add-person', 'Give someone access')]);
     const devs = ps.filter(devOpen).flatMap(p => p.devices ? p.devices.map(d => h('span', { cls: nw('mh-dev'), data: { of: p.id } },
-      h('i', { cls: 'mh-dot' + (d.online ? '' : ' off') }), d.name)) : [h('span', { cls: nw('mh-dev is-none'), data: { of: p.id }, text: `${p.name}’s devices aren’t visible yet` })]);
+      h('i', { cls: 'mh-dot' + (d.online === null ? ' unk' : d.online ? '' : ' off'), title: d.online === null ? 'Last reading; not checked just now' : d.online ? 'Online' : 'Offline' }), d.name)) : [h('span', { cls: nw('mh-dev is-none'), data: { of: p.id }, text: `${p.name}’s devices aren’t visible yet` })]);
     setRow(rowDv, devs);
     // The same chevron as everywhere else, so it is plain the devices fold away.
     const hasDevs = ps.some(p => p.devices && p.devices.length);

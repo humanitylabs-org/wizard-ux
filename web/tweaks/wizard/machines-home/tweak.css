@@ -631,3 +631,6 @@ html:is([data-skin$="light"], [data-skin="sepia"]) .mh-root .mh-act-btn.is-fix {
 
 /* An 'open' count from a last reading (the network couldn't be read just now) is shown dimmed. */
 .mh-ts-n.is-stale { opacity: .6; }
+
+/* A personal device not read just now: unknown, drawn as a hollow ring (neither online nor offline). */
+.mh-dot.unk { background: transparent; box-shadow: inset 0 0 0 1.5px var(--mh-ink-3); }

@@ -457,7 +457,8 @@ test('twenty-second review: the all-clear needs a dated check; any cached machin
 test('final review: personal-device presence needs a fresh reading; meter edits keep unreadable picks; any provider can be the default', () => {
   for (const who of ['miguel', 'wizard']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
-    assert.equal((src.match(/online: !!S\.devFresh && /g) || []).length, 2, who);
+    assert.equal((src.match(/online: S\.devFresh \? /g) || []).length, 2, who + ': unknown (null) without a fresh reading');
+    assert.match(src, /d\.online === null \? ' unk'/, who);
     assert.match(src, /let cur = new Set\(Array\.isArray\(S\.meter\) && S\.meter\.length \? S\.meter\.filter/, who);
     assert.match(src, /subs\(\)\.find\(s => s\.kind === p \|\| String\(s\.group \|\| ''\)\.toLowerCase\(\) === p/, who);
     assert.match(src, /const k = exact \|\| \(\/\^\(claude\|claude-code\|anthropic\)\$\//, who + ': exact identity before whole-name aliases');
@@ -476,7 +477,7 @@ test('final review 2: exposure dates must be real; an open warning from a last r
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /\[bad\.length && S\.devFresh \? \['fix'/, who);
     assert.equal((src.match(/open to the internet\$\{S\.devFresh \? '' : ' \(last reading\)'\}/g) || []).length, 2, who + ': Home tile and desktop icon qualify a last reading');
-    assert.match(src, /online: !!S\.devFresh && d\.status === 'online'/, who);
+    assert.match(src, /online: S\.devFresh \? d\.status === 'online' : null/, who);
     assert.match(src, /roleText: 'Main' \+ \(main\.stale \? ' · last reading' : ''\)/, who);
     assert.match(src, /if \(k !== S\.def && \(k \|\| p\)\) \{ S\.def = k;/, who + ': an unmetered default clears the old one');
     assert.match(src, /if \(open && !wsmBack\) wsmBack = api\.back\?\.push\?\.\(/, who + ': the workspace menu is the top Back layer');
