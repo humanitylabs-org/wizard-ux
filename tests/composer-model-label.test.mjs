@@ -87,6 +87,28 @@ test('tall-draft model menu stays above composer and respects visible keyboard h
   assert.match(src, /window\.visualViewport\?\.addEventListener\('resize', queue/);
 });
 
+test('native keyboard leaves a usable picker above the temporarily shorter input', () => {
+  const src = read('web/core/chat-power.js');
+  const place = src.slice(src.indexOf('  function placePop(el) {'), src.indexOf('  function openSheet(o) {'));
+  const styles = new Map();
+  let inputHeight = 140;
+  const rect = { top: 0, bottom: 440, right: 412, height: 440 };
+  const boxes = {
+    '.ch-psheet.ch-mpop': { getBoundingClientRect: () => rect, style: { setProperty: (k, v) => styles.set(k, parseFloat(v)) } },
+    '.ch-mlabel': { getBoundingClientRect: () => ({ top: 260, right: 392 }) },
+    '.ch-head': { getBoundingClientRect: () => ({ bottom: 53 }) },
+    '.ch-compose': { getBoundingClientRect: () => ({ top: 205 - inputHeight, height: inputHeight + 45 }) },
+    '.ch-compose textarea': { getBoundingClientRect: () => ({ height: inputHeight }) },
+  };
+  const el = { querySelector: s => boxes[s] || null, style: { setProperty: (k, v) => { inputHeight = Math.min(140, parseFloat(v)); } } };
+  const ctx = vm.createContext({ window: { visualViewport: { offsetTop: 0, offsetLeft: 0, height: 440, width: 412 } }, el });
+  vm.runInContext(`${place}; placePop(el); placePop(el);`, ctx);
+  assert.equal(inputHeight, 42, 'only the input viewport shrinks; its value is untouched');
+  assert.ok(styles.get('--mpop-h') >= 90, 'at least one complete model row remains reachable');
+  assert.ok(rect.bottom - styles.get('--mpop-b') < boxes['.ch-compose'].getBoundingClientRect().top);
+  assert.match(src, /el\.classList\.remove\('ch-model-picking'\); el\.style\.removeProperty\('--mpop-input-max'\)/);
+});
+
 test('the composer scripts parse', () => {
   for (const f of ['web/core/chats.js', 'web/core/chat-power.js', 'web/core/chat-models.js']) assert.doesNotThrow(() => new vm.Script(read(f), { filename: f }));
 });

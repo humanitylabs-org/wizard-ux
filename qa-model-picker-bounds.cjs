@@ -15,7 +15,7 @@ const AGENTS = { agents: [
   { id: 'hermes', label: 'Hermes', is_default: true, harness: 'hermes', privacy: 'standard', status: 'running' },
   { id: 'private', label: 'Private', harness: 'hermes', privacy: 'private', status: 'running', model: { provider: 'tinfoil', model: 'glm-5-3', allowed_models: ['glm-5-3', 'kimi-k3'], fallback: false } }
 ] };
-let pass = 0, fail = 0, blockedWrites = 0, foreignRequests = 0;
+let pass = 0, fail = 0, blockedWrites = 0, foreignRequests = 0, completed = 0;
 function ok(v, n, d) { v ? pass++ : fail++; console.log(`${v ? 'PASS' : 'FAIL'} ${n}${v || d === undefined ? '' : ' ' + JSON.stringify(d)}`); }
 async function boot(browser, c) {
   const desktop = c.mode === 'desktop';
@@ -44,6 +44,7 @@ async function boot(browser, c) {
     localStorage.setItem('wos.tour.v1', 'true'); localStorage.setItem('wos.tour.done', '1');
   }, c.skin);
   const p = await ctx.newPage(), errs = [];
+  p.setDefaultTimeout(5000);
   p.on('pageerror', e => errs.push(String(e)));
   await p.goto(`https://wizard.test/wizard-os-home/${desktop ? 'desktop.html' : ''}`, { waitUntil: 'load' });
   const root = desktop ? '__wux' : '__wos';
@@ -75,7 +76,24 @@ async function bounds(p, label) {
   const g = await geometry(p);
   ok(!g.missing && g.height > 40 && g.top >= Math.max(g.headBottom, g.viewportTop) - 1 && g.bottom <= Math.min(g.composerTop, g.viewportBottom) - 3 && g.left >= 0 && g.right <= g.viewportRight + 1,
     `${label}: popup wholly visible above composer`, g);
-  ok(!g.missing && !/^rgba\(.*?,\s*0(?:\.\d+)?\)$/.test(g.background) && g.background !== 'transparent', `${label}: opaque skin panel`, g);
+}
+async function opaquePixels(p, label) {
+  const clip = await p.evaluate(() => {
+    const pop = document.querySelector('.ch-mpop'), card = pop.querySelector('.ch-sheet-b');
+    // Retained raster layer avoids gradient dithering on unrelated repaint; no opacity override.
+    card.style.willChange = 'transform';
+    const loud = document.createElement('div'); loud.dataset.qaLoud = '';
+    loud.style.cssText = 'position:absolute;inset:0;overflow:hidden;background:repeating-linear-gradient(90deg,#f0f 0 8px,#0f0 8px 16px);color:red;font-size:24px;pointer-events:none';
+    loud.textContent = 'LOUD TEXT BEHIND THE PICKER '.repeat(500); pop.prepend(loud);
+    const r = card.getBoundingClientRect();
+    return { x: Math.ceil(r.x + 18), y: Math.ceil(r.y + 18), width: Math.floor(r.width - 36), height: Math.floor(r.height - 36) };
+  });
+  if (clip.height <= 0) return ok(false, `${label}: opaque panel pixel proof has usable area`, clip);
+  const loud = await p.screenshot({ clip, animations: 'disabled', path: path.join(OUT, `${label}-opaque-loud.png`) });
+  await p.locator('[data-qa-loud]').evaluate(el => { el.style.visibility = 'hidden'; });
+  const blank = await p.screenshot({ clip, animations: 'disabled', path: path.join(OUT, `${label}-opaque-blank.png`) });
+  ok(loud.equals(blank), `${label}: panel pixels identical over loud text and blank`);
+  await p.locator('[data-qa-loud]').evaluate(el => el.remove());
 }
 async function exercise(browser, c) {
   const label = `${c.mode}-${c.width}-${c.skin}-${c.short ? 'short' : 'long'}`;
@@ -90,6 +108,7 @@ async function exercise(browser, c) {
     await p.screenshot({ path: path.join(OUT, `${label}-initial.png`) });
     ok(await p.evaluate(() => document.documentElement.dataset.skin) === c.skin, `${label}: requested skin active`);
     await bounds(p, label);
+    await opaquePixels(p, label);
     ok(await p.evaluate(() => document.documentElement.classList.contains('wos-doc-scroll')) === (c.mode === 'native'), `${label}: expected native/overflow scroll mode`);
     const more = p.locator('.ch-mpop [data-mall]');
     await more.scrollIntoViewIfNeeded();
@@ -108,7 +127,7 @@ async function exercise(browser, c) {
     }
     await p.screenshot({ path: path.join(OUT, `${label}-expanded.png`) });
     // Resize while OPEN: keyboard-equivalent constrained visible viewport; do not reopen to repair it.
-    if (!c.short && c.mode !== 'desktop') {
+    {
       await p.setViewportSize({ width: c.width, height: 440 });
       await p.waitForTimeout(250);
       await bounds(p, `${label} keyboard-height`);
@@ -135,21 +154,20 @@ async function exercise(browser, c) {
     await p.evaluate(() => window.__wosNativeBack ? window.__wosNativeBack() : document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     ok(await p.locator('.ch-mpop').count() === 0, `${label}: Back/Escape dismisses`);
     ok(await ta.inputValue() === draft, `${label}: dismissals preserve draft`);
+    ok(await ta.evaluate(el => getComputedStyle(el).maxHeight === '140px' && !el.closest('.ch-model-picking')), `${label}: closing restores normal composer height`);
+    ok(await p.evaluate(root => window[root].wins[qaWid]?.thread === '__new__', root), `${label}: Back keeps the draft thread open`);
     ok(errs.length === 0, `${label}: no page errors`, errs);
   } finally { await ctx.close(); }
 }
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.QA_CHROME || undefined, args: ['--no-sandbox'] });
   try {
-    const cases = [
-      { mode: 'native', width: 360, height: 780, skin: 'nebula' },
-      { mode: 'native', width: 412, height: 892, skin: 'nebula' },
-      { mode: 'phone', width: 360, height: 780, skin: 'nebula' },
-      { mode: 'phone', width: 412, height: 892, skin: 'nebula', short: true },
-      { mode: 'native', width: 412, height: 892, skin: 'sepia' },
-      { mode: 'desktop', width: 1365, height: 900, skin: 'nebula' }
-    ];
-    for (const c of cases) { try { await exercise(browser, c); } catch (e) { ok(false, `${c.mode}-${c.width}-${c.skin}: completed`, String(e)); } }
+    const cases = [];
+    for (const mode of ['native', 'phone', 'desktop']) for (const width of (mode === 'desktop' ? [1365] : [360, 412]))
+      for (const skin of ['nebula', 'sepia']) for (const short of [false, true])
+        cases.push({ mode, width, height: mode === 'desktop' ? 900 : width === 360 ? 780 : 892, skin, short });
+    for (const c of cases) { try { await exercise(browser, c); completed++; } catch (e) { ok(false, `${c.mode}-${c.width}-${c.skin}-${c.short ? 'short' : 'long'}: completed`, String(e)); } }
+    ok(completed === cases.length, 'all matrix cases completed', { completed, expected: cases.length });
   } finally { await browser.close(); }
   ok(foreignRequests === 0, 'no request to any real origin', foreignRequests);
   console.log(JSON.stringify({ pass, fail, blockedWrites, realAgentWrites: 0, foreignRequests, tree: TREE, out: OUT }));

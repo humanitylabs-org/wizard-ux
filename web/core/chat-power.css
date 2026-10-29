@@ -150,6 +150,8 @@
 /* Native document-scroll chrome sits at z=50; keep the bounded picker above it, not underneath it. */
 html.wos-doc-scroll .wos-doc-thread .ch-sheet.ch-mpop { position: fixed; inset: 0; z-index: 52; }
 @keyframes mpop-in { from { opacity: 0; transform: translateY(6px) scale(.97); } }
+/* Only while choosing a model, reserve a usable row area even with a tall draft and keyboard. */
+.ch-model-picking .ch-compose textarea { max-height: var(--mpop-input-max, 140px); }
 .ch-mpop .msheet-list { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
 .ch-mpop .mpop-sec + .mpop-sec, .ch-mpop .mrow.more + .mpop-sec { margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(255, 255, 255, .08); }
 .ch-mpop .msheet-gh { padding: 7px 10px 3px; font-size: 11px; color: var(--ink-3); }
