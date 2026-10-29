@@ -126,10 +126,11 @@
   let lastHtml = '';
   function render() {
     const parts = [];
-    // Only a message the outbox will actually retry may hold the retrying banner up; anything else is a stated failure.
-    const O = window.WosOutbox, waiting = O?.unsent().some(it => it.state === 'waiting' && (!O.canRetry || O.canRetry(it)));
-    if (!(net === 'offline' || net === 'reconnecting' || waiting)) netOpen = false;
-    if (net === 'offline' || net === 'reconnecting' || waiting) {
+    // This is connection feedback, not a second outbox. A saved message may wait on
+    // upload, device storage or admission while chat reads work. Chats keeps its
+    // delivery card and Retry; only failed connection evidence raises this banner.
+    if (!(net === 'offline' || net === 'reconnecting')) netOpen = false;
+    if (net === 'offline' || net === 'reconnecting') {
       const diagnosis = window.WizReach?.failure();
       const full = diagnosis?.message || 'Checking the connection to Wizard. Messages are kept on this device while we retry.';
       // One quiet pill in both shells (James, 22 Oct): short line + two small taps; tapping the line unfolds the full
