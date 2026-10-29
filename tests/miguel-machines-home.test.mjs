@@ -201,8 +201,12 @@ test('review fixes: one Home map at a time, boot guess expires, unreadable usage
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
   assert.deepEqual(cat.oneOf, [['miguel/machines-home', 'wizard/machines-home']], 'the owner\'s package wins over the stock one');
   assert.ok(cat.defaults.includes('wizard/machines-home'), 'the system hub is on in every skin family');
-  assert.match(exp, /loadTweaks\(oneOf\(all\.filter\(id => enabled\(id, own\)\)\)/);
-  const pick = new Function('catalog', 'return ' + exp.match(/const oneOf = (ids => .*);\n/)[1])(cat);  // the shipped function
+  assert.match(exp, /loadTweaks\(oneOf\(all\.filter\(id => enabled\(id, own\)\), own\)/);
+  const src1 = 'return ' + exp.match(/const oneOf = (\(ids, own = recipe\(\)\) => .*);\n/)[1];
+  const make = (offs = [], recipeOff = []) => new Function('catalog', 'recipe', 'recipeChoice', 'offFor', 'owner', 'globalOff', src1)(cat, () => null, (own, id) => recipeOff.includes(id) ? false : undefined, () => offs, 'miguel', () => false);
+  const pick = make();  // the shipped function
+  assert.deepEqual(make([], ['miguel/machines-home'])(['wizard/machines-home', 'x/y']), ['x/y'], 'a My skin off for the owner package keeps the stock one off too');
+  assert.deepEqual(make(['miguel/machines-home'])(['wizard/machines-home']), [], 'a saved off does too');
   assert.deepEqual(pick(['wizard/machines-home', 'miguel/machines-home', 'x/y']), ['miguel/machines-home', 'x/y']);
   assert.deepEqual(pick(['wizard/machines-home']), ['wizard/machines-home']);
   assert.match(host, /tweaksAsked = true;/, 'the real list marks the boot guess settled');
