@@ -857,6 +857,8 @@
     "core/workspace-sync.js",
     "favicon.ico",
     "icon-192.png",
+    "kit/controls.css",
+    "kit/shell-tokens.css",
     "live.js",
     "manifest.webmanifest",
     "outbox.js",
