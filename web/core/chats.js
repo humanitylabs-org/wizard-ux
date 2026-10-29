@@ -519,13 +519,14 @@ window.WizCore.chats = function createChats(H) {
   const readyOrdered = list => readyOrder === 'newest' ? list : readyOrder === 'oldest' ? (LIVE.readyByOldest ? LIVE.readyByOldest(list) : list.slice().reverse()) : LIVE.readyByPriority(list);
   // List mode can end while no list is on screen (a thread, search): let the watcher go on the host's change event too.
   window.addEventListener('wos:prefs', () => { if (notesOff && !window.WosSkinHost?.inboxList) { notesOff(); notesOff = null; } });
-  function readyBody(list, rowFn, nt = null) {
+  function readyBody(list, rowFn, nt = null, sec = 'ready') {
     const later = nt ? nt.later.slice().sort(noteTimeOrder).map(noteRow).join('') : '', awake = nt ? nt.awake.slice().sort(noteOrder) : [];
     // Subject grouping must not pull a snoozed row ahead of another subject's awake rows.
     // Keep one order bar, then all awake groups, then the snoozed tail (no new category).
-    if (snoozeLast() && list.some(deferredOf)) return readyBody(list.filter(s => !deferredOf(s)), rowFn, nt && { awake, later: [] }) + withNotes(list.filter(deferredOf), nt ? nt.later.slice().sort(noteTimeOrder) : [], rowFn, noteByTime);
+    if (snoozeLast() && list.some(deferredOf)) return readyBody(list.filter(s => !deferredOf(s)), rowFn, nt && { awake, later: [] }, sec) + withNotes(list.filter(deferredOf), nt ? nt.later.slice().sort(noteTimeOrder) : [], rowFn, noteByTime);
     const bar = `<div class="ch-rdy-bar" role="group" aria-label="Order Ready">${READY_ORDERS.map(o => { const on = readyOrder === o || (o === 'newest' && readyOrder === 'oldest'); return `<button type="button" data-rdyorder="${o}" aria-pressed="${on}"${on ? ' class="on"' : ''}>${o === 'newest' && readyOrder === 'oldest' ? 'Oldest' : READY_ORDER_LABEL[o]}</button>`; }).join('')}</div>`;
-    if (readyOrder !== 'subject') return bar + withNotes(list, awake, rowFn) + later;
+    const top = sec === 'ready' ? bar : '', mk = k => sec === 'ready' ? `subj:${k}` : `subj:${sec}:${k}`;
+    if (readyOrder !== 'subject') return top + withNotes(list, awake, rowFn) + later;
     const groups = new Map();
     for (const s of list) { const k = attOf(s)?.subject || 'Other'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); }
     if (awake.length && !groups.has(NOTES_SUBJECT)) groups.set(NOTES_SUBJECT, []);
@@ -534,8 +535,8 @@ window.WizCore.chats = function createChats(H) {
     const waits = k => groups.get(k).filter(waitsOn).length + notesOf(k).filter(it => noteRank(it) === 1).length, size = k => groups.get(k).length + notesOf(k).length;
     const keys = subjectSort([...groups.keys()], (a, b) => (a === 'Other') - (b === 'Other') || waits(b) - waits(a) || size(b) - size(a) || a.localeCompare(b));
     const ar = (dir, k, off, label, glyph) => `<button type="button" data-subjmove="${dir}" data-subjkey="${esc(k)}" aria-label="${label} ${esc(k)}"${off ? ' disabled' : ''}>${glyph}</button>`;
-    return bar + keys.map((k, i) => { const l = groups.get(k), wN = waits(k), last = i === keys.length - 1;
-      return `<div class="ch-subj" data-morph-key="subj:${esc(k)}"><span>${esc(k)}</span><small>${wN ? `${wN} waiting · ` : ''}${size(k)}</small><span class="ch-subj-mv" role="group" aria-label="Reorder ${esc(k)}">${ar('top', k, !i, 'Move to top', '<span class="ch-subj-2up" aria-hidden="true"><i>↑</i><i>↑</i></span>')}${ar('up', k, !i, 'Move up', '↑')}${ar('down', k, last, 'Move down', '↓')}</span></div>` + withNotes(l, notesOf(k), rowFn); }).join('') + later;
+    return top + keys.map((k, i) => { const l = groups.get(k), wN = waits(k), last = i === keys.length - 1;
+      return `<div class="ch-subj" data-morph-key="${esc(mk(k))}"><span>${esc(k)}</span><small>${wN ? `${wN} waiting · ` : ''}${size(k)}</small><span class="ch-subj-mv" role="group" aria-label="Reorder ${esc(k)}">${ar('top', k, !i, 'Move to top', '<span class="ch-subj-2up" aria-hidden="true"><i>↑</i><i>↑</i></span>')}${ar('up', k, !i, 'Move up', '↑')}${ar('down', k, last, 'Move down', '↓')}</span></div>` + withNotes(l, notesOf(k), rowFn); }).join('') + later;
   }
   /* Notifications listed in Ready like any chat (a live package holds WosSkinHost.inboxList): unread ones are awake
    * rows that Newest / Oldest place by when they arrived, Priority by their own priority (4–5 beside Needs you, 3
@@ -1094,7 +1095,8 @@ window.WizCore.chats = function createChats(H) {
       + (byStatus() ? SECTIONS_STATUS : SECTIONS_DAY).map(([k, label]) => {
       const list0 = PW && k === 'errors' ? PW.errorsFilter(groups[k]) : groups[k];
       // Ready's order is chosen before paging, so Priority never pages a needs-you row out of the first page.
-      const list = k === 'ready' && !n ? readyOrdered(list0) : k === 'archive' && !n && !filtered && Object.keys(LIVE.windows || {}).length ? list0.slice(0,50) : list0;
+      const dayOrdered = !n && (k === 'ready' || (!byStatus() && (k === 'yesterday' || k === 'pastWeek')));
+      const list = dayOrdered ? readyOrdered(list0) : k === 'archive' && !n && !filtered && Object.keys(LIVE.windows || {}).length ? list0.slice(0,50) : list0;
       // Errors also holds failed background work and voice notes that didn't send (chat-power.js #12).
       const extra = PW && k === 'errors' && !n ? PW.errorsExtra() : { n: 0, html: '' };
       const nt = k === 'ready' && !n && !filtered && !AGID ? notes() : null, notesN = nt ? nt.awake.length + nt.later.length : 0;
@@ -1107,7 +1109,7 @@ window.WizCore.chats = function createChats(H) {
       const archiveNote = k === 'archive' && !n && !filtered && windowMeta ? `<span class="ch-none">Newest ${list.length} of ${windowMeta.archiveTotal} · search to find older chats</span>` : '';
       const shown = c.more[k] ? list : list.slice(0, SEC_PAGE);
       return `<section class="ch-sec${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length + extra.n + notesN}</small>${waitN ? `<b class="wait">${waitN} need you</b>` : ''}${newN ? `<b>${newN} new</b>` : ''}<i aria-hidden="true"></i></button>
-        ${open ? `<div class="ch-sec-b">${k === 'archive' && !n && !filtered && !AGID ? '<div data-slot="archive-top"></div>' : ''}${k === 'archive' && !n && !filtered ? archSel() : ''}${archiveNote}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-top"></div>' + morningCard() : ''}${list.length || extra.n || notesN ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : k === 'ready' && !n ? readyBody(shown, s => chatRow(s, null), nt) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-end"></div>' : ''}</div>` : ''}</section>`;
+        ${open ? `<div class="ch-sec-b">${k === 'archive' && !n && !filtered && !AGID ? '<div data-slot="archive-top"></div>' : ''}${k === 'archive' && !n && !filtered ? archSel() : ''}${archiveNote}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-top"></div>' + morningCard() : ''}${list.length || extra.n || notesN ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : dayOrdered ? readyBody(shown, s => chatRow(s, null), nt, k) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-end"></div>' : ''}</div>` : ''}</section>`;
     }).join('');
     // Progress sits above the results (James, 25 Oct 2026: it was hidden below a long Archive); the final line stays under them.
     if (bs && LST.ok) body = BS.scanning(bs) || bs.busy ? BS.footer(bs) + body : body + BS.footer(bs);
