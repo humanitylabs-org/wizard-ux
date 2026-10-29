@@ -396,7 +396,7 @@
       // Settings redraws only when what it shows itself changes (the list entry, phones, Turn off); the component
       // redraws its own part.
       onChange: pc => {
-        const v = pc.view, key = JSON.stringify([pc.status, pc.lost, v?.step, v?.phones]);
+        const v = pc.view, key = JSON.stringify([pc.status, pc.lost, pc.connecting, v?.step, v?.phones]);
         if (key !== PH.summary) { PH.summary = key; for (const m of mounts) m.render(); }
       },
     });
@@ -405,7 +405,7 @@
     return PH.pc;
   }
   function phonesAvailable() { const pc = phones(); if (!pc) return false; pc.refresh(15000); return pc.status !== 'denied'; }
-  const osName = os => ({ ios: 'iPhone', android: 'Android', ipados: 'iPad' })[String(os || '').toLowerCase()] || 'Phone';
+  const osName = os => ({ ios: 'iPhone', android: 'Android', ipados: 'iPad' })[String(os || '').toLowerCase()] || 'Device';
   function closePhonesSheet(ctx) { PH.confirm = false; PH.error = ''; ctx.render(); ctx.root.querySelector('[data-st="phones-off"]')?.focus(); }
   register({ id: 'phones', page: 'phones', aliases: ['phones', 'devices', 'phone-access'], available: phonesAvailable, html() {
     const pc = phones(); if (!pc) return '';
@@ -413,7 +413,7 @@
     let h = '<div class="st-group"><h4>Device access</h4><div class="st-pc" data-phone-connect></div></div>';
     if (pc.on && !pc.connecting) {
       h += '<div class="st-group"><h4>Your devices</h4>';
-      h += v.phones.length ? v.phones.map(p => `<div class="st-row static"><span class="st-tx"><b>${esc(p.name)}</b><small>${esc(osName(p.os))} · ${p.online ? 'Online' : 'Offline'}</small></span></div>`).join('')
+      h += v.phones.length ? v.phones.map(p => `<div class="st-row wz-row static"><span class="st-tx wz-main"><b>${esc(p.name)}</b><small>${esc(osName(p.os))} · ${p.online ? 'Online' : 'Offline'}</small></span></div>`).join('')
         : '<div class="st-empty">No device on your Tailscale account yet.</div>';
       h += '<a class="st-row" data-st="phones-manage" href="https://login.tailscale.com/admin/machines" target="_blank" rel="noopener noreferrer"><span class="st-tx"><b>Remove a device</b><small>Devices are listed on your Tailscale account. Remove one there and it can’t reach Wizard any more.</small></span><span class="st-go">↗</span></a>';
       h += '</div>';

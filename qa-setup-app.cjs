@@ -62,7 +62,7 @@ async function decode(browser,el) {
   ok(count(await log(),'POST','/wizard/v1/setup/seen')===1,`${mode}: first-run seen posted exactly once`);
   if(mode==='phone') ok(await p.evaluate(()=>{ const w=Object.values(__wos.wins).find(w=>w.appId==='setup'); return __wos.desks[__wos.idx]?.wins.includes(w.id); }), 'phone: Setup is on the visible desk');
   await phone(f); await step(f,'off');
-  ok(await f.locator('[data-pc="start"]').innerText()==='Connect a phone',`${mode}: off renders shared Connect control, not removed step markup`);
+  ok(await f.locator('[data-pc="start"]').innerText()==='Connect a device',`${mode}: off renders shared Connect control, not removed step markup`);
   await f.locator('[data-pc="start"]').click(); await step(f,'signin');
   await f.waitForFunction(()=>document.querySelector('[data-pc="open"]')?.textContent==='Open again');
   ok(outside.filter(u=>u===URLS.auth).length===1,`${mode}: sign-in opens outside once`);
@@ -79,7 +79,8 @@ async function decode(browser,el) {
   await change(f,{phone:{step:'phone_seen'}},'phone_seen');
   ok((await text(f,'.pc-ok')).includes('connected'),`${mode}: connected state`);
   await f.locator('[data-pc="again"]').click();
-  ok(await f.locator('.pc-again').isVisible(),`${mode}: Connect another phone expands the same component`);
+  ok(await f.locator('[data-pc-flow]').isVisible(),`${mode}: Connect another device opens the shared flow`);
+  await f.locator('[data-pc="flow-close"]').click();
   await f.locator('[data-act="menu"]').click();
   if(mode==='phone') { await p.evaluate(()=>window.__wosNativeBack()); ok(await f.locator('#menu').isHidden(),'phone: Back closes menu only'); await f.locator('[data-act="menu"]').click(); }
   await f.locator('[data-act="ask-reset"]').click();

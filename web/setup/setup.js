@@ -115,6 +115,7 @@
     S.screen = 'phone';
     $('list').hidden = true; $('phone').hidden = false; scrollTo(0, 0);
     renderPhone(); log('screen:phone');
+    if (PC.on || S.list.data?.items?.some(i => i.id === 'phone' && i.state === 'done')) PC.connectAnother();
     PC.refresh();
   }
   function closePhone() {
@@ -129,7 +130,7 @@
   function closeMenu(fromBack) { if (!S.menu) return; S.menu = false; $('menu').hidden = true; if (!S.sheet) $('scrim').hidden = true; const h = menuHold; menuHold = null; if (!fromBack) h?.release(); }
   function openSheet() { closeMenu(); S.sheet = true; $('sheet').hidden = false; $('scrim').hidden = false; sheetHold = WA?.back.push(() => { closeSheet(true); return true; }); }
   function closeSheet(fromBack) { if (!S.sheet) return; S.sheet = false; $('sheet').hidden = true; $('scrim').hidden = true; const h = sheetHold; sheetHold = null; if (!fromBack) h?.release(); }
-  WA?.back.register({ canGoBack: () => S.screen === 'phone', back: () => closePhone() });
+  WA?.back.register({ canGoBack: () => S.screen === 'phone', back: () => PC.back() || closePhone() });
   window.__setup = { get state() { return S; }, get phone() { return { status: PC.status, view: PC.view }; }, get inView() { return inView; }, back: () => WA ? WA.back : null, layout };
 
   /* ---------------- render: checklist ---------------- */
@@ -143,9 +144,9 @@
     const item = (L.data?.items || []).find(i => i && i.id === 'phone') || { id: 'phone', title: 'Connect another device', state: '' };
     const st = L.status === 'loading' ? 'loading' : L.status === 'neterr' ? 'neterr' : item.state;
     const line = st === 'done' && item.phone_ready === true ? 'Ready to open on your device.'
-      : { loading: 'Checking…', neterr: 'Can’t check right now.', todo: 'From anywhere, not just at home.', in_progress: 'Not finished. Pick up where you left off.', done: 'Your phone is connected.' }[st] || 'From anywhere, not just at home.';
+      : { loading: 'Checking…', neterr: 'Can’t check right now.', todo: 'From anywhere, not just at home.', in_progress: 'Not finished. Pick up where you left off.', done: 'Your device is connected.' }[st] || 'From anywhere, not just at home.';
     const end = st === 'done' ? `<svg class="okmark" viewBox="0 0 24 24" aria-label="Done"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>` : st === 'in_progress' ? `<span class="dot" aria-label="In progress"></span>${CHEV}` : CHEV;
-    h += `<div class="rows"><button class="row" data-act="open-phone" data-state="${esc(st)}"><span class="ic" aria-hidden="true">📱</span><span class="bd"><b>${esc(str(item.title) || 'Connect another device')}</b><small>${line}</small></span><span class="end">${end}</span></button></div>`;
+    h += `<div class="rows"><button class="row" data-act="open-phone" data-state="${esc(st)}"><span class="ic" aria-hidden="true">📱</span><span class="bd"><b>Connect another device</b><small>${line}</small></span><span class="end">${end}</span></button></div>`;
     if (L.status === 'neterr') h += '<button class="link" data-act="retry-list">Try again</button>';
     if (L.status === 'ok') h += window.WosRecommended?.html() || '';
     h += '<p class="foot custom" data-customize>Everything you see is customizable. Try asking your Wizard for one change.</p>';
@@ -177,7 +178,7 @@
 
   /* ---------------- taps ---------------- */
   document.addEventListener('click', e => {
-    if (e.target.closest('[data-pc="flow-done"]')) { show('list'); return; }
+    if (e.target.closest('[data-pc="flow-done"]')) { closePhone(); return; }
     const t = e.target.closest('[data-act]');
     if (!t) return;
     const act = t.dataset.act;

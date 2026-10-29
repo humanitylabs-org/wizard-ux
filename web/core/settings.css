@@ -83,7 +83,7 @@ a.st-row { color: inherit; text-decoration: none; }
 .st-root, .dsettings {
   --wz-base: var(--bg); --wz-overlay: var(--glass-2);
   --wz-text: var(--ink); --wz-text-secondary: var(--ink-2); --wz-text-muted: var(--ink-3);
-  --wz-border: var(--line-2); --wz-accent: var(--violet-2); --wz-warning: var(--amber);
+  --wz-on-accent: var(--bg); --wz-border: var(--line-2); --wz-accent: var(--violet-2); --wz-warning: var(--amber);
   --wz-surface: color-mix(in srgb, var(--wz-text) 6%, transparent);
   --wz-surface-raised: color-mix(in srgb, var(--wz-text) 10%, transparent);
   --wz-accent-soft: color-mix(in srgb, var(--wz-accent) 16%, transparent);

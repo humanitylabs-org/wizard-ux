@@ -57,3 +57,5 @@
 .pc .pc-flow-step summary + div { margin-top:12px; }
 .pc .pc-platforms { display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; }
 .pc .pc-again { padding-top:12px; border-top:1px solid var(--wz-border); }
+
+.pc .pc-checklist { padding:12px; border-radius:var(--wz-radius-tile,13px); background:var(--wz-surface); font-size:15px; margin-bottom:12px; }
