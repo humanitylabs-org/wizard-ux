@@ -298,6 +298,8 @@ test('eighth review: only stamped assets are immutable; a child sign-out survive
   const ng = read('packaging/nginx.conf.template'), usage = read('web/core/usage.js');
   assert.match(ng, /map "\$arg_v:\$uri" \$wizard_cache \{\n    default "no-cache";\n    "~\^\[0-9a-f\]\{12\}:\.\*\/sw\\\.js\$" "no-cache";/, 'pages and sw.js stay no-cache even with ?v=');
   assert.doesNotMatch(ng, /map \$arg_v \$wizard_cache/, 'no blanket ?v= rule');
+  assert.match(ng, /map \$status \$wizard_cache_ok \{ 200 \$wizard_cache; 304 \$wizard_cache; default "no-store"; \}/, 'errors are never kept');
+  assert.match(read('packaging/static.conf'), /add_header Cache-Control \$wizard_cache_ok always;/);
   assert.match(usage, /const childOut = \['signed_out', 'auth', 'reauth'\]\.includes\(a\.status\); return \{\.\.\.a, providerId:p\.id, providerName:p\.name, status:childOut \? a\.status :/);
 });
 

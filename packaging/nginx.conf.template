@@ -27,6 +27,8 @@ http {
     "~^[0-9a-f]{12}:.*/sw\.js$" "no-cache";
     "~^[0-9a-f]{12}:.*\.(js|mjs|css|svg|webp|png|jpe?g|gif|ico|woff2?|json)$" "public, max-age=31536000, immutable";
   }
+  # Only a successful answer may be kept for a year; an error (a file missing mid-deploy) is never cached.
+  map $status $wizard_cache_ok { 200 $wizard_cache; 304 $wizard_cache; default "no-store"; }
   # Compress the shell's text files (scripts and styles are ~4x smaller); event streams and JSON APIs are left as is.
   gzip on; gzip_vary on; gzip_proxied any; gzip_comp_level 5; gzip_min_length 1024;
   gzip_types application/javascript text/javascript text/css image/svg+xml text/markdown application/manifest+json;
