@@ -256,6 +256,14 @@ test('fourth review: sign-in state survives normalisation, managed workspaces ge
   assert.match(desk, /controls: el => !!el\?\.closest\('#voicePill,#micBtn,#dictateBtn,\.voice-menu'\)/);
 });
 
+test('fifth review: System pages open by deep link; phone Ready opens the unfiltered list', () => {
+  const set = read('web/core/settings.js'), phone = read('web/app.js');
+  assert.match(set, /const sys = PAGES\.find\(p => p\.group === 'System' && p\.id === view\); if \(!sys\) return false;/);
+  assert.match(set, /if \(sys\.available\(\)\) open\(view\); else \{ let n = 0; const t = setInterval/, 'a link that arrives before the package waits for it');
+  assert.match(read('web/core/deeplink.js'), /window\.WosSettings\?\.systemPages\?\.includes\(view\)/, '?view=network is a link the shell accepts');
+  assert.match(phone, /openSessions: kind => \(kind === 'working' \? openChatsFiltered\('working', \{ card: true \}\) : openChatsList\(\)\)/);
+});
+
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));

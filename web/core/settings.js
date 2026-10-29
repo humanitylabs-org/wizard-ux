@@ -684,7 +684,14 @@
   function route(view, open) {
     if (view === 'settings') { open(); return true; }
     const f = [...features.values()].find(f => f.aliases?.includes(view));
-    if (!f && !features.has(view)) return false; open(f?.id || view); return true;
+    // System pages filled by a package (?view=network etc.) open once something is on them.
+    if (!f && !features.has(view)) {
+      const sys = PAGES.find(p => p.group === 'System' && p.id === view); if (!sys) return false;
+      // A link can arrive before the package fills the page: wait for it (up to 10 s), then open.
+      if (sys.available()) open(view); else { let n = 0; const t = setInterval(() => { if (sys.available()) { clearInterval(t); open(view); } else if (++n >= 40) clearInterval(t); }, 250); }
+      return true;
+    }
+    open(f?.id || view); return true;
   }
   // Shared focus containment. Existing shell Back guards own history; never add a second guard here.
   function trap(event, panel) {
@@ -695,5 +702,5 @@
     if (at < 0 || (!event.shiftKey && at === controls.length - 1) || (event.shiftKey && at === 0)) { event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0].focus(); }
   }
   window.WosMySkin?.on(() => { for (const m of mounts) m.render(); });
-  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
+  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, systemPages: Object.freeze(PAGES.filter(p => p.group === 'System').map(p => p.id)), trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
 })();
