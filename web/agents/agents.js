@@ -4,7 +4,7 @@
  * Screens (state only; Back walks them through the shared WizardApp facade, never out of Wizard):
  *   list            every agent: sigil, name, harness, model provider · model, Private/Standard, status
  *   new (3 steps)   Harness → Model provider → Permissions (a preset, then adjust)  → Create
- *   detail          edit any time: model, outside tools, files, Wizard apps, agent apps (tools/connectors), other agents
+ *   detail          edit any time: model, outside tools, files, apps, agent apps (tools/connectors), other agents
  *   sheets          pickers and confirmations, above any screen
  *
  * Data: the Agent Service contract (core/agents.js header). Writes are PATCH/POST to /wizard/v1/agents…; the server
@@ -107,7 +107,7 @@
       <p class="ag-lede">Each agent has its own harness, model provider, permissions and chats.</p>
       ${body}
       ${routingHtml()}
-      <p class="ag-note">Apps are apps, agents are agents: add Wizard apps and agent apps to an agent from its page.${framed ? ' · <button type="button" class="ag-link" data-system>Your system</button>' : ''}</p>
+      <p class="ag-note">Apps are apps, agents are agents: add apps and agent apps to an agent from its page.${framed ? ' · <button type="button" class="ag-link" data-system>Your system</button>' : ''}</p>
       ${AG.available ? `<button type="button" class="ag-btn ag-fab" data-new>${PLUS}New agent</button>` : ''}`;
   }
 
@@ -222,7 +222,7 @@
     const appRow = (a, kind) => {
       const meta = (kind === 'wizard' ? o.wizard_apps : o.agent_apps).find(x => x.id === a) || { id: a, label: AG.friendly(a), description: '', kind: 'app' };
       const ic = window.WizSigil ? window.WizSigil.box('span', 'ic', { id: meta.id, name: meta.label, icon: meta.icon, colors: meta.colors }) : '';
-      return `<div class="ag-item" data-app-item="${esc(a)}">${ic}<span class="tx"><b>${esc(meta.label)}</b><small>${esc(kind === 'wizard' ? 'Wizard app' : meta.kind === 'tool' ? 'Tool' : meta.kind === 'connector' ? 'Connector' : 'Agent app')}${meta.description ? ' · ' + esc(meta.description) : ''}</small></span>${appsEditable ? `<button type="button" class="ag-x" data-remove="${kind}" data-v="${esc(a)}" aria-label="Remove ${esc(meta.label)}">✕</button>` : ''}</div>`;
+      return `<div class="ag-item" data-app-item="${esc(a)}">${ic}<span class="tx"><b>${esc(meta.label)}</b><small>${esc(kind === 'wizard' ? 'App' : meta.kind === 'tool' ? 'Tool' : meta.kind === 'connector' ? 'Connector' : 'Agent app')}${meta.description ? ' · ' + esc(meta.description) : ''}</small></span>${appsEditable ? `<button type="button" class="ag-x" data-remove="${kind}" data-v="${esc(a)}" aria-label="Remove ${esc(meta.label)}">✕</button>` : ''}</div>`;
     };
     const wa = Array.isArray(p.wizard_apps) ? p.wizard_apps : [], aa = Array.isArray(p.agent_apps) ? p.agent_apps : [];
     return `<div class="ag-sec">Outside tools<small>${tools.length ? `${tools.length} on` : 'All off'}</small></div>
@@ -231,9 +231,9 @@
       <div class="ag-sec">Files</div>
       <div class="ag-seg" role="radiogroup" aria-label="Files" style="--n:${FILES.length}">${FILES.map(([v, l]) => `<button type="button" role="radio" aria-checked="${p.files === v}" data-files="${v}" ${dis}>${l}</button>`).join('')}</div>
       <p class="ag-note">${esc((FILES.find(f => f[0] === p.files) || [])[2] || '')}</p>
-      <div class="ag-sec">Wizard apps<small>${wa.length}</small></div>
-      <div class="ag-card" data-wizard-apps>${wa.map(a => appRow(a, 'wizard')).join('') || '<div class="ag-empty-line">No Wizard apps.</div>'}
-        ${appsEditable ? `<button type="button" class="ag-add" data-add="wizard">${PLUS.replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"')}Add Wizard app</button>` : ''}</div>
+      <div class="ag-sec">Apps<small>${wa.length}</small></div>
+      <div class="ag-card" data-wizard-apps>${wa.map(a => appRow(a, 'wizard')).join('') || '<div class="ag-empty-line">No apps.</div>'}
+        ${appsEditable ? `<button type="button" class="ag-add" data-add="wizard">${PLUS.replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"')}Add app</button>` : ''}</div>
       <div class="ag-sec">Agent apps<small>tools &amp; connectors · ${aa.length}</small></div>
       <div class="ag-card" data-agent-apps>${aa.map(a => appRow(a, 'agent')).join('') || '<div class="ag-empty-line">No agent apps, tools or connectors.</div>'}
         ${appsEditable ? `<button type="button" class="ag-add" data-add="agent">${PLUS.replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"')}Add agent app</button><button type="button" class="ag-add" data-add="tool">${PLUS.replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"')}Add tool or connector</button>` : ''}</div>
@@ -311,8 +311,8 @@
       const typed = o.agent_apps.some(x => x.kind !== 'app'); // the server names tools/connectors; else one pool
       const pool = sh.kind === 'wizard' ? o.wizard_apps : typed ? o.agent_apps.filter(x => sh.kind === 'tool' ? x.kind !== 'app' : x.kind === 'app') : o.agent_apps;
       const left = pool.filter(x => !have.has(x.id));
-      const title = sh.kind === 'wizard' ? 'Add Wizard app' : sh.kind === 'tool' ? 'Add tool or connector' : 'Add agent app';
-      const note = sh.kind === 'wizard' ? 'Wizard apps have their own screen. The agent can use them for you.' : sh.kind === 'tool' ? 'Tools and connectors give the agent one capability or one account.' : 'Agent apps run on your Wizard with no screen of their own.';
+      const title = sh.kind === 'wizard' ? 'Add app' : sh.kind === 'tool' ? 'Add tool or connector' : 'Add agent app';
+      const note = sh.kind === 'wizard' ? 'Apps have their own screen. The agent can use them for you.' : sh.kind === 'tool' ? 'Tools and connectors give the agent one capability or one account.' : 'Agent apps run on your Wizard with no screen of their own.';
       inner = `<h2>${title}</h2><p class="ag-note">${note}${S.view.name !== 'new' && AG.get(S.view.id)?.privacy === 'private' ? ' A private agent sends what it reads to these apps; they run on your Wizard.' : ''}</p>
         <div style="margin-top:12px">${left.map(x => `<button type="button" class="ag-choice" data-addpick="${esc(x.id)}"><span class="tx"><b>${esc(x.label)}</b>${x.description ? `<small>${esc(x.description)}</small>` : ''}</span><span class="rd"></span></button>`).join('') || `<div class="ag-empty-line">${pool.length ? 'All of them are added already.' : 'Nothing to add yet. Get more from the App Store.'}</div>`}</div>
         <div class="acts" style="grid-template-columns:1fr"><button type="button" class="ag-btn ghost" data-sheetclose>Close</button></div>`;
