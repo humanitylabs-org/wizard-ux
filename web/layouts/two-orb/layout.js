@@ -96,7 +96,7 @@ export default function setup(api) {
     orb.classList.toggle('app-claim', !!claim);
     if (claim) {
       orb.hidden = false;
-      const c = claim.colors?.[0] || '#8f63ff';
+      const c = claim.colors?.[0] || 'var(--wz-accent)'; // the app's registry colour, else the skin's accent
       orb.style.setProperty('--c', c);
       const h = hueOf(c); if (h != null) orb.style.setProperty('--h', h);
       if (glyph.dataset.icon !== claim.icon) { glyph.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${GLYPHS[claim.icon] || GLYPHS.plus}</svg>`; glyph.dataset.icon = claim.icon; }
