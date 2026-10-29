@@ -187,20 +187,48 @@ export default function setup(api) {
   const tsTab = h('button', { type: 'button', cls: 'mh-ts-tab', data: { toggle: 'ts' }, hidden: true });
   const map = h('div', { cls: 'mh-map' + (S.bars ? ' is-details' : '') }, lines, tsTab, rowSt, rowTs, rowMn, rowAct, rowMore, rowPp, rowDv, rowChev);
   // The strip: which Wizard, AI fuel, chats, last backup, network. Each part opens its page in Settings.
-  const glance = h('div', { cls: 'mh-glance', role: 'group', 'aria-label': 'Your Wizard at a glance' });
-  const wsMenu = h('div', { cls: 'mh-ws-menu', hidden: true });
-  root.append(h('div', { cls: 'mh-body' }, glance, wsMenu));
+  // Desktop: the glance lives in the top bar (menu-bar style); phone: a widget on Home. Same parts, two designs.
+  const desk = !!document.getElementById('bar');
+  const homeWs = h('div', { cls: 'mh-ws is-home-ws', role: 'tablist', 'aria-label': 'Which Wizard' });
+  const glance = h('div', { cls: 'mh-glance ' + (desk ? 'is-bar' : 'is-widget'), role: 'group', 'aria-label': 'Your Wizard at a glance', 'data-look': api.storage.get('look') || 'b' });
+  // Desktop: which Wizard is a dropdown at the top-left (above desks in the hierarchy); the status icons sit with the
+  // bar's own icons at the top-right, same size and hover, no extra pill.
+  const wizBtn = h('button', { type: 'button', cls: 'mh-wiz', data: { toggle: 'wsm' }, 'aria-haspopup': 'menu' });
+  const wizMenu = h('div', { cls: 'mh-wiz-menu', role: 'menu', hidden: true });
+  const wizBox = h('div', { cls: 'mh-root is-topbar is-wiz' }, wizBtn, wizMenu);
+  const barBox = h('div', { cls: 'mh-root is-topbar' }, glance);
+  // Phone: the same workspace dropdown, at the top-left of Home; the widget below it.
+  root.append(h('div', { cls: 'mh-body' }, ...(desk ? [] : [h('div', { cls: 'mh-phone-top' }, wizBox), glance])));
   // Settings sections: each its own .mh-root so the same styles and size rules apply there.
   const sec = (cls, ...kids) => h('div', { cls: 'mh-root is-settings ' + cls }, ...kids);
   const netBox = h('div', { cls: 'mh-net' }), storeBox = h('div', { cls: 'mh-store' });
   const secMap = sec('is-overview', wsBar, map), secAI = sec('is-ai', aiRow, aiList), secNet = sec('is-net', netBox), secStore = sec('is-store', storeBox);
 
   /* ---------- top ---------- */
-  function renderTabs() {
+  function renderTabs() { fillTabs(wsBar); fillTabs(homeWs); renderWiz(); }
+  // The top-left shows the workspace this screen is connected to. Others he manages aren't connected yet: greyed,
+  // and a tap explains what switching will mean instead of pretending to switch.
+  function renderWiz() {
+    const own = thisName(), open = S.open.has('wsm'), why = S.open.has('wsm-why') ? S.whyWs : '';
+    wizBtn.setAttribute('aria-expanded', String(open)); wizBtn.setAttribute('aria-label', `Workspace: ${own}. Switch workspace`);
+    wizBtn.replaceChildren(h('b', { text: own }), (() => { const v = sv('svg', { class: 'mh-wiz-car' + (open ? ' is-up' : ''), viewBox: '0 0 24 24', 'aria-hidden': 'true' }); sv('path', { d: 'm7 10 5 5 5-5' }, v); return v; })());
+    wizMenu.hidden = !open;
+    const g = why ? managedOf(why) : null;
+    wizMenu.replaceChildren(...(open ? [h('small', { cls: 'mh-wiz-h', text: 'Workspaces' }),
+      h('button', { type: 'button', role: 'menuitemradio', 'aria-checked': 'true', data: { toggle: 'wsm' } }, h('b', { text: own }), h('small', { text: 'Connected · this screen' })),
+      ...managedList().map(m => h('button', { type: 'button', role: 'menuitem', cls: 'is-off' + (why === m.id ? ' is-why' : ''), data: { wsWhy: m.id } }, h('b', { text: m.name }), h('small', { text: `${m.org ? m.org + ' · ' : ''}Not connected` }))),
+      g ? h('div', { cls: 'mh-wiz-why' },
+        h('span', { text: `${g.name} isn’t running Wizard yet, so there’s nothing to switch to.` }),
+        h('span', { text: 'Once it is, switching swaps everything (apps, chats, agents) for that workspace’s own. The apps will switch in place; a browser opens its address.' }),
+        h('button', { type: 'button', cls: 'is-add', data: { ws: g.id, go: 'overview' } }, `See what’s known about ${g.name} in Settings ›`)) : null,
+      h('button', { type: 'button', cls: 'is-add', role: 'menuitem', data: { act: 'add-managed' } }, '+ Add a workspace')].filter(Boolean) : []));
+  }
+
+  function fillTabs(bar) {
     const tab = (id, name) => h('button', { type: 'button', role: 'tab', data: { ws: id }, 'aria-selected': String(S.ws === id) }, name);
     const add = h('button', { type: 'button', cls: 'mh-ws-add', 'aria-label': 'Add a Wizard you manage', data: { act: 'add-managed' } });
     const s = sv('svg', { class: 'mh-i', viewBox: '0 0 24 24', 'aria-hidden': 'true' }, add); for (const [t, a] of PLUS) sv(t, a, s);
-    wsBar.replaceChildren(tab('mine', thisName()), ...managedList().map(g => tab(g.id, g.name)), add);
+    bar.replaceChildren(tab('mine', thisName()), ...managedList().map(g => tab(g.id, g.name)), add);
   }
   // A fuel tag: "AI", then E, ten cells that fill, F. No percentage at rest.
   function gaugeEl(g, still) {
@@ -324,8 +352,8 @@ export default function setup(api) {
     fix: () => { const open = openOnes(), names = open.map(m => m.name).join(' and ');
       return [`Close ${names} to the internet so ${open.length === 1 ? 'it is' : 'they are'} reachable only over Tailscale, like Main.`, '',
         ...open.map(m => `${m.name}: ${(m.access.details || []).join('; ')}`), '',
-        'For each one: test its ports from another machine first, apply the fix with a safety net that undoes itself if access is lost, test again from outside, then update the map. Ask me before anything that needs my password, and tell me if a fix would cut off something I use (like AnyDesk).'].join('\n'); },
-    oneway: () => 'Make my Tailscale one-way: my phone and Mac can reach my machines, my machines can reach each other (sync and work), but my machines cannot reach my phone or Mac. Show me the exact rule change first, keep a way back, and don\u2019t apply it until I say so.',
+        'For each one: test its ports from another machine first, apply the fix with a safety net that undoes itself if access is lost, test again from outside, then update the map. Ask me before anything that needs my password, and tell me if a fix would cut off something I use (like a remote-desktop app).'].join('\n'); },
+    oneway: () => 'Make my Tailscale one-way: my own devices (phone, laptop) can reach my machines, my machines can reach each other (sync and work), but my machines cannot reach my own devices. Show me the exact rule change first, keep a way back, and don\u2019t apply it until I say so.',
     check: () => 'Check again how open each of my machines is from the internet: test their ports from another machine over IPv4 and IPv6, then update the shields on my map. Don\u2019t change anything.',
   };
   // Tailscale is the network, not a device: a dashed outline around everything on it, with one small tab on its edge.
@@ -340,7 +368,7 @@ export default function setup(api) {
       h('span', { cls: 'mh-ts-list' }, all.map(m => { const [w, x] = word(m); return h('span', { cls: 'mh-ts-row', 'data-x': x }, h('i'), h('b', { text: m.name }), h('span', { text: w })); })),
       h('span', { text: 'Who can reach whom: right now any device on your Tailscale can reach any other, both ways (Tailscale’s starting rule).' }),
       h('span', { cls: 'mh-act-btns' },
-        [bad.length ? ['fix', `Close ${bad.length === 1 ? 'it' : 'them'}`, 'Tailscale becomes the only way in'] : null, ['oneway', 'Make it one-way', 'phone and Mac reach machines, not back'], ['check', 'Check again', 'tests every machine from outside']]
+        [bad.length ? ['fix', `Close ${bad.length === 1 ? 'it' : 'them'}`, 'Tailscale becomes the only way in'] : null, ['oneway', 'Make it one-way', 'your devices reach machines, not back'], ['check', 'Check again', 'tests every machine from outside']]
           .filter(Boolean).map(([id, text, note]) => h('button', { type: 'button', cls: 'mh-act-btn' + (id === 'fix' ? ' is-fix' : ''), data: { tsAsk: id } }, h('b', { text }), h('small', { text: note })))));
   }
   function paintTsTab() {
@@ -472,13 +500,15 @@ export default function setup(api) {
   const flip = k => { if (S.open.has(k)) S.open.delete(k); else S.open.add(k); };
   const onTap = e => {
     const top = e.currentTarget;
-    let b = e.target; while (b && b !== top && !(b.dataset && (b.dataset.ws || b.dataset.act || b.dataset.open || b.dataset.go || b.dataset.person || b.dataset.toggle || b.dataset.machine || b.dataset.ask || b.dataset.stAsk || b.dataset.tsAsk))) b = b.parentNode;
+    let b = e.target; while (b && b !== top && !(b.dataset && (b.dataset.ws || b.dataset.act || b.dataset.open || b.dataset.go || b.dataset.wsWhy || b.dataset.person || b.dataset.toggle || b.dataset.machine || b.dataset.ask || b.dataset.stAsk || b.dataset.tsAsk))) b = b.parentNode;
     if (!b || b === top) return;  // Sign in / Sign out carry the shell's own data-res-signin, which opens that app
     const d = b.dataset;
+    if (d.wsWhy) { S.whyWs = S.whyWs === d.wsWhy && S.open.has('wsm-why') ? '' : d.wsWhy; if (S.whyWs) S.open.add('wsm-why'); else S.open.delete('wsm-why'); renderWiz(); return; }
+    if (d.ws && d.go) { S.open.delete('wsm'); S.open.delete('wsm-why'); S.ws = d.ws; api.storage.set('ws', d.ws); fresh = true; paint(true); renderWiz(); api.settings?.open?.(d.go); return; }
     if (d.go) { if (d.go === 'chats') return api.data.read.sessions?.open('ready'); return api.settings?.open?.(d.go); }
-    if (d.toggle === 'wsm') { flip('wsm'); drawn.glance = ''; paint(); return; }
+    if (d.toggle === 'wsm') { flip('wsm'); renderWiz(); return; }
     if (d.open) return api.data.read.sessions?.open(d.open);
-    if (d.ws) { S.open.delete('wsm'); drawn.glance = ''; if (S.ws === d.ws) { paint(); return; } S.ws = d.ws; api.storage.set('ws', d.ws); fresh = true; paint(true); api.settings?.refresh?.(); return; }
+    if (d.ws) { S.open.delete('wsm'); drawn.glance = ''; renderWiz(); if (S.ws === d.ws) { paint(); return; } S.ws = d.ws; api.storage.set('ws', d.ws); fresh = true; paint(true); api.settings?.refresh?.(); return; }
     if (d.act) {
       const g = managedOf(S.ws), where = g ? `${g.name}'s Wizard` : 'my network';
       const ask = { 'add-managed': ['Add a Wizard I manage', 'Add a Wizard I manage to my map: '], 'add-device': ['Add a device', `Add a device to ${where} as a helper: `],
@@ -514,7 +544,7 @@ export default function setup(api) {
       b.firstElementChild?.classList.toggle('is-up', S.bars);
     }
   };
-  for (const el of [root, secMap, secAI, secNet, secStore]) api.listen(el, 'click', onTap);
+  for (const el of [root, barBox, ...(desk ? [wizBox] : []), secMap, secAI, secNet, secStore]) api.listen(el, 'click', onTap);
   api.listen(secAI, 'input', e => {
     const id = e.target?.dataset?.nick; if (!id) return;
     const v = String(e.target.value || '').trim().slice(0, 24);
@@ -530,28 +560,44 @@ export default function setup(api) {
       devices().map(d => [d.id, d.name, d.status, d.error, d.cpus, d.memoryTotalGB, diskGB(d), Math.round((d.memory || 0) / 5), Math.round((d.cpu || 0) / 5), Math.round((freeGB(d) || 0) / 5)]),
       myDevices(), sessions(), S.unread, backupRunning(), st && { ...st, age: st.age == null ? null : agoS(st.age), used: st.used == null ? null : gbFmt(st.used) },
       (S.backup?.standby?.machines || []).map(x => [x.id, x.verdict, (x.checks || []).map(c => c.ok)])]); };
+  // Pictures and one short value per part; the words live in the tooltip / screen-reader label and in Settings.
   function renderGlance() {
-    const g = managedOf(S.ws), x = sessions(), fuel = g ? null : gauge(), st = g ? null : storage(), bad = g ? 0 : openOnes().length;
-    const name = g ? g.name : thisName(), many = managedList().length > 0;
-    const sig = JSON.stringify([S.ws, name, many, S.open.has('wsm'), managedList().map(m => m.id), x.working, Math.min(x.ready, 6), S.unread, fuel && Math.round(fuel.left / 10), st && [st.state, st.age == null ? null : agoS(st.age)], bad, backupRunning(), devices().map(d => d.access?.exposure)]);
+    const g = null, x = sessions(), fuel = g ? null : gauge(), st = g ? null : storage(), bad = g ? 0 : openOnes().length;  // the bar always shows the connected workspace
+    const checked = devices().length && devices().every(d => d.access?.exposure === 'tailscale'), nM = g ? 1 : devices().length || 1;
+    const sig = JSON.stringify([S.ws, fuel && Math.round(fuel.left / 10), x.working, Math.min(x.ready, 8), S.unread, st && [st.state, st.age == null ? null : agoS(st.age)], bad, checked, nM, backupRunning(), people().length]);
     if (sig === drawn.glance) return; drawn.glance = sig;
-    const b = (go, cls, label, ...kids) => h('button', { type: 'button', cls: 'mh-gl-item ' + cls, data: { go }, 'aria-label': label }, ...kids);
     const dots = (n, cls) => Array.from({ length: n }, () => h('i', { cls }));
-    const checked = devices().length && devices().every(d => d.access?.exposure === 'tailscale');
-    glance.replaceChildren(...[
-      h('button', { type: 'button', cls: 'mh-gl-item is-name', data: { toggle: 'wsm' }, 'aria-expanded': String(S.open.has('wsm')), 'aria-label': `${name}. Switch Wizard` }, h('b', { text: name }), chev(S.open.has('wsm'))),
-      fuel ? gaugeEl(fuel) : null,
-      g ? null : b('chats', 'is-chats', `${x.working} working, ${x.ready} ready${S.unread ? `, ${S.unread} unread` : ''}. Open your chats`,
-        h('span', { cls: 'mh-dots' }, dots(Math.min(x.working, 6), 'work'), dots(Math.min(x.ready, 6 - Math.min(x.working, 6)), 'ready')), S.unread ? h('span', { cls: 'mh-bell' }, bell(), h('b', { text: String(Math.min(S.unread, 99)) })) : null),
-      st ? b('storage', 'is-backup', `${backupRunning() ? 'Backing up now' : st.age == null ? 'No backup yet' : `Backed up ${agoS(st.age)} ago`}. Open Storage in Settings`,
-        h('span', { 'data-x': st.state }, h('span', { cls: 'mh-sh-long', text: backupRunning() ? 'Backing up' : st.age == null ? 'No backup' : 'Backed up ' }), backupRunning() || st.age == null ? null : h('span', { text: `${agoS(st.age)} ago` }))) : null,
-      bad || checked ? b('network', 'is-net', bad ? `${bad} machines open to the internet. Open Network in Settings` : 'Network private. Open Network in Settings', h('span', { 'data-x': bad ? 'no' : 'ok', text: bad ? `${bad} open` : 'Private' })) : null,
-      b('overview', 'is-more', 'Open your network in Settings', h('span', { cls: 'mh-sh-long', text: 'Details' }), h('i', { cls: 'mh-go', 'aria-hidden': 'true', text: '›' })),
-    ].filter(Boolean));
-    wsMenu.hidden = !S.open.has('wsm');
-    wsMenu.replaceChildren(...(S.open.has('wsm') ? [...[['mine', thisName()], ...managedList().map(m => [m.id, m.name])].map(([id, n]) =>
-      h('button', { type: 'button', role: 'menuitemradio', 'aria-checked': String(S.ws === id), data: { ws: id } }, n)),
-      h('button', { type: 'button', cls: 'is-add', data: { act: 'add-managed' } }, '+ Add a Wizard you manage')] : []));
+    const tile = (go, cls, label, title, viz, val, badge) => h('button', { type: 'button', cls: 'mh-tile ' + cls, data: { go }, title, 'aria-label': `${label}: ${title}` },
+      h('span', { cls: 'mh-tile-viz' }, viz, badge || null), h('b', { cls: 'mh-tile-val', text: val ?? '' }), h('small', { cls: 'mh-tile-lab', text: label }));
+    const pic = k => h('span', { cls: 'mh-pic' }, art(k));
+    const parts = [
+      fuel ? h('div', { cls: 'mh-tile is-ai' }, gaugeEl(fuel)) : null,
+      g || desk ? null : tile('chats', 'is-chats', 'Chats', `${x.working} working, ${x.ready} ready${S.unread ? `, ${S.unread} unread` : ''}`,
+        h('span', { cls: 'mh-dots' }, dots(Math.min(x.working, 8), 'work'), dots(Math.min(x.ready, 8 - Math.min(x.working, 8)), 'ready')), null,
+        S.unread ? h('span', { cls: 'mh-badge', text: String(Math.min(S.unread, 99)) }) : null),
+      st ? tile('storage', 'is-backup', 'Backup', backupRunning() ? 'Backing up now' : st.age == null ? 'No backup yet' : `Backed up ${agoS(st.age)} ago${st.used != null ? ' · ' + gbFmt(st.used) : ''}`,
+        pic('store'), backupRunning() ? '…' : st.age == null ? '–' : agoS(st.age), st.state !== 'ok' ? h('span', { cls: 'mh-badge is-warn', text: '!' }) : null) : null,
+      g ? null : tile('network', 'is-net' + (bad ? ' is-bad' : checked ? ' is-ok' : ''), 'Security', bad ? `${bad} ${bad === 1 ? 'machine' : 'machines'} open to the internet` : checked ? 'Tailscale only' : 'Not checked yet',
+        pic('shield'), null, bad ? h('span', { cls: 'mh-badge', text: String(bad) }) : checked ? h('span', { cls: 'mh-badge is-ok', text: '✓' }) : null),
+      g ? null : tile('overview', 'is-mach', 'Machines', `${nM} ${nM === 1 ? 'machine' : 'machines'}${people().length ? ` · ${people().length} ${people().length === 1 ? 'person' : 'people'}` : ''}`,
+        pic('box'), String(nM)),
+    ].filter(Boolean);
+    if (desk) {
+      // Bar icons: the fuel meter, then one line icon each; a badge only when something needs you.
+      const ic = paths => { const v = sv('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true' }); for (const d of paths) sv('path', { d }, v); return v; };
+      const I = { store: ['M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3Z', 'M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6', 'M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3'],
+        shield: ['M12 3l7 3v6c0 4.2-3 7.4-7 9-4-1.6-7-4.8-7-9V6z'], server: ['M4 4h16v6H4z', 'M4 14h16v6H4z', 'M8 7h.01M8 17h.01'] };
+      const icon = (go, cls, label, paths, badge) => h('button', { type: 'button', cls: 'mh-bi ' + cls, data: { go }, title: label, 'aria-label': label }, ic(paths), badge || null);
+      glance.replaceChildren(...[
+        fuel ? gaugeEl(fuel) : null,
+        st ? icon('storage', 'is-backup' + (st.state !== 'ok' ? ' is-warn' : ''), backupRunning() ? 'Backing up now' : st.age == null ? 'No backup yet' : `Backed up ${agoS(st.age)} ago${st.used != null ? ' · ' + gbFmt(st.used) : ''}`, I.store, st.state !== 'ok' ? h('span', { cls: 'mh-badge is-warn', text: '!' }) : null) : null,
+        g ? null : icon('network', 'is-net' + (bad ? ' is-bad' : ''), bad ? `${bad} ${bad === 1 ? 'machine' : 'machines'} open to the internet` : checked ? 'Tailscale only' : 'Security not checked yet', I.shield, bad ? h('span', { cls: 'mh-badge', text: String(bad) }) : null),
+        g ? null : icon('overview', 'is-mach', `${nM} ${nM === 1 ? 'machine' : 'machines'} · your network`, I.server),
+      ].filter(Boolean));
+      if (glance.firstChild) glance.append(h('span', { cls: 'mh-bar-sep', 'aria-hidden': 'true' }));
+      return;
+    }
+    glance.replaceChildren(...parts);
   }
   function paint(force) {
     renderGlance();
@@ -582,7 +628,7 @@ export default function setup(api) {
   api.data.read.resources.watch(state => { const got = merge(state); if (got.devices || got.ai) keep(); paint(); readBackup(); });
 
   /* ---------- mount at Home; keep it there across Home repaints ---------- */
-  const mount = () => { if (api.slot.mount('home-main', root)) { api.data.read.resources.refresh(); api.frame(drawLines); } };
+  const mount = () => { if (desk) { api.slot.mount('dock-end', barBox, -1); api.slot.mount('bar-start', wizBox); } if (api.slot.mount('home-main', root)) { api.data.read.resources.refresh(); api.frame(drawLines); } };
   api.on('home', () => { mount(); paint(); });
   api.on('route', () => { mount(); readBackup(); });
   let ro = null;
@@ -593,6 +639,8 @@ export default function setup(api) {
   api.settings?.section('ai', 'ai', secAI, { subtitle: fuelText });
   api.settings?.section('net', 'network', secNet, { subtitle: () => { const n = openOnes().length; return n ? `${n} open to internet` : ''; } });
   api.settings?.section('store', 'storage', secStore, { subtitle: () => { const st = storage(); return st?.age != null ? `${agoS(st.age)} ago` : ''; } });
+  api.listen(document, 'click', e => { if (S.open.has('wsm') && e.target.isConnected && !wizBox.contains(e.target)) { S.open.delete('wsm'); S.open.delete('wsm-why'); renderWiz(); } });
+  api.listen(document, 'keydown', e => { if (e.key === 'Escape' && S.open.has('wsm')) { S.open.delete('wsm'); renderWiz(); wizBtn.focus(); } });
   S.res = api.storage.get('res') || {}; merge(api.data.read.resources.snapshot());
   paint(true); mount(); readBackup(true);
   return () => { ro?.disconnect(); };
