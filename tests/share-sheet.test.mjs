@@ -72,12 +72,15 @@ test('a pending share goes to one frame: the first live puller claims it until i
   assert.equal(S.pending('messenger', b).length, 0);
 });
 
-test('reviewed Messenger defaults offer images, never generic files', () => {
+test('Messenger defaults stay text/url; images only once a Messenger registers them', () => {
   const { S } = load();
+  assert.equal(S.wants('image'), false, 'a never-opened Messenger may not stage photos yet');
+  assert.equal(S.wants('file'), false);
+  S.register('messenger', { accepts: ['text', 'url', 'image'] });
   assert.equal(S.wants('image'), true);
   assert.equal(S.wants('file'), false);
   S.register('messenger', { accepts: ['text', 'url'] });
-  assert.equal(S.wants('image'), false, 'older app registration replaces defaults');
+  assert.equal(S.wants('image'), false, 'older app registration replaces it');
 });
 
 test('Blob handoffs preserve bytes and metadata; claim, isolate, clone and ack once', async () => {

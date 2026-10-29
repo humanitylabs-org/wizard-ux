@@ -59,7 +59,9 @@
   // Reviewed receivers offered before the app has ever been opened on this device (fresh install, new phone,
   // cleared storage). Until the catalog carries a manifest share declaration, this list is the only default; the
   // app's own WizardApp.share.receive registration replaces it (and adds its people) the first time it runs.
-  const DEFAULTS = Object.freeze({ messenger: Object.freeze({ accepts: Object.freeze(['text', 'url', 'image']), targets: Object.freeze([]) }) });
+  // Images stay out of the default until a Messenger that stages images (wizard-messenger#8) registers them itself:
+  // an older, never-opened Messenger offered an image would leave it pending until expiry.
+  const DEFAULTS = Object.freeze({ messenger: Object.freeze({ accepts: Object.freeze(['text', 'url']), targets: Object.freeze([]) }) });
   const live = kind => Object.entries({ ...DEFAULTS, ...receivers }).filter(([id, r]) => r?.accepts?.includes(kind) && installed(id));
   const rank = key => { const i = recent.indexOf(key); return i < 0 ? 1e6 : i; };
   function people(kind) {
