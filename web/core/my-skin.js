@@ -72,6 +72,11 @@
   }
   // The box owns recipes; this device caches first paint and migrates preview-only recipes once.
   const RECIPES = 'wos.own-skins.v1', BOX_CACHE = 'wos.own-skins.cache.v1', URL_SKINS = '/wizard/v1/skins';
+  // Leaving an own skin before the box answers is a pending intent, never a recipe write: it is shown at once
+  // and replayed as PUT /active {id:null} once the box confirms (dropped if the box meanwhile wears another).
+  const LEAVE = 'wos.own-skins.leave.v1';
+  let pendingLeave = null;
+  try { pendingLeave = localStorage.getItem(LEAVE) || null; } catch (_) {}
   let serverMode = null, loadingRecipes = null, writing = Promise.resolve(), selecting = false;
   const clone = value => JSON.parse(JSON.stringify(value));
   let recipes = { version: 1, skins: [], active: null, migrated: false };
@@ -82,7 +87,12 @@
       if (!recipes.skins.some(s => s.id === recipes.active)) recipes.active = null;
     }
   } catch (_) {}
+  if (pendingLeave && recipes.active === pendingLeave) recipes.active = null;
   const own = () => recipes.skins.find(s => s.id === recipes.active) || null;
+  function setPendingLeave(id) {
+    pendingLeave = id || null;
+    try { if (pendingLeave) localStorage.setItem(LEAVE, pendingLeave); else localStorage.removeItem(LEAVE); } catch (_) {}
+  }
   function persist(next) {
     localStorage.setItem(RECIPES, JSON.stringify(next));
     if (serverMode === false) { try { localStorage.removeItem(BOX_CACHE); } catch (_) {} }
@@ -108,6 +118,12 @@
     persist({ ...recipes, active: id }); window.WosSkin?.set(skin.base); recipeChanged(); return clone(skin);
   }
   function leave() { if (!own()) return; persist({ ...recipes, active: null }); recipeChanged(); }
+  function leaveUnconfirmed() {
+    if (!own()) return;
+    setPendingLeave(recipes.active); recipes = { ...recipes, active: null }; recipeChanged();
+    // A box load already in flight may confirm the box without seeing this intent; replay it right after.
+    void Promise.resolve(loadingRecipes).then(() => (pendingLeave && serverMode === true ? loadRecipes() : null)).catch(() => {});
+  }
   function create({ name, base, tweaks }) {
     name = String(name || '').trim();
     if (!name || name.length > 60) throw new Error('Give your skin a name (up to 60 characters)');
@@ -174,7 +190,7 @@
         let legacy;
         try { legacy = JSON.parse(localStorage.getItem(RECIPES)); } catch (_) {}
         if (legacy?.version === 1 && Array.isArray(legacy.skins)) {
-          const active = legacy.active;
+          const active = pendingLeave && legacy.active === pendingLeave ? null : legacy.active;
           for (const s of [...legacy.skins]) {
             if (!s || typeof s.name !== 'string' || !s.base || !s.tweaks) continue;
             let found = list.skins.find(k => k.name === s.name && (s.legacy || (k.base === s.base && JSON.stringify(k.tweaks || {}) === JSON.stringify(s.tweaks))));
@@ -186,6 +202,10 @@
           localStorage.removeItem(RECIPES);
           list = await request('');
         }
+        if (pendingLeave) {
+          if (list.active === pendingLeave) list = await request('/active', 'PUT', { id: null });
+          setPendingLeave(null);
+        }
         receive(list);
       } catch (e) {
         if (e.older) { serverMode = false; migrate(state.css); }
@@ -194,7 +214,6 @@
     })();
     return loadingRecipes;
   }
-  let leaveBox;
   function boxAction(local, remote) {
     return (...args) => {
       if (serverMode === false) return local(...args);
@@ -222,6 +241,7 @@
     receive(await request('/active', 'PUT', { id })); await refresh(); return clone(own());
   }
   async function leaveOnBox() { receive(await request('/active', 'PUT', { id: null })); await refresh(); }
+  const leaveBox = boxAction(leave, leaveOnBox);
   async function updateOnBox(values) {
     const s = own(); if (!s) return;
     receive(await request('/' + encodeURIComponent(s.id), 'PATCH', values));
@@ -297,8 +317,9 @@
     get FILE() { return own() ? 'Skins/' + own().id + '/skin.css' : FILE; },
     get recipes() { return clone(recipes.skins); },
     get active() { return own() ? clone(own()) : null; },
-    create: (leaveBox = boxAction(leave, leaveOnBox), boxAction(create, createOnBox)), wear: boxAction(wear, wearOnBox), // Wearing a built-in skin is never blocked: without a confirmed box connection it is a local choice.
-    leave: (...a) => (serverMode === true ? leaveBox(...a) : leave(...a)), update: boxAction(update, updateOnBox), remove: boxAction(remove, removeOnBox), restore: boxAction(restore, restoreOnBox),
+    create: boxAction(create, createOnBox), wear: boxAction(wear, wearOnBox), update: boxAction(update, updateOnBox), remove: boxAction(remove, removeOnBox), restore: boxAction(restore, restoreOnBox),
+    // Wearing a built-in skin never waits on the box: without a confirmed connection, leaving is a pending intent.
+    leave: (...a) => (serverMode === null ? leaveUnconfirmed(...a) : leaveBox(...a)),
     get storage() { return serverMode === true ? 'box' : serverMode === false ? 'local' : 'offline'; },
     get state() { return state; },
     // The owner overlay stays above the skin and the tweaks it brings; changing skin never clears it.
