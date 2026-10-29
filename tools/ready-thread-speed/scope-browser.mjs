@@ -20,7 +20,7 @@ try {
    if(kind==='synthetic-private')s.setSupervisorSeal('private',false);
    const setup=await (await fetch(s.origin()+'/wizard/v1/setup',{headers:s.ownerHeaders})).json();
    assert.equal(setup.first_run,false,'fixture is explicitly past onboarding');
-   const registry=await (await fetch(s.origin()+'/wizard/agents',{headers:s.ownerHeaders})).json();
+   const registry=await (await fetch(s.origin()+'/wizard/v1/agents',{headers:s.ownerHeaders})).json();
    const agent=registry.agents.find(a=>a.id===s.id);assert.ok(agent,'valid fixture agent must be in the real registry');
    if(kind==='synthetic-private')assert.equal(agent.privacy,'private');
    const id='wizard_speed_scope',at=Date.now()/1000,expected='SYNTHETIC_SCOPED_CURRENT_ANSWER';

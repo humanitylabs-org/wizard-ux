@@ -39,9 +39,10 @@ Original API measurements remain provisional synthetic contributor evidence.
   established before shell boot. No UI is hidden/removed and no animation is
   disabled. Failure receipts include shell, current desks/windows, row geometry
   and Setup launch log.
-- Scope results were 20 cells: all four phone standard runtime kinds passed on
-  each skin, both phone private cells failed to find a row, and all desktop
-  labels failed their preparation. `setSupervisorSeal('private', [])` supplied
+- Scope results were 20 cells, with 16 passes and four private-row timeouts.
+  Standard cells passed under both labels, but the shared touch capability means
+  the desktop label did not establish desktop-shell proof. All four synthetic
+  private cells failed to find a row. `setSupervisorSeal('private', [])` supplied
   an array where real agent parsing requires boolean `shared_with_agents`, so
   the synthetic private agent disappeared from the registry. It now uses false
   and explicitly verifies registry privacy before opening the UI.
