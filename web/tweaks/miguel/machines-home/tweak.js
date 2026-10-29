@@ -168,7 +168,8 @@ export default function setup(api) {
     if (k && k !== S.def) { S.def = k; api.storage.set('def', k); } return S.def; };
   // What the E-to-F meter shows: the owner's pick (one kind only: plan limits or prepaid credit, never a mix), else
   // the default model's service. Every account gets a plain name for the "combines …" line.
-  const subName = (s, list = subs()) => { if (s.nick) return s.nick; const same = list.filter(x => x.group === s.group); return same.length > 1 ? `${s.group} ${same.findIndex(x => x.id === s.id) + 1}` : s.group; };
+  // Nickname first; when the same nickname is used on two services, the service name goes in front so they stay apart.
+  const subName = (s, list = subs()) => { if (s.nick) return list.some(x => x.id !== s.id && x.group !== s.group && x.nick && x.nick.toLowerCase() === s.nick.toLowerCase()) ? `${s.group} ${s.nick}` : s.nick; const same = list.filter(x => x.group === s.group); return same.length > 1 ? `${s.group} ${same.findIndex(x => x.id === s.id) + 1}` : s.group; };
   function meterPool() {
     const all = subs(), live = all.filter(s => s.left != null && !s.out);
     const picked = Array.isArray(S.meter) ? live.filter(s => S.meter.includes(s.id)) : [];
@@ -469,7 +470,7 @@ export default function setup(api) {
     if (stEl) {
       const sd = box(stEl), st = storage();  // from the bottom of its label (and its details, when open)
       const col = st?.state === 'ok' ? 'var(--mh-accent)' : st?.state === 'no' ? 'var(--mh-bad)' : 'var(--mh-warn)';
-      specs.push([curveV(md.cx, md.t - 4, sd.cx, sd.b + 4), col, M.width < 600 && S.ws === 'mine' ? '' : backupRunning() ? 'backing up now' : st?.age == null ? 'no backup yet' : 'backed up ' + agoS(st.age) + ' ago', backupRunning() ? 3 : 1]);
+      specs.push([curveV(md.cx, md.t - 4, sd.cx, sd.b + 4), col, (M.width < 600 && S.ws === 'mine') || S.open.has('ts') ? '' : backupRunning() ? 'backing up now' : st?.age == null ? 'no backup yet' : 'backed up ' + agoS(st.age) + ' ago', backupRunning() ? 3 : 1]);
     }
     // Machines: a chain outward from Main on each side, in row order.
     const ms = [...rowMn.children].filter(n => n.dataset?.role);
