@@ -87,14 +87,20 @@ async function decode(browser,el) {
   if(mode==='phone') {
    for(const skin of ['nebula','obsidian-light']) {
     await p.evaluate(()=>__wos.openSettings('look'));
-    await pick(p,skin); await p.evaluate(()=>window.__wosNativeBack());
+    await pick(p,skin);
+    // One Back only returns Appearance to Settings' category list. Dismiss the outer
+    // Settings sheet too before addressing the existing Setup window underneath it.
+    for(let i=0;i<3 && await p.locator('#settings').evaluate(e=>e.classList.contains('open'));i++) {
+      await p.evaluate(()=>window.__wosNativeBack()); await sleep(250);
+    }
+    await p.waitForFunction(()=>!document.querySelector('#settings').classList.contains('open'));
     await open(p,mode);
     await f.waitForFunction(s=>document.documentElement.dataset.skin===s,skin);
     ok(await f.evaluate(()=>window.__qaIdentity==='setup-kept'&&!document.getElementById('sheet').hidden),`${skin}: document and open disconnect sheet survive skin change`);
     await sleep(600);await p.screenshot({path:path.join(SHOTS,`${mode}-${skin}.jpg`),type:'jpeg',quality:85});
    }
   }
-  if(mode==='phone') await p.evaluate(()=>window.__wosNativeBack()); else await f.locator('[data-act="cancel-reset"]').click();
+  if(mode==='phone') { await p.evaluate(()=>window.__wosNativeBack()); await f.waitForFunction(()=>document.getElementById('sheet').hidden); } else await f.locator('[data-act="cancel-reset"]').click();
   ok(await f.locator('#sheet').isHidden(),`${mode}: dismiss disconnect without leaving phone screen`);
   await f.locator('[data-act="menu"]').click();await f.locator('[data-act="ask-reset"]').click();await f.locator('[data-act="reset"]').click();await step(f,'off');
   ok(count(await log(),'POST','/wizard/v1/setup/phone/reset')===1,`${mode}: confirmed disconnect resets once`);
