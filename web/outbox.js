@@ -516,7 +516,7 @@
       it.sessionReady = true; await put(it);
     }
     if (!it.body) {
-      const body = { session_id: it.sessionId, input };
+      const body = { session_id: it.sessionId, input, ...(it.retryRunId ? { wizard_retry_run_id: it.retryRunId } : {}) };
       if (it.instructions) body.instructions = String(it.instructions).slice(0, 2000);
       if (fileIds.length) body.wizard_file_ids = fileIds;
       Object.assign(body, { model: it.model, provider: it.provider, require_model_lock: true });
@@ -599,6 +599,7 @@
       meetingEventId: o.meetingEventId || '', parkedDraft: o.parkedDraft || null, nativeIds: [...new Set([...(o.nativeIds || []), o.nativeId].filter(Boolean))],
       kind: o.kind === 'conversation' ? 'conversation' : o.kind === 'reply' ? 'reply' : 'new', conversation: o.conversation || null, sessionId: o.kind === 'conversation' ? '' : o.sessionId || newSessionId(), steerRunId: o.meetingEventId ? '' : o.steerRunId || '',
       text: String(o.text || '').trim(), typed: o.audio && !String(o.text || '').trim() ? String(o.typed || '').trim() : '', instructions: o.instructions || '', files: (o.files || []).map(f => ({ ...f })),
+      retryRunId: typeof o.retryRunId === 'string' ? o.retryRunId : '',
       audio: o.audio || null, audioType: o.audio?.type || '', model: o.model || '', provider: o.provider || '',
       pendingBlobs: keepPending(o.files), sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', deliveryRequested: false, source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false,
       // A Notifications Reply: the item, framed after his words only in the message that is delivered (deliver()).
