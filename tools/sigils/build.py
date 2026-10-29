@@ -86,7 +86,13 @@ HOUSE = {
     'sniper':        ('scope',    4,   0.12),
     'card-benefits': ('card',     145, None),
     'money':         ('dollar',   152, 0.13),
+    'profiles':      ('profile',  296, None),
     'defleur-video': ('clip',     268, None),
+    'notes':         ('notes',    356, None),   # Notes: rose, in the gap between Music (344) and Calendar (8)
+    'wizard-notes':  ('notes',    356, None),
+    'morning':       ('coffee',   46,  None),   # Morning (installed id) wears Morning report's cup
+    'wizard-files':  ('files',    232, None),   # Wizard Files (installed id) wears the Files folder
+    'photos':        ('image',    244, None),   # Photos: a picture frame, in the gap between Files and Search
     'troubleshooter':('wrench',   186, 0.08),
     'wizard-ux':     ('wizard',   280, 0.09),
     # Agents (the app): two layered hats drawn from brand masks in style.css; its tile glass is a quiet periwinkle,

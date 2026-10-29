@@ -50,7 +50,8 @@ test('Done keeps archived stale-running threads out of Working for main and ever
 test('archived stale-running threads remain recoverable without steering stale runs', () => {
   const workingStart = chatsSource.indexOf("  const WORKING_ST = new Set(['submitting', 'queued', 'running', 'stopping']);");
   const workingEnd = chatsSource.indexOf('\n  // Same sections', workingStart);
-  const actionsStart = chatsSource.indexOf('  function threadActions(s, turns) {');
+  // threadActions reads the watcher predicate declared just above it.
+  const actionsStart = chatsSource.indexOf('  const followUpActive = s =>');
   const actionsEnd = chatsSource.indexOf('\n  const ACT =', actionsStart);
   const stateStart = chatsSource.indexOf('  function threadState(s, agent) {');
   const stateEnd = chatsSource.indexOf('\n  function renderThread(', stateStart);
@@ -75,4 +76,8 @@ test('archived stale-running threads remain recoverable without steering stale r
   assert.equal(context.working({ id: 'active', status: 'running' }), true);
   assert.deepEqual(Array.from(context.actions({ id: 'busy', archived: true, status: 'running' }, null)), [], 'optimistic archive writes stay disabled');
   assert.deepEqual(Array.from(context.actions({ id: 'aged', aged: true, status: 'running' }, null)), ['restore', 'snooze']);
+  // A quiet watcher check runs while its thread stays archived: Stop watching is then the only action.
+  const watched = { active: true, count: 1 };
+  assert.deepEqual(Array.from(context.actions({ id: 'watch-run', archived: true, status: 'running', followUp: watched }, null)), ['stop_watch']);
+  assert.deepEqual(Array.from(context.actions({ id: 'watch-idle', archived: true, status: 'completed', followUp: watched }, null)), ['restore', 'snooze', 'stop_watch']);
 });

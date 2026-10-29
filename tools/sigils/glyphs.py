@@ -380,6 +380,26 @@ def g_gauge():
 def g_letter():
     return D(circle(256, 256, 156), circle(256, 256, 120))
 
+@glyph('notes', 'A page with a pencil cut in from its corner: you write here, and it keeps.')
+def g_notes():
+    page = rrect(124, 92, 264, 328, 44)
+    x0, y0, x1, y1, w = 430, 70, 214, 286, 58          # pencil: end (off the corner) -> tip
+    dx, dy = x1 - x0, y1 - y0; L = math.hypot(dx, dy); ux, uy = dx / L, dy / L; nx, ny = -uy, ux
+    bx, by, h = x1 - ux * w * 1.25, y1 - uy * w * 1.25, w / 2
+    body = poly((x0 + nx * h, y0 + ny * h), (bx + nx * h, by + ny * h), (bx - nx * h, by - ny * h), (x0 - nx * h, y0 - ny * h))
+    tip = poly((bx + nx * h, by + ny * h), (x1, y1), (bx - nx * h, by - ny * h))
+    return D(page, U(body, tip))
+
+@glyph('profile', 'A disc with a wizard cut out, hat over a bust running off the edge: who you are, as friends see you.')
+def g_profile():
+    disc = circle(256, 256, 176)
+    # Three big shapes so it still reads at 24 px: the hat, one bust (head and shoulders joined), and a wide band
+    # of disc between them. The shoulders run past the disc, so it is a person, never a pawn on a base.
+    hat_ = U(hat_at(256, 200, 106), rrect(170, 184, 172, 30, 15))   # tip stays inside the disc
+    bust = U(circle(256, 284, 46), P("M118 480 C124 372 188 326 256 326 C324 326 388 372 394 480 Z"))
+    bust = D(bust, rrect(140, 150, 232, 92, 0))      # flat-topped head: the hat sits on it across a clear gap
+    return D(disc, U(hat_, bust))
+
 # ---------- normalise + emit ----------
 def fmt(p):
     pen = SVGPathPen(None, ntos=lambda v: str(int(round(v))))

@@ -1,0 +1,38 @@
+name: App shared-components reuse gate
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: 'JSON runner name or label array; private apps select their self-hosted reuse worker'
+        type: string
+        required: false
+        default: '"ubuntu-latest"'
+permissions:
+  contents: read
+jobs:
+  reuse:
+    name: Shared-components reuse
+    runs-on: ${{ fromJSON(inputs.runner) }}
+    timeout-minutes: 5
+    steps:
+      - name: Read app PR history (never execute app code)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          path: app
+      - name: Read trusted gate and canonical shared-component inventory
+        uses: actions/checkout@v4
+        with:
+          repository: humanitylabs-org/wizard-ux
+          ref: main
+          persist-credentials: false
+          path: wizard-shared
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check declarations and only lines added by this PR
+        env:
+          APP_REPO: ${{ github.workspace }}/app
+        run: node wizard-shared/tools/reuse-check-app.mjs

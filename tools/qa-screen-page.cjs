@@ -76,7 +76,7 @@ const LINES = [
       };
     }, { jpeg: scr.jpeg });
     await p.goto('file://' + PAGE);
-    await p.evaluate(({ blocks, mode, DPR }) => window.S.open({ mode, dpr: DPR, ox: 0, oy: 0, sw: 411 * DPR, sh: 914 * DPR, top: 24, bot: 0, shot: true, few: false, blocks }), { blocks: scr.blocks, mode, DPR });
+    await p.evaluate(({ blocks, mode, DPR }) => window.S.open({ mode, dpr: DPR, ox: 0, oy: 0, sw: 411 * DPR, sh: 914 * DPR, top: 24, bot: 48, shot: true, few: false, blocks }), { blocks: scr.blocks, mode, DPR });
     await p.waitForTimeout(500);
     return p;
   }
@@ -166,6 +166,32 @@ const LINES = [
     frP && rgb(frP.bg)[2] > rgb(frP.bg)[0] + 40 && rgb(frP.fg)[0] > 200 && thP && rgb(thP.bg)[0] > 220, [frP && frP.bg, frP && frP.fg, thP && thP.bg]);
   check('no selection boxes or hint in translate view', k.boxes === 0 && k.hl === 0 && !k.sheet && k.tbar, [k.boxes, k.sheet, k.tbar]);
   await p.screenshot({ path: OUT + '/05-translate-screen.png' });
+  {
+    const hiddenOff = s => !s.visible || s.top >= k.vh;
+    check('closed sheets are fully off screen, never peeking behind the nav bar', hiddenOff(k.sheets.langs) && hiddenOff(k.sheets.sheet), k.sheets);
+    check('the translation bar starts docked at the bottom', k.dock === 'bottom' && k.sheets.tbar.visible && k.sheets.tbar.bottom > k.vh * .8, k.sheets.tbar);
+    const tb = k.btn.tSel, cp = (await p.evaluate(() => window.__calls)).filter(c => c[0] === 'copy').length;
+    await touchDrag(p, [css(p, tb[0]), css(p, tb[1])], [css(p, tb[0]), css(p, tb[1]) - 140], 4);
+    await p.waitForTimeout(300);
+    k = await peek(p);
+    check('a quick flick up docks the bar at the top', k.dock === 'top' && k.sheets.tbar.visible && k.sheets.tbar.top < k.vh * .25, [k.dock, k.sheets.tbar]);
+    check('the flick did not press the button under the finger', k.mode === 'translate' && (await p.evaluate(() => window.__calls)).filter(c => c[0] === 'copy').length === cp, k.mode);
+    await p.screenshot({ path: OUT + '/05b-docked-top.png' });
+    const tb2 = k.btn.tAsk;
+    await touchDrag(p, [css(p, tb2[0]), css(p, tb2[1])], [css(p, tb2[0]), css(p, tb2[1]) + 140], 4);
+    await p.waitForTimeout(300);
+    k = await peek(p);
+    check('a flick down docks it back at the bottom', k.dock === 'bottom' && k.sheets.tbar.bottom > k.vh * .8 && !(await p.evaluate(() => window.__calls)).some(c => c[0] === 'ask'), [k.dock, k.sheets.tbar]);
+    // dock top again: the tapped-translation sheet and the language list follow it
+    await touchDrag(p, [css(p, k.btn.tSel[0]), css(p, k.btn.tSel[1])], [css(p, k.btn.tSel[0]), css(p, k.btn.tSel[1]) - 140], 4);
+    await p.waitForTimeout(300);
+    k = await peek(p);
+    const frT = k.painted.find(e => e.t === 'Closed on Monday');
+    await tap(p, css(p, frT.c[0]), css(p, frT.c[1]));
+    k = await peek(p);
+    check('when docked top, the picked translation sheet opens at the top too', k.sheet && k.sheets.sheet.top < k.vh * .25, k.sheets.sheet);
+    await p.evaluate(() => window.S.back());
+  }
   await tap(p, css(p, frP.c[0]), css(p, frP.c[1]));
   k = await peek(p);
   check('tapping a translation shows it with its original in the sheet', k.sheet && k.sheetText.includes('Fermé le lundi') && k.sheetText.includes('Closed on Monday'), k.sheetText);
@@ -189,6 +215,8 @@ const LINES = [
   await p.close();
   p = await openScreen('translate'); await p.waitForTimeout(700);
   check('the chosen language is remembered next time', (await peek(p)).to === 'Japanese');
+  check('the dock position is remembered next time', (await peek(p)).dock === 'top', (await peek(p)).dock);
+  await p.evaluate(() => localStorage.removeItem('wizScreenDock'));
   await p.evaluate(() => localStorage.removeItem('wizScreenTo'));
   await p.close();
   await b.close();
