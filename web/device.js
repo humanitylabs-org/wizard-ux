@@ -40,6 +40,11 @@
     $('#device')?.classList.toggle('dv-share-open', kind === 'share');
     requestAnimationFrame(() => el.classList.add('open'));
     sheet = { kind, el, onBack };
+    // All device sheets, including recorder recovery, use the same Back cleanup.
+    el.addEventListener('click', e => {
+      if (!e.target.closest('[data-dvclose]') && e.target !== el) return;
+      e.preventDefault(); e.stopImmediatePropagation(); back();
+    });
     return el;
   }
   function closeSheet() {
