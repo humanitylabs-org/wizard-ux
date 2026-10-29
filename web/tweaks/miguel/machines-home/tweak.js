@@ -205,16 +205,24 @@ export default function setup(api) {
 
   /* ---------- top ---------- */
   function renderTabs() { fillTabs(wsBar); fillTabs(homeWs); renderWiz(); }
+  // The top-left shows the workspace this screen is connected to. Others he manages aren't connected yet: greyed,
+  // and a tap explains what switching will mean instead of pretending to switch.
   function renderWiz() {
-    const all = [['mine', thisName(), reg().this?.owner ? 'Your Wizard' : ''], ...managedList().map(g => [g.id, g.name, g.org || ''])];
-    const cur = all.find(x => x[0] === S.ws) || all[0], open = S.open.has('wsm');
-    wizBtn.setAttribute('aria-expanded', String(open)); wizBtn.setAttribute('aria-label', `Workspace: ${cur[1]}. Switch workspace`);
-    wizBtn.replaceChildren(h('b', { text: cur[1] }), (() => { const v = sv('svg', { class: 'mh-wiz-car' + (open ? ' is-up' : ''), viewBox: '0 0 24 24', 'aria-hidden': 'true' }); sv('path', { d: 'm7 10 5 5 5-5' }, v); return v; })());
+    const own = thisName(), open = S.open.has('wsm'), why = S.open.has('wsm-why') ? S.whyWs : '';
+    wizBtn.setAttribute('aria-expanded', String(open)); wizBtn.setAttribute('aria-label', `Workspace: ${own}. Switch workspace`);
+    wizBtn.replaceChildren(h('b', { text: own }), (() => { const v = sv('svg', { class: 'mh-wiz-car' + (open ? ' is-up' : ''), viewBox: '0 0 24 24', 'aria-hidden': 'true' }); sv('path', { d: 'm7 10 5 5 5-5' }, v); return v; })());
     wizMenu.hidden = !open;
+    const g = why ? managedOf(why) : null;
     wizMenu.replaceChildren(...(open ? [h('small', { cls: 'mh-wiz-h', text: 'Workspaces' }),
-      ...all.map(([id, n, sub]) => h('button', { type: 'button', role: 'menuitemradio', 'aria-checked': String(S.ws === id), data: { ws: id } }, h('b', { text: n }), sub ? h('small', { text: sub }) : null)),
+      h('button', { type: 'button', role: 'menuitemradio', 'aria-checked': 'true', data: { toggle: 'wsm' } }, h('b', { text: own }), h('small', { text: 'Connected · this screen' })),
+      ...managedList().map(m => h('button', { type: 'button', role: 'menuitem', cls: 'is-off' + (why === m.id ? ' is-why' : ''), data: { wsWhy: m.id } }, h('b', { text: m.name }), h('small', { text: `${m.org ? m.org + ' · ' : ''}Not connected` }))),
+      g ? h('div', { cls: 'mh-wiz-why' },
+        h('span', { text: `${g.name} isn’t running Wizard yet, so there’s nothing to switch to.` }),
+        h('span', { text: 'Once it is, switching swaps everything (apps, chats, agents) for that workspace’s own. The apps will switch in place; a browser opens its address.' }),
+        h('button', { type: 'button', cls: 'is-add', data: { ws: g.id, go: 'overview' } }, `See what’s known about ${g.name} in Settings ›`)) : null,
       h('button', { type: 'button', cls: 'is-add', role: 'menuitem', data: { act: 'add-managed' } }, '+ Add a workspace')] : []));
   }
+
   function fillTabs(bar) {
     const tab = (id, name) => h('button', { type: 'button', role: 'tab', data: { ws: id }, 'aria-selected': String(S.ws === id) }, name);
     const add = h('button', { type: 'button', cls: 'mh-ws-add', 'aria-label': 'Add a Wizard you manage', data: { act: 'add-managed' } });
@@ -491,9 +499,11 @@ export default function setup(api) {
   const flip = k => { if (S.open.has(k)) S.open.delete(k); else S.open.add(k); };
   const onTap = e => {
     const top = e.currentTarget;
-    let b = e.target; while (b && b !== top && !(b.dataset && (b.dataset.ws || b.dataset.act || b.dataset.open || b.dataset.go || b.dataset.person || b.dataset.toggle || b.dataset.machine || b.dataset.ask || b.dataset.stAsk || b.dataset.tsAsk))) b = b.parentNode;
+    let b = e.target; while (b && b !== top && !(b.dataset && (b.dataset.ws || b.dataset.act || b.dataset.open || b.dataset.go || b.dataset.wsWhy || b.dataset.person || b.dataset.toggle || b.dataset.machine || b.dataset.ask || b.dataset.stAsk || b.dataset.tsAsk))) b = b.parentNode;
     if (!b || b === top) return;  // Sign in / Sign out carry the shell's own data-res-signin, which opens that app
     const d = b.dataset;
+    if (d.wsWhy) { S.whyWs = S.whyWs === d.wsWhy && S.open.has('wsm-why') ? '' : d.wsWhy; if (S.whyWs) S.open.add('wsm-why'); else S.open.delete('wsm-why'); renderWiz(); return; }
+    if (d.ws && d.go) { S.open.delete('wsm'); S.open.delete('wsm-why'); S.ws = d.ws; api.storage.set('ws', d.ws); fresh = true; paint(true); renderWiz(); api.settings?.open?.(d.go); return; }
     if (d.go) { if (d.go === 'chats') return api.data.read.sessions?.open('ready'); return api.settings?.open?.(d.go); }
     if (d.toggle === 'wsm') { flip('wsm'); renderWiz(); return; }
     if (d.open) return api.data.read.sessions?.open(d.open);
@@ -551,7 +561,7 @@ export default function setup(api) {
       (S.backup?.standby?.machines || []).map(x => [x.id, x.verdict, (x.checks || []).map(c => c.ok)])]); };
   // Pictures and one short value per part; the words live in the tooltip / screen-reader label and in Settings.
   function renderGlance() {
-    const g = managedOf(S.ws), x = sessions(), fuel = g ? null : gauge(), st = g ? null : storage(), bad = g ? 0 : openOnes().length;
+    const g = desk ? null : managedOf(S.ws), x = sessions(), fuel = g ? null : gauge(), st = g ? null : storage(), bad = g ? 0 : openOnes().length;  // the bar always shows the connected workspace
     const checked = devices().length && devices().every(d => d.access?.exposure === 'tailscale'), nM = g ? 1 : devices().length || 1;
     const sig = JSON.stringify([S.ws, fuel && Math.round(fuel.left / 10), x.working, Math.min(x.ready, 8), S.unread, st && [st.state, st.age == null ? null : agoS(st.age)], bad, checked, nM, backupRunning(), people().length]);
     if (sig === drawn.glance) return; drawn.glance = sig;
@@ -628,7 +638,7 @@ export default function setup(api) {
   api.settings?.section('ai', 'ai', secAI, { subtitle: fuelText });
   api.settings?.section('net', 'network', secNet, { subtitle: () => { const n = openOnes().length; return n ? `${n} open to internet` : ''; } });
   api.settings?.section('store', 'storage', secStore, { subtitle: () => { const st = storage(); return st?.age != null ? `${agoS(st.age)} ago` : ''; } });
-  api.listen(document, 'click', e => { if (S.open.has('wsm') && e.target.isConnected && !wizBox.contains(e.target)) { S.open.delete('wsm'); renderWiz(); } });
+  api.listen(document, 'click', e => { if (S.open.has('wsm') && e.target.isConnected && !wizBox.contains(e.target)) { S.open.delete('wsm'); S.open.delete('wsm-why'); renderWiz(); } });
   api.listen(document, 'keydown', e => { if (e.key === 'Escape' && S.open.has('wsm')) { S.open.delete('wsm'); renderWiz(); wizBtn.focus(); } });
   S.res = api.storage.get('res') || {}; merge(api.data.read.resources.snapshot());
   paint(true); mount(); readBackup(true);
