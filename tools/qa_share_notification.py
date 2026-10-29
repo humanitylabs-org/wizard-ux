@@ -132,7 +132,8 @@ def main():
     if os.uname().nodename != 'forum' or not str(root).startswith('/srv/work/'):
         raise RuntimeError('forum only')
     fd = int(os.environ['WIZARD_HEAVY_LOCK_FD'])
-    if os.fstat(fd).st_ino != Path('/srv/work/heavy/production/worker.lock').stat().st_ino:
+    held = os.fstat(fd); lease = Path('/srv/work/heavy/production/worker.lock').stat()
+    if (held.st_dev, held.st_ino) != (lease.st_dev, lease.st_ino):
         raise RuntimeError('wrong inherited heavy lease')
     if not storage['admissible']:
         raise RuntimeError('storage floor plus task-owned peak not met: ' + json.dumps(storage))
