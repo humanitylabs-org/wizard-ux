@@ -29,6 +29,9 @@ http {
   }
   # Only a successful answer may be kept for a year; an error (a file missing mid-deploy) is never cached.
   map $status $wizard_cache_ok { 200 $wizard_cache; 304 $wizard_cache; default "no-store"; }
+  # Chat attachments and files: kept only when the service actually sent them (never a 401/404/5xx).
+  map $status $wizard_attach_cache { 200 "private, max-age=31536000, immutable"; 304 "private, max-age=31536000, immutable"; default "no-store"; }
+  map $status $wizard_file_cache { 200 "private, max-age=86400"; 304 "private, max-age=86400"; default "no-store"; }
   # Compress the shell's text files (scripts and styles are ~4x smaller); event streams and JSON APIs are left as is.
   gzip on; gzip_vary on; gzip_proxied any; gzip_comp_level 5; gzip_min_length 1024;
   gzip_types application/javascript text/javascript text/css image/svg+xml text/markdown application/manifest+json;
@@ -99,11 +102,11 @@ http {
     # picture again each visit (private only; shared caches never store them). Matches the Agent Service's own headers.
     location ~ "^/wizard/attachments/[0-9a-f]{32}$" {
       proxy_pass $wizard_api$request_uri; include /tmp/wizard-proxy.conf;
-      proxy_hide_header Cache-Control; add_header Cache-Control "private, max-age=31536000, immutable" always;
+      proxy_hide_header Cache-Control; add_header Cache-Control $wizard_attach_cache always;
     }
     location ~ "^/wizard/files/wf_[0-9a-f]{32}/content$" {
       proxy_pass $wizard_api$request_uri; include /tmp/wizard-proxy.conf;
-      proxy_hide_header Cache-Control; add_header Cache-Control "private, max-age=86400" always;
+      proxy_hide_header Cache-Control; add_header Cache-Control $wizard_file_cache always;
     }
     location / { proxy_pass $wizard_api$request_uri; include /tmp/wizard-proxy.conf; }
   }

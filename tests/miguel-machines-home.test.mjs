@@ -300,6 +300,8 @@ test('eighth review: only stamped assets are immutable; a child sign-out survive
   assert.doesNotMatch(ng, /map \$arg_v \$wizard_cache/, 'no blanket ?v= rule');
   assert.match(ng, /map \$status \$wizard_cache_ok \{ 200 \$wizard_cache; 304 \$wizard_cache; default "no-store"; \}/, 'errors are never kept');
   assert.match(read('packaging/static.conf'), /add_header Cache-Control \$wizard_cache_ok always;/);
+  assert.match(ng, /add_header Cache-Control \$wizard_attach_cache always;/); assert.match(ng, /add_header Cache-Control \$wizard_file_cache always;/);
+  assert.doesNotMatch(ng, /add_header Cache-Control "private/, 'no fixed long cache on proxied errors');
   assert.match(usage, /const childOut = \['signed_out', 'auth', 'reauth'\]\.includes\(a\.status\); return \{\.\.\.a, providerId:p\.id, providerName:p\.name, status:childOut \? a\.status :/);
 });
 
