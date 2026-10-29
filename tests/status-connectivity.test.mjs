@@ -60,19 +60,47 @@ test('healthy state never diagnoses; failed reads show the full diagnosis and ac
   banner.handlers.click({ target: { closest: sel => sel === '[data-wxretry]' } });
   assert.equal(h.ctx.WosOutbox.retries, 1); assert.equal(h.L.refreshes, 1);
 });
-test('send failure diagnoses even when live reads are healthy, then clears after receipt', () => {
+// The shared connection surface is read-driven (live change 1f38e65d / PR689).
+// Saved-message delivery failures keep their own Chats card; they are not outage evidence.
+test('waiting sends never diagnose an outage while live reads are healthy, regardless of retryability', () => {
   const h = setup(); h.success(); const O = h.ctx.WosOutbox;
-  O.waiting = true; O.listeners.forEach(fn => fn());
-  assert.match(h.ctx.document.getElementById('wxBanners').innerHTML, /Agent Service isn’t responding/);
+  const banner = h.ctx.document.getElementById('wxBanners');
+  O.waiting = true;
+  for (const retryable of [false, true]) {
+    O.canRetry = () => retryable; O.listeners.forEach(fn => fn());
+    assert.equal(h.state(), 'online');
+    assert.equal(banner.hidden, true); assert.equal(banner.innerHTML, '');
+    assert.equal(h.ctx.WizReach.calls, 0);
+    assert.deepEqual(O.unsent(), [{ state: 'waiting' }]);
+  }
   O.waiting = false; O.listeners.forEach(fn => fn());
-  assert.equal(h.ctx.document.getElementById('wxBanners').hidden, true);
+  assert.equal(banner.hidden, true); assert.equal(banner.innerHTML, '');
+  assert.equal(h.ctx.WizReach.calls, 0);
 });
-test('a waiting item the outbox can no longer retry never holds the retrying banner up', () => {
+test('a failed read shows diagnosis and recovery controls even with a non-retryable waiting send; fresh reads recover without losing it', () => {
   const h = setup(); h.success(); const O = h.ctx.WosOutbox;
+  const banner = h.ctx.document.getElementById('wxBanners');
   O.canRetry = () => false; O.waiting = true; O.listeners.forEach(fn => fn());
-  assert.equal(h.ctx.document.getElementById('wxBanners').hidden, true);
+  assert.equal(banner.hidden, true); assert.equal(h.ctx.WizReach.calls, 0);
+  h.L.ok = false; h.L.error = 'offline'; h.L.errorAt = h.L.at + 1; h.L.emit();
+  assert.equal(h.state(), 'reconnecting'); assert.equal(banner.hidden, false);
+  assert.match(banner.innerHTML, /data-wxnet="reconnecting"/);
+  assert.match(banner.innerHTML, /Agent Service isn’t responding/);
+  assert.match(banner.innerHTML, /Open Troubleshooter/); assert.match(banner.innerHTML, /Retry now/);
+  assert.ok(h.ctx.WizReach.calls > 0);
+  banner.handlers.click({ target: { closest: sel => sel === '[data-wxtroubleshoot]' } });
+  assert.equal(h.ctx.WizReach.opened, 1);
+  banner.handlers.click({ target: { closest: sel => sel === '[data-wxretry]' } });
+  assert.equal(O.retries, 1); assert.equal(h.L.refreshes, 1);
   O.canRetry = () => true; O.listeners.forEach(fn => fn());
-  assert.match(h.ctx.document.getElementById('wxBanners').innerHTML, /data-wxnet="reconnecting"/);
+  assert.equal(banner.hidden, false); assert.match(banner.innerHTML, /data-wxnet="reconnecting"/);
+  assert.deepEqual(O.unsent(), [{ state: 'waiting' }]);
+  h.L.emit(); assert.equal(h.state(), 'reconnecting'); // no fresh successful read yet
+  h.success(); assert.equal(h.state(), 'restored');
+  assert.equal(banner.hidden, false); assert.match(banner.innerHTML, /Back online/);
+  h.settle(); assert.equal(h.state(), 'online');
+  assert.equal(banner.hidden, true); assert.equal(banner.innerHTML, '');
+  assert.deepEqual(O.unsent(), [{ state: 'waiting' }]);
 });
 test('Retry queues a fresh verification when a stale degraded probe is still in flight', async () => {
   let calls = 0, resolveFirst;
