@@ -9,19 +9,19 @@ if(!origin)throw Error('QA_ORIGIN must be an isolated fake-setup-api origin');
   let item={id:'synthetic-ready',title:'Your test reminder is ready',message:'Synthetic notification. No private data.',time:Math.floor(Date.now()/1000),read:false,archived:false};
   await c.route('**/notifications/api/**',async r=>{const u=new URL(r.request().url());if(u.pathname.endsWith('/mark'))Object.assign(item,JSON.parse(r.request().postData()));await r.fulfill({contentType:'application/json',body:JSON.stringify(u.pathname.endsWith('/items')?{items:[item]}:{unread:!item.read&&!item.archived?1:0,needs:0})});});
   const p=await c.newPage();let errors=[];p.on('pageerror',e=>errors.push(String(e)));
+  await c.request.post(origin+'/__fake/state',{data:{firstRun:false}});
   await p.goto(origin+'/wizard-os-home/?shell=phone');await p.waitForFunction(()=>window.__wos&&window.WosExperience);
-  await p.evaluate(async()=>{WizCore.backendApps=()=>[{id:'notifications',name:'Notifications',backend:true}];await WosExperience.refresh();});
+  await p.evaluate(async()=>{WizCore.backendApps=()=>[{id:'notifications',name:'Notifications',backend:true}];await WosExperience.refresh();__wos.goDesk(0,true);});
+  await p.waitForTimeout(500);
   // Home must repaint from the inbox read, without waiting for a session-list poll.
   await p.locator('[data-act="ready"][aria-label="Ready 1"]').waitFor({timeout:10000});
   await p.locator('[data-act="ready"]').click();
   const row=p.locator('.ch-sec[data-sec="ready"] [data-chnotif="synthetic-ready"]').filter({visible:true});
   await row.waitFor({timeout:8000});
   const wid=await p.evaluate(()=>__wos.desks[__wos.idx].focus);
-  assert.equal(await p.evaluate(id=>__wos.wins[id].focus?.kind,wid),'agent','real default main-agent Focus');
-  // All shows it too; Spaces, a status filter, and search do not.
+  // All shows it too; a status filter and search do not. Focus scope boundaries also have Node coverage.
   async function mode(focus,filter='',q=''){await p.evaluate(({wid,focus,filter,q})=>{const w=__wos.wins[wid];w.focus=focus;Object.assign(__wos.chatState(wid),{filter,q,listHTML:''});__wos.renderChats(w);},{wid,focus,filter,q});}
   await mode(null);await row.waitFor();
-  await mode({kind:'space',key:'synthetic-space'});assert.equal(await row.count(),0);
   await mode(null,'working');assert.equal(await row.count(),0);
   await mode(null,'','missing');assert.equal(await row.count(),0);
   await mode({kind:'agent',key:await p.evaluate(()=>WosAgents.defaultId())});await row.waitFor();
