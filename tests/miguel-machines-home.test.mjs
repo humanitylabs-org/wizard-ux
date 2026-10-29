@@ -182,6 +182,12 @@ test('api.nav.ask: trusted only, namespaced home: key, sends through the shell c
   await f.clear();
 });
 
+test('Home buttons that ask the agent open Chats with the draft even when no Chats window is on this desk', () => {
+  const phone = read('web/app.js'), desk = read('web/desktop/desktop.js');
+  assert.match(phone, /contextDraft: \(key, item, words, draft\) => \{ let w = skinChatsWin\(\); if \(!w\) \{ openChatsList\(\); w = skinChatsWin\(\); \}/, 'phone: Home opens Chats first');
+  assert.match(desk, /contextDraft: \(key, item, words, draft\) => \{ let w = homeOpen \? null : skinChatsWin\(\); if \(!w\) \{ openChatsList\(\); w = skinChatsWin\(\); \}/, 'desktop: Home and the Settings panel open Chats first');
+});
+
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));
