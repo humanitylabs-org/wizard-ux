@@ -669,7 +669,10 @@ window.WizCore.chats = function createChats(H) {
         : `<button type="button" class="pbtn" data-obretryall>Retry all</button>`;
     } else if (waiting.length) {
       cls = ' wait';
-      label = esc(reach().short);
+      const diagnosis = reach();
+      // A healthy probe says nothing about this saved message's failed step. Keep
+      // its delivery status here, without describing the whole Wizard as offline.
+      label = esc(diagnosis.layer === 'send' ? (waiting.length === 1 ? 'Message not sent · retrying' : `${waiting.length} messages not sent · retrying`) : diagnosis.short);
       btns = one ? `<button type="button" class="pbtn" data-obretry="${esc(one.id)}">Retry now</button>` : `<button type="button" class="pbtn" data-obretryall>Retry now</button>`;
       btns += troubleshoot;
     } else {
