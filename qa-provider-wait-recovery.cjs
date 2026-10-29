@@ -24,9 +24,10 @@ const server=http.createServer((req,res)=>{
  try{
  for(const shell of ['phone','desktop'])for(const skin of ['obsidian','landscapes']){
   const ctx=await browser.newContext({viewport:shell==='phone'?{width:412,height:892}:{width:1440,height:960},isMobile:shell==='phone',hasTouch:shell==='phone',serviceWorkers:'block'});
-  let route={...original},status='queued',retryId=source,modelFailure=false;
+  let route={...original},status='queued',retryId=source,runId=source,modelFailure=false;
+  const at=1700000000; let revision=1;
   const writes=[],sends=[],errors=[],blocked=[];
-  const row=()=>({id:sid,title:'Synthetic · provider could not start',source:'wizard-mobile',status,queue_reason:status==='queued'?'provider_access':'',model:route.model,provider:route.provider,archived:false,hidden:false,message_count:1,started_at:Date.now()/1000-200,last_active:Date.now()/1000-100,wizard_last_run_status:status,wizard_run_id:source,wizard_retry_run_id:retryId,wizard_retry_input:text,wizard_safe_error:'The selected provider could not start. Your request is saved.',wizard_last_request_at:Date.now()/1000-100,preview:text.slice(0,100),preview_role:'user'});
+  const row=()=>({id:sid,title:'Synthetic · provider could not start',source:'wizard-mobile',status,queue_reason:status==='queued'?'provider_access':'',model:route.model,provider:route.provider,archived:false,hidden:false,message_count:1,started_at:at-200,last_active:at-100,wizard_last_run_status:status,wizard_run_id:runId,wizard_retry_run_id:retryId,wizard_retry_input:text,wizard_safe_error:status==='queued'?'The selected provider could not start. Your request is saved.':'',wizard_last_request_at:at-100,preview:text.slice(0,100),preview_role:'user'});
   await ctx.addInitScript(s=>{localStorage.setItem('wos.skin',s);localStorage.setItem('wos.skin.composition.v1',JSON.stringify({version:1,extends:s}));for(const k of ['wos.coached','wos.tour.v1','wos.tour.done','wos.voiceTipSeen'])localStorage.setItem(k,'true');},skin);
   await ctx.route('**/*',async r=>{
    const q=r.request(),u=new URL(q.url()),p=u.pathname;
@@ -35,22 +36,23 @@ const server=http.createServer((req,res)=>{
    if(!['GET','HEAD'].includes(q.method())){
     const body=q.postDataJSON();writes.push({path:p,body});
     if(p===`/wizard/hermes/api/sessions/${sid}/model`){
-     if(modelFailure)return json({error:'Synthetic model save failure'},503);
-     route={model:body.model,provider:body.provider};return json({runtime:{...route,model_lock:'accepted',selection_version:Date.now()}});
+     if(modelFailure==='http')return json({error:'Synthetic model save failure'},503);
+     if(modelFailure==='ack')return json({runtime:{...original,model_lock:'accepted'}});
+     route={model:body.model,provider:body.provider};revision++;return json({runtime:{...route,model_lock:'accepted',selection_version:Date.now()}});
     }
     if(p==='/wizard/hermes/v1/runs'){
      assert.equal(body.wizard_retry_run_id,source,'source identity travels through real outbox');
      assert.equal(body.model,chosen.model);assert.equal(body.provider,chosen.provider);assert.equal(body.require_model_lock,true);
-     sends.push(body);status='running';retryId='';return json({run_id:'wizardq_synthetic_child',status:'running',runtime:{...route,model_lock:'accepted'}},202);
+     sends.push(body);status='running';retryId='';runId='wizardq_synthetic_child';revision++;return json({run_id:'wizardq_synthetic_child',status:'running',runtime:{...route,model_lock:'accepted'}},202);
     }
     if(/thread-seen|ui-preferences|thread-dispositions|title/.test(p))return json({state:{initializedAt:Date.now(),threads:{}},ok:true});
     return json({error:'Blocked non-fixture write'},403);
    }
    if(p==='/wizard/v1/bootstrap')return json({bootstrap:1,settings:{owner:{name:'Fixture owner'},agent:{name:'Fixture Wizard'},clock:{timezone:'UTC'},voice:{}},endpoints:{apps:'/wizard/v1/apps',sessions:'/wizard/hermes/api/sessions',runs:'/wizard/hermes/v1/runs'},capabilities:{files:true}});
    if(p==='/wizard/v1/apps')return json({apps:[]});
-   if(p==='/wizard/hermes/api/sessions')return json({data:[row()],has_more:false,total:1,list_version:Date.now()});
+   if(p==='/wizard/hermes/api/sessions')return json({data:[row()],has_more:false,total:1,list_version:revision});
    if(p===`/wizard/hermes/api/sessions/${sid}`)return json({session:row()});
-   if(p===`/wizard/hermes/api/sessions/${sid}/messages`)return json({data:[{id:1,role:'user',content:text,timestamp:Date.now()/1000-100}],pagination:{returned:1,total:1},has_more:false});
+   if(p===`/wizard/hermes/api/sessions/${sid}/messages`)return json({data:[{id:1,role:'user',content:text,timestamp:at-100}],pagination:{returned:1,total:1},has_more:false});
    if(p==='/wizard/hermes/api/model/options')return json({model:original.model,provider:original.provider,options:[{value:original.model,provider:original.provider,name:'Original Opus',default:true},{value:chosen.model,provider:chosen.provider,name:'Chosen GPT'}]});
    if(p==='/wizard/thread-seen')return json({state:{initializedAt:Date.now(),threads:{}}});
    if(p==='/wizard/thread-dispositions')return json({state:{}});
@@ -69,8 +71,13 @@ const server=http.createServer((req,res)=>{
    await page.evaluate(id=>window.__wos?__wos.openWizardThread(id):__wux.openThread(id),sid);
    await page.waitForSelector('[data-chretrymodel]',{timeout:20000});
   };
+  const realClick=async selector=>{
+   const target=page.locator(selector+':visible');assert.equal(await target.count(),1,'one visible action: '+selector);
+   for(let n=0;;n++)try{await target.click({trial:true,timeout:3000});await target.click({timeout:3000});return;}
+   catch(e){if(n===2)throw e;} // never force or dispatch a DOM click
+  };
   const pick=async()=>{
-   await page.locator('[data-chretrymodel]').last().click();await page.waitForSelector('[data-mpick]');
+   await realClick('[data-chretrymodel]');await page.waitForSelector('[data-mpick]');
    const index=await page.evaluate(model=>WosModels.visible(WizLive.session('wizard_synthetic_provider_wait').model,WizLive.session('wizard_synthetic_provider_wait').provider).findIndex(x=>x.value===model),chosen.model);
    assert(index>=0,'chosen route visible');return page.locator(`[data-mpick="${index}"]`).last();
   };
@@ -85,22 +92,32 @@ const server=http.createServer((req,res)=>{
    await page.screenshot({path:path.join(OUT,`${shell}-${skin}-error.png`)});
    await open(); // refresh must retain the visible error and usable controls
    const composer=page.locator('textarea').last();await composer.fill('Keep my unrelated unsent draft');
-   modelFailure=true;await(await pick()).click();
-   await page.waitForFunction(()=>!WosModels.pending.size);assert.equal(sends.length,0);assert.deepEqual(route,original);
-   assert.equal(await composer.inputValue(),'Keep my unrelated unsent draft');
+   for(const failure of ['http','ack']){
+    modelFailure=failure;
+    // Clear a previous toast by reloading, not by racing its async save.
+    if(failure==='ack'){await open();await composer.fill('Keep my unrelated unsent draft');}
+    await(await pick()).click();
+    await page.waitForFunction(()=>/Couldn’t change the model/.test(document.body.innerText)&&!WosModels.pending.size);
+    assert.equal(sends.length,0);assert.deepEqual(route,original);
+    assert.equal(await composer.inputValue(),'Keep my unrelated unsent draft');
+   }
    // A picker left open across automatic recovery cannot save or replay the stale request.
    modelFailure=false;const stale=await pick(),before=writes.filter(x=>x.path.endsWith('/model')).length;
-   status='running';retryId='';await stale.click();
+   status='running';retryId='';runId='wizardq_auto_child';revision++;await stale.click();
    await page.waitForFunction(()=>/saved request has changed/i.test(document.body.innerText));
    assert.equal(writes.filter(x=>x.path.endsWith('/model')).length,before);assert.equal(sends.length,0);
-   status='queued';retryId=source;await page.evaluate(()=>WizLive.refresh());await open();
+   status='queued';retryId=source;runId=source;revision++;await page.evaluate(()=>WizLive.refresh());await open();
    await(await pick()).click();
    await page.waitForFunction(()=>[...WosOutbox._items.values()].some(x=>x.runId==='wizardq_synthetic_child'),null,{timeout:20000});
    assert.equal(sends.length,1);assert.deepEqual(route,chosen);
    assert.equal(sends[0].input,text.trim(),'real outbox passes full preview; backend retention separately tested with files');
    await page.screenshot({path:path.join(OUT,`${shell}-${skin}-retried.png`)});
    assert.deepEqual(errors,[]);
-   receipts.push({shell,skin,source:'synthetic queued/provider_access',model:route,requests:sends.length,modelSaveFailures:1,stalePickerRefused:true,refreshRetainedError:true,hit,errors,externalRequestsBlocked:blocked.length,writes});
+   receipts.push({shell,skin,source:'synthetic queued/provider_access',model:route,requests:sends.length,modelSaveFailures:2,ackMismatchRefused:true,stalePickerRefused:true,refreshRetainedError:true,hit,errors,externalRequestsBlocked:blocked.length,writes});
+  }catch(e){
+   await page.screenshot({path:path.join(OUT,`${shell}-${skin}-failure.png`)}).catch(()=>{});
+   const state=await page.evaluate(id=>({session:window.WizLive?.session(id),html:document.body.innerHTML,tour:window.__tourLog}),sid).catch(()=>null);
+   fs.writeFileSync(path.join(OUT,`${shell}-${skin}-failure.json`),JSON.stringify({error:String(e),state,fixture:row(),writes,sends,errors,blocked},null,2));throw e;
   }finally{await ctx.close();}
  }
  }finally{await browser.close();await new Promise(r=>server.close(r));fs.writeFileSync(path.join(OUT,'receipt.json'),JSON.stringify({fixtureOnly:true,host:require('node:os').hostname(),source:process.env.QA_SHA,receipts},null,2));}
