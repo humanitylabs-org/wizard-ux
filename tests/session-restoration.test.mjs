@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { launcherFixture } from './launcher-fixture.mjs';
 import fs from 'node:fs';
 const root=process.env.HOME_SCREEN_SOURCE || new URL('../',import.meta.url).pathname;
 const read=p=>fs.readFileSync(root+'/web/core/'+p,'utf8');
@@ -24,7 +25,7 @@ function fixture(id,save,utilities={}){
  }};
  const window={WizCore:{apps:()=>apps,appsLoaded:()=>Promise.resolve()},WizAppServices:{attach:()=>()=>{},guardBack(){},back:()=> 'root'},WizAppReadingPosition:{flush(){}},...utilities};
  const ctx=vm.createContext({window,document,localStorage:storage,location:{origin:'https://box.test',search:'?app-session='+id},URL,URLSearchParams,JSON,Date,Object,Math,setTimeout(){},setInterval(fn){listeners.interval=fn},addEventListener(t,fn){listeners[t]=fn}});
- vm.runInContext(read('home-screen-policy.js'),ctx);vm.runInContext(read('single-app-session.js'),ctx);
+ launcherFixture(ctx); vm.runInContext(read('home-screen-policy.js'),ctx);vm.runInContext(read('single-app-session.js'),ctx);
  return {data,key,apps,frames,listeners,window,async ready(){await Promise.resolve();await Promise.resolve();return frames.at(-1)}};
 }
 test('Signal hash route reconstructs saved domain/filter state with fresh SDK history mark',async()=>{

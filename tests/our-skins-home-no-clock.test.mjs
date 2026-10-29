@@ -6,7 +6,7 @@ const read = f => fs.readFileSync(new URL(f, import.meta.url), 'utf8');
 
 test('our skins hide the Home date and clock', () => {
   assert.match(read('../web/skins/obsidian/skin.css'), /html\[data-skin\^="obsidian"\] :is\(\.home-date, \.home-time\) \{ display: none; \}/);
-  assert.match(read('../web/skins/landscapes/skin.css'), /html\[data-skin="landscapes"\] :is\(\.home-date, \.home-time\) \{ display: none; \}/);
+  assert.match(read('../web/skins/landscapes/skin.css'), /html\[data-skin\^="landscapes"\] :is\(\.home-date, \.home-time\) \{ display: none; \}/);
 });
 
 test('James skins and core CSS keep the Home date and clock', () => {

@@ -46,6 +46,7 @@ public final class ConnectActivity extends Activity {
         look = WizardLook.load(this);
         if (look.square()) labelFace = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD);
         boolean switching = !ServerSettings.origin(this).isEmpty();
+        if (switching && installPath(getIntent()) != null) { returnToWizard(); return; }
         getWindow().setStatusBarColor(Color.TRANSPARENT); getWindow().setNavigationBarColor(Color.TRANSPARENT);
 
         FrameLayout root = new FrameLayout(this);
@@ -200,7 +201,15 @@ public final class ConnectActivity extends Activity {
         connect.setAlpha(on ? 0.5f : 1f); scan.setAlpha(on ? 0.5f : 1f);
     }
 
+    private String installPath(Intent intent) {
+        return intent == null || intent.getData() == null ? null : InstallLink.shellPath(intent.getData().toString());
+    }
     private void prefill(Intent intent) {
+        if (installPath(intent) != null) {
+            if (!ServerSettings.origin(this).isEmpty()) returnToWizard();
+            else say("Connect to your Wizard first, then review the shared app in the Store.", false);
+            return;
+        }
         if (intent.getData() == null) return;
         String origin = ServerOrigin.parse(intent.getData().toString());
         if (origin == null) say("That QR isn't a Wizard address. Scan the QR in Setup, not the Tailscale sign-in one.", true);
@@ -240,10 +249,15 @@ public final class ConnectActivity extends Activity {
     private void returnToWizard() {
         // App-session document tasks from the old box must not keep privileged bridges alive after a switch.
         android.app.ActivityManager am = getSystemService(android.app.ActivityManager.class);
-        if (am != null) for (android.app.ActivityManager.AppTask task : am.getAppTasks()) {
+        String install = installPath(getIntent());
+        if (install == null && am != null) for (android.app.ActivityManager.AppTask task : am.getAppTasks()) {
             if (task.getTaskInfo().id != getTaskId()) task.finishAndRemoveTask();
         }
-        startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK)); finish();
+        Intent home = new Intent(this, MainActivity.class).addFlags(install == null
+                ? Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK
+                : Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        if (install != null) home.setData(android.net.Uri.parse(ServerSettings.origin(this) + install));
+        startActivity(home); finish();
     }
     private void back() {
         if (checking) { generation++; checking = false; busy(false); say("", false); }

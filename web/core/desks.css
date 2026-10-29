@@ -113,7 +113,7 @@
 /* ---------------- bound views (James, 12 Oct 2026) ----------------
  * A thread whose latest reply links the thing that was built opens that view on the desk beside it. While the
  * thread is in front, the thread narrows by 36 px and that desk leans into the gap, its edge fading in: an
- * extended canvas. No tab: swipe the bottom bar to move between them. */
+ * extended canvas. No tab: swipe the bottom bar, or tap / swipe the leaning edge (edge peek), to move between them. */
 .desk.bound-peek { transform: translate3d(-36px, 0, 0); z-index: 3; transition: transform 520ms var(--ease), opacity 400ms, filter 400ms; }
 .desk.bound-peek .tiles { -webkit-mask-image: linear-gradient(90deg, rgba(0,0,0,.6), #000 26px); mask-image: linear-gradient(90deg, rgba(0,0,0,.6), #000 26px); }
 .desk.bound-peek > .tiles .win { box-shadow: -10px 0 28px rgba(255, 170, 60, .16); }
@@ -126,6 +126,25 @@
 .desk.bound-chat-peek > .tiles .win { box-shadow: 10px 0 28px rgba(255, 170, 60, .16); }
 .device.bound-view-peeking .desk.bound-view-host .tiles { left: 20px; } /* a hint of the thread, the view keeps nearly full width */
 @media (prefers-reduced-motion: reduce) { .desk.bound-peek, .desk.bound-chat-peek { transition: none; } }
+/* Edge peek (core/edge-peek.js): the leaning edge (36 px on the thread's right; the thread's 20 px on the view's left)
+ * is a handle, clear of the status bar and the dock and under sheets. A small pill marks it; it and the next dock dot
+ * glow three times when it appears. */
+.bound-grab { position: absolute; z-index: 40; top: calc(var(--safe-t, 0px) + 64px); bottom: calc(var(--dock-h, 124px) + var(--safe-b, 0px) + 24px);
+  width: 36px; padding: 0; border: 0; background: transparent; touch-action: pan-y; -webkit-tap-highlight-color: transparent; cursor: pointer; }
+.bound-grab[hidden] { display: none; }
+.bound-grab.right { right: 0; }
+.bound-grab.left { left: 0; width: 22px; }
+.bound-grab::after { content: ""; position: absolute; top: 50%; width: 5px; height: 56px; margin-top: -28px; border-radius: 3px;
+  background: color-mix(in srgb, var(--violet-2, #8f63ff) 70%, #fff); opacity: .55; box-shadow: 0 0 0 1px rgba(0, 0, 0, .18), 0 0 14px color-mix(in srgb, var(--violet-2, #8f63ff) 70%, transparent); } /* the hairline keeps it visible over a white view */
+.bound-grab.right::after { right: 8px; }
+.bound-grab.left::after { left: 6px; }
+.bound-grab:focus-visible::after { opacity: 1; }
+.bound-grab.glow::after { animation: edgePeekGlow 1.6s ease-in-out 3; }
+#device:has(> .bound-grab.right.glow) #dotsR > .ddot:first-child .dsg,
+#device:has(> .bound-grab.left.glow) #dotsL > .ddot:last-child .dsg { animation: edgePeekDot 1.6s ease-in-out 3; }
+@keyframes edgePeekGlow { 50% { opacity: 1; transform: scaleY(1.25); box-shadow: 0 0 22px var(--violet-2, #8f63ff); } }
+@keyframes edgePeekDot { 50% { filter: drop-shadow(0 0 8px var(--violet-2, #8f63ff)) brightness(1.5); transform: scale(1.18); } }
+@media (prefers-reduced-motion: reduce) { .bound-grab.glow::after, #device:has(> .bound-grab.glow) .ddot .dsg { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .ov, .ov-card { transition: none; } }
 
 /* ＋ after the last desk: a new desk, starting from the app list */
@@ -139,7 +158,9 @@
 .new-desk .nd-head span { font-size: 13.5px; color: var(--ink-3); }
 .new-desk .lgroup { margin-bottom: 22px; }
 /* Search apps (James, 23 Oct 2026): pill at bottom centre, above the dock. The desk scroll leaves room for it. */
-.new-desk.kinds { padding-bottom: 92px; }
+/* Room under the last row for the search pill, the dock and the iPhone home bar, so the list can always scroll the
+ * For agents row clear of the pill, even when the apps only just fill the screen (Miguel, 24 Oct 2026). */
+.new-desk.kinds { padding-bottom: calc(var(--dock-h, 64px) + var(--safe-b, 0px) + env(safe-area-inset-bottom, 0px) + 96px); }
 .nd-search { position: absolute; left: 50%; bottom: calc(var(--dock-h) + var(--safe-b, 0px) + 8px); transform: translateX(-50%); width: min(78%, 340px); height: 46px; z-index: 3; display: flex; align-items: center; gap: 9px; padding: 0 16px; border-radius: 999px; background: color-mix(in srgb, var(--bg-2, #0f0c17) 82%, transparent); border: 1px solid var(--line-2); box-shadow: 0 8px 26px rgba(0, 0, 0, .32); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
 .nd-search svg { width: 17px; height: 17px; flex: 0 0 auto; fill: none; stroke: var(--ink-3); stroke-width: 2.2; stroke-linecap: round; }
 .nd-search input { flex: 1; min-width: 0; height: 100%; background: none; border: 0; outline: none; color: var(--ink); font: inherit; font-size: 16px; user-select: text; -webkit-user-select: text; }

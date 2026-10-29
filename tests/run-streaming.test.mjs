@@ -110,3 +110,129 @@ test('an early empty stream disconnect retries the same read, bounded to three r
   assert.ok(h.sources.every(s => s.url === '/wizard/hermes/v1/runs/rid/events'));
   assert.equal(h.calls.length, 0, 'no admission or send was made');
 });
+test('live tool steps stream like the CLI; reconnect replays without duplicates', () => {
+  const h = harness(); let snap;
+  h.L.openRunStream('sid', '', 'rid', r => snap = r);
+  h.sources[0].emit({ event: 'tool.started', tool: 'terminal', preview: 'df -h' }, 'tool.started');
+  h.sources[0].emit({ event: 'tool.completed', tool: 'terminal', error: false }, 'tool.completed');
+  h.sources[0].emit({ event: 'tool.started', tool: 'mcp__wizard__backup__backup_status', preview: '' }, 'tool.started');
+  h.paint();
+  assert.equal(JSON.stringify(snap.steps.map(s => [s.tool, s.done])), JSON.stringify([['terminal', true], ['mcp__wizard__backup__backup_status', false]]));
+  for (let i = 0; i < 6; i++) h.sources[0].emit({ event: 'tool.started', tool: 't' + i }, 'tool.started');
+  h.paint(); assert.equal(snap.steps.length, 4, 'only the latest steps are kept');
+  h.timers.shift(); h.sources[0].onerror(); h.timers.shift()();
+  assert.equal(snap.steps.length, 0, 'reconnect replays the run from the start');
+});
+test('same-name concurrent tool completion uses stable step IDs', () => {
+  const h = harness(); let snap;
+  h.L.openRunStream('sid', '', 'rid', s => { snap = s; });
+  const es = h.sources[0];
+  es.emit({ event: 'tool.started', step_id: 'a', tool: 'terminal', preview: 'command a' });
+  es.emit({ event: 'tool.started', step_id: 'b', tool: 'terminal', preview: 'command b' });
+  es.emit({ event: 'tool.completed', step_id: 'a', tool: 'terminal' }); h.paint();
+  assert.equal(JSON.stringify(snap.steps.map(s => [s.id, s.done])), JSON.stringify([['a', true], ['b', false]]));
+});
+test('status poll backs off while the live stream is open', async () => {
+  const h = harness(), delays = [];
+  h.c.setTimeout = (fn, ms) => (h.timers.push(fn), delays.push(ms), h.timers.length);
+  h.L.openRunStream('sid', '', 'rid', () => {});
+  h.sources[0].onopen();
+  h.c.receipt = { run_id: 'rid', session_id: 'sid', status: 'running' };
+  await h.timers.shift()();
+  assert.equal(delays.at(-1), 10000);
+  h.sources[0].onerror(); h.timers.pop(); delays.pop();
+  await h.timers.shift()();
+  assert.equal(delays.at(-1), 1500);
+});
+test('running reply shows one activity section, not two', () => {
+  const w = { id: 'w', thread: 'sid' }, c = {}, row = {};
+  let callback;
+  const ctx = { LIVE: { pendingRun: () => 'rid', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close() {} }) },
+    WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }), clip: (s, n) => s.slice(0, n),
+    esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => {}, loadThread: async () => {}, setTimeout: () => 1, clearTimeout: () => {} };
+  vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+  assert.equal(ctx.syncStream(w, c, [], ''), '');
+  const work = { window: {} };
+  vm.runInNewContext(readFileSync(new URL('../web/core/chat-work.js', import.meta.url), 'utf8'), work);
+  const tn = { u: { at: 1000 }, notes: [], work: [
+    { at: 2000, calls: [{ id: 'command', label: 'Checked the release state' }] },
+    { role: 'tool', at: 3000, callId: 'command' }
+  ] };
+  const power = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
+  const receipt = { WK: work.window.WosWork, A: { md: s => s }, esc: s => s, clip: s => s };
+  vm.runInNewContext(power.slice(power.indexOf('  const turnKey ='), power.indexOf('  /* ================= #11 models')), receipt);
+  c.wkOpen = new Set(['1000:0']);
+  for (const agent of ['', 'host-profile', 'container', 'restricted']) {
+    // The one history-owned disclosure is present before words, during tokens and at completion.
+    for (const [text, terminal] of [['', false], ['Checking the release.', false], ['Checked.', true]]) {
+      callback({ text, steps: [{ tool: 'terminal', preview: 'git status --short', done: terminal }], terminal });
+      const stream = ctx.syncStream(w, c, [], agent), html = receipt.workHtml(c, tn, true) + stream;
+      assert.equal((html.match(/<details\b/g) || []).length, 1);
+      assert.doesNotMatch(html, /ch-steps/);
+      assert.doesNotMatch(stream, /git status --short/);
+      if (!terminal) assert.match(html, /wk-preview">git status --short/);
+      assert.match(html, /Checked the release state/);
+      assert.match(html, /<time>1s<\/time>/);
+      assert.equal(stream === '', !text, 'no separate steps-only Working bubble');
+      if (text) assert.match(stream, /class="bub"/);
+    }
+  }
+  assert.doesNotMatch(readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8'), /\.ch-steps\b/);
+});
+test('a reopened thread whose answer already landed never shows the replayed run twice', () => {
+  const w = { id: 'w', thread: 'sid' }, c = {}, row = {};
+  let callback, closed = 0;
+  const ctx = { LIVE: { pendingRun: () => 'rid', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close: () => closed++ }) },
+    WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }), clip: (s, n) => s.slice(0, n),
+    esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => {}, loadThread: async () => {}, setTimeout: () => 1, clearTimeout: () => {} };
+  vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+  const answer = "**You're right, and that's fixed.**\n\n**What I did:** switched the job.";
+  const turns = [{ u: { text: 'hi' }, notes: ["Now I'll save the rule."], a: { at: 5, text: answer, final: true } }];
+  assert.equal(ctx.syncStream(w, c, turns, ''), '');
+  // The run replays from its first event: an interim line, then the same answer with its status trailer.
+  callback({ text: "Now I'll save the rule." + answer + '\n\n[WIZARD_STATUS_V1]{"state":"done"}[/WIZARD_STATUS_V1]', steps: [], terminal: false });
+  assert.equal(ctx.syncStream(w, c, turns, ''), '', 'no provisional copy under the landed answer');
+  assert.equal(c.stream.landed, true); assert.equal(closed, 1);
+  // A real new run whose words are not in the transcript yet still streams.
+  const c2 = {};
+  ctx.LIVE.pendingRun = () => 'rid2';
+  assert.equal(ctx.syncStream(w, c2, turns, ''), '');
+  callback({ text: 'Fresh words', steps: [], terminal: false });
+  assert.match(ctx.syncStream(w, c2, turns, ''), /Fresh words/);
+});
+test('a terminal provisional that never matches the transcript retires after the reconcile window', async () => {
+  const w = { id: 'w', thread: 'sid' }, c = {}, row = {};
+  let callback, clock = 1000, timer = null, repaints = 0;
+  const ctx = { LIVE: { pendingRun: () => 'rid', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close() {} }) },
+    WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }), clip: (s, n) => s.slice(0, n),
+    esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => repaints++, loadThread: async () => {}, setTimeout: fn => (timer = fn, 1), clearTimeout: () => {},
+    Date: { now: () => clock } };
+  vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+  const turns = [{ a: { at: 5, text: 'older answer', final: true } }];
+  ctx.syncStream(w, c, turns, '');
+  callback({ text: 'words never persisted', steps: [], terminal: true }); await settle();
+  assert.match(ctx.syncStream(w, c, turns, ''), /Finishing/);
+  clock += 61000; await timer(); await settle();
+  assert.equal(c.stream.landed, true);
+  assert.equal(ctx.syncStream(w, c, turns, ''), '');
+});
+test('a new run that only ends like the previous short answer keeps streaming (main and routed threads)', () => {
+  for (const agent of ['', 'philosopher']) {
+    const w = { id: 'w', thread: 'sid' }, c = {}, row = {};
+    let callback;
+    const ctx = { LIVE: { pendingRun: () => 'rid', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close() {} }) },
+      WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }), clip: (s, n) => s.slice(0, n),
+      esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => {}, loadThread: async () => {}, setTimeout: () => 1, clearTimeout: () => {} };
+    vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+    const turns = [{ notes: [], a: { at: 5, text: 'Yes.', final: true } }];
+    ctx.syncStream(w, c, turns, agent);
+    callback({ text: 'I checked the request. Yes.', steps: [], terminal: false });
+    assert.match(ctx.syncStream(w, c, turns, agent), /I checked the request/, `agent=${agent || 'main'}`);
+    assert.equal(c.stream.landed, false);
+    // The same thread reopened after that answer landed: the replay is retired on both routes.
+    const c2 = {}, landed = [...turns, { notes: [], a: { at: 9, text: 'I checked the request. Yes.', final: true } }];
+    ctx.syncStream(w, c2, landed, agent);
+    callback({ text: 'I checked the request. Yes.', steps: [], terminal: true });
+    assert.equal(ctx.syncStream(w, c2, landed, agent), '', `agent=${agent || 'main'}`);
+  }
+});
