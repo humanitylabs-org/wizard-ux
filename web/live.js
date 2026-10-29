@@ -1316,6 +1316,7 @@
         if (r.stopped || r.terminal || r.source) return;
         if (!numbered) r.steps = []; // an unnumbered reconnect replays the run from its first event
         try {
+          r.seenAt = Date.now(); // a new read gets the full stall window to open, however slow the link
           r.source = new window.EventSource(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
           r.source.onmessage = event;
           for (const name of ['message.delta', 'tool.started', 'tool.completed', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted', 'replay.truncated']) r.source.addEventListener(name, event);
@@ -1345,7 +1346,7 @@
           if (r.stopped) return;
           if ((d.run_id || d.id) === runId && d.session_id === sid && ['completed', 'failed', 'cancelled', 'interrupted'].includes(d.status)) terminal();
           // Wizard answers but the stream has been silent past several keepalives: a half-open connection (plane wifi).
-          else if (r.source && numbered && Date.now() - (r.seenAt || 0) > STALL_MS) { r.live = false; close(); connect(); }
+          else if (r.source && r.live && numbered && Date.now() - (r.seenAt || 0) > STALL_MS) { r.live = false; close(); connect(); }
           // Some systems never fire 'online': a status read that worked is proof enough.
           else if (!r.source && r.waitingOnline) resumeNow();
         } catch (_) { /* connectivity recovery is the ordinary read poll, never another send */ }

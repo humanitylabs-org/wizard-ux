@@ -163,6 +163,19 @@ test('a silent half-open stream is replaced once the status read proves Wizard r
   t += 100000; await h.timers.shift()(); assert.equal(h.sources.length, 2, 'silent past the stall window: read again');
   assert.equal(h.sources[0].closed, true);
 });
+test('a replacement stream on a slow link gets the whole stall window to open', async () => {
+  const h = harness(); let t = 1000;
+  h.c.Date = { now: () => t };
+  h.L.openRunStream('sid', '', 'rid', () => {});
+  let poll = h.timers.shift();
+  h.sources[0].onopen(); h.sources[0].emit({ event: 'message.delta', delta: 'Hi', seq: 0 });
+  h.c.receipt = { run_id: 'rid', session_id: 'sid', status: 'running' };
+  t += 100000; await poll(); assert.equal(h.sources.length, 2, 'stalled: replaced');
+  // The replacement has not opened yet; the next polls (1.5 s apart while not live) must leave it alone.
+  for (let i = 0; i < 5; i++) { t += 1500; await h.timers.shift()(); }
+  assert.equal(h.sources.length, 2, 'never closed before it could open');
+  assert.equal(h.sources[1].closed, undefined);
+});
 test('live tool steps stream like the CLI; reconnect replays without duplicates', () => {
   const h = harness(); let snap;
   h.L.openRunStream('sid', '', 'rid', r => snap = r);
