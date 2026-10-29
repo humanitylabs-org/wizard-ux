@@ -24,6 +24,12 @@ Read-only main Hermes session metadata/limited prior assistant results found the
 
 The global banner now follows actual connection evidence only. Chats retains the unsent card, item/count, Retry now, Troubleshooter and recovery controls. Healthy probes produce neutral request-retry copy; Chats supplies the precise saved-message label “Message not sent · retrying”. No `outbox.js`, persistence, retry/backoff, cancellation, authority, idempotency or receipt code changes.
 
+## Failed forum run triage
+
+The initial receipt retained 1506 passing tests and one failure: this change expanded `docs/COMPONENTS.md` to 14233 bytes against its unchanged 14000-byte ceiling. Shorten the changed row; do not weaken the inventory test. The upstream port had the same row expansion.
+
+The browser stopped before Retry could be exercised. Its saved screenshot is Home, while the Chats send pill is mounted on a neighboring offscreen desk. The fixture used ignored shell/skin/state storage keys and checked DOM presence, not the current visible desk. Fix the fixture to use the real shell/skin keys, tap Chats in the dock, assert the applied skin and hit-test an in-viewport Retry, then use an ordinary click. No production layout or delivery-code change is warranted by that failure. Preserve all original phase logs and rerun only the inventory check and failed browser phase, with unchanged product/test source hash-bound to prior passes.
+
 ## Acceptance
 
 - New assertions fail against the pre-fix source: healthy reads plus retryable waiting item must not raise a global connection warning; healthy health probes must not claim the server refused a message.
