@@ -633,6 +633,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/welcome.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
     "core/workspace-navigation.js": {
       "loadedBy": [
         "phone",
@@ -656,6 +663,11 @@
     }
   },
   "exceptions": {
+    "pwa-install.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Phone-only install banner (Add to Home Screen is needed for voice); desktop browsers offer install in the address bar (Miguel, 29 Oct 2026)."
+    },
     "core/device-port.js": {
       "shell": "phone",
       "classification": "native",
@@ -863,6 +875,8 @@
     "core/voice-legacy.js",
     "core/voice-status.js",
     "core/web-update.js",
+    "core/welcome.css",
+    "core/welcome.js",
     "core/workspace-navigation.js",
     "core/workspace-sync.js",
     "favicon.ico",
@@ -871,7 +885,6 @@
     "kit/shell-tokens.css",
     "live.js",
     "manifest.webmanifest",
-    "outbox.js",
-    "pwa-install.js"
+    "outbox.js"
   ]
 }
