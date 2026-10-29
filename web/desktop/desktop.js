@@ -1261,7 +1261,7 @@
       const blocks = pickKinds(); palItems = []; const html = [];
       const tile = it => { const i = palItems.push(it) - 1;
         const ic = it.get ? '<span class="ic pal-plus">+</span>' : ico('span', 'ic', it.app);
-        return `<button type="button" class="pal-app${it.sys ? ' pal-sys' : ''}${it.get ? ' pal-get' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-selected="false" title="${esc(it.sub ? `${it.name} · ${it.sub}` : it.name)}">${ic}<span class="nm">${esc(it.name)}</span></button>`; };
+        return `<button type="button" class="pal-app${it.sys ? ' pal-sys' : ''}${it.get ? ' pal-get' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-selected="false" title="${esc(it.sub ? `${it.name} · ${it.sub}` : it.name)}">${ic}<span class="nm${/\S{13,}/.test(it.name) ? ' long' : ''}">${esc(it.name)}</span></button>`; };
       for (const b of blocks) {
         if (b.fold) { const i = palItems.push({ kind: 'fold', name: 'For agents', run: () => { palFold = !palFold; pickRender(); palIn.focus(); } }) - 1;
           html.push(`<button type="button" class="pal-fold${palFold ? ' open' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-expanded="${palFold}"><span>For agents</span><small>${b.n}</small><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>`); continue; }
@@ -1270,7 +1270,7 @@
       palList.innerHTML = html.join(''); palSel = Math.min(palSel, palItems.length - 1);
       return palMark(palSel);
     }
-    palList.innerHTML = palItems.map((it, i) => `<button type="button" class="pal-app${i === palSel ? ' sel' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-selected="${i === palSel}" title="${esc(it.sub ? `${it.name} · ${it.sub}` : it.name)}">${ico('span', 'ic', it.app)}<span class="nm">${esc(it.name)}</span></button>`).join('')
+    palList.innerHTML = palItems.map((it, i) => `<button type="button" class="pal-app${i === palSel ? ' sel' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-selected="${i === palSel}" title="${esc(it.sub ? `${it.name} · ${it.sub}` : it.name)}">${ico('span', 'ic', it.app)}<span class="nm${/\S{13,}/.test(it.name) ? ' long' : ''}">${esc(it.name)}</span></button>`).join('')
       || `<div class="pal-empty">No app called “${esc(clip(palIn.value.trim(), 40))}”.<br><kbd>↵</kbd> searches threads and commands too</div>`;
     palMark(palSel);
   }
