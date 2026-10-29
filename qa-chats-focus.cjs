@@ -359,9 +359,65 @@ async function soloAcceptance(b) {
  }} finally {soloAgent=false;sharedSpaces=[];}
 }
 
+// One-Space regression uses the existing fixture transport and real shared menu/picker on both shells.
+// PATCH deliberately answers 405 so this also covers the older-service full-PUT fallback.
+async function oneSpaceAcceptance(b) {
+ const at=writes.length;
+ for(const desktop of [false,true]) for(const skin of ['obsidian','nebula']) {
+  sharedSpaces=[{id:'reading',name:'Reading',threads:[]},{id:'launch',name:'Launch',threads:[]}];
+  const {ctx,p}=await boot(b,desktop), tag=(desktop?'desktop':'phone')+' '+skin;
+  const members=()=>sharedSpaces.filter(s=>s.threads.includes('main_phil')).map(s=>s.id).sort();
+  const settle=async()=>{await p.waitForTimeout(500);};
+  const menu=async()=>{await p.locator('[data-chopen="main_phil"]:visible').dispatchEvent('contextmenu');};
+  const reload=async()=>{
+   await p.reload({waitUntil:'domcontentloaded'});
+   await p.waitForFunction(()=>!!(window.__wos||window.__wux)?.live.agentStatus.philosopher?.ok);
+   await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');if(window.__wos)a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);});
+   await settle();
+  };
+  try {
+   await p.evaluate(s=>WosSkin.set(s),skin);
+   await p.locator('.mz-intro').waitFor({state:'detached'});
+   await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');if(window.__wos)a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);});await settle();
+   await menu();
+   ok((await p.locator('[data-rsspacepicker]').innerText()).trim()==='Add to a Space…',tag+' unfiled menu says Add to a Space');
+   await activate(p,'[data-rsspacepicker]');
+   ok(await p.locator('.ch-space-picker header b').innerText()==='Add to a Space',tag+' unfiled picker says Add to a Space');
+   await activate(p,'[data-spspace="reading"]');await settle();
+   ok(JSON.stringify(members())==='["reading"]',tag+' Add persists one membership',members());
+   await menu();
+   ok((await p.locator('[data-rsspacepicker]').innerText()).trim()==='Move to Space…',tag+' filed menu says Move to Space');
+   await capture(p,tag.replaceAll(' ','-')+'-one-space-menu');
+   await activate(p,'[data-rsspacepicker]');
+   ok(await p.locator('.ch-space-picker header b').innerText()==='Move to Space',tag+' filed picker says Move to Space');
+   await activate(p,'[data-spspace="launch"]');await settle();
+   ok(JSON.stringify(members())==='["launch"]',tag+' move removes old membership and persists only destination',members());
+   await reload();await menu();
+   ok(await p.locator('[data-rsspace]').count()===1&&await p.locator('[data-rsspace="launch"]').count()===1,tag+' reload renders only destination Remove action');
+   await activate(p,'[data-rsspacepicker]');const n=writes.filter(w=>w.path==='/wizard/v1/ui-preferences').length;
+   await activate(p,'[data-spspace="launch"]');await settle();
+   ok(writes.filter(w=>w.path==='/wizard/v1/ui-preferences').length===n&&JSON.stringify(members())==='["launch"]',tag+' same-Space choice is idempotent with no preference write',members());
+   await menu();
+   if(await p.locator('[data-rsspace="launch"]').count()) {
+    await activate(p,'[data-rsspace="launch"]');await settle();
+    ok(members().length===0,tag+' removal leaves chat unfiled',members());
+    await reload();await menu();
+    ok((await p.locator('[data-rsspacepicker]').innerText()).trim()==='Add to a Space…'&&await p.locator('[data-rsspace]').count()===0,tag+' removal survives reload and restores Add menu');
+   } else {
+    ok(false,tag+' removal leaves chat unfiled',{reason:'same-Space selection incorrectly removed the destination',members:members()});
+    ok(false,tag+' removal survives reload and restores Add menu',{reason:'destination removal is unavailable'});
+   }
+  } finally {await ctx.close();}
+ }
+ sharedSpaces=[];
+ ok(!writes.slice(at).some(w=>w.path.endsWith('/v1/runs')), 'one-Space menu creates zero agent runs');
+ ok(errors.length===0,'one-Space no page errors',errors);
+}
+
 (async()=>{
  const b=await chromium.launch({executablePath:process.env.QA_CHROME||undefined,args:['--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required']});
  try {
+ if(process.env.QA_ONE_SPACE_ONLY){await oneSpaceAcceptance(b);console.log(`${pass} passed, ${fail} failed`);process.exitCode=fail?1:0;return;}
  if(process.env.QA_SPACE_MEMBERS_ONLY){await spaceArchiveMatrix(b);ok(errors.length===0,'no page errors',errors);console.log(`${pass} passed, ${fail} failed`);process.exitCode=fail?1:0;return;}
  await soloAcceptance(b);
  if(process.env.QA_SOLO_ONLY){console.log(`${pass} passed, ${fail} failed`);process.exitCode=fail?1:0;return;}
