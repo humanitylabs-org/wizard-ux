@@ -12,7 +12,7 @@ async function load(reply) {
   let refreshes = 0;
   const fetch = async (url, opts = {}) => {
     calls.push({ url, ...opts, body: opts.body && JSON.parse(opts.body) });
-    const [status, body] = reply(opts.method || 'GET', opts.body && JSON.parse(opts.body));
+    const [status, body] = await reply(opts.method || 'GET', opts.body && JSON.parse(opts.body));
     return { ok: status >= 200 && status < 300, status, json: async () => body };
   };
   const window = { WosSettings: { register: f => registered.push(f), refresh: () => refreshes++ } };
@@ -24,6 +24,123 @@ async function load(reply) {
 const btn = osu => ({ closest: sel => (sel === '[data-osu]' ? { dataset: { osu } } : null) });
 const ctx = () => { const t = []; return { t, toast: (...a) => t.push(a), render() {}, haptic() {} }; };
 const STATUS = { mode: 'auto', chosen: false, installed: '0.3.15', latest: '0.3.16', update_available: true, unpinned: false, checked: true, installing: false };
+const APPS = { app_mode: 'auto', chosen: false, due: [{ id: 'notes' }], skipped: [{ id: 'my-app', skip: 'owner-source' }], last: { updated: [{ id: 'news' }] } };
+
+const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
+test('an older background refresh cannot overwrite a confirmed app setting', async () => {
+  const stale = deferred(); let reads = 0;
+  const manual = { ...STATUS, apps: { ...APPS, app_mode: 'ask', chosen: true } };
+  const { U } = await load(method => method === 'POST' ? [200, {}] : ++reads === 2 ? stale.promise : [200, reads > 2 ? manual : { ...STATUS, apps: APPS }]);
+  const old = U.load(true); await tick();
+  const c = ctx(); U.act(btn('apps-ask'), c);
+  await tick(); await tick();
+  stale.resolve([200, { ...STATUS, apps: APPS }]); await old; await tick(); await tick();
+  assert.equal(U.state.apps.app_mode, 'ask');
+  assert.equal(U.state.apps.chosen, true);
+  assert.equal(c.t.at(-1)[0], '✓');
+});
+
+test('Update apps now remains busy across slow or failed status refresh', async () => {
+  for (const response of [[200, { ...STATUS, apps: APPS }], [503, {}]]) {
+    const refresh = deferred(); let reads = 0;
+    const { U, calls } = await load(method => method === 'POST' ? [200, { started: true }] : ++reads === 1 ? [200, { ...STATUS, apps: APPS }] : refresh.promise);
+    U.act(btn('apps-apply'), ctx()); await tick(); await tick();
+    assert.match(U.html(), /data-osu="apps-apply" disabled/);
+    U.act(btn('apps-apply'), ctx()); await tick();
+    assert.equal(calls.filter(c => c.method === 'POST').length, 1);
+    refresh.resolve(response); await tick(); await tick();
+    if (response[0] !== 200) assert.match(U.html(), /data-osu="apps-apply" disabled/, 'unknown admission remains held until successful refresh');
+  }
+});
+
+test('missing or malformed app readback cannot release one-shot admission; valid refresh recovers', async () => {
+  const malformed = [undefined, null, {}, { ...APPS, app_mode: null }, { ...APPS, due: null },
+    { ...APPS, due: {} }, { ...APPS, skipped: null }, { ...APPS, due: [null] },
+    { ...APPS, due: ['notes'] }, { ...APPS, error: 'offline' }];
+  for (const apps of malformed) {
+    let response = { ...STATUS, apps: APPS };
+    const { U, calls } = await load(method => [200, method === 'POST' ? { started: true } : response]);
+    response = { ...STATUS, apps };
+    U.act(btn('apps-apply'), ctx()); await tick(); await tick();
+    // OS status is independently usable, but an unknown app refresh must retain the previous app state.
+    assert.equal(U.state.mode, STATUS.mode);
+    assert.deepEqual(U.state.apps, APPS);
+    assert.match(U.html(), /data-osu="apps-apply" disabled/);
+    assert.match(U.html(), /data-osu="apps-refresh"/);
+    U.act(btn('apps-apply'), ctx()); await tick();
+    assert.equal(calls.filter(c => c.method === 'POST').length, 1, 'partial GET must not permit duplicate start');
+    response = { ...STATUS, apps: { ...APPS, app_mode: 'ask', chosen: true } };
+    await U.load(true); await tick();
+    assert.doesNotMatch(U.html(), /data-osu="apps-apply" disabled/);
+    U.act(btn('apps-apply'), ctx()); await tick(); await tick();
+    assert.equal(calls.filter(c => c.method === 'POST').length, 2, 'valid independent app readback recovers');
+    assert.equal(U.state.apps.app_mode, 'ask', 'one-shot never enables Automatic');
+  }
+});
+
+test('unknown source is not described as owner-modified', async () => {
+  const { U } = await load(() => [200, { ...STATUS, apps: { ...APPS, skipped: [{ id: 'legacy', skip: 'source-unverified' }] } }]);
+  assert.match(U.html(), /legacy \(can’t confirm it is unchanged yet\)/);
+  assert.doesNotMatch(U.html(), /legacy \(your code needs review\)/);
+});
+
+test('app policy is visible, separately scoped, default is not called consent, and legacy boxes invent nothing', async () => {
+  const { U } = await load(() => [200, { ...STATUS, mode: 'ask', apps: APPS }]);
+  assert.match(U.html(), /Wizard OS updates/);
+  assert.match(U.html(), /App updates/);
+  assert.match(U.html(), /Default: Automatic/);
+  assert.match(U.html(), /Last updated: news/);
+  assert.doesNotMatch(U.html(), /\[object Object\]/);
+  assert.match(U.html(), /my-app \(your code needs review\)/);
+  assert.match(U.html(), /data-osu="apps-auto" role="radio" aria-checked="true"/);
+  const old = await load(() => [200, STATUS]);
+  assert.doesNotMatch(old.U.html(), /apps-auto|apps-ask/);
+});
+
+test('manual app choice is read back and does not change system policy; Update apps now stays Manual', async () => {
+  let state = { ...STATUS, apps: { ...APPS } };
+  const { U, calls } = await load((method, body) => {
+    if (method === 'GET') return [200, state];
+    if (body.app_mode) { state = { ...state, apps: { ...state.apps, app_mode: body.app_mode, chosen: true } }; return [200, state]; }
+    return [200, { started: true }];
+  });
+  const c = ctx();
+  U.act(btn('apps-ask'), c);
+  await tick(); await tick();
+  assert.equal(U.state.apps.app_mode, 'ask');
+  assert.equal(U.state.mode, 'auto');
+  assert.deepEqual(c.t.at(-1), ['✓', 'Automatic app updates off', 1800]);
+  assert.deepEqual(calls.filter(r => r.method === 'POST').at(-1).body, { app_mode: 'ask' });
+  assert.equal(calls.at(-1).method, undefined, 'GET readback follows write');
+  U.act(btn('apps-apply'), c);
+  await tick(); await tick();
+  assert.deepEqual(calls.filter(r => r.method === 'POST').at(-1).body, { action: 'apply-apps' });
+  assert.equal(U.state.apps.app_mode, 'ask');
+});
+
+test('Manual legacy copies can request explicit verification without enabling Automatic', async () => {
+  const apps = { ...APPS, app_mode: 'ask', chosen: true, due: [], skipped: [{ id: 'legacy', skip: 'source-unverified' }] };
+  const { U, calls } = await load((method) => method === 'GET' ? [200, { ...STATUS, apps }] : [200, { started: true }]);
+  assert.match(U.html(), /data-osu="apps-apply" >Update apps now/);
+  assert.match(U.html(), /Checks 1 app and updates only those confirmed unchanged/);
+  U.act(btn('apps-apply'), ctx()); await tick(); await tick();
+  assert.deepEqual(calls.find(r => r.method === 'POST').body, { action: 'apply-apps' });
+  assert.equal(U.state.apps.app_mode, 'ask');
+});
+
+test('failed app policy readback never fabricates success or a chosen setting', async () => {
+  for (const readback of [[503, {}], [200, { ...STATUS, apps: APPS }]]) {
+    let reads = 0;
+    const { U } = await load(method => method === 'GET' ? (++reads === 1 ? [200, { ...STATUS, apps: APPS }] : readback) : [200, {}]);
+    const c = ctx();
+    U.act(btn('apps-ask'), c);
+    await tick(); await tick();
+    assert.equal(U.state.apps.app_mode, 'auto');
+    assert.equal(U.state.apps.chosen, false);
+    assert.equal(c.t.at(-1)[0], '!');
+    assert.match(c.t.at(-1)[1], /confirm the saved/);
+  }
+});
 
 test('reads the App Manager through the Store listener and registers one Settings group', async () => {
   const { U, calls, registered } = await load(() => [200, STATUS]);

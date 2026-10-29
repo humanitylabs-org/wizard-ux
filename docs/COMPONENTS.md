@@ -49,7 +49,7 @@ Visual: <side-by-side screenshot, or "none">
 | Alternative Chats list | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`web/core/edge-peek.js`), host storage | skin-local duplicate |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
-| Models, retry, mic, receipts, reading place | `WosChatPower` (`core/chat-power.js`: anchors; repair; viewport-bound picker, keyboard cleanup) + `WosModels` (`core/chat-models.js`: pooled Claude; provider-access Error + Retry/Choose another model; acknowledged source-bound saved retry), `WosErrors` (`core/chat-errors.js`), `WosWork` (`core/chat-work.js`: one activity group, history + tools) | model/error/reading-place forks; duplicate diagnosis/steps |
+| Models, retry, mic, receipts, reading place | `WosChatPower` (`core/chat-power.js`: anchors/repair/picker/keyboard), `WosModels` (`core/chat-models.js`: pooled Claude, source-bound Retry/Choose another model), `WosErrors` (`core/chat-errors.js`), `WosWork` (`core/chat-work.js`: activity/history/tools) | forks; duplicate diagnosis/steps |
 | Markdown, drafts, inline/bottom media | `WosChat` (`chat-kit.js`: `helm`, `md`, `copyRich`, `viewer`); Chats `mediaBlock` | own parser/viewer |
 | Spaces / Focus | `WizCore` Chats (`core/chats.js`), `WizLive.prefOps` (`spaces`), `spaceSessions(ids)`; shared naming; `winAgent` / `modelRoute` new-chat routes; `WosOutbox.onNew` joins front Space; Focus awaits agent census; hidden agents routable; scoped Spaces tools; `WosAgents.colour` / `distinctHues`, `--ch-agent-hue` | auto-subject tabs; separate stores/routers |
 | Incognito (Settings `.sw`) | `WizCore.incognitoChats` (`web/core/incognito-chat.js`); `WizLive.openRunStream`, RAM Retry | durable state or forks |
@@ -77,9 +77,9 @@ Visual: <side-by-side screenshot, or "none">
 | Dictation into a focused field | `WizCore` focused field (`web/core/focused-field.js`); voice `WizCore` (`web/core/voice.js`); mic choice `WosMic` (`web/core/mic.js`) | own recorder/transcriber |
 | Local commands | `WosCommands` (`web/core/commands.js`) | a second command parser |
 | Screen capture | `WosScreenCapture` (`web/core/screen-capture.js`), `WosCaptureTools` (`web/core/capture-tools.js`) | — |
-| Update banners, Settings card, Home pop-up | `WizWebUpdate`, `WizAppUpdates` (`web/core/web-update.js`), `WizAppVersions` (`web/core/app-versions.js`), `WosUpdates` (`web/core/os-updates.js`: `card`/`popup`) | own reload timers, a second card |
+| Updates: banners/Settings/Home | `WizWebUpdate`, `WizAppUpdates` (`web/core/web-update.js`), `WizAppVersions` (`web/core/app-versions.js`), `WosUpdates` (`web/core/os-updates.js`: card/popup; Automatic/Manual, one-shot; reads ≠ consent) | reload timers, 2nd card |
 | Provider login (Claude, ChatGPT) for agents and apps | the installed login apps (`wizard-claude`, `wizard-chatgpt`; skill `app-owned-codex-connections`) | setup-tokens or bespoke auth flows |
-| Native phone mic recording (voice notes, orb takes, dictation) | `NoteRecorder` (`audio/NoteRecorder.java`) over `MicRoute` (`audio/MicRoute.java`: `MicRoute.start` with `MicRoute.NOTE_SOURCES` for listened notes, `MicRoute.SOURCES` for STT) | `new MediaRecorder`, `AudioRecord` or `setAudioSource` outside `audio/` | `MicRouteTest`, `NoteRecorderTest` |
+| Phone mic | `NoteRecorder` (`audio/NoteRecorder.java`) over `MicRoute` (`audio/MicRoute.java`: `MicRoute.start` with `MicRoute.NOTE_SOURCES` for listened notes, `MicRoute.SOURCES` for STT) | `new MediaRecorder`, `AudioRecord` or `setAudioSource` outside `audio/` | `MicRouteTest`, `NoteRecorderTest` |
 | Android shell capabilities | `WosDevicePort` (`web/core/device-port.js`), `WosDeviceRecording` (`web/core/device-recording.js`), `WosDeviceOrb` (`web/core/device-orb.js`); `wizardDevicePort` v1 (`device/DeviceMessageProtocol.java`) | another envelope, recorder/store or feature `@JavascriptInterface`; ack before durable custody |
 | Add an app to the home screen | `WizHomeScreenApps.attach / offer / canOffer` (`web/core/home-screen-apps.js`): native pin/guide, dedup echoes, resume retry; `WosExperience` arrange; docs/pwa-app-install.md | second pin menu/sheet |
 | Long screenshot, text selection | WebView document scroll, `SelectionWebView`, `ScrollCaptureCrashGuard` (`docs/android-document-scroll.md`) | second capture path | long Chats capture |
@@ -89,7 +89,7 @@ Visual: <side-by-side screenshot, or "none">
 | Need | Use | Never hand-roll |
 |---|---|---|
 | The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`, icon/core); Android `android/app/src/main/assets/assist/everywhere.html` | PNG + CSS spin, Lottie, SVG |
-| Skins, backgrounds, scenery, skin switches (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`; tweaks: `core/slots.json` incl. `home-main`+`paintHome`, `windowRefresh`, beside, inbox+list, `data.read` resources/app, `back.push`), `WosExperience` (`web/core/experience.js`), `WosMySkin` (`web/core/my-skin.js`), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own gradients, canvases or colour constants |
+| Skins/scenery (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`; `core/slots.json`: home-main/paintHome, windowRefresh, beside, inbox/list, data.read, back.push), `WosExperience`, `WosMySkin`, `WosScenery`, `WizAppearance` (`web/core/appearance-host.js`) | own gradients/canvases/colours |
 | Overlay panel material | `--wz-panel`, `--wz-panel-raised` | `docs/OPAQUE_OVERLAYS.md` |
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) | own keyframe sets |
 | Tour/help ("Step N of 3": Talk, Reply in Chats, Done), responsive Done, skip/exit; desktop guide `WosTour.desk` ("Step N of 2") | `WosTour` (`web/core/tour.js`) | — |
@@ -106,8 +106,8 @@ Visual: <side-by-side screenshot, or "none">
 
 ## Plumbing (single owner)
 
-AI usage: EXTEND `WosResources` (`web/core/resources.js`) for shared Home/Settings extra-usage cells and bars, including enabled-with-unknown-cap status and last-known readings; EXTEND `WosUsage` (`web/core/usage.js`) for AI-account details. Unknown cap/balance or spend never implies zero or unlimited. Regression: `tests/claude-extra-usage.test.mjs`.
+AI usage: `WosResources` (`web/core/resources.js`): Home/Settings usage, unknown caps, last-known values; `WosUsage` (`web/core/usage.js`): account details. Unknown ≠ zero/unlimited. Test: `tests/claude-extra-usage.test.mjs`.
 
 `WizCompanionPane` (`web/core/companion-pane.js`), `WizardApp` (`web/core/app-client.js`), `WizAppCapture` (`web/core/app-capture.js`), `WizComposerInput` (`web/core/composer-input.js`), `WizAttachChip` (`web/core/attach-chip.js`), `WosSkinFrame` (`web/core/skin-frame.js`), `WosDevice` (`web/device.js`), `WizAppServices` (`web/core/app-services.js`), `WizCore` (`web/core/core.js`, `bridge.js`), `WizConfig` (`web/core/config.js`), `WizReach` (`web/core/reach.js`), `WizAndroidRelay` (`web/core/android-relay.js`), `WizBackgroundAudio` (`web/core/background-audio.js`), `WizHomeScreenPolicy` (`web/core/home-screen-policy.js`), `WosOwnViews` (`web/core/own-views.js`), `WosOrbHandoff` (`web/core/orb-handoff.js`), `WosShareSheet` (`web/core/share-sheet.js`), `WosBell` (`web/core/notif-bell.js`, items), `WosResources` (`web/core/resources.js`), `WosUsage` (`web/core/usage.js`), `WizPhotosRelay` (`web/core/photos-relay.js`), `WosMusic`, `WizDeviceLegacy` (`web/core/voice-legacy.js`), openers `WizAppOpen`, `WizCanOpen`, `WizOpenApp`, `WizOpenAgentChats` (`web/app.js`), `WosBoundView` (`web/core/bound-view.js`), `WosWorkspaceSync` (`web/core/workspace-sync.js`, rig).
 
-Devices: `WizPhoneConnect`, #677 + #648, shared kit. Setup/Mac reuse; +16px tinted Setup action, step-2 green check/Show again, final Done.
+Devices: `WizPhoneConnect` #677/#648: shared Setup/Mac, +16px action, green step-2/Show again, Done.

@@ -48,22 +48,36 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const API = new URL('../store-install/_updates', document.currentScript?.src || location.href).href;
   const FRESH = 60e3;
-  let st = null, at = 0, inflight = null, busy = '', off = false;
+  let st = null, at = 0, inflight = null, busy = '', off = false, epoch = 0, appsPending = false;
 
   const valid = d => d && typeof d === 'object' && ['auto', 'ask'].includes(d.mode) && 'update_available' in d;
+  // OS validity says nothing about app status. Unknown/error app reads cannot release a pending one-shot.
+  const validApps = a => a && typeof a === 'object' && ['auto', 'ask'].includes(a.app_mode) &&
+    typeof a.chosen === 'boolean' && !a.error && Array.isArray(a.due) && Array.isArray(a.skipped) &&
+    [...a.due, ...a.skipped].every(r => r && typeof r === 'object' && typeof r.id === 'string' && r.id.length);
   function changed() { try { window.WosSettings?.refresh(); } catch (_) {} try { popup(); } catch (_) {} }
   function load(force) {
     if (off && !force) return Promise.resolve(st);
     if (!force && st && Date.now() - at < FRESH) return Promise.resolve(st);
     if (inflight) return inflight;
-    inflight = (async () => {
+    const generation = epoch;
+    const job = (async () => {
       try {
         const r = await fetch(API, { credentials: 'same-origin', cache: 'no-store' });
         const d = r.ok ? await r.json().catch(() => null) : null;
-        if (valid(d)) { st = d; off = false; } else if (!st) off = true;
-      } catch (_) { if (!st) off = true; }
-      at = Date.now(); inflight = null; changed(); return st;
+        if (generation !== epoch) return st;
+        if (valid(d)) {
+          const appsConfirmed = validApps(d.apps);
+          st = appsPending && !appsConfirmed ? { ...d, apps: st?.apps } : d;
+          off = false;
+          if (appsConfirmed) appsPending = false;
+        } else if (!st) off = true;
+      } catch (_) { if (generation === epoch && !st) off = true; }
+      if (generation === epoch) { at = Date.now(); changed(); }
+      return st;
     })();
+    inflight = job;
+    job.finally(() => { if (inflight === job) inflight = null; });
     return inflight;
   }
   async function post(body) {
@@ -100,14 +114,29 @@
     const sub = st.unpinned ? 'Updated by hand · not on a release' : !st.checked ? 'Couldn’t check for updates' : 'Up to date';
     return `<div class="st-row static osu-head"><span class="st-tx"><b data-osu-title>${esc(have)}</b></span><span class="st-val">${esc(sub)}</span></div>`;
   }
+  function appsHtml() {
+    const a = st?.apps;
+    if (!a) return ''; // older App Manager: no invented control or mode
+    if (!['auto', 'ask'].includes(a.app_mode)) return '<div class="osu-sec"><span class="osu-lbl">App updates</span><p class="st-hint">Couldn’t check app updates. Try again before changing this setting.</p><button type="button" class="osu-go" data-osu="apps-refresh">Try again</button></div>';
+    const auto = a.app_mode === 'auto', due = Array.isArray(a.due) ? a.due : [];
+    // A read cannot migrate legacy inventories. Let a one-shot verify them without enabling Automatic.
+    const unchecked = (Array.isArray(a.skipped) ? a.skipped : []).filter(r => r.skip === 'source-unverified');
+    const checkable = due.length + unchecked.length;
+    const skipped = (Array.isArray(a.skipped) ? a.skipped : []).filter(r => ['held', 'owner-source', 'source-unverified', 'pinned'].includes(r.skip));
+    const why = { held: 'kept on this version', 'owner-source': 'your code needs review', 'source-unverified': 'can’t confirm it is unchanged yet', pinned: 'your selected version' };
+    const kept = skipped.length ? `<p class="st-hint">Kept unchanged: ${skipped.map(r => `${esc(r.id)} (${why[r.skip]})`).join(', ')}.</p>` : '';
+    const warning = a.error ? `<p class="st-hint">${esc(a.error)}. Your saved setting is still shown.</p>` : '';
+    const last = a.last?.updated?.length ? `<p class="st-hint">Last updated: ${a.last.updated.map(r => esc(typeof r === 'string' ? r : r.id)).join(', ')}.</p>` : '';
+    return `<div class="osu-sec" data-app-updates><span class="osu-lbl">App updates</span>${seg('App updates', [['apps-auto', 'Automatic', auto], ['apps-ask', 'Manual', !auto]])}<p class="st-hint">${auto ? `${a.chosen ? '' : 'Default: Automatic. '}New app versions install overnight. You can turn this off here.` : 'No automatic app updates. Update only when you choose.'} An update already running finishes safely. Your changed code is kept for review.</p>${warning}${kept}${last}<button type="button" class="osu-go" data-osu="apps-apply" ${busy || appsPending || !checkable ? 'disabled' : ''}>${busy === 'apps-apply' ? 'Starting…' : 'Update apps now'}</button>${appsPending && !busy ? '<p class="st-hint">Updates started; couldn’t refresh their status yet.</p><button type="button" class="osu-go" data-osu="apps-refresh">Refresh status</button>' : ''}<p class="st-hint">Checks ${checkable} app${checkable === 1 ? '' : 's'} and updates only those confirmed unchanged, once; doesn’t turn Automatic on. Wizard OS updates are separate.</p></div>`;
+  }
   function html() {
     if (!st) { if (!off) load(); return ''; }
     if (Date.now() - at > FRESH) load();
     const auto = st.mode === 'auto';
     const ch = ['stable', 'latest'].includes(st.channel) ? st.channel : '';
     const channel = ch ? `<div class="osu-sec"><span class="osu-lbl">Channel</span>${seg('Release channel', [['ch-stable', 'Stable', ch === 'stable'], ['ch-latest', 'Latest', ch === 'latest']])}<p class="st-hint">${ch === 'stable' ? 'Tested releases only.' : `Every release, for testers.${auto ? ' Automatic installs Stable only.' : ''}`}</p></div>` : '';
-    const install = `<div class="osu-sec"><span class="osu-lbl">Updates</span>${seg('Updates', [['auto', 'Automatic', auto], ['ask', 'Ask me', !auto]])}<p class="st-hint">${auto ? 'Overnight, never during a chat.' : 'Nothing installs until you tap Install.'}</p></div>`;
-    return `<div class="st-group" data-osu-group>${cardHtml()}${quietHead()}${install}${channel}</div>`;
+    const install = `<div class="osu-sec"><span class="osu-lbl">Wizard OS updates</span>${seg('Updates', [['auto', 'Automatic', auto], ['ask', 'Ask me', !auto]])}<p class="st-hint">${auto ? 'Overnight, never during a chat.' : 'Nothing installs until you tap Install.'}</p></div>`;
+    return `<div class="st-group" data-osu-group>${cardHtml()}${quietHead()}${install}${channel}${appsHtml()}</div>`;
   }
   function pick(chan, ctx) {
     if (!['stable', 'latest'].includes(chan) || chan === st.channel) return true;
@@ -131,6 +160,33 @@
     const what = b.dataset.osu;
     if (what === 'reload') { ctx?.haptic?.(8); reload(); return true; }
     if (busy || !st) return true;
+    if (what === 'apps-refresh') { load(true); return true; }
+    if (what === 'apps-auto' || what === 'apps-ask' || what === 'apps-apply') {
+      if (what === 'apps-apply' && appsPending) return true;
+      epoch++; inflight = null; // pre-write/background reads cannot replace confirmed state
+      const mode = what === 'apps-auto' ? 'auto' : 'ask';
+      busy = what; ctx?.render?.(); ctx?.haptic?.(8);
+      post(what === 'apps-apply' ? { action: 'apply-apps' } : { app_mode: mode }).then(async d => {
+        epoch++; inflight = null; // also invalidate reads started while the write was pending
+        if (what === 'apps-apply') {
+          if (!d.started) throw new Error(d.error || 'Couldn’t start app updates');
+          appsPending = true;
+          ctx?.toast?.('↻', 'App updates started. Results will appear in Notifications.', 3200);
+          await load(true); // keep the action busy throughout status refresh
+          return;
+        }
+        // Never invent saved consent on a partial response or failed readback.
+        const r = await fetch(API, { credentials: 'same-origin', cache: 'no-store' });
+        const read = r.ok ? await r.json().catch(() => null) : null;
+        if (!valid(read) || !validApps(read.apps) || read.apps.app_mode !== mode || read.apps.chosen !== true)
+          throw new Error('Couldn’t confirm the saved app-update setting. Try again.');
+        epoch++; inflight = null; // the confirmed readback outranks any independent pending GET
+        st = read; at = Date.now();
+        ctx?.toast?.('✓', mode === 'ask' ? 'Automatic app updates off' : 'Automatic app updates on', 1800);
+      }).catch(e => ctx?.toast?.('!', e.message || 'Couldn’t reach the App Manager', 2600))
+        .finally(() => { busy = ''; changed(); });
+      return true;
+    }
     if (what.startsWith('ch-')) return pick(what.slice(3), ctx);
     if ((what === 'auto' || what === 'ask') && what === st.mode && st.chosen) return true;
     if (what === 'apply' && card()?.disabled) return true;
