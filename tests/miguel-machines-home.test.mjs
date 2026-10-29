@@ -481,7 +481,9 @@ test('final review 2: exposure dates must be real; an open warning from a last r
     assert.match(src, /if \(k !== S\.def && \(k \|\| p\)\) \{ S\.def = k;/, who + ': an unmetered default clears the old one');
     assert.match(src, /if \(open && !wsmBack\) wsmBack = api\.back\?\.push\?\.\(/, who + ': the workspace menu is the top Back layer');
     assert.match(src, /function renderWiz\(\) \{\n    syncWsmBack\(\);/, who);
-    assert.equal((src.match(/\$\{S\.backupRead === 'ok' \? '' : ' \(last reading\)'\}`/g) || []).length, 2, who + ': Home backup age says when it is a saved copy');
+    assert.equal((src.match(/\$\{S\.backupRead === 'ok' \? '' : ' \(last reading\)'\}`/g) || []).length, 3, who + ': Home and Settings backup age say when it is a saved copy');
+    assert.match(src, /% left\$\{aiStale\(\) \? ' \(last reading\)' : ''\}`/, who);
+    assert.match(src, /sub = JSON\.stringify\(\[S\.ws, !!S\.devFresh, S\.backupRead \|\| '',/, who);
     assert.match(src, /money = fmtMoney\(amt, cur\);/, who + ': credit keeps its currency');
     assert.match(src, /use\.every\(s => s\.cur === use\[0\]\.cur\) \? fmtMoney\(/, who + ': never sums mixed currencies');
     assert.equal((src.match(/open(?: to internet)?\$\{S\.devFresh \? '' : ' \(last reading\)'\}` : ''/g) || []).length, 2, who + ': Settings subtitles too');

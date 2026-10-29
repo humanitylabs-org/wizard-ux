@@ -699,7 +699,7 @@ export default function setup(api) {
     if (S.ws !== 'mine' && S.res.devices && !managedOf(S.ws)) { S.ws = 'mine'; api.storage.set('ws', 'mine'); }
     renderGlance();
     // The Settings index shows a one-line summary per System page; redraw it only when one of those lines changes.
-    { const st = storage(), sub = JSON.stringify([S.ws, !!S.devFresh, openOnes().length, gauge()?.left ?? null, aiStale(), st?.age == null ? null : agoS(st.age)]); if (sub !== drawn.sub) { const first = drawn.sub == null; drawn.sub = sub; if (!first) api.settings?.refresh?.(); } }
+    { const st = storage(), sub = JSON.stringify([S.ws, !!S.devFresh, S.backupRead || '', openOnes().length, gauge()?.left ?? null, aiStale(), st?.age == null ? null : agoS(st.age)]); if (sub !== drawn.sub) { const first = drawn.sub == null; drawn.sub = sub; if (!first) api.settings?.refresh?.(); } }
     const top = JSON.stringify([thisName(), managedList().map(g => [g.id, g.name]), S.ws]);
     if (force || top !== drawn.top) { drawn.top = top; renderTabs(); }
     const gs = JSON.stringify([S.ws, aiStale(), gauge(), S.open.has('ai'), S.open.has('mp'), S.meter, subs().map(s => [s.id, s.left, s.money, s.out, s.na, s.stale, s.nick])]);
@@ -739,13 +739,13 @@ export default function setup(api) {
   let ro = null;
   if (typeof ResizeObserver === 'function') { ro = new ResizeObserver(() => api.frame(drawLines)); ro.observe(map); ro.observe(rowMn); }
   // Settings › System pages, filled with the same live views (each released on teardown by the host).
-  const fuelText = () => { const g = gauge(); return g ? `${g.left}% left` : ''; };
+  const fuelText = () => { const g = gauge(); return g ? `${g.left}% left${aiStale() ? ' (last reading)' : ''}` : ''; };
   // Subtitles describe this Wizard only; on a managed workspace they stay quiet (its facts live on that Wizard).
   const mine = fn => () => managedOf(S.ws) ? '' : fn();
   api.settings?.section('map', 'overview', secMap, { subtitle: mine(() => { const n = openOnes().length; return n ? `${n} open${S.devFresh ? '' : ' (last reading)'}` : ''; }) });
   api.settings?.section('ai', 'ai', secAI, { subtitle: mine(fuelText) });
   api.settings?.section('net', 'network', secNet, { subtitle: mine(() => { const n = openOnes().length; return n ? `${n} open to internet${S.devFresh ? '' : ' (last reading)'}` : ''; }) });
-  api.settings?.section('store', 'storage', secStore, { subtitle: mine(() => { const st = storage(); return st?.age != null ? `${agoS(st.age)} ago` : ''; }) });
+  api.settings?.section('store', 'storage', secStore, { subtitle: mine(() => { const st = storage(); return st?.age != null ? `${agoS(st.age)} ago${S.backupRead === 'ok' ? '' : ' (last reading)'}` : ''; }) });
   api.listen(document, 'click', e => { if (S.open.has('wsm') && e.target.isConnected && !wizBox.contains(e.target)) { S.open.delete('wsm'); S.open.delete('wsm-why'); renderWiz(); } });
   // Esc reaches the menu through the shell's Back order (api.back above), before anything underneath.
   S.res = api.storage.get('res') || {}; { const now = api.data.read.resources.snapshot(); S.devFresh = devNew(now); S.aiLive = !!now?.ai && !now.aiError; merge(now); }
