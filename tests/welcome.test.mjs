@@ -88,3 +88,9 @@ test('Welcome: Back can close during an install; the app-list wait is bounded', 
   assert.doesNotMatch(js, /if \(installing \|\| sending\) return 'welcome'/);
   assert.match(js, /Promise\.race\(\[Promise\.resolve\(window\.WizCore\?\.appsLoaded\?\.\(\)\)/);
 });
+
+test('Welcome: works without AbortSignal.timeout; a late thread open never pulls the owner back', () => {
+  const js = read('web/core/welcome.js');
+  assert.doesNotMatch(js, /signal: AbortSignal\.timeout/);
+  assert.match(js, /if \(moved\(\)\) \{ log\('thread:moved'\); return; \}/);
+});

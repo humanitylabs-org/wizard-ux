@@ -24,6 +24,9 @@
   const BRAND = `<div class="wl-brand"><img src="brand/wizard-mark-white.png" alt=""><span>Wizard OS</span></div>`;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const log = s => { window.__welcomeLog = (window.__welcomeLog || []).concat(s).slice(-40); };
+  // AbortSignal.timeout is missing on older iOS WebViews (see core/status.js): fall back to a controller and a timer.
+  const tsig = ms => { try { if (AbortSignal.timeout) return AbortSignal.timeout(ms); } catch (e) {}
+    try { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal; } catch (e) { return undefined; } };
   const read = () => { try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } };
   const write = v => { try { localStorage.setItem(KEY, v); } catch (e) {} };
   let H = null, el = null, step = 'ai', provider = null, pollT = 0, connected = false, sending = false, booted = false, installing = '', installError = '', sendError = '';
@@ -31,7 +34,7 @@
   // slug: only that provider counts (the one being signed in to); none: any signed-in provider.
   async function aiReady(slug) {
     try {
-      const r = await fetch(OPTIONS, { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(5000) });
+      const r = await fetch(OPTIONS, { credentials: 'same-origin', cache: 'no-store', signal: tsig(5000) });
       if (!r.ok) return null;
       const j = await r.json();
       return (j?.providers || []).some(p => p && p.authenticated === true && (!slug || p.slug === slug));
@@ -40,7 +43,7 @@
 
   async function setupState() {
     try {
-      const r = await fetch(SETUP, { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(4000) });
+      const r = await fetch(SETUP, { credentials: 'same-origin', cache: 'no-store', signal: tsig(4000) });
       return r.ok ? await r.json() : null;
     } catch (e) { return null; }
   }
@@ -247,9 +250,17 @@
 
   // The first thread exists on the agent a moment after the message is saved. Open it only once the agent knows it
   // (or its first run has started), so the window never lands on a "thread is no longer here" placeholder.
+  // The owner moving on (a tap or a key elsewhere) cancels it: a late open must never pull them back to Chats.
   async function whenThreadExists(sid, open, ms = 90000) {
     const end = Date.now() + ms;
+    let moved = false; const move = () => { moved = true; };
+    setTimeout(() => { try { addEventListener('pointerdown', move, true); addEventListener('keydown', move, true); } catch (e) {} }, 0);
+    const stop = () => { try { removeEventListener('pointerdown', move, true); removeEventListener('keydown', move, true); } catch (e) {} };
+    try { return await waitThread(sid, open, end, () => moved); } finally { stop(); }
+  }
+  async function waitThread(sid, open, end, moved) {
     while (Date.now() < end) {
+      if (moved()) { log('thread:moved'); return; }
       try {
         const r = await fetch(`/wizard/hermes/api/sessions/${encodeURIComponent(sid)}/messages`, { credentials: 'same-origin', cache: 'no-store' });
         const j = r.ok ? await r.json() : null;
