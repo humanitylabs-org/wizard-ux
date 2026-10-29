@@ -25,11 +25,16 @@ const webDigest = () => {
 (async () => {
   const browser = await chromium.launch({ headless: true });
   const rows = [];
+  try {
   for (const shell of ['phone', 'desktop']) for (const skin of ['obsidian', 'landscapes']) {
     const ctx = await browser.newContext(shell === 'phone'
       ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
       : { viewport: { width: 1440, height: 900 } });
     const state = { saved: initial(), calls: [], failReadback: false, outside: [] };
+    let page;
+    const errors = [];
+    const deadline = setTimeout(() => ctx.close().catch(() => {}), Number(process.env.QA_CASE_TIMEOUT_MS || 45000));
+    try {
     await ctx.route('**/*', r => {
       const req = r.request(), u = new URL(req.url());
       if (u.origin !== ORIGIN) { state.outside.push(u.origin); return r.abort(); }
@@ -56,18 +61,23 @@ const webDigest = () => {
       try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour', 'done'); localStorage.setItem('wos.tour.done', '1');
         localStorage.setItem('wux.shell', shell); localStorage.setItem('wos.skin', skin); } catch (_) {}
     }, { shell, skin });
-    const page = await ctx.newPage();
-    const errors = []; page.on('pageerror', e => errors.push(String(e).slice(0, 200)));
+    page = await ctx.newPage();
+    page.on('pageerror', e => errors.push(String(e).slice(0, 200)));
+    page.setDefaultTimeout(10000); page.setDefaultNavigationTimeout(15000);
     const entry = shell === 'phone' ? '?shell=phone&view=settings&updates' : 'desktop.html?view=settings&updates';
     await page.goto(`${ORIGIN}/wizard-os-home/${entry}`, { waitUntil: 'load' });
     await page.waitForFunction(s => document.documentElement.dataset.shell === s, shell, { timeout: 30000 });
     await page.waitForFunction(s => document.documentElement.dataset.skin === s, skin, { timeout: 30000 });
+    // &updates is not a supported category deep link. Use the real Settings control.
+    await page.locator('[data-st-page="about"]').click();
+    await page.locator('[data-settings-root][data-settings-page="about"]').waitFor({ state: 'visible' });
     if (process.env.QA_BASELINE === '1') {
       await page.locator(shell === 'phone' ? '#settings.open' : '.win .settings-host').first().waitFor({ timeout: 30000 });
       const text = await page.locator(shell === 'phone' ? '#settings' : '.win .settings-host').first().innerText();
       await page.screenshot({ path: path.join(out, `${shell}-${skin}-baseline.png`) });
-      rows.push({ shell, skin, baseline: true, hasAppControl: await page.locator('[data-app-updates]').count() > 0, text, calls });
-      await ctx.close(); continue;
+      rows.push({ shell, skin, baseline: true, hasAppControl: await page.locator('[data-app-updates]').count() > 0, text, calls: state.calls, errors });
+      if (errors.length) throw Error(errors.join('\n'));
+      continue;
     }
     const section = page.locator('[data-app-updates]');
     await section.waitFor({ state: 'visible', timeout: 30000 });
@@ -106,9 +116,17 @@ const webDigest = () => {
     state.failReadback = false;
 
     rows.push({ shell, skin, before, after, calls: state.calls, outside: [...new Set(state.outside)], errors });
-    await ctx.close();
+    if (errors.length) throw Error(errors.join('\n'));
+    } catch (error) {
+      if (page && !page.isClosed()) {
+        await page.screenshot({ path: path.join(out, `${shell}-${skin}-REJECTED.png`), timeout: 3000 }).catch(() => {});
+        fs.writeFileSync(path.join(out, `${shell}-${skin}-REJECTED.html`), await page.content().catch(() => 'page unavailable'));
+      }
+      fs.writeFileSync(path.join(out, `${shell}-${skin}-failure.json`), JSON.stringify({ error: String(error), errors, calls: state.calls }, null, 2));
+      throw error;
+    } finally { clearTimeout(deadline); await ctx.close(); }
   }
-  await browser.close();
+  } finally { await browser.close(); }
   const result = { passed: rows.length, web_sha256: webDigest(), rows };
   fs.writeFileSync(path.join(out, 'results.json'), JSON.stringify(result, null, 2));
   console.log(JSON.stringify({ passed: rows.length, web_sha256: result.web_sha256, out }));
