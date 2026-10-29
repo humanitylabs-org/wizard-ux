@@ -74,6 +74,21 @@ another emulator or the shared ADB server. Controller-only tests cover delayed
 serial disappearance and timeout, receipt omission/drift/wrong identity, APK/JUnit
 and source drift, and a resealed Android-source change. These are not native proof.
 
+## Sender selector regression (controller-only)
+
+The saved real `failure-external-boilerplate.xml` from the first reuse job shows
+`SHARE SYNTHETIC PDF`, because Android renders Button labels uppercase. Its
+`resource-id` is empty. `native_sender_bounds` therefore uses **exact casefolded
+text only inside `qa.unifiedshare.sender`**, requiring an enabled, clickable
+`android.widget.Button` with positive bounds and no explicit hidden flag. Other
+native text selectors remain case-sensitive. The controller suite embeds the
+unaltered XML (SHA256 `520e6150fa7bb2ce13693cac756473e88d6336e283083d16d12106296d482fac`)
+without adding sealed source members. It verifies the real tap coordinate,
+wrong-package/hidden/disabled/non-button/nonexact-text refusals, and the actual
+`Rig.share` tap path before receiver attachment. This is selector regression
+proof, not evidence that a share completed. Restage a new sibling QA directory
+with the same `--reuse-build` protocol; preserve all earlier failure evidence.
+
 ## Real device phases and evidence
 
 The separate synthetic source app generates a 24 MiB blank-page PDF fixture byte

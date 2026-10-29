@@ -238,6 +238,19 @@ def native_bounds(xml, text):
     return None
 
 
+def native_sender_bounds(xml):
+    """Android renders Button labels all-caps; scope exact casefold to our sender."""
+    for node in ET.fromstring(xml).iter('node'):
+        if (node.get('package') == SENDER and node.get('class') == 'android.widget.Button' and
+                node.get('text', '').casefold() == 'Share synthetic PDF'.casefold() and
+                node.get('clickable') == 'true' and node.get('enabled') == 'true' and
+                node.get('visible-to-user') != 'false' and node.get('displayed') != 'false'):
+            xy = native_bounds(ET.tostring(node, encoding='unicode'), node.get('text'))
+            if xy:
+                return xy
+    return None
+
+
 def serial_present(devices, serial):
     return serial in {line.split()[0] for line in devices.splitlines() if line.split()}
 
@@ -474,7 +487,8 @@ class Rig:
     def share(self, mode):
         self.sx('am start -W -n ' + SENDER + '/.SenderActivity --es fixture_case ' + mode)
         self.screenshot('sender-%d-%s' % (len(self.report['external_intents']), mode))
-        self.tap_text('Share synthetic PDF')
+        xy = wait(lambda: native_sender_bounds(self.ui()), 30)
+        self.sx('input tap %d %d' % tuple(xy))
         self.connect_page()
         wait(self.sheet, 40)
         wait(lambda: self.page.ev("!!document.querySelector('[data-sharesend]:not(:disabled)')"), 40)

@@ -75,6 +75,47 @@ class ControllerTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'source identity mismatch'):
             runner.require_build(0, dict(build, source_revision='wrong'), cfg, counts, [])
 
+    # Exact UIAutomator capture from the failed external-boilerplate phase.
+    # Embedded to preserve the sealed QA-only source membership; no SDK needed.
+    SENDER_XML = '<?xml version=\'1.0\' encoding=\'UTF-8\' standalone=\'yes\' ?><hierarchy rotation="0"><node index="0" text="" resource-id="" class="android.widget.FrameLayout" package="qa.unifiedshare.sender" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[0,0][1080,2400]"><node index="0" text="" resource-id="" class="android.widget.LinearLayout" package="qa.unifiedshare.sender" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[0,0][1080,2400]"><node index="0" text="" resource-id="android:id/content" class="android.widget.FrameLayout" package="qa.unifiedshare.sender" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[0,0][1080,2400]"><node index="0" text="" resource-id="" class="android.widget.LinearLayout" package="qa.unifiedshare.sender" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[0,0][1080,2400]"><node index="0" text="Synthetic external PDF sender&#10;x.pdf&#10;No owner files or accounts" resource-id="" class="android.widget.TextView" package="qa.unifiedshare.sender" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[30,150][1050,287]" /><node index="1" text="SHARE SYNTHETIC PDF" resource-id="" class="android.widget.Button" package="qa.unifiedshare.sender" content-desc="" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[30,287][1050,413]" /></node></node></node></node></hierarchy>'
+    SENDER_XML_SHA256 = '520e6150fa7bb2ce13693cac756473e88d6336e283083d16d12106296d482fac'
+
+    def test_sender_saved_real_xml_selects_rendered_uppercase_button(self):
+        self.assertEqual(hashlib.sha256(self.SENDER_XML.encode()).hexdigest(), self.SENDER_XML_SHA256)
+        self.assertIsNone(runner.native_bounds(self.SENDER_XML, 'Share synthetic PDF'))
+        self.assertEqual(runner.native_sender_bounds(self.SENDER_XML), [540, 350])
+
+    def test_sender_saved_real_xml_rejects_wrong_package_and_invisible_controls(self):
+        for before, after in (
+                ('package="qa.unifiedshare.sender"', 'package="ai.wizards.os.qa"'),
+                ('text="SHARE SYNTHETIC PDF"', 'text="SHARE SYNTHETIC PDF EXTRA"'),
+                ('class="android.widget.Button"', 'class="android.widget.TextView"'),
+                ('clickable="true"', 'clickable="false"'),
+                ('enabled="true"', 'enabled="false"'),
+                ('text="SHARE SYNTHETIC PDF"', 'visible-to-user="false" text="SHARE SYNTHETIC PDF"'),
+                ('text="SHARE SYNTHETIC PDF"', 'displayed="false" text="SHARE SYNTHETIC PDF"'),
+                ('bounds="[30,287][1050,413]"', 'bounds="[0,0][0,0]"')):
+            with self.subTest(after=after):
+                self.assertIsNone(runner.native_sender_bounds(self.SENDER_XML.replace(before, after)))
+
+    def test_sender_casefold_is_exact_and_does_not_weaken_other_native_selectors(self):
+        mixed = self.SENDER_XML.replace('SHARE SYNTHETIC PDF', 'Share synthetic PDF')
+        self.assertEqual(runner.native_sender_bounds(mixed), [540, 350])
+        self.assertIsNone(runner.native_bounds(self.SENDER_XML, 'share synthetic pdf'))
+
+    def test_share_taps_saved_sender_button_before_connecting_receiver(self):
+        rig = runner.Rig.__new__(runner.Rig)
+        rig.report = {'external_intents': []}
+        rig.sx = Mock(); rig.screenshot = Mock(); rig.ui = Mock(return_value=self.SENDER_XML)
+        rig.connect_page = Mock(side_effect=RuntimeError('stop after native sender tap'))
+        rig.tap_text = Mock(side_effect=AssertionError('generic text selector must not select sender'))
+        with self.assertRaisesRegex(RuntimeError, 'stop after native sender tap'):
+            rig.share('boilerplate')
+        self.assertEqual(rig.sx.call_args_list[0].args,
+                         ('am start -W -n qa.unifiedshare.sender/.SenderActivity --es fixture_case boilerplate',))
+        self.assertEqual(rig.sx.call_args_list[1].args, ('input tap 540 350',))
+        rig.tap_text.assert_not_called()
+
     def test_bounds(self):
         xml = '<hierarchy><node text="Share synthetic PDF" bounds="[10,20][110,80]"/></hierarchy>'
         self.assertEqual(runner.native_bounds(xml, 'Share synthetic PDF'), [60, 50])
