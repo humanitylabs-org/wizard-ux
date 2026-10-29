@@ -62,6 +62,13 @@ const webDigest = () => {
     await page.goto(`${ORIGIN}/wizard-os-home/${entry}`, { waitUntil: 'load' });
     await page.waitForFunction(s => document.documentElement.dataset.shell === s, shell, { timeout: 30000 });
     await page.waitForFunction(s => document.documentElement.dataset.skin === s, skin, { timeout: 30000 });
+    if (process.env.QA_BASELINE === '1') {
+      await page.locator(shell === 'phone' ? '#settings.open' : '.win .settings-host').first().waitFor({ timeout: 30000 });
+      const text = await page.locator(shell === 'phone' ? '#settings' : '.win .settings-host').first().innerText();
+      await page.screenshot({ path: path.join(out, `${shell}-${skin}-baseline.png`) });
+      rows.push({ shell, skin, baseline: true, hasAppControl: await page.locator('[data-app-updates]').count() > 0, text, calls });
+      await ctx.close(); continue;
+    }
     const section = page.locator('[data-app-updates]');
     await section.waitFor({ state: 'visible', timeout: 30000 });
     await page.addStyleTag({ content: '*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}' });
