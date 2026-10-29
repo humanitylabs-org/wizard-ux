@@ -181,12 +181,13 @@ test('api.nav.ask: trusted only, namespaced home: key, sends through the shell c
   await f.clear();
 });
 
-test('machines-home: Home is one strip; the full views live in Settings › System', () => {
+test('machines-home: Home is one glance; the full views live in Settings › System', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));
   assert.ok(man.capabilities.includes('settings'));
   for (const page of ['overview', 'ai', 'network', 'storage']) assert.match(src, new RegExp(`api\\.settings\\?\\.section\\('[a-z]+', '${page}'`), page);
-  assert.match(src, /data: \{ toggle: 'wsm' \}/, 'the Wizard switcher sits in the strip');
+  assert.match(src, /api\.slot\.mount\('dock-end', barBox, -1\)/, 'desktop: the glance sits in the top bar');
+  assert.match(src, /fillTabs\(homeWs\)/, 'the Wizard switcher travels with the glance');
   assert.match(src, /api\.settings\?\.open\?\.\(d\.go\)/, 'strip parts open their Settings page');
   assert.doesNotMatch(src, /h\('header', \{ cls: 'mh-top' \}/, 'no separate switcher above the strip');
   assert.match(host, /if \(caps\.has\('settings'\)\) api\.settings = Object\.freeze/);

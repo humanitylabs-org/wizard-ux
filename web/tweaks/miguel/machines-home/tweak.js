@@ -187,20 +187,24 @@ export default function setup(api) {
   const tsTab = h('button', { type: 'button', cls: 'mh-ts-tab', data: { toggle: 'ts' }, hidden: true });
   const map = h('div', { cls: 'mh-map' + (S.bars ? ' is-details' : '') }, lines, tsTab, rowSt, rowTs, rowMn, rowAct, rowMore, rowPp, rowDv, rowChev);
   // The strip: which Wizard, AI fuel, chats, last backup, network. Each part opens its page in Settings.
-  const glance = h('div', { cls: 'mh-glance', role: 'group', 'aria-label': 'Your Wizard at a glance' });
-  const wsMenu = h('div', { cls: 'mh-ws-menu', hidden: true });
-  root.append(h('div', { cls: 'mh-body' }, glance, wsMenu));
+  // Desktop: the glance lives in the top bar (menu-bar style); phone: a widget on Home. Same parts, two designs.
+  const desk = !!document.getElementById('bar');
+  const homeWs = h('div', { cls: 'mh-ws is-home-ws', role: 'tablist', 'aria-label': 'Which Wizard' });
+  const glance = h('div', { cls: 'mh-glance ' + (desk ? 'is-bar' : 'is-widget'), role: 'group', 'aria-label': 'Your Wizard at a glance', 'data-look': api.storage.get('look') || 'b' });
+  const barBox = h('div', { cls: 'mh-root is-topbar' }, homeWs, glance);
+  root.append(h('div', { cls: 'mh-body' }, ...(desk ? [] : [homeWs, glance])));
   // Settings sections: each its own .mh-root so the same styles and size rules apply there.
   const sec = (cls, ...kids) => h('div', { cls: 'mh-root is-settings ' + cls }, ...kids);
   const netBox = h('div', { cls: 'mh-net' }), storeBox = h('div', { cls: 'mh-store' });
   const secMap = sec('is-overview', wsBar, map), secAI = sec('is-ai', aiRow, aiList), secNet = sec('is-net', netBox), secStore = sec('is-store', storeBox);
 
   /* ---------- top ---------- */
-  function renderTabs() {
+  function renderTabs() { fillTabs(wsBar); fillTabs(homeWs); }
+  function fillTabs(bar) {
     const tab = (id, name) => h('button', { type: 'button', role: 'tab', data: { ws: id }, 'aria-selected': String(S.ws === id) }, name);
     const add = h('button', { type: 'button', cls: 'mh-ws-add', 'aria-label': 'Add a Wizard you manage', data: { act: 'add-managed' } });
     const s = sv('svg', { class: 'mh-i', viewBox: '0 0 24 24', 'aria-hidden': 'true' }, add); for (const [t, a] of PLUS) sv(t, a, s);
-    wsBar.replaceChildren(tab('mine', thisName()), ...managedList().map(g => tab(g.id, g.name)), add);
+    bar.replaceChildren(tab('mine', thisName()), ...managedList().map(g => tab(g.id, g.name)), add);
   }
   // A fuel tag: "AI", then E, ten cells that fill, F. No percentage at rest.
   function gaugeEl(g, still) {
@@ -514,7 +518,7 @@ export default function setup(api) {
       b.firstElementChild?.classList.toggle('is-up', S.bars);
     }
   };
-  for (const el of [root, secMap, secAI, secNet, secStore]) api.listen(el, 'click', onTap);
+  for (const el of [root, barBox, secMap, secAI, secNet, secStore]) api.listen(el, 'click', onTap);
   api.listen(secAI, 'input', e => {
     const id = e.target?.dataset?.nick; if (!id) return;
     const v = String(e.target.value || '').trim().slice(0, 24);
@@ -530,33 +534,29 @@ export default function setup(api) {
       devices().map(d => [d.id, d.name, d.status, d.error, d.cpus, d.memoryTotalGB, diskGB(d), Math.round((d.memory || 0) / 5), Math.round((d.cpu || 0) / 5), Math.round((freeGB(d) || 0) / 5)]),
       myDevices(), sessions(), S.unread, backupRunning(), st && { ...st, age: st.age == null ? null : agoS(st.age), used: st.used == null ? null : gbFmt(st.used) },
       (S.backup?.standby?.machines || []).map(x => [x.id, x.verdict, (x.checks || []).map(c => c.ok)])]); };
+  // Pictures and one short value per part; the words live in the tooltip / screen-reader label and in Settings.
   function renderGlance() {
     const g = managedOf(S.ws), x = sessions(), fuel = g ? null : gauge(), st = g ? null : storage(), bad = g ? 0 : openOnes().length;
-    const name = g ? g.name : thisName(), many = managedList().length > 0;
-    const sig = JSON.stringify([fuel && fuel.left, st && st.used, devices().length, people().length, S.ws, name, many, S.open.has('wsm'), managedList().map(m => m.id), x.working, Math.min(x.ready, 6), S.unread, fuel && Math.round(fuel.left / 10), st && [st.state, st.age == null ? null : agoS(st.age)], bad, backupRunning(), devices().map(d => d.access?.exposure)]);
+    const checked = devices().length && devices().every(d => d.access?.exposure === 'tailscale'), nM = g ? 1 : devices().length || 1;
+    const sig = JSON.stringify([S.ws, fuel && Math.round(fuel.left / 10), x.working, Math.min(x.ready, 8), S.unread, st && [st.state, st.age == null ? null : agoS(st.age)], bad, checked, nM, backupRunning(), people().length]);
     if (sig === drawn.glance) return; drawn.glance = sig;
-    // A small labelled panel: one row per area (what it is, how it is), each opening its full page in Settings.
     const dots = (n, cls) => Array.from({ length: n }, () => h('i', { cls }));
-    const checked = devices().length && devices().every(d => d.access?.exposure === 'tailscale');
-    const rowB = (go, title, label, x, ...val) => h('button', { type: 'button', cls: 'mh-gl-row', data: { go }, 'aria-label': label, ...(x ? { 'data-x': x } : {}) },
-      h('span', { cls: 'mh-gl-t', text: title }), h('span', { cls: 'mh-gl-v' }, ...val), h('i', { cls: 'mh-go', 'aria-hidden': 'true', text: '›' }));
-    const cells = n => h('span', { cls: 'mh-gl-cells', 'data-s': level(fuel.left) }, Array.from({ length: 10 }, (_, i) => h('i', { cls: i < n ? 'on' : '' })));
-    const nM = devices().length || 1, nP = people().length;
-    glance.replaceChildren(...[
-      h('button', { type: 'button', cls: 'mh-gl-head', data: { toggle: 'wsm' }, 'aria-expanded': String(S.open.has('wsm')), 'aria-label': `${name}. Switch Wizard` }, h('b', { text: name }), chev(S.open.has('wsm'))),
-      g ? null : rowB('chats', 'Chats', `${x.working} working, ${x.ready} ready${S.unread ? `, ${S.unread} unread` : ''}. Open your chats`, '',
-        h('span', { cls: 'mh-dots' }, dots(Math.min(x.working, 8), 'work'), dots(Math.min(x.ready, 8 - Math.min(x.working, 8)), 'ready')),
-        h('span', { text: `${x.working} working · ${x.ready} ready` }), S.unread ? h('span', { cls: 'mh-bell' }, bell(), h('b', { text: String(Math.min(S.unread, 99)) })) : null),
-      fuel ? rowB('ai', 'AI usage', `AI ${fuel.left}% left. Open AI in Settings`, level(fuel.left), cells(Math.round(fuel.left / 10)), h('span', { text: `${fuel.left}% left · ${fuel.name}` })) : null,
-      st ? rowB('storage', 'Storage & backups', 'Open Storage in Settings', st.state, h('span', { text: backupRunning() ? 'Backing up now' : st.age == null ? 'No backup yet' : `Backed up ${agoS(st.age)} ago` }), st.used != null ? h('small', { text: gbFmt(st.used) }) : null) : null,
-      g ? null : rowB('network', 'Network & security', 'Open Network in Settings', bad ? 'no' : checked ? 'ok' : '',
-        h('span', { text: bad ? `${bad} ${bad === 1 ? 'machine' : 'machines'} open to the internet` : checked ? 'Tailscale only' : 'Not checked yet' })),
-      g ? null : rowB('overview', 'Machines & people', 'Open your network in Settings', '', h('span', { text: `${nM} ${nM === 1 ? 'machine' : 'machines'}${nP ? ` · ${nP} ${nP === 1 ? 'person' : 'people'}` : ''}` })),
-    ].filter(Boolean));
-    wsMenu.hidden = !S.open.has('wsm');
-    wsMenu.replaceChildren(...(S.open.has('wsm') ? [...[['mine', thisName()], ...managedList().map(m => [m.id, m.name])].map(([id, n]) =>
-      h('button', { type: 'button', role: 'menuitemradio', 'aria-checked': String(S.ws === id), data: { ws: id } }, n)),
-      h('button', { type: 'button', cls: 'is-add', data: { act: 'add-managed' } }, '+ Add a Wizard you manage')] : []));
+    const tile = (go, cls, label, title, viz, val, badge) => h('button', { type: 'button', cls: 'mh-tile ' + cls, data: { go }, title, 'aria-label': `${label}: ${title}` },
+      h('span', { cls: 'mh-tile-viz' }, viz, badge || null), h('b', { cls: 'mh-tile-val', text: val ?? '' }), h('small', { cls: 'mh-tile-lab', text: label }));
+    const pic = k => h('span', { cls: 'mh-pic' }, art(k));
+    const parts = [
+      fuel ? h('div', { cls: 'mh-tile is-ai' }, gaugeEl(fuel)) : null,
+      g || desk ? null : tile('chats', 'is-chats', 'Chats', `${x.working} working, ${x.ready} ready${S.unread ? `, ${S.unread} unread` : ''}`,
+        h('span', { cls: 'mh-dots' }, dots(Math.min(x.working, 8), 'work'), dots(Math.min(x.ready, 8 - Math.min(x.working, 8)), 'ready')), null,
+        S.unread ? h('span', { cls: 'mh-badge', text: String(Math.min(S.unread, 99)) }) : null),
+      st ? tile('storage', 'is-backup', 'Backup', backupRunning() ? 'Backing up now' : st.age == null ? 'No backup yet' : `Backed up ${agoS(st.age)} ago${st.used != null ? ' · ' + gbFmt(st.used) : ''}`,
+        pic('store'), backupRunning() ? '…' : st.age == null ? '–' : agoS(st.age), st.state !== 'ok' ? h('span', { cls: 'mh-badge is-warn', text: '!' }) : null) : null,
+      g ? null : tile('network', 'is-net' + (bad ? ' is-bad' : checked ? ' is-ok' : ''), 'Security', bad ? `${bad} ${bad === 1 ? 'machine' : 'machines'} open to the internet` : checked ? 'Tailscale only' : 'Not checked yet',
+        pic('shield'), null, bad ? h('span', { cls: 'mh-badge', text: String(bad) }) : checked ? h('span', { cls: 'mh-badge is-ok', text: '✓' }) : null),
+      g ? null : tile('overview', 'is-mach', 'Machines', `${nM} ${nM === 1 ? 'machine' : 'machines'}${people().length ? ` · ${people().length} ${people().length === 1 ? 'person' : 'people'}` : ''}`,
+        pic('box'), String(nM)),
+    ].filter(Boolean);
+    glance.replaceChildren(...parts);
   }
   function paint(force) {
     renderGlance();
@@ -587,7 +587,7 @@ export default function setup(api) {
   api.data.read.resources.watch(state => { const got = merge(state); if (got.devices || got.ai) keep(); paint(); readBackup(); });
 
   /* ---------- mount at Home; keep it there across Home repaints ---------- */
-  const mount = () => { if (api.slot.mount('home-main', root)) { api.data.read.resources.refresh(); api.frame(drawLines); } };
+  const mount = () => { if (desk) api.slot.mount('dock-end', barBox, -1); if (api.slot.mount('home-main', root)) { api.data.read.resources.refresh(); api.frame(drawLines); } };
   api.on('home', () => { mount(); paint(); });
   api.on('route', () => { mount(); readBackup(); });
   let ro = null;
