@@ -14,8 +14,10 @@ module.exports = async ({boot, ok, model, provider, out, browser}) => {
     source:'wizard-mobile',status:'running',wizard_status:'running',wizard_run_id:'accepted-'+a.kind,model,provider,
     message_count:2,started_at:now-60,last_active:now-i,wizard_last_user_at:now-10,
     messages:[{id:1,role:'user',content:'Switch',timestamp:now-10},{id:2,role:'assistant',content:'Accepted reply stays intact',timestamp:now-5}]}));
-  const smoke=process.env.QA_DISMISS_SMOKE==='1';
-  const cases=smoke?[{desktop:true,skin:'nebula',route:routes[1]}]:[false,true].flatMap(desktop=>['nebula','signal'].flatMap(skin=>routes.map(route=>({desktop,skin,route}))));
+  const smoke=process.env.QA_DISMISS_SMOKE;
+  const matrix=[false,true].flatMap(desktop=>['nebula','signal'].flatMap(skin=>routes.map(route=>({desktop,skin,route}))));
+  const cases=smoke?matrix.filter(x=>`${x.desktop?'desktop':'phone'}-${x.skin}-${x.route.kind}`===(smoke==='1'?'desktop-nebula-host-profile':smoke)):matrix;
+  if(!cases.length)throw Error('Unknown Dismiss smoke case');
   for(const {desktop,skin,route} of cases){
     const label=`${desktop?'desktop':'phone'}-${skin}-${route.kind}`,s=sessions.find(s=>s.id==='dismiss-'+route.kind),agent=s.agent;
     const f=await boot(desktop,false,null,{agents,sessions,skin}),p=f.p,wid=f.wid;
@@ -26,7 +28,8 @@ module.exports = async ({boot, ok, model, provider, out, browser}) => {
       await p.waitForFunction(wid=>{const el=document.querySelector(`[data-chats="${wid}"]`),r=el?.getBoundingClientRect();return r&&r.left>=0&&r.right<=innerWidth+1&&r.width>0&&el.getAnimations({subtree:true}).every(a=>a.effect?.getTiming().iterations===Infinity||a.playState!=='running');},desktop?wid+'::list':wid);
     }
     async function tap(control){
-      await control.waitFor({state:'visible'});await control.scrollIntoViewIfNeeded();await settled();
+      // Locator trial re-resolves across polling renders; a separate scroll holds a stale element.
+      await settled();await control[desktop?'click':'tap']({trial:true});
       const hit=await control.evaluate(el=>{const r=el.getBoundingClientRect();return r.width>=28&&r.height>=24&&r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight&&[[.5,.5],[.15,.2],[.85,.8]].every(([x,y])=>el.contains(document.elementFromPoint(r.left+r.width*x,r.top+r.height*y)));});
       if(!hit)throw Error(label+': control clipped or covered: '+await control.evaluate(el=>el.outerHTML));
       await control[desktop?'click':'tap']();
@@ -41,6 +44,8 @@ module.exports = async ({boot, ok, model, provider, out, browser}) => {
       }
     }
     async function active(){
+      await chat.getByText('Accepted reply stays intact',{exact:true}).waitFor({state:'visible'});
+      await p.waitForFunction(wid=>{const root=document.querySelector(`[data-chats="${wid}"]`);return [...(root?.querySelectorAll('.msg.u:not(.pending) .bub')||[])].filter(e=>e.textContent.trim()==='Switch').length===1;},wid);
       const state=await p.evaluate(sid=>{const A=window.__wos||window.__wux,s=A.live.session(sid);return {status:s?.status,runId:s?.runId,agent:A.live.agentOf(sid)};},s.id);
       record(state.status==='running'&&state.runId===s.wizard_run_id&&state.agent===agent,'accepted active run and route intact',state);
       record(await chat.locator('.msg.u:not(.pending) .bub').filter({hasText:/^Switch$/}).count()===1&&await chat.getByText('Accepted reply stays intact',{exact:true}).count()===1,'accepted Switch and reply intact');
