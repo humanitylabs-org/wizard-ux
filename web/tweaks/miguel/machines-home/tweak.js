@@ -108,7 +108,8 @@ export default function setup(api) {
       keep: span.length ? `Older backups thin out: ${span.length > 1 ? span.slice(0, -1).join(', ') + ' and ' + span.at(-1) : span[0]}` : '', cf: !!cf,
       state: !okAt ? 'no' : b.state === 'failing' || age > 2 * every ? 'tight' : 'ok' };
   }
-  const backupRunning = () => Array.isArray(S.backup?.active) && S.backup.active.length > 0;
+  // Running only on a reading from this visit: a saved copy may be from a backup that has long finished.
+  const backupRunning = () => S.backupRead === 'ok' && Array.isArray(S.backup?.active) && S.backup.active.length > 0;
   const sessions = () => api.data.read.sessions?.counts() || { working: 0, ready: 0 };
   const myDevices = () => peers().filter(p => p.group === 'human').map(p => ({ name: p.name === 'localhost' && /ios/i.test(p.os || '') ? 'iPhone' : p.name, online: !!p.online }));
   function people() {
@@ -374,6 +375,8 @@ export default function setup(api) {
             .map(([id, text, note, words]) => h('button', { type: 'button', cls: 'mh-act-btn', data: { stAsk: id, words } }, h('b', { text }), h('small', { text: note })))));
   }
   // Tailscale: one node beside Storage. Simple on the map (is anything open?), the whole story when tapped.
+  // "Tailscale is the only way in" only from a fresh reading where every machine was checked and found Tailscale-only.
+  const allClear = () => !!S.devFresh && devices().length > 0 && devices().every(d => d.access?.exposure === 'tailscale');
   const openOnes = () => devices().filter(d => d.access?.exposure === 'internet').map(d => machine(d.id));
   const TS_ASK = {
     fix: () => { const open = openOnes(), names = open.map(m => m.name).join(' and ');
@@ -391,8 +394,8 @@ export default function setup(api) {
     return h('span', { cls: 'mh-more-info mh-ts-info' },
       h('span', { text: 'Your private network. Everything inside the dashed line talks over it, encrypted.' }),
       bad.length ? h('span', { cls: 'is-bad', text: `${bad.map(m => m.name).join(' and ')} ${bad.length === 1 ? 'is' : 'are'} on Tailscale too, but strangers on the internet can also knock on ${bad.length === 1 ? 'it' : 'them'}.` })
-        : all.every(m => m.access?.exposure === 'tailscale') ? h('span', { text: 'Nothing answers from the internet. Tailscale is the only way in.' })
-        : h('span', { text: 'Not every machine has been checked from the internet yet. Check again to find out.' }),
+        : allClear() ? h('span', { text: 'Nothing answers from the internet. Tailscale is the only way in.' })
+        : h('span', { text: S.devFresh ? 'Not every machine has been checked from the internet yet. Check again to find out.' : 'This is the last reading; your network couldn’t be read just now.' }),
       h('span', { cls: 'mh-ts-list' }, all.map(m => { const [w, x] = word(m); return h('span', { cls: 'mh-ts-row', 'data-x': x }, h('i'), h('b', { text: m.name }), h('span', { text: w })); })),
       h('span', { text: 'Who can reach whom: right now any device on your Tailscale can reach any other, both ways (Tailscale’s starting rule).' }),
       h('span', { cls: 'mh-act-btns' },
@@ -402,7 +405,7 @@ export default function setup(api) {
   function paintTsTab() {
     const bad = openOnes().length, open = S.open.has('ts');
     tsTab.hidden = S.ws !== 'mine'; tsTab.setAttribute('aria-expanded', String(open));
-    const checked = devices().length && devices().every(d => d.access?.exposure === 'tailscale');
+    const checked = allClear();
     tsTab.setAttribute('aria-label', `Tailscale, ${bad ? bad + ' open to the internet' : checked ? 'the only way in' : 'not every machine checked yet'}. ${open ? 'Hide' : 'Show'} details`);
     tsTab.replaceChildren(h('span', { text: 'Tailscale' }), bad ? h('b', { cls: 'mh-ts-n', text: `${bad} open` }) : null, chev(open));
   }
@@ -608,7 +611,7 @@ export default function setup(api) {
   // Pictures and one short value per part; the words live in the tooltip / screen-reader label and in Settings.
   function renderGlance() {
     const g = null, x = sessions(), fuel = g ? null : gauge(), st = g ? null : storage(), bad = g ? 0 : openOnes().length;  // the bar always shows the connected workspace
-    const checked = devices().length && devices().every(d => d.access?.exposure === 'tailscale'), nM = g ? 1 : devices().length || 1;
+    const checked = allClear(), nM = g ? 1 : devices().length || 1;
     const sig = JSON.stringify([S.ws, fuel && Math.round(fuel.left / 10), x.working, Math.min(x.ready, 8), S.unread, st && [st.state, st.age == null ? null : agoS(st.age)], bad, checked, nM, backupRunning(), people().length]);
     if (sig === drawn.glance) return; drawn.glance = sig;
     const dots = (n, cls) => Array.from({ length: n }, () => h('i', { cls }));
@@ -664,7 +667,7 @@ export default function setup(api) {
     const j = await api.data.read.app('backup', 'overview');
     if (j && j.backup && typeof j.backup === 'object') {  // otherwise keep the last good answer
       S.backup = { backup: j.backup, standby: j.standby || null, connector: j.connector || null, active: j.active || null };
-      api.storage.set('backup', S.backup); S.backupRead = 'ok';
+      api.storage.set('backup', { ...S.backup, active: null }); S.backupRead = 'ok';
     } else if (j && typeof j === 'object') { S.backupRead = 'none'; S.backup = null; api.storage.set('backup', null); }  // Backup answered: none set up (any more)
     else S.backupRead = 'error';  // null = timeout / not 2xx / not JSON: keep the last good answer  // null = timeout / not 2xx / not JSON, not "no backup"
 
@@ -672,7 +675,7 @@ export default function setup(api) {
   }
   const merge = state => { const got = Object.fromEntries(Object.entries(state || {}).filter(([, v]) => v != null)); S.res = { ...S.res, ...got }; return got; };
   api.inbox?.watch?.(items => { const n = (items || []).filter(i => !i.read && !i.archived).length; if (n !== S.unread) { S.unread = n; paint(); } });
-  api.data.read.resources.watch(state => { const got = merge(state); if (got.devices || got.ai) keep(); paint(); readBackup(); });
+  api.data.read.resources.watch(state => { if (state?.devicesError) S.devFresh = false; else if (state?.devices) S.devFresh = true; const got = merge(state); if (got.devices || got.ai) keep(); paint(); readBackup(); });
 
   /* ---------- mount at Home; keep it there across Home repaints ---------- */
   const mount = () => { if (desk) { api.slot.mount('dock-end', barBox, -1); api.slot.mount('bar-start', wizBox); } if (api.slot.mount('home-main', root)) { api.data.read.resources.refresh(); api.frame(drawLines); } };
@@ -688,7 +691,7 @@ export default function setup(api) {
   api.settings?.section('store', 'storage', secStore, { subtitle: () => { const st = storage(); return st?.age != null ? `${agoS(st.age)} ago` : ''; } });
   api.listen(document, 'click', e => { if (S.open.has('wsm') && e.target.isConnected && !wizBox.contains(e.target)) { S.open.delete('wsm'); S.open.delete('wsm-why'); renderWiz(); } });
   api.listen(document, 'keydown', e => { if (e.key === 'Escape' && S.open.has('wsm')) { S.open.delete('wsm'); renderWiz(); wizBtn.focus(); } });
-  S.res = api.storage.get('res') || {}; merge(api.data.read.resources.snapshot());
+  S.res = api.storage.get('res') || {}; { const now = api.data.read.resources.snapshot(); S.devFresh = !!now?.devices && !now.devicesError; merge(now); }
   paint(true); mount(); readBackup(true);
   return () => { ro?.disconnect(); };
 }

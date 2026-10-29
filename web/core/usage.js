@@ -28,7 +28,7 @@
       counts.set(id, {id, name: id === 'chatgpt' ? 'ChatGPT' : String(p.name || id), count:(prior?.count || 0) + (Array.isArray(p.accounts) ? p.accounts.length : 1)});
     }
     const accountCounts = [...counts.values()];
-    const expanded = groups.flatMap(p => Array.isArray(p?.accounts) ? p.accounts.map(a => ({...a, providerId:p.id, providerName:p.name, status:p.status === 'stale' ? 'stale' : a.status})) : [p]);
+    const expanded = groups.flatMap(p => Array.isArray(p?.accounts) ? p.accounts.map(a => ({...a, providerId:p.id, providerName:p.name, status:['stale', 'signed_out', 'auth', 'reauth'].includes(p.status) ? p.status : a.status, signedOut:a.signedOut === true || p.signedOut === true, error:a.error || p.error})) : [p]);
     const providers = expanded.map(p => {
       if (!p || typeof p !== 'object' || !p.id) return null;
       const limits = (Array.isArray(p.limits) ? p.limits : []).map(l => {

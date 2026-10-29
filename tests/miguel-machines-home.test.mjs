@@ -127,7 +127,7 @@ test('machines-home: simple at rest, more on tap (one AI gauge, storage size, on
 test('machines-home: calm repaints (last readings first, motion once, parts redraw only when they change)', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), css = read('web/tweaks/miguel/machines-home/tweak.css');
   assert.match(src, /api\.storage\.set\('res'/); assert.match(src, /S\.res = api\.storage\.get\('res'\)/, 'paints the last good readings at once');
-  assert.match(src, /api\.storage\.set\('backup', S\.backup\)/);
+  assert.match(src, /api\.storage\.set\('backup', \{ \.\.\.S\.backup, active: null \}\)/, 'last good backup kept (without its live running state)');
   assert.match(src, /const nw = cls => fresh \? cls \+ ' mh-new' : cls/); assert.match(src, /fresh = false;/);
   assert.match(css, /\.mh-new:is\(\.mh-node/, 'entry motion hangs off .mh-new only');
   assert.doesNotMatch(css, /\.mh-map\.is-switch|^\.mh-bars \{[^}]*animation/m);
@@ -216,7 +216,11 @@ test('review fixes: one Home map at a time, boot guess expires, unreadable usage
 test('second review: no unverified all-clear, stock loading state, Settings dialog keeps focus, Back closes the mic menu', () => {
   for (const who of ['miguel', 'wizard']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
-    assert.match(src, /all\.every\(m => m\.access\?\.exposure === 'tailscale'\) \? h\('span', \{ text: 'Nothing answers from the internet/, who + ': all-clear only when every machine was checked');
+    assert.match(src, /: allClear\(\) \? h\('span', \{ text: 'Nothing answers from the internet/, who + ': all-clear only when every machine was checked');
+    assert.match(src, /const allClear = \(\) => !!S\.devFresh && devices\(\)\.length > 0 && devices\(\)\.every\(d => d\.access\?\.exposure === 'tailscale'\);/, who + ': and only from a fresh reading');
+    assert.match(src, /if \(state\?\.devicesError\) S\.devFresh = false; else if \(state\?\.devices\) S\.devFresh = true;/, who);
+    assert.match(src, /const backupRunning = \(\) => S\.backupRead === 'ok' &&/, who + ': running only from a reading this visit');
+    assert.match(src, /api\.storage\.set\('backup', \{ \.\.\.S\.backup, active: null \}\)/, who);
     assert.match(src, /Not every machine has been checked from the internet yet/, who);
     assert.match(src, /if \(!netBox\.firstChild\) netBox\.replaceChildren\(h\('span', \{ cls: 'mh-wait'/, who + ': loading mark on the Security page');
   }
@@ -234,6 +238,7 @@ test('third review: AI page offers sign-in with no accounts, backup read failure
     assert.match(src, /else S\.backupRead = 'error';/, who);
     assert.match(src, /keep: span\.length \? `Older backups thin out: \$\{span/, who + ': retention from Backup, not a fixed sentence');
     assert.match(src, /S\.backupRead === 'none' \? h\('span', \{ cls: 'mh-more-info', text: 'No backup set up yet\.' \}\)/, who + ': "no backup" only after a real answer');
+    assert.match(src, /const checked = allClear\(\);\n    tsTab\.setAttribute/, who);
     assert.match(src, /checked \? 'the only way in' : 'not every machine checked yet'/, who);
   }
 });
@@ -241,6 +246,7 @@ test('third review: AI page offers sign-in with no accounts, backup read failure
 test('fourth review: sign-in state survives normalisation, managed workspaces get honest System pages, Dictate keeps its field through the mic menu', () => {
   const usage = read('web/core/usage.js'), desk = read('web/desktop/desktop.js');
   assert.match(usage, /signedOut: \['signed_out', 'auth', 'reauth'\]\.includes\(p\.status\)/);
+  assert.match(usage, /status:\['stale', 'signed_out', 'auth', 'reauth'\]\.includes\(p\.status\) \? p\.status : a\.status, signedOut:a\.signedOut === true \|\| p\.signedOut === true/, 'a group sign-out reaches its accounts');
   for (const who of ['miguel', 'wizard']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /const signedOut = p\.signedOut === true \|\|/, who);
