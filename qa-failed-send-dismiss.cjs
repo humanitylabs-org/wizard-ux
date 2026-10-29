@@ -19,11 +19,11 @@ module.exports = async ({boot, ok, model, provider, out, browser}) => {
   for(const {desktop,skin,route} of cases){
     const label=`${desktop?'desktop':'phone'}-${skin}-${route.kind}`,s=sessions.find(s=>s.id==='dismiss-'+route.kind),agent=s.agent;
     const f=await boot(desktop,false,null,{agents,sessions,skin}),p=f.p,wid=f.wid;
-    const chat=p.locator(`[data-chats="${wid}"]`),bubble=id=>chat.locator(`[data-ob="${id}"]`),button=id=>bubble(id).locator(`[data-obdismissfailed="${id}"]`);
+    const chat=p.locator(`[data-chats="${wid}"]`),list=p.locator(`[data-chats="${wid}${desktop?'::list':''}"]`),bubble=id=>chat.locator(`[data-ob="${id}"]`),button=id=>bubble(id).locator(`[data-obdismissfailed="${id}"]`);
     const details={label,routeKind:route.kind,agent,sessionId:s.id};
     const record=(v,name,detail)=>ok(v,label+': '+name,detail);
     async function settled(){
-      await p.waitForFunction(wid=>{const el=document.querySelector(`[data-chats="${wid}"]`),r=el?.getBoundingClientRect();return r&&r.left>=0&&r.right<=innerWidth+1&&r.width>0&&el.getAnimations({subtree:true}).every(a=>a.effect?.getTiming().iterations===Infinity||a.playState!=='running');},wid);
+      await p.waitForFunction(wid=>{const el=document.querySelector(`[data-chats="${wid}"]`),r=el?.getBoundingClientRect();return r&&r.left>=0&&r.right<=innerWidth+1&&r.width>0&&el.getAnimations({subtree:true}).every(a=>a.effect?.getTiming().iterations===Infinity||a.playState!=='running');},desktop?wid+'::list':wid);
     }
     async function tap(control){
       await control.waitFor({state:'visible'});await control.scrollIntoViewIfNeeded();await settled();
@@ -32,6 +32,14 @@ module.exports = async ({boot, ok, model, provider, out, browser}) => {
       await control[desktop?'click':'tap']();
     }
     async function retained(id,text){return p.evaluate(({id,text,agent,sid})=>{const it=WosOutbox.get(id);return it?.text===text&&it.sessionId===sid&&(it.agent||'')===agent&&it.state==='held'&&it.cancelled&&it.threadHidden&&it.durable&&!WosOutbox.canRetry(it)&&WosOutbox.unsent().some(x=>x.id===id);},{id,text,agent,sid:s.id});}
+    async function returnList(){
+      if(!desktop)await tap(chat.locator('[data-chback]'));
+      else{
+        // Desktop has no visible Back. Switching Focus is its supported list navigation.
+        await tap(list.locator('[data-chfocusopt="all:"]'));
+        await tap(list.locator(`[data-chfocusopt="agent:${route.id}"]`));
+      }
+    }
     async function active(){
       const state=await p.evaluate(sid=>{const A=window.__wos||window.__wux,s=A.live.session(sid);return {status:s?.status,runId:s?.runId,agent:A.live.agentOf(sid)};},s.id);
       record(state.status==='running'&&state.runId===s.wizard_run_id&&state.agent===agent,'accepted active run and route intact',state);
@@ -41,11 +49,11 @@ module.exports = async ({boot, ok, model, provider, out, browser}) => {
       await p.waitForFunction(()=>WosAgents.ready&&(window.__wos||window.__wux).live.agentStatus['qa-restricted']?.ok);await settled();
       record(await p.evaluate(skin=>WosSkin.current===skin&&document.documentElement.dataset.skin===skin,skin),'requested skin applied');
       // Use supported visible routing controls, never setFocus/openChat/w.agent stand-ins.
-      await tap(chat.locator(`.ch-focus-strip [data-chfocusopt="agent:${route.id}"]`));
+      await tap(list.locator(`.ch-focus-strip [data-chfocusopt="agent:${route.id}"]`));
       await p.waitForFunction(({wid,id})=>(window.__wos||window.__wux).wins[wid]?.focus?.key===id,{wid,id:route.id});
-      const listIds=await chat.locator('[data-part="list"] [data-chopen]').evaluateAll(es=>es.map(e=>e.dataset.chopen));
+      const listIds=await list.locator('[data-chopen]').evaluateAll(es=>es.map(e=>e.dataset.chopen));
       record(listIds.includes(s.id)&&sessions.filter(x=>x.id!==s.id).every(x=>!listIds.includes(x.id)),'Focus filters other routes out of list',listIds);
-      await tap(chat.locator(`[data-part="list"] [data-chopen="${s.id}"]`));
+      await tap(list.locator(`button.ch-row[data-chopen="${s.id}"]`));
       await chat.getByText('Accepted reply stays intact',{exact:true}).waitFor();
       // Failed custody is seeded, but its owner is derived from the route just opened through real UI.
       const ids=await p.evaluate(async({wid,model,provider,foreign})=>{const A=window.__wos||window.__wux,w=A.wins[wid],sid=w.thread,agent=A.live.agentOf(sid);const add=async(text,sessionId=sid,targetAgent=agent)=>{const it=await WosOutbox.stage({kind:'reply',sessionId,agent:targetAgent,text,model,provider});await WosOutbox.transition(it.id,'failed','No confirmed model route');return it.id;};return {target:await add('Switch'),other:await add('Keep this other message'),foreign:await add('Other route failure',foreign.id,foreign.agent)};},{wid,model,provider,foreign:sessions.find(x=>x.id!==s.id)});
@@ -59,26 +67,32 @@ module.exports = async ({boot, ok, model, provider, out, browser}) => {
       record(await bubble(ids.other).count()===1&&await p.evaluate(id=>WosOutbox.get(id)?.state==='failed',ids.other),'other failed bubble intact');
       record(await bubble(ids.foreign).count()===0&&await p.evaluate(id=>WosOutbox.get(id)?.state==='failed',ids.foreign),'other route failure untouched and not rendered');
       await active();
-      await p.reload();await p.waitForFunction(()=>window.WosOutbox?.recoveryComplete&&(window.__wos||window.__wux)?.live.agentStatus['qa-restricted']?.ok);await settled();
+      // Reload from routed list and reopen with its real row, isolating Dismiss persistence
+      // from the separate pre-list restored-thread discovery/bootstrap contract.
+      await returnList();await p.reload();await p.waitForFunction(()=>window.WosOutbox?.recoveryComplete&&(window.__wos||window.__wux)?.live.agentStatus['qa-restricted']?.ok);await settled();
       const restored=await p.evaluate(wid=>{const w=(window.__wos||window.__wux).wins[wid];return {thread:w?.thread,focus:w?.focus};},wid);
-      record(restored.thread===s.id&&restored.focus?.key===route.id,'reload restores same routed thread and Focus',restored);
+      record(!restored.thread&&restored.focus?.key===route.id,'reload preserves routed list Focus',restored);
+      await tap(list.locator(`button.ch-row[data-chopen="${s.id}"]`));
       await button(ids.other).waitFor({state:'visible'});
       record(await bubble(ids.target).count()===0&&await retained(ids.target,'Switch'),'dismissed original stays hidden and nonretryable after reload');
       await active();
       await tap(button(ids.other));await bubble(ids.other).waitFor({state:'detached'});
-      // Back is a phone control. Desktop already has the visible two-pane list.
-      if(!desktop)await tap(chat.locator('[data-chback]'));
+      // Focus filters the main Chats list, not its window's send-pill owner.
+      // Routed bubble dismissal is covered above; only the main owner shows this pill here.
+      if(route.kind==='main'){
+      await returnList();
       const pillId=await p.evaluate(async({sid,agent,model,provider})=>{const it=await WosOutbox.stage({kind:'reply',sessionId:sid,agent,text:'Dismiss from list',model,provider});await WosOutbox.transition(it.id,'failed','No confirmed model route');return it.id;},{sid:s.id,agent,model,provider});details.pillId=pillId;
-      const pill=chat.locator(`.ch-pill [data-obdismissfailed="${pillId}"]`);
+      const pill=list.locator(`.ch-pill [data-obdismissfailed="${pillId}"]`);
       await pill.waitFor({state:'visible'});await pill.scrollIntoViewIfNeeded();await settled();
       await p.screenshot({path:path.join(out,label+'-pill-before.png'),animations:'disabled'});
-      await tap(pill);await chat.locator('.ch-pill:not(.sent)').waitFor({state:'hidden'});
+      await tap(pill);await list.locator('.ch-pill:not(.sent)').waitFor({state:'hidden'});
       record(await retained(pillId,'Dismiss from list'),'last failed-send pill clears after durable Dismiss');
       await p.reload();await p.waitForFunction(()=>window.WosOutbox?.recoveryComplete&&(window.__wos||window.__wux)?.live.agentStatus['qa-restricted']?.ok);await settled();
-      await chat.locator('.ch-pill:not(.sent)').waitFor({state:'hidden'});
+      await list.locator('.ch-pill:not(.sent)').waitFor({state:'hidden'});
       record(await retained(pillId,'Dismiss from list')&&await retained(ids.target,'Switch'),'thread and pill dismissal both survive reload');
-      if(!desktop)await tap(chat.locator(`[data-part="list"] [data-chopen="${s.id}"]`));
+      await tap(list.locator(`button.ch-row[data-chopen="${s.id}"]`));
       await chat.getByText('Accepted reply stays intact',{exact:true}).waitFor();await active();
+      }
       await p.screenshot({path:path.join(out,label+'-after.png'),animations:'disabled'});
       const reads=f.state.requests.filter(q=>q.method==='GET'&&q.path.includes(`/api/sessions/${s.id}`));
       record(reads.some(q=>q.path.endsWith('/messages'))&&reads.every(q=>(new URLSearchParams(q.query).get('agent')||'')===agent)&&f.state.scopeErrors.length===0,'real thread/message reads use exact route owner',reads);
