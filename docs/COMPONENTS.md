@@ -1,5 +1,7 @@
 # Shared components
 
+**Appearance:** [Wizard app style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md). Implementation inventory only.
+
 **One implementation per capability.** NEW: `web/core/` + row, never an app.
 
 CI: [reuse gate](app-reuse-gate.md).
@@ -38,6 +40,7 @@ Visual: <side-by-side screenshot, or "none">
 | Protect unsaved work from updates | `WizardApp.update.hold` | app service worker, forced reload | released only after save+readback |
 | App reading place | `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic | app-local scroll store | reopen lands at the saved place |
 | Motion, haptics, press feel | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own spring/haptic helpers | — |
+| Canonical style admission | `check_style.py` (`wizard-os/style/`); trusted main policy, mirrored WAM scanner | per-app lint forks, blanket legacy failure | legacy warns; changed lines and new-app templates fail |
 | App kit: rows, sections, empty/add field | `WizardApp`: live `web/kit/wizard-ui.css` + `--wz-*`, then active skin (core/package/My skin) | kit forks; `.wz-field-row` chat; literal colours | two skins + My skin restyle `.wz-*` rows |
 
 ## Shell (`web/core/`): both shells and all agents; per-kind variants must EXTEND.
@@ -48,13 +51,13 @@ Visual: <side-by-side screenshot, or "none">
 | Chats list variant | `WizChatsHost` view slot (`web/core/chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`web/core/edge-peek.js`), host storage | skin-local duplicate |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`web/core/dom-morph.js`) | whole-view `innerHTML` on every live tick |
-| Models, retry, composer mic, receipts, reading place | `WosChatPower` (`web/core/chat-power.js`: anchor/offset/atBottom; repair) + `WosModels` (`web/core/chat-models.js`; pooled Claude first; fresh; model-aware Sign in, no Retry), `WosErrors` (`web/core/chat-errors.js`), `WosWork` (`web/core/chat-work.js`: expandable history + live tools) | model/error/reading-place forks; duplicate diagnosis notice or parallel live steps list |
+| Models, retry, composer mic, receipts, reading place | `WosChatPower` (`web/core/chat-power.js`: anchor/offset/atBottom; repair; viewport-bound picker, keyboard room/cleanup) + `WosModels` (`web/core/chat-models.js`; pooled Claude first; fresh; model-aware Sign in, no Retry), `WosErrors` (`web/core/chat-errors.js`), `WosWork` (`web/core/chat-work.js`: expandable history + live tools) | model/error/reading-place forks; duplicate diagnosis notice or parallel live steps list |
 | Markdown, drafts, inline/bottom media | `WosChat` (`chat-kit.js`: `helm`, `md`, `copyRich`, `viewer`); Chats `mediaBlock` | own parser/viewer |
 | Spaces / Focus | `WizCore` Chats (`web/core/chats.js`), `WizLive.prefOps` (`spaces`); one naming form; `WizLive.spaceSessions(ids)` hydrates; `winAgent`/`modelRoute` route new chats; `WosOutbox.onNew` joins front Space; restored Focus awaits census; hidden agents accept explicit routes; scoped Spaces tool; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` | automatic subject tabs, separate collection store, per-shell Focus routing or section implementations |
 | Pinned threads (synced) | `WosChatPins` (`web/core/chat-pins.js`) | device-local pin lists |
 | Snooze thread/message: Later today · Tomorrow · In 2/3/5 days · Next week · Someday; Other date… last; success returns via threadBack like Done | `WosBoomerang` (`web/core/scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`web/core/schedules.js`) | own timers or reminder stores |
 | Thread topic emoji | `WosTopicEmoji` (`web/core/chat-topic-emojis.js`, data `WosTopicEmojiData`) | — |
-| Durable send; >6h held in thread/list for Send/Discard | `WosOutbox`, `WosCarry` (`web/outbox.js`) | own queue |
+| Durable send, saved Retry; >6h hold | `WosOutbox`, `WosCarry` (`web/outbox.js`) | own queue |
 | Cancelled-recording keep | `WosCancelled` (`web/core/cancelled.js`) | — |
 | Share to Wizard | `WizShareWizard` (`web/core/share-wizard.js`) | one sheet; `share.wizard` |
 | Uploads of any size | `WizUploads` (`web/core/uploads.js`) | single-fetch uploads |
@@ -104,4 +107,4 @@ Visual: <side-by-side screenshot, or "none">
 
 `WizCompanionPane` (`web/core/companion-pane.js`), `WizardApp` (`web/core/app-client.js`), `WizAppCapture` (`web/core/app-capture.js`), `WizComposerInput` (`web/core/composer-input.js`), `WizAttachChip` (`web/core/attach-chip.js`), `WosSkinFrame` (`web/core/skin-frame.js`), `WosDevice` (`web/device.js`), `WizAppServices` (`web/core/app-services.js`), `WizCore` (`web/core/core.js`, `bridge.js`), `WizConfig` (`web/core/config.js`), `WizReach` (`web/core/reach.js`), `WizAndroidRelay` (`web/core/android-relay.js`), `WizBackgroundAudio` (`web/core/background-audio.js`), `WizHomeScreenPolicy` (`web/core/home-screen-policy.js`), `WosOwnViews` (`web/core/own-views.js`), `WosOrbHandoff` (`web/core/orb-handoff.js`), `WosShareSheet` (`web/core/share-sheet.js`), `WosBell` (`web/core/notif-bell.js`, items), `WosResources` (`web/core/resources.js`), `WosUsage` (`web/core/usage.js`), `WizPhotosRelay` (`web/core/photos-relay.js`), `WosMusic`, `WizDeviceLegacy` (`web/core/voice-legacy.js`), openers `WizAppOpen`, `WizCanOpen`, `WizOpenApp`, `WizOpenAgentChats` (`web/app.js`), `WosBoundView` (`web/core/bound-view.js`), `WosWorkspaceSync` (`web/core/workspace-sync.js`, rig).
 
-Devices (James approved 29 Oct): EXTEND `WizPhoneConnect` with #648’s QR/checklist/Done flow; Jan’s #677 owns Settings management. REUSE `web/kit/controls.css` from the Wizard kit. Setup + Mac onboarding share it.
+Devices: `WizPhoneConnect`, #677 + #648, shared kit. Setup/Mac reuse; +16px tinted Setup action, step-2 green check/Show again, final Done.
