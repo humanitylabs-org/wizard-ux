@@ -75,3 +75,10 @@ test('Welcome: never covers work already started, keeps keys and focus, Back can
   assert.match(read('web/desktop/desktop.js'), /WosWelcome\?\.boot\([^]*?busy: \(\) => VOICE\.state !== 'idle'/);
   assert.match(read('web/app.js'), /WosWelcome\?\.boot\([^]*?busy: \(\) => V\.state !== 'idle'/);
 });
+
+test('Welcome: the server seen mark is retried until acknowledged; phone Setup tap ends its opening state', () => {
+  const js = read('web/core/welcome.js');
+  assert.match(js, /if \(r\.ok\) \{ try \{ localStorage\.removeItem\(SEEN_PENDING\)/);
+  assert.match(js, /if \(seenPending\(\)\) markSeen\(\);/);
+  assert.match(read('web/app.js'), /a\.id === 'setup' && window\.WosWelcome\) \{ openingEnd\(a\.id\);/);
+});

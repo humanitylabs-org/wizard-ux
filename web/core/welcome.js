@@ -44,7 +44,15 @@
       return r.ok ? await r.json() : null;
     } catch (e) { return null; }
   }
-  function markSeen() { fetch(SETUP + '/seen', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: '{}' }).catch(() => {}); }
+  // The server's "seen" is what keeps the Welcome away on other browsers and devices: retry it on later launches
+  // until the Agent Service acknowledges it.
+  const SEEN_PENDING = KEY + '.seen-pending';
+  function markSeen() {
+    try { localStorage.setItem(SEEN_PENDING, '1'); } catch (e) {}
+    return fetch(SETUP + '/seen', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: '{}' })
+      .then(r => { if (r.ok) { try { localStorage.removeItem(SEEN_PENDING); } catch (e) {} } else log('seen:' + r.status); }, () => log('seen:offline'));
+  }
+  const seenPending = () => { try { return localStorage.getItem(SEEN_PENDING) === '1'; } catch (e) { return false; } };
 
   const isInstalled = id => !!H.app(id)?.url;
   // Not installed yet: install it the way the Store does (same endpoint, same release check), then sign in.
@@ -225,6 +233,7 @@
     if (booted || !h) return; booted = true; H = h;
     try { addEventListener('pointerdown', act, true); addEventListener('keydown', act, true); } catch (e) {}
     setTimeout(async () => {
+      if (seenPending()) markSeen();
       if (h.deeplinked?.()) { log('deeplink'); return; }
       const [ok, setup] = await Promise.all([aiReady(), setupState(), Promise.resolve(window.WizCore?.appsLoaded?.()).catch(() => {})]);
       const state = read();
