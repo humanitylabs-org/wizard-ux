@@ -87,6 +87,8 @@ async function exercise(browser, c) {
     await p.locator('[data-chmodel]').first().click();
     await p.locator('.ch-mpop').waitFor();
     await p.waitForTimeout(200); // popup entry animation only
+    await p.screenshot({ path: path.join(OUT, `${label}-initial.png`) });
+    ok(await p.evaluate(() => document.documentElement.dataset.skin) === c.skin, `${label}: requested skin active`);
     await bounds(p, label);
     ok(await p.evaluate(() => document.documentElement.classList.contains('wos-doc-scroll')) === (c.mode === 'native'), `${label}: expected native/overflow scroll mode`);
     const more = p.locator('.ch-mpop [data-mall]');
