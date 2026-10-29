@@ -37,6 +37,40 @@ test('weather reader bounds its provider read, caches success and returns stale 
   now += 21_600_001; await assert.rejects(read(), /unavailable/i, 'expired data is not presented indefinitely');
 });
 
+test('weather reader coalesces refreshes and throttles outage retries to one provider call per interval', async () => {
+  const ttlMs = 600_000;
+  let calls = 0, fail = false, releaseFailure, now = Date.parse('2026-10-29T18:00:00Z');
+  const read = createWeatherReader({ config: configured, now: () => now, ttlMs, staleMs: 21_600_000,
+    fetchImpl: async () => {
+      calls++;
+      if (fail) {
+        await new Promise(resolve => { releaseFailure = resolve; });
+        throw new Error('offline');
+      }
+      return new Response(JSON.stringify(payload), { status: 200 });
+    },
+  });
+
+  await read();
+  now += ttlMs + 1;
+  fail = true;
+  const concurrent = [read(), read(), read(), read()];
+  assert.equal(calls, 2, 'concurrent stale reads share one provider refresh');
+  releaseFailure();
+  const stale = await Promise.all(concurrent);
+  assert.ok(stale.every(value => value.stale), 'a failed refresh serves the recent cached reading');
+
+  const repeated = await Promise.all([read(), read(), read()]);
+  assert.ok(repeated.every(value => value.stale));
+  assert.equal(calls, 2, 'repeated reads do not retry during the failed refresh interval');
+
+  now += ttlMs + 1;
+  const nextInterval = read();
+  assert.equal(calls, 3, 'the provider is retried once after the failed refresh interval');
+  releaseFailure();
+  assert.equal((await nextInterval).stale, true);
+});
+
 test('same-origin weather route is owner-only, read-only and reports unconfigured quietly', async () => {
   const server = http.createServer(createResourceHandler(async () => ({}), null, null, async () => ({ configured: false }), 'qa-owner'));
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));

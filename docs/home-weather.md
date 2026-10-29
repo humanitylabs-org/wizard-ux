@@ -11,7 +11,7 @@ Configure the adapter process with:
 
 The adapter rounds coordinates to a coarse 0.1-degree grid (roughly 11 km north-south) before use. Open-Meteo receives those rounded coordinates over HTTPS; the browser never receives them. With neither coordinate set, the endpoint returns `{ "configured": false }` and Home leaves the weather row hidden. A partial or invalid coordinate configuration fails adapter startup rather than silently reading the wrong place.
 
-The adapter uses Open-Meteo over HTTPS, times out each provider read after five seconds, caches a successful reading for ten minutes, and may serve that last reading as stale for up to six hours when the provider is unavailable. It never blocks the rest of Home.
+The adapter uses Open-Meteo over HTTPS, times out each provider read after five seconds, caches a successful reading for ten minutes, and may serve that last reading as stale for up to six hours when the provider is unavailable. Concurrent refreshes share one provider request. After a failed refresh, the adapter serves the stale reading without retrying Open-Meteo more than once per ten-minute refresh interval. It never blocks the rest of Home.
 
 The private gateway must authenticate the exact `/api/system/weather` path, strip caller-supplied identity, and reverse-proxy it to the same loopback adapter as the existing system resource routes. The adapter then compares that verified identity with `WIZARD_WEATHER_ALLOWED_LOGIN` and fails closed when the owner login is absent or different. `tools/system-resources.Caddyfile` carries the route template.
 

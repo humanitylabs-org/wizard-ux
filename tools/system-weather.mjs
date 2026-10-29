@@ -28,11 +28,9 @@ export function createWeatherReader({
   config = readWeatherConfig(), fetchImpl = fetch, now = Date.now,
   ttlMs = 10 * 60_000, staleMs = 6 * 60 * 60_000,
 } = {}) {
-  let cached = null, cachedAt = 0;
-  return async () => {
-    if (!config) return { configured: false };
-    const at = now();
-    if (cached && at - cachedAt <= ttlMs) return { ...cached, stale: false };
+  let cached = null, cachedAt = 0, failedAt = null, refreshPromise = null;
+  const staleReading = at => cached && at - cachedAt <= staleMs ? { ...cached, stale: true } : null;
+  const refresh = async at => {
     try {
       const url = new URL(PROVIDER);
       url.searchParams.set('latitude', String(config.latitude));
@@ -49,6 +47,7 @@ export function createWeatherReader({
       const temperatureC = finite(current?.temperature_2m), windKph = finite(current?.wind_speed_10m), code = finite(current?.weather_code);
       if (temperatureC == null || temperatureC < -100 || temperatureC > 70 || code == null) throw new Error('Invalid weather response');
       cachedAt = at;
+      failedAt = null;
       cached = {
         configured: true,
         label: config.label,
@@ -61,8 +60,22 @@ export function createWeatherReader({
       };
       return { ...cached };
     } catch {
-      if (cached && at - cachedAt <= staleMs) return { ...cached, stale: true };
+      failedAt = at;
+      const stale = staleReading(at);
+      if (stale) return stale;
       throw new Error('Weather unavailable');
     }
+  };
+  return async () => {
+    if (!config) return { configured: false };
+    const at = now();
+    if (cached && at - cachedAt <= ttlMs) return { ...cached, stale: false };
+    if (failedAt != null && at - failedAt <= ttlMs) {
+      const stale = staleReading(at);
+      if (stale) return stale;
+      throw new Error('Weather unavailable');
+    }
+    if (!refreshPromise) refreshPromise = refresh(at).finally(() => { refreshPromise = null; });
+    return refreshPromise;
   };
 }
