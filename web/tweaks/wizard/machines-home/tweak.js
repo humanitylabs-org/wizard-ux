@@ -112,8 +112,10 @@ export default function setup(api) {
   const backupRunning = () => S.backupRead === 'ok' && Array.isArray(S.backup?.active) && S.backup.active.length > 0;
   const sessions = () => api.data.read.sessions?.counts() || { working: 0, ready: 0 };
   const myDevices = () => peers().filter(p => p.group === 'human').map(p => ({ name: p.name === 'localhost' && /ios/i.test(p.os || '') ? 'iPhone' : p.name, online: !!p.online }));
+  // The connected Wizard's people (the glance always describes this one, whatever Your network has selected).
+  const myPeople = () => [{ id: 'me', name: ownerName(), devices: myDevices() }];
   function people() {
-    if (S.ws === 'mine') return [{ id: 'me', name: ownerName(), devices: myDevices() }];
+    if (S.ws === 'mine') return myPeople();
     const g = managedOf(S.ws); if (!g) return [];
     const names = (Array.isArray(g.people) ? g.people : []).filter(n => typeof n === 'string' && n);
     const rest = Math.max(0, (Number.isInteger(g.peopleCount) ? g.peopleCount : 0) - names.length);
@@ -619,7 +621,7 @@ export default function setup(api) {
   function renderGlance() {
     const g = null, x = sessions(), fuel = g ? null : gauge(), st = g ? null : storage(), bad = g ? 0 : openOnes().length;  // the bar always shows the connected workspace
     const checked = allClear(), nM = g ? 1 : devices().length || 1;
-    const sig = JSON.stringify([S.ws, aiStale(), fuel && Math.round(fuel.left / 10), x.working, Math.min(x.ready, 8), S.unread, st && [st.state, st.age == null ? null : agoS(st.age)], bad, checked, nM, backupRunning(), people().length]);
+    const sig = JSON.stringify([S.ws, aiStale(), fuel && Math.round(fuel.left / 10), x.working, Math.min(x.ready, 8), S.unread, st && [st.state, st.age == null ? null : agoS(st.age)], bad, checked, nM, backupRunning(), myPeople().length]);
     if (sig === drawn.glance) return; drawn.glance = sig;
     const dots = (n, cls) => Array.from({ length: n }, () => h('i', { cls }));
     const tile = (go, cls, label, title, viz, val, badge) => h('button', { type: 'button', cls: 'mh-tile ' + cls, data: { go }, title, 'aria-label': `${label}: ${title}` },
@@ -634,7 +636,7 @@ export default function setup(api) {
         pic('store'), backupRunning() ? '…' : st.age == null ? '–' : agoS(st.age), st.state !== 'ok' ? h('span', { cls: 'mh-badge is-warn', text: '!' }) : null) : null,
       g ? null : tile('network', 'is-net' + (bad ? ' is-bad' : checked ? ' is-ok' : ''), 'Security', bad ? `${bad} ${bad === 1 ? 'machine' : 'machines'} open to the internet` : checked ? 'Tailscale only' : 'Not checked yet',
         pic('shield'), null, bad ? h('span', { cls: 'mh-badge', text: String(bad) }) : checked ? h('span', { cls: 'mh-badge is-ok', text: '✓' }) : null),
-      g ? null : tile('overview', 'is-mach', 'Machines', `${nM} ${nM === 1 ? 'machine' : 'machines'}${people().length ? ` · ${people().length} ${people().length === 1 ? 'person' : 'people'}` : ''}`,
+      g ? null : tile('overview', 'is-mach', 'Machines', `${nM} ${nM === 1 ? 'machine' : 'machines'}${myPeople().length ? ` · ${myPeople().length} ${myPeople().length === 1 ? 'person' : 'people'}` : ''}`,
         pic('box'), String(nM)),
     ].filter(Boolean);
     if (desk) {

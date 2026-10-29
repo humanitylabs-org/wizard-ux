@@ -1457,7 +1457,7 @@
   function hostSettings() {
     if (settingsModal) { if (setEl.parentNode !== document.body) document.body.appendChild(setEl); return; }
     const w = settingsWin(), host = w && winEl(w.id)?.querySelector('.settings-host');
-    if (host) { if (setEl.parentNode !== host) host.appendChild(setEl); return; }
+    if (host) { if (setEl.parentNode !== host) host.appendChild(setEl); setEl.hidden = false; return; }  // a Settings window always shows its panel
     if (w) return;
     if (setEl.parentNode !== document.body) document.body.appendChild(setEl);
     if (setEl.hidden) return;
@@ -1471,7 +1471,7 @@
   function openSettings(focus) {
     window.WosResources?.back(); closePalette(); toggleKeys(false);
     const w = settingsWin();
-    if (homeOpen && !w) {
+    if (homeOpen) {  // from Home it is always the centred panel, even when a Settings window exists on a desk (it gets the panel back on close)
       if (!settingsModal) settingsFocus = document.activeElement;
       settingsModal = true; setEl.classList.add('is-modal'); setEl.setAttribute('aria-modal', 'true'); setEl.setAttribute('role', 'dialog');
       if (setEl.parentNode !== document.body) document.body.appendChild(setEl);
@@ -1493,6 +1493,7 @@
     if (settingsModal) {
       settingsModal = false; setEl.classList.remove('is-modal'); setEl.removeAttribute('aria-modal'); setEl.setAttribute('role', 'region');
       scrim.hidden = true; setEl.hidden = true;
+      if (settingsWin()) hostSettings();  // back into its desk window (shown there again)
       if (settingsFocus?.isConnected && settingsFocus.getClientRects().length) settingsFocus.focus({ preventScroll: true });
       window.WosScenery?.update(); return;
     }

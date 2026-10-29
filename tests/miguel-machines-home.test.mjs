@@ -311,6 +311,17 @@ test('ninth review: failed first reads say so (AI accounts, network); availabili
   }
 });
 
+test('tenth review: Home Settings is always the panel; the glance counts only this Wizard\'s people', () => {
+  const desk = read('web/desktop/desktop.js');
+  assert.match(desk, /if \(homeOpen\) \{  \/\/ from Home it is always the centred panel/);
+  assert.match(desk, /if \(settingsWin\(\)\) hostSettings\(\);  \/\/ back into its desk window/, 'the desk window gets its panel back');
+  for (const who of ['miguel', 'wizard']) {
+    const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
+    const glance = src.slice(src.indexOf('function renderGlance()'), src.indexOf('\n  }\n', src.indexOf('function renderGlance()')));
+    assert.ok(!/[^y]people\(\)/.test(glance) && glance.includes('myPeople()'), who);
+  }
+});
+
 test('machines-home: Home is one glance; the full views live in Settings › System', () => {
   const src = read('web/tweaks/miguel/machines-home/tweak.js'), host = read('web/core/skin-host.js'), set = read('web/core/settings.js');
   const man = JSON.parse(read('web/tweaks/miguel/machines-home/manifest.json'));
