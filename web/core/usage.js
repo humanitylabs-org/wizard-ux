@@ -36,8 +36,10 @@
         return { id: String(l.id || l.label || ''), label: String(l.label || 'Quota'), remainingPercent: rem, usedPercent: 100 - rem, resetsAt: iso(l.resetsAt) };
       }).filter(Boolean);
       const paid = p.paid && typeof p.paid === 'object' ? p.paid : null;
-      return { id: String(p.id), provider: family(p), providerName: family(p) === 'chatgpt' ? 'ChatGPT' : String(p.providerName || p.name || p.id), name: String(p.name || p.id), email: typeof p.email === 'string' && p.email.includes('@') && !p.email.includes('*') ? p.email : '', plan: p.plan ? String(p.plan) : '', status: ['ok', 'stale', 'unavailable'].includes(p.status) ? p.status : (limits.length ? 'ok' : 'unavailable'),
-        signedOut: ['signed_out', 'auth', 'reauth'].includes(p.status) || p.signedOut === true || /sign.?in|signed.?out|reauth|401|unauthori[sz]ed/i.test(String(p.error?.code || p.error?.kind || '')),
+      // Signed out: any limits it still carries are from before; every renderer reads that as unavailable, never live.
+      const signedOut = ['signed_out', 'auth', 'reauth'].includes(p.status) || p.signedOut === true || /sign.?in|signed.?out|reauth|401|unauthori[sz]ed/i.test(String(p.error?.code || p.error?.kind || ''));
+      return { id: String(p.id), provider: family(p), providerName: family(p) === 'chatgpt' ? 'ChatGPT' : String(p.providerName || p.name || p.id), name: String(p.name || p.id), email: typeof p.email === 'string' && p.email.includes('@') && !p.email.includes('*') ? p.email : '', plan: p.plan ? String(p.plan) : '', status: signedOut ? 'unavailable' : ['ok', 'stale', 'unavailable'].includes(p.status) ? p.status : (limits.length ? 'ok' : 'unavailable'),
+        signedOut,
         fetchedAt: iso(p.fetchedAt), limits, paid, error: p.error ? String(p.error.message || p.error) : '' };
     }).filter(Boolean);
     return { fetchedAt: iso(j?.fetchedAt), providers, accountCounts };
@@ -96,7 +98,7 @@
       if (!s) return `<div class="st-group st-usage" data-usage>${head}<div class="st-empty">${U.error ? esc(U.error) : 'Loading…'}</div></div>`;
       const rows = [], notes = [];
       for (const p of s.providers) {
-        if (p.status === 'unavailable' || !p.limits.length) { notes.push(`${p.name}${p.plan ? ' · ' + p.plan : ''}: ${p.status === 'unavailable' ? 'couldn’t read usage' : 'no quota windows'}${p.error ? ' · ' + p.error : ''}`); }
+        if (p.status === 'unavailable' || !p.limits.length) { notes.push(`${p.name}${p.plan ? ' · ' + p.plan : ''}: ${p.signedOut ? 'signed out · sign in again to read usage' : p.status === 'unavailable' ? 'couldn’t read usage' : 'no quota windows'}${p.error ? ' · ' + p.error : ''}`); }
         if (p.status === 'stale') notes.push(`${p.name}: last known reading`);
         if (p.status === 'unavailable') continue;
         // Every bar in Wizard shows how much is USED (fills up toward 100%), like the server and Home bars.

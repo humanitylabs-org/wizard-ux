@@ -452,7 +452,6 @@ export default function setup(api) {
       netBox.replaceChildren(why ? h('span', { cls: 'mh-more-info', text: why }) : h('span', { cls: 'mh-wait', role: 'status', 'aria-label': 'Loading your network' }));
       if (why) setRow(rowMn, [h('span', { cls: 'mh-more-info', text: why })]); return; }
     root.classList.remove('is-loading');
-    if (S.ws !== 'mine' && !managedOf(S.ws) && S.res.devices) S.ws = 'mine';
     const g = managedOf(S.ws);
     root.classList.toggle('is-managed', !!g);
     if (g) {
@@ -675,6 +674,8 @@ export default function setup(api) {
     glance.replaceChildren(...parts);
   }
   function paint(force) {
+    // A managed Wizard that is gone from a fresh reading: back to this one, remembered, before anything draws.
+    if (S.ws !== 'mine' && S.res.devices && !managedOf(S.ws)) { S.ws = 'mine'; api.storage.set('ws', 'mine'); }
     renderGlance();
     const top = JSON.stringify([thisName(), managedList().map(g => [g.id, g.name]), S.ws]);
     if (force || top !== drawn.top) { drawn.top = top; renderTabs(); }

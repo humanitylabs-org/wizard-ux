@@ -251,7 +251,7 @@ test('third review: AI page offers sign-in with no accounts, backup read failure
 
 test('fourth review: sign-in state survives normalisation, managed workspaces get honest System pages, Dictate keeps its field through the mic menu', () => {
   const usage = read('web/core/usage.js'), desk = read('web/desktop/desktop.js');
-  assert.match(usage, /signedOut: \['signed_out', 'auth', 'reauth'\]\.includes\(p\.status\)/);
+  assert.match(usage, /const signedOut = \['signed_out', 'auth', 'reauth'\]\.includes\(p\.status\)/);
   assert.match(usage, /\['stale', 'unavailable', 'signed_out', 'auth', 'reauth'\]\.includes\(p\.status\) \? p\.status : a\.status, signedOut:childOut \|\| a\.signedOut === true \|\| p\.signedOut === true/, 'a group sign-out reaches its accounts');
   for (const who of ['miguel', 'wizard']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
@@ -403,6 +403,17 @@ test('eighteenth review: machines from a saved or failed-read snapshot are last 
   for (const who of ['miguel', 'wizard']) {
     const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
     assert.match(src, /status = !S\.devFresh && d\.status === 'online' \? 'stale' : d\.status;\n    return \{ id, name: pretty\(d\.name\), status, stale: status === 'stale',/, who);
+  }
+});
+
+test('nineteenth review: a signed-out account is never a live usage reading; a vanished managed Wizard falls back before painting', () => {
+  const usage = read('web/core/usage.js');
+  assert.match(usage, /status: signedOut \? 'unavailable' : \['ok', 'stale', 'unavailable'\]\.includes\(p\.status\)/);
+  assert.match(usage, /p\.signedOut \? 'signed out · sign in again to read usage'/);
+  assert.match(read('web/core/resources.js'), /bad\?\(p\.signedOut\?'Signed out':'Unavailable'\):/);
+  for (const who of ['miguel', 'wizard']) {
+    const src = read(`web/tweaks/${who}/machines-home/tweak.js`);
+    assert.match(src, /function paint\(force\) \{\n    \/\/ [^\n]*\n    if \(S\.ws !== 'mine' && S\.res\.devices && !managedOf\(S\.ws\)\) \{ S\.ws = 'mine'; api\.storage\.set\('ws', 'mine'\); \}\n    renderGlance\(\);/, who);
   }
 });
 
