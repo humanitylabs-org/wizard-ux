@@ -5,13 +5,13 @@
 .sc-head button { flex: none; border: 1px solid var(--wz-border); border-radius: 16px; padding: 8px 14px; color: var(--wz-text-secondary); background: var(--wz-surface-raised); }
 .sc-head button[aria-checked="true"] { color: var(--wz-text); background: var(--wz-accent-soft); border-color: var(--wz-accent); }
 .sc-row b, .sc-import b { overflow-wrap: anywhere; }
-.sc-chat { color: var(--wz-text-secondary); font-size: 13px; margin-top: 4px; }
+.sc-chat { color: var(--wz-text-secondary); font-size:var(--wz-text-sm); margin-top: 4px; }
 .sc-chat button { color: var(--wz-accent); background: transparent; padding: 0; text-align: left; text-decoration: underline; overflow-wrap: anywhere; max-width: 100%; }
-.sc-last { color: var(--wz-text-muted); margin: 6px 0; font-size: 12px; }
+.sc-last { color: var(--wz-text-muted); margin: 6px 0; font-size:var(--wz-text-sm); }
 .sc-scrim { align-items: end; }
 .sc-sheet { width: min(520px, 100%); max-height: 100%; box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain; }
 .sc-sheet > .st-actions { position: sticky; bottom: -20px; margin: 12px -20px -20px; padding: 12px 20px 20px; background: linear-gradient(var(--wz-overlay), var(--wz-overlay)), var(--wz-base); }
-.sc-sheet label { display: grid; gap: 6px; font-size: 14px; color: var(--wz-text-secondary); margin: 12px 0; }
+.sc-sheet label { display: grid; gap: 6px; font-size:var(--wz-text-md); color: var(--wz-text-secondary); margin: 12px 0; }
 .sc-sheet input, .sc-sheet textarea, .sc-sheet select { min-width: 0; width: 100%; box-sizing: border-box; border: 1px solid var(--wz-border); border-radius: 10px; padding: 12px; background: var(--wz-surface); color: var(--wz-text); font: inherit; min-height: 48px; }
 .sc-sheet option { background: var(--wz-base); color: var(--wz-text); }
 .sc-sheet :is(input, textarea, select):focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 1px; }
@@ -24,9 +24,9 @@
 
 /* Shared approved phone Settings controls, responsive container authored by Claude Opus.
  * Feature selectors belong here, never in a shell-only stylesheet. */
-.st-title { margin: 6px 4px 14px; font-size: 28px; font-weight: 700; letter-spacing: -.01em; }
+.st-title { margin: 6px 4px 14px; font-size:var(--wz-text-title); font-weight: 700; letter-spacing: -.01em; }
 .st-group { margin: 0 0 28px; }
-.st-group h4 { display: flex; gap: 8px; align-items: baseline; margin: 0 4px 4px; font-size: 13px; font-weight: 650; letter-spacing: .02em; text-transform: none; color: var(--wz-text-muted); }
+.st-group h4 { display: flex; gap: 8px; align-items: baseline; margin: 0 4px 4px; font-size:var(--wz-text-sm); font-weight: 650; letter-spacing: .02em; text-transform: none; color: var(--wz-text-muted); }
 .st-group h4 span { color: var(--wz-warning); }
 /* Every row is a plain line on the page, split by a hairline. No boxes, no icon tiles. */
 .st-row { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 12px 4px; margin: 0; border: 0; border-bottom: 1px solid var(--wz-border); border-radius: 0; background: transparent; text-align: left; color: var(--wz-text); }
@@ -35,31 +35,31 @@
 .st-choice { flex: 0 0 auto; max-width: 112px; min-height: 44px; padding: 8px; border: 1px solid var(--wz-border); border-radius: var(--wz-radius, 12px); background: var(--wz-surface); color: var(--wz-text); font: inherit; }
 .st-choice:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
 .st-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.st-tx b { font-size: 17px; font-weight: 550; line-height: 1.3; }
-.st-tx small { font-size: 14px; line-height: 1.4; color: var(--wz-text-muted); margin-top: 2px; }
-.st-go { color: var(--wz-text-muted); font-size: 22px; }
+.st-tx b { font-size:var(--wz-font-size); font-weight: 550; line-height: 1.3; }
+.st-tx small { font-size:var(--wz-text-sm); line-height: 1.4; color: var(--wz-text-muted); margin-top: 2px; }
+.st-go { color: var(--wz-text-muted); font-size:var(--wz-text-heading); }
 .sw { flex: 0 0 44px; height: 26px; border-radius: 99px; background: var(--wz-surface-raised); position: relative; transition: background 200ms; }
 .sw i { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--wz-text); transition: transform 220ms var(--ease); }
 .sw.on { background: var(--wz-accent); }
 .sw.on i { transform: translateX(18px); }
-.st-empty { padding: 14px 4px; color: var(--wz-text-secondary); font-size: 15px; }
-.st-note { margin: 8px 4px 0; font-size: 12px; color: var(--wz-text-muted); }
-.st-wide { width: 100%; margin-top: 12px; padding: 12px; border-radius: 99px; border: 1px solid var(--wz-border); background: transparent; color: var(--wz-text); font-size: 15px; font-weight: 650; }
+.st-empty { padding: 14px 4px; color: var(--wz-text-secondary); font-size:var(--wz-font-size); }
+.st-note { margin: 8px 4px 0; font-size:var(--wz-text-sm); color: var(--wz-text-muted); }
+.st-wide { width: 100%; margin-top: 12px; padding: 12px; border-radius: 99px; border: 1px solid var(--wz-border); background: transparent; color: var(--wz-text); font-size:var(--wz-font-size); font-weight: 650; }
 .ub-row { padding: 14px 4px; border-bottom: 1px solid var(--wz-border); }
-.ub-t { display: flex; gap: 8px; align-items: flex-start; font-size: 16px; line-height: 1.4; }
+.ub-t { display: flex; gap: 8px; align-items: flex-start; font-size:var(--wz-text-lg); line-height: 1.4; }
 .ub-t svg { flex: 0 0 16px; width: 16px; height: 16px; margin-top: 2px; fill: none; stroke: var(--wz-accent); stroke-width: 1.8; }
 .ub-t span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.ub-m { margin-top: 5px; font-size: 13.5px; color: var(--wz-text-muted); }
+.ub-m { margin-top: 5px; font-size:var(--wz-text-md); color: var(--wz-text-muted); }
 .ub-m .fail { color: var(--wz-warning); font-weight: 700; }
 .ub-a { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-.ub-a button { min-height: 44px; min-width: 48px; padding: 8px 14px; border-radius: 99px; border: 1px solid var(--wz-border); background: transparent; color: var(--wz-text); font-size: 14px; font-weight: 600; }
+.ub-a button { min-height: 44px; min-width: 48px; padding: 8px 14px; border-radius: 99px; border: 1px solid var(--wz-border); background: transparent; color: var(--wz-text); font-size:var(--wz-text-md); font-weight: 600; }
 .ub-a button.ghost { background: transparent; border: 1px solid var(--wz-border); color: var(--wz-text-secondary); }
 
 .cx-row { padding: 14px 4px; border-bottom: 1px solid var(--wz-border); }
-.cx-t { font-size: 14px; color: var(--wz-text-secondary); }
+.cx-t { font-size:var(--wz-text-md); color: var(--wz-text-secondary); }
 .cx-t b { color: var(--wz-text); font-weight: 650; font-variant-numeric: tabular-nums; }
-.cx-text { margin-top: 8px; padding: 10px 12px; border-radius: 12px; background: var(--wz-surface); font-size: 14px; line-height: 1.45; color: var(--wz-text); white-space: pre-wrap; max-height: 40vh; overflow: auto; user-select: text; -webkit-user-select: text; }
-.cx-err { margin-top: 6px; font-size: 12.5px; color: var(--wz-warning); }
+.cx-text { margin-top: 8px; padding: 10px 12px; border-radius: 12px; background: var(--wz-surface); font-size:var(--wz-text-md); line-height: 1.45; color: var(--wz-text); white-space: pre-wrap; max-height: 40vh; overflow: auto; user-select: text; -webkit-user-select: text; }
+.cx-err { margin-top: 6px; font-size:var(--wz-text-sm); color: var(--wz-warning); }
 .cx-row .ub-a button[disabled] { opacity: .6; }
 
 
@@ -79,9 +79,9 @@
 /* Appearance v1 bridge: the shell still publishes its original live skin tokens.
  * No palette is defined here; hosted Settings paints a transparent canvas. */
 .st-root, .dsettings {
-  --wz-base: var(--bg); --wz-overlay: var(--glass-2);
-  --wz-text: var(--ink); --wz-text-secondary: var(--ink-2); --wz-text-muted: var(--ink-3);
-  --wz-border: var(--line-2); --wz-accent: var(--violet-2); --wz-warning: var(--amber);
+  --wz-base: var(--wz-base); --wz-overlay: var(--wz-panel);
+  --wz-text: var(--wz-text); --wz-text-secondary: var(--wz-text-secondary); --wz-text-muted: var(--wz-text-muted);
+  --wz-border: var(--wz-border); --wz-accent: var(--wz-accent); --wz-warning: var(--wz-warning);
   --wz-surface: color-mix(in srgb, var(--wz-text) 6%, transparent);
   --wz-surface-raised: color-mix(in srgb, var(--wz-text) 10%, transparent);
   --wz-accent-soft: color-mix(in srgb, var(--wz-accent) 16%, transparent);
@@ -92,31 +92,31 @@
 .st-root [hidden] { display: none !important; }
 .st-root .st-inner { max-inline-size: none; }
 .st-category { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 10px 4px; border: 0; border-bottom: 1px solid var(--wz-border); border-radius: 0; text-align: left; color: var(--wz-text); background: transparent; }
-.st-category .st-tx b { font-size: 17px; font-weight: 550; }
+.st-category .st-tx b { font-size:var(--wz-font-size); font-weight: 550; }
 /* A quiet value on the right (the skin name, a count) instead of a second line. */
-.st-val { flex: none; max-width: 45%; font-size: 15px; color: var(--wz-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.st-val { flex: none; max-width: 45%; font-size:var(--wz-font-size); color: var(--wz-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .st-val:empty { display: none; }
 .st-category[aria-current="page"] .st-tx b { font-weight: 700; }
 .st-desktop .st-category[aria-current="page"] { color: var(--wz-accent); }
 .st-index .st-title { margin-bottom: 8px; }
 .st-page-head { display: flex; gap: 6px; align-items: center; margin-bottom: 16px; }
-.st-page-head h3 { margin: 0; font-size: 24px; font-weight: 700; }
-.st-page-head button { font-size: 30px; background: transparent; color: var(--wz-text); }
+.st-page-head h3 { margin: 0; font-size:var(--wz-text-title); font-weight: 700; }
+.st-page-head button { font-size:var(--wz-text-title); background: transparent; color: var(--wz-text); }
 .st-phone.st-in-page .st-index { display: none; }
 .st-phone:not(.st-in-page) .st-page { display: none; }
 .st-attention { margin-bottom: 4px; }
-.st-attention button { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 56px; padding: 10px 4px; border-bottom: 1px solid var(--wz-border); background: transparent; color: var(--wz-warning); font-size: 16px; font-weight: 600; text-align: left; }
+.st-attention button { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 56px; padding: 10px 4px; border-bottom: 1px solid var(--wz-border); background: transparent; color: var(--wz-warning); font-size:var(--wz-text-lg); font-weight: 600; text-align: left; }
 .st-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .st-actions button { padding: 10px 16px; border: 1px solid var(--wz-border); border-radius: 12px; background: var(--wz-surface-raised); color: var(--wz-text); }
 .st-actions .ghost { background: transparent; }
-.st-store-hint { font-size: 13px; color: var(--wz-text-secondary); }
+.st-store-hint { font-size:var(--wz-text-sm); color: var(--wz-text-secondary); }
 .st-store-hint button { padding: 0 8px; text-decoration: underline; background: transparent; color: var(--wz-accent); }
 .st-info summary, .st-advanced summary { display: flex; align-items: center; cursor: pointer; color: var(--wz-text-secondary); }
 .st-info summary { width: 48px; justify-content: center; border-radius: 50%; background: var(--wz-surface); }
 .st-confirm-scrim { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; background: color-mix(in srgb, var(--wz-base) 75%, transparent); }
 .st-confirm { width: min(420px, 100%); padding: 20px; border-radius: 20px; border: 1px solid var(--wz-border); background: linear-gradient(var(--wz-overlay), var(--wz-overlay)), var(--wz-base); }
-.st-confirm h3 { font-size: 20px; margin: 0 0 12px; }
-.st-confirm p { color: var(--wz-text-secondary); font-size: 14px; }
+.st-confirm h3 { font-size:var(--wz-text-heading); margin: 0 0 12px; }
+.st-confirm p { color: var(--wz-text-secondary); font-size:var(--wz-text-md); }
 .dsettings .st-root { overflow: hidden; padding-bottom: 16px; }
 .st-desktop { display: grid; grid-template-columns: 280px minmax(0, 1fr); height: 100%; gap: 24px; }
 .st-desktop .st-index { overflow-y: auto; padding-right: 16px; border-right: 1px solid var(--wz-border); }
@@ -137,14 +137,14 @@
 .tw-set .tw-row { padding-left: 18px; }
 /* About & updates: flat on the page. One update card when there is something to do, then two segmented choices.
  * Nothing boxed inside a box; type large enough to read at arm's length; every target ≥ 48px. */
-.st-hint { margin: 0 4px 16px; font-size: 14px; line-height: 1.45; color: var(--wz-text-secondary); }
+.st-hint { margin: 0 4px 16px; font-size:var(--wz-text-md); line-height: 1.45; color: var(--wz-text-secondary); }
 .st-hint { margin-top: 10px; }
 /* The update card: one look for Update, Updating…, Couldn’t update and Reload; only its words change. */
 .osu-card { display: flex; align-items: center; gap: 12px; margin: 0 0 18px; padding: 16px 14px 16px 18px; border-radius: 20px; background: var(--wz-accent-soft); color: var(--wz-text); }
 .osu-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.osu-tx b { font-size: 17px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; text-wrap: balance; }
-.osu-tx > span { font-size: 15px; line-height: 1.35; color: var(--wz-text-secondary); text-wrap: balance; }
-.st-root[data-settings-root] button.osu-go { flex: none; min-height: 48px; min-width: 88px; padding: 10px 18px; border: 0; border-radius: 99px; background: var(--wz-accent); color: var(--wz-base); font-size: 16px; font-weight: 700; touch-action: manipulation; }
+.osu-tx b { font-size:var(--wz-text-heading); font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; text-wrap: balance; }
+.osu-tx > span { font-size:var(--wz-font-size); line-height: 1.35; color: var(--wz-text-secondary); text-wrap: balance; }
+.st-root[data-settings-root] button.osu-go { flex: none; min-height: 48px; min-width: 88px; padding: 10px 18px; border: 0; border-radius: 99px; background: var(--wz-accent); color: var(--wz-base); font-size:var(--wz-text-lg); font-weight: 700; touch-action: manipulation; }
 .st-root[data-settings-root] button.osu-go:disabled { opacity: .5; }
 .st-root .osu-card button:focus:not(:focus-visible) { outline: none; }
 .st-root .osu-card button:focus-visible { outline: 2px solid color-mix(in srgb, var(--wz-accent) 70%, transparent); outline-offset: 2px; }
@@ -152,13 +152,13 @@
 /* No box on tap; a soft rounded ring only for keyboard focus. */
 /* Fixed hues so the three lanes read apart on every skin, light or dark; text stays the skin's own ink. */
 .st-seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px; border-radius: 18px; background: var(--wz-surface); }
-.st-seg button { min-height: 48px; padding: 8px 12px; border: 0; border-radius: 14px; background: transparent; color: var(--wz-text-secondary); font-size: 16px; font-weight: 600; touch-action: manipulation; }
+.st-seg button { min-height: 48px; padding: 8px 12px; border: 0; border-radius: 14px; background: transparent; color: var(--wz-text-secondary); font-size:var(--wz-text-lg); font-weight: 600; touch-action: manipulation; }
 .st-seg button[aria-checked="true"] { background: var(--wz-accent); color: var(--wz-base); font-weight: 700; }
 .st-seg button:disabled { opacity: .6; }
 /* Look: the skin picker sits flat on the page under a plain heading. */
 .st-root .sk-row { padding: 0; margin: 0 0 8px; }
 .st-root .sk-row .sk-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding: 0; margin: 0 4px 6px; }
-.st-root .sk-row .sk-head small { font-size: 14px; font-weight: 500; color: var(--wz-text-secondary); }
+.st-root .sk-row .sk-head small { font-size:var(--wz-text-md); font-weight: 500; color: var(--wz-text-secondary); }
 /* Phone: the dock floats over the sheet's foot, so the last line must scroll clear of it. */
 .st-phone { padding-bottom: calc(104px + env(safe-area-inset-bottom)); }
 .st-desktop .st-seg { max-width: 360px; }
@@ -166,8 +166,8 @@
 
 /* Minimal: feature modules keep their own markup, but nothing reads as a box on the page. */
 .st-root .us-row { padding: 12px 4px; margin: 0; border: 0; border-bottom: 1px solid var(--wz-border); border-radius: 0; background: transparent; }
-.st-root .us-t b { font-size: 16px; }
-.st-root .st-usage .st-empty { padding: 14px 4px; font-size: 15px; }
+.st-root .us-t b { font-size:var(--wz-text-lg); }
+.st-root .st-usage .st-empty { padding: 14px 4px; font-size:var(--wz-font-size); }
 .st-root .my-skin-row { margin: 0; }
 .st-root .sk-row { border-bottom: 1px solid var(--wz-border); padding-bottom: 16px; }
 .st-root .st-chats-options .st-row { gap: 14px; }
@@ -175,14 +175,14 @@
 
 /* About & updates without a card: one quiet line naming what is installed; the choices sit under plain labels. */
 .osu-sec { margin-top: 26px; }
-.osu-lbl { display: block; margin: 0 4px 8px; font-size: 13px; font-weight: 650; letter-spacing: .02em; color: var(--wz-text-muted); }
+.osu-lbl { display: block; margin: 0 4px 8px; font-size:var(--wz-text-sm); font-weight: 650; letter-spacing: .02em; color: var(--wz-text-muted); }
 
 /* My skin: the last tile of the grid, same size, dashed; ringed in ink while worn. Its controls open under the grid. */
-.st-root .skp-my .skp-mini-my { background: transparent; box-shadow: none; border: 0; outline: 1.5px dashed color-mix(in srgb, var(--ink) 40%, transparent); outline-offset: -1.5px; }
-.st-root .skp-my[aria-expanded="true"] .skp-mini-my, .st-root .skp-my.worn .skp-mini-my { outline-color: var(--ink); }
+.st-root .skp-my .skp-mini-my { background: transparent; box-shadow: none; border: 0; outline: 1.5px dashed color-mix(in srgb, var(--wz-text) 40%, transparent); outline-offset: -1.5px; }
+.st-root .skp-my[aria-expanded="true"] .skp-mini-my, .st-root .skp-my.worn .skp-mini-my { outline-color: var(--wz-text); }
 .st-root .skp-my.worn .skp-mini-my { outline-style: solid; }
-.st-root .skp-my .skp-plus { left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; background: linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat, linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat; color: color-mix(in srgb, var(--ink) 55%, transparent); }
-.st-root .skp-my:focus-visible .skp-mini-my { outline: 2px solid color-mix(in srgb, var(--ink) 70%, transparent); }
+.st-root .skp-my .skp-plus { left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; background: linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat, linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat; color: color-mix(in srgb, var(--wz-text) 55%, transparent); }
+.st-root .skp-my:focus-visible .skp-mini-my { outline: 2px solid color-mix(in srgb, var(--wz-text) 70%, transparent); }
 .st-root .ms-panel { border-bottom: 1px solid var(--wz-border); }
 .st-root .ms-panel .my-skin-row { margin: 0; border-bottom: 0; flex-wrap: wrap; }
 .st-root .ms-panel .my-skin-row.worn { box-shadow: none; }
@@ -199,7 +199,7 @@
 /* Family first, then its colours: four compact family tiles, never the full palette catalogue. */
 .st-root .skp.skp-families { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 24px; }
 .st-root .skp-families .skp-mini { aspect-ratio: 1; border-radius: 12px; }
-.st-root .skp-families .skp-nm { font-size: 12px; }
+.st-root .skp-families .skp-nm { font-size:var(--wz-text-sm); }
 .st-root .skp-colours { margin-bottom: 20px; }
 /* Settings › Resources: the Home resource bars (core/resources.js, WosResources.bars), left-aligned on the page, in
  * the skin's own ink. Label | bar | value per row; AI first, then Compute split by machine. Amber under a quarter
@@ -207,13 +207,13 @@
 .st-root .st-res .rs-barsw.rs-widget.wz-home-widget { display: flex; flex-direction: column; gap: 22px; width: 100%; max-width: 480px; margin: 4px 0 0; padding: 0 4px; background: none; border: 0; box-shadow: none; overflow: visible; border-radius: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .st-res .rs-bg { --dc: var(--wz-text); display: flex; flex-direction: column; gap: 9px; }
 .st-res .rs-bg-hw { padding-top: 14px; border-top: 1px solid var(--wz-border); }
-.st-res .rs-gh { display: flex; align-items: baseline; gap: 6px; margin: 0 0 4px; font-size: 13px; }
+.st-res .rs-gh { display: flex; align-items: baseline; gap: 6px; margin: 0 0 4px; font-size:var(--wz-text-sm); }
 .st-res .rs-gh b { font-weight: 650; color: var(--wz-text); }
-.st-res .rs-gh span { font-size: 12px; color: var(--wz-text-secondary); }
+.st-res .rs-gh span { font-size:var(--wz-text-sm); color: var(--wz-text-secondary); }
 .st-root[data-settings-root] .st-res button.rs-br { display: grid; grid-template-columns: 64px minmax(60px, 1fr) 104px; align-items: center; column-gap: 10px; width: 100%; min-width: 0; min-height: 36px; padding: 0; border: 0; border-radius: 0; background: none; color: inherit; font: inherit; text-align: left; -webkit-tap-highlight-color: transparent; }
 .st-res .rs-br:active { opacity: .7; }
-.st-res .rs-bl { font-size: 14px; font-weight: 500; color: var(--wz-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.st-res .rs-bv { font-size: 13px; font-weight: 600; text-align: right; color: var(--wz-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.st-res .rs-bl { font-size:var(--wz-text-md); font-weight: 500; color: var(--wz-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-res .rs-bv { font-size:var(--wz-text-sm); font-weight: 600; text-align: right; color: var(--wz-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .st-res .rs-bt { display: flex; gap: 2px; height: 8px; }
 .st-res .rs-bg-hw .rs-bt { height: 10px; }
 .st-res .rs-bs { position: relative; min-width: 8px; height: 100%; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--dc) 16%, transparent); }
@@ -227,12 +227,12 @@
 .st-res .rs-bv.rs-crit { color: var(--wz-danger); }
 .st-res .rs-br-off .rs-bv { color: var(--wz-text-secondary); text-decoration: underline; text-underline-offset: 2px; }
 .st-res .rs-br-off .rs-bs { background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--wz-text) 18%, transparent) 0 4px, transparent 4px 7px); }
-.st-res .rs-lg { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 5px; font-size: 12px; color: var(--wz-text-secondary); }
+.st-res .rs-lg { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 5px; font-size:var(--wz-text-sm); color: var(--wz-text-secondary); }
 .st-res .rs-lg span { display: inline-flex; align-items: center; gap: 5px; }
 .st-res .rs-lg i { width: 8px; height: 8px; border-radius: 2px; background: var(--dc); }
 
 /* Settings › Look › Window opacity */
 .wg-section .wg-row { min-height: 44px; border-bottom: 0; }
-.wg-section [data-wg-val] { flex: none; font-variant-numeric: tabular-nums; font-weight: 650; color: var(--wz-text, var(--ink)); }
-.wg-section .wg-range { display: block; width: 100%; min-height: 44px; margin: 0; accent-color: var(--wz-accent, var(--violet-2, #8f63ff)); cursor: pointer; }
-.wg-section .wg-reset { min-height: 44px; padding: 6px 14px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--ink-2); font: inherit; font-size: 13px; cursor: pointer; }
+.wg-section [data-wg-val] { flex: none; font-variant-numeric: tabular-nums; font-weight: 650; color: var(--wz-text, var(--wz-text)); }
+.wg-section .wg-range { display: block; width: 100%; min-height: 44px; margin: 0; accent-color: var(--wz-accent, var(--violet-2, var(--wz-accent))); cursor: pointer; }
+.wg-section .wg-reset { min-height: 44px; padding: 6px 14px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--wz-text-secondary); font: inherit; font-size:var(--wz-text-sm); cursor: pointer; }

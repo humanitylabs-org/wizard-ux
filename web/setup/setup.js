@@ -159,7 +159,6 @@
 
   /* ---------------- layers + Back ---------------- */
   const WA = window.WizardApp;
-  let menuHold = null, sheetHold = null;
   function openPhone() {
     if (S.screen === 'phone') return;
     S.screen = 'phone'; S.opErr = '';
@@ -177,10 +176,12 @@
     log('screen:list'); if (!ioList) loadList(); else renderList();
     return true;
   }
-  function openMenu() { if (S.menu) return; S.menu = true; $('menu').hidden = false; $('scrim').hidden = false; menuHold = WA?.back.push(() => { closeMenu(true); return true; }); }
-  function closeMenu(fromBack) { if (!S.menu) return; S.menu = false; $('menu').hidden = true; if (!S.sheet) $('scrim').hidden = true; const h = menuHold; menuHold = null; if (!fromBack) h?.release(); }
-  function openSheet() { closeMenu(); S.sheet = true; $('sheet').hidden = false; $('scrim').hidden = false; sheetHold = WA?.back.push(() => { closeSheet(true); return true; }); }
-  function closeSheet(fromBack) { if (!S.sheet) return; S.sheet = false; $('sheet').hidden = true; $('scrim').hidden = true; const h = sheetHold; sheetHold = null; if (!fromBack) h?.release(); }
+  function openMenu() { if (S.menu) return; S.menu = true; window.WzSheet.open($('menu')); }
+  function closeMenu() { if (!S.menu) return; window.WzSheet.close($('menu')); S.menu = false; }
+  $('menu').addEventListener('close', () => { S.menu = false; });
+  function openSheet() { closeMenu(); S.sheet = true; window.WzSheet.open($('sheet')); }
+  function closeSheet() { if (!S.sheet) return; window.WzSheet.close($('sheet')); S.sheet = false; }
+  $('sheet').addEventListener('close', () => { S.sheet = false; });
   WA?.back.register({ canGoBack: () => S.screen === 'phone', back: () => closePhone() });
   window.__setup = { get state() { return S; }, get polling() { return !!pollT; }, get inView() { return inView; }, back: () => WA ? WA.back : null, layout };
 
@@ -196,7 +197,7 @@
   const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
   function renderList() {
     const L = S.list, owner = ownerName();
-    let h = '<h1>Setup</h1>';
+    let h = '<header class="wz-head"><h1>Setup</h1></header>';
     if (S.firstRun) h += `<p class="greet">${owner ? `Hi ${esc(owner)}. ` : ''}Make this Wizard yours.</p>`;
     if (L.status === 'denied') { $('list').innerHTML = h + '<div class="state"><p>Only Wizard’s owner can use Setup.</p></div>'; return; }
     if (L.status === 'missing') { $('list').innerHTML = h + '<div class="state"><p>This Wizard doesn’t have Setup yet.</p><p class="muted">Update Wizard, then come back.</p></div>'; return; }
@@ -205,12 +206,12 @@
     const line = st === 'done' && item.phone_ready === true ? 'Ready to open on your phone.'
       : { loading: 'Checking…', neterr: 'Can’t check right now.', todo: 'From anywhere, not just at home.', in_progress: 'Not finished. Pick up where you left off.', done: 'Your phone is connected.' }[st] || 'From anywhere, not just at home.';
     const end = st === 'done' ? `<svg class="okmark" viewBox="0 0 24 24" aria-label="Done"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>` : st === 'in_progress' ? `<span class="dot" aria-label="In progress"></span>${CHEV}` : CHEV;
-    h += `<div class="rows"><button class="row" data-act="open-phone" data-state="${esc(st)}"><span class="ic" aria-hidden="true">📱</span><span class="bd"><b>${esc(str(item.title) || 'Use Wizard on your phone')}</b><small>${line}</small></span><span class="end">${end}</span></button></div>`;
-    if (L.status === 'neterr') h += '<button class="link" data-act="retry-list">Try again</button>';
+    h += `<div class="rows"><button class="row wz-row" data-act="open-phone" data-state="${esc(st)}"><span class="ic" aria-hidden="true">📱</span><span class="bd"><b>${esc(str(item.title) || 'Use Wizard on your phone')}</b><small>${line}</small></span><span class="end">${end}</span></button></div>`;
+    if (L.status === 'neterr') h += '<button class="link wz-button secondary" data-act="retry-list">Try again</button>';
     if (L.status === 'ok') h += window.WosRecommended?.html() || '';
     h += '<p class="foot custom" data-customize>Everything you see is customizable. Try asking your Wizard for one change.</p>';
     h += `<p class="foot">${phoneLayout && tourPending() ? 'The 30-second tour starts when you go back to Home.' : 'You can come back to Setup any time.'}</p>`;
-    if (tourAvailable()) h += '<button class="link" data-act="tour">Show the 30-second tour</button>';
+    if (tourAvailable()) h += '<button class="link wz-button secondary" data-act="tour">Show the 30-second tour</button>';
     $('list').innerHTML = h;
   }
 
@@ -220,8 +221,8 @@
     : kind === 'attn' ? `<span class="gl attn" data-g="attn" aria-label="Needs you">!</span>`
     : `<span class="gl ${kind === 'locked' ? 'locked' : 'todo'}" data-g="${kind}">${n}</span>`;
   const shown = u => { try { const x = new URL(u); return (x.host + (x.pathname === '/' ? '' : x.pathname) + x.search); } catch (e) { return u; } };
-  const urlRow = u => `<div class="url" data-url="${esc(u)}"><span class="u" title="${esc(u)}" data-full="${esc(shown(u))}">${esc(shown(u))}</span><button class="copy" data-act="copy" data-url="${esc(u)}">Copy</button></div>`;
-  const out = (cls, u, label) => `<a class="btn ${cls}" href="${esc(u)}" target="_blank" rel="noopener" data-out>${label}</a>`;
+  const urlRow = u => `<div class="url" data-url="${esc(u)}"><span class="u" title="${esc(u)}" data-full="${esc(shown(u))}">${esc(shown(u))}</span><button class="copy wz-button secondary" data-act="copy" data-url="${esc(u)}">Copy</button></div>`;
+  const out = (cls, u, label) => `<a class="btn ${cls} wz-button" href="${esc(u)}" target="_blank" rel="noopener" data-out>${label}</a>`;
   const qr = u => `<div class="qr" data-qr="${esc(u)}" role="img" aria-label="QR code for ${esc(shown(u))}"><canvas></canvas></div>`;
   const step = (n, g, title, body, extra = '', cls = '') => `<div class="step ${cls}" data-step="${n}">${glyph(g, n)}<div class="sb"><h2>${title}</h2>${body}${extra}</div></div>`;
 
@@ -239,9 +240,9 @@
       https: '<p>One switch left. Tap below, then press Enable HTTPS on the page that opens. Wizard notices when it’s done.</p>',
     }[d.step] || '';
     const failed = S.opErr || err;
-    if (failed) return step(1, 'attn', T, body + `<p class="err">${esc(failed)}</p>`, '<div class="act"><button class="btn primary" data-act="start">Try again</button></div>');
-    if (d.step === 'off') return step(1, 'todo', T, body, '<div class="act"><button class="btn primary" data-act="start">Sign in with Tailscale</button></div>');
-    if (d.step === 'signin') return step(1, 'working', T, body, `<div class="act">${auth ? out('primary', auth, 'Open the sign-in page') : '<button class="btn primary" data-act="start">Open the sign-in page</button>'}</div>`);
+    if (failed) return step(1, 'attn', T, body + `<p class="err">${esc(failed)}</p>`, '<div class="act"><button class="btn primary wz-button" data-act="start">Try again</button></div>');
+    if (d.step === 'off') return step(1, 'todo', T, body, '<div class="act"><button class="btn primary wz-button" data-act="start">Sign in with Tailscale</button></div>');
+    if (d.step === 'signin') return step(1, 'working', T, body, `<div class="act">${auth ? out('primary', auth, 'Open the sign-in page') : '<button class="btn primary wz-button" data-act="start">Open the sign-in page</button>'}</div>`);
     if (d.step === 'https') return step(1, 'attn', T, body, https ? `<div class="act">${out('primary', https, 'Turn on secure addresses')}</div>` : '');
     return step(1, 'todo', T, body);
   }
@@ -278,7 +279,7 @@
       if (P.banner) h += '<div class="banner" role="status">Wizard can’t check on this right now. Trying again.</div>';
       h += '<div class="steps">';
       if (P.status === 'loading') h += step(1, 'working', 'Sign in to Tailscale on this Wizard', '<p>Checking…</p>') + step(2, 'locked', 'Get Tailscale on your phone', '', '', 'locked') + step(3, 'locked', 'Open Wizard on your phone', '', '', 'locked');
-      else if (P.status === 'neterr') h += step(1, 'attn', 'Sign in to Tailscale on this Wizard', '<p>Can’t check right now.</p>', '<div class="act"><button class="btn primary" data-act="retry-phone">Try again</button></div>') + step(2, 'locked', 'Get Tailscale on your phone', '', '', 'locked') + step(3, 'locked', 'Open Wizard on your phone', '', '', 'locked');
+      else if (P.status === 'neterr') h += step(1, 'attn', 'Sign in to Tailscale on this Wizard', '<p>Can’t check right now.</p>', '<div class="act"><button class="btn primary wz-button" data-act="retry-phone">Try again</button></div>') + step(2, 'locked', 'Get Tailscale on your phone', '', '', 'locked') + step(3, 'locked', 'Open Wizard on your phone', '', '', 'locked');
       else h += step1(d) + step2(d) + step3(d);
       h += '</div>';
     }

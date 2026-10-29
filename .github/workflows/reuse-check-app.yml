@@ -36,3 +36,14 @@ jobs:
         env:
           APP_REPO: ${{ github.workspace }}/app
         run: node wizard-shared/tools/reuse-check-app.mjs
+      - name: Read canonical style policy (trusted source, not app PR code)
+        uses: actions/checkout@v4
+        with:
+          repository: humanitylabs-org/wizard-os
+          ref: main
+          persist-credentials: false
+          path: wizard-style
+      - name: Style ratchet (legacy warns, added lines fail)
+        env:
+          STYLE_BASE: ${{ github.event.pull_request.base.sha }}
+        run: python3 wizard-style/style/check_style.py app --policy wizard-style/style/style-policy.json --base "$STYLE_BASE"

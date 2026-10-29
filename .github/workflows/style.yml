@@ -1,0 +1,26 @@
+name: Wizard style ratchet
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  style:
+    name: Wizard style (changed lines)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          path: app
+      - uses: actions/checkout@v4
+        with:
+          repository: humanitylabs-org/wizard-os
+          ref: main
+          persist-credentials: false
+          path: wizard-style
+      - name: Warn legacy, fail additions and changed stale kit copies
+        env:
+          STYLE_BASE: ${{ github.event.pull_request.base.sha }}
+        run: python3 wizard-style/style/check_style.py app --policy wizard-style/style/style-policy.json --base "$STYLE_BASE"

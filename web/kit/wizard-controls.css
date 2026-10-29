@@ -1,0 +1,28 @@
+/* Generated from ui.css; control classes only, no global reset or aliases. */
+.wz-list { list-style: none; margin: 0; padding: 0; }
+.wz-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px; border-radius: var(--wz-radius); text-align: left; transition: background 140ms; }
+.wz-row:active { background: var(--wz-surface); }
+.wz-row:hover { background: var(--wz-surface); }
+.wz-row .wz-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.wz-row .wz-main b { font-size: 15px; font-weight: 600; color: var(--wz-text); overflow-wrap: anywhere; }
+.wz-row .wz-main small { font-size: 13px; color: var(--ink-3); }
+.wz-tile { flex: none; width: 36px; height: 36px; border-radius: var(--r-tile); display: grid; place-items: center; font-size: 18px; background: var(--wz-surface); }
+.wz-row:disabled { opacity: .6; cursor: progress; }
+.wz-field, .wz-input { flex: 1; min-width: 0; height: 44px; padding: 0 16px; border-radius: var(--r-pill); border: 1px solid var(--wz-border); outline: 0; background: var(--wz-surface); color: var(--wz-text); font-size: 15px; }
+.wz-field::placeholder, .wz-input::placeholder { color: var(--ink-3); }
+.wz-field:focus, .wz-input:focus { border-color: color-mix(in srgb, var(--wz-accent) 60%, transparent); }
+.wz-button { min-height: 44px; padding: 8px 16px; border-radius: var(--r-tile); background: var(--wz-accent); color: var(--wz-on-accent); font-weight: 600; }
+.wz-button.secondary { background: var(--wz-surface); color: var(--wz-text); border: 1px solid var(--wz-border); }
+.wz-button:disabled { opacity: .45; cursor: default; }
+.wz-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--r-pill); font-size: 13px; font-weight: 650; color: var(--ink-2); background: var(--wz-surface); white-space: nowrap; }
+.wz-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.wz-pill.ok { color: var(--wz-success, var(--wz-accent)); }
+.wz-pill.warn { color: var(--wz-warning, var(--danger)); }
+.wz-pill.off { color: var(--ink-3); }
+.wz-button.destructive { background: color-mix(in srgb, var(--wz-danger) 16%, var(--wz-base)); color: var(--wz-danger); border: 1px solid var(--wz-danger); }
+.wz-icon-button { display: inline-grid; place-items: center; min-width: var(--wz-target); min-height: var(--wz-target); border-radius: var(--wz-radius-tile); background: var(--wz-surface); color: var(--wz-text); }
+.wz-icon-button svg { width: var(--wz-icon-size); height: var(--wz-icon-size); }
+.wz-pill.error { color: var(--wz-danger); }
+.wz-icon-button.ghost { background: none; }
+.wz-icon-button.caption { display: inline-flex; flex-direction: column; justify-content: center; gap: var(--wz-space-1); white-space: nowrap; font-size: var(--wz-text-sm); }
+.wz-button[hidden], .wz-row[hidden], .wz-icon-button[hidden], .wz-input[hidden] { display: none !important; }

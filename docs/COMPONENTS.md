@@ -1,5 +1,7 @@
 # Shared components
 
+**Appearance decisions:** [the canonical Wizard app style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md). This file is an implementation inventory, not a competing visual specification. REUSE/EXTEND/NEW still applies.
+
 **One implementation per capability.** NEW: `web/core/` + row, never an app.
 
 CI: [reuse gate](app-reuse-gate.md).
