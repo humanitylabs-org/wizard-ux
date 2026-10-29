@@ -39,7 +39,7 @@ import android.window.OnBackInvokedDispatcher;
  *  - Only the private origin loads inside the app; any other link opens in the phone's browser.
  *  - The microphone is granted to the private origin only, after Android's own permission prompt.
  */
-public class MainActivity extends Activity {
+public class MainActivity extends androidx.fragment.app.FragmentActivity {
     static final String UA_TAG = " WizardOS-Android/" + BuildConfig.VERSION_NAME;
     private static final int REQ_MIC = 41;
     private static final int REQ_FILE = 42;
@@ -112,6 +112,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        ScrollCaptureCrashGuard.install();
         if (ai.wizards.os.device.AppState.origin(this).isEmpty()) {
             startActivity(new Intent(this, ConnectActivity.class)); finish(); return;
         }
@@ -172,7 +173,7 @@ public class MainActivity extends Activity {
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(false);
         s.setSupportMultipleWindows(false);
-        s.setUserAgentString(s.getUserAgentString() + UA_TAG);
+        s.setUserAgentString(s.getUserAgentString() + UA_TAG + " WizardOS-DocScroll");
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         web.addJavascriptInterface(new Bridge(), "WizardOSNative");
@@ -186,12 +187,13 @@ public class MainActivity extends Activity {
         if (photos != null) photos.detach();
         photos = ai.wizards.os.photos.PhotosBridge.install(this, web); // status/settings only; no media or credentials
         ai.wizards.os.photos.BackupScheduler.schedule(this);
+        if (device != null) device.onPageStarted();
         device = new ai.wizards.os.device.DeviceBridge(this, web);
         web.addJavascriptInterface(device, "WizardOSDevice");
         if (mizel != null) mizel.detach();
         mizel = ai.wizards.os.mizel.MizelBridge.install(web, ai.wizards.os.device.AppState.origin(this));
         if (apps != null) apps.detach();
-        apps = ai.wizards.os.apps.AppsBridge.install(this, web);
+        apps = ai.wizards.os.apps.AppsBridge.install(this, web, device);
         if (audio != null) audio.detach();
         audio = ai.wizards.os.audio.BackgroundAudioBridge.install(this, web);
 
@@ -253,7 +255,6 @@ public class MainActivity extends Activity {
 
             @Override
             public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
-                if (view instanceof SelectionWebView) ((SelectionWebView)view).refreshScrollProxy();
                 // A commit (also a same-document hop). Never fires for a load that was abandoned or still hangs.
                 if (isWeb(url) && !mainFailed && sameHost(url, wantUrl) && reach != null && reach.isShowing() && !reach.isOffline()) landed();
             }
@@ -267,15 +268,15 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
-                if (view instanceof SelectionWebView) ((SelectionWebView)view).scrollPageStarted();
+                if (device != null) device.onPageStarted();
                 pageUrl = url;
                 screenCaptureId = null;
                 setKeepAwake(false);
+                if (apps != null) apps.onVaultPageStarted();
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                if (view instanceof SelectionWebView) ((SelectionWebView)view).installScrollProxy();
                 topSent = -1; cutoutSent = -1; reportTop(topPx); reportCutout(cutoutPx); // a reload starts fresh: push both again
             }
 
@@ -323,6 +324,7 @@ public class MainActivity extends Activity {
     }
 
     @SuppressWarnings("deprecation")
+    @android.annotation.SuppressLint("MissingSuperCall") // Back never exits: super would finish the activity
     @Override
     public void onBackPressed() {
         handleBack(); // API < 33; never calls super, so Back can never finish the activity
@@ -655,7 +657,7 @@ public class MainActivity extends Activity {
         if (!(this instanceof AppSessionActivity)) current = new java.lang.ref.WeakReference<>(this);
         if (device == null) return;
         device.onStart();
-        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.front());
+        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.shellFront());
         ai.wizards.os.everywhere.EverywhereOutbox.get(this).pump();
         ai.wizards.os.mizel.MeetingRecorderService.recover(this); // a meeting cut off by a process death is closed and uploaded
     }
@@ -663,7 +665,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onStop() {
         if (device != null) device.onStop();
-        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.front());
+        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.shellFront());
         super.onStop();
     }
 
@@ -716,7 +718,6 @@ public class MainActivity extends Activity {
     public void onWindowFocusChanged(boolean hasFocus) {
         if(!hasFocus)ScrollCaptureDiagnostics.arm("window-focus-lost");
         ScrollCaptureDiagnostics.record("Activity.onWindowFocusChanged",ScrollCaptureDiagnostics.fields("hasFocus",hasFocus));
-        if(web!=null) {web.recordProxyState();web.refreshScrollProxy();}
         super.onWindowFocusChanged(hasFocus);
         if(hasFocus)ScrollCaptureDiagnostics.resumed(this);
         if (hasFocus && immersive) applyImmersive(true); // a dialog or the shade can bring the bars back
@@ -797,7 +798,6 @@ public class MainActivity extends Activity {
     protected void onPause() {
         ScrollCaptureDiagnostics.arm("activity-pause");
         ScrollCaptureDiagnostics.record("Activity.onPause",ScrollCaptureDiagnostics.fields());
-        if(web!=null)web.recordProxyState();
         if (web != null && !(this instanceof AppSessionActivity)) web.evaluateJavascript(WizardLook.READ_JS, raw -> WizardLook.save(this, raw)); // the reach/Connect screens wear the last skin
         if (this instanceof AppSessionActivity && web != null) web.evaluateJavascript("window.__wosSessionCheckpoint?.()", null);
         if (mizel != null) mizel.setPcmForeground(false);

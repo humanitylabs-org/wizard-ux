@@ -2,7 +2,20 @@
 
 System app `setup` (title **Setup**), listed beside Chats. Contract: wizard-os `spec/PHONE_SETUP.md` → "Setup app".
 Design: Claude Fable, two rounds on 14 Oct 2026 (layout, copy, every state, first-run order). Archimedes built it as
-specified; the only deliberate deviation is the deep-link launch rule below.
+specified; install-scoped alongside onboarding and the deep-link launch rule are documented below.
+
+## Existing-Hermes alongside launch
+When the Setup overview explicitly returns `launch_mode: "alongside"`, neither shell auto-opens Setup
+or starts the gesture tour. It does not mark either as completed: the launcher still opens Setup, and
+the phone Setup page still offers its explicit tour button. Absent/unknown modes retain VM onboarding.
+Host-managed phone access ready before a first recorded visit uses the checklist's `phone_ready` hint
+to say "Ready to open on your phone", without claiming that a phone connected.
+
+Regression: `node qa-alongside-launch.cjs` against `tools/fake-setup-api.cjs` exercises both shells,
+manual Setup/tour and empty/populated historical sections. Companion Agent Service
+`qa/agent-parity/history-sections.mjs` uses real Service + UX with disposable main, host-profile,
+container and restricted gateways for the shared list-rendering behavior. These are synthetic fixtures,
+not existing private-agent sessions or installed-upgrade evidence.
 
 ## What it is
 - **Checklist** (root): one item now, "Use Wizard on your phone". Later setup items slot into the same list.

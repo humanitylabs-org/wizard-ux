@@ -45,6 +45,8 @@ public final class DeviceBridge implements RecorderService.Listener {
 
     private final Activity activity;
     private final WebView web;
+    private final ai.wizards.os.identity.WizardId wizardId;
+    private long identityDocument;
     private final Handler main = new Handler(Looper.getMainLooper());
     private String pending; // JSON for WosDevice.handle once the page is ready
     private int tries;
@@ -52,11 +54,61 @@ public final class DeviceBridge implements RecorderService.Listener {
     public DeviceBridge(Activity activity, WebView web) {
         this.activity = activity;
         this.web = web;
+        wizardId = new ai.wizards.os.identity.WizardId((androidx.fragment.app.FragmentActivity)activity);
         if (!(activity instanceof ai.wizards.os.AppSessionActivity)) {
             RecorderService.setListener(this);
             Updater.attach(activity, this);
         }
         new Thread(() -> ShareStore.get(activity).prune(), "wizard-share-prune").start();
+    }
+
+    /** Called by the existing origin-scoped wizardDevicePort dispatcher, never a second JS interface. */
+    public boolean dispatchIdentity(String method, JSONObject params, java.util.function.Consumer<JSONObject> reply,
+            java.util.function.BooleanSupplier trusted) {
+        if (!java.util.Arrays.asList("identity.info", "identity.setup", "identity.sign", "identity.nip44_encrypt", "identity.nip44_decrypt", "view.capture").contains(method)) return false;
+        long document = identityDocument;
+        java.util.function.Consumer<JSONObject> answer = result -> {
+            if (document == identityDocument && trusted.getAsBoolean()) reply.accept(result);
+        };
+        if (!trusted.getAsBoolean()) return true;
+        if ("identity.info".equals(method)) { answer.accept(wizardId.info()); return true; }
+        if ("view.capture".equals(method)) { answer.accept(captureView(params)); return true; }
+        // Appearance-only values: never used for the sentence, event, signer or key.
+        web.evaluateJavascript(ai.wizards.os.WizardLook.READ_JS, encoded -> {
+            if (document != identityDocument || !trusted.getAsBoolean()) return;
+            ai.wizards.os.WizardLook.save(activity, encoded);
+            wizardId.colors(ai.wizards.os.WizardLook.identityColors(activity));
+            if ("identity.setup".equals(method)) wizardId.setup(answer);
+            else if ("identity.nip44_encrypt".equals(method) || "identity.nip44_decrypt".equals(method)) wizardId.nip44(params, "identity.nip44_encrypt".equals(method), params.optString("requester"), answer);
+            else { JSONObject event = params.optJSONObject("event"); if (event == null) answer.accept(denied()); else wizardId.sign(event, params.optString("requester"), answer); }
+        });
+        return true;
+    }
+    public void onPageStarted() { identityDocument++; wizardId.cancel(); }
+    private static JSONObject denied() {
+        try { return new JSONObject().put("denied",true); } catch (Exception e) { return new JSONObject(); }
+    }
+    @SuppressWarnings("deprecation")
+    private JSONObject captureView(JSONObject params) {
+        android.graphics.Bitmap bitmap = null;
+        try {
+            int x=0,y=0,w=web.getWidth(),h=web.getHeight();
+            if (params.has("rect")) {
+                JSONObject rect = params.getJSONObject("rect"); float scale = web.getScale();
+                double left=rect.getDouble("x"),top=rect.getDouble("y"),width=rect.getDouble("width"),height=rect.getDouble("height");
+                if (!Double.isFinite(left+top+width+height) || left<0 || top<0 || width<=0 || height<=0 ||
+                        (left+width)*scale>w || (top+height)*scale>h) return denied();
+                x=(int)Math.floor(left*scale); y=(int)Math.floor(top*scale);
+                w=(int)Math.ceil(width*scale); h=(int)Math.ceil(height*scale);
+            }
+            if (w<=0 || h<=0 || x+w>web.getWidth() || y+h>web.getHeight() || w>2048 || h>2048 || (long)w*h>4_000_000) return denied();
+            bitmap = android.graphics.Bitmap.createBitmap(w,h,android.graphics.Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas canvas = new android.graphics.Canvas(bitmap); canvas.translate(-x,-y); web.draw(canvas);
+            java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+            if (!bitmap.compress(android.graphics.Bitmap.CompressFormat.WEBP,85,bytes)) return denied();
+            return new JSONObject().put("webp_b64",Base64.encodeToString(bytes.toByteArray(),Base64.NO_WRAP)).put("width",w).put("height",h);
+        } catch (Exception e) { return denied(); }
+        finally { if (bitmap != null) bitmap.recycle(); }
     }
 
     /* ------------------------------------------------------------------ MainActivity hooks */
@@ -97,6 +149,7 @@ public final class DeviceBridge implements RecorderService.Listener {
     public void onStop() { AppState.setFront(activity,false); if (!AppState.front()) ReplyWatcher.kick(activity); if (!(activity instanceof ai.wizards.os.AppSessionActivity)) Updater.onStop(activity); }
     public void onResume() { if (!(activity instanceof ai.wizards.os.AppSessionActivity)) Updater.onResume(activity); WizardIdentity.refresh(activity); }
     public void onDestroy() {
+        onPageStarted();
         // A take still running (app swiped away) carries on; its notification's Stop/Send take over from here.
         AppState.setFront(activity,false);
         if (!(activity instanceof ai.wizards.os.AppSessionActivity)) { RecorderService.setListener(null); Updater.detach(activity); }

@@ -1,0 +1,43 @@
+/* Notifications in Chats: yellow one-message threads. The Chats bell goes (one inbox). */
+html[data-tweaks~="wizard/unified-inbox"] [data-chbell] { display: none !important; }
+html[data-tweaks~="wizard/unified-inbox"] { --ui-y: #f2c230; --ui-y-ink: #1d1600; }
+html[data-tweaks~="wizard/unified-inbox"]:is([data-color-scheme="light"], [data-skin="obsidian-light"]) { --ui-y: #b98a00; --ui-y-ink: #fff; }
+.ui-inbox { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 8px; }
+.ui-inbox[hidden], .ui-done[hidden] { display: none; }
+.ui-item { border-radius: 14px; background: color-mix(in srgb, var(--ui-y) 11%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-y) 45%, transparent); }
+.ui-item .ui-row { background: none; }
+.ui-item.new .ui-row .tp b { color: var(--ink) !important; font-weight: 700 !important; }
+.ui-item.new .ui-row .tp time { color: var(--ui-y) !important; font-weight: 700; }
+.ui-item.new .ui-row .pv { color: var(--ink-2) !important; }
+.ui-item .ui-ic { background: color-mix(in srgb, var(--ui-y) 22%, transparent) !important; color: var(--ui-y); }
+.ui-item .ui-ic svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* Snoozed and completed: quiet, like a snoozed thread; still yellow-edged so they read as notifications. */
+.ui-item.snoozed, .ui-item.done { background: none; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-y) 28%, transparent); opacity: .78; }
+.ui-snz { color: var(--ui-y); font-style: normal; }
+/* Ready says "None" only when there is truly nothing in it. */
+[data-slot="ready-top"]:has(> .ui-inbox) ~ .ch-none, [data-slot="ready-top"]:has(> .ui-inbox) ~ * .ch-none { display: none; }
+.ui-done { margin: 2px 0 8px; }
+.ui-done-btn { min-height: 34px; padding: 0 14px; border-radius: 99px; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink-2) !important; background: color-mix(in srgb, var(--ui-y) 10%, transparent) !important; border: 1px solid color-mix(in srgb, var(--ui-y) 35%, transparent) !important; cursor: pointer; }
+.ui-done .ui-inbox { margin-top: 6px; }
+/* Phone (his skins list Ready bottom-up, newest nearest the thumb): newest notification lowest too. */
+html:not([data-shell="desktop"]) .ch-list .ch-sec-b > [data-slot] > .ui-inbox { flex-direction: column-reverse; }
+
+/* The notification open in the chat window: one yellow message, its actions where a thread keeps them. */
+.ch-notif-thread .msg.ch-notif .bub { background: color-mix(in srgb, var(--ui-y) 13%, transparent) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-y) 50%, transparent) !important; border-radius: 16px; padding: 12px 14px; }
+.ch-notif-thread .ch-head .ti b { color: var(--ui-y); }
+.ch-notif-src { margin-left: 8px; color: var(--ui-y); font-size: 12px; }
+.ch-notif-thread [data-chact="resolve"] { color: var(--ui-y-ink) !important; background: var(--ui-y) !important; border-color: var(--ui-y) !important; }
+.ch-notif-thread [data-chact="resolve"] svg { stroke: currentColor; }
+/* The message above is the notification itself: no second copy as a reply bubble over the composer. */
+.ch-notif-thread .ch-reply { display: none !important; }
+
+/* Rows Chats lists among the chats (host list mode): same row, yellow-edged. */
+.ch-notif-wrap { border-radius: 14px; background: color-mix(in srgb, var(--ui-y) 11%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-y) 45%, transparent); margin: 2px 0; }
+.ch-notif-wrap .ch-notif-row { background: none; }
+.ch-notif-wrap:not(.later) .ch-notif-row .tp b { color: var(--ink) !important; font-weight: 700 !important; }
+.ch-notif-wrap:not(.later) .ch-notif-row .tp time { color: var(--ui-y) !important; font-weight: 700; }
+.ch-notif-wrap .ch-notif-row .pv { color: var(--ink-2) !important; }
+.ch-notif-wrap .ch-notif-ic { display: grid; place-items: center; background: color-mix(in srgb, var(--ui-y) 22%, transparent) !important; color: var(--ui-y); }
+.ch-notif-wrap .ch-notif-ic svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ch-notif-wrap.later { background: none; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-y) 28%, transparent); opacity: .78; }
+.ch-notif-snz { color: var(--ui-y) !important; font-style: normal; }
