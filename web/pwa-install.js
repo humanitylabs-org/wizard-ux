@@ -12,13 +12,15 @@
 
   const read = () => { try { return Number(localStorage.getItem(key)) || 0; } catch (_) { return 0; } };
   const dismiss = () => { try { localStorage.setItem(key, String(Date.now() + 86400000)); } catch (_) {} };
-  let deferred = null, host = null, root = null, busy = false, installed = false, dismissedHere = false, held = false;
+  let deferred = null, host = null, root = null, busy = false, installed = false, dismissedHere = false;
+  const holds = new Set();
+  const isHeld = () => holds.size > 0;
   const clear = () => { host?.remove(); host = root = null; };
 
   function render() {
     // No event means unknown state. It never warrants an install suggestion.
     // A real install capability outranks an inherited parent-container display mode.
-    if (!deferred || installed || held || dismissedHere || read() > Date.now()) { clear(); return; }
+    if (!deferred || installed || dismissedHere || isHeld() || read() > Date.now()) { clear(); return; }
     if (!document.body) { document.addEventListener('DOMContentLoaded', render, {once: true}); return; }
     if (!host) {
       host = document.createElement('aside');
@@ -59,9 +61,12 @@
     } finally { deferred = null; busy = false; render(); }
   }
 
-  // The phone tour (core/tour.js) holds the banner while it runs, so the banner (z-index 200) never covers the tour's
-  // own controls (Codex P2 on #569; same hold as Stable 0.3.61).
-  window.WizardPwaInstall = { ...(window.WizardPwaInstall || {}), hold(on) { held = !!on; render(); } };
+  // Overlays use named holds so one surface cannot release another surface's request. The original one-argument
+  // form remains the default hold used by the phone tour.
+  window.WizardPwaInstall = { ...(window.WizardPwaInstall || {}), hold(on, owner = 'default') {
+    if (on) holds.add(owner); else holds.delete(owner);
+    render();
+  } };
 
   window.addEventListener('beforeinstallprompt', event => {
     event.preventDefault();
