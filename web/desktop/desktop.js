@@ -407,6 +407,10 @@
     if (!a) return false;
     if (a.id === 'setup' && window.WosWelcome) { window.WosWelcome.open(); return true; } // Setup is the Welcome modal now
     if (a.id === 'pages') { const ex = !opts.fresh && findWin(w => w.app === 'pages'); if (ex) focusWin(ex.id); else newWin({app:'pages',appId:'pages'}, opts); return true; }
+    // A launcher link to one of the agent's Pages opens in the Pages window: a page is a sandboxed (opaque-origin)
+    // document, so a plain app frame can't read it and wrongly shows "can't show in a window".
+    const pageSlug = a.url && window.WosPages?.match(a.url);
+    if (pageSlug) { const ex = !opts.fresh && findWin(w => w.app === 'pages' && w.pageSlug === pageSlug); if (ex) focusWin(ex.id); else newWin({app:'pages',appId:'pages',pageSlug}, opts); return true; }
     if (a.url && !opts.setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openApp(a, { ...opts, setupChecked: true }));
     if (a.kind === 'chats') {
