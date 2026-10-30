@@ -919,7 +919,7 @@
   function replyAbout() {
     const f = focused(), fr = f && f.app === 'frame' && !homeOpen ? winEl(f.id)?.querySelector('iframe') : null;
     if (!fr) return toast('A', `Open an app, then ${MOD}A = Reply about it`, 1800);
-    try { if (!window.WizAppServices?.replyAbout?.(fr, window.WizScreen?.read(winEl(f.id)) || '')) toast('A', 'Nothing on screen to reply about', 1800); }
+    try { if (!window.WizAppServices?.replyAbout?.(fr, window.WizScreen?.read(winEl(f.id)?.querySelector('.wbody') || fr) || '')) toast('A', 'Nothing on screen to reply about', 1800); }
     catch (_) { toast('!', 'Couldn’t open Chats · nothing sent', 2200); }
   }
   function reloadCurrent() { if (homeOpen || !ws[cur].wins.length) return refreshHome(); const f = focused(); return f ? reloadWin(f.id) : refreshHome(); }
