@@ -22,3 +22,13 @@
 }
 .selmenu button:active { background: rgba(143, 99, 255, .26); }
 .selmenu svg { width: 19px; height: 19px; fill: none; stroke: var(--violet-2, #b99bff); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Reply to selected words in an app window (core/app-services.js): the same floating accent Reply as Morning Report. */
+.app-sel-reply {
+  position: fixed; left: 0; top: 0; z-index: 255; min-width: 72px; min-height: 44px; padding: 0 14px; border: 0;
+  border-radius: 12px; background: var(--wz-accent, var(--violet-2, #b99bff)); color: var(--wz-on-accent, var(--bg, #05030c));
+  font: 600 14px/1 system-ui, sans-serif; box-shadow: 0 4px 14px rgba(0, 0, 0, .28); cursor: pointer;
+  user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+}
+.app-sel-reply[hidden] { display: none; }
+@media (hover: hover) { .app-sel-reply:hover { opacity: .9; } }
