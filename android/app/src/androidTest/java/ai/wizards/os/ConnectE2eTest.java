@@ -70,7 +70,8 @@ public class ConnectE2eTest {
             other.wizard = false;
             device.findObject(By.desc("Wizard address")).setText(other.origin());
             device.findObject(By.text("Connect")).click();
-            visible("Couldn't reach that Wizard. Check the address and that Tailscale is on, then try again.");
+            // It answered, so the message names what it answered (WizardProbe.message), not a generic "couldn't reach".
+            visible("localhost:" + other.socket.getLocalPort() + " answered, but it isn't a Wizard.");
             assertEquals(fake.origin(), ServerSettings.origin(c));
             other.wizard = true;
             device.findObject(By.text("Connect")).click(); visible("Fixture home"); foreground();

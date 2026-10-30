@@ -44,6 +44,8 @@ public final class ConnectActivity extends Activity {
     private TailscaleGuideView guide;
     private String guideOrigin;
     private Boolean guideMissing;
+    /** Not-found results in a row with Tailscale on: "not on your network" needs two (like the iPhone app). */
+    private int guideNotFound;
     private boolean guideOn;
     private boolean resumed, guideChecking;
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
@@ -106,9 +108,9 @@ public final class ConnectActivity extends Activity {
 
         // Scan: one Settings row.
         body.addView(groupLabel("Scan"));
-        scan = row("▦", "Scan QR code", "On your computer, open Setup › Use Wizard on your phone");
+        scan = row("▦", "Scan QR code", "On your computer, open Wizard › Settings › Phones & devices");
         scan.setOnClickListener(v -> new IntentIntegrator(this).setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
-                .setPrompt("Scan the Wizard QR in Setup").setBeepEnabled(false).setOrientationLocked(false).initiateScan());
+                .setPrompt("Scan the Wizard QR code from Settings › Phones & devices").setBeepEnabled(false).setOrientationLocked(false).initiateScan());
         body.addView(scan, margins(0, 0, dp(16)));
 
         // Or type it.
@@ -223,7 +225,7 @@ public final class ConnectActivity extends Activity {
         }
         if (intent.getData() == null) return;
         String origin = ServerOrigin.parse(intent.getData().toString());
-        if (origin == null) say("That QR isn't a Wizard address. Scan the QR in Setup, not the Tailscale sign-in one.", true);
+        if (origin == null) say(BAD_QR, true);
         else { address.setText(origin); say("Check the address, then tap Connect.", false); }
     }
     @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); if (!checking) prefill(intent); }
@@ -233,38 +235,47 @@ public final class ConnectActivity extends Activity {
         if (qr == null) { super.onActivityResult(request, result, data); return; }
         if (qr.getContents() == null) { say("", false); return; }
         String origin = ServerOrigin.parse(qr.getContents());
-        if (origin == null) say("That QR isn't a Wizard address. Scan the QR in Setup › Use Wizard on your phone.", true);
+        if (origin == null) say(BAD_QR, true);
         else { address.setText(origin); say("Scanned. Check the address, then tap Connect.", false); }
     }
     private void connect() {
         if (checking) return;
-        final String origin = ServerOrigin.parse(address.getText().toString(), BuildConfig.DEBUG);
+        // A bare host gets https:// in front (never http).
+        final String origin = ServerOrigin.typed(address.getText().toString(), BuildConfig.DEBUG);
         if (origin == null) { say("Enter your Wizard's https:// address, like https://wizard.your-tailnet.ts.net", true); return; }
         boolean[] net = ReachScreen.net(this);
         // A Tailscale address while Tailscale is off can't answer: show the guide now instead of waiting out the check.
-        if (TailscaleGuide.applies(origin) && net[0] && !net[1]) { say("", false); guideMissing = null; showGuide(origin); return; }
+        if (TailscaleGuide.applies(origin) && net[0] && !net[1]) { say("", false); guideMissing = null; guideNotFound = 0; showGuide(origin); return; }
+        final boolean onBefore = net[1];
         final int attempt = ++generation;
         checking = true; busy(true);
         say("Checking your Wizard…", false);
         InputMethodManager keyboard = getSystemService(InputMethodManager.class); if (keyboard != null) keyboard.hideSoftInputFromWindow(address.getWindowToken(), 0);
         new Thread(() -> {
-            String error = null;
-            try { WizardProbe.check(origin); }
-            catch (Exception e) {
-                error = "Couldn't reach that Wizard. Check the address and that Tailscale is on, then try again.";
-                guideMissing = e instanceof java.net.UnknownHostException;
-            }
-            final String failure = error;
+            final WizardProbe.Result result = WizardProbe.probe(origin);
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed() || generation != attempt) return;
                 checking = false; busy(false);
-                if (failure != null && TailscaleGuide.applies(origin)) { say("", false); showGuide(origin); return; }
-                if (failure != null) { say(failure, true); return; }
-                if (!ServerSettings.save(this, origin)) { say("Couldn't switch yet. Let any recording or upload finish, then try again.", true); return; }
+                // Only "no such name" and "no answer" are Tailscale's to fix; a Wizard that answered says what it said.
+                if (result.unanswered() && TailscaleGuide.applies(origin)) {
+                    say("", false);
+                    guideMissing = null; guideNotFound = 0;
+                    // Only a result found with Tailscale on the whole time counts.
+                    if (onBefore && ReachScreen.net(this)[1]) {
+                        if (result.kind == WizardProbe.Kind.NOT_FOUND) guideNotFound = 1;
+                        else guideMissing = false;
+                    }
+                    showGuide(origin);
+                    return;
+                }
+                if (!result.ok()) { say(WizardProbe.message(result.kind, result.status, origin), true); return; }
+                if (!ServerSettings.save(this, origin)) { say(SWITCH_LATER, true); return; }
                 returnToWizard();
             });
         }, "WizardConnect").start();
     }
+    private static final String SWITCH_LATER = "Couldn't switch yet. Let any recording or upload finish, then try again.";
+    private static final String BAD_QR = "That QR code isn't a Wizard address. Scan the one in Settings › Phones & devices, not the Tailscale sign-in code.";
     private void returnToWizard() {
         // App-session document tasks from the old box must not keep privileged bridges alive after a switch.
         android.app.ActivityManager am = getSystemService(android.app.ActivityManager.class);
@@ -297,7 +308,7 @@ public final class ConnectActivity extends Activity {
         }
         boolean[] net = ReachScreen.net(this);
         guideOn = net[1];
-        if (!net[1]) guideMissing = null;
+        if (!net[1]) { guideMissing = null; guideNotFound = 0; }
         guide.show(origin, net[1], guideMissing, ReachScreen.tailscaleInstalled(this));
         main.removeCallbacks(guideTick);
         main.postDelayed(guideTick, 4000);
@@ -313,21 +324,28 @@ public final class ConnectActivity extends Activity {
         if (origin == null || !resumed || guideChecking) return;
         final boolean on = ReachScreen.net(this)[1];
         // A reason found while Tailscale was off (no ts.net name resolves then) says nothing once it's on.
-        if (on != guideOn) { guideOn = on; guideMissing = null; }
+        if (on != guideOn) { guideOn = on; guideMissing = null; guideNotFound = 0; }
         guide.show(origin, on, guideMissing, ReachScreen.tailscaleInstalled(this));
         final int attempt = ++generation;
         guideChecking = true;
         new Thread(() -> {
-            boolean ok; Boolean missing = null;
-            try { WizardProbe.check(origin); ok = true; }
-            catch (Exception e) { ok = false; missing = e instanceof java.net.UnknownHostException; }
-            final boolean reached = ok; final Boolean notFound = missing;
+            final WizardProbe.Result result = WizardProbe.probe(origin);
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed() || generation != attempt || !origin.equals(guideOrigin)) return;
                 guideChecking = false;
-                if (reached && ServerSettings.save(this, origin)) { returnToWizard(); return; }
-                // Only an answer found with Tailscale on the whole time counts.
-                if (notFound != null && on && ReachScreen.net(this)[1]) { guideMissing = notFound; guide.show(origin, true, guideMissing, ReachScreen.tailscaleInstalled(this)); }
+                if (result.ok()) {
+                    if (ServerSettings.save(this, origin)) { returnToWizard(); return; }
+                    hideGuide(); say(SWITCH_LATER, true); return;
+                }
+                // It answered (403 from another Tailscale user, not a Wizard…): not a Tailscale problem, so no guide.
+                if (!result.unanswered()) { hideGuide(); say(WizardProbe.message(result.kind, result.status, origin), true); return; }
+                // Only a result found with Tailscale on the whole time counts. "Not on your network" needs two in a row:
+                // right after Tailscale connects the name can briefly fail to resolve.
+                if (on && ReachScreen.net(this)[1]) {
+                    if (result.kind == WizardProbe.Kind.NOT_FOUND) { if (++guideNotFound >= 2) guideMissing = true; }
+                    else { guideNotFound = 0; guideMissing = false; }
+                    guide.show(origin, true, guideMissing, ReachScreen.tailscaleInstalled(this));
+                }
                 main.postDelayed(guideTick, 4000);
             });
         }, "WizardGuideCheck").start();

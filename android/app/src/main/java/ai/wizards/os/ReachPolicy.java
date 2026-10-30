@@ -13,7 +13,8 @@ package ai.wizards.os;
 final class ReachPolicy {
     private ReachPolicy() {}
 
-    enum Why { NO_NETWORK, TAILSCALE_OFF, NOT_ANSWERING }
+    /** REFUSED: the Wizard answered 401/403 (this phone's Tailscale user isn't the Wizard's owner). Never from the network. */
+    enum Why { NO_NETWORK, TAILSCALE_OFF, NOT_ANSWERING, REFUSED }
 
     /** A normal open paints before this, so it never flashes the screen. */
     static final long CONNECTING_MS = 1_200L;
@@ -45,15 +46,35 @@ final class ReachPolicy {
         return status >= 500 && status <= 599;
     }
 
-    /** A network change worth a fresh try: the reason changed, and there is now a network to try on. */
+    /** The Wizard said no to this phone (another Tailscale user than its owner): its own screen, not its raw page. */
+    static boolean refused(int status) {
+        return status == 401 || status == 403;
+    }
+
+    /**
+     * A network change worth a fresh try: the reason changed, and there is now a network to try on. A refusal is the
+     * Wizard's answer, not the network's: only the regular retry and coming back to the app try it again.
+     */
     static boolean retryOnChange(Why shown, Why now) {
+        if (shown == Why.REFUSED) return false;
         return shown != now && now != Why.NO_NETWORK;
+    }
+
+    /** A network change that redraws the screen without a retry. A refusal stays until the network itself goes. */
+    static boolean redrawOnChange(Why shown, Why now) {
+        return shown != now && (shown != Why.REFUSED || now == Why.NO_NETWORK);
+    }
+
+    /** Tailscale gives this phone an IPv4 in 100.64.0.0/10 (the CGNAT range); another VPN doesn't count as Tailscale. */
+    static boolean tailscaleAddress(byte[] a) {
+        return a != null && a.length == 4 && (a[0] & 0xff) == 100 && ((a[1] & 0xff) >> 6) == 1;
     }
 
     static String title(Why w) {
         switch (w) {
             case NO_NETWORK: return "You're offline";
             case TAILSCALE_OFF: return "Tailscale is off";
+            case REFUSED: return "This phone isn't allowed into this Wizard";
             default: return "Can't reach your Wizard";
         }
     }
@@ -62,6 +83,7 @@ final class ReachPolicy {
         switch (w) {
             case NO_NETWORK: return "This phone has no connection. Wizard opens by itself when it's back.";
             case TAILSCALE_OFF: return "Wizard lives on your private network. Turn Tailscale on and Wizard opens by itself.";
+            case REFUSED: return "Sign in to Tailscale with your Wizard's account.";
             default: return "Your Wizard isn't answering yet. Check its address and connection. Wizard keeps trying by itself.";
         }
     }

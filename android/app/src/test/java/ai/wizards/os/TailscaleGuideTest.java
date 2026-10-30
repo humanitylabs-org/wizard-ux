@@ -3,6 +3,7 @@ package ai.wizards.os;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import ai.wizards.os.TailscaleGuide.Step;
@@ -89,5 +90,13 @@ public class TailscaleGuideTest {
         assertTrue(TailscaleGuide.missingFrom("net::ERR_NAME_NOT_RESOLVED"));
         assertFalse(TailscaleGuide.missingFrom("net::ERR_CONNECTION_TIMED_OUT"));
         assertFalse(TailscaleGuide.missingFrom(null)); // the give-up mark: the load hung, so the name resolved
+    }
+
+    @Test
+    public void notOnYourNetworkNeedsTwoNotFoundInARow() {
+        assertEquals(Boolean.FALSE, TailscaleGuide.missingAfter(0));
+        assertNull("one not-found is still unsure", TailscaleGuide.missingAfter(1));
+        assertEquals(Boolean.TRUE, TailscaleGuide.missingAfter(2));
+        assertEquals(Boolean.TRUE, TailscaleGuide.missingAfter(5));
     }
 }

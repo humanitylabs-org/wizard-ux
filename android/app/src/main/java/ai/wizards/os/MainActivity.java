@@ -233,10 +233,18 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
             @Override
             public void onReceivedHttpError(WebView view, WebResourceRequest req, android.webkit.WebResourceResponse resp) {
+                if (!req.isForMainFrame() || resp == null) return;
+                int status = resp.getStatusCode();
+                // The saved Wizard refused this phone (another Tailscale user): say so instead of its raw page.
+                if (ReachPolicy.refused(status) && Origin.isPrivate(MainActivity.this, req.getUrl())) {
+                    mainFailed = true;
+                    showOffline("Wizard answered " + status, ReachPolicy.Why.REFUSED);
+                    return;
+                }
                 // The gateway answered but the Wizard behind it didn't (502 while it restarts): same screen, it retries.
-                if (!req.isForMainFrame() || resp == null || !ReachPolicy.httpFailure(resp.getStatusCode())) return;
+                if (!ReachPolicy.httpFailure(status)) return;
                 mainFailed = true;
-                showOffline("Wizard answered " + resp.getStatusCode());
+                showOffline("Wizard answered " + status);
             }
 
             @Override
@@ -478,7 +486,10 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         else reach.connecting();
     };
 
-    private final Runnable reachGiveUp = () -> showOffline(null);
+    private final Runnable reachGiveUp = () -> {
+        if (reach != null) reach.hung(); // a hang, not "no such name"
+        showOffline(null);
+    };
 
     private final Runnable reachRetry = new Runnable() {
         @Override
@@ -522,11 +533,14 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (reach != null) reach.hide();
     }
 
-    private void showOffline(String why) {
+    private void showOffline(String why) { showOffline(why, null); }
+
+    /** `known`: a reason the Wizard itself gave (REFUSED); null reads it from the phone's network. */
+    private void showOffline(String why, ReachPolicy.Why known) {
         main.removeCallbacks(reachMark);
         main.removeCallbacks(reachGiveUp);
         if (reach == null) return;
-        ReachPolicy.Why w = ReachScreen.why(this);
+        ReachPolicy.Why w = known != null ? known : ReachScreen.why(this);
         reach.offline(w, why, ReachScreen.tailscaleInstalled(this));
         android.util.Log.i("WizardOSReach", "offline " + w + " " + why);
         main.removeCallbacks(reachRetry);
@@ -574,7 +588,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (reach == null || !reach.isOffline()) return;
         ReachPolicy.Why now = ReachScreen.why(this);
         if (ReachPolicy.retryOnChange(reach.shown(), now)) { if (resumed) retryReach(); }
-        else if (now != reach.shown()) reach.offline(now, null, ReachScreen.tailscaleInstalled(this));
+        else if (ReachPolicy.redrawOnChange(reach.shown(), now)) reach.offline(now, null, ReachScreen.tailscaleInstalled(this));
     };
 
     void netChanged() {
