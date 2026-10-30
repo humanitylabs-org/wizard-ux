@@ -92,11 +92,11 @@ test('⌥G Pick anything: letter chips on every clickable, typed letters click i
   assert.ok(js.includes("['G', 'Pick anything',"));
 });
 
-test('the keys guide is chips in place, no boxes: ↓ on the next Ready chat, F W R on window buttons, H J K L on neighbours, words only on Speak', () => {
+test('the keys guide is chips in place, no boxes: ↓ on the next Ready chat, F W R on window buttons, no H J K L (retired for ⌥L light), words only on Speak', () => {
   assert.doesNotMatch(js, /kh-card|function card\(/);
   assert.match(js, /rows\[0\] : rows\[\(i \+ 1\) % rows\.length\]/);
   assert.match(js, /\['\[data-wact="mono"\]', 'F'\], \['\[data-wact="close"\]', 'W'\], \['\[data-wact="reload"\]', 'R'\]/);
-  assert.match(js, /\(dx < 0 \? 'H' : 'L'\) : \(dy < 0 \? 'K' : 'J'\)/);
+  assert.doesNotMatch(js, /\(dx < 0 \? 'H' : 'L'\)|KeyH: \[|KeyJ: \[|KeyK: \[/);
   assert.match(js, /\['#micBtn', 'S', 'Talk about this'\]/);
 })
 
@@ -210,7 +210,7 @@ test('Omarchy-style keys: ⌥− / ⌥= resize, ⌥⇧W reopens, ⌥Z jumps back
   assert.match(js, /chip\(n, '⇧W', 'below', 'Reopen'\)/);
   assert.match(js, /chip\(b, '=', side, 'Wider'\); chip\(b, '−', side, 'Narrower'\)/);
   assert.match(js, /chip\(n, 'Z', 'below', 'Back'\)/);
-  assert.match(js, /Key\[ABGIWFHJKLNTVPZ\]\|Slash\|Comma\|Minus\|Equal/);
+  assert.match(js, /Key\[AGIWFLNTVPZ\]\|Slash\|Comma\|Minus\|Equal/);
 });
 
 test('resize keeps the stock split until asked, and is kept per desk', () => {
@@ -219,9 +219,9 @@ test('resize keeps the stock split until asked, and is kept per desk', () => {
   assert.equal(splitOf({}, 2), 0.5); assert.equal(splitOf({}, 3), 0.56); assert.equal(splitOf({ split: 0.66 }, 2), 0.66); assert.equal(splitOf({ split: 0.9 }, 2), 0.5);
 });
 
-test('⌥B flips Dark / Light within the same skin, shown on the Settings gear; closed windows survive a reload', () => {
-  assert.match(js, /alt && !shift && code === 'KeyB'\) return hit\(\(\) => \{ if \(!e\.repeat\) flipLight\(\); \}\)/);
-  assert.match(js, /chip\(n, 'B', 'below', tw\.light \? 'Light' : 'Dark'\)/);
+test('⌥L flips Dark / Light within the same skin, shown on the Settings gear; closed windows survive a reload', () => {
+  assert.match(js, /alt && !shift && code === 'KeyL'\) return hit\(\(\) => \{ if \(!e\.repeat\) flipLight\(\); \}\)/);
+  assert.match(js, /chip\(n, 'L', 'below', tw\.light \? 'Light' : 'Dark'\)/);
   assert.match(js, /store\.get\('closed', \[\]\)/);
   const skins = readFileSync(new URL('../web/core/skins.js', import.meta.url), 'utf8');
   assert.match(skins, /obsidian: 'obsidian-light', 'obsidian-light': 'obsidian', landscapes: 'landscapes-light', 'landscapes-light': 'landscapes'/);

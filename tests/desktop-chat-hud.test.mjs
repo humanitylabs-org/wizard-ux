@@ -37,7 +37,7 @@ test('render keeps the HUD above every desk and Home; the open HUD counts as vis
 
 test('two controls only: float over every desk, and back to desktop 1 (Miguel: no minimize, no orb, no put-back-here)', () => {
   assert.doesNotMatch(js, /hud-min|hud-dock|hudFold|hudOrb/);
-  assert.doesNotMatch(js, /code === 'KeyB'\) return hit\(\(\) => \{[^\n]*hud/i); // ⌥B is Dark / Light now, never the floating chat
+  assert.doesNotMatch(js, /code === 'KeyB'\) return hit\(\(\) => \{[^\n]*hud/i); // ⌥B never comes back as the floating chat
   assert.doesNotMatch(html, /hudOrb|<script src="orb\.js">/);
   const bar = js.slice(js.indexOf('function barHtml('), js.indexOf('return `<div class="wbar" data-drag>', js.indexOf('function barHtml(')));
   assert.deepEqual([...bar.matchAll(/data-wact="([^"]+)"/g)].map(m => m[1]), ['hud-home', 'close']);
