@@ -901,5 +901,6 @@ body {
 .wtool-dot::after { content: ""; position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 0 2px var(--bg); pointer-events: none; }
 /* Phone: icon tools are 44px wide, and an invisible hit area reaches 44px tall, whatever height a skin draws them. */
 html[data-shell="phone"] .wbar > .wtools > .wtool.wtool-ic[data-tool] { min-width: 44px; }
+html[data-shell="phone"] .wbar > .wtools { position: relative; z-index: 1; }   /* the hit area may reach a few px past a slim bar */
 html[data-shell="phone"] .wbar > .wtools > .wtool-ic::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 44px; transform: translateY(-50%); }
 html[data-shell="phone"] .wbar > .wtools > .wtool-ic.wtool-dot::after { right: 10px; }
