@@ -180,5 +180,5 @@ test('⌥A replies about the app in front: bound, in the guide, chipped on its t
   assert.match(js, /code === 'KeyA'\) return hit\(\(\) => \{ if \(!e\.repeat\) replyAbout\(\); \}\)/);
   assert.match(js, /\['A', 'Reply about this'/);
   assert.match(js, /f\.app === 'frame'\) \{ const n = wel\?\.querySelector\('\.wbar \.t'\); if \(vis\(n\)\) chip\(n, 'A'\)/);
-  assert.match(js, /WizAppServices\?\.replyAbout\?\.\(fr, window\.WizScreen\?\.read\(winEl\(f\.id\)\)/);
+  assert.match(js, /WizAppServices\?\.replyAbout\?\.\(fr, window\.WizScreen\?\.read\(winEl\(f\.id\)\?\.querySelector\('\.wbody'\) \|\| fr\)/);
 });
