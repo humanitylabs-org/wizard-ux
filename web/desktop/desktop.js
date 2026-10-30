@@ -1919,6 +1919,14 @@
     { const hb = hudBack(); if (hb) return hb; }
     // Leave fullscreen before navigating the app underneath; preserve its thread and draft.
     if (homeOpen) return '';
+    // The split list owns its own search state (id::list). Back there peels search/chips
+    // without navigating the selected thread; overlays above it have already had first refusal.
+    { const f = focused(), inList = f && winEl(f.id)?.querySelector('.pane-list')?.contains(document.activeElement);
+      if (f?.app === 'chats' && (inList || !f.thread)) {
+        const did = CHATS.clearFilter(listWin(f.id));
+        if (did) { syncChatsPane(f.id); if (inList) winEl(f.id)?.querySelector('[data-chsearch]')?.focus({ preventScroll: true }); return did === 'search' ? 'search' : 'filter'; }
+      }
+    }
     if (focused() && CHATS.isHosted(focused().id)) return CHATS.threadBack(focused());
     if (focused()?.app === 'pages') { const w = focused(); if (window.WosPages.back(winEl(w.id)?.querySelector('.pg-host'))) return 'pages'; closeWin(w.id); return 'pages-close'; }
     if (ws[cur].mono) { toggleMono(); return 'mono'; }
@@ -2183,6 +2191,11 @@
   const NATIVE_MENU = !!window.webkit?.messageHandlers?.wizardNative;
   const vis0 = n => !!n && !!n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
   function onKey(e, fromFrame = false) {
+    // IME owns Escape during composition; a held Escape must not peel several search layers.
+    if (e.key === 'Escape' && e.target.matches?.('[data-chsearch]')) {
+      if (e.isComposing || e.keyCode === 229) return;
+      if (e.repeat) { e.preventDefault(); e.stopPropagation(); return; }
+    }
     if (pick.active()) return pick.key(e);
     if (window.WosWelcome?.active) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); window.WosWelcome.back(); } return; } // first run: no shell shortcuts behind it
     if (e.key === 'Escape' && keyHints.pinned()) { e.preventDefault(); e.stopPropagation(); toggleKeys(false); returnToSettings(); return; }

@@ -2687,12 +2687,15 @@ window.WizCore.chats = function createChats(H) {
     const text = ta.value || ta.placeholder || '';
     mirror.textContent = text; const end = document.createElement('span'); end.textContent = '\u200b'; mirror.appendChild(end);
     const lastEnd = end.offsetLeft; // x where the last line ends
+    const lineHeight = parseFloat(cs.lineHeight) || 0;
+    const lineCount = lineHeight > 0 ? Math.round(mirror.offsetHeight / lineHeight) : 1;
     const room = inner - lw + 12; // last-line text may come within ~8px of the label's visible name (the label has 10px inner padding)
-    // The name gets its own strip below the text (outside the scrolling area) when the last line would reach it, or
-    // once the box is at full height and scrolls: a scrolled textarea can't be trusted to keep bottom padding clear.
+    // The name gets its own strip once the draft wraps to three lines: its 40px tap target otherwise occupies the
+    // bottom two editing rows even when a short final line does not touch the visible name. Keep the existing strip
+    // for a last-line collision or scrolling box too, because those states cannot safely share the editable area.
     const scrolls = ta.scrollHeight > ta.clientHeight + 2;
     ta.style.paddingBottom = '';
-    ta.parentElement.classList.toggle('lab-row', lastEnd > room || scrolls);
+    ta.parentElement.classList.toggle('lab-row', lineCount >= 3 || lastEnd > room || scrolls);
   }
   function growTa(ta) {
     if (!ta) return;
