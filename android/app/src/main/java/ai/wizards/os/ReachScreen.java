@@ -6,6 +6,8 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.ConnectivityManager;
+import android.net.LinkAddress;
+import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.util.TypedValue;
@@ -37,8 +39,11 @@ final class ReachScreen {
     private final TailscaleGuideView guide;
     private boolean offline;
     private ReachPolicy.Why shown;
-    /** The WebView's error for this outage (kept when a network change redraws without one). */
-    private String lastError;
+    /**
+     * The WebView's name-not-found errors in a row under the reason shown (kept when a network change redraws without
+     * an error): "not on your network" needs two (TailscaleGuide.missingAfter).
+     */
+    private int notFound;
 
     ReachScreen(Activity a, FrameLayout parent, Runnable onRetry, Runnable onTailscale) {
         this.a = a;
@@ -118,16 +123,17 @@ final class ReachScreen {
 
     void offline(ReachPolicy.Why why, String raw, boolean tailscaleInstalled) {
         // A reason found under another state (e.g. no ts.net name resolves while Tailscale is off) no longer applies.
-        if (shown != why) lastError = null;
+        if (shown != why) notFound = 0;
         offline = true;
         shown = why;
         String origin = ai.wizards.os.device.AppState.origin(a);
-        if (why != ReachPolicy.Why.NO_NETWORK && TailscaleGuide.applies(origin)) {
+        // A refusal (401/403) answered: the plain look says so; the guide is only for a Wizard that doesn't answer.
+        if (why != ReachPolicy.Why.NO_NETWORK && why != ReachPolicy.Why.REFUSED && TailscaleGuide.applies(origin)) {
             // On a Tailscale address with a network: the guide. NOT_ANSWERING here means Tailscale is on.
             col.setVisibility(View.GONE);
-            if (raw != null) lastError = raw;
-            // Tailscale on: a name that doesn't resolve means another network; a hang means the Wizard is off.
-            guide.show(origin, why == ReachPolicy.Why.NOT_ANSWERING, TailscaleGuide.missingFrom(lastError), tailscaleInstalled);
+            if (raw != null) notFound = TailscaleGuide.missingFrom(raw) ? notFound + 1 : 0;
+            // Tailscale on: a name that doesn't resolve (twice in a row) means another network; a hang means the Wizard is off.
+            guide.show(origin, why == ReachPolicy.Why.NOT_ANSWERING, TailscaleGuide.missingAfter(notFound), tailscaleInstalled);
             view.setVisibility(View.VISIBLE);
             return;
         }
@@ -152,6 +158,9 @@ final class ReachScreen {
         view.setVisibility(View.VISIBLE);
     }
 
+    /** The load hung past the give-up mark: the name resolved, so a not-found streak ends. */
+    void hung() { notFound = 0; }
+
     /** A retry is under way: keep the explanation up, say it's trying. */
     void trying() {
         if (!offline) return;
@@ -165,14 +174,17 @@ final class ReachScreen {
 
     void hide() {
         offline = false;
-        lastError = null;
+        notFound = 0;
         shown = null;
         view.setVisibility(View.GONE);
     }
 
     /* ---------------- the phone's network, as the screen needs it ---------------- */
 
-    /** {network, vpn} for this app's default network. Debug builds can force the VPN answer (files/qa_vpn.txt). */
+    /**
+     * {network, vpn}: a default network, and Tailscale on (a VPN holding a Tailscale address, so another VPN doesn't
+     * count). Debug builds can force the VPN answer (files/qa_vpn.txt).
+     */
     static boolean[] net(Context c) {
         boolean network = false, vpn = false;
         try {
@@ -180,11 +192,26 @@ final class ReachScreen {
             Network n = cm == null ? null : cm.getActiveNetwork();
             NetworkCapabilities nc = n == null ? null : cm.getNetworkCapabilities(n);
             network = nc != null;
-            vpn = nc != null && nc.hasTransport(NetworkCapabilities.TRANSPORT_VPN);
+            vpn = network && tailscaleUp(cm);
         } catch (RuntimeException ignored) {}
         String qa = qaVpn(c);
         if (network && qa != null) vpn = qa.equals("on");
         return new boolean[]{network, vpn};
+    }
+
+    /** Any VPN network with an IPv4 in Tailscale's 100.64.0.0/10 (ReachPolicy.tailscaleAddress). */
+    private static boolean tailscaleUp(ConnectivityManager cm) {
+        for (Network n : cm.getAllNetworks()) {
+            NetworkCapabilities nc = cm.getNetworkCapabilities(n);
+            if (nc == null || !nc.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) continue;
+            LinkProperties lp = cm.getLinkProperties(n);
+            if (lp == null) continue;
+            for (LinkAddress la : lp.getLinkAddresses()) {
+                java.net.InetAddress ip = la.getAddress();
+                if (ip != null && ReachPolicy.tailscaleAddress(ip.getAddress())) return true;
+            }
+        }
+        return false;
     }
 
     static ReachPolicy.Why why(Context c) {
