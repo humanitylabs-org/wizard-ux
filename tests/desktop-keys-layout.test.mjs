@@ -210,7 +210,7 @@ test('Omarchy-style keys: ⌥− / ⌥= resize, ⌥⇧W reopens, ⌥Z jumps back
   assert.match(js, /chip\(n, '⇧W', 'below', 'Reopen'\)/);
   assert.match(js, /chip\(b, '=', side, 'Wider'\); chip\(b, '−', side, 'Narrower'\)/);
   assert.match(js, /chip\(n, 'Z', 'below', 'Back'\)/);
-  assert.match(js, /Key\[AGIWFLNTVPZ\]\|Slash\|Comma\|Minus\|Equal/);
+  assert.match(js, /Key\[AGIWFLMNTVPZ\]\|Slash\|Comma\|Minus\|Equal/);
 });
 
 test('resize keeps the stock split until asked, and is kept per desk', () => {

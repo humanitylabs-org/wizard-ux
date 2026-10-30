@@ -8,7 +8,7 @@ const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const js = read('web/desktop/desktop.js'), html = read('web/desktop.html'), css = read('web/desktop/desktop.css');
 
 test('Chats windows get a float button beside ✕; other windows do not', () => {
-  assert.match(js, /w\.app === 'chats' \? `<button data-wact="hud" title="Float over every desk \(\$\{MOD\}P\)"/);
+  assert.match(js, /w\.app === 'chats' \? `<button data-wact="hud-min"[^`]*<button data-wact="hud" title="Float over every desk \(\$\{MOD\}P\)"/);
   assert.match(js, /if \(act === 'hud'\) return hudOn\(id\);/);
   assert.match(js, /if \(act === 'close' && hud\?\.id === id\) return hudClose\(\);\s*\n\s*if \(act === 'close'\) return closeWin\(id\);/);
   // Borderless frames hide title-bar buttons except ✕: the float button is re-shown next to it.
@@ -35,12 +35,40 @@ test('render keeps the HUD above every desk and Home; the open HUD counts as vis
   assert.match(css, /\.hud-layer \{ position: absolute; inset: 0; z-index: 150; pointer-events: none; \}/);
 });
 
-test('two controls only: float over every desk, and back to desktop 1 (Miguel: no minimize, no orb, no put-back-here)', () => {
-  assert.doesNotMatch(js, /hud-min|hud-dock|hudFold|hudOrb/);
+test('three controls: float over every desk, minimize to the bubble, back to desktop 1 (Miguel, 30 Oct 2026: minimize is back; still no orb, no put-back-here)', () => {
+  assert.doesNotMatch(js, /hud-dock|hudOrb/);
   assert.doesNotMatch(js, /code === 'KeyB'\) return hit\(\(\) => \{[^\n]*hud/i); // ⌥B never comes back as the floating chat
   assert.doesNotMatch(html, /hudOrb|<script src="orb\.js">/);
   const bar = js.slice(js.indexOf('function barHtml('), js.indexOf('return `<div class="wbar" data-drag>', js.indexOf('function barHtml(')));
-  assert.deepEqual([...bar.matchAll(/data-wact="([^"]+)"/g)].map(m => m[1]), ['hud-home', 'close']);
+  assert.deepEqual([...bar.matchAll(/data-wact="([^"]+)"/g)].map(m => m[1]), ['hud-min', 'hud-home', 'close']);
+  // Docked Chats windows: Minimize sits just left of the float button.
+  assert.match(js, /<button data-wact="hud-min" title="Minimize \(\$\{MOD\}M\)" aria-label="Minimize" aria-keyshortcuts="Alt\+M">\$\{MIN_ICON\}<\/button><button data-wact="hud" title/);
+});
+
+test('minimized, the chat is a bubble at the bottom right; the bubble and ⌥M open it on the right side as a split, and minimize it again', () => {
+  assert.match(js, /if \(act === 'hud-min'\) return hudOn\(id, \{ open: false \}\);/);
+  assert.match(js, /if \(alt && !shift && code === 'KeyM'\) return hit\(\(\) => \{ if \(!e\.repeat\) \{ closePalette\(\{ restore: false \}\); hudToggle\(\); \} \}\);/);
+  assert.match(js, /b\.addEventListener\('click', \(\) => hudToggle\(\)\);/);
+  assert.match(js, /else hud = \{ \.\.\.HUD_DEF, \.\.\.hud, open: hud\.open !== false \};/); // a minimized chat stays minimized across reloads
+  assert.match(css, /\.stage\.hud-split > \.wsp, \.stage\.hud-split > \.desktop-home \{ right: var\(--hud-side, 0px\); \}/);
+  assert.match(css, /html\[data-skin-frame="borderless"\] \.wbar > \[data-wact="hud-min"\] \{ right:/);
+  const src = js.slice(js.indexOf('function hudFold('), js.indexOf('// Back / Esc inside the floating chat'));
+  for (const kind of ['main', 'host-profile', 'container', 'restricted']) {
+    const here = { id: 'h', app: 'chats', thread: 't-' + kind, ...(kind === 'main' ? {} : { agent: kind }) }, away = { id: 'm', app: 'chats', thread: 'main-away' };
+    const calls = [];
+    const ctx = { W: { h: here, m: away }, ws: [{ wins: ['h'] }, { wins: ['m'] }], cur: 0, homeOpen: false, hud: null, focused: () => here,
+      mainChats: w => !!(w && w.app === 'chats' && !w.agent), findWin: () => away, newWin: () => ({ id: 'n' }),
+      hudOn: (id, o) => { calls.push('on:' + id + ':' + (o && o.open)); ctx.hud = { id, open: o.open, side: !o.open }; return true; },
+      hudHasFocus: () => true, save() {}, render() {}, restFocus: () => calls.push('rest'), log() {}, hudFocus() {}, setTimeout: f => f(),
+      CHATS: { markVisibleThreadsSeen() {} } };
+    vm.runInNewContext(src + '\nhudToggle();', ctx);
+    assert.deepEqual(calls, ['on:h:false'], kind + ': ⌥M with nothing floating minimizes the chat in front');
+    vm.runInNewContext(src + '\nhudToggle();', ctx);
+    assert.deepEqual([ctx.hud.open, ctx.hud.side], [true, true], kind + ': the bubble opens it on the right side');
+    vm.runInNewContext(src + '\nhudToggle();', ctx);
+    assert.equal(ctx.hud.open, false, kind + ': and again minimizes it');
+    assert.equal(away.thread, 'main-away'); assert.equal(here.thread, 't-' + kind);
+  }
 });
 
 test('keys, voice and chat actions follow the keyboard into the HUD; desk routes never reuse it (Codex P1/P2)', () => {
