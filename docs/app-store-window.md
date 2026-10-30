@@ -27,7 +27,7 @@ Allowed GET/HEAD suffixes:
 - `api/apps/installed`
 - `api/marketplace/apps/<id>:<store>/image`
 
-Unsafe methods get 405, unknown paths 404, raw/encoded traversal and encoded separators 400. The adapter does not proxy arbitrary URLs. Index upstream is fixed public `https://apps.aiwizards.com/v1`, with bounded query/cache rules. It has no install/start/stop/uninstall route.
+Unsafe methods get 405, unknown paths 404, raw/encoded traversal and encoded separators 400. The adapter does not proxy arbitrary URLs. Index upstream is fixed public `https://apps.aiwizards.com/v1`, with bounded query/cache rules. It has no install/start/stop/uninstall route: Store Get and Remove app go to the App Manager's owner-gated `store-install/` listener instead (see [Store sources and install links](store-sources.md)).
 
 After independent review, parent may install a loopback browse-data unit from the reviewed exact SHA and route **only** the prefix through the existing authenticated private gateway. Example executable: `$HOME/.local/bin/node <exact checkout>/tools/store-data-origin.mjs 9584`. Preserve the gate, route prefix and other mappings. Do not expose the adapter directly or restart/modify the Service. Production enablement belongs entirely to parent; this candidate did not change Caddy, daily/main, or any production service.
 

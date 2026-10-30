@@ -9,6 +9,19 @@ test('installed identity is scalar-only; internal config and private URLs stay s
  assert.deepEqual(shellMetadata({apps:[{id:'a',url:'//other-site/',config:secret},{id:'b',url:'/b/',token:'secret'}]}),[{id:'a',system:false},{id:'b',url:'/b/',system:false}]);
  assert.throws(()=>wamMetadata({})); assert.throws(()=>shellMetadata({}));
 });
+test('the App Manager system flag reaches the Store so it never offers to remove a Wizard app',()=>{
+ assert.deepEqual(wamMetadata({apps:[{id:'browser',repo:'org/browser',system:true},{id:'ledger',repo:'org/ledger',system:false},{id:'odd',system:'yes'}]}),
+  [{id:'browser',repo:'org/browser',system:true},{id:'ledger',repo:'org/ledger'},{id:'odd'}]);
+});
+test('the browse adapter still refuses every lifecycle write, including uninstall and Store removal paths',async()=>{
+ const route=createStoreDataRoutes({readWam:()=>({apps:[]}),fetchImpl:async()=>{throw Error('no upstream write may happen');}});
+ const s=http.createServer(route);await new Promise(r=>s.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${s.address().port}${PREFIX}`;
+ try {
+  for(const [method,path] of [['DELETE','api/app-lifecycle/ledger:wizardapps/uninstall'],['POST','api/app-lifecycle/ledger:wizardapps/uninstall'],['DELETE','api/apps/ledger'],['POST','store-install/_remove/ledger'],['POST','_remove/ledger']])
+   assert.equal((await fetch(base+path,{method})).status,405,method+' '+path);
+  assert.equal((await fetch(base+'_remove/ledger/plan')).status,404);
+ } finally {s.closeAllConnections();await new Promise(r=>s.close(r));}
+});
 test('real HTTP route merges independent read status, never treats failure as empty success',async()=>{
  let wamFail=false,shellFail=false;const calls=[];
  const route=createStoreDataRoutes({readWam:()=>{if(wamFail)throw Error('secret');return {apps:[{id:'movies-next',app_id:'movies',repo:'org/movies'}]};},fetchImpl:async(url,opts)=>{calls.push({url,method:opts.method || 'GET'});return shellFail?new Response('bad',{status:503}):Response.json({apps:[{id:'calendar',url:'/wizard-calendar/',token:'secret'}]});}});
