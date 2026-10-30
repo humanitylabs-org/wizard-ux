@@ -1172,7 +1172,7 @@
       { kind: 'cmd', name: 'Previous window', icon: '←', keys: `${MOD}[`, run: () => stepWin(-1) },
       { kind: 'cmd', name: 'Next desktop', icon: '→', run: () => stepDesk(1) },
       { kind: 'cmd', name: 'Previous desktop', icon: '←', run: () => stepDesk(-1) },
-      { kind: 'cmd', name: 'New chat', icon: '✎', keys: `${MOD}N`, run: () => newChat({ fresh: true }) },
+      { kind: 'cmd', name: 'New chat', icon: '✎', keys: `${MOD}N`, run: () => newChat() },
       { kind: 'cmd', name: 'New voice chat', icon: '🎙', keys: `${MOD}V`, run: () => talkNew() },
       { kind: 'cmd', name: `Talk to ${window.WizConfig.agent()}`, icon: '🎙', keys: 'Right ⌘', run: () => talk() },
       { kind: 'cmd', name: 'Dictate', icon: '✎', keys: 'Right ⌥', run: () => dictate() },
@@ -2042,9 +2042,12 @@
           const send = wel.querySelector('.pane-main .ch-send'); if (f.thread && vis(send)) chip(send, '↵', 'start');
           // ⌥I opens the chat list; pressed again it searches chats and messages.
           const srch = wel.querySelector('[data-chsearch]'); if (vis(srch) && document.activeElement !== srch) chip(srch, 'I', 'inside');
-          const fab = wel.querySelector('.pane-list [data-chfab]'); if (vis(fab)) chip(fab, 'N', 'corner');
         }
+        // N on this desk's New chat button: ⌥N starts the new chat there, even from the app beside it.
+        const fab = wel.querySelector('.pane-list [data-chfab]'); if (vis(fab)) chip(fab, 'N', 'corner');
       }
+      // No Chats on this desk: N with its word on the right edge of the window in front, where the chat opens.
+      else if (f && f.app !== 'chats') { const b = winEl(f.id)?.querySelector('.wbody'); if (vis(b)) chip(b, 'N', 'inside', 'New chat'); }
       // Heads-up chat: P on the float button, or (floating) on Back to desktop 1.
       if (hud && W[hud.id]) { const n = winEl(hud.id)?.querySelector('.wbar [data-wact="hud-home"]'); if (vis(n)) chip(n, 'P'); }
       else {
@@ -2215,7 +2218,8 @@
     if ((menu || alt) && !shift && code === 'KeyT') return hit(() => { if (!e.repeat) { closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newDesktop(); } });
     if (alt && !shift && (code === 'ArrowUp' || code === 'ArrowDown')) return hit(() => { if (!e.repeat || focused()?.app === 'chats') { closePalette(); toggleKeys(false); chatsUpDown(code === 'ArrowDown' ? 1 : -1); } });
     // ⌥N new chat; ⌥V new voice chat (⌥V again sends).
-    if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newChat({ fresh: true }); });
+    // ⌥N: a New chat on this desk. Reuses this desk's Chats window, else opens one beside the window in front (like Reply).
+    if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newChat(); });
     if (alt && !shift && code === 'Enter') return hit(() => { if (!e.repeat) newChat(); });
     if (alt && code === 'KeyV') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); talkNew(`${MOD}V`); });
     // ⌥→ Done, ⌥← Snooze (Miguel, 27 Oct 2026): with a chat open in Chats, the arrows act on it, also from an EMPTY

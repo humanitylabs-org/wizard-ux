@@ -191,3 +191,11 @@ test('⌥A replies about the app in front: bound, in the guide, chipped on its t
   assert.match(js, /f\.app === 'frame'\) \{ const n = wel\?\.querySelector\('\.wbar \.t'\); if \(vis\(n\)\) chip\(n, 'A'\)/);
   assert.match(js, /WizAppServices\?\.replyAbout\?\.\(fr, window\.WizScreen\?\.read\(winEl\(f\.id\)\?\.querySelector\('\.wbody'\) \|\| fr\)/);
 });
+
+test('⌥N opens a New chat on this desk beside the app in front, and holding ⌥ shows it there', () => {
+  // Reuses this desk's Chats window (no stacked copies), else opens one beside the focused window, like Reply.
+  assert.match(js, /code === 'KeyN'\) return hit\(\(\) => \{[^\n]*newChat\(\); \}\);/);
+  assert.doesNotMatch(js, /newChat\(\{ fresh: true \}\)/);
+  // Guide: N on this desk's New chat button, or with its word on the right edge of the app in front.
+  assert.match(js, /else if \(f && f\.app !== 'chats'\) \{ const b = winEl\(f\.id\)\?\.querySelector\('\.wbody'\); if \(vis\(b\)\) chip\(b, 'N', 'inside', 'New chat'\); \}/);
+});
