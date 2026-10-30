@@ -81,17 +81,23 @@
     (document.body || document.documentElement).append(b);
     return (selBtn = b);
   }
-  function selRead(frame) {
+  // The app window behind a frame, if it may open a reply draft now: verified, installed, visible.
+  function selApp(frame) {
     const st = frame && frames.get(frame);
     if (!valid(st) || st.isVisible?.() !== true || typeof st.openContextDraft !== 'function' || !/^[a-z][a-z0-9-]{0,40}$/.test(st.appId)) return null;
     const app = apps().find(a => a.id === st.appId && a.kind === 'wizard'); if (!app) return null;
     let w, d; try { w = st.frame.contentWindow; d = w.document; } catch (_) { return null; }
-    if (d.querySelector('meta[name="wizard-selection-reply"][content="own"]')) return null;
-    const s = w.getSelection?.(); if (!s || s.isCollapsed || !s.rangeCount) return null;
+    return { st, w, d, name: String(app.name || st.appId) };
+  }
+  function selRead(frame, key = false) {
+    const c = selApp(frame); if (!c) return null;
+    // The meta opt-out hides only the floating button: the app draws its own. The key still works there.
+    if (!key && c.d.querySelector('meta[name="wizard-selection-reply"][content="own"]')) return null;
+    const s = c.w.getSelection?.(); if (!s || s.isCollapsed || !s.rangeCount) return null;
     const r = s.getRangeAt(0), el = n => n?.nodeType === 1 ? n : n?.parentElement;
-    if (d.activeElement?.matches?.(SEL_EDIT) || el(r.startContainer)?.closest?.(SEL_EDIT) || el(r.endContainer)?.closest?.(SEL_EDIT)) return null;
+    if (c.d.activeElement?.matches?.(SEL_EDIT) || el(r.startContainer)?.closest?.(SEL_EDIT) || el(r.endContainer)?.closest?.(SEL_EDIT)) return null;
     const text = String(s).trim(); if (!text || text.length > 32000) return null;
-    return { st, w, d, r, text, name: String(app.name || st.appId) };
+    return { ...c, r, text };
   }
   function selHide() { if (selRaf) cancelAnimationFrame(selRaf); selRaf = 0; selFrame = null; if (selBtn) selBtn.hidden = true; }
   // Follows the words while shown (scrolls, window drags, resizes); the loop runs only while a selection exists.
@@ -109,20 +115,32 @@
     b.style.left = Math.round(left) + 'px'; b.style.top = Math.round(top) + 'px';
     selRaf = requestAnimationFrame(selPlace);
   }
-  function selSend() {
-    const c = selRead(selFrame); if (!c) return selHide();
+  function selOpen(c, text) {
     // Stable bounded item id: the same words reopen the same draft; new words start a new one.
     let a = 2166136261, z = 5381;
-    for (let i = 0; i < c.text.length; i++) { a = Math.imul(a ^ c.text.charCodeAt(i), 16777619); z = Math.imul(z, 33) ^ c.text.charCodeAt(i); }
+    for (let i = 0; i < text.length; i++) { a = Math.imul(a ^ text.charCodeAt(i), 16777619); z = Math.imul(z, 33) ^ text.charCodeAt(i); }
     const id = 'sel-' + (a >>> 0).toString(16) + (z >>> 0).toString(16);
     const t = String(c.d.title || '').trim().slice(0, 200);
     const title = t && !t.toLowerCase().includes(c.name.toLowerCase()) ? c.name + ' · ' + t : t || c.name;
-    try {
-      const receipt = c.st.openContextDraft(c.st.appId + ':' + id, { title, message: c.text });
-      if (receipt?.kind !== 'unsent-draft' || receipt.sent !== false) throw fault('No draft');
-      try { c.w.getSelection().removeAllRanges(); } catch (_) {}
-    } catch (_) { (window.__wos || window.__wux)?.toast?.('!', 'Couldn’t open Chats · nothing sent', 2400); }
+    const receipt = c.st.openContextDraft(c.st.appId + ':' + id, { title, message: text });
+    if (receipt?.kind !== 'unsent-draft' || receipt.sent !== false) throw fault('No draft');
+  }
+  function selSend() {
+    const c = selRead(selFrame); if (!c) return selHide();
+    try { selOpen(c, c.text); try { c.w.getSelection().removeAllRanges(); } catch (_) {} }
+    catch (_) { (window.__wos || window.__wux)?.toast?.('!', 'Couldn’t open Chats · nothing sent', 2400); }
     selHide();
+  }
+  /* The keyboard way (desktop ⌥A, Miguel 30 Oct 2026): reply about the app in front. Selected words win; with none
+   * (most app screens are rows and buttons that can't be selected) the caller's visible-screen text rides instead.
+   * Returns 'selection' | 'screen' | '' (not an app window, or nothing to quote). */
+  function replyAbout(frame, screen = '') {
+    const sel = selRead(frame, true);
+    const c = sel || selApp(frame); if (!c) return '';
+    const text = sel ? sel.text : String(screen || '').trim().slice(0, 32000); if (!text) return '';
+    selOpen(c, text);
+    if (sel) { try { c.w.getSelection().removeAllRanges(); } catch (_) {} selHide(); }
+    return sel ? 'selection' : 'screen';
   }
   function armSelection(frame) {
     let d; try { d = frame.contentWindow?.document; } catch (_) { return; }
@@ -785,7 +803,7 @@
       return true;
     } catch (_) { done?.(false); return false; }
   }
-  window.WizAppServices = Object.freeze({ voiceCommand, runVoiceCommand, authorized: frame => { const st = frames.get(frame); return valid(st, st?.doc); }, version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
+  window.WizAppServices = Object.freeze({ replyAbout, voiceCommand, runVoiceCommand, authorized: frame => { const st = frames.get(frame); return valid(st, st?.doc); }, version: VERSION, claimShare, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
     orb: Object.freeze({ of: orbOf, tap: orbTap, presenter(fn) { orbShown = typeof fn === 'function' ? fn : () => false; } }),
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),

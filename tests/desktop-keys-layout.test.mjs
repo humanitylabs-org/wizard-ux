@@ -175,3 +175,10 @@ test('⌥] / ⌥[ walk this desk\'s windows left to right (Chats: list, then mes
   api.stepWin(-1); assert.equal(where(), '0:a:win');
   api.stepWin(-1); assert.ok(api.home, '[ past the first window of desktop 1 goes Home');
 });
+
+test('⌥A replies about the app in front: bound, in the guide, chipped on its title, in the palette', () => {
+  assert.match(js, /code === 'KeyA'\) return hit\(\(\) => \{ if \(!e\.repeat\) replyAbout\(\); \}\)/);
+  assert.match(js, /\['A', 'Reply about this'/);
+  assert.match(js, /f\.app === 'frame'\) \{ const n = wel\?\.querySelector\('\.wbar \.t'\); if \(vis\(n\)\) chip\(n, 'A'\)/);
+  assert.match(js, /WizAppServices\?\.replyAbout\?\.\(fr, window\.WizScreen\?\.read\(winEl\(f\.id\)\)/);
+});

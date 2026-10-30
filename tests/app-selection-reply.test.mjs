@@ -22,7 +22,7 @@ function fixture({id='wizard-music',kind='wizard',text='Draft a reply to Ana',me
  const state={visible:true};
  window.WizAppServices.attach(frame,{appId:id,path:app.url,isVisible:()=>state.visible,openContextDraft:(key,item)=>{calls.push({key,item});return {kind:'unsent-draft',id:'fixture',sent:false};}});
  const select=()=>{for(const f of docL.selectionchange||[])f();const r=rafs;rafs=[];for(const f of r)f();};
- return {calls,state,sel,made,select,button:()=>made.find(e=>e.tag==='button'),cleared:()=>cleared};
+ return {services:window.WizAppServices,frame,calls,state,sel,made,select,button:()=>made.find(e=>e.tag==='button'),cleared:()=>cleared};
 }
 test('selected words in an app show the shell Reply above them, inside the window',()=>{
  const f=fixture();f.select();const b=f.button();assert.ok(b);assert.equal(b.hidden,false);assert.equal(b.textContent,'Reply');
@@ -44,4 +44,15 @@ for(const [name,opts,alter] of [['an app that draws its own Reply',{meta:true}],
 });
 test('a window hidden after selecting cannot open a draft',()=>{
  const f=fixture();f.select();f.state.visible=false;f.button().fire('click');assert.equal(f.calls.filter(c=>c.key).length,0);
+});
+test('⌥A with words selected replies with those words, even in an app that draws its own Reply',()=>{
+ const f=fixture({meta:true});assert.equal(f.services.replyAbout(f.frame,'screen words'),'selection');
+ assert.deepEqual({...f.calls[0].item},{title:'Music',message:'Draft a reply to Ana'});assert.equal(f.cleared(),1);
+});
+test('⌥A with nothing selected quotes what is on screen',()=>{
+ const f=fixture({text:''});assert.equal(f.services.replyAbout(f.frame,'Now playing · Song A'),'screen');
+ assert.deepEqual({...f.calls[0].item},{title:'Music',message:'Now playing · Song A'});
+});
+for(const [name,opts,alter,screen] of [['a hidden window',{},f=>f.state.visible=false,'x'],['a non-Wizard page',{kind:'web'},null,'x'],['nothing to quote',{text:''},null,'  ']]) test('⌥A opens nothing for '+name,()=>{
+ const f=fixture(opts);alter?.(f);assert.equal(f.services.replyAbout(f.frame,screen),'');assert.equal(f.calls.filter(c=>c.key).length,0);
 });
