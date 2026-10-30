@@ -81,13 +81,6 @@ test('tap outside closes Settings confirmations like Back without leaving the ow
     assert.equal(h.view.dispatch(outside),true);
     assert.doesNotMatch(h.root.innerHTML,/role="alertdialog"/);
     assert.equal(h.view.page,'chats'); assert.equal(h.posts.length,0);
-    const own={id:'mine',name:'Quiet',base:'nebula',tweaks:{}};
-    h.s.WosMySkin={recipes:[own],active:own,state:{script:{}}};
-    h.view.focus('look'); h.act('data-ownskin-remove','mine');
-    assert.match(h.root.innerHTML,/role="alertdialog"/);
-    assert.equal(h.view.dispatch(outside),true);
-    assert.doesNotMatch(h.root.innerHTML,/role="alertdialog"/);
-    assert.equal(h.view.page,'appearance'); assert.equal(h.posts.length,0);
   }
 });
 test('chooser confirms before POST, reads the exact slot, refreshes registry and rerenders only after confirmation', async () => {
@@ -125,7 +118,7 @@ test('Look: every color in one grid whoever made it, no skin tiles, and Layout i
   const h = harness(); h.s.WosSkin.current = 'obsidian-light'; h.view.focus('look');
   const html = h.root.innerHTML;
   assert.doesNotMatch(html, /data-skinfamily/);
-  assert.match(html, /<h4>Skin<\/h4>[^]*aria-label="All skins"[^]*data-skinpick="nebula"[^]*data-skinpick="obsidian-light" aria-pressed="true"/);
+  assert.match(html, /<h4>Skin<\/h4>[^]*aria-label="Skins"[^]*data-skinpick="nebula"[^]*data-skinpick="obsidian-light" aria-pressed="true"/);
   assert.doesNotMatch(html, /data-layout-row|data-layoutpick|<b>Layout<\/b>/);
   h.s.WosSkin.current = 'nebula'; h.view.render();
   assert.match(h.root.innerHTML, /data-skinpick="nebula" aria-pressed="true"[^]*data-skinpick="obsidian-light" aria-pressed="false"/);
@@ -168,59 +161,22 @@ test('settings.css: rows are hairline lines, not boxes', () => {
   }
   assert.doesNotMatch(css, /\.st-ic \{|\.st-hero \{|\.st-suggestion \{/);
 });
-test('New skin is last; nested Back returns to Look on both shells, never leaves the app', async () => {
+test('Look is only the skin and the tweaks: Select all turns every tweak on, then off', async () => {
   for (const shell of ['phone', 'desktop']) {
-    const h = harness({shell});
-    h.s.WosMySkin = { recipes: [], state: { empty: true, script: {} } };
-    h.s.WosExperience = { installed: async()=>[], defaults: async()=>({}), state: {tweaks:[]} };
+    const h = harness({shell}); const calls = [];
+    h.s.WosMySkin = { state: { empty: true, script: {} } };
+    h.s.WosExperience = { authors: async () => [], setAll: async v => { calls.push(v); }, toggle: async () => {}, state: { busy: false, error: '', tweaks: [
+      { id: 'miguel/hidden-pin', name: 'Hide pin buttons', author: 'miguel', on: true }, { id: 'wizard/two-orbs', name: 'Two orbs', author: 'wizard', on: false }] } };
     h.view.focus('look');
-    assert.match(h.root.innerHTML, /data-skinpick="obsidian-light"[^]*<h4>Your skins<\/h4>[^]*data-newskin[^]*\+ New skin/);
-    h.act('data-newskin'); await tick();
-    assert.match(h.root.innerHTML, /data-newskin-sheet/);
-    assert.match(h.root.innerHTML, /aria-label="Back to Look"/);
-    assert.equal(h.view.back(), true); assert.equal(h.view.page, 'appearance');
-    assert.doesNotMatch(h.root.innerHTML, /data-newskin-sheet/);
-    assert.match(h.root.innerHTML, /data-newskin/);
-    h.act('data-newskin'); h.view.focus('chats'); await tick();
-    assert.equal(h.view.context.skinDraft, null, 'leave invalidates pending form defaults');
+    const html = h.root.innerHTML.split('data-settings-feature="look"')[1].split('<section')[0];
+    assert.doesNotMatch(html, /Your skins|New skin|data-newskin|data-ownskin|data-tweakauthor|Edit with your Wizard|<details/);
+    assert.match(html, /<h4>Skin<\/h4>[^]*<h4>Tweaks<\/h4>[^]*data-tweak-all role="switch" aria-checked="false"[^]*Select all[^]*1 of 2 on[^]*Hide pin buttons[^]*Two orbs/);
+    h.act('data-tweak-all'); await tick();
+    assert.deepEqual(calls, [undefined], 'Select all lets the tweak store decide all-on or all-off');
   }
 });
-test('desktop implicit Appearance uses its feature lifecycle for New skin Back, refresh and leave', async () => {
-  const h = harness({shell:'desktop'});
-  h.s.WosMySkin = {recipes:[],state:{script:{}}};
-  h.s.WosExperience = {installed:async()=>[],defaults:async()=>({}),state:{tweaks:[]}};
-  h.view.render(); assert.equal(h.view.page, '');
-  h.act('data-newskin'); await tick();
-  assert.equal(h.root.dataset.settingsNested,'true');
-  const html = h.root.innerHTML; h.view.render(); assert.equal(h.root.innerHTML,html);
-  assert.equal(h.view.back(),true); assert.equal(h.view.context.skinDraft,null);
-  assert.equal(h.root.dataset.settingsNested,'false');
-  h.act('data-newskin'); h.view.focus('chats'); await tick();
-  assert.equal(h.view.context.skinDraft,null);
-});
-test('own tiles use base preview; own panel shows colours, edit hint and a nested remove confirmation', () => {
-  const h = harness();
-  const own = {id:'mine',name:'Quiet',base:'nebula',tweaks:{}};
-  h.s.WosMySkin = { recipes:[own],active:own,state:{script:{}} };
-  h.view.focus('look');
-  assert.match(h.root.innerHTML,/data-ownskin="mine" aria-pressed="true"/);
-  assert.match(h.root.innerHTML,/aria-label="Quiet skins"/);
-  assert.match(h.root.innerHTML,/change my Quiet skin so…/);
-  h.act('data-ownskin-remove','mine'); assert.match(h.root.innerHTML,/role="alertdialog"/);
-  assert.equal(h.view.back(),true); assert.equal(h.view.page,'appearance');
-  assert.doesNotMatch(h.root.innerHTML,/role="alertdialog"/);
-});
-test('own skin Edit opens only registered Files IDs or shows the Wizard hint', () => {
-  const h = harness(); const opened=[];
-  h.s.WosMySkin = {recipes:[],active:{name:'Quiet'},state:{script:{}}};
-  h.s.WizCanOpen = id => id === 'wizard-files'; h.s.WizOpenApp = id => {opened.push(id); return true;};
-  h.act('data-myskin','edit'); assert.deepEqual(opened,['wizard-files']);
-  h.s.WizCanOpen = id => id === 'files'; h.act('data-myskin','edit'); assert.deepEqual(opened,['wizard-files','files']);
-  h.s.WizCanOpen = () => false; h.act('data-myskin','edit');
-  assert.equal(opened.length,2); assert.match(h.notices.at(-1)[1],/change my Quiet skin so/);
-});
 test('arrows reach every tile without silently wearing or opening it', () => {
-  assert.match(source,/\[data-ownskin\], \[data-newskin\]/);
+  assert.match(source,/\[data-skinpick\], \[data-skinfamily\]/);
   assert.match(source,/buttons\[n\]\.focus\(\);/);
   assert.doesNotMatch(source,/buttons\[n\]\.click/);
 });
