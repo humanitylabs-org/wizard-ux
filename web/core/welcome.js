@@ -3,12 +3,12 @@
  *   1. Connect your AI   pick a provider (Claude first, recommended; ChatGPT; Tinfoil) and sign in inside its own app
  *                        page, opened with ?connect=1 so the app goes straight to its sign-in steps. A provider app
  *                        that is not installed yet is installed through the Store's own install path first.
- *   2. Pick a theme      any of the themes, applied live
+ *   2. Pick a skin      any of the themes, applied live
  *   3. Say hello         the first message; the Chats window opens with it once it is sent
  * Every install method gets the same first run: it opens whenever no AI provider is signed in, and on a brand-new
  * Wizard (Agent Service setup first_run) whose agent already has a provider it starts at step 2. Existing Wizards
  * (first_run false, a provider signed in) never see it. Finishing posts /wizard/v1/setup/seen.
- * Look offers every theme, drawn with the Settings preview cards, over a lighter dim so the real
+ * Look offers every skin, drawn with the Settings preview cards, over a lighter dim so the real
  * interface shows through. The first message opens in the one main Chats window, on its own thread.
  * Name your Wizard (Miguel, 29 Oct 2026) comes first, only while the agent still has the default name: one field,
  * prefilled, Continue keeps it as it is unless edited; the name is saved in the Agent Service settings
@@ -175,8 +175,8 @@
     const S = window.WosSkin;
     if (!S?.list?.length) return paintHello();
     const cur = S.current, list = S.list;
-    return `${BRAND}${dots()}<header class="wl-head"><h2 tabindex="-1">Pick a theme</h2><p>You can change it any time in Settings.</p></header>
-      <div class="st-root wl-skp"><div class="skp" role="group" aria-label="Themes">${list.map(k => card(k, cur)).join('')}</div></div>
+    return `${BRAND}${dots()}<header class="wl-head"><h2 tabindex="-1">Pick a skin</h2><p>You can change it any time in Settings.</p></header>
+      <div class="st-root wl-skp"><div class="skp" role="group" aria-label="Skins">${list.map(k => card(k, cur)).join('')}</div></div>
       <button type="button" class="wl-primary" data-wl="next">Continue</button>`;
   }
 
