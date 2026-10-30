@@ -31,8 +31,29 @@
   const SUBSCRIPTIONS = ['openai-codex', SUB];
   // Connection metadata only: native subscriptions belong to Hermes' Anthropic pool,
   // not the legacy Claude Code login. An unavailable connector leaves legacy intact.
-  const hasNativeClaude = connection => arr(obj(connection).accounts).some(a =>
-    a.id !== 'legacy-claude-code' && a.source !== 'legacy-claude-code' && a.status === 'ready');
+  const nativeClaudeAccounts = connection => arr(obj(connection).accounts).filter(a =>
+    a && a.id !== 'legacy-claude-code' && a.source !== 'legacy-claude-code');
+  // A quota-limited grant is still installed in Hermes' pool. Dropping its route
+  // from the picker would silently steer the owner onto the single-login legacy route.
+  const hasNativeClaude = connection => nativeClaudeAccounts(connection).some(a =>
+    ['ready', 'ok', 'exhausted', 'rate_limited'].includes(a.status));
+  const accountAtLimit = a => {
+    if (!a || !['ready', 'ok', 'connected', 'exhausted', 'rate_limited'].includes(a.status)) return false;
+    if (['exhausted', 'rate_limited'].includes(a.status)) return true;
+    const usage = obj(a.usage);
+    const fetched = Date.parse(usage.fetchedAt);
+    if (!Number.isFinite(fetched) || Math.abs(Date.now() - fetched) > 15 * 60e3) return false;
+    return arr(usage.limits).some(limit =>
+      (limit.id === 'session:session' || limit.id === 'weekly_all:weekly') &&
+      Number(limit.usedPercent) >= 100 && Number(limit.remainingPercent) <= 0);
+  };
+  const claudeLimitNote = connection => {
+    const accounts = arr(obj(connection).accounts);
+    // The connector can say connected/ok even when a fresh usage meter is full.
+    // A model-specific allowance may remain, so never claim all Claude models are out.
+    return accounts.length && accounts.every(accountAtLimit)
+      ? 'Every listed Claude account reports a limit. Changing accounts alone may not restore this model; another model may still be available.' : '';
+  };
   const CLAUDE_ORDER = ['fable', 'opus', 'sonnet', 'haiku'];
   const GPT_ORDER = ['astra', 'sol', 'terra', 'luna', 'codex-spark'];
   // The models closest to the thumb in the compact model menu (James 18 Oct 2026). Everything else is one tap away.
@@ -166,11 +187,11 @@
   }
 
   const M = {
-    options: [], providers: [], tinfoil: null, selections: new Map(), pending: new Map(), ready: false, error: '', at: 0, loading: null, claudeDown: false,
+    options: [], providers: [], tinfoil: null, selections: new Map(), pending: new Map(), ready: false, error: '', at: 0, loading: null, claudeDown: false, claudeLimit: '',
     // The picker refetches on open when its list is older than this, so a just-added sign-in shows up right away.
     FRESH_MS: 15e3,
     stale() { return !M.ready || Date.now() - M.at > M.FRESH_MS; },
-    claudeNote() { return M.claudeDown ? '<p class="ch-sheet-n mwarn" role="status">Claude app not answering · Claude models may be missing</p>' : ''; },
+    claudeNote() { return `${M.claudeDown ? '<p class="ch-sheet-n mwarn" role="status">Claude app not answering · Claude models may be missing</p>' : ''}${M.claudeLimit ? `<p class="ch-sheet-n mwarn" role="status">${esc(M.claudeLimit)}</p>` : ''}`; },
     load(force) {
       if (M.loading) return M.loading;
       if (!force && M.ready && Date.now() - M.at < 5 * 60e3) return Promise.resolve(M.options);
@@ -184,7 +205,7 @@
         .catch(e => { M.claudeDown = /abort|timeout/i.test(String(e?.name || '')) || e instanceof TypeError; return null; });
       M.loading = fetch('/wizard/hermes/api/model/options', { cache: 'no-store', credentials: 'same-origin' })
         .then(r => { if (!r.ok) throw new Error(`Models unavailable (${r.status})`); return r.json(); })
-        .then(async j => { M.tinfoil = await connection; M.providers = arr(obj(j).providers); M.options = normalize(j, hasNativeClaude(await claude)).filter(o => !isTinfoil(o.provider) || M.tinfoilReady()); M.ready = true; M.error = ''; M.at = Date.now(); return M.options; })
+        .then(async j => { M.tinfoil = await connection; const accounts = await claude; M.claudeLimit = claudeLimitNote(accounts); M.providers = arr(obj(j).providers); M.options = normalize(j, hasNativeClaude(accounts)).filter(o => !isTinfoil(o.provider) || M.tinfoilReady()); M.ready = true; M.error = ''; M.at = Date.now(); return M.options; })
         .catch(e => { M.error = String(e.message || e); return M.options; })
         .finally(() => { M.loading = null; });
       return M.loading;

@@ -6,10 +6,11 @@ const source = readFileSync(new URL('../web/core/chat-power.js', import.meta.url
 function harness(kind, explicit = false) {
   const paints = [], state = explicit ? { newModel: { model: 'chosen', provider: 'p' } } : {};
   const w = { id: 'win', thread: '__new__', ...(kind === 'main' ? {} : { agent: kind }) };
-  let defaultModel = 'old', release;
-  const ready = new Promise(r => { release = (fresh = 'fresh') => { defaultModel = fresh; if (fresh !== 'old') M.options = [{ value: fresh, provider: 'p', name: fresh, isGlobalDefault: true }]; r(); }; });
+  let defaultModel = 'old', release, claudeNote = '';
+  const ready = new Promise(r => { release = (fresh = 'fresh', note = '') => { defaultModel = fresh; claudeNote = note; if (fresh !== 'old') M.options = [{ value: fresh, provider: 'p', name: fresh, isGlobalDefault: true }]; r(); }; });
   const el = { querySelectorAll: () => [], insertAdjacentHTML() {}, querySelector: () => null };
   const M = { ready: true, stale: () => true, load: () => ready, options: [{ value: 'old', provider: 'p', name: 'Old', isGlobalDefault: true }],
+    claudeNote: () => claudeNote,
     defaultOption: () => ({ value: defaultModel, provider: 'p' }),
     sheetHtml: opt => { paints.push(JSON.parse(JSON.stringify(opt))); return { list: [], html: '<div></div>' }; } };
   const ctx = { setTimeout, clearTimeout, console, localStorage: { getItem: () => null },
@@ -53,4 +54,9 @@ test('an unchanged catalogue after the open-time refetch does not repaint', asyn
 test('a catalogue that gained a model repaints once', async () => {
   const h = harness('main'); h.open(); h.release('astra'); await new Promise(r => setImmediate(r));
   assert.equal(h.paints.length, 2); assert.equal(h.paints[1].cur.model, 'astra');
+});
+test('a new pool-limit notice repaints an open picker even with unchanged model choices', async () => {
+  const h = harness('main'); h.open(); h.release('old', 'Every Claude account is limited');
+  await new Promise(r => setImmediate(r));
+  assert.equal(h.paints.length, 2);
 });

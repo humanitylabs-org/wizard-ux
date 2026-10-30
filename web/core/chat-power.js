@@ -604,10 +604,10 @@ window.WosChatPower = function chatPower(A) {
     // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
     const priv = !agent && !A.winAgent(w) && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
     openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, retryRunId: s?.retryRunId || '', all: false, agent, priv, pop: !!pop && mode !== 'retry' });
-    // Revalidate every open; repaint only if the catalogue/default actually changed.
+    // Revalidate every open; repaint only if visible choices or the Claude status note changed.
     // WosModels.options is the catalogue array (never a function): compare the fields the sheet shows.
     const rows = list => (Array.isArray(list) ? list : []).map(o => [o.agent, o.provider, o.value, o.name, o.description, !!o.isGlobalDefault]);
-    const key = () => JSON.stringify([rows(M.options), rows(M.privateOptions?.())]);
+    const key = () => JSON.stringify([rows(M.options), rows(M.privateOptions?.()), M.claudeNote?.()]);
     const opened = sheet, before = key();
     M.load(M.ready).then(() => {
       if (sheet !== opened || sheet?.type !== 'model' || H.win(wid)?.thread !== opened.sid) return;
