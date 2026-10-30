@@ -120,9 +120,10 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   const isInstalled = a => !!S.installed.get(key(a)) && !S.installed.get(key(a)).conflict;
   // A share link pins an exact release: treat it as an explicit selection so a different installed commit offers Switch.
   const status = a => S.selections.get(key(a))==='unavailable' ? 'unknown' : releaseState(a,S.installed.get(key(a)),S.selections.has(key(a)) || !!a.install_link,S.complete);
-  // The shell knows which apps have a view it can open; only those get "Open".
+  // The live shell registry is authoritative. Immediately after installation its refresh can still be in flight,
+  // so the same-origin installed-app snapshot is the safe bridge; the host refreshes again before opening.
   const openId = a => S.installed.get(key(a))?.id || '';
-  const canOpen = a => { try { return framed && typeof parent.WizCanOpen === 'function' && parent.WizCanOpen(openId(a)); } catch (_) { return false; } };
+  const canOpen = a => { if (!framed) return false; const id=openId(a); try { if (typeof parent.WizCanOpen === 'function' && parent.WizCanOpen(id)) return true; } catch (_) {} return (S.snapshot?.shell || []).some(x => x?.id === id && x.url); };
 
   /* ---------------- pieces ---------------- */
   function icon(a, size = 'm') {
@@ -131,7 +132,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     const img = a.logo ? `<img src="${DATA}logo/${esc(a.id)}" alt="" loading="lazy" decoding="async">` : '';
     return `<span class="ic ic-${size}" style="--c1:${c1};--c2:${c2}"><b>${letter}</b>${img}</span>`;
   }
-  function action(a, cls = '') {
+  function action(a, cls = '', showInstalled = false) {
     const state=status(a);
     if (S.busy.has(a.id)) return `<span class="get wait ${cls}" aria-live="polite">Installing…</span>`;
     if (S.removing?.has(a.id)) return `<span class="get wait ${cls}" aria-live="polite">Removing…</span>`;
@@ -140,8 +141,12 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     if(state==='unknown') return `<span class="get wait ${cls}" aria-label="Status unavailable">Status unavailable</span>`;
     if(['get','switch','update'].includes(state) && architectureReason(a,S.architecture)) return `<span class="get wait ${cls}" title="${esc(architectureReason(a,S.architecture))}">${S.architecture ? 'Not compatible' : 'Compatibility unavailable'}</span>`;
     if(state==='switch' || state==='update') return `<button class="get upd ${cls}" data-get="${esc(key(a))}">${state==='update'?'Update':'Switch release'}</button>`;
-    if (isInstalled(a) && canOpen(a)) return `<button class="get open ${cls}" data-open="${esc(openId(a))}">Open</button>`;
-    if (isInstalled(a)) return `<span class="get have ${cls}" aria-label="Installed">✓ Installed</span>`;
+    if (isInstalled(a)) {
+      const have = `<span class="get have ${cls}" aria-label="Installed">✓ Installed</span>`;
+      if (!canOpen(a)) return have;
+      const open = `<button class="get open ${cls}" data-open="${esc(openId(a))}">Open</button>`;
+      return showInstalled ? `<span class="install-actions">${have}${open}</span>` : open;
+    }
     return `<button class="get ${cls}" data-get="${esc(key(a))}">Get</button>`;
   }
   const row = base => {const a=selected(base); return `<div class="row" data-app="${esc(key(a))}" role="button" tabindex="0">${icon(a)}<span class="tx"><b>${esc(a.name)}</b>${badge(a)}<small>${esc(kindOf(a).one)} · ${esc(a.summary)}</small></span>${action(a)}</div>`;};
@@ -197,7 +202,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     const info = [['Kind', k.one], ['Source', provenance(a).label + (provenance(a).detail ? ' · ' + provenance(a).detail : '')], ['Publisher', a.publisher], ['Version', a.version], ['Commit', a.commit], ['Runs on', (a.architectures || []).join(' · ')], ['Installs', a.installs > 0 ? String(a.installs) : 'New']]
       .filter(([, v]) => v).map(([l, v]) => `<div><dt>${esc(l)}</dt><dd>${esc(v)}</dd></div>`).join('');
     $('detail').innerHTML = `<div class="d-hero" style="--c1:${c1};--c2:${c2}"><button class="back" data-back aria-label="Back">‹</button>
-        ${icon(a, 'l')}<div class="d-id"><h2>${esc(a.name)}</h2>${badge(a)}<p>${esc(k.one)}${a.publisher ? ` · ${esc(a.publisher)}` : ''}</p>${action(a, 'big')}${removable(a) ? `<button type="button" class="remove-action" data-remove="${esc(key(a))}">Remove app</button>` : ''}${['beta','link','local'].includes(provenance(a).kind) && installShareLink({...a,...S.installed.get(key(a))}) ? `<button type="button" class="share-action" data-share="${esc(key(a))}">Share</button>` : ''}</div></div>
+        ${icon(a, 'l')}<div class="d-id"><h2>${esc(a.name)}</h2>${badge(a)}<p>${esc(k.one)}${a.publisher ? ` · ${esc(a.publisher)}` : ''}</p>${action(a, 'big', true)}${removable(a) ? `<button type="button" class="remove-action" data-remove="${esc(key(a))}">Remove app</button>` : ''}${['beta','link','local'].includes(provenance(a).kind) && installShareLink({...a,...S.installed.get(key(a))}) ? `<button type="button" class="share-action" data-share="${esc(key(a))}">Share</button>` : ''}</div></div>
       ${base.releases.length ? `<section class="d-sec"><label class="release-label">Release <select id="release-choice" data-release="${esc(key(base))}">${S.selections.get(key(base))==='unavailable'?'<option selected disabled>Selected release no longer available</option>':''}${base.releases.map(r=>`<option value="${esc(`${r.source}:${r.commit}`)}" ${S.selections.get(key(base))!=='unavailable' && r.source===a.source && r.commit===a.commit?'selected':''}>${sourceLabel(r).label} · ${esc(r.version)} · ${esc(r.source_name)}</option>`).join('')}</select></label><p class="d-note">Beta marks availability, not your installed channel. Open uses your existing app; choosing another release never installs it automatically.</p></section>` : ''}
       ${base.conflict ? sourcesSection(base) : ''}
       <div class="d-stats"><div><b>${esc(k.one)}</b><small>Kind</small></div><div><b>${a.installs > 0 ? a.installs : 'New'}</b><small>Installs</small></div><div><b>${esc((a.version || '—').split(/[-+]/)[0])}</b><small>Version</small></div><div><b>${(a.tags || [])[0] ? esc(cap(a.tags[0])) : '—'}</b><small>Topic</small></div></div>

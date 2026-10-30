@@ -99,13 +99,14 @@ const SKINS=[{id:'nebula',css:''},{id:'obsidian-light',css:'/wizard-os-home/skin
    const sources=await f.locator('#detail .src-list').innerText();
    assert.match(sources,/origin-team\/cards\s+Installed/); assert.match(sources,/fork-team\/cards\s+Version 0\.5\.1/);
    assert.match(await f.locator('#detail').innerText(),/Wizard keeps the installed one/);
-   assert.equal(await f.locator('#detail [data-open="cards"]').count(),1); assert.equal(await f.locator('#detail [data-get]').count(),0);
+   assert.equal(await f.locator('#detail [data-open="cards"]').count(),1); assert.equal(await f.locator('#detail .install-actions .get.have').innerText(),'✓ Installed'); assert.equal(await f.locator('#detail [data-get]').count(),0);
    await shot('cards-detail'); await noOverflow('cards detail'); await tap(f.locator('#detail [data-back]'));
    // Wizard's own apps never offer removal.
    await tap(f.locator('.row[data-app^="helper|"] .tx')); await f.locator('#detail [data-open="helper"]').waitFor();
    assert.equal(await f.locator('#detail [data-remove]').count(),0); await tap(f.locator('#detail [data-back]'));
    // Ledger: Open stays primary; Remove app is a quiet secondary action.
    await tap(f.locator('.row[data-app^="ledger|"] .tx')); await f.locator('#detail [data-open="ledger"]').waitFor();
+   assert.equal(await f.locator('#detail .install-actions .get.have').innerText(),'✓ Installed');
    const looks=await f.evaluate(()=>{const o=document.querySelector('#detail [data-open]'),r=document.querySelector('#detail [data-remove]'),cs=e=>getComputedStyle(e);
     return {open:{bg:cs(o).backgroundColor,box:o.getBoundingClientRect().toJSON()},remove:{bg:cs(r).backgroundColor,color:cs(r).color,text:r.textContent,box:r.getBoundingClientRect().toJSON()}};});
    assert.equal(looks.remove.text,'Remove app'); assert.match(looks.remove.bg,/rgba\(0, 0, 0, 0\)|transparent/);

@@ -80,6 +80,8 @@ h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
 .get.light { color: #fff; background: rgba(255, 255, 255, .22); backdrop-filter: blur(8px); }
 .get.big { height: 34px; min-width: 96px; font-size: 15px; color: #fff; background: var(--violet); margin-top: 10px; }
 .get.big.have { background: rgba(79, 240, 176, .14); color: var(--green); }
+.install-actions { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.install-actions .get.big { box-sizing: border-box; }
 /* One colour per meaning: violet = Get, green = on this box (solid Open, quiet Installed),
    amber = needs attention (Update, conflict), grey = waiting or unknown. */
 .get:not(.open):not(.have):not(.upd):not(.warn):not(.wait):not(.light) { color: var(--wz-on-accent, var(--s-on-accent)); background: var(--wz-accent, var(--violet)); }
