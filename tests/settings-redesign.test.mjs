@@ -125,7 +125,7 @@ test('Look: every color in one grid whoever made it, no skin tiles, and Layout i
   const h = harness(); h.s.WosSkin.current = 'obsidian-light'; h.view.focus('look');
   const html = h.root.innerHTML;
   assert.doesNotMatch(html, /data-skinfamily/);
-  assert.match(html, /<h4>Color<\/h4>[^]*aria-label="All colors"[^]*data-skinpick="nebula"[^]*data-skinpick="obsidian-light" aria-pressed="true"/);
+  assert.match(html, /<h4>Theme<\/h4>[^]*aria-label="All themes"[^]*data-skinpick="nebula"[^]*data-skinpick="obsidian-light" aria-pressed="true"/);
   assert.doesNotMatch(html, /data-layout-row|data-layoutpick|<b>Layout<\/b>/);
   h.s.WosSkin.current = 'nebula'; h.view.render();
   assert.match(h.root.innerHTML, /data-skinpick="nebula" aria-pressed="true"[^]*data-skinpick="obsidian-light" aria-pressed="false"/);
@@ -204,7 +204,7 @@ test('own tiles use base preview; own panel shows colours, edit hint and a neste
   h.s.WosMySkin = { recipes:[own],active:own,state:{script:{}} };
   h.view.focus('look');
   assert.match(h.root.innerHTML,/data-ownskin="mine" aria-pressed="true"/);
-  assert.match(h.root.innerHTML,/aria-label="Quiet colors"/);
+  assert.match(h.root.innerHTML,/aria-label="Quiet themes"/);
   assert.match(h.root.innerHTML,/change my Quiet skin so…/);
   h.act('data-ownskin-remove','mine'); assert.match(h.root.innerHTML,/role="alertdialog"/);
   assert.equal(h.view.back(),true); assert.equal(h.view.page,'appearance');

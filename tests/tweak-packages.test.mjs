@@ -37,23 +37,27 @@ test('multiple ordered packages clean listeners, CSS, mounts and action intercep
 });
 test('colors and tweaks are separate: a color pick never changes tweaks; a preset starts over; any tweak can be tried', async () => {
   const storage = new Map([['wos.skin', 'obsidian']]); let skin = 'obsidian', active = [];
-  const profiles = { miguel: { id: 'miguel', name: 'Miguel’s', version: 1, tweaks: ['miguel/hidden-pin'] }, wizard: JSON.parse(read('web/tweaks/wizard/profile.json')) };
+  const profiles = { miguel: { id: 'miguel', name: 'Miguel', version: 1, tweaks: ['miguel/hidden-pin'] }, wizard: JSON.parse(read('web/tweaks/wizard/profile.json')) };
   const fams = [{ id: 'wizard', tweaks: 'wizard', palettes: ['grove'] }, { id: 'mizel', tweaks: 'miguel', palettes: ['obsidian', 'landscapes'] }];
   const window = { WosSkin: { get current() { return skin; }, families: fams, familyOf: id => fams.find(f => f.palettes.includes(id)).id }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, loadTweaks: async ids => { active = ids.filter(id => !['wizard/unified-inbox', 'wizard/machines-home'].includes(id)); } }, addEventListener() {}, dispatchEvent() {} };
   const ctx = { window, setTimeout, document: { baseURI:'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal, localStorage: { getItem:k=>storage.get(k), setItem:(k,v)=>storage.set(k,v) }, fetch: async url => ({ ok:true, json: async () => { const who = url.pathname.match(/tweaks\/([^/]+)\/profile\.json$/)?.[1]; return who ? profiles[who] : JSON.parse(read('web/'+url.pathname.split('/wizard-os-home/')[1])); } }) };
   vm.runInNewContext(read('web/core/experience.js'), ctx); const E = window.WosExperience;
-  await E.refresh(); assert.equal(E.state.preset, 'miguel', 'a device from before the split keeps the set its color brought');
-  assert.deepEqual(Array.from(active), ['miguel/hidden-pin']);
+  await E.refresh(); assert.deepEqual(Array.from(active), ['miguel/hidden-pin'], 'a device from before keeps what its color brought');
+  assert.deepEqual(JSON.parse(storage.get('wos.skin-tweaks.v1')).mix, { 'miguel/hidden-pin': true }, 'written into its own switches once');
   skin = 'grove'; await E.chooseSkin(); assert.deepEqual(Array.from(active), ['miguel/hidden-pin'], 'a color pick keeps the tweaks');
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
   assert.equal(E.state.tweaks.length, new Set([...cat.tweaks, ...cat.defaults]).size, 'every installed tweak is offered, whoever wrote it');
   await E.toggle('wizard/two-orbs'); assert.deepEqual(Array.from(active).sort(), ['miguel/hidden-pin', 'wizard/two-orbs'], 'another author\'s tweak can be tried');
   await E.toggle('miguel/hidden-pin'); assert.deepEqual(Array.from(active), ['wizard/two-orbs']);
   profiles.miguel = { ...profiles.miguel, version: 2, tweaks: ['miguel/home-bars', 'miguel/hidden-pin'] }; await E.refresh();
-  assert.deepEqual(Array.from(active).sort(), ['miguel/home-bars', 'wizard/two-orbs'], 'newly published tweaks arrive; offs are kept');
-  await E.choosePreset('wizard'); assert.equal(E.state.preset, 'wizard'); assert.deepEqual(Array.from(active), [], 'a preset starts over');
-  await E.choosePreset('nobody'); assert.equal(E.state.preset, 'wizard', 'unknown sets are ignored');
-  assert.deepEqual(Array.from(await E.presets(), p => p.name), ['Standard', 'Miguel’s'], 'Standard first');
+  assert.deepEqual(Array.from(active), ['wizard/two-orbs'], 'new features start off for everyone');
+  const mig = cat.tweaks.filter(id => id.startsWith('miguel/'));
+  await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), [...mig, 'wizard/two-orbs'].sort(), 'Miguel\'s button turns all of his on, adding to the rest');
+  await E.chooseAuthor('wizard'); assert.ok(active.includes('wizard/app-borders') && active.includes('wizard/two-orbs'));
+  await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), ['wizard/app-borders', 'wizard/two-orbs'], 'tapped again: his are off, James\'s stay');
+  const authors = await E.authors(); assert.deepEqual(Array.from(authors, a => a.name), ['Miguel', 'James']);
+  assert.ok(!authors.some(a => a.ids.some(id => cat.defaults.includes(id))), 'built-in features have no quick button');
+  assert.equal(E.state.tweaks.find(t => t.id === 'wizard/unified-inbox').builtin, true);
 });
 
 test('event access is capability-gated, render payloads have no DOM, stale model and nav APIs are inert', async () => {
@@ -154,8 +158,8 @@ test('own recipes expose all installed tweaks, use published defaults and isolat
   await f.E.refresh(); const defaults = await f.E.defaults();
   assert.equal(defaults['wizard/app-borders'], false); assert.equal(defaults['wizard/two-orbs'], false);
   assert.equal(defaults['miguel/model-pills'], false, 'a new skin starts from what runs now');
-  await f.E.choosePreset('miguel'); assert.equal((await f.E.defaults())['miguel/model-pills'], true);
-  await f.E.choosePreset('wizard');
+  await f.E.chooseAuthor('miguel'); assert.equal((await f.E.defaults())['miguel/model-pills'], true);
+  await f.E.chooseAuthor('miguel');
   const skin = {id:'quiet',tweaks:{...defaults,'miguel/model-pills':true}};
   f.window.WosMySkin = {active:skin,update(v){ Object.assign(skin.tweaks,v.tweaks); }};
   await f.E.refresh(); const cat = JSON.parse(read('web/tweaks/catalog.json')); assert.equal(f.E.state.tweaks.length, cat.tweaks.length - (cat.oneOf || []).reduce((n, g) => n + g.length - 1, 0), 'one switch per oneOf group');
@@ -170,7 +174,7 @@ test('installed list warms base profiles so picking Mizel does not wait for anot
   await f.E.installed();
   const count = () => f.requests.filter(p => p.endsWith('/miguel/profile.json')).length;
   assert.equal(count(), 1);
-  await f.E.refresh(); await f.E.choosePreset('miguel'); assert.equal((await f.E.defaults())['miguel/model-pills'], true);
+  await f.E.refresh(); await f.E.chooseAuthor('miguel'); assert.equal((await f.E.defaults())['miguel/model-pills'], true);
   await f.E.defaults(); assert.equal(count(), 1);
 });
 

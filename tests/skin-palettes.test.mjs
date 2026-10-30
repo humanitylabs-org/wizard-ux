@@ -27,7 +27,7 @@ test('Settings › Look shows every color as a preview card in one flat grid, wi
   assert.doesNotMatch(s, /suggestionHtml|data-chats-suggest/);
   assert.match(s, /\$\{S\.list\.map\(k => skinCard\(k, cur\)\)\.join\(''\)\}/, 'one list of every color');
   assert.match(s, /aria-label="Your skins">\$\{ownTiles\(S\)\}\$\{newTile\(\)\}<\/div>/);
-  assert.match(s, /<h4>Color<\/h4>/);
+  assert.match(s, /<h4>Theme<\/h4>/);
   assert.doesNotMatch(read('web/core/skins.css'), /\.skp-fam/);
 });
 
@@ -40,7 +40,8 @@ test('colors and tweaks are separate: onboarding offers every color; Look offers
   const w = read('web/core/welcome.js'), s = read('web/core/settings.js'), e = read('web/core/experience.js');
   assert.match(w, /const cur = S\.current, list = S\.list;/, 'first run lists every color, not one skin\'s');
   assert.doesNotMatch(w, /fam\.palettes/);
-  assert.match(s, /data-tweakpreset=/, 'a tweak set is picked on its own');
+  assert.match(s, /data-tweakauthor=/, 'a quick button per author');
+  assert.doesNotMatch(s, /data-tweakpreset/, 'no preset sets: everything starts off');
   assert.match(e, /chooseSkin\(\) \{ if \(wornOwner\(\) !== owner\) return apply\(\); return Promise\.resolve\(\); \}/, 'a color pick never swaps the tweak set');
   for (const who of ['wizard', 'miguel']) assert.equal(typeof JSON.parse(read(`web/tweaks/${who}/profile.json`)).name, 'string', who + ' set has a display name');
 });

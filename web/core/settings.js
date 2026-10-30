@@ -253,14 +253,18 @@
     const E = window.WosExperience; if (!E) return '';
     const s = E.state, own = window.WosMySkin?.active;
     if (!s.tweaks.length && !s.error) return '';
-    const rows = tweakSwitches(s.tweaks, 'data-tweak-toggle', s.busy);
-    if (own) return `<div class="tw-set"><h4>Tweaks</h4>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</div>`;
-    const on = s.tweaks.filter(t => t.on).length;
-    if (!presetList) window.WosExperience.presets?.().then(list => { presetList = list; for (const m of mounts) m.render(); }, () => {});
-    const chips = (presetList || []).length > 1 ? `<div class="st-seg tw-presets" role="radiogroup" aria-label="Start from">${presetList.map(p => `<button type="button" role="radio" data-tweakpreset="${esc(p.id)}" aria-checked="${p.id === s.preset}"${s.busy ? ' disabled' : ''}>${esc(p.name)}</button>`).join('')}</div>` : '';
-    return `<div class="tw-group"><h4>Tweaks</h4>${chips}<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row wz-row"><span class="st-tx"><b>How things work</b><small>${on} of ${s.tweaks.length} changes on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</details></div>`;
+    if (!authorList) E.authors?.().then(list => { authorList = list; for (const m of mounts) m.render(); }, () => {});
+    const name = who => (authorList || []).find(a => a.id === who)?.name || who;
+    const exp = s.tweaks.filter(t => !t.builtin), built = s.tweaks.filter(t => t.builtin);
+    const rows = list => tweakSwitches(list.map(t => ({ ...t, description: [t.description, t.builtin ? '' : 'by ' + name(t.author)].filter(Boolean).join(' · ') })), 'data-tweak-toggle', s.busy);
+    const err = s.error ? `<p role="alert">${esc(s.error)}</p>` : '';
+    if (own) return `<div class="tw-set"><h4>Experimental features</h4>${err}${rows(exp)}${built.length ? `<h4>Built in</h4>${rows(built)}` : ''}</div>`;
+    const on = exp.filter(t => t.on).length;
+    // Quick buttons: one per author; they add to what is on (tap James's and Miguel's = all), tap again to take them off.
+    const quick = (authorList || []).filter(a => a.ids.length).map(a => { const all = a.ids.every(id => exp.find(t => t.id === id)?.on); return `<button type="button" class="tw-quick" data-tweakauthor="${esc(a.id)}" aria-pressed="${all}"${s.busy ? ' disabled' : ''}>${all ? '✓ ' : ''}${esc(a.name)}’s (${a.ids.length})</button>`; }).join('');
+    return `<div class="tw-group"><h4>Experimental features</h4><p class="st-hint">Off unless you turn them on. Each one is someone’s idea being tried out.</p>${quick ? `<div class="tw-quicks" role="group" aria-label="Get someone’s experimental features">${quick}</div>` : ''}<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row wz-row"><span class="st-tx"><b>All experimental features</b><small>${on} of ${exp.length} on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${err}${rows(exp)}</details>${built.length ? `<div class="tw-built"><h4>Built in</h4>${rows(built)}</div>` : ''}</div>`;
   }
-  let tweaksOpen = false, presetList = null;
+  let tweaksOpen = false, authorList = null;
   window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
   const newTile = () => window.WosMySkin ? '<button type="button" class="skp-card skp-my" data-newskin aria-label="New skin"><span class="skp-mini skp-mini-my" aria-hidden="true"><i class="skp-plus"></i></span><span class="skp-nm">+ New skin</span></button>' : '';
   function skinAction(action, done, failed) {
@@ -295,7 +299,7 @@
     finally { if (ctx.skinDraft === draft && draft.seq === seq) { draft.loading = false; ctx.render?.(); } }
   }
   function newSkinHtml(S, draft) {
-    return `<div class="st-group sc-sheet skin-create" data-newskin-sheet><h4>New skin</h4><label>Name<input data-skin-name maxlength="60" autocomplete="off" value="${esc(draft.name)}" placeholder="Give your skin a name"></label><h4>Color</h4><div class="skp" role="group" aria-label="New skin colors">${S.list.map(k => skinCard(k, draft.base)).join('')}</div><h4>Tweaks</h4><p class="st-hint">All installed tweaks · starts with the ones on now.</p>${draft.loading ? '<p role="status">Loading tweaks…</p>' : tweakSwitches((draft.items || []).map(t => ({ ...t, on: draft.tweaks[t.id] })), 'data-draft-tweak')}${draft.validation ? `<p role="alert">${esc(draft.validation)}</p>` : ''}${draft.error ? `<p role="alert">${esc(draft.error)}</p><button data-skinretry>Try again</button>` : ''}<div class="st-actions"><button data-skin-create${draft.loading || draft.error || draft.saving ? ' disabled' : ''}>Create skin</button></div></div>`;
+    return `<div class="st-group sc-sheet skin-create" data-newskin-sheet><h4>New skin</h4><label>Name<input data-skin-name maxlength="60" autocomplete="off" value="${esc(draft.name)}" placeholder="Give your skin a name"></label><h4>Theme</h4><div class="skp" role="group" aria-label="New skin themes">${S.list.map(k => skinCard(k, draft.base)).join('')}</div><h4>Experimental features</h4><p class="st-hint">Starts with the ones on now.</p>${draft.loading ? '<p role="status">Loading tweaks…</p>' : tweakSwitches((draft.items || []).map(t => ({ ...t, on: draft.tweaks[t.id] })), 'data-draft-tweak')}${draft.validation ? `<p role="alert">${esc(draft.validation)}</p>` : ''}${draft.error ? `<p role="alert">${esc(draft.error)}</p><button data-skinretry>Try again</button>` : ''}<div class="st-actions"><button data-skin-create${draft.loading || draft.error || draft.saving ? ' disabled' : ''}>Create skin</button></div></div>`;
   }
   function lookHtml(S, ctx) {
     window.WosExperience?.installed?.().catch(() => {}); // warm the tweak list for New skin
@@ -303,11 +307,11 @@
     const cur = S.current, base = lookName(S, cur), own = window.WosMySkin?.active;
     loadFaces();
     // One list of every color, whoever made it (James's five, Novaire's two, Miguel's four), in the skins' own order.
-    const colours = `<div class="skp-colours"><div class="skp" role="group" aria-label="${esc(own?.name || 'All')} colors">${S.list.map(k => skinCard(k, cur)).join('')}</div></div>`;
+    const colours = `<div class="skp-colours"><div class="skp" role="group" aria-label="${esc(own?.name || 'All')} themes">${S.list.map(k => skinCard(k, cur)).join('')}</div></div>`;
     const mine = window.WosMySkin ? `<div class="skp-own"><h4>Your skins</h4><div class="skp skp-families" role="group" aria-label="Your skins">${ownTiles(S)}${newTile()}</div></div>` : '';
     const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
     const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
-    return `<div class="st-group" data-stgroup="look"><h4>Color</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${colours}</div>${tweakRows(S)}${mine}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
+    return `<div class="st-group" data-stgroup="look"><h4>Theme</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${colours}</div>${tweakRows(S)}${mine}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
   }
   register({ id: 'look', aliases: ['skin'], html(ctx) {
     const S = window.WosSkin; if (!S) return '';
@@ -358,8 +362,8 @@
     if (set) { event?.preventDefault?.(); tweaksOpen = !set.parentElement.open; set.parentElement.open = tweaksOpen; return true; }
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
-    const preset = el.closest('[data-tweakpreset]');
-    if (preset) { tweaksOpen = true; void window.WosExperience?.choosePreset?.(preset.dataset.tweakpreset).catch(e => ctx.toast?.('!', e.message, 2400)); ctx.haptic?.(8); return true; }
+    const quick = el.closest('[data-tweakauthor]');
+    if (quick) { void window.WosExperience?.chooseAuthor?.(quick.dataset.tweakauthor).catch(e => ctx.toast?.('!', e.message, 2400)); ctx.haptic?.(8); return true; }
     const b = el.closest('[data-skinpick]'); if (!b) return false;
     skinAction(() => M?.active ? M.update({ base: b.dataset.skinpick }) : S.set(b.dataset.skinpick), () => {
       void window.WosExperience?.chooseSkin?.();

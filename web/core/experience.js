@@ -1,9 +1,9 @@
-/* Colors and tweaks are separate choices (Miguel, 30 Oct 2026). A color is only a look; tweaks change how things
- * work. Tweaks come in published sets (web/tweaks/<owner>/profile.json): the owner picks one set as a starting point
- * ("Standard", "Miguel's") and can then switch any installed tweak on or off, whoever wrote it. Changing color never
- * changes tweaks. Saved per device as { preset, mix } in wos.skin-tweaks.v1; a device from before this split keeps
- * the set its color used to bring, with its offs. Device storage is isolated here until Agent Service offers an
- * owner profile route. */
+/* Themes and experimental features are separate choices (Miguel, 30 Oct 2026). A theme is only a look. Every
+ * experimental feature (web/tweaks/<author>/<id>) is one switch, off by default, labelled with its author; a quick
+ * button per author turns all of theirs on (or off). Catalog `defaults` are built-in features, not experiments: on for
+ * everyone, with an owner off-switch. Saved per device as { mix } in wos.skin-tweaks.v1. A device from before keeps
+ * exactly what it ran: the set its color used to bring (with its offs) is written into mix once, then never again.
+ * Device storage is isolated here until Agent Service offers an owner profile route. */
 (() => {
   'use strict';
   const KEY = 'wos.skin-tweaks.v1', ID = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/;
@@ -134,11 +134,13 @@
     const on = id => published?.tweaks.includes(id) && !(published.off || []).includes(id);
     return Object.fromEntries(list.map(m => [m.id, globalIds().includes(m.id) ? !globalOff(m.id) : (mixOf(m.id) ?? !!on(m.id))]));
   }
-  // The published sets, in catalog order, for the preset buttons in Settings › Look.
-  async function presets() {
+  // Authors with experimental features here, for the quick buttons: display name from their profile, else the id.
+  async function authors() {
     catalog ||= await read('tweaks/catalog.json');
-    const out = await Promise.all((catalog.profiles || []).map(async who => { try { const p = await profile(who); return { id: who, name: typeof p.name === 'string' ? p.name : who }; } catch (_) { return null; } }));
-    return out.filter(Boolean);
+    const names = new Map(await Promise.all((catalog.profiles || []).map(async who => { try { const p = await profile(who); return [who, typeof p.name === 'string' ? p.name : who]; } catch (_) { return [who, who]; } })));
+    const out = new Map();
+    for (const id of catalog.tweaks) { if (globalIds().includes(id)) continue; const who = id.split('/')[0]; if (!out.has(who)) out.set(who, { id: who, name: names.get(who) || who, ids: [] }); out.get(who).ids.push(id); }
+    return [...out.values()];
   }
   async function apply(warm = false) {
     const seq = ++generation; busy = true; error = ''; changed();
@@ -156,6 +158,12 @@
         const mix = {}; for (const id of next?.tweaks || []) { const on = !state.carry.includes(id); if (on !== presetOn(id)) mix[id] = on; }
         state.mix = mix; delete state.carry; Store.write(state);
       }
+      // Flatten once: what the old set turned on becomes the owner's own switches; from now on everything starts off.
+      if (who) {
+        const mix = {};
+        for (const id of catalog.tweaks) if (!globalIds().includes(id) && (mixOf(id) ?? presetOn(id))) mix[id] = true;
+        state.mix = mix; state.preset = 'none'; Store.write(state); owner = null; set = null;
+      }
       if (who) profileReads.set(who, Promise.resolve(next));
       const own = recipe();
       // Every installed tweak is offered, whoever wrote it; the preset only sets which start on.
@@ -167,20 +175,23 @@
   }
   const experience = {
     get state() {
-      return copy({ owner, preset: state.preset || null, busy, error, active: window.WosSkinHost?.tweakState || [],
-        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', on: groupOf(id) ? groupOn(id) : enabled(id) })) });
+      return copy({ owner, busy, error, active: window.WosSkinHost?.tweakState || [],
+        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), on: groupOf(id) ? groupOn(id) : enabled(id) })) });
     },
-    installed, defaults, presets,
+    installed, defaults, authors,
     // Replacement groups (catalog `oneOf`): each loads only its first enabled member. Read after installed() settles.
     groups: () => (catalog?.oneOf || []).map(g => [...g]),
     get installedReady() { return !!installedP?.settled; },
     refresh: apply,
     // A color pick never changes tweaks; kept so older callers stay harmless.
     chooseSkin() { if (wornOwner() !== owner) return apply(); return Promise.resolve(); },
-    // Start over from a published set (or 'none'): the owner's per-tweak choices are cleared.
-    choosePreset(who) {
-      if (!(who === 'none' || (WHO.test(who) && (catalog?.profiles || []).includes(who)))) return Promise.resolve();
-      state.preset = who; state.mix = {}; Store.write(state); return apply(true);
+    // Quick button: turn on every experimental feature by this author; if all are on already, turn them off.
+    async chooseAuthor(who) {
+      if (!WHO.test(who) || !catalog) return;
+      const ids = catalog.tweaks.filter(id => id.startsWith(who + '/') && !globalIds().includes(id)); if (!ids.length) return;
+      const own = recipe(), on = !ids.every(id => enabled(id, own));
+      for (const id of ids) await setOne(id, on);
+      return apply();
     },
     async toggle(id) {
       const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
