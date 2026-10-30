@@ -2515,11 +2515,15 @@
   window.WosWorkspaceSync?.create({
     shell: 'desktop',
     title: w => appOf(w)?.name || w.title || w.appId,
-    read: () => ({ desks: ws.map(d => ({ id: d.id, wins: d.wins.map(id => W[id]).filter(Boolean) })) }),
+    // A minimized chat is only a desktop way of showing it: other devices (the phone) see it in its usual place,
+    // first on desktop 1, as a normal window (Miguel, 30 Oct 2026).
+    read: () => ({ desks: ws.map((d, i) => ({ id: d.id, wins: [...(i === 0 && hud && W[hud.id] ? [hud.id] : []), ...d.wins].map(id => W[id]).filter(Boolean) })) }),
     apply(state, o = {}) {
       if (!state) { const i = ws.findIndex(d => d.id === o.focus); if (i >= 0) { closeSettings(); goWs(i); } return; }
       const here = ws[cur]?.id, at = cur;
       const r = window.WosWorkspaceSync.reconcile(ws, W, state, { fresh: id => ({ ...freshDesk(), id }) });
+      // The minimized chat stays minimized here; the copy on desktop 1 is how other devices see it.
+      if (hud) r.desks.forEach(d => { const k = d.wins.indexOf(hud.id); if (k >= 0) { d.wins.splice(k, 1); if (d.focus === hud.id) d.focus = d.wins[Math.max(0, k - 1)] || null; } });
       r.removed.forEach(id => { boundManager?.dismiss(W[id]); if (W[id]?.app === 'chats') CHATS.saveDraft(id); delete W[id]; CHATS.forget(id); });
       ws = r.desks.length ? r.desks : [freshDesk()];
       ws.forEach(d => { d.mono = !!d.mono && d.wins.length > 0; });

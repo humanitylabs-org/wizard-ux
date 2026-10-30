@@ -19,8 +19,8 @@ test('Chats windows get a Minimize button beside ✕; other windows do not; no f
 test('the HUD window lives outside the desks: never pruned at boot, never synced, never tiled', () => {
   assert.match(js, /if \(id !== hud\?\.id && !ws\.some\(d => d\.wins\.includes\(id\)\)\) delete W\[id\];/);
   assert.match(js, /store\.set\('hud', hud\)/);
-  // Workspace sync reads desk windows only, so the HUD stays on this device.
-  assert.match(js, /read: \(\) => \(\{ desks: ws\.map\(d => \(\{ id: d\.id, wins: d\.wins\.map\(id => W\[id\]\)\.filter\(Boolean\) \}\)\) \}\)/);
+  // Workspace sync shows the minimized chat to other devices first on desktop 1, as a normal window.
+  assert.match(js, /read: \(\) => \(\{ desks: ws\.map\(\(d, i\) => \(\{ id: d\.id, wins: \[\.\.\.\(i === 0 && hud && W\[hud\.id\] \? \[hud\.id\] : \[\]\), \.\.\.d\.wins\]/);
   // It leaves its desk when floated and goes back to the desk in front when put back.
   const on = js.slice(js.indexOf('function hudOn('), js.indexOf('function hudKeepPlace('));
   assert.match(on, /d\.wins\.splice\(i, 1\);/);
@@ -155,4 +155,20 @@ test('Back to desktop 1 gives Chats desktop 1 to itself and moves every other de
   }
   const empty = run([{ id: 'd1', wins: [], focus: null }, { id: 'd2', wins: ['b'], focus: 'b' }]);
   assert.deepEqual(empty.ctx.ws.map(d => d.wins), [['h'], ['b']]);
+});
+
+test('the phone sees a minimized desktop chat as a normal Chats window on desktop 1, and syncing back keeps it minimized here', async () => {
+  const sync = read('web/core/workspace-sync.js');
+  const ctx = { window: {}, localStorage: { getItem() { return null; }, setItem() {} }, navigator: { userAgent: 'x' }, location: { href: 'https://x/' }, setTimeout, clearTimeout, console, fetch: async () => ({ ok: false }), document: { addEventListener() {}, visibilityState: 'visible' }, addEventListener() {} };
+  ctx.globalThis = ctx; vm.runInNewContext(sync, ctx);
+  const WS = ctx.window.WosWorkspaceSync; assert.ok(WS?.reconcile);
+  const readSrc = js.match(/read: (\(\) => \(\{ desks: ws\.map\(\(d, i\)[^\n]+\}\)\) \}\)),\n/)[1];
+  const W = { h: { id: 'h', app: 'chats', thread: 't1' }, a: { id: 'a', app: 'frame', appId: 'files' } };
+  const ws = [{ id: 'd1', wins: ['a'], focus: 'a' }], hud = { id: 'h', open: false };
+  const state = vm.runInNewContext(`(${readSrc})()`, { ws, W, hud });
+  assert.deepEqual([...state.desks[0].wins.map(w => w.id)], ['h', 'a'], 'other devices get Chats first on desktop 1');
+  const applySrc = js.slice(js.indexOf('const r = window.WosWorkspaceSync.reconcile(ws, W, state'), js.indexOf('r.removed.forEach'));
+  const back = vm.runInNewContext(applySrc + '\nr', { window: { WosWorkspaceSync: WS }, ws, W, state: JSON.parse(JSON.stringify(state)), hud, freshDesk: () => ({ wins: [], focus: null }) });
+  assert.deepEqual([...back.desks[0].wins], ['a'], 'and it stays minimized on this desktop');
+  assert.ok(W.h, 'the chat is not removed');
 });
