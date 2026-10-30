@@ -23,9 +23,9 @@ for (const file of ['web/core/welcome.js', 'web/core/settings.js', 'web/core/my-
   });
 }
 
-test('Welcome: no "colour" anywhere outside comments, and the step says "Pick a theme"', () => {
+test('Welcome: no "colour" anywhere outside comments, and the step says "Pick a skin"', () => {
   const js = read('web/core/welcome.js');
   assert.doesNotMatch(code(js), /colour/i);
-  assert.ok(js.includes('<h2 tabindex="-1">Pick a theme</h2>'));
-  assert.ok(js.includes('aria-label="Themes"'));
+  assert.ok(js.includes('<h2 tabindex="-1">Pick a skin</h2>'));
+  assert.ok(js.includes('aria-label="Skins"'));
 });

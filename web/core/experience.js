@@ -1,5 +1,5 @@
-/* Themes and experimental features are separate choices (Miguel, 30 Oct 2026). A theme is only a look. Every
- * experimental feature (web/tweaks/<author>/<id>) is one switch, off by default, labelled with its author; a quick
+/* Skins and tweaks are separate choices (Miguel, 30 Oct 2026). A skin is only a look. Every
+ * tweak (web/tweaks/<author>/<id>) is one switch, off by default, labelled with its author; a quick
  * button per author turns all of theirs on (or off). Catalog `defaults` are built-in features, not experiments: on for
  * everyone, with an owner off-switch. Saved per device as { mix } in wos.skin-tweaks.v1. A device from before keeps
  * exactly what it ran: the set its color used to bring (with its offs) is written into mix once, then never again.
@@ -134,7 +134,7 @@
     const on = id => published?.tweaks.includes(id) && !(published.off || []).includes(id);
     return Object.fromEntries(list.map(m => [m.id, globalIds().includes(m.id) ? !globalOff(m.id) : (mixOf(m.id) ?? !!on(m.id))]));
   }
-  // Authors with experimental features here, for the quick buttons: display name from their profile, else the id.
+  // Authors with tweaks here, for the quick buttons: display name from their profile, else the id.
   async function authors() {
     catalog ||= await read('tweaks/catalog.json');
     const names = new Map(await Promise.all((catalog.profiles || []).map(async who => { try { const p = await profile(who); return [who, typeof p.name === 'string' ? p.name : who]; } catch (_) { return [who, who]; } })));
@@ -185,7 +185,7 @@
     refresh: apply,
     // A color pick never changes tweaks; kept so older callers stay harmless.
     chooseSkin() { if (wornOwner() !== owner) return apply(); return Promise.resolve(); },
-    // Quick button: turn on every experimental feature by this author; if all are on already, turn them off.
+    // Quick button: turn on every tweak by this author; if all are on already, turn them off.
     async chooseAuthor(who) {
       if (!WHO.test(who) || !catalog) return;
       const ids = catalog.tweaks.filter(id => id.startsWith(who + '/') && !globalIds().includes(id)); if (!ids.length) return;

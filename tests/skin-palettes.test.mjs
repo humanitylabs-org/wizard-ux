@@ -27,7 +27,7 @@ test('Settings › Look shows every color as a preview card in one flat grid, wi
   assert.doesNotMatch(s, /suggestionHtml|data-chats-suggest/);
   assert.match(s, /\$\{S\.list\.map\(k => skinCard\(k, cur\)\)\.join\(''\)\}/, 'one list of every color');
   assert.match(s, /aria-label="Your skins">\$\{ownTiles\(S\)\}\$\{newTile\(\)\}<\/div>/);
-  assert.match(s, /<h4>Theme<\/h4>/);
+  assert.match(s, /<h4>Skin<\/h4>/);
   assert.doesNotMatch(read('web/core/skins.css'), /\.skp-fam/);
 });
 
