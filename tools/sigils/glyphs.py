@@ -174,8 +174,9 @@ def g_social():
 
 @glyph('files', 'A folder with the Wizard door cut into its base: your stuff lives in the Wizard\u2019s house.')
 def g_files():
-    folder = P("M156 120 H218 Q232 120 242 132 L266 160 H356 Q388 160 388 192 V376 Q388 408 356 408 H156 Q124 408 124 376 V152 Q124 120 156 120 Z")
-    return D(folder, P("M222 416 V336 A34 34 0 0 1 290 336 V416 Z"))
+    # Landscape like a real folder (Robert, 30 Oct 2026: "not as tall"): 320 wide, 244 tall.
+    folder = P("M128 136 H204 Q218 136 228 148 L252 172 H384 Q416 172 416 204 V348 Q416 380 384 380 H128 Q96 380 96 348 V168 Q96 136 128 136 Z")
+    return D(folder, P("M224 388 V320 A32 32 0 0 1 288 320 V388 Z"))
 
 @glyph('iching', 'A casting coin with its square hole: cast and read.')
 def g_iching():
@@ -405,20 +406,36 @@ def g_profile():
     disc = circle(256, 256, 176)
     # Three big shapes so it still reads at 24 px: the hat, one bust (head and shoulders joined), and a wide band
     # of disc between them. The shoulders run past the disc, so it is a person, never a pawn on a base.
-    hat_ = U(hat_at(256, 200, 106), rrect(170, 184, 172, 30, 15))   # tip stays inside the disc
+    # Robert, 30 Oct 2026: the hat sits on the head, no gap; person and hat are one cut-out.
+    hat_ = U(hat_at(256, 236, 112), rrect(176, 224, 160, 28, 14))   # brim rests on the crown of the head
     bust = U(circle(256, 284, 46), P("M118 480 C124 372 188 326 256 326 C324 326 388 372 394 480 Z"))
-    bust = D(bust, rrect(140, 150, 232, 92, 0))      # flat-topped head: the hat sits on it across a clear gap
     return D(disc, U(hat_, bust))
 
+# Two other ways to say Profiles, for Robert to compare (30 Oct 2026). Only one stays after he picks.
+@glyph('profile-person', 'A person wearing the Wizard hat: who you are, as friends see you.')
+def g_profile_person():
+    hat_ = U(hat_at(256, 214, 140), rrect(150, 200, 212, 32, 16))
+    head = circle(256, 278, 58)
+    shoulders = P("M120 430 C124 368 176 340 256 340 C336 340 388 368 392 430 Q392 444 378 444 H134 Q120 444 120 430 Z")
+    return D(U(hat_, head, shoulders), rrect(150, 330, 212, 14, 7))   # one bite: the neckline
+
+@glyph('profile-card', 'A profile card: you in your hat on the left, your details on the right.')
+def g_profile_card():
+    card = rrect(72, 128, 368, 256, 48)
+    me = U(hat_at(170, 250, 86), rrect(124, 240, 92, 20, 10), circle(170, 284, 30),
+           P("M112 360 C116 330 138 316 170 316 C202 316 224 330 228 360 Z"))
+    lines = U(rrect(262, 214, 128, 30, 15), rrect(262, 268, 96, 30, 15))
+    return D(card, me, lines)
+
 # Launch set (Robert, 29 Oct 2026): apps on a stock Wizard that still showed a letter.
-@glyph('recorder', 'A microphone with a live dot cut in, its words already landing beside it: record and transcribe live.')
+@glyph('recorder', 'A microphone with its words already landing beside it: record and transcribe live.')
 def g_recorder():
     cap = rrect(112, 92, 128, 216, 64)
     yoke = stroke("M92 236 A84 84 0 0 0 260 236", 26)
     stem = rrect(163, 318, 26, 50, 0)
     base = rrect(120, 362, 112, 30, 15)
     lines = U(rrect(290, 142, 132, 34, 17), rrect(290, 210, 104, 34, 17), rrect(290, 278, 64, 34, 17))
-    return U(D(U(cap, yoke, stem, base), circle(176, 164, 24)), lines)
+    return U(cap, yoke, stem, base, lines)
 
 @glyph('foot', 'A big footprint with a check cut into the sole: Sasquatch keeps track of what you pay for.', scale=1.12)
 def g_foot():
