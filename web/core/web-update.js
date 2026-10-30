@@ -146,13 +146,34 @@
     }
     log('web:reload', why); window.__wosReloading = why; location.reload(); return true;
   }
+  /* Name who is holding the reload, and let a second tap override an app's hold (Miguel, 30 Oct 2026: Messenger
+   * blocked reloading with a vague "save your work first"). Only app work holds can be overridden: a recording
+   * (in-page mic), a voice message being sent and the shell's own work (uploads, voice) still wait. */
+  function appName(id) {
+    try { for (const k of ['mobile', 'desktop']) { const a = window.WizCore.apps(k).APPS.find(x => x.id === id); if (a?.name) return a.name; } } catch (_) {}
+    return id ? String(id) : '';
+  }
+  function holders(p) {
+    const names = [];
+    for (const b of p.blocking || []) if (b.kind === 'work' && b.appId) { const n = appName(b.appId); if (n && !names.includes(n)) names.push(n); }
+    return names;
+  }
+  const workOnly = p => !p.host && !p.recording && !loan(p) && (p.blocking || []).length > 0 && (p.blocking || []).every(b => b.kind === 'work');
+  const who = names => (names.length ? names.slice(0, 2).join(' and ') + (names.length > 2 ? ' and others' : '') : 'An app') + (names.length > 1 ? ' are' : ' is');
+  let override = null; // {until, names}: the first blocked tap; a second tap before `until` reloads anyway
   function reload(why) {
     if (going) return false;
     if (armed && why === 'tap') { disarm('tap'); H?.toast?.('◌', 'Reload cancelled', 1400); return false; }
     const p = plan();
-    if (!p.host && p.ok) { void go(why, p); return true; }
+    if (!p.host && p.ok) { override = null; void go(why, p); return true; }
     if (armable(p)) { arm(p); return false; }
-    H?.toast?.('◌', loan(p) ? 'Finish the voice message first' : 'Finish recording or save your work first', 2000); return false;
+    if (why === 'tap' && workOnly(p)) {
+      if (override && Date.now() < override.until) { log('web:reload-anyway', holders(p).join(',')); override = null; void go('anyway', p); return true; }
+      override = { until: Date.now() + 8000, names: holders(p) };
+      setTimeout(() => { if (override && Date.now() >= override.until) { override = null; render(); } }, 8100);
+      H?.toast?.('◌', `${who(override.names)} still saving · tap Reload again to reload anyway`, 3000); render(); return false;
+    }
+    H?.toast?.('◌', loan(p) ? 'Finish the voice message first' : p.recording ? 'Finish recording first' : 'Finish recording or save your work first', 2000); return false;
   }
   /* The banner says which thread the update came from and links there, so you can see what a reload brings
    * (James, 12 Oct): "Update ready / Bound views  [Thread] [Reload]". Several threads: "[Threads ▾]" opens a
@@ -175,7 +196,8 @@
     const linked = changes.filter(c => c.thread), names = changes.map(rowName);
     // Desktop has no toast near the card: say it in place. Armed = Reload was tapped and waits for the end.
     const wait = armed ? (armed.recording ? 'Interface update · reloads after the recording' : 'Interface update · reloads once saved')
-      : H.shell === 'desktop' && busy() ? 'Interface update · finish recording first' : '';
+      : override && Date.now() < override.until ? `Interface update · ${who(override.names)} still saving`
+      : H.shell === 'desktop' && busy() ? (() => { const p = plan(); return workOnly(p) ? `Interface update · ${who(holders(p))} still saving` : 'Interface update · finish recording first'; })() : '';
     const held = !!wait && (H.shell === 'desktop' || !!armed);
     const head = held ? wait : 'Interface update';
     // Two lines so the thread name gets the width: "Interface update" small, the thread it came from bold.
@@ -189,7 +211,7 @@
       : `<div class="dv-wr static" role="listitem"><b>${esc(rowName(c))}</b><small>No thread</small></div>`).join('')}</div>` : '';
     el.classList.toggle('open', !!list);
     const mark = changes.length ? '' : `<span class="dv-ui">${window.WizBrand?.html || '✦'}</span>`;
-    el.innerHTML = `<div class="dv-wtop">${mark}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}${armed ? `<button data-web="go" class="armed" aria-pressed="true" title="Tap to cancel the waiting reload">${armed.recording ? 'Reload when recording ends' : 'Reload when saved'}</button>` : '<button data-web="go" title="Reload into the new interface">Reload</button>'}</div>${list}`;
+    el.innerHTML = `<div class="dv-wtop">${mark}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}${armed ? `<button data-web="go" class="armed" aria-pressed="true" title="Tap to cancel the waiting reload">${armed.recording ? 'Reload when recording ends' : 'Reload when saved'}</button>` : (override && Date.now() < override.until ? '<button data-web="go" class="anyway" title="Reload now even though an app is still saving">Reload anyway</button>' : '<button data-web="go" title="Reload into the new interface">Reload</button>')}</div>${list}`;
   }
   // Back (phone) / Esc (desktop): fold an open thread list first. Returns true when it took the press.
   function back() { if (listOpen && pending) { listOpen = false; render(); return true; } return false; }
