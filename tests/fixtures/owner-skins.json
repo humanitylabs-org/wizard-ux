@@ -1,11 +1,11 @@
 {
-  "note": "James's skins (Nebula, Grove, Tide, Ember, Signal) and the base shell look. Update only with James's explicit approval; name it in the commit. James approved the white app icon in the orb and removal of the centre dot, 27 Oct 2026.",
+  "note": "James's skins (Nebula, Grove, Tide, Ember, Signal) and the base shell look. Update only with James's explicit approval; name it in the commit. James approved the white app icon in the orb and removal of the centre dot, 27 Oct 2026. Miguel (owner) approved Robert's Signal Chats contrast fix (wizard-ux #747) on 30 Oct 2026: Robert's front-end design fixes ship immediately.",
   "hashes": {
     "base": "6b08a59778a37980",
     "nebula": "20f4b94785436b85",
     "grove": "990a69d4c9e76209",
     "tide": "9e6e8d2250894936",
     "ember": "d920000c3ec5f776",
-    "signal": "31096f4c1686c72e"
+    "signal": "2a6bd89f5f95440c"
   }
 }

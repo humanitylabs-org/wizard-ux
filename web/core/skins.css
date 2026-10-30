@@ -55,6 +55,12 @@ html[data-skin="signal"] .now-card { position: relative; }
 html[data-skin="signal"] .now-card::before { left: -1px; top: -1px; border-right: 0; border-bottom: 0; }
 html[data-skin="signal"] .now-card::after { right: -1px; bottom: -1px; border-left: 0; border-top: 0; }
 html[data-skin="signal"] .now-card .pip { border-radius: 1px; }
+/* Keep green for state and action, while list copy leans closer to white so hierarchy reads before hue.
+   Saved drafts keep their amber semantic preview instead of inheriting thread-copy paint. */
+html[data-skin="signal"] .ch-row:not(.draft) .tp b { color: color-mix(in srgb, var(--ink-2) 82%, white); }
+html[data-skin="signal"] .ch-row:not(.draft) .pv { color: color-mix(in srgb, var(--ink-3) 72%, white); }
+html[data-skin="signal"] .ch-row.unread .tp b { color: color-mix(in srgb, var(--ink) 86%, white); }
+html[data-skin="signal"] .ch-row.unread .pv { color: color-mix(in srgb, var(--ink-2) 76%, white); }
 
 /* the space-only layers fade out under other skins (opacity set by skins.js while browsing) */
 .stars, .nebula { opacity: var(--sk-space, 1); }
