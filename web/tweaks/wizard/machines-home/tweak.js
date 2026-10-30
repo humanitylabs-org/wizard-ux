@@ -361,7 +361,9 @@ export default function setup(api) {
   const accessInfo = a => a ? h('span', { cls: 'mh-access' },
     a.how ? h('code', { text: a.how }) : null,
     (a.details || []).map(t => h('span', { text: t })),
-    a.checked ? h('small', { text: `Checked ${a.checked}` }) : h('small', { text: 'Not checked yet' })) : null;
+    h('small', { text: checkedWords(a) })) : null;
+  // When it was last tested: the box re-tests by itself every 15 minutes (tools/system-exposure.mjs); old notes keep their date.
+  const checkedWords = a => !a ? 'Not checked yet' : a.checkedAt ? `${a.stale ? 'Last checked' : 'Checked automatically'} ${agoS(Math.max(60, (Date.now() - Date.parse(a.checkedAt)) / 1000))} ago${a.stale ? ' · couldn’t reach it since' : ''}` : a.checked ? `Checked ${a.checked}` : 'Not checked yet';
   const label = (name, role, cls = '') => h('span', { cls: 'mh-label ' + cls }, h('span', { cls: 'mh-name', text: name }), role ? h('span', { cls: 'mh-role', text: role }) : null);
   function machineNode(m, role, maxOf, extra = {}) {
     const s = extra.size || sizeOf(m), off = m.status && !hasReading(m) && role !== 'main';
@@ -430,6 +432,7 @@ export default function setup(api) {
     oneway: () => 'Make my Tailscale one-way: my own devices (phone, laptop) can reach my machines, my machines can reach each other (sync and work), but my machines cannot reach my own devices. Show me the exact rule change first, keep a way back, and don\u2019t apply it until I say so.',
     check: () => 'Check again how open each of my machines is from the internet: test their ports from another machine over IPv4 and IPv6, then update the shields on my map. Don\u2019t change anything.',
   };
+  const lastAuto = () => Math.max(0, ...devices().map(d => Date.parse(d.access?.checkedAt || '') || 0));
   // Tailscale is the network, not a device: a dashed outline around everything on it, with one small tab on its edge.
   // The tab opens the details here, inside the outline.
   function tsPanel() {
@@ -441,9 +444,10 @@ export default function setup(api) {
         : allClear() ? h('span', { text: 'Nothing answers from the internet. Tailscale is the only way in.' })
         : h('span', { text: S.devFresh ? 'Not every machine has been checked from the internet yet. Check again to find out.' : 'This is the last reading; your network couldn’t be read just now.' }),
       h('span', { cls: 'mh-ts-list' }, all.map(m => { const [w, x] = word(m); return h('span', { cls: 'mh-ts-row', 'data-x': x }, h('i'), h('b', { text: m.name }), h('span', { text: w })); })),
+      h('span', { cls: 'mh-ts-when', text: S.checking ? 'Testing every machine from outside now…' : `Tested from outside automatically every 15 minutes${lastAuto() ? ` · last ${agoS(Math.max(60, (Date.now() - lastAuto()) / 1000))} ago` : ''}. You get a notification if one opens up.` }),
       h('span', { text: 'Who can reach whom isn’t checked here. Unless your Tailscale rules were changed, every device can reach every other, both ways (Tailscale’s starting rule).' }),
       h('span', { cls: 'mh-act-btns' },
-        [bad.length && S.devFresh ? ['fix', `Close ${bad.length === 1 ? 'it' : 'them'}`, 'Tailscale becomes the only way in'] : null, ['oneway', 'Make it one-way', 'your devices reach machines, not back'], ['check', 'Check again', 'tests every machine from outside']]
+        [bad.length && S.devFresh ? ['fix', `Close ${bad.length === 1 ? 'it' : 'them'}`, 'Tailscale becomes the only way in'] : null, ['oneway', 'Make it one-way', 'your devices reach machines, not back'], ['check', S.checking ? 'Checking…' : 'Check again', 'tests every machine from outside now']]
           .filter(Boolean).map(([id, text, note]) => h('button', { type: 'button', cls: 'mh-act-btn' + (id === 'fix' ? ' is-fix' : ''), data: { tsAsk: id } }, h('b', { text }), h('small', { text: note })))));
   }
   function paintTsTab() {
@@ -605,6 +609,12 @@ export default function setup(api) {
     if (d.person) { const p = people().find(x => x.id === d.person); if (p?.devices) { flip('devs'); api.storage.set('devs', S.open.has('devs') ? 'on' : 'off'); } else flip('p:' + d.person); paint(); return; }
     if (d.toggle === 'devs') { flip('devs'); api.storage.set('devs', S.open.has('devs') ? 'on' : 'off'); paint(); return; }
     if (d.stAsk) { const st = storage(); if (!api.nav?.ask?.('storage-' + d.stAsk, { title: 'Storage', message: st ? [st.where + ' · ' + st.bucket, st.every, st.keep].join('\n') : '' }, d.words)) api.toast('Open Chats, then try again'); return; }
+    if (d.tsAsk === 'check' && api.data.read.resources.checkExposure) {
+      // Plain code on the box tests every machine now; no chat, no AI. Shields and the badge follow the re-read feed.
+      if (S.checking) return; S.checking = true; paint();
+      api.data.read.resources.checkExposure().then(ok => { S.checking = false; paint(); api.settings?.refresh?.(); if (!ok) api.toast('Couldn’t run the check. Try again in a minute'); });
+      return;
+    }
     if (d.tsAsk) {
       const words = TS_ASK[d.tsAsk]?.(); if (!words) return;
       const title = { fix: 'Network · Close open machines', oneway: 'Network · One-way Tailscale', check: 'Network · Check exposure' }[d.tsAsk];
@@ -653,7 +663,7 @@ export default function setup(api) {
   const mapSig = () => { const st = storage();
     return JSON.stringify([S.ws, S.backupRead || '', [...S.open].filter(k => k !== 'ai' && k !== 'signin' && k !== 'wsm'), reg().this || null, managedList(),
       S.devFresh, !!S.res.devicesError, devices().map(d => [d.id, d.name, d.status, d.error, JSON.stringify(d.access || null), d.cpus, d.memoryTotalGB, diskGB(d), Math.round((d.memory || 0) / 5), Math.round((d.cpu || 0) / 5), Math.round((freeGB(d) || 0) / 5), d.group, d.status === 'stale' ? d.readAt : null]),
-      myDevices(), sessions(), S.unread, backupRunning(), st && { ...st, age: st.age == null ? null : agoS(st.age), used: st.used == null ? null : gbFmt(st.used) },
+      S.checking, devices().map(d => d.access?.checkedAt && agoS((Date.now() - Date.parse(d.access.checkedAt)) / 1000)), myDevices(), sessions(), S.unread, backupRunning(), st && { ...st, age: st.age == null ? null : agoS(st.age), used: st.used == null ? null : gbFmt(st.used) },
       (S.backup?.standby?.machines || []).map(x => [x.id, x.verdict, (x.checks || []).map(c => c.ok)])]); };
   // Pictures and one short value per part; the words live in the tooltip / screen-reader label and in Settings.
   function renderGlance() {
