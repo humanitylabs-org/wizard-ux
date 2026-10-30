@@ -435,21 +435,20 @@ html.key-hints-on #clock { visibility: hidden; }
 .win.hud[hidden] { display: none; }
 /* It floats over anything (Home scenery, other apps): a solid sheet of the skin's own background, never see-through glass. */
 #hudLayer > .win.hud { background: var(--bg, #0e091e); border: 1px solid rgba(185, 155, 255, .45); }
-.win.hud .wbar { cursor: grab; }
 .win.hud .wbar .t { color: var(--ink); }
 .hud-layer.moving, .hud-layer.moving * { cursor: grabbing !important; user-select: none; }
 .hud-layer.moving .win.hud { transition: none; }
 .wbar [data-wact^="hud"] svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.hud-grip { position: absolute; left: 0; top: 0; width: 14px; height: 14px; z-index: 3; cursor: nwse-resize; }
-/* Borderless frames show only ✕ in a title bar; the float button (and the HUD's own fold / put back) stand beside it. */
+.hud-grip { position: absolute; left: 0; top: 0; bottom: 0; width: 8px; z-index: 3; cursor: ew-resize; }
+/* Borderless frames show only ✕ in a title bar; Minimize (and the side chat's Back to desktop 1) stand beside it. */
 html[data-skin-frame="borderless"] .wbar > [data-wact^="hud"] { position: absolute; top: 0; display: grid; place-items: center; min-width: 44px; width: 44px; height: 44px; border-radius: 50%; color: var(--ink-2); background: transparent; font-size: 18px; right: calc(var(--sf-padding, 16px) + 38px); }
 html[data-skin-frame="borderless"] .wbar > [data-wact="hud-home"] { right: calc(var(--sf-padding, 16px) + 38px); }
 html[data-skin-frame="borderless"] .wbar > [data-wact^="hud"]:hover { color: var(--ink); background: var(--glass-2); }
 html[data-skin-frame="borderless"] .wbar > [data-wact^="hud"]:focus-visible { outline: 2px solid var(--violet-2); outline-offset: -3px; }
-html[data-skin-frame="borderless"] .wbar > [data-wact="hud-min"] { right: calc(var(--sf-padding, 16px) + 82px); }
-html[data-skin-frame="borderless"] .wbar:has(> [data-wact="hud"]) { padding-right: calc(140px + var(--sf-padding, 16px)); }
+html[data-skin-frame="borderless"] .win.hud .wbar > [data-wact="hud-min"] { right: calc(var(--sf-padding, 16px) + 82px); }
+html[data-skin-frame="borderless"] .wbar:has(> [data-wact="hud-min"]) { padding-right: calc(96px + var(--sf-padding, 16px)); }
 html[data-skin-frame="borderless"] .win.hud > .wbar { padding-right: calc(140px + var(--sf-padding, 16px)); }
-/* Floating glides in from the corner the HUD is anchored to (bottom-right). */
+/* The side chat slides in from the bubble's corner (bottom-right). */
 .win.hud { transform-origin: 100% 100%; }
 .win.hud:not([hidden]) { animation: hud-in 200ms var(--ease, ease-out) both; }
 @keyframes hud-in { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
@@ -469,13 +468,12 @@ html[data-skin="obsidian-light"] .voice-menu button:hover, html[data-skin="lands
 /* Minimized chat (Miguel, 30 Oct 2026): a bubble at the bottom right. It opens the chat on the right side, and the
  * desks and Home make room for it like a split; it stays there whichever desk is in front. */
 .stage.hud-split > .wsp, .stage.hud-split > .desktop-home { right: var(--hud-side, 0px); }
-.hud-bubble { position: absolute; right: 14px; bottom: 12px; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; padding: 0; border: 1px solid rgba(185, 155, 255, .55); background: linear-gradient(150deg, #9b74ff, #6d3df0); color: #fff; box-shadow: 0 10px 28px rgba(40, 14, 110, .45); cursor: pointer; transition: transform 140ms var(--ease, ease-out), box-shadow 140ms var(--ease, ease-out); }
+.hud-bubble { position: absolute; right: 14px; bottom: 12px; width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; padding: 0; border: 0; background: transparent; cursor: pointer; transition: transform 140ms var(--ease, ease-out); }
 .hud-bubble[hidden] { display: none; }
-.hud-bubble:hover { transform: translateY(-1px) scale(1.04); box-shadow: 0 14px 34px rgba(40, 14, 110, .55); }
+/* The chat's own agent hat (the title bar's mark), as a round tile. */
+.hud-bubble > .hb-sig { width: 100%; height: 100%; border-radius: 50%; }
+.hud-bubble > .hb-sig .sgi { width: 76%; height: 76%; }
+.hud-bubble:hover { transform: translateY(-1px) scale(1.05); }
+.hud-bubble.on > .hb-sig { box-shadow: 0 0 0 2px var(--violet-2, #a98bff), 0 10px 24px -10px rgba(0, 0, 0, .6); }
 .hud-bubble:focus-visible { outline: 2px solid var(--violet-2); outline-offset: 3px; }
-.hud-bubble svg { grid-area: 1 / 1; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; transition: opacity 140ms, transform 160ms var(--ease, ease-out); }
-.hud-bubble .hb-min, .hud-bubble.on .hb-chat { opacity: 0; transform: scale(.7); }
-.hud-bubble.on .hb-min { opacity: 1; transform: none; }
-.win.hud.side > .hud-grip { top: 0; bottom: 0; height: auto; width: 8px; cursor: ew-resize; }
-.win.hud.side > .wbar { cursor: grab; }
-@media (prefers-reduced-motion: reduce) { .hud-bubble, .hud-bubble svg { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .hud-bubble { transition: none; } }
