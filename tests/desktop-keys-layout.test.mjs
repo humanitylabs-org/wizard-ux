@@ -41,7 +41,8 @@ test('⌥↓/⌥↑ walk Ready chats from anywhere into the message box; no ⌥�
 });
 
 test('⌥→ Done and ⌥← Snooze act on the open chat (not mid-text); no hidden ⌥E/⌥Z; the guide shows chat keys', () => {
-  assert.doesNotMatch(js, /code === 'KeyE'|code === 'KeyZ'/);
+  assert.doesNotMatch(js, /code === 'KeyE'/);
+  assert.doesNotMatch(js, /code === 'KeyZ'\) return hit\(\(\) => \{[^\n]*chatAct/); // ⌥Z is Back to where you were, never Snooze
   assert.match(js, /const midText = typing\(e\.target\) && String\(e\.target\.value \?\? e\.target\.textContent \?\? ''\)\.trim\(\) !== '';/);
   assert.match(js, /CHATS\.threadAct\(f\.id, f\.thread, act\)/);
   assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\) && !midText\) return hit/);
@@ -198,4 +199,22 @@ test('⌥N opens a New chat on this desk beside the app in front, and holding �
   assert.doesNotMatch(js, /newChat\(\{ fresh: true \}\)/);
   // Guide: N on this desk's New chat button, or with its word on the right edge of the app in front.
   assert.match(js, /else if \(f && f\.app !== 'chats'\) \{ const b = winEl\(f\.id\)\?\.querySelector\('\.wbody'\); if \(vis\(b\)\) chip\(b, 'N', 'inside', 'New chat'\); \}/);
+});
+
+test('Omarchy-style keys: ⌥− / ⌥= resize, ⌥⇧W reopens, ⌥Z jumps back, each shown where it acts', () => {
+  assert.match(js, /code === 'Minus' \|\| code === 'Equal'\)\) return hit\(\(\) => resizeFocused\(code === 'Equal' \? 1 : -1\)\)/);
+  assert.match(js, /alt && shift && code === 'KeyW'\) return hit\(\(\) => \{ if \(!e\.repeat\) reopenClosed\(\); \}\)/);
+  assert.match(js, /alt && !shift && code === 'KeyZ'\) return hit\(\(\) => \{ if \(!e\.repeat\) jumpBack\(\); \}\)/);
+  // ⌥⇧W must come before the plain ⌥W close in the ⌥ section, which ignores shift.
+  assert.ok(js.indexOf("code === 'KeyW') return hit(() => { if (!e.repeat) reopenClosed")  < js.indexOf("if (code === 'KeyW') return hit"));
+  assert.match(js, /chip\(n, '⇧W', 'below', 'Reopen'\)/);
+  assert.match(js, /chip\(b, '=', side, 'Wider'\); chip\(b, '−', side, 'Narrower'\)/);
+  assert.match(js, /chip\(n, 'Z', 'below', 'Back'\)/);
+  assert.match(js, /Key\[AGIWFHJKLNTVPZ\]\|Slash\|Comma\|Minus\|Equal/);
+});
+
+test('resize keeps the stock split until asked, and is kept per desk', () => {
+  const start = js.indexOf('  function splitOf('), body = js.slice(start, js.indexOf('\n', start));
+  const splitOf = vm.runInNewContext(`const SPLIT = [0.25, 0.75]; (${body.trim().replace(/^function splitOf/, 'function')})`);
+  assert.equal(splitOf({}, 2), 0.5); assert.equal(splitOf({}, 3), 0.56); assert.equal(splitOf({ split: 0.66 }, 2), 0.66); assert.equal(splitOf({ split: 0.9 }, 2), 0.5);
 });

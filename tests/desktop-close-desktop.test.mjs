@@ -14,14 +14,14 @@ function fn(name) {
 function rig({ cur = 1, lastWs = 2, count = 3, homeOpen = false, refuse = '' } = {}) {
   const W = {}, calls = [];
   const ws = Array.from({ length: count }, (_, i) => { const id = `w${i}`; W[id] = { id, app: i === 1 ? 'chats' : 'frame', name: `App ${i}` }; return { id: `d${i}`, wins: [id], focus: id, mono: false }; });
-  const ctx = vm.createContext({ ws, W, cur, lastWs, homeOpen, hud: null, calls,
+  const ctx = vm.createContext({ ws, W, cur, lastWs, homeOpen, hud: null, calls, closedWins: [],
     wsOf: id => ws.findIndex(d => d.wins.includes(id)),
     CHATS: { beforeLeave: id => id !== refuse, saveDraft: id => calls.push(['draft', id]), forget: id => calls.push(['forget', id]), markVisibleThreadsSeen: () => calls.push(['seen']) },
     threadShown: (id, el) => calls.push(['thread', id, el]), boundManager: { dismiss: w => calls.push(['dismiss', w.id]) },
     window: { WizBackgroundAudio: { closeApp: id => { calls.push(['audio', id]); return Promise.resolve(); } } },
     appOf: w => w, store: { set: () => {} }, save: () => calls.push(['save']), render: () => calls.push(['render']),
     focused: () => ctx.homeOpen ? null : W[ws[ctx.cur].focus], focusInside: id => calls.push(['focus', id]), goHome: () => { ctx.homeOpen = true; }, toast: (...args) => calls.push(['toast', ...args]), hudClose: () => {} });
-  vm.runInContext(['canLeave', 'removeWin', 'closeWin', 'removeDesktop', 'closeDesktop', 'closeCurrent'].map(fn).join('\n'), ctx);
+  vm.runInContext(['canLeave', 'removeWin', 'rememberClosed', 'closeWin', 'removeDesktop', 'closeDesktop', 'closeCurrent'].map(fn).join('\n'), ctx);
   return ctx;
 }
 test('desk tiles carry no close ✕: a stray click on a tile can only switch desks', () => {
