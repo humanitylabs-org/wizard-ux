@@ -75,6 +75,10 @@
       const moved = slots.map(i => out[i]).sort((a, b) => local.desks.findIndex(d => d.id === a.id) - local.desks.findIndex(d => d.id === b.id));
       slots.forEach((i, k) => { out[i] = moved[k]; });
     }
+    // A window changed here keeps this device's change wherever it now lives (the other device may have moved it).
+    const all = s => new Map(s.desks.flatMap(d => d.wins.map(w => [w.id, w])));
+    const baseAll = all(base), localAll = all(local);
+    for (const d of out) d.wins = d.wins.map(w => { const l = localAll.get(w.id), b = baseAll.get(w.id); return l && b && !same(l, b) ? l : w; });
     // A window lives on one desk: where this device put it wins, otherwise its first desk.
     const mine = new Map(); local.desks.forEach(d => d.wins.forEach(w => mine.set(w.id, d.id)));
     const home = id => mine.has(id) && out.some(d => d.id === mine.get(id) && d.wins.some(w => w.id === id)) ? mine.get(id) : null;
