@@ -23,7 +23,7 @@
   const FRAG = `
 precision highp float;
 uniform vec2 res; uniform float t; uniform float lvl; uniform float energy; uniform float spin;
-uniform float ring; uniform float core; uniform float press; uniform float R;
+uniform float ring; uniform float core; uniform float press; uniform float R; uniform float gloss;
 uniform vec3 cA; uniform vec3 cB; uniform vec3 cC;
 float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
@@ -61,7 +61,7 @@ void main(){
     float spec = pow(max(dot(nrm, normalize(L+vec3(0,0,1))),0.), 70.)*1.35;
     float spec2 = pow(max(dot(nrm, normalize(vec3(.6,-.55,.6)+vec3(0,0,1))),0.), 26.)*.18;
     float arc = smoothstep(.035, 0., abs(length(p-vec2(-.18,.24)) - .62)) * smoothstep(-.1,.5,p.y-p.x*.3) * .22;
-    inner += spec + spec2*cC + arc;
+    inner += (spec + arc)*gloss + spec2*cC; // gloss 0: no white top-left shine behind the app icon
     inner += cC * pow(max(-p.y,0.), 3.) * .45 * z;
     float edge = smoothstep(Rr, Rr-.018, r);
     float rim = smoothstep(.04,0.,abs(r-Rr+.012))*.55;
@@ -107,7 +107,7 @@ void main(){
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
     const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    ['res','t','lvl','energy','spin','ring','core','press','R','cA','cB','cC'].forEach(k => U[k] = gl.getUniformLocation(prog, k));
+    ['res','t','lvl','energy','spin','ring','core','press','R','cA','cB','cC','gloss'].forEach(k => U[k] = gl.getUniformLocation(prog, k));
     gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   }
   function size() {
@@ -117,7 +117,8 @@ void main(){
     if (canvas.width !== w || canvas.height !== hh) { canvas.width = w; canvas.height = hh; }
   }
   const lerp = (a, b, k) => a + (b - a) * k;
-  // James approved the white app icon in the orb and removal of the centre dot, 27 Oct 2026.
+  // James approved the white app icon in the orb and removal of the centre dot, 27 Oct 2026,
+  // and of the white top-left shine (specular highlight) behind it, 29 Oct 2026.
   // Only the phone's main orb in James's five skins opts in; other skins/native orbs stay unchanged.
   function coreTarget() {
     if (canvas.id !== 'orb' || !['nebula', 'grove', 'tide', 'ember', 'signal'].includes(document.documentElement.dataset.skin)) return 1;
@@ -171,7 +172,7 @@ void main(){
       gl.uniform1f(U.t, (now - t0) / 1000);
       gl.uniform1f(U.lvl, levelS); gl.uniform1f(U.energy, cur.energy);
       gl.uniform1f(U.spin, cur.spin); gl.uniform1f(U.ring, cur.ring);
-      gl.uniform1f(U.core, cur.core * coreMultiplier); gl.uniform1f(U.press, press); gl.uniform1f(U.R, opts.R || window.ORB_R || .5);
+      gl.uniform1f(U.core, cur.core * coreMultiplier); gl.uniform1f(U.gloss, coreMultiplier); gl.uniform1f(U.press, press); gl.uniform1f(U.R, opts.R || window.ORB_R || .5);
       gl.uniform3fv(U.cA, cur.a); gl.uniform3fv(U.cB, cur.b); gl.uniform3fv(U.cC, cur.c);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       frames++;

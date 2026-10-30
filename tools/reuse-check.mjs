@@ -27,7 +27,7 @@ export function checkReuse({ body = '', files = [], inventory = '' }) {
   for (const l of after) {
     if (/^\s*[-*]\s+/.test(l)) lines.push(l); else if (l.trim() && lines.length) break;
   }
-  const decl = lines.map(l => l.match(/\b(REUSE|EXTEND|NEW)\b\s*`?([^\s`(]*)/)).filter(Boolean);
+  const decl = lines.map(l => l.match(/\b(REUSE|EXTEND|NEW)\b\s*:?\s*`?([^\s`(]*)/)).filter(Boolean);
   if (!decl.length) problems.push('"Reuse:" needs at least one "- <capability>: REUSE|EXTEND|NEW <entry point>" line.');
   if (lines.length !== decl.length) problems.push('Every Reuse line needs REUSE, EXTEND or NEW.');
   for (const [, kind, name] of decl) {

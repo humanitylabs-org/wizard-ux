@@ -90,7 +90,8 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header(
             "Content-Security-Policy",
             "default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
-            "connect-src 'self'; media-src 'self' blob:; manifest-src 'self'; base-uri 'none'; "
+            # One cross-site read: Tailscale's 204 connectivity check, the offline pop-up's Internet row (core/reach.js).
+            "connect-src 'self' https://derp1.tailscale.com/generate_204; media-src 'self' blob:; manifest-src 'self'; base-uri 'none'; "
             "form-action 'self'; frame-ancestors 'none'",
         )
         self.send_header("Permissions-Policy", "microphone=(self)")

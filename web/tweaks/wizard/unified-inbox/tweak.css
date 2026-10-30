@@ -1,7 +1,7 @@
 /* Notifications in Chats: yellow one-message threads. The Chats bell goes (one inbox). */
-html[data-tweaks~="miguel/unified-inbox"] [data-chbell] { display: none !important; }
-html[data-tweaks~="miguel/unified-inbox"] { --ui-y: #f2c230; --ui-y-ink: #1d1600; }
-html[data-tweaks~="miguel/unified-inbox"]:is([data-color-scheme="light"], [data-skin="obsidian-light"]) { --ui-y: #b98a00; --ui-y-ink: #fff; }
+html[data-tweaks~="wizard/unified-inbox"] [data-chbell] { display: none !important; }
+html[data-tweaks~="wizard/unified-inbox"] { --ui-y: #f2c230; --ui-y-ink: #1d1600; }
+html[data-tweaks~="wizard/unified-inbox"]:is([data-color-scheme="light"], [data-skin="obsidian-light"]) { --ui-y: #b98a00; --ui-y-ink: #fff; }
 .ui-inbox { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 8px; }
 .ui-inbox[hidden], .ui-done[hidden] { display: none; }
 .ui-item { border-radius: 14px; background: color-mix(in srgb, var(--ui-y) 11%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-y) 45%, transparent); }

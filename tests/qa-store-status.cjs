@@ -81,7 +81,8 @@ const snapshot=JSON.parse(fs.readFileSync(process.env.QA_SNAPSHOT));
   mode='outage';await f.locator('#refresh').click();await f.locator('#refresh:not([disabled])').waitFor();await f.locator('[data-kind="apps"]').click();
   assert.equal(await f.locator('[data-get]').count(),0);assert.ok((await f.locator('#source-status').innerText()).includes('incomplete'));
   mode='conflict';await f.locator('#refresh').click();await f.locator('#refresh:not([disabled])').waitFor();
-  const conflict=f.locator('.row[data-app^="cinequeue|"]');assert.equal(await conflict.locator('[data-open]').count(),0);assert.equal(await conflict.locator('[data-get]').count(),0);assert.equal(await conflict.locator('.get').innerText(),'Resolve conflict');
+  // A conflicted ID never installs; its exactly installed copy (same repository) still opens, marked by the status badge.
+  const conflict=f.locator('.row[data-app^="cinequeue|"]');assert.equal(await conflict.locator('[data-open="cinequeue-next"]').count(),1);assert.equal(await conflict.locator('[data-get]').count(),0);assert.equal(await conflict.locator('.conflict-badge').innerText(),'Source conflict');assert.doesNotMatch(await conflict.innerText(),/Resolve/);
   // Selected release disappearing on refresh blocks, rather than replacing its exact pin.
   mode='live';await f.locator('#refresh').click();await f.locator('#refresh:not([disabled])').waitFor();await f.locator('.row[data-app^="wisdom|"] .tx').click();await f.locator('#release-choice').selectOption(`${alpha.source}:${alpha.commit}`);
   mode='removed';await f.locator('#refresh').click();await f.locator('#refresh:not([disabled])').waitFor();assert.equal(await f.locator('#detail [data-get]').count(),0);assert.ok((await f.locator('#release-choice').innerText()).includes('no longer available'));

@@ -13,7 +13,7 @@
     "miguel/machines-home",
     "miguel/arrange-download",
     "miguel/refresh-button",
-    "miguel/unified-inbox"
+    "wizard/unified-inbox"
   ],
   "flags": {}
 }

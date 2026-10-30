@@ -40,27 +40,28 @@
     view.append(title, body, retry); win.append(view);
   }
   function safeInsets() {
-    if (!frame) return;
+    // Pinned apps keep Android's status/navigation bars visible. The HOST owns
+    // their top clearance, even before mount (also used by notices/link sheets).
+    // CSS takes the union with env(safe-area-inset-top), never sums the heights.
+    document.documentElement.style.setProperty('--nat-t', top + 'px');
+    document.documentElement.style.setProperty('--cut-t', cut + 'px');
     try {
-      const d = frame.contentDocument;
-      if (!d?.documentElement) return;
-      // Android keeps its status bar and navigation buttons (James, 18 Oct): the app starts below the taller of
-      // the status bar and the camera cutout; the native view already pads the navigation bar at the bottom.
-      const edge = Math.max(cut, top);
-      d.documentElement.style.setProperty('--wos-cutout', edge + 'px');
-      let own = !!d.querySelector('meta[name="wizard-os-edge"][content="cover"]');
-      if (!own) for (const sh of d.styleSheets) { try { if ([...sh.cssRules].some(r => r.cssText.includes('--wos-cutout'))) { own = true; break; } } catch (_) {} }
-      win.style.setProperty('--single-cut', (own ? 0 : edge) + 'px');
+      // James' universal standalone rule: a padded sticky toolbar, cover meta or
+      // late/imported CSS cannot protect scrolling content behind the status bar.
+      // Clip the whole frame below it and consume the child inset exactly once.
+      frame?.contentDocument?.documentElement?.style.setProperty('--wos-cutout', '0px', 'important');
     } catch (_) {}
   }
   window.__wosCutout = px => { cut = Math.max(0, px | 0); safeInsets(); };
   window.__wosTop = px => { top = Math.max(0, px | 0); safeInsets(); };
   try { window.WizardOSNative?.immersive?.(false); cut = +window.WizardOSNative?.cutoutTop?.() || 0; top = +window.WizardOSNative?.insetTop?.() || 0; } catch (_) {}
+  safeInsets();
   window.__wosSessionCheckpoint = checkpoint;
   window.__wos = { toast, links, get singleApp() { return id; }, get voice() { return 'idle'; } };
   window.__wosNativeBack = () => {
     if (window.WosSelMenu?.back?.()) return 'selection';
     if (window.WosChat?.viewer?.close?.()) return 'media';
+    if (window.WizLinks?.backMenu?.()) return 'link-menu';
     if (links?.back()) return 'link';
     if (!frame || !loaded) return 'root';
     const step = window.WizAppServices?.back(frame);

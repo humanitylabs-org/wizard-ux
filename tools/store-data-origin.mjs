@@ -52,6 +52,8 @@ export function wamMetadata(doc) {
     repo:str(a.repo,201,/^[\w.-]+\/[\w.-]+$/), commit:str(a.commit,40,/^[a-f0-9]{40}$/),
     version:str(a.version,40), status:str(a.status,24,/^[a-z_-]+$/),
     source:typeof a.source?.local==='string'?'local':str(a.source,64,/^[a-z0-9][a-z0-9-]{0,63}$/), channel:['alpha','standard'].includes(a.channel)?a.channel:undefined,
+    // Wizard's own apps: the Store hides Remove for them (the App Manager refuses them regardless).
+    system:a.system===true?true:undefined,
   }));
 }
 export function shellMetadata(doc) {

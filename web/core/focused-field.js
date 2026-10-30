@@ -90,19 +90,26 @@
       return seal;
     }
     function insert(seal, text) {
-      if (!seal || seal.released || seal.changed || seal.observer?.takeRecords().length || !validContext(seal, seal.el)) return false;
+      if (!seal || seal.released || !validContext(seal, seal.el)) return false;
       const el = seal.el, plain = el.matches('input, textarea');
-      if ((plain ? el.value : el.innerHTML) !== seal.value) return false;
+      // Plain fields: the sealed node is still here, so the words always land in it. Android keyboards fire
+      // input events on blur (finishing a composing word) without changing a character, so an input event
+      // alone never vetoes the insert (James, 24 Oct 2026: tapped above a pasted draft, dictated, and got a
+      // copy card instead of the words at the cursor). If the text really changed during the take, the words
+      // go where the caret is now, like any keyboard's voice typing. Only a lost or navigated field falls back.
+      if (!plain && (seal.changed || seal.observer?.takeRecords().length || el.innerHTML !== seal.value)) return false;
       if (!plain && (!el.contains(seal.range.startContainer) || !el.contains(seal.range.endContainer))) return false;
       // Release the mutation guard before our own input, and use the target document's constructors.
       seal.release();
       if (plain) {
+        let start = seal.start, end = seal.end;
+        if (el.value !== seal.value) { start = el.selectionStart ?? el.value.length; end = el.selectionEnd ?? start; }
         // Spoken words land as words: a space against a neighbouring character (typing at the end of a URL or word).
-        const before = el.value.slice(0, seal.start).slice(-1), after = el.value.slice(seal.end, seal.end + 1);
+        const before = el.value.slice(0, start).slice(-1), after = el.value.slice(end, end + 1);
         let t = String(text);
         if (before && !/\s/.test(before) && /^[^\s.,;:!?)]/.test(t)) t = ' ' + t;
         if (after && !/\s/.test(after) && !/[\s(]$/.test(t)) t = t + ' ';
-        el.setRangeText(t, seal.start, seal.end, 'end');
+        el.setRangeText(t, start, end, 'end');
       }
       else {
         const r = seal.range; r.deleteContents();

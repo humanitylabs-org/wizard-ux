@@ -42,7 +42,7 @@ const ok = (c, name, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS'
   back(); await p.waitForTimeout(1200);
   s = await st(); ok(/chrome/.test(top()) && s.idx === 2, 'second Back (no tap between) → Home desk, still open', JSON.stringify(s)); shot('c-home');
   back(); await p.waitForTimeout(500);
-  s = await st(); ok(/chrome/.test(top()) && p.url().includes('wizard-os-home') && /back again/i.test(s.toast), 'Back on Home → "Press back again to exit", stays', JSON.stringify(s)); shot('d-warn');
+  s = await st(); ok(/chrome/.test(top()) && p.url().includes('wizard-os-home') && /you're home/i.test(s.toast), 'Back on Home → "You\'re home", stays', JSON.stringify(s)); shot('d-warn');
   await p.waitForTimeout(3000);
   // Sheet path with a tap: open inbox, Back closes it.
   await p.evaluate(() => __wos.openSheet('inbox')); await p.waitForTimeout(600); await tapEl('#inbox .sheet-grip');

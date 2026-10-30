@@ -16,7 +16,7 @@ function boot() {
  ]), store = new Map(), calls = [], bodies = [];
  let delayLock = null, badAck = false, admissionFail = false, runRuntime = {model:'claude-opus-5-5',provider:'anthropic'};
  const timers = [];
- const context = { console, URL, Blob, crypto: require('crypto').webcrypto, Date, Map, Set, Promise,
+ const context = { console, URL, Blob, AbortSignal, AbortController, crypto: require('crypto').webcrypto, Date, Map, Set, Promise,
   document:{documentElement:{dataset:{}},addEventListener(){}},
   addEventListener(){}, localStorage:{getItem:()=>null,setItem(){}},
   indexedDB:{open(){throw Error('fixture uses text fallback')}},

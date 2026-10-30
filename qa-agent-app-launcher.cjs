@@ -119,7 +119,7 @@ async function run(mobile) {
     await closeSearch(p, mobile);
     if (mobile) {
       await p.evaluate(() => __wos.openSheet('launcher')); await nap(250);
-      const grid = p.locator('#launcherBody .lgroup').filter({ has: p.locator('h4', { hasText: 'Wizard apps' }) });
+      const grid = p.locator('#launcherBody .lgroup').filter({ has: p.locator('h4', { hasText: /^Apps\b/ }) });
       check(await grid.locator('[data-app="agent:private"]').count() === 1, 'phone Apps grid includes private once');
       if (await grid.locator('[data-app="agent:private"]').count()) await grid.locator('[data-app="agent:private"]').scrollIntoViewIfNeeded();
       await nap(2500); // Let tile entrance animations and the intentional stale-agent refusal toast settle.

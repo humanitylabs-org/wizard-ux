@@ -76,7 +76,7 @@
     const working = WORKING.has(status) || status === 'waiting_for_approval';
     const latestText = clean(text(latest?.content ?? latest?.text));
     const userText = clean(text(lastUser?.content ?? lastUser?.text) || text(item.wizard_request_preview));
-    const preview = working ? (userText || latestText) : (latestText || userText || clean(text(item.preview)));
+    const preview = working ? (item.wizard_helper_status ? (latestText || clean(text(item.preview)) || userText) : (userText || latestText)) : (latestText || userText || clean(text(item.preview)));
     const latestAt = optIso(latest?.timestamp ?? latest?.created_at);
     const userAt = optIso(lastUser?.timestamp ?? lastUser?.created_at);
     return {
@@ -84,6 +84,7 @@
       title: String(item.title || item.name || 'Untitled chat'),
       source: item.source || '',
       status,
+      queueReason: item.queue_reason === 'provider_access' ? 'provider_access' : '',
       safeError: typeof item.wizard_safe_error === 'string' ? item.wizard_safe_error : '',
       // The AI provider's sign-in expired (Agent Service provider-reconnect.mjs): the connection app that fixes it.
       reconnect: reconnectOf(item.wizard_reconnect),
@@ -103,6 +104,7 @@
       critical: (item.wizard_attention_level || item.attention_level) === 'critical',
       waitingOn: item.wizard_waiting_on === 'helper' ? 'helper' : '',
       helperStatus: item.wizard_helper_status && typeof item.wizard_helper_status === 'object' ? item.wizard_helper_status : null,
+      background: ['helper', 'heavy'].includes(item.wizard_background) ? item.wizard_background : '',
       // What the finished thread asks of James (the agent's hidden status line): needs_you / check / done / fyi.
       attention: attentionOf(item.wizard_attention),
       // A durable quiet one-shot checker bound to this thread. The prompt never reaches the list.
@@ -114,6 +116,7 @@
       model: typeof item.model === 'string' ? item.model : '', provider: typeof item.provider === 'string' ? item.provider : '',
       modelLockAt: Number(item.wizard_model_lock_updated_at) || 0,
       // The last thing asked (Retry on a failed thread sends it again: controller.ts retryServerFailedSession).
+      retryRunId: typeof item.wizard_retry_run_id === 'string' ? item.wizard_retry_run_id : '',
       request: typeof item.wizard_retry_input === 'string' ? item.wizard_retry_input : userText,
       // Agents MVP: the agent this thread is pinned to (server metadata). '' = the main agent.
       agent: typeof item.agent === 'string' ? item.agent : item.agent && typeof item.agent === 'object' && typeof item.agent.id === 'string' ? item.agent.id : '',
@@ -301,7 +304,7 @@
   // The owner's day: their time zone and day_starts_at from Wizard OS settings (WizConfig).
   const workDayStart = (now = Date.now()) => window.WizConfig.dayStart(now);
   const WORKING_SECTION = new Set(['submitting', 'queued', 'running', 'waiting_for_approval', 'stopping']);
-  const isErr = s => s.status === 'failed' || s.status === 'interrupted';
+  const isErr = s => s.status === 'failed' || s.status === 'interrupted' || (s.status === 'queued' && s.queueReason === 'provider_access');
   const needsApproval = s => ['waiting_for_approval', 'unknown'].includes(s.status);
   const inWorking = s => WORKING_SECTION.has(s.status) && !needsApproval(s) && !isErr(s);
   const firstValid = (...v) => v.find(x => isFinite(Date.parse(x ?? ''))) ?? '';
@@ -389,9 +392,13 @@
       const sub = SPACE_OP.exec(key), list = Array.isArray(next[opField({ key })]) ? next[opField({ key })] : [];
       if (key === 'pinnedChats' || key === 'subjectOrder') next[key] = op === 'front' ? [...new Set(items)].concat(list.filter(x => !items.includes(x))).slice(0, 60)
         : op === 'add' ? (list.includes(item) ? list : list.concat(item)) : list.filter(x => x !== item);
-      else if (key === 'spaces') next.spaces = op === 'add' ? (list.some(s => s.id === item.id) ? list : list.concat(item)) : list.filter(s => s.id !== item);
-      else if (sub) next.spaces = list.map(s => s.id !== sub[1] ? s : sub[2] === 'name' ? { ...s, name: item }
-        : { ...s, threads: op === 'add' ? (s.threads.includes(item) ? s.threads : s.threads.concat(item)) : s.threads.filter(t => t !== item) });
+      else if (key === 'spaces') next.spaces = op === 'add' ? (list.some(s => s.id === item.id) ? list : list.map(s => (s.agent || 'hermes') === (item.agent || 'hermes') && s.threads.some(t => item.threads.includes(t)) ? { ...s, threads: s.threads.filter(t => !item.threads.includes(t)) } : s).concat(item)) : list.filter(s => s.id !== item);
+      // One Space per chat (James, 29 Oct 2026), as the Agent Service applies it: adding moves the chat out of that
+      // agent's other Spaces in the same edit.
+      else if (sub) { const to = list.find(s => s.id === sub[1]), mine = s => (s.agent || 'hermes') === (to?.agent || 'hermes');
+        next.spaces = list.map(s => s.id !== sub[1] ? (to && sub[2] === 'threads' && op === 'add' && mine(s) && s.threads.includes(item) ? { ...s, threads: s.threads.filter(t => t !== item) } : s)
+          : sub[2] === 'name' ? { ...s, name: item }
+          : { ...s, threads: op === 'add' ? (s.threads.includes(item) ? s.threads : s.threads.concat(item)) : s.threads.filter(t => t !== item) }); }
     }
     return next;
   }
@@ -479,15 +486,19 @@
   //   Newest   = approvals pinned, then pure recency, status labels ignored (groupWork's default).
   //   Priority = approvals, then needs you, then things to test, then everything else (newest first within each).
   // Status labels never move a thread between days (James, 11 Oct 2026: Ready, Yesterday and Past week stay
-  // filtered by day in Newest and Priority); Priority only reorders within Ready.
+  // filtered by day in Newest and Priority); Priority reorders within each day: Ready, Yesterday and Past week
+  // (James, 23 Oct 2026).
   // Snoozed (deferred) threads leave the list (James, 23 Oct 2026: "It doesn't remove the thread from my list,
   // which is the purpose of snoozing it"; supersedes 10 Oct "bottom of today"). They wait in the collapsed Snoozed
   // section until their return time, Restore or Done. A message James sends after snoozing brings the thread back.
   const isDeferred = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt));
-  const readyRank = s => snoozeLast() && isDeferred(s) ? 9 : needsApproval(s) ? 0 : isDeferred(s) ? 9 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
+  // Priority ranks every status line, so Done threads (nothing left to do) sink below FYI answers and unlabelled
+  // threads come last: with only needs you / check ranked, most of Ready tied and Priority read like Newest.
+  const ATT_RANK = { needs_you: 1, check: 2, fyi: 3, done: 4 };
+  const readyRank = s => snoozeLast() && isDeferred(s) ? 9 : needsApproval(s) ? 0 : isDeferred(s) ? 9 : ATT_RANK[s.attention?.state] || 5;
   const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
   // Oldest (James, 23 Oct 2026: "oldest messages at the top … the newest one at the bottom"): Newest's pins kept
-  // (approvals first, deferred last), only time reversed in between. Yesterday and Past week stay newest first.
+  // (approvals first, deferred last), only time reversed in between. The same order applies to Yesterday and Past week.
   // snoozeOrder('last'): Snooze is a lower place in Ready, ahead of no unsnoozed row (even approvals).
   const snoozeOrder = (l, r) => snoozeLast() ? Number(isDeferred(l)) - Number(isDeferred(r)) : 0;
   const byOldest = list => list.slice().sort((l, r) => snoozeOrder(l, r) || Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(r, l));
@@ -559,6 +570,10 @@
   const confirmed = (s, p) => {
     const st = s.orig ? s.orig.status : s.status, run = s.orig ? s.orig.runId : s.runId;
     const sameKey = !!p.key && s.lastRunKey === p.key;
+    // A queued sign-in wait is an acknowledged failed start, not active work.
+    // Release that send's optimistic spinner immediately, but keep a newer
+    // explicit retry's hold until its own receipt arrives.
+    if (s.queueReason === 'provider_access' && (sameKey || (!!p.runId && run === p.runId))) return true;
     if ((sameKey || (!!p.runId && run === p.runId)) && WORKING.has(st)) p.acknowledged = true;
     return sameKey && !WORKING.has(st) && !WORKING.has(s.lastRunStatus);
   };
@@ -578,7 +593,7 @@
     if (!s.orig) s.orig = { status: s.status, runId: s.runId, assignedAt: s.assignedAt, requestAt: s.requestAt };
     const at = new Date(p.at).toISOString();
     // Already working (a message into a live run) keeps Wizard's status; anything else is held in Working.
-    if (!WORKING.has(s.orig.status) && !['waiting_for_approval', 'unknown'].includes(s.orig.status)) {
+    if ((!WORKING.has(s.orig.status) || s.queueReason === 'provider_access') && !['waiting_for_approval', 'unknown'].includes(s.orig.status)) {
       s.status = p.state === 'sent' ? 'running' : 'submitting';
       s.runId = p.runId || ''; // never an older finished run (a quick second reply must not try to steer it)
       s.assignedAt = at; s.requestAt = at;
@@ -745,6 +760,7 @@
     seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
     workGroups(sessions, now) { return groupWork(sessions || this.unified(), now); },
     readyByPriority: byPriority,
+    readyRank,
     readyByOldest: byOldest,
     get archiveAfterDays() { return archiveAfterDays(); },
     get chatLayout() { return chatLayout(); },
@@ -760,6 +776,7 @@
         const def = this.deferred[seenKeyOf(s)]?.deferred;
         if (snoozeLast() && isDeferred(s) && !WORKING.has(s.status)) continue; // snoozeOrder('last'): not Needs you until restored/replied
         if (['waiting_for_approval', 'unknown'].includes(s.status)) { needs.push(s); continue; }
+        if (s.status === 'queued' && s.queueReason === 'provider_access') { needs.push(s); continue; }
         if (WORKING.has(s.status)) { working.push(s); continue; }
         if (def) continue;
         const at = Date.parse(assistantAt(s) || s.activityAt || s.updatedAt);
@@ -851,8 +868,11 @@
           window.WosModels?.reconcile(list);
           this.agentSessions[id] = list; this.agentStatus[id] = { ok: true, error: '', at: Date.now() };
         } catch (e) {
+          // Same contract as the main list: a failed refresh keeps the threads already shown and marks them
+          // Not up to date (with the real last-read time); only an agent never read yet shows the connection card.
+          const prev = this.agentStatus[id], error = e.status === 403 ? 'access' : 'offline';
           this.agentSessions[id] = this.agentSessions[id] || [];
-          this.agentStatus[id] = { ok: false, error: e.status === 403 ? 'access' : 'offline', at: Date.now() };
+          this.agentStatus[id] = prev?.ok && error !== 'access' ? { ok: true, error, at: prev.at } : { ok: false, error, at: Date.now() };
         }
       }));
       let migrated = false, state = merge(readLocal(),this.seen) || {initializedAt:Date.now(),threads:{}};
@@ -1119,7 +1139,11 @@
       const list = agent ? (this.agentSessions[agent] = this.agentSessions[agent] || []) : this.sessions;
       const i = list.findIndex(x => x.id === id);
       if (s.id !== id || (s.agent && otherAgent(s.agent) && s.agent !== agent)) throw new Error('Thread scope changed');
-      if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, renames: s.renames, detailNeeded: false,
+      // The detail read carries no run state for a live thread (only the list projects runs and helpers), so an
+      // empty status there must not settle the row: a Working thread used to flash into Ready whenever its history
+      // was preloaded or opened, until the next list read put it back. A status the detail does report still wins.
+      const run = s.status ? { queueReason: s.queueReason, status: s.status } : {};
+      if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, retryRunId: s.retryRunId, ...run, safeError: s.safeError, reconnect: s.reconnect, renames: s.renames, detailNeeded: false,
         ...(s.model ? { model: s.model, provider: s.provider, modelLockAt: s.modelLockAt } : {}) };
       else if (this.windows[agent || 'hermes']) DETAIL.set(id, { ...s, detailNeeded: false });
       else list.push({ ...s, detailNeeded: false });
@@ -1260,13 +1284,26 @@
       };
       const close = () => { r.source?.close(); r.source = null; };
       const terminal = () => { if (!r.terminal) { r.terminal = true; close(); notify(); } };
-      let retries = 0;
+      // Resume across drops (spotty wifi, a phone waking up): Hermes and the Agent Service number every frame (SSE id
+      // and data.seq) and replay the run on each new read, so a reconnect skips every frame this stream already showed.
+      // Unnumbered streams keep the old rule: reconnect only before any answer bytes, never duplicate text.
+      let retries = 0, lastSeq = -1, numbered = false;
+      const BACKOFF = [500, 1000, 2000, 4000, 8000, 15000, 30000], MAX_RETRIES = 20, STALL_MS = 90000;
       const event = e => {
         if (r.stopped || r.terminal) return;
         let d; try { d = JSON.parse(e.data); } catch (_) { return; }
         if ((d.session_id && d.session_id !== sid) || (d.run_id && d.run_id !== runId)) return;
         const type = d.event || e.type;
-        if (type === 'message.delta' && typeof d.delta === 'string') { r.text += d.delta; notify(); }
+        r.seenAt = Date.now();
+        // The replay lost frames this stream never showed: the text would have a hole, so drop it and let the
+        // transcript read bring the answer (still reading steps and the end of the run).
+        if (type === 'replay.truncated') {
+          if (lastSeq >= 0 && Number(d.oldest_retained_seq) > lastSeq + 1 && !r.gap) { r.gap = true; r.text = ''; notify(); }
+          return;
+        }
+        const seq = Number.isInteger(d.seq) ? d.seq : /^\d+$/.test(e.lastEventId || '') ? Number(e.lastEventId) : null;
+        if (seq != null) { if (seq <= lastSeq) return; lastSeq = seq; numbered = true; retries = 0; }
+        if (type === 'message.delta' && typeof d.delta === 'string') { if (!r.gap) { r.text += d.delta; notify(); } }
         // Live steps, like the CLI: the tool that is running and the ones just finished.
         if (type === 'tool.started' && d.tool) { const id = d.tool_call_id || d.step_id || d.id; r.steps = [...r.steps, { ...(typeof id === 'string' && id ? { id } : {}), tool: String(d.tool), preview: typeof d.preview === 'string' ? d.preview : '', done: false }].slice(-4); notify(); }
         if (type === 'tool.completed' && d.tool) {
@@ -1277,24 +1314,34 @@
         // reasoning.available is deliberately not answer text.
         if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) terminal();
       };
+      const canResume = () => !r.stopped && !r.terminal && (numbered || !r.text);
       const connect = () => {
-        if (r.stopped || r.terminal) return;
-        r.steps = []; // a reconnect replays the run from its first event
+        clearTimeout(r.reconnect); r.reconnect = null;
+        if (r.stopped || r.terminal || r.source) return;
+        if (!numbered) r.steps = []; // an unnumbered reconnect replays the run from its first event
         try {
+          r.seenAt = Date.now(); // a new read gets the full stall window to open, however slow the link
           r.source = new window.EventSource(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
           r.source.onmessage = event;
-          for (const name of ['message.delta', 'tool.started', 'tool.completed', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted']) r.source.addEventListener(name, event);
-          r.source.onopen = () => { r.live = true; };
+          for (const name of ['message.delta', 'tool.started', 'tool.completed', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted', 'replay.truncated']) r.source.addEventListener(name, event);
+          r.source.onopen = () => { r.live = true; r.seenAt = Date.now(); };
           r.source.onerror = () => {
             r.live = false;
             close();
-            // Some queued main sends close before yielding any answer bytes.
-            // Retry only before ANY answer bytes: no duplicated/replayed text. This is
-            // another read of the same run, never another admission/send.
-            if (!r.stopped && !r.terminal && !r.text && retries++ < 3) r.reconnect = setTimeout(connect, 500);
+            // Another read of the same run, never another admission/send. Offline waits for the network to return.
+            if (!canResume() || retries >= MAX_RETRIES) return;
+            if (window.navigator?.onLine === false) { r.waitingOnline = true; return; }
+            r.reconnect = setTimeout(connect, BACKOFF[Math.min(retries++, BACKOFF.length - 1)]);
           };
         } catch (_) { close(); }
       };
+      // Back online or back in front: read again now instead of waiting out the backoff (a few more tries at most).
+      const resumeNow = () => {
+        if (window.document?.hidden || window.navigator?.onLine === false || r.source || !canResume()) return;
+        r.waitingOnline = false; retries = Math.min(retries, MAX_RETRIES - 3); connect();
+      };
+      window.addEventListener?.('online', resumeNow);
+      window.document?.addEventListener('visibilitychange', resumeNow);
       connect();
       const poll = async () => {
         if (r.stopped || r.terminal) return;
@@ -1302,11 +1349,18 @@
           const d = await (await req(url)).json();
           if (r.stopped) return;
           if ((d.run_id || d.id) === runId && d.session_id === sid && ['completed', 'failed', 'cancelled', 'interrupted'].includes(d.status)) terminal();
+          // Wizard answers but the stream has been silent past several keepalives: a half-open connection (plane wifi).
+          else if (r.source && r.live && numbered && Date.now() - (r.seenAt || 0) > STALL_MS) { r.live = false; close(); connect(); }
+          // Some systems never fire 'online': a status read that worked is proof enough.
+          else if (!r.source && r.waitingOnline) resumeNow();
         } catch (_) { /* connectivity recovery is the ordinary read poll, never another send */ }
         // The status read is only the safety net while the live stream is open.
         if (!r.stopped && !r.terminal) r.timer = setTimeout(poll, r.live ? 10000 : 1500);
       };
-      r.dispose = () => { r.stopped = true; close(); clearTimeout(r.timer); clearTimeout(r.reconnect); if (r.frame != null) cancelAnimationFrame(r.frame); RUN_STREAMS.delete(key); };
+      r.dispose = () => {
+        r.stopped = true; close(); clearTimeout(r.timer); clearTimeout(r.reconnect); if (r.frame != null) cancelAnimationFrame(r.frame);
+        window.removeEventListener?.('online', resumeNow); window.document?.removeEventListener('visibilitychange', resumeNow); RUN_STREAMS.delete(key);
+      };
       r.timer = setTimeout(poll, 500);
     }
     r.listeners.add(paint);
@@ -1478,6 +1532,9 @@
     const c = keepable(id) && TC.get(id), s = L.session(id); if (!c || !s || !L.listTrusted()) return null;
     return String(c.rev || '').split('|').slice(0, 3).join('|') === ckOf(s) ? c.rows : null;
   };
+  // No answer from Wizard at all (offline, plane wifi): the last copy this device kept, whatever its age. chats.js
+  // shows it only after a read has failed, labelled as a saved copy, and the next good read replaces it.
+  L.savedMessages = id => { const c = keepable(id) && TC.get(id); return c && Array.isArray(c.rows) ? { rows: c.rows, at: c.at || 0 } : null; };
   // A thread the server answered 404 for is gone: drop its memory and IndexedDB copy so a reopen can't repaint it.
   L.forgetMessages = async id => {
     if (!id) return; TC.delete(id);

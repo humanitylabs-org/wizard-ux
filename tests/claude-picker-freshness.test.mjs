@@ -21,14 +21,16 @@ function models(claude) {
 }
 const NOTE = 'Claude app not answering';
 
-test('picker list goes stale after ~15 s so a new sign-in shows on the next open', async () => {
+test('picker catalogue TTL remains ~15 s and every open revalidates sign-in' , async () => {
   const M = models(async () => ({ ok: true, status: 200, json: async () => ({ accounts: [] }) }));
   assert.equal(M.stale(), true);
   await M.load();
   assert.equal(M.stale(), false);
   M.at = Date.now() - 16e3;
   assert.equal(M.stale(), true);
-  assert.match(power, /M\.stale \? M\.stale\(\) : !M\.ready\) M\.load\(M\.ready\)/);
+  const open = power.slice(power.indexOf("openSheet({ type: 'model'"), power.indexOf('function openFiles'));
+  assert.match(open, /M\.load\(M\.ready\)/, 'every open revalidates, which includes stale catalogues');
+  assert.doesNotMatch(open, /if \(M\.stale|if \(!M\.ready\)/, 'fresh-cache opens must not hide a new sign-in');
 });
 
 test('a Claude app that errors or times out is named in the picker', async () => {

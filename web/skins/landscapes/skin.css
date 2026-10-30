@@ -163,12 +163,6 @@ html[data-skin^="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tile
 html[data-skin^="landscapes"]:not([data-shell="desktop"]) .device:not(.immersive) .tiles.has-full { bottom: calc(var(--pill-top) + 6px); }
 html[data-skin^="landscapes"]:not([data-shell="desktop"]) #device:not(.orb-corner) > :is(#voiceDestination, #generalVoice) { bottom: calc(var(--pill-top) - 9px); }
 html[data-skin^="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub .sc-label { bottom: calc(var(--pill-h) + 4px); }
-/* Opinionated (phone): the "Interface updated · Reload" banner sits just above the bottom bar, in thumb reach,
- * instead of under the status bar. Its thread list opens upward. Full-screen chats: above the corner orb. */
-html[data-skin^="landscapes"]:not([data-shell="desktop"]) .device .dv-update { top: auto; left: var(--pill-x, 10px); right: var(--pill-x, 10px); bottom: calc(var(--pill-top, calc(var(--dock-h) + var(--safe-b-low))) + 8px); }
-html[data-skin^="landscapes"]:not([data-shell="desktop"]) .device.orb-corner .dv-update { bottom: calc(var(--safe-b-low) + var(--corner-b) + var(--corner-orb) + 10px); }
-html[data-skin^="landscapes"]:not([data-shell="desktop"]) .device .dv-update.web { flex-direction: column-reverse; }
-html[data-skin^="landscapes"]:not([data-shell="desktop"]) .device .dv-update .dv-wl { margin: 0 0 8px; border-top: 0; border-bottom: 1px solid var(--line); }
 /* Opinionated (phone, test port) round 2: content runs under the pill and fades out into the background (iOS style)
  * instead of stopping in a hard edge above it; quieter pill; chat Back drawn as a hamburger (back to the list). */
 html[data-skin^="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full):has(> .win.solo.app-chats) { bottom: 0; }
@@ -953,6 +947,8 @@ html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .ch-row .pv em.att.fyi { color: #7a6200; }
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .ch-row .pv em.att.failed { color: #b3261e; }
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .ch-row .pv em.att.deferred { color: rgba(0, 0, 0, .7); }
+/* Light's read preview needs one darker step on frosted paper. Saved drafts keep their amber semantic cue. */
+html[data-skin="landscapes-light"] .ch-row:not(.unread):not(.draft) .pv { color: rgba(17, 18, 22, .62); }
 /* Desktop Latest pill (Miguel, 28 Oct 2026): it sat on the Done button, so a double click could close the thread. It now
  * rides in the thread's column just above the Snooze/Done row, centred, taking no space (32px tall, -44px top, 12px gap). */
 html[data-skin^="landscapes"][data-shell="desktop"] .ch-thread > .ch-latest { position: relative; inset: auto; transform: none; flex: none; align-self: center; margin: -44px auto 12px; z-index: 6; }

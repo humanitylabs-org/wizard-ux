@@ -17,6 +17,7 @@ export default function setup(api) {
   orb.type = 'button'; orb.className = 'to-orb'; orb.id = 'agentOrb';
   orb.setAttribute('aria-label', 'Agent orb');
   const face = doc.createElement('span'); face.className = 'to-face';
+  const glyph = doc.createElement('span'); glyph.className = 'to-glyph'; glyph.setAttribute('aria-hidden', 'true');
   const ring = doc.createElement('span'); ring.className = 'to-ring';
   const name = doc.createElement('span'); name.className = 'to-name';
   // The orb itself is the Wizard Everywhere floating orb: a second instance of the shell's orb.js, with Everywhere's
@@ -27,7 +28,7 @@ export default function setup(api) {
   const proc = doc.createElement('span'); proc.className = 'to-proc';
   const timer = doc.createElement('span'); timer.className = 'to-timer'; timer.textContent = '0:00';
   glass.append(cv, fb, proc, timer);
-  orb.append(glass, ring, face, name);
+  orb.append(glass, ring, face, glyph, name);
 
   const arc = doc.createElement('div'); arc.className = 'to-arc'; arc.hidden = true;
   arc.setAttribute('role', 'listbox'); arc.setAttribute('aria-label', 'Choose an agent for this message');
@@ -69,9 +70,43 @@ export default function setup(api) {
     const html = api.agents.sigil(id) || '';
     if (el.dataset.sig !== id + '|' + html.length) { el.innerHTML = html; el.dataset.sig = id + '|' + html.length; }
   };
+  // An app in front can wear the orb as its main button: its icon, its colour (WizardApp.orb.claim).
+  const GLYPHS = {
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    mic: '<rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/>',
+    record: '<circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/>',
+    stop: '<rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none"/>',
+    send: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+    search: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
+    edit: '<path d="M5 19l1-4 10-10 3 3-10 10-4 1z"/>',
+  };
+  const hueOf = hex => {
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim()); if (!m) return null;
+    const n = parseInt(m[1], 16), r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn; if (!d) return 0;
+    const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return Math.round((h * 60 + 360) % 360);
+  };
+  let claimed = null;
   function paint() {
     const v = api.voice.state();
     const busy = v.state && v.state !== 'idle';
+    const claim = !busy && !G?.arc ? api.app.orb() : null;
+    claimed = claim;
+    orb.classList.toggle('app-claim', !!claim);
+    if (claim) {
+      orb.hidden = false;
+      const c = claim.colors?.[0] || 'var(--wz-accent)'; // the app's registry colour, else the skin's accent
+      orb.style.setProperty('--c', c);
+      const h = hueOf(c); if (h != null) orb.style.setProperty('--h', h);
+      if (glyph.dataset.icon !== claim.icon) { glyph.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${GLYPHS[claim.icon] || GLYPHS.plus}</svg>`; glyph.dataset.icon = claim.icon; }
+      name.textContent = '';
+      orb.dataset.state = 'idle'; delete doc.documentElement.dataset.toTake;
+      orb.setAttribute('aria-label', `${claim.label} (${claim.name}). Hold to talk to an agent.`);
+      shownFor = 'app:' + claim.appId;
+      glassState('idle'); lift();
+      return;
+    }
     const here = api.agents.here();
     const list = api.agents.list();
     const take = busy && v.kind !== 'dictation' && v.kind !== 'command' ? list.find(a => a.id === v.agent) : null;
@@ -121,12 +156,12 @@ export default function setup(api) {
       arc.append(c);
       return { el: c, a, x: x + host.left, y: y + host.top };
     });
-    arc.hidden = false; orb.classList.add('picking');
+    arc.hidden = false; orb.classList.add('picking'); orb.classList.remove('app-claim');
     api.frame(() => arc.classList.add('on'));
     try { navigator.vibrate?.(14); } catch (_) {}
     return true;
   }
-  function closeArc() { arc.classList.remove('on'); arc.hidden = true; arc.replaceChildren(); chips = []; orb.classList.remove('picking'); }
+  function closeArc() { arc.classList.remove('on'); arc.hidden = true; arc.replaceChildren(); chips = []; orb.classList.remove('picking'); paint(); }
   function pickAt(x, y) {
     let best = null, d = Infinity;
     for (const c of chips) { const dd = Math.hypot(c.x - x, c.y - y); if (dd < d) { d = dd; best = c; } }
@@ -163,12 +198,13 @@ export default function setup(api) {
       return;
     }
     if (cancelled || g.moved) return;
+    if (claimed && api.voice.state().state === 'idle' && api.app.tap()) return; // the app's own main button (e.g. a recorder's New recording)
     api.voice.tap(); // idle: talk to the screen's agent; recording: send; paused: resume
   }
   api.listen(orb, 'pointerup', e => end(e, false));
   api.listen(orb, 'pointercancel', e => end(e, true));
   api.listen(orb, 'lostpointercapture', e => end(e, true));
-  api.listen(orb, 'keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); api.voice.tap(); } });
+  api.listen(orb, 'keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!(claimed && api.voice.state().state === 'idle' && api.app.tap())) api.voice.tap(); } });
 
   /* White orb: a tap types into the focused field; a tap with nothing focused explains itself. In a full-screen
    * Chats or text field the white orb moves to the corner and keeps its classic tap there. */

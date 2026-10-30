@@ -32,6 +32,22 @@ The owner must tap Install. The only install selection is:
 
 The Store reuses its existing WAM polling, exact-selection receipt validation and registry readback. No `/v1/runs` or agent-mediated install is involved. Server-side authorization, manifest validation and source persistence require the companion **wizard-app-manager `feat/link-source-install`** change.
 
+## One entry per app ID (source conflicts)
+
+When catalogs list the same app ID from different repositories (for example an original repository and its fork), `mergeConflicts` (`web/store/store-status.js`) shows one row. Rows from the same repository, however it is spelled, count as one source and are never a conflict between themselves. It keeps the repository whose installed identity is exact (same repository in the App Manager registry, or a reviewed host alias); a Runtipi-only match proves nothing about the source. The row shows the `Source conflict` status beside the name, never an action pill. The installed copy still opens. Installing from a conflicted ID stays blocked.
+
+The detail page's **Sources** section lists every repository and marks the installed one. Replacing an installed app with another repository is not available from the Store: it would need a server-persisted source choice and an App Manager replacement flow (follow-up). Refresh rebuilds the same single row from the same data.
+
+## Remove app
+
+An installed app's page offers `Remove app` next to Open when the App Manager installed it under its own ID from a known repository at a full commit, and it is not one of Wizard's own apps (`system`, shell, interface). The review opens on the Store's existing sheet layer (Back/Escape cancel). It reads `GET store-install/_remove/<app>/plan` from the App Manager. The plan covers the exact installed repository and commit, the apps that use it, any capability nothing else provides, and the number of earlier backups it keeps. The App Manager refuses required spots and Wizard's own apps.
+
+`Remove app` sends one `POST store-install/_remove/<app>` with exactly `{repo, commit, dependents, empties}` from that plan. It goes through the same owner gate as Store Get. The App Manager refuses the request if anything changed. A second tap joins the running job. The Store shows the app as removed only after both of these hold:
+- the job reports `removed` for the same identity;
+- a fresh read of the App Manager registry and Runtipi lists no longer contains it.
+
+On success the Store posts `wizard:apps-changed`, closes the review and the app page, and lands on the list it came from. A refusal or failure keeps the review open with the reason. An unknown outcome says to refresh and never claims removal. Server contract: wizard-app-manager `wam/store_remove.py`.
+
 ## Verification
 
 - `node --test tests/store-*.test.mjs` — source mapping, parser errors, registry allowlist, fixed-endpoint preview with fixture fetches, exact SHA/token/cap/failure behavior, and existing Store contracts.

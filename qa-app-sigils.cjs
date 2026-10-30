@@ -52,7 +52,7 @@ async function ctxFor(b, mobile) {
     await p.waitForFunction(() => document.querySelectorAll('#launcherBody .lapp').length > 8, null, { timeout: 15000 }).catch(() => {});
     await p.waitForTimeout(1200);
     const r = await p.evaluate(() => {
-      const tiles = [...document.querySelectorAll('#launcherBody .lgroup')].filter(g => /wizard apps/i.test(g.querySelector('h4')?.textContent || ''))
+      const tiles = [...document.querySelectorAll('#launcherBody .lgroup')].filter(g => /^\s*apps\b/i.test(g.querySelector('h4')?.textContent || ''))
         .flatMap(g => [...g.querySelectorAll('.lapp')]);
       return {
         loaded: !!window.WizSigil,
@@ -67,8 +67,8 @@ async function ctxFor(b, mobile) {
     });
     ok(r.loaded, 'phone: WizSigil loaded');
     const T = Object.fromEntries(r.tiles.map(t => [t.id, t]));
-    ok(r.tiles.length >= 10, `phone: Wizard apps group has tiles (${r.tiles.length})`);
-    ok(r.tiles.every(t => t.sgt), 'phone: every Wizard app tile is a sigil tile', JSON.stringify(r.tiles.filter(t => !t.sgt).map(t => t.id)));
+    ok(r.tiles.length >= 10, `phone: Apps group has tiles (${r.tiles.length})`);
+    ok(r.tiles.every(t => t.sgt), 'phone: every app tile is a sigil tile', JSON.stringify(r.tiles.filter(t => !t.sgt).map(t => t.id)));
     ok(r.tiles.every(t => !t.emoji), 'phone: no emoji left on any app tile', JSON.stringify(r.tiles.filter(t => t.emoji).map(t => t.id)));
     const house = r.tiles.filter(t => !t.id.startsWith('qa-'));
     ok(house.every(t => t.glyph && /^url\("?data:image\/svg\+xml/.test(t.mask)), 'phone: every house app draws a glyph through an SVG mask', JSON.stringify(house.filter(t => !t.glyph).map(t => t.id)));

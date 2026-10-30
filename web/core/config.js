@@ -5,8 +5,10 @@
  * answer on the device, so a reload paints instantly and offline still works.
  *
  *   WizConfig.agent()          the agent's display name ("Wizard" until the owner names it)
+ *   WizConfig.agentName(name)  save a new agent name (PUT /wizard/v1/settings), resolves to the confirmed name
  *   WizConfig.owner()          the owner's name, or '' (UI then says "you")
- *   WizConfig.timeZone()       settings timezone, else the device's own zone
+ *   WizConfig.timeZone()       the device's own zone (follows the owner when they travel), else settings timezone
+ *   WizConfig.homeZone()       the settings timezone the server schedules in, else the device's zone
  *   WizConfig.dayStart(t)      start (ms) of the owner's day containing t (settings day_starts_at)
  *   WizConfig.dayParts(t)      {y, m, d, dow} of t in the owner's zone
  *   WizConfig.endpoint(name)   'transcribe' | 'route' | 'apps' | 'upload' URL, or '' when absent
@@ -28,7 +30,9 @@
   let B = (() => { try { return JSON.parse(localStorage.getItem(KEY) || 'null') || DEFAULTS; } catch (e) { return DEFAULTS; } })();
   let live = false;
 
-  const deviceZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) { return 'UTC'; } };
+  // The zone the phone reports, or '' when it reports none (some WebViews), so the settings zone can take over.
+  const phoneZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; } };
+  const deviceZone = () => phoneZone() || 'UTC';
   const zoneOk = z => { if (!z) return false; try { new Intl.DateTimeFormat('en-US', { timeZone: z }); return true; } catch (e) { return false; } };
   const fmtCache = new Map();
   const fmt = z => {
@@ -66,7 +70,10 @@
     owner() { return (B.settings?.owner?.name || '').trim(); },
     place() { return (B.settings?.owner?.place || '').trim(); },
     vocabulary() { return Array.isArray(B.settings?.voice?.vocabulary) ? B.settings.voice.vocabulary : []; },
-    timeZone() { const z = B.settings?.clock?.timezone; return zoneOk(z) ? z : deviceZone(); },
+    // Times on screen follow the phone's clock, so a trip abroad needs no settings change.
+    // The settings zone stays the fallback (and the server's home zone) when the device reports none.
+    timeZone() { const d = phoneZone(); if (zoneOk(d)) return d; const z = B.settings?.clock?.timezone; return zoneOk(z) ? z : 'UTC'; },
+    homeZone() { const z = B.settings?.clock?.timezone; return zoneOk(z) ? z : deviceZone(); },
     /* Wall-clock parts of instant t in the owner's zone. */
     dayParts(t = Date.now()) {
       const p = {}; for (const x of fmt(C.timeZone()).formatToParts(new Date(t))) p[x.type] = x.value;
@@ -138,6 +145,32 @@
       try { localStorage.setItem(KEY, JSON.stringify(B)); } catch (_) {}
       window.dispatchEvent(new CustomEvent('wizard:config', { detail: B }));
       return style;
+    },
+    // The agent's name (Name your Wizard, Settings): saved in the Agent Service settings, then read back. One line of
+    // plain text, at most 40 characters; the rest of the agent block (adapter) is kept as it is.
+    // from: the name the owner was looking at; if the agent was renamed elsewhere since, nothing is written and the
+    // error carries code 'conflict' and the current name.
+    async agentName(value, { from } = {}) {
+      const name = String(value ?? '').replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40).trim();
+      if (!name) throw Error('Type a name');
+      const cur = await fetch('/wizard/v1/settings', { credentials: 'same-origin', cache: 'no-store' });
+      if (!cur.ok) throw Error('Could not read your Wizard settings');
+      // The Agent Service replaces the whole agent block on PUT, so the fields read here go back with the new name.
+      const agent = (await cur.json()).settings?.agent || {};
+      if (from !== undefined && (agent.name || 'Wizard') !== from) {
+        B = { ...B, settings: { ...B.settings, agent: { ...B.settings?.agent, name: agent.name || 'Wizard' } } };
+        try { localStorage.setItem(KEY, JSON.stringify(B)); } catch (_) {}
+        window.dispatchEvent(new CustomEvent('wizard:config', { detail: B }));
+        throw Object.assign(Error('Renamed on another device'), { code: 'conflict', current: agent.name || 'Wizard' });
+      }
+      const saved = await fetch('/wizard/v1/settings', { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: { ...agent, name } }) });
+      if (!saved.ok) throw Error('Could not save the name');
+      const now = (await saved.json().catch(() => ({}))).settings?.agent?.name;
+      if (now !== name) throw Error('Your Wizard has not confirmed the new name. Try again.');
+      B = { ...B, settings: { ...B.settings, agent: { ...B.settings?.agent, name: now } } };
+      try { localStorage.setItem(KEY, JSON.stringify(B)); } catch (_) {}
+      window.dispatchEvent(new CustomEvent('wizard:config', { detail: B }));
+      return now;
     },
     ready: null,
   };

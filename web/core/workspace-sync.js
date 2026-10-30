@@ -37,16 +37,36 @@
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const looseSig = d => d.wins.map(w => [w.app, w.appId || '', w.agent || ''].join('|')).sort().join('&');
 
-  /* Three-way merge: start from the box's desks, replay what this device changed since `base`. */
+  /* Three-way merge: start from the box's desks, replay what this device changed since `base`.
+   * Closing wins over edits: a window or desk closed on one device stays closed when the other device only changed
+   * something inside it (its page, thread or title). Only windows opened since `base` keep a closed desk alive, so a
+   * close never needs doing twice. */
+  const ids = d => new Set((d?.wins || []).map(w => w.id));
+  function mergeDesk(b, mine, theirs) {
+    const inBase = ids(b), inTheirs = ids(theirs), inMine = ids(mine);
+    const baseWin = new Map(b.wins.map(w => [w.id, w])), theirWin = new Map(theirs.wins.map(w => [w.id, w]));
+    const wins = mine.wins
+      .filter(w => !inBase.has(w.id) || inTheirs.has(w.id))                     // closed there stays closed
+      .map(w => (inBase.has(w.id) && same(baseWin.get(w.id), w) ? theirWin.get(w.id) : w)); // their edit unless mine
+    for (const w of theirs.wins) if (!inBase.has(w.id) && !inMine.has(w.id)) wins.push(w); // opened there
+    return { ...theirs, wins };
+  }
   function merge(base, local, remote) {
     const B = new Map(base.desks.map(d => [d.id, d])), L = new Map(local.desks.map(d => [d.id, d]));
     const out = remote.desks.map(d => ({ ...d }));
     const at = id => out.findIndex(d => d.id === id);
-    for (const [id, d] of B) { const j = at(id); if (!L.has(id) && j >= 0 && same(out[j], d)) out.splice(j, 1); } // closed here, untouched there
+    for (const [id, d] of B) { // closed here: gone, unless the other device opened something new on it meanwhile
+      const j = at(id); if (L.has(id) || j < 0) continue;
+      const fresh = out[j].wins.filter(w => !ids(d).has(w.id));
+      if (fresh.length) out[j] = { ...out[j], wins: fresh }; else out.splice(j, 1);
+    }
     local.desks.forEach((d, i) => {
       const b = B.get(d.id), j = at(d.id);
       if (!b) { if (j < 0) out.splice(Math.min(i, out.length), 0, d); }                         // opened here
-      else if (!same(b, d)) { if (j >= 0) out[j] = d; else out.splice(Math.min(i, out.length), 0, d); } // edited here
+      else if (!same(b, d)) {                                                                    // edited here
+        if (j >= 0) out[j] = mergeDesk(b, d, out[j]);
+        else { const fresh = d.wins.filter(w => !ids(b).has(w.id)); if (fresh.length) out.splice(Math.min(i, out.length), 0, { ...d, wins: fresh }); }
+      }
     });
     // Desks reordered here: shared desks follow this device's order, the others keep their places.
     const order = ids => ids.filter(id => L.has(id) && B.has(id));
@@ -55,6 +75,10 @@
       const moved = slots.map(i => out[i]).sort((a, b) => local.desks.findIndex(d => d.id === a.id) - local.desks.findIndex(d => d.id === b.id));
       slots.forEach((i, k) => { out[i] = moved[k]; });
     }
+    // A window changed here keeps this device's change wherever it now lives (the other device may have moved it).
+    const all = s => new Map(s.desks.flatMap(d => d.wins.map(w => [w.id, w])));
+    const baseAll = all(base), localAll = all(local);
+    for (const d of out) d.wins = d.wins.map(w => { const l = localAll.get(w.id), b = baseAll.get(w.id); return l && b && !same(l, b) ? l : w; });
     // A window lives on one desk: where this device put it wins, otherwise its first desk.
     const mine = new Map(); local.desks.forEach(d => d.wins.forEach(w => mine.set(w.id, d.id)));
     const home = id => mine.has(id) && out.some(d => d.id === mine.get(id) && d.wins.some(w => w.id === id)) ? mine.get(id) : null;

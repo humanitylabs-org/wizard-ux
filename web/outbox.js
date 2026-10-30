@@ -34,6 +34,17 @@
     return !!it && !localCompletions.has(it.id) && !it.localCompleted && !quarantine.has(it.id) && ['new', 'reply'].includes(it.kind) &&
       (it.intent !== 'command' || it.deliveryRequested === true) && it.steerDispatch !== 'started' && !it.cancelled && !it.cancelRequested && states.includes(it.state);
   }
+  // An agent-bound message rides on one of that agent's own models: its allowed pick, otherwise its default.
+  // A main-agent route that rode along on a staged take (Opus on a Private note) is never sent or rejected as-is.
+  // An agent pick always carries the agent's own provider, so a listed model on another provider is the main
+  // agent's route, not a pick: it falls back to the agent's default too.
+  function fitAgentRoute(it) {
+    const AG = window.WosAgents, a = it?.agent && AG?.get?.(it.agent);
+    if (!a?.model || it.body || !AG.allows || !AG.route) return false;
+    if (it.model && AG.allows(a, it.model) && (!it.provider || it.provider === a.model.provider)) return false;
+    const r = AG.route(a, ''); if (!r?.model) return false;
+    Object.assign(it, { model: r.model, provider: r.provider }); return true;
+  }
   // A recording this device can no longer read, with no copy on Wizard, has nothing left to send: Delete only.
   const lostAudio = it => !!it?.audioUnreadable && !it.audioFile?.id;
   function queueRetry(it, states, ownerSend = false) {
@@ -420,6 +431,7 @@
   async function deliver(it) {
     halt(it);
     if (it.kind === 'conversation') throw new HttpError(409, 'App voice input messages use explicit conversation delivery only');
+    if (fitAgentRoute(it)) await put(it);
     if (!it.model || !it.provider) throw new HttpError(409, 'No confirmed model route · choose a model before retrying');
     if (it.body) {
       const frozen = JSON.parse(it.body);
@@ -516,7 +528,7 @@
       it.sessionReady = true; await put(it);
     }
     if (!it.body) {
-      const body = { session_id: it.sessionId, input };
+      const body = { session_id: it.sessionId, input, ...(it.retryRunId ? { wizard_retry_run_id: it.retryRunId } : {}) };
       if (it.instructions) body.instructions = String(it.instructions).slice(0, 2000);
       if (fileIds.length) body.wizard_file_ids = fileIds;
       Object.assign(body, { model: it.model, provider: it.provider, require_model_lock: true });
@@ -599,6 +611,7 @@
       meetingEventId: o.meetingEventId || '', parkedDraft: o.parkedDraft || null, nativeIds: [...new Set([...(o.nativeIds || []), o.nativeId].filter(Boolean))],
       kind: o.kind === 'conversation' ? 'conversation' : o.kind === 'reply' ? 'reply' : 'new', conversation: o.conversation || null, sessionId: o.kind === 'conversation' ? '' : o.sessionId || newSessionId(), steerRunId: o.meetingEventId ? '' : o.steerRunId || '',
       text: String(o.text || '').trim(), typed: o.audio && !String(o.text || '').trim() ? String(o.typed || '').trim() : '', instructions: o.instructions || '', files: (o.files || []).map(f => ({ ...f })),
+      retryRunId: typeof o.retryRunId === 'string' ? o.retryRunId : '',
       audio: o.audio || null, audioType: o.audio?.type || '', model: o.model || '', provider: o.provider || '',
       pendingBlobs: keepPending(o.files), sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', deliveryRequested: false, source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false,
       // A Notifications Reply: the item, framed after his words only in the message that is delivered (deliver()).
@@ -762,6 +775,7 @@
         if (held.cancelled || held.cancelRequested) { if (held.cancelRequested) await finishCancel(held); return held; }
         // The delivery caller names the agent (an orb pick); a staged take that lost it must not fall back to the main agent.
         if (agent && !it.agent) { it.agent = agent; if (snapshot) Object.assign(it, snapshot); }
+        fitAgentRoute(it);
         // Preserve the original route/destination/id. Routing is allowed to choose a local command;
         // message delivery always retains the send-time thread and selected provider.
         Object.assign(it, { text: String(o.text || '').trim(), typed: o.typed || it.typed, files: [...(it.files || []), ...(o.files || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i), instructions: o.instructions || it.instructions, wid: o.wid || it.wid, ...(replyOf(o) || it.reply ? { reply: replyOf(o) || it.reply } : {}),
@@ -819,6 +833,21 @@
     isMessage: it => !!it && (it.intent !== 'command' || it.deliveryRequested === true),
     forThread(sessionId, wid) { return [...items.values()].filter(it => api.isMessage(it) && !it.compact && !(['empty', 'held', 'sent'].includes(it.state) && it.threadHidden) && !['dictation', 'conversation'].includes(it.kind) && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
     dismissEmpty(id) { return this.get(id)?.state === 'sent' ? Promise.resolve(false) : this.dismissBubble(id); },
+    async dismissFailed(id) {
+      // Withdraw only this settled local failure. Never stop a run or erase recovery custody.
+      const it = items.get(id);
+      if (!it || it.state !== 'failed' || quarantine.has(id) || admitting.has(id) || transcriptWork.has(id) || conversationWork.has(id) || it.steerDispatch === 'started') return false;
+      const before = { ...it };
+      Object.assign(it, { state: 'held', cancelled: true, threadHidden: true, nextAt: 0 });
+      await put(it);
+      if (!it.durable) {
+        for (const key of ['state', 'cancelled', 'threadHidden', 'nextAt']) {
+          if (key in before) it[key] = before[key]; else delete it[key];
+        }
+        emit(); return false;
+      }
+      return true;
+    },
     async dismissBubble(id) {
       // Hide only the local presentation; accepted work and original recovery custody stay untouched.
       const it = items.get(id); if (!it || !['empty', 'held', 'sent'].includes(it.state) || quarantine.has(id) || conversationWork.has(id)) return false;

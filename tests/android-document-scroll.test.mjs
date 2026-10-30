@@ -25,12 +25,25 @@ test('reading place, jump latest, prepend and repaint share the document adapter
  const cp=read('web/core/chat-power.js'),ch=read('web/core/chats.js');
  assert.doesNotMatch(cp,/\bnb\.(scrollTop|scrollHeight|clientHeight|scrollTo)\b|\bbox\.(scrollTop|scrollHeight)\b/);
  assert.match(ch,/PW\?\.capture\(box\)/);
- assert.match(ch,/PW\?\.position\(w, el, nb, \{ turns, working \}\)/);
+ assert.match(ch,/PW\?\.position\(w, el, nb, \{ turns, working, notification: NV\?\.id, notificationScroll \}\)/);
  assert.match(cp,/anchor: anchorOf\(nb\), shown: c.show/);
  assert.match(ch,/PW\?\.RP.read\(w.thread\)\?\.shown/);
  assert.doesNotMatch(ch,/docAway|docLast|docAnchor|docRestore|docOwnedAt|docAside/);
  assert.equal((cp.match(/function restore\(/g)||[]).length,1);
  assert.match(cp,/Math.abs\(s.scrollTop - to\) >= 1/);
+});
+test('native composer unions safe-bottom with the already covered keyboard/dock strip',()=>{
+ const css=read('web/core/chats.css');
+ // The measured dock strip already includes --safe-b. Adding both lifted a 440px
+ // viewport's compact composer to y=101 and left a 34px picker (James correction).
+ const bottom=/html\.wos-doc-scroll \.wos-doc-thread \.ch-compose\s*\{[^}]*bottom:\s*([^;]+);/.exec(css)?.[1];
+ assert.equal(bottom,'max(var(--safe-b, 0px), var(--wos-doc-bottom, 0px)) !important');
+ for(const [safe,covered,expected] of [[92,159,159],[0,66,66],[300,300,300],[24,0,24]]){
+   const expression=bottom.replace(/ !important$/,'').replace('var(--safe-b, 0px)',String(safe)).replace('var(--wos-doc-bottom, 0px)',String(covered)).replace('max(','Math.max(');
+   assert.equal(new Function('return '+expression)(),expected);
+ }
+ assert.equal((css.match(/max\(var\(--safe-b, 0px\), var\(--wos-doc-bottom, 0px\)\)/g)||[]).length,4,'composer, switch, Latest and document reserve share one inset');
+ assert.doesNotMatch(css,/var\(--safe-b, 0px\) \+ var\(--wos-doc-bottom, 0px\)/);
 });
 test('header/composer and skin animation cannot acquire a document-sized fixed containing block',()=>{
  const css=read('web/core/chats.css');
