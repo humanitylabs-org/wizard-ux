@@ -18,7 +18,7 @@
 (() => {
   'use strict';
   const KEY = 'wos.welcome.v1', OPTIONS = '/wizard/hermes/api/model/options', SETUP = '/wizard/v1/setup', POLL_MS = 3000;
-  const FAMILY = 'wizard'; // first run keeps the Wizard skin and offers its colours; other skins live in Settings
+  const FAMILY = 'wizard'; // first run starts on the original Wizard color (Nebula) and offers every color
   const PROVIDERS = [
     // Alongside the Claude app adds to Hermes' own Anthropic pool; on a fresh Wizard its sign-in is the Claude Code
     // login, which Hermes reaches as the subscription provider (the app makes it the agent's model).
@@ -167,16 +167,15 @@
       ${installError ? `<p class="wl-status err" role="alert">${esc(installError)}</p>` : ''}`;
   }
 
-  // The same preview cards as Settings › Look (core/settings.js skinCard + core/skins.css .skp), Wizard colours only.
+  // The same preview cards as Settings › Look (core/settings.js skinCard + core/skins.css .skp): every color, any author.
   const pvars = k => { const t = k.t || {}; return [['bg', t.bg || k.bg], ['ink', t.ink], ['ac', t.violet || k.accent], ['ac2', t['violet-2']], ['pk', t.pink], ['cy', t.cyan], ['dock', t['sk-dock']], ['dl', t['sk-dock-line']]]
     .filter(([, v]) => v).map(([n, v]) => `--p-${n}:${esc(v)}`).join(';'); };
   const card = (k, cur) => `<button type="button" class="skp-card" data-wl="palette" data-id="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}"><span class="skp-mini" data-skp="${esc(k.id)}" style="${pvars(k)}" aria-hidden="true"><i class="skp-a"></i><i class="skp-a skp-a2"></i><i class="skp-u"></i><i class="skp-dock"><i class="skp-orb"></i></i></span><span class="skp-nm">${esc(k.name)}</span></button>`;
   function paintLook() {
     const S = window.WosSkin;
-    const fam = S?.families?.find(f => f.id === FAMILY);
-    if (!fam) return paintHello();
-    const cur = S.current, list = fam.palettes.map(id => S.list.find(k => k.id === id)).filter(Boolean);
-    return `${BRAND}${dots()}<header class="wl-head"><h2 tabindex="-1">Pick a color</h2><p>You can change it, or try other skins, any time in Settings.</p></header>
+    if (!S?.list?.length) return paintHello();
+    const cur = S.current, list = S.list;
+    return `${BRAND}${dots()}<header class="wl-head"><h2 tabindex="-1">Pick a color</h2><p>You can change it any time in Settings.</p></header>
       <div class="st-root wl-skp"><div class="skp" role="group" aria-label="Colors">${list.map(k => card(k, cur)).join('')}</div></div>
       <button type="button" class="wl-primary" data-wl="next">Continue</button>`;
   }
