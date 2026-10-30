@@ -108,3 +108,29 @@ test('404/405 old boxes use local fallback quietly; denied/offline writes never 
   assert.equal(cached.M.active.name, 'Cached'); await assert.rejects(cached.M.create({ name: 'Offline', base: 'nebula', tweaks: {} }));
   assert.equal(cached.M.recipes.length, 1);
 });
+
+test('leaving an own skin before the box answers is a pending intent: no recipe write, no duplicate, replayed once', async () => {
+  const server = box(); server.data.skins.push({ id: 'Work', name: 'Work', base: 'obsidian-light', has_recipe: true, tweaks: { a: true } }); server.data.active = 'Work';
+  const store = new Map([['wos.own-skins.cache.v1', JSON.stringify({ version: 1, skins: copy(server.data.skins), active: 'Work', migrated: true })]]);
+  server.fail = 403;
+  const b = await boot(server, store);
+  assert.equal(b.M.storage, 'offline'); assert.equal(b.M.active.id, 'Work');
+  b.ctx.WosSkin.set('nebula');
+  assert.equal(b.M.active, null, 'the built-in skin is worn at once');
+  assert.equal(store.has('wos.own-skins.v1'), false, 'box recipes never land in the legacy migration key');
+  const reload = await boot(server, store); assert.equal(reload.M.active, null, 'the pending leave survives a reload');
+  server.data.skins.find(s => s.id === 'Work').tweaks = { a: false };
+  server.fail = 0; await b.M.refresh();
+  assert.equal(server.calls.filter(c => c.method === 'POST').length, 0, 'no duplicate skin');
+  assert.equal(server.data.active, null); assert.equal(b.M.active, null); assert.deepEqual(server.data.skins.map(s => s.id), ['My skin', 'Work']);
+  assert.equal(server.calls.filter(c => c.method === 'PUT').length, 1); assert.equal(store.has('wos.own-skins.leave.v1'), false);
+  await b.M.refresh(); assert.equal(server.calls.filter(c => c.method === 'PUT').length, 1, 'replayed once');
+});
+test('a pending leave is dropped when the box meanwhile wears another skin', async () => {
+  const server = box(); server.data.skins.push({ id: 'Work', name: 'Work', base: 'nebula', has_recipe: true, tweaks: {} }, { id: 'Home', name: 'Home', base: 'obsidian-light', has_recipe: true, tweaks: {} }); server.data.active = 'Work';
+  const store = new Map([['wos.own-skins.cache.v1', JSON.stringify({ version: 1, skins: copy(server.data.skins), active: 'Work', migrated: true })]]);
+  server.fail = 403; const b = await boot(server, store);
+  await b.M.leave(); assert.equal(b.M.active, null);
+  server.data.active = 'Home'; server.fail = 0; await b.M.refresh();
+  assert.equal(server.calls.filter(c => c.method === 'PUT').length, 0); assert.equal(server.data.active, 'Home'); assert.equal(b.M.active.id, 'Home');
+});
