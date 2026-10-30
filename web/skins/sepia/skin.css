@@ -1,8 +1,27 @@
 /* Sepia: Novaire's warm e-reader paper with soft dark ink. Visual only; geometry and behaviour stay stock. */
-html[data-skin="sepia"] { color-scheme: light; }
+html[data-skin="sepia"] {
+  color-scheme: light;
+  --sepia-status-needs: #80580e;
+  --sepia-status-check: #3f6868;
+  --sepia-status-done: #4b6543;
+  --sepia-status-fyi: #6f5a0d;
+  --sepia-status-failed: #9a3d32;
+}
 html[data-skin="sepia"] .home-time { font-family: 'Sk Fraunces', Georgia, serif; font-weight: 300; letter-spacing: -.035em; text-shadow: 0 1px rgba(255, 252, 238, .55); }
 html[data-skin="sepia"] :is(.now-card, .side-card) { box-shadow: inset 0 1px 0 rgba(255, 252, 238, .5), 0 12px 36px rgba(83, 59, 31, .08); }
 html[data-skin="sepia"] .sk-dot { border-color: rgba(86, 65, 40, .28); }
+
+/* Status hues stay distinct on paper without using the dark-skin neon values. */
+html[data-skin="sepia"] :is(.ch-row, .ch-head) .emo.sti:is(.needs, .approval, .offline) { color: var(--sepia-status-needs); background: color-mix(in srgb, currentColor 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 25%, transparent); }
+html[data-skin="sepia"] :is(.ch-row, .ch-head) .emo.sti.check { color: var(--sepia-status-check); background: color-mix(in srgb, currentColor 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 25%, transparent); }
+html[data-skin="sepia"] :is(.ch-row, .ch-head) .emo.sti.done { color: var(--sepia-status-done); background: color-mix(in srgb, currentColor 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 25%, transparent); }
+html[data-skin="sepia"] :is(.ch-row, .ch-head) .emo.sti.fyi { color: var(--sepia-status-fyi); background: color-mix(in srgb, currentColor 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 25%, transparent); }
+html[data-skin="sepia"] :is(.ch-row, .ch-head) .emo.sti.failed { color: var(--sepia-status-failed); background: color-mix(in srgb, currentColor 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 25%, transparent); }
+html[data-skin="sepia"] .ch-row .pv em.att:is(.needs, .approval) { color: var(--sepia-status-needs); }
+html[data-skin="sepia"] .ch-row .pv em.att.check { color: var(--sepia-status-check); }
+html[data-skin="sepia"] .ch-row .pv em.att.done { color: var(--sepia-status-done); }
+html[data-skin="sepia"] .ch-row .pv em.att.fyi { color: var(--sepia-status-fyi); }
+html[data-skin="sepia"] .ch-row .pv em.att.failed { color: var(--sepia-status-failed); }
 
 /* Chat reading size: the stock phone default is 17px (core/chats.css); this skin keeps its original 15px. */
 html[data-skin="sepia"][data-shell="phone"] .ch-msgs .msg .bub { font-size: 15px; line-height: 1.45; }
