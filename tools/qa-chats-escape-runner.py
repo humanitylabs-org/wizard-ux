@@ -8,7 +8,9 @@ def save(): (out/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
 def digest(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def inventory(root):return {str(x.relative_to(root)):digest(x) for x in sorted(root.rglob('*')) if x.is_file()}
 def verify():
- for name in ['baseline','candidate']:assert inventory(stage/name)==manifest['sources'][name]['files'], 'Source drift '+name
+ for name in ['baseline','candidate']:
+  assert inventory(stage/name)==manifest['sources'][name]['files'], 'Source drift '+name
+  for rel,mode in manifest['sources'][name]['modes'].items():assert (stage/name/rel).stat().st_mode & 0o777 == mode, 'Source mode drift '+name+'/'+rel
  assert digest(pathlib.Path(__file__))==manifest['runner_sha256'],'Runner drift'
  for name,h in manifest['archives'].items():assert digest(stage/name)==h,'Archive drift '+name
 verify();save()
