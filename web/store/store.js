@@ -25,7 +25,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     { id: 'connections', type: 'external', one: 'Connector', many: 'Connectors', blurb: 'Accounts your agents can use' },
   ];
   const KIND_OF = Object.fromEntries(KINDS.map(k => [k.type, k]));
-  const kindOf = a => KIND_OF[a.type] || KINDS[1];
+  const declaredKindOf = a => KIND_OF[a.type] || KINDS[1];
   // Four quiet entry points; category lists and app details retain their existing layout.
   const KIND_ICONS = {
     apps: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
@@ -123,6 +123,9 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   // The shell knows which apps have a view it can open; only those get "Open".
   const openId = a => S.installed.get(key(a))?.id || '';
   const canOpen = a => { try { return framed && typeof parent.WizCanOpen === 'function' && parent.WizCanOpen(openId(a)); } catch (_) { return false; } };
+  // If an installed service has an owner-facing screen, it is an App in this Store.
+  // Screenless services remain Agent apps; declared connectors keep their own section.
+  const kindOf = a => a.type === 'service' && isInstalled(a) && canOpen(a) ? KINDS[0] : declaredKindOf(a);
 
   /* ---------------- pieces ---------------- */
   function icon(a, size = 'm') {
