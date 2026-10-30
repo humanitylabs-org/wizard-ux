@@ -23,9 +23,11 @@ export function sniffImage(b) {
   if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
   if (b.toString('latin1', 0, 4) === 'GIF8') return 'image/gif';
   if (b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP') return 'image/webp';
-  const head = b.toString('utf8', 0, 512).replace(/^\uFEFF/, '').trimStart();
-  if (/^(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*<svg[\s>]/i.test(head)) return 'image/svg+xml';
-  return '';
+  // SVG: an optional XML declaration and a few comments, then <svg (walked, not one regex: no backtracking).
+  let head = b.toString('utf8', 0, 512).replace(/^\uFEFF/, '').trimStart();
+  if (head.startsWith('<?xml')) { const e = head.indexOf('?>'); head = e < 0 ? '' : head.slice(e + 2).trimStart(); }
+  for (let i = 0; i < 8 && head.startsWith('<!--'); i++) { const e = head.indexOf('-->'); head = e < 0 ? '' : head.slice(e + 3).trimStart(); }
+  return /^<svg[\s>]/i.test(head) ? 'image/svg+xml' : '';
 }
 
 export function createAppLogos({ readWam, runtipiRoot, stat = statSync, read = readFileSync, placeholders = PLACEHOLDER_LOGOS }) {

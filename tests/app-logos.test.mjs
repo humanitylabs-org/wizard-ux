@@ -29,6 +29,8 @@ test('image type comes from the bytes, not the logo.jpg name', () => {
   assert.equal(sniffImage(Buffer.from('GIF89a' + 'x'.repeat(20))), 'image/gif');
   assert.equal(sniffImage(Buffer.from('RIFF\0\0\0\0WEBPVP8 ' + 'x'.repeat(20))), 'image/webp');
   assert.equal(sniffImage(Buffer.from('<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg"></svg>')), 'image/svg+xml');
+  assert.equal(sniffImage(Buffer.from('<!-- made by hand --><svg viewBox="0 0 1 1"/>')), 'image/svg+xml');
+  assert.equal(sniffImage(Buffer.from('<!--' + '--><!--'.repeat(5000))), '');
   assert.equal(sniffImage(Buffer.from('<html><script>alert(1)</script></html>')), '');
   assert.equal(sniffImage(Buffer.from('{"not":"an image"}')), '');
 });
