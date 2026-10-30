@@ -131,8 +131,9 @@
 .mrow.priv .mn b .ag-lock { color: hsl(160 72% 62%); }
 .msheet-gn { margin: 4px 12px 0; font-size: 12px; opacity: .7; line-height: 1.35; }
 
-/* Model label in the message box (James 18 Oct 2026): just the model name, small and white, bottom-right inside the
- * box. The text wraps early to leave its corner free (chats.js fitLabel). Tapping it opens the compact menu below. */
+/* Model label in the message box (James 18 Oct 2026): just the model name, small and white. An empty composer can
+ * share its bottom-right corner; any draft moves the label to the separate strip below so the tap target never covers
+ * editable text. Tapping the label opens the compact menu above. */
 .ch-field { flex: 1; min-width: 0; position: relative; display: flex; }
 .ch-field > textarea { flex: 1; width: 100%; }
 .ch-compose .ch-field > .ch-mlabel { position: absolute; right: 4px; bottom: 1px; width: auto; height: 40px; max-width: 42%; padding: 0 10px; border-radius: 16px;

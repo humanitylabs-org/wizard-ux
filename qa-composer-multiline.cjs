@@ -1,6 +1,6 @@
 'use strict';
-// QA: a three-line mobile draft keeps the model control outside the editable rows.
-// The second-last line must still hit the textarea, and Send must remain reachable.
+// QA: multiline mobile drafts keep the model control outside every editable row.
+// The reported two-line case must allow selection on its final line; three-line drafts retain the earlier regression.
 // Usage: QA_TREE=<baseline-or-candidate> QA_OUT=<evidence-dir> node qa-composer-multiline.cjs
 const fs = require('node:fs'), path = require('node:path');
 const { chromium } = require('./tools/qa-playwright.cjs');
@@ -18,15 +18,16 @@ const ROUTES = [
 ];
 const AGENTS = { agents: ROUTES.map(route => ({ harness: 'hermes', privacy: 'standard', status: 'running',
   model: { model: CATALOGUE.model, provider: CATALOGUE.provider, allowed_models: [CATALOGUE.model], fallback: false }, ...route })) };
-const DRAFT = 'Add Popcorn and Costumes to\nmorning brief reminder morning\nbrief';
+const THREE_LINE_DRAFT = 'Add Popcorn and Costumes to\nmorning brief reminder morning\nbrief';
+const TWO_LINE_DRAFT = 'Add this is a new draft to my right app';
 let pass = 0, fail = 0, foreign = 0, blockedWrites = 0, agentWrites = 0;
 function ok(v, name, detail) {
   v ? pass++ : fail++;
   console.log(`${v ? 'PASS' : 'FAIL'} ${name}${v || detail === undefined ? '' : ' ' + JSON.stringify(detail)}`);
 }
-async function run(browser, { mode, width, height, skin, route = ROUTES[0] }) {
+async function run(browser, { mode, width, height, skin, route = ROUTES[0], draft = THREE_LINE_DRAFT, draftKind = 'three-line' }) {
   const native = mode === 'native';
-  const label = `${mode}-${width}-${skin}-${route.kind}`;
+  const label = `${draftKind}-${mode}-${width}-${skin}-${route.kind}`;
   const ctx = await browser.newContext({ viewport: { width, height }, serviceWorkers: 'block', isMobile: true, hasTouch: true,
     deviceScaleFactor: 1, userAgent: `Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36${native ? ' WizardOS-DocScroll' : ''}` });
   await ctx.route('**/*', async route => {
@@ -77,14 +78,14 @@ async function run(browser, { mode, width, height, skin, route = ROUTES[0] }) {
       await Promise.allSettled((frame?.getAnimations() || []).map(animation => animation.finished));
     });
     await page.waitForFunction(() => WosModels.ready && WosAgents.ready);
-    await textarea.fill(DRAFT);
+    await textarea.fill(draft);
     await page.waitForTimeout(100);
     await textarea.evaluate(node => {
       node.focus();
       const start = node.value.indexOf('\n') + 1;
       node.setSelectionRange(start, node.value.length, 'forward');
     });
-    const state = await textarea.evaluate((node, activeRoute) => {
+    const state = await textarea.evaluate((node, { activeRoute, draftKind }) => {
       const field = node.closest('.ch-field'), compose = node.closest('.ch-compose'), model = field.querySelector('.ch-mlabel'), send = compose.querySelector('.ch-send');
       const win = __wos.wins[node.closest('.win')?.dataset.win];
       const routeOk = activeRoute.kind === 'main'
@@ -94,19 +95,19 @@ async function run(browser, { mode, width, height, skin, route = ROUTES[0] }) {
       const frame = node.closest('.win')?.getBoundingClientRect(), badge = model.getBoundingClientRect(), action = send.getBoundingClientRect();
       const line = parseFloat(getComputedStyle(node).lineHeight) || 20;
       const x = Math.min(input.right - 8, Math.max(badge.left + 8, badge.right - 12));
-      const y = input.bottom - line * 1.5;
+      const y = input.bottom - line * (draftKind === 'two-line' ? 0.5 : 1.5);
       const editHit = document.elementFromPoint(x, y), sendX = action.x + action.width / 2, sendY = action.y + action.height / 2;
       const sendHit = document.elementFromPoint(sendX, sendY);
       const box = rect => rect && ({ top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right });
-      return { routeOk, route: { expected: activeRoute, focus: win?.focus || null }, labRow: field.classList.contains('lab-row'),
+      return { routeOk, route: { expected: activeRoute, focus: win?.focus || null }, draftKind, labRow: field.classList.contains('lab-row'),
         editHit: editHit === node, sendHit: send.contains(sendHit), viewport: innerWidth,
         frame: box(frame), composer: box(composer), field: box(fieldBox), input: box(input), badge: box(badge), action: box(action),
         probe: { x, y, tag: editHit?.tagName || '', cls: editHit?.className || '' },
         sendProbe: { x: sendX, y: sendY, tag: sendHit?.tagName || '', cls: sendHit?.className || '' }, selected: [node.selectionStart, node.selectionEnd] };
-    }, route);
+    }, { activeRoute: route, draftKind });
     ok(state.routeOk, `${label}: composer belongs to the requested agent route`, state.route);
-    ok(state.labRow, `${label}: three-line draft moves the model below the editable rows`, state);
-    ok(state.editHit, `${label}: second-last line hit-tests to the textarea`, state);
+    ok(state.labRow, `${label}: model control sits below the editable rows`, state);
+    ok(state.editHit, `${label}: targeted editing line hit-tests to the textarea`, state);
     ok(state.sendHit, `${label}: Send remains hit-testable with the lower lines selected`, state);
     ok(errors.length === 0, `${label}: no page errors`, errors);
     fs.writeFileSync(path.join(OUT, `${label}.json`), JSON.stringify(state, null, 2));
@@ -124,6 +125,7 @@ async function run(browser, { mode, width, height, skin, route = ROUTES[0] }) {
       )))),
       { mode: 'native', width: 844, height: 390, skin: 'nebula', route: ROUTES[0] },
       ...ROUTES.slice(1).map(route => ({ mode: 'native', width: 412, height: 892, skin: 'nebula', route })),
+      { mode: 'native', width: 393, height: 852, skin: 'nebula', route: ROUTES[0], draft: TWO_LINE_DRAFT, draftKind: 'two-line' },
     ];
     for (const item of cases) {
       try { await run(browser, item); }

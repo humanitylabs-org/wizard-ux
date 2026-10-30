@@ -2660,9 +2660,9 @@ window.WizCore.chats = function createChats(H) {
   document.body.appendChild(picker);
   let pickFor = '';
   picker.addEventListener('change', () => { const list = [...picker.files]; picker.value = ''; if (pickFor && W[pickFor] && list.length) addFiles(pickFor, list); });
-  // Typed text uses the full width of the box. Only when the last line would run into the model label (bottom-right)
-  // does the box add one line, so the label sits under the text and nothing is hidden (James 18 Oct 2026).
-  // A textarea can't wrap one line early, so a hidden mirror measures where the last line ends.
+  // Empty composers keep the model name in the free bottom-right corner. As soon as there is a draft, the name gets
+  // its own strip below the textarea so its 40px tap target can never intercept text selection or editing. The mirror
+  // still catches placeholder collisions and scrolling states where the editable area cannot safely share the corner.
   let mirror = null;
   function fitLabel(root) {
     const ta = root?.matches?.('textarea') ? root : root?.querySelector('.ch-field textarea');
@@ -2680,12 +2680,13 @@ window.WizCore.chats = function createChats(H) {
     const lineHeight = parseFloat(cs.lineHeight) || 0;
     const lineCount = lineHeight > 0 ? Math.round(mirror.offsetHeight / lineHeight) : 1;
     const room = inner - lw + 12; // last-line text may come within ~8px of the label's visible name (the label has 10px inner padding)
-    // The name gets its own strip once the draft wraps to three lines: its 40px tap target otherwise occupies the
-    // bottom two editing rows even when a short final line does not touch the visible name. Keep the existing strip
-    // for a last-line collision or scrolling box too, because those states cannot safely share the editable area.
+    // The name gets its own strip for every draft: its 40px tap target otherwise sits on top of the editable row and
+    // steals taps used to place or drag the selection. Keep the measured fallbacks for an empty placeholder collision
+    // or scrolling box too, because those states cannot safely share the editable area.
     const scrolls = ta.scrollHeight > ta.clientHeight + 2;
+    const hasDraft = ta.value.length > 0;
     ta.style.paddingBottom = '';
-    ta.parentElement.classList.toggle('lab-row', lineCount >= 3 || lastEnd > room || scrolls);
+    ta.parentElement.classList.toggle('lab-row', hasDraft || lineCount >= 3 || lastEnd > room || scrolls);
   }
   function growTa(ta) {
     if (!ta) return;
