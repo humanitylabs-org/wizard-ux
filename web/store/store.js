@@ -3,7 +3,10 @@
  * Get and explicit release changes use this Wizard's owner-authorized App Manager. Back: detail → list → Store root,
  * through the shell's canonical hook (window.__wizardCloseOverlay); standalone it guards its own history. */
 import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp, architectureReason} from './store-status.js';
-import {routerNeeds, routerApprove, routerRows, hasNeeds, pending, nice} from './store-router.js';
+import {routerNeeds, hasNeeds, pending} from './store-router.js';
+import {installRelease} from './store-install.js';
+await window.WosAppSetup.ready;
+const Setup = window.WosAppSetup;
 import {sourceLabel, installedOnlyApps} from './store-source.js';
 import {parseInstallLink, installShareLink} from './install-link.js';
 import {adoptAppearance} from './store-appearance.js';
@@ -100,6 +103,8 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     // ?kind=apps|agent-apps|agents|connections: the launcher's "+ Get ..." tiles open that section.
     const reqKind = new URLSearchParams(location.search).get('kind');
     if (reqKind && !S.stack.length && KINDS.some(k => k.id === reqKind)) openKind(reqKind);
+    const initialQuery = new URLSearchParams(location.search).get('q');
+    if (initialQuery && !S.stack.length) { $('q').value = initialQuery; search(initialQuery); }
     const requested = new URLSearchParams(location.search).get('app');
     if (requested && !S.stack.length && S.apps.some(a => a.id === requested)) {
       const a=find(requested), source=new URLSearchParams(location.search).get('source'), r=a.releases.find(r=>r.source===source);
@@ -194,7 +199,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   /* ---------------- Connection Router: install sheet and "Models and connections" ---------------- */
   // Keyed by the installed registry id (what the Router knows); refetched when stale, after approvals and on return.
   const routerId = a => S.installed.get(key(a))?.id || a.id;
-  const rctx = () => ({ esc, storeApps: S.apps, busy: S.mcBusy });
+  const rctx = () => ({ esc, storeApps: S.apps, busy: S.mcBusy, isInstalled });
   function needsFor(id, force) {
     const c = S.router.get(id);
     if (c?.loading || (!force && c && Date.now() - c.at < 15000)) return c;
@@ -208,8 +213,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     if (!c?.data) return '';
     if (!hasNeeds(c.data)) return '';
     return `<section class="d-sec mc" data-mc-app="${esc(routerId(a))}"><h3>Models and connections</h3>
-      <p class="d-note">What each feature was tested on and what runs it here. Models change only when you approve.</p>
-      <div class="mc-list">${routerRows(routerId(a), c.data, rctx())}</div></section>`;
+      <div class="mc-list">${Setup.html(routerId(a), c.data, rctx())}</div>${Setup.controls(routerId(a), c.data, { ...rctx(), name: a.name, store: true })}</section>`;
   }
   function showSheet(k) {
     if (k === '@link') return showLinkSheet();
@@ -223,11 +227,9 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       <p class="mc-lede">${esc(a.name)} is meant to be private, and this Wizard has no private agent yet, so no agent can use it. Set up a private agent, or choose a non-private agent yourself.</p>
       <div class="pv-acts"><button type="button" class="get big" data-pv-new>Set up private agent</button><button type="button" class="get" data-pv-choose>Choose an agent</button></div></div>` : '';
     $('sheet').innerHTML = `<div class="list-head"><button class="back" data-back aria-label="Back">‹</button><div><h2>${esc(a.name)} is installed</h2>
-      <p>${models || !privacy ? (left ? `${left} feature${left === 1 ? '' : 's'} need${left === 1 ? 's' : ''} a model` : 'Every feature has a model') : 'Private app'}</p></div></div>
+      <p>${models || !privacy ? (left ? `${left} connection${left === 1 ? '' : 's'} need${left === 1 ? 's' : ''} setup` : 'Every connection is ready') : 'Private app'}</p></div></div>
       <p class="sheet-source">${chip(a)} ${esc(provenance(a).detail)}</p>
-      ${privacy}${models || !privacy ? `<p class="mc-lede">Each feature was tested on one model. Connect that provider, or approve a swap to a model this Wizard already has.</p>
-      <div class="mc-list" data-mc-app="${esc(id)}">${c?.data ? routerRows(id, c.data, rctx()) : '<p class="empty">Checking connections…</p>'}</div>` : ''}
-      <div class="mc-done"><button type="button" class="get big" data-back>${left ? 'Decide later' : 'Done'}</button></div>`;
+      ${privacy}${models || !privacy ? `<div class="mc-list" data-mc-app="${esc(id)}">${c?.data ? Setup.html(id, c.data, rctx()) + Setup.controls(id, c.data, { ...rctx(), name: a.name, store: true }) : '<p class="empty">Checking connections…</p>'}</div>` : ''}`;
   }
   // Link previews share the existing sheet layer, preserving the screen underneath it.
   async function openInstallLink(input) {
@@ -264,25 +266,19 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
       else { await navigator.clipboard.writeText(url); toast('<b>Install link copied</b>'); }
     } catch(err) { if(err.name!=='AbortError') toast('<b>Couldn’t share this link.</b>'); }
   }
-  async function approve(btn) {
-    const app = btn.closest('[data-mc-app]')?.dataset.mcApp, feature = btn.dataset.mcApprove;
-    if (!app || !feature || S.mcBusy.has(app + '/' + feature)) return;
-    S.mcBusy.add(app + '/' + feature); refresh();
+  async function setupAction(btn) {
+    const app = btn.closest('[data-mc-app]')?.dataset.mcApp;
+    const data = S.router.get(app)?.data; if (!app || !data || S.mcBusy.has(app)) return;
+    S.mcBusy.add(app); btn.disabled = true;
     try {
-      await routerApprove({ app, feature, provider: btn.dataset.mcProvider, model: btn.dataset.mcModel });
-      const r = await routerNeeds(app); S.router.set(app, { ...r, at: Date.now() });
-      toast(`<b>${esc(btn.dataset.mcModel)} approved</b><span>Runs ${esc(nice(feature))} from now on.</span>`);
-    } catch (err) { toast(`<b>Nothing changed</b><span>${esc(err.message || 'Approval failed.')}</span>`); }
-    finally { S.mcBusy.delete(app + '/' + feature); refresh(); }
-  }
-  function connect(btn) {
-    const id = btn.dataset.mcConnect;
-    if (!id) return openKind('connections');
-    if (btn.dataset.mcInstalled === '1') {
-      if (framed) parent.postMessage({ type: 'wizard:open-app', id }, location.origin); else toast('<b>Open it from your apps.</b>');
-      return;
-    }
-    const target = S.apps.find(x => x.id === id); if (target) openApp(key(target));
+      await Setup.action(btn, { app, data, ...rctx(),
+        recheck: async () => { const r = await routerNeeds(app); S.router.set(app, { ...r, at: Date.now() }); refresh(); },
+        openStore: slot => { $('q').value = slot; search(slot); },
+        installProvider: a => install(selected(a), { setup: true }),
+        openProvider: id => { if (framed) parent.postMessage({ type: 'wizard:open-app', id }, location.origin); else toast('<b>Open this provider from Apps, then return here.</b>'); }
+      });
+    } catch (err) { toast('<b>Couldn’t finish setup. Try again.</b>'); }
+    finally { S.mcBusy.delete(app); if (btn.isConnected) btn.disabled = false; }
   }
   // Coming back from a provider's connection app: re-read what the Router sees.
   const recheck = () => { if (document.hidden) return; const t = S.stack.at(-1); if (!t || !['sheet', 'detail'].includes(t.t)) return;
@@ -298,7 +294,8 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   }
   function push(t, arg) { scrolls.push(window.scrollY); S.stack.push({ t, arg }); render(); }
   function pop() {
-    if (!S.stack.length) return false; // Root: the shell takes the step (phone → Home, desktop closes); Back never exits Wizard.
+    if (Setup.back()) return true;
+    if (!S.stack.length) return false;
     const was = S.stack.pop(); render();
     if (was.t === 'search') { $('q').value = ''; S.q = ''; }
     const under = S.stack[S.stack.length - 1];
@@ -325,39 +322,24 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   let toastT = 0;
   function toast(html, duration=3600) { const t = $('toast'); t.innerHTML = html; t.hidden = false; requestAnimationFrame(() => t.classList.add('on')); clearTimeout(toastT); toastT = setTimeout(() => { t.classList.remove('on'); setTimeout(() => { if(!t.classList.contains('on')) t.hidden = true; }, 250); }, duration); }
 
-  // Identifiers select a server-authorized release, never a browser-supplied install URL or ref.
-  const INSTALL = DATA.replace(/store-data\/$/, 'store-install/');
-
   // Which agents can use an installed app (#58), plus its optional privacy tag. Null when unknown.
   async function appAccess(id) {
     try { const r = await fetch('/wizard/v1/apps/' + encodeURIComponent(id) + '/agents', { credentials: 'same-origin', cache: 'no-store' }); return r.ok ? await r.json() : null; } catch (_) { return null; }
   }
-  async function install(a) {
+  async function install(a, options = {}) {
     if (!a || architectureReason(a,S.architecture) || S.busy.has(a.id) || !['get','update','switch'].includes(status(a))) return;
     const operation = status(a)==='get'?'install':status(a);
-    const selection = {source:a.source,repo:a.repo,commit:a.commit,operation};
     if(a.install_link && S.link) S.link.error='';
     S.busy.add(a.id); refresh();
     const say = (m, ok=false) => toast(renderInstallResult({ name: a.name, message: m, ok }));
     try {
-      const r = await fetch(INSTALL + encodeURIComponent(a.id), { method: 'POST', credentials: 'same-origin', cache: 'no-store',
-        headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: JSON.stringify(selection) });
-      let j = await r.json().catch(() => ({}));
-      if (r.status === 404 && !j.error) throw new Error('This Wizard’s App Manager needs updating before Store installs are available.');
-      if (r.status === 403 || r.status === 404) throw new Error(j.error || 'Not allowed.');
-      if (!r.ok && r.status !== 202) throw new Error(j.error || `Install failed (${r.status}).`);
-      for (let i = 0; j.state === 'installing' && i < 360; i++) {
-        await new Promise(res => setTimeout(res, 2500));
-        const s = await fetch(INSTALL + encodeURIComponent(a.id), { credentials: 'same-origin', cache: 'no-store' });
-        j = await s.json().catch(() => ({ state: 'installing' }));
-      }
-      if (j.state !== 'installed') throw new Error(j.error || 'The App Manager did not finish. Refresh to check its status.');
-      if (!j.selection || ['source','repo','commit','operation'].some(k=>j.selection[k]!==selection[k])) throw new Error('The App Manager returned a different release. Refresh before retrying.');
+      await installRelease({ ...a, operation });
       try { if (framed) parent.postMessage({ type: 'wizard:apps-changed', id: a.id }, location.origin); } catch (_) {}
       await load(true);
       const actual=S.installed.get(key(a));
       if(!actual || actual.conflict || actual.repo!==a.repo || actual.commit!==a.commit) throw new Error('Installation finished, but the selected release is not registered yet. Refresh to check.');
-      // The Router reads the app's declaration once it is registered; any model needs open the install sheet.
+      if (options.setup) return true;
+      // The Router reads the app's declaration once it is registered; any needs open the install sheet.
       const id = routerId(a), [need, access] = await Promise.all([routerNeeds(id), appAccess(id)]); S.router.set(id, { ...need, at: Date.now() });
       if (access) S.access.set(id, access);
       if (hasNeeds(need.data) || access?.needs_private_agent) { if (top() !== 'sheet') push('sheet', key(a)); else S.stack.at(-1).arg=key(a); showSheet(key(a)); window.scrollTo(0, 0); }
@@ -376,6 +358,9 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   }, true);
 
   document.addEventListener('click', e => {
+    // This is a navigation layer, not a native dialog: its exposed padding and
+    // surrounding Store canvas still dismiss the install layer through Back.
+    if (top() === 'sheet' && (e.target === $('sheet') || e.target === $('app') || e.target === document.body)) { pop(); return; }
     if (e.target.closest('[data-back]')) { pop(); return; }
     const sh = e.target.closest('[data-share]'); if(sh) { shareApp(find(sh.dataset.share)); return; }
     const li = e.target.closest('[data-link-install]'); if(li) { install(S.link?.app); return; }
@@ -388,8 +373,8 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     if (pv) { e.stopPropagation(); const id = pv.closest('[data-pv-app]')?.dataset.pvApp; if (!id) return;
       if (framed) parent.postMessage({ type: 'wizard:app-route', id, ...(pv.matches('[data-pv-new]') ? { action: 'new-private-agent' } : {}) }, location.origin);
       else toast('<b>Open Wizard to choose.</b>'); return; }
-    const ap = e.target.closest('[data-mc-approve]'); if (ap) { e.stopPropagation(); approve(ap); return; }
-    const cn = e.target.closest('[data-mc-connect]'); if (cn) { e.stopPropagation(); connect(cn); return; }
+    const setup = e.target.closest('[data-mc-approve],[data-mc-connect],[data-mc-another],[data-was-store],[data-was-back]');
+    if (setup) { e.stopPropagation(); setupAction(setup); return; }
     const o = e.target.closest('[data-open]');
     if (o) { e.stopPropagation(); if (framed) parent.postMessage({ type: 'wizard:open-app', id: o.dataset.open }, location.origin); else toast('<b>Open it from your apps.</b>'); return; }
     const k = e.target.closest('[data-kind]'); if (k) return openKind(k.dataset.kind);

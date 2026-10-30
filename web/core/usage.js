@@ -28,7 +28,7 @@
       counts.set(id, {id, name: id === 'chatgpt' ? 'ChatGPT' : String(p.name || id), count:(prior?.count || 0) + (Array.isArray(p.accounts) ? p.accounts.length : 1)});
     }
     const accountCounts = [...counts.values()];
-    const expanded = groups.flatMap(p => Array.isArray(p?.accounts) ? p.accounts.map(a => ({...a, providerId:p.id, providerName:p.name, status:p.status === 'stale' ? 'stale' : a.status})) : [p]);
+    const expanded = groups.flatMap(p => Array.isArray(p?.accounts) ? p.accounts.map(a => { const childOut = ['signed_out', 'auth', 'reauth'].includes(a.status); return {...a, providerId:p.id, providerName:p.name, status:childOut ? a.status : ['stale', 'unavailable', 'signed_out', 'auth', 'reauth'].includes(p.status) ? p.status : a.status, signedOut:childOut || a.signedOut === true || p.signedOut === true, error:a.error || p.error}; }) : [p]);
     const providers = expanded.map(p => {
       if (!p || typeof p !== 'object' || !p.id) return null;
       const limits = (Array.isArray(p.limits) ? p.limits : []).map(l => {
@@ -36,7 +36,10 @@
         return { id: String(l.id || l.label || ''), label: String(l.label || 'Quota'), remainingPercent: rem, usedPercent: 100 - rem, resetsAt: iso(l.resetsAt) };
       }).filter(Boolean);
       const paid = p.paid && typeof p.paid === 'object' ? p.paid : null;
-      return { id: String(p.id), provider: family(p), providerName: family(p) === 'chatgpt' ? 'ChatGPT' : String(p.providerName || p.name || p.id), name: String(p.name || p.id), email: typeof p.email === 'string' && p.email.includes('@') && !p.email.includes('*') ? p.email : '', plan: p.plan ? String(p.plan) : '', status: ['ok', 'stale', 'unavailable'].includes(p.status) ? p.status : (limits.length ? 'ok' : 'unavailable'),
+      // Signed out: any limits it still carries are from before; every renderer reads that as unavailable, never live.
+      const signedOut = ['signed_out', 'auth', 'reauth'].includes(p.status) || p.signedOut === true || /sign.?in|signed.?out|reauth|401|unauthori[sz]ed/i.test(String(p.error?.code || p.error?.kind || ''));
+      return { id: String(p.id), provider: family(p), providerName: family(p) === 'chatgpt' ? 'ChatGPT' : String(p.providerName || p.name || p.id), name: String(p.name || p.id), email: typeof p.email === 'string' && p.email.includes('@') && !p.email.includes('*') ? p.email : '', plan: p.plan ? String(p.plan) : '', status: signedOut ? 'unavailable' : ['ok', 'stale', 'unavailable'].includes(p.status) ? p.status : (limits.length ? 'ok' : 'unavailable'),
+        signedOut,
         fetchedAt: iso(p.fetchedAt), limits, paid, error: p.error ? String(p.error.message || p.error) : '' };
     }).filter(Boolean);
     return { fetchedAt: iso(j?.fetchedAt), providers, accountCounts };
@@ -62,12 +65,13 @@
     const m = Math.max(0, Math.floor((now - Math.min(...ts)) / 60000));
     return m < 1 ? 'Updated just now' : m < 60 ? `Updated ${m} min ago` : `Updated ${clock(Math.min(...ts))}`;
   }
-  const money = (minor, exp, cur) => minor == null ? '' : (cur === 'USD' ? '$' : '') + (minor / 10 ** Math.max(0, exp || 0)).toFixed(Math.max(0, Math.min(4, exp || 0))) + (cur && cur !== 'USD' ? ' ' + cur : '');
+  const money = (minor, exp, cur) => minor == null ? '' : (cur === 'USD' ? '$' : '') + (minor / 10 ** Math.max(0, exp || 0)).toLocaleString('en-US', {minimumFractionDigits:Math.max(0, Math.min(4, exp || 0)),maximumFractionDigits:Math.max(0, Math.min(4, exp || 0))}) + (cur && cur !== 'USD' ? ' ' + cur : '');
   function paidLine(p) {
     if (!p || p.enabled === false) return '';
     if (p.type === 'credits') return p.unlimited ? 'Credits: unlimited' : p.balanceMinor != null ? `Credits: ${money(p.balanceMinor, p.exponent, p.currency)}` : '';
     const u = money(p.usedMinor, p.exponent, p.currency), l = money(p.limitMinor, p.exponent, p.currency);
-    return u && l ? `Extra usage: ${u} of ${l}` : u ? `Extra usage: ${u}` : '';
+    if (p.type === 'spend' && p.enabled === true && !l) return `Extra usage: Enabled · ${u ? u + ' spent' : 'Spend unavailable'} · Balance and cap unavailable`;
+    return u && l ? `Extra usage: ${u} of ${l}` : l ? `Extra usage: Enabled · Spend unavailable · ${l} cap` : u ? `Extra usage: ${u} spent` : '';
   }
   // compactRows: 'Claude · Session', 'ChatGPT 2 · Weekly'; a model-scoped window names the model ('Fable · weekly').
   function rowLabel(p, l) {
@@ -94,7 +98,7 @@
       if (!s) return `<div class="st-group st-usage" data-usage>${head}<div class="st-empty">${U.error ? esc(U.error) : 'Loading…'}</div></div>`;
       const rows = [], notes = [];
       for (const p of s.providers) {
-        if (p.status === 'unavailable' || !p.limits.length) { notes.push(`${p.name}${p.plan ? ' · ' + p.plan : ''}: ${p.status === 'unavailable' ? 'couldn’t read usage' : 'no quota windows'}${p.error ? ' · ' + p.error : ''}`); }
+        if (p.status === 'unavailable' || !p.limits.length) { notes.push(`${p.name}${p.plan ? ' · ' + p.plan : ''}: ${p.signedOut ? 'signed out · sign in again to read usage' : p.status === 'unavailable' ? 'couldn’t read usage' : 'no quota windows'}${p.error ? ' · ' + p.error : ''}`); }
         if (p.status === 'stale') notes.push(`${p.name}: last known reading`);
         if (p.status === 'unavailable') continue;
         // Every bar in Wizard shows how much is USED (fills up toward 100%), like the server and Home bars.
@@ -105,7 +109,7 @@
       }
       return `<div class="st-group st-usage" data-usage>${head}${rows.join('') || '<div class="st-empty">No quota windows reported.</div>'}`
         + (notes.length ? `<p class="st-note us-notes">${notes.map(esc).join('<br>')}</p>` : '')
-        + `<p class="st-note">${esc(freshness(s.providers, now))}${U.error ? ' · ' + esc(U.error) : ''} · times in ${esc(zone() || 'local time')}</p></div>`;
+        + `<p class="st-note">${U.error ? 'Last known reading · ' : ''}${esc(freshness(s.providers, now))}${U.error ? ' · ' + esc(U.error) : ''} · times in ${esc(zone() || 'local time')}</p></div>`;
     },
   };
   window.WosUsage = U;

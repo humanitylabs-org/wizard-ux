@@ -578,7 +578,7 @@ with _lockfile as lock:
         connect()
         sheet2 = wait(lambda: pg.ev("(() => { const e = document.querySelector('[data-dv=share]'); return e ? e.innerText.replace(/\\s+/g, ' ') : ''; })()"), 15)
         check('#20 sharing again opens a fresh Share sheet with the image', sheet2 and 'qa-share' in sheet2, (sheet2, logs('WizardShare', '.')))
-        pg.tap('[data-dv=share] [data-shareto=__new__]')
+        pg.tap('[data-dv=share] [data-sharesend]')
         wait(lambda: runs_n() > n0, 40); time.sleep(3)
         up = ST['uploads'][u0:]
         b = ST['runs'][n0]['body'] if runs_n() > n0 else {}

@@ -25,7 +25,7 @@ test('reading place, jump latest, prepend and repaint share the document adapter
  const cp=read('web/core/chat-power.js'),ch=read('web/core/chats.js');
  assert.doesNotMatch(cp,/\bnb\.(scrollTop|scrollHeight|clientHeight|scrollTo)\b|\bbox\.(scrollTop|scrollHeight)\b/);
  assert.match(ch,/PW\?\.capture\(box\)/);
- assert.match(ch,/PW\?\.position\(w, el, nb, \{ turns, working \}\)/);
+ assert.match(ch,/PW\?\.position\(w, el, nb, \{ turns, working, notification: NV\?\.id, notificationScroll \}\)/);
  assert.match(cp,/anchor: anchorOf\(nb\), shown: c.show/);
  assert.match(ch,/PW\?\.RP.read\(w.thread\)\?\.shown/);
  assert.doesNotMatch(ch,/docAway|docLast|docAnchor|docRestore|docOwnedAt|docAside/);

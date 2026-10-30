@@ -1,4 +1,4 @@
-// Miguel's skins (Dark, Light, Landscapes) sort the Apps sheet and New desk into Apps / Wizard apps / Agents /
+// Miguel's skins (Dark, Light, Landscapes) sort the Apps sheet and New desk into Apps / Agent apps / Agents /
 // Connectors with system apps first and no Recent row; James's skins keep the stock layout.
 import test from 'node:test';
 import assert from 'node:assert/strict';

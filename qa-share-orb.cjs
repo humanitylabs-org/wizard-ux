@@ -125,7 +125,7 @@ async function cases(browser) {
     f.writes.length = 0; f.R.words = 'add this to my music library';
     await take(f);
     const v = await note.inputValue();
-    ok(v.endsWith('?v=qa add this to my music library') && v.startsWith('Gotye'), label + ': orb tap dictates into the share note', v);
+    ok(v.trim() === 'add this to my music library' && /^Gotye/.test(await p.locator('.dv-quote').innerText()), label + ': orb tap dictates into the comment box; the shared link stays in the quote', v);
     ok(noAgent(f).length === 0 && !f.writes.some(w => /v1\/runs/.test(w.path)), label + ': dictation sends nothing', noAgent(f));
     ok(await p.locator('.dv-wrap[data-dv="share"]').count() === 1, label + ': share sheet still open after dictation');
     await p.evaluate(() => __wos.onBack()); await sleep(100); await p.evaluate(() => __wos.onBack()); await sleep(400);

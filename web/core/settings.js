@@ -11,22 +11,49 @@
   const shellOrb = () => shell() && window.WosDeviceOrb?.ready ? window.WosDeviceOrb : null;
   // Rows are plain lines split by hairlines: no boxes, no icon tiles; a second line only when it says something.
   const row = (id, title, sub) => `<button class="st-row wz-row" data-st="${esc(id)}"><span class="st-tx"><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="st-go">›</span></button>`;
+  // System pages are filled by packages (WosSettings.register with page = one of these); a page with nothing on it hides.
+  const filled = id => () => [...features.values()].some(f => f.page === id && (!f.available || f.available()));
   const PAGES = [
-    { id: 'appearance', title: 'Appearance' },
+    { id: 'overview', title: 'Your network', group: 'System', available: filled('overview') },
+    { id: 'ai', title: 'AI', group: 'System', available: filled('ai') },
+    { id: 'network', title: 'Network & security', group: 'System', available: filled('network') },
+    { id: 'storage', title: 'Storage & backups', group: 'System', available: filled('storage') },
+    { id: 'appearance', title: 'Appearance', group: 'Preferences' },
     { id: 'chats', title: 'Chats & app screens' },
     { id: 'voice', title: 'Voice & typing' },
     // Phones over Tailscale (Phone Setup). Hidden on a Wizard without Phone Setup or for a non-owner.
     // Hidden only for a non-owner; a Wizard without phone access shows the shared "not available yet" note.
     { id: 'phones', title: 'Phones & devices', available: phonesAvailable },
     { id: 'phone', title: 'Phone', available: () => shell() ? !!shellOrb() : android() },
+    // Connections: the App Manager's own view (agents, what each may use, app-to-app links), only where its owner
+    // listener answers. System pieces that come with every box live in Settings, not the launcher (wizard-os issue 324).
+    // pending: availability not known yet; a deep link to it waits for the answer instead of falling back to the root.
+    { id: 'connections', title: 'Connections', available: () => connectionsAvailable(), pending: () => conn.ok === null },
     { id: 'recovery', title: 'Unsent & recovered' },
     // Resources: the Home resource bars (AI + Compute) from the shared renderer, when it is there; else AI usage.
+    // Kept beside the System pages: it is the only place with service health and the manual refresh.
     { id: 'usage', get title() { return window.WosResources?.bars ? 'Resources' : 'AI usage'; } },
     { id: 'schedules', title: 'Schedules', available: () => !!window.WosSchedules?.available },
     { id: 'about', title: 'About & updates' },
   ];
   const featurePages = { look: 'appearance', 'window-glass': 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
   const pageOf = f => f?.page != null ? PAGES.some(p => p.id === f.page) ? f.page : 'about' : featurePages[f?.id] || 'about';
+  /* Connections is served by the App Manager behind its owner channel, on this origin; the page hosts it as is, so
+   * its owner-only actions (Disconnect, Reconnect, agent access, Restore defaults) stay the App Manager's own. The tab
+   * shows only once that listener answers this device (a non-owner, or a box without it, never sees an empty tab). */
+  // Beside the shell's own pages (/wizard-os-home/), like the Store's install routes.
+  const CONNECTIONS = (() => { try { return new URL('store-install/_connections/', document.baseURI || location.href).pathname; } catch (_) { return '/wizard-os-home/store-install/_connections/'; } })();
+  const conn = { ok: null, at: 0, busy: false };
+  function connectionsAvailable() {
+    if (!conn.busy && Date.now() - conn.at > (conn.ok ? 300000 : 60000) && typeof fetch === 'function') {
+      conn.busy = true;
+      fetch(CONNECTIONS, { credentials: 'same-origin', cache: 'no-store' }).then(r => r.ok, () => conn.ok).then(ok => {
+        const was = conn.ok; conn.ok = ok === true; conn.at = Date.now(); conn.busy = false;
+        if (was !== conn.ok) for (const m of mounts) m.render();
+      });
+    }
+    return conn.ok === true;
+  }
   const chatsHost = () => window.WizChatsHost;
   const chatsName = id => id === 'wizard-chats' ? 'Wizard Chats' : chatsHost()?.installed().find(a => a.id === id)?.name || id;
   const recovered = () => window.WosCancelled?.list?.() || [];
@@ -46,6 +73,8 @@
     if (id === 'phone') { if (shell()) return shellOrb()?.state.on ? 'Everywhere on' : ''; try { return JSON.parse(native()?.everywhere?.() || '{}').enabled ? 'Everywhere on' : ''; } catch (_) { return ''; } }
     if (id === 'recovery') { const n = new Set([...unsentAll(ctx), ...recovered()].map(x => x.id)).size; return n ? String(n) : ''; }
     // Resources: quiet unless something is running low (under a quarter left), then the lowest one.
+    const own = [...features.values()].find(f => f.page === id && typeof f.subtitle === 'function');
+    if (own) { try { return String(own.subtitle() || '').slice(0, 40); } catch (_) { return ''; } }
     if (id === 'usage') { const low = window.WosResources?.lowest?.(); return low && low.left < 25 ? `${low.label} ${low.value || (100 - low.left) + '% used'}` : ''; }
     return '';
   }
@@ -177,7 +206,11 @@
   const mySkinWorn = () => !!window.WosMySkin?.active;
   function mySkinRow(skin) {
     const M = window.WosMySkin, st = M?.state, js = st?.script;
-    const script = js?.exists && !st.off ? `<div class="st-row static my-skin-row" data-myskin-script><span class="st-tx"><b>${js.approved ? 'Skin script on' : 'Skin script changed'}</b><small>${esc(M.active ? 'Skins/' + M.active.id + '/skin.js' : 'skin.js')} · approval on this device</small></span><span class="ms-acts">${js.approved ? '<button type="button" class="ghost" data-myskin="off">Turn off</button>' : `<button type="button" data-myskin="on" data-myskin-hash="${esc(js.sha256 || '')}" ${js.valid ? '' : 'disabled'}>Turn on</button>`}</span></div>` : '';
+    // A script that failed to load names its file and the reason, and stays off until the owner turns it on again.
+    const jsFile = js?.file || (M.active ? 'Skins/' + M.active.id + '/skin.js' : 'skin.js');
+    const jsTitle = js?.error && !js.approved ? 'Skin script off' : js?.approved ? 'Skin script on' : 'Skin script changed';
+    const jsSub = js?.error && !js.approved ? `${jsFile} didn’t load: ${js.error.message}` : `${jsFile} · approval on this device`;
+    const script = js?.exists && !st.off ? `<div class="st-row static my-skin-row${js.error && !js.approved ? ' failed' : ''}" data-myskin-script${js.error && !js.approved ? ' data-myskin-error' : ''}><span class="st-tx"><b>${jsTitle}</b><small>${esc(jsSub)}</small></span><span class="ms-acts">${js.approved ? '<button type="button" class="ghost" data-myskin="off">Turn off</button>' : `<button type="button" data-myskin="on" data-myskin-hash="${esc(js.sha256 || '')}" ${js.valid ? '' : 'disabled'}>Turn on</button>`}</span></div>` : '';
     return `<div class="ms-panel" data-ownskin-panel><button class="st-row wz-row" data-myskin="edit"><span class="st-tx"><b>Edit with your Wizard</b><small>Ask your Wizard ‘change my ${esc(skin.name)} skin so…’</small></span><span class="st-go">›</span></button><p class="st-hint">${M.storage === 'box' ? 'Saved on your Wizard.' : M.storage === 'local' ? 'Saved on this device until your Wizard is updated.' : 'Offline · showing a cached skin.'}</p>${script}<button class="st-row wz-row" data-ownskin-remove="${esc(skin.id)}"><span class="st-tx"><b>Remove skin</b></span><span class="st-go">›</span></button></div>`;
   }
   function mySkinAction(ctx, what, event) {
@@ -246,8 +279,16 @@
     // The list is warmed when Look opens, so Loading only shows on a cold first read.
     draft.loading = !window.WosExperience.installedReady; ctx.render?.();
     try {
-      const [items, map] = await Promise.all([window.WosExperience.installed(), window.WosExperience.defaults(draft.base)]);
+      let [items, map] = await Promise.all([window.WosExperience.installed(), window.WosExperience.defaults(draft.base)]);
       if (ctx.skinDraft !== draft || draft.seq !== seq) return;
+      // A replacement group (two Home maps) is one switch: keep only the member that would load, so the draft never
+      // shows two and never saves the hidden one as off (any member saved off turns the whole group off).
+      for (const g of window.WosExperience.groups?.() || []) {
+        const present = g.filter(id => items.some(t => t.id === id)); if (present.length < 2) continue;
+        const pick = present.find(id => map[id]) || present[0];
+        map = Object.fromEntries(Object.entries(map).filter(([id]) => id === pick || !present.includes(id)));
+        items = items.filter(t => t.id === pick || !present.includes(t.id));
+      }
       draft.items = items; draft.tweaks = map;
     } catch (e) { if (ctx.skinDraft === draft && draft.seq === seq) draft.error = 'Could not load installed tweaks. Try again.'; }
     finally { if (ctx.skinDraft === draft && draft.seq === seq) { draft.loading = false; ctx.render?.(); } }
@@ -485,6 +526,24 @@
     }
     outbox.remove(item.id); return true;
   }
+  // The frame is kept while the page is open: background refreshes never reload it under the owner's hand.
+  register({ id: 'connections', page: 'connections', aliases: ['connections', 'app-connections'], available: () => connectionsAvailable(),
+    deferRefresh: ctx => !!ctx.root?.querySelector?.('[data-st-connections] iframe'),
+    // Back steps inside the view first, the way an app window does: its open pop-up (the kit's canonical
+    // __wizardCloseOverlay hook), then the map back to the list; only then does Settings leave the page.
+    back(ctx) {
+      const f = ctx.root?.querySelector?.('[data-st-connections] iframe');
+      try {
+        const w = f?.contentWindow; if (!w || w.location.origin !== location.origin) return false;
+        if (typeof w.__wizardCloseOverlay === 'function' && w.__wizardCloseOverlay() === true) return true;
+        const list = w.document.querySelector('[data-cm-seelist]');
+        if (list && list.getClientRects().length) { list.click(); return true; }
+      } catch (_) {}
+      return false;
+    },
+    // ?embed=settings: the view drops its own title, sheet and canvas and takes the shell's skin (Appearance v1), so the
+    // page head is the one title and the content sits straight on the Settings page, with no box around it.
+    html: () => `<div class="st-embed" data-st-connections><iframe src="${esc(CONNECTIONS)}?embed=settings" title="Connections"></iframe></div>` });
   register({ id: 'chats-default', page: 'chats', aliases: ['chats-default'], html(ctx) {
     const host = chatsHost(), apps = host?.installed() || [{ id: 'wizard-chats' }], current = host?.defaultId() || 'wizard-chats';
     apps.sort((a, b) => (b.id === 'wizard-chats') - (a.id === 'wizard-chats'));
@@ -493,9 +552,9 @@
   function mount(root, adapter) {
     root.classList.add('st-root'); root.dataset.settingsRoot = '';
     const ctx = { ...adapter, root }, api = { render, focus, back, destroy, dispatch, context: ctx, get page() { return page; } };
-    let skinImportMessage = '', page = '', confirm = null;
+    let skinImportMessage = '', page = '', confirm = null, wanted = '';
     const desktop = adapter.shell === 'desktop';
-    const effectivePage = () => page || (desktop ? 'appearance' : '');
+    const effectivePage = () => page || (desktop ? (filled('overview')() ? 'overview' : 'appearance') : '');
     ctx.render = () => render(true);
     ctx.paintUsage = () => { const g = root.querySelector('[data-usage]'); if (g) g.outerHTML = window.WosUsage.html(); paintSubtitles(); };
     function paintSubtitles() {
@@ -511,14 +570,17 @@
       const record = active?.closest('[data-ubid]')?.dataset.ubid;
       const selection = active && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
       const pages = PAGES.filter(p => !p.available || p.available(ctx));
-      if (page && !pages.some(p => p.id === page)) page = '';
+      // A page whose availability is still being checked (a cold deep link) opens once it turns out available.
+      if (wanted && !page && pages.some(p => p.id === wanted)) page = wanted;
+      if (wanted && (page === wanted || !PAGES.find(p => p.id === wanted)?.pending?.())) wanted = '';
+      if (page && !pages.some(p => p.id === page)) { if (PAGES.find(p => p.id === page)?.pending?.()) wanted = page; page = ''; }
       const selected = effectivePage();
       const heading = PAGES.find(p => p.id === selected)?.title || '';
       const items = attention(ctx);
       const attentionHtml = items.length ? `<div class="st-attention" aria-label="Needs attention">${items.map(i => `<button data-st-attention="${esc(i.feature)}">${esc(i.title)}<span aria-hidden="true">›</span></button>`).join('')}</div>` : '';
       // Desktop shows About & updates beside the list with the card on it, so the list does not repeat it.
       const card = desktop && selected === 'about' ? '' : cardHtml();
-      const nav = pages.map(p => `<button class="st-category" data-st-page="${p.id}" aria-current="${p.id === selected ? 'page' : 'false'}"><span class="st-tx"><b>${p.title}</b></span><span class="st-val" data-st-subtitle="${p.id}">${esc(subtitle(p.id, ctx))}</span><span class="st-go" aria-hidden="true">›</span></button>`).join('');
+      const nav = pages.map((p, i) => (p.group && p.group !== pages[i - 1]?.group && pages.some(q => q.group && q.group !== p.group) ? `<h4 class="st-navgroup">${esc(p.group)}</h4>` : '') + `<button class="st-category" data-st-page="${p.id}" aria-current="${p.id === selected ? 'page' : 'false'}"><span class="st-tx"><b>${p.title}</b></span><span class="st-val" data-st-subtitle="${p.id}">${esc(subtitle(p.id, ctx))}</span><span class="st-go" aria-hidden="true">›</span></button>`).join('');
       const fs = [...features.values()].filter(f => pageOf(f) === selected && (!ctx.skinDraft || f.id === 'look') && (!f.available || f.available(ctx)));
       // About & updates leads with the update card and its choices; the connection rows follow.
       if (selected === 'about') fs.sort((x, y) => (y.id === 'updates') - (x.id === 'updates'));
@@ -537,6 +599,7 @@
     function focus(id) {
       for (const f of features.values()) if (pageOf(f) === effectivePage()) f.leave?.(ctx);
       const f = features.get(id) || [...features.values()].find(f => f.aliases?.includes(id));
+      wanted = '';
       page = f ? pageOf(f) : featurePages[id] || (id === 'updates' ? 'about' : PAGES.some(p => p.id === id) ? id : '');
       for (const f of features.values()) if (pageOf(f) === effectivePage()) f.enter?.(ctx);
       confirm = null; render(); root.scrollTop = 0;
@@ -573,6 +636,7 @@
       finally { ctx.chatsBusy = false; confirm = null; render(); root.querySelector('[data-chats-choice][aria-checked="true"]')?.focus({ preventScroll: true }); }
     }
     function dispatch(el, event) {
+      if (el.classList?.contains('st-confirm-scrim')) return back();
       if (el.closest('[data-chats-confirm]')) { useChats(); return true; }
       if (el.closest('[data-chats-cancel]')) { back(); return true; }
       if (confirm) return false;
@@ -628,10 +692,24 @@
     function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wizard:apps', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
     root.addEventListener('input', featureInput); root.addEventListener('click', click); root.addEventListener('keydown', key); root.addEventListener('change', change); mounts.add(api); render(); return api;
   }
+  // One deferred System link at a time: a newer link, Back, or anything the user does first cancels the wait.
+  let waiting = null;
+  const STOPS = ['popstate', 'hashchange', 'pointerdown', 'keydown'];
+  function cancelWait() { if (!waiting) return; clearInterval(waiting); waiting = null; for (const t of STOPS) window.removeEventListener?.(t, cancelWait, true); }
   function route(view, open) {
+    cancelWait();
     if (view === 'settings') { open(); return true; }
     const f = [...features.values()].find(f => f.aliases?.includes(view));
-    if (!f && !features.has(view)) return false; open(f?.id || view); return true;
+    // System pages filled by a package (?view=network etc.) open once something is on them.
+    if (!f && !features.has(view)) {
+      const sys = PAGES.find(p => p.group === 'System' && p.id === view); if (!sys) return false;
+      // A link can arrive before the package fills the page: wait for it (up to 10 s), then open.
+      if (sys.available()) open(view);
+      else { let n = 0; waiting = setInterval(() => { if (sys.available()) { cancelWait(); open(view); } else if (++n >= 40) cancelWait(); }, 250);
+        for (const t of STOPS) window.addEventListener?.(t, cancelWait, true); }
+      return true;
+    }
+    open(f?.id || view); return true;
   }
   // Shared focus containment. Existing shell Back guards own history; never add a second guard here.
   function trap(event, panel) {
@@ -642,5 +720,5 @@
     if (at < 0 || (!event.shiftKey && at === controls.length - 1) || (event.shiftKey && at === 0)) { event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0].focus(); }
   }
   window.WosMySkin?.on(() => { for (const m of mounts) m.render(); });
-  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
+  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, cancelWait, systemPages: Object.freeze(PAGES.filter(p => p.group === 'System').map(p => p.id)), trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
 })();

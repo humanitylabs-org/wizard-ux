@@ -25,7 +25,7 @@ const sampleSpaces = () => [{id:'wizard-launch',name:'Wizard OS launch',threads:
 async function route(r) {
  const q=r.request(), u=new URL(q.url()), m=q.method();
  const json=(body,status=200)=>r.fulfill({status,json:body});
- if (!['GET','HEAD'].includes(m)) { writes.push({method:m,path:u.pathname,query:u.search,body:q.postData()}); if(u.pathname.endsWith('/api/sessions'))return json({ok:true}); if(u.pathname.endsWith('/v1/runs'))return json({run_id:'fixture-run-'+(++writeSeq),status:'running'}); if(u.pathname==='/wizard/files/upload')return json({file:{id:'fixture-audio-'+(++writeSeq),filename:'voice.webm',mime:'audio/webm'}}); if(u.pathname.endsWith('/api/transcribe'))return json({text:'Fixture voice question'}); if(u.pathname==='/wizard/v1/ui-preferences'){const patch=JSON.parse(q.postData());if(patch.spaces)sharedSpaces=patch.spaces;return json({spaces:sharedSpaces});} return json(u.pathname==='/wizard/thread-seen'?{state:JSON.parse(q.postData()||'{}').state}:{ok:true}); }
+ if (!['GET','HEAD'].includes(m)) { writes.push({method:m,path:u.pathname,query:u.search,body:q.postData()}); if(u.pathname.endsWith('/api/sessions'))return json({ok:true}); if(u.pathname.endsWith('/v1/runs'))return json({run_id:'fixture-run-'+(++writeSeq),status:'running'}); if(u.pathname==='/wizard/files/upload')return json({file:{id:'fixture-audio-'+(++writeSeq),filename:'voice.webm',mime:'audio/webm'}}); if(u.pathname.endsWith('/api/transcribe'))return json({text:'Fixture voice question'}); if(u.pathname==='/wizard/v1/ui-preferences'){if(m==='PATCH')return json({error:'method_not_allowed'},405);/* PUT fallback: the shell's own op merge decides membership */const patch=JSON.parse(q.postData());if(patch.spaces)sharedSpaces=patch.spaces;return json({spaces:sharedSpaces});} return json(u.pathname==='/wizard/thread-seen'?{state:JSON.parse(q.postData()||'{}').state}:{ok:true}); }
  if (!u.pathname.startsWith('/wizard/')) return r.continue();
  if (u.pathname==='/wizard/v1/agents') return json({agents:soloAgent?agents.filter(a=>a.is_default):visualAgents?agents.filter(a=>['hermes','philosopher','archimedes-new'].includes(a.id)):agents});
  if (u.pathname==='/wizard/v1/ui-preferences') return json({archiveAfterDays:7,compact:false,readyOrder:'newest',pinnedChats:[],spaces:sharedSpaces});
@@ -321,7 +321,7 @@ async function soloAcceptance(b) {
    await row.scrollIntoViewIfNeeded();
    if(desktop)await row.click({button:'right'});
    else {const r=await row.boundingBox(),cdp=await ctx.newCDPSession(p);await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:r.x+r.width/2,y:r.y+r.height/2}]});await p.waitForTimeout(600);await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();}
-   ok(await p.locator('[data-rsspacepicker]').count()===1,mode+' long-press offers Add to a Space with zero Spaces');
+   ok(await p.locator('[data-rsspacepicker]').innerText().then(t=>t.includes('Add to a Space')),mode+' long-press offers Add to a Space with zero Spaces');
    await activate(p,'[data-rsspacepicker]');
    ok(await p.locator('[data-spnew]').count()===1,mode+' empty Add picker offers New Space');
    await activate(p,'[data-spnew]');await p.locator('.ch-space-form input').fill('First space');
@@ -538,6 +538,7 @@ async function soloAcceptance(b) {
   await choose(p,'space:reading');
   await p.locator('[data-chopen="main_phil"]:visible').dispatchEvent('contextmenu');
   ok(await p.locator('[data-rsspace="reading"]').innerText().then(t=>t.includes('Remove from Space')),mode+' existing context menu offers Remove from Space');
+  ok(await p.locator('[data-rsspacepicker]').innerText().then(t=>t.includes('Move to Space')&&!t.includes('Add to a Space')),mode+' filed chat reads Move to Space, never Add to a Space');
   await p.locator('[data-rsspace="reading"]').click();await p.waitForTimeout(80);
   ok(JSON.stringify(await ids(p))===JSON.stringify([])&&!sharedSpaces.find(s=>s.id==='reading').threads.includes('main_phil'),mode+' remove membership PUT and visible filter');
   await choose(p,'all:');await p.locator('[data-chopen="main_phil"]:visible').dispatchEvent('contextmenu');

@@ -313,7 +313,7 @@
     return out;
   }
   function session(s) {
-    return Object.freeze({ id: s.row.id,
+    return Object.freeze({ id: s.row.id, reattached: () => !!s.reattached,
       getInfo: () => ({ phase:s.phase,inputStopped:!!s.inputStopped,error:s.error?.code||null,native: s.row.native || null, backendStopOwned: !!s.engine?.backendStopOwned, livePcm: s.engine?.livePcm !== false,
         hasSystemAudio: !!s.hasSystemAudio, paused: s.phase === 'paused' || s.phase === 'handoff',
         durationMs: s.nativeState?.mediaMs ?? (s.row.pcm && !s.row.native ? s.row.durationMs : (s.pausedAt || Date.now()) - s.row.startedAt - (s.pausedTotal || 0)),
@@ -765,6 +765,7 @@
     for (const [key,opt] of [['pcm','onPcm'],['chunk','onChunk'],['state','onNativeState'],['warn','onWarn']])
       if (typeof opts[opt] === 'function') observe(s,key,opts[opt]);
     if (prepared) { preparations.delete(prepared.id); s.ctx = prepared.ctx; s.displayPromise = prepared.display?.catch(e => { emit(s,'warn','Computer audio was not captured: ' + e.message); return null; }); }
+    s.readyPromise = new Promise(resolve => { s.readyResolve = resolve; });
     active = s; changed();
     // WebAudio activation happens synchronously in the gesture, before IDB awaits.
     try {
@@ -824,7 +825,22 @@
       }
       if (e.name === 'NotAllowedError') throw fail('permission_denied', 'Microphone access was denied.', { cause: e });
       throw e;
+    } finally { s.readyResolve(); }
+  }
+  // Recover only this app's live take. Never accept a caller-supplied owner or borrow another app's mic.
+  async function attach(appId) {
+    validate(appId, {}); await ready;
+    const s = active;
+    if (s?.row.appId === appId) {
+      await s.readyPromise;
+      if (active !== s) return null;
+      s.reattached = true; // a stale document's failed start must not stop the take this document now owns
+      return session(s);
     }
+    if (s) return null;
+    await recover();
+    const row = [...recoveryLive].map(id => ownedRows.get(id)).find(r => r?.appId === appId);
+    return row ? start(appId, {kind: row.kind, resumeId: row.id, meta: row.meta}) : null;
   }
   async function pending(appId) {
     validate(appId, {}); await ready; await recover();
@@ -899,7 +915,7 @@
   }
   // Host-only adapter seam. Apps get only the frozen facade via app-services;
   // never expose configureNative through RPC or allow arbitrary bridge eval.
-  W.WizAppCapture = Object.freeze({ version: 1, start, pending, ack, prepare, discardPrepared, capabilities, getState: state,
+  W.WizAppCapture = Object.freeze({ version: 1, start, attach, pending, ack, prepare, discardPrepared, capabilities, getState: state,
     beginVoiceBorrow, endVoiceBorrow, reloadCheck, prepareReload, closeApp,
     current(appId) { validate(appId,{}); const r=active?.row.appId===appId ? active.row : [...recoveryLive].map(id=>ownedRows.get(id)).find(r=>r?.appId===appId);
       return r ? {id:r.id,meta:JSON.parse(JSON.stringify(r.meta)),phase:active?.row.id===r.id ? active.phase : 'recoverable'} : null; },

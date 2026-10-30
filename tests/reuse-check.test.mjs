@@ -15,6 +15,12 @@ test('REUSE of a listed entry point passes', () => {
   assert.deepEqual(run('Reuse:\n- chat: REUSE WizardApp.nav.openThread\n- orb: REUSE `Orb.create`', [web('web/app.js')]), []);
 });
 
+test('literal domain: EXTEND: WizardApp syntax accepts the separator without skipping validation', () => {
+  const files = [web('web/core/app-client.js'),web('docs/COMPONENTS.md')];
+  assert.deepEqual(run('Reuse:\n- domain: EXTEND: WizardApp\n- links: REUSE: `WizLinks`',files),[]);
+  assert.match(run('Reuse:\n- domain: EXTEND: UnknownEntry',files).join(),/not an entry point/);
+});
+
 test('REUSE of something not in the inventory fails', () => {
   assert.match(run('Reuse:\n- chat: REUSE MyChatBox', [web('web/app.js')]).join(), /not an entry point/);
 });

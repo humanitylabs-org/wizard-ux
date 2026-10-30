@@ -72,6 +72,24 @@ test('page Back returns to root, then leaves closing to the shell; confirm Back 
   assert.match(h.root.innerHTML, /role="alertdialog"/); assert.equal(h.view.back(), true); assert.equal(h.view.page, 'chats');
   assert.equal(h.view.back(), true); assert.equal(h.view.page, ''); assert.equal(h.view.back(), false); assert.equal(h.posts.length, 0);
 });
+test('tap outside closes Settings confirmations like Back without leaving the owning page', () => {
+  for (const shell of ['phone','desktop']) {
+    const h = harness({shell});
+    const outside = {classList:{contains: c => c === 'st-confirm-scrim'},closest:()=>null};
+    h.view.focus('chats-default'); h.act('data-chats-choice','mizel-chats');
+    assert.match(h.root.innerHTML,/role="alertdialog"/);
+    assert.equal(h.view.dispatch(outside),true);
+    assert.doesNotMatch(h.root.innerHTML,/role="alertdialog"/);
+    assert.equal(h.view.page,'chats'); assert.equal(h.posts.length,0);
+    const own={id:'mine',name:'Quiet',base:'nebula',tweaks:{}};
+    h.s.WosMySkin={recipes:[own],active:own,state:{script:{}}};
+    h.view.focus('look'); h.act('data-ownskin-remove','mine');
+    assert.match(h.root.innerHTML,/role="alertdialog"/);
+    assert.equal(h.view.dispatch(outside),true);
+    assert.doesNotMatch(h.root.innerHTML,/role="alertdialog"/);
+    assert.equal(h.view.page,'appearance'); assert.equal(h.posts.length,0);
+  }
+});
 test('chooser confirms before POST, reads the exact slot, refreshes registry and rerenders only after confirmation', async () => {
   const h = harness(); h.view.focus('chats-default');
   assert.match(h.root.innerHTML, /Wizard Chats \(built in\)/); assert.match(h.root.innerHTML, /Mizel Chats/);
@@ -79,8 +97,8 @@ test('chooser confirms before POST, reads the exact slot, refreshes registry and
   h.act('data-chats-confirm'); await tick();
   assert.equal(h.posts.length, 1); assert.equal(h.posts[0].url, '/wizard-os-home/store-install/_slots/chats');
   assert.equal(h.posts[0].body, '{"default":"mizel-chats"}'); assert.equal(h.posts[0].credentials, 'same-origin');
-  // Phones & devices asks for its status on its own.
-  assert.deepEqual(h.reads.filter(url => url !== '/wizard/v1/setup/phone'), ['/wizard-os-home/store-install/_slots/chats']);
+  // Phones & devices and Connections ask whether they are available on their own.
+  assert.deepEqual(h.reads.filter(url => url !== '/wizard/v1/setup/phone' && url !== '/wizard-os-home/store-install/_connections/'), ['/wizard-os-home/store-install/_slots/chats']);
   assert.deepEqual(h.changed, ['mizel-chats']);
   assert.match(h.root.innerHTML, /aria-checked="true" data-chats-choice="mizel-chats"/);
 });

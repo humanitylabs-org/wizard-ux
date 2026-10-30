@@ -19,7 +19,7 @@ test('drag, hold, keys and right-click are all wired on the desk list', () => {
   assert.match(js, /dd\.hold = setTimeout\(/, 'touch needs a press and hold before dragging');
   assert.match(js, /if \(shift\) return moveDesk\(cur, cur - 1\)/);
   assert.match(js, /if \(shift\) return moveDesk\(cur, cur \+ 1\)/);
-  assert.match(js, /list\.addEventListener\('contextmenu'/);
+  assert.match(js, /\$\('#wsList'\)\.addEventListener\('contextmenu'/);
   assert.match(js, /Move desktop left \/ right/, 'keys sheet lists the move keys');
   assert.match(js, /classList\.contains\('arranging'\)\) \$\('#wsList'\)\.innerHTML/, 'live repaints do not drop a desk mid-drag');
   assert.match(css, /\.ws\[data-ws\] \{ touch-action: none; \}/);

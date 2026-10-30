@@ -373,7 +373,7 @@ with _lockfile as lock:
             pg = Page('wizard-os-home')
             sheet = None
             for _ in range(10):
-                sheet = pg.ev("(() => { const t = document.querySelector('.dv-text'); const img = document.querySelectorAll('.dv-item').length; return t ? {text: t.value, items: img} : null; })()")
+                sheet = pg.ev("(() => { const t = document.querySelector('.dv-quote'); const img = document.querySelectorAll('.dv-items .ch-att').length; return t ? {text: t.textContent, items: img} : null; })()")
                 if sheet: break
                 time.sleep(0.6)
             check('the Wizard OS share sheet holds the original text, its English and the screen picture', sheet and 'ผัด' in sheet['text'] and 'English:' in sheet['text'] and 'EN(' in sheet['text'] and sheet['items'] == 1, sheet)

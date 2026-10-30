@@ -33,10 +33,17 @@
   function allowed(f) {
     let loc; try { loc = f.contentWindow.location; } catch (e) { return false; }   // cross-origin: never
     if (!loc || loc.origin !== ORIGIN) return false;
+    if (f.closest('.st-embed')) return true;   // a page Settings itself embeds (Settings › Connections)
     const p = loc.pathname;
     return appPrefixes().some(pre => pre.endsWith('/') ? p.startsWith(pre) : (p === pre || p.startsWith(pre + '/')));
   }
-  const winFrames = () => [...document.querySelectorAll('.win iframe')];
+  // Registered apps opened in the shared link sheet (including provider setup)
+  // receive the same Appearance contract as normal app windows. allowed() still
+  // excludes cross-origin and unregistered pages.
+  // Settings embeds (.st-embed, e.g. Settings › Connections) take the theme too, so they follow the skin like the page
+  // around them; they never mark the Settings window .wz-themed (that window is the shell's own).
+  const winFrames = () => [...document.querySelectorAll('.win iframe, .linksheet iframe, .st-embed iframe')];
+  const themedWin = f => f.closest('.st-embed') ? null : f.closest('.win');
   const frameOf = src => src ? winFrames().find(f => f.contentWindow === src) || null : null;
 
   function tokens() {
@@ -73,7 +80,7 @@
     a.revision = ++revision; st.sig = sig; st.sent = a;
     try { f.contentWindow.postMessage({ type: 'wizard:appearance', appearance: a }, ORIGIN); } catch (e) {}
   }
-  function forget(f) { frames.delete(f); f.closest('.win')?.classList.remove('wz-themed'); }
+  function forget(f) { frames.delete(f); themedWin(f)?.classList.remove('wz-themed'); }
   function sync() {
     for (const f of [...frames.keys()]) {
       if (!f.isConnected) { frames.delete(f); continue; }
@@ -102,7 +109,7 @@
       const st = frames.get(f); if (!st || !st.sent || d.revision !== st.sent.revision) return;
       let doc = null; try { doc = f.contentDocument; } catch (e2) {}
       if (doc !== st.doc) return;
-      st.acked = true; f.closest('.win')?.classList.add('wz-themed');
+      st.acked = true; themedWin(f)?.classList.add('wz-themed');
     }
   });
   // A frame that navigated to a document that did not (re)announce itself loses the theme marker.

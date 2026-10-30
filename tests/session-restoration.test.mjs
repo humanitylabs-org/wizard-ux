@@ -15,7 +15,7 @@ function fixture(id,save,utilities={}){
  const device={classList:{add(){}},appendChild(){}};
  const win={dataset:{},style:{setProperty(){}},replaceChildren(){},append(){},appendChild(f){f.isConnected=true;frames.push(f)},innerHTML:''};
  const rootDoc={documentElement:{style:{setProperty(){}}},styleSheets:[],querySelector:()=>null};
- const document={documentElement:{setAttribute(){}},getElementById:n=>n==='device'?device:{classList:{add(){},remove(){}}},addEventListener(){},createElement(tag){
+ const document={documentElement:{setAttribute(){},style:{setProperty(){}}},getElementById:n=>n==='device'?device:{classList:{add(){},remove(){}}},addEventListener(){},createElement(tag){
   if(tag==='article')return win;
   if(tag!=='iframe')return {className:'',append(){}};
   const events={},wEvents={},w={document:rootDoc,location:{href:''},history:{state:{__wizardApp:{index:0}},replaceState(state,_title,url){this.state=state;if(url)w.location.href=new URL(url,w.location.href).href},pushState(state,title,url){this.replaceState(state,title,url)}},WizardApp:{ready(){}},

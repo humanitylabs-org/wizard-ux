@@ -13,11 +13,11 @@ function check(v, name, detail) { checks.push({ pass: !!v, name, detail }); asse
   try {
     for (const phone of [true, false]) {
       const kind = phone ? 'phone-390' : 'desktop', fixture = schedulerFixture();
-      const ctx = await browser.newContext({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 1000 }, isMobile: phone, hasTouch: phone, timezoneId: 'UTC', serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36' } : {}) });
+      const ctx = await browser.newContext({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 1000 }, isMobile: phone, hasTouch: phone, timezoneId: 'Europe/London', serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36' } : {}) });
       const synthetic = { id: 'chat-brief', title: 'Daily notes', created_at: '2026-10-21T06:00:00Z', updated_at: '2026-10-21T07:00:00Z', messages: [] };
       await ctx.route('**/*', async route => {
         const q = route.request(), u = new URL(q.url()), json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
-        if (u.pathname === '/wizard/v1/bootstrap' && q.method() === 'GET') { const r = await route.fetch(); const body = await r.json(); body.settings.clock.timezone = 'Europe/London'; return route.fulfill({ response: r, json: body }); }
+        if (u.pathname === '/wizard/v1/bootstrap' && q.method() === 'GET') { const r = await route.fetch(); const body = await r.json(); body.settings.clock.timezone = 'Asia/Bangkok'; return route.fulfill({ response: r, json: body }); }
         if (u.pathname.startsWith('/wizard/v1/schedules')) { const d = fixture.handle(u.pathname, q.method(), q.postData() ? q.postDataJSON() : {}); return json(d.body, d.status); }
         if (!['GET', 'HEAD'].includes(q.method())) { writes.push({ kind, method: q.method(), path: u.pathname, forwarded: false }); return json({ error: 'QA refuses production writes' }, 403); }
         if (u.pathname === '/wizard/hermes/api/sessions') return json({ sessions: u.searchParams.has('agent') ? [] : [synthetic], has_more: false });
@@ -46,7 +46,7 @@ function check(v, name, detail) { checks.push({ pass: !!v, name, detail }); asse
         for (const [outcome, error, label] of [['silent', null, 'Silent'], ['failed', 'Run failed', 'Failed: Run failed'], ['running', null, 'Running']]) {
           Object.assign(fixture.jobs[0].lastRun, { outcome, error }); await p.evaluate(async () => { await WosSchedules.load(); await WosSchedules.load(); });
           await p.waitForFunction(label => [...document.querySelectorAll('.sc-last')].some(e => e.textContent.includes('Last run 07:00 · ' + label)), label);
-          check((await p.locator('.sc-last').first().innerText()).includes('Last run 07:00 · ' + label), `${kind} ${skin}: ${outcome} in owner timezone, not device UTC`);
+          check((await p.locator('.sc-last').first().innerText()).includes('Last run 07:00 · ' + label), `${kind} ${skin}: ${outcome} in the phone's timezone, not the settings home zone`);
         }
         const last = fixture.jobs[0].lastRun, next = fixture.jobs[0].nextRun;
         delete fixture.jobs[0].lastRun; delete fixture.jobs[0].nextRun; await p.evaluate(() => WosSchedules.load());

@@ -38,7 +38,7 @@ test('multiple ordered packages clean listeners, CSS, mounts and action intercep
 test('a skin brings its tweaks; offs are remembered per skin; another skin drops them; new published tweaks arrive', async () => {
   const storage = new Map(); let skin = 'grove', published = { id: 'miguel', version: 1, skin: 'obsidian', tweaks: ['miguel/hidden-pin'], flags: {} }, active;
   const fams = [{ id: 'wizard', palettes: ['grove'] }, { id: 'mizel', tweaks: 'miguel', palettes: ['obsidian', 'landscapes'] }];
-  const window = { WosSkin: { get current() { return skin; }, families: fams, familyOf: id => fams.find(f => f.palettes.includes(id)).id }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active || []; }, loadTweaks: async ids => { active = ids.filter(id => id !== 'wizard/unified-inbox'); } }, addEventListener() {}, dispatchEvent() {} };
+  const window = { WosSkin: { get current() { return skin; }, families: fams, familyOf: id => fams.find(f => f.palettes.includes(id)).id }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active || []; }, loadTweaks: async ids => { active = ids.filter(id => !['wizard/unified-inbox', 'wizard/machines-home'].includes(id)); } }, addEventListener() {}, dispatchEvent() {} };
   const ctx = { window, document: { baseURI:'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal, localStorage: { getItem:k=>storage.get(k), setItem:(k,v)=>storage.set(k,v) }, fetch: async url => ({ ok:true, json: async () => url.pathname.endsWith('profile.json') ? published : JSON.parse(read('web/'+url.pathname.split('/wizard-os-home/')[1])) }) };
   vm.runInNewContext(read('web/core/experience.js'), ctx); const E = window.WosExperience;
   await E.refresh(); assert.equal(E.state.owner, null); assert.equal(active.length, 0);
@@ -46,7 +46,7 @@ test('a skin brings its tweaks; offs are remembered per skin; another skin drops
   await E.toggle('miguel/hidden-pin'); assert.equal(active.length, 0); assert.equal(E.state.tweaks[0].on, false);
   published = { ...published, version:2, tweaks: ['miguel/home-bars','miguel/hidden-pin'] }; await E.refresh();
   assert.deepEqual(Array.from(active), ['miguel/home-bars']);
-  skin = 'grove'; await E.chooseSkin(); assert.equal(E.state.owner, null); assert.equal(active.length, 0); assert.equal(E.state.tweaks.filter(t => t.id !== 'wizard/unified-inbox').length, 0);
+  skin = 'grove'; await E.chooseSkin(); assert.equal(E.state.owner, null); assert.equal(active.length, 0); assert.equal(E.state.tweaks.filter(t => !['wizard/unified-inbox', 'wizard/machines-home'].includes(t.id)).length, 0);
   skin = 'landscapes'; await E.chooseSkin(); assert.deepEqual(Array.from(active), ['miguel/home-bars']);
 });
 
@@ -76,10 +76,10 @@ function wizardExperience(storage = new Map()) {
   vm.runInNewContext(read('web/core/experience.js'), {window, document:{baseURI:'https://wizard.test/wizard-os-home/',addEventListener(){}}, Event, URL, AbortSignal,
     localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)}, fetch:async url=>{ requests.push(url.pathname); return {ok:true,json:async()=>JSON.parse(read('web/'+url.pathname.split('/wizard-os-home/')[1]))}; }});
   // Notifications in Chats is on by default for the Wizard family; these older checks are about the other tweaks.
-  return { window, E:window.WosExperience, storage, requests, skin:id=>{skin=id;}, active:()=>Array.from(active).filter(id => id !== 'wizard/unified-inbox'), all:()=>Array.from(active) };
+  return { window, E:window.WosExperience, storage, requests, skin:id=>{skin=id;}, active:()=>Array.from(active).filter(id => id !== 'wizard/unified-inbox' && id !== 'wizard/machines-home'), all:()=>Array.from(active) };
 }
 test('profile default-off applies until the owner stores a deliberate choice, including an empty off list', async () => {
-  let f = wizardExperience(); await f.E.refresh(); assert.deepEqual(f.active(), []); assert.equal(f.E.state.tweaks.find(t => t.id === 'wizard/two-orbs').on, false);
+  let f = wizardExperience(); await f.E.refresh(); assert.ok(f.all().includes('wizard/machines-home'), 'the network map is on by default for the Wizard skin'); assert.deepEqual(f.active(), []); assert.equal(f.E.state.tweaks.find(t => t.id === 'wizard/two-orbs').on, false);
   await f.E.toggle('wizard/two-orbs'); assert.deepEqual(f.active(), ['wizard/two-orbs']);
   assert.deepEqual(JSON.parse(f.storage.get('wos.skin-tweaks.v1')).off.wizard, ['wizard/app-borders']);
   f = wizardExperience(f.storage); await f.E.refresh(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
@@ -152,7 +152,7 @@ test('own recipes expose all installed tweaks, use published defaults and isolat
   const mizel = await f.E.defaults('obsidian-light'); assert.equal(mizel['miguel/model-pills'],true);
   const skin = {id:'quiet',tweaks:{...defaults,'miguel/model-pills':true}};
   f.window.WosMySkin = {active:skin,update(v){ Object.assign(skin.tweaks,v.tweaks); }};
-  await f.E.refresh(); assert.equal(f.E.state.tweaks.length, JSON.parse(read('web/tweaks/catalog.json')).tweaks.length);
+  await f.E.refresh(); const cat = JSON.parse(read('web/tweaks/catalog.json')); assert.equal(f.E.state.tweaks.length, cat.tweaks.length - (cat.oneOf || []).reduce((n, g) => n + g.length - 1, 0), 'one switch per oneOf group');
   assert.deepEqual(f.active(),['miguel/model-pills']);
   await f.E.toggle('wizard/app-borders'); assert.ok(f.active().includes('wizard/app-borders'));
   f.window.WosMySkin.active=null; await f.E.refresh(); assert.deepEqual(f.active(),[]);
@@ -246,7 +246,8 @@ test('chats.js lists notifications among Ready chats only in list mode, in every
   const src = read('web/core/chats.js');
   assert.match(src, /const on = !!window\.WosSkinHost\?\.inboxList;/, 'gated on the host list flag');
   assert.match(src, /const nt = k === 'ready' \? listNotes : null/, 'eligible notifications join Ready');
-  assert.match(src, /return bar \+ withNotes\(list, awake, rowFn\) \+ later;/, 'Newest, Oldest and Priority interleave');
+  assert.match(src, /const top = sec === 'ready' \? bar : ''/, 'only Ready owns the order controls');
+  assert.match(src, /return top \+ withNotes\(list, awake, rowFn\) \+ later;/, 'Newest, Oldest and Priority interleave in every dated section');
   assert.match(src, /if \(awake\.length && !groups\.has\(NOTES_SUBJECT\)\) groups\.set\(NOTES_SUBJECT, \[\]\);/, 'By subject: their own subject');
   assert.match(src, /\.ch-list \.ch-notif-row\[data-chnotif\]'\); if \(nr\) \{ window\.WosSkinHost\?\.inboxAct\?\.\('open'/, 'a tap goes to the package');
 });
