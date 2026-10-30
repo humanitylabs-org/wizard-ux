@@ -129,15 +129,6 @@ a.st-row { color: inherit; text-decoration: none; }
 
 /* Tweaks, separate from skin: a quick button per author, every tweak in one disclosure. */
 .tw-group { margin-top: 20px; }
-.tw-quicks { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 10px; }
-.tw-quick { min-height: 40px; padding: 0 14px; border-radius: 20px; border: 1px solid color-mix(in srgb, var(--wz-text) 18%, transparent); background: var(--wz-surface); color: var(--wz-text); font-size: var(--wz-text-sm); font-weight: 600; touch-action: manipulation; }
-.tw-quick[aria-pressed="true"] { background: var(--wz-accent); border-color: var(--wz-accent); color: var(--wz-base); }
-.tw-quick:disabled { opacity: .6; }
-.skp-own { margin-top: 20px; }
-.tw-set > summary { list-style: none; cursor: pointer; }
-.tw-set > summary::-webkit-details-marker { display: none; }
-.tw-set[open] > summary .st-go { transform: rotate(90deg); }
-.tw-set .tw-row { padding-left: 18px; }
 /* About & updates: flat on the page. One update card when there is something to do, then two segmented choices.
  * Nothing boxed inside a box; type large enough to read at arm's length; every target ≥ 48px. */
 .st-hint { margin: 0 4px 16px; font-size:var(--wz-text-md); line-height: 1.45; color: var(--wz-text-secondary); }
@@ -181,24 +172,11 @@ a.st-row { color: inherit; text-decoration: none; }
 .osu-lbl { display: block; margin: 0 4px 8px; font-size:var(--wz-text-sm); font-weight: 650; letter-spacing: .02em; color: var(--wz-text-muted); }
 
 /* My skin: the last tile of the grid, same size, dashed; ringed in ink while worn. Its controls open under the grid. */
-.st-root .skp-my .skp-mini-my { background: transparent; box-shadow: none; border: 0; outline: 1.5px dashed color-mix(in srgb, var(--wz-text) 40%, transparent); outline-offset: -1.5px; }
-.st-root .skp-my[aria-expanded="true"] .skp-mini-my, .st-root .skp-my.worn .skp-mini-my { outline-color: var(--wz-text); }
-.st-root .skp-my.worn .skp-mini-my { outline-style: solid; }
-.st-root .skp-my .skp-plus { left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; background: linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat, linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat; color: color-mix(in srgb, var(--wz-text) 55%, transparent); }
-.st-root .skp-my:focus-visible .skp-mini-my { outline: 2px solid color-mix(in srgb, var(--wz-text) 70%, transparent); }
-.st-root .ms-panel { border-bottom: 1px solid var(--wz-border); }
-.st-root .ms-panel .my-skin-row { margin: 0; border-bottom: 0; flex-wrap: wrap; }
-.st-root .ms-panel .my-skin-row.worn { box-shadow: none; }
-.st-root .ms-panel .my-skin-row + .my-skin-row { border-top: 1px solid var(--wz-border); }
 .st-root .ms-invite { margin: 8px 4px 16px; }
 
 /* Named recipes and New skin extend the shared settings sheet, cards and switch rows. */
 .st-root .skp-families .skp-nm { overflow-wrap: anywhere; }
 .st-root[data-settings-nested="true"] .st-page-head button { display: grid; }
-.st-root .skin-create { width: 100%; max-width: none; max-height: none; overflow: visible; }
-.st-root .skin-create > .st-actions { bottom: 0; margin: 12px 0 0; padding: 12px 0; z-index: 1; }
-.st-root .st-skin-toast { position: sticky; bottom: 12px; display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--wz-border); border-radius: 12px; background: linear-gradient(var(--wz-overlay), var(--wz-overlay)), var(--wz-base); color: var(--wz-text); z-index: 2; }
-.st-root .st-skin-toast button { min-height: 44px; padding: 8px 12px; background: var(--wz-surface); color: var(--wz-text); border: 1px solid var(--wz-border); border-radius: 8px; }
 /* Family first, then its colours: four compact family tiles, never the full palette catalogue. */
 .st-root .skp.skp-families { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 24px; }
 .st-root .skp-families .skp-mini { aspect-ratio: 1; border-radius: 12px; }
