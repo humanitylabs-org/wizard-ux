@@ -125,4 +125,12 @@ html[data-skin="signal"] :is(.item, .btn, .url, .menu, .sheet, .qr) { border-rad
 .link-device { max-height: 85dvh; padding-top: 0; gap: 0; overflow-y: auto; overscroll-behavior: contain; }
 .link-device > .bar { position: sticky; top: 0; z-index: 1; margin: 0 -4px 6px; background: linear-gradient(var(--wz-overlay, var(--ov)), var(--wz-overlay, var(--ov))), var(--wz-base, #05030c); }
 .link-device > h2 { margin-bottom: 12px; }
+/* Link another device: its own tinted surface with air above it, never flush against the row or steps before it. */
+.btn.add-device { width: 100%; margin-top: 16px; background: var(--acs); color: var(--ac); border: 1px solid color-mix(in srgb, var(--ac) 28%, transparent); }
+.btn.small { min-height: 36px; padding: 0 14px; font-size: 14px; }
+.link.small { font-size: 14px; padding: 6px 0 0; }
+.stepdone { display: flex; justify-content: flex-end; margin-top: 10px; }
+.step.folded p { margin: 0; }
+.sheetdone { padding: 16px 0 calc(8px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--bd); }
+.sheetdone .btn { width: 100%; }
 .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); transform: translateX(-50%); z-index: 12; max-width: calc(100vw - 40px); padding: 10px 14px; border-radius: 12px; background: var(--ov); border: 1px solid var(--bd); color: var(--t); font-size: 14px; -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
