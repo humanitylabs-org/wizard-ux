@@ -1,15 +1,23 @@
 import Foundation
+import Network
 
 /// Wizard addresses, parsed exactly like the Android app (`android/.../ServerOrigin.java`, `android/CONNECT.md`):
-/// fail-closed, HTTPS only, an origin and nothing else. Foundation only, so `ios/tests/origin` can run it on a Mac.
+/// fail-closed, HTTPS only, an origin and nothing else. Foundation and Network only, so `ios/tests/origin` can run it
+/// on a Mac.
 enum WizardOrigin {
-    /// A Setup QR code or `wizard://` link: `wizard://connect?origin=<percent-encoded https origin>`, or a plain https
-    /// origin (`https://host[:port]`, optionally ending in `/` or `/wizard-os-home/`).
+    /// Wizard's QR code (Settings › Phones & devices) or a `wizard://` link: `wizard://connect?origin=<percent-encoded
+    /// https origin>`, or a plain https origin (`https://host[:port]`, optionally ending in `/` or `/wizard-os-home/`).
     /// Returns `https://host[:port]` (port 443 dropped, host lower-cased) or nil.
     /// True for `wizard://connect…` links, the only `wizard:` route the app handles itself. Other routes (e.g. the
     /// Store's `wizard://install?…`) go on to Capacitor so the Wizard's pages receive them.
     static func isConnectLink(_ url: URL) -> Bool {
         url.scheme?.lowercased() == "wizard" && url.host?.lowercased() == "connect"
+    }
+
+    /// A `wizard://` link that isn't a connect link (a Store install link) while no Wizard is set: nothing could open
+    /// it, so the connect screen says to connect first.
+    static func needsWizardFirst(_ url: URL, hasWizard: Bool) -> Bool {
+        !hasWizard && url.scheme?.lowercased() == "wizard" && !isConnectLink(url)
     }
 
     static func parse(_ text: String) -> String? {
@@ -96,6 +104,23 @@ final class WizardProbe: NSObject, URLSessionDataDelegate {
     /// that is merely off or asleep gives "couldn't reach" (a timeout) instead.
     static func notFound(_ problem: String) -> Bool { problem.hasPrefix("Couldn't find") }
 
+    /// The Wizard answered 401/403: it's there, but this phone's Tailscale user isn't its owner.
+    static let refusedMessage = "This phone isn't allowed into this Wizard. Sign in to Tailscale with your Wizard's account."
+    static func refused(_ problem: String) -> Bool { problem == refusedMessage }
+
+    /// A main-frame answer from the Wizard at launch that shouldn't show as a page: "refused" (401/403, this phone's
+    /// Tailscale user isn't the owner), "server" (5xx, e.g. the Wizard restarting behind its gateway), else nil.
+    static func launchVerdict(status: Int) -> String? {
+        if status == 401 || status == 403 { return "refused" }
+        return (500...599).contains(status) ? "server" : nil
+    }
+
+    /// Opening the Wizard can't work right now: no network, or a Tailscale address with Tailscale off (Android
+    /// ReachPolicy.failNow). The launch watchdog gives up early then.
+    static func hopeless(network: Bool, needsTailscale: Bool, tailscaleOn: Bool) -> Bool {
+        !network || (needsTailscale && !tailscaleOn)
+    }
+
     /// The owner's message for a connection that failed with `code` (an NSURLError code).
     static func failure(code: Int, origin: String) -> String {
         let host = WizardOrigin.host(origin), tailscale = WizardOrigin.needsTailscale(origin)
@@ -109,6 +134,7 @@ final class WizardProbe: NSObject, URLSessionDataDelegate {
     }
 
     static func headerProblem(status: Int, contentType: String?, host: String) -> String? {
+        if status == 401 || status == 403 { return refusedMessage }
         if status != 200 { return "\(host) answered, but didn't open Wizard (HTTP \(status))." }
         guard let type = contentType,
               type.split(separator: ";", maxSplits: 1, omittingEmptySubsequences: false).first?
@@ -205,5 +231,28 @@ enum TailscaleNet {
             if isTailscale(interface: String(cString: entry.pointee.ifa_name), ipv4: address) { return true }
         }
         return false
+    }
+}
+
+/// Does this phone have a network at all (Wi-Fi or mobile data)? Started at launch (AppDelegate); read from any thread.
+/// Before the monitor's first answer it says yes, so the app never claims "offline" without evidence.
+enum NetPath {
+    private static let lock = NSLock()
+    private static var up = true
+    private static let monitor: NWPathMonitor = {
+        let m = NWPathMonitor()
+        m.pathUpdateHandler = { path in
+            lock.lock(); up = path.status == .satisfied; lock.unlock()
+        }
+        m.start(queue: DispatchQueue(label: "ai.wizards.os.netpath"))
+        return m
+    }()
+
+    static func start() { _ = monitor }
+
+    static var isUp: Bool {
+        _ = monitor
+        lock.lock(); defer { lock.unlock() }
+        return up
     }
 }
