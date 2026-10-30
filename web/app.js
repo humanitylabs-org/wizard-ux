@@ -2032,10 +2032,15 @@
   });
 
   // Moons orbit the orb: one per running agent (violet) or thread that needs you (amber).
+  // Even counts use a half-step offset so no moon sits behind the six-o'clock scrub handle.
+  function moonAngle(k, count) {
+    const offset = count > 1 && count % 2 === 0 ? Math.PI / count : 0;
+    return (k / Math.max(count, 1)) * Math.PI * 2 - Math.PI / 2 + offset;
+  }
   function renderMoons() {
     const L = live();
     const m = [...L.needs.map(() => 'var(--amber)'), ...L.working.map(() => 'var(--violet-2)'), ...L.ready.map(() => 'var(--green)')].slice(0, 8);
-    $('#moons').innerHTML = m.map((c, k) => { const a = (k / Math.max(m.length, 1)) * Math.PI * 2 - Math.PI / 2, r = Math.round(($('#orbWrap').offsetWidth || 44) / 2 + 8);
+    $('#moons').innerHTML = m.map((c, k) => { const a = moonAngle(k, m.length), r = Math.round(($('#orbWrap').offsetWidth || 44) / 2 + 8);
       return `<i style="--c:${c};transform:translate(${(Math.cos(a) * r).toFixed(1)}px,${(Math.sin(a) * r).toFixed(1)}px)"></i>`; }).join('');
     // Opinionated: Ready count, not unread. It belongs to Chats; the orb shows the count of the desk in view.
     window.WizCore.workspaceNav.setCount(CHATS_APP.id, (LIVE && LIVE.ok ? (LIVE.workGroups().ready || []).length : 0) + (window.WosBell?.readyCount?.() || 0));
