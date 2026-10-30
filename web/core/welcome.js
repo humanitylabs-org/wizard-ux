@@ -9,7 +9,9 @@
  * Wizard (Agent Service setup first_run) whose agent already has a provider it starts at step 2. Existing Wizards
  * (first_run false, a provider signed in) never see it. Finishing posts /wizard/v1/setup/seen.
  * Look offers every skin, drawn with the Settings preview cards, over a lighter dim so the real
- * interface shows through. The first message opens in the one main Chats window, on its own thread.
+ * interface shows through. A card sets only that skin (WosSkin.set): skins and tweaks are independent, so it never
+ * applies or changes tweaks, and opening the step never switches the skin; an owner who never picks keeps the fresh
+ * default, Nebula (Miguel, 30 Oct 2026). The first message opens in the one main Chats window, on its own thread.
  * Name your Wizard (Miguel, 29 Oct 2026) comes first, only while the agent still has the default name: one field,
  * prefilled, Continue keeps it as it is unless edited; the name is saved in the Agent Service settings
  * (WizConfig.agentName) and every later step says it. Skipped or kept, the box stays "Wizard".
@@ -18,7 +20,6 @@
 (() => {
   'use strict';
   const KEY = 'wos.welcome.v1', OPTIONS = '/wizard/hermes/api/model/options', SETUP = '/wizard/v1/setup', POLL_MS = 3000;
-  const FAMILY = 'wizard'; // first run starts on the original Wizard color (Nebula) and offers every color
   const PROVIDERS = [
     // Alongside the Claude app adds to Hermes' own Anthropic pool; on a fresh Wizard its sign-in is the Claude Code
     // login, which Hermes reaches as the subscription provider (the app makes it the agent's model).
@@ -239,7 +240,6 @@
       }
       e.stopPropagation(); // the shell's own shortcuts wait until the welcome is done (desktop onKey also stands down)
     });
-    if (at === 'look' || at === 'ai') { const S = window.WosSkin; if (S && S.familyOf(S.current) !== FAMILY && !S.chosen) S.setFamily(FAMILY); }
     paint(); poll(); log('open:' + at + (asked ? ':name' : ''));
   }
 

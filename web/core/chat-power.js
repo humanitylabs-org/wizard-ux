@@ -304,7 +304,10 @@ window.WosChatPower = function chatPower(A) {
   function ensureModels() {
     if (!M || modelsAsked) return;
     modelsAsked = true;
-    M.load().then(() => { for (const id of Object.keys(A.CH)) { const w = H.win(id); if (w?.thread) (A.renderThreadLive || A.renderThreadNow)(w); } }); // background: waits for a selection
+    const repaint = () => { for (const id of Object.keys(A.CH)) { const w = H.win(id); if (w?.thread) (A.renderThreadLive || A.renderThreadNow)(w); } };
+    M.load().then(repaint); // background: waits for a selection
+    // A later background reload that changed the catalogue (e.g. ChatGPT's real list replacing Hermes' placeholder).
+    window.addEventListener?.('wos:models', repaint);
   }
   async function pickModel(o, direct) {
     const sh = direct || sheet; if (!sh || (!direct && sh.type !== 'model') || (direct?.alive && !direct.alive())) return;
