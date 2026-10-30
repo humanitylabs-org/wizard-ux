@@ -98,6 +98,10 @@ final class TailscaleGuideView {
         String net = TailscaleGuide.tailnet(origin);
         TailscaleGuide.Step[] steps = TailscaleGuide.steps(on, missing, installed);
 
+        // The Wizard logo row top-left, as on the other connect screens.
+        LinearLayout.LayoutParams brand = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        brand.bottomMargin = dp(6);
+        body.addView(BrandRow.build(a, p.muted), brand);
         TextView eyebrow = text(TailscaleGuide.EYEBROW.toUpperCase(java.util.Locale.ROOT), 11, p.accent, true);
         eyebrow.setLetterSpacing(0.16f);
         body.addView(eyebrow, lp(dp(8)));

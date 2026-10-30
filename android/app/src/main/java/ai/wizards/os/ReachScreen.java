@@ -14,6 +14,7 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -25,7 +26,8 @@ import java.nio.file.Files;
 /**
  * The native "can't reach your Wizard" screen (rules in ReachPolicy). A plain Android view over the WebView, so it
  * shows even while the WebView sits on a connection that never answers (Tailscale off: the black screen).
- * Two looks: Connecting (orb + one line) and Offline (why, what to do, Try again, Open Tailscale).
+ * Two looks: Connecting (orb + one line) and Offline (why, what to do, Try again, Open Tailscale), both with the
+ * Wizard logo row top-left.
  */
 final class ReachScreen {
     private static final int BG = Color.rgb(5, 3, 12);
@@ -35,7 +37,7 @@ final class ReachScreen {
     private final Activity a;
     private final FrameLayout view;
     private final TextView title, body, status, detail, retry, tailscale, server;
-    private final LinearLayout col;
+    private final LinearLayout col, brand;
     private final TailscaleGuideView guide;
     private boolean offline;
     private ReachPolicy.Why shown;
@@ -90,6 +92,12 @@ final class ReachScreen {
         col.addView(server, lp(dp(28)));
         view.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+        // The Wizard logo row top-left (under the guide, which draws its own); placeBrand() clears the status bar.
+        brand = BrandRow.build(a, TailscaleGuideView.withAlpha(INK, 0.6f));
+        FrameLayout.LayoutParams bl = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.START);
+        bl.leftMargin = dp(20); bl.topMargin = dp(40);
+        view.addView(brand, bl);
         // A Wizard on Tailscale: the step-by-step guide instead (TailscaleGuide), in this screen's colours.
         guide = new TailscaleGuideView(a, new TailscaleGuideView.Palette(BG, INK, TailscaleGuideView.withAlpha(INK, 0.78f),
                 TailscaleGuideView.withAlpha(INK, 0.5f), VIOLET, Color.rgb(91, 61, 214), Color.WHITE,
@@ -118,6 +126,7 @@ final class ReachScreen {
         server.setVisibility(View.GONE);
         status.setVisibility(View.VISIBLE);
         status.setText("Connecting to your Wizard…");
+        placeBrand();
         view.setVisibility(View.VISIBLE);
     }
 
@@ -155,6 +164,7 @@ final class ReachScreen {
         String d = ReachPolicy.detail(raw);
         detail.setText(d);
         detail.setVisibility(d.isEmpty() ? View.GONE : View.VISIBLE);
+        placeBrand();
         view.setVisibility(View.VISIBLE);
     }
 
@@ -233,6 +243,20 @@ final class ReachScreen {
     }
 
     /* ---------------- views ---------------- */
+
+    /**
+     * The logo row 12dp below the status bar. MainActivity's root consumes the insets (this screen runs under the
+     * status bar, like the page), so read the window's own; API 28-29 don't draw edge to edge.
+     */
+    private void placeBrand() {
+        int top = 0;
+        WindowInsets in = view.getRootWindowInsets();
+        if (in != null && android.os.Build.VERSION.SDK_INT >= 30) {
+            top = in.getInsets(WindowInsets.Type.statusBars() | WindowInsets.Type.displayCutout()).top;
+        }
+        FrameLayout.LayoutParams l = (FrameLayout.LayoutParams) brand.getLayoutParams();
+        if (l.topMargin != top + dp(12)) { l.topMargin = top + dp(12); brand.setLayoutParams(l); }
+    }
 
     private int dp(int v) {
         return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, a.getResources().getDisplayMetrics()));

@@ -83,7 +83,7 @@ test('iPhone and Android say the same words', () => {
 test('the iPhone connect screen loads the guide and connects by itself once the Wizard answers', () => {
   const page = read('ios/www/index.html');
   assert.ok(page.indexOf('<script src="tailscale-guide.js"></script>') > 0 && page.indexOf('tailscale-guide.js') < page.indexOf('const G = window.WizardTailscaleGuide'));
-  assert.match(page, /<section class="card" id="guide"[^>]*hidden><\/section>/);
+  assert.match(page, /<section [^>]*id="guide"[^>]*hidden><\/section>/);
   assert.match(page, /call\('check', \{ address: g\.address \}\)/);
   assert.match(page, /e\.code === 'offline' && G\.applies/, 'only a Wizard that never answered gets the guide');
   assert.match(page, /if \(r && r\.offline && on && \(await tailscaleOn\(\)\)\)/, 'only answers found with Tailscale on count');

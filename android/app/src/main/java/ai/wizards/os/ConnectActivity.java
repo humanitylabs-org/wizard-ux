@@ -83,6 +83,12 @@ public final class ConnectActivity extends Activity {
             return in.consumeSystemWindowInsets();
         });
 
+        // The Wizard logo row top-left on the first screen (the iPhone app's; Change Wizard keeps its back button).
+        if (!switching) {
+            LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            bl.leftMargin = dp(4); bl.topMargin = dp(2); bl.bottomMargin = dp(14);
+            body.addView(BrandRow.build(this, look.muted), bl);
+        }
         // Header: back (when there is a Wizard to go back to) + title, like a Settings sub-page.
         LinearLayout head = new LinearLayout(this); head.setGravity(Gravity.CENTER_VERTICAL);
         if (switching) {
