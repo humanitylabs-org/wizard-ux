@@ -17,7 +17,7 @@ function fixture({thread='selected',q='quokka',filter='unread',inList=true,mono=
  ch:id=>id==='one::list'?state:other,rerenderList:()=>calls.push('render'),syncChatsPane:()=>calls.push('sync'),
  focused:()=>w,listWin:id=>({id:id+'::list',thread:null}),winEl:()=>({querySelector:()=>({contains:()=>inList,focus:()=>{}}),focus:()=>{}}),
  pal:{hidden:true},keyHints:{pinned:()=>false},LINKS:null,closeUsage:()=>false,settingsReturn:'',settingsFocused:()=>false,
- hudBack:()=>'',homeOpen:false,ws:[{mono}],cur:0,toggleMono:()=>calls.push('mono'),
+ hudBack:()=>'',voiceMenuBack:()=>'',homeOpen:false,ws:[{mono}],cur:0,toggleMono:()=>calls.push('mono'),
  CHATS:{KIT:{},isHosted:()=>false,closeOverlay:()=>'',threadBack:()=>{w.thread=null;calls.push('thread');return 'thread';}},
  closeWin:()=>calls.push('close')};
  vm.createContext(ctx);vm.runInContext(clear,ctx);ctx.CHATS.clearFilter=ctx.clearFilter;vm.runInContext(esc,ctx);

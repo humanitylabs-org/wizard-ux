@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import vm from 'node:vm';
 const read = p => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 
 test('Welcome: Claude is listed first and recommended, then ChatGPT', () => {
@@ -71,7 +72,14 @@ test('Welcome: never covers work already started, keeps keys and focus, Back can
   assert.match(js, /acted \|\| h\.busy\?\.\(\) \|\| h\.deeplinked\?\.\(\)\)\) \{ log\('boot:busy'\); return; \}/);
   assert.match(js, /e\.key === 'Tab'/);
   assert.match(js, /provider === chosen/);
-  assert.match(read('web/desktop/desktop.js'), /function onKey\(e, fromFrame = false\) \{\s*if \(pick\.active\(\)\) return pick\.key\(e\);\s*if \(window\.WosWelcome\?\.active\)/);
+  // Exercise ownership instead of requiring Welcome at a fixed source line before IME guards.
+  const desktop = read('web/desktop/desktop.js'), start = desktop.indexOf('  function onKey(e, fromFrame = false)');
+  const head = desktop.slice(start, desktop.indexOf('    keyHints.down(e);', start)), calls = [];
+  const context = { pick: { active: () => false }, window: { WosWelcome: { active: true, back: () => calls.push('back') } } };
+  vm.createContext(context); vm.runInContext(head + ' calls.push("shell"); }', Object.assign(context,{calls}));
+  context.onKey({key:'Escape',target:{matches:()=>false},preventDefault:()=>calls.push('prevent'),stopPropagation:()=>calls.push('stop')});
+  assert.deepEqual(calls,['prevent','stop','back']);
+  calls.length = 0; context.onKey({key:'g',target:{matches:()=>false}}); assert.deepEqual(calls,[]);
   assert.match(read('web/desktop/desktop.js'), /WosWelcome\?\.boot\([^]*?busy: \(\) => VOICE\.state !== 'idle'/);
   assert.match(read('web/app.js'), /WosWelcome\?\.boot\([^]*?busy: \(\) => V\.state !== 'idle'/);
 });
