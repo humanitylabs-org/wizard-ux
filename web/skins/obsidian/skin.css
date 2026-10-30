@@ -223,12 +223,6 @@ html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.immersive) .tiles.has-full { bottom: calc(var(--pill-top) + 6px); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) #device:not(.orb-corner) > :is(#voiceDestination, #generalVoice) { bottom: calc(var(--pill-top) - 9px); }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub .sc-label { bottom: calc(var(--pill-h) + 4px); }
-/* Opinionated (phone): the "Interface updated · Reload" banner sits just above the bottom bar, in thumb reach,
- * instead of under the status bar. Its thread list opens upward. Full-screen chats: above the corner orb. */
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device .dv-update { top: auto; left: var(--pill-x, 10px); right: var(--pill-x, 10px); bottom: calc(var(--pill-top, calc(var(--dock-h) + var(--safe-b-low))) + 8px); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.orb-corner .dv-update { bottom: calc(var(--safe-b-low) + var(--corner-b) + var(--corner-orb) + 10px); }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device .dv-update.web { flex-direction: column-reverse; }
-html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device .dv-update .dv-wl { margin: 0 0 8px; border-top: 0; border-bottom: 1px solid var(--line); }
 /* Opinionated (phone, test port) round 2: content runs under the pill and fades out into the background (iOS style)
  * instead of stopping in a hard edge above it; quieter pill; chat Back drawn as a hamburger (back to the list). */
 html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full):has(> .win.solo.app-chats) { bottom: 0; }

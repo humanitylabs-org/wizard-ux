@@ -122,7 +122,7 @@
   function create({ name, base, tweaks }) {
     name = String(name || '').trim();
     if (!name || name.length > 60) throw new Error('Give your skin a name (up to 60 characters)');
-    if (!window.WosSkin?.list.some(s => s.id === base)) throw new Error('Choose an installed colour');
+    if (!window.WosSkin?.list.some(s => s.id === base)) throw new Error('Choose an installed color');
     if (recipes.skins.some(s => s.name.toLocaleLowerCase() === name.toLocaleLowerCase())) throw new Error('You already have a skin with that name');
     const map = Object.fromEntries(Object.entries(tweaks || {}).filter(([id,v]) => /^[a-z0-9-]+\/[a-z0-9-]+$/.test(id) && typeof v === 'boolean'));
     const skin = { id: 'skin-' + crypto.randomUUID(), name, base, tweaks: map };
@@ -132,7 +132,7 @@
   function update(values) {
     const skin = own(); if (!skin) return;
     const base = values.base || skin.base;
-    if (!window.WosSkin?.list.some(s => s.id === base)) throw new Error('Choose an installed colour');
+    if (!window.WosSkin?.list.some(s => s.id === base)) throw new Error('Choose an installed color');
     const next = { ...skin, base, tweaks: { ...skin.tweaks, ...(values.tweaks || {}) } };
     persist({ ...recipes, skins: recipes.skins.map(s => s.id === skin.id ? next : s) });
     if (window.WosSkin.current !== base) window.WosSkin.set(base); recipeChanged();
@@ -222,7 +222,7 @@
   async function createOnBox({ name, base, tweaks }) {
     name = String(name || '').trim();
     if (!name || name.length > 60) throw new Error('Give your skin a name (up to 60 characters)');
-    if (!window.WosSkin?.list.some(s => s.id === base)) throw new Error('Choose an installed colour');
+    if (!window.WosSkin?.list.some(s => s.id === base)) throw new Error('Choose an installed color');
     if (recipes.skins.some(s => s.name.toLocaleLowerCase() === name.toLocaleLowerCase())) throw new Error('You already have a skin with that name');
     const made = await request('', 'POST', { name, base, tweaks: tweaks || {}, activate: true });
     await syncBox(); return clone(recipes.skins.find(s => s.id === made.id));
