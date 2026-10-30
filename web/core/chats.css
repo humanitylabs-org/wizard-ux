@@ -193,8 +193,7 @@ html[data-shell="phone"] .ch-fsheet:has([data-chfocusopt]) { bottom: calc(var(--
 .ch-sec { margin: 0 0 2px; }
 .ch-sec-h { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 8px 8px; text-align: left; font-size: 11.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); }
 .ch-sec-h small { font-size: 11.5px; font-weight: 800; color: var(--ink-3); letter-spacing: .05em; }
-.ch-sec-h b { padding: 1px 7px; border-radius: 99px; font-size: 10.5px; letter-spacing: .04em; color: #fff; background: var(--violet); }
-.ch-sec-h b { color: var(--wz-base, var(--bg)); background: var(--violet); }
+.ch-sec-h b { padding: 1px 7px; border-radius: 99px; font-size: 10.5px; letter-spacing: .04em; color: var(--wz-base, var(--bg)); background: var(--violet); }
 .ch-sec-h i { margin-left: auto; width: 8px; height: 8px; border-right: 2px solid var(--ink-3); border-bottom: 2px solid var(--ink-3); transform: rotate(45deg); transition: transform .18s; }
 .ch-sec.open .ch-sec-h i { transform: rotate(-135deg); }
 .ch-sec + .ch-sec { border-top: 1px solid var(--line); }
@@ -613,8 +612,7 @@ body > .mviewer { position: fixed; z-index: 200; }
 /* New chat button: bottom-right of the Chats list, clear of the orb (dock sits below the window; corner orb lifts it).
    Its paint follows the active skin instead of carrying Nebula purple into every palette. */
 .ch-fab { position: absolute; right: 16px; bottom: 16px; z-index: 5; width: 54px; height: 54px; border-radius: 18px; display: grid; place-items: center;
-  background: linear-gradient(145deg, #9b6bff, #6d45e6); color: #fff; box-shadow: 0 10px 26px rgba(70, 30, 160, .55), inset 0 1px 0 rgba(255, 255, 255, .22); }
-.ch-fab { background: linear-gradient(145deg, color-mix(in oklab, var(--violet) 85%, var(--ink)), color-mix(in oklab, var(--violet) 80%, var(--bg)));
+  background: linear-gradient(145deg, color-mix(in oklab, var(--violet) 85%, var(--ink)), color-mix(in oklab, var(--violet) 80%, var(--bg)));
   color: var(--wz-base, var(--bg)); box-shadow: 0 10px 26px color-mix(in srgb, var(--violet) 42%, transparent), inset 0 1px 0 color-mix(in srgb, var(--ink) 22%, transparent); }
 .ch-fab svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
 .ch-fab:active { transform: scale(.94); }
