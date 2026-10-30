@@ -26,7 +26,7 @@ test('Settings › Look shows every look as a preview card in one flat grid, wit
   assert.match(s, /data-skinfamily=/);
   assert.doesNotMatch(s, /suggestionHtml|data-chats-suggest/);
   assert.match(s, /aria-label="Skins">\$\{tiles\}\$\{ownTiles\(S\)\}\$\{newTile\(\)\}<\/div>/);
-  assert.match(s, /<h4>Colours<\/h4>/);
+  assert.match(s, /<h4>Colors<\/h4>/);
   assert.doesNotMatch(read('web/core/skins.css'), /\.skp-fam/);
 });
 

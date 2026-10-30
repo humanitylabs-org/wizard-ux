@@ -23,6 +23,8 @@
   const ua = navigator.userAgent || '';
   const android = !!window.WizardOSNative || /WizardOS-Android\//.test(ua);
   const mac = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.wizardNative);
+  // Set before first paint so the desktop bar never draws under the Mac window buttons.
+  if (mac) document.documentElement.dataset.nativeChrome = 'mac';
   const mq = s => { try { return matchMedia(s).matches; } catch (e) { return false; } };
   const touchFirst = mq('(pointer: coarse)') && !mq('(any-pointer: fine)') && !mq('(hover: hover)');
   const mobileUA = /Android.+Mobile|iPhone|iPod|Mobile Safari/i.test(ua);
