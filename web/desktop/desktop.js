@@ -10,7 +10,7 @@
  * Keys use ⌥ (Option/Alt) as the window-manager modifier, so they never fight the browser's ⌘ keys:
  *   ⌘K / ⌥Space   search and launch           ⌥` Home, ⌥1…⌥9 go to desktop
  *   ⌥Enter        new chat                    ⇧⌥1…9      send window to workspace
- *   Right ⌘ tap   talk (tap again to send)    ⌥←↑→↓/HJKL focus window
+ *   Right ⌘ tap   talk (tap again to send)    ⌥←↑→↓ focus window
  *   Right ⌥ tap   dictate (tap again: insert at the cursor, else copy)
  *   ⌥I            Chats                       ⇧⌥←→       swap window
  *   ⌘W / ⌥W       close app                   ⌥F         full screen
@@ -229,9 +229,65 @@
     if (hud?.id === id) { hudClose(); return; }
     const t = wsOf(id); if (t < 0) return;
     const d = ws[t];
+    if (!internal) rememberClosed(id, t);
     removeWin(id, internal);
     if (!internal && !d.wins.length && ws.length > 1) removeDesktop(d);
     else { save(); render(); }
+  }
+  /* ⌥⇧W reopens the last closed window (Omarchy-style safety net for ⌥W): same desk, same spot, same chat or screen. */
+  const closedWins = (() => { const v = store.get('closed', []); return Array.isArray(v) ? v.filter(c => c && c.w && typeof c.w.id === 'string').slice(-12) : []; })(); // kept across reloads
+  function rememberClosed(id, t) {
+    const d = ws[t]; let w; try { w = JSON.parse(JSON.stringify(W[id])); } catch (_) { return; }
+    closedWins.push({ w, desk: d.id, deskAt: t, at: d.wins.indexOf(id), split: d.split }); if (closedWins.length > 12) closedWins.shift(); store.set('closed', closedWins);
+  }
+  function reopenClosed() {
+    let c; do c = closedWins.pop(); while (c && W[c.w.id]); store.set('closed', closedWins);
+    if (!c) return toast('↺', 'Nothing closed to reopen', 1500);
+    closePalette({ restore: false }); toggleKeys(false); closeSettings(); closeUsage();
+    let t = ws.findIndex(d => d.id === c.desk);
+    if (t < 0) { // its desk closed with it: put the desk back where it was
+      t = Math.max(0, Math.min(c.deskAt, ws.length)); ws.splice(t, 0, { ...freshDesk(), id: c.desk, ...(c.split ? { split: c.split } : {}) });
+      if (cur >= t) cur += 1; if (lastWs >= t) lastWs += 1;
+    }
+    const d = ws[t]; W[c.w.id] = c.w;
+    d.wins.splice(Math.max(0, Math.min(c.at, d.wins.length)), 0, c.w.id); d.focus = c.w.id; d.mono = false;
+    save(); leaveHome(); if (t !== cur) { lastWs = cur; goWs(t); } else render();
+    focusWin(c.w.id); log('reopen:' + (c.w.appId || c.w.app));
+  }
+  /* ⌥Z: back to where you were just before (window, desk or Home); again flips back. Like Omarchy's last workspace. */
+  let spotNow = null, spotPrev = null, spotQ = false;
+  function noteSpot() {
+    if (spotQ) return; spotQ = true;
+    queueMicrotask(() => { spotQ = false; const s = homeOpen ? 'home' : ws[cur] ? ws[cur].focus || 'd:' + ws[cur].id : null; if (s && s !== spotNow) { if (spotNow) spotPrev = spotNow; spotNow = s; } });
+  }
+  function spotLive(s) {
+    if (s === 'home') return true;
+    if (s?.startsWith('d:')) return ws.some(d => d.id === s.slice(2));
+    return !!s && !!W[s] && wsOf(s) >= 0;
+  }
+  function jumpBack() {
+    const s = spotPrev;
+    if (!spotLive(s)) return toast('↩', 'Nowhere to go back to yet', 1500);
+    closePalette({ restore: false }); toggleKeys(false); closeSettings(); closeUsage();
+    if (s === 'home') { lastWs = cur; goHome(); }
+    else if (s.startsWith('d:')) { const i = ws.findIndex(d => d.id === s.slice(2)); if (i !== cur) lastWs = cur; goWs(i); if (homeOpen) leaveHome(); }
+    else { if (wsOf(s) !== cur) lastWs = cur; focusWin(s); }
+    log('jump-back');
+  }
+  function flipLight() {
+    const tw = window.WosSkin?.twin?.();
+    if (!tw) return toast('◐', 'This skin has no light / dark version', 1600);
+    window.WosSkin.set(tw.id); toast('◐', tw.name, 1000); log('skin:' + tw.id);
+  }
+  /* ⌥− / ⌥= (Omarchy's resize): the window in front gets narrower / wider. Each desk keeps its own split. */
+  const SPLIT = [0.25, 0.75];
+  function splitOf(d, n) { const v = +d.split; return v >= SPLIT[0] && v <= SPLIT[1] ? v : n === 2 ? 0.5 : 0.56; }
+  function resizable(d) { return !homeOpen && !d.mono && d.wins.length >= 2 && !(d.wins.length <= 4 && d.wins.some(id => W[id]?.share > 0)); }
+  function resizeFocused(dir) {
+    const d = ws[cur], f = focused();
+    if (!f || hud?.id === f.id || !resizable(d)) return toast('⇔', `Two windows side by side: ${MOD}− narrower · ${MOD}= wider`, 1800);
+    const n = d.wins.length, v = splitOf(d, n) + (d.wins[0] === f.id ? dir : -dir) * 0.08;
+    d.split = Math.round(clampN(v, SPLIT[0], SPLIT[1]) * 100) / 100; save(); layout();
   }
   function focusWin(id, { scroll = true } = {}) {
     if (hud?.id === id) { hudFocus(); return; }
@@ -640,12 +696,13 @@
       const width = Math.min(maxWidth, Math.max(0, W_ - 2 * g));
       rects[d.wins[0]] = [(W_ - width) / 2, g, width, H_ - 2 * g];
     } else if (n === 2) {
-      const half = Math.min(maxWidth, Math.max(0, (W_ - 3 * g) / 2));
-      const left = (W_ - 2 * half - g) / 2;
-      rects[d.wins[0]] = [left, g, half, H_ - 2 * g]; rects[d.wins[1]] = [left + g + half, g, half, H_ - 2 * g];
+      const avail2 = Math.max(0, W_ - 3 * g), sp = splitOf(d, 2); // ⌥− / ⌥= move the split
+      const lw = sp === 0.5 ? Math.min(maxWidth, avail2 / 2) : Math.min(maxWidth, avail2 * sp), rw = sp === 0.5 ? lw : Math.min(maxWidth, avail2 - avail2 * sp);
+      const left = (W_ - lw - rw - g) / 2;
+      rects[d.wins[0]] = [left, g, lw, H_ - 2 * g]; rects[d.wins[1]] = [left + g + lw, g, rw, H_ - 2 * g];
     } else {
       const available = Math.max(0, W_ - 3 * g);
-      const naturalMaster = Math.round(available * 0.56);
+      const naturalMaster = Math.round(available * splitOf(d, n));
       const mw = Math.min(maxWidth, naturalMaster), sw = Math.min(maxWidth, available - naturalMaster);
       const left = (W_ - mw - sw - g) / 2, k = n - 1, sh = (H_ - (k + 1) * g) / k;
       rects[d.wins[0]] = [left, g, mw, H_ - 2 * g];
@@ -788,7 +845,7 @@
   });
   addEventListener('resize', () => hudPaint());
   function paintFocus() {
-    const d = ws[cur];
+    const d = ws[cur]; noteSpot();
     $$('.win', stage).forEach(el => el.classList.toggle('focus', el.dataset.win === d.focus));
     const f = focused(); document.title = f ? `${winTitle(f)} · Wizard` : 'Wizard';
     if (d.mono) layout();
@@ -801,7 +858,7 @@
     const t = cur + dir; if (t < 0 || t >= ws.length) return;
     lastWs = cur; goWs(t);
   }
-  // ⌥] / ⌥[ (Miguel, 28 Oct 2026): walk this desk's windows left to right first (the order H J K L use), and only
+  // ⌥] / ⌥[ (Miguel, 28 Oct 2026): walk this desk's windows left to right first (left to right), and only
   // past the last (or first) one step on to the next (or previous) desk. Chats with a chat open is two stops: the
   // chat list, then the message box. Arriving on a desk with ] starts at its leftmost stop, with [ at its rightmost.
   // ⌥← / ⌥→ stay Snooze / Done on an open chat.
@@ -1169,7 +1226,12 @@
       { kind: 'cmd', name: 'Previous window', icon: '←', keys: `${MOD}[`, run: () => stepWin(-1) },
       { kind: 'cmd', name: 'Next desktop', icon: '→', run: () => stepDesk(1) },
       { kind: 'cmd', name: 'Previous desktop', icon: '←', run: () => stepDesk(-1) },
-      { kind: 'cmd', name: 'New chat', icon: '✎', keys: `${MOD}N`, run: () => newChat({ fresh: true }) },
+      { kind: 'cmd', name: 'New chat', icon: '✎', keys: `${MOD}N`, run: () => newChat() },
+      { kind: 'cmd', name: 'Wider window', icon: '⇔', keys: `${MOD}=`, run: () => resizeFocused(1) },
+      { kind: 'cmd', name: 'Narrower window', icon: '⇔', keys: `${MOD}−`, run: () => resizeFocused(-1) },
+      { kind: 'cmd', name: 'Reopen closed window', icon: '↺', keys: `${MOD}⇧W`, run: () => reopenClosed() },
+      { kind: 'cmd', name: 'Back to where you were', icon: '↩', keys: `${MOD}Z`, run: () => jumpBack() },
+      { kind: 'cmd', name: 'Dark / Light', icon: '◐', keys: `${MOD}L`, run: () => flipLight() },
       { kind: 'cmd', name: 'New voice chat', icon: '🎙', keys: `${MOD}V`, run: () => talkNew() },
       { kind: 'cmd', name: `Talk to ${window.WizConfig.agent()}`, icon: '🎙', keys: 'Right ⌘', run: () => talk() },
       { kind: 'cmd', name: 'Dictate', icon: '✎', keys: 'Right ⌥', run: () => dictate() },
@@ -1962,7 +2024,7 @@
     const TYPE = [['N', 'New chat', 'Type a new message'], ['␣', 'Search', 'Apps, chats and commands'], ['I', 'Inbox', 'All your chats']];
     const READY = [['↓', 'Next ready chat', 'From anywhere. Opens it ready to reply'], ['→  ←', 'Done / Snooze', 'The open chat'], ['X', 'Resolve this', 'An open notification: stop these or fix the cause']];
     const GO = [['G', 'Pick anything', 'Letters appear on every button, app and chat; type them to click'], ['`', 'Home', 'Again to go back'], ['1–9', 'Desktop 1 to 9', 'Jump straight to it'], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
-    const WIN = [['P', 'Float chat', 'Over every desk; again puts it back on desktop 1'], ['F', 'Full screen', ''], ['W', 'Close', ''], ['R', 'Refresh window', ''], ['H J K L', 'Window to the left, below, above, right', ''], [']', 'Next window', 'Past the last one: the next desktop'], ['[', 'Previous window', 'Past the first one: the previous desktop'], ['⇧ ← →', 'Swap places', ''], ['⇧ 1–9', 'Send to a desktop', '']];
+    const WIN = [['P', 'Float chat', 'Over every desk; again puts it back on desktop 1'], ['F', 'Full screen', ''], ['W', 'Close', ''], ['⇧W', 'Reopen closed window', 'The last window you closed, where it was'], ['−', 'Narrower', 'The window in front'], ['=', 'Wider', 'The window in front'], ['Z', 'Back to where you were', 'Again flips back'], ['L', 'Dark / Light', 'Same skin, light or dark'], ['R', 'Refresh window', ''], [']', 'Next window', 'Past the last one: the next desktop'], ['[', 'Previous window', 'Past the first one: the previous desktop'], ['⇧ ← →', 'Swap places', ''], ['⇧ 1–9', 'Send to a desktop', '']];
     const vis = n => n && !n.hidden && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
     // Every key is a small chip on the thing it acts on (Miguel, 27 Oct 2026: no boxes to read). Only the four
     // Speak keys carry a word, since their buttons don't say what they do. The lists above name each chip for
@@ -1981,6 +2043,7 @@
       let x = r.left + r.width / 2 - w / 2, y = r.bottom + 24 > innerHeight ? r.top - h - 3 : r.bottom + 3; // near the bottom: above it
       if (at === 'inside') { x = r.right - w - 8; y = r.top + r.height / 2 - h / 2; }
       if (at === 'start') { x = r.left - w - 4; y = r.top + r.height / 2 - h / 2; if (x < 4) x = r.left + 4; }
+      if (at === 'inside-l') { x = r.left + 8; y = r.top + r.height / 2 - h / 2; }
       if (at === 'inside-2') { x = r.right - w - 8 - 76; y = r.top + r.height / 2 - h / 2; }
       if (at === 'above') y = r.top - h - 3 < 4 ? r.bottom + 3 : r.top - h - 3;
       if (at === 'corner') { x = r.left - 4; y = r.top - 4; }
@@ -2038,27 +2101,35 @@
           const send = wel.querySelector('.pane-main .ch-send'); if (f.thread && vis(send)) chip(send, '↵', 'start');
           // ⌥I opens the chat list; pressed again it searches chats and messages.
           const srch = wel.querySelector('[data-chsearch]'); if (vis(srch) && document.activeElement !== srch) chip(srch, 'I', 'inside');
-          const fab = wel.querySelector('.pane-list [data-chfab]'); if (vis(fab)) chip(fab, 'N', 'corner');
         }
+        // N on this desk's New chat button: ⌥N starts the new chat there, even from the app beside it.
+        const fab = wel.querySelector('.pane-list [data-chfab]'); if (vis(fab)) chip(fab, 'N', 'corner');
       }
+      // No Chats on this desk: N with its word on the right edge of the window in front, where the chat opens.
+      else if (f && f.app !== 'chats') { const b = winEl(f.id)?.querySelector('.wbody'); if (vis(b)) chip(b, 'N', 'inside', 'New chat'); }
       // Heads-up chat: P on the float button, or (floating) on Back to desktop 1.
       if (hud && W[hud.id]) { const n = winEl(hud.id)?.querySelector('.wbar [data-wact="hud-home"]'); if (vis(n)) chip(n, 'P'); }
       else {
         const fw = f?.app === 'chats' ? f : !homeOpen && d.wins.map(x => W[x]).find(mainChats);
         const n = fw && winEl(fw.id)?.querySelector('.wbar [data-wact="hud"]'); if (vis(n)) chip(n, 'P');
       }
-      // The window in front: F W R on its own buttons; H J K L on the windows they jump to.
+      // The window in front: F W R on its own buttons ([ ] mark the windows they step to).
       if (f) {
         const wel = winEl(f.id);
         for (const [q, l] of [['[data-wact="mono"]', 'F'], ['[data-wact="close"]', 'W'], ['[data-wact="reload"]', 'R']]) { const n = wel?.querySelector(`.wbar ${q}`); if (vis(n)) chip(n, l); }
-        const me = wel?.getBoundingClientRect(), best = {};
-        if (me) for (const id of d.wins) {
-          if (id === f.id) continue; const o = winEl(id), r = o?.getBoundingClientRect(); if (!r || o.classList.contains('gone')) continue;
-          const dx = r.left + r.width / 2 - (me.left + me.width / 2), dy = r.top + r.height / 2 - (me.top + me.height / 2);
-          const k = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'H' : 'L') : (dy < 0 ? 'K' : 'J'), dist = Math.hypot(dx, dy);
-          if (!best[k] || dist < best[k].dist) best[k] = { o, dist };
-        }
-        for (const [k, { o }] of Object.entries(best)) { const t = o.querySelector('.wbar .t') || o.querySelector('.wbar'); if (vis(t)) chip(t, k, 'start'); }
+        // ⇧W under W once something was closed; = − on the edge the window shares with its neighbour.
+        if (closedWins.some(c => !W[c.w.id])) { const n = wel?.querySelector('.wbar [data-wact="close"]'); if (vis(n)) chip(n, '⇧W', 'below', 'Reopen'); }
+        if (hud?.id !== f.id && resizable(d)) { const b = wel?.querySelector('.wbody'), side = d.wins[0] === f.id ? 'inside' : 'inside-l'; if (vis(b)) { chip(b, '=', side, 'Wider'); chip(b, '−', side, 'Narrower'); } }
+      }
+      // No window in front (Home, empty desk): ⇧W Reopen sits on the new-desktop +.
+      if (!f && closedWins.some(c => !W[c.w.id])) { const n = $('#wsList [data-newdesk]'); if (vis(n)) chip(n, '⇧W', 'below', 'Reopen'); }
+      // L flips Dark / Light (lights on / off): on the Settings gear, saying where it goes.
+      { const tw = window.WosSkin?.twin?.(), n = $('#settingsBtn'); if (tw && vis(n)) chip(n, 'L', 'below', tw.light ? 'Light' : 'Dark'); }
+      // Z on where it goes back to: that window's title, that desk's number, or Home.
+      if (spotLive(spotPrev) && spotPrev !== (homeOpen ? 'home' : f?.id)) {
+        const s = spotPrev, i = s === 'home' ? -1 : s.startsWith('d:') ? ws.findIndex(x => x.id === s.slice(2)) : wsOf(s);
+        const n = s === 'home' ? $('#logo') : i === cur && !homeOpen && !s.startsWith('d:') ? winEl(s)?.querySelector('.wbar .t') : $(`#wsList .ws[data-ws="${i}"]`);
+        if (vis(n)) chip(n, 'Z', 'below', 'Back');
       }
       // ] and [ inside this desk: on the title of the window they go to, or on the Chats side (list / message box).
       for (const [st, l] of [[winR, ']'], [winL, '[']]) {
@@ -2207,10 +2278,17 @@
     if (alt && !shift && code === 'KeyG') return hit(() => { if (!e.repeat) pick.start(); });
     if (alt && !shift && code === 'Backquote') return hit(() => { if (e.repeat) return; if (homeOpen) { leaveHome(); log('home:back'); } else { goHome(); log('home'); } });
     if ((menu || alt) && !shift && code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
+    // ⌥⇧W reopen the last closed window · ⌥Z back to where you were · ⌥− / ⌥= window narrower / wider. Even while typing.
+    if (alt && shift && code === 'KeyW') return hit(() => { if (!e.repeat) reopenClosed(); });
+    if (alt && !shift && code === 'KeyZ') return hit(() => { if (!e.repeat) jumpBack(); });
+    // ⌥L Dark ⇄ Light (Miguel: L for light; ⌥H J K L window moves retired, ⌥[ ] step windows): the same skin's light or dark twin (Dark ⇄ Light, Landscapes Dark ⇄ Landscapes Light).
+    if (alt && !shift && code === 'KeyL') return hit(() => { if (!e.repeat) flipLight(); });
+    if (alt && (code === 'Minus' || code === 'Equal')) return hit(() => resizeFocused(code === 'Equal' ? 1 : -1));
     if ((menu || alt) && !shift && code === 'KeyT') return hit(() => { if (!e.repeat) { closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newDesktop(); } });
     if (alt && !shift && (code === 'ArrowUp' || code === 'ArrowDown')) return hit(() => { if (!e.repeat || focused()?.app === 'chats') { closePalette(); toggleKeys(false); chatsUpDown(code === 'ArrowDown' ? 1 : -1); } });
     // ⌥N new chat; ⌥V new voice chat (⌥V again sends).
-    if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newChat({ fresh: true }); });
+    // ⌥N: a New chat on this desk. Reuses this desk's Chats window, else opens one beside the window in front (like Reply).
+    if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newChat(); });
     if (alt && !shift && code === 'Enter') return hit(() => { if (!e.repeat) newChat(); });
     if (alt && code === 'KeyV') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); talkNew(`${MOD}V`); });
     // ⌥→ Done, ⌥← Snooze (Miguel, 27 Oct 2026): with a chat open in Chats, the arrows act on it, also from an EMPTY
@@ -2255,7 +2333,7 @@
     if (!pal.hidden) {
       // ⌘K's palette owns the keyboard while open. The app selector lets the window manager's ⌥ chords
       // through (⌥Enter, ⌥1…9, ⌥[ ], ⌥W…), stepping aside first, so a fresh desktop never traps them.
-      if (palMode !== 'apps' || !alt || !/^(Digit[1-9]|Key[GIWFHJKLNTVP]|Slash|Comma|Bracket(Left|Right))$/.test(code)) return;
+      if (palMode !== 'apps' || !alt || !/^(Digit[1-9]|Key[GIWFLNTVPZ]|Slash|Comma|Minus|Equal|Bracket(Left|Right))$/.test(code)) return;
       closePalette({ restore: false });
       queueMicrotask(() => { const a = document.activeElement; if (!a || a === document.body || !a.getClientRects().length) restFocus(); });
     }
@@ -2298,8 +2376,8 @@
     // ⌥] / ⌥[ next / previous window on this desk (Chats: list, then message box), then on to the next / previous desk.
     if (code === 'BracketLeft') return hit(() => { if (shift) return moveDesk(cur, cur - 1); stepWin(-1); });
     if (code === 'BracketRight') return hit(() => { if (shift) return moveDesk(cur, cur + 1); stepWin(1); });
-    const dir = { ArrowLeft: [-1, 0], KeyH: [-1, 0], ArrowRight: [1, 0], KeyL: [1, 0], ArrowUp: [0, -1], KeyK: [0, -1], ArrowDown: [0, 1], KeyJ: [0, 1] }[code];
-    // ⌥ arrows are word/paragraph jumps while typing on a Mac: leave them to the text field (⌥HJKL still move focus).
+    const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[code];
+    // ⌥ arrows are word/paragraph jumps while typing on a Mac: leave them to the text field (⌥[ ] still step windows).
     if (dir && /^Arrow/.test(code) && typing(e.target)) return;
     if (dir) return hit(() => { if (shift && dir[0]) swapWin(dir[0]); else dirFocus(dir[0], dir[1]); });
   }
