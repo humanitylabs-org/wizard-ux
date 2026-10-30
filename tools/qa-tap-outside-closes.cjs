@@ -188,6 +188,18 @@ async function check(name, fn) { await fn(); passed++; console.log('PASS', name)
       await page.evaluate(()=>{const b=document.createElement('button');b.dataset.resOpen='server';document.querySelector('#device').append(b);b.click();});
       assert.equal(await page.evaluate(()=>WosResources.state.panel),true);await page.locator('.rs-backdrop').tap({position:{x:5,y:5}});assert.equal(await page.evaluate(()=>WosResources.state.panel),false);await mounted();
     });
+    await check('shell Resources close stays tappable while the install prompt is pending',async()=>{
+      await page.addStyleTag({content:'.rs-sheet{top:12px!important;bottom:50px!important}'});await page.addScriptTag({url:origin+'/pwa-install.js'});
+      try{
+        await page.evaluate(()=>{const e=new Event('beforeinstallprompt',{cancelable:true});e.prompt=async()=>{};e.userChoice=Promise.resolve({outcome:'dismissed'});dispatchEvent(e);});
+        await page.waitForSelector('#wizard-pwa-install');
+        await page.evaluate(()=>{const b=document.createElement('button');b.dataset.resOpen='server';document.querySelector('#device').append(b);b.click();});
+        assert.equal(await page.locator('#wizard-pwa-install').count(),0,'install prompt must yield to the Resources sheet');
+        const box=await page.locator('[data-res-close]').boundingBox();assert.ok(box);await page.touchscreen.tap(box.x+box.width/2,box.y+box.height/2);
+        assert.equal(await page.evaluate(()=>WosResources.state.panel),false);
+      }finally{await page.evaluate(()=>{WosResources?.close?.();dispatchEvent(new Event('appinstalled'));});}
+      await mounted();
+    });
     await check('shell media viewer: outside photo closes; photo menu release ignored then backdrop closes only menu',async()=>{
       await page.evaluate(()=>WosChat.viewer.open([{kind:'image',url:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"/>',name:'Fixture'}]));
       await page.locator('.mv-stage').dispatchEvent('contextmenu',{bubbles:true});
