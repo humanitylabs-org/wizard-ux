@@ -50,7 +50,8 @@ test('the thread header no longer carries the model; the label lives inside the 
   assert.match(chats, /\$\{mlabel\}<\/div>/);
   assert.match(chats, /const chip = PW && !PW\.modelLabel \? PW\.modelChip\(w, s\) : ''/);
   assert.match(chats, /function fitLabel\(root\)/);
-  assert.match(chats, /classList\.toggle\('lab-row', lastEnd > room \|\| scrolls\)/);
+  assert.match(chats, /const lineCount = lineHeight > 0 \? Math\.round\(mirror\.offsetHeight \/ lineHeight\) : 1;/);
+  assert.match(chats, /classList\.toggle\('lab-row', lineCount >= 3 \|\| lastEnd > room \|\| scrolls\)/);
   assert.match(css, /\.ch-field\.lab-row \{ flex-direction: column; padding-bottom: 24px;/);
   assert.match(chats, /'px';\n    fitLabel\(ta\);\n(    if \(ta\.scrollTop !== top\) ta\.scrollTop = top;\n)?  \}/); // measured after the height is set, so a full, scrolling box is detected
   // Measuring collapses the box to 'auto'; the owner's scroll position is put back afterwards (James, 21 Oct 2026).
