@@ -44,7 +44,7 @@ test('shell adapters cannot retain a second Settings renderer, picker, or hardco
   const settings = read('web/core/settings.js');
   assert.doesNotMatch(settings, /data-layoutpick|data-layout-row/);
   assert.match(settings, /data-skinfamily=/);
-  assert.match(settings, /<h4>Colours<\/h4>/);
+  assert.match(settings, /<h4>Colors<\/h4>/);
   assert.match(settings, /data-newskin/);
   assert.match(read('web/core/deeplink.js'), /WosSettings\?\.features\.some/);
 });

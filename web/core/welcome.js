@@ -176,8 +176,8 @@
     const fam = S?.families?.find(f => f.id === FAMILY);
     if (!fam) return paintHello();
     const cur = S.current, list = fam.palettes.map(id => S.list.find(k => k.id === id)).filter(Boolean);
-    return `${BRAND}${dots()}<header class="wl-head"><h2 tabindex="-1">Pick a colour</h2><p>You can change it, or try other skins, any time in Settings.</p></header>
-      <div class="st-root wl-skp"><div class="skp" role="group" aria-label="Colours">${list.map(k => card(k, cur)).join('')}</div></div>
+    return `${BRAND}${dots()}<header class="wl-head"><h2 tabindex="-1">Pick a color</h2><p>You can change it, or try other skins, any time in Settings.</p></header>
+      <div class="st-root wl-skp"><div class="skp" role="group" aria-label="Colors">${list.map(k => card(k, cur)).join('')}</div></div>
       <button type="button" class="wl-primary" data-wl="next">Continue</button>`;
   }
 

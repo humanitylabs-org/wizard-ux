@@ -125,10 +125,10 @@ test('Look: family tiles lead, only the worn family colours render, and Layout i
   const h = harness(); h.s.WosSkin.current = 'obsidian-light'; h.view.focus('look');
   const html = h.root.innerHTML;
   assert.match(html, /data-skinfamily="wizard"[^]*data-skinfamily="mizel" aria-pressed="true"/);
-  assert.match(html, /<h4>Colours<\/h4>[^]*aria-label="Mizel colours"[^]*data-skinpick="obsidian-light"/);
+  assert.match(html, /<h4>Colors<\/h4>[^]*aria-label="Mizel colors"[^]*data-skinpick="obsidian-light"/);
   assert.doesNotMatch(html, /data-skinpick="nebula"|data-layout-row|data-layoutpick|<b>Layout<\/b>/);
   h.s.WosSkin.current = 'nebula'; h.view.render();
-  assert.match(h.root.innerHTML, /aria-label="Wizard colours"[^]*data-skinpick="nebula"/);
+  assert.match(h.root.innerHTML, /aria-label="Wizard colors"[^]*data-skinpick="nebula"/);
   assert.doesNotMatch(h.root.innerHTML, /data-skinpick="obsidian-light"/);
 });
 test('index: one update card on top when there is something to do, nothing otherwise; desktop does not repeat it beside About', () => {
@@ -205,7 +205,7 @@ test('own tiles use base preview; own panel shows colours, edit hint and a neste
   h.s.WosMySkin = { recipes:[own],active:own,state:{script:{}} };
   h.view.focus('look');
   assert.match(h.root.innerHTML,/data-ownskin="mine" aria-pressed="true"/);
-  assert.match(h.root.innerHTML,/aria-label="Quiet colours"/);
+  assert.match(h.root.innerHTML,/aria-label="Quiet colors"/);
   assert.match(h.root.innerHTML,/change my Quiet skin so…/);
   h.act('data-ownskin-remove','mine'); assert.match(h.root.innerHTML,/role="alertdialog"/);
   assert.equal(h.view.back(),true); assert.equal(h.view.page,'appearance');
