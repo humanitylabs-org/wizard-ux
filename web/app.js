@@ -2032,10 +2032,12 @@
   });
 
   // Moons orbit the orb: one per running agent (violet) or thread that needs you (amber).
-  // Even counts use a half-step offset so no moon sits behind the six-o'clock scrub handle.
+  // Leave a 90° gap around six o'clock so the scrub handle never covers a moon.
   function moonAngle(k, count) {
-    const offset = count > 1 && count % 2 === 0 ? Math.PI / count : 0;
-    return (k / Math.max(count, 1)) * Math.PI * 2 - Math.PI / 2 + offset;
+    if (count <= 1) return -Math.PI / 2;
+    const step = (Math.PI * 3 / 2) / (count - 1);
+    const slot = (k + Math.floor((count - 1) / 2)) % count;
+    return Math.PI * 3 / 4 + slot * step;
   }
   function renderMoons() {
     const L = live();

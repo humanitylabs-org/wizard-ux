@@ -17,13 +17,13 @@ function distance(a, b) {
   return Math.min(d, Math.PI * 2 - d);
 }
 
-test('even moon counts avoid the bottom orb handle', () => {
+test('every moon count leaves a 90-degree gap around the bottom handle', () => {
   const moonAngle = productionMoonAngle();
-  for (const count of [2, 4, 6, 8]) {
+  for (const count of [1, 2, 3, 4, 5, 6, 7, 8]) {
     const angles = Array.from({ length: count }, (_, k) => moonAngle(k, count));
     assert.ok(
-      angles.every(angle => distance(angle, Math.PI / 2) >= Math.PI / count - 1e-9),
-      `${count} moons must be shifted half a step away from the six-o'clock handle`,
+      angles.every(angle => distance(angle, Math.PI / 2) >= Math.PI / 4 - 1e-9),
+      `${count} moons must stay outside the handle's bottom quadrant`,
     );
   }
 });
@@ -32,5 +32,5 @@ test('five Ready and three Working moons all get distinct visible positions', ()
   const moonAngle = productionMoonAngle();
   const angles = Array.from({ length: 8 }, (_, k) => moonAngle(k, 8));
   assert.equal(new Set(angles.map(angle => angle.toFixed(8))).size, 8);
-  assert.ok(angles.every(angle => distance(angle, Math.PI / 2) > Math.PI / 16));
+  assert.ok(angles.every(angle => distance(angle, Math.PI / 2) >= Math.PI / 4 - 1e-9));
 });
