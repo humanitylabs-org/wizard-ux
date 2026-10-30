@@ -81,7 +81,7 @@ html[data-skin^="obsidian"] .ms-track.dragging .ms-thumb { transition: none; }
 html[data-skin^="obsidian"] .ms-track.off .ms-thumb { opacity: 0; }
 html[data-skin^="obsidian"] .ms-o { position: relative; z-index: 1; min-width: 0; padding: 0 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; white-space: nowrap; font-size: 13px; font-weight: 700; line-height: 1.1; color: var(--ink-2); transition: color 200ms; }
 html[data-skin^="obsidian"] .ms-o.on { color: var(--bg); }
-html[data-skin^="obsidian"] .ms-o:disabled { opacity: .35; }
+html[data-skin^="obsidian"] .ms-o:is(:disabled, [aria-disabled="true"]) { opacity: .35; }
 html[data-skin^="obsidian"] .ms-version { font-size: 10px; font-weight: 500; line-height: 1.1; opacity: .65; }
 html[data-skin^="obsidian"] .ms-version:empty { display: none; }
 html[data-skin^="obsidian"] .ms-o.secure { color: var(--secure); }
