@@ -20,7 +20,7 @@ test('Welcome: opens only without a signed-in provider, resumes after sign-in, n
 
 test('Welcome: three steps only, no uppercase eyebrows or em dashes in its copy', () => {
   const js = read('web/core/welcome.js');
-  for (const t of ['Connect your AI', 'Pick a colour', 'Say hello']) assert.ok(js.includes(t), t);
+  for (const t of ['Connect your AI', 'Pick a color', 'Say hello']) assert.ok(js.includes(t), t);
   const copy = js.split('\n').filter(l => !l.trim().startsWith('*') && !l.trim().startsWith('/*') && !l.trim().startsWith('//')).join('\n');
   assert.doesNotMatch(copy, /—/);
   assert.doesNotMatch(copy, /STEP \d/i);
