@@ -28,9 +28,9 @@ test('Welcome: three steps only, no uppercase eyebrows or em dashes in its copy'
   assert.doesNotMatch(read('web/core/welcome.css'), /text-transform:\s*uppercase/);
 });
 
-test('Welcome: colours are the Wizard skin only, drawn with the Settings preview cards', () => {
+test('Welcome: every skin, drawn with the Settings preview cards (tests/welcome-every-skin.test.mjs)', () => {
   const js = read('web/core/welcome.js');
-  assert.match(js, /const FAMILY = 'wizard'/);
+  assert.doesNotMatch(js, /const FAMILY = /);
   assert.match(js, /class="skp-card"/);
   assert.match(js, /class="st-root wl-skp"/);
   assert.doesNotMatch(js, /data-wl="family"/);
