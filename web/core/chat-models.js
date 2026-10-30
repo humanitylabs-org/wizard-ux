@@ -205,10 +205,29 @@
         .catch(e => { M.claudeDown = /abort|timeout/i.test(String(e?.name || '')) || e instanceof TypeError; return null; });
       M.loading = fetch('/wizard/hermes/api/model/options', { cache: 'no-store', credentials: 'same-origin' })
         .then(r => { if (!r.ok) throw new Error(`Models unavailable (${r.status})`); return r.json(); })
-        .then(async j => { M.tinfoil = await connection; const accounts = await claude; M.claudeLimit = claudeLimitNote(accounts); M.providers = arr(obj(j).providers); M.options = normalize(j, hasNativeClaude(accounts)).filter(o => !isTinfoil(o.provider) || M.tinfoilReady()); M.ready = true; M.error = ''; M.at = Date.now(); return M.options; })
+        .then(async j => { M.tinfoil = await connection; const accounts = await claude; M.claudeLimit = claudeLimitNote(accounts); M.providers = arr(obj(j).providers); M.options = normalize(j, hasNativeClaude(accounts)).filter(o => !isTinfoil(o.provider) || M.tinfoilReady()); M.ready = true; M.error = ''; M.at = Date.now(); M.recheckPlaceholder(); return M.options; })
         .catch(e => { M.error = String(e.message || e); return M.options; })
         .finally(() => { M.loading = null; });
       return M.loading;
+    },
+    /* Hermes answers with an offline placeholder catalogue while a ChatGPT sign-in is renewing or the pool just switched
+     * accounts (no live answer yet). It omits account-gated models (Astra) and the newest tier (6.1 Sol), so the switch
+     * greyed Astra and showed an older Sol for the full 5-minute cache. A signed-in ChatGPT list without Astra is
+     * rechecked a few times soon after; listeners on `wos:models` repaint when the real catalogue arrives. Bounded,
+     * so a plan without Astra settles after the last try. */
+    placeholderTries: 0, PLACEHOLDER_RETRY_MS: [8e3, 30e3, 90e3], placeholderTimer: 0,
+    codexPlaceholder() {
+      const p = M.providers.find(x => str(obj(x).slug) === 'openai-codex');
+      return !!p && p.authenticated === true && arr(p.models).length > 0 && !arr(p.models).some(m => gptFamily(typeof m === 'string' ? m : str(obj(m).id, obj(m).value), 'openai-codex') === 'gpt:astra');
+    },
+    recheckPlaceholder() {
+      if (!M.codexPlaceholder()) { M.placeholderTries = 0; return; }
+      const wait = M.PLACEHOLDER_RETRY_MS[M.placeholderTries]; if (wait === undefined || M.placeholderTimer) return;
+      M.placeholderTries += 1;
+      M.placeholderTimer = setTimeout(() => {
+        M.placeholderTimer = 0; const before = JSON.stringify(M.options.map(o => [o.provider, o.value]));
+        M.load(true).then(() => { if (JSON.stringify(M.options.map(o => [o.provider, o.value])) !== before) window.dispatchEvent?.(new Event('wos:models')); });
+      }, wait);
     },
     normalize, hasNativeClaude, visibleChoices, PRIMARY, family, privateName, isPrivateRoute: isTinfoil, ours,
     tinfoilReady() { return M.tinfoil?.provider === 'tinfoil' && M.tinfoil?.credentialStored === true; },
