@@ -249,6 +249,14 @@ window.WizCore.chats = function createChats(H) {
     const n = new Map(); for (const s of (LIVE.ok ? LIVE.unified() : [])) { if (s.hidden) continue; const k = subjectOf(s); if (k) n.set(k, (n.get(k) || 0) + 1); }
     return [...n.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k]) => k);
   }
+  function devices() {
+    const names = new Map();
+    for (const s of (LIVE.ok ? LIVE.unified() : [])) {
+      const name = String(s.device || '').replace(/\s+/g, ' ').trim(); if (!name) continue;
+      const key = norm(name); if (!names.has(key)) names.set(key, name);
+    }
+    return [...names.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  }
   /* Names → filter, for typed suggestions and the voice grammar: exact name or synonym first, then prefix. */
   function matchFilters(text, max = 3) {
     const q = norm(text); if (!q) return [];
@@ -256,8 +264,9 @@ window.WizCore.chats = function createChats(H) {
     const st = statusEntries().map(([key, f]) => ({ kind: 'status', key, label: f.label, names: [norm(f.label), ...f.syn.map(norm)] }));
     const sj = visibleSpaces().map(s => ({ kind: 'space', key: s.id, label: s.name, names: [norm(s.name)] }));
     const ag = focusAgents().map(a => ({ kind: 'agent', key: a.id, label: a.label, names: [norm(a.id), norm(a.label)] }));
-    for (const f of st.concat(ag, sj)) if (f.names.includes(q)) push(f);
-    if (q.length >= 2) for (const f of st.concat(ag, sj)) if (f.names.some(n => n.startsWith(q) || n.split(' ').some(w => w.length > 2 && w.startsWith(q)))) push(f);
+    const dv = devices().map(name => ({ kind: 'device', key: name, label: name, names: [norm(name), norm(`device ${name}`)] }));
+    for (const f of st.concat(ag, sj, dv)) if (f.names.includes(q)) push(f);
+    if (q.length >= 2) for (const f of st.concat(ag, sj, dv)) if (f.names.some(n => n.startsWith(q) || n.split(' ').some(w => w.length > 2 && w.startsWith(q)))) push(f);
     return out.slice(0, max);
   }
   function setFilter(w, f) { // a status key, or '' for none (the Home cards)
@@ -345,19 +354,20 @@ window.WizCore.chats = function createChats(H) {
     const o = W[owner(w.id)] || w, m = o?.agentFocus?.[agent];
     return m?.kind === 'space' && spaces().some(s => s.id === m.key && spaceAgent(s) === agent) ? m : { kind: 'agent', key: agent };
   }
-  function addFilter(w, f) { if (!f) return false; if (f.kind === 'space' || f.kind === 'agent') return setFocus(w, f); const c = ch(w.id); if (w.thread) chatsBack(w); c.filter = f.key; c.filterFrom = null; rerenderList(w); return true; }
+  function addFilter(w, f) { if (!f) return false; if (f.kind === 'space' || f.kind === 'agent') return setFocus(w, f); const c = ch(w.id); if (w.thread) chatsBack(w); if (f.kind === 'device') c.device = f.key; else c.filter = f.key; c.filterFrom = null; c.lastChip = f.kind; rerenderList(w); return true; }
   function rerenderList(w) { const el = elOf(w.id); if (el && !w.thread) { ch(w.id).listPlace = null; ch(w.id).listPending = null; renderChatList(w, el); const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; } }
   /* Back on a filtered list: search text first, then the most recent chip. */
   function clearFilter(w) {
     if (!w || w.thread) return false;
     const c = ch(w.id);
     if (c.q) { c.q = ''; window.WizCore.chatSearch?.cancel(w.id); rerenderList(w); return 'search'; }
-    if (!c.filter) return false;
-    c.filter = ''; c.lastChip = '';
+    if (!c.filter && !c.device) return false;
+    if ((c.lastChip === 'device' && c.device) || !c.filter) c.device = ''; else c.filter = '';
+    c.lastChip = c.device ? 'device' : c.filter ? 'status' : '';
     rerenderList(w); return 'chip';
   }
-  const hasFilter = w => { const c = ch(w.id); return !!c.filter; };
-  function clearAll(w) { const c = ch(w.id); c.filter = ''; c.q = ''; c.filterFrom = null; window.WizCore.chatSearch?.cancel(w.id); rerenderList(w); }
+  const hasFilter = w => { const c = ch(w.id); return !!(c.filter || c.device); };
+  function clearAll(w) { const c = ch(w.id); c.filter = ''; c.device = ''; c.q = ''; c.filterFrom = null; c.lastChip = ''; window.WizCore.chatSearch?.cancel(w.id); rerenderList(w); }
   function setQuery(w, q) { const c = ch(w.id); if (w.thread) chatsBack(w); c.q = String(q || ''); rerenderList(w); }
   const SEC_DEFAULT = { errors: true, working: true, ready: true, yesterday: true, pastWeek: false, deferred: false, archive: false };
   let secOpen = (() => { try { return { ...SEC_DEFAULT, ...JSON.parse(localStorage.getItem(SEC_OPEN_KEY) || '{}') }; } catch (e) { return { ...SEC_DEFAULT }; } })();
@@ -458,6 +468,11 @@ window.WizCore.chats = function createChats(H) {
   // of the screen text sent as context with a message to another agent (core/screen-text.js).
   let rowListAgent = '';
   const privRow = s => !rowListAgent && !!LIVE.isPrivate?.(s.id);
+  const deviceTag = (s, button = false) => {
+    const name = String(s?.device || '').trim(); if (!name) return '';
+    return button ? `<button type="button" class="ch-device-tag header" data-chdevice aria-label="Device needed: ${esc(name)}">${esc(name)}</button>`
+      : `<span class="ch-device-tag" title="Device needed: ${esc(name)}">${esc(name)}</span>`;
+  };
   function chatRow(s, snip) {
     const working = isWorking(s), unread = !working && LIVE.isNew(s), needs = ['waiting_for_approval', 'unknown'].includes(s.status) || s.status === 'failed' || s.status === 'interrupted';
     // Deferred (bottom of Ready): the status reads Deferred in place of Needs you / Your call, then its one line.
@@ -480,7 +495,7 @@ window.WizCore.chats = function createChats(H) {
     const mark = !topic ? stock : `<span class="ch-topic-mark" data-chpick="thread:${esc(s.id)}" title="Choose topic emoji"><span class="ch-topic-emoji" aria-hidden="true">${topic}</span><span class="emo sti ${kind} ch-topic-status" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span></span>`;
     const pinned = PIN.has(s.id), boom = BOOM()?.dueFor(s.id).length ? ' due' : BOOM()?.nextFor(s.id) ? ' set' : '';
     return `<div class="ch-row-wrap${s.reconnect && needs ? ' diagnosed' : ''}${pinned ? ' pinned' : ''}" data-morph-key="row:${esc(s.id)}"><button data-part="thread-row" class="ch-row${unread ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}${priv ? ' private' : ''}" data-chopen="${esc(s.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open thread · hold or open the context menu for actions"${quiet ? ' data-quiet="1"' : ''}${priv ? ' data-wiz-private=""' : ''}>${mark}
-      <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b>${backgroundBadge(s)}<time>${esc(ago(LIVE.cardAt(s)))}</time></span>
+      <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b>${deviceTag(s)}${backgroundBadge(s)}<time>${esc(ago(LIVE.cardAt(s)))}</time></span>
       ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}</span>${boom ? `<i class="ch-boom${boom}" title="${boom === ' due' ? 'Back for you' : 'Snoozed'}" aria-label="${boom === ' due' ? 'Back for you' : 'Snoozed'}">◷</i>` : ''}</button>${s.reconnect && needs ? `<button type="button" class="ch-row-signin" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : ''}<button type="button" data-part="pin-button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinned ? 'Unpin' : 'Pin'} chat: ${esc(s.title)}" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}">${PIN_SVG}</button></div>`;
   }
   /* Ready has three orders (James, 10 Oct 2026): Newest (pure recency, labels don't move rows), Priority
@@ -570,7 +585,9 @@ window.WizCore.chats = function createChats(H) {
     return { awake: all.filter(i => !i.read), later: all.filter(i => i.read) };
   }
   const noteAt = it => (Number(it.time) || 0) * 1000, sesAt = s => Date.parse(LIVE.cardAt(s)) || 0;
-  const noteRank = it => it.priority >= 4 ? 1 : it.priority === 3 ? 2 : 3;
+  // Notifications uses this same threshold for its Needs you count. Lower priorities are FYI, not unresolved work.
+  const noteNeedsAction = it => Number(it?.priority) >= 4;
+  const noteRank = it => noteNeedsAction(it) ? 1 : it.priority === 3 ? 2 : 3;
   const SES_RANK = { needs_you: 1, check: 2, fyi: 3, done: 4 };
   const sesRank = s => LIVE.readyRank ? LIVE.readyRank(s) : ['waiting_for_approval', 'unknown'].includes(s.status) ? 0 : deferredOf(s) ? 9 : SES_RANK[attOf(s)?.state] || 5;
   /* Priority shows its groups (Miguel, 29 Oct 2026: "they're not grouped properly … it doesn't really change from
@@ -593,9 +610,9 @@ window.WizCore.chats = function createChats(H) {
   }
   const notePlain = t => String(t || '').replace(/\[([^\]\n]+)\]\((https?:[^\s)]+)\)/g, '$1').replace(/[*`#>]/g, '').replace(/\s+/g, ' ').trim();
   function noteRow(it) {
-    const later = !!it.read, title = notePlain(it.title) || notePlain(String(it.message || '').split('\n').find(l => l.trim())) || 'Notification';
+    const later = !!it.read, needs = noteNeedsAction(it), title = notePlain(it.title) || notePlain(String(it.message || '').split('\n').find(l => l.trim())) || 'Notification';
     const pv = (it.source === 'cron' ? 'Scheduled job · ' : '') + clip(notePlain(it.message), 160);
-    return `<div class="ch-row-wrap ch-notif-wrap${later ? ' later' : ''}" data-morph-key="notif:${esc(it.id)}"><button type="button" class="ch-row ch-notif-row${later ? ' deferred' : ' unread'}" data-chnotif="${esc(it.id)}" title="Open notification"><span class="emo ch-notif-ic" aria-hidden="true">${window.WosBell?.icon || ''}</span>
+    return `<div class="ch-row-wrap ch-notif-wrap${needs ? ' needs' : ' fyi'}${later ? ' later' : ''}" data-morph-key="notif:${esc(it.id)}"><button type="button" class="ch-row ch-notif-row${later ? ' deferred' : ' unread'}" data-chnotif="${esc(it.id)}" title="Open notification"><span class="emo ch-notif-ic" aria-hidden="true">${window.WosBell?.icon || ''}</span>
       <span class="bd"><span class="tp"><b>${esc(clip(title, 120))}</b><time>${esc(ago(new Date(noteAt(it)).toISOString()))}</time></span><span class="pv">${later ? '<em class="att ch-notif-snz">Snoozed:</em> ' : ''}${esc(pv)}</span></span></button></div>`;
   }
   // The snoozed tail is one time-ordered run (Oldest reverses it), snoozed notes included, whatever the order.
@@ -777,14 +794,15 @@ window.WizCore.chats = function createChats(H) {
   migrateOldReplies();
   // The reply bubble above the composer: who it answers, one or two lines of it, and × to drop it.
   /* Notifications as threads (a live package holds WosSkinHost.inboxThreads): a New chat whose draft carries a
-   * Notifications item is shown as that notification's one-message thread. Its title, one yellow message, Done /
-   * Snooze (or Restore) where a thread keeps them, and the composer: sending starts a real chat with it attached. */
+   * Notifications item is shown as that notification's one-message thread. Needs-you items are yellow and offer
+   * Resolve / Snooze / Done; FYIs stay neutral and offer only Ok. */
   const NOTIF_KEY = /^notifications:([A-Za-z0-9_-]{1,128})$/;
   function notifOf(w) {
     if (!w || w.thread !== '__new__' || winAgent(w) || !window.WosSkinHost?.inboxThreads) return null;
     const r = KIT.drafts.get('new').reply, m = r && NOTIF_KEY.exec(r.key || ''); if (!m) return null;
     const it = window.WosBell?.item?.(m[1]) || null;
-    return { id: m[1], reply: r, item: it, acts: it?.archived ? ['restore'] : it?.read ? ['resolve', 'done'] : ['resolve', 'snooze', 'done'] };
+    const needs = noteNeedsAction(it);
+    return { id: m[1], reply: r, item: it, needs, acts: it?.archived ? ['restore'] : needs ? (it?.read ? ['resolve', 'done'] : ['resolve', 'snooze', 'done']) : ['done'] };
   }
   function notifAct(wid, a) {
     const w = W[owner(wid)], n = notifOf(w); if (!n || !n.acts.includes(a)) return false;
@@ -795,7 +813,7 @@ window.WizCore.chats = function createChats(H) {
     const d = KIT.drafts.get('new');
     if (!String(ch(w.id).draft || d.text || '').trim() && !(d.files || []).length) KIT.drafts.clear('new'); else KIT.drafts.setReply('new', null);
     ch(w.id).draft = ''; chatsBack(w);
-    toast({ done: '✓', snooze: '◷', restore: '↺' }[a], { done: 'Marked done', snooze: 'Snoozed', restore: 'Back in your inbox' }[a], 1600);
+    toast({ done: '✓', snooze: '◷', restore: '↺' }[a], { done: n.needs ? 'Marked done' : 'Dismissed', snooze: 'Snoozed', restore: 'Back in your inbox' }[a], 1600);
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
     return true;
   }
@@ -823,9 +841,11 @@ window.WizCore.chats = function createChats(H) {
   const snoozeLast = () => window.WosSkinHost?.snoozeOrder === 'last';
   const compactOn = () => { try { const v = localStorage.getItem(COMPACT_KEY); return v == null ? OUR_SKINS.includes(document.documentElement.dataset.skin || '') : v === '1'; } catch (e) { return false; } };
   function filterSheet(w, c) {
-    const opt = (k, key, label, on) => `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-chfopt="${k}:${esc(key)}"><i class="ch-fdot ${k === 'status' ? key : 'subject'}"></i>${esc(label)}${on ? '<b>✓</b>' : ''}</button>`;
-    return `<div class="ch-fsheet" data-chfsheet><div class="ch-fcard" role="dialog" aria-label="Filter chats"><div class="ch-fh"><b>Filter</b>${c.filter ? '<button type="button" data-chfclear>Clear</button>' : ''}</div>
+    const opt = (k, key, label, on) => `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-chfopt="${k}:${esc(key)}"><i class="ch-fdot ${k === 'status' ? key : k}"></i>${esc(label)}${on ? '<b>✓</b>' : ''}</button>`;
+    const dv = devices();
+    return `<div class="ch-fsheet" data-chfsheet><div class="ch-fcard" role="dialog" aria-label="Filter chats"><div class="ch-fh"><b>Filter</b>${c.filter || c.device ? '<button type="button" data-chfclear>Clear</button>' : ''}</div>
       <h5>Status</h5><div class="ch-fopts">${statusEntries().map(([k, f]) => opt('status', k, f.label, c.filter === k)).join('')}</div>
+      ${dv.length ? `<h5>Device needed</h5><div class="ch-fopts">${dv.map(name => opt('device', name, name, norm(c.device) === norm(name))).join('')}</div>` : ''}
       ${focusSection(w)}
       ${ourSkin() ? '' : `<h5>Layout</h5><div class="ch-fopts">${[['day', 'By day'], ['status', 'By status']].map(([v, l]) => { const on = (byStatus() ? 'status' : 'day') === v; return `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-chlayout="${v}">${l}${on ? '<b>✓</b>' : ''}</button>`; }).join('')}</div>`}
       <h5>View</h5><div class="ch-fopts"><button type="button" class="ch-fopt${compactOn() ? ' on' : ''}" data-chcompact>Compact · titles only${compactOn() ? '<b>✓</b>' : ''}</button></div>
@@ -1066,17 +1086,17 @@ window.WizCore.chats = function createChats(H) {
     const AGID = winAgent(w), LST = LIVE.statusFor ? LIVE.statusFor(AGID) : { ok: LIVE.ok, error: LIVE.error };
     rowListAgent = AGID;
     if (!AGID) morningPoll();
-    const F = c.filter && STATUS[c.filter] ? STATUS[c.filter] : null, focus = focusOf(w);
+    const F = c.filter && STATUS[c.filter] ? STATUS[c.filter] : null, D = String(c.device || '').trim(), focus = focusOf(w);
     const fids = F?.ids ? F.ids(AGID) : null;
     const space = focus?.kind === 'space' ? spaces().find(s => s.id === focus.key) : null;
     const members = space && LST.ok ? LIVE.spaceSessions?.(space.threads, { agent: spaceAgent(space) }) : null;
-    const all = (LST.ok ? (members ? members.rows : n && LIVE.searchRows ? LIVE.searchRows(AGID) : LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).filter(s => !s.hidden) : []).filter(s => (!F || (fids ? fids.has(s.id) : F.test(s))) && focusMatches(w, s));
-    const filtered = !!(F || focus);
+    const all = (LST.ok ? (members ? members.rows : n && LIVE.searchRows ? LIVE.searchRows(AGID) : LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).filter(s => !s.hidden) : []).filter(s => (!F || (fids ? fids.has(s.id) : F.test(s))) && (!D || norm(s.device) === norm(D)) && focusMatches(w, s));
+    const filtered = !!(F || D || focus);
     // The default main-agent Focus is still the owner's inbox. Spaces and other agents are not.
     // Subscribe before the empty-list branch: notifications can be the only Ready rows.
-    const listNotes = !n && !F && !AGID && focus?.kind !== 'space' ? notes() : null;
+    const listNotes = !n && !F && !D && !AGID && focus?.kind !== 'space' ? notes() : null;
     const listNotesN = listNotes ? listNotes.awake.length + listNotes.later.length : 0;
-    const titleHit = n ? all.filter(s => norm(s.title).includes(n) || norm(s.preview).includes(n)) : all;
+    const titleHit = n ? all.filter(s => norm(s.title).includes(n) || norm(s.preview).includes(n) || norm(s.device).includes(n)) : all;
     // Message bodies: searched lazily in the background (core/chat-search.js); hits stream in with a snippet.
     // Body search reads the main agent's threads only; an agent's Chats search titles and previews.
     const BS = window.WizCore.chatSearch, queryAt = c.q, searchNav = c.readNav;
@@ -1098,14 +1118,14 @@ window.WizCore.chats = function createChats(H) {
     const ownerId = owner(w.id), curThread = W[ownerId]?.thread;
     const drafts = focus ? [] : newDrafts().filter(d => !n || norm(d.text).includes(n));
     c.more = c.more || {};
-    const chip = (k, label) => `<span class="ch-chip ${k}" data-chchip="${k}"><i class="ch-fdot ${k === 'status' ? c.filter : 'subject'}"></i>${esc(label)}<button type="button" data-chchipx="${k}" aria-label="Remove filter ${esc(label)}">✕</button></span>`;
-    const chips = (F ? chip('status', F.label) : '');
+    const chip = (k, label) => `<span class="ch-chip ${k}" data-chchip="${k}"><i class="ch-fdot ${k === 'status' ? c.filter : k}"></i>${esc(label)}<button type="button" data-chchipx="${k}" aria-label="Remove filter ${esc(label)}">✕</button></span>`;
+    const chips = (F ? chip('status', F.label) : '') + (D ? chip('device', D) : '');
     const ph = filtered ? 'Search within' : 'Search chats and messages';
     const head = `<div class="ch-top"><label class="ch-search${filtered ? ' has-chips' : ''}"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>${chips}<input data-chsearch placeholder="${ph}" aria-label="Search chats and messages" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false">${c.q ? '<button type="button" class="ch-sclear" data-chsclear aria-label="Clear search">×</button>' : ''}<button type="button" class="ch-fbtn${filtered ? ' on' : ''}" data-chfbtn aria-label="Filter chats" aria-expanded="${c.sheet ? 'true' : 'false'}"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button></label>${AGID ? '' : (window.WosBell?.html?.() || '')}</div>`
       // Switching Focus (agent/Space) never pushes the list down with a count line (James, 25 Oct 2026); only a status filter says how many matched.
-      + (F && LIVE.ok ? `<div class="ch-count">${hitCount()} ${hitCount() === 1 ? 'chat' : 'chats'}${coachLine()}</div>` : '');
+      + ((F || D) && LIVE.ok ? `<div class="ch-count">${hitCount()} ${hitCount() === 1 ? 'chat' : 'chats'}${coachLine()}</div>` : '');
     // Suggestions while typing (or focused on an empty field): filters that match the words, then a new chat.
-    const sug = !c.sugOff && (c.q || c.focus) ? matchFilters(c.q, 3).filter(f => !(f.kind === 'status' && f.key === c.filter) && !(f.kind === focus?.kind && f.key === focus.key)) : [];
+    const sug = !c.sugOff && (c.q || c.focus) ? matchFilters(c.q, 3).filter(f => !(f.kind === 'status' && f.key === c.filter) && !(f.kind === 'device' && norm(f.key) === norm(D)) && !(f.kind === focus?.kind && f.key === focus.key)) : [];
     // Filter suggestions only. New chat lives in one place, the bottom-right button (James, 24 Oct 2026: no second New chat in search).
     const sugHtml = sug.length ? `<div class="ch-sug">${sug.map(f => `<button type="button" class="ch-sugrow" data-chsug="${f.kind}:${esc(f.key)}"><span class="ch-sugic">⌯</span><span>Filter: <b>${esc(f.label)}</b></span></button>`).join('')}</div>` : '';
     let body;
@@ -1124,9 +1144,9 @@ window.WizCore.chats = function createChats(H) {
     if (false) {}
     else if (!LST.ok && !LST.error) body = draftSec + skelRows(AGID ? `Connecting to ${agentName(AGID)}` : 'Connecting to Wizard');
     else if (!LST.ok) body = draftSec + `<div class="ch-empty">${esc(window.WizReach?.failure().message || 'Checking the connection to Wizard…')}</div>`;
-    else if (focus?.kind === 'space' && !hit.length && !n && !F) body = `<div class="ch-empty">${esc(agentRec(focusedAgent(focus)).label)} is filling this Space…</div>`;
-    else if (AGID && !all.length && !n && !F) body = `<div class="ch-empty"><b>No chats with ${esc(agentName(AGID))} yet</b><br><button type="button" class="ch-fclear" data-chnew data-chemptynew>Start a new chat</button><br> ${agentRec(AGID).privacy === 'private' ? 'They stay with this agent: the main agent can’t search or read them.' : 'They stay in this agent’s chats.'}</div>`;
-    else if (filtered && !hit.length && !listNotesN) body = `<div class="ch-empty">${n ? 'No chats match' : F ? F.empty : `No chats in ${esc(focusLabel(w))}`}<br><button type="button" class="ch-fclear" ${n || F ? 'data-chfclear' : 'data-chfbtn'}>${n || F ? 'Clear filter' : 'Change focus'}</button></div>`;
+    else if (focus?.kind === 'space' && !hit.length && !n && !F && !D) body = `<div class="ch-empty">${esc(agentRec(focusedAgent(focus)).label)} is filling this Space…</div>`;
+    else if (AGID && !all.length && !n && !F && !D) body = `<div class="ch-empty"><b>No chats with ${esc(agentName(AGID))} yet</b><br><button type="button" class="ch-fclear" data-chnew data-chemptynew>Start a new chat</button><br> ${agentRec(AGID).privacy === 'private' ? 'They stay with this agent: the main agent can’t search or read them.' : 'They stay in this agent’s chats.'}</div>`;
+    else if (filtered && !hit.length && !listNotesN) body = `<div class="ch-empty">${n ? 'No chats match' : D ? `No chats need ${esc(D)}.` : F ? F.empty : `No chats in ${esc(focusLabel(w))}`}<br><button type="button" class="ch-fclear" ${n || F || D ? 'data-chfclear' : 'data-chfbtn'}>${n || F || D ? 'Clear filter' : 'Change focus'}</button></div>`;
     else if (!hit.length && !drafts.length && !listNotesN) body = `<div class="ch-empty">${bs && (bs.busy || bs.scanned < Math.min(bs.want, bs.total || 0)) ? `No titles match “${esc(c.q)}” · searching messages…` : `No threads match “${esc(c.q)}”.`}</div>`;
     else body = (filtered ? '' : draftSec)
       + (pinnedRows.length ? `<section class="ch-sec ch-pinned open" data-sec="pinned"><div class="ch-sec-h static"><span>Pinned</span><small>${pinnedRows.length}</small></div><div class="ch-sec-b">${pinnedRows.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')}</div></section>` : '')
@@ -1447,6 +1467,7 @@ window.WizCore.chats = function createChats(H) {
   };
   // Notification-thread only: hand it to the agent to stop or fix (the package sends the ask).
   const NACT = { resolve: { label: 'Resolve this', icon: '<svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0 5 5L12 19l-3 1 1-3 7.7-7.7M5 5l3 3"/></svg>', hint: 'Ask Wizard to stop these or fix the cause' }, restore: { ...ACT.restore, label: 'Restore', hint: 'Move back to your inbox' } };
+  const notifAction = (n, a) => a === 'done' && !n.needs ? { ...ACT.done, label: 'Ok', hint: 'Acknowledge this notification' } : NACT[a] || ACT[a];
   const actionLabel = (s, a, compact = false) => a === 'done' && followUpActive(s) ? 'Done for now'
     : a === 'stop_watch' && compact ? 'Stop' : ACT[a].label;
   const owner = id => (H.owner ? H.owner(id) : id);
@@ -1511,6 +1532,7 @@ window.WizCore.chats = function createChats(H) {
     el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Thread actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(s.title)}</div>
       <button type="button" data-rsopen>${'<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'}Open</button>
       <button type="button" data-rsrename>${RENAME_SVG}Rename</button>
+      <button type="button" data-rsdevice>${DEVICE_SVG}${s.device ? `Device · ${esc(s.device)}` : 'Set device needed'}</button>
       <button type="button" data-part="pin-button" data-rspin>${PIN_SVG}${PIN.has(sid) ? 'Unpin' : 'Pin'}</button>
       <button type="button" data-rsspacepicker>${PIN_SVG}${spacesOf(sid).length ? `Move to ${SPACE.one}…` : `Add to a ${SPACE.one}…`}</button>
       ${spacesOf(sid).map(space => `<button type="button" data-rsspace="${esc(space.id)}" data-add="false">${PIN_SVG}Remove from ${SPACE.one} · ${esc(space.name)}</button>`).join('')}
@@ -1559,6 +1581,7 @@ window.WizCore.chats = function createChats(H) {
   }
   /* Rename (long-press a thread, or tap the title inside it). James's name locks the thread: the agent keeps it. */
   const RENAME_SVG = '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>';
+  const DEVICE_SVG = '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg>';
   function openRenameSheet(wid, sid) {
     const s = LIVE.session(sid), el = track.querySelector(`[data-chats="${wid}"]`); if (!s || !el) return;
     closeRowSheet();
@@ -1578,6 +1601,28 @@ window.WizCore.chats = function createChats(H) {
     const r = await LIVE.rename(sid, t);
     if (r === true) toast('✎', 'Renamed', 1400);
     else toast('!', r === 'taken' ? 'Another thread already has that name' : 'Couldn’t rename · kept the old name', 2600);
+    for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
+    const w = W[wid]; if (w && w.thread === sid) renderThreadNow(w);
+  }
+  function openDeviceSheet(wid, sid) {
+    const s = rowOf(wid, sid), el = track.querySelector(`[data-chats="${wid}"]`); if (!s || !el) return;
+    closeRowSheet();
+    const options = devices().filter(name => norm(name) !== norm(s.device)).map(name => `<option value="${esc(name)}"></option>`).join('');
+    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Device needed"><form class="ch-sheet-b ch-rename ch-device-form" data-dvform>
+      <div class="ch-sheet-t">Device needed</div>
+      <input type="text" name="device" value="${esc(s.device || '')}" list="chDeviceOptions" placeholder="For example, Abby" autocomplete="off" enterkeyhint="done" aria-label="Device needed">
+      <datalist id="chDeviceOptions">${options}</datalist>
+      <p class="ch-sheet-n">Use the device name you need before this thread can move.</p>
+      <div class="ch-rename-b">${s.device ? '<button type="button" data-dvclear>Clear</button>' : '<button type="button" data-dvcancel>Cancel</button>'}<button type="submit" class="go">Save</button></div></form></div>`);
+    rowSheet = { wid, sid, device: true };
+    const inp = el.querySelector('.ch-device-form input'); if (inp) { inp.focus(); inp.select(); }
+  }
+  async function submitDevice(form, clear = false) {
+    if (!rowSheet?.device) return;
+    const { wid, sid } = rowSheet, value = clear ? '' : form.querySelector('input').value.replace(/\s+/g, ' ').trim();
+    closeRowSheet();
+    const s = rowOf(wid, sid), ok = await LIVE.setDevice(sid, value, LIVE.ownerOf ? LIVE.ownerOf(s) : undefined);
+    toast(ok ? (value ? '▣' : '✓') : '!', ok ? (value ? `Needs ${value}` : 'Device cleared') : 'Couldn’t save device · kept the old one', ok ? 1600 : 3200);
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
     const w = W[wid]; if (w && w.thread === sid) renderThreadNow(w);
   }
@@ -1960,15 +2005,15 @@ window.WizCore.chats = function createChats(H) {
     const mlabel = PW?.modelLabel && !msw ? PW.modelLabel(w, s) : '';
     const chip = PW && !PW.modelLabel ? PW.modelChip(w, s) : '';
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
-    const tacts = NV ? `<div class="ch-tacts" data-part="thread-actions">${NV.acts.map(a => { const A = NACT[a] || ACT[a]; return `<button type="button" data-chact="${a}" aria-label="${A.hint}" title="${A.hint}">${A.icon}<span>${A.label}</span></button>`; }).join('')}</div>`
+    const tacts = NV ? `<div class="ch-tacts" data-part="thread-actions">${NV.acts.map(a => { const A = notifAction(NV, a); return `<button type="button" data-chact="${a}" aria-label="${A.hint}" title="${A.hint}">${A.icon}<span>${A.label}</span></button>`; }).join('')}</div>`
       : acts.length && turns && !pend.length ? `<div class="ch-tacts" data-part="thread-actions">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${actionLabel(s, a, true)}</span></button>`).join('')}</div>` : '';
     clearReading(w.id);
     // Live repaints rebuild the thread. Keep each already-loaded photo node so it doesn't blank and reload (flicker).
     const keepImgs = keepLoadedImages(el);
     const keepSheet = keptSheet(el);
     const openContexts = el.dataset.draftFor === dkey ? new Set([...el.querySelectorAll('[data-run-original][open]')].map(e => e.dataset.runOriginal)) : new Set();
-    const threadHTML = `<div data-part="thread" class="ch-thread${TAG ? ' agent' : ''}${NV ? ' ch-notif-thread' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
-      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(NV ? NV.reply.title || NV.item?.title || 'Notification' : winTitle(w))}</b>`}${privTag}</div>${chip}<span data-slot="thread-header-actions"></span></div>
+    const threadHTML = `<div data-part="thread" class="ch-thread${TAG ? ' agent' : ''}${NV ? ` ch-notif-thread${NV.needs ? ' needs' : ' fyi'}` : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
+      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(NV ? NV.reply.title || NV.item?.title || 'Notification' : winTitle(w))}</b>`}${privTag}</div>${s ? deviceTag(s, true) : ''}${chip}<span data-slot="thread-header-actions"></span></div>
       ${s && BOOM() ? BOOM().banner(s.id) : ''}<div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
       ${msw ? `<div class="ch-swrow">${msw}<span data-slot="thread-switch-row-end"></span></div>` : '<div data-slot="thread-switch-row-end"></div>'}<form data-slot="composer-end" data-part="composer" class="ch-compose${hasContent(draft, c.files || []) ? ' has-text' : ''}${rpl ? ' has-reply' : ''}" data-chform>${replyBubble(rpl)}${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${mlabel}</div>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
@@ -2660,9 +2705,9 @@ window.WizCore.chats = function createChats(H) {
   document.body.appendChild(picker);
   let pickFor = '';
   picker.addEventListener('change', () => { const list = [...picker.files]; picker.value = ''; if (pickFor && W[pickFor] && list.length) addFiles(pickFor, list); });
-  // Typed text uses the full width of the box. Only when the last line would run into the model label (bottom-right)
-  // does the box add one line, so the label sits under the text and nothing is hidden (James 18 Oct 2026).
-  // A textarea can't wrap one line early, so a hidden mirror measures where the last line ends.
+  // Empty composers keep the model name in the free bottom-right corner. As soon as there is a draft, the name gets
+  // its own strip below the textarea so its 40px tap target can never intercept text selection or editing. The mirror
+  // still catches placeholder collisions and scrolling states where the editable area cannot safely share the corner.
   let mirror = null;
   function fitLabel(root) {
     const ta = root?.matches?.('textarea') ? root : root?.querySelector('.ch-field textarea');
@@ -2680,12 +2725,13 @@ window.WizCore.chats = function createChats(H) {
     const lineHeight = parseFloat(cs.lineHeight) || 0;
     const lineCount = lineHeight > 0 ? Math.round(mirror.offsetHeight / lineHeight) : 1;
     const room = inner - lw + 12; // last-line text may come within ~8px of the label's visible name (the label has 10px inner padding)
-    // The name gets its own strip once the draft wraps to three lines: its 40px tap target otherwise occupies the
-    // bottom two editing rows even when a short final line does not touch the visible name. Keep the existing strip
-    // for a last-line collision or scrolling box too, because those states cannot safely share the editable area.
+    // The name gets its own strip for every draft: its 40px tap target otherwise sits on top of the editable row and
+    // steals taps used to place or drag the selection. Keep the measured fallbacks for an empty placeholder collision
+    // or scrolling box too, because those states cannot safely share the editable area.
     const scrolls = ta.scrollHeight > ta.clientHeight + 2;
+    const hasDraft = ta.value.length > 0;
     ta.style.paddingBottom = '';
-    ta.parentElement.classList.toggle('lab-row', lineCount >= 3 || lastEnd > room || scrolls);
+    ta.parentElement.classList.toggle('lab-row', hasDraft || lineCount >= 3 || lastEnd > room || scrolls);
   }
   function growTa(ta) {
     if (!ta) return;
@@ -2791,7 +2837,7 @@ window.WizCore.chats = function createChats(H) {
     const dx = e.target.closest('[data-chdraftx]'); if (dx) { discardDraft(dx.dataset.chdraftx); renderChatList(w, elOf(id)); return true; }
     const dr = e.target.closest('[data-chdraft]'); if (dr) { openNewDraft(owner(id), dr.dataset.chdraft); return true; }
     if (e.target.closest('[data-chbsmore]')) { window.WizCore.chatSearch?.more(id); renderChatList(w, elOf(id)); return true; }
-    const cx = e.target.closest('[data-chchipx]'); if (cx) { const c = ch(id); c.filter = ''; c.filterFrom = null; c.coach = false; rerenderList(w); return true; }
+    const cx = e.target.closest('[data-chchipx]'); if (cx) { const c = ch(id); if (cx.dataset.chchipx === 'device') c.device = ''; else c.filter = ''; c.filterFrom = null; c.coach = false; c.lastChip = c.device ? 'device' : c.filter ? 'status' : ''; rerenderList(w); return true; }
     const newSpace = e.target.closest('[data-chspacenew]');
     if (newSpace) { openSpacePicker(w, focusAgents()[0].id, newSpace, { naming: true }); return true; }
     const fp = e.target.closest('[data-chfocusopt]'); if (fp) {
@@ -2807,10 +2853,11 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chcompact]')) { const on = !compactOn(); try { localStorage.setItem(COMPACT_KEY, on ? '1' : '0'); } catch (err) {} LIVE.putPrefs?.({ compact: on }); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
     const fo = e.target.closest('[data-chfopt]'); if (fo) { const c = ch(id), [k, ...r] = fo.dataset.chfopt.split(':'), key = r.join(':'); c.sheet = false; c.coach = false;
       if (k === 'status') { c.filter = c.filter === key ? '' : key; c.filterFrom = null; }
+      if (k === 'device') c.device = norm(c.device) === norm(key) ? '' : key;
       c.lastChip = k; rerenderList(w); return true; }
     if (e.target.closest('[data-chfsheet]') && !e.target.closest('.ch-fcard')) { ch(id).sheet = false; rerenderList(w); return true; }
     const sg = e.target.closest('[data-chsug]'); if (sg) { const c = ch(id), [k, ...r] = sg.dataset.chsug.split(':'), key = r.join(':'); c.q = ''; c.focus = false; c.coach = false;
-      if (k === 'status') { c.filter = key; c.filterFrom = null; } else setFocus(w, { kind: k, key }); c.lastChip = k; window.WizCore.chatSearch?.cancel(id); rerenderList(w); return true; }
+      if (k === 'status') { c.filter = key; c.filterFrom = null; } else if (k === 'device') c.device = key; else setFocus(w, { kind: k, key }); c.lastChip = k; window.WizCore.chatSearch?.cancel(id); rerenderList(w); return true; }
     if (e.target.closest('[data-chsclear]')) { ch(id).q = ''; window.WizCore.chatSearch?.cancel(id); renderChatList(w, elOf(id)); elOf(id)?.querySelector('[data-chsearch]')?.focus(); return true; }
     const sec = e.target.closest('[data-sectoggle]'); if (sec) { toggleSection(w, sec.dataset.sectoggle); return true; }
     const sm = e.target.closest('[data-subjmove]');
@@ -2833,8 +2880,12 @@ window.WizCore.chats = function createChats(H) {
     if (rsSpace && rowSheet?.sid) { const { sid } = rowSheet, add = rsSpace.dataset.add === 'true', name = spaces().find(x => x.id === rsSpace.dataset.rsspace)?.name || SPACE.one; closeRowSheet(); if (spaceMember(rsSpace.dataset.rsspace, sid, add)) toast('✓', `${add ? 'Added to' : 'Removed from'} ${name}`, 2000); return true; }
     if (e.target.closest('[data-rspin]') && rowSheet?.sid) { const { sid } = rowSheet, on = PIN.toggle(sid); closeRowSheet(); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
     if (e.target.closest('[data-rsrename]') && rowSheet) { const { wid: rw, sid } = rowSheet; openRenameSheet(rw, sid); return true; }
+    if (e.target.closest('[data-rsdevice]') && rowSheet) { const { wid: rw, sid } = rowSheet; openDeviceSheet(rw, sid); return true; }
     if (e.target.closest('[data-rncancel]') && rowSheet) { closeRowSheet(); return true; }
+    if (e.target.closest('[data-dvcancel]') && rowSheet) { closeRowSheet(); return true; }
+    if (e.target.closest('[data-dvclear]') && rowSheet?.device) { submitDevice(e.target.closest('form'), true); return true; }
     if (e.target.closest('[data-chrename]') && w.thread && w.thread !== '__new__' && LIVE.session(w.thread)) { openRenameSheet(id, w.thread); return true; }
+    if (e.target.closest('[data-chdevice]') && w.thread && w.thread !== '__new__' && LIVE.session(w.thread)) { openDeviceSheet(id, w.thread); return true; }
     if (e.target.closest('[data-rsopen]') && rowSheet) { const { wid: rw, sid } = rowSheet; closeRowSheet(); openChat(owner(rw), sid); return true; }
     // The lift that ends a long-press can land on the sheet's backdrop (the row sat under it): keep the sheet open.
     if (rowSheet && e.target.closest('.ch-sheet') && !e.target.closest('.ch-sheet-b')) { if (e.detail === 0 || rowSheet.outsidePress) closeRowSheet(); return true; }
@@ -2885,6 +2936,7 @@ window.WizCore.chats = function createChats(H) {
     root.addEventListener('pointercancel', () => { if (rowSheet) rowSheet.outsidePress = false; }, true);
     root.addEventListener('submit', e => {
       const rn = e.target.closest('[data-rnform]'); if (rn) { e.preventDefault(); submitRename(rn); return; }
+      const dv = e.target.closest('[data-dvform]'); if (dv) { e.preventDefault(); submitDevice(dv); return; }
       const f = e.target.closest('[data-chform]'); if (!f) return;
       e.preventDefault(); const id = idOf(f); const ta = f.querySelector('textarea');
       const text = ta.value; const c = ch(id);

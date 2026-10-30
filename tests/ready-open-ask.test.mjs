@@ -34,7 +34,7 @@ test('Working helper rows keep their waiting label while preferring the latest r
   assert.ok(live.includes('item.wizard_helper_status ? (latestText || clean(text(item.preview)) || userText)'));
 });
 test('helper badge stays visible on a phone: it sits outside the truncated title (James, 28 Oct 2026)', () => {
-  assert.ok(chats.includes('${esc(s.title)}</b>${backgroundBadge(s)}<time>'));
+  assert.ok(chats.includes('${esc(s.title)}</b>${deviceTag(s)}${backgroundBadge(s)}<time>'));
   assert.ok(!chats.includes('${backgroundBadge(s)}</b>'));
 });
 

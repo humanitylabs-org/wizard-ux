@@ -8,11 +8,11 @@ test('notification-only Ready survives an empty default main-agent Chats list', 
   const src = read('web/core/chats.js');
   // Evaluate the real eligibility expression across every Focus/status/search boundary.
   const expr = src.match(/const listNotes = ([^;]+);/)[1];
-  for (const [n,F,AGID,focus,visible] of [
-    ['',null,'',null,true], ['',null,'',{kind:'agent',key:'hermes'},true],
-    ['',null,'other',{kind:'agent',key:'other'},false], ['',null,'',{kind:'space',key:'test'},false],
-    ['query',null,'',null,false], ['',{label:'Working'},'',null,false],
-  ]) assert.equal(!!vm.runInNewContext(expr,{n,F,AGID,focus,notes:()=>({awake:[{}],later:[]})}),visible);
+  for (const [n,F,D,AGID,focus,visible] of [
+    ['',null,'','',null,true], ['',null,'','',{kind:'agent',key:'hermes'},true],
+    ['',null,'','other',{kind:'agent',key:'other'},false], ['',null,'','',{kind:'space',key:'test'},false],
+    ['query',null,'','',null,false], ['',{label:'Working'},'','',null,false], ['',null,'Abby','',null,false],
+  ]) assert.equal(!!vm.runInNewContext(expr,{n,F,D,AGID,focus,notes:()=>({awake:[{}],later:[]})}),visible);
   assert.match(src,/else if \(filtered && !hit.length && !listNotesN\)/);
   assert.match(src,/else if \(!hit.length && !drafts.length && !listNotesN\)/);
   assert.match(src,/const nt = k === 'ready' \? listNotes : null/);
