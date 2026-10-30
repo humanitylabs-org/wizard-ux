@@ -411,22 +411,6 @@ def g_profile():
     bust = U(circle(256, 284, 46), P("M118 480 C124 372 188 326 256 326 C324 326 388 372 394 480 Z"))
     return D(disc, U(hat_, bust))
 
-# Two other ways to say Profiles, for Robert to compare (30 Oct 2026). Only one stays after he picks.
-@glyph('profile-person', 'A person wearing the Wizard hat: who you are, as friends see you.')
-def g_profile_person():
-    hat_ = U(hat_at(256, 214, 140), rrect(150, 200, 212, 32, 16))
-    head = circle(256, 278, 58)
-    shoulders = P("M120 430 C124 368 176 340 256 340 C336 340 388 368 392 430 Q392 444 378 444 H134 Q120 444 120 430 Z")
-    return D(U(hat_, head, shoulders), rrect(150, 330, 212, 14, 7))   # one bite: the neckline
-
-@glyph('profile-card', 'A profile card: you in your hat on the left, your details on the right.')
-def g_profile_card():
-    card = rrect(72, 128, 368, 256, 48)
-    me = U(hat_at(170, 250, 86), rrect(124, 240, 92, 20, 10), circle(170, 284, 30),
-           P("M112 360 C116 330 138 316 170 316 C202 316 224 330 228 360 Z"))
-    lines = U(rrect(262, 214, 128, 30, 15), rrect(262, 268, 96, 30, 15))
-    return D(card, me, lines)
-
 # Launch set (Robert, 29 Oct 2026): apps on a stock Wizard that still showed a letter.
 @glyph('recorder', 'A microphone with its words already landing beside it: record and transcribe live.')
 def g_recorder():
