@@ -255,14 +255,15 @@
     if (!s.tweaks.length && !s.error) return '';
     if (!authorList) E.authors?.().then(list => { authorList = list; for (const m of mounts) m.render(); }, () => {});
     const name = who => (authorList || []).find(a => a.id === who)?.name || who;
-    const exp = s.tweaks.filter(t => !t.builtin), built = s.tweaks.filter(t => t.builtin);
+    // Release-wide features are ordinary settings on their own pages (settingRow below), never tweaks.
+    const exp = s.tweaks.filter(t => !t.builtin);
     const rows = list => tweakSwitches(list.map(t => ({ ...t, description: [t.description, t.builtin ? '' : 'by ' + name(t.author)].filter(Boolean).join(' · ') })), 'data-tweak-toggle', s.busy);
     const err = s.error ? `<p role="alert">${esc(s.error)}</p>` : '';
-    if (own) return `<div class="tw-set"><h4>Tweaks</h4>${err}${rows(exp)}${built.length ? `<h4>Built in</h4>${rows(built)}` : ''}</div>`;
+    if (own) return `<div class="tw-set"><h4>Tweaks</h4>${err}${rows(exp)}</div>`;
     const on = exp.filter(t => t.on).length;
     // Quick buttons: one per author; they add to what is on (tap James's and Miguel's = all), tap again to take them off.
     const quick = (authorList || []).filter(a => a.ids.length).map(a => { const all = a.ids.every(id => exp.find(t => t.id === id)?.on); return `<button type="button" class="tw-quick" data-tweakauthor="${esc(a.id)}" aria-pressed="${all}"${s.busy ? ' disabled' : ''}>${all ? '✓ ' : ''}${esc(a.name)}’s (${a.ids.length})</button>`; }).join('');
-    return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">Off unless you turn them on. Each one is someone’s idea being tried out.</p>${quick ? `<div class="tw-quicks" role="group" aria-label="Get someone’s tweaks">${quick}</div>` : ''}<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row wz-row"><span class="st-tx"><b>All tweaks</b><small>${on} of ${exp.length} on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${err}${rows(exp)}</details>${built.length ? `<div class="tw-built"><h4>Built in</h4>${rows(built)}</div>` : ''}</div>`;
+    return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">Off unless you turn them on. Each one is someone’s idea being tried out.</p>${quick ? `<div class="tw-quicks" role="group" aria-label="Get someone’s tweaks">${quick}</div>` : ''}<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row wz-row"><span class="st-tx"><b>All tweaks</b><small>${on} of ${exp.length} on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${err}${rows(exp)}</details></div>`;
   }
   let tweaksOpen = false, authorList = null;
   window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
@@ -387,6 +388,10 @@
     if (!el.closest('[data-wg-reset]')) return false;
     window.WosSkin.setGlass(null); ctx.render(); ctx.root.querySelector('[data-wg-range]')?.focus(); return true;
   } });
+  /* Features on for everyone (catalog `defaults`) are plain settings where they act: one switch each, no author. */
+  const settingRow = id => { const t = window.WosExperience?.state.tweaks.find(x => x.id === id && x.builtin); return t ? tweakSwitches([t], 'data-tweak-toggle', window.WosExperience.state.busy) : ''; };
+  const settingAct = (ctx, el) => { const b = el.closest('[data-tweak-toggle]'); if (!b) return false; void window.WosExperience.toggle(b.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; };
+  register({ id: 'home-network', page: 'appearance', html: () => { const r = settingRow('wizard/machines-home'); return r ? `<div class="st-group"><h4>Home</h4>${r}</div>` : ''; }, act: settingAct });
   register({ id: 'skin-frame', available: () => !!window.WosSkin, html() {
     return '<div class="st-group sf-section"><details class="st-advanced"><summary>Advanced</summary><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><p data-skinimport-status role="status"></p></details></div>';
   }, act(ctx, el) {
@@ -539,6 +544,7 @@
     // ?embed=settings: the view drops its own title, sheet and canvas and takes the shell's skin (Appearance v1), so the
     // page head is the one title and the content sits straight on the Settings page, with no box around it.
     html: () => `<div class="st-embed" data-st-connections><iframe src="${esc(CONNECTIONS)}?embed=settings" title="Connections"></iframe></div>` });
+  register({ id: 'notifications-in-chats', page: 'chats', html: () => { const r = settingRow('wizard/unified-inbox'); return r ? `<div class="st-group"><h4>Notifications</h4>${r}</div>` : ''; }, act: settingAct });
   register({ id: 'chats-default', page: 'chats', aliases: ['chats-default'], html(ctx) {
     const host = chatsHost(), apps = host?.installed() || [{ id: 'wizard-chats' }], current = host?.defaultId() || 'wizard-chats';
     apps.sort((a, b) => (b.id === 'wizard-chats') - (a.id === 'wizard-chats'));
